@@ -2,6 +2,7 @@ package controller
 
 import (
 	"net/http"
+	"os"
 	"strings"
 
 	"itsm-backend/common"
@@ -16,6 +17,9 @@ type AuthController struct {
 }
 
 func authCookieSecure(c *gin.Context) bool {
+	if os.Getenv("ENV") == "development" || os.Getenv("GIN_MODE") != "release" {
+		return false
+	}
 	return c.Request.TLS != nil || strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https")
 }
 

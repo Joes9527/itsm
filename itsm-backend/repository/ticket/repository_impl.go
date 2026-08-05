@@ -98,6 +98,9 @@ func (r *EntRepository) Create(ctx context.Context, params *CreateParams, tenant
 		if len(params.TagIDs) > 0 {
 			builder.AddTagIDs(params.TagIDs...)
 		}
+		if len(params.CustomFieldValues) > 0 {
+			builder.SetCustomFieldValues(params.CustomFieldValues)
+		}
 
 		entity, err := builder.Save(ctx)
 		if err == nil {
@@ -790,6 +793,9 @@ func toDomainModel(e *ent.Ticket) *Ticket {
 	}
 	if e.MspTicketID != "" {
 		t.MSPTicketID = &e.MspTicketID
+	}
+	if len(e.CustomFieldValues) > 0 {
+		t.CustomFieldValues = e.CustomFieldValues
 	}
 
 	return t

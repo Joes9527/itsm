@@ -167,7 +167,10 @@ const TicketTemplatesPage = () => {
           autoAssign: (item.content?.autoAssign as boolean) || false,
           requiresApproval: (item.content?.requiresApproval as boolean) || false,
           approvalLevel: (item.content?.approvalLevel as string) || 'none',
-          customFields: (item.content?.customFields as CustomField[]) || [],
+          customFields:
+            (item.content?.fields as CustomField[]) ||
+            (item.content?.customFields as CustomField[]) ||
+            [],
           tags: (item.content?.tags as string[]) || [],
           isActive: item.isActive ?? true,
           createdAt: item.createdAt || new Date().toISOString(),
@@ -603,6 +606,23 @@ const TicketTemplatesPage = () => {
           initialValues={editingTemplate || {}}
           onFinish={async values => {
             try {
+              // 格式化自定义表单字段
+              const processedFields = (values.customFields || []).map((f: any, index: number) => {
+                const fieldObj: any = {
+                  id: f.name || `field_${index}`,
+                  name: f.name,
+                  label: f.label,
+                  type: f.type || 'text',
+                  required: !!f.required,
+                  order: index + 1,
+                };
+                if (f.type === 'select' && f.optionsStr) {
+                  const opts = f.optionsStr.split(',').map((s: string) => s.trim()).filter(Boolean);
+                  fieldObj.options = opts.map((opt: string) => ({ label: opt, value: opt }));
+                }
+                return fieldObj;
+              });
+
               // 把表单字段映射到后端 dto.TicketTemplate
               const formFields: Record<string, unknown> = {
                 type: values.type,
@@ -613,6 +633,8 @@ const TicketTemplatesPage = () => {
                 slaType: values.slaType,
                 approvalLevel: values.approvalLevel,
                 tags: values.tags || [],
+                fields: processedFields,
+                customFields: processedFields,
               };
               const payload = {
                 name: values.name,
@@ -620,6 +642,7 @@ const TicketTemplatesPage = () => {
                 category: values.category,
                 priority: values.priority,
                 formFields,
+                fields: processedFields,
                 isActive: values.isActive ?? true,
               };
               if (editingTemplate) {
@@ -793,6 +816,100 @@ const TicketTemplatesPage = () => {
               </Form.Item>
             </Col>
           </Row>
+
+          <Divider>自定义表单字段 (Custom Fields)</Divider>
+          <Form.List name="customFields">
+            {(fields, { add, remove }) => (
+              <div className="space-y-4 mb-4">
+                {fields.map(({ key, name, ...restField }) => (
+                  <Card key={key} size="small" className="bg-gray-50 border border-gray-200">
+                    <Row gutter={12} align="middle">
+                      <Col span={6}>
+                        <Form.Item
+                          {...restField}
+                          name={[name, 'label']}
+                          label="字段显示标签"
+                          rules={[{ required: true, message: '请输入显示标签' }]}
+                          style={{ marginBottom: 8 }}
+                        >
+                          <Input placeholder="如：服务器IP" />
+                        </Form.Item>
+                      </Col>
+                      <Col span={6}>
+                        <Form.Item
+                          {...restField}
+                          name={[name, 'name']}
+                          label="字段标识(英文)"
+                          rules={[{ required: true, message: '请输入英文标识' }]}
+                          style={{ marginBottom: 8 }}
+                        >
+                          <Input placeholder="如：server_ip" />
+                        </Form.Item>
+                      </Col>
+                      <Col span={5}>
+                        <Form.Item
+                          {...restField}
+                          name={[name, 'type']}
+                          label="控件类型"
+                          rules={[{ required: true, message: '请选择类型' }]}
+                          style={{ marginBottom: 8 }}
+                        >
+                          <Select
+                            placeholder="类型"
+                            options={[
+                              { value: 'text', label: '单行文本' },
+                              { value: 'textarea', label: '多行文本' },
+                              { value: 'select', label: '下拉选择' },
+                              { value: 'number', label: '数字' },
+                              { value: 'date', label: '日期时间' },
+                            ]}
+                          />
+                        </Form.Item>
+                      </Col>
+                      <Col span={4}>
+                        <Form.Item
+                          {...restField}
+                          name={[name, 'required']}
+                          valuePropName="checked"
+                          label="是否必填"
+                          style={{ marginBottom: 8 }}
+                        >
+                          <Switch size="small" />
+                        </Form.Item>
+                      </Col>
+                      <Col span={3} className="text-right">
+                        <Button danger type="text" onClick={() => remove(name)}>
+                          删除
+                        </Button>
+                      </Col>
+                    </Row>
+                    <Form.Item
+                      noStyle
+                      shouldUpdate={(prevValues, currentValues) =>
+                        prevValues.customFields?.[name]?.type !== currentValues.customFields?.[name]?.type
+                      }
+                    >
+                      {({ getFieldValue }) =>
+                        getFieldValue(['customFields', name, 'type']) === 'select' ? (
+                          <Form.Item
+                            {...restField}
+                            name={[name, 'optionsStr']}
+                            label="下拉选项（用英文逗号分隔）"
+                            style={{ marginBottom: 0, marginTop: 4 }}
+                          >
+                            <Input placeholder="选项A, 选项B, 选项C" />
+                          </Form.Item>
+                        ) : null
+                      }
+                    </Form.Item>
+                  </Card>
+                ))}
+                <Button type="dashed" onClick={() => add({ type: 'text', required: false })} block icon={<Plus size={14} />}>
+                  添加自定义表单字段
+                </Button>
+              </div>
+            )}
+          </Form.List>
 
           <Divider>Advanced Settings</Divider>
 

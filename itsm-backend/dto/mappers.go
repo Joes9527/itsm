@@ -89,6 +89,9 @@ func ToTicketResponse(ticket *ent.Ticket) *TicketResponse {
 		first := ticket.FirstResponseAt
 		response.FirstResponseAt = &first
 	}
+	if len(ticket.CustomFieldValues) > 0 {
+		response.CustomFieldValues = ticket.CustomFieldValues
+	}
 	// ResolutionCategory 和 ClosedAt 是后期 raw SQL 添加的列，ent 不知道
 	// 在控制器中调用 PopulateTicketExtraFields 补全
 

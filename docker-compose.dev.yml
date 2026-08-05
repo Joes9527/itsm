@@ -29,7 +29,7 @@ services:
     container_name: itsm-redis-dev
     hostname: redis
     ports:
-      - "6379:6379"
+      - "6389:6379"
     volumes:
       - redis_dev_data:/data
     networks:
@@ -49,8 +49,8 @@ services:
     hostname: minio
     command: server /data --console-address ":9001"
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "9010:9000"
+      - "9011:9001"
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin123
@@ -175,12 +175,12 @@ services:
       - MINIO_ROOT_PASSWORD=minioadmin123
       - MINIO_BUCKET=itsm-uploads
 
-      # LLM 配置（开发用本地模型）
-      - LLM_PROVIDER=ollama
-      - LLM_MODEL=llama2
-      - OLLAMA_BASE_URL=http://host.docker.internal:11434 # 指向宿主机（开发用）
-      # 或者使用本地运行的 Ollama 容器:
-      # - OLLAMA_BASE_URL=http://ollama:11434
+      # LLM 配置（DeepSeek API）
+      - LLM_PROVIDER=openai
+      - LLM_BASE_URL=https://api.deepseek.com/v1
+      - LLM_ENDPOINT=https://api.deepseek.com/v1
+      - LLM_API_KEY=sk-f06badc392ec4d5797288736d5e5c040
+      - LLM_MODEL=deepseek-v4-pro
 
       # 监控配置
       - ENABLE_METRICS=true
@@ -189,9 +189,8 @@ services:
       - ENABLE_SWAGGER=true
       - ENABLE_CORS=true
       # CORS 白名单：开发环境允许前端 3000 以及常用调试端口；避免 TRAE 代理导致的 ERR_FAILED
-      - ITSM_CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://0.0.0.0:3000
+      - ITSM_CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://0.0.0.0:3000,http://localhost:3010,http://127.0.0.1:3010,http://0.0.0.0:3010
       # GIN_MODE=debug -> gin.Mode() != release -> default echo reqOrigin; kept as defense in depth
-      - GIN_MODE=debug
 
       # 清除代理（避免 Docker Desktop 代理干扰容器内请求）
       - HTTP_PROXY=
@@ -228,14 +227,16 @@ services:
     restart: unless-stopped
     profiles: [ "dev" ]
 
-  # ITSM 前端服务（开发环境）
+  # ITSM 前端服务（生产构建模式 — 预编译，无 JIT，访问速度更快）
   itsm-frontend:
     build:
       context: ./itsm-frontend
       dockerfile: Dockerfile
-      target: runner
+      target: production
       args:
-        - NODE_ENV=development
+        - NODE_ENV=production
+        - ITSM_BACKEND_URL=http://backend:8090
+        - NEXT_PUBLIC_ENABLE_AI=true
         - HTTP_PROXY=
         - HTTPS_PROXY=
         - http_proxy=
@@ -243,13 +244,11 @@ services:
     container_name: itsm-frontend-dev
     hostname: frontend
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=production
       - ITSM_BACKEND_URL=http://backend:8090
-      # 使用同源代理模式：浏览器请求 /api/v1/... 通过 Next.js 代理路由转发到后端
-      # 这样避免了跨域 cookie (SameSite=Lax) 和 CORS 预检问题
-      # - NEXT_PUBLIC_API_URL=http://localhost:8090
       - NEXT_PUBLIC_ENABLE_AI=true
       - NEXT_PUBLIC_ENABLE_SWAGGER=true
+      - NEXT_TELEMETRY_DISABLED=1
 
       # 清除代理
       - HTTP_PROXY=
@@ -259,17 +258,12 @@ services:
       - NO_PROXY=
       - no_proxy=
     ports:
-      - "3000:3000"
-      - "9229:9229" # Node.js debug 端口
+      - "3010:3000"
     depends_on:
       itsm-backend:
         condition: service_healthy
     networks:
       - itsm-dev-network
-    volumes:
-      - ./itsm-frontend:/app
-      - /app/node_modules
-      - /app/.next
     restart: unless-stopped
     profiles: [ "dev" ]
 

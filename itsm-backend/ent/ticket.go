@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/user"
@@ -84,6 +85,8 @@ type Ticket struct {
 	MspTicketID string `json:"msp_ticket_id,omitempty"`
 	// 删除时间
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+	// 工单创建时提交的自定义字段值（key 为模板字段 name）
+	CustomFieldValues map[string]interface{} `json:"custom_field_values,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the TicketQuery when eager-loading is set.
 	Edges                      TicketEdges `json:"edges"`
@@ -289,6 +292,8 @@ func (*Ticket) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case ticket.FieldCustomFieldValues:
+			values[i] = new([]byte)
 		case ticket.FieldIsManagedByMsp:
 			values[i] = new(sql.NullBool)
 		case ticket.FieldID, ticket.FieldRequesterID, ticket.FieldAssigneeID, ticket.FieldTenantID, ticket.FieldTemplateID, ticket.FieldCategoryID, ticket.FieldDepartmentID, ticket.FieldParentTicketID, ticket.FieldSLADefinitionID, ticket.FieldRating, ticket.FieldRatedBy, ticket.FieldVersion, ticket.FieldMspProviderID, ticket.FieldManagedByUserID:
@@ -531,6 +536,14 @@ func (_m *Ticket) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.DeletedAt = new(time.Time)
 				*_m.DeletedAt = value.Time
+			}
+		case ticket.FieldCustomFieldValues:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field custom_field_values", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.CustomFieldValues); err != nil {
+					return fmt.Errorf("unmarshal field custom_field_values: %w", err)
+				}
 			}
 		case ticket.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -799,6 +812,9 @@ func (_m *Ticket) String() string {
 		builder.WriteString("deleted_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
+	builder.WriteString(", ")
+	builder.WriteString("custom_field_values=")
+	builder.WriteString(fmt.Sprintf("%v", _m.CustomFieldValues))
 	builder.WriteByte(')')
 	return builder.String()
 }

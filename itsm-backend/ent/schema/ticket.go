@@ -122,6 +122,9 @@ func (Ticket) Fields() []ent.Field {
 			Comment("删除时间").
 			Optional().
 			Nillable(),
+		field.JSON("custom_field_values", map[string]interface{}{}).
+			Comment("工单创建时提交的自定义字段值（key 为模板字段 name）").
+			Optional(),
 	}
 }
 

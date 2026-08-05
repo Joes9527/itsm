@@ -3925,6 +3925,7 @@ var (
 		{Name: "managed_by_user_id", Type: field.TypeInt, Nullable: true},
 		{Name: "msp_ticket_id", Type: field.TypeString, Nullable: true},
 		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
+		{Name: "custom_field_values", Type: field.TypeJSON, Nullable: true},
 		{Name: "configuration_item_tickets", Type: field.TypeInt, Nullable: true},
 		{Name: "department_tickets", Type: field.TypeInt, Nullable: true},
 		{Name: "problem_tickets", Type: field.TypeInt, Nullable: true},
@@ -3943,55 +3944,55 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "tickets_configuration_items_tickets",
-				Columns:    []*schema.Column{TicketsColumns[32]},
+				Columns:    []*schema.Column{TicketsColumns[33]},
 				RefColumns: []*schema.Column{ConfigurationItemsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "tickets_departments_tickets",
-				Columns:    []*schema.Column{TicketsColumns[33]},
+				Columns:    []*schema.Column{TicketsColumns[34]},
 				RefColumns: []*schema.Column{DepartmentsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "tickets_problems_tickets",
-				Columns:    []*schema.Column{TicketsColumns[34]},
+				Columns:    []*schema.Column{TicketsColumns[35]},
 				RefColumns: []*schema.Column{ProblemsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "tickets_sla_definitions_tickets",
-				Columns:    []*schema.Column{TicketsColumns[35]},
+				Columns:    []*schema.Column{TicketsColumns[36]},
 				RefColumns: []*schema.Column{SLADefinitionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "tickets_sla_policies_tickets",
-				Columns:    []*schema.Column{TicketsColumns[36]},
+				Columns:    []*schema.Column{TicketsColumns[37]},
 				RefColumns: []*schema.Column{SLAPoliciesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "tickets_ticket_tags_tickets",
-				Columns:    []*schema.Column{TicketsColumns[37]},
+				Columns:    []*schema.Column{TicketsColumns[38]},
 				RefColumns: []*schema.Column{TicketTagsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "tickets_ticket_templates_tickets",
-				Columns:    []*schema.Column{TicketsColumns[38]},
+				Columns:    []*schema.Column{TicketsColumns[39]},
 				RefColumns: []*schema.Column{TicketTemplatesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "tickets_users_tickets",
-				Columns:    []*schema.Column{TicketsColumns[39]},
+				Columns:    []*schema.Column{TicketsColumns[40]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "tickets_users_assigned_tickets",
-				Columns:    []*schema.Column{TicketsColumns[40]},
+				Columns:    []*schema.Column{TicketsColumns[41]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -4020,12 +4021,12 @@ var (
 			{
 				Name:    "ticket_requester_id",
 				Unique:  false,
-				Columns: []*schema.Column{TicketsColumns[39]},
+				Columns: []*schema.Column{TicketsColumns[40]},
 			},
 			{
 				Name:    "ticket_assignee_id",
 				Unique:  false,
-				Columns: []*schema.Column{TicketsColumns[40]},
+				Columns: []*schema.Column{TicketsColumns[41]},
 			},
 			{
 				Name:    "ticket_created_at",
@@ -4045,7 +4046,7 @@ var (
 			{
 				Name:    "ticket_tenant_id_requester_id",
 				Unique:  false,
-				Columns: []*schema.Column{TicketsColumns[7], TicketsColumns[39]},
+				Columns: []*schema.Column{TicketsColumns[7], TicketsColumns[40]},
 			},
 			{
 				Name:    "ticket_status_priority",
@@ -4055,7 +4056,7 @@ var (
 			{
 				Name:    "ticket_requester_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{TicketsColumns[39], TicketsColumns[3]},
+				Columns: []*schema.Column{TicketsColumns[40], TicketsColumns[3]},
 			},
 		},
 	}

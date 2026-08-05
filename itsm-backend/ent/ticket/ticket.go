@@ -80,6 +80,8 @@ const (
 	FieldMspTicketID = "msp_ticket_id"
 	// FieldDeletedAt holds the string denoting the deleted_at field in the database.
 	FieldDeletedAt = "deleted_at"
+	// FieldCustomFieldValues holds the string denoting the custom_field_values field in the database.
+	FieldCustomFieldValues = "custom_field_values"
 	// EdgeComments holds the string denoting the comments edge name in mutations.
 	EdgeComments = "comments"
 	// EdgeAttachments holds the string denoting the attachments edge name in mutations.
@@ -257,6 +259,7 @@ var Columns = []string{
 	FieldManagedByUserID,
 	FieldMspTicketID,
 	FieldDeletedAt,
+	FieldCustomFieldValues,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "tickets"

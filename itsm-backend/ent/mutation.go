@@ -124620,6 +124620,7 @@ type TicketMutation struct {
 	addmanaged_by_user_id      *int
 	msp_ticket_id              *string
 	deleted_at                 *time.Time
+	custom_field_values        *map[string]interface{}
 	clearedFields              map[string]struct{}
 	comments                   map[int]struct{}
 	removedcomments            map[int]struct{}
@@ -126473,6 +126474,55 @@ func (m *TicketMutation) ResetDeletedAt() {
 	delete(m.clearedFields, ticket.FieldDeletedAt)
 }
 
+// SetCustomFieldValues sets the "custom_field_values" field.
+func (m *TicketMutation) SetCustomFieldValues(value map[string]interface{}) {
+	m.custom_field_values = &value
+}
+
+// CustomFieldValues returns the value of the "custom_field_values" field in the mutation.
+func (m *TicketMutation) CustomFieldValues() (r map[string]interface{}, exists bool) {
+	v := m.custom_field_values
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCustomFieldValues returns the old "custom_field_values" field's value of the Ticket entity.
+// If the Ticket object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketMutation) OldCustomFieldValues(ctx context.Context) (v map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCustomFieldValues is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCustomFieldValues requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCustomFieldValues: %w", err)
+	}
+	return oldValue.CustomFieldValues, nil
+}
+
+// ClearCustomFieldValues clears the value of the "custom_field_values" field.
+func (m *TicketMutation) ClearCustomFieldValues() {
+	m.custom_field_values = nil
+	m.clearedFields[ticket.FieldCustomFieldValues] = struct{}{}
+}
+
+// CustomFieldValuesCleared returns if the "custom_field_values" field was cleared in this mutation.
+func (m *TicketMutation) CustomFieldValuesCleared() bool {
+	_, ok := m.clearedFields[ticket.FieldCustomFieldValues]
+	return ok
+}
+
+// ResetCustomFieldValues resets all changes to the "custom_field_values" field.
+func (m *TicketMutation) ResetCustomFieldValues() {
+	m.custom_field_values = nil
+	delete(m.clearedFields, ticket.FieldCustomFieldValues)
+}
+
 // AddCommentIDs adds the "comments" edge to the TicketComment entity by ids.
 func (m *TicketMutation) AddCommentIDs(ids ...int) {
 	if m.comments == nil {
@@ -127317,7 +127367,7 @@ func (m *TicketMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TicketMutation) Fields() []string {
-	fields := make([]string, 0, 33)
+	fields := make([]string, 0, 34)
 	if m.title != nil {
 		fields = append(fields, ticket.FieldTitle)
 	}
@@ -127417,6 +127467,9 @@ func (m *TicketMutation) Fields() []string {
 	if m.deleted_at != nil {
 		fields = append(fields, ticket.FieldDeletedAt)
 	}
+	if m.custom_field_values != nil {
+		fields = append(fields, ticket.FieldCustomFieldValues)
+	}
 	return fields
 }
 
@@ -127491,6 +127544,8 @@ func (m *TicketMutation) Field(name string) (ent.Value, bool) {
 		return m.MspTicketID()
 	case ticket.FieldDeletedAt:
 		return m.DeletedAt()
+	case ticket.FieldCustomFieldValues:
+		return m.CustomFieldValues()
 	}
 	return nil, false
 }
@@ -127566,6 +127621,8 @@ func (m *TicketMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldMspTicketID(ctx)
 	case ticket.FieldDeletedAt:
 		return m.OldDeletedAt(ctx)
+	case ticket.FieldCustomFieldValues:
+		return m.OldCustomFieldValues(ctx)
 	}
 	return nil, fmt.Errorf("unknown Ticket field %s", name)
 }
@@ -127806,6 +127863,13 @@ func (m *TicketMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetDeletedAt(v)
 		return nil
+	case ticket.FieldCustomFieldValues:
+		v, ok := value.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCustomFieldValues(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Ticket field %s", name)
 }
@@ -128037,6 +128101,9 @@ func (m *TicketMutation) ClearedFields() []string {
 	if m.FieldCleared(ticket.FieldDeletedAt) {
 		fields = append(fields, ticket.FieldDeletedAt)
 	}
+	if m.FieldCleared(ticket.FieldCustomFieldValues) {
+		fields = append(fields, ticket.FieldCustomFieldValues)
+	}
 	return fields
 }
 
@@ -128116,6 +128183,9 @@ func (m *TicketMutation) ClearField(name string) error {
 		return nil
 	case ticket.FieldDeletedAt:
 		m.ClearDeletedAt()
+		return nil
+	case ticket.FieldCustomFieldValues:
+		m.ClearCustomFieldValues()
 		return nil
 	}
 	return fmt.Errorf("unknown Ticket nullable field %s", name)
@@ -128223,6 +128293,9 @@ func (m *TicketMutation) ResetField(name string) error {
 		return nil
 	case ticket.FieldDeletedAt:
 		m.ResetDeletedAt()
+		return nil
+	case ticket.FieldCustomFieldValues:
+		m.ResetCustomFieldValues()
 		return nil
 	}
 	return fmt.Errorf("unknown Ticket field %s", name)

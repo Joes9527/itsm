@@ -243,6 +243,58 @@ func TestTicketService_CreateTicketPersistsAssociations(t *testing.T) {
 	assert.Equal(t, tag.ID, entity.Edges.Tags[0].ID)
 }
 
+func TestTicketService_CreateTicketPersistsCustomFieldValues(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ticket_create_custom_fields?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	tenant := createTicketAssociationTenant(t, ctx, client, "create-custom-fields")
+	requester := createTicketAssociationUser(t, ctx, client, tenant.ID, "create-custom-fields-requester")
+	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
+
+	created, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
+		Title:       "网络接入申请",
+		Description: "自定义字段测试",
+		Priority:    "medium",
+		RequesterID: requester.ID,
+		FormFields: map[string]interface{}{
+			"presetTypeId": "network_access",
+			"values": map[string]interface{}{
+				"office_location": "上海",
+				"device_count":    float64(3),
+			},
+		},
+	}, tenant.ID)
+	require.NoError(t, err)
+	require.NotNil(t, created)
+	assert.Equal(t, "上海", created.CustomFieldValues["office_location"])
+	assert.Equal(t, float64(3), created.CustomFieldValues["device_count"])
+	// presetTypeId 只是路由元数据，不应混入自定义字段值
+	assert.NotContains(t, created.CustomFieldValues, "presetTypeId")
+
+	entity, err := client.Ticket.Get(ctx, created.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "上海", entity.CustomFieldValues["office_location"])
+}
+
+func TestTicketService_CreateTicketWithoutFormFieldsLeavesCustomFieldValuesEmpty(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ticket_create_no_custom_fields?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	tenant := createTicketAssociationTenant(t, ctx, client, "create-no-custom-fields")
+	requester := createTicketAssociationUser(t, ctx, client, tenant.ID, "create-no-custom-fields-requester")
+	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
+
+	created, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
+		Title:       "无自定义字段工单",
+		Description: "普通工单",
+		Priority:    "medium",
+		RequesterID: requester.ID,
+	}, tenant.ID)
+	require.NoError(t, err)
+	require.NotNil(t, created)
+	assert.Empty(t, created.CustomFieldValues)
+}
+
 func TestTicketService_CreateTicketRejectsCrossTenantReferences(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:ticket_create_cross_tenant?mode=memory&cache=shared&_fk=1")
 	defer client.Close()

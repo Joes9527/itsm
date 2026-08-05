@@ -464,6 +464,12 @@ func (_c *TicketCreate) SetNillableDeletedAt(v *time.Time) *TicketCreate {
 	return _c
 }
 
+// SetCustomFieldValues sets the "custom_field_values" field.
+func (_c *TicketCreate) SetCustomFieldValues(v map[string]interface{}) *TicketCreate {
+	_c.mutation.SetCustomFieldValues(v)
+	return _c
+}
+
 // AddCommentIDs adds the "comments" edge to the TicketComment entity by IDs.
 func (_c *TicketCreate) AddCommentIDs(ids ...int) *TicketCreate {
 	_c.mutation.AddCommentIDs(ids...)
@@ -966,6 +972,10 @@ func (_c *TicketCreate) createSpec() (*Ticket, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.DeletedAt(); ok {
 		_spec.SetField(ticket.FieldDeletedAt, field.TypeTime, value)
 		_node.DeletedAt = &value
+	}
+	if value, ok := _c.mutation.CustomFieldValues(); ok {
+		_spec.SetField(ticket.FieldCustomFieldValues, field.TypeJSON, value)
+		_node.CustomFieldValues = value
 	}
 	if nodes := _c.mutation.CommentsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

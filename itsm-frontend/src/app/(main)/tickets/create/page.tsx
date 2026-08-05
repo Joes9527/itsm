@@ -105,8 +105,48 @@ export default function CreateTicketPage() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
-  // 过滤后的类型列表
-  const filteredTypes = getTicketTypesByCategory(categoryFilter);
+  // 从数据库动态拉取的自定义模板列表
+  const [dbTemplates, setDbTemplates] = useState<TicketTypePreset[]>([]);
+
+  useEffect(() => {
+    // 从后端 API 加载之前由用户在 /tickets/templates 保存的模板
+    TicketApi.getTemplates({ page: 1, pageSize: 100 })
+      .then(res => {
+        if (res && res.items && Array.isArray(res.items)) {
+          const mapped: TicketTypePreset[] = res.items.map((item: any) => {
+            const rawFields = item.fields || item.content?.fields || item.content?.customFields || [];
+            const fieldsArr = Array.isArray(rawFields) ? rawFields.map((f: any) => ({
+              name: f.name || f.id,
+              label: f.label || f.name,
+              type: f.type || 'text',
+              required: !!f.required,
+              placeholder: f.placeholder || `请输入${f.label || f.name}`,
+              options: f.options || (f.optionsStr ? f.optionsStr.split(',').map((o: string) => ({ label: o.trim(), value: o.trim() })) : undefined),
+            })) : [];
+
+            return {
+              id: `db_${item.id}`,
+              name: item.name,
+              code: `TMPL_${item.id}`,
+              category: item.category || '自定义模板',
+              categoryKey: 'custom',
+              description: item.description || '用户保存的自定义表单模板',
+              icon: 'FileText',
+              color: '#1677ff',
+              priority: item.priority || 'medium',
+              fields: fieldsArr,
+            };
+          });
+          setDbTemplates(mapped);
+        }
+      })
+      .catch(err => {
+        console.warn('Failed to load DB templates in create page:', err);
+      });
+  }, []);
+
+  // 合并静态预设与数据库动态保存的自定义模板
+  const allAvailableTypes = [...dbTemplates, ...getTicketTypesByCategory(categoryFilter)];
 
   // 选中类型时自动设置优先级
   useEffect(() => {
@@ -157,13 +197,26 @@ export default function CreateTicketPage() {
       // 构建 priority：如果没有选择类型，使用表单中的 priority；否则使用预设优先级
       const priority = values.priority || (selectedType ? selectedType.priority : 'medium');
 
+      // 收集自定义字段的结构化值，供后端结构化落库（与上面拼进 description 的可读摘要并行，互不替代）
+      const customFieldValues: Record<string, unknown> = {};
+      if (selectedType?.fields && selectedType.fields.length > 0) {
+        selectedType.fields.forEach(field => {
+          const value = values[field.name];
+          if (value !== undefined && value !== null && value !== '') {
+            customFieldValues[field.name] = value;
+          }
+        });
+      }
+
       const created = await TicketApi.createTicket({
         title: title,
         description: description,
         priority: priority,
         type: inferTicketType(selectedType),
         category: values.category || (selectedType ? selectedType.category : undefined),
-        formFields: selectedType ? { presetTypeId: selectedType.id } : undefined,
+        formFields: selectedType
+          ? { presetTypeId: selectedType.id, values: customFieldValues }
+          : undefined,
         workflowDefinitionKey: selectedType?.workflowTemplateId,
       });
 
@@ -290,7 +343,7 @@ export default function CreateTicketPage() {
               title={
                 <Space>
                   <span>选择工单类型</span>
-                  <Tag color="blue">{filteredTypes.length} 种</Tag>
+                  <Tag color="blue">{allAvailableTypes.length} 种</Tag>
                 </Space>
               }
               styles={{ body: { padding: '12px' } }}
@@ -333,7 +386,7 @@ export default function CreateTicketPage() {
                   size={8}
                   role="presentation"
                 >
-                  {filteredTypes.map(type => renderTypeCard(type))}
+                  {allAvailableTypes.map(type => renderTypeCard(type))}
                 </Space>
               </div>
             </Card>

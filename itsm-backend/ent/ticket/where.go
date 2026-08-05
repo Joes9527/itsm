@@ -1940,6 +1940,16 @@ func DeletedAtNotNil() predicate.Ticket {
 	return predicate.Ticket(sql.FieldNotNull(FieldDeletedAt))
 }
 
+// CustomFieldValuesIsNil applies the IsNil predicate on the "custom_field_values" field.
+func CustomFieldValuesIsNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldIsNull(FieldCustomFieldValues))
+}
+
+// CustomFieldValuesNotNil applies the NotNil predicate on the "custom_field_values" field.
+func CustomFieldValuesNotNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotNull(FieldCustomFieldValues))
+}
+
 // HasComments applies the HasEdge predicate on the "comments" edge.
 func HasComments() predicate.Ticket {
 	return predicate.Ticket(func(s *sql.Selector) {

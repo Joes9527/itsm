@@ -143,7 +143,9 @@ port_in_use() {
 dc() {
     # Auto-detect docker compose command (supports v1 and v2)
     local -a cmd
-    if command -v docker-compose &>/dev/null; then
+    if docker compose version &>/dev/null; then
+        cmd=(docker compose)
+    elif command -v docker-compose &>/dev/null; then
         cmd=(docker-compose)
     else
         cmd=(docker compose)

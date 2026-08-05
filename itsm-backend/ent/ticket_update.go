@@ -705,6 +705,18 @@ func (_u *TicketUpdate) ClearDeletedAt() *TicketUpdate {
 	return _u
 }
 
+// SetCustomFieldValues sets the "custom_field_values" field.
+func (_u *TicketUpdate) SetCustomFieldValues(v map[string]interface{}) *TicketUpdate {
+	_u.mutation.SetCustomFieldValues(v)
+	return _u
+}
+
+// ClearCustomFieldValues clears the value of the "custom_field_values" field.
+func (_u *TicketUpdate) ClearCustomFieldValues() *TicketUpdate {
+	_u.mutation.ClearCustomFieldValues()
+	return _u
+}
+
 // AddCommentIDs adds the "comments" edge to the TicketComment entity by IDs.
 func (_u *TicketUpdate) AddCommentIDs(ids ...int) *TicketUpdate {
 	_u.mutation.AddCommentIDs(ids...)
@@ -1510,6 +1522,12 @@ func (_u *TicketUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.DeletedAtCleared() {
 		_spec.ClearField(ticket.FieldDeletedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.CustomFieldValues(); ok {
+		_spec.SetField(ticket.FieldCustomFieldValues, field.TypeJSON, value)
+	}
+	if _u.mutation.CustomFieldValuesCleared() {
+		_spec.ClearField(ticket.FieldCustomFieldValues, field.TypeJSON)
 	}
 	if _u.mutation.CommentsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -2882,6 +2900,18 @@ func (_u *TicketUpdateOne) ClearDeletedAt() *TicketUpdateOne {
 	return _u
 }
 
+// SetCustomFieldValues sets the "custom_field_values" field.
+func (_u *TicketUpdateOne) SetCustomFieldValues(v map[string]interface{}) *TicketUpdateOne {
+	_u.mutation.SetCustomFieldValues(v)
+	return _u
+}
+
+// ClearCustomFieldValues clears the value of the "custom_field_values" field.
+func (_u *TicketUpdateOne) ClearCustomFieldValues() *TicketUpdateOne {
+	_u.mutation.ClearCustomFieldValues()
+	return _u
+}
+
 // AddCommentIDs adds the "comments" edge to the TicketComment entity by IDs.
 func (_u *TicketUpdateOne) AddCommentIDs(ids ...int) *TicketUpdateOne {
 	_u.mutation.AddCommentIDs(ids...)
@@ -3717,6 +3747,12 @@ func (_u *TicketUpdateOne) sqlSave(ctx context.Context) (_node *Ticket, err erro
 	}
 	if _u.mutation.DeletedAtCleared() {
 		_spec.ClearField(ticket.FieldDeletedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.CustomFieldValues(); ok {
+		_spec.SetField(ticket.FieldCustomFieldValues, field.TypeJSON, value)
+	}
+	if _u.mutation.CustomFieldValuesCleared() {
+		_spec.ClearField(ticket.FieldCustomFieldValues, field.TypeJSON)
 	}
 	if _u.mutation.CommentsCleared() {
 		edge := &sqlgraph.EdgeSpec{

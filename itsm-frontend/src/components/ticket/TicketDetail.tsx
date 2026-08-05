@@ -489,6 +489,18 @@ const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
             <Descriptions.Item label="描述" span={2}>
               <SafeTextBlock content={ticket.description} fallback="暂无描述" />
             </Descriptions.Item>
+            {ticket.customFields && Object.keys(ticket.customFields).length > 0 && (
+              <Descriptions.Item label="自定义字段" span={2}>
+                <Space orientation="vertical" size={4} style={{ width: '100%' }}>
+                  {Object.entries(ticket.customFields).map(([key, value]) => (
+                    <div key={key}>
+                      <Typography.Text type="secondary">{key}：</Typography.Text>
+                      {String(value)}
+                    </div>
+                  ))}
+                </Space>
+              </Descriptions.Item>
+            )}
           </Descriptions>
 
           {/* SLA Information */}

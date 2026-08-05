@@ -59,6 +59,9 @@ func ticketToResponse(t *ticket.Ticket) *dto.TicketResponse {
 	if t.CategoryID != nil {
 		resp.CategoryID = *t.CategoryID
 	}
+	if len(t.CustomFieldValues) > 0 {
+		resp.CustomFieldValues = t.CustomFieldValues
+	}
 	return resp
 }
 

@@ -75,6 +75,7 @@ type Ticket struct {
 	CreatedAt             time.Time
 	UpdatedAt             time.Time
 	DeletedAt             *time.Time
+	CustomFieldValues     map[string]interface{}
 }
 
 // IsFinalState 判断是否为终态
@@ -208,17 +209,18 @@ type FilterParams struct {
 
 // CreateParams 工单创建参数
 type CreateParams struct {
-	Title          string
-	Description    string
-	Type           Type
-	Priority       Priority
-	RequesterID    int
-	AssigneeID     *int
-	CategoryID     *int
-	TemplateID     *int
-	ParentTicketID *int
-	TagIDs         []int
-	Tags           []string
+	Title             string
+	Description       string
+	Type              Type
+	Priority          Priority
+	RequesterID       int
+	AssigneeID        *int
+	CategoryID        *int
+	TemplateID        *int
+	ParentTicketID    *int
+	TagIDs            []int
+	Tags              []string
+	CustomFieldValues map[string]interface{}
 }
 
 // UpdateParams 工单更新参数

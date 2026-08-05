@@ -135,14 +135,15 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 
 	// 转换 DTO 到领域参数
 	params := &ticket.CreateParams{
-		Title:          req.Title,
-		Description:    req.Description,
-		Type:           ticketType,
-		Priority:       ticket.Priority(req.Priority),
-		RequesterID:    req.RequesterID,
-		TemplateID:     req.TemplateID,
-		ParentTicketID: req.ParentTicketID,
-		TagIDs:         uniqueIDs(req.TagIDs),
+		Title:             req.Title,
+		Description:       req.Description,
+		Type:              ticketType,
+		Priority:          ticket.Priority(req.Priority),
+		RequesterID:       req.RequesterID,
+		TemplateID:        req.TemplateID,
+		ParentTicketID:    req.ParentTicketID,
+		TagIDs:            uniqueIDs(req.TagIDs),
+		CustomFieldValues: extractCustomFieldValues(req.FormFields),
 	}
 
 	if assigneeID != 0 {
@@ -344,6 +345,18 @@ func (s *TicketService) validateCreateTicketReferences(ctx context.Context, req 
 		if count != len(tagIDs) {
 			return fmt.Errorf("工单标签不存在或不可用")
 		}
+	}
+	return nil
+}
+
+// extractCustomFieldValues 从提交的 formFields 中取出用户实际填写的自定义字段值（"values" 键），
+// 忽略 presetTypeId 等仅用于类型推断/路由的元数据键。
+func extractCustomFieldValues(formFields map[string]interface{}) map[string]interface{} {
+	if formFields == nil {
+		return nil
+	}
+	if values, ok := formFields["values"].(map[string]interface{}); ok {
+		return values
 	}
 	return nil
 }
@@ -1146,6 +1159,9 @@ func (s *TicketService) toTicketResponse(t *ticket.Ticket) *dto.TicketResponse {
 	resp.FirstResponseAt = t.FirstResponseAt
 	resp.SLAResponseDeadline = t.SLAResponseDeadline
 	resp.SLAResolutionDeadline = t.SLAResolutionDeadline
+	if len(t.CustomFieldValues) > 0 {
+		resp.CustomFieldValues = t.CustomFieldValues
+	}
 
 	return resp
 }
@@ -1181,6 +1197,7 @@ func (s *TicketService) toEntTicket(t *ticket.Ticket) *ent.Ticket {
 		entTicket.ResolvedAt = *t.ResolvedAt
 	}
 	entTicket.ClosedAt = t.ClosedAt
+	entTicket.CustomFieldValues = t.CustomFieldValues
 	return entTicket
 }
 
