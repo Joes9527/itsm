@@ -40,6 +40,7 @@ import {
   Tag as TagIcon,
 } from 'lucide-react';
 import { TicketApi } from '@/lib/api/ticket-api';
+import { CustomFieldsEditor } from '@/components/common/CustomFieldsEditor';
 // AppLayout is handled by layout.tsx
 
 const { Title, Text } = Typography;
@@ -841,96 +842,7 @@ const TicketTemplatesPage = () => {
           </Row>
 
           <Divider>Custom Fields</Divider>
-          <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-            提交工单时会额外展示这些字段；下面填写的其它元数据（placeholder、默认值等）目前后端不持久化，仅字段名/标签/类型/是否必填会保存。
-          </Text>
-          <Form.List name="customFields">
-            {(fields, { add, remove }) => (
-              <>
-                {fields.map(({ key, name, ...restField }) => (
-                  <Row gutter={8} key={key} align="middle" style={{ marginBottom: 8 }}>
-                    <Col span={6}>
-                      <Form.Item
-                        {...restField}
-                        name={[name, 'name']}
-                        rules={[{ required: true, message: 'Field name required' }]}
-                        style={{ marginBottom: 0 }}
-                      >
-                        <Input placeholder="字段名，如 environment" />
-                      </Form.Item>
-                    </Col>
-                    <Col span={6}>
-                      <Form.Item
-                        {...restField}
-                        name={[name, 'label']}
-                        rules={[{ required: true, message: 'Label required' }]}
-                        style={{ marginBottom: 0 }}
-                      >
-                        <Input placeholder="展示标签，如 环境" />
-                      </Form.Item>
-                    </Col>
-                    <Col span={5}>
-                      <Form.Item
-                        {...restField}
-                        name={[name, 'type']}
-                        initialValue="text"
-                        style={{ marginBottom: 0 }}
-                      >
-                        <Select
-                          options={[
-                            { value: 'text', label: 'Text' },
-                            { value: 'textarea', label: 'Textarea' },
-                            { value: 'number', label: 'Number' },
-                            { value: 'date', label: 'Date' },
-                            { value: 'select', label: 'Select' },
-                          ]}
-                        />
-                      </Form.Item>
-                    </Col>
-                    <Col span={4}>
-                      <Form.Item
-                        {...restField}
-                        name={[name, 'options']}
-                        style={{ marginBottom: 0 }}
-                      >
-                        <Input placeholder="选项(逗号分隔，仅Select)" />
-                      </Form.Item>
-                    </Col>
-                    <Col span={2}>
-                      <Form.Item
-                        {...restField}
-                        name={[name, 'required']}
-                        valuePropName="checked"
-                        initialValue={false}
-                        style={{ marginBottom: 0 }}
-                      >
-                        <Switch checkedChildren="必填" unCheckedChildren="选填" />
-                      </Form.Item>
-                    </Col>
-                    <Col span={1}>
-                      <Button
-                        type="text"
-                        danger
-                        icon={<Delete size={16} />}
-                        onClick={() => remove(name)}
-                        aria-label="删除字段"
-                      />
-                    </Col>
-                  </Row>
-                ))}
-                <Form.Item style={{ marginBottom: 0 }}>
-                  <Button
-                    type="dashed"
-                    onClick={() => add({ type: 'text', required: false })}
-                    icon={<Plus size={16} />}
-                    block
-                  >
-                    添加自定义字段
-                  </Button>
-                </Form.Item>
-              </>
-            )}
-          </Form.List>
+          <CustomFieldsEditor name="customFields" />
 
           <Divider>Advanced Settings</Divider>
 
