@@ -37,10 +37,12 @@ import {
   Tooltip,
   App,
   Tag,
+  Divider,
 } from 'antd';
 import { ServiceCatalogApi } from '@/lib/api/service-catalog-api';
 import { CMDBApi } from '@/lib/api/cmdb-api';
 import { BatchActionBar, type BatchAction } from '@/components/business/BatchActionBar';
+import { CustomFieldsEditor } from '@/components/common/CustomFieldsEditor';
 import type {
   ServiceItem,
   CreateServiceItemRequest,
@@ -143,6 +145,7 @@ const ServiceCatalogManagement = () => {
         availability: values.deliveryTime ? { responseTime: values.deliveryTime } : undefined,
         ciTypeId: values.ciTypeId,
         cloudServiceId: values.cloudServiceId,
+        fields: values.fields,
         ...(values.status ? { status: values.status } : {}),
       } as CreateServiceItemRequest;
       if (editingCatalog) {
@@ -175,6 +178,7 @@ const ServiceCatalogManagement = () => {
       status: catalog.status,
       ciTypeId: catalog.ciTypeId,
       cloudServiceId: catalog.cloudServiceId,
+      fields: catalog.fields || [],
     });
     setShowModal(true);
   };
@@ -740,6 +744,9 @@ const ServiceCatalogManagement = () => {
               </Form.Item>
             </Col>
           </Row>
+
+          <Divider>自定义字段</Divider>
+          <CustomFieldsEditor name="fields" />
 
           {/* 审批配置 */}
           <div className="bg-gray-50 p-4 rounded-lg mb-4">

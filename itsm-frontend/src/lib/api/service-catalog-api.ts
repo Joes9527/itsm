@@ -86,6 +86,7 @@ export class ServiceCatalogApi {
         // 后端 deliveryTime 为 string（天/小时口径未统一）；V0先用于展示，不做严格含义
         responseTime: raw?.deliveryTime ? Number(raw.deliveryTime) : undefined,
       },
+      fields: Array.isArray(raw?.fields) ? raw.fields : [],
     };
   }
 
@@ -202,6 +203,7 @@ export class ServiceCatalogApi {
         request.availability?.responseTime ?? request.availability?.resolutionTime ?? 1
       ),
       status: ServiceCatalogApi.toBackendStatus(request.status) || 'enabled',
+      fields: request.fields,
     };
     const resp = await httpClient.post<any>('/api/v1/service-catalogs', payload);
     return ServiceCatalogApi.toServiceItem(resp);
@@ -222,6 +224,7 @@ export class ServiceCatalogApi {
     }
     if (request.ciTypeId !== undefined) payload.ciTypeId = request.ciTypeId;
     if (request.cloudServiceId !== undefined) payload.cloudServiceId = request.cloudServiceId;
+    if (request.fields !== undefined) payload.fields = request.fields;
     const st = ServiceCatalogApi.toBackendStatus(request.status);
     if (st) payload.status = st;
 
