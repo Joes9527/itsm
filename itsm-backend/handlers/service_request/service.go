@@ -74,6 +74,11 @@ func NewService(repo Repository, scRepo service_catalog.Repository, cmdbRepo cmd
 	return svc
 }
 
+// Client exposes the underlying ent client so the handler layer can query
+// side-channel data (e.g. custom field values) for detail responses without
+// duplicating that dependency on Handler.
+func (s *Service) Client() *ent.Client { return s.client }
+
 // Create submits a new service request
 func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalogID int, reqData *ServiceRequest) (*ServiceRequest, error) {
 	if _, _, err := s.repo.GetUserContext(ctx, requesterID, tenantID); err != nil {

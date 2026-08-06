@@ -23,6 +23,7 @@ import (
 	entuser "itsm-backend/ent/user"
 	"itsm-backend/handlers/cmdb"
 	"itsm-backend/handlers/service_catalog"
+	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -153,6 +154,36 @@ func TestServiceRequestHandler_Create_Success(t *testing.T) {
 	data := resp.Data.(map[string]interface{})
 	assert.EqualValues(t, catID, data["catalogId"])
 	assert.Equal(t, "submitted", data["status"])
+}
+
+func TestHandler_Get_IncludesCustomFieldValues(t *testing.T) {
+	// srSetup 返回 (r, client, tenantID, userID, catalogID)；这里不用它预置的那个
+	// catalogID（没有字段定义），另外建一个带字段的 ServiceCatalog。
+	r, client, tenantID, _, _ := srSetup(t)
+	scRepo := service_catalog.NewEntRepository(client)
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
+	catalog, err := scService.Create(context.Background(), "云主机申请-"+srUID(), "software", "desc", 1, tenantID, "enabled", 0, 0,
+		[]service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}})
+	require.NoError(t, err)
+
+	createReq := dto.CreateServiceRequestRequest{
+		CatalogID: catalog.ID, Title: "申请", Reason: "测试", ComplianceAck: true,
+		FormData: map[string]interface{}{"environment": "staging"},
+	}
+	createResp := srDoReq(t, r, "POST", "/api/v1/service-requests", createReq)
+	require.Equal(t, common.SuccessCode, createResp.Code, "body=%s", srStr(createResp))
+	created := createResp.Data.(map[string]interface{})
+	id := int(created["id"].(float64))
+
+	getResp := srDoReq(t, r, "GET", "/api/v1/service-requests/"+strconv.Itoa(id), nil)
+	require.Equal(t, common.SuccessCode, getResp.Code, "body=%s", srStr(getResp))
+	data := getResp.Data.(map[string]interface{})
+	customFields := data["customFields"].([]interface{})
+	require.Len(t, customFields, 1)
+	first := customFields[0].(map[string]interface{})
+	assert.Equal(t, "environment", first["name"])
+	assert.Equal(t, "环境", first["label"])
+	assert.Equal(t, "staging", first["value"])
 }
 
 func TestServiceRequestHandler_Create_MissingCatalogID(t *testing.T) {

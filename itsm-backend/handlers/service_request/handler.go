@@ -1,6 +1,7 @@
 package service_request
 
 import (
+	"context"
 	"strconv"
 	"strings"
 	"time"
@@ -8,6 +9,7 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -111,6 +113,29 @@ func (h *Handler) toDTO(req *ServiceRequest, approvals []*ServiceRequestApproval
 	return resp
 }
 
+// toDTOWithCustomFields wraps toDTO and additionally fills in CustomFields
+// from the field_values snapshot. Used by detail-style responses (Get,
+// Create's success branch) — List intentionally does not call this to avoid
+// N+1 queries, mirroring ToTicketResponse vs ToTicketResponseWithCustomFields.
+func (h *Handler) toDTOWithCustomFields(req *ServiceRequest, approvals []*ServiceRequestApproval, client *ent.Client) *dto.ServiceRequestResponse {
+	resp := h.toDTO(req, approvals)
+	if client == nil {
+		return resp
+	}
+	values, err := service.NewFieldValueService(client).ListValues(context.Background(), req.TenantID, "service_request", req.ID)
+	if err != nil {
+		return resp
+	}
+	if len(values) == 0 {
+		return resp
+	}
+	resp.CustomFields = make([]dto.CustomFieldValueResponse, 0, len(values))
+	for _, v := range values {
+		resp.CustomFields = append(resp.CustomFields, dto.CustomFieldValueResponse{Name: v.Name, Label: v.Label, Value: v.Value})
+	}
+	return resp
+}
+
 func (h *Handler) Create(c *gin.Context) {
 	var req dto.CreateServiceRequestRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -161,7 +186,7 @@ func (h *Handler) Create(c *gin.Context) {
 		common.Success(c, h.toDTO(created, nil))
 		return
 	}
-	common.Success(c, h.toDTO(fullReq, approvals))
+	common.Success(c, h.toDTOWithCustomFields(fullReq, approvals, h.service.Client()))
 }
 
 func (h *Handler) Get(c *gin.Context) {
@@ -184,7 +209,7 @@ func (h *Handler) Get(c *gin.Context) {
 		}
 		return
 	}
-	common.Success(c, h.toDTO(req, approvals))
+	common.Success(c, h.toDTOWithCustomFields(req, approvals, h.service.Client()))
 }
 
 func (h *Handler) List(c *gin.Context) {

@@ -111,9 +111,10 @@ type ServiceRequestResponse struct {
 	CreatedAt      time.Time  `json:"createdAt"`
 	UpdatedAt      time.Time  `json:"updatedAt"`
 
-	Approvals []ServiceRequestApprovalResponse `json:"approvals,omitempty"`
-	Catalog   *ServiceCatalogResponse          `json:"catalog,omitempty"`
-	Requester *UserResponse                    `json:"requester,omitempty"`
+	Approvals    []ServiceRequestApprovalResponse `json:"approvals,omitempty"`
+	Catalog      *ServiceCatalogResponse          `json:"catalog,omitempty"`
+	Requester    *UserResponse                    `json:"requester,omitempty"`
+	CustomFields []CustomFieldValueResponse       `json:"customFields,omitempty"`
 }
 
 // ServiceRequestApprovalResponse 服务请求审批记录响应
