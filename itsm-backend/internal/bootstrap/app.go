@@ -492,7 +492,7 @@ func NewApplication() *Application {
 
 	// Domain: Service Catalog (DDD)
 	scRepo := service_catalog.NewEntRepository(client)
-	scService := service_catalog.NewService(scRepo, sugar)
+	scService := service_catalog.NewService(scRepo, client, sugar)
 	scHandler := service_catalog.NewHandler(scService)
 
 	// Domain: CMDB (DDD)

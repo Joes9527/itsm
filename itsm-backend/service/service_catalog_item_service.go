@@ -70,7 +70,7 @@ func (s *ServiceCatalogItemService) CreateServiceCatalogItem(ctx context.Context
 		return nil, fmt.Errorf("failed to create service item: %w", err)
 	}
 
-	if _, err := NewFieldDefinitionService(s.client).ReplaceDefinitions(ctx, tenantID, "service_catalog_item", item.ID, toFieldDefinitionInputs(req.Fields)); err != nil {
+	if _, err := NewFieldDefinitionService(s.client).ReplaceDefinitions(ctx, tenantID, "service_catalog_item", item.ID, ToFieldDefinitionInputs(req.Fields)); err != nil {
 		return nil, fmt.Errorf("failed to save field definitions: %w", err)
 	}
 
@@ -197,7 +197,7 @@ func (s *ServiceCatalogItemService) UpdateServiceCatalogItem(ctx context.Context
 	}
 
 	if req.Fields != nil {
-		if _, err := NewFieldDefinitionService(s.client).ReplaceDefinitions(ctx, tenantID, "service_catalog_item", id, toFieldDefinitionInputs(*req.Fields)); err != nil {
+		if _, err := NewFieldDefinitionService(s.client).ReplaceDefinitions(ctx, tenantID, "service_catalog_item", id, ToFieldDefinitionInputs(*req.Fields)); err != nil {
 			return nil, fmt.Errorf("failed to save field definitions: %w", err)
 		}
 	}

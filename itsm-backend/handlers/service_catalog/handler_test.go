@@ -80,7 +80,7 @@ func scSetup(t *testing.T) (*gin.Engine, *ent.Client, int) {
 	require.NoError(t, err)
 
 	repo := NewEntRepository(client)
-	svc := NewService(repo, zaptest.NewLogger(t).Sugar())
+	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
 	h := NewHandler(svc)
 
 	r := gin.New()

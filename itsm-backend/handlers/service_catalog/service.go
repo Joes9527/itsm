@@ -6,23 +6,27 @@ import (
 
 	"go.uber.org/zap"
 	"itsm-backend/common"
+	"itsm-backend/ent"
+	"itsm-backend/service"
 )
 
 // Service defines the business logic
 type Service struct {
 	repo   Repository
+	client *ent.Client
 	logger *zap.SugaredLogger
 }
 
 // NewService creates a new Service
-func NewService(repo Repository, logger *zap.SugaredLogger) *Service {
+func NewService(repo Repository, client *ent.Client, logger *zap.SugaredLogger) *Service {
 	return &Service{
 		repo:   repo,
+		client: client,
 		logger: logger,
 	}
 }
 
-func (s *Service) Create(ctx context.Context, name, category, description string, deliveryTime, tenantID int, status string, ciTypeID, cloudServiceID int) (*ServiceCatalog, error) {
+func (s *Service) Create(ctx context.Context, name, category, description string, deliveryTime, tenantID int, status string, ciTypeID, cloudServiceID int, fields []service.FieldDefinitionInput) (*ServiceCatalog, error) {
 	name = strings.TrimSpace(name)
 	category = strings.TrimSpace(category)
 	if name == "" || category == "" {
@@ -63,7 +67,17 @@ func (s *Service) Create(ctx context.Context, name, category, description string
 		Status:         status,
 		TenantID:       tenantID,
 	}
-	return s.repo.Create(ctx, catalog)
+	created, err := s.repo.Create(ctx, catalog)
+	if err != nil {
+		return nil, err
+	}
+	if s.client != nil {
+		if _, err := service.NewFieldDefinitionService(s.client).ReplaceDefinitions(ctx, tenantID, "service_catalog", created.ID, fields); err != nil {
+			return nil, common.NewInternalError("Failed to save custom field definitions", err)
+		}
+	}
+	created.Fields = fields
+	return created, nil
 }
 
 func (s *Service) Get(ctx context.Context, tenantID int, id int) (*ServiceCatalog, error) {
@@ -83,7 +97,7 @@ func (s *Service) List(ctx context.Context, tenantID int, filters ListFilters) (
 	return s.repo.List(ctx, tenantID, filters)
 }
 
-func (s *Service) Update(ctx context.Context, tenantID int, id int, name, category, description string, deliveryTime int, status string, ciTypeID, cloudServiceID int) (*ServiceCatalog, error) {
+func (s *Service) Update(ctx context.Context, tenantID int, id int, name, category, description string, deliveryTime int, status string, ciTypeID, cloudServiceID int, fields []service.FieldDefinitionInput) (*ServiceCatalog, error) {
 	// First check if exists
 	current, err := s.repo.Get(ctx, tenantID, id)
 	if err != nil {
@@ -147,7 +161,17 @@ func (s *Service) Update(ctx context.Context, tenantID int, id int, name, catego
 		current.CloudServiceID = cloudServiceID
 	}
 
-	return s.repo.Update(ctx, tenantID, current)
+	updated, err := s.repo.Update(ctx, tenantID, current)
+	if err != nil {
+		return nil, err
+	}
+	if fields != nil && s.client != nil {
+		if _, err := service.NewFieldDefinitionService(s.client).ReplaceDefinitions(ctx, tenantID, "service_catalog", id, fields); err != nil {
+			return nil, common.NewInternalError("Failed to save custom field definitions", err)
+		}
+		updated.Fields = fields
+	}
+	return updated, nil
 }
 
 func (s *Service) Delete(ctx context.Context, tenantID int, id int) error {

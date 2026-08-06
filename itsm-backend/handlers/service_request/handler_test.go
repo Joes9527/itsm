@@ -93,8 +93,8 @@ func srSetup(t *testing.T) (*gin.Engine, *ent.Client, int, int, int) {
 
 	// 播种一个服务目录（无 CI 类型，走简单路径）
 	scRepo := service_catalog.NewEntRepository(client)
-	scSvc := service_catalog.NewService(scRepo, logger)
-	cat, err := scSvc.Create(ctx, "SRCatalog-"+srUID(), "software", "for test", 0, tenant.ID, "enabled", 0, 0)
+	scSvc := service_catalog.NewService(scRepo, client, logger)
+	cat, err := scSvc.Create(ctx, "SRCatalog-"+srUID(), "software", "for test", 0, tenant.ID, "enabled", 0, 0, nil)
 	require.NoError(t, err)
 
 	repo := NewEntRepository(client)
@@ -195,8 +195,8 @@ func TestServiceRequestCreateDefersNewCIUntilProvisioning(t *testing.T) {
 	ciType, err := client.CIType.Create().SetName("Virtual Machine").SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 	scRepo := service_catalog.NewEntRepository(client)
-	catalog, err := service_catalog.NewService(scRepo, logger).
-		Create(ctx, "VM Request", "infrastructure", "Provision VM", 24, tenant.ID, "enabled", ciType.ID, 0)
+	catalog, err := service_catalog.NewService(scRepo, client, logger).
+		Create(ctx, "VM Request", "infrastructure", "Provision VM", 24, tenant.ID, "enabled", ciType.ID, 0, nil)
 	require.NoError(t, err)
 	service := NewService(NewEntRepository(client), scRepo, cmdb.NewEntRepository(client), client, logger)
 	expireAt := time.Now().Add(30 * 24 * time.Hour)
@@ -336,8 +336,8 @@ func srSetupRole(t *testing.T, role, dept string) (*gin.Engine, int, int, int) {
 		Save(ctx)
 	require.NoError(t, err)
 	scRepo := service_catalog.NewEntRepository(client)
-	scSvc := service_catalog.NewService(scRepo, logger)
-	cat, err := scSvc.Create(ctx, "SRCatalog-"+srUID(), "software", "for test", 0, tenant.ID, "enabled", 0, 0)
+	scSvc := service_catalog.NewService(scRepo, client, logger)
+	cat, err := scSvc.Create(ctx, "SRCatalog-"+srUID(), "software", "for test", 0, tenant.ID, "enabled", 0, 0, nil)
 	require.NoError(t, err)
 	repo := NewEntRepository(client)
 	cmdbRepo := cmdb.NewEntRepository(client)
