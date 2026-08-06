@@ -114,3 +114,43 @@ func TestService_Update_NonNilFields_ReplacesDefinitions(t *testing.T) {
 	require.Len(t, listed, 1)
 	assert.Equal(t, "device_count", listed[0].Name)
 }
+
+// TestService_Create_FieldDefinitions_CrossTenantIsolation 验证 Create 写入的字段定义
+// 严格按 tenant_id 隔离：租户 B 即便拿到租户 A 目录的真实 entity_id，也读不到租户 A 的字段定义，
+// 且租户 B 也不能通过 Service.Get 拿到租户 A 的目录本身（repo.Get 已按 tenantID 过滤）。
+func TestService_Create_FieldDefinitions_CrossTenantIsolation(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:sc_service_tenant_isolation?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+
+	tenantA, err := client.Tenant.Create().
+		SetName("SC Tenant A").SetCode("SCA-" + scUID()).SetDomain("sc-a.test").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	tenantB, err := client.Tenant.Create().
+		SetName("SC Tenant B").SetCode("SCB-" + scUID()).SetDomain("sc-b.test").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+
+	repo := NewEntRepository(client)
+	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
+
+	createdA, err := svc.Create(ctx, "VM Service A", "it_service", "tenant A catalog", 1, tenantA.ID, "enabled", 0, 0, []service.FieldDefinitionInput{
+		{Name: "office_location", Label: "办公地点", FieldType: "text", Required: true},
+	})
+	require.NoError(t, err)
+	require.Len(t, createdA.Fields, 1)
+
+	// 租户 B 用租户 A 目录的真实 entity_id 去查字段定义，必须查不到任何东西
+	listedForB, err := service.NewFieldDefinitionService(client).ListDefinitions(ctx, tenantB.ID, "service_catalog", createdA.ID)
+	require.NoError(t, err)
+	assert.Empty(t, listedForB, "tenant B must not see tenant A's field definitions even with a valid entity_id")
+
+	// 租户 A 自己查得到
+	listedForA, err := service.NewFieldDefinitionService(client).ListDefinitions(ctx, tenantA.ID, "service_catalog", createdA.ID)
+	require.NoError(t, err)
+	require.Len(t, listedForA, 1)
+	assert.Equal(t, "office_location", listedForA[0].Name)
+
+	// 租户 B 也不能通过 Service.Get 拿到租户 A 的目录本身
+	_, err = svc.Get(ctx, tenantB.ID, createdA.ID)
+	assert.Error(t, err, "tenant B must not be able to fetch tenant A's service catalog")
+}
