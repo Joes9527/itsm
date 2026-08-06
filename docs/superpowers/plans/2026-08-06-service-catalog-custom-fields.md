@@ -31,10 +31,12 @@
 - Modify: `itsm-backend/handlers/service_catalog/handler_test.go:83`（`scSetup` 里的 `NewService` 调用点）
 - Modify: `itsm-backend/handlers/service_request/handler_test.go:96`（`srSetup` 里的 `service_catalog.NewService` 调用点）
 - Modify: `itsm-backend/handlers/service_request/handler_bpmn_bridge_test.go:42`（同上）
+- Modify: `itsm-backend/service/ticket_service.go:2008,2055,2084`（`toFieldDefinitionInputs` 导出为 `ToFieldDefinitionInputs`，避免和 `handlers/service_catalog` 各自维护一份同样的转换逻辑）
+- Modify: `itsm-backend/service/service_catalog_item_service.go:73,200`（跟随上面的改名同步更新调用点；此文件会在 Task 10 整体删除，这里只是保持中间状态可编译）
 - Test: `itsm-backend/handlers/service_catalog/service_test.go`（新建）
 
 **Interfaces:**
-- Consumes: `service.FieldDefinitionInput{Name,Label,FieldType,Required,Options,SortOrder}`、`service.NewFieldDefinitionService(client).ReplaceDefinitions(ctx, tenantID, entityType string, entityID int, defs []service.FieldDefinitionInput) ([]*ent.FieldDefinition, error)`（已存在，`itsm-backend/service/field_definition_service.go:36`）
+- Consumes: `service.FieldDefinitionInput{Name,Label,FieldType,Required,Options,SortOrder}`、`service.NewFieldDefinitionService(client).ReplaceDefinitions(ctx, tenantID, entityType string, entityID int, defs []service.FieldDefinitionInput) ([]*ent.FieldDefinition, error)`（已存在，`itsm-backend/service/field_definition_service.go:36`）、`service.ToFieldDefinitionInputs(fields []map[string]interface{}) []service.FieldDefinitionInput`（本 Task Step 5a 把它从私有函数改成导出，供 `handlers/service_catalog` 复用，不新增重复实现）
 - Produces：`Service.Create`/`Service.Update` 新增 `fields []service.FieldDefinitionInput` 参数；`ServiceCatalog` struct 新增 `Fields []service.FieldDefinitionInput` 字段，供 Task 2 的 `Get`/`List` 读取路径使用。
 
 - [ ] **Step 1: `entity.go` 加 `Fields` 字段**
@@ -172,42 +174,44 @@ func (s *Service) Update(ctx context.Context, tenantID int, id int, name, catego
 
 （`client` 变量在该行所在函数作用域内已存在，第505行 `service_request.NewService(srRepo, scRepo, cmdbRepo, client, sugar)` 已经在用同一个 `client`。）
 
-- [ ] **Step 5: `handler.go` 的 `Create`/`Update`/`toDTO` 接入 `fields`**
+- [ ] **Step 5a: 先把 `service` 包里已有的同名转换函数导出，而不是跨包复制一份**
 
-`Create`（117行起）：`ShouldBindJSON` 拿到 `req.Fields`（`[]map[string]interface{}`）后转换：
+`itsm-backend/service/ticket_service.go:2008` 已经有一个逻辑完全一样的函数 `toFieldDefinitionInputs（fields []map[string]interface{}) []FieldDefinitionInput`，只是没导出，`handlers/service_catalog` 这种外部包用不了。把它改成导出：
 
 ```go
-	fields := toFieldDefinitionInputs(req.Fields)
+// itsm-backend/service/ticket_service.go:2008
+func ToFieldDefinitionInputs(fields []map[string]interface{}) []FieldDefinitionInput {
 ```
 
-新增一个包级辅助函数（跟 `itsm-backend/service/ticket_service.go:2008` 的 `toFieldDefinitionInputs` 逻辑完全一致，复制过来放在 `handler.go` 底部，因为 `service` 包那个是非导出函数，跨包不能直接复用）：
+同一个文件里两处调用点（2055、2084行）改成大写：
 
 ```go
-func toFieldDefinitionInputs(fields []map[string]interface{}) []service.FieldDefinitionInput {
-	result := make([]service.FieldDefinitionInput, 0, len(fields))
-	for i, f := range fields {
-		name, _ := f["name"].(string)
-		if name == "" {
-			continue
-		}
-		label, _ := f["label"].(string)
-		fieldType, _ := f["type"].(string)
-		required, _ := f["required"].(bool)
-		var options []interface{}
-		if raw, ok := f["options"].([]interface{}); ok {
-			options = raw
-		}
-		result = append(result, service.FieldDefinitionInput{
-			Name:      name,
-			Label:     label,
-			FieldType: fieldType,
-			Required:  required,
-			Options:   options,
-			SortOrder: i,
-		})
-	}
-	return result
-}
+		Fields:        ToFieldDefinitionInputs(createReq.Fields),
+```
+
+```go
+		fields = ToFieldDefinitionInputs(updateReq.Fields)
+```
+
+`itsm-backend/service/service_catalog_item_service.go` 里还有两处调用（73、200行，这个文件本身会在 Task 10 整体删除，但在那之前的每个 Task 都要保持能编译）同样改成大写：
+
+```go
+	if _, err := NewFieldDefinitionService(s.client).ReplaceDefinitions(ctx, tenantID, "service_catalog_item", item.ID, ToFieldDefinitionInputs(req.Fields)); err != nil {
+```
+
+```go
+		if _, err := NewFieldDefinitionService(s.client).ReplaceDefinitions(ctx, tenantID, "service_catalog_item", id, ToFieldDefinitionInputs(*req.Fields)); err != nil {
+```
+
+Run: `cd itsm-backend && go build ./service/... 2>&1 | tail -30`
+Expected: 无输出（确认改名没有漏掉调用点）
+
+- [ ] **Step 5b: `handler.go` 的 `Create`/`Update`/`toDTO` 接入 `fields`**
+
+`Create`（117行起）：`ShouldBindJSON` 拿到 `req.Fields`（`[]map[string]interface{}`）后转换，直接调用 Step 5a 导出的函数，不新增任何包级辅助函数：
+
+```go
+	fields := service.ToFieldDefinitionInputs(req.Fields)
 ```
 
 `h.service.Create(...)` 调用末尾加 `fields` 实参；`Update` 同理。`toDTO`（308行）加：
@@ -286,7 +290,7 @@ Expected: 全部 PASS（这一步会真正编译到 Step 6 改的三个 `_test.g
 ```bash
 cd itsm-backend
 gofmt -l .
-git add handlers/service_catalog/entity.go handlers/service_catalog/service.go handlers/service_catalog/handler.go handlers/service_catalog/handler_test.go dto/service_dto.go internal/bootstrap/app.go handlers/service_request/handler_test.go handlers/service_request/handler_bpmn_bridge_test.go
+git add handlers/service_catalog/entity.go handlers/service_catalog/service.go handlers/service_catalog/handler.go handlers/service_catalog/handler_test.go handlers/service_catalog/service_test.go dto/service_dto.go internal/bootstrap/app.go handlers/service_request/handler_test.go handlers/service_request/handler_bpmn_bridge_test.go service/ticket_service.go service/service_catalog_item_service.go
 git commit -m "feat(backend): wire field_definitions into handlers/service_catalog Create/Update"
 ```
 
