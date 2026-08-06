@@ -104,6 +104,7 @@ export default function ServiceCatalogRequestPage() {
           // B10: 合规确认 + 过期时间
           complianceAck: !!values.complianceAck,
           expireAt: expireAt ? expireAt.toISOString() : undefined,
+          ...(values.customFields || {}),
         },
       };
 
@@ -272,6 +273,32 @@ export default function ServiceCatalogRequestPage() {
               我已知悉本服务的合规要求与安全策略，并承诺仅将资源用于申请所述的合法业务场景
             </Checkbox>
           </Form.Item>
+
+          {Array.isArray(catalog?.fields) && catalog.fields.length > 0 && (
+            <>
+              <Divider>该服务的补充信息</Divider>
+              {catalog.fields.map((field: { name: string; label: string; type: string; required: boolean; options?: Array<{ label: string; value: string }> }) => (
+                <Form.Item
+                  key={field.name}
+                  name={['customFields', field.name]}
+                  label={field.label}
+                  rules={field.required ? [{ required: true, message: `请填写${field.label}` }] : []}
+                >
+                  {field.type === 'textarea' ? (
+                    <TextArea rows={3} />
+                  ) : field.type === 'select' ? (
+                    <Select options={field.options} />
+                  ) : field.type === 'number' ? (
+                    <Input type="number" />
+                  ) : field.type === 'date' ? (
+                    <DatePicker style={{ width: '100%' }} />
+                  ) : (
+                    <Input />
+                  )}
+                </Form.Item>
+              ))}
+            </>
+          )}
 
           <Form.Item>
             <Space>
