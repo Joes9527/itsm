@@ -204,7 +204,22 @@ const TicketTemplatesPage = () => {
   };
 
   const handleEditTemplate = (template: TicketTemplate) => {
-    setEditingTemplate(template);
+    // customFields[].options 从后端拿到时是 [{label,value}] 数组（供渲染 Select 用），
+    // 但编辑表单里的 options 输入框是逗号分隔的字符串——编辑态转一次好让已有 select 类型
+    // 字段的选项能正常回显，而不是显示成 "[object Object]"。
+    const normalized: TicketTemplate = {
+      ...template,
+      customFields: (template.customFields || []).map(f => ({
+        ...f,
+        options: Array.isArray(f.options)
+          ? (f.options as unknown[])
+              .map(o => (o && typeof o === 'object' ? (o as { label?: string }).label : o))
+              .filter(Boolean)
+              .join(',')
+          : f.options,
+      })) as unknown as CustomField[],
+    };
+    setEditingTemplate(normalized);
     setModalVisible(true);
   };
 
@@ -599,6 +614,7 @@ const TicketTemplatesPage = () => {
         onCancel={() => setModalVisible(false)}
         footer={null}
         width={1000}
+        destroyOnHidden
       >
         <Form
           layout="vertical"
@@ -616,12 +632,40 @@ const TicketTemplatesPage = () => {
                 approvalLevel: values.approvalLevel,
                 tags: values.tags || [],
               };
+              // customFields（Form.List 编辑态）转成后端 field_definitions 期望的
+              // {name, label, type, required, options} 数组；过滤掉没填字段名的空行。
+              const rawCustomFields: Array<{
+                name?: string;
+                label?: string;
+                type?: string;
+                required?: boolean;
+                options?: string;
+              }> = values.customFields || [];
+              const fields = rawCustomFields
+                .filter(f => f?.name)
+                .map(f => ({
+                  name: f.name,
+                  label: f.label || f.name,
+                  type: f.type || 'text',
+                  required: !!f.required,
+                  ...(f.type === 'select' && f.options
+                    ? {
+                        options: f.options
+                          .split(',')
+                          .map(o => o.trim())
+                          .filter(Boolean)
+                          .map(o => ({ label: o, value: o })),
+                      }
+                    : {}),
+                }));
+
               const payload = {
                 name: values.name,
                 description: values.description,
                 category: values.category,
                 priority: values.priority,
                 formFields,
+                fields,
                 isActive: values.isActive ?? true,
               };
               if (editingTemplate) {
@@ -795,6 +839,98 @@ const TicketTemplatesPage = () => {
               </Form.Item>
             </Col>
           </Row>
+
+          <Divider>Custom Fields</Divider>
+          <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+            提交工单时会额外展示这些字段；下面填写的其它元数据（placeholder、默认值等）目前后端不持久化，仅字段名/标签/类型/是否必填会保存。
+          </Text>
+          <Form.List name="customFields">
+            {(fields, { add, remove }) => (
+              <>
+                {fields.map(({ key, name, ...restField }) => (
+                  <Row gutter={8} key={key} align="middle" style={{ marginBottom: 8 }}>
+                    <Col span={6}>
+                      <Form.Item
+                        {...restField}
+                        name={[name, 'name']}
+                        rules={[{ required: true, message: 'Field name required' }]}
+                        style={{ marginBottom: 0 }}
+                      >
+                        <Input placeholder="字段名，如 environment" />
+                      </Form.Item>
+                    </Col>
+                    <Col span={6}>
+                      <Form.Item
+                        {...restField}
+                        name={[name, 'label']}
+                        rules={[{ required: true, message: 'Label required' }]}
+                        style={{ marginBottom: 0 }}
+                      >
+                        <Input placeholder="展示标签，如 环境" />
+                      </Form.Item>
+                    </Col>
+                    <Col span={5}>
+                      <Form.Item
+                        {...restField}
+                        name={[name, 'type']}
+                        initialValue="text"
+                        style={{ marginBottom: 0 }}
+                      >
+                        <Select
+                          options={[
+                            { value: 'text', label: 'Text' },
+                            { value: 'textarea', label: 'Textarea' },
+                            { value: 'number', label: 'Number' },
+                            { value: 'date', label: 'Date' },
+                            { value: 'select', label: 'Select' },
+                          ]}
+                        />
+                      </Form.Item>
+                    </Col>
+                    <Col span={4}>
+                      <Form.Item
+                        {...restField}
+                        name={[name, 'options']}
+                        style={{ marginBottom: 0 }}
+                      >
+                        <Input placeholder="选项(逗号分隔，仅Select)" />
+                      </Form.Item>
+                    </Col>
+                    <Col span={2}>
+                      <Form.Item
+                        {...restField}
+                        name={[name, 'required']}
+                        valuePropName="checked"
+                        initialValue={false}
+                        style={{ marginBottom: 0 }}
+                      >
+                        <Switch checkedChildren="必填" unCheckedChildren="选填" />
+                      </Form.Item>
+                    </Col>
+                    <Col span={1}>
+                      <Button
+                        type="text"
+                        danger
+                        icon={<Delete size={16} />}
+                        onClick={() => remove(name)}
+                        aria-label="删除字段"
+                      />
+                    </Col>
+                  </Row>
+                ))}
+                <Form.Item style={{ marginBottom: 0 }}>
+                  <Button
+                    type="dashed"
+                    onClick={() => add({ type: 'text', required: false })}
+                    icon={<Plus size={16} />}
+                    block
+                  >
+                    添加自定义字段
+                  </Button>
+                </Form.Item>
+              </>
+            )}
+          </Form.List>
 
           <Divider>Advanced Settings</Divider>
 
