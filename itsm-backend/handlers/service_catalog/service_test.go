@@ -154,3 +154,75 @@ func TestService_Create_FieldDefinitions_CrossTenantIsolation(t *testing.T) {
 	_, err = svc.Get(ctx, tenantB.ID, createdA.ID)
 	assert.Error(t, err, "tenant B must not be able to fetch tenant A's service catalog")
 }
+
+func TestService_CreateAndGet_PersistsFieldDefinitions(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:sc_fields?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	tenant, err := client.Tenant.Create().SetName("t").SetCode("sc-fields").SetDomain("d.test").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+
+	repo := NewEntRepository(client)
+	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
+
+	created, err := svc.Create(ctx, "云主机申请", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0,
+		[]service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text", Required: true}})
+	require.NoError(t, err)
+	require.Len(t, created.Fields, 1)
+	assert.Equal(t, "environment", created.Fields[0].Name)
+
+	fetched, err := svc.Get(ctx, tenant.ID, created.ID)
+	require.NoError(t, err)
+	require.Len(t, fetched.Fields, 1)
+	assert.Equal(t, "环境", fetched.Fields[0].Label)
+}
+
+func TestService_List_BatchLoadsFieldDefinitionsPerCatalog(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:sc_list_fields?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	tenant, err := client.Tenant.Create().SetName("t").SetCode("sc-list-fields").SetDomain("d.test").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+
+	repo := NewEntRepository(client)
+	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
+
+	c1, err := svc.Create(ctx, "云主机申请", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0,
+		[]service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}})
+	require.NoError(t, err)
+	c2, err := svc.Create(ctx, "VPN权限", "网络", "desc", 1, tenant.ID, "enabled", 0, 0, nil)
+	require.NoError(t, err)
+
+	list, _, err := svc.List(ctx, tenant.ID, ListFilters{Page: 1, Size: 10})
+	require.NoError(t, err)
+	byID := map[int]*ServiceCatalog{}
+	for _, c := range list {
+		byID[c.ID] = c
+	}
+	require.Len(t, byID[c1.ID].Fields, 1)
+	assert.Equal(t, "environment", byID[c1.ID].Fields[0].Name)
+	assert.Empty(t, byID[c2.ID].Fields)
+}
+
+func TestService_Get_TenantIsolation_NoCrossTenantFieldLeak(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:sc_tenant_isolation?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	tenantA, err := client.Tenant.Create().SetName("A").SetCode("sc-tenant-a").SetDomain("a.test").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	tenantB, err := client.Tenant.Create().SetName("B").SetCode("sc-tenant-b").SetDomain("b.test").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+
+	repo := NewEntRepository(client)
+	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
+
+	catalogA, err := svc.Create(ctx, "服务A", "分类", "desc", 1, tenantA.ID, "enabled", 0, 0,
+		[]service.FieldDefinitionInput{{Name: "secretField", Label: "租户A专属字段", FieldType: "text"}})
+	require.NoError(t, err)
+
+	// 租户 B 用同样的 entity_id（碰巧撞上租户 A 的 catalog.ID）查询，不应该看到租户 A 的字段定义。
+	// 用直接调 FieldDefinitionService 而非 svc.Get 来模拟"entity_id 相同、tenant_id 不同"这种最容易漏查 tenantID 的场景。
+	defs, err := service.NewFieldDefinitionService(client).ListDefinitions(ctx, tenantB.ID, "service_catalog", catalogA.ID)
+	require.NoError(t, err)
+	assert.Empty(t, defs, "租户 B 不应该查到租户 A 的字段定义，即使 entity_id 相同")
+}

@@ -81,7 +81,19 @@ func (s *Service) Create(ctx context.Context, name, category, description string
 }
 
 func (s *Service) Get(ctx context.Context, tenantID int, id int) (*ServiceCatalog, error) {
-	return s.repo.Get(ctx, tenantID, id)
+	catalog, err := s.repo.Get(ctx, tenantID, id)
+	if err != nil {
+		return nil, err
+	}
+	if s.client != nil {
+		defs, err := service.NewFieldDefinitionService(s.client).ListDefinitions(ctx, tenantID, "service_catalog", catalog.ID)
+		if err != nil {
+			s.logger.Warnw("Failed to load field definitions for service catalog", "error", err, "catalog_id", catalog.ID)
+		} else {
+			catalog.Fields = toFieldDefinitionInputsFromEnt(defs)
+		}
+	}
+	return catalog, nil
 }
 
 func (s *Service) List(ctx context.Context, tenantID int, filters ListFilters) ([]*ServiceCatalog, int, error) {
@@ -94,7 +106,37 @@ func (s *Service) List(ctx context.Context, tenantID int, filters ListFilters) (
 	if filters.Size > 100 {
 		filters.Size = 100
 	}
-	return s.repo.List(ctx, tenantID, filters)
+	catalogs, total, err := s.repo.List(ctx, tenantID, filters)
+	if err != nil {
+		return nil, 0, err
+	}
+	if s.client != nil && len(catalogs) > 0 {
+		ids := make([]int, len(catalogs))
+		for i, c := range catalogs {
+			ids[i] = c.ID
+		}
+		defsByCatalog, err := service.NewFieldDefinitionService(s.client).ListDefinitionsForEntities(ctx, tenantID, "service_catalog", ids)
+		if err != nil {
+			s.logger.Warnw("Failed to batch-load field definitions for service catalogs", "error", err)
+		} else {
+			for _, c := range catalogs {
+				c.Fields = toFieldDefinitionInputsFromEnt(defsByCatalog[c.ID])
+			}
+		}
+	}
+	return catalogs, total, nil
+}
+
+// toFieldDefinitionInputsFromEnt 把查出来的 ent.FieldDefinition 转成领域层的 FieldDefinitionInput。
+func toFieldDefinitionInputsFromEnt(defs []*ent.FieldDefinition) []service.FieldDefinitionInput {
+	result := make([]service.FieldDefinitionInput, 0, len(defs))
+	for _, d := range defs {
+		result = append(result, service.FieldDefinitionInput{
+			Name: d.Name, Label: d.Label, FieldType: d.FieldType,
+			Required: d.Required, Options: d.Options, SortOrder: d.SortOrder,
+		})
+	}
+	return result
 }
 
 func (s *Service) Update(ctx context.Context, tenantID int, id int, name, category, description string, deliveryTime int, status string, ciTypeID, cloudServiceID int, fields []service.FieldDefinitionInput) (*ServiceCatalog, error) {
