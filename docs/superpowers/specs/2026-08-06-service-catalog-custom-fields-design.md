@@ -44,7 +44,7 @@
 
 这个函数在工单模板那次实施中已经按这个要求实现了（`itsm-backend/service/field_definition_service.go:36-84`，`client.Tx(ctx)` 包住删除+插入，`TestFieldDefinitionService_ReplaceDefinitions_TransactionRollback` 用真实唯一约束冲突验证回滚），本次直接复用同一个函数，不需要重新实现，但作为设计文档必须显式声明这个前提，不能只靠"实施时顺带做对了"。
 
-同理，`ServiceRequest` 创建时写入 `field_values` 必须和 `ServiceRequest` 主记录的创建在同一事务内完成（`FieldValueService.CreateValues` 已经是这个模式，直接复用）。
+`FieldValueService.CreateValues` 自身的事务只包住它内部**多条 field_values 记录之间**的写入（防止一次提交里几个字段值只插一半），不包含调用方的主记录创建。`ServiceRequest` 创建时写入 `field_values` 沿用工单那边已经验证过的既定模式（`itsm-backend/service/ticket_service.go` `CreateTicket`）：**先提交 `ServiceRequest` 主记录，成功后再单独调用一次 `CreateValues`；`CreateValues` 失败只记 `Warnw` 日志、不回滚已经创建的 `ServiceRequest`**——跟 SLA 计算失败的处理方式一致，字段值写入失败不应该阻塞主业务操作。这是已有代码里唯一经过验证的组合方式，本次直接照搬，不引入"整体回滚"这种没有先例、没有测过的新语义。
 
 ## API 集成
 
@@ -57,7 +57,7 @@
 
 ### 值的提交（`ServiceRequest` 创建）
 
-- `handlers/service_request/service.go` 的 `Create`：在 `handler.go:431-473` 已有的"从 `FormData` 摘出系统已知字段"逻辑之后、`ServiceRequest` 主记录创建的同一个事务内，按 `CatalogID` 查出 `field_definitions`（`entity_type="service_catalog"`），从 `FormData` 里取出这些字段名对应的值（排除掉系统已知字段清单，避免误把系统字段当成动态字段收编），调 `FieldValueService.CreateValues(ctx, tenantID, "service_catalog", catalogID, "service_request", request.ID, values)`。
+- `handlers/service_request/service.go` 的 `Create`：`s.repo.Create(ctx, newReq, approvals)` 成功拿到 `created.ID` 之后（不是同一事务，见下方"事务边界修正"），从 `reqData.FormData` 里取出**不在** `handler.go:431-473` 系统已知字段清单（`title`/`reason`/`cost_center`/`data_classification`/`source_ip_whitelist`/`expire_at`/`compliance_ack`）里的键，调 `FieldValueService.CreateValues(ctx, tenantID, "service_catalog", catalogID, "service_request", created.ID, values)`；失败只记 `Warnw`，不影响已创建的 `ServiceRequest` 返回给调用方。
 - `handlers/service_request` 的详情响应 DTO 新增 `customFields`（复用工单 `CustomFieldValueResponse` 的形状：`{name,label,value}`），详情接口（单条）查一次 `field_values`；列表接口不查，维持跟工单一致的"列表不承载自定义字段，避免 N+1"设计。
 - `GET /api/v1/service-catalogs/:id` 响应体的 `fields` 字段供员工侧提交表单读取渲染（复用定义管理里已经加的字段，不需要单独开新端点）。
 
