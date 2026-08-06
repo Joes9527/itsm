@@ -1372,55 +1372,76 @@ git commit -m "feat(frontend): display service request custom field values on de
 
 ### Task 10: 废弃 `ServiceCatalogItem`——删除孤立 legacy 代码 + 补迁移文件
 
+**范围修正（执行时发现，非原计划）**：Task 10 首次派发时，implementer 重新跑 Step 1 的验证 grep 发现结论有误——`service.ServiceCatalogService`/`ServiceRequestService` 并不是零路由的孤立代码，而是通过 `controller/service_controller.go`（`ServiceController`，479 行，13 个方法）真实挂在 `router.go:1257-1274` 的 `/api/v1/services/catalogs*`、`/api/v1/services/requests*` 这组路由上（`internal/bootstrap/app.go:262,381,410,729` 完成依赖注入）。这是原设计阶段调查遗漏的第三套实现。经过人工确认：前端全文搜索、`itsm-cli`、`itsm-agent` 均无任何调用这组 `/services/catalogs`、`/services/requests` 接口的地方，`controller/service_controller.go` 也没有任何测试引用（`grep -rln "ServiceController\b" --include=*_test.go .` 零命中）——即"路由是注册的，但没有真实消费方"。已经跟人类确认：本次连这套 `ServiceController` + 路由一起清理，不只是原计划里的 `ServiceCatalogItem`/两个 legacy service 文件。
+
 **Files:**
+- Delete: `itsm-backend/controller/service_controller.go`
 - Delete: `itsm-backend/service/service_catalog_item_service.go`
 - Delete: `itsm-backend/service/service_catalog_item_service_test.go`
 - Delete: `itsm-backend/service/service_catalog_service.go`
+- Delete: `itsm-backend/service/service_catalog_service_test.go`（Step 1 验证时发现的额外文件，只测这个 legacy service，随其一起删）
 - Delete: `itsm-backend/service/service_request_service.go`
 - Delete: `itsm-backend/ent/schema/service_catalog_item.go`
+- Modify: `itsm-backend/router/router.go`（删掉 248 行 `ServiceController *controller.ServiceController` 字段、1257-1274 行整个 `if config.ServiceController != nil {...}` 路由注册块）
+- Modify: `itsm-backend/internal/bootstrap/app.go`（删掉 262/381/410/729 行：`serviceCatalogService`/`serviceRequestService`/`serviceController` 的构造和 `ServiceController: serviceController` 字段赋值——注意 381 行 `service.NewServiceRequestService(client, sugar, approvalService, notificationService)` 用到的 `approvalService`/`notificationService` 这两个变量很可能在文件其它地方还有别的用途，删除这一行前确认它们不会变成未使用变量导致编译报错；如果只有这一处用到，对应的构造也要一并清理，不要留下 unused variable）
 - Modify: `itsm-backend/ent/schema/servicecatalog.go`（去掉 `edge.To("items", ServiceCatalogItem.Type)`）
-- Modify: `itsm-backend/internal/bootstrap/app.go`（去掉对已删除的 legacy service 的实例化，如果有的话）
 - Create: `itsm-backend/migrations/xxxxxxxx_drop_service_catalog_item.sql`（文件名前缀按仓库既有迁移文件的编号规则决定，先看一眼 `ls itsm-backend/migrations/` 确认命名规则）
 
-**Interfaces:** 无新增/变更的代码接口——本 Task 纯删除。
+**Interfaces:** 无新增/变更的代码接口——本 Task 纯删除。删除后 `/api/v1/services/catalogs*`、`/api/v1/services/requests*` 这组路由不再存在（确认过没有真实调用方，属于安全删除）。
 
-- [ ] **Step 1: 再次确认这几个文件真的没有任何路由/依赖注入引用**
+- [ ] **Step 1: 再次确认这几个文件真的没有其它路由/依赖注入引用（`ServiceController` 本身除外，它就是本次要删的）**
 
 Run:
 ```bash
 cd itsm-backend
-grep -rn "ServiceCatalogItemService\|service.NewServiceCatalogService\b\|service.NewServiceRequestService\b" --include=*.go . | grep -v "_test.go\|service/service_catalog_item_service.go\|service/service_catalog_service.go\|service/service_request_service.go"
+grep -rn "ServiceCatalogItemService\|service.NewServiceCatalogService\b\|service.NewServiceRequestService\b|ServiceController\b" --include=*.go . | grep -v "_test.go\|service/service_catalog_item_service.go\|service/service_catalog_service.go\|service/service_request_service.go\|controller/service_controller.go\|router/router.go\|internal/bootstrap/app.go"
 ```
-Expected: 无输出（如果有输出，说明还有真实调用方，停下来找到调用方、评估能不能一起清理，不要在有未知调用方的情况下继续删除）
+Expected: 无输出。如果有输出且不是本 Task 计划删除/修改的文件，停下来找到那个调用方、评估能不能一起清理，不要在有未知调用方的情况下继续删除。
 
-- [ ] **Step 2: 删除文件**
+- [ ] **Step 2: 先删 `ServiceController` 和它的路由/依赖注入，再删底层 service**
+
+顺序很重要——先让 `ServiceController` 及其路由/构造彻底消失，底层的 `service.ServiceCatalogService`/`ServiceRequestService` 才会变成真正无引用的死代码，此时删除它们才不会破坏编译。
+
+```bash
+git rm itsm-backend/controller/service_controller.go
+```
+
+编辑 `itsm-backend/router/router.go`：删掉 248 行 `ServiceController *controller.ServiceController` 字段声明，删掉 1257-1274 行整个 `// Service Catalog & Service Requests` + `if config.ServiceController != nil { ... }` 块。
+
+编辑 `itsm-backend/internal/bootstrap/app.go`：删掉 410 行 `serviceController := controller.NewServiceController(...)`、729 行 `ServiceController: serviceController,`；删掉 262 行 `serviceCatalogService := service.NewServiceCatalogService(client, sugar)`；检查 381 行 `serviceRequestService := service.NewServiceRequestService(client, sugar, approvalService, notificationService)`——如果 `serviceRequestService` 这个变量删除构造后在文件里再没有其它引用，把这行也删掉；如果 `approvalService`/`notificationService` 这两个入参变量除了这一行没有被其它代码使用，会变成 unused variable 编译错误，需要一并处理（多半这两个变量在文件别处也被其它构造函数用到，正常情况下不需要改，只是提醒检查）。
+
+Run: `cd itsm-backend && go build ./controller/... ./router/... ./internal/bootstrap/... 2>&1 | tail -60`
+Expected: 无输出（确认 `ServiceController` 清理干净，没有遗漏引用）
+
+- [ ] **Step 3: 删除底层 legacy service 文件**
 
 ```bash
 git rm itsm-backend/service/service_catalog_item_service.go
 git rm itsm-backend/service/service_catalog_item_service_test.go
 git rm itsm-backend/service/service_catalog_service.go
+git rm itsm-backend/service/service_catalog_service_test.go
 git rm itsm-backend/service/service_request_service.go
 git rm itsm-backend/ent/schema/service_catalog_item.go
 ```
 
-- [ ] **Step 3: `ent/schema/servicecatalog.go` 去掉 `items` edge**
+- [ ] **Step 4: `ent/schema/servicecatalog.go` 去掉 `items` edge**
 
 Run: `grep -n "items" itsm-backend/ent/schema/servicecatalog.go`，删掉那一行 `edge.To("items", ServiceCatalogItem.Type)`（如果 `Edges()` 方法删空了只剩一个空的 `[]ent.Edge{}`，保留方法本身，不要连方法一起删——`Edges()` 是 `ent.Schema` 接口要求实现的方法）。
 
-- [ ] **Step 4: 重新生成 Ent 代码**
+- [ ] **Step 5: 重新生成 Ent 代码**
 
 Run: `cd itsm-backend && go generate ./ent 2>&1 | tail -40`
 Expected: 生成成功，`ent/servicecatalogitem*.go`、`ent/schema/service_catalog_item.go` 等文件被自动清理（Ent 的代码生成器会根据 schema 文件删除对应的生成代码）
 
-- [ ] **Step 5: 编译，看还有哪里引用了已删除的类型**
+- [ ] **Step 6: 编译，看还有哪里引用了已删除的类型**
 
 Run: `cd itsm-backend && go build ./... 2>&1 | tail -60`
 
-如果报错提示某处还在用 `ent.ServiceCatalogItem`/`ServiceCatalogItemService` 之类的符号，去掉那个引用点（预期不会有，Step 1 已经确认过没有真实调用方，但 `internal/bootstrap/app.go` 里如果有『实例化了但没接路由』的死代码——比如以前可能有一行 `service.NewServiceCatalogItemService(...)` 赋值给一个从未被使用的变量——顺手删掉）。
+如果报错提示某处还在用 `ent.ServiceCatalogItem`/`ServiceCatalogItemService` 之类的符号，去掉那个引用点（预期不会有，Step 1/2 已经确认过没有真实调用方）。
 
 Expected: 最终无输出（编译通过）
 
-- [ ] **Step 6: 补迁移文件**
+- [ ] **Step 7: 补迁移文件**
 
 Run: `ls itsm-backend/migrations/ | tail -10` 看命名规则（时间戳前缀还是序号前缀），照着建一个新文件：
 
@@ -1434,17 +1455,24 @@ ALTER TABLE service_catalogs DROP COLUMN IF EXISTS form_schema;
 
 在 `itsm-backend/migration/migrator.go` 里确认新迁移文件会被自动发现执行（这个项目的迁移器通常是扫描 `migrations/` 目录按文件名排序执行，具体确认方式：`grep -n "ReadDir\|Glob\|migrations" itsm-backend/migration/migrator.go`），不需要手动注册文件名的话这一步就是纯确认，不用改代码。
 
-- [ ] **Step 7: 跑全量测试确认没有隐藏依赖**
+- [ ] **Step 8: 跑全量测试确认没有隐藏依赖**
 
 Run: `cd itsm-backend && gofmt -l . && go test ./... 2>&1 | tail -80`
-Expected: `gofmt -l .` 无输出；`go test` 全部 `ok`（`service/service_catalog_item_service_test.go` 已经随源文件一起删除，不会再跑那几条测试；除了本仓库已知的、跟本次改动无关的密码策略相关既有失败外不应该有新增 `FAIL`）
+Expected: `gofmt -l .` 无输出；`go test` 全部 `ok`（`service/service_catalog_item_service_test.go`、`service/service_catalog_service_test.go` 已经随源文件一起删除，不会再跑那几条测试；除了本仓库已知的、跟本次改动无关的密码策略/incident 状态流转既有失败外不应该有新增 `FAIL`）
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 cd itsm-backend
 git add -A
-git commit -m "refactor(backend): remove orphaned ServiceCatalogItem branch (zero HTTP routes, superseded by handlers/service_catalog custom fields)"
+git commit -m "refactor(backend): remove orphaned ServiceCatalogItem + ServiceController branches (zero real callers, superseded by handlers/service_catalog custom fields)
+
+- delete service/service_catalog_item_service.go (+test) and service/service_catalog_service.go (+test), service/service_request_service.go
+- delete controller/service_controller.go (479 lines, 13 handlers, zero real callers)
+- remove /api/v1/services/catalogs* and /api/v1/services/requests* route registrations from router/router.go
+- remove dead wiring from internal/bootstrap/app.go
+- drop ent ServiceCatalogItem schema + items edge on ServiceCatalog
+- add migration to drop service_catalog_items table and servicecatalogs.form_schema column"
 ```
 
 ---
