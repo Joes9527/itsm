@@ -54,6 +54,7 @@ type Service struct {
 	repo           Repository
 	scRepo         service_catalog.Repository
 	cmdbRepo       cmdb.Repository
+	client         *ent.Client
 	logger         *zap.SugaredLogger
 	approvalBridge *service.BPMNApprovalBridge
 }
@@ -63,6 +64,7 @@ func NewService(repo Repository, scRepo service_catalog.Repository, cmdbRepo cmd
 		repo:     repo,
 		scRepo:   scRepo,
 		cmdbRepo: cmdbRepo,
+		client:   entClient,
 		logger:   logger,
 	}
 	if entClient != nil {
@@ -168,6 +170,17 @@ func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalog
 	if err != nil {
 		s.logger.Errorw("Failed to create service request", "error", err)
 		return nil, common.NewInternalError("Failed to create service request", err)
+	}
+
+	// 6. Persist dynamic custom field values (best-effort, write-after — mirrors the
+	// established CreateTicket pattern: the service request record is already
+	// committed above, so a field_values failure here must not roll it back).
+	if s.client != nil {
+		if fieldValues := extractServiceRequestFieldValues(reqData.FormData); len(fieldValues) > 0 {
+			if err := service.NewFieldValueService(s.client).CreateValues(ctx, tenantID, "service_catalog", catalogID, "service_request", created.ID, fieldValues); err != nil {
+				s.logger.Warnw("Failed to persist service request custom field values", "error", err, "service_request_id", created.ID)
+			}
+		}
 	}
 
 	return created, nil
@@ -514,4 +527,27 @@ func isValidServiceRequestOperationalTransition(current, next string) bool {
 	}
 	_, ok = allowed[next]
 	return ok
+}
+
+// serviceRequestSystemFormDataKeys 是 handler.go normalizeCreateServiceRequest 已经从
+// FormData 摘出、写进 ServiceRequest 专用列的系统已知键。这些键即使恰好跟某个字段定义
+// 同名，也不应该被当成动态自定义字段再收编一次进 field_values。
+var serviceRequestSystemFormDataKeys = map[string]bool{
+	"title": true, "reason": true, "cost_center": true,
+	"data_classification": true, "source_ip_whitelist": true,
+	"expire_at": true, "compliance_ack": true,
+}
+
+func extractServiceRequestFieldValues(formData map[string]interface{}) map[string]interface{} {
+	if formData == nil {
+		return nil
+	}
+	result := make(map[string]interface{}, len(formData))
+	for k, v := range formData {
+		if serviceRequestSystemFormDataKeys[k] {
+			continue
+		}
+		result[k] = v
+	}
+	return result
 }
