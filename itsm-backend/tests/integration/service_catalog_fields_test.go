@@ -58,6 +58,7 @@ func setupServiceCatalogFieldsRouter(t *testing.T) (*gin.Engine, *ent.Tenant, *e
 	r.GET("/api/v1/service-catalogs/:id", scHandler.Get)
 	r.POST("/api/v1/service-requests", srHandler.Create)
 	r.GET("/api/v1/service-requests/:id", srHandler.Get)
+	r.GET("/api/v1/service-requests", srHandler.List)
 
 	return r, tenant, user
 }
@@ -128,4 +129,25 @@ func TestServiceCatalogFields(t *testing.T) {
 	assert.Equal(t, "environment", detail.CustomFields[0].Name)
 	assert.Equal(t, "环境", detail.CustomFields[0].Label)
 	assert.Equal(t, "production", detail.CustomFields[0].Value)
+
+	env, status = doServiceCatalogFieldsRequest(t, r, http.MethodGet, "/api/v1/service-requests", nil)
+	require.Equal(t, http.StatusOK, status, "message=%s", env.Message)
+	require.Equal(t, 0, env.Code)
+	var listResp struct {
+		Requests []map[string]interface{} `json:"requests"`
+		Total    int                      `json:"total"`
+	}
+	require.NoError(t, json.Unmarshal(env.Data, &listResp))
+	require.NotEmpty(t, listResp.Requests, "列表里应该能查到刚创建的服务请求")
+
+	found := false
+	for _, item := range listResp.Requests {
+		idVal, _ := item["id"].(float64)
+		if int(idVal) == createdRequest.ID {
+			found = true
+		}
+		_, hasCustomFields := item["customFields"]
+		assert.False(t, hasCustomFields, "列表响应项不应该带 customFields key（列表不查字段值，避免 N+1）")
+	}
+	assert.True(t, found, "列表里应该包含 Step 2 创建的服务请求")
 }
