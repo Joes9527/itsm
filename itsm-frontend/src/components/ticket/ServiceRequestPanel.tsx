@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, Descriptions, Tag, Table, Button, message, Empty } from 'antd';
 import { PlayCircle } from 'lucide-react';
 import { ServiceCatalogApi } from '@/lib/api/service-catalog-api';
@@ -15,6 +16,7 @@ interface ServiceRequestPanelProps {
 // 之前分散在两个独立详情页（/service-requests/[id]、/my-requests/[requestId]）里的
 // SR 专属字段和交付任务展示，这次统一收到这里，不再维护两份重复代码。
 export default function ServiceRequestPanel({ ticketId }: ServiceRequestPanelProps) {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [request, setRequest] = useState<any>(null);
   const [tasks, setTasks] = useState<ProvisioningTask[]>([]);
@@ -67,6 +69,15 @@ export default function ServiceRequestPanel({ ticketId }: ServiceRequestPanelPro
         <Descriptions.Item label="需要公网IP">{request.needsPublicIp ? '是' : '否'}</Descriptions.Item>
         <Descriptions.Item label="到期时间">
           {request.expireAt ? new Date(request.expireAt).toLocaleString() : '-'}
+        </Descriptions.Item>
+        <Descriptions.Item label="关联CI">
+          {request.ciId ? (
+            <Button type="link" onClick={() => router.push(`/cmdb/cis/${request.ciId}`)}>
+              CI #{request.ciId}
+            </Button>
+          ) : (
+            '-'
+          )}
         </Descriptions.Item>
       </Descriptions>
 
