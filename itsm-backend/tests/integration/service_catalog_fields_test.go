@@ -78,15 +78,21 @@ func doServiceCatalogFieldsRequest(t *testing.T, r http.Handler, method, path st
 	return env, w.Code
 }
 
-// TestServiceCatalogFields 跑通"建服务目录（带1个自定义字段）-> 员工提交服务请求（填该字段）
+// TestServiceCatalogFields 跑通"建服务目录（带1个下划线命名的自定义字段）-> 员工提交服务请求
+// （以 [{name,value}] 数组形状填该字段，模拟前端 http-client.ts 全局 camelCase 请求体转换后的实际线上形状）
 // -> 请求详情 customFields 展示正确 -> 列表不带 customFields"的完整链路。
+//
+// 字段名故意用下划线（office_location）而不是无下划线的名字：这是最终整分支评审 Fix 1 的回归测试——
+// 如果提交仍然用 name 为 key 的 map 形状，http-client.ts 会把 office_location 悄悄改写成
+// officeLocation，导致后端按名称匹配字段定义时找不到、值被静默丢弃。这里通过集成测试的 HTTP 层
+// 直接验证数组形状不受这个转换影响。
 func TestServiceCatalogFields(t *testing.T) {
 	r, _, _ := setupServiceCatalogFieldsRouter(t)
 
 	createCatalogReq := map[string]interface{}{
 		"name": "云主机申请", "category": "云服务", "description": "测试",
 		"fields": []map[string]interface{}{
-			{"name": "environment", "label": "环境", "type": "text", "required": true},
+			{"name": "office_location", "label": "办公地点", "type": "text", "required": true},
 		},
 	}
 	env, status := doServiceCatalogFieldsRequest(t, r, http.MethodPost, "/api/v1/service-catalogs", createCatalogReq)
@@ -104,7 +110,9 @@ func TestServiceCatalogFields(t *testing.T) {
 		"catalogId": catalogID, "title": "申请一台云主机", "reason": "测试",
 		"complianceAck": true,
 		"formData": map[string]interface{}{
-			"environment": "production",
+			"customFieldValues": []map[string]interface{}{
+				{"name": "office_location", "value": "Beijing"},
+			},
 		},
 	}
 	env, status = doServiceCatalogFieldsRequest(t, r, http.MethodPost, "/api/v1/service-requests", createRequestReq)
@@ -126,9 +134,9 @@ func TestServiceCatalogFields(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(env.Data, &detail))
 	require.Len(t, detail.CustomFields, 1)
-	assert.Equal(t, "environment", detail.CustomFields[0].Name)
-	assert.Equal(t, "环境", detail.CustomFields[0].Label)
-	assert.Equal(t, "production", detail.CustomFields[0].Value)
+	assert.Equal(t, "office_location", detail.CustomFields[0].Name)
+	assert.Equal(t, "办公地点", detail.CustomFields[0].Label)
+	assert.Equal(t, "Beijing", detail.CustomFields[0].Value)
 
 	env, status = doServiceCatalogFieldsRequest(t, r, http.MethodGet, "/api/v1/service-requests", nil)
 	require.Equal(t, http.StatusOK, status, "message=%s", env.Message)

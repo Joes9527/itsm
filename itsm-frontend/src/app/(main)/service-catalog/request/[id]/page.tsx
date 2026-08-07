@@ -86,6 +86,16 @@ export default function ServiceCatalogRequestPage() {
     setLoading(true);
     try {
       const expireAt: Dayjs | undefined = values.expireAt;
+      // 自定义字段值必须以 [{name, value}] 数组形状提交，而不是 name 为 key 的 map：
+      // http-client.ts 会对请求体做全局递归 camelCase 转换，map 形状里带下划线的字段名
+      // （如 office_location）会被悄悄改写成 officeLocation，导致后端按名称匹配字段定义
+      // 时找不到、值被静默丢弃。数组元素里的 name 是字符串值而非 object key，不受影响。
+      const customFieldValues = (catalog?.fields || [])
+        .map((field: { name: string }) => ({
+          name: field.name,
+          value: values.customFields?.[field.name],
+        }))
+        .filter((f: { value: unknown }) => f.value !== undefined && f.value !== null && f.value !== '');
       const payload: any = {
         serviceId: id,
         formData: {
@@ -104,7 +114,7 @@ export default function ServiceCatalogRequestPage() {
           // B10: 合规确认 + 过期时间
           complianceAck: !!values.complianceAck,
           expireAt: expireAt ? expireAt.toISOString() : undefined,
-          ...(values.customFields || {}),
+          customFieldValues,
         },
       };
 

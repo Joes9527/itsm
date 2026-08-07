@@ -2,6 +2,7 @@ package service_request
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -116,6 +117,25 @@ func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalog
 	case "public", "internal", "confidential", "restricted":
 	default:
 		return nil, common.NewBadRequestError("Invalid data classification", nil)
+	}
+
+	// 2b. Validate required dynamic custom fields (server-side enforcement — the admin-configured
+	// "required" flag on a service catalog's field definitions must not be trust-the-frontend-only).
+	if s.client != nil {
+		fieldValues := extractServiceRequestFieldValues(reqData.FormData)
+		defs, err := service.NewFieldDefinitionService(s.client).ListDefinitions(ctx, tenantID, "service_catalog", catalogID)
+		if err != nil {
+			return nil, common.NewInternalError("Failed to load service catalog fields", err)
+		}
+		for _, def := range defs {
+			if !def.Required {
+				continue
+			}
+			val, ok := fieldValues[def.Name]
+			if !ok || val == nil || val == "" {
+				return nil, common.NewBadRequestError(fmt.Sprintf("字段「%s」为必填项", def.Label), nil)
+			}
+		}
 	}
 
 	// 3. Prepare Service Request
@@ -543,10 +563,45 @@ var serviceRequestSystemFormDataKeys = map[string]bool{
 	"expire_at": true, "compliance_ack": true,
 }
 
+// parseServiceRequestFieldValuesArray 把 formData["customFieldValues"] 解析成 [{name,value}] 数组形状，
+// 转成内部用的 map[name]value。数组形状是必须的——字段名作为数组元素里的字符串值
+// （而不是对象的 key）传输，这样才能绕开前端 http-client.ts 那个全局的、不区分
+// 契约字段和用户数据的 snake_case→camelCase 请求体转换（那个转换会把 map 形状里
+// 带下划线的字段名 key 悄悄改写，导致匹配失败、值静默丢失）。
+// 解析不出数组形状返回 nil，调用方会退回到兼容 map 形状的旧逻辑。
+func parseServiceRequestFieldValuesArray(formData map[string]interface{}) map[string]interface{} {
+	if formData == nil {
+		return nil
+	}
+	rawValues, ok := formData["customFieldValues"].([]interface{})
+	if !ok {
+		return nil
+	}
+	result := make(map[string]interface{}, len(rawValues))
+	for _, raw := range rawValues {
+		entry, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		name, _ := entry["name"].(string)
+		if name == "" {
+			continue
+		}
+		if val, ok := entry["value"]; ok {
+			result[name] = val
+		}
+	}
+	return result
+}
+
 func extractServiceRequestFieldValues(formData map[string]interface{}) map[string]interface{} {
 	if formData == nil {
 		return nil
 	}
+	if values := parseServiceRequestFieldValuesArray(formData); values != nil {
+		return values
+	}
+	// 兼容旧的 map 形状
 	result := make(map[string]interface{}, len(formData))
 	for k, v := range formData {
 		if serviceRequestSystemFormDataKeys[k] {
