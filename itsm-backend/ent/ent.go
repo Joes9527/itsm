@@ -87,7 +87,6 @@ import (
 	"itsm-backend/ent/rolepermission"
 	"itsm-backend/ent/rootcauseanalysis"
 	"itsm-backend/ent/servicecatalog"
-	"itsm-backend/ent/servicecatalogitem"
 	"itsm-backend/ent/servicerequest"
 	"itsm-backend/ent/servicerequestapproval"
 	"itsm-backend/ent/slaalerthistory"
@@ -278,7 +277,6 @@ func checkColumn(t, c string) error {
 			slapolicy.Table:                   slapolicy.ValidColumn,
 			slaviolation.Table:                slaviolation.ValidColumn,
 			servicecatalog.Table:              servicecatalog.ValidColumn,
-			servicecatalogitem.Table:          servicecatalogitem.ValidColumn,
 			servicerequest.Table:              servicerequest.ValidColumn,
 			servicerequestapproval.Table:      servicerequestapproval.ValidColumn,
 			standardchange.Table:              standardchange.ValidColumn,

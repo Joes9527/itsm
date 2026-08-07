@@ -217,6 +217,12 @@ export default function MyRequestDetailPage() {
               {detail?.dataClassification || '-'}
             </Descriptions.Item>
             <Descriptions.Item label="成本中心">{detail?.costCenter || '-'}</Descriptions.Item>
+            {Array.isArray(detail?.customFields) && detail.customFields.length > 0 &&
+              detail.customFields.map((field: { name: string; label: string; value: unknown }) => (
+                <Descriptions.Item key={field.name} label={field.label}>
+                  {field.value === null || field.value === undefined ? '-' : String(field.value)}
+                </Descriptions.Item>
+              ))}
           </Descriptions>
 
           <Divider />

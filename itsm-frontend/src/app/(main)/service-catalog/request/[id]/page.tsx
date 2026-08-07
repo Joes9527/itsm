@@ -86,6 +86,16 @@ export default function ServiceCatalogRequestPage() {
     setLoading(true);
     try {
       const expireAt: Dayjs | undefined = values.expireAt;
+      // 自定义字段值必须以 [{name, value}] 数组形状提交，而不是 name 为 key 的 map：
+      // http-client.ts 会对请求体做全局递归 camelCase 转换，map 形状里带下划线的字段名
+      // （如 office_location）会被悄悄改写成 officeLocation，导致后端按名称匹配字段定义
+      // 时找不到、值被静默丢弃。数组元素里的 name 是字符串值而非 object key，不受影响。
+      const customFieldValues = (catalog?.fields || [])
+        .map((field: { name: string }) => ({
+          name: field.name,
+          value: values.customFields?.[field.name],
+        }))
+        .filter((f: { value: unknown }) => f.value !== undefined && f.value !== null && f.value !== '');
       const payload: any = {
         serviceId: id,
         formData: {
@@ -104,6 +114,7 @@ export default function ServiceCatalogRequestPage() {
           // B10: 合规确认 + 过期时间
           complianceAck: !!values.complianceAck,
           expireAt: expireAt ? expireAt.toISOString() : undefined,
+          customFieldValues,
         },
       };
 
@@ -272,6 +283,32 @@ export default function ServiceCatalogRequestPage() {
               我已知悉本服务的合规要求与安全策略，并承诺仅将资源用于申请所述的合法业务场景
             </Checkbox>
           </Form.Item>
+
+          {Array.isArray(catalog?.fields) && catalog.fields.length > 0 && (
+            <>
+              <Divider>该服务的补充信息</Divider>
+              {catalog.fields.map((field: { name: string; label: string; type: string; required: boolean; options?: Array<{ label: string; value: string }> }) => (
+                <Form.Item
+                  key={field.name}
+                  name={['customFields', field.name]}
+                  label={field.label}
+                  rules={field.required ? [{ required: true, message: `请填写${field.label}` }] : []}
+                >
+                  {field.type === 'textarea' ? (
+                    <TextArea rows={3} />
+                  ) : field.type === 'select' ? (
+                    <Select options={field.options} />
+                  ) : field.type === 'number' ? (
+                    <Input type="number" />
+                  ) : field.type === 'date' ? (
+                    <DatePicker style={{ width: '100%' }} />
+                  ) : (
+                    <Input />
+                  )}
+                </Form.Item>
+              ))}
+            </>
+          )}
 
           <Form.Item>
             <Space>

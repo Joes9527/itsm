@@ -64,6 +64,11 @@ var RegisteredMigrations = []Migration{
 		Description: "Add tenant_id column to tool_invocations for cross-tenant IDOR isolation",
 		RollbackSQL: "ALTER TABLE tool_invocations DROP COLUMN IF EXISTS tenant_id; DROP INDEX IF EXISTS idx_tool_invocations_tenant;",
 	},
+	{
+		Version:     "012_drop_service_catalog_item",
+		Description: "Drop orphaned service_catalog_items table and service_catalogs.form_schema column (legacy ServiceCatalogItem/ServiceController branch removed, zero real HTTP callers; irreversible, forward-fix only)",
+		RollbackSQL: "",
+	},
 }
 
 // PostSchemaMigrations returns a defensive copy of the canonical active stream.
@@ -584,6 +589,16 @@ CREATE INDEX IF NOT EXISTS idx_tool_invocations_tenant ON tool_invocations(tenan
 
 -- NOTE: rows with tenant_id = 0 are orphan records (conversation_id=0 or conversation
 -- without a valid tenant). They will only be accessible via system-bypass queries.
+`
+	case "012_drop_service_catalog_item":
+		return `
+-- Drop the legacy ServiceCatalogItem table and the never-written
+-- service_catalogs.form_schema column. Backed the orphaned
+-- ServiceCatalogItemService/ServiceCatalogService/ServiceRequestService +
+-- ServiceController branch (zero real HTTP callers), superseded by
+-- handlers/service_catalog + handlers/service_request.
+DROP TABLE IF EXISTS service_catalog_items;
+ALTER TABLE service_catalogs DROP COLUMN IF EXISTS form_schema;
 `
 	default:
 		return ""

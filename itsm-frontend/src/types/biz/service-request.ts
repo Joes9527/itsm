@@ -57,6 +57,7 @@ export interface ServiceRequest {
   title?: string;
   reason?: string;
   formData?: Record<string, any>;
+  customFields?: Array<{ name: string; label: string; value: unknown }>;
 
   costCenter?: string;
   dataClassification?: string;

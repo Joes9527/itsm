@@ -44,7 +44,7 @@ func TestUserService_CreateUser(t *testing.T) {
 				Name:       "Test User",
 				Department: "IT",
 				Phone:      "1234567890",
-				Password:   "password123",
+				Password:   "Password123!",
 				TenantID:   testTenant.ID,
 			},
 			expectedError: false,
@@ -57,7 +57,7 @@ func TestUserService_CreateUser(t *testing.T) {
 				Name:       "Test User 2",
 				Department: "HR",
 				Phone:      "0987654321",
-				Password:   "password456",
+				Password:   "Password456!",
 				TenantID:   testTenant.ID,
 			},
 			expectedError: true,
@@ -70,7 +70,7 @@ func TestUserService_CreateUser(t *testing.T) {
 				Name:       "Test User 3",
 				Department: "Finance",
 				Phone:      "1111111111",
-				Password:   "password789",
+				Password:   "Password789!",
 				TenantID:   testTenant.ID,
 			},
 			expectedError: true,
@@ -471,7 +471,7 @@ func TestUserService_ResetPassword(t *testing.T) {
 		{
 			name:          "成功重置密码",
 			userID:        testUser.ID,
-			newPassword:   "newpassword123",
+			newPassword:   "NewPassword123!",
 			expectedError: false,
 		},
 		{
@@ -665,7 +665,7 @@ func BenchmarkUserService_CreateUser(b *testing.B) {
 			Name:       "Test User",
 			Department: "IT",
 			Phone:      "1234567890",
-			Password:   "password123",
+			Password:   "Password123!",
 			TenantID:   testTenant.ID,
 		}
 		_, _ = userService.CreateUser(ctx, req, testTenant.ID)

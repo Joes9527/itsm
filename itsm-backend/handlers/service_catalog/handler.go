@@ -6,6 +6,7 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -142,6 +143,8 @@ func (h *Handler) Create(c *gin.Context) {
 		deliveryTime = val
 	}
 
+	fields := service.ToFieldDefinitionInputs(req.Fields)
+
 	catalog, err := h.service.Create(
 		c.Request.Context(),
 		req.Name,
@@ -152,6 +155,7 @@ func (h *Handler) Create(c *gin.Context) {
 		req.Status,
 		req.CITypeID,
 		req.CloudServiceID,
+		fields,
 	)
 	if err != nil {
 		failServiceCatalog(c, err)
@@ -192,6 +196,11 @@ func (h *Handler) Update(c *gin.Context) {
 		deliveryTime = val
 	}
 
+	var fields []service.FieldDefinitionInput
+	if req.Fields != nil {
+		fields = service.ToFieldDefinitionInputs(req.Fields)
+	}
+
 	_, err = h.service.Update(
 		c.Request.Context(),
 		tenantID,
@@ -203,6 +212,7 @@ func (h *Handler) Update(c *gin.Context) {
 		req.Status,
 		req.CITypeID,
 		req.CloudServiceID,
+		fields,
 	)
 	if err != nil {
 		failServiceCatalog(c, err)
@@ -306,6 +316,13 @@ func (h *Handler) Stats(c *gin.Context) {
 }
 
 func (h *Handler) toDTO(c *ServiceCatalog) dto.ServiceCatalogResponse {
+	fields := make([]map[string]interface{}, 0, len(c.Fields))
+	for _, d := range c.Fields {
+		fields = append(fields, map[string]interface{}{
+			"name": d.Name, "label": d.Label, "type": d.FieldType,
+			"required": d.Required, "options": d.Options,
+		})
+	}
 	return dto.ServiceCatalogResponse{
 		ID:             c.ID,
 		Name:           c.Name,
@@ -315,6 +332,7 @@ func (h *Handler) toDTO(c *ServiceCatalog) dto.ServiceCatalogResponse {
 		CITypeID:       c.CITypeID,
 		CloudServiceID: c.CloudServiceID,
 		Status:         c.Status,
+		Fields:         fields,
 		CreatedAt:      c.CreatedAt,
 		UpdatedAt:      c.UpdatedAt,
 	}

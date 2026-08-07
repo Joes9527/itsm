@@ -110,6 +110,15 @@ export interface ServiceItem {
   tags: string[];
   searchKeywords?: string[];
 
+  // 自定义字段定义（field_definitions），提交请求时前端按这里渲染动态输入项
+  fields?: Array<{
+    name: string;
+    label: string;
+    type: string;
+    required: boolean;
+    options?: Array<{ label: string; value: string }>;
+  }>;
+
   // 审批流程
   approvalWorkflow?: string; // 审批工作流ID
 
@@ -408,6 +417,7 @@ export interface CreateServiceItemRequest {
   requiresApproval?: boolean;
   approvalWorkflow?: string;
   status?: ServiceStatus;
+  fields?: ServiceItem['fields'];
 }
 
 /**

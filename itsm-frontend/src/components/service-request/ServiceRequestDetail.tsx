@@ -200,6 +200,15 @@ const ServiceRequestDetail: React.FC = () => {
                 <Descriptions.Item label="需要公网IP">
                   {request.needsPublicIp ? '是' : '否'}
                 </Descriptions.Item>
+                {Array.isArray(request.customFields) && request.customFields.length > 0 && (
+                  <>
+                    {request.customFields.map((field: { name: string; label: string; value: unknown }) => (
+                      <Descriptions.Item key={field.name} label={field.label}>
+                        {String(field.value)}
+                      </Descriptions.Item>
+                    ))}
+                  </>
+                )}
                 {request.formData && (
                   <Descriptions.Item label="表单数据">
                     <pre style={{ margin: 0, fontSize: '12px' }}>

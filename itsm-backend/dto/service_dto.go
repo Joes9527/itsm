@@ -68,16 +68,17 @@ type GetServiceRequestsRequest struct {
 
 // ServiceCatalogResponse 服务目录响应
 type ServiceCatalogResponse struct {
-	ID             int       `json:"id"`
-	Name           string    `json:"name"`
-	Category       string    `json:"category"`
-	Description    string    `json:"description"`
-	DeliveryTime   string    `json:"deliveryTime"`
-	CITypeID       int       `json:"ciTypeId,omitempty"`
-	CloudServiceID int       `json:"cloudServiceId,omitempty"`
-	Status         string    `json:"status"`
-	CreatedAt      time.Time `json:"createdAt"`
-	UpdatedAt      time.Time `json:"updatedAt"`
+	ID             int                      `json:"id"`
+	Name           string                   `json:"name"`
+	Category       string                   `json:"category"`
+	Description    string                   `json:"description"`
+	DeliveryTime   string                   `json:"deliveryTime"`
+	CITypeID       int                      `json:"ciTypeId,omitempty"`
+	CloudServiceID int                      `json:"cloudServiceId,omitempty"`
+	Status         string                   `json:"status"`
+	Fields         []map[string]interface{} `json:"fields,omitempty"`
+	CreatedAt      time.Time                `json:"createdAt"`
+	UpdatedAt      time.Time                `json:"updatedAt"`
 }
 
 // ServiceRequestResponse 服务请求响应
@@ -110,9 +111,10 @@ type ServiceRequestResponse struct {
 	CreatedAt      time.Time  `json:"createdAt"`
 	UpdatedAt      time.Time  `json:"updatedAt"`
 
-	Approvals []ServiceRequestApprovalResponse `json:"approvals,omitempty"`
-	Catalog   *ServiceCatalogResponse          `json:"catalog,omitempty"`
-	Requester *UserResponse                    `json:"requester,omitempty"`
+	Approvals    []ServiceRequestApprovalResponse `json:"approvals,omitempty"`
+	Catalog      *ServiceCatalogResponse          `json:"catalog,omitempty"`
+	Requester    *UserResponse                    `json:"requester,omitempty"`
+	CustomFields []CustomFieldValueResponse       `json:"customFields,omitempty"`
 }
 
 // ServiceRequestApprovalResponse 服务请求审批记录响应
@@ -229,22 +231,24 @@ func ToServiceRequestApprovalResponse(a *ent.ServiceRequestApproval) ServiceRequ
 
 // CreateServiceCatalogRequest 创建服务目录请求
 type CreateServiceCatalogRequest struct {
-	Name           string `json:"name" binding:"required,max=255"`
-	Category       string `json:"category" binding:"required,max=100"`
-	Description    string `json:"description" binding:"omitempty,max=1000"`
-	DeliveryTime   string `json:"deliveryTime" binding:"omitempty,max=50"`
-	CITypeID       int    `json:"ciTypeId,omitempty"`
-	CloudServiceID int    `json:"cloudServiceId,omitempty"`
-	Status         string `json:"status" binding:"omitempty,oneof=enabled disabled"`
+	Name           string                   `json:"name" binding:"required,max=255"`
+	Category       string                   `json:"category" binding:"required,max=100"`
+	Description    string                   `json:"description" binding:"omitempty,max=1000"`
+	DeliveryTime   string                   `json:"deliveryTime" binding:"omitempty,max=50"`
+	CITypeID       int                      `json:"ciTypeId,omitempty"`
+	CloudServiceID int                      `json:"cloudServiceId,omitempty"`
+	Status         string                   `json:"status" binding:"omitempty,oneof=enabled disabled"`
+	Fields         []map[string]interface{} `json:"fields,omitempty"`
 }
 
 // UpdateServiceCatalogRequest 更新服务目录请求
 type UpdateServiceCatalogRequest struct {
-	Name           string `json:"name" binding:"omitempty,max=255"`
-	Category       string `json:"category" binding:"omitempty,max=100"`
-	Description    string `json:"description" binding:"omitempty,max=1000"`
-	DeliveryTime   string `json:"deliveryTime" binding:"omitempty,max=50"`
-	CITypeID       int    `json:"ciTypeId,omitempty"`
-	CloudServiceID int    `json:"cloudServiceId,omitempty"`
-	Status         string `json:"status" binding:"omitempty,oneof=enabled disabled"`
+	Name           string                   `json:"name" binding:"omitempty,max=255"`
+	Category       string                   `json:"category" binding:"omitempty,max=100"`
+	Description    string                   `json:"description" binding:"omitempty,max=1000"`
+	DeliveryTime   string                   `json:"deliveryTime" binding:"omitempty,max=50"`
+	CITypeID       int                      `json:"ciTypeId,omitempty"`
+	CloudServiceID int                      `json:"cloudServiceId,omitempty"`
+	Status         string                   `json:"status" binding:"omitempty,oneof=enabled disabled"`
+	Fields         []map[string]interface{} `json:"fields,omitempty"`
 }

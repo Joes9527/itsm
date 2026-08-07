@@ -3,6 +3,8 @@ package service_catalog
 import (
 	"context"
 	"time"
+
+	"itsm-backend/service"
 )
 
 // ServiceCatalog represents the core domain entity
@@ -16,6 +18,7 @@ type ServiceCatalog struct {
 	CloudServiceID int
 	Status         string
 	TenantID       int
+	Fields         []service.FieldDefinitionInput
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }

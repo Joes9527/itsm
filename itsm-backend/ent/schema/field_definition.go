@@ -9,7 +9,7 @@ import (
 )
 
 // FieldDefinition 动态字段定义：谁（entity_type+entity_id）拥有哪些自定义字段。
-// entity_type 取值：ticket_template | service_catalog_item
+// entity_type 取值：ticket_template | service_catalog
 type FieldDefinition struct {
 	ent.Schema
 }
@@ -17,7 +17,7 @@ type FieldDefinition struct {
 func (FieldDefinition) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int("tenant_id").Comment("租户ID").Positive(),
-		field.String("entity_type").Comment("字段定义归属的实体类型: ticket_template | service_catalog_item").NotEmpty(),
+		field.String("entity_type").Comment("字段定义归属的实体类型: ticket_template | service_catalog").NotEmpty(),
 		field.Int("entity_id").Comment("归属实体ID（模板ID 或 服务目录项ID）").Positive(),
 		field.String("name").Comment("字段key，如 office_location").NotEmpty(),
 		field.String("label").Comment("显示名，如 办公地点").NotEmpty(),

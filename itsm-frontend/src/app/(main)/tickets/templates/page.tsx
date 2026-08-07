@@ -40,6 +40,7 @@ import {
   Tag as TagIcon,
 } from 'lucide-react';
 import { TicketApi } from '@/lib/api/ticket-api';
+import { CustomFieldsEditor } from '@/components/common/CustomFieldsEditor';
 // AppLayout is handled by layout.tsx
 
 const { Title, Text } = Typography;
@@ -204,7 +205,22 @@ const TicketTemplatesPage = () => {
   };
 
   const handleEditTemplate = (template: TicketTemplate) => {
-    setEditingTemplate(template);
+    // customFields[].options 从后端拿到时是 [{label,value}] 数组（供渲染 Select 用），
+    // 但编辑表单里的 options 输入框是逗号分隔的字符串——编辑态转一次好让已有 select 类型
+    // 字段的选项能正常回显，而不是显示成 "[object Object]"。
+    const normalized: TicketTemplate = {
+      ...template,
+      customFields: (template.customFields || []).map(f => ({
+        ...f,
+        options: Array.isArray(f.options)
+          ? (f.options as unknown[])
+              .map(o => (o && typeof o === 'object' ? (o as { label?: string }).label : o))
+              .filter(Boolean)
+              .join(',')
+          : f.options,
+      })) as unknown as CustomField[],
+    };
+    setEditingTemplate(normalized);
     setModalVisible(true);
   };
 
@@ -599,6 +615,7 @@ const TicketTemplatesPage = () => {
         onCancel={() => setModalVisible(false)}
         footer={null}
         width={1000}
+        destroyOnHidden
       >
         <Form
           layout="vertical"
@@ -616,12 +633,40 @@ const TicketTemplatesPage = () => {
                 approvalLevel: values.approvalLevel,
                 tags: values.tags || [],
               };
+              // customFields（Form.List 编辑态）转成后端 field_definitions 期望的
+              // {name, label, type, required, options} 数组；过滤掉没填字段名的空行。
+              const rawCustomFields: Array<{
+                name?: string;
+                label?: string;
+                type?: string;
+                required?: boolean;
+                options?: string;
+              }> = values.customFields || [];
+              const fields = rawCustomFields
+                .filter(f => f?.name)
+                .map(f => ({
+                  name: f.name,
+                  label: f.label || f.name,
+                  type: f.type || 'text',
+                  required: !!f.required,
+                  ...(f.type === 'select' && f.options
+                    ? {
+                        options: f.options
+                          .split(',')
+                          .map(o => o.trim())
+                          .filter(Boolean)
+                          .map(o => ({ label: o, value: o })),
+                      }
+                    : {}),
+                }));
+
               const payload = {
                 name: values.name,
                 description: values.description,
                 category: values.category,
                 priority: values.priority,
                 formFields,
+                fields,
                 isActive: values.isActive ?? true,
               };
               if (editingTemplate) {
@@ -795,6 +840,9 @@ const TicketTemplatesPage = () => {
               </Form.Item>
             </Col>
           </Row>
+
+          <Divider>Custom Fields</Divider>
+          <CustomFieldsEditor name="customFields" />
 
           <Divider>Advanced Settings</Divider>
 

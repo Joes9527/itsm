@@ -205,6 +205,24 @@ describe('httpClient', () => {
       expect(sentBody.formFields.values[0].name).toBe('current_replicas');
       expect(sentBody.formFields.values[0].value).toBe(5);
     });
+
+    it('preserves snake_case service-catalog custom field names inside formData.customFieldValues (same class of bug, service-request submission path)', async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ code: 0, message: 'ok', data: {} }));
+
+      await httpClient.post('/api/v1/service-requests', {
+        serviceId: 1,
+        formData: {
+          customFieldValues: [{ name: 'office_location', value: 'Beijing' }],
+        },
+      });
+
+      const [, init] = fetchMock.mock.calls[0];
+      const sentBody = JSON.parse(init.body);
+      // 与 ticket 路径同理：数组元素里的 name 是字符串值，不是 object key，
+      // 不会被请求体的驼峰转换改写，office_location 不会变成 officeLocation。
+      expect(sentBody.formData.customFieldValues[0].name).toBe('office_location');
+      expect(sentBody.formData.customFieldValues[0].value).toBe('Beijing');
+    });
   });
 
   describe('put / patch / delete', () => {

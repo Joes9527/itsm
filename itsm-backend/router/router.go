@@ -245,7 +245,6 @@ type RouterConfig struct {
 	NotificationController           *controller.NotificationController
 
 	// Additional domain controllers
-	ServiceController      *controller.ServiceController
 	ProvisioningController *controller.ProvisioningController
 	AnalyticsController    *controller.AnalyticsController
 	PredictionController   *controller.PredictionController
@@ -1251,25 +1250,6 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 					applications.POST("", middleware.RequirePermission("application", "write"), config.ApplicationController.CreateApplication)
 					applications.GET("/microservices", middleware.RequirePermission("application", "read"), config.ApplicationController.ListMicroservices)
 					applications.POST("/microservices", middleware.RequirePermission("application", "write"), config.ApplicationController.CreateMicroservice)
-				}
-			}
-
-			// Service Catalog & Service Requests
-			if config.ServiceController != nil {
-				services := tenant.(*gin.RouterGroup).Group("/services")
-				{
-					services.GET("/catalogs", middleware.RequirePermission("service_catalog", "read"), config.ServiceController.GetServiceCatalogs)
-					services.POST("/catalogs", middleware.RequirePermission("service_catalog", "write"), config.ServiceController.CreateServiceCatalog)
-					services.GET("/catalogs/:id", middleware.RequirePermission("service_catalog", "read"), config.ServiceController.GetServiceCatalogByID)
-					services.PUT("/catalogs/:id", middleware.RequirePermission("service_catalog", "write"), config.ServiceController.UpdateServiceCatalog)
-					services.DELETE("/catalogs/:id", middleware.RequirePermission("service_catalog", "delete"), config.ServiceController.DeleteServiceCatalog)
-					services.GET("/requests", middleware.RequirePermission("service_request", "read"), config.ServiceController.GetUserServiceRequests)
-					services.POST("/requests", middleware.RequirePermission("service_request", "write"), config.ServiceController.CreateServiceRequest)
-					services.GET("/requests/:id", middleware.RequirePermission("service_request", "read"), config.ServiceController.GetServiceRequestByID)
-					services.PUT("/requests/:id/status", middleware.RequirePermission("service_request", "write"), config.ServiceController.UpdateServiceRequestStatus)
-					services.POST("/requests/approval", middleware.RequirePermission("service_request", "write"), config.ServiceController.ApplyServiceRequestApproval)
-					services.GET("/requests/approvals", middleware.RequirePermission("service_request", "read"), config.ServiceController.GetServiceRequestApprovals)
-					services.GET("/requests/approvals/pending", middleware.RequirePermission("service_request", "read"), config.ServiceController.GetPendingServiceRequestApprovals)
 				}
 			}
 

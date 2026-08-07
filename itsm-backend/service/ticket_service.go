@@ -2003,9 +2003,9 @@ func (s *TicketService) GetTicketAnalytics(ctx context.Context, tenantID int, da
 
 // ==================== 模板 CRUD ====================
 
-// toFieldDefinitionInputs 把前端提交的模板字段（[]map[string]interface{}）转换成
+// ToFieldDefinitionInputs 把前端提交的模板字段（[]map[string]interface{}）转换成
 // FieldDefinitionService 消费的 []FieldDefinitionInput。
-func toFieldDefinitionInputs(fields []map[string]interface{}) []FieldDefinitionInput {
+func ToFieldDefinitionInputs(fields []map[string]interface{}) []FieldDefinitionInput {
 	result := make([]FieldDefinitionInput, 0, len(fields))
 	for i, f := range fields {
 		name, _ := f["name"].(string)
@@ -2052,7 +2052,7 @@ func (s *TicketService) CreateTicketTemplate(ctx context.Context, tenantID int, 
 		Description:   createReq.Description,
 		Category:      createReq.Category,
 		Priority:      priority,
-		Fields:        toFieldDefinitionInputs(createReq.Fields),
+		Fields:        ToFieldDefinitionInputs(createReq.Fields),
 		WorkflowSteps: createReq.WorkflowSteps,
 		IsActive:      isActive,
 		TenantID:      tenantID,
@@ -2081,7 +2081,7 @@ func (s *TicketService) UpdateTicketTemplate(ctx context.Context, tenantID int, 
 	templateService := NewTicketTemplateService(s.client)
 	var fields []FieldDefinitionInput
 	if updateReq.Fields != nil {
-		fields = toFieldDefinitionInputs(updateReq.Fields)
+		fields = ToFieldDefinitionInputs(updateReq.Fields)
 	}
 	serviceReq := &UpdateTemplateRequest{
 		Name:          updateReq.Name,

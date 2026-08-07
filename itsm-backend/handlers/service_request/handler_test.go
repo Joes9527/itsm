@@ -23,6 +23,7 @@ import (
 	entuser "itsm-backend/ent/user"
 	"itsm-backend/handlers/cmdb"
 	"itsm-backend/handlers/service_catalog"
+	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -93,8 +94,8 @@ func srSetup(t *testing.T) (*gin.Engine, *ent.Client, int, int, int) {
 
 	// 播种一个服务目录（无 CI 类型，走简单路径）
 	scRepo := service_catalog.NewEntRepository(client)
-	scSvc := service_catalog.NewService(scRepo, logger)
-	cat, err := scSvc.Create(ctx, "SRCatalog-"+srUID(), "software", "for test", 0, tenant.ID, "enabled", 0, 0)
+	scSvc := service_catalog.NewService(scRepo, client, logger)
+	cat, err := scSvc.Create(ctx, "SRCatalog-"+srUID(), "software", "for test", 0, tenant.ID, "enabled", 0, 0, nil)
 	require.NoError(t, err)
 
 	repo := NewEntRepository(client)
@@ -155,6 +156,36 @@ func TestServiceRequestHandler_Create_Success(t *testing.T) {
 	assert.Equal(t, "submitted", data["status"])
 }
 
+func TestHandler_Get_IncludesCustomFieldValues(t *testing.T) {
+	// srSetup 返回 (r, client, tenantID, userID, catalogID)；这里不用它预置的那个
+	// catalogID（没有字段定义），另外建一个带字段的 ServiceCatalog。
+	r, client, tenantID, _, _ := srSetup(t)
+	scRepo := service_catalog.NewEntRepository(client)
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
+	catalog, err := scService.Create(context.Background(), "云主机申请-"+srUID(), "software", "desc", 1, tenantID, "enabled", 0, 0,
+		[]service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}})
+	require.NoError(t, err)
+
+	createReq := dto.CreateServiceRequestRequest{
+		CatalogID: catalog.ID, Title: "申请", Reason: "测试", ComplianceAck: true,
+		FormData: map[string]interface{}{"environment": "staging"},
+	}
+	createResp := srDoReq(t, r, "POST", "/api/v1/service-requests", createReq)
+	require.Equal(t, common.SuccessCode, createResp.Code, "body=%s", srStr(createResp))
+	created := createResp.Data.(map[string]interface{})
+	id := int(created["id"].(float64))
+
+	getResp := srDoReq(t, r, "GET", "/api/v1/service-requests/"+strconv.Itoa(id), nil)
+	require.Equal(t, common.SuccessCode, getResp.Code, "body=%s", srStr(getResp))
+	data := getResp.Data.(map[string]interface{})
+	customFields := data["customFields"].([]interface{})
+	require.Len(t, customFields, 1)
+	first := customFields[0].(map[string]interface{})
+	assert.Equal(t, "environment", first["name"])
+	assert.Equal(t, "环境", first["label"])
+	assert.Equal(t, "staging", first["value"])
+}
+
 func TestServiceRequestHandler_Create_MissingCatalogID(t *testing.T) {
 	r, _, _, _, _ := srSetup(t)
 	// CatalogID=0 → handler 直接返回 1001
@@ -195,8 +226,8 @@ func TestServiceRequestCreateDefersNewCIUntilProvisioning(t *testing.T) {
 	ciType, err := client.CIType.Create().SetName("Virtual Machine").SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 	scRepo := service_catalog.NewEntRepository(client)
-	catalog, err := service_catalog.NewService(scRepo, logger).
-		Create(ctx, "VM Request", "infrastructure", "Provision VM", 24, tenant.ID, "enabled", ciType.ID, 0)
+	catalog, err := service_catalog.NewService(scRepo, client, logger).
+		Create(ctx, "VM Request", "infrastructure", "Provision VM", 24, tenant.ID, "enabled", ciType.ID, 0, nil)
 	require.NoError(t, err)
 	service := NewService(NewEntRepository(client), scRepo, cmdb.NewEntRepository(client), client, logger)
 	expireAt := time.Now().Add(30 * 24 * time.Hour)
@@ -336,8 +367,8 @@ func srSetupRole(t *testing.T, role, dept string) (*gin.Engine, int, int, int) {
 		Save(ctx)
 	require.NoError(t, err)
 	scRepo := service_catalog.NewEntRepository(client)
-	scSvc := service_catalog.NewService(scRepo, logger)
-	cat, err := scSvc.Create(ctx, "SRCatalog-"+srUID(), "software", "for test", 0, tenant.ID, "enabled", 0, 0)
+	scSvc := service_catalog.NewService(scRepo, client, logger)
+	cat, err := scSvc.Create(ctx, "SRCatalog-"+srUID(), "software", "for test", 0, tenant.ID, "enabled", 0, 0, nil)
 	require.NoError(t, err)
 	repo := NewEntRepository(client)
 	cmdbRepo := cmdb.NewEntRepository(client)

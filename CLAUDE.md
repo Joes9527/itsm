@@ -92,7 +92,7 @@ ADMIN_PASSWORD=admin123
 
 - **controller/** - HTTP handlers, receive requests, call services (legacy horizontal layering)
 - **service/** - Business logic, orchestrate operations (legacy horizontal layering)
-- **handlers/<domain>/** - Domain-sliced modules (ai, change, cmdb, incident, knowledge, problem, service_catalog, service_request, sla, standard_change, ticket, etc.). Each domain package owns its own vertical slice: `handler.go` (HTTP layer), `service.go` (business logic), `repository.go` + `repository_impl.go` (data access), `entity.go` (domain entities/DTOs). Shared helpers live in `handlers/common/` and `handlers/shared/`.
+- **handlers/<domain>/** - Domain-sliced modules (ai, change, cmdb, incident, knowledge, problem, service_catalog, service_request, sla, standard_change, ticket, etc.). Each domain package owns its own vertical slice: `handler.go` (HTTP layer), `service.go` (business logic), `repository.go` + `repository_impl.go` (data access), `entity.go` (domain entities/DTOs). Shared helpers live in `handlers/common/` and `handlers/shared/`. `FieldDefinitionService` / `FieldValueService` (`itsm-backend/service/field_definition_service.go`, `field_value_service.go`) are shared cross-domain infrastructure for dynamic custom fields; domain packages under `handlers/<domain>/` may import and call them directly (established pattern, e.g. `handlers/service_catalog` and `handlers/service_request`).
 - **ent/schema/** - Database schema definitions (Ent ORM)
 - **middleware/** - Auth, logging, CORS, tenant isolation
 - **dto/** - Request/response DTOs
@@ -231,12 +231,15 @@ All APIs return `{ code: number, message: string, data: any }`:
 
 ### Controller必须返回DTO，禁止直接返回Ent模型
 
-- ✅ `common.Success(c, dto.ToTicketResponse(ticket))`
+- ✅ `common.Success(c, service.ToTicketResponse(ctx, ticket))`
 - ❌ `common.Success(c, ticket)` // ticket是*ent.Ticket
 
 ### 使用已有的Mapper函数
 
-- `dto.ToTicketResponse()` / `ToTicketResponseList()`
+- `service.ToTicketResponse(ctx, ticket)` / `service.ToTicketResponseWithCustomFields(ctx, client, ticket)` —
+  工单的 mapper 住在 `itsm-backend/service/ticket_service.go`，不在 `dto` 包。它需要 `ctx` +
+  `*ent.Client` 去联表查 `field_values`（自定义字段值），而 `dto` 包不持有 DB 连接，所以没法留在纯
+  `dto` 包里。列表路径用不带 `WithCustomFields` 的版本，避免 N+1。
 - `dto.ToIncidentResponse()` / `ToIncidentResponseList()`
 - `dto.ToUserDetailResponse()` / `ToUserDetailResponseList()`
 - `dto.ToTenantResponse()` / `ToTenantResponseList()`

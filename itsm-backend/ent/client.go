@@ -92,7 +92,6 @@ import (
 	"itsm-backend/ent/rolepermission"
 	"itsm-backend/ent/rootcauseanalysis"
 	"itsm-backend/ent/servicecatalog"
-	"itsm-backend/ent/servicecatalogitem"
 	"itsm-backend/ent/servicerequest"
 	"itsm-backend/ent/servicerequestapproval"
 	"itsm-backend/ent/slaalerthistory"
@@ -316,8 +315,6 @@ type Client struct {
 	SLAViolation *SLAViolationClient
 	// ServiceCatalog is the client for interacting with the ServiceCatalog builders.
 	ServiceCatalog *ServiceCatalogClient
-	// ServiceCatalogItem is the client for interacting with the ServiceCatalogItem builders.
-	ServiceCatalogItem *ServiceCatalogItemClient
 	// ServiceRequest is the client for interacting with the ServiceRequest builders.
 	ServiceRequest *ServiceRequestClient
 	// ServiceRequestApproval is the client for interacting with the ServiceRequestApproval builders.
@@ -478,7 +475,6 @@ func (c *Client) init() {
 	c.SLAPolicy = NewSLAPolicyClient(c.config)
 	c.SLAViolation = NewSLAViolationClient(c.config)
 	c.ServiceCatalog = NewServiceCatalogClient(c.config)
-	c.ServiceCatalogItem = NewServiceCatalogItemClient(c.config)
 	c.ServiceRequest = NewServiceRequestClient(c.config)
 	c.ServiceRequestApproval = NewServiceRequestApprovalClient(c.config)
 	c.StandardChange = NewStandardChangeClient(c.config)
@@ -689,7 +685,6 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		SLAPolicy:                   NewSLAPolicyClient(cfg),
 		SLAViolation:                NewSLAViolationClient(cfg),
 		ServiceCatalog:              NewServiceCatalogClient(cfg),
-		ServiceCatalogItem:          NewServiceCatalogItemClient(cfg),
 		ServiceRequest:              NewServiceRequestClient(cfg),
 		ServiceRequestApproval:      NewServiceRequestApprovalClient(cfg),
 		StandardChange:              NewStandardChangeClient(cfg),
@@ -827,7 +822,6 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		SLAPolicy:                   NewSLAPolicyClient(cfg),
 		SLAViolation:                NewSLAViolationClient(cfg),
 		ServiceCatalog:              NewServiceCatalogClient(cfg),
-		ServiceCatalogItem:          NewServiceCatalogItemClient(cfg),
 		ServiceRequest:              NewServiceRequestClient(cfg),
 		ServiceRequestApproval:      NewServiceRequestApprovalClient(cfg),
 		StandardChange:              NewStandardChangeClient(cfg),
@@ -909,14 +903,13 @@ func (c *Client) Use(hooks ...Hook) {
 		c.Project, c.PromptTemplate, c.ProvisioningTask, c.RelationshipType, c.Release,
 		c.Role, c.RolePermission, c.RootCauseAnalysis, c.SLAAlertHistory,
 		c.SLAAlertRule, c.SLADefinition, c.SLAMetric, c.SLAPolicy, c.SLAViolation,
-		c.ServiceCatalog, c.ServiceCatalogItem, c.ServiceRequest,
-		c.ServiceRequestApproval, c.StandardChange, c.Survey, c.SurveyResponse,
-		c.SystemConfig, c.Tag, c.Team, c.Tenant, c.TenantInstallation, c.Ticket,
-		c.TicketApproval, c.TicketAssignmentRule, c.TicketAttachment,
-		c.TicketAutomationRule, c.TicketCC, c.TicketCategory, c.TicketComment,
-		c.TicketNotification, c.TicketTag, c.TicketTemplate, c.TicketType,
-		c.TicketView, c.TicketWorkflowRecord, c.ToolInvocation, c.User, c.Vendor,
-		c.Workflow, c.WorkflowInstance, c.WorkflowTask, c.WorkflowVersion,
+		c.ServiceCatalog, c.ServiceRequest, c.ServiceRequestApproval, c.StandardChange,
+		c.Survey, c.SurveyResponse, c.SystemConfig, c.Tag, c.Team, c.Tenant,
+		c.TenantInstallation, c.Ticket, c.TicketApproval, c.TicketAssignmentRule,
+		c.TicketAttachment, c.TicketAutomationRule, c.TicketCC, c.TicketCategory,
+		c.TicketComment, c.TicketNotification, c.TicketTag, c.TicketTemplate,
+		c.TicketType, c.TicketView, c.TicketWorkflowRecord, c.ToolInvocation, c.User,
+		c.Vendor, c.Workflow, c.WorkflowInstance, c.WorkflowTask, c.WorkflowVersion,
 	} {
 		n.Use(hooks...)
 	}
@@ -947,14 +940,13 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.Project, c.PromptTemplate, c.ProvisioningTask, c.RelationshipType, c.Release,
 		c.Role, c.RolePermission, c.RootCauseAnalysis, c.SLAAlertHistory,
 		c.SLAAlertRule, c.SLADefinition, c.SLAMetric, c.SLAPolicy, c.SLAViolation,
-		c.ServiceCatalog, c.ServiceCatalogItem, c.ServiceRequest,
-		c.ServiceRequestApproval, c.StandardChange, c.Survey, c.SurveyResponse,
-		c.SystemConfig, c.Tag, c.Team, c.Tenant, c.TenantInstallation, c.Ticket,
-		c.TicketApproval, c.TicketAssignmentRule, c.TicketAttachment,
-		c.TicketAutomationRule, c.TicketCC, c.TicketCategory, c.TicketComment,
-		c.TicketNotification, c.TicketTag, c.TicketTemplate, c.TicketType,
-		c.TicketView, c.TicketWorkflowRecord, c.ToolInvocation, c.User, c.Vendor,
-		c.Workflow, c.WorkflowInstance, c.WorkflowTask, c.WorkflowVersion,
+		c.ServiceCatalog, c.ServiceRequest, c.ServiceRequestApproval, c.StandardChange,
+		c.Survey, c.SurveyResponse, c.SystemConfig, c.Tag, c.Team, c.Tenant,
+		c.TenantInstallation, c.Ticket, c.TicketApproval, c.TicketAssignmentRule,
+		c.TicketAttachment, c.TicketAutomationRule, c.TicketCC, c.TicketCategory,
+		c.TicketComment, c.TicketNotification, c.TicketTag, c.TicketTemplate,
+		c.TicketType, c.TicketView, c.TicketWorkflowRecord, c.ToolInvocation, c.User,
+		c.Vendor, c.Workflow, c.WorkflowInstance, c.WorkflowTask, c.WorkflowVersion,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -1137,8 +1129,6 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.SLAViolation.mutate(ctx, m)
 	case *ServiceCatalogMutation:
 		return c.ServiceCatalog.mutate(ctx, m)
-	case *ServiceCatalogItemMutation:
-		return c.ServiceCatalogItem.mutate(ctx, m)
 	case *ServiceRequestMutation:
 		return c.ServiceRequest.mutate(ctx, m)
 	case *ServiceRequestApprovalMutation:
@@ -14784,22 +14774,6 @@ func (c *ServiceCatalogClient) GetX(ctx context.Context, id int) *ServiceCatalog
 	return obj
 }
 
-// QueryItems queries the items edge of a ServiceCatalog.
-func (c *ServiceCatalogClient) QueryItems(_m *ServiceCatalog) *ServiceCatalogItemQuery {
-	query := (&ServiceCatalogItemClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(servicecatalog.Table, servicecatalog.FieldID, id),
-			sqlgraph.To(servicecatalogitem.Table, servicecatalogitem.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, servicecatalog.ItemsTable, servicecatalog.ItemsColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // Hooks returns the client hooks.
 func (c *ServiceCatalogClient) Hooks() []Hook {
 	return c.hooks.ServiceCatalog
@@ -14822,155 +14796,6 @@ func (c *ServiceCatalogClient) mutate(ctx context.Context, m *ServiceCatalogMuta
 		return (&ServiceCatalogDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown ServiceCatalog mutation op: %q", m.Op())
-	}
-}
-
-// ServiceCatalogItemClient is a client for the ServiceCatalogItem schema.
-type ServiceCatalogItemClient struct {
-	config
-}
-
-// NewServiceCatalogItemClient returns a client for the ServiceCatalogItem from the given config.
-func NewServiceCatalogItemClient(c config) *ServiceCatalogItemClient {
-	return &ServiceCatalogItemClient{config: c}
-}
-
-// Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `servicecatalogitem.Hooks(f(g(h())))`.
-func (c *ServiceCatalogItemClient) Use(hooks ...Hook) {
-	c.hooks.ServiceCatalogItem = append(c.hooks.ServiceCatalogItem, hooks...)
-}
-
-// Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `servicecatalogitem.Intercept(f(g(h())))`.
-func (c *ServiceCatalogItemClient) Intercept(interceptors ...Interceptor) {
-	c.inters.ServiceCatalogItem = append(c.inters.ServiceCatalogItem, interceptors...)
-}
-
-// Create returns a builder for creating a ServiceCatalogItem entity.
-func (c *ServiceCatalogItemClient) Create() *ServiceCatalogItemCreate {
-	mutation := newServiceCatalogItemMutation(c.config, OpCreate)
-	return &ServiceCatalogItemCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// CreateBulk returns a builder for creating a bulk of ServiceCatalogItem entities.
-func (c *ServiceCatalogItemClient) CreateBulk(builders ...*ServiceCatalogItemCreate) *ServiceCatalogItemCreateBulk {
-	return &ServiceCatalogItemCreateBulk{config: c.config, builders: builders}
-}
-
-// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
-// a builder and applies setFunc on it.
-func (c *ServiceCatalogItemClient) MapCreateBulk(slice any, setFunc func(*ServiceCatalogItemCreate, int)) *ServiceCatalogItemCreateBulk {
-	rv := reflect.ValueOf(slice)
-	if rv.Kind() != reflect.Slice {
-		return &ServiceCatalogItemCreateBulk{err: fmt.Errorf("calling to ServiceCatalogItemClient.MapCreateBulk with wrong type %T, need slice", slice)}
-	}
-	builders := make([]*ServiceCatalogItemCreate, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
-		builders[i] = c.Create()
-		setFunc(builders[i], i)
-	}
-	return &ServiceCatalogItemCreateBulk{config: c.config, builders: builders}
-}
-
-// Update returns an update builder for ServiceCatalogItem.
-func (c *ServiceCatalogItemClient) Update() *ServiceCatalogItemUpdate {
-	mutation := newServiceCatalogItemMutation(c.config, OpUpdate)
-	return &ServiceCatalogItemUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOne returns an update builder for the given entity.
-func (c *ServiceCatalogItemClient) UpdateOne(_m *ServiceCatalogItem) *ServiceCatalogItemUpdateOne {
-	mutation := newServiceCatalogItemMutation(c.config, OpUpdateOne, withServiceCatalogItem(_m))
-	return &ServiceCatalogItemUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOneID returns an update builder for the given id.
-func (c *ServiceCatalogItemClient) UpdateOneID(id int) *ServiceCatalogItemUpdateOne {
-	mutation := newServiceCatalogItemMutation(c.config, OpUpdateOne, withServiceCatalogItemID(id))
-	return &ServiceCatalogItemUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// Delete returns a delete builder for ServiceCatalogItem.
-func (c *ServiceCatalogItemClient) Delete() *ServiceCatalogItemDelete {
-	mutation := newServiceCatalogItemMutation(c.config, OpDelete)
-	return &ServiceCatalogItemDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// DeleteOne returns a builder for deleting the given entity.
-func (c *ServiceCatalogItemClient) DeleteOne(_m *ServiceCatalogItem) *ServiceCatalogItemDeleteOne {
-	return c.DeleteOneID(_m.ID)
-}
-
-// DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *ServiceCatalogItemClient) DeleteOneID(id int) *ServiceCatalogItemDeleteOne {
-	builder := c.Delete().Where(servicecatalogitem.ID(id))
-	builder.mutation.id = &id
-	builder.mutation.op = OpDeleteOne
-	return &ServiceCatalogItemDeleteOne{builder}
-}
-
-// Query returns a query builder for ServiceCatalogItem.
-func (c *ServiceCatalogItemClient) Query() *ServiceCatalogItemQuery {
-	return &ServiceCatalogItemQuery{
-		config: c.config,
-		ctx:    &QueryContext{Type: TypeServiceCatalogItem},
-		inters: c.Interceptors(),
-	}
-}
-
-// Get returns a ServiceCatalogItem entity by its id.
-func (c *ServiceCatalogItemClient) Get(ctx context.Context, id int) (*ServiceCatalogItem, error) {
-	return c.Query().Where(servicecatalogitem.ID(id)).Only(ctx)
-}
-
-// GetX is like Get, but panics if an error occurs.
-func (c *ServiceCatalogItemClient) GetX(ctx context.Context, id int) *ServiceCatalogItem {
-	obj, err := c.Get(ctx, id)
-	if err != nil {
-		panic(err)
-	}
-	return obj
-}
-
-// QueryCatalog queries the catalog edge of a ServiceCatalogItem.
-func (c *ServiceCatalogItemClient) QueryCatalog(_m *ServiceCatalogItem) *ServiceCatalogQuery {
-	query := (&ServiceCatalogClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(servicecatalogitem.Table, servicecatalogitem.FieldID, id),
-			sqlgraph.To(servicecatalog.Table, servicecatalog.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, servicecatalogitem.CatalogTable, servicecatalogitem.CatalogColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// Hooks returns the client hooks.
-func (c *ServiceCatalogItemClient) Hooks() []Hook {
-	return c.hooks.ServiceCatalogItem
-}
-
-// Interceptors returns the client interceptors.
-func (c *ServiceCatalogItemClient) Interceptors() []Interceptor {
-	return c.inters.ServiceCatalogItem
-}
-
-func (c *ServiceCatalogItemClient) mutate(ctx context.Context, m *ServiceCatalogItemMutation) (Value, error) {
-	switch m.Op() {
-	case OpCreate:
-		return (&ServiceCatalogItemCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdate:
-		return (&ServiceCatalogItemUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdateOne:
-		return (&ServiceCatalogItemUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpDelete, OpDeleteOne:
-		return (&ServiceCatalogItemDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
-	default:
-		return nil, fmt.Errorf("ent: unknown ServiceCatalogItem mutation op: %q", m.Op())
 	}
 }
 
@@ -20319,13 +20144,12 @@ type (
 		Project, PromptTemplate, ProvisioningTask, RelationshipType, Release, Role,
 		RolePermission, RootCauseAnalysis, SLAAlertHistory, SLAAlertRule,
 		SLADefinition, SLAMetric, SLAPolicy, SLAViolation, ServiceCatalog,
-		ServiceCatalogItem, ServiceRequest, ServiceRequestApproval, StandardChange,
-		Survey, SurveyResponse, SystemConfig, Tag, Team, Tenant, TenantInstallation,
-		Ticket, TicketApproval, TicketAssignmentRule, TicketAttachment,
-		TicketAutomationRule, TicketCC, TicketCategory, TicketComment,
-		TicketNotification, TicketTag, TicketTemplate, TicketType, TicketView,
-		TicketWorkflowRecord, ToolInvocation, User, Vendor, Workflow, WorkflowInstance,
-		WorkflowTask, WorkflowVersion []ent.Hook
+		ServiceRequest, ServiceRequestApproval, StandardChange, Survey, SurveyResponse,
+		SystemConfig, Tag, Team, Tenant, TenantInstallation, Ticket, TicketApproval,
+		TicketAssignmentRule, TicketAttachment, TicketAutomationRule, TicketCC,
+		TicketCategory, TicketComment, TicketNotification, TicketTag, TicketTemplate,
+		TicketType, TicketView, TicketWorkflowRecord, ToolInvocation, User, Vendor,
+		Workflow, WorkflowInstance, WorkflowTask, WorkflowVersion []ent.Hook
 	}
 	inters struct {
 		Application, ApprovalChain, ApprovalRecord, ApprovalWorkflow, Asset,
@@ -20347,12 +20171,11 @@ type (
 		Project, PromptTemplate, ProvisioningTask, RelationshipType, Release, Role,
 		RolePermission, RootCauseAnalysis, SLAAlertHistory, SLAAlertRule,
 		SLADefinition, SLAMetric, SLAPolicy, SLAViolation, ServiceCatalog,
-		ServiceCatalogItem, ServiceRequest, ServiceRequestApproval, StandardChange,
-		Survey, SurveyResponse, SystemConfig, Tag, Team, Tenant, TenantInstallation,
-		Ticket, TicketApproval, TicketAssignmentRule, TicketAttachment,
-		TicketAutomationRule, TicketCC, TicketCategory, TicketComment,
-		TicketNotification, TicketTag, TicketTemplate, TicketType, TicketView,
-		TicketWorkflowRecord, ToolInvocation, User, Vendor, Workflow, WorkflowInstance,
-		WorkflowTask, WorkflowVersion []ent.Interceptor
+		ServiceRequest, ServiceRequestApproval, StandardChange, Survey, SurveyResponse,
+		SystemConfig, Tag, Team, Tenant, TenantInstallation, Ticket, TicketApproval,
+		TicketAssignmentRule, TicketAttachment, TicketAutomationRule, TicketCC,
+		TicketCategory, TicketComment, TicketNotification, TicketTag, TicketTemplate,
+		TicketType, TicketView, TicketWorkflowRecord, ToolInvocation, User, Vendor,
+		Workflow, WorkflowInstance, WorkflowTask, WorkflowVersion []ent.Interceptor
 	}
 )

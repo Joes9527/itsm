@@ -480,11 +480,108 @@ export default function CreateTicketPage() {
                 </Card>
               )}
 
-              {/* 智能显示表单：已选类型有字段→自定义表单 | 已选类型无字段或未选择→基础表单 */}
-              {selectedType?.fields && selectedType.fields.length > 0 ? (
-                /* 有自定义字段：只显示自定义表单（已包含所有必要信息） */
+              {/* 基础表单：标题/描述/优先级/分类，始终显示——即使选了带自定义字段的模板，
+                  用户也应该能自己写标题和描述，不是只能靠自动生成（模板名/字段摘要）兜底。
+                  没选模板时标题/描述必填；选了模板时留空会在提交时自动补全，所以改成非必填。 */}
+              <Card
+                title="工单信息"
+                style={{ marginBottom: 16 }}
+                aria-label="基础工单信息表单"
+                data-testid="ticket-form"
+              >
+                <Alert
+                  type="info"
+                  showIcon
+                  className="mb-4"
+                  message={
+                    selectedType
+                      ? '标题/描述留空将根据所选类型和下方字段自动生成，也可以自己填写覆盖。'
+                      : '填写最少信息即可提交，补充说明建议写在详细描述中。'
+                  }
+                />
+                <Form.Item
+                  name="title"
+                  label="标题"
+                  rules={[
+                    ...(selectedType ? [] : [{ required: true, message: '请输入标题' }]),
+                    { min: 2, message: '标题至少需要2个字符' },
+                  ]}
+                >
+                  <Input
+                    placeholder={selectedType ? `例如：${selectedType.name}请求` : '例如：VPN 无法连接'}
+                    aria-required={!selectedType}
+                    aria-describedby="title-help"
+                    data-testid="ticket-title-input"
+                  />
+                </Form.Item>
+
+                <Form.Item
+                  name="description"
+                  label="详细描述"
+                  rules={[
+                    ...(selectedType
+                      ? []
+                      : [{ required: true, message: '请输入描述（至少10个字符）' }]),
+                    { min: 10, message: '描述至少需要10个字符' },
+                  ]}
+                  extra={
+                    selectedType
+                      ? '建议写清现象、影响范围和期望结果；留空时会自动附上下方字段的摘要。'
+                      : '建议写清现象、影响范围和期望结果。'
+                  }
+                >
+                  <TextArea
+                    rows={selectedType ? 3 : 6}
+                    placeholder="请详细描述问题/需求与影响范围..."
+                    aria-required={!selectedType}
+                    data-testid="ticket-description-input"
+                  />
+                </Form.Item>
+
+                <Row gutter={[16, 16]}>
+                  <Col xs={24} sm={12}>
+                    <Form.Item
+                      name="priority"
+                      label="优先级"
+                      initialValue="medium"
+                      rules={[{ required: true }]}
+                    >
+                      <Select<Priority>
+                        allowClear
+                        options={[
+                          { label: '低', value: 'low' },
+                          { label: '中', value: 'medium' },
+                          { label: '高', value: 'high' },
+                          { label: '紧急', value: 'urgent' },
+                        ]}
+                        placeholder="选择优先级"
+                        aria-label="选择工单优先级"
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <Form.Item name="category" label="分类" initialValue="技术支持">
+                      <Select
+                        allowClear
+                        showSearch
+                        options={[
+                          { label: '技术支持', value: '技术支持' },
+                          { label: '账户问题', value: '账户问题' },
+                          { label: '系统故障', value: '系统故障' },
+                        ]}
+                        optionFilterProp="label"
+                        placeholder="选择分类"
+                        aria-label="选择工单分类"
+                      />
+                    </Form.Item>
+                  </Col>
+                </Row>
+              </Card>
+
+              {/* 自定义字段：模板配置了字段时，作为补充信息附加在基础表单下面 */}
+              {selectedType?.fields && selectedType.fields.length > 0 && (
                 <Card
-                  title={`${selectedType.name} - 详细信息`}
+                  title={`${selectedType.name} - 补充信息`}
                   style={{ marginBottom: 16 }}
                   aria-label={`${selectedType.name} 自定义表单`}
                 >
@@ -530,92 +627,6 @@ export default function CreateTicketPage() {
                         </Form.Item>
                       </Col>
                     ))}
-                  </Row>
-                </Card>
-              ) : (
-                /* 无自定义字段：显示基础表单 */
-                <Card
-                  title="工单信息"
-                  style={{ marginBottom: 16 }}
-                  aria-label="基础工单信息表单"
-                  data-testid="ticket-form"
-                >
-                  <Alert
-                    type="info"
-                    showIcon
-                    className="mb-4"
-                    message="填写最少信息即可提交，补充说明建议写在详细描述中。"
-                  />
-                  <Form.Item
-                    name="title"
-                    label="标题"
-                    rules={[
-                      { required: true, message: '请输入标题' },
-                      { min: 2, message: '标题至少需要2个字符' },
-                    ]}
-                  >
-                    <Input
-                      placeholder="例如：VPN 无法连接"
-                      aria-required="true"
-                      aria-describedby="title-help"
-                      data-testid="ticket-title-input"
-                    />
-                  </Form.Item>
-
-                  <Form.Item
-                    name="description"
-                    label="详细描述"
-                    rules={[
-                      { required: true, message: '请输入描述（至少10个字符）' },
-                      { min: 10, message: '描述至少需要10个字符' },
-                    ]}
-                    extra="建议写清现象、影响范围和期望结果。"
-                  >
-                    <TextArea
-                      rows={6}
-                      placeholder="请详细描述问题/需求与影响范围..."
-                      aria-required="true"
-                      data-testid="ticket-description-input"
-                    />
-                  </Form.Item>
-
-                  <Row gutter={[16, 16]}>
-                    <Col xs={24} sm={12}>
-                      <Form.Item
-                        name="priority"
-                        label="优先级"
-                        initialValue="medium"
-                        rules={[{ required: true }]}
-                      >
-                        <Select<Priority>
-                          allowClear
-                          options={[
-                            { label: '低', value: 'low' },
-                            { label: '中', value: 'medium' },
-                            { label: '高', value: 'high' },
-                            { label: '紧急', value: 'urgent' },
-                          ]}
-                          placeholder="选择优先级"
-                          aria-label="选择工单优先级"
-                        />
-                      </Form.Item>
-                    </Col>
-                    <Col xs={24} sm={12}>
-                      <Form.Item name="category" label="分类" initialValue="技术支持">
-                        <Select
-                          allowClear
-                          showSearch
-                          options={[
-                            { label: '技术支持', value: '技术支持' },
-                            { label: '账户问题', value: '账户问题' },
-                            { label: '系统故障', value: '系统故障' },
-                          ]}
-                          optionFilterProp="label"
-                          placeholder="选择分类"
-                          aria-label="选择工单分类"
-                        />
-                      </Form.Item>
-                    </Col>
                   </Row>
                 </Card>
               )}

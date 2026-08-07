@@ -3550,38 +3550,6 @@ var (
 			},
 		},
 	}
-	// ServiceCatalogItemsColumns holds the columns for the "service_catalog_items" table.
-	ServiceCatalogItemsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "name", Type: field.TypeString},
-		{Name: "description", Type: field.TypeString, Nullable: true},
-		{Name: "details", Type: field.TypeString, Nullable: true, Size: 2147483647},
-		{Name: "category", Type: field.TypeString, Nullable: true},
-		{Name: "icon", Type: field.TypeString, Nullable: true},
-		{Name: "sla_id", Type: field.TypeInt, Nullable: true},
-		{Name: "approval_chain_id", Type: field.TypeInt, Nullable: true},
-		{Name: "is_active", Type: field.TypeBool, Default: true},
-		{Name: "requires_approval", Type: field.TypeBool, Default: true},
-		{Name: "estimated_days", Type: field.TypeInt, Default: 1},
-		{Name: "tenant_id", Type: field.TypeInt},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
-		{Name: "catalog_id", Type: field.TypeInt},
-	}
-	// ServiceCatalogItemsTable holds the schema information for the "service_catalog_items" table.
-	ServiceCatalogItemsTable = &schema.Table{
-		Name:       "service_catalog_items",
-		Columns:    ServiceCatalogItemsColumns,
-		PrimaryKey: []*schema.Column{ServiceCatalogItemsColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "service_catalog_items_service_catalogs_items",
-				Columns:    []*schema.Column{ServiceCatalogItemsColumns[14]},
-				RefColumns: []*schema.Column{ServiceCatalogsColumns[0]},
-				OnDelete:   schema.NoAction,
-			},
-		},
-	}
 	// ServiceRequestsColumns holds the columns for the "service_requests" table.
 	ServiceRequestsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -5269,7 +5237,6 @@ var (
 		SLAPoliciesTable,
 		SLAViolationsTable,
 		ServiceCatalogsTable,
-		ServiceCatalogItemsTable,
 		ServiceRequestsTable,
 		ServiceRequestApprovalsTable,
 		StandardChangesTable,
@@ -5382,7 +5349,6 @@ func init() {
 	SLAMetricsTable.ForeignKeys[0].RefTable = SLADefinitionsTable
 	SLAViolationsTable.ForeignKeys[0].RefTable = SLADefinitionsTable
 	SLAViolationsTable.ForeignKeys[1].RefTable = TicketsTable
-	ServiceCatalogItemsTable.ForeignKeys[0].RefTable = ServiceCatalogsTable
 	SurveyResponsesTable.ForeignKeys[0].RefTable = SurveysTable
 	TenantsTable.ForeignKeys[0].RefTable = BootstrapTokensTable
 	TenantInstallationsTable.ForeignKeys[0].RefTable = MarketplaceItemsTable
