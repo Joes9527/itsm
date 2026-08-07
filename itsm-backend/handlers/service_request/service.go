@@ -131,6 +131,7 @@ func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalog
 		Priority:    "medium",
 		Type:        "service_request",
 		RequesterID: requesterID,
+		Source:      "service_catalog",
 	}
 	createdTicket, err := s.ticketSvc.CreateTicket(ctx, ticketReq, tenantID)
 	if err != nil {

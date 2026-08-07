@@ -98,6 +98,9 @@ func (r *EntRepository) Create(ctx context.Context, params *CreateParams, tenant
 		if len(params.TagIDs) > 0 {
 			builder.AddTagIDs(params.TagIDs...)
 		}
+		if params.Source != "" {
+			builder.SetSource(params.Source)
+		}
 
 		entity, err := builder.Save(ctx)
 		if err == nil {

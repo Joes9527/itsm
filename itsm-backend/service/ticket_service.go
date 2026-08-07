@@ -154,6 +154,7 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 		TemplateID:     req.TemplateID,
 		ParentTicketID: req.ParentTicketID,
 		TagIDs:         uniqueIDs(req.TagIDs),
+		Source:         req.Source,
 	}
 
 	if assigneeID != 0 {

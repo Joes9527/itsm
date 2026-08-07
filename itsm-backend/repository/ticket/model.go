@@ -219,6 +219,9 @@ type CreateParams struct {
 	ParentTicketID *int
 	TagIDs         []int
 	Tags           []string
+	// Source 工单来源：manual=手动创建，service_catalog=服务目录申请。
+	// 留空时由 ent schema 的 Default("manual") 生效，不强制赋值。
+	Source string
 }
 
 // UpdateParams 工单更新参数

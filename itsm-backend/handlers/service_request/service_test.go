@@ -225,6 +225,7 @@ func TestService_Create_LinksTicketAndDelegatesFields(t *testing.T) {
 	assert.Equal(t, "申请一台云主机-Link测试", tkt.Title)
 	assert.Equal(t, "delegation test reason", tkt.Description)
 	assert.Equal(t, "service_request", tkt.Type)
+	assert.Equal(t, "service_catalog", tkt.Source, "服务目录发起的申请必须标记 ticket.source=service_catalog（Task 2 前端据此判断是否渲染 SR 面板）")
 	assert.Equal(t, tenant.ID, tkt.TenantID)
 	assert.Equal(t, requester.ID, tkt.RequesterID)
 }
