@@ -335,6 +335,54 @@ func TestToTicketResponse_IncludesCustomFieldValuesOrdered(t *testing.T) {
 	assert.Equal(t, "device_count", resp.CustomFieldValues[1].Name)
 }
 
+// TestTicketService_CreateTicket_SourceSurvivesToTicketResponse 是对
+// 「ticket.source 需要从 ent 一路活到 DTO」这条链路的回归测试。
+//
+// 这条链路此前分裂成两个各自独立、且都曾经缺失 Source 字段的 ent->domain 转换函数
+// （repository/ticket/repository_impl.go 的 toDomainModel，以及 service/ticket_service.go
+// 的 entToDomain），外加 ToTicketResponse 这一层 domain->DTO 转换。三处任何一处漏掉，
+// 前端 TicketDetail.tsx 用来判断是否挂载 ServiceRequestPanel 的
+// `ticket.source === 'service_catalog'` 就会静默失效——不会报错，只是面板不出现。
+// 用 TicketService.CreateTicket（最贴近真实 HTTP 路径的入口）走一遍创建 + 读取，
+// 覆盖 toDomainModel 在创建路径和独立读取路径（GetTicket -> repo.GetByID）两次调用。
+func TestTicketService_CreateTicket_SourceSurvivesToTicketResponse(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ticket_source_round_trip?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	tenant := createTicketAssociationTenant(t, ctx, client, "source-round-trip")
+	requester := createTicketAssociationUser(t, ctx, client, tenant.ID, "source-round-trip-requester")
+
+	svc := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
+
+	created, err := svc.CreateTicket(ctx, &dto.CreateTicketRequest{
+		Title:       "服务目录申请工单",
+		Description: "d",
+		Priority:    "medium",
+		RequesterID: requester.ID,
+		Source:      "service_catalog",
+	}, tenant.ID)
+	require.NoError(t, err)
+	require.NotNil(t, created)
+
+	// 1) 创建路径直接返回的领域模型：toDomainModel 必须把 ent.Ticket.Source 带过来。
+	assert.Equal(t, "service_catalog", created.Source)
+
+	// 2) 创建路径的响应 DTO：ToTicketResponse 必须把 t.Source 写进 dto.TicketResponse.Source。
+	createdResp := ToTicketResponse(ctx, created)
+	require.NotNil(t, createdResp)
+	assert.Equal(t, "service_catalog", createdResp.Source)
+
+	// 3) 独立的读路径：GetTicket -> repo.GetByID -> toDomainModel，走真实 DB round-trip
+	// （而不是复用内存里创建时的同一个指针），确认持久化的 source 列本身也读得回来。
+	fetched, err := svc.GetTicket(ctx, created.ID, tenant.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "service_catalog", fetched.Source)
+
+	fetchedResp := ToTicketResponse(ctx, fetched)
+	require.NotNil(t, fetchedResp)
+	assert.Equal(t, "service_catalog", fetchedResp.Source)
+}
+
 func TestTicketService_CreateTicketRejectsCrossTenantReferences(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:ticket_create_cross_tenant?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
