@@ -20,7 +20,7 @@ type FieldDefinition struct {
 	ID int `json:"id,omitempty"`
 	// 租户ID
 	TenantID int `json:"tenant_id,omitempty"`
-	// 字段定义归属的实体类型: ticket_template | service_catalog_item
+	// 字段定义归属的实体类型: ticket_template | service_catalog
 	EntityType string `json:"entity_type,omitempty"`
 	// 归属实体ID（模板ID 或 服务目录项ID）
 	EntityID int `json:"entity_id,omitempty"`

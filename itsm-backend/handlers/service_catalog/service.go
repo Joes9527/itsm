@@ -224,8 +224,11 @@ func (s *Service) Delete(ctx context.Context, tenantID int, id int) error {
 		return err
 	}
 	if s.client != nil {
-		if err := service.NewFieldDefinitionService(s.client).DeleteDefinitions(ctx, tenantID, "service_catalog", id); err != nil {
-			s.logger.Warnw("Failed to delete field definitions for deleted service catalog", "error", err, "catalog_id", id)
+		// repo.Delete 是软删除（status=disabled），目录随时可能被重新启用，所以这里用
+		// DisableDefinitions 而不是 DeleteDefinitions——否则目录恢复后自定义字段配置
+		// 已经永久丢了，恢复不回来。
+		if err := service.NewFieldDefinitionService(s.client).DisableDefinitions(ctx, tenantID, "service_catalog", id); err != nil {
+			s.logger.Warnw("Failed to disable field definitions for deleted service catalog", "error", err, "catalog_id", id)
 		}
 	}
 	return nil

@@ -124,6 +124,9 @@ func (s *FieldDefinitionService) ListDefinitionsForEntities(ctx context.Context,
 }
 
 // DeleteDefinitions 删除 (tenantID, entityType, entityID) 下所有字段定义。
+// 只在宿主实体本身也是硬删除时使用；如果宿主实体是软删除/可恢复的（比如状态置为
+// disabled 但记录还在），应该用 DisableDefinitions，否则宿主"恢复"之后字段定义
+// 已经永久丢了，恢复不回来。
 func (s *FieldDefinitionService) DeleteDefinitions(ctx context.Context, tenantID int, entityType string, entityID int) error {
 	_, err := s.client.FieldDefinition.Delete().
 		Where(
@@ -132,6 +135,22 @@ func (s *FieldDefinitionService) DeleteDefinitions(ctx context.Context, tenantID
 			fielddefinition.EntityID(entityID),
 		).
 		Exec(ctx)
+	return err
+}
+
+// DisableDefinitions 把 (tenantID, entityType, entityID) 下所有字段定义标记为不活跃
+// （is_active=false），不物理删除行。用于宿主实体是软删除的场景：ListDefinitions/
+// ListDefinitionsForEntities 都过滤 is_active=true，效果上等同于"字段定义也消失了"，
+// 但宿主实体恢复后，数据仍在，不会永久丢失管理员配置过的自定义字段。
+func (s *FieldDefinitionService) DisableDefinitions(ctx context.Context, tenantID int, entityType string, entityID int) error {
+	_, err := s.client.FieldDefinition.Update().
+		Where(
+			fielddefinition.TenantID(tenantID),
+			fielddefinition.EntityType(entityType),
+			fielddefinition.EntityID(entityID),
+		).
+		SetIsActive(false).
+		Save(ctx)
 	return err
 }
 

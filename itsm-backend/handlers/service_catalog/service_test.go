@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"itsm-backend/ent/enttest"
+	"itsm-backend/ent/fielddefinition"
 	"itsm-backend/service"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -204,10 +205,12 @@ func TestService_List_BatchLoadsFieldDefinitionsPerCatalog(t *testing.T) {
 	assert.Empty(t, byID[c2.ID].Fields)
 }
 
-// TestService_Delete_RemovesFieldDefinitions 证明删除 service catalog 时同步清理其字段定义，
-// 不会留下悬空的 field_definitions 行（最终整分支评审 Fix 2）。
-func TestService_Delete_RemovesFieldDefinitions(t *testing.T) {
-	client := enttest.Open(t, "sqlite3", "file:sc_delete_removes_fields?mode=memory&cache=shared&_fk=1")
+// TestService_Delete_DisablesFieldDefinitions 证明删除 service catalog 时同步禁用其字段定义
+// （ListDefinitions 不再返回），但不会物理删除行——因为 repo.Delete 本身是软删除
+// （status=disabled），目录随时可能被重新启用，字段定义配置必须能一起恢复
+// （最终整分支评审 Fix 2 + 重新审查发现的回归修正：硬删除会导致目录恢复后字段配置永久丢失）。
+func TestService_Delete_DisablesFieldDefinitions(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:sc_delete_disables_fields?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
 	ctx := context.Background()
 	tenant, err := client.Tenant.Create().SetName("t").SetCode("sc-delete-fields").SetDomain("d.test").SetStatus("active").Save(ctx)
@@ -228,7 +231,17 @@ func TestService_Delete_RemovesFieldDefinitions(t *testing.T) {
 
 	listedAfter, err := service.NewFieldDefinitionService(client).ListDefinitions(ctx, tenant.ID, "service_catalog", created.ID)
 	require.NoError(t, err)
-	assert.Empty(t, listedAfter, "field_definitions should be cleaned up when the owning service catalog is deleted")
+	assert.Empty(t, listedAfter, "ListDefinitions should not return definitions for a disabled catalog")
+
+	// 数据本身还在（is_active=false），不是被物理删除——这是跟旧的硬删除实现的关键区别：
+	// 目录被恢复（status 改回 enabled）后，字段配置应该能一起恢复，而不是永久丢失。
+	raw, err := client.FieldDefinition.Query().
+		Where(fielddefinition.TenantID(tenant.ID), fielddefinition.EntityType("service_catalog"), fielddefinition.EntityID(created.ID)).
+		All(ctx)
+	require.NoError(t, err)
+	require.Len(t, raw, 1, "field_definitions row must survive a soft-deleted catalog, not be physically removed")
+	assert.False(t, raw[0].IsActive)
+	assert.Equal(t, "environment", raw[0].Name)
 }
 
 // TestService_Search_PopulatesFieldDefinitions 证明 Search 的结果也批量回填字段定义，
