@@ -1052,18 +1052,6 @@ func (f ServiceCatalogFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Val
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ServiceCatalogMutation", m)
 }
 
-// The ServiceCatalogItemFunc type is an adapter to allow the use of ordinary
-// function as ServiceCatalogItem mutator.
-type ServiceCatalogItemFunc func(context.Context, *ent.ServiceCatalogItemMutation) (ent.Value, error)
-
-// Mutate calls f(ctx, m).
-func (f ServiceCatalogItemFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.ServiceCatalogItemMutation); ok {
-		return f(ctx, mv)
-	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ServiceCatalogItemMutation", m)
-}
-
 // The ServiceRequestFunc type is an adapter to allow the use of ordinary
 // function as ServiceRequest mutator.
 type ServiceRequestFunc func(context.Context, *ent.ServiceRequestMutation) (ent.Value, error)

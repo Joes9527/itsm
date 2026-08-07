@@ -84,7 +84,6 @@ import (
 	"itsm-backend/ent/rootcauseanalysis"
 	"itsm-backend/ent/schema"
 	"itsm-backend/ent/servicecatalog"
-	"itsm-backend/ent/servicecatalogitem"
 	"itsm-backend/ent/servicerequest"
 	"itsm-backend/ent/servicerequestapproval"
 	"itsm-backend/ent/slaalerthistory"
@@ -3127,42 +3126,6 @@ func init() {
 	servicecatalog.DefaultUpdatedAt = servicecatalogDescUpdatedAt.Default.(func() time.Time)
 	// servicecatalog.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	servicecatalog.UpdateDefaultUpdatedAt = servicecatalogDescUpdatedAt.UpdateDefault.(func() time.Time)
-	servicecatalogitemFields := schema.ServiceCatalogItem{}.Fields()
-	_ = servicecatalogitemFields
-	// servicecatalogitemDescCatalogID is the schema descriptor for catalog_id field.
-	servicecatalogitemDescCatalogID := servicecatalogitemFields[0].Descriptor()
-	// servicecatalogitem.CatalogIDValidator is a validator for the "catalog_id" field. It is called by the builders before save.
-	servicecatalogitem.CatalogIDValidator = servicecatalogitemDescCatalogID.Validators[0].(func(int) error)
-	// servicecatalogitemDescName is the schema descriptor for name field.
-	servicecatalogitemDescName := servicecatalogitemFields[1].Descriptor()
-	// servicecatalogitem.NameValidator is a validator for the "name" field. It is called by the builders before save.
-	servicecatalogitem.NameValidator = servicecatalogitemDescName.Validators[0].(func(string) error)
-	// servicecatalogitemDescIsActive is the schema descriptor for is_active field.
-	servicecatalogitemDescIsActive := servicecatalogitemFields[8].Descriptor()
-	// servicecatalogitem.DefaultIsActive holds the default value on creation for the is_active field.
-	servicecatalogitem.DefaultIsActive = servicecatalogitemDescIsActive.Default.(bool)
-	// servicecatalogitemDescRequiresApproval is the schema descriptor for requires_approval field.
-	servicecatalogitemDescRequiresApproval := servicecatalogitemFields[9].Descriptor()
-	// servicecatalogitem.DefaultRequiresApproval holds the default value on creation for the requires_approval field.
-	servicecatalogitem.DefaultRequiresApproval = servicecatalogitemDescRequiresApproval.Default.(bool)
-	// servicecatalogitemDescEstimatedDays is the schema descriptor for estimated_days field.
-	servicecatalogitemDescEstimatedDays := servicecatalogitemFields[10].Descriptor()
-	// servicecatalogitem.DefaultEstimatedDays holds the default value on creation for the estimated_days field.
-	servicecatalogitem.DefaultEstimatedDays = servicecatalogitemDescEstimatedDays.Default.(int)
-	// servicecatalogitemDescTenantID is the schema descriptor for tenant_id field.
-	servicecatalogitemDescTenantID := servicecatalogitemFields[11].Descriptor()
-	// servicecatalogitem.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
-	servicecatalogitem.TenantIDValidator = servicecatalogitemDescTenantID.Validators[0].(func(int) error)
-	// servicecatalogitemDescCreatedAt is the schema descriptor for created_at field.
-	servicecatalogitemDescCreatedAt := servicecatalogitemFields[12].Descriptor()
-	// servicecatalogitem.DefaultCreatedAt holds the default value on creation for the created_at field.
-	servicecatalogitem.DefaultCreatedAt = servicecatalogitemDescCreatedAt.Default.(func() time.Time)
-	// servicecatalogitemDescUpdatedAt is the schema descriptor for updated_at field.
-	servicecatalogitemDescUpdatedAt := servicecatalogitemFields[13].Descriptor()
-	// servicecatalogitem.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	servicecatalogitem.DefaultUpdatedAt = servicecatalogitemDescUpdatedAt.Default.(func() time.Time)
-	// servicecatalogitem.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	servicecatalogitem.UpdateDefaultUpdatedAt = servicecatalogitemDescUpdatedAt.UpdateDefault.(func() time.Time)
 	servicerequestFields := schema.ServiceRequest{}.Fields()
 	_ = servicerequestFields
 	// servicerequestDescTenantID is the schema descriptor for tenant_id field.

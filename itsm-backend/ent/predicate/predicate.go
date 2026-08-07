@@ -267,9 +267,6 @@ type SLAViolation func(*sql.Selector)
 // ServiceCatalog is the predicate function for servicecatalog builders.
 type ServiceCatalog func(*sql.Selector)
 
-// ServiceCatalogItem is the predicate function for servicecatalogitem builders.
-type ServiceCatalogItem func(*sql.Selector)
-
 // ServiceRequest is the predicate function for servicerequest builders.
 type ServiceRequest func(*sql.Selector)
 

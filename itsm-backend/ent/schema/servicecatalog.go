@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"entgo.io/ent"
-	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 )
@@ -55,9 +54,7 @@ func (ServiceCatalog) Fields() []ent.Field {
 }
 
 func (ServiceCatalog) Edges() []ent.Edge {
-	return []ent.Edge{
-		edge.To("items", ServiceCatalogItem.Type),
-	}
+	return []ent.Edge{}
 }
 
 func (ServiceCatalog) Indexes() []ent.Index {

@@ -186,8 +186,6 @@ type Tx struct {
 	SLAViolation *SLAViolationClient
 	// ServiceCatalog is the client for interacting with the ServiceCatalog builders.
 	ServiceCatalog *ServiceCatalogClient
-	// ServiceCatalogItem is the client for interacting with the ServiceCatalogItem builders.
-	ServiceCatalogItem *ServiceCatalogItemClient
 	// ServiceRequest is the client for interacting with the ServiceRequest builders.
 	ServiceRequest *ServiceRequestClient
 	// ServiceRequestApproval is the client for interacting with the ServiceRequestApproval builders.
@@ -468,7 +466,6 @@ func (tx *Tx) init() {
 	tx.SLAPolicy = NewSLAPolicyClient(tx.config)
 	tx.SLAViolation = NewSLAViolationClient(tx.config)
 	tx.ServiceCatalog = NewServiceCatalogClient(tx.config)
-	tx.ServiceCatalogItem = NewServiceCatalogItemClient(tx.config)
 	tx.ServiceRequest = NewServiceRequestClient(tx.config)
 	tx.ServiceRequestApproval = NewServiceRequestApprovalClient(tx.config)
 	tx.StandardChange = NewStandardChangeClient(tx.config)
