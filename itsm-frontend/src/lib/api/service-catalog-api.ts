@@ -313,6 +313,14 @@ export class ServiceCatalogApi {
   }
 
   /**
+   * 按关联的 ticketId 查服务请求（供工单详情页的 ServiceRequestPanel 用）
+   */
+  static async getServiceRequestByTicketId(ticketId: number): Promise<any> {
+    const resp = await httpClient.get<any>(`/api/v1/service-requests/by-ticket/${ticketId}`);
+    return ServiceCatalogApi.toServiceRequest(resp);
+  }
+
+  /**
    * 创建服务请求
    */
   static async createServiceRequest(request: CreateServiceRequestRequest): Promise<any> {

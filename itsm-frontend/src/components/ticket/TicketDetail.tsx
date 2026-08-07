@@ -63,6 +63,7 @@ import {
   fetchAuditLogHistory,
 } from '@/components/business/detail-tabs';
 import { RelationPanel } from '@/components/ticket-relations/RelationPanel';
+import ServiceRequestPanel from './ServiceRequestPanel';
 import {
   MessageSquare,
   Paperclip,
@@ -507,6 +508,8 @@ const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
           }}
         />
       )}
+
+      {ticket?.source === 'service_catalog' && <ServiceRequestPanel ticketId={ticket.id} />}
 
       <Card className="rounded-lg shadow-sm border border-gray-200">
         <Space orientation="vertical" size={16} style={{ width: '100%' }}>
