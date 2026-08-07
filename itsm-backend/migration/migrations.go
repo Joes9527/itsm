@@ -69,6 +69,11 @@ var RegisteredMigrations = []Migration{
 		Description: "Drop orphaned service_catalog_items table and service_catalogs.form_schema column (legacy ServiceCatalogItem/ServiceController branch removed, zero real HTTP callers; irreversible, forward-fix only)",
 		RollbackSQL: "",
 	},
+	{
+		Version:     "013_service_request_delegates_to_ticket",
+		Description: "ServiceRequest delegates status/workflow/approval to its linked Ticket: drop status/title/reason/approval-progress columns and the service_request_approvals table (superseded by ticket's process_approval_decision); irreversible, forward-fix only",
+		RollbackSQL: "",
+	},
 }
 
 // PostSchemaMigrations returns a defensive copy of the canonical active stream.
@@ -599,6 +604,20 @@ CREATE INDEX IF NOT EXISTS idx_tool_invocations_tenant ON tool_invocations(tenan
 -- handlers/service_catalog + handlers/service_request.
 DROP TABLE IF EXISTS service_catalog_items;
 ALTER TABLE service_catalogs DROP COLUMN IF EXISTS form_schema;
+`
+	case "013_service_request_delegates_to_ticket":
+		return `
+ALTER TABLE service_requests DROP COLUMN IF EXISTS status;
+ALTER TABLE service_requests DROP COLUMN IF EXISTS title;
+ALTER TABLE service_requests DROP COLUMN IF EXISTS reason;
+ALTER TABLE service_requests DROP COLUMN IF EXISTS current_level;
+ALTER TABLE service_requests DROP COLUMN IF EXISTS total_levels;
+ALTER TABLE service_requests DROP COLUMN IF EXISTS current_approver;
+ALTER TABLE service_requests DROP COLUMN IF EXISTS approved_at;
+ALTER TABLE service_requests DROP COLUMN IF EXISTS approver_comment;
+ALTER TABLE service_requests DROP COLUMN IF EXISTS approval_history;
+DROP TABLE IF EXISTS service_request_approvals;
+DELETE FROM field_values WHERE entity_type = 'service_request';
 `
 	default:
 		return ""

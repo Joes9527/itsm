@@ -188,8 +188,6 @@ type Tx struct {
 	ServiceCatalog *ServiceCatalogClient
 	// ServiceRequest is the client for interacting with the ServiceRequest builders.
 	ServiceRequest *ServiceRequestClient
-	// ServiceRequestApproval is the client for interacting with the ServiceRequestApproval builders.
-	ServiceRequestApproval *ServiceRequestApprovalClient
 	// StandardChange is the client for interacting with the StandardChange builders.
 	StandardChange *StandardChangeClient
 	// Survey is the client for interacting with the Survey builders.
@@ -467,7 +465,6 @@ func (tx *Tx) init() {
 	tx.SLAViolation = NewSLAViolationClient(tx.config)
 	tx.ServiceCatalog = NewServiceCatalogClient(tx.config)
 	tx.ServiceRequest = NewServiceRequestClient(tx.config)
-	tx.ServiceRequestApproval = NewServiceRequestApprovalClient(tx.config)
 	tx.StandardChange = NewStandardChangeClient(tx.config)
 	tx.Survey = NewSurveyClient(tx.config)
 	tx.SurveyResponse = NewSurveyResponseClient(tx.config)

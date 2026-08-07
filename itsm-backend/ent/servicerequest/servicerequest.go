@@ -15,18 +15,14 @@ const (
 	FieldID = "id"
 	// FieldTenantID holds the string denoting the tenant_id field in the database.
 	FieldTenantID = "tenant_id"
+	// FieldTicketID holds the string denoting the ticket_id field in the database.
+	FieldTicketID = "ticket_id"
 	// FieldCatalogID holds the string denoting the catalog_id field in the database.
 	FieldCatalogID = "catalog_id"
 	// FieldCiID holds the string denoting the ci_id field in the database.
 	FieldCiID = "ci_id"
 	// FieldRequesterID holds the string denoting the requester_id field in the database.
 	FieldRequesterID = "requester_id"
-	// FieldStatus holds the string denoting the status field in the database.
-	FieldStatus = "status"
-	// FieldTitle holds the string denoting the title field in the database.
-	FieldTitle = "title"
-	// FieldReason holds the string denoting the reason field in the database.
-	FieldReason = "reason"
 	// FieldFormData holds the string denoting the form_data field in the database.
 	FieldFormData = "form_data"
 	// FieldCostCenter holds the string denoting the cost_center field in the database.
@@ -41,18 +37,6 @@ const (
 	FieldExpireAt = "expire_at"
 	// FieldComplianceAck holds the string denoting the compliance_ack field in the database.
 	FieldComplianceAck = "compliance_ack"
-	// FieldCurrentLevel holds the string denoting the current_level field in the database.
-	FieldCurrentLevel = "current_level"
-	// FieldTotalLevels holds the string denoting the total_levels field in the database.
-	FieldTotalLevels = "total_levels"
-	// FieldCurrentApprover holds the string denoting the current_approver field in the database.
-	FieldCurrentApprover = "current_approver"
-	// FieldApprovedAt holds the string denoting the approved_at field in the database.
-	FieldApprovedAt = "approved_at"
-	// FieldApproverComment holds the string denoting the approver_comment field in the database.
-	FieldApproverComment = "approver_comment"
-	// FieldApprovalHistory holds the string denoting the approval_history field in the database.
-	FieldApprovalHistory = "approval_history"
 	// FieldProcessorID holds the string denoting the processor_id field in the database.
 	FieldProcessorID = "processor_id"
 	// FieldStartedAt holds the string denoting the started_at field in the database.
@@ -79,12 +63,10 @@ const (
 var Columns = []string{
 	FieldID,
 	FieldTenantID,
+	FieldTicketID,
 	FieldCatalogID,
 	FieldCiID,
 	FieldRequesterID,
-	FieldStatus,
-	FieldTitle,
-	FieldReason,
 	FieldFormData,
 	FieldCostCenter,
 	FieldDataClassification,
@@ -92,12 +74,6 @@ var Columns = []string{
 	FieldSourceIPWhitelist,
 	FieldExpireAt,
 	FieldComplianceAck,
-	FieldCurrentLevel,
-	FieldTotalLevels,
-	FieldCurrentApprover,
-	FieldApprovedAt,
-	FieldApproverComment,
-	FieldApprovalHistory,
 	FieldProcessorID,
 	FieldStartedAt,
 	FieldCompletedAt,
@@ -122,22 +98,18 @@ func ValidColumn(column string) bool {
 var (
 	// TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	TenantIDValidator func(int) error
+	// TicketIDValidator is a validator for the "ticket_id" field. It is called by the builders before save.
+	TicketIDValidator func(int) error
 	// CatalogIDValidator is a validator for the "catalog_id" field. It is called by the builders before save.
 	CatalogIDValidator func(int) error
 	// RequesterIDValidator is a validator for the "requester_id" field. It is called by the builders before save.
 	RequesterIDValidator func(int) error
-	// DefaultStatus holds the default value on creation for the "status" field.
-	DefaultStatus string
 	// DefaultDataClassification holds the default value on creation for the "data_classification" field.
 	DefaultDataClassification string
 	// DefaultNeedsPublicIP holds the default value on creation for the "needs_public_ip" field.
 	DefaultNeedsPublicIP bool
 	// DefaultComplianceAck holds the default value on creation for the "compliance_ack" field.
 	DefaultComplianceAck bool
-	// DefaultCurrentLevel holds the default value on creation for the "current_level" field.
-	DefaultCurrentLevel int
-	// DefaultTotalLevels holds the default value on creation for the "total_levels" field.
-	DefaultTotalLevels int
 	// DefaultVersion holds the default value on creation for the "version" field.
 	DefaultVersion int
 	// VersionValidator is a validator for the "version" field. It is called by the builders before save.
@@ -163,6 +135,11 @@ func ByTenantID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTenantID, opts...).ToFunc()
 }
 
+// ByTicketID orders the results by the ticket_id field.
+func ByTicketID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTicketID, opts...).ToFunc()
+}
+
 // ByCatalogID orders the results by the catalog_id field.
 func ByCatalogID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCatalogID, opts...).ToFunc()
@@ -176,21 +153,6 @@ func ByCiID(opts ...sql.OrderTermOption) OrderOption {
 // ByRequesterID orders the results by the requester_id field.
 func ByRequesterID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRequesterID, opts...).ToFunc()
-}
-
-// ByStatus orders the results by the status field.
-func ByStatus(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldStatus, opts...).ToFunc()
-}
-
-// ByTitle orders the results by the title field.
-func ByTitle(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldTitle, opts...).ToFunc()
-}
-
-// ByReason orders the results by the reason field.
-func ByReason(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldReason, opts...).ToFunc()
 }
 
 // ByCostCenter orders the results by the cost_center field.
@@ -216,31 +178,6 @@ func ByExpireAt(opts ...sql.OrderTermOption) OrderOption {
 // ByComplianceAck orders the results by the compliance_ack field.
 func ByComplianceAck(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldComplianceAck, opts...).ToFunc()
-}
-
-// ByCurrentLevel orders the results by the current_level field.
-func ByCurrentLevel(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldCurrentLevel, opts...).ToFunc()
-}
-
-// ByTotalLevels orders the results by the total_levels field.
-func ByTotalLevels(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldTotalLevels, opts...).ToFunc()
-}
-
-// ByCurrentApprover orders the results by the current_approver field.
-func ByCurrentApprover(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldCurrentApprover, opts...).ToFunc()
-}
-
-// ByApprovedAt orders the results by the approved_at field.
-func ByApprovedAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldApprovedAt, opts...).ToFunc()
-}
-
-// ByApproverComment orders the results by the approver_comment field.
-func ByApproverComment(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldApproverComment, opts...).ToFunc()
 }
 
 // ByProcessorID orders the results by the processor_id field.

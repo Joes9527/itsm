@@ -88,7 +88,6 @@ import (
 	"itsm-backend/ent/rootcauseanalysis"
 	"itsm-backend/ent/servicecatalog"
 	"itsm-backend/ent/servicerequest"
-	"itsm-backend/ent/servicerequestapproval"
 	"itsm-backend/ent/slaalerthistory"
 	"itsm-backend/ent/slaalertrule"
 	"itsm-backend/ent/sladefinition"
@@ -278,7 +277,6 @@ func checkColumn(t, c string) error {
 			slaviolation.Table:                slaviolation.ValidColumn,
 			servicecatalog.Table:              servicecatalog.ValidColumn,
 			servicerequest.Table:              servicerequest.ValidColumn,
-			servicerequestapproval.Table:      servicerequestapproval.ValidColumn,
 			standardchange.Table:              standardchange.ValidColumn,
 			survey.Table:                      survey.ValidColumn,
 			surveyresponse.Table:              surveyresponse.ValidColumn,

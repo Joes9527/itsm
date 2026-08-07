@@ -7,7 +7,6 @@ import (
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/servicerequest"
-	"itsm-backend/ent/servicerequestapproval"
 	"itsm-backend/ent/user"
 )
 
@@ -27,12 +26,10 @@ func (r *EntRepository) toDomain(req *ent.ServiceRequest) *ServiceRequest {
 	return &ServiceRequest{
 		ID:                 req.ID,
 		TenantID:           req.TenantID,
+		TicketID:           req.TicketID,
 		CatalogID:          req.CatalogID,
 		RequesterID:        req.RequesterID,
 		CiID:               req.CiID,
-		Status:             req.Status,
-		Title:              req.Title,
-		Reason:             req.Reason,
 		FormData:           req.FormData,
 		CostCenter:         req.CostCenter,
 		DataClassification: req.DataClassification,
@@ -40,11 +37,8 @@ func (r *EntRepository) toDomain(req *ent.ServiceRequest) *ServiceRequest {
 		SourceIPWhitelist:  req.SourceIPWhitelist,
 		ExpireAt:           itemOrNil(req.ExpireAt),
 		ComplianceAck:      req.ComplianceAck,
-		CurrentLevel:       req.CurrentLevel,
-		TotalLevels:        req.TotalLevels,
 		Version:            req.Version,
 		ProcessorID:        optionalInt(req.ProcessorID),
-		ApprovedAt:         itemOrNil(req.ApprovedAt),
 		StartedAt:          itemOrNil(req.StartedAt),
 		CompletedAt:        itemOrNil(req.CompletedAt),
 		CompletionNote:     req.CompletionNote,
@@ -68,56 +62,16 @@ func optionalInt(value int) *int {
 	return &value
 }
 
-// toDomainApproval converts Ent approval model to Domain entity
-func (r *EntRepository) toDomainApproval(app *ent.ServiceRequestApproval) *ServiceRequestApproval {
-	if app == nil {
-		return nil
-	}
-	return &ServiceRequestApproval{
-		ID:               app.ID,
-		TenantID:         app.TenantID,
-		ServiceRequestID: app.ServiceRequestID,
-		Level:            app.Level,
-		Step:             app.Step,
-		Status:           app.Status,
-		ApproverID:       app.ApproverID,
-		ApproverName:     app.ApproverName,
-		Comment:          app.Comment,
-		Action:           app.Action,
-		TimeoutHours:     app.TimeoutHours,
-		DueAt:            itemOrNil(app.DueAt),
-		ProcessedAt:      itemOrNil(app.ProcessedAt),
-		CreatedAt:        app.CreatedAt,
-		// UpdatedAt not in ent schema
-	}
-}
-
-func (r *EntRepository) Create(ctx context.Context, req *ServiceRequest, approvals []*ServiceRequestApproval) (*ServiceRequest, error) {
-	tx, err := r.client.Tx(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("starting transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	// 1. Create Service Request
-	create := tx.ServiceRequest.Create().
+func (r *EntRepository) Create(ctx context.Context, req *ServiceRequest) (*ServiceRequest, error) {
+	create := r.client.ServiceRequest.Create().
 		SetTenantID(req.TenantID).
+		SetTicketID(req.TicketID).
 		SetCatalogID(req.CatalogID).
 		SetRequesterID(req.RequesterID).
-		SetStatus(req.Status).
-		SetCurrentLevel(req.CurrentLevel).
-		SetTotalLevels(req.TotalLevels).
 		SetComplianceAck(req.ComplianceAck).
 		SetNeedsPublicIP(req.NeedsPublicIP).
-		SetComplianceAck(req.ComplianceAck).
 		SetDataClassification(req.DataClassification)
 
-	if req.Title != "" {
-		create.SetTitle(req.Title)
-	}
-	if req.Reason != "" {
-		create.SetReason(req.Reason)
-	}
 	if req.FormData != nil {
 		create.SetFormData(req.FormData)
 	}
@@ -139,31 +93,6 @@ func (r *EntRepository) Create(ctx context.Context, req *ServiceRequest, approva
 		return nil, fmt.Errorf("creating service request: %w", err)
 	}
 
-	// 2. Create Approvals
-	if len(approvals) > 0 {
-		bulk := make([]*ent.ServiceRequestApprovalCreate, len(approvals))
-		for i, app := range approvals {
-			bulk[i] = tx.ServiceRequestApproval.Create().
-				SetTenantID(req.TenantID).
-				SetServiceRequestID(savedReq.ID).
-				SetLevel(app.Level).
-				SetStep(app.Step).
-				SetStatus(app.Status).
-				SetTimeoutHours(app.TimeoutHours)
-
-			if app.DueAt != nil {
-				bulk[i].SetDueAt(*app.DueAt)
-			}
-		}
-		if _, err := tx.ServiceRequestApproval.CreateBulk(bulk...).Save(ctx); err != nil {
-			return nil, fmt.Errorf("creating approvals: %w", err)
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("committing transaction: %w", err)
-	}
-
 	return r.toDomain(savedReq), nil
 }
 
@@ -177,37 +106,20 @@ func (r *EntRepository) Get(ctx context.Context, id, tenantID int) (*ServiceRequ
 	return r.toDomain(req), nil
 }
 
-func (r *EntRepository) GetWithApprovals(ctx context.Context, id, tenantID int) (*ServiceRequest, []*ServiceRequestApproval, error) {
-	req, err := r.client.ServiceRequest.Query().
-		Where(servicerequest.IDEQ(id), servicerequest.TenantIDEQ(tenantID), servicerequest.DeletedAtIsNil()).
+func (r *EntRepository) GetByTicketID(ctx context.Context, ticketID, tenantID int) (*ServiceRequest, error) {
+	sr, err := r.client.ServiceRequest.Query().
+		Where(servicerequest.TicketID(ticketID), servicerequest.TenantID(tenantID)).
 		Only(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-
-	approvals, err := r.client.ServiceRequestApproval.Query().
-		Where(servicerequestapproval.ServiceRequestIDEQ(id), servicerequestapproval.TenantIDEQ(tenantID)).
-		Order(ent.Asc(servicerequestapproval.FieldLevel)).
-		All(ctx)
-	if err != nil {
-		return nil, nil, fmt.Errorf("querying approvals: %w", err)
-	}
-
-	domainApprovals := make([]*ServiceRequestApproval, len(approvals))
-	for i, app := range approvals {
-		domainApprovals[i] = r.toDomainApproval(app)
-	}
-
-	return r.toDomain(req), domainApprovals, nil
+	return r.toDomain(sr), nil
 }
 
 func (r *EntRepository) List(ctx context.Context, tenantID int, filters ListFilters) ([]*ServiceRequest, int, error) {
 	query := r.client.ServiceRequest.Query().
 		Where(servicerequest.TenantID(tenantID), servicerequest.DeletedAtIsNil())
 
-	if filters.Status != "" {
-		query.Where(servicerequest.Status(filters.Status))
-	}
 	if filters.UserID > 0 {
 		query.Where(servicerequest.RequesterID(filters.UserID))
 	}
@@ -242,35 +154,13 @@ func (r *EntRepository) List(ctx context.Context, tenantID int, filters ListFilt
 	return results, total, nil
 }
 
-func (r *EntRepository) UpdateStatus(ctx context.Context, req *ServiceRequest, status string, actorID int) error {
-	update := r.client.ServiceRequest.UpdateOneID(req.ID).
-		Where(
-			servicerequest.TenantIDEQ(req.TenantID),
-			servicerequest.DeletedAtIsNil(),
-			servicerequest.VersionEQ(req.Version),
-		).
-		SetStatus(status).
-		AddVersion(1)
-	now := time.Now()
-	switch status {
-	case SRStatusProvisioning:
-		update.SetProcessorID(actorID).SetStartedAt(now)
-	case SRStatusDelivered:
-		update.SetCompletedAt(now)
-	}
-	return update.Exec(ctx)
-}
-
 func (r *EntRepository) Update(ctx context.Context, req *ServiceRequest) error {
 	update := r.client.ServiceRequest.UpdateOneID(req.ID).
 		Where(
 			servicerequest.TenantIDEQ(req.TenantID),
 			servicerequest.DeletedAtIsNil(),
 			servicerequest.VersionEQ(req.Version),
-			servicerequest.StatusEQ(SRStatusSubmitted),
 		).
-		SetTitle(req.Title).
-		SetReason(req.Reason).
 		SetFormData(req.FormData).
 		SetCostCenter(req.CostCenter).
 		SetDataClassification(req.DataClassification).
@@ -297,183 +187,7 @@ func (r *EntRepository) Delete(ctx context.Context, req *ServiceRequest) error {
 		Exec(ctx)
 }
 
-func (r *EntRepository) GetApproval(ctx context.Context, requestID int, level int) (*ServiceRequestApproval, error) {
-	app, err := r.client.ServiceRequestApproval.Query().
-		Where(servicerequestapproval.ServiceRequestID(requestID)).
-		Where(servicerequestapproval.Level(level)).
-		Where(servicerequestapproval.Status("pending")). // Ideally we query by ID or just logic, but this matches logic
-		First(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return r.toDomainApproval(app), nil
-}
-
-func (r *EntRepository) UpdateApproval(ctx context.Context, approval *ServiceRequestApproval) error {
-	update := r.client.ServiceRequestApproval.UpdateOneID(approval.ID).
-		SetStatus(approval.Status).
-		SetAction(approval.Action).
-		SetComment(approval.Comment)
-
-	if approval.ApproverID != nil {
-		update.SetApproverID(*approval.ApproverID)
-	}
-	if approval.ApproverName != "" {
-		update.SetApproverName(approval.ApproverName)
-	}
-	if approval.ProcessedAt != nil {
-		update.SetProcessedAt(*approval.ProcessedAt)
-	}
-
-	return update.Exec(ctx)
-}
-
-func (r *EntRepository) UpdateRequestAndApproval(ctx context.Context, req *ServiceRequest, approval *ServiceRequestApproval) error {
-	tx, err := r.client.Tx(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	// Update Request
-	reqUpdate := tx.ServiceRequest.UpdateOneID(req.ID).
-		Where(
-			servicerequest.TenantIDEQ(req.TenantID),
-			servicerequest.DeletedAtIsNil(),
-			servicerequest.VersionEQ(req.Version),
-		).
-		SetStatus(req.Status).
-		SetCurrentLevel(req.CurrentLevel).
-		AddVersion(1)
-	if req.Status == SRStatusSecurityApproved {
-		reqUpdate.SetApprovedAt(time.Now())
-	}
-	if err := reqUpdate.Exec(ctx); err != nil {
-		return err
-	}
-
-	// Update Approval
-	appUpdate := tx.ServiceRequestApproval.UpdateOneID(approval.ID).
-		Where(
-			servicerequestapproval.TenantIDEQ(req.TenantID),
-			servicerequestapproval.ServiceRequestIDEQ(req.ID),
-			servicerequestapproval.StatusEQ(ApprovalStatusPending),
-		).
-		SetStatus(approval.Status).
-		SetAction(approval.Action).
-		SetComment(approval.Comment)
-
-	if approval.ApproverID != nil {
-		appUpdate.SetApproverID(*approval.ApproverID)
-	}
-	if approval.ApproverName != "" {
-		appUpdate.SetApproverName(approval.ApproverName)
-	}
-	if approval.ProcessedAt != nil {
-		appUpdate.SetProcessedAt(*approval.ProcessedAt)
-	}
-	if err := appUpdate.Exec(ctx); err != nil {
-		return err
-	}
-
-	return tx.Commit()
-}
-
-func (r *EntRepository) ListPendingApprovals(ctx context.Context, tenantID int, targetLevel int, requiredStatus, requesterDept string, page, size int) ([]*ServiceRequest, int, error) {
-	approvalQuery := r.client.ServiceRequestApproval.Query().
-		Where(
-			servicerequestapproval.TenantIDEQ(tenantID),
-			servicerequestapproval.StatusEQ(ApprovalStatusPending),
-		)
-	if targetLevel > 0 {
-		approvalQuery = approvalQuery.Where(servicerequestapproval.LevelEQ(targetLevel))
-	}
-	pendingApprovals, err := approvalQuery.Select(servicerequestapproval.FieldServiceRequestID).All(ctx)
-	if err != nil {
-		return nil, 0, err
-	}
-	requestIDs := make([]int, 0, len(pendingApprovals))
-	seenRequestIDs := make(map[int]struct{}, len(pendingApprovals))
-	for _, approval := range pendingApprovals {
-		if _, exists := seenRequestIDs[approval.ServiceRequestID]; exists {
-			continue
-		}
-		seenRequestIDs[approval.ServiceRequestID] = struct{}{}
-		requestIDs = append(requestIDs, approval.ServiceRequestID)
-	}
-	if len(requestIDs) == 0 {
-		return []*ServiceRequest{}, 0, nil
-	}
-	query := r.client.ServiceRequest.Query().
-		Where(
-			servicerequest.TenantID(tenantID),
-			servicerequest.DeletedAtIsNil(),
-			servicerequest.IDIn(requestIDs...),
-		)
-	if page < 1 {
-		page = 1
-	}
-	if size < 1 {
-		size = 10
-	}
-	if size > 100 {
-		size = 100
-	}
-
-	if targetLevel > 0 {
-		query = query.Where(
-			servicerequest.CurrentLevel(targetLevel),
-			servicerequest.Status(requiredStatus),
-		)
-		if requesterDept != "" {
-			users, err := r.client.User.Query().
-				Where(user.TenantIDEQ(tenantID), user.ActiveEQ(true), user.DepartmentEQ(requesterDept)).
-				Select(user.FieldID).
-				All(ctx)
-			if err != nil {
-				return nil, 0, err
-			}
-			requesterIDs := make([]int, 0, len(users))
-			for _, item := range users {
-				requesterIDs = append(requesterIDs, item.ID)
-			}
-			if len(requesterIDs) == 0 {
-				return []*ServiceRequest{}, 0, nil
-			}
-			query = query.Where(servicerequest.RequesterIDIn(requesterIDs...))
-		}
-	} else {
-		// Admin/Super Admin: See all active pending states
-		// This logic mimics the original service
-		query = query.Where(servicerequest.StatusIn(
-			"submitted",
-			"manager_approved",
-			"it_approved",
-		))
-	}
-
-	total, err := query.Count(ctx)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	rows, err := query.
-		Order(ent.Desc(servicerequest.FieldCreatedAt)).
-		Offset((page - 1) * size).
-		Limit(size).
-		All(ctx)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	results := make([]*ServiceRequest, len(rows))
-	for i, row := range rows {
-		results[i] = r.toDomain(row)
-	}
-	return results, total, nil
-}
-
-// Helper to get User department (needed for filtering)
+// GetUserContext returns User department (needed for filtering)
 // Note: This leaks abstraction slightly by querying User, but practical.
 func (r *EntRepository) GetUserContext(ctx context.Context, userID, tenantID int) (string, string, error) {
 	u, err := r.client.User.Query().

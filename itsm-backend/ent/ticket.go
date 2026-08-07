@@ -26,6 +26,8 @@ type Ticket struct {
 	Status string `json:"status,omitempty"`
 	// 工单类型
 	Type string `json:"type,omitempty"`
+	// 工单来源：manual=手动创建，service_catalog=服务目录申请
+	Source string `json:"source,omitempty"`
 	// 优先级
 	Priority string `json:"priority,omitempty"`
 	// 工单编号
@@ -293,7 +295,7 @@ func (*Ticket) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case ticket.FieldID, ticket.FieldRequesterID, ticket.FieldAssigneeID, ticket.FieldTenantID, ticket.FieldTemplateID, ticket.FieldCategoryID, ticket.FieldDepartmentID, ticket.FieldParentTicketID, ticket.FieldSLADefinitionID, ticket.FieldRating, ticket.FieldRatedBy, ticket.FieldVersion, ticket.FieldMspProviderID, ticket.FieldManagedByUserID:
 			values[i] = new(sql.NullInt64)
-		case ticket.FieldTitle, ticket.FieldDescription, ticket.FieldStatus, ticket.FieldType, ticket.FieldPriority, ticket.FieldTicketNumber, ticket.FieldResolution, ticket.FieldResolutionCategory, ticket.FieldRatingComment, ticket.FieldMspTicketID:
+		case ticket.FieldTitle, ticket.FieldDescription, ticket.FieldStatus, ticket.FieldType, ticket.FieldSource, ticket.FieldPriority, ticket.FieldTicketNumber, ticket.FieldResolution, ticket.FieldResolutionCategory, ticket.FieldRatingComment, ticket.FieldMspTicketID:
 			values[i] = new(sql.NullString)
 		case ticket.FieldSLAResponseDeadline, ticket.FieldSLAResolutionDeadline, ticket.FieldFirstResponseAt, ticket.FieldResolvedAt, ticket.FieldClosedAt, ticket.FieldRatedAt, ticket.FieldCreatedAt, ticket.FieldUpdatedAt, ticket.FieldDeletedAt:
 			values[i] = new(sql.NullTime)
@@ -355,6 +357,12 @@ func (_m *Ticket) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field type", values[i])
 			} else if value.Valid {
 				_m.Type = value.String
+			}
+		case ticket.FieldSource:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field source", values[i])
+			} else if value.Valid {
+				_m.Source = value.String
 			}
 		case ticket.FieldPriority:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -708,6 +716,9 @@ func (_m *Ticket) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("type=")
 	builder.WriteString(_m.Type)
+	builder.WriteString(", ")
+	builder.WriteString("source=")
+	builder.WriteString(_m.Source)
 	builder.WriteString(", ")
 	builder.WriteString("priority=")
 	builder.WriteString(_m.Priority)

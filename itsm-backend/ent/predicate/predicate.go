@@ -270,9 +270,6 @@ type ServiceCatalog func(*sql.Selector)
 // ServiceRequest is the predicate function for servicerequest builders.
 type ServiceRequest func(*sql.Selector)
 
-// ServiceRequestApproval is the predicate function for servicerequestapproval builders.
-type ServiceRequestApproval func(*sql.Selector)
-
 // StandardChange is the predicate function for standardchange builders.
 type StandardChange func(*sql.Selector)
 

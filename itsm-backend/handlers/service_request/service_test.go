@@ -35,21 +35,23 @@ func TestService_Create_PersistsFieldValues(t *testing.T) {
 
 	srRepo := NewEntRepository(client)
 	cmdbRepo := cmdb.NewEntRepository(client)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar())
+	ticketSvc := service.NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar(), ticketSvc)
 
 	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
-		Title:              "申请一台云主机",
-		Reason:             "测试",
 		ComplianceAck:      true,
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
 		FormData: map[string]interface{}{
+			"title":       "申请一台云主机",
+			"reason":      "测试",
 			"environment": "production",
 		},
 	})
 	require.NoError(t, err)
+	require.Greater(t, created.TicketID, 0, "Create 必须创建关联 Ticket 并回写 TicketID")
 
-	values, err := service.NewFieldValueService(client).ListValues(ctx, tenant.ID, "service_request", created.ID)
+	values, err := service.NewFieldValueService(client).ListValues(ctx, tenant.ID, "ticket", created.TicketID)
 	require.NoError(t, err)
 	require.Len(t, values, 1)
 	assert.Equal(t, "environment", values[0].Name)
@@ -75,16 +77,18 @@ func TestService_Create_SystemFormDataFieldsNotCollectedAsCustomFields(t *testin
 
 	srRepo := NewEntRepository(client)
 	cmdbRepo := cmdb.NewEntRepository(client)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar())
+	ticketSvc := service.NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar(), ticketSvc)
 
 	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
-		Title: "VPN 权限申请", Reason: "测试", ComplianceAck: true,
-		DataClassification: "internal", ExpireAt: ptrTime(time.Now().Add(24 * time.Hour)),
-		FormData: map[string]interface{}{"title": "不应该被当成自定义字段", "cost_center": "CC-001"},
+		ComplianceAck:      true,
+		DataClassification: "internal",
+		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
+		FormData:           map[string]interface{}{"title": "VPN 权限申请", "reason": "测试", "cost_center": "CC-001"},
 	})
 	require.NoError(t, err)
 
-	values, err := service.NewFieldValueService(client).ListValues(ctx, tenant.ID, "service_request", created.ID)
+	values, err := service.NewFieldValueService(client).ListValues(ctx, tenant.ID, "ticket", created.TicketID)
 	require.NoError(t, err)
 	assert.Empty(t, values, "没有对应 field_definitions 的系统字段不应该落进 field_values")
 }
@@ -111,15 +115,16 @@ func TestService_Create_PersistsFieldValues_ArrayShapeSnakeCaseName(t *testing.T
 
 	srRepo := NewEntRepository(client)
 	cmdbRepo := cmdb.NewEntRepository(client)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar())
+	ticketSvc := service.NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar(), ticketSvc)
 
 	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
-		Title:              "申请办公用品",
-		Reason:             "测试",
 		ComplianceAck:      true,
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
 		FormData: map[string]interface{}{
+			"title":  "申请办公用品",
+			"reason": "测试",
 			// 模拟前端 httpClient 对请求体做完全局 camelCase key 转换之后、
 			// 仍然把字段名放在数组元素的 value 位置（而不是 map 的 key）的形状。
 			"customFieldValues": []interface{}{
@@ -129,7 +134,7 @@ func TestService_Create_PersistsFieldValues_ArrayShapeSnakeCaseName(t *testing.T
 	})
 	require.NoError(t, err)
 
-	values, err := service.NewFieldValueService(client).ListValues(ctx, tenant.ID, "service_request", created.ID)
+	values, err := service.NewFieldValueService(client).ListValues(ctx, tenant.ID, "ticket", created.TicketID)
 	require.NoError(t, err)
 	require.Len(t, values, 1)
 	assert.Equal(t, "office_location", values[0].Name)
@@ -137,7 +142,8 @@ func TestService_Create_PersistsFieldValues_ArrayShapeSnakeCaseName(t *testing.T
 }
 
 // TestService_Create_RequiredFieldMissing_Rejected 证明 catalog 上标记为 required 的动态字段
-// 缺失或空值时，Create 在写入 ServiceRequest 之前就以 400 拒绝提交（最终整分支评审 Fix 3）。
+// 缺失或空值时，Create 在写入 ServiceRequest（以及创建关联 Ticket）之前就以 400 拒绝提交
+// （最终整分支评审 Fix 3）。
 func TestService_Create_RequiredFieldMissing_Rejected(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:sr_required_field?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
@@ -157,15 +163,14 @@ func TestService_Create_RequiredFieldMissing_Rejected(t *testing.T) {
 
 	srRepo := NewEntRepository(client)
 	cmdbRepo := cmdb.NewEntRepository(client)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar())
+	ticketSvc := service.NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar(), ticketSvc)
 
 	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
-		Title:              "扩容申请",
-		Reason:             "测试",
 		ComplianceAck:      true,
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
-		FormData:           map[string]interface{}{},
+		FormData:           map[string]interface{}{"title": "扩容申请", "reason": "测试"},
 	})
 	require.Error(t, err)
 	assert.Nil(t, created)
@@ -173,6 +178,101 @@ func TestService_Create_RequiredFieldMissing_Rejected(t *testing.T) {
 	_, total, err := srRepo.List(ctx, tenant.ID, ListFilters{Page: 1, Size: 10})
 	require.NoError(t, err)
 	assert.Equal(t, 0, total, "required 字段校验失败时不应该创建 ServiceRequest 记录")
+
+	ticketCount, err := client.Ticket.Query().Count(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 0, ticketCount, "required 字段校验失败时不应该先创建关联 Ticket")
+}
+
+// TestService_Create_LinksTicketAndDelegatesFields 证明 Create 委托给 Ticket：
+// 返回的 ServiceRequest.TicketID > 0，且能用它查到一条 title/description 对应申请内容的 Ticket。
+func TestService_Create_LinksTicketAndDelegatesFields(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:sr_links_ticket?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	tenant, err := client.Tenant.Create().SetName("t").SetCode("sr-links-ticket").SetDomain("d.test").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	requester, err := client.User.Create().
+		SetUsername("requester5").SetEmail("requester5@test.com").SetName("Requester5").
+		SetPasswordHash("hash").SetRole("end_user").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	scRepo := service_catalog.NewEntRepository(client)
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
+	catalog, err := scService.Create(ctx, "云主机申请-link", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil)
+	require.NoError(t, err)
+
+	srRepo := NewEntRepository(client)
+	cmdbRepo := cmdb.NewEntRepository(client)
+	logger := zaptest.NewLogger(t).Sugar()
+	ticketSvc := service.NewTicketServiceForTest(client, logger)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc)
+
+	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+		ComplianceAck:      true,
+		DataClassification: "internal",
+		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
+		FormData: map[string]interface{}{
+			"title":  "申请一台云主机-Link测试",
+			"reason": "delegation test reason",
+		},
+	})
+	require.NoError(t, err)
+	require.Greater(t, created.TicketID, 0, "Create 必须创建关联 Ticket 并回写 TicketID")
+
+	tkt, err := client.Ticket.Get(ctx, created.TicketID)
+	require.NoError(t, err)
+	assert.Equal(t, "申请一台云主机-Link测试", tkt.Title)
+	assert.Equal(t, "delegation test reason", tkt.Description)
+	assert.Equal(t, "service_request", tkt.Type)
+	assert.Equal(t, tenant.ID, tkt.TenantID)
+	assert.Equal(t, requester.ID, tkt.RequesterID)
+}
+
+// TestService_GetByTicketID_ReturnsLinkedServiceRequest 证明 GetByTicketID 能用 Create
+// 返回的 TicketID 查回同一条 ServiceRequest（Task 2 前端渲染 ticket 详情页 SR 面板依赖此接口）。
+func TestService_GetByTicketID_ReturnsLinkedServiceRequest(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:sr_get_by_ticket?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	tenant, err := client.Tenant.Create().SetName("t").SetCode("sr-get-by-ticket").SetDomain("d.test").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	requester, err := client.User.Create().
+		SetUsername("requester6").SetEmail("requester6@test.com").SetName("Requester6").
+		SetPasswordHash("hash").SetRole("end_user").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	scRepo := service_catalog.NewEntRepository(client)
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
+	catalog, err := scService.Create(ctx, "云主机申请-getbyticket", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil)
+	require.NoError(t, err)
+
+	srRepo := NewEntRepository(client)
+	cmdbRepo := cmdb.NewEntRepository(client)
+	logger := zaptest.NewLogger(t).Sugar()
+	ticketSvc := service.NewTicketServiceForTest(client, logger)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc)
+
+	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+		ComplianceAck:      true,
+		DataClassification: "internal",
+		CostCenter:         "CC-GETBYTICKET",
+		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
+		FormData: map[string]interface{}{
+			"title":  "申请一台云主机-GetByTicket",
+			"reason": "get by ticket test",
+		},
+	})
+	require.NoError(t, err)
+	require.Greater(t, created.TicketID, 0)
+
+	fetched, err := svc.GetByTicketID(ctx, created.TicketID, tenant.ID)
+	require.NoError(t, err)
+	require.NotNil(t, fetched)
+	assert.Equal(t, created.ID, fetched.ID)
+	assert.Equal(t, catalog.ID, fetched.CatalogID)
+	assert.Equal(t, "CC-GETBYTICKET", fetched.CostCenter)
+	assert.Equal(t, created.TicketID, fetched.TicketID)
 }
 
 func ptrTime(t time.Time) *time.Time { return &t }

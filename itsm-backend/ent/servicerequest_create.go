@@ -26,6 +26,12 @@ func (_c *ServiceRequestCreate) SetTenantID(v int) *ServiceRequestCreate {
 	return _c
 }
 
+// SetTicketID sets the "ticket_id" field.
+func (_c *ServiceRequestCreate) SetTicketID(v int) *ServiceRequestCreate {
+	_c.mutation.SetTicketID(v)
+	return _c
+}
+
 // SetCatalogID sets the "catalog_id" field.
 func (_c *ServiceRequestCreate) SetCatalogID(v int) *ServiceRequestCreate {
 	_c.mutation.SetCatalogID(v)
@@ -49,48 +55,6 @@ func (_c *ServiceRequestCreate) SetNillableCiID(v *int) *ServiceRequestCreate {
 // SetRequesterID sets the "requester_id" field.
 func (_c *ServiceRequestCreate) SetRequesterID(v int) *ServiceRequestCreate {
 	_c.mutation.SetRequesterID(v)
-	return _c
-}
-
-// SetStatus sets the "status" field.
-func (_c *ServiceRequestCreate) SetStatus(v string) *ServiceRequestCreate {
-	_c.mutation.SetStatus(v)
-	return _c
-}
-
-// SetNillableStatus sets the "status" field if the given value is not nil.
-func (_c *ServiceRequestCreate) SetNillableStatus(v *string) *ServiceRequestCreate {
-	if v != nil {
-		_c.SetStatus(*v)
-	}
-	return _c
-}
-
-// SetTitle sets the "title" field.
-func (_c *ServiceRequestCreate) SetTitle(v string) *ServiceRequestCreate {
-	_c.mutation.SetTitle(v)
-	return _c
-}
-
-// SetNillableTitle sets the "title" field if the given value is not nil.
-func (_c *ServiceRequestCreate) SetNillableTitle(v *string) *ServiceRequestCreate {
-	if v != nil {
-		_c.SetTitle(*v)
-	}
-	return _c
-}
-
-// SetReason sets the "reason" field.
-func (_c *ServiceRequestCreate) SetReason(v string) *ServiceRequestCreate {
-	_c.mutation.SetReason(v)
-	return _c
-}
-
-// SetNillableReason sets the "reason" field if the given value is not nil.
-func (_c *ServiceRequestCreate) SetNillableReason(v *string) *ServiceRequestCreate {
-	if v != nil {
-		_c.SetReason(*v)
-	}
 	return _c
 }
 
@@ -173,82 +137,6 @@ func (_c *ServiceRequestCreate) SetNillableComplianceAck(v *bool) *ServiceReques
 	if v != nil {
 		_c.SetComplianceAck(*v)
 	}
-	return _c
-}
-
-// SetCurrentLevel sets the "current_level" field.
-func (_c *ServiceRequestCreate) SetCurrentLevel(v int) *ServiceRequestCreate {
-	_c.mutation.SetCurrentLevel(v)
-	return _c
-}
-
-// SetNillableCurrentLevel sets the "current_level" field if the given value is not nil.
-func (_c *ServiceRequestCreate) SetNillableCurrentLevel(v *int) *ServiceRequestCreate {
-	if v != nil {
-		_c.SetCurrentLevel(*v)
-	}
-	return _c
-}
-
-// SetTotalLevels sets the "total_levels" field.
-func (_c *ServiceRequestCreate) SetTotalLevels(v int) *ServiceRequestCreate {
-	_c.mutation.SetTotalLevels(v)
-	return _c
-}
-
-// SetNillableTotalLevels sets the "total_levels" field if the given value is not nil.
-func (_c *ServiceRequestCreate) SetNillableTotalLevels(v *int) *ServiceRequestCreate {
-	if v != nil {
-		_c.SetTotalLevels(*v)
-	}
-	return _c
-}
-
-// SetCurrentApprover sets the "current_approver" field.
-func (_c *ServiceRequestCreate) SetCurrentApprover(v string) *ServiceRequestCreate {
-	_c.mutation.SetCurrentApprover(v)
-	return _c
-}
-
-// SetNillableCurrentApprover sets the "current_approver" field if the given value is not nil.
-func (_c *ServiceRequestCreate) SetNillableCurrentApprover(v *string) *ServiceRequestCreate {
-	if v != nil {
-		_c.SetCurrentApprover(*v)
-	}
-	return _c
-}
-
-// SetApprovedAt sets the "approved_at" field.
-func (_c *ServiceRequestCreate) SetApprovedAt(v time.Time) *ServiceRequestCreate {
-	_c.mutation.SetApprovedAt(v)
-	return _c
-}
-
-// SetNillableApprovedAt sets the "approved_at" field if the given value is not nil.
-func (_c *ServiceRequestCreate) SetNillableApprovedAt(v *time.Time) *ServiceRequestCreate {
-	if v != nil {
-		_c.SetApprovedAt(*v)
-	}
-	return _c
-}
-
-// SetApproverComment sets the "approver_comment" field.
-func (_c *ServiceRequestCreate) SetApproverComment(v string) *ServiceRequestCreate {
-	_c.mutation.SetApproverComment(v)
-	return _c
-}
-
-// SetNillableApproverComment sets the "approver_comment" field if the given value is not nil.
-func (_c *ServiceRequestCreate) SetNillableApproverComment(v *string) *ServiceRequestCreate {
-	if v != nil {
-		_c.SetApproverComment(*v)
-	}
-	return _c
-}
-
-// SetApprovalHistory sets the "approval_history" field.
-func (_c *ServiceRequestCreate) SetApprovalHistory(v []map[string]interface{}) *ServiceRequestCreate {
-	_c.mutation.SetApprovalHistory(v)
 	return _c
 }
 
@@ -413,10 +301,6 @@ func (_c *ServiceRequestCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *ServiceRequestCreate) defaults() {
-	if _, ok := _c.mutation.Status(); !ok {
-		v := servicerequest.DefaultStatus
-		_c.mutation.SetStatus(v)
-	}
 	if _, ok := _c.mutation.DataClassification(); !ok {
 		v := servicerequest.DefaultDataClassification
 		_c.mutation.SetDataClassification(v)
@@ -428,14 +312,6 @@ func (_c *ServiceRequestCreate) defaults() {
 	if _, ok := _c.mutation.ComplianceAck(); !ok {
 		v := servicerequest.DefaultComplianceAck
 		_c.mutation.SetComplianceAck(v)
-	}
-	if _, ok := _c.mutation.CurrentLevel(); !ok {
-		v := servicerequest.DefaultCurrentLevel
-		_c.mutation.SetCurrentLevel(v)
-	}
-	if _, ok := _c.mutation.TotalLevels(); !ok {
-		v := servicerequest.DefaultTotalLevels
-		_c.mutation.SetTotalLevels(v)
 	}
 	if _, ok := _c.mutation.Version(); !ok {
 		v := servicerequest.DefaultVersion
@@ -461,6 +337,14 @@ func (_c *ServiceRequestCreate) check() error {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.tenant_id": %w`, err)}
 		}
 	}
+	if _, ok := _c.mutation.TicketID(); !ok {
+		return &ValidationError{Name: "ticket_id", err: errors.New(`ent: missing required field "ServiceRequest.ticket_id"`)}
+	}
+	if v, ok := _c.mutation.TicketID(); ok {
+		if err := servicerequest.TicketIDValidator(v); err != nil {
+			return &ValidationError{Name: "ticket_id", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.ticket_id": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.CatalogID(); !ok {
 		return &ValidationError{Name: "catalog_id", err: errors.New(`ent: missing required field "ServiceRequest.catalog_id"`)}
 	}
@@ -477,9 +361,6 @@ func (_c *ServiceRequestCreate) check() error {
 			return &ValidationError{Name: "requester_id", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.requester_id": %w`, err)}
 		}
 	}
-	if _, ok := _c.mutation.Status(); !ok {
-		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "ServiceRequest.status"`)}
-	}
 	if _, ok := _c.mutation.DataClassification(); !ok {
 		return &ValidationError{Name: "data_classification", err: errors.New(`ent: missing required field "ServiceRequest.data_classification"`)}
 	}
@@ -488,12 +369,6 @@ func (_c *ServiceRequestCreate) check() error {
 	}
 	if _, ok := _c.mutation.ComplianceAck(); !ok {
 		return &ValidationError{Name: "compliance_ack", err: errors.New(`ent: missing required field "ServiceRequest.compliance_ack"`)}
-	}
-	if _, ok := _c.mutation.CurrentLevel(); !ok {
-		return &ValidationError{Name: "current_level", err: errors.New(`ent: missing required field "ServiceRequest.current_level"`)}
-	}
-	if _, ok := _c.mutation.TotalLevels(); !ok {
-		return &ValidationError{Name: "total_levels", err: errors.New(`ent: missing required field "ServiceRequest.total_levels"`)}
 	}
 	if _, ok := _c.mutation.Version(); !ok {
 		return &ValidationError{Name: "version", err: errors.New(`ent: missing required field "ServiceRequest.version"`)}
@@ -539,6 +414,10 @@ func (_c *ServiceRequestCreate) createSpec() (*ServiceRequest, *sqlgraph.CreateS
 		_spec.SetField(servicerequest.FieldTenantID, field.TypeInt, value)
 		_node.TenantID = value
 	}
+	if value, ok := _c.mutation.TicketID(); ok {
+		_spec.SetField(servicerequest.FieldTicketID, field.TypeInt, value)
+		_node.TicketID = value
+	}
 	if value, ok := _c.mutation.CatalogID(); ok {
 		_spec.SetField(servicerequest.FieldCatalogID, field.TypeInt, value)
 		_node.CatalogID = value
@@ -550,18 +429,6 @@ func (_c *ServiceRequestCreate) createSpec() (*ServiceRequest, *sqlgraph.CreateS
 	if value, ok := _c.mutation.RequesterID(); ok {
 		_spec.SetField(servicerequest.FieldRequesterID, field.TypeInt, value)
 		_node.RequesterID = value
-	}
-	if value, ok := _c.mutation.Status(); ok {
-		_spec.SetField(servicerequest.FieldStatus, field.TypeString, value)
-		_node.Status = value
-	}
-	if value, ok := _c.mutation.Title(); ok {
-		_spec.SetField(servicerequest.FieldTitle, field.TypeString, value)
-		_node.Title = value
-	}
-	if value, ok := _c.mutation.Reason(); ok {
-		_spec.SetField(servicerequest.FieldReason, field.TypeString, value)
-		_node.Reason = value
 	}
 	if value, ok := _c.mutation.FormData(); ok {
 		_spec.SetField(servicerequest.FieldFormData, field.TypeJSON, value)
@@ -590,30 +457,6 @@ func (_c *ServiceRequestCreate) createSpec() (*ServiceRequest, *sqlgraph.CreateS
 	if value, ok := _c.mutation.ComplianceAck(); ok {
 		_spec.SetField(servicerequest.FieldComplianceAck, field.TypeBool, value)
 		_node.ComplianceAck = value
-	}
-	if value, ok := _c.mutation.CurrentLevel(); ok {
-		_spec.SetField(servicerequest.FieldCurrentLevel, field.TypeInt, value)
-		_node.CurrentLevel = value
-	}
-	if value, ok := _c.mutation.TotalLevels(); ok {
-		_spec.SetField(servicerequest.FieldTotalLevels, field.TypeInt, value)
-		_node.TotalLevels = value
-	}
-	if value, ok := _c.mutation.CurrentApprover(); ok {
-		_spec.SetField(servicerequest.FieldCurrentApprover, field.TypeString, value)
-		_node.CurrentApprover = value
-	}
-	if value, ok := _c.mutation.ApprovedAt(); ok {
-		_spec.SetField(servicerequest.FieldApprovedAt, field.TypeTime, value)
-		_node.ApprovedAt = value
-	}
-	if value, ok := _c.mutation.ApproverComment(); ok {
-		_spec.SetField(servicerequest.FieldApproverComment, field.TypeString, value)
-		_node.ApproverComment = value
-	}
-	if value, ok := _c.mutation.ApprovalHistory(); ok {
-		_spec.SetField(servicerequest.FieldApprovalHistory, field.TypeJSON, value)
-		_node.ApprovalHistory = value
 	}
 	if value, ok := _c.mutation.ProcessorID(); ok {
 		_spec.SetField(servicerequest.FieldProcessorID, field.TypeInt, value)

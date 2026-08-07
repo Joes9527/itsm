@@ -3554,12 +3554,10 @@ var (
 	ServiceRequestsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
 		{Name: "tenant_id", Type: field.TypeInt},
+		{Name: "ticket_id", Type: field.TypeInt},
 		{Name: "catalog_id", Type: field.TypeInt},
 		{Name: "ci_id", Type: field.TypeInt, Nullable: true},
 		{Name: "requester_id", Type: field.TypeInt},
-		{Name: "status", Type: field.TypeString, Default: "submitted"},
-		{Name: "title", Type: field.TypeString, Nullable: true},
-		{Name: "reason", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "form_data", Type: field.TypeJSON, Nullable: true},
 		{Name: "cost_center", Type: field.TypeString, Nullable: true},
 		{Name: "data_classification", Type: field.TypeString, Default: "internal"},
@@ -3567,12 +3565,6 @@ var (
 		{Name: "source_ip_whitelist", Type: field.TypeJSON, Nullable: true},
 		{Name: "expire_at", Type: field.TypeTime, Nullable: true},
 		{Name: "compliance_ack", Type: field.TypeBool, Default: false},
-		{Name: "current_level", Type: field.TypeInt, Default: 1},
-		{Name: "total_levels", Type: field.TypeInt, Default: 1},
-		{Name: "current_approver", Type: field.TypeString, Nullable: true},
-		{Name: "approved_at", Type: field.TypeTime, Nullable: true},
-		{Name: "approver_comment", Type: field.TypeString, Nullable: true},
-		{Name: "approval_history", Type: field.TypeJSON, Nullable: true},
 		{Name: "processor_id", Type: field.TypeInt, Nullable: true},
 		{Name: "started_at", Type: field.TypeTime, Nullable: true},
 		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
@@ -3590,78 +3582,24 @@ var (
 		PrimaryKey: []*schema.Column{ServiceRequestsColumns[0]},
 		Indexes: []*schema.Index{
 			{
+				Name:    "servicerequest_ticket_id",
+				Unique:  true,
+				Columns: []*schema.Column{ServiceRequestsColumns[2]},
+			},
+			{
 				Name:    "servicerequest_tenant_id_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{ServiceRequestsColumns[1], ServiceRequestsColumns[27]},
+				Columns: []*schema.Column{ServiceRequestsColumns[1], ServiceRequestsColumns[19]},
 			},
 			{
 				Name:    "servicerequest_tenant_id_requester_id_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{ServiceRequestsColumns[1], ServiceRequestsColumns[4], ServiceRequestsColumns[27]},
-			},
-			{
-				Name:    "servicerequest_tenant_id_status_created_at",
-				Unique:  false,
-				Columns: []*schema.Column{ServiceRequestsColumns[1], ServiceRequestsColumns[5], ServiceRequestsColumns[27]},
+				Columns: []*schema.Column{ServiceRequestsColumns[1], ServiceRequestsColumns[5], ServiceRequestsColumns[19]},
 			},
 			{
 				Name:    "servicerequest_tenant_id_ci_id",
 				Unique:  false,
-				Columns: []*schema.Column{ServiceRequestsColumns[1], ServiceRequestsColumns[3]},
-			},
-			{
-				Name:    "servicerequest_tenant_id_current_level",
-				Unique:  false,
-				Columns: []*schema.Column{ServiceRequestsColumns[1], ServiceRequestsColumns[15]},
-			},
-		},
-	}
-	// ServiceRequestApprovalsColumns holds the columns for the "service_request_approvals" table.
-	ServiceRequestApprovalsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "tenant_id", Type: field.TypeInt},
-		{Name: "service_request_id", Type: field.TypeInt},
-		{Name: "level", Type: field.TypeInt},
-		{Name: "step", Type: field.TypeString, Nullable: true},
-		{Name: "node", Type: field.TypeJSON, Nullable: true},
-		{Name: "status", Type: field.TypeString, Default: "pending"},
-		{Name: "approver_id", Type: field.TypeInt, Nullable: true},
-		{Name: "approver_name", Type: field.TypeString, Nullable: true},
-		{Name: "action", Type: field.TypeString, Nullable: true},
-		{Name: "comment", Type: field.TypeString, Nullable: true, Size: 2147483647},
-		{Name: "timeout_hours", Type: field.TypeInt, Default: 24},
-		{Name: "due_at", Type: field.TypeTime, Nullable: true},
-		{Name: "is_escalated", Type: field.TypeBool, Default: false},
-		{Name: "delegated_to_id", Type: field.TypeInt, Nullable: true},
-		{Name: "escalation_reason", Type: field.TypeString, Nullable: true},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "processed_at", Type: field.TypeTime, Nullable: true},
-	}
-	// ServiceRequestApprovalsTable holds the schema information for the "service_request_approvals" table.
-	ServiceRequestApprovalsTable = &schema.Table{
-		Name:       "service_request_approvals",
-		Columns:    ServiceRequestApprovalsColumns,
-		PrimaryKey: []*schema.Column{ServiceRequestApprovalsColumns[0]},
-		Indexes: []*schema.Index{
-			{
-				Name:    "servicerequestapproval_tenant_id_service_request_id_level",
-				Unique:  false,
-				Columns: []*schema.Column{ServiceRequestApprovalsColumns[1], ServiceRequestApprovalsColumns[2], ServiceRequestApprovalsColumns[3]},
-			},
-			{
-				Name:    "servicerequestapproval_tenant_id_service_request_id_status",
-				Unique:  false,
-				Columns: []*schema.Column{ServiceRequestApprovalsColumns[1], ServiceRequestApprovalsColumns[2], ServiceRequestApprovalsColumns[6]},
-			},
-			{
-				Name:    "servicerequestapproval_due_at",
-				Unique:  false,
-				Columns: []*schema.Column{ServiceRequestApprovalsColumns[12]},
-			},
-			{
-				Name:    "servicerequestapproval_status_due_at",
-				Unique:  false,
-				Columns: []*schema.Column{ServiceRequestApprovalsColumns[6], ServiceRequestApprovalsColumns[12]},
+				Columns: []*schema.Column{ServiceRequestsColumns[1], ServiceRequestsColumns[4]},
 			},
 		},
 	}
@@ -3937,6 +3875,7 @@ var (
 		{Name: "description", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "status", Type: field.TypeString, Default: "open"},
 		{Name: "type", Type: field.TypeString, Default: "incident"},
+		{Name: "source", Type: field.TypeString, Nullable: true, Default: "manual"},
 		{Name: "priority", Type: field.TypeString, Default: "medium"},
 		{Name: "ticket_number", Type: field.TypeString, Unique: true},
 		{Name: "tenant_id", Type: field.TypeInt},
@@ -3982,55 +3921,55 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "tickets_configuration_items_tickets",
-				Columns:    []*schema.Column{TicketsColumns[32]},
+				Columns:    []*schema.Column{TicketsColumns[33]},
 				RefColumns: []*schema.Column{ConfigurationItemsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "tickets_departments_tickets",
-				Columns:    []*schema.Column{TicketsColumns[33]},
+				Columns:    []*schema.Column{TicketsColumns[34]},
 				RefColumns: []*schema.Column{DepartmentsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "tickets_problems_tickets",
-				Columns:    []*schema.Column{TicketsColumns[34]},
+				Columns:    []*schema.Column{TicketsColumns[35]},
 				RefColumns: []*schema.Column{ProblemsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "tickets_sla_definitions_tickets",
-				Columns:    []*schema.Column{TicketsColumns[35]},
+				Columns:    []*schema.Column{TicketsColumns[36]},
 				RefColumns: []*schema.Column{SLADefinitionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "tickets_sla_policies_tickets",
-				Columns:    []*schema.Column{TicketsColumns[36]},
+				Columns:    []*schema.Column{TicketsColumns[37]},
 				RefColumns: []*schema.Column{SLAPoliciesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "tickets_ticket_tags_tickets",
-				Columns:    []*schema.Column{TicketsColumns[37]},
+				Columns:    []*schema.Column{TicketsColumns[38]},
 				RefColumns: []*schema.Column{TicketTagsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "tickets_ticket_templates_tickets",
-				Columns:    []*schema.Column{TicketsColumns[38]},
+				Columns:    []*schema.Column{TicketsColumns[39]},
 				RefColumns: []*schema.Column{TicketTemplatesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "tickets_users_tickets",
-				Columns:    []*schema.Column{TicketsColumns[39]},
+				Columns:    []*schema.Column{TicketsColumns[40]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "tickets_users_assigned_tickets",
-				Columns:    []*schema.Column{TicketsColumns[40]},
+				Columns:    []*schema.Column{TicketsColumns[41]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -4039,7 +3978,7 @@ var (
 			{
 				Name:    "ticket_ticket_number",
 				Unique:  true,
-				Columns: []*schema.Column{TicketsColumns[6]},
+				Columns: []*schema.Column{TicketsColumns[7]},
 			},
 			{
 				Name:    "ticket_status",
@@ -4049,7 +3988,7 @@ var (
 			{
 				Name:    "ticket_priority",
 				Unique:  false,
-				Columns: []*schema.Column{TicketsColumns[5]},
+				Columns: []*schema.Column{TicketsColumns[6]},
 			},
 			{
 				Name:    "ticket_type",
@@ -4059,42 +3998,42 @@ var (
 			{
 				Name:    "ticket_requester_id",
 				Unique:  false,
-				Columns: []*schema.Column{TicketsColumns[39]},
+				Columns: []*schema.Column{TicketsColumns[40]},
 			},
 			{
 				Name:    "ticket_assignee_id",
 				Unique:  false,
-				Columns: []*schema.Column{TicketsColumns[40]},
+				Columns: []*schema.Column{TicketsColumns[41]},
 			},
 			{
 				Name:    "ticket_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{TicketsColumns[25]},
+				Columns: []*schema.Column{TicketsColumns[26]},
 			},
 			{
 				Name:    "ticket_tenant_id",
 				Unique:  false,
-				Columns: []*schema.Column{TicketsColumns[7]},
+				Columns: []*schema.Column{TicketsColumns[8]},
 			},
 			{
 				Name:    "ticket_tenant_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{TicketsColumns[7], TicketsColumns[3]},
+				Columns: []*schema.Column{TicketsColumns[8], TicketsColumns[3]},
 			},
 			{
 				Name:    "ticket_tenant_id_requester_id",
 				Unique:  false,
-				Columns: []*schema.Column{TicketsColumns[7], TicketsColumns[39]},
+				Columns: []*schema.Column{TicketsColumns[8], TicketsColumns[40]},
 			},
 			{
 				Name:    "ticket_status_priority",
 				Unique:  false,
-				Columns: []*schema.Column{TicketsColumns[3], TicketsColumns[5]},
+				Columns: []*schema.Column{TicketsColumns[3], TicketsColumns[6]},
 			},
 			{
 				Name:    "ticket_requester_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{TicketsColumns[39], TicketsColumns[3]},
+				Columns: []*schema.Column{TicketsColumns[40], TicketsColumns[3]},
 			},
 		},
 	}
@@ -5238,7 +5177,6 @@ var (
 		SLAViolationsTable,
 		ServiceCatalogsTable,
 		ServiceRequestsTable,
-		ServiceRequestApprovalsTable,
 		StandardChangesTable,
 		SurveysTable,
 		SurveyResponsesTable,

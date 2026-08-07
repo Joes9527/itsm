@@ -22,6 +22,8 @@ const (
 	FieldStatus = "status"
 	// FieldType holds the string denoting the type field in the database.
 	FieldType = "type"
+	// FieldSource holds the string denoting the source field in the database.
+	FieldSource = "source"
 	// FieldPriority holds the string denoting the priority field in the database.
 	FieldPriority = "priority"
 	// FieldTicketNumber holds the string denoting the ticket_number field in the database.
@@ -228,6 +230,7 @@ var Columns = []string{
 	FieldDescription,
 	FieldStatus,
 	FieldType,
+	FieldSource,
 	FieldPriority,
 	FieldTicketNumber,
 	FieldRequesterID,
@@ -302,6 +305,8 @@ var (
 	DefaultStatus string
 	// DefaultType holds the default value on creation for the "type" field.
 	DefaultType string
+	// DefaultSource holds the default value on creation for the "source" field.
+	DefaultSource string
 	// DefaultPriority holds the default value on creation for the "priority" field.
 	DefaultPriority string
 	// TicketNumberValidator is a validator for the "ticket_number" field. It is called by the builders before save.
@@ -352,6 +357,11 @@ func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 // ByType orders the results by the type field.
 func ByType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldType, opts...).ToFunc()
+}
+
+// BySource orders the results by the source field.
+func BySource(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSource, opts...).ToFunc()
 }
 
 // ByPriority orders the results by the priority field.

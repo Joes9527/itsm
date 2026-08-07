@@ -3,11 +3,13 @@ package service
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	"itsm-backend/domain/provisioning"
 	"itsm-backend/ent"
+	"itsm-backend/ent/processapprovaldecision"
 	"itsm-backend/ent/provisioningtask"
 	"itsm-backend/ent/servicerequest"
 	"itsm-backend/infrastructure/cloud"
@@ -46,8 +48,20 @@ func (s *ProvisioningService) CreateTaskFromServiceRequest(ctx context.Context, 
 	if err != nil {
 		return nil, fmt.Errorf("服务请求不存在")
 	}
-	if string(sr.Status) != "security_approved" {
-		return nil, fmt.Errorf("当前状态不允许启动交付（需要 security_approved）")
+
+	approved, err := tx.ProcessApprovalDecision.Query().
+		Where(
+			processapprovaldecision.BusinessType("ticket"),
+			processapprovaldecision.BusinessID(strconv.Itoa(sr.TicketID)),
+			processapprovaldecision.Decision("approved"),
+			processapprovaldecision.TenantID(tenantID),
+		).
+		Exist(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("查询审批状态失败: %w", err)
+	}
+	if !approved {
+		return nil, fmt.Errorf("当前状态不允许启动交付（需要关联工单审批通过）")
 	}
 
 	// payload：优先使用 form_data；若为空则降级为空 map
@@ -72,14 +86,6 @@ func (s *ProvisioningService) CreateTaskFromServiceRequest(ctx context.Context, 
 		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("创建交付任务失败: %w", err)
-	}
-
-	// 回写 ServiceRequest 状态为 provisioning
-	if err := tx.ServiceRequest.Update().
-		Where(servicerequest.ID(serviceRequestID), servicerequest.TenantID(tenantID)).
-		SetStatus("provisioning").
-		Exec(ctx); err != nil {
-		return nil, fmt.Errorf("更新服务请求状态失败: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -124,12 +130,12 @@ func (s *ProvisioningService) ExecuteTask(ctx context.Context, taskID, tenantID,
 			Exec(ctx); err != nil {
 			s.logger.Warnw("failed to update task status to failed", "taskID", task.ID, "error", err)
 		}
+		// SR 没有 status 字段了（交付状态从 ProvisioningTask.Status 派生），仅保留错误信息留痕。
 		if err := s.client.ServiceRequest.Update().
 			Where(servicerequest.ID(task.ServiceRequestID), servicerequest.TenantID(tenantID)).
-			SetStatus("failed").
 			SetLastError(execErr.Error()).
 			Exec(ctx); err != nil {
-			s.logger.Warnw("failed to update service request status to failed", "serviceRequestID", task.ServiceRequestID, "error", err)
+			s.logger.Warnw("failed to update service request last_error", "serviceRequestID", task.ServiceRequestID, "error", err)
 		}
 		return nil, execErr
 	}
@@ -146,12 +152,7 @@ func (s *ProvisioningService) ExecuteTask(ctx context.Context, taskID, tenantID,
 		Exec(ctx); err != nil {
 		return nil, fmt.Errorf("回写任务结果失败: %w", err)
 	}
-	if err := s.client.ServiceRequest.Update().
-		Where(servicerequest.ID(task.ServiceRequestID), servicerequest.TenantID(tenantID)).
-		SetStatus("delivered").
-		Exec(ctx); err != nil {
-		s.logger.Warnw("failed to update service request status to delivered", "serviceRequestID", task.ServiceRequestID, "error", err)
-	}
+	// SR 没有 status 字段了——交付状态直接从 ProvisioningTask.Status 派生，这里不再回写 SR。
 
 	// 返回最新任务
 	return s.client.ProvisioningTask.Get(ctx, task.ID)

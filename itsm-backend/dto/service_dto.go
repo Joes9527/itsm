@@ -31,11 +31,6 @@ type CreateServiceRequestRequest struct {
 	ComplianceAck      bool       `json:"complianceAck"`
 }
 
-// UpdateServiceRequestStatusRequest 更新服务请求状态请求
-type UpdateServiceRequestStatusRequest struct {
-	Status string `json:"status" binding:"required"`
-}
-
 // UpdateServiceRequestRequest 更新服务请求请求
 type UpdateServiceRequestRequest struct {
 	Title    string         `json:"title" binding:"omitempty,max=255"`
@@ -84,12 +79,10 @@ type ServiceCatalogResponse struct {
 // ServiceRequestResponse 服务请求响应
 type ServiceRequestResponse struct {
 	ID          int            `json:"id"`
+	TicketID    int            `json:"ticketId"`
 	CatalogID   int            `json:"catalogId"`
 	RequesterID int            `json:"requesterId"`
 	CIID        int            `json:"ciId,omitempty"`
-	Status      string         `json:"status"`
-	Title       string         `json:"title,omitempty"`
-	Reason      string         `json:"reason,omitempty"`
 	FormData    map[string]any `json:"formData,omitempty"`
 
 	CostCenter         string     `json:"costCenter,omitempty"`
@@ -99,11 +92,8 @@ type ServiceRequestResponse struct {
 	ExpireAt           *time.Time `json:"expireAt,omitempty"`
 	ComplianceAck      bool       `json:"complianceAck"`
 
-	CurrentLevel   int        `json:"currentLevel"`
-	TotalLevels    int        `json:"totalLevels"`
 	Version        int        `json:"version"`
 	ProcessorID    *int       `json:"processorId,omitempty"`
-	ApprovedAt     *time.Time `json:"approvedAt,omitempty"`
 	StartedAt      *time.Time `json:"startedAt,omitempty"`
 	CompletedAt    *time.Time `json:"completedAt,omitempty"`
 	CompletionNote string     `json:"completionNote,omitempty"`
@@ -111,38 +101,9 @@ type ServiceRequestResponse struct {
 	CreatedAt      time.Time  `json:"createdAt"`
 	UpdatedAt      time.Time  `json:"updatedAt"`
 
-	Approvals    []ServiceRequestApprovalResponse `json:"approvals,omitempty"`
-	Catalog      *ServiceCatalogResponse          `json:"catalog,omitempty"`
-	Requester    *UserResponse                    `json:"requester,omitempty"`
-	CustomFields []CustomFieldValueResponse       `json:"customFields,omitempty"`
-}
-
-// ServiceRequestApprovalResponse 服务请求审批记录响应
-type ServiceRequestApprovalResponse struct {
-	ID               int        `json:"id"`
-	ServiceRequestID int        `json:"serviceRequestId"`
-	Level            int        `json:"level"`
-	Step             string     `json:"step"`
-	Status           string     `json:"status"`
-	ApproverID       *int       `json:"approverId,omitempty"`
-	ApproverName     string     `json:"approverName,omitempty"`
-	Action           string     `json:"action,omitempty"`
-	Comment          string     `json:"comment,omitempty"`
-	CreatedAt        time.Time  `json:"createdAt"`
-	ProcessedAt      *time.Time `json:"processedAt,omitempty"`
-
-	// V1 新增字段
-	TimeoutHours     int        `json:"timeoutHours,omitempty"`     // 审批时限（小时）
-	DueAt            *time.Time `json:"dueAt,omitempty"`            // 到期时间
-	IsEscalated      bool       `json:"isEscalated,omitempty"`      // 是否已升级
-	DelegatedToID    *int       `json:"delegatedToId,omitempty"`    // 转交审批人ID
-	EscalationReason string     `json:"escalationReason,omitempty"` // 升级原因
-}
-
-// ServiceRequestApprovalActionRequest 审批动作请求
-type ServiceRequestApprovalActionRequest struct {
-	Action  string `json:"action" binding:"required,oneof=approve reject"`
-	Comment string `json:"comment" binding:"omitempty,max=2000"`
+	Catalog      *ServiceCatalogResponse    `json:"catalog,omitempty"`
+	Requester    *UserResponse              `json:"requester,omitempty"`
+	CustomFields []CustomFieldValueResponse `json:"customFields,omitempty"`
 }
 
 // ServiceCatalogListResponse 服务目录列表响应
@@ -186,12 +147,10 @@ func ToServiceRequestResponse(request *ent.ServiceRequest) *ServiceRequestRespon
 	}
 	resp := &ServiceRequestResponse{
 		ID:                 request.ID,
+		TicketID:           request.TicketID,
 		CatalogID:          request.CatalogID,
 		RequesterID:        request.RequesterID,
 		CIID:               request.CiID,
-		Status:             string(request.Status),
-		Title:              request.Title,
-		Reason:             request.Reason,
 		FormData:           request.FormData,
 		CostCenter:         request.CostCenter,
 		DataClassification: request.DataClassification,
@@ -199,34 +158,12 @@ func ToServiceRequestResponse(request *ent.ServiceRequest) *ServiceRequestRespon
 		SourceIPWhitelist:  request.SourceIPWhitelist,
 		ExpireAt:           expireAt,
 		ComplianceAck:      request.ComplianceAck,
-		CurrentLevel:       request.CurrentLevel,
-		TotalLevels:        request.TotalLevels,
+		Version:            request.Version,
 		CreatedAt:          request.CreatedAt,
 		UpdatedAt:          request.UpdatedAt,
 	}
 
 	return resp
-}
-
-func ToServiceRequestApprovalResponse(a *ent.ServiceRequestApproval) ServiceRequestApprovalResponse {
-	var processedAt *time.Time
-	if !a.ProcessedAt.IsZero() {
-		t := a.ProcessedAt
-		processedAt = &t
-	}
-	return ServiceRequestApprovalResponse{
-		ID:               a.ID,
-		ServiceRequestID: a.ServiceRequestID,
-		Level:            a.Level,
-		Step:             a.Step,
-		Status:           a.Status,
-		ApproverID:       a.ApproverID,
-		ApproverName:     a.ApproverName,
-		Action:           a.Action,
-		Comment:          a.Comment,
-		CreatedAt:        a.CreatedAt,
-		ProcessedAt:      processedAt,
-	}
 }
 
 // CreateServiceCatalogRequest 创建服务目录请求

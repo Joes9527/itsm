@@ -881,13 +881,10 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				sr.POST("", middleware.RequirePermission("service_request", "write"), config.ServiceRequestHandler.Create)
 				sr.GET("", middleware.RequirePermission("service_request", "read"), config.ServiceRequestHandler.List)
 				sr.GET("/me", middleware.RequirePermission("service_request", "read"), config.ServiceRequestHandler.List)
-				sr.GET("/approvals/pending", middleware.RequirePermission("service_request", "read"), config.ServiceRequestHandler.ListPending)
+				sr.GET("/by-ticket/:ticketId", middleware.RequirePermission("service_request", "read"), config.ServiceRequestHandler.GetByTicket)
 				sr.GET("/:id", middleware.RequirePermission("service_request", "read"), config.ServiceRequestHandler.Get)
 				sr.PUT("/:id", middleware.RequirePermission("service_request", "write"), config.ServiceRequestHandler.Update)
-				sr.PUT("/:id/status", middleware.RequirePermission("service_request", "write"), config.ServiceRequestHandler.UpdateStatus)
 				sr.DELETE("/:id", middleware.RequirePermission("service_request", "delete"), config.ServiceRequestHandler.Delete)
-				sr.POST("/:id/approval", middleware.RequirePermission("service_request", "write"), config.ServiceRequestHandler.ApplyApproval)
-				sr.POST("/:id/approvals", middleware.RequirePermission("service_request", "write"), config.ServiceRequestHandler.ApplyApproval)
 			}
 
 			// Provisioning routes

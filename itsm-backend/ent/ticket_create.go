@@ -82,6 +82,20 @@ func (_c *TicketCreate) SetNillableType(v *string) *TicketCreate {
 	return _c
 }
 
+// SetSource sets the "source" field.
+func (_c *TicketCreate) SetSource(v string) *TicketCreate {
+	_c.mutation.SetSource(v)
+	return _c
+}
+
+// SetNillableSource sets the "source" field if the given value is not nil.
+func (_c *TicketCreate) SetNillableSource(v *string) *TicketCreate {
+	if v != nil {
+		_c.SetSource(*v)
+	}
+	return _c
+}
+
 // SetPriority sets the "priority" field.
 func (_c *TicketCreate) SetPriority(v string) *TicketCreate {
 	_c.mutation.SetPriority(v)
@@ -727,6 +741,10 @@ func (_c *TicketCreate) defaults() {
 		v := ticket.DefaultType
 		_c.mutation.SetType(v)
 	}
+	if _, ok := _c.mutation.Source(); !ok {
+		v := ticket.DefaultSource
+		_c.mutation.SetSource(v)
+	}
 	if _, ok := _c.mutation.Priority(); !ok {
 		v := ticket.DefaultPriority
 		_c.mutation.SetPriority(v)
@@ -858,6 +876,10 @@ func (_c *TicketCreate) createSpec() (*Ticket, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.GetType(); ok {
 		_spec.SetField(ticket.FieldType, field.TypeString, value)
 		_node.Type = value
+	}
+	if value, ok := _c.mutation.Source(); ok {
+		_spec.SetField(ticket.FieldSource, field.TypeString, value)
+		_node.Source = value
 	}
 	if value, ok := _c.mutation.Priority(); ok {
 		_spec.SetField(ticket.FieldPriority, field.TypeString, value)

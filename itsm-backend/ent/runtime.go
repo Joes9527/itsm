@@ -85,7 +85,6 @@ import (
 	"itsm-backend/ent/schema"
 	"itsm-backend/ent/servicecatalog"
 	"itsm-backend/ent/servicerequest"
-	"itsm-backend/ent/servicerequestapproval"
 	"itsm-backend/ent/slaalerthistory"
 	"itsm-backend/ent/slaalertrule"
 	"itsm-backend/ent/sladefinition"
@@ -3132,84 +3131,46 @@ func init() {
 	servicerequestDescTenantID := servicerequestFields[0].Descriptor()
 	// servicerequest.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	servicerequest.TenantIDValidator = servicerequestDescTenantID.Validators[0].(func(int) error)
+	// servicerequestDescTicketID is the schema descriptor for ticket_id field.
+	servicerequestDescTicketID := servicerequestFields[1].Descriptor()
+	// servicerequest.TicketIDValidator is a validator for the "ticket_id" field. It is called by the builders before save.
+	servicerequest.TicketIDValidator = servicerequestDescTicketID.Validators[0].(func(int) error)
 	// servicerequestDescCatalogID is the schema descriptor for catalog_id field.
-	servicerequestDescCatalogID := servicerequestFields[1].Descriptor()
+	servicerequestDescCatalogID := servicerequestFields[2].Descriptor()
 	// servicerequest.CatalogIDValidator is a validator for the "catalog_id" field. It is called by the builders before save.
 	servicerequest.CatalogIDValidator = servicerequestDescCatalogID.Validators[0].(func(int) error)
 	// servicerequestDescRequesterID is the schema descriptor for requester_id field.
-	servicerequestDescRequesterID := servicerequestFields[3].Descriptor()
+	servicerequestDescRequesterID := servicerequestFields[4].Descriptor()
 	// servicerequest.RequesterIDValidator is a validator for the "requester_id" field. It is called by the builders before save.
 	servicerequest.RequesterIDValidator = servicerequestDescRequesterID.Validators[0].(func(int) error)
-	// servicerequestDescStatus is the schema descriptor for status field.
-	servicerequestDescStatus := servicerequestFields[4].Descriptor()
-	// servicerequest.DefaultStatus holds the default value on creation for the status field.
-	servicerequest.DefaultStatus = servicerequestDescStatus.Default.(string)
 	// servicerequestDescDataClassification is the schema descriptor for data_classification field.
-	servicerequestDescDataClassification := servicerequestFields[9].Descriptor()
+	servicerequestDescDataClassification := servicerequestFields[7].Descriptor()
 	// servicerequest.DefaultDataClassification holds the default value on creation for the data_classification field.
 	servicerequest.DefaultDataClassification = servicerequestDescDataClassification.Default.(string)
 	// servicerequestDescNeedsPublicIP is the schema descriptor for needs_public_ip field.
-	servicerequestDescNeedsPublicIP := servicerequestFields[10].Descriptor()
+	servicerequestDescNeedsPublicIP := servicerequestFields[8].Descriptor()
 	// servicerequest.DefaultNeedsPublicIP holds the default value on creation for the needs_public_ip field.
 	servicerequest.DefaultNeedsPublicIP = servicerequestDescNeedsPublicIP.Default.(bool)
 	// servicerequestDescComplianceAck is the schema descriptor for compliance_ack field.
-	servicerequestDescComplianceAck := servicerequestFields[13].Descriptor()
+	servicerequestDescComplianceAck := servicerequestFields[11].Descriptor()
 	// servicerequest.DefaultComplianceAck holds the default value on creation for the compliance_ack field.
 	servicerequest.DefaultComplianceAck = servicerequestDescComplianceAck.Default.(bool)
-	// servicerequestDescCurrentLevel is the schema descriptor for current_level field.
-	servicerequestDescCurrentLevel := servicerequestFields[14].Descriptor()
-	// servicerequest.DefaultCurrentLevel holds the default value on creation for the current_level field.
-	servicerequest.DefaultCurrentLevel = servicerequestDescCurrentLevel.Default.(int)
-	// servicerequestDescTotalLevels is the schema descriptor for total_levels field.
-	servicerequestDescTotalLevels := servicerequestFields[15].Descriptor()
-	// servicerequest.DefaultTotalLevels holds the default value on creation for the total_levels field.
-	servicerequest.DefaultTotalLevels = servicerequestDescTotalLevels.Default.(int)
 	// servicerequestDescVersion is the schema descriptor for version field.
-	servicerequestDescVersion := servicerequestFields[25].Descriptor()
+	servicerequestDescVersion := servicerequestFields[17].Descriptor()
 	// servicerequest.DefaultVersion holds the default value on creation for the version field.
 	servicerequest.DefaultVersion = servicerequestDescVersion.Default.(int)
 	// servicerequest.VersionValidator is a validator for the "version" field. It is called by the builders before save.
 	servicerequest.VersionValidator = servicerequestDescVersion.Validators[0].(func(int) error)
 	// servicerequestDescCreatedAt is the schema descriptor for created_at field.
-	servicerequestDescCreatedAt := servicerequestFields[26].Descriptor()
+	servicerequestDescCreatedAt := servicerequestFields[18].Descriptor()
 	// servicerequest.DefaultCreatedAt holds the default value on creation for the created_at field.
 	servicerequest.DefaultCreatedAt = servicerequestDescCreatedAt.Default.(func() time.Time)
 	// servicerequestDescUpdatedAt is the schema descriptor for updated_at field.
-	servicerequestDescUpdatedAt := servicerequestFields[27].Descriptor()
+	servicerequestDescUpdatedAt := servicerequestFields[19].Descriptor()
 	// servicerequest.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	servicerequest.DefaultUpdatedAt = servicerequestDescUpdatedAt.Default.(func() time.Time)
 	// servicerequest.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	servicerequest.UpdateDefaultUpdatedAt = servicerequestDescUpdatedAt.UpdateDefault.(func() time.Time)
-	servicerequestapprovalFields := schema.ServiceRequestApproval{}.Fields()
-	_ = servicerequestapprovalFields
-	// servicerequestapprovalDescTenantID is the schema descriptor for tenant_id field.
-	servicerequestapprovalDescTenantID := servicerequestapprovalFields[0].Descriptor()
-	// servicerequestapproval.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
-	servicerequestapproval.TenantIDValidator = servicerequestapprovalDescTenantID.Validators[0].(func(int) error)
-	// servicerequestapprovalDescServiceRequestID is the schema descriptor for service_request_id field.
-	servicerequestapprovalDescServiceRequestID := servicerequestapprovalFields[1].Descriptor()
-	// servicerequestapproval.ServiceRequestIDValidator is a validator for the "service_request_id" field. It is called by the builders before save.
-	servicerequestapproval.ServiceRequestIDValidator = servicerequestapprovalDescServiceRequestID.Validators[0].(func(int) error)
-	// servicerequestapprovalDescLevel is the schema descriptor for level field.
-	servicerequestapprovalDescLevel := servicerequestapprovalFields[2].Descriptor()
-	// servicerequestapproval.LevelValidator is a validator for the "level" field. It is called by the builders before save.
-	servicerequestapproval.LevelValidator = servicerequestapprovalDescLevel.Validators[0].(func(int) error)
-	// servicerequestapprovalDescStatus is the schema descriptor for status field.
-	servicerequestapprovalDescStatus := servicerequestapprovalFields[5].Descriptor()
-	// servicerequestapproval.DefaultStatus holds the default value on creation for the status field.
-	servicerequestapproval.DefaultStatus = servicerequestapprovalDescStatus.Default.(string)
-	// servicerequestapprovalDescTimeoutHours is the schema descriptor for timeout_hours field.
-	servicerequestapprovalDescTimeoutHours := servicerequestapprovalFields[10].Descriptor()
-	// servicerequestapproval.DefaultTimeoutHours holds the default value on creation for the timeout_hours field.
-	servicerequestapproval.DefaultTimeoutHours = servicerequestapprovalDescTimeoutHours.Default.(int)
-	// servicerequestapprovalDescIsEscalated is the schema descriptor for is_escalated field.
-	servicerequestapprovalDescIsEscalated := servicerequestapprovalFields[12].Descriptor()
-	// servicerequestapproval.DefaultIsEscalated holds the default value on creation for the is_escalated field.
-	servicerequestapproval.DefaultIsEscalated = servicerequestapprovalDescIsEscalated.Default.(bool)
-	// servicerequestapprovalDescCreatedAt is the schema descriptor for created_at field.
-	servicerequestapprovalDescCreatedAt := servicerequestapprovalFields[15].Descriptor()
-	// servicerequestapproval.DefaultCreatedAt holds the default value on creation for the created_at field.
-	servicerequestapproval.DefaultCreatedAt = servicerequestapprovalDescCreatedAt.Default.(func() time.Time)
 	standardchangeFields := schema.StandardChange{}.Fields()
 	_ = standardchangeFields
 	// standardchangeDescTitle is the schema descriptor for title field.
@@ -3450,44 +3411,48 @@ func init() {
 	ticketDescType := ticketFields[3].Descriptor()
 	// ticket.DefaultType holds the default value on creation for the type field.
 	ticket.DefaultType = ticketDescType.Default.(string)
+	// ticketDescSource is the schema descriptor for source field.
+	ticketDescSource := ticketFields[4].Descriptor()
+	// ticket.DefaultSource holds the default value on creation for the source field.
+	ticket.DefaultSource = ticketDescSource.Default.(string)
 	// ticketDescPriority is the schema descriptor for priority field.
-	ticketDescPriority := ticketFields[4].Descriptor()
+	ticketDescPriority := ticketFields[5].Descriptor()
 	// ticket.DefaultPriority holds the default value on creation for the priority field.
 	ticket.DefaultPriority = ticketDescPriority.Default.(string)
 	// ticketDescTicketNumber is the schema descriptor for ticket_number field.
-	ticketDescTicketNumber := ticketFields[5].Descriptor()
+	ticketDescTicketNumber := ticketFields[6].Descriptor()
 	// ticket.TicketNumberValidator is a validator for the "ticket_number" field. It is called by the builders before save.
 	ticket.TicketNumberValidator = ticketDescTicketNumber.Validators[0].(func(string) error)
 	// ticketDescRequesterID is the schema descriptor for requester_id field.
-	ticketDescRequesterID := ticketFields[6].Descriptor()
+	ticketDescRequesterID := ticketFields[7].Descriptor()
 	// ticket.RequesterIDValidator is a validator for the "requester_id" field. It is called by the builders before save.
 	ticket.RequesterIDValidator = ticketDescRequesterID.Validators[0].(func(int) error)
 	// ticketDescTenantID is the schema descriptor for tenant_id field.
-	ticketDescTenantID := ticketFields[8].Descriptor()
+	ticketDescTenantID := ticketFields[9].Descriptor()
 	// ticket.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	ticket.TenantIDValidator = ticketDescTenantID.Validators[0].(func(int) error)
 	// ticketDescRating is the schema descriptor for rating field.
-	ticketDescRating := ticketFields[21].Descriptor()
+	ticketDescRating := ticketFields[22].Descriptor()
 	// ticket.RatingValidator is a validator for the "rating" field. It is called by the builders before save.
 	ticket.RatingValidator = ticketDescRating.Validators[0].(func(int) error)
 	// ticketDescVersion is the schema descriptor for version field.
-	ticketDescVersion := ticketFields[25].Descriptor()
+	ticketDescVersion := ticketFields[26].Descriptor()
 	// ticket.DefaultVersion holds the default value on creation for the version field.
 	ticket.DefaultVersion = ticketDescVersion.Default.(int)
 	// ticket.VersionValidator is a validator for the "version" field. It is called by the builders before save.
 	ticket.VersionValidator = ticketDescVersion.Validators[0].(func(int) error)
 	// ticketDescCreatedAt is the schema descriptor for created_at field.
-	ticketDescCreatedAt := ticketFields[26].Descriptor()
+	ticketDescCreatedAt := ticketFields[27].Descriptor()
 	// ticket.DefaultCreatedAt holds the default value on creation for the created_at field.
 	ticket.DefaultCreatedAt = ticketDescCreatedAt.Default.(func() time.Time)
 	// ticketDescUpdatedAt is the schema descriptor for updated_at field.
-	ticketDescUpdatedAt := ticketFields[27].Descriptor()
+	ticketDescUpdatedAt := ticketFields[28].Descriptor()
 	// ticket.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	ticket.DefaultUpdatedAt = ticketDescUpdatedAt.Default.(func() time.Time)
 	// ticket.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	ticket.UpdateDefaultUpdatedAt = ticketDescUpdatedAt.UpdateDefault.(func() time.Time)
 	// ticketDescIsManagedByMsp is the schema descriptor for is_managed_by_msp field.
-	ticketDescIsManagedByMsp := ticketFields[28].Descriptor()
+	ticketDescIsManagedByMsp := ticketFields[29].Descriptor()
 	// ticket.DefaultIsManagedByMsp holds the default value on creation for the is_managed_by_msp field.
 	ticket.DefaultIsManagedByMsp = ticketDescIsManagedByMsp.Default.(bool)
 	ticketapprovalFields := schema.TicketApproval{}.Fields()

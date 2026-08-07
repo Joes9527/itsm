@@ -93,7 +93,6 @@ import (
 	"itsm-backend/ent/rootcauseanalysis"
 	"itsm-backend/ent/servicecatalog"
 	"itsm-backend/ent/servicerequest"
-	"itsm-backend/ent/servicerequestapproval"
 	"itsm-backend/ent/slaalerthistory"
 	"itsm-backend/ent/slaalertrule"
 	"itsm-backend/ent/sladefinition"
@@ -317,8 +316,6 @@ type Client struct {
 	ServiceCatalog *ServiceCatalogClient
 	// ServiceRequest is the client for interacting with the ServiceRequest builders.
 	ServiceRequest *ServiceRequestClient
-	// ServiceRequestApproval is the client for interacting with the ServiceRequestApproval builders.
-	ServiceRequestApproval *ServiceRequestApprovalClient
 	// StandardChange is the client for interacting with the StandardChange builders.
 	StandardChange *StandardChangeClient
 	// Survey is the client for interacting with the Survey builders.
@@ -476,7 +473,6 @@ func (c *Client) init() {
 	c.SLAViolation = NewSLAViolationClient(c.config)
 	c.ServiceCatalog = NewServiceCatalogClient(c.config)
 	c.ServiceRequest = NewServiceRequestClient(c.config)
-	c.ServiceRequestApproval = NewServiceRequestApprovalClient(c.config)
 	c.StandardChange = NewStandardChangeClient(c.config)
 	c.Survey = NewSurveyClient(c.config)
 	c.SurveyResponse = NewSurveyResponseClient(c.config)
@@ -686,7 +682,6 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		SLAViolation:                NewSLAViolationClient(cfg),
 		ServiceCatalog:              NewServiceCatalogClient(cfg),
 		ServiceRequest:              NewServiceRequestClient(cfg),
-		ServiceRequestApproval:      NewServiceRequestApprovalClient(cfg),
 		StandardChange:              NewStandardChangeClient(cfg),
 		Survey:                      NewSurveyClient(cfg),
 		SurveyResponse:              NewSurveyResponseClient(cfg),
@@ -823,7 +818,6 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		SLAViolation:                NewSLAViolationClient(cfg),
 		ServiceCatalog:              NewServiceCatalogClient(cfg),
 		ServiceRequest:              NewServiceRequestClient(cfg),
-		ServiceRequestApproval:      NewServiceRequestApprovalClient(cfg),
 		StandardChange:              NewStandardChangeClient(cfg),
 		Survey:                      NewSurveyClient(cfg),
 		SurveyResponse:              NewSurveyResponseClient(cfg),
@@ -903,8 +897,8 @@ func (c *Client) Use(hooks ...Hook) {
 		c.Project, c.PromptTemplate, c.ProvisioningTask, c.RelationshipType, c.Release,
 		c.Role, c.RolePermission, c.RootCauseAnalysis, c.SLAAlertHistory,
 		c.SLAAlertRule, c.SLADefinition, c.SLAMetric, c.SLAPolicy, c.SLAViolation,
-		c.ServiceCatalog, c.ServiceRequest, c.ServiceRequestApproval, c.StandardChange,
-		c.Survey, c.SurveyResponse, c.SystemConfig, c.Tag, c.Team, c.Tenant,
+		c.ServiceCatalog, c.ServiceRequest, c.StandardChange, c.Survey,
+		c.SurveyResponse, c.SystemConfig, c.Tag, c.Team, c.Tenant,
 		c.TenantInstallation, c.Ticket, c.TicketApproval, c.TicketAssignmentRule,
 		c.TicketAttachment, c.TicketAutomationRule, c.TicketCC, c.TicketCategory,
 		c.TicketComment, c.TicketNotification, c.TicketTag, c.TicketTemplate,
@@ -940,8 +934,8 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.Project, c.PromptTemplate, c.ProvisioningTask, c.RelationshipType, c.Release,
 		c.Role, c.RolePermission, c.RootCauseAnalysis, c.SLAAlertHistory,
 		c.SLAAlertRule, c.SLADefinition, c.SLAMetric, c.SLAPolicy, c.SLAViolation,
-		c.ServiceCatalog, c.ServiceRequest, c.ServiceRequestApproval, c.StandardChange,
-		c.Survey, c.SurveyResponse, c.SystemConfig, c.Tag, c.Team, c.Tenant,
+		c.ServiceCatalog, c.ServiceRequest, c.StandardChange, c.Survey,
+		c.SurveyResponse, c.SystemConfig, c.Tag, c.Team, c.Tenant,
 		c.TenantInstallation, c.Ticket, c.TicketApproval, c.TicketAssignmentRule,
 		c.TicketAttachment, c.TicketAutomationRule, c.TicketCC, c.TicketCategory,
 		c.TicketComment, c.TicketNotification, c.TicketTag, c.TicketTemplate,
@@ -1131,8 +1125,6 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.ServiceCatalog.mutate(ctx, m)
 	case *ServiceRequestMutation:
 		return c.ServiceRequest.mutate(ctx, m)
-	case *ServiceRequestApprovalMutation:
-		return c.ServiceRequestApproval.mutate(ctx, m)
 	case *StandardChangeMutation:
 		return c.StandardChange.mutate(ctx, m)
 	case *SurveyMutation:
@@ -14932,139 +14924,6 @@ func (c *ServiceRequestClient) mutate(ctx context.Context, m *ServiceRequestMuta
 	}
 }
 
-// ServiceRequestApprovalClient is a client for the ServiceRequestApproval schema.
-type ServiceRequestApprovalClient struct {
-	config
-}
-
-// NewServiceRequestApprovalClient returns a client for the ServiceRequestApproval from the given config.
-func NewServiceRequestApprovalClient(c config) *ServiceRequestApprovalClient {
-	return &ServiceRequestApprovalClient{config: c}
-}
-
-// Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `servicerequestapproval.Hooks(f(g(h())))`.
-func (c *ServiceRequestApprovalClient) Use(hooks ...Hook) {
-	c.hooks.ServiceRequestApproval = append(c.hooks.ServiceRequestApproval, hooks...)
-}
-
-// Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `servicerequestapproval.Intercept(f(g(h())))`.
-func (c *ServiceRequestApprovalClient) Intercept(interceptors ...Interceptor) {
-	c.inters.ServiceRequestApproval = append(c.inters.ServiceRequestApproval, interceptors...)
-}
-
-// Create returns a builder for creating a ServiceRequestApproval entity.
-func (c *ServiceRequestApprovalClient) Create() *ServiceRequestApprovalCreate {
-	mutation := newServiceRequestApprovalMutation(c.config, OpCreate)
-	return &ServiceRequestApprovalCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// CreateBulk returns a builder for creating a bulk of ServiceRequestApproval entities.
-func (c *ServiceRequestApprovalClient) CreateBulk(builders ...*ServiceRequestApprovalCreate) *ServiceRequestApprovalCreateBulk {
-	return &ServiceRequestApprovalCreateBulk{config: c.config, builders: builders}
-}
-
-// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
-// a builder and applies setFunc on it.
-func (c *ServiceRequestApprovalClient) MapCreateBulk(slice any, setFunc func(*ServiceRequestApprovalCreate, int)) *ServiceRequestApprovalCreateBulk {
-	rv := reflect.ValueOf(slice)
-	if rv.Kind() != reflect.Slice {
-		return &ServiceRequestApprovalCreateBulk{err: fmt.Errorf("calling to ServiceRequestApprovalClient.MapCreateBulk with wrong type %T, need slice", slice)}
-	}
-	builders := make([]*ServiceRequestApprovalCreate, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
-		builders[i] = c.Create()
-		setFunc(builders[i], i)
-	}
-	return &ServiceRequestApprovalCreateBulk{config: c.config, builders: builders}
-}
-
-// Update returns an update builder for ServiceRequestApproval.
-func (c *ServiceRequestApprovalClient) Update() *ServiceRequestApprovalUpdate {
-	mutation := newServiceRequestApprovalMutation(c.config, OpUpdate)
-	return &ServiceRequestApprovalUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOne returns an update builder for the given entity.
-func (c *ServiceRequestApprovalClient) UpdateOne(_m *ServiceRequestApproval) *ServiceRequestApprovalUpdateOne {
-	mutation := newServiceRequestApprovalMutation(c.config, OpUpdateOne, withServiceRequestApproval(_m))
-	return &ServiceRequestApprovalUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOneID returns an update builder for the given id.
-func (c *ServiceRequestApprovalClient) UpdateOneID(id int) *ServiceRequestApprovalUpdateOne {
-	mutation := newServiceRequestApprovalMutation(c.config, OpUpdateOne, withServiceRequestApprovalID(id))
-	return &ServiceRequestApprovalUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// Delete returns a delete builder for ServiceRequestApproval.
-func (c *ServiceRequestApprovalClient) Delete() *ServiceRequestApprovalDelete {
-	mutation := newServiceRequestApprovalMutation(c.config, OpDelete)
-	return &ServiceRequestApprovalDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// DeleteOne returns a builder for deleting the given entity.
-func (c *ServiceRequestApprovalClient) DeleteOne(_m *ServiceRequestApproval) *ServiceRequestApprovalDeleteOne {
-	return c.DeleteOneID(_m.ID)
-}
-
-// DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *ServiceRequestApprovalClient) DeleteOneID(id int) *ServiceRequestApprovalDeleteOne {
-	builder := c.Delete().Where(servicerequestapproval.ID(id))
-	builder.mutation.id = &id
-	builder.mutation.op = OpDeleteOne
-	return &ServiceRequestApprovalDeleteOne{builder}
-}
-
-// Query returns a query builder for ServiceRequestApproval.
-func (c *ServiceRequestApprovalClient) Query() *ServiceRequestApprovalQuery {
-	return &ServiceRequestApprovalQuery{
-		config: c.config,
-		ctx:    &QueryContext{Type: TypeServiceRequestApproval},
-		inters: c.Interceptors(),
-	}
-}
-
-// Get returns a ServiceRequestApproval entity by its id.
-func (c *ServiceRequestApprovalClient) Get(ctx context.Context, id int) (*ServiceRequestApproval, error) {
-	return c.Query().Where(servicerequestapproval.ID(id)).Only(ctx)
-}
-
-// GetX is like Get, but panics if an error occurs.
-func (c *ServiceRequestApprovalClient) GetX(ctx context.Context, id int) *ServiceRequestApproval {
-	obj, err := c.Get(ctx, id)
-	if err != nil {
-		panic(err)
-	}
-	return obj
-}
-
-// Hooks returns the client hooks.
-func (c *ServiceRequestApprovalClient) Hooks() []Hook {
-	return c.hooks.ServiceRequestApproval
-}
-
-// Interceptors returns the client interceptors.
-func (c *ServiceRequestApprovalClient) Interceptors() []Interceptor {
-	return c.inters.ServiceRequestApproval
-}
-
-func (c *ServiceRequestApprovalClient) mutate(ctx context.Context, m *ServiceRequestApprovalMutation) (Value, error) {
-	switch m.Op() {
-	case OpCreate:
-		return (&ServiceRequestApprovalCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdate:
-		return (&ServiceRequestApprovalUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdateOne:
-		return (&ServiceRequestApprovalUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpDelete, OpDeleteOne:
-		return (&ServiceRequestApprovalDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
-	default:
-		return nil, fmt.Errorf("ent: unknown ServiceRequestApproval mutation op: %q", m.Op())
-	}
-}
-
 // StandardChangeClient is a client for the StandardChange schema.
 type StandardChangeClient struct {
 	config
@@ -20144,12 +20003,12 @@ type (
 		Project, PromptTemplate, ProvisioningTask, RelationshipType, Release, Role,
 		RolePermission, RootCauseAnalysis, SLAAlertHistory, SLAAlertRule,
 		SLADefinition, SLAMetric, SLAPolicy, SLAViolation, ServiceCatalog,
-		ServiceRequest, ServiceRequestApproval, StandardChange, Survey, SurveyResponse,
-		SystemConfig, Tag, Team, Tenant, TenantInstallation, Ticket, TicketApproval,
-		TicketAssignmentRule, TicketAttachment, TicketAutomationRule, TicketCC,
-		TicketCategory, TicketComment, TicketNotification, TicketTag, TicketTemplate,
-		TicketType, TicketView, TicketWorkflowRecord, ToolInvocation, User, Vendor,
-		Workflow, WorkflowInstance, WorkflowTask, WorkflowVersion []ent.Hook
+		ServiceRequest, StandardChange, Survey, SurveyResponse, SystemConfig, Tag,
+		Team, Tenant, TenantInstallation, Ticket, TicketApproval, TicketAssignmentRule,
+		TicketAttachment, TicketAutomationRule, TicketCC, TicketCategory,
+		TicketComment, TicketNotification, TicketTag, TicketTemplate, TicketType,
+		TicketView, TicketWorkflowRecord, ToolInvocation, User, Vendor, Workflow,
+		WorkflowInstance, WorkflowTask, WorkflowVersion []ent.Hook
 	}
 	inters struct {
 		Application, ApprovalChain, ApprovalRecord, ApprovalWorkflow, Asset,
@@ -20171,11 +20030,11 @@ type (
 		Project, PromptTemplate, ProvisioningTask, RelationshipType, Release, Role,
 		RolePermission, RootCauseAnalysis, SLAAlertHistory, SLAAlertRule,
 		SLADefinition, SLAMetric, SLAPolicy, SLAViolation, ServiceCatalog,
-		ServiceRequest, ServiceRequestApproval, StandardChange, Survey, SurveyResponse,
-		SystemConfig, Tag, Team, Tenant, TenantInstallation, Ticket, TicketApproval,
-		TicketAssignmentRule, TicketAttachment, TicketAutomationRule, TicketCC,
-		TicketCategory, TicketComment, TicketNotification, TicketTag, TicketTemplate,
-		TicketType, TicketView, TicketWorkflowRecord, ToolInvocation, User, Vendor,
-		Workflow, WorkflowInstance, WorkflowTask, WorkflowVersion []ent.Interceptor
+		ServiceRequest, StandardChange, Survey, SurveyResponse, SystemConfig, Tag,
+		Team, Tenant, TenantInstallation, Ticket, TicketApproval, TicketAssignmentRule,
+		TicketAttachment, TicketAutomationRule, TicketCC, TicketCategory,
+		TicketComment, TicketNotification, TicketTag, TicketTemplate, TicketType,
+		TicketView, TicketWorkflowRecord, ToolInvocation, User, Vendor, Workflow,
+		WorkflowInstance, WorkflowTask, WorkflowVersion []ent.Interceptor
 	}
 )

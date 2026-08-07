@@ -12,36 +12,14 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/handlers/cmdb"
 	"itsm-backend/handlers/service_catalog"
+	"itsm-backend/repository/ticket"
 	"itsm-backend/service"
 
 	"go.uber.org/zap"
 )
 
-// Constants for approval steps
+// Constants
 const (
-	ApprovalStepManager  = "manager"
-	ApprovalStepIT       = "it"
-	ApprovalStepSecurity = "security"
-
-	SRStatusSubmitted        = "submitted"
-	SRStatusManagerApproved  = "manager_approved"
-	SRStatusITApproved       = "it_approved"
-	SRStatusSecurityApproved = "security_approved"
-	SRStatusRejected         = "rejected"
-	SRStatusProvisioning     = "provisioning"
-	SRStatusDelivered        = "delivered"
-	SRStatusFailed           = "failed"
-	SRStatusCancelled        = "cancelled"
-
-	ApprovalStatusPending  = "pending"
-	ApprovalStatusApproved = "approved"
-	ApprovalStatusRejected = "rejected"
-
-	// V1 审批时限配置（小时）
-	ApprovalTimeoutManager  = 24
-	ApprovalTimeoutIT       = 48
-	ApprovalTimeoutSecurity = 72
-
 	// Roles
 	RoleAdmin      = "admin"
 	RoleSuperAdmin = "super_admin"
@@ -51,28 +29,30 @@ const (
 	RoleSecurity   = "security"
 )
 
-type Service struct {
-	repo           Repository
-	scRepo         service_catalog.Repository
-	cmdbRepo       cmdb.Repository
-	client         *ent.Client
-	logger         *zap.SugaredLogger
-	approvalBridge *service.BPMNApprovalBridge
+// TicketServiceInterface 是 Create 需要的最小 Ticket 创建能力，用接口而非具体类型
+// 避免 handlers/service_request 直接依赖 service.TicketService 的完整实现。
+type TicketServiceInterface interface {
+	CreateTicket(ctx context.Context, req *dto.CreateTicketRequest, tenantID int) (*ticket.Ticket, error)
 }
 
-func NewService(repo Repository, scRepo service_catalog.Repository, cmdbRepo cmdb.Repository, entClient *ent.Client, logger *zap.SugaredLogger) *Service {
-	svc := &Service{
-		repo:     repo,
-		scRepo:   scRepo,
-		cmdbRepo: cmdbRepo,
-		client:   entClient,
-		logger:   logger,
+type Service struct {
+	repo      Repository
+	scRepo    service_catalog.Repository
+	cmdbRepo  cmdb.Repository
+	client    *ent.Client
+	logger    *zap.SugaredLogger
+	ticketSvc TicketServiceInterface
+}
+
+func NewService(repo Repository, scRepo service_catalog.Repository, cmdbRepo cmdb.Repository, entClient *ent.Client, logger *zap.SugaredLogger, ticketSvc TicketServiceInterface) *Service {
+	return &Service{
+		repo:      repo,
+		scRepo:    scRepo,
+		cmdbRepo:  cmdbRepo,
+		client:    entClient,
+		logger:    logger,
+		ticketSvc: ticketSvc,
 	}
-	if entClient != nil {
-		// P0-1：服务请求审批桥接到 BPMN 任务，避免流程实例悬挂
-		svc.approvalBridge = service.NewBPMNApprovalBridge(entClient, logger)
-	}
-	return svc
 }
 
 // Client exposes the underlying ent client so the handler layer can query
@@ -80,7 +60,11 @@ func NewService(repo Repository, scRepo service_catalog.Repository, cmdbRepo cmd
 // duplicating that dependency on Handler.
 func (s *Service) Client() *ent.Client { return s.client }
 
-// Create submits a new service request
+// Create submits a new service request. 先创建关联 Ticket（承担状态/审批/工作流），
+// 再创建瘦身后的 ServiceRequest 行——两步顺序执行，不在同一数据库事务里（TicketService.CreateTicket
+// 是自包含的高层编排方法，不暴露外部事务句柄）。若第二步失败，Ticket 已经存在但缺少关联的
+// SR 扩展数据——这与 CreateTicket 自己写 field_values 的失败处理是同一种"创建后写卫星数据，
+// 失败只警告不回滚主记录"模式，不是新发明的容错策略。
 func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalogID int, reqData *ServiceRequest) (*ServiceRequest, error) {
 	if _, _, err := s.repo.GetUserContext(ctx, requesterID, tenantID); err != nil {
 		return nil, common.NewBadRequestError("Requester not found or inactive", err)
@@ -110,7 +94,8 @@ func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalog
 	if !reqData.ExpireAt.After(time.Now()) {
 		return nil, common.NewBadRequestError("Expiration date must be in the future", nil)
 	}
-	if strings.TrimSpace(reqData.Title) == "" {
+	title := strings.TrimSpace(reqData.title())
+	if title == "" {
 		return nil, common.NewBadRequestError("Request title is required", nil)
 	}
 	switch reqData.DataClassification {
@@ -138,19 +123,28 @@ func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalog
 		}
 	}
 
-	// 3. Prepare Service Request
+	// 3. 先创建关联 Ticket——source="service_catalog" 标记来源，
+	// description 用申请原因（reqData.reason() 从 FormData 兜底取，逻辑同下方 title()）。
+	ticketReq := &dto.CreateTicketRequest{
+		Title:       title,
+		Description: reqData.reason(),
+		Priority:    "medium",
+		Type:        "service_request",
+		RequesterID: requesterID,
+	}
+	createdTicket, err := s.ticketSvc.CreateTicket(ctx, ticketReq, tenantID)
+	if err != nil {
+		return nil, common.NewInternalError("Failed to create linked ticket", err)
+	}
+
 	newReq := &ServiceRequest{
 		TenantID:           tenantID,
+		TicketID:           createdTicket.ID,
 		CatalogID:          catalogID,
 		RequesterID:        requesterID,
-		Status:             SRStatusSubmitted,
-		CurrentLevel:       1,
-		TotalLevels:        3,
 		ComplianceAck:      reqData.ComplianceAck,
 		NeedsPublicIP:      reqData.NeedsPublicIP,
 		DataClassification: reqData.DataClassification,
-		Title:              reqData.Title,
-		Reason:             reqData.Reason,
 		FormData:           reqData.FormData,
 		CostCenter:         reqData.CostCenter,
 		SourceIPWhitelist:  reqData.SourceIPWhitelist,
@@ -165,50 +159,39 @@ func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalog
 		newReq.CiID = ciID
 	}
 
-	// 4. Create Approval Steps
-	steps := []struct {
-		level        int
-		step         string
-		timeoutHours int
-	}{
-		{1, ApprovalStepManager, ApprovalTimeoutManager},
-		{2, ApprovalStepIT, ApprovalTimeoutIT},
-		{3, ApprovalStepSecurity, ApprovalTimeoutSecurity},
-	}
-
-	approvals := make([]*ServiceRequestApproval, len(steps))
-	now := time.Now()
-	for i, st := range steps {
-		dueAt := now.Add(time.Duration(st.timeoutHours) * time.Hour)
-		approvals[i] = &ServiceRequestApproval{
-			TenantID:     tenantID,
-			Level:        st.level,
-			Step:         st.step,
-			Status:       ApprovalStatusPending,
-			TimeoutHours: st.timeoutHours,
-			DueAt:        &dueAt,
-		}
-	}
-
-	// 5. Save
-	created, err := s.repo.Create(ctx, newReq, approvals)
+	// 4. Save
+	created, err := s.repo.Create(ctx, newReq)
 	if err != nil {
-		s.logger.Errorw("Failed to create service request", "error", err)
+		s.logger.Errorw("Failed to create service request (linked ticket already created)", "error", err, "ticket_id", createdTicket.ID)
 		return nil, common.NewInternalError("Failed to create service request", err)
 	}
 
-	// 6. Persist dynamic custom field values (best-effort, write-after — mirrors the
-	// established CreateTicket pattern: the service request record is already
-	// committed above, so a field_values failure here must not roll it back).
+	// 5. Persist dynamic custom field values against the TICKET now, not the SR
+	// (entity_type/entity_id 归属改成 ticket，这样工单详情页能像其他自定义字段一样直接展示)。
 	if s.client != nil {
 		if fieldValues := extractServiceRequestFieldValues(reqData.FormData); len(fieldValues) > 0 {
-			if err := service.NewFieldValueService(s.client).CreateValues(ctx, tenantID, "service_catalog", catalogID, "service_request", created.ID, fieldValues); err != nil {
-				s.logger.Warnw("Failed to persist service request custom field values", "error", err, "service_request_id", created.ID)
+			if err := service.NewFieldValueService(s.client).CreateValues(ctx, tenantID, "service_catalog", catalogID, "ticket", createdTicket.ID, fieldValues); err != nil {
+				s.logger.Warnw("Failed to persist service request custom field values", "error", err, "ticket_id", createdTicket.ID)
 			}
 		}
 	}
 
 	return created, nil
+}
+
+// title/reason 这两个展示字段现在只是"创建 ticket 时的初始值"，不再持久化在 SR 表上——
+// 从 FormData 兜底读，和 handler.go normalizeCreateServiceRequest 已经做的事保持一致。
+func (r *ServiceRequest) title() string {
+	if v, ok := r.FormData["title"].(string); ok {
+		return v
+	}
+	return ""
+}
+func (r *ServiceRequest) reason() string {
+	if v, ok := r.FormData["reason"].(string); ok {
+		return v
+	}
+	return ""
 }
 
 func (s *Service) ensureLinkedCI(ctx context.Context, tenantID int, cat *service_catalog.ServiceCatalog, reqData *ServiceRequest) (int, error) {
@@ -251,169 +234,15 @@ func parseIntField(formData map[string]interface{}, key string) int {
 	return 0
 }
 
-// Get retrieves a service request with approvals
-func (s *Service) Get(ctx context.Context, id, tenantID int) (*ServiceRequest, []*ServiceRequestApproval, error) {
-	req, approvals, err := s.repo.GetWithApprovals(ctx, id, tenantID)
-	if err != nil {
-		return nil, nil, err
-	}
-	return req, approvals, nil
+func (s *Service) Get(ctx context.Context, id, tenantID int) (*ServiceRequest, error) {
+	return s.repo.Get(ctx, id, tenantID)
 }
 
-// ApplyApproval processes an approval action
-func (s *Service) ApplyApproval(ctx context.Context, id, tenantID, actorID int, action, comment string, userRole, userDept string) (*ServiceRequest, []*ServiceRequestApproval, error) {
-	// 1. Validate Inputs
-	if action != "approve" && action != "reject" {
-		return nil, nil, common.NewBadRequestError("Invalid action: "+action, nil)
-	}
-	if action == "reject" && strings.TrimSpace(comment) == "" {
-		return nil, nil, common.NewBadRequestError("Comment required for rejection", nil)
-	}
-
-	// 2. Get Request
-	req, approvals, err := s.repo.GetWithApprovals(ctx, id, tenantID)
-	if err != nil {
-		return nil, nil, err
-	}
-	actorDept, actorName, err := s.repo.GetUserContext(ctx, actorID, tenantID)
-	if err != nil {
-		return nil, nil, common.NewForbiddenError("Approver not found or inactive")
-	}
-	if actorID == req.RequesterID && !isServiceRequestAdmin(userRole) {
-		return nil, nil, common.NewForbiddenError("Requesters cannot approve their own service requests")
-	}
-
-	// 3. Find Pending Approval for Current Level
-	var currentApproval *ServiceRequestApproval
-	for _, app := range approvals {
-		if app.Level == req.CurrentLevel && app.Status == ApprovalStatusPending {
-			currentApproval = app
-			break
-		}
-	}
-	if currentApproval == nil {
-		return nil, nil, common.NewConflictError("No pending approval found for current level", "")
-	}
-
-	// 4. Check Permissions
-	requesterDept, _, err := s.repo.GetUserContext(ctx, req.RequesterID, tenantID)
-	if err != nil {
-		return nil, nil, common.NewConflictError("Requester is no longer available", "")
-	}
-	if actorDept == "" {
-		actorDept = userDept
-	}
-	if err := s.checkEligibility(userRole, actorDept, requesterDept, currentApproval.Step); err != nil {
-		return nil, nil, err
-	}
-
-	// P0-1：审批先桥接完成对应的 BPMN 待办任务（以流程任务为权威审批来源）。
-	// 无关联运行中流程实例时回退旧审批链，兼容未绑定流程的历史数据；
-	// 若存在待办流程任务但完成失败（如操作人不是流程任务审批人），则中止业务审批，避免双轨分叉。
-	if s.approvalBridge != nil {
-		if _, bridgeErr := s.approvalBridge.CompleteBusinessApprovalTask(
-			ctx, tenantID, actorID, string(dto.BusinessTypeServiceRequest), id, action, comment,
-		); bridgeErr != nil {
-			return nil, nil, common.NewInternalError("同步流程审批任务失败", bridgeErr)
-		}
-	}
-
-	// 5. Process
-	now := time.Now()
-	status := ApprovalStatusApproved
-	nextReqStatus := req.Status
-	nextLevel := req.CurrentLevel
-
-	if action == "reject" {
-		status = ApprovalStatusRejected
-		nextReqStatus = SRStatusRejected
-	} else {
-		// Approve logic
-		switch currentApproval.Step {
-		case ApprovalStepManager:
-			nextReqStatus = SRStatusManagerApproved
-		case ApprovalStepIT:
-			nextReqStatus = SRStatusITApproved
-		case ApprovalStepSecurity:
-			nextReqStatus = SRStatusSecurityApproved
-		}
-		if req.CurrentLevel < req.TotalLevels {
-			nextLevel = req.CurrentLevel + 1
-		}
-	}
-
-	// 6. Update Entities
-	currentApproval.Status = status
-	currentApproval.Action = action
-	currentApproval.Comment = comment
-	currentApproval.ApproverID = &actorID
-	currentApproval.ApproverName = actorName
-	currentApproval.ProcessedAt = &now
-
-	req.Status = nextReqStatus
-	if action == "approve" {
-		req.CurrentLevel = nextLevel
-	}
-
-	if err := s.repo.UpdateRequestAndApproval(ctx, req, currentApproval); err != nil {
-		return nil, nil, common.NewDatabaseError("Failed to update request", err)
-	}
-
-	return s.Get(ctx, id, tenantID)
-}
-
-func (s *Service) checkEligibility(actorRole, actorDept, requesterDept, step string) error {
-	actorRole = strings.ToLower(actorRole)
-	if actorRole == RoleAdmin || actorRole == RoleSuperAdmin {
-		return nil
-	}
-
-	switch step {
-	case ApprovalStepManager:
-		if actorRole == RoleManager && actorDept != "" && strings.EqualFold(actorDept, requesterDept) {
-			return nil
-		}
-	case ApprovalStepIT:
-		if actorRole == RoleAgent || actorRole == RoleTechnician {
-			return nil
-		}
-	case ApprovalStepSecurity:
-		if actorRole == RoleSecurity {
-			return nil
-		}
-	}
-	return common.NewForbiddenError("Permission denied for this approval step")
-}
-
-// ListPendingApprovals lists pending approvals for current user
-func (s *Service) ListPendingApprovals(ctx context.Context, tenantID, userID int, role string, page, size int) ([]*ServiceRequest, int, error) {
-	role = strings.ToLower(role)
-	var targetLevel int
-	var requiredStatus string
-	var requesterDept string
-	actorDept, _, err := s.repo.GetUserContext(ctx, userID, tenantID)
-	if err != nil {
-		return nil, 0, common.NewForbiddenError("Approver not found or inactive")
-	}
-
-	switch role {
-	case ApprovalStepManager:
-		targetLevel = 1
-		requiredStatus = SRStatusSubmitted
-		requesterDept = actorDept
-	case ApprovalStepIT, RoleAgent, RoleTechnician:
-		targetLevel = 2
-		requiredStatus = SRStatusManagerApproved
-	case ApprovalStepSecurity:
-		targetLevel = 3
-		requiredStatus = SRStatusITApproved
-	case RoleAdmin, RoleSuperAdmin:
-		targetLevel = 0
-	default:
-		return nil, 0, common.NewForbiddenError("Role is not eligible to approve service requests")
-	}
-
-	return s.repo.ListPendingApprovals(ctx, tenantID, targetLevel, requiredStatus, requesterDept, page, size)
+// GetByTicketID 供 ticket 详情页查询关联的 SR 扩展数据（Task 2 前端用）。
+// 找不到时返回的 error 用 ent.IsNotFound 判断——不是每个 ticket 都有关联 SR，
+// 调用方（ticket handler）要能区分"这不是服务目录来源的 ticket"和真正的查询失败。
+func (s *Service) GetByTicketID(ctx context.Context, ticketID, tenantID int) (*ServiceRequest, error) {
+	return s.repo.GetByTicketID(ctx, ticketID, tenantID)
 }
 
 func (s *Service) List(ctx context.Context, tenantID int, filters ListFilters) ([]*ServiceRequest, int, error) {
@@ -423,24 +252,15 @@ func (s *Service) List(ctx context.Context, tenantID int, filters ListFilters) (
 // Update updates a service request
 func (s *Service) Update(ctx context.Context, id, tenantID, actorID int, actorRole string, reqData *ServiceRequest) (*ServiceRequest, error) {
 	// 1. Get existing request
-	req, _, err := s.repo.GetWithApprovals(ctx, id, tenantID)
+	req, err := s.repo.Get(ctx, id, tenantID)
 	if err != nil {
 		return nil, common.NewNotFoundError("Service Request not found")
-	}
-	if req.Status != SRStatusSubmitted {
-		return nil, common.NewConflictError("Only submitted requests can be edited", req.Status)
 	}
 	if actorID != req.RequesterID && !isServiceRequestAdmin(actorRole) {
 		return nil, common.NewForbiddenError("Only the requester or an administrator can edit this request")
 	}
 
 	// 2. Update fields
-	if reqData.Title != "" {
-		req.Title = reqData.Title
-	}
-	if reqData.Reason != "" {
-		req.Reason = reqData.Reason
-	}
 	if reqData.FormData != nil {
 		req.FormData = reqData.FormData
 	}
@@ -472,44 +292,15 @@ func (s *Service) Update(ctx context.Context, id, tenantID, actorID int, actorRo
 	return req, nil
 }
 
-// UpdateStatus updates a service request status with tenant isolation.
-func (s *Service) UpdateStatus(ctx context.Context, id, tenantID, actorID int, actorRole, status string) error {
-	req, _, err := s.repo.GetWithApprovals(ctx, id, tenantID)
-	if err != nil {
-		return common.NewNotFoundError("Service Request not found")
-	}
-	if strings.TrimSpace(status) == "" {
-		return common.NewBadRequestError("Status is required", nil)
-	}
-	if !isValidServiceRequestOperationalTransition(req.Status, status) {
-		return common.NewConflictError("Invalid service request status transition", req.Status+" -> "+status)
-	}
-	if status == SRStatusCancelled {
-		if actorID != req.RequesterID && !isServiceRequestAdmin(actorRole) {
-			return common.NewForbiddenError("Only the requester or an administrator can cancel this request")
-		}
-	} else if !isServiceRequestOperator(actorRole) {
-		return common.NewForbiddenError("Only service operators can update fulfillment status")
-	}
-	if err := s.repo.UpdateStatus(ctx, req, status, actorID); err != nil {
-		s.logger.Errorw("Failed to update service request status", "error", err, "id", id, "status", status)
-		return common.NewInternalError("Failed to update service request status", err)
-	}
-	return nil
-}
-
 // Delete deletes a service request
 func (s *Service) Delete(ctx context.Context, id, tenantID, actorID int, actorRole string) error {
 	// 1. Get existing request
-	req, _, err := s.repo.GetWithApprovals(ctx, id, tenantID)
+	req, err := s.repo.Get(ctx, id, tenantID)
 	if err != nil {
 		return common.NewNotFoundError("Service Request not found")
 	}
 	if actorID != req.RequesterID && !isServiceRequestAdmin(actorRole) {
 		return common.NewForbiddenError("Only the requester or an administrator can delete this request")
-	}
-	if req.Status != SRStatusSubmitted && req.Status != SRStatusRejected && req.Status != SRStatusCancelled {
-		return common.NewConflictError("Only submitted, rejected, or cancelled requests can be deleted", req.Status)
 	}
 
 	// 2. Delete
@@ -529,29 +320,6 @@ func isServiceRequestAdmin(role string) bool {
 func isServiceRequestOperator(role string) bool {
 	role = strings.ToLower(strings.TrimSpace(role))
 	return isServiceRequestAdmin(role) || role == RoleAgent || role == RoleTechnician
-}
-
-func isValidServiceRequestOperationalTransition(current, next string) bool {
-	if current == next {
-		return true
-	}
-	transitions := map[string]map[string]struct{}{
-		SRStatusSubmitted:        {SRStatusCancelled: {}},
-		SRStatusManagerApproved:  {SRStatusCancelled: {}},
-		SRStatusITApproved:       {SRStatusCancelled: {}},
-		SRStatusSecurityApproved: {SRStatusProvisioning: {}, SRStatusCancelled: {}},
-		SRStatusProvisioning:     {SRStatusDelivered: {}, SRStatusFailed: {}},
-		SRStatusFailed:           {SRStatusProvisioning: {}, SRStatusCancelled: {}},
-		SRStatusRejected:         {},
-		SRStatusDelivered:        {},
-		SRStatusCancelled:        {},
-	}
-	allowed, ok := transitions[current]
-	if !ok {
-		return false
-	}
-	_, ok = allowed[next]
-	return ok
 }
 
 // serviceRequestSystemFormDataKeys 是 handler.go normalizeCreateServiceRequest 已经从
