@@ -591,7 +591,11 @@ func TestIncidentService_UpdateIncident_StatusTransition(t *testing.T) {
 		assert.Equal(t, newStatus, response.Status)
 	})
 
-	t.Run("有效状态转换 in_progress -> resolved", func(t *testing.T) {
+	// resolved/closed 不能再通过通用 UpdateIncident 直接设置——必须走 ResolveIncident/
+	// CloseIncident 专用动作，确保解决说明、关闭备注和审计事件不可被绕过
+	// （见 service/incident_service.go 的 UpdateIncident 守卫）。
+	// 专用动作路径本身的行为由 TestIncidentService_DedicatedLifecyclePersistsAuditAndTimestamps 覆盖。
+	t.Run("通用更新拒绝直接转到 resolved，必须走专用动作", func(t *testing.T) {
 		testIncident, err := client.Incident.Create().
 			SetTitle("Status Test 2").
 			SetDescription("Test description").
@@ -606,17 +610,16 @@ func TestIncidentService_UpdateIncident_StatusTransition(t *testing.T) {
 		require.NoError(t, err)
 
 		newStatus := "resolved"
-		response, err := service.UpdateIncident(ctx, testIncident.ID, &dto.UpdateIncidentRequest{
+		_, err = service.UpdateIncident(ctx, testIncident.ID, &dto.UpdateIncidentRequest{
 			Status:  &newStatus,
 			Version: 0,
 		}, testTenant.ID)
 
-		require.NoError(t, err)
-		assert.Equal(t, newStatus, response.Status)
-		assert.NotNil(t, response.ResolvedAt)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "dedicated resolve or close action")
 	})
 
-	t.Run("有效状态转换 resolved -> closed", func(t *testing.T) {
+	t.Run("通用更新拒绝直接转到 closed，必须走专用动作", func(t *testing.T) {
 		resolvedAt := time.Now().Add(-1 * time.Hour)
 		testIncident, err := client.Incident.Create().
 			SetTitle("Status Test 3").
@@ -633,14 +636,13 @@ func TestIncidentService_UpdateIncident_StatusTransition(t *testing.T) {
 		require.NoError(t, err)
 
 		newStatus := "closed"
-		response, err := service.UpdateIncident(ctx, testIncident.ID, &dto.UpdateIncidentRequest{
+		_, err = service.UpdateIncident(ctx, testIncident.ID, &dto.UpdateIncidentRequest{
 			Status:  &newStatus,
 			Version: 0,
 		}, testTenant.ID)
 
-		require.NoError(t, err)
-		assert.Equal(t, newStatus, response.Status)
-		assert.NotNil(t, response.ClosedAt)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "dedicated resolve or close action")
 	})
 
 	t.Run("无效状态转换", func(t *testing.T) {
