@@ -67,6 +67,14 @@ field.Int("ci_id").Optional()
 
 删除：`status`、`title`、`reason`、`current_level`、`total_levels`（全部改为读关联 Ticket 的对应字段）
 
+### ProvisioningTask 集成点（评审补充）
+
+**现状核实**：`POST /service-requests/:id/provision`（`ProvisioningController.StartProvisioning` → `ProvisioningService.CreateTaskFromServiceRequest`）是**人工触发**的操作（agent 点"开始交付"按钮），不是审批通过自动触发。当前实现直接查 `ent.ServiceRequest.Status`，硬编码检查 `!= "security_approved"` 则拒绝；创建 `ProvisioningTask` 成功后，同一事务里把 `ServiceRequest.Status` 回写为 `"provisioning"`。SR 瘦身删除 `status` 字段后，这两处都要改：
+
+1. **前置条件检查**：把 `sr.Status == "security_approved"` 改为查询 `process_approval_decision` 表——`WHERE business_type='ticket' AND business_id=<关联的ticket.ID> AND decision='approved'` 存在即视为"已批准，允许启动交付"（`business_type`/`business_id` 是 BPMN 引擎在 `recordApprovalDecision` 时从 `ProcessTriggerRequest.BusinessType`/`BusinessID` 带过去的，ticket 触发时已经是 `"ticket"`/`ticket.ID`，可以直接查，不需要新增字段或旁路）。
+2. **状态回写**：不再需要 `ServiceRequest.Status = "provisioning"` 这个动作——SR 已经没有自己的 status 字段。"是否已在交付/已交付"这个信息改为直接从 `ProvisioningTask` 本身派生（查该 SR 关联的 `ProvisioningTask` 是否存在、及其 `status` 字段），前端/API 需要展示"交付状态"时改查 `ProvisioningTask`，不再依赖 SR 的状态快照。
+3. **`StartProvisioning` 保持人工触发不变**——这次重构不新增"审批通过自动开始交付"的自动化逻辑，只是把现有的人工触发链路的判断依据从 SR 状态改成 ticket 审批决策记录，行为对用户可见部分不变。
+
 ### `ent.ServiceRequestApproval` —— 整体删除
 
 过渡期审批记录就是 Ticket 走 BPMN 产生的 `process_approval_decision`，不再有 SR 专属审批记录表。三级审批的精确建模（如果要保留独立于 ticket 通用审批的三级语义）留到下一轮"审批收敛"设计。
@@ -93,12 +101,16 @@ field.Int("ci_id").Optional()
 
 ## 实施顺序
 
+**步骤 1-3（schema 改动 + handler/service 重写）必须在同一次提交里落地，不能分批合入**——第 1-2 步做完、第 3 步没做完之前，代码编译不过（旧 handler/service 还在引用被删的 `ServiceRequestApproval`/`current_level`/`total_levels`/`sr.Status`）。写实施计划时这几步要合成一个任务，不能拆成独立可合并的小任务。
+
 1. ent schema 改动：`Ticket` 加 `source`，`ServiceRequest` 瘦身 + 加 `ticket_id`，`ServiceRequestApproval` 删除
 2. `go generate ./ent`
-3. 后端 `handlers/service_request/service.go` 重写：`Create` 改为先建 Ticket（含触发 `ProcessTriggerService`）再建 SR；`Get`/`List` 改为联查组装；删除三级审批硬编码逻辑
+3. 后端重写（同一提交内完成）：
+   - `handlers/service_request/service.go`：`Create` 改为先建 Ticket（含触发 `ProcessTriggerService`）再建 SR；`Get`/`List` 改为联查组装；删除三级审批硬编码逻辑
+   - `service/provisioning_service.go`：`CreateTaskFromServiceRequest` 的前置检查从 `sr.Status=="security_approved"` 改为查 `process_approval_decision`；删除对 `ServiceRequest.Status` 的回写
 4. 迁移 SQL：新增/删除相应列和表
 5. 自定义字段值归属迁移：`extractServiceRequestFieldValues` 写入路径的 `entity_type`/`entity_id` 改为指向 ticket
-6. 前端：退休两个独立详情页，`/tickets/[id]` 页面加 SR 面板；提交页跳转目标调整
+6. 前端：退休两个独立详情页，`/tickets/[id]` 页面加 SR 面板；提交页跳转目标调整；交付状态展示改为查 `ProvisioningTask`
 7. 全量测试 + 手动验证主链路
 
 ## 测试计划
@@ -108,6 +120,7 @@ field.Int("ci_id").Optional()
 - `/my-requests` 过滤视图返回正确的 `source=service_catalog` 工单列表
 - ticket 详情页在 `source=service_catalog` 时正确渲染 SR 专属面板，非该来源时不渲染
 - 明确写一条测试断言"三级审批已退化为单节点 BPMN 审批"——证明这是设计内的已知过渡行为，不是遗漏
+- `StartProvisioning` 在关联 ticket 没有 `process_approval_decision(decision='approved')` 记录时拒绝启动交付；有记录时正常创建 `ProvisioningTask`（覆盖评审补充的集成点）
 
 ## 非目标（本设计不做）
 
