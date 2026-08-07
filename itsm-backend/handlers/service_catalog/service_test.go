@@ -204,6 +204,58 @@ func TestService_List_BatchLoadsFieldDefinitionsPerCatalog(t *testing.T) {
 	assert.Empty(t, byID[c2.ID].Fields)
 }
 
+// TestService_Delete_RemovesFieldDefinitions 证明删除 service catalog 时同步清理其字段定义，
+// 不会留下悬空的 field_definitions 行（最终整分支评审 Fix 2）。
+func TestService_Delete_RemovesFieldDefinitions(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:sc_delete_removes_fields?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	tenant, err := client.Tenant.Create().SetName("t").SetCode("sc-delete-fields").SetDomain("d.test").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+
+	repo := NewEntRepository(client)
+	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
+
+	created, err := svc.Create(ctx, "云主机申请", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0,
+		[]service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}})
+	require.NoError(t, err)
+
+	listedBefore, err := service.NewFieldDefinitionService(client).ListDefinitions(ctx, tenant.ID, "service_catalog", created.ID)
+	require.NoError(t, err)
+	require.Len(t, listedBefore, 1)
+
+	require.NoError(t, svc.Delete(ctx, tenant.ID, created.ID))
+
+	listedAfter, err := service.NewFieldDefinitionService(client).ListDefinitions(ctx, tenant.ID, "service_catalog", created.ID)
+	require.NoError(t, err)
+	assert.Empty(t, listedAfter, "field_definitions should be cleaned up when the owning service catalog is deleted")
+}
+
+// TestService_Search_PopulatesFieldDefinitions 证明 Search 的结果也批量回填字段定义，
+// 和 List/Get 保持一致（最终整分支评审 cleanup #3）。
+func TestService_Search_PopulatesFieldDefinitions(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:sc_search_fields?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	tenant, err := client.Tenant.Create().SetName("t").SetCode("sc-search-fields").SetDomain("d.test").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+
+	repo := NewEntRepository(client)
+	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
+
+	created, err := svc.Create(ctx, "云主机申请搜索测试", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0,
+		[]service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}})
+	require.NoError(t, err)
+
+	results, total, err := svc.Search(ctx, tenant.ID, "云主机申请搜索", ListFilters{Page: 1, Size: 10})
+	require.NoError(t, err)
+	require.Equal(t, 1, total)
+	require.Len(t, results, 1)
+	assert.Equal(t, created.ID, results[0].ID)
+	require.Len(t, results[0].Fields, 1)
+	assert.Equal(t, "environment", results[0].Fields[0].Name)
+}
+
 func TestService_Get_TenantIsolation_NoCrossTenantFieldLeak(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:sc_tenant_isolation?mode=memory&cache=shared&_fk=1")
 	defer client.Close()

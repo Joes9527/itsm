@@ -220,7 +220,15 @@ func (s *Service) Delete(ctx context.Context, tenantID int, id int) error {
 	if _, err := s.repo.Get(ctx, tenantID, id); err != nil {
 		return err
 	}
-	return s.repo.Delete(ctx, tenantID, id)
+	if err := s.repo.Delete(ctx, tenantID, id); err != nil {
+		return err
+	}
+	if s.client != nil {
+		if err := service.NewFieldDefinitionService(s.client).DeleteDefinitions(ctx, tenantID, "service_catalog", id); err != nil {
+			s.logger.Warnw("Failed to delete field definitions for deleted service catalog", "error", err, "catalog_id", id)
+		}
+	}
+	return nil
 }
 
 func (s *Service) Search(ctx context.Context, tenantID int, keyword string, filters ListFilters) ([]*ServiceCatalog, int, error) {
@@ -233,7 +241,25 @@ func (s *Service) Search(ctx context.Context, tenantID int, keyword string, filt
 	if filters.Size > 100 {
 		filters.Size = 100
 	}
-	return s.repo.Search(ctx, tenantID, strings.TrimSpace(keyword), filters)
+	catalogs, total, err := s.repo.Search(ctx, tenantID, strings.TrimSpace(keyword), filters)
+	if err != nil {
+		return nil, 0, err
+	}
+	if s.client != nil && len(catalogs) > 0 {
+		ids := make([]int, len(catalogs))
+		for i, c := range catalogs {
+			ids[i] = c.ID
+		}
+		defsByCatalog, err := service.NewFieldDefinitionService(s.client).ListDefinitionsForEntities(ctx, tenantID, "service_catalog", ids)
+		if err != nil {
+			s.logger.Warnw("Failed to batch-load field definitions for service catalogs (search)", "error", err)
+		} else {
+			for _, c := range catalogs {
+				c.Fields = toFieldDefinitionInputsFromEnt(defsByCatalog[c.ID])
+			}
+		}
+	}
+	return catalogs, total, nil
 }
 
 func isValidCatalogStatus(status string) bool {
