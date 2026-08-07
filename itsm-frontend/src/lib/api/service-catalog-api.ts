@@ -322,8 +322,14 @@ export class ServiceCatalogApi {
 
   /**
    * 创建服务请求
+   *
+   * 返回值透传后端 dto.ServiceRequestResponse（不经过 toServiceRequest 适配），其中
+   * ticketId 是提交成功后创建的关联 Ticket ID——调用方（提交表单页）据此跳转到
+   * /tickets/:ticketId，服务请求已经不再有独立详情页。
    */
-  static async createServiceRequest(request: CreateServiceRequestRequest): Promise<any> {
+  static async createServiceRequest(
+    request: CreateServiceRequestRequest
+  ): Promise<{ ticketId: number } & Record<string, any>> {
     // 前端 CreateServiceRequestRequest: { serviceId, formData, ... }
     // 后端 CreateServiceRequestRequest: { catalog_id, title, reason, form_data, ... , compliance_ack }
     const reason =
@@ -351,7 +357,10 @@ export class ServiceCatalogApi {
       expireAt: request.formData?.expireAt ? request.formData?.expireAt : undefined,
     };
 
-    return httpClient.post('/api/v1/service-requests', payload);
+    return httpClient.post<{ ticketId: number } & Record<string, any>>(
+      '/api/v1/service-requests',
+      payload
+    );
   }
 
   /**

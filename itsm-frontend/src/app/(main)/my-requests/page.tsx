@@ -17,22 +17,19 @@ import {
 } from 'lucide-react';
 
 // API 接口类型定义
+//
+// 状态/标题已经全部委托给关联的 Ticket（Task 1 从 ServiceRequest 表移除了 status/title/reason）。
+// ticketId 是跳转到工单详情页（/tickets/:ticketId，承载状态/审批/工作流）的依据；
+// ticketTitle/ticketStatus 是列表接口批量回填的展示字段，值域是 Ticket 的状态
+// （new/open/in_progress/pending/resolved/closed/cancelled，见 src/types/ticket.ts），
+// 不再是服务请求自己的审批阶段（submitted/manager_approved/...）。
 interface ServiceRequest {
   id: number;
+  ticketId: number;
   catalogId: number;
   requesterId: number;
-  status:
-    | 'submitted'
-    | 'manager_approved'
-    | 'it_approved'
-    | 'security_approved'
-    | 'provisioning'
-    | 'delivered'
-    | 'failed'
-    | 'rejected'
-    | 'cancelled'
-    | string;
-  reason: string;
+  ticketTitle?: string;
+  ticketStatus?: string;
   createdAt: string;
   catalog?: {
     id: number;
@@ -49,20 +46,26 @@ interface ServiceRequest {
 
 import { ServiceCatalogApi } from '@/lib/api/service-catalog-api';
 
-const RequestStatusBadge = ({ status }: { status: string }) => {
+// 与 src/types/ticket.ts 的 TicketStatus 保持一致
+const RequestStatusBadge = ({ status }: { status?: string }) => {
   const statusConfig = {
-    submitted: { label: '已提交', color: 'gold', icon: Clock, pulse: true },
-    managerApproved: { label: '主管已批', color: 'blue', icon: Hourglass, pulse: true },
-    itApproved: { label: 'IT已批', color: 'blue', icon: Hourglass, pulse: true },
-    securityApproved: { label: '安全已批', color: 'green', icon: CheckCircle, pulse: false },
-    provisioning: { label: '交付中', color: 'processing', icon: Hourglass, pulse: true },
-    delivered: { label: '已交付', color: 'success', icon: CheckCircle, pulse: false },
-    failed: { label: '交付失败', color: 'error', icon: XCircle, pulse: false },
-    rejected: { label: '已拒绝', color: 'error', icon: XCircle, pulse: false },
-    cancelled: { label: '已取消', color: 'default', icon: XCircle, pulse: false },
+    new: { label: '新建', color: 'gold', icon: Clock },
+    open: { label: '待处理', color: 'gold', icon: Clock },
+    in_progress: { label: '处理中', color: 'processing', icon: Hourglass },
+    pending: { label: '待处理', color: 'blue', icon: Hourglass },
+    resolved: { label: '已解决', color: 'success', icon: CheckCircle },
+    closed: { label: '已关闭', color: 'default', icon: CheckCircle },
+    cancelled: { label: '已取消', color: 'default', icon: XCircle },
   };
 
-  const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.submitted;
+  if (!status) {
+    return <Tag color="default">-</Tag>;
+  }
+  const config = statusConfig[status as keyof typeof statusConfig] || {
+    label: status,
+    color: 'default',
+    icon: Clock,
+  };
   const Icon = config.icon;
 
   return (
@@ -98,14 +101,12 @@ const RequestCard = ({ request }: { request: ServiceRequest }) => {
             <span className="text-sm font-mono text-gray-500 bg-gray-50 px-2 py-1 rounded">
               REQ-{String(request.id).padStart(5, '0')}
             </span>
-            <RequestStatusBadge status={request.status} />
+            <RequestStatusBadge status={request.ticketStatus} />
           </div>
           <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            {request.catalog?.name || '未知服务'}
+            {request.ticketTitle || request.catalog?.name || '未知服务'}
           </h3>
-          <p className="text-sm text-gray-600 mb-3">
-            {request.catalog?.description || request.reason}
-          </p>
+          <p className="text-sm text-gray-600 mb-3">{request.catalog?.description || '-'}</p>
         </div>
       </div>
 
@@ -120,7 +121,7 @@ const RequestCard = ({ request }: { request: ServiceRequest }) => {
             <span>{request.catalog?.category || '其他'}</span>
           </div>
         </div>
-        <Link href={`/my-requests/${request.id}`}>
+        <Link href={`/tickets/${request.ticketId}`}>
           <Button type="link" className="flex items-center gap-1 p-0 h-auto">
             查看详情
             <ChevronRight className="w-4 h-4" />
@@ -177,17 +178,18 @@ const MyRequestsPage = () => {
     const matchesSearch =
       !searchTerm ||
       request.catalog?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      request.reason.toLowerCase().includes(searchTerm.toLowerCase());
+      (request.ticketTitle || '').toLowerCase().includes(searchTerm.toLowerCase());
     return matchesSearch;
   });
 
-  // 动态计算过滤选项数量
+  // 动态计算过滤选项数量——按关联 ticket 状态统计（状态已经委托给 Ticket，
+  // 值域是 new/open/in_progress/pending/resolved/closed/cancelled）
   const filterOptions = [
     { value: 'all', label: '全部', count: total },
-    { value: 'submitted', label: '已提交', count: requests.filter(r => r.status === 'submitted').length },
-    { value: 'provisioning', label: '交付中', count: requests.filter(r => r.status === 'provisioning').length },
-    { value: 'delivered', label: '已交付', count: requests.filter(r => r.status === 'delivered').length },
-    { value: 'rejected', label: '已拒绝', count: requests.filter(r => r.status === 'rejected').length },
+    { value: 'open', label: '待处理', count: requests.filter(r => r.ticketStatus === 'open' || r.ticketStatus === 'new').length },
+    { value: 'in_progress', label: '处理中', count: requests.filter(r => r.ticketStatus === 'in_progress').length },
+    { value: 'resolved', label: '已解决', count: requests.filter(r => r.ticketStatus === 'resolved').length },
+    { value: 'closed', label: '已关闭', count: requests.filter(r => r.ticketStatus === 'closed').length },
   ];
 
   return (

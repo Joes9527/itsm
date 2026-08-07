@@ -104,6 +104,12 @@ type ServiceRequestResponse struct {
 	Catalog      *ServiceCatalogResponse    `json:"catalog,omitempty"`
 	Requester    *UserResponse              `json:"requester,omitempty"`
 	CustomFields []CustomFieldValueResponse `json:"customFields,omitempty"`
+
+	// TicketTitle/TicketStatus 是列表场景（GET /api/v1/service-requests/me 等）下批量回填的
+	// 关联 ticket 展示字段，不是持久化数据——状态/标题的唯一事实来源仍然是 Ticket。
+	// /my-requests 列表页用它们替代已经删掉的 ServiceRequest.status/title 列。
+	TicketTitle  string `json:"ticketTitle,omitempty"`
+	TicketStatus string `json:"ticketStatus,omitempty"`
 }
 
 // ServiceCatalogListResponse 服务目录列表响应

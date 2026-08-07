@@ -118,9 +118,9 @@ export default function ServiceCatalogRequestPage() {
         },
       };
 
-      await ServiceCatalogApi.createServiceRequest(payload);
+      const created = await ServiceCatalogApi.createServiceRequest(payload);
       message.success('申请已提交，等待审批');
-      router.push('/my-requests');
+      router.push(`/tickets/${created.ticketId}`);
     } catch (e: any) {
       message.error('提交失败：' + (e?.message || '未知错误'));
     } finally {

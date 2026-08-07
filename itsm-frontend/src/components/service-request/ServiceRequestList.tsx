@@ -82,6 +82,8 @@ const ServiceRequestList: React.FC = () => {
   };
 
   // 表格列定义
+  // 状态/标题已经委托给关联 Ticket——用后端批量回填的 ticketTitle/ticketStatus 展示，
+  // 详情/审批都跳转到 /tickets/:ticketId（服务请求已经没有独立详情页）。
   const columns = [
     {
       title: 'ID',
@@ -90,7 +92,7 @@ const ServiceRequestList: React.FC = () => {
     },
     {
       title: '标题',
-      dataIndex: 'title',
+      dataIndex: 'ticketTitle',
       render: (text: string, record: ServiceRequest) => (
         <div className="flex flex-col">
           <span className="font-medium text-gray-900">{text || `请求 #${record.id}`}</span>
@@ -100,20 +102,10 @@ const ServiceRequestList: React.FC = () => {
     },
     {
       title: '状态',
-      dataIndex: 'status',
+      dataIndex: 'ticketStatus',
       width: 150,
-      render: (status: string) => <Tag color={statusColors[status] || 'default'}>{status}</Tag>,
-    },
-    {
-      title: '当前步骤',
-      dataIndex: 'currentLevel',
-      width: 120,
-      render: (level: number, record: ServiceRequest) => (
-        <span>
-          Level {level} / {record.totalLevels}
-        </span>
-      ),
-      responsive: ['md'],
+      render: (status: string) =>
+        status ? <Tag color={statusColors[status] || 'default'}>{status}</Tag> : '-',
     },
     {
       title: '提交时间',
@@ -133,7 +125,7 @@ const ServiceRequestList: React.FC = () => {
               type="text"
               icon={<Eye />}
               className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
-              onClick={() => router.push(`/service-requests/${record.id}`)}
+              onClick={() => router.push(`/tickets/${record.ticketId}`)}
             />
           </Tooltip>
           {activeTab === 'approvals' && (
@@ -142,7 +134,7 @@ const ServiceRequestList: React.FC = () => {
                 type="text"
                 icon={<CheckCircle />}
                 className="text-green-600 hover:text-green-800 hover:bg-green-50"
-                onClick={() => router.push(`/service-requests/${record.id}`)}
+                onClick={() => router.push(`/tickets/${record.ticketId}`)}
               />
             </Tooltip>
           )}

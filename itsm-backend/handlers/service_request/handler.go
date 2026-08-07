@@ -72,6 +72,8 @@ func (h *Handler) toDTO(req *ServiceRequest) *dto.ServiceRequestResponse {
 		LastError:          req.LastError,
 		CreatedAt:          req.CreatedAt,
 		UpdatedAt:          req.UpdatedAt,
+		TicketTitle:        req.TicketTitle,
+		TicketStatus:       req.TicketStatus,
 	}
 	if req.ExpireAt != nil {
 		t := *req.ExpireAt

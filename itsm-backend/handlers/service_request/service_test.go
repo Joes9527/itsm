@@ -276,4 +276,53 @@ func TestService_GetByTicketID_ReturnsLinkedServiceRequest(t *testing.T) {
 	assert.Equal(t, created.TicketID, fetched.TicketID)
 }
 
+// TestService_List_BatchLoadsLinkedTicketSummary 证明 List 给每条记录批量回填了关联 ticket
+// 的 title/status（/my-requests 列表页据此展示，因为 ServiceRequest 表本身已经不存 status/title
+// 了——委托给 Ticket）。批量加载：一次 Ticket.Query().Where(IDIn(...)) 而不是逐条查。
+func TestService_List_BatchLoadsLinkedTicketSummary(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:sr_list_ticket_summary?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	tenant, err := client.Tenant.Create().SetName("t").SetCode("sr-list-summary").SetDomain("d.test").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	requester, err := client.User.Create().
+		SetUsername("requester7").SetEmail("requester7@test.com").SetName("Requester7").
+		SetPasswordHash("hash").SetRole("end_user").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	scRepo := service_catalog.NewEntRepository(client)
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
+	catalog, err := scService.Create(ctx, "云主机申请-list", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil)
+	require.NoError(t, err)
+
+	srRepo := NewEntRepository(client)
+	cmdbRepo := cmdb.NewEntRepository(client)
+	logger := zaptest.NewLogger(t).Sugar()
+	ticketSvc := service.NewTicketServiceForTest(client, logger)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc)
+
+	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+		ComplianceAck:      true,
+		DataClassification: "internal",
+		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
+		FormData: map[string]interface{}{
+			"title":  "申请一台云主机-List测试",
+			"reason": "list batch load test",
+		},
+	})
+	require.NoError(t, err)
+	require.Greater(t, created.TicketID, 0)
+
+	list, total, err := svc.List(ctx, tenant.ID, ListFilters{Page: 1, Size: 10})
+	require.NoError(t, err)
+	require.Equal(t, 1, total)
+	require.Len(t, list, 1)
+	assert.Equal(t, "申请一台云主机-List测试", list[0].TicketTitle)
+	assert.NotEmpty(t, list[0].TicketStatus)
+
+	tkt, err := client.Ticket.Get(ctx, created.TicketID)
+	require.NoError(t, err)
+	assert.Equal(t, tkt.Status, list[0].TicketStatus)
+}
+
 func ptrTime(t time.Time) *time.Time { return &t }
