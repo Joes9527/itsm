@@ -1274,6 +1274,7 @@ func ToTicketResponse(ctx context.Context, t *ticket.Ticket) *dto.TicketResponse
 		Version:      t.Version,
 		CreatedAt:    t.CreatedAt,
 		UpdatedAt:    t.UpdatedAt,
+		Source:       t.Source,
 	}
 
 	if t.AssigneeID != nil {
@@ -1800,6 +1801,7 @@ func (s *TicketService) entToDomain(e *ent.Ticket) *ticket.Ticket {
 		Version:      e.Version,
 		CreatedAt:    e.CreatedAt,
 		UpdatedAt:    e.UpdatedAt,
+		Source:       e.Source,
 	}
 	if e.AssigneeID > 0 {
 		aid := e.AssigneeID

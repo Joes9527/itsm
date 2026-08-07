@@ -103,6 +103,7 @@ type TicketResponse struct {
 	SLAResponseDeadline   *time.Time                 `json:"slaResponseDeadline,omitempty"`
 	SLAResolutionDeadline *time.Time                 `json:"slaResolutionDeadline,omitempty"`
 	Rating                int                        `json:"rating,omitempty"`
+	Source                string                     `json:"source,omitempty"`
 	CustomFieldValues     []CustomFieldValueResponse `json:"customFields,omitempty"`
 }
 

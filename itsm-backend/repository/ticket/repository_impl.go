@@ -739,6 +739,7 @@ func toDomainModel(e *ent.Ticket) *Ticket {
 		IsManagedByMSP: e.IsManagedByMsp,
 		CreatedAt:      e.CreatedAt,
 		UpdatedAt:      e.UpdatedAt,
+		Source:         e.Source,
 	}
 
 	// 可选字段

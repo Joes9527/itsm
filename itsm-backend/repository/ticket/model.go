@@ -75,6 +75,8 @@ type Ticket struct {
 	CreatedAt             time.Time
 	UpdatedAt             time.Time
 	DeletedAt             *time.Time
+	// Source 工单来源：manual=手动创建，service_catalog=服务目录申请。
+	Source string
 }
 
 // IsFinalState 判断是否为终态
