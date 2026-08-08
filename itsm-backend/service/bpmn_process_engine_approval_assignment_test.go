@@ -430,6 +430,79 @@ func TestAuthorizeTaskActor_RequesterCannotActOnOwnApprovalTask_CandidateGroupPa
 	assert.Error(t, err, "申请人不应该能通过候选组身份操作自己提交工单的审批任务")
 }
 
+// ==================== Finding 2：BPMN 显式声明 candidateUsers（无 candidateGroups）时，
+// 也不应该触发部门负责人解析 ====================
+
+func TestCreateUserTask_Approval_ExplicitCandidateUsersSkipsManagerPath(t *testing.T) {
+	fx := newApprovalAssignmentFixture(t)
+
+	manager := fx.createUser(t, "manager4", 0)
+	dept := fx.createDepartment(t, "Has Manager 2", manager.ID, 0)
+	requester := fx.createUser(t, "requester13", dept.ID)
+	designatedApprover := fx.createUser(t, "designatedApprover", 0)
+
+	instance := fx.createInstance(t, "explicit-candidate-users", map[string]interface{}{
+		"requester_id": float64(requester.ID),
+	})
+
+	task := approvalTask("Activity_Approval", "工单审批")
+	// 流程设计器画的审批节点：只设置了 candidateUsers，没有 candidateGroups。
+	task.CandidateUsers = strconv.Itoa(designatedApprover.ID)
+
+	err := fx.engine.createUserTask(fx.ctx, instance, task)
+	require.NoError(t, err)
+
+	created := fx.getCreatedTask(t, instance.ID, "Activity_Approval")
+	assert.Equal(t, "", created.Assignee, "BPMN 显式声明 candidateUsers 时不应该触发部门负责人解析")
+	assert.Contains(t, created.CandidateUsers, strconv.Itoa(designatedApprover.ID), "显式声明的 candidateUsers 应该原样保留")
+	assert.NotContains(t, created.CandidateUsers, strconv.Itoa(manager.ID), "不应该混入跟这个节点配置无关的部门负责人")
+}
+
+// ==================== Finding 1：ClaimTask/ClaimTaskByID 必须校验候选人身份 ====================
+
+func TestClaimTaskByID_RequesterCannotClaimOwnCandidateGroupFallbackTask(t *testing.T) {
+	fx := newApprovalAssignmentFixture(t)
+
+	dept := fx.createDepartment(t, "Orphan Dept 6", 0, 0)
+	requester := fx.createUser(t, "requester14", dept.ID)
+	backupApprover := fx.createUser(t, "backupApprover6", 0)
+	// requester 不在 ticket-approvers 组里，走候选组兜底后应被排除在候选人之外。
+	fx.createGroup(t, "ticket-approvers", backupApprover.ID)
+
+	instance := fx.createInstance(t, "claim-requester-excluded", map[string]interface{}{
+		"requester_id": float64(requester.ID),
+	})
+	require.NoError(t, fx.engine.createUserTask(fx.ctx, instance, approvalTask("Activity_Approval", "工单审批")))
+	task := fx.getCreatedTask(t, instance.ID, "Activity_Approval")
+	require.Equal(t, "", task.Assignee)
+	require.NotContains(t, task.CandidateUsers, "requester14")
+
+	err := fx.engine.TaskService().ClaimTaskByID(fx.ctx, task.ID, requester.ID)
+	assert.Error(t, err, "申请人不是候选人，不应该能认领落到候选组兜底的审批任务")
+}
+
+func TestClaimTaskByID_RealCandidateCanClaim(t *testing.T) {
+	fx := newApprovalAssignmentFixture(t)
+
+	dept := fx.createDepartment(t, "Orphan Dept 7", 0, 0)
+	requester := fx.createUser(t, "requester15", dept.ID)
+	backupApprover := fx.createUser(t, "backupApprover7", 0)
+	fx.createGroup(t, "ticket-approvers", backupApprover.ID)
+
+	instance := fx.createInstance(t, "claim-real-candidate", map[string]interface{}{
+		"requester_id": float64(requester.ID),
+	})
+	require.NoError(t, fx.engine.createUserTask(fx.ctx, instance, approvalTask("Activity_Approval", "工单审批")))
+	task := fx.getCreatedTask(t, instance.ID, "Activity_Approval")
+	require.Contains(t, task.CandidateUsers, "backupApprover7")
+
+	err := fx.engine.TaskService().ClaimTaskByID(fx.ctx, task.ID, backupApprover.ID)
+	require.NoError(t, err, "真正在候选组里的人应该能成功认领")
+
+	claimed := fx.getCreatedTask(t, instance.ID, "Activity_Approval")
+	assert.Equal(t, strconv.Itoa(backupApprover.ID), claimed.Assignee)
+}
+
 // ==================== 纯函数单元测试 ====================
 
 func TestExcludeUserFromCandidates(t *testing.T) {

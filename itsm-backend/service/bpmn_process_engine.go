@@ -663,8 +663,9 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 			// 如果 BPMN 已经显式声明了 candidateGroups（比如 legacy 审批链迁移出来的按角色/组
 			// 路由节点，见 legacy_approval_migration_service.go），说明这个节点的路由方式是
 			// 配置驱动的，不触发部门负责人解析，直接进入下面的候选组展开——避免用一个跟节点
-			// 配置无关的"部门负责人"语义覆盖它。
-			if strings.TrimSpace(task.CandidateGroups) == "" {
+			// 配置无关的"部门负责人"语义覆盖它。同理，如果 BPMN 显式声明了 candidateUsers
+			// （比如流程设计器画的审批节点直接指定了候选人），也不该被部门负责人解析覆盖。
+			if strings.TrimSpace(task.CandidateGroups) == "" && strings.TrimSpace(task.CandidateUsers) == "" {
 				assignee = e.resolveApprovalAssignee(ctx, instance, approvalRequester)
 			}
 		} else {
@@ -2013,6 +2014,26 @@ func (s *bpmnTaskService) AssignTask(ctx context.Context, taskID string, assigne
 	return err
 }
 
+// isTaskCandidate 复用 authorizeTaskActor 的候选人匹配语义（用户 ID 十进制字符串或用户名），
+// 用于 ClaimTask/ClaimTaskByID 校验：只有任务的 assignee 或 candidate_users 里的人才能认领
+// 未分配的任务——否则任何登录用户都能抢先认领任何审批任务（包括自己提交的工单）。
+func isTaskCandidate(ctx context.Context, client *ent.Client, userID int, task *ent.ProcessTask) (bool, error) {
+	actor, err := client.User.Query().Where(user.ID(userID)).Only(ctx)
+	if err != nil {
+		return false, fmt.Errorf("用户不存在: %w", err)
+	}
+	allowed := func(csv string) bool {
+		for _, candidate := range strings.Split(csv, ",") {
+			candidate = strings.TrimSpace(candidate)
+			if candidate == strconv.Itoa(userID) || candidate == actor.Username {
+				return true
+			}
+		}
+		return false
+	}
+	return allowed(task.Assignee) || allowed(task.CandidateUsers), nil
+}
+
 // ClaimTask 认领任务 (根据task_id字符串)
 func (s *bpmnTaskService) ClaimTask(ctx context.Context, taskID string, userID string) error {
 	task, err := s.GetTask(ctx, taskID)
@@ -2023,6 +2044,18 @@ func (s *bpmnTaskService) ClaimTask(ctx context.Context, taskID string, userID s
 	// 检查任务是否已分配 (assignee不为空且不为"0")
 	if task.Assignee != "" && task.Assignee != "0" {
 		return fmt.Errorf("任务已被其他用户认领")
+	}
+
+	uid, err := strconv.Atoi(userID)
+	if err != nil || uid <= 0 {
+		return fmt.Errorf("无效的用户ID")
+	}
+	ok, err := isTaskCandidate(ctx, s.client, uid, task)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("当前用户不是该任务的候选人，无法认领")
 	}
 
 	_, err = s.client.ProcessTask.UpdateOne(task).
@@ -2044,6 +2077,14 @@ func (s *bpmnTaskService) ClaimTaskByID(ctx context.Context, id int, userID int)
 	// 检查任务是否已分配 (assignee不为空且不为"0")
 	if task.Assignee != "" && task.Assignee != "0" {
 		return fmt.Errorf("任务已被其他用户认领")
+	}
+
+	ok, err := isTaskCandidate(ctx, s.client, userID, task)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("当前用户不是该任务的候选人，无法认领")
 	}
 
 	_, err = s.client.ProcessTask.UpdateOne(task).
