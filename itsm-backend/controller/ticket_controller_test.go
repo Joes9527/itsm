@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	mathrand "math/rand"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -30,7 +31,11 @@ import (
 func setupTestTicketController(t *testing.T) (*gin.Engine, *ent.Client, *TicketController) {
 	gin.SetMode(gin.TestMode)
 
-	client := enttest.Open(t, "sqlite3", "file:ent?mode=memory&cache=shared&_fk=1")
+	// 每个测试用例使用独立的内存库名（同 test_helper.go 的 SetupTestDB 约定），避免多个测试函数
+	// 共享同一个 sqlite shared-cache 内存库时，tickets.ticket_number 的全局唯一索引跨租户碰撞——
+	// 号码生成器按 tenant 维度查询"当月最大序号"，但唯一约束是全局的，一旦某个较早测试的租户已经
+	// 占用了当月的 000001 号，后面任何新租户创建的第一张工单都会确定性撞号重试耗尽失败。
+	client := enttest.Open(t, "sqlite3", fmt.Sprintf("file:ticketctrl_%s_%d?mode=memory&cache=shared&_fk=1", t.Name(), mathrand.Int31()))
 
 	logger := zaptest.NewLogger(t).Sugar()
 
