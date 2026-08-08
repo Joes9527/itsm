@@ -20,6 +20,7 @@ import (
 	"itsm-backend/ent/ticketassignmentrule"
 	"itsm-backend/ent/user"
 	"itsm-backend/ent/workflowtask"
+	"itsm-backend/service/approver"
 	"itsm-backend/service/bpmn"
 
 	"go.uber.org/zap"
@@ -614,6 +615,11 @@ func mergeServiceTaskVariables(instanceVariables map[string]interface{}, task *B
 	return variables
 }
 
+// approvalFallbackCandidateGroup 是 taskPurpose="approval" 任务在没有解析出部门负责人、
+// 且 BPMN 也没有显式声明 candidateGroups 时使用的默认候选组名。租户需要在 /admin/groups
+// 里创建这个组并配置至少 2 名成员，否则单人部门 + 单人组的组合会出现审批任务无人可领。
+const approvalFallbackCandidateGroup = "ticket-approvers"
+
 func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.ProcessInstance, task *BPMNUserTask) error {
 	// 自动分配逻辑：优先级 BPMN定义 > 流程变量(request/assignee) > 默认分配
 	assignee := task.Assignee
@@ -640,46 +646,85 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 		return ""
 	}
 
+	// taskPurpose="approval" 的任务需要申请人身份，用来：
+	// 1) 解析申请人所在部门的负责人作为 assignee；
+	// 2) 把申请人自己从 candidateGroups 展开出的候选人里剔除。
+	// 非 approval 任务不需要，不做这次额外查询。
+	var approvalRequester *ent.User
+	if task.TaskPurpose == "approval" {
+		approvalRequester = e.loadApprovalRequester(ctx, instance, getUserID)
+	}
+
 	// 如果BPMN没有定义分配人，从流程变量中获取
 	if assignee == "" {
-		// 优先使用 requester_id（工单申请人）
-		assignee = getUserID("requester_id")
-		// 其次使用 triggered_by（触发者）
-		if assignee == "" {
-			assignee = getUserID("triggered_by")
+		if task.TaskPurpose == "approval" {
+			// 审批任务：不走 requester_id/triggered_by/assignee_id/getDefaultAssigntee 这条链
+			// （否则几乎总会落回申请人自己），改成部门负责人解析。
+			// 如果 BPMN 已经显式声明了 candidateGroups（比如 legacy 审批链迁移出来的按角色/组
+			// 路由节点，见 legacy_approval_migration_service.go），说明这个节点的路由方式是
+			// 配置驱动的，不触发部门负责人解析，直接进入下面的候选组展开——避免用一个跟节点
+			// 配置无关的"部门负责人"语义覆盖它。
+			if strings.TrimSpace(task.CandidateGroups) == "" {
+				assignee = e.resolveApprovalAssignee(ctx, instance, approvalRequester)
+			}
+		} else {
+			// 优先使用 requester_id（工单申请人）
+			assignee = getUserID("requester_id")
+			// 其次使用 triggered_by（触发者）
+			if assignee == "" {
+				assignee = getUserID("triggered_by")
+			}
+			// 再其次使用 assignee_id
+			if assignee == "" {
+				assignee = getUserID("assignee_id")
+			}
+			// 如果还是没有，根据任务名称自动分配
+			if assignee == "" {
+				assignee = e.getDefaultAssigntee(ctx, instance, task)
+			}
 		}
-		// 再其次使用 assignee_id
-		if assignee == "" {
-			assignee = getUserID("assignee_id")
-		}
-		// 如果还是没有，根据任务名称自动分配
-		if assignee == "" {
-			assignee = e.getDefaultAssigntee(ctx, instance, task)
-		}
+	}
+
+	// 审批任务如果部门负责人解析失败（没配置/manager就是申请人自己），且 BPMN 也没有
+	// 声明 candidateGroups，兜底用固定候选组，保证任务始终有机会被领取。
+	candidateGroupsToExpand := task.CandidateGroups
+	if task.TaskPurpose == "approval" && assignee == "" && strings.TrimSpace(candidateGroupsToExpand) == "" {
+		candidateGroupsToExpand = approvalFallbackCandidateGroup
 	}
 
 	// 展开 candidateGroups 为具体用户，合并到 candidate_users。
 	// 这样「我的待办」接口才有可能查到分配给我的任务。
 	expandedCandidateUsers := task.CandidateUsers
-	if e.groupResolver != nil && strings.TrimSpace(task.CandidateGroups) != "" {
-		_, groupUsernames, err := e.groupResolver.ExpandGroupsToUsers(ctx, instance.TenantID, task.CandidateGroups)
+	if e.groupResolver != nil && strings.TrimSpace(candidateGroupsToExpand) != "" {
+		_, groupUsernames, err := e.groupResolver.ExpandGroupsToUsers(ctx, instance.TenantID, candidateGroupsToExpand)
 		if err != nil {
 			// 解析失败：记录警告但不阻塞流程，以免审批组配置漂移导致整个流程中断
 			e.logger.Warnw(
 				"审批组展开失败，继续仅使用 BPMN candidateUsers",
 				"taskID", task.ID,
-				"candidateGroups", task.CandidateGroups,
+				"candidateGroups", candidateGroupsToExpand,
 				"error", err,
 			)
 		} else {
+			if task.TaskPurpose == "approval" && approvalRequester != nil {
+				groupUsernames = excludeUserFromCandidates(groupUsernames, approvalRequester)
+			}
 			expandedCandidateUsers = e.groupResolver.MergeCandidateUsers(task.CandidateUsers, groupUsernames)
 			e.logger.Infow(
 				"审批组已展开",
 				"taskID", task.ID,
-				"candidateGroups", task.CandidateGroups,
+				"candidateGroups", candidateGroupsToExpand,
 				"expandedUsers", groupUsernames,
 			)
 		}
+	}
+	if task.TaskPurpose == "approval" && assignee == "" && strings.TrimSpace(expandedCandidateUsers) == "" {
+		e.logger.Warnw(
+			"审批任务没有解析到任何审批人（部门负责人未配置，候选组展开后也为空），任务将无人可领",
+			"taskID", task.ID,
+			"taskName", task.Name,
+			"candidateGroups", candidateGroupsToExpand,
+		)
 	}
 
 	// Use instance.ID (auto-generated integer) for the relationship
@@ -700,7 +745,7 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 		SetStatus("created").
 		SetAssignee(assignee).
 		SetCandidateUsers(expandedCandidateUsers).
-		SetCandidateGroups(task.CandidateGroups).
+		SetCandidateGroups(candidateGroupsToExpand).
 		SetFormKey(task.FormKey).
 		SetTaskVariables(taskConfig).
 		SetTenantID(instance.TenantID).
@@ -730,6 +775,83 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 	}
 	e.logger.Infow("User task created with auto-assignment", "taskID", task.ID, "taskName", task.Name, "assignee", assignee)
 	return nil
+}
+
+// loadApprovalRequester 加载 taskPurpose="approval" 任务对应流程实例的申请人（requester_id
+// 流程变量指向的 User），找不到时返回 nil（调用方会退化到候选组兜底路径，不会报错阻塞流程）。
+func (e *CustomProcessEngine) loadApprovalRequester(ctx context.Context, instance *ent.ProcessInstance, getUserID func(string) string) *ent.User {
+	idStr := getUserID("requester_id")
+	if idStr == "" {
+		return nil
+	}
+	id, err := strconv.Atoi(idStr)
+	if err != nil || id <= 0 {
+		return nil
+	}
+	requester, err := e.client.User.Query().
+		Where(user.IDEQ(id), user.TenantIDEQ(instance.TenantID)).
+		Only(ctx)
+	if err != nil {
+		e.logger.Warnw("解析审批任务申请人失败", "requesterID", id, "tenantID", instance.TenantID, "error", err)
+		return nil
+	}
+	return requester
+}
+
+// resolveApprovalAssignee 把申请人所在部门（含祖先部门递归）的负责人解析为审批任务的
+// assignee。复用 service/approver.DeptManagerResolver（已有、已测试、已被 legacy 审批链
+// approval_service.go:940 使用的部门->负责人查询），不重新实现部门递归逻辑。
+// 解析失败，或者解析出的负责人正好是申请人自己（避免部门负责人审批自己提交的工单），
+// 都返回空字符串——调用方会转入 candidateGroups 兜底路径。
+func (e *CustomProcessEngine) resolveApprovalAssignee(ctx context.Context, instance *ent.ProcessInstance, requester *ent.User) string {
+	if requester == nil || requester.DepartmentID == 0 {
+		return ""
+	}
+	approvers, err := approver.NewDeptManagerResolver().Resolve(ctx, e.client, &approver.ApproverContext{
+		TenantID:     instance.TenantID,
+		DepartmentID: requester.DepartmentID,
+	})
+	if err != nil || len(approvers) == 0 {
+		e.logger.Infow(
+			"审批任务未解析到部门负责人，转候选组兜底",
+			"requesterID", requester.ID, "departmentID", requester.DepartmentID, "error", err,
+		)
+		return ""
+	}
+	manager := approvers[0]
+	if manager.UserID == requester.ID {
+		e.logger.Infow(
+			"部门负责人是申请人本人，转候选组兜底，避免自己审批自己",
+			"requesterID", requester.ID, "departmentID", requester.DepartmentID,
+		)
+		return ""
+	}
+	return strconv.Itoa(manager.UserID)
+}
+
+// excludeUserFromCandidates 从 candidateGroups 展开出来的候选人显示名列表里剔除某个用户。
+// 匹配语义跟 authorizeTaskActor.allowed（bpmn_process_engine.go:417）保持一致：用户 ID
+// 字符串或用户名；额外多判断一次 Email，覆盖 GroupResolver.ExpandGroupsToUsers 在用户名
+// 为空时退化用 Email 做候选人显示名的情况。
+func excludeUserFromCandidates(usernames []string, u *ent.User) []string {
+	if u == nil || len(usernames) == 0 {
+		return usernames
+	}
+	idStr := strconv.Itoa(u.ID)
+	filtered := make([]string, 0, len(usernames))
+	for _, name := range usernames {
+		if name == idStr {
+			continue
+		}
+		if u.Username != "" && name == u.Username {
+			continue
+		}
+		if u.Email != "" && name == u.Email {
+			continue
+		}
+		filtered = append(filtered, name)
+	}
+	return filtered
 }
 
 func splitNonEmptyCSV(value string) []string {

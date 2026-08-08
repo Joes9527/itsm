@@ -789,7 +789,7 @@ func TestExcludeUserFromCandidates(t *testing.T) {
 		})
 	}
 
-	assert.Nil(t, excludeUserFromCandidates([]string{"a"}, nil), "nil user 时原样返回")
+	assert.Equal(t, []string{"a"}, excludeUserFromCandidates([]string{"a"}, nil), "nil user 时原样返回")
 }
 ```
 
