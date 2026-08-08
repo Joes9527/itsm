@@ -32,9 +32,11 @@ type CreateServiceRequestRequest struct {
 }
 
 // UpdateServiceRequestRequest 更新服务请求请求
+//
+// Title/Reason 已移除：它们现在是 ticket-owned 字段，只在创建时设置一次
+// （委托给关联的 Ticket，详见 handlers/service_request/service.go 的 Create）。
+// Update 从未读取过它们；保留会让客户端以为传 title 能生效，实际被静默丢弃。
 type UpdateServiceRequestRequest struct {
-	Title    string         `json:"title" binding:"omitempty,max=255"`
-	Reason   string         `json:"reason" binding:"omitempty,max=500"`
 	FormData map[string]any `json:"formData" binding:"omitempty"`
 
 	CostCenter         string     `json:"costCenter" binding:"omitempty,max=100"`

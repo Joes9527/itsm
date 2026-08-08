@@ -227,6 +227,42 @@ func TestTicketController_CreateTicket(t *testing.T) {
 	}
 }
 
+// TestTicketController_CreateTicket_IgnoresClientSuppliedSource proves the public
+// POST /tickets endpoint cannot be spoofed into self-reporting
+// source=service_catalog (a value that's supposed to be set only by the trusted
+// internal service_request.Service.Create -> ticketSvc.CreateTicket call path).
+// Without this, any authenticated caller could fake a service-catalog origin on a
+// manually created ticket with no real linked ServiceRequest behind it, which is
+// load-bearing for ServiceRequestPanel's rendering decision on the ticket detail page.
+func TestTicketController_CreateTicket_IgnoresClientSuppliedSource(t *testing.T) {
+	r, client, _ := setupTestTicketController(t)
+	defer client.Close()
+
+	tenant, user := createTestTenantAndUserForTicket(t, client)
+
+	body, err := json.Marshal(dto.CreateTicketRequest{
+		Title:       "伪造来源的工单",
+		Description: "尝试自报 source=service_catalog",
+		Priority:    "medium",
+		Category:    "incident",
+		Source:      "service_catalog",
+	})
+	require.NoError(t, err)
+
+	req, err := http.NewRequest("POST", "/api/v1/tickets", bytes.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Test-Tenant", strconv.Itoa(tenant.ID))
+	req.Header.Set("X-Test-User", strconv.Itoa(user.ID))
+
+	resp, _ := doJSONRequest(t, r, req)
+	require.Equal(t, common.SuccessCode, resp.Code, "message=%s", resp.Message)
+
+	var created dto.TicketResponse
+	require.NoError(t, json.Unmarshal(resp.Data, &created), "data=%s", string(resp.Data))
+	assert.Equal(t, "manual", created.Source, "client-supplied source must be ignored on the public endpoint; ent schema default(\"manual\") should apply")
+}
+
 func TestTicketController_GetTicket(t *testing.T) {
 	r, client, _ := setupTestTicketController(t)
 	defer client.Close()

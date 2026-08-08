@@ -71,6 +71,14 @@ func (tc *TicketController) CreateTicket(c *gin.Context) {
 		return
 	}
 
+	// source 只允许由受信任的内部调用链设置（例如 service_request.Service.Create 在
+	// provisioning 前置条件判断中依赖 source=service_catalog 配合真实的 ticket_id →
+	// process_approval_decision 链路）。公开 HTTP 创建接口必须忽略客户端自报的 source，
+	// 否则任何已认证调用方都能在没有真实关联 ServiceRequest 的情况下伪造
+	// source=service_catalog，误导 ServiceRequestPanel 等 UI 展示。清空后交给
+	// ent schema 的 Default("manual") 生效。
+	req.Source = ""
+
 	// 获取租户ID（从中间件注入）
 	tenantID := c.GetInt("tenant_id")
 	if tenantID == 0 {

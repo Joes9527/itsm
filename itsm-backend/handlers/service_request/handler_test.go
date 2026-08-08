@@ -302,8 +302,11 @@ func TestServiceRequestHandler_PartialUpdatePreservesBooleanFields(t *testing.T)
 	require.Equal(t, common.SuccessCode, create.Code, "body=%s", srStr(create))
 	id := int(create.Data.(map[string]interface{})["id"].(float64))
 
+	// Title is no longer part of UpdateServiceRequestRequest (it's ticket-owned, set only at
+	// creation time) — send an update payload that only touches an unrelated field (FormData)
+	// to prove the boolean fields are still preserved when omitted from the payload.
 	update := srDoReq(t, r, "PUT", "/api/v1/service-requests/"+strconv.Itoa(id),
-		dto.UpdateServiceRequestRequest{Title: "Renamed endpoint"})
+		dto.UpdateServiceRequestRequest{FormData: map[string]any{"note": "renamed via test"}})
 	require.Equal(t, common.SuccessCode, update.Code, "body=%s", srStr(update))
 	data := update.Data.(map[string]interface{})
 	assert.Equal(t, true, data["needsPublicIp"])
