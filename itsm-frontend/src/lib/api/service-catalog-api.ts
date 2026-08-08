@@ -363,45 +363,12 @@ export class ServiceCatalogApi {
     );
   }
 
-  /**
-   * 取消服务请求
-   */
-  static async cancelServiceRequest(id: number, reason?: string): Promise<void> {
-    await httpClient.put(`/api/v1/service-requests/${id}/status`, {
-      status: 'cancelled',
-      comment: reason,
-    });
-  }
-
-  /**
-   * 审批服务请求
-   */
-  static async approveServiceRequest(id: number, comment?: string): Promise<void> {
-    await httpClient.post(`/api/v1/service-requests/${id}/approval`, {
-      action: 'approve',
-      comment,
-    });
-  }
-
-  /**
-   * 拒绝服务请求
-   */
-  static async rejectServiceRequest(id: number, reason: string): Promise<void> {
-    await httpClient.post(`/api/v1/service-requests/${id}/approval`, {
-      action: 'reject',
-      comment: reason,
-    });
-  }
-
-  /**
-   * 完成服务请求
-   */
-  static async completeServiceRequest(id: number, notes?: string): Promise<void> {
-    await httpClient.put(`/api/v1/service-requests/${id}/status`, {
-      status: 'completed',
-      comment: notes,
-    });
-  }
+  // cancelServiceRequest/approveServiceRequest/rejectServiceRequest/completeServiceRequest/
+  // getPendingApprovalCount 已经移除——它们打在 Task 1 删除的
+  // /api/v1/service-requests/:id/status 和 /api/v1/service-requests/:id/approval 及
+  // /api/v1/service-requests/approvals/pending 路由上（SR 自己的审批阶段/终态操作整体退休，
+  // 状态/审批全部委托给关联 Ticket）。删除前确认过没有真实调用方：唯一的调用方
+  // src/app/(main)/service-catalog/approvals/page.tsx 已经改造成重定向到 /approvals/pending。
 
   /**
    * 获取服务请求详情（包含审批历史）
@@ -409,16 +376,6 @@ export class ServiceCatalogApi {
   static async getServiceRequestDetail(id: number): Promise<any> {
     const response = await httpClient.get(`/api/v1/service-requests/${id}`);
     return response;
-  }
-
-  /**
-   * 获取待审批数量
-   */
-  static async getPendingApprovalCount(): Promise<number> {
-    const response = await httpClient.get<{ total: number }>(
-      '/api/v1/service-requests/approvals/pending'
-    );
-    return response.total || 0;
   }
 
   // ==================== 收藏和评分 ====================

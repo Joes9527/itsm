@@ -86,30 +86,6 @@ describe('ServiceCatalogApi', () => {
     });
   });
 
-  describe('cancelServiceRequest', () => {
-    it('should cancel a service request', async () => {
-      mockPut.mockResolvedValue(undefined);
-      await ServiceCatalogApi.cancelServiceRequest(1, 'No longer needed');
-      expect(mockPut).toHaveBeenCalledWith('/api/v1/service-requests/1/status', { status: 'cancelled', comment: 'No longer needed' });
-    });
-  });
-
-  describe('approveServiceRequest', () => {
-    it('should approve a service request', async () => {
-      mockPost.mockResolvedValue(undefined);
-      await ServiceCatalogApi.approveServiceRequest(1, 'Looks good');
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/service-requests/1/approval', { action: 'approve', comment: 'Looks good' });
-    });
-  });
-
-  describe('rejectServiceRequest', () => {
-    it('should reject a service request', async () => {
-      mockPost.mockResolvedValue(undefined);
-      await ServiceCatalogApi.rejectServiceRequest(1, 'Budget issue');
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/service-requests/1/approval', { action: 'reject', comment: 'Budget issue' });
-    });
-  });
-
   describe('getCatalogStats', () => {
     it('should get catalog stats', async () => {
       mockGet.mockResolvedValue({ totalServices: 20, publishedServices: 15, categories: {} });
@@ -161,47 +137,6 @@ describe('ServiceCatalogApi', () => {
       mockPost.mockResolvedValue({ id: 1 });
       await ServiceCatalogApi.createServiceRequest({ serviceId: '5', formData: { reason: 'Need access' } } as any);
       expect(mockPost).toHaveBeenCalledWith('/api/v1/service-requests', expect.objectContaining({ catalogId: 5 }));
-    });
-  });
-
-  describe('cancelServiceRequest', () => {
-    it('should cancel request', async () => {
-      mockPut.mockResolvedValue(undefined);
-      await ServiceCatalogApi.cancelServiceRequest(1, 'No longer needed');
-      expect(mockPut).toHaveBeenCalledWith('/api/v1/service-requests/1/status', { status: 'cancelled', comment: 'No longer needed' });
-    });
-  });
-
-  describe('approveServiceRequest', () => {
-    it('should approve request', async () => {
-      mockPost.mockResolvedValue(undefined);
-      await ServiceCatalogApi.approveServiceRequest(1, 'LGTM');
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/service-requests/1/approval', { action: 'approve', comment: 'LGTM' });
-    });
-  });
-
-  describe('rejectServiceRequest', () => {
-    it('should reject request', async () => {
-      mockPost.mockResolvedValue(undefined);
-      await ServiceCatalogApi.rejectServiceRequest(1, 'Budget issue');
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/service-requests/1/approval', { action: 'reject', comment: 'Budget issue' });
-    });
-  });
-
-  describe('completeServiceRequest', () => {
-    it('should complete request', async () => {
-      mockPut.mockResolvedValue(undefined);
-      await ServiceCatalogApi.completeServiceRequest(1, 'Done');
-      expect(mockPut).toHaveBeenCalledWith('/api/v1/service-requests/1/status', { status: 'completed', comment: 'Done' });
-    });
-  });
-
-  describe('getPendingApprovalCount', () => {
-    it('should get pending count', async () => {
-      mockGet.mockResolvedValue({ total: 5 });
-      const result = await ServiceCatalogApi.getPendingApprovalCount();
-      expect(mockGet).toHaveBeenCalledWith('/api/v1/service-requests/approvals/pending');
-      expect(result).toBe(5);
     });
   });
 
