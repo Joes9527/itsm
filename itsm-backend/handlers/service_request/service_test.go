@@ -2,10 +2,13 @@ package service_request
 
 import (
 	"context"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
 	"itsm-backend/ent/enttest"
+	entticket "itsm-backend/ent/ticket"
 	"itsm-backend/handlers/cmdb"
 	"itsm-backend/handlers/service_catalog"
 	"itsm-backend/service"
@@ -323,6 +326,121 @@ func TestService_List_BatchLoadsLinkedTicketSummary(t *testing.T) {
 	tkt, err := client.Ticket.Get(ctx, created.TicketID)
 	require.NoError(t, err)
 	assert.Equal(t, tkt.Status, list[0].TicketStatus)
+}
+
+// TestService_AttachTicketSummaries_DoesNotLeakCrossTenant proves attachTicketSummaries (the
+// batch-load helper List uses to fill in TicketTitle/TicketStatus) does not leak a tenant-B
+// ticket's title/status into a tenant-A service request's list entry — CLAUDE.md requires a test
+// for any tenant-scoped query added/changed (final review fix wave, Fix 7). Ent IDs are global
+// (not tenant-scoped sequences), so it's plausible for a tenant-A record's ticket_id column to
+// numerically collide with a real ticket ID owned by tenant B; the batch query must still filter
+// by tenant.
+func TestService_AttachTicketSummaries_DoesNotLeakCrossTenant(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:sr_attach_summaries_cross_tenant?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+
+	tenantA, err := client.Tenant.Create().SetName("Tenant A").SetCode("sr-attach-tenant-a").SetDomain("a2.test").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	tenantB, err := client.Tenant.Create().SetName("Tenant B").SetCode("sr-attach-tenant-b").SetDomain("b2.test").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+
+	requesterB, err := client.User.Create().
+		SetUsername("attach-requester-b").SetEmail("attach-requester-b@test.com").SetName("Requester B").
+		SetPasswordHash("hash").SetRole("end_user").SetActive(true).SetTenantID(tenantB.ID).Save(ctx)
+	require.NoError(t, err)
+
+	// A real ticket that belongs to tenant B, with a title that must never surface on a
+	// tenant-A list entry.
+	ticketB, err := client.Ticket.Create().
+		SetTicketNumber("TKT-ATTACH-B").
+		SetTitle("Tenant B 私密工单标题").
+		SetDescription("desc").
+		SetPriority("medium").
+		SetStatus("open").
+		SetRequesterID(requesterB.ID).
+		SetTenantID(tenantB.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	srRepo := NewEntRepository(client)
+	scRepo := service_catalog.NewEntRepository(client)
+	cmdbRepo := cmdb.NewEntRepository(client)
+	logger := zaptest.NewLogger(t).Sugar()
+	ticketSvc := service.NewTicketServiceForTest(client, logger)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc)
+
+	// A tenant-A ServiceRequest whose ticket_id happens to equal tenant B's ticket ID —
+	// simulating the collision scenario without depending on ent's ID allocation order.
+	list := []*ServiceRequest{
+		{ID: 1, TenantID: tenantA.ID, TicketID: ticketB.ID},
+	}
+
+	svc.attachTicketSummaries(ctx, tenantA.ID, list)
+
+	assert.Empty(t, list[0].TicketTitle, "must not leak tenant B's ticket title into a tenant A list entry")
+	assert.Empty(t, list[0].TicketStatus, "must not leak tenant B's ticket status into a tenant A list entry")
+}
+
+// TestServiceRequest_ApprovalDegradedToSingleNodeBPMN locks in, as an explicit assertion rather
+// than a silent omission, that the original 3-level approval design (currentLevel/totalLevels,
+// see the design docs under prd/) has intentionally degraded to single-node BPMN approval as
+// part of this delegation refactor: ServiceRequest no longer tracks approval level/step at all —
+// that responsibility now belongs entirely to the linked Ticket's BPMN process instance. This is
+// a documented transitional decision, not an oversight (final review fix wave, Fix 9).
+func TestServiceRequest_ApprovalDegradedToSingleNodeBPMN(t *testing.T) {
+	// Compile-time-adjacent assertion: if a future change resurrects CurrentLevel/TotalLevels
+	// (or any other multi-step-approval concept) on the domain struct, this reflection-based
+	// check makes that an explicit, intentional decision instead of a silent field addition
+	// nobody notices.
+	fields := reflect.VisibleFields(reflect.TypeOf(ServiceRequest{}))
+	for _, f := range fields {
+		lower := strings.ToLower(f.Name)
+		assert.NotContains(t, lower, "currentlevel", "ServiceRequest must not resurrect the retired 3-level approval's CurrentLevel field")
+		assert.NotContains(t, lower, "totallevels", "ServiceRequest must not resurrect the retired 3-level approval's TotalLevels field")
+		assert.NotContains(t, lower, "approvalstep", "ServiceRequest must not resurrect a per-request approval-step field")
+	}
+
+	// End-to-end: a freshly created ServiceRequest's approval state lives entirely on its
+	// linked Ticket (single BPMN process instance), not on the ServiceRequest itself.
+	client := enttest.Open(t, "sqlite3", "file:sr_approval_degraded?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	tenant, err := client.Tenant.Create().SetName("t").SetCode("sr-approval-degraded").SetDomain("degraded.test").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	requester, err := client.User.Create().
+		SetUsername("degraded-requester").SetEmail("degraded-requester@test.com").SetName("Degraded Requester").
+		SetPasswordHash("hash").SetRole("end_user").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	scRepo := service_catalog.NewEntRepository(client)
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
+	catalog, err := scService.Create(ctx, "退化审批测试", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil)
+	require.NoError(t, err)
+
+	srRepo := NewEntRepository(client)
+	cmdbRepo := cmdb.NewEntRepository(client)
+	logger := zaptest.NewLogger(t).Sugar()
+	ticketSvc := service.NewTicketServiceForTest(client, logger)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc)
+
+	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+		ComplianceAck:      true,
+		DataClassification: "internal",
+		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
+		FormData: map[string]interface{}{
+			"title":  "退化审批测试申请",
+			"reason": "verify degraded single-node approval",
+		},
+	})
+	require.NoError(t, err)
+
+	// Exactly one Ticket exists for this request — a single BPMN process instance carries
+	// whatever approval steps the bound process defines, instead of the ServiceRequest itself
+	// tracking a 3-level currentLevel/totalLevels counter.
+	ticketCount, err := client.Ticket.Query().Where(entticket.IDEQ(created.TicketID)).Count(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, ticketCount, "approval now lives on exactly one linked Ticket, not a per-SR multi-level counter")
 }
 
 func ptrTime(t time.Time) *time.Time { return &t }

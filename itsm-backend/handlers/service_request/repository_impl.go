@@ -108,7 +108,7 @@ func (r *EntRepository) Get(ctx context.Context, id, tenantID int) (*ServiceRequ
 
 func (r *EntRepository) GetByTicketID(ctx context.Context, ticketID, tenantID int) (*ServiceRequest, error) {
 	sr, err := r.client.ServiceRequest.Query().
-		Where(servicerequest.TicketID(ticketID), servicerequest.TenantID(tenantID)).
+		Where(servicerequest.TicketID(ticketID), servicerequest.TenantID(tenantID), servicerequest.DeletedAtIsNil()).
 		Only(ctx)
 	if err != nil {
 		return nil, err
