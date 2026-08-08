@@ -103,6 +103,10 @@ func (s *BPMNTemplateService) listTemplates() ([]*TemplateInfo, error) {
 			info.Name = "通用工单流程"
 			info.Category = "ticket"
 			info.Description = "通用工单处理流程"
+		case "ticket_urgent_flow":
+			info.Name = "紧急工单流程"
+			info.Category = "ticket"
+			info.Description = "高/紧急优先级工单处理流程（结构与通用工单流程等价，暂无独立超时/升级差异）"
 		case "ticket_assignment_flow":
 			info.Name = "工单分配流程"
 			info.Category = "ticket"

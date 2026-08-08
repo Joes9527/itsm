@@ -5,11 +5,11 @@
                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
                  targetNamespace="http://bpmn.io/schema/bpmn">
 
-  <bpmn:process id="ticket_general_flow" name="通用工单流程" isExecutable="true">
+  <bpmn:process id="ticket_urgent_flow" name="紧急工单流程" isExecutable="true">
     <bpmn:extensionElements>
       <bpmn:metaData name="category">ticket</bpmn:metaData>
       <bpmn:metaData name="version">1.0.0</bpmn:metaData>
-      <bpmn:metaData name="description">通用工单处理流程</bpmn:metaData>
+      <bpmn:metaData name="description">高/紧急优先级工单处理流程（结构与通用工单流程等价，暂无独立的超时/升级差异）</bpmn:metaData>
     </bpmn:extensionElements>
 
     <!-- 开始事件：工单创建 -->
@@ -125,7 +125,7 @@
   </bpmn:process>
 
   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
-    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="ticket_general_flow">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="ticket_urgent_flow">
       <!-- 省略DI定义 -->
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
