@@ -117,10 +117,14 @@ describe('ServiceCatalogApi', () => {
       expect(result.total).toBe(1);
     });
 
-    it('should use pending approvals endpoint for pending status', async () => {
+    // The retired SR-approval route (/service-requests/approvals/pending) and its
+    // isPendingApproval branch have been removed — approval now flows through the linked
+    // ticket's own BPMN mechanism. getServiceRequests always hits /me regardless of the
+    // status value passed (including legacy 'pending_approval'/'pending' filter values).
+    it('always uses the /me endpoint, never the retired pending-approvals endpoint', async () => {
       mockGet.mockResolvedValue({ requests: [], total: 0 });
       await ServiceCatalogApi.getServiceRequests({ status: 'pending_approval' } as any);
-      expect(mockGet).toHaveBeenCalledWith('/api/v1/service-requests/approvals/pending', expect.any(Object));
+      expect(mockGet).toHaveBeenCalledWith('/api/v1/service-requests/me', expect.any(Object));
     });
   });
 

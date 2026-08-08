@@ -2,12 +2,8 @@
  * 服务请求模块类型定义
  */
 
-import type {
-  ServiceRequestStatus,
-  ApprovalStatus,
-  ApprovalStep,
-  ApprovalAction,
-} from '@/constants/service-request';
+import type { ServiceRequestStatus } from '@/constants/service-request';
+import type { TicketStatus } from '@/types/ticket';
 
 // 服务目录简要信息 (用于内嵌在服务请求中)
 export interface ServiceCatalogRef {
@@ -24,28 +20,6 @@ export interface RequesterRef {
   name: string;
   email: string;
   department?: string;
-}
-
-// 服务请求审批记录
-export interface ServiceRequestApproval {
-  id: number;
-  serviceRequestId: number;
-  level: number;
-  step: ApprovalStep | string;
-  status: ApprovalStatus | string;
-  approverId?: number;
-  approverName?: string;
-  action?: ApprovalAction | string;
-  comment?: string;
-  createdAt: string;
-  processedAt?: string;
-
-  // V1 新增字段
-  timeoutHours?: number;
-  dueAt?: string;
-  isEscalated?: boolean;
-  delegatedToId?: number;
-  escalationReason?: string;
 }
 
 // 服务请求实体 (对应后端 DTO dto.ServiceRequestResponse)
@@ -74,9 +48,8 @@ export interface ServiceRequest {
 
   // 列表展示用的关联 ticket 冗余字段（批量回填，见上方注释）
   ticketTitle?: string;
-  ticketStatus?: ServiceRequestStatus | string;
+  ticketStatus?: TicketStatus | string;
 
-  approvals?: ServiceRequestApproval[];
   catalog?: ServiceCatalogRef; // 后端目前可能未填充，需注意
   requester?: RequesterRef; // 后端目前可能未填充，需注意
 }

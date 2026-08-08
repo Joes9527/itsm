@@ -52,14 +52,12 @@ export class ServiceCatalogApi {
     return `"${text.replace(/"/g, '""')}"`;
   }
 
+  // 状态已经委托给关联 Ticket（值域是 new/open/in_progress/pending/resolved/closed/cancelled）；
+  // 旧的 SR 专属状态（submitted/security_approved/provisioning/delivered 等）已随三级审批一起退役，
+  // 这里不再做值域转换，直接透传调用方传入的 ticket 状态值。
   private static toBackendRequestStatus(status?: unknown): string | undefined {
     if (!status) return undefined;
-    const s = String(status);
-    if (s === 'pending_approval' || s === 'pending') return 'submitted';
-    if (s === 'approved') return 'security_approved';
-    if (s === 'in_progress') return 'provisioning';
-    if (s === 'completed') return 'delivered';
-    return s;
+    return String(status);
   }
 
    
@@ -283,16 +281,9 @@ export class ServiceCatalogApi {
     const page = query?.page ?? 1;
     const size = query?.pageSize ?? 10;
     const requestedStatus = query?.status ? String(query.status) : undefined;
-    const isPendingApproval =
-      requestedStatus === 'pending_approval' || requestedStatus === 'pending';
-    const endpoint = isPendingApproval
-      ? '/api/v1/service-requests/approvals/pending'
-      : '/api/v1/service-requests/me';
-    const status = isPendingApproval
-      ? undefined
-      : ServiceCatalogApi.toBackendRequestStatus(requestedStatus);
+    const status = ServiceCatalogApi.toBackendRequestStatus(requestedStatus);
 
-    const resp = await httpClient.get<any>(endpoint, {
+    const resp = await httpClient.get<any>('/api/v1/service-requests/me', {
       page,
       size,
       ...(status ? { status } : {}),
