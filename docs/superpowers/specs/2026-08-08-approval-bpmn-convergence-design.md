@@ -38,7 +38,13 @@
 
 ### `service_request_flow.bpmn` 存在但够不着——`ProcessBinding` 种子数据的 `business_type` 跟 resolver 实际查询方式不匹配
 
-`config/seed/default.json:110-114` 里的 `ProcessBinding` 种子数据用顶层 `business_type="service_request"`/`business_type="change"`。但 `ProcessResolver`（`process_resolver.go:34-42`）实际查询是 `FindBestBinding(BusinessType="ticket", subType="service_request"/"change")`——`bpmn_process_binding_service.go:227-237` 按精确 `BusinessType` 过滤，`"service_request"` 类型的种子行永远匹配不上 `"ticket"` 类型的查询，resolver 因此总是落到兜底的 `ticket_general_flow`。`service_request_flow.bpmn` 文件本身没问题，只是种子绑定数据写错了 `business_type` 的值。
+`config/seed/default.json:110-114` 里的 `ProcessBinding` 种子数据用顶层 `business_type="service_request"`/`business_type="change"`。但 `ProcessResolver`（`process_resolver.go:34-42`）实际查询是 `FindBestBinding(BusinessType="ticket", subType="service_request"/"change")`——`bpmn_process_binding_service.go:227-237` 按精确 `BusinessType` 过滤，`"service_request"` 类型的种子行永远匹配不上 `"ticket"` 类型的查询，resolver 因此总是落到兜底的 `ticket_general_flow`。`service_request_flow.bpmn` 文件本身没问题，只是种子绑定数据写错了 `business_type` 的值。**这条诊断只对 service_request 成立——`business_type="change"` 那行虽然是同样的写法问题，但对 Change 当前行为没有任何影响，因为上一节已经确认 Change 创建根本不查 `FindBestBinding`（硬编码 `ProcessDefinitionKey`），这行种子数据现在对不对都不影响 Change 的真实路由，见组件②2c 的处理方式。**
+
+### `FindBestBinding` 不读 `Conditions`，工单这条路径也走不到真正会求值 `Conditions` 的地方
+
+`ProcessBindingService.FindBestBinding`（`bpmn_process_binding_service.go:227-267`）只按 `BusinessType`+`BusinessSubType`+`TenantID`+`IsActive` 过滤，排序用 `priority`/`is_default` 两个普通整数字段，完全不读取 `Conditions`（JSON 字段）。真正会对 `Conditions` 求值的逻辑在另一个服务里——`ProcessRoutingService.FindBestRoute`/`calculateMatchScore`/`evaluateConditions`（`service/process_routing_service.go:54-196`）。
+
+工单创建这条路径（`triggerWorkflowForTicket`，`ticket_service.go:554-560`）用 `ProcessResolver.ResolveWithPriority` 解析出一个 `processKey`——`Resolve`（`process_resolver.go:26-48`）最差情况也会兜底成字面量 `"ticket_general_flow"`，**从不返回空字符串**。这个非空 key 被塞进 `ProcessTriggerRequest.ProcessDefinitionKey` 传给 `TriggerProcess`（`bpmn_process_trigger_service.go:49-67`），而 `TriggerProcess` 只在 `req.ProcessDefinitionKey == ""` 时才会调用 `processRoutingSvc.FindBestRoute`（真正读 `Conditions` 的那个）——对工单来说这个分支永远不会触发。也就是说，**给 `ProcessBinding` 配 `Conditions` 对工单创建这条路径完全不起作用**，`ResolveWithPriority` 里硬编码的 `if processKey == "ticket_general_flow" { 按优先级换成 ticket_urgent_flow }` 特判，才是当前唯一真正在跑的"按优先级路由"机制。
 
 ### `handlers/service_request/service.go` 没有硬编码审批链（订正一条过期的会话内 memory）
 
@@ -111,14 +117,14 @@ candidateGroups 兜底（复用 excludeUserFromCandidates 同一套保护，不�
 
 新建 `service/bpmn/change_emergency_flow.bpmn`。跟这次会话修 `ticket_urgent_flow.bpmn` 时不一样——不做零差异副本。"紧急变更"在 Change 管理场景下有真实的业务含义（CLAUDE.md 要求变更管理保留风险/CAB/发布窗口概念），但这次设计的范围不包括重新设计紧急变更的审批链路本身，先做跟 `change_normal_flow.bpmn` 结构等价的副本（只改 `process id`/`name`/`description`），把"文件缺失导致创建失败"这个硬 bug 堵上，行为差异（更短审批链/更高级别直批）作为明确记录的后续事项，不在这轮做（跟 `ticket_urgent_flow` 保持一致的节奏，避免两个"紧急流程"用不一致的标准）。
 
-**2c. 修 `service_request_flow.bpmn` 绑不上的问题**
+**2c. 修 `service_request_flow.bpmn` 绑不上的问题（顺手修，对 Change 当前行为无影响）**
 
-修种子数据，不改 resolver 逻辑：把 `config/seed/default.json` 里 `business_type="service_request"`/`business_type="change"` 的 `ProcessBinding` 种子行改成 `business_type="ticket"` + 对应 `subType`，照着 resolver 实际查询方式（`FindBestBinding(BusinessType="ticket", subType=...)`）写，不动 `bpmn_process_binding_service.go`/`process_resolver.go` 的匹配逻辑本身（改逻辑的影响面覆盖所有已经在正常工作的绑定，风险比改种子数据大得多）。
+修种子数据，不改 resolver 逻辑：把 `config/seed/default.json` 里 `business_type="service_request"`/`business_type="change"` 的 `ProcessBinding` 种子行改成 `business_type="ticket"` + 对应 `subType`，照着 resolver 实际查询方式（`FindBestBinding(BusinessType="ticket", subType=...)`）写，不动 `bpmn_process_binding_service.go`/`process_resolver.go` 的匹配逻辑本身（改逻辑的影响面覆盖所有已经在正常工作的绑定，风险比改种子数据大得多）。**这一步对 `business_type="service_request"` 那行是真正的修复（解开 `service_request_flow.bpmn` 够不着的问题）；对 `business_type="change"` 那行只是顺手把种子数据改一致，Change 今天的路由不受它影响（见现状核实"`FindBestBinding` 不读 Conditions"一节）——Change 真正的路由 bug 是 2b 的缺文件问题，不是这里。**
 
 **2d. 4 个默认模板的取舍**
 
 - "普通变更审批"/"紧急变更审批"（`ApprovalWorkflow` 种子行）——直接删，不迁移。Change 已经在 BPMN 上跑（`change_normal_flow.bpmn`/修复后的 `change_emergency_flow.bpmn`），这两个模板从来没被触发过，纯冗余。
-- "服务请求审批"/"权限申请审批"——这两个映射到 Ticket type=service_request 场景。核实过 `service_request_flow.bpmn` 现有结构（只有一个通用的 `Activity_Approval`/"请求审批"节点，没有区分优先级的分支；`Activity_AccessApproval`/`Activity_HardwareApproval` 是在 `_cn` 变体文件里，跟这次要处理的默认场景无关，不要混用）：复用 `service_request_flow.bpmn`，给它的 `Activity_Approval` 打上 `taskPurpose="approval"` 标记，通过 `ProcessBinding`（不带 priority 条件）覆盖"服务请求审批"这个默认场景；"权限申请审批"（`priority="high"` 的服务请求）新建 `service_request_urgent_flow.bpmn`——跟这次会话 `ticket_general_flow.bpmn`→`ticket_urgent_flow.bpmn` 同样的模式（内容等价副本，仅 `process id`/`name`/`description` 不同），通过 `ProcessBinding` 的 `priority="high"` 条件路由过去（复用 `dto.ProcessBinding.Conditions` 已有的 priority 条件机制，不新发明选择逻辑）。`tenant_provisioner.go` 改成部署+绑定这两个模板，不再克隆 `ApprovalWorkflow` 行。
+- "服务请求审批"/"权限申请审批"——这两个映射到 Ticket type=service_request 场景。核实过 `service_request_flow.bpmn` 现有结构（只有一个通用的 `Activity_Approval`/"请求审批"节点，没有区分优先级的分支；`Activity_AccessApproval`/`Activity_HardwareApproval` 是在 `_cn` 变体文件里，跟这次要处理的默认场景无关，不要混用）：复用 `service_request_flow.bpmn`，给它的 `Activity_Approval` 打上 `taskPurpose="approval"` 标记，通过 2c 修好的 `ProcessBinding` 覆盖"服务请求审批"这个默认场景；"权限申请审批"（`priority="high"` 的服务请求）新建 `service_request_urgent_flow.bpmn`——跟这次会话 `ticket_general_flow.bpmn`→`ticket_urgent_flow.bpmn` 同样的模式（内容等价副本，仅 `process id`/`name`/`description` 不同）。**路由方式不是配 `ProcessBinding.Conditions`（上面已经确认这条路径工单走不到）——照着 `ResolveWithPriority`（`process_resolver.go:50-63`）里 `ticket_general_flow`→`ticket_urgent_flow` 那个硬编码特判的写法，显式加一条 `service_request_flow`→`service_request_urgent_flow`，同样按 `ticket.Priority == "high" || "urgent"` 判断。**`tenant_provisioner.go` 改成部署+绑定这两个模板，不再克隆 `ApprovalWorkflow` 行。
 
 ### 组件③ — 修复 `legacy_approval_migration_service.go` + 批量迁移存量自定义工作流
 
@@ -158,7 +164,8 @@ assigneeType == "amount_based"   → 不生成该节点，整个工作流迁移�
 - 组件①：`assigneeRole` 命中/未命中/申请人自己就是该角色时排除并转候选组兜底；四个固定范围属性各自命中/租户隔离（跨租户不能解析到别的租户的部门/团队）/解析出的人是申请人自己时排除。
 - 组件②2a：创建工单只触发一次 BPMN 流程，不再触发 `ApprovalService`（回归断言：mock/spy `approvalSvc.TriggerApproval` 在 `CreateTicket` 调用后断言零调用）。
 - 组件②2b：`change_emergency_flow` 能被发现、部署、`StartProcess` 成功创建实例（不再报"流程定义不存在"）。
-- 组件②2c：修完 `business_type` 之后，`ProcessResolver` 对 service_request/change 类型工单能正确解析到 `service_request_flow`/`change_normal_flow`，不再落到 `ticket_general_flow` 兜底。
+- 组件②2c：修完 `business_type` 之后，`ProcessResolver` 对 service_request 类型工单能正确解析到 `service_request_flow`，不再落到 `ticket_general_flow` 兜底；同时断言 `change` 类型工单的路由行为在这次修改前后不变（用来验证"对 Change 无影响"这个判断，不是假设）。
+- 组件②2d：**这是这次评审直接指出没有被覆盖、需要补上的场景**——`priority="high"`/`"urgent"` 的 service_request 类型工单，`ResolveWithPriority` 要解析到 `service_request_urgent_flow`，不是 `service_request_flow`；普通优先级的要保持解析到 `service_request_flow`。跟现有的 `ticket_general_flow`/`ticket_urgent_flow` 那组测试用同样的断言方式。
 - 组件③：`buildLegacyApprovalBPMN` 对 7 种 `assigneeType`（user/group/role/dept_manager/team_leader/project_manager/temp_team_leader）分别生成正确的 BPMN 属性；`amount_based` 类型触发中止+明确错误；批量迁移任务对种子默认模板正确跳过、对自定义工作流正确迁移并标记、租户隔离（迁移只处理对应租户的数据，不跨租户误迁）。
 - 组件④：只读断言（旧 API 的创建/编辑端点在标记下线后返回明确的"已下线，请使用 BPMN"错误，而不是继续悄悄写入数据）。
 
