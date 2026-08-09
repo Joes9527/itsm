@@ -98,23 +98,23 @@
     <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Activity_Accept" />
     <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_Accept" targetRef="Gateway_Approval" />
     <bpmn:sequenceFlow id="Flow_3" sourceRef="Gateway_Approval" targetRef="Activity_Approval">
-      <bpmn:conditionExpression><![CDATA[${variables['need_approval'] == true}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['need_approval'] == true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_4" sourceRef="Gateway_Approval" targetRef="Activity_Execute">
-      <bpmn:conditionExpression><![CDATA[${variables['need_approval'] != true}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['need_approval'] != true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_5" sourceRef="Activity_Approval" targetRef="Gateway_ApprovalResult" />
     <bpmn:sequenceFlow id="Flow_Reject" sourceRef="Gateway_ApprovalResult" targetRef="Activity_RejectNotify">
-      <bpmn:conditionExpression><![CDATA[${variables['approval_result'] == 'rejected'}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['approval_result'] == 'rejected']]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_EndReject" sourceRef="Activity_RejectNotify" targetRef="EndEvent_Reject" />
     <bpmn:sequenceFlow id="Flow_6" sourceRef="Activity_Execute" targetRef="Activity_Confirm" />
     <bpmn:sequenceFlow id="Flow_7" sourceRef="Activity_Confirm" targetRef="Gateway_Satisfaction" />
     <bpmn:sequenceFlow id="Flow_8" sourceRef="Gateway_Satisfaction" targetRef="Activity_Complete">
-      <bpmn:conditionExpression><![CDATA[${variables['satisfied'] == true}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['satisfied'] == true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_Feedback" sourceRef="Gateway_Satisfaction" targetRef="Activity_Feedback">
-      <bpmn:conditionExpression><![CDATA[${variables['satisfied'] != true}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['satisfied'] != true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_End" sourceRef="Activity_Complete" targetRef="EndEvent_1" />
   </bpmn:process>

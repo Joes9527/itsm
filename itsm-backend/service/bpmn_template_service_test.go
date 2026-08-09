@@ -151,6 +151,54 @@ func TestBPMNTemplateService_ListTemplates_IncludesServiceRequestUrgentFlow(t *t
 	assert.Equal(t, "service_request", found.Category)
 }
 
+// TestBPMNTemplateService_ChangeNormalFlow_ApprovalGatewayConditionCompiles 锁定 Fix 2：
+// change_normal_flow.bpmn 里 Gateway_Approval 的出边条件表达式必须是这个引擎（expr-lang/expr）
+// 能编译的裸表达式，不能带 "${...}" 包装——那种写法之前会导致 EvaluateCondition 编译失败
+// （"unexpected token Bracket"），evaluateCondition 编译出错时按 false 处理，两条出边都算不满足，
+// 网关直接报"没有符合条件的路径"硬错误。这条测试直接解析 .bpmn 文件、取出 Gateway_Approval
+// 出边的真实条件表达式字符串，喂给 ExpressionEngine.EvaluateCondition 求值，如果把 XML 里的
+// "${}" 包装加回去重新跑这条测试，应该会失败。
+func TestBPMNTemplateService_ChangeNormalFlow_ApprovalGatewayConditionCompiles(t *testing.T) {
+	parser := NewBPMNParser()
+
+	data, err := bpmnTemplates.ReadFile("bpmn/change_normal_flow.bpmn")
+	require.NoError(t, err)
+
+	defs, err := parser.ParseXML(data)
+	require.NoError(t, err)
+	require.Len(t, defs.Processes, 1)
+
+	var approvalFlow, scheduleFlow *BPMNSequenceFlow
+	for _, flow := range defs.Processes[0].SequenceFlows {
+		if flow.SourceRef != "Gateway_Approval" {
+			continue
+		}
+		switch flow.TargetRef {
+		case "Activity_CABApproval":
+			approvalFlow = flow
+		case "Activity_Schedule":
+			scheduleFlow = flow
+		}
+	}
+	require.NotNil(t, approvalFlow, "Gateway_Approval 应该有一条指向 Activity_CABApproval 的出边（need_approval==true）")
+	require.NotNil(t, scheduleFlow, "Gateway_Approval 应该有一条指向 Activity_Schedule 的出边（need_approval!=true）")
+	require.NotNil(t, approvalFlow.ConditionExpression)
+	require.NotNil(t, scheduleFlow.ConditionExpression)
+
+	engine := NewExpressionEngine()
+
+	needApprovalTrue := map[string]interface{}{
+		"variables": map[string]interface{}{"need_approval": true},
+	}
+	result, err := engine.EvaluateCondition(approvalFlow.ConditionExpression.Expression, needApprovalTrue)
+	require.NoError(t, err, "need_approval==true 分支的条件表达式应该能正常编译求值，而不是解析失败")
+	assert.True(t, result, "need_approval=true 时，指向 Activity_CABApproval 的分支应该判定为满足")
+
+	result, err = engine.EvaluateCondition(scheduleFlow.ConditionExpression.Expression, needApprovalTrue)
+	require.NoError(t, err, "need_approval!=true 分支的条件表达式应该能正常编译求值，而不是解析失败")
+	assert.False(t, result, "need_approval=true 时，指向 Activity_Schedule 的分支应该判定为不满足")
+}
+
 func TestBPMNTemplateService_ServiceRequestFlows_ApprovalNodeMarked(t *testing.T) {
 	parser := NewBPMNParser()
 

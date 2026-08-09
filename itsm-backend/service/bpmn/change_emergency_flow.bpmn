@@ -121,10 +121,10 @@
     <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Activity_Assessment" />
     <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_Assessment" targetRef="Gateway_Approval" />
     <bpmn:sequenceFlow id="Flow_3" sourceRef="Gateway_Approval" targetRef="Activity_CABApproval">
-      <bpmn:conditionExpression><![CDATA[${variables['need_approval'] == true}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['need_approval'] == true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_Schedule" sourceRef="Gateway_Approval" targetRef="Activity_Schedule">
-      <bpmn:conditionExpression><![CDATA[${variables['need_approval'] != true}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['need_approval'] != true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_ApprovalResult" sourceRef="Activity_CABApproval" targetRef="Gateway_ApprovalResult" />
     <bpmn:sequenceFlow id="Flow_Reject" sourceRef="Gateway_ApprovalResult" targetRef="Activity_Reject" />
@@ -132,7 +132,7 @@
     <bpmn:sequenceFlow id="Flow_5" sourceRef="Activity_Implement" targetRef="Activity_Verify" />
     <bpmn:sequenceFlow id="Flow_6" sourceRef="Activity_Verify" targetRef="Gateway_VerifyResult" />
     <bpmn:sequenceFlow id="Flow_Close" sourceRef="Gateway_VerifyResult" targetRef="Activity_Close">
-      <bpmn:conditionExpression><![CDATA[${variables['verify_passed'] == true}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['verify_passed'] == true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_End" sourceRef="Activity_Close" targetRef="EndEvent_1" />
     <bpmn:sequenceFlow id="Flow_EndReject" sourceRef="Activity_Reject" targetRef="EndEvent_1" />
