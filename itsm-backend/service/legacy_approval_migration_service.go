@@ -9,6 +9,7 @@ import (
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/approvalworkflow"
 	"itsm-backend/ent/processdefinition"
 )
 
@@ -27,6 +28,7 @@ type LegacyApprovalMigrationResult struct {
 	ProcessDefinitionKey string `json:"processDefinitionKey"`
 	BPMNXML              string `json:"bpmnXml,omitempty"`
 	Skipped              bool   `json:"skipped"`
+	Error                string `json:"error,omitempty"`
 }
 
 func (s *LegacyApprovalMigrationService) Migrate(ctx context.Context, workflow *ent.ApprovalWorkflow, dryRun bool) (*LegacyApprovalMigrationResult, error) {
@@ -64,6 +66,50 @@ func (s *LegacyApprovalMigrationService) Migrate(ctx context.Context, workflow *
 		return nil, err
 	}
 	return result, nil
+}
+
+// MigrateAllForTenant 迁移一个租户下所有启用的 ApprovalWorkflow。单个工作流迁移失败不中止
+// 整个批次——把错误信息记进对应的 LegacyApprovalMigrationResult.Error，继续处理下一个，
+// 避免一条写得有问题的自定义工作流拖累同租户其它工作流的迁移。
+func (s *LegacyApprovalMigrationService) MigrateAllForTenant(ctx context.Context, tenantID int, dryRun bool) ([]*LegacyApprovalMigrationResult, error) {
+	workflows, err := s.client.ApprovalWorkflow.Query().
+		Where(approvalworkflow.TenantIDEQ(tenantID), approvalworkflow.IsActiveEQ(true)).
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query approval workflows for tenant %d: %w", tenantID, err)
+	}
+
+	results := make([]*LegacyApprovalMigrationResult, 0, len(workflows))
+	for _, workflow := range workflows {
+		result, migrateErr := s.Migrate(ctx, workflow, dryRun)
+		if migrateErr != nil {
+			results = append(results, &LegacyApprovalMigrationResult{
+				WorkflowID: workflow.ID,
+				Error:      migrateErr.Error(),
+			})
+			continue
+		}
+		results = append(results, result)
+	}
+	return results, nil
+}
+
+// MigrateAllTenants 遍历所有租户，对每个租户调用 MigrateAllForTenant，按 tenantID 汇总结果。
+func (s *LegacyApprovalMigrationService) MigrateAllTenants(ctx context.Context, dryRun bool) (map[int][]*LegacyApprovalMigrationResult, error) {
+	tenants, err := s.client.Tenant.Query().All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query tenants: %w", err)
+	}
+
+	byTenant := make(map[int][]*LegacyApprovalMigrationResult, len(tenants))
+	for _, tenant := range tenants {
+		results, err := s.MigrateAllForTenant(ctx, tenant.ID, dryRun)
+		if err != nil {
+			return nil, fmt.Errorf("failed to migrate tenant %d: %w", tenant.ID, err)
+		}
+		byTenant[tenant.ID] = results
+	}
+	return byTenant, nil
 }
 
 // buildLegacyApprovalBPMN 把一个 ApprovalWorkflow.Nodes（dto.ApprovalNodeConfig 的驼峰 JSON
