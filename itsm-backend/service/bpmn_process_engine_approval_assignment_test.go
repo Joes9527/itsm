@@ -9,6 +9,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/processtask"
+	"itsm-backend/ent/user"
 	"itsm-backend/service/bpmn"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -527,4 +528,295 @@ func TestExcludeUserFromCandidates(t *testing.T) {
 	}
 
 	assert.Equal(t, []string{"a"}, excludeUserFromCandidates([]string{"a"}, nil), "nil user 时原样返回")
+}
+
+// ==================== 新增 fixture 辅助方法：Team / Project / 指定角色的用户 ====================
+
+func (f *approvalAssignmentFixture) createTeam(t *testing.T, name string, managerID int) *ent.Team {
+	t.Helper()
+	team, err := f.client.Team.Create().
+		SetName(name).
+		SetCode(name).
+		SetTenantID(f.tenant.ID).
+		SetManagerID(managerID).
+		Save(f.ctx)
+	require.NoError(t, err)
+	return team
+}
+
+func (f *approvalAssignmentFixture) createProject(t *testing.T, name string, managerID int) *ent.Project {
+	t.Helper()
+	proj, err := f.client.Project.Create().
+		SetName(name).
+		SetCode(name).
+		SetTenantID(f.tenant.ID).
+		SetManagerID(managerID).
+		SetStatus("active").
+		Save(f.ctx)
+	require.NoError(t, err)
+	return proj
+}
+
+// createUserWithRole 建一个指定 ent/user.Role 枚举值的用户；deptID <= 0 表示不设置部门。
+func (f *approvalAssignmentFixture) createUserWithRole(t *testing.T, username string, role user.Role, deptID int) *ent.User {
+	t.Helper()
+	q := f.client.User.Create().
+		SetUsername(username).
+		SetEmail(username + "@aa.example.com").
+		SetName(username).
+		SetPasswordHash("hash").
+		SetActive(true).
+		SetTenantID(f.tenant.ID).
+		SetRole(role)
+	if deptID > 0 {
+		q = q.SetDepartmentID(deptID)
+	}
+	u, err := q.Save(f.ctx)
+	require.NoError(t, err)
+	return u
+}
+
+// approvalTaskWithRole 是 approvalTask 的变体，额外设置 AssigneeRole。固定范围的四个属性
+// （AssigneeDeptId 等）用不上单独的构造变体——测试里直接在 approvalTask() 返回值上赋值一个
+// 字段就够了，不需要为每个属性各写一个变体函数。
+
+func approvalTaskWithRole(id, name, role string) *BPMNUserTask {
+	task := approvalTask(id, name)
+	task.AssigneeRole = role
+	return task
+}
+
+// ==================== 第 2 级：按角色查候选人 ====================
+
+func TestCreateUserTask_Approval_AssigneeRole_ResolvesAllUsersWithRole(t *testing.T) {
+	fx := newApprovalAssignmentFixture(t)
+
+	requester := fx.createUser(t, "requester20", 0)
+	_ = fx.createUserWithRole(t, "opsA", user.RoleManager, 0)
+	_ = fx.createUserWithRole(t, "opsB", user.RoleManager, 0)
+	// 无关角色的用户不应该混进候选人
+	fx.createUserWithRole(t, "agentC", user.RoleAgent, 0)
+
+	instance := fx.createInstance(t, "assignee-role-multi", map[string]interface{}{
+		"requester_id": float64(requester.ID),
+	})
+
+	err := fx.engine.createUserTask(fx.ctx, instance, approvalTaskWithRole("Activity_Approval", "工单审批", string(user.RoleManager)))
+	require.NoError(t, err)
+
+	task := fx.getCreatedTask(t, instance.ID, "Activity_Approval")
+	assert.Equal(t, "", task.Assignee, "按角色解析应该产出候选人列表，不是单一 assignee")
+	assert.Contains(t, task.CandidateUsers, "opsA")
+	assert.Contains(t, task.CandidateUsers, "opsB")
+	assert.NotContains(t, task.CandidateUsers, "agentC")
+}
+
+func TestCreateUserTask_Approval_AssigneeRole_ExcludesRequester(t *testing.T) {
+	fx := newApprovalAssignmentFixture(t)
+
+	// 申请人自己就是这个角色下的一员——现实中常见场景（比如运维经理自己也会提工单）
+	requester := fx.createUserWithRole(t, "requester21", user.RoleManager, 0)
+	_ = fx.createUserWithRole(t, "backupManager", user.RoleManager, 0)
+
+	instance := fx.createInstance(t, "assignee-role-exclude", map[string]interface{}{
+		"requester_id": float64(requester.ID),
+	})
+
+	err := fx.engine.createUserTask(fx.ctx, instance, approvalTaskWithRole("Activity_Approval", "工单审批", string(user.RoleManager)))
+	require.NoError(t, err)
+
+	task := fx.getCreatedTask(t, instance.ID, "Activity_Approval")
+	assert.NotContains(t, task.CandidateUsers, "requester21", "候选人列表不能包含申请人自己")
+	assert.Contains(t, task.CandidateUsers, "backupManager")
+}
+
+func TestCreateUserTask_Approval_AssigneeRole_NoMatchingUsers_FallsBackToCandidateGroup(t *testing.T) {
+	fx := newApprovalAssignmentFixture(t)
+
+	requester := fx.createUser(t, "requester22", 0)
+	backup := fx.createUser(t, "backupApprover7", 0)
+	fx.createGroup(t, "ticket-approvers", backup.ID)
+
+	instance := fx.createInstance(t, "assignee-role-no-match", map[string]interface{}{
+		"requester_id": float64(requester.ID),
+	})
+
+	// technician 角色这个租户里一个用户都没有
+	err := fx.engine.createUserTask(fx.ctx, instance, approvalTaskWithRole("Activity_Approval", "工单审批", string(user.RoleTechnician)))
+	require.NoError(t, err)
+
+	task := fx.getCreatedTask(t, instance.ID, "Activity_Approval")
+	assert.Equal(t, "", task.Assignee)
+	assert.Contains(t, task.CandidateUsers, "backupApprover7", "角色查不到人时应该转候选组兜底，不是留空孤儿任务")
+}
+
+// ==================== 第 3 级：固定范围组织路由 ====================
+
+func TestCreateUserTask_Approval_AssigneeDeptId_ResolvesFixedDepartmentManager(t *testing.T) {
+	fx := newApprovalAssignmentFixture(t)
+
+	manager := fx.createUser(t, "fixedDeptManager", 0)
+	fixedDept := fx.createDepartment(t, "Fixed Dept", manager.ID, 0)
+	// requester 自己在另一个部门——固定范围路由不应该受 requester 自己部门的影响
+	requesterDept := fx.createDepartment(t, "Requester Dept", 0, 0)
+	requester := fx.createUser(t, "requester23", requesterDept.ID)
+
+	instance := fx.createInstance(t, "assignee-dept-id", map[string]interface{}{
+		"requester_id": float64(requester.ID),
+	})
+
+	task := approvalTask("Activity_Approval", "工单审批")
+	task.AssigneeDeptId = fixedDept.ID
+	err := fx.engine.createUserTask(fx.ctx, instance, task)
+	require.NoError(t, err)
+
+	created := fx.getCreatedTask(t, instance.ID, "Activity_Approval")
+	assert.Equal(t, strconv.Itoa(manager.ID), created.Assignee, "应该解析到固定部门的负责人，不是申请人自己部门的负责人（这个部门没配 manager，会是空）")
+}
+
+func TestCreateUserTask_Approval_AssigneeTeamId_ResolvesTeamLeader(t *testing.T) {
+	fx := newApprovalAssignmentFixture(t)
+
+	leader := fx.createUser(t, "teamLeader1", 0)
+	team := fx.createTeam(t, "Fixed Team", leader.ID)
+	requester := fx.createUser(t, "requester24", 0)
+
+	instance := fx.createInstance(t, "assignee-team-id", map[string]interface{}{
+		"requester_id": float64(requester.ID),
+	})
+
+	task := approvalTask("Activity_Approval", "工单审批")
+	task.AssigneeTeamId = team.ID
+	err := fx.engine.createUserTask(fx.ctx, instance, task)
+	require.NoError(t, err)
+
+	created := fx.getCreatedTask(t, instance.ID, "Activity_Approval")
+	assert.Equal(t, strconv.Itoa(leader.ID), created.Assignee)
+}
+
+func TestCreateUserTask_Approval_AssigneeProjectId_ResolvesProjectManager(t *testing.T) {
+	fx := newApprovalAssignmentFixture(t)
+
+	manager := fx.createUser(t, "projectManager1", 0)
+	proj := fx.createProject(t, "Fixed Project", manager.ID)
+	requester := fx.createUser(t, "requester25", 0)
+
+	instance := fx.createInstance(t, "assignee-project-id", map[string]interface{}{
+		"requester_id": float64(requester.ID),
+	})
+
+	task := approvalTask("Activity_Approval", "工单审批")
+	task.AssigneeProjectId = proj.ID
+	err := fx.engine.createUserTask(fx.ctx, instance, task)
+	require.NoError(t, err)
+
+	created := fx.getCreatedTask(t, instance.ID, "Activity_Approval")
+	assert.Equal(t, strconv.Itoa(manager.ID), created.Assignee)
+}
+
+func TestCreateUserTask_Approval_AssigneeTempTeamId_ResolvesTeamLeader(t *testing.T) {
+	fx := newApprovalAssignmentFixture(t)
+
+	leader := fx.createUser(t, "tempTeamLeader1", 0)
+	team := fx.createTeam(t, "Temp Team", leader.ID)
+	requester := fx.createUser(t, "requester26", 0)
+
+	instance := fx.createInstance(t, "assignee-temp-team-id", map[string]interface{}{
+		"requester_id": float64(requester.ID),
+	})
+
+	task := approvalTask("Activity_Approval", "工单审批")
+	task.AssigneeTempTeamId = team.ID
+	err := fx.engine.createUserTask(fx.ctx, instance, task)
+	require.NoError(t, err)
+
+	created := fx.getCreatedTask(t, instance.ID, "Activity_Approval")
+	assert.Equal(t, strconv.Itoa(leader.ID), created.Assignee, "assigneeTempTeamId 复用的是 Team 实体的 manager_id，跟 assigneeTeamId 同一个数据源")
+}
+
+func TestCreateUserTask_Approval_AssigneeDeptId_RequesterIsTheManager_FallsBackToOwnDepartment(t *testing.T) {
+	fx := newApprovalAssignmentFixture(t)
+
+	// requester 自己部门的负责人（不是 requester 自己）——固定范围解析失败退到这一级时
+	// 应该解析到这个人，而不是直接跳过到候选组兜底
+	requesterDeptManager := fx.createUser(t, "requesterDeptManager1", 0)
+	requesterDept := fx.createDepartment(t, "Requester Own Dept", requesterDeptManager.ID, 0)
+	requester := fx.createUser(t, "requester29", requesterDept.ID)
+
+	// BPMN 声明的固定范围部门，负责人恰好就是 requester 自己
+	fixedDept := fx.createDepartment(t, "Fixed Dept Managed By Requester", requester.ID, 0)
+
+	instance := fx.createInstance(t, "assignee-dept-id-is-requester", map[string]interface{}{
+		"requester_id": float64(requester.ID),
+	})
+
+	task := approvalTask("Activity_Approval", "工单审批")
+	task.AssigneeDeptId = fixedDept.ID
+	err := fx.engine.createUserTask(fx.ctx, instance, task)
+	require.NoError(t, err)
+
+	created := fx.getCreatedTask(t, instance.ID, "Activity_Approval")
+	assert.NotEqual(t, strconv.Itoa(requester.ID), created.Assignee, "固定范围解析出的人是申请人自己时不能直接指派给他")
+	assert.Equal(t, strconv.Itoa(requesterDeptManager.ID), created.Assignee, "应该退到申请人自己部门这一级，解析出申请人自己部门的负责人")
+}
+
+func TestCreateUserTask_Approval_AssigneeDeptId_ResolveFails_FallsBackToOwnDepartment(t *testing.T) {
+	fx := newApprovalAssignmentFixture(t)
+
+	ownManager := fx.createUser(t, "ownDeptManager2", 0)
+	requesterDept := fx.createDepartment(t, "Requester Dept For Fallback", ownManager.ID, 0)
+	requester := fx.createUser(t, "requester27", requesterDept.ID)
+
+	instance := fx.createInstance(t, "assignee-dept-id-not-found", map[string]interface{}{
+		"requester_id": float64(requester.ID),
+	})
+
+	task := approvalTask("Activity_Approval", "工单审批")
+	task.AssigneeDeptId = 999999 // 不存在的部门 ID
+	err := fx.engine.createUserTask(fx.ctx, instance, task)
+	require.NoError(t, err)
+
+	created := fx.getCreatedTask(t, instance.ID, "Activity_Approval")
+	assert.Equal(t, strconv.Itoa(ownManager.ID), created.Assignee, "固定部门解析不到时应该退到申请人自己部门这一级，不是直接跳到候选组兜底")
+}
+
+// ==================== 跨租户隔离 ====================
+
+func TestCreateUserTask_Approval_AssigneeRole_TenantIsolation(t *testing.T) {
+	fx := newApprovalAssignmentFixture(t)
+
+	otherTenant, err := fx.client.Tenant.Create().
+		SetName("Role Isolation Tenant").
+		SetCode("role-isolation-tenant").
+		SetDomain("role-isolation.example.com").
+		SetStatus("active").
+		Save(fx.ctx)
+	require.NoError(t, err)
+
+	// 另一个租户里同样角色的用户不应该被本租户的查询看到
+	_, err = fx.client.User.Create().
+		SetUsername("otherTenantManager").
+		SetEmail("otherTenantManager@aa.example.com").
+		SetName("otherTenantManager").
+		SetPasswordHash("hash").
+		SetActive(true).
+		SetTenantID(otherTenant.ID).
+		SetRole(user.RoleManager).
+		Save(fx.ctx)
+	require.NoError(t, err)
+
+	requester := fx.createUser(t, "requester28", 0)
+	backup := fx.createUser(t, "backupApprover8", 0)
+	fx.createGroup(t, "ticket-approvers", backup.ID)
+
+	instance := fx.createInstance(t, "assignee-role-tenant-isolation", map[string]interface{}{
+		"requester_id": float64(requester.ID),
+	})
+
+	err = fx.engine.createUserTask(fx.ctx, instance, approvalTaskWithRole("Activity_Approval", "工单审批", string(user.RoleManager)))
+	require.NoError(t, err)
+
+	task := fx.getCreatedTask(t, instance.ID, "Activity_Approval")
+	assert.NotContains(t, task.CandidateUsers, "otherTenantManager", "不能跨租户解析到别的租户同角色的用户")
+	assert.Contains(t, task.CandidateUsers, "backupApprover8", "本租户查不到该角色用户时应该转候选组兜底")
 }

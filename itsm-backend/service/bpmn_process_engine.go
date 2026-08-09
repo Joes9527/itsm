@@ -655,17 +655,42 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 		approvalRequester = e.loadApprovalRequester(ctx, instance, getUserID)
 	}
 
+	// 角色查询解析出的候选人列表——跟 candidateGroups 展开不是同一条路径（角色不等于组），
+	// 但最终都要合并进 candidate_users、排除申请人自己，所以先收集，稍后统一处理。
+	var roleCandidates []string
+
 	// 如果BPMN没有定义分配人，从流程变量中获取
 	if assignee == "" {
 		if task.TaskPurpose == "approval" {
-			// 审批任务：不走 requester_id/triggered_by/assignee_id/getDefaultAssigntee 这条链
-			// （否则几乎总会落回申请人自己），改成部门负责人解析。
-			// 如果 BPMN 已经显式声明了 candidateGroups（比如 legacy 审批链迁移出来的按角色/组
-			// 路由节点，见 legacy_approval_migration_service.go），说明这个节点的路由方式是
-			// 配置驱动的，不触发部门负责人解析，直接进入下面的候选组展开——避免用一个跟节点
-			// 配置无关的"部门负责人"语义覆盖它。同理，如果 BPMN 显式声明了 candidateUsers
-			// （比如流程设计器画的审批节点直接指定了候选人），也不该被部门负责人解析覆盖。
-			if strings.TrimSpace(task.CandidateGroups) == "" && strings.TrimSpace(task.CandidateUsers) == "" {
+			switch {
+			case strings.TrimSpace(task.CandidateGroups) != "" || strings.TrimSpace(task.CandidateUsers) != "":
+				// BPMN 已经显式声明了 candidateGroups/candidateUsers（比如 legacy 审批链迁移出来的
+				// 按角色/组路由节点，见 legacy_approval_migration_service.go，或者流程设计器直接
+				// 指定了候选人），说明这个节点的路由方式是配置驱动的，不触发下面任何自动解析——
+				// 避免用一个跟节点配置无关的语义覆盖它。
+			case strings.TrimSpace(task.AssigneeRole) != "":
+				// 按角色查这个租户里所有 active 且该角色的用户，全部作为候选人（不是挑一个人
+				// 直接指派）——同一个角色可能有多人，候选人列表让谁先领谁审批，不会因为引擎
+				// 武断选中的那个人离职/请假就卡死。查询语义复用 approval_service.go
+				// resolveApprover "role" 分支的过滤条件（RoleEQ + TenantID + Active）。
+				candidates, err := e.resolveRoleCandidates(ctx, instance.TenantID, task.AssigneeRole)
+				if err != nil {
+					e.logger.Warnw("按角色解析候选审批人失败，转候选组兜底", "role", task.AssigneeRole, "error", err)
+				} else {
+					roleCandidates = candidates
+				}
+			case task.AssigneeDeptId != 0 || task.AssigneeTeamId != 0 || task.AssigneeProjectId != 0 || task.AssigneeTempTeamId != 0:
+				// BPMN 声明了固定范围的组织路由（部门/团队/项目/临时团队负责人，范围钉死在配置的
+				// 具体 ID 上，不取申请人的）——四个 resolver 都是"至多解析出一个人"的形状，
+				// 跟下面 default 分支的"申请人自己部门"解析方式一样，只是 appCtx 的范围来源不同。
+				assignee = e.resolveFixedScopeAssignee(ctx, instance, approvalRequester, task)
+				if assignee == "" {
+					// 固定范围没配置/解析失败/解析出来是申请人自己——退到"申请人自己部门"这一级，
+					// 而不是直接跳到候选组兜底，保持跟原有优先级链兼容。
+					assignee = e.resolveApprovalAssignee(ctx, instance, approvalRequester)
+				}
+			default:
+				// 都没声明：解析申请人自己所在部门的负责人（这次会话早前已经做的部分）
 				assignee = e.resolveApprovalAssignee(ctx, instance, approvalRequester)
 			}
 		} else {
@@ -686,10 +711,10 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 		}
 	}
 
-	// 审批任务如果部门负责人解析失败（没配置/manager就是申请人自己），且 BPMN 也没有
-	// 声明 candidateGroups，兜底用固定候选组，保证任务始终有机会被领取。
+	// 审批任务如果自动解析都没有产出结果（部门负责人解析失败/角色查询没找到候选人/BPMN
+	// 也没有声明 candidateGroups），兜底用固定候选组，保证任务始终有机会被领取。
 	candidateGroupsToExpand := task.CandidateGroups
-	if task.TaskPurpose == "approval" && assignee == "" && strings.TrimSpace(candidateGroupsToExpand) == "" {
+	if task.TaskPurpose == "approval" && assignee == "" && len(roleCandidates) == 0 && strings.TrimSpace(candidateGroupsToExpand) == "" {
 		candidateGroupsToExpand = approvalFallbackCandidateGroup
 	}
 
@@ -719,9 +744,24 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 			)
 		}
 	}
+	if task.TaskPurpose == "approval" && len(roleCandidates) > 0 {
+		// 按角色查出来的候选人，排除申请人自己，合并进 candidate_users——跟 candidateGroups
+		// 展开是互斥的两条路径（见上面的 switch），这里不会重复合并同一批人。
+		filtered := roleCandidates
+		if approvalRequester != nil {
+			filtered = excludeUserFromCandidates(filtered, approvalRequester)
+		}
+		expandedCandidateUsers = e.groupResolver.MergeCandidateUsers(expandedCandidateUsers, filtered)
+		e.logger.Infow(
+			"按角色的候选审批人已展开",
+			"taskID", task.ID,
+			"role", task.AssigneeRole,
+			"expandedUsers", filtered,
+		)
+	}
 	if task.TaskPurpose == "approval" && assignee == "" && strings.TrimSpace(expandedCandidateUsers) == "" {
 		e.logger.Warnw(
-			"审批任务没有解析到任何审批人（部门负责人未配置，候选组展开后也为空），任务将无人可领",
+			"审批任务没有解析到任何审批人（自动分配全部失败，候选组/候选角色展开后也为空），任务将无人可领",
 			"taskID", task.ID,
 			"taskName", task.Name,
 			"candidateGroups", candidateGroupsToExpand,
@@ -828,6 +868,76 @@ func (e *CustomProcessEngine) resolveApprovalAssignee(ctx context.Context, insta
 		return ""
 	}
 	return strconv.Itoa(manager.UserID)
+}
+
+// resolveRoleCandidates 查询该租户下所有 active 且 role = role 的用户，返回候选人展开
+// 形态的字符串列表（跟 GroupResolver.ExpandGroupsToUsers 的 usernames 返回值同样的
+// username→email→ID 兜底规则），供 excludeUserFromCandidates/MergeCandidateUsers 直接复用。
+// role 必须是 ent/user.Role 枚举的合法值——不是这几个值的字符串查询会直接返回空列表，
+// 不是错误，调用方应该按"没查到候选人"处理，转候选组兜底。
+func (e *CustomProcessEngine) resolveRoleCandidates(ctx context.Context, tenantID int, role string) ([]string, error) {
+	users, err := e.client.User.Query().
+		Where(user.RoleEQ(user.Role(role)), user.TenantIDEQ(tenantID), user.Active(true)).
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("查询角色候选审批人失败: %w", err)
+	}
+	names := make([]string, 0, len(users))
+	for _, u := range users {
+		display := strings.TrimSpace(u.Username)
+		if display == "" {
+			display = strings.TrimSpace(u.Email)
+		}
+		if display == "" {
+			display = strconv.Itoa(u.ID)
+		}
+		names = append(names, display)
+	}
+	return names, nil
+}
+
+// resolveFixedScopeAssignee 处理固定范围组织路由（BPMN 声明 assigneeDeptId/assigneeTeamId/
+// assigneeProjectId/assigneeTempTeamId 中的一个，按这个顺序取第一个非零的）。四个 resolver
+// （service/approver/*.go，已有、已测试）都是"至多解析出一个人"的形状，返回值/自我审批
+// 排除规则完全比照 resolveApprovalAssignee（申请人自己部门）——用 approvers[0].UserID 而
+// 不是 approvers[0].UserName，因为 ApproverInfo.UserName 实际填的是 User.Name（显示名），
+// 不是 authorizeTaskActor 用来比对的 User.Username（登录名），用 UserName 会导致候选人
+// 字符串永远匹配不上真实登录用户。
+func (e *CustomProcessEngine) resolveFixedScopeAssignee(ctx context.Context, instance *ent.ProcessInstance, requester *ent.User, task *BPMNUserTask) string {
+	var resolver approver.ApproverResolver
+	appCtx := &approver.ApproverContext{TenantID: instance.TenantID}
+	switch {
+	case task.AssigneeDeptId != 0:
+		resolver = approver.NewDeptManagerResolver()
+		appCtx.DepartmentID = task.AssigneeDeptId
+	case task.AssigneeTeamId != 0:
+		resolver = approver.NewTeamLeaderResolver()
+		appCtx.TeamID = task.AssigneeTeamId
+	case task.AssigneeProjectId != 0:
+		resolver = approver.NewProjectMgrResolver()
+		appCtx.ProjectID = task.AssigneeProjectId
+	case task.AssigneeTempTeamId != 0:
+		resolver = approver.NewTempTeamResolver()
+		appCtx.TeamID = task.AssigneeTempTeamId
+	default:
+		return ""
+	}
+	approvers, err := resolver.Resolve(ctx, e.client, appCtx)
+	if err != nil || len(approvers) == 0 {
+		e.logger.Infow(
+			"固定范围审批人解析失败，转候选组兜底",
+			"resolverType", resolver.GetType(), "error", err,
+		)
+		return ""
+	}
+	if requester != nil && approvers[0].UserID == requester.ID {
+		e.logger.Infow(
+			"固定范围解析出的审批人是申请人本人，转候选组兜底，避免自己审批自己",
+			"resolverType", resolver.GetType(), "requesterID", requester.ID,
+		)
+		return ""
+	}
+	return strconv.Itoa(approvers[0].UserID)
 }
 
 // excludeUserFromCandidates 从 candidateGroups 展开出来的候选人显示名列表里剔除某个用户。
