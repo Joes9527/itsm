@@ -84,3 +84,52 @@ func TestBPMNTemplateService_DeployAndStartTicketUrgentFlow(t *testing.T) {
 	assert.NotNil(t, instance)
 	assert.Equal(t, "ticket_urgent_flow", instance.ProcessDefinitionKey)
 }
+
+func TestBPMNTemplateService_ListTemplates_IncludesChangeEmergencyFlow(t *testing.T) {
+	svc := &BPMNTemplateService{}
+	templates, err := svc.listTemplates()
+	require.NoError(t, err)
+
+	var found *TemplateInfo
+	for _, tmpl := range templates {
+		if tmpl.ID == "change_emergency_flow" {
+			found = tmpl
+			break
+		}
+	}
+	require.NotNil(t, found, "change_emergency_flow.bpmn 应该被发现并纳入模板清单")
+	assert.Equal(t, "紧急变更流程", found.Name)
+	assert.Equal(t, "change", found.Category)
+	assert.Equal(t, "emergency", found.SubCategory)
+}
+
+func TestBPMNTemplateService_DeployAndStartChangeEmergencyFlow(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:change_emergency_flow_test?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+
+	tenant, err := client.Tenant.Create().
+		SetName("Change Emergency Flow Tenant").
+		SetCode("change-emergency-flow").
+		SetDomain("change-emergency.example.com").
+		SetStatus("active").
+		Save(ctx)
+	require.NoError(t, err)
+
+	templateSvc := NewBPMNTemplateService(client)
+	err = templateSvc.DeployTemplateByName(ctx, "change_emergency_flow", tenant.ID)
+	require.NoError(t, err, "change_emergency_flow 模板应该能正常部署")
+
+	logger := zaptest.NewLogger(t).Sugar()
+	engineIface := NewCustomProcessEngine(client, logger)
+	engine, ok := engineIface.(*CustomProcessEngine)
+	require.True(t, ok)
+
+	runCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+	instance, err := engine.StartProcess(runCtx, "change_emergency_flow", "CHANGE-EMERGENCY-1", map[string]interface{}{
+		"requester_id": float64(1),
+	})
+	require.NoError(t, err, "change_emergency_flow 应该能成功启动流程实例，不再报'流程定义不存在'")
+	assert.NotNil(t, instance)
+	assert.Equal(t, "change_emergency_flow", instance.ProcessDefinitionKey)
+}
