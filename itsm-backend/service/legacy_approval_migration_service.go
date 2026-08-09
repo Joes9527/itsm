@@ -66,37 +66,65 @@ func (s *LegacyApprovalMigrationService) Migrate(ctx context.Context, workflow *
 	return result, nil
 }
 
+// buildLegacyApprovalBPMN 把一个 ApprovalWorkflow.Nodes（dto.ApprovalNodeConfig 的驼峰 JSON
+// 形状，nodesToMaps 产出）转成简单的线性审批链 BPMN XML。节点按 Level 排序，每个节点生成一个
+// taskPurpose="approval" 的 userTask，按 AssigneeType 映射到对应的 BPMN 声明式属性——这些属性
+// 是组件①加的，createUserTask 已经支持解析它们。
 func buildLegacyApprovalBPMN(key, name string, nodes []map[string]interface{}) (string, error) {
 	if strings.TrimSpace(key) == "" || len(nodes) == 0 {
 		return "", fmt.Errorf("legacy workflow must have a key and at least one node")
 	}
-	sort.SliceStable(nodes, func(i, j int) bool { return intValue(nodes[i]["step_order"]) < intValue(nodes[j]["step_order"]) })
+
+	configs, err := mapsToNodes(nodes)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse legacy workflow nodes: %w", err)
+	}
+
+	sort.SliceStable(configs, func(i, j int) bool { return configs[i].Level < configs[j].Level })
+
 	escape := func(v string) string { var b strings.Builder; _ = xml.EscapeText(&b, []byte(v)); return b.String() }
 	var tasks, flows strings.Builder
 	previous := "StartEvent_1"
-	for i, node := range nodes {
-		id := fmt.Sprintf("Approval_%d", i+1)
-		assigneeType, _ := node["assignee_type"].(string)
-		assignee := fmt.Sprint(node["assignee_value"])
-		attribute := "assignee"
-		if assigneeType == "role" || assigneeType == "group" {
-			attribute = "candidateGroups"
+	for i, cfg := range configs {
+		// ApproverType 兜底到 AssigneeType——复用 ApprovalService.parseWorkflowNodes
+		// （service/approval_service.go）同样的约定，不是这里新发明的规则。
+		assigneeType := cfg.AssigneeType
+		if assigneeType == "" {
+			switch cfg.ApproverType {
+			case dto.ApprovalNodeTypeDeptManager, dto.ApprovalNodeTypeTeamLeader,
+				dto.ApprovalNodeTypeProjectManager, dto.ApprovalNodeTypeTempTeamLeader,
+				dto.ApprovalNodeTypeAmountBased:
+				assigneeType = string(cfg.ApproverType)
+			}
 		}
-		fmt.Fprintf(&tasks, `<bpmn:userTask id="%s" name="%s" itsm:taskPurpose="approval" itsm:approvalMode="single" itsm:%s="%s" itsm:commentRequiredOnReject="true"/>`, id, escape(fmt.Sprint(node["name"])), attribute, escape(assignee))
+
+		id := fmt.Sprintf("Approval_%d", i+1)
+		var attr, value string
+		switch assigneeType {
+		case "user":
+			attr, value = "assignee", cfg.AssigneeValue
+		case "group":
+			attr, value = "candidateGroups", cfg.AssigneeValue
+		case string(dto.ApprovalNodeTypeRole):
+			attr, value = "assigneeRole", cfg.AssigneeValue
+		case string(dto.ApprovalNodeTypeDeptManager):
+			attr, value = "assigneeDeptId", cfg.AssigneeValue
+		case string(dto.ApprovalNodeTypeTeamLeader):
+			attr, value = "assigneeTeamId", cfg.AssigneeValue
+		case string(dto.ApprovalNodeTypeTempTeamLeader):
+			attr, value = "assigneeTempTeamId", cfg.AssigneeValue
+		case string(dto.ApprovalNodeTypeProjectManager):
+			attr, value = "assigneeProjectId", cfg.AssigneeValue
+		case string(dto.ApprovalNodeTypeAmountBased):
+			return "", fmt.Errorf("workflow %q node %q uses unsupported assignee type amount_based -- migration aborted for the whole workflow, not just this node", name, cfg.Name)
+		default:
+			return "", fmt.Errorf("workflow %q node %q has unrecognized assignee type %q -- migration aborted", name, cfg.Name, assigneeType)
+		}
+
+		fmt.Fprintf(&tasks, `<bpmn:userTask id="%s" name="%s" itsm:taskPurpose="approval" itsm:approvalMode="single" itsm:%s="%s" itsm:commentRequiredOnReject="true"/>`, id, escape(cfg.Name), attr, escape(value))
 		fmt.Fprintf(&flows, `<bpmn:sequenceFlow id="Flow_%d" sourceRef="%s" targetRef="%s"/>`, i+1, previous, id)
 		previous = id
 	}
-	fmt.Fprintf(&flows, `<bpmn:sequenceFlow id="Flow_%d" sourceRef="%s" targetRef="EndEvent_1"/>`, len(nodes)+1, previous)
+	fmt.Fprintf(&flows, `<bpmn:sequenceFlow id="Flow_%d" sourceRef="%s" targetRef="EndEvent_1"/>`, len(configs)+1, previous)
 	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?><bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:itsm="https://github.com/heidsoft/itsm/schema/bpmn" id="Definitions_%s" targetNamespace="https://github.com/heidsoft/itsm"><bpmn:process id="%s" name="%s" isExecutable="true"><bpmn:startEvent id="StartEvent_1"/>%s<bpmn:endEvent id="EndEvent_1"/>%s</bpmn:process></bpmn:definitions>`, escape(key), escape(key), escape(name), tasks.String(), flows.String()), nil
-}
-
-func intValue(v interface{}) int {
-	switch n := v.(type) {
-	case int:
-		return n
-	case float64:
-		return int(n)
-	default:
-		return 0
-	}
 }
