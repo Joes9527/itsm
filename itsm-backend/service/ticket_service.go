@@ -207,22 +207,6 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 		}
 	}
 
-	// 触发审批（同步，走 ApprovalService，查找匹配工作流并创建 ApprovalRecord）
-	// 这是 V1 缺失的 Phase 1 #1 缺陷修复：V2 必须让工单进入审批链路
-	if s.approvalSvc != nil {
-		if _, err := s.approvalSvc.TriggerApproval(ctx, &ApprovalTriggerRequest{
-			TicketID:     tkt.ID,
-			TicketNumber: tkt.TicketNumber,
-			TicketTitle:  tkt.Title,
-			TicketType:   string(tkt.Type),
-			Priority:     string(tkt.Priority),
-			RequesterID:  tkt.RequesterID,
-			TenantID:     tenantID,
-		}); err != nil {
-			s.logger.Warnw("Approval trigger failed", "error", err, "ticket_id", tkt.ID)
-		}
-	}
-
 	// 异步发送通知（如果分配了处理人）
 	// 注意：必须使用 context.Background()，不能复用请求 ctx。
 	// 否则 HTTP 响应返回后 ctx 立即取消，异步任务会失败（context canceled）。
