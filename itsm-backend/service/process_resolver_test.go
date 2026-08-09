@@ -85,3 +85,45 @@ func TestProcessResolver_ServiceRequestBinding_OldSeedShapeNeverMatches(t *testi
 	require.NoError(t, err)
 	assert.Equal(t, "ticket_general_flow", key, "旧的错误种子数据形状会匹配不上 service_request_flow，落到通用兜底流程")
 }
+
+func TestProcessResolver_ResolveWithPriority_ServiceRequestHighPriority_RoutesToUrgentFlow(t *testing.T) {
+	client, resolver, tenant := newProcessResolverFixture(t)
+	ctx := context.Background()
+
+	_, err := client.ProcessBinding.Create().
+		SetBusinessType("ticket").
+		SetBusinessSubType("service_request").
+		SetProcessDefinitionKey("service_request_flow").
+		SetIsDefault(true).
+		SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	highPriorityTicket := &ent.Ticket{Type: "service_request", Priority: "high", TenantID: tenant.ID}
+	key, err := resolver.ResolveWithPriority(ctx, highPriorityTicket, "")
+	require.NoError(t, err)
+	assert.Equal(t, "service_request_urgent_flow", key, "高优先级服务请求应该路由到紧急变体")
+
+	normalPriorityTicket := &ent.Ticket{Type: "service_request", Priority: "medium", TenantID: tenant.ID}
+	key, err = resolver.ResolveWithPriority(ctx, normalPriorityTicket, "")
+	require.NoError(t, err)
+	assert.Equal(t, "service_request_flow", key, "普通优先级服务请求应该保持标准流程，不受这次改动影响")
+}
+
+func TestProcessResolver_ResolveWithPriority_TicketGeneralFlow_StillRoutesToUrgentFlow(t *testing.T) {
+	client, resolver, tenant := newProcessResolverFixture(t)
+	ctx := context.Background()
+
+	_, err := client.ProcessBinding.Create().
+		SetBusinessType("ticket").
+		SetProcessDefinitionKey("ticket_general_flow").
+		SetIsDefault(true).
+		SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	urgentTicket := &ent.Ticket{Type: "generic", Priority: "urgent", TenantID: tenant.ID}
+	key, err := resolver.ResolveWithPriority(ctx, urgentTicket, "")
+	require.NoError(t, err)
+	assert.Equal(t, "ticket_urgent_flow", key, "既有的 ticket_general_flow 优先级路由回归——本任务只新增一条特判，不能影响这一条")
+}

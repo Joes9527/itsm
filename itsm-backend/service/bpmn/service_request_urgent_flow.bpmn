@@ -2,11 +2,11 @@
 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
                  targetNamespace="http://bpmn.io/schema/bpmn">
 
-  <bpmn:process id="service_request_flow" name="服务请求流程" isExecutable="true">
+  <bpmn:process id="service_request_urgent_flow" name="紧急服务请求流程" isExecutable="true">
     <bpmn:extensionElements>
       <bpmn:metaData name="category">service_request</bpmn:metaData>
       <bpmn:metaData name="version">1.0.0</bpmn:metaData>
-      <bpmn:metaData name="description">标准服务请求处理流程</bpmn:metaData>
+      <bpmn:metaData name="description">高优先级服务请求处理流程（结构与标准服务请求流程等价，暂无独立超时/升级差异）</bpmn:metaData>
     </bpmn:extensionElements>
 
     <!-- 开始事件：请求提交 -->

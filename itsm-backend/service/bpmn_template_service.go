@@ -130,6 +130,10 @@ func (s *BPMNTemplateService) listTemplates() ([]*TemplateInfo, error) {
 			info.Name = "服务请求流程"
 			info.Category = "service_request"
 			info.Description = "标准服务请求处理流程"
+		case "service_request_urgent_flow":
+			info.Name = "紧急服务请求流程"
+			info.Category = "service_request"
+			info.Description = "高优先级服务请求处理流程（结构与标准服务请求流程等价，暂无独立超时/升级差异）"
 		case "problem_management_flow":
 			info.Name = "问题管理流程"
 			info.Category = "problem"

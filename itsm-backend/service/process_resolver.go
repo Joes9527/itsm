@@ -62,5 +62,16 @@ func (r *ProcessResolver) ResolveWithPriority(ctx context.Context, ticket *ent.T
 		}
 	}
 
+	// 服务请求场景同理：高/紧急优先级路由到独立的紧急服务请求流程。这条特判是
+	// ProcessBinding.Conditions 机制在工单这条路径上走不到（TriggerProcess 只在
+	// ProcessDefinitionKey 为空时才会去查会求值 Conditions 的 ProcessRoutingService，
+	// 而这里的 processKey 永远非空）之后选定的替代方案，跟上面 ticket_general_flow
+	// 那条保持同样的实现方式，不是发明新机制。
+	if processKey == "service_request_flow" {
+		if ticket.Priority == "high" || ticket.Priority == "urgent" {
+			return "service_request_urgent_flow", nil
+		}
+	}
+
 	return processKey, nil
 }

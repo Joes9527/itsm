@@ -133,3 +133,43 @@ func TestBPMNTemplateService_DeployAndStartChangeEmergencyFlow(t *testing.T) {
 	assert.NotNil(t, instance)
 	assert.Equal(t, "change_emergency_flow", instance.ProcessDefinitionKey)
 }
+
+func TestBPMNTemplateService_ListTemplates_IncludesServiceRequestUrgentFlow(t *testing.T) {
+	svc := &BPMNTemplateService{}
+	templates, err := svc.listTemplates()
+	require.NoError(t, err)
+
+	var found *TemplateInfo
+	for _, tmpl := range templates {
+		if tmpl.ID == "service_request_urgent_flow" {
+			found = tmpl
+			break
+		}
+	}
+	require.NotNil(t, found, "service_request_urgent_flow.bpmn 应该被发现并纳入模板清单")
+	assert.Equal(t, "紧急服务请求流程", found.Name)
+	assert.Equal(t, "service_request", found.Category)
+}
+
+func TestBPMNTemplateService_ServiceRequestFlows_ApprovalNodeMarked(t *testing.T) {
+	parser := NewBPMNParser()
+
+	for _, file := range []string{"service_request_flow.bpmn", "service_request_urgent_flow.bpmn"} {
+		data, err := bpmnTemplates.ReadFile("bpmn/" + file)
+		require.NoError(t, err, file)
+
+		defs, err := parser.ParseXML(data)
+		require.NoError(t, err, file)
+		require.Len(t, defs.Processes, 1, file)
+
+		var approval *BPMNUserTask
+		for _, ut := range defs.Processes[0].UserTasks {
+			if ut.ID == "Activity_Approval" {
+				approval = ut
+				break
+			}
+		}
+		require.NotNil(t, approval, "%s 应该有 Activity_Approval 节点", file)
+		assert.Equal(t, "approval", approval.TaskPurpose, "%s 的 Activity_Approval 应该打上 taskPurpose=approval", file)
+	}
+}
