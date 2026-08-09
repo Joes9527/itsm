@@ -14,9 +14,11 @@
 
 ## 现状核实（代码走查 + 本地 dev 库查证，2026-08-08）
 
-### `ApprovalWorkflow` 是新租户 onboarding 的一部分，不是没人用的遗留代码
+### `ApprovalWorkflow` 是产品默认种子数据，不是没人用的遗留代码——但"每个新租户自动拿到"这个说法不准确，已订正
 
-`pkg/seeder/tenant_provisioner.go:201-215` 会把源租户（模板租户）的 4 个 `ApprovalWorkflow` 记录克隆给每一个新建租户：服务请求审批、普通变更审批、紧急变更审批、权限申请审批。本地 dev 库查证（`docker exec itsm-postgres-dev`）确认这 4 条记录全部是同一秒创建的种子数据（2026-08-04），不是真实使用产生的数据。
+`config/seed/default.json` 的 `ApprovalWorkflows`/`ProcessBindings` 数组通过 `pkg/seeder/seeder.go` 的 `loadSeedConfig → seedApprovalWorkflows/seedProcessBindings` 在**进程启动时**（`internal/bootstrap/app.go` 的初始化引擎，受 `AutoSeed` 配置门控）写入 `tenant.code == "default"` 这个模板租户。本地 dev 库查证（`docker exec itsm-postgres-dev`）确认 `approval_workflows` 表的 4 条记录内容跟这个 JSON 文件逐字节一致，证实这确实是活的种子源，不是死配置。
+
+**订正（2026-08-08 复审后核实）**：原文说这 4 条记录会"克隆给每一个新建租户"，这不准确。真正的租户创建 API（`service/tenant_service.go` 的 `CreateTenant`）完全不做任何 Approval/ProcessBinding 相关的种子克隆——通过这个 API 建的新租户默认没有这 4 个工作流，直接落到 `ticket_general_flow` 兜底。克隆动作只发生在 `pkg/seeder/tenant_provisioner.go` 的 `ProvisionTenant`，而这是一个独立的运维 CLI 工具（`cmd/provision_tenant/main.go`），不是自动挂在租户创建流程上的。也就是说这 4 条记录的实际影响面是：①"default" 模板租户自己（每次启动都会重新核对种子）；②任何被运维手工跑过 `provision_tenant` 工具的租户。不是"绝对每一个新租户"。这个订正不影响后面"要不要迁移这 4 个模板"的结论（default 模板租户本身也需要这次修复，运维流程未来还会继续用它作为克隆源），但纠正了受影响范围的描述。
 
 ### 种子默认模板一旦触发就会报错——不是行为不对，是完全跑不起来
 
