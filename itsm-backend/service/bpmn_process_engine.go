@@ -677,6 +677,21 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 				if err != nil {
 					e.logger.Warnw("按角色解析候选审批人失败，转候选组兜底", "role", task.AssigneeRole, "error", err)
 				} else {
+					// 排除申请人自己必须在这里做（存入 roleCandidates 之前），而不是等到下面
+					// 合并进 expandedCandidateUsers 的时候才做——下面的候选组兜底判断
+					// （len(roleCandidates) == 0）要看到排除申请人之后的真实候选人数，否则
+					// "角色唯一匹配到的人正好是申请人自己"这种情况会被误判为"有候选人"，
+					// 不会触发 candidateGroups 兜底，最终任务 assignee/candidate_users/
+					// candidate_groups 三者皆空，变成没人能处理的孤儿任务。
+					if approvalRequester != nil {
+						candidates = excludeUserFromCandidates(candidates, approvalRequester)
+					}
+					if len(candidates) == 0 {
+						e.logger.Infow(
+							"按角色未解析到候选审批人（该角色下无匹配用户，或唯一匹配是申请人本人已被排除），转候选组兜底",
+							"role", task.AssigneeRole, "tenantID", instance.TenantID,
+						)
+					}
 					roleCandidates = candidates
 				}
 			case task.AssigneeDeptId != 0 || task.AssigneeTeamId != 0 || task.AssigneeProjectId != 0 || task.AssigneeTempTeamId != 0:
@@ -745,18 +760,15 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 		}
 	}
 	if task.TaskPurpose == "approval" && len(roleCandidates) > 0 {
-		// 按角色查出来的候选人，排除申请人自己，合并进 candidate_users——跟 candidateGroups
-		// 展开是互斥的两条路径（见上面的 switch），这里不会重复合并同一批人。
-		filtered := roleCandidates
-		if approvalRequester != nil {
-			filtered = excludeUserFromCandidates(filtered, approvalRequester)
-		}
-		expandedCandidateUsers = e.groupResolver.MergeCandidateUsers(expandedCandidateUsers, filtered)
+		// 按角色查出来的候选人，合并进 candidate_users——跟 candidateGroups 展开是互斥的两条
+		// 路径（见上面的 switch），这里不会重复合并同一批人。申请人自己已经在上面的 switch
+		// case 里排除过了，这里不需要再排除一次。
+		expandedCandidateUsers = e.groupResolver.MergeCandidateUsers(expandedCandidateUsers, roleCandidates)
 		e.logger.Infow(
 			"按角色的候选审批人已展开",
 			"taskID", task.ID,
 			"role", task.AssigneeRole,
-			"expandedUsers", filtered,
+			"expandedUsers", roleCandidates,
 		)
 	}
 	if task.TaskPurpose == "approval" && assignee == "" && strings.TrimSpace(expandedCandidateUsers) == "" {

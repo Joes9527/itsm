@@ -820,3 +820,140 @@ func TestCreateUserTask_Approval_AssigneeRole_TenantIsolation(t *testing.T) {
 	assert.NotContains(t, task.CandidateUsers, "otherTenantManager", "不能跨租户解析到别的租户同角色的用户")
 	assert.Contains(t, task.CandidateUsers, "backupApprover8", "本租户查不到该角色用户时应该转候选组兜底")
 }
+
+// ==================== Finding 1（最终审查）：角色唯一匹配是申请人自己时，必须转候选组兜底，
+// 不能变成 assignee/candidate_users/candidate_groups 三者皆空的孤儿任务 ====================
+
+func TestCreateUserTask_Approval_AssigneeRole_SoleMatchIsRequester_FallsBackToCandidateGroup(t *testing.T) {
+	fx := newApprovalAssignmentFixture(t)
+
+	// 这个角色在本租户下唯一匹配的用户就是申请人自己——排除申请人后候选人列表应该是空，
+	// 必须触发 candidateGroups 兜底，而不是留下一个无人能领取、也没有兜底组的孤儿任务。
+	requester := fx.createUserWithRole(t, "requester30", user.RoleManager, 0)
+	backup := fx.createUser(t, "backupApprover9", 0)
+	fx.createGroup(t, "ticket-approvers", backup.ID)
+
+	instance := fx.createInstance(t, "assignee-role-sole-match-is-requester", map[string]interface{}{
+		"requester_id": float64(requester.ID),
+	})
+
+	err := fx.engine.createUserTask(fx.ctx, instance, approvalTaskWithRole("Activity_Approval", "工单审批", string(user.RoleManager)))
+	require.NoError(t, err)
+
+	task := fx.getCreatedTask(t, instance.ID, "Activity_Approval")
+	assert.Equal(t, "", task.Assignee)
+	assert.NotContains(t, task.CandidateUsers, "requester30", "候选人列表不能包含申请人自己")
+	assert.Contains(t, task.CandidateUsers, "backupApprover9", "角色唯一匹配是申请人自己时应该转候选组兜底，不能留下无人可领的孤儿任务")
+}
+
+// ==================== Finding 3（最终审查）：固定范围组织路由的另外三个属性也需要跨租户隔离测试
+// （assigneeTempTeamId 复用 assigneeTeamId 同一个 Team 实体/resolver，跳过，避免和团队测试重复）====================
+
+func TestCreateUserTask_Approval_AssigneeDeptId_TenantIsolation(t *testing.T) {
+	fx := newApprovalAssignmentFixture(t)
+
+	otherTenant, err := fx.client.Tenant.Create().
+		SetName("Dept Isolation Tenant").
+		SetCode("dept-isolation-tenant").
+		SetDomain("dept-isolation.example.com").
+		SetStatus("active").
+		Save(fx.ctx)
+	require.NoError(t, err)
+
+	otherManager := fx.createUserInTenant(t, otherTenant.ID, "otherTenantDeptManager", 0)
+	otherDept := fx.createDepartmentInTenant(t, otherTenant.ID, "Other Tenant Dept", otherManager.ID, 0)
+
+	ownManager := fx.createUser(t, "ownDeptManager3", 0)
+	requesterDept := fx.createDepartment(t, "Requester Dept For Dept Isolation", ownManager.ID, 0)
+	requester := fx.createUser(t, "requester31", requesterDept.ID)
+
+	instance := fx.createInstance(t, "assignee-dept-id-tenant-isolation", map[string]interface{}{
+		"requester_id": float64(requester.ID),
+	})
+
+	task := approvalTask("Activity_Approval", "工单审批")
+	task.AssigneeDeptId = otherDept.ID // 本租户里这个 ID 属于别的租户，应该查不到
+	err = fx.engine.createUserTask(fx.ctx, instance, task)
+	require.NoError(t, err)
+
+	created := fx.getCreatedTask(t, instance.ID, "Activity_Approval")
+	assert.NotEqual(t, strconv.Itoa(otherManager.ID), created.Assignee, "不能跨租户解析到另一个租户的固定部门负责人")
+	assert.Equal(t, strconv.Itoa(ownManager.ID), created.Assignee, "固定部门跨租户查不到时应该退到申请人自己部门这一级")
+}
+
+func TestCreateUserTask_Approval_AssigneeTeamId_TenantIsolation(t *testing.T) {
+	fx := newApprovalAssignmentFixture(t)
+
+	otherTenant, err := fx.client.Tenant.Create().
+		SetName("Team Isolation Tenant").
+		SetCode("team-isolation-tenant").
+		SetDomain("team-isolation.example.com").
+		SetStatus("active").
+		Save(fx.ctx)
+	require.NoError(t, err)
+
+	otherLeader := fx.createUserInTenant(t, otherTenant.ID, "otherTenantTeamLeader", 0)
+	otherTeam, err := fx.client.Team.Create().
+		SetName("Other Tenant Team").
+		SetCode("Other Tenant Team").
+		SetTenantID(otherTenant.ID).
+		SetManagerID(otherLeader.ID).
+		Save(fx.ctx)
+	require.NoError(t, err)
+
+	ownManager := fx.createUser(t, "ownDeptManager4", 0)
+	requesterDept := fx.createDepartment(t, "Requester Dept For Team Isolation", ownManager.ID, 0)
+	requester := fx.createUser(t, "requester32", requesterDept.ID)
+
+	instance := fx.createInstance(t, "assignee-team-id-tenant-isolation", map[string]interface{}{
+		"requester_id": float64(requester.ID),
+	})
+
+	task := approvalTask("Activity_Approval", "工单审批")
+	task.AssigneeTeamId = otherTeam.ID // 本租户里这个 ID 属于别的租户，应该查不到
+	err = fx.engine.createUserTask(fx.ctx, instance, task)
+	require.NoError(t, err)
+
+	created := fx.getCreatedTask(t, instance.ID, "Activity_Approval")
+	assert.NotEqual(t, strconv.Itoa(otherLeader.ID), created.Assignee, "不能跨租户解析到另一个租户的固定团队负责人")
+	assert.Equal(t, strconv.Itoa(ownManager.ID), created.Assignee, "固定团队跨租户查不到时应该退到申请人自己部门这一级")
+}
+
+func TestCreateUserTask_Approval_AssigneeProjectId_TenantIsolation(t *testing.T) {
+	fx := newApprovalAssignmentFixture(t)
+
+	otherTenant, err := fx.client.Tenant.Create().
+		SetName("Project Isolation Tenant").
+		SetCode("project-isolation-tenant").
+		SetDomain("project-isolation.example.com").
+		SetStatus("active").
+		Save(fx.ctx)
+	require.NoError(t, err)
+
+	otherManager := fx.createUserInTenant(t, otherTenant.ID, "otherTenantProjectManager", 0)
+	otherProject, err := fx.client.Project.Create().
+		SetName("Other Tenant Project").
+		SetCode("Other Tenant Project").
+		SetTenantID(otherTenant.ID).
+		SetManagerID(otherManager.ID).
+		SetStatus("active").
+		Save(fx.ctx)
+	require.NoError(t, err)
+
+	ownManager := fx.createUser(t, "ownDeptManager5", 0)
+	requesterDept := fx.createDepartment(t, "Requester Dept For Project Isolation", ownManager.ID, 0)
+	requester := fx.createUser(t, "requester33", requesterDept.ID)
+
+	instance := fx.createInstance(t, "assignee-project-id-tenant-isolation", map[string]interface{}{
+		"requester_id": float64(requester.ID),
+	})
+
+	task := approvalTask("Activity_Approval", "工单审批")
+	task.AssigneeProjectId = otherProject.ID // 本租户里这个 ID 属于别的租户，应该查不到
+	err = fx.engine.createUserTask(fx.ctx, instance, task)
+	require.NoError(t, err)
+
+	created := fx.getCreatedTask(t, instance.ID, "Activity_Approval")
+	assert.NotEqual(t, strconv.Itoa(otherManager.ID), created.Assignee, "不能跨租户解析到另一个租户的固定项目负责人")
+	assert.Equal(t, strconv.Itoa(ownManager.ID), created.Assignee, "固定项目跨租户查不到时应该退到申请人自己部门这一级")
+}
