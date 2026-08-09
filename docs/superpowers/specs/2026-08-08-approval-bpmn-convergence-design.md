@@ -130,9 +130,19 @@ candidateGroups 兜底（复用 excludeUserFromCandidates 同一套保护，不�
 
 ### 组件③ — 修复 `legacy_approval_migration_service.go` + 批量迁移存量自定义工作流
 
-**现状 bug**：`buildLegacyApprovalBPMN`（`service/legacy_approval_migration_service.go`）对 `assigneeType` 不是 `role`/`group` 的情况，一律把 `assignee_value` 原样写进 BPMN `assignee` 属性。对 `user` 类型这是对的（`assignee_value` 就是用户 ID）。但对 `dept_manager`/`team_leader`/`project_manager`/`temp_team_leader` 类型，`assignee_value` 是一个**组织范围 ID**（部门/团队/项目 ID），不是用户 ID——直接写进 `assignee` 属性会让 `authorizeTaskActor` 把这个数字当成用户 ID 比对，几乎必然匹配到错误的人或者谁都匹配不上。另外，对 `role` 类型，现有代码把它跟 `group` 类型混在一起都写成 `candidateGroups`——但 `Role`（`User.role` 枚举字段）和 `Group`（`/admin/groups` 的成员制实体）是两套不同的东西，只有真的存在一个同名 `Group` 且成员正好跟角色同步时才会碰巧工作，这是第二个独立的映射错误。
+**现状 bug（2026-08-08 写组件③计划前用真实探针重新核实，比原文严重得多）**：`buildLegacyApprovalBPMN`（`service/legacy_approval_migration_service.go`）读节点字段用的是 `node["assignee_type"]`/`node["assignee_value"]`/`node["step_order"]`（snake_case，`map[string]interface{}` 裸访问）。但真正的、通过 `/admin/approvals` 管理界面创建/编辑出来的租户自定义工作流，`Nodes` 字段存的是 `dto.ApprovalNodeConfig` 的 JSON 形状——`nodesToMaps`（`service/approval_type_converters.go:12`）经过"序列化再反序列化"确保形状一致，JSON key 是**驼峰**的 `assigneeType`/`assigneeValue`/`approverType`/`timeoutHours`/`level`（`dto/ticket_approval_dto.go` 里 `ApprovalNodeConfig` 的 struct tag）。两边字段名完全对不上——不是"某几种类型映射错误"这么轻，是**每一个节点、不分类型，字段读出来全是空/nil**。
 
-**修复**：按 `assigneeType` 生成正确的声明式属性（依赖组件①新加的属性）：
+实测验证（探针跑 `buildLegacyApprovalBPMN` 传入真实形状的节点 `{"level":1,"name":"部门负责人审批","assigneeType":"user","assigneeValue":"42","approvalMode":"any"}`）：
+
+```
+itsm:assignee="&lt;nil&gt;"
+```
+
+字面意思——生成的 BPMN XML 里 `assignee` 属性的值就是字符串 `"<nil>"`（`fmt.Sprint(node["assignee_value"])` 在 key 不存在时对 `nil` 求值的结果），不管原始节点配置的是哪种 `assigneeType`。原文档诊断的"`dept_manager`/`team_leader` 等类型把组织范围 ID 错当用户 ID"、"`role`/`group` 混用成同一个 `candidateGroups`"这两个映射错误依然存在、依然要修，但它们建立在"字段能读到值"这个前提上——这个前提本身是假的，得先修。
+
+（本地 dev 库之前查到的种子默认模板节点形状 `{"role": "dept_manager", "approver_type": "role", "timeout": 480, ...}`，字段名既不是这里的 snake_case，也不是 `dto.ApprovalNodeConfig` 的驼峰——这是组件②已经解决的、单独的"种子数据字段漂移"问题（4 个默认模板已经在组件②清空），不是这里要处理的对象。组件③要处理的"存量自定义工作流"，只要是通过 `CreateWorkflow`/`UpdateWorkflow` 存过一次的，`Nodes` 字段必然是 `nodesToMaps` 产出的驼峰形状，不会是种子数据那种走样的第三种形状。）
+
+**修复**：分两层。第一层是字段解析——`buildLegacyApprovalBPMN` 不再自己用 snake_case key 裸读 `map[string]interface{}`，改成复用已经存在、已经在 `parseWorkflowNodes`/`CreateWorkflow`/`UpdateWorkflow` 里验证过的强类型转换路径：`mapsToNodes(nodes) ([]dto.ApprovalNodeConfig, error)`（`service/approval_type_converters.go:12`），拿到正确解析出来的 `AssigneeType`/`AssigneeValue`/`ApproverType`/`Level`/`Name` 字段（不是重新发明一套解析逻辑）。第二层才是按 `AssigneeType` 生成正确的声明式属性（依赖组件①新加的属性）：
 
 ```
 assigneeType == "user"           → assignee="<value>"（不变，本来就对）
