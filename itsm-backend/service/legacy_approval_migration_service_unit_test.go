@@ -5,8 +5,10 @@ import (
 	"strings"
 	"testing"
 
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/ent/processbinding"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
@@ -143,6 +145,42 @@ func TestBuildLegacyApprovalBPMN_AmountBased_AbortsEntireWorkflow(t *testing.T) 
 	}
 }
 
+// TestBuildLegacyApprovalBPMN_ApproverIDs 锁定固定审批人 ID 列表的迁移：管理端"指定用户"
+// （approverType=user + 固定审批人ID）配出来的节点没有 assigneeType/assigneeValue，以前会掉进
+// default 分支整条工作流迁移失败。ApproverIDs 应该写成 candidateUsers 的十进制 ID CSV。
+func TestBuildLegacyApprovalBPMN_ApproverIDs(t *testing.T) {
+	nodes := []map[string]interface{}{
+		{"level": 1, "name": "指定审批人", "approverType": "user", "approverIds": []int{5, 7}, "approvalMode": "any"},
+	}
+	xml, err := buildLegacyApprovalBPMN("legacy_8", "指定审批人工作流", nodes)
+	require.NoError(t, err, "只配了 ApproverIDs 的节点不应该被当成无法识别的 assignee type 而中止迁移")
+	assert.Contains(t, xml, `itsm:candidateUsers="5,7"`, "ApproverIDs 应该转成 candidateUsers 的十进制 ID CSV")
+	assert.Contains(t, xml, `itsm:taskPurpose="approval"`)
+
+	parsed, err := NewBPMNParser().ParseXML([]byte(xml))
+	require.NoError(t, err)
+	assert.Equal(t, "5,7", parsed.Processes[0].UserTasks[0].CandidateUsers, "生成的 candidateUsers 必须能被 BPMN 解析器读回来")
+}
+
+// TestBuildLegacyApprovalBPMN_ApproverIDsWinOverAssigneeType 锁定优先级顺序，跟遗留运行时
+// ApprovalService（service/approval_service.go:724-732）保持一致：非空 ApproverIDs 优先，
+// AssigneeType/AssigneeValue 只在 ApproverIDs 为空时才被采纳。
+func TestBuildLegacyApprovalBPMN_ApproverIDsWinOverAssigneeType(t *testing.T) {
+	nodes := []map[string]interface{}{
+		{
+			"level": 1, "name": "双配置节点",
+			"approverIds":   []int{11},
+			"assigneeType":  "role",
+			"assigneeValue": "manager",
+			"approvalMode":  "any",
+		},
+	}
+	xml, err := buildLegacyApprovalBPMN("legacy_9", "优先级测试", nodes)
+	require.NoError(t, err)
+	assert.Contains(t, xml, `itsm:candidateUsers="11"`, "同时配了 ApproverIDs 和 AssigneeType 时，ApproverIDs 优先")
+	assert.NotContains(t, xml, "assigneeRole", "ApproverIDs 非空时不应该再落到 assigneeType 分支")
+}
+
 func newMigrationTestClient(t *testing.T) *ent.Client {
 	t.Helper()
 	client := enttest.Open(t, "sqlite3", "file:legacy_approval_migration_test?mode=memory&cache=shared&_fk=1")
@@ -272,6 +310,90 @@ func TestLegacyApprovalMigrationService_MigrateAllTenants_GroupsByTenant(t *test
 	require.NoError(t, err)
 	require.Len(t, byTenant[tenant1.ID], 1)
 	require.Len(t, byTenant[tenant2.ID], 1)
+}
+
+// TestLegacyApprovalMigrationService_Migrate_CreatesReachableProcessBinding 锁定迁移产出的
+// ProcessBinding 行形状。以前 Migrate 把 business_type 写成 workflow.TicketType（如
+// "service_request"）且 business_sub_type 留空，这种行 FindBestBinding 永远查不到——
+// migrated=1 报成功，但没有任何工单会路由到新部署的流程定义。正确形状是
+// business_type="ticket" + business_sub_type=<工单类型>，跟 config/seed/default.json 一致。
+func TestLegacyApprovalMigrationService_Migrate_CreatesReachableProcessBinding(t *testing.T) {
+	client := newMigrationTestClient(t)
+	ctx := context.Background()
+
+	tenant, err := client.Tenant.Create().
+		SetName("Binding Shape Tenant").SetCode("binding-shape-tenant").
+		SetDomain("binding-shape.example.com").SetStatus("active").
+		Save(ctx)
+	require.NoError(t, err)
+
+	workflow, err := client.ApprovalWorkflow.Create().
+		SetName("服务请求审批").
+		SetTicketType("service_request").
+		SetIsActive(true).
+		SetTenantID(tenant.ID).
+		SetNodes([]map[string]interface{}{
+			{"level": 1, "name": "经理审批", "assigneeType": "user", "assigneeValue": "1", "approvalMode": "any"},
+		}).
+		Save(ctx)
+	require.NoError(t, err)
+
+	svc := NewLegacyApprovalMigrationService(client)
+	result, err := svc.Migrate(ctx, workflow, false)
+	require.NoError(t, err)
+	require.False(t, result.Skipped)
+
+	binding, err := client.ProcessBinding.Query().
+		Where(processbinding.ProcessDefinitionKey(result.ProcessDefinitionKey)).
+		Only(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, string(dto.BusinessTypeTicket), binding.BusinessType, "business_type 必须是 ticket，不是工单子类型")
+	assert.Equal(t, workflow.TicketType, binding.BusinessSubType, "工单类型应该写进 business_sub_type")
+	assert.False(t, binding.IsDefault, "迁移出来的按子类型绑定不应该抢占租户的默认绑定")
+
+	// 用 ProcessResolver 验证这行绑定真的可达——跟 process_resolver_test.go 的验证方式一致。
+	resolver := NewProcessResolver(client, NewProcessBindingService(client))
+	ticket := &ent.Ticket{Type: "service_request", Priority: "medium", TenantID: tenant.ID}
+	key, err := resolver.Resolve(ctx, ticket, "")
+	require.NoError(t, err)
+	assert.Equal(t, result.ProcessDefinitionKey, key, "迁移出来的绑定必须能被 resolver 匹配到，而不是落回 ticket_general_flow 兜底")
+}
+
+// TestLegacyApprovalMigrationService_Migrate_EmptyTicketTypeBindingIsReachable 覆盖
+// workflow.TicketType 为空的情况：子类型兜底成 "ticket"，绑定依然可达（通用工单路径）。
+func TestLegacyApprovalMigrationService_Migrate_EmptyTicketTypeBindingIsReachable(t *testing.T) {
+	client := newMigrationTestClient(t)
+	ctx := context.Background()
+
+	tenant, err := client.Tenant.Create().
+		SetName("Empty Type Tenant").SetCode("empty-type-tenant").
+		SetDomain("empty-type.example.com").SetStatus("active").
+		Save(ctx)
+	require.NoError(t, err)
+
+	workflow, err := client.ApprovalWorkflow.Create().
+		SetName("无类型审批").SetIsActive(true).SetTenantID(tenant.ID).
+		SetNodes([]map[string]interface{}{
+			{"level": 1, "name": "经理审批", "assigneeType": "user", "assigneeValue": "1", "approvalMode": "any"},
+		}).
+		Save(ctx)
+	require.NoError(t, err)
+
+	svc := NewLegacyApprovalMigrationService(client)
+	result, err := svc.Migrate(ctx, workflow, false)
+	require.NoError(t, err)
+
+	binding, err := client.ProcessBinding.Query().
+		Where(processbinding.ProcessDefinitionKey(result.ProcessDefinitionKey)).
+		Only(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, string(dto.BusinessTypeTicket), binding.BusinessType)
+	assert.Equal(t, string(dto.BusinessTypeTicket), binding.BusinessSubType, "TicketType 为空时子类型兜底成 ticket")
+
+	resolver := NewProcessResolver(client, NewProcessBindingService(client))
+	key, err := resolver.Resolve(ctx, &ent.Ticket{Type: "ticket", Priority: "medium", TenantID: tenant.ID}, "")
+	require.NoError(t, err)
+	assert.Equal(t, result.ProcessDefinitionKey, key)
 }
 
 func TestLegacyApprovalMigrationService_MigrateAllForTenant_DryRunDoesNotPersist(t *testing.T) {
