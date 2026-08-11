@@ -10,7 +10,6 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -20,9 +19,9 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
-	entuser "itsm-backend/ent/user"
 	"itsm-backend/handlers/cmdb"
 	"itsm-backend/handlers/service_catalog"
+	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -93,13 +92,14 @@ func srSetup(t *testing.T) (*gin.Engine, *ent.Client, int, int, int) {
 
 	// 播种一个服务目录（无 CI 类型，走简单路径）
 	scRepo := service_catalog.NewEntRepository(client)
-	scSvc := service_catalog.NewService(scRepo, logger)
-	cat, err := scSvc.Create(ctx, "SRCatalog-"+srUID(), "software", "for test", 0, tenant.ID, "enabled", 0, 0)
+	scSvc := service_catalog.NewService(scRepo, client, logger)
+	cat, err := scSvc.Create(ctx, "SRCatalog-"+srUID(), "software", "for test", 0, tenant.ID, "enabled", 0, 0, nil)
 	require.NoError(t, err)
 
 	repo := NewEntRepository(client)
 	cmdbRepo := cmdb.NewEntRepository(client)
-	svc := NewService(repo, scRepo, cmdbRepo, client, logger)
+	ticketSvc := service.NewTicketServiceForTest(client, logger)
+	svc := NewService(repo, scRepo, cmdbRepo, client, logger, ticketSvc)
 	h := NewHandler(svc)
 
 	user, err := client.User.Create().
@@ -118,11 +118,10 @@ func srSetup(t *testing.T) (*gin.Engine, *ent.Client, int, int, int) {
 	r.Use(srAuth(tenant.ID, uid))
 	r.POST("/api/v1/service-requests", h.Create)
 	r.GET("/api/v1/service-requests", h.List)
+	r.GET("/api/v1/service-requests/by-ticket/:ticketId", h.GetByTicket)
 	r.GET("/api/v1/service-requests/:id", h.Get)
 	r.PUT("/api/v1/service-requests/:id", h.Update)
-	r.PUT("/api/v1/service-requests/:id/status", h.UpdateStatus)
 	r.DELETE("/api/v1/service-requests/:id", h.Delete)
-	r.POST("/api/v1/service-requests/:id/approval", h.ApplyApproval)
 	return r, client, tenant.ID, uid, cat.ID
 }
 
@@ -152,7 +151,37 @@ func TestServiceRequestHandler_Create_Success(t *testing.T) {
 	require.Equal(t, common.SuccessCode, resp.Code, "body=%s", srStr(resp))
 	data := resp.Data.(map[string]interface{})
 	assert.EqualValues(t, catID, data["catalogId"])
-	assert.Equal(t, "submitted", data["status"])
+	assert.Greater(t, data["ticketId"], float64(0), "Create 必须委托创建关联 Ticket 并回写 ticketId")
+}
+
+func TestHandler_Get_IncludesCustomFieldValues(t *testing.T) {
+	// srSetup 返回 (r, client, tenantID, userID, catalogID)；这里不用它预置的那个
+	// catalogID（没有字段定义），另外建一个带字段的 ServiceCatalog。
+	r, client, tenantID, _, _ := srSetup(t)
+	scRepo := service_catalog.NewEntRepository(client)
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
+	catalog, err := scService.Create(context.Background(), "云主机申请-"+srUID(), "software", "desc", 1, tenantID, "enabled", 0, 0,
+		[]service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}})
+	require.NoError(t, err)
+
+	createReq := dto.CreateServiceRequestRequest{
+		CatalogID: catalog.ID, Title: "申请", Reason: "测试", ComplianceAck: true,
+		FormData: map[string]interface{}{"environment": "staging"},
+	}
+	createResp := srDoReq(t, r, "POST", "/api/v1/service-requests", createReq)
+	require.Equal(t, common.SuccessCode, createResp.Code, "body=%s", srStr(createResp))
+	created := createResp.Data.(map[string]interface{})
+	id := int(created["id"].(float64))
+
+	getResp := srDoReq(t, r, "GET", "/api/v1/service-requests/"+strconv.Itoa(id), nil)
+	require.Equal(t, common.SuccessCode, getResp.Code, "body=%s", srStr(getResp))
+	data := getResp.Data.(map[string]interface{})
+	customFields := data["customFields"].([]interface{})
+	require.Len(t, customFields, 1)
+	first := customFields[0].(map[string]interface{})
+	assert.Equal(t, "environment", first["name"])
+	assert.Equal(t, "环境", first["label"])
+	assert.Equal(t, "staging", first["value"])
 }
 
 func TestServiceRequestHandler_Create_MissingCatalogID(t *testing.T) {
@@ -195,14 +224,16 @@ func TestServiceRequestCreateDefersNewCIUntilProvisioning(t *testing.T) {
 	ciType, err := client.CIType.Create().SetName("Virtual Machine").SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 	scRepo := service_catalog.NewEntRepository(client)
-	catalog, err := service_catalog.NewService(scRepo, logger).
-		Create(ctx, "VM Request", "infrastructure", "Provision VM", 24, tenant.ID, "enabled", ciType.ID, 0)
+	catalog, err := service_catalog.NewService(scRepo, client, logger).
+		Create(ctx, "VM Request", "infrastructure", "Provision VM", 24, tenant.ID, "enabled", ciType.ID, 0, nil)
 	require.NoError(t, err)
-	service := NewService(NewEntRepository(client), scRepo, cmdb.NewEntRepository(client), client, logger)
+	ticketSvc := service.NewTicketServiceForTest(client, logger)
+	srSvc := NewService(NewEntRepository(client), scRepo, cmdb.NewEntRepository(client), client, logger, ticketSvc)
 	expireAt := time.Now().Add(30 * 24 * time.Hour)
 
-	created, err := service.Create(ctx, tenant.ID, user.ID, catalog.ID, &ServiceRequest{
-		Title: "Production VM", ComplianceAck: true, DataClassification: "internal", ExpireAt: &expireAt,
+	created, err := srSvc.Create(ctx, tenant.ID, user.ID, catalog.ID, &ServiceRequest{
+		ComplianceAck: true, DataClassification: "internal", ExpireAt: &expireAt,
+		FormData: map[string]interface{}{"title": "Production VM"},
 	})
 	require.NoError(t, err)
 	assert.Zero(t, created.CiID)
@@ -232,6 +263,26 @@ func TestServiceRequestHandler_Get_NotFound(t *testing.T) {
 	assert.EqualValues(t, 404, resp.Code, "body=%s", srStr(resp))
 }
 
+func TestServiceRequestHandler_GetByTicket(t *testing.T) {
+	r, _, _, _, catID := srSetup(t)
+	id := srCreateOne(t, r, catID)
+	getResp := srDoReq(t, r, "GET", "/api/v1/service-requests/"+strconv.Itoa(id), nil)
+	require.Equal(t, common.SuccessCode, getResp.Code, "body=%s", srStr(getResp))
+	ticketID := int(getResp.Data.(map[string]interface{})["ticketId"].(float64))
+
+	resp := srDoReq(t, r, "GET", "/api/v1/service-requests/by-ticket/"+strconv.Itoa(ticketID), nil)
+	require.Equal(t, common.SuccessCode, resp.Code, "body=%s", srStr(resp))
+	data := resp.Data.(map[string]interface{})
+	assert.EqualValues(t, id, data["id"])
+	assert.EqualValues(t, ticketID, data["ticketId"])
+}
+
+func TestServiceRequestHandler_GetByTicket_NotFound(t *testing.T) {
+	r, _, _, _, _ := srSetup(t)
+	resp := srDoReq(t, r, "GET", "/api/v1/service-requests/by-ticket/999999", nil)
+	assert.EqualValues(t, 404, resp.Code, "body=%s", srStr(resp))
+}
+
 func TestServiceRequestHandler_List(t *testing.T) {
 	r, _, _, _, catID := srSetup(t)
 	srCreateOne(t, r, catID)
@@ -251,28 +302,15 @@ func TestServiceRequestHandler_PartialUpdatePreservesBooleanFields(t *testing.T)
 	require.Equal(t, common.SuccessCode, create.Code, "body=%s", srStr(create))
 	id := int(create.Data.(map[string]interface{})["id"].(float64))
 
+	// Title is no longer part of UpdateServiceRequestRequest (it's ticket-owned, set only at
+	// creation time) — send an update payload that only touches an unrelated field (FormData)
+	// to prove the boolean fields are still preserved when omitted from the payload.
 	update := srDoReq(t, r, "PUT", "/api/v1/service-requests/"+strconv.Itoa(id),
-		dto.UpdateServiceRequestRequest{Title: "Renamed endpoint"})
+		dto.UpdateServiceRequestRequest{FormData: map[string]any{"note": "renamed via test"}})
 	require.Equal(t, common.SuccessCode, update.Code, "body=%s", srStr(update))
 	data := update.Data.(map[string]interface{})
 	assert.Equal(t, true, data["needsPublicIp"])
 	assert.Equal(t, true, data["complianceAck"])
-}
-
-func TestServiceRequestHandler_UpdateStatusCannotBypassApproval(t *testing.T) {
-	r, _, _, _, catID := srSetup(t)
-	id := srCreateOne(t, r, catID)
-	req := dto.UpdateServiceRequestStatusRequest{Status: "approved"} // 归一化为 security_approved
-	resp := srDoReq(t, r, "PUT", "/api/v1/service-requests/"+strconv.Itoa(id)+"/status", req)
-	assert.EqualValues(t, common.ConflictCode, resp.Code, "body=%s", srStr(resp))
-}
-
-func TestServiceRequestHandler_UpdateStatus_MissingStatus(t *testing.T) {
-	r, _, _, _, catID := srSetup(t)
-	id := srCreateOne(t, r, catID)
-	// status 为空 → binding required 触发 1001
-	resp := srDoReq(t, r, "PUT", "/api/v1/service-requests/"+strconv.Itoa(id)+"/status", dto.UpdateServiceRequestStatusRequest{})
-	assert.EqualValues(t, 1001, resp.Code, "body=%s", srStr(resp))
 }
 
 func TestServiceRequestHandler_Delete(t *testing.T) {
@@ -286,273 +324,4 @@ func TestServiceRequestHandler_Delete(t *testing.T) {
 	stored, err := client.ServiceRequest.Get(context.Background(), id)
 	require.NoError(t, err)
 	require.NotNil(t, stored.DeletedAt)
-	approvalCount, err := client.ServiceRequestApproval.Query().Count(context.Background())
-	require.NoError(t, err)
-	assert.Equal(t, 3, approvalCount, "soft deletion must preserve approval audit records")
-}
-
-// --- ApplyApproval（审批动作）路径 ---
-
-// _srAuthRole 与 srAuth 类似，但允许指定角色/部门，用于覆盖审批权限分支。
-//
-//lint:ignore U1000 test helper for future auth role tests
-func _srAuthRole(tid, uid int, role, dept string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Set("tenant_id", tid)
-		c.Set("user_id", uid)
-		c.Set("role", role)
-		c.Set("department", dept)
-		c.Next()
-	}
-}
-
-func srAuthRoleActors(tid, requesterID, actorID int, role, dept string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		uid := actorID
-		if c.Request.Method == http.MethodPost &&
-			strings.HasSuffix(c.Request.URL.Path, "/service-requests") {
-			uid = requesterID
-		}
-		c.Set("tenant_id", tid)
-		c.Set("user_id", uid)
-		c.Set("role", role)
-		c.Set("department", dept)
-		c.Next()
-	}
-}
-
-// srSetupRole 组装服务请求 handler，并指定审批人角色。
-func srSetupRole(t *testing.T, role, dept string) (*gin.Engine, int, int, int) {
-	t.Helper()
-	dsn := "file:" + filepath.Join(t.TempDir(), "sr_role_test.db") + "?_fk=1"
-	client := enttest.Open(t, "sqlite3", dsn)
-	logger := zaptest.NewLogger(t).Sugar()
-	ctx := context.Background()
-	tenant, err := client.Tenant.Create().
-		SetName("SRTenant").
-		SetCode("SR" + srUID()).
-		SetDomain("sr.test").
-		SetStatus("active").
-		Save(ctx)
-	require.NoError(t, err)
-	scRepo := service_catalog.NewEntRepository(client)
-	scSvc := service_catalog.NewService(scRepo, logger)
-	cat, err := scSvc.Create(ctx, "SRCatalog-"+srUID(), "software", "for test", 0, tenant.ID, "enabled", 0, 0)
-	require.NoError(t, err)
-	repo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
-	svc := NewService(repo, scRepo, cmdbRepo, client, logger)
-	h := NewHandler(svc)
-	requester, err := client.User.Create().
-		SetUsername("sr-requester-" + srUID()).
-		SetEmail("sr-requester-" + srUID() + "@example.com").
-		SetName("SR Requester").
-		SetPasswordHash("hash").
-		SetRole("agent").
-		SetDepartment(dept).
-		SetActive(true).
-		SetTenantID(tenant.ID).
-		Save(ctx)
-	require.NoError(t, err)
-	user, err := client.User.Create().
-		SetUsername("sr-role-user-" + srUID()).
-		SetEmail("sr-role-" + srUID() + "@example.com").
-		SetName("SR Role User").
-		SetPasswordHash("hash").
-		SetRole(entuser.Role(role)).
-		SetDepartment(dept).
-		SetActive(true).
-		SetTenantID(tenant.ID).
-		Save(ctx)
-	require.NoError(t, err)
-	uid := user.ID
-	r := gin.New()
-	r.Use(srAuthRoleActors(tenant.ID, requester.ID, uid, role, dept))
-	r.POST("/api/v1/service-requests", h.Create)
-	r.POST("/api/v1/service-requests/:id/approval", h.ApplyApproval)
-	r.PUT("/api/v1/service-requests/:id", h.Update)
-	r.PUT("/api/v1/service-requests/:id/status", h.UpdateStatus)
-	r.DELETE("/api/v1/service-requests/:id", h.Delete)
-	return r, tenant.ID, uid, cat.ID
-}
-
-// srApprovals 提取响应里的审批步骤数组，便于按状态断言。
-func srApprovals(t *testing.T, resp *common.Response) []map[string]interface{} {
-	t.Helper()
-	data := resp.Data.(map[string]interface{})
-	raw, ok := data["approvals"].([]interface{})
-	require.True(t, ok, "approvals field missing: %s", srStr(resp))
-	out := make([]map[string]interface{}, 0, len(raw))
-	for _, a := range raw {
-		out = append(out, a.(map[string]interface{}))
-	}
-	return out
-}
-
-func TestServiceRequestHandler_ApplyApproval_FirstApprove(t *testing.T) {
-	r, _, _, catID := srSetupRole(t, "manager", "IT")
-	id := srCreateOne(t, r, catID)
-	resp := srDoReq(t, r, "POST", "/api/v1/service-requests/"+strconv.Itoa(id)+"/approval",
-		dto.ServiceRequestApprovalActionRequest{Action: "approve"})
-	require.Equal(t, common.SuccessCode, resp.Code, "body=%s", srStr(resp))
-	data := resp.Data.(map[string]interface{})
-	assert.Equal(t, "manager_approved", data["status"])
-	apps := srApprovals(t, resp)
-	approved, pending := 0, 0
-	for _, a := range apps {
-		switch a["status"] {
-		case "approved":
-			approved++
-		case "pending":
-			pending++
-		}
-	}
-	assert.Equal(t, 1, approved, "exactly one approval should be approved")
-	assert.Equal(t, 2, pending, "two approvals should remain pending")
-}
-
-func TestServiceRequestHandler_ApplyApproval_InvalidAction(t *testing.T) {
-	r, _, _, catID := srSetupRole(t, "manager", "IT")
-	id := srCreateOne(t, r, catID)
-	// action 不在 {approve,reject} → binding oneof 校验失败 → 1001
-	resp := srDoReq(t, r, "POST", "/api/v1/service-requests/"+strconv.Itoa(id)+"/approval",
-		dto.ServiceRequestApprovalActionRequest{Action: "fly"})
-	assert.EqualValues(t, 1001, resp.Code, "body=%s", srStr(resp))
-}
-
-func TestServiceRequestHandler_ApplyApproval_RejectRequiresComment(t *testing.T) {
-	r, _, _, catID := srSetupRole(t, "manager", "IT")
-	id := srCreateOne(t, r, catID)
-	// reject 但 comment 为空 → service 返回 BadRequest → handler 映射 5001
-	resp := srDoReq(t, r, "POST", "/api/v1/service-requests/"+strconv.Itoa(id)+"/approval",
-		dto.ServiceRequestApprovalActionRequest{Action: "reject", Comment: ""})
-	assert.EqualValues(t, common.ParamErrorCode, resp.Code, "body=%s", srStr(resp))
-}
-
-func TestServiceRequestHandler_ApplyApproval_Reject(t *testing.T) {
-	r, _, _, catID := srSetupRole(t, "manager", "IT")
-	id := srCreateOne(t, r, catID)
-	resp := srDoReq(t, r, "POST", "/api/v1/service-requests/"+strconv.Itoa(id)+"/approval",
-		dto.ServiceRequestApprovalActionRequest{Action: "reject", Comment: "policy violation"})
-	require.Equal(t, common.SuccessCode, resp.Code, "body=%s", srStr(resp))
-	data := resp.Data.(map[string]interface{})
-	assert.Equal(t, "rejected", data["status"])
-}
-
-func TestServiceRequestHandler_ApplyApproval_InvalidID(t *testing.T) {
-	r, _, _, _ := srSetupRole(t, "manager", "IT")
-	resp := srDoReq(t, r, "POST", "/api/v1/service-requests/abc/approval",
-		dto.ServiceRequestApprovalActionRequest{Action: "approve"})
-	assert.EqualValues(t, 1001, resp.Code, "body=%s", srStr(resp))
-}
-
-func TestServiceRequestHandler_ApplyApproval_PermissionDenied(t *testing.T) {
-	// 当前审批级别为 manager（level 1），但审批人是 agent → 权限不足
-	r, _, _, catID := srSetupRole(t, "agent", "IT")
-	id := srCreateOne(t, r, catID)
-	resp := srDoReq(t, r, "POST", "/api/v1/service-requests/"+strconv.Itoa(id)+"/approval",
-		dto.ServiceRequestApprovalActionRequest{Action: "approve"})
-	// 注意：handler 目前把 service 错误统一映射为 5001；
-	// 权限错误理想应返回 2003(Forbidden)，此处先钉住当前行为，作为后续优化点。
-	assert.EqualValues(t, common.ForbiddenErrorCode, resp.Code, "body=%s", srStr(resp))
-}
-
-func TestServiceRequestHandler_RequesterCannotSelfApprove(t *testing.T) {
-	r, _, _, _, catID := srSetup(t)
-	id := srCreateOne(t, r, catID)
-	resp := srDoReq(t, r, "POST", "/api/v1/service-requests/"+strconv.Itoa(id)+"/approval",
-		dto.ServiceRequestApprovalActionRequest{Action: "approve"})
-	assert.EqualValues(t, common.ForbiddenErrorCode, resp.Code, "body=%s", srStr(resp))
-}
-
-func TestServiceRequestPendingApprovalsAreDepartmentScopedAndUnknownRoleDenied(t *testing.T) {
-	_, client, tenantID, managerID, catID := srSetup(t)
-	ctx := context.Background()
-	logger := zaptest.NewLogger(t).Sugar()
-	scRepo := service_catalog.NewEntRepository(client)
-	service := NewService(NewEntRepository(client), scRepo, cmdb.NewEntRepository(client), client, logger)
-	itRequester, err := client.User.Create().
-		SetUsername("it-requester-" + srUID()).SetEmail("it-" + srUID() + "@example.com").SetName("IT Requester").
-		SetPasswordHash("hash").SetRole("agent").SetDepartment("IT").SetActive(true).SetTenantID(tenantID).Save(ctx)
-	require.NoError(t, err)
-	hrRequester, err := client.User.Create().
-		SetUsername("hr-requester-" + srUID()).SetEmail("hr-" + srUID() + "@example.com").SetName("HR Requester").
-		SetPasswordHash("hash").SetRole("agent").SetDepartment("HR").SetActive(true).SetTenantID(tenantID).Save(ctx)
-	require.NoError(t, err)
-	expireAt := time.Now().Add(30 * 24 * time.Hour)
-	for _, requesterID := range []int{itRequester.ID, hrRequester.ID} {
-		_, err = service.Create(ctx, tenantID, requesterID, catID, &ServiceRequest{
-			Title: "Department scoped request", ComplianceAck: true,
-			DataClassification: "internal", ExpireAt: &expireAt,
-		})
-		require.NoError(t, err)
-	}
-
-	pending, total, err := service.ListPendingApprovals(ctx, tenantID, managerID, "manager", 1, 10)
-	require.NoError(t, err)
-	assert.Equal(t, 1, total)
-	require.Len(t, pending, 1)
-	assert.Equal(t, itRequester.ID, pending[0].RequesterID)
-
-	_, _, err = service.ListPendingApprovals(ctx, tenantID, managerID, "viewer", 1, 10)
-	require.Error(t, err)
-}
-
-func TestServiceRequestHandler_ApplyApproval_FullProgression(t *testing.T) {
-	// admin 角色可逐级审批全部 3 级
-	r, _, _, catID := srSetupRole(t, "admin", "IT")
-	id := srCreateOne(t, r, catID)
-
-	// 第 1 级：manager → manager_approved
-	resp1 := srDoReq(t, r, "POST", "/api/v1/service-requests/"+strconv.Itoa(id)+"/approval",
-		dto.ServiceRequestApprovalActionRequest{Action: "approve"})
-	require.Equal(t, common.SuccessCode, resp1.Code, "L1 body=%s", srStr(resp1))
-	assert.Equal(t, "manager_approved", resp1.Data.(map[string]interface{})["status"])
-
-	// 第 2 级：it → it_approved
-	resp2 := srDoReq(t, r, "POST", "/api/v1/service-requests/"+strconv.Itoa(id)+"/approval",
-		dto.ServiceRequestApprovalActionRequest{Action: "approve"})
-	require.Equal(t, common.SuccessCode, resp2.Code, "L2 body=%s", srStr(resp2))
-	assert.Equal(t, "it_approved", resp2.Data.(map[string]interface{})["status"])
-
-	// 第 3 级：security → security_approved
-	resp3 := srDoReq(t, r, "POST", "/api/v1/service-requests/"+strconv.Itoa(id)+"/approval",
-		dto.ServiceRequestApprovalActionRequest{Action: "approve"})
-	require.Equal(t, common.SuccessCode, resp3.Code, "L3 body=%s", srStr(resp3))
-	assert.Equal(t, "security_approved", resp3.Data.(map[string]interface{})["status"])
-	assert.EqualValues(t, 3, resp3.Data.(map[string]interface{})["currentLevel"])
-
-	// 超量审批：3 级已批完，无待审 → 冲突错误 → handler 映射 5001
-	resp4 := srDoReq(t, r, "POST", "/api/v1/service-requests/"+strconv.Itoa(id)+"/approval",
-		dto.ServiceRequestApprovalActionRequest{Action: "approve"})
-	assert.EqualValues(t, common.ConflictCode, resp4.Code, "L4 body=%s", srStr(resp4))
-}
-
-func TestServiceRequestHandler_OperationalLifecycleAfterApproval(t *testing.T) {
-	r, _, _, catID := srSetupRole(t, "admin", "IT")
-	id := srCreateOne(t, r, catID)
-	for i := 0; i < 3; i++ {
-		resp := srDoReq(t, r, "POST", "/api/v1/service-requests/"+strconv.Itoa(id)+"/approval",
-			dto.ServiceRequestApprovalActionRequest{Action: "approve"})
-		require.Equal(t, common.SuccessCode, resp.Code, "approval %d: %s", i+1, srStr(resp))
-	}
-
-	provisioning := srDoReq(t, r, "PUT", "/api/v1/service-requests/"+strconv.Itoa(id)+"/status",
-		dto.UpdateServiceRequestStatusRequest{Status: "in_progress"})
-	require.Equal(t, common.SuccessCode, provisioning.Code, "body=%s", srStr(provisioning))
-	assert.Equal(t, "provisioning", provisioning.Data.(map[string]interface{})["status"])
-	assert.NotNil(t, provisioning.Data.(map[string]interface{})["processorId"])
-	assert.NotNil(t, provisioning.Data.(map[string]interface{})["startedAt"])
-
-	delivered := srDoReq(t, r, "PUT", "/api/v1/service-requests/"+strconv.Itoa(id)+"/status",
-		dto.UpdateServiceRequestStatusRequest{Status: "completed"})
-	require.Equal(t, common.SuccessCode, delivered.Code, "body=%s", srStr(delivered))
-	assert.Equal(t, "delivered", delivered.Data.(map[string]interface{})["status"])
-	assert.NotNil(t, delivered.Data.(map[string]interface{})["completedAt"])
-
-	edit := srDoReq(t, r, "PUT", "/api/v1/service-requests/"+strconv.Itoa(id),
-		dto.UpdateServiceRequestRequest{Title: "must not change"})
-	assert.EqualValues(t, common.ConflictCode, edit.Code)
-	deleteResp := srDoReq(t, r, "DELETE", "/api/v1/service-requests/"+strconv.Itoa(id), nil)
-	assert.EqualValues(t, common.ConflictCode, deleteResp.Code)
 }

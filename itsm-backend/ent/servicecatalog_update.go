@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"itsm-backend/ent/predicate"
 	"itsm-backend/ent/servicecatalog"
-	"itsm-backend/ent/servicecatalogitem"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -353,18 +352,6 @@ func (_u *ServiceCatalogUpdate) ClearCloudServiceID() *ServiceCatalogUpdate {
 	return _u
 }
 
-// SetFormSchema sets the "form_schema" field.
-func (_u *ServiceCatalogUpdate) SetFormSchema(v map[string]interface{}) *ServiceCatalogUpdate {
-	_u.mutation.SetFormSchema(v)
-	return _u
-}
-
-// ClearFormSchema clears the value of the "form_schema" field.
-func (_u *ServiceCatalogUpdate) ClearFormSchema() *ServiceCatalogUpdate {
-	_u.mutation.ClearFormSchema()
-	return _u
-}
-
 // SetAvailableRegions sets the "available_regions" field.
 func (_u *ServiceCatalogUpdate) SetAvailableRegions(v []string) *ServiceCatalogUpdate {
 	_u.mutation.SetAvailableRegions(v)
@@ -491,45 +478,9 @@ func (_u *ServiceCatalogUpdate) SetUpdatedAt(v time.Time) *ServiceCatalogUpdate 
 	return _u
 }
 
-// AddItemIDs adds the "items" edge to the ServiceCatalogItem entity by IDs.
-func (_u *ServiceCatalogUpdate) AddItemIDs(ids ...int) *ServiceCatalogUpdate {
-	_u.mutation.AddItemIDs(ids...)
-	return _u
-}
-
-// AddItems adds the "items" edges to the ServiceCatalogItem entity.
-func (_u *ServiceCatalogUpdate) AddItems(v ...*ServiceCatalogItem) *ServiceCatalogUpdate {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.AddItemIDs(ids...)
-}
-
 // Mutation returns the ServiceCatalogMutation object of the builder.
 func (_u *ServiceCatalogUpdate) Mutation() *ServiceCatalogMutation {
 	return _u.mutation
-}
-
-// ClearItems clears all "items" edges to the ServiceCatalogItem entity.
-func (_u *ServiceCatalogUpdate) ClearItems() *ServiceCatalogUpdate {
-	_u.mutation.ClearItems()
-	return _u
-}
-
-// RemoveItemIDs removes the "items" edge to ServiceCatalogItem entities by IDs.
-func (_u *ServiceCatalogUpdate) RemoveItemIDs(ids ...int) *ServiceCatalogUpdate {
-	_u.mutation.RemoveItemIDs(ids...)
-	return _u
-}
-
-// RemoveItems removes "items" edges to ServiceCatalogItem entities.
-func (_u *ServiceCatalogUpdate) RemoveItems(v ...*ServiceCatalogItem) *ServiceCatalogUpdate {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.RemoveItemIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -699,12 +650,6 @@ func (_u *ServiceCatalogUpdate) sqlSave(ctx context.Context) (_node int, err err
 	if _u.mutation.CloudServiceIDCleared() {
 		_spec.ClearField(servicecatalog.FieldCloudServiceID, field.TypeInt)
 	}
-	if value, ok := _u.mutation.FormSchema(); ok {
-		_spec.SetField(servicecatalog.FieldFormSchema, field.TypeJSON, value)
-	}
-	if _u.mutation.FormSchemaCleared() {
-		_spec.ClearField(servicecatalog.FieldFormSchema, field.TypeJSON)
-	}
 	if value, ok := _u.mutation.AvailableRegions(); ok {
 		_spec.SetField(servicecatalog.FieldAvailableRegions, field.TypeJSON, value)
 	}
@@ -750,51 +695,6 @@ func (_u *ServiceCatalogUpdate) sqlSave(ctx context.Context) (_node int, err err
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(servicecatalog.FieldUpdatedAt, field.TypeTime, value)
-	}
-	if _u.mutation.ItemsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   servicecatalog.ItemsTable,
-			Columns: []string{servicecatalog.ItemsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(servicecatalogitem.FieldID, field.TypeInt),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.RemovedItemsIDs(); len(nodes) > 0 && !_u.mutation.ItemsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   servicecatalog.ItemsTable,
-			Columns: []string{servicecatalog.ItemsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(servicecatalogitem.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.ItemsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   servicecatalog.ItemsTable,
-			Columns: []string{servicecatalog.ItemsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(servicecatalogitem.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -1139,18 +1039,6 @@ func (_u *ServiceCatalogUpdateOne) ClearCloudServiceID() *ServiceCatalogUpdateOn
 	return _u
 }
 
-// SetFormSchema sets the "form_schema" field.
-func (_u *ServiceCatalogUpdateOne) SetFormSchema(v map[string]interface{}) *ServiceCatalogUpdateOne {
-	_u.mutation.SetFormSchema(v)
-	return _u
-}
-
-// ClearFormSchema clears the value of the "form_schema" field.
-func (_u *ServiceCatalogUpdateOne) ClearFormSchema() *ServiceCatalogUpdateOne {
-	_u.mutation.ClearFormSchema()
-	return _u
-}
-
 // SetAvailableRegions sets the "available_regions" field.
 func (_u *ServiceCatalogUpdateOne) SetAvailableRegions(v []string) *ServiceCatalogUpdateOne {
 	_u.mutation.SetAvailableRegions(v)
@@ -1277,45 +1165,9 @@ func (_u *ServiceCatalogUpdateOne) SetUpdatedAt(v time.Time) *ServiceCatalogUpda
 	return _u
 }
 
-// AddItemIDs adds the "items" edge to the ServiceCatalogItem entity by IDs.
-func (_u *ServiceCatalogUpdateOne) AddItemIDs(ids ...int) *ServiceCatalogUpdateOne {
-	_u.mutation.AddItemIDs(ids...)
-	return _u
-}
-
-// AddItems adds the "items" edges to the ServiceCatalogItem entity.
-func (_u *ServiceCatalogUpdateOne) AddItems(v ...*ServiceCatalogItem) *ServiceCatalogUpdateOne {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.AddItemIDs(ids...)
-}
-
 // Mutation returns the ServiceCatalogMutation object of the builder.
 func (_u *ServiceCatalogUpdateOne) Mutation() *ServiceCatalogMutation {
 	return _u.mutation
-}
-
-// ClearItems clears all "items" edges to the ServiceCatalogItem entity.
-func (_u *ServiceCatalogUpdateOne) ClearItems() *ServiceCatalogUpdateOne {
-	_u.mutation.ClearItems()
-	return _u
-}
-
-// RemoveItemIDs removes the "items" edge to ServiceCatalogItem entities by IDs.
-func (_u *ServiceCatalogUpdateOne) RemoveItemIDs(ids ...int) *ServiceCatalogUpdateOne {
-	_u.mutation.RemoveItemIDs(ids...)
-	return _u
-}
-
-// RemoveItems removes "items" edges to ServiceCatalogItem entities.
-func (_u *ServiceCatalogUpdateOne) RemoveItems(v ...*ServiceCatalogItem) *ServiceCatalogUpdateOne {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.RemoveItemIDs(ids...)
 }
 
 // Where appends a list predicates to the ServiceCatalogUpdate builder.
@@ -1515,12 +1367,6 @@ func (_u *ServiceCatalogUpdateOne) sqlSave(ctx context.Context) (_node *ServiceC
 	if _u.mutation.CloudServiceIDCleared() {
 		_spec.ClearField(servicecatalog.FieldCloudServiceID, field.TypeInt)
 	}
-	if value, ok := _u.mutation.FormSchema(); ok {
-		_spec.SetField(servicecatalog.FieldFormSchema, field.TypeJSON, value)
-	}
-	if _u.mutation.FormSchemaCleared() {
-		_spec.ClearField(servicecatalog.FieldFormSchema, field.TypeJSON)
-	}
 	if value, ok := _u.mutation.AvailableRegions(); ok {
 		_spec.SetField(servicecatalog.FieldAvailableRegions, field.TypeJSON, value)
 	}
@@ -1566,51 +1412,6 @@ func (_u *ServiceCatalogUpdateOne) sqlSave(ctx context.Context) (_node *ServiceC
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(servicecatalog.FieldUpdatedAt, field.TypeTime, value)
-	}
-	if _u.mutation.ItemsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   servicecatalog.ItemsTable,
-			Columns: []string{servicecatalog.ItemsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(servicecatalogitem.FieldID, field.TypeInt),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.RemovedItemsIDs(); len(nodes) > 0 && !_u.mutation.ItemsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   servicecatalog.ItemsTable,
-			Columns: []string{servicecatalog.ItemsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(servicecatalogitem.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.ItemsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   servicecatalog.ItemsTable,
-			Columns: []string{servicecatalog.ItemsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(servicecatalogitem.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &ServiceCatalog{config: _u.config}
 	_spec.Assign = _node.assignValues

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"itsm-backend/dto"
@@ -29,6 +30,16 @@ func NewTicketTypeService(client *ent.Client, logger *zap.SugaredLogger) *Ticket
 // CreateTicketType creates a new ticket type using ent (supports transaction via ctx)
 func (s *TicketTypeService) CreateTicketType(ctx context.Context, req *dto.CreateTicketTypeRequest, tenantID, userID int) (*dto.TicketTypeDefinition, error) {
 	s.logger.Infow("Creating ticket type", "code", req.Code, "tenant_id", tenantID)
+	req.Code, req.Name = strings.TrimSpace(req.Code), strings.TrimSpace(req.Name)
+	if req.Code == "" || req.Name == "" {
+		return nil, fmt.Errorf("工单类型编码和名称不能为空")
+	}
+	if len(req.Code) > 64 || len(req.Name) > 128 {
+		return nil, fmt.Errorf("工单类型编码或名称过长")
+	}
+	if req.ApprovalEnabled && len(req.ApprovalChain) == 0 {
+		return nil, fmt.Errorf("启用审批时必须配置审批链")
+	}
 
 	// Check code uniqueness within tenant
 	exists, err := s.checkCodeExists(ctx, req.Code, tenantID)
@@ -40,7 +51,6 @@ func (s *TicketTypeService) CreateTicketType(ctx context.Context, req *dto.Creat
 	}
 
 	// Serialize complex JSON fields
-	customFieldsMap := toCustomFieldsMap(req.CustomFields)
 	assignmentRulesMap := toAssignmentRulesMap(req.AssignmentRules)
 	approvalChainSlice := toInterfaceSlice(req.ApprovalChain)
 	notificationConfigMap := structToMap(req.NotificationConfig)
@@ -55,7 +65,6 @@ func (s *TicketTypeService) CreateTicketType(ctx context.Context, req *dto.Creat
 		SetIcon(req.Icon).
 		SetColor(req.Color).
 		SetStatus(string(dto.TicketTypeStatusActive)).
-		SetCustomFields(customFieldsMap).
 		SetApprovalEnabled(req.ApprovalEnabled).
 		SetApprovalChain(approvalChainSlice).
 		SetSLAEnabled(req.SLAEnabled).
@@ -95,6 +104,9 @@ func (s *TicketTypeService) UpdateTicketType(ctx context.Context, id int, req *d
 	// Build update mutation using UpdateOne(existing) which supports chaining and returns *TicketType
 	update := s.client.TicketType.UpdateOne(existing)
 	if req.Name != nil {
+		if strings.TrimSpace(*req.Name) == "" {
+			return nil, fmt.Errorf("工单类型名称不能为空")
+		}
 		update.SetName(*req.Name)
 	}
 	if req.Description != nil {
@@ -109,14 +121,22 @@ func (s *TicketTypeService) UpdateTicketType(ctx context.Context, id int, req *d
 	if req.Status != nil {
 		update.SetStatus(string(*req.Status))
 	}
-	if req.CustomFields != nil {
-		update.SetCustomFields(toCustomFieldsMap(*req.CustomFields))
-	}
 	if req.ApprovalEnabled != nil {
 		update.SetApprovalEnabled(*req.ApprovalEnabled)
 	}
 	if req.ApprovalChain != nil {
 		update.SetApprovalChain(toInterfaceSlice(*req.ApprovalChain))
+	}
+	approvalEnabled := existing.ApprovalEnabled
+	if req.ApprovalEnabled != nil {
+		approvalEnabled = *req.ApprovalEnabled
+	}
+	approvalChainEmpty := len(existing.ApprovalChain) == 0
+	if req.ApprovalChain != nil {
+		approvalChainEmpty = len(*req.ApprovalChain) == 0
+	}
+	if approvalEnabled && approvalChainEmpty {
+		return nil, fmt.Errorf("启用审批时必须配置审批链")
 	}
 	if req.SLAEnabled != nil {
 		update.SetSLAEnabled(*req.SLAEnabled)
@@ -252,7 +272,6 @@ func (s *TicketTypeService) toDefinition(t *ent.TicketType) *dto.TicketTypeDefin
 		Icon:               t.Icon,
 		Color:              t.Color,
 		Status:             dto.TicketTypeStatus(t.Status),
-		CustomFields:       convertCustomFields(t.CustomFields),
 		ApprovalEnabled:    t.ApprovalEnabled,
 		ApprovalWorkflowID: strPtrFromInt64(t.ApprovalWorkflowID),
 		ApprovalChain:      convertApprovalChain(t.ApprovalChain),
@@ -340,20 +359,6 @@ func ptrPermissionConfig(m map[string]interface{}) *dto.PermissionConfig {
 	return &result
 }
 
-// toCustomFieldsMap converts DTO slice to ent-compatible map
-func toCustomFieldsMap(fields []dto.CustomFieldDefinition) map[string]interface{} {
-	m := make(map[string]interface{})
-	for _, f := range fields {
-		data, _ := json.Marshal(f)
-		var fm map[string]interface{}
-		json.Unmarshal(data, &fm)
-		for k, v := range fm {
-			m[k] = v
-		}
-	}
-	return m
-}
-
 // toAssignmentRulesMap converts DTO slice to ent-compatible slice of maps
 func toAssignmentRulesMap(rules []dto.AssignmentRule) []interface{} {
 	result := make([]interface{}, len(rules))
@@ -384,20 +389,6 @@ func structToMap(v interface{}) map[string]interface{} {
 	var m map[string]interface{}
 	json.Unmarshal(data, &m)
 	return m
-}
-
-// convertCustomFields converts ent map to DTO CustomFieldDefinition slice
-func convertCustomFields(m map[string]interface{}) []dto.CustomFieldDefinition {
-	if m == nil {
-		return nil
-	}
-	data, err := json.Marshal(m)
-	if err != nil {
-		return nil
-	}
-	var result []dto.CustomFieldDefinition
-	json.Unmarshal(data, &result)
-	return result
 }
 
 // convertAssignmentRules converts ent slice to DTO AssignmentRule slice

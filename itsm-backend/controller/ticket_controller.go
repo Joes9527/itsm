@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strconv"
@@ -9,6 +10,7 @@ import (
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
+	"itsm-backend/ent"
 	"itsm-backend/middleware"
 	"itsm-backend/repository/ticket"
 	"itsm-backend/service"
@@ -21,54 +23,32 @@ type TicketController struct {
 	ticketService           *service.TicketService
 	ticketDependencyService *service.TicketDependencyService
 	db                      *sql.DB
+	client                  *ent.Client
 	logger                  *zap.SugaredLogger
 }
 
-func NewTicketController(ticketService *service.TicketService, ticketDependencyService *service.TicketDependencyService, db *sql.DB, logger *zap.SugaredLogger) *TicketController {
+func NewTicketController(ticketService *service.TicketService, ticketDependencyService *service.TicketDependencyService, db *sql.DB, client *ent.Client, logger *zap.SugaredLogger) *TicketController {
 	return &TicketController{
 		ticketService:           ticketService,
 		ticketDependencyService: ticketDependencyService,
 		db:                      db,
+		client:                  client,
 		logger:                  logger,
 	}
 }
 
-// ticketToResponse 将 V2 领域模型 ticket.Ticket 转换为 DTO TicketResponse
-// V2 负责业务编排，DTO 负责接口呈现；中间需要一层 adapter
-func ticketToResponse(t *ticket.Ticket) *dto.TicketResponse {
-	if t == nil {
-		return nil
-	}
-	resp := &dto.TicketResponse{
-		ID:           t.ID,
-		TicketNumber: t.TicketNumber,
-		Title:        t.Title,
-		Description:  t.Description,
-		Status:       string(t.Status),
-		Priority:     string(t.Priority),
-		Type:         string(t.Type),
-		RequesterID:  t.RequesterID,
-		TenantID:     t.TenantID,
-		Version:      t.Version,
-		CreatedAt:    t.CreatedAt,
-		UpdatedAt:    t.UpdatedAt,
-	}
-	if t.AssigneeID != nil {
-		resp.AssigneeID = *t.AssigneeID
-	}
-	if t.CategoryID != nil {
-		resp.CategoryID = *t.CategoryID
-	}
-	if len(t.CustomFieldValues) > 0 {
-		resp.CustomFieldValues = t.CustomFieldValues
-	}
-	return resp
+// ticketToResponse 工单详情/创建响应——会额外查一次自定义字段值。
+// 薄封装：真正的转换逻辑统一收敛在 service.ToTicketResponse/ToTicketResponseWithCustomFields，
+// controller 不再自己维护一份领域模型到 DTO 的映射。
+func (tc *TicketController) ticketToResponse(ctx context.Context, t *ticket.Ticket) *dto.TicketResponse {
+	return service.ToTicketResponseWithCustomFields(ctx, tc.client, t)
 }
 
-func ticketListToResponse(ts []*ticket.Ticket) []*dto.TicketResponse {
+// ticketListToResponse 工单列表响应——不查字段值，避免 N+1。
+func (tc *TicketController) ticketListToResponse(ctx context.Context, ts []*ticket.Ticket) []*dto.TicketResponse {
 	result := make([]*dto.TicketResponse, 0, len(ts))
 	for _, t := range ts {
-		if r := ticketToResponse(t); r != nil {
+		if r := service.ToTicketResponse(ctx, t); r != nil {
 			result = append(result, r)
 		}
 	}
@@ -90,6 +70,14 @@ func (tc *TicketController) CreateTicket(c *gin.Context) {
 		common.Fail(c, common.ParamErrorCode, "请求参数错误: "+err.Error())
 		return
 	}
+
+	// source 只允许由受信任的内部调用链设置（例如 service_request.Service.Create 在
+	// provisioning 前置条件判断中依赖 source=service_catalog 配合真实的 ticket_id →
+	// process_approval_decision 链路）。公开 HTTP 创建接口必须忽略客户端自报的 source，
+	// 否则任何已认证调用方都能在没有真实关联 ServiceRequest 的情况下伪造
+	// source=service_catalog，误导 ServiceRequestPanel 等 UI 展示。清空后交给
+	// ent schema 的 Default("manual") 生效。
+	req.Source = ""
 
 	// 获取租户ID（从中间件注入）
 	tenantID := c.GetInt("tenant_id")
@@ -126,7 +114,7 @@ func (tc *TicketController) CreateTicket(c *gin.Context) {
 		return
 	}
 
-	common.Success(c, ticketToResponse(ticket))
+	common.Success(c, tc.ticketToResponse(c.Request.Context(), ticket))
 }
 
 // UpdateTicket 更新工单
@@ -176,7 +164,7 @@ func (tc *TicketController) UpdateTicket(c *gin.Context) {
 		return
 	}
 
-	common.Success(c, ticketToResponse(ticket))
+	common.Success(c, tc.ticketToResponse(c.Request.Context(), ticket))
 }
 
 // GetTicket 获取工单详情
@@ -195,7 +183,7 @@ func (tc *TicketController) GetTicket(c *gin.Context) {
 		common.Fail(c, common.NotFoundCode, "工单不存在")
 		return
 	}
-	resp := ticketToResponse(ticket)
+	resp := tc.ticketToResponse(c.Request.Context(), ticket)
 	dto.EnrichTicketResponse(c.Request.Context(), tc.db, resp, tenantID)
 	common.Success(c, resp)
 }
@@ -291,7 +279,7 @@ func (tc *TicketController) UpdateTicketStatus(c *gin.Context) {
 		return
 	}
 
-	common.Success(c, ticketToResponse(ticket))
+	common.Success(c, tc.ticketToResponse(c.Request.Context(), ticket))
 }
 
 // BatchDeleteTickets 批量删除工单
@@ -361,7 +349,7 @@ func (tc *TicketController) AssignTicket(c *gin.Context) {
 		return
 	}
 
-	common.Success(c, ticketToResponse(ticket))
+	common.Success(c, tc.ticketToResponse(c.Request.Context(), ticket))
 }
 
 // EscalateTicket 升级工单
@@ -388,7 +376,7 @@ func (tc *TicketController) EscalateTicket(c *gin.Context) {
 		return
 	}
 
-	common.Success(c, ticketToResponse(ticket))
+	common.Success(c, tc.ticketToResponse(c.Request.Context(), ticket))
 }
 
 // ResolveTicket 解决工单
@@ -422,7 +410,7 @@ func (tc *TicketController) ResolveTicket(c *gin.Context) {
 		return
 	}
 
-	common.Success(c, ticketToResponse(ticket))
+	common.Success(c, tc.ticketToResponse(c.Request.Context(), ticket))
 }
 
 // CloseTicket 关闭工单
@@ -450,7 +438,7 @@ func (tc *TicketController) CloseTicket(c *gin.Context) {
 		return
 	}
 
-	common.Success(c, ticketToResponse(ticket))
+	common.Success(c, tc.ticketToResponse(c.Request.Context(), ticket))
 }
 
 // SearchTickets 搜索工单
@@ -470,7 +458,7 @@ func (tc *TicketController) SearchTickets(c *gin.Context) {
 		return
 	}
 
-	common.Success(c, ticketListToResponse(tickets))
+	common.Success(c, tc.ticketListToResponse(c.Request.Context(), tickets))
 }
 
 // GetOverdueTickets 获取逾期工单
@@ -484,7 +472,7 @@ func (tc *TicketController) GetOverdueTickets(c *gin.Context) {
 		return
 	}
 
-	common.Success(c, ticketListToResponse(tickets))
+	common.Success(c, tc.ticketListToResponse(c.Request.Context(), tickets))
 }
 
 // GetTicketsByAssignee 获取指定处理人的工单
@@ -504,7 +492,7 @@ func (tc *TicketController) GetTicketsByAssignee(c *gin.Context) {
 		return
 	}
 
-	common.Success(c, ticketListToResponse(tickets))
+	common.Success(c, tc.ticketListToResponse(c.Request.Context(), tickets))
 }
 
 // GetTicketActivity 获取工单活动日志
@@ -879,10 +867,9 @@ func normalizeTicketTemplate(template interface{}) gin.H {
 	if !ok || tmpl == nil {
 		return gin.H{}
 	}
-	formFields := tmpl.FormFields
-	if formFields == nil {
-		formFields = gin.H{}
-	}
+	// FormFields 已废弃：模板字段定义现在存在 field_definitions 表，通过 tmpl.Fields 返回。
+	// 这两个 key 仍保留在响应里以兼容旧前端，但内容始终为空对象。
+	formFields := gin.H{}
 	isActive := tmpl.IsActive
 	return gin.H{
 		"id":             tmpl.ID,
@@ -966,7 +953,7 @@ func (tc *TicketController) CreateSubtask(c *gin.Context) {
 		return
 	}
 
-	common.Success(c, ticketToResponse(ticket))
+	common.Success(c, tc.ticketToResponse(c.Request.Context(), ticket))
 }
 
 // UpdateSubtask 更新子任务
@@ -1013,7 +1000,7 @@ func (tc *TicketController) UpdateSubtask(c *gin.Context) {
 		return
 	}
 
-	common.Success(c, ticketToResponse(updatedTicket))
+	common.Success(c, tc.ticketToResponse(c.Request.Context(), updatedTicket))
 }
 
 // DeleteSubtask 删除子任务

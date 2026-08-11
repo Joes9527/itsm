@@ -34,17 +34,6 @@ describe('ServiceRequestAPI', () => {
     });
   });
 
-  describe('getPendingApprovals', () => {
-    it('should get pending approvals', async () => {
-      mockSuccessResponse({ requests: [], total: 0, page: 1, size: 10 });
-      const result = await serviceRequestAPI.getPendingApprovals({ page: 1 });
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/v1/service-requests/approvals/pending'),
-        expect.any(Object)
-      );
-    });
-  });
-
   describe('getServiceRequestDetails', () => {
     it('should get service request details', async () => {
       mockSuccessResponse({ id: 1, catalogId: 2, requesterId: 3, status: 'submitted', version: 1, createdAt: '' });
@@ -64,28 +53,6 @@ describe('ServiceRequestAPI', () => {
       const result = await serviceRequestAPI.createServiceRequest(data);
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/api/v1/service-requests'),
-        expect.objectContaining({ method: 'POST' })
-      );
-    });
-  });
-
-  describe('updateServiceRequestStatus', () => {
-    it('should update status', async () => {
-      mockSuccessResponse({ id: 1, status: 'delivered' });
-      await serviceRequestAPI.updateServiceRequestStatus(1, 'delivered', 'Done');
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/v1/service-requests/1/status'),
-        expect.objectContaining({ method: 'PUT' })
-      );
-    });
-  });
-
-  describe('applyApprovalAction', () => {
-    it('should apply approval action', async () => {
-      mockSuccessResponse({ id: 1, status: 'security_approved' });
-      await serviceRequestAPI.applyApprovalAction(1, { action: 'approve', comment: 'OK' });
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/v1/service-requests/1/approvals'),
         expect.objectContaining({ method: 'POST' })
       );
     });

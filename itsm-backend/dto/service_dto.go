@@ -31,15 +31,12 @@ type CreateServiceRequestRequest struct {
 	ComplianceAck      bool       `json:"complianceAck"`
 }
 
-// UpdateServiceRequestStatusRequest 更新服务请求状态请求
-type UpdateServiceRequestStatusRequest struct {
-	Status string `json:"status" binding:"required"`
-}
-
 // UpdateServiceRequestRequest 更新服务请求请求
+//
+// Title/Reason 已移除：它们现在是 ticket-owned 字段，只在创建时设置一次
+// （委托给关联的 Ticket，详见 handlers/service_request/service.go 的 Create）。
+// Update 从未读取过它们；保留会让客户端以为传 title 能生效，实际被静默丢弃。
 type UpdateServiceRequestRequest struct {
-	Title    string         `json:"title" binding:"omitempty,max=255"`
-	Reason   string         `json:"reason" binding:"omitempty,max=500"`
 	FormData map[string]any `json:"formData" binding:"omitempty"`
 
 	CostCenter         string     `json:"costCenter" binding:"omitempty,max=100"`
@@ -68,27 +65,26 @@ type GetServiceRequestsRequest struct {
 
 // ServiceCatalogResponse 服务目录响应
 type ServiceCatalogResponse struct {
-	ID             int       `json:"id"`
-	Name           string    `json:"name"`
-	Category       string    `json:"category"`
-	Description    string    `json:"description"`
-	DeliveryTime   string    `json:"deliveryTime"`
-	CITypeID       int       `json:"ciTypeId,omitempty"`
-	CloudServiceID int       `json:"cloudServiceId,omitempty"`
-	Status         string    `json:"status"`
-	CreatedAt      time.Time `json:"createdAt"`
-	UpdatedAt      time.Time `json:"updatedAt"`
+	ID             int                      `json:"id"`
+	Name           string                   `json:"name"`
+	Category       string                   `json:"category"`
+	Description    string                   `json:"description"`
+	DeliveryTime   string                   `json:"deliveryTime"`
+	CITypeID       int                      `json:"ciTypeId,omitempty"`
+	CloudServiceID int                      `json:"cloudServiceId,omitempty"`
+	Status         string                   `json:"status"`
+	Fields         []map[string]interface{} `json:"fields,omitempty"`
+	CreatedAt      time.Time                `json:"createdAt"`
+	UpdatedAt      time.Time                `json:"updatedAt"`
 }
 
 // ServiceRequestResponse 服务请求响应
 type ServiceRequestResponse struct {
 	ID          int            `json:"id"`
+	TicketID    int            `json:"ticketId"`
 	CatalogID   int            `json:"catalogId"`
 	RequesterID int            `json:"requesterId"`
 	CIID        int            `json:"ciId,omitempty"`
-	Status      string         `json:"status"`
-	Title       string         `json:"title,omitempty"`
-	Reason      string         `json:"reason,omitempty"`
 	FormData    map[string]any `json:"formData,omitempty"`
 
 	CostCenter         string     `json:"costCenter,omitempty"`
@@ -98,11 +94,8 @@ type ServiceRequestResponse struct {
 	ExpireAt           *time.Time `json:"expireAt,omitempty"`
 	ComplianceAck      bool       `json:"complianceAck"`
 
-	CurrentLevel   int        `json:"currentLevel"`
-	TotalLevels    int        `json:"totalLevels"`
 	Version        int        `json:"version"`
 	ProcessorID    *int       `json:"processorId,omitempty"`
-	ApprovedAt     *time.Time `json:"approvedAt,omitempty"`
 	StartedAt      *time.Time `json:"startedAt,omitempty"`
 	CompletedAt    *time.Time `json:"completedAt,omitempty"`
 	CompletionNote string     `json:"completionNote,omitempty"`
@@ -110,37 +103,15 @@ type ServiceRequestResponse struct {
 	CreatedAt      time.Time  `json:"createdAt"`
 	UpdatedAt      time.Time  `json:"updatedAt"`
 
-	Approvals []ServiceRequestApprovalResponse `json:"approvals,omitempty"`
-	Catalog   *ServiceCatalogResponse          `json:"catalog,omitempty"`
-	Requester *UserResponse                    `json:"requester,omitempty"`
-}
+	Catalog      *ServiceCatalogResponse    `json:"catalog,omitempty"`
+	Requester    *UserResponse              `json:"requester,omitempty"`
+	CustomFields []CustomFieldValueResponse `json:"customFields,omitempty"`
 
-// ServiceRequestApprovalResponse 服务请求审批记录响应
-type ServiceRequestApprovalResponse struct {
-	ID               int        `json:"id"`
-	ServiceRequestID int        `json:"serviceRequestId"`
-	Level            int        `json:"level"`
-	Step             string     `json:"step"`
-	Status           string     `json:"status"`
-	ApproverID       *int       `json:"approverId,omitempty"`
-	ApproverName     string     `json:"approverName,omitempty"`
-	Action           string     `json:"action,omitempty"`
-	Comment          string     `json:"comment,omitempty"`
-	CreatedAt        time.Time  `json:"createdAt"`
-	ProcessedAt      *time.Time `json:"processedAt,omitempty"`
-
-	// V1 新增字段
-	TimeoutHours     int        `json:"timeoutHours,omitempty"`     // 审批时限（小时）
-	DueAt            *time.Time `json:"dueAt,omitempty"`            // 到期时间
-	IsEscalated      bool       `json:"isEscalated,omitempty"`      // 是否已升级
-	DelegatedToID    *int       `json:"delegatedToId,omitempty"`    // 转交审批人ID
-	EscalationReason string     `json:"escalationReason,omitempty"` // 升级原因
-}
-
-// ServiceRequestApprovalActionRequest 审批动作请求
-type ServiceRequestApprovalActionRequest struct {
-	Action  string `json:"action" binding:"required,oneof=approve reject"`
-	Comment string `json:"comment" binding:"omitempty,max=2000"`
+	// TicketTitle/TicketStatus 是列表场景（GET /api/v1/service-requests/me 等）下批量回填的
+	// 关联 ticket 展示字段，不是持久化数据——状态/标题的唯一事实来源仍然是 Ticket。
+	// /my-requests 列表页用它们替代已经删掉的 ServiceRequest.status/title 列。
+	TicketTitle  string `json:"ticketTitle,omitempty"`
+	TicketStatus string `json:"ticketStatus,omitempty"`
 }
 
 // ServiceCatalogListResponse 服务目录列表响应
@@ -184,12 +155,10 @@ func ToServiceRequestResponse(request *ent.ServiceRequest) *ServiceRequestRespon
 	}
 	resp := &ServiceRequestResponse{
 		ID:                 request.ID,
+		TicketID:           request.TicketID,
 		CatalogID:          request.CatalogID,
 		RequesterID:        request.RequesterID,
 		CIID:               request.CiID,
-		Status:             string(request.Status),
-		Title:              request.Title,
-		Reason:             request.Reason,
 		FormData:           request.FormData,
 		CostCenter:         request.CostCenter,
 		DataClassification: request.DataClassification,
@@ -197,8 +166,7 @@ func ToServiceRequestResponse(request *ent.ServiceRequest) *ServiceRequestRespon
 		SourceIPWhitelist:  request.SourceIPWhitelist,
 		ExpireAt:           expireAt,
 		ComplianceAck:      request.ComplianceAck,
-		CurrentLevel:       request.CurrentLevel,
-		TotalLevels:        request.TotalLevels,
+		Version:            request.Version,
 		CreatedAt:          request.CreatedAt,
 		UpdatedAt:          request.UpdatedAt,
 	}
@@ -206,45 +174,26 @@ func ToServiceRequestResponse(request *ent.ServiceRequest) *ServiceRequestRespon
 	return resp
 }
 
-func ToServiceRequestApprovalResponse(a *ent.ServiceRequestApproval) ServiceRequestApprovalResponse {
-	var processedAt *time.Time
-	if !a.ProcessedAt.IsZero() {
-		t := a.ProcessedAt
-		processedAt = &t
-	}
-	return ServiceRequestApprovalResponse{
-		ID:               a.ID,
-		ServiceRequestID: a.ServiceRequestID,
-		Level:            a.Level,
-		Step:             a.Step,
-		Status:           a.Status,
-		ApproverID:       a.ApproverID,
-		ApproverName:     a.ApproverName,
-		Action:           a.Action,
-		Comment:          a.Comment,
-		CreatedAt:        a.CreatedAt,
-		ProcessedAt:      processedAt,
-	}
-}
-
 // CreateServiceCatalogRequest 创建服务目录请求
 type CreateServiceCatalogRequest struct {
-	Name           string `json:"name" binding:"required,max=255"`
-	Category       string `json:"category" binding:"required,max=100"`
-	Description    string `json:"description" binding:"omitempty,max=1000"`
-	DeliveryTime   string `json:"deliveryTime" binding:"omitempty,max=50"`
-	CITypeID       int    `json:"ciTypeId,omitempty"`
-	CloudServiceID int    `json:"cloudServiceId,omitempty"`
-	Status         string `json:"status" binding:"omitempty,oneof=enabled disabled"`
+	Name           string                   `json:"name" binding:"required,max=255"`
+	Category       string                   `json:"category" binding:"required,max=100"`
+	Description    string                   `json:"description" binding:"omitempty,max=1000"`
+	DeliveryTime   string                   `json:"deliveryTime" binding:"omitempty,max=50"`
+	CITypeID       int                      `json:"ciTypeId,omitempty"`
+	CloudServiceID int                      `json:"cloudServiceId,omitempty"`
+	Status         string                   `json:"status" binding:"omitempty,oneof=enabled disabled"`
+	Fields         []map[string]interface{} `json:"fields,omitempty"`
 }
 
 // UpdateServiceCatalogRequest 更新服务目录请求
 type UpdateServiceCatalogRequest struct {
-	Name           string `json:"name" binding:"omitempty,max=255"`
-	Category       string `json:"category" binding:"omitempty,max=100"`
-	Description    string `json:"description" binding:"omitempty,max=1000"`
-	DeliveryTime   string `json:"deliveryTime" binding:"omitempty,max=50"`
-	CITypeID       int    `json:"ciTypeId,omitempty"`
-	CloudServiceID int    `json:"cloudServiceId,omitempty"`
-	Status         string `json:"status" binding:"omitempty,oneof=enabled disabled"`
+	Name           string                   `json:"name" binding:"omitempty,max=255"`
+	Category       string                   `json:"category" binding:"omitempty,max=100"`
+	Description    string                   `json:"description" binding:"omitempty,max=1000"`
+	DeliveryTime   string                   `json:"deliveryTime" binding:"omitempty,max=50"`
+	CITypeID       int                      `json:"ciTypeId,omitempty"`
+	CloudServiceID int                      `json:"cloudServiceId,omitempty"`
+	Status         string                   `json:"status" binding:"omitempty,oneof=enabled disabled"`
+	Fields         []map[string]interface{} `json:"fields,omitempty"`
 }

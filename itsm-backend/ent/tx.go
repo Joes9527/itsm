@@ -80,6 +80,10 @@ type Tx struct {
 	EngineerSkill *EngineerSkillClient
 	// FeishuTicketSync is the client for interacting with the FeishuTicketSync builders.
 	FeishuTicketSync *FeishuTicketSyncClient
+	// FieldDefinition is the client for interacting with the FieldDefinition builders.
+	FieldDefinition *FieldDefinitionClient
+	// FieldValue is the client for interacting with the FieldValue builders.
+	FieldValue *FieldValueClient
 	// Group is the client for interacting with the Group builders.
 	Group *GroupClient
 	// Incident is the client for interacting with the Incident builders.
@@ -182,12 +186,8 @@ type Tx struct {
 	SLAViolation *SLAViolationClient
 	// ServiceCatalog is the client for interacting with the ServiceCatalog builders.
 	ServiceCatalog *ServiceCatalogClient
-	// ServiceCatalogItem is the client for interacting with the ServiceCatalogItem builders.
-	ServiceCatalogItem *ServiceCatalogItemClient
 	// ServiceRequest is the client for interacting with the ServiceRequest builders.
 	ServiceRequest *ServiceRequestClient
-	// ServiceRequestApproval is the client for interacting with the ServiceRequestApproval builders.
-	ServiceRequestApproval *ServiceRequestApprovalClient
 	// StandardChange is the client for interacting with the StandardChange builders.
 	StandardChange *StandardChangeClient
 	// Survey is the client for interacting with the Survey builders.
@@ -411,6 +411,8 @@ func (tx *Tx) init() {
 	tx.EndpointACL = NewEndpointACLClient(tx.config)
 	tx.EngineerSkill = NewEngineerSkillClient(tx.config)
 	tx.FeishuTicketSync = NewFeishuTicketSyncClient(tx.config)
+	tx.FieldDefinition = NewFieldDefinitionClient(tx.config)
+	tx.FieldValue = NewFieldValueClient(tx.config)
 	tx.Group = NewGroupClient(tx.config)
 	tx.Incident = NewIncidentClient(tx.config)
 	tx.IncidentAlert = NewIncidentAlertClient(tx.config)
@@ -462,9 +464,7 @@ func (tx *Tx) init() {
 	tx.SLAPolicy = NewSLAPolicyClient(tx.config)
 	tx.SLAViolation = NewSLAViolationClient(tx.config)
 	tx.ServiceCatalog = NewServiceCatalogClient(tx.config)
-	tx.ServiceCatalogItem = NewServiceCatalogItemClient(tx.config)
 	tx.ServiceRequest = NewServiceRequestClient(tx.config)
-	tx.ServiceRequestApproval = NewServiceRequestApprovalClient(tx.config)
 	tx.StandardChange = NewStandardChangeClient(tx.config)
 	tx.Survey = NewSurveyClient(tx.config)
 	tx.SurveyResponse = NewSurveyResponseClient(tx.config)

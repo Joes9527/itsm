@@ -52,14 +52,12 @@ export class ServiceCatalogApi {
     return `"${text.replace(/"/g, '""')}"`;
   }
 
+  // 状态已经委托给关联 Ticket（值域是 new/open/in_progress/pending/resolved/closed/cancelled）；
+  // 旧的 SR 专属状态（submitted/security_approved/provisioning/delivered 等）已随三级审批一起退役，
+  // 这里不再做值域转换，直接透传调用方传入的 ticket 状态值。
   private static toBackendRequestStatus(status?: unknown): string | undefined {
     if (!status) return undefined;
-    const s = String(status);
-    if (s === 'pending_approval' || s === 'pending') return 'submitted';
-    if (s === 'approved') return 'security_approved';
-    if (s === 'in_progress') return 'provisioning';
-    if (s === 'completed') return 'delivered';
-    return s;
+    return String(status);
   }
 
    
@@ -86,6 +84,7 @@ export class ServiceCatalogApi {
         // 后端 deliveryTime 为 string（天/小时口径未统一）；V0先用于展示，不做严格含义
         responseTime: raw?.deliveryTime ? Number(raw.deliveryTime) : undefined,
       },
+      fields: Array.isArray(raw?.fields) ? raw.fields : [],
     };
   }
 
@@ -202,6 +201,7 @@ export class ServiceCatalogApi {
         request.availability?.responseTime ?? request.availability?.resolutionTime ?? 1
       ),
       status: ServiceCatalogApi.toBackendStatus(request.status) || 'enabled',
+      fields: request.fields,
     };
     const resp = await httpClient.post<any>('/api/v1/service-catalogs', payload);
     return ServiceCatalogApi.toServiceItem(resp);
@@ -222,6 +222,7 @@ export class ServiceCatalogApi {
     }
     if (request.ciTypeId !== undefined) payload.ciTypeId = request.ciTypeId;
     if (request.cloudServiceId !== undefined) payload.cloudServiceId = request.cloudServiceId;
+    if (request.fields !== undefined) payload.fields = request.fields;
     const st = ServiceCatalogApi.toBackendStatus(request.status);
     if (st) payload.status = st;
 
@@ -280,16 +281,9 @@ export class ServiceCatalogApi {
     const page = query?.page ?? 1;
     const size = query?.pageSize ?? 10;
     const requestedStatus = query?.status ? String(query.status) : undefined;
-    const isPendingApproval =
-      requestedStatus === 'pending_approval' || requestedStatus === 'pending';
-    const endpoint = isPendingApproval
-      ? '/api/v1/service-requests/approvals/pending'
-      : '/api/v1/service-requests/me';
-    const status = isPendingApproval
-      ? undefined
-      : ServiceCatalogApi.toBackendRequestStatus(requestedStatus);
+    const status = ServiceCatalogApi.toBackendRequestStatus(requestedStatus);
 
-    const resp = await httpClient.get<any>(endpoint, {
+    const resp = await httpClient.get<any>('/api/v1/service-requests/me', {
       page,
       size,
       ...(status ? { status } : {}),
@@ -310,9 +304,23 @@ export class ServiceCatalogApi {
   }
 
   /**
-   * 创建服务请求
+   * 按关联的 ticketId 查服务请求（供工单详情页的 ServiceRequestPanel 用）
    */
-  static async createServiceRequest(request: CreateServiceRequestRequest): Promise<any> {
+  static async getServiceRequestByTicketId(ticketId: number): Promise<any> {
+    const resp = await httpClient.get<any>(`/api/v1/service-requests/by-ticket/${ticketId}`);
+    return ServiceCatalogApi.toServiceRequest(resp);
+  }
+
+  /**
+   * 创建服务请求
+   *
+   * 返回值透传后端 dto.ServiceRequestResponse（不经过 toServiceRequest 适配），其中
+   * ticketId 是提交成功后创建的关联 Ticket ID——调用方（提交表单页）据此跳转到
+   * /tickets/:ticketId，服务请求已经不再有独立详情页。
+   */
+  static async createServiceRequest(
+    request: CreateServiceRequestRequest
+  ): Promise<{ ticketId: number } & Record<string, any>> {
     // 前端 CreateServiceRequestRequest: { serviceId, formData, ... }
     // 后端 CreateServiceRequestRequest: { catalog_id, title, reason, form_data, ... , compliance_ack }
     const reason =
@@ -340,48 +348,18 @@ export class ServiceCatalogApi {
       expireAt: request.formData?.expireAt ? request.formData?.expireAt : undefined,
     };
 
-    return httpClient.post('/api/v1/service-requests', payload);
+    return httpClient.post<{ ticketId: number } & Record<string, any>>(
+      '/api/v1/service-requests',
+      payload
+    );
   }
 
-  /**
-   * 取消服务请求
-   */
-  static async cancelServiceRequest(id: number, reason?: string): Promise<void> {
-    await httpClient.put(`/api/v1/service-requests/${id}/status`, {
-      status: 'cancelled',
-      comment: reason,
-    });
-  }
-
-  /**
-   * 审批服务请求
-   */
-  static async approveServiceRequest(id: number, comment?: string): Promise<void> {
-    await httpClient.post(`/api/v1/service-requests/${id}/approval`, {
-      action: 'approve',
-      comment,
-    });
-  }
-
-  /**
-   * 拒绝服务请求
-   */
-  static async rejectServiceRequest(id: number, reason: string): Promise<void> {
-    await httpClient.post(`/api/v1/service-requests/${id}/approval`, {
-      action: 'reject',
-      comment: reason,
-    });
-  }
-
-  /**
-   * 完成服务请求
-   */
-  static async completeServiceRequest(id: number, notes?: string): Promise<void> {
-    await httpClient.put(`/api/v1/service-requests/${id}/status`, {
-      status: 'completed',
-      comment: notes,
-    });
-  }
+  // cancelServiceRequest/approveServiceRequest/rejectServiceRequest/completeServiceRequest/
+  // getPendingApprovalCount 已经移除——它们打在 Task 1 删除的
+  // /api/v1/service-requests/:id/status 和 /api/v1/service-requests/:id/approval 及
+  // /api/v1/service-requests/approvals/pending 路由上（SR 自己的审批阶段/终态操作整体退休，
+  // 状态/审批全部委托给关联 Ticket）。删除前确认过没有真实调用方：唯一的调用方
+  // src/app/(main)/service-catalog/approvals/page.tsx 已经改造成重定向到 /approvals/pending。
 
   /**
    * 获取服务请求详情（包含审批历史）
@@ -389,16 +367,6 @@ export class ServiceCatalogApi {
   static async getServiceRequestDetail(id: number): Promise<any> {
     const response = await httpClient.get(`/api/v1/service-requests/${id}`);
     return response;
-  }
-
-  /**
-   * 获取待审批数量
-   */
-  static async getPendingApprovalCount(): Promise<number> {
-    const response = await httpClient.get<{ total: number }>(
-      '/api/v1/service-requests/approvals/pending'
-    );
-    return response.total || 0;
   }
 
   // ==================== 收藏和评分 ====================

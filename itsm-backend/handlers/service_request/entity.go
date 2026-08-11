@@ -5,16 +5,16 @@ import (
 	"time"
 )
 
-// ServiceRequest represents the domain entity for a service request
+// ServiceRequest represents the domain entity for a service request.
+// 状态/标题/审批全部委托给关联的 Ticket（TicketID）——本实体只保留服务目录来源
+// 特有的字段（成本中心/合规/资源交付等）。
 type ServiceRequest struct {
 	ID                 int
 	TenantID           int
+	TicketID           int
 	CatalogID          int
 	RequesterID        int
 	CiID               int
-	Status             string
-	Title              string
-	Reason             string
 	FormData           map[string]interface{}
 	CostCenter         string
 	DataClassification string
@@ -24,41 +24,25 @@ type ServiceRequest struct {
 	ExpireAt           *time.Time
 	ComplianceAck      bool
 	ComplianceAckSet   bool
-	CurrentLevel       int
-	TotalLevels        int
 	Version            int
 	ProcessorID        *int
-	ApprovedAt         *time.Time
 	StartedAt          *time.Time
 	CompletedAt        *time.Time
 	CompletionNote     string
 	LastError          string
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
-}
 
-// ServiceRequestApproval represents an approval step for a request
-type ServiceRequestApproval struct {
-	ID               int
-	TenantID         int
-	ServiceRequestID int
-	Level            int
-	Step             string
-	Status           string
-	ApproverID       *int
-	ApproverName     string
-	Comment          string
-	Action           string
-	TimeoutHours     int
-	DueAt            *time.Time
-	ProcessedAt      *time.Time
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	// TicketTitle/TicketStatus 是列表响应场景下由 Service.List 批量回填的展示字段——
+	// 不是持久化列，只在内存里跟着 List 的返回值走一次，供 handler.toDTO 映射进
+	// ServiceRequestResponse.TicketTitle/TicketStatus（/my-requests 列表页用，
+	// 省掉前端对每条记录再单独查一次 ticket 的往返）。Get/Create/Update 路径不填这两个字段。
+	TicketTitle  string
+	TicketStatus string
 }
 
 // ListFilters defines filters for listing service requests
 type ListFilters struct {
-	Status string
 	UserID int // Requester ID
 	Page   int
 	Size   int
@@ -66,20 +50,11 @@ type ListFilters struct {
 
 // Repository defines the interface for data persistence
 type Repository interface {
-	Create(ctx context.Context, req *ServiceRequest, approvals []*ServiceRequestApproval) (*ServiceRequest, error)
+	Create(ctx context.Context, req *ServiceRequest) (*ServiceRequest, error)
 	Get(ctx context.Context, id, tenantID int) (*ServiceRequest, error)
-	GetWithApprovals(ctx context.Context, id, tenantID int) (*ServiceRequest, []*ServiceRequestApproval, error)
+	GetByTicketID(ctx context.Context, ticketID, tenantID int) (*ServiceRequest, error)
 	List(ctx context.Context, tenantID int, filters ListFilters) ([]*ServiceRequest, int, error)
-	UpdateStatus(ctx context.Context, req *ServiceRequest, status string, actorID int) error
 	Update(ctx context.Context, req *ServiceRequest) error
 	Delete(ctx context.Context, req *ServiceRequest) error
-
-	// Approval related
-	GetApproval(ctx context.Context, requestID int, level int) (*ServiceRequestApproval, error)
-	UpdateApproval(ctx context.Context, approval *ServiceRequestApproval) error
-	UpdateRequestAndApproval(ctx context.Context, req *ServiceRequest, approval *ServiceRequestApproval) error
-
-	// Pending approvals for approver
-	ListPendingApprovals(ctx context.Context, tenantID int, targetLevel int, requiredStatus, requesterDept string, page, size int) ([]*ServiceRequest, int, error)
 	GetUserContext(ctx context.Context, userID, tenantID int) (department, name string, err error)
 }

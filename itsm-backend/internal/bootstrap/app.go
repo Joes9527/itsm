@@ -259,7 +259,6 @@ func NewApplication() *Application {
 	mspAllocationService := service.NewMSPAllocationService(client, sugar)
 	mspController := controller.NewMSPController(mspAllocationService, ticketService, sugar)
 
-	serviceCatalogService := service.NewServiceCatalogService(client, sugar)
 	// 审批服务
 	approvalService := service.NewApprovalService(client, sugar)
 
@@ -359,7 +358,7 @@ func NewApplication() *Application {
 	toolRegistry := service.NewToolRegistry(ragService, incidentService, configurationItemService, client)
 	toolQueue := service.NewToolQueue(client, toolRegistry, 100, sugar)
 
-	ticketController := controller.NewTicketController(ticketService, ticketDependencyService, database.GetRawDB(), sugar)
+	ticketController := controller.NewTicketController(ticketService, ticketDependencyService, database.GetRawDB(), client, sugar)
 	ticketDependencyController := controller.NewTicketDependencyController(ticketDependencyService)
 
 	ticketCommentService := service.NewTicketCommentService(client, sugar)
@@ -376,9 +375,6 @@ func NewApplication() *Application {
 	// Notification Preference Service & Controller
 	notificationPreferenceService := service.NewNotificationPreferenceService(client, sugar)
 	notificationPreferenceController := controller.NewNotificationPreferenceController(notificationPreferenceService, sugar)
-
-	// 服务请求服务（依赖通知服务）
-	serviceRequestService := service.NewServiceRequestService(client, sugar, approvalService, notificationService)
 
 	ticketRatingService := service.NewTicketRatingService(client, sugar)
 	ticketRatingController := controller.NewTicketRatingController(ticketRatingService, sugar)
@@ -407,7 +403,6 @@ func NewApplication() *Application {
 	incidentController := controller.NewIncidentController(incidentService, incidentRuleEngine, incidentMonitoringService, incidentAlertingService, rootCauseAnalysisService, sugar)
 	approvalController := controller.NewApprovalController(approvalService)
 
-	serviceController := controller.NewServiceController(serviceCatalogService, serviceRequestService)
 	provisioningService := service.NewProvisioningService(client, sugar)
 	provisioningController := controller.NewProvisioningController(provisioningService)
 
@@ -492,7 +487,7 @@ func NewApplication() *Application {
 
 	// Domain: Service Catalog (DDD)
 	scRepo := service_catalog.NewEntRepository(client)
-	scService := service_catalog.NewService(scRepo, sugar)
+	scService := service_catalog.NewService(scRepo, client, sugar)
 	scHandler := service_catalog.NewHandler(scService)
 
 	// Domain: CMDB (DDD)
@@ -502,7 +497,7 @@ func NewApplication() *Application {
 
 	// Domain: Service Request (DDD)
 	srRepo := service_request.NewEntRepository(client)
-	srService := service_request.NewService(srRepo, scRepo, cmdbRepo, client, sugar)
+	srService := service_request.NewService(srRepo, scRepo, cmdbRepo, client, sugar, ticketService)
 	srHandler := service_request.NewHandler(srService)
 
 	// Domain: Incident (DDD)
@@ -726,7 +721,6 @@ func NewApplication() *Application {
 		VendorController: vendorController,
 
 		// Additional controllers
-		ServiceController:      serviceController,
 		ProvisioningController: provisioningController,
 		AnalyticsController:    analyticsController,
 		PredictionController:   predictionController,
@@ -823,6 +817,9 @@ func InitializeStorage(cfg *config.Config, client *ent.Client, sugar *zap.Sugare
 		}
 		if err := prepareCMDBModelMigration(ctx, database.GetRawDB(), sugar); err != nil {
 			return fmt.Errorf("prepare CMDB model migration: %w", err)
+		}
+		if err := prepareServiceRequestTicketMigration(ctx, database.GetRawDB(), sugar); err != nil {
+			return fmt.Errorf("prepare service_request ticket migration: %w", err)
 		}
 		if err := client.Schema.Create(ctx); err != nil {
 			return fmt.Errorf("create schema resources: %w", err)

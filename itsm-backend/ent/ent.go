@@ -40,6 +40,8 @@ import (
 	"itsm-backend/ent/endpointacl"
 	"itsm-backend/ent/engineerskill"
 	"itsm-backend/ent/feishuticketsync"
+	"itsm-backend/ent/fielddefinition"
+	"itsm-backend/ent/fieldvalue"
 	"itsm-backend/ent/group"
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/incidentalert"
@@ -85,9 +87,7 @@ import (
 	"itsm-backend/ent/rolepermission"
 	"itsm-backend/ent/rootcauseanalysis"
 	"itsm-backend/ent/servicecatalog"
-	"itsm-backend/ent/servicecatalogitem"
 	"itsm-backend/ent/servicerequest"
-	"itsm-backend/ent/servicerequestapproval"
 	"itsm-backend/ent/slaalerthistory"
 	"itsm-backend/ent/slaalertrule"
 	"itsm-backend/ent/sladefinition"
@@ -223,6 +223,8 @@ func checkColumn(t, c string) error {
 			endpointacl.Table:                 endpointacl.ValidColumn,
 			engineerskill.Table:               engineerskill.ValidColumn,
 			feishuticketsync.Table:            feishuticketsync.ValidColumn,
+			fielddefinition.Table:             fielddefinition.ValidColumn,
+			fieldvalue.Table:                  fieldvalue.ValidColumn,
 			group.Table:                       group.ValidColumn,
 			incident.Table:                    incident.ValidColumn,
 			incidentalert.Table:               incidentalert.ValidColumn,
@@ -274,9 +276,7 @@ func checkColumn(t, c string) error {
 			slapolicy.Table:                   slapolicy.ValidColumn,
 			slaviolation.Table:                slaviolation.ValidColumn,
 			servicecatalog.Table:              servicecatalog.ValidColumn,
-			servicecatalogitem.Table:          servicecatalogitem.ValidColumn,
 			servicerequest.Table:              servicerequest.ValidColumn,
-			servicerequestapproval.Table:      servicerequestapproval.ValidColumn,
 			standardchange.Table:              standardchange.ValidColumn,
 			survey.Table:                      survey.ValidColumn,
 			surveyresponse.Table:              surveyresponse.ValidColumn,

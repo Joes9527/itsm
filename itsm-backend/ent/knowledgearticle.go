@@ -5,8 +5,6 @@ package ent
 import (
 	"fmt"
 	"itsm-backend/ent/knowledgearticle"
-	"itsm-backend/ent/knowledgearticlesession"
-	"itsm-backend/ent/knowledgearticleversion"
 	"strings"
 	"time"
 
@@ -41,11 +39,11 @@ type KnowledgeArticle struct {
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// 更新时间
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
+	// 软删除时间
+	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the KnowledgeArticleQuery when eager-loading is set.
 	Edges                          KnowledgeArticleEdges `json:"edges"`
-	knowledge_article_versions     *int
-	knowledge_article_sessions     *int
 	known_error_knowledge_articles *int
 	selectValues                   sql.SelectValues
 }
@@ -55,9 +53,9 @@ type KnowledgeArticleEdges struct {
 	// UserLikes holds the value of the user_likes edge.
 	UserLikes []*KnowledgeArticleLike `json:"user_likes,omitempty"`
 	// Versions holds the value of the versions edge.
-	Versions *KnowledgeArticleVersion `json:"versions,omitempty"`
+	Versions []*KnowledgeArticleVersion `json:"versions,omitempty"`
 	// Sessions holds the value of the sessions edge.
-	Sessions *KnowledgeArticleSession `json:"sessions,omitempty"`
+	Sessions []*KnowledgeArticleSession `json:"sessions,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
 	loadedTypes [3]bool
@@ -73,23 +71,19 @@ func (e KnowledgeArticleEdges) UserLikesOrErr() ([]*KnowledgeArticleLike, error)
 }
 
 // VersionsOrErr returns the Versions value or an error if the edge
-// was not loaded in eager-loading, or loaded but was not found.
-func (e KnowledgeArticleEdges) VersionsOrErr() (*KnowledgeArticleVersion, error) {
-	if e.Versions != nil {
+// was not loaded in eager-loading.
+func (e KnowledgeArticleEdges) VersionsOrErr() ([]*KnowledgeArticleVersion, error) {
+	if e.loadedTypes[1] {
 		return e.Versions, nil
-	} else if e.loadedTypes[1] {
-		return nil, &NotFoundError{label: knowledgearticleversion.Label}
 	}
 	return nil, &NotLoadedError{edge: "versions"}
 }
 
 // SessionsOrErr returns the Sessions value or an error if the edge
-// was not loaded in eager-loading, or loaded but was not found.
-func (e KnowledgeArticleEdges) SessionsOrErr() (*KnowledgeArticleSession, error) {
-	if e.Sessions != nil {
+// was not loaded in eager-loading.
+func (e KnowledgeArticleEdges) SessionsOrErr() ([]*KnowledgeArticleSession, error) {
+	if e.loadedTypes[2] {
 		return e.Sessions, nil
-	} else if e.loadedTypes[2] {
-		return nil, &NotFoundError{label: knowledgearticlesession.Label}
 	}
 	return nil, &NotLoadedError{edge: "sessions"}
 }
@@ -105,13 +99,9 @@ func (*KnowledgeArticle) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullInt64)
 		case knowledgearticle.FieldTitle, knowledgearticle.FieldContent, knowledgearticle.FieldCategory, knowledgearticle.FieldTags:
 			values[i] = new(sql.NullString)
-		case knowledgearticle.FieldCreatedAt, knowledgearticle.FieldUpdatedAt:
+		case knowledgearticle.FieldCreatedAt, knowledgearticle.FieldUpdatedAt, knowledgearticle.FieldDeletedAt:
 			values[i] = new(sql.NullTime)
-		case knowledgearticle.ForeignKeys[0]: // knowledge_article_versions
-			values[i] = new(sql.NullInt64)
-		case knowledgearticle.ForeignKeys[1]: // knowledge_article_sessions
-			values[i] = new(sql.NullInt64)
-		case knowledgearticle.ForeignKeys[2]: // known_error_knowledge_articles
+		case knowledgearticle.ForeignKeys[0]: // known_error_knowledge_articles
 			values[i] = new(sql.NullInt64)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -200,21 +190,14 @@ func (_m *KnowledgeArticle) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.UpdatedAt = value.Time
 			}
+		case knowledgearticle.FieldDeletedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field deleted_at", values[i])
+			} else if value.Valid {
+				_m.DeletedAt = new(time.Time)
+				*_m.DeletedAt = value.Time
+			}
 		case knowledgearticle.ForeignKeys[0]:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for edge-field knowledge_article_versions", value)
-			} else if value.Valid {
-				_m.knowledge_article_versions = new(int)
-				*_m.knowledge_article_versions = int(value.Int64)
-			}
-		case knowledgearticle.ForeignKeys[1]:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for edge-field knowledge_article_sessions", value)
-			} else if value.Valid {
-				_m.knowledge_article_sessions = new(int)
-				*_m.knowledge_article_sessions = int(value.Int64)
-			}
-		case knowledgearticle.ForeignKeys[2]:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for edge-field known_error_knowledge_articles", value)
 			} else if value.Valid {
@@ -304,6 +287,11 @@ func (_m *KnowledgeArticle) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
 	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	if v := _m.DeletedAt; v != nil {
+		builder.WriteString("deleted_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

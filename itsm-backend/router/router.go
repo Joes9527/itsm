@@ -245,7 +245,6 @@ type RouterConfig struct {
 	NotificationController           *controller.NotificationController
 
 	// Additional domain controllers
-	ServiceController      *controller.ServiceController
 	ProvisioningController *controller.ProvisioningController
 	AnalyticsController    *controller.AnalyticsController
 	PredictionController   *controller.PredictionController
@@ -879,13 +878,10 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				sr.POST("", middleware.RequirePermission("service_request", "write"), config.ServiceRequestHandler.Create)
 				sr.GET("", middleware.RequirePermission("service_request", "read"), config.ServiceRequestHandler.List)
 				sr.GET("/me", middleware.RequirePermission("service_request", "read"), config.ServiceRequestHandler.List)
-				sr.GET("/approvals/pending", middleware.RequirePermission("service_request", "read"), config.ServiceRequestHandler.ListPending)
+				sr.GET("/by-ticket/:ticketId", middleware.RequirePermission("service_request", "read"), config.ServiceRequestHandler.GetByTicket)
 				sr.GET("/:id", middleware.RequirePermission("service_request", "read"), config.ServiceRequestHandler.Get)
 				sr.PUT("/:id", middleware.RequirePermission("service_request", "write"), config.ServiceRequestHandler.Update)
-				sr.PUT("/:id/status", middleware.RequirePermission("service_request", "write"), config.ServiceRequestHandler.UpdateStatus)
 				sr.DELETE("/:id", middleware.RequirePermission("service_request", "delete"), config.ServiceRequestHandler.Delete)
-				sr.POST("/:id/approval", middleware.RequirePermission("service_request", "write"), config.ServiceRequestHandler.ApplyApproval)
-				sr.POST("/:id/approvals", middleware.RequirePermission("service_request", "write"), config.ServiceRequestHandler.ApplyApproval)
 			}
 
 			// Provisioning routes
@@ -1251,24 +1247,11 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				}
 			}
 
-			// Service Catalog & Service Requests
-			if config.ServiceController != nil {
-				services := tenant.(*gin.RouterGroup).Group("/services")
-				{
-					services.GET("/catalogs", middleware.RequirePermission("service_catalog", "read"), config.ServiceController.GetServiceCatalogs)
-					services.POST("/catalogs", middleware.RequirePermission("service_catalog", "write"), config.ServiceController.CreateServiceCatalog)
-					services.GET("/catalogs/:id", middleware.RequirePermission("service_catalog", "read"), config.ServiceController.GetServiceCatalogByID)
-					services.PUT("/catalogs/:id", middleware.RequirePermission("service_catalog", "write"), config.ServiceController.UpdateServiceCatalog)
-					services.DELETE("/catalogs/:id", middleware.RequirePermission("service_catalog", "delete"), config.ServiceController.DeleteServiceCatalog)
-					services.GET("/requests", middleware.RequirePermission("service_request", "read"), config.ServiceController.GetUserServiceRequests)
-					services.POST("/requests", middleware.RequirePermission("service_request", "write"), config.ServiceController.CreateServiceRequest)
-					services.GET("/requests/:id", middleware.RequirePermission("service_request", "read"), config.ServiceController.GetServiceRequestByID)
-					services.PUT("/requests/:id/status", middleware.RequirePermission("service_request", "write"), config.ServiceController.UpdateServiceRequestStatus)
-					services.POST("/requests/approval", middleware.RequirePermission("service_request", "write"), config.ServiceController.ApplyServiceRequestApproval)
-					services.GET("/requests/approvals", middleware.RequirePermission("service_request", "read"), config.ServiceController.GetServiceRequestApprovals)
-					services.GET("/requests/approvals/pending", middleware.RequirePermission("service_request", "read"), config.ServiceController.GetPendingServiceRequestApprovals)
-				}
-			}
+			// Legacy /services path redirect. Canonical APIs are /service-catalogs,
+			// /service-catalog-services, and /service-requests.
+			tenant.GET("/services", middleware.RequirePermission("service_catalog", "read"), func(c *gin.Context) {
+				common.Fail(c, common.BadRequestCode, "兼容接口未接入真实数据，请使用 /api/v1/service-catalogs")
+			})
 
 			// Ticket Dependencies
 			if config.TicketDependencyController != nil {

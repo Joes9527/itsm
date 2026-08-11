@@ -104,6 +104,26 @@ func (_u *TicketUpdate) SetNillableType(v *string) *TicketUpdate {
 	return _u
 }
 
+// SetSource sets the "source" field.
+func (_u *TicketUpdate) SetSource(v string) *TicketUpdate {
+	_u.mutation.SetSource(v)
+	return _u
+}
+
+// SetNillableSource sets the "source" field if the given value is not nil.
+func (_u *TicketUpdate) SetNillableSource(v *string) *TicketUpdate {
+	if v != nil {
+		_u.SetSource(*v)
+	}
+	return _u
+}
+
+// ClearSource clears the value of the "source" field.
+func (_u *TicketUpdate) ClearSource() *TicketUpdate {
+	_u.mutation.ClearSource()
+	return _u
+}
+
 // SetPriority sets the "priority" field.
 func (_u *TicketUpdate) SetPriority(v string) *TicketUpdate {
 	_u.mutation.SetPriority(v)
@@ -1349,6 +1369,12 @@ func (_u *TicketUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.GetType(); ok {
 		_spec.SetField(ticket.FieldType, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.Source(); ok {
+		_spec.SetField(ticket.FieldSource, field.TypeString, value)
+	}
+	if _u.mutation.SourceCleared() {
+		_spec.ClearField(ticket.FieldSource, field.TypeString)
+	}
 	if value, ok := _u.mutation.Priority(); ok {
 		_spec.SetField(ticket.FieldPriority, field.TypeString, value)
 	}
@@ -2296,6 +2322,26 @@ func (_u *TicketUpdateOne) SetNillableType(v *string) *TicketUpdateOne {
 	if v != nil {
 		_u.SetType(*v)
 	}
+	return _u
+}
+
+// SetSource sets the "source" field.
+func (_u *TicketUpdateOne) SetSource(v string) *TicketUpdateOne {
+	_u.mutation.SetSource(v)
+	return _u
+}
+
+// SetNillableSource sets the "source" field if the given value is not nil.
+func (_u *TicketUpdateOne) SetNillableSource(v *string) *TicketUpdateOne {
+	if v != nil {
+		_u.SetSource(*v)
+	}
+	return _u
+}
+
+// ClearSource clears the value of the "source" field.
+func (_u *TicketUpdateOne) ClearSource() *TicketUpdateOne {
+	_u.mutation.ClearSource()
 	return _u
 }
 
@@ -3573,6 +3619,12 @@ func (_u *TicketUpdateOne) sqlSave(ctx context.Context) (_node *Ticket, err erro
 	}
 	if value, ok := _u.mutation.GetType(); ok {
 		_spec.SetField(ticket.FieldType, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Source(); ok {
+		_spec.SetField(ticket.FieldSource, field.TypeString, value)
+	}
+	if _u.mutation.SourceCleared() {
+		_spec.ClearField(ticket.FieldSource, field.TypeString)
 	}
 	if value, ok := _u.mutation.Priority(); ok {
 		_spec.SetField(ticket.FieldPriority, field.TypeString, value)

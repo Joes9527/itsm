@@ -70,24 +70,6 @@ export interface CreateServiceRequestRequest {
   complianceAck: boolean;
 }
 
-export interface UpdateServiceRequestStatusRequest {
-  status:
-    | 'submitted'
-    | 'manager_approved'
-    | 'it_approved'
-    | 'security_approved'
-    | 'provisioning'
-    | 'delivered'
-    | 'failed'
-    | 'rejected'
-    | 'cancelled';
-}
-
-export interface ServiceRequestApprovalActionRequest {
-  action: 'approve' | 'reject';
-  comment?: string;
-}
-
 class ServiceRequestAPI {
   private baseURL: string;
 
@@ -208,20 +190,6 @@ class ServiceRequestAPI {
     return this.normalizeList(resp);
   }
 
-  // Get pending approvals (approver inbox)
-  async getPendingApprovals(
-    params: { page?: number; size?: number } = {}
-  ): Promise<ServiceRequestListResponse> {
-    const searchParams = new URLSearchParams();
-    if (params.page) searchParams.append('page', params.page.toString());
-    if (params.size) searchParams.append('size', params.size.toString());
-    const qs = searchParams.toString();
-    const resp = await this.request<ServiceRequestListResponse>(
-      `/api/v1/service-requests/approvals/pending${qs ? `?${qs}` : ''}`
-    );
-    return this.normalizeList(resp);
-  }
-
   // Get service request details
   async getServiceRequestDetails(id: number): Promise<ServiceRequest> {
     const resp = await this.request<ServiceRequest>(`/api/v1/service-requests/${id}`);
@@ -233,31 +201,6 @@ class ServiceRequestAPI {
     const resp = await this.request<ServiceRequest>('/api/v1/service-requests', {
       method: 'POST',
       body: JSON.stringify(data),
-    });
-    return this.normalizeRequest(resp);
-  }
-
-  // Update service request status (admin operation)
-  async updateServiceRequestStatus(
-    id: number,
-    status: string,
-    comment?: string
-  ): Promise<ServiceRequest> {
-    const resp = await this.request<ServiceRequest>(`/api/v1/service-requests/${id}/status`, {
-      method: 'PUT',
-      body: JSON.stringify({ status, comment }),
-    });
-    return this.normalizeRequest(resp);
-  }
-
-  // Apply approval action on current step
-  async applyApprovalAction(
-    id: number,
-    payload: ServiceRequestApprovalActionRequest
-  ): Promise<ServiceRequest> {
-    const resp = await this.request<ServiceRequest>(`/api/v1/service-requests/${id}/approvals`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
     });
     return this.normalizeRequest(resp);
   }
@@ -304,11 +247,6 @@ class ServiceRequestAPI {
   /** @deprecated 使用 getUserServiceRequests */
   async getServiceRequest(id: number): Promise<ServiceRequest> {
     return this.getServiceRequestDetails(id);
-  }
-
-  /** @deprecated 使用 applyApprovalAction */
-  async applyApproval(id: number, action: string, comment?: string): Promise<ServiceRequest> {
-    return this.applyApprovalAction(id, { action: action as 'approve' | 'reject', comment });
   }
 }
 

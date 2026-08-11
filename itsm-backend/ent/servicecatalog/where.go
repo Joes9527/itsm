@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
-	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 // ID filters vertices based on their ID field.
@@ -945,16 +944,6 @@ func CloudServiceIDNotNil() predicate.ServiceCatalog {
 	return predicate.ServiceCatalog(sql.FieldNotNull(FieldCloudServiceID))
 }
 
-// FormSchemaIsNil applies the IsNil predicate on the "form_schema" field.
-func FormSchemaIsNil() predicate.ServiceCatalog {
-	return predicate.ServiceCatalog(sql.FieldIsNull(FieldFormSchema))
-}
-
-// FormSchemaNotNil applies the NotNil predicate on the "form_schema" field.
-func FormSchemaNotNil() predicate.ServiceCatalog {
-	return predicate.ServiceCatalog(sql.FieldNotNull(FieldFormSchema))
-}
-
 // AvailableRegionsIsNil applies the IsNil predicate on the "available_regions" field.
 func AvailableRegionsIsNil() predicate.ServiceCatalog {
 	return predicate.ServiceCatalog(sql.FieldIsNull(FieldAvailableRegions))
@@ -1208,29 +1197,6 @@ func UpdatedAtLT(v time.Time) predicate.ServiceCatalog {
 // UpdatedAtLTE applies the LTE predicate on the "updated_at" field.
 func UpdatedAtLTE(v time.Time) predicate.ServiceCatalog {
 	return predicate.ServiceCatalog(sql.FieldLTE(FieldUpdatedAt, v))
-}
-
-// HasItems applies the HasEdge predicate on the "items" edge.
-func HasItems() predicate.ServiceCatalog {
-	return predicate.ServiceCatalog(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, ItemsTable, ItemsColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasItemsWith applies the HasEdge predicate on the "items" edge with a given conditions (other predicates).
-func HasItemsWith(preds ...predicate.ServiceCatalogItem) predicate.ServiceCatalog {
-	return predicate.ServiceCatalog(func(s *sql.Selector) {
-		step := newItemsStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
 }
 
 // And groups predicates with the AND operator between them.

@@ -6,23 +6,27 @@ import (
 
 	"go.uber.org/zap"
 	"itsm-backend/common"
+	"itsm-backend/ent"
+	"itsm-backend/service"
 )
 
 // Service defines the business logic
 type Service struct {
 	repo   Repository
+	client *ent.Client
 	logger *zap.SugaredLogger
 }
 
 // NewService creates a new Service
-func NewService(repo Repository, logger *zap.SugaredLogger) *Service {
+func NewService(repo Repository, client *ent.Client, logger *zap.SugaredLogger) *Service {
 	return &Service{
 		repo:   repo,
+		client: client,
 		logger: logger,
 	}
 }
 
-func (s *Service) Create(ctx context.Context, name, category, description string, deliveryTime, tenantID int, status string, ciTypeID, cloudServiceID int) (*ServiceCatalog, error) {
+func (s *Service) Create(ctx context.Context, name, category, description string, deliveryTime, tenantID int, status string, ciTypeID, cloudServiceID int, fields []service.FieldDefinitionInput) (*ServiceCatalog, error) {
 	name = strings.TrimSpace(name)
 	category = strings.TrimSpace(category)
 	if name == "" || category == "" {
@@ -63,11 +67,33 @@ func (s *Service) Create(ctx context.Context, name, category, description string
 		Status:         status,
 		TenantID:       tenantID,
 	}
-	return s.repo.Create(ctx, catalog)
+	created, err := s.repo.Create(ctx, catalog)
+	if err != nil {
+		return nil, err
+	}
+	if s.client != nil {
+		if _, err := service.NewFieldDefinitionService(s.client).ReplaceDefinitions(ctx, tenantID, "service_catalog", created.ID, fields); err != nil {
+			return nil, common.NewInternalError("Failed to save custom field definitions", err)
+		}
+	}
+	created.Fields = fields
+	return created, nil
 }
 
 func (s *Service) Get(ctx context.Context, tenantID int, id int) (*ServiceCatalog, error) {
-	return s.repo.Get(ctx, tenantID, id)
+	catalog, err := s.repo.Get(ctx, tenantID, id)
+	if err != nil {
+		return nil, err
+	}
+	if s.client != nil {
+		defs, err := service.NewFieldDefinitionService(s.client).ListDefinitions(ctx, tenantID, "service_catalog", catalog.ID)
+		if err != nil {
+			s.logger.Warnw("Failed to load field definitions for service catalog", "error", err, "catalog_id", catalog.ID)
+		} else {
+			catalog.Fields = toFieldDefinitionInputsFromEnt(defs)
+		}
+	}
+	return catalog, nil
 }
 
 func (s *Service) List(ctx context.Context, tenantID int, filters ListFilters) ([]*ServiceCatalog, int, error) {
@@ -80,10 +106,40 @@ func (s *Service) List(ctx context.Context, tenantID int, filters ListFilters) (
 	if filters.Size > 100 {
 		filters.Size = 100
 	}
-	return s.repo.List(ctx, tenantID, filters)
+	catalogs, total, err := s.repo.List(ctx, tenantID, filters)
+	if err != nil {
+		return nil, 0, err
+	}
+	if s.client != nil && len(catalogs) > 0 {
+		ids := make([]int, len(catalogs))
+		for i, c := range catalogs {
+			ids[i] = c.ID
+		}
+		defsByCatalog, err := service.NewFieldDefinitionService(s.client).ListDefinitionsForEntities(ctx, tenantID, "service_catalog", ids)
+		if err != nil {
+			s.logger.Warnw("Failed to batch-load field definitions for service catalogs", "error", err)
+		} else {
+			for _, c := range catalogs {
+				c.Fields = toFieldDefinitionInputsFromEnt(defsByCatalog[c.ID])
+			}
+		}
+	}
+	return catalogs, total, nil
 }
 
-func (s *Service) Update(ctx context.Context, tenantID int, id int, name, category, description string, deliveryTime int, status string, ciTypeID, cloudServiceID int) (*ServiceCatalog, error) {
+// toFieldDefinitionInputsFromEnt 把查出来的 ent.FieldDefinition 转成领域层的 FieldDefinitionInput。
+func toFieldDefinitionInputsFromEnt(defs []*ent.FieldDefinition) []service.FieldDefinitionInput {
+	result := make([]service.FieldDefinitionInput, 0, len(defs))
+	for _, d := range defs {
+		result = append(result, service.FieldDefinitionInput{
+			Name: d.Name, Label: d.Label, FieldType: d.FieldType,
+			Required: d.Required, Options: d.Options, SortOrder: d.SortOrder,
+		})
+	}
+	return result
+}
+
+func (s *Service) Update(ctx context.Context, tenantID int, id int, name, category, description string, deliveryTime int, status string, ciTypeID, cloudServiceID int, fields []service.FieldDefinitionInput) (*ServiceCatalog, error) {
 	// First check if exists
 	current, err := s.repo.Get(ctx, tenantID, id)
 	if err != nil {
@@ -147,14 +203,35 @@ func (s *Service) Update(ctx context.Context, tenantID int, id int, name, catego
 		current.CloudServiceID = cloudServiceID
 	}
 
-	return s.repo.Update(ctx, tenantID, current)
+	updated, err := s.repo.Update(ctx, tenantID, current)
+	if err != nil {
+		return nil, err
+	}
+	if fields != nil && s.client != nil {
+		if _, err := service.NewFieldDefinitionService(s.client).ReplaceDefinitions(ctx, tenantID, "service_catalog", id, fields); err != nil {
+			return nil, common.NewInternalError("Failed to save custom field definitions", err)
+		}
+		updated.Fields = fields
+	}
+	return updated, nil
 }
 
 func (s *Service) Delete(ctx context.Context, tenantID int, id int) error {
 	if _, err := s.repo.Get(ctx, tenantID, id); err != nil {
 		return err
 	}
-	return s.repo.Delete(ctx, tenantID, id)
+	if err := s.repo.Delete(ctx, tenantID, id); err != nil {
+		return err
+	}
+	if s.client != nil {
+		// repo.Delete 是软删除（status=disabled），目录随时可能被重新启用，所以这里用
+		// DisableDefinitions 而不是 DeleteDefinitions——否则目录恢复后自定义字段配置
+		// 已经永久丢了，恢复不回来。
+		if err := service.NewFieldDefinitionService(s.client).DisableDefinitions(ctx, tenantID, "service_catalog", id); err != nil {
+			s.logger.Warnw("Failed to disable field definitions for deleted service catalog", "error", err, "catalog_id", id)
+		}
+	}
+	return nil
 }
 
 func (s *Service) Search(ctx context.Context, tenantID int, keyword string, filters ListFilters) ([]*ServiceCatalog, int, error) {
@@ -167,7 +244,25 @@ func (s *Service) Search(ctx context.Context, tenantID int, keyword string, filt
 	if filters.Size > 100 {
 		filters.Size = 100
 	}
-	return s.repo.Search(ctx, tenantID, strings.TrimSpace(keyword), filters)
+	catalogs, total, err := s.repo.Search(ctx, tenantID, strings.TrimSpace(keyword), filters)
+	if err != nil {
+		return nil, 0, err
+	}
+	if s.client != nil && len(catalogs) > 0 {
+		ids := make([]int, len(catalogs))
+		for i, c := range catalogs {
+			ids[i] = c.ID
+		}
+		defsByCatalog, err := service.NewFieldDefinitionService(s.client).ListDefinitionsForEntities(ctx, tenantID, "service_catalog", ids)
+		if err != nil {
+			s.logger.Warnw("Failed to batch-load field definitions for service catalogs (search)", "error", err)
+		} else {
+			for _, c := range catalogs {
+				c.Fields = toFieldDefinitionInputsFromEnt(defsByCatalog[c.ID])
+			}
+		}
+	}
+	return catalogs, total, nil
 }
 
 func isValidCatalogStatus(status string) bool {

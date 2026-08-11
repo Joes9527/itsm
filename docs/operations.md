@@ -174,6 +174,16 @@ checkpoint_completion_target = 0.9
 5. **Network isolation** - Use Docker networks, don't expose DB port
 6. **Rate limiting** - Configure nginx rate limits
 7. **Regular updates** - Enable Dependabot for dependency updates
+8. **Provision the `ticket-approvers` fallback group** - BPMN `taskPurpose="approval"` tasks that
+   can't resolve a department manager (no manager configured, or the manager is the requester
+   themselves) fall back to the candidate group named by the `approvalFallbackCandidateGroup`
+   constant in `service/bpmn_process_engine.go` (currently `ticket-approvers`). Before going live,
+   create this group via `/admin/groups` and add **at least 2 members**. A single-member group is
+   not enough: if that one member is also the ticket's requester, they are excluded from the
+   candidate list (self-approval is blocked) and the task ends up with no eligible candidate at
+   all. `ClaimTask`/`ClaimTaskByID` also enforce that only the task's assignee or a listed
+   candidate can claim it, so an empty candidate list means the task is genuinely stuck until an
+   admin reassigns it.
 
 ## Troubleshooting
 

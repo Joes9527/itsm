@@ -8,6 +8,7 @@ import (
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/approvalrecord"
 	"itsm-backend/ent/enttest"
 	entTicket "itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketcomment"
@@ -244,36 +245,35 @@ func TestTicketService_CreateTicketPersistsAssociations(t *testing.T) {
 }
 
 func TestTicketService_CreateTicketPersistsCustomFieldValues(t *testing.T) {
-	client := enttest.Open(t, "sqlite3", "file:ticket_create_custom_fields?mode=memory&cache=shared&_fk=1")
+func TestTicketService_CreateTicketPersistsCustomFieldValues(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ticket_create_custom_fields_v2?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
 	ctx := context.Background()
-	tenant := createTicketAssociationTenant(t, ctx, client, "create-custom-fields")
-	requester := createTicketAssociationUser(t, ctx, client, tenant.ID, "create-custom-fields-requester")
-	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
+	tenant := createTicketAssociationTenant(t, ctx, client, "create-custom-fields-v2")
+	requester := createTicketAssociationUser(t, ctx, client, tenant.ID, "create-custom-fields-v2-requester")
+	template, err := client.TicketTemplate.Create().
+		SetName("网络接入").SetCategory("网络").SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	_, err = NewFieldDefinitionService(client).ReplaceDefinitions(ctx, tenant.ID, "ticket_template", template.ID, []FieldDefinitionInput{
+		{Name: "office_location", Label: "办公地点", FieldType: "text", SortOrder: 0},
+	})
+	require.NoError(t, err)
 
+	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
 	created, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
-		Title:       "网络接入申请",
-		Description: "自定义字段测试",
-		Priority:    "medium",
-		RequesterID: requester.ID,
+		Title: "网络接入申请", Description: "测试", Priority: "medium",
+		RequesterID: requester.ID, TemplateID: &template.ID,
 		FormFields: map[string]interface{}{
-			"presetTypeId": "network_access",
-			"values": map[string]interface{}{
-				"office_location": "上海",
-				"device_count":    float64(3),
-			},
+			"values": map[string]interface{}{"office_location": "北京"},
 		},
 	}, tenant.ID)
 	require.NoError(t, err)
-	require.NotNil(t, created)
-	assert.Equal(t, "上海", created.CustomFieldValues["office_location"])
-	assert.Equal(t, float64(3), created.CustomFieldValues["device_count"])
-	// presetTypeId 只是路由元数据，不应混入自定义字段值
-	assert.NotContains(t, created.CustomFieldValues, "presetTypeId")
 
-	entity, err := client.Ticket.Get(ctx, created.ID)
+	values, err := NewFieldValueService(client).ListValues(ctx, tenant.ID, "ticket", created.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "上海", entity.CustomFieldValues["office_location"])
+	require.Len(t, values, 1)
+	assert.Equal(t, "office_location", values[0].Name)
+	assert.Equal(t, "北京", values[0].Value)
 }
 
 func TestTicketService_CreateTicketWithoutFormFieldsLeavesCustomFieldValuesEmpty(t *testing.T) {
@@ -293,6 +293,116 @@ func TestTicketService_CreateTicketWithoutFormFieldsLeavesCustomFieldValuesEmpty
 	require.NoError(t, err)
 	require.NotNil(t, created)
 	assert.Empty(t, created.CustomFieldValues)
+}
+
+func TestTicketService_CreateTicket_AdHocFieldValuesWithoutTemplate(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ticket_create_adhoc_fields?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	tenant := createTicketAssociationTenant(t, ctx, client, "create-adhoc-fields")
+	requester := createTicketAssociationUser(t, ctx, client, tenant.ID, "create-adhoc-fields-requester")
+	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
+
+	created, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
+		Title: "K8S扩容", Description: "测试", Priority: "medium", RequesterID: requester.ID,
+		// 没有 TemplateID——模拟静态预设
+		FormFields: map[string]interface{}{
+			"fieldDefs": []interface{}{
+				map[string]interface{}{"name": "replicas", "label": "副本数"},
+			},
+			"values": map[string]interface{}{"replicas": float64(3)},
+		},
+	}, tenant.ID)
+	require.NoError(t, err)
+
+	values, err := NewFieldValueService(client).ListValues(ctx, tenant.ID, "ticket", created.ID)
+	require.NoError(t, err)
+	require.Len(t, values, 1)
+	assert.Equal(t, "replicas", values[0].Name)
+	assert.Equal(t, "副本数", values[0].Label)
+	assert.Equal(t, float64(3), values[0].Value)
+}
+
+func TestToTicketResponse_IncludesCustomFieldValuesOrdered(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:to_ticket_response_fields?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	tenant := createTicketAssociationTenant(t, ctx, client, "to-response-fields")
+	requester := createTicketAssociationUser(t, ctx, client, tenant.ID, "to-response-fields-requester")
+	template, err := client.TicketTemplate.Create().
+		SetName("t").SetCategory("c").SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	_, err = NewFieldDefinitionService(client).ReplaceDefinitions(ctx, tenant.ID, "ticket_template", template.ID, []FieldDefinitionInput{
+		{Name: "office_location", Label: "办公地点", FieldType: "text", SortOrder: 0},
+		{Name: "device_count", Label: "设备数量", FieldType: "number", SortOrder: 1},
+	})
+	require.NoError(t, err)
+
+	svc := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
+	created, err := svc.CreateTicket(ctx, &dto.CreateTicketRequest{
+		Title: "t", Description: "d", Priority: "medium", RequesterID: requester.ID, TemplateID: &template.ID,
+		FormFields: map[string]interface{}{"values": map[string]interface{}{
+			"office_location": "北京", "device_count": float64(2),
+		}},
+	}, tenant.ID)
+	require.NoError(t, err)
+
+	// ToTicketResponse（列表路径）不查字段值；ToTicketResponseWithCustomFields（详情/创建路径）才查——
+	// 两者的行为契约见本文件所属任务的 Interfaces 说明。这里测的是后者。
+	resp := ToTicketResponseWithCustomFields(ctx, client, created)
+	require.Len(t, resp.CustomFieldValues, 2)
+	assert.Equal(t, "office_location", resp.CustomFieldValues[0].Name)
+	assert.Equal(t, "办公地点", resp.CustomFieldValues[0].Label)
+	assert.Equal(t, "device_count", resp.CustomFieldValues[1].Name)
+}
+
+// TestTicketService_CreateTicket_SourceSurvivesToTicketResponse 是对
+// 「ticket.source 需要从 ent 一路活到 DTO」这条链路的回归测试。
+//
+// 这条链路此前分裂成两个各自独立、且都曾经缺失 Source 字段的 ent->domain 转换函数
+// （repository/ticket/repository_impl.go 的 toDomainModel，以及 service/ticket_service.go
+// 的 entToDomain），外加 ToTicketResponse 这一层 domain->DTO 转换。三处任何一处漏掉，
+// 前端 TicketDetail.tsx 用来判断是否挂载 ServiceRequestPanel 的
+// `ticket.source === 'service_catalog'` 就会静默失效——不会报错，只是面板不出现。
+// 用 TicketService.CreateTicket（最贴近真实 HTTP 路径的入口）走一遍创建 + 读取，
+// 覆盖 toDomainModel 在创建路径和独立读取路径（GetTicket -> repo.GetByID）两次调用。
+func TestTicketService_CreateTicket_SourceSurvivesToTicketResponse(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ticket_source_round_trip?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	tenant := createTicketAssociationTenant(t, ctx, client, "source-round-trip")
+	requester := createTicketAssociationUser(t, ctx, client, tenant.ID, "source-round-trip-requester")
+
+	svc := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
+
+	created, err := svc.CreateTicket(ctx, &dto.CreateTicketRequest{
+		Title:       "服务目录申请工单",
+		Description: "d",
+		Priority:    "medium",
+		RequesterID: requester.ID,
+		Source:      "service_catalog",
+	}, tenant.ID)
+	require.NoError(t, err)
+	require.NotNil(t, created)
+
+	// 1) 创建路径直接返回的领域模型：toDomainModel 必须把 ent.Ticket.Source 带过来。
+	assert.Equal(t, "service_catalog", created.Source)
+
+	// 2) 创建路径的响应 DTO：ToTicketResponse 必须把 t.Source 写进 dto.TicketResponse.Source。
+	createdResp := ToTicketResponse(ctx, created)
+	require.NotNil(t, createdResp)
+	assert.Equal(t, "service_catalog", createdResp.Source)
+
+	// 3) 独立的读路径：GetTicket -> repo.GetByID -> toDomainModel，走真实 DB round-trip
+	// （而不是复用内存里创建时的同一个指针），确认持久化的 source 列本身也读得回来。
+	fetched, err := svc.GetTicket(ctx, created.ID, tenant.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "service_catalog", fetched.Source)
+
+	fetchedResp := ToTicketResponse(ctx, fetched)
+	require.NotNil(t, fetchedResp)
+	assert.Equal(t, "service_catalog", fetchedResp.Source)
+}
 }
 
 func TestTicketService_CreateTicketRejectsCrossTenantReferences(t *testing.T) {
@@ -1252,4 +1362,138 @@ func BenchmarkTicketService_CreateTicket(b *testing.B) {
 			b.Fatal(err)
 		}
 	}
+}
+
+func TestTicketService_CreateTicket_ValuesArrayFormatSurvivesUnderscoreNames(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ticket_create_values_array?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	tenant := createTicketAssociationTenant(t, ctx, client, "create-values-array")
+	requester := createTicketAssociationUser(t, ctx, client, tenant.ID, "create-values-array-requester")
+	template, err := client.TicketTemplate.Create().
+		SetName("云主机申请").SetCategory("云").SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	_, err = NewFieldDefinitionService(client).ReplaceDefinitions(ctx, tenant.ID, "ticket_template", template.ID, []FieldDefinitionInput{
+		{Name: "current_replicas", Label: "当前副本数", FieldType: "number", SortOrder: 0},
+	})
+	require.NoError(t, err)
+
+	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
+	created, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
+		Title: "扩容申请", Description: "测试", Priority: "medium",
+		RequesterID: requester.ID, TemplateID: &template.ID,
+		FormFields: map[string]interface{}{
+			// 数组形状——模拟前端发送、经过 http-client.ts 全局驼峰转换后的真实线上形态。
+			// 注意：这里故意用数组而不是 map，因为这正是这次要修的 bug 场景。
+			"values": []interface{}{
+				map[string]interface{}{"name": "current_replicas", "value": float64(5)},
+			},
+		},
+	}, tenant.ID)
+	require.NoError(t, err)
+
+	values, err := NewFieldValueService(client).ListValues(ctx, tenant.ID, "ticket", created.ID)
+	require.NoError(t, err)
+	require.Len(t, values, 1)
+	assert.Equal(t, "current_replicas", values[0].Name)
+	assert.Equal(t, float64(5), values[0].Value)
+}
+
+func TestTicketService_CreateTicket_ValuesMapFormatStillWorks(t *testing.T) {
+	// 向后兼容：直接调 service 层（不经过前端/http-client）的现有测试和调用方，
+	// 传的还是 map 形状，这条要继续通过。
+	client := enttest.Open(t, "sqlite3", "file:ticket_create_values_map_compat?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	tenant := createTicketAssociationTenant(t, ctx, client, "create-values-map-compat")
+	requester := createTicketAssociationUser(t, ctx, client, tenant.ID, "create-values-map-compat-requester")
+	template, err := client.TicketTemplate.Create().
+		SetName("模板").SetCategory("c").SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	_, err = NewFieldDefinitionService(client).ReplaceDefinitions(ctx, tenant.ID, "ticket_template", template.ID, []FieldDefinitionInput{
+		{Name: "office_location", Label: "办公地点", FieldType: "text", SortOrder: 0},
+	})
+	require.NoError(t, err)
+
+	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
+	created, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
+		Title: "t", Description: "d", Priority: "medium",
+		RequesterID: requester.ID, TemplateID: &template.ID,
+		FormFields: map[string]interface{}{
+			"values": map[string]interface{}{"office_location": "北京"},
+		},
+	}, tenant.ID)
+	require.NoError(t, err)
+
+	values, err := NewFieldValueService(client).ListValues(ctx, tenant.ID, "ticket", created.ID)
+	require.NoError(t, err)
+	require.Len(t, values, 1)
+	assert.Equal(t, "北京", values[0].Value)
+}
+
+// TestTicketService_CreateTicket_DoesNotTriggerLegacyApproval 是审批收敛组件②的回归测试：
+// CreateTicket 只应该触发 BPMN（异步），不应该再同步调用旧的 ApprovalService.TriggerApproval。
+// 用真实 ApprovalService + 一条会精确匹配的 ApprovalWorkflow 种子数据来验证——如果调用点还在，
+// 这条工作流会命中并创建一条 ApprovalRecord；调用点删掉之后不会有任何记录产生。
+func TestTicketService_CreateTicket_DoesNotTriggerLegacyApproval(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", testDSN())
+	defer client.Close()
+
+	logger := zaptest.NewLogger(t).Sugar()
+	ticketService := NewTicketServiceForTest(client, logger)
+	ticketService.SetApprovalService(NewApprovalService(client, logger))
+
+	ctx := context.Background()
+
+	testTenant, err := client.Tenant.Create().
+		SetName("Dual Trigger Test Tenant").
+		SetCode("dual-trigger-test").
+		SetDomain("dual-trigger.example.com").
+		SetStatus("active").
+		Save(ctx)
+	require.NoError(t, err)
+
+	testUser, err := client.User.Create().
+		SetUsername("dualtriggeruser").
+		SetEmail("dualtrigger@example.com").
+		SetName("Dual Trigger User").
+		SetPasswordHash("hashedpassword").
+		SetRole("end_user").
+		SetActive(true).
+		SetTenantID(testTenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	// 精确匹配的旧审批工作流：ticket_type + priority 都对得上下面创建的工单，
+	// 节点用 "user" 类型直接指向 testUser，resolveApprover 不需要额外查询就能成功，
+	// 保证"如果调用点还在，一定会真的创建出 ApprovalRecord"，不是被节点解析失败悄悄跳过。
+	_, err = client.ApprovalWorkflow.Create().
+		SetName("Dual Trigger Regression Workflow").
+		SetTicketType("incident").
+		SetPriority("medium").
+		SetIsActive(true).
+		SetTenantID(testTenant.ID).
+		SetNodes([]map[string]interface{}{
+			{"assigneeType": "user", "assigneeValue": fmt.Sprintf("%d", testUser.ID), "name": "回归测试审批"},
+		}).
+		Save(ctx)
+	require.NoError(t, err)
+
+	// 注意：ApprovalWorkflow.TicketType 匹配的是 ticket.Type，不是 ticket 的分类展示字段
+	// Category（那个字段只用来查一个可选的 CategoryID，跟 TriggerApproval 的匹配逻辑无关）。
+	// 必须显式传 Type，不能只传 Category，否则这条测试即使旧调用点还在也会因为
+	// findMatchingWorkflow 匹配不上而通不过——变成一条自己骗自己的假阳性测试。
+	created, err := ticketService.CreateTicket(ctx, &dto.CreateTicketRequest{
+		Title:       "双重触发回归测试工单",
+		Description: "验证 CreateTicket 不再同步调用旧审批系统",
+		Priority:    "medium",
+		Type:        "incident",
+		RequesterID: testUser.ID,
+	}, testTenant.ID)
+	require.NoError(t, err)
+	require.NotNil(t, created)
+
+	count, err := client.ApprovalRecord.Query().Where(approvalrecord.TenantIDEQ(testTenant.ID)).Count(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 0, count, "CreateTicket 不应该再触发旧审批系统创建 ApprovalRecord")
 }

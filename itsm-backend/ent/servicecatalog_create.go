@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"itsm-backend/ent/servicecatalog"
-	"itsm-backend/ent/servicecatalogitem"
 	"time"
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -215,12 +214,6 @@ func (_c *ServiceCatalogCreate) SetNillableCloudServiceID(v *int) *ServiceCatalo
 	return _c
 }
 
-// SetFormSchema sets the "form_schema" field.
-func (_c *ServiceCatalogCreate) SetFormSchema(v map[string]interface{}) *ServiceCatalogCreate {
-	_c.mutation.SetFormSchema(v)
-	return _c
-}
-
 // SetAvailableRegions sets the "available_regions" field.
 func (_c *ServiceCatalogCreate) SetAvailableRegions(v []string) *ServiceCatalogCreate {
 	_c.mutation.SetAvailableRegions(v)
@@ -307,21 +300,6 @@ func (_c *ServiceCatalogCreate) SetNillableUpdatedAt(v *time.Time) *ServiceCatal
 		_c.SetUpdatedAt(*v)
 	}
 	return _c
-}
-
-// AddItemIDs adds the "items" edge to the ServiceCatalogItem entity by IDs.
-func (_c *ServiceCatalogCreate) AddItemIDs(ids ...int) *ServiceCatalogCreate {
-	_c.mutation.AddItemIDs(ids...)
-	return _c
-}
-
-// AddItems adds the "items" edges to the ServiceCatalogItem entity.
-func (_c *ServiceCatalogCreate) AddItems(v ...*ServiceCatalogItem) *ServiceCatalogCreate {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _c.AddItemIDs(ids...)
 }
 
 // Mutation returns the ServiceCatalogMutation object of the builder.
@@ -521,10 +499,6 @@ func (_c *ServiceCatalogCreate) createSpec() (*ServiceCatalog, *sqlgraph.CreateS
 		_spec.SetField(servicecatalog.FieldCloudServiceID, field.TypeInt, value)
 		_node.CloudServiceID = value
 	}
-	if value, ok := _c.mutation.FormSchema(); ok {
-		_spec.SetField(servicecatalog.FieldFormSchema, field.TypeJSON, value)
-		_node.FormSchema = value
-	}
 	if value, ok := _c.mutation.AvailableRegions(); ok {
 		_spec.SetField(servicecatalog.FieldAvailableRegions, field.TypeJSON, value)
 		_node.AvailableRegions = value
@@ -556,22 +530,6 @@ func (_c *ServiceCatalogCreate) createSpec() (*ServiceCatalog, *sqlgraph.CreateS
 	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(servicecatalog.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
-	}
-	if nodes := _c.mutation.ItemsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   servicecatalog.ItemsTable,
-			Columns: []string{servicecatalog.ItemsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(servicecatalogitem.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
 }

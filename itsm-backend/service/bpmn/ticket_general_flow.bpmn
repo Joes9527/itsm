@@ -88,7 +88,7 @@
     </bpmn:exclusiveGateway>
 
     <!-- 审批任务 -->
-    <bpmn:userTask id="Activity_Approval" name="工单审批">
+    <bpmn:userTask id="Activity_Approval" name="工单审批" taskPurpose="approval">
       <bpmn:incoming>Flow_ApprovalTask</bpmn:incoming>
       <bpmn:outgoing>Flow_ApprovalResult</bpmn:outgoing>
     </bpmn:userTask>

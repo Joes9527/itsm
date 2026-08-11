@@ -14,6 +14,7 @@ import (
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/group"
 	"itsm-backend/ent/processinstance"
 	entTicket "itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketcategory"
@@ -30,14 +31,15 @@ import (
 // TicketService 改进版的工单服务
 // 使用构造函数注入和 Repository 模式
 type TicketService struct {
-	repo              ticket.Repository
-	client            *ent.Client // 用于 ProcessInstance 等系统级查询（不走 Repository）
-	logger            *zap.SugaredLogger
-	notificationSvc   *TicketNotificationService
-	approvalSvc       *ApprovalService
-	automationRuleSvc *TicketAutomationRuleService
-	slaSvc            *TicketSLAService
-	connectorManager  *connector.Manager // 连接器管理器，用于飞书等外部集成
+	repo                   ticket.Repository
+	client                 *ent.Client // 用于 ProcessInstance 等系统级查询（不走 Repository）
+	logger                 *zap.SugaredLogger
+	notificationSvc        *TicketNotificationService
+	approvalSvc            *ApprovalService
+	automationRuleSvc      *TicketAutomationRuleService
+	slaSvc                 *TicketSLAService
+	assignmentSmartService *TicketAssignmentSmartService
+	connectorManager       *connector.Manager // 连接器管理器，用于飞书等外部集成
 
 	// 流程触发（V1 兼容语义）
 	processTriggerSvc ProcessTriggerServiceInterface
@@ -69,7 +71,7 @@ func NewTicketService(cfg *TicketServiceConfig) *TicketService {
 		panic("Logger is required")
 	}
 
-	return &TicketService{
+	s := &TicketService{
 		repo:              cfg.Repository,
 		client:            cfg.Client,
 		logger:            cfg.Logger,
@@ -81,6 +83,12 @@ func NewTicketService(cfg *TicketServiceConfig) *TicketService {
 		processResolver:   cfg.ProcessResolver,
 		connectorManager:  cfg.ConnectorManager,
 	}
+	if cfg.Client != nil {
+		assignmentService := NewTicketAssignmentService(cfg.Client, cfg.Logger)
+		assignmentRuleService := NewTicketAssignmentRuleService(cfg.Client, cfg.Logger)
+		s.assignmentSmartService = NewTicketAssignmentSmartService(cfg.Client, cfg.Logger, assignmentService, assignmentRuleService)
+	}
+	return s
 }
 
 // NewTicketServiceForTest 构造一个最小可运行的 TicketService（仅用于测试）
@@ -130,6 +138,9 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 
 	ticketType := normalizeCreateTicketType(req.Type, req.FormFields)
 	assigneeID := req.AssigneeID
+	if assigneeID == 0 {
+		assigneeID = s.defaultTierOneAssignee(ctx, tenantID)
+	}
 	categoryID := req.CategoryID
 	workflowDefinitionKey := req.WorkflowDefinitionKey
 
@@ -144,6 +155,7 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 		ParentTicketID:    req.ParentTicketID,
 		TagIDs:            uniqueIDs(req.TagIDs),
 		CustomFieldValues: extractCustomFieldValues(req.FormFields),
+		Source:            req.Source,
 	}
 
 	if assigneeID != 0 {
@@ -160,6 +172,29 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 		return nil, err
 	}
 
+	if tkt.AssigneeID == nil && s.assignmentSmartService != nil {
+		assignment, err := s.assignmentSmartService.AutoAssign(ctx, tkt.ID, tenantID)
+		if err != nil {
+			s.logger.Warnw("Automatic ticket assignment failed", "error", err, "ticket_id", tkt.ID)
+		} else {
+			tkt.AssigneeID = assignment.AssignedTo
+		}
+	}
+
+	// 将自定义字段值写入共享的 field_values 表（取代旧的 Ticket.custom_field_values JSON 列）。
+	// 写入失败不应该阻塞工单创建本身，跟 SLA 计算失败的处理方式一致。
+	if req.TemplateID != nil {
+		if fieldValues := extractCustomFieldValues(req.FormFields); len(fieldValues) > 0 {
+			if err := NewFieldValueService(s.client).CreateValues(ctx, tenantID, "ticket_template", *req.TemplateID, "ticket", tkt.ID, fieldValues); err != nil {
+				s.logger.Errorw("Failed to persist custom field values", "error", err, "ticket_id", tkt.ID, "template_id", *req.TemplateID)
+			}
+		}
+	} else if adHocFields := extractAdHocFieldValues(req.FormFields); len(adHocFields) > 0 {
+		if err := NewFieldValueService(s.client).CreateAdHocValues(ctx, tenantID, "ticket", tkt.ID, adHocFields); err != nil {
+			s.logger.Errorw("Failed to persist ad-hoc custom field values", "error", err, "ticket_id", tkt.ID)
+		}
+	}
+
 	// 计算 SLA（如果配置了 SLA 服务）
 	if s.slaSvc != nil {
 		slaResult, err := s.slaSvc.CalculateSLADeadlineFromRequest(ctx, tenantID, string(tkt.Type), string(tkt.Priority))
@@ -170,22 +205,6 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 			if err != nil {
 				s.logger.Warnw("Failed to update SLA deadlines", "error", err)
 			}
-		}
-	}
-
-	// 触发审批（同步，走 ApprovalService，查找匹配工作流并创建 ApprovalRecord）
-	// 这是 V1 缺失的 Phase 1 #1 缺陷修复：V2 必须让工单进入审批链路
-	if s.approvalSvc != nil {
-		if _, err := s.approvalSvc.TriggerApproval(ctx, &ApprovalTriggerRequest{
-			TicketID:     tkt.ID,
-			TicketNumber: tkt.TicketNumber,
-			TicketTitle:  tkt.Title,
-			TicketType:   string(tkt.Type),
-			Priority:     string(tkt.Priority),
-			RequesterID:  tkt.RequesterID,
-			TenantID:     tenantID,
-		}); err != nil {
-			s.logger.Warnw("Approval trigger failed", "error", err, "ticket_id", tkt.ID)
 		}
 	}
 
@@ -272,6 +291,28 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 	return tkt, nil
 }
 
+// defaultTierOneAssignee selects a stable, active member of the tenant's
+// tier1-support group. A missing or empty group leaves the ticket unassigned
+// rather than making ticket creation unavailable.
+func (s *TicketService) defaultTierOneAssignee(ctx context.Context, tenantID int) int {
+	if s.client == nil {
+		return 0
+	}
+	member, err := s.client.Group.Query().
+		Where(group.TenantIDEQ(tenantID), group.NameEQ("tier1-support")).
+		QueryMembers().
+		Where(user.TenantIDEQ(tenantID), user.ActiveEQ(true)).
+		Order(ent.Asc(user.FieldID)).
+		First(ctx)
+	if err != nil {
+		if !ent.IsNotFound(err) {
+			s.logger.Warnw("Failed to resolve tier-1 support assignee", "error", err, "tenant_id", tenantID)
+		}
+		return 0
+	}
+	return member.ID
+}
+
 func (s *TicketService) validateCreateTicketReferences(ctx context.Context, req *dto.CreateTicketRequest, tenantID int) error {
 	// Mock-backed unit tests may intentionally construct the service without an
 	// Ent client. Production wiring and integration tests always provide it.
@@ -349,16 +390,94 @@ func (s *TicketService) validateCreateTicketReferences(ctx context.Context, req 
 	return nil
 }
 
+// parseFieldValuesArray 把 formFields["values"] 解析成 [{name,value}] 数组形状，
+// 转成内部用的 map[name]value。数组形状是必须的——字段名作为数组元素里的字符串值
+// （而不是对象的 key）传输，这样才能绕开前端 http-client.ts 那个全局的、不区分
+// 契约字段和用户数据的 snake_case→camelCase 请求体转换（那个转换会把 map 形状里
+// 带下划线的字段名 key 悄悄改写，导致匹配失败、值静默丢失）。
+// 解析不出数组形状返回 nil，调用方会退回到兼容 map 形状的旧逻辑。
+func parseFieldValuesArray(formFields map[string]interface{}) map[string]interface{} {
+	if formFields == nil {
+		return nil
+	}
+	rawValues, ok := formFields["values"].([]interface{})
+	if !ok {
+		return nil
+	}
+	result := make(map[string]interface{}, len(rawValues))
+	for _, raw := range rawValues {
+		entry, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		name, _ := entry["name"].(string)
+		if name == "" {
+			continue
+		}
+		if val, ok := entry["value"]; ok {
+			result[name] = val
+		}
+	}
+	return result
+}
+
 // extractCustomFieldValues 从提交的 formFields 中取出用户实际填写的自定义字段值（"values" 键），
 // 忽略 presetTypeId 等仅用于类型推断/路由的元数据键。
 func extractCustomFieldValues(formFields map[string]interface{}) map[string]interface{} {
 	if formFields == nil {
 		return nil
 	}
+	if values := parseFieldValuesArray(formFields); values != nil {
+		return values
+	}
+	// 兼容旧的 map 形状——直接调用 service 层的测试/调用方还在用。
 	if values, ok := formFields["values"].(map[string]interface{}); ok {
 		return values
 	}
 	return nil
+}
+
+// extractAdHocFieldValues 解析 formFields["fieldDefs"]（客户端提交的 {name,label} 列表，
+// 用于没有 field_definitions 行的静态预设）配合 formFields["values"] 里的实际值，
+// 构造成 AdHocFieldValue 列表。fieldDefs 缺失或为空返回 nil。
+func extractAdHocFieldValues(formFields map[string]interface{}) []AdHocFieldValue {
+	if formFields == nil {
+		return nil
+	}
+	rawDefs, ok := formFields["fieldDefs"].([]interface{})
+	if !ok || len(rawDefs) == 0 {
+		return nil
+	}
+	values := parseFieldValuesArray(formFields)
+	if len(values) == 0 {
+		if mapValues, ok := formFields["values"].(map[string]interface{}); ok {
+			values = mapValues
+		}
+	}
+	if len(values) == 0 {
+		return nil
+	}
+	result := make([]AdHocFieldValue, 0, len(rawDefs))
+	for i, raw := range rawDefs {
+		defMap, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		name, _ := defMap["name"].(string)
+		if name == "" {
+			continue
+		}
+		val, ok := values[name]
+		if !ok {
+			continue
+		}
+		label, _ := defMap["label"].(string)
+		if label == "" {
+			label = name
+		}
+		result = append(result, AdHocFieldValue{Name: name, Label: label, SortOrder: i, Value: val})
+	}
+	return result
 }
 
 func normalizeCreateTicketType(reqType string, formFields ...map[string]interface{}) ticket.Type {
@@ -861,7 +980,7 @@ func (s *TicketService) ListTickets(ctx context.Context, req *dto.ListTicketsReq
 	}
 
 	for i, t := range result.Data {
-		response.Tickets[i] = s.toTicketResponse(t)
+		response.Tickets[i] = ToTicketResponse(ctx, t)
 	}
 
 	return response, nil
@@ -1121,8 +1240,12 @@ func (s *TicketService) GetTicketStats(ctx context.Context, tenantID int) (*dto.
 
 // ==================== 辅助方法 ====================
 
-// toTicketResponse 转换为 DTO 响应
-func (s *TicketService) toTicketResponse(t *ticket.Ticket) *dto.TicketResponse {
+// ToTicketResponse 是工单领域模型转 DTO 响应的唯一入口，创建/详情/列表所有路径都应该调用它。
+// 列表路径直接用这个函数，不查字段值（避免 N+1）。
+func ToTicketResponse(ctx context.Context, t *ticket.Ticket) *dto.TicketResponse {
+	if t == nil {
+		return nil
+	}
 	resp := &dto.TicketResponse{
 		ID:           t.ID,
 		TicketNumber: t.TicketNumber,
@@ -1136,6 +1259,7 @@ func (s *TicketService) toTicketResponse(t *ticket.Ticket) *dto.TicketResponse {
 		Version:      t.Version,
 		CreatedAt:    t.CreatedAt,
 		UpdatedAt:    t.UpdatedAt,
+		Source:       t.Source,
 	}
 
 	if t.AssigneeID != nil {
@@ -1159,10 +1283,37 @@ func (s *TicketService) toTicketResponse(t *ticket.Ticket) *dto.TicketResponse {
 	resp.FirstResponseAt = t.FirstResponseAt
 	resp.SLAResponseDeadline = t.SLAResponseDeadline
 	resp.SLAResolutionDeadline = t.SLAResolutionDeadline
-	if len(t.CustomFieldValues) > 0 {
-		resp.CustomFieldValues = t.CustomFieldValues
-	}
 
+	return resp
+}
+
+// ToTicketResponseWithCustomFields 是 TicketService 持有 client 时的便捷封装，
+// 供没有单独持有 *ent.Client 的调用方（如 MSPController）获取带自定义字段值的详情响应。
+func (s *TicketService) ToTicketResponseWithCustomFields(ctx context.Context, t *ticket.Ticket) *dto.TicketResponse {
+	return ToTicketResponseWithCustomFields(ctx, s.client, t)
+}
+
+// ToTicketResponseWithCustomFields 在 ToTicketResponse 基础上额外查一次 field_values。
+// 只用于单条工单详情/创建响应，列表接口不调用（避免 N+1）。
+func ToTicketResponseWithCustomFields(ctx context.Context, client *ent.Client, t *ticket.Ticket) *dto.TicketResponse {
+	resp := ToTicketResponse(ctx, t)
+	if resp == nil || client == nil {
+		return resp
+	}
+	values, err := NewFieldValueService(client).ListValues(ctx, t.TenantID, "ticket", t.ID)
+	if err != nil {
+		zap.S().Warnw("Failed to load custom field values for ticket response", "error", err, "ticket_id", t.ID)
+		return resp
+	}
+	if len(values) == 0 {
+		return resp
+	}
+	resp.CustomFieldValues = make([]dto.CustomFieldValueResponse, 0, len(values))
+	for _, v := range values {
+		resp.CustomFieldValues = append(resp.CustomFieldValues, dto.CustomFieldValueResponse{
+			Name: v.Name, Label: v.Label, Value: v.Value,
+		})
+	}
 	return resp
 }
 
@@ -1636,6 +1787,7 @@ func (s *TicketService) entToDomain(e *ent.Ticket) *ticket.Ticket {
 		Version:      e.Version,
 		CreatedAt:    e.CreatedAt,
 		UpdatedAt:    e.UpdatedAt,
+		Source:       e.Source,
 	}
 	if e.AssigneeID > 0 {
 		aid := e.AssigneeID
@@ -1840,6 +1992,34 @@ func (s *TicketService) GetTicketAnalytics(ctx context.Context, tenantID int, da
 
 // ==================== 模板 CRUD ====================
 
+// ToFieldDefinitionInputs 把前端提交的模板字段（[]map[string]interface{}）转换成
+// FieldDefinitionService 消费的 []FieldDefinitionInput。
+func ToFieldDefinitionInputs(fields []map[string]interface{}) []FieldDefinitionInput {
+	result := make([]FieldDefinitionInput, 0, len(fields))
+	for i, f := range fields {
+		name, _ := f["name"].(string)
+		if name == "" {
+			continue
+		}
+		label, _ := f["label"].(string)
+		fieldType, _ := f["type"].(string)
+		required, _ := f["required"].(bool)
+		var options []interface{}
+		if raw, ok := f["options"].([]interface{}); ok {
+			options = raw
+		}
+		result = append(result, FieldDefinitionInput{
+			Name:      name,
+			Label:     label,
+			FieldType: fieldType,
+			Required:  required,
+			Options:   options,
+			SortOrder: i,
+		})
+	}
+	return result
+}
+
 // CreateTicketTemplate 创建工单模板
 func (s *TicketService) CreateTicketTemplate(ctx context.Context, tenantID int, req interface{}) (interface{}, error) {
 	createReq, ok := req.(*dto.TicketTemplate)
@@ -1848,13 +2028,6 @@ func (s *TicketService) CreateTicketTemplate(ctx context.Context, tenantID int, 
 	}
 	if s.client == nil {
 		return nil, fmt.Errorf("ent client not available for template")
-	}
-	formFields := createReq.FormFields
-	if formFields == nil {
-		formFields = make(map[string]interface{})
-	}
-	if len(createReq.Fields) > 0 {
-		formFields["fields"] = createReq.Fields
 	}
 	isActive := true
 	priority := strings.TrimSpace(createReq.Priority)
@@ -1868,7 +2041,7 @@ func (s *TicketService) CreateTicketTemplate(ctx context.Context, tenantID int, 
 		Description:   createReq.Description,
 		Category:      createReq.Category,
 		Priority:      priority,
-		FormFields:    formFields,
+		Fields:        ToFieldDefinitionInputs(createReq.Fields),
 		WorkflowSteps: createReq.WorkflowSteps,
 		IsActive:      isActive,
 		TenantID:      tenantID,
@@ -1877,7 +2050,7 @@ func (s *TicketService) CreateTicketTemplate(ctx context.Context, tenantID int, 
 	if err != nil {
 		return nil, err
 	}
-	return s.toTicketTemplateDTO(template)
+	return s.toTicketTemplateDTO(ctx, template)
 }
 
 // UpdateTicketTemplate 更新工单模板
@@ -1889,24 +2062,22 @@ func (s *TicketService) UpdateTicketTemplate(ctx context.Context, tenantID int, 
 	if s.client == nil {
 		return nil, fmt.Errorf("ent client not available for template")
 	}
-	formFields := updateReq.FormFields
-	if formFields == nil && len(updateReq.Fields) > 0 {
-		formFields = map[string]interface{}{"fields": updateReq.Fields}
-	} else if len(updateReq.Fields) > 0 {
-		formFields["fields"] = updateReq.Fields
-	}
 	var isActive *bool
 	if updateReq.IsActiveAlt != nil {
 		isActive = updateReq.IsActiveAlt
 	}
 	priority := strings.TrimSpace(updateReq.Priority)
 	templateService := NewTicketTemplateService(s.client)
+	var fields []FieldDefinitionInput
+	if updateReq.Fields != nil {
+		fields = ToFieldDefinitionInputs(updateReq.Fields)
+	}
 	serviceReq := &UpdateTemplateRequest{
 		Name:          updateReq.Name,
 		Description:   updateReq.Description,
 		Category:      updateReq.Category,
 		Priority:      priority,
-		FormFields:    formFields,
+		Fields:        fields,
 		WorkflowSteps: updateReq.WorkflowSteps,
 		IsActive:      isActive,
 	}
@@ -1914,7 +2085,7 @@ func (s *TicketService) UpdateTicketTemplate(ctx context.Context, tenantID int, 
 	if err != nil {
 		return nil, err
 	}
-	return s.toTicketTemplateDTO(template)
+	return s.toTicketTemplateDTO(ctx, template)
 }
 
 // DeleteTicketTemplate 删除工单模板
@@ -1944,7 +2115,7 @@ func (s *TicketService) GetTicketTemplates(ctx context.Context, tenantID int) ([
 	}
 	result := make([]interface{}, 0, len(templates))
 	for _, template := range templates {
-		templateDTO, err := s.toTicketTemplateDTO(template)
+		templateDTO, err := s.toTicketTemplateDTO(ctx, template)
 		if err != nil {
 			return nil, err
 		}
@@ -1963,7 +2134,7 @@ func (s *TicketService) GetTicketTemplate(ctx context.Context, tenantID int, tem
 	if err != nil {
 		return nil, err
 	}
-	return s.toTicketTemplateDTO(template)
+	return s.toTicketTemplateDTO(ctx, template)
 }
 
 // UpdateTicketTemplateStatus 启用或停用工单模板
@@ -1996,7 +2167,6 @@ func (s *TicketService) CopyTicketTemplate(ctx context.Context, tenantID int, te
 		Category:      source.Category,
 		Priority:      source.Priority,
 		Fields:        source.Fields,
-		FormFields:    source.FormFields,
 		WorkflowSteps: source.WorkflowSteps,
 		IsActive:      source.IsActive,
 	})
@@ -2031,15 +2201,21 @@ func (s *TicketService) GetTicketTemplateCategories(ctx context.Context, tenantI
 	return categories, nil
 }
 
-func (s *TicketService) toTicketTemplateDTO(template *ent.TicketTemplate) (*dto.TicketTemplate, error) {
-	var formFields map[string]interface{}
-	if len(template.FormFields) > 0 {
-		if err := json.Unmarshal(template.FormFields, &formFields); err != nil {
-			s.logger.Warnw("反序列化表单字段失败", "error", err, "template_id", template.ID)
-			formFields = make(map[string]interface{})
-		}
-	} else {
-		formFields = make(map[string]interface{})
+func (s *TicketService) toTicketTemplateDTO(ctx context.Context, template *ent.TicketTemplate) (*dto.TicketTemplate, error) {
+	defs, err := NewFieldDefinitionService(s.client).ListDefinitions(ctx, template.TenantID, "ticket_template", template.ID)
+	if err != nil {
+		s.logger.Warnw("加载模板字段定义失败", "error", err, "template_id", template.ID)
+		defs = nil
+	}
+	fields := make([]map[string]interface{}, 0, len(defs))
+	for _, d := range defs {
+		fields = append(fields, map[string]interface{}{
+			"name":     d.Name,
+			"label":    d.Label,
+			"type":     d.FieldType,
+			"required": d.Required,
+			"options":  d.Options,
+		})
 	}
 
 	var workflowSteps []map[string]interface{}
@@ -2047,13 +2223,6 @@ func (s *TicketService) toTicketTemplateDTO(template *ent.TicketTemplate) (*dto.
 		if err := json.Unmarshal(template.WorkflowSteps, &workflowSteps); err != nil {
 			s.logger.Warnw("反序列化工作流步骤失败", "error", err, "template_id", template.ID)
 			workflowSteps = nil
-		}
-	}
-
-	fields := make([]map[string]interface{}, 0)
-	if rawFields, ok := formFields["fields"]; ok {
-		if encoded, err := json.Marshal(rawFields); err == nil {
-			_ = json.Unmarshal(encoded, &fields)
 		}
 	}
 
@@ -2065,7 +2234,6 @@ func (s *TicketService) toTicketTemplateDTO(template *ent.TicketTemplate) (*dto.
 		Category:      template.Category,
 		Priority:      template.Priority,
 		Fields:        fields,
-		FormFields:    formFields,
 		WorkflowSteps: workflowSteps,
 		IsActive:      isActive,
 		CreatedAt:     template.CreatedAt,
@@ -2099,7 +2267,7 @@ func (s *TicketService) generateCSV(data []map[string]interface{}) ([]byte, erro
 				record = append(record, fmt.Sprintf("%v", value))
 			}
 		}
-		if err := writer.Write(record); err != nil {
+		if err := writer.Write(sanitizeSpreadsheetRow(record)); err != nil {
 			return nil, err
 		}
 	}

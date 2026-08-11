@@ -30,6 +30,7 @@ import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { ServiceCatalogApi } from '@/lib/api/service-catalog-api';
 import { httpClient } from '@/lib/api/http-client';
+import { useAuthStore } from '@/lib/store/auth-store';
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -42,10 +43,17 @@ export default function ServiceCatalogRequestPage() {
   const [loading, setLoading] = useState(false);
   const [catalog, setCatalog] = useState<any>(null);
   const [fetching, setFetching] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const user = useAuthStore(state => state.user);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id) {
+      setFetching(false);
+      setFetchError('服务标识无效，请返回服务目录重新选择');
+      return;
+    }
     setFetching(true);
+    setFetchError(null);
     // 拉取服务目录详情
     httpClient
       .get<any>(`/api/v1/service-catalogs/${id}`)
@@ -57,19 +65,42 @@ export default function ServiceCatalogRequestPage() {
         return httpClient.get<any>('/api/v1/service-catalogs', { page: 1, size: 100 }).then((list: any) => {
           const items = list?.data?.items || list?.items || [];
           const found = items.find((it: any) => it.id === id);
-          if (found) setCatalog(found);
+          if (found) {
+            setCatalog(found);
+          } else {
+            setFetchError('未找到所选服务，该服务可能已下架');
+          }
         });
       })
+      .catch(() => setFetchError('服务信息加载失败，请稍后重试'))
       .finally(() => setFetching(false));
   }, [id]);
+
+  useEffect(() => {
+    if (user) {
+      form.setFieldsValue({ requesterName: user.name, requesterEmail: user.email });
+    }
+  }, [form, user]);
 
   const onFinish = async (values: any) => {
     setLoading(true);
     try {
       const expireAt: Dayjs | undefined = values.expireAt;
+      // 自定义字段值必须以 [{name, value}] 数组形状提交，而不是 name 为 key 的 map：
+      // http-client.ts 会对请求体做全局递归 camelCase 转换，map 形状里带下划线的字段名
+      // （如 office_location）会被悄悄改写成 officeLocation，导致后端按名称匹配字段定义
+      // 时找不到、值被静默丢弃。数组元素里的 name 是字符串值而非 object key，不受影响。
+      const customFieldValues = (catalog?.fields || [])
+        .map((field: { name: string }) => ({
+          name: field.name,
+          value: values.customFields?.[field.name],
+        }))
+        .filter((f: { value: unknown }) => f.value !== undefined && f.value !== null && f.value !== '');
       const payload: any = {
         serviceId: id,
         formData: {
+          requesterName: values.requesterName,
+          requesterEmail: values.requesterEmail,
           title: values.title,
           reason: values.reason,
           quantity: values.quantity || 1,
@@ -83,12 +114,13 @@ export default function ServiceCatalogRequestPage() {
           // B10: 合规确认 + 过期时间
           complianceAck: !!values.complianceAck,
           expireAt: expireAt ? expireAt.toISOString() : undefined,
+          customFieldValues,
         },
       };
 
-      await ServiceCatalogApi.createServiceRequest(payload);
+      const created = await ServiceCatalogApi.createServiceRequest(payload);
       message.success('申请已提交，等待审批');
-      router.push('/my-requests');
+      router.push(`/tickets/${created.ticketId}`);
     } catch (e: any) {
       message.error('提交失败：' + (e?.message || '未知错误'));
     } finally {
@@ -123,6 +155,16 @@ export default function ServiceCatalogRequestPage() {
           </Title>
         </Space>
 
+        {fetchError && (
+          <Alert
+            type="error"
+            showIcon
+            className="mb-4"
+            message={fetchError}
+            action={<Button onClick={() => router.push('/service-catalog')}>返回服务目录</Button>}
+          />
+        )}
+
         {catalog && (
           <Alert
             type="info"
@@ -146,6 +188,14 @@ export default function ServiceCatalogRequestPage() {
         <Divider />
 
         <Form form={form} layout="vertical" onFinish={onFinish}>
+          <div className="grid grid-cols-2 gap-4">
+            <Form.Item name="requesterName" label="申请人">
+              <Input disabled placeholder="当前登录用户" />
+            </Form.Item>
+            <Form.Item name="requesterEmail" label="联系邮箱">
+              <Input disabled placeholder="当前用户邮箱" />
+            </Form.Item>
+          </div>
           <Form.Item
             name="title"
             label="申请标题"
@@ -234,6 +284,32 @@ export default function ServiceCatalogRequestPage() {
             </Checkbox>
           </Form.Item>
 
+          {Array.isArray(catalog?.fields) && catalog.fields.length > 0 && (
+            <>
+              <Divider>该服务的补充信息</Divider>
+              {catalog.fields.map((field: { name: string; label: string; type: string; required: boolean; options?: Array<{ label: string; value: string }> }) => (
+                <Form.Item
+                  key={field.name}
+                  name={['customFields', field.name]}
+                  label={field.label}
+                  rules={field.required ? [{ required: true, message: `请填写${field.label}` }] : []}
+                >
+                  {field.type === 'textarea' ? (
+                    <TextArea rows={3} />
+                  ) : field.type === 'select' ? (
+                    <Select options={field.options} />
+                  ) : field.type === 'number' ? (
+                    <Input type="number" />
+                  ) : field.type === 'date' ? (
+                    <DatePicker style={{ width: '100%' }} />
+                  ) : (
+                    <Input />
+                  )}
+                </Form.Item>
+              ))}
+            </>
+          )}
+
           <Form.Item>
             <Space>
               <Button
@@ -241,6 +317,7 @@ export default function ServiceCatalogRequestPage() {
                 htmlType="submit"
                 icon={<Send />}
                 loading={loading}
+                disabled={!catalog || !!fetchError}
               >
                 提交申请
               </Button>

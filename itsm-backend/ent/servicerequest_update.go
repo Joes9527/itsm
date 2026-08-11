@@ -50,6 +50,27 @@ func (_u *ServiceRequestUpdate) AddTenantID(v int) *ServiceRequestUpdate {
 	return _u
 }
 
+// SetTicketID sets the "ticket_id" field.
+func (_u *ServiceRequestUpdate) SetTicketID(v int) *ServiceRequestUpdate {
+	_u.mutation.ResetTicketID()
+	_u.mutation.SetTicketID(v)
+	return _u
+}
+
+// SetNillableTicketID sets the "ticket_id" field if the given value is not nil.
+func (_u *ServiceRequestUpdate) SetNillableTicketID(v *int) *ServiceRequestUpdate {
+	if v != nil {
+		_u.SetTicketID(*v)
+	}
+	return _u
+}
+
+// AddTicketID adds value to the "ticket_id" field.
+func (_u *ServiceRequestUpdate) AddTicketID(v int) *ServiceRequestUpdate {
+	_u.mutation.AddTicketID(v)
+	return _u
+}
+
 // SetCatalogID sets the "catalog_id" field.
 func (_u *ServiceRequestUpdate) SetCatalogID(v int) *ServiceRequestUpdate {
 	_u.mutation.ResetCatalogID()
@@ -116,60 +137,6 @@ func (_u *ServiceRequestUpdate) SetNillableRequesterID(v *int) *ServiceRequestUp
 // AddRequesterID adds value to the "requester_id" field.
 func (_u *ServiceRequestUpdate) AddRequesterID(v int) *ServiceRequestUpdate {
 	_u.mutation.AddRequesterID(v)
-	return _u
-}
-
-// SetStatus sets the "status" field.
-func (_u *ServiceRequestUpdate) SetStatus(v string) *ServiceRequestUpdate {
-	_u.mutation.SetStatus(v)
-	return _u
-}
-
-// SetNillableStatus sets the "status" field if the given value is not nil.
-func (_u *ServiceRequestUpdate) SetNillableStatus(v *string) *ServiceRequestUpdate {
-	if v != nil {
-		_u.SetStatus(*v)
-	}
-	return _u
-}
-
-// SetTitle sets the "title" field.
-func (_u *ServiceRequestUpdate) SetTitle(v string) *ServiceRequestUpdate {
-	_u.mutation.SetTitle(v)
-	return _u
-}
-
-// SetNillableTitle sets the "title" field if the given value is not nil.
-func (_u *ServiceRequestUpdate) SetNillableTitle(v *string) *ServiceRequestUpdate {
-	if v != nil {
-		_u.SetTitle(*v)
-	}
-	return _u
-}
-
-// ClearTitle clears the value of the "title" field.
-func (_u *ServiceRequestUpdate) ClearTitle() *ServiceRequestUpdate {
-	_u.mutation.ClearTitle()
-	return _u
-}
-
-// SetReason sets the "reason" field.
-func (_u *ServiceRequestUpdate) SetReason(v string) *ServiceRequestUpdate {
-	_u.mutation.SetReason(v)
-	return _u
-}
-
-// SetNillableReason sets the "reason" field if the given value is not nil.
-func (_u *ServiceRequestUpdate) SetNillableReason(v *string) *ServiceRequestUpdate {
-	if v != nil {
-		_u.SetReason(*v)
-	}
-	return _u
-}
-
-// ClearReason clears the value of the "reason" field.
-func (_u *ServiceRequestUpdate) ClearReason() *ServiceRequestUpdate {
-	_u.mutation.ClearReason()
 	return _u
 }
 
@@ -282,126 +249,6 @@ func (_u *ServiceRequestUpdate) SetNillableComplianceAck(v *bool) *ServiceReques
 	if v != nil {
 		_u.SetComplianceAck(*v)
 	}
-	return _u
-}
-
-// SetCurrentLevel sets the "current_level" field.
-func (_u *ServiceRequestUpdate) SetCurrentLevel(v int) *ServiceRequestUpdate {
-	_u.mutation.ResetCurrentLevel()
-	_u.mutation.SetCurrentLevel(v)
-	return _u
-}
-
-// SetNillableCurrentLevel sets the "current_level" field if the given value is not nil.
-func (_u *ServiceRequestUpdate) SetNillableCurrentLevel(v *int) *ServiceRequestUpdate {
-	if v != nil {
-		_u.SetCurrentLevel(*v)
-	}
-	return _u
-}
-
-// AddCurrentLevel adds value to the "current_level" field.
-func (_u *ServiceRequestUpdate) AddCurrentLevel(v int) *ServiceRequestUpdate {
-	_u.mutation.AddCurrentLevel(v)
-	return _u
-}
-
-// SetTotalLevels sets the "total_levels" field.
-func (_u *ServiceRequestUpdate) SetTotalLevels(v int) *ServiceRequestUpdate {
-	_u.mutation.ResetTotalLevels()
-	_u.mutation.SetTotalLevels(v)
-	return _u
-}
-
-// SetNillableTotalLevels sets the "total_levels" field if the given value is not nil.
-func (_u *ServiceRequestUpdate) SetNillableTotalLevels(v *int) *ServiceRequestUpdate {
-	if v != nil {
-		_u.SetTotalLevels(*v)
-	}
-	return _u
-}
-
-// AddTotalLevels adds value to the "total_levels" field.
-func (_u *ServiceRequestUpdate) AddTotalLevels(v int) *ServiceRequestUpdate {
-	_u.mutation.AddTotalLevels(v)
-	return _u
-}
-
-// SetCurrentApprover sets the "current_approver" field.
-func (_u *ServiceRequestUpdate) SetCurrentApprover(v string) *ServiceRequestUpdate {
-	_u.mutation.SetCurrentApprover(v)
-	return _u
-}
-
-// SetNillableCurrentApprover sets the "current_approver" field if the given value is not nil.
-func (_u *ServiceRequestUpdate) SetNillableCurrentApprover(v *string) *ServiceRequestUpdate {
-	if v != nil {
-		_u.SetCurrentApprover(*v)
-	}
-	return _u
-}
-
-// ClearCurrentApprover clears the value of the "current_approver" field.
-func (_u *ServiceRequestUpdate) ClearCurrentApprover() *ServiceRequestUpdate {
-	_u.mutation.ClearCurrentApprover()
-	return _u
-}
-
-// SetApprovedAt sets the "approved_at" field.
-func (_u *ServiceRequestUpdate) SetApprovedAt(v time.Time) *ServiceRequestUpdate {
-	_u.mutation.SetApprovedAt(v)
-	return _u
-}
-
-// SetNillableApprovedAt sets the "approved_at" field if the given value is not nil.
-func (_u *ServiceRequestUpdate) SetNillableApprovedAt(v *time.Time) *ServiceRequestUpdate {
-	if v != nil {
-		_u.SetApprovedAt(*v)
-	}
-	return _u
-}
-
-// ClearApprovedAt clears the value of the "approved_at" field.
-func (_u *ServiceRequestUpdate) ClearApprovedAt() *ServiceRequestUpdate {
-	_u.mutation.ClearApprovedAt()
-	return _u
-}
-
-// SetApproverComment sets the "approver_comment" field.
-func (_u *ServiceRequestUpdate) SetApproverComment(v string) *ServiceRequestUpdate {
-	_u.mutation.SetApproverComment(v)
-	return _u
-}
-
-// SetNillableApproverComment sets the "approver_comment" field if the given value is not nil.
-func (_u *ServiceRequestUpdate) SetNillableApproverComment(v *string) *ServiceRequestUpdate {
-	if v != nil {
-		_u.SetApproverComment(*v)
-	}
-	return _u
-}
-
-// ClearApproverComment clears the value of the "approver_comment" field.
-func (_u *ServiceRequestUpdate) ClearApproverComment() *ServiceRequestUpdate {
-	_u.mutation.ClearApproverComment()
-	return _u
-}
-
-// SetApprovalHistory sets the "approval_history" field.
-func (_u *ServiceRequestUpdate) SetApprovalHistory(v []map[string]interface{}) *ServiceRequestUpdate {
-	_u.mutation.SetApprovalHistory(v)
-	return _u
-}
-
-// AppendApprovalHistory appends value to the "approval_history" field.
-func (_u *ServiceRequestUpdate) AppendApprovalHistory(v []map[string]interface{}) *ServiceRequestUpdate {
-	_u.mutation.AppendApprovalHistory(v)
-	return _u
-}
-
-// ClearApprovalHistory clears the value of the "approval_history" field.
-func (_u *ServiceRequestUpdate) ClearApprovalHistory() *ServiceRequestUpdate {
-	_u.mutation.ClearApprovalHistory()
 	return _u
 }
 
@@ -621,6 +468,11 @@ func (_u *ServiceRequestUpdate) check() error {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.tenant_id": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.TicketID(); ok {
+		if err := servicerequest.TicketIDValidator(v); err != nil {
+			return &ValidationError{Name: "ticket_id", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.ticket_id": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.CatalogID(); ok {
 		if err := servicerequest.CatalogIDValidator(v); err != nil {
 			return &ValidationError{Name: "catalog_id", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.catalog_id": %w`, err)}
@@ -657,6 +509,12 @@ func (_u *ServiceRequestUpdate) sqlSave(ctx context.Context) (_node int, err err
 	if value, ok := _u.mutation.AddedTenantID(); ok {
 		_spec.AddField(servicerequest.FieldTenantID, field.TypeInt, value)
 	}
+	if value, ok := _u.mutation.TicketID(); ok {
+		_spec.SetField(servicerequest.FieldTicketID, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedTicketID(); ok {
+		_spec.AddField(servicerequest.FieldTicketID, field.TypeInt, value)
+	}
 	if value, ok := _u.mutation.CatalogID(); ok {
 		_spec.SetField(servicerequest.FieldCatalogID, field.TypeInt, value)
 	}
@@ -677,21 +535,6 @@ func (_u *ServiceRequestUpdate) sqlSave(ctx context.Context) (_node int, err err
 	}
 	if value, ok := _u.mutation.AddedRequesterID(); ok {
 		_spec.AddField(servicerequest.FieldRequesterID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.Status(); ok {
-		_spec.SetField(servicerequest.FieldStatus, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.Title(); ok {
-		_spec.SetField(servicerequest.FieldTitle, field.TypeString, value)
-	}
-	if _u.mutation.TitleCleared() {
-		_spec.ClearField(servicerequest.FieldTitle, field.TypeString)
-	}
-	if value, ok := _u.mutation.Reason(); ok {
-		_spec.SetField(servicerequest.FieldReason, field.TypeString, value)
-	}
-	if _u.mutation.ReasonCleared() {
-		_spec.ClearField(servicerequest.FieldReason, field.TypeString)
 	}
 	if value, ok := _u.mutation.FormData(); ok {
 		_spec.SetField(servicerequest.FieldFormData, field.TypeJSON, value)
@@ -730,47 +573,6 @@ func (_u *ServiceRequestUpdate) sqlSave(ctx context.Context) (_node int, err err
 	}
 	if value, ok := _u.mutation.ComplianceAck(); ok {
 		_spec.SetField(servicerequest.FieldComplianceAck, field.TypeBool, value)
-	}
-	if value, ok := _u.mutation.CurrentLevel(); ok {
-		_spec.SetField(servicerequest.FieldCurrentLevel, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedCurrentLevel(); ok {
-		_spec.AddField(servicerequest.FieldCurrentLevel, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.TotalLevels(); ok {
-		_spec.SetField(servicerequest.FieldTotalLevels, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedTotalLevels(); ok {
-		_spec.AddField(servicerequest.FieldTotalLevels, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.CurrentApprover(); ok {
-		_spec.SetField(servicerequest.FieldCurrentApprover, field.TypeString, value)
-	}
-	if _u.mutation.CurrentApproverCleared() {
-		_spec.ClearField(servicerequest.FieldCurrentApprover, field.TypeString)
-	}
-	if value, ok := _u.mutation.ApprovedAt(); ok {
-		_spec.SetField(servicerequest.FieldApprovedAt, field.TypeTime, value)
-	}
-	if _u.mutation.ApprovedAtCleared() {
-		_spec.ClearField(servicerequest.FieldApprovedAt, field.TypeTime)
-	}
-	if value, ok := _u.mutation.ApproverComment(); ok {
-		_spec.SetField(servicerequest.FieldApproverComment, field.TypeString, value)
-	}
-	if _u.mutation.ApproverCommentCleared() {
-		_spec.ClearField(servicerequest.FieldApproverComment, field.TypeString)
-	}
-	if value, ok := _u.mutation.ApprovalHistory(); ok {
-		_spec.SetField(servicerequest.FieldApprovalHistory, field.TypeJSON, value)
-	}
-	if value, ok := _u.mutation.AppendedApprovalHistory(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, servicerequest.FieldApprovalHistory, value)
-		})
-	}
-	if _u.mutation.ApprovalHistoryCleared() {
-		_spec.ClearField(servicerequest.FieldApprovalHistory, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.ProcessorID(); ok {
 		_spec.SetField(servicerequest.FieldProcessorID, field.TypeInt, value)
@@ -864,6 +666,27 @@ func (_u *ServiceRequestUpdateOne) AddTenantID(v int) *ServiceRequestUpdateOne {
 	return _u
 }
 
+// SetTicketID sets the "ticket_id" field.
+func (_u *ServiceRequestUpdateOne) SetTicketID(v int) *ServiceRequestUpdateOne {
+	_u.mutation.ResetTicketID()
+	_u.mutation.SetTicketID(v)
+	return _u
+}
+
+// SetNillableTicketID sets the "ticket_id" field if the given value is not nil.
+func (_u *ServiceRequestUpdateOne) SetNillableTicketID(v *int) *ServiceRequestUpdateOne {
+	if v != nil {
+		_u.SetTicketID(*v)
+	}
+	return _u
+}
+
+// AddTicketID adds value to the "ticket_id" field.
+func (_u *ServiceRequestUpdateOne) AddTicketID(v int) *ServiceRequestUpdateOne {
+	_u.mutation.AddTicketID(v)
+	return _u
+}
+
 // SetCatalogID sets the "catalog_id" field.
 func (_u *ServiceRequestUpdateOne) SetCatalogID(v int) *ServiceRequestUpdateOne {
 	_u.mutation.ResetCatalogID()
@@ -930,60 +753,6 @@ func (_u *ServiceRequestUpdateOne) SetNillableRequesterID(v *int) *ServiceReques
 // AddRequesterID adds value to the "requester_id" field.
 func (_u *ServiceRequestUpdateOne) AddRequesterID(v int) *ServiceRequestUpdateOne {
 	_u.mutation.AddRequesterID(v)
-	return _u
-}
-
-// SetStatus sets the "status" field.
-func (_u *ServiceRequestUpdateOne) SetStatus(v string) *ServiceRequestUpdateOne {
-	_u.mutation.SetStatus(v)
-	return _u
-}
-
-// SetNillableStatus sets the "status" field if the given value is not nil.
-func (_u *ServiceRequestUpdateOne) SetNillableStatus(v *string) *ServiceRequestUpdateOne {
-	if v != nil {
-		_u.SetStatus(*v)
-	}
-	return _u
-}
-
-// SetTitle sets the "title" field.
-func (_u *ServiceRequestUpdateOne) SetTitle(v string) *ServiceRequestUpdateOne {
-	_u.mutation.SetTitle(v)
-	return _u
-}
-
-// SetNillableTitle sets the "title" field if the given value is not nil.
-func (_u *ServiceRequestUpdateOne) SetNillableTitle(v *string) *ServiceRequestUpdateOne {
-	if v != nil {
-		_u.SetTitle(*v)
-	}
-	return _u
-}
-
-// ClearTitle clears the value of the "title" field.
-func (_u *ServiceRequestUpdateOne) ClearTitle() *ServiceRequestUpdateOne {
-	_u.mutation.ClearTitle()
-	return _u
-}
-
-// SetReason sets the "reason" field.
-func (_u *ServiceRequestUpdateOne) SetReason(v string) *ServiceRequestUpdateOne {
-	_u.mutation.SetReason(v)
-	return _u
-}
-
-// SetNillableReason sets the "reason" field if the given value is not nil.
-func (_u *ServiceRequestUpdateOne) SetNillableReason(v *string) *ServiceRequestUpdateOne {
-	if v != nil {
-		_u.SetReason(*v)
-	}
-	return _u
-}
-
-// ClearReason clears the value of the "reason" field.
-func (_u *ServiceRequestUpdateOne) ClearReason() *ServiceRequestUpdateOne {
-	_u.mutation.ClearReason()
 	return _u
 }
 
@@ -1096,126 +865,6 @@ func (_u *ServiceRequestUpdateOne) SetNillableComplianceAck(v *bool) *ServiceReq
 	if v != nil {
 		_u.SetComplianceAck(*v)
 	}
-	return _u
-}
-
-// SetCurrentLevel sets the "current_level" field.
-func (_u *ServiceRequestUpdateOne) SetCurrentLevel(v int) *ServiceRequestUpdateOne {
-	_u.mutation.ResetCurrentLevel()
-	_u.mutation.SetCurrentLevel(v)
-	return _u
-}
-
-// SetNillableCurrentLevel sets the "current_level" field if the given value is not nil.
-func (_u *ServiceRequestUpdateOne) SetNillableCurrentLevel(v *int) *ServiceRequestUpdateOne {
-	if v != nil {
-		_u.SetCurrentLevel(*v)
-	}
-	return _u
-}
-
-// AddCurrentLevel adds value to the "current_level" field.
-func (_u *ServiceRequestUpdateOne) AddCurrentLevel(v int) *ServiceRequestUpdateOne {
-	_u.mutation.AddCurrentLevel(v)
-	return _u
-}
-
-// SetTotalLevels sets the "total_levels" field.
-func (_u *ServiceRequestUpdateOne) SetTotalLevels(v int) *ServiceRequestUpdateOne {
-	_u.mutation.ResetTotalLevels()
-	_u.mutation.SetTotalLevels(v)
-	return _u
-}
-
-// SetNillableTotalLevels sets the "total_levels" field if the given value is not nil.
-func (_u *ServiceRequestUpdateOne) SetNillableTotalLevels(v *int) *ServiceRequestUpdateOne {
-	if v != nil {
-		_u.SetTotalLevels(*v)
-	}
-	return _u
-}
-
-// AddTotalLevels adds value to the "total_levels" field.
-func (_u *ServiceRequestUpdateOne) AddTotalLevels(v int) *ServiceRequestUpdateOne {
-	_u.mutation.AddTotalLevels(v)
-	return _u
-}
-
-// SetCurrentApprover sets the "current_approver" field.
-func (_u *ServiceRequestUpdateOne) SetCurrentApprover(v string) *ServiceRequestUpdateOne {
-	_u.mutation.SetCurrentApprover(v)
-	return _u
-}
-
-// SetNillableCurrentApprover sets the "current_approver" field if the given value is not nil.
-func (_u *ServiceRequestUpdateOne) SetNillableCurrentApprover(v *string) *ServiceRequestUpdateOne {
-	if v != nil {
-		_u.SetCurrentApprover(*v)
-	}
-	return _u
-}
-
-// ClearCurrentApprover clears the value of the "current_approver" field.
-func (_u *ServiceRequestUpdateOne) ClearCurrentApprover() *ServiceRequestUpdateOne {
-	_u.mutation.ClearCurrentApprover()
-	return _u
-}
-
-// SetApprovedAt sets the "approved_at" field.
-func (_u *ServiceRequestUpdateOne) SetApprovedAt(v time.Time) *ServiceRequestUpdateOne {
-	_u.mutation.SetApprovedAt(v)
-	return _u
-}
-
-// SetNillableApprovedAt sets the "approved_at" field if the given value is not nil.
-func (_u *ServiceRequestUpdateOne) SetNillableApprovedAt(v *time.Time) *ServiceRequestUpdateOne {
-	if v != nil {
-		_u.SetApprovedAt(*v)
-	}
-	return _u
-}
-
-// ClearApprovedAt clears the value of the "approved_at" field.
-func (_u *ServiceRequestUpdateOne) ClearApprovedAt() *ServiceRequestUpdateOne {
-	_u.mutation.ClearApprovedAt()
-	return _u
-}
-
-// SetApproverComment sets the "approver_comment" field.
-func (_u *ServiceRequestUpdateOne) SetApproverComment(v string) *ServiceRequestUpdateOne {
-	_u.mutation.SetApproverComment(v)
-	return _u
-}
-
-// SetNillableApproverComment sets the "approver_comment" field if the given value is not nil.
-func (_u *ServiceRequestUpdateOne) SetNillableApproverComment(v *string) *ServiceRequestUpdateOne {
-	if v != nil {
-		_u.SetApproverComment(*v)
-	}
-	return _u
-}
-
-// ClearApproverComment clears the value of the "approver_comment" field.
-func (_u *ServiceRequestUpdateOne) ClearApproverComment() *ServiceRequestUpdateOne {
-	_u.mutation.ClearApproverComment()
-	return _u
-}
-
-// SetApprovalHistory sets the "approval_history" field.
-func (_u *ServiceRequestUpdateOne) SetApprovalHistory(v []map[string]interface{}) *ServiceRequestUpdateOne {
-	_u.mutation.SetApprovalHistory(v)
-	return _u
-}
-
-// AppendApprovalHistory appends value to the "approval_history" field.
-func (_u *ServiceRequestUpdateOne) AppendApprovalHistory(v []map[string]interface{}) *ServiceRequestUpdateOne {
-	_u.mutation.AppendApprovalHistory(v)
-	return _u
-}
-
-// ClearApprovalHistory clears the value of the "approval_history" field.
-func (_u *ServiceRequestUpdateOne) ClearApprovalHistory() *ServiceRequestUpdateOne {
-	_u.mutation.ClearApprovalHistory()
 	return _u
 }
 
@@ -1448,6 +1097,11 @@ func (_u *ServiceRequestUpdateOne) check() error {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.tenant_id": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.TicketID(); ok {
+		if err := servicerequest.TicketIDValidator(v); err != nil {
+			return &ValidationError{Name: "ticket_id", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.ticket_id": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.CatalogID(); ok {
 		if err := servicerequest.CatalogIDValidator(v); err != nil {
 			return &ValidationError{Name: "catalog_id", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.catalog_id": %w`, err)}
@@ -1501,6 +1155,12 @@ func (_u *ServiceRequestUpdateOne) sqlSave(ctx context.Context) (_node *ServiceR
 	if value, ok := _u.mutation.AddedTenantID(); ok {
 		_spec.AddField(servicerequest.FieldTenantID, field.TypeInt, value)
 	}
+	if value, ok := _u.mutation.TicketID(); ok {
+		_spec.SetField(servicerequest.FieldTicketID, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedTicketID(); ok {
+		_spec.AddField(servicerequest.FieldTicketID, field.TypeInt, value)
+	}
 	if value, ok := _u.mutation.CatalogID(); ok {
 		_spec.SetField(servicerequest.FieldCatalogID, field.TypeInt, value)
 	}
@@ -1521,21 +1181,6 @@ func (_u *ServiceRequestUpdateOne) sqlSave(ctx context.Context) (_node *ServiceR
 	}
 	if value, ok := _u.mutation.AddedRequesterID(); ok {
 		_spec.AddField(servicerequest.FieldRequesterID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.Status(); ok {
-		_spec.SetField(servicerequest.FieldStatus, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.Title(); ok {
-		_spec.SetField(servicerequest.FieldTitle, field.TypeString, value)
-	}
-	if _u.mutation.TitleCleared() {
-		_spec.ClearField(servicerequest.FieldTitle, field.TypeString)
-	}
-	if value, ok := _u.mutation.Reason(); ok {
-		_spec.SetField(servicerequest.FieldReason, field.TypeString, value)
-	}
-	if _u.mutation.ReasonCleared() {
-		_spec.ClearField(servicerequest.FieldReason, field.TypeString)
 	}
 	if value, ok := _u.mutation.FormData(); ok {
 		_spec.SetField(servicerequest.FieldFormData, field.TypeJSON, value)
@@ -1574,47 +1219,6 @@ func (_u *ServiceRequestUpdateOne) sqlSave(ctx context.Context) (_node *ServiceR
 	}
 	if value, ok := _u.mutation.ComplianceAck(); ok {
 		_spec.SetField(servicerequest.FieldComplianceAck, field.TypeBool, value)
-	}
-	if value, ok := _u.mutation.CurrentLevel(); ok {
-		_spec.SetField(servicerequest.FieldCurrentLevel, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedCurrentLevel(); ok {
-		_spec.AddField(servicerequest.FieldCurrentLevel, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.TotalLevels(); ok {
-		_spec.SetField(servicerequest.FieldTotalLevels, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedTotalLevels(); ok {
-		_spec.AddField(servicerequest.FieldTotalLevels, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.CurrentApprover(); ok {
-		_spec.SetField(servicerequest.FieldCurrentApprover, field.TypeString, value)
-	}
-	if _u.mutation.CurrentApproverCleared() {
-		_spec.ClearField(servicerequest.FieldCurrentApprover, field.TypeString)
-	}
-	if value, ok := _u.mutation.ApprovedAt(); ok {
-		_spec.SetField(servicerequest.FieldApprovedAt, field.TypeTime, value)
-	}
-	if _u.mutation.ApprovedAtCleared() {
-		_spec.ClearField(servicerequest.FieldApprovedAt, field.TypeTime)
-	}
-	if value, ok := _u.mutation.ApproverComment(); ok {
-		_spec.SetField(servicerequest.FieldApproverComment, field.TypeString, value)
-	}
-	if _u.mutation.ApproverCommentCleared() {
-		_spec.ClearField(servicerequest.FieldApproverComment, field.TypeString)
-	}
-	if value, ok := _u.mutation.ApprovalHistory(); ok {
-		_spec.SetField(servicerequest.FieldApprovalHistory, field.TypeJSON, value)
-	}
-	if value, ok := _u.mutation.AppendedApprovalHistory(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, servicerequest.FieldApprovalHistory, value)
-		})
-	}
-	if _u.mutation.ApprovalHistoryCleared() {
-		_spec.ClearField(servicerequest.FieldApprovalHistory, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.ProcessorID(); ok {
 		_spec.SetField(servicerequest.FieldProcessorID, field.TypeInt, value)

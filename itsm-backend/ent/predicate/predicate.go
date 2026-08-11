@@ -108,6 +108,12 @@ type EngineerSkill func(*sql.Selector)
 // FeishuTicketSync is the predicate function for feishuticketsync builders.
 type FeishuTicketSync func(*sql.Selector)
 
+// FieldDefinition is the predicate function for fielddefinition builders.
+type FieldDefinition func(*sql.Selector)
+
+// FieldValue is the predicate function for fieldvalue builders.
+type FieldValue func(*sql.Selector)
+
 // Group is the predicate function for group builders.
 type Group func(*sql.Selector)
 
@@ -261,14 +267,8 @@ type SLAViolation func(*sql.Selector)
 // ServiceCatalog is the predicate function for servicecatalog builders.
 type ServiceCatalog func(*sql.Selector)
 
-// ServiceCatalogItem is the predicate function for servicecatalogitem builders.
-type ServiceCatalogItem func(*sql.Selector)
-
 // ServiceRequest is the predicate function for servicerequest builders.
 type ServiceRequest func(*sql.Selector)
-
-// ServiceRequestApproval is the predicate function for servicerequestapproval builders.
-type ServiceRequestApproval func(*sql.Selector)
 
 // StandardChange is the predicate function for standardchange builders.
 type StandardChange func(*sql.Selector)

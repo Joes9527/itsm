@@ -101,6 +101,9 @@ func (r *EntRepository) Create(ctx context.Context, params *CreateParams, tenant
 		if len(params.CustomFieldValues) > 0 {
 			builder.SetCustomFieldValues(params.CustomFieldValues)
 		}
+		if params.Source != "" {
+			builder.SetSource(params.Source)
+		}
 
 		entity, err := builder.Save(ctx)
 		if err == nil {
@@ -739,6 +742,7 @@ func toDomainModel(e *ent.Ticket) *Ticket {
 		IsManagedByMSP: e.IsManagedByMsp,
 		CreatedAt:      e.CreatedAt,
 		UpdatedAt:      e.UpdatedAt,
+		Source:         e.Source,
 	}
 
 	// 可选字段

@@ -37,10 +37,12 @@ import {
   Tooltip,
   App,
   Tag,
+  Divider,
 } from 'antd';
 import { ServiceCatalogApi } from '@/lib/api/service-catalog-api';
 import { CMDBApi } from '@/lib/api/cmdb-api';
 import { BatchActionBar, type BatchAction } from '@/components/business/BatchActionBar';
+import { CustomFieldsEditor } from '@/components/common/CustomFieldsEditor';
 import type {
   ServiceItem,
   CreateServiceItemRequest,
@@ -135,6 +137,37 @@ const ServiceCatalogManagement = () => {
         message.error('关联云服务时必须选择CI类型');
         return;
       }
+      // fields（Form.List 编辑态）里的 options 是逗号分隔字符串（CustomFieldsEditor 的输入框限制），
+      // 但 ServiceItem['fields'][number].options 需要 {label,value} 数组；仅 select 类型需要转换，
+      // 过滤掉没填字段名的空行。用 unknown 接收 options 是因为 values 的静态类型（CreateServiceItemRequest）
+      // 声明 options 为 {label,value}[]，但表单实际产出的运行时值是 CustomFieldsEditor 那个纯文本输入框的字符串。
+      const rawFields: Array<{
+        name?: string;
+        label?: string;
+        type?: string;
+        required?: boolean;
+        options?: unknown;
+      }> = values.fields || [];
+      const fields = rawFields
+        .filter(f => f?.name)
+        .map(f => {
+          const optionsInput = f.options;
+          const options =
+            f.type === 'select' && typeof optionsInput === 'string' && optionsInput
+              ? optionsInput
+                  .split(',')
+                  .map(o => o.trim())
+                  .filter(Boolean)
+                  .map(o => ({ label: o, value: o }))
+              : undefined;
+          return {
+            name: f.name as string,
+            label: f.label || (f.name as string),
+            type: f.type || 'text',
+            required: !!f.required,
+            ...(options ? { options } : {}),
+          };
+        });
       const payload: CreateServiceItemRequest = {
         name: values.name,
         category: values.category,
@@ -143,6 +176,7 @@ const ServiceCatalogManagement = () => {
         availability: values.deliveryTime ? { responseTime: values.deliveryTime } : undefined,
         ciTypeId: values.ciTypeId,
         cloudServiceId: values.cloudServiceId,
+        fields,
         ...(values.status ? { status: values.status } : {}),
       } as CreateServiceItemRequest;
       if (editingCatalog) {
@@ -167,6 +201,18 @@ const ServiceCatalogManagement = () => {
   // 编辑服务目录
   const handleEdit = (catalog: ServiceItem) => {
     setEditingCatalog(catalog);
+    // catalog.fields[].options 从后端拿到时是 [{label,value}] 数组（供渲染 Select 用），
+    // 但编辑表单里 CustomFieldsEditor 的 options 输入框是逗号分隔的字符串——编辑态转一次，
+    // 让已有 select 类型字段的选项能正常回显，而不是显示成 "[object Object]"。
+    const fieldsForForm = (catalog.fields || []).map(f => ({
+      ...f,
+      options: Array.isArray(f.options)
+        ? f.options
+            .map(o => (o && typeof o === 'object' ? o.label : o))
+            .filter(Boolean)
+            .join(',')
+        : f.options,
+    }));
     form.setFieldsValue({
       name: catalog.name,
       category: catalog.category,
@@ -175,6 +221,7 @@ const ServiceCatalogManagement = () => {
       status: catalog.status,
       ciTypeId: catalog.ciTypeId,
       cloudServiceId: catalog.cloudServiceId,
+      fields: fieldsForForm,
     });
     setShowModal(true);
   };
@@ -740,6 +787,9 @@ const ServiceCatalogManagement = () => {
               </Form.Item>
             </Col>
           </Row>
+
+          <Divider>自定义字段</Divider>
+          <CustomFieldsEditor name="fields" />
 
           {/* 审批配置 */}
           <div className="bg-gray-50 p-4 rounded-lg mb-4">

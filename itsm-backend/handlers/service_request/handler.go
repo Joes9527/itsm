@@ -1,6 +1,7 @@
 package service_request
 
 import (
+	"context"
 	"strconv"
 	"strings"
 	"time"
@@ -8,6 +9,7 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -46,67 +48,59 @@ func NewHandler(service *Service) *Handler {
 }
 
 // Map Domain to DTO
-func (h *Handler) toDTO(req *ServiceRequest, approvals []*ServiceRequestApproval) *dto.ServiceRequestResponse {
+func (h *Handler) toDTO(req *ServiceRequest) *dto.ServiceRequestResponse {
 	if req == nil {
 		return nil
 	}
 	resp := &dto.ServiceRequestResponse{
 		ID:                 req.ID,
+		TicketID:           req.TicketID,
 		CatalogID:          req.CatalogID,
 		RequesterID:        req.RequesterID,
 		CIID:               req.CiID,
-		Status:             req.Status,
-		Title:              req.Title,
-		Reason:             req.Reason,
 		FormData:           req.FormData,
 		CostCenter:         req.CostCenter,
 		DataClassification: req.DataClassification,
 		NeedsPublicIP:      req.NeedsPublicIP,
 		SourceIPWhitelist:  req.SourceIPWhitelist,
 		ComplianceAck:      req.ComplianceAck,
-		CurrentLevel:       req.CurrentLevel,
-		TotalLevels:        req.TotalLevels,
 		Version:            req.Version,
 		ProcessorID:        req.ProcessorID,
-		ApprovedAt:         req.ApprovedAt,
 		StartedAt:          req.StartedAt,
 		CompletedAt:        req.CompletedAt,
 		CompletionNote:     req.CompletionNote,
 		LastError:          req.LastError,
 		CreatedAt:          req.CreatedAt,
 		UpdatedAt:          req.UpdatedAt,
+		TicketTitle:        req.TicketTitle,
+		TicketStatus:       req.TicketStatus,
 	}
 	if req.ExpireAt != nil {
 		t := *req.ExpireAt
 		resp.ExpireAt = &t
 	}
+	return resp
+}
 
-	if approvals != nil {
-		resp.Approvals = make([]dto.ServiceRequestApprovalResponse, len(approvals))
-		for i, app := range approvals {
-			resp.Approvals[i] = dto.ServiceRequestApprovalResponse{
-				ID:               app.ID,
-				ServiceRequestID: app.ServiceRequestID,
-				Level:            app.Level,
-				Step:             app.Step,
-				Status:           app.Status,
-				ApproverName:     app.ApproverName,
-				Comment:          app.Comment,
-				Action:           app.Action,
-				TimeoutHours:     app.TimeoutHours,
-			}
-			if app.DueAt != nil {
-				t := *app.DueAt
-				resp.Approvals[i].DueAt = &t
-			}
-			if app.ProcessedAt != nil {
-				t := *app.ProcessedAt
-				resp.Approvals[i].ProcessedAt = &t
-			}
-			if app.ApproverID != nil {
-				resp.Approvals[i].ApproverID = app.ApproverID
-			}
-		}
+// toDTOWithCustomFields wraps toDTO and additionally fills in CustomFields
+// from the field_values snapshot. Used by detail-style responses (Get,
+// Create's success branch) — List intentionally does not call this to avoid
+// N+1 queries, mirroring ToTicketResponse vs ToTicketResponseWithCustomFields.
+func (h *Handler) toDTOWithCustomFields(req *ServiceRequest, client *ent.Client) *dto.ServiceRequestResponse {
+	resp := h.toDTO(req)
+	if client == nil {
+		return resp
+	}
+	values, err := service.NewFieldValueService(client).ListValues(context.Background(), req.TenantID, "ticket", req.TicketID)
+	if err != nil {
+		return resp
+	}
+	if len(values) == 0 {
+		return resp
+	}
+	resp.CustomFields = make([]dto.CustomFieldValueResponse, 0, len(values))
+	for _, v := range values {
+		resp.CustomFields = append(resp.CustomFields, dto.CustomFieldValueResponse{Name: v.Name, Label: v.Label, Value: v.Value})
 	}
 	return resp
 }
@@ -140,13 +134,16 @@ func (h *Handler) Create(c *gin.Context) {
 		ComplianceAck:      req.ComplianceAck,
 		NeedsPublicIP:      req.NeedsPublicIP,
 		DataClassification: req.DataClassification,
-		Title:              req.Title,
-		Reason:             req.Reason,
 		FormData:           req.FormData,
 		CostCenter:         req.CostCenter,
 		SourceIPWhitelist:  req.SourceIPWhitelist,
 		ExpireAt:           expireAt,
 	}
+	if domainReq.FormData == nil {
+		domainReq.FormData = map[string]interface{}{}
+	}
+	domainReq.FormData["title"] = req.Title
+	domainReq.FormData["reason"] = req.Reason
 
 	created, err := h.service.Create(c.Request.Context(), tenantID, userID, req.CatalogID, domainReq)
 	if err != nil {
@@ -154,14 +151,14 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 
-	fullReq, approvals, err := h.service.Get(c.Request.Context(), created.ID, tenantID)
+	fullReq, err := h.service.Get(c.Request.Context(), created.ID, tenantID)
 	if err != nil {
 		h.service.logger.Errorw("Create: failed to get created service request", "error", err, "id", created.ID)
 		// Return the created object even if Get fails - created.ID is valid
-		common.Success(c, h.toDTO(created, nil))
+		common.Success(c, h.toDTO(created))
 		return
 	}
-	common.Success(c, h.toDTO(fullReq, approvals))
+	common.Success(c, h.toDTOWithCustomFields(fullReq, h.service.Client()))
 }
 
 func (h *Handler) Get(c *gin.Context) {
@@ -173,7 +170,7 @@ func (h *Handler) Get(c *gin.Context) {
 	}
 	tenantID := c.GetInt("tenant_id")
 
-	req, approvals, err := h.service.Get(c.Request.Context(), id, tenantID)
+	req, err := h.service.Get(c.Request.Context(), id, tenantID)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			common.Fail(c, 404, "Not Found")
@@ -184,7 +181,29 @@ func (h *Handler) Get(c *gin.Context) {
 		}
 		return
 	}
-	common.Success(c, h.toDTO(req, approvals))
+	common.Success(c, h.toDTOWithCustomFields(req, h.service.Client()))
+}
+
+// GetByTicket 供 ticket 详情页渲染关联的服务请求扩展面板。
+func (h *Handler) GetByTicket(c *gin.Context) {
+	ticketIDStr := c.Param("ticketId")
+	ticketID, err := strconv.Atoi(ticketIDStr)
+	if err != nil {
+		common.Fail(c, 1001, "Invalid ticket ID")
+		return
+	}
+	tenantID := c.GetInt("tenant_id")
+
+	req, err := h.service.GetByTicketID(c.Request.Context(), ticketID, tenantID)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			common.Fail(c, 404, "No service request linked to this ticket")
+		} else {
+			common.Fail(c, 5001, err.Error())
+		}
+		return
+	}
+	common.Success(c, h.toDTOWithCustomFields(req, h.service.Client()))
 }
 
 func (h *Handler) List(c *gin.Context) {
@@ -207,7 +226,6 @@ func (h *Handler) List(c *gin.Context) {
 	}
 
 	filters := ListFilters{
-		Status: normalizeServiceRequestStatus(req.Status),
 		UserID: userID,
 		Page:   req.Page,
 		Size:   req.Size,
@@ -227,7 +245,7 @@ func (h *Handler) List(c *gin.Context) {
 
 	dtos := make([]dto.ServiceRequestResponse, len(list))
 	for i, v := range list {
-		dtos[i] = *h.toDTO(v, nil)
+		dtos[i] = *h.toDTO(v)
 	}
 
 	common.Success(c, map[string]interface{}{
@@ -235,81 +253,6 @@ func (h *Handler) List(c *gin.Context) {
 		"total":    total,
 		"page":     filters.Page,
 		"size":     filters.Size,
-	})
-}
-
-func (h *Handler) ApplyApproval(c *gin.Context) {
-	idStr := c.Param("id")
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		common.Fail(c, 1001, "Invalid ID")
-		return
-	}
-
-	var req dto.ServiceRequestApprovalActionRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.Fail(c, 1001, err.Error())
-		return
-	}
-
-	tenantID := c.GetInt("tenant_id")
-	userID := c.GetInt("user_id")
-	role, _ := c.Get("role")
-	dept, _ := c.Get("department")
-
-	roleStr, _ := role.(string)
-	deptStr, _ := dept.(string)
-
-	res, approvals, err := h.service.ApplyApproval(c.Request.Context(), id, tenantID, userID, req.Action, req.Comment, roleStr, deptStr)
-	if err != nil {
-		failServiceRequest(c, err)
-		return
-	}
-
-	common.Success(c, h.toDTO(res, approvals))
-}
-
-func (h *Handler) ListPending(c *gin.Context) {
-	var req dto.GetServiceRequestsRequest
-	if err := c.ShouldBindQuery(&req); err != nil {
-		common.Fail(c, 1001, "Invalid parameters")
-		return
-	}
-	tenantID := c.GetInt("tenant_id")
-	userID := c.GetInt("user_id")
-	role, _ := c.Get("role")
-	roleStr, _ := role.(string)
-
-	if req.Page < 1 {
-		req.Page = 1
-	}
-	if req.Size < 1 {
-		req.Size = 10
-	}
-
-	list, total, err := h.service.ListPendingApprovals(c.Request.Context(), tenantID, userID, roleStr, req.Page, req.Size)
-	if err != nil {
-		failServiceRequest(c, err)
-		return
-	}
-
-	dtos := make([]dto.ServiceRequestResponse, len(list))
-	for i, v := range list {
-		// ListPendingApprovals in Service returns []*ServiceRequest.
-		// Approvals are pre-loaded? Repository implementation says:
-		// return list, total, nil
-		// It uses request.QueryApprovals()... but we need to check if toDTO handles nil approvals gracefully (it currently allocates generic slice if not nil, else leaves field empty).
-		// For pending list, likely we want to see approvals?
-		// The Service implementation of ListPendingApprovals calls repo.ListPendingApprovals.
-		// Let's assume for now we return the request details.
-		dtos[i] = *h.toDTO(v, nil)
-	}
-
-	common.Success(c, map[string]interface{}{
-		"requests": dtos,
-		"total":    total,
-		"page":     req.Page,
-		"size":     req.Size,
 	})
 }
 
@@ -335,8 +278,6 @@ func (h *Handler) Update(c *gin.Context) {
 	normalizeUpdateServiceRequest(&req)
 
 	domainReq := &ServiceRequest{
-		Title:              req.Title,
-		Reason:             req.Reason,
 		FormData:           req.FormData,
 		CostCenter:         req.CostCenter,
 		DataClassification: req.DataClassification,
@@ -360,48 +301,8 @@ func (h *Handler) Update(c *gin.Context) {
 		return
 	}
 
-	fullReq, approvals, _ := h.service.Get(c.Request.Context(), updated.ID, tenantID)
-	common.Success(c, h.toDTO(fullReq, approvals))
-}
-
-func (h *Handler) UpdateStatus(c *gin.Context) {
-	idStr := c.Param("id")
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		common.Fail(c, 1001, "Invalid ID")
-		return
-	}
-
-	var req dto.UpdateServiceRequestStatusRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.Fail(c, 1001, "Invalid parameters: "+err.Error())
-		return
-	}
-	status := normalizeServiceRequestStatus(req.Status)
-	if status == "" {
-		common.Fail(c, 1001, "status is required")
-		return
-	}
-
-	tenantID := c.GetInt("tenant_id")
-	if tenantID == 0 {
-		common.Fail(c, 2001, "Tenant ID missing")
-		return
-	}
-
-	userID := c.GetInt("user_id")
-	role := c.GetString("role")
-	if err := h.service.UpdateStatus(c.Request.Context(), id, tenantID, userID, role, status); err != nil {
-		failServiceRequest(c, err)
-		return
-	}
-
-	fullReq, approvals, err := h.service.Get(c.Request.Context(), id, tenantID)
-	if err != nil {
-		common.Success(c, gin.H{"id": id, "status": status})
-		return
-	}
-	common.Success(c, h.toDTO(fullReq, approvals))
+	fullReq, _ := h.service.Get(c.Request.Context(), updated.ID, tenantID)
+	common.Success(c, h.toDTO(fullReq))
 }
 
 func (h *Handler) Delete(c *gin.Context) {
@@ -476,19 +377,4 @@ func normalizeCreateServiceRequest(req *dto.CreateServiceRequestRequest) {
 }
 
 func normalizeUpdateServiceRequest(req *dto.UpdateServiceRequestRequest) {
-}
-
-func normalizeServiceRequestStatus(status string) string {
-	switch strings.TrimSpace(status) {
-	case "pending_approval", "pending":
-		return "submitted"
-	case "approved":
-		return "security_approved"
-	case "in_progress":
-		return "provisioning"
-	case "completed":
-		return "delivered"
-	default:
-		return strings.TrimSpace(status)
-	}
 }

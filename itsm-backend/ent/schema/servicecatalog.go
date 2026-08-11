@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"entgo.io/ent"
-	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 )
@@ -39,7 +38,6 @@ func (ServiceCatalog) Fields() []ent.Field {
 		field.Int("cloud_service_id").Comment("关联云服务ID").Optional(),
 
 		// 表单配置
-		field.JSON("form_schema", map[string]interface{}{}).Comment("表单JSON配置").Optional(),
 		field.JSON("available_regions", []string{}).Comment("可选区域").Optional(),
 		field.JSON("available_specs", []string{}).Comment("可选规格").Optional(),
 
@@ -56,9 +54,7 @@ func (ServiceCatalog) Fields() []ent.Field {
 }
 
 func (ServiceCatalog) Edges() []ent.Edge {
-	return []ent.Edge{
-		edge.To("items", ServiceCatalogItem.Type),
-	}
+	return []ent.Edge{}
 }
 
 func (ServiceCatalog) Indexes() []ent.Index {

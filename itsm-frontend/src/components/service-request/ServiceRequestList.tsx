@@ -1,13 +1,18 @@
 'use client';
 
 /**
- * 服务请求列表组件
- * 包含"我的请求"和"待办审批"两个视图
+ * 服务请求列表组件——"我的请求"
+ *
+ * 原来还有一个内部"待办审批" Tab，数据源 ServiceRequestApi.getPendingApprovals 打在
+ * Task 1 已经删除的 /api/v1/service-requests/approvals/pending 上（SR 自己的审批阶段
+ * 概念整体退休，审批现在走关联 Ticket 自己的 BPMN 流程，对应视图见
+ * /approvals/pending 页面的"我作为候选组员（BPMN）"Tab）。与其保留一个数据源已经不存在、
+ * 靠 catch 掩盖成永远空的 Tab，不如去掉——只保留"我的请求"这一个真实存在的视图。
  */
 
 import React, { useState, useEffect } from 'react';
-import { Table, Tag, Button, Tabs, Card, Space, Tooltip, message, Empty } from 'antd';
-import { Eye, RefreshCw, CheckCircle } from 'lucide-react';
+import { Table, Tag, Button, Card, Space, Tooltip, message, Empty } from 'antd';
+import { Eye, RefreshCw } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 
@@ -30,7 +35,6 @@ const statusColors: Record<string, string> = {
 
 const ServiceRequestList: React.FC = () => {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState('my-requests');
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<ServiceRequest[]>([]);
   const [total, setTotal] = useState(0);
@@ -42,24 +46,14 @@ const ServiceRequestList: React.FC = () => {
     scope: 'me',
   });
 
-  // 加载数据
+  // 加载数据——只有"我的请求"这一个视图了
   const loadData = async () => {
     setLoading(true);
     try {
-      let resp;
-      if (activeTab === 'approvals') {
-        // 待办审批
-        resp = await ServiceRequestApi.getPendingApprovals({
-          ...query,
-          // status: ServiceRequestStatus.SUBMITTED // 或者根据逻辑传参
-        });
-      } else {
-        // 我的请求
-        resp = await ServiceRequestApi.getServiceRequests({
-          ...query,
-          scope: 'me',
-        });
-      }
+      const resp = await ServiceRequestApi.getServiceRequests({
+        ...query,
+        scope: 'me',
+      });
       setData((resp.requests || []) as unknown as ServiceRequest[]);
       setTotal(resp?.total ?? 0);
     } catch (error) {
@@ -72,16 +66,12 @@ const ServiceRequestList: React.FC = () => {
 
   useEffect(() => {
     loadData();
-     
-  }, [query, activeTab]);
 
-  // 处理Tab切换
-  const handleTabChange = (key: string) => {
-    setActiveTab(key);
-    setQuery(prev => ({ ...prev, page: 1, scope: key === 'approvals' ? 'all' : 'me' }));
-  };
+  }, [query]);
 
   // 表格列定义
+  // 状态/标题已经委托给关联 Ticket——用后端批量回填的 ticketTitle/ticketStatus 展示，
+  // 详情/审批都跳转到 /tickets/:ticketId（服务请求已经没有独立详情页）。
   const columns = [
     {
       title: 'ID',
@@ -90,7 +80,7 @@ const ServiceRequestList: React.FC = () => {
     },
     {
       title: '标题',
-      dataIndex: 'title',
+      dataIndex: 'ticketTitle',
       render: (text: string, record: ServiceRequest) => (
         <div className="flex flex-col">
           <span className="font-medium text-gray-900">{text || `请求 #${record.id}`}</span>
@@ -100,20 +90,10 @@ const ServiceRequestList: React.FC = () => {
     },
     {
       title: '状态',
-      dataIndex: 'status',
+      dataIndex: 'ticketStatus',
       width: 150,
-      render: (status: string) => <Tag color={statusColors[status] || 'default'}>{status}</Tag>,
-    },
-    {
-      title: '当前步骤',
-      dataIndex: 'currentLevel',
-      width: 120,
-      render: (level: number, record: ServiceRequest) => (
-        <span>
-          Level {level} / {record.totalLevels}
-        </span>
-      ),
-      responsive: ['md'],
+      render: (status: string) =>
+        status ? <Tag color={statusColors[status] || 'default'}>{status}</Tag> : '-',
     },
     {
       title: '提交时间',
@@ -133,19 +113,9 @@ const ServiceRequestList: React.FC = () => {
               type="text"
               icon={<Eye />}
               className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
-              onClick={() => router.push(`/service-requests/${record.id}`)}
+              onClick={() => router.push(`/tickets/${record.ticketId}`)}
             />
           </Tooltip>
-          {activeTab === 'approvals' && (
-            <Tooltip title="审批">
-              <Button
-                type="text"
-                icon={<CheckCircle />}
-                className="text-green-600 hover:text-green-800 hover:bg-green-50"
-                onClick={() => router.push(`/service-requests/${record.id}`)}
-              />
-            </Tooltip>
-          )}
         </Space>
       ),
     },
@@ -154,16 +124,7 @@ const ServiceRequestList: React.FC = () => {
   return (
     <Card className="rounded-lg shadow-sm border border-gray-200">
       <div className="flex justify-between items-center mb-4">
-        <Tabs
-          activeKey={activeTab}
-          onChange={handleTabChange}
-          size="large"
-          className="flex-1"
-          items={[
-            { label: '我的请求', key: 'my-requests' },
-            { label: '待办审批', key: 'approvals' },
-          ]}
-        />
+        <h3 className="text-base font-medium text-gray-900">我的请求</h3>
         <Button icon={<RefreshCw />} onClick={loadData}>
           刷新
         </Button>

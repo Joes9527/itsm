@@ -176,39 +176,11 @@ export function useCreateServiceRequestMutation() {
   });
 }
 
-export function useApproveServiceRequestMutation() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, comment }: { id: number; comment?: string }) =>
-      ServiceCatalogApi.approveServiceRequest(id, comment),
-    onSuccess: (_, variables) => {
-      message.success('服务请求已批准');
-      queryClient.invalidateQueries({
-        queryKey: SERVICE_CATALOG_KEYS.requestDetail(variables.id),
-      });
-      queryClient.invalidateQueries({
-        queryKey: SERVICE_CATALOG_KEYS.requests(),
-      });
-    },
-  });
-}
-
-export function useRejectServiceRequestMutation() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, reason }: { id: number; reason: string }) =>
-      ServiceCatalogApi.rejectServiceRequest(id, reason),
-    onSuccess: (_, variables) => {
-      message.success('服务请求已拒绝');
-      queryClient.invalidateQueries({
-        queryKey: SERVICE_CATALOG_KEYS.requestDetail(variables.id),
-      });
-      queryClient.invalidateQueries({
-        queryKey: SERVICE_CATALOG_KEYS.requests(),
-      });
-    },
-  });
-}
+// useApproveServiceRequestMutation/useRejectServiceRequestMutation 已经移除——它们包装的
+// ServiceCatalogApi.approveServiceRequest/rejectServiceRequest 打在 Task 1 删除的
+// /api/v1/service-requests/:id/approval 路由上，且没有任何真实调用方（唯一的调用方
+// src/app/(main)/service-catalog/approvals/page.tsx 已经改造成重定向到 /approvals/pending，
+// 审批统一走关联 Ticket 的 BPMN 流程）。
 
 export function useAddFavoriteMutation() {
   const queryClient = useQueryClient();
@@ -274,8 +246,6 @@ export default {
   useUpdateServiceMutation,
   usePublishServiceMutation,
   useCreateServiceRequestMutation,
-  useApproveServiceRequestMutation,
-  useRejectServiceRequestMutation,
   useAddFavoriteMutation,
   useRemoveFavoriteMutation,
   useRateServiceMutation,

@@ -40,6 +40,7 @@ import {
   Tag as TagIcon,
 } from 'lucide-react';
 import { TicketApi } from '@/lib/api/ticket-api';
+import { CustomFieldsEditor } from '@/components/common/CustomFieldsEditor';
 // AppLayout is handled by layout.tsx
 
 const { Title, Text } = Typography;
@@ -138,13 +139,15 @@ const TicketTemplatesPage = () => {
       });
 
       // 将API响应转换为组件期望的格式
-      const apiTemplates: TicketTemplate[] = (response.items || []).map(
+      const apiTemplates: TicketTemplate[] = (response.templates || []).map(
         (item: {
           id: number;
           name: string;
           description: string;
           category: string;
+          priority?: string;
           content?: Record<string, unknown>;
+          fields?: unknown;
           isActive?: boolean;
           createdAt?: string;
           updatedAt?: string;
@@ -155,7 +158,7 @@ const TicketTemplatesPage = () => {
           type: (item.content?.type as string) || item.category?.toLowerCase() || 'incident',
           category: item.category,
           subcategory: (item.content?.subcategory as string) || undefined,
-          priority: (item.content?.priority as string) || 'medium',
+          priority: item.priority || 'medium',
           estimatedTime: (item.content?.estimatedTime as string) || '1 hour',
           sla: (item.content?.sla as string) || '4 hours',
           slaType: (item.content?.slaType as 'hours' | 'days' | 'business_hours') || 'hours',
@@ -167,10 +170,7 @@ const TicketTemplatesPage = () => {
           autoAssign: (item.content?.autoAssign as boolean) || false,
           requiresApproval: (item.content?.requiresApproval as boolean) || false,
           approvalLevel: (item.content?.approvalLevel as string) || 'none',
-          customFields:
-            (item.content?.fields as CustomField[]) ||
-            (item.content?.customFields as CustomField[]) ||
-            [],
+          customFields: (item.fields as CustomField[]) || [],
           tags: (item.content?.tags as string[]) || [],
           isActive: item.isActive ?? true,
           createdAt: item.createdAt || new Date().toISOString(),
@@ -205,7 +205,22 @@ const TicketTemplatesPage = () => {
   };
 
   const handleEditTemplate = (template: TicketTemplate) => {
-    setEditingTemplate(template);
+    // customFields[].options 从后端拿到时是 [{label,value}] 数组（供渲染 Select 用），
+    // 但编辑表单里的 options 输入框是逗号分隔的字符串——编辑态转一次好让已有 select 类型
+    // 字段的选项能正常回显，而不是显示成 "[object Object]"。
+    const normalized: TicketTemplate = {
+      ...template,
+      customFields: (template.customFields || []).map(f => ({
+        ...f,
+        options: Array.isArray(f.options)
+          ? (f.options as unknown[])
+              .map(o => (o && typeof o === 'object' ? (o as { label?: string }).label : o))
+              .filter(Boolean)
+              .join(',')
+          : f.options,
+      })) as unknown as CustomField[],
+    };
+    setEditingTemplate(normalized);
     setModalVisible(true);
   };
 
@@ -600,29 +615,13 @@ const TicketTemplatesPage = () => {
         onCancel={() => setModalVisible(false)}
         footer={null}
         width={1000}
+        destroyOnHidden
       >
         <Form
           layout="vertical"
           initialValues={editingTemplate || {}}
           onFinish={async values => {
             try {
-              // 格式化自定义表单字段
-              const processedFields = (values.customFields || []).map((f: any, index: number) => {
-                const fieldObj: any = {
-                  id: f.name || `field_${index}`,
-                  name: f.name,
-                  label: f.label,
-                  type: f.type || 'text',
-                  required: !!f.required,
-                  order: index + 1,
-                };
-                if (f.type === 'select' && f.optionsStr) {
-                  const opts = f.optionsStr.split(',').map((s: string) => s.trim()).filter(Boolean);
-                  fieldObj.options = opts.map((opt: string) => ({ label: opt, value: opt }));
-                }
-                return fieldObj;
-              });
-
               // 把表单字段映射到后端 dto.TicketTemplate
               const formFields: Record<string, unknown> = {
                 type: values.type,
@@ -633,16 +632,41 @@ const TicketTemplatesPage = () => {
                 slaType: values.slaType,
                 approvalLevel: values.approvalLevel,
                 tags: values.tags || [],
-                fields: processedFields,
-                customFields: processedFields,
               };
+              // customFields（Form.List 编辑态）转成后端 field_definitions 期望的
+              // {name, label, type, required, options} 数组；过滤掉没填字段名的空行。
+              const rawCustomFields: Array<{
+                name?: string;
+                label?: string;
+                type?: string;
+                required?: boolean;
+                options?: string;
+              }> = values.customFields || [];
+              const fields = rawCustomFields
+                .filter(f => f?.name)
+                .map(f => ({
+                  name: f.name,
+                  label: f.label || f.name,
+                  type: f.type || 'text',
+                  required: !!f.required,
+                  ...(f.type === 'select' && f.options
+                    ? {
+                        options: f.options
+                          .split(',')
+                          .map(o => o.trim())
+                          .filter(Boolean)
+                          .map(o => ({ label: o, value: o })),
+                      }
+                    : {}),
+                }));
+
               const payload = {
                 name: values.name,
                 description: values.description,
                 category: values.category,
                 priority: values.priority,
                 formFields,
-                fields: processedFields,
+                fields,
                 isActive: values.isActive ?? true,
               };
               if (editingTemplate) {
@@ -817,99 +841,8 @@ const TicketTemplatesPage = () => {
             </Col>
           </Row>
 
-          <Divider>自定义表单字段 (Custom Fields)</Divider>
-          <Form.List name="customFields">
-            {(fields, { add, remove }) => (
-              <div className="space-y-4 mb-4">
-                {fields.map(({ key, name, ...restField }) => (
-                  <Card key={key} size="small" className="bg-gray-50 border border-gray-200">
-                    <Row gutter={12} align="middle">
-                      <Col span={6}>
-                        <Form.Item
-                          {...restField}
-                          name={[name, 'label']}
-                          label="字段显示标签"
-                          rules={[{ required: true, message: '请输入显示标签' }]}
-                          style={{ marginBottom: 8 }}
-                        >
-                          <Input placeholder="如：服务器IP" />
-                        </Form.Item>
-                      </Col>
-                      <Col span={6}>
-                        <Form.Item
-                          {...restField}
-                          name={[name, 'name']}
-                          label="字段标识(英文)"
-                          rules={[{ required: true, message: '请输入英文标识' }]}
-                          style={{ marginBottom: 8 }}
-                        >
-                          <Input placeholder="如：server_ip" />
-                        </Form.Item>
-                      </Col>
-                      <Col span={5}>
-                        <Form.Item
-                          {...restField}
-                          name={[name, 'type']}
-                          label="控件类型"
-                          rules={[{ required: true, message: '请选择类型' }]}
-                          style={{ marginBottom: 8 }}
-                        >
-                          <Select
-                            placeholder="类型"
-                            options={[
-                              { value: 'text', label: '单行文本' },
-                              { value: 'textarea', label: '多行文本' },
-                              { value: 'select', label: '下拉选择' },
-                              { value: 'number', label: '数字' },
-                              { value: 'date', label: '日期时间' },
-                            ]}
-                          />
-                        </Form.Item>
-                      </Col>
-                      <Col span={4}>
-                        <Form.Item
-                          {...restField}
-                          name={[name, 'required']}
-                          valuePropName="checked"
-                          label="是否必填"
-                          style={{ marginBottom: 8 }}
-                        >
-                          <Switch size="small" />
-                        </Form.Item>
-                      </Col>
-                      <Col span={3} className="text-right">
-                        <Button danger type="text" onClick={() => remove(name)}>
-                          删除
-                        </Button>
-                      </Col>
-                    </Row>
-                    <Form.Item
-                      noStyle
-                      shouldUpdate={(prevValues, currentValues) =>
-                        prevValues.customFields?.[name]?.type !== currentValues.customFields?.[name]?.type
-                      }
-                    >
-                      {({ getFieldValue }) =>
-                        getFieldValue(['customFields', name, 'type']) === 'select' ? (
-                          <Form.Item
-                            {...restField}
-                            name={[name, 'optionsStr']}
-                            label="下拉选项（用英文逗号分隔）"
-                            style={{ marginBottom: 0, marginTop: 4 }}
-                          >
-                            <Input placeholder="选项A, 选项B, 选项C" />
-                          </Form.Item>
-                        ) : null
-                      }
-                    </Form.Item>
-                  </Card>
-                ))}
-                <Button type="dashed" onClick={() => add({ type: 'text', required: false })} block icon={<Plus size={14} />}>
-                  添加自定义表单字段
-                </Button>
-              </div>
-            )}
-          </Form.List>
+          <Divider>Custom Fields</Divider>
+          <CustomFieldsEditor name="customFields" />
 
           <Divider>Advanced Settings</Divider>
 

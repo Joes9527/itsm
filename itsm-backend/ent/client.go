@@ -45,6 +45,8 @@ import (
 	"itsm-backend/ent/endpointacl"
 	"itsm-backend/ent/engineerskill"
 	"itsm-backend/ent/feishuticketsync"
+	"itsm-backend/ent/fielddefinition"
+	"itsm-backend/ent/fieldvalue"
 	"itsm-backend/ent/group"
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/incidentalert"
@@ -90,9 +92,7 @@ import (
 	"itsm-backend/ent/rolepermission"
 	"itsm-backend/ent/rootcauseanalysis"
 	"itsm-backend/ent/servicecatalog"
-	"itsm-backend/ent/servicecatalogitem"
 	"itsm-backend/ent/servicerequest"
-	"itsm-backend/ent/servicerequestapproval"
 	"itsm-backend/ent/slaalerthistory"
 	"itsm-backend/ent/slaalertrule"
 	"itsm-backend/ent/sladefinition"
@@ -208,6 +208,10 @@ type Client struct {
 	EngineerSkill *EngineerSkillClient
 	// FeishuTicketSync is the client for interacting with the FeishuTicketSync builders.
 	FeishuTicketSync *FeishuTicketSyncClient
+	// FieldDefinition is the client for interacting with the FieldDefinition builders.
+	FieldDefinition *FieldDefinitionClient
+	// FieldValue is the client for interacting with the FieldValue builders.
+	FieldValue *FieldValueClient
 	// Group is the client for interacting with the Group builders.
 	Group *GroupClient
 	// Incident is the client for interacting with the Incident builders.
@@ -310,12 +314,8 @@ type Client struct {
 	SLAViolation *SLAViolationClient
 	// ServiceCatalog is the client for interacting with the ServiceCatalog builders.
 	ServiceCatalog *ServiceCatalogClient
-	// ServiceCatalogItem is the client for interacting with the ServiceCatalogItem builders.
-	ServiceCatalogItem *ServiceCatalogItemClient
 	// ServiceRequest is the client for interacting with the ServiceRequest builders.
 	ServiceRequest *ServiceRequestClient
-	// ServiceRequestApproval is the client for interacting with the ServiceRequestApproval builders.
-	ServiceRequestApproval *ServiceRequestApprovalClient
 	// StandardChange is the client for interacting with the StandardChange builders.
 	StandardChange *StandardChangeClient
 	// Survey is the client for interacting with the Survey builders.
@@ -419,6 +419,8 @@ func (c *Client) init() {
 	c.EndpointACL = NewEndpointACLClient(c.config)
 	c.EngineerSkill = NewEngineerSkillClient(c.config)
 	c.FeishuTicketSync = NewFeishuTicketSyncClient(c.config)
+	c.FieldDefinition = NewFieldDefinitionClient(c.config)
+	c.FieldValue = NewFieldValueClient(c.config)
 	c.Group = NewGroupClient(c.config)
 	c.Incident = NewIncidentClient(c.config)
 	c.IncidentAlert = NewIncidentAlertClient(c.config)
@@ -470,9 +472,7 @@ func (c *Client) init() {
 	c.SLAPolicy = NewSLAPolicyClient(c.config)
 	c.SLAViolation = NewSLAViolationClient(c.config)
 	c.ServiceCatalog = NewServiceCatalogClient(c.config)
-	c.ServiceCatalogItem = NewServiceCatalogItemClient(c.config)
 	c.ServiceRequest = NewServiceRequestClient(c.config)
-	c.ServiceRequestApproval = NewServiceRequestApprovalClient(c.config)
 	c.StandardChange = NewStandardChangeClient(c.config)
 	c.Survey = NewSurveyClient(c.config)
 	c.SurveyResponse = NewSurveyResponseClient(c.config)
@@ -628,6 +628,8 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		EndpointACL:                 NewEndpointACLClient(cfg),
 		EngineerSkill:               NewEngineerSkillClient(cfg),
 		FeishuTicketSync:            NewFeishuTicketSyncClient(cfg),
+		FieldDefinition:             NewFieldDefinitionClient(cfg),
+		FieldValue:                  NewFieldValueClient(cfg),
 		Group:                       NewGroupClient(cfg),
 		Incident:                    NewIncidentClient(cfg),
 		IncidentAlert:               NewIncidentAlertClient(cfg),
@@ -679,9 +681,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		SLAPolicy:                   NewSLAPolicyClient(cfg),
 		SLAViolation:                NewSLAViolationClient(cfg),
 		ServiceCatalog:              NewServiceCatalogClient(cfg),
-		ServiceCatalogItem:          NewServiceCatalogItemClient(cfg),
 		ServiceRequest:              NewServiceRequestClient(cfg),
-		ServiceRequestApproval:      NewServiceRequestApprovalClient(cfg),
 		StandardChange:              NewStandardChangeClient(cfg),
 		Survey:                      NewSurveyClient(cfg),
 		SurveyResponse:              NewSurveyResponseClient(cfg),
@@ -764,6 +764,8 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		EndpointACL:                 NewEndpointACLClient(cfg),
 		EngineerSkill:               NewEngineerSkillClient(cfg),
 		FeishuTicketSync:            NewFeishuTicketSyncClient(cfg),
+		FieldDefinition:             NewFieldDefinitionClient(cfg),
+		FieldValue:                  NewFieldValueClient(cfg),
 		Group:                       NewGroupClient(cfg),
 		Incident:                    NewIncidentClient(cfg),
 		IncidentAlert:               NewIncidentAlertClient(cfg),
@@ -815,9 +817,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		SLAPolicy:                   NewSLAPolicyClient(cfg),
 		SLAViolation:                NewSLAViolationClient(cfg),
 		ServiceCatalog:              NewServiceCatalogClient(cfg),
-		ServiceCatalogItem:          NewServiceCatalogItemClient(cfg),
 		ServiceRequest:              NewServiceRequestClient(cfg),
-		ServiceRequestApproval:      NewServiceRequestApprovalClient(cfg),
 		StandardChange:              NewStandardChangeClient(cfg),
 		Survey:                      NewSurveyClient(cfg),
 		SurveyResponse:              NewSurveyResponseClient(cfg),
@@ -883,27 +883,27 @@ func (c *Client) Use(hooks ...Hook) {
 		c.CloudResource, c.CloudService, c.ConfigurationItem,
 		c.ConfigurationItemHistory, c.Contract, c.Conversation, c.Department,
 		c.DiscoveryJob, c.DiscoveryResult, c.DiscoverySource, c.DomainConfig,
-		c.EndpointACL, c.EngineerSkill, c.FeishuTicketSync, c.Group, c.Incident,
-		c.IncidentAlert, c.IncidentEscalationRule, c.IncidentEvent, c.IncidentMetric,
-		c.IncidentRule, c.IncidentRuleExecution, c.ItemVersion, c.KnowledgeArticle,
-		c.KnowledgeArticleLike, c.KnowledgeArticleParticipant,
-		c.KnowledgeArticleSession, c.KnowledgeArticleVersion, c.KnownError,
-		c.MSPAllocation, c.MarketplaceItem, c.Menu, c.Message, c.Microservice,
-		c.Notification, c.NotificationPreference, c.PasswordResetToken, c.Permission,
-		c.PermissionDefinition, c.Problem, c.ProcessApprovalDecision,
-		c.ProcessAuditLog, c.ProcessBinding, c.ProcessDefinition, c.ProcessDeployment,
-		c.ProcessExecutionHistory, c.ProcessInstance, c.ProcessTask, c.ProcessVariable,
-		c.ProcessVersionChangelog, c.Project, c.PromptTemplate, c.ProvisioningTask,
-		c.RelationshipType, c.Release, c.Role, c.RolePermission, c.RootCauseAnalysis,
-		c.SLAAlertHistory, c.SLAAlertRule, c.SLADefinition, c.SLAMetric, c.SLAPolicy,
-		c.SLAViolation, c.ServiceCatalog, c.ServiceCatalogItem, c.ServiceRequest,
-		c.ServiceRequestApproval, c.StandardChange, c.Survey, c.SurveyResponse,
-		c.SystemConfig, c.Tag, c.Team, c.Tenant, c.TenantInstallation, c.Ticket,
-		c.TicketApproval, c.TicketAssignmentRule, c.TicketAttachment,
-		c.TicketAutomationRule, c.TicketCC, c.TicketCategory, c.TicketComment,
-		c.TicketNotification, c.TicketTag, c.TicketTemplate, c.TicketType,
-		c.TicketView, c.TicketWorkflowRecord, c.ToolInvocation, c.User, c.Vendor,
-		c.Workflow, c.WorkflowInstance, c.WorkflowTask, c.WorkflowVersion,
+		c.EndpointACL, c.EngineerSkill, c.FeishuTicketSync, c.FieldDefinition,
+		c.FieldValue, c.Group, c.Incident, c.IncidentAlert, c.IncidentEscalationRule,
+		c.IncidentEvent, c.IncidentMetric, c.IncidentRule, c.IncidentRuleExecution,
+		c.ItemVersion, c.KnowledgeArticle, c.KnowledgeArticleLike,
+		c.KnowledgeArticleParticipant, c.KnowledgeArticleSession,
+		c.KnowledgeArticleVersion, c.KnownError, c.MSPAllocation, c.MarketplaceItem,
+		c.Menu, c.Message, c.Microservice, c.Notification, c.NotificationPreference,
+		c.PasswordResetToken, c.Permission, c.PermissionDefinition, c.Problem,
+		c.ProcessApprovalDecision, c.ProcessAuditLog, c.ProcessBinding,
+		c.ProcessDefinition, c.ProcessDeployment, c.ProcessExecutionHistory,
+		c.ProcessInstance, c.ProcessTask, c.ProcessVariable, c.ProcessVersionChangelog,
+		c.Project, c.PromptTemplate, c.ProvisioningTask, c.RelationshipType, c.Release,
+		c.Role, c.RolePermission, c.RootCauseAnalysis, c.SLAAlertHistory,
+		c.SLAAlertRule, c.SLADefinition, c.SLAMetric, c.SLAPolicy, c.SLAViolation,
+		c.ServiceCatalog, c.ServiceRequest, c.StandardChange, c.Survey,
+		c.SurveyResponse, c.SystemConfig, c.Tag, c.Team, c.Tenant,
+		c.TenantInstallation, c.Ticket, c.TicketApproval, c.TicketAssignmentRule,
+		c.TicketAttachment, c.TicketAutomationRule, c.TicketCC, c.TicketCategory,
+		c.TicketComment, c.TicketNotification, c.TicketTag, c.TicketTemplate,
+		c.TicketType, c.TicketView, c.TicketWorkflowRecord, c.ToolInvocation, c.User,
+		c.Vendor, c.Workflow, c.WorkflowInstance, c.WorkflowTask, c.WorkflowVersion,
 	} {
 		n.Use(hooks...)
 	}
@@ -920,27 +920,27 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.CloudResource, c.CloudService, c.ConfigurationItem,
 		c.ConfigurationItemHistory, c.Contract, c.Conversation, c.Department,
 		c.DiscoveryJob, c.DiscoveryResult, c.DiscoverySource, c.DomainConfig,
-		c.EndpointACL, c.EngineerSkill, c.FeishuTicketSync, c.Group, c.Incident,
-		c.IncidentAlert, c.IncidentEscalationRule, c.IncidentEvent, c.IncidentMetric,
-		c.IncidentRule, c.IncidentRuleExecution, c.ItemVersion, c.KnowledgeArticle,
-		c.KnowledgeArticleLike, c.KnowledgeArticleParticipant,
-		c.KnowledgeArticleSession, c.KnowledgeArticleVersion, c.KnownError,
-		c.MSPAllocation, c.MarketplaceItem, c.Menu, c.Message, c.Microservice,
-		c.Notification, c.NotificationPreference, c.PasswordResetToken, c.Permission,
-		c.PermissionDefinition, c.Problem, c.ProcessApprovalDecision,
-		c.ProcessAuditLog, c.ProcessBinding, c.ProcessDefinition, c.ProcessDeployment,
-		c.ProcessExecutionHistory, c.ProcessInstance, c.ProcessTask, c.ProcessVariable,
-		c.ProcessVersionChangelog, c.Project, c.PromptTemplate, c.ProvisioningTask,
-		c.RelationshipType, c.Release, c.Role, c.RolePermission, c.RootCauseAnalysis,
-		c.SLAAlertHistory, c.SLAAlertRule, c.SLADefinition, c.SLAMetric, c.SLAPolicy,
-		c.SLAViolation, c.ServiceCatalog, c.ServiceCatalogItem, c.ServiceRequest,
-		c.ServiceRequestApproval, c.StandardChange, c.Survey, c.SurveyResponse,
-		c.SystemConfig, c.Tag, c.Team, c.Tenant, c.TenantInstallation, c.Ticket,
-		c.TicketApproval, c.TicketAssignmentRule, c.TicketAttachment,
-		c.TicketAutomationRule, c.TicketCC, c.TicketCategory, c.TicketComment,
-		c.TicketNotification, c.TicketTag, c.TicketTemplate, c.TicketType,
-		c.TicketView, c.TicketWorkflowRecord, c.ToolInvocation, c.User, c.Vendor,
-		c.Workflow, c.WorkflowInstance, c.WorkflowTask, c.WorkflowVersion,
+		c.EndpointACL, c.EngineerSkill, c.FeishuTicketSync, c.FieldDefinition,
+		c.FieldValue, c.Group, c.Incident, c.IncidentAlert, c.IncidentEscalationRule,
+		c.IncidentEvent, c.IncidentMetric, c.IncidentRule, c.IncidentRuleExecution,
+		c.ItemVersion, c.KnowledgeArticle, c.KnowledgeArticleLike,
+		c.KnowledgeArticleParticipant, c.KnowledgeArticleSession,
+		c.KnowledgeArticleVersion, c.KnownError, c.MSPAllocation, c.MarketplaceItem,
+		c.Menu, c.Message, c.Microservice, c.Notification, c.NotificationPreference,
+		c.PasswordResetToken, c.Permission, c.PermissionDefinition, c.Problem,
+		c.ProcessApprovalDecision, c.ProcessAuditLog, c.ProcessBinding,
+		c.ProcessDefinition, c.ProcessDeployment, c.ProcessExecutionHistory,
+		c.ProcessInstance, c.ProcessTask, c.ProcessVariable, c.ProcessVersionChangelog,
+		c.Project, c.PromptTemplate, c.ProvisioningTask, c.RelationshipType, c.Release,
+		c.Role, c.RolePermission, c.RootCauseAnalysis, c.SLAAlertHistory,
+		c.SLAAlertRule, c.SLADefinition, c.SLAMetric, c.SLAPolicy, c.SLAViolation,
+		c.ServiceCatalog, c.ServiceRequest, c.StandardChange, c.Survey,
+		c.SurveyResponse, c.SystemConfig, c.Tag, c.Team, c.Tenant,
+		c.TenantInstallation, c.Ticket, c.TicketApproval, c.TicketAssignmentRule,
+		c.TicketAttachment, c.TicketAutomationRule, c.TicketCC, c.TicketCategory,
+		c.TicketComment, c.TicketNotification, c.TicketTag, c.TicketTemplate,
+		c.TicketType, c.TicketView, c.TicketWorkflowRecord, c.ToolInvocation, c.User,
+		c.Vendor, c.Workflow, c.WorkflowInstance, c.WorkflowTask, c.WorkflowVersion,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -1017,6 +1017,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.EngineerSkill.mutate(ctx, m)
 	case *FeishuTicketSyncMutation:
 		return c.FeishuTicketSync.mutate(ctx, m)
+	case *FieldDefinitionMutation:
+		return c.FieldDefinition.mutate(ctx, m)
+	case *FieldValueMutation:
+		return c.FieldValue.mutate(ctx, m)
 	case *GroupMutation:
 		return c.Group.mutate(ctx, m)
 	case *IncidentMutation:
@@ -1119,12 +1123,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.SLAViolation.mutate(ctx, m)
 	case *ServiceCatalogMutation:
 		return c.ServiceCatalog.mutate(ctx, m)
-	case *ServiceCatalogItemMutation:
-		return c.ServiceCatalogItem.mutate(ctx, m)
 	case *ServiceRequestMutation:
 		return c.ServiceRequest.mutate(ctx, m)
-	case *ServiceRequestApprovalMutation:
-		return c.ServiceRequestApproval.mutate(ctx, m)
 	case *StandardChangeMutation:
 		return c.StandardChange.mutate(ctx, m)
 	case *SurveyMutation:
@@ -6542,6 +6542,272 @@ func (c *FeishuTicketSyncClient) mutate(ctx context.Context, m *FeishuTicketSync
 	}
 }
 
+// FieldDefinitionClient is a client for the FieldDefinition schema.
+type FieldDefinitionClient struct {
+	config
+}
+
+// NewFieldDefinitionClient returns a client for the FieldDefinition from the given config.
+func NewFieldDefinitionClient(c config) *FieldDefinitionClient {
+	return &FieldDefinitionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `fielddefinition.Hooks(f(g(h())))`.
+func (c *FieldDefinitionClient) Use(hooks ...Hook) {
+	c.hooks.FieldDefinition = append(c.hooks.FieldDefinition, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `fielddefinition.Intercept(f(g(h())))`.
+func (c *FieldDefinitionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.FieldDefinition = append(c.inters.FieldDefinition, interceptors...)
+}
+
+// Create returns a builder for creating a FieldDefinition entity.
+func (c *FieldDefinitionClient) Create() *FieldDefinitionCreate {
+	mutation := newFieldDefinitionMutation(c.config, OpCreate)
+	return &FieldDefinitionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of FieldDefinition entities.
+func (c *FieldDefinitionClient) CreateBulk(builders ...*FieldDefinitionCreate) *FieldDefinitionCreateBulk {
+	return &FieldDefinitionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *FieldDefinitionClient) MapCreateBulk(slice any, setFunc func(*FieldDefinitionCreate, int)) *FieldDefinitionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &FieldDefinitionCreateBulk{err: fmt.Errorf("calling to FieldDefinitionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*FieldDefinitionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &FieldDefinitionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for FieldDefinition.
+func (c *FieldDefinitionClient) Update() *FieldDefinitionUpdate {
+	mutation := newFieldDefinitionMutation(c.config, OpUpdate)
+	return &FieldDefinitionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *FieldDefinitionClient) UpdateOne(_m *FieldDefinition) *FieldDefinitionUpdateOne {
+	mutation := newFieldDefinitionMutation(c.config, OpUpdateOne, withFieldDefinition(_m))
+	return &FieldDefinitionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *FieldDefinitionClient) UpdateOneID(id int) *FieldDefinitionUpdateOne {
+	mutation := newFieldDefinitionMutation(c.config, OpUpdateOne, withFieldDefinitionID(id))
+	return &FieldDefinitionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for FieldDefinition.
+func (c *FieldDefinitionClient) Delete() *FieldDefinitionDelete {
+	mutation := newFieldDefinitionMutation(c.config, OpDelete)
+	return &FieldDefinitionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *FieldDefinitionClient) DeleteOne(_m *FieldDefinition) *FieldDefinitionDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *FieldDefinitionClient) DeleteOneID(id int) *FieldDefinitionDeleteOne {
+	builder := c.Delete().Where(fielddefinition.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &FieldDefinitionDeleteOne{builder}
+}
+
+// Query returns a query builder for FieldDefinition.
+func (c *FieldDefinitionClient) Query() *FieldDefinitionQuery {
+	return &FieldDefinitionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeFieldDefinition},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a FieldDefinition entity by its id.
+func (c *FieldDefinitionClient) Get(ctx context.Context, id int) (*FieldDefinition, error) {
+	return c.Query().Where(fielddefinition.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *FieldDefinitionClient) GetX(ctx context.Context, id int) *FieldDefinition {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *FieldDefinitionClient) Hooks() []Hook {
+	return c.hooks.FieldDefinition
+}
+
+// Interceptors returns the client interceptors.
+func (c *FieldDefinitionClient) Interceptors() []Interceptor {
+	return c.inters.FieldDefinition
+}
+
+func (c *FieldDefinitionClient) mutate(ctx context.Context, m *FieldDefinitionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&FieldDefinitionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&FieldDefinitionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&FieldDefinitionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&FieldDefinitionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown FieldDefinition mutation op: %q", m.Op())
+	}
+}
+
+// FieldValueClient is a client for the FieldValue schema.
+type FieldValueClient struct {
+	config
+}
+
+// NewFieldValueClient returns a client for the FieldValue from the given config.
+func NewFieldValueClient(c config) *FieldValueClient {
+	return &FieldValueClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `fieldvalue.Hooks(f(g(h())))`.
+func (c *FieldValueClient) Use(hooks ...Hook) {
+	c.hooks.FieldValue = append(c.hooks.FieldValue, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `fieldvalue.Intercept(f(g(h())))`.
+func (c *FieldValueClient) Intercept(interceptors ...Interceptor) {
+	c.inters.FieldValue = append(c.inters.FieldValue, interceptors...)
+}
+
+// Create returns a builder for creating a FieldValue entity.
+func (c *FieldValueClient) Create() *FieldValueCreate {
+	mutation := newFieldValueMutation(c.config, OpCreate)
+	return &FieldValueCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of FieldValue entities.
+func (c *FieldValueClient) CreateBulk(builders ...*FieldValueCreate) *FieldValueCreateBulk {
+	return &FieldValueCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *FieldValueClient) MapCreateBulk(slice any, setFunc func(*FieldValueCreate, int)) *FieldValueCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &FieldValueCreateBulk{err: fmt.Errorf("calling to FieldValueClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*FieldValueCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &FieldValueCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for FieldValue.
+func (c *FieldValueClient) Update() *FieldValueUpdate {
+	mutation := newFieldValueMutation(c.config, OpUpdate)
+	return &FieldValueUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *FieldValueClient) UpdateOne(_m *FieldValue) *FieldValueUpdateOne {
+	mutation := newFieldValueMutation(c.config, OpUpdateOne, withFieldValue(_m))
+	return &FieldValueUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *FieldValueClient) UpdateOneID(id int) *FieldValueUpdateOne {
+	mutation := newFieldValueMutation(c.config, OpUpdateOne, withFieldValueID(id))
+	return &FieldValueUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for FieldValue.
+func (c *FieldValueClient) Delete() *FieldValueDelete {
+	mutation := newFieldValueMutation(c.config, OpDelete)
+	return &FieldValueDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *FieldValueClient) DeleteOne(_m *FieldValue) *FieldValueDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *FieldValueClient) DeleteOneID(id int) *FieldValueDeleteOne {
+	builder := c.Delete().Where(fieldvalue.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &FieldValueDeleteOne{builder}
+}
+
+// Query returns a query builder for FieldValue.
+func (c *FieldValueClient) Query() *FieldValueQuery {
+	return &FieldValueQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeFieldValue},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a FieldValue entity by its id.
+func (c *FieldValueClient) Get(ctx context.Context, id int) (*FieldValue, error) {
+	return c.Query().Where(fieldvalue.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *FieldValueClient) GetX(ctx context.Context, id int) *FieldValue {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *FieldValueClient) Hooks() []Hook {
+	return c.hooks.FieldValue
+}
+
+// Interceptors returns the client interceptors.
+func (c *FieldValueClient) Interceptors() []Interceptor {
+	return c.inters.FieldValue
+}
+
+func (c *FieldValueClient) mutate(ctx context.Context, m *FieldValueMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&FieldValueCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&FieldValueUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&FieldValueUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&FieldValueDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown FieldValue mutation op: %q", m.Op())
+	}
+}
+
 // GroupClient is a client for the Group schema.
 type GroupClient struct {
 	config
@@ -8095,7 +8361,7 @@ func (c *KnowledgeArticleClient) QueryVersions(_m *KnowledgeArticle) *KnowledgeA
 		step := sqlgraph.NewStep(
 			sqlgraph.From(knowledgearticle.Table, knowledgearticle.FieldID, id),
 			sqlgraph.To(knowledgearticleversion.Table, knowledgearticleversion.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, knowledgearticle.VersionsTable, knowledgearticle.VersionsColumn),
+			sqlgraph.Edge(sqlgraph.O2M, false, knowledgearticle.VersionsTable, knowledgearticle.VersionsColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -8111,7 +8377,7 @@ func (c *KnowledgeArticleClient) QuerySessions(_m *KnowledgeArticle) *KnowledgeA
 		step := sqlgraph.NewStep(
 			sqlgraph.From(knowledgearticle.Table, knowledgearticle.FieldID, id),
 			sqlgraph.To(knowledgearticlesession.Table, knowledgearticlesession.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, knowledgearticle.SessionsTable, knowledgearticle.SessionsColumn),
+			sqlgraph.Edge(sqlgraph.O2M, false, knowledgearticle.SessionsTable, knowledgearticle.SessionsColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -8574,7 +8840,7 @@ func (c *KnowledgeArticleSessionClient) QueryArticle(_m *KnowledgeArticleSession
 		step := sqlgraph.NewStep(
 			sqlgraph.From(knowledgearticlesession.Table, knowledgearticlesession.FieldID, id),
 			sqlgraph.To(knowledgearticle.Table, knowledgearticle.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, true, knowledgearticlesession.ArticleTable, knowledgearticlesession.ArticleColumn),
+			sqlgraph.Edge(sqlgraph.M2O, true, knowledgearticlesession.ArticleTable, knowledgearticlesession.ArticleColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -8755,7 +9021,7 @@ func (c *KnowledgeArticleVersionClient) QueryArticle(_m *KnowledgeArticleVersion
 		step := sqlgraph.NewStep(
 			sqlgraph.From(knowledgearticleversion.Table, knowledgearticleversion.FieldID, id),
 			sqlgraph.To(knowledgearticle.Table, knowledgearticle.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, true, knowledgearticleversion.ArticleTable, knowledgearticleversion.ArticleColumn),
+			sqlgraph.Edge(sqlgraph.M2O, true, knowledgearticleversion.ArticleTable, knowledgearticleversion.ArticleColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -14500,22 +14766,6 @@ func (c *ServiceCatalogClient) GetX(ctx context.Context, id int) *ServiceCatalog
 	return obj
 }
 
-// QueryItems queries the items edge of a ServiceCatalog.
-func (c *ServiceCatalogClient) QueryItems(_m *ServiceCatalog) *ServiceCatalogItemQuery {
-	query := (&ServiceCatalogItemClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(servicecatalog.Table, servicecatalog.FieldID, id),
-			sqlgraph.To(servicecatalogitem.Table, servicecatalogitem.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, servicecatalog.ItemsTable, servicecatalog.ItemsColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // Hooks returns the client hooks.
 func (c *ServiceCatalogClient) Hooks() []Hook {
 	return c.hooks.ServiceCatalog
@@ -14538,155 +14788,6 @@ func (c *ServiceCatalogClient) mutate(ctx context.Context, m *ServiceCatalogMuta
 		return (&ServiceCatalogDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown ServiceCatalog mutation op: %q", m.Op())
-	}
-}
-
-// ServiceCatalogItemClient is a client for the ServiceCatalogItem schema.
-type ServiceCatalogItemClient struct {
-	config
-}
-
-// NewServiceCatalogItemClient returns a client for the ServiceCatalogItem from the given config.
-func NewServiceCatalogItemClient(c config) *ServiceCatalogItemClient {
-	return &ServiceCatalogItemClient{config: c}
-}
-
-// Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `servicecatalogitem.Hooks(f(g(h())))`.
-func (c *ServiceCatalogItemClient) Use(hooks ...Hook) {
-	c.hooks.ServiceCatalogItem = append(c.hooks.ServiceCatalogItem, hooks...)
-}
-
-// Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `servicecatalogitem.Intercept(f(g(h())))`.
-func (c *ServiceCatalogItemClient) Intercept(interceptors ...Interceptor) {
-	c.inters.ServiceCatalogItem = append(c.inters.ServiceCatalogItem, interceptors...)
-}
-
-// Create returns a builder for creating a ServiceCatalogItem entity.
-func (c *ServiceCatalogItemClient) Create() *ServiceCatalogItemCreate {
-	mutation := newServiceCatalogItemMutation(c.config, OpCreate)
-	return &ServiceCatalogItemCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// CreateBulk returns a builder for creating a bulk of ServiceCatalogItem entities.
-func (c *ServiceCatalogItemClient) CreateBulk(builders ...*ServiceCatalogItemCreate) *ServiceCatalogItemCreateBulk {
-	return &ServiceCatalogItemCreateBulk{config: c.config, builders: builders}
-}
-
-// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
-// a builder and applies setFunc on it.
-func (c *ServiceCatalogItemClient) MapCreateBulk(slice any, setFunc func(*ServiceCatalogItemCreate, int)) *ServiceCatalogItemCreateBulk {
-	rv := reflect.ValueOf(slice)
-	if rv.Kind() != reflect.Slice {
-		return &ServiceCatalogItemCreateBulk{err: fmt.Errorf("calling to ServiceCatalogItemClient.MapCreateBulk with wrong type %T, need slice", slice)}
-	}
-	builders := make([]*ServiceCatalogItemCreate, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
-		builders[i] = c.Create()
-		setFunc(builders[i], i)
-	}
-	return &ServiceCatalogItemCreateBulk{config: c.config, builders: builders}
-}
-
-// Update returns an update builder for ServiceCatalogItem.
-func (c *ServiceCatalogItemClient) Update() *ServiceCatalogItemUpdate {
-	mutation := newServiceCatalogItemMutation(c.config, OpUpdate)
-	return &ServiceCatalogItemUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOne returns an update builder for the given entity.
-func (c *ServiceCatalogItemClient) UpdateOne(_m *ServiceCatalogItem) *ServiceCatalogItemUpdateOne {
-	mutation := newServiceCatalogItemMutation(c.config, OpUpdateOne, withServiceCatalogItem(_m))
-	return &ServiceCatalogItemUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOneID returns an update builder for the given id.
-func (c *ServiceCatalogItemClient) UpdateOneID(id int) *ServiceCatalogItemUpdateOne {
-	mutation := newServiceCatalogItemMutation(c.config, OpUpdateOne, withServiceCatalogItemID(id))
-	return &ServiceCatalogItemUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// Delete returns a delete builder for ServiceCatalogItem.
-func (c *ServiceCatalogItemClient) Delete() *ServiceCatalogItemDelete {
-	mutation := newServiceCatalogItemMutation(c.config, OpDelete)
-	return &ServiceCatalogItemDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// DeleteOne returns a builder for deleting the given entity.
-func (c *ServiceCatalogItemClient) DeleteOne(_m *ServiceCatalogItem) *ServiceCatalogItemDeleteOne {
-	return c.DeleteOneID(_m.ID)
-}
-
-// DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *ServiceCatalogItemClient) DeleteOneID(id int) *ServiceCatalogItemDeleteOne {
-	builder := c.Delete().Where(servicecatalogitem.ID(id))
-	builder.mutation.id = &id
-	builder.mutation.op = OpDeleteOne
-	return &ServiceCatalogItemDeleteOne{builder}
-}
-
-// Query returns a query builder for ServiceCatalogItem.
-func (c *ServiceCatalogItemClient) Query() *ServiceCatalogItemQuery {
-	return &ServiceCatalogItemQuery{
-		config: c.config,
-		ctx:    &QueryContext{Type: TypeServiceCatalogItem},
-		inters: c.Interceptors(),
-	}
-}
-
-// Get returns a ServiceCatalogItem entity by its id.
-func (c *ServiceCatalogItemClient) Get(ctx context.Context, id int) (*ServiceCatalogItem, error) {
-	return c.Query().Where(servicecatalogitem.ID(id)).Only(ctx)
-}
-
-// GetX is like Get, but panics if an error occurs.
-func (c *ServiceCatalogItemClient) GetX(ctx context.Context, id int) *ServiceCatalogItem {
-	obj, err := c.Get(ctx, id)
-	if err != nil {
-		panic(err)
-	}
-	return obj
-}
-
-// QueryCatalog queries the catalog edge of a ServiceCatalogItem.
-func (c *ServiceCatalogItemClient) QueryCatalog(_m *ServiceCatalogItem) *ServiceCatalogQuery {
-	query := (&ServiceCatalogClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(servicecatalogitem.Table, servicecatalogitem.FieldID, id),
-			sqlgraph.To(servicecatalog.Table, servicecatalog.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, servicecatalogitem.CatalogTable, servicecatalogitem.CatalogColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// Hooks returns the client hooks.
-func (c *ServiceCatalogItemClient) Hooks() []Hook {
-	return c.hooks.ServiceCatalogItem
-}
-
-// Interceptors returns the client interceptors.
-func (c *ServiceCatalogItemClient) Interceptors() []Interceptor {
-	return c.inters.ServiceCatalogItem
-}
-
-func (c *ServiceCatalogItemClient) mutate(ctx context.Context, m *ServiceCatalogItemMutation) (Value, error) {
-	switch m.Op() {
-	case OpCreate:
-		return (&ServiceCatalogItemCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdate:
-		return (&ServiceCatalogItemUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdateOne:
-		return (&ServiceCatalogItemUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpDelete, OpDeleteOne:
-		return (&ServiceCatalogItemDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
-	default:
-		return nil, fmt.Errorf("ent: unknown ServiceCatalogItem mutation op: %q", m.Op())
 	}
 }
 
@@ -14820,139 +14921,6 @@ func (c *ServiceRequestClient) mutate(ctx context.Context, m *ServiceRequestMuta
 		return (&ServiceRequestDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown ServiceRequest mutation op: %q", m.Op())
-	}
-}
-
-// ServiceRequestApprovalClient is a client for the ServiceRequestApproval schema.
-type ServiceRequestApprovalClient struct {
-	config
-}
-
-// NewServiceRequestApprovalClient returns a client for the ServiceRequestApproval from the given config.
-func NewServiceRequestApprovalClient(c config) *ServiceRequestApprovalClient {
-	return &ServiceRequestApprovalClient{config: c}
-}
-
-// Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `servicerequestapproval.Hooks(f(g(h())))`.
-func (c *ServiceRequestApprovalClient) Use(hooks ...Hook) {
-	c.hooks.ServiceRequestApproval = append(c.hooks.ServiceRequestApproval, hooks...)
-}
-
-// Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `servicerequestapproval.Intercept(f(g(h())))`.
-func (c *ServiceRequestApprovalClient) Intercept(interceptors ...Interceptor) {
-	c.inters.ServiceRequestApproval = append(c.inters.ServiceRequestApproval, interceptors...)
-}
-
-// Create returns a builder for creating a ServiceRequestApproval entity.
-func (c *ServiceRequestApprovalClient) Create() *ServiceRequestApprovalCreate {
-	mutation := newServiceRequestApprovalMutation(c.config, OpCreate)
-	return &ServiceRequestApprovalCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// CreateBulk returns a builder for creating a bulk of ServiceRequestApproval entities.
-func (c *ServiceRequestApprovalClient) CreateBulk(builders ...*ServiceRequestApprovalCreate) *ServiceRequestApprovalCreateBulk {
-	return &ServiceRequestApprovalCreateBulk{config: c.config, builders: builders}
-}
-
-// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
-// a builder and applies setFunc on it.
-func (c *ServiceRequestApprovalClient) MapCreateBulk(slice any, setFunc func(*ServiceRequestApprovalCreate, int)) *ServiceRequestApprovalCreateBulk {
-	rv := reflect.ValueOf(slice)
-	if rv.Kind() != reflect.Slice {
-		return &ServiceRequestApprovalCreateBulk{err: fmt.Errorf("calling to ServiceRequestApprovalClient.MapCreateBulk with wrong type %T, need slice", slice)}
-	}
-	builders := make([]*ServiceRequestApprovalCreate, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
-		builders[i] = c.Create()
-		setFunc(builders[i], i)
-	}
-	return &ServiceRequestApprovalCreateBulk{config: c.config, builders: builders}
-}
-
-// Update returns an update builder for ServiceRequestApproval.
-func (c *ServiceRequestApprovalClient) Update() *ServiceRequestApprovalUpdate {
-	mutation := newServiceRequestApprovalMutation(c.config, OpUpdate)
-	return &ServiceRequestApprovalUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOne returns an update builder for the given entity.
-func (c *ServiceRequestApprovalClient) UpdateOne(_m *ServiceRequestApproval) *ServiceRequestApprovalUpdateOne {
-	mutation := newServiceRequestApprovalMutation(c.config, OpUpdateOne, withServiceRequestApproval(_m))
-	return &ServiceRequestApprovalUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOneID returns an update builder for the given id.
-func (c *ServiceRequestApprovalClient) UpdateOneID(id int) *ServiceRequestApprovalUpdateOne {
-	mutation := newServiceRequestApprovalMutation(c.config, OpUpdateOne, withServiceRequestApprovalID(id))
-	return &ServiceRequestApprovalUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// Delete returns a delete builder for ServiceRequestApproval.
-func (c *ServiceRequestApprovalClient) Delete() *ServiceRequestApprovalDelete {
-	mutation := newServiceRequestApprovalMutation(c.config, OpDelete)
-	return &ServiceRequestApprovalDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// DeleteOne returns a builder for deleting the given entity.
-func (c *ServiceRequestApprovalClient) DeleteOne(_m *ServiceRequestApproval) *ServiceRequestApprovalDeleteOne {
-	return c.DeleteOneID(_m.ID)
-}
-
-// DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *ServiceRequestApprovalClient) DeleteOneID(id int) *ServiceRequestApprovalDeleteOne {
-	builder := c.Delete().Where(servicerequestapproval.ID(id))
-	builder.mutation.id = &id
-	builder.mutation.op = OpDeleteOne
-	return &ServiceRequestApprovalDeleteOne{builder}
-}
-
-// Query returns a query builder for ServiceRequestApproval.
-func (c *ServiceRequestApprovalClient) Query() *ServiceRequestApprovalQuery {
-	return &ServiceRequestApprovalQuery{
-		config: c.config,
-		ctx:    &QueryContext{Type: TypeServiceRequestApproval},
-		inters: c.Interceptors(),
-	}
-}
-
-// Get returns a ServiceRequestApproval entity by its id.
-func (c *ServiceRequestApprovalClient) Get(ctx context.Context, id int) (*ServiceRequestApproval, error) {
-	return c.Query().Where(servicerequestapproval.ID(id)).Only(ctx)
-}
-
-// GetX is like Get, but panics if an error occurs.
-func (c *ServiceRequestApprovalClient) GetX(ctx context.Context, id int) *ServiceRequestApproval {
-	obj, err := c.Get(ctx, id)
-	if err != nil {
-		panic(err)
-	}
-	return obj
-}
-
-// Hooks returns the client hooks.
-func (c *ServiceRequestApprovalClient) Hooks() []Hook {
-	return c.hooks.ServiceRequestApproval
-}
-
-// Interceptors returns the client interceptors.
-func (c *ServiceRequestApprovalClient) Interceptors() []Interceptor {
-	return c.inters.ServiceRequestApproval
-}
-
-func (c *ServiceRequestApprovalClient) mutate(ctx context.Context, m *ServiceRequestApprovalMutation) (Value, error) {
-	switch m.Op() {
-	case OpCreate:
-		return (&ServiceRequestApprovalCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdate:
-		return (&ServiceRequestApprovalUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdateOne:
-		return (&ServiceRequestApprovalUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpDelete, OpDeleteOne:
-		return (&ServiceRequestApprovalDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
-	default:
-		return nil, fmt.Errorf("ent: unknown ServiceRequestApproval mutation op: %q", m.Op())
 	}
 }
 
@@ -20022,25 +19990,25 @@ type (
 		CMDBImportTask, CMDBSavedView, Change, ChangePIR, CloudAccount, CloudResource,
 		CloudService, ConfigurationItem, ConfigurationItemHistory, Contract,
 		Conversation, Department, DiscoveryJob, DiscoveryResult, DiscoverySource,
-		DomainConfig, EndpointACL, EngineerSkill, FeishuTicketSync, Group, Incident,
-		IncidentAlert, IncidentEscalationRule, IncidentEvent, IncidentMetric,
-		IncidentRule, IncidentRuleExecution, ItemVersion, KnowledgeArticle,
-		KnowledgeArticleLike, KnowledgeArticleParticipant, KnowledgeArticleSession,
-		KnowledgeArticleVersion, KnownError, MSPAllocation, MarketplaceItem, Menu,
-		Message, Microservice, Notification, NotificationPreference,
-		PasswordResetToken, Permission, PermissionDefinition, Problem,
-		ProcessApprovalDecision, ProcessAuditLog, ProcessBinding, ProcessDefinition,
-		ProcessDeployment, ProcessExecutionHistory, ProcessInstance, ProcessTask,
-		ProcessVariable, ProcessVersionChangelog, Project, PromptTemplate,
-		ProvisioningTask, RelationshipType, Release, Role, RolePermission,
-		RootCauseAnalysis, SLAAlertHistory, SLAAlertRule, SLADefinition, SLAMetric,
-		SLAPolicy, SLAViolation, ServiceCatalog, ServiceCatalogItem, ServiceRequest,
-		ServiceRequestApproval, StandardChange, Survey, SurveyResponse, SystemConfig,
-		Tag, Team, Tenant, TenantInstallation, Ticket, TicketApproval,
-		TicketAssignmentRule, TicketAttachment, TicketAutomationRule, TicketCC,
-		TicketCategory, TicketComment, TicketNotification, TicketTag, TicketTemplate,
-		TicketType, TicketView, TicketWorkflowRecord, ToolInvocation, User, Vendor,
-		Workflow, WorkflowInstance, WorkflowTask, WorkflowVersion []ent.Hook
+		DomainConfig, EndpointACL, EngineerSkill, FeishuTicketSync, FieldDefinition,
+		FieldValue, Group, Incident, IncidentAlert, IncidentEscalationRule,
+		IncidentEvent, IncidentMetric, IncidentRule, IncidentRuleExecution,
+		ItemVersion, KnowledgeArticle, KnowledgeArticleLike,
+		KnowledgeArticleParticipant, KnowledgeArticleSession, KnowledgeArticleVersion,
+		KnownError, MSPAllocation, MarketplaceItem, Menu, Message, Microservice,
+		Notification, NotificationPreference, PasswordResetToken, Permission,
+		PermissionDefinition, Problem, ProcessApprovalDecision, ProcessAuditLog,
+		ProcessBinding, ProcessDefinition, ProcessDeployment, ProcessExecutionHistory,
+		ProcessInstance, ProcessTask, ProcessVariable, ProcessVersionChangelog,
+		Project, PromptTemplate, ProvisioningTask, RelationshipType, Release, Role,
+		RolePermission, RootCauseAnalysis, SLAAlertHistory, SLAAlertRule,
+		SLADefinition, SLAMetric, SLAPolicy, SLAViolation, ServiceCatalog,
+		ServiceRequest, StandardChange, Survey, SurveyResponse, SystemConfig, Tag,
+		Team, Tenant, TenantInstallation, Ticket, TicketApproval, TicketAssignmentRule,
+		TicketAttachment, TicketAutomationRule, TicketCC, TicketCategory,
+		TicketComment, TicketNotification, TicketTag, TicketTemplate, TicketType,
+		TicketView, TicketWorkflowRecord, ToolInvocation, User, Vendor, Workflow,
+		WorkflowInstance, WorkflowTask, WorkflowVersion []ent.Hook
 	}
 	inters struct {
 		Application, ApprovalChain, ApprovalRecord, ApprovalWorkflow, Asset,
@@ -20049,24 +20017,24 @@ type (
 		CMDBImportTask, CMDBSavedView, Change, ChangePIR, CloudAccount, CloudResource,
 		CloudService, ConfigurationItem, ConfigurationItemHistory, Contract,
 		Conversation, Department, DiscoveryJob, DiscoveryResult, DiscoverySource,
-		DomainConfig, EndpointACL, EngineerSkill, FeishuTicketSync, Group, Incident,
-		IncidentAlert, IncidentEscalationRule, IncidentEvent, IncidentMetric,
-		IncidentRule, IncidentRuleExecution, ItemVersion, KnowledgeArticle,
-		KnowledgeArticleLike, KnowledgeArticleParticipant, KnowledgeArticleSession,
-		KnowledgeArticleVersion, KnownError, MSPAllocation, MarketplaceItem, Menu,
-		Message, Microservice, Notification, NotificationPreference,
-		PasswordResetToken, Permission, PermissionDefinition, Problem,
-		ProcessApprovalDecision, ProcessAuditLog, ProcessBinding, ProcessDefinition,
-		ProcessDeployment, ProcessExecutionHistory, ProcessInstance, ProcessTask,
-		ProcessVariable, ProcessVersionChangelog, Project, PromptTemplate,
-		ProvisioningTask, RelationshipType, Release, Role, RolePermission,
-		RootCauseAnalysis, SLAAlertHistory, SLAAlertRule, SLADefinition, SLAMetric,
-		SLAPolicy, SLAViolation, ServiceCatalog, ServiceCatalogItem, ServiceRequest,
-		ServiceRequestApproval, StandardChange, Survey, SurveyResponse, SystemConfig,
-		Tag, Team, Tenant, TenantInstallation, Ticket, TicketApproval,
-		TicketAssignmentRule, TicketAttachment, TicketAutomationRule, TicketCC,
-		TicketCategory, TicketComment, TicketNotification, TicketTag, TicketTemplate,
-		TicketType, TicketView, TicketWorkflowRecord, ToolInvocation, User, Vendor,
-		Workflow, WorkflowInstance, WorkflowTask, WorkflowVersion []ent.Interceptor
+		DomainConfig, EndpointACL, EngineerSkill, FeishuTicketSync, FieldDefinition,
+		FieldValue, Group, Incident, IncidentAlert, IncidentEscalationRule,
+		IncidentEvent, IncidentMetric, IncidentRule, IncidentRuleExecution,
+		ItemVersion, KnowledgeArticle, KnowledgeArticleLike,
+		KnowledgeArticleParticipant, KnowledgeArticleSession, KnowledgeArticleVersion,
+		KnownError, MSPAllocation, MarketplaceItem, Menu, Message, Microservice,
+		Notification, NotificationPreference, PasswordResetToken, Permission,
+		PermissionDefinition, Problem, ProcessApprovalDecision, ProcessAuditLog,
+		ProcessBinding, ProcessDefinition, ProcessDeployment, ProcessExecutionHistory,
+		ProcessInstance, ProcessTask, ProcessVariable, ProcessVersionChangelog,
+		Project, PromptTemplate, ProvisioningTask, RelationshipType, Release, Role,
+		RolePermission, RootCauseAnalysis, SLAAlertHistory, SLAAlertRule,
+		SLADefinition, SLAMetric, SLAPolicy, SLAViolation, ServiceCatalog,
+		ServiceRequest, StandardChange, Survey, SurveyResponse, SystemConfig, Tag,
+		Team, Tenant, TenantInstallation, Ticket, TicketApproval, TicketAssignmentRule,
+		TicketAttachment, TicketAutomationRule, TicketCC, TicketCategory,
+		TicketComment, TicketNotification, TicketTag, TicketTemplate, TicketType,
+		TicketView, TicketWorkflowRecord, ToolInvocation, User, Vendor, Workflow,
+		WorkflowInstance, WorkflowTask, WorkflowVersion []ent.Interceptor
 	}
 )

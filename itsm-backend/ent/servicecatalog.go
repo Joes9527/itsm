@@ -48,8 +48,6 @@ type ServiceCatalog struct {
 	CiTypeID int `json:"ci_type_id,omitempty"`
 	// 关联云服务ID
 	CloudServiceID int `json:"cloud_service_id,omitempty"`
-	// 表单JSON配置
-	FormSchema map[string]interface{} `json:"form_schema,omitempty"`
 	// 可选区域
 	AvailableRegions []string `json:"available_regions,omitempty"`
 	// 可选规格
@@ -65,29 +63,8 @@ type ServiceCatalog struct {
 	// 创建时间
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// 更新时间
-	UpdatedAt time.Time `json:"updated_at,omitempty"`
-	// Edges holds the relations/edges for other nodes in the graph.
-	// The values are being populated by the ServiceCatalogQuery when eager-loading is set.
-	Edges        ServiceCatalogEdges `json:"edges"`
+	UpdatedAt    time.Time `json:"updated_at,omitempty"`
 	selectValues sql.SelectValues
-}
-
-// ServiceCatalogEdges holds the relations/edges for other nodes in the graph.
-type ServiceCatalogEdges struct {
-	// Items holds the value of the items edge.
-	Items []*ServiceCatalogItem `json:"items,omitempty"`
-	// loadedTypes holds the information for reporting if a
-	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [1]bool
-}
-
-// ItemsOrErr returns the Items value or an error if the edge
-// was not loaded in eager-loading.
-func (e ServiceCatalogEdges) ItemsOrErr() ([]*ServiceCatalogItem, error) {
-	if e.loadedTypes[0] {
-		return e.Items, nil
-	}
-	return nil, &NotLoadedError{edge: "items"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -95,7 +72,7 @@ func (*ServiceCatalog) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case servicecatalog.FieldApprovers, servicecatalog.FieldFormSchema, servicecatalog.FieldAvailableRegions, servicecatalog.FieldAvailableSpecs:
+		case servicecatalog.FieldApprovers, servicecatalog.FieldAvailableRegions, servicecatalog.FieldAvailableSpecs:
 			values[i] = new([]byte)
 		case servicecatalog.FieldRequiresApproval, servicecatalog.FieldIsActive:
 			values[i] = new(sql.NullBool)
@@ -220,14 +197,6 @@ func (_m *ServiceCatalog) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.CloudServiceID = int(value.Int64)
 			}
-		case servicecatalog.FieldFormSchema:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field form_schema", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &_m.FormSchema); err != nil {
-					return fmt.Errorf("unmarshal field form_schema: %w", err)
-				}
-			}
 		case servicecatalog.FieldAvailableRegions:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field available_regions", values[i])
@@ -291,11 +260,6 @@ func (_m *ServiceCatalog) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (_m *ServiceCatalog) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
-}
-
-// QueryItems queries the "items" edge of the ServiceCatalog entity.
-func (_m *ServiceCatalog) QueryItems() *ServiceCatalogItemQuery {
-	return NewServiceCatalogClient(_m.config).QueryItems(_m)
 }
 
 // Update returns a builder for updating this ServiceCatalog.
@@ -365,9 +329,6 @@ func (_m *ServiceCatalog) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("cloud_service_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.CloudServiceID))
-	builder.WriteString(", ")
-	builder.WriteString("form_schema=")
-	builder.WriteString(fmt.Sprintf("%v", _m.FormSchema))
 	builder.WriteString(", ")
 	builder.WriteString("available_regions=")
 	builder.WriteString(fmt.Sprintf("%v", _m.AvailableRegions))

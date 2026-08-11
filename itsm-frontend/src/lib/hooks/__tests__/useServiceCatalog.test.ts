@@ -6,8 +6,7 @@ import {
   useServiceAnalyticsQuery, useServiceRequestsQuery, useServiceRequestQuery,
   useFavoritesQuery, usePortalConfigQuery, useCatalogStatsQuery,
   useCreateServiceMutation, useUpdateServiceMutation, usePublishServiceMutation,
-  useCreateServiceRequestMutation, useApproveServiceRequestMutation,
-  useRejectServiceRequestMutation, useAddFavoriteMutation,
+  useCreateServiceRequestMutation, useAddFavoriteMutation,
   useRemoveFavoriteMutation, useRateServiceMutation,
   SERVICE_CATALOG_KEYS,
 } from '../useServiceCatalog';
@@ -20,8 +19,7 @@ jest.mock('@/lib/api/service-catalog-api', () => ({
     updateService: jest.fn(), publishService: jest.fn(),
     getServiceRatings: jest.fn(), getServiceAnalytics: jest.fn(),
     getServiceRequests: jest.fn(), getServiceRequest: jest.fn(),
-    createServiceRequest: jest.fn(), approveServiceRequest: jest.fn(),
-    rejectServiceRequest: jest.fn(), getFavorites: jest.fn(),
+    createServiceRequest: jest.fn(), getFavorites: jest.fn(),
     addFavorite: jest.fn(), removeFavorite: jest.fn(),
     getPortalConfig: jest.fn(), getCatalogStats: jest.fn(),
     rateService: jest.fn(),
@@ -179,26 +177,6 @@ describe('useServiceCatalog hooks', () => {
       mockApi.createServiceRequest.mockResolvedValue({ id: 1 } as any);
       const { result } = renderHook(() => useCreateServiceRequestMutation(), { wrapper: createWrapper() });
       act(() => { result.current.mutate({ serviceId: 's1' } as any); });
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(message.success).toHaveBeenCalled();
-    });
-  });
-
-  describe('useApproveServiceRequestMutation', () => {
-    it('approves request', async () => {
-      mockApi.approveServiceRequest.mockResolvedValue(undefined as any);
-      const { result } = renderHook(() => useApproveServiceRequestMutation(), { wrapper: createWrapper() });
-      act(() => { result.current.mutate({ id: 1, comment: 'ok' }); });
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(message.success).toHaveBeenCalled();
-    });
-  });
-
-  describe('useRejectServiceRequestMutation', () => {
-    it('rejects request', async () => {
-      mockApi.rejectServiceRequest.mockResolvedValue(undefined as any);
-      const { result } = renderHook(() => useRejectServiceRequestMutation(), { wrapper: createWrapper() });
-      act(() => { result.current.mutate({ id: 1, reason: 'invalid' }); });
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
       expect(message.success).toHaveBeenCalled();
     });

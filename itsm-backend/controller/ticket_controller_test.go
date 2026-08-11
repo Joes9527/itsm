@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	mathrand "math/rand"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -30,14 +31,18 @@ import (
 func setupTestTicketController(t *testing.T) (*gin.Engine, *ent.Client, *TicketController) {
 	gin.SetMode(gin.TestMode)
 
-	client := enttest.Open(t, "sqlite3", "file:ent?mode=memory&cache=shared&_fk=1")
+	// 每个测试用例使用独立的内存库名（同 test_helper.go 的 SetupTestDB 约定），避免多个测试函数
+	// 共享同一个 sqlite shared-cache 内存库时，tickets.ticket_number 的全局唯一索引跨租户碰撞——
+	// 号码生成器按 tenant 维度查询"当月最大序号"，但唯一约束是全局的，一旦某个较早测试的租户已经
+	// 占用了当月的 000001 号，后面任何新租户创建的第一张工单都会确定性撞号重试耗尽失败。
+	client := enttest.Open(t, "sqlite3", fmt.Sprintf("file:ticketctrl_%s_%d?mode=memory&cache=shared&_fk=1", t.Name(), mathrand.Int31()))
 
 	logger := zaptest.NewLogger(t).Sugar()
 
 	ticketService := service.NewTicketServiceForTest(client, logger)
 	var ticketDependencyService *service.TicketDependencyService
 
-	ticketController := NewTicketController(ticketService, ticketDependencyService, nil, logger)
+	ticketController := NewTicketController(ticketService, ticketDependencyService, nil, client, logger)
 
 	r := gin.New()
 	r.Use(gin.Recovery())
@@ -225,6 +230,42 @@ func TestTicketController_CreateTicket(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestTicketController_CreateTicket_IgnoresClientSuppliedSource proves the public
+// POST /tickets endpoint cannot be spoofed into self-reporting
+// source=service_catalog (a value that's supposed to be set only by the trusted
+// internal service_request.Service.Create -> ticketSvc.CreateTicket call path).
+// Without this, any authenticated caller could fake a service-catalog origin on a
+// manually created ticket with no real linked ServiceRequest behind it, which is
+// load-bearing for ServiceRequestPanel's rendering decision on the ticket detail page.
+func TestTicketController_CreateTicket_IgnoresClientSuppliedSource(t *testing.T) {
+	r, client, _ := setupTestTicketController(t)
+	defer client.Close()
+
+	tenant, user := createTestTenantAndUserForTicket(t, client)
+
+	body, err := json.Marshal(dto.CreateTicketRequest{
+		Title:       "伪造来源的工单",
+		Description: "尝试自报 source=service_catalog",
+		Priority:    "medium",
+		Category:    "incident",
+		Source:      "service_catalog",
+	})
+	require.NoError(t, err)
+
+	req, err := http.NewRequest("POST", "/api/v1/tickets", bytes.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Test-Tenant", strconv.Itoa(tenant.ID))
+	req.Header.Set("X-Test-User", strconv.Itoa(user.ID))
+
+	resp, _ := doJSONRequest(t, r, req)
+	require.Equal(t, common.SuccessCode, resp.Code, "message=%s", resp.Message)
+
+	var created dto.TicketResponse
+	require.NoError(t, json.Unmarshal(resp.Data, &created), "data=%s", string(resp.Data))
+	assert.Equal(t, "manual", created.Source, "client-supplied source must be ignored on the public endpoint; ent schema default(\"manual\") should apply")
 }
 
 func TestTicketController_GetTicket(t *testing.T) {

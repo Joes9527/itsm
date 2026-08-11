@@ -91,6 +91,11 @@ type BPMNUserTask struct {
 	AllowDelegate           bool   `xml:"allowDelegate,attr"`
 	AllowAddApprover        bool   `xml:"allowAddApprover,attr"`
 	CommentRequiredOnReject bool   `xml:"commentRequiredOnReject,attr"`
+	AssigneeRole            string `xml:"assigneeRole,attr"`
+	AssigneeDeptId          int    `xml:"assigneeDeptId,attr"`
+	AssigneeTeamId          int    `xml:"assigneeTeamId,attr"`
+	AssigneeProjectId       int    `xml:"assigneeProjectId,attr"`
+	AssigneeTempTeamId      int    `xml:"assigneeTempTeamId,attr"`
 }
 
 // GetID 获取ID

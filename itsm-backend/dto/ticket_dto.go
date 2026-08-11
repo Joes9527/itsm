@@ -20,10 +20,11 @@ type CreateTicketRequest struct {
 	Priority              string                 `json:"priority" binding:"required,oneof=low medium high critical urgent"`
 	Type                  string                 `json:"type" binding:"omitempty,oneof=incident service_request change ticket problem improvement"` // 工单类型
 	TypeID                string                 `json:"typeId,omitempty"`
-	Category              string                 `json:"category"`                        // 分类名称（可选，前端传入）
-	CategoryID            *int                   `json:"categoryId,omitempty"`            // 分类ID（优先使用）
-	TemplateID            *int                   `json:"templateId,omitempty"`            // 模板ID
-	RequesterID           int                    `json:"requesterId" binding:"omitempty"` // 从认证上下文中获取，前端可不传
+	Source                string                 `json:"source,omitempty" binding:"omitempty,oneof=manual service_catalog"` // 工单来源：manual=手动创建，service_catalog=服务目录申请
+	Category              string                 `json:"category"`                                                          // 分类名称（可选，前端传入）
+	CategoryID            *int                   `json:"categoryId,omitempty"`                                              // 分类ID（优先使用）
+	TemplateID            *int                   `json:"templateId,omitempty"`                                              // 模板ID
+	RequesterID           int                    `json:"requesterId" binding:"omitempty"`                                   // 从认证上下文中获取，前端可不传
 	AssigneeID            int                    `json:"assigneeId"`
 	ParentTicketID        *int                   `json:"parentTicketId,omitempty"`
 	TagIDs                []int                  `json:"tagIds,omitempty"` // 标签ID列表
@@ -75,34 +76,42 @@ type ListTicketsRequest struct {
 
 // TicketResponse 工单响应
 type TicketResponse struct {
-	ID                    int                    `json:"id"`
-	Title                 string                 `json:"title"`
-	Description           string                 `json:"description"`
-	Status                string                 `json:"status"`
-	Priority              string                 `json:"priority"`
-	Type                  string                 `json:"type"`
-	TicketNumber          string                 `json:"ticketNumber"`
-	RequesterID           int                    `json:"requesterId"`
-	AssigneeID            int                    `json:"assigneeId,omitempty"`
-	TenantID              int                    `json:"tenantId"`
-	CategoryID            int                    `json:"categoryId,omitempty"`
-	DepartmentID          int                    `json:"departmentId,omitempty"`
-	ParentTicketID        int                    `json:"parentTicketId,omitempty"`
-	TemplateID            *int                   `json:"templateId,omitempty"`
-	Version               int                    `json:"version"`
-	CreatedAt             time.Time              `json:"createdAt"`
-	UpdatedAt             time.Time              `json:"updatedAt"`
-	Requester             *UserBasicInfo         `json:"requester,omitempty"`
-	Assignee              *UserBasicInfo         `json:"assignee,omitempty"`
-	Resolution            string                 `json:"resolution,omitempty"`
-	ResolutionCategory    string                 `json:"resolutionCategory,omitempty"`
-	ResolvedAt            *time.Time             `json:"resolvedAt,omitempty"`
-	ClosedAt              *time.Time             `json:"closedAt,omitempty"`
-	FirstResponseAt       *time.Time             `json:"firstResponseAt,omitempty"`
-	SLAResponseDeadline   *time.Time             `json:"slaResponseDeadline,omitempty"`
-	SLAResolutionDeadline *time.Time             `json:"slaResolutionDeadline,omitempty"`
-	Rating                int                    `json:"rating,omitempty"`
-	CustomFieldValues     map[string]interface{} `json:"customFields,omitempty"`
+	ID                    int                        `json:"id"`
+	Title                 string                     `json:"title"`
+	Description           string                     `json:"description"`
+	Status                string                     `json:"status"`
+	Priority              string                     `json:"priority"`
+	Type                  string                     `json:"type"`
+	TicketNumber          string                     `json:"ticketNumber"`
+	RequesterID           int                        `json:"requesterId"`
+	AssigneeID            int                        `json:"assigneeId,omitempty"`
+	TenantID              int                        `json:"tenantId"`
+	CategoryID            int                        `json:"categoryId,omitempty"`
+	DepartmentID          int                        `json:"departmentId,omitempty"`
+	ParentTicketID        int                        `json:"parentTicketId,omitempty"`
+	TemplateID            *int                       `json:"templateId,omitempty"`
+	Version               int                        `json:"version"`
+	CreatedAt             time.Time                  `json:"createdAt"`
+	UpdatedAt             time.Time                  `json:"updatedAt"`
+	Requester             *UserBasicInfo             `json:"requester,omitempty"`
+	Assignee              *UserBasicInfo             `json:"assignee,omitempty"`
+	Resolution            string                     `json:"resolution,omitempty"`
+	ResolutionCategory    string                     `json:"resolutionCategory,omitempty"`
+	ResolvedAt            *time.Time                 `json:"resolvedAt,omitempty"`
+	ClosedAt              *time.Time                 `json:"closedAt,omitempty"`
+	FirstResponseAt       *time.Time                 `json:"firstResponseAt,omitempty"`
+	SLAResponseDeadline   *time.Time                 `json:"slaResponseDeadline,omitempty"`
+	SLAResolutionDeadline *time.Time                 `json:"slaResolutionDeadline,omitempty"`
+	Rating                int                        `json:"rating,omitempty"`
+	Source                string                     `json:"source,omitempty"`
+	CustomFieldValues     []CustomFieldValueResponse `json:"customFields,omitempty"`
+}
+
+// CustomFieldValueResponse 单个自定义字段的展示值（快照 name/label，避免响应层依赖 service 包）。
+type CustomFieldValueResponse struct {
+	Name  string      `json:"name"`
+	Label string      `json:"label"`
+	Value interface{} `json:"value"`
 }
 
 // ListTicketsResponse 工单列表响应
@@ -175,7 +184,6 @@ type TicketTemplate struct {
 	Category      string                   `json:"category"`
 	Priority      string                   `json:"priority"`
 	Fields        []map[string]interface{} `json:"fields,omitempty"`
-	FormFields    map[string]interface{}   `json:"formFields"`
 	WorkflowSteps []map[string]interface{} `json:"workflowSteps,omitempty"`
 	IsActive      bool                     `json:"isActive"`
 	IsActiveAlt   *bool                    `json:"-"` // internal flag: force-update isActive (not JSON-bound)

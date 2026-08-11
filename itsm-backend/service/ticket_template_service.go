@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"itsm-backend/ent"
@@ -13,22 +15,20 @@ import (
 
 // TicketTemplateService 工单模板服务
 type TicketTemplateService struct {
-	client *ent.Client
+	client   *ent.Client
+	fieldSvc *FieldDefinitionService
 }
 
 // NewTicketTemplateService 创建工单模板服务实例
 func NewTicketTemplateService(client *ent.Client) *TicketTemplateService {
-	return &TicketTemplateService{client: client}
+	return &TicketTemplateService{client: client, fieldSvc: NewFieldDefinitionService(client)}
 }
 
 // CreateTemplate 创建工单模板
 func (s *TicketTemplateService) CreateTemplate(ctx context.Context, req *CreateTemplateRequest) (*ent.TicketTemplate, error) {
-	// 序列化表单字段
-	formFieldsBytes, err := json.Marshal(req.FormFields)
-	if err != nil {
+	if err := validateTicketTemplate(req.Name, req.Category, req.Priority, req.Fields); err != nil {
 		return nil, err
 	}
-
 	// 序列化工作流步骤
 	workflowStepsBytes, err := json.Marshal(req.WorkflowSteps)
 	if err != nil {
@@ -40,12 +40,15 @@ func (s *TicketTemplateService) CreateTemplate(ctx context.Context, req *CreateT
 		SetDescription(req.Description).
 		SetCategory(req.Category).
 		SetPriority(req.Priority).
-		SetFormFields(formFieldsBytes).
 		SetWorkflowSteps(workflowStepsBytes).
 		SetIsActive(req.IsActive).
 		SetTenantID(req.TenantID).
 		Save(ctx)
 	if err != nil {
+		return nil, err
+	}
+
+	if _, err := s.fieldSvc.ReplaceDefinitions(ctx, req.TenantID, "ticket_template", template.ID, req.Fields); err != nil {
 		return nil, err
 	}
 
@@ -116,6 +119,11 @@ func (s *TicketTemplateService) ListTemplates(ctx context.Context, req *ListTemp
 
 // UpdateTemplate 更新工单模板
 func (s *TicketTemplateService) UpdateTemplate(ctx context.Context, id int, req *UpdateTemplateRequest, tenantID int) (*ent.TicketTemplate, error) {
+	if req.Fields != nil {
+		if err := validateTemplateFields(req.Fields); err != nil {
+			return nil, err
+		}
+	}
 	update := s.client.TicketTemplate.UpdateOneID(id).
 		Where(tickettemplate.TenantIDEQ(tenantID))
 
@@ -131,13 +139,6 @@ func (s *TicketTemplateService) UpdateTemplate(ctx context.Context, id int, req 
 	if req.Priority != "" {
 		update.SetPriority(req.Priority)
 	}
-	if req.FormFields != nil {
-		formFieldsBytes, err := json.Marshal(req.FormFields)
-		if err != nil {
-			return nil, err
-		}
-		update.SetFormFields(formFieldsBytes)
-	}
 	if req.WorkflowSteps != nil {
 		workflowStepsBytes, err := json.Marshal(req.WorkflowSteps)
 		if err != nil {
@@ -151,7 +152,82 @@ func (s *TicketTemplateService) UpdateTemplate(ctx context.Context, id int, req 
 
 	update.SetUpdatedAt(time.Now())
 
-	return update.Save(ctx)
+	updated, err := update.Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Fields != nil {
+		if _, err := s.fieldSvc.ReplaceDefinitions(ctx, tenantID, "ticket_template", id, req.Fields); err != nil {
+			return nil, err
+		}
+	}
+
+	return updated, nil
+}
+
+// RenderTemplate validates required fields before a template is used to create a ticket.
+// Field definitions now live in field_definitions (no more per-template FormFields JSON
+// column), so this reads them via fieldSvc instead of decoding tmpl.FormFields. The old
+// per-field "default value" application is dropped: FieldDefinitionInput/field_definitions
+// has no default-value column, and this function has no callers anywhere in the codebase
+// yet, so there's no observed behavior depending on it.
+func (s *TicketTemplateService) RenderTemplate(ctx context.Context, id, tenantID int, values map[string]interface{}) (map[string]interface{}, error) {
+	tmpl, err := s.GetTemplate(ctx, id, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("模板不存在")
+	}
+	if !tmpl.IsActive {
+		return nil, fmt.Errorf("模板已下架")
+	}
+	defs, err := s.fieldSvc.ListDefinitions(ctx, tenantID, "ticket_template", id)
+	if err != nil {
+		return nil, fmt.Errorf("加载模板字段定义失败: %w", err)
+	}
+	result := make(map[string]interface{}, len(values))
+	for key, value := range values {
+		result[key] = value
+	}
+	for _, def := range defs {
+		if !def.Required {
+			continue
+		}
+		value, exists := result[def.Name]
+		if !exists || value == nil || strings.TrimSpace(fmt.Sprint(value)) == "" {
+			return nil, fmt.Errorf("必填字段 %s 未填写", def.Name)
+		}
+	}
+	return result, nil
+}
+
+func validateTicketTemplate(name, category, priority string, fields []FieldDefinitionInput) error {
+	if strings.TrimSpace(name) == "" {
+		return fmt.Errorf("模板名称不能为空")
+	}
+	if strings.TrimSpace(category) == "" {
+		return fmt.Errorf("模板分类不能为空")
+	}
+	if priority != "" && priority != "low" && priority != "medium" && priority != "high" && priority != "critical" {
+		return fmt.Errorf("无效的模板优先级")
+	}
+	return validateTemplateFields(fields)
+}
+
+func validateTemplateFields(fields []FieldDefinitionInput) error {
+	if len(fields) > 200 {
+		return fmt.Errorf("模板字段不能超过 200 个")
+	}
+	seen := make(map[string]struct{}, len(fields))
+	for _, field := range fields {
+		if strings.TrimSpace(field.Name) == "" {
+			return fmt.Errorf("模板字段名不能为空")
+		}
+		if _, dup := seen[field.Name]; dup {
+			return fmt.Errorf("模板字段 %s 重复", field.Name)
+		}
+		seen[field.Name] = struct{}{}
+	}
+	return nil
 }
 
 // DeleteTemplate 删除工单模板
@@ -170,9 +246,13 @@ func (s *TicketTemplateService) DeleteTemplate(ctx context.Context, id int, tena
 		return errors.New("无法删除正在使用的模板")
 	}
 
-	return s.client.TicketTemplate.DeleteOneID(id).
+	if err := s.client.TicketTemplate.DeleteOneID(id).
 		Where(tickettemplate.TenantIDEQ(tenantID)).
-		Exec(ctx)
+		Exec(ctx); err != nil {
+		return err
+	}
+
+	return s.fieldSvc.DeleteDefinitions(ctx, tenantID, "ticket_template", id)
 }
 
 // CreateTemplateRequest 创建模板请求
@@ -181,7 +261,7 @@ type CreateTemplateRequest struct {
 	Description   string                   `json:"description"`
 	Category      string                   `json:"category" binding:"required"`
 	Priority      string                   `json:"priority"`
-	FormFields    map[string]interface{}   `json:"formFields"`
+	Fields        []FieldDefinitionInput   `json:"fields"`
 	WorkflowSteps []map[string]interface{} `json:"workflowSteps"`
 	IsActive      bool                     `json:"isActive"`
 	TenantID      int                      `json:"tenantId" binding:"required"`
@@ -193,7 +273,7 @@ type UpdateTemplateRequest struct {
 	Description   string                   `json:"description"`
 	Category      string                   `json:"category"`
 	Priority      string                   `json:"priority"`
-	FormFields    map[string]interface{}   `json:"formFields"`
+	Fields        []FieldDefinitionInput   `json:"fields"`
 	WorkflowSteps []map[string]interface{} `json:"workflowSteps"`
 	IsActive      *bool                    `json:"isActive"`
 }

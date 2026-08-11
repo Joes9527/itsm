@@ -112,7 +112,7 @@ export interface Ticket extends BaseTicket {
   escalationLevel?: number;
   source?: string;
   businessValue?: string;
-  customFields?: Record<string, unknown>;
+  customFields?: Array<{ name: string; label: string; value: unknown }>;
 }
 
 // 附件接口
@@ -210,6 +210,7 @@ export interface CreateTicketRequest {
   type?: 'incident' | 'service_request' | 'change' | 'problem' | string;
   category?: string;
   categoryId?: number;
+  templateId?: number;
   formFields?: Record<string, unknown>;
   assigneeId?: number;
   workflowDefinitionKey?: string;

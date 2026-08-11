@@ -20,18 +20,14 @@ type ServiceRequest struct {
 	ID int `json:"id,omitempty"`
 	// 租户ID
 	TenantID int `json:"tenant_id,omitempty"`
+	// 关联的Ticket ID——状态/审批/工作流全部委托给它
+	TicketID int `json:"ticket_id,omitempty"`
 	// 服务目录ID
 	CatalogID int `json:"catalog_id,omitempty"`
 	// 关联CI ID
 	CiID int `json:"ci_id,omitempty"`
 	// 申请人ID
 	RequesterID int `json:"requester_id,omitempty"`
-	// 状态: submitted|approved|rejected|in_progress|completed|cancelled
-	Status string `json:"status,omitempty"`
-	// 请求标题
-	Title string `json:"title,omitempty"`
-	// 申请原因
-	Reason string `json:"reason,omitempty"`
 	// 表单数据
 	FormData map[string]interface{} `json:"form_data,omitempty"`
 	// 成本中心
@@ -46,18 +42,6 @@ type ServiceRequest struct {
 	ExpireAt time.Time `json:"expire_at,omitempty"`
 	// 合规条款确认
 	ComplianceAck bool `json:"compliance_ack,omitempty"`
-	// 当前审批级别
-	CurrentLevel int `json:"current_level,omitempty"`
-	// 总审批级别数
-	TotalLevels int `json:"total_levels,omitempty"`
-	// 当前审批人
-	CurrentApprover string `json:"current_approver,omitempty"`
-	// 审批完成时间
-	ApprovedAt time.Time `json:"approved_at,omitempty"`
-	// 审批意见
-	ApproverComment string `json:"approver_comment,omitempty"`
-	// 审批历史
-	ApprovalHistory []map[string]interface{} `json:"approval_history,omitempty"`
 	// 处理人ID
 	ProcessorID int `json:"processor_id,omitempty"`
 	// 开始处理时间
@@ -84,15 +68,15 @@ func (*ServiceRequest) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case servicerequest.FieldFormData, servicerequest.FieldSourceIPWhitelist, servicerequest.FieldApprovalHistory:
+		case servicerequest.FieldFormData, servicerequest.FieldSourceIPWhitelist:
 			values[i] = new([]byte)
 		case servicerequest.FieldNeedsPublicIP, servicerequest.FieldComplianceAck:
 			values[i] = new(sql.NullBool)
-		case servicerequest.FieldID, servicerequest.FieldTenantID, servicerequest.FieldCatalogID, servicerequest.FieldCiID, servicerequest.FieldRequesterID, servicerequest.FieldCurrentLevel, servicerequest.FieldTotalLevels, servicerequest.FieldProcessorID, servicerequest.FieldVersion:
+		case servicerequest.FieldID, servicerequest.FieldTenantID, servicerequest.FieldTicketID, servicerequest.FieldCatalogID, servicerequest.FieldCiID, servicerequest.FieldRequesterID, servicerequest.FieldProcessorID, servicerequest.FieldVersion:
 			values[i] = new(sql.NullInt64)
-		case servicerequest.FieldStatus, servicerequest.FieldTitle, servicerequest.FieldReason, servicerequest.FieldCostCenter, servicerequest.FieldDataClassification, servicerequest.FieldCurrentApprover, servicerequest.FieldApproverComment, servicerequest.FieldCompletionNote, servicerequest.FieldLastError:
+		case servicerequest.FieldCostCenter, servicerequest.FieldDataClassification, servicerequest.FieldCompletionNote, servicerequest.FieldLastError:
 			values[i] = new(sql.NullString)
-		case servicerequest.FieldExpireAt, servicerequest.FieldApprovedAt, servicerequest.FieldStartedAt, servicerequest.FieldCompletedAt, servicerequest.FieldCreatedAt, servicerequest.FieldUpdatedAt, servicerequest.FieldDeletedAt:
+		case servicerequest.FieldExpireAt, servicerequest.FieldStartedAt, servicerequest.FieldCompletedAt, servicerequest.FieldCreatedAt, servicerequest.FieldUpdatedAt, servicerequest.FieldDeletedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -121,6 +105,12 @@ func (_m *ServiceRequest) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.TenantID = int(value.Int64)
 			}
+		case servicerequest.FieldTicketID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field ticket_id", values[i])
+			} else if value.Valid {
+				_m.TicketID = int(value.Int64)
+			}
 		case servicerequest.FieldCatalogID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field catalog_id", values[i])
@@ -138,24 +128,6 @@ func (_m *ServiceRequest) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field requester_id", values[i])
 			} else if value.Valid {
 				_m.RequesterID = int(value.Int64)
-			}
-		case servicerequest.FieldStatus:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field status", values[i])
-			} else if value.Valid {
-				_m.Status = value.String
-			}
-		case servicerequest.FieldTitle:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field title", values[i])
-			} else if value.Valid {
-				_m.Title = value.String
-			}
-		case servicerequest.FieldReason:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field reason", values[i])
-			} else if value.Valid {
-				_m.Reason = value.String
 			}
 		case servicerequest.FieldFormData:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -202,44 +174,6 @@ func (_m *ServiceRequest) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field compliance_ack", values[i])
 			} else if value.Valid {
 				_m.ComplianceAck = value.Bool
-			}
-		case servicerequest.FieldCurrentLevel:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field current_level", values[i])
-			} else if value.Valid {
-				_m.CurrentLevel = int(value.Int64)
-			}
-		case servicerequest.FieldTotalLevels:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field total_levels", values[i])
-			} else if value.Valid {
-				_m.TotalLevels = int(value.Int64)
-			}
-		case servicerequest.FieldCurrentApprover:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field current_approver", values[i])
-			} else if value.Valid {
-				_m.CurrentApprover = value.String
-			}
-		case servicerequest.FieldApprovedAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field approved_at", values[i])
-			} else if value.Valid {
-				_m.ApprovedAt = value.Time
-			}
-		case servicerequest.FieldApproverComment:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field approver_comment", values[i])
-			} else if value.Valid {
-				_m.ApproverComment = value.String
-			}
-		case servicerequest.FieldApprovalHistory:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field approval_history", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &_m.ApprovalHistory); err != nil {
-					return fmt.Errorf("unmarshal field approval_history: %w", err)
-				}
 			}
 		case servicerequest.FieldProcessorID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -335,6 +269,9 @@ func (_m *ServiceRequest) String() string {
 	builder.WriteString("tenant_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.TenantID))
 	builder.WriteString(", ")
+	builder.WriteString("ticket_id=")
+	builder.WriteString(fmt.Sprintf("%v", _m.TicketID))
+	builder.WriteString(", ")
 	builder.WriteString("catalog_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.CatalogID))
 	builder.WriteString(", ")
@@ -343,15 +280,6 @@ func (_m *ServiceRequest) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("requester_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.RequesterID))
-	builder.WriteString(", ")
-	builder.WriteString("status=")
-	builder.WriteString(_m.Status)
-	builder.WriteString(", ")
-	builder.WriteString("title=")
-	builder.WriteString(_m.Title)
-	builder.WriteString(", ")
-	builder.WriteString("reason=")
-	builder.WriteString(_m.Reason)
 	builder.WriteString(", ")
 	builder.WriteString("form_data=")
 	builder.WriteString(fmt.Sprintf("%v", _m.FormData))
@@ -373,24 +301,6 @@ func (_m *ServiceRequest) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("compliance_ack=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ComplianceAck))
-	builder.WriteString(", ")
-	builder.WriteString("current_level=")
-	builder.WriteString(fmt.Sprintf("%v", _m.CurrentLevel))
-	builder.WriteString(", ")
-	builder.WriteString("total_levels=")
-	builder.WriteString(fmt.Sprintf("%v", _m.TotalLevels))
-	builder.WriteString(", ")
-	builder.WriteString("current_approver=")
-	builder.WriteString(_m.CurrentApprover)
-	builder.WriteString(", ")
-	builder.WriteString("approved_at=")
-	builder.WriteString(_m.ApprovedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("approver_comment=")
-	builder.WriteString(_m.ApproverComment)
-	builder.WriteString(", ")
-	builder.WriteString("approval_history=")
-	builder.WriteString(fmt.Sprintf("%v", _m.ApprovalHistory))
 	builder.WriteString(", ")
 	builder.WriteString("processor_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ProcessorID))

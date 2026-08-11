@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
-	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 const (
@@ -44,8 +43,6 @@ const (
 	FieldCiTypeID = "ci_type_id"
 	// FieldCloudServiceID holds the string denoting the cloud_service_id field in the database.
 	FieldCloudServiceID = "cloud_service_id"
-	// FieldFormSchema holds the string denoting the form_schema field in the database.
-	FieldFormSchema = "form_schema"
 	// FieldAvailableRegions holds the string denoting the available_regions field in the database.
 	FieldAvailableRegions = "available_regions"
 	// FieldAvailableSpecs holds the string denoting the available_specs field in the database.
@@ -62,17 +59,8 @@ const (
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
 	FieldUpdatedAt = "updated_at"
-	// EdgeItems holds the string denoting the items edge name in mutations.
-	EdgeItems = "items"
 	// Table holds the table name of the servicecatalog in the database.
 	Table = "service_catalogs"
-	// ItemsTable is the table that holds the items relation/edge.
-	ItemsTable = "service_catalog_items"
-	// ItemsInverseTable is the table name for the ServiceCatalogItem entity.
-	// It exists in this package in order to avoid circular dependency with the "servicecatalogitem" package.
-	ItemsInverseTable = "service_catalog_items"
-	// ItemsColumn is the table column denoting the items relation/edge.
-	ItemsColumn = "catalog_id"
 )
 
 // Columns holds all SQL columns for servicecatalog fields.
@@ -93,7 +81,6 @@ var Columns = []string{
 	FieldSLAResolutionTime,
 	FieldCiTypeID,
 	FieldCloudServiceID,
-	FieldFormSchema,
 	FieldAvailableRegions,
 	FieldAvailableSpecs,
 	FieldStatus,
@@ -245,25 +232,4 @@ func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByUpdatedAt orders the results by the updated_at field.
 func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUpdatedAt, opts...).ToFunc()
-}
-
-// ByItemsCount orders the results by items count.
-func ByItemsCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newItemsStep(), opts...)
-	}
-}
-
-// ByItems orders the results by items terms.
-func ByItems(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newItemsStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-func newItemsStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(ItemsInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, ItemsTable, ItemsColumn),
-	)
 }

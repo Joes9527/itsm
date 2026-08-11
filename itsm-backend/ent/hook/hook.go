@@ -416,6 +416,30 @@ func (f FeishuTicketSyncFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.V
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.FeishuTicketSyncMutation", m)
 }
 
+// The FieldDefinitionFunc type is an adapter to allow the use of ordinary
+// function as FieldDefinition mutator.
+type FieldDefinitionFunc func(context.Context, *ent.FieldDefinitionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f FieldDefinitionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.FieldDefinitionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.FieldDefinitionMutation", m)
+}
+
+// The FieldValueFunc type is an adapter to allow the use of ordinary
+// function as FieldValue mutator.
+type FieldValueFunc func(context.Context, *ent.FieldValueMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f FieldValueFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.FieldValueMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.FieldValueMutation", m)
+}
+
 // The GroupFunc type is an adapter to allow the use of ordinary
 // function as Group mutator.
 type GroupFunc func(context.Context, *ent.GroupMutation) (ent.Value, error)
@@ -1028,18 +1052,6 @@ func (f ServiceCatalogFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Val
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ServiceCatalogMutation", m)
 }
 
-// The ServiceCatalogItemFunc type is an adapter to allow the use of ordinary
-// function as ServiceCatalogItem mutator.
-type ServiceCatalogItemFunc func(context.Context, *ent.ServiceCatalogItemMutation) (ent.Value, error)
-
-// Mutate calls f(ctx, m).
-func (f ServiceCatalogItemFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.ServiceCatalogItemMutation); ok {
-		return f(ctx, mv)
-	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ServiceCatalogItemMutation", m)
-}
-
 // The ServiceRequestFunc type is an adapter to allow the use of ordinary
 // function as ServiceRequest mutator.
 type ServiceRequestFunc func(context.Context, *ent.ServiceRequestMutation) (ent.Value, error)
@@ -1050,18 +1062,6 @@ func (f ServiceRequestFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Val
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ServiceRequestMutation", m)
-}
-
-// The ServiceRequestApprovalFunc type is an adapter to allow the use of ordinary
-// function as ServiceRequestApproval mutator.
-type ServiceRequestApprovalFunc func(context.Context, *ent.ServiceRequestApprovalMutation) (ent.Value, error)
-
-// Mutate calls f(ctx, m).
-func (f ServiceRequestApprovalFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.ServiceRequestApprovalMutation); ok {
-		return f(ctx, mv)
-	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ServiceRequestApprovalMutation", m)
 }
 
 // The StandardChangeFunc type is an adapter to allow the use of ordinary

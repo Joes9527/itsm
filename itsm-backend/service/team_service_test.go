@@ -96,13 +96,45 @@ func TestTeamService_AddMember_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	// 添加成员
-	err = service.AddMember(ctx, teamEntity.ID, testUser.ID)
+	err = service.AddMember(ctx, teamEntity.ID, testUser.ID, testTenant.ID)
 	require.NoError(t, err)
 
 	// 验证成员已添加
 	updated, err := client.Team.Query().WithUsers().Where(team.IDEQ(teamEntity.ID)).First(ctx)
 	require.NoError(t, err)
 	assert.Len(t, updated.Edges.Users, 1)
+}
+
+func TestTeamService_AddMember_RejectsCrossTenantUser(t *testing.T) {
+	client, service, ctx := setupTeamTest(t)
+	defer client.Close()
+
+	tenantOne, err := createTeamTestTenant(ctx, client, "membertenant1")
+	require.NoError(t, err)
+	tenantTwo, err := createTeamTestTenant(ctx, client, "membertenant2")
+	require.NoError(t, err)
+	foreignUser, err := createTeamTestUser(ctx, client, tenantTwo.ID, "foreignmember")
+	require.NoError(t, err)
+	teamEntity, err := service.CreateTeam(ctx, "租户一团队", "TENANT1-TEAM", "", 0, tenantOne.ID)
+	require.NoError(t, err)
+
+	err = service.AddMember(ctx, teamEntity.ID, foreignUser.ID, tenantOne.ID)
+	require.ErrorContains(t, err, "不属于当前租户")
+}
+
+func TestTeamService_CreateTeam_RejectsCrossTenantManager(t *testing.T) {
+	client, service, ctx := setupTeamTest(t)
+	defer client.Close()
+
+	tenantOne, err := createTeamTestTenant(ctx, client, "managerTenant1")
+	require.NoError(t, err)
+	tenantTwo, err := createTeamTestTenant(ctx, client, "managerTenant2")
+	require.NoError(t, err)
+	foreignManager, err := createTeamTestUser(ctx, client, tenantTwo.ID, "foreignmanager")
+	require.NoError(t, err)
+
+	_, err = service.CreateTeam(ctx, "租户一团队", "TENANT1-MANAGER", "", foreignManager.ID, tenantOne.ID)
+	require.ErrorContains(t, err, "不属于当前租户")
 }
 
 // ==================== 列出团队测试 ====================
@@ -222,10 +254,13 @@ func TestTeamService_DeleteTeam_Success(t *testing.T) {
 	err = service.DeleteTeam(ctx, team.ID, testTenant.ID)
 	require.NoError(t, err)
 
-	// 验证已删除
-	_, err = client.Team.Get(ctx, team.ID)
-	require.Error(t, err)
-	assert.True(t, ent.IsNotFound(err))
+	// 物理记录保留，但业务列表不可见。
+	stored, err := client.Team.Get(ctx, team.ID)
+	require.NoError(t, err)
+	assert.NotNil(t, stored.DeletedAt)
+	teams, err := service.ListTeams(ctx, testTenant.ID)
+	require.NoError(t, err)
+	assert.Empty(t, teams)
 }
 
 func TestTeamService_DeleteTeam_NotFound(t *testing.T) {

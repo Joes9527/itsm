@@ -88,6 +88,7 @@ func (ks *KnowledgeService) GetArticle(ctx context.Context, id, tenantID int) (*
 		Where(
 			knowledgearticle.ID(id),
 			knowledgearticle.TenantID(tenantID),
+			knowledgearticle.DeletedAtIsNil(),
 		).
 		Only(ctx)
 	if err != nil {
@@ -102,18 +103,27 @@ func (ks *KnowledgeService) GetArticle(ctx context.Context, id, tenantID int) (*
 
 // ListArticles 获取知识库文章列表
 func (ks *KnowledgeService) ListArticles(ctx context.Context, req *dto.ListKnowledgeArticlesRequest, tenantID int) ([]*ent.KnowledgeArticle, int, error) {
+	if req.Page <= 0 {
+		req.Page = 1
+	}
+	if req.PageSize <= 0 {
+		req.PageSize = 20
+	} else if req.PageSize > 100 {
+		req.PageSize = 100
+	}
 	query := ks.client.KnowledgeArticle.Query().
-		Where(knowledgearticle.TenantID(tenantID))
+		Where(knowledgearticle.TenantID(tenantID), knowledgearticle.DeletedAtIsNil())
 
 	// 添加过滤条件
 	if req.Category != "" {
 		query = query.Where(knowledgearticle.Category(req.Category))
 	}
-	if req.Search != "" {
+	if search := strings.TrimSpace(req.Search); search != "" {
 		query = query.Where(
 			knowledgearticle.Or(
-				knowledgearticle.TitleContains(req.Search),
-				knowledgearticle.ContentContains(req.Search),
+				knowledgearticle.TitleContainsFold(search),
+				knowledgearticle.ContentContainsFold(search),
+				knowledgearticle.TagsContainsFold(search),
 			),
 		)
 	}
@@ -147,8 +157,12 @@ func (ks *KnowledgeService) ListArticles(ctx context.Context, req *dto.ListKnowl
 
 // UpdateArticle 更新知识库文章
 func (ks *KnowledgeService) UpdateArticle(ctx context.Context, id int, req *dto.UpdateKnowledgeArticleRequest, tenantID int) (*ent.KnowledgeArticle, error) {
+	existing, err := ks.GetArticle(ctx, id, tenantID)
+	if err != nil {
+		return nil, err
+	}
 	update := ks.client.KnowledgeArticle.UpdateOneID(id).
-		Where(knowledgearticle.TenantID(tenantID))
+		Where(knowledgearticle.TenantID(tenantID), knowledgearticle.DeletedAtIsNil())
 
 	if req.Title != nil {
 		cleaned := common.SanitizeText(*req.Title)
@@ -166,10 +180,17 @@ func (ks *KnowledgeService) UpdateArticle(ctx context.Context, id int, req *dto.
 		update = update.SetCategory(category)
 	}
 	if req.Tags != nil {
-		if len(req.Tags) > 0 {
-			// 将Tags数组转换为字符串
-			tagsStr := strings.Join(req.Tags, ",")
-			update = update.SetTags(tagsStr)
+		// 空数组表示清空标签，而不是忽略更新。
+		update = update.SetTags(strings.Join(req.Tags, ","))
+	}
+	if req.Status != nil {
+		switch strings.ToLower(strings.TrimSpace(*req.Status)) {
+		case "published":
+			update = update.SetIsPublished(true)
+		case "draft":
+			update = update.SetIsPublished(false)
+		default:
+			return nil, fmt.Errorf("文章状态仅支持 draft 或 published")
 		}
 	}
 
@@ -180,6 +201,10 @@ func (ks *KnowledgeService) UpdateArticle(ctx context.Context, id int, req *dto.
 		}
 		ks.logger.Errorw("Failed to update knowledge article", "error", err, "id", id, "tenant_id", tenantID)
 		return nil, fmt.Errorf("更新文章失败: %w", err)
+	}
+	if _, versionErr := ks.CreateVersion(ctx, existing, "文章更新前快照"); versionErr != nil {
+		ks.logger.Errorw("Failed to create article version", "error", versionErr, "id", id, "tenant_id", tenantID)
+		return nil, fmt.Errorf("文章已更新，但版本历史保存失败，请联系管理员: %w", versionErr)
 	}
 
 	ks.logger.Infow("Knowledge article updated successfully", "id", id, "tenant_id", tenantID)
@@ -196,22 +221,28 @@ func validateKnowledgeCategory(category string) error {
 	return nil
 }
 
-// DeleteArticle 删除知识库文章（级联删除关联数据）
+// DeleteArticle 软删除知识库文章，版本、点赞等关联数据必须保留。
 func (ks *KnowledgeService) DeleteArticle(ctx context.Context, id, tenantID int) error {
 	ks.logger.Infow("Deleting knowledge article", "id", id, "tenant_id", tenantID)
 
-	// 先删除关联的 user_likes
-	_, err := ks.client.KnowledgeArticleLike.Delete().
-		Where(knowledgearticlelike.ArticleIDEQ(id)).
-		Exec(ctx)
-	if err != nil && !ent.IsNotFound(err) {
-		ks.logger.Errorw("Failed to delete article likes", "error", err, "id", id)
-		return fmt.Errorf("删除文章点赞记录失败: %w", err)
+	// 必须先确认租户归属，避免在删除主体失败前破坏其他租户的关联数据。
+	if _, err := ks.GetArticle(ctx, id, tenantID); err != nil {
+		return err
+	}
+	activeSessions, err := ks.client.KnowledgeArticleSession.Query().
+		Where(knowledgearticlesession.ArticleID(id), knowledgearticlesession.StatusIn("active", "idle")).
+		Count(ctx)
+	if err != nil {
+		return fmt.Errorf("检查文章协作状态失败: %w", err)
+	}
+	if activeSessions > 0 {
+		return fmt.Errorf("文章仍有协作者在线，请等待协作会话结束后再删除")
 	}
 
-	err = ks.client.KnowledgeArticle.DeleteOneID(id).
-		Where(knowledgearticle.TenantID(tenantID)).
-		Exec(ctx)
+	_, err = ks.client.KnowledgeArticle.UpdateOneID(id).
+		Where(knowledgearticle.TenantID(tenantID), knowledgearticle.DeletedAtIsNil()).
+		SetDeletedAt(time.Now()).
+		Save(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			ks.logger.Warnw("Knowledge article not found", "id", id, "tenant_id", tenantID)
@@ -228,7 +259,7 @@ func (ks *KnowledgeService) DeleteArticle(ctx context.Context, id, tenantID int)
 // GetCategories 获取知识库分类列表
 func (ks *KnowledgeService) GetCategories(ctx context.Context, tenantID int) ([]string, error) {
 	categories, err := ks.client.KnowledgeArticle.Query().
-		Where(knowledgearticle.TenantID(tenantID)).
+		Where(knowledgearticle.TenantID(tenantID), knowledgearticle.DeletedAtIsNil()).
 		GroupBy(knowledgearticle.FieldCategory).
 		Strings(ctx)
 	if err != nil {
@@ -245,6 +276,7 @@ func (ks *KnowledgeService) LikeArticle(ctx context.Context, id, userID, tenantI
 		Where(
 			knowledgearticle.ID(id),
 			knowledgearticle.TenantID(tenantID),
+			knowledgearticle.DeletedAtIsNil(),
 		).
 		Exist(ctx)
 	if err != nil {
@@ -330,6 +362,7 @@ func (ks *KnowledgeService) GetLikeCount(ctx context.Context, articleID, tenantI
 		Where(
 			knowledgearticle.ID(articleID),
 			knowledgearticle.TenantID(tenantID),
+			knowledgearticle.DeletedAtIsNil(),
 		).
 		Only(ctx)
 	if err != nil {
@@ -378,6 +411,7 @@ func (ks *KnowledgeService) ListVersions(ctx context.Context, articleID, tenantI
 		Where(
 			knowledgearticle.ID(articleID),
 			knowledgearticle.TenantID(tenantID),
+			knowledgearticle.DeletedAtIsNil(),
 		).
 		Exist(ctx)
 	if err != nil {
@@ -417,6 +451,7 @@ func (ks *KnowledgeService) GetVersion(ctx context.Context, articleID, version, 
 		Where(
 			knowledgearticle.ID(articleID),
 			knowledgearticle.TenantID(tenantID),
+			knowledgearticle.DeletedAtIsNil(),
 		).
 		Exist(ctx)
 	if err != nil {
@@ -455,6 +490,7 @@ func (ks *KnowledgeService) RestoreVersion(ctx context.Context, articleID, versi
 		Where(
 			knowledgearticle.ID(articleID),
 			knowledgearticle.TenantID(tenantID),
+			knowledgearticle.DeletedAtIsNil(),
 		).
 		Only(ctx)
 	if err != nil {
@@ -491,6 +527,7 @@ func (ks *KnowledgeService) CreateSession(ctx context.Context, articleID, userID
 		Where(
 			knowledgearticle.ID(articleID),
 			knowledgearticle.TenantID(tenantID),
+			knowledgearticle.DeletedAtIsNil(),
 		).
 		Exist(ctx)
 	if err != nil {
@@ -568,6 +605,7 @@ func (ks *KnowledgeService) GetSession(ctx context.Context, articleID, userID, t
 		Where(
 			knowledgearticle.ID(articleID),
 			knowledgearticle.TenantID(tenantID),
+			knowledgearticle.DeletedAtIsNil(),
 		).
 		Exist(ctx)
 	if err != nil || !exist {
@@ -598,6 +636,7 @@ func (ks *KnowledgeService) ListParticipants(ctx context.Context, articleID, ten
 		Where(
 			knowledgearticle.ID(articleID),
 			knowledgearticle.TenantID(tenantID),
+			knowledgearticle.DeletedAtIsNil(),
 		).
 		Exist(ctx)
 	if err != nil || !exist {
