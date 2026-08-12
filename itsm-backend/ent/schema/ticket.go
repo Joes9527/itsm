@@ -46,6 +46,9 @@ func (Ticket) Fields() []ent.Field {
 		field.String("creator_email").
 			Comment("创建人邮箱（邮件开单时记录，非注册用户也可创建）").
 			Optional(),
+		field.String("external_message_id").
+			Comment("外部消息ID（如邮件 internetMessageId），用于同一来源消息的建单去重判断").
+			Optional(),
 		field.Int("assignee_id").
 			Comment("处理人ID").
 			Optional(),
@@ -179,6 +182,7 @@ func (Ticket) Indexes() []ent.Index {
 		index.Fields("tenant_id"),
 		index.Fields("tenant_id", "status"),
 		index.Fields("tenant_id", "requester_id"),
+		index.Fields("tenant_id", "external_message_id"),
 		index.Fields("status", "priority"),
 		index.Fields("requester_id", "status"),
 	}

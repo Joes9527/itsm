@@ -100,6 +100,11 @@ func CreatorEmail(v string) predicate.Ticket {
 	return predicate.Ticket(sql.FieldEQ(FieldCreatorEmail, v))
 }
 
+// ExternalMessageID applies equality check predicate on the "external_message_id" field. It's identical to ExternalMessageIDEQ.
+func ExternalMessageID(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldExternalMessageID, v))
+}
+
 // AssigneeID applies equality check predicate on the "assignee_id" field. It's identical to AssigneeIDEQ.
 func AssigneeID(v int) predicate.Ticket {
 	return predicate.Ticket(sql.FieldEQ(FieldAssigneeID, v))
@@ -798,6 +803,81 @@ func CreatorEmailEqualFold(v string) predicate.Ticket {
 // CreatorEmailContainsFold applies the ContainsFold predicate on the "creator_email" field.
 func CreatorEmailContainsFold(v string) predicate.Ticket {
 	return predicate.Ticket(sql.FieldContainsFold(FieldCreatorEmail, v))
+}
+
+// ExternalMessageIDEQ applies the EQ predicate on the "external_message_id" field.
+func ExternalMessageIDEQ(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldExternalMessageID, v))
+}
+
+// ExternalMessageIDNEQ applies the NEQ predicate on the "external_message_id" field.
+func ExternalMessageIDNEQ(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNEQ(FieldExternalMessageID, v))
+}
+
+// ExternalMessageIDIn applies the In predicate on the "external_message_id" field.
+func ExternalMessageIDIn(vs ...string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldIn(FieldExternalMessageID, vs...))
+}
+
+// ExternalMessageIDNotIn applies the NotIn predicate on the "external_message_id" field.
+func ExternalMessageIDNotIn(vs ...string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotIn(FieldExternalMessageID, vs...))
+}
+
+// ExternalMessageIDGT applies the GT predicate on the "external_message_id" field.
+func ExternalMessageIDGT(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGT(FieldExternalMessageID, v))
+}
+
+// ExternalMessageIDGTE applies the GTE predicate on the "external_message_id" field.
+func ExternalMessageIDGTE(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGTE(FieldExternalMessageID, v))
+}
+
+// ExternalMessageIDLT applies the LT predicate on the "external_message_id" field.
+func ExternalMessageIDLT(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLT(FieldExternalMessageID, v))
+}
+
+// ExternalMessageIDLTE applies the LTE predicate on the "external_message_id" field.
+func ExternalMessageIDLTE(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLTE(FieldExternalMessageID, v))
+}
+
+// ExternalMessageIDContains applies the Contains predicate on the "external_message_id" field.
+func ExternalMessageIDContains(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldContains(FieldExternalMessageID, v))
+}
+
+// ExternalMessageIDHasPrefix applies the HasPrefix predicate on the "external_message_id" field.
+func ExternalMessageIDHasPrefix(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldHasPrefix(FieldExternalMessageID, v))
+}
+
+// ExternalMessageIDHasSuffix applies the HasSuffix predicate on the "external_message_id" field.
+func ExternalMessageIDHasSuffix(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldHasSuffix(FieldExternalMessageID, v))
+}
+
+// ExternalMessageIDIsNil applies the IsNil predicate on the "external_message_id" field.
+func ExternalMessageIDIsNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldIsNull(FieldExternalMessageID))
+}
+
+// ExternalMessageIDNotNil applies the NotNil predicate on the "external_message_id" field.
+func ExternalMessageIDNotNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotNull(FieldExternalMessageID))
+}
+
+// ExternalMessageIDEqualFold applies the EqualFold predicate on the "external_message_id" field.
+func ExternalMessageIDEqualFold(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEqualFold(FieldExternalMessageID, v))
+}
+
+// ExternalMessageIDContainsFold applies the ContainsFold predicate on the "external_message_id" field.
+func ExternalMessageIDContainsFold(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldContainsFold(FieldExternalMessageID, v))
 }
 
 // AssigneeIDEQ applies the EQ predicate on the "assignee_id" field.

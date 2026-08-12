@@ -186,6 +186,26 @@ func (_u *TicketUpdate) ClearCreatorEmail() *TicketUpdate {
 	return _u
 }
 
+// SetExternalMessageID sets the "external_message_id" field.
+func (_u *TicketUpdate) SetExternalMessageID(v string) *TicketUpdate {
+	_u.mutation.SetExternalMessageID(v)
+	return _u
+}
+
+// SetNillableExternalMessageID sets the "external_message_id" field if the given value is not nil.
+func (_u *TicketUpdate) SetNillableExternalMessageID(v *string) *TicketUpdate {
+	if v != nil {
+		_u.SetExternalMessageID(*v)
+	}
+	return _u
+}
+
+// ClearExternalMessageID clears the value of the "external_message_id" field.
+func (_u *TicketUpdate) ClearExternalMessageID() *TicketUpdate {
+	_u.mutation.ClearExternalMessageID()
+	return _u
+}
+
 // SetAssigneeID sets the "assignee_id" field.
 func (_u *TicketUpdate) SetAssigneeID(v int) *TicketUpdate {
 	_u.mutation.SetAssigneeID(v)
@@ -1407,6 +1427,12 @@ func (_u *TicketUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.CreatorEmailCleared() {
 		_spec.ClearField(ticket.FieldCreatorEmail, field.TypeString)
 	}
+	if value, ok := _u.mutation.ExternalMessageID(); ok {
+		_spec.SetField(ticket.FieldExternalMessageID, field.TypeString, value)
+	}
+	if _u.mutation.ExternalMessageIDCleared() {
+		_spec.ClearField(ticket.FieldExternalMessageID, field.TypeString)
+	}
 	if value, ok := _u.mutation.TenantID(); ok {
 		_spec.SetField(ticket.FieldTenantID, field.TypeInt, value)
 	}
@@ -2430,6 +2456,26 @@ func (_u *TicketUpdateOne) SetNillableCreatorEmail(v *string) *TicketUpdateOne {
 // ClearCreatorEmail clears the value of the "creator_email" field.
 func (_u *TicketUpdateOne) ClearCreatorEmail() *TicketUpdateOne {
 	_u.mutation.ClearCreatorEmail()
+	return _u
+}
+
+// SetExternalMessageID sets the "external_message_id" field.
+func (_u *TicketUpdateOne) SetExternalMessageID(v string) *TicketUpdateOne {
+	_u.mutation.SetExternalMessageID(v)
+	return _u
+}
+
+// SetNillableExternalMessageID sets the "external_message_id" field if the given value is not nil.
+func (_u *TicketUpdateOne) SetNillableExternalMessageID(v *string) *TicketUpdateOne {
+	if v != nil {
+		_u.SetExternalMessageID(*v)
+	}
+	return _u
+}
+
+// ClearExternalMessageID clears the value of the "external_message_id" field.
+func (_u *TicketUpdateOne) ClearExternalMessageID() *TicketUpdateOne {
+	_u.mutation.ClearExternalMessageID()
 	return _u
 }
 
@@ -3683,6 +3729,12 @@ func (_u *TicketUpdateOne) sqlSave(ctx context.Context) (_node *Ticket, err erro
 	}
 	if _u.mutation.CreatorEmailCleared() {
 		_spec.ClearField(ticket.FieldCreatorEmail, field.TypeString)
+	}
+	if value, ok := _u.mutation.ExternalMessageID(); ok {
+		_spec.SetField(ticket.FieldExternalMessageID, field.TypeString, value)
+	}
+	if _u.mutation.ExternalMessageIDCleared() {
+		_spec.ClearField(ticket.FieldExternalMessageID, field.TypeString)
 	}
 	if value, ok := _u.mutation.TenantID(); ok {
 		_spec.SetField(ticket.FieldTenantID, field.TypeInt, value)

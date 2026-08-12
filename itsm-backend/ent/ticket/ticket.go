@@ -32,6 +32,8 @@ const (
 	FieldRequesterID = "requester_id"
 	// FieldCreatorEmail holds the string denoting the creator_email field in the database.
 	FieldCreatorEmail = "creator_email"
+	// FieldExternalMessageID holds the string denoting the external_message_id field in the database.
+	FieldExternalMessageID = "external_message_id"
 	// FieldAssigneeID holds the string denoting the assignee_id field in the database.
 	FieldAssigneeID = "assignee_id"
 	// FieldTenantID holds the string denoting the tenant_id field in the database.
@@ -239,6 +241,7 @@ var Columns = []string{
 	FieldTicketNumber,
 	FieldRequesterID,
 	FieldCreatorEmail,
+	FieldExternalMessageID,
 	FieldAssigneeID,
 	FieldTenantID,
 	FieldTemplateID,
@@ -388,6 +391,11 @@ func ByRequesterID(opts ...sql.OrderTermOption) OrderOption {
 // ByCreatorEmail orders the results by the creator_email field.
 func ByCreatorEmail(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCreatorEmail, opts...).ToFunc()
+}
+
+// ByExternalMessageID orders the results by the external_message_id field.
+func ByExternalMessageID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldExternalMessageID, opts...).ToFunc()
 }
 
 // ByAssigneeID orders the results by the assignee_id field.
