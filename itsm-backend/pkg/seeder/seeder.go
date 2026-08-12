@@ -65,6 +65,7 @@ type SeedConfig struct {
 	Teams             []TeamSeed             `json:"teams"`
 	Roles             []RoleSeed             `json:"roles"`
 	SLADefinitions    []SLADefinitionSeed    `json:"sla_definitions"`
+	SLAPolicies       []SLAPolicySeed        `json:"sla_policies"`
 	ServiceCatalog    []ServiceCatalogSeed   `json:"service_catalog"`
 	ApprovalWorkflows []ApprovalWorkflowSeed `json:"approval_workflows"`
 	ProcessBindings   []ProcessBindingSeed   `json:"process_bindings"`
@@ -276,6 +277,23 @@ type FieldDefinitionSeed struct {
 	SortOrder int                      `json:"sort_order"`
 }
 // SLAPolicySeed SLA策略种子数据结构
+type SLAPolicySeed struct {
+	Name                  string `json:"name"`
+	Description           string `json:"description"`
+	Priority              string `json:"priority"`
+	ResponseTimeMinutes   int    `json:"response_time_minutes"`
+	ResolutionTimeMinutes int    `json:"resolution_time_minutes"`
+	ExcludeWeekends       bool   `json:"exclude_weekends"`
+	ExcludeHolidays       bool   `json:"exclude_holidays"`
+	IsActive              bool   `json:"is_active"`
+	PriorityScore         int    `json:"priority_score"`
+}
+
+// Seeder manages database seeding operations
+type Seeder struct {
+	client                  *ent.Client
+	sugar                   *zap.SugaredLogger
+	config                  *SeedConfig
 	appConfig               *config.Config
 	bpmnTemplateService     *service.BPMNTemplateService
 	expectedPermissions     []string
@@ -983,6 +1001,166 @@ func (s *Seeder) seedSLADefinitions(ctx context.Context) {
 	}
 	s.sugar.Infow("SLA definitions seeded", "count", len(s.config.SLADefinitions))
 	_ = slaIDMap
+}
+
+func (s *Seeder) seedSLAAlertRules(ctx context.Context) {
+	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
+	if err != nil {
+		s.sugar.Warnw("default tenant not found; skip SLA alert rules seed", "error", err)
+		return
+	}
+
+	existing, err := s.client.SLAAlertRule.Query().Where(slaalertrule.TenantIDEQ(t.ID)).Count(ctx)
+	if err != nil {
+		s.sugar.Warnw("check existing SLA alert rules failed", "error", err)
+		return
+	}
+	if existing > 0 {
+		s.sugar.Infow("SLA alert rules already seeded")
+		return
+	}
+
+	// 简化版告警规则
+	alertRules := []struct {
+		Name              string
+		SLAKey            string
+		AlertLevel        string
+		Threshold         int
+		NotificationChans []string
+	}{
+		{"SLA-P0-响应告警", "SLA-P0-紧急", "warning", 50, []string{"email"}},
+		{"SLA-P0-解决告警", "SLA-P0-紧急", "critical", 80, []string{"email", "sms"}},
+		{"SLA-P1-响应告警", "SLA-P1-高", "warning", 50, []string{"email"}},
+		{"SLA-P1-解决告警", "SLA-P1-高", "warning", 80, []string{"email"}},
+		{"SLA-P2-响应告警", "SLA-P2-中", "info", 50, []string{"email"}},
+		{"SLA-P2-解决告警", "SLA-P2-中", "warning", 80, []string{"email"}},
+		{"SLA-服务请求-响应告警", "SLA-服务请求", "info", 50, []string{"email"}},
+		{"SLA-变更-响应告警", "SLA-变更", "warning", 50, []string{"email"}},
+	}
+
+	// 获取 SLA 定义
+	slas, err := s.client.SLADefinition.Query().Where(sladefinition.TenantIDEQ(t.ID)).All(ctx)
+	if err != nil || len(slas) == 0 {
+		s.sugar.Warnw("no SLA definitions found; skip alert rules seed")
+		return
+	}
+
+	slaMap := make(map[string]int)
+	for _, sla := range slas {
+		slaMap[sla.Name] = sla.ID
+	}
+
+	for _, rule := range alertRules {
+		slaID, ok := slaMap[rule.SLAKey]
+		if !ok {
+			continue
+		}
+		_, err := s.client.SLAAlertRule.Create().
+			SetName(rule.Name).
+			SetSLADefinitionID(slaID).
+			SetAlertLevel(rule.AlertLevel).
+			SetThresholdPercentage(rule.Threshold).
+			SetNotificationChannels(rule.NotificationChans).
+			SetEscalationEnabled(true).
+			SetIsActive(true).
+			SetTenantID(t.ID).
+			Save(ctx)
+		if err != nil {
+			s.sugar.Warnw("seed SLA alert rule failed", "error", err, "name", rule.Name)
+		}
+	}
+	s.sugar.Infow("SLA alert rules seeded", "count", len(alertRules))
+}
+
+func (s *Seeder) seedApprovalWorkflows(ctx context.Context) {
+	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
+	if err != nil {
+		s.sugar.Warnw("default tenant not found; skip approval workflows seed", "error", err)
+		return
+	}
+
+	existing, err := s.client.ApprovalWorkflow.Query().Where(approvalworkflow.TenantIDEQ(t.ID)).Count(ctx)
+	if err != nil {
+		s.sugar.Warnw("check existing approval workflows failed", "error", err)
+		return
+	}
+	if existing > 0 {
+		s.sugar.Infow("approval workflows already seeded")
+		return
+	}
+
+	for _, wf := range s.config.ApprovalWorkflows {
+		_, err := s.client.ApprovalWorkflow.Create().
+			SetName(wf.Name).
+			SetDescription(wf.Desc).
+			SetTicketType(wf.TicketType).
+			SetPriority(wf.Priority).
+			SetNodes(wf.Nodes).
+			SetIsActive(true).
+			SetTenantID(t.ID).
+			Save(ctx)
+		if err != nil {
+			s.sugar.Warnw("seed approval workflow failed", "error", err, "name", wf.Name)
+		}
+	}
+	s.sugar.Infow("approval workflows seeded", "count", len(s.config.ApprovalWorkflows))
+}
+
+func (s *Seeder) seedProcessBindings(ctx context.Context) {
+	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
+	if err != nil {
+		s.sugar.Warnw("default tenant not found; skip process bindings seed", "error", err)
+		return
+	}
+
+	existing, err := s.client.ProcessBinding.Query().Where(processbinding.TenantIDEQ(t.ID)).Count(ctx)
+	if err != nil {
+		s.sugar.Warnw("check existing process bindings failed", "error", err)
+		return
+	}
+	if existing > 0 {
+		s.sugar.Infow("process bindings already seeded")
+		return
+	}
+
+	for _, b := range s.config.ProcessBindings {
+		_, err := s.client.ProcessBinding.Create().
+			SetBusinessType(b.BusinessType).
+			SetNillableBusinessSubType(nilIfEmpty(b.BusinessSubType)).
+			SetProcessDefinitionKey(b.ProcessDefinitionKey).
+			SetIsDefault(b.IsDefault).
+			SetIsActive(true).
+			SetTenantID(t.ID).
+			Save(ctx)
+		if err != nil {
+			s.sugar.Warnw("seed process binding failed", "error", err, "business_type", b.BusinessType)
+		}
+	}
+	s.sugar.Infow("process bindings seeded", "count", len(s.config.ProcessBindings))
+}
+
+// seedBPMNWorkflows 部署BPMN工作流模板
+func (s *Seeder) seedBPMNWorkflows(ctx context.Context) {
+	// 检查是否已配置部署工作流
+	if s.config == nil || !s.config.SeedWorkflows {
+		s.sugar.Infow("workflow seeding is disabled in config")
+		return
+	}
+
+	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
+	if err != nil {
+		s.sugar.Warnw("default tenant not found; skip BPMN workflows seed", "error", err)
+		return
+	}
+
+	// 使用BPMNTemplateService加载并部署内置模板
+	templates, err := s.bpmnTemplateService.LoadAndDeployTemplates(ctx, t.ID)
+	if err != nil {
+		s.sugar.Warnw("failed to deploy BPMN templates", "error", err)
+		return
+	}
+
+	s.sugar.Infow("BPMN workflows seeded", "count", len(templates))
 }
 
 func (s *Seeder) seedTicketViews(ctx context.Context) {

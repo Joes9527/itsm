@@ -122,7 +122,7 @@ func (s *IncidentEscalationService) UpdateEscalationRule(ctx context.Context, id
 		update.SetAutoEscalate(*input.AutoEscalate)
 	}
 	if input.NotificationConfig != nil {
-		update.SetNotificationConfig(*input.NotificationConfig)
+		update.SetNotificationConfig(input.NotificationConfig)
 	}
 	if input.IsActive != nil {
 		update.SetIsActive(*input.IsActive)
