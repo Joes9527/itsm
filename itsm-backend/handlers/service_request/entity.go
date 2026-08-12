@@ -86,6 +86,12 @@ func (sr *ServiceRequest) amount() float64 {
 
 // injectApprovalChain 将解析出的审批链步骤注入 FormData 的 _approval_chain 键中。
 // 若 steps 为 nil 则不注入，避免在 form_data 中留下空键。
+// hasApprovalChainSteps 判断审批链解析结果是否包含实际步骤。
+// resolvedSteps 在 service.go 中已通过 len(chain.Steps) > 0 过滤，非 nil 即有效。
+func hasApprovalChainSteps(steps interface{}) bool {
+	return steps != nil
+}
+
 func injectApprovalChain(formData map[string]interface{}, steps interface{}) map[string]interface{} {
 	if steps == nil {
 		return formData

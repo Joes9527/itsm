@@ -31,7 +31,8 @@ type CreateTicketRequest struct {
 	Tags                  []string               `json:"tags"`
 	FormFields            map[string]interface{} `json:"formFields"`
 	Attachments           []string               `json:"attachments"`
-	WorkflowDefinitionKey string                 `json:"workflowDefinitionKey"` // 工作流定义Key（可选，优先级高于自动选择）
+	WorkflowDefinitionKey string        `json:"workflowDefinitionKey"` // 工作流定义Key（可选，优先级高于自动选择）
+	ApprovalChain         interface{}   `json:"approvalChain,omitempty"` // 审批链步骤（由 SR 流程注入，BPMN 变量用）
 }
 
 // UpdateTicketRequest 更新工单请求

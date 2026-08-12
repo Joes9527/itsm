@@ -243,7 +243,7 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 		go func() {
 			ctx2, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			if err := s.triggerWorkflowForTicket(ctx2, tkt, tenantID, workflowDefinitionKey); err != nil {
+			if err := s.triggerWorkflowForTicket(ctx2, tkt, tenantID, workflowDefinitionKey, req.ApprovalChain); err != nil {
 				s.logger.Warnw("Workflow trigger failed", "error", err, "ticket_id", tkt.ID)
 			}
 		}()
@@ -520,7 +520,7 @@ func isTicketDataScopeAllRole(role string) bool {
 
 // triggerWorkflowForTicket 异步触发工单关联的 BPMN 流程
 // 逻辑参考 V1 (ticket_service.go:221-279)，适配 V2 的 DDD 领域模型
-func (s *TicketService) triggerWorkflowForTicket(ctx context.Context, tkt *ticket.Ticket, tenantID int, workflowDefinitionKey string) error {
+func (s *TicketService) triggerWorkflowForTicket(ctx context.Context, tkt *ticket.Ticket, tenantID int, workflowDefinitionKey string, approvalChain interface{}) error {
 	// 构造流程变量
 	variables := map[string]interface{}{
 		"ticket_id":     tkt.ID,
@@ -533,6 +533,14 @@ func (s *TicketService) triggerWorkflowForTicket(ctx context.Context, tkt *ticke
 	}
 	if tkt.AssigneeID != nil {
 		variables["assignee_id"] = *tkt.AssigneeID
+	}
+
+	// 审批链 → BPMN 变量（由 SR 创建流程传入）
+	if approvalChain != nil {
+		variables["approval_required"] = true
+		variables["approval_chain"] = approvalChain
+	} else {
+		variables["approval_required"] = false
 	}
 
 	// 解析 process key：1.请求指定 2.Resolver 3.兜底
