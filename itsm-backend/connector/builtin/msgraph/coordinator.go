@@ -71,13 +71,17 @@ func NewEmailPollingCoordinator(store TicketStore, triage Triager, logger *zap.S
 }
 
 // Start begins polling for the given tenant using the given connector
-// instance. If polling is already running for this tenant, it is stopped
-// first (handles "admin changed the config" without leaking goroutines).
+// instance. If polling is already running for this tenant, the old poller
+// is cancelled first (handles "admin changed the config" without leaking
+// goroutines). The stop-old/install-new step happens under a single lock
+// acquisition so concurrent Start calls for the same tenantID can never
+// leave an old CancelFunc unreachable in c.cancels.
 func (c *EmailPollingCoordinator) Start(ctx context.Context, tenantID int, conn *GraphConnector) {
-	c.Stop(tenantID)
-
 	pollCtx, cancel := context.WithCancel(ctx)
 	c.mu.Lock()
+	if oldCancel, ok := c.cancels[tenantID]; ok {
+		oldCancel()
+	}
 	c.cancels[tenantID] = cancel
 	c.mu.Unlock()
 

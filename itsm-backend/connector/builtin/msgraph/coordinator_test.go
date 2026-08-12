@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -205,6 +206,70 @@ func TestCoordinator_StartStop_CancelsPolling(t *testing.T) {
 	_, stillRunning := coord.cancels[7]
 	coord.mu.Unlock()
 	assert.False(t, stillRunning)
+}
+
+// TestCoordinator_Start_ConcurrentCallsDoNotLeakGoroutine is a regression
+// test for a race where two concurrent Start calls for the same tenantID
+// could each install their own CancelFunc under separate lock acquisitions
+// (Stop-then-store, rather than one atomic critical section), letting one
+// CancelFunc get silently overwritten in c.cancels — leaking that poller
+// goroutine forever, unreachable by any later Stop call.
+func TestCoordinator_Start_ConcurrentCallsDoNotLeakGoroutine(t *testing.T) {
+	store := newFakeStore()
+	triager := fakeTriager{suggestion: TriageSuggestion{Priority: "medium"}}
+	coord := NewEmailPollingCoordinator(store, triager, zaptest.NewLogger(t).Sugar())
+
+	var pollCount atomic.Int64
+	aad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"tok","expires_in":3599}`))
+	}))
+	defer aad.Close()
+	graph := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		pollCount.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"@odata.deltaLink":"` + graphDeltaLinkPlaceholder + `","value":[]}`))
+	}))
+	defer graph.Close()
+
+	conn := New()
+	cfg := connectorConfigFor("support@contoso.com", aad.URL, graph.URL)
+	cfg.Settings["poll_interval_seconds"] = float64(1)
+	require.NoError(t, conn.Init(context.Background(), cfg))
+
+	// Fire two Start calls for the same tenantID as close together as
+	// possible, to exercise the concurrent-Start race.
+	var wg sync.WaitGroup
+	begin := make(chan struct{})
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-begin
+			coord.Start(context.Background(), 7, conn)
+		}()
+	}
+	close(begin)
+	wg.Wait()
+
+	// Let both goroutines' immediate first poll run, but not long enough
+	// for the 1s ticker to fire.
+	time.Sleep(150 * time.Millisecond)
+
+	coord.Stop(7)
+
+	coord.mu.Lock()
+	_, stillTracked := coord.cancels[7]
+	coord.mu.Unlock()
+	assert.False(t, stillTracked, "no cancel func should remain tracked for tenant 7 after Stop")
+
+	countAfterStop := pollCount.Load()
+	// Wait past at least one more poll interval: if a goroutine leaked
+	// (its CancelFunc became unreachable during the concurrent-Start race),
+	// it keeps ticking and hitting the Graph test server here.
+	time.Sleep(1200 * time.Millisecond)
+	countLater := pollCount.Load()
+	assert.Equal(t, countAfterStop, countLater, "no goroutine should still be polling the Graph server after Stop (goroutine leak)")
 }
 
 func writeJSON(w http.ResponseWriter, v interface{}) error {
