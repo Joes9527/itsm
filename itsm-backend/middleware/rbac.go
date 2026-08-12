@@ -609,8 +609,6 @@ var ResourceActionMap = map[string]map[string]Permission{
 		"/api/v1/my-approvals":           {Resource: "task", Action: "read"},
 		"/api/v1/my-approvals/*":         {Resource: "task", Action: "read"},
 		// 通知偏好/系统配置/菜单/租户/权限
-		"/api/v1/notification-preferences":     {Resource: "notification", Action: "read"},
-		"/api/v1/notification-preferences/*":   {Resource: "notification", Action: "read"},
 		"/api/v1/system-configs":               {Resource: "system_config", Action: "read"},
 		"/api/v1/system-configs/*":             {Resource: "system_config", Action: "read"},
 		"/api/v1/menus":                        {Resource: "menu", Action: "read"},
