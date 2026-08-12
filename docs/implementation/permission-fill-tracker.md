@@ -13,56 +13,56 @@
 
 ## 新增权限定义 (seeder)
 
-- [ ] approval_workflow: create, read, update, delete
-- [ ] assignment_rule: create, read, update, delete
-- [ ] audit_log: read
-- [ ] automation_rule: create, read, update, delete
-- [ ] cloud_account: read, write, delete
-- [ ] cloud_resource: read, write, delete
-- [ ] cloud_service: read, write, delete
-- [ ] system_config: read, update
-- [ ] investigation: create, read, update
-- [ ] menu: create, read, update, delete
-- [ ] permission: create, read
-- [ ] process_instance: create, read, update
-- [ ] root_cause: create
-- [ ] solution: create
-- [ ] step: create, update
-- [ ] tag: read
-- [ ] task: read, update
-- [ ] tenant: create, read, update, delete
-- [ ] view: create, read, update, delete
-- [ ] widget: create, update, delete
+- [x] approval_workflow: create, read, update, delete
+- [x] assignment_rule: create, read, update, delete
+- [x] audit_log: read
+- [x] automation_rule: create, read, update, delete
+- [x] cloud_account: read, write, delete
+- [x] cloud_resource: read, write, delete
+- [x] cloud_service: read, write, delete
+- [x] system_config: read, update
+- [x] investigation: create, read, update
+- [x] menu: create, read, update, delete
+- [x] permission: create, read
+- [x] process_instance: create, read, update
+- [x] root_cause: create
+- [x] solution: create
+- [x] step: create, update
+- [x] tag: read
+- [x] task: read, update
+- [x] tenant: create, read, update, delete
+- [x] view: create, read, update, delete
+- [x] widget: create, update, delete
 
 ## 角色-权限分配
 
-- [ ] sysadmin: 全部
-- [ ] it_director: 管理类 + 审批/流程类
-- [ ] service_catalog_admin: 工单相关 + 流程查看
-- [ ] end_user: tag:read
-- [ ] allPermissionCodes() 补齐
+- [x] sysadmin: 全部
+- [x] it_director: 管理类 + 审批/流程类
+- [x] service_catalog_admin: 工单相关 + 流程查看
+- [x] end_user: tag:read
+- [x] allPermissionCodes() 补齐
 
 ## Router 命名修正
 
-- [ ] `config:read` → `system_config:read`
-- [ ] `config:update` → `system_config:update`
+- [x] `config:read` → `system_config:read`
+- [x] `config:update` → `system_config:update`
 
 ## ResourceActionMap 补齐
 
-- [ ] audit_logs → audit_log 统一
-- [ ] 新增 /api/v1/approval-workflows*
-- [ ] 新增 /api/v1/approval-chains*
-- [ ] 新增 /api/v1/my-approvals*
-- [ ] 新增 /api/v1/notification-preferences*
-- [ ] 新增 /api/v1/system-configs*
-- [ ] 新增 /api/v1/menus*
-- [ ] 新增 /api/v1/tenants*
-- [ ] 新增 /api/v1/permissions*
-- [ ] 新增 /api/v1/bpmn/tasks*
-- [ ] 新增 /api/v1/bpmn/instances*
-- [ ] 新增 cloud, investigation, cmdb 等路径
+- [x] audit_logs → audit_log 统一
+- [x] 新增 /api/v1/approval-workflows*
+- [x] 新增 /api/v1/approval-chains*
+- [x] 新增 /api/v1/my-approvals*
+- [x] 新增 /api/v1/notification-preferences*
+- [x] 新增 /api/v1/system-configs*
+- [x] 新增 /api/v1/menus*
+- [x] 新增 /api/v1/tenants*
+- [x] 新增 /api/v1/permissions*
+- [x] 新增 /api/v1/bpmn/tasks*
+- [x] 新增 /api/v1/bpmn/instances*
+- [x] 新增 cloud, investigation, cmdb 等路径
 
 ## 迁移 SQL
 
-- [ ] 为 tenant 1 创建新权限定义
-- [ ] 分配权限给角色
+- [x] 为 tenant 1 创建新权限定义
+- [x] 分配权限给角色
