@@ -178,7 +178,7 @@ export function getMenuConfig(): MenuConfig {
         key: '/service-catalog',
         icon: getIconByName('BookOpen')!,
         label: '服务目录',
-        path: '/service-catalog',
+        path: '/tickets/create',
         permission: 'service:read',
         description: '服务目录',
         children: [
@@ -186,7 +186,7 @@ export function getMenuConfig(): MenuConfig {
             key: '/service-catalog/list',
             icon: getIconByName('BookOpen')!,
             label: '服务目录',
-            path: '/service-catalog',
+            path: '/tickets/create',
             permission: 'service:read',
           },
           // "待我审批" 子菜单已经移除——原来指向的 /service-catalog/approvals 是一个直接对

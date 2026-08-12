@@ -239,7 +239,7 @@ func AzureCallbackHandler(cfg AzureConfig, client *ent.Client, jwtSecret string,
 		target := "/dashboard"
 		switch string(u.Role) {
 		case "end_user":
-			target = "/service-catalog"
+			target = "/tickets/create"
 		case "agent", "technician":
 			target = "/tickets"
 		case "manager", "security":
