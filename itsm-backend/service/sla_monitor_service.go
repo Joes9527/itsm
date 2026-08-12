@@ -234,7 +234,7 @@ func (s *SLAMonitorService) createViolation(ctx context.Context, t *ent.Ticket, 
 		SetTicketID(t.ID).
 		SetTicketType("ticket"). // Ticket 表没有类型字段，使用默认值
 		SetSLADefinitionID(t.SLADefinitionID).
-		SetSLAName(slaName).
+		SetSLAPolicy(slaName).
 		SetViolationType(violationType).
 		SetViolationTime(now).
 		SetDescription(description).
@@ -661,7 +661,7 @@ func (s *SLAMonitorService) GetDashboardMetrics(ctx context.Context, tenantID in
 			dashboard.TopViolations = append(dashboard.TopViolations, dto.SLAViolationItem{
 				TicketID:    v.TicketID,
 				TicketTitle: ticketTitle,
-				SLAName:   v.SLAName,
+				SLAName:   v.SLAPolicy,
 				ViolatedAt:  v.ViolationTime.Format(time.RFC3339),
 				Delay:       delayMinutes,
 			})

@@ -22,6 +22,8 @@ const (
 	FieldServiceType = "service_type"
 	// FieldPriority holds the string denoting the priority field in the database.
 	FieldPriority = "priority"
+	// FieldCategoryIds holds the string denoting the category_ids field in the database.
+	FieldCategoryIds = "category_ids"
 	// FieldResponseTime holds the string denoting the response_time field in the database.
 	FieldResponseTime = "response_time"
 	// FieldResolutionTime holds the string denoting the resolution_time field in the database.
@@ -91,6 +93,7 @@ var Columns = []string{
 	FieldDescription,
 	FieldServiceType,
 	FieldPriority,
+	FieldCategoryIds,
 	FieldResponseTime,
 	FieldResolutionTime,
 	FieldBusinessHours,

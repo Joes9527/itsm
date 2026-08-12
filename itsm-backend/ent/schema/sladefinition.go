@@ -16,6 +16,7 @@ func (SLADefinition) Fields() []ent.Field {
 		field.Text("description").Comment("SLA描述").Optional(),
 		field.String("service_type").Comment("服务类型").Optional(),
 		field.String("priority").Comment("优先级").Optional(),
+		field.JSON("category_ids", []int{}).Comment("绑定的工单分类ID列表").Optional(),
 		field.Int("response_time").Comment("响应时间(分钟)").Positive().Default(30),
 		field.Int("resolution_time").Comment("解决时间(分钟)").Positive().Default(240),
 		field.JSON("business_hours", map[string]interface{}{}).Comment("营业时间配置").Optional(),

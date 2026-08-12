@@ -103816,6 +103816,8 @@ type SLADefinitionMutation struct {
 	description        *string
 	service_type       *string
 	priority           *string
+	category_ids       *[]int
+	appendcategory_ids []int
 	response_time      *int
 	addresponse_time   *int
 	resolution_time    *int
@@ -104127,6 +104129,71 @@ func (m *SLADefinitionMutation) PriorityCleared() bool {
 func (m *SLADefinitionMutation) ResetPriority() {
 	m.priority = nil
 	delete(m.clearedFields, sladefinition.FieldPriority)
+}
+
+// SetCategoryIds sets the "category_ids" field.
+func (m *SLADefinitionMutation) SetCategoryIds(i []int) {
+	m.category_ids = &i
+	m.appendcategory_ids = nil
+}
+
+// CategoryIds returns the value of the "category_ids" field in the mutation.
+func (m *SLADefinitionMutation) CategoryIds() (r []int, exists bool) {
+	v := m.category_ids
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCategoryIds returns the old "category_ids" field's value of the SLADefinition entity.
+// If the SLADefinition object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SLADefinitionMutation) OldCategoryIds(ctx context.Context) (v []int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCategoryIds is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCategoryIds requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCategoryIds: %w", err)
+	}
+	return oldValue.CategoryIds, nil
+}
+
+// AppendCategoryIds adds i to the "category_ids" field.
+func (m *SLADefinitionMutation) AppendCategoryIds(i []int) {
+	m.appendcategory_ids = append(m.appendcategory_ids, i...)
+}
+
+// AppendedCategoryIds returns the list of values that were appended to the "category_ids" field in this mutation.
+func (m *SLADefinitionMutation) AppendedCategoryIds() ([]int, bool) {
+	if len(m.appendcategory_ids) == 0 {
+		return nil, false
+	}
+	return m.appendcategory_ids, true
+}
+
+// ClearCategoryIds clears the value of the "category_ids" field.
+func (m *SLADefinitionMutation) ClearCategoryIds() {
+	m.category_ids = nil
+	m.appendcategory_ids = nil
+	m.clearedFields[sladefinition.FieldCategoryIds] = struct{}{}
+}
+
+// CategoryIdsCleared returns if the "category_ids" field was cleared in this mutation.
+func (m *SLADefinitionMutation) CategoryIdsCleared() bool {
+	_, ok := m.clearedFields[sladefinition.FieldCategoryIds]
+	return ok
+}
+
+// ResetCategoryIds resets all changes to the "category_ids" field.
+func (m *SLADefinitionMutation) ResetCategoryIds() {
+	m.category_ids = nil
+	m.appendcategory_ids = nil
+	delete(m.clearedFields, sladefinition.FieldCategoryIds)
 }
 
 // SetResponseTime sets the "response_time" field.
@@ -104874,7 +104941,7 @@ func (m *SLADefinitionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SLADefinitionMutation) Fields() []string {
-	fields := make([]string, 0, 15)
+	fields := make([]string, 0, 16)
 	if m.name != nil {
 		fields = append(fields, sladefinition.FieldName)
 	}
@@ -104886,6 +104953,9 @@ func (m *SLADefinitionMutation) Fields() []string {
 	}
 	if m.priority != nil {
 		fields = append(fields, sladefinition.FieldPriority)
+	}
+	if m.category_ids != nil {
+		fields = append(fields, sladefinition.FieldCategoryIds)
 	}
 	if m.response_time != nil {
 		fields = append(fields, sladefinition.FieldResponseTime)
@@ -104936,6 +105006,8 @@ func (m *SLADefinitionMutation) Field(name string) (ent.Value, bool) {
 		return m.ServiceType()
 	case sladefinition.FieldPriority:
 		return m.Priority()
+	case sladefinition.FieldCategoryIds:
+		return m.CategoryIds()
 	case sladefinition.FieldResponseTime:
 		return m.ResponseTime()
 	case sladefinition.FieldResolutionTime:
@@ -104975,6 +105047,8 @@ func (m *SLADefinitionMutation) OldField(ctx context.Context, name string) (ent.
 		return m.OldServiceType(ctx)
 	case sladefinition.FieldPriority:
 		return m.OldPriority(ctx)
+	case sladefinition.FieldCategoryIds:
+		return m.OldCategoryIds(ctx)
 	case sladefinition.FieldResponseTime:
 		return m.OldResponseTime(ctx)
 	case sladefinition.FieldResolutionTime:
@@ -105033,6 +105107,13 @@ func (m *SLADefinitionMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetPriority(v)
+		return nil
+	case sladefinition.FieldCategoryIds:
+		v, ok := value.([]int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCategoryIds(v)
 		return nil
 	case sladefinition.FieldResponseTime:
 		v, ok := value.(int)
@@ -105189,6 +105270,9 @@ func (m *SLADefinitionMutation) ClearedFields() []string {
 	if m.FieldCleared(sladefinition.FieldPriority) {
 		fields = append(fields, sladefinition.FieldPriority)
 	}
+	if m.FieldCleared(sladefinition.FieldCategoryIds) {
+		fields = append(fields, sladefinition.FieldCategoryIds)
+	}
 	if m.FieldCleared(sladefinition.FieldBusinessHours) {
 		fields = append(fields, sladefinition.FieldBusinessHours)
 	}
@@ -105221,6 +105305,9 @@ func (m *SLADefinitionMutation) ClearField(name string) error {
 	case sladefinition.FieldPriority:
 		m.ClearPriority()
 		return nil
+	case sladefinition.FieldCategoryIds:
+		m.ClearCategoryIds()
+		return nil
 	case sladefinition.FieldBusinessHours:
 		m.ClearBusinessHours()
 		return nil
@@ -105249,6 +105336,9 @@ func (m *SLADefinitionMutation) ResetField(name string) error {
 		return nil
 	case sladefinition.FieldPriority:
 		m.ResetPriority()
+		return nil
+	case sladefinition.FieldCategoryIds:
+		m.ResetCategoryIds()
 		return nil
 	case sladefinition.FieldResponseTime:
 		m.ResetResponseTime()

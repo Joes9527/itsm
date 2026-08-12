@@ -3367,6 +3367,7 @@ var (
 		{Name: "description", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "service_type", Type: field.TypeString, Nullable: true},
 		{Name: "priority", Type: field.TypeString, Nullable: true},
+		{Name: "category_ids", Type: field.TypeJSON, Nullable: true},
 		{Name: "response_time", Type: field.TypeInt, Default: 30},
 		{Name: "resolution_time", Type: field.TypeInt, Default: 240},
 		{Name: "business_hours", Type: field.TypeJSON, Nullable: true},

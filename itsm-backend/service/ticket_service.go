@@ -197,7 +197,11 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 
 	// 计算 SLA（如果配置了 SLA 服务）
 	if s.slaSvc != nil {
-		slaResult, err := s.slaSvc.CalculateSLADeadlineFromRequest(ctx, tenantID, string(tkt.Type), string(tkt.Priority))
+		slaCategoryID := 0
+		if req.CategoryID != nil {
+			slaCategoryID = *req.CategoryID
+		}
+		slaResult, err := s.slaSvc.CalculateSLADeadlineFromRequest(ctx, tenantID, string(tkt.Type), string(tkt.Priority), slaCategoryID)
 		if err != nil {
 			s.logger.Warnw("Failed to calculate SLA", "error", err)
 		} else {
@@ -440,6 +444,13 @@ func extractCustomFieldValues(formFields map[string]interface{}) map[string]inte
 // extractAdHocFieldValues 解析 formFields["fieldDefs"]（客户端提交的 {name,label} 列表，
 // 用于没有 field_definitions 行的静态预设）配合 formFields["values"] 里的实际值，
 // 构造成 AdHocFieldValue 列表。fieldDefs 缺失或为空返回 nil。
+func getCategoryIDValue(categoryID *int) int {
+	if categoryID == nil {
+		return 0
+	}
+	return *categoryID
+}
+
 func extractAdHocFieldValues(formFields map[string]interface{}) []AdHocFieldValue {
 	if formFields == nil {
 		return nil
@@ -857,6 +868,18 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 	}
 
 	s.logger.Infow("Ticket updated", "ticket_id", id)
+
+	// 优先级或分类变更时重新计算 SLA
+	if (req.Priority != "" || req.CategoryID != nil || strings.TrimSpace(req.Category) != "") && s.slaSvc != nil {
+		slaResult, err := s.slaSvc.CalculateSLADeadlineFromRequest(ctx, tenantID, string(updated.Type), string(updated.Priority), getCategoryIDValue(categoryID))
+		if err != nil {
+			s.logger.Warnw("Failed to recalculate SLA after update", "error", err, "ticket_id", id)
+		} else {
+			if err := s.repo.UpdateSLADeadlines(ctx, id, slaResult.ResponseDeadline, slaResult.ResolutionDeadline, &slaResult.SLADefinitionID, tenantID); err != nil {
+				s.logger.Warnw("Failed to persist SLA recalculation", "error", err, "ticket_id", id)
+			}
+		}
+	}
 
 	// 异步同步工单到飞书
 	if s.connectorManager != nil {

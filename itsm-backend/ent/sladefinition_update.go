@@ -16,6 +16,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 )
 
@@ -103,6 +104,24 @@ func (_u *SLADefinitionUpdate) SetNillablePriority(v *string) *SLADefinitionUpda
 // ClearPriority clears the value of the "priority" field.
 func (_u *SLADefinitionUpdate) ClearPriority() *SLADefinitionUpdate {
 	_u.mutation.ClearPriority()
+	return _u
+}
+
+// SetCategoryIds sets the "category_ids" field.
+func (_u *SLADefinitionUpdate) SetCategoryIds(v []int) *SLADefinitionUpdate {
+	_u.mutation.SetCategoryIds(v)
+	return _u
+}
+
+// AppendCategoryIds appends value to the "category_ids" field.
+func (_u *SLADefinitionUpdate) AppendCategoryIds(v []int) *SLADefinitionUpdate {
+	_u.mutation.AppendCategoryIds(v)
+	return _u
+}
+
+// ClearCategoryIds clears the value of the "category_ids" field.
+func (_u *SLADefinitionUpdate) ClearCategoryIds() *SLADefinitionUpdate {
+	_u.mutation.ClearCategoryIds()
 	return _u
 }
 
@@ -510,6 +529,17 @@ func (_u *SLADefinitionUpdate) sqlSave(ctx context.Context) (_node int, err erro
 	if _u.mutation.PriorityCleared() {
 		_spec.ClearField(sladefinition.FieldPriority, field.TypeString)
 	}
+	if value, ok := _u.mutation.CategoryIds(); ok {
+		_spec.SetField(sladefinition.FieldCategoryIds, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedCategoryIds(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, sladefinition.FieldCategoryIds, value)
+		})
+	}
+	if _u.mutation.CategoryIdsCleared() {
+		_spec.ClearField(sladefinition.FieldCategoryIds, field.TypeJSON)
+	}
 	if value, ok := _u.mutation.ResponseTime(); ok {
 		_spec.SetField(sladefinition.FieldResponseTime, field.TypeInt, value)
 	}
@@ -832,6 +862,24 @@ func (_u *SLADefinitionUpdateOne) SetNillablePriority(v *string) *SLADefinitionU
 // ClearPriority clears the value of the "priority" field.
 func (_u *SLADefinitionUpdateOne) ClearPriority() *SLADefinitionUpdateOne {
 	_u.mutation.ClearPriority()
+	return _u
+}
+
+// SetCategoryIds sets the "category_ids" field.
+func (_u *SLADefinitionUpdateOne) SetCategoryIds(v []int) *SLADefinitionUpdateOne {
+	_u.mutation.SetCategoryIds(v)
+	return _u
+}
+
+// AppendCategoryIds appends value to the "category_ids" field.
+func (_u *SLADefinitionUpdateOne) AppendCategoryIds(v []int) *SLADefinitionUpdateOne {
+	_u.mutation.AppendCategoryIds(v)
+	return _u
+}
+
+// ClearCategoryIds clears the value of the "category_ids" field.
+func (_u *SLADefinitionUpdateOne) ClearCategoryIds() *SLADefinitionUpdateOne {
+	_u.mutation.ClearCategoryIds()
 	return _u
 }
 
@@ -1268,6 +1316,17 @@ func (_u *SLADefinitionUpdateOne) sqlSave(ctx context.Context) (_node *SLADefini
 	}
 	if _u.mutation.PriorityCleared() {
 		_spec.ClearField(sladefinition.FieldPriority, field.TypeString)
+	}
+	if value, ok := _u.mutation.CategoryIds(); ok {
+		_spec.SetField(sladefinition.FieldCategoryIds, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedCategoryIds(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, sladefinition.FieldCategoryIds, value)
+		})
+	}
+	if _u.mutation.CategoryIdsCleared() {
+		_spec.ClearField(sladefinition.FieldCategoryIds, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.ResponseTime(); ok {
 		_spec.SetField(sladefinition.FieldResponseTime, field.TypeInt, value)

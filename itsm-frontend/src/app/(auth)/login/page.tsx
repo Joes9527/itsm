@@ -288,9 +288,12 @@ export default function LoginPage() {
           />
 
           {/* 左上角品牌 */}
-          <div className="absolute left-10 top-9 z-10">
-            <div className="text-white font-semibold text-sm tracking-wide">AI-Native ITSM</div>
-            <div className="text-white/40 text-[11px] mt-0.5">Enterprise Service Desk</div>
+          <div className="absolute left-10 top-9 z-10 flex items-center gap-3">
+            <img src="/kln-logo.png" alt="KLN" className="h-7 w-auto" />
+            <div>
+              <div className="text-white font-semibold text-sm tracking-wide">AI-Native ITSM</div>
+              <div className="text-white/40 text-[11px] mt-0.5">Enterprise Service Desk</div>
+            </div>
           </div>
 
           {/* 底部渐变光线 */}
@@ -310,7 +313,6 @@ export default function LoginPage() {
                 boxShadow: '0 0 0 22px rgba(240,104,32,.035), 0 0 90px rgba(240,104,32,.28)',
               }}
             >
-              <img src="/kln-logo.png" alt="KLN" className="h-9 w-auto mb-2" />
               <strong className="text-white text-2xl tracking-wide">ITSM</strong>
               <span className="absolute bottom-9 text-[#f27c38] text-xs font-bold tracking-[0.15em] uppercase">
                 AI-Native

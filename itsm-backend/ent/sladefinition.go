@@ -26,6 +26,8 @@ type SLADefinition struct {
 	ServiceType string `json:"service_type,omitempty"`
 	// 优先级
 	Priority string `json:"priority,omitempty"`
+	// 绑定的工单分类ID列表
+	CategoryIds []int `json:"category_ids,omitempty"`
 	// 响应时间(分钟)
 	ResponseTime int `json:"response_time,omitempty"`
 	// 解决时间(分钟)
@@ -110,7 +112,7 @@ func (*SLADefinition) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case sladefinition.FieldBusinessHours, sladefinition.FieldEscalationRules, sladefinition.FieldConditions:
+		case sladefinition.FieldCategoryIds, sladefinition.FieldBusinessHours, sladefinition.FieldEscalationRules, sladefinition.FieldConditions:
 			values[i] = new([]byte)
 		case sladefinition.FieldExcludeWeekends, sladefinition.FieldExcludeHolidays, sladefinition.FieldIsActive:
 			values[i] = new(sql.NullBool)
@@ -164,6 +166,14 @@ func (_m *SLADefinition) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field priority", values[i])
 			} else if value.Valid {
 				_m.Priority = value.String
+			}
+		case sladefinition.FieldCategoryIds:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field category_ids", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.CategoryIds); err != nil {
+					return fmt.Errorf("unmarshal field category_ids: %w", err)
+				}
 			}
 		case sladefinition.FieldResponseTime:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -304,6 +314,9 @@ func (_m *SLADefinition) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("priority=")
 	builder.WriteString(_m.Priority)
+	builder.WriteString(", ")
+	builder.WriteString("category_ids=")
+	builder.WriteString(fmt.Sprintf("%v", _m.CategoryIds))
 	builder.WriteString(", ")
 	builder.WriteString("response_time=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ResponseTime))

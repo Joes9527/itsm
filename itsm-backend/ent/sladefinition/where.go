@@ -405,6 +405,16 @@ func PriorityContainsFold(v string) predicate.SLADefinition {
 	return predicate.SLADefinition(sql.FieldContainsFold(FieldPriority, v))
 }
 
+// CategoryIdsIsNil applies the IsNil predicate on the "category_ids" field.
+func CategoryIdsIsNil() predicate.SLADefinition {
+	return predicate.SLADefinition(sql.FieldIsNull(FieldCategoryIds))
+}
+
+// CategoryIdsNotNil applies the NotNil predicate on the "category_ids" field.
+func CategoryIdsNotNil() predicate.SLADefinition {
+	return predicate.SLADefinition(sql.FieldNotNull(FieldCategoryIds))
+}
+
 // ResponseTimeEQ applies the EQ predicate on the "response_time" field.
 func ResponseTimeEQ(v int) predicate.SLADefinition {
 	return predicate.SLADefinition(sql.FieldEQ(FieldResponseTime, v))

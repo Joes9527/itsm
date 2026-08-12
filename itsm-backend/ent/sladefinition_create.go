@@ -72,6 +72,12 @@ func (_c *SLADefinitionCreate) SetNillablePriority(v *string) *SLADefinitionCrea
 	return _c
 }
 
+// SetCategoryIds sets the "category_ids" field.
+func (_c *SLADefinitionCreate) SetCategoryIds(v []int) *SLADefinitionCreate {
+	_c.mutation.SetCategoryIds(v)
+	return _c
+}
+
 // SetResponseTime sets the "response_time" field.
 func (_c *SLADefinitionCreate) SetResponseTime(v int) *SLADefinitionCreate {
 	_c.mutation.SetResponseTime(v)
@@ -409,6 +415,10 @@ func (_c *SLADefinitionCreate) createSpec() (*SLADefinition, *sqlgraph.CreateSpe
 	if value, ok := _c.mutation.Priority(); ok {
 		_spec.SetField(sladefinition.FieldPriority, field.TypeString, value)
 		_node.Priority = value
+	}
+	if value, ok := _c.mutation.CategoryIds(); ok {
+		_spec.SetField(sladefinition.FieldCategoryIds, field.TypeJSON, value)
+		_node.CategoryIds = value
 	}
 	if value, ok := _c.mutation.ResponseTime(); ok {
 		_spec.SetField(sladefinition.FieldResponseTime, field.TypeInt, value)

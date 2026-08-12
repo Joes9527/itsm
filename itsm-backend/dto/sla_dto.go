@@ -213,7 +213,7 @@ type SLADeadline struct {
 type SLAViolationItem struct {
 	TicketID    int    `json:"ticketId"`
 	TicketTitle string `json:"ticketTitle"`
-	SLAPolicy   string `json:"slaPolicy"`
+	SLAName     string `json:"slaName"`
 	ViolatedAt  string `json:"violatedAt"`
 	Delay       int    `json:"delayMinutes"`
 }
