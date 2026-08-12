@@ -9,12 +9,22 @@ import (
 
 	"itsm-backend/common"
 	"itsm-backend/connector"
+	msgraphpkg "itsm-backend/connector/builtin/msgraph"
 	"itsm-backend/connector/marketplace"
 	"itsm-backend/dto"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
+
+// emailPollingCoordinator is the subset of *msgraph.EmailPollingCoordinator
+// this controller depends on. Kept as a small interface (rather than the
+// concrete type) purely so tests can substitute a fake without spinning up
+// real polling goroutines.
+type emailPollingCoordinator interface {
+	Start(ctx context.Context, tenantID int, conn *msgraphpkg.GraphConnector)
+	Stop(tenantID int)
+}
 
 // ConnectorController 连接器 HTTP API
 // 路由：
@@ -28,14 +38,24 @@ import (
 //	GET    /api/v1/connectors/health       -> 所有实例的健康检查
 //	POST   /api/v1/connectors/feishu/callback -> 飞书事件回调入口（如果安装了 feishu）
 type ConnectorController struct {
-	manager  *connector.Manager
-	market   *marketplace.Market // optional
-	registry *connector.Registry
-	logger   *zap.SugaredLogger
+	manager          *connector.Manager
+	market           *marketplace.Market // optional
+	registry         *connector.Registry
+	logger           *zap.SugaredLogger
+	emailCoordinator emailPollingCoordinator // optional; nil unless SetEmailCoordinator is called
 }
 
 func NewConnectorController(mgr *connector.Manager, reg *connector.Registry, mkt *marketplace.Market, logger *zap.SugaredLogger) *ConnectorController {
 	return &ConnectorController{manager: mgr, market: mkt, registry: reg, logger: logger}
+}
+
+// SetEmailCoordinator wires in the MS Graph email polling coordinator.
+// Optional — if never called, provisioning "msgraph-email" still succeeds
+// (config is stored via Manager like any other connector) but no polling
+// starts. Called once from bootstrap after the coordinator's dependencies
+// (TicketService, TriageService) are constructed.
+func (c *ConnectorController) SetEmailCoordinator(coord emailPollingCoordinator) {
+	c.emailCoordinator = coord
 }
 
 // ListMarket 列出市场中所有可用连接器
@@ -142,6 +162,15 @@ func (c *ConnectorController) Provision(ctx *gin.Context) {
 		common.Fail(ctx, common.InternalErrorCode, err.Error())
 		return
 	}
+	if req.Name == "msgraph-email" && c.emailCoordinator != nil {
+		if !cfg.Enabled {
+			c.emailCoordinator.Stop(tenantID)
+		} else if conn, ok := c.manager.Get(tenantID, "msgraph-email"); ok {
+			if gc, ok := conn.(*msgraphpkg.GraphConnector); ok {
+				c.emailCoordinator.Start(ctx.Request.Context(), tenantID, gc)
+			}
+		}
+	}
 	common.Success(ctx, maskConfig(cfg, c.manager.HealthCheckAll(ctx.Request.Context())))
 }
 
@@ -150,6 +179,9 @@ func (c *ConnectorController) Revoke(ctx *gin.Context) {
 	name := ctx.Param("name")
 	tenantID := ctx.GetInt("tenant_id")
 	c.manager.Revoke(connector.Config{TenantID: tenantID, Name: name})
+	if name == "msgraph-email" && c.emailCoordinator != nil {
+		c.emailCoordinator.Stop(tenantID)
+	}
 	common.Success(ctx, gin.H{"name": name, "revoked": true})
 }
 

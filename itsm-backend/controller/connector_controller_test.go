@@ -6,10 +6,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"itsm-backend/common"
 	"itsm-backend/connector"
+	msgraphpkg "itsm-backend/connector/builtin/msgraph"
 	"itsm-backend/connector/marketplace"
 	"itsm-backend/dto"
 
@@ -196,6 +198,120 @@ func TestConnectorController_Test_MissingDebugChannel(t *testing.T) {
 	// 触发 test：缺少 debug_channel → ParamErrorCode
 	resp := doReq(t, r, "POST", "/api/v1/connectors/fakeconn/test", nil, false)
 	assert.EqualValues(t, common.ParamErrorCode, resp.Code, "body=%s", mustString(resp))
+}
+
+// --- MS Graph email polling coordinator wiring ---
+
+type fakeEmailCoordinator struct {
+	mu      sync.Mutex
+	started []int // tenantIDs Start was called for
+	stopped []int // tenantIDs Stop was called for
+}
+
+func (f *fakeEmailCoordinator) Start(_ context.Context, tenantID int, _ *msgraphpkg.GraphConnector) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.started = append(f.started, tenantID)
+}
+
+func (f *fakeEmailCoordinator) Stop(tenantID int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.stopped = append(f.stopped, tenantID)
+}
+
+func TestConnectorController_Provision_StartsEmailCoordinatorForMsgraphEmail(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	logger := zaptest.NewLogger(t).Sugar()
+	reg := connector.NewRegistry()
+	// msgraph-email only auto-registers into connector.Default() via its
+	// package init(); this test uses an isolated registry (matching this
+	// file's existing pattern of not depending on global registration
+	// order), so it must register the factory explicitly.
+	reg.Register(func() connector.Connector { return msgraphpkg.New() })
+	mgr := connector.NewManager(reg, logger)
+	mkt := marketplace.New()
+	ctrl := NewConnectorController(mgr, reg, mkt, logger)
+	fake := &fakeEmailCoordinator{}
+	ctrl.SetEmailCoordinator(fake)
+
+	r := gin.New()
+	r.Use(gin.Recovery())
+	r.Use(withTestAuth(9, 1))
+	r.POST("/api/v1/connectors/configs", ctrl.Provision)
+
+	body := dto.ProvisionConnectorRequest{
+		Name:     "msgraph-email",
+		Provider: "microsoft",
+		Enabled:  true,
+		Settings: map[string]interface{}{
+			"azure_tenant_id": "t",
+			"mailbox":         "support@contoso.com",
+		},
+		Credentials: map[string]string{
+			"azure_client_id":     "id",
+			"azure_client_secret": "secret",
+		},
+	}
+	resp := doReq(t, r, "POST", "/api/v1/connectors/configs", body, false)
+	require.Equal(t, common.SuccessCode, resp.Code, "body=%s", mustString(resp))
+
+	fake.mu.Lock()
+	defer fake.mu.Unlock()
+	assert.Equal(t, []int{9}, fake.started, "Start must be called for the provisioning tenant")
+	assert.Empty(t, fake.stopped)
+}
+
+func TestConnectorController_Provision_IgnoresOtherConnectors(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	logger := zaptest.NewLogger(t).Sugar()
+	reg := connector.NewRegistry()
+	mgr := connector.NewManager(reg, logger)
+	mkt := marketplace.New()
+	ctrl := NewConnectorController(mgr, reg, mkt, logger)
+	fake := &fakeEmailCoordinator{}
+	ctrl.SetEmailCoordinator(fake)
+
+	r := gin.New()
+	r.Use(gin.Recovery())
+	r.Use(withTestAuth(9, 1))
+	r.POST("/api/v1/connectors/configs", ctrl.Provision)
+
+	// This registry has nothing registered at all, so provisioning any name
+	// must fail cleanly (connector not registered) without touching the
+	// coordinator — which is exactly what we're asserting: the coordinator
+	// hook only fires for req.Name == "msgraph-email", never as a side
+	// effect of Provision failing.
+	body := dto.ProvisionConnectorRequest{Name: "not-msgraph", Provider: "x", Enabled: true}
+	_ = doReq(t, r, "POST", "/api/v1/connectors/configs", body, false)
+
+	fake.mu.Lock()
+	defer fake.mu.Unlock()
+	assert.Empty(t, fake.started)
+	assert.Empty(t, fake.stopped)
+}
+
+func TestConnectorController_Revoke_StopsEmailCoordinator(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	logger := zaptest.NewLogger(t).Sugar()
+	reg := connector.NewRegistry()
+	mgr := connector.NewManager(reg, logger)
+	mkt := marketplace.New()
+	ctrl := NewConnectorController(mgr, reg, mkt, logger)
+	fake := &fakeEmailCoordinator{}
+	ctrl.SetEmailCoordinator(fake)
+
+	r := gin.New()
+	r.Use(gin.Recovery())
+	r.Use(withTestAuth(9, 1))
+	r.DELETE("/api/v1/connectors/configs/:name", ctrl.Revoke)
+
+	resp := doReq(t, r, "DELETE", "/api/v1/connectors/configs/msgraph-email", nil, false)
+	require.Equal(t, common.SuccessCode, resp.Code, "body=%s", mustString(resp))
+
+	fake.mu.Lock()
+	defer fake.mu.Unlock()
+	assert.Equal(t, []int{9}, fake.stopped)
 }
 
 func TestConnectorController_Test_Success(t *testing.T) {
