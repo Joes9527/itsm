@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Card, Form, Input, Select, Button, Space, Typography, App, Tag,
   Row, Col, Spin, Alert, DatePicker, Tree, Empty, Divider, Collapse,
@@ -132,9 +132,14 @@ const inferTicketType = (template: DbTemplate | null, preset: TicketTypePreset |
 
 export default function CreateTicketPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { message } = App.useApp();
   const { t } = useI18n();
   const [form] = Form.useForm();
+
+  // URL 参数：从服务目录点进来的分类和名称
+  const urlCategory = searchParams.get('category') || '';
+  const urlItem = searchParams.get('item') || '';
 
   // --- 状态 ---
   const [loading, setLoading] = useState(false);
@@ -194,6 +199,18 @@ export default function CreateTicketPage() {
       .catch(err => console.warn('Failed to load templates:', err))
       .finally(() => setTemplatesLoading(false));
   }, []);
+
+  // URL 参数：自动选中树节点 + 预填标题
+  useEffect(() => {
+    if (!urlCategory || categories.length === 0) return;
+    const cat = categories.find(c => c.code === urlCategory);
+    if (cat) {
+      setSelectedCategoryKeys([`cat-${cat.id}`]);
+      setSelectedCategoryCode(cat.code);
+      form.setFieldValue('category', cat.code);
+      if (urlItem) form.setFieldValue('title', urlItem);
+    }
+  }, [urlCategory, categories]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- 分类树 ---
   const categoryTree = useMemo(() => buildCategoryTree(categories), [categories]);
