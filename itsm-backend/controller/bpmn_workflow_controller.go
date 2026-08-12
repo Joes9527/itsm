@@ -847,13 +847,7 @@ func (c *BPMNWorkflowController) GetVersion(ctx *gin.Context) {
 	versionStr := ctx.Param("version")
 	tenantID := ctx.GetInt("tenant_id")
 
-	version, err := strconv.Atoi(versionStr)
-	if err != nil {
-		common.Fail(ctx, common.BadRequestCode, "无效的版本号")
-		return
-	}
-
-	versionInfo, err := c.versionService.GetVersion(ctx, processKey, version, tenantID)
+	versionInfo, err := c.versionService.GetVersion(ctx, processKey, versionStr, tenantID)
 	if err != nil {
 		common.NotFound(ctx, "版本不存在")
 		return
@@ -888,13 +882,7 @@ func (c *BPMNWorkflowController) ActivateVersion(ctx *gin.Context) {
 	versionStr := ctx.Param("version")
 	tenantID := ctx.GetInt("tenant_id")
 
-	version, err := strconv.Atoi(versionStr)
-	if err != nil {
-		common.Fail(ctx, common.BadRequestCode, "无效的版本号")
-		return
-	}
-
-	err = c.versionService.ActivateVersion(ctx, processKey, version, tenantID)
+	err := c.versionService.ActivateVersion(ctx, processKey, versionStr, tenantID)
 	if err != nil {
 		common.InternalError(ctx, "激活版本失败: "+err.Error())
 		return
@@ -909,18 +897,12 @@ func (c *BPMNWorkflowController) RollbackVersion(ctx *gin.Context) {
 	versionStr := ctx.Param("version")
 	tenantID := ctx.GetInt("tenant_id")
 
-	version, err := strconv.Atoi(versionStr)
-	if err != nil {
-		common.Fail(ctx, common.BadRequestCode, "无效的版本号")
-		return
-	}
-
 	var req struct {
 		Reason string `json:"reason"`
 	}
 	ctx.ShouldBindJSON(&req)
 
-	err = c.versionService.RollbackToVersion(ctx, processKey, version, tenantID, req.Reason)
+	err := c.versionService.RollbackToVersion(ctx, processKey, versionStr, tenantID, req.Reason)
 	if err != nil {
 		common.InternalError(ctx, "回滚版本失败: "+err.Error())
 		return
@@ -942,25 +924,13 @@ func (c *BPMNWorkflowController) CompareVersions(ctx *gin.Context) {
 		return
 	}
 
-	base, err := strconv.Atoi(baseVersion)
-	if err != nil {
-		common.Fail(ctx, common.BadRequestCode, "无效的基础版本号")
-		return
-	}
-
-	target, err := strconv.Atoi(targetVersion)
-	if err != nil {
-		common.Fail(ctx, common.BadRequestCode, "无效的目标版本号")
-		return
-	}
-
 	// 相同版本无需比较
-	if base == target {
+	if baseVersion == targetVersion {
 		common.SuccessWithMessage(ctx, "版本相同，无需比较", nil)
 		return
 	}
 
-	comparison, err := c.versionService.CompareVersions(ctx, processKey, base, target, tenantID)
+	comparison, err := c.versionService.CompareVersions(ctx, processKey, baseVersion, targetVersion, tenantID)
 	if err != nil {
 		common.InternalError(ctx, "版本比较失败: "+err.Error())
 		return
