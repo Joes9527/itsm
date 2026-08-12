@@ -181,7 +181,7 @@ func (c *BPMNWorkflowController) CreateProcessDefinition(ctx *gin.Context) {
 		return
 	}
 
-	common.SuccessWithMessage(ctx, "流程定义创建成功", definition)
+	common.SuccessWithMessage(ctx, "流程定义创建成功", dto.ToProcessDefinitionResponse(definition))
 }
 
 // ListProcessDefinitions 获取流程定义列表
@@ -215,7 +215,7 @@ func (c *BPMNWorkflowController) ListProcessDefinitions(ctx *gin.Context) {
 	}
 
 	// 使用统一响应格式
-	listResponse := common.NewListResponse(definitions, common.NewPaginationResponse(int(req.Page), int(req.PageSize), int64(total)))
+	listResponse := common.NewListResponse(dto.ToProcessDefinitionResponseList(definitions), common.NewPaginationResponse(int(req.Page), int(req.PageSize), int64(total)))
 	common.Success(ctx, listResponse)
 }
 
@@ -242,7 +242,7 @@ func (c *BPMNWorkflowController) GetProcessDefinition(ctx *gin.Context) {
 		return
 	}
 
-	common.Success(ctx, definition)
+	common.Success(ctx, dto.ToProcessDefinitionResponse(definition))
 }
 
 // UpdateProcessDefinition 更新流程定义
@@ -270,7 +270,7 @@ func (c *BPMNWorkflowController) UpdateProcessDefinition(ctx *gin.Context) {
 		return
 	}
 
-	common.SuccessWithMessage(ctx, "流程定义更新成功", definition)
+	common.SuccessWithMessage(ctx, "流程定义更新成功", dto.ToProcessDefinitionResponse(definition))
 }
 
 // DeleteProcessDefinition 删除流程定义
@@ -375,7 +375,7 @@ func (c *BPMNWorkflowController) CloneProcessDefinition(ctx *gin.Context) {
 		return
 	}
 
-	common.Success(ctx, created)
+	common.Success(ctx, dto.ToProcessDefinitionResponse(created))
 }
 
 // SetProcessDefinitionActive 激活/停用流程定义
