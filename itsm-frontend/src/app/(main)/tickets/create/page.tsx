@@ -255,6 +255,7 @@ export default function CreateTicketPage() {
     const node = findNode(categoryTree);
     if (node) {
       setSelectedCategoryCode(node.code);
+      form.setFieldValue('category', node.code);
     }
   };
 
@@ -576,13 +577,31 @@ export default function CreateTicketPage() {
                       </Form.Item>
                     </Col>
                     <Col xs={24} sm={12}>
-                      <Form.Item name="category" label="服务分类" initialValue={selectedCategoryCode || undefined}>
-                        <Select
-                          allowClear showSearch
-                          options={domainOptions}
-                          placeholder="选择服务分类"
-                          optionFilterProp="label"
-                        />
+                      {selectedCategoryCode ? (
+                        <div style={{ paddingTop: 4 }}>
+                          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>服务分类</Text>
+                          <Space>
+                            <Tag color="blue">{selectedCategoryCode}</Tag>
+                            <Button type="link" size="small" onClick={() => {
+                              setSelectedCategoryKeys([]);
+                              setSelectedCategoryCode(null);
+                              form.setFieldValue('category', undefined);
+                            }}>清除</Button>
+                          </Space>
+                        </div>
+                      ) : (
+                        <Form.Item name="category" label="服务分类（可选）">
+                          <Select
+                            allowClear showSearch
+                            options={domainOptions}
+                            placeholder="未选分类树？在此快速选择"
+                            optionFilterProp="label"
+                          />
+                        </Form.Item>
+                      )}
+                      {/* 隐藏字段，确保分类值提交 */}
+                      <Form.Item name="category" hidden>
+                        <Input />
                       </Form.Item>
                     </Col>
                   </Row>
