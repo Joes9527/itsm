@@ -1445,7 +1445,7 @@ func (s *Seeder) seedPermissions(ctx context.Context) {
 		{"project:write", "管理项目", "project", "write", "管理项目"},
 		{"application:read", "查看应用", "application", "read", "查看应用"},
 		{"application:write", "管理应用", "application", "write", "管理应用"},
-		{"audit:read", "查看审计", "audit", "read", "查看审计日志"},
+		{"audit_log:read", "查看审计", "audit_log", "read", "查看审计日志"},
 		{"ai:read", "查看AI能力", "ai", "read", "查看AI能力和审计"},
 		{"ai:write", "管理AI能力", "ai", "write", "调用和管理AI能力"},
 		{"connector:write", "管理连接器", "connector", "write", "管理连接器配置"},
@@ -1464,6 +1464,78 @@ func (s *Seeder) seedPermissions(ctx context.Context) {
 		{"msp_allocation:write", "管理分配", "msp_allocation", "write", "创建、编辑MSP分配"},
 		{"msp_report:read", "查看报表", "msp_report", "read", "查看MSP报表"},
 		{"msp_report:write", "管理报表", "msp_report", "write", "生成和管理MSP报表"},
+		// 审批工作流
+		{"approval_workflow:read", "查看审批工作流", "approval_workflow", "read", "查看审批工作流"},
+		{"approval_workflow:create", "创建审批工作流", "approval_workflow", "create", "创建审批工作流"},
+		{"approval_workflow:update", "更新审批工作流", "approval_workflow", "update", "更新审批工作流"},
+		{"approval_workflow:delete", "删除审批工作流", "approval_workflow", "delete", "删除审批工作流"},
+		// 分派规则
+		{"assignment_rule:read", "查看分派规则", "assignment_rule", "read", "查看分派规则"},
+		{"assignment_rule:create", "创建分派规则", "assignment_rule", "create", "创建分派规则"},
+		{"assignment_rule:update", "更新分派规则", "assignment_rule", "update", "更新分派规则"},
+		{"assignment_rule:delete", "删除分派规则", "assignment_rule", "delete", "删除分派规则"},
+		// 自动化规则
+		{"automation_rule:read", "查看自动化规则", "automation_rule", "read", "查看自动化规则"},
+		{"automation_rule:create", "创建自动化规则", "automation_rule", "create", "创建自动化规则"},
+		{"automation_rule:update", "更新自动化规则", "automation_rule", "update", "更新自动化规则"},
+		{"automation_rule:delete", "删除自动化规则", "automation_rule", "delete", "删除自动化规则"},
+		// 云账号
+		{"cloud_account:read", "查看云账号", "cloud_account", "read", "查看云账号"},
+		{"cloud_account:write", "管理云账号", "cloud_account", "write", "创建、编辑云账号"},
+		{"cloud_account:delete", "删除云账号", "cloud_account", "delete", "删除云账号"},
+		// 云资源
+		{"cloud_resource:read", "查看云资源", "cloud_resource", "read", "查看云资源"},
+		{"cloud_resource:write", "管理云资源", "cloud_resource", "write", "创建、编辑云资源"},
+		{"cloud_resource:delete", "删除云资源", "cloud_resource", "delete", "删除云资源"},
+		// 云服务
+		{"cloud_service:read", "查看云服务", "cloud_service", "read", "查看云服务"},
+		{"cloud_service:write", "管理云服务", "cloud_service", "write", "创建、编辑云服务"},
+		{"cloud_service:delete", "删除云服务", "cloud_service", "delete", "删除云服务"},
+		// 系统配置
+		{"system_config:read", "查看系统配置", "system_config", "read", "查看系统配置"},
+		{"system_config:update", "更新系统配置", "system_config", "update", "更新系统配置"},
+		// 问题调查
+		{"investigation:read", "查看调查", "investigation", "read", "查看问题调查"},
+		{"investigation:create", "创建调查", "investigation", "create", "创建问题调查"},
+		{"investigation:update", "更新调查", "investigation", "update", "更新问题调查"},
+		// 菜单
+		{"menu:read", "查看菜单", "menu", "read", "查看菜单配置"},
+		{"menu:create", "创建菜单", "menu", "create", "创建菜单"},
+		{"menu:update", "更新菜单", "menu", "update", "更新菜单"},
+		{"menu:delete", "删除菜单", "menu", "delete", "删除菜单"},
+		// 权限管理
+		{"permission:read", "查看权限", "permission", "read", "查看权限定义"},
+		{"permission:create", "创建权限", "permission", "create", "创建权限"},
+		// 流程实例
+		{"process_instance:read", "查看流程实例", "process_instance", "read", "查看流程实例"},
+		{"process_instance:create", "启动流程", "process_instance", "create", "启动流程实例"},
+		{"process_instance:update", "管理流程", "process_instance", "update", "暂停/恢复/取消流程"},
+		// 根因
+		{"root_cause:create", "设置根因", "root_cause", "create", "设置问题根因"},
+		// 解决方案
+		{"solution:create", "创建方案", "solution", "create", "创建解决方案"},
+		// 步骤
+		{"step:create", "创建步骤", "step", "create", "创建调查步骤"},
+		{"step:update", "更新步骤", "step", "update", "更新调查步骤"},
+		// 标签
+		{"tag:read", "查看标签", "tag", "read", "查看工单标签"},
+		// 任务
+		{"task:read", "查看任务", "task", "read", "查看审批/流程任务"},
+		{"task:update", "处理任务", "task", "update", "审批/处理流程任务"},
+		// 租户
+		{"tenant:read", "查看租户", "tenant", "read", "查看租户信息"},
+		{"tenant:create", "创建租户", "tenant", "create", "创建新租户"},
+		{"tenant:update", "更新租户", "tenant", "update", "更新租户配置"},
+		{"tenant:delete", "删除租户", "tenant", "delete", "删除租户"},
+		// 视图
+		{"view:read", "查看视图", "view", "read", "查看自定义视图"},
+		{"view:create", "创建视图", "view", "create", "创建自定义视图"},
+		{"view:update", "更新视图", "view", "update", "更新自定义视图"},
+		{"view:delete", "删除视图", "view", "delete", "删除自定义视图"},
+		// 部件
+		{"widget:create", "创建部件", "widget", "create", "创建仪表盘部件"},
+		{"widget:update", "更新部件", "widget", "update", "更新仪表盘部件"},
+		{"widget:delete", "删除部件", "widget", "delete", "删除仪表盘部件"},
 	}
 	s.expectedPermissions = make([]string, 0, len(permissions))
 	for _, p := range permissions {
@@ -1808,8 +1880,12 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 			"ticket_category:read", "ticket_category:create", "ticket_category:update",
 			"workflow:read",
 			"approval:read",
+			"approval_workflow:read",
 			"sla:read",
 			"knowledge:read",
+			"tag:read",
+			"task:read",
+			"process_instance:read",
 		},
 		// 一线支持工程师
 		"l1_support": {
@@ -1885,6 +1961,7 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		"end_user": {
 			"ticket:read", "ticket:write", "knowledge:read", "service_catalog:read",
 			"ticket_category:read", "ticket_template:read", "notification:read",
+			"tag:read",
 		},
 		// 访客
 		"guest": {
@@ -2000,7 +2077,7 @@ func allPermissionCodes() []string {
 		"org:read", "org:write",
 		"project:read", "project:write",
 		"application:read", "application:write",
-		"audit:read",
+		"audit_log:read",
 		"ai:read", "ai:write",
 		"connector:write",
 		"vendor:read", "vendor:write", "vendor:delete",
@@ -2010,6 +2087,30 @@ func allPermissionCodes() []string {
 		"msp_ticket:read", "msp_ticket:write",
 		"msp_allocation:read", "msp_allocation:write",
 		"msp_report:read", "msp_report:write",
+		// 新增: 审批工作流/分派规则/自动化规则
+		"approval_workflow:read", "approval_workflow:create", "approval_workflow:update", "approval_workflow:delete",
+		"assignment_rule:read", "assignment_rule:create", "assignment_rule:update", "assignment_rule:delete",
+		"automation_rule:read", "automation_rule:create", "automation_rule:update", "automation_rule:delete",
+		// 新增: 云管理
+		"cloud_account:read", "cloud_account:write", "cloud_account:delete",
+		"cloud_resource:read", "cloud_resource:write", "cloud_resource:delete",
+		"cloud_service:read", "cloud_service:write", "cloud_service:delete",
+		// 新增: 系统配置/菜单/权限管理/租户
+		"system_config:read", "system_config:update",
+		"menu:read", "menu:create", "menu:update", "menu:delete",
+		"permission:read", "permission:create",
+		"tenant:read", "tenant:create", "tenant:update", "tenant:delete",
+		// 新增: 流程实例/任务/步骤
+		"process_instance:read", "process_instance:create", "process_instance:update",
+		"task:read", "task:update",
+		"step:create", "step:update",
+		// 新增: 问题调查/根因/方案
+		"investigation:read", "investigation:create", "investigation:update",
+		"root_cause:create", "solution:create",
+		// 新增: 视图/部件/标签
+		"view:read", "view:create", "view:update", "view:delete",
+		"widget:create", "widget:update", "widget:delete",
+		"tag:read",
 	}
 }
 

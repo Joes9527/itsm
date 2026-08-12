@@ -706,15 +706,15 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 			sysConfigs := tenant.(*gin.RouterGroup).Group("/system-configs")
 			{
 				// 配置管理
-				sysConfigs.GET("", middleware.RequirePermission("config", "read"), config.SystemConfigController.ListConfigs)
-				sysConfigs.GET("/init", middleware.RequirePermission("config", "read"), config.SystemConfigController.InitDefaultConfigs)
-				sysConfigs.GET("/:id", middleware.RequirePermission("config", "read"), config.SystemConfigController.GetConfig)
-				sysConfigs.GET("/key/:key", middleware.RequirePermission("config", "read"), config.SystemConfigController.GetConfigByKey)
-				sysConfigs.PUT("/:id", middleware.RequirePermission("config", "update"), config.SystemConfigController.UpdateConfig)
-				sysConfigs.PUT("/batch", middleware.RequirePermission("config", "update"), config.SystemConfigController.BatchUpdateConfigs)
+				sysConfigs.GET("", middleware.RequirePermission("system_config", "read"), config.SystemConfigController.ListConfigs)
+				sysConfigs.GET("/init", middleware.RequirePermission("system_config", "read"), config.SystemConfigController.InitDefaultConfigs)
+				sysConfigs.GET("/:id", middleware.RequirePermission("system_config", "read"), config.SystemConfigController.GetConfig)
+				sysConfigs.GET("/key/:key", middleware.RequirePermission("system_config", "read"), config.SystemConfigController.GetConfigByKey)
+				sysConfigs.PUT("/:id", middleware.RequirePermission("system_config", "update"), config.SystemConfigController.UpdateConfig)
+				sysConfigs.PUT("/batch", middleware.RequirePermission("system_config", "update"), config.SystemConfigController.BatchUpdateConfigs)
 
 				// 系统状态
-				sysConfigs.GET("/status", middleware.RequirePermission("config", "read"), func(c *gin.Context) {
+				sysConfigs.GET("/status", middleware.RequirePermission("system_config", "read"), func(c *gin.Context) {
 					var m runtime.MemStats
 					runtime.ReadMemStats(&m)
 
@@ -740,13 +740,13 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				// 兼容旧路径：/configs → /system-configs
 				configs := tenant.(*gin.RouterGroup).Group("/configs")
 				{
-					configs.GET("", middleware.RequirePermission("config", "read"), config.SystemConfigController.ListConfigs)
-					configs.GET("/init", middleware.RequirePermission("config", "read"), config.SystemConfigController.InitDefaultConfigs)
-					configs.GET("/:id", middleware.RequirePermission("config", "read"), config.SystemConfigController.GetConfig)
-					configs.GET("/key/:key", middleware.RequirePermission("config", "read"), config.SystemConfigController.GetConfigByKey)
-					configs.PUT("/:id", middleware.RequirePermission("config", "update"), config.SystemConfigController.UpdateConfig)
-					configs.PUT("/batch", middleware.RequirePermission("config", "update"), config.SystemConfigController.BatchUpdateConfigs)
-					configs.GET("/status", middleware.RequirePermission("config", "read"), func(c *gin.Context) {
+					configs.GET("", middleware.RequirePermission("system_config", "read"), config.SystemConfigController.ListConfigs)
+					configs.GET("/init", middleware.RequirePermission("system_config", "read"), config.SystemConfigController.InitDefaultConfigs)
+					configs.GET("/:id", middleware.RequirePermission("system_config", "read"), config.SystemConfigController.GetConfig)
+					configs.GET("/key/:key", middleware.RequirePermission("system_config", "read"), config.SystemConfigController.GetConfigByKey)
+					configs.PUT("/:id", middleware.RequirePermission("system_config", "update"), config.SystemConfigController.UpdateConfig)
+					configs.PUT("/batch", middleware.RequirePermission("system_config", "update"), config.SystemConfigController.BatchUpdateConfigs)
+					configs.GET("/status", middleware.RequirePermission("system_config", "read"), func(c *gin.Context) {
 						var m runtime.MemStats
 						runtime.ReadMemStats(&m)
 						c.JSON(200, gin.H{
@@ -765,7 +765,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 					})
 				}
 
-				sysRoot.GET("/config", middleware.RequirePermission("config", "read"), func(c *gin.Context) {
+				sysRoot.GET("/config", middleware.RequirePermission("system_config", "read"), func(c *gin.Context) {
 					c.JSON(200, gin.H{
 						"status":    "ok",
 						"version":   "1.6.8",
