@@ -115,7 +115,8 @@ func (e *EscalationService) processSLAEscalations(ctx context.Context, tenantID 
 			// 多级连续升级：while 循环，逐级推进
 			currentMax := alert.EscalationLevel
 			for {
-				nextLevel := e.matrixSvc.FindNextEscalationLevel(tenantID, priority, elapsedMinutes, currentMax)
+				slaDefID := e.resolveSLADefinitionID(ctx, alert.TicketID)
+				nextLevel := e.matrixSvc.FindNextEscalationLevel(tenantID, priority, elapsedMinutes, currentMax, slaDefID)
 				if nextLevel == nil {
 					break
 				}
@@ -153,6 +154,17 @@ func (e *EscalationService) resolveTicketPriority(ctx context.Context, ticketID 
 		return ""
 	}
 	return string(t.Priority)
+}
+
+func (e *EscalationService) resolveSLADefinitionID(ctx context.Context, ticketID int) int {
+	if ticketID <= 0 || e.client == nil {
+		return 0
+	}
+	t, err := e.client.Ticket.Get(ctx, ticketID)
+	if err != nil || t == nil {
+		return 0
+	}
+	return t.SLADefinitionID
 }
 
 // escalateToLevelByMatrix 按矩阵级别升级

@@ -278,7 +278,6 @@ var ForeignKeys = []string{
 	"department_tickets",
 	"problem_tickets",
 	"sla_definition_tickets",
-	"sla_policy_tickets",
 	"ticket_tag_tickets",
 	"ticket_template_tickets",
 }

@@ -12,6 +12,7 @@ import (
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/processdefinition"
+	"itsm-backend/ent/processdeployment"
 
 	"github.com/pkg/errors"
 )
@@ -173,7 +174,7 @@ func (s *BPMNTemplateService) isTemplateDeployed(ctx context.Context, templateID
 	return count > 0, nil
 }
 
-// deployTemplate 部署单个模板
+// deployTemplate 部署单个模板（幂等：已存在则跳过）
 func (s *BPMNTemplateService) deployTemplate(ctx context.Context, tmpl *TemplateInfo, tenantID int) error {
 	// 读取模板文件
 	data, err := bpmnTemplates.ReadFile(filepath.Join("bpmn", tmpl.Filename))
@@ -181,19 +182,28 @@ func (s *BPMNTemplateService) deployTemplate(ctx context.Context, tmpl *Template
 		return errors.Wrap(err, "读取模板文件失败")
 	}
 
-	// 获取当前时间
 	now := time.Now()
+	deploymentID := fmt.Sprintf("%s-v1", tmpl.ID)
 
-	// 先创建部署记录
-	deployment, err := s.client.ProcessDeployment.Create().
-		SetDeploymentID(fmt.Sprintf("%s-v1", tmpl.ID)).
-		SetDeploymentName(fmt.Sprintf("%s v1", tmpl.Name)).
-		SetDeploymentTime(now).
-		SetTenantID(tenantID).
-		SetDeployedBy("system").
-		Save(ctx)
-	if err != nil {
-		return errors.Wrap(err, "创建部署记录失败")
+	// 幂等：检查部署记录是否已存在
+	existing, _ := s.client.ProcessDeployment.Query().
+		Where(processdeployment.DeploymentID(deploymentID)).
+		First(ctx)
+
+	var deployment *ent.ProcessDeployment
+	if existing != nil {
+		deployment = existing
+	} else {
+		deployment, err = s.client.ProcessDeployment.Create().
+			SetDeploymentID(deploymentID).
+			SetDeploymentName(fmt.Sprintf("%s v1", tmpl.Name)).
+			SetDeploymentTime(now).
+			SetTenantID(tenantID).
+			SetDeployedBy("system").
+			Save(ctx)
+		if err != nil {
+			return errors.Wrap(err, "创建部署记录失败")
+		}
 	}
 
 	// 创建流程定义（关联部署ID）

@@ -100,7 +100,6 @@ type Ticket struct {
 	department_tickets         *int
 	problem_tickets            *int
 	sla_definition_tickets     *int
-	sla_policy_tickets         *int
 	ticket_tag_tickets         *int
 	ticket_template_tickets    *int
 	selectValues               sql.SelectValues
@@ -316,11 +315,9 @@ func (*Ticket) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullInt64)
 		case ticket.ForeignKeys[3]: // sla_definition_tickets
 			values[i] = new(sql.NullInt64)
-		case ticket.ForeignKeys[4]: // sla_policy_tickets
+		case ticket.ForeignKeys[4]: // ticket_tag_tickets
 			values[i] = new(sql.NullInt64)
-		case ticket.ForeignKeys[5]: // ticket_tag_tickets
-			values[i] = new(sql.NullInt64)
-		case ticket.ForeignKeys[6]: // ticket_template_tickets
+		case ticket.ForeignKeys[5]: // ticket_template_tickets
 			values[i] = new(sql.NullInt64)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -599,19 +596,12 @@ func (_m *Ticket) assignValues(columns []string, values []any) error {
 			}
 		case ticket.ForeignKeys[4]:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for edge-field sla_policy_tickets", value)
-			} else if value.Valid {
-				_m.sla_policy_tickets = new(int)
-				*_m.sla_policy_tickets = int(value.Int64)
-			}
-		case ticket.ForeignKeys[5]:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for edge-field ticket_tag_tickets", value)
 			} else if value.Valid {
 				_m.ticket_tag_tickets = new(int)
 				*_m.ticket_tag_tickets = int(value.Int64)
 			}
-		case ticket.ForeignKeys[6]:
+		case ticket.ForeignKeys[5]:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for edge-field ticket_template_tickets", value)
 			} else if value.Valid {

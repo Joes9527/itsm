@@ -16,6 +16,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 )
 
@@ -106,6 +107,24 @@ func (_u *SLADefinitionUpdate) ClearPriority() *SLADefinitionUpdate {
 	return _u
 }
 
+// SetCategoryIds sets the "category_ids" field.
+func (_u *SLADefinitionUpdate) SetCategoryIds(v []int) *SLADefinitionUpdate {
+	_u.mutation.SetCategoryIds(v)
+	return _u
+}
+
+// AppendCategoryIds appends value to the "category_ids" field.
+func (_u *SLADefinitionUpdate) AppendCategoryIds(v []int) *SLADefinitionUpdate {
+	_u.mutation.AppendCategoryIds(v)
+	return _u
+}
+
+// ClearCategoryIds clears the value of the "category_ids" field.
+func (_u *SLADefinitionUpdate) ClearCategoryIds() *SLADefinitionUpdate {
+	_u.mutation.ClearCategoryIds()
+	return _u
+}
+
 // SetResponseTime sets the "response_time" field.
 func (_u *SLADefinitionUpdate) SetResponseTime(v int) *SLADefinitionUpdate {
 	_u.mutation.ResetResponseTime()
@@ -181,6 +200,34 @@ func (_u *SLADefinitionUpdate) SetConditions(v map[string]interface{}) *SLADefin
 // ClearConditions clears the value of the "conditions" field.
 func (_u *SLADefinitionUpdate) ClearConditions() *SLADefinitionUpdate {
 	_u.mutation.ClearConditions()
+	return _u
+}
+
+// SetExcludeWeekends sets the "exclude_weekends" field.
+func (_u *SLADefinitionUpdate) SetExcludeWeekends(v bool) *SLADefinitionUpdate {
+	_u.mutation.SetExcludeWeekends(v)
+	return _u
+}
+
+// SetNillableExcludeWeekends sets the "exclude_weekends" field if the given value is not nil.
+func (_u *SLADefinitionUpdate) SetNillableExcludeWeekends(v *bool) *SLADefinitionUpdate {
+	if v != nil {
+		_u.SetExcludeWeekends(*v)
+	}
+	return _u
+}
+
+// SetExcludeHolidays sets the "exclude_holidays" field.
+func (_u *SLADefinitionUpdate) SetExcludeHolidays(v bool) *SLADefinitionUpdate {
+	_u.mutation.SetExcludeHolidays(v)
+	return _u
+}
+
+// SetNillableExcludeHolidays sets the "exclude_holidays" field if the given value is not nil.
+func (_u *SLADefinitionUpdate) SetNillableExcludeHolidays(v *bool) *SLADefinitionUpdate {
+	if v != nil {
+		_u.SetExcludeHolidays(*v)
+	}
 	return _u
 }
 
@@ -482,6 +529,17 @@ func (_u *SLADefinitionUpdate) sqlSave(ctx context.Context) (_node int, err erro
 	if _u.mutation.PriorityCleared() {
 		_spec.ClearField(sladefinition.FieldPriority, field.TypeString)
 	}
+	if value, ok := _u.mutation.CategoryIds(); ok {
+		_spec.SetField(sladefinition.FieldCategoryIds, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedCategoryIds(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, sladefinition.FieldCategoryIds, value)
+		})
+	}
+	if _u.mutation.CategoryIdsCleared() {
+		_spec.ClearField(sladefinition.FieldCategoryIds, field.TypeJSON)
+	}
 	if value, ok := _u.mutation.ResponseTime(); ok {
 		_spec.SetField(sladefinition.FieldResponseTime, field.TypeInt, value)
 	}
@@ -511,6 +569,12 @@ func (_u *SLADefinitionUpdate) sqlSave(ctx context.Context) (_node int, err erro
 	}
 	if _u.mutation.ConditionsCleared() {
 		_spec.ClearField(sladefinition.FieldConditions, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.ExcludeWeekends(); ok {
+		_spec.SetField(sladefinition.FieldExcludeWeekends, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.ExcludeHolidays(); ok {
+		_spec.SetField(sladefinition.FieldExcludeHolidays, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.IsActive(); ok {
 		_spec.SetField(sladefinition.FieldIsActive, field.TypeBool, value)
@@ -801,6 +865,24 @@ func (_u *SLADefinitionUpdateOne) ClearPriority() *SLADefinitionUpdateOne {
 	return _u
 }
 
+// SetCategoryIds sets the "category_ids" field.
+func (_u *SLADefinitionUpdateOne) SetCategoryIds(v []int) *SLADefinitionUpdateOne {
+	_u.mutation.SetCategoryIds(v)
+	return _u
+}
+
+// AppendCategoryIds appends value to the "category_ids" field.
+func (_u *SLADefinitionUpdateOne) AppendCategoryIds(v []int) *SLADefinitionUpdateOne {
+	_u.mutation.AppendCategoryIds(v)
+	return _u
+}
+
+// ClearCategoryIds clears the value of the "category_ids" field.
+func (_u *SLADefinitionUpdateOne) ClearCategoryIds() *SLADefinitionUpdateOne {
+	_u.mutation.ClearCategoryIds()
+	return _u
+}
+
 // SetResponseTime sets the "response_time" field.
 func (_u *SLADefinitionUpdateOne) SetResponseTime(v int) *SLADefinitionUpdateOne {
 	_u.mutation.ResetResponseTime()
@@ -876,6 +958,34 @@ func (_u *SLADefinitionUpdateOne) SetConditions(v map[string]interface{}) *SLADe
 // ClearConditions clears the value of the "conditions" field.
 func (_u *SLADefinitionUpdateOne) ClearConditions() *SLADefinitionUpdateOne {
 	_u.mutation.ClearConditions()
+	return _u
+}
+
+// SetExcludeWeekends sets the "exclude_weekends" field.
+func (_u *SLADefinitionUpdateOne) SetExcludeWeekends(v bool) *SLADefinitionUpdateOne {
+	_u.mutation.SetExcludeWeekends(v)
+	return _u
+}
+
+// SetNillableExcludeWeekends sets the "exclude_weekends" field if the given value is not nil.
+func (_u *SLADefinitionUpdateOne) SetNillableExcludeWeekends(v *bool) *SLADefinitionUpdateOne {
+	if v != nil {
+		_u.SetExcludeWeekends(*v)
+	}
+	return _u
+}
+
+// SetExcludeHolidays sets the "exclude_holidays" field.
+func (_u *SLADefinitionUpdateOne) SetExcludeHolidays(v bool) *SLADefinitionUpdateOne {
+	_u.mutation.SetExcludeHolidays(v)
+	return _u
+}
+
+// SetNillableExcludeHolidays sets the "exclude_holidays" field if the given value is not nil.
+func (_u *SLADefinitionUpdateOne) SetNillableExcludeHolidays(v *bool) *SLADefinitionUpdateOne {
+	if v != nil {
+		_u.SetExcludeHolidays(*v)
+	}
 	return _u
 }
 
@@ -1207,6 +1317,17 @@ func (_u *SLADefinitionUpdateOne) sqlSave(ctx context.Context) (_node *SLADefini
 	if _u.mutation.PriorityCleared() {
 		_spec.ClearField(sladefinition.FieldPriority, field.TypeString)
 	}
+	if value, ok := _u.mutation.CategoryIds(); ok {
+		_spec.SetField(sladefinition.FieldCategoryIds, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedCategoryIds(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, sladefinition.FieldCategoryIds, value)
+		})
+	}
+	if _u.mutation.CategoryIdsCleared() {
+		_spec.ClearField(sladefinition.FieldCategoryIds, field.TypeJSON)
+	}
 	if value, ok := _u.mutation.ResponseTime(); ok {
 		_spec.SetField(sladefinition.FieldResponseTime, field.TypeInt, value)
 	}
@@ -1236,6 +1357,12 @@ func (_u *SLADefinitionUpdateOne) sqlSave(ctx context.Context) (_node *SLADefini
 	}
 	if _u.mutation.ConditionsCleared() {
 		_spec.ClearField(sladefinition.FieldConditions, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.ExcludeWeekends(); ok {
+		_spec.SetField(sladefinition.FieldExcludeWeekends, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.ExcludeHolidays(); ok {
+		_spec.SetField(sladefinition.FieldExcludeHolidays, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.IsActive(); ok {
 		_spec.SetField(sladefinition.FieldIsActive, field.TypeBool, value)

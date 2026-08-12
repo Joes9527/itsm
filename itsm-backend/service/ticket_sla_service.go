@@ -22,10 +22,11 @@ type TicketSLAServiceInterface interface {
 	GetOverdueTickets(ctx context.Context, tenantID int) ([]*ent.Ticket, error)
 	// GetTicketStats 获取工单统计
 	GetTicketStats(ctx context.Context, tenantID int) (*TicketStats, error)
-	// CalculateSLADeadline 计算SLA截止时间
-	CalculateSLADeadline(ctx context.Context, tenantID int, ticketType, priority string) (*SLADeadlineResult, error)
-	// CalculateSLADeadlineFromRequest 根据请求参数计算SLA截止时间（包含SLADefinitionID）
-	CalculateSLADeadlineFromRequest(ctx context.Context, tenantID int, ticketType, priority string) (*SLADeadlineResult, error)
+	// CalculateSLADeadline 计算SLA截止时间。categoryID>=1 时优先按分类匹配。
+	CalculateSLADeadline(ctx context.Context, tenantID int, ticketType, priority string, categoryID int) (*SLADeadlineResult, error)
+	// CalculateSLADeadlineFromRequest 根据请求参数计算SLA截止时间（包含SLADefinitionID）。
+	// categoryID 可选：传入 >0 时优先按分类匹配 SLA 定义。
+	CalculateSLADeadlineFromRequest(ctx context.Context, tenantID int, ticketType, priority string, categoryID int) (*SLADeadlineResult, error)
 	// AdjustToBusinessHours 调整时间到工作时间
 	AdjustToBusinessHours(t time.Time) time.Time
 }
@@ -100,9 +101,7 @@ func (s *TicketSLAService) GetTicketSLAInfo(ctx context.Context, ticketID int, t
 	if !t.ResolvedAt.IsZero() {
 		resolutionTimeUsed = int(t.ResolvedAt.Sub(t.CreatedAt).Minutes())
 	}
-
-	// 获取SLA定义
-	slaDef, err := s.getSLADefinition(ctx, tenantID, t.Type, t.Priority)
+	slaDef, err := s.getSLADefinition(ctx, tenantID, t.Type, t.Priority, 0)
 	if err != nil {
 		s.logger.Warnw("Failed to get SLA definition", "error", err)
 		// 返回没有SLA信息的结果
@@ -246,14 +245,14 @@ func (s *TicketSLAService) GetTicketStats(ctx context.Context, tenantID int) (*T
 	return stats, nil
 }
 
-// CalculateSLADeadline 计算SLA截止时间
-func (s *TicketSLAService) CalculateSLADeadline(ctx context.Context, tenantID int, ticketType, priority string) (*SLADeadlineResult, error) {
-	slaDef, err := s.getSLADefinition(ctx, tenantID, ticketType, priority)
+// CalculateSLADeadline 计算SLA截止时间。categoryID>=1 时优先按分类匹配。
+func (s *TicketSLAService) CalculateSLADeadline(ctx context.Context, tenantID int, ticketType, priority string, categoryID int) (*SLADeadlineResult, error) {
+	slaDef, err := s.getSLADefinition(ctx, tenantID, ticketType, priority, categoryID)
 	if err != nil {
 		return nil, err
 	}
 
-	result := &SLADeadlineResult{}
+	result := &SLADeadlineResult{SLADefinitionID: slaDef.ID}
 
 	now := time.Now()
 
@@ -270,39 +269,65 @@ func (s *TicketSLAService) CalculateSLADeadline(ctx context.Context, tenantID in
 	return result, nil
 }
 
-// getSLADefinition 获取SLA定义
-func (s *TicketSLAService) getSLADefinition(ctx context.Context, tenantID int, ticketType, priority string) (*ent.SLADefinition, error) {
-	// 尝试查找匹配的类型和优先级
-	sla, err := s.client.SLADefinition.Query().
-		Where(
-			sladefinition.TenantID(tenantID),
+// getSLADefinition 获取SLA定义。匹配优先级：category_id > type+priority > type-only > default。
+func (s *TicketSLAService) getSLADefinition(ctx context.Context, tenantID int, ticketType, priority string, categoryID int) (*ent.SLADefinition, error) {
+	// 1) 按分类ID精确匹配
+	if categoryID > 0 {
+		sla, err := s.matchSLA(ctx, tenantID, func(q *ent.SLADefinitionQuery) {
+			q.Where(sladefinition.IsActive(true))
+		})
+		if err == nil && sla != nil && s.categoryMatches(sla, categoryID) {
+			return sla, nil
+		}
+	}
+
+	// 2) 按 type + priority 精确匹配
+	sla, err := s.matchSLA(ctx, tenantID, func(q *ent.SLADefinitionQuery) {
+		q.Where(
 			sladefinition.ServiceType(ticketType),
 			sladefinition.Priority(priority),
 			sladefinition.IsActive(true),
-		).
-		Only(ctx)
-	if err == nil {
+		)
+	})
+	if err == nil && sla != nil {
 		return sla, nil
 	}
 
-	// 如果没有精确匹配，尝试只匹配类型
-	sla, err = s.client.SLADefinition.Query().
-		Where(
-			sladefinition.TenantID(tenantID),
+	// 3) 按 type-only 匹配
+	sla, err = s.matchSLA(ctx, tenantID, func(q *ent.SLADefinitionQuery) {
+		q.Where(
 			sladefinition.ServiceType(ticketType),
-			sladefinition.PriorityIsNil(),
 			sladefinition.IsActive(true),
-		).
-		Only(ctx)
-	if err == nil {
+		)
+	})
+	if err == nil && sla != nil {
 		return sla, nil
 	}
 
-	// 如果没有匹配的类型，返回默认SLA
-	return &ent.SLADefinition{
-		ResponseTime:   60,  // 默认1小时响应
-		ResolutionTime: 480, // 默认8小时解决
-	}, nil
+	// 4) 默认兜底
+	return s.defaultSLADefinition(), nil
+}
+
+// matchSLA 查找租户下第一个匹配的 SLA 定义
+func (s *TicketSLAService) matchSLA(ctx context.Context, tenantID int, apply func(q *ent.SLADefinitionQuery)) (*ent.SLADefinition, error) {
+	q := s.client.SLADefinition.Query().Where(sladefinition.TenantIDEQ(tenantID))
+	apply(q)
+	return q.First(ctx)
+}
+
+// categoryMatches 检查 SLA 的 category_ids 是否包含目标分类
+func (s *TicketSLAService) categoryMatches(sla *ent.SLADefinition, categoryID int) bool {
+	for _, id := range sla.CategoryIds {
+		if id == categoryID {
+			return true
+		}
+	}
+	return false
+}
+
+// defaultSLADefinition 返回一个内联默认 SLA 定义
+func (s *TicketSLAService) defaultSLADefinition() *ent.SLADefinition {
+	return &ent.SLADefinition{ID: 0, Name: "默认SLA", ResponseTime: 480, ResolutionTime: 1440}
 }
 
 // calculateDeadlineWithBusinessHours applies an SLA definition's configured
@@ -487,75 +512,40 @@ func addBusinessMinutes(start time.Time, minutes int, cfg businessHoursConfig) t
 }
 
 // CalculateSLADeadlineFromRequest 根据请求参数计算SLA截止时间（包含SLADefinitionID）
-func (s *TicketSLAService) CalculateSLADeadlineFromRequest(ctx context.Context, tenantID int, ticketType, priority string) (*SLADeadlineResult, error) {
+func (s *TicketSLAService) CalculateSLADeadlineFromRequest(ctx context.Context, tenantID int, ticketType, priority string, categoryID int) (*SLADeadlineResult, error) {
 	now := time.Now()
-
-	// 确定service_type
-	var serviceType string
-	switch ticketType {
-	case "incident":
-		serviceType = "incident"
-	case "service_request":
-		serviceType = "service_request"
-	case "change":
-		serviceType = "change"
-	default:
-		// 默认为incident类型
-		serviceType = "incident"
-	}
-
-	// 标准化优先级
+	serviceType := mapTicketTypeToServiceType(ticketType)
 	normalizedPriority := strings.ToLower(priority)
 	if normalizedPriority == "urgent" {
 		normalizedPriority = "critical"
 	}
-
-	// 从数据库查找匹配的SLA定义
-	sla, err := s.client.SLADefinition.Query().
-		Where(
-			sladefinition.TenantID(tenantID),
-			sladefinition.ServiceType(serviceType),
-			sladefinition.Priority(normalizedPriority),
-			sladefinition.IsActive(true),
-		).
-		First(ctx)
-	if err != nil {
-		// 如果找不到精确匹配，尝试查找默认SLA（不带优先级）
-		if ent.IsNotFound(err) {
-			sla, err = s.client.SLADefinition.Query().
-				Where(
-					sladefinition.TenantID(tenantID),
-					sladefinition.ServiceType(serviceType),
-					sladefinition.IsActive(true),
-				).
-				First(ctx)
-		}
-
-		if err != nil || sla == nil {
-			// 如果还是找不到，返回默认值
-			s.logger.Warnw("No SLA definition found, using defaults", "service_type", serviceType, "priority", normalizedPriority)
-			return &SLADeadlineResult{
-				SLADefinitionID:    0,
-				ResponseDeadline:   toPointer(now.Add(8 * time.Hour)),
-				ResolutionDeadline: toPointer(now.Add(24 * time.Hour)),
-			}, nil
-		}
+	slaDef, err := s.getSLADefinition(ctx, tenantID, serviceType, normalizedPriority, categoryID)
+	if err != nil || slaDef == nil {
+		s.logger.Warnw("No SLA definition found, using defaults", "service_type", serviceType, "priority", normalizedPriority)
+		return &SLADeadlineResult{
+			SLADefinitionID:    0,
+			ResponseDeadline:   toPointer(now.Add(8 * time.Hour)),
+			ResolutionDeadline: toPointer(now.Add(24 * time.Hour)),
+		}, nil
 	}
-
-	// 计算截止时间（单位是分钟）。
-	// 阻断7/C-8 修复：统一走 SLA 配置的工作日历。
-	// 旧逻辑用 AdjustToBusinessHours 平移截止时刻，导致非工作时段被当作顺延而非排除，
-	// 且与 GetTicketSLAInfo 路径使用不同口径，造成同一工单"是否违规"两路径结论相反。
-	businessHoursOnly := len(sla.BusinessHours) > 0
-	responseDeadline := s.calculateDeadlineWithBusinessHours(now, sla.ResponseTime, sla.BusinessHours)
-	resolutionDeadline := s.calculateDeadlineWithBusinessHours(now, sla.ResolutionTime, sla.BusinessHours)
-
+	businessHoursOnly := len(slaDef.BusinessHours) > 0
+	responseDeadline := s.calculateDeadlineWithBusinessHours(now, slaDef.ResponseTime, slaDef.BusinessHours)
+	resolutionDeadline := s.calculateDeadlineWithBusinessHours(now, slaDef.ResolutionTime, slaDef.BusinessHours)
 	return &SLADeadlineResult{
-		SLADefinitionID:    sla.ID,
+		SLADefinitionID:    slaDef.ID,
 		ResponseDeadline:   &responseDeadline,
 		ResolutionDeadline: &resolutionDeadline,
 		BusinessHoursOnly:  businessHoursOnly,
 	}, nil
+}
+
+func mapTicketTypeToServiceType(ticketType string) string {
+	switch ticketType {
+	case "incident", "service_request", "change":
+		return ticketType
+	default:
+		return "incident"
+	}
 }
 
 // toPointer 返回指针（辅助函数）

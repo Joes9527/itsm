@@ -26,7 +26,6 @@ import (
 	"itsm-backend/ent/servicecatalog"
 	"itsm-backend/ent/slaalertrule"
 	"itsm-backend/ent/sladefinition"
-	"itsm-backend/ent/slapolicy"
 	"itsm-backend/ent/standardchange"
 	"itsm-backend/ent/tag"
 	"itsm-backend/ent/team"
@@ -58,7 +57,6 @@ var (
 	_ = tag.NameEQ               // Used to ensure tag package is imported
 	_ = assetlicense.NameEQ      // Used to ensure assetlicense package is imported
 	_ = release.TitleEQ          // Used to ensure release package is imported
-	_ = slapolicy.NameEQ         // Used to ensure slapolicy package is imported
 )
 
 // SeedConfig 种子数据配置结构
@@ -564,7 +562,6 @@ func (s *Seeder) SeedAll(ctx context.Context) {
 	s.seedCloudServiceTemplates(ctx)
 	// 使用配置的初始化数据
 	s.seedSLADefinitions(ctx)
-	s.seedSLAPolicies(ctx)
 	s.seedSLAAlertRules(ctx)
 	s.seedApprovalWorkflows(ctx)
 	s.seedProcessBindings(ctx)
@@ -1004,103 +1001,6 @@ func (s *Seeder) seedSLADefinitions(ctx context.Context) {
 	}
 	s.sugar.Infow("SLA definitions seeded", "count", len(s.config.SLADefinitions))
 	_ = slaIDMap
-}
-
-func (s *Seeder) seedSLAPolicies(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip SLA policies seed", "error", err)
-		return
-	}
-
-	policies := s.config.SLAPolicies
-	if len(policies) == 0 {
-		policies = defaultSLAPolicySeeds()
-		s.sugar.Warnw("SLA policies not found in seed config; using built-in defaults")
-	}
-
-	created := 0
-	updated := 0
-	for _, sla := range policies {
-		existing, err := s.client.SLAPolicy.Query().
-			Where(slapolicy.TenantIDEQ(t.ID), slapolicy.NameEQ(sla.Name)).
-			First(ctx)
-		if err == nil {
-			_, err = existing.Update().
-				SetDescription(sla.Description).
-				SetPriority(sla.Priority).
-				SetResponseTimeMinutes(sla.ResponseTimeMinutes).
-				SetResolutionTimeMinutes(sla.ResolutionTimeMinutes).
-				SetExcludeWeekends(sla.ExcludeWeekends).
-				SetExcludeHolidays(sla.ExcludeHolidays).
-				SetIsActive(sla.IsActive).
-				SetPriorityScore(sla.PriorityScore).
-				Save(ctx)
-			if err != nil {
-				s.sugar.Warnw("update SLA policy failed", "error", err, "name", sla.Name)
-				continue
-			}
-			updated++
-			continue
-		}
-
-		_, err = s.client.SLAPolicy.Create().
-			SetName(sla.Name).
-			SetDescription(sla.Description).
-			SetPriority(sla.Priority).
-			SetResponseTimeMinutes(sla.ResponseTimeMinutes).
-			SetResolutionTimeMinutes(sla.ResolutionTimeMinutes).
-			SetExcludeWeekends(sla.ExcludeWeekends).
-			SetExcludeHolidays(sla.ExcludeHolidays).
-			SetIsActive(sla.IsActive).
-			SetPriorityScore(sla.PriorityScore).
-			SetTenantID(t.ID).
-			Save(ctx)
-		if err != nil {
-			s.sugar.Warnw("seed SLA policy failed", "error", err, "name", sla.Name)
-			continue
-		}
-		created++
-	}
-	s.sugar.Infow("SLA policies ensured", "total", len(policies), "created", created, "updated", updated)
-}
-
-func defaultSLAPolicySeeds() []SLAPolicySeed {
-	return []SLAPolicySeed{
-		{
-			Name:                  "默认P1事件SLA",
-			Description:           "高优先级事件响应与解决策略",
-			Priority:              "high",
-			ResponseTimeMinutes:   30,
-			ResolutionTimeMinutes: 240,
-			ExcludeWeekends:       false,
-			ExcludeHolidays:       false,
-			IsActive:              true,
-			PriorityScore:         90,
-		},
-		{
-			Name:                  "默认P2事件SLA",
-			Description:           "中优先级事件响应与解决策略",
-			Priority:              "medium",
-			ResponseTimeMinutes:   120,
-			ResolutionTimeMinutes: 1440,
-			ExcludeWeekends:       true,
-			ExcludeHolidays:       true,
-			IsActive:              true,
-			PriorityScore:         60,
-		},
-		{
-			Name:                  "默认服务请求SLA",
-			Description:           "标准服务请求履约策略",
-			Priority:              "low",
-			ResponseTimeMinutes:   240,
-			ResolutionTimeMinutes: 2880,
-			ExcludeWeekends:       true,
-			ExcludeHolidays:       true,
-			IsActive:              true,
-			PriorityScore:         30,
-		},
-	}
 }
 
 func (s *Seeder) seedSLAAlertRules(ctx context.Context) {

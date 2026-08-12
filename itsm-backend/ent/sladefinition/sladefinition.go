@@ -22,6 +22,8 @@ const (
 	FieldServiceType = "service_type"
 	// FieldPriority holds the string denoting the priority field in the database.
 	FieldPriority = "priority"
+	// FieldCategoryIds holds the string denoting the category_ids field in the database.
+	FieldCategoryIds = "category_ids"
 	// FieldResponseTime holds the string denoting the response_time field in the database.
 	FieldResponseTime = "response_time"
 	// FieldResolutionTime holds the string denoting the resolution_time field in the database.
@@ -32,6 +34,10 @@ const (
 	FieldEscalationRules = "escalation_rules"
 	// FieldConditions holds the string denoting the conditions field in the database.
 	FieldConditions = "conditions"
+	// FieldExcludeWeekends holds the string denoting the exclude_weekends field in the database.
+	FieldExcludeWeekends = "exclude_weekends"
+	// FieldExcludeHolidays holds the string denoting the exclude_holidays field in the database.
+	FieldExcludeHolidays = "exclude_holidays"
 	// FieldIsActive holds the string denoting the is_active field in the database.
 	FieldIsActive = "is_active"
 	// FieldTenantID holds the string denoting the tenant_id field in the database.
@@ -87,32 +93,24 @@ var Columns = []string{
 	FieldDescription,
 	FieldServiceType,
 	FieldPriority,
+	FieldCategoryIds,
 	FieldResponseTime,
 	FieldResolutionTime,
 	FieldBusinessHours,
 	FieldEscalationRules,
 	FieldConditions,
+	FieldExcludeWeekends,
+	FieldExcludeHolidays,
 	FieldIsActive,
 	FieldTenantID,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }
 
-// ForeignKeys holds the SQL foreign-keys that are owned by the "sla_definitions"
-// table and are not defined as standalone fields in the schema.
-var ForeignKeys = []string{
-	"sla_policy_sla_definition",
-}
-
 // ValidColumn reports if the column name is valid (part of the table columns).
 func ValidColumn(column string) bool {
 	for i := range Columns {
 		if column == Columns[i] {
-			return true
-		}
-	}
-	for i := range ForeignKeys {
-		if column == ForeignKeys[i] {
 			return true
 		}
 	}
@@ -130,6 +128,10 @@ var (
 	DefaultResolutionTime int
 	// ResolutionTimeValidator is a validator for the "resolution_time" field. It is called by the builders before save.
 	ResolutionTimeValidator func(int) error
+	// DefaultExcludeWeekends holds the default value on creation for the "exclude_weekends" field.
+	DefaultExcludeWeekends bool
+	// DefaultExcludeHolidays holds the default value on creation for the "exclude_holidays" field.
+	DefaultExcludeHolidays bool
 	// DefaultIsActive holds the default value on creation for the "is_active" field.
 	DefaultIsActive bool
 	// TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
@@ -178,6 +180,16 @@ func ByResponseTime(opts ...sql.OrderTermOption) OrderOption {
 // ByResolutionTime orders the results by the resolution_time field.
 func ByResolutionTime(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldResolutionTime, opts...).ToFunc()
+}
+
+// ByExcludeWeekends orders the results by the exclude_weekends field.
+func ByExcludeWeekends(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldExcludeWeekends, opts...).ToFunc()
+}
+
+// ByExcludeHolidays orders the results by the exclude_holidays field.
+func ByExcludeHolidays(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldExcludeHolidays, opts...).ToFunc()
 }
 
 // ByIsActive orders the results by the is_active field.

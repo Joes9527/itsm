@@ -26,6 +26,8 @@ type SLADefinition struct {
 	ServiceType string `json:"service_type,omitempty"`
 	// 优先级
 	Priority string `json:"priority,omitempty"`
+	// 绑定的工单分类ID列表
+	CategoryIds []int `json:"category_ids,omitempty"`
 	// 响应时间(分钟)
 	ResponseTime int `json:"response_time,omitempty"`
 	// 解决时间(分钟)
@@ -36,6 +38,10 @@ type SLADefinition struct {
 	EscalationRules map[string]interface{} `json:"escalation_rules,omitempty"`
 	// 适用条件
 	Conditions map[string]interface{} `json:"conditions,omitempty"`
+	// 是否排除周末
+	ExcludeWeekends bool `json:"exclude_weekends,omitempty"`
+	// 是否排除节假日
+	ExcludeHolidays bool `json:"exclude_holidays,omitempty"`
 	// 是否激活
 	IsActive bool `json:"is_active,omitempty"`
 	// 租户ID
@@ -46,9 +52,8 @@ type SLADefinition struct {
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the SLADefinitionQuery when eager-loading is set.
-	Edges                     SLADefinitionEdges `json:"edges"`
-	sla_policy_sla_definition *int
-	selectValues              sql.SelectValues
+	Edges        SLADefinitionEdges `json:"edges"`
+	selectValues sql.SelectValues
 }
 
 // SLADefinitionEdges holds the relations/edges for other nodes in the graph.
@@ -107,9 +112,9 @@ func (*SLADefinition) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case sladefinition.FieldBusinessHours, sladefinition.FieldEscalationRules, sladefinition.FieldConditions:
+		case sladefinition.FieldCategoryIds, sladefinition.FieldBusinessHours, sladefinition.FieldEscalationRules, sladefinition.FieldConditions:
 			values[i] = new([]byte)
-		case sladefinition.FieldIsActive:
+		case sladefinition.FieldExcludeWeekends, sladefinition.FieldExcludeHolidays, sladefinition.FieldIsActive:
 			values[i] = new(sql.NullBool)
 		case sladefinition.FieldID, sladefinition.FieldResponseTime, sladefinition.FieldResolutionTime, sladefinition.FieldTenantID:
 			values[i] = new(sql.NullInt64)
@@ -117,8 +122,6 @@ func (*SLADefinition) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullString)
 		case sladefinition.FieldCreatedAt, sladefinition.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
-		case sladefinition.ForeignKeys[0]: // sla_policy_sla_definition
-			values[i] = new(sql.NullInt64)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -164,6 +167,14 @@ func (_m *SLADefinition) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Priority = value.String
 			}
+		case sladefinition.FieldCategoryIds:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field category_ids", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.CategoryIds); err != nil {
+					return fmt.Errorf("unmarshal field category_ids: %w", err)
+				}
+			}
 		case sladefinition.FieldResponseTime:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field response_time", values[i])
@@ -200,6 +211,18 @@ func (_m *SLADefinition) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field conditions: %w", err)
 				}
 			}
+		case sladefinition.FieldExcludeWeekends:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field exclude_weekends", values[i])
+			} else if value.Valid {
+				_m.ExcludeWeekends = value.Bool
+			}
+		case sladefinition.FieldExcludeHolidays:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field exclude_holidays", values[i])
+			} else if value.Valid {
+				_m.ExcludeHolidays = value.Bool
+			}
 		case sladefinition.FieldIsActive:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field is_active", values[i])
@@ -223,13 +246,6 @@ func (_m *SLADefinition) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
 				_m.UpdatedAt = value.Time
-			}
-		case sladefinition.ForeignKeys[0]:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for edge-field sla_policy_sla_definition", value)
-			} else if value.Valid {
-				_m.sla_policy_sla_definition = new(int)
-				*_m.sla_policy_sla_definition = int(value.Int64)
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
@@ -299,6 +315,9 @@ func (_m *SLADefinition) String() string {
 	builder.WriteString("priority=")
 	builder.WriteString(_m.Priority)
 	builder.WriteString(", ")
+	builder.WriteString("category_ids=")
+	builder.WriteString(fmt.Sprintf("%v", _m.CategoryIds))
+	builder.WriteString(", ")
 	builder.WriteString("response_time=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ResponseTime))
 	builder.WriteString(", ")
@@ -313,6 +332,12 @@ func (_m *SLADefinition) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("conditions=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Conditions))
+	builder.WriteString(", ")
+	builder.WriteString("exclude_weekends=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ExcludeWeekends))
+	builder.WriteString(", ")
+	builder.WriteString("exclude_holidays=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ExcludeHolidays))
 	builder.WriteString(", ")
 	builder.WriteString("is_active=")
 	builder.WriteString(fmt.Sprintf("%v", _m.IsActive))

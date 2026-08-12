@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"itsm-backend/ent"
 	"fmt"
 	"sync"
 	"time"
@@ -53,10 +54,10 @@ var DefaultEscalationMatrix = EscalationMatrix{
 
 // EscalationMatrixService 升级矩阵服务
 //
-// 内存缓存每个租户的升级矩阵，缺省使用 DefaultEscalationMatrix。
-// 未来可扩展：每个租户自定义矩阵（通过 DB 存储）。
+// 优先从 SLADefinition.escalation_rules 读取，缺省使用 DefaultEscalationMatrix。
 type EscalationMatrixService struct {
 	logger *zap.SugaredLogger
+	client *ent.Client
 
 	mu    sync.RWMutex
 	cache map[int]EscalationMatrix
@@ -68,6 +69,11 @@ func NewEscalationMatrixService(logger *zap.SugaredLogger) *EscalationMatrixServ
 		logger: logger,
 		cache:  make(map[int]EscalationMatrix),
 	}
+}
+
+// SetClient 注入 Ent 客户端（用于从 DB 读取升级规则）
+func (s *EscalationMatrixService) SetClient(client *ent.Client) {
+	s.client = client
 }
 
 // GetMatrix 获取指定租户的升级矩阵
@@ -111,14 +117,60 @@ func (s *EscalationMatrixService) InvalidateCache(tenantID int) {
 	delete(s.cache, tenantID)
 }
 
-// FindNextEscalationLevel 查找下一个应触发的升级级别
-//
-// 输入：priority + 当前已升级到的最大级别
-// 输出：下一个级别（若所有级别均已升级则返回 nil）
-//
-// 触发条件：levels[i].AfterMinutes <= elapsedMinutes
-func (s *EscalationMatrixService) FindNextEscalationLevel(tenantID int, priority string, elapsedMinutes int, currentMaxLevel int) *EscalationLevel {
-	matrix := s.GetMatrix(tenantID)
+// GetMatrixBySLA 从 SLADefinition.escalation_rules 读取升级矩阵。
+// 若 SLA 未配置升级规则，返回 DefaultEscalationMatrix。
+func (s *EscalationMatrixService) GetMatrixBySLA(ctx context.Context, slaDefinitionID int) EscalationMatrix {
+	if s.client != nil && slaDefinitionID > 0 {
+		sla, err := s.client.SLADefinition.Get(ctx, slaDefinitionID)
+		if err == nil && sla != nil && len(sla.EscalationRules) > 0 {
+			rules := sla.EscalationRules
+			if rules != nil {
+				matrix := make(EscalationMatrix, len(rules))
+				for priority, rawLevels := range rules {
+					if levels, ok := rawLevels.([]interface{}); ok {
+						for _, l := range levels {
+							if lm, ok := l.(map[string]interface{}); ok {
+								level := EscalationLevel{}
+								if v, ok := lm["level"].(float64); ok {
+									level.Level = int(v)
+								}
+								if v, ok := lm["afterMinutes"].(float64); ok {
+									level.AfterMinutes = int(v)
+								}
+								if v, ok := lm["description"].(string); ok {
+									level.Description = v
+								}
+								if roles, ok := lm["notifyRoles"].([]interface{}); ok {
+									for _, r := range roles {
+										if rs, ok := r.(string); ok {
+											level.NotifyRoles = append(level.NotifyRoles, rs)
+										}
+									}
+								}
+								matrix[priority] = append(matrix[priority], level)
+							}
+						}
+					}
+				}
+				if len(matrix) > 0 {
+					return matrix
+				}
+			}
+		}
+	}
+	// Fallback to default
+	return DefaultEscalationMatrix
+}
+
+// FindNextEscalationLevel 查找下一个应触发的升级级别。
+// slaDefID 可选：>0 时从 SLADefinition.escalation_rules 读取，否则使用默认矩阵。
+func (s *EscalationMatrixService) FindNextEscalationLevel(tenantID int, priority string, elapsedMinutes int, currentMaxLevel int, slaDefID int) *EscalationLevel {
+	var matrix EscalationMatrix
+	if slaDefID > 0 && s.client != nil {
+		matrix = s.GetMatrixBySLA(context.TODO(), slaDefID)
+	} else {
+		matrix = s.GetMatrix(tenantID)
+	}
 	levels, ok := matrix[priority]
 	if !ok {
 		// 未知 priority 降级到 medium

@@ -89,7 +89,6 @@ import (
 	"itsm-backend/ent/slaalertrule"
 	"itsm-backend/ent/sladefinition"
 	"itsm-backend/ent/slametric"
-	"itsm-backend/ent/slapolicy"
 	"itsm-backend/ent/slaviolation"
 	"itsm-backend/ent/standardchange"
 	"itsm-backend/ent/survey"
@@ -2912,31 +2911,39 @@ func init() {
 	// sladefinition.NameValidator is a validator for the "name" field. It is called by the builders before save.
 	sladefinition.NameValidator = sladefinitionDescName.Validators[0].(func(string) error)
 	// sladefinitionDescResponseTime is the schema descriptor for response_time field.
-	sladefinitionDescResponseTime := sladefinitionFields[4].Descriptor()
+	sladefinitionDescResponseTime := sladefinitionFields[5].Descriptor()
 	// sladefinition.DefaultResponseTime holds the default value on creation for the response_time field.
 	sladefinition.DefaultResponseTime = sladefinitionDescResponseTime.Default.(int)
 	// sladefinition.ResponseTimeValidator is a validator for the "response_time" field. It is called by the builders before save.
 	sladefinition.ResponseTimeValidator = sladefinitionDescResponseTime.Validators[0].(func(int) error)
 	// sladefinitionDescResolutionTime is the schema descriptor for resolution_time field.
-	sladefinitionDescResolutionTime := sladefinitionFields[5].Descriptor()
+	sladefinitionDescResolutionTime := sladefinitionFields[6].Descriptor()
 	// sladefinition.DefaultResolutionTime holds the default value on creation for the resolution_time field.
 	sladefinition.DefaultResolutionTime = sladefinitionDescResolutionTime.Default.(int)
 	// sladefinition.ResolutionTimeValidator is a validator for the "resolution_time" field. It is called by the builders before save.
 	sladefinition.ResolutionTimeValidator = sladefinitionDescResolutionTime.Validators[0].(func(int) error)
+	// sladefinitionDescExcludeWeekends is the schema descriptor for exclude_weekends field.
+	sladefinitionDescExcludeWeekends := sladefinitionFields[10].Descriptor()
+	// sladefinition.DefaultExcludeWeekends holds the default value on creation for the exclude_weekends field.
+	sladefinition.DefaultExcludeWeekends = sladefinitionDescExcludeWeekends.Default.(bool)
+	// sladefinitionDescExcludeHolidays is the schema descriptor for exclude_holidays field.
+	sladefinitionDescExcludeHolidays := sladefinitionFields[11].Descriptor()
+	// sladefinition.DefaultExcludeHolidays holds the default value on creation for the exclude_holidays field.
+	sladefinition.DefaultExcludeHolidays = sladefinitionDescExcludeHolidays.Default.(bool)
 	// sladefinitionDescIsActive is the schema descriptor for is_active field.
-	sladefinitionDescIsActive := sladefinitionFields[9].Descriptor()
+	sladefinitionDescIsActive := sladefinitionFields[12].Descriptor()
 	// sladefinition.DefaultIsActive holds the default value on creation for the is_active field.
 	sladefinition.DefaultIsActive = sladefinitionDescIsActive.Default.(bool)
 	// sladefinitionDescTenantID is the schema descriptor for tenant_id field.
-	sladefinitionDescTenantID := sladefinitionFields[10].Descriptor()
+	sladefinitionDescTenantID := sladefinitionFields[13].Descriptor()
 	// sladefinition.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	sladefinition.TenantIDValidator = sladefinitionDescTenantID.Validators[0].(func(int) error)
 	// sladefinitionDescCreatedAt is the schema descriptor for created_at field.
-	sladefinitionDescCreatedAt := sladefinitionFields[11].Descriptor()
+	sladefinitionDescCreatedAt := sladefinitionFields[14].Descriptor()
 	// sladefinition.DefaultCreatedAt holds the default value on creation for the created_at field.
 	sladefinition.DefaultCreatedAt = sladefinitionDescCreatedAt.Default.(func() time.Time)
 	// sladefinitionDescUpdatedAt is the schema descriptor for updated_at field.
-	sladefinitionDescUpdatedAt := sladefinitionFields[12].Descriptor()
+	sladefinitionDescUpdatedAt := sladefinitionFields[15].Descriptor()
 	// sladefinition.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	sladefinition.DefaultUpdatedAt = sladefinitionDescUpdatedAt.Default.(func() time.Time)
 	// sladefinition.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -2973,50 +2980,6 @@ func init() {
 	slametric.DefaultUpdatedAt = slametricDescUpdatedAt.Default.(func() time.Time)
 	// slametric.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	slametric.UpdateDefaultUpdatedAt = slametricDescUpdatedAt.UpdateDefault.(func() time.Time)
-	slapolicyFields := schema.SLAPolicy{}.Fields()
-	_ = slapolicyFields
-	// slapolicyDescName is the schema descriptor for name field.
-	slapolicyDescName := slapolicyFields[0].Descriptor()
-	// slapolicy.NameValidator is a validator for the "name" field. It is called by the builders before save.
-	slapolicy.NameValidator = slapolicyDescName.Validators[0].(func(string) error)
-	// slapolicyDescResponseTimeMinutes is the schema descriptor for response_time_minutes field.
-	slapolicyDescResponseTimeMinutes := slapolicyFields[5].Descriptor()
-	// slapolicy.ResponseTimeMinutesValidator is a validator for the "response_time_minutes" field. It is called by the builders before save.
-	slapolicy.ResponseTimeMinutesValidator = slapolicyDescResponseTimeMinutes.Validators[0].(func(int) error)
-	// slapolicyDescResolutionTimeMinutes is the schema descriptor for resolution_time_minutes field.
-	slapolicyDescResolutionTimeMinutes := slapolicyFields[6].Descriptor()
-	// slapolicy.ResolutionTimeMinutesValidator is a validator for the "resolution_time_minutes" field. It is called by the builders before save.
-	slapolicy.ResolutionTimeMinutesValidator = slapolicyDescResolutionTimeMinutes.Validators[0].(func(int) error)
-	// slapolicyDescExcludeWeekends is the schema descriptor for exclude_weekends field.
-	slapolicyDescExcludeWeekends := slapolicyFields[8].Descriptor()
-	// slapolicy.DefaultExcludeWeekends holds the default value on creation for the exclude_weekends field.
-	slapolicy.DefaultExcludeWeekends = slapolicyDescExcludeWeekends.Default.(bool)
-	// slapolicyDescExcludeHolidays is the schema descriptor for exclude_holidays field.
-	slapolicyDescExcludeHolidays := slapolicyFields[9].Descriptor()
-	// slapolicy.DefaultExcludeHolidays holds the default value on creation for the exclude_holidays field.
-	slapolicy.DefaultExcludeHolidays = slapolicyDescExcludeHolidays.Default.(bool)
-	// slapolicyDescIsActive is the schema descriptor for is_active field.
-	slapolicyDescIsActive := slapolicyFields[11].Descriptor()
-	// slapolicy.DefaultIsActive holds the default value on creation for the is_active field.
-	slapolicy.DefaultIsActive = slapolicyDescIsActive.Default.(bool)
-	// slapolicyDescPriorityScore is the schema descriptor for priority_score field.
-	slapolicyDescPriorityScore := slapolicyFields[12].Descriptor()
-	// slapolicy.DefaultPriorityScore holds the default value on creation for the priority_score field.
-	slapolicy.DefaultPriorityScore = slapolicyDescPriorityScore.Default.(int)
-	// slapolicyDescTenantID is the schema descriptor for tenant_id field.
-	slapolicyDescTenantID := slapolicyFields[13].Descriptor()
-	// slapolicy.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
-	slapolicy.TenantIDValidator = slapolicyDescTenantID.Validators[0].(func(int) error)
-	// slapolicyDescCreatedAt is the schema descriptor for created_at field.
-	slapolicyDescCreatedAt := slapolicyFields[14].Descriptor()
-	// slapolicy.DefaultCreatedAt holds the default value on creation for the created_at field.
-	slapolicy.DefaultCreatedAt = slapolicyDescCreatedAt.Default.(func() time.Time)
-	// slapolicyDescUpdatedAt is the schema descriptor for updated_at field.
-	slapolicyDescUpdatedAt := slapolicyFields[15].Descriptor()
-	// slapolicy.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	slapolicy.DefaultUpdatedAt = slapolicyDescUpdatedAt.Default.(func() time.Time)
-	// slapolicy.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	slapolicy.UpdateDefaultUpdatedAt = slapolicyDescUpdatedAt.UpdateDefault.(func() time.Time)
 	slaviolationFields := schema.SLAViolation{}.Fields()
 	_ = slaviolationFields
 	// slaviolationDescCreatedBy is the schema descriptor for created_by field.
