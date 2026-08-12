@@ -21,6 +21,8 @@ type CreateTicketRequest struct {
 	Type                  string                 `json:"type" binding:"omitempty,oneof=incident service_request change ticket problem improvement"` // 工单类型
 	TypeID                string                 `json:"typeId,omitempty"`
 	Source                string                 `json:"source,omitempty" binding:"omitempty,oneof=manual service_catalog"` // 工单来源：manual=手动创建，service_catalog=服务目录申请
+	CreatorEmail          string                 `json:"creatorEmail,omitempty"`                                            // 创建人邮箱（邮件建单等非交互式来源记录原始发件邮箱）
+	ExternalMessageID     string                 `json:"externalMessageId,omitempty"`                                       // 外部消息ID（如邮件 internetMessageId），用于建单去重
 	Category              string                 `json:"category"`                                                          // 分类名称（可选，前端传入）
 	CategoryID            *int                   `json:"categoryId,omitempty"`                                              // 分类ID（优先使用）
 	TemplateID            *int                   `json:"templateId,omitempty"`                                              // 模板ID
@@ -184,7 +186,7 @@ type TicketTemplate struct {
 	Category      string                   `json:"category"`
 	Priority      string                   `json:"priority"`
 	Fields        []map[string]interface{} `json:"fields,omitempty"`
-	CategoryIDs   []int                     `json:"categoryIds"`
+	CategoryIDs   []int                    `json:"categoryIds"`
 	WorkflowSteps []map[string]interface{} `json:"workflowSteps,omitempty"`
 	IsActive      bool                     `json:"isActive"`
 	IsActiveAlt   *bool                    `json:"-"` // internal flag: force-update isActive (not JSON-bound)

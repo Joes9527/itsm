@@ -226,6 +226,10 @@ type CreateParams struct {
 	// Source 工单来源：manual=手动创建，service_catalog=服务目录申请。
 	// 留空时由 ent schema 的 Default("manual") 生效，不强制赋值。
 	Source string
+	// CreatorEmail 创建人邮箱：邮件建单时记录原始发件邮箱，便于人工核对
+	CreatorEmail string
+	// ExternalMessageID 外部消息ID（如邮件 internetMessageId），用于建单去重判断
+	ExternalMessageID string
 }
 
 // UpdateParams 工单更新参数

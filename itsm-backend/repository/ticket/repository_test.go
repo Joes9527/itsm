@@ -172,6 +172,30 @@ func TestRepository_Create_WithoutCustomFieldValues(t *testing.T) {
 	assert.Empty(t, tkt.CustomFieldValues)
 }
 
+func TestRepository_Create_PersistsCreatorEmailAndExternalMessageID(t *testing.T) {
+	fx := newRepoFixture(t)
+	defer fx.client.Close()
+
+	params := &CreateParams{
+		Title:             "From email",
+		Description:       "body",
+		Priority:          PriorityMedium,
+		Type:              TypeIncident,
+		RequesterID:       fx.user.ID,
+		Source:            "email",
+		CreatorEmail:      "alice@test.com",
+		ExternalMessageID: "<msg-1@contoso.com>",
+	}
+
+	tkt, err := fx.repo.Create(fx.ctx, params, fx.tenant.ID)
+	require.NoError(t, err)
+
+	stored, err := fx.client.Ticket.Get(fx.ctx, tkt.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "alice@test.com", stored.CreatorEmail)
+	assert.Equal(t, "<msg-1@contoso.com>", stored.ExternalMessageID)
+}
+
 func TestRepository_Create_RetriesOnTicketNumberConflict(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()

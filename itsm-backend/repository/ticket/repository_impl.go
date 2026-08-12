@@ -104,6 +104,12 @@ func (r *EntRepository) Create(ctx context.Context, params *CreateParams, tenant
 		if params.Source != "" {
 			builder.SetSource(params.Source)
 		}
+		if params.CreatorEmail != "" {
+			builder.SetCreatorEmail(params.CreatorEmail)
+		}
+		if params.ExternalMessageID != "" {
+			builder.SetExternalMessageID(params.ExternalMessageID)
+		}
 
 		entity, err := builder.Save(ctx)
 		if err == nil {

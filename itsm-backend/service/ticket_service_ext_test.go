@@ -612,5 +612,28 @@ func TestTicketService_CreateTicket_DefaultsToNewStatus(t *testing.T) {
 		"新建工单默认状态应为 new")
 }
 
+func TestTicketService_CreateTicket_PersistsCreatorEmailAndExternalMessageID(t *testing.T) {
+	fx := newTicketFixture(t)
+	defer fx.client.Close()
+
+	req := &dto.CreateTicketRequest{
+		Title:             "From email",
+		Description:       "body",
+		Priority:          "medium",
+		RequesterID:       fx.user.GetID(),
+		Source:            "email",
+		CreatorEmail:      "alice@test.com",
+		ExternalMessageID: "<msg-1@contoso.com>",
+	}
+
+	tkt, err := fx.svc.CreateTicket(fx.ctx, req, fx.tenant.GetID())
+	require.NoError(t, err)
+
+	stored, err := fx.client.Ticket.Get(fx.ctx, tkt.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "alice@test.com", stored.CreatorEmail)
+	assert.Equal(t, "<msg-1@contoso.com>", stored.ExternalMessageID)
+}
+
 // 时间戳 sanity check（用于未来 regression）
 var _ = time.Now

@@ -156,6 +156,8 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 		TagIDs:            uniqueIDs(req.TagIDs),
 		CustomFieldValues: extractCustomFieldValues(req.FormFields),
 		Source:            req.Source,
+		CreatorEmail:      req.CreatorEmail,
+		ExternalMessageID: req.ExternalMessageID,
 	}
 
 	if assigneeID != 0 {
