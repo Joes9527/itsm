@@ -163,6 +163,9 @@ func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalog
 		RequesterID: requesterID,
 		Source:      "service_catalog",
 	}
+	if hasApprovalChainSteps(resolvedSteps) {
+		ticketReq.ApprovalChain = resolvedSteps
+	}
 	createdTicket, err := s.ticketSvc.CreateTicket(ctx, ticketReq, tenantID)
 	if err != nil {
 		return nil, common.NewInternalError("Failed to create linked ticket", err)
