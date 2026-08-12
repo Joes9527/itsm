@@ -153,8 +153,10 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
-  // 根路径不再重定向 — 介绍页对所有用户可见
-  // 已登录用户访问根路径时，由客户端组件显示"进入系统"按钮
+  // 根路径：已登录跳转工作台，未登录直接跳转登录页（不再展示介绍页）
+  if (pathname === '/') {
+    return NextResponse.redirect(new URL(isValid ? '/dashboard' : '/login', request.url));
+  }
 
   return NextResponse.next();
 }

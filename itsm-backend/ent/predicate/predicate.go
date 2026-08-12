@@ -258,9 +258,6 @@ type SLADefinition func(*sql.Selector)
 // SLAMetric is the predicate function for slametric builders.
 type SLAMetric func(*sql.Selector)
 
-// SLAPolicy is the predicate function for slapolicy builders.
-type SLAPolicy func(*sql.Selector)
-
 // SLAViolation is the predicate function for slaviolation builders.
 type SLAViolation func(*sql.Selector)
 

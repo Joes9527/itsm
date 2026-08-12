@@ -85,6 +85,16 @@ func ResolutionTime(v int) predicate.SLADefinition {
 	return predicate.SLADefinition(sql.FieldEQ(FieldResolutionTime, v))
 }
 
+// ExcludeWeekends applies equality check predicate on the "exclude_weekends" field. It's identical to ExcludeWeekendsEQ.
+func ExcludeWeekends(v bool) predicate.SLADefinition {
+	return predicate.SLADefinition(sql.FieldEQ(FieldExcludeWeekends, v))
+}
+
+// ExcludeHolidays applies equality check predicate on the "exclude_holidays" field. It's identical to ExcludeHolidaysEQ.
+func ExcludeHolidays(v bool) predicate.SLADefinition {
+	return predicate.SLADefinition(sql.FieldEQ(FieldExcludeHolidays, v))
+}
+
 // IsActive applies equality check predicate on the "is_active" field. It's identical to IsActiveEQ.
 func IsActive(v bool) predicate.SLADefinition {
 	return predicate.SLADefinition(sql.FieldEQ(FieldIsActive, v))
@@ -503,6 +513,26 @@ func ConditionsIsNil() predicate.SLADefinition {
 // ConditionsNotNil applies the NotNil predicate on the "conditions" field.
 func ConditionsNotNil() predicate.SLADefinition {
 	return predicate.SLADefinition(sql.FieldNotNull(FieldConditions))
+}
+
+// ExcludeWeekendsEQ applies the EQ predicate on the "exclude_weekends" field.
+func ExcludeWeekendsEQ(v bool) predicate.SLADefinition {
+	return predicate.SLADefinition(sql.FieldEQ(FieldExcludeWeekends, v))
+}
+
+// ExcludeWeekendsNEQ applies the NEQ predicate on the "exclude_weekends" field.
+func ExcludeWeekendsNEQ(v bool) predicate.SLADefinition {
+	return predicate.SLADefinition(sql.FieldNEQ(FieldExcludeWeekends, v))
+}
+
+// ExcludeHolidaysEQ applies the EQ predicate on the "exclude_holidays" field.
+func ExcludeHolidaysEQ(v bool) predicate.SLADefinition {
+	return predicate.SLADefinition(sql.FieldEQ(FieldExcludeHolidays, v))
+}
+
+// ExcludeHolidaysNEQ applies the NEQ predicate on the "exclude_holidays" field.
+func ExcludeHolidaysNEQ(v bool) predicate.SLADefinition {
+	return predicate.SLADefinition(sql.FieldNEQ(FieldExcludeHolidays, v))
 }
 
 // IsActiveEQ applies the EQ predicate on the "is_active" field.

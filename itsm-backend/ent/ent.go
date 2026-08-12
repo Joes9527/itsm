@@ -92,7 +92,6 @@ import (
 	"itsm-backend/ent/slaalertrule"
 	"itsm-backend/ent/sladefinition"
 	"itsm-backend/ent/slametric"
-	"itsm-backend/ent/slapolicy"
 	"itsm-backend/ent/slaviolation"
 	"itsm-backend/ent/standardchange"
 	"itsm-backend/ent/survey"
@@ -273,7 +272,6 @@ func checkColumn(t, c string) error {
 			slaalertrule.Table:                slaalertrule.ValidColumn,
 			sladefinition.Table:               sladefinition.ValidColumn,
 			slametric.Table:                   slametric.ValidColumn,
-			slapolicy.Table:                   slapolicy.ValidColumn,
 			slaviolation.Table:                slaviolation.ValidColumn,
 			servicecatalog.Table:              servicecatalog.ValidColumn,
 			servicerequest.Table:              servicerequest.ValidColumn,

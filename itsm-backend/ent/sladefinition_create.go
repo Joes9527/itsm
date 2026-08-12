@@ -118,6 +118,34 @@ func (_c *SLADefinitionCreate) SetConditions(v map[string]interface{}) *SLADefin
 	return _c
 }
 
+// SetExcludeWeekends sets the "exclude_weekends" field.
+func (_c *SLADefinitionCreate) SetExcludeWeekends(v bool) *SLADefinitionCreate {
+	_c.mutation.SetExcludeWeekends(v)
+	return _c
+}
+
+// SetNillableExcludeWeekends sets the "exclude_weekends" field if the given value is not nil.
+func (_c *SLADefinitionCreate) SetNillableExcludeWeekends(v *bool) *SLADefinitionCreate {
+	if v != nil {
+		_c.SetExcludeWeekends(*v)
+	}
+	return _c
+}
+
+// SetExcludeHolidays sets the "exclude_holidays" field.
+func (_c *SLADefinitionCreate) SetExcludeHolidays(v bool) *SLADefinitionCreate {
+	_c.mutation.SetExcludeHolidays(v)
+	return _c
+}
+
+// SetNillableExcludeHolidays sets the "exclude_holidays" field if the given value is not nil.
+func (_c *SLADefinitionCreate) SetNillableExcludeHolidays(v *bool) *SLADefinitionCreate {
+	if v != nil {
+		_c.SetExcludeHolidays(*v)
+	}
+	return _c
+}
+
 // SetIsActive sets the "is_active" field.
 func (_c *SLADefinitionCreate) SetIsActive(v bool) *SLADefinitionCreate {
 	_c.mutation.SetIsActive(v)
@@ -269,6 +297,14 @@ func (_c *SLADefinitionCreate) defaults() {
 		v := sladefinition.DefaultResolutionTime
 		_c.mutation.SetResolutionTime(v)
 	}
+	if _, ok := _c.mutation.ExcludeWeekends(); !ok {
+		v := sladefinition.DefaultExcludeWeekends
+		_c.mutation.SetExcludeWeekends(v)
+	}
+	if _, ok := _c.mutation.ExcludeHolidays(); !ok {
+		v := sladefinition.DefaultExcludeHolidays
+		_c.mutation.SetExcludeHolidays(v)
+	}
 	if _, ok := _c.mutation.IsActive(); !ok {
 		v := sladefinition.DefaultIsActive
 		_c.mutation.SetIsActive(v)
@@ -308,6 +344,12 @@ func (_c *SLADefinitionCreate) check() error {
 		if err := sladefinition.ResolutionTimeValidator(v); err != nil {
 			return &ValidationError{Name: "resolution_time", err: fmt.Errorf(`ent: validator failed for field "SLADefinition.resolution_time": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.ExcludeWeekends(); !ok {
+		return &ValidationError{Name: "exclude_weekends", err: errors.New(`ent: missing required field "SLADefinition.exclude_weekends"`)}
+	}
+	if _, ok := _c.mutation.ExcludeHolidays(); !ok {
+		return &ValidationError{Name: "exclude_holidays", err: errors.New(`ent: missing required field "SLADefinition.exclude_holidays"`)}
 	}
 	if _, ok := _c.mutation.IsActive(); !ok {
 		return &ValidationError{Name: "is_active", err: errors.New(`ent: missing required field "SLADefinition.is_active"`)}
@@ -387,6 +429,14 @@ func (_c *SLADefinitionCreate) createSpec() (*SLADefinition, *sqlgraph.CreateSpe
 	if value, ok := _c.mutation.Conditions(); ok {
 		_spec.SetField(sladefinition.FieldConditions, field.TypeJSON, value)
 		_node.Conditions = value
+	}
+	if value, ok := _c.mutation.ExcludeWeekends(); ok {
+		_spec.SetField(sladefinition.FieldExcludeWeekends, field.TypeBool, value)
+		_node.ExcludeWeekends = value
+	}
+	if value, ok := _c.mutation.ExcludeHolidays(); ok {
+		_spec.SetField(sladefinition.FieldExcludeHolidays, field.TypeBool, value)
+		_node.ExcludeHolidays = value
 	}
 	if value, ok := _c.mutation.IsActive(); ok {
 		_spec.SetField(sladefinition.FieldIsActive, field.TypeBool, value)

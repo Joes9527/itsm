@@ -21,6 +21,8 @@ func (SLADefinition) Fields() []ent.Field {
 		field.JSON("business_hours", map[string]interface{}{}).Comment("营业时间配置").Optional(),
 		field.JSON("escalation_rules", map[string]interface{}{}).Comment("升级规则").Optional(),
 		field.JSON("conditions", map[string]interface{}{}).Comment("适用条件").Optional(),
+		field.Bool("exclude_weekends").Comment("是否排除周末").Default(false),
+		field.Bool("exclude_holidays").Comment("是否排除节假日").Default(false),
 		field.Bool("is_active").Comment("是否激活").Default(true),
 		field.Int("tenant_id").Comment("租户ID").Positive(),
 		field.Time("created_at").Comment("创建时间").Default(time.Now),

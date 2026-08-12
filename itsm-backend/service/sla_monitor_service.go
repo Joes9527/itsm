@@ -629,7 +629,7 @@ func (s *SLAMonitorService) GetDashboardMetrics(ctx context.Context, tenantID in
 				TicketID:    t.ID,
 				TicketTitle: t.Title,
 				Deadline:    t.SLAResolutionDeadline,
-				SLAPolicy:   slaName,
+				SLAName:   slaName,
 				TimeLeft:    timeLeftStr,
 			})
 		}
@@ -661,7 +661,7 @@ func (s *SLAMonitorService) GetDashboardMetrics(ctx context.Context, tenantID in
 			dashboard.TopViolations = append(dashboard.TopViolations, dto.SLAViolationItem{
 				TicketID:    v.TicketID,
 				TicketTitle: ticketTitle,
-				SLAPolicy:   v.SLAName,
+				SLAName:   v.SLAName,
 				ViolatedAt:  v.ViolationTime.Format(time.RFC3339),
 				Delay:       delayMinutes,
 			})

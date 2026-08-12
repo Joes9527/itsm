@@ -95,7 +95,6 @@ import (
 	"itsm-backend/ent/slaalertrule"
 	"itsm-backend/ent/sladefinition"
 	"itsm-backend/ent/slametric"
-	"itsm-backend/ent/slapolicy"
 	"itsm-backend/ent/slaviolation"
 	"itsm-backend/ent/standardchange"
 	"itsm-backend/ent/survey"
@@ -226,7 +225,6 @@ const (
 	TypeSLAAlertRule                = "SLAAlertRule"
 	TypeSLADefinition               = "SLADefinition"
 	TypeSLAMetric                   = "SLAMetric"
-	TypeSLAPolicy                   = "SLAPolicy"
 	TypeSLAViolation                = "SLAViolation"
 	TypeServiceCatalog              = "ServiceCatalog"
 	TypeServiceRequest              = "ServiceRequest"
@@ -103825,6 +103823,8 @@ type SLADefinitionMutation struct {
 	business_hours     *map[string]interface{}
 	escalation_rules   *map[string]interface{}
 	conditions         *map[string]interface{}
+	exclude_weekends   *bool
+	exclude_holidays   *bool
 	is_active          *bool
 	tenant_id          *int
 	addtenant_id       *int
@@ -104388,6 +104388,78 @@ func (m *SLADefinitionMutation) ResetConditions() {
 	delete(m.clearedFields, sladefinition.FieldConditions)
 }
 
+// SetExcludeWeekends sets the "exclude_weekends" field.
+func (m *SLADefinitionMutation) SetExcludeWeekends(b bool) {
+	m.exclude_weekends = &b
+}
+
+// ExcludeWeekends returns the value of the "exclude_weekends" field in the mutation.
+func (m *SLADefinitionMutation) ExcludeWeekends() (r bool, exists bool) {
+	v := m.exclude_weekends
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExcludeWeekends returns the old "exclude_weekends" field's value of the SLADefinition entity.
+// If the SLADefinition object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SLADefinitionMutation) OldExcludeWeekends(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExcludeWeekends is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExcludeWeekends requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExcludeWeekends: %w", err)
+	}
+	return oldValue.ExcludeWeekends, nil
+}
+
+// ResetExcludeWeekends resets all changes to the "exclude_weekends" field.
+func (m *SLADefinitionMutation) ResetExcludeWeekends() {
+	m.exclude_weekends = nil
+}
+
+// SetExcludeHolidays sets the "exclude_holidays" field.
+func (m *SLADefinitionMutation) SetExcludeHolidays(b bool) {
+	m.exclude_holidays = &b
+}
+
+// ExcludeHolidays returns the value of the "exclude_holidays" field in the mutation.
+func (m *SLADefinitionMutation) ExcludeHolidays() (r bool, exists bool) {
+	v := m.exclude_holidays
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExcludeHolidays returns the old "exclude_holidays" field's value of the SLADefinition entity.
+// If the SLADefinition object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SLADefinitionMutation) OldExcludeHolidays(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExcludeHolidays is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExcludeHolidays requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExcludeHolidays: %w", err)
+	}
+	return oldValue.ExcludeHolidays, nil
+}
+
+// ResetExcludeHolidays resets all changes to the "exclude_holidays" field.
+func (m *SLADefinitionMutation) ResetExcludeHolidays() {
+	m.exclude_holidays = nil
+}
+
 // SetIsActive sets the "is_active" field.
 func (m *SLADefinitionMutation) SetIsActive(b bool) {
 	m.is_active = &b
@@ -104802,7 +104874,7 @@ func (m *SLADefinitionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SLADefinitionMutation) Fields() []string {
-	fields := make([]string, 0, 13)
+	fields := make([]string, 0, 15)
 	if m.name != nil {
 		fields = append(fields, sladefinition.FieldName)
 	}
@@ -104829,6 +104901,12 @@ func (m *SLADefinitionMutation) Fields() []string {
 	}
 	if m.conditions != nil {
 		fields = append(fields, sladefinition.FieldConditions)
+	}
+	if m.exclude_weekends != nil {
+		fields = append(fields, sladefinition.FieldExcludeWeekends)
+	}
+	if m.exclude_holidays != nil {
+		fields = append(fields, sladefinition.FieldExcludeHolidays)
 	}
 	if m.is_active != nil {
 		fields = append(fields, sladefinition.FieldIsActive)
@@ -104868,6 +104946,10 @@ func (m *SLADefinitionMutation) Field(name string) (ent.Value, bool) {
 		return m.EscalationRules()
 	case sladefinition.FieldConditions:
 		return m.Conditions()
+	case sladefinition.FieldExcludeWeekends:
+		return m.ExcludeWeekends()
+	case sladefinition.FieldExcludeHolidays:
+		return m.ExcludeHolidays()
 	case sladefinition.FieldIsActive:
 		return m.IsActive()
 	case sladefinition.FieldTenantID:
@@ -104903,6 +104985,10 @@ func (m *SLADefinitionMutation) OldField(ctx context.Context, name string) (ent.
 		return m.OldEscalationRules(ctx)
 	case sladefinition.FieldConditions:
 		return m.OldConditions(ctx)
+	case sladefinition.FieldExcludeWeekends:
+		return m.OldExcludeWeekends(ctx)
+	case sladefinition.FieldExcludeHolidays:
+		return m.OldExcludeHolidays(ctx)
 	case sladefinition.FieldIsActive:
 		return m.OldIsActive(ctx)
 	case sladefinition.FieldTenantID:
@@ -104982,6 +105068,20 @@ func (m *SLADefinitionMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetConditions(v)
+		return nil
+	case sladefinition.FieldExcludeWeekends:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExcludeWeekends(v)
+		return nil
+	case sladefinition.FieldExcludeHolidays:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExcludeHolidays(v)
 		return nil
 	case sladefinition.FieldIsActive:
 		v, ok := value.(bool)
@@ -105164,6 +105264,12 @@ func (m *SLADefinitionMutation) ResetField(name string) error {
 		return nil
 	case sladefinition.FieldConditions:
 		m.ResetConditions()
+		return nil
+	case sladefinition.FieldExcludeWeekends:
+		m.ResetExcludeWeekends()
+		return nil
+	case sladefinition.FieldExcludeHolidays:
+		m.ResetExcludeHolidays()
 		return nil
 	case sladefinition.FieldIsActive:
 		m.ResetIsActive()
@@ -106317,1570 +106423,6 @@ func (m *SLAMetricMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown SLAMetric edge %s", name)
-}
-
-// SLAPolicyMutation represents an operation that mutates the SLAPolicy nodes in the graph.
-type SLAPolicyMutation struct {
-	config
-	op                         Op
-	typ                        string
-	id                         *int
-	name                       *string
-	description                *string
-	customer_tier              *string
-	ticket_type                *string
-	priority                   *string
-	response_time_minutes      *int
-	addresponse_time_minutes   *int
-	resolution_time_minutes    *int
-	addresolution_time_minutes *int
-	business_hours             *map[string]interface{}
-	exclude_weekends           *bool
-	exclude_holidays           *bool
-	escalation_rules           *map[string]interface{}
-	is_active                  *bool
-	priority_score             *int
-	addpriority_score          *int
-	tenant_id                  *int
-	addtenant_id               *int
-	created_at                 *time.Time
-	updated_at                 *time.Time
-	clearedFields              map[string]struct{}
-	sla_definition             map[int]struct{}
-	removedsla_definition      map[int]struct{}
-	clearedsla_definition      bool
-	tickets                    map[int]struct{}
-	removedtickets             map[int]struct{}
-	clearedtickets             bool
-	done                       bool
-	oldValue                   func(context.Context) (*SLAPolicy, error)
-	predicates                 []predicate.SLAPolicy
-}
-
-var _ ent.Mutation = (*SLAPolicyMutation)(nil)
-
-// slapolicyOption allows management of the mutation configuration using functional options.
-type slapolicyOption func(*SLAPolicyMutation)
-
-// newSLAPolicyMutation creates new mutation for the SLAPolicy entity.
-func newSLAPolicyMutation(c config, op Op, opts ...slapolicyOption) *SLAPolicyMutation {
-	m := &SLAPolicyMutation{
-		config:        c,
-		op:            op,
-		typ:           TypeSLAPolicy,
-		clearedFields: make(map[string]struct{}),
-	}
-	for _, opt := range opts {
-		opt(m)
-	}
-	return m
-}
-
-// withSLAPolicyID sets the ID field of the mutation.
-func withSLAPolicyID(id int) slapolicyOption {
-	return func(m *SLAPolicyMutation) {
-		var (
-			err   error
-			once  sync.Once
-			value *SLAPolicy
-		)
-		m.oldValue = func(ctx context.Context) (*SLAPolicy, error) {
-			once.Do(func() {
-				if m.done {
-					err = errors.New("querying old values post mutation is not allowed")
-				} else {
-					value, err = m.Client().SLAPolicy.Get(ctx, id)
-				}
-			})
-			return value, err
-		}
-		m.id = &id
-	}
-}
-
-// withSLAPolicy sets the old SLAPolicy of the mutation.
-func withSLAPolicy(node *SLAPolicy) slapolicyOption {
-	return func(m *SLAPolicyMutation) {
-		m.oldValue = func(context.Context) (*SLAPolicy, error) {
-			return node, nil
-		}
-		m.id = &node.ID
-	}
-}
-
-// Client returns a new `ent.Client` from the mutation. If the mutation was
-// executed in a transaction (ent.Tx), a transactional client is returned.
-func (m SLAPolicyMutation) Client() *Client {
-	client := &Client{config: m.config}
-	client.init()
-	return client
-}
-
-// Tx returns an `ent.Tx` for mutations that were executed in transactions;
-// it returns an error otherwise.
-func (m SLAPolicyMutation) Tx() (*Tx, error) {
-	if _, ok := m.driver.(*txDriver); !ok {
-		return nil, errors.New("ent: mutation is not running in a transaction")
-	}
-	tx := &Tx{config: m.config}
-	tx.init()
-	return tx, nil
-}
-
-// ID returns the ID value in the mutation. Note that the ID is only available
-// if it was provided to the builder or after it was returned from the database.
-func (m *SLAPolicyMutation) ID() (id int, exists bool) {
-	if m.id == nil {
-		return
-	}
-	return *m.id, true
-}
-
-// IDs queries the database and returns the entity ids that match the mutation's predicate.
-// That means, if the mutation is applied within a transaction with an isolation level such
-// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
-// or updated by the mutation.
-func (m *SLAPolicyMutation) IDs(ctx context.Context) ([]int, error) {
-	switch {
-	case m.op.Is(OpUpdateOne | OpDeleteOne):
-		id, exists := m.ID()
-		if exists {
-			return []int{id}, nil
-		}
-		fallthrough
-	case m.op.Is(OpUpdate | OpDelete):
-		return m.Client().SLAPolicy.Query().Where(m.predicates...).IDs(ctx)
-	default:
-		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
-	}
-}
-
-// SetName sets the "name" field.
-func (m *SLAPolicyMutation) SetName(s string) {
-	m.name = &s
-}
-
-// Name returns the value of the "name" field in the mutation.
-func (m *SLAPolicyMutation) Name() (r string, exists bool) {
-	v := m.name
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldName returns the old "name" field's value of the SLAPolicy entity.
-// If the SLAPolicy object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SLAPolicyMutation) OldName(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldName is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldName requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldName: %w", err)
-	}
-	return oldValue.Name, nil
-}
-
-// ResetName resets all changes to the "name" field.
-func (m *SLAPolicyMutation) ResetName() {
-	m.name = nil
-}
-
-// SetDescription sets the "description" field.
-func (m *SLAPolicyMutation) SetDescription(s string) {
-	m.description = &s
-}
-
-// Description returns the value of the "description" field in the mutation.
-func (m *SLAPolicyMutation) Description() (r string, exists bool) {
-	v := m.description
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldDescription returns the old "description" field's value of the SLAPolicy entity.
-// If the SLAPolicy object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SLAPolicyMutation) OldDescription(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldDescription is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldDescription requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldDescription: %w", err)
-	}
-	return oldValue.Description, nil
-}
-
-// ClearDescription clears the value of the "description" field.
-func (m *SLAPolicyMutation) ClearDescription() {
-	m.description = nil
-	m.clearedFields[slapolicy.FieldDescription] = struct{}{}
-}
-
-// DescriptionCleared returns if the "description" field was cleared in this mutation.
-func (m *SLAPolicyMutation) DescriptionCleared() bool {
-	_, ok := m.clearedFields[slapolicy.FieldDescription]
-	return ok
-}
-
-// ResetDescription resets all changes to the "description" field.
-func (m *SLAPolicyMutation) ResetDescription() {
-	m.description = nil
-	delete(m.clearedFields, slapolicy.FieldDescription)
-}
-
-// SetCustomerTier sets the "customer_tier" field.
-func (m *SLAPolicyMutation) SetCustomerTier(s string) {
-	m.customer_tier = &s
-}
-
-// CustomerTier returns the value of the "customer_tier" field in the mutation.
-func (m *SLAPolicyMutation) CustomerTier() (r string, exists bool) {
-	v := m.customer_tier
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldCustomerTier returns the old "customer_tier" field's value of the SLAPolicy entity.
-// If the SLAPolicy object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SLAPolicyMutation) OldCustomerTier(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldCustomerTier is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldCustomerTier requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldCustomerTier: %w", err)
-	}
-	return oldValue.CustomerTier, nil
-}
-
-// ClearCustomerTier clears the value of the "customer_tier" field.
-func (m *SLAPolicyMutation) ClearCustomerTier() {
-	m.customer_tier = nil
-	m.clearedFields[slapolicy.FieldCustomerTier] = struct{}{}
-}
-
-// CustomerTierCleared returns if the "customer_tier" field was cleared in this mutation.
-func (m *SLAPolicyMutation) CustomerTierCleared() bool {
-	_, ok := m.clearedFields[slapolicy.FieldCustomerTier]
-	return ok
-}
-
-// ResetCustomerTier resets all changes to the "customer_tier" field.
-func (m *SLAPolicyMutation) ResetCustomerTier() {
-	m.customer_tier = nil
-	delete(m.clearedFields, slapolicy.FieldCustomerTier)
-}
-
-// SetTicketType sets the "ticket_type" field.
-func (m *SLAPolicyMutation) SetTicketType(s string) {
-	m.ticket_type = &s
-}
-
-// TicketType returns the value of the "ticket_type" field in the mutation.
-func (m *SLAPolicyMutation) TicketType() (r string, exists bool) {
-	v := m.ticket_type
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldTicketType returns the old "ticket_type" field's value of the SLAPolicy entity.
-// If the SLAPolicy object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SLAPolicyMutation) OldTicketType(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldTicketType is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldTicketType requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldTicketType: %w", err)
-	}
-	return oldValue.TicketType, nil
-}
-
-// ClearTicketType clears the value of the "ticket_type" field.
-func (m *SLAPolicyMutation) ClearTicketType() {
-	m.ticket_type = nil
-	m.clearedFields[slapolicy.FieldTicketType] = struct{}{}
-}
-
-// TicketTypeCleared returns if the "ticket_type" field was cleared in this mutation.
-func (m *SLAPolicyMutation) TicketTypeCleared() bool {
-	_, ok := m.clearedFields[slapolicy.FieldTicketType]
-	return ok
-}
-
-// ResetTicketType resets all changes to the "ticket_type" field.
-func (m *SLAPolicyMutation) ResetTicketType() {
-	m.ticket_type = nil
-	delete(m.clearedFields, slapolicy.FieldTicketType)
-}
-
-// SetPriority sets the "priority" field.
-func (m *SLAPolicyMutation) SetPriority(s string) {
-	m.priority = &s
-}
-
-// Priority returns the value of the "priority" field in the mutation.
-func (m *SLAPolicyMutation) Priority() (r string, exists bool) {
-	v := m.priority
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldPriority returns the old "priority" field's value of the SLAPolicy entity.
-// If the SLAPolicy object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SLAPolicyMutation) OldPriority(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldPriority is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldPriority requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldPriority: %w", err)
-	}
-	return oldValue.Priority, nil
-}
-
-// ClearPriority clears the value of the "priority" field.
-func (m *SLAPolicyMutation) ClearPriority() {
-	m.priority = nil
-	m.clearedFields[slapolicy.FieldPriority] = struct{}{}
-}
-
-// PriorityCleared returns if the "priority" field was cleared in this mutation.
-func (m *SLAPolicyMutation) PriorityCleared() bool {
-	_, ok := m.clearedFields[slapolicy.FieldPriority]
-	return ok
-}
-
-// ResetPriority resets all changes to the "priority" field.
-func (m *SLAPolicyMutation) ResetPriority() {
-	m.priority = nil
-	delete(m.clearedFields, slapolicy.FieldPriority)
-}
-
-// SetResponseTimeMinutes sets the "response_time_minutes" field.
-func (m *SLAPolicyMutation) SetResponseTimeMinutes(i int) {
-	m.response_time_minutes = &i
-	m.addresponse_time_minutes = nil
-}
-
-// ResponseTimeMinutes returns the value of the "response_time_minutes" field in the mutation.
-func (m *SLAPolicyMutation) ResponseTimeMinutes() (r int, exists bool) {
-	v := m.response_time_minutes
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldResponseTimeMinutes returns the old "response_time_minutes" field's value of the SLAPolicy entity.
-// If the SLAPolicy object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SLAPolicyMutation) OldResponseTimeMinutes(ctx context.Context) (v int, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldResponseTimeMinutes is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldResponseTimeMinutes requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldResponseTimeMinutes: %w", err)
-	}
-	return oldValue.ResponseTimeMinutes, nil
-}
-
-// AddResponseTimeMinutes adds i to the "response_time_minutes" field.
-func (m *SLAPolicyMutation) AddResponseTimeMinutes(i int) {
-	if m.addresponse_time_minutes != nil {
-		*m.addresponse_time_minutes += i
-	} else {
-		m.addresponse_time_minutes = &i
-	}
-}
-
-// AddedResponseTimeMinutes returns the value that was added to the "response_time_minutes" field in this mutation.
-func (m *SLAPolicyMutation) AddedResponseTimeMinutes() (r int, exists bool) {
-	v := m.addresponse_time_minutes
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ResetResponseTimeMinutes resets all changes to the "response_time_minutes" field.
-func (m *SLAPolicyMutation) ResetResponseTimeMinutes() {
-	m.response_time_minutes = nil
-	m.addresponse_time_minutes = nil
-}
-
-// SetResolutionTimeMinutes sets the "resolution_time_minutes" field.
-func (m *SLAPolicyMutation) SetResolutionTimeMinutes(i int) {
-	m.resolution_time_minutes = &i
-	m.addresolution_time_minutes = nil
-}
-
-// ResolutionTimeMinutes returns the value of the "resolution_time_minutes" field in the mutation.
-func (m *SLAPolicyMutation) ResolutionTimeMinutes() (r int, exists bool) {
-	v := m.resolution_time_minutes
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldResolutionTimeMinutes returns the old "resolution_time_minutes" field's value of the SLAPolicy entity.
-// If the SLAPolicy object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SLAPolicyMutation) OldResolutionTimeMinutes(ctx context.Context) (v int, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldResolutionTimeMinutes is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldResolutionTimeMinutes requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldResolutionTimeMinutes: %w", err)
-	}
-	return oldValue.ResolutionTimeMinutes, nil
-}
-
-// AddResolutionTimeMinutes adds i to the "resolution_time_minutes" field.
-func (m *SLAPolicyMutation) AddResolutionTimeMinutes(i int) {
-	if m.addresolution_time_minutes != nil {
-		*m.addresolution_time_minutes += i
-	} else {
-		m.addresolution_time_minutes = &i
-	}
-}
-
-// AddedResolutionTimeMinutes returns the value that was added to the "resolution_time_minutes" field in this mutation.
-func (m *SLAPolicyMutation) AddedResolutionTimeMinutes() (r int, exists bool) {
-	v := m.addresolution_time_minutes
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ResetResolutionTimeMinutes resets all changes to the "resolution_time_minutes" field.
-func (m *SLAPolicyMutation) ResetResolutionTimeMinutes() {
-	m.resolution_time_minutes = nil
-	m.addresolution_time_minutes = nil
-}
-
-// SetBusinessHours sets the "business_hours" field.
-func (m *SLAPolicyMutation) SetBusinessHours(value map[string]interface{}) {
-	m.business_hours = &value
-}
-
-// BusinessHours returns the value of the "business_hours" field in the mutation.
-func (m *SLAPolicyMutation) BusinessHours() (r map[string]interface{}, exists bool) {
-	v := m.business_hours
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldBusinessHours returns the old "business_hours" field's value of the SLAPolicy entity.
-// If the SLAPolicy object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SLAPolicyMutation) OldBusinessHours(ctx context.Context) (v map[string]interface{}, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldBusinessHours is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldBusinessHours requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldBusinessHours: %w", err)
-	}
-	return oldValue.BusinessHours, nil
-}
-
-// ClearBusinessHours clears the value of the "business_hours" field.
-func (m *SLAPolicyMutation) ClearBusinessHours() {
-	m.business_hours = nil
-	m.clearedFields[slapolicy.FieldBusinessHours] = struct{}{}
-}
-
-// BusinessHoursCleared returns if the "business_hours" field was cleared in this mutation.
-func (m *SLAPolicyMutation) BusinessHoursCleared() bool {
-	_, ok := m.clearedFields[slapolicy.FieldBusinessHours]
-	return ok
-}
-
-// ResetBusinessHours resets all changes to the "business_hours" field.
-func (m *SLAPolicyMutation) ResetBusinessHours() {
-	m.business_hours = nil
-	delete(m.clearedFields, slapolicy.FieldBusinessHours)
-}
-
-// SetExcludeWeekends sets the "exclude_weekends" field.
-func (m *SLAPolicyMutation) SetExcludeWeekends(b bool) {
-	m.exclude_weekends = &b
-}
-
-// ExcludeWeekends returns the value of the "exclude_weekends" field in the mutation.
-func (m *SLAPolicyMutation) ExcludeWeekends() (r bool, exists bool) {
-	v := m.exclude_weekends
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldExcludeWeekends returns the old "exclude_weekends" field's value of the SLAPolicy entity.
-// If the SLAPolicy object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SLAPolicyMutation) OldExcludeWeekends(ctx context.Context) (v bool, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldExcludeWeekends is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldExcludeWeekends requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldExcludeWeekends: %w", err)
-	}
-	return oldValue.ExcludeWeekends, nil
-}
-
-// ResetExcludeWeekends resets all changes to the "exclude_weekends" field.
-func (m *SLAPolicyMutation) ResetExcludeWeekends() {
-	m.exclude_weekends = nil
-}
-
-// SetExcludeHolidays sets the "exclude_holidays" field.
-func (m *SLAPolicyMutation) SetExcludeHolidays(b bool) {
-	m.exclude_holidays = &b
-}
-
-// ExcludeHolidays returns the value of the "exclude_holidays" field in the mutation.
-func (m *SLAPolicyMutation) ExcludeHolidays() (r bool, exists bool) {
-	v := m.exclude_holidays
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldExcludeHolidays returns the old "exclude_holidays" field's value of the SLAPolicy entity.
-// If the SLAPolicy object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SLAPolicyMutation) OldExcludeHolidays(ctx context.Context) (v bool, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldExcludeHolidays is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldExcludeHolidays requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldExcludeHolidays: %w", err)
-	}
-	return oldValue.ExcludeHolidays, nil
-}
-
-// ResetExcludeHolidays resets all changes to the "exclude_holidays" field.
-func (m *SLAPolicyMutation) ResetExcludeHolidays() {
-	m.exclude_holidays = nil
-}
-
-// SetEscalationRules sets the "escalation_rules" field.
-func (m *SLAPolicyMutation) SetEscalationRules(value map[string]interface{}) {
-	m.escalation_rules = &value
-}
-
-// EscalationRules returns the value of the "escalation_rules" field in the mutation.
-func (m *SLAPolicyMutation) EscalationRules() (r map[string]interface{}, exists bool) {
-	v := m.escalation_rules
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldEscalationRules returns the old "escalation_rules" field's value of the SLAPolicy entity.
-// If the SLAPolicy object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SLAPolicyMutation) OldEscalationRules(ctx context.Context) (v map[string]interface{}, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldEscalationRules is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldEscalationRules requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldEscalationRules: %w", err)
-	}
-	return oldValue.EscalationRules, nil
-}
-
-// ClearEscalationRules clears the value of the "escalation_rules" field.
-func (m *SLAPolicyMutation) ClearEscalationRules() {
-	m.escalation_rules = nil
-	m.clearedFields[slapolicy.FieldEscalationRules] = struct{}{}
-}
-
-// EscalationRulesCleared returns if the "escalation_rules" field was cleared in this mutation.
-func (m *SLAPolicyMutation) EscalationRulesCleared() bool {
-	_, ok := m.clearedFields[slapolicy.FieldEscalationRules]
-	return ok
-}
-
-// ResetEscalationRules resets all changes to the "escalation_rules" field.
-func (m *SLAPolicyMutation) ResetEscalationRules() {
-	m.escalation_rules = nil
-	delete(m.clearedFields, slapolicy.FieldEscalationRules)
-}
-
-// SetIsActive sets the "is_active" field.
-func (m *SLAPolicyMutation) SetIsActive(b bool) {
-	m.is_active = &b
-}
-
-// IsActive returns the value of the "is_active" field in the mutation.
-func (m *SLAPolicyMutation) IsActive() (r bool, exists bool) {
-	v := m.is_active
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldIsActive returns the old "is_active" field's value of the SLAPolicy entity.
-// If the SLAPolicy object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SLAPolicyMutation) OldIsActive(ctx context.Context) (v bool, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldIsActive is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldIsActive requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldIsActive: %w", err)
-	}
-	return oldValue.IsActive, nil
-}
-
-// ResetIsActive resets all changes to the "is_active" field.
-func (m *SLAPolicyMutation) ResetIsActive() {
-	m.is_active = nil
-}
-
-// SetPriorityScore sets the "priority_score" field.
-func (m *SLAPolicyMutation) SetPriorityScore(i int) {
-	m.priority_score = &i
-	m.addpriority_score = nil
-}
-
-// PriorityScore returns the value of the "priority_score" field in the mutation.
-func (m *SLAPolicyMutation) PriorityScore() (r int, exists bool) {
-	v := m.priority_score
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldPriorityScore returns the old "priority_score" field's value of the SLAPolicy entity.
-// If the SLAPolicy object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SLAPolicyMutation) OldPriorityScore(ctx context.Context) (v int, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldPriorityScore is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldPriorityScore requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldPriorityScore: %w", err)
-	}
-	return oldValue.PriorityScore, nil
-}
-
-// AddPriorityScore adds i to the "priority_score" field.
-func (m *SLAPolicyMutation) AddPriorityScore(i int) {
-	if m.addpriority_score != nil {
-		*m.addpriority_score += i
-	} else {
-		m.addpriority_score = &i
-	}
-}
-
-// AddedPriorityScore returns the value that was added to the "priority_score" field in this mutation.
-func (m *SLAPolicyMutation) AddedPriorityScore() (r int, exists bool) {
-	v := m.addpriority_score
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ResetPriorityScore resets all changes to the "priority_score" field.
-func (m *SLAPolicyMutation) ResetPriorityScore() {
-	m.priority_score = nil
-	m.addpriority_score = nil
-}
-
-// SetTenantID sets the "tenant_id" field.
-func (m *SLAPolicyMutation) SetTenantID(i int) {
-	m.tenant_id = &i
-	m.addtenant_id = nil
-}
-
-// TenantID returns the value of the "tenant_id" field in the mutation.
-func (m *SLAPolicyMutation) TenantID() (r int, exists bool) {
-	v := m.tenant_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldTenantID returns the old "tenant_id" field's value of the SLAPolicy entity.
-// If the SLAPolicy object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SLAPolicyMutation) OldTenantID(ctx context.Context) (v int, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldTenantID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
-	}
-	return oldValue.TenantID, nil
-}
-
-// AddTenantID adds i to the "tenant_id" field.
-func (m *SLAPolicyMutation) AddTenantID(i int) {
-	if m.addtenant_id != nil {
-		*m.addtenant_id += i
-	} else {
-		m.addtenant_id = &i
-	}
-}
-
-// AddedTenantID returns the value that was added to the "tenant_id" field in this mutation.
-func (m *SLAPolicyMutation) AddedTenantID() (r int, exists bool) {
-	v := m.addtenant_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ResetTenantID resets all changes to the "tenant_id" field.
-func (m *SLAPolicyMutation) ResetTenantID() {
-	m.tenant_id = nil
-	m.addtenant_id = nil
-}
-
-// SetCreatedAt sets the "created_at" field.
-func (m *SLAPolicyMutation) SetCreatedAt(t time.Time) {
-	m.created_at = &t
-}
-
-// CreatedAt returns the value of the "created_at" field in the mutation.
-func (m *SLAPolicyMutation) CreatedAt() (r time.Time, exists bool) {
-	v := m.created_at
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldCreatedAt returns the old "created_at" field's value of the SLAPolicy entity.
-// If the SLAPolicy object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SLAPolicyMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
-	}
-	return oldValue.CreatedAt, nil
-}
-
-// ResetCreatedAt resets all changes to the "created_at" field.
-func (m *SLAPolicyMutation) ResetCreatedAt() {
-	m.created_at = nil
-}
-
-// SetUpdatedAt sets the "updated_at" field.
-func (m *SLAPolicyMutation) SetUpdatedAt(t time.Time) {
-	m.updated_at = &t
-}
-
-// UpdatedAt returns the value of the "updated_at" field in the mutation.
-func (m *SLAPolicyMutation) UpdatedAt() (r time.Time, exists bool) {
-	v := m.updated_at
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldUpdatedAt returns the old "updated_at" field's value of the SLAPolicy entity.
-// If the SLAPolicy object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SLAPolicyMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
-	}
-	return oldValue.UpdatedAt, nil
-}
-
-// ResetUpdatedAt resets all changes to the "updated_at" field.
-func (m *SLAPolicyMutation) ResetUpdatedAt() {
-	m.updated_at = nil
-}
-
-// AddSLADefinitionIDs adds the "sla_definition" edge to the SLADefinition entity by ids.
-func (m *SLAPolicyMutation) AddSLADefinitionIDs(ids ...int) {
-	if m.sla_definition == nil {
-		m.sla_definition = make(map[int]struct{})
-	}
-	for i := range ids {
-		m.sla_definition[ids[i]] = struct{}{}
-	}
-}
-
-// ClearSLADefinition clears the "sla_definition" edge to the SLADefinition entity.
-func (m *SLAPolicyMutation) ClearSLADefinition() {
-	m.clearedsla_definition = true
-}
-
-// SLADefinitionCleared reports if the "sla_definition" edge to the SLADefinition entity was cleared.
-func (m *SLAPolicyMutation) SLADefinitionCleared() bool {
-	return m.clearedsla_definition
-}
-
-// RemoveSLADefinitionIDs removes the "sla_definition" edge to the SLADefinition entity by IDs.
-func (m *SLAPolicyMutation) RemoveSLADefinitionIDs(ids ...int) {
-	if m.removedsla_definition == nil {
-		m.removedsla_definition = make(map[int]struct{})
-	}
-	for i := range ids {
-		delete(m.sla_definition, ids[i])
-		m.removedsla_definition[ids[i]] = struct{}{}
-	}
-}
-
-// RemovedSLADefinition returns the removed IDs of the "sla_definition" edge to the SLADefinition entity.
-func (m *SLAPolicyMutation) RemovedSLADefinitionIDs() (ids []int) {
-	for id := range m.removedsla_definition {
-		ids = append(ids, id)
-	}
-	return
-}
-
-// SLADefinitionIDs returns the "sla_definition" edge IDs in the mutation.
-func (m *SLAPolicyMutation) SLADefinitionIDs() (ids []int) {
-	for id := range m.sla_definition {
-		ids = append(ids, id)
-	}
-	return
-}
-
-// ResetSLADefinition resets all changes to the "sla_definition" edge.
-func (m *SLAPolicyMutation) ResetSLADefinition() {
-	m.sla_definition = nil
-	m.clearedsla_definition = false
-	m.removedsla_definition = nil
-}
-
-// AddTicketIDs adds the "tickets" edge to the Ticket entity by ids.
-func (m *SLAPolicyMutation) AddTicketIDs(ids ...int) {
-	if m.tickets == nil {
-		m.tickets = make(map[int]struct{})
-	}
-	for i := range ids {
-		m.tickets[ids[i]] = struct{}{}
-	}
-}
-
-// ClearTickets clears the "tickets" edge to the Ticket entity.
-func (m *SLAPolicyMutation) ClearTickets() {
-	m.clearedtickets = true
-}
-
-// TicketsCleared reports if the "tickets" edge to the Ticket entity was cleared.
-func (m *SLAPolicyMutation) TicketsCleared() bool {
-	return m.clearedtickets
-}
-
-// RemoveTicketIDs removes the "tickets" edge to the Ticket entity by IDs.
-func (m *SLAPolicyMutation) RemoveTicketIDs(ids ...int) {
-	if m.removedtickets == nil {
-		m.removedtickets = make(map[int]struct{})
-	}
-	for i := range ids {
-		delete(m.tickets, ids[i])
-		m.removedtickets[ids[i]] = struct{}{}
-	}
-}
-
-// RemovedTickets returns the removed IDs of the "tickets" edge to the Ticket entity.
-func (m *SLAPolicyMutation) RemovedTicketsIDs() (ids []int) {
-	for id := range m.removedtickets {
-		ids = append(ids, id)
-	}
-	return
-}
-
-// TicketsIDs returns the "tickets" edge IDs in the mutation.
-func (m *SLAPolicyMutation) TicketsIDs() (ids []int) {
-	for id := range m.tickets {
-		ids = append(ids, id)
-	}
-	return
-}
-
-// ResetTickets resets all changes to the "tickets" edge.
-func (m *SLAPolicyMutation) ResetTickets() {
-	m.tickets = nil
-	m.clearedtickets = false
-	m.removedtickets = nil
-}
-
-// Where appends a list predicates to the SLAPolicyMutation builder.
-func (m *SLAPolicyMutation) Where(ps ...predicate.SLAPolicy) {
-	m.predicates = append(m.predicates, ps...)
-}
-
-// WhereP appends storage-level predicates to the SLAPolicyMutation builder. Using this method,
-// users can use type-assertion to append predicates that do not depend on any generated package.
-func (m *SLAPolicyMutation) WhereP(ps ...func(*sql.Selector)) {
-	p := make([]predicate.SLAPolicy, len(ps))
-	for i := range ps {
-		p[i] = ps[i]
-	}
-	m.Where(p...)
-}
-
-// Op returns the operation name.
-func (m *SLAPolicyMutation) Op() Op {
-	return m.op
-}
-
-// SetOp allows setting the mutation operation.
-func (m *SLAPolicyMutation) SetOp(op Op) {
-	m.op = op
-}
-
-// Type returns the node type of this mutation (SLAPolicy).
-func (m *SLAPolicyMutation) Type() string {
-	return m.typ
-}
-
-// Fields returns all fields that were changed during this mutation. Note that in
-// order to get all numeric fields that were incremented/decremented, call
-// AddedFields().
-func (m *SLAPolicyMutation) Fields() []string {
-	fields := make([]string, 0, 16)
-	if m.name != nil {
-		fields = append(fields, slapolicy.FieldName)
-	}
-	if m.description != nil {
-		fields = append(fields, slapolicy.FieldDescription)
-	}
-	if m.customer_tier != nil {
-		fields = append(fields, slapolicy.FieldCustomerTier)
-	}
-	if m.ticket_type != nil {
-		fields = append(fields, slapolicy.FieldTicketType)
-	}
-	if m.priority != nil {
-		fields = append(fields, slapolicy.FieldPriority)
-	}
-	if m.response_time_minutes != nil {
-		fields = append(fields, slapolicy.FieldResponseTimeMinutes)
-	}
-	if m.resolution_time_minutes != nil {
-		fields = append(fields, slapolicy.FieldResolutionTimeMinutes)
-	}
-	if m.business_hours != nil {
-		fields = append(fields, slapolicy.FieldBusinessHours)
-	}
-	if m.exclude_weekends != nil {
-		fields = append(fields, slapolicy.FieldExcludeWeekends)
-	}
-	if m.exclude_holidays != nil {
-		fields = append(fields, slapolicy.FieldExcludeHolidays)
-	}
-	if m.escalation_rules != nil {
-		fields = append(fields, slapolicy.FieldEscalationRules)
-	}
-	if m.is_active != nil {
-		fields = append(fields, slapolicy.FieldIsActive)
-	}
-	if m.priority_score != nil {
-		fields = append(fields, slapolicy.FieldPriorityScore)
-	}
-	if m.tenant_id != nil {
-		fields = append(fields, slapolicy.FieldTenantID)
-	}
-	if m.created_at != nil {
-		fields = append(fields, slapolicy.FieldCreatedAt)
-	}
-	if m.updated_at != nil {
-		fields = append(fields, slapolicy.FieldUpdatedAt)
-	}
-	return fields
-}
-
-// Field returns the value of a field with the given name. The second boolean
-// return value indicates that this field was not set, or was not defined in the
-// schema.
-func (m *SLAPolicyMutation) Field(name string) (ent.Value, bool) {
-	switch name {
-	case slapolicy.FieldName:
-		return m.Name()
-	case slapolicy.FieldDescription:
-		return m.Description()
-	case slapolicy.FieldCustomerTier:
-		return m.CustomerTier()
-	case slapolicy.FieldTicketType:
-		return m.TicketType()
-	case slapolicy.FieldPriority:
-		return m.Priority()
-	case slapolicy.FieldResponseTimeMinutes:
-		return m.ResponseTimeMinutes()
-	case slapolicy.FieldResolutionTimeMinutes:
-		return m.ResolutionTimeMinutes()
-	case slapolicy.FieldBusinessHours:
-		return m.BusinessHours()
-	case slapolicy.FieldExcludeWeekends:
-		return m.ExcludeWeekends()
-	case slapolicy.FieldExcludeHolidays:
-		return m.ExcludeHolidays()
-	case slapolicy.FieldEscalationRules:
-		return m.EscalationRules()
-	case slapolicy.FieldIsActive:
-		return m.IsActive()
-	case slapolicy.FieldPriorityScore:
-		return m.PriorityScore()
-	case slapolicy.FieldTenantID:
-		return m.TenantID()
-	case slapolicy.FieldCreatedAt:
-		return m.CreatedAt()
-	case slapolicy.FieldUpdatedAt:
-		return m.UpdatedAt()
-	}
-	return nil, false
-}
-
-// OldField returns the old value of the field from the database. An error is
-// returned if the mutation operation is not UpdateOne, or the query to the
-// database failed.
-func (m *SLAPolicyMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
-	switch name {
-	case slapolicy.FieldName:
-		return m.OldName(ctx)
-	case slapolicy.FieldDescription:
-		return m.OldDescription(ctx)
-	case slapolicy.FieldCustomerTier:
-		return m.OldCustomerTier(ctx)
-	case slapolicy.FieldTicketType:
-		return m.OldTicketType(ctx)
-	case slapolicy.FieldPriority:
-		return m.OldPriority(ctx)
-	case slapolicy.FieldResponseTimeMinutes:
-		return m.OldResponseTimeMinutes(ctx)
-	case slapolicy.FieldResolutionTimeMinutes:
-		return m.OldResolutionTimeMinutes(ctx)
-	case slapolicy.FieldBusinessHours:
-		return m.OldBusinessHours(ctx)
-	case slapolicy.FieldExcludeWeekends:
-		return m.OldExcludeWeekends(ctx)
-	case slapolicy.FieldExcludeHolidays:
-		return m.OldExcludeHolidays(ctx)
-	case slapolicy.FieldEscalationRules:
-		return m.OldEscalationRules(ctx)
-	case slapolicy.FieldIsActive:
-		return m.OldIsActive(ctx)
-	case slapolicy.FieldPriorityScore:
-		return m.OldPriorityScore(ctx)
-	case slapolicy.FieldTenantID:
-		return m.OldTenantID(ctx)
-	case slapolicy.FieldCreatedAt:
-		return m.OldCreatedAt(ctx)
-	case slapolicy.FieldUpdatedAt:
-		return m.OldUpdatedAt(ctx)
-	}
-	return nil, fmt.Errorf("unknown SLAPolicy field %s", name)
-}
-
-// SetField sets the value of a field with the given name. It returns an error if
-// the field is not defined in the schema, or if the type mismatched the field
-// type.
-func (m *SLAPolicyMutation) SetField(name string, value ent.Value) error {
-	switch name {
-	case slapolicy.FieldName:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetName(v)
-		return nil
-	case slapolicy.FieldDescription:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetDescription(v)
-		return nil
-	case slapolicy.FieldCustomerTier:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetCustomerTier(v)
-		return nil
-	case slapolicy.FieldTicketType:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetTicketType(v)
-		return nil
-	case slapolicy.FieldPriority:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetPriority(v)
-		return nil
-	case slapolicy.FieldResponseTimeMinutes:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetResponseTimeMinutes(v)
-		return nil
-	case slapolicy.FieldResolutionTimeMinutes:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetResolutionTimeMinutes(v)
-		return nil
-	case slapolicy.FieldBusinessHours:
-		v, ok := value.(map[string]interface{})
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetBusinessHours(v)
-		return nil
-	case slapolicy.FieldExcludeWeekends:
-		v, ok := value.(bool)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetExcludeWeekends(v)
-		return nil
-	case slapolicy.FieldExcludeHolidays:
-		v, ok := value.(bool)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetExcludeHolidays(v)
-		return nil
-	case slapolicy.FieldEscalationRules:
-		v, ok := value.(map[string]interface{})
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetEscalationRules(v)
-		return nil
-	case slapolicy.FieldIsActive:
-		v, ok := value.(bool)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetIsActive(v)
-		return nil
-	case slapolicy.FieldPriorityScore:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetPriorityScore(v)
-		return nil
-	case slapolicy.FieldTenantID:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetTenantID(v)
-		return nil
-	case slapolicy.FieldCreatedAt:
-		v, ok := value.(time.Time)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetCreatedAt(v)
-		return nil
-	case slapolicy.FieldUpdatedAt:
-		v, ok := value.(time.Time)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetUpdatedAt(v)
-		return nil
-	}
-	return fmt.Errorf("unknown SLAPolicy field %s", name)
-}
-
-// AddedFields returns all numeric fields that were incremented/decremented during
-// this mutation.
-func (m *SLAPolicyMutation) AddedFields() []string {
-	var fields []string
-	if m.addresponse_time_minutes != nil {
-		fields = append(fields, slapolicy.FieldResponseTimeMinutes)
-	}
-	if m.addresolution_time_minutes != nil {
-		fields = append(fields, slapolicy.FieldResolutionTimeMinutes)
-	}
-	if m.addpriority_score != nil {
-		fields = append(fields, slapolicy.FieldPriorityScore)
-	}
-	if m.addtenant_id != nil {
-		fields = append(fields, slapolicy.FieldTenantID)
-	}
-	return fields
-}
-
-// AddedField returns the numeric value that was incremented/decremented on a field
-// with the given name. The second boolean return value indicates that this field
-// was not set, or was not defined in the schema.
-func (m *SLAPolicyMutation) AddedField(name string) (ent.Value, bool) {
-	switch name {
-	case slapolicy.FieldResponseTimeMinutes:
-		return m.AddedResponseTimeMinutes()
-	case slapolicy.FieldResolutionTimeMinutes:
-		return m.AddedResolutionTimeMinutes()
-	case slapolicy.FieldPriorityScore:
-		return m.AddedPriorityScore()
-	case slapolicy.FieldTenantID:
-		return m.AddedTenantID()
-	}
-	return nil, false
-}
-
-// AddField adds the value to the field with the given name. It returns an error if
-// the field is not defined in the schema, or if the type mismatched the field
-// type.
-func (m *SLAPolicyMutation) AddField(name string, value ent.Value) error {
-	switch name {
-	case slapolicy.FieldResponseTimeMinutes:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddResponseTimeMinutes(v)
-		return nil
-	case slapolicy.FieldResolutionTimeMinutes:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddResolutionTimeMinutes(v)
-		return nil
-	case slapolicy.FieldPriorityScore:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddPriorityScore(v)
-		return nil
-	case slapolicy.FieldTenantID:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddTenantID(v)
-		return nil
-	}
-	return fmt.Errorf("unknown SLAPolicy numeric field %s", name)
-}
-
-// ClearedFields returns all nullable fields that were cleared during this
-// mutation.
-func (m *SLAPolicyMutation) ClearedFields() []string {
-	var fields []string
-	if m.FieldCleared(slapolicy.FieldDescription) {
-		fields = append(fields, slapolicy.FieldDescription)
-	}
-	if m.FieldCleared(slapolicy.FieldCustomerTier) {
-		fields = append(fields, slapolicy.FieldCustomerTier)
-	}
-	if m.FieldCleared(slapolicy.FieldTicketType) {
-		fields = append(fields, slapolicy.FieldTicketType)
-	}
-	if m.FieldCleared(slapolicy.FieldPriority) {
-		fields = append(fields, slapolicy.FieldPriority)
-	}
-	if m.FieldCleared(slapolicy.FieldBusinessHours) {
-		fields = append(fields, slapolicy.FieldBusinessHours)
-	}
-	if m.FieldCleared(slapolicy.FieldEscalationRules) {
-		fields = append(fields, slapolicy.FieldEscalationRules)
-	}
-	return fields
-}
-
-// FieldCleared returns a boolean indicating if a field with the given name was
-// cleared in this mutation.
-func (m *SLAPolicyMutation) FieldCleared(name string) bool {
-	_, ok := m.clearedFields[name]
-	return ok
-}
-
-// ClearField clears the value of the field with the given name. It returns an
-// error if the field is not defined in the schema.
-func (m *SLAPolicyMutation) ClearField(name string) error {
-	switch name {
-	case slapolicy.FieldDescription:
-		m.ClearDescription()
-		return nil
-	case slapolicy.FieldCustomerTier:
-		m.ClearCustomerTier()
-		return nil
-	case slapolicy.FieldTicketType:
-		m.ClearTicketType()
-		return nil
-	case slapolicy.FieldPriority:
-		m.ClearPriority()
-		return nil
-	case slapolicy.FieldBusinessHours:
-		m.ClearBusinessHours()
-		return nil
-	case slapolicy.FieldEscalationRules:
-		m.ClearEscalationRules()
-		return nil
-	}
-	return fmt.Errorf("unknown SLAPolicy nullable field %s", name)
-}
-
-// ResetField resets all changes in the mutation for the field with the given name.
-// It returns an error if the field is not defined in the schema.
-func (m *SLAPolicyMutation) ResetField(name string) error {
-	switch name {
-	case slapolicy.FieldName:
-		m.ResetName()
-		return nil
-	case slapolicy.FieldDescription:
-		m.ResetDescription()
-		return nil
-	case slapolicy.FieldCustomerTier:
-		m.ResetCustomerTier()
-		return nil
-	case slapolicy.FieldTicketType:
-		m.ResetTicketType()
-		return nil
-	case slapolicy.FieldPriority:
-		m.ResetPriority()
-		return nil
-	case slapolicy.FieldResponseTimeMinutes:
-		m.ResetResponseTimeMinutes()
-		return nil
-	case slapolicy.FieldResolutionTimeMinutes:
-		m.ResetResolutionTimeMinutes()
-		return nil
-	case slapolicy.FieldBusinessHours:
-		m.ResetBusinessHours()
-		return nil
-	case slapolicy.FieldExcludeWeekends:
-		m.ResetExcludeWeekends()
-		return nil
-	case slapolicy.FieldExcludeHolidays:
-		m.ResetExcludeHolidays()
-		return nil
-	case slapolicy.FieldEscalationRules:
-		m.ResetEscalationRules()
-		return nil
-	case slapolicy.FieldIsActive:
-		m.ResetIsActive()
-		return nil
-	case slapolicy.FieldPriorityScore:
-		m.ResetPriorityScore()
-		return nil
-	case slapolicy.FieldTenantID:
-		m.ResetTenantID()
-		return nil
-	case slapolicy.FieldCreatedAt:
-		m.ResetCreatedAt()
-		return nil
-	case slapolicy.FieldUpdatedAt:
-		m.ResetUpdatedAt()
-		return nil
-	}
-	return fmt.Errorf("unknown SLAPolicy field %s", name)
-}
-
-// AddedEdges returns all edge names that were set/added in this mutation.
-func (m *SLAPolicyMutation) AddedEdges() []string {
-	edges := make([]string, 0, 2)
-	if m.sla_definition != nil {
-		edges = append(edges, slapolicy.EdgeSLADefinition)
-	}
-	if m.tickets != nil {
-		edges = append(edges, slapolicy.EdgeTickets)
-	}
-	return edges
-}
-
-// AddedIDs returns all IDs (to other nodes) that were added for the given edge
-// name in this mutation.
-func (m *SLAPolicyMutation) AddedIDs(name string) []ent.Value {
-	switch name {
-	case slapolicy.EdgeSLADefinition:
-		ids := make([]ent.Value, 0, len(m.sla_definition))
-		for id := range m.sla_definition {
-			ids = append(ids, id)
-		}
-		return ids
-	case slapolicy.EdgeTickets:
-		ids := make([]ent.Value, 0, len(m.tickets))
-		for id := range m.tickets {
-			ids = append(ids, id)
-		}
-		return ids
-	}
-	return nil
-}
-
-// RemovedEdges returns all edge names that were removed in this mutation.
-func (m *SLAPolicyMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 2)
-	if m.removedsla_definition != nil {
-		edges = append(edges, slapolicy.EdgeSLADefinition)
-	}
-	if m.removedtickets != nil {
-		edges = append(edges, slapolicy.EdgeTickets)
-	}
-	return edges
-}
-
-// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
-// the given name in this mutation.
-func (m *SLAPolicyMutation) RemovedIDs(name string) []ent.Value {
-	switch name {
-	case slapolicy.EdgeSLADefinition:
-		ids := make([]ent.Value, 0, len(m.removedsla_definition))
-		for id := range m.removedsla_definition {
-			ids = append(ids, id)
-		}
-		return ids
-	case slapolicy.EdgeTickets:
-		ids := make([]ent.Value, 0, len(m.removedtickets))
-		for id := range m.removedtickets {
-			ids = append(ids, id)
-		}
-		return ids
-	}
-	return nil
-}
-
-// ClearedEdges returns all edge names that were cleared in this mutation.
-func (m *SLAPolicyMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 2)
-	if m.clearedsla_definition {
-		edges = append(edges, slapolicy.EdgeSLADefinition)
-	}
-	if m.clearedtickets {
-		edges = append(edges, slapolicy.EdgeTickets)
-	}
-	return edges
-}
-
-// EdgeCleared returns a boolean which indicates if the edge with the given name
-// was cleared in this mutation.
-func (m *SLAPolicyMutation) EdgeCleared(name string) bool {
-	switch name {
-	case slapolicy.EdgeSLADefinition:
-		return m.clearedsla_definition
-	case slapolicy.EdgeTickets:
-		return m.clearedtickets
-	}
-	return false
-}
-
-// ClearEdge clears the value of the edge with the given name. It returns an error
-// if that edge is not defined in the schema.
-func (m *SLAPolicyMutation) ClearEdge(name string) error {
-	switch name {
-	}
-	return fmt.Errorf("unknown SLAPolicy unique edge %s", name)
-}
-
-// ResetEdge resets all changes to the edge with the given name in this mutation.
-// It returns an error if the edge is not defined in the schema.
-func (m *SLAPolicyMutation) ResetEdge(name string) error {
-	switch name {
-	case slapolicy.EdgeSLADefinition:
-		m.ResetSLADefinition()
-		return nil
-	case slapolicy.EdgeTickets:
-		m.ResetTickets()
-		return nil
-	}
-	return fmt.Errorf("unknown SLAPolicy edge %s", name)
 }
 
 // SLAViolationMutation represents an operation that mutates the SLAViolation nodes in the graph.

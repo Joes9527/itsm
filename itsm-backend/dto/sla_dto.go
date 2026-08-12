@@ -206,7 +206,7 @@ type SLADeadline struct {
 	TicketID    int       `json:"ticketId"`
 	TicketTitle string    `json:"ticketTitle"`
 	Deadline    time.Time `json:"deadline"`
-	SLAPolicy   string    `json:"slaPolicy"`
+	SLAName     string    `json:"slaName"`
 	TimeLeft    string    `json:"timeLeft"`
 }
 

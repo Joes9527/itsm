@@ -184,6 +184,34 @@ func (_u *SLADefinitionUpdate) ClearConditions() *SLADefinitionUpdate {
 	return _u
 }
 
+// SetExcludeWeekends sets the "exclude_weekends" field.
+func (_u *SLADefinitionUpdate) SetExcludeWeekends(v bool) *SLADefinitionUpdate {
+	_u.mutation.SetExcludeWeekends(v)
+	return _u
+}
+
+// SetNillableExcludeWeekends sets the "exclude_weekends" field if the given value is not nil.
+func (_u *SLADefinitionUpdate) SetNillableExcludeWeekends(v *bool) *SLADefinitionUpdate {
+	if v != nil {
+		_u.SetExcludeWeekends(*v)
+	}
+	return _u
+}
+
+// SetExcludeHolidays sets the "exclude_holidays" field.
+func (_u *SLADefinitionUpdate) SetExcludeHolidays(v bool) *SLADefinitionUpdate {
+	_u.mutation.SetExcludeHolidays(v)
+	return _u
+}
+
+// SetNillableExcludeHolidays sets the "exclude_holidays" field if the given value is not nil.
+func (_u *SLADefinitionUpdate) SetNillableExcludeHolidays(v *bool) *SLADefinitionUpdate {
+	if v != nil {
+		_u.SetExcludeHolidays(*v)
+	}
+	return _u
+}
+
 // SetIsActive sets the "is_active" field.
 func (_u *SLADefinitionUpdate) SetIsActive(v bool) *SLADefinitionUpdate {
 	_u.mutation.SetIsActive(v)
@@ -511,6 +539,12 @@ func (_u *SLADefinitionUpdate) sqlSave(ctx context.Context) (_node int, err erro
 	}
 	if _u.mutation.ConditionsCleared() {
 		_spec.ClearField(sladefinition.FieldConditions, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.ExcludeWeekends(); ok {
+		_spec.SetField(sladefinition.FieldExcludeWeekends, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.ExcludeHolidays(); ok {
+		_spec.SetField(sladefinition.FieldExcludeHolidays, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.IsActive(); ok {
 		_spec.SetField(sladefinition.FieldIsActive, field.TypeBool, value)
@@ -879,6 +913,34 @@ func (_u *SLADefinitionUpdateOne) ClearConditions() *SLADefinitionUpdateOne {
 	return _u
 }
 
+// SetExcludeWeekends sets the "exclude_weekends" field.
+func (_u *SLADefinitionUpdateOne) SetExcludeWeekends(v bool) *SLADefinitionUpdateOne {
+	_u.mutation.SetExcludeWeekends(v)
+	return _u
+}
+
+// SetNillableExcludeWeekends sets the "exclude_weekends" field if the given value is not nil.
+func (_u *SLADefinitionUpdateOne) SetNillableExcludeWeekends(v *bool) *SLADefinitionUpdateOne {
+	if v != nil {
+		_u.SetExcludeWeekends(*v)
+	}
+	return _u
+}
+
+// SetExcludeHolidays sets the "exclude_holidays" field.
+func (_u *SLADefinitionUpdateOne) SetExcludeHolidays(v bool) *SLADefinitionUpdateOne {
+	_u.mutation.SetExcludeHolidays(v)
+	return _u
+}
+
+// SetNillableExcludeHolidays sets the "exclude_holidays" field if the given value is not nil.
+func (_u *SLADefinitionUpdateOne) SetNillableExcludeHolidays(v *bool) *SLADefinitionUpdateOne {
+	if v != nil {
+		_u.SetExcludeHolidays(*v)
+	}
+	return _u
+}
+
 // SetIsActive sets the "is_active" field.
 func (_u *SLADefinitionUpdateOne) SetIsActive(v bool) *SLADefinitionUpdateOne {
 	_u.mutation.SetIsActive(v)
@@ -1236,6 +1298,12 @@ func (_u *SLADefinitionUpdateOne) sqlSave(ctx context.Context) (_node *SLADefini
 	}
 	if _u.mutation.ConditionsCleared() {
 		_spec.ClearField(sladefinition.FieldConditions, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.ExcludeWeekends(); ok {
+		_spec.SetField(sladefinition.FieldExcludeWeekends, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.ExcludeHolidays(); ok {
+		_spec.SetField(sladefinition.FieldExcludeHolidays, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.IsActive(); ok {
 		_spec.SetField(sladefinition.FieldIsActive, field.TypeBool, value)
