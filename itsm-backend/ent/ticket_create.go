@@ -122,6 +122,20 @@ func (_c *TicketCreate) SetRequesterID(v int) *TicketCreate {
 	return _c
 }
 
+// SetCreatorEmail sets the "creator_email" field.
+func (_c *TicketCreate) SetCreatorEmail(v string) *TicketCreate {
+	_c.mutation.SetCreatorEmail(v)
+	return _c
+}
+
+// SetNillableCreatorEmail sets the "creator_email" field if the given value is not nil.
+func (_c *TicketCreate) SetNillableCreatorEmail(v *string) *TicketCreate {
+	if v != nil {
+		_c.SetCreatorEmail(*v)
+	}
+	return _c
+}
+
 // SetAssigneeID sets the "assignee_id" field.
 func (_c *TicketCreate) SetAssigneeID(v int) *TicketCreate {
 	_c.mutation.SetAssigneeID(v)
@@ -894,6 +908,10 @@ func (_c *TicketCreate) createSpec() (*Ticket, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.TicketNumber(); ok {
 		_spec.SetField(ticket.FieldTicketNumber, field.TypeString, value)
 		_node.TicketNumber = value
+	}
+	if value, ok := _c.mutation.CreatorEmail(); ok {
+		_spec.SetField(ticket.FieldCreatorEmail, field.TypeString, value)
+		_node.CreatorEmail = value
 	}
 	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(ticket.FieldTenantID, field.TypeInt, value)

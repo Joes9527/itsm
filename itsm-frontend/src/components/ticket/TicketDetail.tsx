@@ -64,6 +64,7 @@ import {
 } from '@/components/business/detail-tabs';
 import { RelationPanel } from '@/components/ticket-relations/RelationPanel';
 import ServiceRequestPanel from './ServiceRequestPanel';
+import ServiceCatalogApprovalChain from './ServiceCatalogApprovalChain';
 import {
   MessageSquare,
   Paperclip,
@@ -959,6 +960,7 @@ const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
         ticketNumber={ticket.ticketNumber}
         ticketType={ticket.type as string | undefined}
         ticketPriority={ticket.priority as string | undefined}
+        ticketSource={ticket.source}
         currentUserId={currentUser?.id}
         isTicketFinal={isTicketFinal}
         onRefresh={fetchTicket}
@@ -974,6 +976,7 @@ interface TicketDetailTabsProps {
   ticketNumber?: string;
   ticketType?: string;
   ticketPriority?: string;
+  ticketSource?: string;
   currentUserId?: number;
   isTicketFinal: boolean;
   onRefresh: () => void;
@@ -984,6 +987,7 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
   ticketNumber,
   ticketType,
   ticketPriority,
+  ticketSource,
   currentUserId,
   isTicketFinal,
   onRefresh,
@@ -1034,15 +1038,20 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
         </span>
       ),
       children: (
-        <ApprovalWorkflowPanel
-          ticketId={ticketId}
-          ticketType={ticketType}
-          priority={ticketPriority}
-          currentUserId={currentUserId}
-          isTicketFinal={isTicketFinal}
-          onRefresh={onRefresh}
-          formatDateTime={formatDateTime}
-        />
+        <div>
+          {ticketSource === 'service_catalog' && (
+            <ServiceCatalogApprovalChain ticketId={ticketId} />
+          )}
+          <ApprovalWorkflowPanel
+            ticketId={ticketId}
+            ticketType={ticketType}
+            priority={ticketPriority}
+            currentUserId={currentUserId}
+            isTicketFinal={isTicketFinal}
+            onRefresh={onRefresh}
+            formatDateTime={formatDateTime}
+          />
+        </div>
       ),
     },
     {

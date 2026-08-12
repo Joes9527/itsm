@@ -166,6 +166,26 @@ func (_u *TicketUpdate) SetNillableRequesterID(v *int) *TicketUpdate {
 	return _u
 }
 
+// SetCreatorEmail sets the "creator_email" field.
+func (_u *TicketUpdate) SetCreatorEmail(v string) *TicketUpdate {
+	_u.mutation.SetCreatorEmail(v)
+	return _u
+}
+
+// SetNillableCreatorEmail sets the "creator_email" field if the given value is not nil.
+func (_u *TicketUpdate) SetNillableCreatorEmail(v *string) *TicketUpdate {
+	if v != nil {
+		_u.SetCreatorEmail(*v)
+	}
+	return _u
+}
+
+// ClearCreatorEmail clears the value of the "creator_email" field.
+func (_u *TicketUpdate) ClearCreatorEmail() *TicketUpdate {
+	_u.mutation.ClearCreatorEmail()
+	return _u
+}
+
 // SetAssigneeID sets the "assignee_id" field.
 func (_u *TicketUpdate) SetAssigneeID(v int) *TicketUpdate {
 	_u.mutation.SetAssigneeID(v)
@@ -1381,6 +1401,12 @@ func (_u *TicketUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.TicketNumber(); ok {
 		_spec.SetField(ticket.FieldTicketNumber, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.CreatorEmail(); ok {
+		_spec.SetField(ticket.FieldCreatorEmail, field.TypeString, value)
+	}
+	if _u.mutation.CreatorEmailCleared() {
+		_spec.ClearField(ticket.FieldCreatorEmail, field.TypeString)
+	}
 	if value, ok := _u.mutation.TenantID(); ok {
 		_spec.SetField(ticket.FieldTenantID, field.TypeInt, value)
 	}
@@ -2384,6 +2410,26 @@ func (_u *TicketUpdateOne) SetNillableRequesterID(v *int) *TicketUpdateOne {
 	if v != nil {
 		_u.SetRequesterID(*v)
 	}
+	return _u
+}
+
+// SetCreatorEmail sets the "creator_email" field.
+func (_u *TicketUpdateOne) SetCreatorEmail(v string) *TicketUpdateOne {
+	_u.mutation.SetCreatorEmail(v)
+	return _u
+}
+
+// SetNillableCreatorEmail sets the "creator_email" field if the given value is not nil.
+func (_u *TicketUpdateOne) SetNillableCreatorEmail(v *string) *TicketUpdateOne {
+	if v != nil {
+		_u.SetCreatorEmail(*v)
+	}
+	return _u
+}
+
+// ClearCreatorEmail clears the value of the "creator_email" field.
+func (_u *TicketUpdateOne) ClearCreatorEmail() *TicketUpdateOne {
+	_u.mutation.ClearCreatorEmail()
 	return _u
 }
 
@@ -3631,6 +3677,12 @@ func (_u *TicketUpdateOne) sqlSave(ctx context.Context) (_node *Ticket, err erro
 	}
 	if value, ok := _u.mutation.TicketNumber(); ok {
 		_spec.SetField(ticket.FieldTicketNumber, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.CreatorEmail(); ok {
+		_spec.SetField(ticket.FieldCreatorEmail, field.TypeString, value)
+	}
+	if _u.mutation.CreatorEmailCleared() {
+		_spec.ClearField(ticket.FieldCreatorEmail, field.TypeString)
 	}
 	if value, ok := _u.mutation.TenantID(); ok {
 		_spec.SetField(ticket.FieldTenantID, field.TypeInt, value)

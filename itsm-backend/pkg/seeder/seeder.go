@@ -32,6 +32,8 @@ import (
 	"itsm-backend/ent/team"
 	"itsm-backend/ent/tenant"
 	"itsm-backend/ent/ticketcategory"
+	"itsm-backend/ent/fielddefinition"
+	"itsm-backend/ent/tickettemplate"
 	"itsm-backend/ent/ticketview"
 	"itsm-backend/ent/user"
 	"itsm-backend/service"
@@ -81,6 +83,8 @@ type SeedConfig struct {
 	StandardChanges []StandardChangeSeed `json:"standard_changes"`
 	KnownErrors     []KnownErrorSeed     `json:"known_errors"`
 	TicketTags      []TicketTagSeed      `json:"ticket_tags"`
+	TicketCategories []TicketCategorySeed  `json:"ticket_categories"`
+	TicketTemplates  []TicketTemplateSeed  `json:"ticket_templates"`
 	// 工作流种子配置
 	SeedWorkflows bool `json:"seed_workflows"`
 }
@@ -196,11 +200,19 @@ type KnowledgeArticleSeed struct {
 	ViewCount   int    `json:"view_count"`
 }
 
-// TicketCategorySeed 工单分类种子数据结构（用于事件分类）
+// TicketCategorySeed 工单分类种子数据结构（用于事件分类和工单分类树）
 type TicketCategorySeed struct {
-	Name        string `json:"name"`
-	Code        string `json:"code"`
-	Description string `json:"description"`
+	Name            string `json:"name"`
+	Code            string `json:"code"`
+	Description     string `json:"description"`
+	ParentCode      string `json:"parent_code"` // 父分类代码，用于构建层级树
+	Level           int    `json:"level"`       // 层级: 1=一级, 2=二级, 3=三级
+	SortOrder       int    `json:"sort_order"`  // 排序
+	ITSMType        string `json:"itsm_type"`
+	DefaultPriority string `json:"default_priority"`
+	SLATier         string `json:"sla_tier"`
+	DefaultResolver string `json:"default_resolver"`
+	IsUserFacing    *bool  `json:"is_user_facing"`
 }
 
 // StandardChangeSeed 标准变更模板种子数据结构
@@ -244,6 +256,28 @@ type TicketTagSeed struct {
 	Color       string `json:"color"`
 }
 
+
+// TicketTemplateSeed 工单模板种子数据结构
+type TicketTemplateSeed struct {
+	Name        string                `json:"name"`
+	Description string                `json:"description"`
+	Category    string                `json:"category"`
+	Priority    string                `json:"priority"`
+	IsActive    bool                  `json:"is_active"`
+	CategoryIDs   []int                 `json:"category_ids"`
+	CategoryCodes []string              `json:"category_codes"`
+	Fields        []FieldDefinitionSeed `json:"fields"`
+}
+
+// FieldDefinitionSeed 自定义字段定义种子数据结构
+type FieldDefinitionSeed struct {
+	Name      string                   `json:"name"`
+	Label     string                   `json:"label"`
+	FieldType string                   `json:"field_type"`
+	Required  bool                     `json:"required"`
+	Options   []map[string]interface{} `json:"options"`
+	SortOrder int                      `json:"sort_order"`
+}
 // SLAPolicySeed SLA策略种子数据结构
 type SLAPolicySeed struct {
 	Name                  string `json:"name"`
@@ -387,6 +421,12 @@ func mergeSeedConfig(base *SeedConfig, override *SeedConfig) *SeedConfig {
 	}
 	if override.TicketTags != nil {
 		base.TicketTags = override.TicketTags
+	}
+	if override.TicketCategories != nil {
+		base.TicketCategories = override.TicketCategories
+	}
+	if override.TicketTemplates != nil {
+		base.TicketTemplates = override.TicketTemplates
 	}
 	if override.SeedWorkflows {
 		base.SeedWorkflows = true
@@ -533,7 +573,9 @@ func (s *Seeder) SeedAll(ctx context.Context) {
 	s.seedServiceCatalog(ctx)
 	s.seedTicketTypes(ctx)            // 新增：初始化工单类型
 	s.seedCITypes(ctx)                // 新增：初始化CI类型
-	s.seedIncidentCategories(ctx)     // 新增：初始化事件分类
+	s.seedTicketCategories(ctx)       // 新增：初始化工单分类层级树
+	s.seedIncidentCategories(ctx)     // 新增：初始化事件分类（在层级树之后，已有数据则跳过）
+	s.seedTicketTemplates(ctx)        // 新增：初始化工单模板与自定义字段
 	s.seedStandardChanges(ctx)        // 新增：初始化标准变更模板
 	s.seedTicketTags(ctx)             // 新增：初始化标签
 	s.seedMenuAndPermissionFixes(ctx) // 修复：更新菜单路径和补充缺失权限
@@ -1382,6 +1424,11 @@ func (s *Seeder) seedPermissions(ctx context.Context) {
 		// 审批权限
 		{"approval:read", "查看审批", "approval", "read", "查看审批记录"},
 		{"approval:write", "管理审批", "approval", "write", "审批操作"},
+		// 通知权限
+		{"notification:read", "查看通知", "notification", "read", "查看通知消息"},
+		{"notification:create", "创建通知", "notification", "create", "发送通知"},
+		{"notification:update", "更新通知", "notification", "update", "更新通知配置"},
+		{"notification:delete", "删除通知", "notification", "delete", "删除通知"},
 		// 工作流权限
 		{"workflow:read", "查看工作流", "workflow", "read", "查看工作流"},
 		{"workflow:write", "管理工作流", "workflow", "write", "创建、编辑工作流"},
@@ -1837,6 +1884,7 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		// 普通用户
 		"end_user": {
 			"ticket:read", "ticket:write", "knowledge:read", "service_catalog:read",
+			"ticket_category:read", "ticket_template:read", "notification:read",
 		},
 		// 访客
 		"guest": {
@@ -1945,6 +1993,7 @@ func allPermissionCodes() []string {
 		"department:read", "department:write",
 		"team:read", "team:write",
 		"approval:read", "approval:write",
+		"notification:read", "notification:create", "notification:update", "notification:delete",
 		"workflow:read", "workflow:write",
 		"knowledge:read", "knowledge:write", "knowledge:delete",
 		"system:read", "system:write",
@@ -2404,4 +2453,208 @@ func (s *Seeder) seedIncidentCategories(ctx context.Context) {
 		}
 	}
 	s.sugar.Infow("incident categories seeded", "count", len(categories))
+}
+
+// seedTicketCategories 初始化工单分类树（层级结构）
+func (s *Seeder) seedTicketCategories(ctx context.Context) {
+	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
+	if err != nil {
+		s.sugar.Warnw("default tenant not found; skip ticket categories seed", "error", err)
+		return
+	}
+
+	categories := s.config.TicketCategories
+	if len(categories) == 0 {
+		s.sugar.Infow("no ticket categories in config; skip seed")
+		return
+	}
+
+	// 检查是否已有分类数据（按 tenant 检查，避免重复种子）
+	existing, err := s.client.TicketCategory.Query().
+		Where(ticketcategory.TenantIDEQ(t.ID)).
+		Count(ctx)
+	if err != nil {
+		s.sugar.Warnw("check existing ticket categories failed", "error", err)
+		return
+	}
+	if existing > 0 {
+		s.sugar.Infow("ticket categories already seeded", "count", existing)
+		return
+	}
+
+	// 先创建所有分类（不含 parent_id），再设置父子关系
+	created := make(map[string]*ent.TicketCategory)
+	for _, cat := range categories {
+		create := s.client.TicketCategory.Create().
+			SetName(cat.Name).
+			SetCode(cat.Code).
+			SetDescription(cat.Description).
+			SetLevel(cat.Level).
+			SetSortOrder(cat.SortOrder).
+			SetIsActive(true).
+			SetTenantID(t.ID)
+		if cat.ITSMType != "" {
+			create.SetItsmType(cat.ITSMType)
+		}
+		if cat.DefaultPriority != "" {
+			create.SetDefaultPriority(cat.DefaultPriority)
+		}
+		if cat.SLATier != "" {
+			create.SetSLATier(cat.SLATier)
+		}
+		if cat.DefaultResolver != "" {
+			create.SetDefaultResolver(cat.DefaultResolver)
+		}
+		if cat.IsUserFacing != nil {
+			create.SetIsUserFacing(*cat.IsUserFacing)
+		}
+		entity, err := create.Save(ctx)
+		if err != nil {
+			s.sugar.Warnw("seed ticket category failed", "error", err, "code", cat.Code)
+			continue
+		}
+		created[cat.Code] = entity
+	}
+
+	// 设置父子关系
+	for _, cat := range categories {
+		if cat.ParentCode == "" {
+			continue
+		}
+		child, ok := created[cat.Code]
+		if !ok {
+			continue
+		}
+		parent, ok := created[cat.ParentCode]
+		if !ok {
+			s.sugar.Warnw("parent category not found", "code", cat.Code, "parent_code", cat.ParentCode)
+			continue
+		}
+		_, err := child.Update().
+			SetParentID(parent.ID).
+			Save(ctx)
+		if err != nil {
+			s.sugar.Warnw("set parent for ticket category failed", "error", err, "code", cat.Code)
+		}
+	}
+
+	s.sugar.Infow("ticket categories seeded", "count", len(created), "total_config", len(categories))
+}
+
+// seedTicketTemplates 初始化工单模板及自定义字段定义
+func (s *Seeder) seedTicketTemplates(ctx context.Context) {
+	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
+	if err != nil {
+		s.sugar.Warnw("default tenant not found; skip ticket templates seed", "error", err)
+		return
+	}
+
+	templates := s.config.TicketTemplates
+	if len(templates) == 0 {
+		s.sugar.Infow("no ticket templates in config; skip seed")
+		return
+	}
+
+	// 检查是否已有模板数据
+	existing, err := s.client.TicketTemplate.Query().
+		Where(tickettemplate.TenantIDEQ(t.ID)).
+		Count(ctx)
+	if err != nil {
+		s.sugar.Warnw("check existing ticket templates failed", "error", err)
+		return
+	}
+	if existing > 0 {
+		s.sugar.Infow("ticket templates already seeded", "count", existing)
+		return
+	}
+
+	// fieldDefSvc removed - using direct FieldDefinition operations in transaction
+
+	for _, tmpl := range templates {
+		// 解析 category_codes → category_ids
+		categoryIDs := tmpl.CategoryIDs
+		if len(categoryIDs) == 0 && len(tmpl.CategoryCodes) > 0 {
+			cats, err := s.client.TicketCategory.Query().
+				Where(ticketcategory.TenantIDEQ(t.ID), ticketcategory.CodeIn(tmpl.CategoryCodes...)).
+				All(ctx)
+			if err == nil {
+				for _, c := range cats {
+					categoryIDs = append(categoryIDs, c.ID)
+				}
+			}
+		}
+
+		// 1. 创建模板
+		tpl, err := s.client.TicketTemplate.Create().
+			SetName(tmpl.Name).
+			SetDescription(tmpl.Description).
+			SetCategory(tmpl.Category).
+			SetPriority(tmpl.Priority).
+			SetIsActive(tmpl.IsActive).
+			SetCategoryIds(categoryIDs).
+			SetTenantID(t.ID).
+			Save(ctx)
+		if err != nil {
+			s.sugar.Warnw("seed ticket template failed", "error", err, "name", tmpl.Name)
+			continue
+		}
+
+			// 2. 创建自定义字段定义（直接在当前事务中操作）
+			if len(tmpl.Fields) == 0 {
+				continue
+			}
+
+			// 删除旧定义（幂等）
+			_, err = s.client.FieldDefinition.Delete().
+				Where(
+					fielddefinition.TenantIDEQ(t.ID),
+					fielddefinition.EntityTypeEQ("ticket_template"),
+					fielddefinition.EntityIDEQ(tpl.ID),
+				).
+				Exec(ctx)
+			if err != nil {
+				s.sugar.Warnw("delete old field definitions failed", "error", err, "template", tmpl.Name)
+			}
+
+			// 按序创建新定义
+			for i, fd := range tmpl.Fields {
+				opts := fd.Options
+				if opts == nil {
+					opts = []map[string]interface{}{}
+				}
+				sortOrder := fd.SortOrder
+				if sortOrder == 0 {
+					sortOrder = i
+				}
+				_, err := s.client.FieldDefinition.Create().
+					SetTenantID(t.ID).
+					SetEntityType("ticket_template").
+					SetEntityID(tpl.ID).
+					SetName(fd.Name).
+					SetLabel(fd.Label).
+					SetFieldType(fd.FieldType).
+					SetRequired(fd.Required).
+					SetOptions(convertOptions(fd.Options)).
+					SetSortOrder(sortOrder).
+					SetIsActive(true).
+					Save(ctx)
+				if err != nil {
+					s.sugar.Warnw("seed field definition failed", "error", err, "template", tmpl.Name, "field", fd.Name)
+				}
+			}
+		if err != nil {
+			s.sugar.Warnw("seed field definitions for template failed", "error", err, "template", tmpl.Name)
+		}
+	}
+
+	s.sugar.Infow("ticket templates seeded", "count", len(templates))
+}
+
+// convertOptions converts []map[string]interface{} to []interface{} for FieldDefinition
+func convertOptions(opts []map[string]interface{}) []interface{} {
+	result := make([]interface{}, len(opts))
+	for i, opt := range opts {
+		result[i] = opt
+	}
+	return result
 }

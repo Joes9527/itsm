@@ -33,8 +33,8 @@ const toneClasses: Record<
     background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
     border: '#bfdbfe',
     iconBackground: '#dbeafe',
-    iconColor: '#2563eb',
-    valueColor: '#1d4ed8',
+    iconColor: '#D85E10',
+    valueColor: '#B84A08',
   },
   orange: {
     background: 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)',

@@ -35,7 +35,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
           <div
             className="absolute inset-0"
             style={{
-              background: `linear-gradient(135deg, #1890ff 0%, #2563eb 50%, #1d4ed8 100%)`,
+              background: `linear-gradient(135deg, #1890ff 0%, #D85E10 50%, #B84A08 100%)`,
             }}
           ></div>
           <div className="absolute inset-0 bg-black/20"></div>

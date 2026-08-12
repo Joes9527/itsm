@@ -100,7 +100,7 @@ function getInitialData(): DashboardData {
         title: '总工单数',
         value: 0,
         unit: '个',
-        color: '#3b82f6',
+        color: '#F06820',
         trend: 'up' as const,
         change: 0,
         changeType: 'increase' as const,
@@ -202,7 +202,7 @@ function getInitialData(): DashboardData {
         title: '创建工单',
         description: '快速创建新的IT工单',
         path: '/tickets/create',
-        color: '#3b82f6',
+        color: '#F06820',
       },
       {
         id: 'create-incident',

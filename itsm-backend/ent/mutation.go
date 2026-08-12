@@ -109614,6 +109614,7 @@ type ServiceCatalogMutation struct {
 	category                *string
 	icon                    *string
 	service_type            *string
+	itsm_type               *string
 	price                   *float64
 	addprice                *float64
 	delivery_time           *int
@@ -109965,6 +109966,42 @@ func (m *ServiceCatalogMutation) OldServiceType(ctx context.Context) (v string, 
 // ResetServiceType resets all changes to the "service_type" field.
 func (m *ServiceCatalogMutation) ResetServiceType() {
 	m.service_type = nil
+}
+
+// SetItsmType sets the "itsm_type" field.
+func (m *ServiceCatalogMutation) SetItsmType(s string) {
+	m.itsm_type = &s
+}
+
+// ItsmType returns the value of the "itsm_type" field in the mutation.
+func (m *ServiceCatalogMutation) ItsmType() (r string, exists bool) {
+	v := m.itsm_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldItsmType returns the old "itsm_type" field's value of the ServiceCatalog entity.
+// If the ServiceCatalog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ServiceCatalogMutation) OldItsmType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldItsmType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldItsmType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldItsmType: %w", err)
+	}
+	return oldValue.ItsmType, nil
+}
+
+// ResetItsmType resets all changes to the "itsm_type" field.
+func (m *ServiceCatalogMutation) ResetItsmType() {
+	m.itsm_type = nil
 }
 
 // SetPrice sets the "price" field.
@@ -111013,7 +111050,7 @@ func (m *ServiceCatalogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ServiceCatalogMutation) Fields() []string {
-	fields := make([]string, 0, 23)
+	fields := make([]string, 0, 24)
 	if m.name != nil {
 		fields = append(fields, servicecatalog.FieldName)
 	}
@@ -111028,6 +111065,9 @@ func (m *ServiceCatalogMutation) Fields() []string {
 	}
 	if m.service_type != nil {
 		fields = append(fields, servicecatalog.FieldServiceType)
+	}
+	if m.itsm_type != nil {
+		fields = append(fields, servicecatalog.FieldItsmType)
 	}
 	if m.price != nil {
 		fields = append(fields, servicecatalog.FieldPrice)
@@ -111101,6 +111141,8 @@ func (m *ServiceCatalogMutation) Field(name string) (ent.Value, bool) {
 		return m.Icon()
 	case servicecatalog.FieldServiceType:
 		return m.ServiceType()
+	case servicecatalog.FieldItsmType:
+		return m.ItsmType()
 	case servicecatalog.FieldPrice:
 		return m.Price()
 	case servicecatalog.FieldDeliveryTime:
@@ -111156,6 +111198,8 @@ func (m *ServiceCatalogMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldIcon(ctx)
 	case servicecatalog.FieldServiceType:
 		return m.OldServiceType(ctx)
+	case servicecatalog.FieldItsmType:
+		return m.OldItsmType(ctx)
 	case servicecatalog.FieldPrice:
 		return m.OldPrice(ctx)
 	case servicecatalog.FieldDeliveryTime:
@@ -111235,6 +111279,13 @@ func (m *ServiceCatalogMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetServiceType(v)
+		return nil
+	case servicecatalog.FieldItsmType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetItsmType(v)
 		return nil
 	case servicecatalog.FieldPrice:
 		v, ok := value.(float64)
@@ -111617,6 +111668,9 @@ func (m *ServiceCatalogMutation) ResetField(name string) error {
 		return nil
 	case servicecatalog.FieldServiceType:
 		m.ResetServiceType()
+		return nil
+	case servicecatalog.FieldItsmType:
+		m.ResetItsmType()
 		return nil
 	case servicecatalog.FieldPrice:
 		m.ResetPrice()
@@ -123186,6 +123240,7 @@ type TicketMutation struct {
 	source                     *string
 	priority                   *string
 	ticket_number              *string
+	creator_email              *string
 	tenant_id                  *int
 	addtenant_id               *int
 	template_id                *int
@@ -123685,6 +123740,55 @@ func (m *TicketMutation) OldRequesterID(ctx context.Context) (v int, err error) 
 // ResetRequesterID resets all changes to the "requester_id" field.
 func (m *TicketMutation) ResetRequesterID() {
 	m.requester = nil
+}
+
+// SetCreatorEmail sets the "creator_email" field.
+func (m *TicketMutation) SetCreatorEmail(s string) {
+	m.creator_email = &s
+}
+
+// CreatorEmail returns the value of the "creator_email" field in the mutation.
+func (m *TicketMutation) CreatorEmail() (r string, exists bool) {
+	v := m.creator_email
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatorEmail returns the old "creator_email" field's value of the Ticket entity.
+// If the Ticket object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketMutation) OldCreatorEmail(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatorEmail is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatorEmail requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatorEmail: %w", err)
+	}
+	return oldValue.CreatorEmail, nil
+}
+
+// ClearCreatorEmail clears the value of the "creator_email" field.
+func (m *TicketMutation) ClearCreatorEmail() {
+	m.creator_email = nil
+	m.clearedFields[ticket.FieldCreatorEmail] = struct{}{}
+}
+
+// CreatorEmailCleared returns if the "creator_email" field was cleared in this mutation.
+func (m *TicketMutation) CreatorEmailCleared() bool {
+	_, ok := m.clearedFields[ticket.FieldCreatorEmail]
+	return ok
+}
+
+// ResetCreatorEmail resets all changes to the "creator_email" field.
+func (m *TicketMutation) ResetCreatorEmail() {
+	m.creator_email = nil
+	delete(m.clearedFields, ticket.FieldCreatorEmail)
 }
 
 // SetAssigneeID sets the "assignee_id" field.
@@ -126018,7 +126122,7 @@ func (m *TicketMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TicketMutation) Fields() []string {
-	fields := make([]string, 0, 34)
+	fields := make([]string, 0, 36)
 	if m.title != nil {
 		fields = append(fields, ticket.FieldTitle)
 	}
@@ -126042,6 +126146,9 @@ func (m *TicketMutation) Fields() []string {
 	}
 	if m.requester != nil {
 		fields = append(fields, ticket.FieldRequesterID)
+	}
+	if m.creator_email != nil {
+		fields = append(fields, ticket.FieldCreatorEmail)
 	}
 	if m.assignee != nil {
 		fields = append(fields, ticket.FieldAssigneeID)
@@ -126148,6 +126255,8 @@ func (m *TicketMutation) Field(name string) (ent.Value, bool) {
 		return m.TicketNumber()
 	case ticket.FieldRequesterID:
 		return m.RequesterID()
+	case ticket.FieldCreatorEmail:
+		return m.CreatorEmail()
 	case ticket.FieldAssigneeID:
 		return m.AssigneeID()
 	case ticket.FieldTenantID:
@@ -126227,6 +126336,8 @@ func (m *TicketMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldTicketNumber(ctx)
 	case ticket.FieldRequesterID:
 		return m.OldRequesterID(ctx)
+	case ticket.FieldCreatorEmail:
+		return m.OldCreatorEmail(ctx)
 	case ticket.FieldAssigneeID:
 		return m.OldAssigneeID(ctx)
 	case ticket.FieldTenantID:
@@ -126345,6 +126456,13 @@ func (m *TicketMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetRequesterID(v)
+		return nil
+	case ticket.FieldCreatorEmail:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatorEmail(v)
 		return nil
 	case ticket.FieldAssigneeID:
 		v, ok := value.(int)
@@ -126706,6 +126824,9 @@ func (m *TicketMutation) ClearedFields() []string {
 	if m.FieldCleared(ticket.FieldSource) {
 		fields = append(fields, ticket.FieldSource)
 	}
+	if m.FieldCleared(ticket.FieldCreatorEmail) {
+		fields = append(fields, ticket.FieldCreatorEmail)
+	}
 	if m.FieldCleared(ticket.FieldAssigneeID) {
 		fields = append(fields, ticket.FieldAssigneeID)
 	}
@@ -126791,6 +126912,9 @@ func (m *TicketMutation) ClearField(name string) error {
 		return nil
 	case ticket.FieldSource:
 		m.ClearSource()
+		return nil
+	case ticket.FieldCreatorEmail:
+		m.ClearCreatorEmail()
 		return nil
 	case ticket.FieldAssigneeID:
 		m.ClearAssigneeID()
@@ -126889,6 +127013,9 @@ func (m *TicketMutation) ResetField(name string) error {
 		return nil
 	case ticket.FieldRequesterID:
 		m.ResetRequesterID()
+		return nil
+	case ticket.FieldCreatorEmail:
+		m.ResetCreatorEmail()
 		return nil
 	case ticket.FieldAssigneeID:
 		m.ResetAssigneeID()
@@ -132691,6 +132818,11 @@ type TicketCategoryMutation struct {
 	is_active         *bool
 	tenant_id         *int
 	addtenant_id      *int
+	itsm_type         *string
+	default_priority  *string
+	sla_tier          *string
+	default_resolver  *string
+	is_user_facing    *bool
 	created_at        *time.Time
 	updated_at        *time.Time
 	clearedFields     map[string]struct{}
@@ -133281,6 +133413,238 @@ func (m *TicketCategoryMutation) ResetWorkflowID() {
 	delete(m.clearedFields, ticketcategory.FieldWorkflowID)
 }
 
+// SetItsmType sets the "itsm_type" field.
+func (m *TicketCategoryMutation) SetItsmType(s string) {
+	m.itsm_type = &s
+}
+
+// ItsmType returns the value of the "itsm_type" field in the mutation.
+func (m *TicketCategoryMutation) ItsmType() (r string, exists bool) {
+	v := m.itsm_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldItsmType returns the old "itsm_type" field's value of the TicketCategory entity.
+// If the TicketCategory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketCategoryMutation) OldItsmType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldItsmType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldItsmType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldItsmType: %w", err)
+	}
+	return oldValue.ItsmType, nil
+}
+
+// ClearItsmType clears the value of the "itsm_type" field.
+func (m *TicketCategoryMutation) ClearItsmType() {
+	m.itsm_type = nil
+	m.clearedFields[ticketcategory.FieldItsmType] = struct{}{}
+}
+
+// ItsmTypeCleared returns if the "itsm_type" field was cleared in this mutation.
+func (m *TicketCategoryMutation) ItsmTypeCleared() bool {
+	_, ok := m.clearedFields[ticketcategory.FieldItsmType]
+	return ok
+}
+
+// ResetItsmType resets all changes to the "itsm_type" field.
+func (m *TicketCategoryMutation) ResetItsmType() {
+	m.itsm_type = nil
+	delete(m.clearedFields, ticketcategory.FieldItsmType)
+}
+
+// SetDefaultPriority sets the "default_priority" field.
+func (m *TicketCategoryMutation) SetDefaultPriority(s string) {
+	m.default_priority = &s
+}
+
+// DefaultPriority returns the value of the "default_priority" field in the mutation.
+func (m *TicketCategoryMutation) DefaultPriority() (r string, exists bool) {
+	v := m.default_priority
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDefaultPriority returns the old "default_priority" field's value of the TicketCategory entity.
+// If the TicketCategory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketCategoryMutation) OldDefaultPriority(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDefaultPriority is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDefaultPriority requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDefaultPriority: %w", err)
+	}
+	return oldValue.DefaultPriority, nil
+}
+
+// ClearDefaultPriority clears the value of the "default_priority" field.
+func (m *TicketCategoryMutation) ClearDefaultPriority() {
+	m.default_priority = nil
+	m.clearedFields[ticketcategory.FieldDefaultPriority] = struct{}{}
+}
+
+// DefaultPriorityCleared returns if the "default_priority" field was cleared in this mutation.
+func (m *TicketCategoryMutation) DefaultPriorityCleared() bool {
+	_, ok := m.clearedFields[ticketcategory.FieldDefaultPriority]
+	return ok
+}
+
+// ResetDefaultPriority resets all changes to the "default_priority" field.
+func (m *TicketCategoryMutation) ResetDefaultPriority() {
+	m.default_priority = nil
+	delete(m.clearedFields, ticketcategory.FieldDefaultPriority)
+}
+
+// SetSLATier sets the "sla_tier" field.
+func (m *TicketCategoryMutation) SetSLATier(s string) {
+	m.sla_tier = &s
+}
+
+// SLATier returns the value of the "sla_tier" field in the mutation.
+func (m *TicketCategoryMutation) SLATier() (r string, exists bool) {
+	v := m.sla_tier
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSLATier returns the old "sla_tier" field's value of the TicketCategory entity.
+// If the TicketCategory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketCategoryMutation) OldSLATier(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSLATier is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSLATier requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSLATier: %w", err)
+	}
+	return oldValue.SLATier, nil
+}
+
+// ClearSLATier clears the value of the "sla_tier" field.
+func (m *TicketCategoryMutation) ClearSLATier() {
+	m.sla_tier = nil
+	m.clearedFields[ticketcategory.FieldSLATier] = struct{}{}
+}
+
+// SLATierCleared returns if the "sla_tier" field was cleared in this mutation.
+func (m *TicketCategoryMutation) SLATierCleared() bool {
+	_, ok := m.clearedFields[ticketcategory.FieldSLATier]
+	return ok
+}
+
+// ResetSLATier resets all changes to the "sla_tier" field.
+func (m *TicketCategoryMutation) ResetSLATier() {
+	m.sla_tier = nil
+	delete(m.clearedFields, ticketcategory.FieldSLATier)
+}
+
+// SetDefaultResolver sets the "default_resolver" field.
+func (m *TicketCategoryMutation) SetDefaultResolver(s string) {
+	m.default_resolver = &s
+}
+
+// DefaultResolver returns the value of the "default_resolver" field in the mutation.
+func (m *TicketCategoryMutation) DefaultResolver() (r string, exists bool) {
+	v := m.default_resolver
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDefaultResolver returns the old "default_resolver" field's value of the TicketCategory entity.
+// If the TicketCategory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketCategoryMutation) OldDefaultResolver(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDefaultResolver is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDefaultResolver requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDefaultResolver: %w", err)
+	}
+	return oldValue.DefaultResolver, nil
+}
+
+// ClearDefaultResolver clears the value of the "default_resolver" field.
+func (m *TicketCategoryMutation) ClearDefaultResolver() {
+	m.default_resolver = nil
+	m.clearedFields[ticketcategory.FieldDefaultResolver] = struct{}{}
+}
+
+// DefaultResolverCleared returns if the "default_resolver" field was cleared in this mutation.
+func (m *TicketCategoryMutation) DefaultResolverCleared() bool {
+	_, ok := m.clearedFields[ticketcategory.FieldDefaultResolver]
+	return ok
+}
+
+// ResetDefaultResolver resets all changes to the "default_resolver" field.
+func (m *TicketCategoryMutation) ResetDefaultResolver() {
+	m.default_resolver = nil
+	delete(m.clearedFields, ticketcategory.FieldDefaultResolver)
+}
+
+// SetIsUserFacing sets the "is_user_facing" field.
+func (m *TicketCategoryMutation) SetIsUserFacing(b bool) {
+	m.is_user_facing = &b
+}
+
+// IsUserFacing returns the value of the "is_user_facing" field in the mutation.
+func (m *TicketCategoryMutation) IsUserFacing() (r bool, exists bool) {
+	v := m.is_user_facing
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIsUserFacing returns the old "is_user_facing" field's value of the TicketCategory entity.
+// If the TicketCategory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketCategoryMutation) OldIsUserFacing(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIsUserFacing is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIsUserFacing requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIsUserFacing: %w", err)
+	}
+	return oldValue.IsUserFacing, nil
+}
+
+// ResetIsUserFacing resets all changes to the "is_user_facing" field.
+func (m *TicketCategoryMutation) ResetIsUserFacing() {
+	m.is_user_facing = nil
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *TicketCategoryMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -133576,7 +133940,7 @@ func (m *TicketCategoryMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TicketCategoryMutation) Fields() []string {
-	fields := make([]string, 0, 12)
+	fields := make([]string, 0, 17)
 	if m.name != nil {
 		fields = append(fields, ticketcategory.FieldName)
 	}
@@ -133606,6 +133970,21 @@ func (m *TicketCategoryMutation) Fields() []string {
 	}
 	if m.workflow != nil {
 		fields = append(fields, ticketcategory.FieldWorkflowID)
+	}
+	if m.itsm_type != nil {
+		fields = append(fields, ticketcategory.FieldItsmType)
+	}
+	if m.default_priority != nil {
+		fields = append(fields, ticketcategory.FieldDefaultPriority)
+	}
+	if m.sla_tier != nil {
+		fields = append(fields, ticketcategory.FieldSLATier)
+	}
+	if m.default_resolver != nil {
+		fields = append(fields, ticketcategory.FieldDefaultResolver)
+	}
+	if m.is_user_facing != nil {
+		fields = append(fields, ticketcategory.FieldIsUserFacing)
 	}
 	if m.created_at != nil {
 		fields = append(fields, ticketcategory.FieldCreatedAt)
@@ -133641,6 +134020,16 @@ func (m *TicketCategoryMutation) Field(name string) (ent.Value, bool) {
 		return m.DepartmentID()
 	case ticketcategory.FieldWorkflowID:
 		return m.WorkflowID()
+	case ticketcategory.FieldItsmType:
+		return m.ItsmType()
+	case ticketcategory.FieldDefaultPriority:
+		return m.DefaultPriority()
+	case ticketcategory.FieldSLATier:
+		return m.SLATier()
+	case ticketcategory.FieldDefaultResolver:
+		return m.DefaultResolver()
+	case ticketcategory.FieldIsUserFacing:
+		return m.IsUserFacing()
 	case ticketcategory.FieldCreatedAt:
 		return m.CreatedAt()
 	case ticketcategory.FieldUpdatedAt:
@@ -133674,6 +134063,16 @@ func (m *TicketCategoryMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldDepartmentID(ctx)
 	case ticketcategory.FieldWorkflowID:
 		return m.OldWorkflowID(ctx)
+	case ticketcategory.FieldItsmType:
+		return m.OldItsmType(ctx)
+	case ticketcategory.FieldDefaultPriority:
+		return m.OldDefaultPriority(ctx)
+	case ticketcategory.FieldSLATier:
+		return m.OldSLATier(ctx)
+	case ticketcategory.FieldDefaultResolver:
+		return m.OldDefaultResolver(ctx)
+	case ticketcategory.FieldIsUserFacing:
+		return m.OldIsUserFacing(ctx)
 	case ticketcategory.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case ticketcategory.FieldUpdatedAt:
@@ -133756,6 +134155,41 @@ func (m *TicketCategoryMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetWorkflowID(v)
+		return nil
+	case ticketcategory.FieldItsmType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetItsmType(v)
+		return nil
+	case ticketcategory.FieldDefaultPriority:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDefaultPriority(v)
+		return nil
+	case ticketcategory.FieldSLATier:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSLATier(v)
+		return nil
+	case ticketcategory.FieldDefaultResolver:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDefaultResolver(v)
+		return nil
+	case ticketcategory.FieldIsUserFacing:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIsUserFacing(v)
 		return nil
 	case ticketcategory.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -133852,6 +134286,18 @@ func (m *TicketCategoryMutation) ClearedFields() []string {
 	if m.FieldCleared(ticketcategory.FieldWorkflowID) {
 		fields = append(fields, ticketcategory.FieldWorkflowID)
 	}
+	if m.FieldCleared(ticketcategory.FieldItsmType) {
+		fields = append(fields, ticketcategory.FieldItsmType)
+	}
+	if m.FieldCleared(ticketcategory.FieldDefaultPriority) {
+		fields = append(fields, ticketcategory.FieldDefaultPriority)
+	}
+	if m.FieldCleared(ticketcategory.FieldSLATier) {
+		fields = append(fields, ticketcategory.FieldSLATier)
+	}
+	if m.FieldCleared(ticketcategory.FieldDefaultResolver) {
+		fields = append(fields, ticketcategory.FieldDefaultResolver)
+	}
 	return fields
 }
 
@@ -133877,6 +134323,18 @@ func (m *TicketCategoryMutation) ClearField(name string) error {
 		return nil
 	case ticketcategory.FieldWorkflowID:
 		m.ClearWorkflowID()
+		return nil
+	case ticketcategory.FieldItsmType:
+		m.ClearItsmType()
+		return nil
+	case ticketcategory.FieldDefaultPriority:
+		m.ClearDefaultPriority()
+		return nil
+	case ticketcategory.FieldSLATier:
+		m.ClearSLATier()
+		return nil
+	case ticketcategory.FieldDefaultResolver:
+		m.ClearDefaultResolver()
 		return nil
 	}
 	return fmt.Errorf("unknown TicketCategory nullable field %s", name)
@@ -133915,6 +134373,21 @@ func (m *TicketCategoryMutation) ResetField(name string) error {
 		return nil
 	case ticketcategory.FieldWorkflowID:
 		m.ResetWorkflowID()
+		return nil
+	case ticketcategory.FieldItsmType:
+		m.ResetItsmType()
+		return nil
+	case ticketcategory.FieldDefaultPriority:
+		m.ResetDefaultPriority()
+		return nil
+	case ticketcategory.FieldSLATier:
+		m.ResetSLATier()
+		return nil
+	case ticketcategory.FieldDefaultResolver:
+		m.ResetDefaultResolver()
+		return nil
+	case ticketcategory.FieldIsUserFacing:
+		m.ResetIsUserFacing()
 		return nil
 	case ticketcategory.FieldCreatedAt:
 		m.ResetCreatedAt()
@@ -136861,6 +137334,8 @@ type TicketTemplateMutation struct {
 	priority             *string
 	workflow_steps       *[]uint8
 	appendworkflow_steps []uint8
+	category_ids         *[]int
+	appendcategory_ids   []int
 	is_active            *bool
 	tenant_id            *int
 	addtenant_id         *int
@@ -137195,6 +137670,71 @@ func (m *TicketTemplateMutation) ResetWorkflowSteps() {
 	delete(m.clearedFields, tickettemplate.FieldWorkflowSteps)
 }
 
+// SetCategoryIds sets the "category_ids" field.
+func (m *TicketTemplateMutation) SetCategoryIds(i []int) {
+	m.category_ids = &i
+	m.appendcategory_ids = nil
+}
+
+// CategoryIds returns the value of the "category_ids" field in the mutation.
+func (m *TicketTemplateMutation) CategoryIds() (r []int, exists bool) {
+	v := m.category_ids
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCategoryIds returns the old "category_ids" field's value of the TicketTemplate entity.
+// If the TicketTemplate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketTemplateMutation) OldCategoryIds(ctx context.Context) (v []int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCategoryIds is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCategoryIds requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCategoryIds: %w", err)
+	}
+	return oldValue.CategoryIds, nil
+}
+
+// AppendCategoryIds adds i to the "category_ids" field.
+func (m *TicketTemplateMutation) AppendCategoryIds(i []int) {
+	m.appendcategory_ids = append(m.appendcategory_ids, i...)
+}
+
+// AppendedCategoryIds returns the list of values that were appended to the "category_ids" field in this mutation.
+func (m *TicketTemplateMutation) AppendedCategoryIds() ([]int, bool) {
+	if len(m.appendcategory_ids) == 0 {
+		return nil, false
+	}
+	return m.appendcategory_ids, true
+}
+
+// ClearCategoryIds clears the value of the "category_ids" field.
+func (m *TicketTemplateMutation) ClearCategoryIds() {
+	m.category_ids = nil
+	m.appendcategory_ids = nil
+	m.clearedFields[tickettemplate.FieldCategoryIds] = struct{}{}
+}
+
+// CategoryIdsCleared returns if the "category_ids" field was cleared in this mutation.
+func (m *TicketTemplateMutation) CategoryIdsCleared() bool {
+	_, ok := m.clearedFields[tickettemplate.FieldCategoryIds]
+	return ok
+}
+
+// ResetCategoryIds resets all changes to the "category_ids" field.
+func (m *TicketTemplateMutation) ResetCategoryIds() {
+	m.category_ids = nil
+	m.appendcategory_ids = nil
+	delete(m.clearedFields, tickettemplate.FieldCategoryIds)
+}
+
 // SetIsActive sets the "is_active" field.
 func (m *TicketTemplateMutation) SetIsActive(b bool) {
 	m.is_active = &b
@@ -137447,7 +137987,7 @@ func (m *TicketTemplateMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TicketTemplateMutation) Fields() []string {
-	fields := make([]string, 0, 9)
+	fields := make([]string, 0, 10)
 	if m.name != nil {
 		fields = append(fields, tickettemplate.FieldName)
 	}
@@ -137462,6 +138002,9 @@ func (m *TicketTemplateMutation) Fields() []string {
 	}
 	if m.workflow_steps != nil {
 		fields = append(fields, tickettemplate.FieldWorkflowSteps)
+	}
+	if m.category_ids != nil {
+		fields = append(fields, tickettemplate.FieldCategoryIds)
 	}
 	if m.is_active != nil {
 		fields = append(fields, tickettemplate.FieldIsActive)
@@ -137493,6 +138036,8 @@ func (m *TicketTemplateMutation) Field(name string) (ent.Value, bool) {
 		return m.Priority()
 	case tickettemplate.FieldWorkflowSteps:
 		return m.WorkflowSteps()
+	case tickettemplate.FieldCategoryIds:
+		return m.CategoryIds()
 	case tickettemplate.FieldIsActive:
 		return m.IsActive()
 	case tickettemplate.FieldTenantID:
@@ -137520,6 +138065,8 @@ func (m *TicketTemplateMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldPriority(ctx)
 	case tickettemplate.FieldWorkflowSteps:
 		return m.OldWorkflowSteps(ctx)
+	case tickettemplate.FieldCategoryIds:
+		return m.OldCategoryIds(ctx)
 	case tickettemplate.FieldIsActive:
 		return m.OldIsActive(ctx)
 	case tickettemplate.FieldTenantID:
@@ -137571,6 +138118,13 @@ func (m *TicketTemplateMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetWorkflowSteps(v)
+		return nil
+	case tickettemplate.FieldCategoryIds:
+		v, ok := value.([]int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCategoryIds(v)
 		return nil
 	case tickettemplate.FieldIsActive:
 		v, ok := value.(bool)
@@ -137651,6 +138205,9 @@ func (m *TicketTemplateMutation) ClearedFields() []string {
 	if m.FieldCleared(tickettemplate.FieldWorkflowSteps) {
 		fields = append(fields, tickettemplate.FieldWorkflowSteps)
 	}
+	if m.FieldCleared(tickettemplate.FieldCategoryIds) {
+		fields = append(fields, tickettemplate.FieldCategoryIds)
+	}
 	return fields
 }
 
@@ -137670,6 +138227,9 @@ func (m *TicketTemplateMutation) ClearField(name string) error {
 		return nil
 	case tickettemplate.FieldWorkflowSteps:
 		m.ClearWorkflowSteps()
+		return nil
+	case tickettemplate.FieldCategoryIds:
+		m.ClearCategoryIds()
 		return nil
 	}
 	return fmt.Errorf("unknown TicketTemplate nullable field %s", name)
@@ -137693,6 +138253,9 @@ func (m *TicketTemplateMutation) ResetField(name string) error {
 		return nil
 	case tickettemplate.FieldWorkflowSteps:
 		m.ResetWorkflowSteps()
+		return nil
+	case tickettemplate.FieldCategoryIds:
+		m.ResetCategoryIds()
 		return nil
 	case tickettemplate.FieldIsActive:
 		m.ResetIsActive()

@@ -173,7 +173,7 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
                 width: 36,
                 height: 36,
                 borderRadius: DESIGN.radius.md,
-                background: `linear-gradient(135deg, ${DESIGN.colors.accent} 0%, #1d4ed8 100%)`,
+                background: `linear-gradient(135deg, ${DESIGN.colors.accent} 0%, #B84A08 100%)`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',

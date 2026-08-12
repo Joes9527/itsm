@@ -190,7 +190,7 @@ export default function ProblemListPage() {
     {
       label: '总问题数',
       value: stats.total,
-      color: '#3b82f6',
+      color: '#F06820',
       icon: <Bug size={20} strokeWidth={1.8} />,
     },
     {

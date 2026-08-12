@@ -99,7 +99,7 @@ func srSetup(t *testing.T) (*gin.Engine, *ent.Client, int, int, int) {
 	repo := NewEntRepository(client)
 	cmdbRepo := cmdb.NewEntRepository(client)
 	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(repo, scRepo, cmdbRepo, client, logger, ticketSvc)
+	svc := NewService(repo, scRepo, cmdbRepo, client, logger, ticketSvc, nil, nil)
 	h := NewHandler(svc)
 
 	user, err := client.User.Create().
@@ -228,7 +228,7 @@ func TestServiceRequestCreateDefersNewCIUntilProvisioning(t *testing.T) {
 		Create(ctx, "VM Request", "infrastructure", "Provision VM", 24, tenant.ID, "enabled", ciType.ID, 0, nil)
 	require.NoError(t, err)
 	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	srSvc := NewService(NewEntRepository(client), scRepo, cmdb.NewEntRepository(client), client, logger, ticketSvc)
+	srSvc := NewService(NewEntRepository(client), scRepo, cmdb.NewEntRepository(client), client, logger, ticketSvc, nil, nil)
 	expireAt := time.Now().Add(30 * 24 * time.Hour)
 
 	created, err := srSvc.Create(ctx, tenant.ID, user.ID, catalog.ID, &ServiceRequest{

@@ -345,9 +345,19 @@ func (tc *TicketCategoryController) ListCategories(c *gin.Context) {
 		}
 	}
 
+	page := 1
+	pageSize := 100
+	if p, err := strconv.Atoi(c.Query("page")); err == nil && p > 0 {
+		page = p
+	}
+	if ps, err := strconv.Atoi(c.Query("pageSize")); err == nil && ps > 0 {
+		pageSize = ps
+	}
+	pageSize = min(pageSize, 500)
+
 	req := &service.ListCategoriesRequest{
-		Page:     1,
-		PageSize: 100,
+		Page:     page,
+		PageSize: pageSize,
 		ParentID: parentID,
 		Level:    level,
 		IsActive: active,

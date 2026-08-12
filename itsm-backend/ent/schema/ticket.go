@@ -43,6 +43,9 @@ func (Ticket) Fields() []ent.Field {
 		field.Int("requester_id").
 			Comment("申请人ID").
 			Positive(),
+		field.String("creator_email").
+			Comment("创建人邮箱（邮件开单时记录，非注册用户也可创建）").
+			Optional(),
 		field.Int("assignee_id").
 			Comment("处理人ID").
 			Optional(),

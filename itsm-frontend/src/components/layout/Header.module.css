@@ -50,7 +50,7 @@
 }
 
 .breadcrumbLink {
-  color: #3b82f6;
+  color: #F06820;
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
@@ -61,7 +61,7 @@
 
 .breadcrumbLink:hover {
   background-color: #eff6ff;
-  color: #1d4ed8;
+  color: #B84A08;
 }
 
 .breadcrumbCurrent {
@@ -87,7 +87,7 @@
 }
 
 .searchInput:focus {
-  border-color: #3b82f6;
+  border-color: #F06820;
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
 }
 
@@ -224,7 +224,7 @@
   padding: 2px 8px;
   font-size: 11px;
   font-weight: 500;
-  color: #3b82f6;
+  color: #F06820;
   background: #eff6ff;
   border-radius: 4px;
 }
@@ -239,7 +239,7 @@
 }
 
 .menuItemContent:hover {
-  color: #3b82f6;
+  color: #F06820;
 }
 
 .menuItemLogout {

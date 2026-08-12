@@ -110,6 +110,24 @@ func (_u *TicketTemplateUpdate) ClearWorkflowSteps() *TicketTemplateUpdate {
 	return _u
 }
 
+// SetCategoryIds sets the "category_ids" field.
+func (_u *TicketTemplateUpdate) SetCategoryIds(v []int) *TicketTemplateUpdate {
+	_u.mutation.SetCategoryIds(v)
+	return _u
+}
+
+// AppendCategoryIds appends value to the "category_ids" field.
+func (_u *TicketTemplateUpdate) AppendCategoryIds(v []int) *TicketTemplateUpdate {
+	_u.mutation.AppendCategoryIds(v)
+	return _u
+}
+
+// ClearCategoryIds clears the value of the "category_ids" field.
+func (_u *TicketTemplateUpdate) ClearCategoryIds() *TicketTemplateUpdate {
+	_u.mutation.ClearCategoryIds()
+	return _u
+}
+
 // SetIsActive sets the "is_active" field.
 func (_u *TicketTemplateUpdate) SetIsActive(v bool) *TicketTemplateUpdate {
 	_u.mutation.SetIsActive(v)
@@ -300,6 +318,17 @@ func (_u *TicketTemplateUpdate) sqlSave(ctx context.Context) (_node int, err err
 	if _u.mutation.WorkflowStepsCleared() {
 		_spec.ClearField(tickettemplate.FieldWorkflowSteps, field.TypeJSON)
 	}
+	if value, ok := _u.mutation.CategoryIds(); ok {
+		_spec.SetField(tickettemplate.FieldCategoryIds, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedCategoryIds(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, tickettemplate.FieldCategoryIds, value)
+		})
+	}
+	if _u.mutation.CategoryIdsCleared() {
+		_spec.ClearField(tickettemplate.FieldCategoryIds, field.TypeJSON)
+	}
 	if value, ok := _u.mutation.IsActive(); ok {
 		_spec.SetField(tickettemplate.FieldIsActive, field.TypeBool, value)
 	}
@@ -457,6 +486,24 @@ func (_u *TicketTemplateUpdateOne) AppendWorkflowSteps(v []uint8) *TicketTemplat
 // ClearWorkflowSteps clears the value of the "workflow_steps" field.
 func (_u *TicketTemplateUpdateOne) ClearWorkflowSteps() *TicketTemplateUpdateOne {
 	_u.mutation.ClearWorkflowSteps()
+	return _u
+}
+
+// SetCategoryIds sets the "category_ids" field.
+func (_u *TicketTemplateUpdateOne) SetCategoryIds(v []int) *TicketTemplateUpdateOne {
+	_u.mutation.SetCategoryIds(v)
+	return _u
+}
+
+// AppendCategoryIds appends value to the "category_ids" field.
+func (_u *TicketTemplateUpdateOne) AppendCategoryIds(v []int) *TicketTemplateUpdateOne {
+	_u.mutation.AppendCategoryIds(v)
+	return _u
+}
+
+// ClearCategoryIds clears the value of the "category_ids" field.
+func (_u *TicketTemplateUpdateOne) ClearCategoryIds() *TicketTemplateUpdateOne {
+	_u.mutation.ClearCategoryIds()
 	return _u
 }
 
@@ -679,6 +726,17 @@ func (_u *TicketTemplateUpdateOne) sqlSave(ctx context.Context) (_node *TicketTe
 	}
 	if _u.mutation.WorkflowStepsCleared() {
 		_spec.ClearField(tickettemplate.FieldWorkflowSteps, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.CategoryIds(); ok {
+		_spec.SetField(tickettemplate.FieldCategoryIds, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedCategoryIds(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, tickettemplate.FieldCategoryIds, value)
+		})
+	}
+	if _u.mutation.CategoryIdsCleared() {
+		_spec.ClearField(tickettemplate.FieldCategoryIds, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.IsActive(); ok {
 		_spec.SetField(tickettemplate.FieldIsActive, field.TypeBool, value)

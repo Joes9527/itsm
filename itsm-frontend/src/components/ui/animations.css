@@ -48,7 +48,7 @@
   left: 50%;
   width: 0;
   height: 2px;
-  background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+  background: linear-gradient(90deg, #F06820, #B84A08);
   transition: all 0.3s ease;
   transform: translateX(-50%);
 }
@@ -85,7 +85,7 @@
 
 .icon-hover:hover {
   transform: scale(1.1) rotate(5deg);
-  color: #3b82f6;
+  color: #F06820;
 }
 
 /* 脉冲动画 */

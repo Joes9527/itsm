@@ -526,6 +526,13 @@ export function getMenuConfig(): MenuConfig {
             permission: 'ticket:category:manage',
           },
           {
+            key: '/tickets/templates',
+            icon: getIconByName('FileText')!,
+            label: '工单模板',
+            path: '/tickets/templates',
+            permission: 'ticket_template:read',
+          },
+          {
             key: '/admin/tickets/assignment-rules',
             icon: getIconByName('GitBranch')!,
             label: '工单分配规则',

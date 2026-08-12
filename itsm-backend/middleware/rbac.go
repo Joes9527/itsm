@@ -283,6 +283,8 @@ var RolePermissions = map[string][]Permission{
 		{Resource: "service_catalog", Action: "read"},
 		{Resource: "service_request", Action: "read"},
 		{Resource: "service_request", Action: "write"},
+		{Resource: "ticket_category", Action: "read"}, // 浏览服务目录需要读取工单分类树
+		{Resource: "ticket_template", Action: "read"}, // 创建工单时需要加载模板
 		{Resource: "user", Action: "read"}, // 查看自己的用户信息
 		{Resource: "sla", Action: "read"},
 		// SLA write removed: only admin/manager should configure SLA policies
@@ -545,8 +547,8 @@ var ResourceActionMap = map[string]map[string]Permission{
 		"/api/v1/notifications/*":       {Resource: "notification", Action: "read"},
 		"/api/v1/ticket-categories":     {Resource: "ticket_category", Action: "read"},
 		"/api/v1/ticket-categories/*":   {Resource: "ticket_category", Action: "read"},
-		"/api/v1/ticket-templates":      {Resource: "ticket_template", Action: "read"},
-		"/api/v1/ticket-templates/*":    {Resource: "ticket_template", Action: "read"},
+		"/api/v1/tickets/templates":      {Resource: "ticket_template", Action: "read"},
+		"/api/v1/tickets/templates/*":    {Resource: "ticket_template", Action: "read"},
 		"/api/v1/ticket-tags":           {Resource: "ticket_tag", Action: "read"},
 		"/api/v1/ticket-tags/*":         {Resource: "ticket_tag", Action: "read"},
 		"/api/v1/users":                 {Resource: "user", Action: "read"},
@@ -607,8 +609,8 @@ var ResourceActionMap = map[string]map[string]Permission{
 		"/api/v1/tickets/*":             {Resource: "ticket", Action: "write"},
 		"/api/v1/ticket-categories":     {Resource: "ticket_category", Action: "write"},
 		"/api/v1/ticket-categories/*":   {Resource: "ticket_category", Action: "write"},
-		"/api/v1/ticket-templates":      {Resource: "ticket_template", Action: "write"},
-		"/api/v1/ticket-templates/*":    {Resource: "ticket_template", Action: "write"},
+		"/api/v1/tickets/templates":      {Resource: "ticket_template", Action: "write"},
+		"/api/v1/tickets/templates/*":    {Resource: "ticket_template", Action: "write"},
 		"/api/v1/ticket-tags":           {Resource: "ticket_tag", Action: "write"},
 		"/api/v1/ticket-tags/*":         {Resource: "ticket_tag", Action: "write"},
 		"/api/v1/users":                 {Resource: "user", Action: "write"},
@@ -655,7 +657,7 @@ var ResourceActionMap = map[string]map[string]Permission{
 		"/api/v1/tickets/*":            {Resource: "ticket", Action: "write"},
 		"/api/v1/notifications/*":      {Resource: "notification", Action: "write"},
 		"/api/v1/ticket-categories/*":  {Resource: "ticket_category", Action: "write"},
-		"/api/v1/ticket-templates/*":   {Resource: "ticket_template", Action: "write"},
+		"/api/v1/tickets/templates/*":   {Resource: "ticket_template", Action: "write"},
 		"/api/v1/ticket-tags/*":        {Resource: "ticket_tag", Action: "write"},
 		"/api/v1/users/*":              {Resource: "user", Action: "write"},
 		"/api/v1/knowledge/*":          {Resource: "knowledge", Action: "write"},
@@ -672,7 +674,7 @@ var ResourceActionMap = map[string]map[string]Permission{
 	"DELETE": {
 		"/api/v1/tickets/*":            {Resource: "ticket", Action: "delete"},
 		"/api/v1/ticket-categories/*":  {Resource: "ticket_category", Action: "delete"},
-		"/api/v1/ticket-templates/*":   {Resource: "ticket_template", Action: "delete"},
+		"/api/v1/tickets/templates/*":   {Resource: "ticket_template", Action: "delete"},
 		"/api/v1/ticket-tags/*":        {Resource: "ticket_tag", Action: "delete"},
 		"/api/v1/users/*":              {Resource: "user", Action: "delete"},
 		"/api/v1/knowledge/*":          {Resource: "knowledge", Action: "delete"},

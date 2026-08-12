@@ -184,6 +184,7 @@ type TicketTemplate struct {
 	Category      string                   `json:"category"`
 	Priority      string                   `json:"priority"`
 	Fields        []map[string]interface{} `json:"fields,omitempty"`
+	CategoryIDs   []int                     `json:"categoryIds"`
 	WorkflowSteps []map[string]interface{} `json:"workflowSteps,omitempty"`
 	IsActive      bool                     `json:"isActive"`
 	IsActiveAlt   *bool                    `json:"-"` // internal flag: force-update isActive (not JSON-bound)

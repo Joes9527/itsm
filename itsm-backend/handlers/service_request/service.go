@@ -36,23 +36,32 @@ type TicketServiceInterface interface {
 	CreateTicket(ctx context.Context, req *dto.CreateTicketRequest, tenantID int) (*ticket.Ticket, error)
 }
 
-type Service struct {
-	repo      Repository
-	scRepo    service_catalog.Repository
-	cmdbRepo  cmdb.Repository
-	client    *ent.Client
-	logger    *zap.SugaredLogger
-	ticketSvc TicketServiceInterface
+// IncidentCreator 是 Create 在 ITSM 类型为 Incident 时所需的最小事件创建能力。
+type IncidentCreator interface {
+	CreateIncident(ctx context.Context, tenantID, requesterID int, title, description string, catalogID int) (incidentID int, err error)
 }
 
-func NewService(repo Repository, scRepo service_catalog.Repository, cmdbRepo cmdb.Repository, entClient *ent.Client, logger *zap.SugaredLogger, ticketSvc TicketServiceInterface) *Service {
+type Service struct {
+	repo          Repository
+	scRepo        service_catalog.Repository
+	cmdbRepo      cmdb.Repository
+	client        *ent.Client
+	logger        *zap.SugaredLogger
+	ticketSvc     TicketServiceInterface
+	chainResolver *service.ApprovalChainResolver
+	incidentSvc   IncidentCreator
+}
+
+func NewService(repo Repository, scRepo service_catalog.Repository, cmdbRepo cmdb.Repository, entClient *ent.Client, logger *zap.SugaredLogger, ticketSvc TicketServiceInterface, chainResolver *service.ApprovalChainResolver, incidentSvc IncidentCreator) *Service {
 	return &Service{
-		repo:      repo,
-		scRepo:    scRepo,
-		cmdbRepo:  cmdbRepo,
-		client:    entClient,
-		logger:    logger,
-		ticketSvc: ticketSvc,
+		repo:          repo,
+		scRepo:        scRepo,
+		cmdbRepo:      cmdbRepo,
+		client:        entClient,
+		logger:        logger,
+		ticketSvc:     ticketSvc,
+		chainResolver: chainResolver,
+		incidentSvc:   incidentSvc,
 	}
 }
 
@@ -80,6 +89,11 @@ func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalog
 	}
 	if cat.Status != "enabled" && cat.Status != "active" {
 		return nil, common.NewBadRequestError("Service Catalog is not enabled", nil)
+	}
+
+	// 1b. Incident 类型：直接创建事件，跳过 SR 和审批流程。
+	if isIncidentCatalog(cat.ITSMType) {
+		return s.createIncidentFromCatalog(ctx, tenantID, requesterID, catalogID, reqData)
 	}
 
 	// 2. Validate Request Data
@@ -124,13 +138,28 @@ func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalog
 		}
 	}
 
+	// 2c. 解析审批链（阶段二）：根据服务目录项属性和请求金额，从 ApprovalChain
+	// (entity_type=service_request) 中解析出实际生效的审批步骤。解析结果存入
+	// ServiceRequest.FormData._approval_chain 供 BPMN 流程 / 前端引用。
+	// 若租户未配置 service_request 类型的审批链，解析结果为 nil——不影响创建流程。
+	var resolvedSteps interface{}
+	if s.chainResolver != nil {
+		chain, resolveErr := s.chainResolver.ResolveForServiceRequest(ctx, tenantID, reqData.amount(), "", 0)
+		if resolveErr != nil {
+			s.logger.Warnw("Failed to resolve approval chain for service request", "error", resolveErr,
+				"tenant_id", tenantID, "catalog_id", catalogID)
+		} else if chain != nil && len(chain.Steps) > 0 {
+			resolvedSteps = chain.Steps
+		}
+	}
+
 	// 3. 先创建关联 Ticket——source="service_catalog" 标记来源，
 	// description 用申请原因（reqData.reason() 从 FormData 兜底取，逻辑同下方 title()）。
 	ticketReq := &dto.CreateTicketRequest{
 		Title:       title,
 		Description: reqData.reason(),
 		Priority:    "medium",
-		Type:        "service_request",
+		Type:        mapITSMType(cat.ITSMType),
 		RequesterID: requesterID,
 		Source:      "service_catalog",
 	}
@@ -147,7 +176,7 @@ func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalog
 		ComplianceAck:      reqData.ComplianceAck,
 		NeedsPublicIP:      reqData.NeedsPublicIP,
 		DataClassification: reqData.DataClassification,
-		FormData:           reqData.FormData,
+		FormData:           injectApprovalChain(reqData.FormData, resolvedSteps),
 		CostCenter:         reqData.CostCenter,
 		SourceIPWhitelist:  reqData.SourceIPWhitelist,
 		ExpireAt:           reqData.ExpireAt,
@@ -426,4 +455,31 @@ func extractServiceRequestFieldValues(formData map[string]interface{}) map[strin
 		result[k] = v
 	}
 	return result
+}
+
+// createIncidentFromCatalog 为 ITSM 类型为 Incident 的服务目录项直接创建事件，
+// 跳过 ServiceRequest 和审批流程。返回的 "stub" ServiceRequest 仅携带 IncidentID 供
+// handler 层返回给前端，不做持久化。
+func (s *Service) createIncidentFromCatalog(ctx context.Context, tenantID, requesterID, catalogID int, reqData *ServiceRequest) (*ServiceRequest, error) {
+	title := strings.TrimSpace(reqData.title())
+	if title == "" {
+		return nil, common.NewBadRequestError("Incident title is required", nil)
+	}
+	description := reqData.reason()
+	if description == "" {
+		description = title
+	}
+
+	incidentID, err := s.incidentSvc.CreateIncident(ctx, tenantID, requesterID, title, description, catalogID)
+	if err != nil {
+		return nil, common.NewInternalError("Failed to create incident from service catalog", err)
+	}
+
+	// 返回一个非持久化的 stub ServiceRequest，仅供 handler 构建响应用。
+	return &ServiceRequest{
+		ID:          incidentID, // 借用 ID 字段传递 incidentID
+		TenantID:    tenantID,
+		CatalogID:   catalogID,
+		RequesterID: requesterID,
+	}, nil
 }

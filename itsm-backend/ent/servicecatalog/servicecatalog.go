@@ -23,6 +23,8 @@ const (
 	FieldIcon = "icon"
 	// FieldServiceType holds the string denoting the service_type field in the database.
 	FieldServiceType = "service_type"
+	// FieldItsmType holds the string denoting the itsm_type field in the database.
+	FieldItsmType = "itsm_type"
 	// FieldPrice holds the string denoting the price field in the database.
 	FieldPrice = "price"
 	// FieldDeliveryTime holds the string denoting the delivery_time field in the database.
@@ -71,6 +73,7 @@ var Columns = []string{
 	FieldCategory,
 	FieldIcon,
 	FieldServiceType,
+	FieldItsmType,
 	FieldPrice,
 	FieldDeliveryTime,
 	FieldUnit,
@@ -106,6 +109,8 @@ var (
 	NameValidator func(string) error
 	// DefaultServiceType holds the default value on creation for the "service_type" field.
 	DefaultServiceType string
+	// DefaultItsmType holds the default value on creation for the "itsm_type" field.
+	DefaultItsmType string
 	// DefaultRequiresApproval holds the default value on creation for the "requires_approval" field.
 	DefaultRequiresApproval bool
 	// DefaultApprovalLevel holds the default value on creation for the "approval_level" field.
@@ -157,6 +162,11 @@ func ByIcon(opts ...sql.OrderTermOption) OrderOption {
 // ByServiceType orders the results by the service_type field.
 func ByServiceType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldServiceType, opts...).ToFunc()
+}
+
+// ByItsmType orders the results by the itsm_type field.
+func ByItsmType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldItsmType, opts...).ToFunc()
 }
 
 // ByPrice orders the results by the price field.

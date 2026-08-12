@@ -25,7 +25,7 @@ const TicketTrendChart: React.FC<{ data: TicketTrendData[] }> = React.memo(({ da
         duration: 1200,
       },
     },
-    color: ['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6'],
+    color: ['#F06820', '#f59e0b', '#10b981', '#8b5cf6'],
     lineStyle: {
       lineWidth: 3,
     },
@@ -87,14 +87,14 @@ const TicketTrendChart: React.FC<{ data: TicketTrendData[] }> = React.memo(({ da
       title="工单趋势分析"
       subtitle="过去7天工单状态变化趋势"
       icon={<LineChart style={{ width: 20, height: 20 }} />}
-      iconColor="#3b82f6"
+      iconColor="#F06820"
       trend={{ value: trend, isPositive: trend > 0 }}
       extra={
         <Badge
           count={totalTickets}
           showZero
           style={{
-            backgroundColor: '#3b82f6',
+            backgroundColor: '#F06820',
             boxShadow: '0 2px 8px rgba(59, 130, 246, 0.3)',
           }}
         />

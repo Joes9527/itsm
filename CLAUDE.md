@@ -198,6 +198,13 @@ All APIs return `{ code: number, message: string, data: any }`:
 
 - Never commit real secrets, tokens, customer data, production database dumps, or unmasked connector credentials.
 - Authentication, RBAC, menu permissions, endpoint ACL, and tenant filters must be considered together. Hiding a menu is not authorization.
+- **权限资源命名**：`RequirePermission(resource, action)` 中的 `resource` 必须与 `permissions` 表中存储的 `resource` 字段一致：
+  - 工单分类：`ticket_category`（不是 `ticket-category`）
+  - 工单模板：`ticket_template`（不是 `template`）
+  - 工单标签：`ticket_tag`
+  - 服务目录：`service_catalog`
+  - 服务请求：`service_request`
+  - 路由、`ResourceActionMap`、数据库权限码三者必须使用相同的 `resource` 名。
 - Cross-tenant access must fail closed. Add tests when touching tenant-scoped queries.
 - Logs must not expose passwords, JWTs, API keys, connector secrets, prompt secrets, or private ticket content unless explicitly designed as protected audit content.
 - File upload, import, connector callback, webhook, and AI tool invocation endpoints are high-risk surfaces and need validation, size limits, and audit logs.

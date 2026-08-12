@@ -47,6 +47,21 @@ func (TicketCategory) Fields() []ent.Field {
 		field.Int("workflow_id").
 			Comment("关联工作流ID").
 			Optional(),
+		field.String("itsm_type").
+			Comment("ITSM类型: Request/Incident/Change").
+			Optional(),
+		field.String("default_priority").
+			Comment("默认优先级: P1/P2/P3/P4").
+			Optional(),
+		field.String("sla_tier").
+			Comment("SLA等级: 标准服务/快速标准服务/审批类服务/安全响应服务等").
+			Optional(),
+		field.String("default_resolver").
+			Comment("默认处理团队/角色").
+			Optional(),
+		field.Bool("is_user_facing").
+			Comment("是否面向用户展示").
+			Default(true),
 		field.Time("created_at").
 			Comment("创建时间").
 			Default(time.Now),

@@ -4,6 +4,17 @@ import React, { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { User, Lock, Shield, ArrowRight } from 'lucide-react';
+
+function MicrosoftIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 21 21" fill="none">
+      <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+      <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+      <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+      <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+    </svg>
+  );
+}
 import { useI18n } from '@/lib/i18n/useI18n';
 import {
   Typography,
@@ -23,7 +34,8 @@ import {
 import { antdTheme } from '@/lib/antd-theme';
 import { AuthService } from '@/lib/services/auth-service';
 import { logger } from '@/lib/env';
-import { useAuthStoreHydration } from '@/lib/store/auth-store';
+import { useAuthStoreHydration, useAuthStore } from '@/lib/store/auth-store';
+import { getDefaultRoute } from '@/lib/utils/role-routes';
 
 const { Text, Title } = Typography;
 
@@ -47,7 +59,7 @@ function LoginForm() {
 
   // 检查会话过期标记
   const isExpired = searchParams.get('expired') === 'true';
-  const redirectPath = searchParams.get('redirect') || '/dashboard';
+  const redirectPath = searchParams.get('redirect') || null;
 
   // 处理登录提交
   const handleLogin = async (values: { username: string; password: string }) => {
@@ -65,7 +77,8 @@ function LoginForm() {
 
       if (success) {
         logger.info('认证信息已存储，准备跳转');
-        router.push(redirectPath);
+        const target = redirectPath || getDefaultRoute(useAuthStore.getState().user?.role || 'end_user');
+        router.push(target);
         logger.info('已执行跳转命令');
       } else {
         setError(t('auth.login.loginFailed'));
@@ -201,6 +214,25 @@ function LoginForm() {
           </Button>
         </Form.Item>
       </Form>
+
+      <div className='flex items-center gap-3 my-4'>
+        <div className='flex-1 border-t border-gray-200'></div>
+        <Text className='text-gray-400 text-xs'>或</Text>
+        <div className='flex-1 border-t border-gray-200'></div>
+      </div>
+
+      <Button
+        type='default'
+        size='large'
+        className='w-full h-10 rounded-md text-sm font-semibold'
+        icon={<MicrosoftIcon />}
+        onClick={() => {
+          const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+          window.location.href = `${apiUrl}/api/v1/auth/azure/login`;
+        }}
+      >
+        使用 Microsoft 账户登录
+      </Button>
 
       <div className='text-center mt-5'>
         <Text className='text-gray-400 text-xs'>

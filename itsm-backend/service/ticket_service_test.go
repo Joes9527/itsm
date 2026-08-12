@@ -245,7 +245,6 @@ func TestTicketService_CreateTicketPersistsAssociations(t *testing.T) {
 }
 
 func TestTicketService_CreateTicketPersistsCustomFieldValues(t *testing.T) {
-func TestTicketService_CreateTicketPersistsCustomFieldValues(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:ticket_create_custom_fields_v2?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
 	ctx := context.Background()
@@ -402,7 +401,6 @@ func TestTicketService_CreateTicket_SourceSurvivesToTicketResponse(t *testing.T)
 	fetchedResp := ToTicketResponse(ctx, fetched)
 	require.NotNil(t, fetchedResp)
 	assert.Equal(t, "service_catalog", fetchedResp.Source)
-}
 }
 
 func TestTicketService_CreateTicketRejectsCrossTenantReferences(t *testing.T) {

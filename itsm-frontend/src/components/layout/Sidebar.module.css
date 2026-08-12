@@ -32,7 +32,7 @@
 .logoIcon {
   width: 36px;
   height: 36px;
-  background: linear-gradient(135deg, #1677ff 0%, #4096ff 100%);
+  background: linear-gradient(135deg, #F06820 0%, #F27C38 100%);
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -105,13 +105,13 @@
 }
 
 .customMenu :global(.ant-menu-item:hover) {
-  color: #1677ff !important;
+  color: #F06820 !important;
   background-color: #f3f4f6 !important;
 }
 
 .customMenu :global(.ant-menu-item-selected) {
   background-color: #e6f4ff !important;
-  color: #1677ff !important;
+  color: #F06820 !important;
   font-weight: 600 !important;
 }
 

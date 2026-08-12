@@ -13,6 +13,7 @@ type ServiceCatalog struct {
 	Name           string
 	Category       string
 	Description    string
+	ITSMType       string // Request|Incident|Change，决定审批路由
 	DeliveryTime   int
 	CITypeID       int
 	CloudServiceID int

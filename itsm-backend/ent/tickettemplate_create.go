@@ -67,6 +67,12 @@ func (_c *TicketTemplateCreate) SetWorkflowSteps(v []uint8) *TicketTemplateCreat
 	return _c
 }
 
+// SetCategoryIds sets the "category_ids" field.
+func (_c *TicketTemplateCreate) SetCategoryIds(v []int) *TicketTemplateCreate {
+	_c.mutation.SetCategoryIds(v)
+	return _c
+}
+
 // SetIsActive sets the "is_active" field.
 func (_c *TicketTemplateCreate) SetIsActive(v bool) *TicketTemplateCreate {
 	_c.mutation.SetIsActive(v)
@@ -266,6 +272,10 @@ func (_c *TicketTemplateCreate) createSpec() (*TicketTemplate, *sqlgraph.CreateS
 	if value, ok := _c.mutation.WorkflowSteps(); ok {
 		_spec.SetField(tickettemplate.FieldWorkflowSteps, field.TypeJSON, value)
 		_node.WorkflowSteps = value
+	}
+	if value, ok := _c.mutation.CategoryIds(); ok {
+		_spec.SetField(tickettemplate.FieldCategoryIds, field.TypeJSON, value)
+		_node.CategoryIds = value
 	}
 	if value, ok := _c.mutation.IsActive(); ok {
 		_spec.SetField(tickettemplate.FieldIsActive, field.TypeBool, value)

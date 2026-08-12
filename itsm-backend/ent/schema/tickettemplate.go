@@ -31,6 +31,9 @@ func (TicketTemplate) Fields() []ent.Field {
 		field.JSON("workflow_steps", []byte{}).
 			Comment("工作流步骤定义").
 			Optional(),
+		field.JSON("category_ids", []int{}).
+			Comment("关联的工单分类ID列表，用于精确匹配模板与服务目录项").
+			Optional(),
 		field.Bool("is_active").
 			Comment("是否启用").
 			Default(true),

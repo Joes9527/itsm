@@ -4,17 +4,17 @@
 export const colors = {
   // Primary colors - Blue theme for professional ITSM appearance
   primary: {
-    50: '#eff6ff',
-    100: '#dbeafe',
-    200: '#bfdbfe',
-    300: '#93c5fd',
-    400: '#60a5fa',
-    500: '#3b82f6', // Primary brand color
-    600: '#2563eb',
-    700: '#1d4ed8',
-    800: '#1e40af',
-    900: '#1e3a8a',
-    950: '#172554',
+    50: '#fff5f0',
+    100: '#ffe8d9',
+    200: '#ffd1b3',
+    300: '#ffb380',
+    400: '#F27C38',
+    500: '#F06820', // Primary brand color
+    600: '#D85E10',
+    700: '#B84A08',
+    800: '#933A06',
+    900: '#6E2B04',
+    950: '#4A1D02',
   },
 
   // Gray colors for neutral elements
@@ -87,7 +87,7 @@ export const colors = {
 
   // Ticket status colors
   status: {
-    new: '#3b82f6', // Blue
+    new: '#F06820', // Blue
     open: '#06b6d4', // Cyan
     inProgress: '#f59e0b', // Amber
     pending: '#eab308', // Yellow
@@ -99,7 +99,7 @@ export const colors = {
   // Priority colors
   priority: {
     low: '#22c55e', // Green
-    normal: '#3b82f6', // Blue
+    normal: '#F06820', // Blue
     high: '#f59e0b', // Amber
     urgent: '#ef4444', // Red
     critical: '#a855f7', // Purple

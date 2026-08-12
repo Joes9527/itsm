@@ -839,7 +839,7 @@ const IncidentDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
       <Modal
         title={
           <Space>
-            <UserCheck style={{ color: '#1677ff' }} />
+            <UserCheck style={{ color: '#F06820' }} />
             指派事件
           </Space>
         }

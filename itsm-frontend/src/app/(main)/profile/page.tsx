@@ -57,7 +57,7 @@ const { Title, Text } = Typography;
 const DESIGN = {
   colors: {
     primary: '#0f172a',
-    accent: '#3b82f6',
+    accent: '#F06820',
     success: '#10b981',
     warning: '#f59e0b',
     danger: '#ef4444',
@@ -67,7 +67,7 @@ const DESIGN = {
     textMuted: '#64748b',
     bgSubtle: '#f8fafc',
     gradient: {
-      primary: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+      primary: 'linear-gradient(135deg, #F06820 0%, #B84A08 100%)',
       success: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
       warning: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
     },

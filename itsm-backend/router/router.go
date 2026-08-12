@@ -17,6 +17,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/handlers"
 	"itsm-backend/handlers/ai"
+	"itsm-backend/handlers/auth"
 	"itsm-backend/handlers/change"
 	"itsm-backend/handlers/cmdb"
 	domainCommon "itsm-backend/handlers/common"
@@ -353,6 +354,13 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 			public.POST("/auth/validate-reset-token", config.AuthController.ValidateResetToken)
 		}
 
+		// Azure AD OIDC 登录
+		azureCfg := auth.LoadAzureConfig()
+		if azureCfg.IsConfigured() {
+			public.GET("/auth/azure/login", auth.AzureLoginHandler(azureCfg, config.Logger))
+			public.GET("/auth/azure/callback", auth.AzureCallbackHandler(azureCfg, config.Client, config.JWTSecret, config.Logger))
+		}
+
 		// CSRF token 获取端点（无需认证）
 		if config.CSRFEnabled {
 			public.GET("/csrf-token", middleware.CSRFTokenEndpoint(middleware.DefaultCSRFConfig()))
@@ -528,14 +536,14 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 			}
 
 			// 工单模板
-			tickets.GET("/templates", middleware.RequirePermission("template", "read"), config.TicketController.GetTicketTemplates)
-			tickets.GET("/templates/categories", middleware.RequirePermission("template", "read"), config.TicketController.GetTicketTemplateCategories)
-			tickets.POST("/templates", middleware.RequirePermission("template", "create"), config.TicketController.CreateTicketTemplate)
-			tickets.GET("/templates/:id", middleware.RequirePermission("template", "read"), config.TicketController.GetTicketTemplate)
-			tickets.PUT("/templates/:id", middleware.RequirePermission("template", "update"), config.TicketController.UpdateTicketTemplate)
-			tickets.PATCH("/templates/:id/status", middleware.RequirePermission("template", "update"), config.TicketController.UpdateTicketTemplateStatus)
-			tickets.POST("/templates/:id/copy", middleware.RequirePermission("template", "create"), config.TicketController.CopyTicketTemplate)
-			tickets.DELETE("/templates/:id", middleware.RequirePermission("template", "delete"), config.TicketController.DeleteTicketTemplate)
+			tickets.GET("/templates", middleware.RequirePermission("ticket_template", "read"), config.TicketController.GetTicketTemplates)
+			tickets.GET("/templates/categories", middleware.RequirePermission("ticket_template", "read"), config.TicketController.GetTicketTemplateCategories)
+			tickets.POST("/templates", middleware.RequirePermission("ticket_template", "create"), config.TicketController.CreateTicketTemplate)
+			tickets.GET("/templates/:id", middleware.RequirePermission("ticket_template", "read"), config.TicketController.GetTicketTemplate)
+			tickets.PUT("/templates/:id", middleware.RequirePermission("ticket_template", "update"), config.TicketController.UpdateTicketTemplate)
+			tickets.PATCH("/templates/:id/status", middleware.RequirePermission("ticket_template", "update"), config.TicketController.UpdateTicketTemplateStatus)
+			tickets.POST("/templates/:id/copy", middleware.RequirePermission("ticket_template", "create"), config.TicketController.CopyTicketTemplate)
+			tickets.DELETE("/templates/:id", middleware.RequirePermission("ticket_template", "delete"), config.TicketController.DeleteTicketTemplate)
 
 			tickets.POST("/:id/escalate", middleware.RequirePermission("ticket", "escalate"), config.TicketController.EscalateTicket)
 			tickets.GET("/:id/history", middleware.RequirePermission("ticket", "read"), config.TicketController.GetTicketActivity)
@@ -606,9 +614,9 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 					approvals.DELETE("/:id", middleware.RequirePermission("approval_workflow", "delete"), config.ApprovalController.DeleteWorkflow)
 					approvals.GET("/records", middleware.RequirePermission("approval_workflow", "read"), config.ApprovalController.GetApprovalRecords)
 					approvals.POST("/submit", middleware.RequirePermission("approval_workflow", "write"), config.ApprovalController.SubmitApproval)
-					// 兼容旧路径：/approval-records 和 /my-approvals
-					tenant.GET("/approval-records", middleware.RequirePermission("approval_workflow", "read"), config.ApprovalController.GetApprovalRecords)
-					tenant.GET("/my-approvals", middleware.RequirePermission("approval_workflow", "read"), config.ApprovalController.GetApprovalRecords)
+						// 我的待审批：聚合当前用户的 BPMN 审批任务
+						tenant.GET("/approval-records", middleware.RequirePermission("approval_workflow", "read"), config.ApprovalController.GetApprovalRecords)
+						tenant.GET("/my-approvals", middleware.RequirePermission("task", "read"), config.BPMNWorkflowController.ListUserTasks)
 
 				}
 
@@ -1247,11 +1255,6 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				}
 			}
 
-			// Legacy /services path redirect. Canonical APIs are /service-catalogs,
-			// /service-catalog-services, and /service-requests.
-			tenant.GET("/services", middleware.RequirePermission("service_catalog", "read"), func(c *gin.Context) {
-				common.Fail(c, common.BadRequestCode, "兼容接口未接入真实数据，请使用 /api/v1/service-catalogs")
-			})
 
 			// Ticket Dependencies
 			if config.TicketDependencyController != nil {

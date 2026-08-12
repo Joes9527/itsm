@@ -25,6 +25,7 @@ import (
 	marketplaceService "itsm-backend/service/marketplace"
 
 	"itsm-backend/database"
+	"itsm-backend/dto"
 	"itsm-backend/docs"
 	"itsm-backend/ent"
 	"itsm-backend/ent/tenant"
@@ -497,7 +498,10 @@ func NewApplication() *Application {
 
 	// Domain: Service Request (DDD)
 	srRepo := service_request.NewEntRepository(client)
-	srService := service_request.NewService(srRepo, scRepo, cmdbRepo, client, sugar, ticketService)
+	chainResolver := service.NewApprovalChainResolver(client, sugar)
+	// incidentBridge 将 handlers/incident.Service 适配为 service_request.IncidentCreator
+	incidentBridge := &srIncidentBridge{svc: incidentService}
+	srService := service_request.NewService(srRepo, scRepo, cmdbRepo, client, sugar, ticketService, chainResolver, incidentBridge)
 	srHandler := service_request.NewHandler(srService)
 
 	// Domain: Incident (DDD)
@@ -1041,4 +1045,23 @@ func (app *Application) startBackgroundTasks() {
 			}
 		}
 	}()
+}
+
+// srIncidentBridge 将 service.IncidentService 适配为 service_request.IncidentCreator，
+// 使 ServiceRequest.Create 在遇到 ITSM 类型为 Incident 的 catalog 时能直接创建事件。
+type srIncidentBridge struct {
+	svc *service.IncidentService
+}
+
+func (b *srIncidentBridge) CreateIncident(ctx context.Context, tenantID, requesterID int, title, description string, catalogID int) (int, error) {
+	resp, err := b.svc.CreateIncident(ctx, &dto.CreateIncidentRequest{
+		Title:       title,
+		Description: description,
+		Type:        "incident",
+		Priority:    "medium",
+	}, tenantID, requesterID)
+	if err != nil {
+		return 0, err
+	}
+	return resp.ID, nil
 }

@@ -161,21 +161,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCollapse, mobile 
       collapsed={collapsed}
       onCollapse={onCollapse}
       breakpoint={LAYOUT_CONFIG.sider.breakpoint}
-      collapsedWidth={mobile ? 0 : LAYOUT_CONFIG.sider.collapsedWidth}
+      collapsedWidth={0}
       width={LAYOUT_CONFIG.sider.width}
-      className={styles.sider}
+      className={`${styles.sider} ${collapsed ? styles.siderCollapsed : ''}`}
       style={{
-        borderRight: `1px solid ${token.colorBorder}`,
+        background: '#2A2A2A',
+        borderRight: 'none',
         zIndex: LAYOUT_CONFIG.zIndex.sider,
+        transition: 'width 250ms cubic-bezier(0.4, 0, 0.2, 1), opacity 200ms',
       }}
     >
       {/* Logo 区域 */}
       <div className={`${styles.logoArea} ${collapsed ? styles.logoAreaCollapsed : ''}`}>
-        <div className={styles.logoIcon}>AI</div>
+        <img src="/kln-logo.png" alt="Kerry Logistics" className={styles.logoImg} />
         {!collapsed && (
           <div className={styles.logoTextContainer}>
-            <div className={styles.logoText}>AI-Native</div>
-            <div className={styles.logoSubtext}>ITSM</div>
+            <div className={styles.logoText}>ITSM</div>
           </div>
         )}
       </div>

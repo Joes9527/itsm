@@ -73,7 +73,7 @@
 }
 
 .enterprise-dashboard-container .ant-tabs-tab:hover {
-  color: #3b82f6;
+  color: #F06820;
 }
 
 .enterprise-dashboard-container .ant-tabs-tab-active {
@@ -82,7 +82,7 @@
 
 /* 加载状态优化 */
 .enterprise-dashboard-container .ant-spin {
-  color: #3b82f6;
+  color: #F06820;
 }
 
 /* 徽章样式 */
@@ -175,7 +175,7 @@
 
 /* 无障碍优化 */
 .enterprise-dashboard-container *:focus-visible {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid #F06820;
   outline-offset: 2px;
 }
 

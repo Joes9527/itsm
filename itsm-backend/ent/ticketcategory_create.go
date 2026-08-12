@@ -139,6 +139,76 @@ func (_c *TicketCategoryCreate) SetNillableWorkflowID(v *int) *TicketCategoryCre
 	return _c
 }
 
+// SetItsmType sets the "itsm_type" field.
+func (_c *TicketCategoryCreate) SetItsmType(v string) *TicketCategoryCreate {
+	_c.mutation.SetItsmType(v)
+	return _c
+}
+
+// SetNillableItsmType sets the "itsm_type" field if the given value is not nil.
+func (_c *TicketCategoryCreate) SetNillableItsmType(v *string) *TicketCategoryCreate {
+	if v != nil {
+		_c.SetItsmType(*v)
+	}
+	return _c
+}
+
+// SetDefaultPriority sets the "default_priority" field.
+func (_c *TicketCategoryCreate) SetDefaultPriority(v string) *TicketCategoryCreate {
+	_c.mutation.SetDefaultPriority(v)
+	return _c
+}
+
+// SetNillableDefaultPriority sets the "default_priority" field if the given value is not nil.
+func (_c *TicketCategoryCreate) SetNillableDefaultPriority(v *string) *TicketCategoryCreate {
+	if v != nil {
+		_c.SetDefaultPriority(*v)
+	}
+	return _c
+}
+
+// SetSLATier sets the "sla_tier" field.
+func (_c *TicketCategoryCreate) SetSLATier(v string) *TicketCategoryCreate {
+	_c.mutation.SetSLATier(v)
+	return _c
+}
+
+// SetNillableSLATier sets the "sla_tier" field if the given value is not nil.
+func (_c *TicketCategoryCreate) SetNillableSLATier(v *string) *TicketCategoryCreate {
+	if v != nil {
+		_c.SetSLATier(*v)
+	}
+	return _c
+}
+
+// SetDefaultResolver sets the "default_resolver" field.
+func (_c *TicketCategoryCreate) SetDefaultResolver(v string) *TicketCategoryCreate {
+	_c.mutation.SetDefaultResolver(v)
+	return _c
+}
+
+// SetNillableDefaultResolver sets the "default_resolver" field if the given value is not nil.
+func (_c *TicketCategoryCreate) SetNillableDefaultResolver(v *string) *TicketCategoryCreate {
+	if v != nil {
+		_c.SetDefaultResolver(*v)
+	}
+	return _c
+}
+
+// SetIsUserFacing sets the "is_user_facing" field.
+func (_c *TicketCategoryCreate) SetIsUserFacing(v bool) *TicketCategoryCreate {
+	_c.mutation.SetIsUserFacing(v)
+	return _c
+}
+
+// SetNillableIsUserFacing sets the "is_user_facing" field if the given value is not nil.
+func (_c *TicketCategoryCreate) SetNillableIsUserFacing(v *bool) *TicketCategoryCreate {
+	if v != nil {
+		_c.SetIsUserFacing(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *TicketCategoryCreate) SetCreatedAt(v time.Time) *TicketCategoryCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -259,6 +329,10 @@ func (_c *TicketCategoryCreate) defaults() {
 		v := ticketcategory.DefaultIsActive
 		_c.mutation.SetIsActive(v)
 	}
+	if _, ok := _c.mutation.IsUserFacing(); !ok {
+		v := ticketcategory.DefaultIsUserFacing
+		_c.mutation.SetIsUserFacing(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := ticketcategory.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -303,6 +377,9 @@ func (_c *TicketCategoryCreate) check() error {
 		if err := ticketcategory.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "TicketCategory.tenant_id": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.IsUserFacing(); !ok {
+		return &ValidationError{Name: "is_user_facing", err: errors.New(`ent: missing required field "TicketCategory.is_user_facing"`)}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "TicketCategory.created_at"`)}
@@ -363,6 +440,26 @@ func (_c *TicketCategoryCreate) createSpec() (*TicketCategory, *sqlgraph.CreateS
 	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(ticketcategory.FieldTenantID, field.TypeInt, value)
 		_node.TenantID = value
+	}
+	if value, ok := _c.mutation.ItsmType(); ok {
+		_spec.SetField(ticketcategory.FieldItsmType, field.TypeString, value)
+		_node.ItsmType = value
+	}
+	if value, ok := _c.mutation.DefaultPriority(); ok {
+		_spec.SetField(ticketcategory.FieldDefaultPriority, field.TypeString, value)
+		_node.DefaultPriority = value
+	}
+	if value, ok := _c.mutation.SLATier(); ok {
+		_spec.SetField(ticketcategory.FieldSLATier, field.TypeString, value)
+		_node.SLATier = value
+	}
+	if value, ok := _c.mutation.DefaultResolver(); ok {
+		_spec.SetField(ticketcategory.FieldDefaultResolver, field.TypeString, value)
+		_node.DefaultResolver = value
+	}
+	if value, ok := _c.mutation.IsUserFacing(); ok {
+		_spec.SetField(ticketcategory.FieldIsUserFacing, field.TypeBool, value)
+		_node.IsUserFacing = value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(ticketcategory.FieldCreatedAt, field.TypeTime, value)

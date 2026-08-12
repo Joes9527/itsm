@@ -30,6 +30,8 @@ const (
 	FieldTicketNumber = "ticket_number"
 	// FieldRequesterID holds the string denoting the requester_id field in the database.
 	FieldRequesterID = "requester_id"
+	// FieldCreatorEmail holds the string denoting the creator_email field in the database.
+	FieldCreatorEmail = "creator_email"
 	// FieldAssigneeID holds the string denoting the assignee_id field in the database.
 	FieldAssigneeID = "assignee_id"
 	// FieldTenantID holds the string denoting the tenant_id field in the database.
@@ -236,6 +238,7 @@ var Columns = []string{
 	FieldPriority,
 	FieldTicketNumber,
 	FieldRequesterID,
+	FieldCreatorEmail,
 	FieldAssigneeID,
 	FieldTenantID,
 	FieldTemplateID,
@@ -380,6 +383,11 @@ func ByTicketNumber(opts ...sql.OrderTermOption) OrderOption {
 // ByRequesterID orders the results by the requester_id field.
 func ByRequesterID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRequesterID, opts...).ToFunc()
+}
+
+// ByCreatorEmail orders the results by the creator_email field.
+func ByCreatorEmail(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCreatorEmail, opts...).ToFunc()
 }
 
 // ByAssigneeID orders the results by the assignee_id field.

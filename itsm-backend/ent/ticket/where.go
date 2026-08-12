@@ -95,6 +95,11 @@ func RequesterID(v int) predicate.Ticket {
 	return predicate.Ticket(sql.FieldEQ(FieldRequesterID, v))
 }
 
+// CreatorEmail applies equality check predicate on the "creator_email" field. It's identical to CreatorEmailEQ.
+func CreatorEmail(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldCreatorEmail, v))
+}
+
 // AssigneeID applies equality check predicate on the "assignee_id" field. It's identical to AssigneeIDEQ.
 func AssigneeID(v int) predicate.Ticket {
 	return predicate.Ticket(sql.FieldEQ(FieldAssigneeID, v))
@@ -718,6 +723,81 @@ func RequesterIDIn(vs ...int) predicate.Ticket {
 // RequesterIDNotIn applies the NotIn predicate on the "requester_id" field.
 func RequesterIDNotIn(vs ...int) predicate.Ticket {
 	return predicate.Ticket(sql.FieldNotIn(FieldRequesterID, vs...))
+}
+
+// CreatorEmailEQ applies the EQ predicate on the "creator_email" field.
+func CreatorEmailEQ(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldCreatorEmail, v))
+}
+
+// CreatorEmailNEQ applies the NEQ predicate on the "creator_email" field.
+func CreatorEmailNEQ(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNEQ(FieldCreatorEmail, v))
+}
+
+// CreatorEmailIn applies the In predicate on the "creator_email" field.
+func CreatorEmailIn(vs ...string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldIn(FieldCreatorEmail, vs...))
+}
+
+// CreatorEmailNotIn applies the NotIn predicate on the "creator_email" field.
+func CreatorEmailNotIn(vs ...string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotIn(FieldCreatorEmail, vs...))
+}
+
+// CreatorEmailGT applies the GT predicate on the "creator_email" field.
+func CreatorEmailGT(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGT(FieldCreatorEmail, v))
+}
+
+// CreatorEmailGTE applies the GTE predicate on the "creator_email" field.
+func CreatorEmailGTE(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGTE(FieldCreatorEmail, v))
+}
+
+// CreatorEmailLT applies the LT predicate on the "creator_email" field.
+func CreatorEmailLT(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLT(FieldCreatorEmail, v))
+}
+
+// CreatorEmailLTE applies the LTE predicate on the "creator_email" field.
+func CreatorEmailLTE(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLTE(FieldCreatorEmail, v))
+}
+
+// CreatorEmailContains applies the Contains predicate on the "creator_email" field.
+func CreatorEmailContains(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldContains(FieldCreatorEmail, v))
+}
+
+// CreatorEmailHasPrefix applies the HasPrefix predicate on the "creator_email" field.
+func CreatorEmailHasPrefix(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldHasPrefix(FieldCreatorEmail, v))
+}
+
+// CreatorEmailHasSuffix applies the HasSuffix predicate on the "creator_email" field.
+func CreatorEmailHasSuffix(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldHasSuffix(FieldCreatorEmail, v))
+}
+
+// CreatorEmailIsNil applies the IsNil predicate on the "creator_email" field.
+func CreatorEmailIsNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldIsNull(FieldCreatorEmail))
+}
+
+// CreatorEmailNotNil applies the NotNil predicate on the "creator_email" field.
+func CreatorEmailNotNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotNull(FieldCreatorEmail))
+}
+
+// CreatorEmailEqualFold applies the EqualFold predicate on the "creator_email" field.
+func CreatorEmailEqualFold(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEqualFold(FieldCreatorEmail, v))
+}
+
+// CreatorEmailContainsFold applies the ContainsFold predicate on the "creator_email" field.
+func CreatorEmailContainsFold(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldContainsFold(FieldCreatorEmail, v))
 }
 
 // AssigneeIDEQ applies the EQ predicate on the "assignee_id" field.

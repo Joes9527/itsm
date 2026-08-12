@@ -24,6 +24,8 @@ const (
 	FieldPriority = "priority"
 	// FieldWorkflowSteps holds the string denoting the workflow_steps field in the database.
 	FieldWorkflowSteps = "workflow_steps"
+	// FieldCategoryIds holds the string denoting the category_ids field in the database.
+	FieldCategoryIds = "category_ids"
 	// FieldIsActive holds the string denoting the is_active field in the database.
 	FieldIsActive = "is_active"
 	// FieldTenantID holds the string denoting the tenant_id field in the database.
@@ -53,6 +55,7 @@ var Columns = []string{
 	FieldCategory,
 	FieldPriority,
 	FieldWorkflowSteps,
+	FieldCategoryIds,
 	FieldIsActive,
 	FieldTenantID,
 	FieldCreatedAt,

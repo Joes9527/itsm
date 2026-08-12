@@ -40,6 +40,13 @@ go generate ./ent
 go run -tags migrate main.go
 ```
 
+### Recent Migrations
+
+| 文件 | 说明 |
+|------|------|
+| `20260811_end_user_ticket_category_read.sql` | 为所有租户的 `end_user` 角色授予 `ticket_category:read` 权限，修复服务目录为空的问题 |
+| `20260810_service_catalog_itsm_type.sql` | `service_catalogs` 表新增 `itsm_type` 列，支持 ITSM 类型审批路由 |
+
 ## Tables
 
 ### users

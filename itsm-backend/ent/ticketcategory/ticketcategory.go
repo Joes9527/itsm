@@ -34,6 +34,16 @@ const (
 	FieldDepartmentID = "department_id"
 	// FieldWorkflowID holds the string denoting the workflow_id field in the database.
 	FieldWorkflowID = "workflow_id"
+	// FieldItsmType holds the string denoting the itsm_type field in the database.
+	FieldItsmType = "itsm_type"
+	// FieldDefaultPriority holds the string denoting the default_priority field in the database.
+	FieldDefaultPriority = "default_priority"
+	// FieldSLATier holds the string denoting the sla_tier field in the database.
+	FieldSLATier = "sla_tier"
+	// FieldDefaultResolver holds the string denoting the default_resolver field in the database.
+	FieldDefaultResolver = "default_resolver"
+	// FieldIsUserFacing holds the string denoting the is_user_facing field in the database.
+	FieldIsUserFacing = "is_user_facing"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -92,6 +102,11 @@ var Columns = []string{
 	FieldTenantID,
 	FieldDepartmentID,
 	FieldWorkflowID,
+	FieldItsmType,
+	FieldDefaultPriority,
+	FieldSLATier,
+	FieldDefaultResolver,
+	FieldIsUserFacing,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }
@@ -125,6 +140,8 @@ var (
 	DefaultIsActive bool
 	// TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	TenantIDValidator func(int) error
+	// DefaultIsUserFacing holds the default value on creation for the "is_user_facing" field.
+	DefaultIsUserFacing bool
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -189,6 +206,31 @@ func ByDepartmentID(opts ...sql.OrderTermOption) OrderOption {
 // ByWorkflowID orders the results by the workflow_id field.
 func ByWorkflowID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldWorkflowID, opts...).ToFunc()
+}
+
+// ByItsmType orders the results by the itsm_type field.
+func ByItsmType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldItsmType, opts...).ToFunc()
+}
+
+// ByDefaultPriority orders the results by the default_priority field.
+func ByDefaultPriority(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDefaultPriority, opts...).ToFunc()
+}
+
+// BySLATier orders the results by the sla_tier field.
+func BySLATier(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSLATier, opts...).ToFunc()
+}
+
+// ByDefaultResolver orders the results by the default_resolver field.
+func ByDefaultResolver(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDefaultResolver, opts...).ToFunc()
+}
+
+// ByIsUserFacing orders the results by the is_user_facing field.
+func ByIsUserFacing(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIsUserFacing, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

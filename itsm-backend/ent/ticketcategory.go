@@ -39,6 +39,16 @@ type TicketCategory struct {
 	DepartmentID int `json:"department_id,omitempty"`
 	// 关联工作流ID
 	WorkflowID int `json:"workflow_id,omitempty"`
+	// ITSM类型: Request/Incident/Change
+	ItsmType string `json:"itsm_type,omitempty"`
+	// 默认优先级: P1/P2/P3/P4
+	DefaultPriority string `json:"default_priority,omitempty"`
+	// SLA等级: 标准服务/快速标准服务/审批类服务/安全响应服务等
+	SLATier string `json:"sla_tier,omitempty"`
+	// 默认处理团队/角色
+	DefaultResolver string `json:"default_resolver,omitempty"`
+	// 是否面向用户展示
+	IsUserFacing bool `json:"is_user_facing,omitempty"`
 	// 创建时间
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// 更新时间
@@ -122,11 +132,11 @@ func (*TicketCategory) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case ticketcategory.FieldIsActive:
+		case ticketcategory.FieldIsActive, ticketcategory.FieldIsUserFacing:
 			values[i] = new(sql.NullBool)
 		case ticketcategory.FieldID, ticketcategory.FieldParentID, ticketcategory.FieldLevel, ticketcategory.FieldSortOrder, ticketcategory.FieldTenantID, ticketcategory.FieldDepartmentID, ticketcategory.FieldWorkflowID:
 			values[i] = new(sql.NullInt64)
-		case ticketcategory.FieldName, ticketcategory.FieldDescription, ticketcategory.FieldCode:
+		case ticketcategory.FieldName, ticketcategory.FieldDescription, ticketcategory.FieldCode, ticketcategory.FieldItsmType, ticketcategory.FieldDefaultPriority, ticketcategory.FieldSLATier, ticketcategory.FieldDefaultResolver:
 			values[i] = new(sql.NullString)
 		case ticketcategory.FieldCreatedAt, ticketcategory.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -210,6 +220,36 @@ func (_m *TicketCategory) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field workflow_id", values[i])
 			} else if value.Valid {
 				_m.WorkflowID = int(value.Int64)
+			}
+		case ticketcategory.FieldItsmType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field itsm_type", values[i])
+			} else if value.Valid {
+				_m.ItsmType = value.String
+			}
+		case ticketcategory.FieldDefaultPriority:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field default_priority", values[i])
+			} else if value.Valid {
+				_m.DefaultPriority = value.String
+			}
+		case ticketcategory.FieldSLATier:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field sla_tier", values[i])
+			} else if value.Valid {
+				_m.SLATier = value.String
+			}
+		case ticketcategory.FieldDefaultResolver:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field default_resolver", values[i])
+			} else if value.Valid {
+				_m.DefaultResolver = value.String
+			}
+		case ticketcategory.FieldIsUserFacing:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field is_user_facing", values[i])
+			} else if value.Valid {
+				_m.IsUserFacing = value.Bool
 			}
 		case ticketcategory.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -313,6 +353,21 @@ func (_m *TicketCategory) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("workflow_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.WorkflowID))
+	builder.WriteString(", ")
+	builder.WriteString("itsm_type=")
+	builder.WriteString(_m.ItsmType)
+	builder.WriteString(", ")
+	builder.WriteString("default_priority=")
+	builder.WriteString(_m.DefaultPriority)
+	builder.WriteString(", ")
+	builder.WriteString("sla_tier=")
+	builder.WriteString(_m.SLATier)
+	builder.WriteString(", ")
+	builder.WriteString("default_resolver=")
+	builder.WriteString(_m.DefaultResolver)
+	builder.WriteString(", ")
+	builder.WriteString("is_user_facing=")
+	builder.WriteString(fmt.Sprintf("%v", _m.IsUserFacing))
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

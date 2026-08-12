@@ -194,7 +194,7 @@ describe('Color Contrast Utilities', () => {
 
   describe('accessibleColors', () => {
     it('should have primary palette', () => {
-      expect(accessibleColors.primary[500]).toBe('#3b82f6');
+      expect(accessibleColors.primary[500]).toBe('#F06820');
     });
 
     it('should have success palette', () => {

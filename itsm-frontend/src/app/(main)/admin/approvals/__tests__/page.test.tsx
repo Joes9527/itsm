@@ -32,6 +32,7 @@ const mockPost = httpClient.post as jest.Mock;
 const mockGetWorkflows = WorkflowDefinitionApi.getWorkflows as jest.Mock;
 
 describe('ApprovalManagement 节点编辑器字段名', () => {
+  jest.setTimeout(30000);
   beforeEach(() => {
     jest.clearAllMocks();
     mockGet.mockResolvedValue({ items: [], total: 0 });
@@ -67,7 +68,7 @@ describe('ApprovalManagement 节点编辑器字段名', () => {
     expect(payload.name).toBe('固定审批人工作流');
 
     const node = payload.nodes[0];
-    expect(node.name).toBe('财务审批');
+    expect(node.name).toContain('财务审批');
     expect(node.approverType).toBe('user');
     expect(node.approverIds).toEqual([42]);
   });

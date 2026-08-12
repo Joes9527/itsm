@@ -105,6 +105,31 @@ func WorkflowID(v int) predicate.TicketCategory {
 	return predicate.TicketCategory(sql.FieldEQ(FieldWorkflowID, v))
 }
 
+// ItsmType applies equality check predicate on the "itsm_type" field. It's identical to ItsmTypeEQ.
+func ItsmType(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldEQ(FieldItsmType, v))
+}
+
+// DefaultPriority applies equality check predicate on the "default_priority" field. It's identical to DefaultPriorityEQ.
+func DefaultPriority(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldEQ(FieldDefaultPriority, v))
+}
+
+// SLATier applies equality check predicate on the "sla_tier" field. It's identical to SLATierEQ.
+func SLATier(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldEQ(FieldSLATier, v))
+}
+
+// DefaultResolver applies equality check predicate on the "default_resolver" field. It's identical to DefaultResolverEQ.
+func DefaultResolver(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldEQ(FieldDefaultResolver, v))
+}
+
+// IsUserFacing applies equality check predicate on the "is_user_facing" field. It's identical to IsUserFacingEQ.
+func IsUserFacing(v bool) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldEQ(FieldIsUserFacing, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.TicketCategory {
 	return predicate.TicketCategory(sql.FieldEQ(FieldCreatedAt, v))
@@ -538,6 +563,316 @@ func WorkflowIDIsNil() predicate.TicketCategory {
 // WorkflowIDNotNil applies the NotNil predicate on the "workflow_id" field.
 func WorkflowIDNotNil() predicate.TicketCategory {
 	return predicate.TicketCategory(sql.FieldNotNull(FieldWorkflowID))
+}
+
+// ItsmTypeEQ applies the EQ predicate on the "itsm_type" field.
+func ItsmTypeEQ(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldEQ(FieldItsmType, v))
+}
+
+// ItsmTypeNEQ applies the NEQ predicate on the "itsm_type" field.
+func ItsmTypeNEQ(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldNEQ(FieldItsmType, v))
+}
+
+// ItsmTypeIn applies the In predicate on the "itsm_type" field.
+func ItsmTypeIn(vs ...string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldIn(FieldItsmType, vs...))
+}
+
+// ItsmTypeNotIn applies the NotIn predicate on the "itsm_type" field.
+func ItsmTypeNotIn(vs ...string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldNotIn(FieldItsmType, vs...))
+}
+
+// ItsmTypeGT applies the GT predicate on the "itsm_type" field.
+func ItsmTypeGT(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldGT(FieldItsmType, v))
+}
+
+// ItsmTypeGTE applies the GTE predicate on the "itsm_type" field.
+func ItsmTypeGTE(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldGTE(FieldItsmType, v))
+}
+
+// ItsmTypeLT applies the LT predicate on the "itsm_type" field.
+func ItsmTypeLT(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldLT(FieldItsmType, v))
+}
+
+// ItsmTypeLTE applies the LTE predicate on the "itsm_type" field.
+func ItsmTypeLTE(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldLTE(FieldItsmType, v))
+}
+
+// ItsmTypeContains applies the Contains predicate on the "itsm_type" field.
+func ItsmTypeContains(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldContains(FieldItsmType, v))
+}
+
+// ItsmTypeHasPrefix applies the HasPrefix predicate on the "itsm_type" field.
+func ItsmTypeHasPrefix(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldHasPrefix(FieldItsmType, v))
+}
+
+// ItsmTypeHasSuffix applies the HasSuffix predicate on the "itsm_type" field.
+func ItsmTypeHasSuffix(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldHasSuffix(FieldItsmType, v))
+}
+
+// ItsmTypeIsNil applies the IsNil predicate on the "itsm_type" field.
+func ItsmTypeIsNil() predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldIsNull(FieldItsmType))
+}
+
+// ItsmTypeNotNil applies the NotNil predicate on the "itsm_type" field.
+func ItsmTypeNotNil() predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldNotNull(FieldItsmType))
+}
+
+// ItsmTypeEqualFold applies the EqualFold predicate on the "itsm_type" field.
+func ItsmTypeEqualFold(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldEqualFold(FieldItsmType, v))
+}
+
+// ItsmTypeContainsFold applies the ContainsFold predicate on the "itsm_type" field.
+func ItsmTypeContainsFold(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldContainsFold(FieldItsmType, v))
+}
+
+// DefaultPriorityEQ applies the EQ predicate on the "default_priority" field.
+func DefaultPriorityEQ(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldEQ(FieldDefaultPriority, v))
+}
+
+// DefaultPriorityNEQ applies the NEQ predicate on the "default_priority" field.
+func DefaultPriorityNEQ(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldNEQ(FieldDefaultPriority, v))
+}
+
+// DefaultPriorityIn applies the In predicate on the "default_priority" field.
+func DefaultPriorityIn(vs ...string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldIn(FieldDefaultPriority, vs...))
+}
+
+// DefaultPriorityNotIn applies the NotIn predicate on the "default_priority" field.
+func DefaultPriorityNotIn(vs ...string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldNotIn(FieldDefaultPriority, vs...))
+}
+
+// DefaultPriorityGT applies the GT predicate on the "default_priority" field.
+func DefaultPriorityGT(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldGT(FieldDefaultPriority, v))
+}
+
+// DefaultPriorityGTE applies the GTE predicate on the "default_priority" field.
+func DefaultPriorityGTE(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldGTE(FieldDefaultPriority, v))
+}
+
+// DefaultPriorityLT applies the LT predicate on the "default_priority" field.
+func DefaultPriorityLT(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldLT(FieldDefaultPriority, v))
+}
+
+// DefaultPriorityLTE applies the LTE predicate on the "default_priority" field.
+func DefaultPriorityLTE(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldLTE(FieldDefaultPriority, v))
+}
+
+// DefaultPriorityContains applies the Contains predicate on the "default_priority" field.
+func DefaultPriorityContains(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldContains(FieldDefaultPriority, v))
+}
+
+// DefaultPriorityHasPrefix applies the HasPrefix predicate on the "default_priority" field.
+func DefaultPriorityHasPrefix(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldHasPrefix(FieldDefaultPriority, v))
+}
+
+// DefaultPriorityHasSuffix applies the HasSuffix predicate on the "default_priority" field.
+func DefaultPriorityHasSuffix(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldHasSuffix(FieldDefaultPriority, v))
+}
+
+// DefaultPriorityIsNil applies the IsNil predicate on the "default_priority" field.
+func DefaultPriorityIsNil() predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldIsNull(FieldDefaultPriority))
+}
+
+// DefaultPriorityNotNil applies the NotNil predicate on the "default_priority" field.
+func DefaultPriorityNotNil() predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldNotNull(FieldDefaultPriority))
+}
+
+// DefaultPriorityEqualFold applies the EqualFold predicate on the "default_priority" field.
+func DefaultPriorityEqualFold(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldEqualFold(FieldDefaultPriority, v))
+}
+
+// DefaultPriorityContainsFold applies the ContainsFold predicate on the "default_priority" field.
+func DefaultPriorityContainsFold(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldContainsFold(FieldDefaultPriority, v))
+}
+
+// SLATierEQ applies the EQ predicate on the "sla_tier" field.
+func SLATierEQ(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldEQ(FieldSLATier, v))
+}
+
+// SLATierNEQ applies the NEQ predicate on the "sla_tier" field.
+func SLATierNEQ(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldNEQ(FieldSLATier, v))
+}
+
+// SLATierIn applies the In predicate on the "sla_tier" field.
+func SLATierIn(vs ...string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldIn(FieldSLATier, vs...))
+}
+
+// SLATierNotIn applies the NotIn predicate on the "sla_tier" field.
+func SLATierNotIn(vs ...string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldNotIn(FieldSLATier, vs...))
+}
+
+// SLATierGT applies the GT predicate on the "sla_tier" field.
+func SLATierGT(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldGT(FieldSLATier, v))
+}
+
+// SLATierGTE applies the GTE predicate on the "sla_tier" field.
+func SLATierGTE(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldGTE(FieldSLATier, v))
+}
+
+// SLATierLT applies the LT predicate on the "sla_tier" field.
+func SLATierLT(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldLT(FieldSLATier, v))
+}
+
+// SLATierLTE applies the LTE predicate on the "sla_tier" field.
+func SLATierLTE(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldLTE(FieldSLATier, v))
+}
+
+// SLATierContains applies the Contains predicate on the "sla_tier" field.
+func SLATierContains(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldContains(FieldSLATier, v))
+}
+
+// SLATierHasPrefix applies the HasPrefix predicate on the "sla_tier" field.
+func SLATierHasPrefix(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldHasPrefix(FieldSLATier, v))
+}
+
+// SLATierHasSuffix applies the HasSuffix predicate on the "sla_tier" field.
+func SLATierHasSuffix(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldHasSuffix(FieldSLATier, v))
+}
+
+// SLATierIsNil applies the IsNil predicate on the "sla_tier" field.
+func SLATierIsNil() predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldIsNull(FieldSLATier))
+}
+
+// SLATierNotNil applies the NotNil predicate on the "sla_tier" field.
+func SLATierNotNil() predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldNotNull(FieldSLATier))
+}
+
+// SLATierEqualFold applies the EqualFold predicate on the "sla_tier" field.
+func SLATierEqualFold(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldEqualFold(FieldSLATier, v))
+}
+
+// SLATierContainsFold applies the ContainsFold predicate on the "sla_tier" field.
+func SLATierContainsFold(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldContainsFold(FieldSLATier, v))
+}
+
+// DefaultResolverEQ applies the EQ predicate on the "default_resolver" field.
+func DefaultResolverEQ(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldEQ(FieldDefaultResolver, v))
+}
+
+// DefaultResolverNEQ applies the NEQ predicate on the "default_resolver" field.
+func DefaultResolverNEQ(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldNEQ(FieldDefaultResolver, v))
+}
+
+// DefaultResolverIn applies the In predicate on the "default_resolver" field.
+func DefaultResolverIn(vs ...string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldIn(FieldDefaultResolver, vs...))
+}
+
+// DefaultResolverNotIn applies the NotIn predicate on the "default_resolver" field.
+func DefaultResolverNotIn(vs ...string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldNotIn(FieldDefaultResolver, vs...))
+}
+
+// DefaultResolverGT applies the GT predicate on the "default_resolver" field.
+func DefaultResolverGT(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldGT(FieldDefaultResolver, v))
+}
+
+// DefaultResolverGTE applies the GTE predicate on the "default_resolver" field.
+func DefaultResolverGTE(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldGTE(FieldDefaultResolver, v))
+}
+
+// DefaultResolverLT applies the LT predicate on the "default_resolver" field.
+func DefaultResolverLT(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldLT(FieldDefaultResolver, v))
+}
+
+// DefaultResolverLTE applies the LTE predicate on the "default_resolver" field.
+func DefaultResolverLTE(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldLTE(FieldDefaultResolver, v))
+}
+
+// DefaultResolverContains applies the Contains predicate on the "default_resolver" field.
+func DefaultResolverContains(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldContains(FieldDefaultResolver, v))
+}
+
+// DefaultResolverHasPrefix applies the HasPrefix predicate on the "default_resolver" field.
+func DefaultResolverHasPrefix(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldHasPrefix(FieldDefaultResolver, v))
+}
+
+// DefaultResolverHasSuffix applies the HasSuffix predicate on the "default_resolver" field.
+func DefaultResolverHasSuffix(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldHasSuffix(FieldDefaultResolver, v))
+}
+
+// DefaultResolverIsNil applies the IsNil predicate on the "default_resolver" field.
+func DefaultResolverIsNil() predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldIsNull(FieldDefaultResolver))
+}
+
+// DefaultResolverNotNil applies the NotNil predicate on the "default_resolver" field.
+func DefaultResolverNotNil() predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldNotNull(FieldDefaultResolver))
+}
+
+// DefaultResolverEqualFold applies the EqualFold predicate on the "default_resolver" field.
+func DefaultResolverEqualFold(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldEqualFold(FieldDefaultResolver, v))
+}
+
+// DefaultResolverContainsFold applies the ContainsFold predicate on the "default_resolver" field.
+func DefaultResolverContainsFold(v string) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldContainsFold(FieldDefaultResolver, v))
+}
+
+// IsUserFacingEQ applies the EQ predicate on the "is_user_facing" field.
+func IsUserFacingEQ(v bool) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldEQ(FieldIsUserFacing, v))
+}
+
+// IsUserFacingNEQ applies the NEQ predicate on the "is_user_facing" field.
+func IsUserFacingNEQ(v bool) predicate.TicketCategory {
+	return predicate.TicketCategory(sql.FieldNEQ(FieldIsUserFacing, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

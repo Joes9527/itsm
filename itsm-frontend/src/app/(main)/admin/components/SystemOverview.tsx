@@ -12,7 +12,7 @@ const { Paragraph, Title, Text } = Typography;
 const DESIGN_SYSTEM = {
   colors: {
     primary: '#0f172a', // 深海军蓝
-    accent: '#3b82f6', // 明亮蓝
+    accent: '#F06820', // 明亮蓝
     success: '#10b981', // 翠绿
     warning: '#f59e0b', // 琥珀
     danger: '#ef4444', // 珊瑚红
@@ -23,7 +23,7 @@ const DESIGN_SYSTEM = {
     textSecondary: '#64748b',
     gradient: {
       card: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
-      accent: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+      accent: 'linear-gradient(135deg, #F06820 0%, #B84A08 100%)',
       success: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
       warning: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
       danger: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',

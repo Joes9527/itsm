@@ -171,7 +171,7 @@ export default function EscalationMatricesPage() {
         </Col>
         <Col xs={24} sm={8}>
           <Card>
-            <Statistic title="升级级别总数" value={stats.totalLevels} suffix="级" valueStyle={{ color: '#1677ff' }} />
+            <Statistic title="升级级别总数" value={stats.totalLevels} suffix="级" valueStyle={{ color: '#F06820' }} />
           </Card>
         </Col>
         <Col xs={24} sm={8}>

@@ -236,7 +236,7 @@ export default function WorkflowVersionsPage() {
 
       <StatsOverview
         items={[
-          { key: 'count', title: '总版本数', value: versions.length, accentColor: '#1677ff' },
+          { key: 'count', title: '总版本数', value: versions.length, accentColor: '#F06820' },
           {
             key: 'active',
             title: '激活版本',

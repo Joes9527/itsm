@@ -805,15 +805,21 @@ func ToTicketCategoryResponse(category *ent.TicketCategory) *TicketCategoryRespo
 	}
 
 	response := &TicketCategoryResponse{
-		ID:          category.ID,
-		Name:        category.Name,
-		Code:        category.Code,
-		Description: category.Description,
-		SortOrder:   category.SortOrder,
-		IsActive:    category.IsActive,
-		TenantID:    category.TenantID,
-		CreatedAt:   category.CreatedAt,
-		UpdatedAt:   category.UpdatedAt,
+		ID:              category.ID,
+		Name:            category.Name,
+		Code:            category.Code,
+		Description:     category.Description,
+		Level:           category.Level,
+		SortOrder:       category.SortOrder,
+		IsActive:        category.IsActive,
+		TenantID:        category.TenantID,
+		ITSMType:        category.ItsmType,
+		DefaultPriority: category.DefaultPriority,
+		SLATier:         category.SLATier,
+		DefaultResolver: category.DefaultResolver,
+		IsUserFacing:    category.IsUserFacing,
+		CreatedAt:       category.CreatedAt,
+		UpdatedAt:       category.UpdatedAt,
 	}
 
 	if category.ParentID > 0 {

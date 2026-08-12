@@ -1,13 +1,31 @@
 .header {
-  padding: 0 16px;
-  background: #fff;
-  border-bottom: 1px solid #f0f0f0;
+  padding: 0 20px;
+  background: #2A2A2A;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: auto;
+  height: 56px;
   min-height: 56px;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Orange glow sweep at bottom edge */
+.header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: -100%;
+  width: 300%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #F06820, #F27C38, #F06820, transparent);
+  animation: cp-glow-sweep 4s ease-in-out infinite;
+}
+
+@keyframes cp-glow-sweep {
+  0% { transform: translateX(-33%); }
+  50% { transform: translateX(33%); }
+  100% { transform: translateX(-33%); }
 }
 
 .mainRow {
@@ -54,33 +72,27 @@
   gap: 8px;
 }
 
-.breadcrumbSeparator {
-  color: #9ca3af;
-  margin: 0 4px;
+/* antd Breadcrumb 默认使用亮色主题文字色（colorTextDescription/colorText），
+   在深色 Header 背景（#2A2A2A）上对比度不足，这里覆盖为白色系 */
+.breadcrumb :global(.ant-breadcrumb-link) {
+  color: rgba(255, 255, 255, 0.65) !important;
 }
 
-.breadcrumbLink {
-  color: #3b82f6;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.2s;
-  padding: 4px 8px;
-  border-radius: 6px;
+.breadcrumb :global(.ant-breadcrumb-link a) {
+  color: rgba(255, 255, 255, 0.65) !important;
 }
 
-.breadcrumbLink:hover {
-  background-color: #eff6ff;
-  color: #1d4ed8;
+.breadcrumb :global(.ant-breadcrumb-link a:hover) {
+  color: #F06820 !important;
 }
 
-.breadcrumbCurrent {
-  color: #374151;
-  font-size: 14px;
+.breadcrumb :global(.ant-breadcrumb-separator) {
+  color: rgba(255, 255, 255, 0.35) !important;
+}
+
+.breadcrumb :global(.ant-breadcrumb-item:last-child .ant-breadcrumb-link) {
+  color: #ffffff !important;
   font-weight: 600;
-  background-color: #f3f4f6;
-  padding: 4px 8px;
-  border-radius: 6px;
 }
 
 .right {
@@ -97,7 +109,7 @@
 }
 
 .searchInput:focus {
-  border-color: #3b82f6;
+  border-color: #F06820;
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
 }
 
@@ -143,7 +155,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 6px;
-  color: #1e293b !important;
+  color: #ffffff !important;
   background: transparent;
   border: none;
   cursor: pointer;
@@ -152,36 +164,36 @@
 }
 
 .actionButton:hover {
-  color: #0f172a !important;
-  background: #f1f5f9;
+  color: #F06820 !important;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .actionButton:focus-visible {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid #F06820;
   outline-offset: 2px;
 }
 
 .actionButton svg {
-  color: #1e293b;
-  stroke: #1e293b;
+  color: #ffffff;
+  stroke: #ffffff;
   stroke-width: 2.25;
   flex-shrink: 0;
 }
 
 .actionButton:hover svg,
 .actionButton:focus svg {
-  color: #0f172a;
-  stroke: #0f172a;
+  color: #F06820;
+  stroke: #F06820;
 }
 
 .actionButton.active {
-  color: #2563eb !important;
-  background: #dbeafe;
+  color: #F27C38 !important;
+  background: rgba(240, 104, 32, 0.2);
 }
 
 .actionButton.active svg {
-  color: #2563eb;
-  stroke: #2563eb;
+  color: #F27C38;
+  stroke: #F27C38;
 }
 
 /* 通知按钮：复用 actionButton 基础样式，只需覆盖特定差异 */
@@ -190,32 +202,32 @@
 }
 
 .notificationButton svg {
-  color: #64748b;
-  stroke: #64748b;
+  color: #ffffff;
+  stroke: #ffffff;
 }
 
 .notificationButton:hover,
 .notificationButton:focus {
-  background: #f8fafc;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .notificationButton:hover svg,
 .notificationButton:focus svg {
-  color: #1e293b;
-  stroke: #1e293b;
+  color: #F06820;
+  stroke: #F06820;
 }
 
 /* 激活状态：使用两个类选择器组合，特异性高于 .notificationButton */
 .actionButton.notificationButton.active,
 .notificationButton.active {
-  color: #3b82f6 !important;
-  background: #eff6ff;
+  color: #F27C38 !important;
+  background: rgba(240, 104, 32, 0.2);
 }
 
 .actionButton.notificationButton.active svg,
 .notificationButton.active svg {
-  color: #3b82f6 !important;
-  stroke: #3b82f6 !important;
+  color: #F06820 !important;
+  stroke: #F06820 !important;
 }
 
 .userMenu {
@@ -341,7 +353,7 @@
   padding: 2px 8px;
   font-size: 11px;
   font-weight: 500;
-  color: #3b82f6;
+  color: #F06820;
   background: #eff6ff;
   border-radius: 4px;
 }
@@ -356,7 +368,7 @@
 }
 
 .menuItemContent:hover {
-  color: #3b82f6;
+  color: #F06820;
 }
 
 .menuItemLogout {

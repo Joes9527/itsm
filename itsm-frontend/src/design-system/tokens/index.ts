@@ -5,9 +5,9 @@
 
 export const colors = {
   /** 品牌主色（与 antd colorPrimary / tailwind primary 对齐） */
-  primary: '#3b82f6',
+  primary: '#F06820',
   /** 强调色（与主色一致，保留兼容旧引用） */
-  accent: '#3b82f6',
+  accent: '#F06820',
   /** 深色标题/墨色（原误命名为 primary 的 #0f172a） */
   ink: '#0f172a',
   success: '#10b981',

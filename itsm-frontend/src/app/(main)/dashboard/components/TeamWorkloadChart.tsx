@@ -16,7 +16,7 @@ const TeamWorkloadChart: React.FC<{ data: TeamWorkload[] }> = React.memo(({ data
     xField: 'ticketCount',
     yField: 'assignee',
     seriesField: 'assignee',
-    color: ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6'],
+    color: ['#F06820', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6'],
     barStyle: {
       radius: [0, 8, 8, 0],
     },
@@ -46,7 +46,7 @@ const TeamWorkloadChart: React.FC<{ data: TeamWorkload[] }> = React.memo(({ data
       title="团队工作负载"
       subtitle="各成员工单处理情况"
       icon={<Users style={{ width: 20, height: 20 }} />}
-      iconColor="#3b82f6"
+      iconColor="#F06820"
       extra={
         <div style={{ textAlign: 'right' }}>
           <div style={{ fontSize: 12, color: '#8c8c8c' }}>平均完成率</div>

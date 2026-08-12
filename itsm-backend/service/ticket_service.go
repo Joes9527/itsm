@@ -2234,6 +2234,7 @@ func (s *TicketService) toTicketTemplateDTO(ctx context.Context, template *ent.T
 		Category:      template.Category,
 		Priority:      template.Priority,
 		Fields:        fields,
+		CategoryIDs:   template.CategoryIds,
 		WorkflowSteps: workflowSteps,
 		IsActive:      isActive,
 		CreatedAt:     template.CreatedAt,
