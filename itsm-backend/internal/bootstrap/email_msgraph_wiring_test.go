@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -111,6 +112,82 @@ func TestTicketStoreAdapter_PostSystemComment(t *testing.T) {
 	count, err := client.TicketComment.Query().Count(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 1, count)
+}
+
+// triageServiceSuggestForTenantSignature is a compile-time pin on
+// TriageService.SuggestForTenant's parameter order: (ctx, title,
+// description string, tenantID int). msgraph.Triager's own Suggest method
+// deliberately uses a different order — (ctx, tenantID int, title,
+// description string) — and triagerAdapter.Suggest is the one place that
+// bridges the two. If SuggestForTenant's signature is ever changed (e.g.
+// reordered to match the interface for "consistency"), this line stops
+// compiling, forcing whoever makes that change to also revisit
+// triagerAdapter.Suggest's argument order instead of it silently going
+// stale.
+var _ func(context.Context, string, string, int) service.TriageResult = (*service.TriageService)(nil).SuggestForTenant
+
+func TestTriagerAdapter_Suggest_ForwardsToRealTriageServiceInCorrectRoles(t *testing.T) {
+	logger := zaptest.NewLogger(t).Sugar()
+	// Nil gateway (and no guidance client) means TriageService falls back
+	// to its own deterministic keyword-based classifier
+	// (TriageService.keywordBasedSuggest), so this exercises real
+	// classification logic end-to-end without needing an LLM.
+	triageService := service.NewTriageServiceWithSugaredLogger(nil, logger)
+	adapter := newTriagerAdapter(triageService)
+
+	// title carries the keyword that drives category ("数据库" ->
+	// "database", see keywordBasedSuggest's database branch, confidence
+	// 0.7). description carries the keyword that drives priority
+	// escalation ("紧急" -> escalates the default "medium" priority to
+	// "high" and adds +0.1 confidence). The expected result below can
+	// only come out this way if BOTH title's and description's text
+	// actually reach TriageService.SuggestForTenant in their own roles —
+	// if the adapter dropped, duplicated, or dead-code-swapped either
+	// string (or passed tenantID where a string was expected — which
+	// would fail to compile today, but is exactly the drift the
+	// signature pin above guards against for the future), category
+	// and/or priority would not match.
+	suggestion := adapter.Suggest(context.Background(), 42, "数据库连接失败", "系统紧急，请尽快处理")
+
+	assert.Equal(t, "database", suggestion.Category)
+	assert.Equal(t, "high", suggestion.Priority)
+	assert.InDelta(t, 0.8, suggestion.Confidence, 0.0001)
+	assert.Equal(t, "keyword heuristic", suggestion.Explanation)
+}
+
+// fakeTitleLabelingLLMProvider lets TestTriagerAdapter_Suggest_DoesNotSwapTitleAndDescription
+// inspect the actual prompt TriageService.llmClassify builds (it labels
+// title and description with distinct "Title: " / "Description:\n"
+// markers — see llmClassify in service/triage_service.go). Unlike the
+// keyword-based fallback exercised above — which concatenates title and
+// description together and is therefore symmetric with respect to which
+// one is which — the LLM prompt path is genuinely order-sensitive, so it
+// can actually catch a title/description swap in the adapter.
+type fakeTitleLabelingLLMProvider struct{}
+
+func (fakeTitleLabelingLLMProvider) Chat(ctx context.Context, model string, messages []service.LLMMessage) (string, error) {
+	prompt := messages[len(messages)-1].Content
+	if strings.Contains(prompt, "Title: TITLE_MARKER") {
+		return `{"category":"database","priority":"high","confidence":0.9,"explanation":"marker seen in Title slot"}`, nil
+	}
+	return `{"category":"general","priority":"low","confidence":0.9,"explanation":"marker not seen in Title slot"}`, nil
+}
+
+func TestTriagerAdapter_Suggest_DoesNotSwapTitleAndDescription(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+	gateway := service.NewLLMGateway(fakeTitleLabelingLLMProvider{}, nil, nil, "fake")
+	triageService := service.NewTriageService(gateway, logger)
+	adapter := newTriagerAdapter(triageService)
+
+	// "TITLE_MARKER" only produces category "database" if it lands in the
+	// prompt's "Title: " slot (per fakeTitleLabelingLLMProvider above) —
+	// which only happens if triagerAdapter.Suggest forwards its title
+	// argument to TriageService.SuggestForTenant's title parameter and not
+	// its description parameter.
+	suggestion := adapter.Suggest(context.Background(), 42, "TITLE_MARKER", "unrelated filler text")
+
+	assert.Equal(t, "database", suggestion.Category)
+	assert.Equal(t, "high", suggestion.Priority)
 }
 
 func TestWireEmailMsgraphConnector_RegistersCoordinator(t *testing.T) {
