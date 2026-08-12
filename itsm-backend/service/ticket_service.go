@@ -14,6 +14,7 @@ import (
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/fielddefinition"
 	"itsm-backend/ent/group"
 	"itsm-backend/ent/processinstance"
 	entTicket "itsm-backend/ent/ticket"
@@ -180,6 +181,15 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 			s.logger.Warnw("Automatic ticket assignment failed", "error", err, "ticket_id", tkt.ID)
 		} else {
 			tkt.AssigneeID = assignment.AssignedTo
+		}
+	}
+
+	// 验证必填自定义字段（模板字段定义中标记为 required 的字段必须在提交中存在且非空）
+	if req.TemplateID != nil && len(req.FormFields) > 0 {
+		if missing, err := s.validateRequiredFields(ctx, tenantID, *req.TemplateID, req.FormFields); err != nil {
+			s.logger.Errorw("Required field validation error", "error", err, "template_id", *req.TemplateID)
+		} else if len(missing) > 0 {
+			return nil, fmt.Errorf("缺少必填字段: %s", strings.Join(missing, ", "))
 		}
 	}
 
@@ -421,6 +431,57 @@ func parseFieldValuesArray(formFields map[string]interface{}) map[string]interfa
 		}
 	}
 	return result
+}
+
+// validateRequiredFields 校验模板的必填字段是否在提交数据中存在且非空。
+// 返回缺失的字段 label 列表和 error。
+func (s *TicketService) validateRequiredFields(ctx context.Context, tenantID int, templateID int, formFields map[string]interface{}) ([]string, error) {
+	defs, err := s.client.FieldDefinition.Query().
+		Where(
+			fielddefinition.EntityTypeEQ("ticket_template"),
+			fielddefinition.EntityIDEQ(templateID),
+			fielddefinition.Required(true),
+			fielddefinition.IsActive(true),
+			fielddefinition.TenantIDEQ(tenantID),
+		).
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("查询必填字段定义失败: %w", err)
+	}
+	if len(defs) == 0 {
+		return nil, nil
+	}
+
+	// 提取已提交的字段名和值
+	submittedValues := extractCustomFieldValues(formFields)
+
+	var missing []string
+	for _, d := range defs {
+		val, ok := submittedValues[d.Name]
+		if !ok || isEmptyFieldValue(val) {
+			label := d.Label
+			if label == "" {
+				label = d.Name
+			}
+			missing = append(missing, label)
+		}
+	}
+	return missing, nil
+}
+
+// isEmptyFieldValue 判断字段值是否为空
+func isEmptyFieldValue(val interface{}) bool {
+	if val == nil {
+		return true
+	}
+	switch v := val.(type) {
+	case string:
+		return strings.TrimSpace(v) == ""
+	case []interface{}:
+		return len(v) == 0
+	default:
+		return false
+	}
 }
 
 // extractCustomFieldValues 从提交的 formFields 中取出用户实际填写的自定义字段值（"values" 键），
