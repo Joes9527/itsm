@@ -167,7 +167,13 @@ func (c *ConnectorController) Provision(ctx *gin.Context) {
 			c.emailCoordinator.Stop(tenantID)
 		} else if conn, ok := c.manager.Get(tenantID, "msgraph-email"); ok {
 			if gc, ok := conn.(*msgraphpkg.GraphConnector); ok {
-				c.emailCoordinator.Start(ctx.Request.Context(), tenantID, gc)
+				// The HTTP request's context is cancelled the instant this
+				// handler returns its response — but the polling goroutine
+				// started by Start must keep running long after that.
+				// context.WithoutCancel preserves any request-scoped values
+				// while detaching from the request's cancellation signal, so
+				// the poller isn't killed within microseconds of starting.
+				c.emailCoordinator.Start(context.WithoutCancel(ctx.Request.Context()), tenantID, gc)
 			}
 		}
 	}

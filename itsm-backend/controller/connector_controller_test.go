@@ -1,13 +1,16 @@
 package controller
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"itsm-backend/common"
 	"itsm-backend/connector"
@@ -260,6 +263,108 @@ func TestConnectorController_Provision_StartsEmailCoordinatorForMsgraphEmail(t *
 	defer fake.mu.Unlock()
 	assert.Equal(t, []int{9}, fake.started, "Start must be called for the provisioning tenant")
 	assert.Empty(t, fake.stopped)
+}
+
+// ctxCapturingEmailCoordinator captures the context passed to Start, so
+// tests can inspect whether it survives the HTTP request that triggered it.
+type ctxCapturingEmailCoordinator struct {
+	mu  sync.Mutex
+	ctx context.Context
+}
+
+func (f *ctxCapturingEmailCoordinator) Start(ctx context.Context, _ int, _ *msgraphpkg.GraphConnector) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.ctx = ctx
+}
+
+func (f *ctxCapturingEmailCoordinator) Stop(_ int) {}
+
+func (f *ctxCapturingEmailCoordinator) captured() context.Context {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.ctx
+}
+
+// TestConnectorController_Provision_CoordinatorContextSurvivesRequestReturn
+// is the regression test for the CRITICAL bug where the email polling
+// coordinator was started with ctx.Request.Context() — a context that Go's
+// net/http server cancels the instant the handler (Provision) returns its
+// response. That killed the polling goroutine within microseconds of it
+// starting, before it ever really polled.
+//
+// This test uses a REAL httptest.Server (not context.Background(), and not
+// a fake that discards the context) so the request context is genuinely
+// tied to a live HTTP request/response cycle, exactly like production. Per
+// net/http's documented behavior for Request.Context(): "For incoming
+// server requests, the context is canceled ... when the ServeHTTP method
+// returns." That's the exact moment this bug bites, and it's a moment
+// httptest.NewRecorder()-based ServeHTTP calls (used by doReq elsewhere in
+// this file) do not reproduce, because there's no real server connection
+// whose lifecycle drives that cancellation.
+func TestConnectorController_Provision_CoordinatorContextSurvivesRequestReturn(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	logger := zaptest.NewLogger(t).Sugar()
+	reg := connector.NewRegistry()
+	reg.Register(func() connector.Connector { return msgraphpkg.New() })
+	mgr := connector.NewManager(reg, logger)
+	mkt := marketplace.New()
+	ctrl := NewConnectorController(mgr, reg, mkt, logger)
+	fake := &ctxCapturingEmailCoordinator{}
+	ctrl.SetEmailCoordinator(fake)
+
+	r := gin.New()
+	r.Use(gin.Recovery())
+	r.Use(withTestAuth(9, 1))
+	r.POST("/api/v1/connectors/configs", ctrl.Provision)
+
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	body := dto.ProvisionConnectorRequest{
+		Name:     "msgraph-email",
+		Provider: "microsoft",
+		Enabled:  true,
+		Settings: map[string]interface{}{
+			"azure_tenant_id": "t",
+			"mailbox":         "support@contoso.com",
+		},
+		Credentials: map[string]string{
+			"azure_client_id":     "id",
+			"azure_client_secret": "secret",
+		},
+	}
+	raw, err := json.Marshal(body)
+	require.NoError(t, err)
+
+	resp, err := http.Post(srv.URL+"/api/v1/connectors/configs", "application/json", bytes.NewReader(raw))
+	require.NoError(t, err)
+	_, _ = io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+
+	// By the time http.Post has returned a fully-read response, the
+	// server's ServeHTTP call for that request has already returned (the
+	// response was written and handed back to the client), so the
+	// request's own context is already Done — this is the exact moment the
+	// old code (ctx.Request.Context()) would have killed the poller.
+	capturedCtx := fake.captured()
+	require.NotNil(t, capturedCtx, "coordinator.Start must have been called during Provision")
+
+	select {
+	case <-capturedCtx.Done():
+		t.Fatal("the context passed to Start must NOT be cancelled once the HTTP request/response that triggered it completes — the poller must outlive the request")
+	default:
+	}
+
+	// Give it a little more time (in case cancellation is merely delayed
+	// rather than immediate) and re-check — the poller's context must stay
+	// alive indefinitely, not just survive the first instant.
+	time.Sleep(100 * time.Millisecond)
+	select {
+	case <-capturedCtx.Done():
+		t.Fatal("the context passed to Start became cancelled shortly after the request completed — the poller would die almost immediately")
+	default:
+	}
 }
 
 func TestConnectorController_Provision_IgnoresOtherConnectors(t *testing.T) {
