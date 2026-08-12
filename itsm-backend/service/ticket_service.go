@@ -16,6 +16,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/group"
 	"itsm-backend/ent/processinstance"
+	"itsm-backend/ent/slaviolation"
 	entTicket "itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketcategory"
 	entTicketComment "itsm-backend/ent/ticketcomment"
@@ -444,11 +445,40 @@ func extractCustomFieldValues(formFields map[string]interface{}) map[string]inte
 // extractAdHocFieldValues 解析 formFields["fieldDefs"]（客户端提交的 {name,label} 列表，
 // 用于没有 field_definitions 行的静态预设）配合 formFields["values"] 里的实际值，
 // 构造成 AdHocFieldValue 列表。fieldDefs 缺失或为空返回 nil。
+func isFinalStatus(s ticket.Status) bool {
+	return s == ticket.StatusResolved || s == ticket.StatusClosed || s == ticket.StatusCancelled
+}
+
 func getCategoryIDValue(categoryID *int) int {
 	if categoryID == nil {
 		return 0
 	}
 	return *categoryID
+}
+
+// autoCloseSLAViolations 关闭工单的未解决 SLA 违规记录，返回关闭数量。
+func (s *TicketService) autoCloseSLAViolations(ctx context.Context, ticketID int) (int, error) {
+	now := time.Now()
+	violations, err := s.client.SLAViolation.Query().
+		Where(slaviolation.TicketIDEQ(ticketID), slaviolation.ResolvedAtIsNil()).
+		All(ctx)
+	if err != nil {
+		return 0, err
+	}
+	closed := 0
+	for _, v := range violations {
+		_, err := v.Update().
+			SetResolvedAt(now).
+			SetIsResolved(true).
+			SetResolutionNotes("工单已关闭，系统自动解决违规").
+			Save(ctx)
+		if err != nil {
+			s.logger.Warnw("Failed to auto-close SLA violation", "error", err, "violation_id", v.ID)
+			continue
+		}
+		closed++
+	}
+	return closed, nil
 }
 
 func extractAdHocFieldValues(formFields map[string]interface{}) []AdHocFieldValue {
@@ -868,6 +898,17 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 	}
 
 	s.logger.Infow("Ticket updated", "ticket_id", id)
+
+	// 工单进入终态时自动关闭 SLA 违规
+	if req.Status != "" {
+		if isFinalStatus(ticket.Status(req.Status)) && s.client != nil {
+			if count, err := s.autoCloseSLAViolations(ctx, id); err != nil {
+				s.logger.Warnw("Failed to auto-close SLA violations", "error", err, "ticket_id", id)
+			} else if count > 0 {
+				s.logger.Infow("Auto-closed SLA violations", "ticket_id", id, "count", count)
+			}
+		}
+	}
 
 	// 优先级或分类变更时重新计算 SLA
 	if (req.Priority != "" || req.CategoryID != nil || strings.TrimSpace(req.Category) != "") && s.slaSvc != nil {

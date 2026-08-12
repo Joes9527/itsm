@@ -104,7 +104,6 @@ func (s *SLAMonitorService) CheckSLAViolations(ctx context.Context, tenantID int
 		tickets, err := s.client.Ticket.Query().
 			Where(
 				ticket.TenantIDEQ(tenantID),
-				ticket.SLADefinitionIDNEQ(0),
 				ticket.ResolvedAtIsNil(),
 			).
 			Limit(pageSize).
@@ -218,12 +217,8 @@ func (s *SLAMonitorService) createViolation(ctx context.Context, t *ent.Ticket, 
 	}
 
 	now := time.Now()
-	// 如果没有 SLA 定义，跳过创建违规记录
-	if t.SLADefinitionID == 0 {
-		return nil
-	}
 
-	// 从预加载的map中获取SLA名称
+	// 从预加载的map中获取SLA名称；id=0 的兜底 SLA 同样创建违规
 	slaName := slaDefMap[t.SLADefinitionID]
 	if slaName == "" {
 		slaName = "Default SLA"
@@ -234,7 +229,7 @@ func (s *SLAMonitorService) createViolation(ctx context.Context, t *ent.Ticket, 
 		SetTicketID(t.ID).
 		SetTicketType("ticket"). // Ticket 表没有类型字段，使用默认值
 		SetSLADefinitionID(t.SLADefinitionID).
-		SetSLAPolicy(slaName).
+		SetSLAName(slaName).
 		SetViolationType(violationType).
 		SetViolationTime(now).
 		SetDescription(description).
@@ -521,7 +516,6 @@ func (s *SLAMonitorService) GetDashboardMetrics(ctx context.Context, tenantID in
 	tickets, err := s.client.Ticket.Query().
 		Where(
 			ticket.TenantIDEQ(tenantID),
-			ticket.SLADefinitionIDNEQ(0),
 		).
 		All(ctx)
 	if err != nil {
@@ -606,7 +600,6 @@ func (s *SLAMonitorService) GetDashboardMetrics(ctx context.Context, tenantID in
 	upcomingTickets, err := s.client.Ticket.Query().
 		Where(
 			ticket.TenantIDEQ(tenantID),
-			ticket.SLADefinitionIDNEQ(0),
 			ticket.ResolvedAtIsNil(),
 			ticket.SLAResolutionDeadlineGT(now),
 			ticket.SLAResolutionDeadlineLT(upcomingDeadline),
@@ -661,7 +654,7 @@ func (s *SLAMonitorService) GetDashboardMetrics(ctx context.Context, tenantID in
 			dashboard.TopViolations = append(dashboard.TopViolations, dto.SLAViolationItem{
 				TicketID:    v.TicketID,
 				TicketTitle: ticketTitle,
-				SLAName:   v.SLAPolicy,
+				SLAName:   v.SLAName,
 				ViolatedAt:  v.ViolationTime.Format(time.RFC3339),
 				Delay:       delayMinutes,
 			})
