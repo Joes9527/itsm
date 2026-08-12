@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -66,7 +67,38 @@ func (a *ticketStoreAdapter) CreateTicket(ctx context.Context, tenantID int, req
 	if err != nil {
 		return 0, "", err
 	}
+
+	// Tickets created via the HTTP API get an audit_log row through
+	// middleware.AuditMiddleware. This path bypasses HTTP entirely (it's a
+	// background polling goroutine), so without this it would be LESS
+	// auditable than manual ticket creation — backwards for a
+	// connector-triggered, high-risk automated action. Mirror the shape
+	// middleware/audit.go writes, using placeholder path/method values that
+	// make the non-HTTP origin of this record clear.
+	a.recordCreateTicketAudit(ctx, tenantID, req.RequesterID, tkt.ID)
+
 	return tkt.ID, tkt.TicketNumber, nil
+}
+
+// recordCreateTicketAudit writes one audit_log row for a ticket created by
+// the msgraph-email polling coordinator. Best-effort: a failure to write
+// the audit record must not fail (or roll back) the ticket creation that
+// already succeeded, but it is logged loudly so it doesn't go unnoticed.
+func (a *ticketStoreAdapter) recordCreateTicketAudit(ctx context.Context, tenantID, userID, ticketID int) {
+	err := a.client.AuditLog.Create().
+		SetCreatedAt(time.Now()).
+		SetTenantID(tenantID).
+		SetUserID(userID).
+		SetResource("ticket").
+		SetAction("create").
+		SetPath("connector:msgraph-email").
+		SetMethod("CONNECTOR").
+		SetStatusCode(201).
+		SetRequestBody(fmt.Sprintf(`{"ticketId":%d,"source":"email"}`, ticketID)).
+		Exec(ctx)
+	if err != nil {
+		zap.S().Errorw("msgraph: failed to write audit log for connector-created ticket", "tenant_id", tenantID, "ticket_id", ticketID, "error", err)
+	}
 }
 
 // PostSystemComment writes an internal ticket comment directly via ent,

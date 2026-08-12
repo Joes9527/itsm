@@ -94,6 +94,43 @@ func TestTicketStoreAdapter_CreateTicket_AndDedup(t *testing.T) {
 	assert.True(t, existsAfter)
 }
 
+// TestTicketStoreAdapter_CreateTicket_WritesAuditLog is a regression test:
+// tickets created through the normal HTTP API get an audit_log row via
+// middleware.AuditMiddleware, but this adapter's CreateTicket is called
+// from a background polling goroutine that never goes through HTTP — so
+// without an explicit audit write here, connector-created tickets would be
+// LESS auditable than manually-created ones. Per CLAUDE.md: "Any high-risk
+// action triggered by AI, connector, workflow automation, or bulk operation
+// must create an audit record."
+func TestTicketStoreAdapter_CreateTicket_WritesAuditLog(t *testing.T) {
+	client, tenant, user := newWiringFixture(t)
+	defer client.Close()
+
+	logger := zaptest.NewLogger(t).Sugar()
+	ticketService := service.NewTicketServiceForTest(client, logger)
+	adapter := newTicketStoreAdapter(client, ticketService)
+	ctx := context.Background()
+
+	countBefore, err := client.AuditLog.Query().Count(ctx)
+	require.NoError(t, err)
+	require.Zero(t, countBefore)
+
+	ticketID, _, err := adapter.CreateTicket(ctx, tenant.ID, msgraphInboundTicketRequestFixture(user.ID))
+	require.NoError(t, err)
+
+	logs, err := client.AuditLog.Query().All(ctx)
+	require.NoError(t, err)
+	require.Len(t, logs, 1, "exactly one audit_log row must exist after a connector-created ticket")
+
+	entry := logs[0]
+	assert.Equal(t, "ticket", entry.Resource)
+	assert.Equal(t, "create", entry.Action)
+	assert.Equal(t, tenant.ID, entry.TenantID)
+	assert.Equal(t, user.ID, entry.UserID)
+	assert.Contains(t, entry.Path, "msgraph")
+	_ = ticketID
+}
+
 func TestTicketStoreAdapter_PostSystemComment(t *testing.T) {
 	client, tenant, user := newWiringFixture(t)
 	defer client.Close()
