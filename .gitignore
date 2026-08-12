@@ -223,3 +223,6 @@ ignored
 .qoder/better-harness/
 production-mode-test-report-*.md
 output/
+
+# Local git worktrees for isolated feature work
+.worktrees/
