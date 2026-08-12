@@ -1502,11 +1502,12 @@ type TicketSLAInfo struct {
 	ServiceType           string     `json:"serviceType"`
 	ResponseTime          int        `json:"responseTime"`
 	ResolutionTime        int        `json:"resolutionTime"`
-	ResponseDeadline      *time.Time `json:"responseDeadline"`
-	ResolutionDeadline    *time.Time `json:"resolutionDeadline"`
-	IsBreached            bool       `json:"isBreached"`
-	ResponseTimeRemaining *int       `json:"responseTimeRemaining"`
-	ResolutionTimeRemaining *int     `json:"resolutionTimeRemaining"`
+	ResponseDeadline       *time.Time `json:"responseDeadline"`
+	ResolutionDeadline     *time.Time `json:"resolutionDeadline"`
+	IsBreached             bool       `json:"isBreached"`
+	SlaStatus              string     `json:"slaStatus"` // on_track | at_risk | breached
+	ResponseTimeRemaining  *int       `json:"responseTimeRemaining"`
+	ResolutionTimeRemaining *int      `json:"resolutionTimeRemaining"`
 	FirstResponseAt       *time.Time `json:"firstResponseAt,omitempty"`
 	ResolvedAt            *time.Time `json:"resolvedAt,omitempty"`
 }
@@ -1555,11 +1556,16 @@ func (s *TicketService) GetTicketSLAInfo(ctx context.Context, ticketID int, tena
 	// 计算剩余时间和违规状态
 	now := time.Now()
 	info.IsBreached = false
+	info.SlaStatus = "on_track"
 
 	if info.ResponseDeadline != nil && !info.ResponseDeadline.IsZero() {
 		remaining := int(info.ResponseDeadline.Sub(now).Minutes())
 		info.ResponseTimeRemaining = &remaining
-		info.IsBreached = remaining < 0
+		if remaining < 0 {
+			info.IsBreached = true
+		} else if total := info.ResponseTime; total > 0 && remaining < total/5 {
+			info.SlaStatus = "at_risk"
+		}
 	}
 
 	if info.ResolutionDeadline != nil && !info.ResolutionDeadline.IsZero() {
@@ -1567,7 +1573,13 @@ func (s *TicketService) GetTicketSLAInfo(ctx context.Context, ticketID int, tena
 		info.ResolutionTimeRemaining = &remaining
 		if remaining < 0 {
 			info.IsBreached = true
+		} else if total := info.ResolutionTime; total > 0 && remaining < total/5 {
+			info.SlaStatus = "at_risk"
 		}
+	}
+
+	if info.IsBreached {
+		info.SlaStatus = "breached"
 	}
 
 	return info, nil
