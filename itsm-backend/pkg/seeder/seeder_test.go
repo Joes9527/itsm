@@ -244,7 +244,7 @@ func TestSeedAdminPreservesExistingCredentials(t *testing.T) {
 	after, err := seeder.client.User.Get(ctx, created.ID)
 	require.NoError(t, err)
 	assert.Equal(t, string(originalHash), after.PasswordHash)
-	assert.Equal(t, user.RoleAdmin, after.Role)
+	assert.Equal(t, "admin", after.Role)
 }
 
 func TestSeedProductionValidatesAndIsIdempotent(t *testing.T) {

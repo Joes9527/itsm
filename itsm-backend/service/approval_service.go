@@ -898,7 +898,7 @@ func (s *ApprovalService) resolveApprover(ctx context.Context, assigneeType, ass
 	case "role":
 		// 根据角色查找用户
 		user, err := s.client.User.Query().
-			Where(user.RoleEQ(user.Role(assigneeValue)), user.TenantID(tenantID), user.Active(true)).
+			Where(user.RoleEQ(assigneeValue), user.TenantID(tenantID), user.Active(true)).
 			First(ctx)
 		if err != nil || user == nil {
 			// 如果没找到，返回错误而不是回退到用户ID 1

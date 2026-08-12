@@ -48,9 +48,9 @@ func (r *AmountResolver) Resolve(ctx context.Context, client *ent.Client, appCtx
 	if matchedThreshold == nil {
 		return nil, fmt.Errorf("no approval threshold matched for amount %.2f", appCtx.Amount)
 	}
-	matchedRole := user.Role(matchedThreshold.Role)
-	if err := user.RoleValidator(matchedRole); err != nil {
-		return nil, fmt.Errorf("invalid approval role %q: %w", matchedThreshold.Role, err)
+	matchedRole := matchedThreshold.Role
+	if matchedRole == "" {
+		return nil, fmt.Errorf("approval role is empty for threshold amount %.2f", appCtx.Amount)
 	}
 
 	// Find users with the matching role

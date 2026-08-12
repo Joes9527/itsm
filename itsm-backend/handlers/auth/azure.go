@@ -204,7 +204,7 @@ func AzureCallbackHandler(cfg AzureConfig, client *ent.Client, jwtSecret string,
 				SetUsername(email).
 				SetEmail(email).
 				SetName(info.DisplayName).
-				SetRole(user.RoleEndUser).
+				SetRole("end_user").
 				SetPasswordHash("azure_oidc_no_password").
 				SetActive(true).
 				SetTenantID(tenantID).

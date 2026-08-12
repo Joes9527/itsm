@@ -12,7 +12,6 @@ import (
 	"itsm-backend/ent/incidentevent"
 	"itsm-backend/ent/incidentmetric"
 	"itsm-backend/ent/incidentruleexecution"
-	entuser "itsm-backend/ent/user"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -50,7 +49,7 @@ func TestIncidentAlertingLifecycleIsTenantScopedAndAudited(t *testing.T) {
 	require.NoError(t, err)
 	actor, err := createIncidentTestUser(ctx, client, tenant.ID, "alert-actor")
 	require.NoError(t, err)
-	_, err = actor.Update().SetRole(entuser.RoleAdmin).Save(ctx)
+	_, err = actor.Update().SetRole("admin").Save(ctx)
 	require.NoError(t, err)
 	foreignActor, err := createIncidentTestUser(ctx, client, otherTenant.ID, "alert-foreign")
 	require.NoError(t, err)
