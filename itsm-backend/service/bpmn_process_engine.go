@@ -498,15 +498,30 @@ func (e *CustomProcessEngine) executeStep(ctx context.Context, instance *ent.Pro
 	}
 
 	var targetRef string
+	unconditionalCount := 0
 	for _, flow := range outgoingFlows {
 		if e.evaluateCondition(flow, variables) {
-			targetRef = flow.TargetRef
-			break
+			if targetRef == "" {
+				targetRef = flow.TargetRef
+			}
+			if flow.ConditionExpression == nil || flow.ConditionExpression.Expression == "" {
+				unconditionalCount++
+			}
 		}
 	}
 
 	if targetRef == "" {
 		return fmt.Errorf("没有符合条件的路径")
+	}
+
+	// 多个无条件分支同时命中 → BPMN 建模警告，取第一条
+	if unconditionalCount > 1 {
+		e.logger.Warnw("多个无条件分支同时匹配，已取第一条（请检查BPMN流程：应为排他网关添加条件表达式）",
+			"element_id", currentElementID,
+			"unconditional_count", unconditionalCount,
+			"selected_target", targetRef,
+			"instance_id", instance.ProcessInstanceID,
+		)
 	}
 
 	return e.handleElement(ctx, instance, process, targetRef)
