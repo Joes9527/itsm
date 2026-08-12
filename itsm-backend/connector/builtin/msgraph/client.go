@@ -217,7 +217,16 @@ type deltaResponse struct {
 func (c *Client) PollDelta(ctx context.Context, mailbox, deltaLink string) ([]Message, string, error) {
 	link := deltaLink
 	if link == "" {
-		link = fmt.Sprintf("%s/users/%s/mailFolders('inbox')/messages/delta", c.graphBaseURL, url.PathEscape(mailbox))
+		// $deltatoken=latest tells Graph to skip straight to "you're now
+		// caught up" instead of enumerating the mailbox's entire existing
+		// history as if it were all brand-new mail (Graph's documented
+		// behavior for a delta query with no prior token/link is to return
+		// the full current folder contents). Known, accepted tradeoff: since
+		// this connector does not persist deltaLink across restarts (see
+		// design doc), a message that arrives during the gap between a
+		// restart and the coordinator's next poll could be skipped rather
+		// than reprocessed. This is intentional, not something to "fix" here.
+		link = fmt.Sprintf("%s/users/%s/mailFolders('inbox')/messages/delta?$deltatoken=latest", c.graphBaseURL, url.PathEscape(mailbox))
 	}
 
 	var messages []Message
@@ -258,6 +267,16 @@ func (c *Client) SendMail(ctx context.Context, mailbox, toAddress, subject, body
 			},
 			"toRecipients": []map[string]interface{}{
 				{"emailAddress": map[string]string{"address": toAddress}},
+			},
+			// Mail sent through this connector is always
+			// system/automation-generated (ticket confirmation replies,
+			// connector-triggered notifications) — never a human typing a
+			// reply. Marking it Auto-Submitted lets receiving mail systems
+			// (and any out-of-office auto-responders) suppress their own
+			// auto-replies back into the shared mailbox, preventing a mail
+			// loop.
+			"internetMessageHeaders": []map[string]interface{}{
+				{"name": "Auto-Submitted", "value": "auto-replied"},
 			},
 		},
 		"saveToSentItems": "false",

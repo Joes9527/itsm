@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -109,6 +110,77 @@ func TestClient_PollDelta_FirstCallNoLink(t *testing.T) {
 	assert.Equal(t, "https://graph.example/delta-link-1", next)
 }
 
+// TestClient_PollDelta_FirstCallRequestsDeltaTokenLatest is a regression test:
+// a delta query with no prior deltaLink returns Graph's documented behavior
+// of the FULL current folder contents, not just new-since-now items. Passing
+// $deltatoken=latest on the very first call tells Graph to skip straight to
+// "caught up" instead of enumerating the mailbox's entire history as if it
+// were all brand-new mail (which would create a ticket + confirmation reply
+// per pre-existing message the very first time a tenant enables this
+// connector).
+func TestClient_PollDelta_FirstCallRequestsDeltaTokenLatest(t *testing.T) {
+	aad := httptest.NewServer(tokenHandler())
+	defer aad.Close()
+
+	var capturedRawQuery string
+	graph := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedRawQuery = r.URL.RawQuery
+		assert.Equal(t, "/users/support@contoso.com/mailFolders('inbox')/messages/delta", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"@odata.deltaLink": "https://graph.example/delta-link-1",
+			"value":            []map[string]interface{}{},
+		})
+	}))
+	defer graph.Close()
+
+	c := NewClient("test-tenant", "id", "secret", aad.URL, graph.URL)
+	_, _, err := c.PollDelta(context.Background(), "support@contoso.com", "")
+	require.NoError(t, err)
+
+	assert.Equal(t, "latest", r2QueryValue(t, capturedRawQuery, "$deltatoken"), "first call (no deltaLink) must request $deltatoken=latest so Graph doesn't enumerate full mailbox history")
+}
+
+// TestClient_PollDelta_SubsequentCallDoesNotAddDeltaTokenLatest asserts that
+// once a deltaLink from a prior response is passed in, PollDelta hits that
+// literal URL as-is — it must NOT re-append $deltatoken=latest (Graph's
+// returned @odata.deltaLink/@odata.nextLink already encode whatever token
+// semantics are needed for that call).
+func TestClient_PollDelta_SubsequentCallDoesNotAddDeltaTokenLatest(t *testing.T) {
+	aad := httptest.NewServer(tokenHandler())
+	defer aad.Close()
+
+	var capturedPath, capturedRawQuery string
+	graph := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path
+		capturedRawQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"@odata.deltaLink": "https://graph.example/delta-link-2",
+			"value":            []map[string]interface{}{},
+		})
+	}))
+	defer graph.Close()
+
+	c := NewClient("test-tenant", "id", "secret", aad.URL, graph.URL)
+	priorDeltaLink := graph.URL + "/prior-delta-link?$deltatoken=abc123"
+	_, _, err := c.PollDelta(context.Background(), "support@contoso.com", priorDeltaLink)
+	require.NoError(t, err)
+
+	assert.Equal(t, "/prior-delta-link", capturedPath, "a non-empty deltaLink must be used verbatim, without appending $deltatoken=latest")
+	assert.Equal(t, "$deltatoken=abc123", capturedRawQuery, "must not append/replace the token on a call that already carries a deltaLink")
+}
+
+// r2QueryValue is a tiny helper to pull a single query param's value out of
+// a raw query string, without pulling in net/url.ParseQuery duplication at
+// every call site.
+func r2QueryValue(t *testing.T, rawQuery, key string) string {
+	t.Helper()
+	values, err := url.ParseQuery(rawQuery)
+	require.NoError(t, err)
+	return values.Get(key)
+}
+
 func TestClient_PollDelta_FollowsNextLinkUntilDeltaLink(t *testing.T) {
 	aad := httptest.NewServer(tokenHandler())
 	defer aad.Close()
@@ -172,4 +244,20 @@ func TestClient_SendMail(t *testing.T) {
 	require.Len(t, recipients, 1)
 	addr := recipients[0].(map[string]interface{})["emailAddress"].(map[string]interface{})["address"]
 	assert.Equal(t, "alice@contoso.com", addr)
+
+	// Regression: mail sent through this connector must be marked
+	// Auto-Submitted so receiving systems (and any out-of-office
+	// auto-responders) don't bounce a reply back into the shared mailbox,
+	// which would otherwise create a mail loop.
+	headers, ok := message["internetMessageHeaders"].([]interface{})
+	require.True(t, ok, "message must include internetMessageHeaders")
+	var found bool
+	for _, h := range headers {
+		hm := h.(map[string]interface{})
+		if hm["name"] == "Auto-Submitted" {
+			found = true
+			assert.Equal(t, "auto-replied", hm["value"])
+		}
+	}
+	assert.True(t, found, "internetMessageHeaders must include an Auto-Submitted header")
 }
