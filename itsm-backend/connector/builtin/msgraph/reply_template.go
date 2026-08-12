@@ -36,7 +36,7 @@ const replyTemplate = `您好，
 标题：%s
 状态：%s
 
-如有疑问，请回复此邮件。
+请勿直接回复此邮件；如需补充信息，请联系 IT 服务台。
 
 --
 KEAS Service Desk (自动回复)

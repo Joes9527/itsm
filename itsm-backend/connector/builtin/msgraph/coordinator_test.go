@@ -167,6 +167,49 @@ func TestCoordinator_HandleMessage_SkipsDuplicateExternalMessageID(t *testing.T)
 	assert.Empty(t, store.created, "must not create a second ticket for an already-processed message")
 }
 
+// TestCoordinator_HandleMessage_SkipsSelfMailboxLoopGuard is a regression
+// test for the mail-loop risk described in the design review: a message
+// whose From address is the connector's own configured shared mailbox (e.g.
+// a bounce or auto-responder looping back into the inbox) must never be
+// turned into a ticket.
+func TestCoordinator_HandleMessage_SkipsSelfMailboxLoopGuard(t *testing.T) {
+	store := newFakeStore()
+	store.usersByEmail["support@contoso.com"] = 99 // even if somehow "registered"
+	triager := fakeTriager{suggestion: TriageSuggestion{Priority: "medium"}}
+
+	conn := New()
+	require.NoError(t, conn.Init(context.Background(), connectorConfigFor("support@contoso.com", "http://unused", "http://unused")))
+
+	coord := NewEmailPollingCoordinator(store, triager, zaptest.NewLogger(t).Sugar())
+	coord.handleMessage(context.Background(), 7, conn, Message{
+		InternetMessageID: "<loop@contoso.com>",
+		Subject:           "Auto-reply bounce",
+		FromAddress:       "support@contoso.com", // same as the mailbox itself
+	})
+
+	assert.Empty(t, store.created, "a message from the connector's own mailbox must never become a ticket (self-loop guard)")
+}
+
+// TestCoordinator_HandleMessage_SkipsSelfMailboxLoopGuard_CaseInsensitive
+// confirms the guard compares addresses case-insensitively, since Graph (and
+// mail generally) doesn't guarantee consistent casing.
+func TestCoordinator_HandleMessage_SkipsSelfMailboxLoopGuard_CaseInsensitive(t *testing.T) {
+	store := newFakeStore()
+	triager := fakeTriager{suggestion: TriageSuggestion{Priority: "medium"}}
+
+	conn := New()
+	require.NoError(t, conn.Init(context.Background(), connectorConfigFor("Support@Contoso.com", "http://unused", "http://unused")))
+
+	coord := NewEmailPollingCoordinator(store, triager, zaptest.NewLogger(t).Sugar())
+	coord.handleMessage(context.Background(), 7, conn, Message{
+		InternetMessageID: "<loop2@contoso.com>",
+		Subject:           "Auto-reply bounce",
+		FromAddress:       "support@contoso.com", // client.go lowercases FromAddress
+	})
+
+	assert.Empty(t, store.created)
+}
+
 func TestCoordinator_HandleMessage_SkipsUnregisteredSender(t *testing.T) {
 	store := newFakeStore() // no users registered
 	triager := fakeTriager{suggestion: TriageSuggestion{Priority: "medium"}}

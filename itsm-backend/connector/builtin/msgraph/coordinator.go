@@ -3,6 +3,7 @@ package msgraph
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -132,6 +133,19 @@ func (c *EmailPollingCoordinator) pollOnce(ctx context.Context, tenantID int, co
 func (c *EmailPollingCoordinator) handleMessage(ctx context.Context, tenantID int, conn *GraphConnector, m Message) {
 	if m.InternetMessageID == "" {
 		c.logger.Warnw("msgraph message missing internetMessageId, skipping", "tenant_id", tenantID, "graph_id", m.ID)
+		return
+	}
+
+	// Self-loop guard: never turn a message the shared mailbox sent to
+	// itself into a ticket. Without this, a mail loop (e.g. a sender's
+	// out-of-office auto-responder bouncing back into the shared mailbox,
+	// or any other bounce/auto-reply that lands back in the inbox) would
+	// keep creating tickets forever. Note: Graph's delta response doesn't
+	// currently get its internetMessageHeaders parsed into Message/deltaMessage,
+	// so we can't additionally detect an inbound "Auto-Submitted" header —
+	// this address-based guard is the scoped-down protection for now.
+	if strings.EqualFold(m.FromAddress, conn.Mailbox()) {
+		c.logger.Warnw("msgraph inbound message from the connector's own mailbox, skipping (loop guard)", "tenant_id", tenantID, "from", m.FromAddress)
 		return
 	}
 
