@@ -9,7 +9,6 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/processtask"
-	"itsm-backend/ent/user"
 	"itsm-backend/service/bpmn"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -558,7 +557,7 @@ func (f *approvalAssignmentFixture) createProject(t *testing.T, name string, man
 }
 
 // createUserWithRole 建一个指定 ent/user.Role 枚举值的用户；deptID <= 0 表示不设置部门。
-func (f *approvalAssignmentFixture) createUserWithRole(t *testing.T, username string, role user.Role, deptID int) *ent.User {
+func (f *approvalAssignmentFixture) createUserWithRole(t *testing.T, username string, role string, deptID int) *ent.User {
 	t.Helper()
 	q := f.client.User.Create().
 		SetUsername(username).
@@ -592,16 +591,16 @@ func TestCreateUserTask_Approval_AssigneeRole_ResolvesAllUsersWithRole(t *testin
 	fx := newApprovalAssignmentFixture(t)
 
 	requester := fx.createUser(t, "requester20", 0)
-	_ = fx.createUserWithRole(t, "opsA", user.RoleManager, 0)
-	_ = fx.createUserWithRole(t, "opsB", user.RoleManager, 0)
+	_ = fx.createUserWithRole(t, "opsA", "manager", 0)
+	_ = fx.createUserWithRole(t, "opsB", "manager", 0)
 	// 无关角色的用户不应该混进候选人
-	fx.createUserWithRole(t, "agentC", user.RoleAgent, 0)
+	fx.createUserWithRole(t, "agentC", "agent", 0)
 
 	instance := fx.createInstance(t, "assignee-role-multi", map[string]interface{}{
 		"requester_id": float64(requester.ID),
 	})
 
-	err := fx.engine.createUserTask(fx.ctx, instance, approvalTaskWithRole("Activity_Approval", "工单审批", string(user.RoleManager)))
+	err := fx.engine.createUserTask(fx.ctx, instance, approvalTaskWithRole("Activity_Approval", "工单审批", string("manager")))
 	require.NoError(t, err)
 
 	task := fx.getCreatedTask(t, instance.ID, "Activity_Approval")
@@ -615,14 +614,14 @@ func TestCreateUserTask_Approval_AssigneeRole_ExcludesRequester(t *testing.T) {
 	fx := newApprovalAssignmentFixture(t)
 
 	// 申请人自己就是这个角色下的一员——现实中常见场景（比如运维经理自己也会提工单）
-	requester := fx.createUserWithRole(t, "requester21", user.RoleManager, 0)
-	_ = fx.createUserWithRole(t, "backupManager", user.RoleManager, 0)
+	requester := fx.createUserWithRole(t, "requester21", "manager", 0)
+	_ = fx.createUserWithRole(t, "backupManager", "manager", 0)
 
 	instance := fx.createInstance(t, "assignee-role-exclude", map[string]interface{}{
 		"requester_id": float64(requester.ID),
 	})
 
-	err := fx.engine.createUserTask(fx.ctx, instance, approvalTaskWithRole("Activity_Approval", "工单审批", string(user.RoleManager)))
+	err := fx.engine.createUserTask(fx.ctx, instance, approvalTaskWithRole("Activity_Approval", "工单审批", string("manager")))
 	require.NoError(t, err)
 
 	task := fx.getCreatedTask(t, instance.ID, "Activity_Approval")
@@ -642,7 +641,7 @@ func TestCreateUserTask_Approval_AssigneeRole_NoMatchingUsers_FallsBackToCandida
 	})
 
 	// technician 角色这个租户里一个用户都没有
-	err := fx.engine.createUserTask(fx.ctx, instance, approvalTaskWithRole("Activity_Approval", "工单审批", string(user.RoleTechnician)))
+	err := fx.engine.createUserTask(fx.ctx, instance, approvalTaskWithRole("Activity_Approval", "工单审批", string("technician")))
 	require.NoError(t, err)
 
 	task := fx.getCreatedTask(t, instance.ID, "Activity_Approval")
@@ -801,7 +800,7 @@ func TestCreateUserTask_Approval_AssigneeRole_TenantIsolation(t *testing.T) {
 		SetPasswordHash("hash").
 		SetActive(true).
 		SetTenantID(otherTenant.ID).
-		SetRole(user.RoleManager).
+		SetRole("manager").
 		Save(fx.ctx)
 	require.NoError(t, err)
 
@@ -813,7 +812,7 @@ func TestCreateUserTask_Approval_AssigneeRole_TenantIsolation(t *testing.T) {
 		"requester_id": float64(requester.ID),
 	})
 
-	err = fx.engine.createUserTask(fx.ctx, instance, approvalTaskWithRole("Activity_Approval", "工单审批", string(user.RoleManager)))
+	err = fx.engine.createUserTask(fx.ctx, instance, approvalTaskWithRole("Activity_Approval", "工单审批", string("manager")))
 	require.NoError(t, err)
 
 	task := fx.getCreatedTask(t, instance.ID, "Activity_Approval")
@@ -829,7 +828,7 @@ func TestCreateUserTask_Approval_AssigneeRole_SoleMatchIsRequester_FallsBackToCa
 
 	// 这个角色在本租户下唯一匹配的用户就是申请人自己——排除申请人后候选人列表应该是空，
 	// 必须触发 candidateGroups 兜底，而不是留下一个无人能领取、也没有兜底组的孤儿任务。
-	requester := fx.createUserWithRole(t, "requester30", user.RoleManager, 0)
+	requester := fx.createUserWithRole(t, "requester30", "manager", 0)
 	backup := fx.createUser(t, "backupApprover9", 0)
 	fx.createGroup(t, "ticket-approvers", backup.ID)
 
@@ -837,7 +836,7 @@ func TestCreateUserTask_Approval_AssigneeRole_SoleMatchIsRequester_FallsBackToCa
 		"requester_id": float64(requester.ID),
 	})
 
-	err := fx.engine.createUserTask(fx.ctx, instance, approvalTaskWithRole("Activity_Approval", "工单审批", string(user.RoleManager)))
+	err := fx.engine.createUserTask(fx.ctx, instance, approvalTaskWithRole("Activity_Approval", "工单审批", string("manager")))
 	require.NoError(t, err)
 
 	task := fx.getCreatedTask(t, instance.ID, "Activity_Approval")

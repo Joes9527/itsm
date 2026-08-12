@@ -424,8 +424,8 @@ func (s *TicketAttachmentService) authorizeTicketAttachmentAccess(ctx context.Co
 	if err != nil {
 		return fmt.Errorf("permission denied")
 	}
-	switch string(u.Role) {
-	case "super_admin", "admin", "manager", "agent", "technician", "security":
+	// 内部角色（非 end_user / guest）允许操作附件
+	if u.Role != "" && u.Role != "end_user" && u.Role != "guest" {
 		return nil
 	}
 	return fmt.Errorf("permission denied")

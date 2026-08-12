@@ -1495,7 +1495,7 @@ func (s *DashboardService) GetUserStats(ctx context.Context, tenantID int) (*dto
 		if u.Active {
 			stats.Active++
 		}
-		stats.ByRole[u.Role.String()]++
+		stats.ByRole[u.Role]++
 		if u.Department != "" {
 			stats.ByDepartment[u.Department]++
 		}

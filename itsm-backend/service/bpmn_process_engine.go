@@ -10,6 +10,7 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/permission"
 	"itsm-backend/ent/predicate"
 	"itsm-backend/ent/processapprovaldecision"
 	"itsm-backend/ent/processdefinition"
@@ -17,6 +18,8 @@ import (
 	"itsm-backend/ent/processexecutionhistory"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
+	"itsm-backend/ent/role"
+	"itsm-backend/ent/rolepermission"
 	"itsm-backend/ent/ticketassignmentrule"
 	"itsm-backend/ent/user"
 	"itsm-backend/ent/workflowtask"
@@ -885,11 +888,11 @@ func (e *CustomProcessEngine) resolveApprovalAssignee(ctx context.Context, insta
 // resolveRoleCandidates 查询该租户下所有 active 且 role = role 的用户，返回候选人展开
 // 形态的字符串列表（跟 GroupResolver.ExpandGroupsToUsers 的 usernames 返回值同样的
 // username→email→ID 兜底规则），供 excludeUserFromCandidates/MergeCandidateUsers 直接复用。
-// role 必须是 ent/user.Role 枚举的合法值——不是这几个值的字符串查询会直接返回空列表，
-// 不是错误，调用方应该按"没查到候选人"处理，转候选组兜底。
+// role 应为 roles 表中存在的 code 值——不存在的角色查询返回空列表而非报错，
+// 调用方按"没查到候选人"处理，转候选组兜底。
 func (e *CustomProcessEngine) resolveRoleCandidates(ctx context.Context, tenantID int, role string) ([]string, error) {
 	users, err := e.client.User.Query().
-		Where(user.RoleEQ(user.Role(role)), user.TenantIDEQ(tenantID), user.Active(true)).
+		Where(user.RoleEQ(role), user.TenantIDEQ(tenantID), user.Active(true)).
 		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("查询角色候选审批人失败: %w", err)
@@ -906,6 +909,41 @@ func (e *CustomProcessEngine) resolveRoleCandidates(ctx context.Context, tenantI
 		names = append(names, display)
 	}
 	return names, nil
+}
+
+// resolveRolesByPermission 从 DB 查询租户下拥有指定 resource:action 权限的所有角色 code。
+func (e *CustomProcessEngine) resolveRolesByPermission(ctx context.Context, tenantID int, resource, action string) []string {
+	perms, err := e.client.Permission.Query().
+		Where(permission.ResourceEQ(resource), permission.ActionEQ(action), permission.TenantIDEQ(tenantID)).
+		All(ctx)
+	if err != nil || len(perms) == 0 {
+		return nil
+	}
+	permIDs := make([]int, len(perms))
+	for i, p := range perms {
+		permIDs[i] = p.ID
+	}
+	rps, err := e.client.RolePermission.Query().
+		Where(rolepermission.PermissionIDIn(permIDs...), rolepermission.TenantID(tenantID)).
+		All(ctx)
+	if err != nil || len(rps) == 0 {
+		return nil
+	}
+	roleIDs := make([]int, len(rps))
+	for i, rp := range rps {
+		roleIDs[i] = rp.RoleID
+	}
+	roles, err := e.client.Role.Query().
+		Where(role.IDIn(roleIDs...), role.TenantID(tenantID)).
+		All(ctx)
+	if err != nil {
+		return nil
+	}
+	codes := make([]string, 0, len(roles))
+	for _, r := range roles {
+		codes = append(codes, r.Code)
+	}
+	return codes
 }
 
 // resolveFixedScopeAssignee 处理固定范围组织路由（BPMN 声明 assigneeDeptId/assigneeTeamId/
@@ -1018,30 +1056,33 @@ func (e *CustomProcessEngine) getDefaultAssigntee(ctx context.Context, instance 
 	}
 
 	// 第三优先：中文关键词兜底（deprecated，未来版本将移除）
-	// 审批类任务 - 尝试分配给管理员或安全审批人
+	// 审批类任务 - 从 DB 查询有审批权限的角色，再分配用户
 	if strings.Contains(taskName, "审批") || strings.Contains(taskName, "审核") || strings.Contains(taskName, "批准") {
-		// 查找有审批权限的用户 (角色为 admin 或 security)
-		users, err := e.client.User.Query().
-			Where(user.RoleIn("admin", "security")).
-			Where(user.TenantID(instance.TenantID)).
-			Where(user.Active(true)).
-			Limit(1).
-			All(ctx)
-		if err == nil && len(users) > 0 {
-			return strconv.Itoa(users[0].ID)
+		if approverRoles := e.resolveRolesByPermission(ctx, instance.TenantID, "approval", "write"); len(approverRoles) > 0 {
+			users, err := e.client.User.Query().
+				Where(user.RoleIn(approverRoles...)).
+				Where(user.TenantID(instance.TenantID)).
+				Where(user.Active(true)).
+				Limit(1).
+				All(ctx)
+			if err == nil && len(users) > 0 {
+				return strconv.Itoa(users[0].ID)
+			}
 		}
 	}
 
-	// 处理类任务 - 分配给工程师
+	// 处理类任务 - 从 DB 查询有工单处理权限的角色，再分配用户
 	if strings.Contains(taskName, "处理") || strings.Contains(taskName, "执行") {
-		users, err := e.client.User.Query().
-			Where(user.RoleIn("engineer", "admin")).
-			Where(user.TenantID(instance.TenantID)).
-			Where(user.Active(true)).
-			Limit(1).
-			All(ctx)
-		if err == nil && len(users) > 0 {
-			return strconv.Itoa(users[0].ID)
+		if handlerRoles := e.resolveRolesByPermission(ctx, instance.TenantID, "ticket", "write"); len(handlerRoles) > 0 {
+			users, err := e.client.User.Query().
+				Where(user.RoleIn(handlerRoles...)).
+				Where(user.TenantID(instance.TenantID)).
+				Where(user.Active(true)).
+				Limit(1).
+				All(ctx)
+			if err == nil && len(users) > 0 {
+				return strconv.Itoa(users[0].ID)
+			}
 		}
 	}
 

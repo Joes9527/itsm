@@ -54,13 +54,13 @@ func (_c *UserCreate) SetName(v string) *UserCreate {
 }
 
 // SetRole sets the "role" field.
-func (_c *UserCreate) SetRole(v user.Role) *UserCreate {
+func (_c *UserCreate) SetRole(v string) *UserCreate {
 	_c.mutation.SetRole(v)
 	return _c
 }
 
 // SetNillableRole sets the "role" field if the given value is not nil.
-func (_c *UserCreate) SetNillableRole(v *user.Role) *UserCreate {
+func (_c *UserCreate) SetNillableRole(v *string) *UserCreate {
 	if v != nil {
 		_c.SetRole(*v)
 	}
@@ -619,7 +619,7 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 		_node.Name = value
 	}
 	if value, ok := _c.mutation.Role(); ok {
-		_spec.SetField(user.FieldRole, field.TypeEnum, value)
+		_spec.SetField(user.FieldRole, field.TypeString, value)
 		_node.Role = value
 	}
 	if value, ok := _c.mutation.Department(); ok {

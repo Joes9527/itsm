@@ -226,7 +226,7 @@ func (e *EscalationService) resolveNotifyUsers(ctx context.Context, level *Escal
 		for _, role := range level.NotifyRoles {
 			ids, _ := e.client.User.Query().
 				Where(user.TenantIDEQ(tenantID)).
-				Where(user.RoleEQ(user.Role(role))).
+				Where(user.RoleEQ(role)).
 				IDs(ctx)
 			for _, uid := range ids {
 				if !seen[uid] {
@@ -262,7 +262,7 @@ func (e *EscalationService) getEscalationNotifyUsers(ctx context.Context, level 
 	if len(userIDs) == 0 {
 		// 获取所有管理员用户
 		admins, _ := e.client.User.Query().
-			Where(user.RoleEQ("admin")).
+			Where(user.RoleNEQ("end_user"), user.RoleNEQ("guest")).
 			IDs(ctx)
 		userIDs = append(userIDs, admins...)
 	}
@@ -338,7 +338,7 @@ func (e *EscalationService) processLongPendingTickets(ctx context.Context, tenan
 
 			// 通知管理员
 			admins, _ := e.client.User.Query().
-				Where(user.RoleEQ("admin")).
+				Where(user.RoleNEQ("end_user"), user.RoleNEQ("guest")).
 				IDs(ctx)
 
 			for _, adminID := range admins {
@@ -413,7 +413,7 @@ func (e *EscalationService) processUnassignedTickets(ctx context.Context, tenant
 
 	// 通知管理员
 	admins, _ := e.client.User.Query().
-		Where(user.RoleEQ("admin")).
+		Where(user.RoleNEQ("end_user"), user.RoleNEQ("guest")).
 		IDs(ctx)
 
 	for _, t := range tickets {

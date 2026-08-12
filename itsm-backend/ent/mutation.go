@@ -144003,7 +144003,7 @@ type UserMutation struct {
 	username                        *string
 	email                           *string
 	name                            *string
-	role                            *user.Role
+	role                            *string
 	department                      *string
 	phone                           *string
 	feishu_open_id                  *string
@@ -144274,12 +144274,12 @@ func (m *UserMutation) ResetName() {
 }
 
 // SetRole sets the "role" field.
-func (m *UserMutation) SetRole(u user.Role) {
-	m.role = &u
+func (m *UserMutation) SetRole(s string) {
+	m.role = &s
 }
 
 // Role returns the value of the "role" field in the mutation.
-func (m *UserMutation) Role() (r user.Role, exists bool) {
+func (m *UserMutation) Role() (r string, exists bool) {
 	v := m.role
 	if v == nil {
 		return
@@ -144290,7 +144290,7 @@ func (m *UserMutation) Role() (r user.Role, exists bool) {
 // OldRole returns the old "role" field's value of the User entity.
 // If the User object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *UserMutation) OldRole(ctx context.Context) (v user.Role, err error) {
+func (m *UserMutation) OldRole(ctx context.Context) (v string, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldRole is only allowed on UpdateOne operations")
 	}
@@ -145858,7 +145858,7 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 		m.SetName(v)
 		return nil
 	case user.FieldRole:
-		v, ok := value.(user.Role)
+		v, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}

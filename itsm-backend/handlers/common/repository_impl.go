@@ -163,7 +163,7 @@ func (r *EntRepository) CreateUser(ctx context.Context, u *User) (*User, error) 
 		SetUsername(u.Username).
 		SetEmail(u.Email).
 		SetName(u.Name).
-		SetRole(user.Role(u.Role)).
+		SetRole(u.Role).
 		SetDepartment(u.Department).
 		SetDepartmentID(u.DepartmentID).
 		SetPhone(u.Phone).
@@ -181,7 +181,7 @@ func (r *EntRepository) UpdateUser(ctx context.Context, u *User) (*User, error) 
 		Where(user.TenantID(u.TenantID)).
 		SetEmail(u.Email).
 		SetName(u.Name).
-		SetRole(user.Role(u.Role)).
+		SetRole(u.Role).
 		SetDepartment(u.Department).
 		SetDepartmentID(u.DepartmentID).
 		SetPhone(u.Phone).

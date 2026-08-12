@@ -177,7 +177,7 @@ func (s *AuthService) getUserPermissions(userEntity *ent.User) []string {
 	permissions := make([]string, 0)
 
 	// 超级管理员拥有所有权限
-	if userEntity.Role == user.RoleSuperAdmin {
+	if userEntity.Role == "super_admin" {
 		return []string{"*"}
 	}
 
@@ -597,8 +597,8 @@ func (s *AuthService) Register(ctx context.Context, req *dto.RegisterRequest) (*
 	}
 
 	// 确定角色
-	role := user.Role(req.Role)
-	if role.String() == "" {
+	role := req.Role
+	if role == "" {
 		role = "end_user"
 	}
 

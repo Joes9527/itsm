@@ -25,8 +25,8 @@ type User struct {
 	Email string `json:"email,omitempty"`
 	// 姓名
 	Name string `json:"name,omitempty"`
-	// 角色
-	Role user.Role `json:"role,omitempty"`
+	// 角色代码，对应 roles 表的 code 字段
+	Role string `json:"role,omitempty"`
 	// 部门
 	Department string `json:"department,omitempty"`
 	// 部门ID
@@ -309,7 +309,7 @@ func (_m *User) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field role", values[i])
 			} else if value.Valid {
-				_m.Role = user.Role(value.String)
+				_m.Role = value.String
 			}
 		case user.FieldDepartment:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -530,7 +530,7 @@ func (_m *User) String() string {
 	builder.WriteString(_m.Name)
 	builder.WriteString(", ")
 	builder.WriteString("role=")
-	builder.WriteString(fmt.Sprintf("%v", _m.Role))
+	builder.WriteString(_m.Role)
 	builder.WriteString(", ")
 	builder.WriteString("department=")
 	builder.WriteString(_m.Department)

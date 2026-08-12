@@ -252,6 +252,10 @@ var (
 	EmailValidator func(string) error
 	// NameValidator is a validator for the "name" field. It is called by the builders before save.
 	NameValidator func(string) error
+	// DefaultRole holds the default value on creation for the "role" field.
+	DefaultRole string
+	// RoleValidator is a validator for the "role" field. It is called by the builders before save.
+	RoleValidator func(string) error
 	// PasswordHashValidator is a validator for the "password_hash" field. It is called by the builders before save.
 	PasswordHashValidator func(string) error
 	// DefaultActive holds the default value on creation for the "active" field.
@@ -267,37 +271,6 @@ var (
 	// DefaultIsBootstrapAdmin holds the default value on creation for the "is_bootstrap_admin" field.
 	DefaultIsBootstrapAdmin bool
 )
-
-// Role defines the type for the "role" enum field.
-type Role string
-
-// RoleEndUser is the default value of the Role enum.
-const DefaultRole = RoleEndUser
-
-// Role values.
-const (
-	RoleSuperAdmin Role = "super_admin"
-	RoleAdmin      Role = "admin"
-	RoleManager    Role = "manager"
-	RoleAgent      Role = "agent"
-	RoleTechnician Role = "technician"
-	RoleSecurity   Role = "security"
-	RoleEndUser    Role = "end_user"
-)
-
-func (r Role) String() string {
-	return string(r)
-}
-
-// RoleValidator is a validator for the "role" field enum values. It is called by the builders before save.
-func RoleValidator(r Role) error {
-	switch r {
-	case RoleSuperAdmin, RoleAdmin, RoleManager, RoleAgent, RoleTechnician, RoleSecurity, RoleEndUser:
-		return nil
-	default:
-		return fmt.Errorf("user: invalid enum value for role field: %q", r)
-	}
-}
 
 // MspRole defines the type for the "msp_role" enum field.
 type MspRole string

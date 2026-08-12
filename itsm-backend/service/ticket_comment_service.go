@@ -261,8 +261,8 @@ func (s *TicketCommentService) canManageInternalComments(ctx context.Context, us
 	if err != nil {
 		return false, fmt.Errorf("authenticated user not found")
 	}
-	switch string(u.Role) {
-	case "super_admin", "admin", "manager", "agent", "technician", "security":
+	// 内部角色（非 end_user / guest）可执行内部评论操作
+	if u.Role != "" && u.Role != "end_user" && u.Role != "guest" {
 		return true, nil
 	}
 	return false, nil
