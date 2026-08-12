@@ -543,8 +543,10 @@ var ResourceActionMap = map[string]map[string]Permission{
 	"GET": {
 		"/api/v1/tickets":               {Resource: "ticket", Action: "read"},
 		"/api/v1/tickets/*":             {Resource: "ticket", Action: "read"},
-		"/api/v1/notifications":         {Resource: "notification", Action: "read"},
-		"/api/v1/notifications/*":       {Resource: "notification", Action: "read"},
+		"/api/v1/notifications":              {Resource: "notification", Action: "read"},
+		"/api/v1/notifications/*":            {Resource: "notification", Action: "read"},
+		"/api/v1/notification-preferences":   {Resource: "notification", Action: "read"},
+		"/api/v1/notification-preferences/*": {Resource: "notification", Action: "read"},
 		"/api/v1/ticket-categories":     {Resource: "ticket_category", Action: "read"},
 		"/api/v1/ticket-categories/*":   {Resource: "ticket_category", Action: "read"},
 		"/api/v1/tickets/templates":      {Resource: "ticket_template", Action: "read"},
@@ -655,7 +657,9 @@ var ResourceActionMap = map[string]map[string]Permission{
 	},
 	"PUT": {
 		"/api/v1/tickets/*":            {Resource: "ticket", Action: "write"},
-		"/api/v1/notifications/*":      {Resource: "notification", Action: "write"},
+		"/api/v1/notifications/*":            {Resource: "notification", Action: "write"},
+		"/api/v1/notification-preferences":   {Resource: "notification", Action: "write"},
+		"/api/v1/notification-preferences/*": {Resource: "notification", Action: "write"},
 		"/api/v1/ticket-categories/*":  {Resource: "ticket_category", Action: "write"},
 		"/api/v1/tickets/templates/*":   {Resource: "ticket_template", Action: "write"},
 		"/api/v1/ticket-tags/*":        {Resource: "ticket_tag", Action: "write"},
