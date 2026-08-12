@@ -16,6 +16,7 @@ import (
 	_ "itsm-backend/connector/builtin/console"
 	_ "itsm-backend/connector/builtin/dingtalk"
 	_ "itsm-backend/connector/builtin/feishu"
+	_ "itsm-backend/connector/builtin/msgraph"
 	_ "itsm-backend/connector/builtin/webhook"
 	_ "itsm-backend/connector/builtin/wecom"
 	"itsm-backend/connector/marketplace"
@@ -351,6 +352,7 @@ func NewApplication() *Application {
 	}
 	guidanceClient := service.NewGuidanceClient(guidanceURL, sugar)
 	triageService := service.NewTriageServiceWithGuidanceAndSugaredLogger(llmGateway, guidanceClient, sugar)
+	wireEmailMsgraphConnector(client, ticketService, triageService, connectorController, sugar)
 
 	rootCauseService := service.NewRootCauseService(client, sugar)
 	// LLM/Embedding/VectorStore
