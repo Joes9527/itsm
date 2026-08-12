@@ -1428,21 +1428,23 @@ func (s *TicketService) UpdateTicketStatus(ctx context.Context, ticketID int, st
 	return updated, nil
 }
 
-// TicketSLAInfo 工单 SLA 信息（V2 内联定义，避免与 V1 重复）
+// TicketSLAInfo 工单 SLA 信息
 type TicketSLAInfo struct {
-	TicketID             int        `json:"ticketId"`
-	TicketNumber         string     `json:"ticketNumber"`
-	Priority             string     `json:"priority"`
-	SLADefinitionID      int        `json:"slaDefinitionId"`
-	SLADefinitionName    string     `json:"slaDefinitionName"`
-	ResponseDeadline     time.Time  `json:"responseDeadline"`
-	ResolutionDeadline   time.Time  `json:"resolutionDeadline"`
-	ResponseTimeLeft     int        `json:"responseTimeLeftMinutes"`
-	IsResponseBreached   bool       `json:"isResponseBreached"`
-	ResolutionTimeLeft   int        `json:"resolutionTimeLeftMinutes"`
-	IsResolutionBreached bool       `json:"isResolutionBreached"`
-	FirstResponseAt      *time.Time `json:"firstResponseAt,omitempty"`
-	ResolvedAt           *time.Time `json:"resolvedAt,omitempty"`
+	TicketID              int        `json:"ticketId"`
+	TicketNumber          string     `json:"ticketNumber"`
+	Priority              string     `json:"priority"`
+	SLADefinitionID       int        `json:"slaDefinitionId"`
+	SlaName               string     `json:"slaName"`
+	ServiceType           string     `json:"serviceType"`
+	ResponseTime          int        `json:"responseTime"`
+	ResolutionTime        int        `json:"resolutionTime"`
+	ResponseDeadline      *time.Time `json:"responseDeadline"`
+	ResolutionDeadline    *time.Time `json:"resolutionDeadline"`
+	IsBreached            bool       `json:"isBreached"`
+	ResponseTimeRemaining *int       `json:"responseTimeRemaining"`
+	ResolutionTimeRemaining *int     `json:"resolutionTimeRemaining"`
+	FirstResponseAt       *time.Time `json:"firstResponseAt,omitempty"`
+	ResolvedAt            *time.Time `json:"resolvedAt,omitempty"`
 }
 
 // GetTicketSLAInfo 获取工单 SLA 信息
@@ -1453,20 +1455,20 @@ func (s *TicketService) GetTicketSLAInfo(ctx context.Context, ticketID int, tena
 	}
 
 	info := &TicketSLAInfo{
-		TicketID:         tkt.ID,
-		TicketNumber:     tkt.TicketNumber,
-		Priority:         string(tkt.Priority),
-		SLADefinitionID:  0,
-		ResponseDeadline: time.Time{},
+		TicketID:        tkt.ID,
+		TicketNumber:    tkt.TicketNumber,
+		Priority:        string(tkt.Priority),
+		SLADefinitionID: 0,
+		SlaName:         "默认SLA",
 	}
 	if tkt.SLADefinitionID != nil {
 		info.SLADefinitionID = *tkt.SLADefinitionID
 	}
 	if tkt.SLAResponseDeadline != nil {
-		info.ResponseDeadline = *tkt.SLAResponseDeadline
+		info.ResponseDeadline = tkt.SLAResponseDeadline
 	}
 	if tkt.SLAResolutionDeadline != nil {
-		info.ResolutionDeadline = *tkt.SLAResolutionDeadline
+		info.ResolutionDeadline = tkt.SLAResolutionDeadline
 	}
 	if tkt.FirstResponseAt != nil {
 		info.FirstResponseAt = tkt.FirstResponseAt
@@ -1475,33 +1477,33 @@ func (s *TicketService) GetTicketSLAInfo(ctx context.Context, ticketID int, tena
 		info.ResolvedAt = tkt.ResolvedAt
 	}
 
-	// 获取 SLA 定义名称（通过 ent 客户端查询）
+	// 获取 SLA 定义详情
 	if info.SLADefinitionID > 0 && s.client != nil {
 		sla, err := s.client.SLADefinition.Get(ctx, info.SLADefinitionID)
 		if err == nil && sla != nil {
-			info.SLADefinitionName = sla.Name
+			info.SlaName = sla.Name
+			info.ServiceType = sla.ServiceType
+			info.ResponseTime = sla.ResponseTime
+			info.ResolutionTime = sla.ResolutionTime
 		}
 	}
 
+	// 计算剩余时间和违规状态
 	now := time.Now()
-	if info.FirstResponseAt != nil {
-		info.ResponseTimeLeft = 0
-		info.IsResponseBreached = false
-	} else if now.After(info.ResponseDeadline) && !info.ResponseDeadline.IsZero() {
-		info.ResponseTimeLeft = 0
-		info.IsResponseBreached = true
-	} else if !info.ResponseDeadline.IsZero() {
-		info.ResponseTimeLeft = int(info.ResponseDeadline.Sub(now).Minutes())
+	info.IsBreached = false
+
+	if info.ResponseDeadline != nil && !info.ResponseDeadline.IsZero() {
+		remaining := int(info.ResponseDeadline.Sub(now).Minutes())
+		info.ResponseTimeRemaining = &remaining
+		info.IsBreached = remaining < 0
 	}
 
-	if info.ResolvedAt != nil {
-		info.ResolutionTimeLeft = 0
-		info.IsResolutionBreached = false
-	} else if now.After(info.ResolutionDeadline) && !info.ResolutionDeadline.IsZero() {
-		info.ResolutionTimeLeft = 0
-		info.IsResolutionBreached = true
-	} else if !info.ResolutionDeadline.IsZero() {
-		info.ResolutionTimeLeft = int(info.ResolutionDeadline.Sub(now).Minutes())
+	if info.ResolutionDeadline != nil && !info.ResolutionDeadline.IsZero() {
+		remaining := int(info.ResolutionDeadline.Sub(now).Minutes())
+		info.ResolutionTimeRemaining = &remaining
+		if remaining < 0 {
+			info.IsBreached = true
+		}
 	}
 
 	return info, nil
