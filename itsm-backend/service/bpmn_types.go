@@ -1,6 +1,16 @@
 package service
 
-import "encoding/xml"
+import (
+	"encoding/xml"
+	"strings"
+)
+
+// BPMN metaData 的 key 常量。写进 ProcessTask.TaskVariables 时沿用同名 key，
+// CompleteTask 再按同名 key 读回来做回调分发。
+const (
+	bpmnMetaDataServiceTaskType = "service_task_type"
+	bpmnMetaDataAction          = "action"
+)
 
 // BPMNElement BPMN元素的基础接口
 type BPMNElement interface {
@@ -73,6 +83,35 @@ func (e *BPMNEndEvent) GetName() string { return e.Name }
 // GetType 获取类型
 func (e *BPMNEndEvent) GetType() string { return "EndEvent" }
 
+// BPMNMetaData 是 <bpmn:extensionElements> 下的一条 <bpmn:metaData name="...">值</bpmn:metaData>。
+// 模板用它承载引擎需要的声明式配置，目前用到的是 service_task_type / action
+// （见 change_normal_flow.bpmn 等模板），用来把节点完成后的业务副作用路由到
+// service/bpmn 下已注册的 ServiceTaskHandler。
+type BPMNMetaData struct {
+	Name  string `xml:"name,attr"`
+	Value string `xml:",chardata"`
+}
+
+// BPMNExtensionElements 对应 <bpmn:extensionElements>。
+// 只解析 metaData，其余厂商扩展元素按 encoding/xml 的默认行为忽略。
+type BPMNExtensionElements struct {
+	MetaData []BPMNMetaData `xml:"metaData"`
+}
+
+// GetMetaData 按 name 返回 metaData 的值（去掉首尾空白），不存在时返回空串。
+// 接收者可为 nil，调用方无需先判空。
+func (e *BPMNExtensionElements) GetMetaData(name string) string {
+	if e == nil {
+		return ""
+	}
+	for _, md := range e.MetaData {
+		if md.Name == name {
+			return strings.TrimSpace(md.Value)
+		}
+	}
+	return ""
+}
+
 // BPMNUserTask 用户任务
 type BPMNUserTask struct {
 	ID                      string `xml:"id,attr"`
@@ -96,6 +135,20 @@ type BPMNUserTask struct {
 	AssigneeTeamId          int    `xml:"assigneeTeamId,attr"`
 	AssigneeProjectId       int    `xml:"assigneeProjectId,attr"`
 	AssigneeTempTeamId      int    `xml:"assigneeTempTeamId,attr"`
+
+	// ExtensionElements 承载 <bpmn:metaData>，其中 service_task_type/action 决定
+	// 该用户任务完成后要不要走 ServiceTaskHandler 回调（见 CompleteTask）。
+	ExtensionElements *BPMNExtensionElements `xml:"extensionElements"`
+}
+
+// ServiceTaskType 返回该用户任务声明的 service_task_type metaData，未声明时返回空串。
+func (e *BPMNUserTask) ServiceTaskType() string {
+	return e.ExtensionElements.GetMetaData(bpmnMetaDataServiceTaskType)
+}
+
+// ServiceTaskAction 返回该用户任务声明的 action metaData，未声明时返回空串。
+func (e *BPMNUserTask) ServiceTaskAction() string {
+	return e.ExtensionElements.GetMetaData(bpmnMetaDataAction)
 }
 
 // GetID 获取ID
