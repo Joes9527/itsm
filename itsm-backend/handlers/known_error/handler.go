@@ -576,6 +576,7 @@ func (h *Handler) CreateFromProblem(c *gin.Context) {
 	}
 
 	problemSvc := service.NewProblemService(h.client, h.logger)
+	problemSvc.SetKnownErrorService(service.NewKnownErrorService(h.client, h.logger))
 	ke, err := problemSvc.CreateKnownErrorFromProblem(c.Request.Context(), problemID, userID, &req)
 	if err != nil {
 		h.logger.Warnw("Failed to create known error from problem", "error", err, "problem_id", problemID, "tenant_id", tenantID)
