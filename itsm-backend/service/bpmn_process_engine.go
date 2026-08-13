@@ -1229,6 +1229,9 @@ func (e *CustomProcessEngine) evaluateCondition(flow *BPMNSequenceFlow, variable
 		evalVars[k] = v
 	}
 
+	// 将 variables 包装在 "variables" 键中，以便 BPMN 表达式可以使用 variables['key'] 语法
+	evalVars["variables"] = variables
+
 	// 使用表达式引擎评估条件
 	result, err := e.exprEngine.EvaluateCondition(flow.ConditionExpression.Expression, evalVars)
 	if err != nil {

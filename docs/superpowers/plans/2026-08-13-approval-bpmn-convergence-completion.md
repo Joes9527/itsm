@@ -155,7 +155,11 @@ EOF
 
 ## Task 3: 修复 `need_approval`/`approval_required` 变量命名不一致
 
-**背景**：`ticket_service.go`/`handlers/service_request/service.go` 设置的流程变量是 `approval_required`，但 `service_request_flow.bpmn`、`service_request_urgent_flow.bpmn`、`change_normal_flow.bpmn`、`change_emergency_flow.bpmn` 四个已部署种子流程的网关条件读的是 `need_approval`。任何应该走审批的流程，网关条件永远为 false，直接跳过审批。
+**背景**：`ticket_service.go`/`handlers/service_request/service.go` 设置的流程变量是 `approval_required`，但 `service_request_flow.bpmn`、`service_request_urgent_flow.bpmn`、`change_normal_flow.bpmn`、`change_emergency_flow.bpmn` 四个已部署种子流程的网关条件读的是 `need_approval`。
+
+**订正（Task3 实施+评审时发现，比这里原描述更严重）**：实际症状不是"网关条件永远为 false、静默跳过审批"。这四个文件的网关条件用的是 `variables['key']` 索引语法，而 `bpmn_process_engine.go` 的 `evaluateCondition` 在构造 `expr-lang/expr` 求值环境时，从未把流程变量包进一个 `variables` 键——`variables['need_approval']` 这类表达式在原代码下**根本编译不过**，不是"编译过、只是求值成 false"。表达式求值失败触发已有的 SEC-002 fail-closed 逻辑，两条出边都判 false，`executeStep` 找不到匹配的顺序流，直接返回 `"没有符合条件的路径"` 错误——**真实表现是任务完成报错、流程实例卡在网关节点，不是静默跳过审批**。这个订正不影响 Task3 的修复方案本身（改 XML 变量名 + 让 `evaluateCondition` 把变量包进 `variables` 键两者都需要），只是修正对症状的描述。
+
+**另一个更大的、Task3 评审时新发现的问题（不在这次任务范围内，已记入 ledger，需要单独立项）**：仓库里另外 15 个种子流程模板（`ticket_general_flow`、`ticket_urgent_flow`、`problem_management_flow`、`incident_emergency_flow*`、`release_approval_flow*`、`cloud_*` 及全部 `*_cn` 变体）的网关条件用的是 `${variables['key'] == true}` 这种带 `${}` 包裹的语法，`BPMNConditionExpression.Expression` 是原样透传的 `xml:",chardata"`，代码里没有任何地方剥离 `${}`，这类表达式在 expr-lang 下同样编译不过、同样会 fail-closed 报错——是同一类 bug，但比这次任务的 4 个文件影响面大得多。
 
 **Files:**
 - Modify: `itsm-backend/service/bpmn/service_request_flow.bpmn`

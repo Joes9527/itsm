@@ -121,10 +121,10 @@
     <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Activity_Assessment" />
     <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_Assessment" targetRef="Gateway_Approval" />
     <bpmn:sequenceFlow id="Flow_3" sourceRef="Gateway_Approval" targetRef="Activity_CABApproval">
-      <bpmn:conditionExpression><![CDATA[variables['need_approval'] == true]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['approval_required'] == true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_Schedule" sourceRef="Gateway_Approval" targetRef="Activity_Schedule">
-      <bpmn:conditionExpression><![CDATA[variables['need_approval'] != true]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['approval_required'] != true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_ApprovalResult" sourceRef="Activity_CABApproval" targetRef="Gateway_ApprovalResult" />
     <bpmn:sequenceFlow id="Flow_Reject" sourceRef="Gateway_ApprovalResult" targetRef="Activity_Reject" />
