@@ -235,7 +235,7 @@ func TestTicketSLAService_CalculateSLADeadline(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	result, err := slaService.CalculateSLADeadline(ctx, testTenant.ID, "incident", "high")
+	result, err := slaService.CalculateSLADeadline(ctx, testTenant.ID, "incident", "high", 0)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
@@ -309,7 +309,7 @@ func TestTicketSLAService_CalculateSLADeadlineFromRequest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := slaService.CalculateSLADeadlineFromRequest(ctx, tt.tenantID, tt.ticketType, tt.priority)
+			result, err := slaService.CalculateSLADeadlineFromRequest(ctx, tt.tenantID, tt.ticketType, tt.priority, 0)
 
 			if tt.expectedError {
 				assert.Error(t, err)
@@ -458,14 +458,14 @@ func TestTicketSLAService_getSLADefinition(t *testing.T) {
 			name:                   "默认SLA",
 			ticketType:             "unknown_type",
 			priority:               "low",
-			expectedResponseTime:   60,
-			expectedResolutionTime: 480,
+			expectedResponseTime:   480,
+			expectedResolutionTime: 1440,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			slaDef, err := slaService.getSLADefinition(ctx, testTenant.ID, tt.ticketType, tt.priority)
+			slaDef, err := slaService.getSLADefinition(ctx, testTenant.ID, tt.ticketType, tt.priority, 0)
 
 			assert.NoError(t, err)
 			assert.NotNil(t, slaDef)

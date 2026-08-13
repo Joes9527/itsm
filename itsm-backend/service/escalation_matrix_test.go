@@ -64,7 +64,7 @@ func TestEscalationMatrixService_FindNextEscalationLevel_P1(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		got := svc.FindNextEscalationLevel(1, "critical", tc.elapsedMin, tc.currentLevel)
+		got := svc.FindNextEscalationLevel(1, "critical", tc.elapsedMin, tc.currentLevel, 0)
 		if tc.expectNil {
 			if got != nil {
 				t.Errorf("%s: expected nil, got L%d", tc.name, got.Level)
@@ -92,25 +92,25 @@ func TestEscalationMatrixService_FindNextEscalationLevel_MultiLevelSkip(t *testi
 	svc := NewEscalationMatrixService(nil)
 
 	// 第一次调用 elapsed=60, currentMax=0 → 返回 L1
-	lvl := svc.FindNextEscalationLevel(1, "critical", 60, 0)
+	lvl := svc.FindNextEscalationLevel(1, "critical", 60, 0, 0)
 	if lvl == nil || lvl.Level != 1 {
 		t.Errorf("expected L1, got %v", lvl)
 	}
 
 	// 第二次调用 elapsed=60, currentMax=1 → 返回 L2
-	lvl = svc.FindNextEscalationLevel(1, "critical", 60, 1)
+	lvl = svc.FindNextEscalationLevel(1, "critical", 60, 1, 0)
 	if lvl == nil || lvl.Level != 2 {
 		t.Errorf("expected L2, got %v", lvl)
 	}
 
 	// 第三次调用 elapsed=60, currentMax=2 → 返回 L3
-	lvl = svc.FindNextEscalationLevel(1, "critical", 60, 2)
+	lvl = svc.FindNextEscalationLevel(1, "critical", 60, 2, 0)
 	if lvl == nil || lvl.Level != 3 {
 		t.Errorf("expected L3, got %v", lvl)
 	}
 
 	// 第四次调用 elapsed=60, currentMax=3 → 返回 nil
-	lvl = svc.FindNextEscalationLevel(1, "critical", 60, 3)
+	lvl = svc.FindNextEscalationLevel(1, "critical", 60, 3, 0)
 	if lvl != nil {
 		t.Errorf("expected nil (已到顶), got L%d", lvl.Level)
 	}
@@ -121,7 +121,7 @@ func TestEscalationMatrixService_FindNextEscalationLevel_UnknownPriority(t *test
 	svc := NewEscalationMatrixService(nil)
 
 	// 未知 priority + elapsed=240 → 走 medium 兜底，应返回 L1
-	lvl := svc.FindNextEscalationLevel(1, "unknown_priority", 240, 0)
+	lvl := svc.FindNextEscalationLevel(1, "unknown_priority", 240, 0, 0)
 	if lvl == nil || lvl.Level != 1 {
 		t.Errorf("expected L1 from medium fallback, got %v", lvl)
 	}
@@ -204,7 +204,7 @@ func TestEscalationMatrixService_ConcurrentAccess(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			_ = svc.GetMatrix(i % 5)
-			_ = svc.FindNextEscalationLevel(i%5, "critical", i, 0)
+			_ = svc.FindNextEscalationLevel(i%5, "critical", i, 0, 0)
 		}(i)
 	}
 	wg.Wait()

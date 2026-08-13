@@ -207,11 +207,11 @@ func TestSLA_CompleteFlow(t *testing.T) {
 	tenant, user := createTestUserAndTenant(t, ctx, client)
 
 	// 创建 SLA 策略 - 使用正确的字段名
-	slaPolicy, err := client.SLAPolicy.Create().
+	slaPolicy, err := client.SLADefinition.Create().
 		SetName("Critical SLA").
 		SetDescription("4h response, 24h resolution").
-		SetResponseTimeMinutes(4 * 60).    // 4 hours in minutes
-		SetResolutionTimeMinutes(24 * 60). // 24 hours in minutes
+		SetResponseTime(4 * 60).    // 4 hours in minutes
+		SetResolutionTime(24 * 60). // 24 hours in minutes
 		SetPriority("critical").
 		SetTenantID(tenant.ID).
 		Save(ctx)
@@ -247,11 +247,11 @@ func TestSLA_ViolationDetection(t *testing.T) {
 	tenant, user := createTestUserAndTenant(t, ctx, client)
 
 	// 创建严格的 SLA 策略 (60分钟响应)
-	slaPolicy, err := client.SLAPolicy.Create().
+	slaPolicy, err := client.SLADefinition.Create().
 		SetName("Strict SLA").
 		SetDescription("60min response").
-		SetResponseTimeMinutes(60).
-		SetResolutionTimeMinutes(240).
+		SetResponseTime(60).
+		SetResolutionTime(240).
 		SetPriority("high").
 		SetTenantID(tenant.ID).
 		Save(ctx)
@@ -304,19 +304,19 @@ func TestSLA_PriorityMapping_TableDriven(t *testing.T) {
 			tenant, user := createTestUserAndTenant(t, ctx, client)
 
 			// 创建 SLA 策略
-			slaPolicy, err := client.SLAPolicy.Create().
+			slaPolicy, err := client.SLADefinition.Create().
 				SetName(tt.name).
 				SetDescription("Test").
-				SetResponseTimeMinutes(tt.responseTimeMins).
-				SetResolutionTimeMinutes(tt.resolutionTimeMins).
+				SetResponseTime(tt.responseTimeMins).
+				SetResolutionTime(tt.resolutionTimeMins).
 				SetPriority(tt.priority).
 				SetTenantID(tenant.ID).
 				Save(ctx)
 			require.NoError(t, err)
 
 			// 验证策略
-			assert.Equal(t, tt.responseTimeMins, slaPolicy.ResponseTimeMinutes)
-			assert.Equal(t, tt.resolutionTimeMins, slaPolicy.ResolutionTimeMinutes)
+			assert.Equal(t, tt.responseTimeMins, slaPolicy.ResponseTime)
+			assert.Equal(t, tt.resolutionTimeMins, slaPolicy.ResolutionTime)
 
 			// 创建关联工单
 			resolutionDeadline := time.Now().Add(time.Duration(tt.resolutionTimeMins) * time.Minute)
