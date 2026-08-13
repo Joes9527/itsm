@@ -37,7 +37,6 @@ type TicketService struct {
 	client                 *ent.Client // 用于 ProcessInstance 等系统级查询（不走 Repository）
 	logger                 *zap.SugaredLogger
 	notificationSvc        *TicketNotificationService
-	approvalSvc            *ApprovalService
 	automationRuleSvc      *TicketAutomationRuleService
 	slaSvc                 *TicketSLAService
 	assignmentSmartService *TicketAssignmentSmartService
@@ -55,7 +54,6 @@ type TicketServiceConfig struct {
 	Client                *ent.Client // 可选；传入后可用作 ProcessInstance 等系统级查询
 	Logger                *zap.SugaredLogger
 	NotificationService   *TicketNotificationService
-	ApprovalService       *ApprovalService
 	AutomationRuleService *TicketAutomationRuleService
 	SLAService            *TicketSLAService
 	ProcessTriggerService ProcessTriggerServiceInterface
@@ -78,7 +76,6 @@ func NewTicketService(cfg *TicketServiceConfig) *TicketService {
 		client:            cfg.Client,
 		logger:            cfg.Logger,
 		notificationSvc:   cfg.NotificationService,
-		approvalSvc:       cfg.ApprovalService,
 		automationRuleSvc: cfg.AutomationRuleService,
 		slaSvc:            cfg.SLAService,
 		processTriggerSvc: cfg.ProcessTriggerService,
@@ -106,11 +103,6 @@ func NewTicketServiceForTest(client *ent.Client, logger *zap.SugaredLogger) *Tic
 // SetNotificationService 注入通知服务（运行时依赖注入）
 func (s *TicketService) SetNotificationService(n *TicketNotificationService) {
 	s.notificationSvc = n
-}
-
-// SetApprovalService 注入审批服务（运行时依赖注入）
-func (s *TicketService) SetApprovalService(a *ApprovalService) {
-	s.approvalSvc = a
 }
 
 // SetProcessTriggerService 注入流程触发服务（运行时依赖注入）

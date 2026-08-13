@@ -146,7 +146,6 @@ func (Ticket) Edges() []ent.Edge {
 		edge.To("tags", TicketTag.Type),
 		edge.To("related_tickets", Ticket.Type).
 			Comment("双向关联工单"),
-		edge.To("approval_records", ApprovalRecord.Type),
 		edge.To("approvals", TicketApproval.Type),
 		edge.To("workflow_records", TicketWorkflowRecord.Type),
 		edge.To("notifications", TicketNotification.Type),

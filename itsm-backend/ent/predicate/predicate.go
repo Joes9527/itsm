@@ -12,12 +12,6 @@ type Application func(*sql.Selector)
 // ApprovalChain is the predicate function for approvalchain builders.
 type ApprovalChain func(*sql.Selector)
 
-// ApprovalRecord is the predicate function for approvalrecord builders.
-type ApprovalRecord func(*sql.Selector)
-
-// ApprovalWorkflow is the predicate function for approvalworkflow builders.
-type ApprovalWorkflow func(*sql.Selector)
-
 // Asset is the predicate function for asset builders.
 type Asset func(*sql.Selector)
 

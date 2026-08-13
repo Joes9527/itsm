@@ -245,7 +245,6 @@ func NewApplication() *Application {
 		Client:                client,
 		Logger:                sugar,
 		NotificationService:   ticketNotificationService,
-		ApprovalService:       service.NewApprovalService(client, sugar),
 		AutomationRuleService: ticketAutomationRuleService,
 		SLAService:            ticketSLAService,
 		ProcessTriggerService: processTriggerService,
@@ -260,9 +259,6 @@ func NewApplication() *Application {
 	// MSP 服务初始化
 	mspAllocationService := service.NewMSPAllocationService(client, sugar)
 	mspController := controller.NewMSPController(mspAllocationService, ticketService, sugar)
-
-	// 审批服务
-	approvalService := service.NewApprovalService(client, sugar)
 
 	// problemService and changeService removed - using Handlers with domain services instead
 
@@ -404,7 +400,6 @@ func NewApplication() *Application {
 
 	rootCauseAnalysisService := service.NewRootCauseAnalysisService(client)
 	incidentController := controller.NewIncidentController(incidentService, incidentRuleEngine, incidentMonitoringService, incidentAlertingService, rootCauseAnalysisService, sugar)
-	approvalController := controller.NewApprovalController(approvalService)
 
 	provisioningService := service.NewProvisioningService(client, sugar)
 	provisioningController := controller.NewProvisioningController(provisioningService)
@@ -469,9 +464,6 @@ func NewApplication() *Application {
 	// Set process trigger service for workflow integration (after processTriggerService is declared)
 	ticketService.SetProcessTriggerService(processTriggerService)
 	incidentService.SetProcessTriggerService(processTriggerService)
-
-	// Set approval service for ticket workflow integration
-	ticketService.SetApprovalService(approvalService)
 
 	// 初始化模板并部署默认流程
 	go func() {
@@ -690,7 +682,6 @@ func NewApplication() *Application {
 		TicketWorkflowController:        ticketWorkflowController,
 		TicketAutomationRuleController:  ticketAutomationRuleController,
 		IncidentController:              incidentController,
-		ApprovalController:              approvalController,
 		BPMNWorkflowController:          bpmnWorkflowController,
 		BPMNProcessTriggerController:    bpmnProcessTriggerController,
 		BPMNDashboardController:         bpmnDashboardController,

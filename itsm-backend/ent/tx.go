@@ -16,10 +16,6 @@ type Tx struct {
 	Application *ApplicationClient
 	// ApprovalChain is the client for interacting with the ApprovalChain builders.
 	ApprovalChain *ApprovalChainClient
-	// ApprovalRecord is the client for interacting with the ApprovalRecord builders.
-	ApprovalRecord *ApprovalRecordClient
-	// ApprovalWorkflow is the client for interacting with the ApprovalWorkflow builders.
-	ApprovalWorkflow *ApprovalWorkflowClient
 	// Asset is the client for interacting with the Asset builders.
 	Asset *AssetClient
 	// AssetLicense is the client for interacting with the AssetLicense builders.
@@ -377,8 +373,6 @@ func (tx *Tx) Client() *Client {
 func (tx *Tx) init() {
 	tx.Application = NewApplicationClient(tx.config)
 	tx.ApprovalChain = NewApprovalChainClient(tx.config)
-	tx.ApprovalRecord = NewApprovalRecordClient(tx.config)
-	tx.ApprovalWorkflow = NewApprovalWorkflowClient(tx.config)
 	tx.Asset = NewAssetClient(tx.config)
 	tx.AssetLicense = NewAssetLicenseClient(tx.config)
 	tx.AuditLog = NewAuditLogClient(tx.config)

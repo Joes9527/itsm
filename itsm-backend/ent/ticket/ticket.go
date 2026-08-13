@@ -96,8 +96,6 @@ const (
 	EdgeTags = "tags"
 	// EdgeRelatedTickets holds the string denoting the related_tickets edge name in mutations.
 	EdgeRelatedTickets = "related_tickets"
-	// EdgeApprovalRecords holds the string denoting the approval_records edge name in mutations.
-	EdgeApprovalRecords = "approval_records"
 	// EdgeApprovals holds the string denoting the approvals edge name in mutations.
 	EdgeApprovals = "approvals"
 	// EdgeWorkflowRecords holds the string denoting the workflow_records edge name in mutations.
@@ -145,13 +143,6 @@ const (
 	TagsColumn = "ticket_tags"
 	// RelatedTicketsTable is the table that holds the related_tickets relation/edge. The primary key declared below.
 	RelatedTicketsTable = "ticket_related_tickets"
-	// ApprovalRecordsTable is the table that holds the approval_records relation/edge.
-	ApprovalRecordsTable = "approval_records"
-	// ApprovalRecordsInverseTable is the table name for the ApprovalRecord entity.
-	// It exists in this package in order to avoid circular dependency with the "approvalrecord" package.
-	ApprovalRecordsInverseTable = "approval_records"
-	// ApprovalRecordsColumn is the table column denoting the approval_records relation/edge.
-	ApprovalRecordsColumn = "ticket_id"
 	// ApprovalsTable is the table that holds the approvals relation/edge.
 	ApprovalsTable = "ticket_approvals"
 	// ApprovalsInverseTable is the table name for the TicketApproval entity.
@@ -583,20 +574,6 @@ func ByRelatedTickets(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
-// ByApprovalRecordsCount orders the results by approval_records count.
-func ByApprovalRecordsCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newApprovalRecordsStep(), opts...)
-	}
-}
-
-// ByApprovalRecords orders the results by approval_records terms.
-func ByApprovalRecords(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newApprovalRecordsStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-
 // ByApprovalsCount orders the results by approvals count.
 func ByApprovalsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -762,13 +739,6 @@ func newRelatedTicketsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(Table, FieldID),
 		sqlgraph.Edge(sqlgraph.M2M, false, RelatedTicketsTable, RelatedTicketsPrimaryKey...),
-	)
-}
-func newApprovalRecordsStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(ApprovalRecordsInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, ApprovalRecordsTable, ApprovalRecordsColumn),
 	)
 }
 func newApprovalsStep() *sqlgraph.Step {
