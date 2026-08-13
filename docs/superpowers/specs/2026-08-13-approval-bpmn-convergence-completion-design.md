@@ -21,7 +21,7 @@
 | ③ | 批量迁移 CLI | **代码已完成，未执行**——`cmd/migrate_legacy_approvals/main.go` 是完整的、默认 dry-run 的命令行工具，git log 显示只有一次"新增"提交，没有后续"迁移完成"的痕迹，需要真正跑一遍 |
 | ④ | 下线 legacy `ApprovalWorkflow`/`ApprovalRecord` 引擎 | **未完成**——`router/router.go` 里 `/approval-workflows`、`/approvals` 的 CRUD + `/tickets/approval/submit` 全部仍是完全可写状态，不是只读，也没删 |
 
-08-08 文档"非目标"里排除的是 `ApprovalChain`（`/admin/approval-chains`）和 Change 的原生 SQL 审批（本文档的 Track 5）。它**没有提到** `handlers/change/service.go` 自己维护的、Ent 支撑的独立审批状态机（本文档的 Track 4）——核实结果是这条路径今天依然独立于 BPMN 之外运行：
+08-08 文档"非目标"里排除的是 `ApprovalChain`（`/admin/approval-chains`）和 Change 的原生 SQL 审批（本文档的 Track 5）。它**没有提到** `handlers/change/service.go` 自己维护的独立审批状态机（本文档的 Track 4）——核实结果是这条路径今天依然独立于 BPMN 之外运行。**订正（写实施计划时发现）**：Track4 的 `ApprovalRecord`/`ApprovalChain` 也不是 Ent 支撑，`handlers/change/repository_impl.go` 直接手写 SQL 操作 `change_approvals`/`change_approval_chains` 两张表（迁移 `006_add_change_approvals`）——跟 Track5 用的是同一批物理表，只是通过两套完全独立的代码路径读写，此前把 Track4/Track5 的区分描述成"Ent 支撑 vs 原生 SQL"是不准确的，实际区别只是"接了路由、有人调用"vs"零调用的孤儿代码"：
 
 - `handlers/change/service.go` 的 `CreateChange`/`SubmitApproval`/`ProcessApproval`/`checkAndTransitionChange` 是一套完整的、自己维护 `ApprovalRecord`/`ApprovalChain`（change 包内自己的类型，不是 `ent/schema/approvalchain.go` 那个通用表）的状态机，创建阶段完全不碰 BPMN。
 - `TransitionStatus` 里有一段标了 `P0-1` 的补丁（commit `f7e38cd1`，注释写"修复 WorkBuddy 审计报告 Critical/High 级业务安全缺陷"），审批通过/驳回时调用 `BPMNApprovalBridge.CompleteBusinessApprovalTask` 尝试追认一个"可能存在"的 BPMN 任务，找不到就静默回退成纯业务审批。这是打了补丁、没有真正重构的状态，正是 AGENTS.md "禁止桥接服务/新旧模型转换层" 想要防止的形态。
