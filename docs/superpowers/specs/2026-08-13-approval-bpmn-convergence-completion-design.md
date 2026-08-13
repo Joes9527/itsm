@@ -16,7 +16,7 @@
 | ②2a | 退休 `CreateTicket` 双重触发 | **已完成**——`ticket_service.go` 只剩 `processTriggerSvc` 一条触发路径，`approvalSvc.TriggerApproval` 全仓库零调用 |
 | ②2b | 补 `change_emergency_flow.bpmn` 缺文件 | **已完成**——文件存在 |
 | ②2c | 修 `ProcessBinding` 种子数据 `business_type` | **已完成**——`config/seed/default.json` 里已经是 `business_type="ticket"` + 对应 subType 的形状 |
-| ②2d | 4 个默认模板取舍（变更两个删、服务请求两个复用+新建 urgent） | **未完成**——见下方"剩余工作①" |
+| ②2d | 4 个默认模板取舍（变更两个删、服务请求两个复用+新建 urgent） | **已完成**（写 spec 时验证不足，误判为未完成，实施计划前已订正）——commit `0366a6f8` 已经清空种子 `approval_workflows: []`、给 `service_request_flow.bpmn`/`service_request_urgent_flow.bpmn` 的 `Activity_Approval` 打上 `taskPurpose="approval"`，`process_resolver.go` 的 `ResolveWithPriority` 也已有 `service_request_flow`→`service_request_urgent_flow` 特判。唯一还没做的是 CAB 审批节点的声明式属性，见下方"剩余工作①（已改写）" |
 | ③ | `buildLegacyApprovalBPMN` 字段映射修复 | **已完成**——`service/legacy_approval_migration_service.go` 已经用 `mapsToNodes` 强类型解析，7 种 `assigneeType` 映射表跟 08-08 设计一致 |
 | ③ | 批量迁移 CLI | **代码已完成，未执行**——`cmd/migrate_legacy_approvals/main.go` 是完整的、默认 dry-run 的命令行工具，git log 显示只有一次"新增"提交，没有后续"迁移完成"的痕迹，需要真正跑一遍 |
 | ④ | 下线 legacy `ApprovalWorkflow`/`ApprovalRecord` 引擎 | **未完成**——`router/router.go` 里 `/approval-workflows`、`/approvals` 的 CRUD + `/tickets/approval/submit` 全部仍是完全可写状态，不是只读，也没删 |
@@ -40,7 +40,7 @@
 ## 目标架构
 
 ```
-剩余工作① 组件②2d 收尾：4 个默认模板取舍 + 补齐 CAB/审批节点的声明式属性
+剩余工作① 补齐 CAB 审批节点的声明式属性
          │
          ▼
 剩余工作② need_approval/approval_required 命名统一（4 个种子文件 + 回归测试）
@@ -58,16 +58,11 @@
 剩余工作⑥ 前端核实与收敛
 ```
 
-### 剩余工作① — 组件②2d 收尾 + 补齐声明式属性
+### 剩余工作① — 补齐 CAB 审批节点的声明式属性
 
-**4 个默认模板取舍**（照抄 08-08 已经定的方案，之前没有真正执行）：
-- "普通变更审批"/"紧急变更审批"（`ApprovalWorkflow` 种子行）——直接删，不迁移。Change 已经在 BPMN 上跑，这两个模板从未被触发过。
-- "服务请求审批"——复用 `service_request_flow.bpmn`，给 `Activity_Approval` 打上 `taskPurpose="approval"`。
-- "权限申请审批"——新建 `service_request_urgent_flow.bpmn`（`ticket_general_flow`→`ticket_urgent_flow` 同样的等价副本模式），照 `ResolveWithPriority` 里 `ticket_general_flow`→`ticket_urgent_flow` 的硬编码特判写法，加一条 `service_request_flow`→`service_request_urgent_flow`，按 `priority == "high"/"urgent"` 判断。
+组件②2d 的 4 个默认模板取舍在写 spec 时误判为未完成，实际已经在 commit `0366a6f8` 完成（种子 `approval_workflows` 已清空、`service_request_flow`/`service_request_urgent_flow` 已打上 `taskPurpose="approval"`、优先级路由已接好）。真正剩下的缺口只有一个：08-08 组件①定义了声明式属性机制，但从没把它应用到 `change_normal_flow.bpmn`/`change_emergency_flow.bpmn` 的 `Activity_CABApproval` 节点上——两个文件的这个节点目前没有任何 `assigneeRole`/`candidateGroups` 类属性，落到"申请人自己部门负责人"的默认兜底，不是真正的 CAB 成员组。
 
-**补齐审批节点的声明式属性**（08-08 组件①定义了机制，但没有把它真正应用到已部署的种子流程节点上，这是这次核实新发现的缺口）：
-- `change_normal_flow.bpmn`/`change_emergency_flow.bpmn` 的 `Activity_CABApproval`：加 `candidateGroups="cab_members"`（或租户可配置的等价属性，具体命名跟现有 `candidateGroups` 展开机制对齐，不新发明属性名）。
-- `service_request_flow.bpmn`/`service_request_urgent_flow.bpmn`/`ticket_general_flow.bpmn` 的审批节点：核实是否需要类似处理（这几个目前落到"申请人部门负责人"兜底是否是预期行为，需要跟具体业务场景确认，不能假设"没配置=需要补"——工单的通用审批走部门负责人可能本来就是对的默认值，change 的 CAB 审批走部门负责人肯定不对，两者不能用同一个假设）。
+`service_request_flow.bpmn`/`service_request_urgent_flow.bpmn`/`ticket_general_flow.bpmn` 的审批节点没有配置声明式属性、落到部门负责人兜底，核实过是预期行为（服务请求/工单的通用审批走"申请人部门负责人"本来就是合理默认值），不需要动。
 
 ### 剩余工作② — `need_approval`/`approval_required` 命名统一
 
@@ -115,7 +110,7 @@
 
 ## 测试计划
 
-- 剩余工作①：迁移后 4 个默认模板对应场景（普通变更、紧急变更、服务请求、权限申请）分别断言路由到正确的 BPMN 流程；CAB 审批节点断言候选人是配置的 CAB 组成员，不是申请人部门负责人。
+- 剩余工作①：CAB 审批节点断言候选人是配置的 CAB 组成员，不是申请人部门负责人；普通变更/紧急变更两条路径都要验证。
 - 剩余工作②：见上方"回归测试"——四个模板各自真实部署+启动实例+断言网关正确路由，不能只测变量赋值。
 - 剩余工作③：批量迁移 CLI 的 dry-run 输出人工核对；迁移后真实创建工单验证走新流程；`amount_based` 节点正确跳过并有明确警告，不静默丢弃；旧引擎端点下线后返回明确错误而不是 404（区分"从未存在"和"已下线"）。
 - 剩余工作④：变更创建只触发一次 BPMN 流程（回归断言，参照剩余工作③"退休双重触发"验证方式）；CAB 审批通过/驳回后 `Change.Status` 正确流转；删除 P0-1 桥接后不再有"回退成纯业务审批"的分支残留。
