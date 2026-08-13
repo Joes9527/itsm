@@ -28,6 +28,15 @@ var rlsDriver *rls.Driver
 // GetRawDB returns the underlying *sql.DB for raw SQL operations (e.g., pgvector)
 func GetRawDB() *sql.DB { return rawDB }
 
+// SetRawDBForTest 仅供测试使用：直接注入一个已建立连接的 *sql.DB，绕过
+// InitDatabase/InitDatabaseWithRLS 的完整初始化流程（连接池配置、RLS 装饰器、
+// pgvector 兼容处理等）。生产代码路径不应调用此函数。
+//
+// 用途：service 包内直接调用 database.GetRawDB() 的函数（例如
+// CloseChangeApprovalChains）需要在集成测试中注入真实 Postgres 连接才能验证
+// 原始 SQL 行为；调用方应在测试结束时用 t.Cleanup 恢复之前的值。
+func SetRawDBForTest(db *sql.DB) { rawDB = db }
+
 // GetRLSDriver 返回当前进程使用的 RLS 装饰器（可能为 nil）。
 // 用于运维/诊断端点导出 Stats()。
 func GetRLSDriver() *rls.Driver { return rlsDriver }
