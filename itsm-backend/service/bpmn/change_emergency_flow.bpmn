@@ -36,7 +36,7 @@
     </bpmn:exclusiveGateway>
 
     <!-- CAB审批 -->
-    <bpmn:userTask id="Activity_CABApproval" name="CAB审批">
+    <bpmn:userTask id="Activity_CABApproval" name="CAB审批" taskPurpose="approval" assigneeRole="change_manager">
       <bpmn:extensionElements>
         <bpmn:metaData name="service_task_type">change_task</bpmn:metaData>
         <bpmn:metaData name="action">approve_change</bpmn:metaData>

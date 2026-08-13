@@ -918,6 +918,50 @@ func TestCreateUserTask_Approval_AssigneeTeamId_TenantIsolation(t *testing.T) {
 	assert.Equal(t, strconv.Itoa(ownManager.ID), created.Assignee, "固定团队跨租户查不到时应该退到申请人自己部门这一级")
 }
 
+// ==================== 端到端：真实部署 change_normal_flow，
+// CAB 审批候选人应包含 role=change_manager 的用户 ====================
+
+func TestCABApprovalAssignsChangeManagerRole(t *testing.T) {
+	fx := newApprovalAssignmentFixture(t)
+	ctx := context.WithValue(fx.ctx, bpmn.BPMNTenantIDContextKey, fx.tenant.ID)
+
+	deploySvc := NewBPMNTemplateService(fx.client)
+	_, err := deploySvc.LoadAndDeployTemplates(ctx, fx.tenant.ID)
+	require.NoError(t, err)
+
+	// 建一个 role=change_manager 的用户
+	cmUser := fx.createUserWithRole(t, "cm_user", "change_manager", 0)
+
+	// 申请人自己不是 change_manager，避免被排除逻辑误判
+	requester := fx.createUser(t, "requester_cab", 0)
+
+	instance, err := fx.engine.StartProcess(ctx, "change_normal_flow", "test-cab-approval", map[string]interface{}{
+		"approval_required": true,
+		"requester_id":      float64(requester.ID),
+	})
+	require.NoError(t, err)
+
+	// 完成"变更评估"任务，让网关推进到 CAB 审批节点
+	tasks, _, err := fx.engine.TaskService().ListUserTasks(ctx, &ListUserTasksRequest{
+		ProcessInstanceID: instance.ID,
+		PageSize:          10,
+	})
+	require.NoError(t, err)
+	require.Len(t, tasks, 1, "启动流程后应该恰好有一个待办任务（变更评估）")
+
+	err = fx.engine.CompleteTask(ctx, tasks[0].TaskID, map[string]interface{}{})
+	require.NoError(t, err)
+
+	updated, err := fx.client.ProcessInstance.Get(ctx, instance.ID)
+	require.NoError(t, err)
+	require.Equal(t, "Activity_CABApproval", updated.CurrentActivityID,
+		"approval_required=true 应该推进到 CAB 审批节点")
+
+	task := fx.getCreatedTask(t, instance.ID, "Activity_CABApproval")
+	require.Contains(t, task.CandidateUsers, cmUser.Username,
+		"CAB 审批候选人必须包含 role=change_manager 的用户")
+}
+
 func TestCreateUserTask_Approval_AssigneeProjectId_TenantIsolation(t *testing.T) {
 	fx := newApprovalAssignmentFixture(t)
 
