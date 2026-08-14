@@ -6,6 +6,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1583,22 +1584,22 @@ func (s *TicketService) UpdateTicketStatus(ctx context.Context, ticketID int, st
 
 // TicketSLAInfo 工单 SLA 信息
 type TicketSLAInfo struct {
-	TicketID              int        `json:"ticketId"`
-	TicketNumber          string     `json:"ticketNumber"`
-	Priority              string     `json:"priority"`
-	SLADefinitionID       int        `json:"slaDefinitionId"`
-	SlaName               string     `json:"slaName"`
-	ServiceType           string     `json:"serviceType"`
-	ResponseTime          int        `json:"responseTime"`
-	ResolutionTime        int        `json:"resolutionTime"`
-	ResponseDeadline       *time.Time `json:"responseDeadline"`
-	ResolutionDeadline     *time.Time `json:"resolutionDeadline"`
-	IsBreached             bool       `json:"isBreached"`
-	SlaStatus              string     `json:"slaStatus"` // on_track | at_risk | breached
-	ResponseTimeRemaining  *int       `json:"responseTimeRemaining"`
-	ResolutionTimeRemaining *int      `json:"resolutionTimeRemaining"`
-	FirstResponseAt       *time.Time `json:"firstResponseAt,omitempty"`
-	ResolvedAt            *time.Time `json:"resolvedAt,omitempty"`
+	TicketID                int        `json:"ticketId"`
+	TicketNumber            string     `json:"ticketNumber"`
+	Priority                string     `json:"priority"`
+	SLADefinitionID         int        `json:"slaDefinitionId"`
+	SlaName                 string     `json:"slaName"`
+	ServiceType             string     `json:"serviceType"`
+	ResponseTime            int        `json:"responseTime"`
+	ResolutionTime          int        `json:"resolutionTime"`
+	ResponseDeadline        *time.Time `json:"responseDeadline"`
+	ResolutionDeadline      *time.Time `json:"resolutionDeadline"`
+	IsBreached              bool       `json:"isBreached"`
+	SlaStatus               string     `json:"slaStatus"` // on_track | at_risk | breached
+	ResponseTimeRemaining   *int       `json:"responseTimeRemaining"`
+	ResolutionTimeRemaining *int       `json:"resolutionTimeRemaining"`
+	FirstResponseAt         *time.Time `json:"firstResponseAt,omitempty"`
+	ResolvedAt              *time.Time `json:"resolvedAt,omitempty"`
 }
 
 // GetTicketSLAInfo 获取工单 SLA 信息
@@ -1823,7 +1824,7 @@ func (s *TicketService) GetTicketsByAssignee(ctx context.Context, assigneeID int
 }
 
 // GetTicketActivity 获取工单活动日志（合并 comments、attachments、状态变更）
-func (s *TicketService) GetTicketActivity(ctx context.Context, ticketID int, tenantID int) ([]map[string]interface{}, error) {
+func (s *TicketService) GetTicketActivity(ctx context.Context, ticketID int, tenantID int) ([]*dto.TicketActivityItem, error) {
 	s.logger.Infow("Getting ticket activity", "ticket_id", ticketID, "tenant_id", tenantID)
 	if s.client == nil {
 		return nil, fmt.Errorf("ent client not available for activity query")
@@ -1833,18 +1834,19 @@ func (s *TicketService) GetTicketActivity(ctx context.Context, ticketID int, ten
 		return nil, fmt.Errorf("工单不存在: %w", err)
 	}
 
-	activities := make([]map[string]interface{}, 0)
+	activities := make([]*dto.TicketActivityItem, 0)
 
-	activities = append(activities, map[string]interface{}{
-		"action":    "created",
-		"timestamp": tkt.CreatedAt,
-		"user_id":   tkt.RequesterID,
-		"user_name": "",
-		"details":   "工单已创建",
-		"old_value": nil,
-		"new_value": tkt.Title,
+	// 创建事件
+	activities = append(activities, &dto.TicketActivityItem{
+		ID:           1,
+		Action:       "created",
+		User:         &dto.ActivityUser{ID: tkt.RequesterID},
+		ChangeReason: "工单已创建",
+		NewValue:     toPointer(tkt.Title),
+		CreatedAt:    tkt.CreatedAt.Format(time.RFC3339),
 	})
 
+	// 评论事件
 	comments, err := s.client.TicketComment.Query().
 		Where(entTicketComment.TicketID(ticketID)).
 		WithUser().
@@ -1852,56 +1854,56 @@ func (s *TicketService) GetTicketActivity(ctx context.Context, ticketID int, ten
 		All(ctx)
 	if err == nil {
 		for _, c := range comments {
-			userName := ""
+			user := &dto.ActivityUser{ID: c.UserID}
 			if c.Edges.User != nil {
-				userName = c.Edges.User.Name
-				if userName == "" {
-					userName = c.Edges.User.Username
-				}
+				user.Name = c.Edges.User.Name
+				user.Username = c.Edges.User.Username
 			}
-			activities = append(activities, map[string]interface{}{
-				"action":    "commented",
-				"timestamp": c.CreatedAt,
-				"user_id":   c.UserID,
-				"user_name": userName,
-				"details":   "添加了评论",
-				"old_value": nil,
-				"new_value": nil,
+			activities = append(activities, &dto.TicketActivityItem{
+				ID:           int(c.ID),
+				Action:       "commented",
+				User:         user,
+				ChangeReason: "添加了评论",
+				CreatedAt:    c.CreatedAt.Format(time.RFC3339),
 			})
 		}
 	} else {
 		s.logger.Warnw("Failed to get comments for activity", "error", err)
 	}
 
+	// 分配事件
 	if tkt.AssigneeID != nil && *tkt.AssigneeID > 0 {
-		activities = append(activities, map[string]interface{}{
-			"action":    "assigned",
-			"timestamp": tkt.UpdatedAt,
-			"user_id":   *tkt.AssigneeID,
-			"user_name": "",
-			"details":   "工单已分配",
-			"old_value": nil,
-			"new_value": *tkt.AssigneeID,
-		})
-	}
-	if tkt.FirstResponseAt != nil {
-		activities = append(activities, map[string]interface{}{
-			"action":    "first_response",
-			"timestamp": *tkt.FirstResponseAt,
-			"user_id":   0,
-			"details":   "首次响应工单",
-		})
-	}
-	if tkt.ResolvedAt != nil {
-		activities = append(activities, map[string]interface{}{
-			"action":    "resolved",
-			"timestamp": *tkt.ResolvedAt,
-			"user_id":   0,
-			"details":   "工单已解决",
+		activities = append(activities, &dto.TicketActivityItem{
+			ID:           2,
+			Action:       "assigned",
+			User:         &dto.ActivityUser{ID: *tkt.AssigneeID},
+			ChangeReason: "工单已分配",
+			NewValue:     toPointer(strconv.Itoa(*tkt.AssigneeID)),
+			CreatedAt:    tkt.UpdatedAt.Format(time.RFC3339),
 		})
 	}
 
-	// 倒序
+	// 首次响应
+	if tkt.FirstResponseAt != nil {
+		activities = append(activities, &dto.TicketActivityItem{
+			ID:           3,
+			Action:       "first_response",
+			ChangeReason: "首次响应工单",
+			CreatedAt:    tkt.FirstResponseAt.Format(time.RFC3339),
+		})
+	}
+
+	// 解决事件
+	if tkt.ResolvedAt != nil {
+		activities = append(activities, &dto.TicketActivityItem{
+			ID:           4,
+			Action:       "resolved",
+			ChangeReason: "工单已解决",
+			CreatedAt:    tkt.ResolvedAt.Format(time.RFC3339),
+		})
+	}
+
+	// 倒序（最新在前）
 	for i, j := 0, len(activities)-1; i < j; i, j = i+1, j-1 {
 		activities[i], activities[j] = activities[j], activities[i]
 	}

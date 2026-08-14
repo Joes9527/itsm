@@ -34,8 +34,8 @@ type CreateTicketRequest struct {
 	Tags                  []string               `json:"tags"`
 	FormFields            map[string]interface{} `json:"formFields"`
 	Attachments           []string               `json:"attachments"`
-	WorkflowDefinitionKey string        `json:"workflowDefinitionKey"` // 工作流定义Key（可选，优先级高于自动选择）
-	ApprovalChain         interface{}   `json:"approvalChain,omitempty"` // 审批链步骤（由 SR 流程注入，BPMN 变量用）
+	WorkflowDefinitionKey string                 `json:"workflowDefinitionKey"`   // 工作流定义Key（可选，优先级高于自动选择）
+	ApprovalChain         interface{}            `json:"approvalChain,omitempty"` // 审批链步骤（由 SR 流程注入，BPMN 变量用）
 }
 
 // UpdateTicketRequest 更新工单请求
@@ -305,4 +305,22 @@ type CreateSubtaskRequest struct {
 	Type        string                 `json:"type" binding:"omitempty,oneof=incident service_request change ticket problem improvement"`
 	AssigneeID  int                    `json:"assigneeId"`
 	FormFields  map[string]interface{} `json:"formFields"`
+}
+
+// TicketActivityItem 工单活动历史条目（camelCase，与前端 HistoryRecord 契约一致）
+type TicketActivityItem struct {
+	ID           int           `json:"id"`
+	Action       string        `json:"action"`                 // created/commented/assigned/first_response/resolved
+	User         *ActivityUser `json:"user,omitempty"`         // 操作人（nil 表示系统）
+	ChangeReason string        `json:"changeReason,omitempty"` // 活动描述
+	OldValue     *string       `json:"oldValue,omitempty"`
+	NewValue     *string       `json:"newValue,omitempty"`
+	CreatedAt    string        `json:"createdAt"` // RFC3339 时间
+}
+
+// ActivityUser 活动操作人
+type ActivityUser struct {
+	ID       int    `json:"id"`
+	Username string `json:"username,omitempty"`
+	Name     string `json:"name,omitempty"`
 }

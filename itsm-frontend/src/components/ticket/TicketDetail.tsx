@@ -1078,7 +1078,8 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
               const r = raw as unknown as Record<string, unknown>;
               return {
                 id: Number(r.id ?? 0),
-                createdAt: String(r.changedAt ?? r.createdAt ?? ''),
+                action: r.action as string | undefined,
+                createdAt: String(r.createdAt ?? r.changedAt ?? ''),
                 user: (r.user as { name?: string; username?: string }) ?? undefined,
                 fieldName: r.fieldName as string | undefined,
                 oldValue: r.oldValue as string | undefined,
