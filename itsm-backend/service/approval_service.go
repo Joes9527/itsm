@@ -51,7 +51,7 @@ func (s *ApprovalService) isLegacyApprovalWriteLocked(ctx context.Context, tenan
 			systemconfig.TenantIDEQ(tenantID),
 			systemconfig.DeletedAtIsNil(),
 		).
-		Only(ctx)
+		First(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return false, nil
