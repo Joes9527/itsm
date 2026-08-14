@@ -160,6 +160,7 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 		Source:            req.Source,
 		CreatorEmail:      req.CreatorEmail,
 		ExternalMessageID: req.ExternalMessageID,
+		ConversationID:    req.ConversationID,
 	}
 
 	if assigneeID != 0 {

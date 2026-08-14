@@ -105,6 +105,11 @@ func ExternalMessageID(v string) predicate.Ticket {
 	return predicate.Ticket(sql.FieldEQ(FieldExternalMessageID, v))
 }
 
+// ConversationID applies equality check predicate on the "conversation_id" field. It's identical to ConversationIDEQ.
+func ConversationID(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldConversationID, v))
+}
+
 // AssigneeID applies equality check predicate on the "assignee_id" field. It's identical to AssigneeIDEQ.
 func AssigneeID(v int) predicate.Ticket {
 	return predicate.Ticket(sql.FieldEQ(FieldAssigneeID, v))
@@ -878,6 +883,81 @@ func ExternalMessageIDEqualFold(v string) predicate.Ticket {
 // ExternalMessageIDContainsFold applies the ContainsFold predicate on the "external_message_id" field.
 func ExternalMessageIDContainsFold(v string) predicate.Ticket {
 	return predicate.Ticket(sql.FieldContainsFold(FieldExternalMessageID, v))
+}
+
+// ConversationIDEQ applies the EQ predicate on the "conversation_id" field.
+func ConversationIDEQ(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldConversationID, v))
+}
+
+// ConversationIDNEQ applies the NEQ predicate on the "conversation_id" field.
+func ConversationIDNEQ(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNEQ(FieldConversationID, v))
+}
+
+// ConversationIDIn applies the In predicate on the "conversation_id" field.
+func ConversationIDIn(vs ...string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldIn(FieldConversationID, vs...))
+}
+
+// ConversationIDNotIn applies the NotIn predicate on the "conversation_id" field.
+func ConversationIDNotIn(vs ...string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotIn(FieldConversationID, vs...))
+}
+
+// ConversationIDGT applies the GT predicate on the "conversation_id" field.
+func ConversationIDGT(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGT(FieldConversationID, v))
+}
+
+// ConversationIDGTE applies the GTE predicate on the "conversation_id" field.
+func ConversationIDGTE(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGTE(FieldConversationID, v))
+}
+
+// ConversationIDLT applies the LT predicate on the "conversation_id" field.
+func ConversationIDLT(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLT(FieldConversationID, v))
+}
+
+// ConversationIDLTE applies the LTE predicate on the "conversation_id" field.
+func ConversationIDLTE(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLTE(FieldConversationID, v))
+}
+
+// ConversationIDContains applies the Contains predicate on the "conversation_id" field.
+func ConversationIDContains(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldContains(FieldConversationID, v))
+}
+
+// ConversationIDHasPrefix applies the HasPrefix predicate on the "conversation_id" field.
+func ConversationIDHasPrefix(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldHasPrefix(FieldConversationID, v))
+}
+
+// ConversationIDHasSuffix applies the HasSuffix predicate on the "conversation_id" field.
+func ConversationIDHasSuffix(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldHasSuffix(FieldConversationID, v))
+}
+
+// ConversationIDIsNil applies the IsNil predicate on the "conversation_id" field.
+func ConversationIDIsNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldIsNull(FieldConversationID))
+}
+
+// ConversationIDNotNil applies the NotNil predicate on the "conversation_id" field.
+func ConversationIDNotNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotNull(FieldConversationID))
+}
+
+// ConversationIDEqualFold applies the EqualFold predicate on the "conversation_id" field.
+func ConversationIDEqualFold(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEqualFold(FieldConversationID, v))
+}
+
+// ConversationIDContainsFold applies the ContainsFold predicate on the "conversation_id" field.
+func ConversationIDContainsFold(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldContainsFold(FieldConversationID, v))
 }
 
 // AssigneeIDEQ applies the EQ predicate on the "assignee_id" field.

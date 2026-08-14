@@ -206,6 +206,26 @@ func (_u *TicketUpdate) ClearExternalMessageID() *TicketUpdate {
 	return _u
 }
 
+// SetConversationID sets the "conversation_id" field.
+func (_u *TicketUpdate) SetConversationID(v string) *TicketUpdate {
+	_u.mutation.SetConversationID(v)
+	return _u
+}
+
+// SetNillableConversationID sets the "conversation_id" field if the given value is not nil.
+func (_u *TicketUpdate) SetNillableConversationID(v *string) *TicketUpdate {
+	if v != nil {
+		_u.SetConversationID(*v)
+	}
+	return _u
+}
+
+// ClearConversationID clears the value of the "conversation_id" field.
+func (_u *TicketUpdate) ClearConversationID() *TicketUpdate {
+	_u.mutation.ClearConversationID()
+	return _u
+}
+
 // SetAssigneeID sets the "assignee_id" field.
 func (_u *TicketUpdate) SetAssigneeID(v int) *TicketUpdate {
 	_u.mutation.SetAssigneeID(v)
@@ -1433,6 +1453,12 @@ func (_u *TicketUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.ExternalMessageIDCleared() {
 		_spec.ClearField(ticket.FieldExternalMessageID, field.TypeString)
 	}
+	if value, ok := _u.mutation.ConversationID(); ok {
+		_spec.SetField(ticket.FieldConversationID, field.TypeString, value)
+	}
+	if _u.mutation.ConversationIDCleared() {
+		_spec.ClearField(ticket.FieldConversationID, field.TypeString)
+	}
 	if value, ok := _u.mutation.TenantID(); ok {
 		_spec.SetField(ticket.FieldTenantID, field.TypeInt, value)
 	}
@@ -2476,6 +2502,26 @@ func (_u *TicketUpdateOne) SetNillableExternalMessageID(v *string) *TicketUpdate
 // ClearExternalMessageID clears the value of the "external_message_id" field.
 func (_u *TicketUpdateOne) ClearExternalMessageID() *TicketUpdateOne {
 	_u.mutation.ClearExternalMessageID()
+	return _u
+}
+
+// SetConversationID sets the "conversation_id" field.
+func (_u *TicketUpdateOne) SetConversationID(v string) *TicketUpdateOne {
+	_u.mutation.SetConversationID(v)
+	return _u
+}
+
+// SetNillableConversationID sets the "conversation_id" field if the given value is not nil.
+func (_u *TicketUpdateOne) SetNillableConversationID(v *string) *TicketUpdateOne {
+	if v != nil {
+		_u.SetConversationID(*v)
+	}
+	return _u
+}
+
+// ClearConversationID clears the value of the "conversation_id" field.
+func (_u *TicketUpdateOne) ClearConversationID() *TicketUpdateOne {
+	_u.mutation.ClearConversationID()
 	return _u
 }
 
@@ -3735,6 +3781,12 @@ func (_u *TicketUpdateOne) sqlSave(ctx context.Context) (_node *Ticket, err erro
 	}
 	if _u.mutation.ExternalMessageIDCleared() {
 		_spec.ClearField(ticket.FieldExternalMessageID, field.TypeString)
+	}
+	if value, ok := _u.mutation.ConversationID(); ok {
+		_spec.SetField(ticket.FieldConversationID, field.TypeString, value)
+	}
+	if _u.mutation.ConversationIDCleared() {
+		_spec.ClearField(ticket.FieldConversationID, field.TypeString)
 	}
 	if value, ok := _u.mutation.TenantID(); ok {
 		_spec.SetField(ticket.FieldTenantID, field.TypeInt, value)

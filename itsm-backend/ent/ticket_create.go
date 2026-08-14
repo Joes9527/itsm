@@ -150,6 +150,20 @@ func (_c *TicketCreate) SetNillableExternalMessageID(v *string) *TicketCreate {
 	return _c
 }
 
+// SetConversationID sets the "conversation_id" field.
+func (_c *TicketCreate) SetConversationID(v string) *TicketCreate {
+	_c.mutation.SetConversationID(v)
+	return _c
+}
+
+// SetNillableConversationID sets the "conversation_id" field if the given value is not nil.
+func (_c *TicketCreate) SetNillableConversationID(v *string) *TicketCreate {
+	if v != nil {
+		_c.SetConversationID(*v)
+	}
+	return _c
+}
+
 // SetAssigneeID sets the "assignee_id" field.
 func (_c *TicketCreate) SetAssigneeID(v int) *TicketCreate {
 	_c.mutation.SetAssigneeID(v)
@@ -930,6 +944,10 @@ func (_c *TicketCreate) createSpec() (*Ticket, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ExternalMessageID(); ok {
 		_spec.SetField(ticket.FieldExternalMessageID, field.TypeString, value)
 		_node.ExternalMessageID = value
+	}
+	if value, ok := _c.mutation.ConversationID(); ok {
+		_spec.SetField(ticket.FieldConversationID, field.TypeString, value)
+		_node.ConversationID = value
 	}
 	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(ticket.FieldTenantID, field.TypeInt, value)

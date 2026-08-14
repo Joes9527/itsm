@@ -49,6 +49,9 @@ func (Ticket) Fields() []ent.Field {
 		field.String("external_message_id").
 			Comment("外部消息ID（如邮件 internetMessageId），用于同一来源消息的建单去重判断").
 			Optional(),
+		field.String("conversation_id").
+			Comment("邮件对话线程ID（Graph conversationId），用于识别用户回复并追加评论而非重复建单").
+			Optional(),
 		field.Int("assignee_id").
 			Comment("处理人ID").
 			Optional(),
@@ -183,6 +186,7 @@ func (Ticket) Indexes() []ent.Index {
 		index.Fields("tenant_id", "status"),
 		index.Fields("tenant_id", "requester_id"),
 		index.Fields("tenant_id", "external_message_id"),
+		index.Fields("tenant_id", "conversation_id").Unique(),
 		index.Fields("status", "priority"),
 		index.Fields("requester_id", "status"),
 	}

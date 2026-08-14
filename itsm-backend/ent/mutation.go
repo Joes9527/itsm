@@ -121874,6 +121874,7 @@ type TicketMutation struct {
 	ticket_number              *string
 	creator_email              *string
 	external_message_id        *string
+	conversation_id            *string
 	tenant_id                  *int
 	addtenant_id               *int
 	template_id                *int
@@ -122471,6 +122472,55 @@ func (m *TicketMutation) ExternalMessageIDCleared() bool {
 func (m *TicketMutation) ResetExternalMessageID() {
 	m.external_message_id = nil
 	delete(m.clearedFields, ticket.FieldExternalMessageID)
+}
+
+// SetConversationID sets the "conversation_id" field.
+func (m *TicketMutation) SetConversationID(s string) {
+	m.conversation_id = &s
+}
+
+// ConversationID returns the value of the "conversation_id" field in the mutation.
+func (m *TicketMutation) ConversationID() (r string, exists bool) {
+	v := m.conversation_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConversationID returns the old "conversation_id" field's value of the Ticket entity.
+// If the Ticket object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketMutation) OldConversationID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConversationID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConversationID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConversationID: %w", err)
+	}
+	return oldValue.ConversationID, nil
+}
+
+// ClearConversationID clears the value of the "conversation_id" field.
+func (m *TicketMutation) ClearConversationID() {
+	m.conversation_id = nil
+	m.clearedFields[ticket.FieldConversationID] = struct{}{}
+}
+
+// ConversationIDCleared returns if the "conversation_id" field was cleared in this mutation.
+func (m *TicketMutation) ConversationIDCleared() bool {
+	_, ok := m.clearedFields[ticket.FieldConversationID]
+	return ok
+}
+
+// ResetConversationID resets all changes to the "conversation_id" field.
+func (m *TicketMutation) ResetConversationID() {
+	m.conversation_id = nil
+	delete(m.clearedFields, ticket.FieldConversationID)
 }
 
 // SetAssigneeID sets the "assignee_id" field.
@@ -124804,7 +124854,7 @@ func (m *TicketMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TicketMutation) Fields() []string {
-	fields := make([]string, 0, 37)
+	fields := make([]string, 0, 38)
 	if m.title != nil {
 		fields = append(fields, ticket.FieldTitle)
 	}
@@ -124834,6 +124884,9 @@ func (m *TicketMutation) Fields() []string {
 	}
 	if m.external_message_id != nil {
 		fields = append(fields, ticket.FieldExternalMessageID)
+	}
+	if m.conversation_id != nil {
+		fields = append(fields, ticket.FieldConversationID)
 	}
 	if m.assignee != nil {
 		fields = append(fields, ticket.FieldAssigneeID)
@@ -124944,6 +124997,8 @@ func (m *TicketMutation) Field(name string) (ent.Value, bool) {
 		return m.CreatorEmail()
 	case ticket.FieldExternalMessageID:
 		return m.ExternalMessageID()
+	case ticket.FieldConversationID:
+		return m.ConversationID()
 	case ticket.FieldAssigneeID:
 		return m.AssigneeID()
 	case ticket.FieldTenantID:
@@ -125027,6 +125082,8 @@ func (m *TicketMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldCreatorEmail(ctx)
 	case ticket.FieldExternalMessageID:
 		return m.OldExternalMessageID(ctx)
+	case ticket.FieldConversationID:
+		return m.OldConversationID(ctx)
 	case ticket.FieldAssigneeID:
 		return m.OldAssigneeID(ctx)
 	case ticket.FieldTenantID:
@@ -125159,6 +125216,13 @@ func (m *TicketMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetExternalMessageID(v)
+		return nil
+	case ticket.FieldConversationID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConversationID(v)
 		return nil
 	case ticket.FieldAssigneeID:
 		v, ok := value.(int)
@@ -125526,6 +125590,9 @@ func (m *TicketMutation) ClearedFields() []string {
 	if m.FieldCleared(ticket.FieldExternalMessageID) {
 		fields = append(fields, ticket.FieldExternalMessageID)
 	}
+	if m.FieldCleared(ticket.FieldConversationID) {
+		fields = append(fields, ticket.FieldConversationID)
+	}
 	if m.FieldCleared(ticket.FieldAssigneeID) {
 		fields = append(fields, ticket.FieldAssigneeID)
 	}
@@ -125617,6 +125684,9 @@ func (m *TicketMutation) ClearField(name string) error {
 		return nil
 	case ticket.FieldExternalMessageID:
 		m.ClearExternalMessageID()
+		return nil
+	case ticket.FieldConversationID:
+		m.ClearConversationID()
 		return nil
 	case ticket.FieldAssigneeID:
 		m.ClearAssigneeID()
@@ -125721,6 +125791,9 @@ func (m *TicketMutation) ResetField(name string) error {
 		return nil
 	case ticket.FieldExternalMessageID:
 		m.ResetExternalMessageID()
+		return nil
+	case ticket.FieldConversationID:
+		m.ResetConversationID()
 		return nil
 	case ticket.FieldAssigneeID:
 		m.ResetAssigneeID()

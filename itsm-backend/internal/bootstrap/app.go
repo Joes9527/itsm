@@ -352,7 +352,8 @@ func NewApplication() *Application {
 	}
 	guidanceClient := service.NewGuidanceClient(guidanceURL, sugar)
 	triageService := service.NewTriageServiceWithGuidanceAndSugaredLogger(llmGateway, guidanceClient, sugar)
-	wireEmailMsgraphConnector(client, ticketService, triageService, connectorController, sugar)
+	ticketAttachmentService := service.NewTicketAttachmentService(client, sugar)
+	wireEmailMsgraphConnector(client, ticketService, triageService, ticketAttachmentService, connectorController, sugar)
 
 	rootCauseService := service.NewRootCauseService(client, sugar)
 	// LLM/Embedding/VectorStore
@@ -366,7 +367,6 @@ func NewApplication() *Application {
 
 	ticketCommentService := service.NewTicketCommentService(client, sugar)
 	ticketCommentController := controller.NewTicketCommentController(ticketCommentService, sugar)
-	ticketAttachmentService := service.NewTicketAttachmentService(client, sugar)
 	ticketAttachmentController := controller.NewTicketAttachmentController(ticketAttachmentService, sugar)
 	ticketNotificationController := controller.NewTicketNotificationController(ticketNotificationService, sugar)
 	// ticketNotificationService 已在 128 行创建并注入到 V2
