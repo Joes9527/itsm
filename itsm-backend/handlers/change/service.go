@@ -143,11 +143,10 @@ func (s *Service) SubmitChange(ctx context.Context, changeID, tenantID, submitte
 		}
 	}
 
-	if err := s.repo.MarkSubmittedForApproval(ctx, changeID, tenantID); err != nil {
-		s.logger.Warnw("Failed to mark change as submitted", "error", err, "change_id", changeID)
-		return nil, fmt.Errorf("提交变更审批失败: %w", err)
-	}
-
+	// 5. 先启动 BPMN 流程，再落库 draft -> pending，避免流程启动失败时变更被永久卡在
+	// pending（draft 是 SubmitChange 的入口门槛，一旦离开 draft 就没有其他修复路径能
+	// 再次提交）。s.processTriggerService 未注入时（理论上不应发生在生产环境，但测试或
+	// 未完全 bootstrap 的环境可能出现）保留原有的纯状态流转兜底行为。
 	if s.processTriggerService != nil {
 		processDefKey := "change_normal_flow"
 		if c.Type == "emergency" {
@@ -182,6 +181,11 @@ func (s *Service) SubmitChange(ctx context.Context, changeID, tenantID, submitte
 			s.logger.Errorw("SubmitChange: failed to trigger BPMN process", "error", err, "change_id", changeID)
 			return nil, fmt.Errorf("启动审批流程失败: %w", err)
 		}
+	}
+
+	if err := s.repo.MarkSubmittedForApproval(ctx, changeID, tenantID); err != nil {
+		s.logger.Warnw("Failed to mark change as submitted", "error", err, "change_id", changeID)
+		return nil, fmt.Errorf("提交变更审批失败: %w", err)
 	}
 
 	// 6. Notify approvers (optional - to be implemented later or via async)

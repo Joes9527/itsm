@@ -112,3 +112,31 @@ func TestSubmitChange_RejectsDuplicateWhenRunningInstanceExists(t *testing.T) {
 	require.Error(t, err)
 	assert.Empty(t, trigger.triggerCalls)
 }
+
+// TestSubmitChange_TriggerProcessFailureLeavesChangeDraft 回归覆盖 Task 2 修复：
+// TriggerProcess 失败时，change 必须原地保留在 draft（而不是被写成孤儿 pending），
+// 这样才能通过 SubmitChange 的 draft 门槛重新提交。修复前的顺序是先
+// MarkSubmittedForApproval 再 TriggerProcess，一旦 TriggerProcess 失败 change 就永久卡在
+// pending 且没有任何修复路径。
+func TestSubmitChange_TriggerProcessFailureLeavesChangeDraft(t *testing.T) {
+	entClient := newChangeBridgeEntClient(t, "change_submit_trigger_fail")
+	tenantID, actorID := setupChangeBridgeActor(t, entClient, "submit-trigger-fail")
+	repo := newMockRepository()
+	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
+	trigger := &mockProcessTriggerService{triggerErr: fmt.Errorf("bpmn engine unavailable")}
+	svc.SetProcessTriggerService(trigger)
+
+	c := createTestChange(repo, tenantID, actorID)
+	c.Type = "normal"
+
+	_, err := svc.SubmitChange(context.Background(), c.ID, tenantID, actorID, &dto.SubmitChangeRequest{ApproverIDs: []int{actorID}})
+	require.Error(t, err)
+
+	// MarkSubmittedForApproval must never have run: the change stays in draft in the
+	// repo, so it can be resubmitted through the normal API instead of being stranded.
+	stored, getErr := repo.Get(context.Background(), c.ID, tenantID)
+	require.NoError(t, getErr)
+	assert.Equal(t, "draft", stored.Status)
+
+	require.Len(t, trigger.triggerCalls, 1, "TriggerProcess should have been attempted once")
+}
