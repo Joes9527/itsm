@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 
@@ -20,6 +21,17 @@ func getIntFromContext(c *gin.Context, key string) (int, bool) {
 	}
 	v, ok := val.(int)
 	return v, ok
+}
+
+// failApprovalWorkflowWrite 统一处理 ApprovalWorkflow 写入端点（Create/Update/Patch/
+// Delete）的错误响应：锁定状态映射成明确的 403，其它错误保持原来的 500 通用处理，
+// 不要在四个方法里各自重复一遍 errors.Is 判断。
+func failApprovalWorkflowWrite(ctx *gin.Context, action string, err error) {
+	if errors.Is(err, service.ErrLegacyApprovalWriteLocked) {
+		common.Fail(ctx, common.ForbiddenCode, service.ErrLegacyApprovalWriteLocked.Error())
+		return
+	}
+	common.Fail(ctx, common.InternalErrorCode, action+"失败: "+err.Error())
 }
 
 // ApprovalController 审批流程控制器
@@ -78,7 +90,7 @@ func (c *ApprovalController) CreateWorkflow(ctx *gin.Context) {
 
 	response, err := c.approvalService.CreateWorkflow(ctx.Request.Context(), &req, tid)
 	if err != nil {
-		common.Fail(ctx, common.InternalErrorCode, "创建工作流失败: "+err.Error())
+		failApprovalWorkflowWrite(ctx, "创建工作流", err)
 		return
 	}
 
@@ -117,7 +129,7 @@ func (c *ApprovalController) UpdateWorkflow(ctx *gin.Context) {
 
 	response, err := c.approvalService.UpdateWorkflow(ctx.Request.Context(), id, &req, tid)
 	if err != nil {
-		common.Fail(ctx, common.InternalErrorCode, "更新工作流失败: "+err.Error())
+		failApprovalWorkflowWrite(ctx, "更新工作流", err)
 		return
 	}
 
@@ -149,7 +161,7 @@ func (c *ApprovalController) DeleteWorkflow(ctx *gin.Context) {
 
 	err = c.approvalService.DeleteWorkflow(ctx.Request.Context(), id, tid)
 	if err != nil {
-		common.Fail(ctx, common.InternalErrorCode, "删除工作流失败: "+err.Error())
+		failApprovalWorkflowWrite(ctx, "删除工作流", err)
 		return
 	}
 
@@ -272,7 +284,7 @@ func (c *ApprovalController) PatchWorkflow(ctx *gin.Context) {
 
 	response, err := c.approvalService.UpdateWorkflow(ctx.Request.Context(), id, &req, tid)
 	if err != nil {
-		common.Fail(ctx, common.InternalErrorCode, "更新工作流失败: "+err.Error())
+		failApprovalWorkflowWrite(ctx, "更新工作流", err)
 		return
 	}
 

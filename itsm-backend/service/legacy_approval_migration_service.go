@@ -33,6 +33,11 @@ type LegacyApprovalMigrationResult struct {
 }
 
 func (s *LegacyApprovalMigrationService) Migrate(ctx context.Context, workflow *ent.ApprovalWorkflow, dryRun bool) (*LegacyApprovalMigrationResult, error) {
+	// 没有工单类型的遗留工作流没法产出可达的 ProcessBinding（见下面创建绑定处的注释），
+	// 在最前面就失败——dry-run 预览也应该看到这个错误，而不是等到真正部署后才发现。
+	if workflow.TicketType == "" {
+		return nil, fmt.Errorf("workflow %q has no ticket type -- cannot create a reachable ProcessBinding, migration aborted", workflow.Name)
+	}
 	key := fmt.Sprintf("legacy_approval_%d", workflow.ID)
 	bpmnXML, err := buildLegacyApprovalBPMN(key, workflow.Name, workflow.Nodes)
 	if err != nil {
@@ -59,9 +64,6 @@ func (s *LegacyApprovalMigrationService) Migrate(ctx context.Context, workflow *
 	// dto.BusinessTypeTicket + ticket.Type 查询）唯一能命中的形状，也是 config/seed/default.json
 	// 种子数据已经修正成的形状。写成 business_type=workflow.TicketType 的绑定行永远不可达。
 	businessSubType := workflow.TicketType
-	if businessSubType == "" {
-		businessSubType = string(dto.BusinessTypeTicket)
-	}
 	conditions := map[string]interface{}{}
 	if workflow.Priority != "" {
 		conditions["priority"] = workflow.Priority
@@ -146,12 +148,17 @@ func buildLegacyApprovalBPMN(key, name string, nodes []map[string]interface{}) (
 		// 写成 candidateUsers 的十进制 ID CSV 是引擎已支持的形状：resolveFixedScopeAssignee
 		// （service/bpmn_process_engine.go）本身就产出 strconv.Itoa(userID)，authorizeTaskActor
 		// 的候选人匹配也接受 ID 字符串或用户名，不需要额外做用户名查找。
-		if len(cfg.ApproverIDs) > 0 {
-			ids := make([]string, 0, len(cfg.ApproverIDs))
-			for _, approverID := range cfg.ApproverIDs {
-				ids = append(ids, strconv.Itoa(approverID))
+		// 过滤掉 <=0 的 ID（脏数据/未选中的占位值）——前端 normalizeNodes 已经这样过滤，
+		// 但走 API 直接写入的数据不保证同样干净，一个 "0" 会让 candidateUsers 非空，
+		// 短路掉 bpmn_process_engine.go 的自动候选人解析，产出一个没人能认领的任务。
+		validIDs := make([]string, 0, len(cfg.ApproverIDs))
+		for _, approverID := range cfg.ApproverIDs {
+			if approverID > 0 {
+				validIDs = append(validIDs, strconv.Itoa(approverID))
 			}
-			attr, value = "candidateUsers", strings.Join(ids, ",")
+		}
+		if len(validIDs) > 0 {
+			attr, value = "candidateUsers", strings.Join(validIDs, ",")
 		} else {
 			// ApproverType 兜底到 AssigneeType——复用 ApprovalService.parseWorkflowNodes
 			// （service/approval_service.go）同样的约定，不是这里新发明的规则。
@@ -161,6 +168,13 @@ func buildLegacyApprovalBPMN(key, name string, nodes []map[string]interface{}) (
 				case dto.ApprovalNodeTypeDeptManager, dto.ApprovalNodeTypeTeamLeader,
 					dto.ApprovalNodeTypeProjectManager, dto.ApprovalNodeTypeTempTeamLeader,
 					dto.ApprovalNodeTypeAmountBased:
+					assigneeType = string(cfg.ApproverType)
+				case dto.ApprovalNodeTypeRole:
+					// "role" 是 defaultApprovalNode 的默认选中值（admin/approvals/page.tsx），
+					// 且"动态解析类型"下拉框本来就不提供 role 选项——操作员在这种情况下唯一能
+					// 表达角色名的地方就是"解析值"（AssigneeValue）文本框。不兜底的话，任何
+					// 留在默认审批人类型、没手动切换 assigneeType 的节点都会打到下面的
+					// default 分支报错中止,而这是最常见的默认状态,不是异常数据。
 					assigneeType = string(cfg.ApproverType)
 				}
 			}
@@ -187,7 +201,16 @@ func buildLegacyApprovalBPMN(key, name string, nodes []map[string]interface{}) (
 			}
 		}
 
-		fmt.Fprintf(&tasks, `<bpmn:userTask id="%s" name="%s" itsm:taskPurpose="approval" itsm:approvalMode="single" itsm:%s="%s" itsm:commentRequiredOnReject="true"/>`, id, escape(cfg.Name), attr, escape(value))
+		// cfg.ApprovalMode 透传给 BPMN，而不是硬编码 "single"：createUserTask
+		// （service/bpmn_process_engine.go:809）只有 task.ApprovalMode 非空且不等于 "single"
+		// 时才会建会签任务。硬编码 "single" 会把遗留数据里 approvalMode="all"（3 个 ApproverIDs
+		// 必须全部通过）悄悄降级成 1 个候选人认领就算通过的单人审批——在 ApproverIDs 支持加进来
+		// 之前这个硬编码是死代码（没有节点能产出多个候选人），现在会真的削弱审批强度。
+		approvalMode := string(cfg.ApprovalMode)
+		if approvalMode == "" {
+			approvalMode = "single"
+		}
+		fmt.Fprintf(&tasks, `<bpmn:userTask id="%s" name="%s" itsm:taskPurpose="approval" itsm:approvalMode="%s" itsm:%s="%s" itsm:commentRequiredOnReject="true"/>`, id, escape(cfg.Name), escape(approvalMode), attr, escape(value))
 		fmt.Fprintf(&flows, `<bpmn:sequenceFlow id="Flow_%d" sourceRef="%s" targetRef="%s"/>`, i+1, previous, id)
 		previous = id
 	}

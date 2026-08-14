@@ -322,16 +322,20 @@ class HttpClient {
       if (!response?.ok) {
         const rid = response?.headers?.get('X-Request-Id') || '';
         const suffix = rid ? ` [RID: ${rid}]` : '';
-        // 尝试从响应中获取更详细的错误信息
+        // 尝试从响应中获取更详细的错误信息——注意 throw 不能写在这个 try 块里：
+        // 写在里面会被下面紧跟着的 catch 立刻吞掉（catch 只是为了忽略 JSON 解析失败，
+        // 不是用来吞掉我们自己抛出的、带后端消息的错误），实际效果是不管后端返回什么
+        // message，最终永远走到下面的兜底 "HTTP error! status: N"。
+        let backendMessage: string | undefined;
         try {
           const errorData = await response.json();
           if (errorData && errorData.message) {
-            throw new Error(errorData.message + suffix);
+            backendMessage = errorData.message;
           }
         } catch {
           // Ignore JSON parse errors, use default message
         }
-        throw new Error(`HTTP error! status: ${response?.status}${suffix}`);
+        throw new Error((backendMessage ?? `HTTP error! status: ${response?.status}`) + suffix);
       }
 
       const responseData = (await response.json()) as ApiResponse<T>;

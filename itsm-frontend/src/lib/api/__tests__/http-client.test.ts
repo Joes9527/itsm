@@ -279,13 +279,32 @@ describe('httpClient', () => {
       expect(fetchMock.mock.calls[1][1].headers['X-CSRF-Token']).toBe('mock-csrf-token');
     });
 
-    it('does not retry permission-related 403 responses', async () => {
+    it('does not retry permission-related 403 responses, and surfaces the backend message', async () => {
       fetchMock.mockResolvedValueOnce(
         jsonResponse({ code: 2003, message: 'Forbidden' }, { status: 403, ok: false })
       );
 
-      await expect(httpClient.delete('/api/v1/changes/1')).rejects.toThrow('status: 403');
+      // 曾经这里断言的是 'status: 403'（兜底文案）——那是一个 bug 的产物：!response.ok
+      // 分支里 `throw new Error(errorData.message + suffix)` 写在 try 块内，被紧跟着的
+      // catch {} 吞掉，导致后端的具体错误信息永远传不到调用方。现在断言真正的后端消息。
+      await expect(httpClient.delete('/api/v1/changes/1')).rejects.toThrow('Forbidden');
       expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('surfaces the backend message for any non-2xx JSON error response, not just 403s', async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({ code: 2003, message: '旧审批工作流系统已下线，请使用 BPMN 流程设计器' }, { status: 403, ok: false })
+      );
+
+      await expect(httpClient.put('/api/v1/approval-workflows/1', { name: 'x' })).rejects.toThrow(
+        '旧审批工作流系统已下线，请使用 BPMN 流程设计器'
+      );
+    });
+
+    it('falls back to the generic status message when the error body has no message field', async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ code: 5001 }, { status: 500, ok: false }));
+
+      await expect(httpClient.get('/api/v1/tickets/1')).rejects.toThrow(/status: 500/);
     });
 
     it('uses browser credentials instead of reading a token cookie', async () => {

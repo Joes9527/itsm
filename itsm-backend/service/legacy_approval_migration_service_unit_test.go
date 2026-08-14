@@ -245,6 +245,7 @@ func TestLegacyApprovalMigrationService_MigrateAllForTenant_OneFailureDoesNotBlo
 
 	_, err = client.ApprovalWorkflow.Create().
 		SetName("坏的审批（amount_based）").
+		SetTicketType("change").
 		SetIsActive(true).
 		SetTenantID(tenant.ID).
 		SetNodes([]map[string]interface{}{
@@ -255,6 +256,7 @@ func TestLegacyApprovalMigrationService_MigrateAllForTenant_OneFailureDoesNotBlo
 
 	_, err = client.ApprovalWorkflow.Create().
 		SetName("好的审批").
+		SetTicketType("incident").
 		SetIsActive(true).
 		SetTenantID(tenant.ID).
 		SetNodes([]map[string]interface{}{
@@ -295,12 +297,12 @@ func TestLegacyApprovalMigrationService_MigrateAllTenants_GroupsByTenant(t *test
 	require.NoError(t, err)
 
 	_, err = client.ApprovalWorkflow.Create().
-		SetName("T1 审批").SetIsActive(true).SetTenantID(tenant1.ID).
+		SetName("T1 审批").SetTicketType("incident").SetIsActive(true).SetTenantID(tenant1.ID).
 		SetNodes([]map[string]interface{}{{"level": 1, "name": "审批", "assigneeType": "user", "assigneeValue": "1", "approvalMode": "any"}}).
 		Save(ctx)
 	require.NoError(t, err)
 	_, err = client.ApprovalWorkflow.Create().
-		SetName("T2 审批").SetIsActive(true).SetTenantID(tenant2.ID).
+		SetName("T2 审批").SetTicketType("incident").SetIsActive(true).SetTenantID(tenant2.ID).
 		SetNodes([]map[string]interface{}{{"level": 1, "name": "审批", "assigneeType": "user", "assigneeValue": "1", "approvalMode": "any"}}).
 		Save(ctx)
 	require.NoError(t, err)
@@ -359,9 +361,12 @@ func TestLegacyApprovalMigrationService_Migrate_CreatesReachableProcessBinding(t
 	assert.Equal(t, result.ProcessDefinitionKey, key, "迁移出来的绑定必须能被 resolver 匹配到，而不是落回 ticket_general_flow 兜底")
 }
 
-// TestLegacyApprovalMigrationService_Migrate_EmptyTicketTypeBindingIsReachable 覆盖
-// workflow.TicketType 为空的情况：子类型兜底成 "ticket"，绑定依然可达（通用工单路径）。
-func TestLegacyApprovalMigrationService_Migrate_EmptyTicketTypeBindingIsReachable(t *testing.T) {
+// TestLegacyApprovalMigrationService_Migrate_EmptyTicketTypeAborts 覆盖
+// workflow.TicketType 为空的情况：不能兜底成字面量 "ticket"（真实工单的 Type 从不是这个
+// 字面量——ent/schema/ticket.go 默认值是 "incident"，种子/管理界面用的是
+// incident/problem/change/service_request 等），兜底出来的绑定行会跟修复前一样永远不可达，
+// 只是换了个值。没有工单类型的遗留工作流直接失败，不静默生成一条查不到的绑定。
+func TestLegacyApprovalMigrationService_Migrate_EmptyTicketTypeAborts(t *testing.T) {
 	client := newMigrationTestClient(t)
 	ctx := context.Background()
 
@@ -381,19 +386,40 @@ func TestLegacyApprovalMigrationService_Migrate_EmptyTicketTypeBindingIsReachabl
 
 	svc := NewLegacyApprovalMigrationService(client)
 	result, err := svc.Migrate(ctx, workflow, false)
+	require.Error(t, err)
+	require.Nil(t, result)
+	assert.Contains(t, err.Error(), "no ticket type")
+
+	count, err := client.ProcessBinding.Query().Count(ctx)
+	require.NoError(t, err)
+	assert.Zero(t, count, "失败的迁移不应该留下任何 ProcessBinding")
+}
+
+// TestLegacyApprovalMigrationService_Migrate_EmptyTicketTypeAbortsEvenInDryRun 确认 dry-run
+// 预览也能看到这个错误，而不是等到 --dry-run=false 真正部署之后才发现。
+func TestLegacyApprovalMigrationService_Migrate_EmptyTicketTypeAbortsEvenInDryRun(t *testing.T) {
+	client := newMigrationTestClient(t)
+	ctx := context.Background()
+
+	tenant, err := client.Tenant.Create().
+		SetName("Empty Type Dry Run Tenant").SetCode("empty-type-dry-run-tenant").
+		SetDomain("empty-type-dry-run.example.com").SetStatus("active").
+		Save(ctx)
 	require.NoError(t, err)
 
-	binding, err := client.ProcessBinding.Query().
-		Where(processbinding.ProcessDefinitionKey(result.ProcessDefinitionKey)).
-		Only(ctx)
+	workflow, err := client.ApprovalWorkflow.Create().
+		SetName("无类型审批-预览").SetIsActive(true).SetTenantID(tenant.ID).
+		SetNodes([]map[string]interface{}{
+			{"level": 1, "name": "经理审批", "assigneeType": "user", "assigneeValue": "1", "approvalMode": "any"},
+		}).
+		Save(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, string(dto.BusinessTypeTicket), binding.BusinessType)
-	assert.Equal(t, string(dto.BusinessTypeTicket), binding.BusinessSubType, "TicketType 为空时子类型兜底成 ticket")
 
-	resolver := NewProcessResolver(client, NewProcessBindingService(client))
-	key, err := resolver.Resolve(ctx, &ent.Ticket{Type: "ticket", Priority: "medium", TenantID: tenant.ID}, "")
-	require.NoError(t, err)
-	assert.Equal(t, result.ProcessDefinitionKey, key)
+	svc := NewLegacyApprovalMigrationService(client)
+	result, err := svc.Migrate(ctx, workflow, true)
+	require.Error(t, err)
+	require.Nil(t, result)
+	assert.Contains(t, err.Error(), "no ticket type")
 }
 
 func TestLegacyApprovalMigrationService_MigrateAllForTenant_DryRunDoesNotPersist(t *testing.T) {
@@ -405,7 +431,7 @@ func TestLegacyApprovalMigrationService_MigrateAllForTenant_DryRunDoesNotPersist
 		Save(ctx)
 	require.NoError(t, err)
 	_, err = client.ApprovalWorkflow.Create().
-		SetName("试运行审批").SetIsActive(true).SetTenantID(tenant.ID).
+		SetName("试运行审批").SetTicketType("incident").SetIsActive(true).SetTenantID(tenant.ID).
 		SetNodes([]map[string]interface{}{{"level": 1, "name": "审批", "assigneeType": "user", "assigneeValue": "1", "approvalMode": "any"}}).
 		Save(ctx)
 	require.NoError(t, err)
