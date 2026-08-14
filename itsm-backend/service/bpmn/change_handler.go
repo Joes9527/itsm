@@ -144,47 +144,47 @@ func (h *ChangeServiceTaskHandler) updateChange(ctx context.Context, variables m
 // approve_change 这个 action 在 CAB 审批节点（Activity_CABApproval）本身触发，
 // 不管审批结果是 approve 还是 reject 都会走到这里（节点自己的 action 是固定的，
 // 不代表审批结果）——真正的终态判定在 schedule_change/reject_change。
-// 这里不改 Change.Status，只做一次存在性确认，避免 business_id 无效时静默成功。
+// 这里不改 Change.Status，只做一次存在性确认，避免 change_id 无效时静默成功。
 func (h *ChangeServiceTaskHandler) approveChange(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
-	businessID := GetIntFromVars(variables, "business_id")
-	if businessID <= 0 {
+	changeID := GetIntFromVars(variables, "change_id")
+	if changeID <= 0 {
 		return nil, fmt.Errorf("无效的变更ID")
 	}
 
-	_, err := h.client.Change.Get(ctx, businessID)
+	_, err := h.client.Change.Get(ctx, changeID)
 	if err != nil {
 		return nil, fmt.Errorf("变更不存在: %w", err)
 	}
 	return &dto.ServiceTaskResult{
 		Success: true,
-		Message: fmt.Sprintf("变更 %d 审批节点已处理", businessID),
+		Message: fmt.Sprintf("变更 %d 审批节点已处理", changeID),
 	}, nil
 }
 
 // rejectChange 驳回变更
 func (h *ChangeServiceTaskHandler) rejectChange(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
-	businessID := GetIntFromVars(variables, "business_id")
-	if businessID <= 0 {
+	changeID := GetIntFromVars(variables, "change_id")
+	if changeID <= 0 {
 		return nil, fmt.Errorf("无效的变更ID")
 	}
-	if err := h.transitionChangeStatus(ctx, businessID, "rejected"); err != nil {
+	if err := h.transitionChangeStatus(ctx, changeID, "rejected"); err != nil {
 		return nil, err
 	}
 	return &dto.ServiceTaskResult{
 		Success: true,
-		Message: fmt.Sprintf("变更 %d 已驳回", businessID),
+		Message: fmt.Sprintf("变更 %d 已驳回", changeID),
 	}, nil
 }
 
 // scheduleChange 排期变更
 func (h *ChangeServiceTaskHandler) scheduleChange(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
-	businessID := GetIntFromVars(variables, "business_id")
-	if businessID <= 0 {
+	changeID := GetIntFromVars(variables, "change_id")
+	if changeID <= 0 {
 		return nil, fmt.Errorf("无效的变更ID")
 	}
 
 	// 先转移状态为 approved（CAB 批准后的状态）
-	if err := h.transitionChangeStatus(ctx, businessID, "approved"); err != nil {
+	if err := h.transitionChangeStatus(ctx, changeID, "approved"); err != nil {
 		return nil, err
 	}
 
@@ -197,7 +197,7 @@ func (h *ChangeServiceTaskHandler) scheduleChange(ctx context.Context, variables
 		plannedEnd, _ = time.Parse(time.RFC3339, endStr)
 	}
 
-	updateQuery := h.client.Change.UpdateOneID(businessID)
+	updateQuery := h.client.Change.UpdateOneID(changeID)
 	if !plannedStart.IsZero() {
 		updateQuery.SetPlannedStartDate(plannedStart)
 	}
@@ -210,26 +210,26 @@ func (h *ChangeServiceTaskHandler) scheduleChange(ctx context.Context, variables
 		return nil, fmt.Errorf("排期变更失败: %w", err)
 	}
 
-	h.logger.Infow("Change scheduled via BPMN", "change_id", businessID)
+	h.logger.Infow("Change scheduled via BPMN", "change_id", changeID)
 
 	return &dto.ServiceTaskResult{
 		Success: true,
-		Message: fmt.Sprintf("变更 %d 已排期", businessID),
+		Message: fmt.Sprintf("变更 %d 已排期", changeID),
 	}, nil
 }
 
 // transitionChangeStatus 统一做状态机校验后写入，任何调用点都不能绕过
 // isValidChangeStatusTransition —— BPMN 回调跟 handlers/change 自己的
 // TransitionStatus 必须遵守同一套状态机规则，不能各自为政。
-func (h *ChangeServiceTaskHandler) transitionChangeStatus(ctx context.Context, businessID int, targetStatus string) error {
-	c, err := h.client.Change.Get(ctx, businessID)
+func (h *ChangeServiceTaskHandler) transitionChangeStatus(ctx context.Context, changeID int, targetStatus string) error {
+	c, err := h.client.Change.Get(ctx, changeID)
 	if err != nil {
 		return fmt.Errorf("变更不存在: %w", err)
 	}
 	if !isValidChangeStatusTransition(c.Status, targetStatus, c.Type) {
 		return fmt.Errorf("无效的状态转换: 从 %q 到 %q", c.Status, targetStatus)
 	}
-	_, err = h.client.Change.UpdateOneID(businessID).SetStatus(targetStatus).Save(ctx)
+	_, err = h.client.Change.UpdateOneID(changeID).SetStatus(targetStatus).Save(ctx)
 	if err != nil {
 		return fmt.Errorf("更新变更状态失败: %w", err)
 	}

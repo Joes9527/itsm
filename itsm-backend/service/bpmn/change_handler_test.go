@@ -44,8 +44,8 @@ func TestChangeServiceTaskHandler_ApproveChangeAction_DoesNotWriteInvalidStatus(
 	c := createTestChangeForHandler(t, client, 1, "pending")
 
 	_, err := handler.Execute(context.Background(), nil, map[string]interface{}{
-		"action":      "approve_change",
-		"business_id": float64(c.ID),
+		"action":     "approve_change",
+		"change_id":  float64(c.ID),
 	})
 	require.NoError(t, err)
 
@@ -63,8 +63,8 @@ func TestChangeServiceTaskHandler_ScheduleChangeAction_WritesApproved(t *testing
 	c := createTestChangeForHandler(t, client, 1, "pending")
 
 	_, err := handler.Execute(context.Background(), nil, map[string]interface{}{
-		"action":      "schedule_change",
-		"business_id": float64(c.ID),
+		"action":    "schedule_change",
+		"change_id": float64(c.ID),
 	})
 	require.NoError(t, err)
 
@@ -81,8 +81,8 @@ func TestChangeServiceTaskHandler_RejectChangeAction_WritesRejected(t *testing.T
 	c := createTestChangeForHandler(t, client, 1, "pending")
 
 	_, err := handler.Execute(context.Background(), nil, map[string]interface{}{
-		"action":      "reject_change",
-		"business_id": float64(c.ID),
+		"action":    "reject_change",
+		"change_id": float64(c.ID),
 	})
 	require.NoError(t, err)
 
@@ -100,8 +100,8 @@ func TestChangeServiceTaskHandler_ScheduleChangeAction_InvalidTransitionRejected
 	c := createTestChangeForHandler(t, client, 1, "rejected")
 
 	_, err := handler.Execute(context.Background(), nil, map[string]interface{}{
-		"action":      "schedule_change",
-		"business_id": float64(c.ID),
+		"action":    "schedule_change",
+		"change_id": float64(c.ID),
 	})
 	require.Error(t, err)
 
