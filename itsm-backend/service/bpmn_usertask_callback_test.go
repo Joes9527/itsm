@@ -101,8 +101,8 @@ func TestUserTaskWithServiceTaskTypeMetadataTriggersCallback(t *testing.T) {
 
 	updated, err := client.Change.Get(ctx, ch.ID)
 	require.NoError(t, err)
-	require.Equal(t, "pending_approval", updated.Status,
-		"完成 Activity_CABApproval 必须触发 ChangeServiceTaskHandler.approveChange，把 Change.Status 更新成 pending_approval")
+	require.Equal(t, "draft", updated.Status,
+		"完成 Activity_CABApproval 触发 ChangeServiceTaskHandler.approveChange，但该回调不改变状态（approve_change 是节点本身的固定 action，不代表审批结果），真正的状态转换发生在后续的 schedule_change/reject_change")
 }
 
 // TestUserTaskMetadataPropagatedIntoTaskVariables 锁定 metadata 的传播链路：
