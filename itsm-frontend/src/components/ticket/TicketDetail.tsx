@@ -173,6 +173,11 @@ const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
 
   // Get users for assignment
   const fetchUsers = useCallback(async () => {
+    // end_user/guest 无 user:read 权限，跳过用户列表加载（转派/抄送已按角色隐藏）
+    if (currentUser?.role === 'end_user' || currentUser?.role === 'guest') {
+      setUsers([]);
+      return;
+    }
     try {
       setLoadingUsers(true);
       const data = await UserApi.getUsers({ pageSize: 100 });
@@ -183,7 +188,7 @@ const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
     } finally {
       setLoadingUsers(false);
     }
-  }, [antMessage]);
+  }, [antMessage, currentUser?.role]);
 
   // Get ticket SLA info
   const fetchSLAInfo = useCallback(async () => {

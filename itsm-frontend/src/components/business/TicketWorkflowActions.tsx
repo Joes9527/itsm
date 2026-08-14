@@ -32,6 +32,7 @@ import {
   ApproveTicketRequest,
 } from '@/types/ticket-workflow';
 import type { Ticket } from '@/types/ticket';
+import { useAuthStore } from '@/lib/store/auth-store';
 
 const { TextArea } = Input;
 
@@ -48,6 +49,9 @@ export const TicketWorkflowActions: React.FC<TicketWorkflowActionsProps> = ({
   onAction,
   onRefresh,
 }) => {
+  const { user } = useAuthStore();
+  // end_user/guest 无 user:read 权限，不能加载用户列表（转派/抄送）
+  const isEndUser = user?.role === 'end_user' || user?.role === 'guest';
   const [modalVisible, setModalVisible] = useState(false);
   const [currentAction, setCurrentAction] = useState<TicketWorkflowAction | null>(null);
   const [form] = Form.useForm();
@@ -415,7 +419,7 @@ export const TicketWorkflowActions: React.FC<TicketWorkflowActionsProps> = ({
     });
   }
 
-  if (workflowState.canForward) {
+  if (workflowState.canForward && !isEndUser) {
     moreActions.push({
       key: 'forward',
       label: '转发',
@@ -424,7 +428,7 @@ export const TicketWorkflowActions: React.FC<TicketWorkflowActionsProps> = ({
     });
   }
 
-  if (workflowState.canCC) {
+  if (workflowState.canCC && !isEndUser) {
     moreActions.push({
       key: 'cc',
       label: '抄送',
