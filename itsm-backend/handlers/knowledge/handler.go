@@ -23,9 +23,14 @@ func toArticleDTO(a *Article) *dto.KnowledgeArticleResponse {
 	if a == nil {
 		return nil
 	}
-	status := "draft"
-	if a.IsPublished {
-		status = "published"
+	status := a.ReviewStatus
+	if status == "" {
+		// 兼容旧数据：无 review_status 时按 is_published 映射
+		if a.IsPublished {
+			status = "published"
+		} else {
+			status = "draft"
+		}
 	}
 	return &dto.KnowledgeArticleResponse{
 		ID:        a.ID,
@@ -522,4 +527,55 @@ func (h *Handler) CompareArticleVersions(c *gin.Context) {
 		return
 	}
 	common.Success(c, result)
+}
+
+// ==================== 审核 ====================
+
+// SubmitArticleForReview handles POST /api/v1/knowledge/articles/:id/review
+func (h *Handler) SubmitArticleForReview(c *gin.Context) {
+	id, ok := common.ParsePositiveID(c, "id")
+	if !ok {
+		return
+	}
+	tenantID, ok := c.Get("tenant_id")
+	if !ok {
+		common.ParamError(c, "Tenant ID not found")
+		return
+	}
+
+	article, err := h.svc.SubmitForReview(c.Request.Context(), id, tenantID.(int))
+	if err != nil {
+		common.InternalError(c, err.Error())
+		return
+	}
+	common.Success(c, toArticleDTO(article))
+}
+
+// ReviewArticleDecision handles POST /api/v1/knowledge/articles/:id/review/decision
+func (h *Handler) ReviewArticleDecision(c *gin.Context) {
+	id, ok := common.ParsePositiveID(c, "id")
+	if !ok {
+		return
+	}
+	tenantID, ok := c.Get("tenant_id")
+	if !ok {
+		common.ParamError(c, "Tenant ID not found")
+		return
+	}
+
+	var req struct {
+		Action  string `json:"action" binding:"required,oneof=approve reject"`
+		Comment string `json:"comment"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ParamError(c, "Invalid request body: "+err.Error())
+		return
+	}
+
+	article, err := h.svc.ReviewDecision(c.Request.Context(), id, tenantID.(int), req.Action, req.Comment)
+	if err != nil {
+		common.InternalError(c, err.Error())
+		return
+	}
+	common.Success(c, toArticleDTO(article))
 }

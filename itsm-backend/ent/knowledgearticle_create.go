@@ -83,6 +83,18 @@ func (_c *KnowledgeArticleCreate) SetTenantID(v int) *KnowledgeArticleCreate {
 	return _c
 }
 
+// SetReviewStatus sets the "review_status" field.
+func (_c *KnowledgeArticleCreate) SetReviewStatus(v string) *KnowledgeArticleCreate {
+	_c.mutation.SetReviewStatus(v)
+	return _c
+}
+
+// SetReviewComment sets the "review_comment" field.
+func (_c *KnowledgeArticleCreate) SetReviewComment(v string) *KnowledgeArticleCreate {
+	_c.mutation.SetReviewComment(v)
+	return _c
+}
+
 // SetIsPublished sets the "is_published" field.
 func (_c *KnowledgeArticleCreate) SetIsPublished(v bool) *KnowledgeArticleCreate {
 	_c.mutation.SetIsPublished(v)
@@ -247,6 +259,14 @@ func (_c *KnowledgeArticleCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *KnowledgeArticleCreate) defaults() {
+	if _, ok := _c.mutation.ReviewStatus(); !ok {
+		v := knowledgearticle.DefaultReviewStatus
+		_c.mutation.SetReviewStatus(v)
+	}
+	if _, ok := _c.mutation.ReviewComment(); !ok {
+		v := knowledgearticle.DefaultReviewComment
+		_c.mutation.SetReviewComment(v)
+	}
 	if _, ok := _c.mutation.IsPublished(); !ok {
 		v := knowledgearticle.DefaultIsPublished
 		_c.mutation.SetIsPublished(v)

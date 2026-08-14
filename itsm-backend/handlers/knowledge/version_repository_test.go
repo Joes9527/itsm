@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 )
 
 // setupVersionTest 创建测试环境：文章 + 版本仓储
@@ -102,4 +103,54 @@ func TestVersionFlow_CrossTenantIsolation(t *testing.T) {
 
 	_, err = repo.GetVersion(ctx, article.ID, 1, 99)
 	require.Error(t, err)
+}
+
+func TestReviewFlow_SubmitAndApprove(t *testing.T) {
+	repo, article, ctx := setupVersionTest(t)
+
+	svc := &Service{repo: repo, logger: nil}
+	_ = svc
+
+	// 提交审核
+	submitted, err := repo.Update(ctx, &Article{
+		ID: article.ID, Title: article.Title, Content: article.Content,
+		Category: article.Category, Tags: article.Tags, AuthorID: article.AuthorID,
+		TenantID: article.TenantID, IsPublished: false, ReviewStatus: "under_review",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "under_review", submitted.ReviewStatus)
+
+	// 批准
+	approved, err := repo.Update(ctx, &Article{
+		ID: submitted.ID, Title: submitted.Title, Content: submitted.Content,
+		Category: submitted.Category, Tags: submitted.Tags, AuthorID: submitted.AuthorID,
+		TenantID: submitted.TenantID, IsPublished: true, ReviewStatus: "published",
+		ReviewComment: "审核通过",
+	})
+	require.NoError(t, err)
+	assert.True(t, approved.IsPublished)
+	assert.Equal(t, "published", approved.ReviewStatus)
+	assert.Equal(t, "审核通过", approved.ReviewComment)
+}
+
+func TestReviewFlow_RejectRequiresComment(t *testing.T) {
+	repo, article, ctx := setupVersionTest(t)
+
+	svc := NewService(repo, zaptest.NewLogger(t).Sugar())
+
+	// 提交审核
+	if _, err := svc.SubmitForReview(ctx, article.ID, article.TenantID); err != nil {
+		t.Fatalf("submit failed: %v", err)
+	}
+
+	// 拒绝无意见 → 错误
+	_, err := svc.ReviewDecision(ctx, article.ID, article.TenantID, "reject", "")
+	require.Error(t, err)
+
+	// 拒绝有意见 → 回到 draft
+	rejected, err := svc.ReviewDecision(ctx, article.ID, article.TenantID, "reject", "内容不足")
+	require.NoError(t, err)
+	assert.Equal(t, "draft", rejected.ReviewStatus)
+	assert.False(t, rejected.IsPublished)
+	assert.Equal(t, "内容不足", rejected.ReviewComment)
 }

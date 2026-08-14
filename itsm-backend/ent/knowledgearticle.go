@@ -30,7 +30,9 @@ type KnowledgeArticle struct {
 	// 租户ID
 	TenantID int `json:"tenant_id,omitempty"`
 	// 是否发布
-	IsPublished bool `json:"is_published,omitempty"`
+	IsPublished   bool   `json:"is_published,omitempty"`
+	ReviewStatus  string `json:"review_status,omitempty"`
+	ReviewComment string `json:"review_comment,omitempty"`
 	// 浏览次数
 	ViewCount int `json:"view_count,omitempty"`
 	// 点赞次数
@@ -97,7 +99,7 @@ func (*KnowledgeArticle) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case knowledgearticle.FieldID, knowledgearticle.FieldAuthorID, knowledgearticle.FieldTenantID, knowledgearticle.FieldViewCount, knowledgearticle.FieldLikeCount:
 			values[i] = new(sql.NullInt64)
-		case knowledgearticle.FieldTitle, knowledgearticle.FieldContent, knowledgearticle.FieldCategory, knowledgearticle.FieldTags:
+		case knowledgearticle.FieldTitle, knowledgearticle.FieldContent, knowledgearticle.FieldCategory, knowledgearticle.FieldTags, knowledgearticle.FieldReviewStatus, knowledgearticle.FieldReviewComment:
 			values[i] = new(sql.NullString)
 		case knowledgearticle.FieldCreatedAt, knowledgearticle.FieldUpdatedAt, knowledgearticle.FieldDeletedAt:
 			values[i] = new(sql.NullTime)
@@ -141,6 +143,18 @@ func (_m *KnowledgeArticle) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field category", values[i])
 			} else if value.Valid {
 				_m.Category = value.String
+			}
+		case knowledgearticle.FieldReviewStatus:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field review_status", values[i])
+			} else if value.Valid {
+				_m.ReviewStatus = value.String
+			}
+		case knowledgearticle.FieldReviewComment:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field review_comment", values[i])
+			} else if value.Valid {
+				_m.ReviewComment = value.String
 			}
 		case knowledgearticle.FieldTags:
 			if value, ok := values[i].(*sql.NullString); !ok {

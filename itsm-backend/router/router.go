@@ -1054,6 +1054,10 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 					articles.GET("/:id/versions/compare", middleware.RequirePermission("knowledge", "read"), config.KnowledgeHandler.CompareArticleVersions)
 					articles.POST("/:id/versions/:version/restore", middleware.RequirePermission("knowledge", "write"), config.KnowledgeHandler.RestoreArticleVersion)
 
+					// Review workflow
+					articles.POST("/:id/review", middleware.RequirePermission("knowledge", "write"), config.KnowledgeHandler.SubmitArticleForReview)
+					articles.POST("/:id/review/decision", middleware.RequirePermission("knowledge", "write"), config.KnowledgeHandler.ReviewArticleDecision)
+
 					// Comments
 					articles.GET("/:id/comments", middleware.RequirePermission("knowledge", "read"), config.KnowledgeHandler.GetArticleComments)
 					articles.POST("/:id/comments", middleware.RequirePermission("knowledge", "write"), config.KnowledgeHandler.AddArticleComment)

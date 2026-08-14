@@ -485,6 +485,26 @@ func TenantIDLTE(v int) predicate.KnowledgeArticle {
 	return predicate.KnowledgeArticle(sql.FieldLTE(FieldTenantID, v))
 }
 
+// ReviewStatus applies equality check predicate on the "review_status" field. It's identical to ReviewStatusEQ.
+func ReviewStatus(v string) predicate.KnowledgeArticle {
+	return predicate.KnowledgeArticle(sql.FieldEQ(FieldReviewStatus, v))
+}
+
+// ReviewStatusEQ applies the EQ predicate on the "review_status" field.
+func ReviewStatusEQ(v string) predicate.KnowledgeArticle {
+	return predicate.KnowledgeArticle(sql.FieldEQ(FieldReviewStatus, v))
+}
+
+// ReviewComment applies equality check predicate on the "review_comment" field. It's identical to ReviewCommentEQ.
+func ReviewComment(v string) predicate.KnowledgeArticle {
+	return predicate.KnowledgeArticle(sql.FieldEQ(FieldReviewComment, v))
+}
+
+// ReviewCommentEQ applies the EQ predicate on the "review_comment" field.
+func ReviewCommentEQ(v string) predicate.KnowledgeArticle {
+	return predicate.KnowledgeArticle(sql.FieldEQ(FieldReviewComment, v))
+}
+
 // IsPublishedEQ applies the EQ predicate on the "is_published" field.
 func IsPublishedEQ(v bool) predicate.KnowledgeArticle {
 	return predicate.KnowledgeArticle(sql.FieldEQ(FieldIsPublished, v))

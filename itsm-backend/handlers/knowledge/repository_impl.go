@@ -45,16 +45,18 @@ func toDomain(e *ent.KnowledgeArticle) *Article {
 		tags = strings.Split(e.Tags, ",")
 	}
 	return &Article{
-		ID:          e.ID,
-		Title:       e.Title,
-		Content:     e.Content,
-		Category:    e.Category,
-		Tags:        tags,
-		AuthorID:    e.AuthorID,
-		TenantID:    e.TenantID,
-		IsPublished: e.IsPublished,
-		CreatedAt:   e.CreatedAt,
-		UpdatedAt:   e.UpdatedAt,
+		ID:            e.ID,
+		Title:         e.Title,
+		Content:       e.Content,
+		Category:      e.Category,
+		Tags:          tags,
+		AuthorID:      e.AuthorID,
+		TenantID:      e.TenantID,
+		IsPublished:   e.IsPublished,
+		ReviewStatus:  e.ReviewStatus,
+		ReviewComment: e.ReviewComment,
+		CreatedAt:     e.CreatedAt,
+		UpdatedAt:     e.UpdatedAt,
 	}
 }
 
@@ -68,6 +70,8 @@ func (r *EntRepository) Create(ctx context.Context, a *Article) (*Article, error
 		SetAuthorID(a.AuthorID).
 		SetTenantID(a.TenantID).
 		SetIsPublished(a.IsPublished).
+		SetReviewStatus(a.ReviewStatus).
+		SetReviewComment(a.ReviewComment).
 		Save(ctx)
 	if err != nil {
 		return nil, err
@@ -133,6 +137,8 @@ func (r *EntRepository) Update(ctx context.Context, a *Article) (*Article, error
 		SetCategory(a.Category).
 		SetTags(tagsStr).
 		SetIsPublished(a.IsPublished).
+		SetReviewStatus(a.ReviewStatus).
+		SetReviewComment(a.ReviewComment).
 		Save(ctx)
 	if err != nil {
 		return nil, err

@@ -1696,22 +1696,26 @@ func init() {
 	knowledgearticle.TenantIDValidator = knowledgearticleDescTenantID.Validators[0].(func(int) error)
 	// knowledgearticleDescIsPublished is the schema descriptor for is_published field.
 	knowledgearticleDescIsPublished := knowledgearticleFields[6].Descriptor()
+	knowledgearticleDescReviewStatus := knowledgearticleFields[7].Descriptor()
+	knowledgearticleDescReviewComment := knowledgearticleFields[8].Descriptor()
 	// knowledgearticle.DefaultIsPublished holds the default value on creation for the is_published field.
 	knowledgearticle.DefaultIsPublished = knowledgearticleDescIsPublished.Default.(bool)
+	knowledgearticle.DefaultReviewStatus = knowledgearticleDescReviewStatus.Default.(string)
+	knowledgearticle.DefaultReviewComment = knowledgearticleDescReviewComment.Default.(string)
 	// knowledgearticleDescViewCount is the schema descriptor for view_count field.
-	knowledgearticleDescViewCount := knowledgearticleFields[7].Descriptor()
+	knowledgearticleDescViewCount := knowledgearticleFields[9].Descriptor()
 	// knowledgearticle.DefaultViewCount holds the default value on creation for the view_count field.
 	knowledgearticle.DefaultViewCount = knowledgearticleDescViewCount.Default.(int)
 	// knowledgearticleDescLikeCount is the schema descriptor for like_count field.
-	knowledgearticleDescLikeCount := knowledgearticleFields[8].Descriptor()
+	knowledgearticleDescLikeCount := knowledgearticleFields[10].Descriptor()
 	// knowledgearticle.DefaultLikeCount holds the default value on creation for the like_count field.
 	knowledgearticle.DefaultLikeCount = knowledgearticleDescLikeCount.Default.(int)
 	// knowledgearticleDescCreatedAt is the schema descriptor for created_at field.
-	knowledgearticleDescCreatedAt := knowledgearticleFields[9].Descriptor()
+	knowledgearticleDescCreatedAt := knowledgearticleFields[11].Descriptor()
 	// knowledgearticle.DefaultCreatedAt holds the default value on creation for the created_at field.
 	knowledgearticle.DefaultCreatedAt = knowledgearticleDescCreatedAt.Default.(func() time.Time)
 	// knowledgearticleDescUpdatedAt is the schema descriptor for updated_at field.
-	knowledgearticleDescUpdatedAt := knowledgearticleFields[10].Descriptor()
+	knowledgearticleDescUpdatedAt := knowledgearticleFields[12].Descriptor()
 	// knowledgearticle.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	knowledgearticle.DefaultUpdatedAt = knowledgearticleDescUpdatedAt.Default.(func() time.Time)
 	// knowledgearticle.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

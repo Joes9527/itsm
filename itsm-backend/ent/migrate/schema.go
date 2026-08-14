@@ -1829,6 +1829,8 @@ var (
 		{Name: "author_id", Type: field.TypeInt},
 		{Name: "tenant_id", Type: field.TypeInt},
 		{Name: "is_published", Type: field.TypeBool, Default: false},
+		{Name: "review_status", Type: field.TypeString, Default: "draft"},
+		{Name: "review_comment", Type: field.TypeString, Default: ""},
 		{Name: "view_count", Type: field.TypeInt, Default: 0},
 		{Name: "like_count", Type: field.TypeInt, Default: 0},
 		{Name: "created_at", Type: field.TypeTime},
@@ -1844,7 +1846,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "knowledge_articles_known_errors_knowledge_articles",
-				Columns:    []*schema.Column{KnowledgeArticlesColumns[13]},
+				Columns:    []*schema.Column{KnowledgeArticlesColumns[15]},
 				RefColumns: []*schema.Column{KnownErrorsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},

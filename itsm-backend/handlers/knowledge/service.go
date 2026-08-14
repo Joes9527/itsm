@@ -191,3 +191,44 @@ func (s *Service) NextVersion(ctx context.Context, articleID int, tenantID int) 
 func (s *Service) SnapshotVersion(ctx context.Context, v *ArticleVersion) (*ArticleVersion, error) {
 	return s.repo.SnapshotVersion(ctx, v)
 }
+
+// ==================== 审核 ====================
+
+// SubmitForReview 提交审核：draft → under_review
+func (s *Service) SubmitForReview(ctx context.Context, articleID int, tenantID int) (*Article, error) {
+	article, err := s.repo.Get(ctx, articleID, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if article.IsPublished {
+		return nil, fmt.Errorf("已发布文章无需再次审核")
+	}
+	article.ReviewStatus = "under_review"
+	s.logger.Infow("Submitted knowledge article for review", "id", articleID)
+	return s.repo.Update(ctx, article)
+}
+
+// ReviewDecision 审核决定：approve → published；reject → draft（附意见）
+func (s *Service) ReviewDecision(ctx context.Context, articleID int, tenantID int, action, comment string) (*Article, error) {
+	article, err := s.repo.Get(ctx, articleID, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	switch action {
+	case "approve":
+		article.ReviewStatus = "published"
+		article.IsPublished = true
+		article.ReviewComment = comment
+	case "reject":
+		if strings.TrimSpace(comment) == "" {
+			return nil, fmt.Errorf("拒绝审核必须填写意见")
+		}
+		article.ReviewStatus = "draft"
+		article.IsPublished = false
+		article.ReviewComment = comment
+	default:
+		return nil, fmt.Errorf("无效的审核动作: %s", action)
+	}
+	s.logger.Infow("Knowledge article review decision", "id", articleID, "action", action)
+	return s.repo.Update(ctx, article)
+}
