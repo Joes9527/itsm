@@ -16,7 +16,7 @@ import (
 	_ "itsm-backend/connector/builtin/console"
 	_ "itsm-backend/connector/builtin/dingtalk"
 	_ "itsm-backend/connector/builtin/feishu"
-	_ "itsm-backend/connector/builtin/msgraph"
+	msgraph "itsm-backend/connector/builtin/msgraph"
 	_ "itsm-backend/connector/builtin/webhook"
 	_ "itsm-backend/connector/builtin/wecom"
 	"itsm-backend/connector/marketplace"
@@ -236,6 +236,28 @@ func NewApplication() *Application {
 
 	// 通知 / 审批 / SLA / 自动化 / 序列服务（V2 子服务）
 	ticketNotificationService := service.NewTicketNotificationService(client, sugar)
+	// 邮件通知（Graph sendMail 为主，SMTP fallback）
+	emailService := service.NewEmailService(service.EmailConfig{
+		Host:     cfg.SMTP.Host,
+		Port:     cfg.SMTP.Port,
+		Username: cfg.SMTP.Username,
+		Password: cfg.SMTP.Password,
+		From:     cfg.SMTP.FromEmail,
+		FromName: cfg.SMTP.FromName,
+	}, sugar)
+	// 延迟绑定 Graph 发信：发信时动态查 msgraph 连接器（单租户 tenantID=1）
+	emailService.SetGraphProvider(func() (service.GraphMailSender, string, bool) {
+		c, ok := connectorManager.Get(1, "msgraph-email")
+		if !ok {
+			return nil, "", false
+		}
+		gc, ok := c.(*msgraph.GraphConnector)
+		if !ok {
+			return nil, "", false
+		}
+		return gc.GraphClient(), gc.Mailbox(), true
+	})
+	ticketNotificationService.SetEmailService(emailService)
 	ticketSLAService := service.NewTicketSLAService(client, sugar)
 	ticketAutomationRuleService := service.NewTicketAutomationRuleService(client, sugar)
 
@@ -581,6 +603,10 @@ func NewApplication() *Application {
 
 	// Auth Controller（装配缺失的 register / forgot-password / reset-password / validate-reset-token / switch-tenant 路由）
 	authService := service.NewAuthService(client, cfg.JWT.Secret, sugar, nil)
+	authService.SetEmailService(emailService)
+	if cfg.Server.FrontendURL != "" {
+		authService.SetBaseURL(cfg.Server.FrontendURL)
+	}
 	authController := controller.NewAuthController(authService)
 
 	// Role Handler (in-memory for now)

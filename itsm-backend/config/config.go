@@ -112,6 +112,7 @@ type ServerConfig struct {
 	Port         int    `mapstructure:"port"`
 	Mode         string `mapstructure:"mode"`
 	CookieSecure bool   `mapstructure:"cookie_secure"` // Secure flag for cookies (set true only behind HTTPS)
+	FrontendURL  string `mapstructure:"frontend_url"`  // 前端地址（邮件重置链接等用）
 }
 
 type JWTConfig struct {
@@ -273,6 +274,7 @@ func LoadConfig() (*Config, error) {
 	config.Database.AdminRoleUser = getEnvWithDefault("DB_ADMIN_ROLE_USER", config.Database.AdminRoleUser)
 	config.Database.AdminRolePassword = getEnvWithDefault("DB_ADMIN_ROLE_PASSWORD", config.Database.AdminRolePassword)
 	config.Server.Mode = getEnvWithDefault("SERVER_MODE", config.Server.Mode)
+	config.Server.FrontendURL = getEnvWithDefault("FRONTEND_URL", config.Server.FrontendURL)
 	config.Log.Level = getEnvWithDefault("LOG_LEVEL", config.Log.Level)
 	config.Log.Path = getEnvWithDefault("LOG_PATH", config.Log.Path)
 	config.Log.Development = os.Getenv("LOG_DEVELOPMENT") == "true"

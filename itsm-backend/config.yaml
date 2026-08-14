@@ -16,6 +16,7 @@ vector:
 server:
   port: 8090
   mode: "${SERVER_MODE:release}"  # Use env: SERVER_MODE, default release
+  frontend_url: "${FRONTEND_URL:http://localhost:3000}"  # 前端地址（邮件重置链接等用）
 
 deployment:
   mode: "${DEPLOYMENT_MODE:private}"  # private | saas | saas_msp
