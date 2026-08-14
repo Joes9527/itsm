@@ -4,6 +4,23 @@ import { httpClient } from './http-client';
  * 用户通知偏好设置接口
  */
 
+// 通知事件类型
+export interface NotificationEventType {
+  code: string;
+  name: string;
+  description: string;
+}
+
+// 单个事件类型的偏好（4 渠道）
+export interface EventTypePreference {
+  eventType: string;
+  emailEnabled: boolean;
+  smsEnabled: boolean;
+  inAppEnabled: boolean;
+  pushEnabled: boolean;
+  timezone?: string;
+}
+
 // 通知偏好设置类型
 export interface NotificationPreference {
   id: number;
@@ -41,26 +58,16 @@ export class NotificationPreferenceApi {
   private static baseURL = '/api/v1/notification-preferences';
 
   /**
-   * 获取当前用户的通知偏好设置列表（兼容profile页面）
+   * 获取当前用户的通知偏好设置列表（兼容 profile 页面）
    * 返回 { preferences: [...], eventTypes: [...] } 格式
    */
   static async getPreferences(): Promise<{
-    preferences: Array<{
-      eventType: string;
-      emailEnabled: boolean;
-      inAppEnabled: boolean;
-      timezone?: string;
-    }>;
-    eventTypes: string[];
+    preferences: EventTypePreference[];
+    eventTypes: NotificationEventType[];
   }> {
     return httpClient.get<{
-      preferences: Array<{
-        eventType: string;
-        emailEnabled: boolean;
-        inAppEnabled: boolean;
-        timezone?: string;
-      }>;
-      eventTypes: string[];
+      preferences: EventTypePreference[];
+      eventTypes: NotificationEventType[];
     }>(`${this.baseURL}`);
   }
 
@@ -121,15 +128,10 @@ export class NotificationPreferenceApi {
   }
 
   /**
-   * 批量更新通知偏好设置
+   * 批量更新通知偏好设置（按事件类型 × 4 渠道）
    */
   static async bulkUpdate(data: {
-    preferences: Array<{
-      eventType: string;
-      emailEnabled: boolean;
-      inAppEnabled: boolean;
-      timezone?: string;
-    }>;
+    preferences: EventTypePreference[];
   }): Promise<{ preferences: unknown[] }> {
     return httpClient.put<{ preferences: unknown[] }>(`${this.baseURL}`, data);
   }
