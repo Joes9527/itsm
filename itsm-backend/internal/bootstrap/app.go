@@ -242,6 +242,14 @@ func NewApplication() *Application {
 	connectorMarket := marketplace.New()
 	connectorController := controller.NewConnectorController(connectorManager, connector.Default(), connectorMarket, sugar)
 
+	// Webhook 事件推送订阅方：sla.breached 按租户推送到已配置的 webhook 端点
+	webhookSubscriber := service.NewWebhookEventSubscriber(connectorManager, sugar)
+	for _, topic := range service.WebhookEventTopics() {
+		if err := eventBus.Subscribe(topic, webhookSubscriber); err != nil {
+			sugar.Warnw("failed to subscribe webhook subscriber", "error", err, "topic", topic)
+		}
+	}
+
 	// 通知 / 审批 / SLA / 自动化 / 序列服务（V2 子服务）
 	ticketNotificationService := service.NewTicketNotificationService(client, sugar)
 	// 邮件通知（Graph sendMail 为主，SMTP fallback）
