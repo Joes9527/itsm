@@ -215,6 +215,14 @@ func NewApplication() *Application {
 	eventbus.SetGlobalEventBus(eventBus)
 	sugar.Infow("Event bus initialized successfully")
 
+	// 事件驱动审计订阅方：sla.breached / ai.triage.completed 写入 AuditLog
+	auditSubscriber := service.NewEventAuditSubscriber(client, sugar)
+	for _, topic := range service.AuditedEventTopics() {
+		if err := eventBus.Subscribe(topic, auditSubscriber); err != nil {
+			sugar.Warnw("failed to subscribe audit subscriber", "error", err, "topic", topic)
+		}
+	}
+
 	// BPMN 子服务（必须在 TicketService 之前创建）
 	processBindingService := service.NewProcessBindingService(client)
 	processEngine := service.NewCustomProcessEngine(client, sugar)
