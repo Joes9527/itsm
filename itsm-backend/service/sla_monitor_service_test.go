@@ -264,3 +264,20 @@ func TestSLAMonitorService_CreateViolation(t *testing.T) {
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, len(violations), 1)
 }
+
+func TestMapViolationTypeToBreachType(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"response_time", "response"},
+		{"resolution_time", "resolve"},
+		{"unknown_type", "unknown_type"},
+	}
+	for _, tt := range tests {
+		got := mapViolationTypeToBreachType(tt.input)
+		if got != tt.expected {
+			t.Errorf("mapViolationTypeToBreachType(%q) = %q, want %q", tt.input, got, tt.expected)
+		}
+	}
+}

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"itsm-backend/common/tenantctx"
@@ -11,6 +12,8 @@ import (
 	"itsm-backend/ent/sladefinition"
 	"itsm-backend/ent/slaviolation"
 	"itsm-backend/ent/ticket"
+	"itsm-backend/pkg/eventbus"
+	"itsm-backend/service/common/event"
 
 	"go.uber.org/zap"
 )
@@ -250,10 +253,39 @@ func (s *SLAMonitorService) createViolation(ctx context.Context, t *ent.Ticket, 
 		}
 	}
 
+	// 发布领域事件（Webhook/自动化规则/审计订阅方）。
+	// 发布失败只告警不阻塞——违规记录已落库。
+	if bus := eventbus.GetGlobalEventBus(); bus != nil {
+		breachType := mapViolationTypeToBreachType(violationType)
+		ev := event.NewSLABreachedEvent(
+			strconv.Itoa(t.TenantID),
+			strconv.Itoa(t.ID),
+			strconv.Itoa(t.SLADefinitionID),
+			breachType,
+			now,
+		)
+		if err := bus.Publish(ev); err != nil {
+			s.logger.Warnw("failed to publish sla.breached event", "error", err,
+				"ticket_id", t.ID, "breach_type", breachType)
+		}
+	}
+
 	s.logger.Infow("SLA violation created and notification sent", "ticket_id", t.ID,
 		"violation_type", violationType, "exceeded_minutes", exceededMinutes)
 
 	return nil
+}
+
+// mapViolationTypeToBreachType 将内部违规类型映射为领域事件契约值
+func mapViolationTypeToBreachType(violationType string) string {
+	switch violationType {
+	case "response_time":
+		return "response"
+	case "resolution_time":
+		return "resolve"
+	default:
+		return violationType
+	}
 }
 
 // checkAndTriggerWarning 检查是否需要发送SLA预警（在截止时间前触发）
