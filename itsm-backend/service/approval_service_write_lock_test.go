@@ -18,7 +18,7 @@ import (
 )
 
 func setupWriteLockTest(t *testing.T) (*ent.Client, *ApprovalService, context.Context) {
-	client := enttest.Open(t, "sqlite3", "file:ent?mode=memory&cache=shared&_fk=1&_busy_timeout=5000")
+	client := enttest.Open(t, "sqlite3", testDSN())
 	logger := zaptest.NewLogger(t).Sugar()
 	svc := NewApprovalService(client, logger)
 	ctx := context.Background()

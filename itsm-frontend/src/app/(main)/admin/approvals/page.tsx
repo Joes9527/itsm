@@ -122,8 +122,16 @@ export default function ApprovalManagement() {
     try {
       const cfg = await SystemConfigAPI.getConfigByKey('legacyApprovalWriteLocked');
       setWriteLocked(cfg.value === 'true');
-    } catch {
-      setWriteLocked(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      if (message.includes('404') || message.includes('配置不存在')) {
+        // 真的没有这条配置——按后端 ApprovalService.isLegacyApprovalWriteLocked 同样的
+        // 安全默认值处理：未锁定。
+        setWriteLocked(false);
+      }
+      // 其它错误（权限不足、网络问题等）——不改变当前已知状态，避免把一个已经查到的
+      // "锁定" 状态因为一次瞬时错误又翻回"未锁定"。初次加载时的默认值本来就是
+      // false（见 useState(false)），这里不需要也不应该在未知情况下强行归零。
     }
   }, []);
 
@@ -162,7 +170,7 @@ export default function ApprovalManagement() {
       loadWorkflows();
     } catch (error) {
       console.error('Failed to save workflow:', error);
-      message.error('保存审批工作流失败');
+      message.error(error instanceof Error ? error.message : '保存审批工作流失败');
     } finally {
       setLoading(false);
     }
@@ -176,7 +184,7 @@ export default function ApprovalManagement() {
       loadWorkflows();
     } catch (error) {
       console.error('Failed to delete workflow:', error);
-      message.error('删除审批工作流失败');
+      message.error(error instanceof Error ? error.message : '删除审批工作流失败');
     }
   };
 
@@ -205,7 +213,7 @@ export default function ApprovalManagement() {
       loadWorkflows();
     } catch (error) {
       console.error('Failed to toggle status:', error);
-      message.error('状态切换失败');
+      message.error(error instanceof Error ? error.message : '状态切换失败');
     }
   };
 

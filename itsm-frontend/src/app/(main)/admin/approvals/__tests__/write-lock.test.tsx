@@ -79,4 +79,32 @@ describe('ApprovalManagement 写锁定状态', () => {
     const createButton = await screen.findByRole('button', { name: /新建工作流/ });
     expect(createButton).not.toBeDisabled();
   });
+
+  it('已知锁定状态不会被第二次非404错误翻回未锁定 —— 回归', async () => {
+    // 当前组件在挂载时只拉取一次写锁定状态，没有手动刷新写锁定状态的入口
+    // （"刷新"按钮只重新拉取工作流列表），所以这里没有办法通过真实的用户操作触发第二次
+    // GetConfigByKey 调用。用 rerender 复现"同一个已挂载实例，state 应该保持"这个场景：
+    // 第一次拉取返回锁定，等锁定状态稳定生效之后，把 mock 换成拒绝（非 404），再 rerender。
+    // 无论是"effect 依赖没变所以压根没有重新发起请求"，还是"发起了但被正确忽略"，
+    // 断言的结果都应该一致：已经确认过的"锁定"状态不能被翻回"未锁定"。
+    mockGetConfigByKey.mockResolvedValueOnce({
+      id: 1,
+      key: 'legacyApprovalWriteLocked',
+      value: 'true',
+      category: 'approval',
+      createdAt: '',
+      updatedAt: '',
+    });
+
+    const { rerender } = render(<ApprovalManagement />);
+
+    await waitFor(() => expect(mockGetConfigByKey).toHaveBeenCalledWith('legacyApprovalWriteLocked'));
+    const createButton = await screen.findByRole('button', { name: /新建工作流/ });
+    await waitFor(() => expect(createButton).toBeDisabled());
+
+    mockGetConfigByKey.mockRejectedValueOnce(new Error('HTTP error! status: 500'));
+    rerender(<ApprovalManagement />);
+
+    await waitFor(() => expect(createButton).toBeDisabled());
+  });
 });

@@ -66,7 +66,7 @@ func main() {
 			systemconfig.TenantIDEQ(*tenantID),
 			systemconfig.DeletedAtIsNil(),
 		).
-		Only(ctx)
+		First(ctx)
 	if err != nil && !ent.IsNotFound(err) {
 		sugar.Fatalw("query existing lock state", "tenant_id", *tenantID, "error", err)
 	}
