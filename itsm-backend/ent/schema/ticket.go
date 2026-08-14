@@ -43,6 +43,15 @@ func (Ticket) Fields() []ent.Field {
 		field.Int("requester_id").
 			Comment("申请人ID").
 			Positive(),
+		field.String("creator_email").
+			Comment("创建人邮箱（邮件开单时记录，非注册用户也可创建）").
+			Optional(),
+		field.String("external_message_id").
+			Comment("外部消息ID（如邮件 internetMessageId），用于同一来源消息的建单去重判断").
+			Optional(),
+		field.String("conversation_id").
+			Comment("邮件对话线程ID（Graph conversationId），用于识别用户回复并追加评论而非重复建单").
+			Optional(),
 		field.Int("assignee_id").
 			Comment("处理人ID").
 			Optional(),
@@ -126,6 +135,9 @@ func (Ticket) Fields() []ent.Field {
 			Comment("删除时间").
 			Optional().
 			Nillable(),
+		field.JSON("custom_field_values", map[string]interface{}{}).
+			Comment("工单创建时提交的自定义字段值（key 为模板字段 name）").
+			Optional(),
 	}
 }
 
@@ -173,6 +185,8 @@ func (Ticket) Indexes() []ent.Index {
 		index.Fields("tenant_id"),
 		index.Fields("tenant_id", "status"),
 		index.Fields("tenant_id", "requester_id"),
+		index.Fields("tenant_id", "external_message_id"),
+		index.Fields("tenant_id", "conversation_id").Unique(),
 		index.Fields("status", "priority"),
 		index.Fields("requester_id", "status"),
 	}

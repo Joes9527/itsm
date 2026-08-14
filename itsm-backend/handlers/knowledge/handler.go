@@ -2,6 +2,7 @@ package knowledge
 
 import (
 	"strconv"
+	"strings"
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
@@ -179,6 +180,29 @@ func (h *Handler) UpdateArticle(c *gin.Context) {
 	existing, err := h.svc.GetArticle(c.Request.Context(), id, tenantID)
 	if err != nil {
 		common.NotFound(c, "Article not found")
+		return
+	}
+
+	// 更新前快照当前状态为历史版本
+	userID, _ := c.Get("user_id")
+	operatorID, _ := userID.(int)
+	nextVersion, err := h.svc.NextVersion(c.Request.Context(), id, tenantID)
+	if err != nil {
+		common.InternalError(c, err.Error())
+		return
+	}
+	if _, err := h.svc.SnapshotVersion(c.Request.Context(), &ArticleVersion{
+		ArticleID:     existing.ID,
+		Version:       nextVersion,
+		Title:         existing.Title,
+		Content:       existing.Content,
+		Category:      existing.Category,
+		Tags:          strings.Join(existing.Tags, ","),
+		AuthorID:      operatorID,
+		ChangeSummary: "编辑文章",
+		TenantID:      tenantID,
+	}); err != nil {
+		common.InternalError(c, err.Error())
 		return
 	}
 
@@ -410,4 +434,92 @@ func (h *Handler) GetStats(c *gin.Context) {
 	}
 
 	common.Success(c, stats)
+}
+
+// ==================== 版本控制 ====================
+
+// ListArticleVersions handles GET /api/v1/knowledge/articles/:id/versions
+func (h *Handler) ListArticleVersions(c *gin.Context) {
+	id, ok := common.ParsePositiveID(c, "id")
+	if !ok {
+		return
+	}
+	tenantID, ok := c.Get("tenant_id")
+	if !ok {
+		common.ParamError(c, "Tenant ID not found")
+		return
+	}
+
+	versions, err := h.svc.ListVersions(c.Request.Context(), id, tenantID.(int))
+	if err != nil {
+		common.InternalError(c, err.Error())
+		return
+	}
+
+	// 契约：前端期望 camelCase ArticleVersion[]
+	items := make([]map[string]interface{}, 0, len(versions))
+	for _, v := range versions {
+		items = append(items, map[string]interface{}{
+			"version":       v.Version,
+			"content":       v.Content,
+			"changeLog":     v.ChangeSummary,
+			"createdBy":     v.AuthorID,
+			"createdByName": "",
+			"createdAt":     v.CreatedAt,
+		})
+	}
+	common.Success(c, items)
+}
+
+// RestoreArticleVersion handles POST /api/v1/knowledge/articles/:id/versions/:version/restore
+func (h *Handler) RestoreArticleVersion(c *gin.Context) {
+	id, ok := common.ParsePositiveID(c, "id")
+	if !ok {
+		return
+	}
+	version, err := strconv.Atoi(c.Param("version"))
+	if err != nil || version <= 0 {
+		common.ParamError(c, "Invalid version")
+		return
+	}
+	tenantID, ok := c.Get("tenant_id")
+	if !ok {
+		common.ParamError(c, "Tenant ID not found")
+		return
+	}
+	userID, _ := c.Get("user_id")
+	operatorID, _ := userID.(int)
+
+	article, err := h.svc.RestoreVersion(c.Request.Context(), id, version, tenantID.(int), operatorID)
+	if err != nil {
+		common.InternalError(c, err.Error())
+		return
+	}
+	common.Success(c, toArticleDTO(article))
+}
+
+// CompareArticleVersions handles GET /api/v1/knowledge/articles/:id/versions/compare?from=&to=
+func (h *Handler) CompareArticleVersions(c *gin.Context) {
+	id, ok := common.ParsePositiveID(c, "id")
+	if !ok {
+		return
+	}
+	from, err1 := strconv.Atoi(c.Query("from"))
+	to, err2 := strconv.Atoi(c.Query("to"))
+	if err1 != nil || err2 != nil || from <= 0 || to <= 0 {
+		common.ParamError(c, "from and to are required")
+		return
+	}
+	tenantID, ok := c.Get("tenant_id")
+	if !ok {
+		common.ParamError(c, "Tenant ID not found")
+		return
+	}
+
+	result, err := h.svc.CompareVersions(c.Request.Context(), id, from, to, tenantID.(int))
+	if err != nil {
+		common.InternalError(c, err.Error())
+		return
+	}
+	common.Success(c, result)
 }

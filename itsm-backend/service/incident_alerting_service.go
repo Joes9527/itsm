@@ -386,7 +386,7 @@ func (s *IncidentAlertingService) createSystemNotification(ctx context.Context, 
 		Where(
 			user.TenantIDEQ(tenantID),
 			user.ActiveEQ(true),
-			user.RoleIn(user.RoleAdmin, user.RoleSuperAdmin),
+			user.RoleIn("admin", "super_admin"),
 		).
 		All(ctx)
 	if err != nil {

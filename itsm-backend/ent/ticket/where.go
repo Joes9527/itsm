@@ -95,6 +95,21 @@ func RequesterID(v int) predicate.Ticket {
 	return predicate.Ticket(sql.FieldEQ(FieldRequesterID, v))
 }
 
+// CreatorEmail applies equality check predicate on the "creator_email" field. It's identical to CreatorEmailEQ.
+func CreatorEmail(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldCreatorEmail, v))
+}
+
+// ExternalMessageID applies equality check predicate on the "external_message_id" field. It's identical to ExternalMessageIDEQ.
+func ExternalMessageID(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldExternalMessageID, v))
+}
+
+// ConversationID applies equality check predicate on the "conversation_id" field. It's identical to ConversationIDEQ.
+func ConversationID(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldConversationID, v))
+}
+
 // AssigneeID applies equality check predicate on the "assignee_id" field. It's identical to AssigneeIDEQ.
 func AssigneeID(v int) predicate.Ticket {
 	return predicate.Ticket(sql.FieldEQ(FieldAssigneeID, v))
@@ -718,6 +733,231 @@ func RequesterIDIn(vs ...int) predicate.Ticket {
 // RequesterIDNotIn applies the NotIn predicate on the "requester_id" field.
 func RequesterIDNotIn(vs ...int) predicate.Ticket {
 	return predicate.Ticket(sql.FieldNotIn(FieldRequesterID, vs...))
+}
+
+// CreatorEmailEQ applies the EQ predicate on the "creator_email" field.
+func CreatorEmailEQ(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldCreatorEmail, v))
+}
+
+// CreatorEmailNEQ applies the NEQ predicate on the "creator_email" field.
+func CreatorEmailNEQ(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNEQ(FieldCreatorEmail, v))
+}
+
+// CreatorEmailIn applies the In predicate on the "creator_email" field.
+func CreatorEmailIn(vs ...string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldIn(FieldCreatorEmail, vs...))
+}
+
+// CreatorEmailNotIn applies the NotIn predicate on the "creator_email" field.
+func CreatorEmailNotIn(vs ...string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotIn(FieldCreatorEmail, vs...))
+}
+
+// CreatorEmailGT applies the GT predicate on the "creator_email" field.
+func CreatorEmailGT(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGT(FieldCreatorEmail, v))
+}
+
+// CreatorEmailGTE applies the GTE predicate on the "creator_email" field.
+func CreatorEmailGTE(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGTE(FieldCreatorEmail, v))
+}
+
+// CreatorEmailLT applies the LT predicate on the "creator_email" field.
+func CreatorEmailLT(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLT(FieldCreatorEmail, v))
+}
+
+// CreatorEmailLTE applies the LTE predicate on the "creator_email" field.
+func CreatorEmailLTE(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLTE(FieldCreatorEmail, v))
+}
+
+// CreatorEmailContains applies the Contains predicate on the "creator_email" field.
+func CreatorEmailContains(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldContains(FieldCreatorEmail, v))
+}
+
+// CreatorEmailHasPrefix applies the HasPrefix predicate on the "creator_email" field.
+func CreatorEmailHasPrefix(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldHasPrefix(FieldCreatorEmail, v))
+}
+
+// CreatorEmailHasSuffix applies the HasSuffix predicate on the "creator_email" field.
+func CreatorEmailHasSuffix(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldHasSuffix(FieldCreatorEmail, v))
+}
+
+// CreatorEmailIsNil applies the IsNil predicate on the "creator_email" field.
+func CreatorEmailIsNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldIsNull(FieldCreatorEmail))
+}
+
+// CreatorEmailNotNil applies the NotNil predicate on the "creator_email" field.
+func CreatorEmailNotNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotNull(FieldCreatorEmail))
+}
+
+// CreatorEmailEqualFold applies the EqualFold predicate on the "creator_email" field.
+func CreatorEmailEqualFold(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEqualFold(FieldCreatorEmail, v))
+}
+
+// CreatorEmailContainsFold applies the ContainsFold predicate on the "creator_email" field.
+func CreatorEmailContainsFold(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldContainsFold(FieldCreatorEmail, v))
+}
+
+// ExternalMessageIDEQ applies the EQ predicate on the "external_message_id" field.
+func ExternalMessageIDEQ(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldExternalMessageID, v))
+}
+
+// ExternalMessageIDNEQ applies the NEQ predicate on the "external_message_id" field.
+func ExternalMessageIDNEQ(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNEQ(FieldExternalMessageID, v))
+}
+
+// ExternalMessageIDIn applies the In predicate on the "external_message_id" field.
+func ExternalMessageIDIn(vs ...string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldIn(FieldExternalMessageID, vs...))
+}
+
+// ExternalMessageIDNotIn applies the NotIn predicate on the "external_message_id" field.
+func ExternalMessageIDNotIn(vs ...string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotIn(FieldExternalMessageID, vs...))
+}
+
+// ExternalMessageIDGT applies the GT predicate on the "external_message_id" field.
+func ExternalMessageIDGT(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGT(FieldExternalMessageID, v))
+}
+
+// ExternalMessageIDGTE applies the GTE predicate on the "external_message_id" field.
+func ExternalMessageIDGTE(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGTE(FieldExternalMessageID, v))
+}
+
+// ExternalMessageIDLT applies the LT predicate on the "external_message_id" field.
+func ExternalMessageIDLT(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLT(FieldExternalMessageID, v))
+}
+
+// ExternalMessageIDLTE applies the LTE predicate on the "external_message_id" field.
+func ExternalMessageIDLTE(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLTE(FieldExternalMessageID, v))
+}
+
+// ExternalMessageIDContains applies the Contains predicate on the "external_message_id" field.
+func ExternalMessageIDContains(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldContains(FieldExternalMessageID, v))
+}
+
+// ExternalMessageIDHasPrefix applies the HasPrefix predicate on the "external_message_id" field.
+func ExternalMessageIDHasPrefix(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldHasPrefix(FieldExternalMessageID, v))
+}
+
+// ExternalMessageIDHasSuffix applies the HasSuffix predicate on the "external_message_id" field.
+func ExternalMessageIDHasSuffix(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldHasSuffix(FieldExternalMessageID, v))
+}
+
+// ExternalMessageIDIsNil applies the IsNil predicate on the "external_message_id" field.
+func ExternalMessageIDIsNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldIsNull(FieldExternalMessageID))
+}
+
+// ExternalMessageIDNotNil applies the NotNil predicate on the "external_message_id" field.
+func ExternalMessageIDNotNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotNull(FieldExternalMessageID))
+}
+
+// ExternalMessageIDEqualFold applies the EqualFold predicate on the "external_message_id" field.
+func ExternalMessageIDEqualFold(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEqualFold(FieldExternalMessageID, v))
+}
+
+// ExternalMessageIDContainsFold applies the ContainsFold predicate on the "external_message_id" field.
+func ExternalMessageIDContainsFold(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldContainsFold(FieldExternalMessageID, v))
+}
+
+// ConversationIDEQ applies the EQ predicate on the "conversation_id" field.
+func ConversationIDEQ(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldConversationID, v))
+}
+
+// ConversationIDNEQ applies the NEQ predicate on the "conversation_id" field.
+func ConversationIDNEQ(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNEQ(FieldConversationID, v))
+}
+
+// ConversationIDIn applies the In predicate on the "conversation_id" field.
+func ConversationIDIn(vs ...string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldIn(FieldConversationID, vs...))
+}
+
+// ConversationIDNotIn applies the NotIn predicate on the "conversation_id" field.
+func ConversationIDNotIn(vs ...string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotIn(FieldConversationID, vs...))
+}
+
+// ConversationIDGT applies the GT predicate on the "conversation_id" field.
+func ConversationIDGT(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGT(FieldConversationID, v))
+}
+
+// ConversationIDGTE applies the GTE predicate on the "conversation_id" field.
+func ConversationIDGTE(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGTE(FieldConversationID, v))
+}
+
+// ConversationIDLT applies the LT predicate on the "conversation_id" field.
+func ConversationIDLT(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLT(FieldConversationID, v))
+}
+
+// ConversationIDLTE applies the LTE predicate on the "conversation_id" field.
+func ConversationIDLTE(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLTE(FieldConversationID, v))
+}
+
+// ConversationIDContains applies the Contains predicate on the "conversation_id" field.
+func ConversationIDContains(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldContains(FieldConversationID, v))
+}
+
+// ConversationIDHasPrefix applies the HasPrefix predicate on the "conversation_id" field.
+func ConversationIDHasPrefix(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldHasPrefix(FieldConversationID, v))
+}
+
+// ConversationIDHasSuffix applies the HasSuffix predicate on the "conversation_id" field.
+func ConversationIDHasSuffix(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldHasSuffix(FieldConversationID, v))
+}
+
+// ConversationIDIsNil applies the IsNil predicate on the "conversation_id" field.
+func ConversationIDIsNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldIsNull(FieldConversationID))
+}
+
+// ConversationIDNotNil applies the NotNil predicate on the "conversation_id" field.
+func ConversationIDNotNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotNull(FieldConversationID))
+}
+
+// ConversationIDEqualFold applies the EqualFold predicate on the "conversation_id" field.
+func ConversationIDEqualFold(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEqualFold(FieldConversationID, v))
+}
+
+// ConversationIDContainsFold applies the ContainsFold predicate on the "conversation_id" field.
+func ConversationIDContainsFold(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldContainsFold(FieldConversationID, v))
 }
 
 // AssigneeIDEQ applies the EQ predicate on the "assignee_id" field.
@@ -2018,6 +2258,16 @@ func DeletedAtIsNil() predicate.Ticket {
 // DeletedAtNotNil applies the NotNil predicate on the "deleted_at" field.
 func DeletedAtNotNil() predicate.Ticket {
 	return predicate.Ticket(sql.FieldNotNull(FieldDeletedAt))
+}
+
+// CustomFieldValuesIsNil applies the IsNil predicate on the "custom_field_values" field.
+func CustomFieldValuesIsNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldIsNull(FieldCustomFieldValues))
+}
+
+// CustomFieldValuesNotNil applies the NotNil predicate on the "custom_field_values" field.
+func CustomFieldValuesNotNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotNull(FieldCustomFieldValues))
 }
 
 // HasComments applies the HasEdge predicate on the "comments" edge.

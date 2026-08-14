@@ -275,6 +275,25 @@ func TestTicketService_CreateTicketPersistsCustomFieldValues(t *testing.T) {
 	assert.Equal(t, "北京", values[0].Value)
 }
 
+func TestTicketService_CreateTicketWithoutFormFieldsLeavesCustomFieldValuesEmpty(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ticket_create_no_custom_fields?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	tenant := createTicketAssociationTenant(t, ctx, client, "create-no-custom-fields")
+	requester := createTicketAssociationUser(t, ctx, client, tenant.ID, "create-no-custom-fields-requester")
+	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
+
+	created, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
+		Title:       "无自定义字段工单",
+		Description: "普通工单",
+		Priority:    "medium",
+		RequesterID: requester.ID,
+	}, tenant.ID)
+	require.NoError(t, err)
+	require.NotNil(t, created)
+	assert.Empty(t, created.CustomFieldValues)
+}
+
 func TestTicketService_CreateTicket_AdHocFieldValuesWithoutTemplate(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:ticket_create_adhoc_fields?mode=memory&cache=shared&_fk=1")
 	defer client.Close()

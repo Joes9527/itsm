@@ -115,7 +115,8 @@ func (e *EscalationService) processSLAEscalations(ctx context.Context, tenantID 
 			// 多级连续升级：while 循环，逐级推进
 			currentMax := alert.EscalationLevel
 			for {
-				nextLevel := e.matrixSvc.FindNextEscalationLevel(tenantID, priority, elapsedMinutes, currentMax)
+				slaDefID := e.resolveSLADefinitionID(ctx, alert.TicketID)
+				nextLevel := e.matrixSvc.FindNextEscalationLevel(tenantID, priority, elapsedMinutes, currentMax, slaDefID)
 				if nextLevel == nil {
 					break
 				}
@@ -155,6 +156,17 @@ func (e *EscalationService) resolveTicketPriority(ctx context.Context, ticketID 
 	return string(t.Priority)
 }
 
+func (e *EscalationService) resolveSLADefinitionID(ctx context.Context, ticketID int) int {
+	if ticketID <= 0 || e.client == nil {
+		return 0
+	}
+	t, err := e.client.Ticket.Get(ctx, ticketID)
+	if err != nil || t == nil {
+		return 0
+	}
+	return t.SLADefinitionID
+}
+
 // escalateToLevelByMatrix 按矩阵级别升级
 func (e *EscalationService) escalateToLevelByMatrix(
 	ctx context.Context,
@@ -181,10 +193,9 @@ func (e *EscalationService) escalateToLevelByMatrix(
 			alert.TicketNumber, alert.TicketTitle, priority, level.Level, level.Description)
 		for _, userID := range notifyUsers {
 			err := e.notificationSvc.SendNotification(ctx, alert.TicketID, &dto.SendTicketNotificationRequest{
-				UserIDs: []int{userID},
-				Type:    "sla_escalated",
-				Channel: "in_app",
-				Content: content,
+				UserIDs:   []int{userID},
+				EventType: "sla_violated",
+				Content:   content,
 			}, tenantID)
 			if err != nil {
 				e.logger.Errorw("Failed to send SLA escalation notification",
@@ -226,7 +237,7 @@ func (e *EscalationService) resolveNotifyUsers(ctx context.Context, level *Escal
 		for _, role := range level.NotifyRoles {
 			ids, _ := e.client.User.Query().
 				Where(user.TenantIDEQ(tenantID)).
-				Where(user.RoleEQ(user.Role(role))).
+				Where(user.RoleEQ(role)).
 				IDs(ctx)
 			for _, uid := range ids {
 				if !seen[uid] {
@@ -262,7 +273,7 @@ func (e *EscalationService) getEscalationNotifyUsers(ctx context.Context, level 
 	if len(userIDs) == 0 {
 		// 获取所有管理员用户
 		admins, _ := e.client.User.Query().
-			Where(user.RoleEQ("admin")).
+			Where(user.RoleNEQ("end_user"), user.RoleNEQ("guest")).
 			IDs(ctx)
 		userIDs = append(userIDs, admins...)
 	}
@@ -327,10 +338,9 @@ func (e *EscalationService) processLongPendingTickets(ctx context.Context, tenan
 
 			for _, userID := range userIDs {
 				if err := e.notificationSvc.SendNotification(ctx, t.ID, &dto.SendTicketNotificationRequest{
-					UserIDs: []int{userID},
-					Type:    "long_pending",
-					Channel: "in_app",
-					Content: content,
+					UserIDs:   []int{userID},
+					EventType: "ticket_updated",
+					Content:   content,
 				}, tenantID); err != nil {
 					e.logger.Errorw("Failed to send long pending notification", "ticket_id", t.ID, "user_id", userID, "error", err)
 				}
@@ -338,15 +348,14 @@ func (e *EscalationService) processLongPendingTickets(ctx context.Context, tenan
 
 			// 通知管理员
 			admins, _ := e.client.User.Query().
-				Where(user.RoleEQ("admin")).
+				Where(user.RoleNEQ("end_user"), user.RoleNEQ("guest")).
 				IDs(ctx)
 
 			for _, adminID := range admins {
 				if err := e.notificationSvc.SendNotification(ctx, t.ID, &dto.SendTicketNotificationRequest{
-					UserIDs: []int{adminID},
-					Type:    "long_pending_admin",
-					Channel: "in_app",
-					Content: content,
+					UserIDs:   []int{adminID},
+					EventType: "ticket_updated",
+					Content:   content,
 				}, tenantID); err != nil {
 					e.logger.Errorw("Failed to send long pending admin notification", "ticket_id", t.ID, "admin_id", adminID, "error", err)
 				}
@@ -413,7 +422,7 @@ func (e *EscalationService) processUnassignedTickets(ctx context.Context, tenant
 
 	// 通知管理员
 	admins, _ := e.client.User.Query().
-		Where(user.RoleEQ("admin")).
+		Where(user.RoleNEQ("end_user"), user.RoleNEQ("guest")).
 		IDs(ctx)
 
 	for _, t := range tickets {
@@ -428,10 +437,9 @@ func (e *EscalationService) processUnassignedTickets(ctx context.Context, tenant
 
 			for _, adminID := range admins {
 				if err := e.notificationSvc.SendNotification(ctx, t.ID, &dto.SendTicketNotificationRequest{
-					UserIDs: []int{adminID},
-					Type:    "unassigned",
-					Channel: "in_app",
-					Content: content,
+					UserIDs:   []int{adminID},
+					EventType: "ticket_updated",
+					Content:   content,
 				}, tenantID); err != nil {
 					e.logger.Errorw("Failed to send unassigned notification", "ticket_id", t.ID, "admin_id", adminID, "error", err)
 				}
@@ -489,10 +497,9 @@ func (e *EscalationService) EscalateTicket(ctx context.Context, ticketID int, re
 
 		for _, userID := range notifyUsers {
 			if err := e.notificationSvc.SendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
-				UserIDs: []int{userID},
-				Type:    "manual_escalation",
-				Channel: "in_app",
-				Content: content,
+				UserIDs:   []int{userID},
+				EventType: "ticket_updated",
+				Content:   content,
 			}, tenantID); err != nil {
 				e.logger.Errorw("Failed to send manual escalation notification", "ticket_id", ticketID, "user_id", userID, "error", err)
 			}

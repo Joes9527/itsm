@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/user"
@@ -34,6 +35,12 @@ type Ticket struct {
 	TicketNumber string `json:"ticket_number,omitempty"`
 	// 申请人ID
 	RequesterID int `json:"requester_id,omitempty"`
+	// 创建人邮箱（邮件开单时记录，非注册用户也可创建）
+	CreatorEmail string `json:"creator_email,omitempty"`
+	// 外部消息ID（如邮件 internetMessageId），用于同一来源消息的建单去重判断
+	ExternalMessageID string `json:"external_message_id,omitempty"`
+	// 邮件对话线程ID（Graph conversationId），用于识别用户回复并追加评论而非重复建单
+	ConversationID string `json:"conversation_id,omitempty"`
 	// 处理人ID
 	AssigneeID int `json:"assignee_id,omitempty"`
 	// 租户ID
@@ -86,6 +93,8 @@ type Ticket struct {
 	MspTicketID string `json:"msp_ticket_id,omitempty"`
 	// 删除时间
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+	// 工单创建时提交的自定义字段值（key 为模板字段 name）
+	CustomFieldValues map[string]interface{} `json:"custom_field_values,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the TicketQuery when eager-loading is set.
 	Edges                      TicketEdges `json:"edges"`
@@ -93,7 +102,6 @@ type Ticket struct {
 	department_tickets         *int
 	problem_tickets            *int
 	sla_definition_tickets     *int
-	sla_policy_tickets         *int
 	ticket_tag_tickets         *int
 	ticket_template_tickets    *int
 	selectValues               sql.SelectValues
@@ -291,11 +299,13 @@ func (*Ticket) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case ticket.FieldCustomFieldValues:
+			values[i] = new([]byte)
 		case ticket.FieldIsManagedByMsp:
 			values[i] = new(sql.NullBool)
 		case ticket.FieldID, ticket.FieldRequesterID, ticket.FieldAssigneeID, ticket.FieldTenantID, ticket.FieldTemplateID, ticket.FieldCategoryID, ticket.FieldDepartmentID, ticket.FieldParentTicketID, ticket.FieldSLADefinitionID, ticket.FieldRating, ticket.FieldRatedBy, ticket.FieldVersion, ticket.FieldMspProviderID, ticket.FieldManagedByUserID:
 			values[i] = new(sql.NullInt64)
-		case ticket.FieldTitle, ticket.FieldDescription, ticket.FieldStatus, ticket.FieldType, ticket.FieldSource, ticket.FieldPriority, ticket.FieldTicketNumber, ticket.FieldResolution, ticket.FieldResolutionCategory, ticket.FieldRatingComment, ticket.FieldMspTicketID:
+		case ticket.FieldTitle, ticket.FieldDescription, ticket.FieldStatus, ticket.FieldType, ticket.FieldSource, ticket.FieldPriority, ticket.FieldTicketNumber, ticket.FieldCreatorEmail, ticket.FieldExternalMessageID, ticket.FieldConversationID, ticket.FieldResolution, ticket.FieldResolutionCategory, ticket.FieldRatingComment, ticket.FieldMspTicketID:
 			values[i] = new(sql.NullString)
 		case ticket.FieldSLAResponseDeadline, ticket.FieldSLAResolutionDeadline, ticket.FieldFirstResponseAt, ticket.FieldResolvedAt, ticket.FieldClosedAt, ticket.FieldRatedAt, ticket.FieldCreatedAt, ticket.FieldUpdatedAt, ticket.FieldDeletedAt:
 			values[i] = new(sql.NullTime)
@@ -307,11 +317,9 @@ func (*Ticket) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullInt64)
 		case ticket.ForeignKeys[3]: // sla_definition_tickets
 			values[i] = new(sql.NullInt64)
-		case ticket.ForeignKeys[4]: // sla_policy_tickets
+		case ticket.ForeignKeys[4]: // ticket_tag_tickets
 			values[i] = new(sql.NullInt64)
-		case ticket.ForeignKeys[5]: // ticket_tag_tickets
-			values[i] = new(sql.NullInt64)
-		case ticket.ForeignKeys[6]: // ticket_template_tickets
+		case ticket.ForeignKeys[5]: // ticket_template_tickets
 			values[i] = new(sql.NullInt64)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -381,6 +389,24 @@ func (_m *Ticket) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field requester_id", values[i])
 			} else if value.Valid {
 				_m.RequesterID = int(value.Int64)
+			}
+		case ticket.FieldCreatorEmail:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field creator_email", values[i])
+			} else if value.Valid {
+				_m.CreatorEmail = value.String
+			}
+		case ticket.FieldExternalMessageID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field external_message_id", values[i])
+			} else if value.Valid {
+				_m.ExternalMessageID = value.String
+			}
+		case ticket.FieldConversationID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field conversation_id", values[i])
+			} else if value.Valid {
+				_m.ConversationID = value.String
 			}
 		case ticket.FieldAssigneeID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -540,6 +566,14 @@ func (_m *Ticket) assignValues(columns []string, values []any) error {
 				_m.DeletedAt = new(time.Time)
 				*_m.DeletedAt = value.Time
 			}
+		case ticket.FieldCustomFieldValues:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field custom_field_values", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.CustomFieldValues); err != nil {
+					return fmt.Errorf("unmarshal field custom_field_values: %w", err)
+				}
+			}
 		case ticket.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for edge-field configuration_item_tickets", value)
@@ -570,19 +604,12 @@ func (_m *Ticket) assignValues(columns []string, values []any) error {
 			}
 		case ticket.ForeignKeys[4]:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for edge-field sla_policy_tickets", value)
-			} else if value.Valid {
-				_m.sla_policy_tickets = new(int)
-				*_m.sla_policy_tickets = int(value.Int64)
-			}
-		case ticket.ForeignKeys[5]:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for edge-field ticket_tag_tickets", value)
 			} else if value.Valid {
 				_m.ticket_tag_tickets = new(int)
 				*_m.ticket_tag_tickets = int(value.Int64)
 			}
-		case ticket.ForeignKeys[6]:
+		case ticket.ForeignKeys[5]:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for edge-field ticket_template_tickets", value)
 			} else if value.Valid {
@@ -729,6 +756,15 @@ func (_m *Ticket) String() string {
 	builder.WriteString("requester_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.RequesterID))
 	builder.WriteString(", ")
+	builder.WriteString("creator_email=")
+	builder.WriteString(_m.CreatorEmail)
+	builder.WriteString(", ")
+	builder.WriteString("external_message_id=")
+	builder.WriteString(_m.ExternalMessageID)
+	builder.WriteString(", ")
+	builder.WriteString("conversation_id=")
+	builder.WriteString(_m.ConversationID)
+	builder.WriteString(", ")
 	builder.WriteString("assignee_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.AssigneeID))
 	builder.WriteString(", ")
@@ -810,6 +846,9 @@ func (_m *Ticket) String() string {
 		builder.WriteString("deleted_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
+	builder.WriteString(", ")
+	builder.WriteString("custom_field_values=")
+	builder.WriteString(fmt.Sprintf("%v", _m.CustomFieldValues))
 	builder.WriteByte(')')
 	return builder.String()
 }

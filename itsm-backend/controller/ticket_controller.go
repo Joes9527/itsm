@@ -878,6 +878,8 @@ func normalizeTicketTemplate(template interface{}) gin.H {
 		"category":       tmpl.Category,
 		"priority":       tmpl.Priority,
 		"fields":         tmpl.Fields,
+		"categoryIds":    tmpl.CategoryIDs,
+		"category_ids":   tmpl.CategoryIDs,
 		"formFields":     formFields,
 		"form_fields":    formFields,
 		"workflow_steps": tmpl.WorkflowSteps,

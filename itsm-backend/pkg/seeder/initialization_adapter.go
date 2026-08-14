@@ -83,6 +83,8 @@ func ProductionInitializers(seeder *Seeder) ([]initialization.Initializer, error
 		checksum:     checksum("itil-core"),
 		apply: func(ctx context.Context, transactional *Seeder) {
 			transactional.seedTicketTypes(ctx)
+			transactional.seedTicketCategories(ctx)
+			transactional.seedTicketTemplates(ctx)
 			transactional.seedIncidentCategories(ctx)
 			transactional.seedStandardChanges(ctx)
 			transactional.seedTicketTags(ctx)
@@ -112,7 +114,6 @@ func ProductionInitializers(seeder *Seeder) ([]initialization.Initializer, error
 		checksum:     checksum("sla-core"),
 		apply: func(ctx context.Context, transactional *Seeder) {
 			transactional.seedSLADefinitions(ctx)
-			transactional.seedSLAPolicies(ctx)
 			transactional.seedSLAAlertRules(ctx)
 		},
 		verify: func(ctx context.Context, target *Seeder) error {

@@ -82,6 +82,20 @@ func (_c *ServiceCatalogCreate) SetNillableServiceType(v *string) *ServiceCatalo
 	return _c
 }
 
+// SetItsmType sets the "itsm_type" field.
+func (_c *ServiceCatalogCreate) SetItsmType(v string) *ServiceCatalogCreate {
+	_c.mutation.SetItsmType(v)
+	return _c
+}
+
+// SetNillableItsmType sets the "itsm_type" field if the given value is not nil.
+func (_c *ServiceCatalogCreate) SetNillableItsmType(v *string) *ServiceCatalogCreate {
+	if v != nil {
+		_c.SetItsmType(*v)
+	}
+	return _c
+}
+
 // SetPrice sets the "price" field.
 func (_c *ServiceCatalogCreate) SetPrice(v float64) *ServiceCatalogCreate {
 	_c.mutation.SetPrice(v)
@@ -341,6 +355,10 @@ func (_c *ServiceCatalogCreate) defaults() {
 		v := servicecatalog.DefaultServiceType
 		_c.mutation.SetServiceType(v)
 	}
+	if _, ok := _c.mutation.ItsmType(); !ok {
+		v := servicecatalog.DefaultItsmType
+		_c.mutation.SetItsmType(v)
+	}
 	if _, ok := _c.mutation.RequiresApproval(); !ok {
 		v := servicecatalog.DefaultRequiresApproval
 		_c.mutation.SetRequiresApproval(v)
@@ -383,6 +401,9 @@ func (_c *ServiceCatalogCreate) check() error {
 	}
 	if _, ok := _c.mutation.ServiceType(); !ok {
 		return &ValidationError{Name: "service_type", err: errors.New(`ent: missing required field "ServiceCatalog.service_type"`)}
+	}
+	if _, ok := _c.mutation.ItsmType(); !ok {
+		return &ValidationError{Name: "itsm_type", err: errors.New(`ent: missing required field "ServiceCatalog.itsm_type"`)}
 	}
 	if _, ok := _c.mutation.RequiresApproval(); !ok {
 		return &ValidationError{Name: "requires_approval", err: errors.New(`ent: missing required field "ServiceCatalog.requires_approval"`)}
@@ -458,6 +479,10 @@ func (_c *ServiceCatalogCreate) createSpec() (*ServiceCatalog, *sqlgraph.CreateS
 	if value, ok := _c.mutation.ServiceType(); ok {
 		_spec.SetField(servicecatalog.FieldServiceType, field.TypeString, value)
 		_node.ServiceType = value
+	}
+	if value, ok := _c.mutation.ItsmType(); ok {
+		_spec.SetField(servicecatalog.FieldItsmType, field.TypeString, value)
+		_node.ItsmType = value
 	}
 	if value, ok := _c.mutation.Price(); ok {
 		_spec.SetField(servicecatalog.FieldPrice, field.TypeFloat64, value)

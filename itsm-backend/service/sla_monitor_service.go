@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"itsm-backend/common/tenantctx"
@@ -11,6 +12,8 @@ import (
 	"itsm-backend/ent/sladefinition"
 	"itsm-backend/ent/slaviolation"
 	"itsm-backend/ent/ticket"
+	"itsm-backend/pkg/eventbus"
+	"itsm-backend/service/common/event"
 
 	"go.uber.org/zap"
 )
@@ -104,7 +107,6 @@ func (s *SLAMonitorService) CheckSLAViolations(ctx context.Context, tenantID int
 		tickets, err := s.client.Ticket.Query().
 			Where(
 				ticket.TenantIDEQ(tenantID),
-				ticket.SLADefinitionIDNEQ(0),
 				ticket.ResolvedAtIsNil(),
 			).
 			Limit(pageSize).
@@ -218,12 +220,8 @@ func (s *SLAMonitorService) createViolation(ctx context.Context, t *ent.Ticket, 
 	}
 
 	now := time.Now()
-	// 如果没有 SLA 定义，跳过创建违规记录
-	if t.SLADefinitionID == 0 {
-		return nil
-	}
 
-	// 从预加载的map中获取SLA名称
+	// 从预加载的map中获取SLA名称；id=0 的兜底 SLA 同样创建违规
 	slaName := slaDefMap[t.SLADefinitionID]
 	if slaName == "" {
 		slaName = "Default SLA"
@@ -255,10 +253,39 @@ func (s *SLAMonitorService) createViolation(ctx context.Context, t *ent.Ticket, 
 		}
 	}
 
+	// 发布领域事件（Webhook/自动化规则/审计订阅方）。
+	// 发布失败只告警不阻塞——违规记录已落库。
+	if bus := eventbus.GetGlobalEventBus(); bus != nil {
+		breachType := mapViolationTypeToBreachType(violationType)
+		ev := event.NewSLABreachedEvent(
+			strconv.Itoa(t.TenantID),
+			strconv.Itoa(t.ID),
+			strconv.Itoa(t.SLADefinitionID),
+			breachType,
+			now,
+		)
+		if err := bus.Publish(ev); err != nil {
+			s.logger.Warnw("failed to publish sla.breached event", "error", err,
+				"ticket_id", t.ID, "breach_type", breachType)
+		}
+	}
+
 	s.logger.Infow("SLA violation created and notification sent", "ticket_id", t.ID,
 		"violation_type", violationType, "exceeded_minutes", exceededMinutes)
 
 	return nil
+}
+
+// mapViolationTypeToBreachType 将内部违规类型映射为领域事件契约值
+func mapViolationTypeToBreachType(violationType string) string {
+	switch violationType {
+	case "response_time":
+		return "response"
+	case "resolution_time":
+		return "resolve"
+	default:
+		return violationType
+	}
 }
 
 // checkAndTriggerWarning 检查是否需要发送SLA预警（在截止时间前触发）
@@ -521,7 +548,6 @@ func (s *SLAMonitorService) GetDashboardMetrics(ctx context.Context, tenantID in
 	tickets, err := s.client.Ticket.Query().
 		Where(
 			ticket.TenantIDEQ(tenantID),
-			ticket.SLADefinitionIDNEQ(0),
 		).
 		All(ctx)
 	if err != nil {
@@ -606,7 +632,6 @@ func (s *SLAMonitorService) GetDashboardMetrics(ctx context.Context, tenantID in
 	upcomingTickets, err := s.client.Ticket.Query().
 		Where(
 			ticket.TenantIDEQ(tenantID),
-			ticket.SLADefinitionIDNEQ(0),
 			ticket.ResolvedAtIsNil(),
 			ticket.SLAResolutionDeadlineGT(now),
 			ticket.SLAResolutionDeadlineLT(upcomingDeadline),
@@ -629,7 +654,7 @@ func (s *SLAMonitorService) GetDashboardMetrics(ctx context.Context, tenantID in
 				TicketID:    t.ID,
 				TicketTitle: t.Title,
 				Deadline:    t.SLAResolutionDeadline,
-				SLAPolicy:   slaName,
+				SLAName:   slaName,
 				TimeLeft:    timeLeftStr,
 			})
 		}
@@ -661,7 +686,7 @@ func (s *SLAMonitorService) GetDashboardMetrics(ctx context.Context, tenantID in
 			dashboard.TopViolations = append(dashboard.TopViolations, dto.SLAViolationItem{
 				TicketID:    v.TicketID,
 				TicketTitle: ticketTitle,
-				SLAPolicy:   v.SLAName,
+				SLAName:   v.SLAName,
 				ViolatedAt:  v.ViolationTime.Format(time.RFC3339),
 				Delay:       delayMinutes,
 			})

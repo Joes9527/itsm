@@ -39,7 +39,7 @@ func TestService_Create_PersistsFieldValues(t *testing.T) {
 	srRepo := NewEntRepository(client)
 	cmdbRepo := cmdb.NewEntRepository(client)
 	ticketSvc := service.NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar(), ticketSvc)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
 
 	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
@@ -81,7 +81,7 @@ func TestService_Create_SystemFormDataFieldsNotCollectedAsCustomFields(t *testin
 	srRepo := NewEntRepository(client)
 	cmdbRepo := cmdb.NewEntRepository(client)
 	ticketSvc := service.NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar(), ticketSvc)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
 
 	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
@@ -119,7 +119,7 @@ func TestService_Create_PersistsFieldValues_ArrayShapeSnakeCaseName(t *testing.T
 	srRepo := NewEntRepository(client)
 	cmdbRepo := cmdb.NewEntRepository(client)
 	ticketSvc := service.NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar(), ticketSvc)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
 
 	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
@@ -167,7 +167,7 @@ func TestService_Create_RequiredFieldMissing_Rejected(t *testing.T) {
 	srRepo := NewEntRepository(client)
 	cmdbRepo := cmdb.NewEntRepository(client)
 	ticketSvc := service.NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar(), ticketSvc)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
 
 	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
@@ -209,7 +209,7 @@ func TestService_Create_LinksTicketAndDelegatesFields(t *testing.T) {
 	cmdbRepo := cmdb.NewEntRepository(client)
 	logger := zaptest.NewLogger(t).Sugar()
 	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc, nil, nil)
 
 	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
@@ -255,7 +255,7 @@ func TestService_GetByTicketID_ReturnsLinkedServiceRequest(t *testing.T) {
 	cmdbRepo := cmdb.NewEntRepository(client)
 	logger := zaptest.NewLogger(t).Sugar()
 	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc, nil, nil)
 
 	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
@@ -302,7 +302,7 @@ func TestService_List_BatchLoadsLinkedTicketSummary(t *testing.T) {
 	cmdbRepo := cmdb.NewEntRepository(client)
 	logger := zaptest.NewLogger(t).Sugar()
 	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc, nil, nil)
 
 	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
@@ -368,7 +368,7 @@ func TestService_AttachTicketSummaries_DoesNotLeakCrossTenant(t *testing.T) {
 	cmdbRepo := cmdb.NewEntRepository(client)
 	logger := zaptest.NewLogger(t).Sugar()
 	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc, nil, nil)
 
 	// A tenant-A ServiceRequest whose ticket_id happens to equal tenant B's ticket ID —
 	// simulating the collision scenario without depending on ent's ID allocation order.
@@ -422,7 +422,7 @@ func TestServiceRequest_ApprovalDegradedToSingleNodeBPMN(t *testing.T) {
 	cmdbRepo := cmdb.NewEntRepository(client)
 	logger := zaptest.NewLogger(t).Sugar()
 	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc, nil, nil)
 
 	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,

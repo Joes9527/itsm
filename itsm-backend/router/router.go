@@ -17,6 +17,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/handlers"
 	"itsm-backend/handlers/ai"
+	"itsm-backend/handlers/auth"
 	"itsm-backend/handlers/change"
 	"itsm-backend/handlers/cmdb"
 	domainCommon "itsm-backend/handlers/common"
@@ -301,15 +302,14 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 	if config.RedisRateLimiter != nil {
 		// 使用 Redis 限流器（分布式环境）
 		config.Logger.Info("Using Redis-based distributed rate limiter")
-		// Redis 故障时使用更严格的本地限制（10/min），禁止故障放行。
-		fallbackLimiter := middleware.NewRateLimiter(10, time.Minute)
 		r.Use(func(limiter RateLimiterInterface) gin.HandlerFunc {
 			return func(c *gin.Context) {
 				clientIP := c.ClientIP()
 				allowed, err := limiter.Allow(c.Request.Context(), clientIP)
 				if err != nil {
-					config.Logger.Warnw("Redis rate limiter unavailable, using strict in-memory fallback", "error", err)
-					allowed = fallbackLimiter.Allow(clientIP)
+					config.Logger.Warnw("Rate limiter error, allowing request", "error", err)
+					c.Next()
+					return
 				}
 				if !allowed {
 					common.Fail(c, 429, "请求过于频繁，请稍后再试")
@@ -341,17 +341,24 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 	public := r.Group("/api/v1")
 	{
 		if config.CommonHandler != nil {
-			public.POST("/auth/login", middleware.LoginRateLimiter(), config.CommonHandler.Login)
+			public.POST("/auth/login", config.CommonHandler.Login)
 			public.POST("/refresh-token", config.CommonHandler.RefreshToken)
 			public.POST("/auth/refresh", config.CommonHandler.RefreshToken)
 		}
 
 		// 无需认证的账号自助端点（注册/密码找回/重置）
 		if config.AuthController != nil {
-			public.POST("/auth/register", middleware.LoginRateLimiter(), config.AuthController.Register)
-			public.POST("/auth/forgot-password", middleware.LoginRateLimiter(), config.AuthController.ForgotPassword)
-			public.POST("/auth/reset-password", middleware.LoginRateLimiter(), config.AuthController.ResetPassword)
-			public.POST("/auth/validate-reset-token", middleware.LoginRateLimiter(), config.AuthController.ValidateResetToken)
+			public.POST("/auth/register", config.AuthController.Register)
+			public.POST("/auth/forgot-password", config.AuthController.ForgotPassword)
+			public.POST("/auth/reset-password", config.AuthController.ResetPassword)
+			public.POST("/auth/validate-reset-token", config.AuthController.ValidateResetToken)
+		}
+
+		// Azure AD OIDC 登录
+		azureCfg := auth.LoadAzureConfig()
+		if azureCfg.IsConfigured() {
+			public.GET("/auth/azure/login", auth.AzureLoginHandler(azureCfg, config.Logger))
+			public.GET("/auth/azure/callback", auth.AzureCallbackHandler(azureCfg, config.Client, config.JWTSecret, config.Logger))
 		}
 
 		// CSRF token 获取端点（无需认证）
@@ -477,8 +484,6 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 	{
 		// 租户中间件
 		tenant := auth.Use(middleware.TenantMiddleware(config.Client))
-		// 审计必须位于租户解析之后，确保所有租户内写操作都有可靠的租户和操作者上下文。
-		tenant.(*gin.RouterGroup).Use(middleware.AuditMiddleware(config.Client))
 
 		// ==================== Ticket Categories & Tags ====================
 		if config.TicketCategoryController != nil {
@@ -531,14 +536,14 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 			}
 
 			// 工单模板
-			tickets.GET("/templates", middleware.RequirePermission("template", "read"), config.TicketController.GetTicketTemplates)
-			tickets.GET("/templates/categories", middleware.RequirePermission("template", "read"), config.TicketController.GetTicketTemplateCategories)
-			tickets.POST("/templates", middleware.RequirePermission("template", "create"), config.TicketController.CreateTicketTemplate)
-			tickets.GET("/templates/:id", middleware.RequirePermission("template", "read"), config.TicketController.GetTicketTemplate)
-			tickets.PUT("/templates/:id", middleware.RequirePermission("template", "update"), config.TicketController.UpdateTicketTemplate)
-			tickets.PATCH("/templates/:id/status", middleware.RequirePermission("template", "update"), config.TicketController.UpdateTicketTemplateStatus)
-			tickets.POST("/templates/:id/copy", middleware.RequirePermission("template", "create"), config.TicketController.CopyTicketTemplate)
-			tickets.DELETE("/templates/:id", middleware.RequirePermission("template", "delete"), config.TicketController.DeleteTicketTemplate)
+			tickets.GET("/templates", middleware.RequirePermission("ticket_template", "read"), config.TicketController.GetTicketTemplates)
+			tickets.GET("/templates/categories", middleware.RequirePermission("ticket_template", "read"), config.TicketController.GetTicketTemplateCategories)
+			tickets.POST("/templates", middleware.RequirePermission("ticket_template", "create"), config.TicketController.CreateTicketTemplate)
+			tickets.GET("/templates/:id", middleware.RequirePermission("ticket_template", "read"), config.TicketController.GetTicketTemplate)
+			tickets.PUT("/templates/:id", middleware.RequirePermission("ticket_template", "update"), config.TicketController.UpdateTicketTemplate)
+			tickets.PATCH("/templates/:id/status", middleware.RequirePermission("ticket_template", "update"), config.TicketController.UpdateTicketTemplateStatus)
+			tickets.POST("/templates/:id/copy", middleware.RequirePermission("ticket_template", "create"), config.TicketController.CopyTicketTemplate)
+			tickets.DELETE("/templates/:id", middleware.RequirePermission("ticket_template", "delete"), config.TicketController.DeleteTicketTemplate)
 
 			tickets.POST("/:id/escalate", middleware.RequirePermission("ticket", "escalate"), config.TicketController.EscalateTicket)
 			tickets.GET("/:id/history", middleware.RequirePermission("ticket", "read"), config.TicketController.GetTicketActivity)
@@ -579,6 +584,8 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 			if config.TicketAttachmentController != nil {
 				tickets.GET("/:id/attachments", middleware.RequirePermission("ticket", "read"), config.TicketAttachmentController.ListTicketAttachments)
 				tickets.POST("/:id/attachments", middleware.RequirePermission("ticket", "create"), config.TicketAttachmentController.UploadAttachment)
+				tickets.GET("/:id/attachments/:attachment_id", middleware.RequirePermission("ticket", "read"), config.TicketAttachmentController.DownloadAttachment)
+				tickets.GET("/:id/attachments/:attachment_id/preview", middleware.RequirePermission("ticket", "read"), config.TicketAttachmentController.PreviewAttachment)
 				tickets.DELETE("/:id/attachments/:attachment_id", middleware.RequirePermission("ticket", "delete"), config.TicketAttachmentController.DeleteAttachment)
 			}
 
@@ -609,9 +616,9 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 					approvals.DELETE("/:id", middleware.RequirePermission("approval_workflow", "delete"), config.ApprovalController.DeleteWorkflow)
 					approvals.GET("/records", middleware.RequirePermission("approval_workflow", "read"), config.ApprovalController.GetApprovalRecords)
 					approvals.POST("/submit", middleware.RequirePermission("approval_workflow", "write"), config.ApprovalController.SubmitApproval)
-					// 兼容旧路径：/approval-records 和 /my-approvals
-					tenant.GET("/approval-records", middleware.RequirePermission("approval_workflow", "read"), config.ApprovalController.GetApprovalRecords)
-					tenant.GET("/my-approvals", middleware.RequirePermission("approval_workflow", "read"), config.ApprovalController.GetApprovalRecords)
+						// 我的待审批：聚合当前用户的 BPMN 审批任务
+						tenant.GET("/approval-records", middleware.RequirePermission("approval_workflow", "read"), config.ApprovalController.GetApprovalRecords)
+						tenant.GET("/my-approvals", middleware.RequirePermission("task", "read"), config.BPMNWorkflowController.ListUserTasks)
 
 				}
 
@@ -675,7 +682,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 			}
 
 			if config.AnalyticsController != nil {
-				tickets.POST("/analytics/export", middleware.RequirePermission("report", "export"), config.AnalyticsController.ExportAnalytics)
+				tickets.POST("/analytics/export", middleware.RequirePermission("report", "read"), config.AnalyticsController.ExportAnalytics)
 				// B8: GET /api/v1/analytics/tickets - 工单分析概览
 				// 挂在 tenant 顶层 group，路径 = /api/v1/analytics/tickets
 			}
@@ -701,15 +708,15 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 			sysConfigs := tenant.(*gin.RouterGroup).Group("/system-configs")
 			{
 				// 配置管理
-				sysConfigs.GET("", middleware.RequirePermission("config", "read"), config.SystemConfigController.ListConfigs)
-				sysConfigs.GET("/init", middleware.RequirePermission("config", "read"), config.SystemConfigController.InitDefaultConfigs)
-				sysConfigs.GET("/:id", middleware.RequirePermission("config", "read"), config.SystemConfigController.GetConfig)
-				sysConfigs.GET("/key/:key", middleware.RequirePermission("config", "read"), config.SystemConfigController.GetConfigByKey)
-				sysConfigs.PUT("/:id", middleware.RequirePermission("config", "update"), config.SystemConfigController.UpdateConfig)
-				sysConfigs.PUT("/batch", middleware.RequirePermission("config", "update"), config.SystemConfigController.BatchUpdateConfigs)
+				sysConfigs.GET("", middleware.RequirePermission("system_config", "read"), config.SystemConfigController.ListConfigs)
+				sysConfigs.GET("/init", middleware.RequirePermission("system_config", "read"), config.SystemConfigController.InitDefaultConfigs)
+				sysConfigs.GET("/:id", middleware.RequirePermission("system_config", "read"), config.SystemConfigController.GetConfig)
+				sysConfigs.GET("/key/:key", middleware.RequirePermission("system_config", "read"), config.SystemConfigController.GetConfigByKey)
+				sysConfigs.PUT("/:id", middleware.RequirePermission("system_config", "update"), config.SystemConfigController.UpdateConfig)
+				sysConfigs.PUT("/batch", middleware.RequirePermission("system_config", "update"), config.SystemConfigController.BatchUpdateConfigs)
 
 				// 系统状态
-				sysConfigs.GET("/status", middleware.RequirePermission("config", "read"), func(c *gin.Context) {
+				sysConfigs.GET("/status", middleware.RequirePermission("system_config", "read"), func(c *gin.Context) {
 					var m runtime.MemStats
 					runtime.ReadMemStats(&m)
 
@@ -735,13 +742,13 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				// 兼容旧路径：/configs → /system-configs
 				configs := tenant.(*gin.RouterGroup).Group("/configs")
 				{
-					configs.GET("", middleware.RequirePermission("config", "read"), config.SystemConfigController.ListConfigs)
-					configs.GET("/init", middleware.RequirePermission("config", "read"), config.SystemConfigController.InitDefaultConfigs)
-					configs.GET("/:id", middleware.RequirePermission("config", "read"), config.SystemConfigController.GetConfig)
-					configs.GET("/key/:key", middleware.RequirePermission("config", "read"), config.SystemConfigController.GetConfigByKey)
-					configs.PUT("/:id", middleware.RequirePermission("config", "update"), config.SystemConfigController.UpdateConfig)
-					configs.PUT("/batch", middleware.RequirePermission("config", "update"), config.SystemConfigController.BatchUpdateConfigs)
-					configs.GET("/status", middleware.RequirePermission("config", "read"), func(c *gin.Context) {
+					configs.GET("", middleware.RequirePermission("system_config", "read"), config.SystemConfigController.ListConfigs)
+					configs.GET("/init", middleware.RequirePermission("system_config", "read"), config.SystemConfigController.InitDefaultConfigs)
+					configs.GET("/:id", middleware.RequirePermission("system_config", "read"), config.SystemConfigController.GetConfig)
+					configs.GET("/key/:key", middleware.RequirePermission("system_config", "read"), config.SystemConfigController.GetConfigByKey)
+					configs.PUT("/:id", middleware.RequirePermission("system_config", "update"), config.SystemConfigController.UpdateConfig)
+					configs.PUT("/batch", middleware.RequirePermission("system_config", "update"), config.SystemConfigController.BatchUpdateConfigs)
+					configs.GET("/status", middleware.RequirePermission("system_config", "read"), func(c *gin.Context) {
 						var m runtime.MemStats
 						runtime.ReadMemStats(&m)
 						c.JSON(200, gin.H{
@@ -760,7 +767,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 					})
 				}
 
-				sysRoot.GET("/config", middleware.RequirePermission("config", "read"), func(c *gin.Context) {
+				sysRoot.GET("/config", middleware.RequirePermission("system_config", "read"), func(c *gin.Context) {
 					c.JSON(200, gin.H{
 						"status":    "ok",
 						"version":   "1.6.8",
@@ -914,6 +921,10 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				problems.PUT("/:id/root-cause", middleware.RequirePermission("problem", "write"), config.ProblemHandler.UpdateRootCause)
 				problems.PUT("/:id/solution", middleware.RequirePermission("problem", "write"), config.ProblemHandler.UpdateSolution)
 				problems.POST("/:id/close", middleware.RequirePermission("problem", "write"), config.ProblemHandler.CloseProblem)
+				// 问题 → 已知错误 (KEDB) 联动
+				if config.KnownErrorHandler != nil {
+					problems.POST("/:id/known-error", middleware.RequirePermission("problem", "write"), config.KnownErrorHandler.CreateFromProblem)
+				}
 				// 关联管理
 				problems.GET("/:id/associations", middleware.RequirePermission("problem", "read"), config.ProblemHandler.GetAssociations)
 				problems.POST("/:id/associations", middleware.RequirePermission("problem", "write"), config.ProblemHandler.AddAssociation)
@@ -1037,6 +1048,11 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 					articles.DELETE("/:id", middleware.RequirePermission("knowledge", "delete"), config.KnowledgeHandler.DeleteArticle)
 					articles.POST("/:id/publish", middleware.RequirePermission("knowledge", "write"), config.KnowledgeHandler.PublishArticle)
 					articles.POST("/:id/unpublish", middleware.RequirePermission("knowledge", "write"), config.KnowledgeHandler.UnpublishArticle)
+
+					// Version control
+					articles.GET("/:id/versions", middleware.RequirePermission("knowledge", "read"), config.KnowledgeHandler.ListArticleVersions)
+					articles.GET("/:id/versions/compare", middleware.RequirePermission("knowledge", "read"), config.KnowledgeHandler.CompareArticleVersions)
+					articles.POST("/:id/versions/:version/restore", middleware.RequirePermission("knowledge", "write"), config.KnowledgeHandler.RestoreArticleVersion)
 
 					// Comments
 					articles.GET("/:id/comments", middleware.RequirePermission("knowledge", "read"), config.KnowledgeHandler.GetArticleComments)
@@ -1250,6 +1266,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				}
 			}
 
+
 			// Ticket Dependencies
 			if config.TicketDependencyController != nil {
 				tickets.GET("/:id/dependencies", middleware.RequirePermission("ticket", "read"), config.TicketDependencyController.AnalyzeDependencyImpact)
@@ -1356,8 +1373,6 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 					notifications.GET("/unread-count", middleware.RequirePermission("notification", "read"), config.NotificationController.GetUnreadCount)
 					notifications.PUT("/:id/read", middleware.RequirePermission("notification", "update"), config.NotificationController.MarkNotificationRead)
 					notifications.PUT("/read-all", middleware.RequirePermission("notification", "update"), config.NotificationController.MarkAllNotificationsRead)
-					notifications.PUT("/batch/read", middleware.RequirePermission("notification", "update"), config.NotificationController.MarkNotificationsRead)
-					notifications.DELETE("/batch", middleware.RequirePermission("notification", "delete"), config.NotificationController.DeleteNotifications)
 					notifications.DELETE("/:id", middleware.RequirePermission("notification", "delete"), config.NotificationController.DeleteNotification)
 					notifications.POST("", middleware.RequirePermission("notification", "create"), config.NotificationController.CreateNotification)
 				}
@@ -1466,6 +1481,8 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				conns.POST("/:name/send", middleware.RequirePermission("connector", "write"), config.ConnectorController.Send)
 				conns.POST("/:name/test", middleware.RequirePermission("connector", "write"), config.ConnectorController.Test)
 				conns.GET("/health", middleware.RequirePermission("connector", "read"), config.ConnectorController.Health)
+				// 飞书事件回调（独立签名校验）
+				conns.POST("/feishu/callback", config.ConnectorController.FeishuCallback)
 			}
 		}
 

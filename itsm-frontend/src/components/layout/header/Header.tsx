@@ -209,14 +209,14 @@ export const Header: React.FC<HeaderProps> = ({
   ];
 
   return (
-    <AntHeader className={styles.header} style={{ background: DESIGN.colors.surface }}>
-      {/* 主行：面包屑/收缩按钮 + 右侧工具 */}
+    <AntHeader className={styles.header} style={{ background: '#2A2A2A', height: 56, lineHeight: '56px', padding: '0 20px' }}>
+      {/* 主行：Logo品牌 + 收缩按钮 / 面包屑 + 右侧工具 */}
       <div className={styles.mainRow}>
-        {/* 左侧：收缩按钮 + 面包屑 */}
+        {/* 左侧：收缩按钮 + Logo + 品牌文字 */}
         <div className={styles.left}>
           <Button
             type="text"
-            icon={collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+            icon={collapsed ? <PanelLeftOpen size={18} color="#fff" /> : <PanelLeftClose size={18} color="#fff" />}
             onClick={() => onCollapse(!collapsed)}
             aria-label={collapsed ? '展开侧边栏' : '收起侧边栏'}
             title={collapsed ? '展开侧边栏' : '收起侧边栏'}
@@ -226,10 +226,11 @@ export const Header: React.FC<HeaderProps> = ({
               height: 36,
               borderRadius: DESIGN.radius.md,
               flexShrink: 0,
+              color: '#fff',
             }}
           />
           {showBreadcrumb && (
-            <div className={styles.breadcrumb} role="navigation" aria-label="面包屑导航">
+            <div className={styles.breadcrumb} role="navigation" aria-label="面包屑导航" style={{ marginLeft: 16 }}>
               <Breadcrumb
                 items={breadcrumb || buildBreadcrumb(pathname)}
                 separator="/"

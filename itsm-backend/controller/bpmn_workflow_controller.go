@@ -181,7 +181,7 @@ func (c *BPMNWorkflowController) CreateProcessDefinition(ctx *gin.Context) {
 		return
 	}
 
-	common.SuccessWithMessage(ctx, "流程定义创建成功", definition)
+	common.SuccessWithMessage(ctx, "流程定义创建成功", dto.ToProcessDefinitionResponse(definition))
 }
 
 // ListProcessDefinitions 获取流程定义列表
@@ -215,7 +215,7 @@ func (c *BPMNWorkflowController) ListProcessDefinitions(ctx *gin.Context) {
 	}
 
 	// 使用统一响应格式
-	listResponse := common.NewListResponse(definitions, common.NewPaginationResponse(int(req.Page), int(req.PageSize), int64(total)))
+	listResponse := common.NewListResponse(dto.ToProcessDefinitionResponseList(definitions), common.NewPaginationResponse(int(req.Page), int(req.PageSize), int64(total)))
 	common.Success(ctx, listResponse)
 }
 
@@ -242,7 +242,7 @@ func (c *BPMNWorkflowController) GetProcessDefinition(ctx *gin.Context) {
 		return
 	}
 
-	common.Success(ctx, definition)
+	common.Success(ctx, dto.ToProcessDefinitionResponse(definition))
 }
 
 // UpdateProcessDefinition 更新流程定义
@@ -270,7 +270,7 @@ func (c *BPMNWorkflowController) UpdateProcessDefinition(ctx *gin.Context) {
 		return
 	}
 
-	common.SuccessWithMessage(ctx, "流程定义更新成功", definition)
+	common.SuccessWithMessage(ctx, "流程定义更新成功", dto.ToProcessDefinitionResponse(definition))
 }
 
 // DeleteProcessDefinition 删除流程定义
@@ -375,7 +375,7 @@ func (c *BPMNWorkflowController) CloneProcessDefinition(ctx *gin.Context) {
 		return
 	}
 
-	common.Success(ctx, created)
+	common.Success(ctx, dto.ToProcessDefinitionResponse(created))
 }
 
 // SetProcessDefinitionActive 激活/停用流程定义
@@ -847,13 +847,7 @@ func (c *BPMNWorkflowController) GetVersion(ctx *gin.Context) {
 	versionStr := ctx.Param("version")
 	tenantID := ctx.GetInt("tenant_id")
 
-	version, err := strconv.Atoi(versionStr)
-	if err != nil {
-		common.Fail(ctx, common.BadRequestCode, "无效的版本号")
-		return
-	}
-
-	versionInfo, err := c.versionService.GetVersion(ctx, processKey, version, tenantID)
+	versionInfo, err := c.versionService.GetVersion(ctx, processKey, versionStr, tenantID)
 	if err != nil {
 		common.NotFound(ctx, "版本不存在")
 		return
@@ -888,13 +882,7 @@ func (c *BPMNWorkflowController) ActivateVersion(ctx *gin.Context) {
 	versionStr := ctx.Param("version")
 	tenantID := ctx.GetInt("tenant_id")
 
-	version, err := strconv.Atoi(versionStr)
-	if err != nil {
-		common.Fail(ctx, common.BadRequestCode, "无效的版本号")
-		return
-	}
-
-	err = c.versionService.ActivateVersion(ctx, processKey, version, tenantID)
+	err := c.versionService.ActivateVersion(ctx, processKey, versionStr, tenantID)
 	if err != nil {
 		common.InternalError(ctx, "激活版本失败: "+err.Error())
 		return
@@ -909,18 +897,12 @@ func (c *BPMNWorkflowController) RollbackVersion(ctx *gin.Context) {
 	versionStr := ctx.Param("version")
 	tenantID := ctx.GetInt("tenant_id")
 
-	version, err := strconv.Atoi(versionStr)
-	if err != nil {
-		common.Fail(ctx, common.BadRequestCode, "无效的版本号")
-		return
-	}
-
 	var req struct {
 		Reason string `json:"reason"`
 	}
 	ctx.ShouldBindJSON(&req)
 
-	err = c.versionService.RollbackToVersion(ctx, processKey, version, tenantID, req.Reason)
+	err := c.versionService.RollbackToVersion(ctx, processKey, versionStr, tenantID, req.Reason)
 	if err != nil {
 		common.InternalError(ctx, "回滚版本失败: "+err.Error())
 		return
@@ -942,25 +924,13 @@ func (c *BPMNWorkflowController) CompareVersions(ctx *gin.Context) {
 		return
 	}
 
-	base, err := strconv.Atoi(baseVersion)
-	if err != nil {
-		common.Fail(ctx, common.BadRequestCode, "无效的基础版本号")
-		return
-	}
-
-	target, err := strconv.Atoi(targetVersion)
-	if err != nil {
-		common.Fail(ctx, common.BadRequestCode, "无效的目标版本号")
-		return
-	}
-
 	// 相同版本无需比较
-	if base == target {
+	if baseVersion == targetVersion {
 		common.SuccessWithMessage(ctx, "版本相同，无需比较", nil)
 		return
 	}
 
-	comparison, err := c.versionService.CompareVersions(ctx, processKey, base, target, tenantID)
+	comparison, err := c.versionService.CompareVersions(ctx, processKey, baseVersion, targetVersion, tenantID)
 	if err != nil {
 		common.InternalError(ctx, "版本比较失败: "+err.Error())
 		return

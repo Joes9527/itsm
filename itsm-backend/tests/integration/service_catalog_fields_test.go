@@ -45,7 +45,7 @@ func setupServiceCatalogFieldsRouter(t *testing.T) (*gin.Engine, *ent.Tenant, *e
 	srRepo := service_request.NewEntRepository(client)
 	cmdbRepo := cmdb.NewEntRepository(client)
 	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	srService := service_request.NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc)
+	srService := service_request.NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc, nil, nil)
 	srHandler := service_request.NewHandler(srService)
 
 	r := gin.New()

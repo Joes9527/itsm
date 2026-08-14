@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **服务目录对普通用户显示为空** — `end_user` 角色缺少 `ticket_category:read` 权限，且 DTO 映射器 `ToTicketCategoryResponse` 未设置 `Level` 字段（导致前端按 level 过滤失效）。已在 seeder/硬编码 RBAC 中补全权限、在 DTO 和 mapper 中补充 `Level` 字段，并提供迁移 SQL 修复已有租户。
+- **模板路由权限名不一致** — 模板相关路由使用 `RequirePermission("template", ...)` 但数据库中权限资源名为 `ticket_template`，导致权限匹配失败。已统一路由、`ResourceActionMap` 和前端 API 路径为一致的 `ticket_template` 资源名。
+- **模板前端 API 路径错误** — `template-api.ts` 中所有请求路径由 `/api/v1/templates` 修正为 `/api/v1/tickets/templates`，与后端实际路由一致。
+- **end_user 缺少 ticket_template:read 和 notification:read** — 工单创建页加载模板和通知轮询均返回 403。已在 seeder、硬编码 RBAC 中补全权限，创建迁移 SQL，并补齐缺失的 `notification:*` 权限定义。
+
 ---
 
 ## [1.6.8] - 2026-08-04

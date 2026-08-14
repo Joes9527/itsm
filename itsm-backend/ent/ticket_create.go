@@ -122,6 +122,48 @@ func (_c *TicketCreate) SetRequesterID(v int) *TicketCreate {
 	return _c
 }
 
+// SetCreatorEmail sets the "creator_email" field.
+func (_c *TicketCreate) SetCreatorEmail(v string) *TicketCreate {
+	_c.mutation.SetCreatorEmail(v)
+	return _c
+}
+
+// SetNillableCreatorEmail sets the "creator_email" field if the given value is not nil.
+func (_c *TicketCreate) SetNillableCreatorEmail(v *string) *TicketCreate {
+	if v != nil {
+		_c.SetCreatorEmail(*v)
+	}
+	return _c
+}
+
+// SetExternalMessageID sets the "external_message_id" field.
+func (_c *TicketCreate) SetExternalMessageID(v string) *TicketCreate {
+	_c.mutation.SetExternalMessageID(v)
+	return _c
+}
+
+// SetNillableExternalMessageID sets the "external_message_id" field if the given value is not nil.
+func (_c *TicketCreate) SetNillableExternalMessageID(v *string) *TicketCreate {
+	if v != nil {
+		_c.SetExternalMessageID(*v)
+	}
+	return _c
+}
+
+// SetConversationID sets the "conversation_id" field.
+func (_c *TicketCreate) SetConversationID(v string) *TicketCreate {
+	_c.mutation.SetConversationID(v)
+	return _c
+}
+
+// SetNillableConversationID sets the "conversation_id" field if the given value is not nil.
+func (_c *TicketCreate) SetNillableConversationID(v *string) *TicketCreate {
+	if v != nil {
+		_c.SetConversationID(*v)
+	}
+	return _c
+}
+
 // SetAssigneeID sets the "assignee_id" field.
 func (_c *TicketCreate) SetAssigneeID(v int) *TicketCreate {
 	_c.mutation.SetAssigneeID(v)
@@ -475,6 +517,12 @@ func (_c *TicketCreate) SetNillableDeletedAt(v *time.Time) *TicketCreate {
 	if v != nil {
 		_c.SetDeletedAt(*v)
 	}
+	return _c
+}
+
+// SetCustomFieldValues sets the "custom_field_values" field.
+func (_c *TicketCreate) SetCustomFieldValues(v map[string]interface{}) *TicketCreate {
+	_c.mutation.SetCustomFieldValues(v)
 	return _c
 }
 
@@ -889,6 +937,18 @@ func (_c *TicketCreate) createSpec() (*Ticket, *sqlgraph.CreateSpec) {
 		_spec.SetField(ticket.FieldTicketNumber, field.TypeString, value)
 		_node.TicketNumber = value
 	}
+	if value, ok := _c.mutation.CreatorEmail(); ok {
+		_spec.SetField(ticket.FieldCreatorEmail, field.TypeString, value)
+		_node.CreatorEmail = value
+	}
+	if value, ok := _c.mutation.ExternalMessageID(); ok {
+		_spec.SetField(ticket.FieldExternalMessageID, field.TypeString, value)
+		_node.ExternalMessageID = value
+	}
+	if value, ok := _c.mutation.ConversationID(); ok {
+		_spec.SetField(ticket.FieldConversationID, field.TypeString, value)
+		_node.ConversationID = value
+	}
 	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(ticket.FieldTenantID, field.TypeInt, value)
 		_node.TenantID = value
@@ -988,6 +1048,10 @@ func (_c *TicketCreate) createSpec() (*Ticket, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.DeletedAt(); ok {
 		_spec.SetField(ticket.FieldDeletedAt, field.TypeTime, value)
 		_node.DeletedAt = &value
+	}
+	if value, ok := _c.mutation.CustomFieldValues(); ok {
+		_spec.SetField(ticket.FieldCustomFieldValues, field.TypeJSON, value)
+		_node.CustomFieldValues = value
 	}
 	if nodes := _c.mutation.CommentsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

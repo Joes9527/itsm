@@ -98,8 +98,20 @@ func (r *EntRepository) Create(ctx context.Context, params *CreateParams, tenant
 		if len(params.TagIDs) > 0 {
 			builder.AddTagIDs(params.TagIDs...)
 		}
+		if len(params.CustomFieldValues) > 0 {
+			builder.SetCustomFieldValues(params.CustomFieldValues)
+		}
 		if params.Source != "" {
 			builder.SetSource(params.Source)
+		}
+		if params.CreatorEmail != "" {
+			builder.SetCreatorEmail(params.CreatorEmail)
+		}
+		if params.ExternalMessageID != "" {
+			builder.SetExternalMessageID(params.ExternalMessageID)
+		}
+		if params.ConversationID != "" {
+			builder.SetConversationID(params.ConversationID)
 		}
 
 		entity, err := builder.Save(ctx)
@@ -794,6 +806,9 @@ func toDomainModel(e *ent.Ticket) *Ticket {
 	}
 	if e.MspTicketID != "" {
 		t.MSPTicketID = &e.MspTicketID
+	}
+	if len(e.CustomFieldValues) > 0 {
+		t.CustomFieldValues = e.CustomFieldValues
 	}
 
 	return t

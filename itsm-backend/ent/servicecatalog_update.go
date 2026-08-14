@@ -117,6 +117,20 @@ func (_u *ServiceCatalogUpdate) SetNillableServiceType(v *string) *ServiceCatalo
 	return _u
 }
 
+// SetItsmType sets the "itsm_type" field.
+func (_u *ServiceCatalogUpdate) SetItsmType(v string) *ServiceCatalogUpdate {
+	_u.mutation.SetItsmType(v)
+	return _u
+}
+
+// SetNillableItsmType sets the "itsm_type" field if the given value is not nil.
+func (_u *ServiceCatalogUpdate) SetNillableItsmType(v *string) *ServiceCatalogUpdate {
+	if v != nil {
+		_u.SetItsmType(*v)
+	}
+	return _u
+}
+
 // SetPrice sets the "price" field.
 func (_u *ServiceCatalogUpdate) SetPrice(v float64) *ServiceCatalogUpdate {
 	_u.mutation.ResetPrice()
@@ -570,6 +584,9 @@ func (_u *ServiceCatalogUpdate) sqlSave(ctx context.Context) (_node int, err err
 	if value, ok := _u.mutation.ServiceType(); ok {
 		_spec.SetField(servicecatalog.FieldServiceType, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.ItsmType(); ok {
+		_spec.SetField(servicecatalog.FieldItsmType, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.Price(); ok {
 		_spec.SetField(servicecatalog.FieldPrice, field.TypeFloat64, value)
 	}
@@ -800,6 +817,20 @@ func (_u *ServiceCatalogUpdateOne) SetServiceType(v string) *ServiceCatalogUpdat
 func (_u *ServiceCatalogUpdateOne) SetNillableServiceType(v *string) *ServiceCatalogUpdateOne {
 	if v != nil {
 		_u.SetServiceType(*v)
+	}
+	return _u
+}
+
+// SetItsmType sets the "itsm_type" field.
+func (_u *ServiceCatalogUpdateOne) SetItsmType(v string) *ServiceCatalogUpdateOne {
+	_u.mutation.SetItsmType(v)
+	return _u
+}
+
+// SetNillableItsmType sets the "itsm_type" field if the given value is not nil.
+func (_u *ServiceCatalogUpdateOne) SetNillableItsmType(v *string) *ServiceCatalogUpdateOne {
+	if v != nil {
+		_u.SetItsmType(*v)
 	}
 	return _u
 }
@@ -1286,6 +1317,9 @@ func (_u *ServiceCatalogUpdateOne) sqlSave(ctx context.Context) (_node *ServiceC
 	}
 	if value, ok := _u.mutation.ServiceType(); ok {
 		_spec.SetField(servicecatalog.FieldServiceType, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ItsmType(); ok {
+		_spec.SetField(servicecatalog.FieldItsmType, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Price(); ok {
 		_spec.SetField(servicecatalog.FieldPrice, field.TypeFloat64, value)

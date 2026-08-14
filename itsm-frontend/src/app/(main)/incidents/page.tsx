@@ -33,12 +33,12 @@ import {
 } from '@/components/business/UnifiedKanbanBoard';
 import { useI18n } from '@/lib/i18n/useI18n';
 
-// 看板列配置（颜色与全站主色 #3b82f6 对齐，避免遗留 antd 旧蓝 #1890ff）
+// 看板列配置（颜色与全站主色 #F06820 对齐，避免遗留 antd 旧蓝 #1890ff）
 const KANBAN_COLUMNS: KanbanColumnConfig<Incident>[] = [
-  { key: 'new', title: '新建', color: '#3b82f6' },
+  { key: 'new', title: '新建', color: '#F06820' },
   { key: 'acknowledged', title: '已确认', color: '#722ed1' },
   { key: 'assigned', title: '已分配', color: '#13c2c2' },
-  { key: 'in_progress', title: '处理中', color: '#3b82f6' },
+  { key: 'in_progress', title: '处理中', color: '#F06820' },
   { key: 'resolved', title: '已解决', color: '#52c41a' },
   { key: 'closed', title: '已关闭', color: '#d9d9d9' },
 ];
@@ -312,7 +312,7 @@ export default function IncidentsPage() {
         {
           label: '总事件数',
           value: metrics.totalIncidents || 0,
-          color: '#3b82f6',
+          color: '#F06820',
           icon: <Siren size={20} strokeWidth={1.8} />,
         },
         {

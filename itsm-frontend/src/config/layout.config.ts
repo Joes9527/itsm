@@ -36,7 +36,7 @@ export const LAYOUT_CONFIG = {
   // ========== Sider 配置 (Ant Design 标准: 200px/80px) ==========
   sider: {
     width: 256, // 256px = 200 + 8×7 (加宽以适配PC端)
-    collapsedWidth: 80, // 80px 标准收起宽度 ✅
+    collapsedWidth: 0, // 完全隐藏 sidebar
     breakpoint: 'lg' as const, // 992px 响应式断点
     logoAreaHeight: 64, // Logo区域高度 = Header高度
     logoPadding: '0 24px', // Logo内边距

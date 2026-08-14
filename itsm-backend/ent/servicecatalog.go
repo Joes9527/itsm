@@ -28,6 +28,8 @@ type ServiceCatalog struct {
 	Icon string `json:"icon,omitempty"`
 	// 服务类型: vm|rds|oss|network|storage|security|custom
 	ServiceType string `json:"service_type,omitempty"`
+	// ITSM类型: Request|Incident|Change，决定审批路由
+	ItsmType string `json:"itsm_type,omitempty"`
 	// 价格
 	Price float64 `json:"price,omitempty"`
 	// 交付时间（天）
@@ -80,7 +82,7 @@ func (*ServiceCatalog) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullFloat64)
 		case servicecatalog.FieldID, servicecatalog.FieldDeliveryTime, servicecatalog.FieldApprovalLevel, servicecatalog.FieldSLAResponseTime, servicecatalog.FieldSLAResolutionTime, servicecatalog.FieldCiTypeID, servicecatalog.FieldCloudServiceID, servicecatalog.FieldTenantID, servicecatalog.FieldSortOrder:
 			values[i] = new(sql.NullInt64)
-		case servicecatalog.FieldName, servicecatalog.FieldDescription, servicecatalog.FieldCategory, servicecatalog.FieldIcon, servicecatalog.FieldServiceType, servicecatalog.FieldUnit, servicecatalog.FieldStatus:
+		case servicecatalog.FieldName, servicecatalog.FieldDescription, servicecatalog.FieldCategory, servicecatalog.FieldIcon, servicecatalog.FieldServiceType, servicecatalog.FieldItsmType, servicecatalog.FieldUnit, servicecatalog.FieldStatus:
 			values[i] = new(sql.NullString)
 		case servicecatalog.FieldCreatedAt, servicecatalog.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -134,6 +136,12 @@ func (_m *ServiceCatalog) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field service_type", values[i])
 			} else if value.Valid {
 				_m.ServiceType = value.String
+			}
+		case servicecatalog.FieldItsmType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field itsm_type", values[i])
+			} else if value.Valid {
+				_m.ItsmType = value.String
 			}
 		case servicecatalog.FieldPrice:
 			if value, ok := values[i].(*sql.NullFloat64); !ok {
@@ -299,6 +307,9 @@ func (_m *ServiceCatalog) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("service_type=")
 	builder.WriteString(_m.ServiceType)
+	builder.WriteString(", ")
+	builder.WriteString("itsm_type=")
+	builder.WriteString(_m.ItsmType)
 	builder.WriteString(", ")
 	builder.WriteString("price=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Price))

@@ -3,15 +3,16 @@
 :root {
   /* ====== 颜色系统 Color System ====== */
   
-  /* 主色调 Primary Colors */
-  --color-primary: #3b82f6;
-  --color-primary-light: #60a5fa;
-  --color-primary-dark: #2563eb;
-  --color-primary-50: #eff6ff;
-  --color-primary-100: #dbeafe;
-  --color-primary-500: #3b82f6;
-  --color-primary-600: #2563eb;
-  --color-primary-700: #1d4ed8;
+  /* 主色调 Primary Colors — Kerry Logistics Orange */
+  --color-primary: #F06820;
+  --color-primary-light: #F27C38;
+  --color-primary-dark: #D85E10;
+  --color-primary-50: #fff5f0;
+  --color-primary-100: #ffe8d9;
+  --color-primary-500: #F06820;
+  --color-primary-600: #D85E10;
+  --color-primary-700: #B84A08;
+  --color-charcoal: #2A2A2A;
   
   /* 成功色 Success */
   --color-success: #22c55e;
@@ -68,7 +69,7 @@
   /* 边框颜色 Border Colors */
   --color-border-primary: #e5e7eb;
   --color-border-secondary: #d1d5db;
-  --color-border-focus: #3b82f6;
+  --color-border-focus: #F06820;
   
   /* ====== 间距系统 Spacing System ====== */
   --spacing-xs: 4px;
@@ -137,9 +138,9 @@
   --z-tooltip: 1070;
   
   /* ====== 布局尺寸 Layout Sizes ====== */
-  --header-height: 56px;
-  --sidebar-width: 240px;
-  --sidebar-collapsed-width: 64px;
+  --header-height: 48px;
+  --sidebar-width: 260px;
+  --sidebar-collapsed-width: 0px;
   --content-max-width: 1440px;
   --card-padding: 16px;
   
@@ -153,7 +154,7 @@
   
   /* ====== 优先级颜色 Priority Colors ====== */
   --priority-low: #22c55e;
-  --priority-medium: #3b82f6;
+  --priority-medium: #F06820;
   --priority-high: #f59e0b;
   --priority-critical: #ef4444;
   

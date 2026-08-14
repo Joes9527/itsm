@@ -26,12 +26,13 @@ import (
 	"itsm-backend/ent/servicecatalog"
 	"itsm-backend/ent/slaalertrule"
 	"itsm-backend/ent/sladefinition"
-	"itsm-backend/ent/slapolicy"
 	"itsm-backend/ent/standardchange"
 	"itsm-backend/ent/tag"
 	"itsm-backend/ent/team"
 	"itsm-backend/ent/tenant"
 	"itsm-backend/ent/ticketcategory"
+	"itsm-backend/ent/fielddefinition"
+	"itsm-backend/ent/tickettemplate"
 	"itsm-backend/ent/ticketview"
 	"itsm-backend/ent/user"
 	"itsm-backend/service"
@@ -56,7 +57,6 @@ var (
 	_ = tag.NameEQ               // Used to ensure tag package is imported
 	_ = assetlicense.NameEQ      // Used to ensure assetlicense package is imported
 	_ = release.TitleEQ          // Used to ensure release package is imported
-	_ = slapolicy.NameEQ         // Used to ensure slapolicy package is imported
 )
 
 // SeedConfig 种子数据配置结构
@@ -81,6 +81,8 @@ type SeedConfig struct {
 	StandardChanges []StandardChangeSeed `json:"standard_changes"`
 	KnownErrors     []KnownErrorSeed     `json:"known_errors"`
 	TicketTags      []TicketTagSeed      `json:"ticket_tags"`
+	TicketCategories []TicketCategorySeed  `json:"ticket_categories"`
+	TicketTemplates  []TicketTemplateSeed  `json:"ticket_templates"`
 	// 工作流种子配置
 	SeedWorkflows bool `json:"seed_workflows"`
 }
@@ -196,11 +198,19 @@ type KnowledgeArticleSeed struct {
 	ViewCount   int    `json:"view_count"`
 }
 
-// TicketCategorySeed 工单分类种子数据结构（用于事件分类）
+// TicketCategorySeed 工单分类种子数据结构（用于事件分类和工单分类树）
 type TicketCategorySeed struct {
-	Name        string `json:"name"`
-	Code        string `json:"code"`
-	Description string `json:"description"`
+	Name            string `json:"name"`
+	Code            string `json:"code"`
+	Description     string `json:"description"`
+	ParentCode      string `json:"parent_code"` // 父分类代码，用于构建层级树
+	Level           int    `json:"level"`       // 层级: 1=一级, 2=二级, 3=三级
+	SortOrder       int    `json:"sort_order"`  // 排序
+	ITSMType        string `json:"itsm_type"`
+	DefaultPriority string `json:"default_priority"`
+	SLATier         string `json:"sla_tier"`
+	DefaultResolver string `json:"default_resolver"`
+	IsUserFacing    *bool  `json:"is_user_facing"`
 }
 
 // StandardChangeSeed 标准变更模板种子数据结构
@@ -244,6 +254,28 @@ type TicketTagSeed struct {
 	Color       string `json:"color"`
 }
 
+
+// TicketTemplateSeed 工单模板种子数据结构
+type TicketTemplateSeed struct {
+	Name        string                `json:"name"`
+	Description string                `json:"description"`
+	Category    string                `json:"category"`
+	Priority    string                `json:"priority"`
+	IsActive    bool                  `json:"is_active"`
+	CategoryIDs   []int                 `json:"category_ids"`
+	CategoryCodes []string              `json:"category_codes"`
+	Fields        []FieldDefinitionSeed `json:"fields"`
+}
+
+// FieldDefinitionSeed 自定义字段定义种子数据结构
+type FieldDefinitionSeed struct {
+	Name      string                   `json:"name"`
+	Label     string                   `json:"label"`
+	FieldType string                   `json:"field_type"`
+	Required  bool                     `json:"required"`
+	Options   []map[string]interface{} `json:"options"`
+	SortOrder int                      `json:"sort_order"`
+}
 // SLAPolicySeed SLA策略种子数据结构
 type SLAPolicySeed struct {
 	Name                  string `json:"name"`
@@ -267,6 +299,8 @@ type Seeder struct {
 	expectedPermissions     []string
 	expectedMenus           []string
 	expectedRolePermissions map[string][]string
+	// targetTenant 种子目标租户缓存（默认为 default，支持 SeedForTenant 切换）
+	targetTenant *ent.Tenant
 }
 
 // NewSeeder creates a new Seeder instance
@@ -388,6 +422,12 @@ func mergeSeedConfig(base *SeedConfig, override *SeedConfig) *SeedConfig {
 	if override.TicketTags != nil {
 		base.TicketTags = override.TicketTags
 	}
+	if override.TicketCategories != nil {
+		base.TicketCategories = override.TicketCategories
+	}
+	if override.TicketTemplates != nil {
+		base.TicketTemplates = override.TicketTemplates
+	}
 	if override.SeedWorkflows {
 		base.SeedWorkflows = true
 	}
@@ -490,7 +530,7 @@ func getEmbeddedConfig() *SeedConfig {
 		},
 		ApprovalWorkflows: []ApprovalWorkflowSeed{
 			{Name: "P0/P1事件审批", Desc: "紧急和高优先级事件需要主管审批", TicketType: "incident", Priority: "urgent,high", Nodes: []map[string]interface{}{{"type": "approval", "name": "主管审批", "approver_type": "manager", "timeout": 60}}},
-			{Name: "变更审批", Desc: "所有变更请求需要多级审批", TicketType: "change", Priority: "", Nodes: []map[string]interface{}{{"type": "approval", "name": "技术审批", "approver_type": "role", "role": "engineer", "timeout": 240}, {"type": "approval", "name": "经理审批", "approver_type": "role", "role": "manager", "timeout": 480}}},
+			{Name: "变更审批", Desc: "所有变更请求需要多级审批", TicketType: "change", Priority: "", Nodes: []map[string]interface{}{{"type": "approval", "name": "技术审批", "approver_type": "role", "role": "it_director", "timeout": 240}, {"type": "approval", "name": "经理审批", "approver_type": "role", "role": "dept_manager", "timeout": 480}}},
 			{Name: "服务请求审批", Desc: "高价值服务请求需要审批", TicketType: "service_request", Priority: "high", Nodes: []map[string]interface{}{{"type": "approval", "name": "服务审批", "approver_type": "manager", "timeout": 120}}},
 		},
 		ProcessBindings: []ProcessBindingSeed{
@@ -513,8 +553,8 @@ func getEmbeddedConfig() *SeedConfig {
 
 // SeedAll runs all seeding operations
 func (s *Seeder) SeedAll(ctx context.Context) {
-	// 首先确保 default 租户存在
-	s.seedDefaultTenant(ctx)
+	// 解析目标租户（默认 default；SeedForTenant 可切换为其他租户）
+	s.tenant(ctx)
 	s.seedDepartments(ctx)
 	s.seedTeams(ctx)
 	s.seedRoles(ctx)
@@ -524,7 +564,6 @@ func (s *Seeder) SeedAll(ctx context.Context) {
 	s.seedCloudServiceTemplates(ctx)
 	// 使用配置的初始化数据
 	s.seedSLADefinitions(ctx)
-	s.seedSLAPolicies(ctx)
 	s.seedSLAAlertRules(ctx)
 	s.seedApprovalWorkflows(ctx)
 	s.seedProcessBindings(ctx)
@@ -533,7 +572,9 @@ func (s *Seeder) SeedAll(ctx context.Context) {
 	s.seedServiceCatalog(ctx)
 	s.seedTicketTypes(ctx)            // 新增：初始化工单类型
 	s.seedCITypes(ctx)                // 新增：初始化CI类型
-	s.seedIncidentCategories(ctx)     // 新增：初始化事件分类
+	s.seedTicketCategories(ctx)       // 新增：初始化工单分类层级树
+	s.seedIncidentCategories(ctx)     // 新增：初始化事件分类（在层级树之后，已有数据则跳过）
+	s.seedTicketTemplates(ctx)        // 新增：初始化工单模板与自定义字段
 	s.seedStandardChanges(ctx)        // 新增：初始化标准变更模板
 	s.seedTicketTags(ctx)             // 新增：初始化标签
 	s.seedMenuAndPermissionFixes(ctx) // 修复：更新菜单路径和补充缺失权限
@@ -722,6 +763,7 @@ func (s *Seeder) seedDefaultTenant(ctx context.Context) *ent.Tenant {
 			existing = updated
 		}
 		s.sugar.Infow("default tenant already exists", "tenant_id", existing.ID)
+		s.targetTenant = existing
 		return existing
 	}
 
@@ -742,7 +784,28 @@ func (s *Seeder) seedDefaultTenant(ctx context.Context) *ent.Tenant {
 		return nil
 	}
 	s.sugar.Infow("default tenant created", "tenant_id", defaultTenant.ID)
+	s.targetTenant = defaultTenant
 	return defaultTenant
+}
+
+// tenant 返回种子目标租户（缓存解析，避免 24 处重复查询）
+func (s *Seeder) tenant(ctx context.Context) *ent.Tenant {
+	if s.targetTenant != nil {
+		return s.targetTenant
+	}
+	s.targetTenant = s.seedDefaultTenant(ctx)
+	return s.targetTenant
+}
+
+// SeedForTenant 为指定租户运行全量种子（MSP 新租户上架用）
+func (s *Seeder) SeedForTenant(ctx context.Context, target *ent.Tenant) error {
+	if target == nil || target.ID == 0 {
+		return fmt.Errorf("target tenant is required")
+	}
+	s.targetTenant = target
+	s.sugar.Infow("seeding for tenant", "tenant_id", target.ID, "tenant_code", target.Code)
+	s.SeedAll(ctx)
+	return nil
 }
 
 func (s *Seeder) deploymentMode() string {
@@ -760,9 +823,9 @@ func nilIfEmpty(value string) *string {
 }
 
 func (s *Seeder) seedAdmin(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip admin seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 	existing, err := s.client.User.Query().Where(user.UsernameEQ("admin"), user.TenantIDEQ(t.ID)).First(ctx)
@@ -814,9 +877,9 @@ func (s *Seeder) seedAdmin(ctx context.Context) {
 }
 
 func (s *Seeder) seedDepartments(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip departments seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -845,9 +908,9 @@ func (s *Seeder) seedDepartments(ctx context.Context) {
 }
 
 func (s *Seeder) seedTeams(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip teams seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -881,9 +944,9 @@ func (s *Seeder) seedTeams(ctx context.Context) {
 }
 
 func (s *Seeder) seedRoles(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip roles seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -926,9 +989,9 @@ func (s *Seeder) seedCloudServiceTemplates(ctx context.Context) {
 // 以下是使用配置文件的初始化函数
 
 func (s *Seeder) seedSLADefinitions(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip SLA definitions seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -964,107 +1027,10 @@ func (s *Seeder) seedSLADefinitions(ctx context.Context) {
 	_ = slaIDMap
 }
 
-func (s *Seeder) seedSLAPolicies(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip SLA policies seed", "error", err)
-		return
-	}
-
-	policies := s.config.SLAPolicies
-	if len(policies) == 0 {
-		policies = defaultSLAPolicySeeds()
-		s.sugar.Warnw("SLA policies not found in seed config; using built-in defaults")
-	}
-
-	created := 0
-	updated := 0
-	for _, sla := range policies {
-		existing, err := s.client.SLAPolicy.Query().
-			Where(slapolicy.TenantIDEQ(t.ID), slapolicy.NameEQ(sla.Name)).
-			First(ctx)
-		if err == nil {
-			_, err = existing.Update().
-				SetDescription(sla.Description).
-				SetPriority(sla.Priority).
-				SetResponseTimeMinutes(sla.ResponseTimeMinutes).
-				SetResolutionTimeMinutes(sla.ResolutionTimeMinutes).
-				SetExcludeWeekends(sla.ExcludeWeekends).
-				SetExcludeHolidays(sla.ExcludeHolidays).
-				SetIsActive(sla.IsActive).
-				SetPriorityScore(sla.PriorityScore).
-				Save(ctx)
-			if err != nil {
-				s.sugar.Warnw("update SLA policy failed", "error", err, "name", sla.Name)
-				continue
-			}
-			updated++
-			continue
-		}
-
-		_, err = s.client.SLAPolicy.Create().
-			SetName(sla.Name).
-			SetDescription(sla.Description).
-			SetPriority(sla.Priority).
-			SetResponseTimeMinutes(sla.ResponseTimeMinutes).
-			SetResolutionTimeMinutes(sla.ResolutionTimeMinutes).
-			SetExcludeWeekends(sla.ExcludeWeekends).
-			SetExcludeHolidays(sla.ExcludeHolidays).
-			SetIsActive(sla.IsActive).
-			SetPriorityScore(sla.PriorityScore).
-			SetTenantID(t.ID).
-			Save(ctx)
-		if err != nil {
-			s.sugar.Warnw("seed SLA policy failed", "error", err, "name", sla.Name)
-			continue
-		}
-		created++
-	}
-	s.sugar.Infow("SLA policies ensured", "total", len(policies), "created", created, "updated", updated)
-}
-
-func defaultSLAPolicySeeds() []SLAPolicySeed {
-	return []SLAPolicySeed{
-		{
-			Name:                  "默认P1事件SLA",
-			Description:           "高优先级事件响应与解决策略",
-			Priority:              "high",
-			ResponseTimeMinutes:   30,
-			ResolutionTimeMinutes: 240,
-			ExcludeWeekends:       false,
-			ExcludeHolidays:       false,
-			IsActive:              true,
-			PriorityScore:         90,
-		},
-		{
-			Name:                  "默认P2事件SLA",
-			Description:           "中优先级事件响应与解决策略",
-			Priority:              "medium",
-			ResponseTimeMinutes:   120,
-			ResolutionTimeMinutes: 1440,
-			ExcludeWeekends:       true,
-			ExcludeHolidays:       true,
-			IsActive:              true,
-			PriorityScore:         60,
-		},
-		{
-			Name:                  "默认服务请求SLA",
-			Description:           "标准服务请求履约策略",
-			Priority:              "low",
-			ResponseTimeMinutes:   240,
-			ResolutionTimeMinutes: 2880,
-			ExcludeWeekends:       true,
-			ExcludeHolidays:       true,
-			IsActive:              true,
-			PriorityScore:         30,
-		},
-	}
-}
-
 func (s *Seeder) seedSLAAlertRules(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip SLA alert rules seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -1131,9 +1097,9 @@ func (s *Seeder) seedSLAAlertRules(ctx context.Context) {
 }
 
 func (s *Seeder) seedApprovalWorkflows(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip approval workflows seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -1165,9 +1131,9 @@ func (s *Seeder) seedApprovalWorkflows(ctx context.Context) {
 }
 
 func (s *Seeder) seedProcessBindings(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip process bindings seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -1205,9 +1171,9 @@ func (s *Seeder) seedBPMNWorkflows(ctx context.Context) {
 		return
 	}
 
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip BPMN workflows seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -1222,9 +1188,9 @@ func (s *Seeder) seedBPMNWorkflows(ctx context.Context) {
 }
 
 func (s *Seeder) seedTicketViews(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip ticket views seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -1276,9 +1242,9 @@ func (s *Seeder) seedTicketViews(ctx context.Context) {
 
 // seedPermissions 初始化系统权限
 func (s *Seeder) seedPermissions(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip permissions seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -1382,6 +1348,11 @@ func (s *Seeder) seedPermissions(ctx context.Context) {
 		// 审批权限
 		{"approval:read", "查看审批", "approval", "read", "查看审批记录"},
 		{"approval:write", "管理审批", "approval", "write", "审批操作"},
+		// 通知权限
+		{"notification:read", "查看通知", "notification", "read", "查看通知消息"},
+		{"notification:create", "创建通知", "notification", "create", "发送通知"},
+		{"notification:update", "更新通知", "notification", "update", "更新通知配置"},
+		{"notification:delete", "删除通知", "notification", "delete", "删除通知"},
 		// 工作流权限
 		{"workflow:read", "查看工作流", "workflow", "read", "查看工作流"},
 		{"workflow:write", "管理工作流", "workflow", "write", "创建、编辑工作流"},
@@ -1398,7 +1369,7 @@ func (s *Seeder) seedPermissions(ctx context.Context) {
 		{"project:write", "管理项目", "project", "write", "管理项目"},
 		{"application:read", "查看应用", "application", "read", "查看应用"},
 		{"application:write", "管理应用", "application", "write", "管理应用"},
-		{"audit:read", "查看审计", "audit", "read", "查看审计日志"},
+		{"audit_log:read", "查看审计", "audit_log", "read", "查看审计日志"},
 		{"ai:read", "查看AI能力", "ai", "read", "查看AI能力和审计"},
 		{"ai:write", "管理AI能力", "ai", "write", "调用和管理AI能力"},
 		{"connector:write", "管理连接器", "connector", "write", "管理连接器配置"},
@@ -1417,6 +1388,78 @@ func (s *Seeder) seedPermissions(ctx context.Context) {
 		{"msp_allocation:write", "管理分配", "msp_allocation", "write", "创建、编辑MSP分配"},
 		{"msp_report:read", "查看报表", "msp_report", "read", "查看MSP报表"},
 		{"msp_report:write", "管理报表", "msp_report", "write", "生成和管理MSP报表"},
+		// 审批工作流
+		{"approval_workflow:read", "查看审批工作流", "approval_workflow", "read", "查看审批工作流"},
+		{"approval_workflow:create", "创建审批工作流", "approval_workflow", "create", "创建审批工作流"},
+		{"approval_workflow:update", "更新审批工作流", "approval_workflow", "update", "更新审批工作流"},
+		{"approval_workflow:delete", "删除审批工作流", "approval_workflow", "delete", "删除审批工作流"},
+		// 分派规则
+		{"assignment_rule:read", "查看分派规则", "assignment_rule", "read", "查看分派规则"},
+		{"assignment_rule:create", "创建分派规则", "assignment_rule", "create", "创建分派规则"},
+		{"assignment_rule:update", "更新分派规则", "assignment_rule", "update", "更新分派规则"},
+		{"assignment_rule:delete", "删除分派规则", "assignment_rule", "delete", "删除分派规则"},
+		// 自动化规则
+		{"automation_rule:read", "查看自动化规则", "automation_rule", "read", "查看自动化规则"},
+		{"automation_rule:create", "创建自动化规则", "automation_rule", "create", "创建自动化规则"},
+		{"automation_rule:update", "更新自动化规则", "automation_rule", "update", "更新自动化规则"},
+		{"automation_rule:delete", "删除自动化规则", "automation_rule", "delete", "删除自动化规则"},
+		// 云账号
+		{"cloud_account:read", "查看云账号", "cloud_account", "read", "查看云账号"},
+		{"cloud_account:write", "管理云账号", "cloud_account", "write", "创建、编辑云账号"},
+		{"cloud_account:delete", "删除云账号", "cloud_account", "delete", "删除云账号"},
+		// 云资源
+		{"cloud_resource:read", "查看云资源", "cloud_resource", "read", "查看云资源"},
+		{"cloud_resource:write", "管理云资源", "cloud_resource", "write", "创建、编辑云资源"},
+		{"cloud_resource:delete", "删除云资源", "cloud_resource", "delete", "删除云资源"},
+		// 云服务
+		{"cloud_service:read", "查看云服务", "cloud_service", "read", "查看云服务"},
+		{"cloud_service:write", "管理云服务", "cloud_service", "write", "创建、编辑云服务"},
+		{"cloud_service:delete", "删除云服务", "cloud_service", "delete", "删除云服务"},
+		// 系统配置
+		{"system_config:read", "查看系统配置", "system_config", "read", "查看系统配置"},
+		{"system_config:update", "更新系统配置", "system_config", "update", "更新系统配置"},
+		// 问题调查
+		{"investigation:read", "查看调查", "investigation", "read", "查看问题调查"},
+		{"investigation:create", "创建调查", "investigation", "create", "创建问题调查"},
+		{"investigation:update", "更新调查", "investigation", "update", "更新问题调查"},
+		// 菜单
+		{"menu:read", "查看菜单", "menu", "read", "查看菜单配置"},
+		{"menu:create", "创建菜单", "menu", "create", "创建菜单"},
+		{"menu:update", "更新菜单", "menu", "update", "更新菜单"},
+		{"menu:delete", "删除菜单", "menu", "delete", "删除菜单"},
+		// 权限管理
+		{"permission:read", "查看权限", "permission", "read", "查看权限定义"},
+		{"permission:create", "创建权限", "permission", "create", "创建权限"},
+		// 流程实例
+		{"process_instance:read", "查看流程实例", "process_instance", "read", "查看流程实例"},
+		{"process_instance:create", "启动流程", "process_instance", "create", "启动流程实例"},
+		{"process_instance:update", "管理流程", "process_instance", "update", "暂停/恢复/取消流程"},
+		// 根因
+		{"root_cause:create", "设置根因", "root_cause", "create", "设置问题根因"},
+		// 解决方案
+		{"solution:create", "创建方案", "solution", "create", "创建解决方案"},
+		// 步骤
+		{"step:create", "创建步骤", "step", "create", "创建调查步骤"},
+		{"step:update", "更新步骤", "step", "update", "更新调查步骤"},
+		// 标签
+		{"tag:read", "查看标签", "tag", "read", "查看工单标签"},
+		// 任务
+		{"task:read", "查看任务", "task", "read", "查看审批/流程任务"},
+		{"task:update", "处理任务", "task", "update", "审批/处理流程任务"},
+		// 租户
+		{"tenant:read", "查看租户", "tenant", "read", "查看租户信息"},
+		{"tenant:create", "创建租户", "tenant", "create", "创建新租户"},
+		{"tenant:update", "更新租户", "tenant", "update", "更新租户配置"},
+		{"tenant:delete", "删除租户", "tenant", "delete", "删除租户"},
+		// 视图
+		{"view:read", "查看视图", "view", "read", "查看自定义视图"},
+		{"view:create", "创建视图", "view", "create", "创建自定义视图"},
+		{"view:update", "更新视图", "view", "update", "更新自定义视图"},
+		{"view:delete", "删除视图", "view", "delete", "删除自定义视图"},
+		// 部件
+		{"widget:create", "创建部件", "widget", "create", "创建仪表盘部件"},
+		{"widget:update", "更新部件", "widget", "update", "更新仪表盘部件"},
+		{"widget:delete", "删除部件", "widget", "delete", "删除仪表盘部件"},
 	}
 	s.expectedPermissions = make([]string, 0, len(permissions))
 	for _, p := range permissions {
@@ -1461,9 +1504,9 @@ func (s *Seeder) seedPermissions(ctx context.Context) {
 
 // seedMenus 初始化系统菜单
 func (s *Seeder) seedMenus(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip menus seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -1554,9 +1597,9 @@ func (s *Seeder) seedMenus(ctx context.Context) {
 
 // seedMenuAndPermissionFixes 修复菜单路径和补充缺失的权限
 func (s *Seeder) seedMenuAndPermissionFixes(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip fixes", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -1581,7 +1624,7 @@ func (s *Seeder) seedMenuAndPermissionFixes(ctx context.Context) {
 		}
 	}
 
-	_, err = s.client.Menu.Update().
+	_, err := s.client.Menu.Update().
 		Where(menu.Path("/admin/groups"), menu.TenantIDEQ(t.ID)).
 		SetPermissionCode("groups:read").
 		Save(ctx)
@@ -1677,9 +1720,9 @@ func (s *Seeder) seedMenuAndPermissionFixes(ctx context.Context) {
 
 // seedRolePermissions 为角色分配权限关联
 func (s *Seeder) seedRolePermissions(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip role permissions seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -1709,11 +1752,12 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		"ops_director": allExcept([]string{"system:write", "msp:write", "msp_allocation:write", "msp_report:write"}),
 		// 运维经理：运维相关读写
 		"ops_manager": {
-			"ticket:read", "ticket:write", "incident:read", "incident:write",
-			"problem:read", "problem:write", "change:read", "change:write",
+			"ticket:read", "ticket:write", "ticket:escalate", "incident:read", "incident:write",
+			"problem:read", "problem:write", "change:read", "change:write", "change:rollback",
 			"asset:read", "asset:write", "cmdb:read", "cmdb:write",
 			"sla:read", "workflow:read", "report:read",
 			"team:read", "department:read", "user:read",
+			"release:read", "release:approve", "release:rollback",
 		},
 		// 运维工程师：运维操作
 		"ops_engineer": {
@@ -1735,7 +1779,7 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		},
 		// 服务台主管
 		"sd_manager": {
-			"ticket:read", "ticket:write", "incident:read", "incident:write",
+			"ticket:read", "ticket:write", "ticket:escalate", "incident:read", "incident:write",
 			"problem:read", "change:read", "sla:read", "sla:write",
 			"knowledge:read", "knowledge:write", "report:read",
 			"user:read", "team:read",
@@ -1761,12 +1805,16 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 			"ticket_category:read", "ticket_category:create", "ticket_category:update",
 			"workflow:read",
 			"approval:read",
+			"approval_workflow:read",
 			"sla:read",
 			"knowledge:read",
+			"tag:read",
+			"task:read",
+			"process_instance:read",
 		},
 		// 一线支持工程师
 		"l1_support": {
-			"ticket:read", "ticket:write", "incident:read", "incident:write",
+			"ticket:read", "ticket:write", "ticket:escalate", "incident:read", "incident:write",
 			"knowledge:read", "user:read", "sla:read",
 		},
 		// 二线支持工程师
@@ -1811,10 +1859,10 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		},
 		// 部门经理
 		"dept_manager": {
-			"ticket:read", "ticket:write", "incident:read",
-			"problem:read", "change:read", "report:read",
+			"ticket:read", "ticket:write", "ticket:escalate", "incident:read",
+			"problem:read", "change:read", "change:rollback", "report:read",
 			"user:read", "department:read", "team:read",
-			"knowledge:read",
+			"knowledge:read", "release:approve", "release:rollback",
 		},
 		// 团队主管
 		"team_lead": {
@@ -1837,6 +1885,8 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		// 普通用户
 		"end_user": {
 			"ticket:read", "ticket:write", "knowledge:read", "service_catalog:read",
+			"ticket_category:read", "ticket_template:read", "notification:read",
+			"tag:read",
 		},
 		// 访客
 		"guest": {
@@ -1945,13 +1995,14 @@ func allPermissionCodes() []string {
 		"department:read", "department:write",
 		"team:read", "team:write",
 		"approval:read", "approval:write",
+		"notification:read", "notification:create", "notification:update", "notification:delete",
 		"workflow:read", "workflow:write",
 		"knowledge:read", "knowledge:write", "knowledge:delete",
 		"system:read", "system:write",
 		"org:read", "org:write",
 		"project:read", "project:write",
 		"application:read", "application:write",
-		"audit:read",
+		"audit_log:read",
 		"ai:read", "ai:write",
 		"connector:write",
 		"vendor:read", "vendor:write", "vendor:delete",
@@ -1961,6 +2012,30 @@ func allPermissionCodes() []string {
 		"msp_ticket:read", "msp_ticket:write",
 		"msp_allocation:read", "msp_allocation:write",
 		"msp_report:read", "msp_report:write",
+		// 新增: 审批工作流/分派规则/自动化规则
+		"approval_workflow:read", "approval_workflow:create", "approval_workflow:update", "approval_workflow:delete",
+		"assignment_rule:read", "assignment_rule:create", "assignment_rule:update", "assignment_rule:delete",
+		"automation_rule:read", "automation_rule:create", "automation_rule:update", "automation_rule:delete",
+		// 新增: 云管理
+		"cloud_account:read", "cloud_account:write", "cloud_account:delete",
+		"cloud_resource:read", "cloud_resource:write", "cloud_resource:delete",
+		"cloud_service:read", "cloud_service:write", "cloud_service:delete",
+		// 新增: 系统配置/菜单/权限管理/租户
+		"system_config:read", "system_config:update",
+		"menu:read", "menu:create", "menu:update", "menu:delete",
+		"permission:read", "permission:create",
+		"tenant:read", "tenant:create", "tenant:update", "tenant:delete",
+		// 新增: 流程实例/任务/步骤
+		"process_instance:read", "process_instance:create", "process_instance:update",
+		"task:read", "task:update",
+		"step:create", "step:update",
+		// 新增: 问题调查/根因/方案
+		"investigation:read", "investigation:create", "investigation:update",
+		"root_cause:create", "solution:create",
+		// 新增: 视图/部件/标签
+		"view:read", "view:create", "view:update", "view:delete",
+		"widget:create", "widget:update", "widget:delete",
+		"tag:read",
 	}
 }
 
@@ -1980,9 +2055,9 @@ func allExcept(exclude []string) []string {
 }
 
 func (s *Seeder) seedServiceCatalog(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip service catalog seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -2017,9 +2092,9 @@ func (s *Seeder) seedServiceCatalog(ctx context.Context) {
 
 // seedTicketTypes 初始化默认工单类型
 func (s *Seeder) seedTicketTypes(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip ticket types seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -2105,9 +2180,9 @@ func (s *Seeder) seedTicketTypes(ctx context.Context) {
 
 // seedCITypes 初始化CI类型种子数据
 func (s *Seeder) seedCITypes(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip CI types seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -2159,9 +2234,9 @@ func (s *Seeder) seedCITypes(ctx context.Context) {
 
 // seedStandardChanges 初始化标准变更模板种子数据
 func (s *Seeder) seedStandardChanges(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip standard changes seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -2296,9 +2371,9 @@ func (s *Seeder) seedStandardChanges(ctx context.Context) {
 
 // seedTicketTags 初始化标签种子数据
 func (s *Seeder) seedTicketTags(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip ticket tags seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -2354,9 +2429,9 @@ func (s *Seeder) seedTicketTags(ctx context.Context) {
 
 // seedIncidentCategories 初始化事件分类种子数据
 func (s *Seeder) seedIncidentCategories(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip incident categories seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -2404,4 +2479,208 @@ func (s *Seeder) seedIncidentCategories(ctx context.Context) {
 		}
 	}
 	s.sugar.Infow("incident categories seeded", "count", len(categories))
+}
+
+// seedTicketCategories 初始化工单分类树（层级结构）
+func (s *Seeder) seedTicketCategories(ctx context.Context) {
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
+		return
+	}
+
+	categories := s.config.TicketCategories
+	if len(categories) == 0 {
+		s.sugar.Infow("no ticket categories in config; skip seed")
+		return
+	}
+
+	// 检查是否已有分类数据（按 tenant 检查，避免重复种子）
+	existing, err := s.client.TicketCategory.Query().
+		Where(ticketcategory.TenantIDEQ(t.ID)).
+		Count(ctx)
+	if err != nil {
+		s.sugar.Warnw("check existing ticket categories failed", "error", err)
+		return
+	}
+	if existing > 0 {
+		s.sugar.Infow("ticket categories already seeded", "count", existing)
+		return
+	}
+
+	// 先创建所有分类（不含 parent_id），再设置父子关系
+	created := make(map[string]*ent.TicketCategory)
+	for _, cat := range categories {
+		create := s.client.TicketCategory.Create().
+			SetName(cat.Name).
+			SetCode(cat.Code).
+			SetDescription(cat.Description).
+			SetLevel(cat.Level).
+			SetSortOrder(cat.SortOrder).
+			SetIsActive(true).
+			SetTenantID(t.ID)
+		if cat.ITSMType != "" {
+			create.SetItsmType(cat.ITSMType)
+		}
+		if cat.DefaultPriority != "" {
+			create.SetDefaultPriority(cat.DefaultPriority)
+		}
+		if cat.SLATier != "" {
+			create.SetSLATier(cat.SLATier)
+		}
+		if cat.DefaultResolver != "" {
+			create.SetDefaultResolver(cat.DefaultResolver)
+		}
+		if cat.IsUserFacing != nil {
+			create.SetIsUserFacing(*cat.IsUserFacing)
+		}
+		entity, err := create.Save(ctx)
+		if err != nil {
+			s.sugar.Warnw("seed ticket category failed", "error", err, "code", cat.Code)
+			continue
+		}
+		created[cat.Code] = entity
+	}
+
+	// 设置父子关系
+	for _, cat := range categories {
+		if cat.ParentCode == "" {
+			continue
+		}
+		child, ok := created[cat.Code]
+		if !ok {
+			continue
+		}
+		parent, ok := created[cat.ParentCode]
+		if !ok {
+			s.sugar.Warnw("parent category not found", "code", cat.Code, "parent_code", cat.ParentCode)
+			continue
+		}
+		_, err := child.Update().
+			SetParentID(parent.ID).
+			Save(ctx)
+		if err != nil {
+			s.sugar.Warnw("set parent for ticket category failed", "error", err, "code", cat.Code)
+		}
+	}
+
+	s.sugar.Infow("ticket categories seeded", "count", len(created), "total_config", len(categories))
+}
+
+// seedTicketTemplates 初始化工单模板及自定义字段定义
+func (s *Seeder) seedTicketTemplates(ctx context.Context) {
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
+		return
+	}
+
+	templates := s.config.TicketTemplates
+	if len(templates) == 0 {
+		s.sugar.Infow("no ticket templates in config; skip seed")
+		return
+	}
+
+	// 检查是否已有模板数据
+	existing, err := s.client.TicketTemplate.Query().
+		Where(tickettemplate.TenantIDEQ(t.ID)).
+		Count(ctx)
+	if err != nil {
+		s.sugar.Warnw("check existing ticket templates failed", "error", err)
+		return
+	}
+	if existing > 0 {
+		s.sugar.Infow("ticket templates already seeded", "count", existing)
+		return
+	}
+
+	// fieldDefSvc removed - using direct FieldDefinition operations in transaction
+
+	for _, tmpl := range templates {
+		// 解析 category_codes → category_ids
+		categoryIDs := tmpl.CategoryIDs
+		if len(categoryIDs) == 0 && len(tmpl.CategoryCodes) > 0 {
+			cats, err := s.client.TicketCategory.Query().
+				Where(ticketcategory.TenantIDEQ(t.ID), ticketcategory.CodeIn(tmpl.CategoryCodes...)).
+				All(ctx)
+			if err == nil {
+				for _, c := range cats {
+					categoryIDs = append(categoryIDs, c.ID)
+				}
+			}
+		}
+
+		// 1. 创建模板
+		tpl, err := s.client.TicketTemplate.Create().
+			SetName(tmpl.Name).
+			SetDescription(tmpl.Description).
+			SetCategory(tmpl.Category).
+			SetPriority(tmpl.Priority).
+			SetIsActive(tmpl.IsActive).
+			SetCategoryIds(categoryIDs).
+			SetTenantID(t.ID).
+			Save(ctx)
+		if err != nil {
+			s.sugar.Warnw("seed ticket template failed", "error", err, "name", tmpl.Name)
+			continue
+		}
+
+			// 2. 创建自定义字段定义（直接在当前事务中操作）
+			if len(tmpl.Fields) == 0 {
+				continue
+			}
+
+			// 删除旧定义（幂等）
+			_, err = s.client.FieldDefinition.Delete().
+				Where(
+					fielddefinition.TenantIDEQ(t.ID),
+					fielddefinition.EntityTypeEQ("ticket_template"),
+					fielddefinition.EntityIDEQ(tpl.ID),
+				).
+				Exec(ctx)
+			if err != nil {
+				s.sugar.Warnw("delete old field definitions failed", "error", err, "template", tmpl.Name)
+			}
+
+			// 按序创建新定义
+			for i, fd := range tmpl.Fields {
+				opts := fd.Options
+				if opts == nil {
+					opts = []map[string]interface{}{}
+				}
+				sortOrder := fd.SortOrder
+				if sortOrder == 0 {
+					sortOrder = i
+				}
+				_, err := s.client.FieldDefinition.Create().
+					SetTenantID(t.ID).
+					SetEntityType("ticket_template").
+					SetEntityID(tpl.ID).
+					SetName(fd.Name).
+					SetLabel(fd.Label).
+					SetFieldType(fd.FieldType).
+					SetRequired(fd.Required).
+					SetOptions(convertOptions(fd.Options)).
+					SetSortOrder(sortOrder).
+					SetIsActive(true).
+					Save(ctx)
+				if err != nil {
+					s.sugar.Warnw("seed field definition failed", "error", err, "template", tmpl.Name, "field", fd.Name)
+				}
+			}
+		if err != nil {
+			s.sugar.Warnw("seed field definitions for template failed", "error", err, "template", tmpl.Name)
+		}
+	}
+
+	s.sugar.Infow("ticket templates seeded", "count", len(templates))
+}
+
+// convertOptions converts []map[string]interface{} to []interface{} for FieldDefinition
+func convertOptions(opts []map[string]interface{}) []interface{} {
+	result := make([]interface{}, len(opts))
+	for i, opt := range opts {
+		result[i] = opt
+	}
+	return result
 }

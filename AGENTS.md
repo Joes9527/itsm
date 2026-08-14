@@ -136,6 +136,52 @@ All APIs return `{ code: number, message: string, data: any }`:
 
 ## Important Patterns
 
+
+# Core Rules
+
+##  Scope Discipline & Verification
+- **Do NOT expand scope** beyond the reported issue. If you notice unrelated bugs, list them for the user to decide rather than fixing them.
+- **When a fix is declared 'done'**, verify by tracing through ALL layers (DB, files, Redis, vector stores like Qdrant, caches) before claiming completion.
+- **If the user says 'still not working'**, stop patching and re-investigate root cause from scratch.
+- **Always run the full test suite** after multi-file refactors and report the pass count.
+- **NEVER use curly/smart quotes** (' ' " ") in Python or test files — always use straight ASCII quotes.
+
+---
+
+## Do Not Patch Around Problems
+
+Do not solve problems by:
+
+- adding compatibility layers
+- creating temporary wrappers
+- introducing bridge services
+- adding translation layers between old and new models
+- extending legacy behavior indefinitely
+- **adding a new routing layer while keeping the old one alive**
+- **caching a duplicated query instead of deleting the duplicate query**
+
+If the existing design is wrong, refactor it properly.
+Avoid "patch-on-patch" engineering.
+
+---
+
+##  No Hardcoding
+
+Hardcoding is forbidden unless explicitly approved.
+
+Do not hardcode:
+- tenant-specific data (employee names, emails, department names)
+- tenant-specific URLs
+- tenant-specific email addresses
+- region-specific behavior
+- MFA verification codes (must be randomly generated)
+- Chinese/English UI text directly in Python strings (use prompts/messages)
+- threshold constants in module-level variables (use config or workspace settings)
+
+
+
+Use configuration, metadata, strategy patterns, or domain models instead.
+
 ### Backend
 
 - Use `common.Success(c, data)` / `common.Fail(c, code, msg)` for responses

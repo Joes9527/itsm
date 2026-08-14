@@ -28,21 +28,21 @@ export class TemplateApi {
    * 获取模板列表
    */
   static async getTemplates(query?: TemplateListQuery): Promise<TemplateListResponse> {
-    return httpClient.get<TemplateListResponse>('/api/v1/templates', query);
+    return httpClient.get<TemplateListResponse>('/api/v1/tickets/templates', query);
   }
 
   /**
    * 获取模板详情
    */
   static async getTemplate(templateId: string): Promise<TicketTemplate> {
-    return httpClient.get<TicketTemplate>(`/api/v1/templates/${templateId}`);
+    return httpClient.get<TicketTemplate>(`/api/v1/tickets/templates/${templateId}`);
   }
 
   /**
    * 创建模板
    */
   static async createTemplate(data: CreateTemplateRequest): Promise<TicketTemplate> {
-    return httpClient.post<TicketTemplate>('/api/v1/templates', data);
+    return httpClient.post<TicketTemplate>('/api/v1/tickets/templates', data);
   }
 
   /**
@@ -52,28 +52,28 @@ export class TemplateApi {
     templateId: string,
     data: UpdateTemplateRequest
   ): Promise<TicketTemplate> {
-    return httpClient.patch<TicketTemplate>(`/api/v1/templates/${templateId}`, data);
+    return httpClient.patch<TicketTemplate>(`/api/v1/tickets/templates/${templateId}`, data);
   }
 
   /**
    * 删除模板（软删除）
    */
   static async deleteTemplate(templateId: string): Promise<void> {
-    return httpClient.delete(`/api/v1/templates/${templateId}`);
+    return httpClient.delete(`/api/v1/tickets/templates/${templateId}`);
   }
 
   /**
    * 归档模板
    */
   static async archiveTemplate(templateId: string): Promise<TicketTemplate> {
-    return httpClient.post<TicketTemplate>(`/api/v1/templates/${templateId}/archive`);
+    return httpClient.post<TicketTemplate>(`/api/v1/tickets/templates/${templateId}/archive`);
   }
 
   /**
    * 取消归档模板
    */
   static async unarchiveTemplate(templateId: string): Promise<TicketTemplate> {
-    return httpClient.post<TicketTemplate>(`/api/v1/templates/${templateId}/unarchive`);
+    return httpClient.post<TicketTemplate>(`/api/v1/tickets/templates/${templateId}/unarchive`);
   }
 
   // ==================== 模板版本控制 ====================
@@ -82,7 +82,7 @@ export class TemplateApi {
    * 发布模板（从草稿到正式版本）
    */
   static async publishTemplate(templateId: string, changelog?: string): Promise<TicketTemplate> {
-    return httpClient.post<TicketTemplate>(`/api/v1/templates/${templateId}/publish`, {
+    return httpClient.post<TicketTemplate>(`/api/v1/tickets/templates/${templateId}/publish`, {
       changelog,
     });
   }
@@ -91,21 +91,21 @@ export class TemplateApi {
    * 创建模板草稿
    */
   static async createDraft(templateId: string): Promise<TicketTemplate> {
-    return httpClient.post<TicketTemplate>(`/api/v1/templates/${templateId}/draft`);
+    return httpClient.post<TicketTemplate>(`/api/v1/tickets/templates/${templateId}/draft`);
   }
 
   /**
    * 获取模板版本历史
    */
   static async getTemplateVersions(templateId: string): Promise<Array<unknown>> {
-    return httpClient.get(`/api/v1/templates/${templateId}/versions`);
+    return httpClient.get(`/api/v1/tickets/templates/${templateId}/versions`);
   }
 
   /**
    * 回滚到指定版本
    */
   static async rollbackToVersion(templateId: string, version: string): Promise<TicketTemplate> {
-    return httpClient.post<TicketTemplate>(`/api/v1/templates/${templateId}/rollback`, { version });
+    return httpClient.post<TicketTemplate>(`/api/v1/tickets/templates/${templateId}/rollback`, { version });
   }
 
   /**
@@ -116,7 +116,7 @@ export class TemplateApi {
     versionA: string,
     versionB: string
   ): Promise<unknown> {
-    return httpClient.get(`/api/v1/templates/${templateId}/compare`, {
+    return httpClient.get(`/api/v1/tickets/templates/${templateId}/compare`, {
       versionA: versionA,
       versionB: versionB,
     });
@@ -128,7 +128,7 @@ export class TemplateApi {
    * 使用模板创建工单
    */
   static async createTicketFromTemplate(data: CreateTicketFromTemplateRequest): Promise<Ticket> {
-    return httpClient.post<Ticket>('/api/v1/templates/create-ticket', data);
+    return httpClient.post<Ticket>('/api/v1/tickets/templates/create-ticket', data);
   }
 
   /**
@@ -137,7 +137,7 @@ export class TemplateApi {
   static async previewTicketFromTemplate(
     data: CreateTicketFromTemplateRequest
   ): Promise<Partial<Ticket>> {
-    return httpClient.post<Partial<Ticket>>('/api/v1/templates/preview-ticket', data);
+    return httpClient.post<Partial<Ticket>>('/api/v1/tickets/templates/preview-ticket', data);
   }
 
   // ==================== 模板分类管理 ====================
@@ -146,7 +146,7 @@ export class TemplateApi {
    * 获取模板分类列表
    */
   static async getCategories(): Promise<TemplateCategory[]> {
-    return httpClient.get<TemplateCategory[]>('/api/v1/template-categories');
+    return httpClient.get<TemplateCategory[]>('/api/v1/tickets/templates/categories');
   }
 
   /**
@@ -155,7 +155,7 @@ export class TemplateApi {
   static async createCategory(
     data: Omit<TemplateCategory, 'id' | 'createdAt' | 'updatedAt'>
   ): Promise<TemplateCategory> {
-    return httpClient.post<TemplateCategory>('/api/v1/template-categories', data);
+    return httpClient.post<TemplateCategory>('/api/v1/tickets/templates/categories', data);
   }
 
   /**
@@ -165,14 +165,14 @@ export class TemplateApi {
     categoryId: string,
     data: Partial<TemplateCategory>
   ): Promise<TemplateCategory> {
-    return httpClient.patch<TemplateCategory>(`/api/v1/template-categories/${categoryId}`, data);
+    return httpClient.patch<TemplateCategory>(`/api/v1/tickets/templates/categories/${categoryId}`, data);
   }
 
   /**
    * 删除模板分类
    */
   static async deleteCategory(categoryId: string): Promise<void> {
-    return httpClient.delete(`/api/v1/template-categories/${categoryId}`);
+    return httpClient.delete(`/api/v1/tickets/templates/categories/${categoryId}`);
   }
 
   // ==================== 模板使用统计 ====================
@@ -181,21 +181,21 @@ export class TemplateApi {
    * 获取模板使用统计
    */
   static async getTemplateStats(templateId: string): Promise<TemplateUsageStats> {
-    return httpClient.get<TemplateUsageStats>(`/api/v1/templates/${templateId}/stats`);
+    return httpClient.get<TemplateUsageStats>(`/api/v1/tickets/templates/${templateId}/stats`);
   }
 
   /**
    * 记录模板使用
    */
   static async recordTemplateUsage(templateId: string): Promise<void> {
-    return httpClient.post(`/api/v1/templates/${templateId}/use`);
+    return httpClient.post(`/api/v1/tickets/templates/${templateId}/use`);
   }
 
   /**
    * 获取最近使用的模板
    */
   static async getRecentTemplates(limit = 10): Promise<TicketTemplate[]> {
-    return httpClient.get<TicketTemplate[]>('/api/v1/templates/recent', {
+    return httpClient.get<TicketTemplate[]>('/api/v1/tickets/templates/recent', {
       limit,
     });
   }
@@ -204,7 +204,7 @@ export class TemplateApi {
    * 获取最受欢迎的模板
    */
   static async getPopularTemplates(limit = 10): Promise<TicketTemplate[]> {
-    return httpClient.get<TicketTemplate[]>('/api/v1/templates/popular', {
+    return httpClient.get<TicketTemplate[]>('/api/v1/tickets/templates/popular', {
       limit,
     });
   }
@@ -213,7 +213,7 @@ export class TemplateApi {
    * 获取推荐模板
    */
   static async getRecommendedTemplates(userId?: string): Promise<TicketTemplate[]> {
-    return httpClient.get<TicketTemplate[]>('/api/v1/templates/recommended', {
+    return httpClient.get<TicketTemplate[]>('/api/v1/tickets/templates/recommended', {
       userId: userId,
     });
   }
@@ -228,7 +228,7 @@ export class TemplateApi {
     rating: number,
     comment?: string
   ): Promise<TemplateRating> {
-    return httpClient.post<TemplateRating>(`/api/v1/templates/${templateId}/rate`, {
+    return httpClient.post<TemplateRating>(`/api/v1/tickets/templates/${templateId}/rate`, {
       rating,
       comment,
     });
@@ -238,7 +238,7 @@ export class TemplateApi {
    * 获取模板评分列表
    */
   static async getTemplateRatings(templateId: string): Promise<TemplateRating[]> {
-    return httpClient.get<TemplateRating[]>(`/api/v1/templates/${templateId}/ratings`);
+    return httpClient.get<TemplateRating[]>(`/api/v1/tickets/templates/${templateId}/ratings`);
   }
 
   /**
@@ -246,7 +246,7 @@ export class TemplateApi {
    */
   static async getUserRating(templateId: string, userId: string): Promise<TemplateRating | null> {
     return httpClient.get<TemplateRating | null>(
-      `/api/v1/templates/${templateId}/ratings/${userId}`
+      `/api/v1/tickets/templates/${templateId}/ratings/${userId}`
     );
   }
 
@@ -256,7 +256,7 @@ export class TemplateApi {
    * 复制模板
    */
   static async duplicateTemplate(data: TemplateDuplicateRequest): Promise<TicketTemplate> {
-    return httpClient.post<TicketTemplate>('/api/v1/templates/duplicate', data);
+    return httpClient.post<TicketTemplate>('/api/v1/tickets/templates/duplicate', data);
   }
 
   /**
@@ -265,7 +265,7 @@ export class TemplateApi {
   static async exportTemplate(templateId: string, format: TemplateExportFormat): Promise<Blob> {
     const response = await httpClient.request({
       method: 'GET',
-      url: `/api/v1/templates/${templateId}/export`,
+      url: `/api/v1/tickets/templates/${templateId}/export`,
       params: format,
       responseType: 'blob',
     });
@@ -278,7 +278,7 @@ export class TemplateApi {
   static async exportTemplates(templateIds: string[], format: TemplateExportFormat): Promise<Blob> {
     const response = await httpClient.request({
       method: 'POST',
-      url: '/api/v1/templates/export/batch',
+      url: '/api/v1/tickets/templates/export/batch',
       data: { templateIds: templateIds, ...format },
       responseType: 'blob',
     });
@@ -309,7 +309,7 @@ export class TemplateApi {
       formData.append('validate_only', String(data.validateOnly));
     }
 
-    return httpClient.post('/api/v1/templates/import', formData);
+    return httpClient.post('/api/v1/tickets/templates/import', formData);
   }
 
   // ==================== 模板验证 ====================
@@ -320,7 +320,7 @@ export class TemplateApi {
   static async validateTemplate(
     data: CreateTemplateRequest | UpdateTemplateRequest
   ): Promise<TemplateValidationResult> {
-    return httpClient.post<TemplateValidationResult>('/api/v1/templates/validate', data);
+    return httpClient.post<TemplateValidationResult>('/api/v1/tickets/templates/validate', data);
   }
 
   /**
@@ -330,7 +330,7 @@ export class TemplateApi {
     name: string,
     excludeId?: string
   ): Promise<{ available: boolean; suggestions?: string[] }> {
-    return httpClient.get('/api/v1/templates/check-name', {
+    return httpClient.get('/api/v1/tickets/templates/check-name', {
       name,
       excludeId: excludeId,
     });
@@ -345,7 +345,7 @@ export class TemplateApi {
     templateIds: string[],
     isActive: boolean
   ): Promise<{ success: number; failed: number }> {
-    return httpClient.post('/api/v1/templates/batch/toggle', {
+    return httpClient.post('/api/v1/tickets/templates/batch/toggle', {
       templateIds: templateIds,
       isActive: isActive,
     });
@@ -359,7 +359,7 @@ export class TemplateApi {
   ): Promise<{ success: number; failed: number }> {
     return httpClient.request({
       method: 'DELETE',
-      url: '/api/v1/templates/batch',
+      url: '/api/v1/tickets/templates/batch',
       data: { templateIds: templateIds },
     });
   }
@@ -370,7 +370,7 @@ export class TemplateApi {
   static async batchArchiveTemplates(
     templateIds: string[]
   ): Promise<{ success: number; failed: number }> {
-    return httpClient.post('/api/v1/templates/batch/archive', {
+    return httpClient.post('/api/v1/tickets/templates/batch/archive', {
       templateIds: templateIds,
     });
   }
@@ -382,7 +382,7 @@ export class TemplateApi {
     templateIds: string[],
     categoryId: string
   ): Promise<{ success: number; failed: number }> {
-    return httpClient.post('/api/v1/templates/batch/update-category', {
+    return httpClient.post('/api/v1/tickets/templates/batch/update-category', {
       templateIds: templateIds,
       categoryId: categoryId,
     });
@@ -397,7 +397,7 @@ export class TemplateApi {
     query: string,
     filters?: Partial<TemplateListQuery>
   ): Promise<TemplateListResponse> {
-    return httpClient.get<TemplateListResponse>('/api/v1/templates/search', {
+    return httpClient.get<TemplateListResponse>('/api/v1/tickets/templates/search', {
       q: query,
       ...filters,
     });
@@ -412,7 +412,7 @@ export class TemplateApi {
     priority?: string;
     tags?: string[];
   }): Promise<TicketTemplate[]> {
-    return httpClient.post<TicketTemplate[]>('/api/v1/templates/smart-recommend', context);
+    return httpClient.post<TicketTemplate[]>('/api/v1/tickets/templates/smart-recommend', context);
   }
 
   // ==================== 模板字段建议 ====================
@@ -423,7 +423,7 @@ export class TemplateApi {
   static async getFieldSuggestions(
     categoryId?: string
   ): Promise<Array<{ name: string; type: string; label: string }>> {
-    return httpClient.get('/api/v1/templates/field-suggestions', {
+    return httpClient.get('/api/v1/tickets/templates/field-suggestions', {
       categoryId: categoryId,
     });
   }
@@ -432,7 +432,7 @@ export class TemplateApi {
    * 获取常用字段模板
    */
   static async getCommonFields(): Promise<Array<unknown>> {
-    return httpClient.get('/api/v1/templates/common-fields');
+    return httpClient.get('/api/v1/tickets/templates/common-fields');
   }
 
   // ==================== 模板预览和测试 ====================
@@ -444,7 +444,7 @@ export class TemplateApi {
     templateId: string,
     sampleData?: Record<string, unknown>
   ): Promise<unknown> {
-    return httpClient.post(`/api/v1/templates/${templateId}/preview`, {
+    return httpClient.post(`/api/v1/tickets/templates/${templateId}/preview`, {
       sampleData: sampleData,
     });
   }
@@ -461,7 +461,7 @@ export class TemplateApi {
     autoTag: unknown;
     approvalWorkflow: unknown;
   }> {
-    return httpClient.post(`/api/v1/templates/${templateId}/test-automation`, {
+    return httpClient.post(`/api/v1/tickets/templates/${templateId}/test-automation`, {
       testData: testData,
     });
   }
@@ -472,21 +472,21 @@ export class TemplateApi {
    * 收藏模板
    */
   static async favoriteTemplate(templateId: string): Promise<void> {
-    return httpClient.post(`/api/v1/templates/${templateId}/favorite`);
+    return httpClient.post(`/api/v1/tickets/templates/${templateId}/favorite`);
   }
 
   /**
    * 取消收藏模板
    */
   static async unfavoriteTemplate(templateId: string): Promise<void> {
-    return httpClient.delete(`/api/v1/templates/${templateId}/favorite`);
+    return httpClient.delete(`/api/v1/tickets/templates/${templateId}/favorite`);
   }
 
   /**
    * 获取用户收藏的模板
    */
   static async getFavoriteTemplates(): Promise<TicketTemplate[]> {
-    return httpClient.get<TicketTemplate[]>('/api/v1/templates/favorites');
+    return httpClient.get<TicketTemplate[]>('/api/v1/tickets/templates/favorites');
   }
 
   /**
@@ -494,7 +494,7 @@ export class TemplateApi {
    */
   static async isFavorite(templateId: string): Promise<boolean> {
     const result = await httpClient.get<{ isFavorite: boolean }>(
-      `/api/v1/templates/${templateId}/favorite/status`
+      `/api/v1/tickets/templates/${templateId}/favorite/status`
     );
     return result.isFavorite;
   }

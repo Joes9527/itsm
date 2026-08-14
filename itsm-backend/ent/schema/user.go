@@ -27,9 +27,9 @@ func (User) Fields() []ent.Field {
 		field.String("name").
 			Comment("姓名").
 			NotEmpty(),
-		field.Enum("role").
-			Comment("角色").
-			Values("super_admin", "admin", "manager", "agent", "technician", "security", "end_user").
+		field.String("role").
+			Comment("角色代码，对应 roles 表的 code 字段").
+			NotEmpty().
 			Default("end_user"),
 		field.String("department").
 			Comment("部门").

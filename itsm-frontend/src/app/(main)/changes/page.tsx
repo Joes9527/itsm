@@ -29,11 +29,11 @@ import {
   type KanbanColumnConfig,
 } from '@/components/business/UnifiedKanbanBoard';
 
-// 看板列配置（颜色与全站主色 #3b82f6 对齐，避免遗留 antd 旧蓝 #1890ff）
+// 看板列配置（颜色与全站主色 #F06820 对齐，避免遗留 antd 旧蓝 #1890ff）
 const KANBAN_COLUMNS: KanbanColumnConfig<Change>[] = [
   { key: 'draft', title: '草稿', color: '#d9d9d9' },
   { key: 'pending', title: '待审批', color: '#fa8c16' },
-  { key: 'approved', title: '已批准', color: '#3b82f6' },
+  { key: 'approved', title: '已批准', color: '#F06820' },
   { key: 'scheduled', title: '已排期', color: '#722ed1' },
   { key: 'in_progress', title: '实施中', color: '#13c2c2' },
   { key: 'completed', title: '已完成', color: '#52c41a' },
@@ -240,7 +240,7 @@ export default function ChangesPage() {
     {
       label: '总变更数',
       value: stats.total,
-      color: '#3b82f6',
+      color: '#F06820',
       icon: <ClipboardList size={20} strokeWidth={1.8} />,
     },
     {
@@ -252,7 +252,7 @@ export default function ChangesPage() {
     {
       label: '进行中',
       value: stats.inProgress,
-      color: '#3b82f6',
+      color: '#F06820',
       icon: <RefreshCw size={20} strokeWidth={1.8} />,
     },
     {

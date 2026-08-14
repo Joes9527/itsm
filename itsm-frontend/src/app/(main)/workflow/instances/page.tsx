@@ -571,9 +571,9 @@ export default function WorkflowInstancesPage() {
 
       <StatsOverview
         items={[
-          { key: 'total', title: '总实例', value: stats.total, accentColor: '#1677ff' },
+          { key: 'total', title: '总实例', value: stats.total, accentColor: '#F06820' },
           { key: 'running', title: '运行中', value: stats.running, accentColor: '#52c41a' },
-          { key: 'completed', title: '已完成', value: stats.completed, accentColor: '#1677ff' },
+          { key: 'completed', title: '已完成', value: stats.completed, accentColor: '#F06820' },
           { key: 'suspended', title: '已暂停', value: stats.suspended, accentColor: '#faad14' },
         ]}
       />

@@ -18,6 +18,7 @@ func (ServiceCatalog) Fields() []ent.Field {
 		field.String("category").Comment("服务分类").Optional(),
 		field.String("icon").Comment("服务图标").Optional(),
 		field.String("service_type").Comment("服务类型: vm|rds|oss|network|storage|security|custom").Default("custom"),
+	field.String("itsm_type").Comment("ITSM类型: Request|Incident|Change，决定审批路由").Default("Request"),
 
 		// 价格与交付
 		field.Float("price").Comment("价格").Optional(),

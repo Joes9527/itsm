@@ -12,9 +12,9 @@ import { spacing, semanticSpacing, grid, layout, borderRadius, boxShadow, fontSi
 describe('Design System Colors', () => {
   describe('colors', () => {
     it('should have primary palette with all shades', () => {
-      expect(colors.primary[50]).toBe('#eff6ff');
-      expect(colors.primary[500]).toBe('#3b82f6');
-      expect(colors.primary[950]).toBe('#172554');
+      expect(colors.primary[50]).toBe('#fff5f0');
+      expect(colors.primary[500]).toBe('#F06820');
+      expect(colors.primary[950]).toBe('#4A1D02');
     });
 
     it('should have neutral palette', () => {
@@ -32,13 +32,13 @@ describe('Design System Colors', () => {
     it('should have functional colors', () => {
       expect(colors.functional.background.primary).toBe('#ffffff');
       expect(colors.functional.text.primary).toBe('#0f172a');
-      expect(colors.functional.border.focus).toBe('#3b82f6');
+      expect(colors.functional.border.focus).toBe('#F06820');
     });
   });
 
   describe('darkColors', () => {
     it('should have dark theme primary colors', () => {
-      expect(darkColors.primary[500]).toBe('#3b82f6');
+      expect(darkColors.primary[500]).toBe('#F06820');
     });
 
     it('should have dark theme functional colors', () => {
@@ -266,7 +266,7 @@ describe('Design System - Theme', () => {
     const themeConfig = getAntdTheme(false);
     expect(themeConfig).toBeDefined();
     expect(themeConfig.token).toBeDefined();
-    expect(themeConfig.token.colorPrimary).toBe('#3b82f6');
+    expect(themeConfig.token.colorPrimary).toBe('#F06820');
     expect(themeConfig.token.colorBgContainer).toBe('#ffffff');
     expect(themeConfig.components).toBeDefined();
   });
@@ -281,7 +281,7 @@ describe('Design System - Theme', () => {
   it('generateCSSVariables returns light CSS variables', async () => {
     const { generateCSSVariables } = await import('../theme');
     const vars = generateCSSVariables(false);
-    expect(vars['--color-primary-500']).toBe('#3b82f6');
+    expect(vars['--color-primary-500']).toBe('#F06820');
     expect(vars['--color-background-primary']).toBe('#ffffff');
     expect(vars['--color-text-primary']).toBe('#0f172a');
     expect(vars['--spacing-md']).toBeDefined();

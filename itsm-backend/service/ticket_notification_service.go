@@ -23,6 +23,8 @@ type TicketNotificationService struct {
 	logger       *zap.SugaredLogger
 	emailService *EmailService
 	smsService   *SMSService
+	prefService  *NotificationPreferenceService // 按 event_type 查偏好
+	wsService    *WebSocketService              // push 渠道（WebSocket）
 }
 
 // NewTicketNotificationService 创建通知服务
@@ -43,14 +45,24 @@ func (s *TicketNotificationService) SetSMSService(smsService *SMSService) {
 	s.smsService = smsService
 }
 
-// SendNotification 发送工单通知
+// SetNotificationPreferenceService 注入通知偏好服务（按 event_type 查偏好）
+func (s *TicketNotificationService) SetNotificationPreferenceService(p *NotificationPreferenceService) {
+	s.prefService = p
+}
+
+// SetWebSocketService 注入 WebSocket 服务（push 渠道）
+func (s *TicketNotificationService) SetWebSocketService(w *WebSocketService) {
+	s.wsService = w
+}
+
+// SendNotification 发送工单通知（按用户 event_type 偏好路由到多个渠道）
 func (s *TicketNotificationService) SendNotification(
 	ctx context.Context,
 	ticketID int,
 	req *dto.SendTicketNotificationRequest,
 	tenantID int,
 ) error {
-	s.logger.Infow("Sending ticket notification", "ticket_id", ticketID, "type", req.Type, "channel", req.Channel)
+	s.logger.Infow("Sending ticket notification", "ticket_id", ticketID, "event_type", req.EventType)
 
 	// 验证工单是否存在
 	ticketExists, err := s.client.Ticket.Query().
@@ -66,134 +78,125 @@ func (s *TicketNotificationService) SendNotification(
 		return fmt.Errorf("ticket not found")
 	}
 
-	// 为每个用户创建通知记录
+	ticketEntity, err := s.client.Ticket.Get(ctx, ticketID)
+	if err != nil {
+		return fmt.Errorf("failed to get ticket: %w", err)
+	}
+
 	now := time.Now()
 	for _, userID := range req.UserIDs {
 		// 验证用户是否存在
-		userExists, err := s.client.User.Query().
-			Where(user.ID(userID)).
-			Exist(ctx)
-		if err != nil || !userExists {
+		userEntity, err := s.client.User.Get(ctx, userID)
+		if err != nil || userEntity == nil {
 			s.logger.Warnw("User not found, skipping notification", "user_id", userID)
 			continue
 		}
 
-		// 检查用户通知偏好
-		preferences, err := s.getUserNotificationPreferences(ctx, userID)
-		if err != nil {
-			s.logger.Warnw("Failed to get user preferences, using defaults", "user_id", userID, "error", err)
+		// 查该用户对该事件类型的偏好（带默认值兜底）
+		prefs := s.resolvePreferences(ctx, userID, tenantID, req.EventType)
+
+		// 1. 站内信：总是创建通知记录（现有语义）
+		if prefs.InAppEnabled {
+			s.createInAppNotification(ctx, ticketID, userID, req, tenantID, now)
 		}
 
-		// 根据渠道和用户偏好决定是否发送
-		shouldSend := false
-		switch req.Channel {
-		case "email":
-			shouldSend = preferences.EmailEnabled
-		case "in_app":
-			shouldSend = preferences.InAppEnabled
-		case "sms":
-			shouldSend = preferences.SmsEnabled
+		// 2. 邮件
+		if prefs.EmailEnabled && s.emailService != nil && userEntity.Email != "" {
+			if err := s.emailService.SendTicketNotification(
+				ctx,
+				[]string{userEntity.Email},
+				ticketEntity.TicketNumber,
+				ticketEntity.Title,
+				req.EventType,
+				req.Content,
+			); err != nil {
+				s.logger.Errorw("Failed to send email notification", "error", err, "user_id", userID)
+			}
 		}
 
-		// 站内消息总是创建记录（即使其他渠道被禁用）
-		if req.Channel == "in_app" || shouldSend {
-			notification, err := s.client.TicketNotification.Create().
-				SetTicketID(ticketID).
-				SetUserID(userID).
-				SetType(req.Type).
-				SetChannel(req.Channel).
-				SetContent(req.Content).
-				SetTenantID(tenantID).
-				SetStatus("pending").
-				Save(ctx)
-			if err != nil {
-				s.logger.Errorw("Failed to create notification", "error", err, "user_id", userID)
-				continue
+		// 3. 短信
+		if prefs.SmsEnabled && s.smsService != nil && userEntity.Phone != "" {
+			if err := s.smsService.SendTicketNotification(
+				ctx,
+				[]string{userEntity.Phone},
+				ticketEntity.TicketNumber,
+				req.EventType,
+			); err != nil {
+				s.logger.Errorw("Failed to send SMS notification", "error", err, "user_id", userID)
 			}
+		}
 
-			// 同步创建到通用notifications表(供前端统一查询)
-			_, _ = s.client.Notification.Create().
-				SetTitle(req.Type).
-				SetMessage(req.Content).
-				SetType(req.Type).
-				SetUserID(userID).
-				SetTenantID(tenantID).
-				SetNillableActionURL(ticketNotificationStringPtr(fmt.Sprintf("/tickets/%d", ticketID))).
-				SetNillableActionText(ticketNotificationStringPtr("查看工单")).
-				Save(ctx)
-
-			// 如果是站内消息，立即标记为已发送
-			if req.Channel == "in_app" {
-				_, err = s.client.TicketNotification.UpdateOneID(notification.ID).
-					SetStatus("sent").
-					SetNillableSentAt(&now).
-					Save(ctx)
-				if err != nil {
-					s.logger.Warnw("Failed to update notification status", "error", err)
-				}
-			} else if shouldSend {
-				// 实际发送邮件或短信
-				var sendErr error
-				for _, userID := range req.UserIDs {
-					// 获取用户邮箱和手机号
-					userEntity, _ := s.client.User.Get(ctx, userID)
-					if userEntity == nil {
-						continue
-					}
-
-					// 获取工单信息
-					ticketEntity, _ := s.client.Ticket.Get(ctx, ticketID)
-					if ticketEntity == nil {
-						continue
-					}
-
-					switch req.Channel {
-					case "email":
-						if s.emailService != nil && userEntity.Email != "" {
-							sendErr = s.emailService.SendTicketNotification(
-								ctx,
-								[]string{userEntity.Email},
-								ticketEntity.TicketNumber,
-								ticketEntity.Title,
-								req.Type,
-								req.Content,
-							)
-							if sendErr != nil {
-								s.logger.Errorw("Failed to send email notification", "error", sendErr, "user_id", userID)
-							}
-						}
-					case "sms":
-						if s.smsService != nil && userEntity.Phone != "" {
-							sendErr = s.smsService.SendTicketNotification(
-								ctx,
-								[]string{userEntity.Phone},
-								ticketEntity.TicketNumber,
-								req.Type,
-							)
-							if sendErr != nil {
-								s.logger.Errorw("Failed to send SMS notification", "error", sendErr, "user_id", userID)
-							}
-						}
-					}
-				}
-
-				// 更新通知状态
-				status := "sent"
-				if sendErr != nil {
-					status = "failed"
-				}
-				_, err = s.client.TicketNotification.UpdateOneID(notification.ID).
-					SetStatus(status).
-					SetNillableSentAt(&now).
-					Save(ctx)
-				if err != nil {
-					s.logger.Warnw("Failed to update notification status", "error", err)
-				}
-			}
+		// 4. push（WebSocket 实时推送）
+		if prefs.PushEnabled && s.wsService != nil {
+			s.wsService.GetHub().SendToUser(userID, WebSocketMessage{
+				Type:    req.EventType,
+				Payload: map[string]interface{}{"ticket_id": ticketID, "content": req.Content},
+			})
 		}
 	}
 
 	return nil
+}
+
+// resolvePreferences 解析用户偏好；偏好服务未注入或查询失败时回退默认偏好。
+func (s *TicketNotificationService) resolvePreferences(
+	ctx context.Context, userID, tenantID int, eventType string,
+) *dto.NotificationPreferenceResponse {
+	if s.prefService != nil {
+		prefs, err := s.prefService.GetUserPreferenceByEventType(ctx, userID, tenantID, eventType)
+		if err == nil && prefs != nil {
+			return prefs
+		}
+		if err != nil {
+			s.logger.Warnw("Failed to get preference, using defaults", "user_id", userID, "event_type", eventType, "error", err)
+		}
+	}
+	return &dto.NotificationPreferenceResponse{
+		EmailEnabled: true,
+		InAppEnabled: true,
+		SmsEnabled:   false,
+		PushEnabled:  false,
+	}
+}
+
+// createInAppNotification 创建站内通知记录（TicketNotification + Notification）并标记已发送。
+func (s *TicketNotificationService) createInAppNotification(
+	ctx context.Context, ticketID, userID int,
+	req *dto.SendTicketNotificationRequest, tenantID int, now time.Time,
+) {
+	notification, err := s.client.TicketNotification.Create().
+		SetTicketID(ticketID).
+		SetUserID(userID).
+		SetType(req.EventType).
+		SetChannel("in_app").
+		SetContent(req.Content).
+		SetTenantID(tenantID).
+		SetStatus("pending").
+		Save(ctx)
+	if err != nil {
+		s.logger.Errorw("Failed to create notification", "error", err, "user_id", userID)
+		return
+	}
+
+	// 同步创建到通用 notifications 表（供前端统一查询）
+	_, _ = s.client.Notification.Create().
+		SetTitle(req.EventType).
+		SetMessage(req.Content).
+		SetType(req.EventType).
+		SetUserID(userID).
+		SetTenantID(tenantID).
+		SetNillableActionURL(ticketNotificationStringPtr(fmt.Sprintf("/tickets/%d", ticketID))).
+		SetNillableActionText(ticketNotificationStringPtr("查看工单")).
+		Save(ctx)
+
+	// 站内消息立即标记为已发送
+	_, err = s.client.TicketNotification.UpdateOneID(notification.ID).
+		SetStatus("sent").
+		SetNillableSentAt(&now).
+		Save(ctx)
+	if err != nil {
+		s.logger.Warnw("Failed to update notification status", "error", err)
+	}
 }
 
 // NotifyTicketCreated 工单创建时发送通知
@@ -251,10 +254,9 @@ func (s *TicketNotificationService) NotifyTicketCreated(ctx context.Context, tic
 
 	content := fmt.Sprintf("新工单已创建：%s (#%s)", ticket.Title, ticket.TicketNumber)
 	return s.SendNotification(ctx, ticket.ID, &dto.SendTicketNotificationRequest{
-		UserIDs: userIDs,
-		Type:    "created",
-		Channel: "in_app",
-		Content: content,
+		UserIDs:   userIDs,
+		EventType: "ticket_created",
+		Content:   content,
 	}, ticket.TenantID)
 }
 
@@ -267,10 +269,9 @@ func (s *TicketNotificationService) NotifyTicketAssigned(ctx context.Context, ti
 
 	content := fmt.Sprintf("您被分配了工单：%s (#%s)", ticket.Title, ticket.TicketNumber)
 	return s.SendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
-		UserIDs: []int{assigneeID},
-		Type:    "assigned",
-		Channel: "in_app",
-		Content: content,
+		UserIDs:   []int{assigneeID},
+		EventType: "ticket_assigned",
+		Content:   content,
 	}, tenantID)
 }
 
@@ -293,10 +294,9 @@ func (s *TicketNotificationService) NotifyTicketStatusChanged(
 	}
 
 	return s.SendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
-		UserIDs: userIDs,
-		Type:    "status_changed",
-		Channel: "in_app",
-		Content: content,
+		UserIDs:   userIDs,
+		EventType: "ticket_updated",
+		Content:   content,
 	}, tenantID)
 }
 
@@ -341,10 +341,9 @@ func (s *TicketNotificationService) NotifyTicketCommented(
 
 	content := fmt.Sprintf("工单 #%s 有新的评论", ticket.TicketNumber)
 	return s.SendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
-		UserIDs: userIDs,
-		Type:    "commented",
-		Channel: "in_app",
-		Content: content,
+		UserIDs:   userIDs,
+		EventType: "comment_added",
+		Content:   content,
 	}, tenantID)
 }
 
@@ -375,10 +374,9 @@ func (s *TicketNotificationService) NotifySLAWarning(
 	}
 
 	return s.SendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
-		UserIDs: userIDs,
-		Type:    "sla_warning",
-		Channel: "in_app",
-		Content: content,
+		UserIDs:   userIDs,
+		EventType: "sla_warning",
+		Content:   content,
 	}, tenantID)
 }
 
@@ -412,10 +410,9 @@ func (s *TicketNotificationService) NotifySLABreached(
 	// 根据配置的通知渠道发送
 	// 1. 站内消息
 	if err := s.SendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
-		UserIDs: userIDs,
-		Type:    "sla_breached",
-		Channel: "in_app",
-		Content: content,
+		UserIDs:   userIDs,
+		EventType: "sla_violated",
+		Content:   content,
 	}, tenantID); err != nil {
 		s.logger.Errorw("Failed to send in-app SLA breach notification", "error", err)
 	}
@@ -488,10 +485,9 @@ func (s *TicketNotificationService) NotifySLAAlertLevelChanged(
 	}
 
 	return s.SendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
-		UserIDs: userIDs,
-		Type:    "sla_alert",
-		Channel: "in_app",
-		Content: content,
+		UserIDs:   userIDs,
+		EventType: "sla_violated",
+		Content:   content,
 	}, tenantID)
 }
 
@@ -671,25 +667,6 @@ func (s *TicketNotificationService) UpdateUserNotificationPreferences(
 	}, nil
 }
 
-// getUserNotificationPreferences 内部方法：获取用户通知偏好（带默认值）
-func (s *TicketNotificationService) getUserNotificationPreferences(
-	ctx context.Context,
-	userID int,
-) (*dto.NotificationPreferencesResponse, error) {
-	prefs, err := s.GetUserNotificationPreferences(ctx, userID)
-	if err != nil {
-		// 返回默认值
-		return &dto.NotificationPreferencesResponse{
-			UserID:         userID,
-			EmailEnabled:   true,
-			InAppEnabled:   true,
-			SmsEnabled:     false,
-			SlaWarningTime: 30,
-		}, nil
-	}
-	return prefs, nil
-}
-
 // SendAssignmentNotification 发送工单分配通知
 func (s *TicketNotificationService) SendAssignmentNotification(ticketID, assigneeID, assignedBy int) {
 	if s == nil {
@@ -700,10 +677,9 @@ func (s *TicketNotificationService) SendAssignmentNotification(ticketID, assigne
 
 	tenantID := s.resolveTenantID(ctx, ticketID)
 	if err := s.SendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
-		UserIDs: []int{assigneeID},
-		Type:    "assigned",
-		Channel: "in_app",
-		Content: content,
+		UserIDs:   []int{assigneeID},
+		EventType: "ticket_assigned",
+		Content:   content,
 	}, tenantID); err != nil {
 		s.logger.Warnw("failed to send assignment notification", "error", err, "ticket_id", ticketID)
 	}
@@ -719,10 +695,9 @@ func (s *TicketNotificationService) SendEscalationNotification(ticketID, newAssi
 
 	tenantID := s.resolveTenantID(ctx, ticketID)
 	if err := s.SendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
-		UserIDs: []int{newAssignee},
-		Type:    "escalated",
-		Channel: "in_app",
-		Content: content,
+		UserIDs:   []int{newAssignee},
+		EventType: "ticket_updated",
+		Content:   content,
 	}, tenantID); err != nil {
 		s.logger.Warnw("failed to send escalation notification", "error", err, "ticket_id", ticketID)
 	}
@@ -738,10 +713,9 @@ func (s *TicketNotificationService) SendResolutionNotification(ticketID, request
 
 	tenantID := s.resolveTenantID(ctx, ticketID)
 	if err := s.SendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
-		UserIDs: []int{requesterID},
-		Type:    "resolved",
-		Channel: "in_app",
-		Content: content,
+		UserIDs:   []int{requesterID},
+		EventType: "ticket_resolved",
+		Content:   content,
 	}, tenantID); err != nil {
 		s.logger.Warnw("failed to send resolution notification", "error", err, "ticket_id", ticketID)
 	}

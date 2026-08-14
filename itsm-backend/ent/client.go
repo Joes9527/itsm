@@ -97,7 +97,6 @@ import (
 	"itsm-backend/ent/slaalertrule"
 	"itsm-backend/ent/sladefinition"
 	"itsm-backend/ent/slametric"
-	"itsm-backend/ent/slapolicy"
 	"itsm-backend/ent/slaviolation"
 	"itsm-backend/ent/standardchange"
 	"itsm-backend/ent/survey"
@@ -308,8 +307,6 @@ type Client struct {
 	SLADefinition *SLADefinitionClient
 	// SLAMetric is the client for interacting with the SLAMetric builders.
 	SLAMetric *SLAMetricClient
-	// SLAPolicy is the client for interacting with the SLAPolicy builders.
-	SLAPolicy *SLAPolicyClient
 	// SLAViolation is the client for interacting with the SLAViolation builders.
 	SLAViolation *SLAViolationClient
 	// ServiceCatalog is the client for interacting with the ServiceCatalog builders.
@@ -469,7 +466,6 @@ func (c *Client) init() {
 	c.SLAAlertRule = NewSLAAlertRuleClient(c.config)
 	c.SLADefinition = NewSLADefinitionClient(c.config)
 	c.SLAMetric = NewSLAMetricClient(c.config)
-	c.SLAPolicy = NewSLAPolicyClient(c.config)
 	c.SLAViolation = NewSLAViolationClient(c.config)
 	c.ServiceCatalog = NewServiceCatalogClient(c.config)
 	c.ServiceRequest = NewServiceRequestClient(c.config)
@@ -678,7 +674,6 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		SLAAlertRule:                NewSLAAlertRuleClient(cfg),
 		SLADefinition:               NewSLADefinitionClient(cfg),
 		SLAMetric:                   NewSLAMetricClient(cfg),
-		SLAPolicy:                   NewSLAPolicyClient(cfg),
 		SLAViolation:                NewSLAViolationClient(cfg),
 		ServiceCatalog:              NewServiceCatalogClient(cfg),
 		ServiceRequest:              NewServiceRequestClient(cfg),
@@ -814,7 +809,6 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		SLAAlertRule:                NewSLAAlertRuleClient(cfg),
 		SLADefinition:               NewSLADefinitionClient(cfg),
 		SLAMetric:                   NewSLAMetricClient(cfg),
-		SLAPolicy:                   NewSLAPolicyClient(cfg),
 		SLAViolation:                NewSLAViolationClient(cfg),
 		ServiceCatalog:              NewServiceCatalogClient(cfg),
 		ServiceRequest:              NewServiceRequestClient(cfg),
@@ -896,14 +890,14 @@ func (c *Client) Use(hooks ...Hook) {
 		c.ProcessInstance, c.ProcessTask, c.ProcessVariable, c.ProcessVersionChangelog,
 		c.Project, c.PromptTemplate, c.ProvisioningTask, c.RelationshipType, c.Release,
 		c.Role, c.RolePermission, c.RootCauseAnalysis, c.SLAAlertHistory,
-		c.SLAAlertRule, c.SLADefinition, c.SLAMetric, c.SLAPolicy, c.SLAViolation,
-		c.ServiceCatalog, c.ServiceRequest, c.StandardChange, c.Survey,
-		c.SurveyResponse, c.SystemConfig, c.Tag, c.Team, c.Tenant,
-		c.TenantInstallation, c.Ticket, c.TicketApproval, c.TicketAssignmentRule,
-		c.TicketAttachment, c.TicketAutomationRule, c.TicketCC, c.TicketCategory,
-		c.TicketComment, c.TicketNotification, c.TicketTag, c.TicketTemplate,
-		c.TicketType, c.TicketView, c.TicketWorkflowRecord, c.ToolInvocation, c.User,
-		c.Vendor, c.Workflow, c.WorkflowInstance, c.WorkflowTask, c.WorkflowVersion,
+		c.SLAAlertRule, c.SLADefinition, c.SLAMetric, c.SLAViolation, c.ServiceCatalog,
+		c.ServiceRequest, c.StandardChange, c.Survey, c.SurveyResponse, c.SystemConfig,
+		c.Tag, c.Team, c.Tenant, c.TenantInstallation, c.Ticket, c.TicketApproval,
+		c.TicketAssignmentRule, c.TicketAttachment, c.TicketAutomationRule, c.TicketCC,
+		c.TicketCategory, c.TicketComment, c.TicketNotification, c.TicketTag,
+		c.TicketTemplate, c.TicketType, c.TicketView, c.TicketWorkflowRecord,
+		c.ToolInvocation, c.User, c.Vendor, c.Workflow, c.WorkflowInstance,
+		c.WorkflowTask, c.WorkflowVersion,
 	} {
 		n.Use(hooks...)
 	}
@@ -933,14 +927,14 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.ProcessInstance, c.ProcessTask, c.ProcessVariable, c.ProcessVersionChangelog,
 		c.Project, c.PromptTemplate, c.ProvisioningTask, c.RelationshipType, c.Release,
 		c.Role, c.RolePermission, c.RootCauseAnalysis, c.SLAAlertHistory,
-		c.SLAAlertRule, c.SLADefinition, c.SLAMetric, c.SLAPolicy, c.SLAViolation,
-		c.ServiceCatalog, c.ServiceRequest, c.StandardChange, c.Survey,
-		c.SurveyResponse, c.SystemConfig, c.Tag, c.Team, c.Tenant,
-		c.TenantInstallation, c.Ticket, c.TicketApproval, c.TicketAssignmentRule,
-		c.TicketAttachment, c.TicketAutomationRule, c.TicketCC, c.TicketCategory,
-		c.TicketComment, c.TicketNotification, c.TicketTag, c.TicketTemplate,
-		c.TicketType, c.TicketView, c.TicketWorkflowRecord, c.ToolInvocation, c.User,
-		c.Vendor, c.Workflow, c.WorkflowInstance, c.WorkflowTask, c.WorkflowVersion,
+		c.SLAAlertRule, c.SLADefinition, c.SLAMetric, c.SLAViolation, c.ServiceCatalog,
+		c.ServiceRequest, c.StandardChange, c.Survey, c.SurveyResponse, c.SystemConfig,
+		c.Tag, c.Team, c.Tenant, c.TenantInstallation, c.Ticket, c.TicketApproval,
+		c.TicketAssignmentRule, c.TicketAttachment, c.TicketAutomationRule, c.TicketCC,
+		c.TicketCategory, c.TicketComment, c.TicketNotification, c.TicketTag,
+		c.TicketTemplate, c.TicketType, c.TicketView, c.TicketWorkflowRecord,
+		c.ToolInvocation, c.User, c.Vendor, c.Workflow, c.WorkflowInstance,
+		c.WorkflowTask, c.WorkflowVersion,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -1117,8 +1111,6 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.SLADefinition.mutate(ctx, m)
 	case *SLAMetricMutation:
 		return c.SLAMetric.mutate(ctx, m)
-	case *SLAPolicyMutation:
-		return c.SLAPolicy.mutate(ctx, m)
 	case *SLAViolationMutation:
 		return c.SLAViolation.mutate(ctx, m)
 	case *ServiceCatalogMutation:
@@ -14328,171 +14320,6 @@ func (c *SLAMetricClient) mutate(ctx context.Context, m *SLAMetricMutation) (Val
 	}
 }
 
-// SLAPolicyClient is a client for the SLAPolicy schema.
-type SLAPolicyClient struct {
-	config
-}
-
-// NewSLAPolicyClient returns a client for the SLAPolicy from the given config.
-func NewSLAPolicyClient(c config) *SLAPolicyClient {
-	return &SLAPolicyClient{config: c}
-}
-
-// Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `slapolicy.Hooks(f(g(h())))`.
-func (c *SLAPolicyClient) Use(hooks ...Hook) {
-	c.hooks.SLAPolicy = append(c.hooks.SLAPolicy, hooks...)
-}
-
-// Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `slapolicy.Intercept(f(g(h())))`.
-func (c *SLAPolicyClient) Intercept(interceptors ...Interceptor) {
-	c.inters.SLAPolicy = append(c.inters.SLAPolicy, interceptors...)
-}
-
-// Create returns a builder for creating a SLAPolicy entity.
-func (c *SLAPolicyClient) Create() *SLAPolicyCreate {
-	mutation := newSLAPolicyMutation(c.config, OpCreate)
-	return &SLAPolicyCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// CreateBulk returns a builder for creating a bulk of SLAPolicy entities.
-func (c *SLAPolicyClient) CreateBulk(builders ...*SLAPolicyCreate) *SLAPolicyCreateBulk {
-	return &SLAPolicyCreateBulk{config: c.config, builders: builders}
-}
-
-// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
-// a builder and applies setFunc on it.
-func (c *SLAPolicyClient) MapCreateBulk(slice any, setFunc func(*SLAPolicyCreate, int)) *SLAPolicyCreateBulk {
-	rv := reflect.ValueOf(slice)
-	if rv.Kind() != reflect.Slice {
-		return &SLAPolicyCreateBulk{err: fmt.Errorf("calling to SLAPolicyClient.MapCreateBulk with wrong type %T, need slice", slice)}
-	}
-	builders := make([]*SLAPolicyCreate, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
-		builders[i] = c.Create()
-		setFunc(builders[i], i)
-	}
-	return &SLAPolicyCreateBulk{config: c.config, builders: builders}
-}
-
-// Update returns an update builder for SLAPolicy.
-func (c *SLAPolicyClient) Update() *SLAPolicyUpdate {
-	mutation := newSLAPolicyMutation(c.config, OpUpdate)
-	return &SLAPolicyUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOne returns an update builder for the given entity.
-func (c *SLAPolicyClient) UpdateOne(_m *SLAPolicy) *SLAPolicyUpdateOne {
-	mutation := newSLAPolicyMutation(c.config, OpUpdateOne, withSLAPolicy(_m))
-	return &SLAPolicyUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOneID returns an update builder for the given id.
-func (c *SLAPolicyClient) UpdateOneID(id int) *SLAPolicyUpdateOne {
-	mutation := newSLAPolicyMutation(c.config, OpUpdateOne, withSLAPolicyID(id))
-	return &SLAPolicyUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// Delete returns a delete builder for SLAPolicy.
-func (c *SLAPolicyClient) Delete() *SLAPolicyDelete {
-	mutation := newSLAPolicyMutation(c.config, OpDelete)
-	return &SLAPolicyDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// DeleteOne returns a builder for deleting the given entity.
-func (c *SLAPolicyClient) DeleteOne(_m *SLAPolicy) *SLAPolicyDeleteOne {
-	return c.DeleteOneID(_m.ID)
-}
-
-// DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *SLAPolicyClient) DeleteOneID(id int) *SLAPolicyDeleteOne {
-	builder := c.Delete().Where(slapolicy.ID(id))
-	builder.mutation.id = &id
-	builder.mutation.op = OpDeleteOne
-	return &SLAPolicyDeleteOne{builder}
-}
-
-// Query returns a query builder for SLAPolicy.
-func (c *SLAPolicyClient) Query() *SLAPolicyQuery {
-	return &SLAPolicyQuery{
-		config: c.config,
-		ctx:    &QueryContext{Type: TypeSLAPolicy},
-		inters: c.Interceptors(),
-	}
-}
-
-// Get returns a SLAPolicy entity by its id.
-func (c *SLAPolicyClient) Get(ctx context.Context, id int) (*SLAPolicy, error) {
-	return c.Query().Where(slapolicy.ID(id)).Only(ctx)
-}
-
-// GetX is like Get, but panics if an error occurs.
-func (c *SLAPolicyClient) GetX(ctx context.Context, id int) *SLAPolicy {
-	obj, err := c.Get(ctx, id)
-	if err != nil {
-		panic(err)
-	}
-	return obj
-}
-
-// QuerySLADefinition queries the sla_definition edge of a SLAPolicy.
-func (c *SLAPolicyClient) QuerySLADefinition(_m *SLAPolicy) *SLADefinitionQuery {
-	query := (&SLADefinitionClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(slapolicy.Table, slapolicy.FieldID, id),
-			sqlgraph.To(sladefinition.Table, sladefinition.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, slapolicy.SLADefinitionTable, slapolicy.SLADefinitionColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// QueryTickets queries the tickets edge of a SLAPolicy.
-func (c *SLAPolicyClient) QueryTickets(_m *SLAPolicy) *TicketQuery {
-	query := (&TicketClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(slapolicy.Table, slapolicy.FieldID, id),
-			sqlgraph.To(ticket.Table, ticket.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, slapolicy.TicketsTable, slapolicy.TicketsColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// Hooks returns the client hooks.
-func (c *SLAPolicyClient) Hooks() []Hook {
-	return c.hooks.SLAPolicy
-}
-
-// Interceptors returns the client interceptors.
-func (c *SLAPolicyClient) Interceptors() []Interceptor {
-	return c.inters.SLAPolicy
-}
-
-func (c *SLAPolicyClient) mutate(ctx context.Context, m *SLAPolicyMutation) (Value, error) {
-	switch m.Op() {
-	case OpCreate:
-		return (&SLAPolicyCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdate:
-		return (&SLAPolicyUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdateOne:
-		return (&SLAPolicyUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpDelete, OpDeleteOne:
-		return (&SLAPolicyDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
-	default:
-		return nil, fmt.Errorf("ent: unknown SLAPolicy mutation op: %q", m.Op())
-	}
-}
-
 // SLAViolationClient is a client for the SLAViolation schema.
 type SLAViolationClient struct {
 	config
@@ -20002,9 +19829,9 @@ type (
 		ProcessInstance, ProcessTask, ProcessVariable, ProcessVersionChangelog,
 		Project, PromptTemplate, ProvisioningTask, RelationshipType, Release, Role,
 		RolePermission, RootCauseAnalysis, SLAAlertHistory, SLAAlertRule,
-		SLADefinition, SLAMetric, SLAPolicy, SLAViolation, ServiceCatalog,
-		ServiceRequest, StandardChange, Survey, SurveyResponse, SystemConfig, Tag,
-		Team, Tenant, TenantInstallation, Ticket, TicketApproval, TicketAssignmentRule,
+		SLADefinition, SLAMetric, SLAViolation, ServiceCatalog, ServiceRequest,
+		StandardChange, Survey, SurveyResponse, SystemConfig, Tag, Team, Tenant,
+		TenantInstallation, Ticket, TicketApproval, TicketAssignmentRule,
 		TicketAttachment, TicketAutomationRule, TicketCC, TicketCategory,
 		TicketComment, TicketNotification, TicketTag, TicketTemplate, TicketType,
 		TicketView, TicketWorkflowRecord, ToolInvocation, User, Vendor, Workflow,
@@ -20029,9 +19856,9 @@ type (
 		ProcessInstance, ProcessTask, ProcessVariable, ProcessVersionChangelog,
 		Project, PromptTemplate, ProvisioningTask, RelationshipType, Release, Role,
 		RolePermission, RootCauseAnalysis, SLAAlertHistory, SLAAlertRule,
-		SLADefinition, SLAMetric, SLAPolicy, SLAViolation, ServiceCatalog,
-		ServiceRequest, StandardChange, Survey, SurveyResponse, SystemConfig, Tag,
-		Team, Tenant, TenantInstallation, Ticket, TicketApproval, TicketAssignmentRule,
+		SLADefinition, SLAMetric, SLAViolation, ServiceCatalog, ServiceRequest,
+		StandardChange, Survey, SurveyResponse, SystemConfig, Tag, Team, Tenant,
+		TenantInstallation, Ticket, TicketApproval, TicketAssignmentRule,
 		TicketAttachment, TicketAutomationRule, TicketCC, TicketCategory,
 		TicketComment, TicketNotification, TicketTag, TicketTemplate, TicketType,
 		TicketView, TicketWorkflowRecord, ToolInvocation, User, Vendor, Workflow,

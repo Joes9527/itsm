@@ -176,7 +176,7 @@ const ArticleList: React.FC<ArticleListProps> = ({ showHeader = true }) => {
               size="small"
               icon={<Pencil />}
               onClick={() => router.push(`/knowledge/articles/${record.id}/edit`)}
-              style={{ backgroundColor: '#3b82f6', color: '#fff', border: 'none' }}
+              style={{ backgroundColor: '#F06820', color: '#fff', border: 'none' }}
             />
           </Tooltip>
           <Tooltip title="删除">

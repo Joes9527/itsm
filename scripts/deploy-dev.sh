@@ -60,7 +60,7 @@ COMPOSE_OOB="$PROJECT_ROOT/docker-compose.yml"
 DEV_ENV_FILE="$PROJECT_ROOT/.env"
 
 BACKEND_URL="http://localhost:8090"
-FRONTEND_URL="http://localhost:3000"
+FRONTEND_URL="http://localhost:3010"
 HEALTH_PATH="/api/v1/health"
 
 DEFAULT_ADMIN_USER="admin"
@@ -628,7 +628,7 @@ cmd_doctor() {
     # Ports
     echo ""
     echo -e "${BOLD}Ports${NC}"
-    for port_desc in "8090:Backend" "3000:Frontend" "5432:PostgreSQL" "6379:Redis"; do
+    for port_desc in "8090:Backend" "3010:Frontend" "5432:PostgreSQL" "6389:Redis"; do
         local port="${port_desc%%:*}"
         local name="${port_desc##*:}"
         if port_in_use "$port"; then
@@ -744,7 +744,7 @@ show_status() {
         fi
         # Infrastructure
         status_row "PostgreSQL" "$(local_infra_status "itsm-postgres-dev" 5432)" "localhost:5432"
-        status_row "Redis" "$(local_infra_status "itsm-redis-dev" 6379)" "localhost:6379"
+        status_row "Redis" "$(local_infra_status "itsm-redis-dev" 6389)" "localhost:6389"
     fi
     echo ""
 }
@@ -801,7 +801,7 @@ ${BOLD}Quick Start:${NC}
   ./scripts/deploy-dev.sh down          # Stop everything
 
 ${BOLD}Access:${NC}
-  Frontend:  http://localhost:3000
+  Frontend:  http://localhost:3010
   Backend:   http://localhost:8090
   API Docs:  http://localhost:8090/swagger
   Login:     admin / admin123

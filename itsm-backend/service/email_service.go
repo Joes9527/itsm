@@ -25,12 +25,22 @@ type EmailConfig struct {
 	FromName string // 发件人名称
 }
 
+// GraphMailSender Graph sendMail 发信后端（Exchange Online）。由 msgraph
+// 连接器的 Client.SendMail 实现，service 包只依赖该接口，不依赖具体类型。
+type GraphMailSender interface {
+	SendMail(ctx context.Context, mailbox, to, subject, body string) error
+}
+
 // EmailService 邮件服务
 type EmailService struct {
 	config EmailConfig
 	logger *zap.SugaredLogger
 	mu     sync.Mutex
 	recent map[string][]time.Time
+
+	// graphProvider 延迟绑定 Graph 发信后端：返回 sender + 发件邮箱 + 是否可用。
+	// connector 运行时 provision，不能启动时注入，故发信时动态查询。
+	graphProvider func() (GraphMailSender, string, bool)
 }
 
 // EmailMessage 邮件消息
@@ -59,6 +69,11 @@ func NewEmailService(config EmailConfig, logger *zap.SugaredLogger) *EmailServic
 	}
 }
 
+// SetGraphProvider 注入 Graph 发信后端（延迟绑定：发信时动态查 connector）。
+func (s *EmailService) SetGraphProvider(provider func() (GraphMailSender, string, bool)) {
+	s.graphProvider = provider
+}
+
 // Send 发送邮件
 func (s *EmailService) Send(ctx context.Context, msg *EmailMessage) error {
 	if err := s.validateMessage(msg); err != nil {
@@ -67,8 +82,36 @@ func (s *EmailService) Send(ctx context.Context, msg *EmailMessage) error {
 	if err := s.checkRateLimit(msg.To, 20, time.Minute); err != nil {
 		return err
 	}
+
+	// Graph 优先：provider 可用则走 Graph sendMail（Exchange Online）
+	if s.graphProvider != nil {
+		if sender, mailbox, ok := s.graphProvider(); ok && sender != nil {
+			return s.sendViaGraph(ctx, sender, mailbox, msg)
+		}
+	}
+	return s.sendViaSMTP(ctx, msg)
+}
+
+// sendViaGraph 通过 Graph sendMail 发送（纯文本 body）。
+func (s *EmailService) sendViaGraph(ctx context.Context, sender GraphMailSender, mailbox string, msg *EmailMessage) error {
+	body := msg.BodyText
+	if body == "" {
+		body = msg.Body
+	}
+	for _, to := range msg.To {
+		if err := sender.SendMail(ctx, mailbox, to, msg.Subject, body); err != nil {
+			s.logger.Errorw("Failed to send email via Graph", "error", err, "to", to)
+			return fmt.Errorf("graph send email: %w", err)
+		}
+	}
+	s.logger.Infow("Email sent via Graph", "to", msg.To, "subject", msg.Subject)
+	return nil
+}
+
+// sendViaSMTP 通过 SMTP 发送（现有逻辑）。
+func (s *EmailService) sendViaSMTP(ctx context.Context, msg *EmailMessage) error {
 	s.logger.Infow(
-		"Sending email",
+		"Sending email via SMTP",
 		"to", msg.To,
 		"subject", msg.Subject,
 	)

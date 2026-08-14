@@ -7,7 +7,6 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
-	entuser "itsm-backend/ent/user"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -47,7 +46,7 @@ func newApproverFixture(t *testing.T) *approverFixture {
 		SetEmail("manager@approver.com").
 		SetName("Manager").
 		SetPasswordHash("hash").
-		SetRole(entuser.RoleManager).
+		SetRole("manager").
 		SetActive(true).
 		SetTenantID(tenant.ID).
 		Save(ctx)
@@ -58,7 +57,7 @@ func newApproverFixture(t *testing.T) *approverFixture {
 		SetEmail("req@approver.com").
 		SetName("Requester").
 		SetPasswordHash("hash").
-		SetRole(entuser.RoleEndUser).
+		SetRole("end_user").
 		SetActive(true).
 		SetTenantID(tenant.ID).
 		Save(ctx)
@@ -222,7 +221,7 @@ func TestTeamLeaderResolver_Resolve_LeaderInactive(t *testing.T) {
 		SetEmail("inactive@approver.com").
 		SetName("Inactive Manager").
 		SetPasswordHash("hash").
-		SetRole(entuser.RoleManager).
+		SetRole("manager").
 		SetActive(false).
 		SetTenantID(fx.tenant.ID).
 		Save(fx.ctx)
@@ -500,7 +499,7 @@ func TestAmountResolver_Resolve_Success(t *testing.T) {
 		SetEmail("mgr1@test.com").
 		SetName("Manager One").
 		SetPasswordHash("hash").
-		SetRole(entuser.RoleManager).
+		SetRole("manager").
 		SetActive(true).
 		SetTenantID(fx.tenant.ID).
 		Save(fx.ctx)
@@ -512,7 +511,7 @@ func TestAmountResolver_Resolve_Success(t *testing.T) {
 		SetEmail("mgr2@test.com").
 		SetName("Manager Two").
 		SetPasswordHash("hash").
-		SetRole(entuser.RoleManager).
+		SetRole("manager").
 		SetActive(true).
 		SetTenantID(fx.tenant.ID).
 		Save(fx.ctx)
@@ -642,7 +641,7 @@ func TestResolverRegistry_TenantIsolation(t *testing.T) {
 		SetEmail("mgr2@tenant2.com").
 		SetName("Manager 2").
 		SetPasswordHash("hash").
-		SetRole(entuser.RoleManager).
+		SetRole("manager").
 		SetActive(true).
 		SetTenantID(tenant2.ID).
 		Save(fx.ctx)

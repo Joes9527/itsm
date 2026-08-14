@@ -10,7 +10,7 @@
   width: 44px;
   height: 44px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+  background: linear-gradient(135deg, #F06820 0%, #6366f1 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -150,7 +150,7 @@
 }
 
 .stat-value.primary {
-  color: #3b82f6;
+  color: #F06820;
 }
 
 .stat-value.success {
@@ -248,7 +248,7 @@
 }
 
 .quick-action-btn:hover {
-  border-color: #3b82f6;
+  border-color: #F06820;
   background: #eff6ff;
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
@@ -262,7 +262,7 @@
 
 .quick-action-btn:hover .anticon,
 .quick-action-btn:hover svg {
-  color: #3b82f6;
+  color: #F06820;
 }
 
 /* 右侧列 */

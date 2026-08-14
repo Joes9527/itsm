@@ -2,6 +2,7 @@ package service_request
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
@@ -57,4 +58,67 @@ type Repository interface {
 	Update(ctx context.Context, req *ServiceRequest) error
 	Delete(ctx context.Context, req *ServiceRequest) error
 	GetUserContext(ctx context.Context, userID, tenantID int) (department, name string, err error)
+}
+
+// amount 从 FormData 中提取预估金额（float64），常见键名：amount、cost、budget。
+// 返回 0 表示未填写金额或不涉及金额逻辑。
+func (sr *ServiceRequest) amount() float64 {
+	if sr == nil || sr.FormData == nil {
+		return 0
+	}
+	for _, key := range []string{"amount", "cost", "budget"} {
+		if v, ok := sr.FormData[key]; ok {
+			switch n := v.(type) {
+			case float64:
+				return n
+			case int:
+				return float64(n)
+			case string:
+				// 简单转换，忽略解析错误
+				var f float64
+				fmt.Sscanf(n, "%f", &f)
+				return f
+			}
+		}
+	}
+	return 0
+}
+
+// injectApprovalChain 将解析出的审批链步骤注入 FormData 的 _approval_chain 键中。
+// 若 steps 为 nil 则不注入，避免在 form_data 中留下空键。
+// hasApprovalChainSteps 判断审批链解析结果是否包含实际步骤。
+// resolvedSteps 在 service.go 中已通过 len(chain.Steps) > 0 过滤，非 nil 即有效。
+func hasApprovalChainSteps(steps interface{}) bool {
+	return steps != nil
+}
+
+func injectApprovalChain(formData map[string]interface{}, steps interface{}) map[string]interface{} {
+	if steps == nil {
+		return formData
+	}
+	if formData == nil {
+		formData = make(map[string]interface{})
+	}
+	formData["_approval_chain"] = steps
+	return formData
+}
+
+// mapITSMType 将 catalog.itsm_type 映射为 Ticket.type。Incident 类型不通过
+// Ticket 审批路径，调用方应在入此函数前分流。
+// 映射规则：Request → service_request, Change → change, Incident 不应到达此处。
+func mapITSMType(itsmType string) string {
+	switch itsmType {
+	case "Change":
+		return "change"
+	case "Incident":
+		return "incident"
+	default:
+		return "service_request" // Request 及兜底
+	}
+}
+
+// isIncidentCatalog 判断服务目录项的 ITSM 类型是否为事件——事件无需审批，
+// 直接分派给 Resolver，不走 SR→Ticket 审批流程。
+func isIncidentCatalog(itsmType string) bool {
+	return itsmType == "Incident"
 }

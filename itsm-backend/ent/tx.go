@@ -180,8 +180,6 @@ type Tx struct {
 	SLADefinition *SLADefinitionClient
 	// SLAMetric is the client for interacting with the SLAMetric builders.
 	SLAMetric *SLAMetricClient
-	// SLAPolicy is the client for interacting with the SLAPolicy builders.
-	SLAPolicy *SLAPolicyClient
 	// SLAViolation is the client for interacting with the SLAViolation builders.
 	SLAViolation *SLAViolationClient
 	// ServiceCatalog is the client for interacting with the ServiceCatalog builders.
@@ -461,7 +459,6 @@ func (tx *Tx) init() {
 	tx.SLAAlertRule = NewSLAAlertRuleClient(tx.config)
 	tx.SLADefinition = NewSLADefinitionClient(tx.config)
 	tx.SLAMetric = NewSLAMetricClient(tx.config)
-	tx.SLAPolicy = NewSLAPolicyClient(tx.config)
 	tx.SLAViolation = NewSLAViolationClient(tx.config)
 	tx.ServiceCatalog = NewServiceCatalogClient(tx.config)
 	tx.ServiceRequest = NewServiceRequestClient(tx.config)

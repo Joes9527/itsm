@@ -160,7 +160,7 @@ const TicketDashboardPage = () => {
             <Statistic
               title="总工单数"
               value={overview.totalTickets}
-              prefix={<FileText size={16} style={{ color: '#3b82f6' }} />}
+              prefix={<FileText size={16} style={{ color: '#F06820' }} />}
             />
           </Card>
         </Col>
@@ -190,7 +190,7 @@ const TicketDashboardPage = () => {
               title="SLA合规率"
               value={slaData.complianceRate}
               suffix="%"
-              prefix={<TrendingUp size={16} style={{ color: '#3b82f6' }} />}
+              prefix={<TrendingUp size={16} style={{ color: '#F06820' }} />}
               styles={{
                 content: {
                   color: slaData.complianceRate >= 95 ? '#52c41a' : '#faad14',

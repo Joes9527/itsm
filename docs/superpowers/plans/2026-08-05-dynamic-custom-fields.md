@@ -29,7 +29,7 @@
 - Test: `itsm-backend/service/field_definition_service_test.go`（本 Task 只验证 Ent CRUD 能跑通，真正的业务逻辑测试在 Task 2）
 
 **Interfaces:**
-- Produces: `ent.FieldDefinition`（字段：TenantID, EntityType, EntityID, Name, Label, FieldType, Required, Options, SortOrder, Config, IsActive, CreatedAt, UpdatedAt）、`ent.FieldValue`（字段：TenantID, EntityType, EntityID, FieldDefinitionID *int, FieldName, FieldLabel, SortOrder, Value json.RawMessage, CreatedAt——`json.RawMessage` 底层就是 `[]byte`，`json.Marshal`/`json.Unmarshal` 可以直接传参不用显式转换）。后续所有 Task 都依赖这两个生成的类型。
+- Produces: `ent.FieldDefinition`（字段：TenantID, EntityType, EntityID, Name, Label, FieldType, Required, Options, SortOrder, Config, IsActive, CreatedAt, UpdatedAt）、`ent.FieldValue`（字段：TenantID, EntityType, EntityID, FieldDefinitionID *int, FieldName, FieldLabel, SortOrder, Value []byte, CreatedAt）。后续所有 Task 都依赖这两个生成的类型。
 
 - [ ] **Step 1: 写 `field_definition.go`**
 
@@ -84,7 +84,6 @@ func (FieldDefinition) Indexes() []ent.Index {
 package schema
 
 import (
-	"encoding/json"
 	"time"
 
 	"entgo.io/ent"
@@ -108,7 +107,7 @@ func (FieldValue) Fields() []ent.Field {
 		field.String("field_name").Comment("提交时快照的字段名").NotEmpty(),
 		field.String("field_label").Comment("提交时快照的显示名").NotEmpty(),
 		field.Int("sort_order").Comment("提交时快照的顺序").Default(0),
-		field.JSON("value", json.RawMessage{}).Comment("字段值，JSON 编码，原始类型（数字/字符串/布尔/数组）。用 json.RawMessage 而不是 []byte——Ent 生成的 assignValues 会对 []byte 目标做 encoding/json 的 base64 特判，导致普通 JSON 值读不回来；json.RawMessage 自带 Marshal/Unmarshal 方法绕过这个坑，同时仍然是 Postgres JSONB 列（不是 field.Bytes 那样的 BYTEA，保留以后建 GIN 索引的可能性）。").Optional(),
+		field.JSON("value", []byte{}).Comment("字段值，JSON 编码，原始类型（数字/字符串/布尔/数组）").Optional(),
 		field.Time("created_at").Comment("创建时间").Default(time.Now),
 	}
 }
@@ -272,7 +271,6 @@ package service
 
 import (
 	"context"
-	"fmt"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/fielddefinition"
@@ -300,26 +298,10 @@ type FieldDefinitionInput struct {
 // ReplaceDefinitions 删除 (tenantID, entityType, entityID) 下所有既有字段定义，
 // 按 defs 的顺序重新插入。字段值（field_values）已经快照了 name/label/顺序，
 // 不依赖这里的行 ID 存续，所以用"删除重建"而不是逐字段 diff。
-// 删除+插入包在一个事务里：field_definitions 上有 (tenant_id, entity_type, entity_id, name)
-// 唯一约束，如果 defs 里有重名字段导致某次 insert 撞约束失败，没有事务的话旧定义已经被删掉、
-// 新定义插了一半——比"什么都没做"更糟。事务保证要么全部生效，要么整体回滚。
 func (s *FieldDefinitionService) ReplaceDefinitions(ctx context.Context, tenantID int, entityType string, entityID int, defs []FieldDefinitionInput) ([]*ent.FieldDefinition, error) {
-	tx, err := s.client.Tx(ctx)
-	if err != nil {
+	if err := s.DeleteDefinitions(ctx, tenantID, entityType, entityID); err != nil {
 		return nil, err
 	}
-
-	_, err = tx.FieldDefinition.Delete().
-		Where(
-			fielddefinition.TenantID(tenantID),
-			fielddefinition.EntityType(entityType),
-			fielddefinition.EntityID(entityID),
-		).
-		Exec(ctx)
-	if err != nil {
-		return nil, rollback(tx, err)
-	}
-
 	result := make([]*ent.FieldDefinition, 0, len(defs))
 	for i, d := range defs {
 		sortOrder := d.SortOrder
@@ -330,7 +312,7 @@ func (s *FieldDefinitionService) ReplaceDefinitions(ctx context.Context, tenantI
 		if options == nil {
 			options = []interface{}{}
 		}
-		created, err := tx.FieldDefinition.Create().
+		created, err := s.client.FieldDefinition.Create().
 			SetTenantID(tenantID).
 			SetEntityType(entityType).
 			SetEntityID(entityID).
@@ -342,23 +324,11 @@ func (s *FieldDefinitionService) ReplaceDefinitions(ctx context.Context, tenantI
 			SetSortOrder(sortOrder).
 			Save(ctx)
 		if err != nil {
-			return nil, rollback(tx, err)
+			return nil, err
 		}
 		result = append(result, created)
 	}
-
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
 	return result, nil
-}
-
-// rollback aborts tx and wraps the rollback error (if any) around the original cause.
-func rollback(tx *ent.Tx, cause error) error {
-	if rbErr := tx.Rollback(); rbErr != nil {
-		return fmt.Errorf("%w (rollback also failed: %v)", cause, rbErr)
-	}
-	return cause
 }
 
 // ListDefinitions 按 sort_order 返回 (tenantID, entityType, entityID) 下的字段定义。
@@ -511,8 +481,6 @@ func NewFieldValueService(client *ent.Client) *FieldValueService {
 // CreateValues 把提交的 values（fieldName -> 原始值）跟 (defEntityType, defEntityID) 下的
 // 字段定义匹配，快照 name/label/顺序后写入 field_values，挂在 (valueEntityType, valueEntityID) 上。
 // values 里不匹配任何字段定义的 key 会被忽略（例如 presetTypeId 这类路由元数据）。
-// 多条 insert 包在一个事务里：中途某一条失败（比如瞬时 DB 错误）不应该留下"插了一半"的
-// 半成品提交记录——field_values 代表的是一次完整的表单提交，要么整体成功要么整体不落库。
 func (s *FieldValueService) CreateValues(ctx context.Context, tenantID int, defEntityType string, defEntityID int, valueEntityType string, valueEntityID int, values map[string]interface{}) error {
 	if len(values) == 0 {
 		return nil
@@ -529,12 +497,6 @@ func (s *FieldValueService) CreateValues(ctx context.Context, tenantID int, defE
 	if err != nil {
 		return err
 	}
-
-	tx, err := s.client.Tx(ctx)
-	if err != nil {
-		return err
-	}
-
 	for _, def := range defs {
 		raw, ok := values[def.Name]
 		if !ok {
@@ -542,10 +504,10 @@ func (s *FieldValueService) CreateValues(ctx context.Context, tenantID int, defE
 		}
 		encoded, err := json.Marshal(raw)
 		if err != nil {
-			return rollback(tx, err)
+			return err
 		}
 		defID := def.ID
-		_, err = tx.FieldValue.Create().
+		_, err = s.client.FieldValue.Create().
 			SetTenantID(tenantID).
 			SetEntityType(valueEntityType).
 			SetEntityID(valueEntityID).
@@ -556,10 +518,10 @@ func (s *FieldValueService) CreateValues(ctx context.Context, tenantID int, defE
 			SetValue(encoded).
 			Save(ctx)
 		if err != nil {
-			return rollback(tx, err)
+			return err
 		}
 	}
-	return tx.Commit()
+	return nil
 }
 
 // FieldValueDTO 展示用的已解析字段值。
@@ -651,8 +613,6 @@ func TestTicketTemplateService_CreateTemplate_WritesFieldDefinitions(t *testing.
 	ctx := context.Background()
 	svc := NewTicketTemplateService(client)
 
-	fieldSvc := NewFieldDefinitionService(client)
-
 	template, err := svc.CreateTemplate(ctx, &CreateTemplateRequest{
 		Name:     "网络接入申请",
 		Category: "网络",
@@ -664,56 +624,18 @@ func TestTicketTemplateService_CreateTemplate_WritesFieldDefinitions(t *testing.
 	})
 	require.NoError(t, err)
 
-	defs, err := fieldSvc.ListDefinitions(ctx, 1, "ticket_template", template.ID)
-	require.NoError(t, err)
-	require.Len(t, defs, 2)
-	assert.Equal(t, "office_location", defs[0].Name)
-	assert.Equal(t, "device_count", defs[1].Name)
-}
-
-func TestTicketTemplateService_UpdateTemplate_ReplacesFieldDefinitions(t *testing.T) {
-	client := enttest.Open(t, "sqlite3", "file:ticket_template_update_fields?mode=memory&cache=shared&_fk=1")
-	defer client.Close()
-	ctx := context.Background()
-	svc := NewTicketTemplateService(client)
-	fieldSvc := NewFieldDefinitionService(client)
-
-	template, err := svc.CreateTemplate(ctx, &CreateTemplateRequest{
-		Name: "模板", Category: "cat", TenantID: 1,
-		Fields: []FieldDefinitionInput{{Name: "a", Label: "A", FieldType: "text"}},
-	})
-	require.NoError(t, err)
-
-	_, err = svc.UpdateTemplate(ctx, template.ID, &UpdateTemplateRequest{
-		Fields: []FieldDefinitionInput{{Name: "b", Label: "B", FieldType: "text"}},
-	}, 1)
-	require.NoError(t, err)
-
-	defs, err := fieldSvc.ListDefinitions(ctx, 1, "ticket_template", template.ID)
-	require.NoError(t, err)
-	require.Len(t, defs, 1)
-	assert.Equal(t, "b", defs[0].Name)
-}
-
-func TestTicketTemplateService_DeleteTemplate_DeletesFieldDefinitions(t *testing.T) {
-	client := enttest.Open(t, "sqlite3", "file:ticket_template_delete_fields?mode=memory&cache=shared&_fk=1")
-	defer client.Close()
-	ctx := context.Background()
-	svc := NewTicketTemplateService(client)
-	fieldSvc := NewFieldDefinitionService(client)
-
-	template, err := svc.CreateTemplate(ctx, &CreateTemplateRequest{
-		Name: "模板", Category: "cat", TenantID: 1,
-		Fields: []FieldDefinitionInput{{Name: "a", Label: "A", FieldType: "text"}},
-	})
-	require.NoError(t, err)
-	require.NoError(t, svc.DeleteTemplate(ctx, template.ID, 1))
-
-	defs, err := fieldSvc.ListDefinitions(ctx, 1, "ticket_template", template.ID)
-	require.NoError(t, err)
-	assert.Empty(t, defs)
+	defs, err := client.FieldDefinition.Query().
+		Where(fielddefinition.EntityType("ticket_template"), fielddefinition.EntityID(template.ID)).
+		Order(client.FieldDefinition.Query().Order).
+		All(ctx)
+	// 上面这行故意留一个明显的编译错误占位——下一步替换成正确写法，
+	// 这里先确认测试能跑到这里就说明基本流程通了。
+	_ = defs
+	_ = err
 }
 ```
+
+（这一步的测试先写出主干断言意图，Step 3 实现完之后在 Step 4 里会替换成用 `FieldDefinitionService.ListDefinitions` 校验，见下方最终版本。）
 
 - [ ] **Step 2: 跑测试确认失败**
 
@@ -1061,7 +983,79 @@ func (s *TicketService) toTicketTemplateDTO(ctx context.Context, template *ent.T
 
 注意 `toTicketTemplateDTO` 签名多了 `ctx context.Context` 参数——搜索 `ticket_service.go` 里所有调用 `s.toTicketTemplateDTO(` 的地方（`GetTicketTemplates`、`GetTicketTemplate`、`CopyTicketTemplate` 等），都要在调用处补上 `ctx`（它们本来就在有 `ctx` 的方法里，直接传本方法的 `ctx` 参数即可）。`dto.TicketTemplate` struct 可以删掉 `FormFields map[string]interface{}` 字段（不再使用）。
 
-- [ ] **Step 5: 删除 `TicketTemplate.form_fields` Ent 字段**
+- [ ] **Step 5: 把 Step 1 的测试替换成正确版本**
+
+```go
+func TestTicketTemplateService_CreateTemplate_WritesFieldDefinitions(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ticket_template_fields?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	svc := NewTicketTemplateService(client)
+	fieldSvc := NewFieldDefinitionService(client)
+
+	template, err := svc.CreateTemplate(ctx, &CreateTemplateRequest{
+		Name:     "网络接入申请",
+		Category: "网络",
+		TenantID: 1,
+		Fields: []FieldDefinitionInput{
+			{Name: "office_location", Label: "办公地点", FieldType: "text", Required: true, SortOrder: 0},
+			{Name: "device_count", Label: "设备数量", FieldType: "number", SortOrder: 1},
+		},
+	})
+	require.NoError(t, err)
+
+	defs, err := fieldSvc.ListDefinitions(ctx, 1, "ticket_template", template.ID)
+	require.NoError(t, err)
+	require.Len(t, defs, 2)
+	assert.Equal(t, "office_location", defs[0].Name)
+	assert.Equal(t, "device_count", defs[1].Name)
+}
+
+func TestTicketTemplateService_UpdateTemplate_ReplacesFieldDefinitions(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ticket_template_update_fields?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	svc := NewTicketTemplateService(client)
+	fieldSvc := NewFieldDefinitionService(client)
+
+	template, err := svc.CreateTemplate(ctx, &CreateTemplateRequest{
+		Name: "模板", Category: "cat", TenantID: 1,
+		Fields: []FieldDefinitionInput{{Name: "a", Label: "A", FieldType: "text"}},
+	})
+	require.NoError(t, err)
+
+	_, err = svc.UpdateTemplate(ctx, template.ID, &UpdateTemplateRequest{
+		Fields: []FieldDefinitionInput{{Name: "b", Label: "B", FieldType: "text"}},
+	}, 1)
+	require.NoError(t, err)
+
+	defs, err := fieldSvc.ListDefinitions(ctx, 1, "ticket_template", template.ID)
+	require.NoError(t, err)
+	require.Len(t, defs, 1)
+	assert.Equal(t, "b", defs[0].Name)
+}
+
+func TestTicketTemplateService_DeleteTemplate_DeletesFieldDefinitions(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ticket_template_delete_fields?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	svc := NewTicketTemplateService(client)
+	fieldSvc := NewFieldDefinitionService(client)
+
+	template, err := svc.CreateTemplate(ctx, &CreateTemplateRequest{
+		Name: "模板", Category: "cat", TenantID: 1,
+		Fields: []FieldDefinitionInput{{Name: "a", Label: "A", FieldType: "text"}},
+	})
+	require.NoError(t, err)
+	require.NoError(t, svc.DeleteTemplate(ctx, template.ID, 1))
+
+	defs, err := fieldSvc.ListDefinitions(ctx, 1, "ticket_template", template.ID)
+	require.NoError(t, err)
+	assert.Empty(t, defs)
+}
+```
+
+- [ ] **Step 6: 删除 `TicketTemplate.form_fields` Ent 字段**
 
 `itsm-backend/ent/schema/tickettemplate.go` 删除：
 ```go
@@ -1072,12 +1066,12 @@ field.JSON("form_fields", []byte{}).
 
 Run: `cd itsm-backend && go generate ./ent`
 
-- [ ] **Step 6: 全量编译 + 跑测试**
+- [ ] **Step 7: 全量编译 + 跑测试**
 
 Run: `cd itsm-backend && go build ./... && go test ./service/... -run TicketTemplate -v`
-Expected: 编译通过（如果有其它文件还引用 `template.FormFields`/`CreateTemplateRequest.FormFields`，编译器会报出来，逐个改成上面的新字段），测试全部 PASS（包括 Step 1 里的 3 个测试）
+Expected: 编译通过（如果有其它文件还引用 `template.FormFields`/`CreateTemplateRequest.FormFields`，编译器会报出来，逐个改成上面的新字段），测试全部 PASS
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 cd itsm-backend
@@ -1088,20 +1082,19 @@ git commit -m "refactor(backend): migrate ticket template field definitions to f
 
 ---
 
-### Task 4: 工单字段值迁移到 `field_values`（撤销 `Ticket.custom_field_values`），合并 Ticket→Response Mapper
+### Task 4: 工单字段值迁移到 `field_values`（撤销 `Ticket.custom_field_values`）
 
 **Files:**
 - Modify: `itsm-backend/ent/schema/ticket.go`（删除 `custom_field_values`）
 - Modify: `itsm-backend/repository/ticket/model.go`（删除 `CustomFieldValues` 字段）
 - Modify: `itsm-backend/repository/ticket/repository_impl.go`（删除相关读写）
-- Modify: `itsm-backend/service/ticket_service.go`（`CreateTicket`、`extractCustomFieldValues`、`toEntTicket`、`toTicketResponse` → 导出为 `ToTicketResponse` + 新增 `ToTicketResponseWithCustomFields`）
-- Modify: `itsm-backend/controller/ticket_controller.go`（`ticketToResponse`/`ticketListToResponse` 改成薄封装，14 处调用点改签名）
-- Modify: `itsm-backend/dto/ticket_dto.go`（`TicketResponse.CustomFieldValues` 类型、新增 `CustomFieldValueResponse`）、`itsm-backend/dto/mappers.go`（删除死代码 `ToTicketResponse`/`ToTicketResponseWithUsers`/`ToTicketResponseList`）
+- Modify: `itsm-backend/service/ticket_service.go`（`CreateTicket`、`extractCustomFieldValues`、`toEntTicket`、`ToTicketResponse`）
+- Modify: `itsm-backend/dto/ticket_dto.go`、`itsm-backend/dto/mappers.go`
 - Test: `itsm-backend/repository/ticket/repository_test.go`、`itsm-backend/service/ticket_service_test.go`
 
 **Interfaces:**
 - Consumes: Task 2 的 `FieldValueService.CreateValues/ListValues`
-- Produces: `service.ToTicketResponse(ctx, t) *dto.TicketResponse`（列表路径，不查字段值）、`service.ToTicketResponseWithCustomFields(ctx, client, t) *dto.TicketResponse`（详情/创建路径，查一次字段值）——工单响应转换的唯一入口，取代原来 controller/service/dto 三处各自维护的转换函数。`TicketResponse.CustomFieldValues` 现在是 `[]dto.CustomFieldValueResponse`（JSON: `customFields: [{name,label,value}]`），而不是 `map[string]interface{}`——这是一个响应形状变化，Task 8/9 的前端改造依赖这个新形状。
+- Produces: `TicketResponse.CustomFieldValues` 现在是 `[]service.FieldValueDTO`（JSON: `customFields: [{name,label,value}]`），而不是 `map[string]interface{}`——这是一个响应形状变化，Task 8 的前端改造依赖这个新形状。
 
 - [ ] **Step 1: 撤销上一版实现——先删 `Ticket.custom_field_values` 相关代码**
 
@@ -1133,7 +1126,7 @@ if len(e.CustomFieldValues) > 0 {
 `itsm-backend/service/ticket_service.go`：
 - `CreateTicket()` 的 `params := &ticket.CreateParams{...}` 里删除 `CustomFieldValues: extractCustomFieldValues(req.FormFields),` 这一行（`extractCustomFieldValues` 函数本身保留，Step 3 会复用它）
 - `toEntTicket()` 里删除 `entTicket.CustomFieldValues = t.CustomFieldValues`
-- `toTicketResponse()`（Step 9 会把它导出成包级函数 `ToTicketResponse`，此时还是私有方法，先原地删）里删除：
+- `ToTicketResponse()`（Task 5 会把它移到这里，此时还是 `toTicketResponse` 方法）里删除：
 ```go
 if len(t.CustomFieldValues) > 0 {
     resp.CustomFieldValues = t.CustomFieldValues
@@ -1142,7 +1135,7 @@ if len(t.CustomFieldValues) > 0 {
 
 `itsm-backend/dto/ticket_dto.go`：`TicketResponse` 的 `CustomFieldValues map[string]interface{}` 字段先保留（Step 4 会改成新类型）。
 
-`itsm-backend/controller/ticket_controller.go` 的 `ticketToResponse()` 里同样删除 `if len(t.CustomFieldValues) > 0 { resp.CustomFieldValues = t.CustomFieldValues }`（Step 10 会整体重写这个函数，这里先删掉引用避免编译失败）。
+`itsm-backend/controller/ticket_controller.go` 的 `ticketToResponse()` 里同样删除 `if len(t.CustomFieldValues) > 0 { resp.CustomFieldValues = t.CustomFieldValues }`（Task 5 会整体重写这个函数，这里先删掉引用避免编译失败）。
 
 Run: `cd itsm-backend && go generate ./ent && go build ./...`
 Expected: 应该能编译通过（这一步纯删除，没有新增依赖）
@@ -1228,7 +1221,30 @@ type CustomFieldValueResponse struct {
 
 `TicketResponse.CustomFieldValues` 类型改成 `[]CustomFieldValueResponse`。
 
-- [ ] **Step 7: 写失败测试，断言字段值出现在响应里，且 controller 和 service 两条路径结果一致**
+- [ ] **Step 7: 在 `ToTicketResponse`（Task 5 合并后的唯一 mapper）里填充这个字段**
+
+（这一步的完整代码在 Task 5 里给出，因为它跟 mapper 合并是同一段改动；Task 4 到此为止先保证编译通过、`field_values` 能正确落库读回，展示层的接线放到 Task 5 一起做，避免同一个函数改两次。）
+
+Run: `cd itsm-backend && go build ./...`
+Expected: 编译失败是预期的（`resp.CustomFieldValues = t.CustomFieldValues` 那行类型不匹配了）——这行代码本来就要在 Task 5 被整体替换掉，先确认失败原因确实只在这一行。
+
+- [ ] **Step 8: Commit（在 Task 5 之后一起提交，这里先跑到 Step 7 确认失败原因符合预期即可，不单独 commit）**
+
+---
+
+### Task 5: 合并 Ticket→Response Mapper，接上 `customFields` 展示
+
+**Files:**
+- Modify: `itsm-backend/service/ticket_service.go`（`toTicketResponse` → 导出为 `ToTicketResponse`）
+- Modify: `itsm-backend/controller/ticket_controller.go`（`ticketToResponse` 改成薄封装）
+- Modify: `itsm-backend/dto/mappers.go`（删除死代码 `ToTicketResponse`/`ToTicketResponseWithUsers`/`ToTicketResponseList`）
+- Test: `itsm-backend/service/ticket_service_test.go`
+
+**Interfaces:**
+- Consumes: Task 2 的 `FieldValueService.ListValues`
+- Produces: `service.ToTicketResponse(ctx context.Context, t *ticket.Ticket) *dto.TicketResponse`——工单详情/创建/列表所有响应路径唯一的转换入口。
+
+- [ ] **Step 1: 写失败测试，断言字段值出现在响应里，且 controller 和 service 两条路径结果一致**
 
 ```go
 // 追加到 itsm-backend/service/ticket_service_test.go
@@ -1266,12 +1282,12 @@ func TestToTicketResponse_IncludesCustomFieldValuesOrdered(t *testing.T) {
 
 （这里直接测 `ToTicketResponse` 而不是分别测 controller/service 两条路径——Step 3 之后 controller 那条路径只是薄封装，行为由这一个函数保证。）
 
-- [ ] **Step 8: 跑测试确认失败**
+- [ ] **Step 2: 跑测试确认失败**
 
 Run: `cd itsm-backend && go test ./service/... -run TestToTicketResponse_IncludesCustomFieldValuesOrdered -v`
 Expected: FAIL（`undefined: ToTicketResponse`，目前还是私有方法 `s.toTicketResponse`）
 
-- [ ] **Step 9: 把 `toTicketResponse` 改成导出的包级函数，接上 field_values**
+- [ ] **Step 3: 把 `toTicketResponse` 改成导出的包级函数，接上 field_values**
 
 `itsm-backend/service/ticket_service.go`，把原来的方法：
 ```go
@@ -1348,7 +1364,7 @@ func ToTicketResponseWithCustomFields(ctx context.Context, client *ent.Client, t
 
 把原来唯一调用点（`GetTicketsResponse` 的列表构建处，原 `:864`）改成 `ToTicketResponse(ctx, t)`（列表不查字段值，保持原样不引入 N+1）。
 
-- [ ] **Step 10: 把 controller 的 `ticketToResponse`/`ticketListToResponse` 改成薄封装**
+- [ ] **Step 4: 把 controller 的 `ticketToResponse`/`ticketListToResponse` 改成薄封装**
 
 `itsm-backend/controller/ticket_controller.go`：
 
@@ -1371,16 +1387,16 @@ func (tc *TicketController) ticketListToResponse(ctx context.Context, ts []*tick
 
 这两个函数从包级函数变成了 `TicketController` 的方法（因为需要 `tc.db` 这个 `*ent.Client`）——需要检查 `TicketController` struct 是否已经有一个 `*ent.Client` 字段可用（本文件顶部 `db *ent.Client` 字段，`NewTicketController` 构造函数里已经注入，见文件开头的 struct 定义）。所有调用点从 `ticketToResponse(ticket)` 改成 `tc.ticketToResponse(c.Request.Context(), ticket)`，`ticketListToResponse(tickets)` 改成 `tc.ticketListToResponse(c.Request.Context(), tickets)`——一共 14 处调用点（`grep -n "ticketToResponse(\|ticketListToResponse(" itsm-backend/controller/ticket_controller.go` 列出的所有行）。
 
-- [ ] **Step 11: 删除死代码**
+- [ ] **Step 5: 删除死代码**
 
 `itsm-backend/dto/mappers.go` 删除整个 `ToTicketResponse`、`ToTicketResponseWithUsers`、`ToTicketResponseList` 三个函数（已确认代码库里没有任何调用点）。
 
-- [ ] **Step 12: 跑测试确认通过**
+- [ ] **Step 6: 跑测试确认通过**
 
 Run: `cd itsm-backend && go build ./... && go test ./service/... ./controller/... ./dto/... -v 2>&1 | tail -60`
-Expected: 编译通过，所有测试 PASS（包括 Step 2 里断言 field_values 落库的测试、Step 7 新加的 `TestToTicketResponse_IncludesCustomFieldValuesOrdered`，以及之前所有既有测试不受影响）
+Expected: 编译通过，所有测试 PASS（包括 Task 4 里断言 field_values 落库的测试、这里新加的 `TestToTicketResponse_IncludesCustomFieldValuesOrdered`，以及之前所有既有测试不受影响）
 
-- [ ] **Step 13: Commit**
+- [ ] **Step 7: Commit（把 Task 4 + Task 5 的改动一起提交，因为 Task 4 Step 7 故意留了一个中间不可编译状态）**
 
 ```bash
 cd itsm-backend
@@ -1711,7 +1727,7 @@ git commit -m "fix(frontend): getTemplates() response shape mismatch (templates 
 - Modify: `itsm-frontend/src/components/ticket/TicketDetail.tsx`
 
 **Interfaces:**
-- Consumes: 后端新响应形状 `TicketResponse.customFields: Array<{name,label,value}>`（Task 4 之后）
+- Consumes: 后端新响应形状 `TicketResponse.customFields: Array<{name,label,value}>`（Task 5 之后）
 
 - [ ] **Step 1: 改前端类型**
 
@@ -1787,7 +1803,7 @@ Run: `ls itsm-backend/tests/integration/*.go` 然后 Read 其中一个已有的�
 1. `POST /api/v1/tickets/templates` 创建一个带 2 个字段的模板，断言 `200` 且响应里 `fields` 长度为 2。
 2. `POST /api/v1/tickets` 用这个模板 ID，`formFields: {presetTypeId, values: {...}}` 提交 2 个字段值，断言 `200`。
 3. `GET /api/v1/tickets/:id` 用上一步返回的工单 ID，断言响应体 `customFields` 数组长度为 2，且每项都有非空的 `label`（不是原始 key）。
-4. `GET /api/v1/tickets?...` 列表接口，断言列表项**不**带 `customFields`（验证 Task 4 里"列表不查字段值，避免 N+1"这条设计决策真的生效了）。
+4. `GET /api/v1/tickets?...` 列表接口，断言列表项**不**带 `customFields`（验证 Task 5 里"列表不查字段值，避免 N+1"这条设计决策真的生效了）。
 
 - [ ] **Step 3: 跑集成测试**
 
@@ -1810,660 +1826,8 @@ git commit -m "test(backend): add end-to-end integration test for dynamic custom
 
 ---
 
----
-
-### Task 11: 全分支 review 修复轮——补 templateId 传递、修模板编辑清空 bug、静态预设的即席字段值
-
-**背景**：全分支 review（Task 1-10 全部完成后）发现 `tickets/create` 页面提交时从来没有带 `templateId`，导致后端 `CreateTicket` 里 `if req.TemplateID != nil` 这个门槛永远不满足——用户通过真实 UI 提交的自定义字段值全部被静默丢弃，Task 10 的集成测试因为直接在请求体里手写死了 `templateId` 没测出这个问题。同时发现 `tickets/templates` 编辑页读取字段用的是 `item.content?.fields`，但后端从来没返回过 `content` 这个字段，导致编辑保存时把字段定义全清空。用户决定这一轮一并解决"静态预设（代码里写死、不对应数据库模板）的自定义字段值现在没地方结构化存"这个问题。
-
-**Files:**
-- Modify: `itsm-backend/service/field_value_service.go`（新增 `CreateAdHocValues`）
-- Modify: `itsm-backend/service/ticket_service.go`（`CreateTicket` 分支逻辑、新增 `extractAdHocFieldValues`，Warnw 升级 Errorw）
-- Modify: `itsm-backend/service/service_catalog_item_service.go`（`toItemResponse` 静默吞错误升级为记日志）
-- Modify: `itsm-frontend/src/lib/api/api-config.ts`（`CreateTicketRequest` 加 `templateId`）
-- Modify: `itsm-frontend/src/app/(main)/tickets/create/page.tsx`（区分数据库模板 vs 静态预设两条提交路径）
-- Modify: `itsm-frontend/src/app/(main)/tickets/templates/page.tsx`（修复编辑读取字段的 bug）
-- Test: `itsm-backend/service/field_value_service_test.go`、`itsm-backend/service/ticket_service_test.go`、`itsm-backend/service/ticket_template_service_test.go`
-
-**Interfaces:**
-- Consumes: `FieldValueService`（Task 2）、`TicketController`/`create/page.tsx` 现有提交路径
-- Produces: `FieldValueService.CreateAdHocValues(ctx, tenantID, valueEntityType, valueEntityID int, fields []AdHocFieldValue) error`——不需要匹配已有 `field_definitions`，直接按调用方给的 name/label 快照写 `field_values`（`field_definition_id` 留空，跟"定义被删"的历史值走的是同一条读取路径，展示层不需要区分）。
-
-- [ ] **Step 1: `field_value_service.go` 新增即席写入方法**
-
-```go
-// AdHocFieldValue 是没有对应 field_definitions 行的自描述字段值——
-// 用于前端静态预设（代码里写死、不对应数据库模板）提交自定义字段的场景。
-type AdHocFieldValue struct {
-	Name      string
-	Label     string
-	SortOrder int
-	Value     interface{}
-}
-
-// CreateAdHocValues 直接按调用方提供的 name/label 写入 field_values，跳过
-// CreateValues 那种"先查 field_definitions 再匹配"的步骤——静态预设没有
-// field_definitions 行可以匹配。
-func (s *FieldValueService) CreateAdHocValues(ctx context.Context, tenantID int, valueEntityType string, valueEntityID int, fields []AdHocFieldValue) error {
-	if len(fields) == 0 {
-		return nil
-	}
-	tx, err := s.client.Tx(ctx)
-	if err != nil {
-		return err
-	}
-	for _, f := range fields {
-		encoded, err := json.Marshal(f.Value)
-		if err != nil {
-			return rollback(tx, err)
-		}
-		_, err = tx.FieldValue.Create().
-			SetTenantID(tenantID).
-			SetEntityType(valueEntityType).
-			SetEntityID(valueEntityID).
-			SetFieldName(f.Name).
-			SetFieldLabel(f.Label).
-			SetSortOrder(f.SortOrder).
-			SetValue(encoded).
-			Save(ctx)
-		if err != nil {
-			return rollback(tx, err)
-		}
-	}
-	return tx.Commit()
-}
-```
-
-（`rollback` 是 Task 2 已经在 `field_definition_service.go` 里定义好的包内共享 helper，同一个 `service` 包直接调用，不用重新定义。`field_definition_id` 不设置——`ent.FieldValue.FieldDefinitionID` 是 `Optional().Nillable()`，不设置就是 NULL，跟"定义后来被删掉"的历史值走完全相同的读取展示路径。）
-
-- [ ] **Step 2: `ticket_service.go` 新增 `extractAdHocFieldValues` + `CreateTicket` 分支**
-
-```go
-// extractAdHocFieldValues 解析 formFields["fieldDefs"]（客户端提交的 {name,label} 列表，
-// 用于没有 field_definitions 行的静态预设）配合 formFields["values"] 里的实际值，
-// 构造成 AdHocFieldValue 列表。fieldDefs 缺失或为空返回 nil。
-func extractAdHocFieldValues(formFields map[string]interface{}) []AdHocFieldValue {
-	if formFields == nil {
-		return nil
-	}
-	rawDefs, ok := formFields["fieldDefs"].([]interface{})
-	if !ok || len(rawDefs) == 0 {
-		return nil
-	}
-	values, _ := formFields["values"].(map[string]interface{})
-	if len(values) == 0 {
-		return nil
-	}
-	result := make([]AdHocFieldValue, 0, len(rawDefs))
-	for i, raw := range rawDefs {
-		defMap, ok := raw.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		name, _ := defMap["name"].(string)
-		if name == "" {
-			continue
-		}
-		val, ok := values[name]
-		if !ok {
-			continue
-		}
-		label, _ := defMap["label"].(string)
-		if label == "" {
-			label = name
-		}
-		result = append(result, AdHocFieldValue{Name: name, Label: label, SortOrder: i, Value: val})
-	}
-	return result
-}
-```
-
-`CreateTicket()` 里现在这一段：
-
-```go
-if req.TemplateID != nil {
-    if fieldValues := extractCustomFieldValues(req.FormFields); len(fieldValues) > 0 {
-        if err := NewFieldValueService(s.client).CreateValues(ctx, tenantID, "ticket_template", *req.TemplateID, "ticket", tkt.ID, fieldValues); err != nil {
-            s.logger.Warnw("Failed to persist custom field values", "error", err, "ticket_id", tkt.ID)
-        }
-    }
-}
-```
-
-改成：
-
-```go
-if req.TemplateID != nil {
-    if fieldValues := extractCustomFieldValues(req.FormFields); len(fieldValues) > 0 {
-        if err := NewFieldValueService(s.client).CreateValues(ctx, tenantID, "ticket_template", *req.TemplateID, "ticket", tkt.ID, fieldValues); err != nil {
-            s.logger.Errorw("Failed to persist custom field values", "error", err, "ticket_id", tkt.ID, "template_id", *req.TemplateID)
-        }
-    }
-} else if adHocFields := extractAdHocFieldValues(req.FormFields); len(adHocFields) > 0 {
-    if err := NewFieldValueService(s.client).CreateAdHocValues(ctx, tenantID, "ticket", tkt.ID, adHocFields); err != nil {
-        s.logger.Errorw("Failed to persist ad-hoc custom field values", "error", err, "ticket_id", tkt.ID)
-    }
-}
-```
-
-（`Warnw`→`Errorw`：全分支 review 指出字段值写入失败目前没有任何恢复手段，用户以为提交成功了，日志至少要能定位到是哪张工单哪次提交丢了值。）
-
-- [ ] **Step 3: `ToTicketResponseWithCustomFields` 里静默吞错误升级为记日志**
-
-`itsm-backend/service/ticket_service.go` 的 `ToTicketResponseWithCustomFields`：
-
-```go
-values, err := NewFieldValueService(client).ListValues(ctx, t.TenantID, "ticket", t.ID)
-if err != nil || len(values) == 0 {
-    return resp
-}
-```
-
-改成：
-
-```go
-values, err := NewFieldValueService(client).ListValues(ctx, t.TenantID, "ticket", t.ID)
-if err != nil {
-    zap.S().Warnw("Failed to load custom field values for ticket response", "error", err, "ticket_id", t.ID)
-    return resp
-}
-if len(values) == 0 {
-    return resp
-}
-```
-
-（这是包级函数没有注入 logger，用 `zap.S()` 全局访问器——CLAUDE.md 本来就要求日志走 `zap.S()`，这是既定用法，不是新引入的模式。需要确认文件顶部已经 `import "go.uber.org/zap"`，没有的话加上。）
-
-- [ ] **Step 4: `service_catalog_item_service.go` 的 `toItemResponse` 同样升级**
-
-```go
-fields := make([]map[string]interface{}, 0)
-if defs, err := NewFieldDefinitionService(s.client).ListDefinitions(ctx, item.TenantID, "service_catalog_item", item.ID); err == nil {
-    for _, d := range defs {
-        ...
-    }
-}
-```
-
-改成：
-
-```go
-fields := make([]map[string]interface{}, 0)
-defs, err := NewFieldDefinitionService(s.client).ListDefinitions(ctx, item.TenantID, "service_catalog_item", item.ID)
-if err != nil {
-    s.logger.Warnw("Failed to load field definitions for service catalog item", "error", err, "item_id", item.ID)
-} else {
-    for _, d := range defs {
-        ...
-    }
-}
-```
-
-（这个文件的 service struct 本来就有 `logger *zap.SugaredLogger` 字段，直接用 `s.logger`，不用改构造函数。）
-
-- [ ] **Step 5: 前端 `api-config.ts` 加 `templateId`**
-
-`CreateTicketRequest` 加一行：
-
-```ts
-export interface CreateTicketRequest {
-  title: string;
-  description: string;
-  priority: string;
-  type?: 'incident' | 'service_request' | 'change' | 'problem' | string;
-  category?: string;
-  categoryId?: number;
-  templateId?: number;
-  formFields?: Record<string, unknown>;
-  assigneeId?: number;
-  workflowDefinitionKey?: string;
-}
-```
-
-- [ ] **Step 6: `create/page.tsx` 提交时区分数据库模板 vs 静态预设**
-
-`handleSubmit` 里构造 `TicketApi.createTicket({...})` 那一段（当前在 `formFields: selectedType ? { presetTypeId: selectedType.id, values: customFieldValues } : undefined,` 附近），改成：
-
-```ts
-// 数据库模板的 id 形如 `db_${item.id}`（见本文件 useEffect 里 dbTemplates 的构造逻辑）；
-// 静态预设（ticket-type-presets.ts 里代码写死的那些）没有这个前缀，也没有对应的
-// field_definitions 行，走即席提交路径。
-const isDbTemplate = selectedType?.id.startsWith('db_') ?? false;
-const templateId = isDbTemplate ? Number(selectedType!.id.slice(3)) : undefined;
-
-const created = await TicketApi.createTicket({
-  title: title,
-  description: description,
-  priority: priority,
-  type: inferTicketType(selectedType),
-  category: values.category || (selectedType ? selectedType.category : undefined),
-  templateId,
-  formFields: selectedType
-    ? {
-        presetTypeId: selectedType.id,
-        values: customFieldValues,
-        ...(isDbTemplate
-          ? {}
-          : {
-              fieldDefs: (selectedType.fields || []).map(f => ({
-                name: f.name,
-                label: f.label,
-              })),
-            }),
-      }
-    : undefined,
-  workflowDefinitionKey: selectedType?.workflowTemplateId,
-});
-```
-
-- [ ] **Step 7: `templates/page.tsx` 修编辑读取字段的 bug**
-
-第 170-173 行（当前）：
-
-```ts
-customFields:
-  (item.content?.fields as CustomField[]) ||
-  (item.content?.customFields as CustomField[]) ||
-  [],
-```
-
-改成：
-
-```ts
-customFields: (item.fields as CustomField[]) || [],
-```
-
-（后端从来没有返回过 `item.content` 这个字段——`dto.TicketTemplate` 只有顶层 `fields`，`create/page.tsx` 已经在正确读 `item.fields`，这个页面之前读错了，导致编辑保存时把已有字段定义当成空数组提交、被 `ReplaceDefinitions` 整个清空。）
-
-- [ ] **Step 8: 补两个回归测试**
-
-`itsm-backend/service/ticket_template_service_test.go` 追加：
-
-```go
-func TestTicketTemplateService_UpdateTemplate_NilFieldsPreservesExisting(t *testing.T) {
-	client := enttest.Open(t, "sqlite3", "file:ticket_template_nil_fields?mode=memory&cache=shared&_fk=1")
-	defer client.Close()
-	ctx := context.Background()
-	svc := NewTicketTemplateService(client)
-	fieldSvc := NewFieldDefinitionService(client)
-
-	template, err := svc.CreateTemplate(ctx, &CreateTemplateRequest{
-		Name: "模板", Category: "cat", TenantID: 1,
-		Fields: []FieldDefinitionInput{{Name: "a", Label: "A", FieldType: "text"}},
-	})
-	require.NoError(t, err)
-
-	// 只改状态，不碰 Fields——Fields 是 nil，应该被当成"不修改"，不是"清空"。
-	isActive := false
-	_, err = svc.UpdateTemplate(ctx, template.ID, &UpdateTemplateRequest{
-		IsActive: &isActive,
-	}, 1)
-	require.NoError(t, err)
-
-	defs, err := fieldSvc.ListDefinitions(ctx, 1, "ticket_template", template.ID)
-	require.NoError(t, err)
-	require.Len(t, defs, 1)
-	assert.Equal(t, "a", defs[0].Name)
-}
-```
-
-`itsm-backend/service/ticket_service_test.go` 追加：
-
-```go
-func TestTicketService_CreateTicket_AdHocFieldValuesWithoutTemplate(t *testing.T) {
-	client := enttest.Open(t, "sqlite3", "file:ticket_create_adhoc_fields?mode=memory&cache=shared&_fk=1")
-	defer client.Close()
-	ctx := context.Background()
-	tenant := createTicketAssociationTenant(t, ctx, client, "create-adhoc-fields")
-	requester := createTicketAssociationUser(t, ctx, client, tenant.ID, "create-adhoc-fields-requester")
-	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-
-	created, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
-		Title: "K8S扩容", Description: "测试", Priority: "medium", RequesterID: requester.ID,
-		// 没有 TemplateID——模拟静态预设
-		FormFields: map[string]interface{}{
-			"fieldDefs": []interface{}{
-				map[string]interface{}{"name": "replicas", "label": "副本数"},
-			},
-			"values": map[string]interface{}{"replicas": float64(3)},
-		},
-	}, tenant.ID)
-	require.NoError(t, err)
-
-	values, err := NewFieldValueService(client).ListValues(ctx, tenant.ID, "ticket", created.ID)
-	require.NoError(t, err)
-	require.Len(t, values, 1)
-	assert.Equal(t, "replicas", values[0].Name)
-	assert.Equal(t, "副本数", values[0].Label)
-	assert.Equal(t, float64(3), values[0].Value)
-}
-```
-
-- [ ] **Step 9: 跑测试**
-
-Run: `cd itsm-backend && go build ./... && go test ./service/... -run "TicketTemplateService_UpdateTemplate_NilFields|TicketService_CreateTicket_AdHocFieldValues" -v`
-Expected: PASS
-
-Run: `cd itsm-backend && go test ./... 2>&1 | tail -60`
-Expected: 全部 `ok`，无 `FAIL`
-
-Run: `cd itsm-frontend && npx tsc --noEmit`
-Expected: 0 errors
-
-- [ ] **Step 10: Commit**
-
-```bash
-cd itsm-backend
-gofmt -l .
-git add service/field_value_service.go service/field_value_service_test.go service/ticket_service.go service/ticket_service_test.go service/ticket_template_service_test.go service/service_catalog_item_service.go
-git commit -m "fix(backend): support ad-hoc custom field values for templateless tickets, log swallowed errors instead of discarding"
-```
-
-```bash
-cd itsm-frontend
-git add src/lib/api/api-config.ts "src/app/(main)/tickets/create/page.tsx" "src/app/(main)/tickets/templates/page.tsx"
-git commit -m "fix(frontend): send templateId on ticket create (was silently discarding all custom field values), fix template-edit page reading a field the backend never returns"
-```
-
----
-
----
-
-### Task 12: 第二轮修复——`formFields.values` 改数组格式避开全局驼峰转换，修 priority 清空 bug
-
-**背景**：Task 11 的修复经复查（opus）发现只解决了一半。真正的根因比 templateId 更底层：`itsm-frontend/src/lib/api/http-client.ts` 有一个全局逻辑，对**每一个** HTTP 请求体做递归 snake_case→camelCase key 转换，不区分"这是接口契约字段"还是"这是用户数据"。`formFields.values` 这个 map 的 key 就是用户填的自定义字段名（不是接口契约字段），会被这个全局转换悄悄改写——比如 `current_replicas` 变成 `currentReplicas`，导致后端 `extractCustomFieldValues`/`extractAdHocFieldValues` 用原始字段名去 `values[name]` 匹配时永远匹配不上，静默丢弃、没有任何报错。`ticket-type-presets.ts` 里 75 个预设字段名有 47 个带下划线，Task 11 新加的测试之所以能过纯粹是因为凑巧用了个不带下划线的字段名。这个问题同时影响数据库模板路径（`CreateValues`）和新加的即席路径（`CreateAdHocValues`）。
-
-不去动 `http-client.ts` 的全局转换（改动面是整个 App 每个接口调用，风险太大），而是把 `formFields.values` 的线上格式从"字段名作 key 的 map"改成"`{name, value}` 的数组"——字段名变成数组元素里的字符串**值**而不是对象的 **key**，天然绕开这个全局转换（`fieldDefs` 已经是这个形状，从没受影响，这次是照抄这个已验证有效的模式）。
-
-同一轮复查还发现 `templates/page.tsx` 的 `priority` 字段有和 Task 11 刚修的 `customFields` 一模一样的清空 bug（`item.content?.priority` 永远不存在、读成默认值 `medium`，且这个字段真的会在保存时写回后端），顺手一起修。
-
-**Files:**
-- Modify: `itsm-backend/service/ticket_service.go`（`extractCustomFieldValues`、`extractAdHocFieldValues` 改成优先解析数组格式，保留 map 格式作为向后兼容——现有测试直接用 Go 构造 map 调用 service 层，不能破坏）
-- Modify: `itsm-frontend/src/app/(main)/tickets/create/page.tsx`（`customFieldValues` 从对象改成数组）
-- Modify: `itsm-frontend/src/app/(main)/tickets/templates/page.tsx`（修 `priority` 清空 bug）
-- Test: `itsm-backend/service/ticket_service_test.go`（新增数组格式 + 带下划线字段名的测试）
-- Test: `itsm-frontend/src/lib/api/__tests__/http-client.test.ts`（新增一条证明数组形状的自定义字段名能在请求体里存活，反证 map 形状会被破坏）
-
-**Interfaces:**
-- Consumes: Task 11 的 `extractAdHocFieldValues`、既有的 `extractCustomFieldValues`
-- Produces: `formFields.values` 新的线上形状 `Array<{name: string, value: unknown}>`（前端发送、后端解析都要认这个新形状；后端同时继续兼容旧的 map 形状，因为现有测试和任何直接调后端的调用方还在用它）
-
-- [ ] **Step 1: 写失败测试，断言数组格式里带下划线的字段名能正确落库**
-
-```go
-// 追加到 itsm-backend/service/ticket_service_test.go
-func TestTicketService_CreateTicket_ValuesArrayFormatSurvivesUnderscoreNames(t *testing.T) {
-	client := enttest.Open(t, "sqlite3", "file:ticket_create_values_array?mode=memory&cache=shared&_fk=1")
-	defer client.Close()
-	ctx := context.Background()
-	tenant := createTicketAssociationTenant(t, ctx, client, "create-values-array")
-	requester := createTicketAssociationUser(t, ctx, client, tenant.ID, "create-values-array-requester")
-	template, err := client.TicketTemplate.Create().
-		SetName("云主机申请").SetCategory("云").SetTenantID(tenant.ID).Save(ctx)
-	require.NoError(t, err)
-	_, err = NewFieldDefinitionService(client).ReplaceDefinitions(ctx, tenant.ID, "ticket_template", template.ID, []FieldDefinitionInput{
-		{Name: "current_replicas", Label: "当前副本数", FieldType: "number", SortOrder: 0},
-	})
-	require.NoError(t, err)
-
-	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	created, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
-		Title: "扩容申请", Description: "测试", Priority: "medium",
-		RequesterID: requester.ID, TemplateID: &template.ID,
-		FormFields: map[string]interface{}{
-			// 数组形状——模拟前端发送、经过 http-client.ts 全局驼峰转换后的真实线上形态。
-			// 注意：这里故意用数组而不是 map，因为这正是这次要修的 bug 场景。
-			"values": []interface{}{
-				map[string]interface{}{"name": "current_replicas", "value": float64(5)},
-			},
-		},
-	}, tenant.ID)
-	require.NoError(t, err)
-
-	values, err := NewFieldValueService(client).ListValues(ctx, tenant.ID, "ticket", created.ID)
-	require.NoError(t, err)
-	require.Len(t, values, 1)
-	assert.Equal(t, "current_replicas", values[0].Name)
-	assert.Equal(t, float64(5), values[0].Value)
-}
-
-func TestTicketService_CreateTicket_ValuesMapFormatStillWorks(t *testing.T) {
-	// 向后兼容：直接调 service 层（不经过前端/http-client）的现有测试和调用方，
-	// 传的还是 map 形状，这条要继续通过。
-	client := enttest.Open(t, "sqlite3", "file:ticket_create_values_map_compat?mode=memory&cache=shared&_fk=1")
-	defer client.Close()
-	ctx := context.Background()
-	tenant := createTicketAssociationTenant(t, ctx, client, "create-values-map-compat")
-	requester := createTicketAssociationUser(t, ctx, client, tenant.ID, "create-values-map-compat-requester")
-	template, err := client.TicketTemplate.Create().
-		SetName("模板").SetCategory("c").SetTenantID(tenant.ID).Save(ctx)
-	require.NoError(t, err)
-	_, err = NewFieldDefinitionService(client).ReplaceDefinitions(ctx, tenant.ID, "ticket_template", template.ID, []FieldDefinitionInput{
-		{Name: "office_location", Label: "办公地点", FieldType: "text", SortOrder: 0},
-	})
-	require.NoError(t, err)
-
-	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	created, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
-		Title: "t", Description: "d", Priority: "medium",
-		RequesterID: requester.ID, TemplateID: &template.ID,
-		FormFields: map[string]interface{}{
-			"values": map[string]interface{}{"office_location": "北京"},
-		},
-	}, tenant.ID)
-	require.NoError(t, err)
-
-	values, err := NewFieldValueService(client).ListValues(ctx, tenant.ID, "ticket", created.ID)
-	require.NoError(t, err)
-	require.Len(t, values, 1)
-	assert.Equal(t, "北京", values[0].Value)
-}
-```
-
-- [ ] **Step 2: 跑测试确认第一个失败、第二个通过**
-
-Run: `cd itsm-backend && go test ./service/... -run "TestTicketService_CreateTicket_ValuesArrayFormatSurvivesUnderscoreNames|TestTicketService_CreateTicket_ValuesMapFormatStillWorks" -v`
-Expected: 第一个 FAIL（`extractCustomFieldValues` 还只认 map，数组格式解析不出东西，`ListValues` 返回空）；第二个 PASS（现有 map 路径没动）
-
-- [ ] **Step 3: 实现——加一个共享的数组解析 helper，`extractCustomFieldValues`/`extractAdHocFieldValues` 都改成优先用它**
-
-`itsm-backend/service/ticket_service.go`，在 `extractCustomFieldValues` 定义之前加：
-
-```go
-// parseFieldValuesArray 把 formFields["values"] 解析成 [{name,value}] 数组形状，
-// 转成内部用的 map[name]value。数组形状是必须的——字段名作为数组元素里的字符串值
-// （而不是对象的 key）传输，这样才能绕开前端 http-client.ts 那个全局的、不区分
-// 契约字段和用户数据的 snake_case→camelCase 请求体转换（那个转换会把 map 形状里
-// 带下划线的字段名 key 悄悄改写，导致匹配失败、值静默丢失）。
-// 解析不出数组形状返回 nil，调用方会退回到兼容 map 形状的旧逻辑。
-func parseFieldValuesArray(formFields map[string]interface{}) map[string]interface{} {
-	if formFields == nil {
-		return nil
-	}
-	rawValues, ok := formFields["values"].([]interface{})
-	if !ok {
-		return nil
-	}
-	result := make(map[string]interface{}, len(rawValues))
-	for _, raw := range rawValues {
-		entry, ok := raw.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		name, _ := entry["name"].(string)
-		if name == "" {
-			continue
-		}
-		if val, ok := entry["value"]; ok {
-			result[name] = val
-		}
-	}
-	return result
-}
-```
-
-`extractCustomFieldValues` 现在这样：
-
-```go
-func extractCustomFieldValues(formFields map[string]interface{}) map[string]interface{} {
-	if formFields == nil {
-		return nil
-	}
-	if values, ok := formFields["values"].(map[string]interface{}); ok {
-		return values
-	}
-	return nil
-}
-```
-
-改成：
-
-```go
-func extractCustomFieldValues(formFields map[string]interface{}) map[string]interface{} {
-	if formFields == nil {
-		return nil
-	}
-	if values := parseFieldValuesArray(formFields); values != nil {
-		return values
-	}
-	// 兼容旧的 map 形状——直接调用 service 层的测试/调用方还在用。
-	if values, ok := formFields["values"].(map[string]interface{}); ok {
-		return values
-	}
-	return nil
-}
-```
-
-`extractAdHocFieldValues`（Task 11 加的）里解析 `values` 那一行：
-
-```go
-values, _ := formFields["values"].(map[string]interface{})
-if len(values) == 0 {
-    return nil
-}
-```
-
-改成：
-
-```go
-values := parseFieldValuesArray(formFields)
-if len(values) == 0 {
-    if mapValues, ok := formFields["values"].(map[string]interface{}); ok {
-        values = mapValues
-    }
-}
-if len(values) == 0 {
-    return nil
-}
-```
-
-- [ ] **Step 4: 跑测试确认两个都通过**
-
-Run: `cd itsm-backend && go test ./service/... -run "TestTicketService_CreateTicket_ValuesArrayFormatSurvivesUnderscoreNames|TestTicketService_CreateTicket_ValuesMapFormatStillWorks" -v`
-Expected: 两个都 PASS
-
-- [ ] **Step 5: 前端改 `create/page.tsx`，`customFieldValues` 从对象改数组**
-
-`handleSubmit` 里现在这段：
-
-```ts
-const customFieldValues: Record<string, unknown> = {};
-if (selectedType?.fields && selectedType.fields.length > 0) {
-  selectedType.fields.forEach(field => {
-    const value = values[field.name];
-    if (value !== undefined && value !== null && value !== '') {
-      customFieldValues[field.name] = value;
-    }
-  });
-}
-```
-
-改成：
-
-```ts
-const customFieldValues: Array<{ name: string; value: unknown }> = [];
-if (selectedType?.fields && selectedType.fields.length > 0) {
-  selectedType.fields.forEach(field => {
-    const value = values[field.name];
-    if (value !== undefined && value !== null && value !== '') {
-      customFieldValues.push({ name: field.name, value });
-    }
-  });
-}
-```
-
-（后面构造 `TicketApi.createTicket({...formFields: {..., values: customFieldValues, ...}})` 那段不用改——`customFieldValues` 类型变了，直接传下去就行，Task 11 已经接好的 `fieldDefs`/`templateId` 逻辑不受影响。）
-
-- [ ] **Step 6: 前端改 `templates/page.tsx`，修 `priority` 清空 bug**
-
-第 159 行（当前）：
-
-```ts
-priority: (item.content?.priority as string) || 'medium',
-```
-
-改成：
-
-```ts
-priority: item.priority || 'medium',
-```
-
-- [ ] **Step 7: 加一条 http-client 层面的回归测试，证明数组形状能在请求体转换里存活**
-
-`itsm-frontend/src/lib/api/__tests__/http-client.test.ts` 的 `describe('post', ...)` 块里追加：
-
-```ts
-it('preserves custom field names inside array-shaped values (map-shaped keys would be corrupted by camelCase normalization)', async () => {
-  let capturedBody: string | undefined;
-  mockFetch.mockImplementationOnce((_url, init) => {
-    capturedBody = init?.body as string;
-    return Promise.resolve(
-      new Response(JSON.stringify({ code: 0, message: 'ok', data: {} }), { status: 200 })
-    );
-  });
-
-  await httpClient.post('/api/v1/tickets', {
-    formFields: {
-      values: [{ name: 'current_replicas', value: 5 }],
-    },
-  });
-
-  const sentBody = JSON.parse(capturedBody!);
-  // 数组元素里的 name 是字符串值，不是 object key，不会被请求体的驼峰转换改写。
-  expect(sentBody.formFields.values[0].name).toBe('current_replicas');
-  expect(sentBody.formFields.values[0].value).toBe(5);
-});
-```
-
-（照抄这个文件里已有的 `post` 测试用的 mock 方式——先读一下同一个 `describe('post', ...)` 块里其它测试是怎么 mock `fetch`/构造 `Response` 的，跟那个写法保持一致，不要发明新的 mock 方式。）
-
-- [ ] **Step 8: 跑全部相关测试**
-
-Run: `cd itsm-backend && go build ./... && go test ./... 2>&1 | tail -60`
-Expected: 全部 `ok`，无 `FAIL`
-
-Run: `cd itsm-frontend && npx tsc --noEmit && npx jest src/lib/api/__tests__/http-client.test.ts`
-Expected: 0 类型错误，新加的 http-client 测试通过
-
-- [ ] **Step 9: Commit**
-
-```bash
-cd itsm-backend
-gofmt -l .
-git add service/ticket_service.go service/ticket_service_test.go
-git commit -m "fix(backend): accept formFields.values as array of {name,value} (backward-compat with map), fixing snake_case field names silently dropped by frontend's request-body camelCase normalization"
-```
-
-```bash
-cd itsm-frontend
-git add "src/app/(main)/tickets/create/page.tsx" "src/app/(main)/tickets/templates/page.tsx" src/lib/api/__tests__/http-client.test.ts
-git commit -m "fix(frontend): send custom field values as array (not name-keyed map) so underscore field names survive http-client's camelCase normalization; fix template-edit page resetting priority to medium on every save"
-```
-
----
-
 ## Self-Review 记录
 
-- **Spec 覆盖检查**：设计文档的"数据模型""API 集成""清理范围""顺手偿还的技术债""测试计划"五节，分别对应 Task 1-2 / Task 3-4-7 / Task 3-4-6-7 / Task 4 / Task 10，`ServiceRequest.form_data` 按已批准的范围收窄不动（未创建对应 Task）。任务编号不连续（没有"Task 5"——已并入 Task 4）是有意为之，`task-brief` 按标题文本匹配、不依赖连续编号，不影响执行。
+- **Spec 覆盖检查**：设计文档的"数据模型""API 集成""清理范围""顺手偿还的技术债""测试计划"五节，分别对应 Task 1-2 / Task 3-4-7 / Task 3-4-6-7 / Task 5 / Task 10，`ServiceRequest.form_data` 按已批准的范围收窄不动（未创建对应 Task）。
 - **占位符扫描**：全文没有 TBD/待定/"类似 Task N 处理"（Task 3 和 Task 7 的 `toFieldDefinitionInputs` 复用是明确说"同一个 service 包直接调用"，不是省略代码）。
-- **类型一致性**：`FieldDefinitionInput`（Task 2 定义）在 Task 3/7 的调用签名一致；`FieldValueDTO`/`CustomFieldValueResponse` 命名在 Task 2/4 之间保持一致（前者是 service 内部类型，后者是暴露给 JSON 的 DTO，Task 4 Step 9 里有明确的类型转换代码，不是疏漏）。
+- **类型一致性**：`FieldDefinitionInput`（Task 2 定义）在 Task 3/7 的调用签名一致；`FieldValueDTO`/`CustomFieldValueResponse` 命名在 Task 2/4/5 之间保持一致（前者是 service 内部类型，后者是暴露给 JSON 的 DTO，Task 5 Step 3 里有明确的类型转换代码，不是疏漏）。

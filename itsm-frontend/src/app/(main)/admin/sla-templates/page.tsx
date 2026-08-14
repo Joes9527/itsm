@@ -260,7 +260,7 @@ export default function SLATemplatesPage() {
               title="覆盖行业"
               value={Object.keys(stats.byIndustry).length}
               suffix="个"
-              valueStyle={{ color: '#1677ff' }}
+              valueStyle={{ color: '#F06820' }}
             />
           </Card>
         </Col>

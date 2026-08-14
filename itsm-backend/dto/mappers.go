@@ -573,50 +573,6 @@ func ToGroupResponseList(groups []*ent.Group) []*GroupResponse {
 }
 
 // ===================================
-// SLAPolicy Mappers
-// ===================================
-
-// ToSLAPolicyResponse converts an ent.SLAPolicy to SLAPolicyResponse
-func ToSLAPolicyResponse(policy *ent.SLAPolicy) *SLAPolicyResponse {
-	if policy == nil {
-		return nil
-	}
-
-	return &SLAPolicyResponse{
-		ID:                    policy.ID,
-		Name:                  policy.Name,
-		Description:           policy.Description,
-		CustomerTier:          policy.CustomerTier,
-		TicketType:            policy.TicketType,
-		Priority:              policy.Priority,
-		ResponseTimeMinutes:   policy.ResponseTimeMinutes,
-		ResolutionTimeMinutes: policy.ResolutionTimeMinutes,
-		BusinessHours:         policy.BusinessHours,
-		ExcludeWeekends:       policy.ExcludeWeekends,
-		ExcludeHolidays:       policy.ExcludeHolidays,
-		IsActive:              policy.IsActive,
-		PriorityScore:         policy.PriorityScore,
-		TenantID:              policy.TenantID,
-		CreatedAt:             policy.CreatedAt,
-		UpdatedAt:             policy.UpdatedAt,
-	}
-}
-
-// ToSLAPolicyResponseList converts a slice of ent.SLAPolicy to SLAPolicyResponse slice
-func ToSLAPolicyResponseList(policies []*ent.SLAPolicy) []*SLAPolicyResponse {
-	if policies == nil {
-		return nil
-	}
-	responses := make([]*SLAPolicyResponse, 0, len(policies))
-	for _, policy := range policies {
-		if policy != nil {
-			responses = append(responses, ToSLAPolicyResponse(policy))
-		}
-	}
-	return responses
-}
-
-// ===================================
 // Workflow Mappers
 // ===================================
 
@@ -805,15 +761,21 @@ func ToTicketCategoryResponse(category *ent.TicketCategory) *TicketCategoryRespo
 	}
 
 	response := &TicketCategoryResponse{
-		ID:          category.ID,
-		Name:        category.Name,
-		Code:        category.Code,
-		Description: category.Description,
-		SortOrder:   category.SortOrder,
-		IsActive:    category.IsActive,
-		TenantID:    category.TenantID,
-		CreatedAt:   category.CreatedAt,
-		UpdatedAt:   category.UpdatedAt,
+		ID:              category.ID,
+		Name:            category.Name,
+		Code:            category.Code,
+		Description:     category.Description,
+		Level:           category.Level,
+		SortOrder:       category.SortOrder,
+		IsActive:        category.IsActive,
+		TenantID:        category.TenantID,
+		ITSMType:        category.ItsmType,
+		DefaultPriority: category.DefaultPriority,
+		SLATier:         category.SLATier,
+		DefaultResolver: category.DefaultResolver,
+		IsUserFacing:    category.IsUserFacing,
+		CreatedAt:       category.CreatedAt,
+		UpdatedAt:       category.UpdatedAt,
 	}
 
 	if category.ParentID > 0 {

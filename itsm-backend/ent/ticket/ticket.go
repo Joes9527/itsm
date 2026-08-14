@@ -30,6 +30,12 @@ const (
 	FieldTicketNumber = "ticket_number"
 	// FieldRequesterID holds the string denoting the requester_id field in the database.
 	FieldRequesterID = "requester_id"
+	// FieldCreatorEmail holds the string denoting the creator_email field in the database.
+	FieldCreatorEmail = "creator_email"
+	// FieldExternalMessageID holds the string denoting the external_message_id field in the database.
+	FieldExternalMessageID = "external_message_id"
+	// FieldConversationID holds the string denoting the conversation_id field in the database.
+	FieldConversationID = "conversation_id"
 	// FieldAssigneeID holds the string denoting the assignee_id field in the database.
 	FieldAssigneeID = "assignee_id"
 	// FieldTenantID holds the string denoting the tenant_id field in the database.
@@ -82,6 +88,8 @@ const (
 	FieldMspTicketID = "msp_ticket_id"
 	// FieldDeletedAt holds the string denoting the deleted_at field in the database.
 	FieldDeletedAt = "deleted_at"
+	// FieldCustomFieldValues holds the string denoting the custom_field_values field in the database.
+	FieldCustomFieldValues = "custom_field_values"
 	// EdgeComments holds the string denoting the comments edge name in mutations.
 	EdgeComments = "comments"
 	// EdgeAttachments holds the string denoting the attachments edge name in mutations.
@@ -234,6 +242,9 @@ var Columns = []string{
 	FieldPriority,
 	FieldTicketNumber,
 	FieldRequesterID,
+	FieldCreatorEmail,
+	FieldExternalMessageID,
+	FieldConversationID,
 	FieldAssigneeID,
 	FieldTenantID,
 	FieldTemplateID,
@@ -260,6 +271,7 @@ var Columns = []string{
 	FieldManagedByUserID,
 	FieldMspTicketID,
 	FieldDeletedAt,
+	FieldCustomFieldValues,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "tickets"
@@ -269,7 +281,6 @@ var ForeignKeys = []string{
 	"department_tickets",
 	"problem_tickets",
 	"sla_definition_tickets",
-	"sla_policy_tickets",
 	"ticket_tag_tickets",
 	"ticket_template_tickets",
 }
@@ -377,6 +388,21 @@ func ByTicketNumber(opts ...sql.OrderTermOption) OrderOption {
 // ByRequesterID orders the results by the requester_id field.
 func ByRequesterID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRequesterID, opts...).ToFunc()
+}
+
+// ByCreatorEmail orders the results by the creator_email field.
+func ByCreatorEmail(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCreatorEmail, opts...).ToFunc()
+}
+
+// ByExternalMessageID orders the results by the external_message_id field.
+func ByExternalMessageID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldExternalMessageID, opts...).ToFunc()
+}
+
+// ByConversationID orders the results by the conversation_id field.
+func ByConversationID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldConversationID, opts...).ToFunc()
 }
 
 // ByAssigneeID orders the results by the assignee_id field.

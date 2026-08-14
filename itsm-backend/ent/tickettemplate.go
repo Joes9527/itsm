@@ -28,6 +28,8 @@ type TicketTemplate struct {
 	Priority string `json:"priority,omitempty"`
 	// 工作流步骤定义
 	WorkflowSteps []uint8 `json:"workflow_steps,omitempty"`
+	// 关联的工单分类ID列表，用于精确匹配模板与服务目录项
+	CategoryIds []int `json:"category_ids,omitempty"`
 	// 是否启用
 	IsActive bool `json:"is_active,omitempty"`
 	// 租户ID
@@ -65,7 +67,7 @@ func (*TicketTemplate) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case tickettemplate.FieldWorkflowSteps:
+		case tickettemplate.FieldWorkflowSteps, tickettemplate.FieldCategoryIds:
 			values[i] = new([]byte)
 		case tickettemplate.FieldIsActive:
 			values[i] = new(sql.NullBool)
@@ -126,6 +128,14 @@ func (_m *TicketTemplate) assignValues(columns []string, values []any) error {
 			} else if value != nil && len(*value) > 0 {
 				if err := json.Unmarshal(*value, &_m.WorkflowSteps); err != nil {
 					return fmt.Errorf("unmarshal field workflow_steps: %w", err)
+				}
+			}
+		case tickettemplate.FieldCategoryIds:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field category_ids", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.CategoryIds); err != nil {
+					return fmt.Errorf("unmarshal field category_ids: %w", err)
 				}
 			}
 		case tickettemplate.FieldIsActive:
@@ -207,6 +217,9 @@ func (_m *TicketTemplate) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("workflow_steps=")
 	builder.WriteString(fmt.Sprintf("%v", _m.WorkflowSteps))
+	builder.WriteString(", ")
+	builder.WriteString("category_ids=")
+	builder.WriteString(fmt.Sprintf("%v", _m.CategoryIds))
 	builder.WriteString(", ")
 	builder.WriteString("is_active=")
 	builder.WriteString(fmt.Sprintf("%v", _m.IsActive))

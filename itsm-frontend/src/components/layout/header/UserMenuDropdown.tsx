@@ -32,7 +32,7 @@ export const UserMenuDropdown: React.FC<UserMenuDropdownProps> = ({
         style={{
           borderRadius: DESIGN.radius.md,
           height: 36,
-          background: `linear-gradient(135deg, ${DESIGN.colors.accent} 0%, #1d4ed8 100%)`,
+          background: `linear-gradient(135deg, ${DESIGN.colors.accent} 0%, #B84A08 100%)`,
           boxShadow: DESIGN.shadows.glow(DESIGN.colors.accent),
         }}
       >
@@ -45,7 +45,7 @@ export const UserMenuDropdown: React.FC<UserMenuDropdownProps> = ({
   const userInitial = displayName.charAt(0).toUpperCase() || 'U';
   const roleText =
     user?.role === 'admin' ? '管理员' : user?.role === 'super_admin' ? '超级管理员' : '用户';
-  const roleColor = user?.role === 'admin' || user?.role === 'super_admin' ? '#3b82f6' : '#64748b';
+  const roleColor = user?.role === 'admin' || user?.role === 'super_admin' ? '#F06820' : '#64748b';
 
   const handleMenuClick: MenuProps['onClick'] = ({ key }) => {
     if (key === 'logout') {
@@ -125,7 +125,7 @@ export const UserMenuDropdown: React.FC<UserMenuDropdownProps> = ({
         <Avatar
           size={32}
           style={{
-            background: `linear-gradient(135deg, ${DESIGN.colors.accent} 0%, #1d4ed8 100%)`,
+            background: `linear-gradient(135deg, ${DESIGN.colors.accent} 0%, #B84A08 100%)`,
             fontSize: 14,
             fontWeight: 600,
           }}

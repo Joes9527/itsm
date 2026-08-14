@@ -49,7 +49,7 @@ interface QuickActionItem {
 const DESIGN = {
   colors: {
     primary: '#0f172a',
-    accent: '#3b82f6',
+    accent: '#F06820',
     success: '#10b981',
     warning: '#f59e0b',
     surface: '#ffffff',
@@ -80,9 +80,9 @@ export const QuickActions: React.FC = () => {
       title: '用户与权限',
       subtitle: '管理用户账户、角色和权限',
       icon: Users,
-      accent: '#3b82f6',
+      accent: '#F06820',
       items: [
-        { title: '用户管理', desc: '用户账户与组织', href: '/admin/users', count: 1234, color: '#3b82f6', icon: UserCheck },
+        { title: '用户管理', desc: '用户账户与组织', href: '/admin/users', count: 1234, color: '#F06820', icon: UserCheck },
         { title: '角色管理', desc: '角色与权限配置', href: '/admin/roles', count: 15, color: '#6366f1', icon: UserCog },
         { title: '用户组', desc: '组织架构管理', href: '/admin/groups', count: 28, color: '#06b6d4', icon: UserPlus },
         { title: '权限矩阵', desc: '细粒度权限控制', href: '/admin/permissions', count: 156, color: '#8b5cf6', icon: Lock },

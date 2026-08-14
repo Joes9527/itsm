@@ -82,7 +82,7 @@ func (s *UserService) CreateUser(ctx context.Context, req *dto.CreateUserRequest
 		if role == "user" {
 			role = "end_user"
 		}
-		uc = uc.SetRole(user.Role(role))
+		uc = uc.SetRole(role)
 
 	}
 	// 如果请求中提供了MSP角色，则设置MSP角色
@@ -268,7 +268,7 @@ func (s *UserService) UpdateUser(ctx context.Context, id int, req *dto.UpdateUse
 		if role == "user" {
 			role = "end_user"
 		}
-		update = update.SetRole(user.Role(role))
+		update = update.SetRole(role)
 
 	}
 

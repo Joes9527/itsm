@@ -216,6 +216,100 @@ func (_u *TicketCategoryUpdate) ClearWorkflowID() *TicketCategoryUpdate {
 	return _u
 }
 
+// SetItsmType sets the "itsm_type" field.
+func (_u *TicketCategoryUpdate) SetItsmType(v string) *TicketCategoryUpdate {
+	_u.mutation.SetItsmType(v)
+	return _u
+}
+
+// SetNillableItsmType sets the "itsm_type" field if the given value is not nil.
+func (_u *TicketCategoryUpdate) SetNillableItsmType(v *string) *TicketCategoryUpdate {
+	if v != nil {
+		_u.SetItsmType(*v)
+	}
+	return _u
+}
+
+// ClearItsmType clears the value of the "itsm_type" field.
+func (_u *TicketCategoryUpdate) ClearItsmType() *TicketCategoryUpdate {
+	_u.mutation.ClearItsmType()
+	return _u
+}
+
+// SetDefaultPriority sets the "default_priority" field.
+func (_u *TicketCategoryUpdate) SetDefaultPriority(v string) *TicketCategoryUpdate {
+	_u.mutation.SetDefaultPriority(v)
+	return _u
+}
+
+// SetNillableDefaultPriority sets the "default_priority" field if the given value is not nil.
+func (_u *TicketCategoryUpdate) SetNillableDefaultPriority(v *string) *TicketCategoryUpdate {
+	if v != nil {
+		_u.SetDefaultPriority(*v)
+	}
+	return _u
+}
+
+// ClearDefaultPriority clears the value of the "default_priority" field.
+func (_u *TicketCategoryUpdate) ClearDefaultPriority() *TicketCategoryUpdate {
+	_u.mutation.ClearDefaultPriority()
+	return _u
+}
+
+// SetSLATier sets the "sla_tier" field.
+func (_u *TicketCategoryUpdate) SetSLATier(v string) *TicketCategoryUpdate {
+	_u.mutation.SetSLATier(v)
+	return _u
+}
+
+// SetNillableSLATier sets the "sla_tier" field if the given value is not nil.
+func (_u *TicketCategoryUpdate) SetNillableSLATier(v *string) *TicketCategoryUpdate {
+	if v != nil {
+		_u.SetSLATier(*v)
+	}
+	return _u
+}
+
+// ClearSLATier clears the value of the "sla_tier" field.
+func (_u *TicketCategoryUpdate) ClearSLATier() *TicketCategoryUpdate {
+	_u.mutation.ClearSLATier()
+	return _u
+}
+
+// SetDefaultResolver sets the "default_resolver" field.
+func (_u *TicketCategoryUpdate) SetDefaultResolver(v string) *TicketCategoryUpdate {
+	_u.mutation.SetDefaultResolver(v)
+	return _u
+}
+
+// SetNillableDefaultResolver sets the "default_resolver" field if the given value is not nil.
+func (_u *TicketCategoryUpdate) SetNillableDefaultResolver(v *string) *TicketCategoryUpdate {
+	if v != nil {
+		_u.SetDefaultResolver(*v)
+	}
+	return _u
+}
+
+// ClearDefaultResolver clears the value of the "default_resolver" field.
+func (_u *TicketCategoryUpdate) ClearDefaultResolver() *TicketCategoryUpdate {
+	_u.mutation.ClearDefaultResolver()
+	return _u
+}
+
+// SetIsUserFacing sets the "is_user_facing" field.
+func (_u *TicketCategoryUpdate) SetIsUserFacing(v bool) *TicketCategoryUpdate {
+	_u.mutation.SetIsUserFacing(v)
+	return _u
+}
+
+// SetNillableIsUserFacing sets the "is_user_facing" field if the given value is not nil.
+func (_u *TicketCategoryUpdate) SetNillableIsUserFacing(v *bool) *TicketCategoryUpdate {
+	if v != nil {
+		_u.SetIsUserFacing(*v)
+	}
+	return _u
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_u *TicketCategoryUpdate) SetCreatedAt(v time.Time) *TicketCategoryUpdate {
 	_u.mutation.SetCreatedAt(v)
@@ -446,6 +540,33 @@ func (_u *TicketCategoryUpdate) sqlSave(ctx context.Context) (_node int, err err
 	}
 	if value, ok := _u.mutation.AddedTenantID(); ok {
 		_spec.AddField(ticketcategory.FieldTenantID, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.ItsmType(); ok {
+		_spec.SetField(ticketcategory.FieldItsmType, field.TypeString, value)
+	}
+	if _u.mutation.ItsmTypeCleared() {
+		_spec.ClearField(ticketcategory.FieldItsmType, field.TypeString)
+	}
+	if value, ok := _u.mutation.DefaultPriority(); ok {
+		_spec.SetField(ticketcategory.FieldDefaultPriority, field.TypeString, value)
+	}
+	if _u.mutation.DefaultPriorityCleared() {
+		_spec.ClearField(ticketcategory.FieldDefaultPriority, field.TypeString)
+	}
+	if value, ok := _u.mutation.SLATier(); ok {
+		_spec.SetField(ticketcategory.FieldSLATier, field.TypeString, value)
+	}
+	if _u.mutation.SLATierCleared() {
+		_spec.ClearField(ticketcategory.FieldSLATier, field.TypeString)
+	}
+	if value, ok := _u.mutation.DefaultResolver(); ok {
+		_spec.SetField(ticketcategory.FieldDefaultResolver, field.TypeString, value)
+	}
+	if _u.mutation.DefaultResolverCleared() {
+		_spec.ClearField(ticketcategory.FieldDefaultResolver, field.TypeString)
+	}
+	if value, ok := _u.mutation.IsUserFacing(); ok {
+		_spec.SetField(ticketcategory.FieldIsUserFacing, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(ticketcategory.FieldCreatedAt, field.TypeTime, value)
@@ -835,6 +956,100 @@ func (_u *TicketCategoryUpdateOne) ClearWorkflowID() *TicketCategoryUpdateOne {
 	return _u
 }
 
+// SetItsmType sets the "itsm_type" field.
+func (_u *TicketCategoryUpdateOne) SetItsmType(v string) *TicketCategoryUpdateOne {
+	_u.mutation.SetItsmType(v)
+	return _u
+}
+
+// SetNillableItsmType sets the "itsm_type" field if the given value is not nil.
+func (_u *TicketCategoryUpdateOne) SetNillableItsmType(v *string) *TicketCategoryUpdateOne {
+	if v != nil {
+		_u.SetItsmType(*v)
+	}
+	return _u
+}
+
+// ClearItsmType clears the value of the "itsm_type" field.
+func (_u *TicketCategoryUpdateOne) ClearItsmType() *TicketCategoryUpdateOne {
+	_u.mutation.ClearItsmType()
+	return _u
+}
+
+// SetDefaultPriority sets the "default_priority" field.
+func (_u *TicketCategoryUpdateOne) SetDefaultPriority(v string) *TicketCategoryUpdateOne {
+	_u.mutation.SetDefaultPriority(v)
+	return _u
+}
+
+// SetNillableDefaultPriority sets the "default_priority" field if the given value is not nil.
+func (_u *TicketCategoryUpdateOne) SetNillableDefaultPriority(v *string) *TicketCategoryUpdateOne {
+	if v != nil {
+		_u.SetDefaultPriority(*v)
+	}
+	return _u
+}
+
+// ClearDefaultPriority clears the value of the "default_priority" field.
+func (_u *TicketCategoryUpdateOne) ClearDefaultPriority() *TicketCategoryUpdateOne {
+	_u.mutation.ClearDefaultPriority()
+	return _u
+}
+
+// SetSLATier sets the "sla_tier" field.
+func (_u *TicketCategoryUpdateOne) SetSLATier(v string) *TicketCategoryUpdateOne {
+	_u.mutation.SetSLATier(v)
+	return _u
+}
+
+// SetNillableSLATier sets the "sla_tier" field if the given value is not nil.
+func (_u *TicketCategoryUpdateOne) SetNillableSLATier(v *string) *TicketCategoryUpdateOne {
+	if v != nil {
+		_u.SetSLATier(*v)
+	}
+	return _u
+}
+
+// ClearSLATier clears the value of the "sla_tier" field.
+func (_u *TicketCategoryUpdateOne) ClearSLATier() *TicketCategoryUpdateOne {
+	_u.mutation.ClearSLATier()
+	return _u
+}
+
+// SetDefaultResolver sets the "default_resolver" field.
+func (_u *TicketCategoryUpdateOne) SetDefaultResolver(v string) *TicketCategoryUpdateOne {
+	_u.mutation.SetDefaultResolver(v)
+	return _u
+}
+
+// SetNillableDefaultResolver sets the "default_resolver" field if the given value is not nil.
+func (_u *TicketCategoryUpdateOne) SetNillableDefaultResolver(v *string) *TicketCategoryUpdateOne {
+	if v != nil {
+		_u.SetDefaultResolver(*v)
+	}
+	return _u
+}
+
+// ClearDefaultResolver clears the value of the "default_resolver" field.
+func (_u *TicketCategoryUpdateOne) ClearDefaultResolver() *TicketCategoryUpdateOne {
+	_u.mutation.ClearDefaultResolver()
+	return _u
+}
+
+// SetIsUserFacing sets the "is_user_facing" field.
+func (_u *TicketCategoryUpdateOne) SetIsUserFacing(v bool) *TicketCategoryUpdateOne {
+	_u.mutation.SetIsUserFacing(v)
+	return _u
+}
+
+// SetNillableIsUserFacing sets the "is_user_facing" field if the given value is not nil.
+func (_u *TicketCategoryUpdateOne) SetNillableIsUserFacing(v *bool) *TicketCategoryUpdateOne {
+	if v != nil {
+		_u.SetIsUserFacing(*v)
+	}
+	return _u
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_u *TicketCategoryUpdateOne) SetCreatedAt(v time.Time) *TicketCategoryUpdateOne {
 	_u.mutation.SetCreatedAt(v)
@@ -1095,6 +1310,33 @@ func (_u *TicketCategoryUpdateOne) sqlSave(ctx context.Context) (_node *TicketCa
 	}
 	if value, ok := _u.mutation.AddedTenantID(); ok {
 		_spec.AddField(ticketcategory.FieldTenantID, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.ItsmType(); ok {
+		_spec.SetField(ticketcategory.FieldItsmType, field.TypeString, value)
+	}
+	if _u.mutation.ItsmTypeCleared() {
+		_spec.ClearField(ticketcategory.FieldItsmType, field.TypeString)
+	}
+	if value, ok := _u.mutation.DefaultPriority(); ok {
+		_spec.SetField(ticketcategory.FieldDefaultPriority, field.TypeString, value)
+	}
+	if _u.mutation.DefaultPriorityCleared() {
+		_spec.ClearField(ticketcategory.FieldDefaultPriority, field.TypeString)
+	}
+	if value, ok := _u.mutation.SLATier(); ok {
+		_spec.SetField(ticketcategory.FieldSLATier, field.TypeString, value)
+	}
+	if _u.mutation.SLATierCleared() {
+		_spec.ClearField(ticketcategory.FieldSLATier, field.TypeString)
+	}
+	if value, ok := _u.mutation.DefaultResolver(); ok {
+		_spec.SetField(ticketcategory.FieldDefaultResolver, field.TypeString, value)
+	}
+	if _u.mutation.DefaultResolverCleared() {
+		_spec.ClearField(ticketcategory.FieldDefaultResolver, field.TypeString)
+	}
+	if value, ok := _u.mutation.IsUserFacing(); ok {
+		_spec.SetField(ticketcategory.FieldIsUserFacing, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(ticketcategory.FieldCreatedAt, field.TypeTime, value)

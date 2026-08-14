@@ -227,7 +227,7 @@ const WorkflowManagementPage = () => {
         description: '查看流程健康度、SLA 风险和运行趋势',
         icon: <BarChart3 className="h-5 w-5" />,
         path: '/workflow/dashboard',
-        accent: '#1677ff',
+        accent: '#F06820',
       },
       {
         key: 'instances',

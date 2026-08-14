@@ -6,19 +6,21 @@
 // 基础颜色定义
 export const colors = {
   // 主色调
+  // KLN Brand Orange
   primary: {
-    50: '#eff6ff',
-    100: '#dbeafe',
-    200: '#bfdbfe',
-    300: '#93c5fd',
-    400: '#60a5fa',
-    500: '#3b82f6', // 主色
-    600: '#2563eb',
-    700: '#1d4ed8',
-    800: '#1e40af',
-    900: '#1e3a8a',
-    950: '#172554',
+    50: '#fff5f0',
+    100: '#ffe8d9',
+    200: '#ffd1b3',
+    300: '#ffb380',
+    400: '#F27C38',
+    500: '#F06820', // KLN Orange
+    600: '#D85E10',
+    700: '#B84A08',
+    800: '#933A06',
+    900: '#6E2B04',
+    950: '#4A1D02',
   },
+  charcoal: '#2A2A2A',
 
   // 中性色
   neutral: {
@@ -105,7 +107,7 @@ export const colors = {
       primary: '#e2e8f0',
       secondary: '#cbd5e1',
       tertiary: '#94a3b8',
-      focus: '#3b82f6',
+      focus: '#F06820',
     },
     text: {
       primary: '#0f172a',
@@ -120,19 +122,21 @@ export const colors = {
 // 暗色主题颜色
 export const darkColors = {
   // 主色调（暗色主题下调整）
+  // KLN Orange — dark theme (inverted scale: lightest at 50)
   primary: {
-    50: '#172554',
-    100: '#1e3a8a',
-    200: '#1e40af',
-    300: '#1d4ed8',
-    400: '#2563eb',
-    500: '#3b82f6', // 主色
-    600: '#60a5fa',
-    700: '#93c5fd',
-    800: '#bfdbfe',
-    900: '#dbeafe',
-    950: '#eff6ff',
+    50: '#4A1D02',
+    100: '#6E2B04',
+    200: '#933A06',
+    300: '#B84A08',
+    400: '#D85E10',
+    500: '#F06820', // KLN Orange
+    600: '#F27C38',
+    700: '#ffb380',
+    800: '#ffd1b3',
+    900: '#ffe8d9',
+    950: '#fff5f0',
   },
+  charcoal: '#2A2A2A',
 
   // 中性色（暗色主题）
   neutral: {
@@ -167,7 +171,7 @@ export const darkColors = {
       primary: '#334155',
       secondary: '#475569',
       tertiary: '#64748b',
-      focus: '#3b82f6',
+      focus: '#F06820',
     },
     text: {
       primary: '#f8fafc',

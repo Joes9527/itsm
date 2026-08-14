@@ -2,6 +2,7 @@ package knowledge
 
 import (
 	"context"
+	"time"
 )
 
 // Repository interface for Knowledge domain
@@ -13,6 +14,26 @@ type Repository interface {
 	Delete(ctx context.Context, id int, tenantID int) error
 	GetCategories(ctx context.Context, tenantID int) ([]string, error)
 	GetStats(ctx context.Context, tenantID int) (*Stats, error)
+	// 版本控制
+	NextVersion(ctx context.Context, articleID int, tenantID int) (int, error)
+	SnapshotVersion(ctx context.Context, v *ArticleVersion) (*ArticleVersion, error)
+	ListVersions(ctx context.Context, articleID int, tenantID int) ([]*ArticleVersion, error)
+	GetVersion(ctx context.Context, articleID int, version int, tenantID int) (*ArticleVersion, error)
+}
+
+// ArticleVersion represents a knowledge article version snapshot
+type ArticleVersion struct {
+	ID            int
+	ArticleID     int
+	Version       int
+	Title         string
+	Content       string
+	Category      string
+	Tags          string
+	AuthorID      int
+	ChangeSummary string
+	TenantID      int
+	CreatedAt     time.Time
 }
 
 // Stats represents knowledge base statistics

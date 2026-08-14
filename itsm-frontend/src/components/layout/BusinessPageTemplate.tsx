@@ -148,7 +148,7 @@ const StatsCard: React.FC<PageStats & { loading?: boolean }> = ({
   label,
   value,
   suffix,
-  color = '#3b82f6',
+  color = '#F06820',
   icon,
   loading,
 }) => (

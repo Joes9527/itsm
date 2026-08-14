@@ -14,8 +14,10 @@ import (
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/fielddefinition"
 	"itsm-backend/ent/group"
 	"itsm-backend/ent/processinstance"
+	"itsm-backend/ent/slaviolation"
 	entTicket "itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketcategory"
 	entTicketComment "itsm-backend/ent/ticketcomment"
@@ -146,15 +148,19 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 
 	// 转换 DTO 到领域参数
 	params := &ticket.CreateParams{
-		Title:          req.Title,
-		Description:    req.Description,
-		Type:           ticketType,
-		Priority:       ticket.Priority(req.Priority),
-		RequesterID:    req.RequesterID,
-		TemplateID:     req.TemplateID,
-		ParentTicketID: req.ParentTicketID,
-		TagIDs:         uniqueIDs(req.TagIDs),
-		Source:         req.Source,
+		Title:             req.Title,
+		Description:       req.Description,
+		Type:              ticketType,
+		Priority:          ticket.Priority(req.Priority),
+		RequesterID:       req.RequesterID,
+		TemplateID:        req.TemplateID,
+		ParentTicketID:    req.ParentTicketID,
+		TagIDs:            uniqueIDs(req.TagIDs),
+		CustomFieldValues: extractCustomFieldValues(req.FormFields),
+		Source:            req.Source,
+		CreatorEmail:      req.CreatorEmail,
+		ExternalMessageID: req.ExternalMessageID,
+		ConversationID:    req.ConversationID,
 	}
 
 	if assigneeID != 0 {
@@ -180,6 +186,15 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 		}
 	}
 
+	// 验证必填自定义字段（模板字段定义中标记为 required 的字段必须在提交中存在且非空）
+	if req.TemplateID != nil && len(req.FormFields) > 0 {
+		if missing, err := s.validateRequiredFields(ctx, tenantID, *req.TemplateID, req.FormFields); err != nil {
+			s.logger.Errorw("Required field validation error", "error", err, "template_id", *req.TemplateID)
+		} else if len(missing) > 0 {
+			return nil, fmt.Errorf("缺少必填字段: %s", strings.Join(missing, ", "))
+		}
+	}
+
 	// 将自定义字段值写入共享的 field_values 表（取代旧的 Ticket.custom_field_values JSON 列）。
 	// 写入失败不应该阻塞工单创建本身，跟 SLA 计算失败的处理方式一致。
 	if req.TemplateID != nil {
@@ -196,7 +211,11 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 
 	// 计算 SLA（如果配置了 SLA 服务）
 	if s.slaSvc != nil {
-		slaResult, err := s.slaSvc.CalculateSLADeadlineFromRequest(ctx, tenantID, string(tkt.Type), string(tkt.Priority))
+		slaCategoryID := 0
+		if req.CategoryID != nil {
+			slaCategoryID = *req.CategoryID
+		}
+		slaResult, err := s.slaSvc.CalculateSLADeadlineFromRequest(ctx, tenantID, string(tkt.Type), string(tkt.Priority), slaCategoryID)
 		if err != nil {
 			s.logger.Warnw("Failed to calculate SLA", "error", err)
 		} else {
@@ -242,7 +261,7 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 		go func() {
 			ctx2, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			if err := s.triggerWorkflowForTicket(ctx2, tkt, tenantID, workflowDefinitionKey); err != nil {
+			if err := s.triggerWorkflowForTicket(ctx2, tkt, tenantID, workflowDefinitionKey, req.ApprovalChain); err != nil {
 				s.logger.Warnw("Workflow trigger failed", "error", err, "ticket_id", tkt.ID)
 			}
 		}()
@@ -420,6 +439,57 @@ func parseFieldValuesArray(formFields map[string]interface{}) map[string]interfa
 	return result
 }
 
+// validateRequiredFields 校验模板的必填字段是否在提交数据中存在且非空。
+// 返回缺失的字段 label 列表和 error。
+func (s *TicketService) validateRequiredFields(ctx context.Context, tenantID int, templateID int, formFields map[string]interface{}) ([]string, error) {
+	defs, err := s.client.FieldDefinition.Query().
+		Where(
+			fielddefinition.EntityTypeEQ("ticket_template"),
+			fielddefinition.EntityIDEQ(templateID),
+			fielddefinition.Required(true),
+			fielddefinition.IsActive(true),
+			fielddefinition.TenantIDEQ(tenantID),
+		).
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("查询必填字段定义失败: %w", err)
+	}
+	if len(defs) == 0 {
+		return nil, nil
+	}
+
+	// 提取已提交的字段名和值
+	submittedValues := extractCustomFieldValues(formFields)
+
+	var missing []string
+	for _, d := range defs {
+		val, ok := submittedValues[d.Name]
+		if !ok || isEmptyFieldValue(val) {
+			label := d.Label
+			if label == "" {
+				label = d.Name
+			}
+			missing = append(missing, label)
+		}
+	}
+	return missing, nil
+}
+
+// isEmptyFieldValue 判断字段值是否为空
+func isEmptyFieldValue(val interface{}) bool {
+	if val == nil {
+		return true
+	}
+	switch v := val.(type) {
+	case string:
+		return strings.TrimSpace(v) == ""
+	case []interface{}:
+		return len(v) == 0
+	default:
+		return false
+	}
+}
+
 // extractCustomFieldValues 从提交的 formFields 中取出用户实际填写的自定义字段值（"values" 键），
 // 忽略 presetTypeId 等仅用于类型推断/路由的元数据键。
 func extractCustomFieldValues(formFields map[string]interface{}) map[string]interface{} {
@@ -439,6 +509,42 @@ func extractCustomFieldValues(formFields map[string]interface{}) map[string]inte
 // extractAdHocFieldValues 解析 formFields["fieldDefs"]（客户端提交的 {name,label} 列表，
 // 用于没有 field_definitions 行的静态预设）配合 formFields["values"] 里的实际值，
 // 构造成 AdHocFieldValue 列表。fieldDefs 缺失或为空返回 nil。
+func isFinalStatus(s ticket.Status) bool {
+	return s == ticket.StatusResolved || s == ticket.StatusClosed || s == ticket.StatusCancelled
+}
+
+func getCategoryIDValue(categoryID *int) int {
+	if categoryID == nil {
+		return 0
+	}
+	return *categoryID
+}
+
+// autoCloseSLAViolations 关闭工单的未解决 SLA 违规记录，返回关闭数量。
+func (s *TicketService) autoCloseSLAViolations(ctx context.Context, ticketID int) (int, error) {
+	now := time.Now()
+	violations, err := s.client.SLAViolation.Query().
+		Where(slaviolation.TicketIDEQ(ticketID), slaviolation.ResolvedAtIsNil()).
+		All(ctx)
+	if err != nil {
+		return 0, err
+	}
+	closed := 0
+	for _, v := range violations {
+		_, err := v.Update().
+			SetResolvedAt(now).
+			SetIsResolved(true).
+			SetResolutionNotes("工单已关闭，系统自动解决违规").
+			Save(ctx)
+		if err != nil {
+			s.logger.Warnw("Failed to auto-close SLA violation", "error", err, "violation_id", v.ID)
+			continue
+		}
+		closed++
+	}
+	return closed, nil
+}
+
 func extractAdHocFieldValues(formFields map[string]interface{}) []AdHocFieldValue {
 	if formFields == nil {
 		return nil
@@ -519,7 +625,7 @@ func isTicketDataScopeAllRole(role string) bool {
 
 // triggerWorkflowForTicket 异步触发工单关联的 BPMN 流程
 // 逻辑参考 V1 (ticket_service.go:221-279)，适配 V2 的 DDD 领域模型
-func (s *TicketService) triggerWorkflowForTicket(ctx context.Context, tkt *ticket.Ticket, tenantID int, workflowDefinitionKey string) error {
+func (s *TicketService) triggerWorkflowForTicket(ctx context.Context, tkt *ticket.Ticket, tenantID int, workflowDefinitionKey string, approvalChain interface{}) error {
 	// 构造流程变量
 	variables := map[string]interface{}{
 		"ticket_id":     tkt.ID,
@@ -532,6 +638,14 @@ func (s *TicketService) triggerWorkflowForTicket(ctx context.Context, tkt *ticke
 	}
 	if tkt.AssigneeID != nil {
 		variables["assignee_id"] = *tkt.AssigneeID
+	}
+
+	// 审批链 → BPMN 变量（由 SR 创建流程传入）
+	if approvalChain != nil {
+		variables["approval_required"] = true
+		variables["approval_chain"] = approvalChain
+	} else {
+		variables["approval_required"] = false
 	}
 
 	// 解析 process key：1.请求指定 2.Resolver 3.兜底
@@ -856,6 +970,29 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 	}
 
 	s.logger.Infow("Ticket updated", "ticket_id", id)
+
+	// 工单进入终态时自动关闭 SLA 违规
+	if req.Status != "" {
+		if isFinalStatus(ticket.Status(req.Status)) && s.client != nil {
+			if count, err := s.autoCloseSLAViolations(ctx, id); err != nil {
+				s.logger.Warnw("Failed to auto-close SLA violations", "error", err, "ticket_id", id)
+			} else if count > 0 {
+				s.logger.Infow("Auto-closed SLA violations", "ticket_id", id, "count", count)
+			}
+		}
+	}
+
+	// 优先级或分类变更时重新计算 SLA
+	if (req.Priority != "" || req.CategoryID != nil || strings.TrimSpace(req.Category) != "") && s.slaSvc != nil {
+		slaResult, err := s.slaSvc.CalculateSLADeadlineFromRequest(ctx, tenantID, string(updated.Type), string(updated.Priority), getCategoryIDValue(categoryID))
+		if err != nil {
+			s.logger.Warnw("Failed to recalculate SLA after update", "error", err, "ticket_id", id)
+		} else {
+			if err := s.repo.UpdateSLADeadlines(ctx, id, slaResult.ResponseDeadline, slaResult.ResolutionDeadline, &slaResult.SLADefinitionID, tenantID); err != nil {
+				s.logger.Warnw("Failed to persist SLA recalculation", "error", err, "ticket_id", id)
+			}
+		}
+	}
 
 	// 异步同步工单到飞书
 	if s.connectorManager != nil {
@@ -1347,6 +1484,7 @@ func (s *TicketService) toEntTicket(t *ticket.Ticket) *ent.Ticket {
 		entTicket.ResolvedAt = *t.ResolvedAt
 	}
 	entTicket.ClosedAt = t.ClosedAt
+	entTicket.CustomFieldValues = t.CustomFieldValues
 	return entTicket
 }
 
@@ -1426,21 +1564,24 @@ func (s *TicketService) UpdateTicketStatus(ctx context.Context, ticketID int, st
 	return updated, nil
 }
 
-// TicketSLAInfo 工单 SLA 信息（V2 内联定义，避免与 V1 重复）
+// TicketSLAInfo 工单 SLA 信息
 type TicketSLAInfo struct {
-	TicketID             int        `json:"ticketId"`
-	TicketNumber         string     `json:"ticketNumber"`
-	Priority             string     `json:"priority"`
-	SLADefinitionID      int        `json:"slaDefinitionId"`
-	SLADefinitionName    string     `json:"slaDefinitionName"`
-	ResponseDeadline     time.Time  `json:"responseDeadline"`
-	ResolutionDeadline   time.Time  `json:"resolutionDeadline"`
-	ResponseTimeLeft     int        `json:"responseTimeLeftMinutes"`
-	IsResponseBreached   bool       `json:"isResponseBreached"`
-	ResolutionTimeLeft   int        `json:"resolutionTimeLeftMinutes"`
-	IsResolutionBreached bool       `json:"isResolutionBreached"`
-	FirstResponseAt      *time.Time `json:"firstResponseAt,omitempty"`
-	ResolvedAt           *time.Time `json:"resolvedAt,omitempty"`
+	TicketID              int        `json:"ticketId"`
+	TicketNumber          string     `json:"ticketNumber"`
+	Priority              string     `json:"priority"`
+	SLADefinitionID       int        `json:"slaDefinitionId"`
+	SlaName               string     `json:"slaName"`
+	ServiceType           string     `json:"serviceType"`
+	ResponseTime          int        `json:"responseTime"`
+	ResolutionTime        int        `json:"resolutionTime"`
+	ResponseDeadline       *time.Time `json:"responseDeadline"`
+	ResolutionDeadline     *time.Time `json:"resolutionDeadline"`
+	IsBreached             bool       `json:"isBreached"`
+	SlaStatus              string     `json:"slaStatus"` // on_track | at_risk | breached
+	ResponseTimeRemaining  *int       `json:"responseTimeRemaining"`
+	ResolutionTimeRemaining *int      `json:"resolutionTimeRemaining"`
+	FirstResponseAt       *time.Time `json:"firstResponseAt,omitempty"`
+	ResolvedAt            *time.Time `json:"resolvedAt,omitempty"`
 }
 
 // GetTicketSLAInfo 获取工单 SLA 信息
@@ -1451,20 +1592,20 @@ func (s *TicketService) GetTicketSLAInfo(ctx context.Context, ticketID int, tena
 	}
 
 	info := &TicketSLAInfo{
-		TicketID:         tkt.ID,
-		TicketNumber:     tkt.TicketNumber,
-		Priority:         string(tkt.Priority),
-		SLADefinitionID:  0,
-		ResponseDeadline: time.Time{},
+		TicketID:        tkt.ID,
+		TicketNumber:    tkt.TicketNumber,
+		Priority:        string(tkt.Priority),
+		SLADefinitionID: 0,
+		SlaName:         "默认SLA",
 	}
 	if tkt.SLADefinitionID != nil {
 		info.SLADefinitionID = *tkt.SLADefinitionID
 	}
 	if tkt.SLAResponseDeadline != nil {
-		info.ResponseDeadline = *tkt.SLAResponseDeadline
+		info.ResponseDeadline = tkt.SLAResponseDeadline
 	}
 	if tkt.SLAResolutionDeadline != nil {
-		info.ResolutionDeadline = *tkt.SLAResolutionDeadline
+		info.ResolutionDeadline = tkt.SLAResolutionDeadline
 	}
 	if tkt.FirstResponseAt != nil {
 		info.FirstResponseAt = tkt.FirstResponseAt
@@ -1473,33 +1614,44 @@ func (s *TicketService) GetTicketSLAInfo(ctx context.Context, ticketID int, tena
 		info.ResolvedAt = tkt.ResolvedAt
 	}
 
-	// 获取 SLA 定义名称（通过 ent 客户端查询）
+	// 获取 SLA 定义详情
 	if info.SLADefinitionID > 0 && s.client != nil {
 		sla, err := s.client.SLADefinition.Get(ctx, info.SLADefinitionID)
 		if err == nil && sla != nil {
-			info.SLADefinitionName = sla.Name
+			info.SlaName = sla.Name
+			info.ServiceType = sla.ServiceType
+			info.ResponseTime = sla.ResponseTime
+			info.ResolutionTime = sla.ResolutionTime
 		}
 	}
 
+	// 计算剩余时间和违规状态
 	now := time.Now()
-	if info.FirstResponseAt != nil {
-		info.ResponseTimeLeft = 0
-		info.IsResponseBreached = false
-	} else if now.After(info.ResponseDeadline) && !info.ResponseDeadline.IsZero() {
-		info.ResponseTimeLeft = 0
-		info.IsResponseBreached = true
-	} else if !info.ResponseDeadline.IsZero() {
-		info.ResponseTimeLeft = int(info.ResponseDeadline.Sub(now).Minutes())
+	info.IsBreached = false
+	info.SlaStatus = "on_track"
+
+	if info.ResponseDeadline != nil && !info.ResponseDeadline.IsZero() {
+		remaining := int(info.ResponseDeadline.Sub(now).Minutes())
+		info.ResponseTimeRemaining = &remaining
+		if remaining < 0 {
+			info.IsBreached = true
+		} else if total := info.ResponseTime; total > 0 && remaining < total/5 {
+			info.SlaStatus = "at_risk"
+		}
 	}
 
-	if info.ResolvedAt != nil {
-		info.ResolutionTimeLeft = 0
-		info.IsResolutionBreached = false
-	} else if now.After(info.ResolutionDeadline) && !info.ResolutionDeadline.IsZero() {
-		info.ResolutionTimeLeft = 0
-		info.IsResolutionBreached = true
-	} else if !info.ResolutionDeadline.IsZero() {
-		info.ResolutionTimeLeft = int(info.ResolutionDeadline.Sub(now).Minutes())
+	if info.ResolutionDeadline != nil && !info.ResolutionDeadline.IsZero() {
+		remaining := int(info.ResolutionDeadline.Sub(now).Minutes())
+		info.ResolutionTimeRemaining = &remaining
+		if remaining < 0 {
+			info.IsBreached = true
+		} else if total := info.ResolutionTime; total > 0 && remaining < total/5 {
+			info.SlaStatus = "at_risk"
+		}
+	}
+
+	if info.IsBreached {
+		info.SlaStatus = "breached"
 	}
 
 	return info, nil
@@ -2232,6 +2384,7 @@ func (s *TicketService) toTicketTemplateDTO(ctx context.Context, template *ent.T
 		Category:      template.Category,
 		Priority:      template.Priority,
 		Fields:        fields,
+		CategoryIDs:   template.CategoryIds,
 		WorkflowSteps: workflowSteps,
 		IsActive:      isActive,
 		CreatedAt:     template.CreatedAt,

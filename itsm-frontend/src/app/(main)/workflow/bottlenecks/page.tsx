@@ -331,7 +331,7 @@ export default function BottlenecksPage() {
                 <Statistic
                   title="总处理时间"
                   value={formatSeconds(totalProcessing)}
-                  valueStyle={{ color: '#1677ff' }}
+                  valueStyle={{ color: '#F06820' }}
                 />
               </Card>
             </Col>

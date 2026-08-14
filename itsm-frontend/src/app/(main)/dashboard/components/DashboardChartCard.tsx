@@ -23,7 +23,7 @@ export const DashboardChartCard: React.FC<DashboardChartCardProps> = ({
   title,
   subtitle,
   icon,
-  iconColor = '#3b82f6',
+  iconColor = '#F06820',
   trend,
   extra,
   children,

@@ -483,7 +483,7 @@ const TicketTemplatesPage = () => {
             <Statistic
               title="Total Templates"
               value={templates.length}
-              prefix={<FileText size={16} style={{ color: '#3b82f6' }} />}
+              prefix={<FileText size={16} style={{ color: '#F06820' }} />}
             />
           </Card>
         </Col>

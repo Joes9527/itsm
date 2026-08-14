@@ -28,8 +28,8 @@ describe('Theme Configuration', () => {
   describe('colors', () => {
     it('should have primary color palette', () => {
       expect(colors.primary).toBeDefined();
-      expect(colors.primary[500]).toBe('#3b82f6');
-      expect(colors.primary[50]).toBe('#eff6ff');
+      expect(colors.primary[500]).toBe('#F06820');
+      expect(colors.primary[50]).toBe('#fff5f0');
     });
 
     it('should have gray palette', () => {
@@ -38,7 +38,7 @@ describe('Theme Configuration', () => {
     });
 
     it('should have semantic status colors', () => {
-      expect(colors.status.new).toBe('#3b82f6');
+      expect(colors.status.new).toBe('#F06820');
       expect(colors.status.resolved).toBe('#22c55e');
       expect(colors.status.cancelled).toBe('#ef4444');
     });

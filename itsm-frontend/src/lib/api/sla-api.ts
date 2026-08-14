@@ -156,8 +156,9 @@ export class SLAApi {
     endDate: string;
   }): Promise<SLAComplianceReport> {
     const report = await httpClient.get<SLAComplianceReport>('/api/v1/sla/compliance-report', {
-      startDate: params.startDate,
-      endDate: params.endDate,
+      // 后端查询参数使用 snake_case
+      start_date: params.startDate,
+      end_date: params.endDate,
     });
 
     return {

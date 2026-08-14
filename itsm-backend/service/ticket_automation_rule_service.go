@@ -477,10 +477,9 @@ func (s *TicketAutomationRuleService) executeActions(
 					userIDs = append(userIDs, ticketEntity.AssigneeID)
 				}
 				if err := s.notificationService.SendNotification(ctx, ticketEntity.ID, &dto.SendTicketNotificationRequest{
-					UserIDs: userIDs,
-					Type:    "automation",
-					Channel: "in_app",
-					Content: content,
+					UserIDs:   userIDs,
+					EventType: "ticket_updated",
+					Content:   content,
 				}, ticketEntity.TenantID); err != nil {
 					s.logger.Warnw("failed to send automation notification", "error", err, "ticket_id", ticketEntity.ID)
 				}

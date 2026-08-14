@@ -10,12 +10,12 @@
   background: #f5f5f5;
 }
 
-/* ========== Header 顶部导航 (与自定义 Header 样式一致) ========== */
+/* ========== Header 顶部导航 ==========
+   实际 Header 背景/高度由 components/layout/header/Header.tsx 的内联样式
+   与 Header.module.css 控制（深色品牌 Header，与主题无关）。这里不再重复
+   声明背景/尺寸，避免用 !important 覆盖掉组件自身的样式（曾导致 Header
+   被强制渲染为白色背景）。 */
 .ant-layout-header {
-  height: 56px !important;
-  line-height: 56px !important;
-  padding: 0 16px !important;
-  background: #fff !important;
   position: sticky;
   top: 0;
   z-index: 10;
@@ -23,25 +23,13 @@
   align-items: center;
 }
 
-/* ========== Sider 侧边导航 (Ant Design 标准: 200px/80px) ========== */
+/* ========== Sider 侧边导航 ==========
+   展开/收起宽度由 components/layout/sidebar/Sidebar.tsx 通过
+   Sider 的 width / collapsedWidth props（对应内联样式）控制，
+   此处不再用 !important 强制 256/80px，否则会覆盖组件设定的
+   收起宽度（0，即完全隐藏），导致折叠功能失效。 */
 .ant-layout-sider {
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1) !important;
-}
-
-/* Sider 展开状态 */
-.ant-layout-sider:not(.ant-layout-sider-collapsed) {
-  flex: 0 0 256px !important;
-  max-width: 256px !important;
-  min-width: 256px !important;
-  width: 256px !important;
-}
-
-/* Sider 收起状态 */
-.ant-layout-sider-collapsed {
-  flex: 0 0 80px !important;           /* 标准收起宽度 */
-  max-width: 80px !important;
-  min-width: 80px !important;
-  width: 80px !important;
 }
 
 /* Sider Logo区域高度 = Header高度 */

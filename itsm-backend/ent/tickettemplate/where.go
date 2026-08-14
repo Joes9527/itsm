@@ -375,6 +375,16 @@ func WorkflowStepsNotNil() predicate.TicketTemplate {
 	return predicate.TicketTemplate(sql.FieldNotNull(FieldWorkflowSteps))
 }
 
+// CategoryIdsIsNil applies the IsNil predicate on the "category_ids" field.
+func CategoryIdsIsNil() predicate.TicketTemplate {
+	return predicate.TicketTemplate(sql.FieldIsNull(FieldCategoryIds))
+}
+
+// CategoryIdsNotNil applies the NotNil predicate on the "category_ids" field.
+func CategoryIdsNotNil() predicate.TicketTemplate {
+	return predicate.TicketTemplate(sql.FieldNotNull(FieldCategoryIds))
+}
+
 // IsActiveEQ applies the EQ predicate on the "is_active" field.
 func IsActiveEQ(v bool) predicate.TicketTemplate {
 	return predicate.TicketTemplate(sql.FieldEQ(FieldIsActive, v))

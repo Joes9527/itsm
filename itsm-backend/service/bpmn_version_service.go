@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"itsm-backend/ent"
@@ -30,7 +31,7 @@ func NewBPMNVersionService(client *ent.Client, logger *zap.SugaredLogger) *BPMNV
 type ProcessVersion struct {
 	ID                   string    `json:"id"`
 	ProcessDefinitionKey string    `json:"processDefinitionKey"`
-	Version              int       `json:"version"`
+	Version              string    `json:"version"`
 	Name                 string    `json:"name"`
 	Description          string    `json:"description"`
 	BPMNXML              string    `json:"bpmnXml"`
@@ -89,18 +90,18 @@ type ChangeDetail struct {
 
 // CreateVersion 创建新版本
 func (s *BPMNVersionService) CreateVersion(ctx context.Context, req *CreateVersionRequest) (*ProcessVersion, error) {
-	// 获取当前最高版本号
+	// 获取当前最高版本号（语义化版本）
 	currentVersion, err := s.getCurrentVersion(ctx, req.ProcessDefinitionKey, req.TenantID)
 	if err != nil {
 		return nil, fmt.Errorf("获取当前版本失败: %w", err)
 	}
 
-	newVersionNumber := currentVersion + 1
+	newVersion := incrementSemver(currentVersion)
 
 	// 先创建部署记录（因为ProcessDefinition需要deployment_id）
 	deployment, err := s.client.ProcessDeployment.Create().
-		SetDeploymentID(fmt.Sprintf("%s-v%d", req.ProcessDefinitionKey, newVersionNumber)).
-		SetDeploymentName(fmt.Sprintf("%s v%d", req.Name, newVersionNumber)).
+		SetDeploymentID(fmt.Sprintf("%s-v%s", req.ProcessDefinitionKey, newVersion)).
+		SetDeploymentName(fmt.Sprintf("%s v%s", req.Name, newVersion)).
 		SetDeploymentTime(time.Now()).
 		SetTenantID(req.TenantID).
 		SetDeployedBy(req.CreatedBy).
@@ -115,7 +116,7 @@ func (s *BPMNVersionService) CreateVersion(ctx context.Context, req *CreateVersi
 		SetName(req.Name).
 		SetDescription(req.Description).
 		SetBpmnXML([]byte(req.BPMNXML)).
-		SetVersion(fmt.Sprintf("%d", newVersionNumber)).
+		SetVersion(newVersion).
 		SetTenantID(req.TenantID).
 		SetIsActive(false).
 		SetDeploymentID(deployment.ID).
@@ -125,7 +126,7 @@ func (s *BPMNVersionService) CreateVersion(ctx context.Context, req *CreateVersi
 	}
 
 	// 记录版本变更日志 - processDef.ID是int类型
-	if err := s.recordVersionChangeLog(ctx, fmt.Sprintf("%d", processDef.ID), req.ChangeLog, req.CreatedBy, req.TenantID); err != nil {
+	if err := s.recordVersionChangeLog(ctx, fmt.Sprintf("%d", processDef.ID), newVersion, req.ChangeLog, req.CreatedBy, req.TenantID); err != nil {
 		// 记录失败不影响主流程，只记录警告
 		s.logger.Warnw("记录版本变更日志失败", "error", err)
 	}
@@ -133,7 +134,7 @@ func (s *BPMNVersionService) CreateVersion(ctx context.Context, req *CreateVersi
 	return &ProcessVersion{
 		ID:                   fmt.Sprintf("%d", processDef.ID), // ID是int类型，转换为string
 		ProcessDefinitionKey: processDef.Key,
-		Version:              newVersionNumber, // 使用原始int值
+		Version:              newVersion, // 语义化版本字符串
 		Name:                 processDef.Name,
 		Description:          processDef.Description,
 		BPMNXML:              string(processDef.BpmnXML), // BPMNXML是[]byte类型，转换为string
@@ -149,11 +150,11 @@ func (s *BPMNVersionService) CreateVersion(ctx context.Context, req *CreateVersi
 }
 
 // GetVersion 获取指定版本
-func (s *BPMNVersionService) GetVersion(ctx context.Context, processKey string, version int, tenantID int) (*ProcessVersion, error) {
+func (s *BPMNVersionService) GetVersion(ctx context.Context, processKey string, version string, tenantID int) (*ProcessVersion, error) {
 	processDef, err := s.client.ProcessDefinition.Query().
 		Where(
 			processdefinition.Key(processKey),
-			processdefinition.Version(fmt.Sprintf("%d", version)), // Version是string类型
+			processdefinition.Version(version),
 			processdefinition.TenantID(tenantID),
 		).
 		First(ctx)
@@ -161,22 +162,10 @@ func (s *BPMNVersionService) GetVersion(ctx context.Context, processKey string, 
 		return nil, fmt.Errorf("获取流程定义失败: %w", err)
 	}
 
-	// ProcessDeployment没有ProcessDefinitionID字段，暂时跳过部署信息查询
-	// 获取部署信息
-	// deployment, err := s.client.ProcessDeployment.Query().
-	// 	Where(processdeployment.ProcessDefinitionID(processDef.ID)).
-	// 	First(ctx)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("获取部署信息失败: %w", err)
-	// }
-
-	// 解析版本号
-	versionNumber, _ := strconv.Atoi(processDef.Version)
-
 	return &ProcessVersion{
 		ID:                   fmt.Sprintf("%d", processDef.ID), // ID是int类型，转换为string
 		ProcessDefinitionKey: processDef.Key,
-		Version:              versionNumber, // 解析后的int版本号
+		Version:              processDef.Version,
 		Name:                 processDef.Name,
 		Description:          processDef.Description,
 		BPMNXML:              string(processDef.BpmnXML), // BPMNXML是[]byte类型，转换为string
@@ -213,13 +202,10 @@ func (s *BPMNVersionService) ListVersions(ctx context.Context, processKey string
 		// 	continue
 		// }
 
-		// 解析版本号
-		versionNumber, _ := strconv.Atoi(processDef.Version)
-
 		version := &ProcessVersion{
 			ID:                   fmt.Sprintf("%d", processDef.ID), // ID是int类型，转换为string
 			ProcessDefinitionKey: processDef.Key,
-			Version:              versionNumber, // 解析后的int版本号
+			Version:              processDef.Version,
 			Name:                 processDef.Name,
 			Description:          processDef.Description,
 			BPMNXML:              string(processDef.BpmnXML), // BPMNXML是[]byte类型，转换为string
@@ -236,7 +222,7 @@ func (s *BPMNVersionService) ListVersions(ctx context.Context, processKey string
 }
 
 // ActivateVersion 激活指定版本
-func (s *BPMNVersionService) ActivateVersion(ctx context.Context, processKey string, version int, tenantID int) (err error) {
+func (s *BPMNVersionService) ActivateVersion(ctx context.Context, processKey string, version string, tenantID int) (err error) {
 	// 开始事务
 	tx, err := s.client.Tx(ctx)
 	if err != nil {
@@ -267,7 +253,7 @@ func (s *BPMNVersionService) ActivateVersion(ctx context.Context, processKey str
 	_, err = tx.ProcessDefinition.Update().
 		Where(
 			processdefinition.Key(processKey),
-			processdefinition.Version(fmt.Sprintf("%d", version)), // 转换为string
+			processdefinition.Version(version),
 			processdefinition.TenantID(tenantID),
 		).
 		SetIsActive(true).
@@ -286,12 +272,12 @@ func (s *BPMNVersionService) ActivateVersion(ctx context.Context, processKey str
 }
 
 // RollbackToVersion 回滚到指定版本
-func (s *BPMNVersionService) RollbackToVersion(ctx context.Context, processKey string, targetVersion int, tenantID int, reason string) error {
+func (s *BPMNVersionService) RollbackToVersion(ctx context.Context, processKey string, targetVersion string, tenantID int, reason string) error {
 	// 检查目标版本是否存在 - Version是string类型
 	targetProcessDef, err := s.client.ProcessDefinition.Query().
 		Where(
 			processdefinition.Key(processKey),
-			processdefinition.Version(fmt.Sprintf("%d", targetVersion)), // 转换为string
+			processdefinition.Version(targetVersion),
 			processdefinition.TenantID(tenantID),
 		).
 		First(ctx)
@@ -302,10 +288,10 @@ func (s *BPMNVersionService) RollbackToVersion(ctx context.Context, processKey s
 	// 创建回滚版本 - BPMNXML是[]byte类型，转换为string
 	rollbackReq := &CreateVersionRequest{
 		ProcessDefinitionKey: processKey,
-		Name:                 fmt.Sprintf("%s (回滚到v%d)", targetProcessDef.Name, targetVersion),
-		Description:          fmt.Sprintf("回滚到版本 %d，原因: %s", targetVersion, reason),
+		Name:                 fmt.Sprintf("%s (回滚到 v%s)", targetProcessDef.Name, targetVersion),
+		Description:          fmt.Sprintf("回滚到版本 %s，原因: %s", targetVersion, reason),
 		BPMNXML:              string(targetProcessDef.BpmnXML), // 转换为string
-		ChangeLog:            fmt.Sprintf("回滚到版本 %d，原因: %s", targetVersion, reason),
+		ChangeLog:            fmt.Sprintf("回滚到版本 %s，原因: %s", targetVersion, reason),
 		CompatibilityNotes:   "回滚版本，可能存在兼容性问题",
 		TenantID:             tenantID,
 		CreatedBy:            "系统回滚",
@@ -325,7 +311,7 @@ func (s *BPMNVersionService) RollbackToVersion(ctx context.Context, processKey s
 }
 
 // CompareVersions 比较两个版本
-func (s *BPMNVersionService) CompareVersions(ctx context.Context, processKey string, baseVersion, targetVersion int, tenantID int) (*VersionComparison, error) {
+func (s *BPMNVersionService) CompareVersions(ctx context.Context, processKey string, baseVersion, targetVersion string, tenantID int) (*VersionComparison, error) {
 	// 获取基础版本
 	baseProcessDef, err := s.GetVersion(ctx, processKey, baseVersion, tenantID)
 	if err != nil {
@@ -354,29 +340,47 @@ func (s *BPMNVersionService) CompareVersions(ctx context.Context, processKey str
 }
 
 // getCurrentVersion 获取当前最高版本号
-func (s *BPMNVersionService) getCurrentVersion(ctx context.Context, processKey string, tenantID int) (int, error) {
+func (s *BPMNVersionService) getCurrentVersion(ctx context.Context, processKey string, tenantID int) (string, error) {
 	processDef, err := s.client.ProcessDefinition.Query().
 		Where(
 			processdefinition.Key(processKey),
 			processdefinition.TenantID(tenantID),
 		).
-		Order(ent.Desc(processdefinition.FieldVersion)).
+		Order(ent.Desc(processdefinition.FieldCreatedAt)). // 按创建时间降序，避免字符串排序问题
 		First(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("获取流程定义失败: %w", err)
+		return "1.0.0", nil // 无已有定义时返回默认版本
 	}
-
-	// Version是string类型，需要解析为int
-	version, err := strconv.Atoi(processDef.Version)
-	if err != nil {
-		return 0, fmt.Errorf("解析版本号失败: %w", err)
+	if processDef.Version == "" {
+		return "1.0.0", nil
 	}
+	return processDef.Version, nil
+}
 
-	return version, nil
+// parseSemver 解析 major.minor.patch，返回各部分
+func parseSemver(v string) (major, minor, patch int, ok bool) {
+	parts := strings.Split(v, ".")
+	if len(parts) != 3 {
+		return 0, 0, 0, false
+	}
+	var err1, err2, err3 error
+	major, err1 = strconv.Atoi(parts[0])
+	minor, err2 = strconv.Atoi(parts[1])
+	patch, err3 = strconv.Atoi(parts[2])
+	return major, minor, patch, err1 == nil && err2 == nil && err3 == nil
+}
+
+// incrementSemver 递增 minor 版本号，重置 patch
+func incrementSemver(current string) string {
+	major, minor, _, ok := parseSemver(current)
+	if !ok {
+		return "1.0.0"
+	}
+	return fmt.Sprintf("%d.%d.0", major, minor+1)
 }
 
 // recordVersionChangeLog 记录版本变更日志
-func (s *BPMNVersionService) recordVersionChangeLog(ctx context.Context, processDefID string, changeLog, createdBy string, tenantID int) error {
+func (s *BPMNVersionService) recordVersionChangeLog(ctx context.Context, processDefID string, version string, changeLog, createdBy string, tenantID int) error {
 	// 解析 processDefID 为 int
 	processDefIDInt, err := strconv.Atoi(processDefID)
 	if err != nil {
@@ -395,7 +399,7 @@ func (s *BPMNVersionService) recordVersionChangeLog(ctx context.Context, process
 	// 创建版本变更日志记录
 	_, err = s.client.ProcessVersionChangelog.Create().
 		SetProcessDefinitionID(processDefIDInt).
-		SetVersion(changeLog). // 使用 changeLog 作为 version 字段的临时值
+		SetVersion(version).
 		SetChangeLog(changeLog).
 		SetChangeType("update").
 		SetCreatedBy(createdByInt).

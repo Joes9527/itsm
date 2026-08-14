@@ -344,7 +344,7 @@
 }
 
 .text-gradient-blue {
-  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  background: linear-gradient(135deg, #F06820 0%, #B84A08 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -360,7 +360,7 @@
 /* 打字机效果 */
 .typewriter {
   overflow: hidden;
-  border-right: 2px solid #3b82f6;
+  border-right: 2px solid #F06820;
   white-space: nowrap;
   animation: typewriter 3s steps(40, end), blink-caret 0.75s step-end infinite;
 }
@@ -379,7 +379,7 @@
     border-color: transparent;
   }
   50% {
-    border-color: #3b82f6;
+    border-color: #F06820;
   }
 }
 

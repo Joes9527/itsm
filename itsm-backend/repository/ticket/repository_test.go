@@ -129,6 +129,73 @@ func TestRepository_Create_GeneratesTicketNumber(t *testing.T) {
 	assert.Contains(t, tkt.TicketNumber, "TKT-")
 }
 
+func TestRepository_Create_PersistsCustomFieldValues(t *testing.T) {
+	fx := newRepoFixture(t)
+	defer fx.client.Close()
+
+	params := &CreateParams{
+		Title:       "Custom Field Ticket",
+		Description: "Description",
+		Priority:    PriorityMedium,
+		Type:        TypeIncident,
+		RequesterID: fx.user.ID,
+		CustomFieldValues: map[string]interface{}{
+			"impacted_system":  "ERP",
+			"downtime_minutes": float64(30),
+		},
+	}
+
+	created, err := fx.repo.Create(fx.ctx, params, fx.tenant.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "ERP", created.CustomFieldValues["impacted_system"])
+	assert.Equal(t, float64(30), created.CustomFieldValues["downtime_minutes"])
+
+	fetched, err := fx.repo.GetByID(fx.ctx, created.ID, fx.tenant.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "ERP", fetched.CustomFieldValues["impacted_system"])
+}
+
+func TestRepository_Create_WithoutCustomFieldValues(t *testing.T) {
+	fx := newRepoFixture(t)
+	defer fx.client.Close()
+
+	params := &CreateParams{
+		Title:       "No Custom Fields",
+		Description: "Description",
+		Priority:    PriorityMedium,
+		Type:        TypeIncident,
+		RequesterID: fx.user.ID,
+	}
+
+	tkt, err := fx.repo.Create(fx.ctx, params, fx.tenant.ID)
+	require.NoError(t, err)
+	assert.Empty(t, tkt.CustomFieldValues)
+}
+
+func TestRepository_Create_PersistsCreatorEmailAndExternalMessageID(t *testing.T) {
+	fx := newRepoFixture(t)
+	defer fx.client.Close()
+
+	params := &CreateParams{
+		Title:             "From email",
+		Description:       "body",
+		Priority:          PriorityMedium,
+		Type:              TypeIncident,
+		RequesterID:       fx.user.ID,
+		Source:            "email",
+		CreatorEmail:      "alice@test.com",
+		ExternalMessageID: "<msg-1@contoso.com>",
+	}
+
+	tkt, err := fx.repo.Create(fx.ctx, params, fx.tenant.ID)
+	require.NoError(t, err)
+
+	stored, err := fx.client.Ticket.Get(fx.ctx, tkt.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "alice@test.com", stored.CreatorEmail)
+	assert.Equal(t, "<msg-1@contoso.com>", stored.ExternalMessageID)
+}
+
 func TestRepository_Create_RetriesOnTicketNumberConflict(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()

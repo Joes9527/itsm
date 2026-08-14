@@ -79,6 +79,11 @@ func ServiceType(v string) predicate.ServiceCatalog {
 	return predicate.ServiceCatalog(sql.FieldEQ(FieldServiceType, v))
 }
 
+// ItsmType applies equality check predicate on the "itsm_type" field. It's identical to ItsmTypeEQ.
+func ItsmType(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldEQ(FieldItsmType, v))
+}
+
 // Price applies equality check predicate on the "price" field. It's identical to PriceEQ.
 func Price(v float64) predicate.ServiceCatalog {
 	return predicate.ServiceCatalog(sql.FieldEQ(FieldPrice, v))
@@ -507,6 +512,71 @@ func ServiceTypeEqualFold(v string) predicate.ServiceCatalog {
 // ServiceTypeContainsFold applies the ContainsFold predicate on the "service_type" field.
 func ServiceTypeContainsFold(v string) predicate.ServiceCatalog {
 	return predicate.ServiceCatalog(sql.FieldContainsFold(FieldServiceType, v))
+}
+
+// ItsmTypeEQ applies the EQ predicate on the "itsm_type" field.
+func ItsmTypeEQ(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldEQ(FieldItsmType, v))
+}
+
+// ItsmTypeNEQ applies the NEQ predicate on the "itsm_type" field.
+func ItsmTypeNEQ(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldNEQ(FieldItsmType, v))
+}
+
+// ItsmTypeIn applies the In predicate on the "itsm_type" field.
+func ItsmTypeIn(vs ...string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldIn(FieldItsmType, vs...))
+}
+
+// ItsmTypeNotIn applies the NotIn predicate on the "itsm_type" field.
+func ItsmTypeNotIn(vs ...string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldNotIn(FieldItsmType, vs...))
+}
+
+// ItsmTypeGT applies the GT predicate on the "itsm_type" field.
+func ItsmTypeGT(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldGT(FieldItsmType, v))
+}
+
+// ItsmTypeGTE applies the GTE predicate on the "itsm_type" field.
+func ItsmTypeGTE(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldGTE(FieldItsmType, v))
+}
+
+// ItsmTypeLT applies the LT predicate on the "itsm_type" field.
+func ItsmTypeLT(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldLT(FieldItsmType, v))
+}
+
+// ItsmTypeLTE applies the LTE predicate on the "itsm_type" field.
+func ItsmTypeLTE(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldLTE(FieldItsmType, v))
+}
+
+// ItsmTypeContains applies the Contains predicate on the "itsm_type" field.
+func ItsmTypeContains(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldContains(FieldItsmType, v))
+}
+
+// ItsmTypeHasPrefix applies the HasPrefix predicate on the "itsm_type" field.
+func ItsmTypeHasPrefix(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldHasPrefix(FieldItsmType, v))
+}
+
+// ItsmTypeHasSuffix applies the HasSuffix predicate on the "itsm_type" field.
+func ItsmTypeHasSuffix(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldHasSuffix(FieldItsmType, v))
+}
+
+// ItsmTypeEqualFold applies the EqualFold predicate on the "itsm_type" field.
+func ItsmTypeEqualFold(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldEqualFold(FieldItsmType, v))
+}
+
+// ItsmTypeContainsFold applies the ContainsFold predicate on the "itsm_type" field.
+func ItsmTypeContainsFold(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldContainsFold(FieldItsmType, v))
 }
 
 // PriceEQ applies the EQ predicate on the "price" field.

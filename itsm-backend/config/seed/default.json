@@ -1,61 +1,275 @@
 {
   "seed_workflows": true,
   "departments": [
-    {"name": "信息技术部", "code": "IT", "description": "IT整体管理"},
-    {"name": "IT基础架构", "code": "IT-INFRA", "description": "基础设施运维", "parent_code": "IT"},
-    {"name": "IT应用服务", "code": "IT-APP", "description": "应用系统运维", "parent_code": "IT"},
-    {"name": "IT安全", "code": "IT-SEC", "description": "信息安全管理", "parent_code": "IT"},
-    {"name": "IT项目管理", "code": "IT-PMO", "description": "IT项目管理办公室", "parent_code": "IT"},
-    {"name": "运营管理部", "code": "OPS", "description": "IT运营管理"},
-    {"name": "服务台", "code": "OPS-SD", "description": "一线服务支持", "parent_code": "OPS"},
-    {"name": "运维中心", "code": "OPS-NOC", "description": "7x24运维监控", "parent_code": "OPS"},
-    {"name": "安全运营", "code": "OPS-SEC", "description": "安全监控与响应", "parent_code": "OPS"},
-    {"name": "研发部", "code": "RD", "description": "产品研发"},
-    {"name": "测试部", "code": "QA", "description": "质量保证"},
-    {"name": "人力资源部", "code": "HR", "description": "人力资源管理"},
-    {"name": "财务部", "code": "FIN", "description": "财务管理"},
-    {"name": "行政部", "code": "ADMIN", "description": "行政管理"}
+    {
+      "name": "信息技术部",
+      "code": "IT",
+      "description": "IT整体管理"
+    },
+    {
+      "name": "IT基础架构",
+      "code": "IT-INFRA",
+      "description": "基础设施运维",
+      "parent_code": "IT"
+    },
+    {
+      "name": "IT应用服务",
+      "code": "IT-APP",
+      "description": "应用系统运维",
+      "parent_code": "IT"
+    },
+    {
+      "name": "IT安全",
+      "code": "IT-SEC",
+      "description": "信息安全管理",
+      "parent_code": "IT"
+    },
+    {
+      "name": "IT项目管理",
+      "code": "IT-PMO",
+      "description": "IT项目管理办公室",
+      "parent_code": "IT"
+    },
+    {
+      "name": "运营管理部",
+      "code": "OPS",
+      "description": "IT运营管理"
+    },
+    {
+      "name": "服务台",
+      "code": "OPS-SD",
+      "description": "一线服务支持",
+      "parent_code": "OPS"
+    },
+    {
+      "name": "运维中心",
+      "code": "OPS-NOC",
+      "description": "7x24运维监控",
+      "parent_code": "OPS"
+    },
+    {
+      "name": "安全运营",
+      "code": "OPS-SEC",
+      "description": "安全监控与响应",
+      "parent_code": "OPS"
+    },
+    {
+      "name": "研发部",
+      "code": "RD",
+      "description": "产品研发"
+    },
+    {
+      "name": "测试部",
+      "code": "QA",
+      "description": "质量保证"
+    },
+    {
+      "name": "人力资源部",
+      "code": "HR",
+      "description": "人力资源管理"
+    },
+    {
+      "name": "财务部",
+      "code": "FIN",
+      "description": "财务管理"
+    },
+    {
+      "name": "行政部",
+      "code": "ADMIN",
+      "description": "行政管理"
+    }
   ],
   "teams": [
-    {"name": "服务台-L1", "description": "一线服务支持，处理咨询、账号和标准请求"},
-    {"name": "服务台-L2", "description": "二线技术支持，处理复杂事件和升级工单"},
-    {"name": "服务台-L3", "description": "三线技术专家，处理疑难问题和根因分析"},
-    {"name": "服务器运维", "description": "服务器、虚拟化和操作系统运维"},
-    {"name": "网络运维", "description": "网络设备、链路和安全域运维"},
-    {"name": "数据库运维", "description": "数据库实例、备份和性能运维"},
-    {"name": "云平台运维", "description": "公有云、私有云和容器平台运维"},
-    {"name": "应用支持", "description": "企业应用、接口和中间件支持"},
-    {"name": "安全运营", "description": "安全事件响应、漏洞和合规运营"},
-    {"name": "变更委员会", "description": "变更评审、发布窗口和风险控制"}
+    {
+      "name": "服务台-L1",
+      "description": "一线服务支持，处理咨询、账号和标准请求"
+    },
+    {
+      "name": "服务台-L2",
+      "description": "二线技术支持，处理复杂事件和升级工单"
+    },
+    {
+      "name": "服务台-L3",
+      "description": "三线技术专家，处理疑难问题和根因分析"
+    },
+    {
+      "name": "服务器运维",
+      "description": "服务器、虚拟化和操作系统运维"
+    },
+    {
+      "name": "网络运维",
+      "description": "网络设备、链路和安全域运维"
+    },
+    {
+      "name": "数据库运维",
+      "description": "数据库实例、备份和性能运维"
+    },
+    {
+      "name": "云平台运维",
+      "description": "公有云、私有云和容器平台运维"
+    },
+    {
+      "name": "应用支持",
+      "description": "企业应用、接口和中间件支持"
+    },
+    {
+      "name": "安全运营",
+      "description": "安全事件响应、漏洞和合规运营"
+    },
+    {
+      "name": "变更委员会",
+      "description": "变更评审、发布窗口和风险控制"
+    }
   ],
   "roles": [
-    {"name": "IT总监", "code": "it_director", "description": "IT部门总监"},
-    {"name": "运维总监", "code": "ops_director", "description": "运维部门总监"},
-    {"name": "系统管理员", "code": "sysadmin", "description": "系统管理员"},
-    {"name": "安全管理员", "code": "security_admin", "description": "安全管理角色"},
-    {"name": "审计管理员", "code": "audit_admin", "description": "审计管理角色"},
-    {"name": "运维经理", "code": "ops_manager", "description": "运维团队经理"},
-    {"name": "运维工程师", "code": "ops_engineer", "description": "运维工程师"},
-    {"name": "DBA工程师", "code": "dba", "description": "数据库管理员"},
-    {"name": "网络工程师", "code": "network_eng", "description": "网络工程师"},
-    {"name": "服务台主管", "code": "sd_manager", "description": "服务台主管"},
-    {"name": "一线工程师", "code": "l1_support", "description": "一线支持工程师"},
-    {"name": "二线工程师", "code": "l2_support", "description": "二线支持工程师"},
-    {"name": "三线专家", "code": "l3_expert", "description": "三线技术专家"},
-    {"name": "变更经理", "code": "change_manager", "description": "变更流程负责人"},
-    {"name": "服务目录管理员", "code": "service_catalog_admin", "description": "服务目录与请求模板管理员"},
-    {"name": "部门经理", "code": "dept_manager", "description": "部门经理"},
-    {"name": "普通用户", "code": "end_user", "description": "普通终端用户"},
-    {"name": "访客", "code": "guest", "description": "访客用户"}
+    {
+      "name": "IT总监",
+      "code": "it_director",
+      "description": "IT部门总监"
+    },
+    {
+      "name": "运维总监",
+      "code": "ops_director",
+      "description": "运维部门总监"
+    },
+    {
+      "name": "系统管理员",
+      "code": "sysadmin",
+      "description": "系统管理员"
+    },
+    {
+      "name": "安全管理员",
+      "code": "security_admin",
+      "description": "安全管理角色"
+    },
+    {
+      "name": "审计管理员",
+      "code": "audit_admin",
+      "description": "审计管理角色"
+    },
+    {
+      "name": "运维经理",
+      "code": "ops_manager",
+      "description": "运维团队经理"
+    },
+    {
+      "name": "运维工程师",
+      "code": "ops_engineer",
+      "description": "运维工程师"
+    },
+    {
+      "name": "DBA工程师",
+      "code": "dba",
+      "description": "数据库管理员"
+    },
+    {
+      "name": "网络工程师",
+      "code": "network_eng",
+      "description": "网络工程师"
+    },
+    {
+      "name": "服务台主管",
+      "code": "sd_manager",
+      "description": "服务台主管"
+    },
+    {
+      "name": "一线工程师",
+      "code": "l1_support",
+      "description": "一线支持工程师"
+    },
+    {
+      "name": "二线工程师",
+      "code": "l2_support",
+      "description": "二线支持工程师"
+    },
+    {
+      "name": "三线专家",
+      "code": "l3_expert",
+      "description": "三线技术专家"
+    },
+    {
+      "name": "变更经理",
+      "code": "change_manager",
+      "description": "变更流程负责人"
+    },
+    {
+      "name": "服务目录管理员",
+      "code": "service_catalog_admin",
+      "description": "服务目录与请求模板管理员"
+    },
+    {
+      "name": "部门经理",
+      "code": "dept_manager",
+      "description": "部门经理"
+    },
+    {
+      "name": "普通用户",
+      "code": "end_user",
+      "description": "普通终端用户"
+    },
+    {
+      "name": "访客",
+      "code": "guest",
+      "description": "访客用户"
+    }
   ],
   "sla_definitions": [
-    {"name": "Incident-P0-紧急", "description": "核心业务中断或重大安全事件", "service_type": "incident", "priority": "urgent", "response_time": 15, "resolution_time": 120},
-    {"name": "Incident-P1-高", "description": "重要业务受影响，需要快速恢复", "service_type": "incident", "priority": "high", "response_time": 30, "resolution_time": 240},
-    {"name": "Incident-P2-中", "description": "局部功能受影响，有替代方案", "service_type": "incident", "priority": "medium", "response_time": 120, "resolution_time": 480},
-    {"name": "Incident-P3-低", "description": "咨询、轻微影响或非紧急问题", "service_type": "incident", "priority": "low", "response_time": 240, "resolution_time": 1440},
-    {"name": "ServiceRequest-标准", "description": "标准服务请求交付SLA", "service_type": "service_request", "priority": "medium", "response_time": 480, "resolution_time": 4320},
-    {"name": "Change-普通", "description": "普通变更评审与实施SLA", "service_type": "change", "priority": "medium", "response_time": 480, "resolution_time": 10080},
-    {"name": "Change-紧急", "description": "紧急变更快速评审与实施SLA", "service_type": "change", "priority": "high", "response_time": 60, "resolution_time": 1440}
+    {
+      "name": "Incident-P0-紧急",
+      "description": "核心业务中断或重大安全事件",
+      "service_type": "incident",
+      "priority": "urgent",
+      "response_time": 15,
+      "resolution_time": 120
+    },
+    {
+      "name": "Incident-P1-高",
+      "description": "重要业务受影响，需要快速恢复",
+      "service_type": "incident",
+      "priority": "high",
+      "response_time": 30,
+      "resolution_time": 240
+    },
+    {
+      "name": "Incident-P2-中",
+      "description": "局部功能受影响，有替代方案",
+      "service_type": "incident",
+      "priority": "medium",
+      "response_time": 120,
+      "resolution_time": 480
+    },
+    {
+      "name": "Incident-P3-低",
+      "description": "咨询、轻微影响或非紧急问题",
+      "service_type": "incident",
+      "priority": "low",
+      "response_time": 240,
+      "resolution_time": 1440
+    },
+    {
+      "name": "ServiceRequest-标准",
+      "description": "标准服务请求交付SLA",
+      "service_type": "service_request",
+      "priority": "medium",
+      "response_time": 480,
+      "resolution_time": 4320
+    },
+    {
+      "name": "Change-普通",
+      "description": "普通变更评审与实施SLA",
+      "service_type": "change",
+      "priority": "medium",
+      "response_time": 480,
+      "resolution_time": 10080
+    },
+    {
+      "name": "Change-紧急",
+      "description": "紧急变更快速评审与实施SLA",
+      "service_type": "change",
+      "priority": "high",
+      "response_time": 60,
+      "resolution_time": 1440
+    }
   ],
   "sla_policies": [
     {
@@ -93,70 +307,3713 @@
     }
   ],
   "service_catalog": [
-    {"name": "账号申请", "description": "新员工或岗位变更账号开通", "category": "账号与权限", "service_type": "access", "requires_approval": true, "delivery_time": 1},
-    {"name": "权限变更", "description": "业务系统、数据库或基础设施权限调整", "category": "账号与权限", "service_type": "access", "requires_approval": true, "delivery_time": 2},
-    {"name": "软件安装", "description": "标准办公软件和开发工具安装", "category": "终端支持", "service_type": "software", "requires_approval": false, "delivery_time": 1},
-    {"name": "网络接入", "description": "办公网络、VPN、无线网络接入申请", "category": "网络", "service_type": "network", "requires_approval": true, "delivery_time": 2},
-    {"name": "云服务器申请", "description": "云主机、虚拟机或容器资源申请", "category": "云资源", "service_type": "vm", "requires_approval": true, "delivery_time": 2},
-    {"name": "数据库申请", "description": "数据库实例、账号或备份策略申请", "category": "数据库", "service_type": "database", "requires_approval": true, "delivery_time": 3},
-    {"name": "安全扫描", "description": "漏洞扫描、基线检查或渗透测试申请", "category": "安全", "service_type": "security", "requires_approval": true, "delivery_time": 5},
-    {"name": "代码仓库", "description": "代码仓库、CI/CD流水线与制品库申请", "category": "研发效能", "service_type": "devops", "requires_approval": false, "delivery_time": 1}
+    {
+      "name": "账号申请",
+      "description": "新员工或岗位变更账号开通",
+      "category": "账号与权限",
+      "service_type": "access",
+      "requires_approval": true,
+      "delivery_time": 1
+    },
+    {
+      "name": "权限变更",
+      "description": "业务系统、数据库或基础设施权限调整",
+      "category": "账号与权限",
+      "service_type": "access",
+      "requires_approval": true,
+      "delivery_time": 2
+    },
+    {
+      "name": "软件安装",
+      "description": "标准办公软件和开发工具安装",
+      "category": "终端支持",
+      "service_type": "software",
+      "requires_approval": false,
+      "delivery_time": 1
+    },
+    {
+      "name": "网络接入",
+      "description": "办公网络、VPN、无线网络接入申请",
+      "category": "网络",
+      "service_type": "network",
+      "requires_approval": true,
+      "delivery_time": 2
+    },
+    {
+      "name": "云服务器申请",
+      "description": "云主机、虚拟机或容器资源申请",
+      "category": "云资源",
+      "service_type": "vm",
+      "requires_approval": true,
+      "delivery_time": 2
+    },
+    {
+      "name": "数据库申请",
+      "description": "数据库实例、账号或备份策略申请",
+      "category": "数据库",
+      "service_type": "database",
+      "requires_approval": true,
+      "delivery_time": 3
+    },
+    {
+      "name": "安全扫描",
+      "description": "漏洞扫描、基线检查或渗透测试申请",
+      "category": "安全",
+      "service_type": "security",
+      "requires_approval": true,
+      "delivery_time": 5
+    },
+    {
+      "name": "代码仓库",
+      "description": "代码仓库、CI/CD流水线与制品库申请",
+      "category": "研发效能",
+      "service_type": "devops",
+      "requires_approval": false,
+      "delivery_time": 1
+    }
   ],
   "approval_workflows": [],
   "process_bindings": [
-    {"business_type": "ticket", "process_definition_key": "ticket_general_flow", "is_default": true},
-    {"business_type": "incident", "process_definition_key": "incident_emergency_flow", "is_default": true},
-    {"business_type": "problem", "process_definition_key": "problem_management_flow", "is_default": true},
-    {"business_type": "change", "process_definition_key": "change_normal_flow", "is_default": true},
-    {"business_type": "ticket", "business_sub_type": "service_request", "process_definition_key": "service_request_flow", "is_default": true},
-    {"business_type": "release", "process_definition_key": "release_approval_flow", "is_default": true},
-    {"business_type": "cloud_public_ops", "process_definition_key": "cloud_public_ops_flow", "is_default": false},
-    {"business_type": "cloud_private_ops", "process_definition_key": "cloud_private_ops_flow", "is_default": false},
-    {"business_type": "cloud_security_scan", "process_definition_key": "cloud_security_scan_flow", "is_default": false}
+    {
+      "business_type": "ticket",
+      "process_definition_key": "ticket_general_flow",
+      "is_default": true
+    },
+    {
+      "business_type": "incident",
+      "process_definition_key": "incident_emergency_flow",
+      "is_default": true
+    },
+    {
+      "business_type": "problem",
+      "process_definition_key": "problem_management_flow",
+      "is_default": true
+    },
+    {
+      "business_type": "change",
+      "process_definition_key": "change_normal_flow",
+      "is_default": true
+    },
+    {
+      "business_type": "ticket",
+      "business_sub_type": "service_request",
+      "process_definition_key": "service_request_flow",
+      "is_default": true
+    },
+    {
+      "business_type": "release",
+      "process_definition_key": "release_approval_flow",
+      "is_default": true
+    },
+    {
+      "business_type": "cloud_public_ops",
+      "process_definition_key": "cloud_public_ops_flow",
+      "is_default": false
+    },
+    {
+      "business_type": "cloud_private_ops",
+      "process_definition_key": "cloud_private_ops_flow",
+      "is_default": false
+    },
+    {
+      "business_type": "cloud_security_scan",
+      "process_definition_key": "cloud_security_scan_flow",
+      "is_default": false
+    }
   ],
   "ticket_views": [
-    {"name": "我的待办工单", "description": "分配给我的未关闭工单", "is_shared": false, "columns": ["id", "title", "priority", "status", "assignee", "created_at"]},
-    {"name": "我创建的工单", "description": "我提交的工单", "is_shared": false, "columns": ["id", "title", "priority", "status", "assignee", "created_at"]},
-    {"name": "高优先级工单", "description": "P0/P1或高优先级工单", "is_shared": true, "columns": ["id", "title", "priority", "status", "assignee", "created_at"]},
-    {"name": "未分配工单", "description": "尚未分配的工单", "is_shared": true, "columns": ["id", "title", "priority", "status", "creator", "created_at"]},
-    {"name": "已关闭工单", "description": "已完成的工单", "is_shared": false, "columns": ["id", "title", "priority", "status", "assignee", "closed_at"]}
+    {
+      "name": "我的待办工单",
+      "description": "分配给我的未关闭工单",
+      "is_shared": false,
+      "columns": [
+        "id",
+        "title",
+        "priority",
+        "status",
+        "assignee",
+        "created_at"
+      ]
+    },
+    {
+      "name": "我创建的工单",
+      "description": "我提交的工单",
+      "is_shared": false,
+      "columns": [
+        "id",
+        "title",
+        "priority",
+        "status",
+        "assignee",
+        "created_at"
+      ]
+    },
+    {
+      "name": "高优先级工单",
+      "description": "P0/P1或高优先级工单",
+      "is_shared": true,
+      "columns": [
+        "id",
+        "title",
+        "priority",
+        "status",
+        "assignee",
+        "created_at"
+      ]
+    },
+    {
+      "name": "未分配工单",
+      "description": "尚未分配的工单",
+      "is_shared": true,
+      "columns": [
+        "id",
+        "title",
+        "priority",
+        "status",
+        "creator",
+        "created_at"
+      ]
+    },
+    {
+      "name": "已关闭工单",
+      "description": "已完成的工单",
+      "is_shared": false,
+      "columns": [
+        "id",
+        "title",
+        "priority",
+        "status",
+        "assignee",
+        "closed_at"
+      ]
+    }
   ],
   "ci_types": [
-    {"name": "server", "description": "服务器", "icon": "server", "color": "#28a745", "is_active": true},
-    {"name": "database", "description": "数据库", "icon": "database", "color": "#fd7e14", "is_active": true},
-    {"name": "network", "description": "网络设备", "icon": "network", "color": "#17a2b8", "is_active": true},
-    {"name": "storage", "description": "存储设备", "icon": "storage", "color": "#e83e8c", "is_active": true},
-    {"name": "application", "description": "应用服务", "icon": "app", "color": "#6610f2", "is_active": true},
-    {"name": "middleware", "description": "中间件", "icon": "middleware", "color": "#e74c3c", "is_active": true},
-    {"name": "cloud_vm", "description": "云虚拟机", "icon": "cloud", "color": "#6f42c1", "is_active": true},
-    {"name": "kubernetes", "description": "Kubernetes资源", "icon": "kubernetes", "color": "#20c997", "is_active": true}
+    {
+      "name": "server",
+      "description": "服务器",
+      "icon": "server",
+      "color": "#28a745",
+      "is_active": true
+    },
+    {
+      "name": "database",
+      "description": "数据库",
+      "icon": "database",
+      "color": "#fd7e14",
+      "is_active": true
+    },
+    {
+      "name": "network",
+      "description": "网络设备",
+      "icon": "network",
+      "color": "#17a2b8",
+      "is_active": true
+    },
+    {
+      "name": "storage",
+      "description": "存储设备",
+      "icon": "storage",
+      "color": "#e83e8c",
+      "is_active": true
+    },
+    {
+      "name": "application",
+      "description": "应用服务",
+      "icon": "app",
+      "color": "#6610f2",
+      "is_active": true
+    },
+    {
+      "name": "middleware",
+      "description": "中间件",
+      "icon": "middleware",
+      "color": "#e74c3c",
+      "is_active": true
+    },
+    {
+      "name": "cloud_vm",
+      "description": "云虚拟机",
+      "icon": "cloud",
+      "color": "#6f42c1",
+      "is_active": true
+    },
+    {
+      "name": "kubernetes",
+      "description": "Kubernetes资源",
+      "icon": "kubernetes",
+      "color": "#20c997",
+      "is_active": true
+    },
+    {
+      "name": "business_system",
+      "description": "业务系统（软件资产）",
+      "icon": "appstore",
+      "color": "#1677ff",
+      "is_active": true
+    }
+  ],
+  "ticket_categories": [
+    {
+      "name": "账号与访问服务",
+      "code": "ACC",
+      "description": "企业公共身份体系下的账号生命周期、认证登录、权限管理服务",
+      "level": 1,
+      "sort_order": 10
+    },
+    {
+      "name": "AD与基础账号",
+      "code": "ACC-AD",
+      "description": "企业公共身份体系下的标准AD账号开通、停用与回收",
+      "level": 2,
+      "parent_code": "ACC",
+      "sort_order": 11
+    },
+    {
+      "name": "AD账号新建",
+      "code": "ACC-AD-001",
+      "description": "企业公共身份体系下的标准AD账号开通服务",
+      "level": 3,
+      "parent_code": "ACC-AD",
+      "sort_order": 12,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "AD账号停用",
+      "code": "ACC-AD-002",
+      "description": "企业公共身份体系下的标准AD账号停用与回收服务",
+      "level": 3,
+      "parent_code": "ACC-AD",
+      "sort_order": 13,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "认证与登录支持",
+      "code": "ACC-AUT",
+      "description": "企业公共身份体系下的密码、MFA和登录异常支持",
+      "level": 2,
+      "parent_code": "ACC",
+      "sort_order": 14
+    },
+    {
+      "name": "密码重置/解锁",
+      "code": "ACC-AUT-001",
+      "description": "企业公共身份体系下的标准密码重置与账号解锁服务",
+      "level": 3,
+      "parent_code": "ACC-AUT",
+      "sort_order": 15,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "快速标准服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "MFA绑定/重置",
+      "code": "ACC-AUT-002",
+      "description": "企业公共身份体系下的MFA初始化、重置与绑定支持",
+      "level": 3,
+      "parent_code": "ACC-AUT",
+      "sort_order": 16,
+      "itsm_type": "Incident",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "企业账号登录异常",
+      "code": "ACC-AUT-003",
+      "description": "非业务系统企业账号的登录异常排查与协同支持",
+      "level": 3,
+      "parent_code": "ACC-AUT",
+      "sort_order": 17
+    },
+    {
+      "name": "特权与临时权限",
+      "code": "ACC-PRV",
+      "description": "企业公共身份体系下的特权账号和临时权限管理",
+      "level": 2,
+      "parent_code": "ACC",
+      "sort_order": 18
+    },
+    {
+      "name": "特权账号申请",
+      "code": "ACC-PRV-001",
+      "description": "企业公共身份体系下的特权账号申请服务",
+      "level": 3,
+      "parent_code": "ACC-PRV",
+      "sort_order": 19,
+      "itsm_type": "Change",
+      "default_priority": "P2",
+      "sla_tier": "审批类服务",
+      "default_resolver": "Infra/IAM",
+      "is_user_facing": true
+    },
+    {
+      "name": "临时权限开通",
+      "code": "ACC-PRV-002",
+      "description": "企业公共身份体系下临时高权限或临时访问授权服务",
+      "level": 3,
+      "parent_code": "ACC-PRV",
+      "sort_order": 20,
+      "itsm_type": "Change",
+      "default_priority": "P2",
+      "sla_tier": "审批类服务",
+      "default_resolver": "Infra/IAM",
+      "is_user_facing": true
+    },
+    {
+      "name": "账号生命周期管理",
+      "code": "ACC-LCM",
+      "description": "入职、离职场景下企业通用账号生命周期管理",
+      "level": 2,
+      "parent_code": "ACC",
+      "sort_order": 21
+    },
+    {
+      "name": "入职账号开通",
+      "code": "ACC-LCM-001",
+      "description": "入职场景下企业通用账号与基础访问准备服务",
+      "level": 3,
+      "parent_code": "ACC-LCM",
+      "sort_order": 22,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "离职账号回收",
+      "code": "ACC-LCM-002",
+      "description": "离职场景下企业通用账号停用与回收服务",
+      "level": 3,
+      "parent_code": "ACC-LCM",
+      "sort_order": 23,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "终端与办公支持",
+      "code": "EUC",
+      "description": "终端设备交付、硬件故障、外设打印、桌面系统和资产生命周期协同",
+      "level": 1,
+      "sort_order": 30
+    },
+    {
+      "name": "终端交付与标准环境",
+      "code": "EUC-STD",
+      "description": "按标准镜像、软件和配置交付新设备",
+      "level": 2,
+      "parent_code": "EUC",
+      "sort_order": 31
+    },
+    {
+      "name": "新电脑初始化",
+      "code": "EUC-STD-001",
+      "description": "按标准镜像、标准软件和标准配置交付新设备",
+      "level": 3,
+      "parent_code": "EUC-STD",
+      "sort_order": 32,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Desktop",
+      "is_user_facing": true
+    },
+    {
+      "name": "标准镜像部署",
+      "code": "EUC-STD-002",
+      "description": "按企业标准镜像完成设备初始化部署",
+      "level": 3,
+      "parent_code": "EUC-STD",
+      "sort_order": 33,
+      "itsm_type": "Change",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Desktop",
+      "is_user_facing": false
+    },
+    {
+      "name": "标准软件安装",
+      "code": "EUC-STD-003",
+      "description": "按标准清单安装办公和常用基础软件",
+      "level": 3,
+      "parent_code": "EUC-STD",
+      "sort_order": 34,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Desktop",
+      "is_user_facing": true
+    },
+    {
+      "name": "终端硬件与基础故障支持",
+      "code": "EUC-HDW",
+      "description": "终端设备硬件故障、升级和更换支持",
+      "level": 2,
+      "parent_code": "EUC",
+      "sort_order": 35
+    },
+    {
+      "name": "电脑无法开机",
+      "code": "EUC-HDW-001",
+      "description": "终端设备无法正常启动的基础故障支持",
+      "level": 3,
+      "parent_code": "EUC-HDW",
+      "sort_order": 36,
+      "itsm_type": "Incident",
+      "default_priority": "P2",
+      "sla_tier": "标准故障服务",
+      "default_resolver": "Desktop",
+      "is_user_facing": true
+    },
+    {
+      "name": "内存升级/更换",
+      "code": "EUC-HDW-002",
+      "description": "终端设备内存加装、替换和兼容性支持",
+      "level": 3,
+      "parent_code": "EUC-HDW",
+      "sort_order": 37,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Desktop",
+      "is_user_facing": true
+    },
+    {
+      "name": "硬盘更换/扩容",
+      "code": "EUC-HDW-003",
+      "description": "终端设备硬盘更换、迁移和容量扩展支持",
+      "level": 3,
+      "parent_code": "EUC-HDW",
+      "sort_order": 38,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Desktop",
+      "is_user_facing": true
+    },
+    {
+      "name": "外设与打印支持",
+      "code": "EUC-PRT",
+      "description": "打印机、扫描枪、显示器等外设的安装与故障支持",
+      "level": 2,
+      "parent_code": "EUC",
+      "sort_order": 39
+    },
+    {
+      "name": "打印机安装",
+      "code": "EUC-PRT-001",
+      "description": "打印机驱动、连接与标准安装支持",
+      "level": 3,
+      "parent_code": "EUC-PRT",
+      "sort_order": 40,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Desktop",
+      "is_user_facing": true
+    },
+    {
+      "name": "打印异常处理",
+      "code": "EUC-PRT-002",
+      "description": "无法打印、卡纸、打印内容异常等问题处理",
+      "level": 3,
+      "parent_code": "EUC-PRT",
+      "sort_order": 41,
+      "itsm_type": "Incident",
+      "default_priority": "P3",
+      "sla_tier": "标准故障服务",
+      "default_resolver": "Desktop",
+      "is_user_facing": true
+    },
+    {
+      "name": "扫描枪支持",
+      "code": "EUC-PRT-003",
+      "description": "扫描枪安装、连接与基础使用支持",
+      "level": 3,
+      "parent_code": "EUC-PRT",
+      "sort_order": 42,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Desktop",
+      "is_user_facing": true
+    },
+    {
+      "name": "显示器/扩展坞支持",
+      "code": "EUC-PRT-004",
+      "description": "显示器、扩展坞及相关外设连接与异常支持",
+      "level": 3,
+      "parent_code": "EUC-PRT",
+      "sort_order": 43,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Desktop",
+      "is_user_facing": true
+    },
+    {
+      "name": "桌面系统与办公环境支持",
+      "code": "EUC-ENV",
+      "description": "操作系统、驱动、办公软件、域和补丁管理",
+      "level": 2,
+      "parent_code": "EUC",
+      "sort_order": 44
+    },
+    {
+      "name": "操作系统异常",
+      "code": "EUC-ENV-001",
+      "description": "本地操作系统故障、异常和恢复支持",
+      "level": 3,
+      "parent_code": "EUC-ENV",
+      "sort_order": 45,
+      "itsm_type": "Incident",
+      "default_priority": "P2",
+      "sla_tier": "标准故障服务",
+      "default_resolver": "Desktop",
+      "is_user_facing": true
+    },
+    {
+      "name": "驱动问题",
+      "code": "EUC-ENV-002",
+      "description": "终端驱动异常、兼容性和安装支持",
+      "level": 3,
+      "parent_code": "EUC-ENV",
+      "sort_order": 46,
+      "itsm_type": "Incident",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Desktop",
+      "is_user_facing": true
+    },
+    {
+      "name": "本地办公软件异常",
+      "code": "EUC-ENV-003",
+      "description": "本地Office和通用办公软件的异常支持",
+      "level": 3,
+      "parent_code": "EUC-ENV",
+      "sort_order": 47,
+      "itsm_type": "Incident",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Desktop",
+      "is_user_facing": true
+    },
+    {
+      "name": "域加入/退域",
+      "code": "EUC-ENV-004",
+      "description": "终端加入域或退出域的标准支持服务",
+      "level": 3,
+      "parent_code": "EUC-ENV",
+      "sort_order": 48,
+      "itsm_type": "Change",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Desktop",
+      "is_user_facing": true
+    },
+    {
+      "name": "补丁更新/回退",
+      "code": "EUC-ENV-005",
+      "description": "终端标准补丁安装、回退和配置支持",
+      "level": 3,
+      "parent_code": "EUC-ENV",
+      "sort_order": 49,
+      "itsm_type": "Change",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Desktop",
+      "is_user_facing": true
+    },
+    {
+      "name": "设备资产生命周期协同",
+      "code": "EUC-AST",
+      "description": "设备交付、回收和调拨的协同服务",
+      "level": 2,
+      "parent_code": "EUC",
+      "sort_order": 50
+    },
+    {
+      "name": "设备交付协同",
+      "code": "EUC-AST-001",
+      "description": "设备交付、签收与发放协同服务",
+      "level": 3,
+      "parent_code": "EUC-AST",
+      "sort_order": 51,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Desktop",
+      "is_user_facing": true
+    },
+    {
+      "name": "设备回收协同",
+      "code": "EUC-AST-002",
+      "description": "设备回收、交接与基础确认协同服务",
+      "level": 3,
+      "parent_code": "EUC-AST",
+      "sort_order": 52,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Desktop",
+      "is_user_facing": true
+    },
+    {
+      "name": "设备调拨协同",
+      "code": "EUC-AST-003",
+      "description": "设备跨人员或跨地点调拨的协同服务",
+      "level": 3,
+      "parent_code": "EUC-AST",
+      "sort_order": 53,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Desktop",
+      "is_user_facing": true
+    },
+    {
+      "name": "邮箱与Microsoft 365协作服务",
+      "code": "COL",
+      "description": "企业邮箱、Teams协作、共享资源、License管理和邮件安全",
+      "level": 1,
+      "sort_order": 60
+    },
+    {
+      "name": "邮箱账号与基础配置",
+      "code": "COL-MAIL",
+      "description": "企业邮箱开通、停用和容量管理",
+      "level": 2,
+      "parent_code": "COL",
+      "sort_order": 61
+    },
+    {
+      "name": "邮箱开通",
+      "code": "COL-MAIL-001",
+      "description": "企业邮箱标准开通与基础配置服务",
+      "level": 3,
+      "parent_code": "COL-MAIL",
+      "sort_order": 62,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "邮箱停用",
+      "code": "COL-MAIL-002",
+      "description": "企业邮箱停用、回收和基础归档支持",
+      "level": 3,
+      "parent_code": "COL-MAIL",
+      "sort_order": 63,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "邮箱容量调整",
+      "code": "COL-MAIL-003",
+      "description": "企业邮箱容量与配额调整服务",
+      "level": 3,
+      "parent_code": "COL-MAIL",
+      "sort_order": 64,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "邮件收发与访问支持",
+      "code": "COL-ACC",
+      "description": "邮件发送、接收、登录和客户端同步异常支持",
+      "level": 2,
+      "parent_code": "COL",
+      "sort_order": 65
+    },
+    {
+      "name": "邮件发送失败",
+      "code": "COL-ACC-001",
+      "description": "邮件发送失败、退信和路由异常支持",
+      "level": 3,
+      "parent_code": "COL-ACC",
+      "sort_order": 66,
+      "itsm_type": "Incident",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "邮件接收异常",
+      "code": "COL-ACC-002",
+      "description": "邮件接收延迟、收不到邮件等异常支持",
+      "level": 3,
+      "parent_code": "COL-ACC",
+      "sort_order": 67,
+      "itsm_type": "Incident",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "邮箱登录异常",
+      "code": "COL-ACC-003",
+      "description": "邮箱网页登录或客户端访问异常支持",
+      "level": 3,
+      "parent_code": "COL-ACC",
+      "sort_order": 68,
+      "itsm_type": "Incident",
+      "default_priority": "P3",
+      "sla_tier": "快速标准服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "邮件客户端同步异常",
+      "code": "COL-ACC-004",
+      "description": "本地邮件客户端同步、缓存和连接异常支持",
+      "level": 3,
+      "parent_code": "COL-ACC",
+      "sort_order": 69,
+      "itsm_type": "Incident",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "Teams与会议协作支持",
+      "code": "COL-MTG",
+      "description": "Teams访问、会议账号和会前/会中技术支持",
+      "level": 2,
+      "parent_code": "COL",
+      "sort_order": 70
+    },
+    {
+      "name": "Teams访问与基础使用支持",
+      "code": "COL-MTG-001",
+      "description": "Teams登录、访问和基础使用支持",
+      "level": 3,
+      "parent_code": "COL-MTG",
+      "sort_order": 71,
+      "itsm_type": "Request",
+      "default_priority": "P4",
+      "sla_tier": "咨询类服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "Teams会议与账号支持",
+      "code": "COL-MTG-002",
+      "description": "Teams会议账号、权限与基础配置支持",
+      "level": 3,
+      "parent_code": "COL-MTG",
+      "sort_order": 72,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "会前调试支持",
+      "code": "COL-MTG-003",
+      "description": "会议前音视频、账号与设备联调支持",
+      "level": 3,
+      "parent_code": "COL-MTG",
+      "sort_order": 73,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "快速标准服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "会议中技术故障支持",
+      "code": "COL-MTG-004",
+      "description": "会议进行中音视频和协作连接异常支持",
+      "level": 3,
+      "parent_code": "COL-MTG",
+      "sort_order": 74,
+      "itsm_type": "Incident",
+      "default_priority": "P2",
+      "sla_tier": "紧急会议支持",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "共享资源与协作空间",
+      "code": "COL-SHR",
+      "description": "共享邮箱、日历和协作空间的权限管理",
+      "level": 2,
+      "parent_code": "COL",
+      "sort_order": 75
+    },
+    {
+      "name": "共享邮箱申请",
+      "code": "COL-SHR-001",
+      "description": "共享邮箱创建、成员配置和标准权限支持",
+      "level": 3,
+      "parent_code": "COL-SHR",
+      "sort_order": 76,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "共享日历申请",
+      "code": "COL-SHR-002",
+      "description": "共享日历或共享资源访问支持",
+      "level": 3,
+      "parent_code": "COL-SHR",
+      "sort_order": 77,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "协作空间权限申请",
+      "code": "COL-SHR-003",
+      "description": "协作空间、群组、共享目录的权限支持",
+      "level": 3,
+      "parent_code": "COL-SHR",
+      "sort_order": 78,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "Microsoft 365 License与订阅支持",
+      "code": "COL-LIC",
+      "description": "标准License分配、变更回收和能力咨询",
+      "level": 2,
+      "parent_code": "COL",
+      "sort_order": 79
+    },
+    {
+      "name": "标准License分配申请",
+      "code": "COL-LIC-001",
+      "description": "标准Microsoft 365 License分配与开通服务",
+      "level": 3,
+      "parent_code": "COL-LIC",
+      "sort_order": 80,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "License变更/回收申请",
+      "code": "COL-LIC-002",
+      "description": "Microsoft 365 License变更、回收与订阅调整服务",
+      "level": 3,
+      "parent_code": "COL-LIC",
+      "sort_order": 81,
+      "itsm_type": "Change",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "License能力与差异咨询",
+      "code": "COL-LIC-003",
+      "description": "Microsoft 365 License能力范围、差异和适配咨询服务",
+      "level": 3,
+      "parent_code": "COL-LIC",
+      "sort_order": 82,
+      "itsm_type": "Request",
+      "default_priority": "P4",
+      "sla_tier": "咨询类服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "邮件安全与协作安全例外",
+      "code": "COL-SEC",
+      "description": "钓鱼邮件举报、误拦截处理等安全协同服务",
+      "level": 2,
+      "parent_code": "COL",
+      "sort_order": 83
+    },
+    {
+      "name": "钓鱼邮件举报",
+      "code": "COL-SEC-001",
+      "description": "用户对可疑邮件、可疑链接和可疑附件的安全举报服务",
+      "level": 3,
+      "parent_code": "COL-SEC",
+      "sort_order": 84,
+      "itsm_type": "Incident",
+      "default_priority": "P2",
+      "sla_tier": "安全响应服务",
+      "default_resolver": "Security",
+      "is_user_facing": true
+    },
+    {
+      "name": "邮件误拦截处理",
+      "code": "COL-SEC-002",
+      "description": "邮件被误拦截、隔离或误判的安全协同处理服务",
+      "level": 3,
+      "parent_code": "COL-SEC",
+      "sort_order": 85,
+      "itsm_type": "Incident",
+      "default_priority": "P3",
+      "sla_tier": "安全协同服务",
+      "default_resolver": "Security",
+      "is_user_facing": true
+    },
+    {
+      "name": "网络与远程访问服务",
+      "code": "NET",
+      "description": "有线无线接入、VPN远程连接、网络访问控制和故障支持",
+      "level": 1,
+      "sort_order": 90
+    },
+    {
+      "name": "有线与无线网络接入",
+      "code": "NET-ACC",
+      "description": "有线、无线网络接入和端口开通",
+      "level": 2,
+      "parent_code": "NET",
+      "sort_order": 91
+    },
+    {
+      "name": "有线网络接入申请",
+      "code": "NET-ACC-001",
+      "description": "有线网络接入、端口开通和标准接入申请服务",
+      "level": 3,
+      "parent_code": "NET-ACC",
+      "sort_order": 92,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Network",
+      "is_user_facing": true
+    },
+    {
+      "name": "无线网络接入申请",
+      "code": "NET-ACC-002",
+      "description": "无线网络接入、账号关联和标准接入申请服务",
+      "level": 3,
+      "parent_code": "NET-ACC",
+      "sort_order": 93,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Network",
+      "is_user_facing": true
+    },
+    {
+      "name": "网络端口开通",
+      "code": "NET-ACC-003",
+      "description": "标准网络端口开通和接入配置服务",
+      "level": 3,
+      "parent_code": "NET-ACC",
+      "sort_order": 94,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Network",
+      "is_user_facing": true
+    },
+    {
+      "name": "VPN与远程连接",
+      "code": "NET-VPN",
+      "description": "基于Entra ID的VPN开通、停用、权限变更和异常支持",
+      "level": 2,
+      "parent_code": "NET",
+      "sort_order": 95
+    },
+    {
+      "name": "VPN开通申请",
+      "code": "NET-VPN-001",
+      "description": "基于Entra ID的标准VPN访问授权服务",
+      "level": 3,
+      "parent_code": "NET-VPN",
+      "sort_order": 96,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "VPN账号停用",
+      "code": "NET-VPN-002",
+      "description": "基于Entra ID的VPN标准授权回收服务",
+      "level": 3,
+      "parent_code": "NET-VPN",
+      "sort_order": 97,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "VPN权限变更",
+      "code": "NET-VPN-003",
+      "description": "基于Entra ID的VPN权限范围调整服务",
+      "level": 3,
+      "parent_code": "NET-VPN",
+      "sort_order": 98,
+      "itsm_type": "Change",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "VPN连接异常",
+      "code": "NET-VPN-004",
+      "description": "VPN无法连接、连接不稳或访问受阻的异常支持",
+      "level": 3,
+      "parent_code": "NET-VPN",
+      "sort_order": 99,
+      "itsm_type": "Incident",
+      "default_priority": "P2",
+      "sla_tier": "网络故障服务",
+      "default_resolver": "Network",
+      "is_user_facing": true
+    },
+    {
+      "name": "网络访问控制与放行",
+      "code": "NET-CTL",
+      "description": "网络放行、白名单和防火墙策略变更",
+      "level": 2,
+      "parent_code": "NET",
+      "sort_order": 100
+    },
+    {
+      "name": "网络放行申请",
+      "code": "NET-CTL-001",
+      "description": "标准网络访问放行与例外申请服务",
+      "level": 3,
+      "parent_code": "NET-CTL",
+      "sort_order": 101,
+      "itsm_type": "Change",
+      "default_priority": "P2",
+      "sla_tier": "审批类服务",
+      "default_resolver": "Network",
+      "is_user_facing": true
+    },
+    {
+      "name": "白名单申请",
+      "code": "NET-CTL-002",
+      "description": "白名单、例外访问和受控连接申请服务",
+      "level": 3,
+      "parent_code": "NET-CTL",
+      "sort_order": 102,
+      "itsm_type": "Change",
+      "default_priority": "P2",
+      "sla_tier": "审批类服务",
+      "default_resolver": "Network",
+      "is_user_facing": true
+    },
+    {
+      "name": "防火墙策略变更申请",
+      "code": "NET-CTL-003",
+      "description": "标准防火墙或ACL策略变更申请服务",
+      "level": 3,
+      "parent_code": "NET-CTL",
+      "sort_order": 103,
+      "itsm_type": "Change",
+      "default_priority": "P2",
+      "sla_tier": "审批类服务",
+      "default_resolver": "Network",
+      "is_user_facing": true
+    },
+    {
+      "name": "网络故障与连通性异常",
+      "code": "NET-INC",
+      "description": "网络中断、局部访问异常和大面积故障支持",
+      "level": 2,
+      "parent_code": "NET",
+      "sort_order": 104
+    },
+    {
+      "name": "网络连接中断故障",
+      "code": "NET-INC-001",
+      "description": "终端无法正常接入网络或完全失联的故障支持",
+      "level": 3,
+      "parent_code": "NET-INC",
+      "sort_order": 105,
+      "itsm_type": "Incident",
+      "default_priority": "P2",
+      "sla_tier": "网络故障服务",
+      "default_resolver": "Network",
+      "is_user_facing": true
+    },
+    {
+      "name": "局部网络访问异常",
+      "code": "NET-INC-002",
+      "description": "访问部分地址、部分服务或部分网络路径异常支持",
+      "level": 3,
+      "parent_code": "NET-INC",
+      "sort_order": 106,
+      "itsm_type": "Incident",
+      "default_priority": "P2",
+      "sla_tier": "网络故障服务",
+      "default_resolver": "Network",
+      "is_user_facing": true
+    },
+    {
+      "name": "大面积网络故障",
+      "code": "NET-INC-003",
+      "description": "多用户或大范围网络中断故障支持",
+      "level": 3,
+      "parent_code": "NET-INC",
+      "sort_order": 107,
+      "itsm_type": "Incident",
+      "default_priority": "P1",
+      "sla_tier": "关键中断服务",
+      "default_resolver": "Network",
+      "is_user_facing": true
+    },
+    {
+      "name": "平台与基础设施服务",
+      "code": "INF",
+      "description": "服务器、存储、虚拟机、云资源、中间件、数据库、环境部署等平台级基础设施服务",
+      "level": 1,
+      "sort_order": 110
+    },
+    {
+      "name": "存储与备份服务",
+      "code": "INF-STR",
+      "description": "文件共享、存储空间、备份恢复和数据恢复",
+      "level": 2,
+      "parent_code": "INF",
+      "sort_order": 111
+    },
+    {
+      "name": "文件共享申请",
+      "code": "INF-FIL-001",
+      "description": "企业文件共享目录、共享盘与标准共享空间申请服务",
+      "level": 3,
+      "parent_code": "INF-STR",
+      "sort_order": 112,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Infra",
+      "is_user_facing": true
+    },
+    {
+      "name": "共享目录权限支持",
+      "code": "INF-FIL-002",
+      "description": "平台级共享目录访问、权限开通与调整支持服务",
+      "level": 3,
+      "parent_code": "INF-STR",
+      "sort_order": 113,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Infra",
+      "is_user_facing": true
+    },
+    {
+      "name": "文件服务访问异常",
+      "code": "INF-FIL-003",
+      "description": "文件服务器、共享盘或共享目录访问异常支持服务",
+      "level": 3,
+      "parent_code": "INF-STR",
+      "sort_order": 114,
+      "itsm_type": "Incident",
+      "default_priority": "P2",
+      "sla_tier": "平台故障服务",
+      "default_resolver": "Infra",
+      "is_user_facing": true
+    },
+    {
+      "name": "平台级存储空间申请",
+      "code": "INF-FIL-004",
+      "description": "平台级共享存储空间扩展、配额或挂载申请服务",
+      "level": 3,
+      "parent_code": "INF-STR",
+      "sort_order": 115,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Infra",
+      "is_user_facing": true
+    },
+    {
+      "name": "备份恢复申请",
+      "code": "INF-DAT-001",
+      "description": "平台级备份恢复、文件恢复和基础恢复协同服务",
+      "level": 3,
+      "parent_code": "INF-STR",
+      "sort_order": 116,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Infra",
+      "is_user_facing": true
+    },
+    {
+      "name": "平台级数据恢复支持",
+      "code": "INF-DAT-002",
+      "description": "非业务系统平台数据、文件或共享数据恢复支持服务",
+      "level": 3,
+      "parent_code": "INF-STR",
+      "sort_order": 117,
+      "itsm_type": "Request",
+      "default_priority": "P2",
+      "sla_tier": "审批类服务",
+      "default_resolver": "Infra",
+      "is_user_facing": true
+    },
+    {
+      "name": "存储挂载/扩容申请",
+      "code": "INF-DAT-003",
+      "description": "平台级存储挂载、容量扩展和共享存储支持服务",
+      "level": 3,
+      "parent_code": "INF-STR",
+      "sort_order": 118,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Infra",
+      "is_user_facing": true
+    },
+    {
+      "name": "基础平台日志/信息查询",
+      "code": "INF-DAT-004",
+      "description": "平台级日志、运行信息和基础资源查询服务",
+      "level": 3,
+      "parent_code": "INF-STR",
+      "sort_order": 119,
+      "itsm_type": "Request",
+      "default_priority": "P4",
+      "sla_tier": "查询类服务",
+      "default_resolver": "Infra",
+      "is_user_facing": true
+    },
+    {
+      "name": "服务器与计算资源",
+      "code": "INF-SRV",
+      "description": "服务器资源申请、扩容和重启",
+      "level": 2,
+      "parent_code": "INF",
+      "sort_order": 120
+    },
+    {
+      "name": "服务器资源申请",
+      "code": "INF-SRV-001",
+      "description": "标准服务器资源、基础计算资源或平台资源申请服务",
+      "level": 3,
+      "parent_code": "INF-SRV",
+      "sort_order": 121,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Infra",
+      "is_user_facing": true
+    },
+    {
+      "name": "资源扩容申请",
+      "code": "INF-SRV-003",
+      "description": "服务器 CPU、内存、磁盘等基础资源扩容申请服务",
+      "level": 3,
+      "parent_code": "INF-SRV",
+      "sort_order": 122,
+      "itsm_type": "Change",
+      "default_priority": "P2",
+      "sla_tier": "审批类服务",
+      "default_resolver": "Infra",
+      "is_user_facing": true
+    },
+    {
+      "name": "服务器重启申请",
+      "code": "INF-SRV-004",
+      "description": "计划内服务器重启、窗口执行和恢复协同服务",
+      "level": 3,
+      "parent_code": "INF-SRV",
+      "sort_order": 123,
+      "itsm_type": "Change",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Infra",
+      "is_user_facing": true
+    },
+    {
+      "name": "虚拟机与云资源",
+      "code": "INF-VM",
+      "description": "虚拟机申请、资源调整和云资源开通",
+      "level": 2,
+      "parent_code": "INF",
+      "sort_order": 124
+    },
+    {
+      "name": "虚拟机申请",
+      "code": "INF-VM-001",
+      "description": "标准虚拟机开通、配置和交付申请服务",
+      "level": 3,
+      "parent_code": "INF-VM",
+      "sort_order": 125,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Infra",
+      "is_user_facing": true
+    },
+    {
+      "name": "虚拟机资源调整申请",
+      "code": "INF-VM-002",
+      "description": "虚拟机 CPU、内存、磁盘或规格调整申请服务",
+      "level": 3,
+      "parent_code": "INF-VM",
+      "sort_order": 126,
+      "itsm_type": "Change",
+      "default_priority": "P2",
+      "sla_tier": "审批类服务",
+      "default_resolver": "Infra",
+      "is_user_facing": true
+    },
+    {
+      "name": "云资源开通申请",
+      "code": "INF-VM-003",
+      "description": "标准云资源、云主机或基础云能力开通申请服务",
+      "level": 3,
+      "parent_code": "INF-VM",
+      "sort_order": 127,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Infra",
+      "is_user_facing": true
+    },
+    {
+      "name": "平台访问与基础配置",
+      "code": "INF-ACC",
+      "description": "平台级访问开通、配置变更和基础账号支持",
+      "level": 2,
+      "parent_code": "INF",
+      "sort_order": 128
+    },
+    {
+      "name": "平台级访问开通",
+      "code": "INF-ACC-001",
+      "description": "非业务系统平台访问、基础开通与接入支持服务",
+      "level": 3,
+      "parent_code": "INF-ACC",
+      "sort_order": 129,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Infra",
+      "is_user_facing": true
+    },
+    {
+      "name": "基础平台访问异常",
+      "code": "INF-ACC-002",
+      "description": "文件服务、服务器平台或公共基础平台访问异常支持服务",
+      "level": 3,
+      "parent_code": "INF-ACC",
+      "sort_order": 130,
+      "itsm_type": "Incident",
+      "default_priority": "P2",
+      "sla_tier": "平台故障服务",
+      "default_resolver": "Infra",
+      "is_user_facing": true
+    },
+    {
+      "name": "平台配置变更申请",
+      "code": "INF-ACC-003",
+      "description": "平台级基础配置或标准访问配置变更申请服务",
+      "level": 3,
+      "parent_code": "INF-ACC",
+      "sort_order": 131,
+      "itsm_type": "Change",
+      "default_priority": "P2",
+      "sla_tier": "审批类服务",
+      "default_resolver": "Infra",
+      "is_user_facing": true
+    },
+    {
+      "name": "基础平台账号支持",
+      "code": "INF-ACC-004",
+      "description": "平台级公共账号、非业务系统平台账户支持服务",
+      "level": 3,
+      "parent_code": "INF-ACC",
+      "sort_order": 132,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Infra",
+      "is_user_facing": true
+    },
+    {
+      "name": "中间件与数据库平台",
+      "code": "INF-MDW",
+      "description": "数据库访问、中间件开通和中间件/数据库异常支持",
+      "level": 2,
+      "parent_code": "INF",
+      "sort_order": 133
+    },
+    {
+      "name": "数据库访问支持",
+      "code": "INF-MDW-001",
+      "description": "数据库连接、账号开通和基础访问支持服务",
+      "level": 3,
+      "parent_code": "INF-MDW",
+      "sort_order": 134,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Infra",
+      "is_user_facing": true
+    },
+    {
+      "name": "中间件服务开通申请",
+      "code": "INF-MDW-002",
+      "description": "MQ、Web、中间件实例或标准组件开通申请服务",
+      "level": 3,
+      "parent_code": "INF-MDW",
+      "sort_order": 135,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Infra",
+      "is_user_facing": true
+    },
+    {
+      "name": "中间件/数据库异常",
+      "code": "INF-MDW-003",
+      "description": "数据库、中间件、Web 组件运行异常受理服务",
+      "level": 3,
+      "parent_code": "INF-MDW",
+      "sort_order": 136,
+      "itsm_type": "Incident",
+      "default_priority": "P2",
+      "sla_tier": "平台故障服务",
+      "default_resolver": "Infra",
+      "is_user_facing": true
+    },
+    {
+      "name": "环境与部署支持",
+      "code": "INF-ENV",
+      "description": "测试/生产环境准备、发布部署和环境配置异常",
+      "level": 2,
+      "parent_code": "INF",
+      "sort_order": 137
+    },
+    {
+      "name": "测试/生产环境准备申请",
+      "code": "INF-ENV-001",
+      "description": "测试、UAT、生产等标准环境准备和配置协同服务",
+      "level": 3,
+      "parent_code": "INF-ENV",
+      "sort_order": 138,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Infra",
+      "is_user_facing": true
+    },
+    {
+      "name": "发布部署支持申请",
+      "code": "INF-ENV-002",
+      "description": "标准发布窗口、部署执行和基础回退协同支持服务",
+      "level": 3,
+      "parent_code": "INF-ENV",
+      "sort_order": 139,
+      "itsm_type": "Change",
+      "default_priority": "P2",
+      "sla_tier": "审批类服务",
+      "default_resolver": "Infra",
+      "is_user_facing": true
+    },
+    {
+      "name": "环境配置异常支持",
+      "code": "INF-ENV-003",
+      "description": "环境配置缺失、部署依赖异常和运行环境问题支持服务",
+      "level": 3,
+      "parent_code": "INF-ENV",
+      "sort_order": 140,
+      "itsm_type": "Incident",
+      "default_priority": "P2",
+      "sla_tier": "平台故障服务",
+      "default_resolver": "Infra",
+      "is_user_facing": true
+    },
+    {
+      "name": "业务系统支持",
+      "code": "APP",
+      "description": "IL、IFF & Back-office、Transportation 等业务线的功能咨询、权限、数据、接口和故障支持",
+      "level": 1,
+      "sort_order": 150
+    },
+    {
+      "name": "IL业务线支持",
+      "code": "APP-IL",
+      "description": "综合物流(IL)业务线系统的功能咨询、权限、数据、接口和故障支持",
+      "level": 2,
+      "parent_code": "APP",
+      "sort_order": 151
+    },
+    {
+      "name": "IL业务线功能咨询",
+      "code": "APP-IL-FNC-001",
+      "description": "IL 业务线功能、入口和标准使用方式咨询服务",
+      "level": 3,
+      "parent_code": "APP-IL",
+      "sort_order": 152,
+      "itsm_type": "Request",
+      "default_priority": "P4",
+      "sla_tier": "咨询类服务",
+      "default_resolver": "WMS Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "IL业务线角色权限申请",
+      "code": "APP-IL-PRM-001",
+      "description": "IL 业务线系统内角色或功能权限变更申请",
+      "level": 3,
+      "parent_code": "APP-IL",
+      "sort_order": 153,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "应用支持服务",
+      "default_resolver": "WMS Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "IL主数据新增申请",
+      "code": "APP-IL-DAT-001",
+      "description": "IL 业务线主数据新增、初始化和标准录入支持",
+      "level": 3,
+      "parent_code": "APP-IL",
+      "sort_order": 154,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "应用支持服务",
+      "default_resolver": "WMS Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "IL主数据变更申请",
+      "code": "APP-IL-DAT-002",
+      "description": "IL 业务线主数据标准变更与维护支持",
+      "level": 3,
+      "parent_code": "APP-IL",
+      "sort_order": 155,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "应用支持服务",
+      "default_resolver": "WMS Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "IL业务数据查询申请",
+      "code": "APP-IL-DAT-003",
+      "description": "IL 业务线数据查询、导出和基础协同支持",
+      "level": 3,
+      "parent_code": "APP-IL",
+      "sort_order": 156,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "应用支持服务",
+      "default_resolver": "WMS Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "IL数据修正申请",
+      "code": "APP-IL-DAT-004",
+      "description": "IL 业务线例外数据修正与审批协同服务",
+      "level": 3,
+      "parent_code": "APP-IL",
+      "sort_order": 157,
+      "itsm_type": "Request",
+      "default_priority": "P2",
+      "sla_tier": "审批类服务",
+      "default_resolver": "WMS Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "IL接口异常受理",
+      "code": "APP-IL-IFC-001",
+      "description": "IL 业务线接口故障、数据传输失败和集成异常受理服务",
+      "level": 3,
+      "parent_code": "APP-IL",
+      "sort_order": 158,
+      "itsm_type": "Incident",
+      "default_priority": "P2",
+      "sla_tier": "应用故障服务",
+      "default_resolver": "WMS Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "IL数据传输失败",
+      "code": "APP-IL-IFC-002",
+      "description": "IL 业务线数据交换、文件传输和对接失败异常受理服务",
+      "level": 3,
+      "parent_code": "APP-IL",
+      "sort_order": 159,
+      "itsm_type": "Incident",
+      "default_priority": "P2",
+      "sla_tier": "应用故障服务",
+      "default_resolver": "WMS Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "IL系统无法登录",
+      "code": "APP-IL-INC-001",
+      "description": "IL 业务线系统无法登录或无法访问的故障受理服务",
+      "level": 3,
+      "parent_code": "APP-IL",
+      "sort_order": 160,
+      "itsm_type": "Incident",
+      "default_priority": "P2",
+      "sla_tier": "应用故障服务",
+      "default_resolver": "WMS Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "IL关键功能异常",
+      "code": "APP-IL-INC-002",
+      "description": "IL 业务线核心功能不能正常工作的故障受理服务",
+      "level": 3,
+      "parent_code": "APP-IL",
+      "sort_order": 161,
+      "itsm_type": "Incident",
+      "default_priority": "P2",
+      "sla_tier": "应用故障服务",
+      "default_resolver": "WMS Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "IL业务处理中断",
+      "code": "APP-IL-INC-003",
+      "description": "IL 业务线业务处理流程中断、卡住或无法继续的故障受理服务",
+      "level": 3,
+      "parent_code": "APP-IL",
+      "sort_order": 162,
+      "itsm_type": "Incident",
+      "default_priority": "P1",
+      "sla_tier": "关键业务故障",
+      "default_resolver": "WMS Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "IFF & Back-office业务线支持",
+      "code": "APP-IFF",
+      "description": "国际货代(IFF)及后台业务线系统的功能咨询、权限、数据、接口和故障支持",
+      "level": 2,
+      "parent_code": "APP",
+      "sort_order": 163
+    },
+    {
+      "name": "IFF & Back-office业务线功能咨询",
+      "code": "APP-IFF-FNC-001",
+      "description": "IFF & Back-office 业务线功能、入口和标准使用方式咨询服务",
+      "level": 3,
+      "parent_code": "APP-IFF",
+      "sort_order": 164,
+      "itsm_type": "Request",
+      "default_priority": "P4",
+      "sla_tier": "咨询类服务",
+      "default_resolver": "IFF Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "IFF & Back-office业务线角色权限申请",
+      "code": "APP-IFF-PRM-001",
+      "description": "IFF & Back-office 业务线系统内角色或功能权限变更申请",
+      "level": 3,
+      "parent_code": "APP-IFF",
+      "sort_order": 165,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "应用支持服务",
+      "default_resolver": "IFF Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "IFF & Back-office主数据新增申请",
+      "code": "APP-IFF-DAT-001",
+      "description": "IFF & Back-office 业务线主数据新增、初始化和标准录入支持",
+      "level": 3,
+      "parent_code": "APP-IFF",
+      "sort_order": 166,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "应用支持服务",
+      "default_resolver": "IFF Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "IFF & Back-office主数据变更申请",
+      "code": "APP-IFF-DAT-002",
+      "description": "IFF & Back-office 业务线主数据标准变更与维护支持",
+      "level": 3,
+      "parent_code": "APP-IFF",
+      "sort_order": 167,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "应用支持服务",
+      "default_resolver": "IFF Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "IFF & Back-office业务数据查询申请",
+      "code": "APP-IFF-DAT-003",
+      "description": "IFF & Back-office 业务线数据查询、导出和基础协同支持",
+      "level": 3,
+      "parent_code": "APP-IFF",
+      "sort_order": 168,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "应用支持服务",
+      "default_resolver": "IFF Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "IFF & Back-office数据修正申请",
+      "code": "APP-IFF-DAT-004",
+      "description": "IFF & Back-office 业务线例外数据修正与审批协同服务",
+      "level": 3,
+      "parent_code": "APP-IFF",
+      "sort_order": 169,
+      "itsm_type": "Request",
+      "default_priority": "P2",
+      "sla_tier": "审批类服务",
+      "default_resolver": "IFF Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "IFF & Back-office接口异常受理",
+      "code": "APP-IFF-IFC-001",
+      "description": "IFF & Back-office 业务线接口故障、数据传输失败和集成异常受理服务",
+      "level": 3,
+      "parent_code": "APP-IFF",
+      "sort_order": 170,
+      "itsm_type": "Incident",
+      "default_priority": "P2",
+      "sla_tier": "应用故障服务",
+      "default_resolver": "IFF Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "IFF & Back-office数据传输失败",
+      "code": "APP-IFF-IFC-002",
+      "description": "IFF & Back-office 业务线数据交换、文件传输和对接失败异常受理服务",
+      "level": 3,
+      "parent_code": "APP-IFF",
+      "sort_order": 171,
+      "itsm_type": "Incident",
+      "default_priority": "P2",
+      "sla_tier": "应用故障服务",
+      "default_resolver": "IFF Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "IFF & Back-office系统无法登录",
+      "code": "APP-IFF-INC-001",
+      "description": "IFF & Back-office 业务线系统无法登录或无法访问的故障受理服务",
+      "level": 3,
+      "parent_code": "APP-IFF",
+      "sort_order": 172,
+      "itsm_type": "Incident",
+      "default_priority": "P2",
+      "sla_tier": "应用故障服务",
+      "default_resolver": "IFF Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "IFF & Back-office关键功能异常",
+      "code": "APP-IFF-INC-002",
+      "description": "IFF & Back-office 业务线核心功能不能正常工作的故障受理服务",
+      "level": 3,
+      "parent_code": "APP-IFF",
+      "sort_order": 173,
+      "itsm_type": "Incident",
+      "default_priority": "P2",
+      "sla_tier": "应用故障服务",
+      "default_resolver": "IFF Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "IFF & Back-office业务处理中断",
+      "code": "APP-IFF-INC-003",
+      "description": "IFF & Back-office 业务线业务处理流程中断、卡住或无法继续的故障受理服务",
+      "level": 3,
+      "parent_code": "APP-IFF",
+      "sort_order": 174,
+      "itsm_type": "Incident",
+      "default_priority": "P1",
+      "sla_tier": "关键业务故障",
+      "default_resolver": "IFF Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "Transportation业务线支持",
+      "code": "APP-TRN",
+      "description": "运输业务线系统的功能咨询、权限、数据、接口和故障支持",
+      "level": 2,
+      "parent_code": "APP",
+      "sort_order": 175
+    },
+    {
+      "name": "Transportation业务线功能咨询",
+      "code": "APP-TRN-FNC-001",
+      "description": "Transportation 业务线功能、入口和标准使用方式咨询服务",
+      "level": 3,
+      "parent_code": "APP-TRN",
+      "sort_order": 176,
+      "itsm_type": "Request",
+      "default_priority": "P4",
+      "sla_tier": "咨询类服务",
+      "default_resolver": "KTMS Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "Transportation业务线角色权限申请",
+      "code": "APP-TRN-PRM-001",
+      "description": "Transportation 业务线系统内角色或功能权限变更申请",
+      "level": 3,
+      "parent_code": "APP-TRN",
+      "sort_order": 177,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "应用支持服务",
+      "default_resolver": "KTMS Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "Transportation主数据新增申请",
+      "code": "APP-TRN-DAT-001",
+      "description": "Transportation 业务线主数据新增、初始化和标准录入支持",
+      "level": 3,
+      "parent_code": "APP-TRN",
+      "sort_order": 178,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "应用支持服务",
+      "default_resolver": "KTMS Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "Transportation主数据变更申请",
+      "code": "APP-TRN-DAT-002",
+      "description": "Transportation 业务线主数据标准变更与维护支持",
+      "level": 3,
+      "parent_code": "APP-TRN",
+      "sort_order": 179,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "应用支持服务",
+      "default_resolver": "KTMS Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "Transportation业务数据查询申请",
+      "code": "APP-TRN-DAT-003",
+      "description": "Transportation 业务线数据查询、导出和基础协同支持",
+      "level": 3,
+      "parent_code": "APP-TRN",
+      "sort_order": 180,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "应用支持服务",
+      "default_resolver": "KTMS Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "Transportation数据修正申请",
+      "code": "APP-TRN-DAT-004",
+      "description": "Transportation 业务线例外数据修正与审批协同服务",
+      "level": 3,
+      "parent_code": "APP-TRN",
+      "sort_order": 181,
+      "itsm_type": "Request",
+      "default_priority": "P2",
+      "sla_tier": "审批类服务",
+      "default_resolver": "KTMS Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "Transportation接口异常受理",
+      "code": "APP-TRN-IFC-001",
+      "description": "Transportation 业务线接口故障、数据传输失败和集成异常受理服务",
+      "level": 3,
+      "parent_code": "APP-TRN",
+      "sort_order": 182,
+      "itsm_type": "Incident",
+      "default_priority": "P2",
+      "sla_tier": "应用故障服务",
+      "default_resolver": "KTMS Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "Transportation数据传输失败",
+      "code": "APP-TRN-IFC-002",
+      "description": "Transportation 业务线数据交换、文件传输和对接失败异常受理服务",
+      "level": 3,
+      "parent_code": "APP-TRN",
+      "sort_order": 183,
+      "itsm_type": "Incident",
+      "default_priority": "P2",
+      "sla_tier": "应用故障服务",
+      "default_resolver": "KTMS Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "Transportation系统无法登录",
+      "code": "APP-TRN-INC-001",
+      "description": "Transportation 业务线系统无法登录或无法访问的故障受理服务",
+      "level": 3,
+      "parent_code": "APP-TRN",
+      "sort_order": 184,
+      "itsm_type": "Incident",
+      "default_priority": "P2",
+      "sla_tier": "应用故障服务",
+      "default_resolver": "KTMS Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "Transportation关键功能异常",
+      "code": "APP-TRN-INC-002",
+      "description": "Transportation 业务线核心功能不能正常工作的故障受理服务",
+      "level": 3,
+      "parent_code": "APP-TRN",
+      "sort_order": 185,
+      "itsm_type": "Incident",
+      "default_priority": "P2",
+      "sla_tier": "应用故障服务",
+      "default_resolver": "KTMS Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "Transportation业务处理中断",
+      "code": "APP-TRN-INC-003",
+      "description": "Transportation 业务线业务处理流程中断、卡住或无法继续的故障受理服务",
+      "level": 3,
+      "parent_code": "APP-TRN",
+      "sort_order": 186,
+      "itsm_type": "Incident",
+      "default_priority": "P1",
+      "sla_tier": "关键业务故障",
+      "default_resolver": "KTMS Team",
+      "is_user_facing": true
+    },
+    {
+      "name": "跨业务线通用支持",
+      "code": "APP-GEN",
+      "description": "跨业务线共性的标准操作指导和通用支持",
+      "level": 2,
+      "parent_code": "APP",
+      "sort_order": 187
+    },
+    {
+      "name": "业务系统标准操作指导",
+      "code": "APP-GEN-FNC-001",
+      "description": "业务系统标准操作路径、步骤和常见操作指导服务",
+      "level": 3,
+      "parent_code": "APP-GEN",
+      "sort_order": 188,
+      "itsm_type": "Request",
+      "default_priority": "P4",
+      "sla_tier": "咨询类服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "安全与合规支持",
+      "code": "SEC",
+      "description": "安全事件响应、安全评估扫描、身份访问控制、数据安全和合规审计支持",
+      "level": 1,
+      "sort_order": 200
+    },
+    {
+      "name": "安全事件与应急响应",
+      "code": "SEC-EMG",
+      "description": "安全事件上报和终端感染事件处理",
+      "level": 2,
+      "parent_code": "SEC",
+      "sort_order": 201
+    },
+    {
+      "name": "安全事件上报",
+      "code": "SEC-EMG-001",
+      "description": "安全事件、可疑行为和安全告警的统一上报服务",
+      "level": 3,
+      "parent_code": "SEC-EMG",
+      "sort_order": 202,
+      "itsm_type": "Incident",
+      "default_priority": "P1",
+      "sla_tier": "安全响应服务",
+      "default_resolver": "Security",
+      "is_user_facing": true
+    },
+    {
+      "name": "终端感染上报",
+      "code": "SEC-EMG-002",
+      "description": "可疑病毒、木马或恶意终端感染事件上报服务",
+      "level": 3,
+      "parent_code": "SEC-EMG",
+      "sort_order": 203,
+      "itsm_type": "Incident",
+      "default_priority": "P1",
+      "sla_tier": "安全响应服务",
+      "default_resolver": "Security",
+      "is_user_facing": true
+    },
+    {
+      "name": "安全评估与扫描",
+      "code": "SEC-SCN",
+      "description": "安全扫描和漏洞复扫服务",
+      "level": 2,
+      "parent_code": "SEC",
+      "sort_order": 204
+    },
+    {
+      "name": "安全扫描申请",
+      "code": "SEC-SCN-001",
+      "description": "标准安全扫描与评估受理服务",
+      "level": 3,
+      "parent_code": "SEC-SCN",
+      "sort_order": 205,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Security",
+      "is_user_facing": true
+    },
+    {
+      "name": "漏洞复扫申请",
+      "code": "SEC-SCN-002",
+      "description": "已整改问题的安全复扫和验证服务",
+      "level": 3,
+      "parent_code": "SEC-SCN",
+      "sort_order": 206,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Security",
+      "is_user_facing": true
+    },
+    {
+      "name": "身份与访问安全控制",
+      "code": "SEC-IAM",
+      "description": "高风险访问例外和访问安全策略咨询",
+      "level": 2,
+      "parent_code": "SEC",
+      "sort_order": 207
+    },
+    {
+      "name": "高风险访问例外申请",
+      "code": "SEC-IAM-001",
+      "description": "高风险访问、条件访问例外和安全复核申请服务",
+      "level": 3,
+      "parent_code": "SEC-IAM",
+      "sort_order": 208,
+      "itsm_type": "Change",
+      "default_priority": "P2",
+      "sla_tier": "审批类服务",
+      "default_resolver": "Security",
+      "is_user_facing": true
+    },
+    {
+      "name": "访问安全策略咨询",
+      "code": "SEC-IAM-002",
+      "description": "安全访问策略、控制要求和受限访问咨询服务",
+      "level": 3,
+      "parent_code": "SEC-IAM",
+      "sort_order": 209,
+      "itsm_type": "Request",
+      "default_priority": "P4",
+      "sla_tier": "咨询类服务",
+      "default_resolver": "Security",
+      "is_user_facing": true
+    },
+    {
+      "name": "终端与数据安全控制",
+      "code": "SEC-DLP",
+      "description": "DLP策略和数据外发限制",
+      "level": 2,
+      "parent_code": "SEC",
+      "sort_order": 210
+    },
+    {
+      "name": "DLP策略相关申请",
+      "code": "SEC-DLP-001",
+      "description": "数据防泄漏策略相关的控制申请和例外协同服务",
+      "level": 3,
+      "parent_code": "SEC-DLP",
+      "sort_order": 211,
+      "itsm_type": "Change",
+      "default_priority": "P2",
+      "sla_tier": "审批类服务",
+      "default_resolver": "Security",
+      "is_user_facing": true
+    },
+    {
+      "name": "数据外发限制咨询",
+      "code": "SEC-DLP-002",
+      "description": "数据外发受限、审批和控制要求咨询服务",
+      "level": 3,
+      "parent_code": "SEC-DLP",
+      "sort_order": 212,
+      "itsm_type": "Request",
+      "default_priority": "P4",
+      "sla_tier": "咨询类服务",
+      "default_resolver": "Security",
+      "is_user_facing": true
+    },
+    {
+      "name": "合规与审计支持",
+      "code": "SEC-CMP",
+      "description": "审计资料、合规咨询和权限审计协同",
+      "level": 2,
+      "parent_code": "SEC",
+      "sort_order": 213
+    },
+    {
+      "name": "审计资料支持申请",
+      "code": "SEC-CMP-001",
+      "description": "面向审计要求的资料、记录和证据协同支持",
+      "level": 3,
+      "parent_code": "SEC-CMP",
+      "sort_order": 214,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Security",
+      "is_user_facing": true
+    },
+    {
+      "name": "合规要求与整改路径咨询",
+      "code": "SEC-CMP-002",
+      "description": "面向明确合规要求、整改路径和控制要求的咨询服务",
+      "level": 3,
+      "parent_code": "SEC-CMP",
+      "sort_order": 215,
+      "itsm_type": "Request",
+      "default_priority": "P4",
+      "sla_tier": "咨询类服务",
+      "default_resolver": "Security",
+      "is_user_facing": true
+    },
+    {
+      "name": "权限审计协同申请",
+      "code": "SEC-CMP-003",
+      "description": "权限审计、取证和协同材料准备支持服务",
+      "level": 3,
+      "parent_code": "SEC-CMP",
+      "sort_order": 216,
+      "itsm_type": "Request",
+      "default_priority": "P3",
+      "sla_tier": "标准服务",
+      "default_resolver": "Security",
+      "is_user_facing": true
+    },
+    {
+      "name": "咨询与服务引导",
+      "code": "ADV",
+      "description": "业务流程咨询、系统使用咨询、操作指导和需求识别引导",
+      "level": 1,
+      "sort_order": 230
+    },
+    {
+      "name": "业务流程咨询",
+      "code": "ADV-PRC",
+      "description": "流程走向和归口部门咨询",
+      "level": 2,
+      "parent_code": "ADV",
+      "sort_order": 231
+    },
+    {
+      "name": "流程怎么走咨询",
+      "code": "ADV-PRC-001",
+      "description": "面向用户的标准流程、办事路径和归口咨询服务",
+      "level": 3,
+      "parent_code": "ADV-PRC",
+      "sort_order": 232,
+      "itsm_type": "Request",
+      "default_priority": "P4",
+      "sla_tier": "咨询类服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "归口部门咨询",
+      "code": "ADV-PRC-002",
+      "description": "不清楚归属团队和处理部门时的引导咨询服务",
+      "level": 3,
+      "parent_code": "ADV-PRC",
+      "sort_order": 233,
+      "itsm_type": "Request",
+      "default_priority": "P4",
+      "sla_tier": "咨询类服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "系统使用咨询",
+      "code": "ADV-SYS",
+      "description": "场景匹配和系统入口路径咨询",
+      "level": 2,
+      "parent_code": "ADV",
+      "sort_order": 234
+    },
+    {
+      "name": "某场景该用哪个系统咨询",
+      "code": "ADV-SYS-001",
+      "description": "帮助用户识别场景与适用系统的引导咨询服务",
+      "level": 3,
+      "parent_code": "ADV-SYS",
+      "sort_order": 235,
+      "itsm_type": "Request",
+      "default_priority": "P4",
+      "sla_tier": "咨询类服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "系统入口与使用路径咨询",
+      "code": "ADV-SYS-002",
+      "description": "面向非复杂业务场景的系统入口、使用路径和选择判断咨询服务",
+      "level": 3,
+      "parent_code": "ADV-SYS",
+      "sort_order": 236,
+      "itsm_type": "Request",
+      "default_priority": "P4",
+      "sla_tier": "咨询类服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "操作指导与知识支持",
+      "code": "ADV-KB",
+      "description": "标准操作指导和SOP查询",
+      "level": 2,
+      "parent_code": "ADV",
+      "sort_order": 237
+    },
+    {
+      "name": "标准操作指导",
+      "code": "ADV-KB-001",
+      "description": "标准操作步骤、TIPS 和常见问题答复服务",
+      "level": 3,
+      "parent_code": "ADV-KB",
+      "sort_order": 238,
+      "itsm_type": "Request",
+      "default_priority": "P4",
+      "sla_tier": "咨询类服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "SOP查询",
+      "code": "ADV-KB-002",
+      "description": "标准 SOP、指引和知识材料获取服务",
+      "level": 3,
+      "parent_code": "ADV-KB",
+      "sort_order": 239,
+      "itsm_type": "Request",
+      "default_priority": "P4",
+      "sla_tier": "咨询类服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "服务引导与需求识别",
+      "code": "ADV-GUI",
+      "description": "需求识别路由和服务反馈",
+      "level": 2,
+      "parent_code": "ADV",
+      "sort_order": 240
+    },
+    {
+      "name": "不清楚提哪类服务",
+      "code": "ADV-GUI-001",
+      "description": "帮助用户识别需求类型并路由到正确服务项",
+      "level": 3,
+      "parent_code": "ADV-GUI",
+      "sort_order": 241,
+      "itsm_type": "Request",
+      "default_priority": "P4",
+      "sla_tier": "咨询类服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    },
+    {
+      "name": "投诉与服务反馈受理",
+      "code": "ADV-GUI-002",
+      "description": "面向服务体验、抱怨和反馈的统一受理服务",
+      "level": 3,
+      "parent_code": "ADV-GUI",
+      "sort_order": 242,
+      "itsm_type": "Request",
+      "default_priority": "P4",
+      "sla_tier": "咨询类服务",
+      "default_resolver": "Service Desk",
+      "is_user_facing": true
+    }
   ],
   "incident_categories": [
-    {"name": "硬件故障", "code": "hardware", "description": "服务器、存储、网络设备等硬件故障"},
-    {"name": "软件故障", "code": "software", "description": "操作系统、应用软件故障"},
-    {"name": "网络故障", "code": "network", "description": "网络连接、网络设备问题"},
-    {"name": "数据库问题", "code": "database", "description": "数据库性能、连接、备份和权限问题"},
-    {"name": "安全问题", "code": "security", "description": "安全事件、漏洞和合规问题"},
-    {"name": "性能问题", "code": "performance", "description": "系统响应慢、容量或资源瓶颈"},
-    {"name": "配置问题", "code": "configuration", "description": "系统配置、发布配置或参数错误"},
-    {"name": "其他", "code": "other", "description": "其他类型事件"}
+    {
+      "name": "硬件故障",
+      "code": "hardware",
+      "description": "服务器、存储、网络设备等硬件故障"
+    },
+    {
+      "name": "软件故障",
+      "code": "software",
+      "description": "操作系统、应用软件故障"
+    },
+    {
+      "name": "网络故障",
+      "code": "network",
+      "description": "网络连接、网络设备问题"
+    },
+    {
+      "name": "数据库问题",
+      "code": "database",
+      "description": "数据库性能、连接、备份和权限问题"
+    },
+    {
+      "name": "安全问题",
+      "code": "security",
+      "description": "安全事件、漏洞和合规问题"
+    },
+    {
+      "name": "性能问题",
+      "code": "performance",
+      "description": "系统响应慢、容量或资源瓶颈"
+    },
+    {
+      "name": "配置问题",
+      "code": "configuration",
+      "description": "系统配置、发布配置或参数错误"
+    },
+    {
+      "name": "其他",
+      "code": "other",
+      "description": "其他类型事件"
+    }
   ],
   "standard_changes": [
-    {"title": "标准软件安装", "description": "安装已批准的软件白名单中的客户端或工具", "implementation_plan": "确认软件版本和授权，按标准安装步骤执行，完成后验证可用性。", "rollback_plan": "卸载软件并恢复原配置。", "justification": "提升终端支持效率。", "category": "终端支持", "risk_level": "low", "impact_scope": "单用户或单设备", "expected_duration": 30, "approval_required": false, "affected_cis": [], "prerequisites": ["软件已进入白名单"], "remarks": "可由服务台执行。"},
-    {"title": "低风险防火墙规则调整", "description": "在已批准范围内新增或调整访问控制规则", "implementation_plan": "核对源、目的、端口、有效期和业务负责人，变更后执行连通性验证。", "rollback_plan": "删除新增规则或恢复原规则快照。", "justification": "满足业务系统访问需求。", "category": "网络", "risk_level": "low", "impact_scope": "单业务系统", "expected_duration": 45, "approval_required": true, "affected_cis": ["firewall"], "prerequisites": ["业务负责人确认", "安全策略审核通过"], "remarks": "高风险开放需走普通变更。"},
-    {"title": "数据库账号权限调整", "description": "按最小权限原则调整数据库账号权限", "implementation_plan": "确认账号、库表范围和权限级别，执行授权并记录审计。", "rollback_plan": "回收新增权限或恢复原授权快照。", "justification": "支持业务运维和数据访问需求。", "category": "数据库", "risk_level": "medium", "impact_scope": "指定数据库实例", "expected_duration": 30, "approval_required": true, "affected_cis": ["database"], "prerequisites": ["数据 owner 审批", "权限范围明确"], "remarks": "生产写权限需安全复核。"}
+    {
+      "title": "标准软件安装",
+      "description": "安装已批准的软件白名单中的客户端或工具",
+      "implementation_plan": "确认软件版本和授权，按标准安装步骤执行，完成后验证可用性。",
+      "rollback_plan": "卸载软件并恢复原配置。",
+      "justification": "提升终端支持效率。",
+      "category": "终端支持",
+      "risk_level": "low",
+      "impact_scope": "单用户或单设备",
+      "expected_duration": 30,
+      "approval_required": false,
+      "affected_cis": [],
+      "prerequisites": [
+        "软件已进入白名单"
+      ],
+      "remarks": "可由服务台执行。"
+    },
+    {
+      "title": "低风险防火墙规则调整",
+      "description": "在已批准范围内新增或调整访问控制规则",
+      "implementation_plan": "核对源、目的、端口、有效期和业务负责人，变更后执行连通性验证。",
+      "rollback_plan": "删除新增规则或恢复原规则快照。",
+      "justification": "满足业务系统访问需求。",
+      "category": "网络",
+      "risk_level": "low",
+      "impact_scope": "单业务系统",
+      "expected_duration": 45,
+      "approval_required": true,
+      "affected_cis": [
+        "firewall"
+      ],
+      "prerequisites": [
+        "业务负责人确认",
+        "安全策略审核通过"
+      ],
+      "remarks": "高风险开放需走普通变更。"
+    },
+    {
+      "title": "数据库账号权限调整",
+      "description": "按最小权限原则调整数据库账号权限",
+      "implementation_plan": "确认账号、库表范围和权限级别，执行授权并记录审计。",
+      "rollback_plan": "回收新增权限或恢复原授权快照。",
+      "justification": "支持业务运维和数据访问需求。",
+      "category": "数据库",
+      "risk_level": "medium",
+      "impact_scope": "指定数据库实例",
+      "expected_duration": 30,
+      "approval_required": true,
+      "affected_cis": [
+        "database"
+      ],
+      "prerequisites": [
+        "数据 owner 审批",
+        "权限范围明确"
+      ],
+      "remarks": "生产写权限需安全复核。"
+    }
   ],
   "known_errors": [
-    {"title": "Known Error 模板：请替换为真实问题标题", "description": "用于指导企业配置已知错误库字段，不代表真实故障。", "symptoms": "描述用户可感知症状、监控告警和日志特征。", "root_cause": "记录已确认根因或调查结论。", "workaround": "记录临时绕行方案。", "resolution": "记录永久修复方案。", "status": "template", "category": "模板", "severity": "minor", "affected_products": [], "affected_cis": [], "keywords": ["template", "known-error"]}
+    {
+      "title": "Known Error 模板：请替换为真实问题标题",
+      "description": "用于指导企业配置已知错误库字段，不代表真实故障。",
+      "symptoms": "描述用户可感知症状、监控告警和日志特征。",
+      "root_cause": "记录已确认根因或调查结论。",
+      "workaround": "记录临时绕行方案。",
+      "resolution": "记录永久修复方案。",
+      "status": "template",
+      "category": "模板",
+      "severity": "minor",
+      "affected_products": [],
+      "affected_cis": [],
+      "keywords": [
+        "template",
+        "known-error"
+      ]
+    }
   ],
   "ticket_tags": [
-    {"name": "高优先级", "code": "high-priority", "description": "需要优先处理的记录", "color": "#f5222d"},
-    {"name": "需审批", "code": "approval-required", "description": "需要审批流程的记录", "color": "#faad14"},
-    {"name": "AI建议", "code": "ai-suggestion", "description": "包含AI辅助建议的记录", "color": "#52c41a"},
-    {"name": "客户影响", "code": "customer-impact", "description": "已影响客户或终端用户的记录", "color": "#1677ff"}
+    {
+      "name": "高优先级",
+      "code": "high-priority",
+      "description": "需要优先处理的记录",
+      "color": "#f5222d"
+    },
+    {
+      "name": "需审批",
+      "code": "approval-required",
+      "description": "需要审批流程的记录",
+      "color": "#faad14"
+    },
+    {
+      "name": "AI建议",
+      "code": "ai-suggestion",
+      "description": "包含AI辅助建议的记录",
+      "color": "#52c41a"
+    },
+    {
+      "name": "客户影响",
+      "code": "customer-impact",
+      "description": "已影响客户或终端用户的记录",
+      "color": "#1677ff"
+    }
   ],
   "incidents": [],
   "problems": [],
   "changes": [],
-  "knowledge_articles": []
+  "knowledge_articles": [],
+  "ticket_templates": [
+    {
+      "name": "账号申请",
+      "description": "企业账号开通、停用、权限变更及密码重置申请，覆盖AD账号、邮箱、VPN及业务系统账号",
+      "category": "ACC",
+      "priority": "P3",
+      "is_active": true,
+      "fields": [
+        {
+          "name": "account_type",
+          "label": "账号类型",
+          "field_type": "select",
+          "required": true,
+          "sort_order": 1,
+          "options": [
+            {
+              "label": "AD账号",
+              "value": "ad"
+            },
+            {
+              "label": "邮箱账号",
+              "value": "email"
+            },
+            {
+              "label": "VPN账号",
+              "value": "vpn"
+            },
+            {
+              "label": "业务系统账号",
+              "value": "biz_system"
+            },
+            {
+              "label": "堡垒机账号",
+              "value": "bastion"
+            }
+          ]
+        },
+        {
+          "name": "target_system",
+          "label": "相关系统",
+          "field_type": "select",
+          "required": false,
+          "sort_order": 2,
+          "options": [
+            {
+              "label": "KTMS - 运输管理",
+              "value": "ktms"
+            },
+            {
+              "label": "KAPP - 物流App",
+              "value": "kapp"
+            },
+            {
+              "label": "Ksmart - 货代系统",
+              "value": "ksmart"
+            },
+            {
+              "label": "KWMS - 仓储管理",
+              "value": "kwms"
+            },
+            {
+              "label": "KOMS - 订单管理",
+              "value": "koms"
+            },
+            {
+              "label": "KBMS - 结算系统",
+              "value": "kbms"
+            },
+            {
+              "label": "K365 - 结算平台",
+              "value": "k365"
+            },
+            {
+              "label": "Ksmart Air - 空运",
+              "value": "ksmart_air"
+            },
+            {
+              "label": "顺丰对接",
+              "value": "sf_express"
+            }
+          ]
+        },
+        {
+          "name": "operation",
+          "label": "操作类型",
+          "field_type": "select",
+          "required": true,
+          "sort_order": 3,
+          "options": [
+            {
+              "label": "新增/开通",
+              "value": "create"
+            },
+            {
+              "label": "停用/回收",
+              "value": "disable"
+            },
+            {
+              "label": "权限修改",
+              "value": "modify"
+            },
+            {
+              "label": "密码重置",
+              "value": "reset"
+            },
+            {
+              "label": "续期",
+              "value": "renew"
+            }
+          ]
+        },
+        {
+          "name": "applicant_name",
+          "label": "申请人姓名",
+          "field_type": "text",
+          "required": true,
+          "sort_order": 4,
+          "options": []
+        },
+        {
+          "name": "account_id",
+          "label": "账号/工号",
+          "field_type": "text",
+          "required": false,
+          "sort_order": 5,
+          "options": []
+        },
+        {
+          "name": "department",
+          "label": "所属部门",
+          "field_type": "text",
+          "required": false,
+          "sort_order": 6,
+          "options": []
+        },
+        {
+          "name": "reason",
+          "label": "申请原因",
+          "field_type": "textarea",
+          "required": true,
+          "sort_order": 7,
+          "options": []
+        },
+        {
+          "name": "attachment",
+          "label": "附件（申请表/审批单）",
+          "field_type": "file",
+          "required": false,
+          "sort_order": 8,
+          "options": []
+        }
+      ],
+      "category_codes": [
+        "ACC-AD-001",
+        "ACC-AD-002",
+        "ACC-AUT-001",
+        "ACC-AUT-002",
+        "ACC-PRV-001",
+        "ACC-PRV-002",
+        "ACC-LCM-001",
+        "ACC-LCM-002"
+      ]
+    },
+    {
+      "name": "业务系统服务申请",
+      "description": "业务系统（KTMS/KAPP/Ksmart/KWMS等）的数据修正、配置变更、权限调整等运维服务",
+      "category": "BUS",
+      "priority": "P3",
+      "is_active": true,
+      "fields": [
+        {
+          "name": "target_system",
+          "label": "相关系统",
+          "field_type": "select",
+          "required": true,
+          "sort_order": 1,
+          "options": [
+            {
+              "label": "KTMS - 运输管理",
+              "value": "ktms"
+            },
+            {
+              "label": "KAPP - 物流App",
+              "value": "kapp"
+            },
+            {
+              "label": "Ksmart - 货代系统",
+              "value": "ksmart"
+            },
+            {
+              "label": "KWMS - 仓储管理",
+              "value": "kwms"
+            },
+            {
+              "label": "KOMS - 订单管理",
+              "value": "koms"
+            },
+            {
+              "label": "KBMS - 结算系统",
+              "value": "kbms"
+            },
+            {
+              "label": "K365 - 结算平台",
+              "value": "k365"
+            },
+            {
+              "label": "Ksmart Air - 空运",
+              "value": "ksmart_air"
+            },
+            {
+              "label": "顺丰对接",
+              "value": "sf_express"
+            }
+          ]
+        },
+        {
+          "name": "operation",
+          "label": "操作类型",
+          "field_type": "select",
+          "required": true,
+          "sort_order": 2,
+          "options": [
+            {
+              "label": "数据修正",
+              "value": "data_fix"
+            },
+            {
+              "label": "配置变更",
+              "value": "config_change"
+            },
+            {
+              "label": "权限变更",
+              "value": "perm_change"
+            },
+            {
+              "label": "服务方式修改",
+              "value": "service_modify"
+            },
+            {
+              "label": "咨询",
+              "value": "consult"
+            },
+            {
+              "label": "其他",
+              "value": "other"
+            }
+          ]
+        },
+        {
+          "name": "biz_reference",
+          "label": "业务单号/运单号",
+          "field_type": "text",
+          "required": false,
+          "sort_order": 3,
+          "options": []
+        },
+        {
+          "name": "detail",
+          "label": "问题/需求描述",
+          "field_type": "textarea",
+          "required": true,
+          "sort_order": 4,
+          "options": []
+        },
+        {
+          "name": "impact_scope",
+          "label": "影响范围",
+          "field_type": "textarea",
+          "required": false,
+          "sort_order": 5,
+          "options": []
+        },
+        {
+          "name": "attachment",
+          "label": "附件（截图/数据样本）",
+          "field_type": "file",
+          "required": false,
+          "sort_order": 6,
+          "options": []
+        }
+      ],
+      "category_codes": [
+        "APP-IL-FNC-001",
+        "APP-IL-PRM-001",
+        "APP-IL-DAT-001",
+        "APP-IL-DAT-002",
+        "APP-IL-DAT-003",
+        "APP-IL-DAT-004",
+        "APP-IL-IFC-001",
+        "APP-IL-IFC-002",
+        "APP-IL-INC-001",
+        "APP-IL-INC-002",
+        "APP-IL-INC-003",
+        "APP-IFF-FNC-001",
+        "APP-IFF-PRM-001",
+        "APP-IFF-DAT-001",
+        "APP-IFF-DAT-002",
+        "APP-IFF-DAT-003",
+        "APP-IFF-DAT-004",
+        "APP-IFF-IFC-001",
+        "APP-IFF-IFC-002",
+        "APP-IFF-INC-001",
+        "APP-IFF-INC-002",
+        "APP-IFF-INC-003",
+        "APP-TRN-FNC-001",
+        "APP-TRN-PRM-001",
+        "APP-TRN-DAT-001",
+        "APP-TRN-DAT-002",
+        "APP-TRN-DAT-003",
+        "APP-TRN-DAT-004",
+        "APP-TRN-IFC-001",
+        "APP-TRN-IFC-002",
+        "APP-TRN-INC-001",
+        "APP-TRN-INC-002",
+        "APP-TRN-INC-003",
+        "APP-GEN-FNC-001"
+      ]
+    },
+    {
+      "name": "故障报修",
+      "description": "终端设备、网络、邮件、外设等IT基础设施故障报修",
+      "category": "EUC",
+      "priority": "P2",
+      "is_active": true,
+      "fields": [
+        {
+          "name": "fault_category",
+          "label": "故障分类",
+          "field_type": "select",
+          "required": true,
+          "sort_order": 1,
+          "options": [
+            {
+              "label": "电脑无法开机",
+              "value": "pc_no_power"
+            },
+            {
+              "label": "操作系统异常",
+              "value": "os_error"
+            },
+            {
+              "label": "网络连接中断",
+              "value": "network_down"
+            },
+            {
+              "label": "邮件收发异常",
+              "value": "email_error"
+            },
+            {
+              "label": "打印机故障",
+              "value": "printer_error"
+            },
+            {
+              "label": "软件异常",
+              "value": "software_error"
+            },
+            {
+              "label": "外设故障",
+              "value": "peripheral"
+            },
+            {
+              "label": "其他",
+              "value": "other"
+            }
+          ]
+        },
+        {
+          "name": "affected_device",
+          "label": "受影响设备/资产编号",
+          "field_type": "text",
+          "required": false,
+          "sort_order": 2,
+          "options": []
+        },
+        {
+          "name": "symptom",
+          "label": "故障现象",
+          "field_type": "textarea",
+          "required": true,
+          "sort_order": 3,
+          "options": []
+        },
+        {
+          "name": "impact",
+          "label": "影响范围",
+          "field_type": "select",
+          "required": true,
+          "sort_order": 4,
+          "options": [
+            {
+              "label": "仅本人",
+              "value": "self"
+            },
+            {
+              "label": "同组多人",
+              "value": "team"
+            },
+            {
+              "label": "部门范围",
+              "value": "dept"
+            },
+            {
+              "label": "大面积",
+              "value": "wide"
+            }
+          ]
+        },
+        {
+          "name": "attachment",
+          "label": "附件（截图/报错信息）",
+          "field_type": "file",
+          "required": false,
+          "sort_order": 5,
+          "options": []
+        }
+      ],
+      "category_codes": [
+        "EUC-HDW-001",
+        "EUC-ENV-001",
+        "EUC-ENV-002",
+        "EUC-ENV-003",
+        "EUC-PRT-002",
+        "NET-INC-001",
+        "NET-INC-002",
+        "NET-INC-003",
+        "NET-VPN-004"
+      ]
+    },
+    {
+      "name": "通用服务申请",
+      "description": "不属于以上分类的IT服务请求、咨询和其他服务申请",
+      "category": "GEN",
+      "priority": "P3",
+      "is_active": true,
+      "fields": [
+        {
+          "name": "service_type",
+          "label": "服务类型",
+          "field_type": "select",
+          "required": true,
+          "sort_order": 1,
+          "options": [
+            {
+              "label": "软件安装",
+              "value": "software_install"
+            },
+            {
+              "label": "设备申请",
+              "value": "device_request"
+            },
+            {
+              "label": "网络放行",
+              "value": "network_allow"
+            },
+            {
+              "label": "会议室支持",
+              "value": "meeting"
+            },
+            {
+              "label": "IT咨询",
+              "value": "consult"
+            },
+            {
+              "label": "其他",
+              "value": "other"
+            }
+          ]
+        },
+        {
+          "name": "target_system",
+          "label": "相关系统/资产",
+          "field_type": "select",
+          "required": false,
+          "sort_order": 2,
+          "options": [
+            {
+              "label": "KTMS - 运输管理",
+              "value": "ktms"
+            },
+            {
+              "label": "KAPP - 物流App",
+              "value": "kapp"
+            },
+            {
+              "label": "Ksmart - 货代系统",
+              "value": "ksmart"
+            },
+            {
+              "label": "KWMS - 仓储管理",
+              "value": "kwms"
+            },
+            {
+              "label": "KOMS - 订单管理",
+              "value": "koms"
+            },
+            {
+              "label": "KBMS - 结算系统",
+              "value": "kbms"
+            },
+            {
+              "label": "K365 - 结算平台",
+              "value": "k365"
+            },
+            {
+              "label": "Ksmart Air - 空运",
+              "value": "ksmart_air"
+            },
+            {
+              "label": "顺丰对接",
+              "value": "sf_express"
+            }
+          ]
+        },
+        {
+          "name": "detail",
+          "label": "详细说明",
+          "field_type": "textarea",
+          "required": true,
+          "sort_order": 3,
+          "options": []
+        },
+        {
+          "name": "quantity",
+          "label": "数量",
+          "field_type": "number",
+          "required": false,
+          "sort_order": 4,
+          "options": []
+        },
+        {
+          "name": "expected_date",
+          "label": "期望完成日期",
+          "field_type": "date",
+          "required": false,
+          "sort_order": 5,
+          "options": []
+        },
+        {
+          "name": "attachment",
+          "label": "附件",
+          "field_type": "file",
+          "required": false,
+          "sort_order": 6,
+          "options": []
+        }
+      ],
+      "category_codes": [
+        "ADV-PRC-001",
+        "ADV-PRC-002",
+        "ADV-SYS-001",
+        "ADV-SYS-002",
+        "ADV-KB-001",
+        "ADV-KB-002",
+        "ADV-GUI-001",
+        "ADV-GUI-002"
+      ]
+    },
+    {
+      "name": "邮箱服务申请",
+      "description": "企业邮箱开通、停用、容量调整、共享邮箱和协作空间权限配置申请",
+      "category": "COL",
+      "priority": "P3",
+      "is_active": true,
+      "fields": [
+        {
+          "name": "operation",
+          "label": "操作类型",
+          "field_type": "select",
+          "required": true,
+          "sort_order": 1,
+          "options": [
+            {
+              "label": "邮箱开通",
+              "value": "create"
+            },
+            {
+              "label": "邮箱停用",
+              "value": "disable"
+            },
+            {
+              "label": "容量调整",
+              "value": "quota"
+            },
+            {
+              "label": "共享邮箱申请",
+              "value": "shared_mailbox"
+            },
+            {
+              "label": "协作空间权限",
+              "value": "collab_perm"
+            }
+          ]
+        },
+        {
+          "name": "email_prefix",
+          "label": "邮箱前缀/地址",
+          "field_type": "text",
+          "required": true,
+          "sort_order": 2,
+          "options": []
+        },
+        {
+          "name": "employee_name",
+          "label": "员工姓名",
+          "field_type": "text",
+          "required": true,
+          "sort_order": 3,
+          "options": []
+        },
+        {
+          "name": "department",
+          "label": "所属部门",
+          "field_type": "text",
+          "required": false,
+          "sort_order": 4,
+          "options": []
+        },
+        {
+          "name": "reason",
+          "label": "申请原因",
+          "field_type": "textarea",
+          "required": true,
+          "sort_order": 5,
+          "options": []
+        },
+        {
+          "name": "attachment",
+          "label": "附件（审批单）",
+          "field_type": "file",
+          "required": false,
+          "sort_order": 6,
+          "options": []
+        }
+      ],
+      "category_codes": [
+        "COL-MAIL-001",
+        "COL-MAIL-002",
+        "COL-MAIL-003",
+        "COL-SHR-001",
+        "COL-SHR-002",
+        "COL-SHR-003",
+        "COL-LIC-001",
+        "COL-LIC-002",
+        "COL-LIC-003"
+      ]
+    },
+    {
+      "name": "邮件故障报修",
+      "description": "邮件发送失败、接收异常、登录异常、客户端同步等邮件相关故障报修",
+      "category": "COL",
+      "priority": "P2",
+      "is_active": true,
+      "fields": [
+        {
+          "name": "fault_type",
+          "label": "故障类型",
+          "field_type": "select",
+          "required": true,
+          "sort_order": 1,
+          "options": [
+            {
+              "label": "邮件发送失败",
+              "value": "send_fail"
+            },
+            {
+              "label": "邮件接收异常",
+              "value": "receive_error"
+            },
+            {
+              "label": "邮箱登录异常",
+              "value": "login_error"
+            },
+            {
+              "label": "客户端同步异常",
+              "value": "sync_error"
+            },
+            {
+              "label": "邮件误拦截",
+              "value": "blocked"
+            },
+            {
+              "label": "其他",
+              "value": "other"
+            }
+          ]
+        },
+        {
+          "name": "email_address",
+          "label": "邮箱地址",
+          "field_type": "text",
+          "required": true,
+          "sort_order": 2,
+          "options": []
+        },
+        {
+          "name": "symptom",
+          "label": "故障现象",
+          "field_type": "textarea",
+          "required": true,
+          "sort_order": 3,
+          "options": []
+        },
+        {
+          "name": "impact",
+          "label": "影响范围",
+          "field_type": "select",
+          "required": true,
+          "sort_order": 4,
+          "options": [
+            {
+              "label": "仅本人",
+              "value": "self"
+            },
+            {
+              "label": "同组多人",
+              "value": "team"
+            },
+            {
+              "label": "部门范围",
+              "value": "dept"
+            }
+          ]
+        },
+        {
+          "name": "attachment",
+          "label": "附件（截图/报错）",
+          "field_type": "file",
+          "required": false,
+          "sort_order": 5,
+          "options": []
+        }
+      ],
+      "category_codes": [
+        "COL-ACC-001",
+        "COL-ACC-002",
+        "COL-ACC-003",
+        "COL-ACC-004",
+        "COL-MTG-001",
+        "COL-MTG-004",
+        "COL-SEC-001",
+        "COL-SEC-002"
+      ]
+    },
+    {
+      "name": "网络接入申请",
+      "description": "VPN开通/停用/变更、有线无线网络接入、端口开通、网络放行和白名单申请",
+      "category": "NET",
+      "priority": "P3",
+      "is_active": true,
+      "fields": [
+        {
+          "name": "access_type",
+          "label": "接入类型",
+          "field_type": "select",
+          "required": true,
+          "sort_order": 1,
+          "options": [
+            {
+              "label": "VPN开通",
+              "value": "vpn_create"
+            },
+            {
+              "label": "VPN停用",
+              "value": "vpn_disable"
+            },
+            {
+              "label": "VPN权限变更",
+              "value": "vpn_modify"
+            },
+            {
+              "label": "有线网络接入",
+              "value": "wired"
+            },
+            {
+              "label": "无线网络接入",
+              "value": "wifi"
+            },
+            {
+              "label": "端口开通",
+              "value": "port"
+            },
+            {
+              "label": "网络放行",
+              "value": "allowlist"
+            },
+            {
+              "label": "白名单申请",
+              "value": "whitelist"
+            }
+          ]
+        },
+        {
+          "name": "applicant_name",
+          "label": "申请人姓名",
+          "field_type": "text",
+          "required": true,
+          "sort_order": 2,
+          "options": []
+        },
+        {
+          "name": "department",
+          "label": "所属部门",
+          "field_type": "text",
+          "required": false,
+          "sort_order": 3,
+          "options": []
+        },
+        {
+          "name": "access_detail",
+          "label": "接入详情",
+          "field_type": "textarea",
+          "required": true,
+          "sort_order": 4,
+          "description": "源IP/目标IP/端口/协议等具体信息"
+        },
+        {
+          "name": "validity_period",
+          "label": "有效期",
+          "field_type": "select",
+          "required": true,
+          "sort_order": 5,
+          "options": [
+            {
+              "label": "临时(7天)",
+              "value": "7d"
+            },
+            {
+              "label": "1个月",
+              "value": "1m"
+            },
+            {
+              "label": "3个月",
+              "value": "3m"
+            },
+            {
+              "label": "6个月",
+              "value": "6m"
+            },
+            {
+              "label": "1年",
+              "value": "1y"
+            },
+            {
+              "label": "长期",
+              "value": "permanent"
+            }
+          ]
+        },
+        {
+          "name": "reason",
+          "label": "申请原因",
+          "field_type": "textarea",
+          "required": true,
+          "sort_order": 6,
+          "options": []
+        },
+        {
+          "name": "attachment",
+          "label": "附件（审批单）",
+          "field_type": "file",
+          "required": false,
+          "sort_order": 7,
+          "options": []
+        }
+      ],
+      "category_codes": [
+        "NET-ACC-001",
+        "NET-ACC-002",
+        "NET-ACC-003",
+        "NET-VPN-001",
+        "NET-VPN-002",
+        "NET-VPN-003",
+        "NET-CTL-001",
+        "NET-CTL-002",
+        "NET-CTL-003"
+      ]
+    },
+    {
+      "name": "平台资源申请",
+      "description": "服务器、虚拟机、云资源、存储空间、数据库及中间件等平台基础设施资源申请",
+      "category": "INF",
+      "priority": "P3",
+      "is_active": true,
+      "fields": [
+        {
+          "name": "resource_type",
+          "label": "资源类型",
+          "field_type": "select",
+          "required": true,
+          "sort_order": 1,
+          "options": [
+            {
+              "label": "服务器",
+              "value": "server"
+            },
+            {
+              "label": "虚拟机",
+              "value": "vm"
+            },
+            {
+              "label": "云资源",
+              "value": "cloud"
+            },
+            {
+              "label": "存储空间",
+              "value": "storage"
+            },
+            {
+              "label": "数据库",
+              "value": "database"
+            },
+            {
+              "label": "中间件",
+              "value": "middleware"
+            },
+            {
+              "label": "文件共享",
+              "value": "fileshare"
+            },
+            {
+              "label": "其他",
+              "value": "other"
+            }
+          ]
+        },
+        {
+          "name": "spec",
+          "label": "规格/配置要求",
+          "field_type": "textarea",
+          "required": true,
+          "sort_order": 2,
+          "description": "CPU/内存/磁盘/操作系统/数据库版本等"
+        },
+        {
+          "name": "quantity",
+          "label": "数量",
+          "field_type": "number",
+          "required": false,
+          "sort_order": 3,
+          "options": []
+        },
+        {
+          "name": "purpose",
+          "label": "用途说明",
+          "field_type": "textarea",
+          "required": true,
+          "sort_order": 4,
+          "options": []
+        },
+        {
+          "name": "expected_duration",
+          "label": "预计使用期限",
+          "field_type": "select",
+          "required": true,
+          "sort_order": 5,
+          "options": [
+            {
+              "label": "1个月",
+              "value": "1m"
+            },
+            {
+              "label": "3个月",
+              "value": "3m"
+            },
+            {
+              "label": "6个月",
+              "value": "6m"
+            },
+            {
+              "label": "1年",
+              "value": "1y"
+            },
+            {
+              "label": "长期",
+              "value": "permanent"
+            }
+          ]
+        },
+        {
+          "name": "cost_center",
+          "label": "成本中心",
+          "field_type": "text",
+          "required": false,
+          "sort_order": 6,
+          "options": []
+        },
+        {
+          "name": "attachment",
+          "label": "附件（审批单/架构图）",
+          "field_type": "file",
+          "required": false,
+          "sort_order": 7,
+          "options": []
+        }
+      ],
+      "category_codes": [
+        "INF-FIL-001",
+        "INF-FIL-002",
+        "INF-FIL-004",
+        "INF-SRV-001",
+        "INF-SRV-003",
+        "INF-VM-001",
+        "INF-VM-002",
+        "INF-VM-003",
+        "INF-ACC-001",
+        "INF-ACC-003",
+        "INF-ACC-004",
+        "INF-DAT-001",
+        "INF-DAT-003",
+        "INF-MDW-001",
+        "INF-MDW-002",
+        "INF-ENV-001",
+        "INF-ENV-002"
+      ]
+    },
+    {
+      "name": "安全事件上报",
+      "description": "安全事件、终端感染、可疑行为、钓鱼邮件等安全相关事件统一上报",
+      "category": "SEC",
+      "priority": "P2",
+      "is_active": true,
+      "fields": [
+        {
+          "name": "incident_type",
+          "label": "事件类型",
+          "field_type": "select",
+          "required": true,
+          "sort_order": 1,
+          "options": [
+            {
+              "label": "安全事件",
+              "value": "security_event"
+            },
+            {
+              "label": "终端感染/病毒",
+              "value": "malware"
+            },
+            {
+              "label": "可疑行为",
+              "value": "suspicious"
+            },
+            {
+              "label": "钓鱼邮件",
+              "value": "phishing"
+            },
+            {
+              "label": "数据泄漏风险",
+              "value": "dlp"
+            },
+            {
+              "label": "其他",
+              "value": "other"
+            }
+          ]
+        },
+        {
+          "name": "description",
+          "label": "事件描述",
+          "field_type": "textarea",
+          "required": true,
+          "sort_order": 2,
+          "options": []
+        },
+        {
+          "name": "affected_assets",
+          "label": "受影响资产/账号",
+          "field_type": "text",
+          "required": false,
+          "sort_order": 3,
+          "options": []
+        },
+        {
+          "name": "discovered_time",
+          "label": "发现时间",
+          "field_type": "date",
+          "required": true,
+          "sort_order": 4,
+          "options": []
+        },
+        {
+          "name": "attachment",
+          "label": "附件（截图/日志）",
+          "field_type": "file",
+          "required": false,
+          "sort_order": 5,
+          "options": []
+        }
+      ],
+      "category_codes": [
+        "SEC-EMG-001",
+        "SEC-EMG-002",
+        "SEC-SCN-001",
+        "SEC-SCN-002",
+        "SEC-IAM-001",
+        "SEC-DLP-001",
+        "SEC-CMP-001",
+        "SEC-CMP-003"
+      ]
+    },
+    {
+      "name": "IT咨询请求",
+      "description": "业务流程咨询、系统使用咨询、操作指导、服务引导和需求识别",
+      "category": "ADV",
+      "priority": "P4",
+      "is_active": true,
+      "fields": [
+        {
+          "name": "consult_type",
+          "label": "咨询类型",
+          "field_type": "select",
+          "required": true,
+          "sort_order": 1,
+          "options": [
+            {
+              "label": "业务流程咨询",
+              "value": "process"
+            },
+            {
+              "label": "系统使用咨询",
+              "value": "system_use"
+            },
+            {
+              "label": "操作指导",
+              "value": "operation_guide"
+            },
+            {
+              "label": "服务引导/需求识别",
+              "value": "guidance"
+            },
+            {
+              "label": "投诉与反馈",
+              "value": "feedback"
+            },
+            {
+              "label": "其他",
+              "value": "other"
+            }
+          ]
+        },
+        {
+          "name": "question",
+          "label": "问题描述",
+          "field_type": "textarea",
+          "required": true,
+          "sort_order": 2,
+          "options": []
+        },
+        {
+          "name": "preferred_contact",
+          "label": "联系方式",
+          "field_type": "text",
+          "required": false,
+          "sort_order": 3,
+          "options": []
+        },
+        {
+          "name": "attachment",
+          "label": "附件（相关材料）",
+          "field_type": "file",
+          "required": false,
+          "sort_order": 4,
+          "options": []
+        }
+      ],
+      "category_codes": [
+        "ADV-PRC-001",
+        "ADV-PRC-002",
+        "ADV-SYS-001",
+        "ADV-SYS-002",
+        "ADV-KB-001",
+        "ADV-GUI-001",
+        "ADV-GUI-002",
+        "SEC-IAM-002",
+        "SEC-DLP-002",
+        "SEC-CMP-002",
+        "COL-MTG-002",
+        "COL-MTG-003",
+        "COL-LIC-003",
+        "INF-ACC-002",
+        "INF-DAT-002",
+        "INF-DAT-004",
+        "INF-MDW-003",
+        "INF-ENV-003",
+        "INF-FIL-003",
+        "INF-SRV-004"
+      ]
+    }
+  ]
 }

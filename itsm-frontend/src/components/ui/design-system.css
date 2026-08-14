@@ -158,8 +158,8 @@
 .filter-chip-active,
 .filter-chip[aria-selected="true"] {
   background-color: var(--color-primary-100, #dbeafe);
-  border-color: var(--color-primary-500, #3b82f6);
-  color: var(--color-primary-700, #1d4ed8);
+  border-color: var(--color-primary-500, #F06820);
+  color: var(--color-primary-700, #B84A08);
 }
 
 /* Table Styles */
@@ -382,7 +382,7 @@
 
 /* Focus States - ARIA Requirements:
  * All interactive elements MUST have visible focus indicators.
- * Use: outline: 2px solid var(--color-focus-ring, #3b82f6);
+ * Use: outline: 2px solid var(--color-focus-ring, #F06820);
  * Focus ring must be visible against all backgrounds.
  */
 

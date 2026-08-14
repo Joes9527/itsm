@@ -1,12 +1,12 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"mime"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -23,29 +23,24 @@ import (
 type TicketAttachmentService struct {
 	client       *ent.Client
 	logger       *zap.SugaredLogger
-	uploadDir    string
+	storage      AttachmentStorage
 	maxFileSize  int64    // 最大文件大小（字节），默认10MB
 	allowedTypes []string // 允许的文件类型
 	virusScanner AttachmentVirusScanner
 }
 
 type AttachmentVirusScanner interface {
-	Scan(context.Context, string) error
+	Scan(context.Context, io.Reader, int64) error
 }
 type noopAttachmentVirusScanner struct{}
 
-func (noopAttachmentVirusScanner) Scan(context.Context, string) error { return nil }
+func (noopAttachmentVirusScanner) Scan(context.Context, io.Reader, int64) error { return nil }
 
 func NewTicketAttachmentService(client *ent.Client, logger *zap.SugaredLogger) *TicketAttachmentService {
-	uploadDir := "uploads/tickets"
-	if err := os.MkdirAll(uploadDir, 0o755); err != nil {
-		logger.Warnw("Failed to create upload directory", "error", err, "dir", uploadDir)
-	}
-
 	return &TicketAttachmentService{
-		client:      client,
-		logger:      logger,
-		uploadDir:   uploadDir,
+		client:  client,
+		logger:  logger,
+		storage: NewLocalAttachmentStorage("uploads"),
 		maxFileSize: 10 * 1024 * 1024, // 10MB
 		allowedTypes: []string{
 			// 图片
@@ -64,6 +59,13 @@ func NewTicketAttachmentService(client *ent.Client, logger *zap.SugaredLogger) *
 			"application/zip", "application/x-rar-compressed",
 		},
 		virusScanner: noopAttachmentVirusScanner{},
+	}
+}
+
+// SetStorage 切换附件存储后端（默认本地文件系统，可切换为 MinIO）。
+func (s *TicketAttachmentService) SetStorage(storage AttachmentStorage) {
+	if storage != nil {
+		s.storage = storage
 	}
 }
 
@@ -120,45 +122,38 @@ func (s *TicketAttachmentService) UploadAttachment(
 		return nil, fmt.Errorf("invalid filename: empty after sanitization")
 	}
 
-	// 2) Magic bytes / 实际内容嗅探：避免 Content-Type/扩展名 与 真实内容不一致
-	//    从文件头最多读取 512 字节，调用 net/http.DetectContentType。
-	//    注意：fileHeader.Reader 通常是一次性的，因此需要将嗅探过的字节 prepend 回去以便后续 saveFile 读取。
+	// 2) Magic bytes / 实际内容嗅探：读入内存并检测真实类型，避免 Content-Type/扩展名与真实内容不一致
+	var data []byte
 	if fileHeader.Reader != nil {
-		sniffBuf := make([]byte, 0, 512)
-		tmp := make([]byte, 512)
-		for len(sniffBuf) < 512 {
-			n, rerr := fileHeader.Reader.Read(tmp)
-			if n > 0 {
-				sniffBuf = append(sniffBuf, tmp[:n]...)
-			}
-			if rerr != nil {
-				break
-			}
+		data, err = io.ReadAll(io.LimitReader(fileHeader.Reader, s.maxFileSize+1))
+		if err != nil {
+			return nil, fmt.Errorf("failed to read file: %w", err)
 		}
-		if len(sniffBuf) > 0 {
-			detected := http.DetectContentType(sniffBuf)
-			// 以 sniff 出的类型为准，校验是否仍在白名单内
+		if int64(len(data)) > s.maxFileSize {
+			return nil, fmt.Errorf("file size exceeds maximum allowed size (%d bytes)", s.maxFileSize)
+		}
+		if len(data) > 0 {
+			detected := http.DetectContentType(data)
 			if !s.isAllowedType(detected) {
 				return nil, fmt.Errorf("detected file type not allowed: %s (claimed: %s)", detected, mimeType)
 			}
 			mimeType = detected
-			// 把嗅探过的字节塞回 Reader 的前面，保证 saveFile 读得到完整内容
-			fileHeader.Reader = &prefixedReader{prefix: sniffBuf, r: fileHeader.Reader}
 		}
 	}
 
-	// 生成唯一文件名（使用清洗后的文件名）
+	// 生成唯一 object key（使用清洗后的文件名）
 	fileName := fmt.Sprintf("%d_%d_%s", ticketID, time.Now().UnixNano(), safeName)
-	filePath := filepath.Join(s.uploadDir, fileName)
+	key := fmt.Sprintf("tickets/%s", fileName)
 
-	// 保存文件
-	if err := s.saveFile(fileHeader, filePath); err != nil {
+	// 病毒扫描（对内容字节流，存储后端无关）
+	if err := s.virusScanner.Scan(ctx, bytes.NewReader(data), int64(len(data))); err != nil {
+		return nil, fmt.Errorf("file rejected by malware scan")
+	}
+
+	// 保存到存储后端（本地或 MinIO）
+	if err := s.storage.Save(ctx, key, bytes.NewReader(data), int64(len(data))); err != nil {
 		s.logger.Errorw("Failed to save file", "error", err)
 		return nil, fmt.Errorf("failed to save file: %w", err)
-	}
-	if err := s.virusScanner.Scan(ctx, filePath); err != nil {
-		_ = os.Remove(filePath)
-		return nil, fmt.Errorf("file rejected by malware scan")
 	}
 
 	// 生成文件URL（相对路径，实际URL由前端或CDN提供）
@@ -168,7 +163,7 @@ func (s *TicketAttachmentService) UploadAttachment(
 	attachment, err := s.client.TicketAttachment.Create().
 		SetTicketID(ticketID).
 		SetFileName(safeName).
-		SetFilePath(filePath).
+		SetFilePath(key).
 		SetFileURL(fileURL).
 		SetFileSize(int(fileHeader.Size)).
 		SetFileType(mimeType).
@@ -178,7 +173,7 @@ func (s *TicketAttachmentService) UploadAttachment(
 		Save(ctx)
 	if err != nil {
 		// 如果数据库保存失败，删除已上传的文件
-		os.Remove(filePath)
+		_ = s.storage.Delete(ctx, key)
 		s.logger.Errorw("Failed to create attachment record", "error", err)
 		return nil, fmt.Errorf("failed to create attachment record: %w", err)
 	}
@@ -305,9 +300,9 @@ func (s *TicketAttachmentService) DeleteAttachment(ctx context.Context, ticketID
 		return fmt.Errorf("permission denied: only uploader, ticket assignee or requester can delete")
 	}
 
-	// 删除文件
-	if err := os.Remove(attachment.FilePath); err != nil && !os.IsNotExist(err) {
-		s.logger.Warnw("Failed to delete file", "error", err, "path", attachment.FilePath)
+	// 删除文件（存储后端：本地或 MinIO）
+	if err := s.storage.Delete(ctx, attachment.FilePath); err != nil {
+		s.logger.Warnw("Failed to delete file", "error", err, "key", attachment.FilePath)
 		// 继续删除数据库记录，即使文件删除失败
 	}
 
@@ -342,7 +337,7 @@ func (s *TicketAttachmentService) GetAttachmentFile(ctx context.Context, ticketI
 		return nil, fmt.Errorf("attachment not found: %w", err)
 	}
 
-	file, err := os.Open(attachment.FilePath)
+	file, _, err := s.storage.Open(ctx, attachment.FilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
@@ -371,43 +366,13 @@ type FileHeader struct {
 
 // AttachmentFile 附件文件
 type AttachmentFile struct {
-	File     *os.File
+	File     io.ReadCloser
 	FileName string
 	MimeType *string
 	Size     int64
 }
 
-// saveFile 保存文件
-func (s *TicketAttachmentService) saveFile(fileHeader *FileHeader, filePath string) error {
-	// 确保目录存在
-	dir := filepath.Dir(filePath)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("failed to create directory: %w", err)
-	}
-
-	// 创建文件
-	dst, err := os.Create(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to create file: %w", err)
-	}
-	defer dst.Close()
-
-	// 复制文件内容
-	written, err := io.Copy(dst, io.LimitReader(fileHeader.Reader, s.maxFileSize+1))
-	if err != nil {
-		return fmt.Errorf("failed to copy file: %w", err)
-	}
-	if written > s.maxFileSize {
-		_ = os.Remove(filePath)
-		return fmt.Errorf("file size exceeds maximum allowed size (%d bytes)", s.maxFileSize)
-	}
-	if fileHeader.Size >= 0 && written != fileHeader.Size {
-		_ = os.Remove(filePath)
-		return fmt.Errorf("uploaded file size does not match declared size")
-	}
-
-	return nil
-}
+// saveFile 已移除：文件保存统一走 AttachmentStorage 抽象（本地或 MinIO）。
 
 func (s *TicketAttachmentService) authorizeTicketAttachmentAccess(ctx context.Context, ticketID, tenantID, userID int) error {
 	if userID <= 0 {
@@ -424,8 +389,8 @@ func (s *TicketAttachmentService) authorizeTicketAttachmentAccess(ctx context.Co
 	if err != nil {
 		return fmt.Errorf("permission denied")
 	}
-	switch string(u.Role) {
-	case "super_admin", "admin", "manager", "agent", "technician", "security":
+	// 内部角色（非 end_user / guest）允许操作附件
+	if u.Role != "" && u.Role != "end_user" && u.Role != "guest" {
 		return nil
 	}
 	return fmt.Errorf("permission denied")
@@ -437,6 +402,13 @@ func SanitizeDownloadFilename(name string) string { return sanitizeFilename(name
 func (s *TicketAttachmentService) isAllowedType(mimeType string) bool {
 	if mimeType == "" {
 		return false
+	}
+
+	// 规范化：去掉 "; charset=utf-8" 等参数，取纯 MIME 类型。
+	// http.DetectContentType 对 UTF-8 文本会返回 "text/plain; charset=utf-8"，
+	// 而白名单存的是 "text/plain"，不规范化会导致合法文本附件被拒绝。
+	if mediatype, _, err := mime.ParseMediaType(mimeType); err == nil {
+		mimeType = mediatype
 	}
 
 	// 检查精确匹配
@@ -502,24 +474,5 @@ func sanitizeFilename(name string) string {
 	return out
 }
 
-// prefixedReader prepends sniffed bytes back onto the original reader so
-// downstream consumers of fileHeader.Reader see the full stream.
-type prefixedReader struct {
-	prefix []byte
-	off    int
-	r      io.Reader
-}
+// prefixedReader 已移除：上传改为一次性读入内存后统一做类型嗅探与存储。
 
-func (p *prefixedReader) Read(b []byte) (int, error) {
-	if p.off < len(p.prefix) {
-		n := copy(b, p.prefix[p.off:])
-		p.off += n
-		if n == len(b) {
-			return n, nil
-		}
-		// 继续从底层 reader 填剩下的空间
-		n2, err := p.r.Read(b[n:])
-		return n + n2, err
-	}
-	return p.r.Read(b)
-}
