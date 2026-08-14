@@ -4,6 +4,7 @@ import React from 'react';
 import { Drawer, Typography, Button } from 'antd';
 import { Bell, CheckCheck, ArrowRight, Ticket, AlertTriangle, Zap } from 'lucide-react';
 import type { TicketNotification } from '@/lib/api/ticket-notification-api';
+import { useRouter } from 'next/navigation';
 import { DESIGN } from '@/design-system/tokens';
 
 const { Text, Title } = Typography;
@@ -28,6 +29,8 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
   onMarkAllAsRead,
   onViewAll,
 }) => {
+  const router = useRouter();
+
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case 'urgent':
@@ -82,7 +85,11 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
 
     return (
       <div
-        onClick={() => onMarkAsRead(item.id)}
+        onClick={() => {
+          onMarkAsRead(item.id);
+          const url = item.actionUrl || (item.ticketId ? `/tickets/${item.ticketId}` : null);
+          if (url) router.push(url);
+        }}
         style={{
           padding: '16px',
           borderBottom: `1px solid ${DESIGN.colors.border}`,
