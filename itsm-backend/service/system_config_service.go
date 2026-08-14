@@ -12,6 +12,14 @@ import (
 	"go.uber.org/zap"
 )
 
+// protectedSystemConfigKeys 是不允许通过通用的 SystemConfig CRUD 接口
+// （UpdateSystemConfig/BatchUpdateSystemConfigs）修改的 key 集合——这些 key 只应该被专门的、
+// 权限边界更窄的机制写入（比如 cmd/lock_legacy_approvals 这个运维 CLI），不能被任何拿到通用
+// config:update 权限的租户管理员顺手改掉。
+var protectedSystemConfigKeys = map[string]bool{
+	"legacyApprovalWriteLocked": true,
+}
+
 type SystemConfigService struct {
 	client *ent.Client
 	logger *zap.SugaredLogger
@@ -119,17 +127,19 @@ func (s *SystemConfigService) ListSystemConfigs(ctx context.Context, tenantID in
 
 // UpdateSystemConfig 更新系统配置
 func (s *SystemConfigService) UpdateSystemConfig(ctx context.Context, id int, req *dto.UpdateSystemConfigRequest, tenantID int) (*ent.SystemConfig, error) {
-	// 检查配置是否存在
-	exists, err := s.client.SystemConfig.Query().
+	current, err := s.client.SystemConfig.Query().
 		Where(systemconfig.ID(id), systemconfig.DeletedAtIsNil()).
 		Where(systemconfig.TenantIDEQ(tenantID)).
-		Exist(ctx)
+		Only(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("配置不存在: %d", id)
+		}
 		s.logger.Errorf("检查配置失败: %v", err)
 		return nil, fmt.Errorf("检查配置失败: %w", err)
 	}
-	if !exists {
-		return nil, fmt.Errorf("配置不存在: %d", id)
+	if protectedSystemConfigKeys[current.Key] {
+		return nil, fmt.Errorf("配置项 %q 受保护，不能通过通用配置接口修改", current.Key)
 	}
 
 	update := s.client.SystemConfig.UpdateOneID(id).
@@ -160,6 +170,10 @@ func (s *SystemConfigService) BatchUpdateSystemConfigs(ctx context.Context, conf
 	results := make([]*ent.SystemConfig, 0, len(configs))
 
 	for _, cfg := range configs {
+		if protectedSystemConfigKeys[cfg.Key] {
+			s.logger.Warnw("拒绝通过批量配置接口修改受保护的 key", "key", cfg.Key, "tenant_id", tenantID)
+			continue
+		}
 		// 尝试查找现有配置
 		existing, err := s.client.SystemConfig.Query().
 			Where(systemconfig.KeyEQ(cfg.Key), systemconfig.DeletedAtIsNil()).

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -11,12 +12,20 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/approvalrecord"
 	"itsm-backend/ent/approvalworkflow"
+	"itsm-backend/ent/systemconfig"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/user"
 	"itsm-backend/service/approver"
 
 	"go.uber.org/zap"
 )
+
+// ErrLegacyApprovalWriteLocked 表示这个租户的旧审批工作流配置已经被标记为只读——
+// 管理员确认过批量迁移（cmd/migrate_legacy_approvals）跑完之后，用 cmd/lock_legacy_approvals
+// 手动锁定。锁定只挡 CreateWorkflow/UpdateWorkflow/DeleteWorkflow 这三个写入配置的入口，
+// 不影响历史数据查看（ListWorkflows/GetWorkflow/GetApprovalRecords）或者已有 pending
+// 审批的提交（SubmitApproval）——那些不受这个 sentinel error 影响。
+var ErrLegacyApprovalWriteLocked = errors.New("旧审批工作流系统已下线，请使用 BPMN 流程设计器")
 
 type ApprovalService struct {
 	client *ent.Client
@@ -28,6 +37,28 @@ func NewApprovalService(client *ent.Client, logger *zap.SugaredLogger) *Approval
 		client: client,
 		logger: logger,
 	}
+}
+
+// isLegacyApprovalWriteLocked 查这个租户有没有把 legacyApprovalWriteLocked 这个
+// SystemConfig key 设成 "true"。找不到对应的行——不管是这个租户从来没设置过，还是
+// SystemConfig 表里压根没这条记录——都视为未锁定（false），这是安全默认值：这次改动
+// 之前所有租户都应该继续正常工作，只有管理员显式用 cmd/lock_legacy_approvals 锁过的
+// 租户才会被挡。
+func (s *ApprovalService) isLegacyApprovalWriteLocked(ctx context.Context, tenantID int) (bool, error) {
+	cfg, err := s.client.SystemConfig.Query().
+		Where(
+			systemconfig.KeyEQ("legacyApprovalWriteLocked"),
+			systemconfig.TenantIDEQ(tenantID),
+			systemconfig.DeletedAtIsNil(),
+		).
+		First(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("查询审批工作流写锁状态失败: %w", err)
+	}
+	return cfg.Value == "true", nil
 }
 
 func (s *ApprovalService) MigrateWorkflowToBPMN(ctx context.Context, workflowID, tenantID int, dryRun bool) (*LegacyApprovalMigrationResult, error) {
@@ -42,6 +73,14 @@ func (s *ApprovalService) MigrateWorkflowToBPMN(ctx context.Context, workflowID,
 // CreateWorkflow 创建审批工作流
 func (s *ApprovalService) CreateWorkflow(ctx context.Context, req *dto.CreateApprovalWorkflowRequest, tenantID int) (*dto.ApprovalWorkflowResponse, error) {
 	s.logger.Infow("Creating approval workflow", "name", req.Name, "tenant_id", tenantID)
+
+	locked, err := s.isLegacyApprovalWriteLocked(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if locked {
+		return nil, ErrLegacyApprovalWriteLocked
+	}
 
 	// 强类型转换：ApprovalNodeRequest -> ApprovalNodeConfig -> map (Ent存储)
 	configs := dto.NodesToConfigs(req.Nodes)
@@ -80,6 +119,14 @@ func (s *ApprovalService) CreateWorkflow(ctx context.Context, req *dto.CreateApp
 func (s *ApprovalService) UpdateWorkflow(ctx context.Context, id int, req *dto.UpdateApprovalWorkflowRequest, tenantID int) (*dto.ApprovalWorkflowResponse, error) {
 	s.logger.Infow("Updating approval workflow", "id", id, "tenant_id", tenantID)
 
+	locked, err := s.isLegacyApprovalWriteLocked(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if locked {
+		return nil, ErrLegacyApprovalWriteLocked
+	}
+
 	update := s.client.ApprovalWorkflow.Update().
 		Where(
 			approvalworkflow.IDEQ(id),
@@ -113,7 +160,7 @@ func (s *ApprovalService) UpdateWorkflow(ctx context.Context, id int, req *dto.U
 		update = update.SetIsActive(*req.IsActive)
 	}
 
-	_, err := update.Save(ctx)
+	_, err = update.Save(ctx)
 	if err != nil {
 		s.logger.Errorw("Failed to update approval workflow", "error", err)
 		return nil, fmt.Errorf("failed to update approval workflow: %w", err)
@@ -137,8 +184,16 @@ func (s *ApprovalService) UpdateWorkflow(ctx context.Context, id int, req *dto.U
 func (s *ApprovalService) DeleteWorkflow(ctx context.Context, id int, tenantID int) error {
 	s.logger.Infow("Deleting approval workflow", "id", id, "tenant_id", tenantID)
 
+	locked, err := s.isLegacyApprovalWriteLocked(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+	if locked {
+		return ErrLegacyApprovalWriteLocked
+	}
+
 	// 先检查是否存在
-	_, err := s.client.ApprovalWorkflow.Query().
+	_, err = s.client.ApprovalWorkflow.Query().
 		Where(
 			approvalworkflow.IDEQ(id),
 			approvalworkflow.TenantIDEQ(tenantID),
