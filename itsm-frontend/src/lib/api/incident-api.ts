@@ -503,6 +503,22 @@ export class IncidentAPI {
   }
 
   /**
+   * 事件转为问题单
+   * 后端: POST /api/v1/incidents/:id/convert-to-problem
+   * 返回: dto.ToProblemResponse (含 id 字段)
+   */
+  static async convertToProblem(
+    id: number,
+    data: { title?: string; description?: string } = {}
+  ): Promise<{ id: number }> {
+    const response = await httpClient.post<{ id: number }>(
+      `/api/v1/incidents/${id}/convert-to-problem`,
+      data
+    );
+    return response;
+  }
+
+  /**
    * 重新打开事件
    * 将已解决或已关闭的事件恢复为处理中
    * 后端: POST /api/v1/incidents/:id/reopen

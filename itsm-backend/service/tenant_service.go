@@ -16,6 +16,12 @@ import (
 type TenantService struct {
 	client *ent.Client
 	logger *zap.SugaredLogger
+	seeder TenantSeeder // 可选：新租户全量种子
+}
+
+// TenantSeeder 租户种子接口（避免 service 包直接依赖 seeder 包）
+type TenantSeeder interface {
+	SeedForTenant(ctx context.Context, target *ent.Tenant) error
 }
 
 func NewTenantService(client *ent.Client, logger *zap.SugaredLogger) *TenantService {
@@ -23,6 +29,11 @@ func NewTenantService(client *ent.Client, logger *zap.SugaredLogger) *TenantServ
 		client: client,
 		logger: logger,
 	}
+}
+
+// SetSeeder 注入租户种子器（MSP 新租户上架时自动初始化默认配置）
+func (s *TenantService) SetSeeder(seeder TenantSeeder) {
+	s.seeder = seeder
 }
 
 // CreateTenant 创建租户
@@ -64,6 +75,15 @@ func (s *TenantService) CreateTenant(ctx context.Context, req *dto.CreateTenantR
 	}
 
 	s.logger.Infof("成功创建租户: %s (%s)", tenantEntity.Name, tenantEntity.Code)
+
+	// 新租户全量种子（角色/权限/菜单/SLA/流程/目录等默认配置）
+	if s.seeder != nil {
+		if err := s.seeder.SeedForTenant(ctx, tenantEntity); err != nil {
+			s.logger.Errorf("新租户种子失败: %v (tenant=%s)", err, tenantEntity.Code)
+			// 不阻塞租户创建本身——种子失败可重试，租户行已落库
+		}
+	}
+
 	return tenantEntity, nil
 }
 

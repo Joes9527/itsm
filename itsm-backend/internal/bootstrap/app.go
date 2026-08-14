@@ -634,8 +634,9 @@ func NewApplication() *Application {
 	auditLogService := service.NewAuditLogService(client, sugar)
 	auditLogController := controller.NewAuditLogController(auditLogService, sugar)
 
-	// Tenant Controller
+	// Tenant Controller（注入种子器：新租户上架时自动初始化默认配置）
 	tenantService := service.NewTenantService(client, sugar)
+	tenantService.SetSeeder(seeder.NewSeeder(client, sugar, cfg))
 	tenantController := controller.NewTenantController(tenantService, sugar)
 
 	// System Config Controller

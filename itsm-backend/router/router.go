@@ -921,6 +921,10 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				problems.PUT("/:id/root-cause", middleware.RequirePermission("problem", "write"), config.ProblemHandler.UpdateRootCause)
 				problems.PUT("/:id/solution", middleware.RequirePermission("problem", "write"), config.ProblemHandler.UpdateSolution)
 				problems.POST("/:id/close", middleware.RequirePermission("problem", "write"), config.ProblemHandler.CloseProblem)
+				// 问题 → 已知错误 (KEDB) 联动
+				if config.KnownErrorHandler != nil {
+					problems.POST("/:id/known-error", middleware.RequirePermission("problem", "write"), config.KnownErrorHandler.CreateFromProblem)
+				}
 				// 关联管理
 				problems.GET("/:id/associations", middleware.RequirePermission("problem", "read"), config.ProblemHandler.GetAssociations)
 				problems.POST("/:id/associations", middleware.RequirePermission("problem", "write"), config.ProblemHandler.AddAssociation)

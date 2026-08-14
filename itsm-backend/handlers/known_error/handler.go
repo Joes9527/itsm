@@ -9,6 +9,7 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	entknownerror "itsm-backend/ent/knownerror"
+	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -555,6 +556,35 @@ func (h *Handler) PromoteToKnownError(c *gin.Context) {
 	}
 
 	common.Success(c, gin.H{"message": "promoted to active"})
+}
+
+// CreateFromProblem handles POST /api/v1/problems/:id/known-error
+// 从问题单创建已知错误（问题→KEDB 联动，此前 CreateKnownErrorFromProblem 是死代码）
+func (h *Handler) CreateFromProblem(c *gin.Context) {
+	problemID, ok := common.ParsePositiveID(c, "id")
+	if !ok {
+		return
+	}
+
+	tenantID := c.GetInt("tenant_id")
+	userID := c.GetInt("user_id")
+
+	var req dto.KEDBCreateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.Fail(c, common.ParamErrorCode, "请求参数错误: "+err.Error())
+		return
+	}
+
+	problemSvc := service.NewProblemService(h.client, h.logger)
+	problemSvc.SetKnownErrorService(service.NewKnownErrorService(h.client, h.logger))
+	ke, err := problemSvc.CreateKnownErrorFromProblem(c.Request.Context(), problemID, userID, &req)
+	if err != nil {
+		h.logger.Warnw("Failed to create known error from problem", "error", err, "problem_id", problemID, "tenant_id", tenantID)
+		common.InternalError(c, "Failed to create known error: "+err.Error())
+		return
+	}
+
+	common.Success(c, ke)
 }
 
 // RegisterRoutes registers the known error routes
