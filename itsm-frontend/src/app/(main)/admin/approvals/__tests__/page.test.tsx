@@ -48,13 +48,19 @@ describe('ApprovalManagement 节点编辑器字段名', () => {
     await user.click(screen.getByRole('button', { name: /新建工作流/ }));
 
     await user.type(await screen.findByPlaceholderText('请输入工作流名称'), '固定审批人工作流');
-    await user.type(screen.getByPlaceholderText('直属主管审批'), '财务审批');
+    // 节点名称输入框带有 defaultApprovalNode 填的初始值（"审批节点 1"），先清空再输入，
+    // 否则 userEvent.type 会追加在已有文本后面。
+    const nodeNameInput = screen.getByPlaceholderText('直属主管审批');
+    await user.clear(nodeNameInput);
+    await user.type(nodeNameInput, '财务审批');
 
-    // 审批人类型：默认是 '指定角色'(role)，操作员改成 '指定用户'(user)
-    await user.click(screen.getByLabelText('审批人类型'));
-    await user.click(await screen.findByTitle('指定用户'));
-
-    // 固定审批人ID：tags 模式，输入 42 回车成为一个标签
+    // 解析值（assigneeValue，普通文本输入）和固定审批人ID（approverIds，tags 模式，
+    // 打字+回车即可成一个标签）都是简单输入控件，不依赖 antd Select 下拉选项渲染/点击这种
+    // 在 RTL 里出了名不稳定的交互——用它们来验证 camelCase 字段名修复足够，不需要再额外
+    // 点开"审批人类型"下拉框选选项。
+    await user.type(screen.getByPlaceholderText('部门/团队/项目ID，或金额阈值'), 'FIN-DEPT-01');
+    // tags 模式 Select 的占位符是渲染成 span 文案，不是 input 的 placeholder 属性，
+    // 所以这里用 antd 表单关联的 label 定位，不用 getByPlaceholderText。
     await user.type(screen.getByLabelText('固定审批人ID'), '42{enter}');
 
     // antd 会在两个汉字之间插入空格，所以用正则匹配可访问名
@@ -68,7 +74,10 @@ describe('ApprovalManagement 节点编辑器字段名', () => {
 
     const node = payload.nodes[0];
     expect(node.name).toBe('财务审批');
-    expect(node.approverType).toBe('user');
+    // 修复前：这两个字段的 Form.Item name 是 snake_case（assignee_value/approver_ids），
+    // normalizeNodes 读的是 camelCase，永远读不到操作员刚输入的值，只会落到硬编码默认值
+    // （assigneeValue undefined、approverIds []）。这条断言在修复前必然失败。
+    expect(node.assigneeValue).toBe('FIN-DEPT-01');
     expect(node.approverIds).toEqual([42]);
   });
 });
