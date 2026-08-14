@@ -161,15 +161,21 @@ assigneeType == "amount_based"   → 不生成该节点，整个工作流迁移�
 - 跳过内容等于 4 个默认种子模板的记录（这些直接由组件②处理，不走迁移，避免重复）
 - 对每条真正被租户自定义过的记录，调用修复后的 `buildLegacyApprovalBPMN` 生成 BPMN、部署、创建 `ProcessBinding`（复用现有的 `LegacyApprovalMigrationService.Migrate` 方法，这部分部署+建绑定的逻辑已经是对的，只是节点生成那段需要按上面的映射表改）
 - 遇到 `amount_based` 节点的工作流：跳过，记录到迁移报告里，不部分迁移、不静默丢弃
-- 迁移成功的工作流：标记原 `ApprovalWorkflow` 记录为已迁移（加一个 `migrated_to_bpmn_at` 时间戳字段，不删除原记录——为组件④的历史数据保留做准备）
+- 迁移成功的工作流：`LegacyApprovalMigrationResult` 记录结果（`Skipped`/`Error`），不写回 `ApprovalWorkflow` 本身——实际实现里没有加 `migrated_to_bpmn_at` 这类逐条时间戳字段，幂等性是靠 `ProcessDefinition` 按 `legacy_approval_<workflowID>` key 是否已存在来判断（`Migrate` 方法本身），不是靠标记原记录。下面组件④订正为不依赖这个字段。
 
-### 组件④ — 旧系统下线路径
+### 组件④ — 旧系统下线路径（写组件④计划前订正，2026-08-14）
 
-延续这次会话确认过的整体方向（完全下线，历史数据迁存）：
+延续这次会话确认过的整体方向（完全下线，历史数据迁存），但下面两点在写组件③实际代码时跟原设想不一致，订正如下：
 
-- `ApprovalRecord` 历史审批数据保留，但迁移完成后变成只读——不再产生新记录（因为组件②2a 已经切断了触发源头）
-- `/admin/approvals` 等旧管理界面：迁移完成后改成只读历史查看，或者直接跳转到 BPMN 设计器对应位置——具体哪种交互留到写实施计划时结合前端现状再定，这里先明确"不再允许新建/编辑"这个约束
-- `controller/approval_controller.go`、`approval_chain_controller.go`（注意：`ApprovalChain` 不在这次范围内，这里只删跟 `ApprovalWorkflow` 相关的部分，不要连 `ApprovalChain` 的端点一起删）、`service/approval_service.go`、`legacy_approval_migration_service.go`（迁移工具本身，迁移全部完成后也是历史使命完成）——确认所有租户都迁移完、旧路径确实没有流量之后再物理删除，不在批量迁移任务跑完当天就删代码
+**订正 1**：原文假设有逐工作流的 `migrated_to_bpmn_at` 字段可以用来判断"这条工作流是否已经迁移"，实际没有加这个字段（见上）。组件④不需要靠它——下线开关是**租户级/全局级**的一次性配置开关，不是逐工作流状态：管理员确认某个（或全部）租户已经跑过批量迁移、核对无误后，手动打开这个开关；开关本身不依赖对"是否所有工作流都迁移完"做自动判断。
+
+**订正 2**：直接查了 `router/router.go` 和 `controller/approval_controller.go`——`TriggerApproval` 目前在生产代码里已经零调用点（组件②2a 切断的是唯一的触发源），也就是说现在已经没有任何路径会创建新的 `ApprovalRecord`。这意味着"下线"真正需要锁的写入面很小，只是 `ApprovalWorkflow` 配置本身的增删改：
+
+- 锁 `CreateWorkflow`/`UpdateWorkflow`/`PatchWorkflow`/`DeleteWorkflow`（`controller/approval_controller.go`）——这四个是仅有的还能改变"以后迁移工具要处理什么数据"的写入点。锁上以后返回明确的"已下线，请使用 BPMN 流程设计器"错误，不是静默失败。注意路由层实际注册了两套几乎重复的路由组（`router/router.go:591-599` 的 `approvalWorkflows` 和 `:601-611` 的 `approvals`，都指向同一批 controller 方法），两套都要锁，不能只锁一个。
+- **不锁** `SubmitApproval`（对已存在的 `ApprovalRecord` 提交审批决定）——既然已经没有新记录产生，这个端点会随着存量 pending 记录被处理完而自然枯竭，提前锁反而会让下线前就已经在跑的审批卡住，见下面"非目标"。
+- **不锁** `ListWorkflows`/`GetWorkflow`/`GetApprovalRecords`（历史只读查看）。
+- `/admin/approvals` 等旧管理界面：开关打开后，创建/编辑相关的按钮和表单改成禁用/隐藏，列表和历史记录保持只读可查看，或者引导跳转到 BPMN 设计器对应位置——具体哪种交互留到写实施计划时结合前端现状再定。
+- `controller/approval_controller.go`、`approval_chain_controller.go`（注意：`ApprovalChain` 不在这次范围内，这里只删跟 `ApprovalWorkflow` 相关的部分，不要连 `ApprovalChain` 的端点一起删）、`service/approval_service.go`、`legacy_approval_migration_service.go`（迁移工具本身，迁移全部完成后也是历史使命完成）——物理删除不在这次计划范围内，见"非目标"。
 
 ## 测试计划
 
@@ -178,8 +184,8 @@ assigneeType == "amount_based"   → 不生成该节点，整个工作流迁移�
 - 组件②2b：`change_emergency_flow` 能被发现、部署、`StartProcess` 成功创建实例（不再报"流程定义不存在"）。
 - 组件②2c：修完 `business_type` 之后，`ProcessResolver` 对 service_request 类型工单能正确解析到 `service_request_flow`，不再落到 `ticket_general_flow` 兜底；同时断言 `change` 类型工单的路由行为在这次修改前后不变（用来验证"对 Change 无影响"这个判断，不是假设）。
 - 组件②2d：**这是这次评审直接指出没有被覆盖、需要补上的场景**——`priority="high"`/`"urgent"` 的 service_request 类型工单，`ResolveWithPriority` 要解析到 `service_request_urgent_flow`，不是 `service_request_flow`；普通优先级的要保持解析到 `service_request_flow`。跟现有的 `ticket_general_flow`/`ticket_urgent_flow` 那组测试用同样的断言方式。
-- 组件③：`buildLegacyApprovalBPMN` 对 7 种 `assigneeType`（user/group/role/dept_manager/team_leader/project_manager/temp_team_leader）分别生成正确的 BPMN 属性；`amount_based` 类型触发中止+明确错误；批量迁移任务对种子默认模板正确跳过、对自定义工作流正确迁移并标记、租户隔离（迁移只处理对应租户的数据，不跨租户误迁）。
-- 组件④：只读断言（旧 API 的创建/编辑端点在标记下线后返回明确的"已下线，请使用 BPMN"错误，而不是继续悄悄写入数据）。
+- 组件③：`buildLegacyApprovalBPMN` 对 7 种 `assigneeType`（user/group/role/dept_manager/team_leader/project_manager/temp_team_leader）分别生成正确的 BPMN 属性；`amount_based` 类型触发中止+明确错误；批量迁移任务对种子默认模板正确跳过、对自定义工作流正确迁移、租户隔离（迁移只处理对应租户的数据，不跨租户误迁）。
+- 组件④：开关关闭时四个写入端点（Create/Update/Patch/Delete Workflow，两套路由组都要覆盖）行为不变；开关打开后统一返回明确的"已下线"错误，不静默失败；`SubmitApproval`/`GetApprovalRecords`/`ListWorkflows`/`GetWorkflow` 在开关打开前后行为都不变（历史查看和存量 pending 审批不受影响）。
 
 ## 非目标（本次不做）
 
