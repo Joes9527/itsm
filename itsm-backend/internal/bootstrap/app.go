@@ -240,7 +240,7 @@ func NewApplication() *Application {
 	// Connector Manager / Registry / Market —— 连接器/插件/技能市场基础设施
 	connectorManager := connector.NewManager(connector.Default(), sugar)
 	connectorMarket := marketplace.New()
-	connectorController := controller.NewConnectorController(connectorManager, connector.Default(), connectorMarket, sugar)
+	connectorController := controller.NewConnectorController(connectorManager, connector.Default(), connectorMarket, sugar, client)
 
 	// Webhook 事件推送订阅方：sla.breached 按租户推送到已配置的 webhook 端点
 	webhookSubscriber := service.NewWebhookEventSubscriber(connectorManager, sugar)
@@ -403,6 +403,11 @@ func NewApplication() *Application {
 		}
 	}
 	wireEmailMsgraphConnector(client, ticketService, triageService, ticketAttachmentService, connectorController, sugar)
+
+	// 从数据库恢复已配置的连接器（如 msgraph-email），避免进程重启后丢失
+	if err := connectorController.LoadAll(context.Background()); err != nil {
+		sugar.Warnw("Failed to restore connectors from DB", "error", err)
+	}
 
 	rootCauseService := service.NewRootCauseService(client, sugar)
 	// LLM/Embedding/VectorStore

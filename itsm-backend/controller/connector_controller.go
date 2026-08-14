@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -12,6 +13,8 @@ import (
 	msgraphpkg "itsm-backend/connector/builtin/msgraph"
 	"itsm-backend/connector/marketplace"
 	"itsm-backend/dto"
+	"itsm-backend/ent"
+	"itsm-backend/ent/connectorconfig"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -42,11 +45,12 @@ type ConnectorController struct {
 	market           *marketplace.Market // optional
 	registry         *connector.Registry
 	logger           *zap.SugaredLogger
+	client           *ent.Client // 持久化连接器配置（nil 时跳过，测试场景）
 	emailCoordinator emailPollingCoordinator // optional; nil unless SetEmailCoordinator is called
 }
 
-func NewConnectorController(mgr *connector.Manager, reg *connector.Registry, mkt *marketplace.Market, logger *zap.SugaredLogger) *ConnectorController {
-	return &ConnectorController{manager: mgr, market: mkt, registry: reg, logger: logger}
+func NewConnectorController(mgr *connector.Manager, reg *connector.Registry, mkt *marketplace.Market, logger *zap.SugaredLogger, client *ent.Client) *ConnectorController {
+	return &ConnectorController{manager: mgr, market: mkt, registry: reg, logger: logger, client: client}
 }
 
 // SetEmailCoordinator wires in the MS Graph email polling coordinator.
@@ -162,6 +166,10 @@ func (c *ConnectorController) Provision(ctx *gin.Context) {
 		common.Fail(ctx, common.InternalErrorCode, err.Error())
 		return
 	}
+	// 持久化到数据库，供后端重启后自动恢复
+	if err := c.persistConfig(ctx.Request.Context(), cfg); err != nil {
+		c.logger.Warnw("Failed to persist connector config", "error", err, "tenant", tenantID, "name", cfg.Name)
+	}
 	if req.Name == "msgraph-email" && c.emailCoordinator != nil {
 		if !cfg.Enabled {
 			c.emailCoordinator.Stop(tenantID)
@@ -185,6 +193,10 @@ func (c *ConnectorController) Revoke(ctx *gin.Context) {
 	name := ctx.Param("name")
 	tenantID := ctx.GetInt("tenant_id")
 	c.manager.Revoke(connector.Config{TenantID: tenantID, Name: name})
+	// 从数据库删除配置
+	if err := c.deleteConfig(ctx.Request.Context(), tenantID, name); err != nil {
+		c.logger.Warnw("Failed to delete connector config", "error", err, "tenant", tenantID, "name", name)
+	}
 	if name == "msgraph-email" && c.emailCoordinator != nil {
 		c.emailCoordinator.Stop(tenantID)
 	}
@@ -463,4 +475,100 @@ func convertElement(e dto.CardElementDTO) connector.CardElement {
 		el.Action = &connector.Action{Type: e.Action.Type, Text: e.Action.Text, URL: e.Action.URL, Value: e.Action.Value}
 	}
 	return el
+}
+
+// persistConfig 持久化连接器配置到数据库，供后端重启后自动恢复。
+func (c *ConnectorController) persistConfig(ctx context.Context, cfg connector.Config) error {
+	if c.client == nil {
+		return nil
+	}
+	credJSON, _ := json.Marshal(cfg.Credentials)
+	settingsJSON, _ := json.Marshal(cfg.Settings)
+	labelsJSON, _ := json.Marshal(cfg.Labels)
+
+	existing, err := c.client.ConnectorConfig.Query().
+		Where(connectorconfig.TenantIDEQ(cfg.TenantID), connectorconfig.NameEQ(cfg.Name)).
+		Only(ctx)
+	if ent.IsNotFound(err) {
+		_, err = c.client.ConnectorConfig.Create().
+			SetTenantID(cfg.TenantID).
+			SetName(cfg.Name).
+			SetProvider(cfg.Provider).
+			SetEnabled(cfg.Enabled).
+			SetCredentials(string(credJSON)).
+			SetSettings(string(settingsJSON)).
+			SetLabels(string(labelsJSON)).
+			Save(ctx)
+		return err
+	}
+	if err != nil {
+		return err
+	}
+	_, err = existing.Update().
+		SetProvider(cfg.Provider).
+		SetEnabled(cfg.Enabled).
+		SetCredentials(string(credJSON)).
+		SetSettings(string(settingsJSON)).
+		SetLabels(string(labelsJSON)).
+		Save(ctx)
+	return err
+}
+
+// deleteConfig 从数据库删除连接器配置。
+func (c *ConnectorController) deleteConfig(ctx context.Context, tenantID int, name string) error {
+	if c.client == nil {
+		return nil
+	}
+	_, err := c.client.ConnectorConfig.Delete().
+		Where(connectorconfig.TenantIDEQ(tenantID), connectorconfig.NameEQ(name)).
+		Exec(ctx)
+	return err
+}
+
+// LoadAll 从数据库加载所有已启用的连接器配置并自动 provision。
+// 供 bootstrap 在启动时调用，恢复因进程重启而丢失的连接器实例。
+func (c *ConnectorController) LoadAll(ctx context.Context) error {
+	if c.client == nil {
+		return nil
+	}
+	configs, err := c.client.ConnectorConfig.Query().
+		Where(connectorconfig.EnabledEQ(true)).
+		All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, cfg := range configs {
+		var credentials map[string]string
+		var settings map[string]interface{}
+		var labels map[string]string
+		_ = json.Unmarshal([]byte(cfg.Credentials), &credentials)
+		_ = json.Unmarshal([]byte(cfg.Settings), &settings)
+		_ = json.Unmarshal([]byte(cfg.Labels), &labels)
+		if settings == nil {
+			settings = make(map[string]interface{})
+		}
+		if err := c.manager.Provision(ctx, connector.Config{
+			TenantID:    cfg.TenantID,
+			Name:        cfg.Name,
+			Provider:    cfg.Provider,
+			Enabled:     cfg.Enabled,
+			Credentials: credentials,
+			Settings:    settings,
+			Labels:      labels,
+			CreatedAt:   cfg.CreatedAt,
+			UpdatedAt:   cfg.UpdatedAt,
+		}); err != nil {
+			c.logger.Warnw("Failed to restore connector from DB", "error", err, "tenant", cfg.TenantID, "name", cfg.Name)
+			continue
+		}
+		// 恢复 msgraph-email 的邮件轮询
+		if cfg.Name == "msgraph-email" && cfg.Enabled && c.emailCoordinator != nil {
+			if conn, ok := c.manager.Get(cfg.TenantID, "msgraph-email"); ok {
+				if gc, ok := conn.(*msgraphpkg.GraphConnector); ok {
+					c.emailCoordinator.Start(ctx, cfg.TenantID, gc)
+				}
+			}
+		}
+	}
+	return nil
 }

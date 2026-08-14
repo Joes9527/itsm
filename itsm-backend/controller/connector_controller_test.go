@@ -34,7 +34,7 @@ func setupConnectorController(t *testing.T) *gin.Engine {
 	reg := connector.NewRegistry()
 	mgr := connector.NewManager(reg, logger)
 	mkt := marketplace.New()
-	ctrl := NewConnectorController(mgr, reg, mkt, logger)
+	ctrl := NewConnectorController(mgr, reg, mkt, logger, nil)
 
 	r := gin.New()
 	r.Use(gin.Recovery())
@@ -104,7 +104,7 @@ func setupConnectorControllerWithProvision(t *testing.T) *gin.Engine {
 	reg.Register(func() connector.Connector { return &provisionFake{} })
 	mgr := connector.NewManager(reg, logger)
 	mkt := marketplace.New()
-	ctrl := NewConnectorController(mgr, reg, mkt, logger)
+	ctrl := NewConnectorController(mgr, reg, mkt, logger, nil)
 
 	r := gin.New()
 	r.Use(gin.Recovery())
@@ -234,7 +234,7 @@ func TestConnectorController_Provision_StartsEmailCoordinatorForMsgraphEmail(t *
 	reg.Register(func() connector.Connector { return msgraphpkg.New() })
 	mgr := connector.NewManager(reg, logger)
 	mkt := marketplace.New()
-	ctrl := NewConnectorController(mgr, reg, mkt, logger)
+	ctrl := NewConnectorController(mgr, reg, mkt, logger, nil)
 	fake := &fakeEmailCoordinator{}
 	ctrl.SetEmailCoordinator(fake)
 
@@ -309,7 +309,7 @@ func TestConnectorController_Provision_CoordinatorContextSurvivesRequestReturn(t
 	reg.Register(func() connector.Connector { return msgraphpkg.New() })
 	mgr := connector.NewManager(reg, logger)
 	mkt := marketplace.New()
-	ctrl := NewConnectorController(mgr, reg, mkt, logger)
+	ctrl := NewConnectorController(mgr, reg, mkt, logger, nil)
 	fake := &ctxCapturingEmailCoordinator{}
 	ctrl.SetEmailCoordinator(fake)
 
@@ -373,7 +373,7 @@ func TestConnectorController_Provision_IgnoresOtherConnectors(t *testing.T) {
 	reg := connector.NewRegistry()
 	mgr := connector.NewManager(reg, logger)
 	mkt := marketplace.New()
-	ctrl := NewConnectorController(mgr, reg, mkt, logger)
+	ctrl := NewConnectorController(mgr, reg, mkt, logger, nil)
 	fake := &fakeEmailCoordinator{}
 	ctrl.SetEmailCoordinator(fake)
 
@@ -402,7 +402,7 @@ func TestConnectorController_Revoke_StopsEmailCoordinator(t *testing.T) {
 	reg := connector.NewRegistry()
 	mgr := connector.NewManager(reg, logger)
 	mkt := marketplace.New()
-	ctrl := NewConnectorController(mgr, reg, mkt, logger)
+	ctrl := NewConnectorController(mgr, reg, mkt, logger, nil)
 	fake := &fakeEmailCoordinator{}
 	ctrl.SetEmailCoordinator(fake)
 

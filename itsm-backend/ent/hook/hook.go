@@ -296,6 +296,18 @@ func (f ConfigurationItemHistoryFunc) Mutate(ctx context.Context, m ent.Mutation
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ConfigurationItemHistoryMutation", m)
 }
 
+// The ConnectorConfigFunc type is an adapter to allow the use of ordinary
+// function as ConnectorConfig mutator.
+type ConnectorConfigFunc func(context.Context, *ent.ConnectorConfigMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ConnectorConfigFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ConnectorConfigMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ConnectorConfigMutation", m)
+}
+
 // The ContractFunc type is an adapter to allow the use of ordinary
 // function as Contract mutator.
 type ContractFunc func(context.Context, *ent.ContractMutation) (ent.Value, error)

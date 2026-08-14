@@ -1159,6 +1159,25 @@ var (
 			},
 		},
 	}
+	// ConnectorConfigsColumns holds the columns for the "connector_configs" table.
+	ConnectorConfigsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "tenant_id", Type: field.TypeInt},
+		{Name: "name", Type: field.TypeString},
+		{Name: "provider", Type: field.TypeString},
+		{Name: "enabled", Type: field.TypeBool, Default: false},
+		{Name: "credentials", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "settings", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "labels", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// ConnectorConfigsTable holds the schema information for the "connector_configs" table.
+	ConnectorConfigsTable = &schema.Table{
+		Name:       "connector_configs",
+		Columns:    ConnectorConfigsColumns,
+		PrimaryKey: []*schema.Column{ConnectorConfigsColumns[0]},
+	}
 	// ContractsColumns holds the columns for the "contracts" table.
 	ContractsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -5097,6 +5116,7 @@ var (
 		CloudServicesTable,
 		ConfigurationItemsTable,
 		ConfigurationItemHistoriesTable,
+		ConnectorConfigsTable,
 		ContractsTable,
 		ConversationsTable,
 		DepartmentsTable,

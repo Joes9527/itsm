@@ -238,7 +238,7 @@ func TestWireEmailMsgraphConnector_RegistersCoordinator(t *testing.T) {
 	reg := connector.NewRegistry()
 	mgr := connector.NewManager(reg, logger)
 	mkt := connectorMarketplace.New()
-	connCtrl := controller.NewConnectorController(mgr, reg, mkt, logger)
+	connCtrl := controller.NewConnectorController(mgr, reg, mkt, logger, nil)
 
 	// Must not panic even though this is a from-scratch registry/controller —
 	// that's the behavior under test.
