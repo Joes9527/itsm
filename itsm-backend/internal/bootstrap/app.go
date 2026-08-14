@@ -26,8 +26,8 @@ import (
 	marketplaceService "itsm-backend/service/marketplace"
 
 	"itsm-backend/database"
-	"itsm-backend/dto"
 	"itsm-backend/docs"
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/tenant"
 	"itsm-backend/ent/user"
@@ -510,6 +510,7 @@ func NewApplication() *Application {
 	// Domain: Change (DDD)
 	changeRepo := change.NewEntRepository(client, database.GetRawDB())
 	changeServiceDomain := change.NewService(changeRepo, client, sugar)
+	changeServiceDomain.SetProcessTriggerService(processTriggerService)
 	changeHandler := change.NewHandler(changeServiceDomain)
 
 	// Analytics & Prediction Controllers

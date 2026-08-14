@@ -12,17 +12,19 @@ import (
 	"itsm-backend/ent/cirelationship"
 	"itsm-backend/ent/configurationitem"
 	"itsm-backend/ent/incident"
+	"itsm-backend/ent/processinstance"
 	"itsm-backend/service"
 
 	"go.uber.org/zap"
 )
 
 type Service struct {
-	repo           Repository
-	logger         *zap.SugaredLogger
-	entClient      *ent.Client
-	pirService     *service.ChangePIRService
-	approvalBridge *service.BPMNApprovalBridge
+	repo                  Repository
+	logger                *zap.SugaredLogger
+	entClient             *ent.Client
+	pirService            *service.ChangePIRService
+	approvalBridge        *service.BPMNApprovalBridge
+	processTriggerService service.ProcessTriggerServiceInterface
 }
 
 func NewService(repo Repository, entClient *ent.Client, logger *zap.SugaredLogger) *Service {
@@ -38,6 +40,13 @@ func NewService(repo Repository, entClient *ent.Client, logger *zap.SugaredLogge
 		svc.approvalBridge = service.NewBPMNApprovalBridge(entClient, logger)
 	}
 	return svc
+}
+
+// SetProcessTriggerService 注入 BPMN 流程触发服务——参照 IncidentService/TicketService
+// 的 SetProcessTriggerService 模式（internal/bootstrap/app.go 里同样的 setter 注入方式），
+// 不是构造函数参数，避免循环依赖初始化顺序问题。
+func (s *Service) SetProcessTriggerService(svc service.ProcessTriggerServiceInterface) {
+	s.processTriggerService = svc
 }
 
 // Change methods
@@ -134,9 +143,45 @@ func (s *Service) SubmitChange(ctx context.Context, changeID, tenantID, submitte
 		}
 	}
 
-	if err := s.repo.SubmitForApproval(ctx, changeID, tenantID, req.ApproverIDs, req.Comment); err != nil {
-		s.logger.Warnw("Failed to atomically submit change", "error", err, "change_id", changeID)
+	if err := s.repo.MarkSubmittedForApproval(ctx, changeID, tenantID); err != nil {
+		s.logger.Warnw("Failed to mark change as submitted", "error", err, "change_id", changeID)
 		return nil, fmt.Errorf("提交变更审批失败: %w", err)
+	}
+
+	if s.processTriggerService != nil {
+		processDefKey := "change_normal_flow"
+		if c.Type == "emergency" {
+			processDefKey = "change_emergency_flow"
+		}
+		// 幂等保护：同一个 change 不应该有两个并行的运行中流程实例（比如重复点击提交、
+		// 或者前端重试）。businessKey 的约定跟 BPMNApprovalBridge.findPendingApprovalTask
+		// 保持一致（"change:{id}"），查询逻辑复用 ent 直接查，不新增一层抽象。
+		businessKey := fmt.Sprintf("change:%d", changeID)
+		exists, err := s.entClient.ProcessInstance.Query().
+			Where(processinstance.BusinessKey(businessKey), processinstance.TenantID(tenantID), processinstance.Status("running")).
+			Exist(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("检查是否已有运行中审批流程失败: %w", err)
+		}
+		if exists {
+			return nil, fmt.Errorf("该变更已经有一个正在进行的审批流程，不能重复提交")
+		}
+
+		_, err = s.processTriggerService.TriggerProcess(ctx, &dto.ProcessTriggerRequest{
+			BusinessType:         dto.BusinessTypeChange,
+			BusinessID:           changeID,
+			ProcessDefinitionKey: processDefKey,
+			Variables: map[string]interface{}{
+				"approval_required": true,
+				"requester_id":      float64(submitterID),
+			},
+			TriggeredBy: fmt.Sprintf("%d", submitterID),
+			TenantID:    tenantID,
+		})
+		if err != nil {
+			s.logger.Errorw("SubmitChange: failed to trigger BPMN process", "error", err, "change_id", changeID)
+			return nil, fmt.Errorf("启动审批流程失败: %w", err)
+		}
 	}
 
 	// 6. Notify approvers (optional - to be implemented later or via async)

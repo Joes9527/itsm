@@ -178,6 +178,18 @@ func (m *mockRepository) SubmitForApproval(ctx context.Context, changeID, tenant
 	return nil
 }
 
+func (m *mockRepository) MarkSubmittedForApproval(ctx context.Context, changeID, tenantID int) error {
+	if m.submitErr != nil {
+		return m.submitErr
+	}
+	c, ok := m.changes[changeID]
+	if !ok || c.TenantID != tenantID || c.Status != "draft" {
+		return fmt.Errorf("change is not an editable draft")
+	}
+	c.Status = "pending"
+	return nil
+}
+
 func (m *mockRepository) CreateApprovalRecord(ctx context.Context, r *ApprovalRecord) (*ApprovalRecord, error) {
 	r.ID = m.nextID
 	m.nextID++

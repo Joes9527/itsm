@@ -14,6 +14,7 @@ type Repository interface {
 	Delete(ctx context.Context, id int, tenantID int) error
 	GetStats(ctx context.Context, tenantID int) (*Stats, error)
 	SubmitForApproval(ctx context.Context, changeID, tenantID int, approverIDs []int, comment string) error
+	MarkSubmittedForApproval(ctx context.Context, changeID, tenantID int) error
 
 	// Approvals
 	CreateApprovalRecord(ctx context.Context, r *ApprovalRecord) (*ApprovalRecord, error)

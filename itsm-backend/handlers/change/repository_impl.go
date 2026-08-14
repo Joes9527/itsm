@@ -314,6 +314,29 @@ func (r *EntRepository) CreateApprovalRecord(ctx context.Context, rec *ApprovalR
 	return rec, nil
 }
 
+// MarkSubmittedForApproval 只做 draft -> pending 的状态转换，不写
+// change_approvals/change_approval_chains（这两张表的写入路径正在被
+// Track4 迁移到 BPMN，见 handlers/change/service.go 的 SubmitChange）。
+// 用跟 SubmitForApproval 相同的乐观守卫：要求恰好 1 行受影响，否则说明
+// change 已经不是 draft 状态了。
+func (r *EntRepository) MarkSubmittedForApproval(ctx context.Context, changeID, tenantID int) error {
+	result, err := r.db.ExecContext(ctx,
+		`UPDATE changes SET status = 'pending', updated_at = $1
+		 WHERE id = $2 AND tenant_id = $3 AND status = 'draft'`,
+		time.Now(), changeID, tenantID)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected != 1 {
+		return fmt.Errorf("change is not an editable draft")
+	}
+	return nil
+}
+
 func (r *EntRepository) SubmitForApproval(
 	ctx context.Context,
 	changeID, tenantID int,
