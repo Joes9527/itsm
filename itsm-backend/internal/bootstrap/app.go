@@ -26,8 +26,8 @@ import (
 	marketplaceService "itsm-backend/service/marketplace"
 
 	"itsm-backend/database"
-	"itsm-backend/dto"
 	"itsm-backend/docs"
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/tenant"
 	"itsm-backend/ent/user"
@@ -427,6 +427,7 @@ func NewApplication() *Application {
 	// Notification Preference Service & Controller
 	notificationPreferenceService := service.NewNotificationPreferenceService(client, sugar)
 	notificationPreferenceController := controller.NewNotificationPreferenceController(notificationPreferenceService, sugar)
+	ticketNotificationService.SetNotificationPreferenceService(notificationPreferenceService)
 
 	ticketRatingService := service.NewTicketRatingService(client, sugar)
 	ticketRatingController := controller.NewTicketRatingController(ticketRatingService, sugar)
@@ -689,6 +690,7 @@ func NewApplication() *Application {
 
 	// WebSocket Service
 	wsService := service.NewWebSocketService(sugar)
+	ticketNotificationService.SetWebSocketService(wsService)
 
 	// 7. 设置路由
 	// 根据配置设置 Gin 运行模式
