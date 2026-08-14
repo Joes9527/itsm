@@ -88,6 +88,23 @@ go run -tags migrate main.go
 | name | varchar(50) | Role name (admin/l1/l2/l3) |
 | permissions | jsonb | Permission list |
 
+### connector_configs
+
+连接器配置持久化表（ent schema 自动建表，无需 SQL migration）。provision 时落库，后端重启后 `LoadAll` 自动恢复已启用的连接器（如 `msgraph-email`）。
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | bigint | Primary key |
+| tenant_id | bigint | 租户ID |
+| name | varchar | 连接器名称（如 msgraph-email / feishu） |
+| provider | varchar | 连接器类型（如 microsoft / feishu / dingtalk） |
+| enabled | boolean | 是否启用 |
+| credentials | text | 凭据 JSON（含 Azure client_secret，**待加密**） |
+| settings | text | 设置 JSON |
+| labels | text | 标签 JSON |
+| created_at | timestamptz | 创建时间 |
+| updated_at | timestamptz | 更新时间 |
+
 ## pgvector (Vector Search)
 
 Vector similarity search is used for the AI-powered knowledge base:

@@ -208,6 +208,7 @@ These don't belong to a single release; they ship incrementally:
 - CodeQL + Trivy + govulncheck — landed v1.1
 - Quarterly threat-model review
 - Annual pen-test
+- 连接器凭据（`connector_configs.credentials`）AES 加密存储 — backlog（当前 JSON 明文，含 Azure client_secret）
 
 ### Open-Source Governance
 

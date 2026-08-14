@@ -48,6 +48,8 @@ All configuration is done via environment variables. See `.env.prod.example` for
 
 邮件通知（工单通知、SLA 告警、密码重置）优先通过 **Microsoft Graph sendMail** 发送（复用 `msgraph-email` 连接器，适用于 Exchange Online），SMTP 仅作为 fallback（Exchange Online 已禁用 SMTP Basic Auth）。
 
+`msgraph-email` 连接器配置已持久化到数据库（`connector_configs` 表），后端重启后自动恢复，无需手动重新 provision。连接器配置通过 `POST /api/v1/connectors/configs` 提交（含 `azure_tenant_id`、`azure_client_id`、`azure_client_secret`、`mailbox` 等）。
+
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
 | `SMTP_HOST` | SMTP server host（fallback） | No | - |
