@@ -353,6 +353,17 @@ func NewApplication() *Application {
 	guidanceClient := service.NewGuidanceClient(guidanceURL, sugar)
 	triageService := service.NewTriageServiceWithGuidanceAndSugaredLogger(llmGateway, guidanceClient, sugar)
 	ticketAttachmentService := service.NewTicketAttachmentService(client, sugar)
+	// 配置了 MinIO 则切换附件存储后端为对象存储；失败回退本地文件系统。
+	if cfg.MinIO.Endpoint != "" {
+		if minioStorage, err := service.NewMinioAttachmentStorage(
+			cfg.MinIO.Endpoint, cfg.MinIO.AccessKey, cfg.MinIO.SecretKey, cfg.MinIO.Bucket, cfg.MinIO.UseSSL,
+		); err != nil {
+			sugar.Warnw("failed to init MinIO storage, falling back to local filesystem", "error", err)
+		} else {
+			ticketAttachmentService.SetStorage(minioStorage)
+			sugar.Infow("attachment storage backend: minio", "endpoint", cfg.MinIO.Endpoint, "bucket", cfg.MinIO.Bucket)
+		}
+	}
 	wireEmailMsgraphConnector(client, ticketService, triageService, ticketAttachmentService, connectorController, sugar)
 
 	rootCauseService := service.NewRootCauseService(client, sugar)

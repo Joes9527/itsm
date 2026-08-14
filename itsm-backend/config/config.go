@@ -20,6 +20,7 @@ type Config struct {
 	LLM        LLMConfig        `mapstructure:"llm"`
 	SMS        SMSConfig        `mapstructure:"sms"`
 	SMTP       SMTPConfig       `mapstructure:"smtp"`
+	MinIO      MinIOConfig      `mapstructure:"minio"`
 	Ticket     TicketConfig     `mapstructure:"ticket"`
 	Redis      RedisConfig      `mapstructure:"redis"`
 	Security   SecurityConfig   `mapstructure:"security"`
@@ -175,6 +176,15 @@ type SMTPConfig struct {
 	SkipVerify bool   `mapstructure:"skip_verify"`
 }
 
+// MinIOConfig 对象存储配置（附件存储后端）。
+type MinIOConfig struct {
+	Endpoint  string `mapstructure:"endpoint"`   // 如 localhost:9012
+	AccessKey string `mapstructure:"access_key"` // 兼容 MINIO_ROOT_USER
+	SecretKey string `mapstructure:"secret_key"` // 兼容 MINIO_ROOT_PASSWORD
+	Bucket    string `mapstructure:"bucket"`     // 默认 itsm-uploads
+	UseSSL    bool   `mapstructure:"use_ssl"`
+}
+
 // envVarPattern matches ${VAR:default} format
 var envVarPattern = regexp.MustCompile(`\$\{([^:}]+)(?::([^}]*))?\}`)
 
@@ -308,6 +318,12 @@ func LoadConfig() (*Config, error) {
 	config.SMTP.Password = getEnvWithDefault("SMTP_PASSWORD", config.SMTP.Password)
 	config.SMTP.FromEmail = getEnvWithDefault("SMTP_FROM_EMAIL", config.SMTP.FromEmail)
 	config.SMTP.FromName = getEnvWithDefault("SMTP_FROM_NAME", config.SMTP.FromName)
+
+	// MinIO 环境变量支持
+	config.MinIO.Endpoint = getEnvWithDefault("MINIO_ENDPOINT", config.MinIO.Endpoint)
+	config.MinIO.AccessKey = getEnvWithDefault("MINIO_ROOT_USER", config.MinIO.AccessKey)
+	config.MinIO.SecretKey = getEnvWithDefault("MINIO_ROOT_PASSWORD", config.MinIO.SecretKey)
+	config.MinIO.Bucket = getEnvWithDefault("MINIO_BUCKET", config.MinIO.Bucket)
 
 	return &config, nil
 }

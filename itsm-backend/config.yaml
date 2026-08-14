@@ -94,6 +94,14 @@ smtp:
   encryption: "tls"       # tls, ssl, or none
   skip_verify: false   # Skip TLS certificate verification (dev only)
 
+# MinIO object storage configuration (attachment storage backend)
+minio:
+  endpoint: "${MINIO_ENDPOINT:}"       # e.g. localhost:9012 (empty = use local filesystem)
+  access_key: "${MINIO_ROOT_USER:minioadmin}"
+  secret_key: "${MINIO_ROOT_PASSWORD:minioadmin123}"
+  bucket: "${MINIO_BUCKET:itsm-uploads}"
+  use_ssl: false
+
 # Redis configuration (for sequence service, cache, etc.)
 redis:
   host: "${REDIS_HOST:localhost}"
