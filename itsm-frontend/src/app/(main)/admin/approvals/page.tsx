@@ -31,6 +31,7 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import { httpClient } from '@/lib/api/http-client';
 import { WorkflowDefinitionApi } from '@/lib/api/workflow-definition-api';
+import { SystemConfigAPI } from '@/lib/api/system-config-api';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -75,6 +76,7 @@ export default function ApprovalManagement() {
     inactive: 0,
   });
   const [bpmnWorkflows, setBpmnWorkflows] = useState<{ id: string; name: string }[]>([]);
+  const [writeLocked, setWriteLocked] = useState(false);
 
   // 加载审批工作流数据
   const loadWorkflows = useCallback(async () => {
@@ -114,11 +116,23 @@ export default function ApprovalManagement() {
     }
   }, []);
 
+  // 加载写锁定状态——找不到对应的 SystemConfig（通常是 404）视为未锁定，这是安全默认值，
+  // 跟后端 ApprovalService.isLegacyApprovalWriteLocked 的默认行为保持一致。
+  const loadWriteLockStatus = useCallback(async () => {
+    try {
+      const cfg = await SystemConfigAPI.getConfigByKey('legacyApprovalWriteLocked');
+      setWriteLocked(cfg.value === 'true');
+    } catch {
+      setWriteLocked(false);
+    }
+  }, []);
+
   // 初始化加载
   useEffect(() => {
     loadWorkflows();
     loadBpmnWorkflows();
-  }, [loadWorkflows, loadBpmnWorkflows]);
+    loadWriteLockStatus();
+  }, [loadWorkflows, loadBpmnWorkflows, loadWriteLockStatus]);
 
   // 处理保存
   const handleSave = async () => {
@@ -253,28 +267,32 @@ export default function ApprovalManagement() {
       key: 'actions',
       width: 200,
       render: (_: unknown, record: ApprovalWorkflow) => (
-        <Space size="small">
-          <Button
-            type="text"
-            icon={<Edit size={16} />}
-            onClick={() => handleEdit(record)}
-          />
-          <Button
-            type="text"
-            onClick={() => handleToggleStatus(record)}
-          >
-            {record.isActive ? '停用' : '启用'}
-          </Button>
-          <Popconfirm
-            title="确认删除"
-            description={`确定要删除工作流"${record.name}"吗？`}
-            onConfirm={() => handleDelete(record.id)}
-            okText="确认"
-            cancelText="取消"
-          >
-            <Button type="text" danger icon={<Trash2 size={16} />} />
-          </Popconfirm>
-        </Space>
+        writeLocked ? (
+          <Tag>只读</Tag>
+        ) : (
+          <Space size="small">
+            <Button
+              type="text"
+              icon={<Edit size={16} />}
+              onClick={() => handleEdit(record)}
+            />
+            <Button
+              type="text"
+              onClick={() => handleToggleStatus(record)}
+            >
+              {record.isActive ? '停用' : '启用'}
+            </Button>
+            <Popconfirm
+              title="确认删除"
+              description={`确定要删除工作流"${record.name}"吗？`}
+              onConfirm={() => handleDelete(record.id)}
+              okText="确认"
+              cancelText="取消"
+            >
+              <Button type="text" danger icon={<Trash2 size={16} />} />
+            </Popconfirm>
+          </Space>
+        )
       ),
     },
   ];
@@ -341,6 +359,8 @@ export default function ApprovalManagement() {
           <Button
             type="primary"
             icon={<Plus size={16} />}
+            disabled={writeLocked}
+            title={writeLocked ? '旧审批工作流系统已下线，请使用 BPMN 流程设计器' : undefined}
             onClick={() => {
               setSelectedWorkflow(null);
               form.setFieldsValue({ isActive: true, nodes: [defaultApprovalNode()] });
