@@ -971,6 +971,15 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 
 	s.logger.Infow("Ticket updated", "ticket_id", id)
 
+	// 状态变更时发送 ticket_updated 通知
+	if req.Status != "" && ticket.Status(req.Status) != current.Status {
+		if s.notificationSvc != nil {
+			if err := s.notificationSvc.NotifyTicketStatusChanged(ctx, id, string(current.Status), req.Status, tenantID); err != nil {
+				s.logger.Warnw("Failed to send status change notification", "error", err, "ticket_id", id)
+			}
+		}
+	}
+
 	// 工单进入终态时自动关闭 SLA 违规
 	if req.Status != "" {
 		if isFinalStatus(ticket.Status(req.Status)) && s.client != nil {
@@ -1520,6 +1529,14 @@ func (s *TicketService) UpdateTicketStatus(ctx context.Context, ticketID int, st
 	}
 
 	s.logger.Infow("Ticket status updated", "ticket_id", ticketID, "new_status", status)
+
+	// 状态变更通知（ticket_updated）
+	if s.notificationSvc != nil {
+		if err := s.notificationSvc.NotifyTicketStatusChanged(ctx, ticketID, string(current.Status), status, tenantID); err != nil {
+			s.logger.Warnw("Failed to send status change notification", "error", err, "ticket_id", ticketID)
+		}
+	}
+
 	updated, err = s.repo.GetByID(ctx, ticketID, tenantID)
 	if err != nil {
 		return nil, err

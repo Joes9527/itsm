@@ -54,19 +54,21 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
 
   const getNotificationTitle = (type: string) => {
     switch (type) {
-      case 'created':
+      case 'ticket_created':
         return '新工单创建';
-      case 'assigned':
+      case 'ticket_assigned':
         return '工单已分配';
-      case 'status_changed':
+      case 'ticket_updated':
         return '工单状态变更';
-      case 'commented':
+      case 'comment_added':
         return '工单有新评论';
       case 'sla_warning':
         return 'SLA预警';
-      case 'resolved':
+      case 'sla_violated':
+        return 'SLA违规';
+      case 'ticket_resolved':
         return '工单已解决';
-      case 'closed':
+      case 'ticket_closed':
         return '工单已关闭';
       default:
         return '新通知';
@@ -76,7 +78,7 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
   const NotificationItem = ({ item }: { item: TicketNotification }) => {
     const isRead = item.status === 'read';
     const priority =
-      item.type === 'sla_warning' ? 'urgent' : item.type === 'assigned' ? 'high' : 'medium';
+      item.type === 'sla_warning' ? 'urgent' : item.type === 'ticket_assigned' ? 'high' : 'medium';
 
     return (
       <div

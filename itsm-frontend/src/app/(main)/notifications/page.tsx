@@ -51,6 +51,7 @@ import {
 import { useAuthStore } from '@/lib/store/auth-store';
 import { notificationWS } from '@/lib/services/notification-ws';
 import { useI18n } from '@/lib/i18n';
+import { useRouter } from 'next/navigation';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -88,7 +89,7 @@ const EVENT_TYPES: EventTypeConfig[] = [
     descKey: 'notifications.ticketUpdatedDesc',
   },
   {
-    type: 'ticket_commented',
+    type: 'comment_added',
     nameKey: 'notifications.ticketCommented',
     descKey: 'notifications.ticketCommentedDesc',
   },
@@ -142,6 +143,7 @@ export default function NotificationsPage() {
   const { t } = useI18n();
   const { user, token } = useAuthStore();
   const { message } = App.useApp();
+  const router = useRouter();
   const [notifications, setNotifications] = useState<TicketNotification[]>([]);
   const [unreadNotifications, setUnreadNotifications] = useState<TicketNotification[]>([]);
   const [readNotifications, setReadNotifications] = useState<TicketNotification[]>([]);
@@ -414,13 +416,16 @@ export default function NotificationsPage() {
   // 获取通知类型标签
   const getNotificationTypeLabel = (type: string) => {
     const labels: Record<string, string> = {
-      created: t('notifications.ticketCreated'),
-      assigned: t('notifications.ticketAssigned'),
-      statusChanged: t('notifications.ticketUpdated'),
-      commented: t('notifications.ticketCommented'),
-      slaWarning: t('notifications.slaWarning'),
-      resolved: t('notifications.ticketResolved'),
-      closed: t('notifications.ticketClosed'),
+      ticket_created: t('notifications.ticketCreated'),
+      ticket_assigned: t('notifications.ticketAssigned'),
+      ticket_updated: t('notifications.ticketUpdated'),
+      comment_added: t('notifications.ticketCommented'),
+      sla_warning: t('notifications.slaWarning'),
+      sla_violated: t('notifications.slaViolated'),
+      ticket_resolved: t('notifications.ticketResolved'),
+      ticket_closed: t('notifications.ticketClosed'),
+      approval_required: t('notifications.approvalRequired'),
+      mention: '被提及',
     };
     return labels[type] || type;
   };
@@ -462,6 +467,12 @@ export default function NotificationsPage() {
         renderItem={notification => (
           <List.Item
             className={notification.status === 'read' ? 'opacity-70' : ''}
+            style={{ cursor: 'pointer' }}
+            onClick={() => {
+              if (notification.ticketId) {
+                router.push(`/tickets/${notification.ticketId}`);
+              }
+            }}
             actions={[
               notification.status !== 'read' && (
                 <Button
@@ -469,7 +480,7 @@ export default function NotificationsPage() {
                   type="link"
                   size="small"
                   icon={<Eye className="w-4 h-4" />}
-                  onClick={() => handleMarkRead(notification.id)}
+                  onClick={e => { e.stopPropagation(); handleMarkRead(notification.id); }}
                   loading={actionKey === `read-${notification.id}`}
                   aria-label={`${t('notifications.markRead')}: ${getNotificationTypeLabel(notification.type)}`}
                 >
@@ -482,7 +493,7 @@ export default function NotificationsPage() {
                 description={t('notifications.deleteRead')}
                 onConfirm={() => handleDeleteNotification(notification.id)}
               >
-                <Button type="link" size="small" danger icon={<Delete className="w-4 h-4" />}>
+                <Button type="link" size="small" danger icon={<Delete className="w-4 h-4" />} onClick={e => e.stopPropagation()}>
                   {t('notifications.delete')}
                 </Button>
               </Popconfirm>,

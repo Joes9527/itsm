@@ -289,7 +289,7 @@ func (s *TicketNotificationService) NotifyTicketStatusChanged(
 
 	content := fmt.Sprintf("工单 #%s 状态已从 %s 变更为 %s", ticket.TicketNumber, oldStatus, newStatus)
 	userIDs := []int{ticket.RequesterID}
-	if ticket.AssigneeID > 0 {
+	if ticket.AssigneeID > 0 && ticket.AssigneeID != ticket.RequesterID {
 		userIDs = append(userIDs, ticket.AssigneeID)
 	}
 

@@ -115,7 +115,7 @@ function makeNotification(overrides: Partial<TicketNotification> = {}): TicketNo
     id: 1,
     ticketId: 1,
     userId: 1,
-    type: 'created',
+    type: 'ticket_created',
     channel: 'in_app',
     content: 'Test notification',
     status: 'sent',

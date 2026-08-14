@@ -6,13 +6,16 @@ export interface TicketNotification {
   ticketId: number;
   userId: number;
   type:
-    | 'created'
-    | 'assigned'
-    | 'status_changed'
-    | 'commented'
+    | 'ticket_created'
+    | 'ticket_assigned'
+    | 'ticket_updated'
+    | 'comment_added'
     | 'sla_warning'
-    | 'resolved'
-    | 'closed';
+    | 'sla_violated'
+    | 'ticket_resolved'
+    | 'ticket_closed'
+    | 'approval_required'
+    | 'mention';
   channel: 'email' | 'in_app' | 'sms';
   content: string;
   sentAt?: string;
