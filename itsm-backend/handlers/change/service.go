@@ -13,7 +13,9 @@ import (
 	"itsm-backend/ent/configurationitem"
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/processinstance"
+	"itsm-backend/ent/processtask"
 	"itsm-backend/service"
+	"itsm-backend/service/bpmn"
 
 	"go.uber.org/zap"
 )
@@ -25,6 +27,7 @@ type Service struct {
 	pirService            *service.ChangePIRService
 	approvalBridge        *service.BPMNApprovalBridge
 	processTriggerService service.ProcessTriggerServiceInterface
+	processEngine         service.ProcessEngine
 }
 
 func NewService(repo Repository, entClient *ent.Client, logger *zap.SugaredLogger) *Service {
@@ -47,6 +50,13 @@ func NewService(repo Repository, entClient *ent.Client, logger *zap.SugaredLogge
 // 不是构造函数参数，避免循环依赖初始化顺序问题。
 func (s *Service) SetProcessTriggerService(svc service.ProcessTriggerServiceInterface) {
 	s.processTriggerService = svc
+}
+
+// SetProcessEngine 注入 BPMN 流程引擎——完成 CAB 审批任务及其级联的排期/驳回节点
+// 需要直接调用引擎的 CompleteTask，绕不开 Repository/entClient 能提供的能力。
+// 跟 SetProcessTriggerService 一样用 setter 注入，避免构造函数循环依赖。
+func (s *Service) SetProcessEngine(engine service.ProcessEngine) {
+	s.processEngine = engine
 }
 
 // Change methods
@@ -568,6 +578,93 @@ func inferITILPractices(summary *dto.ChangeCMDBImpactSummary) []string {
 		practices = append(practices, "monitoring_and_event_management")
 	}
 	return practices
+}
+
+// completeChangeApprovalTask 完成一个变更的 CAB 审批任务，并在通过/驳回后级联完成
+// 紧邻的排期/驳回节点（Activity_Schedule/Activity_Reject）——这两个节点在 BPMN 图里
+// 是 userTask，没有任何机制会自动完成它们，不级联完成会变成永远挂起的孤儿任务。
+// 级联到此为止：Activity_Schedule 完成后流程会走到 Activity_Implement，那是
+// Track4 范围之外的下一阶段，故意让它停在那里，不继续级联。
+func (s *Service) completeChangeApprovalTask(ctx context.Context, tenantID, actorUserID, changeID int, action, comment string) error {
+	if s.processEngine == nil {
+		return fmt.Errorf("流程引擎未初始化")
+	}
+
+	businessKey := fmt.Sprintf("change:%d", changeID)
+	instance, err := s.entClient.ProcessInstance.Query().
+		Where(processinstance.BusinessKey(businessKey), processinstance.TenantID(tenantID), processinstance.Status("running")).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return fmt.Errorf("该变更没有正在运行的审批流程")
+		}
+		return fmt.Errorf("查询审批流程实例失败: %w", err)
+	}
+
+	task, err := s.entClient.ProcessTask.Query().
+		Where(
+			processtask.HasProcessInstanceWith(processinstance.ID(instance.ID)),
+			processtask.TaskType("user_task"),
+			processtask.StatusIn("created", "assigned", "started", "delegated"),
+		).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return fmt.Errorf("该变更没有待处理的审批任务")
+		}
+		return fmt.Errorf("查询待办审批任务失败: %w", err)
+	}
+
+	approvalResult := "rejected"
+	if action == "approve" {
+		approvalResult = "approved"
+	}
+
+	actorCtx := context.WithValue(ctx, bpmn.BPMNUserIDContextKey, actorUserID)
+	actorCtx = context.WithValue(actorCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+
+	// change_id 必须显式传给 CompleteTask：UserTask 完成后触发的
+	// ChangeServiceTaskHandler 回调只看"完成任务时提交的 variables"，不会自动合并
+	// 流程实例变量（ProcessTriggerService 写进实例变量的是 business_id，键名跟
+	// ChangeServiceTaskHandler 期望的 change_id 也对不上），漏传会导致
+	// approveChange/scheduleChange/rejectChange 都因为 changeID<=0 静默跳过。
+	if err := s.processEngine.CompleteTask(actorCtx, task.TaskID, map[string]interface{}{
+		"change_id":       changeID,
+		"approvalAction":  action,
+		"approvalResult":  approvalResult,
+		"approvalComment": comment,
+	}); err != nil {
+		return fmt.Errorf("完成审批任务失败: %w", err)
+	}
+
+	// 级联完成排期/驳回节点。这一步用系统身份（不注入 actorUserID），因为它不是
+	// 一个新的、独立的人工决定，是上面那次审批决定的自动延伸——如果这里也要求
+	// actorUserID 通过 assignee/candidateUsers 校验，会因为 Activity_Schedule/
+	// Activity_Reject 没有声明 assigneeRole 而始终失败。
+	systemCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+	nextTask, err := s.entClient.ProcessTask.Query().
+		Where(
+			processtask.HasProcessInstanceWith(processinstance.ID(instance.ID)),
+			processtask.TaskType("user_task"),
+			processtask.StatusIn("created", "assigned", "started", "delegated"),
+		).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			// 没有下一个任务——理论上不应该发生（Gateway_ApprovalResult 总是路由到
+			// Activity_Schedule 或 Activity_Reject 之一），但不要因为找不到就整体失败，
+			// 上面那次真正的审批决定已经生效了。
+			s.logger.Warnw("completeChangeApprovalTask: 未找到审批后紧邻的任务，跳过级联完成", "change_id", changeID)
+			return nil
+		}
+		return fmt.Errorf("查询审批后续任务失败: %w", err)
+	}
+	if err := s.processEngine.CompleteTask(systemCtx, nextTask.TaskID, map[string]interface{}{
+		"change_id": changeID,
+	}); err != nil {
+		return fmt.Errorf("级联完成审批后续任务失败: %w", err)
+	}
+	return nil
 }
 
 // TransitionStatus transitions a change to a new status
