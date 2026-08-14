@@ -177,6 +177,14 @@ assigneeType == "amount_based"   → 不生成该节点，整个工作流迁移�
 - `/admin/approvals` 等旧管理界面：开关打开后，创建/编辑相关的按钮和表单改成禁用/隐藏，列表和历史记录保持只读可查看，或者引导跳转到 BPMN 设计器对应位置——具体哪种交互留到写实施计划时结合前端现状再定。
 - `controller/approval_controller.go`、`approval_chain_controller.go`（注意：`ApprovalChain` 不在这次范围内，这里只删跟 `ApprovalWorkflow` 相关的部分，不要连 `ApprovalChain` 的端点一起删）、`service/approval_service.go`、`legacy_approval_migration_service.go`（迁移工具本身，迁移全部完成后也是历史使命完成）——物理删除不在这次计划范围内，见"非目标"。
 
+**实现落地（2026-08-14，实施计划见 `docs/superpowers/plans/2026-08-14-approval-bpmn-legacy-system-write-lock.md`，运维手册见 `docs/runbooks/legacy-approval-write-lock.md`）**：
+
+- 开关复用现成的 `SystemConfig` 实体（`ent/schema/systemconfig.go`），key 固定为 `legacyApprovalWriteLocked`，租户级作用域，不新增 ent schema、不跑新迁移。`ApprovalService` 直接查这张表（没有走 `SystemConfigService` 依赖注入，避免多改两处 wiring 文件），找不到对应行视为未锁定——这是安全默认值，改动前所有租户不受影响。
+- 打开开关的唯一入口是独立 ops CLI `cmd/lock_legacy_approvals`（镜像 `cmd/migrate_legacy_approvals` 的启动模式），不是新 HTTP 端点。
+- 最终评审额外发现：`SystemConfig` 本身已经有一套通用的 CRUD 接口（`PUT /system-configs/:id`、`/batch`），只要有 `config:update` 权限就能顺手把这个 key 改掉，绕开"只有 CLI 能改"的设计意图。已在 `SystemConfigService.UpdateSystemConfig`/`BatchUpdateSystemConfigs` 里加了受保护 key 黑名单堵住这条路。
+- 2026-08-14 在开发环境用真实 API 建的工作流（`approverType:"user"` + `approverIds`）跑通了完整链路：`cmd/migrate_legacy_approvals` 真实迁移成功、生成的 `ProcessBinding`（`business_type=ticket`+`business_sub_type=<具体类型>`）可达、`cmd/lock_legacy_approvals` 锁定后 Create/Update/Delete 真实返回 403、Read 不受影响、通过通用配置接口尝试绕过被正确拒绝、解锁后写操作恢复正常。细节和复现步骤见运维手册。
+- **已知、明确记录、不在这次范围内的遗留项**：(1) 生成的 BPMN 审批链仍然没有拒绝感知的网关——拒绝不会真的中断流程，这是真正的 BPMN 网关设计工作，见组件③评审时记录的 C2；(2) 前端 `http-client.ts` 有一个预先存在的 bug，会把后端返回的具体错误消息吞掉、只显示通用的 "HTTP error! status: N"——发现于验证这次写锁功能时，因为影响面覆盖几乎所有接口调用，已经在独立 PR（#5）里修复，不跟这次写锁功能混在一起提交；(3) 租户开通/克隆流程仍然会无视 source 租户的锁定状态，把旧的 `ApprovalWorkflow` 继续克隆给新租户——不违反这次范围（写锁只需要盖住四个 CRUD 端点），但要记进物理删除阶段的清单里。
+
 ## 测试计划
 
 - 组件①：`assigneeRole` 命中/未命中/申请人自己就是该角色时排除并转候选组兜底；四个固定范围属性各自命中/租户隔离（跨租户不能解析到别的租户的部门/团队）/解析出的人是申请人自己时排除。
