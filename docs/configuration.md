@@ -35,23 +35,27 @@ All configuration is done via environment variables. See `.env.prod.example` for
 
 ### Object Storage (MinIO)
 
+附件存储后端（邮件附件等）。
+
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
 | `MINIO_ENDPOINT` | MinIO server endpoint | No | minio:9000 |
-| `MINIO_ACCESS_KEY` | MinIO access key | Yes | - |
-| `MINIO_SECRET_KEY` | MinIO secret key | Yes | - |
+| `MINIO_ROOT_USER` | MinIO root user (access key) | Yes | minioadmin |
+| `MINIO_ROOT_PASSWORD` | MinIO root password (secret key) | Yes | minioadmin123 |
 | `MINIO_BUCKET` | MinIO bucket name | No | itsm-uploads |
-| `MINIO_USE_SSL` | Use HTTPS for MinIO | No | false |
 
-### Email (SMTP)
+### Email Notification
+
+邮件通知（工单通知、SLA 告警、密码重置）优先通过 **Microsoft Graph sendMail** 发送（复用 `msgraph-email` 连接器，适用于 Exchange Online），SMTP 仅作为 fallback（Exchange Online 已禁用 SMTP Basic Auth）。
 
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
-| `SMTP_HOST` | SMTP server host | No | - |
-| `SMTP_PORT` | SMTP port | No | 587 |
-| `SMTP_USERNAME` | SMTP username | No | - |
-| `SMTP_PASSWORD` | SMTP password | No | - |
-| `SMTP_FROM` | From email address | No | noreply@itsm.local |
+| `SMTP_HOST` | SMTP server host（fallback） | No | - |
+| `SMTP_PORT` | SMTP port（fallback） | No | 587 |
+| `SMTP_USERNAME` | SMTP username（fallback） | No | - |
+| `SMTP_PASSWORD` | SMTP password（fallback） | No | - |
+| `SMTP_FROM` | From email address（fallback） | No | noreply@itsm.local |
+| `FRONTEND_URL` | 前端地址（密码重置链接等） | No | http://localhost:3000 |
 
 ### Notifications
 
