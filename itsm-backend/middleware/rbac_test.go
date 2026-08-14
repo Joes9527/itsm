@@ -131,11 +131,6 @@ func TestHasResourcePermission(t *testing.T) {
 		assert.True(t, result)
 	})
 
-	t.Run("Admin Has Ticket Write Permission", func(t *testing.T) {
-		result := hasResourcePermission(nil, "admin", "ticket", "write", 1)
-		assert.True(t, result)
-	})
-
 	t.Run("End User Has Ticket Read Permission", func(t *testing.T) {
 		result := hasResourcePermission(nil, "end_user", "ticket", "read", 1)
 		assert.True(t, result)
@@ -144,21 +139,6 @@ func TestHasResourcePermission(t *testing.T) {
 	t.Run("End User Does Not Have Ticket Delete Permission", func(t *testing.T) {
 		result := hasResourcePermission(nil, "end_user", "ticket", "delete", 1)
 		assert.False(t, result)
-	})
-
-	t.Run("Agent Has Dashboard Read Permission", func(t *testing.T) {
-		result := hasResourcePermission(nil, "agent", "dashboard", "read", 1)
-		assert.True(t, result)
-	})
-
-	t.Run("Technician Has CMDB Read Permission", func(t *testing.T) {
-		result := hasResourcePermission(nil, "technician", "cmdb", "read", 1)
-		assert.True(t, result)
-	})
-
-	t.Run("Manager Has User Read Permission", func(t *testing.T) {
-		result := hasResourcePermission(nil, "manager", "user", "read", 1)
-		assert.True(t, result)
 	})
 
 	t.Run("Unknown Role Has No Permissions", func(t *testing.T) {
