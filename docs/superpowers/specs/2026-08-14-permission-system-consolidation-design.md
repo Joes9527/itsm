@@ -73,10 +73,9 @@
 **已完成（本次）**：
 - 死角色业务引用：`ticket_service.go`（isTicketDataScopeAllRole）、`ticket_workflow_service.go`（ensureCanViewTicketCC）、`incident_alerting_service.go`（RoleIn）、`common/constants.go`（删除 RoleAdmin/RoleManager/RoleAgent/RoleTechnician/RoleSecurity/SuperAdminUser 死常量）
 - `getUserPermissions` 改从数据库加载（导出 `GetRolePermissions` 复用 `loadPermissionsFromDB`）
-
-**后续（独立 PR）**：
-1. `handlers/service_request/service.go` 的 `isServiceRequestAdmin`/`isServiceRequestOperator` 仍引用本地死角色常量（RoleAdmin/RoleAgent/RoleTechnician），需评估业务角色映射（admin→sysadmin、agent/technician→l1/l2_support 等）后清理。
-2. `service/menu_service.go` 的菜单构建直接读 `RolePermissions`（硬编码），需改为从数据库加载，与运行时权限一致。
+- `handlers/service_request/service.go`：`isServiceRequestAdmin`/`isServiceRequestOperator` 删除，改为 `canManageServiceRequest` 用 `middleware.HasResourcePermission`（service_request:write 权限判断）
+- `service/menu_service.go`：菜单构建删除硬编码 `RolePermissions` 读取，改用已有的 `addDatabaseRolePermissions`（数据库加载）
+- 前端 `TicketWorkflowActions`/`TicketDetail`：用 `hasPermission('user:read')` 替代硬编码角色名（end_user/guest）
 
 ## 5. 风险与回滚
 

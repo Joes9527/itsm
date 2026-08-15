@@ -12,7 +12,6 @@ import (
 	"itsm-backend/ent/role"
 	"itsm-backend/ent/rolepermission"
 	"itsm-backend/ent/user"
-	"itsm-backend/middleware"
 
 	"go.uber.org/zap"
 )
@@ -263,18 +262,9 @@ func (s *MenuService) getUserPermissions(ctx context.Context, userEntity *ent.Us
 
 	roleCodes := make([]string, 0, 1+len(userEntity.Edges.Roles))
 
-	// 从用户直接角色获取权限，兼容旧的 users.role 字段
+	// 收集直接角色（兼容旧的 users.role 字段）
 	if userEntity.Role != "" {
 		roleCodes = append(roleCodes, string(userEntity.Role))
-		rolePerms := middleware.RolePermissions[string(userEntity.Role)]
-		for _, p := range rolePerms {
-			key := p.Resource + ":" + p.Action
-			permissions[key] = true
-			// 也添加通配符权限
-			if p.Action == "*" {
-				permissions[p.Resource+":*"] = true
-			}
-		}
 	}
 
 	// 从用户-角色多对多关系收集数据库角色代码
@@ -284,21 +274,7 @@ func (s *MenuService) getUserPermissions(ctx context.Context, userEntity *ent.Us
 		}
 	}
 
-	// 如果用户有额外的角色，获取角色权限
-	if len(roleCodes) > 0 {
-		for _, roleCode := range roleCodes {
-			rolePerms := middleware.RolePermissions[roleCode]
-			for _, p := range rolePerms {
-				key := p.Resource + ":" + p.Action
-				permissions[key] = true
-				// 也添加通配符权限
-				if p.Action == "*" {
-					permissions[p.Resource+":*"] = true
-				}
-			}
-		}
-	}
-
+	// 从数据库加载角色权限（不再使用硬编码 RolePermissions）
 	s.addDatabaseRolePermissions(ctx, permissions, tenantID, roleCodes)
 
 	return permissions
