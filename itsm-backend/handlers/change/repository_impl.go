@@ -8,6 +8,7 @@ import (
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/change"
+	"itsm-backend/ent/processapprovaldecision"
 	entuser "itsm-backend/ent/user"
 )
 
@@ -416,36 +417,45 @@ func (r *EntRepository) UpdateApprovalRecord(ctx context.Context, rec *ApprovalR
 	return rec, nil
 }
 
+// GetApprovalHistory 读取审批历史。数据源是 BPMN 引擎写入的
+// ent.ProcessApprovalDecision 审计表（Track4 把 change 的 CAB 审批决策路径
+// 迁移到 BPMN 之后，每次 TransitionStatus 的 approve/reject 都会在这张表
+// 落一条记录），不再是 change_approvals 表——那张表的写入路径已经在
+// SubmitChange/TransitionStatus 里被下线，留着旧查询会读到空数据。
+// DTO 形状（ApprovalRecord）保持不变，前端 ChangeDetail.tsx 不用改。
 func (r *EntRepository) GetApprovalHistory(ctx context.Context, changeID int, tenantID int) ([]*ApprovalRecord, error) {
-	query := `
-		SELECT a.id, a.approver_id, u.name as approver_name, a.status, a.comment, a.approved_at, a.created_at
-		FROM change_approvals a
-		LEFT JOIN users u ON a.approver_id = u.id
-		LEFT JOIN changes c ON a.change_id = c.id
-		WHERE a.change_id = $1 AND a.tenant_id = $2 AND c.tenant_id = $2
-		ORDER BY a.created_at ASC
-	`
-	rows, err := r.db.QueryContext(ctx, query, changeID, tenantID)
+	decisions, err := r.client.ProcessApprovalDecision.Query().
+		Where(
+			processapprovaldecision.BusinessType("change"),
+			processapprovaldecision.BusinessID(fmt.Sprintf("%d", changeID)),
+			processapprovaldecision.TenantID(tenantID),
+		).
+		Order(ent.Asc(processapprovaldecision.FieldCreatedAt)).
+		All(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("查询审批历史失败: %w", err)
 	}
-	defer rows.Close()
 
 	// 返回空切片而非 nil，避免 JSON 序列化为 null 导致前端崩溃
-	records := make([]*ApprovalRecord, 0)
-	for rows.Next() {
-		var rec ApprovalRecord
-		var approvedAt sql.NullTime
-		err := rows.Scan(&rec.ID, &rec.ApproverID, &rec.ApproverName, &rec.Status, &rec.Comment, &approvedAt, &rec.CreatedAt)
-		if err != nil {
-			return nil, err
+	records := make([]*ApprovalRecord, 0, len(decisions))
+	for _, d := range decisions {
+		var comment *string
+		if d.Comment != "" {
+			c := d.Comment
+			comment = &c
 		}
-		if approvedAt.Valid {
-			rec.ApprovedAt = &approvedAt.Time
-		}
-		rec.ChangeID = changeID
-		rec.TenantID = tenantID
-		records = append(records, &rec)
+		createdAt := d.CreatedAt
+		records = append(records, &ApprovalRecord{
+			ID:           d.ID,
+			ChangeID:     changeID,
+			TenantID:     tenantID,
+			ApproverID:   d.ActorID,
+			ApproverName: d.ActorName,
+			Status:       d.Decision,
+			Comment:      comment,
+			ApprovedAt:   &createdAt,
+			CreatedAt:    createdAt,
+		})
 	}
 	return records, nil
 }

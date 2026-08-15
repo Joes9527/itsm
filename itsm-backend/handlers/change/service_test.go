@@ -140,3 +140,87 @@ func TestSubmitChange_TriggerProcessFailureLeavesChangeDraft(t *testing.T) {
 
 	require.Len(t, trigger.triggerCalls, 1, "TriggerProcess should have been attempted once")
 }
+
+// TestGetApprovalHistory_ReadsFromProcessApprovalDecision covers Task 5: the
+// change_approvals SQL table is no longer the source of truth for approval
+// history. GetApprovalHistory must read from ent.ProcessApprovalDecision
+// (the BPMN engine's own approval-decision audit table), filtered by
+// business_type="change" + business_id=<changeID> + tenant_id, and map it
+// onto the unchanged ApprovalRecord DTO shape.
+func TestGetApprovalHistory_ReadsFromProcessApprovalDecision(t *testing.T) {
+	entClient := newChangeBridgeEntClient(t, "change_approval_history")
+	ctx := context.Background()
+
+	tenant, err := entClient.Tenant.Create().SetName("T").SetCode("t-history").SetDomain("t-history.example.com").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	actor, err := entClient.User.Create().SetUsername("cm").SetEmail("cm@example.com").SetName("CM User").SetPasswordHash("h").SetRole("agent").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	_, err = entClient.ProcessApprovalDecision.Create().
+		SetProcessInstanceID(1).SetProcessTaskID(1).
+		SetProcessInstanceKey("PI-test-1").SetTaskID("TASK-test-1").
+		SetProcessDefinitionKey("change_normal_flow").SetNodeKey("Activity_CABApproval").
+		SetBusinessType("change").SetBusinessID("42").
+		SetActorID(actor.ID).SetActorName(actor.Name).
+		SetAction("approve").SetDecision("approved").SetComment("looks good").
+		SetVariablesSnapshot(map[string]interface{}{}).SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	repo := NewEntRepository(entClient, nil)
+	history, err := repo.GetApprovalHistory(ctx, 42, tenant.ID)
+	require.NoError(t, err)
+	require.Len(t, history, 1)
+	assert.Equal(t, actor.ID, history[0].ApproverID)
+	assert.Equal(t, actor.Name, history[0].ApproverName)
+	assert.Equal(t, "approved", history[0].Status)
+	require.NotNil(t, history[0].Comment)
+	assert.Equal(t, "looks good", *history[0].Comment)
+}
+
+// TestGetApprovalHistory_TenantIsolation guards against a filter that omits
+// tenant_id: two tenants each get a ProcessApprovalDecision row with the
+// same business_id (42), and a leaky query would return both.
+func TestGetApprovalHistory_TenantIsolation(t *testing.T) {
+	entClient := newChangeBridgeEntClient(t, "change_approval_history_tenant_iso")
+	ctx := context.Background()
+
+	tenantA, err := entClient.Tenant.Create().SetName("Tenant A").SetCode("t-iso-a").SetDomain("t-iso-a.example.com").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	tenantB, err := entClient.Tenant.Create().SetName("Tenant B").SetCode("t-iso-b").SetDomain("t-iso-b.example.com").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	actorA, err := entClient.User.Create().SetUsername("cm-a").SetEmail("cm-a@example.com").SetName("CM A").SetPasswordHash("h").SetRole("agent").SetActive(true).SetTenantID(tenantA.ID).Save(ctx)
+	require.NoError(t, err)
+	actorB, err := entClient.User.Create().SetUsername("cm-b").SetEmail("cm-b@example.com").SetName("CM B").SetPasswordHash("h").SetRole("agent").SetActive(true).SetTenantID(tenantB.ID).Save(ctx)
+	require.NoError(t, err)
+
+	// 两个租户各自一条 ProcessApprovalDecision，business_id 相同（都是 42）——
+	// 这是租户隔离测试的关键：如果查询漏了 tenant_id 过滤，会把两条都返回。
+	_, err = entClient.ProcessApprovalDecision.Create().
+		SetProcessInstanceID(1).SetProcessTaskID(1).
+		SetProcessInstanceKey("PI-iso-a").SetTaskID("TASK-iso-a").
+		SetProcessDefinitionKey("change_normal_flow").SetNodeKey("Activity_CABApproval").
+		SetBusinessType("change").SetBusinessID("42").
+		SetActorID(actorA.ID).SetActorName(actorA.Name).
+		SetAction("approve").SetDecision("approved").SetComment("tenant a").
+		SetVariablesSnapshot(map[string]interface{}{}).SetTenantID(tenantA.ID).
+		Save(ctx)
+	require.NoError(t, err)
+	_, err = entClient.ProcessApprovalDecision.Create().
+		SetProcessInstanceID(2).SetProcessTaskID(2).
+		SetProcessInstanceKey("PI-iso-b").SetTaskID("TASK-iso-b").
+		SetProcessDefinitionKey("change_normal_flow").SetNodeKey("Activity_CABApproval").
+		SetBusinessType("change").SetBusinessID("42").
+		SetActorID(actorB.ID).SetActorName(actorB.Name).
+		SetAction("approve").SetDecision("approved").SetComment("tenant b").
+		SetVariablesSnapshot(map[string]interface{}{}).SetTenantID(tenantB.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	repo := NewEntRepository(entClient, nil)
+	history, err := repo.GetApprovalHistory(ctx, 42, tenantA.ID)
+	require.NoError(t, err)
+	require.Len(t, history, 1)
+	assert.Equal(t, actorA.ID, history[0].ApproverID)
+	assert.Equal(t, "tenant a", *history[0].Comment)
+}
