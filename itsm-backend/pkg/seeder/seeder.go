@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"itsm-backend/ent"
-	"itsm-backend/ent/approvalworkflow"
 	"itsm-backend/ent/assetlicense"
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/department"
@@ -67,7 +66,6 @@ type SeedConfig struct {
 	SLADefinitions    []SLADefinitionSeed    `json:"sla_definitions"`
 	SLAPolicies       []SLAPolicySeed        `json:"sla_policies"`
 	ServiceCatalog    []ServiceCatalogSeed   `json:"service_catalog"`
-	ApprovalWorkflows []ApprovalWorkflowSeed `json:"approval_workflows"`
 	ProcessBindings   []ProcessBindingSeed   `json:"process_bindings"`
 	TicketViews       []TicketViewSeed       `json:"ticket_views"`
 	CITypes           []CITypeSeed           `json:"ci_types"`
@@ -122,14 +120,6 @@ type ServiceCatalogSeed struct {
 	ServiceType      string `json:"service_type"`
 	RequiresApproval bool   `json:"requires_approval"`
 	DeliveryTime     int    `json:"delivery_time"`
-}
-
-type ApprovalWorkflowSeed struct {
-	Name       string                   `json:"name"`
-	Desc       string                   `json:"description"`
-	TicketType string                   `json:"ticket_type"`
-	Priority   string                   `json:"priority"`
-	Nodes      []map[string]interface{} `json:"nodes"`
 }
 
 type ProcessBindingSeed struct {
@@ -386,9 +376,6 @@ func mergeSeedConfig(base *SeedConfig, override *SeedConfig) *SeedConfig {
 	if override.ServiceCatalog != nil {
 		base.ServiceCatalog = override.ServiceCatalog
 	}
-	if override.ApprovalWorkflows != nil {
-		base.ApprovalWorkflows = override.ApprovalWorkflows
-	}
 	if override.ProcessBindings != nil {
 		base.ProcessBindings = override.ProcessBindings
 	}
@@ -528,11 +515,6 @@ func getEmbeddedConfig() *SeedConfig {
 			{Name: "测试环境", Description: "预发布测试环境", Category: "开发", ServiceType: "custom", RequiresApproval: true, DeliveryTime: 2},
 			{Name: "API网关", Description: "API接口管理", Category: "开发", ServiceType: "custom", RequiresApproval: true, DeliveryTime: 3},
 		},
-		ApprovalWorkflows: []ApprovalWorkflowSeed{
-			{Name: "P0/P1事件审批", Desc: "紧急和高优先级事件需要主管审批", TicketType: "incident", Priority: "urgent,high", Nodes: []map[string]interface{}{{"type": "approval", "name": "主管审批", "approver_type": "manager", "timeout": 60}}},
-			{Name: "变更审批", Desc: "所有变更请求需要多级审批", TicketType: "change", Priority: "", Nodes: []map[string]interface{}{{"type": "approval", "name": "技术审批", "approver_type": "role", "role": "it_director", "timeout": 240}, {"type": "approval", "name": "经理审批", "approver_type": "role", "role": "dept_manager", "timeout": 480}}},
-			{Name: "服务请求审批", Desc: "高价值服务请求需要审批", TicketType: "service_request", Priority: "high", Nodes: []map[string]interface{}{{"type": "approval", "name": "服务审批", "approver_type": "manager", "timeout": 120}}},
-		},
 		ProcessBindings: []ProcessBindingSeed{
 			{BusinessType: "ticket", BusinessSubType: "incident", ProcessDefinitionKey: "incident_emergency_flow", IsDefault: true},
 			{BusinessType: "ticket", BusinessSubType: "problem", ProcessDefinitionKey: "problem_management_flow", IsDefault: true},
@@ -565,7 +547,6 @@ func (s *Seeder) SeedAll(ctx context.Context) {
 	// 使用配置的初始化数据
 	s.seedSLADefinitions(ctx)
 	s.seedSLAAlertRules(ctx)
-	s.seedApprovalWorkflows(ctx)
 	s.seedProcessBindings(ctx)
 	s.seedBPMNWorkflows(ctx) // 部署BPMN工作流模板
 	s.seedTicketViews(ctx)
@@ -1096,39 +1077,8 @@ func (s *Seeder) seedSLAAlertRules(ctx context.Context) {
 	s.sugar.Infow("SLA alert rules seeded", "count", len(alertRules))
 }
 
-func (s *Seeder) seedApprovalWorkflows(ctx context.Context) {
-	t := s.tenant(ctx)
-	if t == nil {
-		s.sugar.Warnw("tenant not found; skip seed")
-		return
-	}
-
-	existing, err := s.client.ApprovalWorkflow.Query().Where(approvalworkflow.TenantIDEQ(t.ID)).Count(ctx)
-	if err != nil {
-		s.sugar.Warnw("check existing approval workflows failed", "error", err)
-		return
-	}
-	if existing > 0 {
-		s.sugar.Infow("approval workflows already seeded")
-		return
-	}
-
-	for _, wf := range s.config.ApprovalWorkflows {
-		_, err := s.client.ApprovalWorkflow.Create().
-			SetName(wf.Name).
-			SetDescription(wf.Desc).
-			SetTicketType(wf.TicketType).
-			SetPriority(wf.Priority).
-			SetNodes(wf.Nodes).
-			SetIsActive(true).
-			SetTenantID(t.ID).
-			Save(ctx)
-		if err != nil {
-			s.sugar.Warnw("seed approval workflow failed", "error", err, "name", wf.Name)
-		}
-	}
-	s.sugar.Infow("approval workflows seeded", "count", len(s.config.ApprovalWorkflows))
-}
+// seedApprovalWorkflows 曾负责创建 legacy ApprovalWorkflow 默认模板，已随引擎下线移除（见 Task 6）。
+// 审批能力现在完全由 seedBPMNWorkflows + seedProcessBindings 提供。
 
 func (s *Seeder) seedProcessBindings(ctx context.Context) {
 	t := s.tenant(ctx)

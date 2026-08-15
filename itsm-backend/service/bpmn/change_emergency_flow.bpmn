@@ -36,7 +36,7 @@
     </bpmn:exclusiveGateway>
 
     <!-- CAB审批 -->
-    <bpmn:userTask id="Activity_CABApproval" name="CAB审批">
+    <bpmn:userTask id="Activity_CABApproval" name="CAB审批" taskPurpose="approval" assigneeRole="change_manager">
       <bpmn:extensionElements>
         <bpmn:metaData name="service_task_type">change_task</bpmn:metaData>
         <bpmn:metaData name="action">approve_change</bpmn:metaData>
@@ -48,8 +48,8 @@
     <!-- 审批结果网关 -->
     <bpmn:exclusiveGateway id="Gateway_ApprovalResult" name="审批结果?">
       <bpmn:incoming>Flow_ApprovalResult</bpmn:incoming>
-      <bpmn:outgoing>Flow_Schedule</bpmn:outgoing>
-      <bpmn:outgoing>Flow_Reject</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ApprovalApproved</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ApprovalRejected</bpmn:outgoing>
     </bpmn:exclusiveGateway>
 
     <!-- 驳回处理 -->
@@ -58,7 +58,7 @@
         <bpmn:metaData name="service_task_type">change_task</bpmn:metaData>
         <bpmn:metaData name="action">reject_change</bpmn:metaData>
       </bpmn:extensionElements>
-      <bpmn:incoming>Flow_Reject</bpmn:incoming>
+      <bpmn:incoming>Flow_ApprovalRejected</bpmn:incoming>
       <bpmn:outgoing>Flow_End</bpmn:outgoing>
     </bpmn:userTask>
 
@@ -69,6 +69,7 @@
         <bpmn:metaData name="action">schedule_change</bpmn:metaData>
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_Schedule</bpmn:incoming>
+      <bpmn:incoming>Flow_ApprovalApproved</bpmn:incoming>
       <bpmn:outgoing>Flow_4</bpmn:outgoing>
     </bpmn:userTask>
 
@@ -121,13 +122,18 @@
     <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Activity_Assessment" />
     <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_Assessment" targetRef="Gateway_Approval" />
     <bpmn:sequenceFlow id="Flow_3" sourceRef="Gateway_Approval" targetRef="Activity_CABApproval">
-      <bpmn:conditionExpression><![CDATA[variables['need_approval'] == true]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['approval_required'] == true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_Schedule" sourceRef="Gateway_Approval" targetRef="Activity_Schedule">
-      <bpmn:conditionExpression><![CDATA[variables['need_approval'] != true]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['approval_required'] != true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_ApprovalResult" sourceRef="Activity_CABApproval" targetRef="Gateway_ApprovalResult" />
-    <bpmn:sequenceFlow id="Flow_Reject" sourceRef="Gateway_ApprovalResult" targetRef="Activity_Reject" />
+    <bpmn:sequenceFlow id="Flow_ApprovalApproved" sourceRef="Gateway_ApprovalResult" targetRef="Activity_Schedule">
+      <bpmn:conditionExpression><![CDATA[variables['approvalAction'] == 'approve']]></bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_ApprovalRejected" sourceRef="Gateway_ApprovalResult" targetRef="Activity_Reject">
+      <bpmn:conditionExpression><![CDATA[variables['approvalAction'] != 'approve']]></bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_4" sourceRef="Activity_Schedule" targetRef="Activity_Implement" />
     <bpmn:sequenceFlow id="Flow_5" sourceRef="Activity_Implement" targetRef="Activity_Verify" />
     <bpmn:sequenceFlow id="Flow_6" sourceRef="Activity_Verify" targetRef="Gateway_VerifyResult" />

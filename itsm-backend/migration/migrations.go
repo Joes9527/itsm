@@ -74,6 +74,11 @@ var RegisteredMigrations = []Migration{
 		Description: "ServiceRequest delegates status/workflow/approval to its linked Ticket: drop status/title/reason/approval-progress columns and the service_request_approvals table (superseded by ticket's process_approval_decision); irreversible, forward-fix only",
 		RollbackSQL: "",
 	},
+	{
+		Version:     "014_drop_legacy_approval_workflow",
+		Description: "Drop legacy approval_records/approval_workflows tables (custom ApprovalWorkflow/ApprovalRecord engine fully retired; all real tenant-customized workflows verified migrated to BPMN, see Task 5/6); irreversible, forward-fix only",
+		RollbackSQL: "",
+	},
 }
 
 // PostSchemaMigrations returns a defensive copy of the canonical active stream.
@@ -618,6 +623,16 @@ ALTER TABLE service_requests DROP COLUMN IF EXISTS approver_comment;
 ALTER TABLE service_requests DROP COLUMN IF EXISTS approval_history;
 DROP TABLE IF EXISTS service_request_approvals;
 DELETE FROM field_values WHERE entity_type = 'service_request';
+`
+	case "014_drop_legacy_approval_workflow":
+		return `
+-- Retire the legacy ApprovalWorkflow/ApprovalRecord engine (controller/approval_controller.go,
+-- service/approval_service.go, service/legacy_approval_migration_service.go, cmd/migrate_legacy_approvals).
+-- All real tenant-customized ApprovalWorkflow rows were verified migrated to BPMN (Task 5);
+-- the only rows remaining anywhere were stale pre-fix default-template leftovers, already
+-- removed directly. approval_records has FKs into approval_workflows, so it must drop first.
+DROP TABLE IF EXISTS approval_records;
+DROP TABLE IF EXISTS approval_workflows;
 `
 	default:
 		return ""

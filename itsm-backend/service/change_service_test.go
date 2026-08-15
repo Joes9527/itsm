@@ -2,737 +2,96 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"testing"
-	"time"
 
-	_ "github.com/mattn/go-sqlite3"
-
+	"itsm-backend/common"
+	"itsm-backend/database"
 	"itsm-backend/dto"
-	"itsm-backend/ent"
-	"itsm-backend/ent/enttest"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap/zaptest"
 )
 
-// ==================== 测试设置辅助函数 ====================
-
-func setupChangeTest(t *testing.T) (*ent.Client, *ChangeService, context.Context) {
-	client := enttest.Open(t, "sqlite3", testDSN())
-	logger := zaptest.NewLogger(t).Sugar()
-	service := NewChangeService(client, logger)
-	ctx := context.Background()
-	return client, service, ctx
-}
-
-func createChangeTestTenant(ctx context.Context, client *ent.Client, suffix string) (*ent.Tenant, error) {
-	return client.Tenant.Create().
-		SetName("Test Tenant " + suffix).
-		SetCode("test" + suffix).
-		SetDomain("test" + suffix + ".com").
-		SetStatus("active").
-		Save(ctx)
-}
-
-func createChangeTestUser(ctx context.Context, client *ent.Client, tenantID int, suffix string) (*ent.User, error) {
-	return client.User.Create().
-		SetUsername("testuser" + suffix).
-		SetEmail("test" + suffix + "@example.com").
-		SetName("Test User").
-		SetPasswordHash("hashedpassword").
-		SetRole("agent").
-		SetActive(true).
-		SetTenantID(tenantID).
-		Save(ctx)
-}
-
-// ==================== 创建变更测试 ====================
-
-func TestChangeService_CreateChange_Success(t *testing.T) {
-	client, service, ctx := setupChangeTest(t)
-	defer client.Close()
-
-	testTenant, err := createChangeTestTenant(ctx, client, "create")
-	require.NoError(t, err)
-
-	testUser, err := createChangeTestUser(ctx, client, testTenant.ID, "create")
-	require.NoError(t, err)
-
-	plannedStart := time.Now().Add(24 * time.Hour)
-	plannedEnd := time.Now().Add(48 * time.Hour)
-
-	req := &dto.CreateChangeRequest{
-		Title:              "升级生产服务器",
-		Description:        "升级生产环境服务器的操作系统版本",
-		Justification:      "安全更新需要",
-		Type:               string(dto.ChangeTypeNormal),
-		Priority:           string(dto.ChangePriorityHigh),
-		ImpactScope:        string(dto.ChangeImpactMedium),
-		RiskLevel:          string(dto.ChangeRiskMedium),
-		ImplementationPlan: "1. 备份数据\n2. 执行升级\n3. 验证服务",
-		RollbackPlan:       "恢复快照",
-		PlannedStartDate:   &plannedStart,
-		PlannedEndDate:     &plannedEnd,
-	}
-
-	response, err := service.CreateChange(ctx, req, testUser.ID, testTenant.ID)
-	require.NoError(t, err)
-	assert.NotNil(t, response)
-	assert.Equal(t, req.Title, response.Title)
-	assert.Equal(t, req.Description, response.Description)
-	assert.Equal(t, dto.ChangeStatusDraft, response.Status)
-	assert.Equal(t, dto.ChangeType(req.Type), response.Type)
-	assert.Equal(t, dto.ChangePriority(req.Priority), response.Priority)
-	assert.Equal(t, testUser.ID, response.CreatedBy)
-	assert.Nil(t, response.AssigneeID)
-	assert.NotEmpty(t, response.CreatedAt)
-}
-
-func TestChangeService_CreateChange_WithAffectedCIs(t *testing.T) {
-	client, service, ctx := setupChangeTest(t)
-	defer client.Close()
-
-	testTenant, err := createChangeTestTenant(ctx, client, "ci")
-	require.NoError(t, err)
-
-	testUser, err := createChangeTestUser(ctx, client, testTenant.ID, "ci")
-	require.NoError(t, err)
-	ciType := createTicketAssociationCIType(t, ctx, client, testTenant.ID, "change-ci")
-	createTicketAssociationCI(t, ctx, client, testTenant.ID, ciType.ID, "CI-001", "CHANGE-CI-001")
-	createTicketAssociationCI(t, ctx, client, testTenant.ID, ciType.ID, "CI-002", "CHANGE-CI-002")
-	createTicketAssociationCI(t, ctx, client, testTenant.ID, ciType.ID, "CI-003", "CHANGE-CI-003")
-
-	req := &dto.CreateChangeRequest{
-		Title:         "网络设备配置变更",
-		Description:   "更新防火墙规则",
-		Justification: "业务需求",
-		Type:          string(dto.ChangeTypeNormal),
-		Priority:      string(dto.ChangePriorityMedium),
-		ImpactScope:   string(dto.ChangeImpactLow),
-		RiskLevel:     string(dto.ChangeRiskLow),
-		AffectedCIs:   []string{"CI-001", "CI-002", "CI-003"},
-	}
-
-	response, err := service.CreateChange(ctx, req, testUser.ID, testTenant.ID)
-	require.NoError(t, err)
-	assert.NotNil(t, response)
-
-	// 验证变更已创建
-	assert.Equal(t, req.Title, response.Title)
-
-	// 通过 GetChange 重新获取以验证 AffectedCIs 已存储
-	savedChange, err := client.Change.Get(ctx, response.ID)
-	require.NoError(t, err)
-	assert.Equal(t, []string{"CI-001", "CI-002", "CI-003"}, savedChange.AffectedCis)
-}
-
-func TestChangeService_CreateChange_EmergencyChange(t *testing.T) {
-	client, service, ctx := setupChangeTest(t)
-	defer client.Close()
-
-	testTenant, err := createChangeTestTenant(ctx, client, "emergency")
-	require.NoError(t, err)
-
-	testUser, err := createChangeTestUser(ctx, client, testTenant.ID, "emergency")
-	require.NoError(t, err)
-
-	req := &dto.CreateChangeRequest{
-		Title:         "紧急安全修复",
-		Description:   "修复严重安全漏洞",
-		Justification: "安全漏洞需要立即修复",
-		Type:          string(dto.ChangeTypeEmergency),
-		Priority:      string(dto.ChangePriorityCritical),
-		ImpactScope:   string(dto.ChangeImpactHigh),
-		RiskLevel:     string(dto.ChangeRiskHigh),
-	}
-
-	response, err := service.CreateChange(ctx, req, testUser.ID, testTenant.ID)
-	require.NoError(t, err)
-	assert.NotNil(t, response)
-	assert.Equal(t, dto.ChangeTypeEmergency, response.Type)
-	assert.Equal(t, dto.ChangePriorityCritical, response.Priority)
-}
-
-func TestChangeService_CreateChangeRejectsCrossTenantReferences(t *testing.T) {
-	client, service, ctx := setupChangeTest(t)
-	defer client.Close()
-	tenantA, err := createChangeTestTenant(ctx, client, "ref-a")
-	require.NoError(t, err)
-	tenantB, err := createChangeTestTenant(ctx, client, "ref-b")
-	require.NoError(t, err)
-	userA, err := createChangeTestUser(ctx, client, tenantA.ID, "ref-a")
-	require.NoError(t, err)
-	userB, err := createChangeTestUser(ctx, client, tenantB.ID, "ref-b")
-	require.NoError(t, err)
-	ciType := createTicketAssociationCIType(t, ctx, client, tenantB.ID, "foreign-change-ci")
-	createTicketAssociationCI(t, ctx, client, tenantB.ID, ciType.ID, "foreign-server", "FOREIGN-CHANGE-CI")
-	foreignTicket := createTicketAssociationTicket(t, ctx, client, tenantB.ID, userB.ID, "TKT-FOREIGN-CHANGE")
-
-	base := dto.CreateChangeRequest{
-		Title: "Cross tenant", Type: "normal", Priority: "medium", ImpactScope: "medium", RiskLevel: "medium",
-	}
-	base.AffectedCIs = []string{"foreign-server"}
-	_, err = service.CreateChange(ctx, &base, userA.ID, tenantA.ID)
-	require.ErrorContains(t, err, "配置项不存在")
-	base.AffectedCIs = nil
-	base.RelatedTickets = []string{foreignTicket.TicketNumber}
-	_, err = service.CreateChange(ctx, &base, userA.ID, tenantA.ID)
-	require.ErrorContains(t, err, "相关工单不存在")
-	count, err := client.Change.Query().Count(ctx)
-	require.NoError(t, err)
-	assert.Zero(t, count)
-}
-
-func TestChangeService_StatusTimestampsAndRollback(t *testing.T) {
-	client, service, ctx := setupChangeTest(t)
-	defer client.Close()
-	tenant, err := createChangeTestTenant(ctx, client, "timestamps")
-	require.NoError(t, err)
-	user, err := createChangeTestUser(ctx, client, tenant.ID, "timestamps")
-	require.NoError(t, err)
-	entity, err := client.Change.Create().
-		SetTitle("Timestamp change").SetType("normal").SetStatus("approved").SetPriority("medium").
-		SetImpactScope("medium").SetRiskLevel("medium").SetCreatedBy(user.ID).SetTenantID(tenant.ID).Save(ctx)
-	require.NoError(t, err)
-	require.NoError(t, service.UpdateChangeStatus(ctx, entity.ID, dto.ChangeStatusScheduled, tenant.ID))
-	require.NoError(t, service.UpdateChangeStatus(ctx, entity.ID, dto.ChangeStatusInProgress, tenant.ID))
-	started, err := client.Change.Get(ctx, entity.ID)
-	require.NoError(t, err)
-	assert.False(t, started.ActualStartDate.IsZero())
-	require.NoError(t, service.UpdateChangeStatus(ctx, entity.ID, dto.ChangeStatusFailed, tenant.ID))
-	require.NoError(t, service.UpdateChangeStatus(ctx, entity.ID, dto.ChangeStatusRolledBack, tenant.ID))
-	rolledBack, err := client.Change.Get(ctx, entity.ID)
-	require.NoError(t, err)
-	assert.Equal(t, string(dto.ChangeStatusRolledBack), rolledBack.Status)
-	assert.False(t, rolledBack.ActualEndDate.IsZero())
-
-	_, err = service.UpdateChange(ctx, entity.ID, &dto.UpdateChangeRequest{}, tenant.ID)
-	require.ErrorContains(t, err, "只有草稿")
-}
-
-// ==================== 获取变更测试 ====================
-
-func TestChangeService_GetChange_Success(t *testing.T) {
-	client, service, ctx := setupChangeTest(t)
-	defer client.Close()
-
-	testTenant, err := createChangeTestTenant(ctx, client, "get")
-	require.NoError(t, err)
-
-	testUser, err := createChangeTestUser(ctx, client, testTenant.ID, "get")
-	require.NoError(t, err)
-
-	// 创建测试变更
-	testChange, err := client.Change.Create().
-		SetTitle("Test Change").
-		SetDescription("Test description").
-		SetType("normal").
-		SetStatus("draft").
-		SetPriority("medium").
-		SetImpactScope("medium").
-		SetRiskLevel("low").
-		SetCreatedBy(testUser.ID).
-		SetTenantID(testTenant.ID).
-		Save(ctx)
-	require.NoError(t, err)
-
-	response, err := service.GetChange(ctx, testChange.ID, testTenant.ID)
-	require.NoError(t, err)
-	assert.Equal(t, testChange.ID, response.ID)
-	assert.Equal(t, testChange.Title, response.Title)
-}
-
-func TestChangeService_GetChange_NotFound(t *testing.T) {
-	client, service, ctx := setupChangeTest(t)
-	defer client.Close()
-
-	testTenant, err := createChangeTestTenant(ctx, client, "notfound")
-	require.NoError(t, err)
-
-	_, err = service.GetChange(ctx, 99999, testTenant.ID)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "change not found")
-}
-
-func TestChangeService_GetChange_TenantMismatch(t *testing.T) {
-	client, service, ctx := setupChangeTest(t)
-	defer client.Close()
-
-	testTenant1, err := createChangeTestTenant(ctx, client, "tenant1")
-	require.NoError(t, err)
-
-	testTenant2, err := createChangeTestTenant(ctx, client, "tenant2")
-	require.NoError(t, err)
-
-	testUser, err := createChangeTestUser(ctx, client, testTenant1.ID, "tenant")
-	require.NoError(t, err)
-
-	testChange, err := client.Change.Create().
-		SetTitle("Test Change").
-		SetDescription("Test description").
-		SetType("normal").
-		SetStatus("draft").
-		SetPriority("medium").
-		SetImpactScope("medium").
-		SetRiskLevel("low").
-		SetCreatedBy(testUser.ID).
-		SetTenantID(testTenant1.ID).
-		Save(ctx)
-	require.NoError(t, err)
-
-	// 使用另一个租户ID获取，应该失败
-	_, err = service.GetChange(ctx, testChange.ID, testTenant2.ID)
-	require.Error(t, err)
-}
-
-// ==================== 列出变更测试 ====================
-
-func TestChangeService_ListChanges_Pagination(t *testing.T) {
-	client, service, ctx := setupChangeTest(t)
-	defer client.Close()
-
-	testTenant, err := createChangeTestTenant(ctx, client, "list")
-	require.NoError(t, err)
-
-	testUser, err := createChangeTestUser(ctx, client, testTenant.ID, "list")
-	require.NoError(t, err)
-
-	// 创建多个测试变更
-	for i := 0; i < 15; i++ {
-		_, err := client.Change.Create().
-			SetTitle(fmt.Sprintf("Test Change %d", i+1)).
-			SetDescription("Test description").
-			SetType("normal").
-			SetStatus("draft").
-			SetPriority("medium").
-			SetImpactScope("medium").
-			SetRiskLevel("low").
-			SetCreatedBy(testUser.ID).
-			SetTenantID(testTenant.ID).
-			Save(ctx)
-		require.NoError(t, err)
-	}
-
-	// 测试第一页
-	response, err := service.ListChanges(ctx, testTenant.ID, 1, 10, "", "")
-	require.NoError(t, err)
-	assert.Equal(t, 15, response.Total)
-	assert.Len(t, response.Changes, 10)
-
-	// 测试第二页
-	response, err = service.ListChanges(ctx, testTenant.ID, 2, 10, "", "")
-	require.NoError(t, err)
-	assert.Equal(t, 15, response.Total)
-	assert.Len(t, response.Changes, 5)
-}
-
-func TestChangeService_ListChanges_Filters(t *testing.T) {
-	client, service, ctx := setupChangeTest(t)
-	defer client.Close()
-
-	testTenant, err := createChangeTestTenant(ctx, client, "filter")
-	require.NoError(t, err)
-
-	testUser, err := createChangeTestUser(ctx, client, testTenant.ID, "filter")
-	require.NoError(t, err)
-
-	// 创建不同状态和类型的变更
-	statuses := []string{"draft", "pending", "approved"}
-	types := []string{"normal", "emergency"}
-
-	for _, status := range statuses {
-		for _, changeType := range types {
-			_, err := client.Change.Create().
-				SetTitle(fmt.Sprintf("Change %s-%s", status, changeType)).
-				SetDescription("Test description").
-				SetType(changeType).
-				SetStatus(status).
-				SetPriority("medium").
-				SetImpactScope("medium").
-				SetRiskLevel("low").
-				SetCreatedBy(testUser.ID).
-				SetTenantID(testTenant.ID).
-				Save(ctx)
-			require.NoError(t, err)
-		}
-	}
-
-	// 测试状态过滤
-	response, err := service.ListChanges(ctx, testTenant.ID, 1, 10, "draft", "")
-	require.NoError(t, err)
-	assert.Equal(t, 2, response.Total) // 2 种类型 × 1 个状态
-
-	// 测试搜索过滤
-	response, err = service.ListChanges(ctx, testTenant.ID, 1, 10, "", "emergency")
-	require.NoError(t, err)
-	// 搜索会在标题和描述中查找 "emergency"
-	assert.GreaterOrEqual(t, response.Total, 3) // 至少 3 个包含 "emergency"
-}
-
-// ==================== 更新变更测试 ====================
-
-func TestChangeService_UpdateChange_Success(t *testing.T) {
-	client, service, ctx := setupChangeTest(t)
-	defer client.Close()
-
-	testTenant, err := createChangeTestTenant(ctx, client, "update")
-	require.NoError(t, err)
-
-	testUser, err := createChangeTestUser(ctx, client, testTenant.ID, "update")
-	require.NoError(t, err)
-
-	testChange, err := client.Change.Create().
-		SetTitle("Original Title").
-		SetDescription("Original description").
-		SetType("normal").
-		SetStatus("draft").
-		SetPriority("low").
-		SetImpactScope("low").
-		SetRiskLevel("low").
-		SetCreatedBy(testUser.ID).
-		SetTenantID(testTenant.ID).
-		Save(ctx)
-	require.NoError(t, err)
-
-	newTitle := "Updated Title"
-	newPriority := dto.ChangePriorityHigh
-
-	response, err := service.UpdateChange(ctx, testChange.ID, &dto.UpdateChangeRequest{
-		Title:    &newTitle,
-		Priority: &newPriority,
-	}, testTenant.ID)
-
-	require.NoError(t, err)
-	assert.Equal(t, newTitle, response.Title)
-	assert.Equal(t, newPriority, response.Priority)
-}
-
-func TestChangeService_UpdateChange_StatusTransition(t *testing.T) {
-	client, service, ctx := setupChangeTest(t)
-	defer client.Close()
-
-	testTenant, err := createChangeTestTenant(ctx, client, "status")
-	require.NoError(t, err)
-
-	testUser, err := createChangeTestUser(ctx, client, testTenant.ID, "status")
-	require.NoError(t, err)
-
-	// 使用 common 包中定义的状态常量，与服务层一致
-	// 有效状态转换: draft -> submitted -> approved -> scheduled -> in_progress -> completed
-
-	t.Run("draft -> submitted", func(t *testing.T) {
-		testChange, err := client.Change.Create().
-			SetTitle("Status Test").
-			SetDescription("Test").
-			SetType("normal").
-			SetStatus("draft").
-			SetPriority("medium").
-			SetImpactScope("medium").
-			SetRiskLevel("low").
-			SetCreatedBy(testUser.ID).
-			SetTenantID(testTenant.ID).
-			Save(ctx)
-		require.NoError(t, err)
-
-		// 使用 common 包中的状态常量
-		err = service.UpdateChangeStatus(ctx, testChange.ID, "submitted", testTenant.ID)
-		require.NoError(t, err)
-
-		// 验证状态已更新
-		response, err := service.GetChange(ctx, testChange.ID, testTenant.ID)
-		require.NoError(t, err)
-		assert.Equal(t, dto.ChangeStatusPending, response.Status)
-	})
-
-	t.Run("submitted -> approved", func(t *testing.T) {
-		testChange, err := client.Change.Create().
-			SetTitle("Status Test 2").
-			SetDescription("Test").
-			SetType("normal").
-			SetStatus("submitted").
-			SetPriority("medium").
-			SetImpactScope("medium").
-			SetRiskLevel("low").
-			SetCreatedBy(testUser.ID).
-			SetTenantID(testTenant.ID).
-			Save(ctx)
-		require.NoError(t, err)
-
-		err = service.UpdateChangeStatus(ctx, testChange.ID, "approved", testTenant.ID)
-		require.NoError(t, err)
-
-		response, err := service.GetChange(ctx, testChange.ID, testTenant.ID)
-		require.NoError(t, err)
-		assert.Equal(t, dto.ChangeStatus("approved"), response.Status)
-	})
-
-	t.Run("approved -> scheduled", func(t *testing.T) {
-		testChange, err := client.Change.Create().
-			SetTitle("Status Test 3").
-			SetDescription("Test").
-			SetType("normal").
-			SetStatus("approved").
-			SetPriority("medium").
-			SetImpactScope("medium").
-			SetRiskLevel("low").
-			SetCreatedBy(testUser.ID).
-			SetTenantID(testTenant.ID).
-			Save(ctx)
-		require.NoError(t, err)
-
-		err = service.UpdateChangeStatus(ctx, testChange.ID, "scheduled", testTenant.ID)
-		require.NoError(t, err)
-
-		response, err := service.GetChange(ctx, testChange.ID, testTenant.ID)
-		require.NoError(t, err)
-		assert.Equal(t, dto.ChangeStatus("scheduled"), response.Status)
-	})
-}
-
-// ==================== 删除变更测试 ====================
-
-func TestChangeService_DeleteChange_Success(t *testing.T) {
-	client, service, ctx := setupChangeTest(t)
-	defer client.Close()
-
-	testTenant, err := createChangeTestTenant(ctx, client, "delete")
-	require.NoError(t, err)
-
-	testUser, err := createChangeTestUser(ctx, client, testTenant.ID, "delete")
-	require.NoError(t, err)
-
-	testChange, err := client.Change.Create().
-		SetTitle("To Be Deleted").
-		SetDescription("Test description").
-		SetType("normal").
-		SetStatus("draft").
-		SetPriority("medium").
-		SetImpactScope("medium").
-		SetRiskLevel("low").
-		SetCreatedBy(testUser.ID).
-		SetTenantID(testTenant.ID).
-		Save(ctx)
-	require.NoError(t, err)
-
-	err = service.DeleteChange(ctx, testChange.ID, testTenant.ID)
-	require.NoError(t, err)
-
-	// 验证已删除
-	_, err = client.Change.Get(ctx, testChange.ID)
-	require.Error(t, err)
-	assert.True(t, ent.IsNotFound(err))
-}
-
-func TestChangeService_DeleteChange_NotFound(t *testing.T) {
-	client, service, ctx := setupChangeTest(t)
-	defer client.Close()
-
-	testTenant, err := createChangeTestTenant(ctx, client, "delnotfound")
-	require.NoError(t, err)
-
-	err = service.DeleteChange(ctx, 99999, testTenant.ID)
-	require.Error(t, err)
-}
-
-// ==================== 审批工作流测试 ====================
-
-func TestChangeService_SubmitChange_Success(t *testing.T) {
-	client, service, ctx := setupChangeTest(t)
-	defer client.Close()
-
-	testTenant, err := createChangeTestTenant(ctx, client, "submit")
-	require.NoError(t, err)
-
-	testUser, err := createChangeTestUser(ctx, client, testTenant.ID, "submit")
-	require.NoError(t, err)
-
-	// 创建一个 draft 状态的变更
-	testChange, err := client.Change.Create().
-		SetTitle("提交审批测试").
-		SetDescription("测试提交变更审批流程").
-		SetType("normal").
-		SetStatus("draft").
-		SetPriority("medium").
-		SetImpactScope("medium").
-		SetRiskLevel("low").
-		SetCreatedBy(testUser.ID).
-		SetTenantID(testTenant.ID).
-		Save(ctx)
-	require.NoError(t, err)
-
-	// 验证初始状态为 draft
-	assert.Equal(t, dto.ChangeStatus("draft"), dto.ChangeStatus(testChange.Status))
-
-	// 调用 UpdateChangeStatus 提交变更
-	err = service.UpdateChangeStatus(ctx, testChange.ID, "submitted", testTenant.ID)
-	require.NoError(t, err, "提交变更应该成功")
-
-	// 调用 GetChange 获取更新后的变更
-	response, err := service.GetChange(ctx, testChange.ID, testTenant.ID)
-	require.NoError(t, err, "获取变更应该成功")
-
-	// 验证状态已变为 submitted
-	assert.Equal(t, dto.ChangeStatusPending, response.Status, "API 应将持久化 submitted 映射为 pending")
-	assert.Equal(t, testChange.ID, response.ID, "变更ID应保持不变")
-	assert.Equal(t, testChange.Title, response.Title, "变更标题应保持不变")
-}
-
-// ==================== 状态转换边界测试 ====================
-
-func TestChangeService_UpdateChangeStatus_InvalidTransition(t *testing.T) {
-	client, service, ctx := setupChangeTest(t)
-	defer client.Close()
-
-	testTenant, err := createChangeTestTenant(ctx, client, "invalid")
-	require.NoError(t, err)
-
-	testUser, err := createChangeTestUser(ctx, client, testTenant.ID, "invalid")
-	require.NoError(t, err)
-
-	// 创建一个 draft 状态的变更
-	testChange, err := client.Change.Create().
-		SetTitle("Invalid Transition Test").
-		SetDescription("Test").
-		SetType("normal").
-		SetStatus("draft").
-		SetPriority("medium").
-		SetImpactScope("medium").
-		SetRiskLevel("low").
-		SetCreatedBy(testUser.ID).
-		SetTenantID(testTenant.ID).
-		Save(ctx)
-	require.NoError(t, err)
-
-	// 尝试直接从 draft 转换到 approved（跳过 submitted），应该失败
-	err = service.UpdateChangeStatus(ctx, testChange.ID, "approved", testTenant.ID)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid status transition")
-}
-
-func TestChangeService_UpdateChangeStatus_CancelledCannotTransition(t *testing.T) {
-	client, service, ctx := setupChangeTest(t)
-	defer client.Close()
-
-	testTenant, err := createChangeTestTenant(ctx, client, "cancelled")
-	require.NoError(t, err)
-
-	testUser, err := createChangeTestUser(ctx, client, testTenant.ID, "cancelled")
-	require.NoError(t, err)
-
-	// 创建一个 cancelled 状态的变更
-	testChange, err := client.Change.Create().
-		SetTitle("Cancelled Change Test").
-		SetDescription("Test").
-		SetType("normal").
-		SetStatus("cancelled").
-		SetPriority("medium").
-		SetImpactScope("medium").
-		SetRiskLevel("low").
-		SetCreatedBy(testUser.ID).
-		SetTenantID(testTenant.ID).
-		Save(ctx)
-	require.NoError(t, err)
-
-	// 尝试从 cancelled 转换到 draft，应该失败
-	err = service.UpdateChangeStatus(ctx, testChange.ID, "draft", testTenant.ID)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid status transition")
-}
-
-// ==================== 变更统计测试 ====================
-
-func TestChangeService_GetChangeStats(t *testing.T) {
-	client, service, ctx := setupChangeTest(t)
-	defer client.Close()
-
-	testTenant, err := createChangeTestTenant(ctx, client, "stats")
-	require.NoError(t, err)
-
-	testUser, err := createChangeTestUser(ctx, client, testTenant.ID, "stats")
-	require.NoError(t, err)
-
-	// 创建不同状态的变更
-	statuses := []struct {
-		status string
-		count  int
+// TestIsValidChangeStatusTransition 覆盖 IsValidChangeStatusTransition 的 ITIL 状态机语义：
+// 合法转换、非法转换（含跳级）、终态锁定（cancelled/rejected/completed/rolled_back 不可再转换）、
+// "pending" 历史别名归一化（handlers/change 使用 pending，内部状态机用 submitted），
+// 以及 normal/standard/emergency 三种变更类型的差异化转换规则。
+//
+// 背景：change_service.go 里的 ChangeService 结构体（Track 6，历史遗留、零调用方）已删除，
+// 原 change_service_test.go 随之删除；但 IsValidChangeStatusTransition 是仍被
+// handlers/change/service.go 实际调用的独立函数，删除前该文件对它有充分的间接覆盖
+// （通过 ChangeService.UpdateChangeStatus）。本测试直接调用该纯函数，恢复并强化那部分覆盖，
+// 后续任务（8/9/12）会依赖这里锁定的精确语义。
+func TestIsValidChangeStatusTransition(t *testing.T) {
+	tests := []struct {
+		name          string
+		currentStatus string
+		newStatus     string
+		changeType    string
+		want          bool
 	}{
-		{"draft", 3},
-		{"submitted", 2},
-		{"approved", 4},
-		{"completed", 1},
+		// ---- normal：严格 ITIL 流程 ----
+		{"normal: draft -> submitted 合法", common.ChangeStatusDraft, common.ChangeStatusSubmitted, "normal", true},
+		{"normal: draft -> cancelled 合法", common.ChangeStatusDraft, common.ChangeStatusCancelled, "normal", true},
+		{"normal: draft -> approved 非法（跳过 submitted）", common.ChangeStatusDraft, common.ChangeStatusApproved, "normal", false},
+		{"normal: submitted -> approved 合法", common.ChangeStatusSubmitted, common.ChangeStatusApproved, "normal", true},
+		{"normal: submitted -> rejected 合法", common.ChangeStatusSubmitted, common.ChangeStatusRejected, "normal", true},
+		{"normal: submitted -> in_progress 非法（跳过 approved/scheduled）", common.ChangeStatusSubmitted, common.ChangeStatusInProgress, "normal", false},
+		{"normal: approved -> scheduled 合法", common.ChangeStatusApproved, common.ChangeStatusScheduled, "normal", true},
+		{"normal: approved -> in_progress 非法（跳过 scheduled）", common.ChangeStatusApproved, common.ChangeStatusInProgress, "normal", false},
+		{"normal: scheduled -> in_progress 合法", common.ChangeStatusScheduled, common.ChangeStatusInProgress, "normal", true},
+		{"normal: in_progress -> completed 合法", common.ChangeStatusInProgress, common.ChangeStatusCompleted, "normal", true},
+		{"normal: in_progress -> failed 合法", common.ChangeStatusInProgress, common.ChangeStatusFailed, "normal", true},
+		{"normal: in_progress -> rolled_back 合法", common.ChangeStatusInProgress, string(dto.ChangeStatusRolledBack), "normal", true},
+		{"normal: failed -> scheduled 合法（重新排期）", common.ChangeStatusFailed, common.ChangeStatusScheduled, "normal", true},
+
+		// ---- 终态锁定：不论变更类型，进入终态后不可再转换 ----
+		{"终态: cancelled -> draft 非法", common.ChangeStatusCancelled, common.ChangeStatusDraft, "normal", false},
+		{"终态: cancelled -> approved 非法（standard 类型下同样锁定）", common.ChangeStatusCancelled, common.ChangeStatusApproved, "standard", false},
+		{"终态: rejected -> submitted 非法", common.ChangeStatusRejected, common.ChangeStatusSubmitted, "normal", false},
+		{"终态: completed -> in_progress 非法", common.ChangeStatusCompleted, common.ChangeStatusInProgress, "normal", false},
+		{"终态: rolled_back -> draft 非法", string(dto.ChangeStatusRolledBack), common.ChangeStatusDraft, "normal", false},
+
+		// ---- "pending" 历史别名归一化（仅 currentStatus 侧生效）----
+		{"pending 别名等价 submitted -> approved 合法", "pending", common.ChangeStatusApproved, "normal", true},
+		{"pending 别名等价 submitted -> rejected 合法", "pending", common.ChangeStatusRejected, "normal", true},
+
+		// ---- standard：预授权，可跳过审批/排期 ----
+		{"standard: draft -> approved 合法（预授权跳过 submitted）", common.ChangeStatusDraft, common.ChangeStatusApproved, "standard", true},
+		{"standard: draft -> scheduled 合法（预授权）", common.ChangeStatusDraft, common.ChangeStatusScheduled, "standard", true},
+		{"standard: draft -> in_progress 合法（预授权）", common.ChangeStatusDraft, common.ChangeStatusInProgress, "standard", true},
+		{"standard: approved -> in_progress 合法（跳过 scheduled）", common.ChangeStatusApproved, common.ChangeStatusInProgress, "standard", true},
+
+		// ---- emergency：快速通道，可跳过排期 ----
+		{"emergency: draft -> in_progress 合法（快速通道）", common.ChangeStatusDraft, common.ChangeStatusInProgress, "emergency", true},
+		{"emergency: approved -> in_progress 合法（跳过 scheduled）", common.ChangeStatusApproved, common.ChangeStatusInProgress, "emergency", true},
+		{"emergency: approved -> scheduled 非法（紧急流程无排期步骤）", common.ChangeStatusApproved, common.ChangeStatusScheduled, "emergency", false},
+		{"emergency: scheduled 状态未定义于紧急流程转换表，任何转换均失败关闭", common.ChangeStatusScheduled, common.ChangeStatusInProgress, "emergency", false},
+
+		// ---- 未知状态必须失败关闭 ----
+		{"未知当前状态失败关闭", "some_unknown_status", common.ChangeStatusDraft, "normal", false},
 	}
 
-	for _, s := range statuses {
-		for i := 0; i < s.count; i++ {
-			_, err := client.Change.Create().
-				SetTitle(fmt.Sprintf("Stats Test %s %d", s.status, i)).
-				SetDescription("Test description").
-				SetType("normal").
-				SetStatus(s.status).
-				SetPriority("medium").
-				SetImpactScope("medium").
-				SetRiskLevel("low").
-				SetCreatedBy(testUser.ID).
-				SetTenantID(testTenant.ID).
-				Save(ctx)
-			require.NoError(t, err)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsValidChangeStatusTransition(tt.currentStatus, tt.newStatus, tt.changeType)
+			assert.Equal(t, tt.want, got,
+				"IsValidChangeStatusTransition(%q, %q, %q)", tt.currentStatus, tt.newStatus, tt.changeType)
+		})
 	}
-
-	stats, err := service.GetChangeStats(ctx, testTenant.ID)
-	require.NoError(t, err)
-	assert.NotNil(t, stats)
-
-	totalExpected := 3 + 2 + 4 + 1 // 10
-	assert.Equal(t, totalExpected, stats.Total)
-
-	// Pending = draft + submitted = 3 + 2 = 5
-	assert.Equal(t, 5, stats.Pending)
-	assert.Equal(t, 4, stats.Approved)
-	assert.Equal(t, 1, stats.Completed)
 }
 
-// ==================== 租户隔离测试 ====================
+// TestCloseChangeApprovalChains_NoRawDBConfigured 覆盖 CloseChangeApprovalChains 在
+// database.GetRawDB() 返回 nil（原始 DB 连接未初始化）时必须 fail-closed 返回 error，
+// 而不是静默跳过或 panic。核心的“真正收口 pending 行”行为需要真实 Postgres 连接
+// （原始 SQL 使用 change_approval_chains 裸表，非 Ent 管理），见
+// change_approval_chains_integration_test.go（build tag: integration）。
+func TestCloseChangeApprovalChains_NoRawDBConfigured(t *testing.T) {
+	prev := database.GetRawDB()
+	database.SetRawDBForTest(nil)
+	t.Cleanup(func() { database.SetRawDBForTest(prev) })
 
-func TestChangeService_UpdateChangeStatus_TenantIsolation(t *testing.T) {
-	client, service, ctx := setupChangeTest(t)
-	defer client.Close()
-
-	// Create tenant 1
-	testTenant1, err := createChangeTestTenant(ctx, client, "iso1")
-	require.NoError(t, err)
-
-	// Create tenant 2
-	testTenant2, err := createChangeTestTenant(ctx, client, "iso2")
-	require.NoError(t, err)
-
-	// Create user for tenant 1
-	testUser1, err := createChangeTestUser(ctx, client, testTenant1.ID, "iso1")
-	require.NoError(t, err)
-
-	// Create a change for tenant 1 (status: submitted to allow approval transition)
-	change, err := client.Change.Create().
-		SetTitle("Tenant 1 Change").
-		SetDescription("Should not be updatable by Tenant 2").
-		SetType("normal").
-		SetStatus(string(dto.ChangeStatusPending)). // Need submitted to transition to approved
-		SetPriority("medium").
-		SetImpactScope("medium").
-		SetRiskLevel("low").
-		SetCreatedBy(testUser1.ID).
-		SetTenantID(testTenant1.ID).
-		Save(ctx)
-	require.NoError(t, err)
-
-	// Tenant 2 tries to update status to approved - should fail with cross-tenant error
-	err = service.UpdateChangeStatus(ctx, change.ID, dto.ChangeStatusApproved, testTenant2.ID)
+	err := CloseChangeApprovalChains(context.Background(), 1, 1)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "cross-tenant access denied", "Expected cross-tenant access denied error")
-
-	// Verify change status was NOT updated (still submitted)
-	updatedChange, err := client.Change.Get(ctx, change.ID)
-	require.NoError(t, err)
-	assert.Equal(t, string(dto.ChangeStatusPending), updatedChange.Status, "Change status should not have been updated by Tenant 2")
+	assert.Contains(t, err.Error(), "raw database handle unavailable")
 }

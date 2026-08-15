@@ -8,7 +8,6 @@ import (
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
-	"itsm-backend/ent/approvalrecord"
 	"itsm-backend/ent/enttest"
 	entTicket "itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketcomment"
@@ -1429,69 +1428,8 @@ func TestTicketService_CreateTicket_ValuesMapFormatStillWorks(t *testing.T) {
 	assert.Equal(t, "北京", values[0].Value)
 }
 
-// TestTicketService_CreateTicket_DoesNotTriggerLegacyApproval 是审批收敛组件②的回归测试：
-// CreateTicket 只应该触发 BPMN（异步），不应该再同步调用旧的 ApprovalService.TriggerApproval。
-// 用真实 ApprovalService + 一条会精确匹配的 ApprovalWorkflow 种子数据来验证——如果调用点还在，
-// 这条工作流会命中并创建一条 ApprovalRecord；调用点删掉之后不会有任何记录产生。
-func TestTicketService_CreateTicket_DoesNotTriggerLegacyApproval(t *testing.T) {
-	client := enttest.Open(t, "sqlite3", testDSN())
-	defer client.Close()
-
-	logger := zaptest.NewLogger(t).Sugar()
-	ticketService := NewTicketServiceForTest(client, logger)
-	ticketService.SetApprovalService(NewApprovalService(client, logger))
-
-	ctx := context.Background()
-
-	testTenant, err := client.Tenant.Create().
-		SetName("Dual Trigger Test Tenant").
-		SetCode("dual-trigger-test").
-		SetDomain("dual-trigger.example.com").
-		SetStatus("active").
-		Save(ctx)
-	require.NoError(t, err)
-
-	testUser, err := client.User.Create().
-		SetUsername("dualtriggeruser").
-		SetEmail("dualtrigger@example.com").
-		SetName("Dual Trigger User").
-		SetPasswordHash("hashedpassword").
-		SetRole("end_user").
-		SetActive(true).
-		SetTenantID(testTenant.ID).
-		Save(ctx)
-	require.NoError(t, err)
-
-	// 精确匹配的旧审批工作流：ticket_type + priority 都对得上下面创建的工单，
-	// 节点用 "user" 类型直接指向 testUser，resolveApprover 不需要额外查询就能成功，
-	// 保证"如果调用点还在，一定会真的创建出 ApprovalRecord"，不是被节点解析失败悄悄跳过。
-	_, err = client.ApprovalWorkflow.Create().
-		SetName("Dual Trigger Regression Workflow").
-		SetTicketType("incident").
-		SetPriority("medium").
-		SetIsActive(true).
-		SetTenantID(testTenant.ID).
-		SetNodes([]map[string]interface{}{
-			{"assigneeType": "user", "assigneeValue": fmt.Sprintf("%d", testUser.ID), "name": "回归测试审批"},
-		}).
-		Save(ctx)
-	require.NoError(t, err)
-
-	// 注意：ApprovalWorkflow.TicketType 匹配的是 ticket.Type，不是 ticket 的分类展示字段
-	// Category（那个字段只用来查一个可选的 CategoryID，跟 TriggerApproval 的匹配逻辑无关）。
-	// 必须显式传 Type，不能只传 Category，否则这条测试即使旧调用点还在也会因为
-	// findMatchingWorkflow 匹配不上而通不过——变成一条自己骗自己的假阳性测试。
-	created, err := ticketService.CreateTicket(ctx, &dto.CreateTicketRequest{
-		Title:       "双重触发回归测试工单",
-		Description: "验证 CreateTicket 不再同步调用旧审批系统",
-		Priority:    "medium",
-		Type:        "incident",
-		RequesterID: testUser.ID,
-	}, testTenant.ID)
-	require.NoError(t, err)
-	require.NotNil(t, created)
-
-	count, err := client.ApprovalRecord.Query().Where(approvalrecord.TenantIDEQ(testTenant.ID)).Count(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, 0, count, "CreateTicket 不应该再触发旧审批系统创建 ApprovalRecord")
-}
+// TestTicketService_CreateTicket_DoesNotTriggerLegacyApproval 曾是审批收敛组件②的回归测试：
+// 验证 CreateTicket 不再同步调用旧的 ApprovalService.TriggerApproval。
+// legacy ApprovalService/ApprovalWorkflow/ApprovalRecord 引擎已在 Task 6 整体下线
+// （存量数据已通过 cmd/migrate_legacy_approvals 迁移至 BPMN 并验证），
+// 旧引擎的类型/表已不存在，这个回归测试因此失去测试对象，一并移除。

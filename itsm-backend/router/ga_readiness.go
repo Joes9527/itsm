@@ -40,7 +40,6 @@ func buildGAReadiness(ctx context.Context, client *ent.Client) gaReadinessRespon
 		{Key: "roles", Name: "角色模板", Status: "ready", Endpoint: "/api/v1/roles", DataCount: countOrZero(ctx, client, "roles")},
 		{Key: "service_catalog_templates", Name: "服务目录模板", Status: "ready", Endpoint: "/api/v1/service-catalogs", DataCount: countOrZero(ctx, client, "service_catalogs")},
 		{Key: "sla_templates", Name: "SLA 模板", Status: "ready", Endpoint: "/api/v1/sla/definitions", DataCount: countOrZero(ctx, client, "sla_definitions")},
-		{Key: "approval_templates", Name: "审批流模板", Status: "ready", Endpoint: "/api/v1/approval-workflows", DataCount: countOrZero(ctx, client, "approval_workflows")},
 		{Key: "process_bindings", Name: "流程绑定", Status: "ready", Endpoint: "/api/v1/process-bindings", DataCount: countOrZero(ctx, client, "process_bindings")},
 		{Key: "cmdb_types", Name: "CMDB 类型模板", Status: "ready", Endpoint: "/api/v1/configuration-items/types", DataCount: countOrZero(ctx, client, "ci_types")},
 		{Key: "standard_change_templates", Name: "标准变更模板", Status: "ready", Endpoint: "/api/v1/standard-changes", DataCount: countOrZero(ctx, client, "standard_changes")},
@@ -97,8 +96,6 @@ func countOrZero(ctx context.Context, client *ent.Client, key string) int {
 		count, err = client.ServiceCatalog.Query().Count(ctx)
 	case "sla_definitions":
 		count, err = client.SLADefinition.Query().Count(ctx)
-	case "approval_workflows":
-		count, err = client.ApprovalWorkflow.Query().Count(ctx)
 	case "process_bindings":
 		count, err = client.ProcessBinding.Query().Count(ctx)
 	case "ci_types":

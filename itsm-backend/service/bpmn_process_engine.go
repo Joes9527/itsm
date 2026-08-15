@@ -353,6 +353,17 @@ func (e *CustomProcessEngine) CompleteTask(ctx context.Context, taskID string, v
 		return err
 	}
 
+	// 6.5 UserTask 声明了 service_task_type/action metaData 时（比如变更流程的
+	// Activity_CABApproval、Activity_Schedule 等节点），完成后要走跟 ServiceTask
+	// 一样的 callback registry 分发——这些节点在 BPMN 图上是 UserTask（需要人工操作
+	// 触发完成），但完成后的业务副作用（更新 Change.Status 等）复用同一套
+	// ChangeServiceTaskHandler/TicketServiceTaskHandler 实现，不新写一套分发机制。
+	//
+	// 注意 task 是步骤 1 读出来的快照，它的 TaskVariables 仍是 createUserTask 写入的
+	// taskConfig（含 metaData）；步骤 4 的 SetTaskVariables(variables) 已经把库里那行
+	// 覆盖成完成时提交的变量了，所以这里必须用快照读，不能重新查库。
+	e.dispatchUserTaskCallback(ctx, task, variables)
+
 	// 7. 记录审计日志 - 任务完成
 	userID := 0
 	userName := ""
@@ -365,6 +376,83 @@ func (e *CustomProcessEngine) CompleteTask(ctx context.Context, taskID string, v
 		e.logger.Warnw("audit record failed", "error", err)
 	}
 
+	return nil
+}
+
+// dispatchUserTaskCallback 在用户任务完成后，按其 service_task_type metaData 找到对应的
+// ServiceTaskHandler 并执行，把"人工完成节点"的业务副作用交给已有的 handler 实现。
+//
+// 只有模板显式声明了 service_task_type 的 UserTask 才会走到这里，未声明的普通用户任务
+// （绝大多数流程）完全不受影响。
+//
+// 传给 handler 的变量刻意只取"完成任务时提交的 variables" + metaData 里的 action，
+// 不把 instance.Variables 整个合进去。原因是 ProcessTriggerService 会把 business_id
+// 写进实例变量，而 TicketServiceTaskHandler 正是按 business_id 取工单、按 action
+// 改状态的——一旦合并实例变量，像 ticket_general_flow 的 Activity_Handle/Activity_Resolve
+// （action=update_status）这类节点会在任何一次人工完成时把工单状态强制改成默认的
+// in_progress，等于凭空回退业务状态。让调用方显式传业务 ID 才触发副作用，
+// 是这里唯一安全的默认值。
+//
+// 失败只告警不阻断：走到这一步时任务已置为 completed、流程也已推进，返回错误既回滚不了
+// 也会诱导调用方重试（重试会撞上"任务已结束，不能重复完成"）。副作用失败留待告警与审计追踪。
+func (e *CustomProcessEngine) dispatchUserTaskCallback(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) {
+	if e.callbackRegistry == nil || task == nil {
+		return
+	}
+	serviceTaskType, _ := task.TaskVariables[bpmnMetaDataServiceTaskType].(string)
+	if serviceTaskType == "" {
+		return
+	}
+
+	handler := e.findHandlerByTaskType(serviceTaskType)
+	if handler == nil {
+		// 模板声明了类型但没有注册对应 handler（例如 release_task），按 ServiceTask
+		// 分支的既有约定视为 NoOp，仅告警不阻断流程。
+		e.logger.Warnw("UserTask 声明的 service_task_type 没有注册处理器，跳过回调",
+			"taskID", task.TaskID, "serviceTaskType", serviceTaskType)
+		return
+	}
+
+	callbackVars := make(map[string]interface{}, len(variables)+1)
+	for k, v := range variables {
+		callbackVars[k] = v
+	}
+	// metaData 的 action 是节点固有语义，优先级高于调用方传入的同名变量，
+	// 避免外部请求体伪造 action 让节点执行别的业务动作。
+	if action, ok := task.TaskVariables[bpmnMetaDataAction].(string); ok && action != "" {
+		callbackVars[bpmnMetaDataAction] = action
+	}
+
+	if _, err := handler.Execute(ctx, task, callbackVars); err != nil {
+		e.logger.Warnw("UserTask 完成后回调执行失败",
+			"taskID", task.TaskID, "taskDefinitionKey", task.TaskDefinitionKey,
+			"serviceTaskType", serviceTaskType, "error", err)
+		return
+	}
+	e.logger.Infow("UserTask 完成后回调执行成功",
+		"taskID", task.TaskID, "taskDefinitionKey", task.TaskDefinitionKey,
+		"serviceTaskType", serviceTaskType)
+}
+
+// findHandlerByTaskType 按 handler 的 GetTaskType() 查找处理器。
+//
+// 不能直接用 CallbackRegistry.GetHandler(serviceTaskType)：registry 的 map 是以
+// handler.GetHandlerID()（如 "change_service_handler"）为键注册的，而 BPMN metaData 里写的是
+// 任务类型（如 "change_task"），按 ID 查必然返回 nil。registry 内部的 getHandler 做了
+// 类型兜底匹配但未导出，这里用导出的 ListHandlers 做等价匹配。
+func (e *CustomProcessEngine) findHandlerByTaskType(taskType string) bpmn.ServiceTaskHandlerInterface {
+	if e.callbackRegistry == nil || taskType == "" {
+		return nil
+	}
+	// 先按 handler ID 精确匹配，兼容模板直接写 handler ID 的情况。
+	if handler := e.callbackRegistry.GetHandler(taskType); handler != nil {
+		return handler
+	}
+	for _, handler := range e.callbackRegistry.ListHandlers() {
+		if handler.GetTaskType() == taskType {
+			return handler
+		}
+	}
 	return nil
 }
 
@@ -806,6 +894,15 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 		"allowAddApprover":        task.AllowAddApprover,
 		"commentRequiredOnReject": task.CommentRequiredOnReject,
 	}
+	// service_task_type/action 来自 <bpmn:extensionElements> 的 metaData，只有模板真的
+	// 声明了才写入——CompleteTask 靠这两个 key 是否存在来决定要不要走回调分发，
+	// 无条件写空串会让"未声明"和"声明为空"无法区分。
+	if serviceTaskType := task.ServiceTaskType(); serviceTaskType != "" {
+		taskConfig[bpmnMetaDataServiceTaskType] = serviceTaskType
+		if action := task.ServiceTaskAction(); action != "" {
+			taskConfig[bpmnMetaDataAction] = action
+		}
+	}
 	createdTask, err := e.client.ProcessTask.Create().
 		SetTaskID(fmt.Sprintf("TASK-%s-%d", task.ID, time.Now().UnixNano())).
 		SetProcessInstanceID(instance.ID).
@@ -1228,6 +1325,9 @@ func (e *CustomProcessEngine) evaluateCondition(flow *BPMNSequenceFlow, variable
 	for k, v := range variables {
 		evalVars[k] = v
 	}
+
+	// 将 variables 包装在 "variables" 键中，以便 BPMN 表达式可以使用 variables['key'] 语法
+	evalVars["variables"] = variables
 
 	// 使用表达式引擎评估条件
 	result, err := e.exprEngine.EvaluateCondition(flow.ConditionExpression.Expression, evalVars)

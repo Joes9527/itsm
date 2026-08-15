@@ -155,7 +155,11 @@ EOF
 
 ## Task 3: 修复 `need_approval`/`approval_required` 变量命名不一致
 
-**背景**：`ticket_service.go`/`handlers/service_request/service.go` 设置的流程变量是 `approval_required`，但 `service_request_flow.bpmn`、`service_request_urgent_flow.bpmn`、`change_normal_flow.bpmn`、`change_emergency_flow.bpmn` 四个已部署种子流程的网关条件读的是 `need_approval`。任何应该走审批的流程，网关条件永远为 false，直接跳过审批。
+**背景**：`ticket_service.go`/`handlers/service_request/service.go` 设置的流程变量是 `approval_required`，但 `service_request_flow.bpmn`、`service_request_urgent_flow.bpmn`、`change_normal_flow.bpmn`、`change_emergency_flow.bpmn` 四个已部署种子流程的网关条件读的是 `need_approval`。
+
+**订正（Task3 实施+评审时发现，比这里原描述更严重）**：实际症状不是"网关条件永远为 false、静默跳过审批"。这四个文件的网关条件用的是 `variables['key']` 索引语法，而 `bpmn_process_engine.go` 的 `evaluateCondition` 在构造 `expr-lang/expr` 求值环境时，从未把流程变量包进一个 `variables` 键——`variables['need_approval']` 这类表达式在原代码下**根本编译不过**，不是"编译过、只是求值成 false"。表达式求值失败触发已有的 SEC-002 fail-closed 逻辑，两条出边都判 false，`executeStep` 找不到匹配的顺序流，直接返回 `"没有符合条件的路径"` 错误——**真实表现是任务完成报错、流程实例卡在网关节点，不是静默跳过审批**。这个订正不影响 Task3 的修复方案本身（改 XML 变量名 + 让 `evaluateCondition` 把变量包进 `variables` 键两者都需要），只是修正对症状的描述。
+
+**另一个更大的、Task3 评审时新发现的问题（不在这次任务范围内，已记入 ledger，需要单独立项）**：仓库里另外 15 个种子流程模板（`ticket_general_flow`、`ticket_urgent_flow`、`problem_management_flow`、`incident_emergency_flow*`、`release_approval_flow*`、`cloud_*` 及全部 `*_cn` 变体）的网关条件用的是 `${variables['key'] == true}` 这种带 `${}` 包裹的语法，`BPMNConditionExpression.Expression` 是原样透传的 `xml:",chardata"`，代码里没有任何地方剥离 `${}`，这类表达式在 expr-lang 下同样编译不过、同样会 fail-closed 报错——是同一类 bug，但比这次任务的 4 个文件影响面大得多。
 
 **Files:**
 - Modify: `itsm-backend/service/bpmn/service_request_flow.bpmn`
@@ -706,6 +710,86 @@ action=approve_change 等 metadata，对应的 ChangeServiceTaskHandler 已经
 完整实现并注册，但 CompleteTask 之前只在 ServiceTask 分支查 callback
 registry——这些节点全是 UserTask，回调从未被触发，Change.Status 不会
 随流程推进更新。复用同一套 callback registry，不新写分发机制。
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+EOF
+)"
+```
+
+---
+
+## Task 7.5: 修复 `change_normal_flow.bpmn`/`change_emergency_flow.bpmn` 的 `Gateway_ApprovalResult` 路由缺陷
+
+**背景（Task 7 实施+评审时发现，三方独立确认：implementer、controller、reviewer）**：`Gateway_ApprovalResult`（"审批结果?"）节点自己列的 `<bpmn:outgoing>` 有两条——`Flow_Schedule` 和 `Flow_Reject`——但真正的 `<bpmn:sequenceFlow>` 元素里，`sourceRef="Gateway_ApprovalResult"` 的只有 `Flow_Reject` 一条，而且**无条件**。`Flow_Schedule` 的真实 `sourceRef` 其实是前面那个不同的网关 `Gateway_Approval`（"是否需要审批?"），只是恰好也叫这个 ID，被 `Gateway_ApprovalResult` 的 `<outgoing>` 列表错误地引用了。净效果：CAB 审批完成后，不管 `approvalAction` 是 `approve` 还是 `reject`，流程都会无条件走到 `Activity_Reject`（变更驳回）。这是预先存在的建模 bug，不是这次收敛工作引入的，但直接堵住 Task 9（要让审批通过/驳回真正通过 BPMN 生效）——如果不先修，Task 9 无论代码写得多对，"审批通过"这条路径永远测不出正确结果。
+
+**Files:**
+- Modify: `itsm-backend/service/bpmn/change_normal_flow.bpmn`
+- Modify: `itsm-backend/service/bpmn/change_emergency_flow.bpmn`（结构与 normal 完全一致，同样的缺陷）
+- Test: `itsm-backend/service/bpmn_process_engine_test.go` 或 Task 3/7 已经在用的同类端到端测试文件（新增用例，具体放哪个文件由实现者根据现有测试组织方式决定，不新建独立测试文件）
+
+**Interfaces:**
+- Consumes: 无新接口——沿用 `variables['approvalAction']`（`recordApprovalDecision` 写入的流程变量，Task 7 报告确认 `CompleteTask` 调用时传入的 `approvalAction` 会被引擎记录）判断走哪条边。具体变量名以 `bpmn_process_engine.go` 里 `recordApprovalDecision`/`CompleteTask` 实际写入 `instance.Variables` 的 key 为准，不要凭空假设——读代码确认后再写条件表达式。
+- Produces: 无新接口，只是让已有的 `Gateway_ApprovalResult` 网关按预期工作。
+
+- [ ] **Step 1: 确认流程变量的真实 key 名**
+
+读 `service/bpmn_process_engine.go` 里 `CompleteTask`/`recordApprovalDecision`（Task 7 刚改过这一段，应该记忆犹新）的实现，确认"审批通过/驳回"这个决策结果最终会以什么变量名、什么值写进 `instance.Variables`（比如可能是 `approvalResult == "approved"/"rejected"`，或 `approvalAction == "approve"/"reject"`，需要读代码确认，不要猜）。
+
+- [ ] **Step 2: 写失败测试，证明 bug 存在**
+
+在已有的 BPMN 引擎端到端测试文件里追加一个测试：部署 `change_normal_flow`，走到 `Activity_CABApproval`，用真实的"通过"决策完成任务（走 Task 7 验证过的 `CompleteTask` 调用方式），断言流程实例的 `CurrentActivityID` 应该是 `Activity_Schedule`（排期），不是 `Activity_Reject`。
+
+```bash
+cd itsm-backend && go test ./service/... -run <你加的测试名> -v
+```
+
+Expected: FAIL——当前无条件走到 `Activity_Reject`。
+
+- [ ] **Step 3: 修 XML**
+
+给 `change_normal_flow.bpmn` 的 `Gateway_ApprovalResult` 补上正确的两条出边：
+
+```xml
+<bpmn:sequenceFlow id="Flow_ApprovalApproved" sourceRef="Gateway_ApprovalResult" targetRef="Activity_Schedule">
+  <bpmn:conditionExpression><![CDATA[<Step 1 确认的真实条件表达式，比如 variables['approvalAction'] == 'approve'>]]></bpmn:conditionExpression>
+</bpmn:sequenceFlow>
+<bpmn:sequenceFlow id="Flow_Reject" sourceRef="Gateway_ApprovalResult" targetRef="Activity_Reject">
+  <bpmn:conditionExpression><![CDATA[<对应的驳回条件，或保留无条件作为兜底——两条边至少一条要有条件，避免又出现"两条都无条件、行为不确定"的老问题>]]></bpmn:conditionExpression>
+</bpmn:sequenceFlow>
+```
+
+同时把 `Gateway_ApprovalResult` 节点自己的 `<bpmn:outgoing>` 列表更新成正确的两个 ID（`Flow_ApprovalApproved`/`Flow_Reject`），不要再复用 `Flow_Schedule` 这个已经被 `Gateway_Approval` 占用的 ID——两个不同网关的出边不应该共享同一个 sequenceFlow ID，这正是这次 bug 的根源。`change_emergency_flow.bpmn` 做同样的修改。
+
+- [ ] **Step 4: 运行测试，确认通过**
+
+```bash
+cd itsm-backend && go test ./service/... -run <你加的测试名> -v
+```
+
+Expected: PASS。再补一个"驳回"路径的用例（完成任务时传入拒绝决策，断言走到 `Activity_Reject`），确保两条路径都真的按决策分流，不是又变成另一条无条件边。
+
+- [ ] **Step 5: 跑一遍相关回归测试**
+
+```bash
+cd itsm-backend && go test ./service/... -run "TestBPMN|TestApproval|TestCAB|TestChange" -v
+```
+
+Expected: 全部 PASS，包括 Task 3/4/7 已经加的测试。
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add itsm-backend/service/bpmn/change_normal_flow.bpmn itsm-backend/service/bpmn/change_emergency_flow.bpmn <新增/修改的测试文件>
+git commit -m "$(cat <<'EOF'
+fix(bpmn): 修复 CAB 审批网关路由缺陷——审批结果被无条件路由到驳回
+
+Gateway_ApprovalResult 节点自己列的 <outgoing> 引用了 Flow_Schedule，
+但该 sequenceFlow 的真实 sourceRef 其实是前一个网关 Gateway_Approval，
+两个不同网关的出边共享了同一个 ID。净效果是 Gateway_ApprovalResult
+只有一条真实出边（Flow_Reject，无条件），CAB 审批不管通过还是驳回都
+路由到"变更驳回"。Task 7 实施/评审时发现，此前预先存在、非本次收敛
+工作引入。change_normal_flow.bpmn 和 change_emergency_flow.bpmn 同样
+结构，一并修复。
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
 EOF
