@@ -123,106 +123,26 @@ func createChangeBridgeProcessFixture(t *testing.T, client *ent.Client, tenantID
 	return task.ID
 }
 
-// TestTransitionStatus_BridgesBPMNTask 变更审批端到端：
-// 审批通过时应同时完成绑定的 BPMN 待办任务，并更新业务审批记录与变更状态。
-func TestTransitionStatus_BridgesBPMNTask(t *testing.T) {
-	entClient := newChangeBridgeEntClient(t, "change_bridge_e2e")
-	tenantID, actorID := setupChangeBridgeActor(t, entClient, "e2e")
-	repo := newMockRepository()
-	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
-	ctx := context.Background()
-
-	c := createTestChange(repo, tenantID, actorID)
-	c.Status = "pending"
-	rec, err := repo.CreateApprovalRecord(ctx, &ApprovalRecord{
-		ChangeID:   c.ID,
-		ApproverID: actorID,
-		Status:     "pending",
-	})
-	require.NoError(t, err)
-	taskID := createChangeBridgeProcessFixture(t, entClient, tenantID, "e2e1",
-		fmt.Sprintf("change:%d", c.ID), actorID)
-
-	updated, err := svc.TransitionStatus(ctx, c.ID, tenantID, actorID, "approved", "同意实施")
-	require.NoError(t, err)
-	assert.Equal(t, "approved", updated.Status)
-
-	// BPMN 任务已完成
-	task, err := entClient.ProcessTask.Get(ctx, taskID)
-	require.NoError(t, err)
-	assert.Equal(t, "completed", task.Status)
-
-	// 业务审批记录已更新
-	assert.Equal(t, "approved", repo.approvals[rec.ID].Status)
-
-	// 流程审批决策带正确的业务上下文
-	decisions, err := entClient.ProcessApprovalDecision.Query().All(ctx)
-	require.NoError(t, err)
-	require.Len(t, decisions, 1)
-	assert.Equal(t, "approve", decisions[0].Action)
-	assert.Equal(t, actorID, decisions[0].ActorID)
-	assert.Equal(t, "change", decisions[0].BusinessType)
-	assert.Equal(t, "同意实施", decisions[0].Comment)
-}
-
-// TestTransitionStatus_BridgeFailClosed 失败关闭回归：
-// 存在待办流程任务但操作人不是流程审批人时，变更审批必须整体中止，双轨状态均不变。
-func TestTransitionStatus_BridgeFailClosed(t *testing.T) {
-	entClient := newChangeBridgeEntClient(t, "change_bridge_failclosed")
-	tenantID, actorID := setupChangeBridgeActor(t, entClient, "fc")
-	repo := newMockRepository()
-	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
-	ctx := context.Background()
-
-	c := createTestChange(repo, tenantID, actorID)
-	c.Status = "pending"
-	rec, err := repo.CreateApprovalRecord(ctx, &ApprovalRecord{
-		ChangeID:   c.ID,
-		ApproverID: actorID,
-		Status:     "pending",
-	})
-	require.NoError(t, err)
-	// 流程任务指派给其他人，业务审批人无权完成流程任务
-	taskID := createChangeBridgeProcessFixture(t, entClient, tenantID, "fc1",
-		fmt.Sprintf("change:%d", c.ID), actorID+1000)
-
-	_, err = svc.TransitionStatus(ctx, c.ID, tenantID, actorID, "rejected", "不同意")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "同步流程审批任务失败")
-
-	// 双轨状态均未被修改
-	task, err := entClient.ProcessTask.Get(ctx, taskID)
-	require.NoError(t, err)
-	assert.Equal(t, "assigned", task.Status)
-	assert.Equal(t, "pending", repo.changes[c.ID].Status)
-	assert.Equal(t, "pending", repo.approvals[rec.ID].Status)
-
-	decisionCount, err := entClient.ProcessApprovalDecision.Query().Count(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, 0, decisionCount)
-}
-
-// TestTransitionStatus_NoBoundInstanceFallsBack 无绑定流程实例时回退纯业务审批。
-func TestTransitionStatus_NoBoundInstanceFallsBack(t *testing.T) {
-	entClient := newChangeBridgeEntClient(t, "change_bridge_fallback")
-	tenantID, actorID := setupChangeBridgeActor(t, entClient, "fb")
-	repo := newMockRepository()
-	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
-	ctx := context.Background()
-
-	c := createTestChange(repo, tenantID, actorID)
-	c.Status = "pending"
-	_, err := repo.CreateApprovalRecord(ctx, &ApprovalRecord{
-		ChangeID:   c.ID,
-		ApproverID: actorID,
-		Status:     "pending",
-	})
-	require.NoError(t, err)
-
-	updated, err := svc.TransitionStatus(ctx, c.ID, tenantID, actorID, "approved", "同意")
-	require.NoError(t, err)
-	assert.Equal(t, "approved", updated.Status)
-}
+// NOTE: TestTransitionStatus_BridgesBPMNTask / TestTransitionStatus_BridgeFailClosed /
+// TestTransitionStatus_NoBoundInstanceFallsBack used to live here. They were deleted in
+// Track4 Task 4 because they locked in the P0-1 bridge's own mechanism details, all of
+// which this task intentionally replaces:
+//   - BridgesBPMNTask asserted a ProcessApprovalDecision row shaped by
+//     BPMNApprovalBridge.CompleteBusinessApprovalTask (action/actorID/businessType/comment) —
+//     that bridge call no longer exists in TransitionStatus.
+//   - BridgeFailClosed asserted the literal error string "同步流程审批任务失败", which was
+//     the bridge's own error-wrapping text, not a stable contract.
+//   - NoBoundInstanceFallsBack asserted the P0-1 "fall back to pure business approval when
+//     no BPMN process instance is bound" semantic — this is the exact behavior the task
+//     brief says to remove; the replacement requires a running BPMN process instance and
+//     fails closed without one ("该变更没有正在运行的审批流程").
+//
+// The behavior these tests protected (actor authorization, fail-closed on unauthorized
+// actor, approve/reject actually taking effect) is still covered — by
+// TestTransitionStatus_Approve_UsesCompleteChangeApprovalTask,
+// TestTransitionStatus_Approve_WrongActorRejected, and
+// TestTransitionStatus_Reject_RequiresComment below, plus the completeChangeApprovalTask-
+// specific test group above.
 
 // ==================== completeChangeApprovalTask：CAB 审批完成 + 级联完成排期/驳回节点 ====================
 
@@ -473,4 +393,101 @@ func TestCompleteChangeApprovalTask_FiltersDecoyTaskByDefinitionKey(t *testing.T
 	decoyAfter, err := client.ProcessTask.Get(ctx, decoyTask.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "assigned", decoyAfter.Status, "伪装任务不应该被查询命中或被完成")
+}
+
+// ==================== TransitionStatus approve/reject 完全交给 BPMN（Track4 Task 4） ====================
+
+// setupChangeForTransitionStatusTest 是本任务三条测试共用的 fixture 搭建：建
+// tenant/change_manager 用户/change，部署 BPMN 模板，触发 change_normal_flow，
+// 完成变更评估任务，推进到 CAB 审批节点。返回 client/svc/tenant/cmUser/change 供
+// 各测试按需使用。dbName 必须每个测试唯一，避免 sqlite 内存库互相污染。
+func setupChangeForTransitionStatusTest(t *testing.T, dbName string) (*ent.Client, *Service, *ent.Tenant, *ent.User, *ent.Change) {
+	t.Helper()
+	client := newChangeBridgeEntClient(t, dbName)
+	logger := zaptest.NewLogger(t).Sugar()
+	ctx := context.Background()
+
+	tenant, err := client.Tenant.Create().SetName("TransitionStatus Tenant").SetCode(dbName).SetDomain(dbName + ".example.com").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	// change_manager 角色是 User.Role 这个平铺字段（这个代码库里没有单独的 UserRole 关联表），
+	// authorizeTaskActor 靠 resolveRoleCandidates 按 tenant + role="change_manager" 查询候选人。
+	cmUser, err := client.User.Create().SetUsername(dbName + "-cm").SetEmail(dbName + "-cm@example.com").SetName("CM").SetPasswordHash("h").SetRole("change_manager").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	// requester 必须跟 cmUser 是不同的人：按角色候选人解析会把申请人自己从候选列表里剔除，
+	// 如果 CM 恰好就是申请人，change_manager 角色下就一个人可选，排除之后候选人列表会变空，
+	// CAB 审批任务就分不出候选人（同 completeChangeApprovalTask 系列测试里的既有教训）。
+	requester, err := client.User.Create().SetUsername(dbName + "-req").SetEmail(dbName + "-req@example.com").SetName("Requester").SetPasswordHash("h").SetRole("agent").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	c, err := client.Change.Create().SetTitle("TransitionStatus 测试变更").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).Save(ctx)
+	require.NoError(t, err)
+
+	engine := newTestBPMNEngine(t, client, logger)
+	deploySvc := service.NewBPMNTemplateService(client)
+	tenantCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+	_, err = deploySvc.LoadAndDeployTemplates(tenantCtx, tenant.ID)
+	require.NoError(t, err)
+
+	trigger := service.NewProcessTriggerService(client, engine)
+	_, err = trigger.TriggerProcess(tenantCtx, &dto.ProcessTriggerRequest{
+		BusinessType:         dto.BusinessTypeChange,
+		BusinessID:           c.ID,
+		ProcessDefinitionKey: "change_normal_flow",
+		Variables:            map[string]interface{}{"approval_required": true, "requester_id": float64(requester.ID)},
+		TenantID:             tenant.ID,
+	})
+	require.NoError(t, err)
+
+	assessmentTasks, _, err := engine.TaskService().ListUserTasks(tenantCtx, &service.ListUserTasksRequest{PageSize: 10})
+	require.NoError(t, err)
+	require.NoError(t, engine.CompleteTask(tenantCtx, assessmentTasks[0].TaskID, map[string]interface{}{}))
+
+	// db=nil：TransitionStatus 的 approve/reject 路径不再触碰 ApprovalHistory/ApprovalRecord
+	// 相关的原始 SQL 方法（那些方法用 r.db），完全走 ent 的 Get/Update，所以这里不需要真的
+	// database/sql 连接。
+	repo := NewEntRepository(client, nil)
+	svc := NewService(repo, client, logger)
+	svc.SetProcessEngine(engine)
+	svc.SetProcessTriggerService(trigger)
+
+	return client, svc, tenant, cmUser, c
+}
+
+func TestTransitionStatus_Approve_UsesCompleteChangeApprovalTask(t *testing.T) {
+	client, svc, tenant, cmUser, c := setupChangeForTransitionStatusTest(t, "transition_approve")
+	ctx := context.Background()
+
+	_, err := svc.TransitionStatus(ctx, c.ID, tenant.ID, cmUser.ID, "approved", "looks good")
+	require.NoError(t, err, "不再要求 ApprovalHistory 里有一条 pending 记录——审批人校验完全交给 BPMN authorizeTaskActor")
+
+	updated, err := client.Change.Get(ctx, c.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "approved", updated.Status, "状态由 BPMN 回调写入，不是 TransitionStatus 自己手动 set 的")
+}
+
+func TestTransitionStatus_Reject_RequiresComment(t *testing.T) {
+	client, svc, tenant, cmUser, c := setupChangeForTransitionStatusTest(t, "transition_reject_comment")
+	ctx := context.Background()
+
+	_, err := svc.TransitionStatus(ctx, c.ID, tenant.ID, cmUser.ID, "rejected", "")
+	require.Error(t, err, "驳回必须填写意见，跟 SubmitTaskDecision 的既有约束保持一致")
+
+	updated, err := client.Change.Get(ctx, c.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "pending", updated.Status, "comment 为空时应该在调用 BPMN 之前就被拒绝，状态不应该变")
+}
+
+func TestTransitionStatus_Approve_WrongActorRejected(t *testing.T) {
+	client, svc, tenant, _, c := setupChangeForTransitionStatusTest(t, "transition_wrong_actor")
+	ctx := context.Background()
+
+	outsider, err := client.User.Create().SetUsername("transition-outsider").SetEmail("transition-outsider@example.com").SetName("Outsider").SetPasswordHash("h").SetRole("agent").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	_, err = svc.TransitionStatus(ctx, c.ID, tenant.ID, outsider.ID, "approved", "我批准")
+	require.Error(t, err, "非 change_manager 角色的用户不应该能通过 authorizeTaskActor 校验")
+
+	updated, err := client.Change.Get(ctx, c.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "pending", updated.Status, "越权调用失败后不应该残留任何状态变化")
 }

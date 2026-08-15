@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"itsm-backend/dto"
@@ -682,65 +683,33 @@ func (s *Service) TransitionStatus(ctx context.Context, id, tenantID, userID int
 		return nil, fmt.Errorf("无效的状态转换: 从 '%s' 到 '%s'", c.Status, targetStatus)
 	}
 
-	// For approval actions, verify user is the approver
+	// For approval actions, delegate entirely to BPMN: actor authorization is
+	// authorizeTaskActor (assigneeRole=change_manager candidates), and the
+	// terminal status write happens in ChangeServiceTaskHandler's callback
+	// (Task 1), not here. This replaces both the legacy ApprovalHistory-based
+	// actor check and the P0-1 bridge — there is no longer a business-side
+	// shadow state machine to keep in sync.
 	if targetStatus == "approved" || targetStatus == "rejected" {
-		history, err := s.repo.GetApprovalHistory(ctx, id, tenantID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get approval history")
+		if targetStatus == "rejected" && strings.TrimSpace(comment) == "" {
+			return nil, fmt.Errorf("驳回变更时必须填写意见")
 		}
-		// Find if this user has a pending approval
-		isApprover := false
-		for _, h := range history {
-			if h.ApproverID == userID && h.Status == "pending" {
-				isApprover = true
-				break
-			}
+		action := "approve"
+		if targetStatus == "rejected" {
+			action = "reject"
 		}
-		if !isApprover {
-			return nil, fmt.Errorf("用户不是该变更的审批人，无权执行此操作")
+		if err := s.completeChangeApprovalTask(ctx, tenantID, userID, id, action, comment); err != nil {
+			return nil, err
 		}
-
-		// P0-1：审批先桥接完成对应的 BPMN 待办任务（以流程任务为权威审批来源）。
-		// 无关联运行中流程实例时回退为纯业务审批；若存在待办流程任务但完成失败，
-		// 则中止业务审批，避免变更状态与流程状态分叉。
-		if s.approvalBridge != nil {
-			action := "approve"
-			if targetStatus == "rejected" {
-				action = "reject"
-			}
-			if _, bridgeErr := s.approvalBridge.CompleteBusinessApprovalTask(
-				ctx, tenantID, userID, string(dto.BusinessTypeChange), id, action, comment,
-			); bridgeErr != nil {
-				return nil, fmt.Errorf("同步流程审批任务失败: %w", bridgeErr)
-			}
-		}
-	}
-
-	// For approve action, update the approval record to approved
-	if targetStatus == "approved" {
-		history, err := s.repo.GetApprovalHistory(ctx, id, tenantID)
-		if err != nil {
-			s.logger.Warnw("TransitionStatus: failed to get approval history for record update", "error", err)
-		} else {
-			for _, h := range history {
-				if h.ApproverID == userID && h.Status == "pending" {
-					approvedStatus := "approved"
-					if _, err := s.repo.UpdateApprovalRecord(ctx, &ApprovalRecord{
-						ID:       h.ID,
-						TenantID: tenantID,
-						Status:   approvedStatus,
-					}); err != nil {
-						s.logger.Warnw("TransitionStatus: failed to update approval record", "error", err, "record_id", h.ID)
-					}
-					break
-				}
-			}
-		}
+		// 状态已经由 BPMN 回调写入，重新读一次返回给调用方，不要用调用前的 c（陈旧）。
+		return s.repo.Get(ctx, id, tenantID)
 	}
 
 	// H-2 / C-2 修复：
 	// 1. 终态（rejected/completed/cancelled/rolled_back）需要事务化：写 change + 收口 pending chains
 	// 2. 非终态直接更新
+	// 注意：targetStatus == "rejected" 这个分支实际上已经在上面的 approve/reject 分支里提前
+	// return 了，永远不会走到这里——保留这个条件是防御式编程，避免以后有人调整分支顺序时
+	// 悄悄引入 bug，不删除。
 	isTerminal := targetStatus == "rejected" || targetStatus == "completed" ||
 		targetStatus == "cancelled" || targetStatus == "rolled_back"
 	if isTerminal {
