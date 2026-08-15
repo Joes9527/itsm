@@ -46,6 +46,7 @@ go run -tags migrate main.go
 |------|------|
 | `20260811_end_user_ticket_category_read.sql` | 为所有租户的 `end_user` 角色授予 `ticket_category:read` 权限，修复服务目录为空的问题 |
 | `20260810_service_catalog_itsm_type.sql` | `service_catalogs` 表新增 `itsm_type` 列，支持 ITSM 类型审批路由 |
+| `20260813_ticket_conversation_id.sql` | `tickets` 表新增 `conversation_id` 列 + 唯一索引，用于邮件回复线程追踪 |
 
 ## Tables
 
@@ -71,6 +72,10 @@ go run -tags migrate main.go
 | priority | int | 1=Low, 2=Medium, 3=High, 4=Critical |
 | status | int | 0=Open, 1=In Progress, 2=Resolved, 3=Closed |
 | category | varchar(50) | Category type |
+| source | varchar | 工单来源（manual / service_catalog / email） |
+| creator_email | varchar(255) | 邮件建单时的原始发件人邮箱 |
+| external_message_id | varchar(255) | 外部消息ID（邮件 internetMessageId，用于建单去重） |
+| conversation_id | varchar(255) | 邮件对话线程ID（Graph conversationId，用于回复追踪） |
 | requester_id | uuid | FK to users |
 | assignee_id | uuid | FK to users (nullable) |
 | sla_deadline | timestamp | SLA target time |

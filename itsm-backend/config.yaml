@@ -16,6 +16,7 @@ vector:
 server:
   port: 8090
   mode: "${SERVER_MODE:release}"  # Use env: SERVER_MODE, default release
+  frontend_url: "${FRONTEND_URL:http://localhost:3000}"  # 前端地址（邮件重置链接等用）
 
 deployment:
   mode: "${DEPLOYMENT_MODE:private}"  # private | saas | saas_msp
@@ -93,6 +94,14 @@ smtp:
   from_name: "ITSM System" # Sender name
   encryption: "tls"       # tls, ssl, or none
   skip_verify: false   # Skip TLS certificate verification (dev only)
+
+# MinIO object storage configuration (attachment storage backend)
+minio:
+  endpoint: "${MINIO_ENDPOINT:}"       # e.g. localhost:9012 (empty = use local filesystem)
+  access_key: "${MINIO_ROOT_USER:minioadmin}"
+  secret_key: "${MINIO_ROOT_PASSWORD:minioadmin123}"
+  bucket: "${MINIO_BUCKET:itsm-uploads}"
+  use_ssl: false
 
 # Redis configuration (for sequence service, cache, etc.)
 redis:

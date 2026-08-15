@@ -20,6 +20,7 @@ type Config struct {
 	LLM        LLMConfig        `mapstructure:"llm"`
 	SMS        SMSConfig        `mapstructure:"sms"`
 	SMTP       SMTPConfig       `mapstructure:"smtp"`
+	MinIO      MinIOConfig      `mapstructure:"minio"`
 	Ticket     TicketConfig     `mapstructure:"ticket"`
 	Redis      RedisConfig      `mapstructure:"redis"`
 	Security   SecurityConfig   `mapstructure:"security"`
@@ -111,6 +112,7 @@ type ServerConfig struct {
 	Port         int    `mapstructure:"port"`
 	Mode         string `mapstructure:"mode"`
 	CookieSecure bool   `mapstructure:"cookie_secure"` // Secure flag for cookies (set true only behind HTTPS)
+	FrontendURL  string `mapstructure:"frontend_url"`  // 前端地址（邮件重置链接等用）
 }
 
 type JWTConfig struct {
@@ -173,6 +175,15 @@ type SMTPConfig struct {
 	FromName   string `mapstructure:"from_name"`
 	Encryption string `mapstructure:"encryption"` // tls, ssl, or none
 	SkipVerify bool   `mapstructure:"skip_verify"`
+}
+
+// MinIOConfig 对象存储配置（附件存储后端）。
+type MinIOConfig struct {
+	Endpoint  string `mapstructure:"endpoint"`   // 如 localhost:9012
+	AccessKey string `mapstructure:"access_key"` // 兼容 MINIO_ROOT_USER
+	SecretKey string `mapstructure:"secret_key"` // 兼容 MINIO_ROOT_PASSWORD
+	Bucket    string `mapstructure:"bucket"`     // 默认 itsm-uploads
+	UseSSL    bool   `mapstructure:"use_ssl"`
 }
 
 // envVarPattern matches ${VAR:default} format
@@ -263,6 +274,7 @@ func LoadConfig() (*Config, error) {
 	config.Database.AdminRoleUser = getEnvWithDefault("DB_ADMIN_ROLE_USER", config.Database.AdminRoleUser)
 	config.Database.AdminRolePassword = getEnvWithDefault("DB_ADMIN_ROLE_PASSWORD", config.Database.AdminRolePassword)
 	config.Server.Mode = getEnvWithDefault("SERVER_MODE", config.Server.Mode)
+	config.Server.FrontendURL = getEnvWithDefault("FRONTEND_URL", config.Server.FrontendURL)
 	config.Log.Level = getEnvWithDefault("LOG_LEVEL", config.Log.Level)
 	config.Log.Path = getEnvWithDefault("LOG_PATH", config.Log.Path)
 	config.Log.Development = os.Getenv("LOG_DEVELOPMENT") == "true"
@@ -308,6 +320,12 @@ func LoadConfig() (*Config, error) {
 	config.SMTP.Password = getEnvWithDefault("SMTP_PASSWORD", config.SMTP.Password)
 	config.SMTP.FromEmail = getEnvWithDefault("SMTP_FROM_EMAIL", config.SMTP.FromEmail)
 	config.SMTP.FromName = getEnvWithDefault("SMTP_FROM_NAME", config.SMTP.FromName)
+
+	// MinIO 环境变量支持
+	config.MinIO.Endpoint = getEnvWithDefault("MINIO_ENDPOINT", config.MinIO.Endpoint)
+	config.MinIO.AccessKey = getEnvWithDefault("MINIO_ROOT_USER", config.MinIO.AccessKey)
+	config.MinIO.SecretKey = getEnvWithDefault("MINIO_ROOT_PASSWORD", config.MinIO.SecretKey)
+	config.MinIO.Bucket = getEnvWithDefault("MINIO_BUCKET", config.MinIO.Bucket)
 
 	return &config, nil
 }

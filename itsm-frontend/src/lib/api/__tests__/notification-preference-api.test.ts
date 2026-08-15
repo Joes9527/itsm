@@ -102,7 +102,7 @@ describe('NotificationPreferenceApi', () => {
 
   describe('bulkUpdate', () => {
     it('should bulk update preferences', async () => {
-      const data = { preferences: [{ eventType: 'ticket_created', emailEnabled: true, inAppEnabled: true }] };
+      const data = { preferences: [{ eventType: 'ticket_created', emailEnabled: true, smsEnabled: false, inAppEnabled: true, pushEnabled: false }] };
       const expected = { preferences: [{}] };
       mockPut.mockResolvedValue(expected);
       const res = await NotificationPreferenceApi.bulkUpdate(data);

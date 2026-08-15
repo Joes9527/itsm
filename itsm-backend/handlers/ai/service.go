@@ -4,13 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/middleware"
+	"itsm-backend/pkg/eventbus"
 	"itsm-backend/service"
+	"itsm-backend/service/common/event"
 
 	"go.uber.org/zap"
 )
@@ -469,6 +472,23 @@ func (s *Service) TriageTicket(ctx context.Context, tenantID int, title, descrip
 	// Use LLM-powered TriageService if available
 	if s.triageService != nil {
 		result := s.triageService.Suggest(ctx, title, description)
+
+		// 发布 AI 分诊完成事件（审计/评估订阅方）。
+		// ticketID 为空表示建单前分诊；发布失败只告警不阻塞。
+		if bus := eventbus.GetGlobalEventBus(); bus != nil {
+			ev := event.NewAITriageCompletedEvent(
+				strconv.Itoa(tenantID),
+				"",
+				result.Category,
+				result.Category,
+				"",
+				result.Confidence,
+			)
+			if err := bus.Publish(ev); err != nil {
+				s.logger.Warnw("failed to publish ai.triage.completed event", "error", err, "tenant_id", tenantID)
+			}
+		}
+
 		return map[string]interface{}{
 			"title":       title,
 			"description": description,

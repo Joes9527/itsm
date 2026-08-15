@@ -16,7 +16,7 @@ import (
 	_ "itsm-backend/connector/builtin/console"
 	_ "itsm-backend/connector/builtin/dingtalk"
 	_ "itsm-backend/connector/builtin/feishu"
-	_ "itsm-backend/connector/builtin/msgraph"
+	msgraph "itsm-backend/connector/builtin/msgraph"
 	_ "itsm-backend/connector/builtin/webhook"
 	_ "itsm-backend/connector/builtin/wecom"
 	"itsm-backend/connector/marketplace"
@@ -26,8 +26,8 @@ import (
 	marketplaceService "itsm-backend/service/marketplace"
 
 	"itsm-backend/database"
-	"itsm-backend/dto"
 	"itsm-backend/docs"
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/tenant"
 	"itsm-backend/ent/user"
@@ -215,6 +215,14 @@ func NewApplication() *Application {
 	eventbus.SetGlobalEventBus(eventBus)
 	sugar.Infow("Event bus initialized successfully")
 
+	// 事件驱动审计订阅方：sla.breached / ai.triage.completed 写入 AuditLog
+	auditSubscriber := service.NewEventAuditSubscriber(client, sugar)
+	for _, topic := range service.AuditedEventTopics() {
+		if err := eventBus.Subscribe(topic, auditSubscriber); err != nil {
+			sugar.Warnw("failed to subscribe audit subscriber", "error", err, "topic", topic)
+		}
+	}
+
 	// BPMN 子服务（必须在 TicketService 之前创建）
 	processBindingService := service.NewProcessBindingService(client)
 	processEngine := service.NewCustomProcessEngine(client, sugar)
@@ -234,8 +242,38 @@ func NewApplication() *Application {
 	connectorMarket := marketplace.New()
 	connectorController := controller.NewConnectorController(connectorManager, connector.Default(), connectorMarket, sugar)
 
+	// Webhook 事件推送订阅方：sla.breached 按租户推送到已配置的 webhook 端点
+	webhookSubscriber := service.NewWebhookEventSubscriber(connectorManager, sugar)
+	for _, topic := range service.WebhookEventTopics() {
+		if err := eventBus.Subscribe(topic, webhookSubscriber); err != nil {
+			sugar.Warnw("failed to subscribe webhook subscriber", "error", err, "topic", topic)
+		}
+	}
+
 	// 通知 / 审批 / SLA / 自动化 / 序列服务（V2 子服务）
 	ticketNotificationService := service.NewTicketNotificationService(client, sugar)
+	// 邮件通知（Graph sendMail 为主，SMTP fallback）
+	emailService := service.NewEmailService(service.EmailConfig{
+		Host:     cfg.SMTP.Host,
+		Port:     cfg.SMTP.Port,
+		Username: cfg.SMTP.Username,
+		Password: cfg.SMTP.Password,
+		From:     cfg.SMTP.FromEmail,
+		FromName: cfg.SMTP.FromName,
+	}, sugar)
+	// 延迟绑定 Graph 发信：发信时动态查 msgraph 连接器（单租户 tenantID=1）
+	emailService.SetGraphProvider(func() (service.GraphMailSender, string, bool) {
+		c, ok := connectorManager.Get(1, "msgraph-email")
+		if !ok {
+			return nil, "", false
+		}
+		gc, ok := c.(*msgraph.GraphConnector)
+		if !ok {
+			return nil, "", false
+		}
+		return gc.GraphClient(), gc.Mailbox(), true
+	})
+	ticketNotificationService.SetEmailService(emailService)
 	ticketSLAService := service.NewTicketSLAService(client, sugar)
 	ticketAutomationRuleService := service.NewTicketAutomationRuleService(client, sugar)
 
@@ -348,7 +386,19 @@ func NewApplication() *Application {
 	}
 	guidanceClient := service.NewGuidanceClient(guidanceURL, sugar)
 	triageService := service.NewTriageServiceWithGuidanceAndSugaredLogger(llmGateway, guidanceClient, sugar)
-	wireEmailMsgraphConnector(client, ticketService, triageService, connectorController, sugar)
+	ticketAttachmentService := service.NewTicketAttachmentService(client, sugar)
+	// 配置了 MinIO 则切换附件存储后端为对象存储；失败回退本地文件系统。
+	if cfg.MinIO.Endpoint != "" {
+		if minioStorage, err := service.NewMinioAttachmentStorage(
+			cfg.MinIO.Endpoint, cfg.MinIO.AccessKey, cfg.MinIO.SecretKey, cfg.MinIO.Bucket, cfg.MinIO.UseSSL,
+		); err != nil {
+			sugar.Warnw("failed to init MinIO storage, falling back to local filesystem", "error", err)
+		} else {
+			ticketAttachmentService.SetStorage(minioStorage)
+			sugar.Infow("attachment storage backend: minio", "endpoint", cfg.MinIO.Endpoint, "bucket", cfg.MinIO.Bucket)
+		}
+	}
+	wireEmailMsgraphConnector(client, ticketService, triageService, ticketAttachmentService, connectorController, sugar)
 
 	rootCauseService := service.NewRootCauseService(client, sugar)
 	// LLM/Embedding/VectorStore
@@ -362,7 +412,6 @@ func NewApplication() *Application {
 
 	ticketCommentService := service.NewTicketCommentService(client, sugar)
 	ticketCommentController := controller.NewTicketCommentController(ticketCommentService, sugar)
-	ticketAttachmentService := service.NewTicketAttachmentService(client, sugar)
 	ticketAttachmentController := controller.NewTicketAttachmentController(ticketAttachmentService, sugar)
 	ticketNotificationController := controller.NewTicketNotificationController(ticketNotificationService, sugar)
 	// ticketNotificationService 已在 128 行创建并注入到 V2
@@ -374,6 +423,7 @@ func NewApplication() *Application {
 	// Notification Preference Service & Controller
 	notificationPreferenceService := service.NewNotificationPreferenceService(client, sugar)
 	notificationPreferenceController := controller.NewNotificationPreferenceController(notificationPreferenceService, sugar)
+	ticketNotificationService.SetNotificationPreferenceService(notificationPreferenceService)
 
 	ticketRatingService := service.NewTicketRatingService(client, sugar)
 	ticketRatingController := controller.NewTicketRatingController(ticketRatingService, sugar)
@@ -562,6 +612,10 @@ func NewApplication() *Application {
 
 	// Auth Controller（装配缺失的 register / forgot-password / reset-password / validate-reset-token / switch-tenant 路由）
 	authService := service.NewAuthService(client, cfg.JWT.Secret, sugar, nil)
+	authService.SetEmailService(emailService)
+	if cfg.Server.FrontendURL != "" {
+		authService.SetBaseURL(cfg.Server.FrontendURL)
+	}
 	authController := controller.NewAuthController(authService)
 
 	// Role Handler (in-memory for now)
@@ -589,8 +643,9 @@ func NewApplication() *Application {
 	auditLogService := service.NewAuditLogService(client, sugar)
 	auditLogController := controller.NewAuditLogController(auditLogService, sugar)
 
-	// Tenant Controller
+	// Tenant Controller（注入种子器：新租户上架时自动初始化默认配置）
 	tenantService := service.NewTenantService(client, sugar)
+	tenantService.SetSeeder(seeder.NewSeeder(client, sugar, cfg))
 	tenantController := controller.NewTenantController(tenantService, sugar)
 
 	// System Config Controller
@@ -627,6 +682,7 @@ func NewApplication() *Application {
 
 	// WebSocket Service
 	wsService := service.NewWebSocketService(sugar)
+	ticketNotificationService.SetWebSocketService(wsService)
 
 	// 7. 设置路由
 	// 根据配置设置 Gin 运行模式

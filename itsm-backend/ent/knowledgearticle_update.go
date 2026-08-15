@@ -147,6 +147,18 @@ func (_u *KnowledgeArticleUpdate) AddTenantID(v int) *KnowledgeArticleUpdate {
 	return _u
 }
 
+// SetReviewStatus sets the "review_status" field.
+func (_u *KnowledgeArticleUpdate) SetReviewStatus(v string) *KnowledgeArticleUpdate {
+	_u.mutation.SetReviewStatus(v)
+	return _u
+}
+
+// SetReviewComment sets the "review_comment" field.
+func (_u *KnowledgeArticleUpdate) SetReviewComment(v string) *KnowledgeArticleUpdate {
+	_u.mutation.SetReviewComment(v)
+	return _u
+}
+
 // SetIsPublished sets the "is_published" field.
 func (_u *KnowledgeArticleUpdate) SetIsPublished(v bool) *KnowledgeArticleUpdate {
 	_u.mutation.SetIsPublished(v)
@@ -460,6 +472,12 @@ func (_u *KnowledgeArticleUpdate) sqlSave(ctx context.Context) (_node int, err e
 	if value, ok := _u.mutation.IsPublished(); ok {
 		_spec.SetField(knowledgearticle.FieldIsPublished, field.TypeBool, value)
 	}
+	if value, ok := _u.mutation.ReviewStatus(); ok {
+		_spec.SetField(knowledgearticle.FieldReviewStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ReviewComment(); ok {
+		_spec.SetField(knowledgearticle.FieldReviewComment, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.ViewCount(); ok {
 		_spec.SetField(knowledgearticle.FieldViewCount, field.TypeInt, value)
 	}
@@ -752,6 +770,18 @@ func (_u *KnowledgeArticleUpdateOne) SetNillableTenantID(v *int) *KnowledgeArtic
 // AddTenantID adds value to the "tenant_id" field.
 func (_u *KnowledgeArticleUpdateOne) AddTenantID(v int) *KnowledgeArticleUpdateOne {
 	_u.mutation.AddTenantID(v)
+	return _u
+}
+
+// SetReviewStatus sets the "review_status" field.
+func (_u *KnowledgeArticleUpdateOne) SetReviewStatus(v string) *KnowledgeArticleUpdateOne {
+	_u.mutation.SetReviewStatus(v)
+	return _u
+}
+
+// SetReviewComment sets the "review_comment" field.
+func (_u *KnowledgeArticleUpdateOne) SetReviewComment(v string) *KnowledgeArticleUpdateOne {
+	_u.mutation.SetReviewComment(v)
 	return _u
 }
 
@@ -1097,6 +1127,12 @@ func (_u *KnowledgeArticleUpdateOne) sqlSave(ctx context.Context) (_node *Knowle
 	}
 	if value, ok := _u.mutation.IsPublished(); ok {
 		_spec.SetField(knowledgearticle.FieldIsPublished, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.ReviewStatus(); ok {
+		_spec.SetField(knowledgearticle.FieldReviewStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ReviewComment(); ok {
+		_spec.SetField(knowledgearticle.FieldReviewComment, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.ViewCount(); ok {
 		_spec.SetField(knowledgearticle.FieldViewCount, field.TypeInt, value)

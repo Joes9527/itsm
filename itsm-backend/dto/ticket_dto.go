@@ -23,6 +23,7 @@ type CreateTicketRequest struct {
 	Source                string                 `json:"source,omitempty" binding:"omitempty,oneof=manual service_catalog"` // 工单来源：manual=手动创建，service_catalog=服务目录申请
 	CreatorEmail          string                 `json:"creatorEmail,omitempty"`                                            // 创建人邮箱（邮件建单等非交互式来源记录原始发件邮箱）
 	ExternalMessageID     string                 `json:"externalMessageId,omitempty"`                                       // 外部消息ID（如邮件 internetMessageId），用于建单去重
+	ConversationID        string                 `json:"conversationId,omitempty"`                                          // 邮件对话线程ID（Graph conversationId），用于识别用户回复
 	Category              string                 `json:"category"`                                                          // 分类名称（可选，前端传入）
 	CategoryID            *int                   `json:"categoryId,omitempty"`                                              // 分类ID（优先使用）
 	TemplateID            *int                   `json:"templateId,omitempty"`                                              // 模板ID

@@ -47,7 +47,7 @@ import {
 import { PageHeader } from '@/components/layout/PageHeader';
 import { UserApi } from '@/lib/api/user-api';
 import { TicketApi } from '@/lib/api/ticket-api';
-import { NotificationPreferenceApi } from '@/lib/api/notification-preference-api';
+import { NotificationPreferenceApi, NotificationEventType } from '@/lib/api/notification-preference-api';
 import { useI18n } from '@/lib/i18n';
 import { useAuthStore, useAuthStoreHydration } from '@/lib/store/auth-store';
 
@@ -116,6 +116,20 @@ interface ActivityItem {
   status: 'completed' | 'pending' | 'cancelled';
 }
 
+// 后端不可用时的通知事件类型 fallback（与后端 dto.ListNotificationEventTypes 对齐）
+const DEFAULT_NOTIFICATION_EVENT_TYPES: NotificationEventType[] = [
+  { code: 'ticket_created', name: '工单创建', description: '当工单被创建时' },
+  { code: 'ticket_assigned', name: '工单分配', description: '当工单被分配给自己时' },
+  { code: 'ticket_updated', name: '工单更新', description: '当工单被更新时' },
+  { code: 'ticket_resolved', name: '工单解决', description: '当工单被解决时' },
+  { code: 'ticket_closed', name: '工单关闭', description: '当工单被关闭时' },
+  { code: 'sla_warning', name: 'SLA警告', description: '当SLA即将超时时' },
+  { code: 'sla_violated', name: 'SLA违规', description: '当SLA超时时' },
+  { code: 'comment_added', name: '新增评论', description: '当工单新增评论时' },
+  { code: 'approval_required', name: '需要审批', description: '当需要审批时' },
+  { code: 'mention', name: '被提及', description: '当被@提及 时' },
+];
+
 export default function ProfilePage() {
   const { t } = useI18n();
   const { user } = useAuthStore();
@@ -133,6 +147,10 @@ export default function ProfilePage() {
   const [passwordForm] = Form.useForm();
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [prefsLoading, setPrefsLoading] = useState(false);
+  const [eventTypes, setEventTypes] = useState<NotificationEventType[]>([]);
+  const [prefMatrix, setPrefMatrix] = useState<
+    Record<string, { email: boolean; sms: boolean; inApp: boolean; push: boolean }>
+  >({});
 
   const handlePasswordChange = async () => {
     try {
@@ -263,37 +281,20 @@ export default function ProfilePage() {
     }
   };
 
-  const handleSavePreferences = async (values: any) => {
+  const handleSavePreferences = async () => {
     try {
       setPrefsLoading(true);
-      // 获取所有事件类型定义
-      const eventTypes = [
-        'ticket_created',
-        'ticket_assigned',
-        'ticket_updated',
-        'ticket_resolved',
-        'ticket_closed',
-        'sla_warning',
-        'sla_violated',
-        'comment_added',
-        'approval_required',
-        'mention',
-        'incident_created',
-        'incident_escalated',
-        'change_approved',
-        'change_rejected',
-        'problem_identified',
-      ];
-
-      // 构建批量更新请求：基于表单开关设置各事件类型的通知方式
-      const preferences = eventTypes.map(eventType => {
-        const emailEnabled = values.emailNotify !== false;
-        const inAppEnabled = values.desktopNotify !== false;
+      const timezone = preferencesForm.getFieldValue('timezone') || 'Asia/Shanghai';
+      // 基于矩阵状态构建批量更新请求（按事件类型 × 4 渠道）
+      const preferences = eventTypes.map(et => {
+        const row = prefMatrix[et.code] || { email: true, sms: false, inApp: true, push: false };
         return {
-          eventType: eventType,
-          emailEnabled: emailEnabled,
-          inAppEnabled: inAppEnabled,
-          timezone: values.timezone || 'Asia/Shanghai',
+          eventType: et.code,
+          emailEnabled: row.email,
+          smsEnabled: row.sms,
+          inAppEnabled: row.inApp,
+          pushEnabled: row.push,
+          timezone,
           frequency: 'immediate',
         };
       });
@@ -315,38 +316,49 @@ export default function ProfilePage() {
   const loadNotificationPreferences = async () => {
     try {
       const data = await NotificationPreferenceApi.getPreferences();
-      if (data.preferences && data.preferences.length > 0) {
-        // 从后端偏好中提取语言、时区、通知开关设置
-        // 查找 ticket_assigned 事件类型的偏好（综合开关）
-        const assignedPref = data.preferences.find(p => p.eventType === 'ticket_assigned');
-        const emailNotify = data.preferences.some(p => p.emailEnabled);
-        const desktopNotify = data.preferences.some(p => p.inAppEnabled);
-        const timezone = data.preferences.find(p => p.timezone)?.timezone || 'Asia/Shanghai';
-        preferencesForm.setFieldsValue({
-          language: 'zh-CN',
-          timezone,
-          emailNotify,
-          desktopNotify,
-        });
-      } else {
-        // 无偏好记录，使用默认表单初始值
-        preferencesForm.setFieldsValue({
-          language: 'zh-CN',
-          timezone: 'Asia/Shanghai',
-          emailNotify: true,
-          desktopNotify: true,
-        });
-      }
+      // 事件类型列表（后端返回 [{code,name,description}]）
+      const types: NotificationEventType[] =
+        data.eventTypes && data.eventTypes.length > 0
+          ? data.eventTypes
+          : DEFAULT_NOTIFICATION_EVENT_TYPES;
+      setEventTypes(types);
+
+      // 构建矩阵：默认 email+in_app 启用，sms+push 禁用
+      const matrix: Record<string, { email: boolean; sms: boolean; inApp: boolean; push: boolean }> = {};
+      types.forEach(et => {
+        matrix[et.code] = { email: true, sms: false, inApp: true, push: false };
+      });
+      (data.preferences || []).forEach(p => {
+        matrix[p.eventType] = {
+          email: p.emailEnabled,
+          sms: p.smsEnabled,
+          inApp: p.inAppEnabled,
+          push: p.pushEnabled,
+        };
+      });
+      setPrefMatrix(matrix);
+
+      const timezone = (data.preferences || []).find(p => p.timezone)?.timezone || 'Asia/Shanghai';
+      preferencesForm.setFieldsValue({ language: 'zh-CN', timezone });
     } catch (error) {
       console.error('Failed to load notification preferences:', error);
-      // 后端不可用时使用默认值
-      preferencesForm.setFieldsValue({
-        language: 'zh-CN',
-        timezone: 'Asia/Shanghai',
-        emailNotify: true,
-        desktopNotify: true,
-      });
+      preferencesForm.setFieldsValue({ language: 'zh-CN', timezone: 'Asia/Shanghai' });
     }
+  };
+
+  // 更新矩阵中某个事件类型的某个渠道开关
+  const updatePref = (
+    eventType: string,
+    channel: 'email' | 'sms' | 'inApp' | 'push',
+    checked: boolean
+  ) => {
+    setPrefMatrix(prev => ({
+      ...prev,
+      [eventType]: {
+        ...(prev[eventType] || { email: true, sms: false, inApp: true, push: false }),
+        [channel]: checked,
+      },
+    }));
   };
 
   // 角色标签颜色
@@ -651,8 +663,6 @@ export default function ProfilePage() {
                         initialValues={{
                           language: 'zh-CN',
                           timezone: 'Asia/Shanghai',
-                          emailNotify: true,
-                          desktopNotify: true,
                         }}
                       >
                         <Title level={5}>通知设置</Title>
@@ -676,18 +686,77 @@ export default function ProfilePage() {
                             </Form.Item>
                           </Col>
                           <Col xs={24}>
-                            <Form.Item label="邮件通知" name="emailNotify" valuePropName="checked">
-                              <Switch checkedChildren="开启" unCheckedChildren="关闭" />
-                            </Form.Item>
-                          </Col>
-                          <Col xs={24}>
-                            <Form.Item
-                              label="桌面通知"
-                              name="desktopNotify"
-                              valuePropName="checked"
-                            >
-                              <Switch checkedChildren="开启" unCheckedChildren="关闭" />
-                            </Form.Item>
+                            <Table<NotificationEventType & { key: string }>
+                              dataSource={eventTypes.map(et => ({ key: et.code, ...et }))}
+                              pagination={false}
+                              size="small"
+                              columns={[
+                                {
+                                  title: '事件类型',
+                                  key: 'name',
+                                  render: (_: unknown, record: NotificationEventType & { key: string }) => (
+                                    <div>
+                                      <div>{record.name}</div>
+                                      <div style={{ fontSize: 12, color: DESIGN.colors.textMuted }}>
+                                        {record.description}
+                                      </div>
+                                    </div>
+                                  ),
+                                },
+                                {
+                                  title: '邮件',
+                                  key: 'email',
+                                  width: 80,
+                                  align: 'center',
+                                  render: (_: unknown, record: { key: string }) => (
+                                    <Switch
+                                      size="small"
+                                      checked={prefMatrix[record.key]?.email ?? true}
+                                      onChange={checked => updatePref(record.key, 'email', checked)}
+                                    />
+                                  ),
+                                },
+                                {
+                                  title: '站内',
+                                  key: 'inApp',
+                                  width: 80,
+                                  align: 'center',
+                                  render: (_: unknown, record: { key: string }) => (
+                                    <Switch
+                                      size="small"
+                                      checked={prefMatrix[record.key]?.inApp ?? true}
+                                      onChange={checked => updatePref(record.key, 'inApp', checked)}
+                                    />
+                                  ),
+                                },
+                                {
+                                  title: '短信',
+                                  key: 'sms',
+                                  width: 80,
+                                  align: 'center',
+                                  render: (_: unknown, record: { key: string }) => (
+                                    <Switch
+                                      size="small"
+                                      checked={prefMatrix[record.key]?.sms ?? false}
+                                      onChange={checked => updatePref(record.key, 'sms', checked)}
+                                    />
+                                  ),
+                                },
+                                {
+                                  title: '推送',
+                                  key: 'push',
+                                  width: 80,
+                                  align: 'center',
+                                  render: (_: unknown, record: { key: string }) => (
+                                    <Switch
+                                      size="small"
+                                      checked={prefMatrix[record.key]?.push ?? false}
+                                      onChange={checked => updatePref(record.key, 'push', checked)}
+                                    />
+                                  ),
+                                },
+                              ]}
+                            />
                           </Col>
                         </Row>
 

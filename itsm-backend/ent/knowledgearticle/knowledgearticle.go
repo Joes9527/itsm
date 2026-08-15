@@ -28,6 +28,10 @@ const (
 	FieldTenantID = "tenant_id"
 	// FieldIsPublished holds the string denoting the is_published field in the database.
 	FieldIsPublished = "is_published"
+	// FieldReviewStatus holds the string denoting the review_status field in the database.
+	FieldReviewStatus = "review_status"
+	// FieldReviewComment holds the string denoting the review_comment field in the database.
+	FieldReviewComment = "review_comment"
 	// FieldViewCount holds the string denoting the view_count field in the database.
 	FieldViewCount = "view_count"
 	// FieldLikeCount holds the string denoting the like_count field in the database.
@@ -79,6 +83,8 @@ var Columns = []string{
 	FieldAuthorID,
 	FieldTenantID,
 	FieldIsPublished,
+	FieldReviewStatus,
+	FieldReviewComment,
 	FieldViewCount,
 	FieldLikeCount,
 	FieldCreatedAt,
@@ -116,6 +122,10 @@ var (
 	TenantIDValidator func(int) error
 	// DefaultIsPublished holds the default value on creation for the "is_published" field.
 	DefaultIsPublished bool
+	// DefaultReviewStatus holds the default value on creation for the "review_status" field.
+	DefaultReviewStatus = "draft"
+	// DefaultReviewComment holds the default value on creation for the "review_comment" field.
+	DefaultReviewComment = ""
 	// DefaultViewCount holds the default value on creation for the "view_count" field.
 	DefaultViewCount int
 	// DefaultLikeCount holds the default value on creation for the "like_count" field.

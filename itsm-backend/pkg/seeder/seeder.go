@@ -289,6 +289,8 @@ type Seeder struct {
 	expectedPermissions     []string
 	expectedMenus           []string
 	expectedRolePermissions map[string][]string
+	// targetTenant 种子目标租户缓存（默认为 default，支持 SeedForTenant 切换）
+	targetTenant *ent.Tenant
 }
 
 // NewSeeder creates a new Seeder instance
@@ -533,8 +535,8 @@ func getEmbeddedConfig() *SeedConfig {
 
 // SeedAll runs all seeding operations
 func (s *Seeder) SeedAll(ctx context.Context) {
-	// 首先确保 default 租户存在
-	s.seedDefaultTenant(ctx)
+	// 解析目标租户（默认 default；SeedForTenant 可切换为其他租户）
+	s.tenant(ctx)
 	s.seedDepartments(ctx)
 	s.seedTeams(ctx)
 	s.seedRoles(ctx)
@@ -742,6 +744,7 @@ func (s *Seeder) seedDefaultTenant(ctx context.Context) *ent.Tenant {
 			existing = updated
 		}
 		s.sugar.Infow("default tenant already exists", "tenant_id", existing.ID)
+		s.targetTenant = existing
 		return existing
 	}
 
@@ -762,7 +765,28 @@ func (s *Seeder) seedDefaultTenant(ctx context.Context) *ent.Tenant {
 		return nil
 	}
 	s.sugar.Infow("default tenant created", "tenant_id", defaultTenant.ID)
+	s.targetTenant = defaultTenant
 	return defaultTenant
+}
+
+// tenant 返回种子目标租户（缓存解析，避免 24 处重复查询）
+func (s *Seeder) tenant(ctx context.Context) *ent.Tenant {
+	if s.targetTenant != nil {
+		return s.targetTenant
+	}
+	s.targetTenant = s.seedDefaultTenant(ctx)
+	return s.targetTenant
+}
+
+// SeedForTenant 为指定租户运行全量种子（MSP 新租户上架用）
+func (s *Seeder) SeedForTenant(ctx context.Context, target *ent.Tenant) error {
+	if target == nil || target.ID == 0 {
+		return fmt.Errorf("target tenant is required")
+	}
+	s.targetTenant = target
+	s.sugar.Infow("seeding for tenant", "tenant_id", target.ID, "tenant_code", target.Code)
+	s.SeedAll(ctx)
+	return nil
 }
 
 func (s *Seeder) deploymentMode() string {
@@ -780,9 +804,9 @@ func nilIfEmpty(value string) *string {
 }
 
 func (s *Seeder) seedAdmin(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip admin seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 	existing, err := s.client.User.Query().Where(user.UsernameEQ("admin"), user.TenantIDEQ(t.ID)).First(ctx)
@@ -834,9 +858,9 @@ func (s *Seeder) seedAdmin(ctx context.Context) {
 }
 
 func (s *Seeder) seedDepartments(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip departments seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -865,9 +889,9 @@ func (s *Seeder) seedDepartments(ctx context.Context) {
 }
 
 func (s *Seeder) seedTeams(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip teams seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -901,9 +925,9 @@ func (s *Seeder) seedTeams(ctx context.Context) {
 }
 
 func (s *Seeder) seedRoles(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip roles seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -946,9 +970,9 @@ func (s *Seeder) seedCloudServiceTemplates(ctx context.Context) {
 // 以下是使用配置文件的初始化函数
 
 func (s *Seeder) seedSLADefinitions(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip SLA definitions seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -985,9 +1009,9 @@ func (s *Seeder) seedSLADefinitions(ctx context.Context) {
 }
 
 func (s *Seeder) seedSLAAlertRules(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip SLA alert rules seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -1057,9 +1081,9 @@ func (s *Seeder) seedSLAAlertRules(ctx context.Context) {
 // 审批能力现在完全由 seedBPMNWorkflows + seedProcessBindings 提供。
 
 func (s *Seeder) seedProcessBindings(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip process bindings seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -1097,9 +1121,9 @@ func (s *Seeder) seedBPMNWorkflows(ctx context.Context) {
 		return
 	}
 
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip BPMN workflows seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -1114,9 +1138,9 @@ func (s *Seeder) seedBPMNWorkflows(ctx context.Context) {
 }
 
 func (s *Seeder) seedTicketViews(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip ticket views seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -1168,9 +1192,9 @@ func (s *Seeder) seedTicketViews(ctx context.Context) {
 
 // seedPermissions 初始化系统权限
 func (s *Seeder) seedPermissions(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip permissions seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -1430,9 +1454,9 @@ func (s *Seeder) seedPermissions(ctx context.Context) {
 
 // seedMenus 初始化系统菜单
 func (s *Seeder) seedMenus(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip menus seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -1523,9 +1547,9 @@ func (s *Seeder) seedMenus(ctx context.Context) {
 
 // seedMenuAndPermissionFixes 修复菜单路径和补充缺失的权限
 func (s *Seeder) seedMenuAndPermissionFixes(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip fixes", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -1550,7 +1574,7 @@ func (s *Seeder) seedMenuAndPermissionFixes(ctx context.Context) {
 		}
 	}
 
-	_, err = s.client.Menu.Update().
+	_, err := s.client.Menu.Update().
 		Where(menu.Path("/admin/groups"), menu.TenantIDEQ(t.ID)).
 		SetPermissionCode("groups:read").
 		Save(ctx)
@@ -1646,9 +1670,9 @@ func (s *Seeder) seedMenuAndPermissionFixes(ctx context.Context) {
 
 // seedRolePermissions 为角色分配权限关联
 func (s *Seeder) seedRolePermissions(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip role permissions seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -1678,11 +1702,12 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		"ops_director": allExcept([]string{"system:write", "msp:write", "msp_allocation:write", "msp_report:write"}),
 		// 运维经理：运维相关读写
 		"ops_manager": {
-			"ticket:read", "ticket:write", "incident:read", "incident:write",
-			"problem:read", "problem:write", "change:read", "change:write",
+			"ticket:read", "ticket:write", "ticket:escalate", "incident:read", "incident:write",
+			"problem:read", "problem:write", "change:read", "change:write", "change:rollback",
 			"asset:read", "asset:write", "cmdb:read", "cmdb:write",
 			"sla:read", "workflow:read", "report:read",
 			"team:read", "department:read", "user:read",
+			"release:read", "release:approve", "release:rollback",
 		},
 		// 运维工程师：运维操作
 		"ops_engineer": {
@@ -1704,7 +1729,7 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		},
 		// 服务台主管
 		"sd_manager": {
-			"ticket:read", "ticket:write", "incident:read", "incident:write",
+			"ticket:read", "ticket:write", "ticket:escalate", "incident:read", "incident:write",
 			"problem:read", "change:read", "sla:read", "sla:write",
 			"knowledge:read", "knowledge:write", "report:read",
 			"user:read", "team:read",
@@ -1739,7 +1764,7 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		},
 		// 一线支持工程师
 		"l1_support": {
-			"ticket:read", "ticket:write", "incident:read", "incident:write",
+			"ticket:read", "ticket:write", "ticket:escalate", "incident:read", "incident:write",
 			"knowledge:read", "user:read", "sla:read",
 		},
 		// 二线支持工程师
@@ -1784,10 +1809,10 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		},
 		// 部门经理
 		"dept_manager": {
-			"ticket:read", "ticket:write", "incident:read",
-			"problem:read", "change:read", "report:read",
+			"ticket:read", "ticket:write", "ticket:escalate", "incident:read",
+			"problem:read", "change:read", "change:rollback", "report:read",
 			"user:read", "department:read", "team:read",
-			"knowledge:read",
+			"knowledge:read", "release:approve", "release:rollback",
 		},
 		// 团队主管
 		"team_lead": {
@@ -1980,9 +2005,9 @@ func allExcept(exclude []string) []string {
 }
 
 func (s *Seeder) seedServiceCatalog(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip service catalog seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -2017,9 +2042,9 @@ func (s *Seeder) seedServiceCatalog(ctx context.Context) {
 
 // seedTicketTypes 初始化默认工单类型
 func (s *Seeder) seedTicketTypes(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip ticket types seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -2105,9 +2130,9 @@ func (s *Seeder) seedTicketTypes(ctx context.Context) {
 
 // seedCITypes 初始化CI类型种子数据
 func (s *Seeder) seedCITypes(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip CI types seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -2159,9 +2184,9 @@ func (s *Seeder) seedCITypes(ctx context.Context) {
 
 // seedStandardChanges 初始化标准变更模板种子数据
 func (s *Seeder) seedStandardChanges(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip standard changes seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -2296,9 +2321,9 @@ func (s *Seeder) seedStandardChanges(ctx context.Context) {
 
 // seedTicketTags 初始化标签种子数据
 func (s *Seeder) seedTicketTags(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip ticket tags seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -2354,9 +2379,9 @@ func (s *Seeder) seedTicketTags(ctx context.Context) {
 
 // seedIncidentCategories 初始化事件分类种子数据
 func (s *Seeder) seedIncidentCategories(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip incident categories seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -2408,9 +2433,9 @@ func (s *Seeder) seedIncidentCategories(ctx context.Context) {
 
 // seedTicketCategories 初始化工单分类树（层级结构）
 func (s *Seeder) seedTicketCategories(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip ticket categories seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -2494,9 +2519,9 @@ func (s *Seeder) seedTicketCategories(ctx context.Context) {
 
 // seedTicketTemplates 初始化工单模板及自定义字段定义
 func (s *Seeder) seedTicketTemplates(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip ticket templates seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 

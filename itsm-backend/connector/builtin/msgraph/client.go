@@ -11,6 +11,7 @@ package msgraph
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -129,6 +130,10 @@ func (c *Client) getJSON(ctx context.Context, absoluteURL string, out interface{
 		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+tok)
+	// 请求 Graph 返回纯文本正文而非 HTML：Outlook 默认发 HTML 邮件，
+	// 不加此头时 body.content 会是一整段带 <style>/<meta> 标签的 HTML，
+	// 直接存入工单 description 会污染内容。
+	req.Header.Set("Prefer", `outlook.body-content-type="text"`)
 	resp, err := c.hc.Do(req)
 	if err != nil {
 		return fmt.Errorf("msgraph: GET %s: %w", absoluteURL, err)
@@ -178,19 +183,23 @@ func (c *Client) postJSON(ctx context.Context, path string, payload interface{})
 // Message is a parsed inbound email, ready for ticket creation.
 type Message struct {
 	ID                string
+	ConversationID    string
 	InternetMessageID string
 	Subject           string
 	BodyContentType   string
 	BodyContent       string
 	FromAddress       string
 	ReceivedDateTime  time.Time
+	HasAttachments    bool
 }
 
 type deltaMessage struct {
 	ID                string    `json:"id"`
+	ConversationID    string    `json:"conversationId"`
 	InternetMessageID string    `json:"internetMessageId"`
 	Subject           string    `json:"subject"`
 	ReceivedDateTime  time.Time `json:"receivedDateTime"`
+	HasAttachments    bool      `json:"hasAttachments"`
 	From              struct {
 		EmailAddress struct {
 			Address string `json:"address"`
@@ -238,12 +247,14 @@ func (c *Client) PollDelta(ctx context.Context, mailbox, deltaLink string) ([]Me
 		for _, v := range resp.Value {
 			messages = append(messages, Message{
 				ID:                v.ID,
+				ConversationID:    v.ConversationID,
 				InternetMessageID: v.InternetMessageID,
 				Subject:           v.Subject,
 				BodyContentType:   v.Body.ContentType,
 				BodyContent:       v.Body.Content,
 				FromAddress:       strings.ToLower(v.From.EmailAddress.Address),
 				ReceivedDateTime:  v.ReceivedDateTime,
+				HasAttachments:    v.HasAttachments,
 			})
 		}
 		if resp.DeltaLink != "" {
@@ -256,7 +267,9 @@ func (c *Client) PollDelta(ctx context.Context, mailbox, deltaLink string) ([]Me
 	}
 }
 
-// SendMail sends a plain-text email from the shared mailbox.
+// SendMail sends a plain-text email from the shared mailbox to an arbitrary
+// recipient. It carries no conversation threading — use ReplyMessage to reply
+// to a specific inbound message within the same conversation thread.
 func (c *Client) SendMail(ctx context.Context, mailbox, toAddress, subject, body string) error {
 	payload := map[string]interface{}{
 		"message": map[string]interface{}{
@@ -271,16 +284,115 @@ func (c *Client) SendMail(ctx context.Context, mailbox, toAddress, subject, body
 			// Mail sent through this connector is always
 			// system/automation-generated (ticket confirmation replies,
 			// connector-triggered notifications) — never a human typing a
-			// reply. Marking it Auto-Submitted lets receiving mail systems
+			// reply. Marking it X-Auto-Submitted lets receiving mail systems
 			// (and any out-of-office auto-responders) suppress their own
 			// auto-replies back into the shared mailbox, preventing a mail
-			// loop.
+			// loop. Note: Graph's internetMessageHeaders only accepts custom
+			// headers prefixed with "x-", so the RFC 3834 standard header
+			// "Auto-Submitted" must be sent as "X-Auto-Submitted".
 			"internetMessageHeaders": []map[string]interface{}{
-				{"name": "Auto-Submitted", "value": "auto-replied"},
+				{"name": "X-Auto-Submitted", "value": "auto-replied"},
 			},
 		},
 		"saveToSentItems": "false",
 	}
 	path := fmt.Sprintf("/users/%s/sendMail", url.PathEscape(mailbox))
 	return c.postJSON(ctx, path, payload)
+}
+
+// ReplyMessage replies to a specific inbound message via Graph's reply API,
+// which keeps the reply in the same conversation thread. This is the correct
+// way to continue a conversation: the message.conversationId field on sendMail
+// is read-only and silently ignored by Graph, so sendMail cannot thread a reply.
+func (c *Client) ReplyMessage(ctx context.Context, mailbox, messageID, subject, body string) error {
+	payload := map[string]interface{}{
+		"message": map[string]interface{}{
+			"subject": subject,
+			"body": map[string]string{
+				"contentType": "Text",
+				"content":     body,
+			},
+		},
+	}
+	path := fmt.Sprintf("/users/%s/messages/%s/reply", url.PathEscape(mailbox), url.PathEscape(messageID))
+	return c.postJSON(ctx, path, payload)
+}
+
+// Attachment is a mail attachment. Data holds the decoded bytes for small
+// attachments (<3MB, Graph returns contentBytes); for larger attachments Data
+// is nil and DownloadAttachment must be called to fetch the raw bytes.
+type Attachment struct {
+	ID          string
+	Name        string
+	ContentType string
+	Size        int
+	IsInline    bool
+	Data        []byte
+}
+
+type attachmentListResponse struct {
+	Value []struct {
+		ID           string `json:"id"`
+		Name         string `json:"name"`
+		ContentType  string `json:"contentType"`
+		Size         int    `json:"size"`
+		IsInline     bool   `json:"isInline"`
+		ContentBytes string `json:"contentBytes"`
+	} `json:"value"`
+}
+
+// ListAttachments lists a message's attachments. Small attachments include
+// their decoded content in Data; large attachments have Data == nil.
+func (c *Client) ListAttachments(ctx context.Context, mailbox, messageID string) ([]Attachment, error) {
+	path := fmt.Sprintf("/users/%s/messages/%s/attachments", url.PathEscape(mailbox), url.PathEscape(messageID))
+	var resp attachmentListResponse
+	if err := c.getJSON(ctx, c.graphBaseURL+path, &resp); err != nil {
+		return nil, err
+	}
+	atts := make([]Attachment, 0, len(resp.Value))
+	for _, v := range resp.Value {
+		var data []byte
+		if v.ContentBytes != "" {
+			decoded, err := base64.StdEncoding.DecodeString(v.ContentBytes)
+			if err != nil {
+				return nil, fmt.Errorf("msgraph: decode attachment %q: %w", v.Name, err)
+			}
+			data = decoded
+		}
+		atts = append(atts, Attachment{
+			ID:          v.ID,
+			Name:        v.Name,
+			ContentType: v.ContentType,
+			Size:        v.Size,
+			IsInline:    v.IsInline,
+			Data:        data,
+		})
+	}
+	return atts, nil
+}
+
+// DownloadAttachment fetches the raw bytes of a large attachment via the
+// $value endpoint (returns binary, not JSON).
+func (c *Client) DownloadAttachment(ctx context.Context, mailbox, messageID, attachmentID string) ([]byte, error) {
+	path := fmt.Sprintf("/users/%s/messages/%s/attachments/%s/$value",
+		url.PathEscape(mailbox), url.PathEscape(messageID), url.PathEscape(attachmentID))
+	tok, err := c.Token(ctx)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.graphBaseURL+path, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("msgraph: GET %s: %w", path, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		raw, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("msgraph: GET %s: status %d: %s", path, resp.StatusCode, string(raw))
+	}
+	return io.ReadAll(resp.Body)
 }
