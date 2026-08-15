@@ -1680,7 +1680,7 @@ func (s *Seeder) seedMenuAndPermissionFixes(ctx context.Context) {
 		PermissionCode string
 		SortOrder      int
 	}{
-		{"工单分类", "/admin/ticket-categories", "Tag", "ticket:write", 275},
+		{"工单分类", "/admin/ticket-categories", "Tag", "ticket_category:read", 275},
 		{"CI类型管理", "/admin/cmdb-types", "Database", "cmdb:write", 290},
 		{"许可证管理", "/licenses", "Key", "license:read", 125},
 		{"SLA模板", "/admin/sla-templates", "Layers", "sla:write", 272},
@@ -1752,7 +1752,7 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		"ops_director": allExcept([]string{"system:write", "msp:write", "msp_allocation:write", "msp_report:write"}),
 		// 运维经理：运维相关读写
 		"ops_manager": {
-			"ticket:read", "ticket:write", "ticket:escalate", "incident:read", "incident:write",
+			"ticket:read", "ticket:create", "ticket:update", "ticket:escalate", "incident:read", "incident:write",
 			"problem:read", "problem:write", "change:read", "change:write", "change:rollback",
 			"asset:read", "asset:write", "cmdb:read", "cmdb:write",
 			"sla:read", "workflow:read", "report:read",
@@ -1761,7 +1761,7 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		},
 		// 运维工程师：运维操作
 		"ops_engineer": {
-			"ticket:read", "ticket:write", "incident:read", "incident:write",
+			"ticket:read", "ticket:create", "ticket:update", "incident:read", "incident:write",
 			"problem:read", "change:read", "asset:read", "asset:write",
 			"cmdb:read", "cmdb:write", "sla:read", "knowledge:read", "knowledge:write",
 		},
@@ -1779,7 +1779,7 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		},
 		// 服务台主管
 		"sd_manager": {
-			"ticket:read", "ticket:write", "ticket:escalate", "incident:read", "incident:write",
+			"ticket:read", "ticket:create", "ticket:update", "ticket:escalate", "incident:read", "incident:write",
 			"problem:read", "change:read", "sla:read", "sla:write",
 			"knowledge:read", "knowledge:write", "report:read",
 			"user:read", "team:read",
@@ -1814,18 +1814,18 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		},
 		// 一线支持工程师
 		"l1_support": {
-			"ticket:read", "ticket:write", "ticket:escalate", "incident:read", "incident:write",
+			"ticket:read", "ticket:create", "ticket:update", "ticket:escalate", "incident:read", "incident:write",
 			"knowledge:read", "user:read", "sla:read",
 		},
 		// 二线支持工程师
 		"l2_support": {
-			"ticket:read", "ticket:write", "incident:read", "incident:write",
+			"ticket:read", "ticket:create", "ticket:update", "incident:read", "incident:write",
 			"problem:read", "change:read", "asset:read",
 			"knowledge:read", "knowledge:write", "user:read", "sla:read",
 		},
 		// 三线专家
 		"l3_expert": {
-			"ticket:read", "ticket:write", "incident:read", "incident:write",
+			"ticket:read", "ticket:create", "ticket:update", "incident:read", "incident:write",
 			"problem:read", "problem:write", "change:read", "change:write",
 			"asset:read", "cmdb:read", "knowledge:read", "knowledge:write",
 			"sla:read", "workflow:read",
@@ -1859,20 +1859,20 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		},
 		// 部门经理
 		"dept_manager": {
-			"ticket:read", "ticket:write", "ticket:escalate", "incident:read",
+			"ticket:read", "ticket:create", "ticket:update", "ticket:escalate", "incident:read",
 			"problem:read", "change:read", "change:rollback", "report:read",
 			"user:read", "department:read", "team:read",
 			"knowledge:read", "release:approve", "release:rollback",
 		},
 		// 团队主管
 		"team_lead": {
-			"ticket:read", "ticket:write", "incident:read",
+			"ticket:read", "ticket:create", "ticket:update", "incident:read",
 			"problem:read", "change:read", "team:read",
 			"user:read", "knowledge:read",
 		},
 		// 安全审批人：可读工单/事件/问题/变更/知识库/通知，做安全审批
 		"security": {
-			"ticket:read", "ticket:write",
+			"ticket:read", "ticket:create", "ticket:update",
 			"incident:read", "incident:write",
 			"problem:read",
 			"change:read", "change:write",
@@ -1884,7 +1884,7 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		},
 		// 普通用户
 		"end_user": {
-			"ticket:read", "ticket:write", "knowledge:read", "service_catalog:read",
+			"ticket:read", "ticket:create", "ticket:update", "knowledge:read", "service_catalog:read",
 			"ticket_category:read", "ticket_template:read", "notification:read",
 			"tag:read",
 		},
