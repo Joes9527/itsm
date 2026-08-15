@@ -130,6 +130,24 @@ const inferTicketType = (template: DbTemplate | null, preset: TicketTypePreset |
   return 'service_request';
 };
 
+// 归一化优先级：历史模板数据可能存了 SLA 优先级代码（P0-P4），
+// 统一映射为标准优先级（low/medium/high/critical/urgent），避免后端 oneof 校验失败。
+const normalizePriority = (p: string): string => {
+  switch (p) {
+    case 'P0':
+      return 'urgent';
+    case 'P1':
+      return 'high';
+    case 'P2':
+      return 'medium';
+    case 'P3':
+    case 'P4':
+      return 'low';
+    default:
+      return p;
+  }
+};
+
 export default function CreateTicketPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -341,7 +359,7 @@ export default function CreateTicketPage() {
       }
 
       const title = values.title || (activeSelection ? `${activeSelection.name}请求` : '新建工单');
-      const priority = values.priority || (activeSelection ? activeSelection.priority : 'medium');
+      const priority = normalizePriority(values.priority || (activeSelection ? activeSelection.priority : 'medium'));
 
       const customFieldValues: Array<{ name: string; value: unknown }> = [];
       if (activeFields.length > 0) {
