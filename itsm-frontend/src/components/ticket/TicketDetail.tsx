@@ -113,7 +113,7 @@ const getPriorityText = (priority: string): string => {
 const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
   const params = useParams();
   const { message: antMessage } = App.useApp();
-  const { user: currentUser } = useAuthStore();
+  const { user: currentUser, hasPermission } = useAuthStore();
   const { handleError } = useErrorHandler();
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [loading, setLoading] = useState(true);
@@ -173,8 +173,8 @@ const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
 
   // Get users for assignment
   const fetchUsers = useCallback(async () => {
-    // end_user/guest 无 user:read 权限，跳过用户列表加载（转派/抄送已按角色隐藏）
-    if (currentUser?.role === 'end_user' || currentUser?.role === 'guest') {
+    // 无 user:read 权限时跳过用户列表加载（转派/抄送已按权限隐藏）
+    if (!hasPermission('user:read')) {
       setUsers([]);
       return;
     }
@@ -188,7 +188,7 @@ const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
     } finally {
       setLoadingUsers(false);
     }
-  }, [antMessage, currentUser?.role]);
+  }, [antMessage, hasPermission]);
 
   // Get ticket SLA info
   const fetchSLAInfo = useCallback(async () => {

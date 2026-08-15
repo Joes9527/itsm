@@ -49,9 +49,9 @@ export const TicketWorkflowActions: React.FC<TicketWorkflowActionsProps> = ({
   onAction,
   onRefresh,
 }) => {
-  const { user } = useAuthStore();
-  // end_user/guest 无 user:read 权限，不能加载用户列表（转派/抄送）
-  const isEndUser = user?.role === 'end_user' || user?.role === 'guest';
+  const { hasPermission } = useAuthStore();
+  // 转派/抄送需要加载用户列表（user:read 权限），按权限而非角色名判断
+  const canManageAssignment = hasPermission('user:read');
   const [modalVisible, setModalVisible] = useState(false);
   const [currentAction, setCurrentAction] = useState<TicketWorkflowAction | null>(null);
   const [form] = Form.useForm();
@@ -419,7 +419,7 @@ export const TicketWorkflowActions: React.FC<TicketWorkflowActionsProps> = ({
     });
   }
 
-  if (workflowState.canForward && !isEndUser) {
+  if (workflowState.canForward && canManageAssignment) {
     moreActions.push({
       key: 'forward',
       label: '转发',
@@ -428,7 +428,7 @@ export const TicketWorkflowActions: React.FC<TicketWorkflowActionsProps> = ({
     });
   }
 
-  if (workflowState.canCC && !isEndUser) {
+  if (workflowState.canCC && canManageAssignment) {
     moreActions.push({
       key: 'cc',
       label: '抄送',
