@@ -172,7 +172,7 @@ func (s *AuthService) Login(ctx context.Context, req *dto.LoginRequest) (*dto.Lo
 	}, nil
 }
 
-// getUserPermissions 获取用户的权限列表（从 middleware.RolePermissions）
+// getUserPermissions 获取用户的权限列表（优先数据库，fallback 硬编码兜底）
 func (s *AuthService) getUserPermissions(userEntity *ent.User) []string {
 	permissions := make([]string, 0)
 
@@ -181,34 +181,35 @@ func (s *AuthService) getUserPermissions(userEntity *ent.User) []string {
 		return []string{"*"}
 	}
 
-	// 从 middleware.RolePermissions 获取角色权限
 	roleCode := string(userEntity.Role)
-	rolePerms, ok := middleware.RolePermissions[roleCode]
-	if ok {
-		seen := make(map[string]bool)
-		for _, p := range rolePerms {
-			key := p.Resource + ":" + p.Action
-			if !seen[key] {
-				seen[key] = true
-				permissions = append(permissions, key)
-			}
+	seen := make(map[string]bool)
+
+	// 优先从数据库加载（与运行时权限校验一致）
+	rolePerms := middleware.GetRolePermissions(s.client, roleCode, userEntity.TenantID)
+	// 数据库为空时 fallback 硬编码（MSP 角色等尚未迁入数据库）
+	if len(rolePerms) == 0 {
+		rolePerms = middleware.RolePermissions[roleCode]
+	}
+	for _, p := range rolePerms {
+		key := p.Resource + ":" + p.Action
+		if !seen[key] {
+			seen[key] = true
+			permissions = append(permissions, key)
 		}
 	}
 
 	// 对于 MSP 用户，也要合并 RBAC MSP 角色的权限
 	if userEntity.MspRole != "" {
 		if rbacRole := middleware.GetMSPRBACRole(string(userEntity.MspRole)); rbacRole != "" {
-			if mspPerms, ok := middleware.RolePermissions[rbacRole]; ok {
-				seen := make(map[string]bool)
-				for _, p := range permissions {
-					seen[p] = true
-				}
-				for _, p := range mspPerms {
-					key := p.Resource + ":" + p.Action
-					if !seen[key] {
-						seen[key] = true
-						permissions = append(permissions, key)
-					}
+			mspPerms := middleware.GetRolePermissions(s.client, rbacRole, userEntity.TenantID)
+			if len(mspPerms) == 0 {
+				mspPerms = middleware.RolePermissions[rbacRole]
+			}
+			for _, p := range mspPerms {
+				key := p.Resource + ":" + p.Action
+				if !seen[key] {
+					seen[key] = true
+					permissions = append(permissions, key)
 				}
 			}
 		}

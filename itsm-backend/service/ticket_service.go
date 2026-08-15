@@ -613,11 +613,11 @@ func isSupportedTicketType(value string) bool {
 }
 
 // isTicketDataScopeAllRole 判断角色是否拥有全租户工单可见权限（DataScopeAll）。
-// 阻断8：管理角色（super_admin/admin/manager/sysadmin）可见全租户工单，
-// 其余角色（end_user/agent 等）只能查看本人创建或分配给自己的工单。
+// 阻断8：管理角色（super_admin/sysadmin）可见全租户工单，
+// 其余角色（end_user 等）只能查看本人创建或分配给自己的工单。
 func isTicketDataScopeAllRole(role string) bool {
 	switch role {
-	case "super_admin", "admin", "manager", "sysadmin":
+	case "super_admin", "sysadmin":
 		return true
 	default:
 		return false

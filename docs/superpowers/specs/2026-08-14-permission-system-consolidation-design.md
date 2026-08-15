@@ -59,19 +59,24 @@
 
 ## 4. 改动清单
 
-### 4.1 核心改动（本次实现）
+### 4.1 核心改动（已完成）
 
 | 文件 | 改动 |
 |---|---|
-| `middleware/rbac.go` | `RolePermissions` 删除 11 个死角色；`end_user` 精简到 8 条；补充 super_admin/sysadmin 注释 |
+| `middleware/rbac.go` | `RolePermissions` 删除 6 个死角色（sysadmin/admin/manager/agent/technician/security），保留 super_admin（代码级放行）+ end_user（8 条）+ msp_*（MSP 子系统活跃）；导出 `GetRolePermissions` |
 | `internal/bootstrap/app.go` | `configurePermissionMode` 统一 DBOnly |
 | `dto/user_dto.go` | role binding 枚举对齐数据库 code |
+| `service/auth_service.go` | `getUserPermissions` 改从数据库加载（fallback 硬编码） |
 
-### 4.2 关联清理（后续，独立 PR）
+### 4.2 关联清理
 
-1. **死角色的业务代码引用**（`case "admin"/"manager"/"technician"`、`RoleIn(...)`、`common/constants.go` 的 `RoleAdmin`/`RoleManager`/`SuperAdminUser` 等）需逐一评估后清理，避免影响数据权限 scope（如 `ticket_service.go:620` 的 DataScope 判断）。
+**已完成（本次）**：
+- 死角色业务引用：`ticket_service.go`（isTicketDataScopeAllRole）、`ticket_workflow_service.go`（ensureCanViewTicketCC）、`incident_alerting_service.go`（RoleIn）、`common/constants.go`（删除 RoleAdmin/RoleManager/RoleAgent/RoleTechnician/RoleSecurity/SuperAdminUser 死常量）
+- `getUserPermissions` 改从数据库加载（导出 `GetRolePermissions` 复用 `loadPermissionsFromDB`）
 
-2. **`getUserPermissions` 改从数据库加载**：`service/auth_service.go` 的 `getUserPermissions` 当前从硬编码 `RolePermissions` 构建登录响应中的 `User.Permissions`（前端 `hasPermission` 依据）。业务角色（`dept_manager`/`l1_support` 等）本就不在硬编码中，登录后 `permissions` 为空，导致前端 `hasPermission` 判断失效。方向 C 应将其改为从数据库（`role_permissions` + `permissions`）加载，与运行时权限校验一致。同理 `menu_service.go` 的菜单构建也直接读 `RolePermissions`，需一并评估。
+**后续（独立 PR）**：
+1. `handlers/service_request/service.go` 的 `isServiceRequestAdmin`/`isServiceRequestOperator` 仍引用本地死角色常量（RoleAdmin/RoleAgent/RoleTechnician），需评估业务角色映射（admin→sysadmin、agent/technician→l1/l2_support 等）后清理。
+2. `service/menu_service.go` 的菜单构建直接读 `RolePermissions`（硬编码），需改为从数据库加载，与运行时权限一致。
 
 ## 5. 风险与回滚
 

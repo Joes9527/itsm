@@ -640,7 +640,7 @@ func TestTicketService_ListTickets_DataScope(t *testing.T) {
 		SetEmail("admin@example.com").
 		SetName("Admin").
 		SetPasswordHash("hashed").
-		SetRole("admin").
+		SetRole("super_admin").
 		SetActive(true).
 		SetTenantID(testTenant.ID).
 		Save(ctx)
@@ -715,7 +715,7 @@ func TestTicketService_ListTickets_DataScope(t *testing.T) {
 	assert.Equal(t, 2, bobResp.Total, "Bob 应只看到自己创建的工单")
 
 	// 场景3：Admin 可见全租户全部 4 张工单。
-	adminResp, err := ticketService.ListTickets(ctx, req, testTenant.ID, admin.ID, "admin")
+	adminResp, err := ticketService.ListTickets(ctx, req, testTenant.ID, admin.ID, "super_admin")
 	require.NoError(t, err)
 	assert.Equal(t, 4, adminResp.Total, "Admin 应看到全租户所有工单")
 

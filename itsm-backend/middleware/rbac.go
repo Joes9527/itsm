@@ -52,9 +52,10 @@ func SetPermissionCacheTTL(ttl time.Duration) {
 // RolePermissions 角色权限映射
 //
 // 说明：这是「最小兜底集」，不再是第二套平行权威。运行时权限以数据库
-// （seeder 初始化）为唯一权威；硬编码仅保留以下两个角色：
+// （seeder 初始化）为唯一权威；硬编码仅保留以下角色：
 //   - super_admin：平台超管，跨租户运维，在 hasResourcePermission 中代码级放行。
 //   - end_user：数据库未初始化时的防御性兜底（与 seeder rolePermissionMap 保持一致）。
+//   - msp_*：MSP 服务提供商角色的 RBAC 权限（MSP 子系统活跃，尚未迁入数据库）。
 //
 // 注：sysadmin 是「租户系统管理员」，走数据库权限（seeder 的 allPermissionCodes），
 // 不在此兜底；super_admin 与 sysadmin 语义不同，勿混用。
@@ -71,6 +72,50 @@ var RolePermissions = map[string][]Permission{
 		{Resource: "ticket_template", Action: "read"},
 		{Resource: "notification", Action: "read"},
 		{Resource: "tag", Action: "read"},
+	},
+	// MSP Roles - MSP服务提供商角色权限（MSP 子系统活跃，暂保留在硬编码）
+	"msp_viewer": {
+		{Resource: "msp", Action: "read"},
+		{Resource: "msp_customer", Action: "read"},
+		{Resource: "msp_ticket", Action: "read"},
+		{Resource: "msp_allocation", Action: "read"},
+		{Resource: "msp_report", Action: "read"},
+	},
+	"msp_tech": {
+		{Resource: "msp", Action: "read"},
+		{Resource: "msp_customer", Action: "read"},
+		{Resource: "msp_ticket", Action: "read"},
+		{Resource: "msp_ticket", Action: "write"},
+		{Resource: "msp_allocation", Action: "read"},
+		{Resource: "msp_report", Action: "read"},
+	},
+	"msp_specialist": {
+		{Resource: "msp", Action: "read"},
+		{Resource: "msp_customer", Action: "read"},
+		{Resource: "msp_customer", Action: "write"},
+		{Resource: "msp_ticket", Action: "read"},
+		{Resource: "msp_ticket", Action: "write"},
+		{Resource: "msp_allocation", Action: "read"},
+		{Resource: "msp_report", Action: "read"},
+	},
+	"msp_manager": {
+		{Resource: "msp", Action: "read"},
+		{Resource: "msp", Action: "write"},
+		{Resource: "msp_customer", Action: "read"},
+		{Resource: "msp_customer", Action: "write"},
+		{Resource: "msp_ticket", Action: "read"},
+		{Resource: "msp_ticket", Action: "write"},
+		{Resource: "msp_allocation", Action: "read"},
+		{Resource: "msp_allocation", Action: "write"},
+		{Resource: "msp_report", Action: "read"},
+		{Resource: "msp_report", Action: "write"},
+	},
+	"msp_admin": {
+		{Resource: "msp", Action: "*"},
+		{Resource: "msp_customer", Action: "*"},
+		{Resource: "msp_ticket", Action: "*"},
+		{Resource: "msp_allocation", Action: "*"},
+		{Resource: "msp_report", Action: "*"},
 	},
 }
 
@@ -185,6 +230,12 @@ func InvalidateAllPermissionCaches() {
 	permissionCacheLock.Lock()
 	clear(permissionCache)
 	permissionCacheLock.Unlock()
+}
+
+// GetRolePermissions 从数据库加载指定角色的权限（导出，供 service 层复用）。
+// 与 hasResourcePermission 的数据库加载逻辑一致，返回 Resource/Action 权限列表。
+func GetRolePermissions(client *ent.Client, roleName string, tenantID int) []Permission {
+	return loadPermissionsFromDB(client, roleName, tenantID)
 }
 
 // loadPermissionsFromDB 从新的permission_definition和role_permission表加载权限

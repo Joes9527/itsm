@@ -987,7 +987,7 @@ func (s *TicketWorkflowService) ensureCanViewTicketCC(ctx context.Context, tk *e
 		return fmt.Errorf("用户不存在或无权限")
 	}
 	switch currentUser.Role {
-	case "super_admin", "admin", "manager", "technician":
+	case "super_admin":
 		return nil
 	}
 
