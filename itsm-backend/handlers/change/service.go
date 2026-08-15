@@ -26,7 +26,6 @@ type Service struct {
 	logger                *zap.SugaredLogger
 	entClient             *ent.Client
 	pirService            *service.ChangePIRService
-	approvalBridge        *service.BPMNApprovalBridge
 	processTriggerService service.ProcessTriggerServiceInterface
 	processEngine         service.ProcessEngine
 }
@@ -39,10 +38,6 @@ func NewService(repo Repository, entClient *ent.Client, logger *zap.SugaredLogge
 	}
 	// Initialize PIR service
 	svc.pirService = service.NewChangePIRService(entClient, logger)
-	if entClient != nil {
-		// P0-1：变更审批桥接到 BPMN 任务，避免流程实例悬挂
-		svc.approvalBridge = service.NewBPMNApprovalBridge(entClient, logger)
-	}
 	return svc
 }
 
@@ -205,187 +200,6 @@ func (s *Service) SubmitChange(ctx context.Context, changeID, tenantID, submitte
 
 	c.Status = "pending"
 	return c, nil
-}
-
-// Approval methods
-func (s *Service) SubmitApproval(ctx context.Context, record *ApprovalRecord, tenantID int) (*ApprovalRecord, error) {
-	// Custom business logic: when submitting, we check if change exists
-	c, err := s.repo.Get(ctx, record.ChangeID, tenantID)
-	if err != nil {
-		return nil, fmt.Errorf("change not found")
-	}
-
-	record.Status = "pending"
-	record.TenantID = tenantID
-	res, err := s.repo.CreateApprovalRecord(ctx, record)
-	if err != nil {
-		return nil, err
-	}
-
-	// Update change status to pending if needed
-	if c.Status == "draft" {
-		c.Status = "pending"
-		if _, err := s.repo.Update(ctx, c); err != nil {
-			s.logger.Errorw("SubmitApproval: failed to update change status to pending", "error", err, "change_id", c.ID)
-			return nil, fmt.Errorf("failed to update change status: %w", err)
-		}
-	}
-
-	return res, nil
-}
-
-func (s *Service) ProcessApproval(ctx context.Context, recordID int, status string, comment *string, tenantID int) (*ApprovalRecord, error) {
-	// 1. Get existing record (we need to know what change it refers to)
-	// We might need a repo.GetApprovalRecord method, let's add it or use a workaround if it's missing in repo interface
-	// For now, I'll assume I can update by ID directly if the repository implementation allows it
-
-	rec := &ApprovalRecord{
-		ID:       recordID,
-		TenantID: tenantID,
-		Status:   status,
-		Comment:  comment,
-	}
-
-	res, err := s.repo.UpdateApprovalRecord(ctx, rec)
-	if err != nil {
-		return nil, err
-	}
-
-	// 2. Logic to check if all approvals are done
-	if status == "approved" {
-		if err := s.checkAndTransitionChange(ctx, res.ChangeID, tenantID); err != nil {
-			s.logger.Errorw("ProcessApproval: checkAndTransitionChange failed", "error", err, "change_id", res.ChangeID)
-		}
-	} else if status == "rejected" {
-		// If one rejects, the whole change is rejected?
-		c, err := s.repo.Get(ctx, res.ChangeID, tenantID)
-		if err != nil {
-			s.logger.Errorw("ProcessApproval: failed to get change on rejection", "error", err, "change_id", res.ChangeID)
-			return nil, fmt.Errorf("failed to get change: %w", err)
-		}
-		if c != nil {
-			// C-2 修复：通过状态机校验禁止非法转换（例如 cancelled → rejected 终态互跳）
-			target := "rejected"
-			if !service.IsValidChangeStatusTransition(c.Status, target, c.Type) {
-				s.logger.Warnw("ProcessApproval: skip invalid change status transition",
-					"change_id", res.ChangeID, "from", c.Status, "to", target)
-				return res, nil
-			}
-			// H-2 修复：事务化更新 change 为终态；提交成功后单独收口 pending chains（CloseChangeApprovalChains 内部使用 rawDB，*ent.Tx 不提供 ExecContext）
-			tx, txErr := s.entClient.Tx(ctx)
-			if txErr != nil {
-				return nil, fmt.Errorf("开启事务失败: %w", txErr)
-			}
-			defer tx.Rollback()
-
-			if _, updateErr := tx.Change.UpdateOneID(c.ID).
-				Where(change.TenantID(tenantID)).
-				SetStatus(target).
-				Save(ctx); updateErr != nil {
-				s.logger.Errorw("ProcessApproval: failed to update change status to rejected", "error", updateErr, "change_id", res.ChangeID)
-				return nil, fmt.Errorf("failed to update change status: %w", updateErr)
-			}
-			if commitErr := tx.Commit(); commitErr != nil {
-				return nil, fmt.Errorf("提交事务失败: %w", commitErr)
-			}
-			if closeErr := service.CloseChangeApprovalChains(ctx, res.ChangeID, tenantID); closeErr != nil {
-				s.logger.Errorw("ProcessApproval: 收口审批链失败（非致命，后续状态机兜底）",
-					"error", closeErr, "change_id", res.ChangeID, "tenant_id", tenantID)
-			}
-		}
-	}
-
-	return res, nil
-}
-
-func (s *Service) checkAndTransitionChange(ctx context.Context, changeID, tenantID int) error {
-	chain, err := s.repo.GetApprovalChain(ctx, changeID, tenantID)
-	if err != nil {
-		s.logger.Errorw("checkAndTransitionChange: failed to get approval chain", "error", err, "change_id", changeID)
-		return err
-	}
-	history, err := s.repo.GetApprovalHistory(ctx, changeID, tenantID)
-	if err != nil {
-		s.logger.Errorw("checkAndTransitionChange: failed to get approval history", "error", err, "change_id", changeID)
-		return err
-	}
-
-	// Simple logic: if all required members approved, transition to 'approved'
-	allApproved := true
-	requiredCount := 0
-	approvedMap := make(map[int]bool)
-	for _, h := range history {
-		if h.Status == "approved" {
-			approvedMap[h.ApproverID] = true
-		}
-	}
-
-	for _, item := range chain {
-		if item.IsRequired {
-			requiredCount++
-			if !approvedMap[item.ApproverID] {
-				allApproved = false
-				break
-			}
-		}
-	}
-
-	if allApproved && requiredCount > 0 {
-		c, err := s.repo.Get(ctx, changeID, tenantID)
-		if err != nil {
-			s.logger.Errorw("checkAndTransitionChange: failed to get change", "error", err, "change_id", changeID)
-			return err
-		}
-		if c != nil {
-			// C-2 修复：通过状态机校验禁止非法转换（如 cancelled → approved 终态复活）
-			target := "approved"
-			if !service.IsValidChangeStatusTransition(c.Status, target, c.Type) {
-				s.logger.Warnw("checkAndTransitionChange: skip invalid change status transition",
-					"change_id", changeID, "from", c.Status, "to", target)
-				return nil
-			}
-			c.Status = target
-			if _, err := s.repo.Update(ctx, c); err != nil {
-				s.logger.Errorw("checkAndTransitionChange: failed to update change status to approved", "error", err, "change_id", changeID)
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (s *Service) ConfigureWorkflow(ctx context.Context, changeID, tenantID int, items []*ApprovalChain) error {
-	// Clear existing and set new
-	if _, err := s.repo.Get(ctx, changeID, tenantID); err != nil {
-		return fmt.Errorf("change not found")
-	}
-	for _, item := range items {
-		item.ChangeID = changeID
-		item.TenantID = tenantID
-	}
-	if err := s.repo.ReplaceApprovalChain(ctx, changeID, tenantID, items); err != nil {
-		s.logger.Errorw("ConfigureWorkflow: failed to replace approval chain", "error", err, "change_id", changeID)
-		return fmt.Errorf("failed to replace approval chain: %w", err)
-	}
-	return nil
-}
-
-func (s *Service) GetApprovalSummary(ctx context.Context, changeID, tenantID int) (interface{}, error) {
-	chain, err := s.repo.GetApprovalChain(ctx, changeID, tenantID)
-	if err != nil {
-		s.logger.Warnw("GetApprovalSummary: failed to get approval chain", "error", err, "change_id", changeID)
-		return nil, fmt.Errorf("failed to get approval chain: %w", err)
-	}
-	history, err := s.repo.GetApprovalHistory(ctx, changeID, tenantID)
-	if err != nil {
-		s.logger.Warnw("GetApprovalSummary: failed to get approval history", "error", err, "change_id", changeID)
-		return nil, fmt.Errorf("failed to get approval history: %w", err)
-	}
-
-	return map[string]interface{}{
-		"chain":   chain,
-		"history": history,
-	}, nil
 }
 
 // Risk Assessment

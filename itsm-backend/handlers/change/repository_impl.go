@@ -299,22 +299,6 @@ func (r *EntRepository) GetStats(ctx context.Context, tenantID int) (*Stats, err
 	return stats, nil
 }
 
-// Approval Records (Raw SQL)
-func (r *EntRepository) CreateApprovalRecord(ctx context.Context, rec *ApprovalRecord) (*ApprovalRecord, error) {
-	query := `
-		INSERT INTO change_approvals (change_id, tenant_id, approver_id, status, comment, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		RETURNING id, created_at
-	`
-	now := time.Now()
-	err := r.db.QueryRowContext(ctx, query, rec.ChangeID, rec.TenantID, rec.ApproverID, rec.Status, rec.Comment, now, now).
-		Scan(&rec.ID, &rec.CreatedAt)
-	if err != nil {
-		return nil, err
-	}
-	return rec, nil
-}
-
 // MarkSubmittedForApproval 只做 draft -> pending 的状态转换，不写
 // change_approvals/change_approval_chains（这两张表的写入路径正在被
 // Track4 迁移到 BPMN，见 handlers/change/service.go 的 SubmitChange）。
@@ -336,85 +320,6 @@ func (r *EntRepository) MarkSubmittedForApproval(ctx context.Context, changeID, 
 		return fmt.Errorf("change is not an editable draft")
 	}
 	return nil
-}
-
-func (r *EntRepository) SubmitForApproval(
-	ctx context.Context,
-	changeID, tenantID int,
-	approverIDs []int,
-	comment string,
-) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	result, err := tx.ExecContext(ctx,
-		`UPDATE changes SET status = 'pending', updated_at = $1
-		 WHERE id = $2 AND tenant_id = $3 AND status = 'draft'`,
-		time.Now(), changeID, tenantID)
-	if err != nil {
-		return err
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if affected != 1 {
-		return fmt.Errorf("change is not an editable draft")
-	}
-
-	now := time.Now()
-	for level, approverID := range approverIDs {
-		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO change_approvals
-				(change_id, tenant_id, approver_id, status, comment, created_at, updated_at)
-			VALUES ($1, $2, $3, 'pending', $4, $5, $5)
-		`, changeID, tenantID, approverID, comment, now); err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO change_approval_chains
-				(change_id, tenant_id, level, approver_id, role, status, is_required, created_at)
-			VALUES ($1, $2, $3, $4, 'approver', 'pending', true, $5)
-		`, changeID, tenantID, level+1, approverID, now); err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
-}
-
-func (r *EntRepository) UpdateApprovalRecord(ctx context.Context, rec *ApprovalRecord) (*ApprovalRecord, error) {
-	// C-5 修复：必须加 AND status = 'pending' 条件，防止已驳回/已批准的审批被重复修改
-	// 校验 RowsAffected == 1，否则返回 409 冲突，避免幂等问题
-	query := `
-		UPDATE change_approvals 
-		SET status = $1, comment = $2, approved_at = $3, updated_at = $4
-		WHERE id = $5 AND tenant_id = $6 AND status = 'pending'
-		RETURNING id, change_id, tenant_id, approver_id, status, comment, approved_at, created_at
-	`
-	var approvedAt sql.NullTime
-	now := time.Now()
-	err := r.db.QueryRowContext(ctx, query, rec.Status, rec.Comment, now, now, rec.ID, rec.TenantID).
-		Scan(&rec.ID, &rec.ChangeID, &rec.TenantID, &rec.ApproverID, &rec.Status, &rec.Comment, &approvedAt, &rec.CreatedAt)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			// 没有匹配的 pending 记录：要么记录不存在，要么已被处理过（已批准/已驳回）
-			// 先读一下当前记录状态，返回更精确的错误
-			var curStatus string
-			_ = r.db.QueryRowContext(ctx, `SELECT status FROM change_approvals WHERE id = $1 AND tenant_id = $2`, rec.ID, rec.TenantID).Scan(&curStatus)
-			if curStatus != "" {
-				return nil, fmt.Errorf("审批记录已处理（当前状态=%s），不可重复审批", curStatus)
-			}
-			return nil, fmt.Errorf("审批记录不存在或跨租户")
-		}
-		return nil, err
-	}
-	if approvedAt.Valid {
-		rec.ApprovedAt = &approvedAt.Time
-	}
-	return rec, nil
 }
 
 // GetApprovalHistory 读取审批历史。数据源是 BPMN 引擎写入的
@@ -458,89 +363,6 @@ func (r *EntRepository) GetApprovalHistory(ctx context.Context, changeID int, te
 		})
 	}
 	return records, nil
-}
-
-// Approval Chain (Raw SQL)
-func (r *EntRepository) CreateApprovalChain(ctx context.Context, chain []*ApprovalChain) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	for _, item := range chain {
-		query := `
-			INSERT INTO change_approval_chains (change_id, tenant_id, level, approver_id, role, status, is_required, created_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		`
-		_, err = tx.ExecContext(ctx, query, item.ChangeID, item.TenantID, item.Level, item.ApproverID, item.Role, item.Status, item.IsRequired, time.Now())
-		if err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
-}
-
-func (r *EntRepository) GetApprovalChain(ctx context.Context, changeID int, tenantID int) ([]*ApprovalChain, error) {
-	query := `
-		SELECT c.id, c.level, c.approver_id, u.name as approver_name, c.role, c.status, c.is_required, c.created_at
-		FROM change_approval_chains c
-		LEFT JOIN users u ON c.approver_id = u.id
-		WHERE c.change_id = $1 AND c.tenant_id = $2
-		ORDER BY c.level ASC
-	`
-	rows, err := r.db.QueryContext(ctx, query, changeID, tenantID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	// 返回空切片而非 nil，避免 JSON 序列化为 null 导致前端崩溃
-	chain := make([]*ApprovalChain, 0)
-	for rows.Next() {
-		var item ApprovalChain
-		err := rows.Scan(&item.ID, &item.Level, &item.ApproverID, &item.ApproverName, &item.Role, &item.Status, &item.IsRequired, &item.CreatedAt)
-		if err != nil {
-			return nil, err
-		}
-		item.ChangeID = changeID
-		item.TenantID = tenantID
-		chain = append(chain, &item)
-	}
-	return chain, nil
-}
-
-func (r *EntRepository) DeleteApprovalChain(ctx context.Context, changeID int, tenantID int) error {
-	_, err := r.db.ExecContext(ctx, "DELETE FROM change_approval_chains WHERE change_id = $1 AND tenant_id = $2", changeID, tenantID)
-	return err
-}
-
-func (r *EntRepository) ReplaceApprovalChain(
-	ctx context.Context,
-	changeID, tenantID int,
-	chain []*ApprovalChain,
-) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	if _, err := tx.ExecContext(ctx,
-		"DELETE FROM change_approval_chains WHERE change_id = $1 AND tenant_id = $2",
-		changeID, tenantID); err != nil {
-		return err
-	}
-	for _, item := range chain {
-		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO change_approval_chains
-				(change_id, tenant_id, level, approver_id, role, status, is_required, created_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		`, changeID, tenantID, item.Level, item.ApproverID, item.Role, item.Status, item.IsRequired, time.Now()); err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
 }
 
 // Risk Assessment (Raw SQL)

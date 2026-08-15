@@ -40,20 +40,6 @@ type User struct {
 	Name string
 }
 
-// ApprovalChain represents an item in the approval workflow
-type ApprovalChain struct {
-	ID           int
-	ChangeID     int
-	TenantID     int
-	Level        int
-	ApproverID   int
-	ApproverName string
-	Role         string
-	Status       string
-	IsRequired   bool
-	CreatedAt    time.Time
-}
-
 // ApprovalRecord represents an individual approval action
 type ApprovalRecord struct {
 	ID           int

@@ -13,19 +13,10 @@ type Repository interface {
 	Update(ctx context.Context, c *Change) (*Change, error)
 	Delete(ctx context.Context, id int, tenantID int) error
 	GetStats(ctx context.Context, tenantID int) (*Stats, error)
-	SubmitForApproval(ctx context.Context, changeID, tenantID int, approverIDs []int, comment string) error
 	MarkSubmittedForApproval(ctx context.Context, changeID, tenantID int) error
 
 	// Approvals
-	CreateApprovalRecord(ctx context.Context, r *ApprovalRecord) (*ApprovalRecord, error)
-	UpdateApprovalRecord(ctx context.Context, r *ApprovalRecord) (*ApprovalRecord, error)
 	GetApprovalHistory(ctx context.Context, changeID int, tenantID int) ([]*ApprovalRecord, error)
-
-	// Approval Workflow/Chain
-	CreateApprovalChain(ctx context.Context, chain []*ApprovalChain) error
-	GetApprovalChain(ctx context.Context, changeID int, tenantID int) ([]*ApprovalChain, error)
-	DeleteApprovalChain(ctx context.Context, changeID int, tenantID int) error
-	ReplaceApprovalChain(ctx context.Context, changeID, tenantID int, chain []*ApprovalChain) error
 
 	// Risk Assessment
 	CreateRiskAssessment(ctx context.Context, ra *RiskAssessment) (*RiskAssessment, error)
