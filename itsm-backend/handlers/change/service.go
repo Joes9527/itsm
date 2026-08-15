@@ -605,6 +605,7 @@ func (s *Service) completeChangeApprovalTask(ctx context.Context, tenantID, acto
 		Where(
 			processtask.HasProcessInstanceWith(processinstance.ID(instance.ID)),
 			processtask.TaskType("user_task"),
+			processtask.TaskDefinitionKey("Activity_CABApproval"),
 			processtask.StatusIn("created", "assigned", "started", "delegated"),
 		).
 		Only(ctx)
@@ -646,6 +647,7 @@ func (s *Service) completeChangeApprovalTask(ctx context.Context, tenantID, acto
 		Where(
 			processtask.HasProcessInstanceWith(processinstance.ID(instance.ID)),
 			processtask.TaskType("user_task"),
+			processtask.TaskDefinitionKeyIn("Activity_Schedule", "Activity_Reject"),
 			processtask.StatusIn("created", "assigned", "started", "delegated"),
 		).
 		Only(ctx)

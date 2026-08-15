@@ -396,3 +396,81 @@ func TestCompleteChangeApprovalTask_WrongActorRejected(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "pending", updated.Status, "越权调用失败后 Change.Status 不应该被改动")
 }
+
+// TestCompleteChangeApprovalTask_FiltersDecoyTaskByDefinitionKey 用一个跟 CAB 审批
+// 无关、但状态同样是"待办"的伪装任务（不同 TaskDefinitionKey，挂在同一个流程实例上）
+// 验证两处查询都显式按 TaskDefinitionKey 过滤——如果查询退化成"随便捞一个待办
+// user_task"，这个伪装任务会让 Only() 因为命中两行而报错。这是给 completeChangeApprovalTask
+// 自身契约上的硬化测试：即使调用方违反"每次调用前流程实例最多只有一个待办 user_task"
+// 的隐含假设，这个方法自己也不应该选错任务。
+func TestCompleteChangeApprovalTask_FiltersDecoyTaskByDefinitionKey(t *testing.T) {
+	client := newChangeBridgeEntClient(t, "complete_approval_decoy")
+	logger := zaptest.NewLogger(t).Sugar()
+	ctx := context.Background()
+
+	tenant, err := client.Tenant.Create().SetName("CAB Tenant Decoy").SetCode("cab-decoy").SetDomain("cab-decoy.example.com").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	cmUser, err := client.User.Create().SetUsername("cm4").SetEmail("cm4@example.com").SetName("CM4").SetPasswordHash("h").SetRole("change_manager").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	requester, err := client.User.Create().SetUsername("requester4").SetEmail("requester4@example.com").SetName("Requester4").SetPasswordHash("h").SetRole("agent").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	c, err := client.Change.Create().SetTitle("测试变更-伪装任务").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).Save(ctx)
+	require.NoError(t, err)
+
+	engine := newTestBPMNEngine(t, client, logger)
+	deploySvc := service.NewBPMNTemplateService(client)
+	tenantCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+	_, err = deploySvc.LoadAndDeployTemplates(tenantCtx, tenant.ID)
+	require.NoError(t, err)
+
+	trigger := service.NewProcessTriggerService(client, engine)
+	_, err = trigger.TriggerProcess(tenantCtx, &dto.ProcessTriggerRequest{
+		BusinessType:         dto.BusinessTypeChange,
+		BusinessID:           c.ID,
+		ProcessDefinitionKey: "change_normal_flow",
+		Variables:            map[string]interface{}{"approval_required": true, "requester_id": float64(requester.ID)},
+		TenantID:             tenant.ID,
+	})
+	require.NoError(t, err)
+
+	assessmentTasks, _, err := engine.TaskService().ListUserTasks(tenantCtx, &service.ListUserTasksRequest{PageSize: 10})
+	require.NoError(t, err)
+	require.NoError(t, engine.CompleteTask(tenantCtx, assessmentTasks[0].TaskID, map[string]interface{}{}))
+
+	instance, err := client.ProcessInstance.Query().Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID)), processinstance.TenantID(tenant.ID)).Only(ctx)
+	require.NoError(t, err)
+
+	// 伪装任务：跟真实的 Activity_CABApproval 挂在同一个流程实例上，TaskType/Status
+	// 都满足旧查询（无 TaskDefinitionKey 过滤）的匹配条件，唯独 TaskDefinitionKey
+	// 不是 CAB 审批节点——如果两处查询没有显式按 TaskDefinitionKey 过滤，Only() 会
+	// 因为命中两行而报错。
+	decoyTask, err := client.ProcessTask.Create().
+		SetTaskID("CHG-DECOY-" + strconv.Itoa(c.ID)).
+		SetTaskDefinitionKey("Activity_SomeUnrelatedNode").
+		SetTaskName("无关的伪装任务").
+		SetTaskType("user_task").
+		SetProcessDefinitionKey(instance.ProcessDefinitionKey).
+		SetProcessInstanceID(instance.ID).
+		SetAssignee(strconv.Itoa(cmUser.ID)).
+		SetStatus("assigned").
+		SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	repo := newMockRepository()
+	svc := NewService(repo, client, logger)
+	svc.SetProcessEngine(engine)
+
+	err = svc.completeChangeApprovalTask(tenantCtx, tenant.ID, cmUser.ID, c.ID, "approve", "looks good")
+	require.NoError(t, err, "查询应该被 TaskDefinitionKey 过滤精确命中 Activity_CABApproval，不受同实例下伪装任务干扰")
+
+	updated, err := client.Change.Get(ctx, c.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "approved", updated.Status)
+
+	// 伪装任务应该原封不动——它既没被当成 CAB 审批任务完成，也没被当成级联的排期/驳回节点完成。
+	decoyAfter, err := client.ProcessTask.Get(ctx, decoyTask.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "assigned", decoyAfter.Status, "伪装任务不应该被查询命中或被完成")
+}
