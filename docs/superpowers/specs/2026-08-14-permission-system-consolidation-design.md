@@ -1,8 +1,8 @@
 # 权限体系统一收敛设计（方向 C：分层收敛）
 
 - 日期：2026-08-14
-- 状态：待 review
-- 相关：`middleware/rbac.go`、`pkg/seeder/seeder.go`、`internal/bootstrap/app.go`、`dto/user_dto.go`
+- 状态：已完成
+- 相关：`middleware/rbac.go`、`pkg/seeder/seeder.go`、`internal/bootstrap/app.go`、`dto/user_dto.go`、`service/auth_service.go`、`service/menu_service.go`、`handlers/service_request/service.go`
 
 ## 1. 背景与问题
 

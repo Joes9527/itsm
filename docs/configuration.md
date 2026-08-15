@@ -119,3 +119,13 @@ services:
 | `ENABLE_AI_TRIAGE` | AI-powered ticket triage |
 | `ENABLE_AI_SUMMARY` | AI-generated ticket summaries |
 | `ENABLE_RAG` | RAG-based knowledge base search |
+
+## 权限模型（RBAC）
+
+权限运行时以**数据库**（`roles` + `role_permissions` + `permissions` 表）为唯一权威，统一使用 `DBOnly` 模式（开发/生产一致），权限由 seeder 初始化。
+
+- `super_admin`（平台超管）：代码级放行，跨租户运维，不查数据库。
+- `sysadmin`（租户系统管理员）：数据库角色，拥有租户内所有权限。
+- 其他业务角色（`it_director`/`dept_manager`/`l1_support`/`end_user` 等）：权限由数据库角色-权限关联决定。
+
+硬编码 `RolePermissions`（`middleware/rbac.go`）已收敛为最小兜底集（super_admin + end_user + msp_*），仅在数据库未初始化时防御性兜底。详见 `docs/superpowers/specs/2026-08-14-permission-system-consolidation-design.md`。

@@ -82,11 +82,42 @@ go run -tags migrate main.go
 
 ### roles
 
+角色表（RBAC 业务角色，如 sysadmin/it_director/dept_manager/l1_support/end_user 等）。
+
 | Column | Type | Description |
 |--------|------|-------------|
-| id | uuid | Primary key |
-| name | varchar(50) | Role name (admin/l1/l2/l3) |
-| permissions | jsonb | Permission list |
+| id | bigint | Primary key |
+| name | varchar | 角色显示名（中文） |
+| code | varchar | 角色 code（如 sysadmin/dept_manager/end_user） |
+| tenant_id | bigint | 租户ID |
+| created_at | timestamptz | 创建时间 |
+| updated_at | timestamptz | 更新时间 |
+
+### permissions
+
+权限定义表（resource + action，如 `user:read`）。
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | bigint | Primary key |
+| code | varchar | 权限 code（如 `user:read`） |
+| name | varchar | 权限显示名（中文） |
+| resource | varchar | 资源（如 user/ticket） |
+| action | varchar | 操作（如 read/write/delete） |
+| tenant_id | bigint | 租户ID |
+
+### role_permissions
+
+角色-权限关联表（多对多）。
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | bigint | Primary key |
+| role_id | bigint | FK → roles.id |
+| permission_id | bigint | FK → permissions.id |
+| tenant_id | bigint | 租户ID |
+
+> 权限运行时以数据库（roles + role_permissions + permissions）为唯一权威；硬编码 `RolePermissions` 仅作 super_admin 代码级放行与 end_user 防御性兜底（见 `docs/superpowers/specs/2026-08-14-permission-system-consolidation-design.md`）。
 
 ### connector_configs
 
