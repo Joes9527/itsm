@@ -77,6 +77,9 @@
 - `service/menu_service.go`：菜单构建删除硬编码 `RolePermissions` 读取，改用已有的 `addDatabaseRolePermissions`（数据库加载）
 - 前端 `TicketWorkflowActions`/`TicketDetail`：用 `hasPermission('user:read')` 替代硬编码角色名（end_user/guest）
 
+**后续（独立 PR）**：
+1. `pkg/seeder/seeder.go` 的 `rolePermissionMap` 中 `ticket:write` 语义与路由不一致：路由已细分为 `ticket:create`/`ticket:update`，但 seeder 仍给业务角色笼统的 `ticket:write`（description「创建、编辑工单」），导致工单提交/更新 403。本次用 SQL 迁移（`20260815_ticket_write_split_create_update.sql`）做了数据修复，但 seeder 权威定义未改，下次初始化会复发。需将 seeder 中 `ticket:write` 拆分为 `ticket:create` + `ticket:update`。
+
 ## 5. 风险与回滚
 
 - **风险**：开发环境切 DBOnly 后，若数据库权限未初始化（全新环境未跑 bootstrap），非 super_admin 角色将无权限。
