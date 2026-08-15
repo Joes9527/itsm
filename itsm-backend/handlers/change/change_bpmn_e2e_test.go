@@ -93,11 +93,15 @@ func TestChangeApprovalE2E_FullApproveFlow(t *testing.T) {
 
 	final, err := repo.Get(ctx, created.ID, tenant.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "approved", final.Status)
+	// normal 类型的状态机里 approved 不是终点（approved -> {scheduled, cancelled}，没有直接
+	// approved -> in_progress），scheduleChange 必须两跳推进到 scheduled，见 Finding 4。
+	assert.Equal(t, "scheduled", final.Status)
 
 	history, err := svc.GetApprovalHistory(ctx, created.ID, tenant.ID)
 	require.NoError(t, err)
 	require.Len(t, history, 1)
+	// history[0].Status 是 CAB 审批决定本身的记录（approve/reject），跟 Change.Status 是两回事，
+	// 不受 Finding 4 影响，依然是 "approved"。
 	assert.Equal(t, "approved", history[0].Status)
 	assert.Equal(t, cmUser.ID, history[0].ApproverID)
 

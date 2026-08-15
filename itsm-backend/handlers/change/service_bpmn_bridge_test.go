@@ -149,7 +149,10 @@ func createChangeBridgeProcessFixture(t *testing.T, client *ent.Client, tenantID
 // TestCompleteChangeApprovalTask_ApproveCompletesScheduleNode CAB 审批通过时，应该：
 // 1. 完成 Activity_CABApproval 这个待办任务；
 // 2. 级联完成网关路由到的 Activity_Schedule（排期节点），避免它变成孤儿任务；
-// 3. Activity_Schedule 的 change_task/schedule_change 回调把 Change.Status 改成 approved；
+// 3. Activity_Schedule 的 change_task/schedule_change 回调把 Change.Status 推进两跳，
+//    从 pending 经过 approved 最终落到 scheduled（normal 类型的状态机里 approved 不是
+//    终点——approved 只能到 {scheduled, cancelled}，不直接到 in_progress，所以
+//    scheduleChange 必须走完两跳，否则变更会永久卡在 approved，见 Finding 4）；
 // 4. 流程实例推进到 Activity_Schedule 之后的下一个节点 Activity_Implement（Track4 范围之外，故意停在那）。
 func TestCompleteChangeApprovalTask_ApproveCompletesScheduleNode(t *testing.T) {
 	client := newChangeBridgeEntClient(t, "complete_approval_approve")
@@ -199,7 +202,7 @@ func TestCompleteChangeApprovalTask_ApproveCompletesScheduleNode(t *testing.T) {
 
 	updated, err := client.Change.Get(ctx, c.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "approved", updated.Status, "CAB 通过后应该级联完成排期节点，Change 状态应该变成 approved")
+	assert.Equal(t, "scheduled", updated.Status, "CAB 通过后应该级联完成排期节点，Change 状态应该推进到 scheduled（经过 approved 中间态）")
 
 	instance, err := client.ProcessInstance.Query().Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID)), processinstance.TenantID(tenant.ID)).Only(ctx)
 	require.NoError(t, err)
@@ -387,7 +390,7 @@ func TestCompleteChangeApprovalTask_FiltersDecoyTaskByDefinitionKey(t *testing.T
 
 	updated, err := client.Change.Get(ctx, c.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "approved", updated.Status)
+	assert.Equal(t, "scheduled", updated.Status)
 
 	// 伪装任务应该原封不动——它既没被当成 CAB 审批任务完成，也没被当成级联的排期/驳回节点完成。
 	decoyAfter, err := client.ProcessTask.Get(ctx, decoyTask.ID)
@@ -462,7 +465,7 @@ func TestTransitionStatus_Approve_UsesCompleteChangeApprovalTask(t *testing.T) {
 
 	updated, err := client.Change.Get(ctx, c.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "approved", updated.Status, "状态由 BPMN 回调写入，不是 TransitionStatus 自己手动 set 的")
+	assert.Equal(t, "scheduled", updated.Status, "状态由 BPMN 回调写入，不是 TransitionStatus 自己手动 set 的；normal 类型两跳推进到 scheduled")
 }
 
 func TestTransitionStatus_Reject_RequiresComment(t *testing.T) {

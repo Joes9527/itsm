@@ -172,7 +172,7 @@ func (s *Service) SubmitChange(ctx context.Context, changeID, tenantID, submitte
 			return nil, fmt.Errorf("该变更已经有一个正在进行的审批流程，不能重复提交")
 		}
 
-		_, err = s.processTriggerService.TriggerProcess(ctx, &dto.ProcessTriggerRequest{
+		triggerResp, err := s.processTriggerService.TriggerProcess(ctx, &dto.ProcessTriggerRequest{
 			BusinessType:         dto.BusinessTypeChange,
 			BusinessID:           changeID,
 			ProcessDefinitionKey: processDefKey,
@@ -187,11 +187,28 @@ func (s *Service) SubmitChange(ctx context.Context, changeID, tenantID, submitte
 			s.logger.Errorw("SubmitChange: failed to trigger BPMN process", "error", err, "change_id", changeID)
 			return nil, fmt.Errorf("启动审批流程失败: %w", err)
 		}
-	}
 
-	if err := s.repo.MarkSubmittedForApproval(ctx, changeID, tenantID); err != nil {
-		s.logger.Warnw("Failed to mark change as submitted", "error", err, "change_id", changeID)
-		return nil, fmt.Errorf("提交变更审批失败: %w", err)
+		if err := s.repo.MarkSubmittedForApproval(ctx, changeID, tenantID); err != nil {
+			// 补偿：流程实例已经成功创建（状态 running），但落库 draft -> pending 失败了。
+			// 如果不取消刚创建的实例，它会一直卡在 running，导致上面的幂等保护永久拒绝
+			// 后续重新提交（同一 businessKey 已经存在一个"运行中"实例，且没有任何正常流程
+			// 会去完成/取消它）。取消失败不掩盖原始错误——只记录警告，仍然返回
+			// MarkSubmittedForApproval 的原始错误。
+			if triggerResp != nil {
+				if cancelErr := s.processTriggerService.CancelProcess(ctx, triggerResp.ProcessInstanceID,
+					"SubmitChange: compensating rollback after MarkSubmittedForApproval failure", tenantID); cancelErr != nil {
+					s.logger.Warnw("SubmitChange: 补偿取消流程实例失败，可能残留运行中实例阻塞后续重新提交",
+						"error", cancelErr, "change_id", changeID, "process_instance_id", triggerResp.ProcessInstanceID)
+				}
+			}
+			s.logger.Warnw("Failed to mark change as submitted", "error", err, "change_id", changeID)
+			return nil, fmt.Errorf("提交变更审批失败: %w", err)
+		}
+	} else {
+		if err := s.repo.MarkSubmittedForApproval(ctx, changeID, tenantID); err != nil {
+			s.logger.Warnw("Failed to mark change as submitted", "error", err, "change_id", changeID)
+			return nil, fmt.Errorf("提交变更审批失败: %w", err)
+		}
 	}
 
 	// 6. Notify approvers (optional - to be implemented later or via async)
@@ -519,11 +536,14 @@ func (s *Service) TransitionStatus(ctx context.Context, id, tenantID, userID int
 	}
 
 	// H-2 / C-2 修复：
-	// 1. 终态（rejected/completed/cancelled/rolled_back）需要事务化：写 change + 收口 pending chains
+	// 1. 终态（rejected/completed/cancelled/rolled_back）需要事务化写 change
 	// 2. 非终态直接更新
 	// 注意：targetStatus == "rejected" 这个分支实际上已经在上面的 approve/reject 分支里提前
 	// return 了，永远不会走到这里——保留这个条件是防御式编程，避免以后有人调整分支顺序时
 	// 悄悄引入 bug，不删除。
+	// 注：此前这里还会调用 service.CloseChangeApprovalChains 收口 change_approval_chains 里的
+	// pending 行；Track4 迁移后本包已不再向该表写入 pending 记录（详见 Task 6），保留该调用只会
+	// 是一次必然的空操作，且在裸 DB 句柄为 nil 时还会打一条误导性的 ERROR 日志，故删除。
 	isTerminal := targetStatus == "rejected" || targetStatus == "completed" ||
 		targetStatus == "cancelled" || targetStatus == "rolled_back"
 	if isTerminal {
@@ -541,10 +561,6 @@ func (s *Service) TransitionStatus(ctx context.Context, id, tenantID, userID int
 		}
 		if commitErr := tx.Commit(); commitErr != nil {
 			return nil, fmt.Errorf("提交事务失败: %w", commitErr)
-		}
-		if closeErr := service.CloseChangeApprovalChains(ctx, id, tenantID); closeErr != nil {
-			s.logger.Errorw("TransitionStatus: 收口审批链失败（非致命，后续状态机兜底）",
-				"error", closeErr, "change_id", id, "tenant_id", tenantID)
 		}
 		c.Status = targetStatus
 		return c, nil

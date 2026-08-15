@@ -18,6 +18,8 @@ import (
 type mockProcessTriggerService struct {
 	triggerCalls []*dto.ProcessTriggerRequest
 	triggerErr   error
+	cancelCalls  []int // recorded processInstanceID args
+	cancelErr    error
 }
 
 func (m *mockProcessTriggerService) TriggerProcess(ctx context.Context, req *dto.ProcessTriggerRequest) (*dto.ProcessTriggerResponse, error) {
@@ -38,7 +40,8 @@ func (m *mockProcessTriggerService) TriggerByBusinessType(ctx context.Context, b
 }
 
 func (m *mockProcessTriggerService) CancelProcess(ctx context.Context, processInstanceID int, reason string, tenantID int) error {
-	return nil
+	m.cancelCalls = append(m.cancelCalls, processInstanceID)
+	return m.cancelErr
 }
 
 func (m *mockProcessTriggerService) SuspendProcess(ctx context.Context, processInstanceID int, reason string, tenantID int) error {
@@ -139,6 +142,62 @@ func TestSubmitChange_TriggerProcessFailureLeavesChangeDraft(t *testing.T) {
 	assert.Equal(t, "draft", stored.Status)
 
 	require.Len(t, trigger.triggerCalls, 1, "TriggerProcess should have been attempted once")
+}
+
+// TestSubmitChange_MarkSubmittedFailureCompensatesByCancellingProcess covers the Finding 2a
+// fix: TriggerProcess succeeds (a running process instance now exists), but the subsequent
+// MarkSubmittedForApproval (draft -> pending) fails. Without compensation, that running
+// instance would sit forever and the idempotency guard at the top of SubmitChange would
+// permanently reject any resubmission attempt for this change. SubmitChange must call
+// CancelProcess on the just-created instance before returning the original error.
+func TestSubmitChange_MarkSubmittedFailureCompensatesByCancellingProcess(t *testing.T) {
+	entClient := newChangeBridgeEntClient(t, "change_submit_mark_fail_compensate")
+	tenantID, actorID := setupChangeBridgeActor(t, entClient, "submit-mark-fail")
+	repo := newMockRepository()
+	repo.submitErr = fmt.Errorf("simulated concurrent write conflict")
+	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
+	trigger := &mockProcessTriggerService{}
+	svc.SetProcessTriggerService(trigger)
+
+	c := createTestChange(repo, tenantID, actorID)
+	c.Type = "normal"
+
+	_, err := svc.SubmitChange(context.Background(), c.ID, tenantID, actorID, &dto.SubmitChangeRequest{ApproverIDs: []int{actorID}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "提交变更审批失败")
+
+	require.Len(t, trigger.triggerCalls, 1, "TriggerProcess should have been attempted once")
+	require.Len(t, trigger.cancelCalls, 1, "CancelProcess should have been called once to compensate")
+	assert.Equal(t, 1, trigger.cancelCalls[0], "CancelProcess should target the process instance TriggerProcess just created")
+
+	// The change itself must remain in draft in the repo (MarkSubmittedForApproval never
+	// committed the transition), consistent with the pre-existing draft-preservation guarantee.
+	stored, getErr := repo.Get(context.Background(), c.ID, tenantID)
+	require.NoError(t, getErr)
+	assert.Equal(t, "draft", stored.Status)
+}
+
+// TestSubmitChange_MarkSubmittedFailure_CancelProcessAlsoFails_ReturnsOriginalError ensures
+// a failure in the compensation call itself does not mask or replace the original
+// MarkSubmittedForApproval error — the caller still needs to see why the submit failed.
+func TestSubmitChange_MarkSubmittedFailure_CancelProcessAlsoFails_ReturnsOriginalError(t *testing.T) {
+	entClient := newChangeBridgeEntClient(t, "change_submit_mark_fail_cancel_fail")
+	tenantID, actorID := setupChangeBridgeActor(t, entClient, "submit-mark-fail-cancel-fail")
+	repo := newMockRepository()
+	repo.submitErr = fmt.Errorf("simulated concurrent write conflict")
+	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
+	trigger := &mockProcessTriggerService{cancelErr: fmt.Errorf("bpmn engine unreachable")}
+	svc.SetProcessTriggerService(trigger)
+
+	c := createTestChange(repo, tenantID, actorID)
+	c.Type = "normal"
+
+	_, err := svc.SubmitChange(context.Background(), c.ID, tenantID, actorID, &dto.SubmitChangeRequest{ApproverIDs: []int{actorID}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "提交变更审批失败")
+	assert.Contains(t, err.Error(), "simulated concurrent write conflict")
+
+	require.Len(t, trigger.cancelCalls, 1, "CancelProcess should still have been attempted despite the original error")
 }
 
 // TestGetApprovalHistory_ReadsFromProcessApprovalDecision covers Task 5: the

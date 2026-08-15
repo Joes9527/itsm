@@ -511,6 +511,7 @@ func NewApplication() *Application {
 	changeRepo := change.NewEntRepository(client, database.GetRawDB())
 	changeServiceDomain := change.NewService(changeRepo, client, sugar)
 	changeServiceDomain.SetProcessTriggerService(processTriggerService)
+	changeServiceDomain.SetProcessEngine(processEngine)
 	changeHandler := change.NewHandler(changeServiceDomain)
 
 	// Analytics & Prediction Controllers

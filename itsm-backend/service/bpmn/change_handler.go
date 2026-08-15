@@ -177,15 +177,36 @@ func (h *ChangeServiceTaskHandler) rejectChange(ctx context.Context, variables m
 }
 
 // scheduleChange 排期变更
+// 状态机推进分两跳：
+//  1. pending/submitted -> approved：CAB 批准后所有变更类型都要经过的中间态。
+//  2. approved -> scheduled：只对状态机里声明了这条转换的类型（normal/standard）生效。
+//     emergency 类型的状态机没有 scheduled 这个中间态——approved 直接对接 in_progress
+//     （快速通道），如果这里对 emergency 也强行写 scheduled，第二跳会被状态机拒绝，
+//     把本该成功的 CAB 审批级联搞失败。所以先查一次当前变更的 type，只在
+//     isValidChangeStatusTransition("approved", "scheduled", type) 为真时才做第二跳；
+//     否则停在 approved，交给后续 Activity_Implement 直接把 approved 推进到
+//     in_progress（这也是 emergency 状态机唯一合法的下一跳）。
 func (h *ChangeServiceTaskHandler) scheduleChange(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
 	changeID := GetIntFromVars(variables, "change_id")
 	if changeID <= 0 {
 		return nil, fmt.Errorf("无效的变更ID")
 	}
 
-	// 先转移状态为 approved（CAB 批准后的状态）
+	// 第一跳：转移状态为 approved（CAB 批准后的状态，所有类型都要经过）
 	if err := h.transitionChangeStatus(ctx, changeID, "approved"); err != nil {
 		return nil, err
+	}
+
+	c, err := h.client.Change.Get(ctx, changeID)
+	if err != nil {
+		return nil, fmt.Errorf("变更不存在: %w", err)
+	}
+
+	// 第二跳：仅当该变更类型的状态机允许 approved -> scheduled 时才推进
+	if isValidChangeStatusTransition("approved", "scheduled", c.Type) {
+		if err := h.transitionChangeStatus(ctx, changeID, "scheduled"); err != nil {
+			return nil, err
+		}
 	}
 
 	// 解析日期时间
@@ -205,7 +226,7 @@ func (h *ChangeServiceTaskHandler) scheduleChange(ctx context.Context, variables
 		updateQuery.SetPlannedEndDate(plannedEnd)
 	}
 
-	_, err := updateQuery.Save(ctx)
+	_, err = updateQuery.Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("排期变更失败: %w", err)
 	}
