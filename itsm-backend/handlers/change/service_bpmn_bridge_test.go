@@ -2,6 +2,7 @@ package change
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strconv"
 	"testing"
@@ -38,6 +39,18 @@ func newChangeBridgeEntClient(t *testing.T, dbName string) *ent.Client {
 	client := enttest.Open(t, "sqlite3", fmt.Sprintf("file:%s?mode=memory&cache=shared&_fk=1", dbName))
 	t.Cleanup(func() { client.Close() })
 	return client
+}
+
+// openChangeBridgeRawDB 打开一个指向跟 newChangeBridgeEntClient(t, dbName) 相同 sqlite
+// 内存库的原生 *sql.DB 连接（相同 DSN，mode=memory&cache=shared 让它们共享同一份数据）。
+// MarkSubmittedForApproval 用的是原生 database/sql，不是 ent，NewEntRepository 需要这个
+// 连接才能真的执行 draft->pending 的 UPDATE。
+func openChangeBridgeRawDB(t *testing.T, dbName string) *sql.DB {
+	t.Helper()
+	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?mode=memory&cache=shared&_fk=1", dbName))
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	return db
 }
 
 func setupChangeBridgeActor(t *testing.T, client *ent.Client, code string) (tenantID, actorID int) {
@@ -147,13 +160,13 @@ func createChangeBridgeProcessFixture(t *testing.T, client *ent.Client, tenantID
 // ==================== completeChangeApprovalTask：CAB 审批完成 + 级联完成排期/驳回节点 ====================
 
 // TestCompleteChangeApprovalTask_ApproveCompletesScheduleNode CAB 审批通过时，应该：
-// 1. 完成 Activity_CABApproval 这个待办任务；
-// 2. 级联完成网关路由到的 Activity_Schedule（排期节点），避免它变成孤儿任务；
-// 3. Activity_Schedule 的 change_task/schedule_change 回调把 Change.Status 推进两跳，
-//    从 pending 经过 approved 最终落到 scheduled（normal 类型的状态机里 approved 不是
-//    终点——approved 只能到 {scheduled, cancelled}，不直接到 in_progress，所以
-//    scheduleChange 必须走完两跳，否则变更会永久卡在 approved，见 Finding 4）；
-// 4. 流程实例推进到 Activity_Schedule 之后的下一个节点 Activity_Implement（Track4 范围之外，故意停在那）。
+//  1. 完成 Activity_CABApproval 这个待办任务；
+//  2. 级联完成网关路由到的 Activity_Schedule（排期节点），避免它变成孤儿任务；
+//  3. Activity_Schedule 的 change_task/schedule_change 回调把 Change.Status 推进两跳，
+//     从 pending 经过 approved 最终落到 scheduled（normal 类型的状态机里 approved 不是
+//     终点——approved 只能到 {scheduled, cancelled}，不直接到 in_progress，所以
+//     scheduleChange 必须走完两跳，否则变更会永久卡在 approved，见 Finding 4）；
+//  4. 流程实例推进到 Activity_Schedule 之后的下一个节点 Activity_Implement（Track4 范围之外，故意停在那）。
 func TestCompleteChangeApprovalTask_ApproveCompletesScheduleNode(t *testing.T) {
 	client := newChangeBridgeEntClient(t, "complete_approval_approve")
 	logger := zaptest.NewLogger(t).Sugar()
@@ -531,4 +544,64 @@ func TestTransitionStatus_Approve_NoRunningProcessInstanceFailsClosed(t *testing
 	updated, err := client.Change.Get(ctx, c.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "pending", updated.Status, "fail-closed 之后 Change.Status 不应该被悄悄改成 approved")
+}
+
+// ==================== SubmitChange 自动级联完成 Activity_Assessment ====================
+//
+// 生产环境里没有任何业务入口能完成"变更评估"这个 userTask——handlers/change 包本身
+// 没有对应的端点，唯一能完成它的是通用 BPMN 工作流控制台（权限模型、UI 都不一样）。
+// 这意味着 SubmitChange 触发流程之后，流程会永远停在 Activity_Assessment，CAB 审批任务
+// 根本不会产生。这里让 SubmitChange 用系统身份（不是 requester 的身份）自动级联完成
+// Activity_Assessment，把流程直接推进到 CAB 审批——跟 completeChangeApprovalTask 级联
+// 完成 Activity_Schedule/Activity_Reject 是同一个模式：这不是一次独立的人工决定，
+// 是"提交审批"这个动作本身自然应该做完的事。
+
+func TestSubmitChange_AutoCompletesAssessmentTask(t *testing.T) {
+	dsn := "file:submit_change_assessment_cascade?mode=memory&cache=shared&_fk=1"
+	client := enttest.Open(t, "sqlite3", dsn)
+	defer client.Close()
+	// MarkSubmittedForApproval 用的是原生 database/sql，不是 ent——另开一个指向同一个
+	// sqlite 内存库的 *sql.DB 连接，跟 change_bpmn_e2e_test.go 的做法一致。
+	db, err := sql.Open("sqlite3", dsn)
+	require.NoError(t, err)
+	defer db.Close()
+	logger := zaptest.NewLogger(t).Sugar()
+	ctx := context.Background()
+
+	tenant, err := client.Tenant.Create().SetName("Assessment Cascade Tenant").SetCode("assess-cascade").SetDomain("assess-cascade.example.com").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	requester, err := client.User.Create().SetUsername("assess-requester").SetEmail("assess-requester@example.com").SetName("Requester").SetPasswordHash("h").SetRole("agent").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	cmUser, err := client.User.Create().SetUsername("assess-cm").SetEmail("assess-cm@example.com").SetName("CM").SetPasswordHash("h").SetRole("change_manager").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	engine := newTestBPMNEngine(t, client, logger)
+	deploySvc := service.NewBPMNTemplateService(client)
+	tenantCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+	_, err = deploySvc.LoadAndDeployTemplates(tenantCtx, tenant.ID)
+	require.NoError(t, err)
+
+	trigger := service.NewProcessTriggerService(client, engine)
+	repo := NewEntRepository(client, db)
+	svc := NewService(repo, client, logger)
+	svc.SetProcessTriggerService(trigger)
+	svc.SetProcessEngine(engine)
+
+	created, err := repo.Create(ctx, &Change{Title: "自动推进评估的变更", Type: "normal", Status: "draft", RiskLevel: "medium", ImpactScope: "low", TenantID: tenant.ID, CreatedBy: requester.ID})
+	require.NoError(t, err)
+
+	_, err = svc.SubmitChange(tenantCtx, created.ID, tenant.ID, requester.ID, &dto.SubmitChangeRequest{ApproverIDs: []int{cmUser.ID}})
+	require.NoError(t, err)
+
+	instance, err := client.ProcessInstance.Query().
+		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", created.ID)), processinstance.TenantID(tenant.ID)).
+		Only(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "Activity_CABApproval", instance.CurrentActivityID,
+		"SubmitChange 应该自动完成 Activity_Assessment，流程实例应该直接停在 CAB 审批节点上，不需要任何人工干预")
+
+	// 断言 CAB 审批任务真的存在且可以正常走完——证明级联完成 Assessment 没有留下
+	// 残留状态或者错误的 task 记录，CAB 审批本身完全不受影响。
+	_, err = svc.TransitionStatus(tenantCtx, created.ID, tenant.ID, cmUser.ID, "approved", "自动推进后正常审批")
+	require.NoError(t, err)
 }

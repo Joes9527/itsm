@@ -81,11 +81,8 @@ func TestChangeApprovalE2E_FullApproveFlow(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "pending", afterSubmit.Status)
 
-	// 完成变更评估，推进到 CAB 审批
-	assessmentTasks, _, err := engine.TaskService().ListUserTasks(tenantCtx, &service.ListUserTasksRequest{PageSize: 10})
-	require.NoError(t, err)
-	require.Len(t, assessmentTasks, 1)
-	require.NoError(t, engine.CompleteTask(tenantCtx, assessmentTasks[0].TaskID, map[string]interface{}{}))
+	// SubmitChange 已经自动级联完成了 Activity_Assessment（变更评估），流程直接
+	// 停在 CAB 审批节点上，不需要再手动完成评估任务。
 
 	// CAB 审批通过
 	_, err = svc.TransitionStatus(tenantCtx, created.ID, tenant.ID, cmUser.ID, "approved", "e2e 测试通过")
@@ -155,10 +152,7 @@ func TestChangeApprovalE2E_FullRejectFlow(t *testing.T) {
 	_, err = svc.SubmitChange(tenantCtx, created.ID, tenant.ID, requester.ID, &dto.SubmitChangeRequest{ApproverIDs: []int{cmUser.ID}})
 	require.NoError(t, err)
 
-	assessmentTasks, _, err := engine.TaskService().ListUserTasks(tenantCtx, &service.ListUserTasksRequest{PageSize: 10})
-	require.NoError(t, err)
-	require.Len(t, assessmentTasks, 1)
-	require.NoError(t, engine.CompleteTask(tenantCtx, assessmentTasks[0].TaskID, map[string]interface{}{}))
+	// SubmitChange 已经自动级联完成了 Activity_Assessment，流程直接停在 CAB 审批节点上。
 
 	// comment 为空必须被拒绝，且不改变状态
 	_, err = svc.TransitionStatus(tenantCtx, created.ID, tenant.ID, cmUser.ID, "rejected", "")
@@ -221,10 +215,7 @@ func TestChangeApprovalE2E_NonCMUserCannotApprove(t *testing.T) {
 	_, err = svc.SubmitChange(tenantCtx, created.ID, tenant.ID, requester.ID, &dto.SubmitChangeRequest{ApproverIDs: []int{cmUser.ID}})
 	require.NoError(t, err)
 
-	assessmentTasks, _, err := engine.TaskService().ListUserTasks(tenantCtx, &service.ListUserTasksRequest{PageSize: 10})
-	require.NoError(t, err)
-	require.Len(t, assessmentTasks, 1)
-	require.NoError(t, engine.CompleteTask(tenantCtx, assessmentTasks[0].TaskID, map[string]interface{}{}))
+	// SubmitChange 已经自动级联完成了 Activity_Assessment，流程直接停在 CAB 审批节点上。
 
 	_, err = svc.TransitionStatus(tenantCtx, created.ID, tenant.ID, outsider.ID, "approved", "我批准")
 	require.Error(t, err, "outsider 没有 change_manager 角色，authorizeTaskActor 应该拒绝")

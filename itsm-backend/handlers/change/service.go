@@ -188,6 +188,27 @@ func (s *Service) SubmitChange(ctx context.Context, changeID, tenantID, submitte
 			return nil, fmt.Errorf("启动审批流程失败: %w", err)
 		}
 
+		// 没有任何业务端点能完成 Activity_Assessment（变更评估）这个 userTask——
+		// handlers/change 包本身不暴露这样的接口，唯一能完成它的是通用 BPMN 工作流
+		// 控制台（权限模型、UI 都跟变更详情页不是一回事）。不级联完成它，流程会永远
+		// 停在这一步，CAB 审批任务根本不会产生。用系统身份（不是 submitter 的身份）
+		// 完成它——这不是一次独立的人工决定，是"提交审批"这个动作本身该做完的事，
+		// 跟 completeChangeApprovalTask 级联完成 Activity_Schedule/Activity_Reject
+		// 是同一个模式。失败时的补偿处理跟下面 MarkSubmittedForApproval 失败时一致：
+		// 取消刚创建的流程实例，避免留下一个永远卡在 Activity_Assessment、又被幂等
+		// 保护挡住无法重新提交的运行中实例。
+		if err := s.completeAssessmentTask(ctx, tenantID, changeID); err != nil {
+			if triggerResp != nil {
+				if cancelErr := s.processTriggerService.CancelProcess(ctx, triggerResp.ProcessInstanceID,
+					"SubmitChange: compensating rollback after assessment auto-completion failure", tenantID); cancelErr != nil {
+					s.logger.Warnw("SubmitChange: 补偿取消流程实例失败，可能残留运行中实例阻塞后续重新提交",
+						"error", cancelErr, "change_id", changeID, "process_instance_id", triggerResp.ProcessInstanceID)
+				}
+			}
+			s.logger.Errorw("SubmitChange: failed to auto-complete assessment task", "error", err, "change_id", changeID)
+			return nil, fmt.Errorf("推进变更评估节点失败: %w", err)
+		}
+
 		if err := s.repo.MarkSubmittedForApproval(ctx, changeID, tenantID); err != nil {
 			// 补偿：流程实例已经成功创建（状态 running），但落库 draft -> pending 失败了。
 			// 如果不取消刚创建的实例，它会一直卡在 running，导致上面的幂等保护永久拒绝
@@ -410,6 +431,54 @@ func inferITILPractices(summary *dto.ChangeCMDBImpactSummary) []string {
 		practices = append(practices, "monitoring_and_event_management")
 	}
 	return practices
+}
+
+// completeAssessmentTask 用系统身份自动完成一个刚触发流程的变更的 Activity_Assessment
+// （变更评估）任务，把流程从"评估中"直接推进到 CAB 审批节点。Activity_Assessment 没有
+// 声明 assigneeRole，所以这里不注入 actorUserID（跟 completeChangeApprovalTask 级联完成
+// Activity_Schedule/Activity_Reject 时用系统身份的理由一样：不注入的话 authorizeTaskActor
+// 因为 userID<=0 直接放行，注入了反而可能因为不符合任何候选人规则而报错）。
+// updateChange（Activity_Assessment 声明的 action=update_change）只在 change_id 传对时
+// 才不会短路失败——其余字段（title/description/status）全部可选，传空变量表示"确认存在、
+// 不改任何字段"的空更新，是安全的。
+func (s *Service) completeAssessmentTask(ctx context.Context, tenantID, changeID int) error {
+	if s.processEngine == nil {
+		return fmt.Errorf("流程引擎未初始化")
+	}
+
+	businessKey := fmt.Sprintf("change:%d", changeID)
+	instance, err := s.entClient.ProcessInstance.Query().
+		Where(processinstance.BusinessKey(businessKey), processinstance.TenantID(tenantID), processinstance.Status("running")).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return fmt.Errorf("该变更没有正在运行的审批流程")
+		}
+		return fmt.Errorf("查询审批流程实例失败: %w", err)
+	}
+
+	task, err := s.entClient.ProcessTask.Query().
+		Where(
+			processtask.HasProcessInstanceWith(processinstance.ID(instance.ID)),
+			processtask.TaskType("user_task"),
+			processtask.TaskDefinitionKey("Activity_Assessment"),
+			processtask.StatusIn("created", "assigned", "started", "delegated"),
+		).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return fmt.Errorf("该变更没有待处理的评估任务")
+		}
+		return fmt.Errorf("查询待办评估任务失败: %w", err)
+	}
+
+	systemCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+	if err := s.processEngine.CompleteTask(systemCtx, task.TaskID, map[string]interface{}{
+		"change_id": changeID,
+	}); err != nil {
+		return fmt.Errorf("完成变更评估任务失败: %w", err)
+	}
+	return nil
 }
 
 // completeChangeApprovalTask 完成一个变更的 CAB 审批任务，并在通过/驳回后级联完成

@@ -6,6 +6,10 @@ import (
 	"testing"
 
 	"itsm-backend/dto"
+	"itsm-backend/ent"
+	"itsm-backend/ent/processinstance"
+	"itsm-backend/service"
+	"itsm-backend/service/bpmn"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -56,44 +60,72 @@ func (m *mockProcessTriggerService) GetProcessStatus(ctx context.Context, proces
 	return nil, nil
 }
 
+// deployRealBPMNFixture 部署真实模板、构造真实引擎+触发服务，供需要验证 SubmitChange
+// 真正把流程推进到什么状态（而不是只检查 mock 记录了什么调用参数）的测试复用。
+// completeAssessmentTask 级联完成 Activity_Assessment 时，ChangeServiceTaskHandler 的
+// 回调会直接对 entClient 里的真实 ent.Change 行做 UpdateOneID().Save()——用纯内存
+// mockRepository 时这一步会因为找不到对应的真实行而失败，所以这里必须用真实引擎+
+// 真实模板部署，不能用 mockProcessTriggerService。
+func deployRealBPMNFixture(t *testing.T, entClient *ent.Client, tenantID int) (engine service.ProcessEngine, trigger *service.ProcessTriggerService) {
+	t.Helper()
+	engine = newTestBPMNEngine(t, entClient, zaptest.NewLogger(t).Sugar())
+	deploySvc := service.NewBPMNTemplateService(entClient)
+	tenantCtx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, tenantID)
+	_, err := deploySvc.LoadAndDeployTemplates(tenantCtx, tenantID)
+	require.NoError(t, err)
+	return engine, service.NewProcessTriggerService(entClient, engine)
+}
+
+// TestSubmitChange_TriggersBPMNProcess_Normal/_Emergency 验证 SubmitChange 按 Type
+// 正确选择流程定义——用真实引擎断言触发后实际部署出来的 ProcessInstance.ProcessDefinitionKey，
+// 比断言一个 mock 记录了什么调用参数更贴近真实行为（mock 记录的是"打算传什么"，
+// 这里断言的是"真的触发成了什么"）。
 func TestSubmitChange_TriggersBPMNProcess_Normal(t *testing.T) {
 	entClient := newChangeBridgeEntClient(t, "change_submit_normal")
 	tenantID, actorID := setupChangeBridgeActor(t, entClient, "submit-normal")
-	repo := newMockRepository()
-	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
-	trigger := &mockProcessTriggerService{}
-	svc.SetProcessTriggerService(trigger)
+	engine, trigger := deployRealBPMNFixture(t, entClient, tenantID)
 
-	c := createTestChange(repo, tenantID, actorID)
-	c.Type = "normal"
+	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).Save(context.Background())
+	require.NoError(t, err)
+
+	repo := NewEntRepository(entClient, openChangeBridgeRawDB(t, "change_submit_normal"))
+	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
+	svc.SetProcessTriggerService(trigger)
+	svc.SetProcessEngine(engine)
 
 	updated, err := svc.SubmitChange(context.Background(), c.ID, tenantID, actorID, &dto.SubmitChangeRequest{ApproverIDs: []int{actorID}})
 	require.NoError(t, err)
 	assert.Equal(t, "pending", updated.Status)
 
-	require.Len(t, trigger.triggerCalls, 1)
-	assert.Equal(t, "change_normal_flow", trigger.triggerCalls[0].ProcessDefinitionKey)
-	assert.Equal(t, dto.BusinessTypeChange, trigger.triggerCalls[0].BusinessType)
-	assert.Equal(t, c.ID, trigger.triggerCalls[0].BusinessID)
-	assert.Equal(t, true, trigger.triggerCalls[0].Variables["approval_required"])
+	instance, err := entClient.ProcessInstance.Query().
+		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID)), processinstance.TenantID(tenantID)).
+		Only(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "change_normal_flow", instance.ProcessDefinitionKey)
+	assert.Equal(t, "Activity_CABApproval", instance.CurrentActivityID, "Assessment 应该已经被自动级联完成")
 }
 
 func TestSubmitChange_TriggersBPMNProcess_Emergency(t *testing.T) {
 	entClient := newChangeBridgeEntClient(t, "change_submit_emergency")
 	tenantID, actorID := setupChangeBridgeActor(t, entClient, "submit-emergency")
-	repo := newMockRepository()
-	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
-	trigger := &mockProcessTriggerService{}
-	svc.SetProcessTriggerService(trigger)
+	engine, trigger := deployRealBPMNFixture(t, entClient, tenantID)
 
-	c := createTestChange(repo, tenantID, actorID)
-	c.Type = "emergency"
-
-	_, err := svc.SubmitChange(context.Background(), c.ID, tenantID, actorID, &dto.SubmitChangeRequest{ApproverIDs: []int{actorID}})
+	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("emergency").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).Save(context.Background())
 	require.NoError(t, err)
 
-	require.Len(t, trigger.triggerCalls, 1)
-	assert.Equal(t, "change_emergency_flow", trigger.triggerCalls[0].ProcessDefinitionKey)
+	repo := NewEntRepository(entClient, openChangeBridgeRawDB(t, "change_submit_emergency"))
+	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
+	svc.SetProcessTriggerService(trigger)
+	svc.SetProcessEngine(engine)
+
+	_, err = svc.SubmitChange(context.Background(), c.ID, tenantID, actorID, &dto.SubmitChangeRequest{ApproverIDs: []int{actorID}})
+	require.NoError(t, err)
+
+	instance, err := entClient.ProcessInstance.Query().
+		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID)), processinstance.TenantID(tenantID)).
+		Only(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "change_emergency_flow", instance.ProcessDefinitionKey)
 }
 
 // TestSubmitChange_RejectsDuplicateWhenRunningInstanceExists 幂等保护回归：
@@ -144,6 +176,41 @@ func TestSubmitChange_TriggerProcessFailureLeavesChangeDraft(t *testing.T) {
 	require.Len(t, trigger.triggerCalls, 1, "TriggerProcess should have been attempted once")
 }
 
+// seedChangeInMockAndEnt 双写一个 change：一份进 mockRepository（供 s.repo.Get/
+// MarkSubmittedForApproval 用，submitErr 可控失败），一份进真实 ent.Client（供
+// completeAssessmentTask 触发的真实 BPMN 回调——ChangeServiceTaskHandler.updateChange
+// 直接对 entClient 里的真实行做 UpdateOneID().Save()，纯内存 mock 满足不了这一步）。
+// 两边用同一个 ID，保持一致。
+func seedChangeInMockAndEnt(t *testing.T, repo *mockRepository, entClient *ent.Client, tenantID, actorID int, changeType string) *Change {
+	t.Helper()
+	real, err := entClient.Change.Create().
+		SetTitle("测试变更").
+		SetType(changeType).
+		SetStatus("draft").
+		SetRiskLevel("medium").
+		SetImpactScope("low").
+		SetTenantID(tenantID).
+		SetCreatedBy(actorID).
+		Save(context.Background())
+	require.NoError(t, err)
+
+	c := &Change{
+		ID:          real.ID,
+		Title:       real.Title,
+		Type:        changeType,
+		Status:      "draft",
+		RiskLevel:   "medium",
+		ImpactScope: "low",
+		TenantID:    tenantID,
+		CreatedBy:   actorID,
+	}
+	repo.changes[c.ID] = c
+	if c.ID >= repo.nextID {
+		repo.nextID = c.ID + 1
+	}
+	return c
+}
+
 // TestSubmitChange_MarkSubmittedFailureCompensatesByCancellingProcess covers the Finding 2a
 // fix: TriggerProcess succeeds (a running process instance now exists), but the subsequent
 // MarkSubmittedForApproval (draft -> pending) fails. Without compensation, that running
@@ -153,22 +220,27 @@ func TestSubmitChange_TriggerProcessFailureLeavesChangeDraft(t *testing.T) {
 func TestSubmitChange_MarkSubmittedFailureCompensatesByCancellingProcess(t *testing.T) {
 	entClient := newChangeBridgeEntClient(t, "change_submit_mark_fail_compensate")
 	tenantID, actorID := setupChangeBridgeActor(t, entClient, "submit-mark-fail")
+	engine, trigger := deployRealBPMNFixture(t, entClient, tenantID)
+
 	repo := newMockRepository()
 	repo.submitErr = fmt.Errorf("simulated concurrent write conflict")
-	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
-	trigger := &mockProcessTriggerService{}
-	svc.SetProcessTriggerService(trigger)
+	c := seedChangeInMockAndEnt(t, repo, entClient, tenantID, actorID, "normal")
 
-	c := createTestChange(repo, tenantID, actorID)
-	c.Type = "normal"
+	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
+	svc.SetProcessTriggerService(trigger)
+	svc.SetProcessEngine(engine)
 
 	_, err := svc.SubmitChange(context.Background(), c.ID, tenantID, actorID, &dto.SubmitChangeRequest{ApproverIDs: []int{actorID}})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "提交变更审批失败")
 
-	require.Len(t, trigger.triggerCalls, 1, "TriggerProcess should have been attempted once")
-	require.Len(t, trigger.cancelCalls, 1, "CancelProcess should have been called once to compensate")
-	assert.Equal(t, 1, trigger.cancelCalls[0], "CancelProcess should target the process instance TriggerProcess just created")
+	// 补偿真的生效了：流程实例应该被 CancelProcess（= TerminateProcess）标记成
+	// terminated，不会一直卡在 running 挡住后续重新提交的幂等检查。
+	instance, err := entClient.ProcessInstance.Query().
+		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID)), processinstance.TenantID(tenantID)).
+		Only(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "terminated", instance.Status, "MarkSubmittedForApproval 失败后应该补偿取消刚创建的流程实例")
 
 	// The change itself must remain in draft in the repo (MarkSubmittedForApproval never
 	// committed the transition), consistent with the pre-existing draft-preservation guarantee.
@@ -177,20 +249,40 @@ func TestSubmitChange_MarkSubmittedFailureCompensatesByCancellingProcess(t *test
 	assert.Equal(t, "draft", stored.Status)
 }
 
+// cancelAlwaysFailsTriggerService 包一层真实的 *service.ProcessTriggerService，只覆盖
+// CancelProcess 让它总是失败——TriggerProcess 等其余方法透传给真实实现，这样
+// completeAssessmentTask 需要的真实 ProcessInstance/ProcessTask 照样会被真实创建出来，
+// 只有"补偿失败"这一件事是可控的。
+type cancelAlwaysFailsTriggerService struct {
+	*service.ProcessTriggerService
+	cancelCalls []int
+	cancelErr   error
+}
+
+func (w *cancelAlwaysFailsTriggerService) CancelProcess(ctx context.Context, processInstanceID int, reason string, tenantID int) error {
+	w.cancelCalls = append(w.cancelCalls, processInstanceID)
+	return w.cancelErr
+}
+
 // TestSubmitChange_MarkSubmittedFailure_CancelProcessAlsoFails_ReturnsOriginalError ensures
 // a failure in the compensation call itself does not mask or replace the original
 // MarkSubmittedForApproval error — the caller still needs to see why the submit failed.
 func TestSubmitChange_MarkSubmittedFailure_CancelProcessAlsoFails_ReturnsOriginalError(t *testing.T) {
 	entClient := newChangeBridgeEntClient(t, "change_submit_mark_fail_cancel_fail")
 	tenantID, actorID := setupChangeBridgeActor(t, entClient, "submit-mark-fail-cancel-fail")
+	engine, realTrigger := deployRealBPMNFixture(t, entClient, tenantID)
+	trigger := &cancelAlwaysFailsTriggerService{
+		ProcessTriggerService: realTrigger,
+		cancelErr:             fmt.Errorf("bpmn engine unreachable"),
+	}
+
 	repo := newMockRepository()
 	repo.submitErr = fmt.Errorf("simulated concurrent write conflict")
-	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
-	trigger := &mockProcessTriggerService{cancelErr: fmt.Errorf("bpmn engine unreachable")}
-	svc.SetProcessTriggerService(trigger)
+	c := seedChangeInMockAndEnt(t, repo, entClient, tenantID, actorID, "normal")
 
-	c := createTestChange(repo, tenantID, actorID)
-	c.Type = "normal"
+	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
+	svc.SetProcessTriggerService(trigger)
+	svc.SetProcessEngine(engine)
 
 	_, err := svc.SubmitChange(context.Background(), c.ID, tenantID, actorID, &dto.SubmitChangeRequest{ApproverIDs: []int{actorID}})
 	require.Error(t, err)
