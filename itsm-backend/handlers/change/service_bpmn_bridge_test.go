@@ -491,3 +491,41 @@ func TestTransitionStatus_Approve_WrongActorRejected(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "pending", updated.Status, "越权调用失败后不应该残留任何状态变化")
 }
+
+// TestTransitionStatus_Approve_NoRunningProcessInstanceFailsClosed 覆盖 P0-1 桥接被移除
+// 之后的行为反转：旧实现在没有关联运行中流程实例时会静默回退为纯业务审批（approve 照样成功）；
+// 新实现完全交给 completeChangeApprovalTask，没有运行中的 ProcessInstance 时必须 fail-closed，
+// 不能再有任何"没有流程就自己批"的隐藏路径。这个 change 是直接建库记录，从未跑过
+// SubmitChange/TriggerProcess，所以底下压根没有 ProcessInstance 行——故意不调用
+// setupChangeForTransitionStatusTest（那个 fixture 会部署模板+触发流程+推进到 CAB 节点，
+// 正是这个测试要排除的前提）。
+func TestTransitionStatus_Approve_NoRunningProcessInstanceFailsClosed(t *testing.T) {
+	client := newChangeBridgeEntClient(t, "transition_no_running_instance")
+	logger := zaptest.NewLogger(t).Sugar()
+	ctx := context.Background()
+
+	tenant, err := client.Tenant.Create().SetName("NoInstance Tenant").SetCode("transition_no_running_instance").SetDomain("transition-no-running-instance.example.com").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	cmUser, err := client.User.Create().SetUsername("no-instance-cm").SetEmail("no-instance-cm@example.com").SetName("CM").SetPasswordHash("h").SetRole("change_manager").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	// 直接建库记录，不走 SubmitChange/TriggerProcess——不部署模板、不触发流程，
+	// 所以这个 change 底下没有任何 ProcessInstance。
+	c, err := client.Change.Create().SetTitle("无绑定流程实例的变更").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(cmUser.ID).Save(ctx)
+	require.NoError(t, err)
+
+	// processEngine 必须非 nil，否则会在 completeChangeApprovalTask 里更早地因为
+	// "流程引擎未初始化" 返回，测不到这个用例真正要覆盖的"没有运行中流程实例"分支。
+	engine := newTestBPMNEngine(t, client, logger)
+	repo := NewEntRepository(client, nil)
+	svc := NewService(repo, client, logger)
+	svc.SetProcessEngine(engine)
+
+	_, err = svc.TransitionStatus(ctx, c.ID, tenant.ID, cmUser.ID, "approved", "批准")
+	require.Error(t, err, "没有运行中的 BPMN 流程实例时，approve 必须 fail-closed，不能静默回退为纯业务审批")
+	assert.Contains(t, err.Error(), "该变更没有正在运行的审批流程", "断言的是 completeChangeApprovalTask 真实返回的错误文案，不是臆造的错误")
+
+	updated, err := client.Change.Get(ctx, c.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "pending", updated.Status, "fail-closed 之后 Change.Status 不应该被悄悄改成 approved")
+}
