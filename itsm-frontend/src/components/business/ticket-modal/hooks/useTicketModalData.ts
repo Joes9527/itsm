@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { UserApi } from '@/lib/api/user-api';
+import { useAuthStore } from '@/lib/store/auth-store';
 import { ticketTemplateService } from '@/lib/services/ticket-template-service';
 import type { TicketTemplate, User } from '../types';
 
@@ -16,6 +17,7 @@ interface TicketModalDataState {
  * keeping the form components controlled and free of transport concerns.
  */
 export function useTicketModalData(enabled = true): TicketModalDataState {
+  const hasPermission = useAuthStore(s => s.hasPermission);
   const [users, setUsers] = useState<User[]>([]);
   const [templates, setTemplates] = useState<TicketTemplate[]>([]);
   const [loading, setLoading] = useState(false);
@@ -25,8 +27,11 @@ export function useTicketModalData(enabled = true): TicketModalDataState {
     setLoading(true);
     setError(null);
     try {
+      // 无 user:read 权限时不加载用户列表（避免 403），仅加载模板
       const [userResponse, templateResponse] = await Promise.all([
-        UserApi.getUsers({ page: 1, pageSize: 100 }),
+        hasPermission('user:read')
+          ? UserApi.getUsers({ page: 1, pageSize: 100 })
+          : Promise.resolve({ users: [] }),
         ticketTemplateService.getTemplates({ page: 1, pageSize: 100, isActive: true }),
       ]);
 
@@ -53,7 +58,7 @@ export function useTicketModalData(enabled = true): TicketModalDataState {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [hasPermission]);
 
   useEffect(() => {
     if (enabled) void reload();

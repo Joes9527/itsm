@@ -36,6 +36,7 @@ import {
 import { BatchProgressModal } from './BatchProgressModal';
 import { UserApi } from '@/lib/api/user-api';
 import { CommonApi } from '@/lib/api/common-api';
+import { useAuthStore } from '@/lib/store/auth-store';
 
 const { TextArea } = Input;
 export interface BatchOperationModalProps {
@@ -53,6 +54,7 @@ export const BatchOperationModal: React.FC<BatchOperationModalProps> = ({
   onSuccess,
   onCancel,
 }) => {
+  const hasPermission = useAuthStore(s => s.hasPermission);
   const [form] = Form.useForm();
   const [progressVisible, setProgressVisible] = useState(false);
   const [operationId, setOperationId] = useState<string | null>(null);
@@ -64,7 +66,12 @@ export const BatchOperationModal: React.FC<BatchOperationModalProps> = ({
     if (!visible || operationType !== BatchOperationType.ASSIGN) return;
     let active = true;
     setAssignmentOptionsLoading(true);
-    Promise.all([UserApi.getUsers({ page: 1, pageSize: 100 }), CommonApi.getTeams()])
+    Promise.all([
+      hasPermission('user:read')
+        ? UserApi.getUsers({ page: 1, pageSize: 100 })
+        : Promise.resolve({ users: [] }),
+      CommonApi.getTeams(),
+    ])
       .then(([userResponse, teams]) => {
         if (!active) return;
         setUserOptions((userResponse.users || []).map(user => ({ value: user.id, label: user.name || user.username })));
@@ -77,7 +84,7 @@ export const BatchOperationModal: React.FC<BatchOperationModalProps> = ({
       })
       .finally(() => active && setAssignmentOptionsLoading(false));
     return () => { active = false; };
-  }, [visible, operationType]);
+  }, [visible, operationType, hasPermission]);
 
   // Mutations
   const assignMutation = useBatchAssignMutation();

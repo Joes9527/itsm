@@ -32,6 +32,7 @@ import dayjs from 'dayjs';
 import { IncidentAPI } from '@/lib/api/';
 import { UserApi } from '@/lib/api/user-api';
 import type { User } from '@/lib/api/user-api';
+import { useAuthStore } from '@/lib/store/auth-store';
 import {
   IncidentStatus,
   IncidentStatusLabels,
@@ -88,6 +89,7 @@ const IncidentDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
   // 支持通过props传入id，或通过useParams获取
   const id = propId || (params?.id as string);
   const { handleError } = useErrorHandler();
+  const hasPermission = useAuthStore(s => s.hasPermission);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [data, setData] = useState<Incident | null>(null);
@@ -185,6 +187,10 @@ const IncidentDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
 
   // 加载用户列表，用于负责人/报告人姓名展示与指派选择
   useEffect(() => {
+    if (!hasPermission('user:read')) {
+      setUsers([]);
+      return;
+    }
     const loadUsers = async () => {
       setLoadingUsers(true);
       try {
@@ -198,7 +204,7 @@ const IncidentDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
       }
     };
     loadUsers();
-  }, []);
+  }, [hasPermission]);
 
   // 用户 ID → 姓名（找不到时回退为 #ID）
   const getUserName = (userId?: number | null) => {
