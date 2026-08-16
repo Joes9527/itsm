@@ -13,6 +13,7 @@ import (
 	"itsm-backend/ent/cirelationship"
 	"itsm-backend/ent/configurationitem"
 	"itsm-backend/ent/incident"
+	"itsm-backend/ent/processapprovaldecision"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/service"
@@ -438,6 +439,73 @@ func (s *Service) cancelRunningProcessInstance(ctx context.Context, tenantID, ch
 	}
 }
 
+// BackfillLegacyPendingChange 面向 Track4 上线切换时刻的存量数据：一个变更在旧版审批链
+// 流程下已经提交到了 pending 状态，但因为迁移前后审批机制整体切换，没有对应的 BPMN
+// 流程实例——正常的审批/驳回操作都要求存在运行中的流程实例，这批变更会永久卡住。
+// 这不是常规业务入口，是给一次性迁移 CLI（cmd/backfill_legacy_pending_changes）用的：
+// 效果等价于重放一次 SubmitChange，但跳过"必须是 draft 状态"这道门槛——这些变更已经不在
+// draft 了，且旧的 change_approvals/change_approval_chains 表数据不会被读取（Track4 之后
+// 这两张表已经不是权威数据源）。审批人沿用 assigneeRole=change_manager 的候选人解析，
+// 不尝试还原旧审批链里指定的具体审批人。
+func (s *Service) BackfillLegacyPendingChange(ctx context.Context, changeID, tenantID int) error {
+	c, err := s.repo.Get(ctx, changeID, tenantID)
+	if err != nil {
+		return fmt.Errorf("变更不存在: %w", err)
+	}
+	if c.Status != "pending" {
+		return fmt.Errorf("变更当前状态是 %q，不是 pending，跳过（可能已经被处理过，或者本来就不需要回填）", c.Status)
+	}
+	if s.processTriggerService == nil || s.processEngine == nil {
+		return fmt.Errorf("流程触发/引擎服务未初始化")
+	}
+
+	businessKey := fmt.Sprintf("change:%d", changeID)
+	exists, err := s.entClient.ProcessInstance.Query().
+		Where(processinstance.BusinessKey(businessKey), processinstance.TenantID(tenantID)).
+		Exist(ctx)
+	if err != nil {
+		return fmt.Errorf("检查是否已有流程实例失败: %w", err)
+	}
+	if exists {
+		return fmt.Errorf("该变更已经有关联的流程实例，不需要回填（可能已经走过 Track4 的新流程）")
+	}
+
+	processDefKey := "change_normal_flow"
+	if c.Type == "emergency" {
+		processDefKey = "change_emergency_flow"
+	}
+	triggerResp, err := s.processTriggerService.TriggerProcess(ctx, &dto.ProcessTriggerRequest{
+		BusinessType:         dto.BusinessTypeChange,
+		BusinessID:           changeID,
+		ProcessDefinitionKey: processDefKey,
+		Variables: map[string]interface{}{
+			"approval_required": true,
+			// 旧审批链数据不记录"提交人"这个概念对应的现代字段，用创建人兜底——
+			// 只影响流程变量里的 requester_id（用于候选人解析时排除申请人自己），
+			// 不影响状态机、不影响谁能审批。
+			"requester_id": float64(c.CreatedBy),
+		},
+		TriggeredBy: fmt.Sprintf("%d", c.CreatedBy),
+		TenantID:    tenantID,
+	})
+	if err != nil {
+		return fmt.Errorf("触发审批流程失败: %w", err)
+	}
+
+	if err := s.completeAssessmentTask(ctx, tenantID, changeID); err != nil {
+		// 流程实例已经创建，评估节点没推进成功——补偿取消掉，避免留下一个孤儿实例，
+		// 保持"回填要么完整成功、要么完全没发生"这个不变式，方便这个一次性工具重跑。
+		if triggerResp != nil && s.processTriggerService != nil {
+			if cancelErr := s.processTriggerService.CancelProcess(ctx, triggerResp.ProcessInstanceID,
+				"BackfillLegacyPendingChange: compensating rollback after assessment failure", tenantID); cancelErr != nil {
+				s.logger.Warnw("BackfillLegacyPendingChange: 补偿取消流程实例失败", "error", cancelErr, "change_id", changeID)
+			}
+		}
+		return fmt.Errorf("推进变更评估节点失败: %w", err)
+	}
+	return nil
+}
+
 // completeAssessmentTask 用系统身份自动完成一个刚触发流程的变更的 Activity_Assessment
 // （变更评估）任务，把流程从"评估中"直接推进到 CAB 审批节点。Activity_Assessment 没有
 // 声明 assigneeRole，所以这里不注入 actorUserID（跟 completeChangeApprovalTask 级联完成
@@ -516,10 +584,15 @@ func (s *Service) completeChangeApprovalTask(ctx context.Context, tenantID, acto
 		).
 		Only(ctx)
 	if err != nil {
-		if ent.IsNotFound(err) {
-			return fmt.Errorf("该变更没有待处理的审批任务")
+		if !ent.IsNotFound(err) {
+			return fmt.Errorf("查询待办审批任务失败: %w", err)
 		}
-		return fmt.Errorf("查询待办审批任务失败: %w", err)
+		// 找不到待处理的 CAB 任务不一定是错误——很可能是重试：上一次调用已经成功完成了
+		// CAB 决定（决定已经落库在 ProcessApprovalDecision），只是紧接着的级联步骤失败了
+		// （比如瞬时 DB 错误），调用方看到整体报错后重试，这次自然找不到"待处理的 CAB
+		// 任务"，因为它已经是 completed 状态。resumePendingCascade 负责判断这到底是真的
+		// "没有审批任务"，还是这种可以续做的场景。
+		return s.resumePendingCascade(ctx, instance.ID, tenantID, changeID, action)
 	}
 
 	approvalResult := "rejected"
@@ -544,14 +617,28 @@ func (s *Service) completeChangeApprovalTask(ctx context.Context, tenantID, acto
 		return fmt.Errorf("完成审批任务失败: %w", err)
 	}
 
-	// 级联完成排期/驳回节点。这一步用系统身份（不注入 actorUserID），因为它不是
-	// 一个新的、独立的人工决定，是上面那次审批决定的自动延伸——如果这里也要求
-	// actorUserID 通过 assignee/candidateUsers 校验，会因为 Activity_Schedule/
-	// Activity_Reject 没有声明 assigneeRole 而始终失败。
+	// CAB 决定已经生效并落库——从这里开始，级联完成排期/驳回节点失败不应该让整个调用报错，
+	// 那样会让调用方以为审批没生效而重试，但重试会撞上"该变更没有待处理的审批任务"（上面
+	// 那次判断会走进 resumePendingCascade 分支）。用 Warnw 记录、返回 nil，调用方下一次
+	// 对同一个 change 的 TransitionStatus 调用会自然经由 resumePendingCascade 续完级联。
+	if err := s.completeCascadeTask(ctx, instance.ID, tenantID, changeID); err != nil {
+		s.logger.Warnw("completeChangeApprovalTask: 级联完成审批后续任务失败，CAB 决定已生效，可通过重试续做",
+			"error", err, "change_id", changeID)
+	}
+	return nil
+}
+
+// completeCascadeTask 用系统身份完成 CAB 审批之后紧邻的排期/驳回节点
+// （Activity_Schedule/Activity_Reject）。这两个节点在 BPMN 图里是 userTask，没有任何机制
+// 会自动完成它们，不完成会变成永远挂起的孤儿任务。用系统身份（不注入 actorUserID）——这
+// 不是一个新的、独立的人工决定，是 CAB 决定的自动延伸——如果这里也要求 actorUserID 通过
+// assignee/candidateUsers 校验，会因为 Activity_Schedule/Activity_Reject 没有声明
+// assigneeRole 而始终失败。
+func (s *Service) completeCascadeTask(ctx context.Context, instanceID, tenantID, changeID int) error {
 	systemCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
 	nextTask, err := s.entClient.ProcessTask.Query().
 		Where(
-			processtask.HasProcessInstanceWith(processinstance.ID(instance.ID)),
+			processtask.HasProcessInstanceWith(processinstance.ID(instanceID)),
 			processtask.TaskType("user_task"),
 			processtask.TaskDefinitionKeyIn("Activity_Schedule", "Activity_Reject"),
 			processtask.StatusIn("created", "assigned", "started", "delegated"),
@@ -561,8 +648,8 @@ func (s *Service) completeChangeApprovalTask(ctx context.Context, tenantID, acto
 		if ent.IsNotFound(err) {
 			// 没有下一个任务——理论上不应该发生（Gateway_ApprovalResult 总是路由到
 			// Activity_Schedule 或 Activity_Reject 之一），但不要因为找不到就整体失败，
-			// 上面那次真正的审批决定已经生效了。
-			s.logger.Warnw("completeChangeApprovalTask: 未找到审批后紧邻的任务，跳过级联完成", "change_id", changeID)
+			// 真正的审批决定已经生效了。
+			s.logger.Warnw("completeCascadeTask: 未找到审批后紧邻的任务，跳过级联完成", "change_id", changeID)
 			return nil
 		}
 		return fmt.Errorf("查询审批后续任务失败: %w", err)
@@ -571,6 +658,63 @@ func (s *Service) completeChangeApprovalTask(ctx context.Context, tenantID, acto
 		"change_id": changeID,
 	}); err != nil {
 		return fmt.Errorf("级联完成审批后续任务失败: %w", err)
+	}
+	return nil
+}
+
+// resumePendingCascade 处理"CAB 任务已经不在待办状态"这个入口——区分两种情况：
+//  1. 真的是重试场景：CAB 决定已经生效（Activity_Schedule/Activity_Reject 之一还卡在待办，
+//     说明网关已经按上一次的决定路由过去了），这里直接续做级联，不要求也不允许重新做一次
+//     CAB 决定。如果续做的级联节点跟本次调用请求的 action 对不上（比如上次已经 approve
+//     路由到了 Activity_Schedule，这次却调用 reject），说明是一次矛盾的重试，明确报错而不是
+//     悄悄按旧决定生效或者悄悄改成新决定——审批决定不能被静默覆盖。
+//  2. 级联在上一次调用里已经真正做完了（没有任何待办任务）：整个操作其实已经成功，这次调用
+//     只是调用方没收到成功响应就重试——按幂等处理，直接返回成功，不报错。
+//  3. 两种都不是（从来没有产生过 CAB 决定）：这才是真正的"没有待处理的审批任务"。
+func (s *Service) resumePendingCascade(ctx context.Context, instanceID, tenantID, changeID int, action string) error {
+	nextTask, err := s.entClient.ProcessTask.Query().
+		Where(
+			processtask.HasProcessInstanceWith(processinstance.ID(instanceID)),
+			processtask.TaskType("user_task"),
+			processtask.TaskDefinitionKeyIn("Activity_Schedule", "Activity_Reject"),
+			processtask.StatusIn("created", "assigned", "started", "delegated"),
+		).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			// 没有待办的 CAB 任务，也没有待办的级联任务——要么这个变更从来没有产生过
+			// CAB 决定，要么上一次调用其实已经完整成功了。查一下有没有已经落库的
+			// ProcessApprovalDecision 来区分这两种情况，避免把"其实已经成功"的重试
+			// 报成错误。
+			decided, decErr := s.entClient.ProcessApprovalDecision.Query().
+				Where(
+					processapprovaldecision.ProcessInstanceID(instanceID),
+					processapprovaldecision.TenantID(tenantID),
+					processapprovaldecision.NodeKey("Activity_CABApproval"),
+				).
+				Exist(ctx)
+			if decErr != nil {
+				return fmt.Errorf("查询审批决策记录失败: %w", decErr)
+			}
+			if decided {
+				// 上一次调用已经完整做完了 CAB 决定 + 级联，这次是重复调用，按幂等处理。
+				return nil
+			}
+			return fmt.Errorf("该变更没有待处理的审批任务")
+		}
+		return fmt.Errorf("查询审批后续任务失败: %w", err)
+	}
+
+	expectedKey := "Activity_Reject"
+	if action == "approve" {
+		expectedKey = "Activity_Schedule"
+	}
+	if nextTask.TaskDefinitionKey != expectedKey {
+		return fmt.Errorf("该变更的审批决定已经生效（%s），跟本次请求的操作不一致，不能重复决定", nextTask.TaskDefinitionKey)
+	}
+
+	if err := s.completeCascadeTask(ctx, instanceID, tenantID, changeID); err != nil {
+		return fmt.Errorf("续做级联完成审批后续任务失败: %w", err)
 	}
 	return nil
 }

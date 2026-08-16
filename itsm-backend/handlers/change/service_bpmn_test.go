@@ -12,6 +12,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/processinstance"
+	"itsm-backend/ent/processtask"
 	"itsm-backend/service"
 	"itsm-backend/service/bpmn"
 
@@ -412,6 +413,199 @@ func TestCompleteChangeApprovalTask_FiltersDecoyTaskByDefinitionKey(t *testing.T
 	assert.Equal(t, "assigned", decoyAfter.Status, "伪装任务不应该被查询命中或被完成")
 }
 
+// ==================== completeChangeApprovalTask 的重试/续做语义（代码审查发现：CAB 决定
+// 已经落库，级联收尾若失败则无法重试） ====================
+
+// TestCompleteChangeApprovalTask_ResumesCascadeAfterInterruptedCall 模拟"上一次调用已经
+// 完成了 CAB 决定，但紧接着的级联步骤没有跑完"（比如级联那一步瞬时失败，或者进程在两步
+// 之间崩溃）——直接绕开 completeChangeApprovalTask，手工把 CAB 任务完成（复现"决定已经
+// 生效，级联还没做"这个中间态），再调用 completeChangeApprovalTask 一次，断言它能识别出
+// 这是可以续做的场景，把级联做完，而不是报错"没有待处理的审批任务"。
+func TestCompleteChangeApprovalTask_ResumesCascadeAfterInterruptedCall(t *testing.T) {
+	client := newChangeBPMNEntClient(t, "complete_approval_resume")
+	logger := zaptest.NewLogger(t).Sugar()
+	ctx := context.Background()
+
+	tenant, err := client.Tenant.Create().SetName("CAB Tenant Resume").SetCode("cab-resume").SetDomain("cab-resume.example.com").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	cmUser, err := client.User.Create().SetUsername("cm-resume").SetEmail("cm-resume@example.com").SetName("CM Resume").SetPasswordHash("h").SetRole("change_manager").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	requester, err := client.User.Create().SetUsername("requester-resume").SetEmail("requester-resume@example.com").SetName("Requester Resume").SetPasswordHash("h").SetRole("agent").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	c, err := client.Change.Create().SetTitle("测试变更-续做级联").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).Save(ctx)
+	require.NoError(t, err)
+
+	engine := newTestBPMNEngine(t, client, logger)
+	deploySvc := service.NewBPMNTemplateService(client)
+	tenantCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+	_, err = deploySvc.LoadAndDeployTemplates(tenantCtx, tenant.ID)
+	require.NoError(t, err)
+
+	trigger := service.NewProcessTriggerService(client, engine)
+	_, err = trigger.TriggerProcess(tenantCtx, &dto.ProcessTriggerRequest{
+		BusinessType:         dto.BusinessTypeChange,
+		BusinessID:           c.ID,
+		ProcessDefinitionKey: "change_normal_flow",
+		Variables:            map[string]interface{}{"approval_required": true, "requester_id": float64(requester.ID)},
+		TenantID:             tenant.ID,
+	})
+	require.NoError(t, err)
+
+	assessmentTasks, _, err := engine.TaskService().ListUserTasks(tenantCtx, &service.ListUserTasksRequest{PageSize: 10})
+	require.NoError(t, err)
+	require.NoError(t, engine.CompleteTask(tenantCtx, assessmentTasks[0].TaskID, map[string]interface{}{}))
+
+	// 手工完成 CAB 任务——绕开 completeChangeApprovalTask，只做它原本会做的"第一步"，
+	// 模拟"决定已经生效，级联还没做"这个中间态。
+	cabTask, err := client.ProcessTask.Query().
+		Where(processtask.HasProcessInstanceWith(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID))), processtask.TaskDefinitionKey("Activity_CABApproval")).
+		Only(ctx)
+	require.NoError(t, err)
+	actorCtx := context.WithValue(tenantCtx, bpmn.BPMNUserIDContextKey, cmUser.ID)
+	require.NoError(t, engine.CompleteTask(actorCtx, cabTask.TaskID, map[string]interface{}{
+		"change_id":       c.ID,
+		"approvalAction":  "approve",
+		"approvalResult":  "approved",
+		"approvalComment": "looks good",
+	}))
+
+	// 确认中间态：CAB 任务已完成，级联的排期节点还卡在待办。
+	scheduleTask, err := client.ProcessTask.Query().
+		Where(processtask.HasProcessInstanceWith(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID))), processtask.TaskDefinitionKey("Activity_Schedule")).
+		Only(ctx)
+	require.NoError(t, err)
+	require.Contains(t, []string{"created", "assigned"}, scheduleTask.Status, "前置条件：级联步骤应该还没做")
+
+	repo := newMockRepository()
+	svc := NewService(repo, client, logger)
+	svc.SetProcessEngine(engine)
+
+	// 续做：这次调用应该识别出 CAB 决定已经生效，直接把级联做完，而不是报"没有待处理的审批任务"。
+	err = svc.completeChangeApprovalTask(tenantCtx, tenant.ID, cmUser.ID, c.ID, "approve", "looks good")
+	require.NoError(t, err, "应该能识别出这是可以续做的重试场景，不应该报错")
+
+	updated, err := client.Change.Get(ctx, c.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "scheduled", updated.Status, "续做级联后变更应该正确推进到 scheduled")
+}
+
+// TestCompleteChangeApprovalTask_RetryAfterFullSuccessIsNoop 覆盖"整个操作其实已经成功，
+// 调用方只是没收到成功响应就重试"——不应该报错，按幂等处理。
+func TestCompleteChangeApprovalTask_RetryAfterFullSuccessIsNoop(t *testing.T) {
+	client := newChangeBPMNEntClient(t, "complete_approval_retry_noop")
+	logger := zaptest.NewLogger(t).Sugar()
+	ctx := context.Background()
+
+	tenant, err := client.Tenant.Create().SetName("CAB Tenant RetryNoop").SetCode("cab-retry-noop").SetDomain("cab-retry-noop.example.com").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	cmUser, err := client.User.Create().SetUsername("cm-retry-noop").SetEmail("cm-retry-noop@example.com").SetName("CM RetryNoop").SetPasswordHash("h").SetRole("change_manager").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	requester, err := client.User.Create().SetUsername("requester-retry-noop").SetEmail("requester-retry-noop@example.com").SetName("Requester RetryNoop").SetPasswordHash("h").SetRole("agent").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	c, err := client.Change.Create().SetTitle("测试变更-幂等重试").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).Save(ctx)
+	require.NoError(t, err)
+
+	engine := newTestBPMNEngine(t, client, logger)
+	deploySvc := service.NewBPMNTemplateService(client)
+	tenantCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+	_, err = deploySvc.LoadAndDeployTemplates(tenantCtx, tenant.ID)
+	require.NoError(t, err)
+
+	trigger := service.NewProcessTriggerService(client, engine)
+	_, err = trigger.TriggerProcess(tenantCtx, &dto.ProcessTriggerRequest{
+		BusinessType:         dto.BusinessTypeChange,
+		BusinessID:           c.ID,
+		ProcessDefinitionKey: "change_normal_flow",
+		Variables:            map[string]interface{}{"approval_required": true, "requester_id": float64(requester.ID)},
+		TenantID:             tenant.ID,
+	})
+	require.NoError(t, err)
+
+	assessmentTasks, _, err := engine.TaskService().ListUserTasks(tenantCtx, &service.ListUserTasksRequest{PageSize: 10})
+	require.NoError(t, err)
+	require.NoError(t, engine.CompleteTask(tenantCtx, assessmentTasks[0].TaskID, map[string]interface{}{}))
+
+	repo := newMockRepository()
+	svc := NewService(repo, client, logger)
+	svc.SetProcessEngine(engine)
+
+	// 第一次调用：真正完成审批 + 级联。
+	require.NoError(t, svc.completeChangeApprovalTask(tenantCtx, tenant.ID, cmUser.ID, c.ID, "approve", "looks good"))
+
+	// 第二次调用：整个操作其实已经成功了，调用方只是重试——不应该报错。
+	err = svc.completeChangeApprovalTask(tenantCtx, tenant.ID, cmUser.ID, c.ID, "approve", "looks good")
+	require.NoError(t, err, "已经完整成功过的操作被重复调用，应该按幂等处理而不是报错")
+}
+
+// TestCompleteChangeApprovalTask_RetryWithMismatchedActionRejected 覆盖"重试请求的
+// action 跟已经生效的决定不一致"——必须明确报错，不能静默按旧决定生效，也不能悄悄改判。
+func TestCompleteChangeApprovalTask_RetryWithMismatchedActionRejected(t *testing.T) {
+	client := newChangeBPMNEntClient(t, "complete_approval_retry_mismatch")
+	logger := zaptest.NewLogger(t).Sugar()
+	ctx := context.Background()
+
+	tenant, err := client.Tenant.Create().SetName("CAB Tenant Mismatch").SetCode("cab-retry-mismatch").SetDomain("cab-retry-mismatch.example.com").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	cmUser, err := client.User.Create().SetUsername("cm-retry-mismatch").SetEmail("cm-retry-mismatch@example.com").SetName("CM Mismatch").SetPasswordHash("h").SetRole("change_manager").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	requester, err := client.User.Create().SetUsername("requester-retry-mismatch").SetEmail("requester-retry-mismatch@example.com").SetName("Requester Mismatch").SetPasswordHash("h").SetRole("agent").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	c, err := client.Change.Create().SetTitle("测试变更-矛盾重试").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).Save(ctx)
+	require.NoError(t, err)
+
+	engine := newTestBPMNEngine(t, client, logger)
+	deploySvc := service.NewBPMNTemplateService(client)
+	tenantCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+	_, err = deploySvc.LoadAndDeployTemplates(tenantCtx, tenant.ID)
+	require.NoError(t, err)
+
+	trigger := service.NewProcessTriggerService(client, engine)
+	_, err = trigger.TriggerProcess(tenantCtx, &dto.ProcessTriggerRequest{
+		BusinessType:         dto.BusinessTypeChange,
+		BusinessID:           c.ID,
+		ProcessDefinitionKey: "change_normal_flow",
+		Variables:            map[string]interface{}{"approval_required": true, "requester_id": float64(requester.ID)},
+		TenantID:             tenant.ID,
+	})
+	require.NoError(t, err)
+
+	assessmentTasks, _, err := engine.TaskService().ListUserTasks(tenantCtx, &service.ListUserTasksRequest{PageSize: 10})
+	require.NoError(t, err)
+	require.NoError(t, engine.CompleteTask(tenantCtx, assessmentTasks[0].TaskID, map[string]interface{}{}))
+
+	// 手工完成 CAB 任务为 approve，让级联卡在 Activity_Schedule。
+	cabTask, err := client.ProcessTask.Query().
+		Where(processtask.HasProcessInstanceWith(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID))), processtask.TaskDefinitionKey("Activity_CABApproval")).
+		Only(ctx)
+	require.NoError(t, err)
+	actorCtx := context.WithValue(tenantCtx, bpmn.BPMNUserIDContextKey, cmUser.ID)
+	require.NoError(t, engine.CompleteTask(actorCtx, cabTask.TaskID, map[string]interface{}{
+		"change_id":       c.ID,
+		"approvalAction":  "approve",
+		"approvalResult":  "approved",
+		"approvalComment": "looks good",
+	}))
+
+	repo := newMockRepository()
+	svc := NewService(repo, client, logger)
+	svc.SetProcessEngine(engine)
+
+	// 用跟已经生效的决定（approve）矛盾的 action（reject）重试。
+	err = svc.completeChangeApprovalTask(tenantCtx, tenant.ID, cmUser.ID, c.ID, "reject", "改主意了")
+	require.Error(t, err, "跟已经生效的决定矛盾的重试必须明确报错，不能静默生效")
+	assert.Contains(t, err.Error(), "已经生效")
+
+	// 排期节点应该原封不动，没有被误判成驳回节点完成掉。
+	scheduleTask, err := client.ProcessTask.Query().
+		Where(processtask.HasProcessInstanceWith(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID))), processtask.TaskDefinitionKey("Activity_Schedule")).
+		Only(ctx)
+	require.NoError(t, err)
+	assert.Contains(t, []string{"created", "assigned"}, scheduleTask.Status, "矛盾的重试被拒绝后，排期节点不应该被完成")
+}
+
 // ==================== TransitionStatus approve/reject 完全交给 BPMN（Track4 Task 4） ====================
 
 // setupChangeForTransitionStatusTest 是本任务三条测试共用的 fixture 搭建：建
@@ -605,4 +799,98 @@ func TestSubmitChange_AutoCompletesAssessmentTask(t *testing.T) {
 	// 残留状态或者错误的 task 记录，CAB 审批本身完全不受影响。
 	_, err = svc.TransitionStatus(tenantCtx, created.ID, tenant.ID, cmUser.ID, "approved", "自动推进后正常审批")
 	require.NoError(t, err)
+}
+
+// ==================== BackfillLegacyPendingChange（代码审查发现：上线切换时刻的存量
+// pending 变更没有回填路径） ====================
+
+func TestBackfillLegacyPendingChange_CreatesInstanceAndAdvancesToCAB(t *testing.T) {
+	client := newChangeBPMNEntClient(t, "backfill_legacy_pending")
+	tenantID, actorID := setupChangeBPMNActor(t, client, "backfill-legacy")
+	engine, trigger := deployRealBPMNFixture(t, client, tenantID)
+	logger := zaptest.NewLogger(t).Sugar()
+
+	// 模拟旧审批链流程下已经提交到 pending、但从来没有对应 BPMN 流程实例的存量变更。
+	c, err := client.Change.Create().SetTitle("上线前用旧流程提交的变更").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).Save(context.Background())
+	require.NoError(t, err)
+
+	repo := NewEntRepository(client, nil)
+	svc := NewService(repo, client, logger)
+	svc.SetProcessTriggerService(trigger)
+	svc.SetProcessEngine(engine)
+
+	err = svc.BackfillLegacyPendingChange(context.Background(), c.ID, tenantID)
+	require.NoError(t, err)
+
+	instance, err := client.ProcessInstance.Query().
+		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID)), processinstance.TenantID(tenantID)).
+		Only(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "running", instance.Status)
+	assert.Equal(t, "Activity_CABApproval", instance.CurrentActivityID,
+		"回填之后应该跟正常提交一样自动推进到 CAB 审批节点，不需要额外的人工干预")
+
+	// 变更本身的状态不应该被回填动作改变——它已经是 pending，回填只是补上缺失的
+	// 流程实例，不是重新走一遍提交流程。
+	stillPending, err := client.Change.Get(context.Background(), c.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "pending", stillPending.Status)
+}
+
+func TestBackfillLegacyPendingChange_SkipsChangeWithExistingInstance(t *testing.T) {
+	client := newChangeBPMNEntClient(t, "backfill_existing_instance")
+	tenantID, actorID := setupChangeBPMNActor(t, client, "backfill-existing")
+	engine, trigger := deployRealBPMNFixture(t, client, tenantID)
+	logger := zaptest.NewLogger(t).Sugar()
+
+	c, err := client.Change.Create().SetTitle("已经有流程实例的变更").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).Save(context.Background())
+	require.NoError(t, err)
+
+	tenantCtx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, tenantID)
+	_, err = trigger.TriggerProcess(tenantCtx, &dto.ProcessTriggerRequest{
+		BusinessType:         dto.BusinessTypeChange,
+		BusinessID:           c.ID,
+		ProcessDefinitionKey: "change_normal_flow",
+		Variables:            map[string]interface{}{"approval_required": true, "requester_id": float64(actorID)},
+		TenantID:             tenantID,
+	})
+	require.NoError(t, err)
+
+	repo := NewEntRepository(client, nil)
+	svc := NewService(repo, client, logger)
+	svc.SetProcessTriggerService(trigger)
+	svc.SetProcessEngine(engine)
+
+	err = svc.BackfillLegacyPendingChange(context.Background(), c.ID, tenantID)
+	require.Error(t, err, "已经有流程实例（不管是不是这次 Track4 之前建的）就不该重复回填")
+
+	count, err := client.ProcessInstance.Query().
+		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID)), processinstance.TenantID(tenantID)).
+		Count(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, 1, count, "不应该产生第二个流程实例")
+}
+
+func TestBackfillLegacyPendingChange_RejectsNonPendingChange(t *testing.T) {
+	client := newChangeBPMNEntClient(t, "backfill_non_pending")
+	tenantID, actorID := setupChangeBPMNActor(t, client, "backfill-non-pending")
+	engine, trigger := deployRealBPMNFixture(t, client, tenantID)
+	logger := zaptest.NewLogger(t).Sugar()
+
+	c, err := client.Change.Create().SetTitle("还是草稿的变更").SetType("normal").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).Save(context.Background())
+	require.NoError(t, err)
+
+	repo := NewEntRepository(client, nil)
+	svc := NewService(repo, client, logger)
+	svc.SetProcessTriggerService(trigger)
+	svc.SetProcessEngine(engine)
+
+	err = svc.BackfillLegacyPendingChange(context.Background(), c.ID, tenantID)
+	require.Error(t, err, "不是 pending 状态的变更不需要回填，应该明确拒绝而不是静默处理")
+
+	exists, err := client.ProcessInstance.Query().
+		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID)), processinstance.TenantID(tenantID)).
+		Exist(context.Background())
+	require.NoError(t, err)
+	assert.False(t, exists, "被拒绝的回填不应该留下任何流程实例")
 }
