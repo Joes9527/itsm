@@ -37,6 +37,7 @@ import {
   ChangeRiskLabels,
 } from '@/constants/change';
 import type { Change, ApprovalRecord } from '@/types/biz/change';
+import { getErrorMessage } from '@/lib/utils/error-message-handler';
 import ChangeRiskAssessment from './ChangeRiskAssessment';
 import ChangeCMDBImpactPanel from './ChangeCMDBImpactPanel';
 import ChangeImpactAnalysis from './ChangeImpactAnalysis';
@@ -91,7 +92,7 @@ const ChangeDetail: React.FC = () => {
       setApprovalComment('');
       loadDetail();
     } catch (error) {
-      message.error('批准失败');
+      message.error(getErrorMessage(error) || '批准失败');
     } finally {
       setProcessing(false);
     }
@@ -100,6 +101,12 @@ const ChangeDetail: React.FC = () => {
   // 拒绝变更
   const handleReject = async () => {
     if (!change) return;
+    // 后端要求驳回时必须填写意见（TransitionStatus 会拒绝空 comment）——提前在前端拦住，
+    // 不要让用户点了拒绝之后才发现要填内容。
+    if (!approvalComment.trim()) {
+      message.warning('请填写拒绝原因');
+      return;
+    }
     setProcessing(true);
     try {
       await ChangeApi.rejectChange(change.id, { comment: approvalComment });
@@ -108,7 +115,7 @@ const ChangeDetail: React.FC = () => {
       setApprovalComment('');
       loadDetail();
     } catch (error) {
-      message.error('拒绝失败');
+      message.error(getErrorMessage(error) || '拒绝失败');
     } finally {
       setProcessing(false);
     }
@@ -460,7 +467,9 @@ const ChangeDetail: React.FC = () => {
         ]}
       >
         <div className="py-4">
-          <p className="mb-2">拒绝原因（可选）：</p>
+          <p className="mb-2">
+            拒绝原因<span className="text-red-500 ml-1">*</span>：
+          </p>
           <Input.TextArea
             value={approvalComment}
             onChange={e => setApprovalComment(e.target.value)}
