@@ -590,7 +590,7 @@ func TestSubmitChange_AutoCompletesAssessmentTask(t *testing.T) {
 	created, err := repo.Create(ctx, &Change{Title: "自动推进评估的变更", Type: "normal", Status: "draft", RiskLevel: "medium", ImpactScope: "low", TenantID: tenant.ID, CreatedBy: requester.ID})
 	require.NoError(t, err)
 
-	_, err = svc.SubmitChange(tenantCtx, created.ID, tenant.ID, requester.ID, &dto.SubmitChangeRequest{ApproverIDs: []int{cmUser.ID}})
+	_, err = svc.SubmitChange(tenantCtx, created.ID, tenant.ID, requester.ID, &dto.SubmitChangeRequest{})
 	require.NoError(t, err)
 
 	instance, err := client.ProcessInstance.Query().

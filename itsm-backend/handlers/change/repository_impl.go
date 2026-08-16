@@ -9,6 +9,8 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/processapprovaldecision"
+	"itsm-backend/ent/processinstance"
+	"itsm-backend/ent/processtask"
 	entuser "itsm-backend/ent/user"
 )
 
@@ -362,7 +364,60 @@ func (r *EntRepository) GetApprovalHistory(ctx context.Context, changeID int, te
 			CreatedAt:    createdAt,
 		})
 	}
+
+	if pending := r.pendingApprovalRecord(ctx, changeID, tenantID); pending != nil {
+		records = append(records, pending)
+	}
 	return records, nil
+}
+
+// pendingApprovalRecord 查这个变更当前是否卡在 CAB 审批这一步，如果是，合成一条
+// Status="pending" 的 ApprovalRecord 附加到审批历史末尾。ProcessApprovalDecision
+// 只记录已经做出的决策，审批人做出决定之前审批列表天然是空的——对调用方（前端审批
+// 详情页）来说这看起来像"没人在审批"，实际是"正在等 CAB 决定"。返回 nil 表示当前
+// 没有待处理的 CAB 审批（没有运行中的流程实例、或者流程还没推进到这一步、或者已经
+// 走完了）——这些情况不是错误，静默跳过，不影响已有的审批历史返回。
+func (r *EntRepository) pendingApprovalRecord(ctx context.Context, changeID, tenantID int) *ApprovalRecord {
+	businessKey := fmt.Sprintf("change:%d", changeID)
+	instance, err := r.client.ProcessInstance.Query().
+		Where(processinstance.BusinessKey(businessKey), processinstance.TenantID(tenantID), processinstance.Status("running")).
+		Only(ctx)
+	if err != nil {
+		return nil
+	}
+
+	task, err := r.client.ProcessTask.Query().
+		Where(
+			processtask.HasProcessInstanceWith(processinstance.ID(instance.ID)),
+			processtask.TaskType("user_task"),
+			processtask.TaskDefinitionKey("Activity_CABApproval"),
+			processtask.StatusIn("created", "assigned", "started", "delegated"),
+		).
+		Only(ctx)
+	if err != nil {
+		return nil
+	}
+
+	// CandidateUsers 是 resolveRoleCandidates 展开好的候选人显示名 CSV（username，
+	// 缺失兜底 email/ID），角色未解析到候选人时可能落到 CandidateGroups；两个都拿不到
+	// 就退化成裸角色名，好过什么都不显示。
+	approverName := task.CandidateUsers
+	if approverName == "" {
+		approverName = task.CandidateGroups
+	}
+	if approverName == "" {
+		approverName = "change_manager"
+	}
+
+	createdAt := task.CreatedTime
+	return &ApprovalRecord{
+		ID:           0, // 合成记录，没有真实的 ProcessApprovalDecision.ID
+		ChangeID:     changeID,
+		TenantID:     tenantID,
+		ApproverName: approverName,
+		Status:       "pending",
+		CreatedAt:    createdAt,
+	}
 }
 
 // Risk Assessment (Raw SQL)
@@ -436,17 +491,6 @@ func (r *EntRepository) UpdateRiskAssessment(ctx context.Context, ra *RiskAssess
 		return nil, err
 	}
 	return ra, nil
-}
-
-// ValidateApproverBelongsToTenant validates that an approver belongs to the specified tenant
-func (r *EntRepository) ValidateApproverBelongsToTenant(ctx context.Context, approverID, tenantID int) (bool, error) {
-	exists, err := r.client.User.Query().
-		Where(entuser.ID(approverID), entuser.TenantID(tenantID)).
-		Exist(ctx)
-	if err != nil {
-		return false, err
-	}
-	return exists, nil
 }
 
 // ListByDateRange retrieves changes within a date range

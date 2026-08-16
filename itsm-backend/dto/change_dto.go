@@ -424,9 +424,12 @@ type ChangeApprovalSummary struct {
 }
 
 // SubmitChangeRequest 提交变更审批请求
+//
+// 审批人不再由提交方指定——BPMN 流程的 CAB 审批节点按 assigneeRole="change_manager"
+// 解析候选人（租户内所有 change_manager 角色的用户），旧版本这里的 ApproverIDs
+// 字段已经不生效，删除避免误导调用方以为传了就有用。
 type SubmitChangeRequest struct {
-	ApproverIDs []int  `json:"approverIds"` // 审批人ID列表
-	Comment     string `json:"comment"`     // 提交说明（可选）
+	Comment string `json:"comment"` // 提交说明（可选）
 }
 
 // ChangeCalendarRequest 日历视图请求

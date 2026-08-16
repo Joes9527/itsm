@@ -23,9 +23,6 @@ type Repository interface {
 	GetRiskAssessment(ctx context.Context, changeID int, tenantID int) (*RiskAssessment, error)
 	UpdateRiskAssessment(ctx context.Context, ra *RiskAssessment) (*RiskAssessment, error)
 
-	// Tenant validation
-	ValidateApproverBelongsToTenant(ctx context.Context, approverID, tenantID int) (bool, error)
-
 	// Calendar view
 	ListByDateRange(ctx context.Context, tenantID int, startDate, endDate, status string) ([]*Change, error)
 }

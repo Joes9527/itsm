@@ -93,7 +93,7 @@ func TestSubmitChange_TriggersBPMNProcess_Normal(t *testing.T) {
 	svc.SetProcessTriggerService(trigger)
 	svc.SetProcessEngine(engine)
 
-	updated, err := svc.SubmitChange(context.Background(), c.ID, tenantID, actorID, &dto.SubmitChangeRequest{ApproverIDs: []int{actorID}})
+	updated, err := svc.SubmitChange(context.Background(), c.ID, tenantID, actorID, &dto.SubmitChangeRequest{})
 	require.NoError(t, err)
 	assert.Equal(t, "pending", updated.Status)
 
@@ -118,7 +118,7 @@ func TestSubmitChange_TriggersBPMNProcess_Emergency(t *testing.T) {
 	svc.SetProcessTriggerService(trigger)
 	svc.SetProcessEngine(engine)
 
-	_, err = svc.SubmitChange(context.Background(), c.ID, tenantID, actorID, &dto.SubmitChangeRequest{ApproverIDs: []int{actorID}})
+	_, err = svc.SubmitChange(context.Background(), c.ID, tenantID, actorID, &dto.SubmitChangeRequest{})
 	require.NoError(t, err)
 
 	instance, err := entClient.ProcessInstance.Query().
@@ -143,7 +143,7 @@ func TestSubmitChange_RejectsDuplicateWhenRunningInstanceExists(t *testing.T) {
 	c.Type = "normal"
 	createChangeBridgeProcessFixture(t, entClient, tenantID, "dup1", fmt.Sprintf("change:%d", c.ID), actorID)
 
-	_, err := svc.SubmitChange(context.Background(), c.ID, tenantID, actorID, &dto.SubmitChangeRequest{ApproverIDs: []int{actorID}})
+	_, err := svc.SubmitChange(context.Background(), c.ID, tenantID, actorID, &dto.SubmitChangeRequest{})
 	require.Error(t, err)
 	assert.Empty(t, trigger.triggerCalls)
 }
@@ -164,7 +164,7 @@ func TestSubmitChange_TriggerProcessFailureLeavesChangeDraft(t *testing.T) {
 	c := createTestChange(repo, tenantID, actorID)
 	c.Type = "normal"
 
-	_, err := svc.SubmitChange(context.Background(), c.ID, tenantID, actorID, &dto.SubmitChangeRequest{ApproverIDs: []int{actorID}})
+	_, err := svc.SubmitChange(context.Background(), c.ID, tenantID, actorID, &dto.SubmitChangeRequest{})
 	require.Error(t, err)
 
 	// MarkSubmittedForApproval must never have run: the change stays in draft in the
@@ -230,7 +230,7 @@ func TestSubmitChange_MarkSubmittedFailureCompensatesByCancellingProcess(t *test
 	svc.SetProcessTriggerService(trigger)
 	svc.SetProcessEngine(engine)
 
-	_, err := svc.SubmitChange(context.Background(), c.ID, tenantID, actorID, &dto.SubmitChangeRequest{ApproverIDs: []int{actorID}})
+	_, err := svc.SubmitChange(context.Background(), c.ID, tenantID, actorID, &dto.SubmitChangeRequest{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "提交变更审批失败")
 
@@ -284,7 +284,7 @@ func TestSubmitChange_MarkSubmittedFailure_CancelProcessAlsoFails_ReturnsOrigina
 	svc.SetProcessTriggerService(trigger)
 	svc.SetProcessEngine(engine)
 
-	_, err := svc.SubmitChange(context.Background(), c.ID, tenantID, actorID, &dto.SubmitChangeRequest{ApproverIDs: []int{actorID}})
+	_, err := svc.SubmitChange(context.Background(), c.ID, tenantID, actorID, &dto.SubmitChangeRequest{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "提交变更审批失败")
 	assert.Contains(t, err.Error(), "simulated concurrent write conflict")
@@ -374,4 +374,69 @@ func TestGetApprovalHistory_TenantIsolation(t *testing.T) {
 	require.Len(t, history, 1)
 	assert.Equal(t, actorA.ID, history[0].ApproverID)
 	assert.Equal(t, "tenant a", *history[0].Comment)
+}
+
+// TestGetApprovalHistory_IncludesPendingCABTask 覆盖审批人模型收尾：ProcessApprovalDecision
+// 只记录已经做出的决策，CAB 审批人还没决定之前，审批历史不该是空的——调用方（前端审批
+// 详情页）需要知道"正在等谁审批"，不是"看起来没人在审批"。
+func TestGetApprovalHistory_IncludesPendingCABTask(t *testing.T) {
+	entClient := newChangeBridgeEntClient(t, "change_pending_history")
+	tenantID, actorID := setupChangeBridgeActor(t, entClient, "pending-history")
+	engine, trigger := deployRealBPMNFixture(t, entClient, tenantID)
+
+	// change_manager 角色候选人——CAB 任务需要能解析出至少一个候选人，
+	// CandidateUsers 才会是这个用户名而不是空字符串/候选组兜底。
+	tenantCtx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, tenantID)
+	_, err := entClient.User.Create().SetUsername("pending-cm").SetEmail("pending-cm@example.com").SetName("Pending CM").SetPasswordHash("h").SetRole("change_manager").SetActive(true).SetTenantID(tenantID).Save(context.Background())
+	require.NoError(t, err)
+
+	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).Save(context.Background())
+	require.NoError(t, err)
+
+	repo := NewEntRepository(entClient, openChangeBridgeRawDB(t, "change_pending_history"))
+	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
+	svc.SetProcessTriggerService(trigger)
+	svc.SetProcessEngine(engine)
+
+	_, err = svc.SubmitChange(tenantCtx, c.ID, tenantID, actorID, &dto.SubmitChangeRequest{})
+	require.NoError(t, err)
+
+	history, err := svc.GetApprovalHistory(context.Background(), c.ID, tenantID)
+	require.NoError(t, err)
+	require.Len(t, history, 1, "没有任何真实决策，但流程正卡在 CAB 审批这一步，历史里应该有一条合成的 pending 记录")
+	assert.Equal(t, "pending", history[0].Status)
+	assert.Equal(t, "pending-cm", history[0].ApproverName, "ApproverName 应该是 CAB 任务解析出来的候选审批人")
+	assert.Equal(t, c.ID, history[0].ChangeID)
+}
+
+// TestGetApprovalHistory_NoPendingEntryAfterDecisionMade 确认 pending 合成记录只在
+// "真的没有决策、流程还卡在 CAB 审批"时出现——CAB 决定做出之后（流程已经推进过去），
+// 不应该同时看到一条真实决策记录 + 一条合成的 pending 记录，那会让前端以为审批还没结束。
+func TestGetApprovalHistory_NoPendingEntryAfterDecisionMade(t *testing.T) {
+	entClient := newChangeBridgeEntClient(t, "change_pending_history_decided")
+	tenantID, actorID := setupChangeBridgeActor(t, entClient, "pending-history-decided")
+	engine, trigger := deployRealBPMNFixture(t, entClient, tenantID)
+
+	tenantCtx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, tenantID)
+	cmUser, err := entClient.User.Create().SetUsername("decided-cm").SetEmail("decided-cm@example.com").SetName("Decided CM").SetPasswordHash("h").SetRole("change_manager").SetActive(true).SetTenantID(tenantID).Save(context.Background())
+	require.NoError(t, err)
+
+	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).Save(context.Background())
+	require.NoError(t, err)
+
+	repo := NewEntRepository(entClient, openChangeBridgeRawDB(t, "change_pending_history_decided"))
+	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
+	svc.SetProcessTriggerService(trigger)
+	svc.SetProcessEngine(engine)
+
+	_, err = svc.SubmitChange(tenantCtx, c.ID, tenantID, actorID, &dto.SubmitChangeRequest{})
+	require.NoError(t, err)
+
+	_, err = svc.TransitionStatus(tenantCtx, c.ID, tenantID, cmUser.ID, "approved", "同意")
+	require.NoError(t, err)
+
+	history, err := svc.GetApprovalHistory(context.Background(), c.ID, tenantID)
+	require.NoError(t, err)
+	require.Len(t, history, 1, "CAB 已经做出决定，级联完成排期节点后流程实例不再停在 Activity_CABApproval，不应该再合成 pending 记录")
+	assert.Equal(t, "approved", history[0].Status)
 }

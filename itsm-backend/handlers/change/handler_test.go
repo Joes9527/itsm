@@ -57,21 +57,19 @@ func setupTestHandler(t *testing.T) (*gin.Engine, *Handler, *mockRepository) {
 
 // mockRepository implements Repository interface for testing
 type mockRepository struct {
-	changes       map[int]*Change
-	approvals     map[int]*ApprovalRecord
-	riskAssess    map[int]*RiskAssessment
-	nextID        int
-	approverValid bool
-	submitErr     error
+	changes    map[int]*Change
+	approvals  map[int]*ApprovalRecord
+	riskAssess map[int]*RiskAssessment
+	nextID     int
+	submitErr  error
 }
 
 func newMockRepository() *mockRepository {
 	return &mockRepository{
-		changes:       make(map[int]*Change),
-		approvals:     make(map[int]*ApprovalRecord),
-		riskAssess:    make(map[int]*RiskAssessment),
-		nextID:        1,
-		approverValid: true,
+		changes:    make(map[int]*Change),
+		approvals:  make(map[int]*ApprovalRecord),
+		riskAssess: make(map[int]*RiskAssessment),
+		nextID:     1,
 	}
 }
 
@@ -196,10 +194,6 @@ func (m *mockRepository) UpdateRiskAssessment(ctx context.Context, ra *RiskAsses
 	ra.UpdatedAt = time.Now()
 	m.riskAssess[ra.ChangeID] = ra
 	return ra, nil
-}
-
-func (m *mockRepository) ValidateApproverBelongsToTenant(ctx context.Context, approverID, tenantID int) (bool, error) {
-	return m.approverValid, nil
 }
 
 func (m *mockRepository) ListByDateRange(ctx context.Context, tenantID int, startDate, endDate, status string) ([]*Change, error) {
@@ -583,8 +577,7 @@ func TestChangeController_SubmitChange(t *testing.T) {
 	change := createTestChange(repo, 1, 1)
 
 	req := dto.SubmitChangeRequest{
-		ApproverIDs: []int{2, 3},
-		Comment:     "请审批",
+		Comment: "请审批",
 	}
 	requestBody, err := json.Marshal(req)
 	require.NoError(t, err)
@@ -651,8 +644,7 @@ func TestSubmitChangeAtomicFailureLeavesDraftUnchanged(t *testing.T) {
 	svc := NewService(repo, nil, logger)
 
 	_, err := svc.SubmitChange(context.Background(), 1, 1, 1, &dto.SubmitChangeRequest{
-		ApproverIDs: []int{1},
-		Comment:     "review",
+		Comment: "review",
 	})
 
 	require.ErrorContains(t, err, "提交变更审批失败")

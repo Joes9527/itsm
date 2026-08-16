@@ -74,7 +74,7 @@ func TestChangeApprovalE2E_FullApproveFlow(t *testing.T) {
 	created, err := repo.Create(ctx, &change.Change{Title: "端到端测试变更", Type: "normal", Status: "draft", RiskLevel: "medium", ImpactScope: "low", TenantID: tenant.ID, CreatedBy: requester.ID})
 	require.NoError(t, err)
 
-	_, err = svc.SubmitChange(tenantCtx, created.ID, tenant.ID, requester.ID, &dto.SubmitChangeRequest{ApproverIDs: []int{cmUser.ID}})
+	_, err = svc.SubmitChange(tenantCtx, created.ID, tenant.ID, requester.ID, &dto.SubmitChangeRequest{})
 	require.NoError(t, err)
 
 	afterSubmit, err := repo.Get(ctx, created.ID, tenant.ID)
@@ -109,7 +109,7 @@ func TestChangeApprovalE2E_FullApproveFlow(t *testing.T) {
 
 	// 重复提交应该被拒绝（当前状态已经是 approved，不是 draft，SubmitChange 本身就会拒绝；
 	// 这条断言同时验证了业务层的旧校验依然生效，没有被这次改动破坏）
-	_, err = svc.SubmitChange(tenantCtx, created.ID, tenant.ID, requester.ID, &dto.SubmitChangeRequest{ApproverIDs: []int{cmUser.ID}})
+	_, err = svc.SubmitChange(tenantCtx, created.ID, tenant.ID, requester.ID, &dto.SubmitChangeRequest{})
 	require.Error(t, err)
 }
 
@@ -149,7 +149,7 @@ func TestChangeApprovalE2E_FullRejectFlow(t *testing.T) {
 	created, err := repo.Create(ctx, &change.Change{Title: "端到端测试变更-驳回", Type: "normal", Status: "draft", RiskLevel: "medium", ImpactScope: "low", TenantID: tenant.ID, CreatedBy: requester.ID})
 	require.NoError(t, err)
 
-	_, err = svc.SubmitChange(tenantCtx, created.ID, tenant.ID, requester.ID, &dto.SubmitChangeRequest{ApproverIDs: []int{cmUser.ID}})
+	_, err = svc.SubmitChange(tenantCtx, created.ID, tenant.ID, requester.ID, &dto.SubmitChangeRequest{})
 	require.NoError(t, err)
 
 	// SubmitChange 已经自动级联完成了 Activity_Assessment，流程直接停在 CAB 审批节点上。
@@ -191,7 +191,9 @@ func TestChangeApprovalE2E_NonCMUserCannotApprove(t *testing.T) {
 	require.NoError(t, err)
 	requester, err := client.User.Create().SetUsername("requester3").SetEmail("requester3@example.com").SetName("Requester3").SetPasswordHash("h").SetRole("agent").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
-	cmUser, err := client.User.Create().SetUsername("cm-wa").SetEmail("cm-wa@example.com").SetName("CM WA").SetPasswordHash("h").SetRole("change_manager").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	// cmUser 本身不需要在这个测试里被引用——存在即可，保证 CAB 任务的角色候选人解析
+	// 不会因为"这个角色在租户里一个人都没有"而落到候选组兜底，干扰越权拒绝的断言。
+	_, err = client.User.Create().SetUsername("cm-wa").SetEmail("cm-wa@example.com").SetName("CM WA").SetPasswordHash("h").SetRole("change_manager").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 	outsider, err := client.User.Create().SetUsername("outsider-e2e").SetEmail("outsider-e2e@example.com").SetName("Outsider").SetPasswordHash("h").SetRole("agent").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
@@ -212,7 +214,7 @@ func TestChangeApprovalE2E_NonCMUserCannotApprove(t *testing.T) {
 	created, err := repo.Create(ctx, &change.Change{Title: "端到端测试变更-越权", Type: "normal", Status: "draft", RiskLevel: "medium", ImpactScope: "low", TenantID: tenant.ID, CreatedBy: requester.ID})
 	require.NoError(t, err)
 
-	_, err = svc.SubmitChange(tenantCtx, created.ID, tenant.ID, requester.ID, &dto.SubmitChangeRequest{ApproverIDs: []int{cmUser.ID}})
+	_, err = svc.SubmitChange(tenantCtx, created.ID, tenant.ID, requester.ID, &dto.SubmitChangeRequest{})
 	require.NoError(t, err)
 
 	// SubmitChange 已经自动级联完成了 Activity_Assessment，流程直接停在 CAB 审批节点上。

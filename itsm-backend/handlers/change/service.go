@@ -130,26 +130,7 @@ func (s *Service) SubmitChange(ctx context.Context, changeID, tenantID, submitte
 		return nil, fmt.Errorf("change must be in draft status to submit")
 	}
 
-	// 3.5. If no approvers specified, default to the change creator
-	if len(req.ApproverIDs) == 0 {
-		req.ApproverIDs = []int{c.CreatedBy}
-		s.logger.Infow("No approvers specified, defaulting to change creator", "change_id", changeID, "creator_id", c.CreatedBy)
-	}
-
-	// 4. Validate approvers belong to the same tenant before creating approval records
-	for _, approverID := range req.ApproverIDs {
-		valid, err := s.repo.ValidateApproverBelongsToTenant(ctx, approverID, tenantID)
-		if err != nil {
-			s.logger.Warnw("Failed to validate approver", "error", err, "approver_id", approverID)
-			return nil, fmt.Errorf("验证审批人失败")
-		}
-		if !valid {
-			s.logger.Warnw("Approver does not belong to tenant", "approver_id", approverID, "tenant_id", tenantID)
-			return nil, fmt.Errorf("审批人 %d 不属于当前租户", approverID)
-		}
-	}
-
-	// 5. 先启动 BPMN 流程，再落库 draft -> pending，避免流程启动失败时变更被永久卡在
+	// 3. 先启动 BPMN 流程，再落库 draft -> pending，避免流程启动失败时变更被永久卡在
 	// pending（draft 是 SubmitChange 的入口门槛，一旦离开 draft 就没有其他修复路径能
 	// 再次提交）。s.processTriggerService 未注入时（理论上不应发生在生产环境，但测试或
 	// 未完全 bootstrap 的环境可能出现）保留原有的纯状态流转兜底行为。
@@ -232,9 +213,9 @@ func (s *Service) SubmitChange(ctx context.Context, changeID, tenantID, submitte
 		}
 	}
 
-	// 6. Notify approvers (optional - to be implemented later or via async)
+	// 4. Notify approvers (optional - to be implemented later or via async)
 	// For now, just log the submission
-	s.logger.Infow("Change submitted for approval", "change_id", changeID, "submitter_id", submitterID, "approvers", req.ApproverIDs)
+	s.logger.Infow("Change submitted for approval", "change_id", changeID, "submitter_id", submitterID)
 
 	c.Status = "pending"
 	return c, nil
