@@ -440,3 +440,62 @@ func TestGetApprovalHistory_NoPendingEntryAfterDecisionMade(t *testing.T) {
 	require.Len(t, history, 1, "CAB 已经做出决定，级联完成排期节点后流程实例不再停在 Activity_CABApproval，不应该再合成 pending 记录")
 	assert.Equal(t, "approved", history[0].Status)
 }
+
+// TestTransitionStatus_Cancel_TerminatesRunningProcessInstance 覆盖收尾清理：变更被取消时，
+// 如果还有一个运行中的 BPMN 流程实例挂在它身上（比如卡在 CAB 审批这一步，还没人处理），
+// 不清理会在工作流控制台堆积孤儿实例——包括一个理论上还能被人误操作完成的 CAB 待办任务。
+func TestTransitionStatus_Cancel_TerminatesRunningProcessInstance(t *testing.T) {
+	entClient := newChangeBridgeEntClient(t, "change_cancel_terminates_instance")
+	tenantID, actorID := setupChangeBridgeActor(t, entClient, "cancel-terminate")
+	engine, trigger := deployRealBPMNFixture(t, entClient, tenantID)
+
+	tenantCtx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, tenantID)
+	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).Save(context.Background())
+	require.NoError(t, err)
+
+	repo := NewEntRepository(entClient, openChangeBridgeRawDB(t, "change_cancel_terminates_instance"))
+	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
+	svc.SetProcessTriggerService(trigger)
+	svc.SetProcessEngine(engine)
+
+	_, err = svc.SubmitChange(tenantCtx, c.ID, tenantID, actorID, &dto.SubmitChangeRequest{})
+	require.NoError(t, err)
+
+	instanceBefore, err := entClient.ProcessInstance.Query().
+		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID)), processinstance.TenantID(tenantID)).
+		Only(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, "running", instanceBefore.Status, "取消之前流程实例应该还在运行中——正卡在 CAB 审批这一步没人处理")
+
+	updated, err := svc.TransitionStatus(context.Background(), c.ID, tenantID, actorID, "cancelled", "不需要了")
+	require.NoError(t, err)
+	assert.Equal(t, "cancelled", updated.Status)
+
+	instanceAfter, err := entClient.ProcessInstance.Query().
+		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID)), processinstance.TenantID(tenantID)).
+		Only(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "terminated", instanceAfter.Status, "取消变更应该顺带终止还挂着的运行中流程实例，不留孤儿")
+}
+
+// TestTransitionStatus_Cancel_NoRunningInstanceIsNoop 确认没有运行中流程实例时（比如
+// CAB 已经审批通过、流程早就走完了，或者 processTriggerService 压根没注入）取消操作
+// 本身不受影响，不会因为找不到实例/没有触发服务而报错——cancelRunningProcessInstance
+// 是收尾清理，不应该反过来挡住真正的业务侧终态转换。
+func TestTransitionStatus_Cancel_NoRunningInstanceIsNoop(t *testing.T) {
+	entClient := newChangeBridgeEntClient(t, "change_cancel_no_instance")
+	tenantID, actorID := setupChangeBridgeActor(t, entClient, "cancel-no-instance")
+	logger := zaptest.NewLogger(t).Sugar()
+
+	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).Save(context.Background())
+	require.NoError(t, err)
+
+	repo := NewEntRepository(entClient, nil)
+	svc := NewService(repo, entClient, logger)
+	// 故意不调用 SetProcessTriggerService——覆盖"引擎没注入"这个分支，跟"引擎注入了
+	// 但确实查不到运行中实例"是两条不同的早退路径，都不应该影响业务侧终态转换。
+
+	updated, err := svc.TransitionStatus(context.Background(), c.ID, tenantID, actorID, "cancelled", "不需要了")
+	require.NoError(t, err)
+	assert.Equal(t, "cancelled", updated.Status)
+}

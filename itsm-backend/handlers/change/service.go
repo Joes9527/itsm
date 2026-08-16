@@ -414,6 +414,30 @@ func inferITILPractices(summary *dto.ChangeCMDBImpactSummary) []string {
 	return practices
 }
 
+// cancelRunningProcessInstance 取消一个变更身上还挂着的运行中 BPMN 流程实例（如果有）。
+// 纯收尾操作：找不到运行中实例（正常情况——大多数终态转换发生时流程早就走完了）
+// 或者取消调用本身失败，都只记日志，不向调用方传播错误，不影响已经提交成功的业务侧
+// 状态转换。s.processTriggerService 未注入时直接跳过（理论上不应该发生在生产环境，
+// 但测试或未完全 bootstrap 的环境可能出现，参照 SubmitChange 同样的判空处理）。
+func (s *Service) cancelRunningProcessInstance(ctx context.Context, tenantID, changeID int, reason string) {
+	if s.processTriggerService == nil {
+		return
+	}
+	businessKey := fmt.Sprintf("change:%d", changeID)
+	instance, err := s.entClient.ProcessInstance.Query().
+		Where(processinstance.BusinessKey(businessKey), processinstance.TenantID(tenantID), processinstance.Status("running")).
+		Only(ctx)
+	if err != nil {
+		if !ent.IsNotFound(err) {
+			s.logger.Warnw("cancelRunningProcessInstance: 查询运行中流程实例失败，跳过清理", "error", err, "change_id", changeID)
+		}
+		return
+	}
+	if err := s.processTriggerService.CancelProcess(ctx, instance.ID, reason, tenantID); err != nil {
+		s.logger.Warnw("cancelRunningProcessInstance: 取消流程实例失败，可能残留在工作流控制台", "error", err, "change_id", changeID, "process_instance_id", instance.ID)
+	}
+}
+
 // completeAssessmentTask 用系统身份自动完成一个刚触发流程的变更的 Activity_Assessment
 // （变更评估）任务，把流程从"评估中"直接推进到 CAB 审批节点。Activity_Assessment 没有
 // 声明 assigneeRole，所以这里不注入 actorUserID（跟 completeChangeApprovalTask 级联完成
@@ -612,6 +636,13 @@ func (s *Service) TransitionStatus(ctx context.Context, id, tenantID, userID int
 		if commitErr := tx.Commit(); commitErr != nil {
 			return nil, fmt.Errorf("提交事务失败: %w", commitErr)
 		}
+		// 变更进入终态后，如果还有一个运行中的 BPMN 流程实例挂在它身上（比如卡在
+		// Track4 范围之外的 Activity_Implement/Verify 节点——那几个节点不接 BPMN 任务
+		// 完成，业务侧终态转换不会自动帮它们收尾），把它取消掉，避免在工作流控制台
+		// 堆积孤儿实例（包括理论上还能被人误操作完成的待办任务）。这一步是收尾性质的
+		// 清理，找不到运行中实例（最常见情况：CAB 驳回已经通过 Flow_End 正常终止了）
+		// 或者取消本身失败都只记警告，不影响已经提交成功的业务侧终态转换。
+		s.cancelRunningProcessInstance(ctx, tenantID, c.ID, fmt.Sprintf("change transitioned to %s", targetStatus))
 		c.Status = targetStatus
 		return c, nil
 	}
