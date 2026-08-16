@@ -460,8 +460,15 @@ func (s *Service) BackfillLegacyPendingChange(ctx context.Context, changeID, ten
 	}
 
 	businessKey := fmt.Sprintf("change:%d", changeID)
+	// 只有非 terminated 的实例才算"已经在走 Track4 新流程"。之前失败的回填尝试
+	// 会用 CancelProcess 补偿，留下一条 terminated 记录——如果这里不排除它，
+	// 失败一次就会把这个变更永久挡在回填之外，重试也没用。
 	exists, err := s.entClient.ProcessInstance.Query().
-		Where(processinstance.BusinessKey(businessKey), processinstance.TenantID(tenantID)).
+		Where(
+			processinstance.BusinessKey(businessKey),
+			processinstance.TenantID(tenantID),
+			processinstance.StatusNEQ("terminated"),
+		).
 		Exist(ctx)
 	if err != nil {
 		return fmt.Errorf("检查是否已有流程实例失败: %w", err)

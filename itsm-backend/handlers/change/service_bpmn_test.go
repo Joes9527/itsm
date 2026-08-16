@@ -871,6 +871,56 @@ func TestBackfillLegacyPendingChange_SkipsChangeWithExistingInstance(t *testing.
 	assert.Equal(t, 1, count, "不应该产生第二个流程实例")
 }
 
+func TestBackfillLegacyPendingChange_RetriesAfterTerminatedInstance(t *testing.T) {
+	client := newChangeBPMNEntClient(t, "backfill_retry_after_terminated")
+	tenantID, actorID := setupChangeBPMNActor(t, client, "backfill-retry")
+	engine, trigger := deployRealBPMNFixture(t, client, tenantID)
+	logger := zaptest.NewLogger(t).Sugar()
+
+	c, err := client.Change.Create().SetTitle("第一次回填失败过的变更").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).Save(context.Background())
+	require.NoError(t, err)
+
+	// 模拟第一次回填尝试：触发流程后失败，补偿性地 CancelProcess——跟
+	// BackfillLegacyPendingChange 自己在 completeAssessmentTask 失败时做的事一样，
+	// 留下一条 terminated 的流程实例，change.status 仍然是 pending。
+	tenantCtx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, tenantID)
+	firstAttempt, err := trigger.TriggerProcess(tenantCtx, &dto.ProcessTriggerRequest{
+		BusinessType:         dto.BusinessTypeChange,
+		BusinessID:           c.ID,
+		ProcessDefinitionKey: "change_normal_flow",
+		Variables:            map[string]interface{}{"approval_required": true, "requester_id": float64(actorID)},
+		TenantID:             tenantID,
+	})
+	require.NoError(t, err)
+	require.NoError(t, trigger.CancelProcess(tenantCtx, firstAttempt.ProcessInstanceID, "模拟回填第一次尝试失败后的补偿回滚", tenantID))
+
+	terminated, err := client.ProcessInstance.Query().
+		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID)), processinstance.TenantID(tenantID)).
+		Only(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, "terminated", terminated.Status, "测试前置条件：确认补偿回滚确实留下了 terminated 记录")
+
+	repo := NewEntRepository(client, nil)
+	svc := NewService(repo, client, logger)
+	svc.SetProcessTriggerService(trigger)
+	svc.SetProcessEngine(engine)
+
+	// 重试回填：不应该被那条 terminated 的遗留记录挡住。
+	err = svc.BackfillLegacyPendingChange(context.Background(), c.ID, tenantID)
+	require.NoError(t, err, "terminated 的遗留流程实例不应该让这个变更永久无法回填")
+
+	running, err := client.ProcessInstance.Query().
+		Where(
+			processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID)),
+			processinstance.TenantID(tenantID),
+			processinstance.StatusNEQ("terminated"),
+		).
+		Only(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "running", running.Status)
+	assert.Equal(t, "Activity_CABApproval", running.CurrentActivityID)
+}
+
 func TestBackfillLegacyPendingChange_RejectsNonPendingChange(t *testing.T) {
 	client := newChangeBPMNEntClient(t, "backfill_non_pending")
 	tenantID, actorID := setupChangeBPMNActor(t, client, "backfill-non-pending")
