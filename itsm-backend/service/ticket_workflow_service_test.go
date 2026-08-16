@@ -3,8 +3,10 @@ package service
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 
@@ -427,4 +429,119 @@ func TestTicketWorkflowService_LargeVolumeTickets(t *testing.T) {
 		All(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 50, len(tickets))
+}
+
+func TestTicketWorkflowService_GetApprovalDecisions_ReturnsOrderedByCreatedAt(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ticket_workflow_get_approval_decisions?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+
+	tenant, err := client.Tenant.Create().
+		SetName("Test Tenant").SetCode("test-gad").SetDomain("test-gad.com").SetStatus("active").
+		Save(ctx)
+	require.NoError(t, err)
+
+	actor, err := client.User.Create().
+		SetUsername("approver-gad").SetEmail("approver-gad@test.com").SetPasswordHash("x").
+		SetName("Approver GAD").SetTenantID(tenant.ID).SetActive(true).
+		Save(ctx)
+	require.NoError(t, err)
+
+	tkt, err := client.Ticket.Create().
+		SetTitle("测试工单").SetTicketNumber("T-GAD-1").SetStatus("open").
+		SetRequesterID(actor.ID).SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	// ProcessInstance.process_definition_id 是必填字段（Positive()），
+	// 需要先建 ProcessDeployment + ProcessDefinition 才能拿到合法的 def.ID。
+	deployment, err := client.ProcessDeployment.Create().
+		SetDeploymentID("DEP-gad-1").
+		SetDeploymentName("Deployment GAD").
+		SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	def, err := client.ProcessDefinition.Create().
+		SetKey("ticket_general_flow").
+		SetName("Ticket General Flow").
+		SetBpmnXML([]byte("<bpmn/>")).
+		SetDeploymentID(deployment.ID).
+		SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	instance, err := client.ProcessInstance.Create().
+		SetProcessInstanceID("PI-ticket_general_flow-gad-1").
+		SetProcessDefinitionKey("ticket_general_flow").
+		SetProcessDefinitionID(def.ID).
+		SetBusinessKey(fmt.Sprintf("ticket:%d", tkt.ID)).
+		SetStatus("running").SetTenantID(tenant.ID).SetVariables(map[string]interface{}{}).
+		Save(ctx)
+	require.NoError(t, err)
+
+	task, err := client.ProcessTask.Create().
+		SetTaskID("TASK-gad-1").SetProcessInstanceID(instance.ID).
+		SetProcessDefinitionKey("ticket_general_flow").
+		SetTaskDefinitionKey("Activity_Approve").SetTaskName("审批").SetTaskType("user_task").
+		SetStatus("completed").SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	// process_approval_decisions 对 (tenant_id, process_task_id) 有唯一约束——
+	// 一个流程任务对应一次决策（CompleteTask 只调用一次），所以二级审批需要第二个 task。
+	task2, err := client.ProcessTask.Create().
+		SetTaskID("TASK-gad-2").SetProcessInstanceID(instance.ID).
+		SetProcessDefinitionKey("ticket_general_flow").
+		SetTaskDefinitionKey("Activity_Approve2").SetTaskName("二级审批").SetTaskType("user_task").
+		SetStatus("completed").SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	taskOther, err := client.ProcessTask.Create().
+		SetTaskID("TASK-other").SetProcessInstanceID(instance.ID).
+		SetProcessDefinitionKey("ticket_general_flow").
+		SetTaskDefinitionKey("Activity_Approve").SetTaskName("审批").SetTaskType("user_task").
+		SetStatus("completed").SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	older, err := client.ProcessApprovalDecision.Create().
+		SetProcessInstanceID(instance.ID).SetProcessTaskID(task.ID).
+		SetProcessInstanceKey(instance.ProcessInstanceID).SetTaskID(task.TaskID).
+		SetProcessDefinitionKey("ticket_general_flow").SetNodeKey("Activity_Approve").
+		SetBusinessType("ticket").SetBusinessID(strconv.Itoa(tkt.ID)).
+		SetActorID(actor.ID).SetActorName(actor.Name).SetAction("approve").SetDecision("approved").
+		SetComment("同意").SetTenantID(tenant.ID).
+		SetCreatedAt(time.Now().Add(-time.Hour)).
+		Save(ctx)
+	require.NoError(t, err)
+
+	newer, err := client.ProcessApprovalDecision.Create().
+		SetProcessInstanceID(instance.ID).SetProcessTaskID(task2.ID).
+		SetProcessInstanceKey(instance.ProcessInstanceID).SetTaskID(task2.TaskID).
+		SetProcessDefinitionKey("ticket_general_flow").SetNodeKey("Activity_Approve2").
+		SetBusinessType("ticket").SetBusinessID(strconv.Itoa(tkt.ID)).
+		SetActorID(actor.ID).SetActorName(actor.Name).SetAction("approve").SetDecision("approved").
+		SetComment("二级同意").SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	// 另一个工单的决策不应该混进来。
+	_, err = client.ProcessApprovalDecision.Create().
+		SetProcessInstanceID(instance.ID).SetProcessTaskID(taskOther.ID).
+		SetProcessInstanceKey(instance.ProcessInstanceID).SetTaskID(taskOther.TaskID).
+		SetProcessDefinitionKey("ticket_general_flow").SetNodeKey("Activity_Approve").
+		SetBusinessType("ticket").SetBusinessID(strconv.Itoa(tkt.ID+999)).
+		SetActorID(actor.ID).SetAction("approve").SetDecision("approved").
+		SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	svc := NewTicketWorkflowService(client, zaptest.NewLogger(t).Sugar())
+	decisions, err := svc.GetApprovalDecisions(ctx, tkt.ID, tenant.ID)
+	require.NoError(t, err)
+	require.Len(t, decisions, 2)
+	assert.Equal(t, older.ID, decisions[0].ID, "应该按 created_at 升序返回")
+	assert.Equal(t, newer.ID, decisions[1].ID)
 }

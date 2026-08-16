@@ -417,6 +417,29 @@ func (tc *TicketWorkflowController) GetTicketWorkflowState(c *gin.Context) {
 	common.Success(c, state)
 }
 
+// GetApprovalDecisions handles GET /api/v1/tickets/:id/approval-decisions
+// @Summary 获取工单的 BPMN 审批决策历史
+// @Description 返回该工单在 BPMN 引擎里留下的全部审批决策记录（只读）
+// @Tags 工单流转
+// @Produce json
+// @Param id path int true "工单ID"
+// @Success 200 {object} common.Response{data=[]dto.ProcessApprovalDecisionResponse}
+// @Router /api/v1/tickets/:id/approval-decisions [get]
+func (tc *TicketWorkflowController) GetApprovalDecisions(ctx *gin.Context) {
+	ticketID, err := strconv.Atoi(ctx.Param("id"))
+	if err != nil {
+		common.Fail(ctx, 1001, "无效的工单ID")
+		return
+	}
+	tenantID := ctx.GetInt("tenant_id")
+	decisions, err := tc.workflowService.GetApprovalDecisions(ctx.Request.Context(), ticketID, tenantID)
+	if err != nil {
+		common.InternalError(ctx, "获取审批记录失败: "+err.Error())
+		return
+	}
+	common.Success(ctx, dto.ToProcessApprovalDecisionResponseList(decisions))
+}
+
 // GetTicketWorkflowHistory 获取工单流转历史
 // @Summary 获取工单流转历史
 // @Description 返回工单状态变更、分配、审批等操作历史记录
