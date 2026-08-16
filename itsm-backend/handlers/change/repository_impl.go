@@ -352,6 +352,12 @@ func (r *EntRepository) GetApprovalHistory(ctx context.Context, changeID int, te
 			comment = &c
 		}
 		createdAt := d.CreatedAt
+		// ApprovedAt 只在决策是"通过"时才有意义——驳回记录也套用同一个时间戳会让
+		// 调用方误以为一条 rejected 记录同时也是"批准时间"。
+		var approvedAt *time.Time
+		if d.Decision == "approved" {
+			approvedAt = &createdAt
+		}
 		records = append(records, &ApprovalRecord{
 			ID:           d.ID,
 			ChangeID:     changeID,
@@ -360,7 +366,7 @@ func (r *EntRepository) GetApprovalHistory(ctx context.Context, changeID int, te
 			ApproverName: d.ActorName,
 			Status:       d.Decision,
 			Comment:      comment,
-			ApprovedAt:   &createdAt,
+			ApprovedAt:   approvedAt,
 			CreatedAt:    createdAt,
 		})
 	}

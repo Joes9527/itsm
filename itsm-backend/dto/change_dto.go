@@ -241,12 +241,12 @@ type ChangeRollbackExecution struct {
 	UpdatedAt       time.Time  `json:"updatedAt"`       // 更新时间
 }
 
-// CreateChangeApprovalRequest 创建变更审批请求
-type CreateChangeApprovalRequest struct {
-	ChangeID   int     `json:"changeId" binding:"required"`   // 变更ID
-	ApproverID int     `json:"approverId" binding:"required"` // 审批人ID
-	Comment    *string `json:"comment"`                       // 审批意见
-}
+// CreateChangeApprovalRequest、ChangeApprovalResponse、ChangeApprovalChainResponse、
+// ChangeApprovalWorkflowRequest、ChangeApprovalChainItem、ChangeApprovalSummary 曾服务于
+// handlers/change 包内已删除的 SubmitApproval/ConfigureWorkflow/GetApprovalSummary
+// 端点（"审批链"概念，Track4 迁移到 BPMN 后不再存在——审批人现在按 assigneeRole 从角色
+// 解析，不是逐级审批链）。这几个端点连同它们的路由已经在 Task 6 删除，这几个 DTO 是
+// 唯一没跟着一起删的部分，已确认全代码库零真实调用点。
 
 // UpdateChangeApprovalRequest 更新变更审批请求
 type UpdateChangeApprovalRequest struct {
@@ -290,31 +290,6 @@ type CreateChangeRollbackPlanRequest struct {
 	CommunicationPlan string   `json:"communicationPlan"`                    // 沟通计划
 	TestPlan          string   `json:"testPlan"`                             // 测试计划
 	ApprovalRequired  bool     `json:"approvalRequired"`                     // 是否需要审批
-}
-
-// ChangeApprovalResponse 变更审批响应
-type ChangeApprovalResponse struct {
-	ID           int          `json:"id"`           // 审批ID
-	ChangeID     int          `json:"changeId"`     // 变更ID
-	ApproverID   int          `json:"approverId"`   // 审批人ID
-	ApproverName string       `json:"approverName"` // 审批人姓名
-	Status       ChangeStatus `json:"status"`       // 审批状态
-	Comment      *string      `json:"comment"`      // 审批意见
-	ApprovedAt   *time.Time   `json:"approvedAt"`   // 审批时间
-	CreatedAt    time.Time    `json:"createdAt"`    // 创建时间
-}
-
-// ChangeApprovalChainResponse 变更审批链响应
-type ChangeApprovalChainResponse struct {
-	ID           int       `json:"id"`           // 审批链ID
-	ChangeID     int       `json:"changeId"`     // 变更ID
-	Level        int       `json:"level"`        // 审批级别
-	ApproverID   int       `json:"approverId"`   // 审批人ID
-	ApproverName string    `json:"approverName"` // 审批人姓名
-	Role         string    `json:"role"`         // 审批角色
-	Status       string    `json:"status"`       // 审批状态
-	IsRequired   bool      `json:"isRequired"`   // 是否必需审批
-	CreatedAt    time.Time `json:"createdAt"`    // 创建时间
 }
 
 // ChangeRiskAssessmentResponse 变更风险评估响应
@@ -396,31 +371,6 @@ type ChangeRollbackExecutionResponse struct {
 	Comments        string     `json:"comments"`        // 备注
 	CreatedAt       time.Time  `json:"createdAt"`       // 创建时间
 	UpdatedAt       time.Time  `json:"updatedAt"`       // 更新时间
-}
-
-// ChangeApprovalWorkflowRequest 变更审批工作流请求
-type ChangeApprovalWorkflowRequest struct {
-	ChangeID      int                       `json:"changeId" binding:"required"`      // 变更ID
-	ApprovalChain []ChangeApprovalChainItem `json:"approvalChain" binding:"required"` // 审批链
-}
-
-// ChangeApprovalChainItem 变更审批链项目
-type ChangeApprovalChainItem struct {
-	Level      int    `json:"level" binding:"required"`      // 审批级别
-	ApproverID int    `json:"approverId" binding:"required"` // 审批人ID
-	Role       string `json:"role" binding:"required"`       // 审批角色
-	IsRequired bool   `json:"isRequired"`                    // 是否必需审批
-}
-
-// ChangeApprovalSummary 变更审批摘要
-type ChangeApprovalSummary struct {
-	ChangeID         int                           `json:"changeId"`         // 变更ID
-	CurrentLevel     int                           `json:"currentLevel"`     // 当前审批级别
-	TotalLevels      int                           `json:"totalLevels"`      // 总审批级别
-	ApprovalStatus   string                        `json:"approvalStatus"`   // 审批状态
-	NextApprover     *string                       `json:"nextApprover"`     // 下一个审批人
-	ApprovalHistory  []ChangeApprovalResponse      `json:"approvalHistory"`  // 审批历史
-	PendingApprovals []ChangeApprovalChainResponse `json:"pendingApprovals"` // 待审批项目
 }
 
 // SubmitChangeRequest 提交变更审批请求

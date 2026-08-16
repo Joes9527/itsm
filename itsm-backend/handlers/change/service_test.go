@@ -327,6 +327,38 @@ func TestGetApprovalHistory_ReadsFromProcessApprovalDecision(t *testing.T) {
 	assert.Equal(t, "approved", history[0].Status)
 	require.NotNil(t, history[0].Comment)
 	assert.Equal(t, "looks good", *history[0].Comment)
+	assert.NotNil(t, history[0].ApprovedAt, "通过的决策应该有 ApprovedAt")
+}
+
+// TestGetApprovalHistory_RejectedRecordHasNoApprovedAt 驳回记录不应该带 ApprovedAt——
+// 那个字段只在决策是"通过"时才有意义，套用同一个 CreatedAt 时间戳会让调用方误以为
+// 一条 rejected 记录同时也是"批准时间"。
+func TestGetApprovalHistory_RejectedRecordHasNoApprovedAt(t *testing.T) {
+	entClient := newChangeBPMNEntClient(t, "change_approval_history_rejected")
+	ctx := context.Background()
+
+	tenant, err := entClient.Tenant.Create().SetName("T").SetCode("t-history-rejected").SetDomain("t-history-rejected.example.com").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	actor, err := entClient.User.Create().SetUsername("cm-r").SetEmail("cm-r@example.com").SetName("CM Rejecter").SetPasswordHash("h").SetRole("agent").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	_, err = entClient.ProcessApprovalDecision.Create().
+		SetProcessInstanceID(1).SetProcessTaskID(1).
+		SetProcessInstanceKey("PI-test-rejected").SetTaskID("TASK-test-rejected").
+		SetProcessDefinitionKey("change_normal_flow").SetNodeKey("Activity_CABApproval").
+		SetBusinessType("change").SetBusinessID("43").
+		SetActorID(actor.ID).SetActorName(actor.Name).
+		SetAction("reject").SetDecision("rejected").SetComment("风险太高").
+		SetVariablesSnapshot(map[string]interface{}{}).SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	repo := NewEntRepository(entClient, nil)
+	history, err := repo.GetApprovalHistory(ctx, 43, tenant.ID)
+	require.NoError(t, err)
+	require.Len(t, history, 1)
+	assert.Equal(t, "rejected", history[0].Status)
+	assert.Nil(t, history[0].ApprovedAt, "驳回记录不应该有 ApprovedAt")
 }
 
 // TestGetApprovalHistory_TenantIsolation guards against a filter that omits
