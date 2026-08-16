@@ -32,20 +32,20 @@ func newTestBPMNEngine(t *testing.T, client *ent.Client, logger *zap.SugaredLogg
 	return service.NewCustomProcessEngine(client, logger)
 }
 
-// ==================== TransitionStatus ↔ BPMN 桥接集成测试（P0-1 阶段3） ====================
+// ==================== TransitionStatus ↔ BPMN 集成测试 ====================
 
-func newChangeBridgeEntClient(t *testing.T, dbName string) *ent.Client {
+func newChangeBPMNEntClient(t *testing.T, dbName string) *ent.Client {
 	t.Helper()
 	client := enttest.Open(t, "sqlite3", fmt.Sprintf("file:%s?mode=memory&cache=shared&_fk=1", dbName))
 	t.Cleanup(func() { client.Close() })
 	return client
 }
 
-// openChangeBridgeRawDB 打开一个指向跟 newChangeBridgeEntClient(t, dbName) 相同 sqlite
+// openChangeBPMNRawDB 打开一个指向跟 newChangeBPMNEntClient(t, dbName) 相同 sqlite
 // 内存库的原生 *sql.DB 连接（相同 DSN，mode=memory&cache=shared 让它们共享同一份数据）。
 // MarkSubmittedForApproval 用的是原生 database/sql，不是 ent，NewEntRepository 需要这个
 // 连接才能真的执行 draft->pending 的 UPDATE。
-func openChangeBridgeRawDB(t *testing.T, dbName string) *sql.DB {
+func openChangeBPMNRawDB(t *testing.T, dbName string) *sql.DB {
 	t.Helper()
 	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?mode=memory&cache=shared&_fk=1", dbName))
 	require.NoError(t, err)
@@ -53,11 +53,11 @@ func openChangeBridgeRawDB(t *testing.T, dbName string) *sql.DB {
 	return db
 }
 
-func setupChangeBridgeActor(t *testing.T, client *ent.Client, code string) (tenantID, actorID int) {
+func setupChangeBPMNActor(t *testing.T, client *ent.Client, code string) (tenantID, actorID int) {
 	t.Helper()
 	ctx := context.Background()
 	tenant, err := client.Tenant.Create().
-		SetName("Change Bridge Tenant " + code).
+		SetName("Change BPMN Tenant " + code).
 		SetCode("chg-bridge-" + code).
 		SetDomain("chg-bridge-" + code + ".example.com").
 		SetStatus("active").
@@ -76,14 +76,14 @@ func setupChangeBridgeActor(t *testing.T, client *ent.Client, code string) (tena
 	return tenant.ID, actor.ID
 }
 
-// createChangeBridgeProcessFixture 创建 运行中流程实例 + 待办用户任务，
+// createChangeBPMNProcessFixture 创建 运行中流程实例 + 待办用户任务，
 // businessKey 采用与 ProcessTriggerService 相同的 "change:{id}" 约定。
-func createChangeBridgeProcessFixture(t *testing.T, client *ent.Client, tenantID int, keySuffix, businessKey string, assigneeID int) (taskID int) {
+func createChangeBPMNProcessFixture(t *testing.T, client *ent.Client, tenantID int, keySuffix, businessKey string, assigneeID int) (taskID int) {
 	t.Helper()
 	ctx := context.Background()
 
 	defKey := "change_bridge_approval_" + keySuffix
-	bpmnXML := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?><bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:itsm="https://github.com/heidsoft/itsm/schema/bpmn" id="Definitions_%s" targetNamespace="https://github.com/heidsoft/itsm"><bpmn:process id="%s" name="Change Bridge Approval %s" isExecutable="true"><bpmn:startEvent id="StartEvent_1"/><bpmn:userTask id="Approval_1" name="变更审批" itsm:taskPurpose="approval" itsm:approvalMode="single" itsm:assignee="%d"/><bpmn:endEvent id="EndEvent_1"/><bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Approval_1"/><bpmn:sequenceFlow id="Flow_2" sourceRef="Approval_1" targetRef="EndEvent_1"/></bpmn:process></bpmn:definitions>`, defKey, defKey, keySuffix, assigneeID)
+	bpmnXML := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?><bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:itsm="https://github.com/heidsoft/itsm/schema/bpmn" id="Definitions_%s" targetNamespace="https://github.com/heidsoft/itsm"><bpmn:process id="%s" name="Change BPMN Approval %s" isExecutable="true"><bpmn:startEvent id="StartEvent_1"/><bpmn:userTask id="Approval_1" name="变更审批" itsm:taskPurpose="approval" itsm:approvalMode="single" itsm:assignee="%d"/><bpmn:endEvent id="EndEvent_1"/><bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Approval_1"/><bpmn:sequenceFlow id="Flow_2" sourceRef="Approval_1" targetRef="EndEvent_1"/></bpmn:process></bpmn:definitions>`, defKey, defKey, keySuffix, assigneeID)
 
 	deployment, err := client.ProcessDeployment.Create().
 		SetDeploymentID("CHG-DEP-" + keySuffix).
@@ -97,7 +97,7 @@ func createChangeBridgeProcessFixture(t *testing.T, client *ent.Client, tenantID
 
 	def, err := client.ProcessDefinition.Create().
 		SetKey(defKey).
-		SetName("Change Bridge Approval " + keySuffix).
+		SetName("Change BPMN Approval " + keySuffix).
 		SetVersion("1").
 		SetIsLatest(true).
 		SetBpmnXML([]byte(bpmnXML)).
@@ -138,14 +138,15 @@ func createChangeBridgeProcessFixture(t *testing.T, client *ent.Client, tenantID
 
 // NOTE: TestTransitionStatus_BridgesBPMNTask / TestTransitionStatus_BridgeFailClosed /
 // TestTransitionStatus_NoBoundInstanceFallsBack used to live here. They were deleted in
-// Track4 Task 4 because they locked in the P0-1 bridge's own mechanism details, all of
-// which this task intentionally replaces:
-//   - BridgesBPMNTask asserted a ProcessApprovalDecision row shaped by
-//     BPMNApprovalBridge.CompleteBusinessApprovalTask (action/actorID/businessType/comment) —
-//     that bridge call no longer exists in TransitionStatus.
+// Track4 Task 4 because they locked in the mechanism details of a since-removed
+// bridge shim (BPMNApprovalBridge.CompleteBusinessApprovalTask), all of which this
+// task intentionally replaces:
+//   - BridgesBPMNTask asserted a ProcessApprovalDecision row shaped by the removed
+//     bridge call (action/actorID/businessType/comment) — that call no longer exists
+//     in TransitionStatus.
 //   - BridgeFailClosed asserted the literal error string "同步流程审批任务失败", which was
-//     the bridge's own error-wrapping text, not a stable contract.
-//   - NoBoundInstanceFallsBack asserted the P0-1 "fall back to pure business approval when
+//     the removed bridge's own error-wrapping text, not a stable contract.
+//   - NoBoundInstanceFallsBack asserted a "fall back to pure business approval when
 //     no BPMN process instance is bound" semantic — this is the exact behavior the task
 //     brief says to remove; the replacement requires a running BPMN process instance and
 //     fails closed without one ("该变更没有正在运行的审批流程").
@@ -168,7 +169,7 @@ func createChangeBridgeProcessFixture(t *testing.T, client *ent.Client, tenantID
 //     scheduleChange 必须走完两跳，否则变更会永久卡在 approved，见 Finding 4）；
 //  4. 流程实例推进到 Activity_Schedule 之后的下一个节点 Activity_Implement（Track4 范围之外，故意停在那）。
 func TestCompleteChangeApprovalTask_ApproveCompletesScheduleNode(t *testing.T) {
-	client := newChangeBridgeEntClient(t, "complete_approval_approve")
+	client := newChangeBPMNEntClient(t, "complete_approval_approve")
 	logger := zaptest.NewLogger(t).Sugar()
 	ctx := context.Background()
 
@@ -227,7 +228,7 @@ func TestCompleteChangeApprovalTask_ApproveCompletesScheduleNode(t *testing.T) {
 // Activity_Reject，把 Change.Status 改成 rejected，并且流程实例直接走到 EndEvent 结束
 // （不应该卡在 running）。
 func TestCompleteChangeApprovalTask_RejectEndsProcess(t *testing.T) {
-	client := newChangeBridgeEntClient(t, "complete_approval_reject")
+	client := newChangeBPMNEntClient(t, "complete_approval_reject")
 	logger := zaptest.NewLogger(t).Sugar()
 	ctx := context.Background()
 
@@ -282,7 +283,7 @@ func TestCompleteChangeApprovalTask_RejectEndsProcess(t *testing.T) {
 // 不是 Activity_CABApproval 的候选人，尝试完成审批任务必须失败关闭：
 // CompleteTask 内部的 authorizeTaskActor 校验会拒绝，Change.Status 不能被改动。
 func TestCompleteChangeApprovalTask_WrongActorRejected(t *testing.T) {
-	client := newChangeBridgeEntClient(t, "complete_approval_wrong_actor")
+	client := newChangeBPMNEntClient(t, "complete_approval_wrong_actor")
 	logger := zaptest.NewLogger(t).Sugar()
 	ctx := context.Background()
 
@@ -340,7 +341,7 @@ func TestCompleteChangeApprovalTask_WrongActorRejected(t *testing.T) {
 // 自身契约上的硬化测试：即使调用方违反"每次调用前流程实例最多只有一个待办 user_task"
 // 的隐含假设，这个方法自己也不应该选错任务。
 func TestCompleteChangeApprovalTask_FiltersDecoyTaskByDefinitionKey(t *testing.T) {
-	client := newChangeBridgeEntClient(t, "complete_approval_decoy")
+	client := newChangeBPMNEntClient(t, "complete_approval_decoy")
 	logger := zaptest.NewLogger(t).Sugar()
 	ctx := context.Background()
 
@@ -419,7 +420,7 @@ func TestCompleteChangeApprovalTask_FiltersDecoyTaskByDefinitionKey(t *testing.T
 // 各测试按需使用。dbName 必须每个测试唯一，避免 sqlite 内存库互相污染。
 func setupChangeForTransitionStatusTest(t *testing.T, dbName string) (*ent.Client, *Service, *ent.Tenant, *ent.User, *ent.Change) {
 	t.Helper()
-	client := newChangeBridgeEntClient(t, dbName)
+	client := newChangeBPMNEntClient(t, dbName)
 	logger := zaptest.NewLogger(t).Sugar()
 	ctx := context.Background()
 
@@ -508,15 +509,15 @@ func TestTransitionStatus_Approve_WrongActorRejected(t *testing.T) {
 	assert.Equal(t, "pending", updated.Status, "越权调用失败后不应该残留任何状态变化")
 }
 
-// TestTransitionStatus_Approve_NoRunningProcessInstanceFailsClosed 覆盖 P0-1 桥接被移除
-// 之后的行为反转：旧实现在没有关联运行中流程实例时会静默回退为纯业务审批（approve 照样成功）；
+// TestTransitionStatus_Approve_NoRunningProcessInstanceFailsClosed 覆盖移除旧的桥接
+// 机制之后的行为反转：旧实现在没有关联运行中流程实例时会静默回退为纯业务审批（approve 照样成功）；
 // 新实现完全交给 completeChangeApprovalTask，没有运行中的 ProcessInstance 时必须 fail-closed，
 // 不能再有任何"没有流程就自己批"的隐藏路径。这个 change 是直接建库记录，从未跑过
 // SubmitChange/TriggerProcess，所以底下压根没有 ProcessInstance 行——故意不调用
 // setupChangeForTransitionStatusTest（那个 fixture 会部署模板+触发流程+推进到 CAB 节点，
 // 正是这个测试要排除的前提）。
 func TestTransitionStatus_Approve_NoRunningProcessInstanceFailsClosed(t *testing.T) {
-	client := newChangeBridgeEntClient(t, "transition_no_running_instance")
+	client := newChangeBPMNEntClient(t, "transition_no_running_instance")
 	logger := zaptest.NewLogger(t).Sugar()
 	ctx := context.Background()
 

@@ -81,14 +81,14 @@ func deployRealBPMNFixture(t *testing.T, entClient *ent.Client, tenantID int) (e
 // 比断言一个 mock 记录了什么调用参数更贴近真实行为（mock 记录的是"打算传什么"，
 // 这里断言的是"真的触发成了什么"）。
 func TestSubmitChange_TriggersBPMNProcess_Normal(t *testing.T) {
-	entClient := newChangeBridgeEntClient(t, "change_submit_normal")
-	tenantID, actorID := setupChangeBridgeActor(t, entClient, "submit-normal")
+	entClient := newChangeBPMNEntClient(t, "change_submit_normal")
+	tenantID, actorID := setupChangeBPMNActor(t, entClient, "submit-normal")
 	engine, trigger := deployRealBPMNFixture(t, entClient, tenantID)
 
 	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).Save(context.Background())
 	require.NoError(t, err)
 
-	repo := NewEntRepository(entClient, openChangeBridgeRawDB(t, "change_submit_normal"))
+	repo := NewEntRepository(entClient, openChangeBPMNRawDB(t, "change_submit_normal"))
 	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
 	svc.SetProcessTriggerService(trigger)
 	svc.SetProcessEngine(engine)
@@ -106,14 +106,14 @@ func TestSubmitChange_TriggersBPMNProcess_Normal(t *testing.T) {
 }
 
 func TestSubmitChange_TriggersBPMNProcess_Emergency(t *testing.T) {
-	entClient := newChangeBridgeEntClient(t, "change_submit_emergency")
-	tenantID, actorID := setupChangeBridgeActor(t, entClient, "submit-emergency")
+	entClient := newChangeBPMNEntClient(t, "change_submit_emergency")
+	tenantID, actorID := setupChangeBPMNActor(t, entClient, "submit-emergency")
 	engine, trigger := deployRealBPMNFixture(t, entClient, tenantID)
 
 	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("emergency").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).Save(context.Background())
 	require.NoError(t, err)
 
-	repo := NewEntRepository(entClient, openChangeBridgeRawDB(t, "change_submit_emergency"))
+	repo := NewEntRepository(entClient, openChangeBPMNRawDB(t, "change_submit_emergency"))
 	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
 	svc.SetProcessTriggerService(trigger)
 	svc.SetProcessEngine(engine)
@@ -132,8 +132,8 @@ func TestSubmitChange_TriggersBPMNProcess_Emergency(t *testing.T) {
 // 同一个 change 已经存在一个运行中的 BPMN 流程实例（businessKey = "change:{id}"）时，
 // 重复提交必须被拒绝，且不能再次触发流程。
 func TestSubmitChange_RejectsDuplicateWhenRunningInstanceExists(t *testing.T) {
-	entClient := newChangeBridgeEntClient(t, "change_submit_duplicate")
-	tenantID, actorID := setupChangeBridgeActor(t, entClient, "submit-dup")
+	entClient := newChangeBPMNEntClient(t, "change_submit_duplicate")
+	tenantID, actorID := setupChangeBPMNActor(t, entClient, "submit-dup")
 	repo := newMockRepository()
 	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
 	trigger := &mockProcessTriggerService{}
@@ -141,7 +141,7 @@ func TestSubmitChange_RejectsDuplicateWhenRunningInstanceExists(t *testing.T) {
 
 	c := createTestChange(repo, tenantID, actorID)
 	c.Type = "normal"
-	createChangeBridgeProcessFixture(t, entClient, tenantID, "dup1", fmt.Sprintf("change:%d", c.ID), actorID)
+	createChangeBPMNProcessFixture(t, entClient, tenantID, "dup1", fmt.Sprintf("change:%d", c.ID), actorID)
 
 	_, err := svc.SubmitChange(context.Background(), c.ID, tenantID, actorID, &dto.SubmitChangeRequest{})
 	require.Error(t, err)
@@ -154,8 +154,8 @@ func TestSubmitChange_RejectsDuplicateWhenRunningInstanceExists(t *testing.T) {
 // MarkSubmittedForApproval 再 TriggerProcess，一旦 TriggerProcess 失败 change 就永久卡在
 // pending 且没有任何修复路径。
 func TestSubmitChange_TriggerProcessFailureLeavesChangeDraft(t *testing.T) {
-	entClient := newChangeBridgeEntClient(t, "change_submit_trigger_fail")
-	tenantID, actorID := setupChangeBridgeActor(t, entClient, "submit-trigger-fail")
+	entClient := newChangeBPMNEntClient(t, "change_submit_trigger_fail")
+	tenantID, actorID := setupChangeBPMNActor(t, entClient, "submit-trigger-fail")
 	repo := newMockRepository()
 	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
 	trigger := &mockProcessTriggerService{triggerErr: fmt.Errorf("bpmn engine unavailable")}
@@ -218,8 +218,8 @@ func seedChangeInMockAndEnt(t *testing.T, repo *mockRepository, entClient *ent.C
 // permanently reject any resubmission attempt for this change. SubmitChange must call
 // CancelProcess on the just-created instance before returning the original error.
 func TestSubmitChange_MarkSubmittedFailureCompensatesByCancellingProcess(t *testing.T) {
-	entClient := newChangeBridgeEntClient(t, "change_submit_mark_fail_compensate")
-	tenantID, actorID := setupChangeBridgeActor(t, entClient, "submit-mark-fail")
+	entClient := newChangeBPMNEntClient(t, "change_submit_mark_fail_compensate")
+	tenantID, actorID := setupChangeBPMNActor(t, entClient, "submit-mark-fail")
 	engine, trigger := deployRealBPMNFixture(t, entClient, tenantID)
 
 	repo := newMockRepository()
@@ -268,8 +268,8 @@ func (w *cancelAlwaysFailsTriggerService) CancelProcess(ctx context.Context, pro
 // a failure in the compensation call itself does not mask or replace the original
 // MarkSubmittedForApproval error — the caller still needs to see why the submit failed.
 func TestSubmitChange_MarkSubmittedFailure_CancelProcessAlsoFails_ReturnsOriginalError(t *testing.T) {
-	entClient := newChangeBridgeEntClient(t, "change_submit_mark_fail_cancel_fail")
-	tenantID, actorID := setupChangeBridgeActor(t, entClient, "submit-mark-fail-cancel-fail")
+	entClient := newChangeBPMNEntClient(t, "change_submit_mark_fail_cancel_fail")
+	tenantID, actorID := setupChangeBPMNActor(t, entClient, "submit-mark-fail-cancel-fail")
 	engine, realTrigger := deployRealBPMNFixture(t, entClient, tenantID)
 	trigger := &cancelAlwaysFailsTriggerService{
 		ProcessTriggerService: realTrigger,
@@ -299,7 +299,7 @@ func TestSubmitChange_MarkSubmittedFailure_CancelProcessAlsoFails_ReturnsOrigina
 // business_type="change" + business_id=<changeID> + tenant_id, and map it
 // onto the unchanged ApprovalRecord DTO shape.
 func TestGetApprovalHistory_ReadsFromProcessApprovalDecision(t *testing.T) {
-	entClient := newChangeBridgeEntClient(t, "change_approval_history")
+	entClient := newChangeBPMNEntClient(t, "change_approval_history")
 	ctx := context.Background()
 
 	tenant, err := entClient.Tenant.Create().SetName("T").SetCode("t-history").SetDomain("t-history.example.com").SetStatus("active").Save(ctx)
@@ -333,7 +333,7 @@ func TestGetApprovalHistory_ReadsFromProcessApprovalDecision(t *testing.T) {
 // tenant_id: two tenants each get a ProcessApprovalDecision row with the
 // same business_id (42), and a leaky query would return both.
 func TestGetApprovalHistory_TenantIsolation(t *testing.T) {
-	entClient := newChangeBridgeEntClient(t, "change_approval_history_tenant_iso")
+	entClient := newChangeBPMNEntClient(t, "change_approval_history_tenant_iso")
 	ctx := context.Background()
 
 	tenantA, err := entClient.Tenant.Create().SetName("Tenant A").SetCode("t-iso-a").SetDomain("t-iso-a.example.com").SetStatus("active").Save(ctx)
@@ -380,8 +380,8 @@ func TestGetApprovalHistory_TenantIsolation(t *testing.T) {
 // 只记录已经做出的决策，CAB 审批人还没决定之前，审批历史不该是空的——调用方（前端审批
 // 详情页）需要知道"正在等谁审批"，不是"看起来没人在审批"。
 func TestGetApprovalHistory_IncludesPendingCABTask(t *testing.T) {
-	entClient := newChangeBridgeEntClient(t, "change_pending_history")
-	tenantID, actorID := setupChangeBridgeActor(t, entClient, "pending-history")
+	entClient := newChangeBPMNEntClient(t, "change_pending_history")
+	tenantID, actorID := setupChangeBPMNActor(t, entClient, "pending-history")
 	engine, trigger := deployRealBPMNFixture(t, entClient, tenantID)
 
 	// change_manager 角色候选人——CAB 任务需要能解析出至少一个候选人，
@@ -393,7 +393,7 @@ func TestGetApprovalHistory_IncludesPendingCABTask(t *testing.T) {
 	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).Save(context.Background())
 	require.NoError(t, err)
 
-	repo := NewEntRepository(entClient, openChangeBridgeRawDB(t, "change_pending_history"))
+	repo := NewEntRepository(entClient, openChangeBPMNRawDB(t, "change_pending_history"))
 	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
 	svc.SetProcessTriggerService(trigger)
 	svc.SetProcessEngine(engine)
@@ -413,8 +413,8 @@ func TestGetApprovalHistory_IncludesPendingCABTask(t *testing.T) {
 // "真的没有决策、流程还卡在 CAB 审批"时出现——CAB 决定做出之后（流程已经推进过去），
 // 不应该同时看到一条真实决策记录 + 一条合成的 pending 记录，那会让前端以为审批还没结束。
 func TestGetApprovalHistory_NoPendingEntryAfterDecisionMade(t *testing.T) {
-	entClient := newChangeBridgeEntClient(t, "change_pending_history_decided")
-	tenantID, actorID := setupChangeBridgeActor(t, entClient, "pending-history-decided")
+	entClient := newChangeBPMNEntClient(t, "change_pending_history_decided")
+	tenantID, actorID := setupChangeBPMNActor(t, entClient, "pending-history-decided")
 	engine, trigger := deployRealBPMNFixture(t, entClient, tenantID)
 
 	tenantCtx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, tenantID)
@@ -424,7 +424,7 @@ func TestGetApprovalHistory_NoPendingEntryAfterDecisionMade(t *testing.T) {
 	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).Save(context.Background())
 	require.NoError(t, err)
 
-	repo := NewEntRepository(entClient, openChangeBridgeRawDB(t, "change_pending_history_decided"))
+	repo := NewEntRepository(entClient, openChangeBPMNRawDB(t, "change_pending_history_decided"))
 	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
 	svc.SetProcessTriggerService(trigger)
 	svc.SetProcessEngine(engine)
@@ -445,15 +445,15 @@ func TestGetApprovalHistory_NoPendingEntryAfterDecisionMade(t *testing.T) {
 // 如果还有一个运行中的 BPMN 流程实例挂在它身上（比如卡在 CAB 审批这一步，还没人处理），
 // 不清理会在工作流控制台堆积孤儿实例——包括一个理论上还能被人误操作完成的 CAB 待办任务。
 func TestTransitionStatus_Cancel_TerminatesRunningProcessInstance(t *testing.T) {
-	entClient := newChangeBridgeEntClient(t, "change_cancel_terminates_instance")
-	tenantID, actorID := setupChangeBridgeActor(t, entClient, "cancel-terminate")
+	entClient := newChangeBPMNEntClient(t, "change_cancel_terminates_instance")
+	tenantID, actorID := setupChangeBPMNActor(t, entClient, "cancel-terminate")
 	engine, trigger := deployRealBPMNFixture(t, entClient, tenantID)
 
 	tenantCtx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, tenantID)
 	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).Save(context.Background())
 	require.NoError(t, err)
 
-	repo := NewEntRepository(entClient, openChangeBridgeRawDB(t, "change_cancel_terminates_instance"))
+	repo := NewEntRepository(entClient, openChangeBPMNRawDB(t, "change_cancel_terminates_instance"))
 	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
 	svc.SetProcessTriggerService(trigger)
 	svc.SetProcessEngine(engine)
@@ -483,8 +483,8 @@ func TestTransitionStatus_Cancel_TerminatesRunningProcessInstance(t *testing.T) 
 // 本身不受影响，不会因为找不到实例/没有触发服务而报错——cancelRunningProcessInstance
 // 是收尾清理，不应该反过来挡住真正的业务侧终态转换。
 func TestTransitionStatus_Cancel_NoRunningInstanceIsNoop(t *testing.T) {
-	entClient := newChangeBridgeEntClient(t, "change_cancel_no_instance")
-	tenantID, actorID := setupChangeBridgeActor(t, entClient, "cancel-no-instance")
+	entClient := newChangeBPMNEntClient(t, "change_cancel_no_instance")
+	tenantID, actorID := setupChangeBPMNActor(t, entClient, "cancel-no-instance")
 	logger := zaptest.NewLogger(t).Sugar()
 
 	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).Save(context.Background())
