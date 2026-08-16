@@ -538,10 +538,73 @@ func TestTicketWorkflowService_GetApprovalDecisions_ReturnsOrderedByCreatedAt(t 
 		Save(ctx)
 	require.NoError(t, err)
 
+	// 跨租户隔离：另一个租户下、business_id 字符串与 tkt.ID 完全相同的决策不应该混进来。
+	// 关键是 business_id 字面值相同——这样才能证明隔离真的来自 tenant_id 过滤，
+	// 而不是碰巧因为 business_id 本身就唯一。
+	tenant2, err := client.Tenant.Create().
+		SetName("Test Tenant 2").SetCode("test-gad-2").SetDomain("test-gad-2.com").SetStatus("active").
+		Save(ctx)
+	require.NoError(t, err)
+
+	actor2, err := client.User.Create().
+		SetUsername("approver-gad-2").SetEmail("approver-gad-2@test.com").SetPasswordHash("x").
+		SetName("Approver GAD 2").SetTenantID(tenant2.ID).SetActive(true).
+		Save(ctx)
+	require.NoError(t, err)
+
+	deployment2, err := client.ProcessDeployment.Create().
+		SetDeploymentID("DEP-gad-2").
+		SetDeploymentName("Deployment GAD 2").
+		SetTenantID(tenant2.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	def2, err := client.ProcessDefinition.Create().
+		SetKey("ticket_general_flow").
+		SetName("Ticket General Flow 2").
+		SetBpmnXML([]byte("<bpmn/>")).
+		SetDeploymentID(deployment2.ID).
+		SetTenantID(tenant2.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	instance2, err := client.ProcessInstance.Create().
+		SetProcessInstanceID("PI-ticket_general_flow-gad-2").
+		SetProcessDefinitionKey("ticket_general_flow").
+		SetProcessDefinitionID(def2.ID).
+		SetBusinessKey(fmt.Sprintf("ticket:%d", tkt.ID)).
+		SetStatus("running").SetTenantID(tenant2.ID).SetVariables(map[string]interface{}{}).
+		Save(ctx)
+	require.NoError(t, err)
+
+	task2Tenant2, err := client.ProcessTask.Create().
+		SetTaskID("TASK-gad-tenant2-1").SetProcessInstanceID(instance2.ID).
+		SetProcessDefinitionKey("ticket_general_flow").
+		SetTaskDefinitionKey("Activity_Approve").SetTaskName("审批").SetTaskType("user_task").
+		SetStatus("completed").SetTenantID(tenant2.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	_, err = client.ProcessApprovalDecision.Create().
+		SetProcessInstanceID(instance2.ID).SetProcessTaskID(task2Tenant2.ID).
+		SetProcessInstanceKey(instance2.ProcessInstanceID).SetTaskID(task2Tenant2.TaskID).
+		SetProcessDefinitionKey("ticket_general_flow").SetNodeKey("Activity_Approve").
+		SetBusinessType("ticket").SetBusinessID(strconv.Itoa(tkt.ID)).
+		SetActorID(actor2.ID).SetActorName(actor2.Name).SetAction("approve").SetDecision("approved").
+		SetComment("租户2的同名业务ID决策").SetTenantID(tenant2.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
 	svc := NewTicketWorkflowService(client, zaptest.NewLogger(t).Sugar())
 	decisions, err := svc.GetApprovalDecisions(ctx, tkt.ID, tenant.ID)
 	require.NoError(t, err)
-	require.Len(t, decisions, 2)
+	require.Len(t, decisions, 2, "跨租户的同 business_id 决策不应该混进来")
 	assert.Equal(t, older.ID, decisions[0].ID, "应该按 created_at 升序返回")
 	assert.Equal(t, newer.ID, decisions[1].ID)
+
+	// 反向验证：用租户2的ID查询，只能看到租户2自己的决策，看不到租户1的。
+	decisionsTenant2, err := svc.GetApprovalDecisions(ctx, tkt.ID, tenant2.ID)
+	require.NoError(t, err)
+	require.Len(t, decisionsTenant2, 1)
+	assert.Equal(t, actor2.ID, decisionsTenant2[0].ActorID)
 }
