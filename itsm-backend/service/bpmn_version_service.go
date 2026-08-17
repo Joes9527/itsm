@@ -98,17 +98,30 @@ func (s *BPMNVersionService) CreateVersion(ctx context.Context, req *CreateVersi
 
 	newVersion := incrementSemver(currentVersion)
 
-	// 把当前 is_latest=true 的旧版本降级——不这样做的话，每次 CreateVersion 都会
+	// 降级旧版本 + 建部署记录 + 建流程定义必须在同一个事务里，三者要么一起成功、要么一起回滚。
+	//
+	// 非事务地先降级再创建有一个比原 bug 更糟的失败模式：任何一个 Create 失败时，
+	// 旧行已经被改成 is_latest=false，新行又没建出来，该 key 就变成 0 行 is_latest=true；
+	// GetLatestProcessDefinition 只按 IsLatest(true) 过滤，会直接查不到，
+	// 该 key 的 StartProcess 全线挂掉，直到有人手工再建一个版本。
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("开启事务失败: %w", err)
+	}
+	txClient := tx.Client()
+
+	// 把当前 is_latest=true 的旧版本全部降级——不这样做的话，每次 CreateVersion 都会
 	// 让同一个 key 同时存在多行 is_latest=true（新行靠 schema 默认值天生是 true，
 	// 旧行从来没人主动改成 false），GetLatestProcessDefinition/StartProcess 的
 	// .First() 会取到不确定的一行。跟 bpmnProcessDefinitionService.CreateProcessDefinition
 	// （service/bpmn_process_engine.go）已经写对的降级逻辑保持一致。
-	if err := s.demoteCurrentLatest(ctx, req.ProcessDefinitionKey, req.TenantID); err != nil {
+	if err := s.demoteCurrentLatest(ctx, txClient, req.ProcessDefinitionKey, req.TenantID); err != nil {
+		_ = tx.Rollback()
 		return nil, err
 	}
 
 	// 先创建部署记录（因为ProcessDefinition需要deployment_id）
-	deployment, err := s.client.ProcessDeployment.Create().
+	deployment, err := txClient.ProcessDeployment.Create().
 		SetDeploymentID(fmt.Sprintf("tenant-%d-%s-v%s", req.TenantID, req.ProcessDefinitionKey, newVersion)).
 		SetDeploymentName(fmt.Sprintf("%s v%s", req.Name, newVersion)).
 		SetDeploymentTime(time.Now()).
@@ -116,11 +129,12 @@ func (s *BPMNVersionService) CreateVersion(ctx context.Context, req *CreateVersi
 		SetDeployedBy(req.CreatedBy).
 		Save(ctx)
 	if err != nil {
+		_ = tx.Rollback()
 		return nil, fmt.Errorf("创建部署记录失败: %w", err)
 	}
 
 	// 使用部署ID创建流程定义
-	processDef, err := s.client.ProcessDefinition.Create().
+	processDef, err := txClient.ProcessDefinition.Create().
 		SetKey(req.ProcessDefinitionKey).
 		SetName(req.Name).
 		SetDescription(req.Description).
@@ -132,10 +146,16 @@ func (s *BPMNVersionService) CreateVersion(ctx context.Context, req *CreateVersi
 		SetDeploymentID(deployment.ID).
 		Save(ctx)
 	if err != nil {
+		_ = tx.Rollback()
 		return nil, fmt.Errorf("创建流程定义失败: %w", err)
 	}
 
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("提交事务失败: %w", err)
+	}
+
 	// 记录版本变更日志 - processDef.ID是int类型
+	// 刻意放在事务外：变更日志是审计附属信息，它失败不应该回滚已经生效的新版本（保持既有语义）。
 	if err := s.recordVersionChangeLog(ctx, fmt.Sprintf("%d", processDef.ID), newVersion, req.ChangeLog, req.CreatedBy, req.TenantID); err != nil {
 		// 记录失败不影响主流程，只记录警告
 		s.logger.Warnw("记录版本变更日志失败", "error", err)
@@ -159,24 +179,29 @@ func (s *BPMNVersionService) CreateVersion(ctx context.Context, req *CreateVersi
 	}, nil
 }
 
-// demoteCurrentLatest 把某个 (tenant, key) 当前 is_latest=true 的那一行改成 false。
-// 没有旧版本（首次创建）时 First 返回 not-found，直接当作无需处理。
-func (s *BPMNVersionService) demoteCurrentLatest(ctx context.Context, key string, tenantID int) error {
-	existing, err := s.client.ProcessDefinition.Query().
+// demoteCurrentLatest 把某个 (tenant, key) 下所有 is_latest=true 的行一次性改成 false。
+//
+// 必须是批量 Update 而不是 Query().First() + UpdateOne：这个 bug 的前提就是生产数据里
+// 同一个 key 可能已经并列存在多行 is_latest=true（历史上从没人降级过旧行）。只降级一行的话，
+// CreateVersion 跑完还剩 N-1 行旧的 + 1 行新的，根本收敛不到"任何时刻恰好 1 行最新"。
+//
+// client 由调用方传入（CreateVersion 传的是事务里的 tx.Client()），保证降级与后续的
+// 创建动作处在同一个事务边界内。没有旧版本时批量 Update 影响 0 行，天然幂等。
+func (s *BPMNVersionService) demoteCurrentLatest(ctx context.Context, client *ent.Client, key string, tenantID int) error {
+	demoted, err := client.ProcessDefinition.Update().
 		Where(
 			processdefinition.Key(key),
 			processdefinition.TenantID(tenantID),
 			processdefinition.IsLatest(true),
 		).
-		First(ctx)
+		SetIsLatest(false).
+		Save(ctx)
 	if err != nil {
-		if ent.IsNotFound(err) {
-			return nil
-		}
-		return fmt.Errorf("查询当前最新版本失败: %w", err)
-	}
-	if _, err := s.client.ProcessDefinition.UpdateOne(existing).SetIsLatest(false).Save(ctx); err != nil {
 		return fmt.Errorf("降级旧版本失败: %w", err)
+	}
+	if demoted > 1 {
+		s.logger.Warnw("同一流程 key 存在多行 is_latest=true 的历史脏数据，已一并降级",
+			"key", key, "tenantId", tenantID, "demoted", demoted)
 	}
 	return nil
 }

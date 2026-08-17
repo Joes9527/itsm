@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/processdefinition"
@@ -248,4 +250,117 @@ func TestBPMNVersionService_CreateVersion_TenantIsolation(t *testing.T) {
 
 func newTenantCtx(ctx context.Context, tenantID int) context.Context {
 	return context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+}
+
+// TestBPMNVersionService_CreateVersion_ConvergesMultiplePreExistingLatest 复现原始审计
+// 发现的生产数据形态：同一个 (tenant, key) 已经有多行 is_latest=true（新行靠 schema 默认值
+// 天生是 true，历史上从来没人主动降级过旧行）。旧实现用 Query().First() + UpdateOne 只降级
+// 一行，跑完 CreateVersion 还剩 N-1 行旧的 + 1 行新的，根本没收敛。
+func TestBPMNVersionService_CreateVersion_ConvergesMultiplePreExistingLatest(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:bpmn_version_converge_multi?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	logger := zaptest.NewLogger(t).Sugar()
+
+	tenant, err := client.Tenant.Create().
+		SetName("T").SetCode("bvc-multi").SetDomain("bvc-multi.com").SetStatus("active").
+		Save(ctx)
+	require.NoError(t, err)
+
+	deployment, err := client.ProcessDeployment.Create().
+		SetDeploymentID("DEP-converge-multi").
+		SetDeploymentName("Deployment converge-multi").
+		SetDeploymentTime(time.Now()).
+		SetDeployedBy("seed").
+		SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	// 种下 3 行同时 is_latest=true 的脏数据
+	for _, v := range []string{"1.0.0", "1.1.0", "1.2.0"} {
+		_, err := client.ProcessDefinition.Create().
+			SetKey("dirty_flow").
+			SetName("脏数据流程").
+			SetVersion(v).
+			SetBpmnXML([]byte("<x/>")).
+			SetIsLatest(true).
+			SetIsActive(false).
+			SetDeploymentID(deployment.ID).
+			SetTenantID(tenant.ID).
+			Save(ctx)
+		require.NoError(t, err)
+	}
+
+	preCount, err := client.ProcessDefinition.Query().
+		Where(processdefinition.Key("dirty_flow"), processdefinition.TenantID(tenant.ID), processdefinition.IsLatest(true)).
+		Count(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 3, preCount, "前置条件：确实存在多行 is_latest=true 的脏数据")
+
+	svc := NewBPMNVersionService(client, logger)
+	newVersion, err := svc.CreateVersion(ctx, &CreateVersionRequest{
+		ProcessDefinitionKey: "dirty_flow",
+		Name:                 "脏数据流程",
+		BPMNXML:              "<bpmn:definitions/>",
+		TenantID:             tenant.ID,
+		CreatedBy:            "tester",
+	})
+	require.NoError(t, err)
+
+	latest, err := client.ProcessDefinition.Query().
+		Where(processdefinition.Key("dirty_flow"), processdefinition.TenantID(tenant.ID), processdefinition.IsLatest(true)).
+		All(ctx)
+	require.NoError(t, err)
+	require.Len(t, latest, 1, "CreateVersion 必须把所有旧的 is_latest=true 一次性降级，收敛到恰好 1 行")
+	assert.Equal(t, newVersion.Version, latest[0].Version)
+}
+
+// TestBPMNVersionService_CreateVersion_RollsBackDemoteOnCreateFailure 证明降级和创建
+// 处在同一个事务里：中途 Create 失败时，旧的 is_latest 必须被回滚回来。否则该 key 会变成
+// 0 行 is_latest=true，GetLatestProcessDefinition 直接查不到，StartProcess 全线挂掉——
+// 比原来的"N 行并列最新"更糟。
+//
+// 故障注入手段：ProcessDeployment.deployment_id 在 schema 里是 Unique，
+// 预先占用下一次 CreateVersion 会生成的那个 deployment_id，即可让 Create 撞唯一约束失败。
+func TestBPMNVersionService_CreateVersion_RollsBackDemoteOnCreateFailure(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:bpmn_version_rollback?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	logger := zaptest.NewLogger(t).Sugar()
+
+	tenant, err := client.Tenant.Create().
+		SetName("T").SetCode("bvc-rb").SetDomain("bvc-rb.com").SetStatus("active").
+		Save(ctx)
+	require.NoError(t, err)
+
+	svc := NewBPMNVersionService(client, logger)
+	v1, err := svc.CreateVersion(ctx, &CreateVersionRequest{
+		ProcessDefinitionKey: "rollback_flow", Name: "回滚流程", BPMNXML: "<x/>",
+		TenantID: tenant.ID, CreatedBy: "tester",
+	})
+	require.NoError(t, err)
+
+	// 抢占下一版本将要使用的 deployment_id，制造唯一约束冲突
+	nextDeploymentID := fmt.Sprintf("tenant-%d-%s-v%s", tenant.ID, "rollback_flow", incrementSemver(v1.Version))
+	_, err = client.ProcessDeployment.Create().
+		SetDeploymentID(nextDeploymentID).
+		SetDeploymentName("占位，制造唯一约束冲突").
+		SetDeploymentTime(time.Now()).
+		SetDeployedBy("seed").
+		SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	_, err = svc.CreateVersion(ctx, &CreateVersionRequest{
+		ProcessDefinitionKey: "rollback_flow", Name: "回滚流程", BPMNXML: "<x/>",
+		TenantID: tenant.ID, CreatedBy: "tester",
+	})
+	require.Error(t, err, "部署记录唯一约束冲突，CreateVersion 应该失败")
+
+	latest, err := client.ProcessDefinition.Query().
+		Where(processdefinition.Key("rollback_flow"), processdefinition.TenantID(tenant.ID), processdefinition.IsLatest(true)).
+		All(ctx)
+	require.NoError(t, err)
+	require.Len(t, latest, 1, "创建失败必须连同降级一起回滚，绝不能留下 0 行 is_latest=true")
+	assert.Equal(t, v1.Version, latest[0].Version, "回滚后仍应是原来的最新版本")
 }
