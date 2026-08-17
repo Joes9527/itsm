@@ -880,3 +880,97 @@ func TestAuthorizeTaskActor_NoActorContextIsPermissive(t *testing.T) {
 	// No actor in context should not error (system/internal calls stay working)
 	assert.NoError(t, engine.authorizeTaskActor(ctx, task))
 }
+
+func TestBPMNServiceTask_ServiceTaskType_ReadsExtensionElementsMetaData(t *testing.T) {
+	task := &BPMNServiceTask{
+		ID: "svc1",
+		ExtensionElements: &BPMNExtensionElements{
+			MetaData: []BPMNMetaData{
+				{Name: "service_task_type", Value: "generic_task"},
+				{Name: "action", Value: "notify"},
+			},
+		},
+	}
+	assert.Equal(t, "generic_task", task.ServiceTaskType())
+	assert.Equal(t, "notify", task.ServiceTaskAction())
+}
+
+func TestBPMNServiceTask_ServiceTaskType_NilExtensionElementsReturnsEmpty(t *testing.T) {
+	task := &BPMNServiceTask{ID: "svc2"}
+	assert.Equal(t, "", task.ServiceTaskType())
+	assert.Equal(t, "", task.ServiceTaskAction())
+}
+
+func TestHandleElement_ServiceTask_DispatchesByMetaDataOverAttributeGuessing(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
+	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, actorID)
+
+	tkt, err := engine.client.Ticket.Create().
+		SetTitle("svc-task-dispatch-test").SetTicketNumber("T-SVC-1").SetStatus("open").
+		SetRequesterID(actorID).SetTenantID(tenantID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	// ProcessInstance.process_definition_id 是 schema 里的必填正整数外键（非
+	// Optional），跟 createProcessFixture（本文件上方）一样先落一条最小
+	// ProcessDeployment + ProcessDefinition，拿到真实 ID 再建 ProcessInstance。
+	deployment, err := engine.client.ProcessDeployment.Create().
+		SetDeploymentID("DEP-svc-dispatch-test").
+		SetDeploymentName("Deployment svc-dispatch-test").
+		SetDeploymentTime(time.Now()).
+		SetDeployedBy("test").
+		SetIsActive(true).
+		SetTenantID(tenantID).
+		Save(ctx)
+	require.NoError(t, err)
+	def, err := engine.client.ProcessDefinition.Create().
+		SetKey("svc_dispatch_test_flow").
+		SetName("Svc Dispatch Test Flow").
+		SetVersion("1").
+		SetIsLatest(true).
+		SetBpmnXML([]byte("<definitions/>")).
+		SetDeploymentID(deployment.ID).
+		SetDeployedAt(time.Now()).
+		SetTenantID(tenantID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	instance, err := engine.client.ProcessInstance.Create().
+		SetProcessInstanceID("PI-svc-dispatch-test").
+		SetProcessDefinitionKey(def.Key).
+		SetProcessDefinitionID(def.ID).
+		SetBusinessKey(fmt.Sprintf("ticket:%d", tkt.ID)).
+		SetStatus("running").SetTenantID(tenantID).
+		SetVariables(map[string]interface{}{"business_type": "ticket", "business_id": tkt.ID}).
+		Save(ctx)
+	require.NoError(t, err)
+
+	process := &BPMNProcess{
+		ServiceTasks: []*BPMNServiceTask{
+			{
+				ID:             "Activity_UpdateStatus",
+				Name:           "更新状态",
+				Implementation: "##WebService", // 内置模板里的占位符属性，不应该被用来查 handler
+				ExtensionElements: &BPMNExtensionElements{
+					MetaData: []BPMNMetaData{
+						{Name: "service_task_type", Value: "ticket_task"},
+						{Name: "action", Value: "update_status"},
+					},
+				},
+			},
+		},
+		EndEvents: []*BPMNEndEvent{{ID: "End_1", Name: "结束"}},
+		SequenceFlows: []*BPMNSequenceFlow{
+			{ID: "Flow_1", SourceRef: "Activity_UpdateStatus", TargetRef: "End_1"},
+		},
+	}
+
+	err = engine.handleElement(ctx, instance, process, "Activity_UpdateStatus")
+	require.NoError(t, err)
+
+	updated, err := engine.client.Ticket.Get(ctx, tkt.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "in_progress", updated.Status, "ticket_task 的 update_status（默认目标状态）应该真实生效")
+}

@@ -643,12 +643,36 @@ func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.P
 	} else if gateway := e.findExclusiveGateway(process, elementID); gateway != nil {
 		return e.executeStep(ctx, instance, process, elementID, instance.Variables)
 	} else if serviceTask := e.findServiceTask(process, elementID); serviceTask != nil {
-		// 通过 CallbackRegistry 执行真实的服务任务逻辑
+		// 优先按 metaData 里的 service_task_type/action 分发——跟 UserTask 走
+		// dispatchUserTaskCallback 时用的是同一套 findHandlerByTaskType 查找口径，
+		// 保证"模板声明了 service_task_type 就一定能找到对应 handler"这条规则
+		// 在 UserTask 和 ServiceTask 两种节点类型上表现一致。
+		if serviceTaskType := serviceTask.ServiceTaskType(); serviceTaskType != "" {
+			if handler := e.findHandlerByTaskType(serviceTaskType); handler != nil {
+				callbackVars := mergeServiceTaskVariables(instance.Variables, serviceTask)
+				if action := serviceTask.ServiceTaskAction(); action != "" {
+					callbackVars[bpmnMetaDataAction] = action
+				}
+				e.logger.Infow("执行 ServiceTask 回调（metaData 分发）", "serviceTaskType", serviceTaskType, "elementID", elementID)
+				if _, err := handler.Execute(ctx, nil, callbackVars); err != nil {
+					return fmt.Errorf("ServiceTask %s 执行失败: %w", elementID, err)
+				}
+				return e.executeStep(ctx, instance, process, elementID, instance.Variables)
+			}
+			// 声明了类型但没有注册对应 handler（比如未来新增了类型但忘了注册）：
+			// 按既有约定视为 NoOp，只告警不阻断流程，跟 dispatchUserTaskCallback
+			// 遇到同样情况时的处理方式保持一致。
+			e.logger.Warnw("ServiceTask 声明的 service_task_type 没有注册处理器，跳过执行", "elementID", elementID, "serviceTaskType", serviceTaskType)
+			return e.executeStep(ctx, instance, process, elementID, instance.Variables)
+		}
+
+		// 没有声明 metaData 时，保留原有按 implementation/class/expression/operationRef
+		// 属性猜 handler ID 的兜底逻辑——这是历史行为，目前没有任何内置模板会走到这里
+		// （全部改成了 metaData 声明），但不删除它，避免破坏可能存在的自定义模板。
 		serviceRef := serviceTask.ID
 		if serviceTask.Name != "" {
 			serviceRef = serviceTask.Name
 		}
-		// 尝试通过实现类或表达式属性获取服务引用
 		if serviceTask.Implementation != "" {
 			serviceRef = serviceTask.Implementation
 		} else if serviceTask.Class != "" {
@@ -659,11 +683,9 @@ func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.P
 			serviceRef = serviceTask.OperationRef
 		}
 
-		// 查找并执行 Callback
 		if e.callbackRegistry != nil {
 			handler := e.callbackRegistry.GetHandler(serviceRef)
 			if handler == nil {
-				// 尝试按任务类型匹配
 				handler = e.callbackRegistry.GetHandler(serviceTask.GetType())
 			}
 			if handler != nil {
@@ -673,7 +695,6 @@ func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.P
 					return fmt.Errorf("ServiceTask %s 执行失败: %w", serviceRef, err)
 				}
 			} else {
-				// 未注册的 ServiceTask 视为 NoOp，仅记录警告不阻断流程
 				e.logger.Warnw("未注册的 ServiceTask，跳过执行", "serviceRef", serviceRef, "elementID", elementID)
 			}
 		}
