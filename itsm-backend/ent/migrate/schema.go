@@ -68,68 +68,6 @@ var (
 			},
 		},
 	}
-	// ApprovalRecordsColumns holds the columns for the "approval_records" table.
-	ApprovalRecordsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "ticket_number", Type: field.TypeString},
-		{Name: "ticket_title", Type: field.TypeString},
-		{Name: "workflow_name", Type: field.TypeString},
-		{Name: "current_level", Type: field.TypeInt, Default: 1},
-		{Name: "total_levels", Type: field.TypeInt, Default: 1},
-		{Name: "approver_id", Type: field.TypeInt},
-		{Name: "approver_name", Type: field.TypeString},
-		{Name: "step_order", Type: field.TypeInt, Default: 1},
-		{Name: "due_date", Type: field.TypeTime, Nullable: true},
-		{Name: "status", Type: field.TypeString, Default: "pending"},
-		{Name: "action", Type: field.TypeString, Nullable: true},
-		{Name: "comment", Type: field.TypeString, Nullable: true, Size: 2147483647},
-		{Name: "tenant_id", Type: field.TypeInt},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "processed_at", Type: field.TypeTime, Nullable: true},
-		{Name: "workflow_id", Type: field.TypeInt},
-		{Name: "ticket_id", Type: field.TypeInt},
-	}
-	// ApprovalRecordsTable holds the schema information for the "approval_records" table.
-	ApprovalRecordsTable = &schema.Table{
-		Name:       "approval_records",
-		Columns:    ApprovalRecordsColumns,
-		PrimaryKey: []*schema.Column{ApprovalRecordsColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "approval_records_approval_workflows_approval_records",
-				Columns:    []*schema.Column{ApprovalRecordsColumns[16]},
-				RefColumns: []*schema.Column{ApprovalWorkflowsColumns[0]},
-				OnDelete:   schema.NoAction,
-			},
-			{
-				Symbol:     "approval_records_tickets_approval_records",
-				Columns:    []*schema.Column{ApprovalRecordsColumns[17]},
-				RefColumns: []*schema.Column{TicketsColumns[0]},
-				OnDelete:   schema.NoAction,
-			},
-		},
-	}
-	// ApprovalWorkflowsColumns holds the columns for the "approval_workflows" table.
-	ApprovalWorkflowsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "name", Type: field.TypeString},
-		{Name: "description", Type: field.TypeString, Nullable: true, Size: 2147483647},
-		{Name: "ticket_type", Type: field.TypeString, Nullable: true},
-		{Name: "priority", Type: field.TypeString, Nullable: true},
-		{Name: "nodes", Type: field.TypeJSON},
-		{Name: "status", Type: field.TypeString, Default: "pending"},
-		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
-		{Name: "is_active", Type: field.TypeBool, Default: true},
-		{Name: "tenant_id", Type: field.TypeInt},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
-	}
-	// ApprovalWorkflowsTable holds the schema information for the "approval_workflows" table.
-	ApprovalWorkflowsTable = &schema.Table{
-		Name:       "approval_workflows",
-		Columns:    ApprovalWorkflowsColumns,
-		PrimaryKey: []*schema.Column{ApprovalWorkflowsColumns[0]},
-	}
 	// AssetsColumns holds the columns for the "assets" table.
 	AssetsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -5094,8 +5032,6 @@ var (
 	Tables = []*schema.Table{
 		ApplicationsTable,
 		ApprovalChainsTable,
-		ApprovalRecordsTable,
-		ApprovalWorkflowsTable,
 		AssetsTable,
 		AssetLicensesTable,
 		AuditLogsTable,
@@ -5230,8 +5166,6 @@ var (
 
 func init() {
 	ApplicationsTable.ForeignKeys[0].RefTable = ProjectsTable
-	ApprovalRecordsTable.ForeignKeys[0].RefTable = ApprovalWorkflowsTable
-	ApprovalRecordsTable.ForeignKeys[1].RefTable = TicketsTable
 	AssetsTable.ForeignKeys[0].RefTable = VendorsTable
 	BootstrapTokensTable.ForeignKeys[0].RefTable = TenantsTable
 	CiAttributeDefinitionsTable.ForeignKeys[0].RefTable = CiTypesTable

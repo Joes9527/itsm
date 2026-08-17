@@ -147,18 +147,6 @@ func (_u *KnowledgeArticleUpdate) AddTenantID(v int) *KnowledgeArticleUpdate {
 	return _u
 }
 
-// SetReviewStatus sets the "review_status" field.
-func (_u *KnowledgeArticleUpdate) SetReviewStatus(v string) *KnowledgeArticleUpdate {
-	_u.mutation.SetReviewStatus(v)
-	return _u
-}
-
-// SetReviewComment sets the "review_comment" field.
-func (_u *KnowledgeArticleUpdate) SetReviewComment(v string) *KnowledgeArticleUpdate {
-	_u.mutation.SetReviewComment(v)
-	return _u
-}
-
 // SetIsPublished sets the "is_published" field.
 func (_u *KnowledgeArticleUpdate) SetIsPublished(v bool) *KnowledgeArticleUpdate {
 	_u.mutation.SetIsPublished(v)
@@ -169,6 +157,34 @@ func (_u *KnowledgeArticleUpdate) SetIsPublished(v bool) *KnowledgeArticleUpdate
 func (_u *KnowledgeArticleUpdate) SetNillableIsPublished(v *bool) *KnowledgeArticleUpdate {
 	if v != nil {
 		_u.SetIsPublished(*v)
+	}
+	return _u
+}
+
+// SetReviewStatus sets the "review_status" field.
+func (_u *KnowledgeArticleUpdate) SetReviewStatus(v string) *KnowledgeArticleUpdate {
+	_u.mutation.SetReviewStatus(v)
+	return _u
+}
+
+// SetNillableReviewStatus sets the "review_status" field if the given value is not nil.
+func (_u *KnowledgeArticleUpdate) SetNillableReviewStatus(v *string) *KnowledgeArticleUpdate {
+	if v != nil {
+		_u.SetReviewStatus(*v)
+	}
+	return _u
+}
+
+// SetReviewComment sets the "review_comment" field.
+func (_u *KnowledgeArticleUpdate) SetReviewComment(v string) *KnowledgeArticleUpdate {
+	_u.mutation.SetReviewComment(v)
+	return _u
+}
+
+// SetNillableReviewComment sets the "review_comment" field if the given value is not nil.
+func (_u *KnowledgeArticleUpdate) SetNillableReviewComment(v *string) *KnowledgeArticleUpdate {
+	if v != nil {
+		_u.SetReviewComment(*v)
 	}
 	return _u
 }
@@ -773,18 +789,6 @@ func (_u *KnowledgeArticleUpdateOne) AddTenantID(v int) *KnowledgeArticleUpdateO
 	return _u
 }
 
-// SetReviewStatus sets the "review_status" field.
-func (_u *KnowledgeArticleUpdateOne) SetReviewStatus(v string) *KnowledgeArticleUpdateOne {
-	_u.mutation.SetReviewStatus(v)
-	return _u
-}
-
-// SetReviewComment sets the "review_comment" field.
-func (_u *KnowledgeArticleUpdateOne) SetReviewComment(v string) *KnowledgeArticleUpdateOne {
-	_u.mutation.SetReviewComment(v)
-	return _u
-}
-
 // SetIsPublished sets the "is_published" field.
 func (_u *KnowledgeArticleUpdateOne) SetIsPublished(v bool) *KnowledgeArticleUpdateOne {
 	_u.mutation.SetIsPublished(v)
@@ -795,6 +799,34 @@ func (_u *KnowledgeArticleUpdateOne) SetIsPublished(v bool) *KnowledgeArticleUpd
 func (_u *KnowledgeArticleUpdateOne) SetNillableIsPublished(v *bool) *KnowledgeArticleUpdateOne {
 	if v != nil {
 		_u.SetIsPublished(*v)
+	}
+	return _u
+}
+
+// SetReviewStatus sets the "review_status" field.
+func (_u *KnowledgeArticleUpdateOne) SetReviewStatus(v string) *KnowledgeArticleUpdateOne {
+	_u.mutation.SetReviewStatus(v)
+	return _u
+}
+
+// SetNillableReviewStatus sets the "review_status" field if the given value is not nil.
+func (_u *KnowledgeArticleUpdateOne) SetNillableReviewStatus(v *string) *KnowledgeArticleUpdateOne {
+	if v != nil {
+		_u.SetReviewStatus(*v)
+	}
+	return _u
+}
+
+// SetReviewComment sets the "review_comment" field.
+func (_u *KnowledgeArticleUpdateOne) SetReviewComment(v string) *KnowledgeArticleUpdateOne {
+	_u.mutation.SetReviewComment(v)
+	return _u
+}
+
+// SetNillableReviewComment sets the "review_comment" field if the given value is not nil.
+func (_u *KnowledgeArticleUpdateOne) SetNillableReviewComment(v *string) *KnowledgeArticleUpdateOne {
+	if v != nil {
+		_u.SetReviewComment(*v)
 	}
 	return _u
 }

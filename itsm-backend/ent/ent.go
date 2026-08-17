@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"itsm-backend/ent/application"
 	"itsm-backend/ent/approvalchain"
-	"itsm-backend/ent/approvalrecord"
-	"itsm-backend/ent/approvalworkflow"
 	"itsm-backend/ent/asset"
 	"itsm-backend/ent/assetlicense"
 	"itsm-backend/ent/auditlog"
@@ -191,8 +189,6 @@ func checkColumn(t, c string) error {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
 			application.Table:                 application.ValidColumn,
 			approvalchain.Table:               approvalchain.ValidColumn,
-			approvalrecord.Table:              approvalrecord.ValidColumn,
-			approvalworkflow.Table:            approvalworkflow.ValidColumn,
 			asset.Table:                       asset.ValidColumn,
 			assetlicense.Table:                assetlicense.ValidColumn,
 			auditlog.Table:                    auditlog.ValidColumn,

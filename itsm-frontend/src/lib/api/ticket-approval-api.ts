@@ -1,138 +1,49 @@
 /**
- * 工单审批流程 API 服务
+ * 工单审批相关接口。旧版 /api/v1/approval-workflows、/api/v1/tickets/approval/records
+ * 在后端下线 legacy ApprovalWorkflow 引擎时已经被删除（router.go 已确认无此路由），
+ * 这里只保留真实存在的两个接口：读 BPMN 审批决策历史、提交审批动作。
  */
 
 import { httpClient } from './http-client';
 
-export interface ApprovalWorkflow {
+export interface ProcessApprovalDecision {
   id: number;
-  name: string;
-  description: string;
-  ticketType?: string;
-  priority?: string;
-  nodes: ApprovalNode[];
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ApprovalNode {
-  id: string;
-  level: number;
-  name: string;
-  approverType: 'user' | 'role' | 'department' | 'dynamic';
-  approverIds: number[];
-  approverNames: string[];
-  approvalMode: 'sequential' | 'parallel' | 'any' | 'all';
-  minimumApprovals?: number;
-  timeoutHours?: number;
-  conditions?: Array<{
-    field: string;
-    operator: 'equals' | 'not_equals' | 'greater_than' | 'less_than' | 'contains';
-     
-    value: unknown;
-  }>;
-  allowReject: boolean;
-  allowDelegate: boolean;
-  rejectAction: 'end' | 'return' | 'custom';
-  returnToLevel?: number;
-}
-
-export interface ApprovalRecord {
-  id: number;
-  ticketId: number;
-  ticketNumber: string;
-  ticketTitle: string;
-  workflowId: number;
-  workflowName: string;
-  currentLevel: number;
-  totalLevels: number;
-  approverId: number;
-  approverName: string;
-  status: 'pending' | 'approved' | 'rejected' | 'delegated' | 'timeout';
-  action?: string;
+  processInstanceId: number;
+  processInstanceKey: string;
+  processTaskId: number;
+  taskId: string;
+  processDefinitionKey: string;
+  nodeKey: string;
+  businessType?: string;
+  businessId?: string;
+  actorId: number;
+  actorName?: string;
+  action: string;
+  decision: string;
   comment?: string;
+  variablesSnapshot?: Record<string, unknown>;
   createdAt: string;
-  processedAt?: string;
+}
+
+export interface SubmitApprovalRequest {
+  approvalId: number;
+  ticketId: number;
+  action: 'approve' | 'reject' | 'delegate';
+  comment?: string;
+  delegateToUserId?: number;
 }
 
 export class TicketApprovalApi {
-  // 获取审批工作流列表
-  static async getWorkflows(params?: {
-    ticketType?: string;
-    priority?: string;
-    isActive?: boolean;
-    page?: number;
-    pageSize?: number;
-  }): Promise<{
-    items: ApprovalWorkflow[];
-    total: number;
-    page: number;
-    pageSize: number;
-  }> {
-    const queryParams: Record<string, any> = {};
-    if (params) {
-      if (params.ticketType) queryParams.ticketType = params.ticketType;
-      if (params.priority) queryParams.priority = params.priority;
-      if (params.isActive !== undefined) queryParams.isActive = params.isActive;
-      if (params.page) queryParams.page = params.page;
-      if (params.pageSize) queryParams.pageSize = params.pageSize;
-    }
-    // Backend registers /api/v1/approval-workflows (router.go L564).
-    // The previous /api/v1/tickets/approval-workflows path never existed on the backend.
-    return httpClient.get('/api/v1/approval-workflows', queryParams);
+  static async getApprovalDecisions(ticketId: number): Promise<ProcessApprovalDecision[]> {
+    const res = await httpClient.get<ProcessApprovalDecision[]>(
+      `/api/v1/tickets/${ticketId}/approval-decisions`
+    );
+    return res || [];
   }
 
-  // 创建审批工作流
-  static async createWorkflow(data: Partial<ApprovalWorkflow>): Promise<ApprovalWorkflow> {
-    return httpClient.post<ApprovalWorkflow>('/api/v1/approval-workflows', data);
-  }
-
-  // 更新审批工作流
-  static async updateWorkflow(
-    id: number,
-    data: Partial<ApprovalWorkflow>
-  ): Promise<ApprovalWorkflow> {
-    return httpClient.put<ApprovalWorkflow>(`/api/v1/approval-workflows/${id}`, data);
-  }
-
-  // 删除审批工作流
-  static async deleteWorkflow(id: number): Promise<void> {
-    return httpClient.delete(`/api/v1/approval-workflows/${id}`);
-  }
-
-  // 获取审批记录
-  static async getApprovalRecords(params?: {
-    ticketId?: number;
-    workflowId?: number;
-    status?: string;
-    page?: number;
-    pageSize?: number;
-  }): Promise<{
-    items: ApprovalRecord[];
-    total: number;
-    page: number;
-    pageSize: number;
-  }> {
-    const queryParams: Record<string, any> = {};
-    if (params) {
-      if (params.ticketId) queryParams.ticketId = params.ticketId;
-      if (params.workflowId) queryParams.workflowId = params.workflowId;
-      if (params.status) queryParams.status = params.status;
-      if (params.page) queryParams.page = params.page;
-      if (params.pageSize) queryParams.pageSize = params.pageSize;
-    }
-    return httpClient.get('/api/v1/tickets/approval/records', queryParams);
-  }
-
-  // 提交审批
-  static async submitApproval(data: {
-    ticketId: number;
-    approvalId: number;
-    action: 'approve' | 'reject' | 'delegate';
-    comment: string;
-    delegateToUserId?: number;
-  }): Promise<void> {
-    return httpClient.post('/api/v1/tickets/workflow/approve', data);
+  static async submitApproval(data: SubmitApprovalRequest): Promise<void> {
+    await httpClient.post('/api/v1/tickets/workflow/approve', data);
   }
 }
+
+export default TicketApprovalApi;

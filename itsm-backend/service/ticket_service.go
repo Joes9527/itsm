@@ -38,7 +38,6 @@ type TicketService struct {
 	client                 *ent.Client // 用于 ProcessInstance 等系统级查询（不走 Repository）
 	logger                 *zap.SugaredLogger
 	notificationSvc        *TicketNotificationService
-	approvalSvc            *ApprovalService
 	automationRuleSvc      *TicketAutomationRuleService
 	slaSvc                 *TicketSLAService
 	assignmentSmartService *TicketAssignmentSmartService
@@ -56,7 +55,6 @@ type TicketServiceConfig struct {
 	Client                *ent.Client // 可选；传入后可用作 ProcessInstance 等系统级查询
 	Logger                *zap.SugaredLogger
 	NotificationService   *TicketNotificationService
-	ApprovalService       *ApprovalService
 	AutomationRuleService *TicketAutomationRuleService
 	SLAService            *TicketSLAService
 	ProcessTriggerService ProcessTriggerServiceInterface
@@ -79,7 +77,6 @@ func NewTicketService(cfg *TicketServiceConfig) *TicketService {
 		client:            cfg.Client,
 		logger:            cfg.Logger,
 		notificationSvc:   cfg.NotificationService,
-		approvalSvc:       cfg.ApprovalService,
 		automationRuleSvc: cfg.AutomationRuleService,
 		slaSvc:            cfg.SLAService,
 		processTriggerSvc: cfg.ProcessTriggerService,
@@ -107,11 +104,6 @@ func NewTicketServiceForTest(client *ent.Client, logger *zap.SugaredLogger) *Tic
 // SetNotificationService 注入通知服务（运行时依赖注入）
 func (s *TicketService) SetNotificationService(n *TicketNotificationService) {
 	s.notificationSvc = n
-}
-
-// SetApprovalService 注入审批服务（运行时依赖注入）
-func (s *TicketService) SetApprovalService(a *ApprovalService) {
-	s.approvalSvc = a
 }
 
 // SetProcessTriggerService 注入流程触发服务（运行时依赖注入）
@@ -171,6 +163,18 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 		params.CategoryID = categoryID
 	}
 
+	// 验证必填自定义字段（模板字段定义中标记为 required 的字段必须在提交中存在且非空）。
+	// 必须在 s.repo.Create 之前做——之前的顺序是先落库再校验，校验失败时已经落库的
+	// 工单行（连同工单编号）没有任何回滚，会在数据库里留下一个永远失败创建了的孤儿行，
+	// 污染报表/SLA统计/工单号序列。
+	if req.TemplateID != nil && len(req.FormFields) > 0 {
+		if missing, err := s.validateRequiredFields(ctx, tenantID, *req.TemplateID, req.FormFields); err != nil {
+			s.logger.Errorw("Required field validation error", "error", err, "template_id", *req.TemplateID)
+		} else if len(missing) > 0 {
+			return nil, fmt.Errorf("缺少必填字段: %s", strings.Join(missing, ", "))
+		}
+	}
+
 	// 通过 Repository 创建工单
 	tkt, err := s.repo.Create(ctx, params, tenantID)
 	if err != nil {
@@ -184,15 +188,6 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 			s.logger.Warnw("Automatic ticket assignment failed", "error", err, "ticket_id", tkt.ID)
 		} else {
 			tkt.AssigneeID = assignment.AssignedTo
-		}
-	}
-
-	// 验证必填自定义字段（模板字段定义中标记为 required 的字段必须在提交中存在且非空）
-	if req.TemplateID != nil && len(req.FormFields) > 0 {
-		if missing, err := s.validateRequiredFields(ctx, tenantID, *req.TemplateID, req.FormFields); err != nil {
-			s.logger.Errorw("Required field validation error", "error", err, "template_id", *req.TemplateID)
-		} else if len(missing) > 0 {
-			return nil, fmt.Errorf("缺少必填字段: %s", strings.Join(missing, ", "))
 		}
 	}
 

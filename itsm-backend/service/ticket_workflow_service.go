@@ -3,11 +3,13 @@ package service
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"itsm-backend/connector"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/processapprovaldecision"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketapproval"
 	"itsm-backend/ent/ticketautomationrule"
@@ -551,6 +553,21 @@ func (s *TicketWorkflowService) ApproveTicket(ctx context.Context, req *dto.Appr
 
 	txErr = tx.Commit()
 	return txErr
+}
+
+// GetApprovalDecisions 返回某个工单在 BPMN 引擎里留下的全部审批决策记录，按时间升序。
+// 工单的审批状态完全由 BPMN 驱动（ApproveTicket -> BPMNApprovalBridge -> CompleteTask ->
+// recordApprovalDecision），这里直接读 ProcessApprovalDecision，不依赖 TicketApproval 表——
+// 后者只在委派场景下才会写入（见 ApproveTicket 的 delegate 分支），首次审批完全不经过它。
+func (s *TicketWorkflowService) GetApprovalDecisions(ctx context.Context, ticketID, tenantID int) ([]*ent.ProcessApprovalDecision, error) {
+	return s.client.ProcessApprovalDecision.Query().
+		Where(
+			processapprovaldecision.BusinessType("ticket"),
+			processapprovaldecision.BusinessID(strconv.Itoa(ticketID)),
+			processapprovaldecision.TenantID(tenantID),
+		).
+		Order(ent.Asc(processapprovaldecision.FieldCreatedAt)).
+		All(ctx)
 }
 
 // ResolveTicket 解决工单（事务保护，保证工单状态更新与流转记录的原子性）

@@ -13,8 +13,6 @@ import (
 
 	"itsm-backend/ent/application"
 	"itsm-backend/ent/approvalchain"
-	"itsm-backend/ent/approvalrecord"
-	"itsm-backend/ent/approvalworkflow"
 	"itsm-backend/ent/asset"
 	"itsm-backend/ent/assetlicense"
 	"itsm-backend/ent/auditlog"
@@ -144,10 +142,6 @@ type Client struct {
 	Application *ApplicationClient
 	// ApprovalChain is the client for interacting with the ApprovalChain builders.
 	ApprovalChain *ApprovalChainClient
-	// ApprovalRecord is the client for interacting with the ApprovalRecord builders.
-	ApprovalRecord *ApprovalRecordClient
-	// ApprovalWorkflow is the client for interacting with the ApprovalWorkflow builders.
-	ApprovalWorkflow *ApprovalWorkflowClient
 	// Asset is the client for interacting with the Asset builders.
 	Asset *AssetClient
 	// AssetLicense is the client for interacting with the AssetLicense builders.
@@ -387,8 +381,6 @@ func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.Application = NewApplicationClient(c.config)
 	c.ApprovalChain = NewApprovalChainClient(c.config)
-	c.ApprovalRecord = NewApprovalRecordClient(c.config)
-	c.ApprovalWorkflow = NewApprovalWorkflowClient(c.config)
 	c.Asset = NewAssetClient(c.config)
 	c.AssetLicense = NewAssetLicenseClient(c.config)
 	c.AuditLog = NewAuditLogClient(c.config)
@@ -596,8 +588,6 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		config:                      cfg,
 		Application:                 NewApplicationClient(cfg),
 		ApprovalChain:               NewApprovalChainClient(cfg),
-		ApprovalRecord:              NewApprovalRecordClient(cfg),
-		ApprovalWorkflow:            NewApprovalWorkflowClient(cfg),
 		Asset:                       NewAssetClient(cfg),
 		AssetLicense:                NewAssetLicenseClient(cfg),
 		AuditLog:                    NewAuditLogClient(cfg),
@@ -732,8 +722,6 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		config:                      cfg,
 		Application:                 NewApplicationClient(cfg),
 		ApprovalChain:               NewApprovalChainClient(cfg),
-		ApprovalRecord:              NewApprovalRecordClient(cfg),
-		ApprovalWorkflow:            NewApprovalWorkflowClient(cfg),
 		Asset:                       NewAssetClient(cfg),
 		AssetLicense:                NewAssetLicenseClient(cfg),
 		AuditLog:                    NewAuditLogClient(cfg),
@@ -876,18 +864,17 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.Application, c.ApprovalChain, c.ApprovalRecord, c.ApprovalWorkflow, c.Asset,
-		c.AssetLicense, c.AuditLog, c.BPMNPermission, c.BootstrapToken, c.CABMember,
-		c.CIAttributeDefinition, c.CIRelationship, c.CITag, c.CIType, c.CMDBExportTask,
-		c.CMDBImportTask, c.CMDBSavedView, c.Change, c.ChangePIR, c.CloudAccount,
-		c.CloudResource, c.CloudService, c.ConfigurationItem,
-		c.ConfigurationItemHistory, c.ConnectorConfig, c.Contract, c.Conversation,
-		c.Department, c.DiscoveryJob, c.DiscoveryResult, c.DiscoverySource,
-		c.DomainConfig, c.EndpointACL, c.EngineerSkill, c.FeishuTicketSync,
-		c.FieldDefinition, c.FieldValue, c.Group, c.Incident, c.IncidentAlert,
-		c.IncidentEscalationRule, c.IncidentEvent, c.IncidentMetric, c.IncidentRule,
-		c.IncidentRuleExecution, c.ItemVersion, c.KnowledgeArticle,
-		c.KnowledgeArticleLike, c.KnowledgeArticleParticipant,
+		c.Application, c.ApprovalChain, c.Asset, c.AssetLicense, c.AuditLog,
+		c.BPMNPermission, c.BootstrapToken, c.CABMember, c.CIAttributeDefinition,
+		c.CIRelationship, c.CITag, c.CIType, c.CMDBExportTask, c.CMDBImportTask,
+		c.CMDBSavedView, c.Change, c.ChangePIR, c.CloudAccount, c.CloudResource,
+		c.CloudService, c.ConfigurationItem, c.ConfigurationItemHistory,
+		c.ConnectorConfig, c.Contract, c.Conversation, c.Department, c.DiscoveryJob,
+		c.DiscoveryResult, c.DiscoverySource, c.DomainConfig, c.EndpointACL,
+		c.EngineerSkill, c.FeishuTicketSync, c.FieldDefinition, c.FieldValue, c.Group,
+		c.Incident, c.IncidentAlert, c.IncidentEscalationRule, c.IncidentEvent,
+		c.IncidentMetric, c.IncidentRule, c.IncidentRuleExecution, c.ItemVersion,
+		c.KnowledgeArticle, c.KnowledgeArticleLike, c.KnowledgeArticleParticipant,
 		c.KnowledgeArticleSession, c.KnowledgeArticleVersion, c.KnownError,
 		c.MSPAllocation, c.MarketplaceItem, c.Menu, c.Message, c.Microservice,
 		c.Notification, c.NotificationPreference, c.PasswordResetToken, c.Permission,
@@ -913,18 +900,17 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.Application, c.ApprovalChain, c.ApprovalRecord, c.ApprovalWorkflow, c.Asset,
-		c.AssetLicense, c.AuditLog, c.BPMNPermission, c.BootstrapToken, c.CABMember,
-		c.CIAttributeDefinition, c.CIRelationship, c.CITag, c.CIType, c.CMDBExportTask,
-		c.CMDBImportTask, c.CMDBSavedView, c.Change, c.ChangePIR, c.CloudAccount,
-		c.CloudResource, c.CloudService, c.ConfigurationItem,
-		c.ConfigurationItemHistory, c.ConnectorConfig, c.Contract, c.Conversation,
-		c.Department, c.DiscoveryJob, c.DiscoveryResult, c.DiscoverySource,
-		c.DomainConfig, c.EndpointACL, c.EngineerSkill, c.FeishuTicketSync,
-		c.FieldDefinition, c.FieldValue, c.Group, c.Incident, c.IncidentAlert,
-		c.IncidentEscalationRule, c.IncidentEvent, c.IncidentMetric, c.IncidentRule,
-		c.IncidentRuleExecution, c.ItemVersion, c.KnowledgeArticle,
-		c.KnowledgeArticleLike, c.KnowledgeArticleParticipant,
+		c.Application, c.ApprovalChain, c.Asset, c.AssetLicense, c.AuditLog,
+		c.BPMNPermission, c.BootstrapToken, c.CABMember, c.CIAttributeDefinition,
+		c.CIRelationship, c.CITag, c.CIType, c.CMDBExportTask, c.CMDBImportTask,
+		c.CMDBSavedView, c.Change, c.ChangePIR, c.CloudAccount, c.CloudResource,
+		c.CloudService, c.ConfigurationItem, c.ConfigurationItemHistory,
+		c.ConnectorConfig, c.Contract, c.Conversation, c.Department, c.DiscoveryJob,
+		c.DiscoveryResult, c.DiscoverySource, c.DomainConfig, c.EndpointACL,
+		c.EngineerSkill, c.FeishuTicketSync, c.FieldDefinition, c.FieldValue, c.Group,
+		c.Incident, c.IncidentAlert, c.IncidentEscalationRule, c.IncidentEvent,
+		c.IncidentMetric, c.IncidentRule, c.IncidentRuleExecution, c.ItemVersion,
+		c.KnowledgeArticle, c.KnowledgeArticleLike, c.KnowledgeArticleParticipant,
 		c.KnowledgeArticleSession, c.KnowledgeArticleVersion, c.KnownError,
 		c.MSPAllocation, c.MarketplaceItem, c.Menu, c.Message, c.Microservice,
 		c.Notification, c.NotificationPreference, c.PasswordResetToken, c.Permission,
@@ -953,10 +939,6 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Application.mutate(ctx, m)
 	case *ApprovalChainMutation:
 		return c.ApprovalChain.mutate(ctx, m)
-	case *ApprovalRecordMutation:
-		return c.ApprovalRecord.mutate(ctx, m)
-	case *ApprovalWorkflowMutation:
-		return c.ApprovalWorkflow.mutate(ctx, m)
 	case *AssetMutation:
 		return c.Asset.mutate(ctx, m)
 	case *AssetLicenseMutation:
@@ -1499,320 +1481,6 @@ func (c *ApprovalChainClient) mutate(ctx context.Context, m *ApprovalChainMutati
 		return (&ApprovalChainDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown ApprovalChain mutation op: %q", m.Op())
-	}
-}
-
-// ApprovalRecordClient is a client for the ApprovalRecord schema.
-type ApprovalRecordClient struct {
-	config
-}
-
-// NewApprovalRecordClient returns a client for the ApprovalRecord from the given config.
-func NewApprovalRecordClient(c config) *ApprovalRecordClient {
-	return &ApprovalRecordClient{config: c}
-}
-
-// Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `approvalrecord.Hooks(f(g(h())))`.
-func (c *ApprovalRecordClient) Use(hooks ...Hook) {
-	c.hooks.ApprovalRecord = append(c.hooks.ApprovalRecord, hooks...)
-}
-
-// Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `approvalrecord.Intercept(f(g(h())))`.
-func (c *ApprovalRecordClient) Intercept(interceptors ...Interceptor) {
-	c.inters.ApprovalRecord = append(c.inters.ApprovalRecord, interceptors...)
-}
-
-// Create returns a builder for creating a ApprovalRecord entity.
-func (c *ApprovalRecordClient) Create() *ApprovalRecordCreate {
-	mutation := newApprovalRecordMutation(c.config, OpCreate)
-	return &ApprovalRecordCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// CreateBulk returns a builder for creating a bulk of ApprovalRecord entities.
-func (c *ApprovalRecordClient) CreateBulk(builders ...*ApprovalRecordCreate) *ApprovalRecordCreateBulk {
-	return &ApprovalRecordCreateBulk{config: c.config, builders: builders}
-}
-
-// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
-// a builder and applies setFunc on it.
-func (c *ApprovalRecordClient) MapCreateBulk(slice any, setFunc func(*ApprovalRecordCreate, int)) *ApprovalRecordCreateBulk {
-	rv := reflect.ValueOf(slice)
-	if rv.Kind() != reflect.Slice {
-		return &ApprovalRecordCreateBulk{err: fmt.Errorf("calling to ApprovalRecordClient.MapCreateBulk with wrong type %T, need slice", slice)}
-	}
-	builders := make([]*ApprovalRecordCreate, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
-		builders[i] = c.Create()
-		setFunc(builders[i], i)
-	}
-	return &ApprovalRecordCreateBulk{config: c.config, builders: builders}
-}
-
-// Update returns an update builder for ApprovalRecord.
-func (c *ApprovalRecordClient) Update() *ApprovalRecordUpdate {
-	mutation := newApprovalRecordMutation(c.config, OpUpdate)
-	return &ApprovalRecordUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOne returns an update builder for the given entity.
-func (c *ApprovalRecordClient) UpdateOne(_m *ApprovalRecord) *ApprovalRecordUpdateOne {
-	mutation := newApprovalRecordMutation(c.config, OpUpdateOne, withApprovalRecord(_m))
-	return &ApprovalRecordUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOneID returns an update builder for the given id.
-func (c *ApprovalRecordClient) UpdateOneID(id int) *ApprovalRecordUpdateOne {
-	mutation := newApprovalRecordMutation(c.config, OpUpdateOne, withApprovalRecordID(id))
-	return &ApprovalRecordUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// Delete returns a delete builder for ApprovalRecord.
-func (c *ApprovalRecordClient) Delete() *ApprovalRecordDelete {
-	mutation := newApprovalRecordMutation(c.config, OpDelete)
-	return &ApprovalRecordDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// DeleteOne returns a builder for deleting the given entity.
-func (c *ApprovalRecordClient) DeleteOne(_m *ApprovalRecord) *ApprovalRecordDeleteOne {
-	return c.DeleteOneID(_m.ID)
-}
-
-// DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *ApprovalRecordClient) DeleteOneID(id int) *ApprovalRecordDeleteOne {
-	builder := c.Delete().Where(approvalrecord.ID(id))
-	builder.mutation.id = &id
-	builder.mutation.op = OpDeleteOne
-	return &ApprovalRecordDeleteOne{builder}
-}
-
-// Query returns a query builder for ApprovalRecord.
-func (c *ApprovalRecordClient) Query() *ApprovalRecordQuery {
-	return &ApprovalRecordQuery{
-		config: c.config,
-		ctx:    &QueryContext{Type: TypeApprovalRecord},
-		inters: c.Interceptors(),
-	}
-}
-
-// Get returns a ApprovalRecord entity by its id.
-func (c *ApprovalRecordClient) Get(ctx context.Context, id int) (*ApprovalRecord, error) {
-	return c.Query().Where(approvalrecord.ID(id)).Only(ctx)
-}
-
-// GetX is like Get, but panics if an error occurs.
-func (c *ApprovalRecordClient) GetX(ctx context.Context, id int) *ApprovalRecord {
-	obj, err := c.Get(ctx, id)
-	if err != nil {
-		panic(err)
-	}
-	return obj
-}
-
-// QueryTicket queries the ticket edge of a ApprovalRecord.
-func (c *ApprovalRecordClient) QueryTicket(_m *ApprovalRecord) *TicketQuery {
-	query := (&TicketClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(approvalrecord.Table, approvalrecord.FieldID, id),
-			sqlgraph.To(ticket.Table, ticket.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, approvalrecord.TicketTable, approvalrecord.TicketColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// QueryWorkflow queries the workflow edge of a ApprovalRecord.
-func (c *ApprovalRecordClient) QueryWorkflow(_m *ApprovalRecord) *ApprovalWorkflowQuery {
-	query := (&ApprovalWorkflowClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(approvalrecord.Table, approvalrecord.FieldID, id),
-			sqlgraph.To(approvalworkflow.Table, approvalworkflow.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, approvalrecord.WorkflowTable, approvalrecord.WorkflowColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// Hooks returns the client hooks.
-func (c *ApprovalRecordClient) Hooks() []Hook {
-	return c.hooks.ApprovalRecord
-}
-
-// Interceptors returns the client interceptors.
-func (c *ApprovalRecordClient) Interceptors() []Interceptor {
-	return c.inters.ApprovalRecord
-}
-
-func (c *ApprovalRecordClient) mutate(ctx context.Context, m *ApprovalRecordMutation) (Value, error) {
-	switch m.Op() {
-	case OpCreate:
-		return (&ApprovalRecordCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdate:
-		return (&ApprovalRecordUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdateOne:
-		return (&ApprovalRecordUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpDelete, OpDeleteOne:
-		return (&ApprovalRecordDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
-	default:
-		return nil, fmt.Errorf("ent: unknown ApprovalRecord mutation op: %q", m.Op())
-	}
-}
-
-// ApprovalWorkflowClient is a client for the ApprovalWorkflow schema.
-type ApprovalWorkflowClient struct {
-	config
-}
-
-// NewApprovalWorkflowClient returns a client for the ApprovalWorkflow from the given config.
-func NewApprovalWorkflowClient(c config) *ApprovalWorkflowClient {
-	return &ApprovalWorkflowClient{config: c}
-}
-
-// Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `approvalworkflow.Hooks(f(g(h())))`.
-func (c *ApprovalWorkflowClient) Use(hooks ...Hook) {
-	c.hooks.ApprovalWorkflow = append(c.hooks.ApprovalWorkflow, hooks...)
-}
-
-// Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `approvalworkflow.Intercept(f(g(h())))`.
-func (c *ApprovalWorkflowClient) Intercept(interceptors ...Interceptor) {
-	c.inters.ApprovalWorkflow = append(c.inters.ApprovalWorkflow, interceptors...)
-}
-
-// Create returns a builder for creating a ApprovalWorkflow entity.
-func (c *ApprovalWorkflowClient) Create() *ApprovalWorkflowCreate {
-	mutation := newApprovalWorkflowMutation(c.config, OpCreate)
-	return &ApprovalWorkflowCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// CreateBulk returns a builder for creating a bulk of ApprovalWorkflow entities.
-func (c *ApprovalWorkflowClient) CreateBulk(builders ...*ApprovalWorkflowCreate) *ApprovalWorkflowCreateBulk {
-	return &ApprovalWorkflowCreateBulk{config: c.config, builders: builders}
-}
-
-// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
-// a builder and applies setFunc on it.
-func (c *ApprovalWorkflowClient) MapCreateBulk(slice any, setFunc func(*ApprovalWorkflowCreate, int)) *ApprovalWorkflowCreateBulk {
-	rv := reflect.ValueOf(slice)
-	if rv.Kind() != reflect.Slice {
-		return &ApprovalWorkflowCreateBulk{err: fmt.Errorf("calling to ApprovalWorkflowClient.MapCreateBulk with wrong type %T, need slice", slice)}
-	}
-	builders := make([]*ApprovalWorkflowCreate, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
-		builders[i] = c.Create()
-		setFunc(builders[i], i)
-	}
-	return &ApprovalWorkflowCreateBulk{config: c.config, builders: builders}
-}
-
-// Update returns an update builder for ApprovalWorkflow.
-func (c *ApprovalWorkflowClient) Update() *ApprovalWorkflowUpdate {
-	mutation := newApprovalWorkflowMutation(c.config, OpUpdate)
-	return &ApprovalWorkflowUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOne returns an update builder for the given entity.
-func (c *ApprovalWorkflowClient) UpdateOne(_m *ApprovalWorkflow) *ApprovalWorkflowUpdateOne {
-	mutation := newApprovalWorkflowMutation(c.config, OpUpdateOne, withApprovalWorkflow(_m))
-	return &ApprovalWorkflowUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOneID returns an update builder for the given id.
-func (c *ApprovalWorkflowClient) UpdateOneID(id int) *ApprovalWorkflowUpdateOne {
-	mutation := newApprovalWorkflowMutation(c.config, OpUpdateOne, withApprovalWorkflowID(id))
-	return &ApprovalWorkflowUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// Delete returns a delete builder for ApprovalWorkflow.
-func (c *ApprovalWorkflowClient) Delete() *ApprovalWorkflowDelete {
-	mutation := newApprovalWorkflowMutation(c.config, OpDelete)
-	return &ApprovalWorkflowDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// DeleteOne returns a builder for deleting the given entity.
-func (c *ApprovalWorkflowClient) DeleteOne(_m *ApprovalWorkflow) *ApprovalWorkflowDeleteOne {
-	return c.DeleteOneID(_m.ID)
-}
-
-// DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *ApprovalWorkflowClient) DeleteOneID(id int) *ApprovalWorkflowDeleteOne {
-	builder := c.Delete().Where(approvalworkflow.ID(id))
-	builder.mutation.id = &id
-	builder.mutation.op = OpDeleteOne
-	return &ApprovalWorkflowDeleteOne{builder}
-}
-
-// Query returns a query builder for ApprovalWorkflow.
-func (c *ApprovalWorkflowClient) Query() *ApprovalWorkflowQuery {
-	return &ApprovalWorkflowQuery{
-		config: c.config,
-		ctx:    &QueryContext{Type: TypeApprovalWorkflow},
-		inters: c.Interceptors(),
-	}
-}
-
-// Get returns a ApprovalWorkflow entity by its id.
-func (c *ApprovalWorkflowClient) Get(ctx context.Context, id int) (*ApprovalWorkflow, error) {
-	return c.Query().Where(approvalworkflow.ID(id)).Only(ctx)
-}
-
-// GetX is like Get, but panics if an error occurs.
-func (c *ApprovalWorkflowClient) GetX(ctx context.Context, id int) *ApprovalWorkflow {
-	obj, err := c.Get(ctx, id)
-	if err != nil {
-		panic(err)
-	}
-	return obj
-}
-
-// QueryApprovalRecords queries the approval_records edge of a ApprovalWorkflow.
-func (c *ApprovalWorkflowClient) QueryApprovalRecords(_m *ApprovalWorkflow) *ApprovalRecordQuery {
-	query := (&ApprovalRecordClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(approvalworkflow.Table, approvalworkflow.FieldID, id),
-			sqlgraph.To(approvalrecord.Table, approvalrecord.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, approvalworkflow.ApprovalRecordsTable, approvalworkflow.ApprovalRecordsColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// Hooks returns the client hooks.
-func (c *ApprovalWorkflowClient) Hooks() []Hook {
-	return c.hooks.ApprovalWorkflow
-}
-
-// Interceptors returns the client interceptors.
-func (c *ApprovalWorkflowClient) Interceptors() []Interceptor {
-	return c.inters.ApprovalWorkflow
-}
-
-func (c *ApprovalWorkflowClient) mutate(ctx context.Context, m *ApprovalWorkflowMutation) (Value, error) {
-	switch m.Op() {
-	case OpCreate:
-		return (&ApprovalWorkflowCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdate:
-		return (&ApprovalWorkflowUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdateOne:
-		return (&ApprovalWorkflowUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpDelete, OpDeleteOne:
-		return (&ApprovalWorkflowDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
-	default:
-		return nil, fmt.Errorf("ent: unknown ApprovalWorkflow mutation op: %q", m.Op())
 	}
 }
 
@@ -16352,22 +16020,6 @@ func (c *TicketClient) QueryRelatedTickets(_m *Ticket) *TicketQuery {
 	return query
 }
 
-// QueryApprovalRecords queries the approval_records edge of a Ticket.
-func (c *TicketClient) QueryApprovalRecords(_m *Ticket) *ApprovalRecordQuery {
-	query := (&ApprovalRecordClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(ticket.Table, ticket.FieldID, id),
-			sqlgraph.To(approvalrecord.Table, approvalrecord.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, ticket.ApprovalRecordsTable, ticket.ApprovalRecordsColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // QueryApprovals queries the approvals edge of a Ticket.
 func (c *TicketClient) QueryApprovals(_m *Ticket) *TicketApprovalQuery {
 	query := (&TicketApprovalClient{config: c.config}).Query()
@@ -19952,57 +19604,57 @@ func (c *WorkflowVersionClient) mutate(ctx context.Context, m *WorkflowVersionMu
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Application, ApprovalChain, ApprovalRecord, ApprovalWorkflow, Asset,
-		AssetLicense, AuditLog, BPMNPermission, BootstrapToken, CABMember,
-		CIAttributeDefinition, CIRelationship, CITag, CIType, CMDBExportTask,
-		CMDBImportTask, CMDBSavedView, Change, ChangePIR, CloudAccount, CloudResource,
-		CloudService, ConfigurationItem, ConfigurationItemHistory, ConnectorConfig,
-		Contract, Conversation, Department, DiscoveryJob, DiscoveryResult,
-		DiscoverySource, DomainConfig, EndpointACL, EngineerSkill, FeishuTicketSync,
-		FieldDefinition, FieldValue, Group, Incident, IncidentAlert,
-		IncidentEscalationRule, IncidentEvent, IncidentMetric, IncidentRule,
-		IncidentRuleExecution, ItemVersion, KnowledgeArticle, KnowledgeArticleLike,
-		KnowledgeArticleParticipant, KnowledgeArticleSession, KnowledgeArticleVersion,
-		KnownError, MSPAllocation, MarketplaceItem, Menu, Message, Microservice,
-		Notification, NotificationPreference, PasswordResetToken, Permission,
-		PermissionDefinition, Problem, ProcessApprovalDecision, ProcessAuditLog,
-		ProcessBinding, ProcessDefinition, ProcessDeployment, ProcessExecutionHistory,
-		ProcessInstance, ProcessTask, ProcessVariable, ProcessVersionChangelog,
-		Project, PromptTemplate, ProvisioningTask, RelationshipType, Release, Role,
-		RolePermission, RootCauseAnalysis, SLAAlertHistory, SLAAlertRule,
-		SLADefinition, SLAMetric, SLAViolation, ServiceCatalog, ServiceRequest,
-		StandardChange, Survey, SurveyResponse, SystemConfig, Tag, Team, Tenant,
-		TenantInstallation, Ticket, TicketApproval, TicketAssignmentRule,
-		TicketAttachment, TicketAutomationRule, TicketCC, TicketCategory,
-		TicketComment, TicketNotification, TicketTag, TicketTemplate, TicketType,
-		TicketView, TicketWorkflowRecord, ToolInvocation, User, Vendor, Workflow,
-		WorkflowInstance, WorkflowTask, WorkflowVersion []ent.Hook
+		Application, ApprovalChain, Asset, AssetLicense, AuditLog, BPMNPermission,
+		BootstrapToken, CABMember, CIAttributeDefinition, CIRelationship, CITag,
+		CIType, CMDBExportTask, CMDBImportTask, CMDBSavedView, Change, ChangePIR,
+		CloudAccount, CloudResource, CloudService, ConfigurationItem,
+		ConfigurationItemHistory, ConnectorConfig, Contract, Conversation, Department,
+		DiscoveryJob, DiscoveryResult, DiscoverySource, DomainConfig, EndpointACL,
+		EngineerSkill, FeishuTicketSync, FieldDefinition, FieldValue, Group, Incident,
+		IncidentAlert, IncidentEscalationRule, IncidentEvent, IncidentMetric,
+		IncidentRule, IncidentRuleExecution, ItemVersion, KnowledgeArticle,
+		KnowledgeArticleLike, KnowledgeArticleParticipant, KnowledgeArticleSession,
+		KnowledgeArticleVersion, KnownError, MSPAllocation, MarketplaceItem, Menu,
+		Message, Microservice, Notification, NotificationPreference,
+		PasswordResetToken, Permission, PermissionDefinition, Problem,
+		ProcessApprovalDecision, ProcessAuditLog, ProcessBinding, ProcessDefinition,
+		ProcessDeployment, ProcessExecutionHistory, ProcessInstance, ProcessTask,
+		ProcessVariable, ProcessVersionChangelog, Project, PromptTemplate,
+		ProvisioningTask, RelationshipType, Release, Role, RolePermission,
+		RootCauseAnalysis, SLAAlertHistory, SLAAlertRule, SLADefinition, SLAMetric,
+		SLAViolation, ServiceCatalog, ServiceRequest, StandardChange, Survey,
+		SurveyResponse, SystemConfig, Tag, Team, Tenant, TenantInstallation, Ticket,
+		TicketApproval, TicketAssignmentRule, TicketAttachment, TicketAutomationRule,
+		TicketCC, TicketCategory, TicketComment, TicketNotification, TicketTag,
+		TicketTemplate, TicketType, TicketView, TicketWorkflowRecord, ToolInvocation,
+		User, Vendor, Workflow, WorkflowInstance, WorkflowTask,
+		WorkflowVersion []ent.Hook
 	}
 	inters struct {
-		Application, ApprovalChain, ApprovalRecord, ApprovalWorkflow, Asset,
-		AssetLicense, AuditLog, BPMNPermission, BootstrapToken, CABMember,
-		CIAttributeDefinition, CIRelationship, CITag, CIType, CMDBExportTask,
-		CMDBImportTask, CMDBSavedView, Change, ChangePIR, CloudAccount, CloudResource,
-		CloudService, ConfigurationItem, ConfigurationItemHistory, ConnectorConfig,
-		Contract, Conversation, Department, DiscoveryJob, DiscoveryResult,
-		DiscoverySource, DomainConfig, EndpointACL, EngineerSkill, FeishuTicketSync,
-		FieldDefinition, FieldValue, Group, Incident, IncidentAlert,
-		IncidentEscalationRule, IncidentEvent, IncidentMetric, IncidentRule,
-		IncidentRuleExecution, ItemVersion, KnowledgeArticle, KnowledgeArticleLike,
-		KnowledgeArticleParticipant, KnowledgeArticleSession, KnowledgeArticleVersion,
-		KnownError, MSPAllocation, MarketplaceItem, Menu, Message, Microservice,
-		Notification, NotificationPreference, PasswordResetToken, Permission,
-		PermissionDefinition, Problem, ProcessApprovalDecision, ProcessAuditLog,
-		ProcessBinding, ProcessDefinition, ProcessDeployment, ProcessExecutionHistory,
-		ProcessInstance, ProcessTask, ProcessVariable, ProcessVersionChangelog,
-		Project, PromptTemplate, ProvisioningTask, RelationshipType, Release, Role,
-		RolePermission, RootCauseAnalysis, SLAAlertHistory, SLAAlertRule,
-		SLADefinition, SLAMetric, SLAViolation, ServiceCatalog, ServiceRequest,
-		StandardChange, Survey, SurveyResponse, SystemConfig, Tag, Team, Tenant,
-		TenantInstallation, Ticket, TicketApproval, TicketAssignmentRule,
-		TicketAttachment, TicketAutomationRule, TicketCC, TicketCategory,
-		TicketComment, TicketNotification, TicketTag, TicketTemplate, TicketType,
-		TicketView, TicketWorkflowRecord, ToolInvocation, User, Vendor, Workflow,
-		WorkflowInstance, WorkflowTask, WorkflowVersion []ent.Interceptor
+		Application, ApprovalChain, Asset, AssetLicense, AuditLog, BPMNPermission,
+		BootstrapToken, CABMember, CIAttributeDefinition, CIRelationship, CITag,
+		CIType, CMDBExportTask, CMDBImportTask, CMDBSavedView, Change, ChangePIR,
+		CloudAccount, CloudResource, CloudService, ConfigurationItem,
+		ConfigurationItemHistory, ConnectorConfig, Contract, Conversation, Department,
+		DiscoveryJob, DiscoveryResult, DiscoverySource, DomainConfig, EndpointACL,
+		EngineerSkill, FeishuTicketSync, FieldDefinition, FieldValue, Group, Incident,
+		IncidentAlert, IncidentEscalationRule, IncidentEvent, IncidentMetric,
+		IncidentRule, IncidentRuleExecution, ItemVersion, KnowledgeArticle,
+		KnowledgeArticleLike, KnowledgeArticleParticipant, KnowledgeArticleSession,
+		KnowledgeArticleVersion, KnownError, MSPAllocation, MarketplaceItem, Menu,
+		Message, Microservice, Notification, NotificationPreference,
+		PasswordResetToken, Permission, PermissionDefinition, Problem,
+		ProcessApprovalDecision, ProcessAuditLog, ProcessBinding, ProcessDefinition,
+		ProcessDeployment, ProcessExecutionHistory, ProcessInstance, ProcessTask,
+		ProcessVariable, ProcessVersionChangelog, Project, PromptTemplate,
+		ProvisioningTask, RelationshipType, Release, Role, RolePermission,
+		RootCauseAnalysis, SLAAlertHistory, SLAAlertRule, SLADefinition, SLAMetric,
+		SLAViolation, ServiceCatalog, ServiceRequest, StandardChange, Survey,
+		SurveyResponse, SystemConfig, Tag, Team, Tenant, TenantInstallation, Ticket,
+		TicketApproval, TicketAssignmentRule, TicketAttachment, TicketAutomationRule,
+		TicketCC, TicketCategory, TicketComment, TicketNotification, TicketTag,
+		TicketTemplate, TicketType, TicketView, TicketWorkflowRecord, ToolInvocation,
+		User, Vendor, Workflow, WorkflowInstance, WorkflowTask,
+		WorkflowVersion []ent.Interceptor
 	}
 )

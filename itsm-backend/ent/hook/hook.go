@@ -32,30 +32,6 @@ func (f ApprovalChainFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Valu
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ApprovalChainMutation", m)
 }
 
-// The ApprovalRecordFunc type is an adapter to allow the use of ordinary
-// function as ApprovalRecord mutator.
-type ApprovalRecordFunc func(context.Context, *ent.ApprovalRecordMutation) (ent.Value, error)
-
-// Mutate calls f(ctx, m).
-func (f ApprovalRecordFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.ApprovalRecordMutation); ok {
-		return f(ctx, mv)
-	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ApprovalRecordMutation", m)
-}
-
-// The ApprovalWorkflowFunc type is an adapter to allow the use of ordinary
-// function as ApprovalWorkflow mutator.
-type ApprovalWorkflowFunc func(context.Context, *ent.ApprovalWorkflowMutation) (ent.Value, error)
-
-// Mutate calls f(ctx, m).
-func (f ApprovalWorkflowFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.ApprovalWorkflowMutation); ok {
-		return f(ctx, mv)
-	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ApprovalWorkflowMutation", m)
-}
-
 // The AssetFunc type is an adapter to allow the use of ordinary
 // function as Asset mutator.
 type AssetFunc func(context.Context, *ent.AssetMutation) (ent.Value, error)

@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"itsm-backend/ent"
-	"itsm-backend/ent/approvalworkflow"
 	"itsm-backend/ent/citype"
 	"itsm-backend/ent/menu"
 	"itsm-backend/ent/permission"
@@ -198,24 +197,8 @@ func cloneTenantTemplates(ctx context.Context, c *ent.Client, sourceID, tenantID
 			}
 		}
 	}
-	workflows, err := c.ApprovalWorkflow.Query().Where(approvalworkflow.TenantIDEQ(sourceID)).All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, item := range workflows {
-		exists, err := c.ApprovalWorkflow.Query().Where(approvalworkflow.NameEQ(item.Name), approvalworkflow.TenantIDEQ(tenantID)).Exist(ctx)
-		if err != nil {
-			return err
-		}
-		if !exists {
-			if _, err := c.ApprovalWorkflow.Create().
-				SetName(item.Name).SetDescription(item.Description).SetTicketType(item.TicketType).
-				SetPriority(item.Priority).SetNodes(item.Nodes).SetStatus(item.Status).
-				SetIsActive(item.IsActive).SetTenantID(tenantID).Save(ctx); err != nil {
-				return fmt.Errorf("provision approval workflow %s: %w", item.Name, err)
-			}
-		}
-	}
+	// legacy ApprovalWorkflow 模板克隆已随引擎下线一并移除（见 Task 6）；
+	// 审批能力现在完全由下方的 BPMN ProcessDefinition/ProcessBinding 克隆覆盖。
 	definitions, err := c.ProcessDefinition.Query().Where(processdefinition.TenantIDEQ(sourceID)).All(ctx)
 	if err != nil {
 		return err

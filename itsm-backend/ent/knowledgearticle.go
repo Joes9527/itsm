@@ -30,8 +30,10 @@ type KnowledgeArticle struct {
 	// 租户ID
 	TenantID int `json:"tenant_id,omitempty"`
 	// 是否发布
-	IsPublished   bool   `json:"is_published,omitempty"`
-	ReviewStatus  string `json:"review_status,omitempty"`
+	IsPublished bool `json:"is_published,omitempty"`
+	// 审核状态: draft/under_review/published/archived
+	ReviewStatus string `json:"review_status,omitempty"`
+	// 审核意见
 	ReviewComment string `json:"review_comment,omitempty"`
 	// 浏览次数
 	ViewCount int `json:"view_count,omitempty"`
@@ -144,18 +146,6 @@ func (_m *KnowledgeArticle) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Category = value.String
 			}
-		case knowledgearticle.FieldReviewStatus:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field review_status", values[i])
-			} else if value.Valid {
-				_m.ReviewStatus = value.String
-			}
-		case knowledgearticle.FieldReviewComment:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field review_comment", values[i])
-			} else if value.Valid {
-				_m.ReviewComment = value.String
-			}
 		case knowledgearticle.FieldTags:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tags", values[i])
@@ -179,6 +169,18 @@ func (_m *KnowledgeArticle) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field is_published", values[i])
 			} else if value.Valid {
 				_m.IsPublished = value.Bool
+			}
+		case knowledgearticle.FieldReviewStatus:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field review_status", values[i])
+			} else if value.Valid {
+				_m.ReviewStatus = value.String
+			}
+		case knowledgearticle.FieldReviewComment:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field review_comment", values[i])
+			} else if value.Valid {
+				_m.ReviewComment = value.String
 			}
 		case knowledgearticle.FieldViewCount:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -289,6 +291,12 @@ func (_m *KnowledgeArticle) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("is_published=")
 	builder.WriteString(fmt.Sprintf("%v", _m.IsPublished))
+	builder.WriteString(", ")
+	builder.WriteString("review_status=")
+	builder.WriteString(_m.ReviewStatus)
+	builder.WriteString(", ")
+	builder.WriteString("review_comment=")
+	builder.WriteString(_m.ReviewComment)
 	builder.WriteString(", ")
 	builder.WriteString("view_count=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ViewCount))

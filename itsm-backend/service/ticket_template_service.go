@@ -213,6 +213,26 @@ func validateTicketTemplate(name, category, priority string, fields []FieldDefin
 	return validateTemplateFields(fields)
 }
 
+// validFieldTypes 是 field_definitions.field_type 目前支持的全部取值，跟
+// ent/schema/field_definition.go 里的字段注释保持一致——那边只是注释，不是真正的
+// 枚举约束，这里补上运行时校验，不然拼错的类型字符串会被静默存下来，前端渲染器
+// 找不到匹配分支时会退化成普通文本框。
+var validFieldTypes = map[string]struct{}{
+	"text":        {},
+	"textarea":    {},
+	"number":      {},
+	"date":        {},
+	"select":      {},
+	"multiselect": {},
+	"boolean":     {},
+	"file":        {},
+}
+
+func isValidFieldType(fieldType string) bool {
+	_, ok := validFieldTypes[fieldType]
+	return ok
+}
+
 func validateTemplateFields(fields []FieldDefinitionInput) error {
 	if len(fields) > 200 {
 		return fmt.Errorf("模板字段不能超过 200 个")
@@ -224,6 +244,9 @@ func validateTemplateFields(fields []FieldDefinitionInput) error {
 		}
 		if _, dup := seen[field.Name]; dup {
 			return fmt.Errorf("模板字段 %s 重复", field.Name)
+		}
+		if field.FieldType != "" && !isValidFieldType(field.FieldType) {
+			return fmt.Errorf("模板字段 %s 的字段类型 %q 不合法", field.Name, field.FieldType)
 		}
 		seen[field.Name] = struct{}{}
 	}

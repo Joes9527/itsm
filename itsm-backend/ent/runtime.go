@@ -5,8 +5,6 @@ package ent
 import (
 	"itsm-backend/ent/application"
 	"itsm-backend/ent/approvalchain"
-	"itsm-backend/ent/approvalrecord"
-	"itsm-backend/ent/approvalworkflow"
 	"itsm-backend/ent/asset"
 	"itsm-backend/ent/assetlicense"
 	"itsm-backend/ent/auditlog"
@@ -183,92 +181,6 @@ func init() {
 	approvalchain.DefaultUpdatedAt = approvalchainDescUpdatedAt.Default.(func() time.Time)
 	// approvalchain.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	approvalchain.UpdateDefaultUpdatedAt = approvalchainDescUpdatedAt.UpdateDefault.(func() time.Time)
-	approvalrecordFields := schema.ApprovalRecord{}.Fields()
-	_ = approvalrecordFields
-	// approvalrecordDescTicketID is the schema descriptor for ticket_id field.
-	approvalrecordDescTicketID := approvalrecordFields[0].Descriptor()
-	// approvalrecord.TicketIDValidator is a validator for the "ticket_id" field. It is called by the builders before save.
-	approvalrecord.TicketIDValidator = approvalrecordDescTicketID.Validators[0].(func(int) error)
-	// approvalrecordDescTicketNumber is the schema descriptor for ticket_number field.
-	approvalrecordDescTicketNumber := approvalrecordFields[1].Descriptor()
-	// approvalrecord.TicketNumberValidator is a validator for the "ticket_number" field. It is called by the builders before save.
-	approvalrecord.TicketNumberValidator = approvalrecordDescTicketNumber.Validators[0].(func(string) error)
-	// approvalrecordDescTicketTitle is the schema descriptor for ticket_title field.
-	approvalrecordDescTicketTitle := approvalrecordFields[2].Descriptor()
-	// approvalrecord.TicketTitleValidator is a validator for the "ticket_title" field. It is called by the builders before save.
-	approvalrecord.TicketTitleValidator = approvalrecordDescTicketTitle.Validators[0].(func(string) error)
-	// approvalrecordDescWorkflowID is the schema descriptor for workflow_id field.
-	approvalrecordDescWorkflowID := approvalrecordFields[3].Descriptor()
-	// approvalrecord.WorkflowIDValidator is a validator for the "workflow_id" field. It is called by the builders before save.
-	approvalrecord.WorkflowIDValidator = approvalrecordDescWorkflowID.Validators[0].(func(int) error)
-	// approvalrecordDescWorkflowName is the schema descriptor for workflow_name field.
-	approvalrecordDescWorkflowName := approvalrecordFields[4].Descriptor()
-	// approvalrecord.WorkflowNameValidator is a validator for the "workflow_name" field. It is called by the builders before save.
-	approvalrecord.WorkflowNameValidator = approvalrecordDescWorkflowName.Validators[0].(func(string) error)
-	// approvalrecordDescCurrentLevel is the schema descriptor for current_level field.
-	approvalrecordDescCurrentLevel := approvalrecordFields[5].Descriptor()
-	// approvalrecord.DefaultCurrentLevel holds the default value on creation for the current_level field.
-	approvalrecord.DefaultCurrentLevel = approvalrecordDescCurrentLevel.Default.(int)
-	// approvalrecordDescTotalLevels is the schema descriptor for total_levels field.
-	approvalrecordDescTotalLevels := approvalrecordFields[6].Descriptor()
-	// approvalrecord.DefaultTotalLevels holds the default value on creation for the total_levels field.
-	approvalrecord.DefaultTotalLevels = approvalrecordDescTotalLevels.Default.(int)
-	// approvalrecordDescApproverID is the schema descriptor for approver_id field.
-	approvalrecordDescApproverID := approvalrecordFields[7].Descriptor()
-	// approvalrecord.ApproverIDValidator is a validator for the "approver_id" field. It is called by the builders before save.
-	approvalrecord.ApproverIDValidator = approvalrecordDescApproverID.Validators[0].(func(int) error)
-	// approvalrecordDescApproverName is the schema descriptor for approver_name field.
-	approvalrecordDescApproverName := approvalrecordFields[8].Descriptor()
-	// approvalrecord.ApproverNameValidator is a validator for the "approver_name" field. It is called by the builders before save.
-	approvalrecord.ApproverNameValidator = approvalrecordDescApproverName.Validators[0].(func(string) error)
-	// approvalrecordDescStepOrder is the schema descriptor for step_order field.
-	approvalrecordDescStepOrder := approvalrecordFields[9].Descriptor()
-	// approvalrecord.DefaultStepOrder holds the default value on creation for the step_order field.
-	approvalrecord.DefaultStepOrder = approvalrecordDescStepOrder.Default.(int)
-	// approvalrecordDescStatus is the schema descriptor for status field.
-	approvalrecordDescStatus := approvalrecordFields[11].Descriptor()
-	// approvalrecord.DefaultStatus holds the default value on creation for the status field.
-	approvalrecord.DefaultStatus = approvalrecordDescStatus.Default.(string)
-	// approvalrecordDescTenantID is the schema descriptor for tenant_id field.
-	approvalrecordDescTenantID := approvalrecordFields[14].Descriptor()
-	// approvalrecord.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
-	approvalrecord.TenantIDValidator = approvalrecordDescTenantID.Validators[0].(func(int) error)
-	// approvalrecordDescCreatedAt is the schema descriptor for created_at field.
-	approvalrecordDescCreatedAt := approvalrecordFields[15].Descriptor()
-	// approvalrecord.DefaultCreatedAt holds the default value on creation for the created_at field.
-	approvalrecord.DefaultCreatedAt = approvalrecordDescCreatedAt.Default.(func() time.Time)
-	approvalworkflowFields := schema.ApprovalWorkflow{}.Fields()
-	_ = approvalworkflowFields
-	// approvalworkflowDescName is the schema descriptor for name field.
-	approvalworkflowDescName := approvalworkflowFields[0].Descriptor()
-	// approvalworkflow.NameValidator is a validator for the "name" field. It is called by the builders before save.
-	approvalworkflow.NameValidator = approvalworkflowDescName.Validators[0].(func(string) error)
-	// approvalworkflowDescNodes is the schema descriptor for nodes field.
-	approvalworkflowDescNodes := approvalworkflowFields[4].Descriptor()
-	// approvalworkflow.DefaultNodes holds the default value on creation for the nodes field.
-	approvalworkflow.DefaultNodes = approvalworkflowDescNodes.Default.([]map[string]interface{})
-	// approvalworkflowDescStatus is the schema descriptor for status field.
-	approvalworkflowDescStatus := approvalworkflowFields[5].Descriptor()
-	// approvalworkflow.DefaultStatus holds the default value on creation for the status field.
-	approvalworkflow.DefaultStatus = approvalworkflowDescStatus.Default.(string)
-	// approvalworkflowDescIsActive is the schema descriptor for is_active field.
-	approvalworkflowDescIsActive := approvalworkflowFields[7].Descriptor()
-	// approvalworkflow.DefaultIsActive holds the default value on creation for the is_active field.
-	approvalworkflow.DefaultIsActive = approvalworkflowDescIsActive.Default.(bool)
-	// approvalworkflowDescTenantID is the schema descriptor for tenant_id field.
-	approvalworkflowDescTenantID := approvalworkflowFields[8].Descriptor()
-	// approvalworkflow.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
-	approvalworkflow.TenantIDValidator = approvalworkflowDescTenantID.Validators[0].(func(int) error)
-	// approvalworkflowDescCreatedAt is the schema descriptor for created_at field.
-	approvalworkflowDescCreatedAt := approvalworkflowFields[9].Descriptor()
-	// approvalworkflow.DefaultCreatedAt holds the default value on creation for the created_at field.
-	approvalworkflow.DefaultCreatedAt = approvalworkflowDescCreatedAt.Default.(func() time.Time)
-	// approvalworkflowDescUpdatedAt is the schema descriptor for updated_at field.
-	approvalworkflowDescUpdatedAt := approvalworkflowFields[10].Descriptor()
-	// approvalworkflow.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	approvalworkflow.DefaultUpdatedAt = approvalworkflowDescUpdatedAt.Default.(func() time.Time)
-	// approvalworkflow.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	approvalworkflow.UpdateDefaultUpdatedAt = approvalworkflowDescUpdatedAt.UpdateDefault.(func() time.Time)
 	assetFields := schema.Asset{}.Fields()
 	_ = assetFields
 	// assetDescAssetNumber is the schema descriptor for asset_number field.

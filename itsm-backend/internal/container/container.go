@@ -31,7 +31,6 @@ type Container struct {
 	ticketService         *service.TicketService
 	incidentService       *service.IncidentService
 	notificationService   *service.NotificationService
-	approvalService       *service.ApprovalService
 	sequenceService       *service.SequenceService
 	processTriggerService service.ProcessTriggerServiceInterface
 	processResolver       *service.ProcessResolver
@@ -99,9 +98,6 @@ func (c *Container) initCoreServices() {
 	// Notification Service
 	c.notificationService = service.NewNotificationService(c.client)
 
-	// Approval Service
-	c.approvalService = service.NewApprovalService(c.client, c.logger)
-
 	// Incident Service
 	c.incidentService = service.NewIncidentService(c.client, c.logger)
 	c.incidentService.SetSequenceService(c.sequenceService)
@@ -131,7 +127,6 @@ func (c *Container) initBusinessServices() {
 		Client:                c.client,
 		Logger:                c.logger,
 		NotificationService:   c.ticketNotificationService,
-		ApprovalService:       c.approvalService,
 		AutomationRuleService: c.ticketAutomationService,
 		SLAService:            c.ticketSLAService,
 		ProcessTriggerService: c.processTriggerService,
@@ -159,11 +154,6 @@ func (c *Container) GetIncidentService() *service.IncidentService {
 // GetNotificationService 获取通知服务
 func (c *Container) GetNotificationService() *service.NotificationService {
 	return c.notificationService
-}
-
-// GetApprovalService 获取审批服务
-func (c *Container) GetApprovalService() *service.ApprovalService {
-	return c.approvalService
 }
 
 // GetSequenceService 获取序列服务
@@ -196,7 +186,6 @@ func (c *Container) NewBaseRepository() *base.EntRepository {
 // NewTicketServiceWithDeps 创建工单服务（带自定义依赖）
 func (c *Container) NewTicketServiceWithDeps(
 	notificationSvc *service.TicketNotificationService,
-	approvalSvc *service.ApprovalService,
 	automationSvc *service.TicketAutomationRuleService,
 	slaSvc *service.TicketSLAService,
 ) *service.TicketService {
@@ -204,7 +193,6 @@ func (c *Container) NewTicketServiceWithDeps(
 		Repository:            c.ticketRepository,
 		Logger:                c.logger,
 		NotificationService:   notificationSvc,
-		ApprovalService:       approvalSvc,
 		AutomationRuleService: automationSvc,
 		SLAService:            slaSvc,
 	})

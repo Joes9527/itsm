@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strconv"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/fielddefinition"
@@ -16,6 +18,59 @@ type FieldValueService struct {
 
 func NewFieldValueService(client *ent.Client) *FieldValueService {
 	return &FieldValueService{client: client}
+}
+
+// validateFieldValue 按字段定义的 field_type 做最基本的格式/成员校验。只处理有明确
+// 判定标准的类型（number 是不是数字、select/multiselect 的值在不在 options 里）；
+// text/textarea/date/boolean/file 目前没有额外格式约束，跳过。
+func validateFieldValue(def *ent.FieldDefinition, raw interface{}) error {
+	switch def.FieldType {
+	case "number":
+		switch raw.(type) {
+		case float64, int, int64, json.Number:
+			return nil
+		case string:
+			if _, err := strconv.ParseFloat(raw.(string), 64); err == nil {
+				return nil
+			}
+		}
+		return fmt.Errorf("字段 %q 需要数字类型的值", def.Label)
+	case "select":
+		if len(def.Options) == 0 {
+			return nil
+		}
+		valueStr := fmt.Sprintf("%v", raw)
+		for _, opt := range def.Options {
+			if optMap, ok := opt.(map[string]interface{}); ok {
+				if fmt.Sprintf("%v", optMap["value"]) == valueStr {
+					return nil
+				}
+			}
+		}
+		return fmt.Errorf("字段 %q 的值不在允许的选项范围内", def.Label)
+	case "multiselect":
+		if len(def.Options) == 0 {
+			return nil
+		}
+		values, ok := raw.([]interface{})
+		if !ok {
+			return fmt.Errorf("字段 %q 需要数组类型的值", def.Label)
+		}
+		allowed := make(map[string]struct{}, len(def.Options))
+		for _, opt := range def.Options {
+			if optMap, ok := opt.(map[string]interface{}); ok {
+				allowed[fmt.Sprintf("%v", optMap["value"])] = struct{}{}
+			}
+		}
+		for _, v := range values {
+			if _, ok := allowed[fmt.Sprintf("%v", v)]; !ok {
+				return fmt.Errorf("字段 %q 包含不在允许范围内的值: %v", def.Label, v)
+			}
+		}
+		return nil
+	default:
+		return nil
+	}
 }
 
 // CreateValues 把提交的 values（fieldName -> 原始值）跟 (defEntityType, defEntityID) 下的
@@ -49,6 +104,9 @@ func (s *FieldValueService) CreateValues(ctx context.Context, tenantID int, defE
 		raw, ok := values[def.Name]
 		if !ok {
 			continue
+		}
+		if err := validateFieldValue(def, raw); err != nil {
+			return rollback(tx, err)
 		}
 		encoded, err := json.Marshal(raw)
 		if err != nil {

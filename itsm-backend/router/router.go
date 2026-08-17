@@ -205,7 +205,6 @@ type RouterConfig struct {
 	TicketWorkflowController        *controller.TicketWorkflowController
 	TicketAutomationRuleController  *controller.TicketAutomationRuleController
 	IncidentController              *controller.IncidentController
-	ApprovalController              *controller.ApprovalController
 	BPMNWorkflowController          *controller.BPMNWorkflowController
 	BPMNProcessTriggerController    *controller.BPMNProcessTriggerController
 	BPMNDashboardController         *controller.BPMNDashboardController
@@ -589,39 +588,10 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				tickets.DELETE("/:id/attachments/:attachment_id", middleware.RequirePermission("ticket", "delete"), config.TicketAttachmentController.DeleteAttachment)
 			}
 
-			// 审批流程管理
-			if config.ApprovalController != nil {
-				tickets.POST("/approval/submit", middleware.RequirePermission("approval", "create"), config.ApprovalController.SubmitApproval)
-				tickets.GET("/approval/records", middleware.RequirePermission("approval", "read"), config.ApprovalController.GetApprovalRecords)
-
-				// 审批工作流CRUD
-				approvalWorkflows := tenant.(*gin.RouterGroup).Group("/approval-workflows")
-				{
-					approvalWorkflows.GET("", middleware.RequirePermission("approval_workflow", "read"), config.ApprovalController.ListWorkflows)
-					approvalWorkflows.POST("", middleware.RequirePermission("approval_workflow", "create"), config.ApprovalController.CreateWorkflow)
-					approvalWorkflows.GET("/:id", middleware.RequirePermission("approval_workflow", "read"), config.ApprovalController.GetWorkflow)
-					approvalWorkflows.PUT("/:id", middleware.RequirePermission("approval_workflow", "update"), config.ApprovalController.UpdateWorkflow)
-					approvalWorkflows.POST("/:id/migrate-to-bpmn", middleware.RequirePermission("approval_workflow", "update"), config.ApprovalController.MigrateWorkflowToBPMN)
-					approvalWorkflows.PATCH("/:id", middleware.RequirePermission("approval_workflow", "update"), config.ApprovalController.PatchWorkflow)
-					approvalWorkflows.DELETE("/:id", middleware.RequirePermission("approval_workflow", "delete"), config.ApprovalController.DeleteWorkflow)
-				}
-				// 兼容旧路径 /approvals
-				approvals := tenant.(*gin.RouterGroup).Group("/approvals")
-				{
-					approvals.GET("", middleware.RequirePermission("approval_workflow", "read"), config.ApprovalController.ListWorkflows)
-					approvals.POST("", middleware.RequirePermission("approval_workflow", "write"), config.ApprovalController.CreateWorkflow)
-					approvals.GET("/:id", middleware.RequirePermission("approval_workflow", "read"), config.ApprovalController.GetWorkflow)
-					approvals.PUT("/:id", middleware.RequirePermission("approval_workflow", "write"), config.ApprovalController.UpdateWorkflow)
-					approvals.PATCH("/:id", middleware.RequirePermission("approval_workflow", "write"), config.ApprovalController.PatchWorkflow)
-					approvals.DELETE("/:id", middleware.RequirePermission("approval_workflow", "delete"), config.ApprovalController.DeleteWorkflow)
-					approvals.GET("/records", middleware.RequirePermission("approval_workflow", "read"), config.ApprovalController.GetApprovalRecords)
-					approvals.POST("/submit", middleware.RequirePermission("approval_workflow", "write"), config.ApprovalController.SubmitApproval)
-						// 我的待审批：聚合当前用户的 BPMN 审批任务
-						tenant.GET("/approval-records", middleware.RequirePermission("approval_workflow", "read"), config.ApprovalController.GetApprovalRecords)
-						tenant.GET("/my-approvals", middleware.RequirePermission("task", "read"), config.BPMNWorkflowController.ListUserTasks)
-
-				}
-
+			// 我的待审批：聚合当前用户的 BPMN 审批任务
+			// legacy ApprovalController/ApprovalWorkflow 引擎已下线（存量数据已迁移至 BPMN，见 Task 5/6）
+			if config.BPMNWorkflowController != nil {
+				tenant.GET("/my-approvals", middleware.RequirePermission("task", "read"), config.BPMNWorkflowController.ListUserTasks)
 			}
 
 			// 工单流转工作流
@@ -639,6 +609,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				tickets.GET("/:id/workflow/state", middleware.RequirePermission("workflow", "read"), config.TicketWorkflowController.GetTicketWorkflowState)
 				tickets.GET("/:id/workflow-history", middleware.RequirePermission("workflow", "read"), config.TicketWorkflowController.GetTicketWorkflowHistory)
 				tickets.GET("/:id/workflow_records", middleware.RequirePermission("workflow", "read"), config.TicketWorkflowController.GetTicketWorkflowHistory)
+				tickets.GET("/:id/approval-decisions", middleware.RequirePermission("workflow", "read"), config.TicketWorkflowController.GetApprovalDecisions)
 			}
 
 			// 工单自动化规则

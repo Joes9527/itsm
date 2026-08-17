@@ -180,23 +180,23 @@ func TestBPMNTemplateService_ChangeNormalFlow_ApprovalGatewayConditionCompiles(t
 			scheduleFlow = flow
 		}
 	}
-	require.NotNil(t, approvalFlow, "Gateway_Approval 应该有一条指向 Activity_CABApproval 的出边（need_approval==true）")
-	require.NotNil(t, scheduleFlow, "Gateway_Approval 应该有一条指向 Activity_Schedule 的出边（need_approval!=true）")
+	require.NotNil(t, approvalFlow, "Gateway_Approval 应该有一条指向 Activity_CABApproval 的出边（approval_required==true）")
+	require.NotNil(t, scheduleFlow, "Gateway_Approval 应该有一条指向 Activity_Schedule 的出边（approval_required!=true）")
 	require.NotNil(t, approvalFlow.ConditionExpression)
 	require.NotNil(t, scheduleFlow.ConditionExpression)
 
 	engine := NewExpressionEngine()
 
-	needApprovalTrue := map[string]interface{}{
-		"variables": map[string]interface{}{"need_approval": true},
+	approvalRequiredTrue := map[string]interface{}{
+		"variables": map[string]interface{}{"approval_required": true},
 	}
-	result, err := engine.EvaluateCondition(approvalFlow.ConditionExpression.Expression, needApprovalTrue)
-	require.NoError(t, err, "need_approval==true 分支的条件表达式应该能正常编译求值，而不是解析失败")
-	assert.True(t, result, "need_approval=true 时，指向 Activity_CABApproval 的分支应该判定为满足")
+	result, err := engine.EvaluateCondition(approvalFlow.ConditionExpression.Expression, approvalRequiredTrue)
+	require.NoError(t, err, "approval_required==true 分支的条件表达式应该能正常编译求值，而不是解析失败")
+	assert.True(t, result, "approval_required=true 时，指向 Activity_CABApproval 的分支应该判定为满足")
 
-	result, err = engine.EvaluateCondition(scheduleFlow.ConditionExpression.Expression, needApprovalTrue)
-	require.NoError(t, err, "need_approval!=true 分支的条件表达式应该能正常编译求值，而不是解析失败")
-	assert.False(t, result, "need_approval=true 时，指向 Activity_Schedule 的分支应该判定为不满足")
+	result, err = engine.EvaluateCondition(scheduleFlow.ConditionExpression.Expression, approvalRequiredTrue)
+	require.NoError(t, err, "approval_required!=true 分支的条件表达式应该能正常编译求值，而不是解析失败")
+	assert.False(t, result, "approval_required=true 时，指向 Activity_Schedule 的分支应该判定为不满足")
 }
 
 func TestBPMNTemplateService_ServiceRequestFlows_ApprovalNodeMarked(t *testing.T) {

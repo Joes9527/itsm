@@ -99,7 +99,8 @@ func ProductionInitializers(seeder *Seeder) ([]initialization.Initializer, error
 		dependencies: []string{"identity-rbac", "itil-core"},
 		checksum:     checksum("workflow-core"),
 		apply: func(ctx context.Context, transactional *Seeder) {
-			transactional.seedApprovalWorkflows(ctx)
+			// legacy ApprovalWorkflow 种子已随引擎下线移除（见 Task 6）；
+			// 审批能力由 BPMN 工作流 + 流程绑定覆盖。
 			transactional.seedBPMNWorkflows(ctx)
 			transactional.seedProcessBindings(ctx)
 		},

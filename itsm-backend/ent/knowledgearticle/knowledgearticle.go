@@ -123,9 +123,9 @@ var (
 	// DefaultIsPublished holds the default value on creation for the "is_published" field.
 	DefaultIsPublished bool
 	// DefaultReviewStatus holds the default value on creation for the "review_status" field.
-	DefaultReviewStatus = "draft"
+	DefaultReviewStatus string
 	// DefaultReviewComment holds the default value on creation for the "review_comment" field.
-	DefaultReviewComment = ""
+	DefaultReviewComment string
 	// DefaultViewCount holds the default value on creation for the "view_count" field.
 	DefaultViewCount int
 	// DefaultLikeCount holds the default value on creation for the "like_count" field.
@@ -179,6 +179,16 @@ func ByTenantID(opts ...sql.OrderTermOption) OrderOption {
 // ByIsPublished orders the results by the is_published field.
 func ByIsPublished(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldIsPublished, opts...).ToFunc()
+}
+
+// ByReviewStatus orders the results by the review_status field.
+func ByReviewStatus(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldReviewStatus, opts...).ToFunc()
+}
+
+// ByReviewComment orders the results by the review_comment field.
+func ByReviewComment(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldReviewComment, opts...).ToFunc()
 }
 
 // ByViewCount orders the results by the view_count field.

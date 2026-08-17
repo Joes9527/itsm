@@ -2,6 +2,7 @@ package bpmn
 
 import (
 	"context"
+	"fmt"
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
@@ -106,14 +107,38 @@ func GetStringFromVars(variables map[string]interface{}, key string) string {
 	return ""
 }
 
-// GetTenantIDFromVars 从变量中提取租户ID
-func GetTenantIDFromVars(variables map[string]interface{}) int {
-	// 首先检查 tenant_id
-	if id := GetIntFromVars(variables, "tenant_id"); id > 0 {
-		return id
+// GetTenantIDFromVars 解析当前操作的租户ID，优先级与
+// TicketServiceTaskHandler.getTenantID 完全一致：
+//
+//  1. ctx 里的 BPMNTenantIDContextKey —— 唯一可信来源。它由认证中间件解析出的 JWT 会话
+//     经 controller 的 getBPMNTenantContext / BPMNApprovalBridge 注入，客户端伪造不了。
+//  2. variables["tenant_id"] —— 仅作兜底。ServiceTask 分发路径上它来自
+//     ProcessTriggerService 写入的实例变量（可信），但 UserTask 回调路径
+//     （PUT /tasks/:id/complete → dispatchUserTaskCallback）会把请求体里的
+//     req.Variables 原样透传进来，所以这一层整体上必须当作不可信输入。
+//  3. 两者都没有 → 返回 0，fail closed。
+//
+// 绝不能像旧实现那样默认回落到租户 1：调用方可以带着别的租户的 business_id 完成自己的
+// 合法任务，租户解析一旦默认到 1，越权写入就正好落在租户 1 的真实业务数据上。
+// 返回 0 时，调用方必须自己拒绝执行租户范围内的读写（见各 handler 的 requireTenantID）。
+func GetTenantIDFromVars(ctx context.Context, variables map[string]interface{}) int {
+	if ctx != nil {
+		if tenantID, ok := ctx.Value(BPMNTenantIDContextKey).(int); ok && tenantID > 0 {
+			return tenantID
+		}
 	}
-	// 如果没有，返回默认租户ID 1
-	return 1
+	return GetIntFromVars(variables, "tenant_id")
+}
+
+// RequireTenantID 在 GetTenantIDFromVars 之上加一道 fail-closed 断言：
+// 涉及租户范围读写的 handler 动作宁可明确报错，也不要在"租户未知"的情况下发出
+// 一条不带 tenant 过滤的全局查询/更新。
+func RequireTenantID(ctx context.Context, variables map[string]interface{}) (int, error) {
+	tenantID := GetTenantIDFromVars(ctx, variables)
+	if tenantID <= 0 {
+		return 0, fmt.Errorf("无法确定租户上下文，拒绝执行租户范围操作")
+	}
+	return tenantID, nil
 }
 
 // HandlerRegistry 处理器注册中心
