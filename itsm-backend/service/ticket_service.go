@@ -162,6 +162,18 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 		params.CategoryID = categoryID
 	}
 
+	// 验证必填自定义字段（模板字段定义中标记为 required 的字段必须在提交中存在且非空）。
+	// 必须在 s.repo.Create 之前做——之前的顺序是先落库再校验，校验失败时已经落库的
+	// 工单行（连同工单编号）没有任何回滚，会在数据库里留下一个永远失败创建了的孤儿行，
+	// 污染报表/SLA统计/工单号序列。
+	if req.TemplateID != nil && len(req.FormFields) > 0 {
+		if missing, err := s.validateRequiredFields(ctx, tenantID, *req.TemplateID, req.FormFields); err != nil {
+			s.logger.Errorw("Required field validation error", "error", err, "template_id", *req.TemplateID)
+		} else if len(missing) > 0 {
+			return nil, fmt.Errorf("缺少必填字段: %s", strings.Join(missing, ", "))
+		}
+	}
+
 	// 通过 Repository 创建工单
 	tkt, err := s.repo.Create(ctx, params, tenantID)
 	if err != nil {
@@ -175,15 +187,6 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 			s.logger.Warnw("Automatic ticket assignment failed", "error", err, "ticket_id", tkt.ID)
 		} else {
 			tkt.AssigneeID = assignment.AssignedTo
-		}
-	}
-
-	// 验证必填自定义字段（模板字段定义中标记为 required 的字段必须在提交中存在且非空）
-	if req.TemplateID != nil && len(req.FormFields) > 0 {
-		if missing, err := s.validateRequiredFields(ctx, tenantID, *req.TemplateID, req.FormFields); err != nil {
-			s.logger.Errorw("Required field validation error", "error", err, "template_id", *req.TemplateID)
-		} else if len(missing) > 0 {
-			return nil, fmt.Errorf("缺少必填字段: %s", strings.Join(missing, ", "))
 		}
 	}
 

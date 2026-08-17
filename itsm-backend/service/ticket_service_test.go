@@ -1433,3 +1433,90 @@ func TestTicketService_CreateTicket_ValuesMapFormatStillWorks(t *testing.T) {
 // legacy ApprovalService/ApprovalWorkflow/ApprovalRecord 引擎已在 Task 6 整体下线
 // （存量数据已通过 cmd/migrate_legacy_approvals 迁移至 BPMN 并验证），
 // 旧引擎的类型/表已不存在，这个回归测试因此失去测试对象，一并移除。
+
+func TestCreateTicket_RequiredFieldValidationFailure_DoesNotLeaveOrphanTicketRow(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:create_ticket_no_orphan?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+
+	tenant, err := client.Tenant.Create().
+		SetName("T").SetCode("ct-orphan").SetDomain("ct-orphan.com").SetStatus("active").
+		Save(ctx)
+	require.NoError(t, err)
+
+	requester, err := client.User.Create().
+		SetUsername("requester-orphan").SetEmail("requester-orphan@test.com").SetPasswordHash("x").
+		SetName("申请人").SetTenantID(tenant.ID).SetActive(true).
+		Save(ctx)
+	require.NoError(t, err)
+
+	template, err := client.TicketTemplate.Create().
+		SetName("需要必填字段的模板").SetCategory("general").SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	defSvc := NewFieldDefinitionService(client)
+	_, err = defSvc.ReplaceDefinitions(ctx, tenant.ID, "ticket_template", template.ID, []FieldDefinitionInput{
+		{Name: "impact_scope", Label: "影响范围", FieldType: "text", Required: true, SortOrder: 0},
+	})
+	require.NoError(t, err)
+
+	beforeCount, err := client.Ticket.Query().Count(ctx)
+	require.NoError(t, err)
+
+	svc := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
+	templateID := template.ID
+	_, err = svc.CreateTicket(ctx, &dto.CreateTicketRequest{
+		Title:       "缺必填字段的工单",
+		Priority:    "medium",
+		RequesterID: requester.ID,
+		TemplateID:  &templateID,
+		FormFields:  map[string]interface{}{"values": map[string]interface{}{}},
+	}, tenant.ID)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "缺少必填字段")
+
+	afterCount, err := client.Ticket.Query().Count(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, beforeCount, afterCount, "校验失败不应该在数据库里留下工单行")
+}
+
+func TestCreateTicket_RequiredFieldValidationPasses_CreatesTicket(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:create_ticket_valid?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+
+	tenant, err := client.Tenant.Create().
+		SetName("T").SetCode("ct-valid").SetDomain("ct-valid.com").SetStatus("active").
+		Save(ctx)
+	require.NoError(t, err)
+
+	requester, err := client.User.Create().
+		SetUsername("requester-valid").SetEmail("requester-valid@test.com").SetPasswordHash("x").
+		SetName("申请人").SetTenantID(tenant.ID).SetActive(true).
+		Save(ctx)
+	require.NoError(t, err)
+
+	template, err := client.TicketTemplate.Create().
+		SetName("模板").SetCategory("general").SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	defSvc := NewFieldDefinitionService(client)
+	_, err = defSvc.ReplaceDefinitions(ctx, tenant.ID, "ticket_template", template.ID, []FieldDefinitionInput{
+		{Name: "impact_scope", Label: "影响范围", FieldType: "text", Required: true, SortOrder: 0},
+	})
+	require.NoError(t, err)
+
+	svc := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
+	templateID := template.ID
+	created, err := svc.CreateTicket(ctx, &dto.CreateTicketRequest{
+		Title:       "字段齐全的工单",
+		Priority:    "medium",
+		RequesterID: requester.ID,
+		TemplateID:  &templateID,
+		FormFields:  map[string]interface{}{"values": map[string]interface{}{"impact_scope": "全公司"}},
+	}, tenant.ID)
+	require.NoError(t, err)
+	require.NotNil(t, created)
+}
