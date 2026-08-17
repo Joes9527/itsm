@@ -69,18 +69,55 @@ func (h *GenericServiceTaskHandler) Validate(ctx context.Context, config map[str
 	return nil
 }
 
+// ticketBackedBusinessTypes 列出 business_id 确实指向 Ticket 主键的业务类型。
+//
+// generic_task 的 complete_service / notify_rejection / notify 三个动作都把 business_id
+// 当工单 ID 用（这是 service_request_flow 的设计），但 incident_emergency_flow 的
+// Activity_Notify 同样声明 generic_task/notify，而它是以
+// business_type=incident、business_id=<事件ID> 触发的——事件 ID 和工单 ID 是两个完全
+// 独立的 ID 空间，撞号时会读到毫不相干的工单，甚至是别的租户的工单。
+//
+// 空串同样放行：ProcessTriggerService 会把 business_type 写进实例变量，
+// mergeServiceTaskVariables 会把实例变量整体带进 ServiceTask 分发路径，所以内置模板里
+// 所有 generic_task 节点（全部是 serviceTask）都能看到它；但 dispatchUserTaskCallback
+// 刻意不合并实例变量，自定义模板若把 generic_task 挂在 UserTask 上就会看不到 business_type。
+// 那种情况下保持既有行为（按工单处理），不因为收紧而误伤存量自定义模板。
+var ticketBackedBusinessTypes = map[string]struct{}{
+	"":                {},
+	"ticket":          {},
+	"service_request": {},
+}
+
+// isTicketBackedFlow 判断当前流程实例的 business_id 是否可以当作工单 ID 使用。
+func isTicketBackedFlow(variables map[string]interface{}) bool {
+	_, ok := ticketBackedBusinessTypes[GetStringFromVars(variables, "business_type")]
+	return ok
+}
+
+// getTicket 按 ID + 租户取工单。租户约束是强制的，不做"tenant<=0 就退化成全表 Get"的兜底。
+func (h *GenericServiceTaskHandler) getTicket(ctx context.Context, ticketID, tenantID int) (*ent.Ticket, error) {
+	return h.client.Ticket.Query().
+		Where(ticket.ID(ticketID), ticket.TenantID(tenantID)).
+		Only(ctx)
+}
+
 // completeService 对应"服务完成"节点（service_request_flow.bpmn 的 Activity_Complete）：
 // 把关联的工单状态置为 resolved，跟 TicketServiceTaskHandler.updateTicketStatus 同款写法。
 func (h *GenericServiceTaskHandler) completeService(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+	if !isTicketBackedFlow(variables) {
+		h.logger.Warnw("complete_service 节点被非工单业务类型的流程触发，跳过（business_id 不是工单ID）",
+			"business_type", GetStringFromVars(variables, "business_type"))
+		return &dto.ServiceTaskResult{Success: true, Message: "非工单业务类型，跳过服务完成写入"}, nil
+	}
 	ticketID := GetIntFromVars(variables, "business_id")
 	if ticketID <= 0 {
 		return nil, fmt.Errorf("无效的 business_id")
 	}
-	tenantID := GetTenantIDFromVars(variables)
-	update := h.client.Ticket.UpdateOneID(ticketID)
-	if tenantID > 0 {
-		update = update.Where(ticket.TenantID(tenantID))
+	tenantID, err := RequireTenantID(ctx, variables)
+	if err != nil {
+		return nil, err
 	}
+	update := h.client.Ticket.UpdateOneID(ticketID).Where(ticket.TenantID(tenantID))
 	if _, err := update.SetStatus("resolved").SetResolvedAt(time.Now()).SetUpdatedAt(time.Now()).Save(ctx); err != nil {
 		return nil, fmt.Errorf("完成服务请求失败: %w", err)
 	}
@@ -91,15 +128,40 @@ func (h *GenericServiceTaskHandler) completeService(ctx context.Context, variabl
 // notifyRequester 对应"驳回通知"/"通知相关方"这类纯通知节点：给工单申请人真实创建一条
 // 通知（站内消息 + 统一 Notification），不是只打日志。写法直接抄
 // CCTaskHandler.createCCNotifications 已经验证过的模式。
+//
+// 两道防线（Finding 2）：
+//   - business_type 不是工单口径时直接跳过——incident_emergency_flow 的 Activity_Notify
+//     声明的也是 generic_task/notify，但它的 business_id 是事件 ID；
+//   - 工单查询强制带租户过滤（原来是不带任何过滤的 Ticket.Get），撞号时会把别的租户的
+//     工单标题/编号写进一条持久化通知里。
+//
+// 查不到工单按空态跳过而不是硬失败：通知是流程的旁路副作用，不是状态流转，
+// 让它把整条流程卡在通知节点上（handleElement 会把 error 往上抛）得不偿失。
+// 跳过一律留 Warnw，便于事后排查。
 func (h *GenericServiceTaskHandler) notifyRequester(ctx context.Context, variables map[string]interface{}, defaultContent string) (*dto.ServiceTaskResult, error) {
+	businessType := GetStringFromVars(variables, "business_type")
+	if !isTicketBackedFlow(variables) {
+		h.logger.Warnw("通知节点被非工单业务类型的流程触发，跳过（business_id 不是工单ID）",
+			"business_type", businessType, "business_id", GetIntFromVars(variables, "business_id"))
+		return &dto.ServiceTaskResult{Success: true, Message: "非工单业务类型，跳过工单通知"}, nil
+	}
+
 	ticketID := GetIntFromVars(variables, "business_id")
 	if ticketID <= 0 {
 		return nil, fmt.Errorf("无效的 business_id")
 	}
-	tenantID := GetTenantIDFromVars(variables)
-
-	ticketEntity, err := h.client.Ticket.Get(ctx, ticketID)
+	tenantID, err := RequireTenantID(ctx, variables)
 	if err != nil {
+		return nil, err
+	}
+
+	ticketEntity, err := h.getTicket(ctx, ticketID, tenantID)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			h.logger.Warnw("通知节点未在当前租户下找到对应工单，跳过通知",
+				"ticket_id", ticketID, "tenant_id", tenantID, "business_type", businessType)
+			return &dto.ServiceTaskResult{Success: true, Message: "未找到对应工单，跳过通知"}, nil
+		}
 		return nil, fmt.Errorf("获取工单失败: %w", err)
 	}
 

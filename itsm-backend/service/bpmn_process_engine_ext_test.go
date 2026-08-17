@@ -974,3 +974,97 @@ func TestHandleElement_ServiceTask_DispatchesByMetaDataOverAttributeGuessing(t *
 	require.NoError(t, err)
 	assert.Equal(t, "in_progress", updated.Status, "ticket_task 的 update_status（默认目标状态）应该真实生效")
 }
+
+// TestHandleElement_ServiceTask_IncidentAutoAssign_NoAssignee_ContinuesFlow 是 Finding 1
+// 在"bug 真正显形的那一层"的回归：incident_emergency_flow 的 Activity_AutoAssign 是起始
+// 事件后的第一个 serviceTask（service_task_type=incident_task, action=assign_incident），
+// 而新建事件的 assignee_id 天生是 0（Optional 字段）。handler 一旦对空处理人返回 error，
+// handleElement 会把错误往上抛、StartProcess 整体失败，而调用方
+// （incident_service.go 的 fire-and-forget goroutine）只 Warnw 一句——流程实例就永久卡在
+// 起始事件上，对任何用户都不可见。这里断言的是：handleElement 成功返回，且流程能推进到下一步。
+func TestHandleElement_ServiceTask_IncidentAutoAssign_NoAssignee_ContinuesFlow(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
+	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, actorID)
+
+	inc, err := engine.client.Incident.Create().
+		SetTitle("自动分配空态回归").
+		SetIncidentNumber("INC-AUTOASSIGN-1").
+		SetStatus("new").
+		SetReporterID(actorID).
+		SetTenantID(tenantID).
+		Save(ctx)
+	require.NoError(t, err)
+	require.Zero(t, inc.AssigneeID, "新建事件默认没有处理人，这正是生产里的常态")
+
+	deployment, err := engine.client.ProcessDeployment.Create().
+		SetDeploymentID("DEP-incident-autoassign").
+		SetDeploymentName("Deployment incident-autoassign").
+		SetDeploymentTime(time.Now()).
+		SetDeployedBy("test").
+		SetIsActive(true).
+		SetTenantID(tenantID).
+		Save(ctx)
+	require.NoError(t, err)
+	def, err := engine.client.ProcessDefinition.Create().
+		SetKey("incident_autoassign_test_flow").
+		SetName("Incident AutoAssign Test Flow").
+		SetVersion("1").
+		SetIsLatest(true).
+		SetBpmnXML([]byte("<definitions/>")).
+		SetDeploymentID(deployment.ID).
+		SetDeployedAt(time.Now()).
+		SetTenantID(tenantID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	instance, err := engine.client.ProcessInstance.Create().
+		SetProcessInstanceID("PI-incident-autoassign").
+		SetProcessDefinitionKey(def.Key).
+		SetProcessDefinitionID(def.ID).
+		SetBusinessKey(fmt.Sprintf("incident:%d", inc.ID)).
+		SetStatus("running").SetTenantID(tenantID).
+		SetVariables(map[string]interface{}{
+			"business_type": "incident",
+			"business_id":   inc.ID,
+			"incident_id":   inc.ID,
+			"assignee_id":   inc.AssigneeID, // 0：没有可用处理人
+			"tenant_id":     tenantID,
+		}).
+		Save(ctx)
+	require.NoError(t, err)
+
+	process := &BPMNProcess{
+		ServiceTasks: []*BPMNServiceTask{
+			{
+				ID:             "Activity_AutoAssign",
+				Name:           "自动分配",
+				Implementation: "##WebService",
+				ExtensionElements: &BPMNExtensionElements{
+					MetaData: []BPMNMetaData{
+						{Name: "service_task_type", Value: "incident_task"},
+						{Name: "action", Value: "assign_incident"},
+					},
+				},
+			},
+		},
+		EndEvents: []*BPMNEndEvent{{ID: "End_1", Name: "结束"}},
+		SequenceFlows: []*BPMNSequenceFlow{
+			{ID: "Flow_1", SourceRef: "Activity_AutoAssign", TargetRef: "End_1"},
+		},
+	}
+
+	err = engine.handleElement(ctx, instance, process, "Activity_AutoAssign")
+	require.NoError(t, err, "无处理人是正常空态，不应该让 handleElement 失败、把流程卡死在起始节点")
+
+	// 流程确实推进到了下一步（End_1 -> completeProcess）
+	updatedInstance, err := engine.client.ProcessInstance.Get(ctx, instance.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "completed", updatedInstance.Status, "空态跳过后流程应该继续走到结束事件")
+
+	updatedIncident, err := engine.client.Incident.Get(ctx, inc.ID)
+	require.NoError(t, err)
+	assert.Zero(t, updatedIncident.AssigneeID, "空态跳过时不得写入处理人")
+	assert.Equal(t, "new", updatedIncident.Status, "空态跳过时不得改状态")
+}

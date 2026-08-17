@@ -111,3 +111,61 @@ func TestGenericServiceTaskHandler_MissingBusinessID_ReturnsError(t *testing.T) 
 	_, err := handler.Execute(ctx, nil, map[string]interface{}{"action": "complete_service"})
 	assert.Error(t, err)
 }
+
+// TestGenericServiceTaskHandler_Notify_CrossTenantTicket_DoesNotLeak 是 Finding 2 的核心回归：
+// notifyRequester 以前用不带租户过滤的 Ticket.Get 取工单，另一个租户的工单会被读出来
+// 并把标题/编号写进一条持久化通知里。现在必须查不到 → 干净跳过，绝不落库。
+func TestGenericServiceTaskHandler_Notify_CrossTenantTicket_DoesNotLeak(t *testing.T) {
+	client, handler, tenantID, tkt := setupGenericHandlerFixture(t)
+	ctx := context.Background()
+
+	otherTenant, err := client.Tenant.Create().
+		SetName("T2").SetCode("gh-2").SetDomain("gh-2.com").SetStatus("active").
+		Save(ctx)
+	require.NoError(t, err)
+	require.NotEqual(t, tenantID, otherTenant.ID)
+
+	// 以"另一个租户"的身份去通知租户 1 的工单
+	otherCtx := context.WithValue(ctx, BPMNTenantIDContextKey, otherTenant.ID)
+	result, err := handler.Execute(otherCtx, nil, map[string]interface{}{
+		"action":        "notify",
+		"business_type": "ticket",
+		"business_id":   float64(tkt.ID),
+	})
+	require.NoError(t, err, "跨租户查不到工单属于空态，应该干净跳过而不是让流程卡死")
+	require.NotNil(t, result)
+	assert.True(t, result.Success)
+
+	count, err := client.TicketNotification.Query().
+		Where(ticketnotification.TicketID(tkt.ID)).
+		Count(ctx)
+	require.NoError(t, err)
+	assert.Zero(t, count, "绝不能把别的租户的工单内容写进通知")
+
+	notifCount, err := client.Notification.Query().Count(ctx)
+	require.NoError(t, err)
+	assert.Zero(t, notifCount, "统一通知同样不得跨租户落库")
+}
+
+// TestGenericServiceTaskHandler_Notify_NonTicketBusinessType_IsNoOp：
+// incident_emergency_flow 的 Activity_Notify 同样声明 generic_task/notify，
+// 但它是以 business_type=incident、business_id=<事件ID> 触发的——事件 ID 和工单 ID
+// 是两个完全不同的 ID 空间，绝不能拿事件 ID 去查工单。
+func TestGenericServiceTaskHandler_Notify_NonTicketBusinessType_IsNoOp(t *testing.T) {
+	client, handler, tenantID, tkt := setupGenericHandlerFixture(t)
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+
+	result, err := handler.Execute(ctx, nil, map[string]interface{}{
+		"action":        "notify",
+		"business_type": "incident",
+		"business_id":   float64(tkt.ID), // 故意撞上一个真实存在的工单 ID
+	})
+	require.NoError(t, err, "非工单业务类型应该跳过，不能让 incident 流程卡在通知节点上")
+	assert.True(t, result.Success)
+
+	count, err := client.TicketNotification.Query().
+		Where(ticketnotification.TicketID(tkt.ID)).
+		Count(ctx)
+	require.NoError(t, err)
+	assert.Zero(t, count, "business_type=incident 时不得给同号工单发通知")
+}

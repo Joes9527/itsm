@@ -8,6 +8,7 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/incident"
 
 	"go.uber.org/zap"
 )
@@ -74,7 +75,8 @@ func (h *IncidentServiceTaskHandler) createIncident(ctx context.Context, variabl
 	incidentType, _ := variables["type"].(string)
 	priority, _ := variables["priority"].(string)
 	severity, _ := variables["severity"].(string)
-	tenantID := GetTenantIDFromVars(variables)
+	// tenant_id 为 0 时 Ent 的 Positive() 校验会直接拒绝创建，天然 fail closed
+	tenantID := GetTenantIDFromVars(ctx, variables)
 
 	if title == "" {
 		return nil, fmt.Errorf("事件标题不能为空")
@@ -103,7 +105,19 @@ func (h *IncidentServiceTaskHandler) createIncident(ctx context.Context, variabl
 	}, nil
 }
 
-// assignIncident 分配事件
+// assignIncident 分配事件。
+//
+// incident_emergency_flow.bpmn 的 Activity_AutoAssign 是起始事件之后的第一个 serviceTask
+// （service_task_type=incident_task, action=assign_incident），而 Incident.assignee_id 在
+// ent schema 里是 Optional——新建事件的 assignee_id 天生是 0。所以"自动分配时没有可用处理人"
+// 是这个节点的正常空态，不是失败：这里必须返回成功的空操作。
+//
+// 反例（不要改回去）：对空处理人返回 error → handleElement 把错误往上抛 → StartProcess 整体
+// 失败，而触发方（incident_service.go 的 fire-and-forget goroutine）只 Warnw 一句，
+// 流程实例就永久卡在起始事件上，对任何用户都不可见。
+//
+// incident_id 无效则继续硬失败：那说明没人告诉这个节点该操作哪条事件，是真实的接线错误，
+// 跟"暂时没有处理人"是两回事，必须报出来。
 func (h *IncidentServiceTaskHandler) assignIncident(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
 	incidentID := GetIntFromVars(variables, "incident_id")
 	assigneeID := GetIntFromVars(variables, "assignee_id")
@@ -113,15 +127,31 @@ func (h *IncidentServiceTaskHandler) assignIncident(ctx context.Context, variabl
 	}
 
 	if assigneeID <= 0 {
-		return nil, fmt.Errorf("无效的处理人ID")
+		h.logger.Warnw("BPMN 自动分配未取到可用处理人，按空态跳过（不改事件状态）",
+			"incident_id", incidentID)
+		return &dto.ServiceTaskResult{
+			Success: true,
+			Message: fmt.Sprintf("事件 %d 当前无可用处理人，跳过自动分配", incidentID),
+		}, nil
 	}
 
-	_, err := h.client.Incident.UpdateOneID(incidentID).
+	// 分配是一次真实写入，且 incident_id 在 UserTask 回调路径上来自客户端提交的变量，
+	// 必须带租户约束；租户未知时 fail closed。
+	tenantID, err := RequireTenantID(ctx, variables)
+	if err != nil {
+		return nil, err
+	}
+
+	updated, err := h.client.Incident.Update().
+		Where(incident.ID(incidentID), incident.TenantID(tenantID)).
 		SetAssigneeID(assigneeID).
 		SetStatus(common.IncidentStatusAssigned).
 		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("分配事件失败: %w", err)
+	}
+	if updated == 0 {
+		return nil, fmt.Errorf("事件 %d 不存在或不属于当前租户", incidentID)
 	}
 
 	h.logger.Infow("Incident assigned via BPMN", "incident_id", incidentID, "assignee_id", assigneeID)

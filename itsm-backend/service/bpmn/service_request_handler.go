@@ -80,12 +80,14 @@ func (h *ServiceRequestServiceTaskHandler) getServiceRequest(ctx context.Context
 	if requestID <= 0 {
 		return nil, 0, fmt.Errorf("无效的请求ID")
 	}
-	tenantID := GetTenantIDFromVars(variables)
-	query := h.client.ServiceRequest.Query().Where(servicerequest.ID(requestID))
-	if tenantID > 0 {
-		query = query.Where(servicerequest.TenantID(tenantID))
+	// fail closed：租户未知时直接拒绝，不退化成不带租户约束的全表查询
+	tenantID, err := RequireTenantID(ctx, variables)
+	if err != nil {
+		return nil, 0, err
 	}
-	sr, err := query.Only(ctx)
+	sr, err := h.client.ServiceRequest.Query().
+		Where(servicerequest.ID(requestID), servicerequest.TenantID(tenantID)).
+		Only(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("查询服务请求失败: %w", err)
 	}

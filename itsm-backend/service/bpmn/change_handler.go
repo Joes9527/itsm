@@ -79,7 +79,7 @@ func (h *ChangeServiceTaskHandler) createChange(ctx context.Context, variables m
 	description, _ := variables["description"].(string)
 	changeType, _ := variables["type"].(string)
 	priority, _ := variables["priority"].(string)
-	tenantID := GetTenantIDFromVars(variables)
+	tenantID := GetTenantIDFromVars(ctx, variables)
 
 	if title == "" {
 		return nil, fmt.Errorf("变更标题不能为空")

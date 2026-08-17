@@ -90,15 +90,18 @@ func (h *ReleaseServiceTaskHandler) techReview(ctx context.Context, variables ma
 	if err != nil {
 		return nil, err
 	}
-	tenantID := GetTenantIDFromVars(variables)
+	// fail closed：租户未知时不允许落到一条不带租户约束的全表查询上
+	tenantID, err := RequireTenantID(ctx, variables)
+	if err != nil {
+		return nil, err
+	}
 	comment, _ := variables["comment"].(string)
 
-	entity, err := h.client.Release.Get(ctx, releaseID)
+	entity, err := h.client.Release.Query().
+		Where(release.ID(releaseID), release.TenantID(tenantID)).
+		Only(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("获取发布记录失败: %w", err)
-	}
-	if tenantID > 0 && entity.TenantID != tenantID {
-		return nil, fmt.Errorf("发布记录不存在")
 	}
 	notes := entity.ReleaseNotes
 	if comment != "" {
@@ -119,13 +122,14 @@ func (h *ReleaseServiceTaskHandler) updateStatus(ctx context.Context, variables 
 	if err != nil {
 		return nil, err
 	}
-	tenantID := GetTenantIDFromVars(variables)
-
-	query := h.client.Release.Query().Where(release.ID(releaseID))
-	if tenantID > 0 {
-		query = query.Where(release.TenantID(tenantID))
+	tenantID, err := RequireTenantID(ctx, variables)
+	if err != nil {
+		return nil, err
 	}
-	current, err := query.Only(ctx)
+
+	current, err := h.client.Release.Query().
+		Where(release.ID(releaseID), release.TenantID(tenantID)).
+		Only(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("查询发布记录失败: %w", err)
 	}
