@@ -35,7 +35,6 @@ import BpmnModeler from 'bpmn-js/lib/Modeler';
 import itsmModdleDescriptor from './itsm-moddle-descriptor';
 import gridModule from 'diagram-js/lib/features/grid-snapping';
 
-
 import 'bpmn-js/dist/assets/diagram-js.css';
 import 'bpmn-js/dist/assets/bpmn-font/css/bpmn.css';
 
@@ -81,6 +80,49 @@ interface HistoryItem {
   xml: string;
   timestamp: number;
   description?: string;
+}
+
+interface ElementLike {
+  id: string;
+  type: string;
+  businessObject?: { name?: string; $type?: string };
+}
+
+interface ValidationIssueLike {
+  type: 'error' | 'warning';
+  message: string;
+  elementId?: string;
+  elementType?: string;
+  elementName?: string;
+}
+
+// 引擎目前会静默单分支执行（并行/包容网关）或完全忽略（定时器/消息事件/子流程/
+// 边界事件）这些元素类型——不是报错，是"看起来配置成功，实际不会按 BPMN 语义执行"。
+// 校验器本身之前对这些类型完全没有感知，反而可能引导用户在并行网关上补条件表达式
+// （真实 BPMN 语义里这是错的，而且并不能解决"引擎不支持并行"这个根本问题）。
+const UNSUPPORTED_ELEMENT_TYPES: Record<string, string> = {
+  'bpmn:ParallelGateway': '并行网关：引擎会退化成单分支执行（跟排他网关一样只走一条路径），不会真正并行/汇合',
+  'bpmn:InclusiveGateway': '包容网关：引擎会退化成单分支执行，不会按包容语义多路径触发',
+  'bpmn:SubProcess': '子流程：引擎不支持子流程节点，会被直接忽略',
+  'bpmn:BoundaryEvent': '边界事件：引擎不支持边界事件节点，会被直接忽略',
+};
+
+export function checkUnsupportedElements(elements: ElementLike[]): ValidationIssueLike[] {
+  const issues: ValidationIssueLike[] = [];
+  for (const el of elements) {
+    const type = el.type || el.businessObject?.$type;
+    if (!type) continue;
+    const reason = UNSUPPORTED_ELEMENT_TYPES[type];
+    if (!reason) continue;
+    issues.push({
+      type: 'warning',
+      message: `元素 "${el.businessObject?.name || el.id}" 使用了当前引擎不支持真正执行的类型 —— ${reason}`,
+      elementId: el.id,
+      elementType: type,
+      elementName: el.businessObject?.name || el.id,
+    });
+  }
+  return issues;
 }
 
 const readCanvasZoom = (canvas: unknown): number => {
@@ -746,9 +788,12 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
     userTasks.forEach(task => {
       const bo = task.businessObject;
       if (!bo.assignee && !bo.candidateUsers && !bo.candidateGroups) {
-        errors.push({ 
-          type: 'warning', 
-          message: `用户任务 "${bo.name || task.id}" 未配置受理人或候选人` 
+        errors.push({
+          type: 'warning',
+          message: `用户任务 "${bo.name || task.id}" 未配置受理人或候选人`,
+          elementId: task.id,
+          elementType: 'bpmn:UserTask',
+          elementName: bo.name,
         });
       }
     });
@@ -758,9 +803,12 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
     serviceTasks.forEach(task => {
       const bo = task.businessObject;
       if (!bo.implementation && !bo.operationRef) {
-        errors.push({ 
-          type: 'warning', 
-          message: `服务任务 "${bo.name || task.id}" 未配置实现类型或操作引用` 
+        errors.push({
+          type: 'warning',
+          message: `服务任务 "${bo.name || task.id}" 未配置实现类型或操作引用`,
+          elementId: task.id,
+          elementType: 'bpmn:ServiceTask',
+          elementName: bo.name,
         });
       }
     });
@@ -772,23 +820,33 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
       const outgoing = gateway.outgoing || [];
       
       if (bo.$type === 'bpmn:ExclusiveGateway' && outgoing.length > 1 && !bo.default) {
-        errors.push({ 
-          type: 'warning', 
-          message: `排他网关 "${bo.name || gateway.id}" 有多个输出流但未配置默认分支` 
+        errors.push({
+          type: 'warning',
+          message: `排他网关 "${bo.name || gateway.id}" 有多个输出流但未配置默认分支`,
+          elementId: gateway.id,
+          elementType: bo.$type,
+          elementName: bo.name,
         });
       }
       
       // 检查输出流是否有条件
       outgoing.forEach((flow: any) => {
         if (!flow.conditionExpression && outgoing.length > 1) {
-          errors.push({ 
-            type: 'warning', 
-            message: `网关 "${bo.name || gateway.id}" 的输出流 "${flow.id}" 未配置条件表达式` 
+          errors.push({
+            type: 'warning',
+            message: `网关 "${bo.name || gateway.id}" 的输出流 "${flow.id}" 未配置条件表达式`,
+            elementId: gateway.id,
+            elementType: bo.$type,
+            elementName: bo.name,
           });
         }
       });
     });
-    
+
+    // 检查是否使用了引擎目前不支持真正执行的元素类型（并行/包容网关、子流程、边界事件）
+    const allElements = elementRegistry.filter(() => true);
+    errors.push(...checkUnsupportedElements(allElements));
+
     // 显示验证结果
     if (errors.length === 0) {
       message.success('流程验证通过，未发现问题');
