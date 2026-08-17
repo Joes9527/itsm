@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"itsm-backend/ent/enttest"
+	"itsm-backend/ent/processdefinition"
 	"itsm-backend/service/bpmn"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -220,4 +221,82 @@ func TestBPMNTemplateService_ServiceRequestFlows_ApprovalNodeMarked(t *testing.T
 		require.NotNil(t, approval, "%s 应该有 Activity_Approval 节点", file)
 		assert.Equal(t, "approval", approval.TaskPurpose, "%s 的 Activity_Approval 应该打上 taskPurpose=approval", file)
 	}
+}
+
+// TestBPMNTemplateService_LoadAndDeployTemplates_DriftPublishesNewVersion 是模板漂移
+// 同步的回归：存量租户的旧模板内容与嵌入模板不一致时，再次同步必须自动发布新版本
+// （事务化降级 is_latest），旧版本停用、新版本激活，且同一 key 恰好一行
+// is_latest=true + is_active=true。再同步一次应幂等（不产生第三个版本）。
+func TestBPMNTemplateService_LoadAndDeployTemplates_DriftPublishesNewVersion(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:template_drift_test?mode=memory&cache=shared&_fk=1")
+	t.Cleanup(func() { client.Close() })
+	ctx := context.Background()
+
+	tenant, err := client.Tenant.Create().
+		SetName("T").SetCode("drift-1").SetDomain("drift-1.com").SetStatus("active").
+		Save(ctx)
+	require.NoError(t, err)
+
+	svc := NewBPMNTemplateService(client)
+
+	// 首次部署：v1
+	_, err = svc.LoadAndDeployTemplates(ctx, tenant.ID)
+	require.NoError(t, err)
+
+	defs, err := client.ProcessDefinition.Query().
+		Where(processdefinition.Key("release_approval_flow"), processdefinition.TenantID(tenant.ID)).
+		All(ctx)
+	require.NoError(t, err)
+	require.Len(t, defs, 1, "首次部署应只有一个版本")
+
+	// 模拟线上旧模板（内容与嵌入版本不一致）
+	_, err = client.ProcessDefinition.UpdateOne(defs[0]).
+		SetBpmnXML([]byte("<definitions/>")).
+		Save(ctx)
+	require.NoError(t, err)
+
+	// 再次同步：内容漂移 → 自动发布新版本
+	_, err = svc.LoadAndDeployTemplates(ctx, tenant.ID)
+	require.NoError(t, err)
+
+	defs, err = client.ProcessDefinition.Query().
+		Where(processdefinition.Key("release_approval_flow"), processdefinition.TenantID(tenant.ID)).
+		All(ctx)
+	require.NoError(t, err)
+	require.Len(t, defs, 2, "漂移同步应发布第二个版本")
+
+	latestCount := 0
+	activeCount := 0
+	for _, def := range defs {
+		if def.IsLatest {
+			latestCount++
+			assert.True(t, def.IsActive, "最新版本必须是激活的")
+		} else {
+			assert.False(t, def.IsActive, "旧版本必须被停用")
+		}
+		if def.IsActive {
+			activeCount++
+		}
+	}
+	assert.Equal(t, 1, latestCount, "同一 key 应恰好一行 is_latest=true")
+	assert.Equal(t, 1, activeCount, "同一 key 应恰好一行 is_active=true")
+
+	// 新版本内容必须与嵌入模板一致
+	latest, err := client.ProcessDefinition.Query().
+		Where(processdefinition.Key("release_approval_flow"), processdefinition.TenantID(tenant.ID),
+			processdefinition.IsLatest(true)).
+		Only(ctx)
+	require.NoError(t, err)
+	embedded, err := bpmnTemplates.ReadFile("bpmn/release_approval_flow.bpmn")
+	require.NoError(t, err)
+	assert.Equal(t, embedded, latest.BpmnXML, "新版本应写入嵌入模板的最新内容")
+
+	// 幂等：第三次同步不产生新版本
+	_, err = svc.LoadAndDeployTemplates(ctx, tenant.ID)
+	require.NoError(t, err)
+	defs, err = client.ProcessDefinition.Query().
+		Where(processdefinition.Key("release_approval_flow"), processdefinition.TenantID(tenant.ID)).
+		All(ctx)
+	require.NoError(t, err)
+	require.Len(t, defs, 2, "内容一致时同步应幂等，不再产生新版本")
 }

@@ -255,6 +255,14 @@ func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitio
 	}
 
 	// 5. 执行流程推进（从StartEvent开始）
+	// 平台级操作（ctx 无租户键：controller 的 getBPMNTenantContext 对 tenant_id=0
+	// 不注入）此前会在带 RequireTenantID 的 ServiceTask 上硬失败。实例租户跟随流程
+	// 定义（definition.TenantID 是 Positive 校验过的权威值），把它注入 ctx 后 handler
+	// 的写侧 Where(TenantID) 仍然生效，不放松任何约束——伪造的 variables["tenant_id"]
+	// 只会导致写不中行。
+	if tenantID <= 0 {
+		ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, definition.TenantID)
+	}
 	if err := e.executeStep(ctx, instance, process, startEvent.ID, variables); err != nil {
 		return nil, err
 	}
@@ -294,6 +302,16 @@ func (e *CustomProcessEngine) CompleteTask(ctx context.Context, taskID string, v
 	instance, err := e.client.ProcessInstance.Get(ctx, task.ProcessInstanceID)
 	if err != nil {
 		return fmt.Errorf("获取流程实例失败: %w", err)
+	}
+
+	// 2.5 平台级操作（ctx 无租户键：controller 的 getBPMNTenantContext 对 tenant_id=0
+	// 不注入）恢复可用：注入实例租户作为 handler 执行租户。此前 dispatchUserTaskCallback
+	// 里的 RequireTenantID 会失败，业务副作用被静默跳过。实例租户由启动时的
+	// definition.TenantID 而来（Positive 校验过的权威值），注入它只补全租户上下文，
+	// 写侧 Where(TenantID) 仍是安全边界。任务查询（第 1 步）在注入前执行，
+	// 平台视角的跨租户查询行为与之前一致。
+	if ctxTenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int); ctxTenantID <= 0 {
+		ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, instance.TenantID)
 	}
 
 	// 3. 获取流程定义并解析
@@ -2016,10 +2034,24 @@ func (s *bpmnProcessInstanceService) GetProcessInstanceVariables(ctx context.Con
 	return instance.Variables, nil
 }
 
+// reservedInstanceVariableKeys 是 ProcessTriggerService.buildProcessVariables 写入的
+// 流程身份键。SetProcessInstanceVariables 拒绝覆盖它们：主防线是各 handler 写侧的
+// Where(TenantID)（伪造业务 ID 只会写不中行），这里防止实例归属方污染自己实例的
+// business_id/tenant_id 等身份键，导致后续 ServiceTask 分发（mergeServiceTaskVariables）
+// 读到被篡改的身份上下文。CompleteTask 的任务变量合并路径不在此限制内——那是受
+// ctx 租户边界约束的合法表单提交，且身份键同样有 handler 写侧过滤兜底。
+var reservedInstanceVariableKeys = []string{"business_id", "business_type", "business_key", "tenant_id"}
+
 func (s *bpmnProcessInstanceService) SetProcessInstanceVariables(ctx context.Context, processInstanceID string, variables map[string]interface{}) error {
 	instance, err := s.GetProcessInstance(ctx, processInstanceID)
 	if err != nil {
 		return err
+	}
+
+	for _, reserved := range reservedInstanceVariableKeys {
+		if _, exists := variables[reserved]; exists {
+			return fmt.Errorf("变量 %q 由流程触发方管理，不允许经此端点覆盖", reserved)
+		}
 	}
 
 	_, err = s.client.ProcessInstance.UpdateOne(instance).

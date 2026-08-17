@@ -209,6 +209,36 @@ func TestGetPermissionFromPath(t *testing.T) {
 		perm := getPermissionFromPath("GET", "/api/v1/unknown/path")
 		assert.Nil(t, perm)
 	})
+
+	// 回归：/api/v1/releases 曾缺失于 ResourceActionMap，导致全局 RBACMiddleware
+	// 对所有非 super_admin 用户直接 2003（路由级 RequirePermission 根本轮不到）。
+	t.Run("GET Releases Returns Read Permission", func(t *testing.T) {
+		perm := getPermissionFromPath("GET", "/api/v1/releases")
+		assert.NotNil(t, perm)
+		assert.Equal(t, "release", perm.Resource)
+		assert.Equal(t, "read", perm.Action)
+	})
+
+	t.Run("GET Releases Stats Returns Read Permission", func(t *testing.T) {
+		perm := getPermissionFromPath("GET", "/api/v1/releases/stats")
+		assert.NotNil(t, perm)
+		assert.Equal(t, "release", perm.Resource)
+		assert.Equal(t, "read", perm.Action)
+	})
+
+	t.Run("POST Release Approve Returns Write Permission", func(t *testing.T) {
+		perm := getPermissionFromPath("POST", "/api/v1/releases/1/approve")
+		assert.NotNil(t, perm)
+		assert.Equal(t, "release", perm.Resource)
+		assert.Equal(t, "write", perm.Action)
+	})
+
+	t.Run("DELETE Release Returns Delete Permission", func(t *testing.T) {
+		perm := getPermissionFromPath("DELETE", "/api/v1/releases/1")
+		assert.NotNil(t, perm)
+		assert.Equal(t, "release", perm.Resource)
+		assert.Equal(t, "delete", perm.Action)
+	})
 }
 
 func TestCheckPermissionMatch_ResourceAdminIncludesActions(t *testing.T) {

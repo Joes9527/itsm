@@ -101,7 +101,9 @@
     </bpmn:exclusiveGateway>
 
     <!-- 回退实施 -->
-    <bpmn:sequenceFlow id="Flow_BackToImplement" sourceRef="Gateway_VerifyResult" targetRef="Activity_Implement" />
+    <bpmn:sequenceFlow id="Flow_BackToImplement" sourceRef="Gateway_VerifyResult" targetRef="Activity_Implement">
+      <bpmn:conditionExpression><![CDATA[variables['verify_passed'] != true]]></bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
 
     <!-- 关闭 -->
     <bpmn:userTask id="Activity_Close" name="关闭变更">

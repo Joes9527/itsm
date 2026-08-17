@@ -121,15 +121,15 @@
     <bpmn:sequenceFlow id="Flow_ManagerToDiagnosis" sourceRef="Activity_ManagerApproval" targetRef="Activity_Diagnosis" />
     <bpmn:sequenceFlow id="Flow_3" sourceRef="Activity_Diagnosis" targetRef="Gateway_Resolved" />
     <bpmn:sequenceFlow id="Flow_Resolve" sourceRef="Gateway_Resolved" targetRef="Activity_Resolve">
-      <bpmn:conditionExpression><![CDATA[${variables['problem_identified'] == true}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['problem_identified'] == true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_Escalate" sourceRef="Gateway_Resolved" targetRef="Activity_AutoEscalate">
-      <bpmn:conditionExpression><![CDATA[${variables['problem_identified'] != true}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['problem_identified'] != true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_4" sourceRef="Activity_AutoEscalate" targetRef="Activity_ExpertHandle" />
     <bpmn:sequenceFlow id="Flow_5" sourceRef="Activity_ExpertHandle" targetRef="Gateway_Solved" />
     <bpmn:sequenceFlow id="Flow_Notify" sourceRef="Gateway_Solved" targetRef="Activity_Notify">
-      <bpmn:conditionExpression><![CDATA[${variables['solved'] == true}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['solved'] == true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_End" sourceRef="Activity_Notify" targetRef="Activity_Close" />
     <bpmn:sequenceFlow id="Flow_Final" sourceRef="Activity_Close" targetRef="EndEvent_1" />

@@ -302,6 +302,7 @@ func NewApplication() *Application {
 
 	// Release & Asset Management Services
 	releaseService := service.NewReleaseService(client, sugar)
+	releaseService.SetProcessTriggerService(processTriggerService)
 	assetService := service.NewAssetService(client, sugar)
 	assetLicenseService := service.NewAssetLicenseService(client, sugar)
 	// CMDB Services

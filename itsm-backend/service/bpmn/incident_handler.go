@@ -172,24 +172,34 @@ func (h *IncidentServiceTaskHandler) escalateIncident(ctx context.Context, varia
 		return nil, fmt.Errorf("无效的事件ID")
 	}
 
-	// 获取当前升级级别
-	incident, err := h.client.Incident.Get(ctx, incidentID)
+	// incident_id 在 UserTask 回调路径上来自客户端提交的变量，读写都必须带租户约束
+	tenantID, err := RequireTenantID(ctx, variables)
 	if err != nil {
-		return nil, fmt.Errorf("事件不存在: %w", err)
+		return nil, err
+	}
+
+	// 获取当前升级级别（带租户约束）
+	entity, err := h.client.Incident.Query().
+		Where(incident.ID(incidentID), incident.TenantID(tenantID)).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("事件 %d 不存在或不属于当前租户", incidentID)
+		}
+		return nil, fmt.Errorf("查询事件失败: %w", err)
 	}
 
 	newLevel := escalationLevel
 	if newLevel <= 0 {
-		newLevel = incident.EscalationLevel + 1
+		newLevel = entity.EscalationLevel + 1
 	}
 
 	now := time.Now()
-	_, err = h.client.Incident.UpdateOneID(incidentID).
+	if _, err := entity.Update().
 		SetEscalationLevel(newLevel).
 		SetEscalatedAt(now).
 		SetStatus(common.IncidentStatusEscalated).
-		Save(ctx)
-	if err != nil {
+		Save(ctx); err != nil {
 		return nil, fmt.Errorf("升级事件失败: %w", err)
 	}
 
@@ -210,13 +220,22 @@ func (h *IncidentServiceTaskHandler) resolveIncident(ctx context.Context, variab
 		return nil, fmt.Errorf("无效的事件ID")
 	}
 
+	tenantID, err := RequireTenantID(ctx, variables)
+	if err != nil {
+		return nil, err
+	}
+
 	now := time.Now()
-	_, err := h.client.Incident.UpdateOneID(incidentID).
+	updated, err := h.client.Incident.Update().
+		Where(incident.ID(incidentID), incident.TenantID(tenantID)).
 		SetStatus(common.IncidentStatusResolved).
 		SetResolvedAt(now).
 		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("解决事件失败: %w", err)
+	}
+	if updated == 0 {
+		return nil, fmt.Errorf("事件 %d 不存在或不属于当前租户", incidentID)
 	}
 
 	h.logger.Infow("Incident resolved via BPMN", "incident_id", incidentID, "resolution", resolution)
@@ -236,13 +255,22 @@ func (h *IncidentServiceTaskHandler) closeIncident(ctx context.Context, variable
 		return nil, fmt.Errorf("无效的事件ID")
 	}
 
+	tenantID, err := RequireTenantID(ctx, variables)
+	if err != nil {
+		return nil, err
+	}
+
 	now := time.Now()
-	_, err := h.client.Incident.UpdateOneID(incidentID).
+	updated, err := h.client.Incident.Update().
+		Where(incident.ID(incidentID), incident.TenantID(tenantID)).
 		SetStatus(common.IncidentStatusClosed).
 		SetClosedAt(now).
 		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("关闭事件失败: %w", err)
+	}
+	if updated == 0 {
+		return nil, fmt.Errorf("事件 %d 不存在或不属于当前租户", incidentID)
 	}
 
 	h.logger.Infow("Incident closed via BPMN", "incident_id", incidentID, "feedback", feedback)
@@ -261,7 +289,13 @@ func (h *IncidentServiceTaskHandler) updateIncident(ctx context.Context, variabl
 		return nil, fmt.Errorf("无效的事件ID")
 	}
 
-	updateQuery := h.client.Incident.UpdateOneID(incidentID)
+	tenantID, err := RequireTenantID(ctx, variables)
+	if err != nil {
+		return nil, err
+	}
+
+	updateQuery := h.client.Incident.Update().
+		Where(incident.ID(incidentID), incident.TenantID(tenantID))
 
 	if title, ok := variables["title"].(string); ok && title != "" {
 		updateQuery.SetTitle(title)
@@ -279,9 +313,12 @@ func (h *IncidentServiceTaskHandler) updateIncident(ctx context.Context, variabl
 		updateQuery.SetStatus(status)
 	}
 
-	_, err := updateQuery.Save(ctx)
+	updated, err := updateQuery.Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("更新事件失败: %w", err)
+	}
+	if updated == 0 {
+		return nil, fmt.Errorf("事件 %d 不存在或不属于当前租户", incidentID)
 	}
 
 	h.logger.Infow("Incident updated via BPMN", "incident_id", incidentID)
@@ -300,11 +337,20 @@ func (h *IncidentServiceTaskHandler) acknowledgeIncident(ctx context.Context, va
 		return nil, fmt.Errorf("无效的事件ID")
 	}
 
-	_, err := h.client.Incident.UpdateOneID(incidentID).
+	tenantID, err := RequireTenantID(ctx, variables)
+	if err != nil {
+		return nil, err
+	}
+
+	updated, err := h.client.Incident.Update().
+		Where(incident.ID(incidentID), incident.TenantID(tenantID)).
 		SetStatus(common.IncidentStatusAcknowledged).
 		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("确认事件失败: %w", err)
+	}
+	if updated == 0 {
+		return nil, fmt.Errorf("事件 %d 不存在或不属于当前租户", incidentID)
 	}
 
 	h.logger.Infow("Incident acknowledged via BPMN", "incident_id", incidentID)
@@ -325,7 +371,14 @@ func (h *IncidentServiceTaskHandler) categorizeIncident(ctx context.Context, var
 		return nil, fmt.Errorf("无效的事件ID")
 	}
 
-	updateQuery := h.client.Incident.UpdateOneID(incidentID).SetStatus(common.IncidentStatusTriaged)
+	tenantID, err := RequireTenantID(ctx, variables)
+	if err != nil {
+		return nil, err
+	}
+
+	updateQuery := h.client.Incident.Update().
+		Where(incident.ID(incidentID), incident.TenantID(tenantID)).
+		SetStatus(common.IncidentStatusTriaged)
 	if category != "" {
 		updateQuery.SetCategory(category)
 	}
@@ -333,9 +386,12 @@ func (h *IncidentServiceTaskHandler) categorizeIncident(ctx context.Context, var
 		updateQuery.SetSubcategory(subcategory)
 	}
 
-	_, err := updateQuery.Save(ctx)
+	updated, err := updateQuery.Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("分类事件失败: %w", err)
+	}
+	if updated == 0 {
+		return nil, fmt.Errorf("事件 %d 不存在或不属于当前租户", incidentID)
 	}
 
 	h.logger.Infow("Incident categorized via BPMN", "incident_id", incidentID, "category", category, "subcategory", subcategory)

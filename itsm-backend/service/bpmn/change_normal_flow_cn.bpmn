@@ -251,22 +251,22 @@
     
     <!-- 变更类型分流 -->
     <bpmn:sequenceFlow id="Flow_LowRisk" sourceRef="Gateway_ChangeType" targetRef="Activity_LowRiskApprove">
-      <bpmn:conditionExpression><![CDATA[${variables['risk_level'] == 'low'}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['risk_level'] == 'low']]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_MediumRisk" sourceRef="Gateway_ChangeType" targetRef="Activity_MediumRiskTechReview">
-      <bpmn:conditionExpression><![CDATA[${variables['risk_level'] == 'medium'}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['risk_level'] == 'medium']]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_HighRisk" sourceRef="Gateway_ChangeType" targetRef="Activity_HighRiskTechReview">
-      <bpmn:conditionExpression><![CDATA[${variables['risk_level'] == 'high'}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['risk_level'] == 'high']]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
 
     <!-- 低风险路径 -->
     <bpmn:sequenceFlow id="Flow_LowRiskApproved" sourceRef="Activity_LowRiskApprove" targetRef="Gateway_LowRisk" />
     <bpmn:sequenceFlow id="Flow_ToImplementation_Low" sourceRef="Gateway_LowRisk" targetRef="Activity_Implementation_Low">
-      <bpmn:conditionExpression><![CDATA[${variables['approved'] == true}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['approved'] == true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_Rejected_Low" sourceRef="Gateway_LowRisk" targetRef="Activity_NotifyRejection">
-      <bpmn:conditionExpression><![CDATA[${variables['approved'] != true}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['approved'] != true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_Verify_Low" sourceRef="Activity_Implementation_Low" targetRef="Activity_Verify_Low" />
     <bpmn:sequenceFlow id="Flow_Close_Low" sourceRef="Activity_Verify_Low" targetRef="Activity_ChangeClose" />
@@ -275,10 +275,10 @@
     <bpmn:sequenceFlow id="Flow_C3" sourceRef="Activity_MediumRiskTechReview" targetRef="Activity_MediumRiskManagerApprove" />
     <bpmn:sequenceFlow id="Flow_C4" sourceRef="Activity_MediumRiskManagerApprove" targetRef="Gateway_MediumRisk" />
     <bpmn:sequenceFlow id="Flow_ToImplementation_Medium" sourceRef="Gateway_MediumRisk" targetRef="Activity_Implementation_Medium">
-      <bpmn:conditionExpression><![CDATA[${variables['approved'] == true}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['approved'] == true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_Rejected_Medium" sourceRef="Gateway_MediumRisk" targetRef="Activity_NotifyRejection">
-      <bpmn:conditionExpression><![CDATA[${variables['approved'] != true}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['approved'] != true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_Verify_Medium" sourceRef="Activity_Implementation_Medium" targetRef="Activity_Verify_Medium" />
     <bpmn:sequenceFlow id="Flow_Close_Medium" sourceRef="Activity_Verify_Medium" targetRef="Activity_ChangeClose" />
@@ -289,10 +289,10 @@
     <bpmn:sequenceFlow id="Flow_C7" sourceRef="Activity_HighRiskOpsDirectorApprove" targetRef="Activity_HighRiskITDirectorApprove" />
     <bpmn:sequenceFlow id="Flow_C8" sourceRef="Activity_HighRiskITDirectorApprove" targetRef="Gateway_HighRisk" />
     <bpmn:sequenceFlow id="Flow_ToImplementation_High" sourceRef="Gateway_HighRisk" targetRef="Activity_Implementation_High">
-      <bpmn:conditionExpression><![CDATA[${variables['approved'] == true}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['approved'] == true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_Rejected_High" sourceRef="Gateway_HighRisk" targetRef="Activity_NotifyRejection">
-      <bpmn:conditionExpression><![CDATA[${variables['approved'] != true}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['approved'] != true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_Verify_High" sourceRef="Activity_Implementation_High" targetRef="Activity_Verify_High" />
     <bpmn:sequenceFlow id="Flow_Close_High" sourceRef="Activity_Verify_High" targetRef="Activity_ChangeClose" />

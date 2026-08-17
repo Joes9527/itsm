@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"embed"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"itsm-backend/ent/processdeployment"
 
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 )
 
 //go:embed bpmn/*.bpmn
@@ -41,7 +43,14 @@ type TemplateInfo struct {
 	Filename    string
 }
 
-// LoadAndDeployTemplates 加载并部署所有内置模板
+// LoadAndDeployTemplates 加载并同步所有内置模板：
+//   - 未部署 → 部署 v1；
+//   - 已部署但最新版本内容与嵌入模板不一致（模板修复随新版本发布）→ 自动发布新版本
+//     （事务化降级 is_latest），并停用旧版本、激活新版本；
+//   - 内容一致 → 跳过。
+//
+// 这样内置模板的修复不再要求手工导入或重置数据库——存量租户在下次启动时自动
+// 升级到新模板，同时保证同一 key 恰好一行 is_latest=true + is_active=true。
 func (s *BPMNTemplateService) LoadAndDeployTemplates(ctx context.Context, tenantID int) ([]*TemplateInfo, error) {
 	templates, err := s.listTemplates()
 	if err != nil {
@@ -51,24 +60,82 @@ func (s *BPMNTemplateService) LoadAndDeployTemplates(ctx context.Context, tenant
 	deployed := make([]*TemplateInfo, 0, len(templates))
 
 	for _, tmpl := range templates {
-		// 检查是否已部署
-		exists, err := s.isTemplateDeployed(ctx, tmpl.ID, tenantID)
-		if err != nil {
-			return nil, errors.Wrap(err, "检查模板部署状态失败")
+		if err := s.syncTemplate(ctx, tmpl, tenantID); err != nil {
+			return nil, fmt.Errorf("同步模板 %s 失败: %w", tmpl.Name, err)
 		}
-
-		if !exists {
-			// 部署模板
-			err := s.deployTemplate(ctx, tmpl, tenantID)
-			if err != nil {
-				return nil, fmt.Errorf("部署模板 %s 失败: %w", tmpl.Name, err)
-			}
-		}
-
 		deployed = append(deployed, tmpl)
 	}
 
 	return deployed, nil
+}
+
+// syncTemplate 同步单个内置模板（部署/升级/跳过），见 LoadAndDeployTemplates 注释。
+func (s *BPMNTemplateService) syncTemplate(ctx context.Context, tmpl *TemplateInfo, tenantID int) error {
+	data, err := bpmnTemplates.ReadFile(filepath.Join("bpmn", tmpl.Filename))
+	if err != nil {
+		return errors.Wrap(err, "读取模板文件失败")
+	}
+
+	// 取当前"最新"版本（is_latest 优先、id 兜底，与 StartProcess 的查找口径一致）
+	latest, err := s.client.ProcessDefinition.Query().
+		Where(
+			processdefinition.Key(tmpl.ID),
+			processdefinition.TenantID(tenantID),
+		).
+		Order(ent.Desc(processdefinition.FieldIsLatest), ent.Desc(processdefinition.FieldID)).
+		First(ctx)
+	if err != nil {
+		if !ent.IsNotFound(err) {
+			return errors.Wrap(err, "查询已部署模板失败")
+		}
+		return s.deployTemplate(ctx, tmpl, tenantID, data)
+	}
+
+	if bytes.Equal(latest.BpmnXML, data) {
+		// 内容一致，无需动作
+		return nil
+	}
+
+	// 内容漂移：走版本服务发布新版本（内部事务化：批量降级 is_latest + 建部署 +
+	// 建定义）。复用版本服务而不是就地改写旧定义——运行中的实例仍引用旧版本，
+	// 就地改写会破坏运行中实例与已部署图的不可变契约。
+	versionSvc := NewBPMNVersionService(s.client, zap.NewNop().Sugar())
+	if _, err := versionSvc.CreateVersion(ctx, &CreateVersionRequest{
+		ProcessDefinitionKey: tmpl.ID,
+		TenantID:             tenantID,
+		Name:                 tmpl.Name,
+		Description:          tmpl.Description,
+		BPMNXML:              string(data),
+		ChangeLog:            "内置模板升级（随版本自动同步）",
+		CreatedBy:            "system",
+	}); err != nil {
+		return errors.Wrap(err, "发布模板新版本失败")
+	}
+
+	// CreateVersion 里新版本是 IsActive=false。停用旧版本后激活最新版本，
+	// 使 StartProcess（IsLatest+IsActive）与 trigger 的定义查询（仅 IsActive）
+	// 都唯一命中新版本。
+	if _, err := s.client.ProcessDefinition.Update().
+		Where(
+			processdefinition.Key(tmpl.ID),
+			processdefinition.TenantID(tenantID),
+		).
+		SetIsActive(false).
+		Save(ctx); err != nil {
+		return errors.Wrap(err, "停用旧模板版本失败")
+	}
+	if _, err := s.client.ProcessDefinition.Update().
+		Where(
+			processdefinition.Key(tmpl.ID),
+			processdefinition.TenantID(tenantID),
+			processdefinition.IsLatest(true),
+		).
+		SetIsActive(true).
+		Save(ctx); err != nil {
+		return errors.Wrap(err, "激活新模板版本失败")
+	}
+
+	return nil
 }
 
 // listTemplates 列出所有内置模板
@@ -159,29 +226,8 @@ func (s *BPMNTemplateService) listTemplates() ([]*TemplateInfo, error) {
 	return templates, nil
 }
 
-// isTemplateDeployed 检查模板是否已部署
-func (s *BPMNTemplateService) isTemplateDeployed(ctx context.Context, templateID string, tenantID int) (bool, error) {
-	count, err := s.client.ProcessDefinition.Query().
-		Where(
-			processdefinition.Key(templateID),
-			processdefinition.TenantID(tenantID),
-		).
-		Count(ctx)
-	if err != nil {
-		return false, errors.Wrap(err, "查询流程定义失败")
-	}
-
-	return count > 0, nil
-}
-
-// deployTemplate 部署单个模板（幂等：已存在则跳过）
-func (s *BPMNTemplateService) deployTemplate(ctx context.Context, tmpl *TemplateInfo, tenantID int) error {
-	// 读取模板文件
-	data, err := bpmnTemplates.ReadFile(filepath.Join("bpmn", tmpl.Filename))
-	if err != nil {
-		return errors.Wrap(err, "读取模板文件失败")
-	}
-
+// deployTemplate 部署单个模板（首次部署 v1）
+func (s *BPMNTemplateService) deployTemplate(ctx context.Context, tmpl *TemplateInfo, tenantID int, data []byte) error {
 	now := time.Now()
 	deploymentID := fmt.Sprintf("%s-v1", tmpl.ID)
 
@@ -191,6 +237,7 @@ func (s *BPMNTemplateService) deployTemplate(ctx context.Context, tmpl *Template
 		First(ctx)
 
 	var deployment *ent.ProcessDeployment
+	var err error
 	if existing != nil {
 		deployment = existing
 	} else {
@@ -241,7 +288,8 @@ func (s *BPMNTemplateService) DeployTemplateByName(ctx context.Context, name str
 
 	for _, tmpl := range templates {
 		if tmpl.ID == name {
-			return s.deployTemplate(ctx, tmpl, tenantID)
+			// 与 LoadAndDeployTemplates 同一语义：未部署则部署 v1，内容漂移则升级
+			return s.syncTemplate(ctx, tmpl, tenantID)
 		}
 	}
 

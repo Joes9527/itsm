@@ -138,3 +138,104 @@ func TestServiceRequestHandler_InvalidRequestID_ReturnsError(t *testing.T) {
 	_, err := handler.Execute(ctx, nil, map[string]interface{}{"action": "assign_request"})
 	assert.Error(t, err)
 }
+
+// TestServiceRequestHandler_UpdateRequest_WritesFormFields 锁定 P2.1 的 update_request
+// 真实实现：纯表单元数据字段（无状态语义）按提交变量写入。
+func TestServiceRequestHandler_UpdateRequest_WritesFormFields(t *testing.T) {
+	client, handler, tenantID, _, sr := setupServiceRequestHandlerFixture(t)
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+
+	result, err := handler.Execute(ctx, nil, map[string]interface{}{
+		"action":             "update_request",
+		"request_id":         float64(sr.ID),
+		"cost_center":        "CC-001",
+		"data_classification": "confidential",
+		"needs_public_ip":    true,
+		"compliance_ack":     true,
+	})
+	require.NoError(t, err)
+	assert.True(t, result.Success)
+
+	updated, err := client.ServiceRequest.Get(ctx, sr.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "CC-001", updated.CostCenter)
+	assert.Equal(t, "confidential", updated.DataClassification)
+	assert.True(t, updated.NeedsPublicIP)
+	assert.True(t, updated.ComplianceAck)
+}
+
+// TestServiceRequestHandler_UpdateRequest_CrossTenant 更新动作同样受租户约束。
+func TestServiceRequestHandler_UpdateRequest_CrossTenant(t *testing.T) {
+	client, handler, tenantID, _, sr := setupServiceRequestHandlerFixture(t)
+	otherCtx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID+9999)
+
+	_, err := handler.Execute(otherCtx, nil, map[string]interface{}{
+		"action":      "update_request",
+		"request_id":  float64(sr.ID),
+		"cost_center": "CC-EVIL",
+	})
+	assert.Error(t, err, "跨租户更新必须失败")
+
+	after, err := client.ServiceRequest.Get(context.Background(), sr.ID)
+	require.NoError(t, err)
+	assert.Empty(t, after.CostCenter, "跨租户请求不得写入字段")
+}
+
+// TestServiceRequestHandler_RejectRequest_IllegalTransition_Rejected 锁定关联工单的
+// 状态机校验：resolved 工单不能再被驳回/取消（resolved→closed 不在白名单内）。
+func TestServiceRequestHandler_RejectRequest_IllegalTransition_Rejected(t *testing.T) {
+	client, handler, tenantID, tkt, sr := setupServiceRequestHandlerFixture(t)
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+
+	_, err := client.Ticket.UpdateOne(tkt).SetStatus("resolved").Save(ctx)
+	require.NoError(t, err)
+
+	_, err = handler.Execute(ctx, nil, map[string]interface{}{
+		"action":     "reject_request",
+		"request_id": float64(sr.ID),
+	})
+	require.Error(t, err, "resolved 工单不允许再被驳回")
+	assert.Contains(t, err.Error(), "非法的关联工单状态转换")
+
+	after, err := client.Ticket.Get(ctx, tkt.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "resolved", after.Status, "非法转换不得改写工单")
+}
+
+// TestServiceRequestHandler_CompleteRequest_Idempotent 同状态幂等放行：
+// 已 resolved 的工单重复 complete 不报错（服务请求补记完成时间）。
+func TestServiceRequestHandler_CompleteRequest_Idempotent(t *testing.T) {
+	client, handler, tenantID, tkt, sr := setupServiceRequestHandlerFixture(t)
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+
+	_, err := client.Ticket.UpdateOne(tkt).SetStatus("resolved").Save(ctx)
+	require.NoError(t, err)
+
+	result, err := handler.Execute(ctx, nil, map[string]interface{}{
+		"action":     "complete_request",
+		"request_id": float64(sr.ID),
+	})
+	require.NoError(t, err)
+	assert.True(t, result.Success)
+
+	after, err := client.Ticket.Get(ctx, tkt.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "resolved", after.Status, "幂等完成不得改变状态")
+}
+
+// TestServiceRequestHandler_SetLinkedTicketStatus_AlwaysTenantScoped 锁定删除
+// `if tenantID > 0` 死代码后的行为：关联工单写入恒带租户约束，跨租户零写入。
+func TestServiceRequestHandler_SetLinkedTicketStatus_AlwaysTenantScoped(t *testing.T) {
+	client, handler, tenantID, tkt, sr := setupServiceRequestHandlerFixture(t)
+	otherCtx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID+9999)
+
+	_, err := handler.Execute(otherCtx, nil, map[string]interface{}{
+		"action":     "approve_request",
+		"request_id": float64(sr.ID),
+	})
+	assert.Error(t, err, "跨租户的关联工单写入必须失败")
+
+	after, err := client.Ticket.Get(context.Background(), tkt.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "open", after.Status, "跨租户请求不得改写关联工单状态")
+}

@@ -952,6 +952,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				releases.GET("/:id", middleware.RequirePermission("release", "read"), config.ReleaseController.GetRelease)
 				releases.PUT("/:id", middleware.RequirePermission("release", "write"), config.ReleaseController.UpdateRelease)
 				releases.PUT("/:id/status", middleware.RequirePermission("release", "write"), config.ReleaseController.UpdateReleaseStatus)
+				releases.POST("/:id/tech-review", middleware.RequirePermission("release", "write"), config.ReleaseController.SubmitTechReview)
 				releases.POST("/:id/approve", middleware.RequirePermission("release", "approve"), config.ReleaseController.ApproveRelease)
 				releases.POST("/:id/reject", middleware.RequirePermission("release", "approve"), config.ReleaseController.RejectRelease)
 				releases.POST("/:id/rollback", middleware.RequirePermission("release", "rollback"), config.ReleaseController.RollbackRelease)

@@ -237,6 +237,8 @@ services:
         - NODE_ENV=production
         - ITSM_BACKEND_URL=http://backend:8090
         - NEXT_PUBLIC_ENABLE_AI=true
+        # 国内环境 npmjs 不可达时走 npmmirror（默认 npmjs 在受限网络下会卡死 npm ci）
+        - NPM_REGISTRY=https://registry.npmmirror.com
         - HTTP_PROXY=
         - HTTPS_PROXY=
         - http_proxy=

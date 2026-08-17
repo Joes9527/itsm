@@ -590,6 +590,22 @@ func (s *Service) TransitionStatus(ctx context.Context, id, tenantID, userID int
 		}
 	}
 
+	// P1 域侧桥接：阶段流转（start/complete）先完成对应的 change_normal_flow 阶段节点
+	// （注入 change_id），再由域层写权威状态。handler 侧写入的中间值（scheduled/
+	// pending_approval）会被随后的域写覆盖，最终状态以域为准；handler 写同值时幂等放行。
+	// 桥接失败（存在待办任务但完成不了）则中止，避免变更状态与流程状态分叉。
+	// actorUserID 传 0：阶段流转的授权边界在域层（JWT + 资源权限 + 租户隔离），
+	// 不强制 BPMN 任务 assignee 匹配（authorizeTaskActor 对 userID<=0 按设计跳过）。
+	if s.approvalBridge != nil {
+		for _, st := range changeStageTasks(targetStatus) {
+			if _, bridgeErr := s.approvalBridge.CompleteBusinessStageTask(
+				ctx, tenantID, 0, string(dto.BusinessTypeChange), id, st.key, st.vars,
+			); bridgeErr != nil {
+				return nil, fmt.Errorf("同步流程阶段任务失败: %w", bridgeErr)
+			}
+		}
+	}
+
 	// H-2 / C-2 修复：
 	// 1. 终态（rejected/completed/cancelled/rolled_back）需要事务化：写 change + 收口 pending chains
 	// 2. 非终态直接更新
@@ -621,6 +637,34 @@ func (s *Service) TransitionStatus(ctx context.Context, id, tenantID, userID int
 
 	c.Status = targetStatus
 	return s.repo.Update(ctx, c)
+}
+
+// changeStageTask 描述一次需要桥接完成的变更阶段节点。
+type changeStageTask struct {
+	key  string
+	vars map[string]interface{}
+}
+
+// changeStageTasks 返回变更阶段流转需要依次完成的 change_normal_flow 节点。
+// start（in_progress）先完成排期节点（若流程仍停在该节点，handler 写入的 scheduled
+// 随后被域写 in_progress 覆盖），再完成实施节点；complete 依次完成验证与关闭两个
+// 节点让流程走完，验证节点需带 verify_passed 供 Gateway_VerifyResult 路由。
+// 节点不存在或已完成时桥接层返回 (false, nil)，按顺序尝试即可。
+func changeStageTasks(targetStatus string) []changeStageTask {
+	switch targetStatus {
+	case "in_progress":
+		return []changeStageTask{
+			{key: "Activity_Schedule"},
+			{key: "Activity_Implement"},
+		}
+	case "completed":
+		return []changeStageTask{
+			{key: "Activity_Verify", vars: map[string]interface{}{"verify_passed": true}},
+			{key: "Activity_Close"},
+		}
+	default:
+		return nil
+	}
 }
 
 // GetApprovalHistory returns approval records for a change

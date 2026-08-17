@@ -141,3 +141,134 @@ func TestIncidentServiceTaskHandler_AssignIncident_CrossTenant(t *testing.T) {
 	require.NoError(t, err)
 	assert.Zero(t, after.AssigneeID, "跨租户请求不得写入处理人")
 }
+
+// TestIncidentServiceTaskHandler_TenantScopedActions 覆盖 assign 之外六个动作的
+// 租户隔离三件套：同租户 Valid 生效、跨租户拒绝且零写入、无租户上下文 fail-closed。
+// 这些动作的 incident_id 在 UserTask 回调路径上来自客户端提交的变量，可被伪造，
+// 与 assignIncident 是同一漏洞面。
+func TestIncidentServiceTaskHandler_TenantScopedActions(t *testing.T) {
+	tests := []struct {
+		name        string
+		action      string
+		extraVars   map[string]interface{}
+		assertValid func(t *testing.T, client *ent.Client, incID int)
+	}{
+		{
+			name:   "escalate",
+			action: "escalate_incident",
+			assertValid: func(t *testing.T, client *ent.Client, incID int) {
+				after, err := client.Incident.Get(context.Background(), incID)
+				require.NoError(t, err)
+				assert.Equal(t, 1, after.EscalationLevel, "未显式指定级别时应递增为 1")
+				assert.Equal(t, common.IncidentStatusEscalated, after.Status)
+				assert.False(t, after.EscalatedAt.IsZero())
+			},
+		},
+		{
+			name:   "resolve",
+			action: "resolve_incident",
+			assertValid: func(t *testing.T, client *ent.Client, incID int) {
+				after, err := client.Incident.Get(context.Background(), incID)
+				require.NoError(t, err)
+				assert.Equal(t, common.IncidentStatusResolved, after.Status)
+				assert.False(t, after.ResolvedAt.IsZero())
+			},
+		},
+		{
+			name:   "close",
+			action: "close_incident",
+			assertValid: func(t *testing.T, client *ent.Client, incID int) {
+				after, err := client.Incident.Get(context.Background(), incID)
+				require.NoError(t, err)
+				assert.Equal(t, common.IncidentStatusClosed, after.Status)
+				assert.False(t, after.ClosedAt.IsZero())
+			},
+		},
+		{
+			name:   "acknowledge",
+			action: "acknowledge_incident",
+			assertValid: func(t *testing.T, client *ent.Client, incID int) {
+				after, err := client.Incident.Get(context.Background(), incID)
+				require.NoError(t, err)
+				assert.Equal(t, common.IncidentStatusAcknowledged, after.Status)
+			},
+		},
+		{
+			name:   "categorize",
+			action: "categorize_incident",
+			extraVars: map[string]interface{}{
+				"category": "network",
+			},
+			assertValid: func(t *testing.T, client *ent.Client, incID int) {
+				after, err := client.Incident.Get(context.Background(), incID)
+				require.NoError(t, err)
+				assert.Equal(t, common.IncidentStatusTriaged, after.Status)
+				assert.Equal(t, "network", after.Category)
+			},
+		},
+		{
+			name:   "update",
+			action: "update_incident",
+			extraVars: map[string]interface{}{
+				"title": "改过的标题",
+			},
+			assertValid: func(t *testing.T, client *ent.Client, incID int) {
+				after, err := client.Incident.Get(context.Background(), incID)
+				require.NoError(t, err)
+				assert.Equal(t, "改过的标题", after.Title)
+				assert.Equal(t, common.IncidentStatusNew, after.Status, "update 只提交 title 时不得改状态")
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Run("Valid", func(t *testing.T) {
+				client, handler, tenantID, inc, _ := setupIncidentHandlerFixture(t)
+				ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+
+				vars := map[string]interface{}{"action": tc.action, "incident_id": inc.ID}
+				for k, v := range tc.extraVars {
+					vars[k] = v
+				}
+				result, err := handler.Execute(ctx, nil, vars)
+				require.NoError(t, err)
+				assert.True(t, result.Success)
+				tc.assertValid(t, client, inc.ID)
+			})
+
+			t.Run("CrossTenant", func(t *testing.T) {
+				client, handler, tenantID, inc, _ := setupIncidentHandlerFixture(t)
+				otherCtx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID+9999)
+
+				before, err := client.Incident.Get(context.Background(), inc.ID)
+				require.NoError(t, err)
+
+				vars := map[string]interface{}{"action": tc.action, "incident_id": inc.ID}
+				for k, v := range tc.extraVars {
+					vars[k] = v
+				}
+				_, err = handler.Execute(otherCtx, nil, vars)
+				assert.Error(t, err, "跨租户写入必须失败")
+
+				after, err := client.Incident.Get(context.Background(), inc.ID)
+				require.NoError(t, err)
+				assert.Equal(t, before.Status, after.Status, "跨租户请求不得改状态")
+				assert.Equal(t, before.Title, after.Title, "跨租户请求不得改标题")
+				assert.Equal(t, before.EscalationLevel, after.EscalationLevel)
+			})
+
+			t.Run("NoTenant_FailClosed", func(t *testing.T) {
+				_, handler, _, inc, _ := setupIncidentHandlerFixture(t)
+				// ctx 无租户键、variables 无 tenant_id：必须 fail-closed 而不是裸写
+				vars := map[string]interface{}{"action": tc.action, "incident_id": inc.ID}
+				for k, v := range tc.extraVars {
+					vars[k] = v
+				}
+				_, err := handler.Execute(context.Background(), nil, vars)
+				require.Error(t, err, "租户未知时必须拒绝执行")
+				assert.Contains(t, err.Error(), "租户")
+			})
+		})
+	}
+}
