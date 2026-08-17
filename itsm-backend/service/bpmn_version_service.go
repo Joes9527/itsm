@@ -98,6 +98,15 @@ func (s *BPMNVersionService) CreateVersion(ctx context.Context, req *CreateVersi
 
 	newVersion := incrementSemver(currentVersion)
 
+	// 把当前 is_latest=true 的旧版本降级——不这样做的话，每次 CreateVersion 都会
+	// 让同一个 key 同时存在多行 is_latest=true（新行靠 schema 默认值天生是 true，
+	// 旧行从来没人主动改成 false），GetLatestProcessDefinition/StartProcess 的
+	// .First() 会取到不确定的一行。跟 bpmnProcessDefinitionService.CreateProcessDefinition
+	// （service/bpmn_process_engine.go）已经写对的降级逻辑保持一致。
+	if err := s.demoteCurrentLatest(ctx, req.ProcessDefinitionKey, req.TenantID); err != nil {
+		return nil, err
+	}
+
 	// 先创建部署记录（因为ProcessDefinition需要deployment_id）
 	deployment, err := s.client.ProcessDeployment.Create().
 		SetDeploymentID(fmt.Sprintf("%s-v%s", req.ProcessDefinitionKey, newVersion)).
@@ -119,6 +128,7 @@ func (s *BPMNVersionService) CreateVersion(ctx context.Context, req *CreateVersi
 		SetVersion(newVersion).
 		SetTenantID(req.TenantID).
 		SetIsActive(false).
+		SetIsLatest(true).
 		SetDeploymentID(deployment.ID).
 		Save(ctx)
 	if err != nil {
@@ -147,6 +157,28 @@ func (s *BPMNVersionService) CreateVersion(ctx context.Context, req *CreateVersi
 		ChangeLog:            req.ChangeLog,
 		CompatibilityNotes:   req.CompatibilityNotes,
 	}, nil
+}
+
+// demoteCurrentLatest 把某个 (tenant, key) 当前 is_latest=true 的那一行改成 false。
+// 没有旧版本（首次创建）时 First 返回 not-found，直接当作无需处理。
+func (s *BPMNVersionService) demoteCurrentLatest(ctx context.Context, key string, tenantID int) error {
+	existing, err := s.client.ProcessDefinition.Query().
+		Where(
+			processdefinition.Key(key),
+			processdefinition.TenantID(tenantID),
+			processdefinition.IsLatest(true),
+		).
+		First(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("查询当前最新版本失败: %w", err)
+	}
+	if _, err := s.client.ProcessDefinition.UpdateOne(existing).SetIsLatest(false).Save(ctx); err != nil {
+		return fmt.Errorf("降级旧版本失败: %w", err)
+	}
+	return nil
 }
 
 // GetVersion 获取指定版本
