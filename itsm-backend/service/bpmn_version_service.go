@@ -109,7 +109,7 @@ func (s *BPMNVersionService) CreateVersion(ctx context.Context, req *CreateVersi
 
 	// 先创建部署记录（因为ProcessDefinition需要deployment_id）
 	deployment, err := s.client.ProcessDeployment.Create().
-		SetDeploymentID(fmt.Sprintf("%s-v%s", req.ProcessDefinitionKey, newVersion)).
+		SetDeploymentID(fmt.Sprintf("tenant-%d-%s-v%s", req.TenantID, req.ProcessDefinitionKey, newVersion)).
 		SetDeploymentName(fmt.Sprintf("%s v%s", req.Name, newVersion)).
 		SetDeploymentTime(time.Now()).
 		SetTenantID(req.TenantID).
