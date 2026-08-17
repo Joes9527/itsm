@@ -160,5 +160,5 @@ func TestConfigurePermissionModeFailsClosedByDefault(t *testing.T) {
 	require.Equal(t, middleware.PermissionConfigModeDBOnly, middleware.PermissionConfig.Mode)
 
 	configurePermissionMode("development")
-	require.Equal(t, middleware.PermissionConfigModeFallback, middleware.PermissionConfig.Mode)
+	require.Equal(t, middleware.PermissionConfigModeDBOnly, middleware.PermissionConfig.Mode)
 }
