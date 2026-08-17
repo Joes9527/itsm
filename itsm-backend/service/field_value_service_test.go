@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"itsm-backend/ent/enttest"
+	"itsm-backend/ent/fieldvalue"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -99,4 +100,73 @@ func TestFieldValueService_CreateValues_SurvivesDefinitionDeletion(t *testing.T)
 	assert.Equal(t, "office_location", values[0].Name)
 	assert.Equal(t, "办公地点", values[0].Label)
 	assert.Equal(t, "北京", values[0].Value)
+}
+
+func TestFieldValueService_CreateValues_RejectsNonNumericValueForNumberField(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:field_value_reject_number?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	defSvc := NewFieldDefinitionService(client)
+	valSvc := NewFieldValueService(client)
+
+	_, err := defSvc.ReplaceDefinitions(ctx, 1, "ticket_template", 40, []FieldDefinitionInput{
+		{Name: "device_count", Label: "设备数量", FieldType: "number", SortOrder: 0},
+	})
+	require.NoError(t, err)
+
+	err = valSvc.CreateValues(ctx, 1, "ticket_template", 40, "ticket", 400, map[string]interface{}{
+		"device_count": "not-a-number",
+	})
+	require.Error(t, err)
+
+	count, err := client.FieldValue.Query().Where(fieldvalue.EntityID(400)).Count(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 0, count, "校验失败时不应该留下部分写入的值——事务应该整体回滚")
+}
+
+func TestFieldValueService_CreateValues_RejectsSelectValueNotInOptions(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:field_value_reject_select?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	defSvc := NewFieldDefinitionService(client)
+	valSvc := NewFieldValueService(client)
+
+	_, err := defSvc.ReplaceDefinitions(ctx, 1, "ticket_template", 41, []FieldDefinitionInput{
+		{
+			Name: "priority_level", Label: "优先级", FieldType: "select", SortOrder: 0,
+			Options: []interface{}{
+				map[string]interface{}{"label": "低", "value": "low"},
+				map[string]interface{}{"label": "高", "value": "high"},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	err = valSvc.CreateValues(ctx, 1, "ticket_template", 41, "ticket", 401, map[string]interface{}{
+		"priority_level": "urgent",
+	})
+	require.Error(t, err)
+}
+
+func TestFieldValueService_CreateValues_AcceptsValidNumberAndSelectValues(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:field_value_accept_valid?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	defSvc := NewFieldDefinitionService(client)
+	valSvc := NewFieldValueService(client)
+
+	_, err := defSvc.ReplaceDefinitions(ctx, 1, "ticket_template", 42, []FieldDefinitionInput{
+		{Name: "device_count", Label: "设备数量", FieldType: "number", SortOrder: 0},
+		{
+			Name: "priority_level", Label: "优先级", FieldType: "select", SortOrder: 1,
+			Options: []interface{}{map[string]interface{}{"label": "低", "value": "low"}},
+		},
+	})
+	require.NoError(t, err)
+
+	err = valSvc.CreateValues(ctx, 1, "ticket_template", 42, "ticket", 402, map[string]interface{}{
+		"device_count":   3,
+		"priority_level": "low",
+	})
+	require.NoError(t, err)
 }
