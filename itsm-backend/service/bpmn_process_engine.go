@@ -2233,14 +2233,19 @@ func (s *bpmnTaskService) ListUserTasks(ctx context.Context, req *ListUserTasksR
 			processtask.Assignee(userIDStr),
 			processtask.CandidateUsersContains(userIDStr),
 		}
-		// 同时以 username 形式匹配（process_task.candidate_users 中保存的是 username/email/ID 混合）
+		// 同时以 username/email 形式匹配 assignee 和 candidate_users——两个字段都可能存的是
+		// username/email/ID 混合（例如流程设计器"受理人"选择器写入的是 username，而
+		// resolveApprovalAssignee 等自动解析路径写入的是数字 ID），只匹配 ID 会导致通过
+		// 设计器指定受理人的任务在"我的待办"里对该用户不可见（2026-08-18 实测复现）。
 		if u, err := s.client.User.Get(ctx, req.UserID); err == nil && u != nil {
 			username := strings.TrimSpace(u.Username)
 			if username != "" && username != userIDStr {
+				orPreds = append(orPreds, processtask.Assignee(username))
 				orPreds = append(orPreds, processtask.CandidateUsersContains(username))
 			}
 			email := strings.TrimSpace(u.Email)
 			if email != "" && email != userIDStr && email != username {
+				orPreds = append(orPreds, processtask.Assignee(email))
 				orPreds = append(orPreds, processtask.CandidateUsersContains(email))
 			}
 		}

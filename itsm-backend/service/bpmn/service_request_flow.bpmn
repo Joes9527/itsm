@@ -36,7 +36,7 @@
     <!-- 审批结果 -->
     <bpmn:exclusiveGateway id="Gateway_ApprovalResult" name="审批结果?">
       <bpmn:incoming>Flow_5</bpmn:incoming>
-      <bpmn:outgoing>Flow_4</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Approved</bpmn:outgoing>
       <bpmn:outgoing>Flow_Reject</bpmn:outgoing>
     </bpmn:exclusiveGateway>
 
@@ -53,6 +53,7 @@
     <!-- 执行服务 -->
     <bpmn:userTask id="Activity_Execute" name="执行服务">
       <bpmn:incoming>Flow_4</bpmn:incoming>
+      <bpmn:incoming>Flow_Approved</bpmn:incoming>
       <bpmn:outgoing>Flow_6</bpmn:outgoing>
     </bpmn:userTask>
 
@@ -104,8 +105,11 @@
       <bpmn:conditionExpression><![CDATA[variables['approval_required'] != true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_5" sourceRef="Activity_Approval" targetRef="Gateway_ApprovalResult" />
+    <bpmn:sequenceFlow id="Flow_Approved" sourceRef="Gateway_ApprovalResult" targetRef="Activity_Execute">
+      <bpmn:conditionExpression><![CDATA[variables['approvalResult'] == 'approved']]></bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_Reject" sourceRef="Gateway_ApprovalResult" targetRef="Activity_RejectNotify">
-      <bpmn:conditionExpression><![CDATA[variables['approval_result'] == 'rejected']]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['approvalResult'] == 'rejected']]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_EndReject" sourceRef="Activity_RejectNotify" targetRef="EndEvent_Reject" />
     <bpmn:sequenceFlow id="Flow_6" sourceRef="Activity_Execute" targetRef="Activity_Confirm" />

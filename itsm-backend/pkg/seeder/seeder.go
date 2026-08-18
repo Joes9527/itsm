@@ -1832,7 +1832,13 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 			// release:read 同理必须补：光有 approve 权限但没有 read，审批人连
 			// GET /releases/:id（发布详情页）都会被 RBAC 拒 403，真实浏览器验证时
 			// 点开发布详情直接 404，approve 按钮压根摸不到。
-			"bpmn:read", "task:read",
+			// bpmn:write：POST /api/v1/bpmn/tasks/:id/decisions（审批人真正提交同意/拒绝
+			// 走的接口）在全局 ResourceActionMap 里按 bpmn:write 校验，跟上面 bpmn:read
+			// 只覆盖"查看待办"是两个不同动作。部门经理作为审批人被正确解析成审批任务
+			// assignee 后，没有这条权限会被全局 RBACMiddleware 挡在 authorizeTaskActor
+			// （任务级"是不是你的任务"校验）之前，报"权限不足"而不是业务层错误，真实
+			// 提交-审批全链路验证时实测复现（2026-08-18）。
+			"bpmn:read", "bpmn:write", "task:read",
 		},
 		// 团队主管
 		"team_lead": {
@@ -1857,6 +1863,19 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 			"ticket:read", "ticket:create", "ticket:update", "knowledge:read", "service_catalog:read",
 			"ticket_category:read", "ticket_template:read", "notification:read",
 			"tag:read",
+			// service_request:write/read：没有这条，终端用户从服务目录发起自助申请
+			// （POST /api/v1/service-requests，服务目录的核心使用场景）会被全局 RBAC
+			// 直接拒在 handler 之前，报"权限不足"——end_user 是唯一预期会调这个接口的
+			// 角色，之前只有 it_director/ops_director/sysadmin/service_catalog_admin
+			// 这些管理级角色有，等于普通用户永远走不通自助服务目录。
+			"service_request:write", "service_request:read",
+			// bpmn:read/bpmn:write/task:read：服务请求 BPMN 流程里第一个节点
+			// （Activity_Accept"请求受理"）没有声明 candidateGroups/candidateUsers 时，
+			// bpmn_process_engine.go 会把它默认分配给 requester_id 本人——也就是说
+			// 申请人自己就是审批链路上第一个"任务受理人"。没有这三条权限，申请人看不到
+			// （task:read/bpmn:read）也完不成（bpmn:write）分配给自己的任务，流程卡在
+			// 第一步，真实提交-审批全链路验证时实测复现（2026-08-18）。
+			"bpmn:read", "bpmn:write", "task:read",
 		},
 		// 访客
 		"guest": {
