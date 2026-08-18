@@ -380,7 +380,14 @@ func (e *CustomProcessEngine) CompleteTask(ctx context.Context, taskID string, v
 	// 注意 task 是步骤 1 读出来的快照，它的 TaskVariables 仍是 createUserTask 写入的
 	// taskConfig（含 metaData）；步骤 4 的 SetTaskVariables(variables) 已经把库里那行
 	// 覆盖成完成时提交的变量了，所以这里必须用快照读，不能重新查库。
-	e.dispatchUserTaskCallback(ctx, task, variables)
+	//
+	// 传 instance.Variables（步骤 5 合并落库后的最新值）而不是本次调用的原始 variables：
+	// 启动流程时注入的 change_id/business_id 等字段存在实例变量里，不会随每次任务完成
+	// 请求重复携带。只在调用方显式传参时才够用的话，走"审批中心"通用决策接口（不知道
+	// 也不该关心具体业务字段名）完成这类 UserTask 时，handler 拿到的 change_id 就是 0，
+	// 报"无效的变更ID"——业务副作用被吞掉但流程 token 已经往前走了，状态跟着悬空。
+	// action 仍然优先取 task 自身 metaData（dispatchUserTaskCallback 内部处理），不受此影响。
+	e.dispatchUserTaskCallback(ctx, task, instance.Variables)
 
 	// 7. 记录审计日志 - 任务完成
 	userID := 0

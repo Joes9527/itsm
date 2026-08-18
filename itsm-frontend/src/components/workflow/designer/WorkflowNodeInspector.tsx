@@ -75,7 +75,7 @@ export default function WorkflowNodeInspector({
     const loadUsers = async () => {
       setLoadingUsers(true);
       try {
-        const resp = await UserApi.getUsers({ page: 1, pageSize: 200 });
+        const resp = await UserApi.getUsers({ page: 1, pageSize: 100 });
         if (!cancelled) setUsers((resp.users as ApiUser[]) || []);
       } catch (err) {
         console.error('加载用户列表失败:', err);
@@ -87,7 +87,7 @@ export default function WorkflowNodeInspector({
       setLoadingGroups(true);
       try {
         const tenantId = httpClient.getTenantId() || 1;
-        const resp = await GroupAPI.getGroups({ page: 1, pageSize: 200, tenantId: tenantId });
+        const resp = await GroupAPI.getGroups({ page: 1, pageSize: 100, tenantId: tenantId });
         if (!cancelled) setGroups(resp.groups || []);
       } catch (err) {
         console.error('加载组列表失败:', err);

@@ -816,7 +816,12 @@ export class WorkflowApi {
       status: string;
       startTime: string;
       endTime?: string;
-    }>('/api/v1/bpmn/process-instances', payload);
+    }>('/api/v1/bpmn/process-instances', payload, {
+      // variables 的 key 由 BPMN 流程定义/后端 handler 约定（request_id、cost_center、
+      // business_id 等 snake_case），不是本项目的 DTO 契约字段，不能被全局 camelCase
+      // 归一化改名，否则 handler 读不到值（GetIntFromVars 拿到 0，报"无效的请求ID"）。
+      skipCamelCaseBody: true,
+    });
     return {
       id: item.processInstanceId || item.id || '',
       workflowId: item.processDefinitionKey || '',

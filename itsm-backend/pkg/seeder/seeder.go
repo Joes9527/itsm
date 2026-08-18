@@ -1497,7 +1497,8 @@ func (s *Seeder) seedMenus(ctx context.Context) {
 		{Name: "组管理", Path: "/admin/groups", Icon: "Users", PermissionCode: "groups:read", SortOrder: 230},
 		{Name: "部门管理", Path: "/admin/departments", Icon: "Activity", PermissionCode: "department:read", SortOrder: 240},
 		{Name: "团队管理", Path: "/admin/teams", Icon: "Users", PermissionCode: "team:read", SortOrder: 250},
-		{Name: "审批管理", Path: "/admin/approvals", Icon: "ClipboardList", PermissionCode: "approval:read", SortOrder: 260},
+		// "审批管理"(/admin/approvals) 页面已在 34e4b951 删除(工单审批链 Tab 改用真实 BPMN
+		// 审批决策数据)，这里同步移除菜单种子，避免继续生成指向已删除页面的死链菜单项。
 		{Name: "SLA配置", Path: "/admin/sla-definitions", Icon: "Calendar", PermissionCode: "sla:write", SortOrder: 270},
 		{Name: "系统配置", Path: "/admin/system-config", Icon: "Settings", PermissionCode: "system:write", SortOrder: 280},
 	}
@@ -1823,11 +1824,14 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 			"ticket:read", "ticket:create", "ticket:update", "ticket:escalate", "incident:read",
 			"problem:read", "change:read", "change:rollback", "report:read",
 			"user:read", "department:read", "team:read",
-			"knowledge:read", "release:approve", "release:rollback",
+			"knowledge:read", "release:read", "release:approve", "release:rollback",
 			// release:approve/rollback 只让业务域 API（/releases/:id/approve 等）能调，
 			// 审批人查看"我的待办"走的是 /api/v1/bpmn/tasks，由全局 ResourceActionMap
 			// 的 /api/v1/bpmn/* 通配符按 bpmn:read 校验——同 change_manager 那次修复
 			// 缺 bpmn:read 的道理一样，没有它审批人能审批但看不到自己的待办列表。
+			// release:read 同理必须补：光有 approve 权限但没有 read，审批人连
+			// GET /releases/:id（发布详情页）都会被 RBAC 拒 403，真实浏览器验证时
+			// 点开发布详情直接 404，approve 按钮压根摸不到。
 			"bpmn:read", "task:read",
 		},
 		// 团队主管

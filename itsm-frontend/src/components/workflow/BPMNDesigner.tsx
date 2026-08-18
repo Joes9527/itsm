@@ -157,11 +157,39 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
   const [zoom, setZoom] = useState(1);
   const [history, setHistory] = useState<HistoryItem[]>([{ xml, timestamp: Date.now(), description: '初始' }]);
   const [historyIndex, setHistoryIndex] = useState(0);
-  const [showGrid, setShowGrid] = useState(true);
   const [snapToGrid, setSnapToGrid] = useState(true);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [selectedElements, setSelectedElements] = useState<string[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+
+  // initializeModeler 里注册在 modeler 上的事件监听器（commandStack.changed、
+  // selection.changed 等）是长期存活的——一旦 modeler 创建完成就不会重新绑定。
+  // 之前这些监听器直接闭包捕获 onChange/onSelectionChange/message/historyIndex/
+  // history，所以 initializeModeler 的 useCallback 依赖列表里必须带上它们，
+  // 而 onChange/onSelectionChange 是父组件每次渲染都重新创建的内联函数——
+  // 依赖变了就会让外层 effect 判定"需要重新初始化"，把整个 bpmn-js 实例销毁重建。
+  // 画布不可见时（比如切到别的 tab，容器尺寸为 0）重建会卡在等待 resize，
+  // modelerRef 会在这段时间里一直是 null。
+  // 这里改成用 ref 存"当前最新值"，监听器读 ref.current 而不是闭包变量，
+  // initializeModeler 就可以做到真正稳定（依赖数组清空），只在挂载时执行一次。
+  const onChangeRef = useRef(onChange);
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  const messageRef = useRef(message);
+  const historyIndexRef = useRef(historyIndex);
+  const historyRef = useRef(history);
+  onChangeRef.current = onChange;
+  onSelectionChangeRef.current = onSelectionChange;
+  messageRef.current = message;
+  historyIndexRef.current = historyIndex;
+  historyRef.current = history;
+
+  // commandStack.changed 里把最新 XML 通过 onChange 抛给父组件后，父组件常见做法是
+  // 把它存进自己的 state 再原样传回 xml prop（受控组件模式）。这个"回声"到达下面的
+  // xml prop 同步 effect 时，如果不加区分就会被当成外部变更处理：重新 importXML、
+  // 把 history 重置成单条记录、historyIndex 归零——结果是每编辑一次节点，撤销历史
+  // 就被自己触发的回声清空一次，撤销按钮永远显示"不可用"。这里记录"最近一次自己
+  // emit 出去的 XML"，xml prop 同步 effect 命中这个值时就知道是回声，跳过重导入。
+  const lastEmittedXmlRef = useRef<string | null>(null);
 
   // 等待容器具有有效尺寸后再初始化 BPMN Modeler
   // bpmn-js 在容器尺寸为 0 时会抛出 "Cannot read properties of undefined (reading 'root-0')"
@@ -184,11 +212,7 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
       const modeler = new BpmnModeler({
         container: containerRef.current,
         additionalModules,
-        moddleExtensions: { itsm: itsmModdleDescriptor },
-        grid: {
-          size: 10,
-          visible: showGrid
-        }
+        moddleExtensions: { itsm: itsmModdleDescriptor }
       });
 
       modelerRef.current = modeler;
@@ -206,7 +230,7 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
           })
           .catch((err: Error) => {
             console.error('Failed to import XML:', err);
-            message.error('加载流程图失败');
+            messageRef.current.error('加载流程图失败');
           });
       } else {
         modeler
@@ -229,13 +253,14 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
           const savedXml = result.xml;
           if (savedXml) {
             setCurrentXML(savedXml);
-            onChange?.(savedXml);
+            lastEmittedXmlRef.current = savedXml;
+            onChangeRef.current?.(savedXml);
 
             // 更新历史记录，避免连续重复添加
             setHistory(prev => {
               // 如果当前不是在最后位置，先截断后面的历史
-              const newHistory = prev.slice(0, historyIndex + 1);
-              
+              const newHistory = prev.slice(0, historyIndexRef.current + 1);
+
               // 避免完全相同的内容重复添加
               const lastItem = newHistory[newHistory.length - 1];
               if (lastItem && lastItem.xml === savedXml) {
@@ -243,14 +268,14 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
               }
 
               // 添加新的历史项，最多保留50步
-              newHistory.push({ 
-                xml: savedXml, 
+              newHistory.push({
+                xml: savedXml,
                 timestamp: Date.now(),
                 description: '修改流程'
               });
               return newHistory.slice(-50);
             });
-            setHistoryIndex(prev => Math.min(prev + 1, history.length));
+            setHistoryIndex(prev => Math.min(prev + 1, historyRef.current.length));
           }
         });
       });
@@ -269,16 +294,16 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
         const notifySelection = () => {
           const elements = selection.get();
           setSelectedElements(elements.map(e => e.id));
-          
+
           if (elements.length === 0) {
-            onSelectionChange(null);
+            onSelectionChangeRef.current?.(null);
             return;
           }
-          
+
           // 只返回第一个选中的元素给父组件（保持向后兼容）
           const el = elements[0];
           if (!el) {
-            onSelectionChange(null);
+            onSelectionChangeRef.current?.(null);
             return;
           }
           const nodeSelection: BpmnNodeSelection = {
@@ -289,7 +314,7 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
           if (el.businessObject?.name) {
             nodeSelection.name = el.businessObject.name;
           }
-          onSelectionChange(nodeSelection);
+          onSelectionChangeRef.current?.(nodeSelection);
         };
 
         modeler.on('selection.changed', notifySelection);
@@ -311,7 +336,16 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
       console.error('Failed to initialize BPMN Modeler:', err);
       initAttemptedRef.current = false;
     }
-  }, [xml, historyIndex, message, onChange, onSelectionChange, showGrid, snapToGrid]);
+    // 依赖数组故意留空：这个函数现在只应该执行一次（挂载时创建 modeler 实例），
+    // 不应该因为 onChange/onSelectionChange/message/historyIndex/history 变化就
+    // 判定"需要重新初始化"——那些值已经改成用上面的 ref 读取最新值。
+    // xml/snapToGrid 在函数体内是有意只读"挂载时那一刻"的值：
+    // - xml 之后的变化由另一个独立 effect（同步 xml prop 变化）调用现有 modeler
+    //   实例的 importXML() 处理，不需要也不应该重建整个 modeler。
+    // - snapToGrid 之后的变化由 toggleSnapToGrid 直接调用现有 modeler 实例的
+    //   gridSnapping.setActive() 处理，同样不需要重建。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 初始化 BPMN Modeler - 等待容器布局完成
   useEffect(() => {
@@ -358,15 +392,31 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
         modelerRef.current = null;
       }
       initAttemptedRef.current = false;
+      // apiRef 是父组件（WorkflowDesigner）跨 tab 持有的模块级句柄，这里不清空的话，
+      // 卸载后 apiRef.current 仍是一个"看起来可用"的旧对象——它内部闭包捕获的
+      // modelerRef 已经是 null，调用 validate() 会命中函数最前面的
+      // `if (!modelerRef.current) return []`，静默返回空数组而不报错。上层
+      // validateWorkflow 只在 apiRef.current 整体为 null 时才提示"设计器未就绪"，
+      // 分不清"真的验证通过零问题"和"设计器已卸载、验证根本没跑"，页面就会一直显示
+      // 假的"流程校验通过"。清空后，卸载状态下的调用能命中上层的未就绪提示。
+      if (apiRef) {
+        apiRef.current = null;
+      }
     };
   }, [initializeModeler]);
 
-  // 同步 xml prop 变化 - 仅在父组件传入新的 XML 时才更新
-  // 使用 ref 跟踪上次 prop 避免命令栈变化触发的回环
+  // 同步 xml prop 变化 - 仅在父组件传入"真正外部"的新 XML 时才更新
+  // 单纯比较 xml === lastPropXmlRef.current 不够：受控组件模式下，每次编辑都会
+  // 产出一个新的 XML 字符串，通过 onChange 回传给父组件、父组件存进 state 后
+  // 又原样传回 xml prop——这个值必然与 lastPropXmlRef 记录的"上一次 prop"不同，
+  // 于是被误判成外部变更，触发重新 importXML + 历史记录重置，撤销栈每编辑一次
+  // 就被清空一次。这里额外比对 lastEmittedXmlRef（本组件自己最后一次抛出的值），
+  // 命中说明是自己的回声，只更新 lastPropXmlRef 不做重导入/历史重置。
   const lastPropXmlRef = useRef(xml);
   useEffect(() => {
     if (xml === lastPropXmlRef.current) return;
     lastPropXmlRef.current = xml;
+    if (xml === lastEmittedXmlRef.current) return;
 
     if (modelerRef.current && xml) {
       modelerRef.current
@@ -690,21 +740,6 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
     }
   }, [selectedElements.length, readOnly, message]);
 
-  // 切换网格显示
-  const toggleGrid = useCallback(() => {
-    if (!modelerRef.current) return;
-    const newShowGrid = !showGrid;
-    setShowGrid(newShowGrid);
-    
-    const grid = modelerRef.current.get('grid') as {
-      toggle: () => void;
-    };
-    
-    if (grid) {
-      grid.toggle();
-    }
-  }, [showGrid]);
-
   // 切换网格吸附
   const toggleSnapToGrid = useCallback(() => {
     if (!modelerRef.current) return;
@@ -1018,12 +1053,6 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
 
   // 设置菜单
   const settingsMenuItems: MenuProps['items'] = [
-    {
-      key: 'grid',
-      icon: <Grid size={14} />,
-      label: showGrid ? '隐藏网格' : '显示网格',
-      onClick: toggleGrid
-    },
     {
       key: 'snap',
       icon: <Grid size={14} />,

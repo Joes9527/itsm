@@ -457,6 +457,23 @@ func (s *ReleaseService) ApplyReleaseApproval(ctx context.Context, id, tenantID,
 		return nil, fmt.Errorf("failed to update release status: %w", err)
 	}
 
+	// approve 分支：Release.status 在这里已经直接写成 scheduled，但 Activity_Approval
+	// 完成后引擎推进到的下一个节点是 Activity_Schedule——一个独立的用户任务，不会自动
+	// 完成。之前只有 UpdateReleaseStatus(id,'scheduled') 会触发这个桥接，而审批路径从不
+	// 调用它，导致流程实例永久悬挂在"计划发布"（真实浏览器验证发现：release 状态能一路
+	// 走到 completed，但对应 process_instances 行永远 status=running/Activity_Schedule）。
+	// approve 就是"该发布已排期"的权威决策时刻，这里直接把 Schedule 节点桥接掉，
+	// 不再指望前端另有一次"提交计划"点击来补这个动作。
+	if action == "approve" && s.approvalBridge != nil {
+		if taskKey, ok := releaseStageTaskKey(targetStatus); ok {
+			if _, bridgeErr := s.approvalBridge.CompleteBusinessStageTask(
+				ctx, tenantID, 0, string(dto.BusinessTypeRelease), id, taskKey, nil,
+			); bridgeErr != nil {
+				return nil, fmt.Errorf("同步流程计划节点失败: %w", bridgeErr)
+			}
+		}
+	}
+
 	s.logger.Infow("Release approval applied",
 		"release_id", id, "tenant_id", tenantID, "actor_id", actorID, "action", action, "status", targetStatus)
 	return dto.ToReleaseResponse(updated), nil

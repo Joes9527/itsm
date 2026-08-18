@@ -70,6 +70,7 @@ const businessTypeMap: Record<string, { label: string; url: (id: number) => stri
   incident: { label: '事件', url: (id) => `/incidents/${id}` },
   problem: { label: '问题', url: (id) => `/problems/${id}` },
   service_request: { label: '服务请求', url: (id) => `/service-requests/${id}` },
+  release: { label: '发布', url: (id) => `/releases/${id}` },
 };
 
 function getBusinessLink(task: BpmnMyTask): { label: string; url: string } | null {

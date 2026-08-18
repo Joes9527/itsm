@@ -22,8 +22,15 @@ import (
 // 网关变量（tech_review_pass/approval_pass）无人写入导致流程停在网关上。修复后：
 //
 //	ApplyReleaseTechReview → 桥接 Activity_TechReview → 流程到 Activity_Approval
-//	ApplyReleaseApproval   → 桥接 Activity_Approval  → 流程到 Activity_Schedule
-//	UpdateReleaseStatus    → 桥接 Schedule/Execute/Verify → 流程走完
+//	ApplyReleaseApproval   → 桥接 Activity_Approval 和 Activity_Schedule → 流程到 Activity_Execute
+//	UpdateReleaseStatus    → 桥接 Execute/Verify → 流程走完
+//
+// 真实浏览器验证（2026-08-18）发现 approve 分支只桥接了 Activity_Approval，
+// Activity_Schedule 需要靠"另一次同值 scheduled 调用"才补得上——但审批通过后前端
+// 从没有发出这次调用（"提交计划"按钮的显示条件只匹配免审批草稿路径），导致每一个
+// 走 CAB 审批的发布，流程实例都会永久悬挂在"计划发布"节点，即使域状态已经走到
+// completed。ApplyReleaseApproval 现在在 approve 分支里把 Schedule 桥接一起做掉，
+// 审批即代表"已排期"，不再依赖前端后续动作。
 func TestReleaseFlow_StageBridges_AdvanceProcessEndToEnd(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	t.Cleanup(func() { _ = client.Close() })
@@ -95,7 +102,8 @@ func TestReleaseFlow_StageBridges_AdvanceProcessEndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Activity_Approval", afterReview.CurrentActivityID, "评审后流程应推进到审批节点")
 
-	// 2. 审批：桥接完成 Activity_Approval，网关按 approval_pass=true 路由到 Activity_Schedule
+	// 2. 审批：桥接完成 Activity_Approval 和 Activity_Schedule（approve 即代表已排期），
+	//    网关按 approval_pass=true 路由，流程一次性推进到 Activity_Execute
 	approved, err := releaseService.ApplyReleaseApproval(ctx, releaseEntity.ID, tenant.ID, approver.ID, "approve", "同意发布")
 	require.NoError(t, err)
 	require.NotNil(t, approved)
@@ -103,16 +111,17 @@ func TestReleaseFlow_StageBridges_AdvanceProcessEndToEnd(t *testing.T) {
 
 	afterApproval, err := client.ProcessInstance.Get(ctx, instance.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "Activity_Schedule", afterApproval.CurrentActivityID, "审批后流程应推进到计划发布节点")
+	assert.Equal(t, "Activity_Execute", afterApproval.CurrentActivityID, "审批后流程应直接推进到执行发布节点（Schedule 已随审批一并桥接）")
 
-	// 3. 计划发布：域写幂等（scheduled→scheduled），桥接完成 Activity_Schedule
+	// 3. 计划发布：域写幂等（scheduled→scheduled）；Activity_Schedule 已在审批时完成，
+	//    这里的桥接调用应找不到待办任务、安全空转，流程节点保持不变
 	scheduled, err := releaseService.UpdateReleaseStatus(ctx, releaseEntity.ID, tenant.ID, "scheduled")
 	require.NoError(t, err)
 	assert.Equal(t, "scheduled", scheduled.Status)
 
 	afterSchedule, err := client.ProcessInstance.Get(ctx, instance.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "Activity_Execute", afterSchedule.CurrentActivityID, "计划后流程应推进到执行发布节点")
+	assert.Equal(t, "Activity_Execute", afterSchedule.CurrentActivityID, "Schedule 桥接已随审批完成，同值调用应保持流程节点不变")
 
 	// 4. 执行发布：桥接完成 Activity_Execute
 	inProgress, err := releaseService.UpdateReleaseStatus(ctx, releaseEntity.ID, tenant.ID, "in-progress")

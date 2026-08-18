@@ -460,9 +460,12 @@ export class BPMNWorkflowApi {
     id: string,
     variables: Record<string, unknown>
   ): Promise<void> {
+    // variables 的 key 由 BPMN 流程定义/handler 约定（snake_case），不能被全局
+    // camelCase 归一化改名，否则后端 handler 读不到值。
     await httpClient.put(
       `${this.baseUrl}/process-instances/${encodeURIComponent(id)}/variables`,
-      { variables }
+      { variables },
+      { skipCamelCaseBody: true }
     );
   }
 
@@ -603,9 +606,12 @@ export class BPMNWorkflowApi {
     id: string,
     variables: Record<string, unknown>
   ): Promise<void> {
+    // variables 的 key 由 BPMN 流程定义/handler 约定（snake_case），不能被全局
+    // camelCase 归一化改名，否则后端 handler 读不到值。
     await httpClient.put(
       `${this.baseUrl}/tasks/${encodeURIComponent(id)}/variables`,
-      { variables }
+      { variables },
+      { skipCamelCaseBody: true }
     );
   }
 

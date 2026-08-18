@@ -403,7 +403,13 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
   const validateWorkflow = useCallback(async (showSuccessMessage = false) => {
     const api = getBpmnDesignerApi();
     if (!api) {
-      message.warning('流程设计器未就绪，请稍后重试');
+      // 画布只在"流程设计"页签渲染出非零尺寸容器后才完成 bpmn-js 挂载；切到
+      // "校验结果"等其他页签时拿到的是 null。已知问题：画布组件的初始化 effect
+      // 依赖了每次渲染都重新创建的内联回调（onChange/onSelectionChange），导致
+      // 切换页签也会触发销毁重建，且重建不保证在合理时间内完成——这里不重试掩盖，
+      // 直接如实提示，避免把"没验证成功"误报成"验证通过、零问题"。
+      setActiveTab('designer');
+      message.warning('流程设计器未就绪，已切回"流程设计"页签，请稍等片刻后重新点击校验');
       return [];
     }
 
@@ -794,6 +800,7 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
             activeKey={activeTab}
             onChange={handleTabChange}
             size="small"
+            destroyOnHidden={false}
             items={[
               {
                 key: 'designer',

@@ -114,6 +114,53 @@ const ChangeDetail: React.FC = () => {
     }
   };
 
+  // 提交审批：draft -> pending，触发 change_normal_flow（后端 SubmitChange 已桥接 BPMN）。
+  // API 客户端方法早就实现且有单测覆盖，但此前从未接到任何按钮上——没有这个按钮，
+  // 一个走 CAB 审批的普通变更在真实浏览器里永远走不出草稿状态。
+  const handleSubmitForApproval = async () => {
+    if (!change) return;
+    setProcessing(true);
+    try {
+      await ChangeApi.submitForApproval(change.id);
+      message.success('已提交审批');
+      loadDetail();
+    } catch (error) {
+      message.error('提交审批失败');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // 开始实施：approved -> in_progress
+  const handleStartImplementation = async () => {
+    if (!change) return;
+    setProcessing(true);
+    try {
+      await ChangeApi.startImplementation(change.id);
+      message.success('已开始实施');
+      loadDetail();
+    } catch (error) {
+      message.error('开始实施失败');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // 完成实施：in_progress -> completed
+  const handleCompleteImplementation = async () => {
+    if (!change) return;
+    setProcessing(true);
+    try {
+      await ChangeApi.completeImplementation(change.id);
+      message.success('变更已完成');
+      loadDetail();
+    } catch (error) {
+      message.error('完成变更失败');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   const loadDetail = async () => {
     setLoading(true);
     try {
@@ -241,6 +288,11 @@ const ChangeDetail: React.FC = () => {
             <Tag color={statusColors[change.status]} style={{ padding: '4px 12px', fontSize: 14 }}>
               {ChangeStatusLabels[change.status]}
             </Tag>
+            {change.status === ChangeStatus.DRAFT && (
+              <Button type="primary" loading={processing} onClick={handleSubmitForApproval}>
+                提交审批
+              </Button>
+            )}
             {canApprove && (
               <Space>
                 <Button
@@ -258,6 +310,16 @@ const ChangeDetail: React.FC = () => {
                   拒绝
                 </Button>
               </Space>
+            )}
+            {(change.status === ChangeStatus.APPROVED || change.status === ChangeStatus.SCHEDULED) && (
+              <Button type="primary" loading={processing} onClick={handleStartImplementation}>
+                开始实施
+              </Button>
+            )}
+            {change.status === ChangeStatus.IN_PROGRESS && (
+              <Button type="primary" loading={processing} onClick={handleCompleteImplementation}>
+                完成
+              </Button>
             )}
           </div>
         </div>

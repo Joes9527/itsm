@@ -144,7 +144,11 @@ describe('BPMNWorkflowApi', () => {
     it('should put variables', async () => {
       mockPut.mockResolvedValue(undefined);
       await BPMNWorkflowApi.setProcessInstanceVariables('inst1', { foo: 'bar' });
-      expect(mockPut).toHaveBeenCalledWith('/api/v1/bpmn/process-instances/inst1/variables', { variables: { foo: 'bar' } });
+      expect(mockPut).toHaveBeenCalledWith(
+        '/api/v1/bpmn/process-instances/inst1/variables',
+        { variables: { foo: 'bar' } },
+        { skipCamelCaseBody: true }
+      );
     });
   });
 
@@ -247,7 +251,11 @@ describe('BPMNWorkflowApi', () => {
     it('should put task variables', async () => {
       mockPut.mockResolvedValue(undefined);
       await BPMNWorkflowApi.setTaskVariables('t1', { x: 1 });
-      expect(mockPut).toHaveBeenCalledWith('/api/v1/bpmn/tasks/t1/variables', { variables: { x: 1 } });
+      expect(mockPut).toHaveBeenCalledWith(
+        '/api/v1/bpmn/tasks/t1/variables',
+        { variables: { x: 1 } },
+        { skipCamelCaseBody: true }
+      );
     });
   });
 

@@ -30,6 +30,12 @@ export interface RequestConfig {
   headers?: Record<string, string>;
   body?: BodyInit | null;
   timeout?: number;
+  // 少数端点（比如 BPMN 流程变量）的请求体字段名不是我们自己的 DTO 契约，而是
+  // 由 BPMN 流程定义/后端 handler 直接约定的 key（如 request_id、cost_center、
+  // business_id）——这些必须原样透传，全局的 snake_case→camelCase 归一化会把它们
+  // 改名成后端 handler 读不到的 key（GetIntFromVars(variables, "request_id") 拿到
+  // "requestId" 的值就是 0，报"无效的请求ID"）。设为 true 跳过这次请求的 body 转换。
+  skipCamelCaseBody?: boolean;
 }
 
 // Axios-like request config used by some legacy API modules
@@ -216,8 +222,12 @@ class HttpClient {
         ...config.headers,
       },
       // Normalize request body keys to camelCase to keep the HTTP contract consistent.
+      // skipCamelCaseBody 请求原样透传（见 RequestConfig 上的说明）。
       body:
-        config.body && typeof config.body === 'string' && config.body.startsWith('{')
+        !config.skipCamelCaseBody &&
+        config.body &&
+        typeof config.body === 'string' &&
+        config.body.startsWith('{')
           ? JSON.stringify(toCamelCase(JSON.parse(config.body as string)))
           : config.body,
     };
@@ -460,6 +470,7 @@ class HttpClient {
       onUploadProgress?: (progress: number) => void;
       headers?: Record<string, string>;
       responseType?: 'json' | 'blob';
+      skipCamelCaseBody?: boolean;
     }
   ): Promise<T> {
     // 如果是 FormData，直接传递，不进行 JSON.stringify
@@ -547,13 +558,19 @@ class HttpClient {
       method: 'POST',
       body: data ? JSON.stringify(data) : undefined,
       headers: config?.headers,
+      skipCamelCaseBody: config?.skipCamelCaseBody,
     });
   }
 
-  async put<T>(endpoint: string, data?: unknown): Promise<T> {
+  async put<T>(
+    endpoint: string,
+    data?: unknown,
+    config?: { skipCamelCaseBody?: boolean }
+  ): Promise<T> {
     return this.requestInternal<T>(endpoint, {
       method: 'PUT',
       body: data ? JSON.stringify(data) : undefined,
+      skipCamelCaseBody: config?.skipCamelCaseBody,
     });
   }
 

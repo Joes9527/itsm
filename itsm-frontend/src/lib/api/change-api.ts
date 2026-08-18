@@ -271,7 +271,9 @@ export class ChangeApi {
 
   // 提交变更审批
   static async submitForApproval(id: number): Promise<void> {
-    return httpClient.post(`/api/v1/changes/${id}/submit`);
+    // 后端用 ShouldBindJSON 绑定 SubmitChangeRequest：字段都是可选的，但请求体
+    // 完全为空时 json.Decoder 仍会报 EOF——必须显式传 {}，不能省略 body。
+    return httpClient.post(`/api/v1/changes/${id}/submit`, {});
   }
 
   // 审批变更
