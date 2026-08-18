@@ -50,9 +50,12 @@ interface ServiceItemCardProps {
     estimatedTime?: string;
     rating?: number;
   };
+  // 服务目录浏览页面向普通用户展示，编辑/删除是管理端操作——默认不渲染，
+  // 只有管理端页面显式传 true 才展示这组操作。
+  showManageActions?: boolean;
 }
 
-export const ServiceItemCard: React.FC<ServiceItemCardProps> = ({ catalog }) => {
+export const ServiceItemCard: React.FC<ServiceItemCardProps> = ({ catalog, showManageActions = false }) => {
   const { t } = useI18n();
   const router = useRouter();
   const { message } = App.useApp();
@@ -183,13 +186,15 @@ export const ServiceItemCard: React.FC<ServiceItemCardProps> = ({ catalog }) => 
           >
             {t('serviceCatalog.applyService')}
           </Button>
-          <Dropdown menu={{ items: actionItems }} trigger={['click']} placement="bottomRight">
-            <Button
-              icon={<MoreHorizontal size={16} />}
-              onClick={e => e.stopPropagation()}
-              loading={deleting}
-            />
-          </Dropdown>
+          {showManageActions && (
+            <Dropdown menu={{ items: actionItems }} trigger={['click']} placement="bottomRight">
+              <Button
+                icon={<MoreHorizontal size={16} />}
+                onClick={e => e.stopPropagation()}
+                loading={deleting}
+              />
+            </Dropdown>
+          )}
         </div>
       </div>
     </Card>
