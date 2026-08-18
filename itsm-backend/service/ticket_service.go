@@ -173,6 +173,13 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 		} else if len(missing) > 0 {
 			return nil, fmt.Errorf("缺少必填字段: %s", strings.Join(missing, ", "))
 		}
+		// 校验字段值本身的格式/取值范围（number 是否数字、select/multiselect 的值是否在
+		// options 里）。同样必须在 s.repo.Create 之前做：这类校验此前只在落库后的
+		// CreateValues 里跑，写入失败被当成"持久化失败"静默吞掉（只记日志，工单照样创建
+		// 成功），导致越界值既不报错也不落库，提交者对自己的数据丢失毫无感知。
+		if err := s.validateFieldValueFormats(ctx, tenantID, *req.TemplateID, req.FormFields); err != nil {
+			return nil, err
+		}
 	}
 
 	// 通过 Repository 创建工单
@@ -469,6 +476,36 @@ func (s *TicketService) validateRequiredFields(ctx context.Context, tenantID int
 		}
 	}
 	return missing, nil
+}
+
+// validateFieldValueFormats 校验提交的自定义字段值是否符合字段定义的格式/取值范围
+// （number 是否数字、select/multiselect 的值是否在 options 里，见 validateFieldValue）。
+func (s *TicketService) validateFieldValueFormats(ctx context.Context, tenantID int, templateID int, formFields map[string]interface{}) error {
+	submittedValues := extractCustomFieldValues(formFields)
+	if len(submittedValues) == 0 {
+		return nil
+	}
+	defs, err := s.client.FieldDefinition.Query().
+		Where(
+			fielddefinition.EntityTypeEQ("ticket_template"),
+			fielddefinition.EntityIDEQ(templateID),
+			fielddefinition.IsActive(true),
+			fielddefinition.TenantIDEQ(tenantID),
+		).
+		All(ctx)
+	if err != nil {
+		return fmt.Errorf("查询字段定义失败: %w", err)
+	}
+	for _, d := range defs {
+		val, ok := submittedValues[d.Name]
+		if !ok {
+			continue
+		}
+		if err := validateFieldValue(d, val); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // isEmptyFieldValue 判断字段值是否为空

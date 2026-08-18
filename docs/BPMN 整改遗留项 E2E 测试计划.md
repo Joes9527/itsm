@@ -228,14 +228,24 @@ curl -s -X POST http://localhost:8090/api/v1/tickets \
 
 | 场景 | 结果 | 失败现象 | 修复记录（commit/说明） | 复测 |
 |---|---|---|---|---|
-| 0.1 本地启动 | ⬜ | | | |
-| 0.2 模板生效 | ⬜ | | | |
-| S1 发布全流程 | ⬜ | | | |
-| S2 发布拒绝 | ⬜ | | | |
-| S3 变更全流程 | ⬜ | | | |
-| S4 标准变更 | ⬜ | | | |
-| S5 跨租户隔离 | ⬜ | | | |
-| S6 设计器校验 | ⬜ | | | |
-| S7 自定义字段 | ⬜ | | | |
-| S8 service_request | ⬜ | | | |
-| S9 平台级操作 | ⬜ | | | |
+| 0.1 本地启动 | ✅ | `go run main.go` 默认不跑 seed/模板同步（`ITSM_AUTO_SEED`/`ITSM_AUTO_MIGRATE` 默认 false，属生产安全设计）；需先跑一次 `ITSM_BOOTSTRAP_ONLY=true ITSM_AUTO_SEED=true go run main.go` 补齐权限/模板 | 未改代码，操作步骤记录 | ✅ |
+| 0.2 模板生效 | ✅ | 不带租户过滤的 SQL 会看到 3 行（tenant2 首次部署又插入一条 1.0.0），按租户过滤后 tenant1 两版本 is_latest 语义正确 | 未改代码 | ✅ |
+| S1 发布全流程 | ✅ | 1) `/releases/:id/approve\|reject\|rollback` 被全局 ResourceActionMap 通配符误判为 release:write，只有 release:approve 的审批人被拒；2) dept_manager 缺 bpmn:read/task:read，审批人看不到"我的待办" | middleware/rbac.go 补充 3 条动作型子路由映射；pkg/seeder/seeder.go 给 dept_manager 补 bpmn:read/task:read | ✅ |
+| S2 发布拒绝 | ✅ | 同 S1（复用同一批修复） | 同上 | ✅ |
+| S3 变更全流程 | ✅ | 1) `handlers/change` 提交审批从未触发 change_normal_flow（只桥接"完成已有任务"方向，没接流程触发服务）；2) 触发后未按变更类型设置 approval_required，网关恒判"无需审批" | handlers/change/service.go 新增 SetProcessTriggerService 并在 SubmitChange 里触发，按 type==normal 设 approval_required；internal/bootstrap/app.go 装配 | ✅ |
+| S4 标准变更 | ✅ | 无（复用 S3 的 approval_required 修复）；域状态机仍需显式 approved 步骤才能到 in_progress，测试时按此调用 | 无新增修复 | ✅ |
+| S5 跨租户隔离 | ✅ | 无发现问题（含可选的租户 B 越权补测，403 fail-closed） | 无 | ✅ |
+| S6 设计器校验 | ✅（代码验证，非浏览器） | 无浏览器自动化工具，改用现有前端单测 `BPMNDesigner.validate.test.tsx`（5/5 通过），未做真实浏览器点击验证 | 无 | — |
+| S7 自定义字段 | ✅ | 1) 测试计划文档里的 `/field-definitions` 端点和扁平 `formFields` 形状在当前代码里都不存在（文档过期，非代码缺陷，已按 `PUT /tickets/templates/:id` + `formFields.values` 数组形状改写执行）；2) **真实缺陷**：`CreateTicket` 对字段值的格式/范围校验（number/select/multiselect）只在落库*之后*的 `CreateValues` 里跑，写入失败被当成"持久化失败"静默吞掉——越界值/错误类型既不报错也不落库，调用方拿到 `code:0` 成功响应但数据被悄悄丢弃 | `service/ticket_service.go`：新增 `validateFieldValueFormats`，在 `s.repo.Create` 之前校验，越界/类型错误直接 400 系列拒绝，不再落库 | ✅ |
+| S8 service_request | ✅（单测覆盖，非真实设计器） | 无浏览器/设计器可用，改用现有 `service/bpmn/service_request_handler_test.go`（11/11 通过），未做真实设计器建流程+部署+启动实例的端到端验证 | 无 | — |
+| S9 平台级操作 | ✅（自动化覆盖，未手工验证） | 环境无 tenant_id=0 平台账号，按测试计划的兜底条款改跑 `bpmn_platform_tenant_test.go`（3/3 通过） | 无 | — |
+
+**顺带修复（测试过程中发现，非某一场景专属）**：
+- `service/bpmn_process_binding_service.go` 的 `InitDefaultBindings` 每次进程启动都会重复插入一整套流程绑定（无去重，`CreateBinding` 从不返回代码里期望的 "already exists"），本轮测试过程中已从 800+ 条脏数据清理到 26 条并补上幂等检查。
+- `pkg/seeder/seeder.go` 的权限目录 `seedPermissions` 里从未定义过 `bpmn:read/write/delete`——`rolePermissionMap` 里任何角色写 `bpmn:read`（包括这轮给 change_manager/dept_manager 补的）都因为查不到对应权限 ID 被静默丢弃，只是长期运行的开发库里这几行权限不知何时被别的途径手工插过，掩盖了这个问题；补齐目录项后 `go test ./...` 全绿（此前 `pkg/seeder`/`middleware` 各有几个用例断言的是修复前的错误行为，已随之更新为修复后的预期值）。
+
+**验证保真度说明**：本轮全程无浏览器自动化工具，S1-S5、S7 均通过直接 HTTP 客户端（curl）+ DB 查询走查完成，覆盖不到前端 http-client 请求体转换、真实表单交互与客户端校验；S6/S8/S9 用现有单测替代，覆盖不到设计器/表单的真实浏览器路径。
+
+**测试计划文档本身发现的过期内容（未改测试计划正文，供后续更新参考）**：
+- S7.2 的 `PUT /api/v1/ticket-templates/<TEMPLATE_ID>/field-definitions` 端点在当前代码里不存在；自定义字段是内嵌在 `PUT/POST /api/v1/tickets/templates/:id` 请求体的 `fields` 数组里，且字段类型键名是 `type` 不是 `fieldType`。
+- S7.2 的 `formFields:{"impacted_systems":[...]}` 扁平形状不会被后端解析（`extractCustomFieldValues` 只认 `formFields.values` 数组或 `formFields.values` 映射两种形状），按扁平形状提交会被静默忽略而不是校验/报错。

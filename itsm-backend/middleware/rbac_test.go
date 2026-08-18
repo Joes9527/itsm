@@ -226,11 +226,14 @@ func TestGetPermissionFromPath(t *testing.T) {
 		assert.Equal(t, "read", perm.Action)
 	})
 
-	t.Run("POST Release Approve Returns Write Permission", func(t *testing.T) {
+	t.Run("POST Release Approve Returns Approve Permission", func(t *testing.T) {
+		// 动作型子路由需要比 /releases/* 通配符更具体的映射，否则只被授予
+		// release:approve（没有 release:write）的审批人会被全局中间件挡在路由自己
+		// 声明的 RequirePermission("release","approve") 之前，见 tickets/*/assign 同类先例。
 		perm := getPermissionFromPath("POST", "/api/v1/releases/1/approve")
 		assert.NotNil(t, perm)
 		assert.Equal(t, "release", perm.Resource)
-		assert.Equal(t, "write", perm.Action)
+		assert.Equal(t, "approve", perm.Action)
 	})
 
 	t.Run("DELETE Release Returns Delete Permission", func(t *testing.T) {

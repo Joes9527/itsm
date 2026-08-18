@@ -397,6 +397,21 @@ func (s *ProcessBindingService) InitDefaultBindings(ctx context.Context, tenantI
 			continue
 		}
 
+		// 幂等：CreateBinding 本身不做重复检测（没有唯一约束，也从不返回下面
+		// 期望的 "already exists" 错误），而 InitDefaultBindings 在每次进程启动时
+		// 都会执行一遍——不在这里去重会导致每次重启都插入一整套重复绑定行。
+		alreadyBound, err := s.client.ProcessBinding.Query().
+			Where(
+				processbinding.BusinessType(string(binding.BusinessType)),
+				processbinding.BusinessSubType(binding.BusinessSubType),
+				processbinding.ProcessDefinitionKey(binding.ProcessDefinitionKey),
+				processbinding.TenantID(tenantID),
+			).
+			Exist(ctx)
+		if err != nil || alreadyBound {
+			continue
+		}
+
 		_, err = s.CreateBinding(ctx, &binding)
 		if err != nil {
 			// 忽略已存在的错误

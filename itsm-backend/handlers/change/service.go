@@ -18,11 +18,12 @@ import (
 )
 
 type Service struct {
-	repo           Repository
-	logger         *zap.SugaredLogger
-	entClient      *ent.Client
-	pirService     *service.ChangePIRService
-	approvalBridge *service.BPMNApprovalBridge
+	repo              Repository
+	logger            *zap.SugaredLogger
+	entClient         *ent.Client
+	pirService        *service.ChangePIRService
+	approvalBridge    *service.BPMNApprovalBridge
+	processTriggerSvc service.ProcessTriggerServiceInterface
 }
 
 func NewService(repo Repository, entClient *ent.Client, logger *zap.SugaredLogger) *Service {
@@ -38,6 +39,14 @@ func NewService(repo Repository, entClient *ent.Client, logger *zap.SugaredLogge
 		svc.approvalBridge = service.NewBPMNApprovalBridge(entClient, logger)
 	}
 	return svc
+}
+
+// SetProcessTriggerService 注入流程触发服务（提交变更审批后自动启动 change_normal_flow）。
+// 与 ReleaseService.SetProcessTriggerService 同一模式：由 bootstrap 装配。变更域此前只
+// 桥接了"域动作 -> 完成已存在的 BPMN 任务"方向（approvalBridge），却从未触发流程实例本身，
+// 导致普通变更提交审批后压根没有 change_normal_flow 实例可桥接。
+func (s *Service) SetProcessTriggerService(p service.ProcessTriggerServiceInterface) {
+	s.processTriggerSvc = p
 }
 
 // Change methods
@@ -142,6 +151,26 @@ func (s *Service) SubmitChange(ctx context.Context, changeID, tenantID, submitte
 	// 6. Notify approvers (optional - to be implemented later or via async)
 	// For now, just log the submission
 	s.logger.Infow("Change submitted for approval", "change_id", changeID, "submitter_id", submitterID, "approvers", req.ApproverIDs)
+
+	// 触发变更流程（按 ProcessBinding 默认绑定解析 change_normal_flow）。
+	// fail-soft 与发布/工单域一致：触发失败只告警不阻断提交——变更生命周期本身
+	// 不依赖流程实例，approvalBridge 对"无关联流程实例"回退纯业务路径。
+	//
+	// approval_required 按变更类型预置为初始流程变量：change_normal_flow 的
+	// Gateway_Approval 网关靠这个变量决定是否路由到 CAB 审批——normal 类型的变更
+	// 走完整 CAB 流程，standard（预授权标准变更）跳过审批直接排期，这是 ITIL
+	// 里标准变更"预先批准"的定义，不是遗漏审批环节。
+	if s.processTriggerSvc != nil {
+		triggerVars := map[string]interface{}{
+			"approval_required": c.Type == "normal",
+		}
+		if _, triggerErr := s.processTriggerSvc.TriggerByBusinessType(
+			ctx, dto.BusinessTypeChange, changeID, triggerVars, strconv.Itoa(submitterID), tenantID,
+		); triggerErr != nil {
+			s.logger.Warnw("Failed to trigger change workflow",
+				"change_id", changeID, "tenant_id", tenantID, "error", triggerErr)
+		}
+	}
 
 	c.Status = "pending"
 	return c, nil

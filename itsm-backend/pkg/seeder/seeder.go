@@ -12,6 +12,7 @@ import (
 	"itsm-backend/ent/assetlicense"
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/department"
+	"itsm-backend/ent/fielddefinition"
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/knowledgearticle"
 	"itsm-backend/ent/knownerror"
@@ -30,7 +31,6 @@ import (
 	"itsm-backend/ent/team"
 	"itsm-backend/ent/tenant"
 	"itsm-backend/ent/ticketcategory"
-	"itsm-backend/ent/fielddefinition"
 	"itsm-backend/ent/tickettemplate"
 	"itsm-backend/ent/ticketview"
 	"itsm-backend/ent/user"
@@ -60,15 +60,15 @@ var (
 
 // SeedConfig 种子数据配置结构
 type SeedConfig struct {
-	Departments       []DepartmentSeed       `json:"departments"`
-	Teams             []TeamSeed             `json:"teams"`
-	Roles             []RoleSeed             `json:"roles"`
-	SLADefinitions    []SLADefinitionSeed    `json:"sla_definitions"`
-	SLAPolicies       []SLAPolicySeed        `json:"sla_policies"`
-	ServiceCatalog    []ServiceCatalogSeed   `json:"service_catalog"`
-	ProcessBindings   []ProcessBindingSeed   `json:"process_bindings"`
-	TicketViews       []TicketViewSeed       `json:"ticket_views"`
-	CITypes           []CITypeSeed           `json:"ci_types"`
+	Departments     []DepartmentSeed     `json:"departments"`
+	Teams           []TeamSeed           `json:"teams"`
+	Roles           []RoleSeed           `json:"roles"`
+	SLADefinitions  []SLADefinitionSeed  `json:"sla_definitions"`
+	SLAPolicies     []SLAPolicySeed      `json:"sla_policies"`
+	ServiceCatalog  []ServiceCatalogSeed `json:"service_catalog"`
+	ProcessBindings []ProcessBindingSeed `json:"process_bindings"`
+	TicketViews     []TicketViewSeed     `json:"ticket_views"`
+	CITypes         []CITypeSeed         `json:"ci_types"`
 	// 新增：可配置的种子数据
 	Incidents          []IncidentSeed         `json:"incidents"`
 	Problems           []ProblemSeed          `json:"problems"`
@@ -76,11 +76,11 @@ type SeedConfig struct {
 	KnowledgeArticles  []KnowledgeArticleSeed `json:"knowledge_articles"`
 	IncidentCategories []TicketCategorySeed   `json:"incident_categories"`
 	// 新增：标准变更模板、已知错误、标签种子数据
-	StandardChanges []StandardChangeSeed `json:"standard_changes"`
-	KnownErrors     []KnownErrorSeed     `json:"known_errors"`
-	TicketTags      []TicketTagSeed      `json:"ticket_tags"`
-	TicketCategories []TicketCategorySeed  `json:"ticket_categories"`
-	TicketTemplates  []TicketTemplateSeed  `json:"ticket_templates"`
+	StandardChanges  []StandardChangeSeed `json:"standard_changes"`
+	KnownErrors      []KnownErrorSeed     `json:"known_errors"`
+	TicketTags       []TicketTagSeed      `json:"ticket_tags"`
+	TicketCategories []TicketCategorySeed `json:"ticket_categories"`
+	TicketTemplates  []TicketTemplateSeed `json:"ticket_templates"`
 	// 工作流种子配置
 	SeedWorkflows bool `json:"seed_workflows"`
 }
@@ -244,14 +244,13 @@ type TicketTagSeed struct {
 	Color       string `json:"color"`
 }
 
-
 // TicketTemplateSeed 工单模板种子数据结构
 type TicketTemplateSeed struct {
-	Name        string                `json:"name"`
-	Description string                `json:"description"`
-	Category    string                `json:"category"`
-	Priority    string                `json:"priority"`
-	IsActive    bool                  `json:"is_active"`
+	Name          string                `json:"name"`
+	Description   string                `json:"description"`
+	Category      string                `json:"category"`
+	Priority      string                `json:"priority"`
+	IsActive      bool                  `json:"is_active"`
 	CategoryIDs   []int                 `json:"category_ids"`
 	CategoryCodes []string              `json:"category_codes"`
 	Fields        []FieldDefinitionSeed `json:"fields"`
@@ -266,6 +265,7 @@ type FieldDefinitionSeed struct {
 	Options   []map[string]interface{} `json:"options"`
 	SortOrder int                      `json:"sort_order"`
 }
+
 // SLAPolicySeed SLA策略种子数据结构
 type SLAPolicySeed struct {
 	Name                  string `json:"name"`
@@ -1384,6 +1384,12 @@ func (s *Seeder) seedPermissions(ctx context.Context) {
 		{"process_instance:read", "查看流程实例", "process_instance", "read", "查看流程实例"},
 		{"process_instance:create", "启动流程", "process_instance", "create", "启动流程实例"},
 		{"process_instance:update", "管理流程", "process_instance", "update", "暂停/恢复/取消流程"},
+		// BPMN 引擎（middleware/rbac.go 全局 ResourceActionMap 里 /api/v1/bpmn/* 实际校验的
+		// 资源名，workflow:* 只管菜单可见性——两者不是别名互通，此前这里没有目录项，
+		// rolePermissionMap 里任何角色写 bpmn:read/write 都因为查不到对应权限 ID 被静默丢弃）
+		{"bpmn:read", "查看BPMN流程引擎数据", "bpmn", "read", "查看流程定义/实例/任务等BPMN引擎数据"},
+		{"bpmn:write", "管理BPMN流程引擎数据", "bpmn", "write", "创建/更新流程定义、完成任务等BPMN引擎写操作"},
+		{"bpmn:delete", "删除BPMN流程定义", "bpmn", "delete", "删除流程定义"},
 		// 根因
 		{"root_cause:create", "设置根因", "root_cause", "create", "设置问题根因"},
 		// 解决方案
@@ -1741,7 +1747,12 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 			"approval:read", "approval:write",
 			"release:read", "release:write", "release:approve", "release:rollback",
 			"cmdb:read",
-			"workflow:read", "workflow:write",
+			// workflow:* 控制"工作流"菜单可见性（menu_service.go），bpmn:* 是
+			// middleware/rbac.go 全局 ResourceActionMap 里 /api/v1/bpmn/* 实际
+			// 校验的资源名——两套命名不是别名互通的，菜单可见不代表接口能调，
+			// 缺 bpmn:read 会导致"菜单进得去、列表加载失败：权限不足"。
+			"workflow:read", "workflow:write", "process_instance:read",
+			"bpmn:read", "bpmn:write", "task:read", "task:update",
 			"sla:read",
 			"report:read",
 			"knowledge:read", "knowledge:write",
@@ -1813,6 +1824,11 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 			"problem:read", "change:read", "change:rollback", "report:read",
 			"user:read", "department:read", "team:read",
 			"knowledge:read", "release:approve", "release:rollback",
+			// release:approve/rollback 只让业务域 API（/releases/:id/approve 等）能调，
+			// 审批人查看"我的待办"走的是 /api/v1/bpmn/tasks，由全局 ResourceActionMap
+			// 的 /api/v1/bpmn/* 通配符按 bpmn:read 校验——同 change_manager 那次修复
+			// 缺 bpmn:read 的道理一样，没有它审批人能审批但看不到自己的待办列表。
+			"bpmn:read", "task:read",
 		},
 		// 团队主管
 		"team_lead": {
@@ -2575,49 +2591,49 @@ func (s *Seeder) seedTicketTemplates(ctx context.Context) {
 			continue
 		}
 
-			// 2. 创建自定义字段定义（直接在当前事务中操作）
-			if len(tmpl.Fields) == 0 {
-				continue
-			}
+		// 2. 创建自定义字段定义（直接在当前事务中操作）
+		if len(tmpl.Fields) == 0 {
+			continue
+		}
 
-			// 删除旧定义（幂等）
-			_, err = s.client.FieldDefinition.Delete().
-				Where(
-					fielddefinition.TenantIDEQ(t.ID),
-					fielddefinition.EntityTypeEQ("ticket_template"),
-					fielddefinition.EntityIDEQ(tpl.ID),
-				).
-				Exec(ctx)
+		// 删除旧定义（幂等）
+		_, err = s.client.FieldDefinition.Delete().
+			Where(
+				fielddefinition.TenantIDEQ(t.ID),
+				fielddefinition.EntityTypeEQ("ticket_template"),
+				fielddefinition.EntityIDEQ(tpl.ID),
+			).
+			Exec(ctx)
+		if err != nil {
+			s.sugar.Warnw("delete old field definitions failed", "error", err, "template", tmpl.Name)
+		}
+
+		// 按序创建新定义
+		for i, fd := range tmpl.Fields {
+			opts := fd.Options
+			if opts == nil {
+				opts = []map[string]interface{}{}
+			}
+			sortOrder := fd.SortOrder
+			if sortOrder == 0 {
+				sortOrder = i
+			}
+			_, err := s.client.FieldDefinition.Create().
+				SetTenantID(t.ID).
+				SetEntityType("ticket_template").
+				SetEntityID(tpl.ID).
+				SetName(fd.Name).
+				SetLabel(fd.Label).
+				SetFieldType(fd.FieldType).
+				SetRequired(fd.Required).
+				SetOptions(convertOptions(fd.Options)).
+				SetSortOrder(sortOrder).
+				SetIsActive(true).
+				Save(ctx)
 			if err != nil {
-				s.sugar.Warnw("delete old field definitions failed", "error", err, "template", tmpl.Name)
+				s.sugar.Warnw("seed field definition failed", "error", err, "template", tmpl.Name, "field", fd.Name)
 			}
-
-			// 按序创建新定义
-			for i, fd := range tmpl.Fields {
-				opts := fd.Options
-				if opts == nil {
-					opts = []map[string]interface{}{}
-				}
-				sortOrder := fd.SortOrder
-				if sortOrder == 0 {
-					sortOrder = i
-				}
-				_, err := s.client.FieldDefinition.Create().
-					SetTenantID(t.ID).
-					SetEntityType("ticket_template").
-					SetEntityID(tpl.ID).
-					SetName(fd.Name).
-					SetLabel(fd.Label).
-					SetFieldType(fd.FieldType).
-					SetRequired(fd.Required).
-					SetOptions(convertOptions(fd.Options)).
-					SetSortOrder(sortOrder).
-					SetIsActive(true).
-					Save(ctx)
-				if err != nil {
-					s.sugar.Warnw("seed field definition failed", "error", err, "template", tmpl.Name, "field", fd.Name)
-				}
-			}
+		}
 		if err != nil {
 			s.sugar.Warnw("seed field definitions for template failed", "error", err, "template", tmpl.Name)
 		}

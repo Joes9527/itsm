@@ -381,6 +381,15 @@ var ResourceActionMap = map[string]map[string]Permission{
 		"/api/v1/process-trigger/*":  {Resource: "bpmn", Action: "read"},
 		"/api/v1/process-bindings":   {Resource: "bpmn", Action: "read"},
 		"/api/v1/process-bindings/*": {Resource: "bpmn", Action: "read"},
+		// /api/v1/workflow/* 是 router.go 注册的"简化路由"（/workflow/* -> /bpmn/*
+		// 的路由注释所说的"等价"只是路由目标层面的等价，实际 URL 路径不同，之前
+		// 没人给这组路径单独补全局 ResourceActionMap 条目——全局中间件按路径查不到
+		// 就直接拒绝，路由自己声明的 RequirePermission("process_instance","read")
+		// 根本没有机会被执行到。
+		"/api/v1/workflow/instances":   {Resource: "process_instance", Action: "read"},
+		"/api/v1/workflow/instances/*": {Resource: "process_instance", Action: "read"},
+		"/api/v1/workflow/tasks":       {Resource: "task", Action: "read"},
+		"/api/v1/workflow/tasks/*":     {Resource: "task", Action: "read"},
 		// 审批工作流/审批链
 		"/api/v1/approval-workflows":     {Resource: "approval_workflow", Action: "read"},
 		"/api/v1/approval-workflows/*":   {Resource: "approval_workflow", Action: "read"},
@@ -453,6 +462,14 @@ var ResourceActionMap = map[string]map[string]Permission{
 		"/api/v1/changes/*":             {Resource: "change", Action: "write"},
 		"/api/v1/releases":              {Resource: "release", Action: "write"},
 		"/api/v1/releases/*":            {Resource: "release", Action: "write"},
+		// 动作型子路由需要单独声明，否则会被上面 /releases/* 通配符先命中成
+		// release:write——审批人（如 dept_manager）只被授予 release:approve/
+		// release:rollback，没有 release:write，会被全局中间件挡在路由自己
+		// 声明的 RequirePermission("release","approve") 之前。见 tickets/*/assign
+		// 同类先例。
+		"/api/v1/releases/*/approve":  {Resource: "release", Action: "approve"},
+		"/api/v1/releases/*/reject":   {Resource: "release", Action: "approve"},
+		"/api/v1/releases/*/rollback": {Resource: "release", Action: "rollback"},
 		"/api/v1/roles":                 {Resource: "role", Action: "write"},
 		"/api/v1/roles/*":               {Resource: "role", Action: "write"},
 		"/api/v1/system/*":              {Resource: "system_config", Action: "write"},
@@ -464,6 +481,9 @@ var ResourceActionMap = map[string]map[string]Permission{
 		"/api/v1/process-trigger/*":  {Resource: "bpmn", Action: "write"},
 		"/api/v1/process-bindings":   {Resource: "bpmn", Action: "write"},
 		"/api/v1/process-bindings/*": {Resource: "bpmn", Action: "write"},
+		// /api/v1/workflow/* 简化路由，见 GET 分组同名注释
+		"/api/v1/workflow/instances": {Resource: "process_instance", Action: "create"},
+		"/api/v1/workflow/tasks/*":   {Resource: "task", Action: "update"},
 		// MSP Permissions
 		"/api/v1/msp/allocations":            {Resource: "msp_allocation", Action: "write"},
 		"/api/v1/msp/allocations/deallocate": {Resource: "msp_allocation", Action: "write"},
@@ -489,6 +509,9 @@ var ResourceActionMap = map[string]map[string]Permission{
 		"/api/v1/releases/*":           {Resource: "release", Action: "write"},
 		// BPMN Workflow permissions
 		"/api/v1/bpmn/*": {Resource: "bpmn", Action: "write"},
+		// /api/v1/workflow/* 简化路由，见 GET 分组同名注释
+		"/api/v1/workflow/instances/*": {Resource: "process_instance", Action: "update"},
+		"/api/v1/workflow/tasks/*":     {Resource: "task", Action: "update"},
 	},
 	"DELETE": {
 		"/api/v1/tickets/*":            {Resource: "ticket", Action: "delete"},

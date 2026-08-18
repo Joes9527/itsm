@@ -566,6 +566,8 @@ func NewApplication() *Application {
 	// Domain: Change (DDD)
 	changeRepo := change.NewEntRepository(client, database.GetRawDB())
 	changeServiceDomain := change.NewService(changeRepo, client, sugar)
+	// 提交变更审批后自动启动 change_normal_flow，见 change.Service.SetProcessTriggerService 注释。
+	changeServiceDomain.SetProcessTriggerService(processTriggerService)
 	changeHandler := change.NewHandler(changeServiceDomain)
 
 	// Analytics & Prediction Controllers
