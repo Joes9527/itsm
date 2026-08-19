@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Card,
   Table,
@@ -11,6 +11,7 @@ import {
   Form,
   Input,
   Select,
+  Tree,
   TreeSelect,
   message,
   Popconfirm,
@@ -20,6 +21,7 @@ import {
   Statistic,
   Empty,
 } from 'antd';
+import type { DataNode } from 'antd/es/tree';
 import {
   Plus,
   Edit,
@@ -27,6 +29,8 @@ import {
   Users,
   RefreshCw,
   Search,
+  Folder,
+  FileText,
 } from 'lucide-react';
 import type { ColumnsType } from 'antd/es/table';
 import type { Department, CreateDepartmentRequest } from '@/lib/services/department-service';
@@ -39,6 +43,7 @@ const { TextArea } = Input;
 export default function DepartmentManagement() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [treeData, setTreeData] = useState<Department[]>([]);
+  const [selectedNode, setSelectedNode] = useState<Department | null>(null);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -47,29 +52,50 @@ export default function DepartmentManagement() {
   const [users, setUsers] = useState<{ label: string; value: number }[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
 
+  // 构建符合 TreeSelect / Left Tree 结构的节点
+  const buildTreeData = (depts: Department[]): Department[] => {
+    return depts.map(dept => {
+      const children = dept.children && dept.children.length > 0 ? buildTreeData(dept.children) : undefined;
+      return {
+        ...dept,
+        key: dept.id,
+        value: dept.id,
+        title: dept.name,
+        icon: children ? (
+          <Folder size={14} className="text-amber-500" />
+        ) : (
+          <FileText size={14} className="text-gray-400" />
+        ),
+        children,
+      };
+    });
+  };
+
+  // 左侧展示树的虚拟根节点——真实导入的组织数据里有 143 个平级顶层部门（历史遗留的演示
+  // 部门与本次导入的分公司混在一起，互不隶属），全部挂在这个"组织架构"根节点下面展示，
+  // 而不是散在没有共同入口的顶层列表里（呼应截图里的树形结构）。这只是前端展示层面的
+  // 包装节点，不对应任何真实部门记录，选中它等价于清空选中（右侧表格回退到"全量部门"）。
+  const ORG_ROOT_KEY = '__org_root__';
+
   // 加载部门数据
   const loadDepartments = useCallback(async () => {
     setFetching(true);
     try {
       const data = await departmentService.getDepartmentTree();
       setDepartments(data);
-      // 构建树形数据用于TreeSelect
-      const buildTreeData = (depts: Department[]): Department[] => {
-        return depts.map(dept => ({
-          ...dept,
-          value: dept.id,
-          title: dept.name,
-          children: dept.children ? buildTreeData(dept.children) : undefined,
-        }));
-      };
-      setTreeData(buildTreeData(data));
+      const built = buildTreeData(data);
+      setTreeData(built);
+      // 默认选中第一个顶层节点
+      if (built.length > 0 && !selectedNode) {
+        setSelectedNode(built[0]);
+      }
     } catch (error) {
       console.error('Failed to load departments:', error);
       message.error('加载部门数据失败');
     } finally {
       setFetching(false);
     }
-  }, []);
+  }, [selectedNode]);
 
   // 加载用户列表（用于选择部门经理）
   const loadUsers = useCallback(async () => {
@@ -86,39 +112,67 @@ export default function DepartmentManagement() {
     }
   }, []);
 
-  // 初始化加载
   useEffect(() => {
     loadDepartments();
     loadUsers();
   }, [loadDepartments, loadUsers]);
 
-  // 扁平化部门树用于表格展示
-  const flattenDepartments = (depts: Department[], level = 0): Department[] => {
-    const result: Department[] = [];
-    depts.forEach(dept => {
-      result.push({ ...dept, key: dept.id, level } as Department);
-      if (dept.children && dept.children.length > 0) {
-        result.push(...flattenDepartments(dept.children, level + 1));
+  // 左侧展示树：所有顶层部门（含历史演示部门与本次导入的分公司）包在一个虚拟根节点下
+  const orgTree: DataNode[] = useMemo(
+    () => [
+      {
+        key: ORG_ROOT_KEY,
+        title: '组织架构',
+        icon: <Folder size={14} className="text-amber-500" />,
+        children: treeData as unknown as DataNode[],
+      },
+    ],
+    [treeData]
+  );
+
+  const findDepartmentById = (depts: Department[], id: number): Department | null => {
+    for (const d of depts) {
+      if (d.id === id) return d;
+      if (d.children) {
+        const found = findDepartmentById(d.children, id);
+        if (found) return found;
       }
+    }
+    return null;
+  };
+
+  // 右侧表格只展示当前选中的节点及其直接/间接子部门
+  const getSubTreeList = (node: Department | null): Department[] => {
+    if (!node) return [];
+    const list: Department[] = [node];
+    if (node.children) {
+      node.children.forEach(child => {
+        list.push(...getSubTreeList(child));
+      });
+    }
+    return list;
+  };
+
+  // 如果有搜索词，全局匹配；无搜索词时，展示左侧选中节点的子部门清单
+  const activeDisplayList = searchTerm.trim()
+    ? flattenAll(departments).filter(dept => {
+        const keyword = searchTerm.trim().toLowerCase();
+        return (
+          dept.name.toLowerCase().includes(keyword) ||
+          dept.code.toLowerCase().includes(keyword) ||
+          (dept.description || '').toLowerCase().includes(keyword)
+        );
+      })
+    : (selectedNode ? getSubTreeList(selectedNode) : flattenAll(departments));
+
+  function flattenAll(depts: Department[]): Department[] {
+    const res: Department[] = [];
+    depts.forEach(d => {
+      res.push(d);
+      if (d.children) res.push(...flattenAll(d.children));
     });
-    return result;
-  };
-
-  const flatDepartments = flattenDepartments(departments).filter(dept => {
-    const keyword = searchTerm.trim().toLowerCase();
-    if (!keyword) return true;
-    return (
-      dept.name.toLowerCase().includes(keyword) ||
-      dept.code.toLowerCase().includes(keyword) ||
-      (dept.description || '').toLowerCase().includes(keyword)
-    );
-  });
-
-  // 统计信息
-  const stats = {
-    totalDepartments: flatDepartments.length,
-    activeDepartments: flatDepartments.filter(d => d.name).length,
-  };
+    return res;
+  }
 
   // 处理保存
   const handleSave = async () => {
@@ -127,11 +181,9 @@ export default function DepartmentManagement() {
       setLoading(true);
 
       if (selectedDepartment) {
-        // 更新
         await departmentService.updateDepartment(selectedDepartment.id, values);
         message.success('部门更新成功');
       } else {
-        // 创建
         await departmentService.createDepartment(values as CreateDepartmentRequest);
         message.success('部门创建成功');
       }
@@ -180,8 +232,8 @@ export default function DepartmentManagement() {
       dataIndex: 'name',
       key: 'name',
       render: (text: string, record: Department) => (
-        <Space style={{ paddingLeft: `${((record as Department & { level?: number }).level || 0) * 20}px` }}>
-          <Users />
+        <Space>
+          <Users className="w-4 h-4 text-blue-500" />
           <span className="font-medium">{text}</span>
         </Space>
       ),
@@ -190,11 +242,30 @@ export default function DepartmentManagement() {
       title: '部门编码',
       dataIndex: 'code',
       key: 'code',
+      ellipsis: true,
       render: (text: string) => <Tag color="blue">{text}</Tag>,
     },
     {
+      title: '类型',
+      dataIndex: 'orgType',
+      key: 'orgType',
+      width: 110,
+      render: (type?: string) => (
+        <Tag color={type === 'warehouse' ? 'orange' : 'green'}>
+          {type === 'warehouse' ? '仓库/物流' : '行政部门'}
+        </Tag>
+      ),
+    },
+    {
+      title: '地域',
+      dataIndex: 'areaName',
+      key: 'areaName',
+      width: 90,
+      render: (area?: string) => <span>{area || '中国'}</span>,
+    },
+    {
       title: '部门经理',
-      dataIndex:'managerId',
+      dataIndex: 'managerId',
       key: 'manager',
       render: (managerId: number) => {
         const user = users.find(u => u.value === managerId);
@@ -202,15 +273,9 @@ export default function DepartmentManagement() {
       },
     },
     {
-      title: '描述',
-      dataIndex: 'description',
-      key: 'description',
-      ellipsis: true,
-    },
-    {
       title: '操作',
       key: 'actions',
-      width: 150,
+      width: 120,
       render: (_: unknown, record: Department) => (
         <Space size="small">
           <Button
@@ -237,88 +302,113 @@ export default function DepartmentManagement() {
       <div className="mb-6">
         <Title level={2} className="!mb-2">
           <Users className="mr-2" />
-          部门管理
+          组织架构与部门管理
         </Title>
-        <Text type="secondary">管理系统部门结构和组织架构</Text>
+        <Text type="secondary">采用左侧组织树 + 右侧部门明细的联动架构进行管理</Text>
       </div>
 
-      {/* 统计卡片 */}
-      <Row gutter={[16, 16]} className="mb-6">
-        <Col xs={24} sm={12} lg={8}>
-          <Card className="enterprise-card">
-            <Statistic
-              title="部门总数"
-              value={stats.totalDepartments}
-              prefix={<Users />}
+      {/* 顶部工具栏 */}
+      <Card className="mb-4">
+        <Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
+          <Space>
+            <Input
+              allowClear
+              placeholder="搜索全量部门名称、编码或描述"
+              prefix={<Search size={16} />}
+              value={searchTerm}
+              onChange={event => setSearchTerm(event.target.value)}
+              style={{ width: 320 }}
             />
+            <Button
+              type="primary"
+              icon={<Plus size={16} />}
+              onClick={() => {
+                setSelectedDepartment(null);
+                form.resetFields();
+                if (selectedNode) {
+                  form.setFieldValue('parentId', selectedNode.id);
+                }
+                setShowModal(true);
+              }}
+            >
+              新建部门
+            </Button>
+            <Button
+              icon={<RefreshCw size={16} />}
+              onClick={() => loadDepartments()}
+              loading={fetching}
+            >
+              刷新
+            </Button>
+          </Space>
+        </Space>
+      </Card>
+
+      {/* 主界面：左树右表布局 */}
+      <Row gutter={16}>
+        {/* 左侧组织树 */}
+        <Col xs={24} md={8} lg={7} xl={6}>
+          <Card title="组织机构树" className="min-h-[600px] enterprise-card">
+            {treeData.length > 0 ? (
+              <Tree
+                showIcon
+                showLine={{ showLeafIcon: false }}
+                height={520}
+                treeData={orgTree}
+                defaultExpandedKeys={[ORG_ROOT_KEY]}
+                selectedKeys={[selectedNode ? selectedNode.id : ORG_ROOT_KEY]}
+                onSelect={keys => {
+                  const val = keys[0];
+                  if (val === undefined || val === ORG_ROOT_KEY) {
+                    setSelectedNode(null);
+                    return;
+                  }
+                  setSelectedNode(findDepartmentById(departments, val as number));
+                }}
+              />
+            ) : (
+              <Empty description="暂无组织树" />
+            )}
+            <div className="mt-4 p-3 bg-gray-50 rounded border text-xs text-gray-500">
+              <p className="font-semibold mb-1">提示：</p>
+              <p>点击左侧树中的节点展开/收起，或直接点选分公司、大区、部门节点，右侧表格自动联动过滤该节点下辖的子部门与仓库；点选"组织架构"根节点查看全量部门。用顶部搜索框可跨全量部门按名称/编码/描述搜索。</p>
+            </div>
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={8}>
-          <Card className="enterprise-card">
-            <Statistic
-              title="活跃部门"
-              value={stats.activeDepartments}
-              prefix={<Users />}
+
+        {/* 右侧数据明细表格 */}
+        <Col xs={24} md={16} lg={17} xl={18}>
+          <Card
+            title={
+              <Space>
+                <span>{selectedNode ? selectedNode.name : '全量部门'}</span>
+                {selectedNode?.orgType && (
+                  <Tag color={selectedNode.orgType === 'warehouse' ? 'orange' : 'green'}>
+                    {selectedNode.orgType === 'warehouse' ? '仓库/物流' : '行政部门'}
+                  </Tag>
+                )}
+                {selectedNode?.areaName && <Tag color="blue">{selectedNode.areaName}</Tag>}
+              </Space>
+            }
+            className="min-h-[600px] enterprise-card"
+          >
+            <Table
+              columns={columns}
+              dataSource={activeDisplayList}
+              rowKey="id"
+              loading={fetching}
+              pagination={{ pageSize: 15, showSizeChanger: true }}
+              scroll={{ x: 760 }}
+              locale={{
+                emptyText: <Empty description="当前节点下暂无子部门" />,
+              }}
+              className="enterprise-table"
             />
           </Card>
         </Col>
       </Row>
 
-      {/* 操作栏 */}
-      <Card className="mb-6">
-        <Space wrap>
-          <Input
-            allowClear
-            placeholder="搜索部门名称、编码或描述"
-            prefix={<Search size={16} />}
-            value={searchTerm}
-            onChange={event => setSearchTerm(event.target.value)}
-            style={{ width: 280 }}
-          />
-          <Button
-            type="primary"
-            icon={<Plus size={16} />}
-            onClick={() => {
-              setSelectedDepartment(null);
-              form.resetFields();
-              setShowModal(true);
-            }}
-          >
-            新建部门
-          </Button>
-          <Button
-            icon={<RefreshCw size={16} />}
-            onClick={() => loadDepartments()}
-            loading={fetching}
-          >
-            刷新
-          </Button>
-        </Space>
-      </Card>
-
-      {/* 部门列表 */}
-      <Card className="enterprise-card">
-        <Table
-          columns={columns}
-          dataSource={flatDepartments}
-          rowKey="id"
-          loading={fetching}
-          pagination={false}
-          scroll={{ x: 760 }}
-          locale={{
-            emptyText: (
-              <Empty description={searchTerm ? '没有匹配的部门' : '暂无部门'}>
-                <Button type="primary" onClick={() => setShowModal(true)}>
-                  新建部门
-                </Button>
-              </Empty>
-            ),
-          }}
-          className="enterprise-table"
-        />
-      </Card>
-
-      {/* 编辑模态框 */}
+      {/* 新建/编辑模态框 */}
       <Modal
         title={
           <span>
@@ -355,7 +445,7 @@ export default function DepartmentManagement() {
           </Form.Item>
           <Form.Item
             label="上级部门"
-            name="parent_id"
+            name="parentId"
           >
             <TreeSelect
               placeholder="选择上级部门（可选）"
@@ -367,7 +457,7 @@ export default function DepartmentManagement() {
           </Form.Item>
           <Form.Item
             label="部门经理"
-            name="manager_id"
+            name="managerId"
           >
             <Select
               placeholder="选择部门经理"
