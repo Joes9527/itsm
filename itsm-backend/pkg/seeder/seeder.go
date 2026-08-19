@@ -2018,6 +2018,10 @@ func allPermissionCodes() []string {
 		"process_instance:read", "process_instance:create", "process_instance:update",
 		"task:read", "task:update",
 		"step:create", "step:update",
+		// BPMN 流程引擎（定义/实例/任务的读写）——之前遗漏，导致 allExcept() 派生的角色
+		// （如 it_director）拿不到 bpmn:write，无法通过 POST /bpmn/tasks/:id/decisions
+		// 提交审批决策（全局 RBAC 中间件按路径落到 "/api/v1/bpmn/*" -> bpmn:write 兜底项）
+		"bpmn:read", "bpmn:write", "bpmn:delete",
 		// 新增: 问题调查/根因/方案
 		"investigation:read", "investigation:create", "investigation:update",
 		"root_cause:create", "solution:create",
