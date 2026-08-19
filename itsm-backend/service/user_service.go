@@ -85,6 +85,9 @@ func (s *UserService) CreateUser(ctx context.Context, req *dto.CreateUserRequest
 	if strings.TrimSpace(req.FunctionLine) != "" {
 		uc = uc.SetFunctionLine(req.FunctionLine)
 	}
+	if req.ManagerID > 0 {
+		uc = uc.SetManagerID(req.ManagerID)
+	}
 	// 如果请求中提供了角色，则设置角色；否则使用Schema默认值（end_user）
 	if strings.TrimSpace(req.Role) != "" {
 		role := strings.ToLower(strings.TrimSpace(req.Role))
@@ -174,6 +177,7 @@ func (s *UserService) ListUsers(ctx context.Context, req *dto.ListUsersRequest, 
 	// （之前这里手写过一份字面量，漏了 MSPRole，新增 gender/isLeader/departmentId 时
 	// 又得在两处同步改，是同一类"影子 mapper"问题，见 dto/mappers.go 的注释）。
 	userResponses := dto.ToUserDetailResponseList(users)
+	s.attachManagerNames(ctx, tenantID, userResponses)
 
 	response := &dto.PagedUsersResponse{
 		Users: userResponses,
@@ -187,6 +191,42 @@ func (s *UserService) ListUsers(ctx context.Context, req *dto.ListUsersRequest, 
 
 	s.logger.Infof("用户列表查询成功: total=%d, returned=%d", total, len(users))
 	return response, nil
+}
+
+// attachManagerNames 给这一页的响应补上直属上级的姓名（ManagerName 是展示用的冗余字段，
+// dto.ToUserDetailResponse 只接触单条 ent.User，够不到"上级也是个 user，要另查一次"这件
+// 事，所以放在 service 层批量补——只查当页里出现过的 manager_id，不是全表扫）。查不到就
+// 留空，不当错误处理（比如上级本人被软删/换租户之类，不应该让整页列表查询失败）。
+func (s *UserService) attachManagerNames(ctx context.Context, tenantID int, responses []*dto.UserDetailResponse) {
+	managerIDs := make(map[int]struct{})
+	for _, r := range responses {
+		if r.ManagerID > 0 {
+			managerIDs[r.ManagerID] = struct{}{}
+		}
+	}
+	if len(managerIDs) == 0 {
+		return
+	}
+	ids := make([]int, 0, len(managerIDs))
+	for id := range managerIDs {
+		ids = append(ids, id)
+	}
+	managers, err := s.client.User.Query().
+		Where(user.IDIn(ids...), user.TenantIDEQ(tenantID)).
+		All(ctx)
+	if err != nil {
+		s.logger.Warnw("批量查询直属上级姓名失败，展示时留空", "error", err)
+		return
+	}
+	nameByID := make(map[int]string, len(managers))
+	for _, m := range managers {
+		nameByID[m.ID] = m.Name
+	}
+	for _, r := range responses {
+		if name, ok := nameByID[r.ManagerID]; ok {
+			r.ManagerName = name
+		}
+	}
 }
 
 // GetUserByID 根据ID获取用户
@@ -286,6 +326,9 @@ func (s *UserService) UpdateUser(ctx context.Context, id int, req *dto.UpdateUse
 	}
 	if strings.TrimSpace(req.FunctionLine) != "" {
 		update = update.SetFunctionLine(req.FunctionLine)
+	}
+	if req.ManagerID != nil {
+		update = update.SetManagerID(*req.ManagerID)
 	}
 	// 角色更新（仅在提供时设置），管理员权限由RBAC控制
 	if strings.TrimSpace(req.Role) != "" {

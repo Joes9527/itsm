@@ -21,6 +21,8 @@ type CreateUserRequest struct {
 	Gender       string `json:"gender,omitempty" binding:"omitempty,oneof=male female"`
 	IsLeader     bool   `json:"isLeader,omitempty"`
 	FunctionLine string `json:"functionLine,omitempty"`
+	// ManagerID 直属上级（汇报线，个人级别），不同于 DepartmentID 代表的正式组织归属
+	ManagerID int `json:"managerId,omitempty"`
 }
 
 // UpdateUserRequest 更新用户请求
@@ -44,6 +46,8 @@ type UpdateUserRequest struct {
 	// FunctionLine 传空字符串表示不修改——这个字段目前只从 HR 源数据回填，正常不会有人
 	// 手动清空它，跟 Department/Phone 用同样的"空值=不改"约定，不用额外搞指针。
 	FunctionLine string `json:"functionLine,omitempty"`
+	// ManagerID 传 nil 表示不修改；传具体值（含 0）表示整体替换直属上级。
+	ManagerID *int `json:"managerId,omitempty"`
 }
 
 // ListUsersRequest 获取用户列表请求
@@ -62,23 +66,28 @@ type ListUsersRequest struct {
 
 // UserDetailResponse 用户详细响应
 type UserDetailResponse struct {
-	ID                int       `json:"id"`
-	Username          string    `json:"username"`
-	Email             string    `json:"email"`
-	Name              string    `json:"name"`
-	Department        string    `json:"department"`
-	DepartmentID      int       `json:"departmentId"`
-	Phone             string    `json:"phone"`
-	Active            bool      `json:"active"`
-	TenantID          int       `json:"tenantId"`
-	Role              string    `json:"role"`
-	AdditionalRoleIds []int     `json:"additionalRoleIds,omitempty"`
-	MSPRole           *string   `json:"mspRole,omitempty"`
-	Gender            string    `json:"gender,omitempty"`
-	IsLeader          bool      `json:"isLeader"`
-	FunctionLine      string    `json:"functionLine,omitempty"`
-	CreatedAt         time.Time `json:"createdAt"`
-	UpdatedAt         time.Time `json:"updatedAt"`
+	ID                int     `json:"id"`
+	Username          string  `json:"username"`
+	Email             string  `json:"email"`
+	Name              string  `json:"name"`
+	Department        string  `json:"department"`
+	DepartmentID      int     `json:"departmentId"`
+	Phone             string  `json:"phone"`
+	Active            bool    `json:"active"`
+	TenantID          int     `json:"tenantId"`
+	Role              string  `json:"role"`
+	AdditionalRoleIds []int   `json:"additionalRoleIds,omitempty"`
+	MSPRole           *string `json:"mspRole,omitempty"`
+	Gender            string  `json:"gender,omitempty"`
+	IsLeader          bool    `json:"isLeader"`
+	FunctionLine      string  `json:"functionLine,omitempty"`
+	ManagerID         int     `json:"managerId,omitempty"`
+	// ManagerName 是冗余展示字段，service 层按当页 ManagerID 批量补充（见
+	// UserService.enrichManagerNames），dto.ToUserDetailResponse 本身不填它——
+	// mapper 只接触单条 ent.User，够不到"上级也是个 user，需要另查一次"这件事。
+	ManagerName string    `json:"managerName,omitempty"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
 }
 
 // PagedUsersResponse 分页用户响应

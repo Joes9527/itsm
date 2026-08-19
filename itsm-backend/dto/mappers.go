@@ -45,8 +45,9 @@ func ToUserDetailResponse(user *ent.User) *UserDetailResponse {
 		Gender:       user.Gender,
 		IsLeader:     user.IsLeader,
 		FunctionLine: user.FunctionLine,
+		ManagerID:    user.ManagerID,
 		CreatedAt:    user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
+		UpdatedAt:    user.UpdatedAt,
 	}
 }
 

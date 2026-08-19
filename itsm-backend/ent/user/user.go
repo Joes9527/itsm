@@ -53,6 +53,8 @@ const (
 	FieldIsLeader = "is_leader"
 	// FieldFunctionLine holds the string denoting the function_line field in the database.
 	FieldFunctionLine = "function_line"
+	// FieldManagerID holds the string denoting the manager_id field in the database.
+	FieldManagerID = "manager_id"
 	// EdgeDepartmentRef holds the string denoting the department_ref edge name in mutations.
 	EdgeDepartmentRef = "department_ref"
 	// EdgeTenant holds the string denoting the tenant edge name in mutations.
@@ -217,6 +219,7 @@ var Columns = []string{
 	FieldGender,
 	FieldIsLeader,
 	FieldFunctionLine,
+	FieldManagerID,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "users"
@@ -408,6 +411,11 @@ func ByIsLeader(opts ...sql.OrderTermOption) OrderOption {
 // ByFunctionLine orders the results by the function_line field.
 func ByFunctionLine(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldFunctionLine, opts...).ToFunc()
+}
+
+// ByManagerID orders the results by the manager_id field.
+func ByManagerID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldManagerID, opts...).ToFunc()
 }
 
 // ByDepartmentRefField orders the results by department_ref field.

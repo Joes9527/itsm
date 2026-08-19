@@ -145,6 +145,11 @@ func FunctionLine(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldFunctionLine, v))
 }
 
+// ManagerID applies equality check predicate on the "manager_id" field. It's identical to ManagerIDEQ.
+func ManagerID(v int) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldManagerID, v))
+}
+
 // UsernameEQ applies the EQ predicate on the "username" field.
 func UsernameEQ(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldUsername, v))
@@ -1083,6 +1088,56 @@ func FunctionLineEqualFold(v string) predicate.User {
 // FunctionLineContainsFold applies the ContainsFold predicate on the "function_line" field.
 func FunctionLineContainsFold(v string) predicate.User {
 	return predicate.User(sql.FieldContainsFold(FieldFunctionLine, v))
+}
+
+// ManagerIDEQ applies the EQ predicate on the "manager_id" field.
+func ManagerIDEQ(v int) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldManagerID, v))
+}
+
+// ManagerIDNEQ applies the NEQ predicate on the "manager_id" field.
+func ManagerIDNEQ(v int) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldManagerID, v))
+}
+
+// ManagerIDIn applies the In predicate on the "manager_id" field.
+func ManagerIDIn(vs ...int) predicate.User {
+	return predicate.User(sql.FieldIn(FieldManagerID, vs...))
+}
+
+// ManagerIDNotIn applies the NotIn predicate on the "manager_id" field.
+func ManagerIDNotIn(vs ...int) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldManagerID, vs...))
+}
+
+// ManagerIDGT applies the GT predicate on the "manager_id" field.
+func ManagerIDGT(v int) predicate.User {
+	return predicate.User(sql.FieldGT(FieldManagerID, v))
+}
+
+// ManagerIDGTE applies the GTE predicate on the "manager_id" field.
+func ManagerIDGTE(v int) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldManagerID, v))
+}
+
+// ManagerIDLT applies the LT predicate on the "manager_id" field.
+func ManagerIDLT(v int) predicate.User {
+	return predicate.User(sql.FieldLT(FieldManagerID, v))
+}
+
+// ManagerIDLTE applies the LTE predicate on the "manager_id" field.
+func ManagerIDLTE(v int) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldManagerID, v))
+}
+
+// ManagerIDIsNil applies the IsNil predicate on the "manager_id" field.
+func ManagerIDIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldManagerID))
+}
+
+// ManagerIDNotNil applies the NotNil predicate on the "manager_id" field.
+func ManagerIDNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldManagerID))
 }
 
 // HasDepartmentRef applies the HasEdge predicate on the "department_ref" edge.

@@ -81,6 +81,12 @@ func (User) Fields() []ent.Field {
 				"独立于 department_id 代表的正式组织树——同一条线的人可能分散在不同法人实体/" +
 				"仓库下面。来自 ehr-data.xlsx person 表的 depart_line 字段。").
 			Optional(),
+		field.Int("manager_id").
+			Comment("直属上级的用户ID（汇报线，个人级别，跟 department.manager_id 那种" +
+				"部门级负责人是两个概念）。来自 ehr-data.xlsx person 表的 direct_supervisor" +
+				"字段（格式\"姓名:工号\"，按工号匹配到 username）。跟 department.manager_id" +
+				"一样是普通整型外键，不建 ent edge。0/未设置表示无记录或没匹配上。").
+			Optional(),
 	}
 }
 

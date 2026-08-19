@@ -304,6 +304,12 @@ const UserManagement: React.FC = () => {
       render: (line?: string) => (line ? <Tag>{line}</Tag> : '-'),
     },
     {
+      title: '直属上级',
+      dataIndex: 'managerName',
+      key: 'managerName',
+      render: (managerName?: string) => managerName || '-',
+    },
+    {
       title: '邮箱',
       dataIndex: 'email',
       key: 'email',
