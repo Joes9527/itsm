@@ -597,7 +597,7 @@ export default function WorkflowNodeInspector({
                 showSearch
                 placeholder="选择受理人（单一用户）"
                 value={currentAssignee || undefined}
-                onChange={value => apply({ assignee: value || '', assigneeRole: '', assigneeDeptId: '' })}
+                onChange={value => apply({ assignee: value || '', assigneeRole: '', assigneeDeptId: undefined })}
                 className="w-full"
                 loading={loadingUsers}
                 filterOption={(input, option) =>
@@ -625,7 +625,7 @@ export default function WorkflowNodeInspector({
                 showSearch
                 placeholder="选择角色（该角色下所有用户均可处理）"
                 value={currentAssigneeRole || undefined}
-                onChange={value => apply({ assigneeRole: value || '', assignee: '', assigneeDeptId: '' })}
+                onChange={value => apply({ assigneeRole: value || '', assignee: '', assigneeDeptId: undefined })}
                 className="w-full"
                 loading={loadingRoles}
                 filterOption={(input, option) =>
@@ -655,7 +655,7 @@ export default function WorkflowNodeInspector({
                 placeholder="选择部门（该部门负责人处理，无负责人则向上级部门找）"
                 value={currentAssigneeDeptId}
                 onChange={value =>
-                  apply({ assigneeDeptId: value ?? '', assignee: '', assigneeRole: '' })
+                  apply({ assigneeDeptId: value ?? undefined, assignee: '', assigneeRole: '' })
                 }
                 className="w-full"
                 loading={loadingDepartments}
