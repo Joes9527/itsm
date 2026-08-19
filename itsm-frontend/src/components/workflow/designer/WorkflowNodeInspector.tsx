@@ -218,6 +218,7 @@ export default function WorkflowNodeInspector({
 
   // 用户任务属性
   const currentAssignee = (bo.assignee as string) || '';
+  const currentAssigneeRole = (bo.assigneeRole as string) || '';
   const currentCandidateUsers = parseCsv(bo.candidateUsers as string | undefined);
   const currentCandidateGroups = parseCsv(bo.candidateGroups as string | undefined);
   const currentPriority = (bo.priority as string) || '';
@@ -309,6 +310,12 @@ export default function WorkflowNodeInspector({
   const userOptions = users.map(u => ({
     label: u.name || u.username || `User#${u.id}`,
     value: u.username,
+  }));
+
+  // 角色选项（按角色指派用 role.code，对应后端 resolveRoleCandidates 按 role=? 查询）
+  const assigneeRoleOptions = roles.map(r => ({
+    label: r.name,
+    value: r.code,
   }));
 
   const ccUserOptions = users.map(u => ({
@@ -549,7 +556,7 @@ export default function WorkflowNodeInspector({
                 showSearch
                 placeholder="选择受理人（单一用户）"
                 value={currentAssignee || undefined}
-                onChange={value => apply({ assignee: value || '' })}
+                onChange={value => apply({ assignee: value || '', assigneeRole: '' })}
                 className="w-full"
                 loading={loadingUsers}
                 filterOption={(input, option) =>
@@ -559,7 +566,35 @@ export default function WorkflowNodeInspector({
                 size="small"
               />
               <Text type="secondary" className="text-xs mt-1 block">
-                指定单一用户为该任务的处理人
+                指定单一用户为该任务的处理人；与下方"按角色指派"互斥，设置其一会清空另一个
+              </Text>
+            </div>
+
+            {/* Assignee Role — 按角色指派，跟固定受理人互斥。引擎按角色查该租户下所有该角色的
+                在职用户作为候选人（谁先领谁审批），不是挑固定某一个人，适合"总经理""IT总监"这类
+                跟具体人解耦、只认岗位角色的审批环节。 */}
+            <div className="mt-3">
+              <Text strong className="text-sm flex items-center mb-2">
+                <Shield className="w-3.5 h-3.5 mr-1" />
+                按角色指派 (assigneeRole)
+                <Tag color="purple" className="ml-2 text-xs">候选</Tag>
+              </Text>
+              <Select
+                allowClear
+                showSearch
+                placeholder="选择角色（该角色下所有用户均可处理）"
+                value={currentAssigneeRole || undefined}
+                onChange={value => apply({ assigneeRole: value || '', assignee: '' })}
+                className="w-full"
+                loading={loadingRoles}
+                filterOption={(input, option) =>
+                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                }
+                options={assigneeRoleOptions}
+                size="small"
+              />
+              <Text type="secondary" className="text-xs mt-1 block">
+                指定该任务由某个角色下的用户处理（不依赖具体人，适合总经理/总监等跨部门审批角色）
               </Text>
             </div>
 

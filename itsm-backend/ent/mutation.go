@@ -106590,6 +106590,7 @@ type ServiceCatalogMutation struct {
 	addapproval_level       *int
 	approvers               *[]int
 	appendapprovers         []int
+	process_definition_key  *string
 	sla_response_time       *int
 	addsla_response_time    *int
 	sla_resolution_time     *int
@@ -107315,6 +107316,55 @@ func (m *ServiceCatalogMutation) ResetApprovers() {
 	delete(m.clearedFields, servicecatalog.FieldApprovers)
 }
 
+// SetProcessDefinitionKey sets the "process_definition_key" field.
+func (m *ServiceCatalogMutation) SetProcessDefinitionKey(s string) {
+	m.process_definition_key = &s
+}
+
+// ProcessDefinitionKey returns the value of the "process_definition_key" field in the mutation.
+func (m *ServiceCatalogMutation) ProcessDefinitionKey() (r string, exists bool) {
+	v := m.process_definition_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProcessDefinitionKey returns the old "process_definition_key" field's value of the ServiceCatalog entity.
+// If the ServiceCatalog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ServiceCatalogMutation) OldProcessDefinitionKey(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProcessDefinitionKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProcessDefinitionKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProcessDefinitionKey: %w", err)
+	}
+	return oldValue.ProcessDefinitionKey, nil
+}
+
+// ClearProcessDefinitionKey clears the value of the "process_definition_key" field.
+func (m *ServiceCatalogMutation) ClearProcessDefinitionKey() {
+	m.process_definition_key = nil
+	m.clearedFields[servicecatalog.FieldProcessDefinitionKey] = struct{}{}
+}
+
+// ProcessDefinitionKeyCleared returns if the "process_definition_key" field was cleared in this mutation.
+func (m *ServiceCatalogMutation) ProcessDefinitionKeyCleared() bool {
+	_, ok := m.clearedFields[servicecatalog.FieldProcessDefinitionKey]
+	return ok
+}
+
+// ResetProcessDefinitionKey resets all changes to the "process_definition_key" field.
+func (m *ServiceCatalogMutation) ResetProcessDefinitionKey() {
+	m.process_definition_key = nil
+	delete(m.clearedFields, servicecatalog.FieldProcessDefinitionKey)
+}
+
 // SetSLAResponseTime sets the "sla_response_time" field.
 func (m *ServiceCatalogMutation) SetSLAResponseTime(i int) {
 	m.sla_response_time = &i
@@ -108015,7 +108065,7 @@ func (m *ServiceCatalogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ServiceCatalogMutation) Fields() []string {
-	fields := make([]string, 0, 24)
+	fields := make([]string, 0, 25)
 	if m.name != nil {
 		fields = append(fields, servicecatalog.FieldName)
 	}
@@ -108051,6 +108101,9 @@ func (m *ServiceCatalogMutation) Fields() []string {
 	}
 	if m.approvers != nil {
 		fields = append(fields, servicecatalog.FieldApprovers)
+	}
+	if m.process_definition_key != nil {
+		fields = append(fields, servicecatalog.FieldProcessDefinitionKey)
 	}
 	if m.sla_response_time != nil {
 		fields = append(fields, servicecatalog.FieldSLAResponseTime)
@@ -108120,6 +108173,8 @@ func (m *ServiceCatalogMutation) Field(name string) (ent.Value, bool) {
 		return m.ApprovalLevel()
 	case servicecatalog.FieldApprovers:
 		return m.Approvers()
+	case servicecatalog.FieldProcessDefinitionKey:
+		return m.ProcessDefinitionKey()
 	case servicecatalog.FieldSLAResponseTime:
 		return m.SLAResponseTime()
 	case servicecatalog.FieldSLAResolutionTime:
@@ -108177,6 +108232,8 @@ func (m *ServiceCatalogMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldApprovalLevel(ctx)
 	case servicecatalog.FieldApprovers:
 		return m.OldApprovers(ctx)
+	case servicecatalog.FieldProcessDefinitionKey:
+		return m.OldProcessDefinitionKey(ctx)
 	case servicecatalog.FieldSLAResponseTime:
 		return m.OldSLAResponseTime(ctx)
 	case servicecatalog.FieldSLAResolutionTime:
@@ -108293,6 +108350,13 @@ func (m *ServiceCatalogMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetApprovers(v)
+		return nil
+	case servicecatalog.FieldProcessDefinitionKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProcessDefinitionKey(v)
 		return nil
 	case servicecatalog.FieldSLAResponseTime:
 		v, ok := value.(int)
@@ -108540,6 +108604,9 @@ func (m *ServiceCatalogMutation) ClearedFields() []string {
 	if m.FieldCleared(servicecatalog.FieldApprovers) {
 		fields = append(fields, servicecatalog.FieldApprovers)
 	}
+	if m.FieldCleared(servicecatalog.FieldProcessDefinitionKey) {
+		fields = append(fields, servicecatalog.FieldProcessDefinitionKey)
+	}
 	if m.FieldCleared(servicecatalog.FieldSLAResponseTime) {
 		fields = append(fields, servicecatalog.FieldSLAResponseTime)
 	}
@@ -108592,6 +108659,9 @@ func (m *ServiceCatalogMutation) ClearField(name string) error {
 		return nil
 	case servicecatalog.FieldApprovers:
 		m.ClearApprovers()
+		return nil
+	case servicecatalog.FieldProcessDefinitionKey:
+		m.ClearProcessDefinitionKey()
 		return nil
 	case servicecatalog.FieldSLAResponseTime:
 		m.ClearSLAResponseTime()
@@ -108654,6 +108724,9 @@ func (m *ServiceCatalogMutation) ResetField(name string) error {
 		return nil
 	case servicecatalog.FieldApprovers:
 		m.ResetApprovers()
+		return nil
+	case servicecatalog.FieldProcessDefinitionKey:
+		m.ResetProcessDefinitionKey()
 		return nil
 	case servicecatalog.FieldSLAResponseTime:
 		m.ResetSLAResponseTime()

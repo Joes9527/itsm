@@ -10,6 +10,7 @@ export interface User {
   phone: string;
   active: boolean;
   tenantId: number;
+  role?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -30,6 +31,7 @@ export interface UpdateUserRequest {
   name?: string;
   department?: string;
   phone?: string;
+  role?: string;
 }
 
 export interface ListUsersParams {

@@ -3432,6 +3432,7 @@ var (
 		{Name: "requires_approval", Type: field.TypeBool, Default: true},
 		{Name: "approval_level", Type: field.TypeInt, Default: 1},
 		{Name: "approvers", Type: field.TypeJSON, Nullable: true},
+		{Name: "process_definition_key", Type: field.TypeString, Nullable: true},
 		{Name: "sla_response_time", Type: field.TypeInt, Nullable: true},
 		{Name: "sla_resolution_time", Type: field.TypeInt, Nullable: true},
 		{Name: "ci_type_id", Type: field.TypeInt, Nullable: true},
@@ -3454,12 +3455,12 @@ var (
 			{
 				Name:    "servicecatalog_ci_type_id",
 				Unique:  false,
-				Columns: []*schema.Column{ServiceCatalogsColumns[15]},
+				Columns: []*schema.Column{ServiceCatalogsColumns[16]},
 			},
 			{
 				Name:    "servicecatalog_cloud_service_id",
 				Unique:  false,
-				Columns: []*schema.Column{ServiceCatalogsColumns[16]},
+				Columns: []*schema.Column{ServiceCatalogsColumns[17]},
 			},
 			{
 				Name:    "servicecatalog_service_type",
@@ -3474,7 +3475,7 @@ var (
 			{
 				Name:    "servicecatalog_tenant_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{ServiceCatalogsColumns[20], ServiceCatalogsColumns[19]},
+				Columns: []*schema.Column{ServiceCatalogsColumns[21], ServiceCatalogsColumns[20]},
 			},
 		},
 	}

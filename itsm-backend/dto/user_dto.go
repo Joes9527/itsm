@@ -14,7 +14,7 @@ type CreateUserRequest struct {
 	Password   string `json:"password" binding:"required,min=12,max=128"`
 	TenantID   int    `json:"tenantId"`
 	// 角色，可选；不提供时使用后端默认值（end_user）
-	Role string `json:"role,omitempty" binding:"omitempty,oneof=super_admin sysadmin it_director ops_director ops_manager ops_engineer dba network_eng sd_manager change_manager service_catalog_admin l1_support l2_support l3_expert security_admin audit_admin dept_manager end_user guest"`
+	Role string `json:"role,omitempty" binding:"omitempty,oneof=super_admin sysadmin company_gm it_director ops_director ops_manager ops_engineer dba network_eng sd_manager change_manager service_catalog_admin l1_support l2_support l3_expert security_admin audit_admin dept_manager end_user guest"`
 	// MSP角色，仅当用户属于MSP租户时使用
 	MSPRole string `json:"mspRole,omitempty" binding:"omitempty,oneof=provider_admin provider_agent customer_user"`
 }
@@ -27,7 +27,7 @@ type UpdateUserRequest struct {
 	Department string `json:"department,omitempty"`
 	Phone      string `json:"phone,omitempty"`
 	// 角色更新，仅管理员有权限更新
-	Role string `json:"role,omitempty" binding:"omitempty,oneof=super_admin sysadmin it_director ops_director ops_manager ops_engineer dba network_eng sd_manager change_manager service_catalog_admin l1_support l2_support l3_expert security_admin audit_admin dept_manager end_user guest"`
+	Role string `json:"role,omitempty" binding:"omitempty,oneof=super_admin sysadmin company_gm it_director ops_director ops_manager ops_engineer dba network_eng sd_manager change_manager service_catalog_admin l1_support l2_support l3_expert security_admin audit_admin dept_manager end_user guest"`
 }
 
 // ListUsersRequest 获取用户列表请求

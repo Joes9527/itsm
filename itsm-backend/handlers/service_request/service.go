@@ -156,6 +156,11 @@ func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalog
 	if hasApprovalChainSteps(resolvedSteps) {
 		ticketReq.ApprovalChain = resolvedSteps
 	}
+	// 目录条目配置了专属流程时优先生效，跳过 businessType+businessSubType 的通用绑定解析
+	// （见 ticket_service.go triggerWorkflowForTicket 里 workflowDefinitionKey 的优先级）。
+	if strings.TrimSpace(cat.ProcessDefinitionKey) != "" {
+		ticketReq.WorkflowDefinitionKey = strings.TrimSpace(cat.ProcessDefinitionKey)
+	}
 	createdTicket, err := s.ticketSvc.CreateTicket(ctx, ticketReq, tenantID)
 	if err != nil {
 		return nil, common.NewInternalError("Failed to create linked ticket", err)

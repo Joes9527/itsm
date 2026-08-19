@@ -29,6 +29,7 @@ func (ServiceCatalog) Fields() []ent.Field {
 		field.Bool("requires_approval").Comment("是否需要审批").Default(true),
 		field.Int("approval_level").Comment("审批级别: 1-3").Default(1),
 		field.JSON("approvers", []int{}).Comment("审批人ID列表").Optional(),
+		field.String("process_definition_key").Comment("专属BPMN流程定义Key（可选，优先级高于businessType+businessSubType的通用流程绑定解析，见 ticket_service.go triggerWorkflowForTicket）").Optional(),
 
 		// SLA配置
 		field.Int("sla_response_time").Comment("SLA响应时间(分钟)").Optional(),

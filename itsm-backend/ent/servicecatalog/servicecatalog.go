@@ -37,6 +37,8 @@ const (
 	FieldApprovalLevel = "approval_level"
 	// FieldApprovers holds the string denoting the approvers field in the database.
 	FieldApprovers = "approvers"
+	// FieldProcessDefinitionKey holds the string denoting the process_definition_key field in the database.
+	FieldProcessDefinitionKey = "process_definition_key"
 	// FieldSLAResponseTime holds the string denoting the sla_response_time field in the database.
 	FieldSLAResponseTime = "sla_response_time"
 	// FieldSLAResolutionTime holds the string denoting the sla_resolution_time field in the database.
@@ -80,6 +82,7 @@ var Columns = []string{
 	FieldRequiresApproval,
 	FieldApprovalLevel,
 	FieldApprovers,
+	FieldProcessDefinitionKey,
 	FieldSLAResponseTime,
 	FieldSLAResolutionTime,
 	FieldCiTypeID,
@@ -192,6 +195,11 @@ func ByRequiresApproval(opts ...sql.OrderTermOption) OrderOption {
 // ByApprovalLevel orders the results by the approval_level field.
 func ByApprovalLevel(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldApprovalLevel, opts...).ToFunc()
+}
+
+// ByProcessDefinitionKey orders the results by the process_definition_key field.
+func ByProcessDefinitionKey(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldProcessDefinitionKey, opts...).ToFunc()
 }
 
 // BySLAResponseTime orders the results by the sla_response_time field.

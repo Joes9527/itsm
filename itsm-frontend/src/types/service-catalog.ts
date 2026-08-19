@@ -56,6 +56,9 @@ export interface ServiceItem {
   requiresApproval?: boolean;
   approvalLevel?: number;
   approvers?: number[];
+  // 专属 BPMN 流程定义 Key（可选）。非空时该目录条目提交后优先走这个流程，
+  // 不走 businessType+businessSubType 的通用流程绑定解析。
+  processDefinitionKey?: string;
 
   // SLA配置
   slaResponseTime?: number;
@@ -416,6 +419,7 @@ export interface CreateServiceItemRequest {
   tags?: string[];
   requiresApproval?: boolean;
   approvalWorkflow?: string;
+  processDefinitionKey?: string;
   status?: ServiceStatus;
   fields?: ServiceItem['fields'];
 }

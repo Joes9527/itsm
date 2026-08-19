@@ -156,6 +156,7 @@ func (h *Handler) Create(c *gin.Context) {
 		req.CITypeID,
 		req.CloudServiceID,
 		fields,
+		req.ProcessDefinitionKey,
 	)
 	if err != nil {
 		failServiceCatalog(c, err)
@@ -213,6 +214,7 @@ func (h *Handler) Update(c *gin.Context) {
 		req.CITypeID,
 		req.CloudServiceID,
 		fields,
+		req.ProcessDefinitionKey,
 	)
 	if err != nil {
 		failServiceCatalog(c, err)
@@ -324,16 +326,17 @@ func (h *Handler) toDTO(c *ServiceCatalog) dto.ServiceCatalogResponse {
 		})
 	}
 	return dto.ServiceCatalogResponse{
-		ID:             c.ID,
-		Name:           c.Name,
-		Category:       c.Category,
-		Description:    c.Description,
-		DeliveryTime:   strconv.Itoa(c.DeliveryTime),
-		CITypeID:       c.CITypeID,
-		CloudServiceID: c.CloudServiceID,
-		Status:         c.Status,
-		Fields:         fields,
-		CreatedAt:      c.CreatedAt,
-		UpdatedAt:      c.UpdatedAt,
+		ID:                   c.ID,
+		Name:                 c.Name,
+		Category:             c.Category,
+		Description:          c.Description,
+		DeliveryTime:         strconv.Itoa(c.DeliveryTime),
+		CITypeID:             c.CITypeID,
+		CloudServiceID:       c.CloudServiceID,
+		ProcessDefinitionKey: c.ProcessDefinitionKey,
+		Status:               c.Status,
+		Fields:               fields,
+		CreatedAt:            c.CreatedAt,
+		UpdatedAt:            c.UpdatedAt,
 	}
 }

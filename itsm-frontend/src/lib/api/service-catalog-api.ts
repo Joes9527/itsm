@@ -85,6 +85,7 @@ export class ServiceCatalogApi {
         responseTime: raw?.deliveryTime ? Number(raw.deliveryTime) : undefined,
       },
       fields: Array.isArray(raw?.fields) ? raw.fields : [],
+      processDefinitionKey: raw?.processDefinitionKey || undefined,
     };
   }
 
@@ -202,6 +203,7 @@ export class ServiceCatalogApi {
       ),
       status: ServiceCatalogApi.toBackendStatus(request.status) || 'enabled',
       fields: request.fields,
+      processDefinitionKey: request.processDefinitionKey,
     };
     const resp = await httpClient.post<any>('/api/v1/service-catalogs', payload);
     return ServiceCatalogApi.toServiceItem(resp);
@@ -223,6 +225,9 @@ export class ServiceCatalogApi {
     if (request.ciTypeId !== undefined) payload.ciTypeId = request.ciTypeId;
     if (request.cloudServiceId !== undefined) payload.cloudServiceId = request.cloudServiceId;
     if (request.fields !== undefined) payload.fields = request.fields;
+    if (request.processDefinitionKey !== undefined) {
+      payload.processDefinitionKey = request.processDefinitionKey;
+    }
     const st = ServiceCatalogApi.toBackendStatus(request.status);
     if (st) payload.status = st;
 

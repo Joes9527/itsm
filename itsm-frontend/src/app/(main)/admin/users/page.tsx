@@ -34,6 +34,7 @@ import {
   Empty,
 } from 'antd';
 import { UserApi, type User } from '@/lib/api/user-api';
+import { RoleAPI } from '@/lib/api/role-api';
 import { useAuthStore, useAuthStoreHydration } from '@/lib/store/auth-store';
 
 const { Title, Text } = Typography;
@@ -67,6 +68,7 @@ const UserManagement: React.FC = () => {
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [isPasswordModalVisible, setIsPasswordModalVisible] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [roleOptions, setRoleOptions] = useState<{ label: string; value: string }[]>([]);
 
   // 表单
   const [createForm] = Form.useForm();
@@ -99,6 +101,22 @@ const UserManagement: React.FC = () => {
   useEffect(() => {
     loadUsers();
   }, [pagination.current, pagination.pageSize, filters]);
+
+  useEffect(() => {
+    const loadRoles = async () => {
+      try {
+        const resp = await RoleAPI.getRoles({ page: 1, pageSize: 100 });
+        setRoleOptions(
+          (resp.roles || [])
+            .filter(r => r.code)
+            .map(r => ({ label: r.name, value: r.code as string }))
+        );
+      } catch (error) {
+        console.error('加载角色列表失败:', error);
+      }
+    };
+    loadRoles();
+  }, []);
 
   // 创建用户
   const handleCreateUser = async (values: any) => {
@@ -140,6 +158,7 @@ const UserManagement: React.FC = () => {
         name: values.name,
         department: values.department,
         phone: values.phone,
+        role: values.role,
       });
       message.success('用户更新成功');
       setIsEditModalVisible(false);
@@ -610,14 +629,30 @@ const UserManagement: React.FC = () => {
               </Form.Item>
             </Col>
           </Row>
-          <Form.Item name="department" label="部门">
-            <Select placeholder="请选择部门" options={[
-              { value: 'IT部门', label: 'IT部门' },
-              { value: '财务部门', label: '财务部门' },
-              { value: '人事部门', label: '人事部门' },
-              { value: '市场部门', label: '市场部门' },
-            ]} />
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="department" label="部门">
+                <Select placeholder="请选择部门" options={[
+                  { value: 'IT部门', label: 'IT部门' },
+                  { value: '财务部门', label: '财务部门' },
+                  { value: '人事部门', label: '人事部门' },
+                  { value: '市场部门', label: '市场部门' },
+                ]} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="role" label="角色">
+                <Select
+                  showSearch
+                  placeholder="请选择角色"
+                  options={roleOptions}
+                  filterOption={(input, option) =>
+                    (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())
+                  }
+                />
+              </Form.Item>
+            </Col>
+          </Row>
           <Form.Item>
             <Space>
               <Button type="primary" htmlType="submit" loading={loading}>

@@ -42,6 +42,8 @@ type ServiceCatalog struct {
 	ApprovalLevel int `json:"approval_level,omitempty"`
 	// 审批人ID列表
 	Approvers []int `json:"approvers,omitempty"`
+	// 专属BPMN流程定义Key（可选，优先级高于businessType+businessSubType的通用流程绑定解析，见 ticket_service.go triggerWorkflowForTicket）
+	ProcessDefinitionKey string `json:"process_definition_key,omitempty"`
 	// SLA响应时间(分钟)
 	SLAResponseTime int `json:"sla_response_time,omitempty"`
 	// SLA解决时间(分钟)
@@ -82,7 +84,7 @@ func (*ServiceCatalog) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullFloat64)
 		case servicecatalog.FieldID, servicecatalog.FieldDeliveryTime, servicecatalog.FieldApprovalLevel, servicecatalog.FieldSLAResponseTime, servicecatalog.FieldSLAResolutionTime, servicecatalog.FieldCiTypeID, servicecatalog.FieldCloudServiceID, servicecatalog.FieldTenantID, servicecatalog.FieldSortOrder:
 			values[i] = new(sql.NullInt64)
-		case servicecatalog.FieldName, servicecatalog.FieldDescription, servicecatalog.FieldCategory, servicecatalog.FieldIcon, servicecatalog.FieldServiceType, servicecatalog.FieldItsmType, servicecatalog.FieldUnit, servicecatalog.FieldStatus:
+		case servicecatalog.FieldName, servicecatalog.FieldDescription, servicecatalog.FieldCategory, servicecatalog.FieldIcon, servicecatalog.FieldServiceType, servicecatalog.FieldItsmType, servicecatalog.FieldUnit, servicecatalog.FieldProcessDefinitionKey, servicecatalog.FieldStatus:
 			values[i] = new(sql.NullString)
 		case servicecatalog.FieldCreatedAt, servicecatalog.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -180,6 +182,12 @@ func (_m *ServiceCatalog) assignValues(columns []string, values []any) error {
 				if err := json.Unmarshal(*value, &_m.Approvers); err != nil {
 					return fmt.Errorf("unmarshal field approvers: %w", err)
 				}
+			}
+		case servicecatalog.FieldProcessDefinitionKey:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field process_definition_key", values[i])
+			} else if value.Valid {
+				_m.ProcessDefinitionKey = value.String
 			}
 		case servicecatalog.FieldSLAResponseTime:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -328,6 +336,9 @@ func (_m *ServiceCatalog) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("approvers=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Approvers))
+	builder.WriteString(", ")
+	builder.WriteString("process_definition_key=")
+	builder.WriteString(_m.ProcessDefinitionKey)
 	builder.WriteString(", ")
 	builder.WriteString("sla_response_time=")
 	builder.WriteString(fmt.Sprintf("%v", _m.SLAResponseTime))

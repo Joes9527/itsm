@@ -258,6 +258,26 @@ func (_u *ServiceCatalogUpdate) ClearApprovers() *ServiceCatalogUpdate {
 	return _u
 }
 
+// SetProcessDefinitionKey sets the "process_definition_key" field.
+func (_u *ServiceCatalogUpdate) SetProcessDefinitionKey(v string) *ServiceCatalogUpdate {
+	_u.mutation.SetProcessDefinitionKey(v)
+	return _u
+}
+
+// SetNillableProcessDefinitionKey sets the "process_definition_key" field if the given value is not nil.
+func (_u *ServiceCatalogUpdate) SetNillableProcessDefinitionKey(v *string) *ServiceCatalogUpdate {
+	if v != nil {
+		_u.SetProcessDefinitionKey(*v)
+	}
+	return _u
+}
+
+// ClearProcessDefinitionKey clears the value of the "process_definition_key" field.
+func (_u *ServiceCatalogUpdate) ClearProcessDefinitionKey() *ServiceCatalogUpdate {
+	_u.mutation.ClearProcessDefinitionKey()
+	return _u
+}
+
 // SetSLAResponseTime sets the "sla_response_time" field.
 func (_u *ServiceCatalogUpdate) SetSLAResponseTime(v int) *ServiceCatalogUpdate {
 	_u.mutation.ResetSLAResponseTime()
@@ -631,6 +651,12 @@ func (_u *ServiceCatalogUpdate) sqlSave(ctx context.Context) (_node int, err err
 	if _u.mutation.ApproversCleared() {
 		_spec.ClearField(servicecatalog.FieldApprovers, field.TypeJSON)
 	}
+	if value, ok := _u.mutation.ProcessDefinitionKey(); ok {
+		_spec.SetField(servicecatalog.FieldProcessDefinitionKey, field.TypeString, value)
+	}
+	if _u.mutation.ProcessDefinitionKeyCleared() {
+		_spec.ClearField(servicecatalog.FieldProcessDefinitionKey, field.TypeString)
+	}
 	if value, ok := _u.mutation.SLAResponseTime(); ok {
 		_spec.SetField(servicecatalog.FieldSLAResponseTime, field.TypeInt, value)
 	}
@@ -959,6 +985,26 @@ func (_u *ServiceCatalogUpdateOne) AppendApprovers(v []int) *ServiceCatalogUpdat
 // ClearApprovers clears the value of the "approvers" field.
 func (_u *ServiceCatalogUpdateOne) ClearApprovers() *ServiceCatalogUpdateOne {
 	_u.mutation.ClearApprovers()
+	return _u
+}
+
+// SetProcessDefinitionKey sets the "process_definition_key" field.
+func (_u *ServiceCatalogUpdateOne) SetProcessDefinitionKey(v string) *ServiceCatalogUpdateOne {
+	_u.mutation.SetProcessDefinitionKey(v)
+	return _u
+}
+
+// SetNillableProcessDefinitionKey sets the "process_definition_key" field if the given value is not nil.
+func (_u *ServiceCatalogUpdateOne) SetNillableProcessDefinitionKey(v *string) *ServiceCatalogUpdateOne {
+	if v != nil {
+		_u.SetProcessDefinitionKey(*v)
+	}
+	return _u
+}
+
+// ClearProcessDefinitionKey clears the value of the "process_definition_key" field.
+func (_u *ServiceCatalogUpdateOne) ClearProcessDefinitionKey() *ServiceCatalogUpdateOne {
+	_u.mutation.ClearProcessDefinitionKey()
 	return _u
 }
 
@@ -1364,6 +1410,12 @@ func (_u *ServiceCatalogUpdateOne) sqlSave(ctx context.Context) (_node *ServiceC
 	}
 	if _u.mutation.ApproversCleared() {
 		_spec.ClearField(servicecatalog.FieldApprovers, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.ProcessDefinitionKey(); ok {
+		_spec.SetField(servicecatalog.FieldProcessDefinitionKey, field.TypeString, value)
+	}
+	if _u.mutation.ProcessDefinitionKeyCleared() {
+		_spec.ClearField(servicecatalog.FieldProcessDefinitionKey, field.TypeString)
 	}
 	if value, ok := _u.mutation.SLAResponseTime(); ok {
 		_spec.SetField(servicecatalog.FieldSLAResponseTime, field.TypeInt, value)

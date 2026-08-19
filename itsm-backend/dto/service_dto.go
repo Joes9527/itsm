@@ -65,17 +65,20 @@ type GetServiceRequestsRequest struct {
 
 // ServiceCatalogResponse 服务目录响应
 type ServiceCatalogResponse struct {
-	ID             int                      `json:"id"`
-	Name           string                   `json:"name"`
-	Category       string                   `json:"category"`
-	Description    string                   `json:"description"`
-	DeliveryTime   string                   `json:"deliveryTime"`
-	CITypeID       int                      `json:"ciTypeId,omitempty"`
-	CloudServiceID int                      `json:"cloudServiceId,omitempty"`
-	Status         string                   `json:"status"`
-	Fields         []map[string]interface{} `json:"fields,omitempty"`
-	CreatedAt      time.Time                `json:"createdAt"`
-	UpdatedAt      time.Time                `json:"updatedAt"`
+	ID             int    `json:"id"`
+	Name           string `json:"name"`
+	Category       string `json:"category"`
+	Description    string `json:"description"`
+	DeliveryTime   string `json:"deliveryTime"`
+	CITypeID       int    `json:"ciTypeId,omitempty"`
+	CloudServiceID int    `json:"cloudServiceId,omitempty"`
+	// ProcessDefinitionKey 是该目录条目专属的 BPMN 流程定义 Key（可选），非空时优先于
+	// businessType+businessSubType 的通用流程绑定解析。
+	ProcessDefinitionKey string                   `json:"processDefinitionKey,omitempty"`
+	Status               string                   `json:"status"`
+	Fields               []map[string]interface{} `json:"fields,omitempty"`
+	CreatedAt            time.Time                `json:"createdAt"`
+	UpdatedAt            time.Time                `json:"updatedAt"`
 }
 
 // ServiceRequestResponse 服务请求响应
@@ -133,16 +136,17 @@ type ServiceRequestListResponse struct {
 // ToServiceCatalogResponse 转换为服务目录响应
 func ToServiceCatalogResponse(catalog *ent.ServiceCatalog) *ServiceCatalogResponse {
 	return &ServiceCatalogResponse{
-		ID:             catalog.ID,
-		Name:           catalog.Name,
-		Category:       catalog.Category,
-		Description:    catalog.Description,
-		DeliveryTime:   strconv.Itoa(catalog.DeliveryTime),
-		CITypeID:       catalog.CiTypeID,
-		CloudServiceID: catalog.CloudServiceID,
-		Status:         string(catalog.Status),
-		CreatedAt:      catalog.CreatedAt,
-		UpdatedAt:      catalog.UpdatedAt,
+		ID:                   catalog.ID,
+		Name:                 catalog.Name,
+		Category:             catalog.Category,
+		Description:          catalog.Description,
+		DeliveryTime:         strconv.Itoa(catalog.DeliveryTime),
+		CITypeID:             catalog.CiTypeID,
+		CloudServiceID:       catalog.CloudServiceID,
+		ProcessDefinitionKey: catalog.ProcessDefinitionKey,
+		Status:               string(catalog.Status),
+		CreatedAt:            catalog.CreatedAt,
+		UpdatedAt:            catalog.UpdatedAt,
 	}
 }
 
@@ -176,24 +180,28 @@ func ToServiceRequestResponse(request *ent.ServiceRequest) *ServiceRequestRespon
 
 // CreateServiceCatalogRequest 创建服务目录请求
 type CreateServiceCatalogRequest struct {
-	Name           string                   `json:"name" binding:"required,max=255"`
-	Category       string                   `json:"category" binding:"required,max=100"`
-	Description    string                   `json:"description" binding:"omitempty,max=1000"`
-	DeliveryTime   string                   `json:"deliveryTime" binding:"omitempty,max=50"`
-	CITypeID       int                      `json:"ciTypeId,omitempty"`
-	CloudServiceID int                      `json:"cloudServiceId,omitempty"`
-	Status         string                   `json:"status" binding:"omitempty,oneof=enabled disabled"`
-	Fields         []map[string]interface{} `json:"fields,omitempty"`
+	Name           string `json:"name" binding:"required,max=255"`
+	Category       string `json:"category" binding:"required,max=100"`
+	Description    string `json:"description" binding:"omitempty,max=1000"`
+	DeliveryTime   string `json:"deliveryTime" binding:"omitempty,max=50"`
+	CITypeID       int    `json:"ciTypeId,omitempty"`
+	CloudServiceID int    `json:"cloudServiceId,omitempty"`
+	// ProcessDefinitionKey 可选，指定该目录条目提交后走哪个 BPMN 流程定义，
+	// 不填则沿用 businessType+businessSubType 的通用流程绑定解析。
+	ProcessDefinitionKey string                   `json:"processDefinitionKey" binding:"omitempty,max=255"`
+	Status               string                   `json:"status" binding:"omitempty,oneof=enabled disabled"`
+	Fields               []map[string]interface{} `json:"fields,omitempty"`
 }
 
 // UpdateServiceCatalogRequest 更新服务目录请求
 type UpdateServiceCatalogRequest struct {
-	Name           string                   `json:"name" binding:"omitempty,max=255"`
-	Category       string                   `json:"category" binding:"omitempty,max=100"`
-	Description    string                   `json:"description" binding:"omitempty,max=1000"`
-	DeliveryTime   string                   `json:"deliveryTime" binding:"omitempty,max=50"`
-	CITypeID       int                      `json:"ciTypeId,omitempty"`
-	CloudServiceID int                      `json:"cloudServiceId,omitempty"`
-	Status         string                   `json:"status" binding:"omitempty,oneof=enabled disabled"`
-	Fields         []map[string]interface{} `json:"fields,omitempty"`
+	Name                 string                   `json:"name" binding:"omitempty,max=255"`
+	Category             string                   `json:"category" binding:"omitempty,max=100"`
+	Description          string                   `json:"description" binding:"omitempty,max=1000"`
+	DeliveryTime         string                   `json:"deliveryTime" binding:"omitempty,max=50"`
+	CITypeID             int                      `json:"ciTypeId,omitempty"`
+	CloudServiceID       int                      `json:"cloudServiceId,omitempty"`
+	ProcessDefinitionKey string                   `json:"processDefinitionKey" binding:"omitempty,max=255"`
+	Status               string                   `json:"status" binding:"omitempty,oneof=enabled disabled"`
+	Fields               []map[string]interface{} `json:"fields,omitempty"`
 }

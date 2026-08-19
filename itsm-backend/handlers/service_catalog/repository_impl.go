@@ -35,6 +35,9 @@ func (r *EntRepository) Create(ctx context.Context, catalog *ServiceCatalog) (*S
 	if catalog.CloudServiceID > 0 {
 		entFunc = entFunc.SetCloudServiceID(catalog.CloudServiceID)
 	}
+	if catalog.ProcessDefinitionKey != "" {
+		entFunc = entFunc.SetProcessDefinitionKey(catalog.ProcessDefinitionKey)
+	}
 
 	res, err := entFunc.Save(ctx)
 	if err != nil {
@@ -109,6 +112,9 @@ func (r *EntRepository) Update(ctx context.Context, tenantID int, catalog *Servi
 	}
 	if catalog.CloudServiceID > 0 {
 		update = update.SetCloudServiceID(catalog.CloudServiceID)
+	}
+	if catalog.ProcessDefinitionKey != "" {
+		update = update.SetProcessDefinitionKey(catalog.ProcessDefinitionKey)
 	}
 
 	res, err := update.Save(ctx)
@@ -240,17 +246,18 @@ func (r *EntRepository) Search(ctx context.Context, tenantID int, keyword string
 
 func (r *EntRepository) toDomain(e *ent.ServiceCatalog) *ServiceCatalog {
 	return &ServiceCatalog{
-		ID:             e.ID,
-		Name:           e.Name,
-		Category:       e.Category,
-		Description:    e.Description,
-		ITSMType:       e.ItsmType,
-		DeliveryTime:   e.DeliveryTime,
-		CITypeID:       e.CiTypeID,
-		CloudServiceID: e.CloudServiceID,
-		Status:         e.Status,
-		TenantID:       e.TenantID,
-		CreatedAt:      e.CreatedAt,
-		UpdatedAt:      e.UpdatedAt,
+		ID:                   e.ID,
+		Name:                 e.Name,
+		Category:             e.Category,
+		Description:          e.Description,
+		ITSMType:             e.ItsmType,
+		DeliveryTime:         e.DeliveryTime,
+		CITypeID:             e.CiTypeID,
+		CloudServiceID:       e.CloudServiceID,
+		ProcessDefinitionKey: e.ProcessDefinitionKey,
+		Status:               e.Status,
+		TenantID:             e.TenantID,
+		CreatedAt:            e.CreatedAt,
+		UpdatedAt:            e.UpdatedAt,
 	}
 }
