@@ -28,6 +28,10 @@ type UpdateUserRequest struct {
 	Phone      string `json:"phone,omitempty"`
 	// 角色更新，仅管理员有权限更新
 	Role string `json:"role,omitempty" binding:"omitempty,oneof=super_admin sysadmin it_director ops_director ops_manager ops_engineer dba network_eng sd_manager change_manager service_catalog_admin l1_support l2_support l3_expert security_admin audit_admin dept_manager end_user guest"`
+	// AdditionalRoleIds 是附加角色（多对多，走 User.roles 边），只影响 BPMN 按角色路由
+	// 审批任务时的候选资格（resolveRoleCandidates），不影响 RBAC 权限判定——RBAC 权限
+	// 判定只看上面单一的 Role 字段。传 nil 表示不修改；传 []int{} 表示清空所有附加角色。
+	AdditionalRoleIds *[]int `json:"additionalRoleIds,omitempty"`
 }
 
 // ListUsersRequest 获取用户列表请求

@@ -272,6 +272,16 @@ func (s *UserService) UpdateUser(ctx context.Context, id int, req *dto.UpdateUse
 
 	}
 
+	// 附加角色（仅影响 BPMN 按角色路由的候选资格，不影响 RBAC 权限判定，见 dto.UpdateUserRequest
+	// 里 AdditionalRoleIds 的注释）。nil 表示不修改；非 nil 时用传入的列表整体替换现有附加角色——
+	// 先清空再整体重设，语义等同于"提交的列表就是完整的附加角色集合"，避免增量 add/remove 的状态漂移。
+	if req.AdditionalRoleIds != nil {
+		update = update.ClearRoles()
+		if len(*req.AdditionalRoleIds) > 0 {
+			update = update.AddRoleIDs(*req.AdditionalRoleIds...)
+		}
+	}
+
 	userEntity, err := update.Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("更新用户失败: %w", err)

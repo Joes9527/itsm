@@ -1048,9 +1048,19 @@ func (e *CustomProcessEngine) resolveApprovalAssignee(ctx context.Context, insta
 // username→email→ID 兜底规则），供 excludeUserFromCandidates/MergeCandidateUsers 直接复用。
 // role 应为 roles 表中存在的 code 值——不存在的角色查询返回空列表而非报错，
 // 调用方按"没查到候选人"处理，转候选组兜底。
-func (e *CustomProcessEngine) resolveRoleCandidates(ctx context.Context, tenantID int, role string) ([]string, error) {
+func (e *CustomProcessEngine) resolveRoleCandidates(ctx context.Context, tenantID int, roleCode string) ([]string, error) {
+	// 候选人 = 主角色字段等于 roleCode 的用户，UNION 通过 user_roles 多对多边额外拥有
+	// roleCode 这个角色的用户（一人多角色，仅影响这里的 BPMN 候选资格，不影响 RBAC 权限判定，
+	// 见 dto.UpdateUserRequest.AdditionalRoleIds 的注释）。
 	users, err := e.client.User.Query().
-		Where(user.RoleEQ(role), user.TenantIDEQ(tenantID), user.Active(true)).
+		Where(
+			user.TenantIDEQ(tenantID),
+			user.Active(true),
+			user.Or(
+				user.RoleEQ(roleCode),
+				user.HasRolesWith(role.CodeEQ(roleCode), role.TenantIDEQ(tenantID)),
+			),
+		).
 		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("查询角色候选审批人失败: %w", err)
