@@ -69,6 +69,7 @@ const UserManagement: React.FC = () => {
   const [isPasswordModalVisible, setIsPasswordModalVisible] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [roleOptions, setRoleOptions] = useState<{ label: string; value: string }[]>([]);
+  const [additionalRoleOptions, setAdditionalRoleOptions] = useState<{ label: string; value: number }[]>([]);
 
   // 表单
   const [createForm] = Form.useForm();
@@ -106,11 +107,11 @@ const UserManagement: React.FC = () => {
     const loadRoles = async () => {
       try {
         const resp = await RoleAPI.getRoles({ page: 1, pageSize: 100 });
+        const roles = resp.roles || [];
         setRoleOptions(
-          (resp.roles || [])
-            .filter(r => r.code)
-            .map(r => ({ label: r.name, value: r.code as string }))
+          roles.filter(r => r.code).map(r => ({ label: r.name, value: r.code as string }))
         );
+        setAdditionalRoleOptions(roles.map(r => ({ label: r.name, value: r.id })));
       } catch (error) {
         console.error('加载角色列表失败:', error);
       }
@@ -159,6 +160,7 @@ const UserManagement: React.FC = () => {
         department: values.department,
         phone: values.phone,
         role: values.role,
+        additionalRoleIds: values.additionalRoleIds,
       });
       message.success('用户更新成功');
       setIsEditModalVisible(false);
@@ -653,6 +655,21 @@ const UserManagement: React.FC = () => {
               </Form.Item>
             </Col>
           </Row>
+          <Form.Item
+            name="additionalRoleIds"
+            label="附加角色"
+            tooltip="仅影响该用户能否被按角色路由的审批任务选中，不会叠加权限——权限仍然只看上面的“角色”字段"
+          >
+            <Select
+              mode="multiple"
+              showSearch
+              placeholder="可选，不选则维持现状"
+              options={additionalRoleOptions}
+              filterOption={(input, option) =>
+                (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())
+              }
+            />
+          </Form.Item>
           <Form.Item>
             <Space>
               <Button type="primary" htmlType="submit" loading={loading}>
