@@ -336,6 +336,26 @@ func (_u *UserUpdate) SetNillableIsLeader(v *bool) *UserUpdate {
 	return _u
 }
 
+// SetFunctionLine sets the "function_line" field.
+func (_u *UserUpdate) SetFunctionLine(v string) *UserUpdate {
+	_u.mutation.SetFunctionLine(v)
+	return _u
+}
+
+// SetNillableFunctionLine sets the "function_line" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableFunctionLine(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetFunctionLine(*v)
+	}
+	return _u
+}
+
+// ClearFunctionLine clears the value of the "function_line" field.
+func (_u *UserUpdate) ClearFunctionLine() *UserUpdate {
+	_u.mutation.ClearFunctionLine()
+	return _u
+}
+
 // SetDepartmentRefID sets the "department_ref" edge to the Department entity by ID.
 func (_u *UserUpdate) SetDepartmentRefID(id int) *UserUpdate {
 	_u.mutation.SetDepartmentRefID(id)
@@ -1040,6 +1060,12 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.IsLeader(); ok {
 		_spec.SetField(user.FieldIsLeader, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.FunctionLine(); ok {
+		_spec.SetField(user.FieldFunctionLine, field.TypeString, value)
+	}
+	if _u.mutation.FunctionLineCleared() {
+		_spec.ClearField(user.FieldFunctionLine, field.TypeString)
 	}
 	if _u.mutation.DepartmentRefCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -2042,6 +2068,26 @@ func (_u *UserUpdateOne) SetNillableIsLeader(v *bool) *UserUpdateOne {
 	return _u
 }
 
+// SetFunctionLine sets the "function_line" field.
+func (_u *UserUpdateOne) SetFunctionLine(v string) *UserUpdateOne {
+	_u.mutation.SetFunctionLine(v)
+	return _u
+}
+
+// SetNillableFunctionLine sets the "function_line" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableFunctionLine(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetFunctionLine(*v)
+	}
+	return _u
+}
+
+// ClearFunctionLine clears the value of the "function_line" field.
+func (_u *UserUpdateOne) ClearFunctionLine() *UserUpdateOne {
+	_u.mutation.ClearFunctionLine()
+	return _u
+}
+
 // SetDepartmentRefID sets the "department_ref" edge to the Department entity by ID.
 func (_u *UserUpdateOne) SetDepartmentRefID(id int) *UserUpdateOne {
 	_u.mutation.SetDepartmentRefID(id)
@@ -2776,6 +2822,12 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if value, ok := _u.mutation.IsLeader(); ok {
 		_spec.SetField(user.FieldIsLeader, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.FunctionLine(); ok {
+		_spec.SetField(user.FieldFunctionLine, field.TypeString, value)
+	}
+	if _u.mutation.FunctionLineCleared() {
+		_spec.ClearField(user.FieldFunctionLine, field.TypeString)
 	}
 	if _u.mutation.DepartmentRefCleared() {
 		edge := &sqlgraph.EdgeSpec{

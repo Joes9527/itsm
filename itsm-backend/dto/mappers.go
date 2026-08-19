@@ -41,10 +41,11 @@ func ToUserDetailResponse(user *ent.User) *UserDetailResponse {
 			}
 			return ids
 		}(),
-		MSPRole:   func() *string { s := string(user.MspRole); return &s }(),
-		Gender:    user.Gender,
-		IsLeader:  user.IsLeader,
-		CreatedAt: user.CreatedAt,
+		MSPRole:      func() *string { s := string(user.MspRole); return &s }(),
+		Gender:       user.Gender,
+		IsLeader:     user.IsLeader,
+		FunctionLine: user.FunctionLine,
+		CreatedAt:    user.CreatedAt,
 		UpdatedAt: user.UpdatedAt,
 	}
 }

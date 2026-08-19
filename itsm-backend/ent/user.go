@@ -55,6 +55,8 @@ type User struct {
 	Gender string `json:"gender,omitempty"`
 	// 是否为部门负责人/领导，用于组织架构展示
 	IsLeader bool `json:"is_leader,omitempty"`
+	// 职能条线：HR 系统里跨法人实体的横向职能分组（如'SPT_资讯科技服务部'），独立于 department_id 代表的正式组织树——同一条线的人可能分散在不同法人实体/仓库下面。来自 ehr-data.xlsx person 表的 depart_line 字段。
+	FunctionLine string `json:"function_line,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the UserQuery when eager-loading is set.
 	Edges                  UserEdges `json:"edges"`
@@ -260,7 +262,7 @@ func (*User) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case user.FieldID, user.FieldDepartmentID, user.FieldTenantID, user.FieldAssignedByMspID:
 			values[i] = new(sql.NullInt64)
-		case user.FieldUsername, user.FieldEmail, user.FieldName, user.FieldRole, user.FieldDepartment, user.FieldPhone, user.FieldFeishuOpenID, user.FieldPasswordHash, user.FieldMspRole, user.FieldGender:
+		case user.FieldUsername, user.FieldEmail, user.FieldName, user.FieldRole, user.FieldDepartment, user.FieldPhone, user.FieldFeishuOpenID, user.FieldPasswordHash, user.FieldMspRole, user.FieldGender, user.FieldFunctionLine:
 			values[i] = new(sql.NullString)
 		case user.FieldCreatedAt, user.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -398,6 +400,12 @@ func (_m *User) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field is_leader", values[i])
 			} else if value.Valid {
 				_m.IsLeader = value.Bool
+			}
+		case user.FieldFunctionLine:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field function_line", values[i])
+			} else if value.Valid {
+				_m.FunctionLine = value.String
 			}
 		case user.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -589,6 +597,9 @@ func (_m *User) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("is_leader=")
 	builder.WriteString(fmt.Sprintf("%v", _m.IsLeader))
+	builder.WriteString(", ")
+	builder.WriteString("function_line=")
+	builder.WriteString(_m.FunctionLine)
 	builder.WriteByte(')')
 	return builder.String()
 }

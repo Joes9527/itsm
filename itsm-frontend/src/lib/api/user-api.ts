@@ -15,6 +15,9 @@ export interface User {
   additionalRoleIds?: number[];
   gender?: 'male' | 'female' | '';
   isLeader?: boolean;
+  // 职能条线：HR 系统里跨法人实体的横向职能分组（如"SPT_资讯科技服务部"），独立于
+  // department/departmentId 代表的正式组织树。同一条线的人可能分散在不同法人实体下面。
+  functionLine?: string;
   createdAt: string;
   updatedAt: string;
 }

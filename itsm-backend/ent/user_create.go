@@ -247,6 +247,20 @@ func (_c *UserCreate) SetNillableIsLeader(v *bool) *UserCreate {
 	return _c
 }
 
+// SetFunctionLine sets the "function_line" field.
+func (_c *UserCreate) SetFunctionLine(v string) *UserCreate {
+	_c.mutation.SetFunctionLine(v)
+	return _c
+}
+
+// SetNillableFunctionLine sets the "function_line" field if the given value is not nil.
+func (_c *UserCreate) SetNillableFunctionLine(v *string) *UserCreate {
+	if v != nil {
+		_c.SetFunctionLine(*v)
+	}
+	return _c
+}
+
 // SetDepartmentRefID sets the "department_ref" edge to the Department entity by ID.
 func (_c *UserCreate) SetDepartmentRefID(id int) *UserCreate {
 	_c.mutation.SetDepartmentRefID(id)
@@ -704,6 +718,10 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.IsLeader(); ok {
 		_spec.SetField(user.FieldIsLeader, field.TypeBool, value)
 		_node.IsLeader = value
+	}
+	if value, ok := _c.mutation.FunctionLine(); ok {
+		_spec.SetField(user.FieldFunctionLine, field.TypeString, value)
+		_node.FunctionLine = value
 	}
 	if nodes := _c.mutation.DepartmentRefIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

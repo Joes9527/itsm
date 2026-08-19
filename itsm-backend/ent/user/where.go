@@ -140,6 +140,11 @@ func IsLeader(v bool) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldIsLeader, v))
 }
 
+// FunctionLine applies equality check predicate on the "function_line" field. It's identical to FunctionLineEQ.
+func FunctionLine(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldFunctionLine, v))
+}
+
 // UsernameEQ applies the EQ predicate on the "username" field.
 func UsernameEQ(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldUsername, v))
@@ -1003,6 +1008,81 @@ func IsLeaderEQ(v bool) predicate.User {
 // IsLeaderNEQ applies the NEQ predicate on the "is_leader" field.
 func IsLeaderNEQ(v bool) predicate.User {
 	return predicate.User(sql.FieldNEQ(FieldIsLeader, v))
+}
+
+// FunctionLineEQ applies the EQ predicate on the "function_line" field.
+func FunctionLineEQ(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldFunctionLine, v))
+}
+
+// FunctionLineNEQ applies the NEQ predicate on the "function_line" field.
+func FunctionLineNEQ(v string) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldFunctionLine, v))
+}
+
+// FunctionLineIn applies the In predicate on the "function_line" field.
+func FunctionLineIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldIn(FieldFunctionLine, vs...))
+}
+
+// FunctionLineNotIn applies the NotIn predicate on the "function_line" field.
+func FunctionLineNotIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldFunctionLine, vs...))
+}
+
+// FunctionLineGT applies the GT predicate on the "function_line" field.
+func FunctionLineGT(v string) predicate.User {
+	return predicate.User(sql.FieldGT(FieldFunctionLine, v))
+}
+
+// FunctionLineGTE applies the GTE predicate on the "function_line" field.
+func FunctionLineGTE(v string) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldFunctionLine, v))
+}
+
+// FunctionLineLT applies the LT predicate on the "function_line" field.
+func FunctionLineLT(v string) predicate.User {
+	return predicate.User(sql.FieldLT(FieldFunctionLine, v))
+}
+
+// FunctionLineLTE applies the LTE predicate on the "function_line" field.
+func FunctionLineLTE(v string) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldFunctionLine, v))
+}
+
+// FunctionLineContains applies the Contains predicate on the "function_line" field.
+func FunctionLineContains(v string) predicate.User {
+	return predicate.User(sql.FieldContains(FieldFunctionLine, v))
+}
+
+// FunctionLineHasPrefix applies the HasPrefix predicate on the "function_line" field.
+func FunctionLineHasPrefix(v string) predicate.User {
+	return predicate.User(sql.FieldHasPrefix(FieldFunctionLine, v))
+}
+
+// FunctionLineHasSuffix applies the HasSuffix predicate on the "function_line" field.
+func FunctionLineHasSuffix(v string) predicate.User {
+	return predicate.User(sql.FieldHasSuffix(FieldFunctionLine, v))
+}
+
+// FunctionLineIsNil applies the IsNil predicate on the "function_line" field.
+func FunctionLineIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldFunctionLine))
+}
+
+// FunctionLineNotNil applies the NotNil predicate on the "function_line" field.
+func FunctionLineNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldFunctionLine))
+}
+
+// FunctionLineEqualFold applies the EqualFold predicate on the "function_line" field.
+func FunctionLineEqualFold(v string) predicate.User {
+	return predicate.User(sql.FieldEqualFold(FieldFunctionLine, v))
+}
+
+// FunctionLineContainsFold applies the ContainsFold predicate on the "function_line" field.
+func FunctionLineContainsFold(v string) predicate.User {
+	return predicate.User(sql.FieldContainsFold(FieldFunctionLine, v))
 }
 
 // HasDepartmentRef applies the HasEdge predicate on the "department_ref" edge.

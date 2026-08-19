@@ -298,6 +298,12 @@ const UserManagement: React.FC = () => {
       render: (isLeader?: boolean) => (isLeader ? <Tag color="gold">是</Tag> : '否'),
     },
     {
+      title: '职能条线',
+      dataIndex: 'functionLine',
+      key: 'functionLine',
+      render: (line?: string) => (line ? <Tag>{line}</Tag> : '-'),
+    },
+    {
       title: '邮箱',
       dataIndex: 'email',
       key: 'email',
@@ -448,7 +454,7 @@ const UserManagement: React.FC = () => {
           <Col flex="auto">
             <Space wrap>
               <AntSearch
-                placeholder="搜索用户名、姓名、邮箱"
+                placeholder="搜索用户名、姓名、邮箱、职能条线"
                 style={{ width: 280 }}
                 onSearch={handleSearch}
                 allowClear

@@ -76,6 +76,11 @@ func (User) Fields() []ent.Field {
 		field.Bool("is_leader").
 			Comment("是否为部门负责人/领导，用于组织架构展示").
 			Default(false),
+		field.String("function_line").
+			Comment("职能条线：HR 系统里跨法人实体的横向职能分组（如'SPT_资讯科技服务部'），" +
+				"独立于 department_id 代表的正式组织树——同一条线的人可能分散在不同法人实体/" +
+				"仓库下面。来自 ehr-data.xlsx person 表的 depart_line 字段。").
+			Optional(),
 	}
 }
 

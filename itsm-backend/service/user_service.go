@@ -82,6 +82,9 @@ func (s *UserService) CreateUser(ctx context.Context, req *dto.CreateUserRequest
 	if strings.TrimSpace(req.Gender) != "" {
 		uc = uc.SetGender(req.Gender)
 	}
+	if strings.TrimSpace(req.FunctionLine) != "" {
+		uc = uc.SetFunctionLine(req.FunctionLine)
+	}
 	// 如果请求中提供了角色，则设置角色；否则使用Schema默认值（end_user）
 	if strings.TrimSpace(req.Role) != "" {
 		role := strings.ToLower(strings.TrimSpace(req.Role))
@@ -130,7 +133,15 @@ func (s *UserService) ListUsers(ctx context.Context, req *dto.ListUsersRequest, 
 		query = query.Where(user.DepartmentIDEQ(req.DepartmentID))
 	}
 
-	// 搜索过滤
+	// 按职能条线精确过滤——跟 departmentId 是两条独立的查询维度（同一条线的人可能
+	// 分散在不同法人实体/正式部门下面），互不影响，可以同时传也可以只传一个。
+	if req.FunctionLine != "" {
+		query = query.Where(user.FunctionLineEQ(req.FunctionLine))
+	}
+
+	// 搜索过滤——functionLine 也纳入模糊搜索，这样用户不需要知道"SPT_资讯科技服务部"这种
+	// 精确条线名，直接搜"资讯科技"就能按职能条线找到人（这条线跟正式部门树是两个维度，
+	// 见 ent/schema/user.go FunctionLine 字段注释）。
 	if req.Search != "" {
 		search := strings.TrimSpace(req.Search)
 		query = query.Where(
@@ -138,6 +149,7 @@ func (s *UserService) ListUsers(ctx context.Context, req *dto.ListUsersRequest, 
 				user.UsernameContainsFold(search),
 				user.NameContainsFold(search),
 				user.EmailContainsFold(search),
+				user.FunctionLineContainsFold(search),
 			),
 		)
 	}
@@ -271,6 +283,9 @@ func (s *UserService) UpdateUser(ctx context.Context, id int, req *dto.UpdateUse
 	}
 	if req.IsLeader != nil {
 		update = update.SetIsLeader(*req.IsLeader)
+	}
+	if strings.TrimSpace(req.FunctionLine) != "" {
+		update = update.SetFunctionLine(req.FunctionLine)
 	}
 	// 角色更新（仅在提供时设置），管理员权限由RBAC控制
 	if strings.TrimSpace(req.Role) != "" {
