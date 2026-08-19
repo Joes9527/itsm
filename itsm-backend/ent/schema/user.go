@@ -70,6 +70,12 @@ func (User) Fields() []ent.Field {
 		field.Bool("is_bootstrap_admin").
 			Comment("是否通过bootstrap token创建").
 			Default(false),
+		field.String("gender").
+			Comment("性别: male/female，留空表示未填写").
+			Optional(),
+		field.Bool("is_leader").
+			Comment("是否为部门负责人/领导，用于组织架构展示").
+			Default(false),
 	}
 }
 

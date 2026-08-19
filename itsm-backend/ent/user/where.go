@@ -130,6 +130,16 @@ func IsBootstrapAdmin(v bool) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldIsBootstrapAdmin, v))
 }
 
+// Gender applies equality check predicate on the "gender" field. It's identical to GenderEQ.
+func Gender(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldGender, v))
+}
+
+// IsLeader applies equality check predicate on the "is_leader" field. It's identical to IsLeaderEQ.
+func IsLeader(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldIsLeader, v))
+}
+
 // UsernameEQ applies the EQ predicate on the "username" field.
 func UsernameEQ(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldUsername, v))
@@ -908,6 +918,91 @@ func IsBootstrapAdminEQ(v bool) predicate.User {
 // IsBootstrapAdminNEQ applies the NEQ predicate on the "is_bootstrap_admin" field.
 func IsBootstrapAdminNEQ(v bool) predicate.User {
 	return predicate.User(sql.FieldNEQ(FieldIsBootstrapAdmin, v))
+}
+
+// GenderEQ applies the EQ predicate on the "gender" field.
+func GenderEQ(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldGender, v))
+}
+
+// GenderNEQ applies the NEQ predicate on the "gender" field.
+func GenderNEQ(v string) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldGender, v))
+}
+
+// GenderIn applies the In predicate on the "gender" field.
+func GenderIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldIn(FieldGender, vs...))
+}
+
+// GenderNotIn applies the NotIn predicate on the "gender" field.
+func GenderNotIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldGender, vs...))
+}
+
+// GenderGT applies the GT predicate on the "gender" field.
+func GenderGT(v string) predicate.User {
+	return predicate.User(sql.FieldGT(FieldGender, v))
+}
+
+// GenderGTE applies the GTE predicate on the "gender" field.
+func GenderGTE(v string) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldGender, v))
+}
+
+// GenderLT applies the LT predicate on the "gender" field.
+func GenderLT(v string) predicate.User {
+	return predicate.User(sql.FieldLT(FieldGender, v))
+}
+
+// GenderLTE applies the LTE predicate on the "gender" field.
+func GenderLTE(v string) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldGender, v))
+}
+
+// GenderContains applies the Contains predicate on the "gender" field.
+func GenderContains(v string) predicate.User {
+	return predicate.User(sql.FieldContains(FieldGender, v))
+}
+
+// GenderHasPrefix applies the HasPrefix predicate on the "gender" field.
+func GenderHasPrefix(v string) predicate.User {
+	return predicate.User(sql.FieldHasPrefix(FieldGender, v))
+}
+
+// GenderHasSuffix applies the HasSuffix predicate on the "gender" field.
+func GenderHasSuffix(v string) predicate.User {
+	return predicate.User(sql.FieldHasSuffix(FieldGender, v))
+}
+
+// GenderIsNil applies the IsNil predicate on the "gender" field.
+func GenderIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldGender))
+}
+
+// GenderNotNil applies the NotNil predicate on the "gender" field.
+func GenderNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldGender))
+}
+
+// GenderEqualFold applies the EqualFold predicate on the "gender" field.
+func GenderEqualFold(v string) predicate.User {
+	return predicate.User(sql.FieldEqualFold(FieldGender, v))
+}
+
+// GenderContainsFold applies the ContainsFold predicate on the "gender" field.
+func GenderContainsFold(v string) predicate.User {
+	return predicate.User(sql.FieldContainsFold(FieldGender, v))
+}
+
+// IsLeaderEQ applies the EQ predicate on the "is_leader" field.
+func IsLeaderEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldIsLeader, v))
+}
+
+// IsLeaderNEQ applies the NEQ predicate on the "is_leader" field.
+func IsLeaderNEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldIsLeader, v))
 }
 
 // HasDepartmentRef applies the HasEdge predicate on the "department_ref" edge.

@@ -6,17 +6,20 @@ import (
 
 // CreateUserRequest 创建用户请求
 type CreateUserRequest struct {
-	Username   string `json:"username" binding:"required,min=3,max=50"`
-	Email      string `json:"email" binding:"required,email"`
-	Name       string `json:"name" binding:"required,min=1,max=100"`
-	Department string `json:"department"`
-	Phone      string `json:"phone"`
-	Password   string `json:"password" binding:"required,min=12,max=128"`
-	TenantID   int    `json:"tenantId"`
+	Username     string `json:"username" binding:"required,min=3,max=50"`
+	Email        string `json:"email" binding:"required,email"`
+	Name         string `json:"name" binding:"required,min=1,max=100"`
+	Department   string `json:"department"`
+	DepartmentID int    `json:"departmentId,omitempty"`
+	Phone        string `json:"phone"`
+	Password     string `json:"password" binding:"required,min=12,max=128"`
+	TenantID     int    `json:"tenantId"`
 	// 角色，可选；不提供时使用后端默认值（end_user）
 	Role string `json:"role,omitempty" binding:"omitempty,oneof=super_admin sysadmin it_director ops_director ops_manager ops_engineer dba network_eng sd_manager change_manager service_catalog_admin l1_support l2_support l3_expert security_admin audit_admin dept_manager end_user guest"`
 	// MSP角色，仅当用户属于MSP租户时使用
-	MSPRole string `json:"mspRole,omitempty" binding:"omitempty,oneof=provider_admin provider_agent customer_user"`
+	MSPRole  string `json:"mspRole,omitempty" binding:"omitempty,oneof=provider_admin provider_agent customer_user"`
+	Gender   string `json:"gender,omitempty" binding:"omitempty,oneof=male female"`
+	IsLeader bool   `json:"isLeader,omitempty"`
 }
 
 // UpdateUserRequest 更新用户请求
@@ -25,23 +28,29 @@ type UpdateUserRequest struct {
 	Email      string `json:"email,omitempty" binding:"omitempty,email"`
 	Name       string `json:"name,omitempty" binding:"omitempty,min=1,max=100"`
 	Department string `json:"department,omitempty"`
-	Phone      string `json:"phone,omitempty"`
+	// DepartmentID 传 nil 表示不修改；传具体值（含 0）表示整体替换所属部门。
+	DepartmentID *int   `json:"departmentId,omitempty"`
+	Phone        string `json:"phone,omitempty"`
 	// 角色更新，仅管理员有权限更新
 	Role string `json:"role,omitempty" binding:"omitempty,oneof=super_admin sysadmin it_director ops_director ops_manager ops_engineer dba network_eng sd_manager change_manager service_catalog_admin l1_support l2_support l3_expert security_admin audit_admin dept_manager end_user guest"`
 	// AdditionalRoleIds 是附加角色（多对多，走 User.roles 边），只影响 BPMN 按角色路由
 	// 审批任务时的候选资格（resolveRoleCandidates），不影响 RBAC 权限判定——RBAC 权限
 	// 判定只看上面单一的 Role 字段。传 nil 表示不修改；传 []int{} 表示清空所有附加角色。
 	AdditionalRoleIds *[]int `json:"additionalRoleIds,omitempty"`
+	Gender            string `json:"gender,omitempty" binding:"omitempty,oneof=male female"`
+	// IsLeader 传 nil 表示不修改
+	IsLeader *bool `json:"isLeader,omitempty"`
 }
 
 // ListUsersRequest 获取用户列表请求
 type ListUsersRequest struct {
-	Page       int    `form:"page,default=1" binding:"min=1"`
-	PageSize   int    `form:"pageSize,default=10" binding:"min=1,max=100"`
-	TenantID   int    `form:"tenant_id"`
-	Status     string `form:"status"` // active, inactive
-	Department string `form:"department"`
-	Search     string `form:"search"`
+	Page         int    `form:"page,default=1" binding:"min=1"`
+	PageSize     int    `form:"pageSize,default=10" binding:"min=1,max=100"`
+	TenantID     int    `form:"tenant_id"`
+	Status       string `form:"status"` // active, inactive
+	Department   string `form:"department"`
+	DepartmentID int    `form:"departmentId"`
+	Search       string `form:"search"`
 }
 
 // UserDetailResponse 用户详细响应
@@ -51,12 +60,15 @@ type UserDetailResponse struct {
 	Email             string    `json:"email"`
 	Name              string    `json:"name"`
 	Department        string    `json:"department"`
+	DepartmentID      int       `json:"departmentId"`
 	Phone             string    `json:"phone"`
 	Active            bool      `json:"active"`
 	TenantID          int       `json:"tenantId"`
 	Role              string    `json:"role"`
 	AdditionalRoleIds []int     `json:"additionalRoleIds,omitempty"`
 	MSPRole           *string   `json:"mspRole,omitempty"`
+	Gender            string    `json:"gender,omitempty"`
+	IsLeader          bool      `json:"isLeader"`
 	CreatedAt         time.Time `json:"createdAt"`
 	UpdatedAt         time.Time `json:"updatedAt"`
 }

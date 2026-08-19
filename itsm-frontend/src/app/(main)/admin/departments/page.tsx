@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card,
   Table,
@@ -11,7 +11,6 @@ import {
   Form,
   Input,
   Select,
-  Tree,
   TreeSelect,
   message,
   Popconfirm,
@@ -21,7 +20,6 @@ import {
   Statistic,
   Empty,
 } from 'antd';
-import type { DataNode } from 'antd/es/tree';
 import {
   Plus,
   Edit,
@@ -36,6 +34,7 @@ import type { ColumnsType } from 'antd/es/table';
 import type { Department, CreateDepartmentRequest } from '@/lib/services/department-service';
 import { departmentService } from '@/lib/services/department-service';
 import { UserApi } from '@/lib/api/user-api';
+import OrgDepartmentTree, { findDepartmentById } from '@/components/common/OrgDepartmentTree';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -70,12 +69,6 @@ export default function DepartmentManagement() {
       };
     });
   };
-
-  // 左侧展示树的虚拟根节点——真实导入的组织数据里有 143 个平级顶层部门（历史遗留的演示
-  // 部门与本次导入的分公司混在一起，互不隶属），全部挂在这个"组织架构"根节点下面展示，
-  // 而不是散在没有共同入口的顶层列表里（呼应截图里的树形结构）。这只是前端展示层面的
-  // 包装节点，不对应任何真实部门记录，选中它等价于清空选中（右侧表格回退到"全量部门"）。
-  const ORG_ROOT_KEY = '__org_root__';
 
   // 加载部门数据
   const loadDepartments = useCallback(async () => {
@@ -116,30 +109,6 @@ export default function DepartmentManagement() {
     loadDepartments();
     loadUsers();
   }, [loadDepartments, loadUsers]);
-
-  // 左侧展示树：所有顶层部门（含历史演示部门与本次导入的分公司）包在一个虚拟根节点下
-  const orgTree: DataNode[] = useMemo(
-    () => [
-      {
-        key: ORG_ROOT_KEY,
-        title: '组织架构',
-        icon: <Folder size={14} className="text-amber-500" />,
-        children: treeData as unknown as DataNode[],
-      },
-    ],
-    [treeData]
-  );
-
-  const findDepartmentById = (depts: Department[], id: number): Department | null => {
-    for (const d of depts) {
-      if (d.id === id) return d;
-      if (d.children) {
-        const found = findDepartmentById(d.children, id);
-        if (found) return found;
-      }
-    }
-    return null;
-  };
 
   // 右侧表格只展示当前选中的节点及其直接/间接子部门
   const getSubTreeList = (node: Department | null): Department[] => {
@@ -349,26 +318,12 @@ export default function DepartmentManagement() {
         {/* 左侧组织树 */}
         <Col xs={24} md={8} lg={7} xl={6}>
           <Card title="组织机构树" className="min-h-[600px] enterprise-card">
-            {treeData.length > 0 ? (
-              <Tree
-                showIcon
-                showLine={{ showLeafIcon: false }}
-                height={520}
-                treeData={orgTree}
-                defaultExpandedKeys={[ORG_ROOT_KEY]}
-                selectedKeys={[selectedNode ? selectedNode.id : ORG_ROOT_KEY]}
-                onSelect={keys => {
-                  const val = keys[0];
-                  if (val === undefined || val === ORG_ROOT_KEY) {
-                    setSelectedNode(null);
-                    return;
-                  }
-                  setSelectedNode(findDepartmentById(departments, val as number));
-                }}
-              />
-            ) : (
-              <Empty description="暂无组织树" />
-            )}
+            <OrgDepartmentTree
+              departments={departments}
+              selectedId={selectedNode?.id ?? null}
+              onSelect={setSelectedNode}
+              height={520}
+            />
             <div className="mt-4 p-3 bg-gray-50 rounded border text-xs text-gray-500">
               <p className="font-semibold mb-1">提示：</p>
               <p>点击左侧树中的节点展开/收起，或直接点选分公司、大区、部门节点，右侧表格自动联动过滤该节点下辖的子部门与仓库；点选"组织架构"根节点查看全量部门。用顶部搜索框可跨全量部门按名称/编码/描述搜索。</p>

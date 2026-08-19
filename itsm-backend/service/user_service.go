@@ -74,7 +74,14 @@ func (s *UserService) CreateUser(ctx context.Context, req *dto.CreateUserRequest
 		SetPhone(req.Phone).
 		SetPasswordHash(string(hashedPassword)).
 		SetActive(true).
-		SetTenantID(tenantID)
+		SetTenantID(tenantID).
+		SetIsLeader(req.IsLeader)
+	if req.DepartmentID > 0 {
+		uc = uc.SetDepartmentID(req.DepartmentID)
+	}
+	if strings.TrimSpace(req.Gender) != "" {
+		uc = uc.SetGender(req.Gender)
+	}
 	// 如果请求中提供了角色，则设置角色；否则使用Schema默认值（end_user）
 	if strings.TrimSpace(req.Role) != "" {
 		role := strings.ToLower(strings.TrimSpace(req.Role))
@@ -112,9 +119,15 @@ func (s *UserService) ListUsers(ctx context.Context, req *dto.ListUsersRequest, 
 		query = query.Where(user.ActiveEQ(active))
 	}
 
-	// 按部门过滤
+	// 按部门过滤（自由文本，模糊匹配 department 展示字段）
 	if req.Department != "" {
 		query = query.Where(user.DepartmentContainsFold(req.Department))
+	}
+
+	// 按部门ID精确过滤（组织树左侧选中节点联动，不含子部门——子部门是单独的节点，
+	// 选中哪个节点就精确查那个节点自己的直属用户）
+	if req.DepartmentID > 0 {
+		query = query.Where(user.DepartmentIDEQ(req.DepartmentID))
 	}
 
 	// 搜索过滤
@@ -145,33 +158,10 @@ func (s *UserService) ListUsers(ctx context.Context, req *dto.ListUsersRequest, 
 		return nil, fmt.Errorf("查询用户列表失败: %w", err)
 	}
 
-	// 转换为响应格式
-	userResponses := make([]*dto.UserDetailResponse, 0, len(users))
-	for _, u := range users {
-		userResponses = append(userResponses, &dto.UserDetailResponse{
-			ID:         u.ID,
-			Username:   u.Username,
-			Email:      u.Email,
-			Name:       u.Name,
-			Department: u.Department,
-			Phone:      u.Phone,
-			Active:     u.Active,
-			TenantID:   u.TenantID,
-			Role:       string(u.Role),
-			AdditionalRoleIds: func() []int {
-				if len(u.Edges.Roles) == 0 {
-					return nil
-				}
-				ids := make([]int, 0, len(u.Edges.Roles))
-				for _, r := range u.Edges.Roles {
-					ids = append(ids, r.ID)
-				}
-				return ids
-			}(),
-			CreatedAt: u.CreatedAt,
-			UpdatedAt: u.UpdatedAt,
-		})
-	}
+	// 转换为响应格式——统一走 dto.ToUserDetailResponse，不再在这里维护一份平行字段列表
+	// （之前这里手写过一份字面量，漏了 MSPRole，新增 gender/isLeader/departmentId 时
+	// 又得在两处同步改，是同一类"影子 mapper"问题，见 dto/mappers.go 的注释）。
+	userResponses := dto.ToUserDetailResponseList(users)
 
 	response := &dto.PagedUsersResponse{
 		Users: userResponses,
@@ -270,8 +260,17 @@ func (s *UserService) UpdateUser(ctx context.Context, id int, req *dto.UpdateUse
 	if req.Department != "" {
 		update = update.SetDepartment(req.Department)
 	}
+	if req.DepartmentID != nil {
+		update = update.SetDepartmentID(*req.DepartmentID)
+	}
 	if req.Phone != "" {
 		update = update.SetPhone(req.Phone)
+	}
+	if strings.TrimSpace(req.Gender) != "" {
+		update = update.SetGender(req.Gender)
+	}
+	if req.IsLeader != nil {
+		update = update.SetIsLeader(*req.IsLeader)
 	}
 	// 角色更新（仅在提供时设置），管理员权限由RBAC控制
 	if strings.TrimSpace(req.Role) != "" {
@@ -545,22 +544,7 @@ func (s *UserService) SearchUsers(ctx context.Context, req *dto.SearchUsersReque
 	}
 
 	// 转换为响应格式
-	userResponses := make([]*dto.UserDetailResponse, 0, len(users))
-	for _, u := range users {
-		userResponses = append(userResponses, &dto.UserDetailResponse{
-			ID:         u.ID,
-			Username:   u.Username,
-			Email:      u.Email,
-			Name:       u.Name,
-			Department: u.Department,
-			Phone:      u.Phone,
-			Active:     u.Active,
-			TenantID:   u.TenantID,
-			Role:       string(u.Role),
-			CreatedAt:  u.CreatedAt,
-			UpdatedAt:  u.UpdatedAt,
-		})
-	}
+	userResponses := dto.ToUserDetailResponseList(users)
 
 	s.logger.Infof("用户搜索成功: found=%d", len(users))
 	return userResponses, nil

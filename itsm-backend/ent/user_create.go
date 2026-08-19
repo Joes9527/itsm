@@ -219,6 +219,34 @@ func (_c *UserCreate) SetNillableIsBootstrapAdmin(v *bool) *UserCreate {
 	return _c
 }
 
+// SetGender sets the "gender" field.
+func (_c *UserCreate) SetGender(v string) *UserCreate {
+	_c.mutation.SetGender(v)
+	return _c
+}
+
+// SetNillableGender sets the "gender" field if the given value is not nil.
+func (_c *UserCreate) SetNillableGender(v *string) *UserCreate {
+	if v != nil {
+		_c.SetGender(*v)
+	}
+	return _c
+}
+
+// SetIsLeader sets the "is_leader" field.
+func (_c *UserCreate) SetIsLeader(v bool) *UserCreate {
+	_c.mutation.SetIsLeader(v)
+	return _c
+}
+
+// SetNillableIsLeader sets the "is_leader" field if the given value is not nil.
+func (_c *UserCreate) SetNillableIsLeader(v *bool) *UserCreate {
+	if v != nil {
+		_c.SetIsLeader(*v)
+	}
+	return _c
+}
+
 // SetDepartmentRefID sets the "department_ref" edge to the Department entity by ID.
 func (_c *UserCreate) SetDepartmentRefID(id int) *UserCreate {
 	_c.mutation.SetDepartmentRefID(id)
@@ -508,6 +536,10 @@ func (_c *UserCreate) defaults() {
 		v := user.DefaultIsBootstrapAdmin
 		_c.mutation.SetIsBootstrapAdmin(v)
 	}
+	if _, ok := _c.mutation.IsLeader(); !ok {
+		v := user.DefaultIsLeader
+		_c.mutation.SetIsLeader(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -576,6 +608,9 @@ func (_c *UserCreate) check() error {
 	}
 	if _, ok := _c.mutation.IsBootstrapAdmin(); !ok {
 		return &ValidationError{Name: "is_bootstrap_admin", err: errors.New(`ent: missing required field "User.is_bootstrap_admin"`)}
+	}
+	if _, ok := _c.mutation.IsLeader(); !ok {
+		return &ValidationError{Name: "is_leader", err: errors.New(`ent: missing required field "User.is_leader"`)}
 	}
 	if len(_c.mutation.TenantIDs()) == 0 {
 		return &ValidationError{Name: "tenant", err: errors.New(`ent: missing required edge "User.tenant"`)}
@@ -661,6 +696,14 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.IsBootstrapAdmin(); ok {
 		_spec.SetField(user.FieldIsBootstrapAdmin, field.TypeBool, value)
 		_node.IsBootstrapAdmin = value
+	}
+	if value, ok := _c.mutation.Gender(); ok {
+		_spec.SetField(user.FieldGender, field.TypeString, value)
+		_node.Gender = value
+	}
+	if value, ok := _c.mutation.IsLeader(); ok {
+		_spec.SetField(user.FieldIsLeader, field.TypeBool, value)
+		_node.IsLeader = value
 	}
 	if nodes := _c.mutation.DepartmentRefIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

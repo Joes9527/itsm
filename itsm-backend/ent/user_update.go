@@ -302,6 +302,40 @@ func (_u *UserUpdate) SetNillableIsBootstrapAdmin(v *bool) *UserUpdate {
 	return _u
 }
 
+// SetGender sets the "gender" field.
+func (_u *UserUpdate) SetGender(v string) *UserUpdate {
+	_u.mutation.SetGender(v)
+	return _u
+}
+
+// SetNillableGender sets the "gender" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableGender(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetGender(*v)
+	}
+	return _u
+}
+
+// ClearGender clears the value of the "gender" field.
+func (_u *UserUpdate) ClearGender() *UserUpdate {
+	_u.mutation.ClearGender()
+	return _u
+}
+
+// SetIsLeader sets the "is_leader" field.
+func (_u *UserUpdate) SetIsLeader(v bool) *UserUpdate {
+	_u.mutation.SetIsLeader(v)
+	return _u
+}
+
+// SetNillableIsLeader sets the "is_leader" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableIsLeader(v *bool) *UserUpdate {
+	if v != nil {
+		_u.SetIsLeader(*v)
+	}
+	return _u
+}
+
 // SetDepartmentRefID sets the "department_ref" edge to the Department entity by ID.
 func (_u *UserUpdate) SetDepartmentRefID(id int) *UserUpdate {
 	_u.mutation.SetDepartmentRefID(id)
@@ -997,6 +1031,15 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.IsBootstrapAdmin(); ok {
 		_spec.SetField(user.FieldIsBootstrapAdmin, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Gender(); ok {
+		_spec.SetField(user.FieldGender, field.TypeString, value)
+	}
+	if _u.mutation.GenderCleared() {
+		_spec.ClearField(user.FieldGender, field.TypeString)
+	}
+	if value, ok := _u.mutation.IsLeader(); ok {
+		_spec.SetField(user.FieldIsLeader, field.TypeBool, value)
 	}
 	if _u.mutation.DepartmentRefCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1965,6 +2008,40 @@ func (_u *UserUpdateOne) SetNillableIsBootstrapAdmin(v *bool) *UserUpdateOne {
 	return _u
 }
 
+// SetGender sets the "gender" field.
+func (_u *UserUpdateOne) SetGender(v string) *UserUpdateOne {
+	_u.mutation.SetGender(v)
+	return _u
+}
+
+// SetNillableGender sets the "gender" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableGender(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetGender(*v)
+	}
+	return _u
+}
+
+// ClearGender clears the value of the "gender" field.
+func (_u *UserUpdateOne) ClearGender() *UserUpdateOne {
+	_u.mutation.ClearGender()
+	return _u
+}
+
+// SetIsLeader sets the "is_leader" field.
+func (_u *UserUpdateOne) SetIsLeader(v bool) *UserUpdateOne {
+	_u.mutation.SetIsLeader(v)
+	return _u
+}
+
+// SetNillableIsLeader sets the "is_leader" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableIsLeader(v *bool) *UserUpdateOne {
+	if v != nil {
+		_u.SetIsLeader(*v)
+	}
+	return _u
+}
+
 // SetDepartmentRefID sets the "department_ref" edge to the Department entity by ID.
 func (_u *UserUpdateOne) SetDepartmentRefID(id int) *UserUpdateOne {
 	_u.mutation.SetDepartmentRefID(id)
@@ -2690,6 +2767,15 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if value, ok := _u.mutation.IsBootstrapAdmin(); ok {
 		_spec.SetField(user.FieldIsBootstrapAdmin, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Gender(); ok {
+		_spec.SetField(user.FieldGender, field.TypeString, value)
+	}
+	if _u.mutation.GenderCleared() {
+		_spec.ClearField(user.FieldGender, field.TypeString)
+	}
+	if value, ok := _u.mutation.IsLeader(); ok {
+		_spec.SetField(user.FieldIsLeader, field.TypeBool, value)
 	}
 	if _u.mutation.DepartmentRefCleared() {
 		edge := &sqlgraph.EdgeSpec{

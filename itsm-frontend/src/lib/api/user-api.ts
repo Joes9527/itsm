@@ -7,11 +7,14 @@ export interface User {
   email: string;
   name: string;
   department: string;
+  departmentId?: number;
   phone: string;
   active: boolean;
   tenantId: number;
   role?: string;
   additionalRoleIds?: number[];
+  gender?: 'male' | 'female' | '';
+  isLeader?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -21,9 +24,12 @@ export interface CreateUserRequest {
   email: string;
   name: string;
   department: string;
+  departmentId?: number;
   phone: string;
   password: string;
   tenantId: number;
+  gender?: 'male' | 'female';
+  isLeader?: boolean;
 }
 
 export interface UpdateUserRequest {
@@ -31,11 +37,14 @@ export interface UpdateUserRequest {
   email?: string;
   name?: string;
   department?: string;
+  departmentId?: number;
   phone?: string;
   role?: string;
   // 附加角色（角色 ID 列表），仅影响 BPMN 按角色路由审批任务时的候选资格，不影响 RBAC 权限——
   // RBAC 权限只看上面的 role 字段。不传表示不修改；传空数组表示清空所有附加角色。
   additionalRoleIds?: number[];
+  gender?: 'male' | 'female';
+  isLeader?: boolean;
 }
 
 export interface ListUsersParams {
@@ -44,6 +53,7 @@ export interface ListUsersParams {
   tenantId?: number;
   status?: string;
   department?: string;
+  departmentId?: number;
   search?: string;
 }
 

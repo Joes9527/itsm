@@ -21,15 +21,16 @@ func ToUserDetailResponse(user *ent.User) *UserDetailResponse {
 		return nil
 	}
 	return &UserDetailResponse{
-		ID:         user.ID,
-		Username:   user.Username,
-		Email:      user.Email,
-		Name:       user.Name,
-		Department: user.Department,
-		Phone:      user.Phone,
-		Active:     user.Active,
-		TenantID:   user.TenantID,
-		Role:       string(user.Role),
+		ID:           user.ID,
+		Username:     user.Username,
+		Email:        user.Email,
+		Name:         user.Name,
+		Department:   user.Department,
+		DepartmentID: user.DepartmentID,
+		Phone:        user.Phone,
+		Active:       user.Active,
+		TenantID:     user.TenantID,
+		Role:         string(user.Role),
 		AdditionalRoleIds: func() []int {
 			if len(user.Edges.Roles) == 0 {
 				return nil
@@ -41,6 +42,8 @@ func ToUserDetailResponse(user *ent.User) *UserDetailResponse {
 			return ids
 		}(),
 		MSPRole:   func() *string { s := string(user.MspRole); return &s }(),
+		Gender:    user.Gender,
+		IsLeader:  user.IsLeader,
 		CreatedAt: user.CreatedAt,
 		UpdatedAt: user.UpdatedAt,
 	}
