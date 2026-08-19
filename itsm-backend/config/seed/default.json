@@ -123,11 +123,6 @@
   ],
   "roles": [
     {
-      "name": "总经理",
-      "code": "company_gm",
-      "description": "公司总经理，用于跨部门高层审批场景（如大额采购）"
-    },
-    {
       "name": "IT总监",
       "code": "it_director",
       "description": "IT部门总监"

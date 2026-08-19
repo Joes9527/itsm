@@ -462,7 +462,6 @@ func getEmbeddedConfig() *SeedConfig {
 			{Name: "技术支持", Description: "客户服务技术支持"},
 		},
 		Roles: []RoleSeed{
-			{Name: "总经理", Code: "company_gm", Description: "公司总经理，用于跨部门高层审批场景（如大额采购）"},
 			{Name: "IT总监", Code: "it_director", Description: "IT部门总监"},
 			{Name: "运维总监", Code: "ops_director", Description: "运维部门总监"},
 			{Name: "系统管理员", Code: "sysadmin", Description: "系统管理员"},
@@ -1704,9 +1703,6 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 	rolePermissionMap := map[string][]string{
 		// 系统管理员：所有权限
 		"sysadmin": allPermissionCodes(),
-		// 总经理：全局读写（不含系统管理），跟 it_director 同一档——高层审批角色，
-		// 主要靠 BPMN UserTask 的 assigneeRole 路由到审批任务，不依赖细分的业务写权限。
-		"company_gm": allExcept([]string{"system:write", "msp:write", "msp_allocation:write"}),
 		// IT总监：全局读写（不含系统管理）
 		"it_director": allExcept([]string{"system:write", "msp:write", "msp_allocation:write"}),
 		// 运维总监：运维相关读写
