@@ -9,6 +9,7 @@ const itsmModdleDescriptor = {
     properties: [
       { name: 'assignee', isAttr: true, type: 'String' },
       { name: 'assigneeRole', isAttr: true, type: 'String' },
+      { name: 'assigneeDeptId', isAttr: true, type: 'Integer' },
       { name: 'candidateUsers', isAttr: true, type: 'String' },
       { name: 'candidateGroups', isAttr: true, type: 'String' },
       { name: 'priority', isAttr: true, type: 'String' },
