@@ -11,6 +11,7 @@ export interface User {
   active: boolean;
   tenantId: number;
   role?: string;
+  additionalRoleIds?: number[];
   createdAt: string;
   updatedAt: string;
 }

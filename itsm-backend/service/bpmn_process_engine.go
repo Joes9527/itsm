@@ -1043,10 +1043,11 @@ func (e *CustomProcessEngine) resolveApprovalAssignee(ctx context.Context, insta
 	return strconv.Itoa(manager.UserID)
 }
 
-// resolveRoleCandidates 查询该租户下所有 active 且 role = role 的用户，返回候选人展开
-// 形态的字符串列表（跟 GroupResolver.ExpandGroupsToUsers 的 usernames 返回值同样的
+// resolveRoleCandidates 查询该租户下所有 active 且（主角色等于 roleCode，或通过
+// user_roles 多对多边额外拥有 roleCode 这个角色）的用户，返回候选人展开形态的字符串
+// 列表（跟 GroupResolver.ExpandGroupsToUsers 的 usernames 返回值同样的
 // username→email→ID 兜底规则），供 excludeUserFromCandidates/MergeCandidateUsers 直接复用。
-// role 应为 roles 表中存在的 code 值——不存在的角色查询返回空列表而非报错，
+// roleCode 应为 roles 表中存在的 code 值——不存在的角色查询返回空列表而非报错，
 // 调用方按"没查到候选人"处理，转候选组兜底。
 func (e *CustomProcessEngine) resolveRoleCandidates(ctx context.Context, tenantID int, roleCode string) ([]string, error) {
 	// 候选人 = 主角色字段等于 roleCode 的用户，UNION 通过 user_roles 多对多边额外拥有
