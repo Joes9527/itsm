@@ -257,6 +257,7 @@ export default function WorkflowNodeInspector({
   const currentAssigneeRole = (bo.assigneeRole as string) || '';
   const currentAssigneeDeptId = bo.assigneeDeptId ? Number(bo.assigneeDeptId) : undefined;
   const currentAssigneeGmChain = Boolean(bo.assigneeGmChain);
+  const currentFulfillmentTeamCode = (bo.fulfillmentTeamCode as string) || '';
   const currentCandidateUsers = parseCsv(bo.candidateUsers as string | undefined);
   const currentCandidateGroups = parseCsv(bo.candidateGroups as string | undefined);
   const currentPriority = (bo.priority as string) || '';
@@ -523,7 +524,11 @@ export default function WorkflowNodeInspector({
               <Select
                 value={currentTaskPurpose}
                 onChange={value => apply({ taskPurpose: value })}
-                options={[{ label: '普通人工任务', value: 'work' }, { label: '审批任务', value: 'approval' }]}
+                options={[
+                  { label: '普通人工任务', value: 'work' },
+                  { label: '审批任务', value: 'approval' },
+                  { label: '执行任务（自动分配给团队成员）', value: 'fulfillment' },
+                ]}
                 className="w-full" size="small"
               />
               {currentTaskPurpose === 'approval' && (
@@ -555,6 +560,20 @@ export default function WorkflowNodeInspector({
                     <Switch size="small" checked={currentCommentRequiredOnReject} onChange={v => apply({ commentRequiredOnReject: v })} />拒绝意见必填
                   </Space>
                 </Space>
+              )}
+              {currentTaskPurpose === 'fulfillment' && (
+                <div className="mt-2">
+                  <Input
+                    placeholder="团队 code（留空则默认服务台-L1，例如 服务台-l1）"
+                    value={currentFulfillmentTeamCode}
+                    onChange={e => apply({ fulfillmentTeamCode: e.target.value || undefined })}
+                    size="small"
+                  />
+                  <Text type="secondary" className="text-xs mt-1 block">
+                    到达此节点时，按工作负载自动分配给该团队里当前活跃工单最少的成员，不需要人工领取。
+                    团队按 teams.code 匹配，不是团队名称。
+                  </Text>
+                </div>
               )}
             </div>
 

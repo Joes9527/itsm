@@ -11,6 +11,7 @@ const itsmModdleDescriptor = {
       { name: 'assigneeRole', isAttr: true, type: 'String' },
       { name: 'assigneeDeptId', isAttr: true, type: 'Integer' },
       { name: 'assigneeGmChain', isAttr: true, type: 'Boolean' },
+      { name: 'fulfillmentTeamCode', isAttr: true, type: 'String' },
       { name: 'candidateUsers', isAttr: true, type: 'String' },
       { name: 'candidateGroups', isAttr: true, type: 'String' },
       { name: 'priority', isAttr: true, type: 'String' },
