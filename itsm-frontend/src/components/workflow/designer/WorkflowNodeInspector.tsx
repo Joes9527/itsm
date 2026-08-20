@@ -256,6 +256,7 @@ export default function WorkflowNodeInspector({
   const currentAssignee = (bo.assignee as string) || '';
   const currentAssigneeRole = (bo.assigneeRole as string) || '';
   const currentAssigneeDeptId = bo.assigneeDeptId ? Number(bo.assigneeDeptId) : undefined;
+  const currentAssigneeGmChain = Boolean(bo.assigneeGmChain);
   const currentCandidateUsers = parseCsv(bo.candidateUsers as string | undefined);
   const currentCandidateGroups = parseCsv(bo.candidateGroups as string | undefined);
   const currentPriority = (bo.priority as string) || '';
@@ -597,7 +598,7 @@ export default function WorkflowNodeInspector({
                 showSearch
                 placeholder="选择受理人（单一用户）"
                 value={currentAssignee || undefined}
-                onChange={value => apply({ assignee: value || '', assigneeRole: '', assigneeDeptId: undefined })}
+                onChange={value => apply({ assignee: value || '', assigneeRole: '', assigneeDeptId: undefined, assigneeGmChain: undefined })}
                 className="w-full"
                 loading={loadingUsers}
                 filterOption={(input, option) =>
@@ -625,7 +626,7 @@ export default function WorkflowNodeInspector({
                 showSearch
                 placeholder="选择角色（该角色下所有用户均可处理）"
                 value={currentAssigneeRole || undefined}
-                onChange={value => apply({ assigneeRole: value || '', assignee: '', assigneeDeptId: undefined })}
+                onChange={value => apply({ assigneeRole: value || '', assignee: '', assigneeDeptId: undefined, assigneeGmChain: undefined })}
                 className="w-full"
                 loading={loadingRoles}
                 filterOption={(input, option) =>
@@ -655,7 +656,7 @@ export default function WorkflowNodeInspector({
                 placeholder="选择部门（该部门负责人处理，无负责人则向上级部门找）"
                 value={currentAssigneeDeptId}
                 onChange={value =>
-                  apply({ assigneeDeptId: value ?? undefined, assignee: '', assigneeRole: '' })
+                  apply({ assigneeDeptId: value ?? undefined, assignee: '', assigneeRole: '', assigneeGmChain: undefined })
                 }
                 className="w-full"
                 loading={loadingDepartments}
@@ -667,6 +668,27 @@ export default function WorkflowNodeInspector({
               />
               <Text type="secondary" className="text-xs mt-1 block">
                 指定该任务由某个固定部门的负责人处理（例如选公司根部门=总经理审批）；与"受理人""按角色指派"互斥
+              </Text>
+            </div>
+
+            {/* Assignee GM Chain — 沿申请人自己的真实汇报链（user.manager_id）找总经理，
+                跟"固定部门审批人"的区别是：这里按提交人自己是谁给出不同人（矩阵组织下同一个
+                部门节点常年并存多条业务线的平级总经理，固定部门审批人对所有提交人给出同一个
+                answer，无法区分业务线；这里天然按人区分）。跟前三者互斥。 */}
+            <div className="mt-3">
+              <Text strong className="text-sm flex items-center mb-2">
+                <Shield className="w-3.5 h-3.5 mr-1" />
+                总经理审批（个人汇报链） (assigneeGmChain)
+                <Tag color="green" className="ml-2 text-xs">矩阵组织</Tag>
+              </Text>
+              <Switch
+                checked={currentAssigneeGmChain}
+                onChange={checked =>
+                  apply({ assigneeGmChain: checked || undefined, assignee: '', assigneeRole: '', assigneeDeptId: undefined })
+                }
+              />
+              <Text type="secondary" className="text-xs mt-1 block">
+                沿提交人自己的汇报链向上找职位头衔带"总经理"的人；适合矩阵组织（同一分公司/部门下有多条业务线各自的总经理），跟"固定部门审批人"互斥
               </Text>
             </div>
 
