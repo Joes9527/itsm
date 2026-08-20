@@ -51,11 +51,21 @@
     </bpmn:serviceTask>
 
     <!-- 执行服务 -->
-    <bpmn:userTask id="Activity_Execute" name="执行服务">
+    <bpmn:userTask id="Activity_Execute" name="执行服务" taskPurpose="fulfillment">
       <bpmn:incoming>Flow_4</bpmn:incoming>
       <bpmn:incoming>Flow_Approved</bpmn:incoming>
-      <bpmn:outgoing>Flow_6</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ExecuteNotify</bpmn:outgoing>
     </bpmn:userTask>
+
+    <!-- 通知处理人 -->
+    <bpmn:serviceTask id="Activity_NotifyHandler" name="通知处理人" implementation="##WebService">
+      <bpmn:extensionElements>
+        <bpmn:metaData name="service_task_type">ticket_task</bpmn:metaData>
+        <bpmn:metaData name="action">notify_handler</bpmn:metaData>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ExecuteNotify</bpmn:incoming>
+      <bpmn:outgoing>Flow_6</bpmn:outgoing>
+    </bpmn:serviceTask>
 
     <!-- 确认完成 -->
     <bpmn:userTask id="Activity_Confirm" name="用户确认">
@@ -112,7 +122,8 @@
       <bpmn:conditionExpression><![CDATA[variables['approvalResult'] == 'rejected']]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_EndReject" sourceRef="Activity_RejectNotify" targetRef="EndEvent_Reject" />
-    <bpmn:sequenceFlow id="Flow_6" sourceRef="Activity_Execute" targetRef="Activity_Confirm" />
+    <bpmn:sequenceFlow id="Flow_ExecuteNotify" sourceRef="Activity_Execute" targetRef="Activity_NotifyHandler" />
+    <bpmn:sequenceFlow id="Flow_6" sourceRef="Activity_NotifyHandler" targetRef="Activity_Confirm" />
     <bpmn:sequenceFlow id="Flow_7" sourceRef="Activity_Confirm" targetRef="Gateway_Satisfaction" />
     <bpmn:sequenceFlow id="Flow_8" sourceRef="Gateway_Satisfaction" targetRef="Activity_Complete">
       <bpmn:conditionExpression><![CDATA[variables['satisfied'] == true]]></bpmn:conditionExpression>
