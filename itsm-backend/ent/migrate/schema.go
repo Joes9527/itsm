@@ -1170,6 +1170,8 @@ var (
 		{Name: "tenant_id", Type: field.TypeInt},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "area_name", Type: field.TypeString, Nullable: true},
+		{Name: "org_type", Type: field.TypeString, Nullable: true, Default: "department"},
 		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
 		{Name: "parent_id", Type: field.TypeInt, Nullable: true},
 	}
@@ -1181,7 +1183,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "departments_departments_children",
-				Columns:    []*schema.Column{DepartmentsColumns[9]},
+				Columns:    []*schema.Column{DepartmentsColumns[11]},
 				RefColumns: []*schema.Column{DepartmentsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -4439,6 +4441,10 @@ var (
 		{Name: "msp_role", Type: field.TypeEnum, Nullable: true, Enums: []string{"provider_admin", "provider_agent", "customer_user"}},
 		{Name: "assigned_by_msp_id", Type: field.TypeInt, Nullable: true},
 		{Name: "is_bootstrap_admin", Type: field.TypeBool, Default: false},
+		{Name: "gender", Type: field.TypeString, Nullable: true},
+		{Name: "is_leader", Type: field.TypeBool, Default: false},
+		{Name: "function_line", Type: field.TypeString, Nullable: true},
+		{Name: "manager_id", Type: field.TypeInt, Nullable: true},
 		{Name: "asset_assigned_to_user", Type: field.TypeInt, Nullable: true},
 		{Name: "department_id", Type: field.TypeInt, Nullable: true},
 		{Name: "group_members", Type: field.TypeInt, Nullable: true},
@@ -4453,31 +4459,31 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "users_assets_assigned_to_user",
-				Columns:    []*schema.Column{UsersColumns[15]},
+				Columns:    []*schema.Column{UsersColumns[19]},
 				RefColumns: []*schema.Column{AssetsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "users_departments_users",
-				Columns:    []*schema.Column{UsersColumns[16]},
+				Columns:    []*schema.Column{UsersColumns[20]},
 				RefColumns: []*schema.Column{DepartmentsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "users_groups_members",
-				Columns:    []*schema.Column{UsersColumns[17]},
+				Columns:    []*schema.Column{UsersColumns[21]},
 				RefColumns: []*schema.Column{GroupsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "users_teams_users",
-				Columns:    []*schema.Column{UsersColumns[18]},
+				Columns:    []*schema.Column{UsersColumns[22]},
 				RefColumns: []*schema.Column{TeamsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "users_tenants_users",
-				Columns:    []*schema.Column{UsersColumns[19]},
+				Columns:    []*schema.Column{UsersColumns[23]},
 				RefColumns: []*schema.Column{TenantsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},

@@ -114,6 +114,34 @@ func (_c *DepartmentCreate) SetNillableUpdatedAt(v *time.Time) *DepartmentCreate
 	return _c
 }
 
+// SetAreaName sets the "area_name" field.
+func (_c *DepartmentCreate) SetAreaName(v string) *DepartmentCreate {
+	_c.mutation.SetAreaName(v)
+	return _c
+}
+
+// SetNillableAreaName sets the "area_name" field if the given value is not nil.
+func (_c *DepartmentCreate) SetNillableAreaName(v *string) *DepartmentCreate {
+	if v != nil {
+		_c.SetAreaName(*v)
+	}
+	return _c
+}
+
+// SetOrgType sets the "org_type" field.
+func (_c *DepartmentCreate) SetOrgType(v string) *DepartmentCreate {
+	_c.mutation.SetOrgType(v)
+	return _c
+}
+
+// SetNillableOrgType sets the "org_type" field if the given value is not nil.
+func (_c *DepartmentCreate) SetNillableOrgType(v *string) *DepartmentCreate {
+	if v != nil {
+		_c.SetOrgType(*v)
+	}
+	return _c
+}
+
 // SetDeletedAt sets the "deleted_at" field.
 func (_c *DepartmentCreate) SetDeletedAt(v time.Time) *DepartmentCreate {
 	_c.mutation.SetDeletedAt(v)
@@ -281,6 +309,10 @@ func (_c *DepartmentCreate) defaults() {
 		v := department.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
 	}
+	if _, ok := _c.mutation.OrgType(); !ok {
+		v := department.DefaultOrgType
+		_c.mutation.SetOrgType(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -368,6 +400,14 @@ func (_c *DepartmentCreate) createSpec() (*Department, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(department.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
+	}
+	if value, ok := _c.mutation.AreaName(); ok {
+		_spec.SetField(department.FieldAreaName, field.TypeString, value)
+		_node.AreaName = value
+	}
+	if value, ok := _c.mutation.OrgType(); ok {
+		_spec.SetField(department.FieldOrgType, field.TypeString, value)
+		_node.OrgType = value
 	}
 	if value, ok := _c.mutation.DeletedAt(); ok {
 		_spec.SetField(department.FieldDeletedAt, field.TypeTime, value)

@@ -943,6 +943,10 @@ func init() {
 	department.DefaultUpdatedAt = departmentDescUpdatedAt.Default.(func() time.Time)
 	// department.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	department.UpdateDefaultUpdatedAt = departmentDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// departmentDescOrgType is the schema descriptor for org_type field.
+	departmentDescOrgType := departmentFields[9].Descriptor()
+	// department.DefaultOrgType holds the default value on creation for the org_type field.
+	department.DefaultOrgType = departmentDescOrgType.Default.(string)
 	discoveryjobFields := schema.DiscoveryJob{}.Fields()
 	_ = discoveryjobFields
 	// discoveryjobDescSourceID is the schema descriptor for source_id field.
@@ -3853,6 +3857,10 @@ func init() {
 	userDescIsBootstrapAdmin := userFields[15].Descriptor()
 	// user.DefaultIsBootstrapAdmin holds the default value on creation for the is_bootstrap_admin field.
 	user.DefaultIsBootstrapAdmin = userDescIsBootstrapAdmin.Default.(bool)
+	// userDescIsLeader is the schema descriptor for is_leader field.
+	userDescIsLeader := userFields[17].Descriptor()
+	// user.DefaultIsLeader holds the default value on creation for the is_leader field.
+	user.DefaultIsLeader = userDescIsLeader.Default.(bool)
 	vendorFields := schema.Vendor{}.Fields()
 	_ = vendorFields
 	// vendorDescName is the schema descriptor for name field.

@@ -30,6 +30,10 @@ const (
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
 	FieldUpdatedAt = "updated_at"
+	// FieldAreaName holds the string denoting the area_name field in the database.
+	FieldAreaName = "area_name"
+	// FieldOrgType holds the string denoting the org_type field in the database.
+	FieldOrgType = "org_type"
 	// FieldDeletedAt holds the string denoting the deleted_at field in the database.
 	FieldDeletedAt = "deleted_at"
 	// EdgeParent holds the string denoting the parent edge name in mutations.
@@ -111,6 +115,8 @@ var Columns = []string{
 	FieldTenantID,
 	FieldCreatedAt,
 	FieldUpdatedAt,
+	FieldAreaName,
+	FieldOrgType,
 	FieldDeletedAt,
 }
 
@@ -143,6 +149,8 @@ var (
 	DefaultUpdatedAt func() time.Time
 	// UpdateDefaultUpdatedAt holds the default value on update for the "updated_at" field.
 	UpdateDefaultUpdatedAt func() time.Time
+	// DefaultOrgType holds the default value on creation for the "org_type" field.
+	DefaultOrgType string
 )
 
 // OrderOption defines the ordering options for the Department queries.
@@ -191,6 +199,16 @@ func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByUpdatedAt orders the results by the updated_at field.
 func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUpdatedAt, opts...).ToFunc()
+}
+
+// ByAreaName orders the results by the area_name field.
+func ByAreaName(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAreaName, opts...).ToFunc()
+}
+
+// ByOrgType orders the results by the org_type field.
+func ByOrgType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOrgType, opts...).ToFunc()
 }
 
 // ByDeletedAt orders the results by the deleted_at field.
