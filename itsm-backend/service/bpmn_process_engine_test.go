@@ -2,8 +2,10 @@ package service
 
 import (
 	"context"
+	"strconv"
 	"testing"
 
+	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -181,4 +183,80 @@ func TestResolveRoleCandidates_MatchesPrimaryAndAdditionalRole(t *testing.T) {
 	assert.Len(t, names, 2)
 	assert.Contains(t, names, primaryUser.Username)
 	assert.Contains(t, names, secondaryUser.Username)
+}
+
+func TestCreateUserTask_AssigneeGmChain_ResolvesSubmitterOwnChain(t *testing.T) {
+	ctx := context.Background()
+	client := enttest.Open(t, "sqlite3", "file:gm_chain_task?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	logger := zaptest.NewLogger(t).Sugar()
+
+	tenant, err := client.Tenant.Create().
+		SetName("GM Chain Tenant").
+		SetCode("gm-chain").
+		SetDomain("gm-chain.test").
+		SetStatus("active").
+		Save(ctx)
+	require.NoError(t, err)
+
+	gm, err := client.User.Create().
+		SetUsername("branch_gm").
+		SetEmail("gm@gm-chain.test").
+		SetName("Branch GM").
+		SetPasswordHash("hash").
+		SetActive(true).
+		SetTenantID(tenant.ID).
+		SetJobTitle("综合物流总经理").
+		Save(ctx)
+	require.NoError(t, err)
+
+	submitter, err := client.User.Create().
+		SetUsername("gm_chain_submitter").
+		SetEmail("submitter@gm-chain.test").
+		SetName("Submitter").
+		SetPasswordHash("hash").
+		SetActive(true).
+		SetTenantID(tenant.ID).
+		SetManagerID(gm.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	engine := NewCustomProcessEngine(client, logger).(*CustomProcessEngine)
+
+	instance := &ent.ProcessInstance{TenantID: tenant.ID}
+	assignee := engine.resolveGmChainAssignee(ctx, instance, submitter)
+	assert.Equal(t, strconv.Itoa(gm.ID), assignee)
+}
+
+func TestCreateUserTask_AssigneeGmChain_SelfApprovalFallsBackEmpty(t *testing.T) {
+	ctx := context.Background()
+	client := enttest.Open(t, "sqlite3", "file:gm_chain_self?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	logger := zaptest.NewLogger(t).Sugar()
+
+	tenant, err := client.Tenant.Create().
+		SetName("GM Chain Self Tenant").
+		SetCode("gm-chain-self").
+		SetDomain("gm-chain-self.test").
+		SetStatus("active").
+		Save(ctx)
+	require.NoError(t, err)
+
+	gmSubmitter, err := client.User.Create().
+		SetUsername("self_gm").
+		SetEmail("self-gm@gm-chain-self.test").
+		SetName("Self GM").
+		SetPasswordHash("hash").
+		SetActive(true).
+		SetTenantID(tenant.ID).
+		SetJobTitle("综合物流总经理").
+		Save(ctx)
+	require.NoError(t, err)
+
+	// 提交人自己没有更上级的总经理（manager_id=0），resolveGmChainAssignee 应该返回空串，
+	// 而不是报错或者把提交人自己当成审批人。
+	engine := NewCustomProcessEngine(client, logger).(*CustomProcessEngine)
+	instance := &ent.ProcessInstance{TenantID: tenant.ID}
+	assignee := engine.resolveGmChainAssignee(ctx, instance, gmSubmitter)
+	assert.Equal(t, "", assignee)
 }

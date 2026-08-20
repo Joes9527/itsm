@@ -135,6 +135,7 @@ type BPMNUserTask struct {
 	AssigneeTeamId          int    `xml:"assigneeTeamId,attr"`
 	AssigneeProjectId       int    `xml:"assigneeProjectId,attr"`
 	AssigneeTempTeamId      int    `xml:"assigneeTempTeamId,attr"`
+	AssigneeGmChain         bool   `xml:"assigneeGmChain,attr"`
 
 	// ExtensionElements 承载 <bpmn:metaData>，其中 service_task_type/action 决定
 	// 该用户任务完成后要不要走 ServiceTaskHandler 回调（见 CompleteTask）。
