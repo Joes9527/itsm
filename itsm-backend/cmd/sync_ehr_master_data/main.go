@@ -305,6 +305,7 @@ func main() {
 
 	seenUsernames := make(map[string]bool)
 	seenEmails := make(map[string]bool)
+	empIDToUserID := make(map[string]int)
 
 	insertedUserCount := 0
 	deptLinkedCount := 0
@@ -365,11 +366,12 @@ func main() {
 			deptLinkedCount++
 		}
 
-		_, err := c.Save(ctx)
+		created, err := c.Save(ctx)
 		if err != nil {
 			log.Printf("[%d/%d] Failed to create user %s (%s): %v", idx+1, len(activePersons), username, email, err)
 		} else {
 			insertedUserCount++
+			empIDToUserID[p.EmpID] = created.ID
 		}
 
 		if (idx+1)%1000 == 0 || idx+1 == len(activePersons) {
@@ -378,4 +380,45 @@ func main() {
 	}
 
 	log.Printf("EHR Import Finished! Total Org: %d, Total Active Users: %d (Dept Linked: %d)", insertedDeptCount, insertedUserCount, deptLinkedCount)
+
+	// -------------------------------------------------------------
+	// 6. Link Direct Supervisors (Second Pass)
+	// -------------------------------------------------------------
+	// Supervisor is "姓名:工号" (e.g. "徐一晨:D31717") — a person-level reporting line,
+	// distinct from the department-level manager set above. Needs a second pass over
+	// all users (not folded into the creation loop) because a person's supervisor row
+	// can appear anywhere else in the sheet, before or after their own row, so the
+	// supervisor's user ID may not exist yet at creation time.
+	log.Println("Starting Direct Supervisor Linking...")
+	linkedSupervisorCount := 0
+	skippedSupervisorCount := 0
+	for _, p := range activePersons {
+		selfID, ok := empIDToUserID[p.EmpID]
+		if !ok || p.Supervisor == "" {
+			continue
+		}
+		sup := strings.TrimSpace(p.Supervisor)
+		if strings.ContainsAny(sup, "、,") {
+			// Multiple supervisors listed — no single reporting line to pick, skip.
+			skippedSupervisorCount++
+			continue
+		}
+		parts := strings.SplitN(sup, ":", 2)
+		if len(parts) != 2 || strings.TrimSpace(parts[1]) == "" {
+			skippedSupervisorCount++
+			continue
+		}
+		supervisorEmpID := strings.TrimSpace(parts[1])
+		managerID, ok := empIDToUserID[supervisorEmpID]
+		if !ok || managerID == selfID {
+			skippedSupervisorCount++
+			continue
+		}
+		if err := client.User.UpdateOneID(selfID).SetManagerID(managerID).Exec(ctx); err != nil {
+			log.Printf("Failed to link supervisor for %s -> %s: %v", p.EmpID, supervisorEmpID, err)
+			continue
+		}
+		linkedSupervisorCount++
+	}
+	log.Printf("Direct Supervisor Linking Complete! Linked: %d, Skipped: %d", linkedSupervisorCount, skippedSupervisorCount)
 }
