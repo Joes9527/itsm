@@ -173,9 +173,11 @@ describe('WorkflowNodeInspector — 审批语义 panel', () => {
       expect(screen.getByText('拒绝意见必填')).toBeInTheDocument();
     });
 
-    // The 拒绝意见必填 switch is wired to commentRequiredOnReject.
+    // The 拒绝意见必填 switch is wired to commentRequiredOnReject. Fixed index, not
+    // "last switch" — 总经理审批（个人汇报链）(assigneeGmChain) added its own Switch
+    // further down the panel, after this one, so "last" no longer points here.
     const switches = screen.getAllByRole('switch');
-    const commentSwitch = switches[switches.length - 1]; // 拒绝意见必填 is the last switch
+    const commentSwitch = switches[2];
     expect(commentSwitch).toBeChecked();
     fireEvent.click(commentSwitch);
     expect(onUpdateProperties).toHaveBeenCalledWith('Task_Approve', { commentRequiredOnReject: false });
