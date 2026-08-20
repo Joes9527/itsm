@@ -943,6 +943,10 @@ func init() {
 	department.DefaultUpdatedAt = departmentDescUpdatedAt.Default.(func() time.Time)
 	// department.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	department.UpdateDefaultUpdatedAt = departmentDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// departmentDescOrgType is the schema descriptor for org_type field.
+	departmentDescOrgType := departmentFields[10].Descriptor()
+	// department.DefaultOrgType holds the default value on creation for the org_type field.
+	department.DefaultOrgType = departmentDescOrgType.Default.(string)
 	discoveryjobFields := schema.DiscoveryJob{}.Fields()
 	_ = discoveryjobFields
 	// discoveryjobDescSourceID is the schema descriptor for source_id field.

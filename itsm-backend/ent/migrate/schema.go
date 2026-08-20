@@ -1171,6 +1171,8 @@ var (
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
+		{Name: "area_name", Type: field.TypeString, Nullable: true},
+		{Name: "org_type", Type: field.TypeString, Nullable: true, Default: "department"},
 		{Name: "parent_id", Type: field.TypeInt, Nullable: true},
 	}
 	// DepartmentsTable holds the schema information for the "departments" table.
@@ -1181,7 +1183,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "departments_departments_children",
-				Columns:    []*schema.Column{DepartmentsColumns[9]},
+				Columns:    []*schema.Column{DepartmentsColumns[11]},
 				RefColumns: []*schema.Column{DepartmentsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},

@@ -1,0 +1,2 @@
+ALTER TABLE departments ADD COLUMN IF NOT EXISTS area_name VARCHAR(255);
+ALTER TABLE departments ADD COLUMN IF NOT EXISTS org_type VARCHAR(255) DEFAULT 'department';

@@ -34034,6 +34034,8 @@ type DepartmentMutation struct {
 	created_at        *time.Time
 	updated_at        *time.Time
 	deleted_at        *time.Time
+	area_name         *string
+	org_type          *string
 	clearedFields     map[string]struct{}
 	parent            *int
 	clearedparent     bool
@@ -34578,6 +34580,104 @@ func (m *DepartmentMutation) ResetDeletedAt() {
 	delete(m.clearedFields, department.FieldDeletedAt)
 }
 
+// SetAreaName sets the "area_name" field.
+func (m *DepartmentMutation) SetAreaName(s string) {
+	m.area_name = &s
+}
+
+// AreaName returns the value of the "area_name" field in the mutation.
+func (m *DepartmentMutation) AreaName() (r string, exists bool) {
+	v := m.area_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAreaName returns the old "area_name" field's value of the Department entity.
+// If the Department object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DepartmentMutation) OldAreaName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAreaName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAreaName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAreaName: %w", err)
+	}
+	return oldValue.AreaName, nil
+}
+
+// ClearAreaName clears the value of the "area_name" field.
+func (m *DepartmentMutation) ClearAreaName() {
+	m.area_name = nil
+	m.clearedFields[department.FieldAreaName] = struct{}{}
+}
+
+// AreaNameCleared returns if the "area_name" field was cleared in this mutation.
+func (m *DepartmentMutation) AreaNameCleared() bool {
+	_, ok := m.clearedFields[department.FieldAreaName]
+	return ok
+}
+
+// ResetAreaName resets all changes to the "area_name" field.
+func (m *DepartmentMutation) ResetAreaName() {
+	m.area_name = nil
+	delete(m.clearedFields, department.FieldAreaName)
+}
+
+// SetOrgType sets the "org_type" field.
+func (m *DepartmentMutation) SetOrgType(s string) {
+	m.org_type = &s
+}
+
+// OrgType returns the value of the "org_type" field in the mutation.
+func (m *DepartmentMutation) OrgType() (r string, exists bool) {
+	v := m.org_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOrgType returns the old "org_type" field's value of the Department entity.
+// If the Department object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DepartmentMutation) OldOrgType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOrgType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOrgType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOrgType: %w", err)
+	}
+	return oldValue.OrgType, nil
+}
+
+// ClearOrgType clears the value of the "org_type" field.
+func (m *DepartmentMutation) ClearOrgType() {
+	m.org_type = nil
+	m.clearedFields[department.FieldOrgType] = struct{}{}
+}
+
+// OrgTypeCleared returns if the "org_type" field was cleared in this mutation.
+func (m *DepartmentMutation) OrgTypeCleared() bool {
+	_, ok := m.clearedFields[department.FieldOrgType]
+	return ok
+}
+
+// ResetOrgType resets all changes to the "org_type" field.
+func (m *DepartmentMutation) ResetOrgType() {
+	m.org_type = nil
+	delete(m.clearedFields, department.FieldOrgType)
+}
+
 // ClearParent clears the "parent" edge to the Department entity.
 func (m *DepartmentMutation) ClearParent() {
 	m.clearedparent = true
@@ -35017,7 +35117,7 @@ func (m *DepartmentMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *DepartmentMutation) Fields() []string {
-	fields := make([]string, 0, 9)
+	fields := make([]string, 0, 11)
 	if m.name != nil {
 		fields = append(fields, department.FieldName)
 	}
@@ -35045,6 +35145,12 @@ func (m *DepartmentMutation) Fields() []string {
 	if m.deleted_at != nil {
 		fields = append(fields, department.FieldDeletedAt)
 	}
+	if m.area_name != nil {
+		fields = append(fields, department.FieldAreaName)
+	}
+	if m.org_type != nil {
+		fields = append(fields, department.FieldOrgType)
+	}
 	return fields
 }
 
@@ -35071,6 +35177,10 @@ func (m *DepartmentMutation) Field(name string) (ent.Value, bool) {
 		return m.UpdatedAt()
 	case department.FieldDeletedAt:
 		return m.DeletedAt()
+	case department.FieldAreaName:
+		return m.AreaName()
+	case department.FieldOrgType:
+		return m.OrgType()
 	}
 	return nil, false
 }
@@ -35098,6 +35208,10 @@ func (m *DepartmentMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldUpdatedAt(ctx)
 	case department.FieldDeletedAt:
 		return m.OldDeletedAt(ctx)
+	case department.FieldAreaName:
+		return m.OldAreaName(ctx)
+	case department.FieldOrgType:
+		return m.OldOrgType(ctx)
 	}
 	return nil, fmt.Errorf("unknown Department field %s", name)
 }
@@ -35170,6 +35284,20 @@ func (m *DepartmentMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetDeletedAt(v)
 		return nil
+	case department.FieldAreaName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAreaName(v)
+		return nil
+	case department.FieldOrgType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOrgType(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Department field %s", name)
 }
@@ -35239,6 +35367,12 @@ func (m *DepartmentMutation) ClearedFields() []string {
 	if m.FieldCleared(department.FieldDeletedAt) {
 		fields = append(fields, department.FieldDeletedAt)
 	}
+	if m.FieldCleared(department.FieldAreaName) {
+		fields = append(fields, department.FieldAreaName)
+	}
+	if m.FieldCleared(department.FieldOrgType) {
+		fields = append(fields, department.FieldOrgType)
+	}
 	return fields
 }
 
@@ -35264,6 +35398,12 @@ func (m *DepartmentMutation) ClearField(name string) error {
 		return nil
 	case department.FieldDeletedAt:
 		m.ClearDeletedAt()
+		return nil
+	case department.FieldAreaName:
+		m.ClearAreaName()
+		return nil
+	case department.FieldOrgType:
+		m.ClearOrgType()
 		return nil
 	}
 	return fmt.Errorf("unknown Department nullable field %s", name)
@@ -35299,6 +35439,12 @@ func (m *DepartmentMutation) ResetField(name string) error {
 		return nil
 	case department.FieldDeletedAt:
 		m.ResetDeletedAt()
+		return nil
+	case department.FieldAreaName:
+		m.ResetAreaName()
+		return nil
+	case department.FieldOrgType:
+		m.ResetOrgType()
 		return nil
 	}
 	return fmt.Errorf("unknown Department field %s", name)
