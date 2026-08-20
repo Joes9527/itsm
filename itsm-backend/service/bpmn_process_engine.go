@@ -20,6 +20,7 @@ import (
 	"itsm-backend/ent/processtask"
 	"itsm-backend/ent/role"
 	"itsm-backend/ent/rolepermission"
+	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketassignmentrule"
 	"itsm-backend/ent/user"
 	"itsm-backend/ent/workflowtask"
@@ -772,6 +773,10 @@ func mergeServiceTaskVariables(instanceVariables map[string]interface{}, task *B
 // 里创建这个组并配置至少 2 名成员，否则单人部门 + 单人组的组合会出现审批任务无人可领。
 const approvalFallbackCandidateGroup = "ticket-approvers"
 
+// defaultFulfillmentTeamCode 是 taskPurpose="fulfillment" 节点没有声明 fulfillmentTeamCode 时的
+// 兜底团队 code，跟 approvalFallbackCandidateGroup 是同一种"节点未声明就用常量兜底"写法。
+const defaultFulfillmentTeamCode = "服务台-l1"
+
 func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.ProcessInstance, task *BPMNUserTask) error {
 	// 自动分配逻辑：优先级 BPMN定义 > 流程变量(request/assignee) > 默认分配
 	assignee := task.Assignee
@@ -867,6 +872,42 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 			default:
 				// 都没声明：解析申请人自己所在部门的负责人（这次会话早前已经做的部分）
 				assignee = e.resolveApprovalAssignee(ctx, instance, approvalRequester)
+			}
+		} else if task.TaskPurpose == "fulfillment" {
+			teamCode := task.FulfillmentTeamCode
+			if teamCode == "" {
+				teamCode = defaultFulfillmentTeamCode
+			}
+			approvers, resolveErr := approver.NewTeamWorkloadResolver().Resolve(ctx, e.client, &approver.ApproverContext{
+				TenantID: instance.TenantID,
+				TeamCode: teamCode,
+			})
+			if resolveErr != nil || len(approvers) == 0 {
+				e.logger.Warnw("执行任务未在目标团队解析到可用处理人，工单暂不分配",
+					"taskID", task.ID, "instanceID", instance.ID, "teamCode", teamCode, "error", resolveErr)
+				// 不落候选组兜底，不触发任何通知——留空 assignee，等团队有真实成员后由人工在
+				// 工单列表里认领，或后续补一个定时扫描重试（不在本次范围）。
+			} else {
+				resolvedUserID := approvers[0].UserID
+				assignee = strconv.Itoa(resolvedUserID)
+				// fulfillment 任务的 assignee 就是工单的处理人，必须同步写回 ticket.assignee_id/
+				// status——BPMN 引擎对 taskPurpose="approval" 节点从来不碰 ent.Ticket（审批人不是
+				// 处理人，不该动工单行），但这里是例外：处理人分配的通知交给紧跟其后的
+				// notify_handler ServiceTask 节点（读这里刚写好的 assignee_id），引擎本身不直接
+				// 调用通知服务，沿用"通知走声明式 ServiceTask 节点"的既有模式
+				// （Activity_NotifyRequester/Activity_RejectNotify 都是这样做的）。
+				businessTicketID, convErr := strconv.Atoi(getUserID("business_id"))
+				if convErr != nil || businessTicketID <= 0 {
+					e.logger.Warnw("fulfillment 任务已解析出 assignee，但没有有效的 business_id，跳过 ticket 回写",
+						"taskID", task.ID, "assignee", assignee)
+				} else if updateErr := e.client.Ticket.UpdateOneID(businessTicketID).
+					Where(ticket.TenantIDEQ(instance.TenantID)).
+					SetAssigneeID(resolvedUserID).
+					SetStatus(common.TicketStatusAssigned).
+					Exec(ctx); updateErr != nil {
+					e.logger.Warnw("fulfillment 任务已解析出 assignee，但回写 ticket 失败",
+						"taskID", task.ID, "assignee", assignee, "ticketID", businessTicketID, "error", updateErr)
+				}
 			}
 		} else {
 			// 优先使用 requester_id（工单申请人）
