@@ -1056,7 +1056,10 @@ func (e *CustomProcessEngine) resolveApprovalAssignee(ctx context.Context, insta
 // 有多个平级总经理（不同业务线各自的负责人），PersonalManagerResolver 按人（顺着申请人自己的
 // 真实汇报链）解析，天然避开这种部门维度无法区分的歧义——设计详见
 // docs/superpowers/specs/2026-08-20-personal-manager-chain-approval-design.md。
-// 解析失败，或者解析出的总经理正好是申请人自己，都返回空字符串，转候选组兜底。
+// 解析失败，或者解析出的总经理正好是申请人自己，都返回空字符串——注意这不会直接落到候选组
+// 兜底：调用方（createUserTask 的 switch 分支）在这个函数返回空串后，会先退到
+// resolveApprovalAssignee（申请人自己部门的负责人）再试一次，只有那一步也失败才会最终落到
+// 候选组兜底。
 func (e *CustomProcessEngine) resolveGmChainAssignee(ctx context.Context, instance *ent.ProcessInstance, requester *ent.User) string {
 	if requester == nil {
 		return ""

@@ -5,6 +5,8 @@ export interface Department {
   name: string;
   code: string;
   description?: string;
+  areaName?: string;
+  orgType?: string;
   managerId?: number;
   parentId?: number;
   children?: Department[];

@@ -920,3 +920,43 @@ func TestPersonalManagerResolver_Resolve_CycleDetected(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "cycle detected")
 }
+
+func TestPersonalManagerResolver_Resolve_TenantIsolation(t *testing.T) {
+	fx := newApproverFixture(t)
+	defer fx.client.Close()
+
+	otherTenant, err := fx.client.Tenant.Create().
+		SetName("Other Tenant").
+		SetCode("other-tenant-pm").
+		SetDomain("other-tenant-pm.test").
+		SetStatus("active").
+		Save(fx.ctx)
+	require.NoError(t, err)
+
+	otherGM, err := fx.client.User.Create().
+		SetUsername("other_tenant_gm").
+		SetEmail("gm@other-tenant-pm.test").
+		SetName("Other Tenant GM").
+		SetPasswordHash("hash").
+		SetActive(true).
+		SetTenantID(otherTenant.ID).
+		SetJobTitle("总经理").
+		Save(fx.ctx)
+	require.NoError(t, err)
+
+	// submitter 在本租户，但 manager_id 指向另一个租户里的用户——不能跨租户解析
+	submitter, err := fx.client.User.Create().
+		SetUsername("tenant_isolation_submitter").
+		SetEmail("submitter@personal-manager.test").
+		SetName("Tenant Isolation Submitter").
+		SetPasswordHash("hash").
+		SetActive(true).
+		SetTenantID(fx.tenant.ID).
+		SetManagerID(otherGM.ID).
+		Save(fx.ctx)
+	require.NoError(t, err)
+
+	resolver := NewPersonalManagerResolver()
+	_, err = resolver.Resolve(fx.ctx, fx.client, &ApproverContext{TenantID: fx.tenant.ID, RequesterID: submitter.ID})
+	assert.Error(t, err, "manager_id 指向别的租户的用户，本租户查询应该查不到，报错而不是跨租户解析")
+}
