@@ -1520,3 +1520,49 @@ func TestCreateTicket_RequiredFieldValidationPasses_CreatesTicket(t *testing.T) 
 	require.NoError(t, err)
 	require.NotNil(t, created)
 }
+
+// TestTicketService_CreateTicket_DoesNotAutoAssign 验证创建工单不再触发无差别的同步自动分配。
+//
+// 分配现在只应该在 BPMN taskPurpose="fulfillment" 节点触发（Task 2），或者通过
+// TicketAssignmentService.autoAssignTicket 显式调用（Task 3，委托 TeamWorkloadResolver）。
+// 这里特意搭建一个 defaultFulfillmentTeamCode 团队并给它配一个成员——如果不这样配置，旧的同步
+// 分配路径（TicketAssignmentSmartService.AutoAssign -> TicketAssignmentService.autoAssignTicket
+// -> TeamWorkloadResolver）在找不到目标团队时本来就会把 AssigneeID 留空，那样即使旧代码没删，
+// 这个测试也会"意外"通过，测不出问题。配了团队成员之后，如果旧的同步分配代码还在，
+// created.AssigneeID 就会被自动填上这个成员；删除后应该保持为 nil。
+func TestTicketService_CreateTicket_DoesNotAutoAssign(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ticket_create_no_autoassign?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+
+	logger := zaptest.NewLogger(t).Sugar()
+	tenant, err := client.Tenant.Create().
+		SetName("No AutoAssign Tenant").SetCode("naa").SetDomain("naa.example.com").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+
+	team, err := client.Team.Create().
+		SetName("服务台-L1").SetCode(defaultFulfillmentTeamCode).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	agent, err := client.User.Create().
+		SetUsername("naa_agent").SetEmail("naa_agent@naa.example.com").SetName("naa_agent").
+		SetPasswordHash("hash").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	_, err = client.Team.UpdateOneID(team.ID).AddUserIDs(agent.ID).Save(ctx)
+	require.NoError(t, err)
+
+	requester, err := client.User.Create().
+		SetUsername("naa_requester").SetEmail("naa@example.com").SetName("naa_requester").
+		SetPasswordHash("hash").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	svc := NewTicketServiceForTest(client, logger)
+	created, err := svc.CreateTicket(ctx, &dto.CreateTicketRequest{
+		Title:       "不应该被自动分配的工单",
+		Description: "x",
+		Priority:    "medium",
+		RequesterID: requester.ID,
+	}, tenant.ID)
+	require.NoError(t, err)
+
+	assert.Nil(t, created.AssigneeID, "创建工单不应该再触发无差别自动分配——分配现在只在 BPMN fulfillment 节点触发")
+}

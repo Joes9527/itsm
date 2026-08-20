@@ -34,14 +34,13 @@ import (
 // TicketService 改进版的工单服务
 // 使用构造函数注入和 Repository 模式
 type TicketService struct {
-	repo                   ticket.Repository
-	client                 *ent.Client // 用于 ProcessInstance 等系统级查询（不走 Repository）
-	logger                 *zap.SugaredLogger
-	notificationSvc        *TicketNotificationService
-	automationRuleSvc      *TicketAutomationRuleService
-	slaSvc                 *TicketSLAService
-	assignmentSmartService *TicketAssignmentSmartService
-	connectorManager       *connector.Manager // 连接器管理器，用于飞书等外部集成
+	repo              ticket.Repository
+	client            *ent.Client // 用于 ProcessInstance 等系统级查询（不走 Repository）
+	logger            *zap.SugaredLogger
+	notificationSvc   *TicketNotificationService
+	automationRuleSvc *TicketAutomationRuleService
+	slaSvc            *TicketSLAService
+	connectorManager  *connector.Manager // 连接器管理器，用于飞书等外部集成
 
 	// 流程触发（V1 兼容语义）
 	processTriggerSvc ProcessTriggerServiceInterface
@@ -82,11 +81,6 @@ func NewTicketService(cfg *TicketServiceConfig) *TicketService {
 		processTriggerSvc: cfg.ProcessTriggerService,
 		processResolver:   cfg.ProcessResolver,
 		connectorManager:  cfg.ConnectorManager,
-	}
-	if cfg.Client != nil {
-		assignmentService := NewTicketAssignmentService(cfg.Client, cfg.Logger)
-		assignmentRuleService := NewTicketAssignmentRuleService(cfg.Client, cfg.Logger)
-		s.assignmentSmartService = NewTicketAssignmentSmartService(cfg.Client, cfg.Logger, assignmentService, assignmentRuleService)
 	}
 	return s
 }
@@ -187,15 +181,6 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 	if err != nil {
 		s.logger.Errorw("Failed to create ticket", "error", err)
 		return nil, err
-	}
-
-	if tkt.AssigneeID == nil && s.assignmentSmartService != nil {
-		assignment, err := s.assignmentSmartService.AutoAssign(ctx, tkt.ID, tenantID)
-		if err != nil {
-			s.logger.Warnw("Automatic ticket assignment failed", "error", err, "ticket_id", tkt.ID)
-		} else {
-			tkt.AssigneeID = assignment.AssignedTo
-		}
 	}
 
 	// 将自定义字段值写入共享的 field_values 表（取代旧的 Ticket.custom_field_values JSON 列）。
