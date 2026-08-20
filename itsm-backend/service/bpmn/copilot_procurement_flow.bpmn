@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                 xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                 xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                 xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                 targetNamespace="http://bpmn.io/schema/bpmn">
+
+  <bpmn:process id="copilot_procurement_flow" name="Copilot采购申请审批流程" isExecutable="true">
+    <bpmn:startEvent id="StartEvent_1" name="提交申请">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:userTask id="Activity_DeptManagerApproval" name="部门负责人审批" taskPurpose="approval">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:userTask id="Activity_GMApproval" name="总经理审批" taskPurpose="approval" assigneeGmChain="true">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:userTask id="Activity_ITDirectorApproval" name="IT总监审批" taskPurpose="approval" assigneeRole="it_director">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_4</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:userTask id="Activity_Execute" name="开通许可证账号" taskPurpose="fulfillment">
+      <bpmn:incoming>Flow_4</bpmn:incoming>
+      <bpmn:outgoing>Flow_ExecuteNotify</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:serviceTask id="Activity_NotifyHandler" name="通知处理人" implementation="##WebService">
+      <bpmn:extensionElements>
+        <bpmn:metaData name="service_task_type">ticket_task</bpmn:metaData>
+        <bpmn:metaData name="action">notify_handler</bpmn:metaData>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ExecuteNotify</bpmn:incoming>
+      <bpmn:outgoing>Flow_5</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="EndEvent_1" name="采购完成">
+      <bpmn:incoming>Flow_5</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Activity_DeptManagerApproval" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_DeptManagerApproval" targetRef="Activity_GMApproval" />
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Activity_GMApproval" targetRef="Activity_ITDirectorApproval" />
+    <bpmn:sequenceFlow id="Flow_4" sourceRef="Activity_ITDirectorApproval" targetRef="Activity_Execute" />
+    <bpmn:sequenceFlow id="Flow_ExecuteNotify" sourceRef="Activity_Execute" targetRef="Activity_NotifyHandler" />
+    <bpmn:sequenceFlow id="Flow_5" sourceRef="Activity_NotifyHandler" targetRef="EndEvent_1" />
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="copilot_procurement_flow">
+      <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1">
+        <dc:Bounds x="180" y="150" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_DeptManagerApproval_di" bpmnElement="Activity_DeptManagerApproval">
+        <dc:Bounds x="270" y="128" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_GMApproval_di" bpmnElement="Activity_GMApproval">
+        <dc:Bounds x="430" y="128" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_ITDirectorApproval_di" bpmnElement="Activity_ITDirectorApproval">
+        <dc:Bounds x="590" y="128" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_Execute_di" bpmnElement="Activity_Execute">
+        <dc:Bounds x="750" y="128" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_NotifyHandler_di" bpmnElement="Activity_NotifyHandler">
+        <dc:Bounds x="910" y="128" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1">
+        <dc:Bounds x="1072" y="150" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1">
+        <di:waypoint x="216" y="168"/>
+        <di:waypoint x="270" y="168"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_2_di" bpmnElement="Flow_2">
+        <di:waypoint x="370" y="168"/>
+        <di:waypoint x="430" y="168"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_3_di" bpmnElement="Flow_3">
+        <di:waypoint x="530" y="168"/>
+        <di:waypoint x="590" y="168"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_4_di" bpmnElement="Flow_4">
+        <di:waypoint x="690" y="168"/>
+        <di:waypoint x="750" y="168"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ExecuteNotify_di" bpmnElement="Flow_ExecuteNotify">
+        <di:waypoint x="850" y="168"/>
+        <di:waypoint x="910" y="168"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_5_di" bpmnElement="Flow_5">
+        <di:waypoint x="1010" y="168"/>
+        <di:waypoint x="1072" y="168"/>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

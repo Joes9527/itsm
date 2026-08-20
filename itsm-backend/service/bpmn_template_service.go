@@ -210,6 +210,10 @@ func (s *BPMNTemplateService) listTemplates() ([]*TemplateInfo, error) {
 			info.Name = "发布审批流程"
 			info.Category = "release"
 			info.Description = "软件发布审批管理流程"
+		case "copilot_procurement_flow":
+			info.Name = "Copilot采购申请审批流程"
+			info.Category = "service_request"
+			info.Description = "Copilot/M365 Copilot 等 AI 工具采购三级审批（部门负责人→总经理→IT总监）"
 		default:
 			info.Name = key
 			info.Category = "default"
