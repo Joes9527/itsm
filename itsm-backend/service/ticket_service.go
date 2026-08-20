@@ -16,7 +16,6 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/fielddefinition"
-	"itsm-backend/ent/group"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/slaviolation"
 	entTicket "itsm-backend/ent/ticket"
@@ -127,9 +126,6 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 
 	ticketType := normalizeCreateTicketType(req.Type, req.FormFields)
 	assigneeID := req.AssigneeID
-	if assigneeID == 0 {
-		assigneeID = s.defaultTierOneAssignee(ctx, tenantID)
-	}
 	categoryID := req.CategoryID
 	workflowDefinitionKey := req.WorkflowDefinitionKey
 
@@ -295,28 +291,6 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 	}
 
 	return tkt, nil
-}
-
-// defaultTierOneAssignee selects a stable, active member of the tenant's
-// tier1-support group. A missing or empty group leaves the ticket unassigned
-// rather than making ticket creation unavailable.
-func (s *TicketService) defaultTierOneAssignee(ctx context.Context, tenantID int) int {
-	if s.client == nil {
-		return 0
-	}
-	member, err := s.client.Group.Query().
-		Where(group.TenantIDEQ(tenantID), group.NameEQ("tier1-support")).
-		QueryMembers().
-		Where(user.TenantIDEQ(tenantID), user.ActiveEQ(true)).
-		Order(ent.Asc(user.FieldID)).
-		First(ctx)
-	if err != nil {
-		if !ent.IsNotFound(err) {
-			s.logger.Warnw("Failed to resolve tier-1 support assignee", "error", err, "tenant_id", tenantID)
-		}
-		return 0
-	}
-	return member.ID
 }
 
 func (s *TicketService) validateCreateTicketReferences(ctx context.Context, req *dto.CreateTicketRequest, tenantID int) error {

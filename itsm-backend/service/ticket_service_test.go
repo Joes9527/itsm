@@ -1566,3 +1566,49 @@ func TestTicketService_CreateTicket_DoesNotAutoAssign(t *testing.T) {
 
 	assert.Nil(t, created.AssigneeID, "创建工单不应该再触发无差别自动分配——分配现在只在 BPMN fulfillment 节点触发")
 }
+
+// TestTicketService_CreateTicket_DoesNotAutoAssignViaTierOneGroup 验证创建工单不会通过
+// 已删除的 defaultTierOneAssignee 路径（基于 "tier1-support" group，与本方案的 team 机制
+// 是完全不同的表/概念）在审批前被同步分配。
+//
+// 特意搭建一个名为 "tier1-support" 的 group 并给它配一个 active 成员——如果不这样配置，
+// 这条代码路径根本不会被触发，测试即使旧代码没删也会"意外"通过。配置成员后，如果旧的
+// defaultTierOneAssignee 调用还在，created.AssigneeID 就会被自动填上这个成员；删除后应该
+// 保持为 nil。
+func TestTicketService_CreateTicket_DoesNotAutoAssignViaTierOneGroup(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ticket_create_no_tier1_autoassign?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+
+	logger := zaptest.NewLogger(t).Sugar()
+	tenant, err := client.Tenant.Create().
+		SetName("Tier1 AutoAssign Tenant").SetCode("t1aa").SetDomain("t1aa.example.com").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+
+	tier1Agent, err := client.User.Create().
+		SetUsername("tier1_agent").SetEmail("tier1_agent@t1aa.example.com").SetName("tier1_agent").
+		SetPasswordHash("hash").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	tier1Group, err := client.Group.Create().
+		SetName("tier1-support").SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	_, err = client.Group.UpdateOneID(tier1Group.ID).AddMemberIDs(tier1Agent.ID).Save(ctx)
+	require.NoError(t, err)
+
+	requester, err := client.User.Create().
+		SetUsername("t1aa_requester").SetEmail("t1aa@example.com").SetName("t1aa_requester").
+		SetPasswordHash("hash").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	svc := NewTicketServiceForTest(client, logger)
+	created, err := svc.CreateTicket(ctx, &dto.CreateTicketRequest{
+		Title:       "不应该被 tier1-support group 自动分配的工单",
+		Description: "x",
+		Priority:    "medium",
+		RequesterID: requester.ID,
+	}, tenant.ID)
+	require.NoError(t, err)
+
+	assert.Nil(t, created.AssigneeID, "创建工单不应该通过 tier1-support group 触发预审批自动分配——defaultTierOneAssignee 已被删除")
+}
