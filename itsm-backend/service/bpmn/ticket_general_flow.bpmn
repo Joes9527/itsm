@@ -17,19 +17,9 @@
       <bpmn:outgoing>Flow_1</bpmn:outgoing>
     </bpmn:startEvent>
 
-    <!-- 任务分配 -->
-    <bpmn:userTask id="Activity_Assign" name="任务分配" instantiate="false">
-      <bpmn:extensionElements>
-        <bpmn:metaData name="service_task_type">ticket_task</bpmn:metaData>
-        <bpmn:metaData name="action">assign</bpmn:metaData>
-      </bpmn:extensionElements>
-      <bpmn:incoming>Flow_1</bpmn:incoming>
-      <bpmn:outgoing>Flow_ApprovalCheck</bpmn:outgoing>
-    </bpmn:userTask>
-
     <!-- 审批判断网关：统一决策是否需要审批 -->
     <bpmn:exclusiveGateway id="Gateway_Approval" name="是否需要审批?">
-      <bpmn:incoming>Flow_ApprovalCheck</bpmn:incoming>
+      <bpmn:incoming>Flow_1</bpmn:incoming>
       <bpmn:outgoing>Flow_ApprovalYes</bpmn:outgoing>
       <bpmn:outgoing>Flow_ApprovalNo</bpmn:outgoing>
     </bpmn:exclusiveGateway>
@@ -48,7 +38,7 @@
     </bpmn:exclusiveGateway>
 
     <!-- 处理任务 -->
-    <bpmn:userTask id="Activity_Handle" name="工单处理">
+    <bpmn:userTask id="Activity_Handle" name="工单处理" taskPurpose="fulfillment">
       <bpmn:extensionElements>
         <bpmn:metaData name="service_task_type">ticket_task</bpmn:metaData>
         <bpmn:metaData name="action">update_status</bpmn:metaData>
@@ -56,8 +46,18 @@
       <bpmn:incoming>Flow_ApprovalNo</bpmn:incoming>
       <bpmn:incoming>Flow_Approved</bpmn:incoming>
       <bpmn:incoming>Flow_Reject</bpmn:incoming>
-      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+      <bpmn:outgoing>Flow_HandleNotify</bpmn:outgoing>
     </bpmn:userTask>
+
+    <!-- 通知处理人 -->
+    <bpmn:serviceTask id="Activity_NotifyHandler" name="通知处理人" implementation="##WebService">
+      <bpmn:extensionElements>
+        <bpmn:metaData name="service_task_type">ticket_task</bpmn:metaData>
+        <bpmn:metaData name="action">notify_handler</bpmn:metaData>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_HandleNotify</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+    </bpmn:serviceTask>
 
     <!-- 升级判断网关 -->
     <bpmn:exclusiveGateway id="Gateway_Escalate" name="是否需要升级?">
@@ -103,10 +103,7 @@
     </bpmn:endEvent>
 
     <!-- 连线定义 -->
-    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Activity_Assign" />
-
-    <!-- 所有任务分配后都先进入审批判断网关 -->
-    <bpmn:sequenceFlow id="Flow_ApprovalCheck" sourceRef="Activity_Assign" targetRef="Gateway_Approval" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Gateway_Approval" />
 
     <!-- 审批网关分支：需要审批 -->
     <bpmn:sequenceFlow id="Flow_ApprovalYes" sourceRef="Gateway_Approval" targetRef="Activity_Approval">
@@ -138,7 +135,8 @@
       </bpmn:conditionExpression>
     </bpmn:sequenceFlow>
 
-    <bpmn:sequenceFlow id="Flow_3" sourceRef="Activity_Handle" targetRef="Gateway_Escalate" />
+    <bpmn:sequenceFlow id="Flow_HandleNotify" sourceRef="Activity_Handle" targetRef="Activity_NotifyHandler" />
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Activity_NotifyHandler" targetRef="Gateway_Escalate" />
     <bpmn:sequenceFlow id="Flow_4" sourceRef="Gateway_Escalate" targetRef="Activity_Escalate">
       <bpmn:conditionExpression xsi:type="bpmn:tExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
         <bpmn:body>${variables['need_escalate'] == true}</bpmn:body>
