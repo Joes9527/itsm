@@ -210,10 +210,12 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 		}
 	}
 
-	// 异步发送通知（如果分配了处理人）
+	// 异步发送通知：只要通知服务已配置就始终触发。
+	// 是否分配了处理人由 NotifyTicketCreated 内部判断（无 assignee 时退化为仅通知申请人），
+	// 调用方不再以 AssigneeID 作为发送前提——BPMN 履约节点分配前创建的工单同样需要通知申请人。
 	// 注意：必须使用 context.Background()，不能复用请求 ctx。
 	// 否则 HTTP 响应返回后 ctx 立即取消，异步任务会失败（context canceled）。
-	if s.notificationSvc != nil && tkt.AssigneeID != nil {
+	if s.notificationSvc != nil {
 		go func() {
 			ctx2, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
