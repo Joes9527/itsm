@@ -13,6 +13,7 @@ import { TicketNotificationApi, type TicketNotification } from '@/lib/api/ticket
 import type { GlobalSearchResponse } from '@/lib/api/global-search-api';
 import { notificationWS } from '@/lib/services/notification-ws';
 import { UserMenuDropdown } from './UserMenuDropdown';
+import { PersonaSwitcher } from './PersonaSwitcher';
 import { NotificationDrawer } from './NotificationDrawer';
 import { GlobalSearch, SearchInput } from './GlobalSearch';
 import { buildBreadcrumb } from './breadcrumb-utils';
@@ -324,6 +325,9 @@ export const Header: React.FC<HeaderProps> = ({
               </Button>
             </Tooltip>
           </Dropdown>
+
+          {/* 工作台视图切换 */}
+          {isClient && <PersonaSwitcher />}
 
           {/* 用户菜单 */}
           {isClient && (
