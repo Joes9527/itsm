@@ -25,6 +25,7 @@ type ApproverContext struct {
 	RequesterID  int                    `json:"requesterId,omitempty"`
 	DepartmentID int                    `json:"departmentId,omitempty"`
 	TeamID       int                    `json:"teamId,omitempty"`
+	TeamCode     string                 `json:"teamCode,omitempty"`
 	ProjectID    int                    `json:"projectId,omitempty"`
 	Amount       float64                `json:"amount,omitempty"`
 	Variables    map[string]interface{} `json:"variables,omitempty"`
