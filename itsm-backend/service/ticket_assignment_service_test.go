@@ -2,11 +2,9 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
-	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 
 	"github.com/stretchr/testify/assert"
@@ -120,84 +118,86 @@ func TestTicketAssignmentService_AssignTicket(t *testing.T) {
 	}
 }
 
-// TestTicketAssignmentService_AutoAssign_QueryCountIsBounded 复现真实环境（嘉里物流 eHR
-// 导入后租户内 7826 个 active 用户）暴露出的性能 bug：autoAssignTicket 对每个候选人串行跑
-// 3-5 条 SQL（getUserWorkload 的 2 个 count + 1 个 .All，加上评分阶段的 category/performance
-// count），导致候选人越多、SQL 往返次数越多，线性放大。真实环境里这变成约 3 万次串行往返，
-// 单次工单创建耗时 30+ 秒（看起来像卡死）。这里用 40 个候选人验证优化后的批量查询让总 SQL
-// 次数保持在候选人数量之下的一个小常数，而不是随候选人数线性增长。
-func TestTicketAssignmentService_AutoAssign_QueryCountIsBounded(t *testing.T) {
-	var queryCount int
-	countingLog := func(args ...any) {
-		queryCount++
-	}
-
-	client := enttest.Open(t, "sqlite3", testDSN(), enttest.WithOptions(ent.Log(countingLog), ent.Debug()))
+func TestTicketAssignmentService_AutoAssign_DelegatesToTeamWorkloadResolver(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", testDSN())
 	defer client.Close()
 
 	logger := zaptest.NewLogger(t).Sugar()
 	assignmentService := NewTicketAssignmentService(client, logger)
 
 	ctx := context.Background()
-
 	testTenant, err := client.Tenant.Create().
-		SetName("Perf Tenant").SetCode("perf").SetDomain("perf.com").SetStatus("active").Save(ctx)
+		SetName("Auto Delegate Tenant").SetCode("ad").SetDomain("ad.example.com").SetStatus("active").Save(ctx)
 	require.NoError(t, err)
 
-	// Active(false)：请求人本身不是候选处理人，这样它不会以"零负载"跟真正
-	// 零负载的候选人打平分——分数打平时 sort.Slice 不保证稳定，会让断言变得不确定。
+	team, err := client.Team.Create().
+		SetName("服务台-L1").SetCode(defaultFulfillmentTeamCode).SetTenantID(testTenant.ID).Save(ctx)
+	require.NoError(t, err)
+	idle, err := client.User.Create().
+		SetUsername("idle_agent").SetEmail("idle_agent@ad.example.com").SetName("idle_agent").
+		SetPasswordHash("hash").SetActive(true).SetTenantID(testTenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+	_, err = client.Team.UpdateOneID(team.ID).AddUserIDs(idle.ID).Save(ctx)
+	require.NoError(t, err)
+
 	requester, err := client.User.Create().
-		SetUsername("perf_requester").SetEmail("perf_requester@example.com").SetName("Requester").
-		SetPasswordHash("x").SetRole("end_user").SetActive(false).SetTenantID(testTenant.ID).Save(ctx)
+		SetUsername("requester").SetEmail("requester@ad.example.com").SetName("requester").
+		SetPasswordHash("hash").SetActive(true).SetTenantID(testTenant.ID).Save(ctx)
 	require.NoError(t, err)
 
-	const numCandidates = 40
-	var leastBusyID int
-	for i := 0; i < numCandidates; i++ {
-		u, err := client.User.Create().
-			SetUsername(fmt.Sprintf("perf_agent_%d", i)).
-			SetEmail(fmt.Sprintf("perf_agent_%d@example.com", i)).
-			SetName("Agent").SetPasswordHash("x").SetRole("agent").
-			SetActive(true).SetTenantID(testTenant.ID).Save(ctx)
-		require.NoError(t, err)
-
-		// 除最后一个候选人外，其余每人挂 1 个 open 工单，制造工作负载差异——
-		// 最后一个候选人（零负载）应该在评分里胜出，用来同时验证批量查询
-		// 没有破坏原有的"挑最闲的人"选人语义。
-		if i < numCandidates-1 {
-			_, err = client.Ticket.Create().
-				SetTitle("existing load").SetDescription("x").SetPriority("medium").
-				SetStatus("open").SetTicketNumber(fmt.Sprintf("PERF-%d", i)).
-				SetAssigneeID(u.ID).SetRequesterID(requester.ID).SetTenantID(testTenant.ID).Save(ctx)
-			require.NoError(t, err)
-		} else {
-			leastBusyID = u.ID
-		}
-	}
-
-	ticketToAssign, err := client.Ticket.Create().
-		SetTitle("待分配").SetDescription("x").SetPriority("medium").SetStatus("open").
-		SetTicketNumber("PERF-TARGET").SetRequesterID(requester.ID).SetTenantID(testTenant.ID).Save(ctx)
+	testTicket, err := client.Ticket.Create().
+		SetTitle("待自动分配").SetDescription("x").SetPriority("medium").SetStatus("open").
+		SetTicketNumber("AD-001").SetRequesterID(requester.ID).SetTenantID(testTenant.ID).Save(ctx)
 	require.NoError(t, err)
 
-	queryCount = 0 // 只统计 AssignTicket 调用期间的查询，不含前面建测试数据的部分
 	resp, err := assignmentService.AssignTicket(ctx, &AssignmentRequest{
-		TicketID:   ticketToAssign.ID,
+		TicketID:   testTicket.ID,
 		TenantID:   testTenant.ID,
 		Priority:   "medium",
 		AutoAssign: true,
 	})
 	require.NoError(t, err)
-	require.NotNil(t, resp)
 	require.NotNil(t, resp.AssignedTo)
+	assert.Equal(t, idle.ID, *resp.AssignedTo)
+	assert.Equal(t, "auto", resp.AssignmentType)
 
-	assert.Equal(t, leastBusyID, *resp.AssignedTo, "零负载的候选人应该胜出，批量查询不能改变选人结果")
-	// 优化前：至少 1(列用户) + N*3(getUserWorkload 的 2 个 count + 1 个 resolved .All) +
-	// N*1(calculatePerformanceScore) = 4*40+1 = 161 条查询，随候选人数线性增长。
-	// 优化后：应该是与候选人数无关的一个小常数（列用户 + 几条批量聚合查询）。
-	assert.Less(t, queryCount, numCandidates,
-		"SQL 查询次数应该保持在候选人数量之下的常数级别，不应该随候选人数量线性增长（当前 %d 次，%d 个候选人）",
-		queryCount, numCandidates)
+	updated, err := client.Ticket.Get(ctx, testTicket.ID)
+	require.NoError(t, err)
+	assert.Equal(t, idle.ID, updated.AssigneeID)
+}
+
+func TestTicketAssignmentService_AutoAssign_EmptyTeam_ReturnsNoAssignee(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", testDSN())
+	defer client.Close()
+
+	logger := zaptest.NewLogger(t).Sugar()
+	assignmentService := NewTicketAssignmentService(client, logger)
+
+	ctx := context.Background()
+	testTenant, err := client.Tenant.Create().
+		SetName("Auto Delegate Empty Tenant").SetCode("ade").SetDomain("ade.example.com").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+
+	requester, err := client.User.Create().
+		SetUsername("requester2").SetEmail("requester2@ade.example.com").SetName("requester2").
+		SetPasswordHash("hash").SetActive(true).SetTenantID(testTenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	testTicket, err := client.Ticket.Create().
+		SetTitle("待自动分配-无团队成员").SetDescription("x").SetPriority("medium").SetStatus("open").
+		SetTicketNumber("ADE-001").SetRequesterID(requester.ID).SetTenantID(testTenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	resp, err := assignmentService.AssignTicket(ctx, &AssignmentRequest{
+		TicketID:   testTicket.ID,
+		TenantID:   testTenant.ID,
+		Priority:   "medium",
+		AutoAssign: true,
+	})
+	require.NoError(t, err)
+	assert.Nil(t, resp.AssignedTo)
+	assert.Equal(t, "没有可用的处理人", resp.Reason)
 }
 
 func TestTicketAssignmentService_GetUserWorkload(t *testing.T) {

@@ -3,12 +3,13 @@ package service
 import (
 	"context"
 	"fmt"
-	"sort"
 	"time"
 
+	"itsm-backend/common"
 	"itsm-backend/ent"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/user"
+	"itsm-backend/service/approver"
 
 	"go.uber.org/zap"
 )
@@ -96,15 +97,17 @@ func (s *TicketAssignmentService) AssignTicket(ctx context.Context, req *Assignm
 	return s.routeTicket(ctx, req)
 }
 
-// autoAssignTicket 自动分配工单
+// autoAssignTicket 自动分配工单——委托给 TeamWorkloadResolver（跟 BPMN taskPurpose="fulfillment"
+// 节点用的是同一个 resolver），候选人限定在目标团队内，不再是"全体 active 用户"。这里没有 BPMN
+// 节点上下文可读 fulfillmentTeamCode，固定用 defaultFulfillmentTeamCode（跟 BPMN 侧节点未声明
+// fulfillmentTeamCode 时的默认值保持一致）。
 func (s *TicketAssignmentService) autoAssignTicket(ctx context.Context, req *AssignmentRequest) (*AssignmentResponse, error) {
-	// 1. 获取可用的处理人
-	availableUsers, err := s.getAvailableUsers(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(availableUsers) == 0 {
+	approvers, err := approver.NewTeamWorkloadResolver().Resolve(ctx, s.client, &approver.ApproverContext{
+		TenantID: req.TenantID,
+		TeamCode: defaultFulfillmentTeamCode,
+	})
+	if err != nil || len(approvers) == 0 {
+		s.logger.Infow("自动分配未在目标团队解析到可用处理人", "ticketID", req.TicketID, "error", err)
 		return &AssignmentResponse{
 			TicketID:       req.TicketID,
 			AssignmentType: "auto",
@@ -112,56 +115,32 @@ func (s *TicketAssignmentService) autoAssignTicket(ctx context.Context, req *Ass
 		}, nil
 	}
 
-	// 2. 计算每个用户的评分——分类经验分/历史表现分原本是 calculateUserScore 内部逐人
-	// 查询数据库，改成先批量查一次，再把结果传进去，避免又引入一轮 O(候选人数) 查询。
-	candidateIDs := make([]int, len(availableUsers))
-	for i := range availableUsers {
-		candidateIDs[i] = availableUsers[i].UserID
-	}
-	categoryScores, err := s.batchCalculateCategoryExperienceScores(ctx, candidateIDs, req.CategoryID)
-	if err != nil {
-		return nil, fmt.Errorf("批量计算分类经验评分失败: %w", err)
-	}
-	performanceScores, err := s.batchCalculatePerformanceScores(ctx, candidateIDs)
-	if err != nil {
-		return nil, fmt.Errorf("批量计算历史表现评分失败: %w", err)
-	}
-	for i := range availableUsers {
-		availableUsers[i].Score = s.calculateUserScoreWithPrecomputed(
-			&availableUsers[i], req, categoryScores[availableUsers[i].UserID], performanceScores[availableUsers[i].UserID],
-		)
-	}
-
-	// 3. 按评分排序，选择最高分的用户
-	sort.Slice(availableUsers, func(i, j int) bool {
-		return availableUsers[i].Score > availableUsers[j].Score
-	})
-
-	bestUser := availableUsers[0]
-
-	// 4. 执行分配
-	err = s.client.Ticket.UpdateOneID(req.TicketID).
-		SetAssigneeID(bestUser.UserID).
-		Exec(ctx)
-	if err != nil {
+	assigneeID := approvers[0].UserID
+	if err := s.client.Ticket.UpdateOneID(req.TicketID).
+		Where(ticket.TenantIDEQ(req.TenantID)).
+		SetAssigneeID(assigneeID).
+		SetStatus(common.TicketStatusAssigned).
+		Exec(ctx); err != nil {
 		return nil, fmt.Errorf("分配工单失败: %w", err)
 	}
 
 	return &AssignmentResponse{
 		TicketID:       req.TicketID,
-		AssignedTo:     &bestUser.UserID,
+		AssignedTo:     &assigneeID,
 		AssignmentType: "auto",
-		Reason:         fmt.Sprintf("基于技能匹配和工作负载自动分配，评分: %.2f", bestUser.Score),
-		Score:          bestUser.Score,
-		Alternatives:   s.getAlternativeUserIDs(availableUsers[1:min(len(availableUsers), 5)]),
+		Reason:         "按团队工作负载自动分配",
 	}, nil
 }
 
 // getAvailableUsers 获取可用的处理人
 //
-// 候选人的工作负载不再逐人查询（那样会产生 O(候选人数) 次串行 SQL 往返——在只有几十个
-// 测试账号的环境里不明显，但嘉里物流真实 eHR 数据导入后租户内有 7826 个 active 用户，
-// 单次工单创建因此要等 30+ 秒，跟卡死没区别）。改为对全体候选人 ID 批量聚合查询一次，
+// 注意：这不再是 autoAssignTicket 的候选人来源（那条路径已改为委托 TeamWorkloadResolver，
+// 见上面的 autoAssignTicket）。保留这个方法是因为 TicketAssignmentSmartService.
+// GetAssignRecommendations（/api/v1/tickets/assign-recommendations/:id，SmartAssignmentModal
+// 的"分配建议"列表在用）仍然依赖它对全量候选人评分排序——这是本次重构未覆盖的另一个调用方，
+// 删除会导致该接口编译失败。候选人的工作负载不再逐人查询（那样会产生 O(候选人数) 次串行 SQL
+// 往返——在只有几十个测试账号的环境里不明显，但嘉里物流真实 eHR 数据导入后租户内有 7826 个
+// active 用户，单次查询因此要等 30+ 秒，跟卡死没区别）。改为对全体候选人 ID 批量聚合查询一次，
 // 常数次 SQL，不随候选人数量增长。
 func (s *TicketAssignmentService) getAvailableUsers(ctx context.Context, req *AssignmentRequest) ([]UserWorkload, error) {
 	// 1. 获取所有活跃用户
@@ -298,12 +277,8 @@ func (s *TicketAssignmentService) batchGetUserWorkloads(ctx context.Context, can
 	return result, nil
 }
 
-// CalculateUserScore 计算用户评分（公开方法）
-func (s *TicketAssignmentService) CalculateUserScore(ctx context.Context, user *UserWorkload, req *AssignmentRequest) float64 {
-	return s.calculateUserScore(ctx, user, req)
-}
-
-// calculateUserScore 计算用户评分
+// calculateUserScore 计算用户评分——仍被 TicketAssignmentSmartService.GetAssignRecommendations
+// 使用（分配建议列表的评分排序），autoAssignTicket 已不再调用。
 func (s *TicketAssignmentService) calculateUserScore(ctx context.Context, user *UserWorkload, req *AssignmentRequest) float64 {
 	var score float64
 
@@ -324,93 +299,6 @@ func (s *TicketAssignmentService) calculateUserScore(ctx context.Context, user *
 	score += performanceScore * 0.1
 
 	return score
-}
-
-// calculateUserScoreWithPrecomputed 跟 calculateUserScore 权重公式完全一致，唯一区别是
-// 分类经验分/历史表现分是调用方批量算好传进来的，不在这里逐人查库。
-func (s *TicketAssignmentService) calculateUserScoreWithPrecomputed(user *UserWorkload, req *AssignmentRequest, categoryScore, performanceScore float64) float64 {
-	var score float64
-	score += s.calculateSkillScore(user.Skills, req.RequiredSkills) * 0.4
-	score += s.calculateWorkloadScore(user.ActiveTickets, user.AvgResolution) * 0.3
-	score += categoryScore * 0.2
-	score += performanceScore * 0.1
-	return score
-}
-
-// batchCalculateCategoryExperienceScores 批量版 calculateCategoryExperienceScore，一次
-// 聚合查询算出所有候选人在指定分类下的已处理工单数，而不是每个候选人单独查一次。
-func (s *TicketAssignmentService) batchCalculateCategoryExperienceScores(ctx context.Context, candidateIDs []int, categoryID *int) (map[int]float64, error) {
-	result := make(map[int]float64, len(candidateIDs))
-	if categoryID == nil {
-		for _, id := range candidateIDs {
-			result[id] = 0.5 // 默认中等评分，跟原函数行为一致
-		}
-		return result, nil
-	}
-	for _, id := range candidateIDs {
-		result[id] = 0.4 // 无记录时的最低档评分，跟原函数 count<2 分支一致
-	}
-	if len(candidateIDs) == 0 {
-		return result, nil
-	}
-
-	var rows []assigneeAggRow
-	if err := s.client.Ticket.Query().
-		Where(
-			ticket.AssigneeIDIn(candidateIDs...),
-			ticket.CategoryIDEQ(*categoryID),
-			ticket.StatusIn("resolved", "closed"),
-		).
-		GroupBy(ticket.FieldAssigneeID).
-		Aggregate(ent.Count()).
-		Scan(ctx, &rows); err != nil {
-		return nil, err
-	}
-	for _, row := range rows {
-		switch {
-		case row.Count >= 10:
-			result[row.AssigneeID] = 1.0
-		case row.Count >= 5:
-			result[row.AssigneeID] = 0.8
-		case row.Count >= 2:
-			result[row.AssigneeID] = 0.6
-		default:
-			result[row.AssigneeID] = 0.4
-		}
-	}
-	return result, nil
-}
-
-// batchCalculatePerformanceScores 批量版 calculatePerformanceScore：一次聚合查询算出所有
-// 候选人最近 30 天内已解决/已关闭的工单数，而不是每个候选人单独查一次。
-func (s *TicketAssignmentService) batchCalculatePerformanceScores(ctx context.Context, candidateIDs []int) (map[int]float64, error) {
-	result := make(map[int]float64, len(candidateIDs))
-	for _, id := range candidateIDs {
-		result[id] = 0.5 // 跟原函数 totalTickets==0 分支一致
-	}
-	if len(candidateIDs) == 0 {
-		return result, nil
-	}
-
-	thirtyDaysAgo := time.Now().AddDate(0, 0, -30)
-	var rows []assigneeAggRow
-	if err := s.client.Ticket.Query().
-		Where(
-			ticket.AssigneeIDIn(candidateIDs...),
-			ticket.CreatedAtGTE(thirtyDaysAgo),
-			ticket.StatusIn("resolved", "closed"),
-		).
-		GroupBy(ticket.FieldAssigneeID).
-		Aggregate(ent.Count()).
-		Scan(ctx, &rows); err != nil {
-		return nil, err
-	}
-	for _, row := range rows {
-		if row.Count > 0 {
-			result[row.AssigneeID] = 0.8 // 跟原函数保持一致：有记录固定给 0.8
-		}
-	}
-	return result, nil
 }
 
 // calculateSkillScore 计算技能匹配度
@@ -577,7 +465,7 @@ func (s *TicketAssignmentService) getUserCategories(ctx context.Context, userID 
 	return []int{}, nil
 }
 
-// getMaxActiveTickets 获取最大活跃工单数
+// getMaxActiveTickets 获取最大活跃工单数——仍被 getAvailableUsers 使用（见上方注释）。
 func (s *TicketAssignmentService) getMaxActiveTickets(userID int, priority string) int {
 	// 根据优先级设置不同的最大活跃工单数
 	switch priority {
@@ -644,15 +532,6 @@ func (s *TicketAssignmentService) routeTicket(ctx context.Context, req *Assignme
 	// 这里实现基于规则的路由逻辑
 	// 暂时返回自动分配结果
 	return s.autoAssignTicket(ctx, req)
-}
-
-// getAlternativeUserIDs 获取备选用户ID列表
-func (s *TicketAssignmentService) getAlternativeUserIDs(users []UserWorkload) []int {
-	var ids []int
-	for _, u := range users {
-		ids = append(ids, u.UserID)
-	}
-	return ids
 }
 
 // GetUserWorkload 获取用户工作负载信息
