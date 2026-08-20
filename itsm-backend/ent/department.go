@@ -39,10 +39,6 @@ type Department struct {
 	OrgType string `json:"org_type,omitempty"`
 	// 软删除时间
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
-	// 区域/地域名称
-	AreaName string `json:"area_name,omitempty"`
-	// 组织类型: department=行政部门, warehouse=仓库/物流节点
-	OrgType string `json:"org_type,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the DepartmentQuery when eager-loading is set.
 	Edges        DepartmentEdges `json:"edges"`
@@ -245,18 +241,6 @@ func (_m *Department) assignValues(columns []string, values []any) error {
 				_m.DeletedAt = new(time.Time)
 				*_m.DeletedAt = value.Time
 			}
-		case department.FieldAreaName:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field area_name", values[i])
-			} else if value.Valid {
-				_m.AreaName = value.String
-			}
-		case department.FieldOrgType:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field org_type", values[i])
-			} else if value.Valid {
-				_m.OrgType = value.String
-			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -367,12 +351,6 @@ func (_m *Department) String() string {
 		builder.WriteString("deleted_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
-	builder.WriteString(", ")
-	builder.WriteString("area_name=")
-	builder.WriteString(_m.AreaName)
-	builder.WriteString(", ")
-	builder.WriteString("org_type=")
-	builder.WriteString(_m.OrgType)
 	builder.WriteByte(')')
 	return builder.String()
 }
