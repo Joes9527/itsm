@@ -9,7 +9,6 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketnotification"
-	"itsm-backend/ent/user"
 
 	"go.uber.org/zap"
 )
@@ -202,52 +201,20 @@ func (s *TicketNotificationService) createInAppNotification(
 // NotifyTicketCreated 工单创建时发送通知
 // 通知目标:
 //  1. 工单处理人(AssigneeID),如果有
-//  2. 工单创建人(ReporterID),如果是普通用户
-//  3. 所有租户内管理员(如果没有处理人)
+//  2. 工单创建人(RequesterID),如果是普通用户
+//
+// 不再有"只有创建人就广播全体/admin"的分支——工单刚创建、还没走到 BPMN fulfillment 节点时
+// 没有 assignee 现在是正常状态（审批还没走完），不是需要额外通知谁的异常。处理人分配时的
+// "你被分配了"通知由 BPMN 里紧跟 fulfillment 节点之后的 notify_handler 服务任务节点负责，
+// 不是这个函数的职责。
 func (s *TicketNotificationService) NotifyTicketCreated(ctx context.Context, ticket *ent.Ticket) error {
-	userIDs := []int{}
-
-	// 1. 处理人
+	var userIDs []int
 	if ticket.AssigneeID > 0 {
 		userIDs = append(userIDs, ticket.AssigneeID)
 	}
-
-	// 2. 创建人(去重)
-	if ticket.RequesterID > 0 {
-		dup := false
-		for _, id := range userIDs {
-			if id == ticket.RequesterID {
-				dup = true
-				break
-			}
-		}
-		if !dup {
-			userIDs = append(userIDs, ticket.RequesterID)
-		}
+	if ticket.RequesterID > 0 && ticket.RequesterID != ticket.AssigneeID {
+		userIDs = append(userIDs, ticket.RequesterID)
 	}
-
-	// 3. 如果只有创建人(没有处理人),广播给所有admin
-	if len(userIDs) <= 1 && ticket.RequesterID > 0 {
-		admins, err := s.client.User.Query().
-			Where(user.TenantID(ticket.TenantID)).
-			Where(user.IDNEQ(ticket.RequesterID)).
-			All(ctx)
-		if err == nil {
-			for _, admin := range admins {
-				dup := false
-				for _, id := range userIDs {
-					if id == admin.ID {
-						dup = true
-						break
-					}
-				}
-				if !dup {
-					userIDs = append(userIDs, admin.ID)
-				}
-			}
-		}
-	}
-
 	if len(userIDs) == 0 {
 		return nil
 	}
