@@ -77,19 +77,28 @@
 1. 新增 BPMN 声明式路由属性 `taskPurpose="fulfillment"`，与既有 `taskPurpose="approval"` 并列——`createUserTask`
    识别到这个值时，走一条新的、独立于审批 switch 的分支，触发团队工作负载均衡解析，不复用审批那套
    `assigneeRole`/`assigneeDeptId`/`assigneeGmChain` 属性（语义不同：审批解析的是"谁有资格批"，这里解析的是
-   "谁来干活"）。
+   "谁来干活"）。同时新增 `fulfillmentTeamCode` 属性，指定按 `teams.code`（不是 `teams.name`——理由见下）
+   路由到哪个团队；节点不声明这个属性时，fallback 到一个 Go 常量默认值（跟 `approvalFallbackCandidateGroup
+   = "ticket-approvers"`，`bpmn_process_engine.go:773`，是同一种既有的"节点未声明就用常量兜底"写法，不是
+   新发明的机制）——**不能把团队名称硬编码进 Go 代码里当匹配条件**：`teams` 表本来就有独立的 `code` 字段
+   （唯一约束），`assigneeRole` 也是匹配 `role.code` 而不是 `role.name`（`bpmn_process_engine.go:1104`），
+   用可能被改名/翻译的 `name` 去匹配，未来团队重命名或多语言租户下会直接匹配失败；用声明式属性而不是写死在
+   resolver 里，也是为了给以后"不同服务目录项路由到不同履约团队"（本次范围明确不做，见下）留出口子，不用
+   改代码，只需要在对应节点上填不同的 `fulfillmentTeamCode`。
 2. 新增 `TeamWorkloadResolver`（`service/approver/team_workload_resolver.go`），跟
    `DeptManagerResolver`/`PersonalManagerResolver`/`TeamLeaderResolver` 同一个家族。算法：候选人 =
-   `users.team_users` 指向"服务台-L1"（固定 team，不做分类→team 映射，所有需要 L1/L2/L3 执行的工单统一先进
-   L1，L1 内部再人工升级转发给专精团队——复用现有 `Activity_AutoEscalate` 模式，不新建升级机制）的 active
-   用户；工作负载查询复用本次会话已经修好的批量聚合写法（`service/ticket_assignment_service.go` 里新增的
-   `batchGetUserWorkloads`/`assigneeAggRow` 那套 `GroupBy`+`Aggregate(ent.Count())`，只是把候选人来源从
-   "全体 active 用户"换成"服务台-L1 成员"），挑 `ActiveTickets` 最少的一个直接写 `ProcessTask.assignee`——
-   不做"候选组展开、人工领取"（`candidateGroups`）那一套，因为已经决定自动挑最闲的人，不需要人工认领。
+   `users.team_users` 指向 `fulfillmentTeamCode` 对应团队（不做分类→team 映射，所有需要 L1/L2/L3 执行的
+   工单统一先进服务台-L1，L1 内部再人工升级转发给专精团队——复用现有 `Activity_AutoEscalate` 模式，不新建
+   升级机制）的 active 用户；工作负载查询复用本次会话已经修好的批量聚合写法（`service/ticket_assignment_service.go`
+   里新增的 `batchGetUserWorkloads`/`assigneeAggRow` 那套 `GroupBy`+`Aggregate(ent.Count())`，只是把候选人
+   来源从"全体 active 用户"换成"目标团队成员"），挑 `ActiveTickets` 最少的一个直接写 `ProcessTask.assignee`
+   ——不做"候选组展开、人工领取"（`candidateGroups`）那一套，因为已经决定自动挑最闲的人，不需要人工认领。
    候选池为空（当前 100% 会命中，因为服务台-L1 还没有真实成员）时，只记 `Warnw` 日志，**不落到
    `approvalFallbackCandidateGroup`（"ticket-approvers"）那个候选组兜底**，也不触发任何通知——跟设计二
    的"无 assignee 不广播"策略是同一件事的两面。
-3. 删除 `TicketService.CreateTicket`（`service/ticket_service.go:192-199`）里工单一创建就同步分配的
+3. **解析出 assignee 之后，必须同步做两件现有 BPMN 引擎完全不做的事**（这是审阅时发现的关键缺口，原稿漏了，
+   补充说明见"设计一"）：把结果写回 `ent.Ticket.assignee_id`/`status`，并触发一次"你被分配了"的通知。
+4. 删除 `TicketService.CreateTicket`（`service/ticket_service.go:192-199`）里工单一创建就同步分配的
    逻辑；`TicketAssignmentService.autoAssignTicket`/`getAvailableUsers` 以及它们专用的私有方法
    （`calculateUserScore`/`calculateSkillScore`/`calculateWorkloadScore`/
    `calculateCategoryExperienceScore`/`calculatePerformanceScore`/`checkUserSkills`/
@@ -98,21 +107,32 @@
    整体删除。`GetUserWorkload`/`GetTeamWorkload`/`AssignTicket`（手动指定 `PreferredUser` 那条路径）/
    `ReassignTicket`/`GetTicketsByAssignee`/`AssignTickets` 这些只读统计或人工操作接口保留——
    `controller/ticket_assignment_controller.go` 还在用，跟"自动分配该怎么选人"这件事无关。
-4. BPMN 文件改造：
+5. BPMN 文件改造：
    - `service_request_flow.bpmn`、`service_request_urgent_flow.bpmn`：`Activity_Execute` 加
-     `taskPurpose="fulfillment"`。
+     `taskPurpose="fulfillment"`，紧跟着新增一个 `serviceTask`（`service_task_type=ticket_task`，
+     `action=notify_handler`，复用已经实现好的 `TicketServiceTaskHandler.notifyHandler`，
+     `service/bpmn/ticket_handler.go:212`——它读 `ticketEntity.AssigneeID` 发通知，不用写新 Go 代码，
+     只要保证它在 `Activity_Execute` 把 assignee 写回 `ent.Ticket` 之后执行）。
    - `ticket_general_flow.bpmn`：**删除 `Activity_Assign` 节点**（`Flow_1` 直连 `Gateway_Approval`，
-     不再经过它），`Activity_Handle` 加 `taskPurpose="fulfillment"`——分配职责完全交给审批之后的
-     `Activity_Handle`，避免"审批前分配一次、审批后 `Activity_Handle` 又要处理一次"的语义重复。
+     不再经过它），`Activity_Handle` 加 `taskPurpose="fulfillment"`，同样在它之后加一个
+     `action=notify_handler` 的 `serviceTask`——分配职责完全交给审批之后的 `Activity_Handle`，避免
+     "审批前分配一次、审批后 `Activity_Handle` 又要处理一次"的语义重复。
    - `copilot_procurement_flow`：IT 总监审批通过后新增一个 `taskPurpose="fulfillment"` 的
-     `Activity_Execute`（如"开通 Copilot 许可证账号"）节点，再到 `EndEvent_1`。
-5. `NotifyTicketCreated`（`service/ticket_notification_service.go`）按新的时机模型重写：
+     `Activity_Execute`（如"开通 Copilot 许可证账号"）节点 + 同款 `notify_handler` 通知节点，再到
+     `EndEvent_1`。
+6. 前端 BPMN 设计器暴露 `taskPurpose="fulfillment"`/`fulfillmentTeamCode` 这两个新属性——比照
+   `assigneeGmChain` 当初的接入方式（`itsm-moddle-descriptor.ts` 声明 + `WorkflowNodeInspector.tsx`
+   加开关/输入框，`components/workflow/designer/WorkflowNodeInspector.tsx`），否则管理员没法通过设计器
+   配置这两个新属性，只能手改 `.bpmn` XML。
+7. `NotifyTicketCreated`（`service/ticket_notification_service.go`）按新的时机模型重写：
    - 有 `assignee`（意味着流程已经走到 `Activity_Execute`/`Activity_Handle` 且 `TeamWorkloadResolver`
      成功解析出人）→ 通知 assignee + 申请人，**不变**。
    - 没有 `assignee`，是因为工单刚创建、还没走到执行分配这一步（现在是**正常状态**，不是异常）→ 只通知
      申请人，**不再有"广播全体/admin"这条路**。
    - `TeamWorkloadResolver` 到了 `Activity_Execute` 却解析不到人（服务台-L1 是空的）→ 沿用设计一定的策略，
      只记警告日志，不发任何通知——这是真正的异常信号，靠后台监控/日志发现，不该用邮件轰炸的方式暴露。
+   - 注意：`NotifyTicketCreated` 这次重写跟"被分配时通知处理人"是两件独立的事——后者现在完全由第 5 点新增
+     的 `notify_handler` 服务任务节点负责，不是 `NotifyTicketCreated` 的职责范围。
 
 **明确不在本次范围内**：
 
@@ -133,23 +153,52 @@
 `task.TaskPurpose == "fulfillment"` 的并列分支：
 
 ```go
+// defaultFulfillmentTeamCode 是 taskPurpose="fulfillment" 节点没有声明 fulfillmentTeamCode 时的
+// 兜底团队，跟 approvalFallbackCandidateGroup（第 773 行）是同一种"节点未声明就用常量兜底"写法。
+const defaultFulfillmentTeamCode = "服务台-l1" // 需在实施阶段跟 pkg/seeder/seeder.go 实际写入的 teams.code 值核对一致
+
 } else if task.TaskPurpose == "fulfillment" {
-    assignee = e.resolveFulfillmentAssignee(ctx, instance)
+    teamCode := task.FulfillmentTeamCode
+    if teamCode == "" {
+        teamCode = defaultFulfillmentTeamCode
+    }
+    assignee = e.resolveFulfillmentAssignee(ctx, instance, teamCode)
     if assignee == "" {
-        e.logger.Warnw("执行任务未在服务台-L1解析到可用处理人，工单暂不分配",
-            "taskID", task.ID, "instanceID", instance.ID)
+        e.logger.Warnw("执行任务未在目标团队解析到可用处理人，工单暂不分配",
+            "taskID", task.ID, "instanceID", instance.ID, "teamCode", teamCode)
         // 不落候选组兜底，不触发任何通知——留空 assignee，等团队有真实成员后
         // 由人工在"我的待办"/工单列表里认领，或后续补一个定时扫描重试（不在本次范围）。
+    } else {
+        // 关键：BPMN 引擎从来不会自动回写 ent.Ticket——审批任务只决定"谁批"，本来就不该碰
+        // 工单行；但 fulfillment 任务的 assignee 就是工单的处理人，这里必须同步写回
+        // ticket.assignee_id/status，否则工单列表/详情/外部 API 会永远显示"未分配"，即使
+        // BPMN 任务表里已经有了真实的 assignee。是否被分配的通知交给 BPMN 文件里紧跟着的
+        // notify_handler 服务任务节点（读这里刚写好的 assignee_id），引擎本身不直接调用
+        // 通知服务——沿用"通知走声明式 ServiceTask 节点"的既有模式（Activity_NotifyRequester/
+        // Activity_RejectNotify 都是这样做的），不用给 CustomProcessEngine 加新的服务依赖。
+        // business_id 是 reservedInstanceVariableKeys 里的既有约定（bpmn_process_engine.go:2104），
+        // ticket_task 的 ServiceTask.Execute 已经在用同一个变量取 ticket id（ticket_handler.go:94-100），
+        // 这里复用 createUserTask 顶部已有的 getUserID 辅助函数，不新开取值路径。
+        assigneeID, _ := strconv.Atoi(assignee)
+        businessTicketID, _ := strconv.Atoi(getUserID("business_id"))
+        if err := e.client.Ticket.UpdateOneID(businessTicketID).
+            Where(ticket.TenantIDEQ(instance.TenantID)).
+            SetAssigneeID(assigneeID).
+            SetStatus(common.TicketStatusAssigned). // 跟 ticket_handler.go:328 assignTicket 用的同一个常量
+            Exec(ctx); err != nil {
+            e.logger.Warnw("fulfillment 任务已解析出 assignee，但回写 ticket 失败",
+                "taskID", task.ID, "assignee", assignee, "error", err)
+        }
     }
 }
 ```
 
-`resolveFulfillmentAssignee` 调用 `approver.NewTeamWorkloadResolver().Resolve(ctx, e.client, &approver.ApproverContext{TenantID: instance.TenantID})`——
-不需要 `RequesterID`/`DepartmentID`（跟审批解析器不同，执行分配不看"申请人是谁"，只看"服务台-L1 团队现在
-谁最闲"）。`TeamWorkloadResolver` 内部：
+`resolveFulfillmentAssignee` 调用 `approver.NewTeamWorkloadResolver().Resolve(ctx, e.client, &approver.ApproverContext{TenantID: instance.TenantID, TeamCode: teamCode})`——
+不需要 `RequesterID`/`DepartmentID`（跟审批解析器不同，执行分配不看"申请人是谁"，只看目标团队现在谁最闲）。
+`TeamWorkloadResolver` 内部：
 
-1. 先按 `teams.name = "服务台-L1" AND tenant_id = ?` 查出这个租户下服务台-L1 团队的 `id`（不能跨租户硬编码
-   `team.id`，`teams` 是租户隔离的，每个租户的服务台-L1 是不同的行），再查
+1. 先按 `teams.code = <appCtx.TeamCode> AND tenant_id = ?` 查出这个租户下目标团队的 `id`（用 `code` 不用
+   `name` 匹配，理由见"范围"一节；不能跨租户硬编码 `team.id`，`teams` 是租户隔离的），再查
    `users WHERE team_users = <上一步查到的 team.id> AND tenant_id = ? AND active = true`，得到候选人
    ID 列表。
 2. 候选人列表为空直接返回错误（调用方据此记警告日志，不再往下走）。
@@ -177,28 +226,40 @@ func (s *TicketNotificationService) NotifyTicketCreated(ctx context.Context, tic
 }
 ```
 
-`NotifyTicketAssigned`（工单真正被分配时发通知，`ticket_notification_service.go:264` 起）不受影响，继续
-在 `TeamWorkloadResolver` 成功解析出人、`createUserTask` 写入 `assignee` 之后触发——这部分现有机制已经是对的，
-只是触发时机现在会推迟到 `Activity_Execute`/`Activity_Handle`，而不是工单创建那一刻。
+**订正（审阅时发现原稿这里判断错了）**：`NotifyTicketAssigned`（`ticket_notification_service.go:264`）
+**不会**自动在分配发生时触发——它只是一个独立函数，现在只被人工重新分配路径
+（`TicketService.AssignTicket`/`TicketAssignmentService.assignToSpecificUser`）显式调用。旧代码里
+"自动分配的人会收到通知"这个体验，纯粹是因为分配和创建在同一个同步调用链里，工单创建通知
+（`ticket_service.go:235`）触发时 assignee 已经写好了，两者顺带合并在一起，从来没有专门的"你被分配了"
+通知路径。搬到 `Activity_Execute`/`Activity_Handle` 之后，创建通知和分配之间隔了不定长的审批等待时间，
+这个"顺便带上"的机制会彻底失效。这也是为什么设计一里新增了 `notify_handler` 服务任务节点——处理人的
+"你被分配了"通知，现在完全由这个新节点负责，不再依赖 `NotifyTicketCreated`/`NotifyTicketAssigned` 里
+的任何路径。
 
 ## 测试计划
 
 **后端**：
 
-- `service/approver/team_workload_resolver_test.go`（新建）：�covers 正常解析出最闲成员、候选池为空返回错误
-  两种情况，复用 `TestTicketAssignmentService_AutoAssign_QueryCountIsBounded` 同款的查询次数断言（证明批量
-  查询迁移过来后没有退化回 O(N)）。
+- `service/approver/team_workload_resolver_test.go`（新建）：覆盖按 `teams.code` 正常解析出最闲成员、
+  `fulfillmentTeamCode` 指向不存在的团队、候选池为空返回错误三种情况，复用
+  `TestTicketAssignmentService_AutoAssign_QueryCountIsBounded` 同款的查询次数断言（证明批量查询迁移过来
+  后没有退化回 O(N)）。
 - `service/bpmn_process_engine_test.go`：补 `taskPurpose="fulfillment"` 节点创建时正确调用
-  `TeamWorkloadResolver`、候选池为空时正确留空且不落候选组兜底的用例。
+  `TeamWorkloadResolver`、成功解析出 assignee 时正确回写 `ent.Ticket.assignee_id`/`status`、候选池为空时
+  正确留空且不落候选组兜底、也不误写 ticket 的用例。
+- `service/bpmn/ticket_handler_test.go`：补验证 `action=notify_handler` 的节点在 `Activity_Execute`/
+  `Activity_Handle` 写好 `assignee_id` 之后执行时，能正确读到刚写入的 assignee 并发通知（顺序依赖，不是
+  独立单测能覆盖的，需要一个跑完整 process instance 的集成用例）。
 - `service/ticket_notification_service_test.go`：补"无 assignee 只通知申请人，不广播"的用例（如果现有测试
   文件里有覆盖旧广播行为的用例，需要同步删除/更新，避免新旧行为断言打架）。
 - `go test ./...` 全绿。
 
 **手工/端到端**：
 
-- 往服务台-L1（`teams.id=1`）加 1-2 个真实测试账号（`UPDATE users SET team_users=1 WHERE id IN (...)`），
-  用真实 UI 重跑一遍 Copilot 采购申请全链路，验证 IT 总监审批通过后新增的 `Activity_Execute` 节点正确创建、
-  正确分配给服务台-L1 里工作负载最低的那个人，且通知只发给了 assignee + 申请人两个人（不是全租户）。
+- 往服务台-L1（`teams.code` 实际值以实施时 `pkg/seeder/seeder.go` 或现有 DB 行为准，不是拍脑袋写的
+  字符串）加 1-2 个真实测试账号，用真实 UI 重跑一遍 Copilot 采购申请全链路，验证 IT 总监审批通过后新增的
+  `Activity_Execute` 节点正确创建、正确分配给服务台-L1 里工作负载最低的那个人、`ent.Ticket` 详情页正确显示
+  这个 assignee（不再是"未分配"）、且被分配的人真的收到了一条通知（不是靠"顺便带上"）。
 - 再测一次"不需要审批"的场景（比如吊销 VPN 权限对应的目录项，如果现在没有现成的，需要先建一个
   `requires_approval=false`/走 `ticket_general_flow` 无审批分支的测试目录项），验证提交后不经过任何审批
   节点、直接被服务台-L1 自动分配。
@@ -222,3 +283,11 @@ func (s *TicketNotificationService) NotifyTicketCreated(ctx context.Context, tic
   `TeamWorkloadResolver`**：本次范围明确只覆盖"从无到有"的两个入口（`Activity_Execute`/`Activity_Handle`），
   流程内部后续的升级转发节点沿用现状（人工/`Activity_AutoEscalate`），如果后续发现这些节点也有同样的"广撒网
   分配"问题，需要另开一轮讨论，不在本次 spec 里顺带解决。
+- **`defaultFulfillmentTeamCode` 常量的实际值需要跟数据库核对**：当前 tenant 1 里服务台-L1 的
+  `teams.code` 实际存的是 `"服务台-l1"`（名称的机械小写化，不是一个干净的英文 code），实施阶段要么直接用
+  这个值当默认常量，要么借机把 `pkg/seeder/seeder.go` 里团队的 `code` 改成更规范的值（如
+  `"servicedesk-l1"`）——两种做法都行，但要保证常量硬编码的值跟 seeder 实际写入 DB 的值一致，否则默认兜底
+  会一直匹配不到团队，等价于候选池永远为空。
+- **`notify_handler` 服务任务节点依赖执行顺序**：它读 `ent.Ticket.assignee_id` 发通知，必须确保 BPMN
+  引擎对同一个 `ProcessInstance` 里前后两个节点是严格顺序执行（先完成 fulfillment 节点的回写、再触发下一个
+  节点），不能是并发/异步执行——实施阶段需要确认现有引擎的节点推进机制满足这个顺序保证，本次没有专门验证。
