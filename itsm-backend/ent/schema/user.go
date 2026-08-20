@@ -87,6 +87,11 @@ func (User) Fields() []ent.Field {
 				"字段（格式\"姓名:工号\"，按工号匹配到 username）。跟 department.manager_id" +
 				"一样是普通整型外键，不建 ent edge。0/未设置表示无记录或没匹配上。").
 			Optional(),
+		field.String("job_title").
+			Comment("职位头衔，来自HR系统 employee_post 字段，用于 PersonalManagerResolver 按" +
+				"关键字识别审批层级（如\"总经理\"）。跟 function_line（职能条线）是两个不同维度：" +
+				"job_title 是这个人自己的头衔，function_line 是这个人所属的横向业务分组。").
+			Optional(),
 	}
 }
 

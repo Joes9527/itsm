@@ -81,6 +81,7 @@ type UserDetailResponse struct {
 	Gender            string  `json:"gender,omitempty"`
 	IsLeader          bool    `json:"isLeader"`
 	FunctionLine      string  `json:"functionLine,omitempty"`
+	JobTitle          string  `json:"jobTitle,omitempty"`
 	ManagerID         int     `json:"managerId,omitempty"`
 	// ManagerName 是冗余展示字段，service 层按当页 ManagerID 批量补充（见
 	// UserService.enrichManagerNames），dto.ToUserDetailResponse 本身不填它——

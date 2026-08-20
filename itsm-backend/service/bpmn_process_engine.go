@@ -856,6 +856,14 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 					// 而不是直接跳到候选组兜底，保持跟原有优先级链兼容。
 					assignee = e.resolveApprovalAssignee(ctx, instance, approvalRequester)
 				}
+			case task.AssigneeGmChain:
+				// 沿申请人自己的真实汇报链找总经理，矩阵组织下天然按人（业务线）区分，
+				// 跟上面的固定组织范围路由是两种不同语义，互斥（BPMN 设计器保证不会
+				// 同时声明 assigneeDeptId 和 assigneeGmChain）。
+				assignee = e.resolveGmChainAssignee(ctx, instance, approvalRequester)
+				if assignee == "" {
+					assignee = e.resolveApprovalAssignee(ctx, instance, approvalRequester)
+				}
 			default:
 				// 都没声明：解析申请人自己所在部门的负责人（这次会话早前已经做的部分）
 				assignee = e.resolveApprovalAssignee(ctx, instance, approvalRequester)
@@ -1041,6 +1049,41 @@ func (e *CustomProcessEngine) resolveApprovalAssignee(ctx context.Context, insta
 		return ""
 	}
 	return strconv.Itoa(manager.UserID)
+}
+
+// resolveGmChainAssignee 把申请人自己的个人汇报链（user.manager_id，非部门维度）向上爬到第一个
+// job_title 命中"总经理"关键字的人，解析为审批任务的 assignee。矩阵组织下同一个部门节点可能
+// 有多个平级总经理（不同业务线各自的负责人），PersonalManagerResolver 按人（顺着申请人自己的
+// 真实汇报链）解析，天然避开这种部门维度无法区分的歧义——设计详见
+// docs/superpowers/specs/2026-08-20-personal-manager-chain-approval-design.md。
+// 解析失败，或者解析出的总经理正好是申请人自己，都返回空字符串——注意这不会直接落到候选组
+// 兜底：调用方（createUserTask 的 switch 分支）在这个函数返回空串后，会先退到
+// resolveApprovalAssignee（申请人自己部门的负责人）再试一次，只有那一步也失败才会最终落到
+// 候选组兜底。
+func (e *CustomProcessEngine) resolveGmChainAssignee(ctx context.Context, instance *ent.ProcessInstance, requester *ent.User) string {
+	if requester == nil {
+		return ""
+	}
+	approvers, err := approver.NewPersonalManagerResolver().Resolve(ctx, e.client, &approver.ApproverContext{
+		TenantID:    instance.TenantID,
+		RequesterID: requester.ID,
+	})
+	if err != nil || len(approvers) == 0 {
+		e.logger.Infow(
+			"审批任务未在申请人汇报链上解析到总经理，转候选组兜底",
+			"requesterID", requester.ID, "error", err,
+		)
+		return ""
+	}
+	gm := approvers[0]
+	if gm.UserID == requester.ID {
+		e.logger.Infow(
+			"汇报链解析出的总经理是申请人本人，转候选组兜底，避免自己审批自己",
+			"requesterID", requester.ID,
+		)
+		return ""
+	}
+	return strconv.Itoa(gm.UserID)
 }
 
 // resolveRoleCandidates 查询该租户下所有 active 且（主角色等于 roleCode，或通过

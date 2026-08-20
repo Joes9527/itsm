@@ -9,6 +9,7 @@ import (
 
 	"itsm-backend/config"
 	"itsm-backend/database"
+	"itsm-backend/ent/user"
 
 	"github.com/xuri/excelize/v2"
 	"golang.org/x/crypto/bcrypt"
@@ -303,12 +304,29 @@ func main() {
 	}
 	passwordHashStr := string(hashedPassword)
 
+	// 预加载已存在用户（按 username=EmpID 索引），让本脚本可以安全重跑：已存在的用户走
+	// 更新分支（目前只更新 job_title，避免覆盖管理员在admin界面手工改过的其他字段），
+	// 不会因为 username 唯一约束而创建失败——之前没有这层判断，重跑对已导入用户完全无效
+	// （包括下面要回填的 job_title，也包括"直属上级"第二遍扫描要用的 empIDToUserID 映射）。
+	existingUsers, err := client.User.Query().
+		Where(user.TenantIDEQ(tenantID)).
+		All(ctx)
+	if err != nil {
+		log.Fatalf("Failed to query existing users: %v", err)
+	}
+	existingUsernameToID := make(map[string]int, len(existingUsers))
+	for _, u := range existingUsers {
+		existingUsernameToID[u.Username] = u.ID
+	}
+	log.Printf("Loaded %d existing users from DB for idempotent re-run", len(existingUsers))
+
 	seenUsernames := make(map[string]bool)
 	seenEmails := make(map[string]bool)
 	empIDToUserID := make(map[string]int)
 
 	insertedUserCount := 0
 	deptLinkedCount := 0
+	updatedJobTitleCount := 0
 
 	for idx, p := range activePersons {
 		username := p.EmpID
@@ -350,28 +368,46 @@ func main() {
 			}
 		}
 
-		c := client.User.Create().
-			SetUsername(username).
-			SetName(name).
-			SetEmail(email).
-			SetPhone(phone).
-			SetRole("end_user").
-			SetPasswordHash(passwordHashStr).
-			SetActive(true).
-			SetTenantID(tenantID)
-
-		if deptID > 0 {
-			c.SetDepartmentID(deptID)
-			c.SetDepartment(deptName)
-			deptLinkedCount++
-		}
-
-		created, err := c.Save(ctx)
-		if err != nil {
-			log.Printf("[%d/%d] Failed to create user %s (%s): %v", idx+1, len(activePersons), username, email, err)
+		if existingID, ok := existingUsernameToID[username]; ok {
+			// 已存在：只更新 job_title（本任务范围），不碰其他字段——避免覆盖运营人员在
+			// admin 界面手工改过的角色/部门/激活状态等。empIDToUserID 仍然要填，否则下面
+			// 第二遍扫描"直属上级"时，已存在用户的汇报线永远链接不上（这个 map 是那段代码
+			// 唯一的 EmpID -> DB ID 查找来源）。
+			empIDToUserID[p.EmpID] = existingID
+			if p.Post != "" {
+				if err := client.User.UpdateOneID(existingID).SetJobTitle(p.Post).Exec(ctx); err != nil {
+					log.Printf("[%d/%d] Failed to update job_title for existing user %s: %v", idx+1, len(activePersons), username, err)
+				} else {
+					updatedJobTitleCount++
+				}
+			}
 		} else {
-			insertedUserCount++
-			empIDToUserID[p.EmpID] = created.ID
+			c := client.User.Create().
+				SetUsername(username).
+				SetName(name).
+				SetEmail(email).
+				SetPhone(phone).
+				SetRole("end_user").
+				SetPasswordHash(passwordHashStr).
+				SetActive(true).
+				SetTenantID(tenantID)
+
+			if deptID > 0 {
+				c.SetDepartmentID(deptID)
+				c.SetDepartment(deptName)
+				deptLinkedCount++
+			}
+			if p.Post != "" {
+				c.SetJobTitle(p.Post)
+			}
+
+			created, err := c.Save(ctx)
+			if err != nil {
+				log.Printf("[%d/%d] Failed to create user %s (%s): %v", idx+1, len(activePersons), username, email, err)
+			} else {
+				insertedUserCount++
+				empIDToUserID[p.EmpID] = created.ID
+			}
 		}
 
 		if (idx+1)%1000 == 0 || idx+1 == len(activePersons) {
@@ -379,7 +415,7 @@ func main() {
 		}
 	}
 
-	log.Printf("EHR Import Finished! Total Org: %d, Total Active Users: %d (Dept Linked: %d)", insertedDeptCount, insertedUserCount, deptLinkedCount)
+	log.Printf("EHR Import Finished! Total Org: %d, New Users: %d (Dept Linked: %d), Existing Users job_title Updated: %d", insertedDeptCount, insertedUserCount, deptLinkedCount, updatedJobTitleCount)
 
 	// -------------------------------------------------------------
 	// 6. Link Direct Supervisors (Second Pass)

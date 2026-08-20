@@ -230,6 +230,46 @@ func (_u *DepartmentUpdate) ClearDeletedAt() *DepartmentUpdate {
 	return _u
 }
 
+// SetAreaName sets the "area_name" field.
+func (_u *DepartmentUpdate) SetAreaName(v string) *DepartmentUpdate {
+	_u.mutation.SetAreaName(v)
+	return _u
+}
+
+// SetNillableAreaName sets the "area_name" field if the given value is not nil.
+func (_u *DepartmentUpdate) SetNillableAreaName(v *string) *DepartmentUpdate {
+	if v != nil {
+		_u.SetAreaName(*v)
+	}
+	return _u
+}
+
+// ClearAreaName clears the value of the "area_name" field.
+func (_u *DepartmentUpdate) ClearAreaName() *DepartmentUpdate {
+	_u.mutation.ClearAreaName()
+	return _u
+}
+
+// SetOrgType sets the "org_type" field.
+func (_u *DepartmentUpdate) SetOrgType(v string) *DepartmentUpdate {
+	_u.mutation.SetOrgType(v)
+	return _u
+}
+
+// SetNillableOrgType sets the "org_type" field if the given value is not nil.
+func (_u *DepartmentUpdate) SetNillableOrgType(v *string) *DepartmentUpdate {
+	if v != nil {
+		_u.SetOrgType(*v)
+	}
+	return _u
+}
+
+// ClearOrgType clears the value of the "org_type" field.
+func (_u *DepartmentUpdate) ClearOrgType() *DepartmentUpdate {
+	_u.mutation.ClearOrgType()
+	return _u
+}
+
 // SetParent sets the "parent" edge to the Department entity.
 func (_u *DepartmentUpdate) SetParent(v *Department) *DepartmentUpdate {
 	return _u.SetParentID(v.ID)
@@ -616,6 +656,18 @@ func (_u *DepartmentUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	}
 	if _u.mutation.DeletedAtCleared() {
 		_spec.ClearField(department.FieldDeletedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.AreaName(); ok {
+		_spec.SetField(department.FieldAreaName, field.TypeString, value)
+	}
+	if _u.mutation.AreaNameCleared() {
+		_spec.ClearField(department.FieldAreaName, field.TypeString)
+	}
+	if value, ok := _u.mutation.OrgType(); ok {
+		_spec.SetField(department.FieldOrgType, field.TypeString, value)
+	}
+	if _u.mutation.OrgTypeCleared() {
+		_spec.ClearField(department.FieldOrgType, field.TypeString)
 	}
 	if _u.mutation.ParentCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1177,6 +1229,46 @@ func (_u *DepartmentUpdateOne) ClearDeletedAt() *DepartmentUpdateOne {
 	return _u
 }
 
+// SetAreaName sets the "area_name" field.
+func (_u *DepartmentUpdateOne) SetAreaName(v string) *DepartmentUpdateOne {
+	_u.mutation.SetAreaName(v)
+	return _u
+}
+
+// SetNillableAreaName sets the "area_name" field if the given value is not nil.
+func (_u *DepartmentUpdateOne) SetNillableAreaName(v *string) *DepartmentUpdateOne {
+	if v != nil {
+		_u.SetAreaName(*v)
+	}
+	return _u
+}
+
+// ClearAreaName clears the value of the "area_name" field.
+func (_u *DepartmentUpdateOne) ClearAreaName() *DepartmentUpdateOne {
+	_u.mutation.ClearAreaName()
+	return _u
+}
+
+// SetOrgType sets the "org_type" field.
+func (_u *DepartmentUpdateOne) SetOrgType(v string) *DepartmentUpdateOne {
+	_u.mutation.SetOrgType(v)
+	return _u
+}
+
+// SetNillableOrgType sets the "org_type" field if the given value is not nil.
+func (_u *DepartmentUpdateOne) SetNillableOrgType(v *string) *DepartmentUpdateOne {
+	if v != nil {
+		_u.SetOrgType(*v)
+	}
+	return _u
+}
+
+// ClearOrgType clears the value of the "org_type" field.
+func (_u *DepartmentUpdateOne) ClearOrgType() *DepartmentUpdateOne {
+	_u.mutation.ClearOrgType()
+	return _u
+}
+
 // SetParent sets the "parent" edge to the Department entity.
 func (_u *DepartmentUpdateOne) SetParent(v *Department) *DepartmentUpdateOne {
 	return _u.SetParentID(v.ID)
@@ -1593,6 +1685,18 @@ func (_u *DepartmentUpdateOne) sqlSave(ctx context.Context) (_node *Department, 
 	}
 	if _u.mutation.DeletedAtCleared() {
 		_spec.ClearField(department.FieldDeletedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.AreaName(); ok {
+		_spec.SetField(department.FieldAreaName, field.TypeString, value)
+	}
+	if _u.mutation.AreaNameCleared() {
+		_spec.ClearField(department.FieldAreaName, field.TypeString)
+	}
+	if value, ok := _u.mutation.OrgType(); ok {
+		_spec.SetField(department.FieldOrgType, field.TypeString, value)
+	}
+	if _u.mutation.OrgTypeCleared() {
+		_spec.ClearField(department.FieldOrgType, field.TypeString)
 	}
 	if _u.mutation.ParentCleared() {
 		edge := &sqlgraph.EdgeSpec{

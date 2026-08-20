@@ -59,6 +59,8 @@ type User struct {
 	FunctionLine string `json:"function_line,omitempty"`
 	// 直属上级的用户ID（汇报线，个人级别，跟 department.manager_id 那种部门级负责人是两个概念）。来自 ehr-data.xlsx person 表的 direct_supervisor字段（格式"姓名:工号"，按工号匹配到 username）。跟 department.manager_id一样是普通整型外键，不建 ent edge。0/未设置表示无记录或没匹配上。
 	ManagerID int `json:"manager_id,omitempty"`
+	// 职位头衔，来自HR系统 employee_post 字段，用于 PersonalManagerResolver 按关键字识别审批层级（如"总经理"）。跟 function_line（职能条线）是两个不同维度：job_title 是这个人自己的头衔，function_line 是这个人所属的横向业务分组。
+	JobTitle string `json:"job_title,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the UserQuery when eager-loading is set.
 	Edges                  UserEdges `json:"edges"`
@@ -264,7 +266,7 @@ func (*User) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case user.FieldID, user.FieldDepartmentID, user.FieldTenantID, user.FieldAssignedByMspID, user.FieldManagerID:
 			values[i] = new(sql.NullInt64)
-		case user.FieldUsername, user.FieldEmail, user.FieldName, user.FieldRole, user.FieldDepartment, user.FieldPhone, user.FieldFeishuOpenID, user.FieldPasswordHash, user.FieldMspRole, user.FieldGender, user.FieldFunctionLine:
+		case user.FieldUsername, user.FieldEmail, user.FieldName, user.FieldRole, user.FieldDepartment, user.FieldPhone, user.FieldFeishuOpenID, user.FieldPasswordHash, user.FieldMspRole, user.FieldGender, user.FieldFunctionLine, user.FieldJobTitle:
 			values[i] = new(sql.NullString)
 		case user.FieldCreatedAt, user.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -414,6 +416,12 @@ func (_m *User) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field manager_id", values[i])
 			} else if value.Valid {
 				_m.ManagerID = int(value.Int64)
+			}
+		case user.FieldJobTitle:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field job_title", values[i])
+			} else if value.Valid {
+				_m.JobTitle = value.String
 			}
 		case user.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -611,6 +619,9 @@ func (_m *User) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("manager_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ManagerID))
+	builder.WriteString(", ")
+	builder.WriteString("job_title=")
+	builder.WriteString(_m.JobTitle)
 	builder.WriteByte(')')
 	return builder.String()
 }

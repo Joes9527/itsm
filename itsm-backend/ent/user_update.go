@@ -383,6 +383,26 @@ func (_u *UserUpdate) ClearManagerID() *UserUpdate {
 	return _u
 }
 
+// SetJobTitle sets the "job_title" field.
+func (_u *UserUpdate) SetJobTitle(v string) *UserUpdate {
+	_u.mutation.SetJobTitle(v)
+	return _u
+}
+
+// SetNillableJobTitle sets the "job_title" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableJobTitle(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetJobTitle(*v)
+	}
+	return _u
+}
+
+// ClearJobTitle clears the value of the "job_title" field.
+func (_u *UserUpdate) ClearJobTitle() *UserUpdate {
+	_u.mutation.ClearJobTitle()
+	return _u
+}
+
 // SetDepartmentRefID sets the "department_ref" edge to the Department entity by ID.
 func (_u *UserUpdate) SetDepartmentRefID(id int) *UserUpdate {
 	_u.mutation.SetDepartmentRefID(id)
@@ -1102,6 +1122,12 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.ManagerIDCleared() {
 		_spec.ClearField(user.FieldManagerID, field.TypeInt)
+	}
+	if value, ok := _u.mutation.JobTitle(); ok {
+		_spec.SetField(user.FieldJobTitle, field.TypeString, value)
+	}
+	if _u.mutation.JobTitleCleared() {
+		_spec.ClearField(user.FieldJobTitle, field.TypeString)
 	}
 	if _u.mutation.DepartmentRefCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -2151,6 +2177,26 @@ func (_u *UserUpdateOne) ClearManagerID() *UserUpdateOne {
 	return _u
 }
 
+// SetJobTitle sets the "job_title" field.
+func (_u *UserUpdateOne) SetJobTitle(v string) *UserUpdateOne {
+	_u.mutation.SetJobTitle(v)
+	return _u
+}
+
+// SetNillableJobTitle sets the "job_title" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableJobTitle(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetJobTitle(*v)
+	}
+	return _u
+}
+
+// ClearJobTitle clears the value of the "job_title" field.
+func (_u *UserUpdateOne) ClearJobTitle() *UserUpdateOne {
+	_u.mutation.ClearJobTitle()
+	return _u
+}
+
 // SetDepartmentRefID sets the "department_ref" edge to the Department entity by ID.
 func (_u *UserUpdateOne) SetDepartmentRefID(id int) *UserUpdateOne {
 	_u.mutation.SetDepartmentRefID(id)
@@ -2900,6 +2946,12 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if _u.mutation.ManagerIDCleared() {
 		_spec.ClearField(user.FieldManagerID, field.TypeInt)
+	}
+	if value, ok := _u.mutation.JobTitle(); ok {
+		_spec.SetField(user.FieldJobTitle, field.TypeString, value)
+	}
+	if _u.mutation.JobTitleCleared() {
+		_spec.ClearField(user.FieldJobTitle, field.TypeString)
 	}
 	if _u.mutation.DepartmentRefCleared() {
 		edge := &sqlgraph.EdgeSpec{

@@ -737,3 +737,226 @@ func TestAmountThreshold_BoundaryValues(t *testing.T) {
 	inRange = amount >= threshold.MinAmount && (threshold.MaxAmount == 0 || amount <= threshold.MaxAmount)
 	assert.False(t, inRange)
 }
+
+// =====================================================================
+// PersonalManagerResolver
+// =====================================================================
+
+func TestPersonalManagerResolver_Resolve_ClimbsToGMTitle(t *testing.T) {
+	fx := newApproverFixture(t)
+	defer fx.client.Close()
+
+	gm, err := fx.client.User.Create().
+		SetUsername("gm_ceo").
+		SetEmail("gm@personal-manager.test").
+		SetName("GM").
+		SetPasswordHash("hash").
+		SetActive(true).
+		SetTenantID(fx.tenant.ID).
+		SetJobTitle("综合物流总经理").
+		Save(fx.ctx)
+	require.NoError(t, err)
+
+	teamLead, err := fx.client.User.Create().
+		SetUsername("team_lead").
+		SetEmail("lead@personal-manager.test").
+		SetName("Team Lead").
+		SetPasswordHash("hash").
+		SetActive(true).
+		SetTenantID(fx.tenant.ID).
+		SetJobTitle("操作主管").
+		SetManagerID(gm.ID).
+		Save(fx.ctx)
+	require.NoError(t, err)
+
+	submitter, err := fx.client.User.Create().
+		SetUsername("submitter").
+		SetEmail("submitter@personal-manager.test").
+		SetName("Submitter").
+		SetPasswordHash("hash").
+		SetActive(true).
+		SetTenantID(fx.tenant.ID).
+		SetJobTitle("客户服务专员").
+		SetManagerID(teamLead.ID).
+		Save(fx.ctx)
+	require.NoError(t, err)
+
+	resolver := NewPersonalManagerResolver()
+	approvers, err := resolver.Resolve(fx.ctx, fx.client, &ApproverContext{
+		TenantID:    fx.tenant.ID,
+		RequesterID: submitter.ID,
+	})
+	require.NoError(t, err)
+	require.Len(t, approvers, 1)
+	assert.Equal(t, gm.ID, approvers[0].UserID)
+	assert.Equal(t, "personal_manager_gm", approvers[0].Role)
+}
+
+func TestPersonalManagerResolver_Resolve_MatrixOrgDisambiguatesByOwnChain(t *testing.T) {
+	// 同一个"部门节点"概念在真实数据里可能有多条平级业务线的总经理（矩阵组织），
+	// PersonalManagerResolver 按提交人自己的汇报链爬，两个不同业务线的提交人应该
+	// 各自解析到自己业务线的总经理，不会串到另一条业务线上。
+	fx := newApproverFixture(t)
+	defer fx.client.Close()
+
+	gmA, err := fx.client.User.Create().
+		SetUsername("gm_iff").
+		SetEmail("gm-iff@personal-manager.test").
+		SetName("GM IFF").
+		SetPasswordHash("hash").
+		SetActive(true).
+		SetTenantID(fx.tenant.ID).
+		SetJobTitle("国际货代总经理 - 北京片区").
+		Save(fx.ctx)
+	require.NoError(t, err)
+
+	gmB, err := fx.client.User.Create().
+		SetUsername("gm_il").
+		SetEmail("gm-il@personal-manager.test").
+		SetName("GM IL").
+		SetPasswordHash("hash").
+		SetActive(true).
+		SetTenantID(fx.tenant.ID).
+		SetJobTitle("综合物流总经理-北京片区").
+		Save(fx.ctx)
+	require.NoError(t, err)
+
+	submitterA, err := fx.client.User.Create().
+		SetUsername("submitter_iff").
+		SetEmail("submitter-iff@personal-manager.test").
+		SetName("Submitter IFF").
+		SetPasswordHash("hash").
+		SetActive(true).
+		SetTenantID(fx.tenant.ID).
+		SetManagerID(gmA.ID).
+		Save(fx.ctx)
+	require.NoError(t, err)
+
+	submitterB, err := fx.client.User.Create().
+		SetUsername("submitter_il").
+		SetEmail("submitter-il@personal-manager.test").
+		SetName("Submitter IL").
+		SetPasswordHash("hash").
+		SetActive(true).
+		SetTenantID(fx.tenant.ID).
+		SetManagerID(gmB.ID).
+		Save(fx.ctx)
+	require.NoError(t, err)
+
+	resolver := NewPersonalManagerResolver()
+
+	approversA, err := resolver.Resolve(fx.ctx, fx.client, &ApproverContext{TenantID: fx.tenant.ID, RequesterID: submitterA.ID})
+	require.NoError(t, err)
+	require.Len(t, approversA, 1)
+	assert.Equal(t, gmA.ID, approversA[0].UserID)
+
+	approversB, err := resolver.Resolve(fx.ctx, fx.client, &ApproverContext{TenantID: fx.tenant.ID, RequesterID: submitterB.ID})
+	require.NoError(t, err)
+	require.Len(t, approversB, 1)
+	assert.Equal(t, gmB.ID, approversB[0].UserID)
+}
+
+func TestPersonalManagerResolver_Resolve_NoGMInChain(t *testing.T) {
+	fx := newApproverFixture(t)
+	defer fx.client.Close()
+
+	topOfChain, err := fx.client.User.Create().
+		SetUsername("top_no_title").
+		SetEmail("top@personal-manager.test").
+		SetName("Top No Title").
+		SetPasswordHash("hash").
+		SetActive(true).
+		SetTenantID(fx.tenant.ID).
+		Save(fx.ctx)
+	require.NoError(t, err)
+
+	submitter, err := fx.client.User.Create().
+		SetUsername("submitter_no_gm").
+		SetEmail("submitter-no-gm@personal-manager.test").
+		SetName("Submitter No GM").
+		SetPasswordHash("hash").
+		SetActive(true).
+		SetTenantID(fx.tenant.ID).
+		SetManagerID(topOfChain.ID).
+		Save(fx.ctx)
+	require.NoError(t, err)
+
+	resolver := NewPersonalManagerResolver()
+	_, err = resolver.Resolve(fx.ctx, fx.client, &ApproverContext{TenantID: fx.tenant.ID, RequesterID: submitter.ID})
+	assert.Error(t, err)
+}
+
+func TestPersonalManagerResolver_Resolve_CycleDetected(t *testing.T) {
+	fx := newApproverFixture(t)
+	defer fx.client.Close()
+
+	userA, err := fx.client.User.Create().
+		SetUsername("cycle_a").
+		SetEmail("cycle-a@personal-manager.test").
+		SetName("Cycle A").
+		SetPasswordHash("hash").
+		SetActive(true).
+		SetTenantID(fx.tenant.ID).
+		Save(fx.ctx)
+	require.NoError(t, err)
+
+	userB, err := fx.client.User.Create().
+		SetUsername("cycle_b").
+		SetEmail("cycle-b@personal-manager.test").
+		SetName("Cycle B").
+		SetPasswordHash("hash").
+		SetActive(true).
+		SetTenantID(fx.tenant.ID).
+		SetManagerID(userA.ID).
+		Save(fx.ctx)
+	require.NoError(t, err)
+
+	// 手工造一个环：A 的 manager 指向 B，B 的 manager 指向 A，两者都没有"总经理"头衔。
+	_, err = fx.client.User.UpdateOneID(userA.ID).SetManagerID(userB.ID).Save(fx.ctx)
+	require.NoError(t, err)
+
+	resolver := NewPersonalManagerResolver()
+	_, err = resolver.Resolve(fx.ctx, fx.client, &ApproverContext{TenantID: fx.tenant.ID, RequesterID: userA.ID})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cycle detected")
+}
+
+func TestPersonalManagerResolver_Resolve_TenantIsolation(t *testing.T) {
+	fx := newApproverFixture(t)
+	defer fx.client.Close()
+
+	otherTenant, err := fx.client.Tenant.Create().
+		SetName("Other Tenant").
+		SetCode("other-tenant-pm").
+		SetDomain("other-tenant-pm.test").
+		SetStatus("active").
+		Save(fx.ctx)
+	require.NoError(t, err)
+
+	otherGM, err := fx.client.User.Create().
+		SetUsername("other_tenant_gm").
+		SetEmail("gm@other-tenant-pm.test").
+		SetName("Other Tenant GM").
+		SetPasswordHash("hash").
+		SetActive(true).
+		SetTenantID(otherTenant.ID).
+		SetJobTitle("总经理").
+		Save(fx.ctx)
+	require.NoError(t, err)
+
+	// submitter 在本租户，但 manager_id 指向另一个租户里的用户——不能跨租户解析
+	submitter, err := fx.client.User.Create().
+		SetUsername("tenant_isolation_submitter").
+		SetEmail("submitter@personal-manager.test").
+		SetName("Tenant Isolation Submitter").
+		SetPasswordHash("hash").
+		SetActive(true).
+		SetTenantID(fx.tenant.ID).
+		SetManagerID(otherGM.ID).
+		Save(fx.ctx)
+	require.NoError(t, err)
+
+	resolver := NewPersonalManagerResolver()
+	_, err = resolver.Resolve(fx.ctx, fx.client, &ApproverContext{TenantID: fx.tenant.ID, RequesterID: submitter.ID})
+	assert.Error(t, err, "manager_id 指向别的租户的用户，本租户查询应该查不到，报错而不是跨租户解析")
+}

@@ -141267,6 +141267,7 @@ type UserMutation struct {
 	function_line                   *string
 	manager_id                      *int
 	addmanager_id                   *int
+	job_title                       *string
 	clearedFields                   map[string]struct{}
 	department_ref                  *int
 	cleareddepartment_ref           bool
@@ -142296,6 +142297,55 @@ func (m *UserMutation) ResetManagerID() {
 	delete(m.clearedFields, user.FieldManagerID)
 }
 
+// SetJobTitle sets the "job_title" field.
+func (m *UserMutation) SetJobTitle(s string) {
+	m.job_title = &s
+}
+
+// JobTitle returns the value of the "job_title" field in the mutation.
+func (m *UserMutation) JobTitle() (r string, exists bool) {
+	v := m.job_title
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldJobTitle returns the old "job_title" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldJobTitle(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldJobTitle is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldJobTitle requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldJobTitle: %w", err)
+	}
+	return oldValue.JobTitle, nil
+}
+
+// ClearJobTitle clears the value of the "job_title" field.
+func (m *UserMutation) ClearJobTitle() {
+	m.job_title = nil
+	m.clearedFields[user.FieldJobTitle] = struct{}{}
+}
+
+// JobTitleCleared returns if the "job_title" field was cleared in this mutation.
+func (m *UserMutation) JobTitleCleared() bool {
+	_, ok := m.clearedFields[user.FieldJobTitle]
+	return ok
+}
+
+// ResetJobTitle resets all changes to the "job_title" field.
+func (m *UserMutation) ResetJobTitle() {
+	m.job_title = nil
+	delete(m.clearedFields, user.FieldJobTitle)
+}
+
 // SetDepartmentRefID sets the "department_ref" edge to the Department entity by id.
 func (m *UserMutation) SetDepartmentRefID(id int) {
 	m.department_ref = &id
@@ -143153,7 +143203,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 20)
+	fields := make([]string, 0, 21)
 	if m.username != nil {
 		fields = append(fields, user.FieldUsername)
 	}
@@ -143214,6 +143264,9 @@ func (m *UserMutation) Fields() []string {
 	if m.manager_id != nil {
 		fields = append(fields, user.FieldManagerID)
 	}
+	if m.job_title != nil {
+		fields = append(fields, user.FieldJobTitle)
+	}
 	return fields
 }
 
@@ -143262,6 +143315,8 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.FunctionLine()
 	case user.FieldManagerID:
 		return m.ManagerID()
+	case user.FieldJobTitle:
+		return m.JobTitle()
 	}
 	return nil, false
 }
@@ -143311,6 +143366,8 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldFunctionLine(ctx)
 	case user.FieldManagerID:
 		return m.OldManagerID(ctx)
+	case user.FieldJobTitle:
+		return m.OldJobTitle(ctx)
 	}
 	return nil, fmt.Errorf("unknown User field %s", name)
 }
@@ -143460,6 +143517,13 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetManagerID(v)
 		return nil
+	case user.FieldJobTitle:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetJobTitle(v)
+		return nil
 	}
 	return fmt.Errorf("unknown User field %s", name)
 }
@@ -143544,6 +143608,9 @@ func (m *UserMutation) ClearedFields() []string {
 	if m.FieldCleared(user.FieldManagerID) {
 		fields = append(fields, user.FieldManagerID)
 	}
+	if m.FieldCleared(user.FieldJobTitle) {
+		fields = append(fields, user.FieldJobTitle)
+	}
 	return fields
 }
 
@@ -143584,6 +143651,9 @@ func (m *UserMutation) ClearField(name string) error {
 		return nil
 	case user.FieldManagerID:
 		m.ClearManagerID()
+		return nil
+	case user.FieldJobTitle:
+		m.ClearJobTitle()
 		return nil
 	}
 	return fmt.Errorf("unknown User nullable field %s", name)
@@ -143652,6 +143722,9 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldManagerID:
 		m.ResetManagerID()
+		return nil
+	case user.FieldJobTitle:
+		m.ResetJobTitle()
 		return nil
 	}
 	return fmt.Errorf("unknown User field %s", name)
