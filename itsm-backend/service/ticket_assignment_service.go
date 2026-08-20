@@ -112,9 +112,24 @@ func (s *TicketAssignmentService) autoAssignTicket(ctx context.Context, req *Ass
 		}, nil
 	}
 
-	// 2. 计算每个用户的评分
+	// 2. 计算每个用户的评分——分类经验分/历史表现分原本是 calculateUserScore 内部逐人
+	// 查询数据库，改成先批量查一次，再把结果传进去，避免又引入一轮 O(候选人数) 查询。
+	candidateIDs := make([]int, len(availableUsers))
 	for i := range availableUsers {
-		availableUsers[i].Score = s.calculateUserScore(ctx, &availableUsers[i], req)
+		candidateIDs[i] = availableUsers[i].UserID
+	}
+	categoryScores, err := s.batchCalculateCategoryExperienceScores(ctx, candidateIDs, req.CategoryID)
+	if err != nil {
+		return nil, fmt.Errorf("批量计算分类经验评分失败: %w", err)
+	}
+	performanceScores, err := s.batchCalculatePerformanceScores(ctx, candidateIDs)
+	if err != nil {
+		return nil, fmt.Errorf("批量计算历史表现评分失败: %w", err)
+	}
+	for i := range availableUsers {
+		availableUsers[i].Score = s.calculateUserScoreWithPrecomputed(
+			&availableUsers[i], req, categoryScores[availableUsers[i].UserID], performanceScores[availableUsers[i].UserID],
+		)
 	}
 
 	// 3. 按评分排序，选择最高分的用户
@@ -143,6 +158,11 @@ func (s *TicketAssignmentService) autoAssignTicket(ctx context.Context, req *Ass
 }
 
 // getAvailableUsers 获取可用的处理人
+//
+// 候选人的工作负载不再逐人查询（那样会产生 O(候选人数) 次串行 SQL 往返——在只有几十个
+// 测试账号的环境里不明显，但嘉里物流真实 eHR 数据导入后租户内有 7826 个 active 用户，
+// 单次工单创建因此要等 30+ 秒，跟卡死没区别）。改为对全体候选人 ID 批量聚合查询一次，
+// 常数次 SQL，不随候选人数量增长。
 func (s *TicketAssignmentService) getAvailableUsers(ctx context.Context, req *AssignmentRequest) ([]UserWorkload, error) {
 	// 1. 获取所有活跃用户
 	users, err := s.client.User.Query().
@@ -151,6 +171,16 @@ func (s *TicketAssignmentService) getAvailableUsers(ctx context.Context, req *As
 		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("获取用户失败: %w", err)
+	}
+
+	candidateIDs := make([]int, 0, len(users))
+	for _, u := range users {
+		candidateIDs = append(candidateIDs, u.ID)
+	}
+
+	workloadByUser, err := s.batchGetUserWorkloads(ctx, candidateIDs)
+	if err != nil {
+		return nil, fmt.Errorf("批量获取工作负载失败: %w", err)
 	}
 
 	var availableUsers []UserWorkload
@@ -166,10 +196,16 @@ func (s *TicketAssignmentService) getAvailableUsers(ctx context.Context, req *As
 			continue
 		}
 
-		// 4. 获取用户工作负载
-		workload, err := s.getUserWorkload(ctx, u.ID)
-		if err != nil {
-			continue
+		// 4. 取批量查询结果里对应这个用户的工作负载；没有任何工单记录的用户不会出现在
+		// 聚合结果里，退回全零负载的默认值（跟原 getUserWorkload 对无工单用户的行为一致）。
+		workload, ok := workloadByUser[u.ID]
+		if !ok {
+			workload = &UserWorkload{
+				UserID:        u.ID,
+				AvgResolution: 24 * time.Hour,
+				Skills:        []string{"general"},
+				Categories:    []int{},
+			}
 		}
 
 		// 5. 检查工作负载是否超限
@@ -181,6 +217,85 @@ func (s *TicketAssignmentService) getAvailableUsers(ctx context.Context, req *As
 	}
 
 	return availableUsers, nil
+}
+
+// assigneeAggRow 是按 assignee_id 分组聚合查询的通用扫描目标。
+type assigneeAggRow struct {
+	AssigneeID int `json:"assignee_id"`
+	Count      int `json:"count"`
+}
+
+// batchGetUserWorkloads 一次性为一批候选人计算工作负载（活跃工单数、总工单数、平均解决
+// 时长），替代原来对每个候选人分别调用 getUserWorkload 的 O(N) 查询方式。
+func (s *TicketAssignmentService) batchGetUserWorkloads(ctx context.Context, candidateIDs []int) (map[int]*UserWorkload, error) {
+	result := make(map[int]*UserWorkload, len(candidateIDs))
+	if len(candidateIDs) == 0 {
+		return result, nil
+	}
+
+	var activeCounts []assigneeAggRow
+	if err := s.client.Ticket.Query().
+		Where(ticket.AssigneeIDIn(candidateIDs...), ticket.StatusIn("open", "in_progress", "pending")).
+		GroupBy(ticket.FieldAssigneeID).
+		Aggregate(ent.Count()).
+		Scan(ctx, &activeCounts); err != nil {
+		return nil, fmt.Errorf("批量统计活跃工单数失败: %w", err)
+	}
+
+	var totalCounts []assigneeAggRow
+	if err := s.client.Ticket.Query().
+		Where(ticket.AssigneeIDIn(candidateIDs...)).
+		GroupBy(ticket.FieldAssigneeID).
+		Aggregate(ent.Count()).
+		Scan(ctx, &totalCounts); err != nil {
+		return nil, fmt.Errorf("批量统计总工单数失败: %w", err)
+	}
+
+	// 平均解决时长需要逐条工单的 created_at/updated_at，聚合函数算不出来，
+	// 一次性把所有候选人的已解决/已关闭工单取回来，按 assignee_id 在内存里分组计算。
+	resolvedTickets, err := s.client.Ticket.Query().
+		Where(ticket.AssigneeIDIn(candidateIDs...), ticket.StatusIn("resolved", "closed")).
+		Select(ticket.FieldAssigneeID, ticket.FieldCreatedAt, ticket.FieldUpdatedAt).
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("批量获取已解决工单失败: %w", err)
+	}
+
+	durationSumByUser := make(map[int]time.Duration, len(candidateIDs))
+	resolvedCountByUser := make(map[int]int, len(candidateIDs))
+	for _, t := range resolvedTickets {
+		durationSumByUser[t.AssigneeID] += t.UpdatedAt.Sub(t.CreatedAt)
+		resolvedCountByUser[t.AssigneeID]++
+	}
+
+	for _, id := range candidateIDs {
+		result[id] = &UserWorkload{
+			UserID:        id,
+			AvgResolution: 24 * time.Hour, // 与原 calculateAverageResolutionTime 的默认值保持一致
+			Skills:        []string{"general"},
+			Categories:    []int{},
+		}
+	}
+	for _, row := range activeCounts {
+		if w, ok := result[row.AssigneeID]; ok {
+			w.ActiveTickets = row.Count
+		}
+	}
+	for _, row := range totalCounts {
+		if w, ok := result[row.AssigneeID]; ok {
+			w.TotalTickets = row.Count
+		}
+	}
+	for id, count := range resolvedCountByUser {
+		if count == 0 {
+			continue
+		}
+		if w, ok := result[id]; ok {
+			w.AvgResolution = durationSumByUser[id] / time.Duration(count)
+		}
+	}
+
+	return result, nil
 }
 
 // CalculateUserScore 计算用户评分（公开方法）
@@ -209,6 +324,93 @@ func (s *TicketAssignmentService) calculateUserScore(ctx context.Context, user *
 	score += performanceScore * 0.1
 
 	return score
+}
+
+// calculateUserScoreWithPrecomputed 跟 calculateUserScore 权重公式完全一致，唯一区别是
+// 分类经验分/历史表现分是调用方批量算好传进来的，不在这里逐人查库。
+func (s *TicketAssignmentService) calculateUserScoreWithPrecomputed(user *UserWorkload, req *AssignmentRequest, categoryScore, performanceScore float64) float64 {
+	var score float64
+	score += s.calculateSkillScore(user.Skills, req.RequiredSkills) * 0.4
+	score += s.calculateWorkloadScore(user.ActiveTickets, user.AvgResolution) * 0.3
+	score += categoryScore * 0.2
+	score += performanceScore * 0.1
+	return score
+}
+
+// batchCalculateCategoryExperienceScores 批量版 calculateCategoryExperienceScore，一次
+// 聚合查询算出所有候选人在指定分类下的已处理工单数，而不是每个候选人单独查一次。
+func (s *TicketAssignmentService) batchCalculateCategoryExperienceScores(ctx context.Context, candidateIDs []int, categoryID *int) (map[int]float64, error) {
+	result := make(map[int]float64, len(candidateIDs))
+	if categoryID == nil {
+		for _, id := range candidateIDs {
+			result[id] = 0.5 // 默认中等评分，跟原函数行为一致
+		}
+		return result, nil
+	}
+	for _, id := range candidateIDs {
+		result[id] = 0.4 // 无记录时的最低档评分，跟原函数 count<2 分支一致
+	}
+	if len(candidateIDs) == 0 {
+		return result, nil
+	}
+
+	var rows []assigneeAggRow
+	if err := s.client.Ticket.Query().
+		Where(
+			ticket.AssigneeIDIn(candidateIDs...),
+			ticket.CategoryIDEQ(*categoryID),
+			ticket.StatusIn("resolved", "closed"),
+		).
+		GroupBy(ticket.FieldAssigneeID).
+		Aggregate(ent.Count()).
+		Scan(ctx, &rows); err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		switch {
+		case row.Count >= 10:
+			result[row.AssigneeID] = 1.0
+		case row.Count >= 5:
+			result[row.AssigneeID] = 0.8
+		case row.Count >= 2:
+			result[row.AssigneeID] = 0.6
+		default:
+			result[row.AssigneeID] = 0.4
+		}
+	}
+	return result, nil
+}
+
+// batchCalculatePerformanceScores 批量版 calculatePerformanceScore：一次聚合查询算出所有
+// 候选人最近 30 天内已解决/已关闭的工单数，而不是每个候选人单独查一次。
+func (s *TicketAssignmentService) batchCalculatePerformanceScores(ctx context.Context, candidateIDs []int) (map[int]float64, error) {
+	result := make(map[int]float64, len(candidateIDs))
+	for _, id := range candidateIDs {
+		result[id] = 0.5 // 跟原函数 totalTickets==0 分支一致
+	}
+	if len(candidateIDs) == 0 {
+		return result, nil
+	}
+
+	thirtyDaysAgo := time.Now().AddDate(0, 0, -30)
+	var rows []assigneeAggRow
+	if err := s.client.Ticket.Query().
+		Where(
+			ticket.AssigneeIDIn(candidateIDs...),
+			ticket.CreatedAtGTE(thirtyDaysAgo),
+			ticket.StatusIn("resolved", "closed"),
+		).
+		GroupBy(ticket.FieldAssigneeID).
+		Aggregate(ent.Count()).
+		Scan(ctx, &rows); err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		if row.Count > 0 {
+			result[row.AssigneeID] = 0.8 // 跟原函数保持一致：有记录固定给 0.8
+		}
+	}
+	return result, nil
 }
 
 // calculateSkillScore 计算技能匹配度
