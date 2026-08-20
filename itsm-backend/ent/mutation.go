@@ -141116,6 +141116,12 @@ type UserMutation struct {
 	assigned_by_msp_id              *int
 	addassigned_by_msp_id           *int
 	is_bootstrap_admin              *bool
+	gender                          *string
+	is_leader                       *bool
+	function_line                   *string
+	manager_id                      *int
+	addmanager_id                   *int
+	job_title                       *string
 	clearedFields                   map[string]struct{}
 	department_ref                  *int
 	cleareddepartment_ref           bool
@@ -141939,6 +141945,259 @@ func (m *UserMutation) OldIsBootstrapAdmin(ctx context.Context) (v bool, err err
 // ResetIsBootstrapAdmin resets all changes to the "is_bootstrap_admin" field.
 func (m *UserMutation) ResetIsBootstrapAdmin() {
 	m.is_bootstrap_admin = nil
+}
+
+// SetGender sets the "gender" field.
+func (m *UserMutation) SetGender(s string) {
+	m.gender = &s
+}
+
+// Gender returns the value of the "gender" field in the mutation.
+func (m *UserMutation) Gender() (r string, exists bool) {
+	v := m.gender
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGender returns the old "gender" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldGender(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGender is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGender requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGender: %w", err)
+	}
+	return oldValue.Gender, nil
+}
+
+// ClearGender clears the value of the "gender" field.
+func (m *UserMutation) ClearGender() {
+	m.gender = nil
+	m.clearedFields[user.FieldGender] = struct{}{}
+}
+
+// GenderCleared returns if the "gender" field was cleared in this mutation.
+func (m *UserMutation) GenderCleared() bool {
+	_, ok := m.clearedFields[user.FieldGender]
+	return ok
+}
+
+// ResetGender resets all changes to the "gender" field.
+func (m *UserMutation) ResetGender() {
+	m.gender = nil
+	delete(m.clearedFields, user.FieldGender)
+}
+
+// SetIsLeader sets the "is_leader" field.
+func (m *UserMutation) SetIsLeader(b bool) {
+	m.is_leader = &b
+}
+
+// IsLeader returns the value of the "is_leader" field in the mutation.
+func (m *UserMutation) IsLeader() (r bool, exists bool) {
+	v := m.is_leader
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIsLeader returns the old "is_leader" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldIsLeader(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIsLeader is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIsLeader requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIsLeader: %w", err)
+	}
+	return oldValue.IsLeader, nil
+}
+
+// ResetIsLeader resets all changes to the "is_leader" field.
+func (m *UserMutation) ResetIsLeader() {
+	m.is_leader = nil
+}
+
+// SetFunctionLine sets the "function_line" field.
+func (m *UserMutation) SetFunctionLine(s string) {
+	m.function_line = &s
+}
+
+// FunctionLine returns the value of the "function_line" field in the mutation.
+func (m *UserMutation) FunctionLine() (r string, exists bool) {
+	v := m.function_line
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFunctionLine returns the old "function_line" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldFunctionLine(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFunctionLine is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFunctionLine requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFunctionLine: %w", err)
+	}
+	return oldValue.FunctionLine, nil
+}
+
+// ClearFunctionLine clears the value of the "function_line" field.
+func (m *UserMutation) ClearFunctionLine() {
+	m.function_line = nil
+	m.clearedFields[user.FieldFunctionLine] = struct{}{}
+}
+
+// FunctionLineCleared returns if the "function_line" field was cleared in this mutation.
+func (m *UserMutation) FunctionLineCleared() bool {
+	_, ok := m.clearedFields[user.FieldFunctionLine]
+	return ok
+}
+
+// ResetFunctionLine resets all changes to the "function_line" field.
+func (m *UserMutation) ResetFunctionLine() {
+	m.function_line = nil
+	delete(m.clearedFields, user.FieldFunctionLine)
+}
+
+// SetManagerID sets the "manager_id" field.
+func (m *UserMutation) SetManagerID(i int) {
+	m.manager_id = &i
+	m.addmanager_id = nil
+}
+
+// ManagerID returns the value of the "manager_id" field in the mutation.
+func (m *UserMutation) ManagerID() (r int, exists bool) {
+	v := m.manager_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldManagerID returns the old "manager_id" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldManagerID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldManagerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldManagerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldManagerID: %w", err)
+	}
+	return oldValue.ManagerID, nil
+}
+
+// AddManagerID adds i to the "manager_id" field.
+func (m *UserMutation) AddManagerID(i int) {
+	if m.addmanager_id != nil {
+		*m.addmanager_id += i
+	} else {
+		m.addmanager_id = &i
+	}
+}
+
+// AddedManagerID returns the value that was added to the "manager_id" field in this mutation.
+func (m *UserMutation) AddedManagerID() (r int, exists bool) {
+	v := m.addmanager_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearManagerID clears the value of the "manager_id" field.
+func (m *UserMutation) ClearManagerID() {
+	m.manager_id = nil
+	m.addmanager_id = nil
+	m.clearedFields[user.FieldManagerID] = struct{}{}
+}
+
+// ManagerIDCleared returns if the "manager_id" field was cleared in this mutation.
+func (m *UserMutation) ManagerIDCleared() bool {
+	_, ok := m.clearedFields[user.FieldManagerID]
+	return ok
+}
+
+// ResetManagerID resets all changes to the "manager_id" field.
+func (m *UserMutation) ResetManagerID() {
+	m.manager_id = nil
+	m.addmanager_id = nil
+	delete(m.clearedFields, user.FieldManagerID)
+}
+
+// SetJobTitle sets the "job_title" field.
+func (m *UserMutation) SetJobTitle(s string) {
+	m.job_title = &s
+}
+
+// JobTitle returns the value of the "job_title" field in the mutation.
+func (m *UserMutation) JobTitle() (r string, exists bool) {
+	v := m.job_title
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldJobTitle returns the old "job_title" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldJobTitle(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldJobTitle is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldJobTitle requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldJobTitle: %w", err)
+	}
+	return oldValue.JobTitle, nil
+}
+
+// ClearJobTitle clears the value of the "job_title" field.
+func (m *UserMutation) ClearJobTitle() {
+	m.job_title = nil
+	m.clearedFields[user.FieldJobTitle] = struct{}{}
+}
+
+// JobTitleCleared returns if the "job_title" field was cleared in this mutation.
+func (m *UserMutation) JobTitleCleared() bool {
+	_, ok := m.clearedFields[user.FieldJobTitle]
+	return ok
+}
+
+// ResetJobTitle resets all changes to the "job_title" field.
+func (m *UserMutation) ResetJobTitle() {
+	m.job_title = nil
+	delete(m.clearedFields, user.FieldJobTitle)
 }
 
 // SetDepartmentRefID sets the "department_ref" edge to the Department entity by id.
@@ -142798,7 +143057,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 16)
+	fields := make([]string, 0, 21)
 	if m.username != nil {
 		fields = append(fields, user.FieldUsername)
 	}
@@ -142847,6 +143106,21 @@ func (m *UserMutation) Fields() []string {
 	if m.is_bootstrap_admin != nil {
 		fields = append(fields, user.FieldIsBootstrapAdmin)
 	}
+	if m.gender != nil {
+		fields = append(fields, user.FieldGender)
+	}
+	if m.is_leader != nil {
+		fields = append(fields, user.FieldIsLeader)
+	}
+	if m.function_line != nil {
+		fields = append(fields, user.FieldFunctionLine)
+	}
+	if m.manager_id != nil {
+		fields = append(fields, user.FieldManagerID)
+	}
+	if m.job_title != nil {
+		fields = append(fields, user.FieldJobTitle)
+	}
 	return fields
 }
 
@@ -142887,6 +143161,16 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.AssignedByMspID()
 	case user.FieldIsBootstrapAdmin:
 		return m.IsBootstrapAdmin()
+	case user.FieldGender:
+		return m.Gender()
+	case user.FieldIsLeader:
+		return m.IsLeader()
+	case user.FieldFunctionLine:
+		return m.FunctionLine()
+	case user.FieldManagerID:
+		return m.ManagerID()
+	case user.FieldJobTitle:
+		return m.JobTitle()
 	}
 	return nil, false
 }
@@ -142928,6 +143212,16 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldAssignedByMspID(ctx)
 	case user.FieldIsBootstrapAdmin:
 		return m.OldIsBootstrapAdmin(ctx)
+	case user.FieldGender:
+		return m.OldGender(ctx)
+	case user.FieldIsLeader:
+		return m.OldIsLeader(ctx)
+	case user.FieldFunctionLine:
+		return m.OldFunctionLine(ctx)
+	case user.FieldManagerID:
+		return m.OldManagerID(ctx)
+	case user.FieldJobTitle:
+		return m.OldJobTitle(ctx)
 	}
 	return nil, fmt.Errorf("unknown User field %s", name)
 }
@@ -143049,6 +143343,41 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetIsBootstrapAdmin(v)
 		return nil
+	case user.FieldGender:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGender(v)
+		return nil
+	case user.FieldIsLeader:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIsLeader(v)
+		return nil
+	case user.FieldFunctionLine:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFunctionLine(v)
+		return nil
+	case user.FieldManagerID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetManagerID(v)
+		return nil
+	case user.FieldJobTitle:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetJobTitle(v)
+		return nil
 	}
 	return fmt.Errorf("unknown User field %s", name)
 }
@@ -143060,6 +143389,9 @@ func (m *UserMutation) AddedFields() []string {
 	if m.addassigned_by_msp_id != nil {
 		fields = append(fields, user.FieldAssignedByMspID)
 	}
+	if m.addmanager_id != nil {
+		fields = append(fields, user.FieldManagerID)
+	}
 	return fields
 }
 
@@ -143070,6 +143402,8 @@ func (m *UserMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
 	case user.FieldAssignedByMspID:
 		return m.AddedAssignedByMspID()
+	case user.FieldManagerID:
+		return m.AddedManagerID()
 	}
 	return nil, false
 }
@@ -143085,6 +143419,13 @@ func (m *UserMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddAssignedByMspID(v)
+		return nil
+	case user.FieldManagerID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddManagerID(v)
 		return nil
 	}
 	return fmt.Errorf("unknown User numeric field %s", name)
@@ -143111,6 +143452,18 @@ func (m *UserMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(user.FieldAssignedByMspID) {
 		fields = append(fields, user.FieldAssignedByMspID)
+	}
+	if m.FieldCleared(user.FieldGender) {
+		fields = append(fields, user.FieldGender)
+	}
+	if m.FieldCleared(user.FieldFunctionLine) {
+		fields = append(fields, user.FieldFunctionLine)
+	}
+	if m.FieldCleared(user.FieldManagerID) {
+		fields = append(fields, user.FieldManagerID)
+	}
+	if m.FieldCleared(user.FieldJobTitle) {
+		fields = append(fields, user.FieldJobTitle)
 	}
 	return fields
 }
@@ -143143,6 +143496,18 @@ func (m *UserMutation) ClearField(name string) error {
 		return nil
 	case user.FieldAssignedByMspID:
 		m.ClearAssignedByMspID()
+		return nil
+	case user.FieldGender:
+		m.ClearGender()
+		return nil
+	case user.FieldFunctionLine:
+		m.ClearFunctionLine()
+		return nil
+	case user.FieldManagerID:
+		m.ClearManagerID()
+		return nil
+	case user.FieldJobTitle:
+		m.ClearJobTitle()
 		return nil
 	}
 	return fmt.Errorf("unknown User nullable field %s", name)
@@ -143199,6 +143564,21 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldIsBootstrapAdmin:
 		m.ResetIsBootstrapAdmin()
+		return nil
+	case user.FieldGender:
+		m.ResetGender()
+		return nil
+	case user.FieldIsLeader:
+		m.ResetIsLeader()
+		return nil
+	case user.FieldFunctionLine:
+		m.ResetFunctionLine()
+		return nil
+	case user.FieldManagerID:
+		m.ResetManagerID()
+		return nil
+	case user.FieldJobTitle:
+		m.ResetJobTitle()
 		return nil
 	}
 	return fmt.Errorf("unknown User field %s", name)

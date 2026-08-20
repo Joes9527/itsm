@@ -3853,6 +3853,10 @@ func init() {
 	userDescIsBootstrapAdmin := userFields[15].Descriptor()
 	// user.DefaultIsBootstrapAdmin holds the default value on creation for the is_bootstrap_admin field.
 	user.DefaultIsBootstrapAdmin = userDescIsBootstrapAdmin.Default.(bool)
+	// userDescIsLeader is the schema descriptor for is_leader field.
+	userDescIsLeader := userFields[17].Descriptor()
+	// user.DefaultIsLeader holds the default value on creation for the is_leader field.
+	user.DefaultIsLeader = userDescIsLeader.Default.(bool)
 	vendorFields := schema.Vendor{}.Fields()
 	_ = vendorFields
 	// vendorDescName is the schema descriptor for name field.

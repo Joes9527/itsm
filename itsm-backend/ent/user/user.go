@@ -55,6 +55,8 @@ const (
 	FieldFunctionLine = "function_line"
 	// FieldManagerID holds the string denoting the manager_id field in the database.
 	FieldManagerID = "manager_id"
+	// FieldJobTitle holds the string denoting the job_title field in the database.
+	FieldJobTitle = "job_title"
 	// EdgeDepartmentRef holds the string denoting the department_ref edge name in mutations.
 	EdgeDepartmentRef = "department_ref"
 	// EdgeTenant holds the string denoting the tenant edge name in mutations.
@@ -220,6 +222,7 @@ var Columns = []string{
 	FieldIsLeader,
 	FieldFunctionLine,
 	FieldManagerID,
+	FieldJobTitle,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "users"
@@ -416,6 +419,11 @@ func ByFunctionLine(opts ...sql.OrderTermOption) OrderOption {
 // ByManagerID orders the results by the manager_id field.
 func ByManagerID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldManagerID, opts...).ToFunc()
+}
+
+// ByJobTitle orders the results by the job_title field.
+func ByJobTitle(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldJobTitle, opts...).ToFunc()
 }
 
 // ByDepartmentRefField orders the results by department_ref field.

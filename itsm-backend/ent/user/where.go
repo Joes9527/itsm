@@ -150,6 +150,11 @@ func ManagerID(v int) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldManagerID, v))
 }
 
+// JobTitle applies equality check predicate on the "job_title" field. It's identical to JobTitleEQ.
+func JobTitle(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldJobTitle, v))
+}
+
 // UsernameEQ applies the EQ predicate on the "username" field.
 func UsernameEQ(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldUsername, v))
@@ -1138,6 +1143,81 @@ func ManagerIDIsNil() predicate.User {
 // ManagerIDNotNil applies the NotNil predicate on the "manager_id" field.
 func ManagerIDNotNil() predicate.User {
 	return predicate.User(sql.FieldNotNull(FieldManagerID))
+}
+
+// JobTitleEQ applies the EQ predicate on the "job_title" field.
+func JobTitleEQ(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldJobTitle, v))
+}
+
+// JobTitleNEQ applies the NEQ predicate on the "job_title" field.
+func JobTitleNEQ(v string) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldJobTitle, v))
+}
+
+// JobTitleIn applies the In predicate on the "job_title" field.
+func JobTitleIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldIn(FieldJobTitle, vs...))
+}
+
+// JobTitleNotIn applies the NotIn predicate on the "job_title" field.
+func JobTitleNotIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldJobTitle, vs...))
+}
+
+// JobTitleGT applies the GT predicate on the "job_title" field.
+func JobTitleGT(v string) predicate.User {
+	return predicate.User(sql.FieldGT(FieldJobTitle, v))
+}
+
+// JobTitleGTE applies the GTE predicate on the "job_title" field.
+func JobTitleGTE(v string) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldJobTitle, v))
+}
+
+// JobTitleLT applies the LT predicate on the "job_title" field.
+func JobTitleLT(v string) predicate.User {
+	return predicate.User(sql.FieldLT(FieldJobTitle, v))
+}
+
+// JobTitleLTE applies the LTE predicate on the "job_title" field.
+func JobTitleLTE(v string) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldJobTitle, v))
+}
+
+// JobTitleContains applies the Contains predicate on the "job_title" field.
+func JobTitleContains(v string) predicate.User {
+	return predicate.User(sql.FieldContains(FieldJobTitle, v))
+}
+
+// JobTitleHasPrefix applies the HasPrefix predicate on the "job_title" field.
+func JobTitleHasPrefix(v string) predicate.User {
+	return predicate.User(sql.FieldHasPrefix(FieldJobTitle, v))
+}
+
+// JobTitleHasSuffix applies the HasSuffix predicate on the "job_title" field.
+func JobTitleHasSuffix(v string) predicate.User {
+	return predicate.User(sql.FieldHasSuffix(FieldJobTitle, v))
+}
+
+// JobTitleIsNil applies the IsNil predicate on the "job_title" field.
+func JobTitleIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldJobTitle))
+}
+
+// JobTitleNotNil applies the NotNil predicate on the "job_title" field.
+func JobTitleNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldJobTitle))
+}
+
+// JobTitleEqualFold applies the EqualFold predicate on the "job_title" field.
+func JobTitleEqualFold(v string) predicate.User {
+	return predicate.User(sql.FieldEqualFold(FieldJobTitle, v))
+}
+
+// JobTitleContainsFold applies the ContainsFold predicate on the "job_title" field.
+func JobTitleContainsFold(v string) predicate.User {
+	return predicate.User(sql.FieldContainsFold(FieldJobTitle, v))
 }
 
 // HasDepartmentRef applies the HasEdge predicate on the "department_ref" edge.

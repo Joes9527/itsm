@@ -275,6 +275,20 @@ func (_c *UserCreate) SetNillableManagerID(v *int) *UserCreate {
 	return _c
 }
 
+// SetJobTitle sets the "job_title" field.
+func (_c *UserCreate) SetJobTitle(v string) *UserCreate {
+	_c.mutation.SetJobTitle(v)
+	return _c
+}
+
+// SetNillableJobTitle sets the "job_title" field if the given value is not nil.
+func (_c *UserCreate) SetNillableJobTitle(v *string) *UserCreate {
+	if v != nil {
+		_c.SetJobTitle(*v)
+	}
+	return _c
+}
+
 // SetDepartmentRefID sets the "department_ref" edge to the Department entity by ID.
 func (_c *UserCreate) SetDepartmentRefID(id int) *UserCreate {
 	_c.mutation.SetDepartmentRefID(id)
@@ -740,6 +754,10 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ManagerID(); ok {
 		_spec.SetField(user.FieldManagerID, field.TypeInt, value)
 		_node.ManagerID = value
+	}
+	if value, ok := _c.mutation.JobTitle(); ok {
+		_spec.SetField(user.FieldJobTitle, field.TypeString, value)
+		_node.JobTitle = value
 	}
 	if nodes := _c.mutation.DepartmentRefIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
