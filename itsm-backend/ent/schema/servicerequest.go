@@ -28,6 +28,12 @@ func (ServiceRequest) Fields() []ent.Field {
 		field.Time("expire_at").Comment("到期时间").Optional(),
 		field.Bool("compliance_ack").Comment("合规条款确认").Default(false),
 
+		// 通用层字段：所有 service_type 都适用，取代原来只进 form_data 就没人读的假字段
+		field.String("contact_name").Comment("联系人姓名，默认取申请人姓名，可编辑以支持代他人提交").Optional(),
+		field.String("contact_email").Comment("联系人邮箱，默认取申请人邮箱，可编辑以支持代他人提交").Optional(),
+		field.Int("quantity").Comment("申请数量").Default(1).Positive(),
+		field.Time("expected_at").Comment("期望交付时间").Optional(),
+
 		// 实施信息（资源交付，不属于本次重构范围，原样保留）
 		field.Int("processor_id").Comment("处理人ID").Optional(),
 		field.Time("started_at").Comment("开始处理时间").Optional(),

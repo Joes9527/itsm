@@ -37,6 +37,14 @@ const (
 	FieldExpireAt = "expire_at"
 	// FieldComplianceAck holds the string denoting the compliance_ack field in the database.
 	FieldComplianceAck = "compliance_ack"
+	// FieldContactName holds the string denoting the contact_name field in the database.
+	FieldContactName = "contact_name"
+	// FieldContactEmail holds the string denoting the contact_email field in the database.
+	FieldContactEmail = "contact_email"
+	// FieldQuantity holds the string denoting the quantity field in the database.
+	FieldQuantity = "quantity"
+	// FieldExpectedAt holds the string denoting the expected_at field in the database.
+	FieldExpectedAt = "expected_at"
 	// FieldProcessorID holds the string denoting the processor_id field in the database.
 	FieldProcessorID = "processor_id"
 	// FieldStartedAt holds the string denoting the started_at field in the database.
@@ -74,6 +82,10 @@ var Columns = []string{
 	FieldSourceIPWhitelist,
 	FieldExpireAt,
 	FieldComplianceAck,
+	FieldContactName,
+	FieldContactEmail,
+	FieldQuantity,
+	FieldExpectedAt,
 	FieldProcessorID,
 	FieldStartedAt,
 	FieldCompletedAt,
@@ -110,6 +122,10 @@ var (
 	DefaultNeedsPublicIP bool
 	// DefaultComplianceAck holds the default value on creation for the "compliance_ack" field.
 	DefaultComplianceAck bool
+	// DefaultQuantity holds the default value on creation for the "quantity" field.
+	DefaultQuantity int
+	// QuantityValidator is a validator for the "quantity" field. It is called by the builders before save.
+	QuantityValidator func(int) error
 	// DefaultVersion holds the default value on creation for the "version" field.
 	DefaultVersion int
 	// VersionValidator is a validator for the "version" field. It is called by the builders before save.
@@ -178,6 +194,26 @@ func ByExpireAt(opts ...sql.OrderTermOption) OrderOption {
 // ByComplianceAck orders the results by the compliance_ack field.
 func ByComplianceAck(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldComplianceAck, opts...).ToFunc()
+}
+
+// ByContactName orders the results by the contact_name field.
+func ByContactName(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldContactName, opts...).ToFunc()
+}
+
+// ByContactEmail orders the results by the contact_email field.
+func ByContactEmail(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldContactEmail, opts...).ToFunc()
+}
+
+// ByQuantity orders the results by the quantity field.
+func ByQuantity(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldQuantity, opts...).ToFunc()
+}
+
+// ByExpectedAt orders the results by the expected_at field.
+func ByExpectedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldExpectedAt, opts...).ToFunc()
 }
 
 // ByProcessorID orders the results by the processor_id field.

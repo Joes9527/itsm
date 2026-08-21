@@ -79,6 +79,11 @@ var RegisteredMigrations = []Migration{
 		Description: "Drop legacy approval_records/approval_workflows tables (custom ApprovalWorkflow/ApprovalRecord engine fully retired; all real tenant-customized workflows verified migrated to BPMN, see Task 5/6); irreversible, forward-fix only",
 		RollbackSQL: "",
 	},
+	{
+		Version:     "015_add_service_request_contact_fields",
+		Description: "Add contact_name/contact_email/quantity/expected_at columns to service_requests (previously fake fields that only lived in form_data and were never read back)",
+		RollbackSQL: "ALTER TABLE service_requests DROP COLUMN IF EXISTS contact_name; ALTER TABLE service_requests DROP COLUMN IF EXISTS contact_email; ALTER TABLE service_requests DROP COLUMN IF EXISTS quantity; ALTER TABLE service_requests DROP COLUMN IF EXISTS expected_at;",
+	},
 }
 
 // PostSchemaMigrations returns a defensive copy of the canonical active stream.
@@ -633,6 +638,13 @@ DELETE FROM field_values WHERE entity_type = 'service_request';
 -- removed directly. approval_records has FKs into approval_workflows, so it must drop first.
 DROP TABLE IF EXISTS approval_records;
 DROP TABLE IF EXISTS approval_workflows;
+`
+	case "015_add_service_request_contact_fields":
+		return `
+ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS contact_name VARCHAR;
+ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS contact_email VARCHAR;
+ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS quantity BIGINT NOT NULL DEFAULT 1;
+ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS expected_at TIMESTAMP WITH TIME ZONE;
 `
 	default:
 		return ""

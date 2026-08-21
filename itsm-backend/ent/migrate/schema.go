@@ -3496,6 +3496,10 @@ var (
 		{Name: "source_ip_whitelist", Type: field.TypeJSON, Nullable: true},
 		{Name: "expire_at", Type: field.TypeTime, Nullable: true},
 		{Name: "compliance_ack", Type: field.TypeBool, Default: false},
+		{Name: "contact_name", Type: field.TypeString, Nullable: true},
+		{Name: "contact_email", Type: field.TypeString, Nullable: true},
+		{Name: "quantity", Type: field.TypeInt, Default: 1},
+		{Name: "expected_at", Type: field.TypeTime, Nullable: true},
 		{Name: "processor_id", Type: field.TypeInt, Nullable: true},
 		{Name: "started_at", Type: field.TypeTime, Nullable: true},
 		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
@@ -3520,12 +3524,12 @@ var (
 			{
 				Name:    "servicerequest_tenant_id_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{ServiceRequestsColumns[1], ServiceRequestsColumns[19]},
+				Columns: []*schema.Column{ServiceRequestsColumns[1], ServiceRequestsColumns[23]},
 			},
 			{
 				Name:    "servicerequest_tenant_id_requester_id_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{ServiceRequestsColumns[1], ServiceRequestsColumns[5], ServiceRequestsColumns[19]},
+				Columns: []*schema.Column{ServiceRequestsColumns[1], ServiceRequestsColumns[5], ServiceRequestsColumns[23]},
 			},
 			{
 				Name:    "servicerequest_tenant_id_ci_id",
