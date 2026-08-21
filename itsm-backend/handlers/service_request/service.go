@@ -87,26 +87,32 @@ func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalog
 	}
 
 	// 2. Validate Request Data
-	if !reqData.ComplianceAck {
-		return nil, common.NewBadRequestError("Compliance acknowledgement required", nil)
-	}
-	if reqData.NeedsPublicIP && len(reqData.SourceIPWhitelist) == 0 {
-		return nil, common.NewBadRequestError("Source IP whitelist required for public IP", nil)
-	}
-	if reqData.ExpireAt == nil {
-		return nil, common.NewBadRequestError("Expiration date required", nil)
-	}
-	if !reqData.ExpireAt.After(time.Now()) {
-		return nil, common.NewBadRequestError("Expiration date must be in the future", nil)
-	}
 	title := strings.TrimSpace(reqData.title())
 	if title == "" {
 		return nil, common.NewBadRequestError("Request title is required", nil)
 	}
-	switch reqData.DataClassification {
-	case "public", "internal", "confidential", "restricted":
-	default:
-		return nil, common.NewBadRequestError("Invalid data classification", nil)
+	// 基础设施字段组（成本中心/数据分级/公网IP/IP白名单/资源过期时间/合规确认）只对
+	// vm/network/database 三类目录项强制要求——这条判断只在 service_catalog.RequiresInfraFields
+	// 一处实现，见该函数注释。custom/access/security/software/devops 等类型（如 Copilot
+	// 采购申请）不再被要求填写这组跟业务无关的基础设施字段。
+	if service_catalog.RequiresInfraFields(cat.ServiceType) {
+		if !reqData.ComplianceAck {
+			return nil, common.NewBadRequestError("Compliance acknowledgement required", nil)
+		}
+		if reqData.NeedsPublicIP && len(reqData.SourceIPWhitelist) == 0 {
+			return nil, common.NewBadRequestError("Source IP whitelist required for public IP", nil)
+		}
+		if reqData.ExpireAt == nil {
+			return nil, common.NewBadRequestError("Expiration date required", nil)
+		}
+		if !reqData.ExpireAt.After(time.Now()) {
+			return nil, common.NewBadRequestError("Expiration date must be in the future", nil)
+		}
+		switch reqData.DataClassification {
+		case "public", "internal", "confidential", "restricted":
+		default:
+			return nil, common.NewBadRequestError("Invalid data classification", nil)
+		}
 	}
 
 	// 2b. Validate required dynamic custom fields (server-side enforcement — the admin-configured

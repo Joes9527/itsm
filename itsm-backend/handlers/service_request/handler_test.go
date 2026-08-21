@@ -201,9 +201,18 @@ func TestServiceRequestHandler_Create_CatalogNotFound(t *testing.T) {
 }
 
 func TestServiceRequestHandler_Create_MissingComplianceAck(t *testing.T) {
-	r, _, _, _, catID := srSetup(t)
+	r, client, tenantID, _, _ := srSetup(t)
+	ctx := context.Background()
+	// 创建一个 infra 类型的目录项（ComplianceAck 仅对 vm/network/database 类型强制）
+	scRepo := service_catalog.NewEntRepository(client)
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
+	infraCat, err := scService.Create(ctx, "VM-"+srUID(), "infrastructure", "for test", 0, tenantID, "enabled", 0, 0, nil, "")
+	require.NoError(t, err)
+	_, err = client.ServiceCatalog.UpdateOneID(infraCat.ID).SetServiceType("vm").Save(ctx)
+	require.NoError(t, err)
+
 	// ComplianceAck=false → service 返回 BadRequest → handler 映射 5001
-	req := dto.CreateServiceRequestRequest{CatalogID: catID, Title: "X"}
+	req := dto.CreateServiceRequestRequest{CatalogID: infraCat.ID, Title: "X"}
 	resp := srDoReq(t, r, "POST", "/api/v1/service-requests", req)
 	assert.EqualValues(t, common.ParamErrorCode, resp.Code, "body=%s", srStr(resp))
 }
