@@ -78,7 +78,7 @@ export default function ServiceCatalogRequestPage() {
 
   useEffect(() => {
     if (user) {
-      form.setFieldsValue({ requesterName: user.name, requesterEmail: user.email });
+      form.setFieldsValue({ contactName: user.name, contactEmail: user.email });
     }
   }, [form, user]);
 
@@ -99,8 +99,8 @@ export default function ServiceCatalogRequestPage() {
       const payload: any = {
         serviceId: id,
         formData: {
-          requesterName: values.requesterName,
-          requesterEmail: values.requesterEmail,
+          contactName: values.contactName,
+          contactEmail: values.contactEmail,
           title: values.title,
           reason: values.reason,
           quantity: values.quantity || 1,
@@ -111,7 +111,7 @@ export default function ServiceCatalogRequestPage() {
           sourceIpWhitelist: values.sourceIpWhitelist
             ? values.sourceIpWhitelist.split(',').map((s: string) => s.trim()).filter(Boolean)
             : undefined,
-          // B10: 合规确认 + 过期时间
+          // B10: 合规确认 + 过期时间（仅基础设施类目录项渲染，见下方 requiresInfraFields 分支）
           complianceAck: !!values.complianceAck,
           expireAt: expireAt ? expireAt.toISOString() : undefined,
           customFieldValues,
@@ -189,11 +189,23 @@ export default function ServiceCatalogRequestPage() {
 
         <Form form={form} layout="vertical" onFinish={onFinish}>
           <div className="grid grid-cols-2 gap-4">
-            <Form.Item name="requesterName" label="申请人">
-              <Input disabled placeholder="当前登录用户" />
+            <Form.Item
+              name="contactName"
+              label="联系人"
+              extra="默认取当前登录用户，如代他人提交可修改"
+              rules={[{ required: true, message: '请输入联系人姓名' }]}
+            >
+              <Input placeholder="联系人姓名" />
             </Form.Item>
-            <Form.Item name="requesterEmail" label="联系邮箱">
-              <Input disabled placeholder="当前用户邮箱" />
+            <Form.Item
+              name="contactEmail"
+              label="联系邮箱"
+              rules={[
+                { required: true, message: '请输入联系邮箱' },
+                { type: 'email', message: '请输入合法的邮箱地址' },
+              ]}
+            >
+              <Input placeholder="联系邮箱" />
             </Form.Item>
           </div>
           <Form.Item
@@ -221,68 +233,72 @@ export default function ServiceCatalogRequestPage() {
             </Form.Item>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <Form.Item name="costCenter" label="成本中心">
-              <Input placeholder="例如 CC-1001" />
-            </Form.Item>
-            <Form.Item
-              name="dataClassification"
-              label="数据分级"
-              initialValue="internal"
-            >
-              <Select
-                options={[
-                  { label: '公开 (public)', value: 'public' },
-                  { label: '内部 (internal)', value: 'internal' },
-                  { label: '机密 (confidential)', value: 'confidential' },
-                  { label: '绝密 (restricted)', value: 'restricted' },
+          {catalog?.requiresInfraFields && (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <Form.Item name="costCenter" label="成本中心">
+                  <Input placeholder="例如 CC-1001" />
+                </Form.Item>
+                <Form.Item
+                  name="dataClassification"
+                  label="数据分级"
+                  initialValue="internal"
+                >
+                  <Select
+                    options={[
+                      { label: '公开 (public)', value: 'public' },
+                      { label: '内部 (internal)', value: 'internal' },
+                      { label: '机密 (confidential)', value: 'confidential' },
+                      { label: '绝密 (restricted)', value: 'restricted' },
+                    ]}
+                  />
+                </Form.Item>
+              </div>
+
+              <Form.Item name="needsPublicIp" valuePropName="checked">
+                <Checkbox>需要公网 IP</Checkbox>
+              </Form.Item>
+
+              <Form.Item
+                name="sourceIpWhitelist"
+                label="来源 IP 白名单（多个以英文逗号分隔）"
+                dependencies={['needsPublicIp']}
+              >
+                <Input placeholder="例如 1.2.3.4, 10.0.0.0/8" />
+              </Form.Item>
+
+              <Divider />
+
+              <Form.Item
+                name="expireAt"
+                label="资源过期时间（到期自动回收）"
+                extra="若不填写，则按服务目录默认策略"
+              >
+                <DatePicker
+                  showTime
+                  style={{ width: '100%' }}
+                  disabledDate={(d) => d && d.isBefore(dayjs().startOf('day'))}
+                />
+              </Form.Item>
+
+              <Form.Item
+                name="complianceAck"
+                valuePropName="checked"
+                rules={[
+                  {
+                    validator: (_, value) =>
+                      value
+                        ? Promise.resolve()
+                        : Promise.reject(new Error('请确认已知悉相关合规与安全要求')),
+                  },
                 ]}
-              />
-            </Form.Item>
-          </div>
-
-          <Form.Item name="needsPublicIp" valuePropName="checked">
-            <Checkbox>需要公网 IP</Checkbox>
-          </Form.Item>
-
-          <Form.Item
-            name="sourceIpWhitelist"
-            label="来源 IP 白名单（多个以英文逗号分隔）"
-            dependencies={['needsPublicIp']}
-          >
-            <Input placeholder="例如 1.2.3.4, 10.0.0.0/8" />
-          </Form.Item>
-
-          <Divider />
-
-          <Form.Item
-            name="expireAt"
-            label="资源过期时间（到期自动回收）"
-            extra="若不填写，则按服务目录默认策略"
-          >
-            <DatePicker
-              showTime
-              style={{ width: '100%' }}
-              disabledDate={(d) => d && d.isBefore(dayjs().startOf('day'))}
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="complianceAck"
-            valuePropName="checked"
-            rules={[
-              {
-                validator: (_, value) =>
-                  value
-                    ? Promise.resolve()
-                    : Promise.reject(new Error('请确认已知悉相关合规与安全要求')),
-              },
-            ]}
-          >
-            <Checkbox>
-              我已知悉本服务的合规要求与安全策略，并承诺仅将资源用于申请所述的合法业务场景
-            </Checkbox>
-          </Form.Item>
+              >
+                <Checkbox>
+                  我已知悉本服务的合规要求与安全策略，并承诺仅将资源用于申请所述的合法业务场景
+                </Checkbox>
+              </Form.Item>
+            </>
+          )}
 
           {Array.isArray(catalog?.fields) && catalog.fields.length > 0 && (
             <>
