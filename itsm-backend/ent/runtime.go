@@ -3075,18 +3075,24 @@ func init() {
 	servicerequestDescComplianceAck := servicerequestFields[11].Descriptor()
 	// servicerequest.DefaultComplianceAck holds the default value on creation for the compliance_ack field.
 	servicerequest.DefaultComplianceAck = servicerequestDescComplianceAck.Default.(bool)
+	// servicerequestDescQuantity is the schema descriptor for quantity field.
+	servicerequestDescQuantity := servicerequestFields[14].Descriptor()
+	// servicerequest.DefaultQuantity holds the default value on creation for the quantity field.
+	servicerequest.DefaultQuantity = servicerequestDescQuantity.Default.(int)
+	// servicerequest.QuantityValidator is a validator for the "quantity" field. It is called by the builders before save.
+	servicerequest.QuantityValidator = servicerequestDescQuantity.Validators[0].(func(int) error)
 	// servicerequestDescVersion is the schema descriptor for version field.
-	servicerequestDescVersion := servicerequestFields[17].Descriptor()
+	servicerequestDescVersion := servicerequestFields[21].Descriptor()
 	// servicerequest.DefaultVersion holds the default value on creation for the version field.
 	servicerequest.DefaultVersion = servicerequestDescVersion.Default.(int)
 	// servicerequest.VersionValidator is a validator for the "version" field. It is called by the builders before save.
 	servicerequest.VersionValidator = servicerequestDescVersion.Validators[0].(func(int) error)
 	// servicerequestDescCreatedAt is the schema descriptor for created_at field.
-	servicerequestDescCreatedAt := servicerequestFields[18].Descriptor()
+	servicerequestDescCreatedAt := servicerequestFields[22].Descriptor()
 	// servicerequest.DefaultCreatedAt holds the default value on creation for the created_at field.
 	servicerequest.DefaultCreatedAt = servicerequestDescCreatedAt.Default.(func() time.Time)
 	// servicerequestDescUpdatedAt is the schema descriptor for updated_at field.
-	servicerequestDescUpdatedAt := servicerequestFields[19].Descriptor()
+	servicerequestDescUpdatedAt := servicerequestFields[23].Descriptor()
 	// servicerequest.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	servicerequest.DefaultUpdatedAt = servicerequestDescUpdatedAt.Default.(func() time.Time)
 	// servicerequest.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
