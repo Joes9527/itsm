@@ -114,7 +114,7 @@ export const UserMenuDropdown: React.FC<UserMenuDropdownProps> = ({
           display: 'flex',
           alignItems: 'center',
           gap: 10,
-          padding: '6px 12px 6px 6px',
+          padding: '2px 12px 2px 3px',
           borderRadius: DESIGN.radius.full,
           background: DESIGN.colors.bgSubtle,
           cursor: 'pointer',
@@ -132,8 +132,18 @@ export const UserMenuDropdown: React.FC<UserMenuDropdownProps> = ({
         >
           {userInitial}
         </Avatar>
-        <div className={styles.userMenuDetails} style={{ lineHeight: 1.3 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: DESIGN.colors.text }}>
+        <div className={styles.userMenuDetails} style={{ lineHeight: 1.2 }}>
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: DESIGN.colors.text,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              maxWidth: 140,
+            }}
+          >
             {displayName}
           </div>
           <Tag

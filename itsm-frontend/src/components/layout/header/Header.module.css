@@ -434,10 +434,15 @@
 
 .userMenuTrigger {
   min-width: 0;
+  flex-shrink: 0;
+  height: 40px;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .userMenuDetails {
   min-width: 0;
+  overflow: hidden;
 }
 
 .userMenuChevron {
