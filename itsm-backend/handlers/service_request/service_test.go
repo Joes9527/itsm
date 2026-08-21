@@ -33,7 +33,7 @@ func TestService_Create_PersistsFieldValues(t *testing.T) {
 	scRepo := service_catalog.NewEntRepository(client)
 	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
 	catalog, err := scService.Create(ctx, "云主机申请", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0,
-		[]service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}}, "")
+		[]service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}}, "", "")
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
@@ -75,7 +75,7 @@ func TestService_Create_SystemFormDataFieldsNotCollectedAsCustomFields(t *testin
 	scRepo := service_catalog.NewEntRepository(client)
 	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
 	// 故意不定义任何 field_definitions，只提交系统已知字段。
-	catalog, err := scService.Create(ctx, "VPN权限", "网络", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "")
+	catalog, err := scService.Create(ctx, "VPN权限", "网络", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
@@ -113,7 +113,7 @@ func TestService_Create_PersistsFieldValues_ArrayShapeSnakeCaseName(t *testing.T
 	scRepo := service_catalog.NewEntRepository(client)
 	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
 	catalog, err := scService.Create(ctx, "办公用品申请", "行政", "desc", 1, tenant.ID, "enabled", 0, 0,
-		[]service.FieldDefinitionInput{{Name: "office_location", Label: "办公地点", FieldType: "text"}}, "")
+		[]service.FieldDefinitionInput{{Name: "office_location", Label: "办公地点", FieldType: "text"}}, "", "")
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
@@ -161,7 +161,7 @@ func TestService_Create_RequiredFieldMissing_Rejected(t *testing.T) {
 	scRepo := service_catalog.NewEntRepository(client)
 	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
 	catalog, err := scService.Create(ctx, "服务器扩容", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0,
-		[]service.FieldDefinitionInput{{Name: "reason_code", Label: "原因代码", FieldType: "text", Required: true}}, "")
+		[]service.FieldDefinitionInput{{Name: "reason_code", Label: "原因代码", FieldType: "text", Required: true}}, "", "")
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
@@ -202,7 +202,7 @@ func TestService_Create_LinksTicketAndDelegatesFields(t *testing.T) {
 
 	scRepo := service_catalog.NewEntRepository(client)
 	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
-	catalog, err := scService.Create(ctx, "云主机申请-link", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "")
+	catalog, err := scService.Create(ctx, "云主机申请-link", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
@@ -248,7 +248,7 @@ func TestService_GetByTicketID_ReturnsLinkedServiceRequest(t *testing.T) {
 
 	scRepo := service_catalog.NewEntRepository(client)
 	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
-	catalog, err := scService.Create(ctx, "云主机申请-getbyticket", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "")
+	catalog, err := scService.Create(ctx, "云主机申请-getbyticket", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
@@ -295,7 +295,7 @@ func TestService_List_BatchLoadsLinkedTicketSummary(t *testing.T) {
 
 	scRepo := service_catalog.NewEntRepository(client)
 	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
-	catalog, err := scService.Create(ctx, "云主机申请-list", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "")
+	catalog, err := scService.Create(ctx, "云主机申请-list", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
@@ -415,7 +415,7 @@ func TestServiceRequest_ApprovalDegradedToSingleNodeBPMN(t *testing.T) {
 
 	scRepo := service_catalog.NewEntRepository(client)
 	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
-	catalog, err := scService.Create(ctx, "退化审批测试", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "")
+	catalog, err := scService.Create(ctx, "退化审批测试", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
@@ -457,14 +457,11 @@ func TestService_Create_NonInfraCatalog_SkipsInfraValidation(t *testing.T) {
 		SetPasswordHash("hash").SetRole("end_user").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 
-	// service_catalog.Service.Create 不支持设置 service_type，直接用 ent client 改，
-	// 默认值是 "custom"（ent schema 的 field.String("service_type")...Default("custom")）,
-	// 这里显式设置一次只是让测试意图更清楚。
+	// 显式传 "custom" 只是让测试意图更清楚，实际不传也会落到 ent schema 的
+	// field.String("service_type")...Default("custom")。
 	scRepo := service_catalog.NewEntRepository(client)
 	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
-	catalog, err := scService.Create(ctx, "Copilot采购申请", "基础设施", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "")
-	require.NoError(t, err)
-	_, err = client.ServiceCatalog.UpdateOneID(catalog.ID).SetServiceType("custom").Save(ctx)
+	catalog, err := scService.Create(ctx, "Copilot采购申请", "基础设施", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "custom")
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
@@ -496,9 +493,7 @@ func TestService_Create_InfraCatalog_StillRequiresComplianceAck(t *testing.T) {
 
 	scRepo := service_catalog.NewEntRepository(client)
 	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
-	catalog, err := scService.Create(ctx, "云服务器申请", "云资源", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "")
-	require.NoError(t, err)
-	_, err = client.ServiceCatalog.UpdateOneID(catalog.ID).SetServiceType("vm").Save(ctx)
+	catalog, err := scService.Create(ctx, "云服务器申请", "云资源", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "vm")
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
@@ -533,7 +528,7 @@ func TestService_Create_PersistsContactAndQuantityFieldsThroughFullPath(t *testi
 
 	scRepo := service_catalog.NewEntRepository(client)
 	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
-	catalog, err := scService.Create(ctx, "Copilot采购申请", "基础设施", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "")
+	catalog, err := scService.Create(ctx, "Copilot采购申请", "基础设施", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
@@ -543,7 +538,7 @@ func TestService_Create_PersistsContactAndQuantityFieldsThroughFullPath(t *testi
 
 	expected := time.Now().Add(72 * time.Hour)
 	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
-		FormData: map[string]interface{}{"title": "申请Copilot许可证", "reason": "测试"},
+		FormData:     map[string]interface{}{"title": "申请Copilot许可证", "reason": "测试"},
 		ContactName:  "王五",
 		ContactEmail: "wangwu@example.com",
 		Quantity:     5,

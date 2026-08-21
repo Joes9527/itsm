@@ -86,6 +86,8 @@ export class ServiceCatalogApi {
       },
       fields: Array.isArray(raw?.fields) ? raw.fields : [],
       processDefinitionKey: raw?.processDefinitionKey || undefined,
+      serviceType: raw?.serviceType || undefined,
+      requiresInfraFields: Boolean(raw?.requiresInfraFields),
     };
   }
 
@@ -204,6 +206,7 @@ export class ServiceCatalogApi {
       status: ServiceCatalogApi.toBackendStatus(request.status) || 'enabled',
       fields: request.fields,
       processDefinitionKey: request.processDefinitionKey,
+      serviceType: request.serviceType ? String(request.serviceType) : undefined,
     };
     const resp = await httpClient.post<any>('/api/v1/service-catalogs', payload);
     return ServiceCatalogApi.toServiceItem(resp);
@@ -227,6 +230,9 @@ export class ServiceCatalogApi {
     if (request.fields !== undefined) payload.fields = request.fields;
     if (request.processDefinitionKey !== undefined) {
       payload.processDefinitionKey = request.processDefinitionKey;
+    }
+    if (request.serviceType !== undefined) {
+      payload.serviceType = String(request.serviceType);
     }
     const st = ServiceCatalogApi.toBackendStatus(request.status);
     if (st) payload.status = st;
@@ -341,7 +347,8 @@ export class ServiceCatalogApi {
       title: title ? String(title) : undefined,
       reason,
       formData: request.formData || {},
-      complianceAck: Boolean(request.formData?.complianceAck ?? true), // 以表单勾选为准，兜底为 true
+      // 合规确认绝不能静默默认为已勾选——没有 ?? true 兜底，调用方忘传就是 false。
+      complianceAck: Boolean(request.formData?.complianceAck),
       dataClassification: String(request.formData?.dataClassification || 'internal'),
       needsPublicIp: Boolean(request.formData?.needsPublicIp || false),
       sourceIpWhitelist: Array.isArray(request.formData?.sourceIpWhitelist)
@@ -352,15 +359,13 @@ export class ServiceCatalogApi {
         : undefined,
       expireAt: request.formData?.expireAt ? request.formData?.expireAt : undefined,
       // 通用层字段：所有 service_type 都适用，真正落到后端 ContactName/ContactEmail/
-      // Quantity/ExpectedAt 列，不再只是进 formData 就没人读的假字段。
-      contactName: request.formData?.contactName
-        ? String(request.formData?.contactName)
-        : undefined,
-      contactEmail: request.formData?.contactEmail
-        ? String(request.formData?.contactEmail)
-        : undefined,
-      quantity: request.formData?.quantity ? Number(request.formData?.quantity) : undefined,
-      expectedAt: request.formData?.expectedAt ? request.formData?.expectedAt : undefined,
+      // Quantity/ExpectedAt 列。直接映射到新增列，不再经过 formData JSON 兜底路径
+      // （见 docs/superpowers/specs/2026-08-21-service-catalog-request-form-redesign-design.md
+      // §3.5），所以从 request 顶层读取而不是 request.formData。
+      contactName: request.contactName ? String(request.contactName) : undefined,
+      contactEmail: request.contactEmail ? String(request.contactEmail) : undefined,
+      quantity: request.quantity ? Number(request.quantity) : undefined,
+      expectedAt: request.expectedAt ? request.expectedAt : undefined,
     };
 
     return httpClient.post<{ ticketId: number } & Record<string, any>>(

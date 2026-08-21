@@ -43,6 +43,13 @@ export interface ServiceRequest {
   expireAt?: string;
   complianceAck: boolean;
 
+  // 通用层字段：所有 service_type 都适用，直接映射到后端新增列
+  // （contactName/contactEmail/quantity/expectedAt），不再经过 formData JSON 兜底路径。
+  contactName?: string;
+  contactEmail?: string;
+  quantity: number;
+  expectedAt?: string;
+
   createdAt: string;
   updatedAt: string;
 
@@ -67,6 +74,12 @@ export interface CreateServiceRequestRequest {
   sourceIpWhitelist?: string[];
   expireAt?: string;
   complianceAck: boolean;
+
+  // 通用层字段：所有 service_type 都适用，直接映射到后端新增列，不再经过 formData JSON 兜底路径。
+  contactName?: string;
+  contactEmail?: string;
+  quantity?: number;
+  expectedAt?: string;
 }
 
 // 审批动作请求参数

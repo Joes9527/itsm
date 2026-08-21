@@ -52,6 +52,11 @@ export interface ServiceItem {
   // 服务类型 - 用于动态表单
   serviceType?: ServiceType;
 
+  // 由后端根据 serviceType 计算：仅 vm/rds/network/database/storage/oss 为 true
+  // （见 itsm-backend handlers/service_catalog/entity.go RequiresInfraFields）。
+  // 申请表单据此决定是否渲染成本中心/数据分级/公网IP/IP白名单/过期时间/合规确认这组字段。
+  requiresInfraFields?: boolean;
+
   // 审批配置
   requiresApproval?: boolean;
   approvalLevel?: number;
@@ -422,6 +427,8 @@ export interface CreateServiceItemRequest {
   processDefinitionKey?: string;
   status?: ServiceStatus;
   fields?: ServiceItem['fields'];
+  // 决定是否需要基础设施字段，见 ServiceItem.serviceType/requiresInfraFields 注释。
+  serviceType?: ServiceType | string;
 }
 
 /**
@@ -438,6 +445,14 @@ export interface CreateServiceRequestRequest {
   priority?: 'low' | 'medium' | 'high' | 'urgent';
   additionalNotes?: string;
   requestedFor?: number;
+
+  // 通用层字段：直接映射到后端新增列（contactName/contactEmail/quantity/expectedAt），
+  // 不再经过 formData JSON 兜底路径（见 docs/superpowers/specs/
+  // 2026-08-21-service-catalog-request-form-redesign-design.md §3.5）。
+  contactName?: string;
+  contactEmail?: string;
+  quantity?: number;
+  expectedAt?: string;
 }
 
 /**

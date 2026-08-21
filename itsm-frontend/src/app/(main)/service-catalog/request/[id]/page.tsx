@@ -98,13 +98,15 @@ export default function ServiceCatalogRequestPage() {
         .filter((f: { value: unknown }) => f.value !== undefined && f.value !== null && f.value !== '');
       const payload: any = {
         serviceId: id,
+        // 通用层字段：直接映射到后端新增列，不再经过 formData JSON 兜底路径
+        // （见 docs/superpowers/specs/2026-08-21-service-catalog-request-form-redesign-design.md §3.5）。
+        contactName: values.contactName,
+        contactEmail: values.contactEmail,
+        quantity: values.quantity || 1,
+        expectedAt: values.expectedAt ? values.expectedAt.toISOString() : undefined,
         formData: {
-          contactName: values.contactName,
-          contactEmail: values.contactEmail,
           title: values.title,
           reason: values.reason,
-          quantity: values.quantity || 1,
-          expectedAt: values.expectedAt ? values.expectedAt.toISOString() : undefined,
           costCenter: values.costCenter,
           dataClassification: values.dataClassification || 'internal',
           needsPublicIp: values.needsPublicIp || false,

@@ -26,7 +26,7 @@ func NewService(repo Repository, client *ent.Client, logger *zap.SugaredLogger) 
 	}
 }
 
-func (s *Service) Create(ctx context.Context, name, category, description string, deliveryTime, tenantID int, status string, ciTypeID, cloudServiceID int, fields []service.FieldDefinitionInput, processDefinitionKey string) (*ServiceCatalog, error) {
+func (s *Service) Create(ctx context.Context, name, category, description string, deliveryTime, tenantID int, status string, ciTypeID, cloudServiceID int, fields []service.FieldDefinitionInput, processDefinitionKey string, serviceType string) (*ServiceCatalog, error) {
 	name = strings.TrimSpace(name)
 	category = strings.TrimSpace(category)
 	if name == "" || category == "" {
@@ -67,6 +67,7 @@ func (s *Service) Create(ctx context.Context, name, category, description string
 		ProcessDefinitionKey: strings.TrimSpace(processDefinitionKey),
 		Status:               status,
 		TenantID:             tenantID,
+		ServiceType:          strings.TrimSpace(serviceType),
 	}
 	created, err := s.repo.Create(ctx, catalog)
 	if err != nil {
@@ -140,7 +141,7 @@ func toFieldDefinitionInputsFromEnt(defs []*ent.FieldDefinition) []service.Field
 	return result
 }
 
-func (s *Service) Update(ctx context.Context, tenantID int, id int, name, category, description string, deliveryTime int, status string, ciTypeID, cloudServiceID int, fields []service.FieldDefinitionInput, processDefinitionKey string) (*ServiceCatalog, error) {
+func (s *Service) Update(ctx context.Context, tenantID int, id int, name, category, description string, deliveryTime int, status string, ciTypeID, cloudServiceID int, fields []service.FieldDefinitionInput, processDefinitionKey string, serviceType string) (*ServiceCatalog, error) {
 	// First check if exists
 	current, err := s.repo.Get(ctx, tenantID, id)
 	if err != nil {
@@ -205,6 +206,9 @@ func (s *Service) Update(ctx context.Context, tenantID int, id int, name, catego
 	}
 	if key := strings.TrimSpace(processDefinitionKey); key != "" {
 		current.ProcessDefinitionKey = key
+	}
+	if st := strings.TrimSpace(serviceType); st != "" {
+		current.ServiceType = st
 	}
 
 	updated, err := s.repo.Update(ctx, tenantID, current)

@@ -157,6 +157,7 @@ func (h *Handler) Create(c *gin.Context) {
 		req.CloudServiceID,
 		fields,
 		req.ProcessDefinitionKey,
+		req.ServiceType,
 	)
 	if err != nil {
 		failServiceCatalog(c, err)
@@ -215,6 +216,7 @@ func (h *Handler) Update(c *gin.Context) {
 		req.CloudServiceID,
 		fields,
 		req.ProcessDefinitionKey,
+		req.ServiceType,
 	)
 	if err != nil {
 		failServiceCatalog(c, err)

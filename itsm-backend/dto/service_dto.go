@@ -1,10 +1,7 @@
 package dto
 
 import (
-	"strconv"
 	"time"
-
-	"itsm-backend/ent"
 )
 
 // UserResponse 用户响应
@@ -80,12 +77,12 @@ type ServiceCatalogResponse struct {
 	CloudServiceID int    `json:"cloudServiceId,omitempty"`
 	// ProcessDefinitionKey 是该目录条目专属的 BPMN 流程定义 Key（可选），非空时优先于
 	// businessType+businessSubType 的通用流程绑定解析。
-	ProcessDefinitionKey string                   `json:"processDefinitionKey,omitempty"`
-	Status               string                   `json:"status"`
+	ProcessDefinitionKey string `json:"processDefinitionKey,omitempty"`
+	Status               string `json:"status"`
 	// RequiresInfraFields 由后端根据 service_type 计算：仅 vm/network/database 为 true。
 	// 前端申请表单据此决定是否渲染"成本中心/数据分级/公网IP/IP白名单/资源过期时间/
 	// 合规确认"这组基础设施字段，不自行判断 service_type（见 RequiresInfraFields 注释）。
-	RequiresInfraFields bool                      `json:"requiresInfraFields"`
+	RequiresInfraFields bool                     `json:"requiresInfraFields"`
 	Fields              []map[string]interface{} `json:"fields,omitempty"`
 	CreatedAt           time.Time                `json:"createdAt"`
 	UpdatedAt           time.Time                `json:"updatedAt"`
@@ -148,51 +145,6 @@ type ServiceRequestListResponse struct {
 	Size  int                      `json:"size"`
 }
 
-// ToServiceCatalogResponse 转换为服务目录响应
-func ToServiceCatalogResponse(catalog *ent.ServiceCatalog) *ServiceCatalogResponse {
-	return &ServiceCatalogResponse{
-		ID:                   catalog.ID,
-		Name:                 catalog.Name,
-		Category:             catalog.Category,
-		Description:          catalog.Description,
-		DeliveryTime:         strconv.Itoa(catalog.DeliveryTime),
-		CITypeID:             catalog.CiTypeID,
-		CloudServiceID:       catalog.CloudServiceID,
-		ProcessDefinitionKey: catalog.ProcessDefinitionKey,
-		Status:               string(catalog.Status),
-		CreatedAt:            catalog.CreatedAt,
-		UpdatedAt:            catalog.UpdatedAt,
-	}
-}
-
-// ToServiceRequestResponse 转换为服务请求响应
-func ToServiceRequestResponse(request *ent.ServiceRequest) *ServiceRequestResponse {
-	var expireAt *time.Time
-	if !request.ExpireAt.IsZero() {
-		t := request.ExpireAt
-		expireAt = &t
-	}
-	resp := &ServiceRequestResponse{
-		ID:                 request.ID,
-		TicketID:           request.TicketID,
-		CatalogID:          request.CatalogID,
-		RequesterID:        request.RequesterID,
-		CIID:               request.CiID,
-		FormData:           request.FormData,
-		CostCenter:         request.CostCenter,
-		DataClassification: request.DataClassification,
-		NeedsPublicIP:      request.NeedsPublicIP,
-		SourceIPWhitelist:  request.SourceIPWhitelist,
-		ExpireAt:           expireAt,
-		ComplianceAck:      request.ComplianceAck,
-		Version:            request.Version,
-		CreatedAt:          request.CreatedAt,
-		UpdatedAt:          request.UpdatedAt,
-	}
-
-	return resp
-}
-
 // CreateServiceCatalogRequest 创建服务目录请求
 type CreateServiceCatalogRequest struct {
 	Name           string `json:"name" binding:"required,max=255"`
@@ -206,6 +158,9 @@ type CreateServiceCatalogRequest struct {
 	ProcessDefinitionKey string                   `json:"processDefinitionKey" binding:"omitempty,max=255"`
 	Status               string                   `json:"status" binding:"omitempty,oneof=enabled disabled"`
 	Fields               []map[string]interface{} `json:"fields,omitempty"`
+	// ServiceType 决定是否需要基础设施字段，见 handlers/service_catalog.RequiresInfraFields。
+	// 取值：vm|rds|oss|network|storage|security|custom（ent schema servicecatalog.go 字段注释）。
+	ServiceType string `json:"serviceType" binding:"omitempty,max=50"`
 }
 
 // UpdateServiceCatalogRequest 更新服务目录请求
@@ -219,4 +174,5 @@ type UpdateServiceCatalogRequest struct {
 	ProcessDefinitionKey string                   `json:"processDefinitionKey" binding:"omitempty,max=255"`
 	Status               string                   `json:"status" binding:"omitempty,oneof=enabled disabled"`
 	Fields               []map[string]interface{} `json:"fields,omitempty"`
+	ServiceType          string                   `json:"serviceType" binding:"omitempty,max=50"`
 }
