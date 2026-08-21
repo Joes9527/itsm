@@ -516,4 +516,53 @@ func TestService_Create_InfraCatalog_StillRequiresComplianceAck(t *testing.T) {
 	require.Contains(t, err.Error(), "Compliance acknowledgement required")
 }
 
+// TestService_Create_PersistsContactAndQuantityFieldsThroughFullPath verifies that ContactName,
+// ContactEmail, Quantity, and ExpectedAt fields set on the incoming ServiceRequest parameter
+// are correctly persisted through the full Create path, including the internal newReq reconstruction
+// (regression test for defect where these fields were not copied to newReq before repo.Create).
+func TestService_Create_PersistsContactAndQuantityFieldsThroughFullPath(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:sr_full_path_contact?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	tenant, err := client.Tenant.Create().SetName("t").SetCode("sr-full-path-contact").SetDomain("d.test").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	requester, err := client.User.Create().
+		SetUsername("requester-full-path").SetEmail("fullpath@test.com").SetName("Requester").
+		SetPasswordHash("hash").SetRole("end_user").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	scRepo := service_catalog.NewEntRepository(client)
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
+	catalog, err := scService.Create(ctx, "Copilot采购申请", "基础设施", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "")
+	require.NoError(t, err)
+
+	srRepo := NewEntRepository(client)
+	cmdbRepo := cmdb.NewEntRepository(client)
+	ticketSvc := service.NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
+
+	expected := time.Now().Add(72 * time.Hour)
+	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+		FormData: map[string]interface{}{"title": "申请Copilot许可证", "reason": "测试"},
+		ContactName:  "王五",
+		ContactEmail: "wangwu@example.com",
+		Quantity:     5,
+		ExpectedAt:   &expected,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "王五", created.ContactName, "Service.Create 的完整路径必须真正持久化 ContactName，不能在内部 newReq 重建时丢失")
+	require.Equal(t, "wangwu@example.com", created.ContactEmail)
+	require.Equal(t, 5, created.Quantity)
+	require.NotNil(t, created.ExpectedAt)
+	require.WithinDuration(t, expected, *created.ExpectedAt, time.Second)
+
+	fetched, err := srRepo.Get(ctx, created.ID, tenant.ID)
+	require.NoError(t, err)
+	require.Equal(t, "王五", fetched.ContactName, "从 repo 重新查出的记录也应该保有持久化的字段值")
+	require.Equal(t, "wangwu@example.com", fetched.ContactEmail)
+	require.Equal(t, 5, fetched.Quantity)
+	require.NotNil(t, fetched.ExpectedAt)
+	require.WithinDuration(t, expected, *fetched.ExpectedAt, time.Second)
+}
+
 func ptrTime(t time.Time) *time.Time { return &t }

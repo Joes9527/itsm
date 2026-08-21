@@ -184,6 +184,10 @@ func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalog
 		CostCenter:         reqData.CostCenter,
 		SourceIPWhitelist:  reqData.SourceIPWhitelist,
 		ExpireAt:           reqData.ExpireAt,
+		ContactName:        reqData.ContactName,
+		ContactEmail:       reqData.ContactEmail,
+		Quantity:           reqData.Quantity,
+		ExpectedAt:         reqData.ExpectedAt,
 	}
 
 	if cat.CITypeID > 0 {
