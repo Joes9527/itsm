@@ -29,6 +29,12 @@ type CreateServiceRequestRequest struct {
 	SourceIPWhitelist  []string   `json:"sourceIpWhitelist" binding:"omitempty"`
 	ExpireAt           *time.Time `json:"expireAt" binding:"omitempty"`
 	ComplianceAck      bool       `json:"complianceAck"`
+
+	// 通用层字段：所有 service_type 都适用。
+	ContactName  string     `json:"contactName" binding:"omitempty,max=100"`
+	ContactEmail string     `json:"contactEmail" binding:"omitempty,max=255,email"`
+	Quantity     int        `json:"quantity" binding:"omitempty,min=1,max=1000"`
+	ExpectedAt   *time.Time `json:"expectedAt" binding:"omitempty"`
 }
 
 // UpdateServiceRequestRequest 更新服务请求请求
@@ -100,6 +106,11 @@ type ServiceRequestResponse struct {
 	SourceIPWhitelist  []string   `json:"sourceIpWhitelist,omitempty"`
 	ExpireAt           *time.Time `json:"expireAt,omitempty"`
 	ComplianceAck      bool       `json:"complianceAck"`
+
+	ContactName  string     `json:"contactName,omitempty"`
+	ContactEmail string     `json:"contactEmail,omitempty"`
+	Quantity     int        `json:"quantity"`
+	ExpectedAt   *time.Time `json:"expectedAt,omitempty"`
 
 	Version        int        `json:"version"`
 	ProcessorID    *int       `json:"processorId,omitempty"`

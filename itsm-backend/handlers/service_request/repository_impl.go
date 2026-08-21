@@ -37,6 +37,10 @@ func (r *EntRepository) toDomain(req *ent.ServiceRequest) *ServiceRequest {
 		SourceIPWhitelist:  req.SourceIPWhitelist,
 		ExpireAt:           itemOrNil(req.ExpireAt),
 		ComplianceAck:      req.ComplianceAck,
+		ContactName:        req.ContactName,
+		ContactEmail:       req.ContactEmail,
+		Quantity:           req.Quantity,
+		ExpectedAt:         itemOrNil(req.ExpectedAt),
 		Version:            req.Version,
 		ProcessorID:        optionalInt(req.ProcessorID),
 		StartedAt:          itemOrNil(req.StartedAt),
@@ -83,6 +87,18 @@ func (r *EntRepository) Create(ctx context.Context, req *ServiceRequest) (*Servi
 	}
 	if req.ExpireAt != nil {
 		create.SetExpireAt(*req.ExpireAt)
+	}
+	if req.ContactName != "" {
+		create.SetContactName(req.ContactName)
+	}
+	if req.ContactEmail != "" {
+		create.SetContactEmail(req.ContactEmail)
+	}
+	if req.Quantity > 0 {
+		create.SetQuantity(req.Quantity)
+	}
+	if req.ExpectedAt != nil {
+		create.SetExpectedAt(*req.ExpectedAt)
 	}
 	if req.CiID > 0 {
 		create.SetCiID(req.CiID)
@@ -166,6 +182,8 @@ func (r *EntRepository) Update(ctx context.Context, req *ServiceRequest) error {
 		SetDataClassification(req.DataClassification).
 		SetNeedsPublicIP(req.NeedsPublicIP).
 		SetSourceIPWhitelist(req.SourceIPWhitelist).
+		SetContactName(req.ContactName).
+		SetContactEmail(req.ContactEmail).
 		AddVersion(1)
 
 	if req.ExpireAt != nil {

@@ -25,7 +25,12 @@ type ServiceRequest struct {
 	ExpireAt           *time.Time
 	ComplianceAck      bool
 	ComplianceAckSet   bool
-	Version            int
+	// 通用层字段：所有 service_type 都适用，取代原来只进 FormData 就没人读的假字段。
+	ContactName  string
+	ContactEmail string
+	Quantity     int
+	ExpectedAt   *time.Time
+	Version      int
 	ProcessorID        *int
 	StartedAt          *time.Time
 	CompletedAt        *time.Time
