@@ -193,13 +193,13 @@ export const ROLE_ROUTE_MAPPING: Record<string, RoleRouteConfig> = {
     roleCode: 'it_director',
     roleName: 'IT总监',
     defaultPersona: 'executive',
-    allowedPersonas: ['portal', 'workspace', 'manager', 'executive', 'admin'],
+    allowedPersonas: ['portal', 'workspace', 'manager', 'executive'],
   },
   ops_director: {
     roleCode: 'ops_director',
     roleName: '运维总监',
     defaultPersona: 'executive',
-    allowedPersonas: ['portal', 'workspace', 'manager', 'executive', 'admin'],
+    allowedPersonas: ['portal', 'workspace', 'manager', 'executive'],
   },
 
   // 5. 系统管理员与审计管理员

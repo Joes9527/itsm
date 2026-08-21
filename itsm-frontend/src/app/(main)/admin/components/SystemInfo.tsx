@@ -1,94 +1,77 @@
 'use client';
 
 import React from 'react';
-import { Card, Col, List, Row, Space, Tag, Typography, theme } from 'antd';
 import { Settings, FileText, ArrowUpRight } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
-
-const { Text } = Typography;
 
 const getCurrentYear = () => new Date().getFullYear();
 
 export const SystemInfo: React.FC = () => {
-  const { token } = theme.useToken();
   const { t } = useI18n();
 
+  const supportItems = [
+    { title: t('admin.configGuide'), status: '规划中' },
+    { title: t('admin.apiDocs'), status: '规划中' },
+    { title: t('admin.techSupport'), status: '规划中' },
+    { title: t('admin.updateLog'), status: '规划中' },
+  ];
+
   return (
-    <Row gutter={[24, 24]}>
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* 系统信息 */}
-      <Col xs={24} lg={12}>
-        <Card
-          title={
-            <Space>
-              <Settings className="w-5 h-5" />
-              {t('admin.systemInfo')}
-              <Tag color="gold">静态展示</Tag>
-            </Space>
-          }
-          style={{ height: '100%' }}
-        >
-          <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <Text type="secondary">{t('admin.systemVersion')}</Text>
-              <Text strong>AI-Native ITSM v1.0.0</Text>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <Text type="secondary">{t('admin.databaseVersion')}</Text>
-              <Text strong>PostgreSQL 15.0</Text>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <Text type="secondary">{t('admin.licenseStatus')}</Text>
-              <Tag color="success">{t('admin.licenseActivated')}</Tag>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <Text type="secondary">{t('admin.licenseExpiry')}</Text>
-              <Text strong>{getCurrentYear() + 1}-12-31</Text>
-            </div>
-          </Space>
-        </Card>
-      </Col>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
+        <div className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100 mb-4">
+          <Settings size={18} />
+          <span>{t('admin.systemInfo')}</span>
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
+            静态展示
+          </span>
+        </div>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-slate-500 dark:text-slate-400">{t('admin.systemVersion')}</span>
+            <span className="font-semibold text-slate-800 dark:text-slate-200">AI-Native ITSM v1.0.0</span>
+          </div>
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-slate-500 dark:text-slate-400">{t('admin.databaseVersion')}</span>
+            <span className="font-semibold text-slate-800 dark:text-slate-200">PostgreSQL 15.0</span>
+          </div>
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-slate-500 dark:text-slate-400">{t('admin.licenseStatus')}</span>
+            <span className="px-1.5 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+              {t('admin.licenseActivated')}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-slate-500 dark:text-slate-400">{t('admin.licenseExpiry')}</span>
+            <span className="font-semibold text-slate-800 dark:text-slate-200">{getCurrentYear() + 1}-12-31</span>
+          </div>
+        </div>
+      </div>
 
       {/* 帮助和支持 */}
-      <Col xs={24} lg={12}>
-        <Card
-          title={
-            <Space>
-              <FileText className="w-5 h-5" />
-              {t('admin.helpSupport')}
-              <Tag color="blue">待接入</Tag>
-            </Space>
-          }
-          style={{ height: '100%' }}
-        >
-          <List
-            dataSource={[
-              { title: t('admin.configGuide'), status: '规划中' },
-              { title: t('admin.apiDocs'), status: '规划中' },
-              { title: t('admin.techSupport'), status: '规划中' },
-              { title: t('admin.updateLog'), status: '规划中' },
-            ]}
-            renderItem={item => (
-              <List.Item>
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: `${token.paddingSM}px 0`,
-                    width: '100%',
-                  }}
-                >
-                  <Text>{item.title}</Text>
-                  <Space size={8}>
-                    <Tag>{item.status}</Tag>
-                    <ArrowUpRight className="w-4 h-4" style={{ color: token.colorTextSecondary }} />
-                  </Space>
-                </div>
-              </List.Item>
-            )}
-          />
-        </Card>
-      </Col>
-    </Row>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
+        <div className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100 mb-4">
+          <FileText size={18} />
+          <span>{t('admin.helpSupport')}</span>
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
+            待接入
+          </span>
+        </div>
+        <div className="divide-y divide-slate-100 dark:divide-slate-800">
+          {supportItems.map((item) => (
+            <div key={item.title} className="py-2.5 flex items-center justify-between">
+              <span className="text-xs text-slate-700 dark:text-slate-300">{item.title}</span>
+              <div className="flex items-center gap-2">
+                <span className="px-1.5 py-0.5 rounded text-[11px] bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                  {item.status}
+                </span>
+                <ArrowUpRight size={14} className="text-slate-400" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 };

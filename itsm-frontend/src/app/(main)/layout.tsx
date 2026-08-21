@@ -14,7 +14,14 @@ import { useLayoutStore } from '@/lib/store/layout-store';
 import PageTransition from '@/components/common/PageTransition';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { usePersonaStore } from '@/lib/store/persona-store';
-import { PERSONAS, getRolePersonaConfig, getPersonaByPath } from '@/config/persona/persona-config';
+import {
+  PERSONAS,
+  getRolePersonaConfig,
+  getPersonaByPath,
+  type PersonaType,
+} from '@/config/persona/persona-config';
+
+const PERSONA_TYPES: PersonaType[] = ['portal', 'workspace', 'manager', 'executive', 'admin'];
 import type { Tenant } from '@/lib/api/api-config';
 
 const { Content } = Layout;
@@ -113,17 +120,16 @@ export default function MainLayout({
       // 初始化 Persona
       initPersonaByRole(roleCode);
 
+      const roleConf = getRolePersonaConfig(roleCode);
+
       // 如果用户直接访问了根路由或 /dashboard，重定向至该角色的默认工作台
       if (pathname === '/' || pathname === '/dashboard') {
-        const roleConf = getRolePersonaConfig(roleCode);
-        if (roleConf.defaultPersona === 'portal') {
-          router.replace('/portal');
-        } else if (roleConf.defaultPersona === 'workspace') {
-          router.replace('/workspace/tickets');
-        } else if (roleConf.defaultPersona === 'manager') {
-          router.replace('/manager/live-board');
-        } else if (roleConf.defaultPersona === 'executive') {
-          router.replace('/executive/dashboard');
+        router.replace(PERSONAS[roleConf.defaultPersona].homePath);
+      } else {
+        // 越权拦截：当前路径所属工作台不在该角色允许范围内时，回退到其默认工作台
+        const requestedPersona = PERSONA_TYPES.find(p => pathname?.startsWith(`/${p}`));
+        if (requestedPersona && !roleConf.allowedPersonas.includes(requestedPersona)) {
+          router.replace(PERSONAS[roleConf.defaultPersona].homePath);
         }
       }
 

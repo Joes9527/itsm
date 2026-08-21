@@ -228,6 +228,14 @@ export interface GetTicketsParams {
   priority?: string;
   tenantId?: number;
   templateId?: number;
+  assigneeId?: number;
+  isOverdue?: boolean;
+  unassigned?: boolean;
+  slaBreachingWithinMinutes?: number;
+  dateFrom?: string;
+  dateTo?: string;
+  sortBy?: string;
+  sortOrder?: string;
 }
 
 // 服务目录相关接口（添加租户支持）

@@ -1116,6 +1116,10 @@ func (s *TicketService) ListTickets(ctx context.Context, req *dto.ListTicketsReq
 		filters.TemplateID = req.TemplateID
 	}
 	filters.IsOverdue = req.IsOverdue
+	filters.Unassigned = req.Unassigned
+	if req.SLABreachingWithinMinutes != nil {
+		filters.SLABreachingWithinMinutes = req.SLABreachingWithinMinutes
+	}
 	if req.Keyword != "" {
 		filters.Keyword = req.Keyword
 	}

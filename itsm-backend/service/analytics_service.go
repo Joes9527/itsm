@@ -10,6 +10,8 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/ticket"
+	"itsm-backend/ent/ticketcategory"
+	"itsm-backend/ent/user"
 
 	"go.uber.org/zap"
 )
@@ -82,6 +84,15 @@ func (s *AnalyticsService) GetDeepAnalytics(ctx context.Context, req *dto.DeepAn
 	// 按维度分组统计
 	dataPoints := s.analyzeByDimensions(allTickets, req.Dimensions, req.Metrics, req.GroupBy)
 
+	// 将 "用户{id}" / "分类{id}" 占位符解析为真实名称，避免前端展示裸 ID。
+	resolveDimension := ""
+	if req.GroupBy != nil && *req.GroupBy != "" {
+		resolveDimension = *req.GroupBy
+	} else if len(req.Dimensions) > 0 {
+		resolveDimension = req.Dimensions[0]
+	}
+	s.resolveDimensionNames(ctx, dataPoints, resolveDimension)
+
 	// 计算汇总数据
 	summary := s.calculateSummary(allTickets)
 
@@ -133,6 +144,58 @@ func (s *AnalyticsService) analyzeByDimensions(tickets []*ent.Ticket, dimensions
 	}
 
 	return dataPoints
+}
+
+// resolveDimensionNames 将 analyzeByDimensions 产出的 "用户{id}" / "分类{id}" 占位符
+// 批量解析为真实姓名/分类名，找不到时保留占位符（避免整段报表因单条脏数据失败）。
+func (s *AnalyticsService) resolveDimensionNames(ctx context.Context, points []dto.AnalyticsDataPoint, dimension string) {
+	if dimension != "assignee" && dimension != "category" {
+		return
+	}
+
+	ids := make([]int, 0, len(points))
+	idToIndex := make(map[int]int, len(points))
+	for i, p := range points {
+		var id int
+		var n int
+		if dimension == "assignee" {
+			n, _ = fmt.Sscanf(p.Name, "用户%d", &id)
+		} else {
+			n, _ = fmt.Sscanf(p.Name, "分类%d", &id)
+		}
+		if n == 1 {
+			ids = append(ids, id)
+			idToIndex[id] = i
+		}
+	}
+	if len(ids) == 0 {
+		return
+	}
+
+	if dimension == "assignee" {
+		users, err := s.client.User.Query().Where(user.IDIn(ids...)).All(ctx)
+		if err != nil {
+			s.logger.Warnw("Failed to resolve assignee names for analytics", "error", err)
+			return
+		}
+		for _, u := range users {
+			if idx, ok := idToIndex[u.ID]; ok {
+				points[idx].Name = u.Name
+			}
+		}
+		return
+	}
+
+	categories, err := s.client.TicketCategory.Query().Where(ticketcategory.IDIn(ids...)).All(ctx)
+	if err != nil {
+		s.logger.Warnw("Failed to resolve category names for analytics", "error", err)
+		return
+	}
+	for _, c := range categories {
+		if idx, ok := idToIndex[c.ID]; ok {
+			points[idx].Name = c.Name
+		}
+	}
 }
 
 // getDimensionValue 获取维度值

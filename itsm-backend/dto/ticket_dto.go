@@ -59,23 +59,25 @@ type UpdateTicketRequest struct {
 
 // ListTicketsRequest 获取工单列表请求
 type ListTicketsRequest struct {
-	Page           int        `json:"page" form:"page"`
-	PageSize       int        `json:"pageSize" form:"pageSize"`
-	Status         string     `json:"status" form:"status"`
-	Priority       string     `json:"priority" form:"priority"`
-	Type           string     `json:"type" form:"type"`               // 工单类型筛选
-	Category       string     `json:"category" form:"category"`       // 分类名称
-	CategoryID     *int       `json:"categoryId" form:"categoryId"`   // 分类ID（优先）
-	AssigneeID     *int       `json:"assigneeId" form:"assigneeId"`   // 处理人ID（可选）
-	RequesterID    *int       `json:"requesterId" form:"requesterId"` // 创建人ID（可选）
-	ParentTicketID *int       `json:"parentTicketId" form:"parentTicketId"`
-	TemplateID     *int       `json:"templateId" form:"templateId"`
-	Keyword        string     `json:"keyword" form:"keyword"`
-	DateFrom       *time.Time `json:"dateFrom" form:"dateFrom"` // 创建时间起始
-	DateTo         *time.Time `json:"dateTo" form:"dateTo"`     // 创建时间截止
-	IsOverdue      bool       `json:"isOverdue" form:"isOverdue"`
-	SortBy         string     `json:"sortBy" form:"sortBy"`
-	SortOrder      string     `json:"sortOrder" form:"sortOrder"`
+	Page                      int        `json:"page" form:"page"`
+	PageSize                  int        `json:"pageSize" form:"pageSize"`
+	Status                    string     `json:"status" form:"status"`
+	Priority                  string     `json:"priority" form:"priority"`
+	Type                      string     `json:"type" form:"type"`               // 工单类型筛选
+	Category                  string     `json:"category" form:"category"`       // 分类名称
+	CategoryID                *int       `json:"categoryId" form:"categoryId"`   // 分类ID（优先）
+	AssigneeID                *int       `json:"assigneeId" form:"assigneeId"`   // 处理人ID（可选）
+	RequesterID               *int       `json:"requesterId" form:"requesterId"` // 创建人ID（可选）
+	ParentTicketID            *int       `json:"parentTicketId" form:"parentTicketId"`
+	TemplateID                *int       `json:"templateId" form:"templateId"`
+	Keyword                   string     `json:"keyword" form:"keyword"`
+	DateFrom                  *time.Time `json:"dateFrom" form:"dateFrom"` // 创建时间起始
+	DateTo                    *time.Time `json:"dateTo" form:"dateTo"`     // 创建时间截止
+	IsOverdue                 bool       `json:"isOverdue" form:"isOverdue"`
+	Unassigned                bool       `json:"unassigned" form:"unassigned"`                               // 仅未分配处理人的工单
+	SLABreachingWithinMinutes *int       `json:"slaBreachingWithinMinutes" form:"slaBreachingWithinMinutes"` // 距 SLA 到期不超过 N 分钟且尚未超时
+	SortBy                    string     `json:"sortBy" form:"sortBy"`
+	SortOrder                 string     `json:"sortOrder" form:"sortOrder"`
 }
 
 // TicketResponse 工单响应

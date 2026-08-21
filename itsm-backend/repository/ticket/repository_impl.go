@@ -300,6 +300,18 @@ func (r *EntRepository) List(ctx context.Context, tenantID int, filters *FilterP
 				ticket.StatusNotIn(string(StatusResolved), string(StatusClosed), string(StatusCancelled)),
 			)
 		}
+		if filters.Unassigned {
+			query = query.Where(ticket.AssigneeIDIsNil())
+		}
+		if filters.SLABreachingWithinMinutes != nil {
+			deadline := time.Now().Add(time.Duration(*filters.SLABreachingWithinMinutes) * time.Minute)
+			query = query.Where(
+				ticket.SLAResolutionDeadlineNotNil(),
+				ticket.SLAResolutionDeadlineGTE(time.Now()),
+				ticket.SLAResolutionDeadlineLTE(deadline),
+				ticket.StatusNotIn(string(StatusResolved), string(StatusClosed), string(StatusCancelled)),
+			)
+		}
 		if filters.Keyword != "" {
 			query = query.Where(ticket.Or(
 				ticket.TitleContains(filters.Keyword),

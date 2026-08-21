@@ -199,9 +199,14 @@ type FilterParams struct {
 	ParentTicketID *int
 	TemplateID     *int
 	IsOverdue      bool
-	Keyword        string
-	DateFrom       *time.Time
-	DateTo         *time.Time
+	// Unassigned 仅返回未分配处理人的工单（assignee_id IS NULL）。
+	Unassigned bool
+	// SLABreachingWithinMinutes 非空时，仅返回距离 sla_resolution_deadline
+	// 不超过该分钟数、且尚未超时（区别于 IsOverdue）、且未关闭的工单。
+	SLABreachingWithinMinutes *int
+	Keyword                   string
+	DateFrom                  *time.Time
+	DateTo                    *time.Time
 	// DataScope 行级数据权限（阻断8）。
 	// DataScopeOwnedOrAssigned 时，CurrentUserID 必须非零，
 	// repository 会强制追加 Or(RequesterIDEQ(uid), AssigneeIDEQ(uid)) 谓词。

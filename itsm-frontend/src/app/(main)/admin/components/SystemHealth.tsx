@@ -1,11 +1,8 @@
 'use client';
 
 import React from 'react';
-import { Card, Space, Typography, List, Tag, Avatar, theme, Button } from 'antd';
 import { Activity, AlertCircle, CheckCircle, RefreshCw, XCircle } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
-
-const { Title, Text } = Typography;
 
 const getCurrentDate = () => {
   const now = new Date();
@@ -34,38 +31,49 @@ const systemHealth = {
   },
 };
 
+const HEALTH_STYLES: Record<string, { tagClass: string; textClass: string; badgeClass: string }> = {
+  excellent: {
+    tagClass: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
+    textClass: 'text-emerald-600',
+    badgeClass: 'bg-emerald-600',
+  },
+  good: {
+    tagClass: 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300',
+    textClass: 'text-blue-600',
+    badgeClass: 'bg-blue-600',
+  },
+  warning: {
+    tagClass: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
+    textClass: 'text-amber-600',
+    badgeClass: 'bg-amber-600',
+  },
+  critical: {
+    tagClass: 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300',
+    textClass: 'text-red-600',
+    badgeClass: 'bg-red-600',
+  },
+  default: {
+    tagClass: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+    textClass: 'text-slate-500',
+    badgeClass: 'bg-slate-500',
+  },
+};
+
 export const SystemHealth: React.FC = () => {
-  const { token } = theme.useToken();
   const { t } = useI18n();
 
-  const getHealthStatus = (status: string) => {
+  const getHealthLabel = (status: string) => {
     switch (status) {
       case 'excellent':
-        return {
-          type: 'success' as const,
-          text: t('admin.excellent'),
-          color: token.colorSuccess,
-        };
+        return t('admin.excellent');
       case 'good':
-        return { type: 'info' as const, text: t('admin.good'), color: token.colorInfo };
+        return t('admin.good');
       case 'warning':
-        return {
-          type: 'warning' as const,
-          text: t('admin.warning'),
-          color: token.colorWarning,
-        };
+        return t('admin.warning');
       case 'critical':
-        return {
-          type: 'error' as const,
-          text: t('admin.critical'),
-          color: token.colorError,
-        };
+        return t('admin.critical');
       default:
-        return {
-          type: 'default' as const,
-          text: t('admin.unknown'),
-          color: token.colorTextSecondary,
-        };
+        return t('admin.unknown');
     }
   };
 
@@ -84,7 +92,7 @@ export const SystemHealth: React.FC = () => {
   };
 
   const HealthIcon = getHealthIcon(systemHealth.overall);
-  const healthStatus = getHealthStatus(systemHealth.overall);
+  const healthStyle = HEALTH_STYLES[systemHealth.overall] ?? HEALTH_STYLES.default;
 
   const serviceList = Object.entries(systemHealth.services).map(([service, status]) => ({
     name:
@@ -100,63 +108,53 @@ export const SystemHealth: React.FC = () => {
   }));
 
   return (
-    <Card
-      title={
-        <Space>
-          <Activity className="w-5 h-5" />
-          {t('admin.systemHealth')}
-          <Tag color="gold">示例数据</Tag>
-        </Space>
-      }
-      extra={<Button type="text" icon={<RefreshCw className="w-4 h-4" />} size="small" />}
-    >
-      <div style={{ marginBottom: token.marginLG }}>
-        <Space align="center" size="large">
-          <Avatar
-            size={48}
-            style={{ backgroundColor: healthStatus.color, border: 'none' }}
-            icon={<HealthIcon className="w-6 h-6" />}
-          />
-          <div>
-            <Title level={3} style={{ margin: 0, color: healthStatus.color }}>
-              {healthStatus.text}
-            </Title>
-            <Text type="secondary">
-              {t('admin.uptime')}: {systemHealth.uptime}
-            </Text>
+    <div className="h-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100">
+          <Activity size={18} />
+          <span>{t('admin.systemHealth')}</span>
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
+            示例数据
+          </span>
+        </div>
+        <button className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+          <RefreshCw size={15} />
+        </button>
+      </div>
+
+      <div className="flex items-center gap-4 mb-5">
+        <div className={`w-12 h-12 rounded-full ${healthStyle.badgeClass} flex items-center justify-center text-white flex-shrink-0`}>
+          <HealthIcon size={22} />
+        </div>
+        <div>
+          <div className={`text-lg font-bold ${healthStyle.textClass}`}>{getHealthLabel(systemHealth.overall)}</div>
+          <div className="text-xs text-slate-400">
+            {t('admin.uptime')}: {systemHealth.uptime}
           </div>
-        </Space>
+        </div>
       </div>
 
-      <List
-        grid={{ column: 2, gutter: 16 }}
-        dataSource={serviceList}
-        renderItem={item => {
+      <div className="grid grid-cols-2 gap-3">
+        {serviceList.map((item) => {
           const ServiceIcon = item.icon;
-          const serviceStatus = getHealthStatus(item.status);
+          const style = HEALTH_STYLES[item.status] ?? HEALTH_STYLES.default;
           return (
-            <List.Item>
-              <Space align="center">
-                <ServiceIcon className="w-4 h-4" style={{ color: serviceStatus.color }} />
-                <Text>{item.name}</Text>
-                <Tag color={serviceStatus.type}>{serviceStatus.text}</Tag>
-              </Space>
-            </List.Item>
+            <div key={item.name} className="flex items-center gap-2 text-xs">
+              <ServiceIcon size={14} className={style.textClass} />
+              <span className="text-slate-700 dark:text-slate-300">{item.name}</span>
+              <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${style.tagClass}`}>
+                {getHealthLabel(item.status)}
+              </span>
+            </div>
           );
-        }}
-      />
-
-      <div
-        style={{
-          marginTop: token.marginLG,
-          paddingTop: token.paddingSM,
-          borderTop: `1px solid ${token.colorBorder}`,
-        }}
-      >
-        <Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
-          {t('admin.lastUpdate')}: {systemHealth.lastUpdate}
-        </Text>
+        })}
       </div>
-    </Card>
+
+      <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+        <span className="text-[11px] text-slate-400">
+          {t('admin.lastUpdate')}: {systemHealth.lastUpdate}
+        </span>
+      </div>
+    </div>
   );
 };

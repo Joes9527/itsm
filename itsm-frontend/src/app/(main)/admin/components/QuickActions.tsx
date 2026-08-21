@@ -2,375 +2,256 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Card, Row, Col, Typography, Space, Avatar, Tooltip, Badge } from 'antd';
 import {
   Users,
-  Shield,
   Workflow,
-  Bell,
-  BookOpen,
-  Database,
   Settings,
   Zap,
-  FileText,
-  Calendar,
-  Mail,
-  Globe,
-  ArrowUpRight,
+  BookOpen,
   ChevronRight,
   UserCheck,
   UserCog,
   UserPlus,
   Lock,
-  ClipboardList,
   CheckSquare,
   Clock,
   AlertTriangle,
   Megaphone,
-  Ticket,
   Folder,
   Cog,
 } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import type { LucideIcon } from 'lucide-react';
 
-const { Title, Text } = Typography;
-
 interface QuickActionItem {
   title: string;
   desc: string;
   href: string;
   count: number;
-  color: string;
   icon: LucideIcon;
+  iconBg: string;
+  iconText: string;
+  badgeClass: string;
 }
 
-// 独特的设计系统 - 精品企业风格
-const DESIGN = {
-  colors: {
-    primary: '#0f172a',
-    accent: '#F06820',
-    success: '#10b981',
-    warning: '#f59e0b',
-    surface: '#ffffff',
-    surfaceSubtle: '#f8fafc',
-    border: '#e2e8f0',
-    text: '#1e293b',
-    textMuted: '#64748b',
+const actionGroups = [
+  {
+    id: 'users',
+    title: '用户与权限',
+    subtitle: '管理用户账户、角色和权限',
+    icon: Users,
+    accentClass: 'bg-gradient-to-br from-orange-500 to-orange-700 shadow-orange-500/30',
+    items: [
+      {
+        title: '用户管理',
+        desc: '用户账户与组织',
+        href: '/admin/users',
+        count: 1234,
+        icon: UserCheck,
+        iconBg: 'bg-orange-50 border-orange-200 dark:bg-orange-950/30 dark:border-orange-900',
+        iconText: 'text-orange-600',
+        badgeClass: 'bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300',
+      },
+      {
+        title: '角色管理',
+        desc: '角色与权限配置',
+        href: '/admin/roles',
+        count: 15,
+        icon: UserCog,
+        iconBg: 'bg-indigo-50 border-indigo-200 dark:bg-indigo-950/30 dark:border-indigo-900',
+        iconText: 'text-indigo-600',
+        badgeClass: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300',
+      },
+      {
+        title: '用户组',
+        desc: '组织架构管理',
+        href: '/admin/groups',
+        count: 28,
+        icon: UserPlus,
+        iconBg: 'bg-cyan-50 border-cyan-200 dark:bg-cyan-950/30 dark:border-cyan-900',
+        iconText: 'text-cyan-600',
+        badgeClass: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-950/50 dark:text-cyan-300',
+      },
+      {
+        title: '权限矩阵',
+        desc: '细粒度权限控制',
+        href: '/admin/permissions',
+        count: 156,
+        icon: Lock,
+        iconBg: 'bg-purple-50 border-purple-200 dark:bg-purple-950/30 dark:border-purple-900',
+        iconText: 'text-purple-600',
+        badgeClass: 'bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300',
+      },
+    ] satisfies QuickActionItem[],
   },
-  shadows: {
-    card: '0 1px 3px rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.05)',
-    cardHover: '0 10px 40px -10px rgb(0 0 0 / 0.15)',
-    glow: (color: string) => `0 0 30px ${color}20`,
+  {
+    id: 'process',
+    title: '流程与自动化',
+    subtitle: '配置工作流和审批规则',
+    icon: Workflow,
+    accentClass: 'bg-gradient-to-br from-emerald-500 to-emerald-700 shadow-emerald-500/30',
+    items: [
+      {
+        title: '工作流设计',
+        desc: 'BPMN流程编排',
+        href: '/admin/workflows',
+        count: 45,
+        icon: Workflow,
+        iconBg: 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-900',
+        iconText: 'text-emerald-600',
+        badgeClass: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300',
+      },
+      {
+        title: '审批链',
+        desc: '多级审批规则',
+        href: '/admin/approval-chains',
+        count: 12,
+        icon: CheckSquare,
+        iconBg: 'bg-teal-50 border-teal-200 dark:bg-teal-950/30 dark:border-teal-900',
+        iconText: 'text-teal-600',
+        badgeClass: 'bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300',
+      },
+      {
+        title: 'SLA定义',
+        desc: '服务级别协议',
+        href: '/admin/sla-definitions',
+        count: 8,
+        icon: Clock,
+        iconBg: 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-900',
+        iconText: 'text-amber-600',
+        badgeClass: 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
+      },
+      {
+        title: '升级规则',
+        desc: '自动升级策略',
+        href: '/admin/escalation-rules',
+        count: 6,
+        icon: AlertTriangle,
+        iconBg: 'bg-orange-50 border-orange-200 dark:bg-orange-950/30 dark:border-orange-900',
+        iconText: 'text-orange-600',
+        badgeClass: 'bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300',
+      },
+    ] satisfies QuickActionItem[],
   },
-  radius: {
-    sm: '8px',
-    md: '12px',
-    lg: '16px',
-    xl: '20px',
+  {
+    id: 'system',
+    title: '系统配置',
+    subtitle: '服务目录和通知设置',
+    icon: Settings,
+    accentClass: 'bg-gradient-to-br from-purple-500 to-purple-700 shadow-purple-500/30',
+    items: [
+      {
+        title: '服务目录',
+        desc: '服务项管理',
+        href: '/admin/service-catalogs',
+        count: 89,
+        icon: BookOpen,
+        iconBg: 'bg-pink-50 border-pink-200 dark:bg-pink-950/30 dark:border-pink-900',
+        iconText: 'text-pink-600',
+        badgeClass: 'bg-pink-100 text-pink-700 dark:bg-pink-950/50 dark:text-pink-300',
+      },
+      {
+        title: '通知配置',
+        desc: '消息推送规则',
+        href: '/notifications',
+        count: 24,
+        icon: Megaphone,
+        iconBg: 'bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-900',
+        iconText: 'text-red-600',
+        badgeClass: 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300',
+      },
+      {
+        title: '工单分类',
+        desc: '分类与模板',
+        href: '/admin/ticket-categories',
+        count: 32,
+        icon: Folder,
+        iconBg: 'bg-slate-100 border-slate-200 dark:bg-slate-800 dark:border-slate-700',
+        iconText: 'text-slate-600 dark:text-slate-300',
+        badgeClass: 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200',
+      },
+      {
+        title: '系统设置',
+        desc: '全局参数配置',
+        href: '/admin/system-config',
+        count: 67,
+        icon: Cog,
+        iconBg: 'bg-slate-900/5 border-slate-300 dark:bg-slate-800 dark:border-slate-700',
+        iconText: 'text-slate-900 dark:text-slate-200',
+        badgeClass: 'bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-200',
+      },
+    ] satisfies QuickActionItem[],
   },
+];
+
+const ActionCard: React.FC<{ item: QuickActionItem }> = ({ item }) => {
+  const Icon = item.icon;
+  return (
+    <Link href={item.href} className="group block h-full no-underline">
+      <div className="relative h-full p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm transition-all duration-300 group-hover:-translate-y-0.5 group-hover:shadow-lg overflow-hidden">
+        <div className="flex items-start justify-between mb-3.5">
+          <div className={`w-[42px] h-[42px] rounded-xl border flex items-center justify-center ${item.iconBg}`}>
+            <Icon size={20} className={item.iconText} />
+          </div>
+          <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${item.badgeClass}`}>
+            {item.count}
+          </span>
+        </div>
+
+        <div className="text-[15px] font-semibold text-slate-900 dark:text-slate-100 mb-1.5">{item.title}</div>
+        <div className="text-[13px] text-slate-500 dark:text-slate-400 leading-relaxed">{item.desc}</div>
+
+        <div className="absolute right-4 bottom-4 opacity-0 -translate-x-2 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0 text-slate-400">
+          <ChevronRight size={18} />
+        </div>
+      </div>
+    </Link>
+  );
+};
+
+const GroupSection: React.FC<{ group: (typeof actionGroups)[number] }> = ({ group }) => {
+  const Icon = group.icon;
+
+  return (
+    <div className="mb-8 animate-in fade-in duration-300">
+      <div className="flex items-center gap-3.5 mb-5 pb-4 border-b border-slate-200 dark:border-slate-800">
+        <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-white shadow-sm ${group.accentClass}`}>
+          <Icon size={22} />
+        </div>
+        <div>
+          <h4 className="text-lg font-bold text-slate-900 dark:text-slate-100 m-0 tracking-tight">{group.title}</h4>
+          <p className="text-[13px] text-slate-500 dark:text-slate-400 m-0">{group.subtitle}</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {group.items.map((item) => (
+          <ActionCard key={item.href} item={item} />
+        ))}
+      </div>
+    </div>
+  );
 };
 
 export const QuickActions: React.FC = () => {
-  const { t } = useI18n();
-
-  const actionGroups = [
-    {
-      id: 'users',
-      title: '用户与权限',
-      subtitle: '管理用户账户、角色和权限',
-      icon: Users,
-      accent: '#F06820',
-      items: [
-        { title: '用户管理', desc: '用户账户与组织', href: '/admin/users', count: 1234, color: '#F06820', icon: UserCheck },
-        { title: '角色管理', desc: '角色与权限配置', href: '/admin/roles', count: 15, color: '#6366f1', icon: UserCog },
-        { title: '用户组', desc: '组织架构管理', href: '/admin/groups', count: 28, color: '#06b6d4', icon: UserPlus },
-        { title: '权限矩阵', desc: '细粒度权限控制', href: '/admin/permissions', count: 156, color: '#8b5cf6', icon: Lock },
-      ],
-    },
-    {
-      id: 'process',
-      title: '流程与自动化',
-      subtitle: '配置工作流和审批规则',
-      icon: Workflow,
-      accent: '#10b981',
-      items: [
-        { title: '工作流设计', desc: 'BPMN流程编排', href: '/admin/workflows', count: 45, color: '#10b981', icon: Workflow },
-        { title: '审批链', desc: '多级审批规则', href: '/admin/approval-chains', count: 12, color: '#14b8a6', icon: CheckSquare },
-        { title: 'SLA定义', desc: '服务级别协议', href: '/admin/sla-definitions', count: 8, color: '#f59e0b', icon: Clock },
-        { title: '升级规则', desc: '自动升级策略', href: '/admin/escalation-rules', count: 6, color: '#f97316', icon: AlertTriangle },
-      ],
-    },
-    {
-      id: 'system',
-      title: '系统配置',
-      subtitle: '服务目录和通知设置',
-      icon: Settings,
-      accent: '#8b5cf6',
-      items: [
-        { title: '服务目录', desc: '服务项管理', href: '/admin/service-catalogs', count: 89, color: '#ec4899', icon: BookOpen },
-        { title: '通知配置', desc: '消息推送规则', href: '/notifications', count: 24, color: '#ef4444', icon: Megaphone },
-        { title: '工单分类', desc: '分类与模板', href: '/admin/ticket-categories', count: 32, color: '#64748b', icon: Folder },
-        { title: '系统设置', desc: '全局参数配置', href: '/admin/system-config', count: 67, color: '#0f172a', icon: Cog },
-      ],
-    },
-  ];
-
-  const ActionCard = ({
-    item,
-    index,
-    groupIndex,
-  }: {
-    item: QuickActionItem;
-    index: number;
-    groupIndex: number;
-  }) => {
-    const delay = (groupIndex * 100) + (index * 50);
-
-    return (
-      <Link href={item.href} style={{ textDecoration: 'none' }}>
-        <Card
-          hoverable
-          style={{
-            height: '100%',
-            borderRadius: DESIGN.radius.lg,
-            border: `1px solid ${DESIGN.colors.border}`,
-            background: 'white',
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            overflow: 'hidden',
-          }}
-          styles={{ body: { padding: '20px' } }}
-          className="action-card"
-        >
-          {/* 悬停效果背景 */}
-          <div
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: `linear-gradient(135deg, ${item.color}08 0%, transparent 100%)`,
-              opacity: 0,
-              transition: 'opacity 0.3s',
-              pointerEvents: 'none',
-            }}
-            className="card-bg"
-          />
-
-          <div style={{ position: 'relative', zIndex: 1 }}>
-            {/* 图标行 */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-              <div
-                style={{
-                  width: 42,
-                  height: 42,
-                  borderRadius: DESIGN.radius.md,
-                  background: `linear-gradient(135deg, ${item.color}15 0%, ${item.color}08 100%)`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  border: `1px solid ${item.color}20`,
-                }}
-              >
-                <item.icon size={20} style={{ color: item.color }} />
-              </div>
-              <Badge
-                count={item.count}
-                style={{
-                  backgroundColor: `${item.color}15`,
-                  color: item.color,
-                  border: 'none',
-                  fontWeight: 600,
-                  fontSize: 11,
-                }}
-              />
-            </div>
-
-            {/* 标题 */}
-            <div style={{ marginBottom: 6 }}>
-              <Text strong style={{ fontSize: 15, color: DESIGN.colors.text, fontWeight: 600 }}>
-                {item.title}
-              </Text>
-            </div>
-
-            {/* 描述 */}
-            <Text style={{ fontSize: 13, color: DESIGN.colors.textMuted, display: 'block', lineHeight: 1.5 }}>
-              {item.desc}
-            </Text>
-
-            {/* 箭头指示器 */}
-            <div
-              style={{
-                position: 'absolute',
-                right: 16,
-                bottom: 16,
-                opacity: 0,
-                transform: 'translateX(-8px)',
-                transition: 'all 0.3s',
-                color: item.color,
-              }}
-              className="arrow-indicator"
-            >
-              <ChevronRight size={18} />
-            </div>
-          </div>
-
-          <style>{`
-            .action-card:hover {
-              box-shadow: ${DESIGN.shadows.cardHover}, ${DESIGN.shadows.glow(item.color)};
-              transform: translateY(-2px);
-            }
-            .action-card:hover .card-bg {
-              opacity: 1;
-            }
-            .action-card:hover .arrow-indicator {
-              opacity: 1;
-              transform: translateX(0);
-            }
-          `}</style>
-        </Card>
-      </Link>
-    );
-  };
-
-  const GroupSection = ({
-    group,
-    index,
-  }: {
-    group: typeof actionGroups[0];
-    index: number;
-  }) => {
-    const Icon = group.icon;
-
-    return (
-      <div
-        style={{
-          marginBottom: 32,
-        }}
-        className="group-section"
-      >
-        {/* 分组标题 */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 14,
-            marginBottom: 20,
-            paddingBottom: 16,
-            borderBottom: `1px solid ${DESIGN.colors.border}`,
-          }}
-        >
-          <div
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: DESIGN.radius.md,
-              background: `linear-gradient(135deg, ${group.accent} 0%, ${group.accent}cc 100%)`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: `0 4px 12px ${group.accent}30`,
-              color: 'white',
-            }}
-          >
-            <Icon size={22} />
-          </div>
-          <div>
-            <Title
-              level={4}
-              style={{
-                margin: 0,
-                fontSize: 18,
-                fontWeight: 700,
-                color: DESIGN.colors.text,
-                letterSpacing: '-0.01em',
-              }}
-            >
-              {group.title}
-            </Title>
-            <Text style={{ fontSize: 13, color: DESIGN.colors.textMuted }}>
-              {group.subtitle}
-            </Text>
-          </div>
-        </div>
-
-        {/* 卡片网格 */}
-        <Row gutter={[16, 16]}>
-          {group.items.map((item, itemIndex) => (
-            <Col xs={24} sm={12} lg={6} key={itemIndex}>
-              <ActionCard item={item} index={itemIndex} groupIndex={index} />
-            </Col>
-          ))}
-        </Row>
-      </div>
-    );
-  };
+  useI18n();
 
   return (
-    <div style={{ marginBottom: 8 }}>
+    <div>
       {/* 主标题 */}
-      <div
-        style={{
-          marginBottom: 28,
-          paddingBottom: 20,
-          borderBottom: `1px solid ${DESIGN.colors.border}`,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-          <div
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: DESIGN.radius.md,
-              background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 4px 12px #f59e0b30',
-              color: 'white',
-            }}
-          >
+      <div className="mb-7 pb-5 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-white shadow-sm">
             <Zap size={20} />
           </div>
-          <Title
-            level={3}
-            style={{
-              margin: 0,
-              fontSize: 22,
-              fontWeight: 700,
-              color: DESIGN.colors.text,
-              letterSpacing: '-0.02em',
-            }}
-          >
-            快捷操作
-          </Title>
+          <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 m-0 tracking-tight">快捷操作</h3>
         </div>
-        <Text style={{ fontSize: 14, color: DESIGN.colors.textMuted }}>
-          快速访问系统管理和配置功能
-        </Text>
+        <p className="text-sm text-slate-500 dark:text-slate-400 m-0">快速访问系统管理和配置功能</p>
       </div>
 
-      {/* 分组区域 */}
-      {actionGroups.map((group, index) => (
-        <GroupSection key={group.id} group={group} index={index} />
+      {actionGroups.map((group) => (
+        <GroupSection key={group.id} group={group} />
       ))}
-
-      {/* 动画 */}
-      <style>{`
-        @keyframes fadeInUp {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .group-section {
-          animation: fadeInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-          opacity: 0;
-          animation-delay: 0.1s;
-        }
-        .group-section:nth-child(1) { animation-delay: 0.1s; }
-        .group-section:nth-child(2) { animation-delay: 0.2s; }
-        .group-section:nth-child(3) { animation-delay: 0.3s; }
-      `}</style>
     </div>
   );
 };
