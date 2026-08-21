@@ -76,9 +76,13 @@ type ServiceCatalogResponse struct {
 	// businessType+businessSubType 的通用流程绑定解析。
 	ProcessDefinitionKey string                   `json:"processDefinitionKey,omitempty"`
 	Status               string                   `json:"status"`
-	Fields               []map[string]interface{} `json:"fields,omitempty"`
-	CreatedAt            time.Time                `json:"createdAt"`
-	UpdatedAt            time.Time                `json:"updatedAt"`
+	// RequiresInfraFields 由后端根据 service_type 计算：仅 vm/network/database 为 true。
+	// 前端申请表单据此决定是否渲染"成本中心/数据分级/公网IP/IP白名单/资源过期时间/
+	// 合规确认"这组基础设施字段，不自行判断 service_type（见 RequiresInfraFields 注释）。
+	RequiresInfraFields bool                      `json:"requiresInfraFields"`
+	Fields              []map[string]interface{} `json:"fields,omitempty"`
+	CreatedAt           time.Time                `json:"createdAt"`
+	UpdatedAt           time.Time                `json:"updatedAt"`
 }
 
 // ServiceRequestResponse 服务请求响应

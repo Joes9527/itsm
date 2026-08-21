@@ -251,6 +251,7 @@ func (r *EntRepository) toDomain(e *ent.ServiceCatalog) *ServiceCatalog {
 		Category:             e.Category,
 		Description:          e.Description,
 		ITSMType:             e.ItsmType,
+		ServiceType:          e.ServiceType,
 		DeliveryTime:         e.DeliveryTime,
 		CITypeID:             e.CiTypeID,
 		CloudServiceID:       e.CloudServiceID,

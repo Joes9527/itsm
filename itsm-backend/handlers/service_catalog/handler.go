@@ -335,6 +335,7 @@ func (h *Handler) toDTO(c *ServiceCatalog) dto.ServiceCatalogResponse {
 		CloudServiceID:       c.CloudServiceID,
 		ProcessDefinitionKey: c.ProcessDefinitionKey,
 		Status:               c.Status,
+		RequiresInfraFields:  RequiresInfraFields(c.ServiceType),
 		Fields:               fields,
 		CreatedAt:            c.CreatedAt,
 		UpdatedAt:            c.UpdatedAt,

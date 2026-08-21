@@ -14,6 +14,7 @@ type ServiceCatalog struct {
 	Category       string
 	Description    string
 	ITSMType       string // Request|Incident|Change，决定审批路由
+	ServiceType    string // vm|network|database|access|security|software|devops|custom，决定是否需要基础设施字段（见 RequiresInfraFields）
 	DeliveryTime   int
 	CITypeID       int
 	CloudServiceID int
@@ -55,4 +56,17 @@ type ServiceStats struct {
 	TotalServices     int            `json:"totalServices"`
 	PublishedServices int            `json:"publishedServices"`
 	Categories        map[string]int `json:"categories"`
+}
+
+// RequiresInfraFields 判断该服务类型是否需要基础设施类字段（成本中心/数据分级/
+// 需要公网IP/来源IP白名单/资源过期时间/合规确认）。这条业务规则只在这一处实现——
+// 前端只读取 ServiceCatalogResponse.RequiresInfraFields，不自行判断 service_type，
+// 后端 Create 校验也调用这同一个函数，避免两处各写一份导致漂移。
+func RequiresInfraFields(serviceType string) bool {
+	switch serviceType {
+	case "vm", "network", "database":
+		return true
+	default:
+		return false
+	}
 }
