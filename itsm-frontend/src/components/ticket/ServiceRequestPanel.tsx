@@ -64,6 +64,12 @@ export default function ServiceRequestPanel({ ticketId }: ServiceRequestPanelPro
   return (
     <Card title="服务申请信息" style={{ marginBottom: 16 }}>
       <Descriptions column={2} bordered size="small">
+        <Descriptions.Item label="联系人">{request.contactName || '-'}</Descriptions.Item>
+        <Descriptions.Item label="联系邮箱">{request.contactEmail || '-'}</Descriptions.Item>
+        <Descriptions.Item label="数量">{request.quantity || 1}</Descriptions.Item>
+        <Descriptions.Item label="期望交付时间">
+          {request.expectedAt ? new Date(request.expectedAt).toLocaleString() : '-'}
+        </Descriptions.Item>
         <Descriptions.Item label="成本中心">{request.costCenter || '-'}</Descriptions.Item>
         <Descriptions.Item label="数据分类">{request.dataClassification || 'internal'}</Descriptions.Item>
         <Descriptions.Item label="需要公网IP">{request.needsPublicIp ? '是' : '否'}</Descriptions.Item>
