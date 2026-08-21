@@ -351,6 +351,16 @@ export class ServiceCatalogApi {
         ? String(request.formData?.costCenter)
         : undefined,
       expireAt: request.formData?.expireAt ? request.formData?.expireAt : undefined,
+      // 通用层字段：所有 service_type 都适用，真正落到后端 ContactName/ContactEmail/
+      // Quantity/ExpectedAt 列，不再只是进 formData 就没人读的假字段。
+      contactName: request.formData?.contactName
+        ? String(request.formData?.contactName)
+        : undefined,
+      contactEmail: request.formData?.contactEmail
+        ? String(request.formData?.contactEmail)
+        : undefined,
+      quantity: request.formData?.quantity ? Number(request.formData?.quantity) : undefined,
+      expectedAt: request.formData?.expectedAt ? request.formData?.expectedAt : undefined,
     };
 
     return httpClient.post<{ ticketId: number } & Record<string, any>>(
