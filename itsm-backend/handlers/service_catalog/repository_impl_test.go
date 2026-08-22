@@ -34,3 +34,26 @@ func TestEntRepository_Search_IncludesLegacyActiveStatus(t *testing.T) {
 	require.Len(t, list, 1)
 	require.Equal(t, "active", list[0].Status)
 }
+
+func TestEntRepository_ToDomain_CarriesServiceType(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:sc_service_type?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+
+	ctx := context.Background()
+	repo := NewEntRepository(client)
+
+	created, err := client.ServiceCatalog.Create().
+		SetName("云服务器申请").
+		SetCategory("云资源").
+		SetDescription("desc").
+		SetDeliveryTime(1).
+		SetStatus("active").
+		SetTenantID(1).
+		SetServiceType("vm").
+		Save(ctx)
+	require.NoError(t, err)
+
+	got, err := repo.Get(ctx, 1, created.ID)
+	require.NoError(t, err)
+	require.Equal(t, "vm", got.ServiceType)
+}

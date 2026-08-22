@@ -88,11 +88,16 @@
 
 ### 前端 (itsm-frontend)
 
-- **`src/app/(main)/`**：受保护页面（需登录）
-- **`src/app/lib/api/`**：API 客户端类（按域分文件：`ticket.ts`、`incident.ts`）
-- **`src/app/lib/stores/`**：Zustand 状态
-- **`src/app/components/`**：通用组件
-- **`src/app/hooks/`**：自定义 React hooks
+- **`src/app/(main)/`**：受保护页面，基于角色视图分流（PortalLayout vs ConsoleLayout）：
+  - **`/portal`**：员工自服务门户（宽屏极简无侧栏、AI 自愈拦截、服务目录、我的请求、经理审批）
+  - **`/workspace/tickets`**：工程师协同工作台（三栏分屏、SLA 倒计时钟、360° 用户画像、AI 相似方案排障）
+  - **`/manager/live-board`**：运营监控中心（实时进单监控墙、团队负载调度与 AI 突发故障聚类预警）
+  - **`/executive/dashboard`**：战略决策大屏（MTTR 趋势分析、成本分布与 ChatBI 对话式数据洞察）
+  - **`/admin/overview`**：系统管理后台（BPMN 引擎、连接器市场、组织架构与权限管理）
+- **`src/config/persona/`**：角色与工作台视图映射配置（`persona-config.ts`）
+- **`src/lib/store/`**：全局 Zustand 状态（`auth-store.ts`、`persona-store.ts`、`layout-store.ts`）
+- **`src/components/`**：按业务领域与视图划分的组件（`portal/`、`workspace/`、`manager/`、`executive/`、`ai/`、`layout/`）
+- **`src/lib/api/`**：API 客户端模块
 
 ### 工具链
 

@@ -209,7 +209,7 @@ function MyBpmnTaskTab() {
                   >
                     拒绝
                   </Button>
-                  <Link href={`/workflow/instances/${r.instanceId}?task=${r.id}`}>
+                  <Link href={`/workflow/instances?instanceId=${r.instanceId}`}>
                     <Button size="small">详情</Button>
                   </Link>
                 </Space>

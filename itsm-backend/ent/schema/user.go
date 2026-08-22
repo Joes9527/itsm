@@ -70,6 +70,28 @@ func (User) Fields() []ent.Field {
 		field.Bool("is_bootstrap_admin").
 			Comment("是否通过bootstrap token创建").
 			Default(false),
+		field.String("gender").
+			Comment("性别: male/female，留空表示未填写").
+			Optional(),
+		field.Bool("is_leader").
+			Comment("是否为部门负责人/领导，用于组织架构展示").
+			Default(false),
+		field.String("function_line").
+			Comment("职能条线：HR 系统里跨法人实体的横向职能分组（如'SPT_资讯科技服务部'），" +
+				"独立于 department_id 代表的正式组织树——同一条线的人可能分散在不同法人实体/" +
+				"仓库下面。来自 ehr-data.xlsx person 表的 depart_line 字段。").
+			Optional(),
+		field.Int("manager_id").
+			Comment("直属上级的用户ID（汇报线，个人级别，跟 department.manager_id 那种" +
+				"部门级负责人是两个概念）。来自 ehr-data.xlsx person 表的 direct_supervisor" +
+				"字段（格式\"姓名:工号\"，按工号匹配到 username）。跟 department.manager_id" +
+				"一样是普通整型外键，不建 ent edge。0/未设置表示无记录或没匹配上。").
+			Optional(),
+		field.String("job_title").
+			Comment("职位头衔，来自HR系统 employee_post 字段，用于 PersonalManagerResolver 按" +
+				"关键字识别审批层级（如\"总经理\"）。跟 function_line（职能条线）是两个不同维度：" +
+				"job_title 是这个人自己的头衔，function_line 是这个人所属的横向业务分组。").
+			Optional(),
 	}
 }
 

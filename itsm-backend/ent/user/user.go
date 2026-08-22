@@ -47,6 +47,16 @@ const (
 	FieldAssignedByMspID = "assigned_by_msp_id"
 	// FieldIsBootstrapAdmin holds the string denoting the is_bootstrap_admin field in the database.
 	FieldIsBootstrapAdmin = "is_bootstrap_admin"
+	// FieldGender holds the string denoting the gender field in the database.
+	FieldGender = "gender"
+	// FieldIsLeader holds the string denoting the is_leader field in the database.
+	FieldIsLeader = "is_leader"
+	// FieldFunctionLine holds the string denoting the function_line field in the database.
+	FieldFunctionLine = "function_line"
+	// FieldManagerID holds the string denoting the manager_id field in the database.
+	FieldManagerID = "manager_id"
+	// FieldJobTitle holds the string denoting the job_title field in the database.
+	FieldJobTitle = "job_title"
 	// EdgeDepartmentRef holds the string denoting the department_ref edge name in mutations.
 	EdgeDepartmentRef = "department_ref"
 	// EdgeTenant holds the string denoting the tenant edge name in mutations.
@@ -208,6 +218,11 @@ var Columns = []string{
 	FieldMspRole,
 	FieldAssignedByMspID,
 	FieldIsBootstrapAdmin,
+	FieldGender,
+	FieldIsLeader,
+	FieldFunctionLine,
+	FieldManagerID,
+	FieldJobTitle,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "users"
@@ -270,6 +285,8 @@ var (
 	UpdateDefaultUpdatedAt func() time.Time
 	// DefaultIsBootstrapAdmin holds the default value on creation for the "is_bootstrap_admin" field.
 	DefaultIsBootstrapAdmin bool
+	// DefaultIsLeader holds the default value on creation for the "is_leader" field.
+	DefaultIsLeader bool
 )
 
 // MspRole defines the type for the "msp_role" enum field.
@@ -382,6 +399,31 @@ func ByAssignedByMspID(opts ...sql.OrderTermOption) OrderOption {
 // ByIsBootstrapAdmin orders the results by the is_bootstrap_admin field.
 func ByIsBootstrapAdmin(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldIsBootstrapAdmin, opts...).ToFunc()
+}
+
+// ByGender orders the results by the gender field.
+func ByGender(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGender, opts...).ToFunc()
+}
+
+// ByIsLeader orders the results by the is_leader field.
+func ByIsLeader(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIsLeader, opts...).ToFunc()
+}
+
+// ByFunctionLine orders the results by the function_line field.
+func ByFunctionLine(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldFunctionLine, opts...).ToFunc()
+}
+
+// ByManagerID orders the results by the manager_id field.
+func ByManagerID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldManagerID, opts...).ToFunc()
+}
+
+// ByJobTitle orders the results by the job_title field.
+func ByJobTitle(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldJobTitle, opts...).ToFunc()
 }
 
 // ByDepartmentRefField orders the results by department_ref field.

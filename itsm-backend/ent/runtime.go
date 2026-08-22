@@ -943,6 +943,10 @@ func init() {
 	department.DefaultUpdatedAt = departmentDescUpdatedAt.Default.(func() time.Time)
 	// department.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	department.UpdateDefaultUpdatedAt = departmentDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// departmentDescOrgType is the schema descriptor for org_type field.
+	departmentDescOrgType := departmentFields[9].Descriptor()
+	// department.DefaultOrgType holds the default value on creation for the org_type field.
+	department.DefaultOrgType = departmentDescOrgType.Default.(string)
 	discoveryjobFields := schema.DiscoveryJob{}.Fields()
 	_ = discoveryjobFields
 	// discoveryjobDescSourceID is the schema descriptor for source_id field.
@@ -3071,18 +3075,24 @@ func init() {
 	servicerequestDescComplianceAck := servicerequestFields[11].Descriptor()
 	// servicerequest.DefaultComplianceAck holds the default value on creation for the compliance_ack field.
 	servicerequest.DefaultComplianceAck = servicerequestDescComplianceAck.Default.(bool)
+	// servicerequestDescQuantity is the schema descriptor for quantity field.
+	servicerequestDescQuantity := servicerequestFields[14].Descriptor()
+	// servicerequest.DefaultQuantity holds the default value on creation for the quantity field.
+	servicerequest.DefaultQuantity = servicerequestDescQuantity.Default.(int)
+	// servicerequest.QuantityValidator is a validator for the "quantity" field. It is called by the builders before save.
+	servicerequest.QuantityValidator = servicerequestDescQuantity.Validators[0].(func(int) error)
 	// servicerequestDescVersion is the schema descriptor for version field.
-	servicerequestDescVersion := servicerequestFields[17].Descriptor()
+	servicerequestDescVersion := servicerequestFields[21].Descriptor()
 	// servicerequest.DefaultVersion holds the default value on creation for the version field.
 	servicerequest.DefaultVersion = servicerequestDescVersion.Default.(int)
 	// servicerequest.VersionValidator is a validator for the "version" field. It is called by the builders before save.
 	servicerequest.VersionValidator = servicerequestDescVersion.Validators[0].(func(int) error)
 	// servicerequestDescCreatedAt is the schema descriptor for created_at field.
-	servicerequestDescCreatedAt := servicerequestFields[18].Descriptor()
+	servicerequestDescCreatedAt := servicerequestFields[22].Descriptor()
 	// servicerequest.DefaultCreatedAt holds the default value on creation for the created_at field.
 	servicerequest.DefaultCreatedAt = servicerequestDescCreatedAt.Default.(func() time.Time)
 	// servicerequestDescUpdatedAt is the schema descriptor for updated_at field.
-	servicerequestDescUpdatedAt := servicerequestFields[19].Descriptor()
+	servicerequestDescUpdatedAt := servicerequestFields[23].Descriptor()
 	// servicerequest.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	servicerequest.DefaultUpdatedAt = servicerequestDescUpdatedAt.Default.(func() time.Time)
 	// servicerequest.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -3853,6 +3863,10 @@ func init() {
 	userDescIsBootstrapAdmin := userFields[15].Descriptor()
 	// user.DefaultIsBootstrapAdmin holds the default value on creation for the is_bootstrap_admin field.
 	user.DefaultIsBootstrapAdmin = userDescIsBootstrapAdmin.Default.(bool)
+	// userDescIsLeader is the schema descriptor for is_leader field.
+	userDescIsLeader := userFields[17].Descriptor()
+	// user.DefaultIsLeader holds the default value on creation for the is_leader field.
+	user.DefaultIsLeader = userDescIsLeader.Default.(bool)
 	vendorFields := schema.Vendor{}.Fields()
 	_ = vendorFields
 	// vendorDescName is the schema descriptor for name field.

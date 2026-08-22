@@ -4,7 +4,7 @@ describe('ITSM BPMN moddle descriptor', () => {
   it('persists assignment, approval and countersign attributes', () => {
     const properties = itsmModdleDescriptor.types[0].properties.map(property => property.name);
     expect(properties).toEqual(expect.arrayContaining([
-      'assignee', 'assigneeRole', 'assigneeDeptId', 'candidateUsers', 'candidateGroups', 'taskPurpose',
+      'assignee', 'assigneeRole', 'assigneeDeptId', 'assigneeGmChain', 'candidateUsers', 'candidateGroups', 'taskPurpose',
       'approvalMode', 'approvalThreshold', 'rejectStrategy', 'timeoutAction',
       'allowDelegate', 'allowAddApprover', 'commentRequiredOnReject',
     ]));

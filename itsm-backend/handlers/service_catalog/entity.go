@@ -14,6 +14,7 @@ type ServiceCatalog struct {
 	Category       string
 	Description    string
 	ITSMType       string // Request|Incident|Change，决定审批路由
+	ServiceType    string // vm|rds|network|database|storage|oss|security|access|custom 等，决定是否需要基础设施字段（见 RequiresInfraFields）
 	DeliveryTime   int
 	CITypeID       int
 	CloudServiceID int
@@ -55,4 +56,23 @@ type ServiceStats struct {
 	TotalServices     int            `json:"totalServices"`
 	PublishedServices int            `json:"publishedServices"`
 	Categories        map[string]int `json:"categories"`
+}
+
+// RequiresInfraFields 判断该服务类型是否需要基础设施类字段（成本中心/数据分级/
+// 需要公网IP/来源IP白名单/资源过期时间/合规确认）。这条业务规则只在这一处实现——
+// 前端只读取 ServiceCatalogResponse.RequiresInfraFields，不自行判断 service_type，
+// 后端 Create 校验也调用这同一个函数，避免两处各写一份导致漂移。
+//
+// 取值对齐 ent/schema/servicecatalog.go 的 service_type 字段注释：
+// vm|rds|oss|network|storage|security|custom。其中 "database"/"rds" 与 "storage"/"oss"
+// 分别是同一类资源在不同代码路径/种子数据里使用的不同命名，都算需要基础设施字段。
+// "security"（安全扫描类）故意不包含在内：它是一次性动作，不是需要成本中心/过期时间的
+// 被置备资源，这是设计该集合时的既有产品决策，不在这里重新讨论。
+func RequiresInfraFields(serviceType string) bool {
+	switch serviceType {
+	case "vm", "rds", "network", "database", "storage", "oss":
+		return true
+	default:
+		return false
+	}
 }

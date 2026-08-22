@@ -104,6 +104,26 @@ func ComplianceAck(v bool) predicate.ServiceRequest {
 	return predicate.ServiceRequest(sql.FieldEQ(FieldComplianceAck, v))
 }
 
+// ContactName applies equality check predicate on the "contact_name" field. It's identical to ContactNameEQ.
+func ContactName(v string) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldEQ(FieldContactName, v))
+}
+
+// ContactEmail applies equality check predicate on the "contact_email" field. It's identical to ContactEmailEQ.
+func ContactEmail(v string) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldEQ(FieldContactEmail, v))
+}
+
+// Quantity applies equality check predicate on the "quantity" field. It's identical to QuantityEQ.
+func Quantity(v int) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldEQ(FieldQuantity, v))
+}
+
+// ExpectedAt applies equality check predicate on the "expected_at" field. It's identical to ExpectedAtEQ.
+func ExpectedAt(v time.Time) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldEQ(FieldExpectedAt, v))
+}
+
 // ProcessorID applies equality check predicate on the "processor_id" field. It's identical to ProcessorIDEQ.
 func ProcessorID(v int) predicate.ServiceRequest {
 	return predicate.ServiceRequest(sql.FieldEQ(FieldProcessorID, v))
@@ -587,6 +607,246 @@ func ComplianceAckEQ(v bool) predicate.ServiceRequest {
 // ComplianceAckNEQ applies the NEQ predicate on the "compliance_ack" field.
 func ComplianceAckNEQ(v bool) predicate.ServiceRequest {
 	return predicate.ServiceRequest(sql.FieldNEQ(FieldComplianceAck, v))
+}
+
+// ContactNameEQ applies the EQ predicate on the "contact_name" field.
+func ContactNameEQ(v string) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldEQ(FieldContactName, v))
+}
+
+// ContactNameNEQ applies the NEQ predicate on the "contact_name" field.
+func ContactNameNEQ(v string) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldNEQ(FieldContactName, v))
+}
+
+// ContactNameIn applies the In predicate on the "contact_name" field.
+func ContactNameIn(vs ...string) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldIn(FieldContactName, vs...))
+}
+
+// ContactNameNotIn applies the NotIn predicate on the "contact_name" field.
+func ContactNameNotIn(vs ...string) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldNotIn(FieldContactName, vs...))
+}
+
+// ContactNameGT applies the GT predicate on the "contact_name" field.
+func ContactNameGT(v string) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldGT(FieldContactName, v))
+}
+
+// ContactNameGTE applies the GTE predicate on the "contact_name" field.
+func ContactNameGTE(v string) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldGTE(FieldContactName, v))
+}
+
+// ContactNameLT applies the LT predicate on the "contact_name" field.
+func ContactNameLT(v string) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldLT(FieldContactName, v))
+}
+
+// ContactNameLTE applies the LTE predicate on the "contact_name" field.
+func ContactNameLTE(v string) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldLTE(FieldContactName, v))
+}
+
+// ContactNameContains applies the Contains predicate on the "contact_name" field.
+func ContactNameContains(v string) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldContains(FieldContactName, v))
+}
+
+// ContactNameHasPrefix applies the HasPrefix predicate on the "contact_name" field.
+func ContactNameHasPrefix(v string) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldHasPrefix(FieldContactName, v))
+}
+
+// ContactNameHasSuffix applies the HasSuffix predicate on the "contact_name" field.
+func ContactNameHasSuffix(v string) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldHasSuffix(FieldContactName, v))
+}
+
+// ContactNameIsNil applies the IsNil predicate on the "contact_name" field.
+func ContactNameIsNil() predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldIsNull(FieldContactName))
+}
+
+// ContactNameNotNil applies the NotNil predicate on the "contact_name" field.
+func ContactNameNotNil() predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldNotNull(FieldContactName))
+}
+
+// ContactNameEqualFold applies the EqualFold predicate on the "contact_name" field.
+func ContactNameEqualFold(v string) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldEqualFold(FieldContactName, v))
+}
+
+// ContactNameContainsFold applies the ContainsFold predicate on the "contact_name" field.
+func ContactNameContainsFold(v string) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldContainsFold(FieldContactName, v))
+}
+
+// ContactEmailEQ applies the EQ predicate on the "contact_email" field.
+func ContactEmailEQ(v string) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldEQ(FieldContactEmail, v))
+}
+
+// ContactEmailNEQ applies the NEQ predicate on the "contact_email" field.
+func ContactEmailNEQ(v string) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldNEQ(FieldContactEmail, v))
+}
+
+// ContactEmailIn applies the In predicate on the "contact_email" field.
+func ContactEmailIn(vs ...string) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldIn(FieldContactEmail, vs...))
+}
+
+// ContactEmailNotIn applies the NotIn predicate on the "contact_email" field.
+func ContactEmailNotIn(vs ...string) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldNotIn(FieldContactEmail, vs...))
+}
+
+// ContactEmailGT applies the GT predicate on the "contact_email" field.
+func ContactEmailGT(v string) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldGT(FieldContactEmail, v))
+}
+
+// ContactEmailGTE applies the GTE predicate on the "contact_email" field.
+func ContactEmailGTE(v string) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldGTE(FieldContactEmail, v))
+}
+
+// ContactEmailLT applies the LT predicate on the "contact_email" field.
+func ContactEmailLT(v string) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldLT(FieldContactEmail, v))
+}
+
+// ContactEmailLTE applies the LTE predicate on the "contact_email" field.
+func ContactEmailLTE(v string) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldLTE(FieldContactEmail, v))
+}
+
+// ContactEmailContains applies the Contains predicate on the "contact_email" field.
+func ContactEmailContains(v string) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldContains(FieldContactEmail, v))
+}
+
+// ContactEmailHasPrefix applies the HasPrefix predicate on the "contact_email" field.
+func ContactEmailHasPrefix(v string) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldHasPrefix(FieldContactEmail, v))
+}
+
+// ContactEmailHasSuffix applies the HasSuffix predicate on the "contact_email" field.
+func ContactEmailHasSuffix(v string) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldHasSuffix(FieldContactEmail, v))
+}
+
+// ContactEmailIsNil applies the IsNil predicate on the "contact_email" field.
+func ContactEmailIsNil() predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldIsNull(FieldContactEmail))
+}
+
+// ContactEmailNotNil applies the NotNil predicate on the "contact_email" field.
+func ContactEmailNotNil() predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldNotNull(FieldContactEmail))
+}
+
+// ContactEmailEqualFold applies the EqualFold predicate on the "contact_email" field.
+func ContactEmailEqualFold(v string) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldEqualFold(FieldContactEmail, v))
+}
+
+// ContactEmailContainsFold applies the ContainsFold predicate on the "contact_email" field.
+func ContactEmailContainsFold(v string) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldContainsFold(FieldContactEmail, v))
+}
+
+// QuantityEQ applies the EQ predicate on the "quantity" field.
+func QuantityEQ(v int) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldEQ(FieldQuantity, v))
+}
+
+// QuantityNEQ applies the NEQ predicate on the "quantity" field.
+func QuantityNEQ(v int) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldNEQ(FieldQuantity, v))
+}
+
+// QuantityIn applies the In predicate on the "quantity" field.
+func QuantityIn(vs ...int) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldIn(FieldQuantity, vs...))
+}
+
+// QuantityNotIn applies the NotIn predicate on the "quantity" field.
+func QuantityNotIn(vs ...int) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldNotIn(FieldQuantity, vs...))
+}
+
+// QuantityGT applies the GT predicate on the "quantity" field.
+func QuantityGT(v int) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldGT(FieldQuantity, v))
+}
+
+// QuantityGTE applies the GTE predicate on the "quantity" field.
+func QuantityGTE(v int) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldGTE(FieldQuantity, v))
+}
+
+// QuantityLT applies the LT predicate on the "quantity" field.
+func QuantityLT(v int) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldLT(FieldQuantity, v))
+}
+
+// QuantityLTE applies the LTE predicate on the "quantity" field.
+func QuantityLTE(v int) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldLTE(FieldQuantity, v))
+}
+
+// ExpectedAtEQ applies the EQ predicate on the "expected_at" field.
+func ExpectedAtEQ(v time.Time) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldEQ(FieldExpectedAt, v))
+}
+
+// ExpectedAtNEQ applies the NEQ predicate on the "expected_at" field.
+func ExpectedAtNEQ(v time.Time) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldNEQ(FieldExpectedAt, v))
+}
+
+// ExpectedAtIn applies the In predicate on the "expected_at" field.
+func ExpectedAtIn(vs ...time.Time) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldIn(FieldExpectedAt, vs...))
+}
+
+// ExpectedAtNotIn applies the NotIn predicate on the "expected_at" field.
+func ExpectedAtNotIn(vs ...time.Time) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldNotIn(FieldExpectedAt, vs...))
+}
+
+// ExpectedAtGT applies the GT predicate on the "expected_at" field.
+func ExpectedAtGT(v time.Time) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldGT(FieldExpectedAt, v))
+}
+
+// ExpectedAtGTE applies the GTE predicate on the "expected_at" field.
+func ExpectedAtGTE(v time.Time) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldGTE(FieldExpectedAt, v))
+}
+
+// ExpectedAtLT applies the LT predicate on the "expected_at" field.
+func ExpectedAtLT(v time.Time) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldLT(FieldExpectedAt, v))
+}
+
+// ExpectedAtLTE applies the LTE predicate on the "expected_at" field.
+func ExpectedAtLTE(v time.Time) predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldLTE(FieldExpectedAt, v))
+}
+
+// ExpectedAtIsNil applies the IsNil predicate on the "expected_at" field.
+func ExpectedAtIsNil() predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldIsNull(FieldExpectedAt))
+}
+
+// ExpectedAtNotNil applies the NotNil predicate on the "expected_at" field.
+func ExpectedAtNotNil() predicate.ServiceRequest {
+	return predicate.ServiceRequest(sql.FieldNotNull(FieldExpectedAt))
 }
 
 // ProcessorIDEQ applies the EQ predicate on the "processor_id" field.

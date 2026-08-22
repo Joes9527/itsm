@@ -41,6 +41,13 @@ func (Department) Fields() []ent.Field {
 			Comment("更新时间").
 			Default(time.Now).
 			UpdateDefault(time.Now),
+		field.String("area_name").
+			Comment("区域/地域名称").
+			Optional(),
+		field.String("org_type").
+			Comment("组织类型: department=行政部门, warehouse=仓库/物流节点").
+			Optional().
+			Default("department"),
 		field.Time("deleted_at").
 			Comment("软删除时间").
 			Optional().

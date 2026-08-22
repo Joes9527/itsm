@@ -5,6 +5,8 @@ export interface Department {
   name: string;
   code: string;
   description?: string;
+  areaName?: string;
+  orgType?: string;
   managerId?: number;
   parentId?: number;
   children?: Department[];
@@ -17,6 +19,8 @@ export interface Department {
 }
 
 type RawDepartment = Partial<Department> & {
+  area_name?: string;
+  org_type?: string;
   managerId?: number;
   parentId?: number;
   createdAt?: string;
@@ -48,6 +52,8 @@ class DepartmentService {
       name: department.name || '',
       code: department.code || '',
       description: department.description,
+      areaName: department.areaName || department.area_name,
+      orgType: department.orgType || department.org_type,
       managerId: department.managerId,
       parentId: department.parentId,
       children: department.children?.map(child => this.normalizeDepartment(child)),

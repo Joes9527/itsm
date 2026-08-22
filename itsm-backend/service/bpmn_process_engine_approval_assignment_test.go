@@ -733,6 +733,59 @@ func TestCreateUserTask_Approval_AssigneeTempTeamId_ResolvesTeamLeader(t *testin
 	assert.Equal(t, strconv.Itoa(leader.ID), created.Assignee, "assigneeTempTeamId 复用的是 Team 实体的 manager_id，跟 assigneeTeamId 同一个数据源")
 }
 
+func TestCreateUserTask_Approval_AssigneeGmChain_ResolvesSubmitterOwnChain(t *testing.T) {
+	fx := newApprovalAssignmentFixture(t)
+
+	gm := fx.createUser(t, "gmChainGM1", 0)
+	err := fx.client.User.UpdateOneID(gm.ID).SetJobTitle("综合物流总经理").Exec(fx.ctx)
+	require.NoError(t, err)
+
+	teamLead := fx.createUser(t, "gmChainLead1", 0)
+	err = fx.client.User.UpdateOneID(teamLead.ID).SetJobTitle("操作主管").SetManagerID(gm.ID).Exec(fx.ctx)
+	require.NoError(t, err)
+
+	requester := fx.createUser(t, "gmChainRequester1", 0)
+	err = fx.client.User.UpdateOneID(requester.ID).SetManagerID(teamLead.ID).Exec(fx.ctx)
+	require.NoError(t, err)
+
+	instance := fx.createInstance(t, "assignee-gm-chain", map[string]interface{}{
+		"requester_id": float64(requester.ID),
+	})
+
+	task := approvalTask("Activity_Approval", "总经理审批")
+	task.AssigneeGmChain = true
+	err = fx.engine.createUserTask(fx.ctx, instance, task)
+	require.NoError(t, err)
+
+	created := fx.getCreatedTask(t, instance.ID, "Activity_Approval")
+	assert.Equal(t, strconv.Itoa(gm.ID), created.Assignee, "应该顺着提交人自己的汇报链爬过没有总经理头衔的直属上级，解析到链路上第一个总经理")
+}
+
+func TestCreateUserTask_Approval_AssigneeGmChain_SelfApproval_FallsBackToOwnDepartment(t *testing.T) {
+	fx := newApprovalAssignmentFixture(t)
+
+	deptManager := fx.createUser(t, "gmChainDeptManager1", 0)
+	dept := fx.createDepartment(t, "GM Chain Self Approval Dept", deptManager.ID, 0)
+
+	// requester 自己是总经理，manager_id 指向自己——PersonalManagerResolver 会爬到自己，
+	// 必须被 resolveGmChainAssignee 的自我审批排除，退到"申请人自己部门"这一级。
+	requester := fx.createUser(t, "gmChainSelfApprover1", dept.ID)
+	err := fx.client.User.UpdateOneID(requester.ID).SetJobTitle("综合物流总经理").SetManagerID(requester.ID).Exec(fx.ctx)
+	require.NoError(t, err)
+
+	instance := fx.createInstance(t, "assignee-gm-chain-self-approval", map[string]interface{}{
+		"requester_id": float64(requester.ID),
+	})
+
+	task := approvalTask("Activity_Approval", "总经理审批")
+	task.AssigneeGmChain = true
+	err = fx.engine.createUserTask(fx.ctx, instance, task)
+	require.NoError(t, err)
+
+	created := fx.getCreatedTask(t, instance.ID, "Activity_Approval")
+	assert.Equal(t, strconv.Itoa(deptManager.ID), created.Assignee, "总经理审批解析出申请人自己时应该排除自我审批，退到申请人自己部门的负责人")
+}
+
 func TestCreateUserTask_Approval_AssigneeDeptId_RequesterIsTheManager_FallsBackToOwnDepartment(t *testing.T) {
 	fx := newApprovalAssignmentFixture(t)
 

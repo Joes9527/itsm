@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { App, Button, Card, Descriptions, Form, Input, Modal, Select, Space, Table, Tag, Tabs, Timeline, Empty, Badge } from 'antd';
 import { Eye, PauseCircle, PlayCircle, RefreshCw, StopCircle, Clock, User, FileText, MessageSquare, Rocket } from 'lucide-react';
 
@@ -79,6 +80,7 @@ const auditActionColorMap: Record<string, string> = {
 
 export default function WorkflowInstancesPage() {
   const { message, modal } = App.useApp();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [instances, setInstances] = useState<InstanceRow[]>([]);
   const [stats, setStats] = useState({
@@ -223,6 +225,34 @@ export default function WorkflowInstancesPage() {
   useEffect(() => {
     loadData();
   }, [keyword, status]);
+
+  // "我的待办审批"列表的"详情"链接跳过来时带 ?instanceId=，这个页面原本只支持从列表行内
+  // 点击打开详情弹窗（handleViewDetail 需要一整行 InstanceRow），没有任何代码读取这个查询参数
+  // ——链接指向的实际上是一个从未存在过的路由（/workflow/instances/:id），点开必然 404。
+  // 单独按 instanceId 查一次实例详情，构造出弹窗需要的 InstanceRow 后直接打开，不依赖左侧
+  // 列表是否已经加载到这一条（避免分页/筛选把它排除在外时依然打不开）。
+  useEffect(() => {
+    const instanceId = searchParams.get('instanceId');
+    if (!instanceId) return;
+    (async () => {
+      try {
+        const instance = await WorkflowApi.getInstance(instanceId);
+        const row: InstanceRow = {
+          id: instance.id,
+          businessKey: (instance as unknown as Record<string, string>).businessKey || instance.workflowId || '-',
+          processDefinitionKey: instance.workflowId || '-',
+          status: String(instance.status),
+          startTime: instance.startTime?.toISOString(),
+          endTime: instance.endTime?.toISOString(),
+        };
+        handleViewDetail(row);
+      } catch (error) {
+        console.error('Failed to load workflow instance from instanceId param:', error);
+        message.error('未找到该流程实例');
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const columns = useMemo(
     () => [

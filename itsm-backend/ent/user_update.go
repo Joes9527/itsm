@@ -302,6 +302,107 @@ func (_u *UserUpdate) SetNillableIsBootstrapAdmin(v *bool) *UserUpdate {
 	return _u
 }
 
+// SetGender sets the "gender" field.
+func (_u *UserUpdate) SetGender(v string) *UserUpdate {
+	_u.mutation.SetGender(v)
+	return _u
+}
+
+// SetNillableGender sets the "gender" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableGender(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetGender(*v)
+	}
+	return _u
+}
+
+// ClearGender clears the value of the "gender" field.
+func (_u *UserUpdate) ClearGender() *UserUpdate {
+	_u.mutation.ClearGender()
+	return _u
+}
+
+// SetIsLeader sets the "is_leader" field.
+func (_u *UserUpdate) SetIsLeader(v bool) *UserUpdate {
+	_u.mutation.SetIsLeader(v)
+	return _u
+}
+
+// SetNillableIsLeader sets the "is_leader" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableIsLeader(v *bool) *UserUpdate {
+	if v != nil {
+		_u.SetIsLeader(*v)
+	}
+	return _u
+}
+
+// SetFunctionLine sets the "function_line" field.
+func (_u *UserUpdate) SetFunctionLine(v string) *UserUpdate {
+	_u.mutation.SetFunctionLine(v)
+	return _u
+}
+
+// SetNillableFunctionLine sets the "function_line" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableFunctionLine(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetFunctionLine(*v)
+	}
+	return _u
+}
+
+// ClearFunctionLine clears the value of the "function_line" field.
+func (_u *UserUpdate) ClearFunctionLine() *UserUpdate {
+	_u.mutation.ClearFunctionLine()
+	return _u
+}
+
+// SetManagerID sets the "manager_id" field.
+func (_u *UserUpdate) SetManagerID(v int) *UserUpdate {
+	_u.mutation.ResetManagerID()
+	_u.mutation.SetManagerID(v)
+	return _u
+}
+
+// SetNillableManagerID sets the "manager_id" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableManagerID(v *int) *UserUpdate {
+	if v != nil {
+		_u.SetManagerID(*v)
+	}
+	return _u
+}
+
+// AddManagerID adds value to the "manager_id" field.
+func (_u *UserUpdate) AddManagerID(v int) *UserUpdate {
+	_u.mutation.AddManagerID(v)
+	return _u
+}
+
+// ClearManagerID clears the value of the "manager_id" field.
+func (_u *UserUpdate) ClearManagerID() *UserUpdate {
+	_u.mutation.ClearManagerID()
+	return _u
+}
+
+// SetJobTitle sets the "job_title" field.
+func (_u *UserUpdate) SetJobTitle(v string) *UserUpdate {
+	_u.mutation.SetJobTitle(v)
+	return _u
+}
+
+// SetNillableJobTitle sets the "job_title" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableJobTitle(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetJobTitle(*v)
+	}
+	return _u
+}
+
+// ClearJobTitle clears the value of the "job_title" field.
+func (_u *UserUpdate) ClearJobTitle() *UserUpdate {
+	_u.mutation.ClearJobTitle()
+	return _u
+}
+
 // SetDepartmentRefID sets the "department_ref" edge to the Department entity by ID.
 func (_u *UserUpdate) SetDepartmentRefID(id int) *UserUpdate {
 	_u.mutation.SetDepartmentRefID(id)
@@ -997,6 +1098,36 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.IsBootstrapAdmin(); ok {
 		_spec.SetField(user.FieldIsBootstrapAdmin, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Gender(); ok {
+		_spec.SetField(user.FieldGender, field.TypeString, value)
+	}
+	if _u.mutation.GenderCleared() {
+		_spec.ClearField(user.FieldGender, field.TypeString)
+	}
+	if value, ok := _u.mutation.IsLeader(); ok {
+		_spec.SetField(user.FieldIsLeader, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.FunctionLine(); ok {
+		_spec.SetField(user.FieldFunctionLine, field.TypeString, value)
+	}
+	if _u.mutation.FunctionLineCleared() {
+		_spec.ClearField(user.FieldFunctionLine, field.TypeString)
+	}
+	if value, ok := _u.mutation.ManagerID(); ok {
+		_spec.SetField(user.FieldManagerID, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedManagerID(); ok {
+		_spec.AddField(user.FieldManagerID, field.TypeInt, value)
+	}
+	if _u.mutation.ManagerIDCleared() {
+		_spec.ClearField(user.FieldManagerID, field.TypeInt)
+	}
+	if value, ok := _u.mutation.JobTitle(); ok {
+		_spec.SetField(user.FieldJobTitle, field.TypeString, value)
+	}
+	if _u.mutation.JobTitleCleared() {
+		_spec.ClearField(user.FieldJobTitle, field.TypeString)
 	}
 	if _u.mutation.DepartmentRefCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1965,6 +2096,107 @@ func (_u *UserUpdateOne) SetNillableIsBootstrapAdmin(v *bool) *UserUpdateOne {
 	return _u
 }
 
+// SetGender sets the "gender" field.
+func (_u *UserUpdateOne) SetGender(v string) *UserUpdateOne {
+	_u.mutation.SetGender(v)
+	return _u
+}
+
+// SetNillableGender sets the "gender" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableGender(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetGender(*v)
+	}
+	return _u
+}
+
+// ClearGender clears the value of the "gender" field.
+func (_u *UserUpdateOne) ClearGender() *UserUpdateOne {
+	_u.mutation.ClearGender()
+	return _u
+}
+
+// SetIsLeader sets the "is_leader" field.
+func (_u *UserUpdateOne) SetIsLeader(v bool) *UserUpdateOne {
+	_u.mutation.SetIsLeader(v)
+	return _u
+}
+
+// SetNillableIsLeader sets the "is_leader" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableIsLeader(v *bool) *UserUpdateOne {
+	if v != nil {
+		_u.SetIsLeader(*v)
+	}
+	return _u
+}
+
+// SetFunctionLine sets the "function_line" field.
+func (_u *UserUpdateOne) SetFunctionLine(v string) *UserUpdateOne {
+	_u.mutation.SetFunctionLine(v)
+	return _u
+}
+
+// SetNillableFunctionLine sets the "function_line" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableFunctionLine(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetFunctionLine(*v)
+	}
+	return _u
+}
+
+// ClearFunctionLine clears the value of the "function_line" field.
+func (_u *UserUpdateOne) ClearFunctionLine() *UserUpdateOne {
+	_u.mutation.ClearFunctionLine()
+	return _u
+}
+
+// SetManagerID sets the "manager_id" field.
+func (_u *UserUpdateOne) SetManagerID(v int) *UserUpdateOne {
+	_u.mutation.ResetManagerID()
+	_u.mutation.SetManagerID(v)
+	return _u
+}
+
+// SetNillableManagerID sets the "manager_id" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableManagerID(v *int) *UserUpdateOne {
+	if v != nil {
+		_u.SetManagerID(*v)
+	}
+	return _u
+}
+
+// AddManagerID adds value to the "manager_id" field.
+func (_u *UserUpdateOne) AddManagerID(v int) *UserUpdateOne {
+	_u.mutation.AddManagerID(v)
+	return _u
+}
+
+// ClearManagerID clears the value of the "manager_id" field.
+func (_u *UserUpdateOne) ClearManagerID() *UserUpdateOne {
+	_u.mutation.ClearManagerID()
+	return _u
+}
+
+// SetJobTitle sets the "job_title" field.
+func (_u *UserUpdateOne) SetJobTitle(v string) *UserUpdateOne {
+	_u.mutation.SetJobTitle(v)
+	return _u
+}
+
+// SetNillableJobTitle sets the "job_title" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableJobTitle(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetJobTitle(*v)
+	}
+	return _u
+}
+
+// ClearJobTitle clears the value of the "job_title" field.
+func (_u *UserUpdateOne) ClearJobTitle() *UserUpdateOne {
+	_u.mutation.ClearJobTitle()
+	return _u
+}
+
 // SetDepartmentRefID sets the "department_ref" edge to the Department entity by ID.
 func (_u *UserUpdateOne) SetDepartmentRefID(id int) *UserUpdateOne {
 	_u.mutation.SetDepartmentRefID(id)
@@ -2690,6 +2922,36 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if value, ok := _u.mutation.IsBootstrapAdmin(); ok {
 		_spec.SetField(user.FieldIsBootstrapAdmin, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Gender(); ok {
+		_spec.SetField(user.FieldGender, field.TypeString, value)
+	}
+	if _u.mutation.GenderCleared() {
+		_spec.ClearField(user.FieldGender, field.TypeString)
+	}
+	if value, ok := _u.mutation.IsLeader(); ok {
+		_spec.SetField(user.FieldIsLeader, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.FunctionLine(); ok {
+		_spec.SetField(user.FieldFunctionLine, field.TypeString, value)
+	}
+	if _u.mutation.FunctionLineCleared() {
+		_spec.ClearField(user.FieldFunctionLine, field.TypeString)
+	}
+	if value, ok := _u.mutation.ManagerID(); ok {
+		_spec.SetField(user.FieldManagerID, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedManagerID(); ok {
+		_spec.AddField(user.FieldManagerID, field.TypeInt, value)
+	}
+	if _u.mutation.ManagerIDCleared() {
+		_spec.ClearField(user.FieldManagerID, field.TypeInt)
+	}
+	if value, ok := _u.mutation.JobTitle(); ok {
+		_spec.SetField(user.FieldJobTitle, field.TypeString, value)
+	}
+	if _u.mutation.JobTitleCleared() {
+		_spec.ClearField(user.FieldJobTitle, field.TypeString)
 	}
 	if _u.mutation.DepartmentRefCleared() {
 		edge := &sqlgraph.EdgeSpec{

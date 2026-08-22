@@ -140,6 +140,62 @@ func (_c *ServiceRequestCreate) SetNillableComplianceAck(v *bool) *ServiceReques
 	return _c
 }
 
+// SetContactName sets the "contact_name" field.
+func (_c *ServiceRequestCreate) SetContactName(v string) *ServiceRequestCreate {
+	_c.mutation.SetContactName(v)
+	return _c
+}
+
+// SetNillableContactName sets the "contact_name" field if the given value is not nil.
+func (_c *ServiceRequestCreate) SetNillableContactName(v *string) *ServiceRequestCreate {
+	if v != nil {
+		_c.SetContactName(*v)
+	}
+	return _c
+}
+
+// SetContactEmail sets the "contact_email" field.
+func (_c *ServiceRequestCreate) SetContactEmail(v string) *ServiceRequestCreate {
+	_c.mutation.SetContactEmail(v)
+	return _c
+}
+
+// SetNillableContactEmail sets the "contact_email" field if the given value is not nil.
+func (_c *ServiceRequestCreate) SetNillableContactEmail(v *string) *ServiceRequestCreate {
+	if v != nil {
+		_c.SetContactEmail(*v)
+	}
+	return _c
+}
+
+// SetQuantity sets the "quantity" field.
+func (_c *ServiceRequestCreate) SetQuantity(v int) *ServiceRequestCreate {
+	_c.mutation.SetQuantity(v)
+	return _c
+}
+
+// SetNillableQuantity sets the "quantity" field if the given value is not nil.
+func (_c *ServiceRequestCreate) SetNillableQuantity(v *int) *ServiceRequestCreate {
+	if v != nil {
+		_c.SetQuantity(*v)
+	}
+	return _c
+}
+
+// SetExpectedAt sets the "expected_at" field.
+func (_c *ServiceRequestCreate) SetExpectedAt(v time.Time) *ServiceRequestCreate {
+	_c.mutation.SetExpectedAt(v)
+	return _c
+}
+
+// SetNillableExpectedAt sets the "expected_at" field if the given value is not nil.
+func (_c *ServiceRequestCreate) SetNillableExpectedAt(v *time.Time) *ServiceRequestCreate {
+	if v != nil {
+		_c.SetExpectedAt(*v)
+	}
+	return _c
+}
+
 // SetProcessorID sets the "processor_id" field.
 func (_c *ServiceRequestCreate) SetProcessorID(v int) *ServiceRequestCreate {
 	_c.mutation.SetProcessorID(v)
@@ -313,6 +369,10 @@ func (_c *ServiceRequestCreate) defaults() {
 		v := servicerequest.DefaultComplianceAck
 		_c.mutation.SetComplianceAck(v)
 	}
+	if _, ok := _c.mutation.Quantity(); !ok {
+		v := servicerequest.DefaultQuantity
+		_c.mutation.SetQuantity(v)
+	}
 	if _, ok := _c.mutation.Version(); !ok {
 		v := servicerequest.DefaultVersion
 		_c.mutation.SetVersion(v)
@@ -369,6 +429,14 @@ func (_c *ServiceRequestCreate) check() error {
 	}
 	if _, ok := _c.mutation.ComplianceAck(); !ok {
 		return &ValidationError{Name: "compliance_ack", err: errors.New(`ent: missing required field "ServiceRequest.compliance_ack"`)}
+	}
+	if _, ok := _c.mutation.Quantity(); !ok {
+		return &ValidationError{Name: "quantity", err: errors.New(`ent: missing required field "ServiceRequest.quantity"`)}
+	}
+	if v, ok := _c.mutation.Quantity(); ok {
+		if err := servicerequest.QuantityValidator(v); err != nil {
+			return &ValidationError{Name: "quantity", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.quantity": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.Version(); !ok {
 		return &ValidationError{Name: "version", err: errors.New(`ent: missing required field "ServiceRequest.version"`)}
@@ -457,6 +525,22 @@ func (_c *ServiceRequestCreate) createSpec() (*ServiceRequest, *sqlgraph.CreateS
 	if value, ok := _c.mutation.ComplianceAck(); ok {
 		_spec.SetField(servicerequest.FieldComplianceAck, field.TypeBool, value)
 		_node.ComplianceAck = value
+	}
+	if value, ok := _c.mutation.ContactName(); ok {
+		_spec.SetField(servicerequest.FieldContactName, field.TypeString, value)
+		_node.ContactName = value
+	}
+	if value, ok := _c.mutation.ContactEmail(); ok {
+		_spec.SetField(servicerequest.FieldContactEmail, field.TypeString, value)
+		_node.ContactEmail = value
+	}
+	if value, ok := _c.mutation.Quantity(); ok {
+		_spec.SetField(servicerequest.FieldQuantity, field.TypeInt, value)
+		_node.Quantity = value
+	}
+	if value, ok := _c.mutation.ExpectedAt(); ok {
+		_spec.SetField(servicerequest.FieldExpectedAt, field.TypeTime, value)
+		_node.ExpectedAt = value
 	}
 	if value, ok := _c.mutation.ProcessorID(); ok {
 		_spec.SetField(servicerequest.FieldProcessorID, field.TypeInt, value)

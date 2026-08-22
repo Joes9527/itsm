@@ -28,6 +28,8 @@ type Department struct {
 	Name        string        `json:"name"`
 	Code        string        `json:"code"`
 	Description string        `json:"description"`
+	AreaName    string        `json:"areaName"`
+	OrgType     string        `json:"orgType"`
 	ManagerID   int           `json:"managerId"`
 	ParentID    int           `json:"parentId"`
 	TenantID    int           `json:"tenantId"`

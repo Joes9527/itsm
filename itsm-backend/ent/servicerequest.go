@@ -42,6 +42,14 @@ type ServiceRequest struct {
 	ExpireAt time.Time `json:"expire_at,omitempty"`
 	// 合规条款确认
 	ComplianceAck bool `json:"compliance_ack,omitempty"`
+	// 联系人姓名，默认取申请人姓名，可编辑以支持代他人提交
+	ContactName string `json:"contact_name,omitempty"`
+	// 联系人邮箱，默认取申请人邮箱，可编辑以支持代他人提交
+	ContactEmail string `json:"contact_email,omitempty"`
+	// 申请数量
+	Quantity int `json:"quantity,omitempty"`
+	// 期望交付时间
+	ExpectedAt time.Time `json:"expected_at,omitempty"`
 	// 处理人ID
 	ProcessorID int `json:"processor_id,omitempty"`
 	// 开始处理时间
@@ -72,11 +80,11 @@ func (*ServiceRequest) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case servicerequest.FieldNeedsPublicIP, servicerequest.FieldComplianceAck:
 			values[i] = new(sql.NullBool)
-		case servicerequest.FieldID, servicerequest.FieldTenantID, servicerequest.FieldTicketID, servicerequest.FieldCatalogID, servicerequest.FieldCiID, servicerequest.FieldRequesterID, servicerequest.FieldProcessorID, servicerequest.FieldVersion:
+		case servicerequest.FieldID, servicerequest.FieldTenantID, servicerequest.FieldTicketID, servicerequest.FieldCatalogID, servicerequest.FieldCiID, servicerequest.FieldRequesterID, servicerequest.FieldQuantity, servicerequest.FieldProcessorID, servicerequest.FieldVersion:
 			values[i] = new(sql.NullInt64)
-		case servicerequest.FieldCostCenter, servicerequest.FieldDataClassification, servicerequest.FieldCompletionNote, servicerequest.FieldLastError:
+		case servicerequest.FieldCostCenter, servicerequest.FieldDataClassification, servicerequest.FieldContactName, servicerequest.FieldContactEmail, servicerequest.FieldCompletionNote, servicerequest.FieldLastError:
 			values[i] = new(sql.NullString)
-		case servicerequest.FieldExpireAt, servicerequest.FieldStartedAt, servicerequest.FieldCompletedAt, servicerequest.FieldCreatedAt, servicerequest.FieldUpdatedAt, servicerequest.FieldDeletedAt:
+		case servicerequest.FieldExpireAt, servicerequest.FieldExpectedAt, servicerequest.FieldStartedAt, servicerequest.FieldCompletedAt, servicerequest.FieldCreatedAt, servicerequest.FieldUpdatedAt, servicerequest.FieldDeletedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -174,6 +182,30 @@ func (_m *ServiceRequest) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field compliance_ack", values[i])
 			} else if value.Valid {
 				_m.ComplianceAck = value.Bool
+			}
+		case servicerequest.FieldContactName:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field contact_name", values[i])
+			} else if value.Valid {
+				_m.ContactName = value.String
+			}
+		case servicerequest.FieldContactEmail:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field contact_email", values[i])
+			} else if value.Valid {
+				_m.ContactEmail = value.String
+			}
+		case servicerequest.FieldQuantity:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field quantity", values[i])
+			} else if value.Valid {
+				_m.Quantity = int(value.Int64)
+			}
+		case servicerequest.FieldExpectedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field expected_at", values[i])
+			} else if value.Valid {
+				_m.ExpectedAt = value.Time
 			}
 		case servicerequest.FieldProcessorID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -301,6 +333,18 @@ func (_m *ServiceRequest) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("compliance_ack=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ComplianceAck))
+	builder.WriteString(", ")
+	builder.WriteString("contact_name=")
+	builder.WriteString(_m.ContactName)
+	builder.WriteString(", ")
+	builder.WriteString("contact_email=")
+	builder.WriteString(_m.ContactEmail)
+	builder.WriteString(", ")
+	builder.WriteString("quantity=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Quantity))
+	builder.WriteString(", ")
+	builder.WriteString("expected_at=")
+	builder.WriteString(_m.ExpectedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("processor_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ProcessorID))

@@ -57,6 +57,8 @@ func toDeptDomain(e *ent.Department) *Department {
 		Name:        e.Name,
 		Code:        e.Code,
 		Description: e.Description,
+		AreaName:    e.AreaName,
+		OrgType:     e.OrgType,
 		ManagerID:   e.ManagerID,
 		ParentID:    e.ParentID,
 		TenantID:    e.TenantID,
@@ -246,19 +248,46 @@ func (r *EntRepository) ListDepartments(ctx context.Context, tenantID int) ([]*D
 	return res, nil
 }
 
+// GetDepartmentTree 返回该租户下完整的部门树。真实导入的组织数据层级可以深达十几层
+// （远超 legacy 演示部门 2-3 层的规模），之前用 WithChildren 只 eager-load 一层子部门，
+// 深层节点会被静默截断（Ent 没加载的 Edges.Children 是零值切片，toDeptDomain 递归到
+// 那里就停了，不会报错，只是数据不全）。改成一次性拉全租户部门（几千行量级，单表单
+// 索引查询，比按层链式 WithChildren 更便宜），在内存里按 parent_id 分组建树，
+// 层数不再受查询写法限制。
 func (r *EntRepository) GetDepartmentTree(ctx context.Context, tenantID int) ([]*Department, error) {
 	es, err := r.client.Department.Query().
-		Where(department.TenantID(tenantID), department.ParentIDIsNil(), department.DeletedAtIsNil()).
-		WithChildren(func(q *ent.DepartmentQuery) { q.Where(department.DeletedAtIsNil()) }).
+		Where(department.TenantID(tenantID), department.DeletedAtIsNil()).
 		All(ctx)
 	if err != nil {
 		return nil, err
 	}
-	var res []*Department
+
+	byID := make(map[int]*Department, len(es))
+	childrenByParent := make(map[int][]*Department, len(es))
+	var roots []*Department
 	for _, e := range es {
-		res = append(res, toDeptDomain(e))
+		d := toDeptDomain(e)
+		d.Children = nil
+		byID[d.ID] = d
+		if e.ParentID == 0 {
+			roots = append(roots, d)
+		} else {
+			childrenByParent[e.ParentID] = append(childrenByParent[e.ParentID], d)
+		}
 	}
-	return res, nil
+	// 孤儿节点（parent_id 指向的部门不存在或已被软删）当根节点处理，而不是静默丢弃——
+	// 导入数据里父节点缺失是可能出现的脏数据，丢掉整个子树比多显示一个根更容易漏查。
+	for parentID, kids := range childrenByParent {
+		if _, ok := byID[parentID]; !ok {
+			roots = append(roots, kids...)
+		}
+	}
+	for _, d := range byID {
+		if kids, ok := childrenByParent[d.ID]; ok {
+			d.Children = kids
+		}
+	}
+	return roots, nil
 }
 
 func (r *EntRepository) UpdateDepartment(ctx context.Context, d *Department) (*Department, error) {

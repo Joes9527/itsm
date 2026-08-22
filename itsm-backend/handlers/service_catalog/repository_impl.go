@@ -38,6 +38,9 @@ func (r *EntRepository) Create(ctx context.Context, catalog *ServiceCatalog) (*S
 	if catalog.ProcessDefinitionKey != "" {
 		entFunc = entFunc.SetProcessDefinitionKey(catalog.ProcessDefinitionKey)
 	}
+	if catalog.ServiceType != "" {
+		entFunc = entFunc.SetServiceType(catalog.ServiceType)
+	}
 
 	res, err := entFunc.Save(ctx)
 	if err != nil {
@@ -115,6 +118,9 @@ func (r *EntRepository) Update(ctx context.Context, tenantID int, catalog *Servi
 	}
 	if catalog.ProcessDefinitionKey != "" {
 		update = update.SetProcessDefinitionKey(catalog.ProcessDefinitionKey)
+	}
+	if catalog.ServiceType != "" {
+		update = update.SetServiceType(catalog.ServiceType)
 	}
 
 	res, err := update.Save(ctx)
@@ -251,6 +257,7 @@ func (r *EntRepository) toDomain(e *ent.ServiceCatalog) *ServiceCatalog {
 		Category:             e.Category,
 		Description:          e.Description,
 		ITSMType:             e.ItsmType,
+		ServiceType:          e.ServiceType,
 		DeliveryTime:         e.DeliveryTime,
 		CITypeID:             e.CiTypeID,
 		CloudServiceID:       e.CloudServiceID,

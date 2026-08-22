@@ -33,6 +33,10 @@ type Department struct {
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// 更新时间
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
+	// 区域/地域名称
+	AreaName string `json:"area_name,omitempty"`
+	// 组织类型: department=行政部门, warehouse=仓库/物流节点
+	OrgType string `json:"org_type,omitempty"`
 	// 软删除时间
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -145,7 +149,7 @@ func (*Department) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case department.FieldID, department.FieldManagerID, department.FieldParentID, department.FieldTenantID:
 			values[i] = new(sql.NullInt64)
-		case department.FieldName, department.FieldCode, department.FieldDescription:
+		case department.FieldName, department.FieldCode, department.FieldDescription, department.FieldAreaName, department.FieldOrgType:
 			values[i] = new(sql.NullString)
 		case department.FieldCreatedAt, department.FieldUpdatedAt, department.FieldDeletedAt:
 			values[i] = new(sql.NullTime)
@@ -217,6 +221,18 @@ func (_m *Department) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
 				_m.UpdatedAt = value.Time
+			}
+		case department.FieldAreaName:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field area_name", values[i])
+			} else if value.Valid {
+				_m.AreaName = value.String
+			}
+		case department.FieldOrgType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field org_type", values[i])
+			} else if value.Valid {
+				_m.OrgType = value.String
 			}
 		case department.FieldDeletedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -324,6 +340,12 @@ func (_m *Department) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
 	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("area_name=")
+	builder.WriteString(_m.AreaName)
+	builder.WriteString(", ")
+	builder.WriteString("org_type=")
+	builder.WriteString(_m.OrgType)
 	builder.WriteString(", ")
 	if v := _m.DeletedAt; v != nil {
 		builder.WriteString("deleted_at=")

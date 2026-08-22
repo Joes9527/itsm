@@ -12,13 +12,14 @@ import {
   UserX,
 } from 'lucide-react';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card,
   Table,
   Button,
   Input,
   Select,
+  TreeSelect,
   Modal,
   Form,
   Space,
@@ -36,6 +37,8 @@ import {
 import { UserApi, type User } from '@/lib/api/user-api';
 import { RoleAPI } from '@/lib/api/role-api';
 import { useAuthStore, useAuthStoreHydration } from '@/lib/store/auth-store';
+import { departmentService, type Department } from '@/lib/services/department-service';
+import OrgDepartmentTree, { findDepartmentById, buildDeptTreeSelectData } from '@/components/common/OrgDepartmentTree';
 
 const { Title, Text } = Typography;
 const { Search: AntSearch } = Input;
@@ -63,6 +66,10 @@ const UserManagement: React.FC = () => {
     search: '',
   });
 
+  // 左侧组织树联动
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [selectedDept, setSelectedDept] = useState<Department | null>(null);
+
   // 模态框状态
   const [isCreateModalVisible, setIsCreateModalVisible] = useState(false);
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
@@ -85,6 +92,7 @@ const UserManagement: React.FC = () => {
         pageSize: pagination.pageSize,
         status: filters.status || undefined,
         department: filters.department || undefined,
+        departmentId: selectedDept?.id,
         search: filters.search || undefined,
       };
       const response = await UserApi.getUsers(params);
@@ -101,7 +109,21 @@ const UserManagement: React.FC = () => {
 
   useEffect(() => {
     loadUsers();
-  }, [pagination.current, pagination.pageSize, filters]);
+  }, [pagination.current, pagination.pageSize, filters, selectedDept]);
+
+  // 左侧组织架构树
+  const loadDepartments = useCallback(async () => {
+    try {
+      const data = await departmentService.getDepartmentTree();
+      setDepartments(data);
+    } catch (error) {
+      console.error('Failed to load departments:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadDepartments();
+  }, [loadDepartments]);
 
   useEffect(() => {
     const loadRoles = async () => {
@@ -128,14 +150,18 @@ const UserManagement: React.FC = () => {
         message.error('无法获取租户信息，请重新登录');
         return;
       }
+      const dept = values.departmentId ? findDepartmentById(departments, values.departmentId) : null;
       await UserApi.createUser({
         username: values.username,
         email: values.email,
         name: values.name,
-        department: values.department,
+        department: dept?.name ?? '',
+        departmentId: values.departmentId,
         phone: values.phone,
         password: values.password,
         tenantId: tenantId,
+        gender: values.gender,
+        isLeader: values.isLeader,
       });
       message.success('用户创建成功');
       setIsCreateModalVisible(false);
@@ -153,14 +179,18 @@ const UserManagement: React.FC = () => {
     if (!selectedUser) return;
     setLoading(true);
     try {
+      const dept = values.departmentId ? findDepartmentById(departments, values.departmentId) : null;
       await UserApi.updateUser(selectedUser.id, {
         username: values.username,
         email: values.email,
         name: values.name,
-        department: values.department,
+        department: dept?.name,
+        departmentId: values.departmentId,
         phone: values.phone,
         role: values.role,
         additionalRoleIds: values.additionalRoleIds,
+        gender: values.gender,
+        isLeader: values.isLeader,
       });
       message.success('用户更新成功');
       setIsEditModalVisible(false);
@@ -254,17 +284,38 @@ const UserManagement: React.FC = () => {
       key: 'name',
     },
     {
+      title: '性别',
+      dataIndex: 'gender',
+      key: 'gender',
+      width: 70,
+      render: (gender?: string) => (gender === 'male' ? '男' : gender === 'female' ? '女' : '-'),
+    },
+    {
+      title: '是否是领导',
+      dataIndex: 'isLeader',
+      key: 'isLeader',
+      width: 100,
+      render: (isLeader?: boolean) => (isLeader ? <Tag color="gold">是</Tag> : '否'),
+    },
+    {
+      title: '职能条线',
+      dataIndex: 'functionLine',
+      key: 'functionLine',
+      render: (line?: string) => (line ? <Tag>{line}</Tag> : '-'),
+    },
+    {
+      title: '直属上级',
+      dataIndex: 'managerName',
+      key: 'managerName',
+      render: (managerName?: string) => managerName || '-',
+    },
+    {
       title: '邮箱',
       dataIndex: 'email',
       key: 'email',
     },
     {
-      title: '部门',
-      dataIndex: 'department',
-      key: 'department',
-    },
-    {
-      title: '电话',
+      title: '手机',
       dataIndex: 'phone',
       key: 'phone',
     },
@@ -383,13 +434,33 @@ const UserManagement: React.FC = () => {
         </Row>
       </div>
 
+      {/* 主界面：左侧组织树 + 右侧操作栏/表格 */}
+      <Row gutter={16}>
+        <Col xs={24} md={8} lg={7} xl={6}>
+          <Card title="组织机构树" className="min-h-[600px] enterprise-card">
+            <OrgDepartmentTree
+              departments={departments}
+              selectedId={selectedDept?.id ?? null}
+              onSelect={dept => {
+                setSelectedDept(dept);
+                setPagination(prev => ({ ...prev, current: 1 }));
+              }}
+              height={560}
+            />
+            <div className="mt-4 p-3 bg-gray-50 rounded border text-xs text-gray-500">
+              <p className="font-semibold mb-1">提示：</p>
+              <p>点选左侧部门节点，右侧只显示该部门直属用户；点选"组织架构"根节点查看全量用户。</p>
+            </div>
+          </Card>
+        </Col>
+        <Col xs={24} md={16} lg={17} xl={18}>
       {/* 操作栏 */}
       <Card style={{ marginBottom: token.marginLG }}>
         <Row gutter={[16, 16]} align="middle">
           <Col flex="auto">
             <Space wrap>
               <AntSearch
-                placeholder="搜索用户名、姓名、邮箱"
+                placeholder="搜索用户名、姓名、邮箱、职能条线"
                 style={{ width: 280 }}
                 onSearch={handleSearch}
                 allowClear
@@ -402,18 +473,6 @@ const UserManagement: React.FC = () => {
                 options={[
                   { value: 'active', label: '激活' },
                   { value: 'inactive', label: '禁用' },
-                ]}
-              />
-              <Select
-                placeholder="部门筛选"
-                style={{ width: 160 }}
-                allowClear
-                onChange={value => handleFilterChange('department', value || '')}
-                options={[
-                  { value: 'IT部门', label: 'IT部门' },
-                  { value: '财务部门', label: '财务部门' },
-                  { value: '人事部门', label: '人事部门' },
-                  { value: '市场部门', label: '市场部门' },
                 ]}
               />
             </Space>
@@ -465,7 +524,7 @@ const UserManagement: React.FC = () => {
       </Card>
 
       {/* 用户表格 */}
-      <Card>
+      <Card title={selectedDept ? selectedDept.name : '全量用户'}>
         {users.length === 0 && !loading ? (
           <Empty description="暂无用户数据" image={Empty.PRESENTED_IMAGE_SIMPLE}>
             <Button type="primary" onClick={() => setIsCreateModalVisible(true)}>
@@ -494,6 +553,8 @@ const UserManagement: React.FC = () => {
           />
         )}
       </Card>
+        </Col>
+      </Row>
 
       {/* 创建用户模态框 */}
       <Modal
@@ -551,8 +612,14 @@ const UserManagement: React.FC = () => {
           </Row>
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item name="department" label="部门">
-                <Select placeholder="请选择部门" options={[{ value: 'IT部门', label: 'IT部门' }, { value: '财务部门', label: '财务部门' }, { value: '人事部门', label: '人事部门' }, { value: '市场部门', label: '市场部门' }]} />
+              <Form.Item name="departmentId" label="部门">
+                <TreeSelect
+                  placeholder="请选择部门"
+                  treeData={buildDeptTreeSelectData(departments)}
+                  treeNodeFilterProp="title"
+                  allowClear
+                  showSearch
+                />
               </Form.Item>
             </Col>
             <Col span={12}>
@@ -565,6 +632,25 @@ const UserManagement: React.FC = () => {
                 ]}
               >
                 <Input.Password placeholder="请输入密码" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="gender" label="性别">
+                <Select
+                  placeholder="请选择性别"
+                  allowClear
+                  options={[
+                    { value: 'male', label: '男' },
+                    { value: 'female', label: '女' },
+                  ]}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="isLeader" label="是否是领导" valuePropName="checked" initialValue={false}>
+                <Switch checkedChildren="是" unCheckedChildren="否" />
               </Form.Item>
             </Col>
           </Row>
@@ -633,13 +719,14 @@ const UserManagement: React.FC = () => {
           </Row>
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item name="department" label="部门">
-                <Select placeholder="请选择部门" options={[
-                  { value: 'IT部门', label: 'IT部门' },
-                  { value: '财务部门', label: '财务部门' },
-                  { value: '人事部门', label: '人事部门' },
-                  { value: '市场部门', label: '市场部门' },
-                ]} />
+              <Form.Item name="departmentId" label="部门">
+                <TreeSelect
+                  placeholder="请选择部门"
+                  treeData={buildDeptTreeSelectData(departments)}
+                  treeNodeFilterProp="title"
+                  allowClear
+                  showSearch
+                />
               </Form.Item>
             </Col>
             <Col span={12}>
@@ -670,6 +757,25 @@ const UserManagement: React.FC = () => {
               }
             />
           </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="gender" label="性别">
+                <Select
+                  placeholder="请选择性别"
+                  allowClear
+                  options={[
+                    { value: 'male', label: '男' },
+                    { value: 'female', label: '女' },
+                  ]}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="isLeader" label="是否是领导" valuePropName="checked">
+                <Switch checkedChildren="是" unCheckedChildren="否" />
+              </Form.Item>
+            </Col>
+          </Row>
           <Form.Item>
             <Space>
               <Button type="primary" htmlType="submit" loading={loading}>

@@ -81,7 +81,7 @@ function getBusinessLink(task: BpmnMyTask): { label: string; url: string } | nul
     }
   }
   if (task.processInstanceId) {
-    return { label: `流程实例 #${task.processInstanceId}`, url: `/workflow/instances/${task.processInstanceId}` };
+    return { label: `流程实例 #${task.processInstanceId}`, url: `/workflow/instances?instanceId=${task.processInstanceId}` };
   }
   return null;
 }

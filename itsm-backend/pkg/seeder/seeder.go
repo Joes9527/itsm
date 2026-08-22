@@ -1483,6 +1483,13 @@ func (s *Seeder) seedMenus(ctx context.Context) {
 		{Name: "变更管理", Path: "/changes", Icon: "BarChart3", PermissionCode: "change:read", SortOrder: 50},
 		{Name: "CMDB", Path: "/cmdb", Icon: "Database", PermissionCode: "cmdb:read", SortOrder: 60},
 		{Name: "服务目录", Path: "/service-catalog", Icon: "Book", PermissionCode: "service:read", SortOrder: 70},
+		// "我的待办"(/approvals/pending) 页面本身一直存在且能正常工作(BPMN UserTask 审批收件箱)，
+		// 但从未被加入过菜单种子——旧的 "审批管理"(/admin/approvals) 菜单在 34e4b951 因为指向已删除
+		// 的管理页面而被移除(见上面 SortOrder 260 处的注释)，但同一次改动没有补上这个真正给普通
+		// 审批人用的收件箱页面的菜单项，导致任何角色都无法从侧边栏发现它，只能靠直接输入 URL。
+		// PermissionCode 用 task:read 而不是 workflow:read——部门经理/普通用户/IT总监这些实际
+		// 需要审批的角色都有 task:read，但不是所有角色都有 workflow:read。
+		{Name: "我的待办", Path: "/approvals/pending", Icon: "CheckSquare", PermissionCode: "task:read", SortOrder: 75},
 		{Name: "知识库", Path: "/knowledge", Icon: "HelpCircle", PermissionCode: "knowledge:read", SortOrder: 80},
 		{Name: "SLA监控", Path: "/sla-dashboard", Icon: "Calendar", PermissionCode: "sla:read", SortOrder: 90},
 		{Name: "报表", Path: "/reports", Icon: "TrendingUp", PermissionCode: "report:read", SortOrder: 100},
@@ -2018,6 +2025,10 @@ func allPermissionCodes() []string {
 		"process_instance:read", "process_instance:create", "process_instance:update",
 		"task:read", "task:update",
 		"step:create", "step:update",
+		// BPMN 流程引擎（定义/实例/任务的读写）——之前遗漏，导致 allExcept() 派生的角色
+		// （如 it_director）拿不到 bpmn:write，无法通过 POST /bpmn/tasks/:id/decisions
+		// 提交审批决策（全局 RBAC 中间件按路径落到 "/api/v1/bpmn/*" -> bpmn:write 兜底项）
+		"bpmn:read", "bpmn:write", "bpmn:delete",
 		// 新增: 问题调查/根因/方案
 		"investigation:read", "investigation:create", "investigation:update",
 		"root_cause:create", "solution:create",

@@ -74,7 +74,20 @@ func (s *UserService) CreateUser(ctx context.Context, req *dto.CreateUserRequest
 		SetPhone(req.Phone).
 		SetPasswordHash(string(hashedPassword)).
 		SetActive(true).
-		SetTenantID(tenantID)
+		SetTenantID(tenantID).
+		SetIsLeader(req.IsLeader)
+	if req.DepartmentID > 0 {
+		uc = uc.SetDepartmentID(req.DepartmentID)
+	}
+	if strings.TrimSpace(req.Gender) != "" {
+		uc = uc.SetGender(req.Gender)
+	}
+	if strings.TrimSpace(req.FunctionLine) != "" {
+		uc = uc.SetFunctionLine(req.FunctionLine)
+	}
+	if req.ManagerID > 0 {
+		uc = uc.SetManagerID(req.ManagerID)
+	}
 	// 如果请求中提供了角色，则设置角色；否则使用Schema默认值（end_user）
 	if strings.TrimSpace(req.Role) != "" {
 		role := strings.ToLower(strings.TrimSpace(req.Role))
@@ -112,12 +125,26 @@ func (s *UserService) ListUsers(ctx context.Context, req *dto.ListUsersRequest, 
 		query = query.Where(user.ActiveEQ(active))
 	}
 
-	// 按部门过滤
+	// 按部门过滤（自由文本，模糊匹配 department 展示字段）
 	if req.Department != "" {
 		query = query.Where(user.DepartmentContainsFold(req.Department))
 	}
 
-	// 搜索过滤
+	// 按部门ID精确过滤（组织树左侧选中节点联动，不含子部门——子部门是单独的节点，
+	// 选中哪个节点就精确查那个节点自己的直属用户）
+	if req.DepartmentID > 0 {
+		query = query.Where(user.DepartmentIDEQ(req.DepartmentID))
+	}
+
+	// 按职能条线精确过滤——跟 departmentId 是两条独立的查询维度（同一条线的人可能
+	// 分散在不同法人实体/正式部门下面），互不影响，可以同时传也可以只传一个。
+	if req.FunctionLine != "" {
+		query = query.Where(user.FunctionLineEQ(req.FunctionLine))
+	}
+
+	// 搜索过滤——functionLine 也纳入模糊搜索，这样用户不需要知道"SPT_资讯科技服务部"这种
+	// 精确条线名，直接搜"资讯科技"就能按职能条线找到人（这条线跟正式部门树是两个维度，
+	// 见 ent/schema/user.go FunctionLine 字段注释）。
 	if req.Search != "" {
 		search := strings.TrimSpace(req.Search)
 		query = query.Where(
@@ -125,6 +152,7 @@ func (s *UserService) ListUsers(ctx context.Context, req *dto.ListUsersRequest, 
 				user.UsernameContainsFold(search),
 				user.NameContainsFold(search),
 				user.EmailContainsFold(search),
+				user.FunctionLineContainsFold(search),
 			),
 		)
 	}
@@ -145,33 +173,11 @@ func (s *UserService) ListUsers(ctx context.Context, req *dto.ListUsersRequest, 
 		return nil, fmt.Errorf("查询用户列表失败: %w", err)
 	}
 
-	// 转换为响应格式
-	userResponses := make([]*dto.UserDetailResponse, 0, len(users))
-	for _, u := range users {
-		userResponses = append(userResponses, &dto.UserDetailResponse{
-			ID:         u.ID,
-			Username:   u.Username,
-			Email:      u.Email,
-			Name:       u.Name,
-			Department: u.Department,
-			Phone:      u.Phone,
-			Active:     u.Active,
-			TenantID:   u.TenantID,
-			Role:       string(u.Role),
-			AdditionalRoleIds: func() []int {
-				if len(u.Edges.Roles) == 0 {
-					return nil
-				}
-				ids := make([]int, 0, len(u.Edges.Roles))
-				for _, r := range u.Edges.Roles {
-					ids = append(ids, r.ID)
-				}
-				return ids
-			}(),
-			CreatedAt: u.CreatedAt,
-			UpdatedAt: u.UpdatedAt,
-		})
-	}
+	// 转换为响应格式——统一走 dto.ToUserDetailResponse，不再在这里维护一份平行字段列表
+	// （之前这里手写过一份字面量，漏了 MSPRole，新增 gender/isLeader/departmentId 时
+	// 又得在两处同步改，是同一类"影子 mapper"问题，见 dto/mappers.go 的注释）。
+	userResponses := dto.ToUserDetailResponseList(users)
+	s.attachManagerNames(ctx, tenantID, userResponses)
 
 	response := &dto.PagedUsersResponse{
 		Users: userResponses,
@@ -185,6 +191,42 @@ func (s *UserService) ListUsers(ctx context.Context, req *dto.ListUsersRequest, 
 
 	s.logger.Infof("用户列表查询成功: total=%d, returned=%d", total, len(users))
 	return response, nil
+}
+
+// attachManagerNames 给这一页的响应补上直属上级的姓名（ManagerName 是展示用的冗余字段，
+// dto.ToUserDetailResponse 只接触单条 ent.User，够不到"上级也是个 user，要另查一次"这件
+// 事，所以放在 service 层批量补——只查当页里出现过的 manager_id，不是全表扫）。查不到就
+// 留空，不当错误处理（比如上级本人被软删/换租户之类，不应该让整页列表查询失败）。
+func (s *UserService) attachManagerNames(ctx context.Context, tenantID int, responses []*dto.UserDetailResponse) {
+	managerIDs := make(map[int]struct{})
+	for _, r := range responses {
+		if r.ManagerID > 0 {
+			managerIDs[r.ManagerID] = struct{}{}
+		}
+	}
+	if len(managerIDs) == 0 {
+		return
+	}
+	ids := make([]int, 0, len(managerIDs))
+	for id := range managerIDs {
+		ids = append(ids, id)
+	}
+	managers, err := s.client.User.Query().
+		Where(user.IDIn(ids...), user.TenantIDEQ(tenantID)).
+		All(ctx)
+	if err != nil {
+		s.logger.Warnw("批量查询直属上级姓名失败，展示时留空", "error", err)
+		return
+	}
+	nameByID := make(map[int]string, len(managers))
+	for _, m := range managers {
+		nameByID[m.ID] = m.Name
+	}
+	for _, r := range responses {
+		if name, ok := nameByID[r.ManagerID]; ok {
+			r.ManagerName = name
+		}
+	}
 }
 
 // GetUserByID 根据ID获取用户
@@ -270,8 +312,23 @@ func (s *UserService) UpdateUser(ctx context.Context, id int, req *dto.UpdateUse
 	if req.Department != "" {
 		update = update.SetDepartment(req.Department)
 	}
+	if req.DepartmentID != nil {
+		update = update.SetDepartmentID(*req.DepartmentID)
+	}
 	if req.Phone != "" {
 		update = update.SetPhone(req.Phone)
+	}
+	if strings.TrimSpace(req.Gender) != "" {
+		update = update.SetGender(req.Gender)
+	}
+	if req.IsLeader != nil {
+		update = update.SetIsLeader(*req.IsLeader)
+	}
+	if strings.TrimSpace(req.FunctionLine) != "" {
+		update = update.SetFunctionLine(req.FunctionLine)
+	}
+	if req.ManagerID != nil {
+		update = update.SetManagerID(*req.ManagerID)
 	}
 	// 角色更新（仅在提供时设置），管理员权限由RBAC控制
 	if strings.TrimSpace(req.Role) != "" {
@@ -545,22 +602,7 @@ func (s *UserService) SearchUsers(ctx context.Context, req *dto.SearchUsersReque
 	}
 
 	// 转换为响应格式
-	userResponses := make([]*dto.UserDetailResponse, 0, len(users))
-	for _, u := range users {
-		userResponses = append(userResponses, &dto.UserDetailResponse{
-			ID:         u.ID,
-			Username:   u.Username,
-			Email:      u.Email,
-			Name:       u.Name,
-			Department: u.Department,
-			Phone:      u.Phone,
-			Active:     u.Active,
-			TenantID:   u.TenantID,
-			Role:       string(u.Role),
-			CreatedAt:  u.CreatedAt,
-			UpdatedAt:  u.UpdatedAt,
-		})
-	}
+	userResponses := dto.ToUserDetailResponseList(users)
 
 	s.logger.Infof("用户搜索成功: found=%d", len(users))
 	return userResponses, nil

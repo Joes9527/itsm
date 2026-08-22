@@ -7,11 +7,21 @@ export interface User {
   email: string;
   name: string;
   department: string;
+  departmentId?: number;
   phone: string;
   active: boolean;
   tenantId: number;
   role?: string;
   additionalRoleIds?: number[];
+  gender?: 'male' | 'female' | '';
+  isLeader?: boolean;
+  // 职能条线：HR 系统里跨法人实体的横向职能分组（如"SPT_资讯科技服务部"），独立于
+  // department/departmentId 代表的正式组织树。同一条线的人可能分散在不同法人实体下面。
+  functionLine?: string;
+  // 直属上级（汇报线，个人级别），不同于 departmentId 代表的正式组织归属。
+  // managerName 是后端按当页批量补充的展示字段，不是持久化数据本身。
+  managerId?: number;
+  managerName?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -21,9 +31,12 @@ export interface CreateUserRequest {
   email: string;
   name: string;
   department: string;
+  departmentId?: number;
   phone: string;
   password: string;
   tenantId: number;
+  gender?: 'male' | 'female';
+  isLeader?: boolean;
 }
 
 export interface UpdateUserRequest {
@@ -31,11 +44,14 @@ export interface UpdateUserRequest {
   email?: string;
   name?: string;
   department?: string;
+  departmentId?: number;
   phone?: string;
   role?: string;
   // 附加角色（角色 ID 列表），仅影响 BPMN 按角色路由审批任务时的候选资格，不影响 RBAC 权限——
   // RBAC 权限只看上面的 role 字段。不传表示不修改；传空数组表示清空所有附加角色。
   additionalRoleIds?: number[];
+  gender?: 'male' | 'female';
+  isLeader?: boolean;
 }
 
 export interface ListUsersParams {
@@ -44,6 +60,7 @@ export interface ListUsersParams {
   tenantId?: number;
   status?: string;
   department?: string;
+  departmentId?: number;
   search?: string;
 }
 

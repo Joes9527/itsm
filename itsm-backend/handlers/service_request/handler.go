@@ -64,6 +64,9 @@ func (h *Handler) toDTO(req *ServiceRequest) *dto.ServiceRequestResponse {
 		NeedsPublicIP:      req.NeedsPublicIP,
 		SourceIPWhitelist:  req.SourceIPWhitelist,
 		ComplianceAck:      req.ComplianceAck,
+		ContactName:        req.ContactName,
+		ContactEmail:       req.ContactEmail,
+		Quantity:           req.Quantity,
 		Version:            req.Version,
 		ProcessorID:        req.ProcessorID,
 		StartedAt:          req.StartedAt,
@@ -78,6 +81,10 @@ func (h *Handler) toDTO(req *ServiceRequest) *dto.ServiceRequestResponse {
 	if req.ExpireAt != nil {
 		t := *req.ExpireAt
 		resp.ExpireAt = &t
+	}
+	if req.ExpectedAt != nil {
+		t := *req.ExpectedAt
+		resp.ExpectedAt = &t
 	}
 	return resp
 }
@@ -138,6 +145,10 @@ func (h *Handler) Create(c *gin.Context) {
 		CostCenter:         req.CostCenter,
 		SourceIPWhitelist:  req.SourceIPWhitelist,
 		ExpireAt:           expireAt,
+		ContactName:        req.ContactName,
+		ContactEmail:       req.ContactEmail,
+		Quantity:           req.Quantity,
+		ExpectedAt:         req.ExpectedAt,
 	}
 	if domainReq.FormData == nil {
 		domainReq.FormData = map[string]interface{}{}

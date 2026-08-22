@@ -95,6 +95,16 @@ func UpdatedAt(v time.Time) predicate.Department {
 	return predicate.Department(sql.FieldEQ(FieldUpdatedAt, v))
 }
 
+// AreaName applies equality check predicate on the "area_name" field. It's identical to AreaNameEQ.
+func AreaName(v string) predicate.Department {
+	return predicate.Department(sql.FieldEQ(FieldAreaName, v))
+}
+
+// OrgType applies equality check predicate on the "org_type" field. It's identical to OrgTypeEQ.
+func OrgType(v string) predicate.Department {
+	return predicate.Department(sql.FieldEQ(FieldOrgType, v))
+}
+
 // DeletedAt applies equality check predicate on the "deleted_at" field. It's identical to DeletedAtEQ.
 func DeletedAt(v time.Time) predicate.Department {
 	return predicate.Department(sql.FieldEQ(FieldDeletedAt, v))
@@ -503,6 +513,156 @@ func UpdatedAtLT(v time.Time) predicate.Department {
 // UpdatedAtLTE applies the LTE predicate on the "updated_at" field.
 func UpdatedAtLTE(v time.Time) predicate.Department {
 	return predicate.Department(sql.FieldLTE(FieldUpdatedAt, v))
+}
+
+// AreaNameEQ applies the EQ predicate on the "area_name" field.
+func AreaNameEQ(v string) predicate.Department {
+	return predicate.Department(sql.FieldEQ(FieldAreaName, v))
+}
+
+// AreaNameNEQ applies the NEQ predicate on the "area_name" field.
+func AreaNameNEQ(v string) predicate.Department {
+	return predicate.Department(sql.FieldNEQ(FieldAreaName, v))
+}
+
+// AreaNameIn applies the In predicate on the "area_name" field.
+func AreaNameIn(vs ...string) predicate.Department {
+	return predicate.Department(sql.FieldIn(FieldAreaName, vs...))
+}
+
+// AreaNameNotIn applies the NotIn predicate on the "area_name" field.
+func AreaNameNotIn(vs ...string) predicate.Department {
+	return predicate.Department(sql.FieldNotIn(FieldAreaName, vs...))
+}
+
+// AreaNameGT applies the GT predicate on the "area_name" field.
+func AreaNameGT(v string) predicate.Department {
+	return predicate.Department(sql.FieldGT(FieldAreaName, v))
+}
+
+// AreaNameGTE applies the GTE predicate on the "area_name" field.
+func AreaNameGTE(v string) predicate.Department {
+	return predicate.Department(sql.FieldGTE(FieldAreaName, v))
+}
+
+// AreaNameLT applies the LT predicate on the "area_name" field.
+func AreaNameLT(v string) predicate.Department {
+	return predicate.Department(sql.FieldLT(FieldAreaName, v))
+}
+
+// AreaNameLTE applies the LTE predicate on the "area_name" field.
+func AreaNameLTE(v string) predicate.Department {
+	return predicate.Department(sql.FieldLTE(FieldAreaName, v))
+}
+
+// AreaNameContains applies the Contains predicate on the "area_name" field.
+func AreaNameContains(v string) predicate.Department {
+	return predicate.Department(sql.FieldContains(FieldAreaName, v))
+}
+
+// AreaNameHasPrefix applies the HasPrefix predicate on the "area_name" field.
+func AreaNameHasPrefix(v string) predicate.Department {
+	return predicate.Department(sql.FieldHasPrefix(FieldAreaName, v))
+}
+
+// AreaNameHasSuffix applies the HasSuffix predicate on the "area_name" field.
+func AreaNameHasSuffix(v string) predicate.Department {
+	return predicate.Department(sql.FieldHasSuffix(FieldAreaName, v))
+}
+
+// AreaNameIsNil applies the IsNil predicate on the "area_name" field.
+func AreaNameIsNil() predicate.Department {
+	return predicate.Department(sql.FieldIsNull(FieldAreaName))
+}
+
+// AreaNameNotNil applies the NotNil predicate on the "area_name" field.
+func AreaNameNotNil() predicate.Department {
+	return predicate.Department(sql.FieldNotNull(FieldAreaName))
+}
+
+// AreaNameEqualFold applies the EqualFold predicate on the "area_name" field.
+func AreaNameEqualFold(v string) predicate.Department {
+	return predicate.Department(sql.FieldEqualFold(FieldAreaName, v))
+}
+
+// AreaNameContainsFold applies the ContainsFold predicate on the "area_name" field.
+func AreaNameContainsFold(v string) predicate.Department {
+	return predicate.Department(sql.FieldContainsFold(FieldAreaName, v))
+}
+
+// OrgTypeEQ applies the EQ predicate on the "org_type" field.
+func OrgTypeEQ(v string) predicate.Department {
+	return predicate.Department(sql.FieldEQ(FieldOrgType, v))
+}
+
+// OrgTypeNEQ applies the NEQ predicate on the "org_type" field.
+func OrgTypeNEQ(v string) predicate.Department {
+	return predicate.Department(sql.FieldNEQ(FieldOrgType, v))
+}
+
+// OrgTypeIn applies the In predicate on the "org_type" field.
+func OrgTypeIn(vs ...string) predicate.Department {
+	return predicate.Department(sql.FieldIn(FieldOrgType, vs...))
+}
+
+// OrgTypeNotIn applies the NotIn predicate on the "org_type" field.
+func OrgTypeNotIn(vs ...string) predicate.Department {
+	return predicate.Department(sql.FieldNotIn(FieldOrgType, vs...))
+}
+
+// OrgTypeGT applies the GT predicate on the "org_type" field.
+func OrgTypeGT(v string) predicate.Department {
+	return predicate.Department(sql.FieldGT(FieldOrgType, v))
+}
+
+// OrgTypeGTE applies the GTE predicate on the "org_type" field.
+func OrgTypeGTE(v string) predicate.Department {
+	return predicate.Department(sql.FieldGTE(FieldOrgType, v))
+}
+
+// OrgTypeLT applies the LT predicate on the "org_type" field.
+func OrgTypeLT(v string) predicate.Department {
+	return predicate.Department(sql.FieldLT(FieldOrgType, v))
+}
+
+// OrgTypeLTE applies the LTE predicate on the "org_type" field.
+func OrgTypeLTE(v string) predicate.Department {
+	return predicate.Department(sql.FieldLTE(FieldOrgType, v))
+}
+
+// OrgTypeContains applies the Contains predicate on the "org_type" field.
+func OrgTypeContains(v string) predicate.Department {
+	return predicate.Department(sql.FieldContains(FieldOrgType, v))
+}
+
+// OrgTypeHasPrefix applies the HasPrefix predicate on the "org_type" field.
+func OrgTypeHasPrefix(v string) predicate.Department {
+	return predicate.Department(sql.FieldHasPrefix(FieldOrgType, v))
+}
+
+// OrgTypeHasSuffix applies the HasSuffix predicate on the "org_type" field.
+func OrgTypeHasSuffix(v string) predicate.Department {
+	return predicate.Department(sql.FieldHasSuffix(FieldOrgType, v))
+}
+
+// OrgTypeIsNil applies the IsNil predicate on the "org_type" field.
+func OrgTypeIsNil() predicate.Department {
+	return predicate.Department(sql.FieldIsNull(FieldOrgType))
+}
+
+// OrgTypeNotNil applies the NotNil predicate on the "org_type" field.
+func OrgTypeNotNil() predicate.Department {
+	return predicate.Department(sql.FieldNotNull(FieldOrgType))
+}
+
+// OrgTypeEqualFold applies the EqualFold predicate on the "org_type" field.
+func OrgTypeEqualFold(v string) predicate.Department {
+	return predicate.Department(sql.FieldEqualFold(FieldOrgType, v))
+}
+
+// OrgTypeContainsFold applies the ContainsFold predicate on the "org_type" field.
+func OrgTypeContainsFold(v string) predicate.Department {
+	return predicate.Department(sql.FieldContainsFold(FieldOrgType, v))
 }
 
 // DeletedAtEQ applies the EQ predicate on the "deleted_at" field.
