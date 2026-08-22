@@ -14,7 +14,7 @@ type ServiceCatalog struct {
 	Category       string
 	Description    string
 	ITSMType       string // Request|Incident|Change，决定审批路由
-	ServiceType    string // vm|network|database|access|security|software|devops|custom，决定是否需要基础设施字段（见 RequiresInfraFields）
+	ServiceType    string // vm|rds|network|database|storage|oss|security|access|custom 等，决定是否需要基础设施字段（见 RequiresInfraFields）
 	DeliveryTime   int
 	CITypeID       int
 	CloudServiceID int

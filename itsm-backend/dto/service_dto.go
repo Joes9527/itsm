@@ -79,9 +79,13 @@ type ServiceCatalogResponse struct {
 	// businessType+businessSubType 的通用流程绑定解析。
 	ProcessDefinitionKey string `json:"processDefinitionKey,omitempty"`
 	Status               string `json:"status"`
-	// RequiresInfraFields 由后端根据 service_type 计算：仅 vm/network/database 为 true。
-	// 前端申请表单据此决定是否渲染"成本中心/数据分级/公网IP/IP白名单/资源过期时间/
-	// 合规确认"这组基础设施字段，不自行判断 service_type（见 RequiresInfraFields 注释）。
+	// ServiceType 服务类型：vm|rds|network|database|storage|oss|security|access|custom 等，
+	// 决定 RequiresInfraFields 的计算结果，同时供管理端编辑页回显"服务类型"下拉框。
+	ServiceType string `json:"serviceType,omitempty"`
+	// RequiresInfraFields 由后端根据 service_type 计算：vm/rds/network/database/storage/oss
+	// 为 true（security 及其余类型为 false）。前端申请表单据此决定是否渲染"成本中心/数据分级/
+	// 公网IP/IP白名单/资源过期时间/合规确认"这组基础设施字段，不自行判断 service_type
+	// （见 handlers/service_catalog/entity.go 的 RequiresInfraFields 函数注释）。
 	RequiresInfraFields bool                     `json:"requiresInfraFields"`
 	Fields              []map[string]interface{} `json:"fields,omitempty"`
 	CreatedAt           time.Time                `json:"createdAt"`
