@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"itsm-backend/common"
+	"itsm-backend/middleware"
 	"itsm-backend/service"
 )
 
@@ -81,6 +82,7 @@ func (c *EscalationMatrixController) InvalidateCache(ctx *gin.Context) {
 // RegisterRoutes 注册路由
 func (c *EscalationMatrixController) RegisterRoutes(group *gin.RouterGroup) {
 	matrixGrp := group.Group("/escalation-matrices")
+	matrixGrp.Use(middleware.RequireRole("super_admin"))
 	{
 		matrixGrp.GET("", c.GetMatrix)
 		matrixGrp.PUT("", c.SetMatrix)

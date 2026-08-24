@@ -7,6 +7,7 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	entstandardchange "itsm-backend/ent/standardchange"
+	"itsm-backend/middleware"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -469,6 +470,7 @@ func (h *Handler) InstantiateStandardChange(c *gin.Context) {
 // RegisterRoutes registers the standard change routes
 func (h *Handler) RegisterRoutes(r *gin.RouterGroup) {
 	standardChanges := r.Group("/standard-changes")
+	standardChanges.Use(middleware.RequireRole("super_admin"))
 	{
 		standardChanges.GET("", h.ListStandardChanges)
 		standardChanges.GET("/categories", h.GetCategories)
