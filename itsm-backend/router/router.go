@@ -417,7 +417,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 		wsTicketStore = NewWSTicketStore(DefaultWSTicketTTL)
 
 		// 票据颁发端点（需要JWT认证）
-		auth.POST("/ws/ticket", func(c *gin.Context) {
+		auth.POST("/ws/ticket", middleware.RequireRole("super_admin"), func(c *gin.Context) {
 			userID, _ := c.Get("user_id")
 			tenantID, _ := c.Get("tenant_id")
 
@@ -459,7 +459,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 		msp.Use(middleware.MSPMiddleware(config.Client))
 		{
 			// MSP 基础信息 - 允许 MSP 员工和管理员访问
-			msp.GET("/status", config.MSPController.GetMSPStatus)
+			msp.GET("/status", middleware.RequirePermission("msp", "read"), config.MSPController.GetMSPStatus)
 			msp.GET("/context", middleware.RequireMSPPermission("msp", "read"), config.MSPController.GetMSPContext)
 
 			// 分配管理 - 需要 msp_allocation 权限
@@ -1172,8 +1172,8 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				{
 					users.GET("", middleware.RequirePermission("user", "read"), config.UserController.ListUsers)
 					users.POST("", middleware.RequirePermission("user", "write"), config.UserController.CreateUser)
-					users.GET("/profile", middleware.AuthMiddleware(config.JWTSecret), config.CommonHandler.GetMe) // 获取当前用户信息（需认证）
-					users.GET("/me", middleware.AuthMiddleware(config.JWTSecret), config.CommonHandler.GetMe)      // alias of /profile
+					users.GET("/profile", middleware.AuthMiddleware(config.JWTSecret), middleware.RequirePermission("user", "read"), config.CommonHandler.GetMe) // 获取当前用户信息（需认证）
+					users.GET("/me", middleware.AuthMiddleware(config.JWTSecret), middleware.RequirePermission("user", "read"), config.CommonHandler.GetMe)      // alias of /profile
 					users.GET("/:id", middleware.RequirePermission("user", "read"), config.UserController.GetUser)
 					users.PUT("/:id", middleware.RequirePermission("user", "write"), config.UserController.UpdateUser)
 					users.DELETE("/:id", middleware.RequirePermission("user", "delete"), config.UserController.DeleteUser)
@@ -1458,7 +1458,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				conns.POST("/:name/test", middleware.RequirePermission("connector", "write"), config.ConnectorController.Test)
 				conns.GET("/health", middleware.RequirePermission("connector", "read"), config.ConnectorController.Health)
 				// 飞书事件回调（独立签名校验）
-				conns.POST("/feishu/callback", config.ConnectorController.FeishuCallback)
+				conns.POST("/feishu/callback", middleware.RequireRole("super_admin"), config.ConnectorController.FeishuCallback)
 			}
 		}
 
