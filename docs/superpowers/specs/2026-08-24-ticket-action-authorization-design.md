@@ -51,6 +51,29 @@ Date: 2026-08-24
 4. **服务层硬性职责分离规则**（双保险，不完全依赖权限矩阵）：
    在 `ProvisioningService.CreateTaskFromServiceRequest` 与 `ExecuteTask` 中，加载 `ServiceRequest`/`ProvisioningTask` 后校验 `sr.RequesterID == actorUserID`，若相等直接拒绝，返回明确业务错误（如"申请人不能交付自己提交的服务请求"）。
 5. **前端**：`ServiceRequestPanel.tsx` 的"开始交付"按钮改为读取 `ServiceRequestResponse.actions.provision`（见 Item 2），不再无条件渲染。
+6. **配套数据库 migration（不能只改 `seeder.go`）**：`AutoSeed`/`AutoMigrate` 只在显式的 `ITSM_BOOTSTRAP_ONLY=true` 引导任务里跑（`internal/bootstrap/app.go` `ValidateWebStartupConfig`），长驻的 Web 进程启动时不会重新 seed；改 `seeder.go` 里的 `rolePermissionMap` 只对全新初始化的库生效，已存在的开发/测试/生产库不会自动补齐。本仓库对这类"新增权限定义 + 补发角色授权"的变更已有固定先例（`migrations/20260814_missing_permission_definitions.sql`、`migrations/20260814_end_user_missing_permissions.sql`），新增 `migrations/20260824_add_service_request_provision_permission.sql`，照抄同一个两步模式：
+   ```sql
+   -- 1. 补全 service_request:provision 权限定义（对所有现有租户，幂等）
+   INSERT INTO permissions (code, name, resource, action, tenant_id, created_at, updated_at)
+   SELECT 'service_request:provision', '执行服务请求交付', 'service_request', 'provision', t.tenant_id, now(), now()
+   FROM (SELECT DISTINCT tenant_id FROM roles) t
+   WHERE NOT EXISTS (
+       SELECT 1 FROM permissions p
+       WHERE p.code = 'service_request:provision' AND p.tenant_id = t.tenant_id
+   );
+
+   -- 2. 关联给履约角色（幂等）
+   INSERT INTO role_permissions (role_id, permission_id, tenant_id)
+   SELECT r.id, p.id, r.tenant_id
+   FROM roles r
+   JOIN permissions p ON p.tenant_id = r.tenant_id AND p.code = 'service_request:provision'
+   WHERE r.code IN ('l1_support','l2_support','l3_expert','ops_engineer','dba','network_eng','sd_manager','ops_manager','service_catalog_admin')
+     AND NOT EXISTS (
+       SELECT 1 FROM role_permissions rp
+       WHERE rp.role_id = r.id AND rp.permission_id = p.id AND rp.tenant_id = r.tenant_id
+     );
+   ```
+   `seeder.go` 的改动仍然要做（保证全新环境从一开始就正确），migration 文件是补给已存在环境的必要配套，两者不是二选一。
 
 ---
 
@@ -90,9 +113,11 @@ Actions map[string]ActionPermission `json:"actions"`
 ### 判断规则（原子化拆分，按动作组合，不用一个大函数套所有场景）
 
 原子谓词（Go 函数，供各 `CanXxx` 组合调用）：
-- `hasPermission(role, resource, action)` — 复用现有 `middleware.HasResourcePermission`（已导出）
+- `hasPermission(client *ent.Client, role, resource, action string, tenantID int) bool` — 直接复用现有 `middleware.HasResourcePermission`，签名照抄，不要另包一层简化版；`PermissionConfigModeDBOnly` 下必须带 `client`+`tenantID` 才能命中按租户缓存的权限查询。
 - `isRequester(ticket, actorUserID)` — `ticket.RequesterID == actorUserID`
 - `isFinalStatus(ticket)` — 复用现有 `isFinalStatus(status)` 辅助函数
+
+每个 `CanXxx` 函数的入参因此至少需要 `ctx context.Context, client *ent.Client, tenantID int, actorUserID int, actorRole string` 加上具体资源实体（`*ent.Ticket` 或 `*ent.ServiceRequest`）——不要只传 `role string` 三件套，那是简化写法，真正实现要接住 `HasResourcePermission` 的完整签名。
 
 组合规则：
 
@@ -105,6 +130,8 @@ Actions map[string]ActionPermission `json:"actions"`
 | `CanDelete` | `ticket:delete` | 否 | 是 | **加一道安全阀**：若该工单绑定的 BPMN 流程实例仍在运行（`ProcessInstance` 表 `business_key = "ticket:{id}"` 且 `status = "running"`），禁止删除，Reason 提示"工单流程流转中，不可删除"。理由：删除流转中的工单会让 `process_tasks` 变成指向已软删除工单的孤儿任务，是与 Item 3 同一类问题的新来源，此时拦截成本极低。 |
 | `CanProvision`（挂在 `ServiceRequestResponse`） | `service_request:provision` | 是 | — | 见 Item 1 |
 
+> 字段核对（已直接读 `ent/schema/process_instance.go` 源码确认）：`ProcessInstance` 表只有单一的 `business_key`（`"ticket:{id}"` 格式）字段，**没有**分开的 `business_type`/`business_id` 列。那对分开的列是另一张表 `ProcessApprovalDecision`（`ent/schema/process_approval_decision.go:22-23`）的字段，两张表用的是两套不同的业务关联约定，写查询时不要混用。`CanDelete` 这里查的是 `ProcessInstance`，必须用 `business_key`。
+
 ### 实现落点
 
 - 新建 `service/ticket_authorization.go`（或类似命名，遵循 `*_service.go` 文件命名规范的变体，具体命名在实施计划阶段确认），承载 6 个工单域 `CanXxx` 函数与组装 `actions` map 的辅助函数。
@@ -112,6 +139,7 @@ Actions map[string]ActionPermission `json:"actions"`
 - **读路径**：`ToTicketResponseWithCustomFields`（`service/ticket_service.go`）与服务请求详情的 mapper，组装响应时调用上述 `CanXxx` 函数填充 `actions`。
 - **写路径**：`TicketController` 的 approve/reject/assign/edit/delete 对应 handler，以及 `ProvisioningController` 的 provision handler，在 `RequirePermission` 粗粒度中间件通过后，加载具体资源实例，调用**同一个** `CanXxx` 函数二次校验；若返回 `false`，返回 403 + 对应 Reason。
 - 前端 `TicketDetail.tsx` 全部 7 个按钮的 `disabled`/`title` 改为读 `ticket.actions?.[x]?.allowed`/`.reason`（`provision` 读 `serviceRequest.actions?.provision`），移除现有的 `isRequester`/`isTicketFinal` 等前端本地判断代码。
+- 前端类型定义同步：新增共享类型 `ActionPermission { allowed: boolean; reason?: string }`；`src/types/ticket.ts` 的 `Ticket` interface（68行起）新增 `actions?: Record<string, ActionPermission>`；`src/types/biz/service-request.ts` 的 `ServiceRequest` interface（31行起）同样新增该字段。字段名沿用后端 DTO 的 `actions`（已是 camelCase，无需转换）。
 
 ---
 
