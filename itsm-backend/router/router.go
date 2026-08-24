@@ -867,14 +867,14 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 
 			// Provisioning routes
 			if config.ProvisioningController != nil {
-				sr.POST("/:id/provision", middleware.RequirePermission("service_request", "write"), config.ProvisioningController.StartProvisioning)
+				sr.POST("/:id/provision", middleware.RequirePermission("service_request", "provision"), config.ProvisioningController.StartProvisioning)
 				sr.GET("/:id/provisioning-tasks", middleware.RequirePermission("service_request", "read"), config.ProvisioningController.ListProvisioningTasks)
 			}
 
 			// Provisioning task routes (separate path)
 			provisioning := tenant.(*gin.RouterGroup).Group("/provisioning-tasks")
 			{
-				provisioning.POST("/:id/execute", middleware.RequirePermission("service_request", "write"), config.ProvisioningController.ExecuteProvisioningTask)
+				provisioning.POST("/:id/execute", middleware.RequirePermission("service_request", "provision"), config.ProvisioningController.ExecuteProvisioningTask)
 			}
 		}
 

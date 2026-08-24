@@ -7,6 +7,7 @@ import (
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/middleware"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
@@ -64,8 +65,18 @@ func provisioningTestFixture(t *testing.T, client *ent.Client, label string) (sr
 		Save(ctx)
 	require.NoError(t, err)
 
+	// CanProvision 需要 actor 持有 service_request:provision，且不是申请人本人——
+	// provisioningTestActorID 是测试里固定使用的履约人 ID，跟 requester.ID 保证不撞。
+	seedRolePermission(t, client, tenant.ID, provisioningTestRole, "service_request", "provision")
+
 	return req, tkt
 }
+
+// provisioningTestRole/provisioningTestActorID：测试里固定的"履约人"身份，
+// 用来跟 provisioningTestFixture 创建的 requester 区分开，验证职责分离不会误伤正常路径。
+const provisioningTestRole = "l1_support"
+
+var provisioningTestActorID = 999999
 
 // TestCreateTaskFromServiceRequest_RejectsWithoutApprovalDecision proves provisioning refuses to
 // start when no process_approval_decision row exists for the linked ticket — this is the "not
@@ -74,12 +85,13 @@ func provisioningTestFixture(t *testing.T, client *ent.Client, label string) (sr
 func TestCreateTaskFromServiceRequest_RejectsWithoutApprovalDecision(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:prov_no_decision?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
+	middleware.InvalidateAllPermissionCaches() // 避免不同测试的租户ID复用造成缓存串号
 	ctx := context.Background()
 
 	sr, _ := provisioningTestFixture(t, client, "no-decision")
 
 	svc := NewProvisioningService(client, zaptest.NewLogger(t).Sugar())
-	task, err := svc.CreateTaskFromServiceRequest(ctx, sr.ID, sr.TenantID, 1)
+	task, err := svc.CreateTaskFromServiceRequest(ctx, sr.ID, sr.TenantID, provisioningTestActorID, provisioningTestRole)
 	require.Error(t, err)
 	assert.Nil(t, task)
 
@@ -95,6 +107,7 @@ func TestCreateTaskFromServiceRequest_RejectsWithoutApprovalDecision(t *testing.
 func TestCreateTaskFromServiceRequest_SucceedsWithApprovalDecision(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:prov_decision_approved?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
+	middleware.InvalidateAllPermissionCaches() // 避免不同测试的租户ID复用造成缓存串号
 	ctx := context.Background()
 
 	sr, ticket := provisioningTestFixture(t, client, "approved")
@@ -116,7 +129,7 @@ func TestCreateTaskFromServiceRequest_SucceedsWithApprovalDecision(t *testing.T)
 	require.NoError(t, err)
 
 	svc := NewProvisioningService(client, zaptest.NewLogger(t).Sugar())
-	task, err := svc.CreateTaskFromServiceRequest(ctx, sr.ID, sr.TenantID, 1)
+	task, err := svc.CreateTaskFromServiceRequest(ctx, sr.ID, sr.TenantID, provisioningTestActorID, provisioningTestRole)
 	require.NoError(t, err)
 	require.NotNil(t, task)
 	assert.Equal(t, sr.ID, task.ServiceRequestID)
@@ -135,6 +148,7 @@ func TestCreateTaskFromServiceRequest_SucceedsWithApprovalDecision(t *testing.T)
 func TestCreateTaskFromServiceRequest_CrossTenantApprovalDoesNotUnlock(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:prov_cross_tenant?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
+	middleware.InvalidateAllPermissionCaches() // 避免不同测试的租户ID复用造成缓存串号
 	ctx := context.Background()
 
 	srA, ticketA := provisioningTestFixture(t, client, "tenant-a")
@@ -160,7 +174,7 @@ func TestCreateTaskFromServiceRequest_CrossTenantApprovalDoesNotUnlock(t *testin
 	require.NoError(t, err)
 
 	svc := NewProvisioningService(client, zaptest.NewLogger(t).Sugar())
-	task, err := svc.CreateTaskFromServiceRequest(ctx, srA.ID, srA.TenantID, 1)
+	task, err := svc.CreateTaskFromServiceRequest(ctx, srA.ID, srA.TenantID, provisioningTestActorID, provisioningTestRole)
 	require.Error(t, err, "a same-business_id approval decision filed under a different tenant must not unlock provisioning")
 	assert.Nil(t, task)
 

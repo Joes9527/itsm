@@ -258,7 +258,7 @@ func (s *TicketWorkflowService) CCTicket(ctx context.Context, req *dto.CCTicketR
 		return err
 	}
 
-	if err := s.ensureCanCCTicket(ctx, tk, userID, tenantID); err != nil {
+	if err := s.EnsureCanCCTicket(ctx, tk, userID, tenantID); err != nil {
 		return err
 	}
 
@@ -979,7 +979,7 @@ func workflowUserInfoFromEnt(u *ent.User) dto.WorkflowUserInfo {
 	}
 }
 
-func (s *TicketWorkflowService) ensureCanCCTicket(ctx context.Context, tk *ent.Ticket, userID, tenantID int) error {
+func (s *TicketWorkflowService) EnsureCanCCTicket(ctx context.Context, tk *ent.Ticket, userID, tenantID int) error {
 	if tk == nil {
 		return fmt.Errorf("工单不存在")
 	}

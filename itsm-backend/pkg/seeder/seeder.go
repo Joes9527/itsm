@@ -1273,8 +1273,12 @@ func (s *Seeder) seedPermissions(ctx context.Context) {
 		{"service_catalog:write", "管理服务目录", "service_catalog", "write", "创建、编辑服务目录"},
 		{"service_catalog:delete", "删除服务目录", "service_catalog", "delete", "删除服务目录"},
 		{"service_request:read", "查看服务请求", "service_request", "read", "查看服务请求"},
-		{"service_request:write", "处理服务请求", "service_request", "write", "创建、处理服务请求"},
+		{"service_request:write", "提交服务请求", "service_request", "write", "创建、编辑自己的服务请求"},
 		{"service_request:delete", "删除服务请求", "service_request", "delete", "删除服务请求"},
+		// service_request:provision 从 write 里拆出来的独立动作——write 只管"提交/编辑自己的申请"，
+		// provision 管"对（他人提交的）服务请求执行交付"，两者不能共用同一个权限码，否则给普通
+		// 用户开自助提单权限时会顺带解锁对任意服务请求发起交付。见 ticket:assign 的既有先例。
+		{"service_request:provision", "执行服务请求交付", "service_request", "provision", "启动/执行服务请求的交付任务"},
 		// SLA权限
 		{"sla:read", "查看SLA", "sla", "read", "查看SLA定义"},
 		{"sla:write", "管理SLA", "sla", "write", "管理SLA定义"},
@@ -1722,24 +1726,32 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 			"sla:read", "workflow:read", "report:read",
 			"team:read", "department:read", "user:read",
 			"release:read", "release:approve", "release:rollback",
+			// service_request:provision：运维经理需要能兜底/代处理服务请求交付。
+			"service_request:read", "service_request:provision",
 		},
 		// 运维工程师：运维操作
 		"ops_engineer": {
 			"ticket:read", "ticket:create", "ticket:update", "incident:read", "incident:write",
 			"problem:read", "change:read", "asset:read", "asset:write",
 			"cmdb:read", "cmdb:write", "sla:read", "knowledge:read", "knowledge:write",
+			// service_request:provision：云资源类服务目录项（云服务器/云资源）的实际履约角色。
+			"service_request:read", "service_request:provision",
 		},
 		// DBA工程师
 		"dba": {
 			"ticket:read", "incident:read", "problem:read", "problem:write",
 			"change:read", "change:write", "asset:read", "cmdb:read", "cmdb:write",
 			"knowledge:read", "knowledge:write",
+			// service_request:provision：数据库类服务目录项的实际履约角色。
+			"service_request:read", "service_request:provision",
 		},
 		// 网络安全工程师
 		"network_eng": {
 			"ticket:read", "incident:read", "incident:write", "problem:read",
 			"change:read", "asset:read", "cmdb:read", "sla:read",
 			"knowledge:read", "knowledge:write",
+			// service_request:provision：网络类服务目录项的实际履约角色。
+			"service_request:read", "service_request:provision",
 		},
 		// 服务台主管
 		"sd_manager": {
@@ -1747,6 +1759,8 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 			"problem:read", "change:read", "sla:read", "sla:write",
 			"knowledge:read", "knowledge:write", "report:read",
 			"user:read", "team:read",
+			// service_request:provision：服务台主管需要能兜底/代处理服务请求交付。
+			"service_request:read", "service_request:provision",
 		},
 		// 变更经理：负责变更生命周期、审批协同和发布联动
 		"change_manager": {
@@ -1769,7 +1783,7 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		"service_catalog_admin": {
 			"service:read", "service:write",
 			"service_catalog:read", "service_catalog:write", "service_catalog:delete",
-			"service_request:read", "service_request:write", "service_request:delete",
+			"service_request:read", "service_request:write", "service_request:delete", "service_request:provision",
 			"ticket_template:read", "ticket_template:create", "ticket_template:update", "ticket_template:delete",
 			"ticket_category:read", "ticket_category:create", "ticket_category:update",
 			"workflow:read",
@@ -1785,12 +1799,16 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		"l1_support": {
 			"ticket:read", "ticket:create", "ticket:update", "ticket:escalate", "incident:read", "incident:write",
 			"knowledge:read", "user:read", "sla:read",
+			// service_request:provision：一线工程师是账号/终端类服务目录项最常见的履约角色。
+			"service_request:read", "service_request:provision",
 		},
 		// 二线支持工程师
 		"l2_support": {
 			"ticket:read", "ticket:create", "ticket:update", "incident:read", "incident:write",
 			"problem:read", "change:read", "asset:read",
 			"knowledge:read", "knowledge:write", "user:read", "sla:read",
+			// service_request:provision：一线升级上来的服务请求也需要能继续履约。
+			"service_request:read", "service_request:provision",
 		},
 		// 三线专家
 		"l3_expert": {
@@ -1798,6 +1816,8 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 			"problem:read", "problem:write", "change:read", "change:write",
 			"asset:read", "cmdb:read", "knowledge:read", "knowledge:write",
 			"sla:read", "workflow:read",
+			// service_request:provision：复杂服务请求升级到三线时仍需要能继续履约。
+			"service_request:read", "service_request:provision",
 		},
 		// 研发经理
 		"rd_manager": {
@@ -1983,7 +2003,7 @@ func allPermissionCodes() []string {
 		"license:read", "license:write", "license:delete",
 		"service:read", "service:write",
 		"service_catalog:read", "service_catalog:write", "service_catalog:delete",
-		"service_request:read", "service_request:write", "service_request:delete",
+		"service_request:read", "service_request:write", "service_request:delete", "service_request:provision",
 		"sla:read", "sla:write", "sla:delete",
 		"user:read", "user:write", "user:delete",
 		"group:read", "group:write",

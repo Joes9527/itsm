@@ -8,15 +8,31 @@ import (
 	"time"
 
 	"itsm-backend/domain/provisioning"
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processapprovaldecision"
 	"itsm-backend/ent/provisioningtask"
 	"itsm-backend/ent/servicerequest"
 	"itsm-backend/infrastructure/cloud"
 	cloudAlicloud "itsm-backend/infrastructure/cloud/alicloud"
+	"itsm-backend/middleware"
 
 	"go.uber.org/zap"
 )
+
+// CanProvision：service_request:provision 权限 + 排除申请人本人。
+// 只接收 requesterID（而不是某个具体 ServiceRequest 结构体类型）是因为这个领域里同时存在
+// *ent.ServiceRequest（本文件用）和 handlers/service_request.ServiceRequest（handler 层用）
+// 两种不同的服务请求表示，用原始 requesterID 可以让两边都直接调用，不需要互相转换类型。
+func CanProvision(client *ent.Client, tenantID, actorUserID int, actorRole string, requesterID int) dto.ActionPermission {
+	if requesterID == actorUserID {
+		return dto.ActionPermission{Allowed: false, Reason: "申请人不能交付自己提交的服务请求"}
+	}
+	if !middleware.HasResourcePermission(client, actorRole, "service_request", "provision", tenantID) {
+		return dto.ActionPermission{Allowed: false, Reason: "无交付权限"}
+	}
+	return dto.ActionPermission{Allowed: true}
+}
 
 // ProvisioningService（应用层）：服务请求 -> 交付任务 -> 执行 -> 状态回写
 // M2：先实现可运行骨架（Stub），后续接入阿里云真实交付。
@@ -35,7 +51,7 @@ func NewProvisioningService(client *ent.Client, logger *zap.SugaredLogger) *Prov
 }
 
 // CreateTaskFromServiceRequest 仅创建交付任务并把 ServiceRequest 置为 provisioning
-func (s *ProvisioningService) CreateTaskFromServiceRequest(ctx context.Context, serviceRequestID, tenantID, actorUserID int) (*ent.ProvisioningTask, error) {
+func (s *ProvisioningService) CreateTaskFromServiceRequest(ctx context.Context, serviceRequestID, tenantID, actorUserID int, actorRole string) (*ent.ProvisioningTask, error) {
 	tx, err := s.client.Tx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("开启事务失败: %w", err)
@@ -47,6 +63,10 @@ func (s *ProvisioningService) CreateTaskFromServiceRequest(ctx context.Context, 
 		First(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("服务请求不存在")
+	}
+
+	if perm := CanProvision(s.client, tenantID, actorUserID, actorRole, sr.RequesterID); !perm.Allowed {
+		return nil, fmt.Errorf("%s", perm.Reason)
 	}
 
 	approved, err := tx.ProcessApprovalDecision.Query().
@@ -95,13 +115,23 @@ func (s *ProvisioningService) CreateTaskFromServiceRequest(ctx context.Context, 
 }
 
 // ExecuteTask 执行交付任务（Stub），并回写 ServiceRequest 状态为 delivered/failed
-func (s *ProvisioningService) ExecuteTask(ctx context.Context, taskID, tenantID, actorUserID int) (*ent.ProvisioningTask, error) {
+func (s *ProvisioningService) ExecuteTask(ctx context.Context, taskID, tenantID, actorUserID int, actorRole string) (*ent.ProvisioningTask, error) {
 	// 读任务
 	task, err := s.client.ProvisioningTask.Query().
 		Where(provisioningtask.ID(taskID), provisioningtask.TenantID(tenantID)).
 		First(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("交付任务不存在")
+	}
+
+	sr, err := s.client.ServiceRequest.Query().
+		Where(servicerequest.ID(task.ServiceRequestID), servicerequest.TenantID(tenantID)).
+		First(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("关联服务请求不存在")
+	}
+	if perm := CanProvision(s.client, tenantID, actorUserID, actorRole, sr.RequesterID); !perm.Allowed {
+		return nil, fmt.Errorf("%s", perm.Reason)
 	}
 
 	// 设置 running

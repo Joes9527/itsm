@@ -1,6 +1,6 @@
 # 工单/服务请求动作权限统一化设计
 
-Status: Draft (awaiting user review)
+Status: Implemented — Item 1/2/3 全部落地并逐项验证（后端 `go test ./...` 全绿、迁移脚本已在开发库实跑并确认幂等、`field_values` 孤儿数据已清理、前端 `tsc --noEmit`/`eslint` 全绿），代码尚未提交，等待用户统一验证后决定是否 commit。
 Date: 2026-08-24
 
 ## 背景

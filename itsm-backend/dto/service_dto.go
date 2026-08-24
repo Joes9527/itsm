@@ -131,6 +131,8 @@ type ServiceRequestResponse struct {
 	// /my-requests 列表页用它们替代已经删掉的 ServiceRequest.status/title 列。
 	TicketTitle  string `json:"ticketTitle,omitempty"`
 	TicketStatus string `json:"ticketStatus,omitempty"`
+
+	Actions map[string]ActionPermission `json:"actions,omitempty"`
 }
 
 // ServiceCatalogListResponse 服务目录列表响应

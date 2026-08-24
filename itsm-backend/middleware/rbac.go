@@ -453,7 +453,12 @@ var ResourceActionMap = map[string]map[string]Permission{
 		"/api/v1/service-catalogs/*":    {Resource: "service_catalog", Action: "write"},
 		"/api/v1/service-requests":      {Resource: "service_request", Action: "write"},
 		"/api/v1/service-requests/*":    {Resource: "service_request", Action: "write"},
-		"/api/v1/provisioning-tasks/*":  {Resource: "service_request", Action: "write"},
+		// 更具体的动作型子路由需要单独声明，否则会被上面 /service-requests/* 通配符先命中成
+		// service_request:write——end_user 为了能自助提单被授予了 write，如果交付路由也落进
+		// 这个通配符，end_user 就能对任意服务请求发起交付。同一个道理见 tickets/*/assign。
+		"/api/v1/service-requests/*/provision": {Resource: "service_request", Action: "provision"},
+		"/api/v1/provisioning-tasks/*/execute": {Resource: "service_request", Action: "provision"},
+		"/api/v1/provisioning-tasks/*":         {Resource: "service_request", Action: "write"},
 		"/api/v1/knowledge/articles":    {Resource: "knowledge", Action: "write"},
 		"/api/v1/knowledge/articles/*":  {Resource: "knowledge", Action: "write"},
 		"/api/v1/problems":              {Resource: "problem", Action: "write"},
@@ -490,7 +495,13 @@ var ResourceActionMap = map[string]map[string]Permission{
 		"/api/v1/msp/tickets/*/assign":       {Resource: "msp_ticket", Action: "write"},
 	},
 	"PUT": {
-		"/api/v1/tickets/*":            {Resource: "ticket", Action: "write"},
+		// 这里曾经写的是 ticket:write，但 router.go 里 PUT /tickets/:id 和 /tickets/:id/status
+		// 路由自己声明的是 RequirePermission("ticket","update")——两处权限码不一致，Gin 中间件链
+		// 按 AND 逻辑要求全局这层和路由自己声明的那层都通过，全局层先执行，用 write 会把只有
+		// update（没有 write）的角色（l1_support/sd_manager/end_user 等，几乎除
+		// sysadmin/it_director/ops_director 外的所有角色）挡在路由自己的校验之前，
+		// 编辑/审批-拒绝这类走这条路由的功能对它们全部实际不可用。改成 update 让这两层保持一致。
+		"/api/v1/tickets/*":            {Resource: "ticket", Action: "update"},
 		"/api/v1/notifications/*":            {Resource: "notification", Action: "write"},
 		"/api/v1/notification-preferences":   {Resource: "notification", Action: "write"},
 		"/api/v1/notification-preferences/*": {Resource: "notification", Action: "write"},

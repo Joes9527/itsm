@@ -109,6 +109,14 @@ type TicketResponse struct {
 	Rating                int                        `json:"rating,omitempty"`
 	Source                string                     `json:"source,omitempty"`
 	CustomFieldValues     []CustomFieldValueResponse `json:"customFields,omitempty"`
+	Actions               map[string]ActionPermission `json:"actions,omitempty"`
+}
+
+// ActionPermission 描述某个动作对当前调用者是否可执行——由后端统一计算，
+// 前端只读取渲染，不重新判断业务规则。
+type ActionPermission struct {
+	Allowed bool   `json:"allowed"`
+	Reason  string `json:"reason,omitempty"`
 }
 
 // CustomFieldValueResponse 单个自定义字段的展示值（快照 name/label，避免响应层依赖 service 包）。
