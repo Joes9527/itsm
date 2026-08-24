@@ -5,6 +5,7 @@ import (
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
+	"itsm-backend/middleware"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -28,8 +29,11 @@ func NewBPMNProcessTriggerController(triggerService *service.ProcessTriggerServi
 
 // RegisterRoutes 注册路由
 func (c *BPMNProcessTriggerController) RegisterRoutes(r *gin.RouterGroup) {
-	// 流程触发
+	bpmnRoleGate := middleware.RequireRole("super_admin", "change_manager", "dept_manager", "end_user", "it_director", "ops_director", "sysadmin")
+
+	// 流程触发 — matches the /api/v1/bpmn/* wildcard's current role set.
 	trigger := r.Group("/process-trigger")
+	trigger.Use(bpmnRoleGate)
 	{
 		trigger.POST("", c.TriggerProcess)
 		trigger.GET("/status/:instance_id", c.GetProcessStatus)
@@ -38,25 +42,33 @@ func (c *BPMNProcessTriggerController) RegisterRoutes(r *gin.RouterGroup) {
 		trigger.POST("/resume/:instance_id", c.ResumeProcess)
 	}
 
-	// 流程绑定管理
+	// 流程绑定管理 — read/create match the bpmn:* wildcard's role set, but
+	// update/delete are NOT covered by that wildcard today and fall back to
+	// super_admin-only; the extra RequireRole("super_admin") on those two
+	// routes stacks on top of bpmnRoleGate (Gin chains middleware with AND)
+	// to reproduce that narrower requirement exactly.
 	bindings := r.Group("/process-bindings")
+	bindings.Use(bpmnRoleGate)
 	{
 		bindings.POST("", c.CreateBinding)
 		bindings.GET("", c.QueryBindings)
 		bindings.GET("/by-type/:business_type", c.GetBindingsByBusinessType)
 		bindings.GET("/:id", c.GetBinding)
-		bindings.PUT("/:id", c.UpdateBinding)
-		bindings.DELETE("/:id", c.DeleteBinding)
+		bindings.PUT("/:id", middleware.RequireRole("super_admin"), c.UpdateBinding)
+		bindings.DELETE("/:id", middleware.RequireRole("super_admin"), c.DeleteBinding)
 	}
 
-	// 部门流程配置
+	// 部门流程配置 — no ResourceActionMap coverage today, super_admin only.
 	departments := r.Group("/departments")
+	departments.Use(middleware.RequireRole("super_admin"))
 	{
 		departments.GET("/:id/processes", c.GetDepartmentProcesses)
 		departments.POST("/:id/init-processes", c.InitDepartmentProcesses)
 	}
 
+	// no ResourceActionMap coverage today, super_admin only.
 	domainConfigs := r.Group("/domain-configs")
+	domainConfigs.Use(middleware.RequireRole("super_admin"))
 	{
 		domainConfigs.GET("", c.ListDomainConfigs)
 		domainConfigs.POST("", c.SetDomainConfig)
