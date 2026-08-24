@@ -49,14 +49,20 @@ func setupSlaBpmnTestBaseWithTenant(t *testing.T, tenantID int) (*gin.Engine, *e
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(mockTenantContextMiddleware(tenantID, 1))
+	r.Use(func(c *gin.Context) {
+		c.Set("client", client)
+		c.Next()
+	})
 	return r, client
 }
 
 // 模拟租户上下文中间件
+// 注意：设置role为super_admin以便测试路由的功能性，权限检查在sla_template_controller_test.go中单独测试
 func mockTenantContextMiddleware(tenantID int, userID int) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Set("tenant_id", tenantID)
 		c.Set("user_id", userID)
+		c.Set("role", "super_admin")
 		c.Next()
 	}
 }
@@ -162,6 +168,10 @@ func TestSLATemplate_InstallTemplate_HTTP(t *testing.T) {
 
 	// 先添加中间件再注册路由
 	r.Use(mockTenantContextMiddleware(tenant.ID, 1))
+	r.Use(func(c *gin.Context) {
+		c.Set("client", client)
+		c.Next()
+	})
 	apiV1 := r.Group("/api/v1")
 	ctrl.RegisterRoutes(apiV1)
 
