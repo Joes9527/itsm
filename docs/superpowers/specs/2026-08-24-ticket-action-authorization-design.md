@@ -126,7 +126,7 @@ Actions map[string]ActionPermission `json:"actions"`
 | `CanApprove`/`CanReject` | `ticket:update` | 是 | 是 | 无（本轮沿用现有"轻量版"语义，不涉及 BPMN 收口） |
 | `CanAssign` | `ticket:assign` | 否 | 是 | 分配是路由工单给合适的人，非"对自己的工作做背书"，不属于职责分离场景 |
 | `CanEdit` | `ticket:update` | 否 | 是 | — |
-| `CanCC` | `ticket:read` | 否 | 否 | 抄送风险低，工单结束后仍可抄送知会 |
+| `CanCC` | 无独立权限码 | — | — | **复用既有函数，不新写规则**：`service/ticket_workflow_service.go:982` 的 `ensureCanCCTicket`（需导出为 `EnsureCanCCTicket`）已经实现了完整规则——工单状态为 `closed`/`cancelled` 时拒绝；允许者为申请人、处理人（assignee）、`super_admin`、该工单的审批人（`TicketApproval` 记录）、或已在该工单抄送列表中的人（`TicketCC` 记录）。`CanCC` 内部构造一个 `TicketWorkflowService{client, logger}` 调用该函数，把返回的 `error` 转成 `ActionPermission{allowed:false, reason: err.Error()}`。注意该函数接收的是 `*ent.Ticket`（ent 原生实体），跟其余 5 个 `CanXxx` 接收的 `*ticket.Ticket`（`repository/ticket` 领域模型）不是同一类型，`CanCC` 签名要单独处理，不能套用其它 5 个的统一签名。真实端点是 `POST /api/v1/tickets/workflow/cc`（`TicketWorkflowController.CCTicket`），路由层权限码是 `workflow:update`，与 `ensureCanCCTicket` 的业务规则是两层独立校验，都要保留。 |
 | `CanDelete` | `ticket:delete` | 否 | 是 | **加一道安全阀**：若该工单绑定的 BPMN 流程实例仍在运行（`ProcessInstance` 表 `business_key = "ticket:{id}"` 且 `status = "running"`），禁止删除，Reason 提示"工单流程流转中，不可删除"。理由：删除流转中的工单会让 `process_tasks` 变成指向已软删除工单的孤儿任务，是与 Item 3 同一类问题的新来源，此时拦截成本极低。 |
 | `CanProvision`（挂在 `ServiceRequestResponse`） | `service_request:provision` | 是 | — | 见 Item 1 |
 
@@ -137,7 +137,7 @@ Actions map[string]ActionPermission `json:"actions"`
 - 新建 `service/ticket_authorization.go`（或类似命名，遵循 `*_service.go` 文件命名规范的变体，具体命名在实施计划阶段确认），承载 6 个工单域 `CanXxx` 函数与组装 `actions` map 的辅助函数。
 - 服务请求域的 `CanProvision` 放在 `ProvisioningService` 或 `service_request` 相关 service 文件内。
 - **读路径**：`ToTicketResponseWithCustomFields`（`service/ticket_service.go`）与服务请求详情的 mapper，组装响应时调用上述 `CanXxx` 函数填充 `actions`。
-- **写路径**：`TicketController` 的 approve/reject/assign/edit/delete 对应 handler，以及 `ProvisioningController` 的 provision handler，在 `RequirePermission` 粗粒度中间件通过后，加载具体资源实例，调用**同一个** `CanXxx` 函数二次校验；若返回 `false`，返回 403 + 对应 Reason。
+- **写路径**：`TicketController` 的 approve/reject/assign/edit/delete 对应 handler、`TicketWorkflowController.CCTicket`、以及 `ProvisioningController` 的 provision handler，在 `RequirePermission` 粗粒度中间件通过后，加载具体资源实例，调用**同一个** `CanXxx` 函数二次校验；若返回 `false`，返回 403 + 对应 Reason。
 - 前端 `TicketDetail.tsx` 全部 7 个按钮的 `disabled`/`title` 改为读 `ticket.actions?.[x]?.allowed`/`.reason`（`provision` 读 `serviceRequest.actions?.provision`），移除现有的 `isRequester`/`isTicketFinal` 等前端本地判断代码。
 - 前端类型定义同步：新增共享类型 `ActionPermission { allowed: boolean; reason?: string }`；`src/types/ticket.ts` 的 `Ticket` interface（68行起）新增 `actions?: Record<string, ActionPermission>`；`src/types/biz/service-request.ts` 的 `ServiceRequest` interface（31行起）同样新增该字段。字段名沿用后端 DTO 的 `actions`（已是 camelCase，无需转换）。
 
