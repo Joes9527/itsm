@@ -49,7 +49,7 @@ Date: 2026-08-24
    - 新增 `service_request:provision`：`l1_support`、`l2_support`、`l3_expert`、`ops_engineer`、`dba`、`network_eng`、`sd_manager`、`ops_manager`、`service_catalog_admin`。
    - `sysadmin`/`it_director`/`ops_director`：已通过 `allPermissionCodes()`/`allExcept(...)` 覆盖，无需改动。
 4. **服务层硬性职责分离规则**（双保险，不完全依赖权限矩阵）：
-   在 `ProvisioningService.CreateTaskFromServiceRequest` 与 `ExecuteTask` 中，加载 `ServiceRequest`/`ProvisioningTask` 后校验 `sr.RequesterID == actorUserID`，若相等直接拒绝，返回明确业务错误（如"申请人不能交付自己提交的服务请求"）。
+   通过 Item 2 定义的 `CanProvision` 函数实现（`service_request:provision` 权限 + 排除申请人本人），**不要在这里另写一份内联判断**。`CreateTaskFromServiceRequest`/`ExecuteTask` 加载 `ServiceRequest`/`ProvisioningTask` 后调用 `CanProvision`，返回 `allowed=false` 时用其 `reason` 作为业务错误信息拒绝。`CanProvision` 只实现一次，这里和 Item 2 的 `ServiceRequestResponse.actions.provision` 调的是同一个函数——详见 Item 2 及文末"依赖关系与实施顺序"。
 5. **前端**：`ServiceRequestPanel.tsx` 的"开始交付"按钮改为读取 `ServiceRequestResponse.actions.provision`（见 Item 2），不再无条件渲染。
 6. **配套数据库 migration（不能只改 `seeder.go`）**：`AutoSeed`/`AutoMigrate` 只在显式的 `ITSM_BOOTSTRAP_ONLY=true` 引导任务里跑（`internal/bootstrap/app.go` `ValidateWebStartupConfig`），长驻的 Web 进程启动时不会重新 seed；改 `seeder.go` 里的 `rolePermissionMap` 只对全新初始化的库生效，已存在的开发/测试/生产库不会自动补齐。本仓库对这类"新增权限定义 + 补发角色授权"的变更已有固定先例（`migrations/20260814_missing_permission_definitions.sql`、`migrations/20260814_end_user_missing_permissions.sql`），新增 `migrations/20260824_add_service_request_provision_permission.sql`，照抄同一个两步模式：
    ```sql
@@ -193,6 +193,16 @@ Actions map[string]ActionPermission `json:"actions"`
 本轮策略：仅针对本次改动涉及的接口（`service-requests/*/provision`、`provisioning-tasks/*/execute`、`tickets/*` 的 PUT 系列）手动同步两处声明，不做全库收敛。完成 ADR-0001 迁移作为独立后续项目。
 
 ---
+
+## 依赖关系与实施顺序
+
+三个 Item 不是三个先后阶段，实际依赖关系如下：
+
+- **`CanProvision` 只实现一次**，同时满足 Item 1（`ProvisioningService` 里的强制职责分离校验）和 Item 2（`ServiceRequestResponse.actions.provision` 的展示）两边的需求——这是同一份代码的两个消费方，不是先做 Item 1 的"服务层校验"、再做 Item 2 的"actions 字段"两个先后步骤。实施时应先把 `CanProvision` 写好并接入两个消费方，再各自验证。
+- **Item 1 的路由权限码切换、角色矩阵调整（seeder.go + migration 文件）不依赖 `actions` 契约**，可以独立先行，跟 Item 2 的其它 6 个 `CanXxx` 函数（approve/reject/assign/edit/cc/delete）没有先后关系，可并行开发。
+- **Item 2 的 6 个工单域 `CanXxx` 函数之间也互相独立**，可以按任意顺序或并行实现，共享同一个 `ActionPermission` 类型和 `TicketResponse.actions`/`ServiceRequestResponse.actions` 契约即可。
+- **Item 3（`field_values` 清理）与 Item 1/2 完全无依赖关系**，可以并行处理，也可以独立于本次改动单独执行——它是数据修复，不是代码改动。
+- **Item 4 的两个拆分项目不在本轮排期内**，无需现在安排顺序。
 
 ## 验证计划
 
