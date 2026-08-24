@@ -110,6 +110,11 @@ const getPriorityText = (priority: string): string => {
   return priorityMap[priority] || priority;
 };
 
+// antd 的 disabled 态在不同 type（primary/default/danger）上视觉差异很大——primary 禁用是
+// 明显的实心变灰，default/danger 禁用只是文字颜色淡一点，边框/图标看起来还是"正常"的，容易
+// 让用户误以为按钮仍可点击。统一叠加灰阶+降低不透明度，跟 type 无关，一眼就能看出不可点。
+const DISABLED_ACTION_CLASS = 'opacity-40 grayscale';
+
 const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
   const params = useParams();
   const { message: antMessage } = App.useApp();
@@ -144,10 +149,8 @@ const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
   // 支持通过 props 传入 id，或通过 useParams 获取
   const ticketId = parseInt((propId ?? (params?.ticketId as string)) || '');
 
-  // 判断当前用户是否是工单申请人
-  const isRequester = ticket?.requesterId === currentUser?.id;
-
-  // 判断工单是否处于终态（不可再操作）
+  // 判断工单是否处于终态（不可再操作）——仍用于评论/附件区的展示状态，
+  // 批准/拒绝/分配/编辑/抄送/删除这几个按钮的可用性已经改为读 ticket.actions（后端算好）。
   const isTicketFinal = ticket ? isFinalStatus(ticket.status as any) : false;
 
   // Get ticket details
@@ -369,7 +372,7 @@ const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
       if (event.key.toLowerCase() === 'r') {
         event.preventDefault();
         fetchTicket();
-      } else if (event.key.toLowerCase() === 'e' && ticket && !isTicketFinal) {
+      } else if (event.key.toLowerCase() === 'e' && ticket && ticket.actions?.edit?.allowed) {
         event.preventDefault();
         editForm.setFieldsValue({
           title: ticket.title,
@@ -383,7 +386,7 @@ const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
 
     window.addEventListener('keydown', handleShortcut);
     return () => window.removeEventListener('keydown', handleShortcut);
-  }, [editForm, fetchTicket, isTicketFinal, ticket]);
+  }, [editForm, fetchTicket, ticket]);
 
   if (loading) {
     return (
@@ -591,10 +594,9 @@ const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
               icon={<Check size={16} />}
               onClick={handleApprove}
               loading={approving}
-              disabled={isRequester || isTicketFinal}
-              title={
-                isRequester ? '不能审批自己提交的工单' : isTicketFinal ? '工单已结束，无法操作' : ''
-              }
+              disabled={!ticket.actions?.approve?.allowed}
+              title={ticket.actions?.approve?.reason || ''}
+              className={!ticket.actions?.approve?.allowed ? DISABLED_ACTION_CLASS : ''}
             >
               批准
             </Button>
@@ -603,10 +605,9 @@ const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
               icon={<XIcon size={16} />}
               onClick={handleReject}
               loading={rejecting}
-              disabled={isRequester || isTicketFinal}
-              title={
-                isRequester ? '不能拒绝自己提交的工单' : isTicketFinal ? '工单已结束，无法操作' : ''
-              }
+              disabled={!ticket.actions?.reject?.allowed}
+              title={ticket.actions?.reject?.reason || ''}
+              className={!ticket.actions?.reject?.allowed ? DISABLED_ACTION_CLASS : ''}
             >
               拒绝
             </Button>
@@ -614,28 +615,38 @@ const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
               icon={<UserCheck size={16} />}
               onClick={handleAssign}
               loading={loadingUsers}
-              disabled={isTicketFinal}
-              title={isTicketFinal ? '工单已结束，无法分配' : ''}
+              disabled={!ticket.actions?.assign?.allowed}
+              title={ticket.actions?.assign?.reason || ''}
+              className={!ticket.actions?.assign?.allowed ? DISABLED_ACTION_CLASS : ''}
             >
               分配
             </Button>
             <Button
               icon={<Edit size={16} />}
               onClick={handleUpdate}
-              disabled={isTicketFinal}
-              title={isTicketFinal ? '工单已结束，无法编辑' : ''}
+              disabled={!ticket.actions?.edit?.allowed}
+              title={ticket.actions?.edit?.reason || ''}
+              className={!ticket.actions?.edit?.allowed ? DISABLED_ACTION_CLASS : ''}
             >
               编辑
             </Button>
             <Button
               icon={<Users size={16} />}
               onClick={() => setCCModalVisible(true)}
-              disabled={isTicketFinal}
-              title={isTicketFinal ? '工单已结束，无法抄送' : ''}
+              disabled={!ticket.actions?.cc?.allowed}
+              title={ticket.actions?.cc?.reason || ''}
+              className={!ticket.actions?.cc?.allowed ? DISABLED_ACTION_CLASS : ''}
             >
               抄送
             </Button>
-            <Button danger icon={<Trash2 size={16} />} onClick={handleDeleteClick}>
+            <Button
+              danger
+              icon={<Trash2 size={16} />}
+              onClick={handleDeleteClick}
+              disabled={!ticket.actions?.delete?.allowed}
+              title={ticket.actions?.delete?.reason || ''}
+              className={!ticket.actions?.delete?.allowed ? DISABLED_ACTION_CLASS : ''}
+            >
               删除
             </Button>
           </Space>
@@ -644,16 +655,6 @@ const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
             <Text type="secondary" className="block mt-2">
               工单已结束，无法进行操作
             </Text>
-          )}
-
-          {isRequester && !isTicketFinal && (
-            <Text type="secondary" className="block mt-2">
-              您是此工单的申请人，无法进行审批操作
-            </Text>
-          )}
-
-          {!isRequester && !isTicketFinal && (
-            <Text type="secondary">支持状态变更、审批流程、分配处理人等完整工单操作</Text>
           )}
         </Space>
 

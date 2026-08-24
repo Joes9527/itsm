@@ -95,6 +95,8 @@ export default function ServiceRequestPanel({ ticketId }: ServiceRequestPanelPro
               icon={<PlayCircle size={14} />}
               loading={starting}
               onClick={handleStartProvisioning}
+              disabled={!request.actions?.provision?.allowed}
+              title={request.actions?.provision?.reason || ''}
             >
               开始交付
             </Button>
