@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"itsm-backend/common"
 	"itsm-backend/dto"
+	"itsm-backend/middleware"
 	"itsm-backend/service"
 )
 
@@ -107,6 +108,7 @@ func (c *BPMNAIGeneratorController) GetTemplateSuggestions(ctx *gin.Context) {
 // RegisterRoutes 注册路由
 func (c *BPMNAIGeneratorController) RegisterRoutes(r *gin.RouterGroup) {
 	bpmnAI := r.Group("/bpmn/ai")
+	bpmnAI.Use(middleware.RequireRole("super_admin", "change_manager", "dept_manager", "end_user", "it_director", "ops_director", "sysadmin"))
 	{
 		// 生成BPMN流程
 		bpmnAI.POST("/generate", c.GenerateBPMN)

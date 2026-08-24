@@ -161,6 +161,11 @@ func newBPMNWorkflowTestRouter(t *testing.T) (*gin.Engine, *fakeTaskService) {
 
 	r := gin.New()
 	r.Use(gin.Recovery())
+	// These tests exercise business logic behind the RBAC gate, so authenticate
+	// as an allowed role up front rather than re-deriving the role set here.
+	r.Use(func(c *gin.Context) {
+		c.Set("role", "super_admin")
+	})
 	g := r.Group("/api/v1")
 	ctrl.RegisterRoutes(g)
 	return r, fakeTask
@@ -314,3 +319,39 @@ func TestGetApprovalHistory_PropagatesError(t *testing.T) {
 
 // silence unused-import lint on strconv when feature is dropped
 var _ = strconv.Itoa
+
+func TestBPMNWorkflowController_RoutesRequireBPMNRoleGate(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c := &BPMNWorkflowController{}
+	r := gin.New()
+	group := r.Group("/api/v1")
+	group.Use(func(ctx *gin.Context) {
+		ctx.Set("role", "l1_support") // not in the allowed set
+	})
+	c.RegisterRoutes(group)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/v1/bpmn/process-definitions", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestBPMNWorkflowController_SuperAdminPassesRoleGate(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c := &BPMNWorkflowController{}
+	r := gin.New()
+	group := r.Group("/api/v1")
+	group.Use(func(ctx *gin.Context) {
+		ctx.Set("role", "super_admin")
+	})
+	c.RegisterRoutes(group)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/v1/bpmn/process-definitions", nil)
+	r.ServeHTTP(w, req)
+
+	// Passes the role gate; will fail past it (nil processEngine) but must
+	// not be rejected by RequireRole specifically.
+	assert.NotEqual(t, http.StatusForbidden, w.Code)
+}

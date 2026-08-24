@@ -10,6 +10,7 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/middleware"
 	"itsm-backend/service"
 	"itsm-backend/service/bpmn"
 
@@ -51,6 +52,7 @@ func getBPMNTenantContext(ctx *gin.Context) (context.Context, int, bool) {
 // RegisterRoutes 注册路由
 func (c *BPMNWorkflowController) RegisterRoutes(r *gin.RouterGroup) {
 	bpmn := r.Group("/bpmn")
+	bpmn.Use(middleware.RequireRole("super_admin", "change_manager", "dept_manager", "end_user", "it_director", "ops_director", "sysadmin"))
 	{
 		// 流程定义管理
 		bpmn.POST("/process-definitions", c.CreateProcessDefinition)
