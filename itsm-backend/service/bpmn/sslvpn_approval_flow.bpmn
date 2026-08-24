@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  id="Definitions_SSLVPN_Approval"
+                  targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="sslvpn_approval_flow" name="SSL-VPN 申请与双级审批流" isExecutable="true">
+    <bpmn:extensionElements>
+      <bpmn:metaData name="category">service_request</bpmn:metaData>
+      <bpmn:metaData name="version">1.0.0</bpmn:metaData>
+      <bpmn:metaData name="description">SSL-VPN 远程办公访问权限申请与双级审批流</bpmn:metaData>
+    </bpmn:extensionElements>
+
+    <!-- 开始事件：提交申请 -->
+    <bpmn:startEvent id="StartEvent_1" name="提交申请">
+      <bpmn:outgoing>Flow_To_DeptApproval</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <!-- 一级审批：上级领导初审 -->
+    <bpmn:userTask id="UserTask_DeptManagerApproval" name="上级领导初审" taskPurpose="approval" candidateGroups="dept_manager">
+      <bpmn:incoming>Flow_To_DeptApproval</bpmn:incoming>
+      <bpmn:outgoing>Flow_To_L2OpsApproval</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- 二级审批：李昕/L2网络运维技术复审 -->
+    <bpmn:userTask id="UserTask_L2NetworkOpsApproval" name="李昕/L2网络运维技术复审" taskPurpose="approval" candidateGroups="network_eng">
+      <bpmn:incoming>Flow_To_L2OpsApproval</bpmn:incoming>
+      <bpmn:outgoing>Flow_To_End</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- 结束事件：审批完成移交 -->
+    <bpmn:endEvent id="EndEvent_1" name="审批完成移交">
+      <bpmn:incoming>Flow_To_End</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- 顺序流连接 -->
+    <bpmn:sequenceFlow id="Flow_To_DeptApproval" sourceRef="StartEvent_1" targetRef="UserTask_DeptManagerApproval"/>
+    <bpmn:sequenceFlow id="Flow_To_L2OpsApproval" sourceRef="UserTask_DeptManagerApproval" targetRef="UserTask_L2NetworkOpsApproval"/>
+    <bpmn:sequenceFlow id="Flow_To_End" sourceRef="UserTask_L2NetworkOpsApproval" targetRef="EndEvent_1"/>
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="sslvpn_approval_flow">
+      <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1">
+        <dc:Bounds x="152" y="102" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="UserTask_DeptManagerApproval_di" bpmnElement="UserTask_DeptManagerApproval">
+        <dc:Bounds x="240" y="80" width="120" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="UserTask_L2NetworkOpsApproval_di" bpmnElement="UserTask_L2NetworkOpsApproval">
+        <dc:Bounds x="410" y="80" width="160" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1">
+        <dc:Bounds x="622" y="102" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_To_DeptApproval_di" bpmnElement="Flow_To_DeptApproval">
+        <di:waypoint x="188" y="120"/>
+        <di:waypoint x="240" y="120"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_To_L2OpsApproval_di" bpmnElement="Flow_To_L2OpsApproval">
+        <di:waypoint x="360" y="120"/>
+        <di:waypoint x="410" y="120"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_To_End_di" bpmnElement="Flow_To_End">
+        <di:waypoint x="570" y="120"/>
+        <di:waypoint x="622" y="120"/>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

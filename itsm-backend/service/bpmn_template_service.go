@@ -210,6 +210,10 @@ func (s *BPMNTemplateService) listTemplates() ([]*TemplateInfo, error) {
 			info.Name = "发布审批流程"
 			info.Category = "release"
 			info.Description = "软件发布审批管理流程"
+		case "sslvpn_approval_flow":
+			info.Name = "SSL-VPN 申请与双级审批流"
+			info.Category = "service_request"
+			info.Description = "SSL-VPN 远程办公访问权限申请与双级审批流"
 		default:
 			info.Name = key
 			info.Category = "default"
