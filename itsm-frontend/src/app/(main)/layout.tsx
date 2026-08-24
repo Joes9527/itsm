@@ -110,20 +110,18 @@ export default function MainLayout({
         setCurrentTenant(tenantData);
       }
 
-      // 初始化 Persona
-      initPersonaByRole(roleCode);
+      // 初始化 Persona——带上 userId，跨账号登录时才能正确重置，见 persona-store.ts 注释。
+      initPersonaByRole(roleCode, Number(userInfo?.id || 0));
 
-      // 如果用户直接访问了根路由或 /dashboard，重定向至该角色的默认工作台
+      // 如果用户直接访问了根路由或 /dashboard，重定向至该角色的默认工作台。
+      // 直接查 PERSONAS[defaultPersona].homePath，不要在这里逐个 persona 手写
+      // if/else 分支——之前漏了 'admin' 分支，导致 sysadmin/super_admin 等角色
+      // 登录后一直停在 /dashboard，不会像其它角色一样跳到自己的默认落地页。
       if (pathname === '/' || pathname === '/dashboard') {
         const roleConf = getRolePersonaConfig(roleCode);
-        if (roleConf.defaultPersona === 'portal') {
-          router.replace('/portal');
-        } else if (roleConf.defaultPersona === 'workspace') {
-          router.replace('/workspace/tickets');
-        } else if (roleConf.defaultPersona === 'manager') {
-          router.replace('/manager/live-board');
-        } else if (roleConf.defaultPersona === 'executive') {
-          router.replace('/executive/dashboard');
+        const homePath = PERSONAS[roleConf.defaultPersona]?.homePath;
+        if (homePath) {
+          router.replace(homePath);
         }
       }
 
