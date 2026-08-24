@@ -1,6 +1,6 @@
 # RBAC 双轨制收敛设计
 
-**Status:** Approved — pending spec self-review, then hand off to `writing-plans`
+**Status:** Approved — reviewed by user, ready for `writing-plans`
 **Date:** 2026-08-24
 **Related:** [`2026-08-24-ticket-action-authorization-design.md`](2026-08-24-ticket-action-authorization-design.md)（Item 4b 是本项目的直接前置发现）、`docs/adr/0001-canonical-rbac-and-initialization.md`
 
@@ -75,9 +75,12 @@ Gin 中间件链保证两层都跑（AND 逻辑），且 OLD 先跑。这意味�
 - `RBACMiddleware` 移除对 `hasPermission(...)` 的调用，保留其余职责：认证态存在性、用户禁用检查、从数据库刷新最新角色、租户ID 解析与校验、写 context、`c.Next()`。
 - `RequirePermission(resource, action)`、`hasResourcePermission()`、`loadPermissionsByMode()`、`checkPermissionMatch()` 保持不变。
 - A/B 组按上表补齐 `RequirePermission`；C 组补 `RequireRole("super_admin", ...)`（含 6 个现状可达角色，见下文）占位；D 组补 `RequireRole("super_admin")` 占位。
+- `RequireRole` 当前响应格式是裸 `c.JSON(http.StatusForbidden, gin.H{"code": 2003, ...})`（`middleware/rbac.go:766-789`），不是项目规范的 `common.Fail`。这次要大量新增 `RequireRole` 调用点，顺手把 `RequireRole` 内部改成 `common.Fail`，消除这个已存在的响应格式偏差——这是对本次改动直接涉及的函数做的对齐，不算范围蔓延。
+- `RBACMiddleware` 移除权限判断后，职责收窄为"认证态校验 + 用户禁用检查 + 角色刷新 + 租户ID校验 + 上下文注入"，不再是"挂了就有权限保护"。改动时在函数上补一条 doc comment 说明这一点，避免后续开发者误以为只要路由挂在 `RBACMiddleware` 保护的分组下就自动有细粒度权限保护——细粒度保护现在完全由紧随其后的 `RequirePermission`/`RequireRole`/`RequireMSPPermission` 承担。
+- **C 组挂载方式**：不在 74 处路由调用上逐条重复声明，改为在对应 controller 的 `RegisterRoutes` 方法里、对应 `gin.RouterGroup` 变量上做**分组级** `.Use(middleware.RequireRole(...))`。5 个 controller 里 4 个（`BPMNWorkflowController`、`BPMNMonitoringController`、`BPMNDashboardController`、`BPMNAIGeneratorController`）各自只有一个顶层分组，直接在分组创建后加一行 `.Use()` 即可覆盖全部路由。`BPMNProcessTriggerController` 例外：它的 `/process-bindings` 子分组内部本身就是 C/D 混合——`POST ""`、`GET ""`、`GET "/by-type/:business_type"`、`GET "/:id"` 命中 `bpmn:*` 通配符（C 组），但 `PUT "/:id"`、`DELETE "/:id"` 没有被通配符覆盖（D 组，现状仅 super_admin）。处理方式：`bindings` 分组整体先挂 C 组的 `.Use(RequireRole(...))`，再单独给 `PUT "/:id"`/`DELETE "/:id"` 这两条路由**追加**一层 `RequireRole("super_admin")`（Gin 中间件链式 AND，两层叠加后这两条的有效要求就精确收敛成"仅 super_admin"，与现状一致）；该 controller 其余三个子分组（`trigger`、`departments`、`domain-configs`）内部角色集统一，可以直接分组级挂载（`trigger` 是 C 组，`departments`/`domain-configs` 是 D 组）。
 
 **`middleware/smart_permission.go` 改动**：
-- 整个文件删除：`SmartCheckPermission`、`checkDatabaseACL`、`checkURLInference`、`checkRoleBasedPermission`、`getCachedACLs`、`loadACLsFromDB`、`isKnownWhitelistPath`、`isAuthWhitelist`、`authWhitelist`、ACL 缓存相关包级状态（`aclCache`、`aclCacheLock`、`aclConfig`）、`EndpointACL`/`DBQuerier` 类型定义（这是 `middleware` 包内的本地类型，与 `ent.EndpointACL`/`ent/schema/endpoint_acl.go` 是两个完全独立的东西——后者是 Ent 生成的 schema，当前没有任何 controller/handler/service 引用它，属于 ADR-0001 的既有脚手架，**不在本项目删除范围内**，删除前需二次确认没有漏看的调用方）。
+- 整个文件删除：`SmartCheckPermission`、`checkDatabaseACL`、`checkURLInference`、`checkRoleBasedPermission`、`getCachedACLs`、`loadACLsFromDB`、`isKnownWhitelistPath`、`isAuthWhitelist`、`authWhitelist`、ACL 缓存相关包级状态（`aclCache`、`aclCacheLock`、`aclConfig`）、`EndpointACL`/`DBQuerier` 类型定义（这是 `middleware` 包内的本地类型，与 `ent.EndpointACL`/`ent/schema/endpoint_acl.go` 是两个完全独立的东西——后者是 Ent 生成的 schema，当前没有任何 controller/handler/service 引用它，属于 ADR-0001 的既有脚手架，**不在本项目删除范围内**——复核确认：`ent.EndpointACL` 与 `middleware.EndpointACL` 是两个完全独立的类型，删除后者不影响前者，边界清晰，无需额外处理）。
 
 **不改动**：`router.go` 里已有的 `RequirePermission(...)` 调用、`hasResourcePermission()`、`loadPermissionsByMode()`、`RequireMSPPermission`、`RequireRole`、`PermissionConfig`/`PermissionConfigMode*`、`RolePermissions`（仍被 `loadPermissionsByMode` 的 `HardcodeOnly`/`Merge` 模式使用）、`ent/schema/endpoint_acl.go` 及其生成代码。
 
