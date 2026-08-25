@@ -33,7 +33,7 @@ func ResolveCallerIdentity(ctx context.Context, client *ent.Client, groupResolve
 	if userID <= 0 {
 		return nil, fmt.Errorf("无效的用户ID")
 	}
-	actor, err := client.User.Query().Where(user.ID(userID)).Only(ctx)
+	actor, err := client.User.Query().Where(user.ID(userID), user.TenantID(tenantID)).Only(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("用户不存在: %w", err)
 	}
