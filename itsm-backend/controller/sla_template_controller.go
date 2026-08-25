@@ -3,6 +3,7 @@ package controller
 import (
 	"net/http"
 
+	"itsm-backend/middleware"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -22,9 +23,9 @@ func NewSLATemplateController(templateService *service.SLATemplateService) *SLAT
 func (c *SLATemplateController) RegisterRoutes(r *gin.RouterGroup) {
 	templates := r.Group("/sla/templates")
 	{
-		templates.GET("", c.ListTemplates)
-		templates.GET("/:key", c.GetTemplate)
-		templates.POST("/:key/install", c.InstallTemplate)
+		templates.GET("", middleware.RequirePermission("sla", "read"), c.ListTemplates)
+		templates.GET("/:key", middleware.RequirePermission("sla", "read"), c.GetTemplate)
+		templates.POST("/:key/install", middleware.RequirePermission("sla", "write"), c.InstallTemplate)
 	}
 }
 

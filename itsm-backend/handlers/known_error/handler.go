@@ -9,6 +9,7 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	entknownerror "itsm-backend/ent/knownerror"
+	"itsm-backend/middleware"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -590,6 +591,7 @@ func (h *Handler) CreateFromProblem(c *gin.Context) {
 // RegisterRoutes registers the known error routes
 func (h *Handler) RegisterRoutes(r *gin.RouterGroup) {
 	knownErrors := r.Group("/known-errors")
+	knownErrors.Use(middleware.RequireRole("super_admin"))
 	{
 		knownErrors.GET("", h.ListKnownErrors)
 		knownErrors.GET("/stats", h.GetStats)

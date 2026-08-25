@@ -1388,8 +1388,11 @@ func (s *Seeder) seedPermissions(ctx context.Context) {
 		{"process_instance:read", "查看流程实例", "process_instance", "read", "查看流程实例"},
 		{"process_instance:create", "启动流程", "process_instance", "create", "启动流程实例"},
 		{"process_instance:update", "管理流程", "process_instance", "update", "暂停/恢复/取消流程"},
-		// BPMN 引擎（middleware/rbac.go 全局 ResourceActionMap 里 /api/v1/bpmn/* 实际校验的
-		// 资源名，workflow:* 只管菜单可见性——两者不是别名互通，此前这里没有目录项，
+		// BPMN 引擎（bpmn:* 现在只控制 BPMN 菜单可见性，见 service/menu_service.go；
+		// /api/v1/bpmn/* 的实际 API 访问由 middleware.RequireLegacyBPMNRoles() 这个固定角色
+		// allowlist 把关，与这里的 DB 授权无关——在 DB 里撤销某角色的 bpmn:read 不会真正收回其
+		// API 访问权限，只会移除菜单项，直到 BPMN 有真正的 DB 驱动权限模型为止（backlog，见设计文档）。
+		// workflow:* 只管菜单可见性，两者不是别名互通；此前这里没有目录项，
 		// rolePermissionMap 里任何角色写 bpmn:read/write 都因为查不到对应权限 ID 被静默丢弃）
 		{"bpmn:read", "查看BPMN流程引擎数据", "bpmn", "read", "查看流程定义/实例/任务等BPMN引擎数据"},
 		{"bpmn:write", "管理BPMN流程引擎数据", "bpmn", "write", "创建/更新流程定义、完成任务等BPMN引擎写操作"},
@@ -1769,10 +1772,12 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 			"approval:read", "approval:write",
 			"release:read", "release:write", "release:approve", "release:rollback",
 			"cmdb:read",
-			// workflow:* 控制"工作流"菜单可见性（menu_service.go），bpmn:* 是
-			// middleware/rbac.go 全局 ResourceActionMap 里 /api/v1/bpmn/* 实际
-			// 校验的资源名——两套命名不是别名互通的，菜单可见不代表接口能调，
-			// 缺 bpmn:read 会导致"菜单进得去、列表加载失败：权限不足"。
+			// workflow:* 控制"工作流"菜单可见性（menu_service.go），bpmn:* 现在也只控制
+			// BPMN 菜单可见性——两套命名不是别名互通的。/api/v1/bpmn/* 的实际 API 访问由
+			// middleware.RequireLegacyBPMNRoles() 这个固定角色 allowlist 把关，与这里的
+			// bpmn:read/write DB 授权无关；change_manager 本身就在该 allowlist 里，所以缺
+			// bpmn:read 不会导致接口 403，只会让 BPMN 菜单项不可见（backlog：BPMN 真正的
+			// DB 驱动权限模型，见设计文档）。
 			"workflow:read", "workflow:write", "process_instance:read",
 			"bpmn:read", "bpmn:write", "task:read", "task:update",
 			"sla:read",
@@ -1853,18 +1858,16 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 			"user:read", "department:read", "team:read",
 			"knowledge:read", "release:read", "release:approve", "release:rollback",
 			// release:approve/rollback 只让业务域 API（/releases/:id/approve 等）能调，
-			// 审批人查看"我的待办"走的是 /api/v1/bpmn/tasks，由全局 ResourceActionMap
-			// 的 /api/v1/bpmn/* 通配符按 bpmn:read 校验——同 change_manager 那次修复
-			// 缺 bpmn:read 的道理一样，没有它审批人能审批但看不到自己的待办列表。
 			// release:read 同理必须补：光有 approve 权限但没有 read，审批人连
 			// GET /releases/:id（发布详情页）都会被 RBAC 拒 403，真实浏览器验证时
 			// 点开发布详情直接 404，approve 按钮压根摸不到。
-			// bpmn:write：POST /api/v1/bpmn/tasks/:id/decisions（审批人真正提交同意/拒绝
-			// 走的接口）在全局 ResourceActionMap 里按 bpmn:write 校验，跟上面 bpmn:read
-			// 只覆盖"查看待办"是两个不同动作。部门经理作为审批人被正确解析成审批任务
-			// assignee 后，没有这条权限会被全局 RBACMiddleware 挡在 authorizeTaskActor
-			// （任务级"是不是你的任务"校验）之前，报"权限不足"而不是业务层错误，真实
-			// 提交-审批全链路验证时实测复现（2026-08-18）。
+			// bpmn:read/bpmn:write：审批人查看"我的待办"（/api/v1/bpmn/tasks）、提交同意/拒绝
+			// （POST /api/v1/bpmn/tasks/:id/decisions）走的是 /api/v1/bpmn/* 这组接口，实际
+			// API 访问由 middleware.RequireLegacyBPMNRoles() 固定角色 allowlist 把关，
+			// dept_manager 本身就在该 allowlist 里，所以这两个 bpmn:* 授权现在只控制 BPMN
+			// 菜单可见性（menu_service.go），不再是 API 能不能调的门槛——保留它们是为了让
+			// 部门经理在菜单里也能看到"我的待办"入口，不是因为撤掉会导致 403（backlog：BPMN
+			// 真正的 DB 驱动权限模型落地后这里的语义会变，见设计文档）。
 			"bpmn:read", "bpmn:write", "task:read",
 		},
 		// 团队主管
@@ -1896,12 +1899,15 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 			// 角色，之前只有 it_director/ops_director/sysadmin/service_catalog_admin
 			// 这些管理级角色有，等于普通用户永远走不通自助服务目录。
 			"service_request:write", "service_request:read",
-			// bpmn:read/bpmn:write/task:read：服务请求 BPMN 流程里第一个节点
-			// （Activity_Accept"请求受理"）没有声明 candidateGroups/candidateUsers 时，
-			// bpmn_process_engine.go 会把它默认分配给 requester_id 本人——也就是说
-			// 申请人自己就是审批链路上第一个"任务受理人"。没有这三条权限，申请人看不到
-			// （task:read/bpmn:read）也完不成（bpmn:write）分配给自己的任务，流程卡在
-			// 第一步，真实提交-审批全链路验证时实测复现（2026-08-18）。
+			// bpmn:read/bpmn:write：服务请求 BPMN 流程里第一个节点（Activity_Accept"请求受理"）
+			// 没有声明 candidateGroups/candidateUsers 时，bpmn_process_engine.go 会把它默认
+			// 分配给 requester_id 本人——也就是说申请人自己就是审批链路上第一个"任务受理人"。
+			// /api/v1/bpmn/* 的实际 API 访问现在由 middleware.RequireLegacyBPMNRoles() 固定角色
+			// allowlist 把关（end_user 本身就在该 allowlist 里），所以这两条 bpmn:* 授权现在只
+			// 控制 BPMN 菜单可见性，不是接口能不能调的门槛，保留它们是为了让申请人在菜单里也能
+			// 看到相应入口（backlog：BPMN 真正的 DB 驱动权限模型，见设计文档）。
+			// task:read：/api/v1/workflow/tasks、/api/v1/tenant/my-approvals 等"我的待办"路由
+			// 是真正按 RequirePermission("task","read") 做 DB 驱动校验的，这条是必需的真实授权。
 			"bpmn:read", "bpmn:write", "task:read",
 		},
 		// 访客
@@ -2045,9 +2051,11 @@ func allPermissionCodes() []string {
 		"process_instance:read", "process_instance:create", "process_instance:update",
 		"task:read", "task:update",
 		"step:create", "step:update",
-		// BPMN 流程引擎（定义/实例/任务的读写）——之前遗漏，导致 allExcept() 派生的角色
-		// （如 it_director）拿不到 bpmn:write，无法通过 POST /bpmn/tasks/:id/decisions
-		// 提交审批决策（全局 RBAC 中间件按路径落到 "/api/v1/bpmn/*" -> bpmn:write 兜底项）
+		// BPMN 流程引擎（定义/实例/任务的读写）——之前遗漏，为 allExcept() 派生的角色补齐
+		// 权限目录完整性。/api/v1/bpmn/* 的实际 API 访问现在由 middleware.RequireLegacyBPMNRoles()
+		// 固定角色 allowlist 把关（it_director 等派生角色已在该 allowlist 里），这三条 bpmn:*
+		// 授权目前只控制 BPMN 菜单可见性，不是 POST /bpmn/tasks/:id/decisions 等接口能不能调
+		// 的门槛（backlog：BPMN 真正的 DB 驱动权限模型，见设计文档）。
 		"bpmn:read", "bpmn:write", "bpmn:delete",
 		// 新增: 问题调查/根因/方案
 		"investigation:read", "investigation:create", "investigation:update",

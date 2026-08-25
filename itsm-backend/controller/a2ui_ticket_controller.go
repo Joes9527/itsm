@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"itsm-backend/middleware"
 	"itsm-backend/service"
 )
 
@@ -116,6 +117,7 @@ func (c *A2UITicketController) HandleAction(ctx *gin.Context) {
 // RegisterRoutes registers the A2UI routes
 func (c *A2UITicketController) RegisterRoutes(r *gin.RouterGroup) {
 	a2ai := r.Group("/a2ui")
+	a2ai.Use(middleware.RequireRole("super_admin"))
 	{
 		a2ai.POST("/ticket/form", c.GenerateForm)
 		a2ai.POST("/ticket/action", c.HandleAction)

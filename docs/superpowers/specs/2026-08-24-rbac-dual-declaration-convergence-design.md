@@ -1,6 +1,6 @@
 # RBAC 双轨制收敛设计
 
-**Status:** Approved — reviewed by user, ready for `writing-plans`
+**Status:** Implemented — see docs/superpowers/plans/2026-08-24-rbac-dual-declaration-convergence.md
 **Date:** 2026-08-24
 **Related:** [`2026-08-24-ticket-action-authorization-design.md`](2026-08-24-ticket-action-authorization-design.md)（Item 4b 是本项目的直接前置发现）、`docs/adr/0001-canonical-rbac-and-initialization.md`
 
@@ -99,4 +99,6 @@ Gin 中间件链保证两层都跑（AND 逻辑），且 OLD 先跑。这意味�
 - C 组（BPMN 引擎集群）、D 组（约 34 条无覆盖路由）"正确的权限模型应该是什么"——需要产品侧决定。
 - `POST /api/v1/ws/ticket`、`POST /api/v1/connectors/feishu/callback` 当前实际权限行为的正确性核实。
 - **（新发现，建议优先级高于以上几项）BPMN 流程实例/任务的实例级授权缺失**：`GET /api/v1/bpmn/process-instances`、`GET /api/v1/bpmn/tasks/:id` 目前只做 tenant 级隔离，没有按调用者是否为发起人/审批人/候选人做数据过滤——任何能通过粗粒度角色门槛的用户可以看到整个租户所有流程实例和任意任务详情；`GET /api/v1/bpmn/tasks`（"我的待办"）在调用方显式传 `user_id`/`assignee`/`candidate_users` 时会返回**他人**的待办列表，没有校验调用者是否有权查询别人的任务。这是数据越权问题，不是 RBAC 声明问题，建议与"审批机制收口"项目一并评估，或作为独立安全修复优先处理。
+  - **补充发现（收尾合并阶段实测证伪）**：`/api/v1/bpmn/tasks/*` 这组接口最初也被套了 C 组的粗粒度角色门槛（`RequireLegacyBPMNRoles()`），但与另一条并行分支新增的 SSL-VPN 审批链路 E2E 测试合并时，实测发现这会把合法的任务候选人挡在外面——BPMN `candidate_groups` 的取值可以是任意角色名（例如 `network_eng`），并不受限于那 7 个角色。已改为不给 `/tasks/*` 套粗粒度角色门槛，还原为收敛前的行为。其中 `claim`/`complete`（含 `decisions`）/`vote` 在 service 层已有 `authorizeTaskActor`/`isTaskCandidate` 做真正的候选人级别校验；`assign`/`cancel`/`variables`/`counter-sign`/`counter-sign-status`/`GetTask`/`ListUserTasks` 目前没有对应校验——这正是本条目上面已经记录的"实例级授权缺失"的一部分，不是这次修复引入的新问题，只是在这次合并过程中被更精确地定位了范围。
 - 5 个 `msp_*` 角色在 `roles` 表里完全没有记录，导致所有 MSP 接口现状对其一律 403——与本项目无关的既有缺口。
+- `GET /api/v1/msp/status` 相对旧版全局推断层有一次真实的行为收窄：该路由用 `RequirePermission("msp","read")`（纯 DB 驱动），5 个硬编码 `msp_*` 角色因为在 `roles` 表里没有对应行、拿不到任何 DB 授权而被拒绝；旧版是靠硬编码兜底表放行这 5 个角色，删除该兜底表后此路由对它们从"可用"变成"403"。已确认 `/msp/*` 下其它路由本来就全部要求 `RequireMSPPermission`，同样因这 5 个角色零记录而 403，所以这不影响它们对 MSP 控制台的实际可用功能，故本项目内不改动该路由的中间件调用。彻底修复需要给 `msp_*` 角色补上真实的 `roles` 表记录（MSP 上线数据模型任务），或引入新的 OR 逻辑权限判定机制（超出本项目范围，属于新机制）。

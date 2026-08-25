@@ -44,6 +44,11 @@ func setupTestRouter(t *testing.T, client *ent.Client, userID, tenantID int) (*g
 	r.Use(func(c *gin.Context) {
 		c.Set("user_id", userID)
 		c.Set("tenant_id", tenantID)
+		// RegisterRoutes now gates this group behind RequireRole("super_admin");
+		// the handler tests below exercise business logic, not RBAC, so grant the
+		// role here. RBAC gating itself is covered separately by
+		// TestStandardChangeHandler_RoutesRequireSuperAdmin below.
+		c.Set("role", "super_admin")
 		c.Next()
 	})
 	h.RegisterRoutes(r.Group("/api/v1"))
@@ -526,3 +531,20 @@ func TestStandardChange_TenantIsolation(t *testing.T) {
 
 // strPtr is a small helper for building optional-string update requests.
 func strPtr(s string) *string { return &s }
+
+// ===================== RBAC gating =====================
+
+func TestStandardChangeHandler_RoutesRequireSuperAdmin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := &Handler{}
+	r := gin.New()
+	group := r.Group("/api/v1")
+	group.Use(func(ctx *gin.Context) { ctx.Set("role", "change_manager") })
+	h.RegisterRoutes(group)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/v1/standard-changes", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}

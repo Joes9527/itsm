@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"itsm-backend/middleware"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -30,6 +31,7 @@ func (c *BPMNMonitoringController) SetMonitoringService(s *service.BPMNMonitorin
 // RegisterRoutes 注册路由
 func (c *BPMNMonitoringController) RegisterRoutes(r *gin.RouterGroup) {
 	monitoring := r.Group("/bpmn/monitoring")
+	monitoring.Use(middleware.RequireLegacyBPMNRoles())
 	{
 		// 流程指标监控
 		monitoring.GET("/metrics", c.GetProcessMetrics)

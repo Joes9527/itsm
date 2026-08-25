@@ -13,6 +13,7 @@ import (
 	"itsm-backend/middleware"
 
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -41,6 +42,11 @@ func setupGlobalSearchTest(t *testing.T) (*gin.Engine, *ent.Client, *ent.Tenant,
 			TenantID: tenant.ID,
 			Tenant:   tenant,
 		})
+		// RegisterRoutes now gates this group behind RequireRole("super_admin");
+		// this helper exercises search business logic, not RBAC, so grant the
+		// role here. RBAC gating itself is covered separately by
+		// TestGlobalSearchController_RouteRequiresSuperAdmin below.
+		c.Set("role", "super_admin")
 		c.Next()
 	})
 	controller.RegisterRoutes(r.Group("/api/v1"))
@@ -111,4 +117,19 @@ func TestGlobalSearch_SearchCaseInsensitiveAndNumber(t *testing.T) {
 			require.Equal(t, tt.expectedNo, searchResp.Results[0].Number)
 		})
 	}
+}
+
+func TestGlobalSearchController_RouteRequiresSuperAdmin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c := &GlobalSearchController{}
+	r := gin.New()
+	group := r.Group("/api/v1")
+	group.Use(func(ctx *gin.Context) { ctx.Set("role", "end_user") })
+	c.RegisterRoutes(group)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/v1/global-search", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
 }

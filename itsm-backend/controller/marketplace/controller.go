@@ -53,8 +53,17 @@ func getUserID(ctx *gin.Context) (int, bool) {
 }
 
 // RegisterRoutes 注册路由
+//
+// NOTE: the handler comments below ("公开接口" / "需要登录的接口") describe
+// this route family's original design intent, but the actual current
+// behavior (before this change, via the global ResourceActionMap
+// inference layer that is being deleted) is super_admin-only for all of
+// them — the RequireRole placeholder below preserves that actual
+// behavior exactly. It contradicts the comments' intent; see the design
+// spec's backlog for the product decision on what this should really be.
 func (c *Controller) RegisterRoutes(r *gin.RouterGroup) {
 	marketplaceGroup := r.Group("/marketplace")
+	marketplaceGroup.Use(middleware.RequireRole("super_admin"))
 	{
 		// 公开接口
 		marketplaceGroup.GET("/items", c.ListItems)

@@ -1,12 +1,17 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"itsm-backend/ent/enttest"
+
 	"github.com/gin-gonic/gin"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRBACMiddleware(t *testing.T) {
@@ -38,6 +43,47 @@ func TestRBACMiddleware(t *testing.T) {
 	// Note: "No Role in Context" test requires a valid client to query the database
 	// The RBACMiddleware will attempt to fetch user from DB which panics with nil client
 	// This is expected behavior - in production, client should never be nil
+}
+
+func TestRBACMiddleware_NoLongerPerformsPermissionCheck(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	// A role/path combination that the (now-deleted) hasPermission() would
+	// have denied under the old ResourceActionMap-inference logic must no
+	// longer be rejected by RBACMiddleware itself — that job now belongs
+	// solely to the route's own RequirePermission/RequireRole call, which
+	// isn't present in this bare test context, so this only proves
+	// RBACMiddleware itself doesn't short-circuit on it.
+	//
+	// This test requires a real client because RBACMiddleware queries the
+	// user from DB (see the existing "No Role in Context" comment above) —
+	// use enttest with a seeded active user.
+	client := enttest.Open(t, "sqlite3", "file:rbacmw_test?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	tenant, err := client.Tenant.Create().
+		SetName("Test Tenant").SetCode("test").SetDomain("test.com").SetStatus("active").
+		Save(ctx)
+	require.NoError(t, err)
+	u, err := client.User.Create().
+		SetUsername("test_no_perm_check").
+		SetEmail("test_no_perm_check@example.com").
+		SetName("Test No Perm Check").
+		SetPasswordHash("x").
+		SetActive(true).
+		SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest("GET", "/api/v1/some-random-unmapped-path", nil)
+	c.Set("user_id", u.ID)
+	c.Set("tenant_id", tenant.ID)
+	c.Set("role", "end_user")
+
+	RBACMiddleware(client)(c)
+
+	assert.False(t, c.IsAborted())
 }
 
 func TestRequirePermissionForRBAC(t *testing.T) {
@@ -120,6 +166,53 @@ func TestRequireRole(t *testing.T) {
 	})
 }
 
+// TestRequireLegacyBPMNRoles is the single source-of-truth coverage for the
+// shared BPMN allowlist gate. It replaces having to duplicate a 7-role
+// table-driven test in each of the 5 BPMN controllers that now call
+// middleware.RequireLegacyBPMNRoles() (bpmn_workflow_controller.go,
+// bpmn_monitoring_controller.go, bpmn_dashboard_controller.go,
+// bpmn_ai_generator_controller.go, bpmn_process_trigger_controller.go) — a
+// typo dropping one of the 7 roles from the shared helper would be caught
+// here instead of only being caught by a per-controller "one disallowed role
+// is rejected" test.
+func TestRequireLegacyBPMNRoles(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	allowedRoles := []string{
+		"super_admin", "change_manager", "dept_manager", "end_user",
+		"it_director", "ops_director", "sysadmin",
+	}
+
+	for _, role := range allowedRoles {
+		t.Run("Allows "+role, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request, _ = http.NewRequest("GET", "/api/v1/bpmn/process-instances", nil)
+			c.Set("role", role)
+
+			RequireLegacyBPMNRoles()(c)
+
+			assert.False(t, c.IsAborted())
+		})
+	}
+
+	disallowedRoles := []string{"l1_support", "dba", "guest"}
+
+	for _, role := range disallowedRoles {
+		t.Run("Rejects "+role, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request, _ = http.NewRequest("GET", "/api/v1/bpmn/process-instances", nil)
+			c.Set("role", role)
+
+			RequireLegacyBPMNRoles()(c)
+
+			assert.Equal(t, http.StatusForbidden, w.Code)
+			assert.True(t, c.IsAborted())
+		})
+	}
+}
+
 func TestHasResourcePermission(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	original := PermissionConfig.Mode
@@ -153,94 +246,6 @@ func TestHasResourcePermission(t *testing.T) {
 
 		result = hasResourcePermission(nil, "super_admin", "anything", "anything", 1)
 		assert.True(t, result)
-	})
-}
-
-func TestMatchPath(t *testing.T) {
-	t.Run("Exact Match", func(t *testing.T) {
-		assert.True(t, matchPath("/api/v1/tickets", "/api/v1/tickets"))
-		assert.False(t, matchPath("/api/v1/tickets", "/api/v1/users"))
-	})
-
-	t.Run("Wildcard Match", func(t *testing.T) {
-		assert.True(t, matchPath("/api/v1/tickets/*", "/api/v1/tickets/123"))
-		assert.True(t, matchPath("/api/v1/tickets/*", "/api/v1/tickets/abc/edit"))
-		assert.True(t, matchPath("/api/v1/tickets/*/assign", "/api/v1/tickets/123/assign"))
-		assert.False(t, matchPath("/api/v1/tickets/*/assign", "/api/v1/tickets/123/close"))
-		assert.False(t, matchPath("/api/v1/tickets/*", "/api/v1/users/123"))
-	})
-
-	t.Run("No Match", func(t *testing.T) {
-		assert.False(t, matchPath("/api/v1/tickets", "/api/v1/users"))
-		assert.False(t, matchPath("/api/v1/tickets/*", "/api/v1/tickets"))
-	})
-}
-
-func TestGetPermissionFromPath(t *testing.T) {
-	t.Run("GET Tickets Returns Read Permission", func(t *testing.T) {
-		perm := getPermissionFromPath("GET", "/api/v1/tickets")
-		assert.NotNil(t, perm)
-		assert.Equal(t, "ticket", perm.Resource)
-		assert.Equal(t, "read", perm.Action)
-	})
-
-	t.Run("POST Tickets Returns Write Permission", func(t *testing.T) {
-		perm := getPermissionFromPath("POST", "/api/v1/tickets")
-		assert.NotNil(t, perm)
-		assert.Equal(t, "ticket", perm.Resource)
-		assert.Equal(t, "write", perm.Action)
-	})
-
-	t.Run("Assign Ticket Returns Assign Permission", func(t *testing.T) {
-		perm := getPermissionFromPath("POST", "/api/v1/tickets/123/assign")
-		assert.NotNil(t, perm)
-		assert.Equal(t, "ticket", perm.Resource)
-		assert.Equal(t, "assign", perm.Action)
-	})
-
-	t.Run("DELETE Tickets Returns Delete Permission", func(t *testing.T) {
-		perm := getPermissionFromPath("DELETE", "/api/v1/tickets/123")
-		assert.NotNil(t, perm)
-		assert.Equal(t, "ticket", perm.Resource)
-		assert.Equal(t, "delete", perm.Action)
-	})
-
-	t.Run("Unknown Path Returns Nil", func(t *testing.T) {
-		perm := getPermissionFromPath("GET", "/api/v1/unknown/path")
-		assert.Nil(t, perm)
-	})
-
-	// 回归：/api/v1/releases 曾缺失于 ResourceActionMap，导致全局 RBACMiddleware
-	// 对所有非 super_admin 用户直接 2003（路由级 RequirePermission 根本轮不到）。
-	t.Run("GET Releases Returns Read Permission", func(t *testing.T) {
-		perm := getPermissionFromPath("GET", "/api/v1/releases")
-		assert.NotNil(t, perm)
-		assert.Equal(t, "release", perm.Resource)
-		assert.Equal(t, "read", perm.Action)
-	})
-
-	t.Run("GET Releases Stats Returns Read Permission", func(t *testing.T) {
-		perm := getPermissionFromPath("GET", "/api/v1/releases/stats")
-		assert.NotNil(t, perm)
-		assert.Equal(t, "release", perm.Resource)
-		assert.Equal(t, "read", perm.Action)
-	})
-
-	t.Run("POST Release Approve Returns Approve Permission", func(t *testing.T) {
-		// 动作型子路由需要比 /releases/* 通配符更具体的映射，否则只被授予
-		// release:approve（没有 release:write）的审批人会被全局中间件挡在路由自己
-		// 声明的 RequirePermission("release","approve") 之前，见 tickets/*/assign 同类先例。
-		perm := getPermissionFromPath("POST", "/api/v1/releases/1/approve")
-		assert.NotNil(t, perm)
-		assert.Equal(t, "release", perm.Resource)
-		assert.Equal(t, "approve", perm.Action)
-	})
-
-	t.Run("DELETE Release Returns Delete Permission", func(t *testing.T) {
-		perm := getPermissionFromPath("DELETE", "/api/v1/releases/1")
-		assert.NotNil(t, perm)
-		assert.Equal(t, "release", perm.Resource)
-		assert.Equal(t, "delete", perm.Action)
 	})
 }
 
