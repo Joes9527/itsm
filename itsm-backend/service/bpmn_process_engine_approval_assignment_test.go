@@ -503,6 +503,31 @@ func TestClaimTaskByID_RealCandidateCanClaim(t *testing.T) {
 	assert.Equal(t, strconv.Itoa(backupApprover.ID), claimed.Assignee)
 }
 
+func TestClaimTaskByID_RequesterCannotClaimViaCandidateGroupMembership(t *testing.T) {
+	fx := newApprovalAssignmentFixture(t)
+
+	dept := fx.createDepartment(t, "Orphan Dept 8", 0, 0)
+	requester := fx.createUser(t, "requester16", dept.ID)
+	backupApprover := fx.createUser(t, "backupApprover8", 0)
+	// 跟 TestClaimTaskByID_RequesterCannotClaimOwnCandidateGroupFallbackTask 不同：
+	// 这次申请人真的是 ticket-approvers 组成员——createUserTask 展开候选组时会把申请人从
+	// candidate_users 里过滤掉，但 candidate_groups 字段本身保留原始组名不做过滤，所以
+	// 申请人仍然「属于」这个组。isTaskCandidate 必须额外靠 isProcessInstanceRequester
+	// 排除申请人本人，否则申请人能靠组成员身份认领自己提交工单的审批任务。
+	fx.createGroup(t, "ticket-approvers", requester.ID, backupApprover.ID)
+
+	instance := fx.createInstance(t, "claim-requester-in-group", map[string]interface{}{
+		"requester_id": float64(requester.ID),
+	})
+	require.NoError(t, fx.engine.createUserTask(fx.ctx, instance, approvalTask("Activity_Approval", "工单审批")))
+	task := fx.getCreatedTask(t, instance.ID, "Activity_Approval")
+	require.NotContains(t, task.CandidateUsers, "requester16", "createUserTask 展开候选组时应该已经把申请人过滤掉")
+	require.Contains(t, task.CandidateGroups, "ticket-approvers", "candidate_groups 字段应该保留原始组名，不做过滤")
+
+	err := fx.engine.TaskService().ClaimTaskByID(fx.ctx, task.ID, requester.ID)
+	assert.Error(t, err, "申请人虽然是候选组成员，但不应该能认领自己提交工单的审批任务")
+}
+
 // ==================== 纯函数单元测试 ====================
 
 func TestExcludeUserFromCandidates(t *testing.T) {

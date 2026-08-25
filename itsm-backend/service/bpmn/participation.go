@@ -52,15 +52,12 @@ func ResolveCallerIdentity(ctx context.Context, client *ent.Client, groupResolve
 	return identity, nil
 }
 
-// IsTaskParticipant reports whether this identity is the task's assignee, is
-// listed in its candidate_users, or belongs to a role/group listed in its
-// candidate_groups. assignee/candidate_users are matched by exact token
-// after splitting on commas (a task's CSV may hold IDs, usernames, or
-// emails in any position). candidate_groups is matched by exact token on
-// both sides — NOT the substring-of-whole-CSV comparison ListUserTasks's
-// query used before Task 3 of this plan, which only worked reliably for
-// single-group callers.
-func (id *CallerIdentity) IsTaskParticipant(task *ent.ProcessTask) bool {
+// MatchesAssigneeOrCandidateUser reports whether this identity is the
+// task's assignee or is explicitly listed in its candidate_users — both
+// forms are pre-filtered for exclusions (e.g. requester self-approval) at
+// task-creation time by createUserTask's excludeUserFromCandidates, so a
+// match here is always safe to trust as-is.
+func (id *CallerIdentity) MatchesAssigneeOrCandidateUser(task *ent.ProcessTask) bool {
 	matchesUser := func(csv string) bool {
 		for _, candidate := range strings.Split(csv, ",") {
 			candidate = strings.TrimSpace(candidate)
@@ -73,9 +70,19 @@ func (id *CallerIdentity) IsTaskParticipant(task *ent.ProcessTask) bool {
 		}
 		return false
 	}
-	if matchesUser(task.Assignee) || matchesUser(task.CandidateUsers) {
-		return true
-	}
+	return matchesUser(task.Assignee) || matchesUser(task.CandidateUsers)
+}
+
+// MatchesCandidateGroup reports whether this identity's resolved groups
+// intersect the task's candidate_groups. Unlike CandidateUsers, this is a
+// LIVE re-evaluation against the caller's CURRENT group membership, not a
+// value fixed at task-creation time — createUserTask does NOT filter
+// task.CandidateGroups the way it filters CandidateUsers (the raw
+// configured group name is kept for audit purposes). Callers that grant
+// real action authority based on this match (not just visibility) must
+// separately verify the caller isn't the task's own process-instance
+// requester — see isProcessInstanceRequester.
+func (id *CallerIdentity) MatchesCandidateGroup(task *ent.ProcessTask) bool {
 	if id.GroupsCSV == "" || task.CandidateGroups == "" {
 		return false
 	}
@@ -93,4 +100,15 @@ func (id *CallerIdentity) IsTaskParticipant(task *ent.ProcessTask) bool {
 		}
 	}
 	return false
+}
+
+// IsTaskParticipant reports whether this identity is a participant in the
+// task via ANY means (assignee, candidate_users, or candidate_groups). Use
+// this for read-only/visibility checks only. For anything that grants
+// action authority (completing, reassigning, cancelling, editing
+// variables), check MatchesAssigneeOrCandidateUser and MatchesCandidateGroup
+// separately so the requester-exclusion in isProcessInstanceRequester can be
+// applied to the group-based path — see authorizeTaskActor for the pattern.
+func (id *CallerIdentity) IsTaskParticipant(task *ent.ProcessTask) bool {
+	return id.MatchesAssigneeOrCandidateUser(task) || id.MatchesCandidateGroup(task)
 }

@@ -513,7 +513,10 @@ func (e *CustomProcessEngine) recordApprovalDecision(ctx context.Context, instan
 
 // authorizeTaskActor ensures that task actions are performed by the assigned
 // user or an explicitly resolved candidate (by ID, username, email, or
-// candidate_groups membership — see bpmn.CallerIdentity.IsTaskParticipant).
+// candidate_groups membership). candidate_groups matches must additionally
+// pass isProcessInstanceRequester exclusion, since (unlike candidate_users)
+// candidate_groups isn't pre-filtered for self-approval at task-creation
+// time — see bpmn.CallerIdentity.MatchesCandidateGroup's doc comment.
 // System/internal calls without an authenticated actor keep their existing
 // permissive behavior.
 func (e *CustomProcessEngine) authorizeTaskActor(ctx context.Context, task *ent.ProcessTask) error {
@@ -529,10 +532,49 @@ func (e *CustomProcessEngine) authorizeTaskActor(ctx context.Context, task *ent.
 	if err != nil {
 		return fmt.Errorf("审批用户不存在: %w", err)
 	}
-	if identity.IsTaskParticipant(task) {
+	if identity.MatchesAssigneeOrCandidateUser(task) {
 		return nil
 	}
+	if identity.MatchesCandidateGroup(task) {
+		isRequester, rErr := isProcessInstanceRequester(ctx, e.client, task.ProcessInstanceID, userID)
+		if rErr != nil {
+			return fmt.Errorf("校验申请人身份失败: %w", rErr)
+		}
+		if !isRequester {
+			return nil
+		}
+	}
 	return fmt.Errorf("当前用户不是该任务的审批人或候选人")
+}
+
+// isProcessInstanceRequester reports whether userID is the requester_id
+// recorded on the process instance owning this task (instance.Variables,
+// the same source loadApprovalRequester already reads). Used to exclude the
+// requester from candidate_groups-based action authority — unlike
+// candidate_users, candidate_groups is not pre-filtered at task-creation
+// time (see bpmn.CallerIdentity.MatchesCandidateGroup's doc comment), so
+// without this check a requester who happens to belong to the configured
+// approval group could bypass the self-approval prevention that
+// candidate_users filtering already enforces.
+func isProcessInstanceRequester(ctx context.Context, client *ent.Client, processInstanceID int, userID int) (bool, error) {
+	instance, err := client.ProcessInstance.Get(ctx, processInstanceID)
+	if err != nil {
+		return false, fmt.Errorf("查询流程实例失败: %w", err)
+	}
+	reqIDRaw, ok := instance.Variables["requester_id"]
+	if !ok {
+		return false, nil
+	}
+	var reqID int
+	switch v := reqIDRaw.(type) {
+	case float64:
+		reqID = int(v)
+	case int:
+		reqID = v
+	case string:
+		reqID, _ = strconv.Atoi(v)
+	}
+	return reqID > 0 && reqID == userID, nil
 }
 
 // mergeVariablesWithOptimisticLock 使用乐观锁合并流程实例变量，防止并发覆写
@@ -2411,7 +2453,9 @@ func (s *bpmnTaskService) AssignTask(ctx context.Context, taskID string, assigne
 // isTaskCandidate 复用共享的 bpmn.CallerIdentity 参与者判定（用户 ID/用户名/邮箱，或
 // candidate_groups 命中），用于 ClaimTask/ClaimTaskByID 校验：只有任务的
 // assignee/candidate_users/candidate_groups 命中的人才能认领未分配的任务——否则任何
-// 登录用户都能抢先认领任何审批任务（包括自己提交的工单）。
+// 登录用户都能抢先认领任何审批任务（包括自己提交的工单）。candidate_groups 命中还要
+// 额外排除申请人本人——candidate_groups 不像 candidate_users 那样在任务创建时就已经
+// 过滤过申请人，见 MatchesCandidateGroup 的注释。
 func isTaskCandidate(ctx context.Context, client *ent.Client, userID int, task *ent.ProcessTask) (bool, error) {
 	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
 	if tenantID == 0 {
@@ -2421,7 +2465,17 @@ func isTaskCandidate(ctx context.Context, client *ent.Client, userID int, task *
 	if err != nil {
 		return false, err
 	}
-	return identity.IsTaskParticipant(task), nil
+	if identity.MatchesAssigneeOrCandidateUser(task) {
+		return true, nil
+	}
+	if identity.MatchesCandidateGroup(task) {
+		isRequester, rErr := isProcessInstanceRequester(ctx, client, task.ProcessInstanceID, userID)
+		if rErr != nil {
+			return false, rErr
+		}
+		return !isRequester, nil
+	}
+	return false, nil
 }
 
 // ClaimTask 认领任务 (根据task_id字符串)
