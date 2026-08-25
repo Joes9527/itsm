@@ -536,7 +536,7 @@ func (e *CustomProcessEngine) authorizeTaskActor(ctx context.Context, task *ent.
 		return nil
 	}
 	if identity.MatchesCandidateGroup(task) {
-		isRequester, rErr := isProcessInstanceRequester(ctx, e.client, task.ProcessInstanceID, userID)
+		isRequester, rErr := isProcessInstanceRequester(ctx, e.client, task.ProcessInstanceID, tenantID, userID)
 		if rErr != nil {
 			return fmt.Errorf("校验申请人身份失败: %w", rErr)
 		}
@@ -555,9 +555,12 @@ func (e *CustomProcessEngine) authorizeTaskActor(ctx context.Context, task *ent.
 // time (see bpmn.CallerIdentity.MatchesCandidateGroup's doc comment), so
 // without this check a requester who happens to belong to the configured
 // approval group could bypass the self-approval prevention that
-// candidate_users filtering already enforces.
-func isProcessInstanceRequester(ctx context.Context, client *ent.Client, processInstanceID int, userID int) (bool, error) {
-	instance, err := client.ProcessInstance.Get(ctx, processInstanceID)
+// candidate_users filtering already enforces. Tenant-scoped per the plan's
+// Global Constraints for ProcessInstance/ProcessTask queries.
+func isProcessInstanceRequester(ctx context.Context, client *ent.Client, processInstanceID, tenantID, userID int) (bool, error) {
+	instance, err := client.ProcessInstance.Query().
+		Where(processinstance.ID(processInstanceID), processinstance.TenantID(tenantID)).
+		Only(ctx)
 	if err != nil {
 		return false, fmt.Errorf("查询流程实例失败: %w", err)
 	}
@@ -2469,7 +2472,7 @@ func isTaskCandidate(ctx context.Context, client *ent.Client, userID int, task *
 		return true, nil
 	}
 	if identity.MatchesCandidateGroup(task) {
-		isRequester, rErr := isProcessInstanceRequester(ctx, client, task.ProcessInstanceID, userID)
+		isRequester, rErr := isProcessInstanceRequester(ctx, client, task.ProcessInstanceID, tenantID, userID)
 		if rErr != nil {
 			return false, rErr
 		}
