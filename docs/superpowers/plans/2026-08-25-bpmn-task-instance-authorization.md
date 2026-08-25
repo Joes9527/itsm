@@ -1891,10 +1891,23 @@ Now add the shared `authorizeTaskMutation` helper (elevated bypass + participant
 // same way authorizeTaskActor gates claim/complete: elevated callers
 // (task:update permission) bypass the check entirely (managing a stuck task
 // is a legitimate admin action); everyone else must be the task's
-// assignee/candidate (see bpmn.CallerIdentity.IsTaskParticipant). Returns
-// the resolved actor's ID and display name for the caller to pass into the
-// corresponding BPMNAuditService.Record* call — every mutation this guards
-// must be audited, elevated bypass or not.
+// assignee/candidate. Returns the resolved actor's ID and display name for
+// the caller to pass into the corresponding BPMNAuditService.Record* call —
+// every mutation this guards must be audited, elevated bypass or not.
+//
+// IMPORTANT (ruling recorded during Task 2's fix loop, see ledger): this must
+// use the same two-tier check + requester exclusion as authorizeTaskActor/
+// isTaskCandidate, NOT the combined IsTaskParticipant. candidate_groups is a
+// LIVE re-evaluated check, not pre-filtered at task-creation time the way
+// candidate_users is (createUserTask's excludeUserFromCandidates only
+// filters candidate_users) — a requester who happens to belong to the
+// configured approval group must not be able to bypass self-approval
+// prevention by cancelling/reassigning/editing variables on their own
+// approval task via that group membership. Reassignment/cancellation of
+// one's own approval request is the same segregation-of-duties concern as
+// self-approval, so this exclusion applies here too — unlike the read-only
+// authorizeTaskViewer (Task 6), where viewing one's own request's progress
+// is not a segregation-of-duties issue and needs no exclusion.
 func (s *bpmnTaskService) authorizeTaskMutation(ctx context.Context, task *ent.ProcessTask) (actorID int, actorName string, err error) {
 	userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
 	if userID <= 0 {
@@ -1905,7 +1918,7 @@ func (s *bpmnTaskService) authorizeTaskMutation(ctx context.Context, task *ent.P
 	if tenantID == 0 {
 		tenantID = task.TenantID
 	}
-	actor, actorErr := s.client.User.Query().Where(user.ID(userID)).Only(ctx)
+	actor, actorErr := s.client.User.Query().Where(user.ID(userID), user.TenantID(tenantID)).Only(ctx)
 	if actorErr != nil {
 		return 0, "", fmt.Errorf("操作用户不存在: %w", actorErr)
 	}
@@ -1916,12 +1929,23 @@ func (s *bpmnTaskService) authorizeTaskMutation(ctx context.Context, task *ent.P
 	if identErr != nil {
 		return 0, "", fmt.Errorf("解析调用者身份失败: %w", identErr)
 	}
-	if !identity.IsTaskParticipant(task) {
-		return 0, "", fmt.Errorf("当前用户不是该任务的审批人或候选人")
+	if identity.MatchesAssigneeOrCandidateUser(task) {
+		return userID, actor.Name, nil
 	}
-	return userID, actor.Name, nil
+	if identity.MatchesCandidateGroup(task) {
+		isRequester, reqErr := isProcessInstanceRequester(ctx, s.client, task.ProcessInstanceID, userID)
+		if reqErr != nil {
+			return 0, "", fmt.Errorf("校验申请人身份失败: %w", reqErr)
+		}
+		if !isRequester {
+			return userID, actor.Name, nil
+		}
+	}
+	return 0, "", fmt.Errorf("当前用户不是该任务的审批人或候选人")
 }
 ```
+
+`MatchesAssigneeOrCandidateUser`, `MatchesCandidateGroup`, and the standalone `isProcessInstanceRequester` helper are added in Task 2's fix round (see that task's section above and the ledger) — by the time Task 8 runs, they already exist in `service/bpmn/participation.go` and `service/bpmn_process_engine.go` respectively. Do not reintroduce a call to the combined `IsTaskParticipant` here.
 
 `bpmnTaskService` does not currently have an `auditService` field (only `CustomProcessEngine` does) — add one:
 
