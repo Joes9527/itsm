@@ -1933,7 +1933,7 @@ func (s *bpmnTaskService) authorizeTaskMutation(ctx context.Context, task *ent.P
 		return userID, actor.Name, nil
 	}
 	if identity.MatchesCandidateGroup(task) {
-		isRequester, reqErr := isProcessInstanceRequester(ctx, s.client, task.ProcessInstanceID, userID)
+		isRequester, reqErr := isProcessInstanceRequester(ctx, s.client, task.ProcessInstanceID, tenantID, userID)
 		if reqErr != nil {
 			return 0, "", fmt.Errorf("校验申请人身份失败: %w", reqErr)
 		}
@@ -1945,7 +1945,7 @@ func (s *bpmnTaskService) authorizeTaskMutation(ctx context.Context, task *ent.P
 }
 ```
 
-`MatchesAssigneeOrCandidateUser`, `MatchesCandidateGroup`, and the standalone `isProcessInstanceRequester` helper are added in Task 2's fix round (see that task's section above and the ledger) — by the time Task 8 runs, they already exist in `service/bpmn/participation.go` and `service/bpmn_process_engine.go` respectively. Do not reintroduce a call to the combined `IsTaskParticipant` here.
+`MatchesAssigneeOrCandidateUser`, `MatchesCandidateGroup`, and the standalone `isProcessInstanceRequester(ctx, client, processInstanceID, tenantID, userID) (bool, error)` helper are added in Task 2's fix rounds (see that task's section above and the ledger) — by the time Task 8 runs, they already exist in `service/bpmn/participation.go` and `service/bpmn_process_engine.go` respectively (`isProcessInstanceRequester` takes `tenantID` — its own `ProcessInstance` lookup is tenant-scoped, per Task 2's second fix round). Do not reintroduce a call to the combined `IsTaskParticipant` here.
 
 `bpmnTaskService` does not currently have an `auditService` field (only `CustomProcessEngine` does) — add one:
 
