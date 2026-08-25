@@ -1112,3 +1112,77 @@ func TestHandleElement_ServiceTask_IncidentAutoAssign_NoAssignee_ContinuesFlow(t
 	assert.Zero(t, updatedIncident.AssigneeID, "空态跳过时不得写入处理人")
 	assert.Equal(t, "new", updatedIncident.Status, "空态跳过时不得改状态")
 }
+
+// ==================== StartProcess initiator population tests ====================
+
+// minimalStartToEndBPMN builds a minimal, parseable BPMN XML with just a
+// start event flowing directly to an end event, for tests that need to
+// exercise StartProcess end-to-end (parser + executor) rather than
+// constructing ProcessInstance/ProcessTask rows directly.
+func minimalStartToEndBPMN(processKey string) string {
+	return `<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="http://itsm">
+  <process id="` + processKey + `" isExecutable="true">
+    <startEvent id="StartEvent_1" name="Start">
+      <outgoing>Flow_1</outgoing>
+    </startEvent>
+    <endEvent id="EndEvent_1" name="End">
+      <incoming>Flow_1</incoming>
+    </endEvent>
+    <sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="EndEvent_1"/>
+  </process>
+</definitions>`
+}
+
+func TestStartProcess_PopulatesInitiatorFromContextUser(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
+
+	deployment, err := engine.client.ProcessDeployment.Create().
+		SetDeploymentID("DEP-initiator1").SetDeploymentName("Deployment initiator1").
+		SetDeploymentTime(time.Now()).SetDeployedBy("test").SetIsActive(true).
+		SetTenantID(tenantID).Save(context.Background())
+	require.NoError(t, err)
+	_, err = engine.client.ProcessDefinition.Create().
+		SetKey("initiator_test_flow").SetName("Initiator Test").SetVersion("1").
+		SetIsLatest(true).SetIsActive(true).
+		SetBpmnXML([]byte(minimalStartToEndBPMN("initiator_test_flow"))).
+		SetDeploymentID(deployment.ID).SetDeployedAt(time.Now()).SetTenantID(tenantID).
+		Save(context.Background())
+	require.NoError(t, err)
+
+	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, actorID)
+
+	instance, err := engine.StartProcess(ctx, "initiator_test_flow", "initiator-biz-1", map[string]interface{}{})
+	require.NoError(t, err)
+	assert.Equal(t, fmt.Sprintf("%d", actorID), instance.Initiator)
+}
+
+func TestStartProcess_FallsBackToRequesterIDVariableWhenNoContextUser(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
+
+	deployment, err := engine.client.ProcessDeployment.Create().
+		SetDeploymentID("DEP-initiator2").SetDeploymentName("Deployment initiator2").
+		SetDeploymentTime(time.Now()).SetDeployedBy("test").SetIsActive(true).
+		SetTenantID(tenantID).Save(context.Background())
+	require.NoError(t, err)
+	_, err = engine.client.ProcessDefinition.Create().
+		SetKey("initiator_test_flow2").SetName("Initiator Test 2").SetVersion("1").
+		SetIsLatest(true).SetIsActive(true).
+		SetBpmnXML([]byte(minimalStartToEndBPMN("initiator_test_flow2"))).
+		SetDeploymentID(deployment.ID).SetDeployedAt(time.Now()).SetTenantID(tenantID).
+		Save(context.Background())
+	require.NoError(t, err)
+
+	// System-triggered start: no authenticated user in ctx, only the
+	// requester_id convention variable (see ticket_service.go's trigger path).
+	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+
+	instance, err := engine.StartProcess(ctx, "initiator_test_flow2", "initiator-biz-2", map[string]interface{}{
+		"requester_id": float64(actorID),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, fmt.Sprintf("%d", actorID), instance.Initiator)
+}

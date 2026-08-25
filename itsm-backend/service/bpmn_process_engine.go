@@ -238,6 +238,25 @@ func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitio
 	startEvent := process.StartEvents[0]
 
 	// 4. 创建流程实例
+	// initiator 取自当前认证用户（controller 的 getBPMNTenantContext 注入的
+	// BPMNUserIDContextKey）；系统触发（无认证用户上下文，例如工单创建自动触发
+	// 流程）时，沿用现有的 requester_id 变量约定作为兜底。空字符串（两者都没有）
+	// 是允许的——这类实例只能靠任务参与关系被参与者看到，不会出现在任何人的
+	// "我发起的" 视图里。
+	initiator := ""
+	if callerID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int); callerID > 0 {
+		initiator = strconv.Itoa(callerID)
+	} else if reqID, ok := variables["requester_id"]; ok {
+		switch v := reqID.(type) {
+		case float64:
+			initiator = strconv.Itoa(int(v))
+		case int:
+			initiator = strconv.Itoa(v)
+		case string:
+			initiator = v
+		}
+	}
+
 	instance, err := e.client.ProcessInstance.Create().
 		SetProcessInstanceID(fmt.Sprintf("PI-%s-%d", processDefinitionKey, time.Now().UnixNano())).
 		SetBusinessKey(businessKey).
@@ -249,6 +268,7 @@ func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitio
 		SetTenantID(definition.TenantID).
 		SetCurrentActivityID(startEvent.ID).
 		SetCurrentActivityName(startEvent.Name).
+		SetInitiator(initiator).
 		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("创建流程实例失败: %w", err)
