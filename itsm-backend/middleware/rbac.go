@@ -316,9 +316,15 @@ func loadPermissionsFromDB(client *ent.Client, roleName string, tenantID int) []
 
 // RBACMiddleware is a session/tenant guard, NOT a fine-grained permission
 // check. It validates that the caller is authenticated, that the DB user
-// record exists and is active, refreshes the role from DB, resolves and
-// validates the tenant ID, and enriches the gin.Context (user_entity,
-// client, tenant_id) for downstream handlers. Actual resource:action
+// record exists and is active, resolves and validates the tenant ID, and
+// enriches the gin.Context (user_entity, client, tenant_id) for downstream
+// handlers. It does NOT refresh the authorization role from DB: the
+// userEntity it loads is used only for the Active check and is stashed in
+// "user_entity" — the "role" key used by every downstream RequirePermission /
+// RequireRole / RequireMSPPermission check is set earlier from the JWT claim
+// and is never overwritten with userEntity.Role here. So a role change in
+// the DB does not take effect for a given caller until their JWT is
+// refreshed (re-login or token renewal). Actual resource:action
 // authorization is the sole responsibility of the RequirePermission /
 // RequireRole / RequireMSPPermission call attached to each specific
 // route — a route mounted under a group this middleware guards is NOT
@@ -546,6 +552,19 @@ func RequireRole(allowedRoles ...string) gin.HandlerFunc {
 		common.Fail(c, common.ForbiddenCode, "无权限执行该操作")
 		c.Abort()
 	}
+}
+
+// RequireLegacyBPMNRoles gates the /api/v1/bpmn/* controller group (process
+// definitions/instances/tasks, monitoring, dashboard, AI generator, process
+// trigger). The 7-role list here exactly reproduces what the deleted global
+// inference layer's ResourceActionMap wildcard for /api/v1/bpmn/* used to
+// grant — it is NOT a deliberately designed permission model, just a
+// preserve-current-behavior allowlist captured during the RBAC
+// dual-declaration convergence. The real BPMN permission model (including
+// instance-level authorization) is a backlog item — see
+// docs/superpowers/specs/2026-08-24-rbac-dual-declaration-convergence-design.md.
+func RequireLegacyBPMNRoles() gin.HandlerFunc {
+	return RequireRole("super_admin", "change_manager", "dept_manager", "end_user", "it_director", "ops_director", "sysadmin")
 }
 
 // HasResourcePermission 检查角色是否有指定资源的操作权限（导出供 AI 工具 RBAC 校验复用）

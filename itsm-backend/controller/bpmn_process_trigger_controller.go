@@ -29,7 +29,7 @@ func NewBPMNProcessTriggerController(triggerService *service.ProcessTriggerServi
 
 // RegisterRoutes 注册路由
 func (c *BPMNProcessTriggerController) RegisterRoutes(r *gin.RouterGroup) {
-	bpmnRoleGate := middleware.RequireRole("super_admin", "change_manager", "dept_manager", "end_user", "it_director", "ops_director", "sysadmin")
+	bpmnRoleGate := middleware.RequireLegacyBPMNRoles()
 
 	// 流程触发 — matches the /api/v1/bpmn/* wildcard's current role set.
 	trigger := r.Group("/process-trigger")

@@ -52,7 +52,7 @@ func resolveTenantID(ctx *gin.Context) (int, bool) {
 // RegisterRoutes 注册路由
 func (c *BPMNDashboardController) RegisterRoutes(r *gin.RouterGroup) {
 	dashboard := r.Group("/bpmn/dashboard")
-	dashboard.Use(middleware.RequireRole("super_admin", "change_manager", "dept_manager", "end_user", "it_director", "ops_director", "sysadmin"))
+	dashboard.Use(middleware.RequireLegacyBPMNRoles())
 	{
 		// 仪表盘
 		dashboard.GET("/metrics", c.GetDashboardMetrics)

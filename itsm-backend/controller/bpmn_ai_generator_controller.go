@@ -108,7 +108,7 @@ func (c *BPMNAIGeneratorController) GetTemplateSuggestions(ctx *gin.Context) {
 // RegisterRoutes 注册路由
 func (c *BPMNAIGeneratorController) RegisterRoutes(r *gin.RouterGroup) {
 	bpmnAI := r.Group("/bpmn/ai")
-	bpmnAI.Use(middleware.RequireRole("super_admin", "change_manager", "dept_manager", "end_user", "it_director", "ops_director", "sysadmin"))
+	bpmnAI.Use(middleware.RequireLegacyBPMNRoles())
 	{
 		// 生成BPMN流程
 		bpmnAI.POST("/generate", c.GenerateBPMN)

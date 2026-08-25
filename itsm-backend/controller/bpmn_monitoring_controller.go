@@ -31,7 +31,7 @@ func (c *BPMNMonitoringController) SetMonitoringService(s *service.BPMNMonitorin
 // RegisterRoutes 注册路由
 func (c *BPMNMonitoringController) RegisterRoutes(r *gin.RouterGroup) {
 	monitoring := r.Group("/bpmn/monitoring")
-	monitoring.Use(middleware.RequireRole("super_admin", "change_manager", "dept_manager", "end_user", "it_director", "ops_director", "sysadmin"))
+	monitoring.Use(middleware.RequireLegacyBPMNRoles())
 	{
 		// 流程指标监控
 		monitoring.GET("/metrics", c.GetProcessMetrics)

@@ -166,6 +166,53 @@ func TestRequireRole(t *testing.T) {
 	})
 }
 
+// TestRequireLegacyBPMNRoles is the single source-of-truth coverage for the
+// shared BPMN allowlist gate. It replaces having to duplicate a 7-role
+// table-driven test in each of the 5 BPMN controllers that now call
+// middleware.RequireLegacyBPMNRoles() (bpmn_workflow_controller.go,
+// bpmn_monitoring_controller.go, bpmn_dashboard_controller.go,
+// bpmn_ai_generator_controller.go, bpmn_process_trigger_controller.go) — a
+// typo dropping one of the 7 roles from the shared helper would be caught
+// here instead of only being caught by a per-controller "one disallowed role
+// is rejected" test.
+func TestRequireLegacyBPMNRoles(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	allowedRoles := []string{
+		"super_admin", "change_manager", "dept_manager", "end_user",
+		"it_director", "ops_director", "sysadmin",
+	}
+
+	for _, role := range allowedRoles {
+		t.Run("Allows "+role, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request, _ = http.NewRequest("GET", "/api/v1/bpmn/process-instances", nil)
+			c.Set("role", role)
+
+			RequireLegacyBPMNRoles()(c)
+
+			assert.False(t, c.IsAborted())
+		})
+	}
+
+	disallowedRoles := []string{"l1_support", "dba", "guest"}
+
+	for _, role := range disallowedRoles {
+		t.Run("Rejects "+role, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request, _ = http.NewRequest("GET", "/api/v1/bpmn/process-instances", nil)
+			c.Set("role", role)
+
+			RequireLegacyBPMNRoles()(c)
+
+			assert.Equal(t, http.StatusForbidden, w.Code)
+			assert.True(t, c.IsAborted())
+		})
+	}
+}
+
 func TestHasResourcePermission(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	original := PermissionConfig.Mode
