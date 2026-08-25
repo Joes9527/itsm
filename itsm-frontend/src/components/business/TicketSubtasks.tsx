@@ -28,6 +28,7 @@ import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { UserApi } from '@/lib/api/user-api';
 import type { User } from '@/lib/api/user-api';
+import { useAuthStore } from '@/lib/store/auth-store';
 
 const { TextArea } = Input;
 
@@ -63,6 +64,7 @@ export const TicketSubtasks: React.FC<TicketSubtasksProps> = ({
   canEdit = true,
 }) => {
   const { message: antMessage } = App.useApp();
+  const hasPermission = useAuthStore(s => s.hasPermission);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingSubtask, setEditingSubtask] = useState<Subtask | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
@@ -70,8 +72,12 @@ export const TicketSubtasks: React.FC<TicketSubtasksProps> = ({
   const [users, setUsers] = useState<User[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
 
-  // 获取用户列表
+  // 获取用户列表（无 user:read 权限时跳过，避免 403）
   useEffect(() => {
+    if (!hasPermission('user:read')) {
+      setUsers([]);
+      return;
+    }
     const fetchUsers = async () => {
       setLoadingUsers(true);
       try {
@@ -84,7 +90,7 @@ export const TicketSubtasks: React.FC<TicketSubtasksProps> = ({
       }
     };
     fetchUsers();
-  }, []);
+  }, [hasPermission]);
 
   // 计算父工单进度
   const parentProgress = useMemo(() => {

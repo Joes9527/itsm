@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -27,12 +28,13 @@ type msgraphInboundTicketRequest = msgraph.InboundTicketRequest
 // client and TicketService, so connector/builtin/msgraph never needs to
 // import ent/dto/service directly.
 type ticketStoreAdapter struct {
-	client        *ent.Client
-	ticketService *service.TicketService
+	client            *ent.Client
+	ticketService     *service.TicketService
+	attachmentService *service.TicketAttachmentService
 }
 
-func newTicketStoreAdapter(client *ent.Client, ticketService *service.TicketService) *ticketStoreAdapter {
-	return &ticketStoreAdapter{client: client, ticketService: ticketService}
+func newTicketStoreAdapter(client *ent.Client, ticketService *service.TicketService, attachmentService *service.TicketAttachmentService) *ticketStoreAdapter {
+	return &ticketStoreAdapter{client: client, ticketService: ticketService, attachmentService: attachmentService}
 }
 
 func (a *ticketStoreAdapter) FindActiveUserByEmail(ctx context.Context, tenantID int, email string) (int, bool, error) {
@@ -63,6 +65,7 @@ func (a *ticketStoreAdapter) CreateTicket(ctx context.Context, tenantID int, req
 		CreatorEmail:      req.CreatorEmail,
 		Source:            req.Source,
 		ExternalMessageID: req.ExternalMessageID,
+		ConversationID:    req.ConversationID,
 	}, tenantID)
 	if err != nil {
 		return 0, "", err
@@ -121,6 +124,43 @@ func (a *ticketStoreAdapter) PostSystemComment(ctx context.Context, tenantID, ti
 	return err
 }
 
+// FindTicketByConversationID 按邮件对话线程ID查找已关联的工单。
+func (a *ticketStoreAdapter) FindTicketByConversationID(ctx context.Context, tenantID int, conversationID string) (int, bool, error) {
+	t, err := a.client.Ticket.Query().
+		Where(ticket.TenantIDEQ(tenantID), ticket.ConversationIDEQ(conversationID)).
+		First(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return 0, false, nil
+		}
+		return 0, false, fmt.Errorf("lookup ticket by conversation id: %w", err)
+	}
+	return t.ID, true, nil
+}
+
+// PostReplyComment 追加一条用户可见的邮件回复评论（IsInternal=false）。
+func (a *ticketStoreAdapter) PostReplyComment(ctx context.Context, tenantID, ticketID, authorUserID int, content string) error {
+	_, err := a.client.TicketComment.Create().
+		SetTicketID(ticketID).
+		SetUserID(authorUserID).
+		SetContent(content).
+		SetIsInternal(false).
+		SetTenantID(tenantID).
+		Save(ctx)
+	return err
+}
+
+// SaveAttachment 复用 TicketAttachmentService 保存邮件附件到工单。
+func (a *ticketStoreAdapter) SaveAttachment(ctx context.Context, tenantID, ticketID, uploaderID int, name, contentType string, data []byte) error {
+	_, err := a.attachmentService.UploadAttachment(ctx, ticketID, &service.FileHeader{
+		Filename:    name,
+		Size:        int64(len(data)),
+		ContentType: contentType,
+		Reader:      bytes.NewReader(data),
+	}, uploaderID, tenantID)
+	return err
+}
+
 // triagerAdapter implements msgraph.Triager over the real TriageService.
 type triagerAdapter struct {
 	triageService *service.TriageService
@@ -149,10 +189,11 @@ func wireEmailMsgraphConnector(
 	client *ent.Client,
 	ticketService *service.TicketService,
 	triageService *service.TriageService,
+	attachmentService *service.TicketAttachmentService,
 	connectorController *controller.ConnectorController,
 	logger *zap.SugaredLogger,
 ) {
-	store := newTicketStoreAdapter(client, ticketService)
+	store := newTicketStoreAdapter(client, ticketService, attachmentService)
 	triager := newTriagerAdapter(triageService)
 	coordinator := msgraph.NewEmailPollingCoordinator(store, triager, logger.Named("connector.msgraph.coordinator"))
 	connectorController.SetEmailCoordinator(coordinator)

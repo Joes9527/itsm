@@ -7,11 +7,6 @@ import "time"
 // ===================================
 const (
 	RoleSuperAdmin = "super_admin"
-	RoleAdmin      = "admin"
-	RoleManager    = "manager"
-	RoleAgent      = "agent"
-	RoleTechnician = "technician"
-	RoleSecurity   = "security"
 	RoleEndUser    = "end_user"
 )
 
@@ -403,7 +398,6 @@ const (
 // System Constants
 // ===================================
 const (
-	SystemUser     = "system"
-	DefaultTenant  = "default"
-	SuperAdminUser = "admin"
+	SystemUser    = "system"
+	DefaultTenant = "default"
 )

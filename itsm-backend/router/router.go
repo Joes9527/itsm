@@ -583,6 +583,8 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 			if config.TicketAttachmentController != nil {
 				tickets.GET("/:id/attachments", middleware.RequirePermission("ticket", "read"), config.TicketAttachmentController.ListTicketAttachments)
 				tickets.POST("/:id/attachments", middleware.RequirePermission("ticket", "create"), config.TicketAttachmentController.UploadAttachment)
+				tickets.GET("/:id/attachments/:attachment_id", middleware.RequirePermission("ticket", "read"), config.TicketAttachmentController.DownloadAttachment)
+				tickets.GET("/:id/attachments/:attachment_id/preview", middleware.RequirePermission("ticket", "read"), config.TicketAttachmentController.PreviewAttachment)
 				tickets.DELETE("/:id/attachments/:attachment_id", middleware.RequirePermission("ticket", "delete"), config.TicketAttachmentController.DeleteAttachment)
 			}
 
@@ -607,6 +609,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				tickets.GET("/:id/workflow/state", middleware.RequirePermission("workflow", "read"), config.TicketWorkflowController.GetTicketWorkflowState)
 				tickets.GET("/:id/workflow-history", middleware.RequirePermission("workflow", "read"), config.TicketWorkflowController.GetTicketWorkflowHistory)
 				tickets.GET("/:id/workflow_records", middleware.RequirePermission("workflow", "read"), config.TicketWorkflowController.GetTicketWorkflowHistory)
+				tickets.GET("/:id/approval-decisions", middleware.RequirePermission("workflow", "read"), config.TicketWorkflowController.GetApprovalDecisions)
 			}
 
 			// 工单自动化规则
@@ -889,6 +892,10 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				problems.PUT("/:id/root-cause", middleware.RequirePermission("problem", "write"), config.ProblemHandler.UpdateRootCause)
 				problems.PUT("/:id/solution", middleware.RequirePermission("problem", "write"), config.ProblemHandler.UpdateSolution)
 				problems.POST("/:id/close", middleware.RequirePermission("problem", "write"), config.ProblemHandler.CloseProblem)
+				// 问题 → 已知错误 (KEDB) 联动
+				if config.KnownErrorHandler != nil {
+					problems.POST("/:id/known-error", middleware.RequirePermission("problem", "write"), config.KnownErrorHandler.CreateFromProblem)
+				}
 				// 关联管理
 				problems.GET("/:id/associations", middleware.RequirePermission("problem", "read"), config.ProblemHandler.GetAssociations)
 				problems.POST("/:id/associations", middleware.RequirePermission("problem", "write"), config.ProblemHandler.AddAssociation)
@@ -943,6 +950,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				releases.GET("/:id", middleware.RequirePermission("release", "read"), config.ReleaseController.GetRelease)
 				releases.PUT("/:id", middleware.RequirePermission("release", "write"), config.ReleaseController.UpdateRelease)
 				releases.PUT("/:id/status", middleware.RequirePermission("release", "write"), config.ReleaseController.UpdateReleaseStatus)
+				releases.POST("/:id/tech-review", middleware.RequirePermission("release", "write"), config.ReleaseController.SubmitTechReview)
 				releases.POST("/:id/approve", middleware.RequirePermission("release", "approve"), config.ReleaseController.ApproveRelease)
 				releases.POST("/:id/reject", middleware.RequirePermission("release", "approve"), config.ReleaseController.RejectRelease)
 				releases.POST("/:id/rollback", middleware.RequirePermission("release", "rollback"), config.ReleaseController.RollbackRelease)
@@ -1010,6 +1018,15 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 					articles.DELETE("/:id", middleware.RequirePermission("knowledge", "delete"), config.KnowledgeHandler.DeleteArticle)
 					articles.POST("/:id/publish", middleware.RequirePermission("knowledge", "write"), config.KnowledgeHandler.PublishArticle)
 					articles.POST("/:id/unpublish", middleware.RequirePermission("knowledge", "write"), config.KnowledgeHandler.UnpublishArticle)
+
+					// Version control
+					articles.GET("/:id/versions", middleware.RequirePermission("knowledge", "read"), config.KnowledgeHandler.ListArticleVersions)
+					articles.GET("/:id/versions/compare", middleware.RequirePermission("knowledge", "read"), config.KnowledgeHandler.CompareArticleVersions)
+					articles.POST("/:id/versions/:version/restore", middleware.RequirePermission("knowledge", "write"), config.KnowledgeHandler.RestoreArticleVersion)
+
+					// Review workflow
+					articles.POST("/:id/review", middleware.RequirePermission("knowledge", "write"), config.KnowledgeHandler.SubmitArticleForReview)
+					articles.POST("/:id/review/decision", middleware.RequirePermission("knowledge", "write"), config.KnowledgeHandler.ReviewArticleDecision)
 
 					// Comments
 					articles.GET("/:id/comments", middleware.RequirePermission("knowledge", "read"), config.KnowledgeHandler.GetArticleComments)

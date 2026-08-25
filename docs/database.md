@@ -46,6 +46,7 @@ go run -tags migrate main.go
 |------|------|
 | `20260811_end_user_ticket_category_read.sql` | 为所有租户的 `end_user` 角色授予 `ticket_category:read` 权限，修复服务目录为空的问题 |
 | `20260810_service_catalog_itsm_type.sql` | `service_catalogs` 表新增 `itsm_type` 列，支持 ITSM 类型审批路由 |
+| `20260813_ticket_conversation_id.sql` | `tickets` 表新增 `conversation_id` 列 + 唯一索引，用于邮件回复线程追踪 |
 
 ## Tables
 
@@ -71,17 +72,69 @@ go run -tags migrate main.go
 | priority | int | 1=Low, 2=Medium, 3=High, 4=Critical |
 | status | int | 0=Open, 1=In Progress, 2=Resolved, 3=Closed |
 | category | varchar(50) | Category type |
+| source | varchar | 工单来源（manual / service_catalog / email） |
+| creator_email | varchar(255) | 邮件建单时的原始发件人邮箱 |
+| external_message_id | varchar(255) | 外部消息ID（邮件 internetMessageId，用于建单去重） |
+| conversation_id | varchar(255) | 邮件对话线程ID（Graph conversationId，用于回复追踪） |
 | requester_id | uuid | FK to users |
 | assignee_id | uuid | FK to users (nullable) |
 | sla_deadline | timestamp | SLA target time |
 
 ### roles
 
+角色表（RBAC 业务角色，如 sysadmin/it_director/dept_manager/l1_support/end_user 等）。
+
 | Column | Type | Description |
 |--------|------|-------------|
-| id | uuid | Primary key |
-| name | varchar(50) | Role name (admin/l1/l2/l3) |
-| permissions | jsonb | Permission list |
+| id | bigint | Primary key |
+| name | varchar | 角色显示名（中文） |
+| code | varchar | 角色 code（如 sysadmin/dept_manager/end_user） |
+| tenant_id | bigint | 租户ID |
+| created_at | timestamptz | 创建时间 |
+| updated_at | timestamptz | 更新时间 |
+
+### permissions
+
+权限定义表（resource + action，如 `user:read`）。
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | bigint | Primary key |
+| code | varchar | 权限 code（如 `user:read`） |
+| name | varchar | 权限显示名（中文） |
+| resource | varchar | 资源（如 user/ticket） |
+| action | varchar | 操作（如 read/write/delete） |
+| tenant_id | bigint | 租户ID |
+
+### role_permissions
+
+角色-权限关联表（多对多）。
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | bigint | Primary key |
+| role_id | bigint | FK → roles.id |
+| permission_id | bigint | FK → permissions.id |
+| tenant_id | bigint | 租户ID |
+
+> 权限运行时以数据库（roles + role_permissions + permissions）为唯一权威；硬编码 `RolePermissions` 仅作 super_admin 代码级放行与 end_user 防御性兜底（见 `docs/superpowers/specs/2026-08-14-permission-system-consolidation-design.md`）。
+
+### connector_configs
+
+连接器配置持久化表（ent schema 自动建表，无需 SQL migration）。provision 时落库，后端重启后 `LoadAll` 自动恢复已启用的连接器（如 `msgraph-email`）。
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | bigint | Primary key |
+| tenant_id | bigint | 租户ID |
+| name | varchar | 连接器名称（如 msgraph-email / feishu） |
+| provider | varchar | 连接器类型（如 microsoft / feishu / dingtalk） |
+| enabled | boolean | 是否启用 |
+| credentials | text | 凭据 JSON（含 Azure client_secret，**待加密**） |
+| settings | text | 设置 JSON |
+| labels | text | 标签 JSON |
+| created_at | timestamptz | 创建时间 |
+| updated_at | timestamptz | 更新时间 |
 
 ## pgvector (Vector Search)
 

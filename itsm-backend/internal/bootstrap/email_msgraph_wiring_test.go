@@ -59,7 +59,7 @@ func TestTicketStoreAdapter_FindActiveUserByEmail_CaseInsensitive(t *testing.T) 
 
 	logger := zaptest.NewLogger(t).Sugar()
 	ticketService := service.NewTicketServiceForTest(client, logger)
-	adapter := newTicketStoreAdapter(client, ticketService)
+	adapter := newTicketStoreAdapter(client, ticketService, nil)
 
 	id, found, err := adapter.FindActiveUserByEmail(context.Background(), tenant.ID, "alice@test.com")
 	require.NoError(t, err)
@@ -77,7 +77,7 @@ func TestTicketStoreAdapter_CreateTicket_AndDedup(t *testing.T) {
 
 	logger := zaptest.NewLogger(t).Sugar()
 	ticketService := service.NewTicketServiceForTest(client, logger)
-	adapter := newTicketStoreAdapter(client, ticketService)
+	adapter := newTicketStoreAdapter(client, ticketService, nil)
 	ctx := context.Background()
 
 	existsBefore, err := adapter.TicketExistsForExternalMessage(ctx, tenant.ID, "<abc@contoso.com>")
@@ -108,7 +108,7 @@ func TestTicketStoreAdapter_CreateTicket_WritesAuditLog(t *testing.T) {
 
 	logger := zaptest.NewLogger(t).Sugar()
 	ticketService := service.NewTicketServiceForTest(client, logger)
-	adapter := newTicketStoreAdapter(client, ticketService)
+	adapter := newTicketStoreAdapter(client, ticketService, nil)
 	ctx := context.Background()
 
 	countBefore, err := client.AuditLog.Query().Count(ctx)
@@ -137,7 +137,7 @@ func TestTicketStoreAdapter_PostSystemComment(t *testing.T) {
 
 	logger := zaptest.NewLogger(t).Sugar()
 	ticketService := service.NewTicketServiceForTest(client, logger)
-	adapter := newTicketStoreAdapter(client, ticketService)
+	adapter := newTicketStoreAdapter(client, ticketService, nil)
 	ctx := context.Background()
 
 	ticketID, _, err := adapter.CreateTicket(ctx, tenant.ID, msgraphInboundTicketRequestFixture(user.ID))
@@ -238,9 +238,9 @@ func TestWireEmailMsgraphConnector_RegistersCoordinator(t *testing.T) {
 	reg := connector.NewRegistry()
 	mgr := connector.NewManager(reg, logger)
 	mkt := connectorMarketplace.New()
-	connCtrl := controller.NewConnectorController(mgr, reg, mkt, logger)
+	connCtrl := controller.NewConnectorController(mgr, reg, mkt, logger, nil)
 
 	// Must not panic even though this is a from-scratch registry/controller —
 	// that's the behavior under test.
-	wireEmailMsgraphConnector(client, ticketService, triageService, connCtrl, logger)
+	wireEmailMsgraphConnector(client, ticketService, triageService, nil, connCtrl, logger)
 }

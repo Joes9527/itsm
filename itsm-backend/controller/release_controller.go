@@ -205,6 +205,47 @@ func (rc *ReleaseController) RejectRelease(c *gin.Context) {
 	rc.applyReleaseApproval(c, "reject", req.Reason)
 }
 
+// SubmitTechReview 提交技术评审意见（桥接 release_approval_flow 的 Activity_TechReview，
+// 无关联流程实例时回退为纯业务记录）
+func (rc *ReleaseController) SubmitTechReview(c *gin.Context) {
+	tenantID, err := middleware.GetTenantID(c)
+	if err != nil || tenantID == 0 {
+		common.Fail(c, common.UnauthorizedCode, "未授权访问")
+		return
+	}
+	userID, err := middleware.GetUserID(c)
+	if err != nil || userID == 0 {
+		common.Fail(c, common.UnauthorizedCode, "未授权访问")
+		return
+	}
+	releaseID, err := strconv.Atoi(c.Param("id"))
+	if err != nil || releaseID <= 0 {
+		common.Fail(c, common.BadRequestCode, "无效的发布ID")
+		return
+	}
+	var req struct {
+		Comment string `json:"comment"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.Fail(c, common.BadRequestCode, "请求参数错误: "+err.Error())
+		return
+	}
+
+	release, err := rc.releaseService.ApplyReleaseTechReview(c.Request.Context(), releaseID, tenantID, userID, req.Comment)
+	if err != nil {
+		rc.logger.Errorw("Release tech review failed", "error", err, "release_id", releaseID)
+		common.Fail(c, common.InternalErrorCode, "提交技术评审失败: "+err.Error())
+		return
+	}
+	if release == nil {
+		common.Fail(c, common.NotFoundCode, "发布不存在")
+		return
+	}
+	rc.logger.Infow("Release tech review completed",
+		"release_id", releaseID, "tenant_id", tenantID, "user_id", userID)
+	common.Success(c, release)
+}
+
 // applyReleaseApproval 校验身份后委托服务层处理发布审批（含 BPMN 桥接）
 func (rc *ReleaseController) applyReleaseApproval(c *gin.Context, action, comment string) {
 	tenantID, err := middleware.GetTenantID(c)

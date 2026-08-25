@@ -348,6 +348,38 @@ func TestDeptManagerResolver_Resolve_NoManagerNoParent(t *testing.T) {
 	assert.Contains(t, err.Error(), "no manager found")
 }
 
+func TestDeptManagerResolver_Resolve_CycleDetected(t *testing.T) {
+	fx := newApproverFixture(t)
+	defer fx.client.Close()
+
+	deptA, err := fx.client.Department.Create().
+		SetName("Dept A").
+		SetCode("dept-a-cycle").
+		SetTenantID(fx.tenant.ID).
+		Save(fx.ctx)
+	require.NoError(t, err)
+
+	deptB, err := fx.client.Department.Create().
+		SetName("Dept B").
+		SetCode("dept-b-cycle").
+		SetTenantID(fx.tenant.ID).
+		SetParentID(deptA.ID).
+		Save(fx.ctx)
+	require.NoError(t, err)
+
+	// 手工造一个环：A 的 parent 指向 B，B 的 parent 指向 A，两者都没有 manager。
+	_, err = fx.client.Department.UpdateOneID(deptA.ID).SetParentID(deptB.ID).Save(fx.ctx)
+	require.NoError(t, err)
+
+	resolver := NewDeptManagerResolver()
+	_, err = resolver.Resolve(fx.ctx, fx.client, &ApproverContext{
+		TenantID:     fx.tenant.ID,
+		DepartmentID: deptA.ID,
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cycle detected")
+}
+
 // =====================================================================
 // ProjectMgrResolver
 // =====================================================================

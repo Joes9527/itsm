@@ -246,7 +246,7 @@ func TestClient_SendMail(t *testing.T) {
 	assert.Equal(t, "alice@contoso.com", addr)
 
 	// Regression: mail sent through this connector must be marked
-	// Auto-Submitted so receiving systems (and any out-of-office
+	// X-Auto-Submitted so receiving systems (and any out-of-office
 	// auto-responders) don't bounce a reply back into the shared mailbox,
 	// which would otherwise create a mail loop.
 	headers, ok := message["internetMessageHeaders"].([]interface{})
@@ -254,10 +254,77 @@ func TestClient_SendMail(t *testing.T) {
 	var found bool
 	for _, h := range headers {
 		hm := h.(map[string]interface{})
-		if hm["name"] == "Auto-Submitted" {
+		if hm["name"] == "X-Auto-Submitted" {
 			found = true
 			assert.Equal(t, "auto-replied", hm["value"])
 		}
 	}
-	assert.True(t, found, "internetMessageHeaders must include an Auto-Submitted header")
+	assert.True(t, found, "internetMessageHeaders must include an X-Auto-Submitted header")
+}
+
+func TestClient_ReplyMessage(t *testing.T) {
+	aad := httptest.NewServer(tokenHandler())
+	defer aad.Close()
+
+	var capturedPath string
+	var captured map[string]interface{}
+	graph := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&captured))
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer graph.Close()
+
+	c := NewClient("test-tenant", "id", "secret", aad.URL, graph.URL)
+	err := c.ReplyMessage(context.Background(), "support@contoso.com", "msg-123", "Re: Help", "body")
+	require.NoError(t, err)
+
+	assert.Contains(t, capturedPath, "/messages/msg-123/reply")
+	message := captured["message"].(map[string]interface{})
+	assert.Equal(t, "Re: Help", message["subject"])
+}
+
+func TestClient_ListAttachments_DecodesContentBytesAndFlagsLarge(t *testing.T) {
+	aad := httptest.NewServer(tokenHandler())
+	defer aad.Close()
+
+	graph := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/users/support@contoso.com/messages/msg-1/attachments", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		// "hello" base64 = aGVsbG8=
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"value": []map[string]interface{}{
+				{"id": "att-1", "name": "small.txt", "contentType": "text/plain", "size": 5, "isInline": false, "contentBytes": "aGVsbG8="},
+				{"id": "att-2", "name": "big.pdf", "contentType": "application/pdf", "size": 5000000, "isInline": false},
+			},
+		})
+	}))
+	defer graph.Close()
+
+	c := NewClient("test-tenant", "id", "secret", aad.URL, graph.URL)
+	atts, err := c.ListAttachments(context.Background(), "support@contoso.com", "msg-1")
+	require.NoError(t, err)
+	require.Len(t, atts, 2)
+
+	assert.Equal(t, "small.txt", atts[0].Name)
+	assert.Equal(t, "hello", string(atts[0].Data), "contentBytes must be base64-decoded")
+
+	assert.Equal(t, "big.pdf", atts[1].Name)
+	assert.Nil(t, atts[1].Data, "large attachment must have nil Data (needs $value download)")
+}
+
+func TestClient_DownloadAttachment_FetchesRawBytes(t *testing.T) {
+	aad := httptest.NewServer(tokenHandler())
+	defer aad.Close()
+
+	graph := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/users/support@contoso.com/messages/msg-1/attachments/att-2/$value", r.URL.Path)
+		_, _ = w.Write([]byte("raw-binary-content"))
+	}))
+	defer graph.Close()
+
+	c := NewClient("test-tenant", "id", "secret", aad.URL, graph.URL)
+	data, err := c.DownloadAttachment(context.Background(), "support@contoso.com", "msg-1", "att-2")
+	require.NoError(t, err)
+	assert.Equal(t, "raw-binary-content", string(data))
 }

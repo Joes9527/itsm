@@ -26,7 +26,7 @@ func NewService(repo Repository, client *ent.Client, logger *zap.SugaredLogger) 
 	}
 }
 
-func (s *Service) Create(ctx context.Context, name, category, description string, deliveryTime, tenantID int, status string, ciTypeID, cloudServiceID int, fields []service.FieldDefinitionInput) (*ServiceCatalog, error) {
+func (s *Service) Create(ctx context.Context, name, category, description string, deliveryTime, tenantID int, status string, ciTypeID, cloudServiceID int, fields []service.FieldDefinitionInput, processDefinitionKey string) (*ServiceCatalog, error) {
 	name = strings.TrimSpace(name)
 	category = strings.TrimSpace(category)
 	if name == "" || category == "" {
@@ -58,14 +58,15 @@ func (s *Service) Create(ctx context.Context, name, category, description string
 		return nil, common.NewBadRequestError(err.Error(), err)
 	}
 	catalog := &ServiceCatalog{
-		Name:           name,
-		Category:       category,
-		Description:    description,
-		DeliveryTime:   deliveryTime,
-		CITypeID:       ciTypeID,
-		CloudServiceID: cloudServiceID,
-		Status:         status,
-		TenantID:       tenantID,
+		Name:                 name,
+		Category:             category,
+		Description:          description,
+		DeliveryTime:         deliveryTime,
+		CITypeID:             ciTypeID,
+		CloudServiceID:       cloudServiceID,
+		ProcessDefinitionKey: strings.TrimSpace(processDefinitionKey),
+		Status:               status,
+		TenantID:             tenantID,
 	}
 	created, err := s.repo.Create(ctx, catalog)
 	if err != nil {
@@ -139,7 +140,7 @@ func toFieldDefinitionInputsFromEnt(defs []*ent.FieldDefinition) []service.Field
 	return result
 }
 
-func (s *Service) Update(ctx context.Context, tenantID int, id int, name, category, description string, deliveryTime int, status string, ciTypeID, cloudServiceID int, fields []service.FieldDefinitionInput) (*ServiceCatalog, error) {
+func (s *Service) Update(ctx context.Context, tenantID int, id int, name, category, description string, deliveryTime int, status string, ciTypeID, cloudServiceID int, fields []service.FieldDefinitionInput, processDefinitionKey string) (*ServiceCatalog, error) {
 	// First check if exists
 	current, err := s.repo.Get(ctx, tenantID, id)
 	if err != nil {
@@ -201,6 +202,9 @@ func (s *Service) Update(ctx context.Context, tenantID int, id int, name, catego
 	}
 	if cloudServiceID > 0 {
 		current.CloudServiceID = cloudServiceID
+	}
+	if key := strings.TrimSpace(processDefinitionKey); key != "" {
+		current.ProcessDefinitionKey = key
 	}
 
 	updated, err := s.repo.Update(ctx, tenantID, current)

@@ -35,23 +35,29 @@ All configuration is done via environment variables. See `.env.prod.example` for
 
 ### Object Storage (MinIO)
 
+附件存储后端（邮件附件等）。
+
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
 | `MINIO_ENDPOINT` | MinIO server endpoint | No | minio:9000 |
-| `MINIO_ACCESS_KEY` | MinIO access key | Yes | - |
-| `MINIO_SECRET_KEY` | MinIO secret key | Yes | - |
+| `MINIO_ROOT_USER` | MinIO root user (access key) | Yes | minioadmin |
+| `MINIO_ROOT_PASSWORD` | MinIO root password (secret key) | Yes | minioadmin123 |
 | `MINIO_BUCKET` | MinIO bucket name | No | itsm-uploads |
-| `MINIO_USE_SSL` | Use HTTPS for MinIO | No | false |
 
-### Email (SMTP)
+### Email Notification
+
+邮件通知（工单通知、SLA 告警、密码重置）优先通过 **Microsoft Graph sendMail** 发送（复用 `msgraph-email` 连接器，适用于 Exchange Online），SMTP 仅作为 fallback（Exchange Online 已禁用 SMTP Basic Auth）。
+
+`msgraph-email` 连接器配置已持久化到数据库（`connector_configs` 表），后端重启后自动恢复，无需手动重新 provision。连接器配置通过 `POST /api/v1/connectors/configs` 提交（含 `azure_tenant_id`、`azure_client_id`、`azure_client_secret`、`mailbox` 等）。
 
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
-| `SMTP_HOST` | SMTP server host | No | - |
-| `SMTP_PORT` | SMTP port | No | 587 |
-| `SMTP_USERNAME` | SMTP username | No | - |
-| `SMTP_PASSWORD` | SMTP password | No | - |
-| `SMTP_FROM` | From email address | No | noreply@itsm.local |
+| `SMTP_HOST` | SMTP server host（fallback） | No | - |
+| `SMTP_PORT` | SMTP port（fallback） | No | 587 |
+| `SMTP_USERNAME` | SMTP username（fallback） | No | - |
+| `SMTP_PASSWORD` | SMTP password（fallback） | No | - |
+| `SMTP_FROM` | From email address（fallback） | No | noreply@itsm.local |
+| `FRONTEND_URL` | 前端地址（密码重置链接等） | No | http://localhost:3000 |
 
 ### Notifications
 
@@ -113,3 +119,13 @@ services:
 | `ENABLE_AI_TRIAGE` | AI-powered ticket triage |
 | `ENABLE_AI_SUMMARY` | AI-generated ticket summaries |
 | `ENABLE_RAG` | RAG-based knowledge base search |
+
+## 权限模型（RBAC）
+
+权限运行时以**数据库**（`roles` + `role_permissions` + `permissions` 表）为唯一权威，统一使用 `DBOnly` 模式（开发/生产一致），权限由 seeder 初始化。
+
+- `super_admin`（平台超管）：代码级放行，跨租户运维，不查数据库。
+- `sysadmin`（租户系统管理员）：数据库角色，拥有租户内所有权限。
+- 其他业务角色（`it_director`/`dept_manager`/`l1_support`/`end_user` 等）：权限由数据库角色-权限关联决定。
+
+硬编码 `RolePermissions`（`middleware/rbac.go`）已收敛为最小兜底集（super_admin + end_user + msp_*），仅在数据库未初始化时防御性兜底。详见 `docs/superpowers/specs/2026-08-14-permission-system-consolidation-design.md`。

@@ -33,6 +33,7 @@ import (
 	"itsm-backend/ent/cmdbsavedview"
 	"itsm-backend/ent/configurationitem"
 	"itsm-backend/ent/configurationitemhistory"
+	"itsm-backend/ent/connectorconfig"
 	"itsm-backend/ent/contract"
 	"itsm-backend/ent/conversation"
 	"itsm-backend/ent/department"
@@ -181,6 +182,8 @@ type Client struct {
 	ConfigurationItem *ConfigurationItemClient
 	// ConfigurationItemHistory is the client for interacting with the ConfigurationItemHistory builders.
 	ConfigurationItemHistory *ConfigurationItemHistoryClient
+	// ConnectorConfig is the client for interacting with the ConnectorConfig builders.
+	ConnectorConfig *ConnectorConfigClient
 	// Contract is the client for interacting with the Contract builders.
 	Contract *ContractClient
 	// Conversation is the client for interacting with the Conversation builders.
@@ -398,6 +401,7 @@ func (c *Client) init() {
 	c.CloudService = NewCloudServiceClient(c.config)
 	c.ConfigurationItem = NewConfigurationItemClient(c.config)
 	c.ConfigurationItemHistory = NewConfigurationItemHistoryClient(c.config)
+	c.ConnectorConfig = NewConnectorConfigClient(c.config)
 	c.Contract = NewContractClient(c.config)
 	c.Conversation = NewConversationClient(c.config)
 	c.Department = NewDepartmentClient(c.config)
@@ -604,6 +608,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		CloudService:                NewCloudServiceClient(cfg),
 		ConfigurationItem:           NewConfigurationItemClient(cfg),
 		ConfigurationItemHistory:    NewConfigurationItemHistoryClient(cfg),
+		ConnectorConfig:             NewConnectorConfigClient(cfg),
 		Contract:                    NewContractClient(cfg),
 		Conversation:                NewConversationClient(cfg),
 		Department:                  NewDepartmentClient(cfg),
@@ -737,6 +742,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		CloudService:                NewCloudServiceClient(cfg),
 		ConfigurationItem:           NewConfigurationItemClient(cfg),
 		ConfigurationItemHistory:    NewConfigurationItemHistoryClient(cfg),
+		ConnectorConfig:             NewConnectorConfigClient(cfg),
 		Contract:                    NewContractClient(cfg),
 		Conversation:                NewConversationClient(cfg),
 		Department:                  NewDepartmentClient(cfg),
@@ -862,13 +868,13 @@ func (c *Client) Use(hooks ...Hook) {
 		c.BPMNPermission, c.BootstrapToken, c.CABMember, c.CIAttributeDefinition,
 		c.CIRelationship, c.CITag, c.CIType, c.CMDBExportTask, c.CMDBImportTask,
 		c.CMDBSavedView, c.Change, c.ChangePIR, c.CloudAccount, c.CloudResource,
-		c.CloudService, c.ConfigurationItem, c.ConfigurationItemHistory, c.Contract,
-		c.Conversation, c.Department, c.DiscoveryJob, c.DiscoveryResult,
-		c.DiscoverySource, c.DomainConfig, c.EndpointACL, c.EngineerSkill,
-		c.FeishuTicketSync, c.FieldDefinition, c.FieldValue, c.Group, c.Incident,
-		c.IncidentAlert, c.IncidentEscalationRule, c.IncidentEvent, c.IncidentMetric,
-		c.IncidentRule, c.IncidentRuleExecution, c.ItemVersion, c.KnowledgeArticle,
-		c.KnowledgeArticleLike, c.KnowledgeArticleParticipant,
+		c.CloudService, c.ConfigurationItem, c.ConfigurationItemHistory,
+		c.ConnectorConfig, c.Contract, c.Conversation, c.Department, c.DiscoveryJob,
+		c.DiscoveryResult, c.DiscoverySource, c.DomainConfig, c.EndpointACL,
+		c.EngineerSkill, c.FeishuTicketSync, c.FieldDefinition, c.FieldValue, c.Group,
+		c.Incident, c.IncidentAlert, c.IncidentEscalationRule, c.IncidentEvent,
+		c.IncidentMetric, c.IncidentRule, c.IncidentRuleExecution, c.ItemVersion,
+		c.KnowledgeArticle, c.KnowledgeArticleLike, c.KnowledgeArticleParticipant,
 		c.KnowledgeArticleSession, c.KnowledgeArticleVersion, c.KnownError,
 		c.MSPAllocation, c.MarketplaceItem, c.Menu, c.Message, c.Microservice,
 		c.Notification, c.NotificationPreference, c.PasswordResetToken, c.Permission,
@@ -898,13 +904,13 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.BPMNPermission, c.BootstrapToken, c.CABMember, c.CIAttributeDefinition,
 		c.CIRelationship, c.CITag, c.CIType, c.CMDBExportTask, c.CMDBImportTask,
 		c.CMDBSavedView, c.Change, c.ChangePIR, c.CloudAccount, c.CloudResource,
-		c.CloudService, c.ConfigurationItem, c.ConfigurationItemHistory, c.Contract,
-		c.Conversation, c.Department, c.DiscoveryJob, c.DiscoveryResult,
-		c.DiscoverySource, c.DomainConfig, c.EndpointACL, c.EngineerSkill,
-		c.FeishuTicketSync, c.FieldDefinition, c.FieldValue, c.Group, c.Incident,
-		c.IncidentAlert, c.IncidentEscalationRule, c.IncidentEvent, c.IncidentMetric,
-		c.IncidentRule, c.IncidentRuleExecution, c.ItemVersion, c.KnowledgeArticle,
-		c.KnowledgeArticleLike, c.KnowledgeArticleParticipant,
+		c.CloudService, c.ConfigurationItem, c.ConfigurationItemHistory,
+		c.ConnectorConfig, c.Contract, c.Conversation, c.Department, c.DiscoveryJob,
+		c.DiscoveryResult, c.DiscoverySource, c.DomainConfig, c.EndpointACL,
+		c.EngineerSkill, c.FeishuTicketSync, c.FieldDefinition, c.FieldValue, c.Group,
+		c.Incident, c.IncidentAlert, c.IncidentEscalationRule, c.IncidentEvent,
+		c.IncidentMetric, c.IncidentRule, c.IncidentRuleExecution, c.ItemVersion,
+		c.KnowledgeArticle, c.KnowledgeArticleLike, c.KnowledgeArticleParticipant,
 		c.KnowledgeArticleSession, c.KnowledgeArticleVersion, c.KnownError,
 		c.MSPAllocation, c.MarketplaceItem, c.Menu, c.Message, c.Microservice,
 		c.Notification, c.NotificationPreference, c.PasswordResetToken, c.Permission,
@@ -973,6 +979,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.ConfigurationItem.mutate(ctx, m)
 	case *ConfigurationItemHistoryMutation:
 		return c.ConfigurationItemHistory.mutate(ctx, m)
+	case *ConnectorConfigMutation:
+		return c.ConnectorConfig.mutate(ctx, m)
 	case *ContractMutation:
 		return c.Contract.mutate(ctx, m)
 	case *ConversationMutation:
@@ -4613,6 +4621,139 @@ func (c *ConfigurationItemHistoryClient) mutate(ctx context.Context, m *Configur
 		return (&ConfigurationItemHistoryDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown ConfigurationItemHistory mutation op: %q", m.Op())
+	}
+}
+
+// ConnectorConfigClient is a client for the ConnectorConfig schema.
+type ConnectorConfigClient struct {
+	config
+}
+
+// NewConnectorConfigClient returns a client for the ConnectorConfig from the given config.
+func NewConnectorConfigClient(c config) *ConnectorConfigClient {
+	return &ConnectorConfigClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `connectorconfig.Hooks(f(g(h())))`.
+func (c *ConnectorConfigClient) Use(hooks ...Hook) {
+	c.hooks.ConnectorConfig = append(c.hooks.ConnectorConfig, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `connectorconfig.Intercept(f(g(h())))`.
+func (c *ConnectorConfigClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ConnectorConfig = append(c.inters.ConnectorConfig, interceptors...)
+}
+
+// Create returns a builder for creating a ConnectorConfig entity.
+func (c *ConnectorConfigClient) Create() *ConnectorConfigCreate {
+	mutation := newConnectorConfigMutation(c.config, OpCreate)
+	return &ConnectorConfigCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ConnectorConfig entities.
+func (c *ConnectorConfigClient) CreateBulk(builders ...*ConnectorConfigCreate) *ConnectorConfigCreateBulk {
+	return &ConnectorConfigCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ConnectorConfigClient) MapCreateBulk(slice any, setFunc func(*ConnectorConfigCreate, int)) *ConnectorConfigCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ConnectorConfigCreateBulk{err: fmt.Errorf("calling to ConnectorConfigClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ConnectorConfigCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ConnectorConfigCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ConnectorConfig.
+func (c *ConnectorConfigClient) Update() *ConnectorConfigUpdate {
+	mutation := newConnectorConfigMutation(c.config, OpUpdate)
+	return &ConnectorConfigUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ConnectorConfigClient) UpdateOne(_m *ConnectorConfig) *ConnectorConfigUpdateOne {
+	mutation := newConnectorConfigMutation(c.config, OpUpdateOne, withConnectorConfig(_m))
+	return &ConnectorConfigUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ConnectorConfigClient) UpdateOneID(id int) *ConnectorConfigUpdateOne {
+	mutation := newConnectorConfigMutation(c.config, OpUpdateOne, withConnectorConfigID(id))
+	return &ConnectorConfigUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ConnectorConfig.
+func (c *ConnectorConfigClient) Delete() *ConnectorConfigDelete {
+	mutation := newConnectorConfigMutation(c.config, OpDelete)
+	return &ConnectorConfigDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ConnectorConfigClient) DeleteOne(_m *ConnectorConfig) *ConnectorConfigDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ConnectorConfigClient) DeleteOneID(id int) *ConnectorConfigDeleteOne {
+	builder := c.Delete().Where(connectorconfig.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ConnectorConfigDeleteOne{builder}
+}
+
+// Query returns a query builder for ConnectorConfig.
+func (c *ConnectorConfigClient) Query() *ConnectorConfigQuery {
+	return &ConnectorConfigQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeConnectorConfig},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ConnectorConfig entity by its id.
+func (c *ConnectorConfigClient) Get(ctx context.Context, id int) (*ConnectorConfig, error) {
+	return c.Query().Where(connectorconfig.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ConnectorConfigClient) GetX(ctx context.Context, id int) *ConnectorConfig {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *ConnectorConfigClient) Hooks() []Hook {
+	return c.hooks.ConnectorConfig
+}
+
+// Interceptors returns the client interceptors.
+func (c *ConnectorConfigClient) Interceptors() []Interceptor {
+	return c.inters.ConnectorConfig
+}
+
+func (c *ConnectorConfigClient) mutate(ctx context.Context, m *ConnectorConfigMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ConnectorConfigCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ConnectorConfigUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ConnectorConfigUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ConnectorConfigDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ConnectorConfig mutation op: %q", m.Op())
 	}
 }
 
@@ -19467,51 +19608,53 @@ type (
 		BootstrapToken, CABMember, CIAttributeDefinition, CIRelationship, CITag,
 		CIType, CMDBExportTask, CMDBImportTask, CMDBSavedView, Change, ChangePIR,
 		CloudAccount, CloudResource, CloudService, ConfigurationItem,
-		ConfigurationItemHistory, Contract, Conversation, Department, DiscoveryJob,
-		DiscoveryResult, DiscoverySource, DomainConfig, EndpointACL, EngineerSkill,
-		FeishuTicketSync, FieldDefinition, FieldValue, Group, Incident, IncidentAlert,
-		IncidentEscalationRule, IncidentEvent, IncidentMetric, IncidentRule,
-		IncidentRuleExecution, ItemVersion, KnowledgeArticle, KnowledgeArticleLike,
-		KnowledgeArticleParticipant, KnowledgeArticleSession, KnowledgeArticleVersion,
-		KnownError, MSPAllocation, MarketplaceItem, Menu, Message, Microservice,
-		Notification, NotificationPreference, PasswordResetToken, Permission,
-		PermissionDefinition, Problem, ProcessApprovalDecision, ProcessAuditLog,
-		ProcessBinding, ProcessDefinition, ProcessDeployment, ProcessExecutionHistory,
-		ProcessInstance, ProcessTask, ProcessVariable, ProcessVersionChangelog,
-		Project, PromptTemplate, ProvisioningTask, RelationshipType, Release, Role,
-		RolePermission, RootCauseAnalysis, SLAAlertHistory, SLAAlertRule,
-		SLADefinition, SLAMetric, SLAViolation, ServiceCatalog, ServiceRequest,
-		StandardChange, Survey, SurveyResponse, SystemConfig, Tag, Team, Tenant,
-		TenantInstallation, Ticket, TicketApproval, TicketAssignmentRule,
-		TicketAttachment, TicketAutomationRule, TicketCC, TicketCategory,
-		TicketComment, TicketNotification, TicketTag, TicketTemplate, TicketType,
-		TicketView, TicketWorkflowRecord, ToolInvocation, User, Vendor, Workflow,
-		WorkflowInstance, WorkflowTask, WorkflowVersion []ent.Hook
+		ConfigurationItemHistory, ConnectorConfig, Contract, Conversation, Department,
+		DiscoveryJob, DiscoveryResult, DiscoverySource, DomainConfig, EndpointACL,
+		EngineerSkill, FeishuTicketSync, FieldDefinition, FieldValue, Group, Incident,
+		IncidentAlert, IncidentEscalationRule, IncidentEvent, IncidentMetric,
+		IncidentRule, IncidentRuleExecution, ItemVersion, KnowledgeArticle,
+		KnowledgeArticleLike, KnowledgeArticleParticipant, KnowledgeArticleSession,
+		KnowledgeArticleVersion, KnownError, MSPAllocation, MarketplaceItem, Menu,
+		Message, Microservice, Notification, NotificationPreference,
+		PasswordResetToken, Permission, PermissionDefinition, Problem,
+		ProcessApprovalDecision, ProcessAuditLog, ProcessBinding, ProcessDefinition,
+		ProcessDeployment, ProcessExecutionHistory, ProcessInstance, ProcessTask,
+		ProcessVariable, ProcessVersionChangelog, Project, PromptTemplate,
+		ProvisioningTask, RelationshipType, Release, Role, RolePermission,
+		RootCauseAnalysis, SLAAlertHistory, SLAAlertRule, SLADefinition, SLAMetric,
+		SLAViolation, ServiceCatalog, ServiceRequest, StandardChange, Survey,
+		SurveyResponse, SystemConfig, Tag, Team, Tenant, TenantInstallation, Ticket,
+		TicketApproval, TicketAssignmentRule, TicketAttachment, TicketAutomationRule,
+		TicketCC, TicketCategory, TicketComment, TicketNotification, TicketTag,
+		TicketTemplate, TicketType, TicketView, TicketWorkflowRecord, ToolInvocation,
+		User, Vendor, Workflow, WorkflowInstance, WorkflowTask,
+		WorkflowVersion []ent.Hook
 	}
 	inters struct {
 		Application, ApprovalChain, Asset, AssetLicense, AuditLog, BPMNPermission,
 		BootstrapToken, CABMember, CIAttributeDefinition, CIRelationship, CITag,
 		CIType, CMDBExportTask, CMDBImportTask, CMDBSavedView, Change, ChangePIR,
 		CloudAccount, CloudResource, CloudService, ConfigurationItem,
-		ConfigurationItemHistory, Contract, Conversation, Department, DiscoveryJob,
-		DiscoveryResult, DiscoverySource, DomainConfig, EndpointACL, EngineerSkill,
-		FeishuTicketSync, FieldDefinition, FieldValue, Group, Incident, IncidentAlert,
-		IncidentEscalationRule, IncidentEvent, IncidentMetric, IncidentRule,
-		IncidentRuleExecution, ItemVersion, KnowledgeArticle, KnowledgeArticleLike,
-		KnowledgeArticleParticipant, KnowledgeArticleSession, KnowledgeArticleVersion,
-		KnownError, MSPAllocation, MarketplaceItem, Menu, Message, Microservice,
-		Notification, NotificationPreference, PasswordResetToken, Permission,
-		PermissionDefinition, Problem, ProcessApprovalDecision, ProcessAuditLog,
-		ProcessBinding, ProcessDefinition, ProcessDeployment, ProcessExecutionHistory,
-		ProcessInstance, ProcessTask, ProcessVariable, ProcessVersionChangelog,
-		Project, PromptTemplate, ProvisioningTask, RelationshipType, Release, Role,
-		RolePermission, RootCauseAnalysis, SLAAlertHistory, SLAAlertRule,
-		SLADefinition, SLAMetric, SLAViolation, ServiceCatalog, ServiceRequest,
-		StandardChange, Survey, SurveyResponse, SystemConfig, Tag, Team, Tenant,
-		TenantInstallation, Ticket, TicketApproval, TicketAssignmentRule,
-		TicketAttachment, TicketAutomationRule, TicketCC, TicketCategory,
-		TicketComment, TicketNotification, TicketTag, TicketTemplate, TicketType,
-		TicketView, TicketWorkflowRecord, ToolInvocation, User, Vendor, Workflow,
-		WorkflowInstance, WorkflowTask, WorkflowVersion []ent.Interceptor
+		ConfigurationItemHistory, ConnectorConfig, Contract, Conversation, Department,
+		DiscoveryJob, DiscoveryResult, DiscoverySource, DomainConfig, EndpointACL,
+		EngineerSkill, FeishuTicketSync, FieldDefinition, FieldValue, Group, Incident,
+		IncidentAlert, IncidentEscalationRule, IncidentEvent, IncidentMetric,
+		IncidentRule, IncidentRuleExecution, ItemVersion, KnowledgeArticle,
+		KnowledgeArticleLike, KnowledgeArticleParticipant, KnowledgeArticleSession,
+		KnowledgeArticleVersion, KnownError, MSPAllocation, MarketplaceItem, Menu,
+		Message, Microservice, Notification, NotificationPreference,
+		PasswordResetToken, Permission, PermissionDefinition, Problem,
+		ProcessApprovalDecision, ProcessAuditLog, ProcessBinding, ProcessDefinition,
+		ProcessDeployment, ProcessExecutionHistory, ProcessInstance, ProcessTask,
+		ProcessVariable, ProcessVersionChangelog, Project, PromptTemplate,
+		ProvisioningTask, RelationshipType, Release, Role, RolePermission,
+		RootCauseAnalysis, SLAAlertHistory, SLAAlertRule, SLADefinition, SLAMetric,
+		SLAViolation, ServiceCatalog, ServiceRequest, StandardChange, Survey,
+		SurveyResponse, SystemConfig, Tag, Team, Tenant, TenantInstallation, Ticket,
+		TicketApproval, TicketAssignmentRule, TicketAttachment, TicketAutomationRule,
+		TicketCC, TicketCategory, TicketComment, TicketNotification, TicketTag,
+		TicketTemplate, TicketType, TicketView, TicketWorkflowRecord, ToolInvocation,
+		User, Vendor, Workflow, WorkflowInstance, WorkflowTask,
+		WorkflowVersion []ent.Interceptor
 	}
 )

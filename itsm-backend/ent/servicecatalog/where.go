@@ -109,6 +109,11 @@ func ApprovalLevel(v int) predicate.ServiceCatalog {
 	return predicate.ServiceCatalog(sql.FieldEQ(FieldApprovalLevel, v))
 }
 
+// ProcessDefinitionKey applies equality check predicate on the "process_definition_key" field. It's identical to ProcessDefinitionKeyEQ.
+func ProcessDefinitionKey(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldEQ(FieldProcessDefinitionKey, v))
+}
+
 // SLAResponseTime applies equality check predicate on the "sla_response_time" field. It's identical to SLAResponseTimeEQ.
 func SLAResponseTime(v int) predicate.ServiceCatalog {
 	return predicate.ServiceCatalog(sql.FieldEQ(FieldSLAResponseTime, v))
@@ -812,6 +817,81 @@ func ApproversIsNil() predicate.ServiceCatalog {
 // ApproversNotNil applies the NotNil predicate on the "approvers" field.
 func ApproversNotNil() predicate.ServiceCatalog {
 	return predicate.ServiceCatalog(sql.FieldNotNull(FieldApprovers))
+}
+
+// ProcessDefinitionKeyEQ applies the EQ predicate on the "process_definition_key" field.
+func ProcessDefinitionKeyEQ(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldEQ(FieldProcessDefinitionKey, v))
+}
+
+// ProcessDefinitionKeyNEQ applies the NEQ predicate on the "process_definition_key" field.
+func ProcessDefinitionKeyNEQ(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldNEQ(FieldProcessDefinitionKey, v))
+}
+
+// ProcessDefinitionKeyIn applies the In predicate on the "process_definition_key" field.
+func ProcessDefinitionKeyIn(vs ...string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldIn(FieldProcessDefinitionKey, vs...))
+}
+
+// ProcessDefinitionKeyNotIn applies the NotIn predicate on the "process_definition_key" field.
+func ProcessDefinitionKeyNotIn(vs ...string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldNotIn(FieldProcessDefinitionKey, vs...))
+}
+
+// ProcessDefinitionKeyGT applies the GT predicate on the "process_definition_key" field.
+func ProcessDefinitionKeyGT(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldGT(FieldProcessDefinitionKey, v))
+}
+
+// ProcessDefinitionKeyGTE applies the GTE predicate on the "process_definition_key" field.
+func ProcessDefinitionKeyGTE(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldGTE(FieldProcessDefinitionKey, v))
+}
+
+// ProcessDefinitionKeyLT applies the LT predicate on the "process_definition_key" field.
+func ProcessDefinitionKeyLT(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldLT(FieldProcessDefinitionKey, v))
+}
+
+// ProcessDefinitionKeyLTE applies the LTE predicate on the "process_definition_key" field.
+func ProcessDefinitionKeyLTE(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldLTE(FieldProcessDefinitionKey, v))
+}
+
+// ProcessDefinitionKeyContains applies the Contains predicate on the "process_definition_key" field.
+func ProcessDefinitionKeyContains(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldContains(FieldProcessDefinitionKey, v))
+}
+
+// ProcessDefinitionKeyHasPrefix applies the HasPrefix predicate on the "process_definition_key" field.
+func ProcessDefinitionKeyHasPrefix(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldHasPrefix(FieldProcessDefinitionKey, v))
+}
+
+// ProcessDefinitionKeyHasSuffix applies the HasSuffix predicate on the "process_definition_key" field.
+func ProcessDefinitionKeyHasSuffix(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldHasSuffix(FieldProcessDefinitionKey, v))
+}
+
+// ProcessDefinitionKeyIsNil applies the IsNil predicate on the "process_definition_key" field.
+func ProcessDefinitionKeyIsNil() predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldIsNull(FieldProcessDefinitionKey))
+}
+
+// ProcessDefinitionKeyNotNil applies the NotNil predicate on the "process_definition_key" field.
+func ProcessDefinitionKeyNotNil() predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldNotNull(FieldProcessDefinitionKey))
+}
+
+// ProcessDefinitionKeyEqualFold applies the EqualFold predicate on the "process_definition_key" field.
+func ProcessDefinitionKeyEqualFold(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldEqualFold(FieldProcessDefinitionKey, v))
+}
+
+// ProcessDefinitionKeyContainsFold applies the ContainsFold predicate on the "process_definition_key" field.
+func ProcessDefinitionKeyContainsFold(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldContainsFold(FieldProcessDefinitionKey, v))
 }
 
 // SLAResponseTimeEQ applies the EQ predicate on the "sla_response_time" field.

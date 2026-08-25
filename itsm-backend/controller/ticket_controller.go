@@ -67,6 +67,7 @@ func (tc *TicketController) ticketListToResponse(ctx context.Context, ts []*tick
 func (tc *TicketController) CreateTicket(c *gin.Context) {
 	var req dto.CreateTicketRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		tc.logger.Errorw("CreateTicket param bind failed", "error", err.Error())
 		common.Fail(c, common.ParamErrorCode, "请求参数错误: "+err.Error())
 		return
 	}

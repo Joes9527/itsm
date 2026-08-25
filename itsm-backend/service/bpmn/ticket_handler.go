@@ -180,10 +180,6 @@ func (h *TicketServiceTaskHandler) notifyRequester(ctx context.Context, ticketID
 		notificationType = "status_update"
 	}
 	content, _ := variables["content"].(string)
-	channel, _ := variables["channel"].(string)
-	if channel == "" {
-		channel = "in_app"
-	}
 
 	// 获取工单信息
 	tenantID := h.getTenantID(ctx, variables)
@@ -195,10 +191,9 @@ func (h *TicketServiceTaskHandler) notifyRequester(ctx context.Context, ticketID
 	// 发送通知给请求人
 	if ticketEntity.RequesterID > 0 {
 		err = h.notificationService.SendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
-			UserIDs: []int{ticketEntity.RequesterID},
-			Type:    notificationType,
-			Channel: channel,
-			Content: content,
+			UserIDs:   []int{ticketEntity.RequesterID},
+			EventType: mapBPMNNotificationType(notificationType),
+			Content:   content,
 		}, ticketEntity.TenantID)
 		if err != nil {
 			h.logger.Warnw("Failed to notify requester", "ticket_id", ticketID, "requester_id", ticketEntity.RequesterID, "error", err)
@@ -221,10 +216,6 @@ func (h *TicketServiceTaskHandler) notifyHandler(ctx context.Context, ticketID i
 		notificationType = "assignment"
 	}
 	content, _ := variables["content"].(string)
-	channel, _ := variables["channel"].(string)
-	if channel == "" {
-		channel = "in_app"
-	}
 
 	// 获取工单信息
 	tenantID := h.getTenantID(ctx, variables)
@@ -236,10 +227,9 @@ func (h *TicketServiceTaskHandler) notifyHandler(ctx context.Context, ticketID i
 	// 发送通知给处理人
 	if ticketEntity.AssigneeID > 0 {
 		err = h.notificationService.SendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
-			UserIDs: []int{ticketEntity.AssigneeID},
-			Type:    notificationType,
-			Channel: channel,
-			Content: content,
+			UserIDs:   []int{ticketEntity.AssigneeID},
+			EventType: mapBPMNNotificationType(notificationType),
+			Content:   content,
 		}, ticketEntity.TenantID)
 		if err != nil {
 			h.logger.Warnw("Failed to notify handler", "ticket_id", ticketID, "handler_id", ticketEntity.AssigneeID, "error", err)
@@ -290,10 +280,9 @@ func (h *TicketServiceTaskHandler) escalateTicket(ctx context.Context, ticketID 
 		content := fmt.Sprintf("工单 %s (#%s) 已升级，原因：%s", ticketEntity.Title, ticketEntity.TicketNumber, escalationReason)
 		for _, adminID := range adminIDs {
 			if err := h.notificationService.SendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
-				UserIDs: []int{adminID},
-				Type:    "escalation",
-				Channel: "in_app",
-				Content: content,
+				UserIDs:   []int{adminID},
+				EventType: "ticket_updated",
+				Content:   content,
 			}, ticketEntity.TenantID); err != nil {
 				h.logger.Warnw("failed to send escalation notification", "error", err, "ticket_id", ticketID, "admin_id", adminID)
 			}
@@ -349,10 +338,9 @@ func (h *TicketServiceTaskHandler) assignTicket(ctx context.Context, ticketID in
 		notifyContent = fmt.Sprintf("您被分配了一个新工单：%s (#%s)", ticketEntity.Title, ticketEntity.TicketNumber)
 	}
 	if err := h.notificationService.SendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
-		UserIDs: []int{assigneeID},
-		Type:    "assignment",
-		Channel: "in_app",
-		Content: notifyContent,
+		UserIDs:   []int{assigneeID},
+		EventType: "ticket_assigned",
+		Content:   notifyContent,
 	}, ticketEntity.TenantID); err != nil {
 		h.logger.Warnw("failed to send assignment notification", "error", err, "ticket_id", ticketID, "assignee_id", assigneeID)
 	}
@@ -367,3 +355,15 @@ func (h *TicketServiceTaskHandler) assignTicket(ctx context.Context, ticketID in
 
 // 确保 TicketServiceTaskHandler 实现了 ServiceTaskHandlerInterface
 var _ ServiceTaskHandlerInterface = (*TicketServiceTaskHandler)(nil)
+
+// mapBPMNNotificationType 将 BPMN 通知类型映射为标准 event_type（偏好查询键）。
+func mapBPMNNotificationType(notificationType string) string {
+	switch notificationType {
+	case "assignment":
+		return "ticket_assigned"
+	case "escalation", "status_update":
+		return "ticket_updated"
+	default:
+		return "ticket_updated"
+	}
+}

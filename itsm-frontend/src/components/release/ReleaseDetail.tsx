@@ -83,6 +83,30 @@ const ReleaseDetail: React.FC = () => {
     }
   };
 
+  const requestTechReview = () => {
+    let comment = '';
+    Modal.confirm({
+      title: '技术评审',
+      content: (
+        <Input.TextArea
+          autoFocus
+          rows={4}
+          placeholder="请输入技术评审意见"
+          onChange={(event) => {
+            comment = event.target.value.trim();
+          }}
+        />
+      ),
+      okText: '提交评审',
+      cancelText: '取消',
+      onOk: async () => {
+        await ReleaseApi.submitTechReview(Number(id), comment);
+        message.success('技术评审意见已提交');
+        await loadDetail();
+      },
+    });
+  };
+
   const requestReason = (action: 'reject' | 'rollback') => {
     let reason = '';
     const isReject = action === 'reject';
@@ -310,6 +334,11 @@ const ReleaseDetail: React.FC = () => {
           <Button type="primary" onClick={() => router.push(`/releases/${release.id}`)}>
             编辑
           </Button>
+          {release.status === 'draft' && (
+            <Button onClick={requestTechReview}>
+              技术评审
+            </Button>
+          )}
           {release.status === 'draft' && (
             <Button
               type="primary"

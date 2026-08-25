@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -449,4 +450,57 @@ func TestEmailService_HelperFunctions(t *testing.T) {
 		}
 		assert.Equal(t, "cc1@example.com,cc2@example.com", joined)
 	})
+}
+
+// ==================== Graph 发信后端测试 ====================
+
+type mockGraphMailSender struct {
+	calls []struct{ mailbox, to, subject, body string }
+}
+
+func (m *mockGraphMailSender) SendMail(_ context.Context, mailbox, to, subject, body string) error {
+	m.calls = append(m.calls, struct{ mailbox, to, subject, body string }{mailbox, to, subject, body})
+	return nil
+}
+
+func TestEmailService_SendViaGraph(t *testing.T) {
+	logger := zaptest.NewLogger(t).Sugar()
+	svc := NewEmailService(EmailConfig{}, logger)
+	mock := &mockGraphMailSender{}
+	svc.SetGraphProvider(func() (GraphMailSender, string, bool) {
+		return mock, "ai-support@example.com", true
+	})
+
+	msg := &EmailMessage{
+		To:       []string{"a@example.com", "b@example.com"},
+		Subject:  "测试通知",
+		BodyText: "这是纯文本正文",
+		Body:     "<p>HTML 正文</p>",
+	}
+	err := svc.Send(context.Background(), msg)
+	assert.NoError(t, err)
+	assert.Len(t, mock.calls, 2, "Graph 后端应对每个收件人发一次")
+	assert.Equal(t, "ai-support@example.com", mock.calls[0].mailbox)
+	assert.Equal(t, "a@example.com", mock.calls[0].to)
+	assert.Equal(t, "测试通知", mock.calls[0].subject)
+	assert.Equal(t, "这是纯文本正文", mock.calls[0].body, "Graph 应使用纯文本 BodyText")
+}
+
+func TestEmailService_SendViaGraph_FallsBackToBodyWhenNoText(t *testing.T) {
+	logger := zaptest.NewLogger(t).Sugar()
+	svc := NewEmailService(EmailConfig{}, logger)
+	mock := &mockGraphMailSender{}
+	svc.SetGraphProvider(func() (GraphMailSender, string, bool) {
+		return mock, "ai-support@example.com", true
+	})
+
+	msg := &EmailMessage{
+		To:      []string{"a@example.com"},
+		Subject: "无纯文本",
+		Body:    "<p>只有 HTML</p>",
+	}
+	err := svc.Send(context.Background(), msg)
+	assert.NoError(t, err)
+	assert.Len(t, mock.calls, 1)
+	assert.Equal(t, "<p>只有 HTML</p>", mock.calls[0].body, "BodyText 为空时应回退到 Body")
 }

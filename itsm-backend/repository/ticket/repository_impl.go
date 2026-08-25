@@ -110,6 +110,9 @@ func (r *EntRepository) Create(ctx context.Context, params *CreateParams, tenant
 		if params.ExternalMessageID != "" {
 			builder.SetExternalMessageID(params.ExternalMessageID)
 		}
+		if params.ConversationID != "" {
+			builder.SetConversationID(params.ConversationID)
+		}
 
 		entity, err := builder.Save(ctx)
 		if err == nil {

@@ -24,12 +24,28 @@ const { Header: AntHeader } = Layout;
 const NOTIFICATION_REFRESH_INTERVAL_MS = 30000; // 30秒
 const NOTIFICATION_PAGE_SIZE = 10;
 
-const normalizeNotification = (notification: TicketNotification): TicketNotification => ({
-  ...notification,
-  createdAt: notification.createdAt,
-  readAt: notification.readAt,
-  sentAt: notification.sentAt,
-});
+const normalizeNotification = (notification: any): TicketNotification => {
+  const isRead = typeof notification.read === 'boolean' ? notification.read : notification.status === 'read';
+  // 通用 Notification 表无 ticketId，从 actionUrl（如 "/tickets/30"）提取
+  let ticketId = notification.ticketId ?? 0;
+  if (!ticketId && notification.actionUrl) {
+    const m = notification.actionUrl.match(/\/tickets\/(\d+)/);
+    if (m) ticketId = parseInt(m[1], 10);
+  }
+  return {
+    ...notification,
+    id: notification.id,
+    ticketId,
+    userId: notification.userId ?? 0,
+    type: notification.type ?? '',
+    channel: notification.channel ?? 'in_app',
+    // 通用 Notification 表的内容字段是 message
+    content: notification.message ?? notification.content ?? '',
+    status: isRead ? 'read' : 'sent',
+    read: isRead,
+    createdAt: notification.createdAt,
+  };
+};
 
 interface HeaderProps {
   collapsed: boolean;

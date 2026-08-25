@@ -2,12 +2,14 @@ package knowledge
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/knowledgearticle"
+	"itsm-backend/ent/knowledgearticleversion"
 )
 
 // defaultCategories provides baseline knowledge-base categories so the category
@@ -43,16 +45,18 @@ func toDomain(e *ent.KnowledgeArticle) *Article {
 		tags = strings.Split(e.Tags, ",")
 	}
 	return &Article{
-		ID:          e.ID,
-		Title:       e.Title,
-		Content:     e.Content,
-		Category:    e.Category,
-		Tags:        tags,
-		AuthorID:    e.AuthorID,
-		TenantID:    e.TenantID,
-		IsPublished: e.IsPublished,
-		CreatedAt:   e.CreatedAt,
-		UpdatedAt:   e.UpdatedAt,
+		ID:            e.ID,
+		Title:         e.Title,
+		Content:       e.Content,
+		Category:      e.Category,
+		Tags:          tags,
+		AuthorID:      e.AuthorID,
+		TenantID:      e.TenantID,
+		IsPublished:   e.IsPublished,
+		ReviewStatus:  e.ReviewStatus,
+		ReviewComment: e.ReviewComment,
+		CreatedAt:     e.CreatedAt,
+		UpdatedAt:     e.UpdatedAt,
 	}
 }
 
@@ -66,6 +70,8 @@ func (r *EntRepository) Create(ctx context.Context, a *Article) (*Article, error
 		SetAuthorID(a.AuthorID).
 		SetTenantID(a.TenantID).
 		SetIsPublished(a.IsPublished).
+		SetReviewStatus(a.ReviewStatus).
+		SetReviewComment(a.ReviewComment).
 		Save(ctx)
 	if err != nil {
 		return nil, err
@@ -131,6 +137,8 @@ func (r *EntRepository) Update(ctx context.Context, a *Article) (*Article, error
 		SetCategory(a.Category).
 		SetTags(tagsStr).
 		SetIsPublished(a.IsPublished).
+		SetReviewStatus(a.ReviewStatus).
+		SetReviewComment(a.ReviewComment).
 		Save(ctx)
 	if err != nil {
 		return nil, err
@@ -271,4 +279,115 @@ func (r *EntRepository) GetStats(ctx context.Context, tenantID int) (*Stats, err
 		TotalLikes: totalLikes,
 		Categories: categories,
 	}, nil
+}
+
+// ==================== 版本控制 ====================
+// 租户隔离策略：knowledge_article_versions 表无 tenant_id 列（版本快照随文章继承租户）。
+// 所有版本操作先通过 verifyArticleOwnership 校验文章归属租户，再按 article_id 操作——join-guard 模式。
+
+// verifyArticleOwnership 校验文章归属租户（租户隔离守卫）
+func (r *EntRepository) verifyArticleOwnership(ctx context.Context, articleID int, tenantID int) error {
+	exists, err := r.client.KnowledgeArticle.Query().
+		Where(knowledgearticle.IDEQ(articleID), knowledgearticle.TenantIDEQ(tenantID)).
+		Exist(ctx)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("article not found in tenant")
+	}
+	return nil
+}
+
+// NextVersion 返回该文章下一个版本号（无历史时为 1）
+func (r *EntRepository) NextVersion(ctx context.Context, articleID int, tenantID int) (int, error) {
+	if err := r.verifyArticleOwnership(ctx, articleID, tenantID); err != nil {
+		return 0, err
+	}
+	count, err := r.client.KnowledgeArticleVersion.Query().
+		Where(knowledgearticleversion.ArticleIDEQ(articleID)).
+		Count(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return count + 1, nil
+}
+
+// SnapshotVersion 保存文章版本快照
+func (r *EntRepository) SnapshotVersion(ctx context.Context, v *ArticleVersion) (*ArticleVersion, error) {
+	if err := r.verifyArticleOwnership(ctx, v.ArticleID, v.TenantID); err != nil {
+		return nil, err
+	}
+	e, err := r.client.KnowledgeArticleVersion.Create().
+		SetArticleID(v.ArticleID).
+		SetVersion(v.Version).
+		SetTitle(v.Title).
+		SetContent(v.Content).
+		SetCategory(v.Category).
+		SetTags(v.Tags).
+		SetAuthorID(v.AuthorID).
+		SetChangeSummary(v.ChangeSummary).
+		SetCreatedAt(time.Now()).
+		Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	v.ID = e.ID
+	v.CreatedAt = e.CreatedAt
+	return v, nil
+}
+
+// ListVersions 列出文章所有版本（新→旧）
+func (r *EntRepository) ListVersions(ctx context.Context, articleID int, tenantID int) ([]*ArticleVersion, error) {
+	if err := r.verifyArticleOwnership(ctx, articleID, tenantID); err != nil {
+		return nil, err
+	}
+	versions, err := r.client.KnowledgeArticleVersion.Query().
+		Where(knowledgearticleversion.ArticleIDEQ(articleID)).
+		Order(ent.Desc(knowledgearticleversion.FieldVersion)).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*ArticleVersion, 0, len(versions))
+	for _, e := range versions {
+		out = append(out, toVersionDomain(e))
+	}
+	return out, nil
+}
+
+// GetVersion 获取指定版本快照
+func (r *EntRepository) GetVersion(ctx context.Context, articleID int, version int, tenantID int) (*ArticleVersion, error) {
+	if err := r.verifyArticleOwnership(ctx, articleID, tenantID); err != nil {
+		return nil, err
+	}
+	e, err := r.client.KnowledgeArticleVersion.Query().
+		Where(
+			knowledgearticleversion.ArticleIDEQ(articleID),
+			knowledgearticleversion.VersionEQ(version),
+		).
+		Only(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return toVersionDomain(e), nil
+}
+
+// toVersionDomain maps ent KnowledgeArticleVersion to domain ArticleVersion
+func toVersionDomain(e *ent.KnowledgeArticleVersion) *ArticleVersion {
+	if e == nil {
+		return nil
+	}
+	return &ArticleVersion{
+		ID:            e.ID,
+		ArticleID:     e.ArticleID,
+		Version:       e.Version,
+		Title:         e.Title,
+		Content:       e.Content,
+		Category:      e.Category,
+		Tags:          e.Tags,
+		AuthorID:      e.AuthorID,
+		ChangeSummary: e.ChangeSummary,
+		CreatedAt:     e.CreatedAt,
+	}
 }

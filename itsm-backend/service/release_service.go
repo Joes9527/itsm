@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"itsm-backend/dto"
@@ -15,9 +17,10 @@ import (
 
 // ReleaseService 发布管理服务
 type ReleaseService struct {
-	client         *ent.Client
-	logger         *zap.SugaredLogger
-	approvalBridge *BPMNApprovalBridge
+	client             *ent.Client
+	logger             *zap.SugaredLogger
+	approvalBridge     *BPMNApprovalBridge
+	processTriggerSvc  ProcessTriggerServiceInterface
 }
 
 // NewReleaseService 创建发布管理服务
@@ -31,6 +34,12 @@ func NewReleaseService(client *ent.Client, logger *zap.SugaredLogger) *ReleaseSe
 		svc.approvalBridge = NewBPMNApprovalBridge(client, logger)
 	}
 	return svc
+}
+
+// SetProcessTriggerService 注入流程触发服务（创建发布后自动启动 release_approval_flow）。
+// 与 TicketService.SetProcessTriggerService 同一模式：由 bootstrap 装配。
+func (s *ReleaseService) SetProcessTriggerService(p ProcessTriggerServiceInterface) {
+	s.processTriggerSvc = p
 }
 
 // CreateRelease 创建发布
@@ -94,6 +103,18 @@ func (s *ReleaseService) CreateRelease(ctx context.Context, req *dto.CreateRelea
 	creatorName := ""
 	if creator != nil {
 		creatorName = creator.Name
+	}
+
+	// 触发发布流程（按 ProcessBinding 默认绑定解析 release_approval_flow）。
+	// fail-soft 与工单/事件域一致：触发失败只告警不阻断创建——域侧状态流转的
+	// 桥接对"无关联流程实例"回退纯业务路径，发布生命周期本身不依赖流程。
+	if s.processTriggerSvc != nil {
+		if _, triggerErr := s.processTriggerSvc.TriggerByBusinessType(
+			ctx, dto.BusinessTypeRelease, releaseEntity.ID, nil, strconv.Itoa(createdBy), tenantID,
+		); triggerErr != nil {
+			s.logger.Warnw("Failed to trigger release workflow",
+				"release_id", releaseEntity.ID, "tenant_id", tenantID, "error", triggerErr)
+		}
 	}
 
 	response := dto.ToReleaseResponse(releaseEntity)
@@ -299,8 +320,40 @@ func (s *ReleaseService) UpdateReleaseStatus(ctx context.Context, id, tenantID i
 		return nil, fmt.Errorf("failed to update release status: %w", err)
 	}
 
+	// P1 域侧桥接：状态写完后完成对应的 release_approval_flow 阶段节点（注入 business_id），
+	// 让流程推进到下一节点。release_task handler 会再做一次同值状态写入，状态机白名单
+	// 对同值转换幂等放行。桥接失败（存在待办任务但完成不了）则中止，避免发布状态与
+	// 流程状态分叉。actorUserID 传 0：阶段流转的授权边界在域层（JWT + 资源权限 +
+	// 租户隔离），不强制 BPMN 任务 assignee 匹配——任务未配置处理人时强制校验会误伤
+	// 合法流转（authorizeTaskActor 对 userID<=0 按设计跳过）。
+	if s.approvalBridge != nil {
+		if taskKey, ok := releaseStageTaskKey(status); ok {
+			if _, bridgeErr := s.approvalBridge.CompleteBusinessStageTask(
+				ctx, tenantID, 0, string(dto.BusinessTypeRelease), id, taskKey, nil,
+			); bridgeErr != nil {
+				return nil, fmt.Errorf("同步流程阶段任务失败: %w", bridgeErr)
+			}
+		}
+	}
+
 	s.logger.Infow("Release status updated", "release_id", id, "status", status)
 	return dto.ToReleaseResponse(updated), nil
+}
+
+// releaseStageTaskKey 返回发布状态流转对应的 release_approval_flow 用户任务节点键。
+// 模板只有 5 个节点（技术评审/审批/计划/执行/验证），failed/rolled_back/cancelled
+// 等转换没有对应节点，返回 ok=false 表示不桥接（纯域侧状态流转）。
+func releaseStageTaskKey(status string) (string, bool) {
+	switch status {
+	case string(dto.ReleaseStatusScheduled):
+		return "Activity_Schedule", true
+	case string(dto.ReleaseStatusInProgress):
+		return "Activity_Execute", true
+	case string(dto.ReleaseStatusCompleted):
+		return "Activity_Verify", true
+	default:
+		return "", false
+	}
 }
 
 // isValidReleaseStatusTransition 发布状态转换白名单校验
@@ -404,9 +457,95 @@ func (s *ReleaseService) ApplyReleaseApproval(ctx context.Context, id, tenantID,
 		return nil, fmt.Errorf("failed to update release status: %w", err)
 	}
 
+	// approve 分支：Release.status 在这里已经直接写成 scheduled，但 Activity_Approval
+	// 完成后引擎推进到的下一个节点是 Activity_Schedule——一个独立的用户任务，不会自动
+	// 完成。之前只有 UpdateReleaseStatus(id,'scheduled') 会触发这个桥接，而审批路径从不
+	// 调用它，导致流程实例永久悬挂在"计划发布"（真实浏览器验证发现：release 状态能一路
+	// 走到 completed，但对应 process_instances 行永远 status=running/Activity_Schedule）。
+	// approve 就是"该发布已排期"的权威决策时刻，这里直接把 Schedule 节点桥接掉，
+	// 不再指望前端另有一次"提交计划"点击来补这个动作。
+	if action == "approve" && s.approvalBridge != nil {
+		if taskKey, ok := releaseStageTaskKey(targetStatus); ok {
+			if _, bridgeErr := s.approvalBridge.CompleteBusinessStageTask(
+				ctx, tenantID, 0, string(dto.BusinessTypeRelease), id, taskKey, nil,
+			); bridgeErr != nil {
+				return nil, fmt.Errorf("同步流程计划节点失败: %w", bridgeErr)
+			}
+		}
+	}
+
 	s.logger.Infow("Release approval applied",
 		"release_id", id, "tenant_id", tenantID, "actor_id", actorID, "action", action, "status", targetStatus)
 	return dto.ToReleaseResponse(updated), nil
+}
+
+// ApplyReleaseTechReview 提交技术评审意见：桥接完成 release_approval_flow 的
+// Activity_TechReview 节点（注入 business_id + comment），评审意见由 release_task
+// handler 的 tech_review 动作追加到 release_notes。
+//
+// 无关联运行中流程实例时回退为纯业务记录（直接追加评审意见）；存在待办任务但完成失败
+// 则中止，避免评审记录与流程状态分叉。actorID 不强制 BPMN 任务 assignee 匹配
+// （同 UpdateReleaseStatus 的说明）。
+func (s *ReleaseService) ApplyReleaseTechReview(ctx context.Context, id, tenantID, actorID int, comment string) (*dto.ReleaseResponse, error) {
+	releaseEntity, err := s.client.Release.Query().
+		Where(release.IDEQ(id), release.TenantIDEQ(tenantID)).
+		First(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, nil
+		}
+		s.logger.Errorw("Failed to get release for tech review", "error", err, "release_id", id)
+		return nil, fmt.Errorf("failed to get release: %w", err)
+	}
+
+	comment = strings.TrimSpace(comment)
+
+	if s.approvalBridge != nil {
+		handled, bridgeErr := s.approvalBridge.CompleteBusinessStageTask(
+			ctx, tenantID, actorID, string(dto.BusinessTypeRelease), id, "Activity_TechReview",
+			map[string]interface{}{
+				"comment": comment,
+				// Gateway_TechResult 按 tech_review_pass 路由到 Activity_Approval；
+				// 此前无人写这个变量，评审完成后流程停在网关上。评审意见提交即视为通过，
+				// 技术否决走发布驳回（ApplyReleaseApproval reject）。
+				"tech_review_pass": true,
+			},
+		)
+		if bridgeErr != nil {
+			return nil, fmt.Errorf("同步技术评审任务失败: %w", bridgeErr)
+		}
+		if handled {
+			// 评审意见已由 handler 写入 release_notes，重新读库返回最新实体
+			updated, err := s.client.Release.Query().
+				Where(release.IDEQ(id), release.TenantIDEQ(tenantID)).
+				First(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to reload release: %w", err)
+			}
+			s.logger.Infow("Release tech review bridged to BPMN task",
+				"release_id", id, "tenant_id", tenantID, "actor_id", actorID)
+			return dto.ToReleaseResponse(updated), nil
+		}
+	}
+
+	// 回退：无关联运行中流程实例时直接追加评审意见（与 handler 的 tech_review 格式一致）
+	if comment != "" {
+		notes := releaseEntity.ReleaseNotes
+		if notes != "" {
+			notes += "\n"
+		}
+		notes += fmt.Sprintf("[技术评审] %s", comment)
+		updated, err := releaseEntity.Update().SetReleaseNotes(notes).Save(ctx)
+		if err != nil {
+			s.logger.Errorw("Failed to record tech review", "error", err, "release_id", id)
+			return nil, fmt.Errorf("failed to record tech review: %w", err)
+		}
+		return dto.ToReleaseResponse(updated), nil
+	}
+
+	s.logger.Infow("Release tech review recorded (empty comment)",
+		"release_id", id, "tenant_id", tenantID, "actor_id", actorID)
+	return dto.ToReleaseResponse(releaseEntity), nil
 }
 
 // DeleteRelease 删除发布

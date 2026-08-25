@@ -93,7 +93,7 @@ func srSetup(t *testing.T) (*gin.Engine, *ent.Client, int, int, int) {
 	// 播种一个服务目录（无 CI 类型，走简单路径）
 	scRepo := service_catalog.NewEntRepository(client)
 	scSvc := service_catalog.NewService(scRepo, client, logger)
-	cat, err := scSvc.Create(ctx, "SRCatalog-"+srUID(), "software", "for test", 0, tenant.ID, "enabled", 0, 0, nil)
+	cat, err := scSvc.Create(ctx, "SRCatalog-"+srUID(), "software", "for test", 0, tenant.ID, "enabled", 0, 0, nil, "")
 	require.NoError(t, err)
 
 	repo := NewEntRepository(client)
@@ -161,7 +161,7 @@ func TestHandler_Get_IncludesCustomFieldValues(t *testing.T) {
 	scRepo := service_catalog.NewEntRepository(client)
 	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
 	catalog, err := scService.Create(context.Background(), "云主机申请-"+srUID(), "software", "desc", 1, tenantID, "enabled", 0, 0,
-		[]service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}})
+		[]service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}}, "")
 	require.NoError(t, err)
 
 	createReq := dto.CreateServiceRequestRequest{
@@ -225,7 +225,7 @@ func TestServiceRequestCreateDefersNewCIUntilProvisioning(t *testing.T) {
 	require.NoError(t, err)
 	scRepo := service_catalog.NewEntRepository(client)
 	catalog, err := service_catalog.NewService(scRepo, client, logger).
-		Create(ctx, "VM Request", "infrastructure", "Provision VM", 24, tenant.ID, "enabled", ciType.ID, 0, nil)
+		Create(ctx, "VM Request", "infrastructure", "Provision VM", 24, tenant.ID, "enabled", ciType.ID, 0, nil, "")
 	require.NoError(t, err)
 	ticketSvc := service.NewTicketServiceForTest(client, logger)
 	srSvc := NewService(NewEntRepository(client), scRepo, cmdb.NewEntRepository(client), client, logger, ticketSvc, nil, nil)

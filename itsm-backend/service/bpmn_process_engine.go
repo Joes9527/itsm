@@ -266,6 +266,14 @@ func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitio
 	}
 
 	// 5. 执行流程推进（从StartEvent开始）
+	// 平台级操作（ctx 无租户键：controller 的 getBPMNTenantContext 对 tenant_id=0
+	// 不注入）此前会在带 RequireTenantID 的 ServiceTask 上硬失败。实例租户跟随流程
+	// 定义（definition.TenantID 是 Positive 校验过的权威值），把它注入 ctx 后 handler
+	// 的写侧 Where(TenantID) 仍然生效，不放松任何约束——伪造的 variables["tenant_id"]
+	// 只会导致写不中行。
+	if tenantID <= 0 {
+		ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, definition.TenantID)
+	}
 	if err := e.executeStep(ctx, instance, process, startEvent.ID, variables); err != nil {
 		return nil, err
 	}
@@ -305,6 +313,16 @@ func (e *CustomProcessEngine) CompleteTask(ctx context.Context, taskID string, v
 	instance, err := e.client.ProcessInstance.Get(ctx, task.ProcessInstanceID)
 	if err != nil {
 		return fmt.Errorf("获取流程实例失败: %w", err)
+	}
+
+	// 2.5 平台级操作（ctx 无租户键：controller 的 getBPMNTenantContext 对 tenant_id=0
+	// 不注入）恢复可用：注入实例租户作为 handler 执行租户。此前 dispatchUserTaskCallback
+	// 里的 RequireTenantID 会失败，业务副作用被静默跳过。实例租户由启动时的
+	// definition.TenantID 而来（Positive 校验过的权威值），注入它只补全租户上下文，
+	// 写侧 Where(TenantID) 仍是安全边界。任务查询（第 1 步）在注入前执行，
+	// 平台视角的跨租户查询行为与之前一致。
+	if ctxTenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int); ctxTenantID <= 0 {
+		ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, instance.TenantID)
 	}
 
 	// 3. 获取流程定义并解析
@@ -373,7 +391,14 @@ func (e *CustomProcessEngine) CompleteTask(ctx context.Context, taskID string, v
 	// 注意 task 是步骤 1 读出来的快照，它的 TaskVariables 仍是 createUserTask 写入的
 	// taskConfig（含 metaData）；步骤 4 的 SetTaskVariables(variables) 已经把库里那行
 	// 覆盖成完成时提交的变量了，所以这里必须用快照读，不能重新查库。
-	e.dispatchUserTaskCallback(ctx, task, variables)
+	//
+	// 传 instance.Variables（步骤 5 合并落库后的最新值）而不是本次调用的原始 variables：
+	// 启动流程时注入的 change_id/business_id 等字段存在实例变量里，不会随每次任务完成
+	// 请求重复携带。只在调用方显式传参时才够用的话，走"审批中心"通用决策接口（不知道
+	// 也不该关心具体业务字段名）完成这类 UserTask 时，handler 拿到的 change_id 就是 0，
+	// 报"无效的变更ID"——业务副作用被吞掉但流程 token 已经往前走了，状态跟着悬空。
+	// action 仍然优先取 task 自身 metaData（dispatchUserTaskCallback 内部处理），不受此影响。
+	e.dispatchUserTaskCallback(ctx, task, instance.Variables)
 
 	// 7. 记录审计日志 - 任务完成
 	userID := 0
@@ -654,12 +679,36 @@ func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.P
 	} else if gateway := e.findExclusiveGateway(process, elementID); gateway != nil {
 		return e.executeStep(ctx, instance, process, elementID, instance.Variables)
 	} else if serviceTask := e.findServiceTask(process, elementID); serviceTask != nil {
-		// 通过 CallbackRegistry 执行真实的服务任务逻辑
+		// 优先按 metaData 里的 service_task_type/action 分发——跟 UserTask 走
+		// dispatchUserTaskCallback 时用的是同一套 findHandlerByTaskType 查找口径，
+		// 保证"模板声明了 service_task_type 就一定能找到对应 handler"这条规则
+		// 在 UserTask 和 ServiceTask 两种节点类型上表现一致。
+		if serviceTaskType := serviceTask.ServiceTaskType(); serviceTaskType != "" {
+			if handler := e.findHandlerByTaskType(serviceTaskType); handler != nil {
+				callbackVars := mergeServiceTaskVariables(instance.Variables, serviceTask)
+				if action := serviceTask.ServiceTaskAction(); action != "" {
+					callbackVars[bpmnMetaDataAction] = action
+				}
+				e.logger.Infow("执行 ServiceTask 回调（metaData 分发）", "serviceTaskType", serviceTaskType, "elementID", elementID)
+				if _, err := handler.Execute(ctx, nil, callbackVars); err != nil {
+					return fmt.Errorf("ServiceTask %s 执行失败: %w", elementID, err)
+				}
+				return e.executeStep(ctx, instance, process, elementID, instance.Variables)
+			}
+			// 声明了类型但没有注册对应 handler（比如未来新增了类型但忘了注册）：
+			// 按既有约定视为 NoOp，只告警不阻断流程，跟 dispatchUserTaskCallback
+			// 遇到同样情况时的处理方式保持一致。
+			e.logger.Warnw("ServiceTask 声明的 service_task_type 没有注册处理器，跳过执行", "elementID", elementID, "serviceTaskType", serviceTaskType)
+			return e.executeStep(ctx, instance, process, elementID, instance.Variables)
+		}
+
+		// 没有声明 metaData 时，保留原有按 implementation/class/expression/operationRef
+		// 属性猜 handler ID 的兜底逻辑——这是历史行为，目前没有任何内置模板会走到这里
+		// （全部改成了 metaData 声明），但不删除它，避免破坏可能存在的自定义模板。
 		serviceRef := serviceTask.ID
 		if serviceTask.Name != "" {
 			serviceRef = serviceTask.Name
 		}
-		// 尝试通过实现类或表达式属性获取服务引用
 		if serviceTask.Implementation != "" {
 			serviceRef = serviceTask.Implementation
 		} else if serviceTask.Class != "" {
@@ -670,11 +719,9 @@ func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.P
 			serviceRef = serviceTask.OperationRef
 		}
 
-		// 查找并执行 Callback
 		if e.callbackRegistry != nil {
 			handler := e.callbackRegistry.GetHandler(serviceRef)
 			if handler == nil {
-				// 尝试按任务类型匹配
 				handler = e.callbackRegistry.GetHandler(serviceTask.GetType())
 			}
 			if handler != nil {
@@ -684,7 +731,6 @@ func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.P
 					return fmt.Errorf("ServiceTask %s 执行失败: %w", serviceRef, err)
 				}
 			} else {
-				// 未注册的 ServiceTask 视为 NoOp，仅记录警告不阻断流程
 				e.logger.Warnw("未注册的 ServiceTask，跳过执行", "serviceRef", serviceRef, "elementID", elementID)
 			}
 		}
@@ -1008,14 +1054,25 @@ func (e *CustomProcessEngine) resolveApprovalAssignee(ctx context.Context, insta
 	return strconv.Itoa(manager.UserID)
 }
 
-// resolveRoleCandidates 查询该租户下所有 active 且 role = role 的用户，返回候选人展开
-// 形态的字符串列表（跟 GroupResolver.ExpandGroupsToUsers 的 usernames 返回值同样的
+// resolveRoleCandidates 查询该租户下所有 active 且（主角色等于 roleCode，或通过
+// user_roles 多对多边额外拥有 roleCode 这个角色）的用户，返回候选人展开形态的字符串
+// 列表（跟 GroupResolver.ExpandGroupsToUsers 的 usernames 返回值同样的
 // username→email→ID 兜底规则），供 excludeUserFromCandidates/MergeCandidateUsers 直接复用。
-// role 应为 roles 表中存在的 code 值——不存在的角色查询返回空列表而非报错，
+// roleCode 应为 roles 表中存在的 code 值——不存在的角色查询返回空列表而非报错，
 // 调用方按"没查到候选人"处理，转候选组兜底。
-func (e *CustomProcessEngine) resolveRoleCandidates(ctx context.Context, tenantID int, role string) ([]string, error) {
+func (e *CustomProcessEngine) resolveRoleCandidates(ctx context.Context, tenantID int, roleCode string) ([]string, error) {
+	// 候选人 = 主角色字段等于 roleCode 的用户，UNION 通过 user_roles 多对多边额外拥有
+	// roleCode 这个角色的用户（一人多角色，仅影响这里的 BPMN 候选资格，不影响 RBAC 权限判定，
+	// 见 dto.UpdateUserRequest.AdditionalRoleIds 的注释）。
 	users, err := e.client.User.Query().
-		Where(user.RoleEQ(role), user.TenantIDEQ(tenantID), user.Active(true)).
+		Where(
+			user.TenantIDEQ(tenantID),
+			user.Active(true),
+			user.Or(
+				user.RoleEQ(roleCode),
+				user.HasRolesWith(role.CodeEQ(roleCode), role.TenantIDEQ(tenantID)),
+			),
+		).
 		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("查询角色候选审批人失败: %w", err)
@@ -2006,10 +2063,24 @@ func (s *bpmnProcessInstanceService) GetProcessInstanceVariables(ctx context.Con
 	return instance.Variables, nil
 }
 
+// reservedInstanceVariableKeys 是 ProcessTriggerService.buildProcessVariables 写入的
+// 流程身份键。SetProcessInstanceVariables 拒绝覆盖它们：主防线是各 handler 写侧的
+// Where(TenantID)（伪造业务 ID 只会写不中行），这里防止实例归属方污染自己实例的
+// business_id/tenant_id 等身份键，导致后续 ServiceTask 分发（mergeServiceTaskVariables）
+// 读到被篡改的身份上下文。CompleteTask 的任务变量合并路径不在此限制内——那是受
+// ctx 租户边界约束的合法表单提交，且身份键同样有 handler 写侧过滤兜底。
+var reservedInstanceVariableKeys = []string{"business_id", "business_type", "business_key", "tenant_id"}
+
 func (s *bpmnProcessInstanceService) SetProcessInstanceVariables(ctx context.Context, processInstanceID string, variables map[string]interface{}) error {
 	instance, err := s.GetProcessInstance(ctx, processInstanceID)
 	if err != nil {
 		return err
+	}
+
+	for _, reserved := range reservedInstanceVariableKeys {
+		if _, exists := variables[reserved]; exists {
+			return fmt.Errorf("变量 %q 由流程触发方管理，不允许经此端点覆盖", reserved)
+		}
 	}
 
 	_, err = s.client.ProcessInstance.UpdateOne(instance).
@@ -2184,14 +2255,19 @@ func (s *bpmnTaskService) ListUserTasks(ctx context.Context, req *ListUserTasksR
 			processtask.Assignee(userIDStr),
 			processtask.CandidateUsersContains(userIDStr),
 		}
-		// 同时以 username 形式匹配（process_task.candidate_users 中保存的是 username/email/ID 混合）
+		// 同时以 username/email 形式匹配 assignee 和 candidate_users——两个字段都可能存的是
+		// username/email/ID 混合（例如流程设计器"受理人"选择器写入的是 username，而
+		// resolveApprovalAssignee 等自动解析路径写入的是数字 ID），只匹配 ID 会导致通过
+		// 设计器指定受理人的任务在"我的待办"里对该用户不可见（2026-08-18 实测复现）。
 		if u, err := s.client.User.Get(ctx, req.UserID); err == nil && u != nil {
 			username := strings.TrimSpace(u.Username)
 			if username != "" && username != userIDStr {
+				orPreds = append(orPreds, processtask.Assignee(username))
 				orPreds = append(orPreds, processtask.CandidateUsersContains(username))
 			}
 			email := strings.TrimSpace(u.Email)
 			if email != "" && email != userIDStr && email != username {
+				orPreds = append(orPreds, processtask.Assignee(email))
 				orPreds = append(orPreds, processtask.CandidateUsersContains(email))
 			}
 		}

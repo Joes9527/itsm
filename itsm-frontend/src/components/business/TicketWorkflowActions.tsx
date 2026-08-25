@@ -32,6 +32,7 @@ import {
   ApproveTicketRequest,
 } from '@/types/ticket-workflow';
 import type { Ticket } from '@/types/ticket';
+import { useAuthStore } from '@/lib/store/auth-store';
 
 const { TextArea } = Input;
 
@@ -48,6 +49,9 @@ export const TicketWorkflowActions: React.FC<TicketWorkflowActionsProps> = ({
   onAction,
   onRefresh,
 }) => {
+  const { hasPermission } = useAuthStore();
+  // 转派/抄送需要加载用户列表（user:read 权限），按权限而非角色名判断
+  const canManageAssignment = hasPermission('user:read');
   const [modalVisible, setModalVisible] = useState(false);
   const [currentAction, setCurrentAction] = useState<TicketWorkflowAction | null>(null);
   const [form] = Form.useForm();
@@ -415,7 +419,7 @@ export const TicketWorkflowActions: React.FC<TicketWorkflowActionsProps> = ({
     });
   }
 
-  if (workflowState.canForward) {
+  if (workflowState.canForward && canManageAssignment) {
     moreActions.push({
       key: 'forward',
       label: '转发',
@@ -424,7 +428,7 @@ export const TicketWorkflowActions: React.FC<TicketWorkflowActionsProps> = ({
     });
   }
 
-  if (workflowState.canCC) {
+  if (workflowState.canCC && canManageAssignment) {
     moreActions.push({
       key: 'cc',
       label: '抄送',

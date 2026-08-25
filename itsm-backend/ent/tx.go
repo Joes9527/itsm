@@ -56,6 +56,8 @@ type Tx struct {
 	ConfigurationItem *ConfigurationItemClient
 	// ConfigurationItemHistory is the client for interacting with the ConfigurationItemHistory builders.
 	ConfigurationItemHistory *ConfigurationItemHistoryClient
+	// ConnectorConfig is the client for interacting with the ConnectorConfig builders.
+	ConnectorConfig *ConnectorConfigClient
 	// Contract is the client for interacting with the Contract builders.
 	Contract *ContractClient
 	// Conversation is the client for interacting with the Conversation builders.
@@ -393,6 +395,7 @@ func (tx *Tx) init() {
 	tx.CloudService = NewCloudServiceClient(tx.config)
 	tx.ConfigurationItem = NewConfigurationItemClient(tx.config)
 	tx.ConfigurationItemHistory = NewConfigurationItemHistoryClient(tx.config)
+	tx.ConnectorConfig = NewConnectorConfigClient(tx.config)
 	tx.Contract = NewContractClient(tx.config)
 	tx.Conversation = NewConversationClient(tx.config)
 	tx.Department = NewDepartmentClient(tx.config)

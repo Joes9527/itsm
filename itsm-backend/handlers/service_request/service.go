@@ -13,21 +13,11 @@ import (
 	entticket "itsm-backend/ent/ticket"
 	"itsm-backend/handlers/cmdb"
 	"itsm-backend/handlers/service_catalog"
+	"itsm-backend/middleware"
 	"itsm-backend/repository/ticket"
 	"itsm-backend/service"
 
 	"go.uber.org/zap"
-)
-
-// Constants
-const (
-	// Roles
-	RoleAdmin      = "admin"
-	RoleSuperAdmin = "super_admin"
-	RoleManager    = "manager"
-	RoleAgent      = "agent"
-	RoleTechnician = "technician"
-	RoleSecurity   = "security"
 )
 
 // TicketServiceInterface 是 Create 需要的最小 Ticket 创建能力，用接口而非具体类型
@@ -165,6 +155,11 @@ func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalog
 	}
 	if hasApprovalChainSteps(resolvedSteps) {
 		ticketReq.ApprovalChain = resolvedSteps
+	}
+	// 目录条目配置了专属流程时优先生效，跳过 businessType+businessSubType 的通用绑定解析
+	// （见 ticket_service.go triggerWorkflowForTicket 里 workflowDefinitionKey 的优先级）。
+	if strings.TrimSpace(cat.ProcessDefinitionKey) != "" {
+		ticketReq.WorkflowDefinitionKey = strings.TrimSpace(cat.ProcessDefinitionKey)
 	}
 	createdTicket, err := s.ticketSvc.CreateTicket(ctx, ticketReq, tenantID)
 	if err != nil {
@@ -336,7 +331,7 @@ func (s *Service) Update(ctx context.Context, id, tenantID, actorID int, actorRo
 	if err != nil {
 		return nil, common.NewNotFoundError("Service Request not found")
 	}
-	if actorID != req.RequesterID && !isServiceRequestAdmin(actorRole) {
+	if actorID != req.RequesterID && !s.canManageServiceRequest(ctx, actorRole, tenantID) {
 		return nil, common.NewForbiddenError("Only the requester or an administrator can edit this request")
 	}
 
@@ -379,7 +374,7 @@ func (s *Service) Delete(ctx context.Context, id, tenantID, actorID int, actorRo
 	if err != nil {
 		return common.NewNotFoundError("Service Request not found")
 	}
-	if actorID != req.RequesterID && !isServiceRequestAdmin(actorRole) {
+	if actorID != req.RequesterID && !s.canManageServiceRequest(ctx, actorRole, tenantID) {
 		return common.NewForbiddenError("Only the requester or an administrator can delete this request")
 	}
 
@@ -392,14 +387,9 @@ func (s *Service) Delete(ctx context.Context, id, tenantID, actorID int, actorRo
 	return nil
 }
 
-func isServiceRequestAdmin(role string) bool {
-	role = strings.ToLower(strings.TrimSpace(role))
-	return role == RoleAdmin || role == RoleSuperAdmin
-}
-
-func isServiceRequestOperator(role string) bool {
-	role = strings.ToLower(strings.TrimSpace(role))
-	return isServiceRequestAdmin(role) || role == RoleAgent || role == RoleTechnician
+// canManageServiceRequest 判断角色是否有 service_request:write 权限（按权限而非角色名判断）。
+func (s *Service) canManageServiceRequest(ctx context.Context, role string, tenantID int) bool {
+	return middleware.HasResourcePermission(s.client, role, "service_request", "write", tenantID)
 }
 
 // serviceRequestSystemFormDataKeys 是 handler.go normalizeCreateServiceRequest 已经从

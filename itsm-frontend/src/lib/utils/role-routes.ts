@@ -11,7 +11,7 @@ export function getDefaultRoute(role: string): string {
       return '/tickets';
     case 'manager':
     case 'security':
-      return '/my-approvals';
+      return '/approvals';
     case 'admin':
     case 'super_admin':
       return '/dashboard';

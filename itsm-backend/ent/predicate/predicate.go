@@ -72,6 +72,9 @@ type ConfigurationItem func(*sql.Selector)
 // ConfigurationItemHistory is the predicate function for configurationitemhistory builders.
 type ConfigurationItemHistory func(*sql.Selector)
 
+// ConnectorConfig is the predicate function for connectorconfig builders.
+type ConnectorConfig func(*sql.Selector)
+
 // Contract is the predicate function for contract builders.
 type Contract func(*sql.Selector)
 

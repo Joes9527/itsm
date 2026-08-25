@@ -263,8 +263,11 @@ export function ApprovalChainModal({
         }))}
       />
 
-      {currentStep === 0 && (
-        <Form form={form} layout="vertical" preserve={false}>
+      {/* 两步共用同一个 form 实例；第一步的 Form 保持挂载（用 display 切换可见性）而不是
+          条件卸载——否则切到第二步后 Form.Item 从 DOM 里被移除，提交时
+          form.validateFields() 拿不到这些字段的值，即使填过也会报"必填"校验失败。 */}
+      <div style={{ display: currentStep === 0 ? 'block' : 'none' }}>
+        <Form form={form} layout="vertical">
           <Form.Item
             name="name"
             label="审批链名称"
@@ -290,14 +293,14 @@ export function ApprovalChainModal({
             initialValue="ticket"
             rules={[{ required: true, message: '请选择适用对象' }]}
           >
-            <Select placeholder="请选择适用对象" options={[{ value: 'ticket', label: '工单' }, { value: 'incident', label: '事件' }, { value: 'problem', label: '问题' }, { value: 'change', label: '变更' }]} />
+            <Select placeholder="请选择适用对象" options={[{ value: 'ticket', label: '工单' }, { value: 'service_request', label: '服务请求' }, { value: 'incident', label: '事件' }, { value: 'problem', label: '问题' }, { value: 'change', label: '变更' }]} />
           </Form.Item>
 
           <Form.Item name="isActive" label="状态" valuePropName="checked" initialValue={true}>
             <Switch checkedChildren="启用" unCheckedChildren="禁用" />
           </Form.Item>
         </Form>
-      )}
+      </div>
 
       {currentStep === 1 && renderStepConfig()}
 

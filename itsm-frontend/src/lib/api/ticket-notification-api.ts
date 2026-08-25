@@ -5,16 +5,13 @@ export interface TicketNotification {
   id: number;
   ticketId: number;
   userId: number;
-  type:
-    | 'created'
-    | 'assigned'
-    | 'status_changed'
-    | 'commented'
-    | 'sla_warning'
-    | 'resolved'
-    | 'closed';
+  type: string;
   channel: 'email' | 'in_app' | 'sms';
   content: string;
+  // 通用 Notification 表的字段（/api/v1/notifications 返回）
+  message?: string;
+  actionUrl?: string;
+  read?: boolean;
   sentAt?: string;
   readAt?: string;
   status: 'pending' | 'sent' | 'read';

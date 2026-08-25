@@ -17,11 +17,15 @@ type ServiceCatalog struct {
 	DeliveryTime   int
 	CITypeID       int
 	CloudServiceID int
-	Status         string
-	TenantID       int
-	Fields         []service.FieldDefinitionInput
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	// ProcessDefinitionKey 是该目录条目专属的 BPMN 流程定义 Key（可选）。非空时优先于
+	// businessType+businessSubType 的通用流程绑定解析，见 ticket_service.go
+	// triggerWorkflowForTicket 的 workflowDefinitionKey 参数。
+	ProcessDefinitionKey string
+	Status               string
+	TenantID             int
+	Fields               []service.FieldDefinitionInput
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
 }
 
 // Repository defines the interface for data persistence

@@ -8,6 +8,7 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/change"
 
 	"go.uber.org/zap"
 )
@@ -80,7 +81,7 @@ func (h *ChangeServiceTaskHandler) createChange(ctx context.Context, variables m
 	description, _ := variables["description"].(string)
 	changeType, _ := variables["type"].(string)
 	priority, _ := variables["priority"].(string)
-	tenantID := GetTenantIDFromVars(variables)
+	tenantID := GetTenantIDFromVars(ctx, variables)
 
 	if title == "" {
 		return nil, fmt.Errorf("变更标题不能为空")
@@ -115,7 +116,13 @@ func (h *ChangeServiceTaskHandler) updateChange(ctx context.Context, variables m
 		return nil, fmt.Errorf("无效的变更ID")
 	}
 
-	updateQuery := h.client.Change.UpdateOneID(changeID)
+	tenantID, err := RequireTenantID(ctx, variables)
+	if err != nil {
+		return nil, err
+	}
+
+	updateQuery := h.client.Change.Update().
+		Where(change.ID(changeID), change.TenantID(tenantID))
 
 	if title, ok := variables["title"].(string); ok && title != "" {
 		updateQuery.SetTitle(title)
@@ -127,9 +134,12 @@ func (h *ChangeServiceTaskHandler) updateChange(ctx context.Context, variables m
 		updateQuery.SetStatus(status)
 	}
 
-	_, err := updateQuery.Save(ctx)
+	updated, err := updateQuery.Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("更新变更失败: %w", err)
+	}
+	if updated == 0 {
+		return nil, fmt.Errorf("变更 %d 不存在或不属于当前租户", changeID)
 	}
 
 	h.logger.Infow("Change updated via BPMN", "change_id", changeID)
@@ -151,9 +161,23 @@ func (h *ChangeServiceTaskHandler) approveChange(ctx context.Context, variables 
 		return nil, fmt.Errorf("无效的变更ID")
 	}
 
-	_, err := h.client.Change.Get(ctx, changeID)
+	tenantID, err := RequireTenantID(ctx, variables)
 	if err != nil {
-		return nil, fmt.Errorf("变更不存在: %w", err)
+		return nil, err
+	}
+
+	// 获取变更信息（带租户约束）。approveChange 本身不写状态——CAB 节点的 action 是
+	// 固定的 approve_change，不代表审批结果是通过还是驳回；写"pending_approval"这个
+	// 中间态会跟域侧 canonical 状态机（service.IsValidChangeStatusTransition，没有
+	// pending_approval 这个成员）产生第二套状态机分叉。真正的终态判定和落库在
+	// scheduleChange（approved/scheduled）和 rejectChange（rejected）。
+	if _, err := h.client.Change.Query().
+		Where(change.ID(changeID), change.TenantID(tenantID)).
+		Only(ctx); err != nil {
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("变更 %d 不存在或不属于当前租户", changeID)
+		}
+		return nil, fmt.Errorf("查询变更失败: %w", err)
 	}
 	return &dto.ServiceTaskResult{
 		Success: true,
@@ -167,7 +191,12 @@ func (h *ChangeServiceTaskHandler) rejectChange(ctx context.Context, variables m
 	if changeID <= 0 {
 		return nil, fmt.Errorf("无效的变更ID")
 	}
-	if err := h.transitionChangeStatus(ctx, changeID, "rejected"); err != nil {
+
+	tenantID, err := RequireTenantID(ctx, variables)
+	if err != nil {
+		return nil, err
+	}
+	if err := h.transitionChangeStatus(ctx, tenantID, changeID, "rejected"); err != nil {
 		return nil, err
 	}
 	return &dto.ServiceTaskResult{
@@ -192,19 +221,29 @@ func (h *ChangeServiceTaskHandler) scheduleChange(ctx context.Context, variables
 		return nil, fmt.Errorf("无效的变更ID")
 	}
 
-	// 第一跳：转移状态为 approved（CAB 批准后的状态，所有类型都要经过）
-	if err := h.transitionChangeStatus(ctx, changeID, "approved"); err != nil {
+	tenantID, err := RequireTenantID(ctx, variables)
+	if err != nil {
 		return nil, err
 	}
 
-	c, err := h.client.Change.Get(ctx, changeID)
+	// 第一跳：转移状态为 approved（CAB 批准后的状态，所有类型都要经过）
+	if err := h.transitionChangeStatus(ctx, tenantID, changeID, "approved"); err != nil {
+		return nil, err
+	}
+
+	c, err := h.client.Change.Query().
+		Where(change.ID(changeID), change.TenantID(tenantID)).
+		Only(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("变更不存在: %w", err)
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("变更 %d 不存在或不属于当前租户", changeID)
+		}
+		return nil, fmt.Errorf("查询变更失败: %w", err)
 	}
 
 	// 第二跳：仅当该变更类型的状态机允许 approved -> scheduled 时才推进
 	if isValidChangeStatusTransition("approved", "scheduled", c.Type) {
-		if err := h.transitionChangeStatus(ctx, changeID, "scheduled"); err != nil {
+		if err := h.transitionChangeStatus(ctx, tenantID, changeID, "scheduled"); err != nil {
 			return nil, err
 		}
 	}
@@ -218,7 +257,7 @@ func (h *ChangeServiceTaskHandler) scheduleChange(ctx context.Context, variables
 		plannedEnd, _ = time.Parse(time.RFC3339, endStr)
 	}
 
-	updateQuery := h.client.Change.UpdateOneID(changeID)
+	updateQuery := h.client.Change.UpdateOneID(changeID).Where(change.TenantID(tenantID))
 	if !plannedStart.IsZero() {
 		updateQuery.SetPlannedStartDate(plannedStart)
 	}
@@ -226,8 +265,7 @@ func (h *ChangeServiceTaskHandler) scheduleChange(ctx context.Context, variables
 		updateQuery.SetPlannedEndDate(plannedEnd)
 	}
 
-	_, err = updateQuery.Save(ctx)
-	if err != nil {
+	if _, err := updateQuery.Save(ctx); err != nil {
 		return nil, fmt.Errorf("排期变更失败: %w", err)
 	}
 
@@ -239,19 +277,26 @@ func (h *ChangeServiceTaskHandler) scheduleChange(ctx context.Context, variables
 	}, nil
 }
 
-// transitionChangeStatus 统一做状态机校验后写入，任何调用点都不能绕过
+// transitionChangeStatus 统一做租户约束 + 状态机校验后写入，任何调用点都不能绕过
 // isValidChangeStatusTransition —— BPMN 回调跟 handlers/change 自己的
 // TransitionStatus 必须遵守同一套状态机规则，不能各自为政。
-func (h *ChangeServiceTaskHandler) transitionChangeStatus(ctx context.Context, changeID int, targetStatus string) error {
-	c, err := h.client.Change.Get(ctx, changeID)
+func (h *ChangeServiceTaskHandler) transitionChangeStatus(ctx context.Context, tenantID, changeID int, targetStatus string) error {
+	c, err := h.client.Change.Query().
+		Where(change.ID(changeID), change.TenantID(tenantID)).
+		Only(ctx)
 	if err != nil {
-		return fmt.Errorf("变更不存在: %w", err)
+		if ent.IsNotFound(err) {
+			return fmt.Errorf("变更 %d 不存在或不属于当前租户", changeID)
+		}
+		return fmt.Errorf("查询变更失败: %w", err)
 	}
 	if !isValidChangeStatusTransition(c.Status, targetStatus, c.Type) {
 		return fmt.Errorf("无效的状态转换: 从 %q 到 %q", c.Status, targetStatus)
 	}
-	_, err = h.client.Change.UpdateOneID(changeID).SetStatus(targetStatus).Save(ctx)
-	if err != nil {
+	if _, err := h.client.Change.UpdateOneID(changeID).
+		Where(change.TenantID(tenantID)).
+		SetStatus(targetStatus).
+		Save(ctx); err != nil {
 		return fmt.Errorf("更新变更状态失败: %w", err)
 	}
 	return nil
@@ -265,22 +310,37 @@ func (h *ChangeServiceTaskHandler) implementChange(ctx context.Context, variable
 		return nil, fmt.Errorf("无效的变更ID")
 	}
 
-	// 获取变更信息
-	change, err := h.client.Change.Get(ctx, changeID)
+	tenantID, err := RequireTenantID(ctx, variables)
 	if err != nil {
-		return nil, fmt.Errorf("变更不存在: %w", err)
+		return nil, err
+	}
+
+	// 获取变更信息（带租户约束）
+	entity, err := h.client.Change.Query().
+		Where(change.ID(changeID), change.TenantID(tenantID)).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("变更 %d 不存在或不属于当前租户", changeID)
+		}
+		return nil, fmt.Errorf("查询变更失败: %w", err)
+	}
+
+	// entity.Status == "in_progress" 放行：回调重试落在已经生效的目标状态上，不是新
+	// 转换，不应该报错（canonical 状态机对终态/同值转换本来就不建模为"允许的转换"）。
+	if entity.Status != "in_progress" && !isValidChangeStatusTransition(entity.Status, "in_progress", entity.Type) {
+		return nil, fmt.Errorf("非法的变更状态转换: %s -> %s", entity.Status, "in_progress")
 	}
 
 	now := time.Now()
-	_, err = h.client.Change.UpdateOneID(changeID).
+	if _, err := entity.Update().
 		SetStatus("in_progress").
 		SetActualStartDate(now).
-		Save(ctx)
-	if err != nil {
+		Save(ctx); err != nil {
 		return nil, fmt.Errorf("实施变更失败: %w", err)
 	}
 
-	h.logger.Infow("Change implementation started via BPMN", "change_id", changeID, "title", change.Title)
+	h.logger.Infow("Change implementation started via BPMN", "change_id", changeID, "title", entity.Title)
 
 	return &dto.ServiceTaskResult{
 		Success: true,
@@ -297,16 +357,33 @@ func (h *ChangeServiceTaskHandler) verifyChange(ctx context.Context, variables m
 		return nil, fmt.Errorf("无效的变更ID")
 	}
 
-	// 根据验证结果更新状态
-	newStatus := "verification_passed"
+	// 根据验证结果更新状态。目标状态对齐域状态机（service.IsValidChangeStatusTransition）
+	// 的 canonical 值：passed → completed，failed → failed（旧的 verification_passed/
+	// verification_failed 不是域状态机成员，域侧桥接会被覆盖成非法状态）。
+	newStatus := "completed"
 	if verificationResult == "failed" {
-		newStatus = "verification_failed"
+		newStatus = "failed"
 	}
 
-	_, err := h.client.Change.UpdateOneID(changeID).
-		SetStatus(newStatus).
-		Save(ctx)
+	tenantID, err := RequireTenantID(ctx, variables)
 	if err != nil {
+		return nil, err
+	}
+
+	entity, err := h.client.Change.Query().
+		Where(change.ID(changeID), change.TenantID(tenantID)).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("变更 %d 不存在或不属于当前租户", changeID)
+		}
+		return nil, fmt.Errorf("查询变更失败: %w", err)
+	}
+	if entity.Status != newStatus && !isValidChangeStatusTransition(entity.Status, newStatus, entity.Type) {
+		return nil, fmt.Errorf("非法的变更状态转换: %s -> %s", entity.Status, newStatus)
+	}
+
+	if _, err := entity.Update().SetStatus(newStatus).Save(ctx); err != nil {
 		return nil, fmt.Errorf("验证变更失败: %w", err)
 	}
 
@@ -327,12 +404,30 @@ func (h *ChangeServiceTaskHandler) closeChange(ctx context.Context, variables ma
 		return nil, fmt.Errorf("无效的变更ID")
 	}
 
-	now := time.Now()
-	_, err := h.client.Change.UpdateOneID(changeID).
-		SetStatus("closed").
-		SetActualEndDate(now).
-		Save(ctx)
+	tenantID, err := RequireTenantID(ctx, variables)
 	if err != nil {
+		return nil, err
+	}
+
+	entity, err := h.client.Change.Query().
+		Where(change.ID(changeID), change.TenantID(tenantID)).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("变更 %d 不存在或不属于当前租户", changeID)
+		}
+		return nil, fmt.Errorf("查询变更失败: %w", err)
+	}
+	// 关闭目标状态对齐域状态机 canonical 值 completed（旧的 "closed" 不是域状态机成员）
+	if entity.Status != "completed" && !isValidChangeStatusTransition(entity.Status, "completed", entity.Type) {
+		return nil, fmt.Errorf("非法的变更状态转换: %s -> %s", entity.Status, "completed")
+	}
+
+	now := time.Now()
+	if _, err := entity.Update().
+		SetStatus("completed").
+		SetActualEndDate(now).
+		Save(ctx); err != nil {
 		return nil, fmt.Errorf("关闭变更失败: %w", err)
 	}
 
@@ -352,27 +447,36 @@ func (h *ChangeServiceTaskHandler) assessRisk(ctx context.Context, variables map
 		return nil, fmt.Errorf("无效的变更ID")
 	}
 
-	// 获取变更信息进行风险评估
-	change, err := h.client.Change.Get(ctx, changeID)
+	tenantID, err := RequireTenantID(ctx, variables)
 	if err != nil {
-		return nil, fmt.Errorf("变更不存在: %w", err)
+		return nil, err
+	}
+
+	// 获取变更信息进行风险评估（带租户约束）
+	entity, err := h.client.Change.Query().
+		Where(change.ID(changeID), change.TenantID(tenantID)).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("变更 %d 不存在或不属于当前租户", changeID)
+		}
+		return nil, fmt.Errorf("查询变更失败: %w", err)
 	}
 
 	// 简化的风险评估逻辑
 	riskLevel := "medium"
-	impactScope := change.ImpactScope
+	impactScope := entity.ImpactScope
 
 	// 根据变更类型和优先级确定风险等级
-	if change.Type == "emergency" {
+	if entity.Type == "emergency" {
 		riskLevel = "high"
-	} else if change.Type == "minor" {
+	} else if entity.Type == "minor" {
 		riskLevel = "low"
 	}
 
-	_, err = h.client.Change.UpdateOneID(changeID).
+	if _, err := entity.Update().
 		SetRiskLevel(riskLevel).
-		Save(ctx)
-	if err != nil {
+		Save(ctx); err != nil {
 		return nil, fmt.Errorf("评估风险失败: %w", err)
 	}
 
@@ -397,17 +501,27 @@ func (h *ChangeServiceTaskHandler) notifyStakeholders(ctx context.Context, varia
 		return nil, fmt.Errorf("无效的变更ID")
 	}
 
-	// 获取变更信息
-	change, err := h.client.Change.Get(ctx, changeID)
+	tenantID, err := RequireTenantID(ctx, variables)
 	if err != nil {
-		return nil, fmt.Errorf("变更不存在: %w", err)
+		return nil, err
+	}
+
+	// 获取变更信息（带租户约束）
+	entity, err := h.client.Change.Query().
+		Where(change.ID(changeID), change.TenantID(tenantID)).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("变更 %d 不存在或不属于当前租户", changeID)
+		}
+		return nil, fmt.Errorf("查询变更失败: %w", err)
 	}
 
 	// 记录通知日志（实际应调用通知服务）
 	h.logger.Infow(
 		"Stakeholders notification via BPMN",
 		"change_id", changeID,
-		"change_title", change.Title,
+		"change_title", entity.Title,
 		"notification_type", notificationType,
 	)
 

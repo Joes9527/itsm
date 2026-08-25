@@ -39,6 +39,8 @@ type Ticket struct {
 	CreatorEmail string `json:"creator_email,omitempty"`
 	// 外部消息ID（如邮件 internetMessageId），用于同一来源消息的建单去重判断
 	ExternalMessageID string `json:"external_message_id,omitempty"`
+	// 邮件对话线程ID（Graph conversationId），用于识别用户回复并追加评论而非重复建单
+	ConversationID string `json:"conversation_id,omitempty"`
 	// 处理人ID
 	AssigneeID int `json:"assignee_id,omitempty"`
 	// 租户ID
@@ -292,7 +294,7 @@ func (*Ticket) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case ticket.FieldID, ticket.FieldRequesterID, ticket.FieldAssigneeID, ticket.FieldTenantID, ticket.FieldTemplateID, ticket.FieldCategoryID, ticket.FieldDepartmentID, ticket.FieldParentTicketID, ticket.FieldSLADefinitionID, ticket.FieldRating, ticket.FieldRatedBy, ticket.FieldVersion, ticket.FieldMspProviderID, ticket.FieldManagedByUserID:
 			values[i] = new(sql.NullInt64)
-		case ticket.FieldTitle, ticket.FieldDescription, ticket.FieldStatus, ticket.FieldType, ticket.FieldSource, ticket.FieldPriority, ticket.FieldTicketNumber, ticket.FieldCreatorEmail, ticket.FieldExternalMessageID, ticket.FieldResolution, ticket.FieldResolutionCategory, ticket.FieldRatingComment, ticket.FieldMspTicketID:
+		case ticket.FieldTitle, ticket.FieldDescription, ticket.FieldStatus, ticket.FieldType, ticket.FieldSource, ticket.FieldPriority, ticket.FieldTicketNumber, ticket.FieldCreatorEmail, ticket.FieldExternalMessageID, ticket.FieldConversationID, ticket.FieldResolution, ticket.FieldResolutionCategory, ticket.FieldRatingComment, ticket.FieldMspTicketID:
 			values[i] = new(sql.NullString)
 		case ticket.FieldSLAResponseDeadline, ticket.FieldSLAResolutionDeadline, ticket.FieldFirstResponseAt, ticket.FieldResolvedAt, ticket.FieldClosedAt, ticket.FieldRatedAt, ticket.FieldCreatedAt, ticket.FieldUpdatedAt, ticket.FieldDeletedAt:
 			values[i] = new(sql.NullTime)
@@ -388,6 +390,12 @@ func (_m *Ticket) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field external_message_id", values[i])
 			} else if value.Valid {
 				_m.ExternalMessageID = value.String
+			}
+		case ticket.FieldConversationID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field conversation_id", values[i])
+			} else if value.Valid {
+				_m.ConversationID = value.String
 			}
 		case ticket.FieldAssigneeID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -737,6 +745,9 @@ func (_m *Ticket) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("external_message_id=")
 	builder.WriteString(_m.ExternalMessageID)
+	builder.WriteString(", ")
+	builder.WriteString("conversation_id=")
+	builder.WriteString(_m.ConversationID)
 	builder.WriteString(", ")
 	builder.WriteString("assignee_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.AssigneeID))

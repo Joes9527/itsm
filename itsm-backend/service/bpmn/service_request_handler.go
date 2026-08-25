@@ -3,9 +3,12 @@ package bpmn
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/servicerequest"
+	"itsm-backend/ent/ticket"
 
 	"go.uber.org/zap"
 )
@@ -35,18 +38,25 @@ func (h *ServiceRequestServiceTaskHandler) GetHandlerID() string {
 	return "service_request_handler"
 }
 
-// Execute 执行服务请求任务
+// Execute 执行服务请求任务。ServiceRequest 自身没有 status 字段——状态/审批/工作流全部
+// 委托给关联的 Ticket（见 ent/schema/servicerequest.go 的字段注释），所以这里凡是涉及
+// "状态"语义的动作都改成更新关联 Ticket 的状态，跟 GenericServiceTaskHandler 的写法一致；
+// ServiceRequest 自己的字段（processor_id/started_at/completed_at/completion_note）
+// 只用来记录资源交付过程本身的信息。
 func (h *ServiceRequestServiceTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
 	action, _ := variables["action"].(string)
 	switch action {
 	case "create_request":
-		return h.createRequest(ctx, variables)
+		// 域不变量声明而非死成员：ServiceRequest 必须先于流程存在（服务目录创建 →
+		// 触发流程），流程内创建与架构不符，永远显式报错。
+		return nil, fmt.Errorf("服务请求必须先通过服务目录申请创建，流程实例只能在请求已存在之后触发——不支持从流程内部创建新请求")
 	case "update_request":
 		return h.updateRequest(ctx, variables)
 	case "approve_request":
-		return h.approveRequest(ctx, variables)
+		return h.setLinkedTicketStatus(ctx, variables, "in_progress", "")
 	case "reject_request":
-		return h.rejectRequest(ctx, variables)
+		reason, _ := variables["reject_reason"].(string)
+		return h.rejectRequest(ctx, variables, reason)
 	case "assign_request":
 		return h.assignRequest(ctx, variables)
 	case "provision_resource":
@@ -54,8 +64,13 @@ func (h *ServiceRequestServiceTaskHandler) Execute(ctx context.Context, task *en
 	case "complete_request":
 		return h.completeRequest(ctx, variables)
 	case "cancel_request":
-		return h.cancelRequest(ctx, variables)
+		reason, _ := variables["cancel_reason"].(string)
+		return h.cancelRequest(ctx, variables, reason)
 	default:
+		// 与 ticket/incident/change/release 各 handler 一致的既有分发表约定：未知
+		// action 透传为成功空操作。本白名单是自定义 service_request 模板的扩展点，
+		// 内置 service_request_flow 全部走 generic_task 不经过这里
+		// （bpmn_usertask_callback_test.go 的反面用例锁定了该接线）。
 		return &dto.ServiceTaskResult{Success: true, Message: "无操作执行"}, nil
 	}
 }
@@ -65,127 +80,203 @@ func (h *ServiceRequestServiceTaskHandler) Validate(ctx context.Context, config 
 	return nil
 }
 
-// createRequest 创建服务请求
-func (h *ServiceRequestServiceTaskHandler) createRequest(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
-	title, _ := variables["title"].(string)
-	catalogID := GetIntFromVars(variables, "catalog_id")
-
-	if title == "" {
-		return nil, fmt.Errorf("请求标题不能为空")
+// getServiceRequest 按 request_id + 租户取出服务请求，找不到时返回明确错误。
+func (h *ServiceRequestServiceTaskHandler) getServiceRequest(ctx context.Context, variables map[string]interface{}) (*ent.ServiceRequest, int, error) {
+	requestID := GetIntFromVars(variables, "request_id")
+	if requestID <= 0 {
+		return nil, 0, fmt.Errorf("无效的请求ID")
 	}
-
-	// 注意：这里需要通过其他服务创建请求，简化处理返回成功
-	h.logger.Infow("Service request creation via BPMN", "title", title, "catalog_id", catalogID)
-
-	return &dto.ServiceTaskResult{
-		Success: true,
-		Message: "服务请求已创建",
-	}, nil
+	// fail closed：租户未知时直接拒绝，不退化成不带租户约束的全表查询
+	tenantID, err := RequireTenantID(ctx, variables)
+	if err != nil {
+		return nil, 0, err
+	}
+	sr, err := h.client.ServiceRequest.Query().
+		Where(servicerequest.ID(requestID), servicerequest.TenantID(tenantID)).
+		Only(ctx)
+	if err != nil {
+		return nil, 0, fmt.Errorf("查询服务请求失败: %w", err)
+	}
+	return sr, tenantID, nil
 }
 
-// updateRequest 更新服务请求
 func (h *ServiceRequestServiceTaskHandler) updateRequest(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
-	requestID := GetIntFromVars(variables, "request_id")
-	if requestID <= 0 {
-		return nil, fmt.Errorf("无效的请求ID")
+	sr, _, err := h.getServiceRequest(ctx, variables)
+	if err != nil {
+		return nil, err
 	}
 
-	h.logger.Infow("Service request updated via BPMN", "request_id", requestID)
-
-	return &dto.ServiceTaskResult{
-		Success: true,
-		Message: fmt.Sprintf("服务请求 %d 已更新", requestID),
-	}, nil
+	// 真实写入：只更新纯表单元数据字段（无状态语义），状态/审批/工作流语义
+	// 仍委托给关联工单（见类型注释）。此前是"加载+打日志假装成功"的空实现。
+	update := sr.Update()
+	if formData, ok := variables["form_data"].(map[string]interface{}); ok && len(formData) > 0 {
+		update.SetFormData(formData)
+	}
+	if costCenter, ok := variables["cost_center"].(string); ok && costCenter != "" {
+		update.SetCostCenter(costCenter)
+	}
+	if dataClass, ok := variables["data_classification"].(string); ok && dataClass != "" {
+		update.SetDataClassification(dataClass)
+	}
+	if needsPublicIP, ok := variables["needs_public_ip"].(bool); ok {
+		update.SetNeedsPublicIP(needsPublicIP)
+	}
+	if whitelist, ok := variables["source_ip_whitelist"].([]interface{}); ok {
+		ips := make([]string, 0, len(whitelist))
+		for _, item := range whitelist {
+			if s, ok := item.(string); ok {
+				ips = append(ips, s)
+			}
+		}
+		update.SetSourceIPWhitelist(ips)
+	}
+	if expireAtStr, ok := variables["expire_at"].(string); ok && expireAtStr != "" {
+		if expireAt, parseErr := time.Parse(time.RFC3339, expireAtStr); parseErr == nil {
+			update.SetExpireAt(expireAt)
+		}
+	}
+	if complianceAck, ok := variables["compliance_ack"].(bool); ok {
+		update.SetComplianceAck(complianceAck)
+	}
+	if _, err := update.Save(ctx); err != nil {
+		return nil, fmt.Errorf("更新服务请求失败: %w", err)
+	}
+	h.logger.Infow("Service request updated via BPMN", "request_id", sr.ID)
+	return &dto.ServiceTaskResult{Success: true, Message: fmt.Sprintf("服务请求 %d 已更新", sr.ID)}, nil
 }
 
-// approveRequest 审批服务请求
-func (h *ServiceRequestServiceTaskHandler) approveRequest(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
-	requestID := GetIntFromVars(variables, "request_id")
-	level := GetIntFromVars(variables, "approval_level")
-
-	if requestID <= 0 {
-		return nil, fmt.Errorf("无效的请求ID")
+// setLinkedTicketStatus 把服务请求关联工单的状态改成 newStatus，可选附一条完成备注。
+// 先读当前状态做转换校验（带租户约束），非法转换明确报错，不再无条件覆盖关联工单。
+func (h *ServiceRequestServiceTaskHandler) setLinkedTicketStatus(ctx context.Context, variables map[string]interface{}, newStatus, note string) (*dto.ServiceTaskResult, error) {
+	sr, tenantID, err := h.getServiceRequest(ctx, variables)
+	if err != nil {
+		return nil, err
 	}
 
-	h.logger.Infow("Service request approved via BPMN", "request_id", requestID, "level", level)
-
-	return &dto.ServiceTaskResult{
-		Success: true,
-		Message: fmt.Sprintf("服务请求 %d 第%d级审批已通过", requestID, level),
-	}, nil
-}
-
-// rejectRequest 驳回服务请求
-func (h *ServiceRequestServiceTaskHandler) rejectRequest(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
-	requestID := GetIntFromVars(variables, "request_id")
-	reason, _ := variables["reject_reason"].(string)
-
-	if requestID <= 0 {
-		return nil, fmt.Errorf("无效的请求ID")
+	current, err := h.client.Ticket.Query().
+		Where(ticket.ID(sr.TicketID), ticket.TenantID(tenantID)).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("关联工单 %d 不存在或不属于当前租户", sr.TicketID)
+		}
+		return nil, fmt.Errorf("查询关联工单失败: %w", err)
+	}
+	if !isValidLinkedTicketStatusTransition(current.Status, newStatus) {
+		return nil, fmt.Errorf("非法的关联工单状态转换: %s -> %s", current.Status, newStatus)
 	}
 
-	h.logger.Infow("Service request rejected via BPMN", "request_id", requestID, "reason", reason)
-
-	return &dto.ServiceTaskResult{
-		Success: true,
-		Message: fmt.Sprintf("服务请求 %d 已被驳回: %s", requestID, reason),
-	}, nil
+	update := current.Update()
+	if newStatus == "resolved" || newStatus == "closed" {
+		update = update.SetResolvedAt(time.Now())
+	}
+	if _, err := update.SetStatus(newStatus).SetUpdatedAt(time.Now()).Save(ctx); err != nil {
+		return nil, fmt.Errorf("更新关联工单状态失败: %w", err)
+	}
+	if note != "" {
+		if _, err := sr.Update().SetCompletionNote(note).Save(ctx); err != nil {
+			return nil, fmt.Errorf("记录服务请求备注失败: %w", err)
+		}
+	}
+	return &dto.ServiceTaskResult{Success: true, Message: fmt.Sprintf("服务请求 %d 对应工单状态已更新为 %s", sr.ID, newStatus)}, nil
 }
 
-// assignRequest 分配服务请求
+func (h *ServiceRequestServiceTaskHandler) rejectRequest(ctx context.Context, variables map[string]interface{}, reason string) (*dto.ServiceTaskResult, error) {
+	note := reason
+	if note == "" {
+		note = "已驳回"
+	}
+	return h.setLinkedTicketStatus(ctx, variables, "closed", note)
+}
+
 func (h *ServiceRequestServiceTaskHandler) assignRequest(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
-	requestID := GetIntFromVars(variables, "request_id")
+	sr, _, err := h.getServiceRequest(ctx, variables)
+	if err != nil {
+		return nil, err
+	}
 	assigneeID := GetIntFromVars(variables, "assignee_id")
+	if assigneeID <= 0 {
+		return nil, fmt.Errorf("无效的 assignee_id")
+	}
+	if _, err := sr.Update().SetProcessorID(assigneeID).Save(ctx); err != nil {
+		return nil, fmt.Errorf("分配服务请求失败: %w", err)
+	}
+	h.logger.Infow("Service request assigned via BPMN", "request_id", sr.ID, "assignee_id", assigneeID)
+	return &dto.ServiceTaskResult{Success: true, Message: fmt.Sprintf("服务请求 %d 已分配", sr.ID)}, nil
+}
 
-	if requestID <= 0 {
-		return nil, fmt.Errorf("无效的请求ID")
+func (h *ServiceRequestServiceTaskHandler) provisionResource(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+	sr, _, err := h.getServiceRequest(ctx, variables)
+	if err != nil {
+		return nil, err
+	}
+	resourceType, _ := variables["resource_type"].(string)
+	if _, err := sr.Update().SetStartedAt(time.Now()).Save(ctx); err != nil {
+		return nil, fmt.Errorf("记录资源开通开始时间失败: %w", err)
+	}
+	h.logger.Infow("Resource provisioning via BPMN", "request_id", sr.ID, "resource_type", resourceType)
+	return &dto.ServiceTaskResult{Success: true, Message: fmt.Sprintf("资源 %s 开始供应", resourceType)}, nil
+}
+
+func (h *ServiceRequestServiceTaskHandler) completeRequest(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+	sr, tenantID, err := h.getServiceRequest(ctx, variables)
+	if err != nil {
+		return nil, err
 	}
 
-	h.logger.Infow("Service request assigned via BPMN", "request_id", requestID, "assignee_id", assigneeID)
+	current, err := h.client.Ticket.Query().
+		Where(ticket.ID(sr.TicketID), ticket.TenantID(tenantID)).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("关联工单 %d 不存在或不属于当前租户", sr.TicketID)
+		}
+		return nil, fmt.Errorf("查询关联工单失败: %w", err)
+	}
+	if !isValidLinkedTicketStatusTransition(current.Status, "resolved") {
+		return nil, fmt.Errorf("非法的关联工单状态转换: %s -> %s", current.Status, "resolved")
+	}
 
-	return &dto.ServiceTaskResult{
-		Success: true,
-		Message: fmt.Sprintf("服务请求 %d 已分配", requestID),
-	}, nil
-}
-
-// provisionResource provision资源
-func (h *ServiceRequestServiceTaskHandler) provisionResource(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
-	requestID := GetIntFromVars(variables, "request_id")
-	resourceType, _ := variables["resource_type"].(string)
-
-	h.logger.Infow("Resource provisioning via BPMN", "request_id", requestID, "resource_type", resourceType)
-
-	return &dto.ServiceTaskResult{
-		Success: true,
-		Message: fmt.Sprintf("资源 %s 正在供应中", resourceType),
-	}, nil
-}
-
-// completeRequest 完成服务请求
-func (h *ServiceRequestServiceTaskHandler) completeRequest(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
-	requestID := GetIntFromVars(variables, "request_id")
 	completionNote, _ := variables["completion_note"].(string)
-
-	h.logger.Infow("Service request completed via BPMN", "request_id", requestID, "note", completionNote)
-
-	return &dto.ServiceTaskResult{
-		Success: true,
-		Message: fmt.Sprintf("服务请求 %d 已完成", requestID),
-	}, nil
+	if _, err := sr.Update().SetCompletedAt(time.Now()).SetCompletionNote(completionNote).Save(ctx); err != nil {
+		return nil, fmt.Errorf("记录服务请求完成信息失败: %w", err)
+	}
+	if _, err := current.Update().SetStatus("resolved").SetResolvedAt(time.Now()).SetUpdatedAt(time.Now()).Save(ctx); err != nil {
+		return nil, fmt.Errorf("更新关联工单状态失败: %w", err)
+	}
+	h.logger.Infow("Service request completed via BPMN", "request_id", sr.ID)
+	return &dto.ServiceTaskResult{Success: true, Message: fmt.Sprintf("服务请求 %d 已完成", sr.ID)}, nil
 }
 
-// cancelRequest 取消服务请求
-func (h *ServiceRequestServiceTaskHandler) cancelRequest(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
-	requestID := GetIntFromVars(variables, "request_id")
-	reason, _ := variables["cancel_reason"].(string)
+func (h *ServiceRequestServiceTaskHandler) cancelRequest(ctx context.Context, variables map[string]interface{}, reason string) (*dto.ServiceTaskResult, error) {
+	note := reason
+	if note == "" {
+		note = "已取消"
+	}
+	return h.setLinkedTicketStatus(ctx, variables, "closed", note)
+}
 
-	h.logger.Infow("Service request cancelled via BPMN", "request_id", requestID, "reason", reason)
-
-	return &dto.ServiceTaskResult{
-		Success: true,
-		Message: fmt.Sprintf("服务请求 %d 已取消: %s", requestID, reason),
-	}, nil
+// isValidLinkedTicketStatusTransition 服务请求关联工单的状态转换白名单。
+// ServiceRequest 自身的状态语义全部委托给关联工单，这里只放行服务请求生命周期
+// 会触发的转换（approve→in_progress、reject/cancel→closed、complete→resolved），
+// 防止动作被任意调用时把工单跳成非法状态。同状态幂等放行（重复完成/驳回不报错）。
+func isValidLinkedTicketStatusTransition(current, newStatus string) bool {
+	if current == newStatus {
+		return true
+	}
+	transitions := map[string]map[string]struct{}{
+		"new":         {"in_progress": {}, "resolved": {}, "closed": {}},
+		"open":        {"in_progress": {}, "resolved": {}, "closed": {}},
+		"assigned":    {"in_progress": {}, "resolved": {}, "closed": {}},
+		"pending":     {"in_progress": {}, "resolved": {}, "closed": {}},
+		"in_progress": {"resolved": {}, "closed": {}},
+	}
+	allowed, ok := transitions[current]
+	if !ok {
+		return false
+	}
+	_, ok = allowed[newStatus]
+	return ok
 }
 
 // 确保 ServiceRequestServiceTaskHandler 实现了 ServiceTaskHandlerInterface

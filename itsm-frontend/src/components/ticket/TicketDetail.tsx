@@ -113,7 +113,7 @@ const getPriorityText = (priority: string): string => {
 const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
   const params = useParams();
   const { message: antMessage } = App.useApp();
-  const { user: currentUser } = useAuthStore();
+  const { user: currentUser, hasPermission } = useAuthStore();
   const { handleError } = useErrorHandler();
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [loading, setLoading] = useState(true);
@@ -173,6 +173,11 @@ const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
 
   // Get users for assignment
   const fetchUsers = useCallback(async () => {
+    // 无 user:read 权限时跳过用户列表加载（转派/抄送已按权限隐藏）
+    if (!hasPermission('user:read')) {
+      setUsers([]);
+      return;
+    }
     try {
       setLoadingUsers(true);
       const data = await UserApi.getUsers({ pageSize: 100 });
@@ -183,7 +188,7 @@ const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
     } finally {
       setLoadingUsers(false);
     }
-  }, [antMessage]);
+  }, [antMessage, hasPermission]);
 
   // Get ticket SLA info
   const fetchSLAInfo = useCallback(async () => {
@@ -1073,7 +1078,8 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
               const r = raw as unknown as Record<string, unknown>;
               return {
                 id: Number(r.id ?? 0),
-                createdAt: String(r.changedAt ?? r.createdAt ?? ''),
+                action: r.action as string | undefined,
+                createdAt: String(r.createdAt ?? r.changedAt ?? ''),
                 user: (r.user as { name?: string; username?: string }) ?? undefined,
                 fieldName: r.fieldName as string | undefined,
                 oldValue: r.oldValue as string | undefined,

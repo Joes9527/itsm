@@ -30,9 +30,19 @@ func ToUserDetailResponse(user *ent.User) *UserDetailResponse {
 		Active:     user.Active,
 		TenantID:   user.TenantID,
 		Role:       string(user.Role),
-		MSPRole:    func() *string { s := string(user.MspRole); return &s }(),
-		CreatedAt:  user.CreatedAt,
-		UpdatedAt:  user.UpdatedAt,
+		AdditionalRoleIds: func() []int {
+			if len(user.Edges.Roles) == 0 {
+				return nil
+			}
+			ids := make([]int, 0, len(user.Edges.Roles))
+			for _, r := range user.Edges.Roles {
+				ids = append(ids, r.ID)
+			}
+			return ids
+		}(),
+		MSPRole:   func() *string { s := string(user.MspRole); return &s }(),
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
 	}
 }
 

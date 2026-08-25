@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Select, Avatar, Spin, message } from 'antd';
 import { UserApi } from '@/lib/api/user-api';
 import type { User } from '@/lib/api/user-api';
+import { useAuthStore } from '@/lib/store/auth-store';
 import { User as UserIcon } from 'lucide-react';
 interface UserSelectProps {
   value?: number[];
@@ -24,12 +25,20 @@ export const UserSelect: React.FC<UserSelectProps> = ({
   disabled = false,
   allowClear = true,
 }) => {
+  const hasPermission = useAuthStore(s => s.hasPermission);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchValue, setSearchValue] = useState('');
 
+  // 无 user:read 权限时（如 end_user）不加载用户列表，避免 403
+  const canLoadUsers = hasPermission('user:read');
+
   // 获取用户列表
   const fetchUsers = async (search?: string) => {
+    if (!canLoadUsers) {
+      setUsers([]);
+      return;
+    }
     try {
       setLoading(true);
       const response = await UserApi.getUsers({

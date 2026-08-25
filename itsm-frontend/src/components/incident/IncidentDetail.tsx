@@ -25,13 +25,14 @@ import {
   Spin,
   Alert,
 } from 'antd';
-import { ArrowUp, Plus, Save, Pencil, FileText, Clock, AlertCircle, CheckCircle, Plug, AreaChart, UserCheck, Siren } from 'lucide-react';
+import { ArrowUp, ArrowRight, Plus, Save, Pencil, FileText, Clock, AlertCircle, CheckCircle, Plug, AreaChart, UserCheck, Siren } from 'lucide-react';
 import { useRouter, useParams } from 'next/navigation';
 import dayjs from 'dayjs';
 
 import { IncidentAPI } from '@/lib/api/';
 import { UserApi } from '@/lib/api/user-api';
 import type { User } from '@/lib/api/user-api';
+import { useAuthStore } from '@/lib/store/auth-store';
 import {
   IncidentStatus,
   IncidentStatusLabels,
@@ -88,11 +89,14 @@ const IncidentDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
   // 支持通过props传入id，或通过useParams获取
   const id = propId || (params?.id as string);
   const { handleError } = useErrorHandler();
+  const hasPermission = useAuthStore(s => s.hasPermission);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [data, setData] = useState<Incident | null>(null);
   const [escalateModalVisible, setEscalateModalVisible] = useState(false);
   const [resolveModalVisible, setResolveModalVisible] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [converting, setConverting] = useState(false);
   const [escalating, setEscalating] = useState(false);
   const [resolving, setResolving] = useState(false);
   const [reopening, setReopening] = useState(false);
@@ -183,6 +187,10 @@ const IncidentDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
 
   // 加载用户列表，用于负责人/报告人姓名展示与指派选择
   useEffect(() => {
+    if (!hasPermission('user:read')) {
+      setUsers([]);
+      return;
+    }
     const loadUsers = async () => {
       setLoadingUsers(true);
       try {
@@ -196,7 +204,7 @@ const IncidentDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
       }
     };
     loadUsers();
-  }, []);
+  }, [hasPermission]);
 
   // 用户 ID → 姓名（找不到时回退为 #ID）
   const getUserName = (userId?: number | null) => {
@@ -270,6 +278,39 @@ const IncidentDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
       handleError(error, 'resolveIncident', '解决失败');
     } finally {
       setResolving(false);
+    }
+  };
+
+  const handleClose = async () => {
+    if (!data) return;
+
+    setClosing(true);
+    try {
+      await IncidentAPI.closeIncident(data.id);
+      message.success('事件已关闭');
+      loadData();
+    } catch (error) {
+      handleError(error, 'closeIncident', '关闭失败');
+    } finally {
+      setClosing(false);
+    }
+  };
+
+  const handleConvertToProblem = async () => {
+    if (!data) return;
+
+    setConverting(true);
+    try {
+      const result = await IncidentAPI.convertToProblem(data.id, {
+        title: data.title,
+        description: data.description,
+      });
+      message.success(`已转为问题单 #${result.id}`);
+      router.push(`/problems/${result.id}`);
+    } catch (error) {
+      handleError(error, 'convertToProblem', '转为问题失败');
+    } finally {
+      setConverting(false);
     }
   };
 
@@ -558,6 +599,18 @@ const IncidentDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
                   loading={resolving}
                 >
                   解决
+                </Button>
+              )}
+              {/* 已解决 → 关闭 */}
+              {data.status === IncidentStatus.RESOLVED && (
+                <Button danger onClick={handleClose} loading={closing}>
+                  关闭
+                </Button>
+              )}
+              {/* 转为问题单 */}
+              {!data.problemId && data.status !== IncidentStatus.CLOSED && (
+                <Button icon={<ArrowRight />} onClick={handleConvertToProblem} loading={converting}>
+                  转为问题
                 </Button>
               )}
               {(data.status === IncidentStatus.RESOLVED || data.status === IncidentStatus.CLOSED) && (

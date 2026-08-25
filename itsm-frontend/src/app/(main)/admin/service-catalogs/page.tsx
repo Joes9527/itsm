@@ -41,6 +41,7 @@ import {
 } from 'antd';
 import { ServiceCatalogApi } from '@/lib/api/service-catalog-api';
 import { CMDBApi } from '@/lib/api/cmdb-api';
+import { WorkflowApi } from '@/lib/api/workflow-api';
 import { BatchActionBar, type BatchAction } from '@/components/business/BatchActionBar';
 import { CustomFieldsEditor } from '@/components/common/CustomFieldsEditor';
 import type {
@@ -67,6 +68,7 @@ const ServiceCatalogManagement = () => {
   const [cloudServiceFilter, setCloudServiceFilter] = useState<number | undefined>(undefined);
   const [ciTypes, setCiTypes] = useState<CIType[]>([]);
   const [cloudServices, setCloudServices] = useState<CloudService[]>([]);
+  const [processDefinitions, setProcessDefinitions] = useState<Array<{ key: string; name: string }>>([]);
   const [optionsLoading, setOptionsLoading] = useState(false);
   const [form] = Form.useForm();
 
@@ -115,12 +117,16 @@ const ServiceCatalogManagement = () => {
     const loadOptions = async () => {
       try {
         setOptionsLoading(true);
-        const [types, services] = await Promise.all([
+        const [types, services, workflows] = await Promise.all([
 		  CMDBApi.getCITypes(),
           CMDBApi.getCloudServices(),
+          WorkflowApi.getWorkflows({ page: 1, pageSize: 100 }),
         ]);
         setCiTypes(types || []);
         setCloudServices(services || []);
+        setProcessDefinitions(
+          (workflows.workflows || []).map(w => ({ key: w.code, name: w.name }))
+        );
       } catch (error) {
         message.error('加载CMDB选项失败');
       } finally {
@@ -177,6 +183,7 @@ const ServiceCatalogManagement = () => {
         ciTypeId: values.ciTypeId,
         cloudServiceId: values.cloudServiceId,
         fields,
+        processDefinitionKey: values.processDefinitionKey || undefined,
         ...(values.status ? { status: values.status } : {}),
       } as CreateServiceItemRequest;
       if (editingCatalog) {
@@ -222,6 +229,7 @@ const ServiceCatalogManagement = () => {
       ciTypeId: catalog.ciTypeId,
       cloudServiceId: catalog.cloudServiceId,
       fields: fieldsForForm,
+      processDefinitionKey: catalog.processDefinitionKey,
     });
     setShowModal(true);
   };
@@ -813,6 +821,25 @@ const ServiceCatalogManagement = () => {
               <Col span={8}>
                 <Form.Item name="sortOrder" label="排序">
                   <InputNumber min={0} placeholder="0" style={{ width: '100%' }} />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Row gutter={16}>
+              <Col span={16}>
+                <Form.Item
+                  name="processDefinitionKey"
+                  label="专属审批流程"
+                  tooltip="可选。指定后该服务提交的申请优先走这个 BPMN 流程，不再使用通用的服务请求审批流程；不选则沿用默认流程"
+                >
+                  <Select
+                    allowClear
+                    showSearch
+                    placeholder="不选则使用默认的服务请求审批流程"
+                    options={processDefinitions.map(p => ({ label: `${p.name} (${p.key})`, value: p.key }))}
+                    filterOption={(input, option) =>
+                      (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())
+                    }
+                  />
                 </Form.Item>
               </Col>
             </Row>

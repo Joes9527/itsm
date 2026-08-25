@@ -371,6 +371,7 @@ export default function ApprovalChainsPage() {
         filters={filters}
         onFilterChange={handleFilterChange}
         onRefresh={handleRefresh}
+        onCreateChain={handleCreateChain}
         loading={loading}
       />
 

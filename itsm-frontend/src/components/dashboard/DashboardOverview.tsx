@@ -40,6 +40,7 @@ import type { TicketStats, UserStats, SystemStats } from '@/types/dashboard';
 import type { Ticket } from '@/types/ticket';
 import type { User } from '@/types/user';
 import { useI18n } from '@/lib/i18n';
+import { useAuthStore } from '@/lib/store/auth-store';
 
 interface DashboardOverviewProps {
   timeRange?: '24h' | '7d' | '30d';
@@ -51,6 +52,7 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   refreshInterval = 30000, // 30秒
 }) => {
   const { t } = useI18n();
+  const hasPermission = useAuthStore(s => s.hasPermission);
   const [loading, setLoading] = useState(false);
   const [ticketStats, setTicketStats] = useState<TicketStats | null>(null);
   const [userStats, setUserStats] = useState<UserStats | null>(null);
@@ -80,7 +82,9 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             database?: { connections?: number };
           }>,
           TicketApi.getTickets({ page: 1, size: 5, sort: 'created_at,desc' }),
-          UserApi.getUsers({ page: 1, pageSize: 5, status: 'active' }),
+          hasPermission('user:read')
+            ? UserApi.getUsers({ page: 1, pageSize: 5, status: 'active' })
+            : Promise.resolve({ users: [] }),
         ]);
 
       // 转换工单统计数据

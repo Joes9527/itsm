@@ -230,6 +230,8 @@ type CreateParams struct {
 	CreatorEmail string
 	// ExternalMessageID 外部消息ID（如邮件 internetMessageId），用于建单去重判断
 	ExternalMessageID string
+	// ConversationID 邮件对话线程ID（Graph conversationId），用于识别用户回复
+	ConversationID string
 }
 
 // UpdateParams 工单更新参数

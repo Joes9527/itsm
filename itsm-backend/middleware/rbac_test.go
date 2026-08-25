@@ -131,11 +131,6 @@ func TestHasResourcePermission(t *testing.T) {
 		assert.True(t, result)
 	})
 
-	t.Run("Admin Has Ticket Write Permission", func(t *testing.T) {
-		result := hasResourcePermission(nil, "admin", "ticket", "write", 1)
-		assert.True(t, result)
-	})
-
 	t.Run("End User Has Ticket Read Permission", func(t *testing.T) {
 		result := hasResourcePermission(nil, "end_user", "ticket", "read", 1)
 		assert.True(t, result)
@@ -144,21 +139,6 @@ func TestHasResourcePermission(t *testing.T) {
 	t.Run("End User Does Not Have Ticket Delete Permission", func(t *testing.T) {
 		result := hasResourcePermission(nil, "end_user", "ticket", "delete", 1)
 		assert.False(t, result)
-	})
-
-	t.Run("Agent Has Dashboard Read Permission", func(t *testing.T) {
-		result := hasResourcePermission(nil, "agent", "dashboard", "read", 1)
-		assert.True(t, result)
-	})
-
-	t.Run("Technician Has CMDB Read Permission", func(t *testing.T) {
-		result := hasResourcePermission(nil, "technician", "cmdb", "read", 1)
-		assert.True(t, result)
-	})
-
-	t.Run("Manager Has User Read Permission", func(t *testing.T) {
-		result := hasResourcePermission(nil, "manager", "user", "read", 1)
-		assert.True(t, result)
 	})
 
 	t.Run("Unknown Role Has No Permissions", func(t *testing.T) {
@@ -228,6 +208,39 @@ func TestGetPermissionFromPath(t *testing.T) {
 	t.Run("Unknown Path Returns Nil", func(t *testing.T) {
 		perm := getPermissionFromPath("GET", "/api/v1/unknown/path")
 		assert.Nil(t, perm)
+	})
+
+	// 回归：/api/v1/releases 曾缺失于 ResourceActionMap，导致全局 RBACMiddleware
+	// 对所有非 super_admin 用户直接 2003（路由级 RequirePermission 根本轮不到）。
+	t.Run("GET Releases Returns Read Permission", func(t *testing.T) {
+		perm := getPermissionFromPath("GET", "/api/v1/releases")
+		assert.NotNil(t, perm)
+		assert.Equal(t, "release", perm.Resource)
+		assert.Equal(t, "read", perm.Action)
+	})
+
+	t.Run("GET Releases Stats Returns Read Permission", func(t *testing.T) {
+		perm := getPermissionFromPath("GET", "/api/v1/releases/stats")
+		assert.NotNil(t, perm)
+		assert.Equal(t, "release", perm.Resource)
+		assert.Equal(t, "read", perm.Action)
+	})
+
+	t.Run("POST Release Approve Returns Approve Permission", func(t *testing.T) {
+		// 动作型子路由需要比 /releases/* 通配符更具体的映射，否则只被授予
+		// release:approve（没有 release:write）的审批人会被全局中间件挡在路由自己
+		// 声明的 RequirePermission("release","approve") 之前，见 tickets/*/assign 同类先例。
+		perm := getPermissionFromPath("POST", "/api/v1/releases/1/approve")
+		assert.NotNil(t, perm)
+		assert.Equal(t, "release", perm.Resource)
+		assert.Equal(t, "approve", perm.Action)
+	})
+
+	t.Run("DELETE Release Returns Delete Permission", func(t *testing.T) {
+		perm := getPermissionFromPath("DELETE", "/api/v1/releases/1")
+		assert.NotNil(t, perm)
+		assert.Equal(t, "release", perm.Resource)
+		assert.Equal(t, "delete", perm.Action)
 	})
 }
 

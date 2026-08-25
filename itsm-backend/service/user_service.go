@@ -103,7 +103,8 @@ func (s *UserService) ListUsers(ctx context.Context, req *dto.ListUsersRequest, 
 	s.logger.Infof("获取用户列表: page=%d, pageSize=%d", req.Page, req.PageSize)
 
 	query := s.client.User.Query().
-		Where(user.TenantIDEQ(tenantID))
+		Where(user.TenantIDEQ(tenantID)).
+		WithRoles()
 
 	// 按状态过滤
 	if req.Status != "" {
@@ -157,8 +158,18 @@ func (s *UserService) ListUsers(ctx context.Context, req *dto.ListUsersRequest, 
 			Active:     u.Active,
 			TenantID:   u.TenantID,
 			Role:       string(u.Role),
-			CreatedAt:  u.CreatedAt,
-			UpdatedAt:  u.UpdatedAt,
+			AdditionalRoleIds: func() []int {
+				if len(u.Edges.Roles) == 0 {
+					return nil
+				}
+				ids := make([]int, 0, len(u.Edges.Roles))
+				for _, r := range u.Edges.Roles {
+					ids = append(ids, r.ID)
+				}
+				return ids
+			}(),
+			CreatedAt: u.CreatedAt,
+			UpdatedAt: u.UpdatedAt,
 		})
 	}
 
@@ -185,6 +196,7 @@ func (s *UserService) GetUserByID(ctx context.Context, id int, tenantID int) (*e
 			user.IDEQ(id),
 			user.TenantIDEQ(tenantID),
 		).
+		WithRoles().
 		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -272,9 +284,26 @@ func (s *UserService) UpdateUser(ctx context.Context, id int, req *dto.UpdateUse
 
 	}
 
+	// 附加角色（仅影响 BPMN 按角色路由的候选资格，不影响 RBAC 权限判定，见 dto.UpdateUserRequest
+	// 里 AdditionalRoleIds 的注释）。nil 表示不修改；非 nil 时用传入的列表整体替换现有附加角色——
+	// 先清空再整体重设，语义等同于"提交的列表就是完整的附加角色集合"，避免增量 add/remove 的状态漂移。
+	if req.AdditionalRoleIds != nil {
+		update = update.ClearRoles()
+		if len(*req.AdditionalRoleIds) > 0 {
+			update = update.AddRoleIDs(*req.AdditionalRoleIds...)
+		}
+	}
+
 	userEntity, err := update.Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("更新用户失败: %w", err)
+	}
+
+	// update.Save 返回的实体不带预加载的边，这里补一次查询把最新的附加角色状态
+	// 挂到 Edges.Roles 上，供 controller 层 dto.ToUserDetailResponse 使用。查询失败
+	// 不影响主流程——Edges.Roles 保持 nil 即可。
+	if roles, rolesErr := userEntity.QueryRoles().All(ctx); rolesErr == nil {
+		userEntity.Edges.Roles = roles
 	}
 
 	s.logger.Infof("用户更新成功: ID=%d", id)

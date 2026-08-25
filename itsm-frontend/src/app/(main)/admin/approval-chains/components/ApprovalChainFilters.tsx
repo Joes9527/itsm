@@ -6,7 +6,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { Card, Row, Col, Input, Select, DatePicker, Button, Space } from 'antd';
-import { Search as SearchIcon, RefreshCw, Filter } from 'lucide-react';
+import { Search as SearchIcon, RefreshCw, Filter, Plus } from 'lucide-react';
 import type { ApprovalChainFilters as ApprovalChainFiltersType } from '@/types/approval-chain';
 import { useDebouncedCallback } from '@/lib/component-utils';
 import dayjs from 'dayjs';
@@ -20,6 +20,7 @@ interface ApprovalChainFiltersProps {
   filters: ApprovalChainFiltersType;
   onFilterChange: (filters: ApprovalChainFiltersType) => void;
   onRefresh: () => void;
+  onCreateChain?: () => void;
   loading?: boolean;
 }
 
@@ -27,6 +28,7 @@ export function ApprovalChainFilters({
   filters,
   onFilterChange,
   onRefresh,
+  onCreateChain,
   loading = false,
 }: ApprovalChainFiltersProps) {
   const [localFilters, setLocalFilters] = useState<ApprovalChainFiltersType>(filters);
@@ -135,6 +137,11 @@ export function ApprovalChainFilters({
             <span className="text-sm font-medium text-gray-700">操作</span>
           </div>
           <Space>
+            {onCreateChain && (
+              <Button type="primary" icon={<Plus className="w-4 h-4" />} onClick={onCreateChain}>
+                新建审批链
+              </Button>
+            )}
             <Button icon={<RefreshCw className="w-4 h-4" />} onClick={onRefresh} loading={loading}>
               刷新
             </Button>

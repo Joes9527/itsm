@@ -20,6 +20,7 @@ interface BpmnEventDefinition {
 }
 import { UserApi, type User as ApiUser } from '@/lib/api/user-api';
 import { RoleAPI } from '@/lib/api/role-api';
+import { departmentService, type Department } from '@/lib/services/department-service';
 import { httpClient } from '@/lib/api/http-client';
 import type { BpmnNodeSelection } from '../BPMNDesigner';
 
@@ -54,6 +55,27 @@ function toCsv(values: string[]): string {
 }
 
 /**
+ * 部门树展平为带层级缩进的 Select options（集团→分公司→部门→科室 都是这棵树上不同深度的节点，
+ * 缩进用 "—" 前缀帮用户在下拉框里分辨层级，不依赖后端返回任何层级/类型字段）。
+ */
+function flattenDepartmentOptions(
+  nodes: Department[],
+  depth = 0
+): { label: string; value: number }[] {
+  const result: { label: string; value: number }[] = [];
+  for (const node of nodes) {
+    result.push({
+      label: `${depth > 0 ? '—'.repeat(depth) + ' ' : ''}${node.name}`,
+      value: node.id,
+    });
+    if (node.children && node.children.length > 0) {
+      result.push(...flattenDepartmentOptions(node.children, depth + 1));
+    }
+  }
+  return result;
+}
+
+/**
  * 工作流节点属性面板。
  * - 支持多种BPMN节点类型的属性可视化配置
  */
@@ -65,6 +87,8 @@ export default function WorkflowNodeInspector({
   const [users, setUsers] = useState<ApiUser[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [roles, setRoles] = useState<{ id: number; name: string; code: string }[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [loadingDepartments, setLoadingDepartments] = useState(false);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [loadingGroups, setLoadingGroups] = useState(false);
   const [loadingRoles, setLoadingRoles] = useState(false);
@@ -75,7 +99,7 @@ export default function WorkflowNodeInspector({
     const loadUsers = async () => {
       setLoadingUsers(true);
       try {
-        const resp = await UserApi.getUsers({ page: 1, pageSize: 200 });
+        const resp = await UserApi.getUsers({ page: 1, pageSize: 100 });
         if (!cancelled) setUsers((resp.users as ApiUser[]) || []);
       } catch (err) {
         console.error('加载用户列表失败:', err);
@@ -87,7 +111,7 @@ export default function WorkflowNodeInspector({
       setLoadingGroups(true);
       try {
         const tenantId = httpClient.getTenantId() || 1;
-        const resp = await GroupAPI.getGroups({ page: 1, pageSize: 200, tenantId: tenantId });
+        const resp = await GroupAPI.getGroups({ page: 1, pageSize: 100, tenantId: tenantId });
         if (!cancelled) setGroups(resp.groups || []);
       } catch (err) {
         console.error('加载组列表失败:', err);
@@ -107,9 +131,21 @@ export default function WorkflowNodeInspector({
         if (!cancelled) setLoadingRoles(false);
       }
     };
+    const loadDepartments = async () => {
+      setLoadingDepartments(true);
+      try {
+        const tree = await departmentService.getDepartmentTree();
+        if (!cancelled) setDepartments(tree);
+      } catch (err) {
+        console.error('加载部门列表失败:', err);
+      } finally {
+        if (!cancelled) setLoadingDepartments(false);
+      }
+    };
     loadUsers();
     loadGroups();
     loadRoles();
+    loadDepartments();
     return () => {
       cancelled = true;
     };
@@ -218,6 +254,8 @@ export default function WorkflowNodeInspector({
 
   // 用户任务属性
   const currentAssignee = (bo.assignee as string) || '';
+  const currentAssigneeRole = (bo.assigneeRole as string) || '';
+  const currentAssigneeDeptId = bo.assigneeDeptId ? Number(bo.assigneeDeptId) : undefined;
   const currentCandidateUsers = parseCsv(bo.candidateUsers as string | undefined);
   const currentCandidateGroups = parseCsv(bo.candidateGroups as string | undefined);
   const currentPriority = (bo.priority as string) || '';
@@ -310,6 +348,16 @@ export default function WorkflowNodeInspector({
     label: u.name || u.username || `User#${u.id}`,
     value: u.username,
   }));
+
+  // 角色选项（按角色指派用 role.code，对应后端 resolveRoleCandidates 按 role=? 查询）
+  const assigneeRoleOptions = roles.map(r => ({
+    label: r.name,
+    value: r.code,
+  }));
+
+  // 部门选项（固定部门审批人用 department.id，对应后端 resolveFixedScopeAssignee 的
+  // task.AssigneeDeptId → DeptManagerResolver 解析该固定部门的负责人，非申请人自己的部门）
+  const departmentOptions = flattenDepartmentOptions(departments);
 
   const ccUserOptions = users.map(u => ({
     label: `${u.name || u.username || `User#${u.id}`}${u.department ? ` (${u.department})` : ''}`,
@@ -549,7 +597,7 @@ export default function WorkflowNodeInspector({
                 showSearch
                 placeholder="选择受理人（单一用户）"
                 value={currentAssignee || undefined}
-                onChange={value => apply({ assignee: value || '' })}
+                onChange={value => apply({ assignee: value || '', assigneeRole: '', assigneeDeptId: undefined })}
                 className="w-full"
                 loading={loadingUsers}
                 filterOption={(input, option) =>
@@ -559,7 +607,66 @@ export default function WorkflowNodeInspector({
                 size="small"
               />
               <Text type="secondary" className="text-xs mt-1 block">
-                指定单一用户为该任务的处理人
+                指定单一用户为该任务的处理人；与下方"按角色指派"互斥，设置其一会清空另一个
+              </Text>
+            </div>
+
+            {/* Assignee Role — 按角色指派，跟固定受理人互斥。引擎按角色查该租户下所有该角色的
+                在职用户作为候选人（谁先领谁审批），不是挑固定某一个人，适合"总经理""IT总监"这类
+                跟具体人解耦、只认岗位角色的审批环节。 */}
+            <div className="mt-3">
+              <Text strong className="text-sm flex items-center mb-2">
+                <Shield className="w-3.5 h-3.5 mr-1" />
+                按角色指派 (assigneeRole)
+                <Tag color="purple" className="ml-2 text-xs">候选</Tag>
+              </Text>
+              <Select
+                allowClear
+                showSearch
+                placeholder="选择角色（该角色下所有用户均可处理）"
+                value={currentAssigneeRole || undefined}
+                onChange={value => apply({ assigneeRole: value || '', assignee: '', assigneeDeptId: undefined })}
+                className="w-full"
+                loading={loadingRoles}
+                filterOption={(input, option) =>
+                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                }
+                options={assigneeRoleOptions}
+                size="small"
+              />
+              <Text type="secondary" className="text-xs mt-1 block">
+                指定该任务由某个角色下的用户处理（不依赖具体人，适合 IT总监等纯权限角色；跨部门/公司的组织架构负责人请用下方"固定部门审批人"）
+              </Text>
+            </div>
+
+            {/* Assignee Dept — 固定部门审批人，跟前两者互斥。用于"总经理""分公司负责人"这类
+                跟组织架构位置绑定、不看申请人自己部门的审批环节：把这里选成部门树的根节点就是
+                总经理，选成某个分公司节点就是那个分公司的负责人。引擎复用"部门经理审批"同一条
+                DeptManagerResolver，只是范围钉死在这里选的部门，不取申请人自己的。 */}
+            <div className="mt-3">
+              <Text strong className="text-sm flex items-center mb-2">
+                <Shield className="w-3.5 h-3.5 mr-1" />
+                固定部门审批人 (assigneeDeptId)
+                <Tag color="orange" className="ml-2 text-xs">组织架构</Tag>
+              </Text>
+              <Select
+                allowClear
+                showSearch
+                placeholder="选择部门（该部门负责人处理，无负责人则向上级部门找）"
+                value={currentAssigneeDeptId}
+                onChange={value =>
+                  apply({ assigneeDeptId: value ?? undefined, assignee: '', assigneeRole: '' })
+                }
+                className="w-full"
+                loading={loadingDepartments}
+                filterOption={(input, option) =>
+                  (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())
+                }
+                options={departmentOptions}
+                size="small"
+              />
+              <Text type="secondary" className="text-xs mt-1 block">
+                指定该任务由某个固定部门的负责人处理（例如选公司根部门=总经理审批）；与"受理人""按角色指派"互斥
               </Text>
             </div>
 

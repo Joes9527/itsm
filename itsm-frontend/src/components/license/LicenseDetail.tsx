@@ -27,6 +27,7 @@ import type { License } from '@/lib/api/asset-api';
 import { AssetApi } from '@/lib/api/asset-api';
 import type { User as UserType } from '@/lib/api/user-api';
 import { UserApi } from '@/lib/api/user-api';
+import { useAuthStore } from '@/lib/store/auth-store';
 
 const { Title, Text } = Typography;
 
@@ -56,6 +57,7 @@ const typeLabels: Record<string, string> = {
 const LicenseDetail: React.FC = () => {
   const { id } = useParams() as { id: string };
   const router = useRouter();
+  const hasPermission = useAuthStore(s => s.hasPermission);
   const [loading, setLoading] = useState(true);
   const [license, setLicense] = useState<License | null>(null);
   const [assignModalVisible, setAssignModalVisible] = useState(false);
@@ -82,6 +84,10 @@ const LicenseDetail: React.FC = () => {
   };
 
   const loadUsers = async () => {
+    if (!hasPermission('user:read')) {
+      setUsers([]);
+      return;
+    }
     setUsersLoading(true);
     try {
       const response = await UserApi.getUsers({ pageSize: 100 });

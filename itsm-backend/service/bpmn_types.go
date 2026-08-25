@@ -177,6 +177,23 @@ type BPMNServiceTask struct {
 	CCVariable         string `xml:"ccVariable,attr"`
 	CCNotify           string `xml:"ccNotify,attr"`
 	NotifyChannels     string `xml:"notifyChannels,attr"`
+
+	// ExtensionElements 承载 <bpmn:metaData>，用法跟 BPMNUserTask 完全一样——
+	// 之前这里没有这个字段，encoding/xml 会静默丢弃 <bpmn:extensionElements> 子元素，
+	// 导致内置模板里所有 serviceTask 声明的 service_task_type/action 完全读不到，
+	// handleElement 只能退回按 implementation/class 等属性猜 handler ID，而内置模板
+	// 这些属性要么是占位符 "##WebService" 要么整个不写，猜测必然落空。
+	ExtensionElements *BPMNExtensionElements `xml:"extensionElements"`
+}
+
+// ServiceTaskType 返回该服务任务声明的 service_task_type metaData，未声明时返回空串。
+func (e *BPMNServiceTask) ServiceTaskType() string {
+	return e.ExtensionElements.GetMetaData(bpmnMetaDataServiceTaskType)
+}
+
+// ServiceTaskAction 返回该服务任务声明的 action metaData，未声明时返回空串。
+func (e *BPMNServiceTask) ServiceTaskAction() string {
+	return e.ExtensionElements.GetMetaData(bpmnMetaDataAction)
 }
 
 // GetID 获取ID

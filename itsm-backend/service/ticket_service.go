@@ -6,6 +6,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -152,6 +153,7 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 		Source:            req.Source,
 		CreatorEmail:      req.CreatorEmail,
 		ExternalMessageID: req.ExternalMessageID,
+		ConversationID:    req.ConversationID,
 	}
 
 	if assigneeID != 0 {
@@ -159,6 +161,25 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 	}
 	if categoryID != nil {
 		params.CategoryID = categoryID
+	}
+
+	// 验证必填自定义字段（模板字段定义中标记为 required 的字段必须在提交中存在且非空）。
+	// 必须在 s.repo.Create 之前做——之前的顺序是先落库再校验，校验失败时已经落库的
+	// 工单行（连同工单编号）没有任何回滚，会在数据库里留下一个永远失败创建了的孤儿行，
+	// 污染报表/SLA统计/工单号序列。
+	if req.TemplateID != nil && len(req.FormFields) > 0 {
+		if missing, err := s.validateRequiredFields(ctx, tenantID, *req.TemplateID, req.FormFields); err != nil {
+			s.logger.Errorw("Required field validation error", "error", err, "template_id", *req.TemplateID)
+		} else if len(missing) > 0 {
+			return nil, fmt.Errorf("缺少必填字段: %s", strings.Join(missing, ", "))
+		}
+		// 校验字段值本身的格式/取值范围（number 是否数字、select/multiselect 的值是否在
+		// options 里）。同样必须在 s.repo.Create 之前做：这类校验此前只在落库后的
+		// CreateValues 里跑，写入失败被当成"持久化失败"静默吞掉（只记日志，工单照样创建
+		// 成功），导致越界值既不报错也不落库，提交者对自己的数据丢失毫无感知。
+		if err := s.validateFieldValueFormats(ctx, tenantID, *req.TemplateID, req.FormFields); err != nil {
+			return nil, err
+		}
 	}
 
 	// 通过 Repository 创建工单
@@ -174,15 +195,6 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 			s.logger.Warnw("Automatic ticket assignment failed", "error", err, "ticket_id", tkt.ID)
 		} else {
 			tkt.AssigneeID = assignment.AssignedTo
-		}
-	}
-
-	// 验证必填自定义字段（模板字段定义中标记为 required 的字段必须在提交中存在且非空）
-	if req.TemplateID != nil && len(req.FormFields) > 0 {
-		if missing, err := s.validateRequiredFields(ctx, tenantID, *req.TemplateID, req.FormFields); err != nil {
-			s.logger.Errorw("Required field validation error", "error", err, "template_id", *req.TemplateID)
-		} else if len(missing) > 0 {
-			return nil, fmt.Errorf("缺少必填字段: %s", strings.Join(missing, ", "))
 		}
 	}
 
@@ -466,6 +478,36 @@ func (s *TicketService) validateRequiredFields(ctx context.Context, tenantID int
 	return missing, nil
 }
 
+// validateFieldValueFormats 校验提交的自定义字段值是否符合字段定义的格式/取值范围
+// （number 是否数字、select/multiselect 的值是否在 options 里，见 validateFieldValue）。
+func (s *TicketService) validateFieldValueFormats(ctx context.Context, tenantID int, templateID int, formFields map[string]interface{}) error {
+	submittedValues := extractCustomFieldValues(formFields)
+	if len(submittedValues) == 0 {
+		return nil
+	}
+	defs, err := s.client.FieldDefinition.Query().
+		Where(
+			fielddefinition.EntityTypeEQ("ticket_template"),
+			fielddefinition.EntityIDEQ(templateID),
+			fielddefinition.IsActive(true),
+			fielddefinition.TenantIDEQ(tenantID),
+		).
+		All(ctx)
+	if err != nil {
+		return fmt.Errorf("查询字段定义失败: %w", err)
+	}
+	for _, d := range defs {
+		val, ok := submittedValues[d.Name]
+		if !ok {
+			continue
+		}
+		if err := validateFieldValue(d, val); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // isEmptyFieldValue 判断字段值是否为空
 func isEmptyFieldValue(val interface{}) bool {
 	if val == nil {
@@ -603,11 +645,11 @@ func isSupportedTicketType(value string) bool {
 }
 
 // isTicketDataScopeAllRole 判断角色是否拥有全租户工单可见权限（DataScopeAll）。
-// 阻断8：管理角色（super_admin/admin/manager/sysadmin）可见全租户工单，
-// 其余角色（end_user/agent 等）只能查看本人创建或分配给自己的工单。
+// 阻断8：管理角色（super_admin/sysadmin）可见全租户工单，
+// 其余角色（end_user 等）只能查看本人创建或分配给自己的工单。
 func isTicketDataScopeAllRole(role string) bool {
 	switch role {
-	case "super_admin", "admin", "manager", "sysadmin":
+	case "super_admin", "sysadmin":
 		return true
 	default:
 		return false
@@ -961,6 +1003,15 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 	}
 
 	s.logger.Infow("Ticket updated", "ticket_id", id)
+
+	// 状态变更时发送 ticket_updated 通知
+	if req.Status != "" && ticket.Status(req.Status) != current.Status {
+		if s.notificationSvc != nil {
+			if err := s.notificationSvc.NotifyTicketStatusChanged(ctx, id, string(current.Status), req.Status, tenantID); err != nil {
+				s.logger.Warnw("Failed to send status change notification", "error", err, "ticket_id", id)
+			}
+		}
+	}
 
 	// 工单进入终态时自动关闭 SLA 违规
 	if req.Status != "" {
@@ -1511,6 +1562,14 @@ func (s *TicketService) UpdateTicketStatus(ctx context.Context, ticketID int, st
 	}
 
 	s.logger.Infow("Ticket status updated", "ticket_id", ticketID, "new_status", status)
+
+	// 状态变更通知（ticket_updated）
+	if s.notificationSvc != nil {
+		if err := s.notificationSvc.NotifyTicketStatusChanged(ctx, ticketID, string(current.Status), status, tenantID); err != nil {
+			s.logger.Warnw("Failed to send status change notification", "error", err, "ticket_id", ticketID)
+		}
+	}
+
 	updated, err = s.repo.GetByID(ctx, ticketID, tenantID)
 	if err != nil {
 		return nil, err
@@ -1557,22 +1616,22 @@ func (s *TicketService) UpdateTicketStatus(ctx context.Context, ticketID int, st
 
 // TicketSLAInfo 工单 SLA 信息
 type TicketSLAInfo struct {
-	TicketID              int        `json:"ticketId"`
-	TicketNumber          string     `json:"ticketNumber"`
-	Priority              string     `json:"priority"`
-	SLADefinitionID       int        `json:"slaDefinitionId"`
-	SlaName               string     `json:"slaName"`
-	ServiceType           string     `json:"serviceType"`
-	ResponseTime          int        `json:"responseTime"`
-	ResolutionTime        int        `json:"resolutionTime"`
-	ResponseDeadline       *time.Time `json:"responseDeadline"`
-	ResolutionDeadline     *time.Time `json:"resolutionDeadline"`
-	IsBreached             bool       `json:"isBreached"`
-	SlaStatus              string     `json:"slaStatus"` // on_track | at_risk | breached
-	ResponseTimeRemaining  *int       `json:"responseTimeRemaining"`
-	ResolutionTimeRemaining *int      `json:"resolutionTimeRemaining"`
-	FirstResponseAt       *time.Time `json:"firstResponseAt,omitempty"`
-	ResolvedAt            *time.Time `json:"resolvedAt,omitempty"`
+	TicketID                int        `json:"ticketId"`
+	TicketNumber            string     `json:"ticketNumber"`
+	Priority                string     `json:"priority"`
+	SLADefinitionID         int        `json:"slaDefinitionId"`
+	SlaName                 string     `json:"slaName"`
+	ServiceType             string     `json:"serviceType"`
+	ResponseTime            int        `json:"responseTime"`
+	ResolutionTime          int        `json:"resolutionTime"`
+	ResponseDeadline        *time.Time `json:"responseDeadline"`
+	ResolutionDeadline      *time.Time `json:"resolutionDeadline"`
+	IsBreached              bool       `json:"isBreached"`
+	SlaStatus               string     `json:"slaStatus"` // on_track | at_risk | breached
+	ResponseTimeRemaining   *int       `json:"responseTimeRemaining"`
+	ResolutionTimeRemaining *int       `json:"resolutionTimeRemaining"`
+	FirstResponseAt         *time.Time `json:"firstResponseAt,omitempty"`
+	ResolvedAt              *time.Time `json:"resolvedAt,omitempty"`
 }
 
 // GetTicketSLAInfo 获取工单 SLA 信息
@@ -1797,7 +1856,7 @@ func (s *TicketService) GetTicketsByAssignee(ctx context.Context, assigneeID int
 }
 
 // GetTicketActivity 获取工单活动日志（合并 comments、attachments、状态变更）
-func (s *TicketService) GetTicketActivity(ctx context.Context, ticketID int, tenantID int) ([]map[string]interface{}, error) {
+func (s *TicketService) GetTicketActivity(ctx context.Context, ticketID int, tenantID int) ([]*dto.TicketActivityItem, error) {
 	s.logger.Infow("Getting ticket activity", "ticket_id", ticketID, "tenant_id", tenantID)
 	if s.client == nil {
 		return nil, fmt.Errorf("ent client not available for activity query")
@@ -1807,18 +1866,19 @@ func (s *TicketService) GetTicketActivity(ctx context.Context, ticketID int, ten
 		return nil, fmt.Errorf("工单不存在: %w", err)
 	}
 
-	activities := make([]map[string]interface{}, 0)
+	activities := make([]*dto.TicketActivityItem, 0)
 
-	activities = append(activities, map[string]interface{}{
-		"action":    "created",
-		"timestamp": tkt.CreatedAt,
-		"user_id":   tkt.RequesterID,
-		"user_name": "",
-		"details":   "工单已创建",
-		"old_value": nil,
-		"new_value": tkt.Title,
+	// 创建事件
+	activities = append(activities, &dto.TicketActivityItem{
+		ID:           1,
+		Action:       "created",
+		User:         &dto.ActivityUser{ID: tkt.RequesterID},
+		ChangeReason: "工单已创建",
+		NewValue:     toPointer(tkt.Title),
+		CreatedAt:    tkt.CreatedAt.Format(time.RFC3339),
 	})
 
+	// 评论事件
 	comments, err := s.client.TicketComment.Query().
 		Where(entTicketComment.TicketID(ticketID)).
 		WithUser().
@@ -1826,56 +1886,56 @@ func (s *TicketService) GetTicketActivity(ctx context.Context, ticketID int, ten
 		All(ctx)
 	if err == nil {
 		for _, c := range comments {
-			userName := ""
+			user := &dto.ActivityUser{ID: c.UserID}
 			if c.Edges.User != nil {
-				userName = c.Edges.User.Name
-				if userName == "" {
-					userName = c.Edges.User.Username
-				}
+				user.Name = c.Edges.User.Name
+				user.Username = c.Edges.User.Username
 			}
-			activities = append(activities, map[string]interface{}{
-				"action":    "commented",
-				"timestamp": c.CreatedAt,
-				"user_id":   c.UserID,
-				"user_name": userName,
-				"details":   "添加了评论",
-				"old_value": nil,
-				"new_value": nil,
+			activities = append(activities, &dto.TicketActivityItem{
+				ID:           int(c.ID),
+				Action:       "commented",
+				User:         user,
+				ChangeReason: "添加了评论",
+				CreatedAt:    c.CreatedAt.Format(time.RFC3339),
 			})
 		}
 	} else {
 		s.logger.Warnw("Failed to get comments for activity", "error", err)
 	}
 
+	// 分配事件
 	if tkt.AssigneeID != nil && *tkt.AssigneeID > 0 {
-		activities = append(activities, map[string]interface{}{
-			"action":    "assigned",
-			"timestamp": tkt.UpdatedAt,
-			"user_id":   *tkt.AssigneeID,
-			"user_name": "",
-			"details":   "工单已分配",
-			"old_value": nil,
-			"new_value": *tkt.AssigneeID,
-		})
-	}
-	if tkt.FirstResponseAt != nil {
-		activities = append(activities, map[string]interface{}{
-			"action":    "first_response",
-			"timestamp": *tkt.FirstResponseAt,
-			"user_id":   0,
-			"details":   "首次响应工单",
-		})
-	}
-	if tkt.ResolvedAt != nil {
-		activities = append(activities, map[string]interface{}{
-			"action":    "resolved",
-			"timestamp": *tkt.ResolvedAt,
-			"user_id":   0,
-			"details":   "工单已解决",
+		activities = append(activities, &dto.TicketActivityItem{
+			ID:           2,
+			Action:       "assigned",
+			User:         &dto.ActivityUser{ID: *tkt.AssigneeID},
+			ChangeReason: "工单已分配",
+			NewValue:     toPointer(strconv.Itoa(*tkt.AssigneeID)),
+			CreatedAt:    tkt.UpdatedAt.Format(time.RFC3339),
 		})
 	}
 
-	// 倒序
+	// 首次响应
+	if tkt.FirstResponseAt != nil {
+		activities = append(activities, &dto.TicketActivityItem{
+			ID:           3,
+			Action:       "first_response",
+			ChangeReason: "首次响应工单",
+			CreatedAt:    tkt.FirstResponseAt.Format(time.RFC3339),
+		})
+	}
+
+	// 解决事件
+	if tkt.ResolvedAt != nil {
+		activities = append(activities, &dto.TicketActivityItem{
+			ID:           4,
+			Action:       "resolved",
+			ChangeReason: "工单已解决",
+			CreatedAt:    tkt.ResolvedAt.Format(time.RFC3339),
+		})
+	}
+
+	// 倒序（最新在前）
 	for i, j := 0, len(activities)-1; i < j; i, j = i+1, j-1 {
 		activities[i], activities[j] = activities[j], activities[i]
 	}

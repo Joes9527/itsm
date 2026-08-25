@@ -25,6 +25,7 @@ import (
 	"itsm-backend/ent/cmdbsavedview"
 	"itsm-backend/ent/configurationitem"
 	"itsm-backend/ent/configurationitemhistory"
+	"itsm-backend/ent/connectorconfig"
 	"itsm-backend/ent/contract"
 	"itsm-backend/ent/conversation"
 	"itsm-backend/ent/department"
@@ -858,6 +859,34 @@ func init() {
 	configurationitemhistoryDescCreatedAt := configurationitemhistoryFields[10].Descriptor()
 	// configurationitemhistory.DefaultCreatedAt holds the default value on creation for the created_at field.
 	configurationitemhistory.DefaultCreatedAt = configurationitemhistoryDescCreatedAt.Default.(func() time.Time)
+	connectorconfigFields := schema.ConnectorConfig{}.Fields()
+	_ = connectorconfigFields
+	// connectorconfigDescTenantID is the schema descriptor for tenant_id field.
+	connectorconfigDescTenantID := connectorconfigFields[0].Descriptor()
+	// connectorconfig.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	connectorconfig.TenantIDValidator = connectorconfigDescTenantID.Validators[0].(func(int) error)
+	// connectorconfigDescName is the schema descriptor for name field.
+	connectorconfigDescName := connectorconfigFields[1].Descriptor()
+	// connectorconfig.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	connectorconfig.NameValidator = connectorconfigDescName.Validators[0].(func(string) error)
+	// connectorconfigDescProvider is the schema descriptor for provider field.
+	connectorconfigDescProvider := connectorconfigFields[2].Descriptor()
+	// connectorconfig.ProviderValidator is a validator for the "provider" field. It is called by the builders before save.
+	connectorconfig.ProviderValidator = connectorconfigDescProvider.Validators[0].(func(string) error)
+	// connectorconfigDescEnabled is the schema descriptor for enabled field.
+	connectorconfigDescEnabled := connectorconfigFields[3].Descriptor()
+	// connectorconfig.DefaultEnabled holds the default value on creation for the enabled field.
+	connectorconfig.DefaultEnabled = connectorconfigDescEnabled.Default.(bool)
+	// connectorconfigDescCreatedAt is the schema descriptor for created_at field.
+	connectorconfigDescCreatedAt := connectorconfigFields[7].Descriptor()
+	// connectorconfig.DefaultCreatedAt holds the default value on creation for the created_at field.
+	connectorconfig.DefaultCreatedAt = connectorconfigDescCreatedAt.Default.(func() time.Time)
+	// connectorconfigDescUpdatedAt is the schema descriptor for updated_at field.
+	connectorconfigDescUpdatedAt := connectorconfigFields[8].Descriptor()
+	// connectorconfig.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	connectorconfig.DefaultUpdatedAt = connectorconfigDescUpdatedAt.Default.(func() time.Time)
+	// connectorconfig.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	connectorconfig.UpdateDefaultUpdatedAt = connectorconfigDescUpdatedAt.UpdateDefault.(func() time.Time)
 	contractFields := schema.Contract{}.Fields()
 	_ = contractFields
 	// contractDescContractNumber is the schema descriptor for contract_number field.
@@ -1610,20 +1639,28 @@ func init() {
 	knowledgearticleDescIsPublished := knowledgearticleFields[6].Descriptor()
 	// knowledgearticle.DefaultIsPublished holds the default value on creation for the is_published field.
 	knowledgearticle.DefaultIsPublished = knowledgearticleDescIsPublished.Default.(bool)
+	// knowledgearticleDescReviewStatus is the schema descriptor for review_status field.
+	knowledgearticleDescReviewStatus := knowledgearticleFields[7].Descriptor()
+	// knowledgearticle.DefaultReviewStatus holds the default value on creation for the review_status field.
+	knowledgearticle.DefaultReviewStatus = knowledgearticleDescReviewStatus.Default.(string)
+	// knowledgearticleDescReviewComment is the schema descriptor for review_comment field.
+	knowledgearticleDescReviewComment := knowledgearticleFields[8].Descriptor()
+	// knowledgearticle.DefaultReviewComment holds the default value on creation for the review_comment field.
+	knowledgearticle.DefaultReviewComment = knowledgearticleDescReviewComment.Default.(string)
 	// knowledgearticleDescViewCount is the schema descriptor for view_count field.
-	knowledgearticleDescViewCount := knowledgearticleFields[7].Descriptor()
+	knowledgearticleDescViewCount := knowledgearticleFields[9].Descriptor()
 	// knowledgearticle.DefaultViewCount holds the default value on creation for the view_count field.
 	knowledgearticle.DefaultViewCount = knowledgearticleDescViewCount.Default.(int)
 	// knowledgearticleDescLikeCount is the schema descriptor for like_count field.
-	knowledgearticleDescLikeCount := knowledgearticleFields[8].Descriptor()
+	knowledgearticleDescLikeCount := knowledgearticleFields[10].Descriptor()
 	// knowledgearticle.DefaultLikeCount holds the default value on creation for the like_count field.
 	knowledgearticle.DefaultLikeCount = knowledgearticleDescLikeCount.Default.(int)
 	// knowledgearticleDescCreatedAt is the schema descriptor for created_at field.
-	knowledgearticleDescCreatedAt := knowledgearticleFields[9].Descriptor()
+	knowledgearticleDescCreatedAt := knowledgearticleFields[11].Descriptor()
 	// knowledgearticle.DefaultCreatedAt holds the default value on creation for the created_at field.
 	knowledgearticle.DefaultCreatedAt = knowledgearticleDescCreatedAt.Default.(func() time.Time)
 	// knowledgearticleDescUpdatedAt is the schema descriptor for updated_at field.
-	knowledgearticleDescUpdatedAt := knowledgearticleFields[10].Descriptor()
+	knowledgearticleDescUpdatedAt := knowledgearticleFields[12].Descriptor()
 	// knowledgearticle.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	knowledgearticle.DefaultUpdatedAt = knowledgearticleDescUpdatedAt.Default.(func() time.Time)
 	// knowledgearticle.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -2979,27 +3016,27 @@ func init() {
 	// servicecatalog.DefaultApprovalLevel holds the default value on creation for the approval_level field.
 	servicecatalog.DefaultApprovalLevel = servicecatalogDescApprovalLevel.Default.(int)
 	// servicecatalogDescStatus is the schema descriptor for status field.
-	servicecatalogDescStatus := servicecatalogFields[18].Descriptor()
+	servicecatalogDescStatus := servicecatalogFields[19].Descriptor()
 	// servicecatalog.DefaultStatus holds the default value on creation for the status field.
 	servicecatalog.DefaultStatus = servicecatalogDescStatus.Default.(string)
 	// servicecatalogDescTenantID is the schema descriptor for tenant_id field.
-	servicecatalogDescTenantID := servicecatalogFields[19].Descriptor()
+	servicecatalogDescTenantID := servicecatalogFields[20].Descriptor()
 	// servicecatalog.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	servicecatalog.TenantIDValidator = servicecatalogDescTenantID.Validators[0].(func(int) error)
 	// servicecatalogDescIsActive is the schema descriptor for is_active field.
-	servicecatalogDescIsActive := servicecatalogFields[20].Descriptor()
+	servicecatalogDescIsActive := servicecatalogFields[21].Descriptor()
 	// servicecatalog.DefaultIsActive holds the default value on creation for the is_active field.
 	servicecatalog.DefaultIsActive = servicecatalogDescIsActive.Default.(bool)
 	// servicecatalogDescSortOrder is the schema descriptor for sort_order field.
-	servicecatalogDescSortOrder := servicecatalogFields[21].Descriptor()
+	servicecatalogDescSortOrder := servicecatalogFields[22].Descriptor()
 	// servicecatalog.DefaultSortOrder holds the default value on creation for the sort_order field.
 	servicecatalog.DefaultSortOrder = servicecatalogDescSortOrder.Default.(int)
 	// servicecatalogDescCreatedAt is the schema descriptor for created_at field.
-	servicecatalogDescCreatedAt := servicecatalogFields[22].Descriptor()
+	servicecatalogDescCreatedAt := servicecatalogFields[23].Descriptor()
 	// servicecatalog.DefaultCreatedAt holds the default value on creation for the created_at field.
 	servicecatalog.DefaultCreatedAt = servicecatalogDescCreatedAt.Default.(func() time.Time)
 	// servicecatalogDescUpdatedAt is the schema descriptor for updated_at field.
-	servicecatalogDescUpdatedAt := servicecatalogFields[23].Descriptor()
+	servicecatalogDescUpdatedAt := servicecatalogFields[24].Descriptor()
 	// servicecatalog.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	servicecatalog.DefaultUpdatedAt = servicecatalogDescUpdatedAt.Default.(func() time.Time)
 	// servicecatalog.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -3307,31 +3344,31 @@ func init() {
 	// ticket.RequesterIDValidator is a validator for the "requester_id" field. It is called by the builders before save.
 	ticket.RequesterIDValidator = ticketDescRequesterID.Validators[0].(func(int) error)
 	// ticketDescTenantID is the schema descriptor for tenant_id field.
-	ticketDescTenantID := ticketFields[11].Descriptor()
+	ticketDescTenantID := ticketFields[12].Descriptor()
 	// ticket.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	ticket.TenantIDValidator = ticketDescTenantID.Validators[0].(func(int) error)
 	// ticketDescRating is the schema descriptor for rating field.
-	ticketDescRating := ticketFields[24].Descriptor()
+	ticketDescRating := ticketFields[25].Descriptor()
 	// ticket.RatingValidator is a validator for the "rating" field. It is called by the builders before save.
 	ticket.RatingValidator = ticketDescRating.Validators[0].(func(int) error)
 	// ticketDescVersion is the schema descriptor for version field.
-	ticketDescVersion := ticketFields[28].Descriptor()
+	ticketDescVersion := ticketFields[29].Descriptor()
 	// ticket.DefaultVersion holds the default value on creation for the version field.
 	ticket.DefaultVersion = ticketDescVersion.Default.(int)
 	// ticket.VersionValidator is a validator for the "version" field. It is called by the builders before save.
 	ticket.VersionValidator = ticketDescVersion.Validators[0].(func(int) error)
 	// ticketDescCreatedAt is the schema descriptor for created_at field.
-	ticketDescCreatedAt := ticketFields[29].Descriptor()
+	ticketDescCreatedAt := ticketFields[30].Descriptor()
 	// ticket.DefaultCreatedAt holds the default value on creation for the created_at field.
 	ticket.DefaultCreatedAt = ticketDescCreatedAt.Default.(func() time.Time)
 	// ticketDescUpdatedAt is the schema descriptor for updated_at field.
-	ticketDescUpdatedAt := ticketFields[30].Descriptor()
+	ticketDescUpdatedAt := ticketFields[31].Descriptor()
 	// ticket.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	ticket.DefaultUpdatedAt = ticketDescUpdatedAt.Default.(func() time.Time)
 	// ticket.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	ticket.UpdateDefaultUpdatedAt = ticketDescUpdatedAt.UpdateDefault.(func() time.Time)
 	// ticketDescIsManagedByMsp is the schema descriptor for is_managed_by_msp field.
-	ticketDescIsManagedByMsp := ticketFields[31].Descriptor()
+	ticketDescIsManagedByMsp := ticketFields[32].Descriptor()
 	// ticket.DefaultIsManagedByMsp holds the default value on creation for the is_managed_by_msp field.
 	ticket.DefaultIsManagedByMsp = ticketDescIsManagedByMsp.Default.(bool)
 	ticketapprovalFields := schema.TicketApproval{}.Fields()

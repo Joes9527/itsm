@@ -50,259 +50,30 @@ func SetPermissionCacheTTL(ttl time.Duration) {
 }
 
 // RolePermissions 角色权限映射
+//
+// 说明：这是「最小兜底集」，不再是第二套平行权威。运行时权限以数据库
+// （seeder 初始化）为唯一权威；硬编码仅保留以下角色：
+//   - super_admin：平台超管，跨租户运维，在 hasResourcePermission 中代码级放行。
+//   - end_user：数据库未初始化时的防御性兜底（与 seeder rolePermissionMap 保持一致）。
+//   - msp_*：MSP 服务提供商角色的 RBAC 权限（MSP 子系统活跃，尚未迁入数据库）。
+//
+// 注：sysadmin 是「租户系统管理员」，走数据库权限（seeder 的 allPermissionCodes），
+// 不在此兜底；super_admin 与 sysadmin 语义不同，勿混用。
 var RolePermissions = map[string][]Permission{
 	"super_admin": {
-		{Resource: "*", Action: "*"}, // 超级管理员拥有所有权限
-	},
-	"sysadmin": {
-		{Resource: "*", Action: "*"}, // 系统管理员拥有所有权限
-	},
-	"admin": {
-		{Resource: "ticket", Action: "read"},
-		{Resource: "ticket", Action: "write"},
-		{Resource: "ticket", Action: "delete"},
-		{Resource: "ticket", Action: "admin"},
-		{Resource: "notification", Action: "read"},
-		{Resource: "notification", Action: "write"},
-		{Resource: "ticket_category", Action: "read"},
-		{Resource: "ticket_category", Action: "write"},
-		{Resource: "ticket_category", Action: "delete"},
-		{Resource: "ticket_tag", Action: "read"},
-		{Resource: "ticket_tag", Action: "write"},
-		{Resource: "ticket_tag", Action: "delete"},
-		{Resource: "ticket_template", Action: "read"},
-		{Resource: "ticket_template", Action: "write"},
-		{Resource: "ticket_template", Action: "delete"},
-		{Resource: "user", Action: "read"},
-		{Resource: "user", Action: "write"},
-		{Resource: "user", Action: "delete"},
-		{Resource: "dashboard", Action: "read"},
-		{Resource: "dashboard", Action: "admin"},
-		{Resource: "knowledge", Action: "read"},
-		{Resource: "knowledge", Action: "write"},
-		{Resource: "knowledge", Action: "admin"},
-		{Resource: "cmdb", Action: "read"},
-		{Resource: "cmdb", Action: "write"},
-		{Resource: "cmdb", Action: "delete"},
-		{Resource: "incident", Action: "read"},
-		{Resource: "incident", Action: "write"},
-		{Resource: "incident", Action: "admin"},
-		{Resource: "service_catalog", Action: "read"},
-		{Resource: "service_catalog", Action: "write"},
-		{Resource: "service_catalog", Action: "delete"},
-		{Resource: "service_request", Action: "read"},
-		{Resource: "service_request", Action: "write"},
-		{Resource: "change", Action: "read"},
-		{Resource: "change", Action: "write"},
-		{Resource: "change", Action: "delete"},
-		{Resource: "problem", Action: "read"},
-		{Resource: "problem", Action: "write"},
-		{Resource: "problem", Action: "delete"},
-		{Resource: "sla", Action: "read"},
-		{Resource: "sla", Action: "write"},
-		{Resource: "sla", Action: "delete"},
-		// 审计日志权限：仅管理员及以上可读
-		{Resource: "audit", Action: "read"},
-		{Resource: "ai", Action: "read"},
-		{Resource: "ai", Action: "write"},
-		{Resource: "role", Action: "read"},
-		{Resource: "role", Action: "write"},
-		{Resource: "role", Action: "delete"},
-		{Resource: "permission", Action: "read"},
-		{Resource: "system_config", Action: "read"},
-		{Resource: "system_config", Action: "write"},
-		{Resource: "org", Action: "read"},
-		{Resource: "org", Action: "write"},
-		{Resource: "project", Action: "read"},
-		{Resource: "project", Action: "write"},
-		{Resource: "project", Action: "delete"},
-		{Resource: "application", Action: "read"},
-		{Resource: "application", Action: "write"},
-		// Groups management permissions
-		{Resource: "groups", Action: "read"},
-		{Resource: "groups", Action: "write"},
-		// BPMN Workflow permissions
-		{Resource: "bpmn", Action: "read"},
-		{Resource: "bpmn", Action: "write"},
-		{Resource: "bpmn", Action: "delete"},
-		// Release Management permissions
-		{Resource: "release", Action: "read"},
-		{Resource: "release", Action: "write"},
-		{Resource: "release", Action: "delete"},
-		// Asset Management permissions
-		{Resource: "asset", Action: "read"},
-		{Resource: "asset", Action: "write"},
-		{Resource: "asset", Action: "delete"},
-		// License Management permissions
-		{Resource: "license", Action: "read"},
-		{Resource: "license", Action: "write"},
-		{Resource: "license", Action: "delete"},
-		// Report 权限
-		{Resource: "report", Action: "read"},
-		// MSP 权限
-		{Resource: "msp", Action: "read"},
-	},
-	"manager": {
-		{Resource: "ticket", Action: "read"},
-		{Resource: "ticket", Action: "write"},
-		{Resource: "notification", Action: "read"},
-		{Resource: "notification", Action: "write"},
-		{Resource: "incident", Action: "read"},
-		{Resource: "incident", Action: "write"},
-		{Resource: "dashboard", Action: "read"},
-		{Resource: "knowledge", Action: "read"},
-		{Resource: "cmdb", Action: "read"},
-		{Resource: "user", Action: "read"}, // 经理可查看用户基本信息
-		{Resource: "service_catalog", Action: "read"},
-		{Resource: "service_request", Action: "read"},
-		{Resource: "service_request", Action: "write"},
-		{Resource: "change", Action: "read"},
-		{Resource: "problem", Action: "read"},
-		// SLA 权限
-		{Resource: "sla", Action: "read"},
-		// Report 权限
-		{Resource: "report", Action: "read"},
-		// BPMN Workflow permissions
-		{Resource: "bpmn", Action: "read"},
-		{Resource: "bpmn", Action: "write"},
-		// Release Management permissions
-		{Resource: "release", Action: "read"},
-		{Resource: "release", Action: "write"},
-		// Asset Management permissions
-		{Resource: "asset", Action: "read"},
-		{Resource: "asset", Action: "write"},
-		// License Management permissions
-		{Resource: "license", Action: "read"},
-		{Resource: "license", Action: "write"},
-		// Groups management permissions
-		{Resource: "groups", Action: "read"},
-		{Resource: "groups", Action: "write"},
-		// Organization permissions
-		{Resource: "org", Action: "read"},
-		{Resource: "org", Action: "write"},
-		// Project management permissions
-		{Resource: "project", Action: "read"},
-		{Resource: "project", Action: "write"},
-		// Application permissions
-		{Resource: "application", Action: "read"},
-		{Resource: "application", Action: "write"},
-		// AI permissions
-		{Resource: "ai", Action: "read"},
-	},
-	"agent": {
-		{Resource: "ticket", Action: "read"},
-		{Resource: "ticket", Action: "write"},
-		{Resource: "notification", Action: "read"},
-		{Resource: "notification", Action: "write"},
-		{Resource: "dashboard", Action: "read"},
-		{Resource: "knowledge", Action: "read"},
-		{Resource: "knowledge", Action: "write"},
-		{Resource: "cmdb", Action: "read"},
-		{Resource: "incident", Action: "read"},
-		{Resource: "incident", Action: "write"},
-		{Resource: "service_catalog", Action: "read"},
-		{Resource: "service_request", Action: "read"},
-		{Resource: "service_request", Action: "write"},
-		{Resource: "change", Action: "read"},
-		{Resource: "change", Action: "write"},
-		{Resource: "problem", Action: "read"},
-		{Resource: "problem", Action: "write"},
-		// Groups management permissions
-		{Resource: "groups", Action: "read"},
-		// BPMN Workflow permissions
-		{Resource: "bpmn", Action: "read"},
-		{Resource: "bpmn", Action: "write"},
-	},
-	"technician": {
-		{Resource: "ticket", Action: "read"},
-		{Resource: "ticket", Action: "write"},
-		{Resource: "notification", Action: "read"},
-		{Resource: "knowledge", Action: "read"},
-		{Resource: "cmdb", Action: "read"},
-		{Resource: "incident", Action: "read"},
-		{Resource: "incident", Action: "write"},
-		{Resource: "service_catalog", Action: "read"},
-		{Resource: "service_request", Action: "read"},
-		{Resource: "service_request", Action: "write"},
-		// Groups management permissions
-		{Resource: "groups", Action: "read"},
-		// BPMN Workflow permissions
-		{Resource: "bpmn", Action: "read"},
-		{Resource: "bpmn", Action: "write"},
-	},
-	"security": {
-		// 安全角色需要基本的用户信息访问权限
-		{Resource: "user", Action: "read"}, // 查看自己的用户信息
-		// B12: 安全审批人需要查看知识库和通知
-		{Resource: "knowledge", Action: "read"},
-		{Resource: "knowledge", Action: "list"},
-		{Resource: "notification", Action: "read"},
-		{Resource: "notification", Action: "list"},
-		{Resource: "notification", Action: "write"},
-		// 安全审批人需要查看分配给自己的工单
-		{Resource: "ticket", Action: "read"},
-		{Resource: "ticket", Action: "list"},
-		{Resource: "incident", Action: "read"},
-		{Resource: "incident", Action: "list"},
-		{Resource: "problem", Action: "read"},
-		{Resource: "problem", Action: "list"},
-		{Resource: "change", Action: "read"},
-		{Resource: "change", Action: "list"},
-		// 审批权限
-		{Resource: "approval", Action: "read"},
-		{Resource: "approval", Action: "write"},
-		// V0：安全审批只需要查看/处理服务请求（以及读取服务目录用于上下文展示）
-		{Resource: "service_catalog", Action: "read"},
-		{Resource: "service_request", Action: "read"},
-		{Resource: "service_request", Action: "write"},
-		// BPMN Workflow permissions
-		{Resource: "bpmn", Action: "read"},
-		{Resource: "bpmn", Action: "write"},
-		// Release Management permissions
-		{Resource: "release", Action: "read"},
-		// Asset Management permissions
-		{Resource: "asset", Action: "read"},
-		// License Management permissions
-		{Resource: "license", Action: "read"},
-		// 安全角色需要查看仪表板
-		{Resource: "dashboard", Action: "read"},
-		// CMDB 读取权限
-		{Resource: "cmdb", Action: "read"},
-		// SLA 读取权限
-		{Resource: "sla", Action: "read"},
+		{Resource: "*", Action: "*"}, // 平台超管拥有所有权限
 	},
 	"end_user": {
 		{Resource: "ticket", Action: "read"},
-		{Resource: "ticket", Action: "write"}, // 最终用户可以创建和更新自己的工单
-		{Resource: "notification", Action: "read"},
-		{Resource: "notification", Action: "write"},
+		{Resource: "ticket", Action: "write"},
 		{Resource: "knowledge", Action: "read"},
-		{Resource: "dashboard", Action: "read"},
-		{Resource: "ai", Action: "read"},
-		{Resource: "ai", Action: "write"},
 		{Resource: "service_catalog", Action: "read"},
-		{Resource: "service_request", Action: "read"},
-		{Resource: "service_request", Action: "write"},
-		{Resource: "ticket_category", Action: "read"}, // 浏览服务目录需要读取工单分类树
-		{Resource: "ticket_template", Action: "read"}, // 创建工单时需要加载模板
-		{Resource: "user", Action: "read"}, // 查看自己的用户信息
-		{Resource: "sla", Action: "read"},
-		// SLA write removed: only admin/manager should configure SLA policies
-		// {Resource: "sla", Action: "write"},
-		{Resource: "system_config", Action: "read"},
-		{Resource: "org", Action: "read"},
-		{Resource: "cmdb", Action: "read"}, // 查看配置项信息
-		{Resource: "incident", Action: "read"},
-		{Resource: "change", Action: "read"},
-		{Resource: "problem", Action: "read"},
-		// BPMN Workflow permissions (read only)
-		{Resource: "bpmn", Action: "read"},
-		// Release/Asset/License read permissions
-		{Resource: "release", Action: "read"},
-		{Resource: "asset", Action: "read"},
-		{Resource: "license", Action: "read"},
+		{Resource: "ticket_category", Action: "read"},
+		{Resource: "ticket_template", Action: "read"},
+		{Resource: "notification", Action: "read"},
+		{Resource: "tag", Action: "read"},
 	},
-	// MSP Roles - MSP服务提供商角色权限
+	// MSP Roles - MSP服务提供商角色权限（MSP 子系统活跃，暂保留在硬编码）
 	"msp_viewer": {
 		{Resource: "msp", Action: "read"},
 		{Resource: "msp_customer", Action: "read"},
@@ -461,6 +232,12 @@ func InvalidateAllPermissionCaches() {
 	permissionCacheLock.Unlock()
 }
 
+// GetRolePermissions 从数据库加载指定角色的权限（导出，供 service 层复用）。
+// 与 hasResourcePermission 的数据库加载逻辑一致，返回 Resource/Action 权限列表。
+func GetRolePermissions(client *ent.Client, roleName string, tenantID int) []Permission {
+	return loadPermissionsFromDB(client, roleName, tenantID)
+}
+
 // loadPermissionsFromDB 从新的permission_definition和role_permission表加载权限
 // 如果新表没有数据，则fallback到旧的Permission表
 func loadPermissionsFromDB(client *ent.Client, roleName string, tenantID int) []Permission {
@@ -584,6 +361,9 @@ var ResourceActionMap = map[string]map[string]Permission{
 		"/api/v1/problems/*":            {Resource: "problem", Action: "read"},
 		"/api/v1/changes":               {Resource: "change", Action: "read"},
 		"/api/v1/changes/*":             {Resource: "change", Action: "read"},
+		"/api/v1/releases":              {Resource: "release", Action: "read"},
+		"/api/v1/releases/stats":        {Resource: "release", Action: "read"},
+		"/api/v1/releases/*":            {Resource: "release", Action: "read"},
 		"/api/v1/roles":                 {Resource: "role", Action: "read"},
 		"/api/v1/roles/*":               {Resource: "role", Action: "read"},
 		"/api/v1/permissions":           {Resource: "permission", Action: "read"},
@@ -601,6 +381,15 @@ var ResourceActionMap = map[string]map[string]Permission{
 		"/api/v1/process-trigger/*":  {Resource: "bpmn", Action: "read"},
 		"/api/v1/process-bindings":   {Resource: "bpmn", Action: "read"},
 		"/api/v1/process-bindings/*": {Resource: "bpmn", Action: "read"},
+		// /api/v1/workflow/* 是 router.go 注册的"简化路由"（/workflow/* -> /bpmn/*
+		// 的路由注释所说的"等价"只是路由目标层面的等价，实际 URL 路径不同，之前
+		// 没人给这组路径单独补全局 ResourceActionMap 条目——全局中间件按路径查不到
+		// 就直接拒绝，路由自己声明的 RequirePermission("process_instance","read")
+		// 根本没有机会被执行到。
+		"/api/v1/workflow/instances":   {Resource: "process_instance", Action: "read"},
+		"/api/v1/workflow/instances/*": {Resource: "process_instance", Action: "read"},
+		"/api/v1/workflow/tasks":       {Resource: "task", Action: "read"},
+		"/api/v1/workflow/tasks/*":     {Resource: "task", Action: "read"},
 		// 审批工作流/审批链
 		"/api/v1/approval-workflows":     {Resource: "approval_workflow", Action: "read"},
 		"/api/v1/approval-workflows/*":   {Resource: "approval_workflow", Action: "read"},
@@ -671,6 +460,16 @@ var ResourceActionMap = map[string]map[string]Permission{
 		"/api/v1/problems/*":            {Resource: "problem", Action: "write"},
 		"/api/v1/changes":               {Resource: "change", Action: "write"},
 		"/api/v1/changes/*":             {Resource: "change", Action: "write"},
+		"/api/v1/releases":              {Resource: "release", Action: "write"},
+		"/api/v1/releases/*":            {Resource: "release", Action: "write"},
+		// 动作型子路由需要单独声明，否则会被上面 /releases/* 通配符先命中成
+		// release:write——审批人（如 dept_manager）只被授予 release:approve/
+		// release:rollback，没有 release:write，会被全局中间件挡在路由自己
+		// 声明的 RequirePermission("release","approve") 之前。见 tickets/*/assign
+		// 同类先例。
+		"/api/v1/releases/*/approve":  {Resource: "release", Action: "approve"},
+		"/api/v1/releases/*/reject":   {Resource: "release", Action: "approve"},
+		"/api/v1/releases/*/rollback": {Resource: "release", Action: "rollback"},
 		"/api/v1/roles":                 {Resource: "role", Action: "write"},
 		"/api/v1/roles/*":               {Resource: "role", Action: "write"},
 		"/api/v1/system/*":              {Resource: "system_config", Action: "write"},
@@ -682,6 +481,9 @@ var ResourceActionMap = map[string]map[string]Permission{
 		"/api/v1/process-trigger/*":  {Resource: "bpmn", Action: "write"},
 		"/api/v1/process-bindings":   {Resource: "bpmn", Action: "write"},
 		"/api/v1/process-bindings/*": {Resource: "bpmn", Action: "write"},
+		// /api/v1/workflow/* 简化路由，见 GET 分组同名注释
+		"/api/v1/workflow/instances": {Resource: "process_instance", Action: "create"},
+		"/api/v1/workflow/tasks/*":   {Resource: "task", Action: "update"},
 		// MSP Permissions
 		"/api/v1/msp/allocations":            {Resource: "msp_allocation", Action: "write"},
 		"/api/v1/msp/allocations/deallocate": {Resource: "msp_allocation", Action: "write"},
@@ -704,8 +506,12 @@ var ResourceActionMap = map[string]map[string]Permission{
 		"/api/v1/knowledge-articles/*": {Resource: "knowledge", Action: "write"},
 		"/api/v1/problems/*":           {Resource: "problem", Action: "write"},
 		"/api/v1/changes/*":            {Resource: "change", Action: "write"},
+		"/api/v1/releases/*":           {Resource: "release", Action: "write"},
 		// BPMN Workflow permissions
 		"/api/v1/bpmn/*": {Resource: "bpmn", Action: "write"},
+		// /api/v1/workflow/* 简化路由，见 GET 分组同名注释
+		"/api/v1/workflow/instances/*": {Resource: "process_instance", Action: "update"},
+		"/api/v1/workflow/tasks/*":     {Resource: "task", Action: "update"},
 	},
 	"DELETE": {
 		"/api/v1/tickets/*":            {Resource: "ticket", Action: "delete"},
@@ -720,6 +526,7 @@ var ResourceActionMap = map[string]map[string]Permission{
 		"/api/v1/knowledge-articles/*": {Resource: "knowledge", Action: "delete"},
 		"/api/v1/problems/*":           {Resource: "problem", Action: "delete"},
 		"/api/v1/changes/*":            {Resource: "change", Action: "delete"},
+		"/api/v1/releases/*":           {Resource: "release", Action: "delete"},
 		"/api/v1/roles/*":              {Resource: "role", Action: "delete"},
 		// BPMN Workflow permissions
 		"/api/v1/bpmn/*": {Resource: "bpmn", Action: "delete"},

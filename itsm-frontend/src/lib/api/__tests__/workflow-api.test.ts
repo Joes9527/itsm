@@ -218,7 +218,8 @@ describe('WorkflowApi', () => {
 
       expect(httpClient.post).toHaveBeenCalledWith(
         expect.stringContaining('/api/v1/bpmn/process-instances'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.objectContaining({ skipCamelCaseBody: true })
       );
 
       expect(result.status).toBe('running');

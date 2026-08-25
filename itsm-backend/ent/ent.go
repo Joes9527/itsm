@@ -28,6 +28,7 @@ import (
 	"itsm-backend/ent/cmdbsavedview"
 	"itsm-backend/ent/configurationitem"
 	"itsm-backend/ent/configurationitemhistory"
+	"itsm-backend/ent/connectorconfig"
 	"itsm-backend/ent/contract"
 	"itsm-backend/ent/conversation"
 	"itsm-backend/ent/department"
@@ -208,6 +209,7 @@ func checkColumn(t, c string) error {
 			cloudservice.Table:                cloudservice.ValidColumn,
 			configurationitem.Table:           configurationitem.ValidColumn,
 			configurationitemhistory.Table:    configurationitemhistory.ValidColumn,
+			connectorconfig.Table:             connectorconfig.ValidColumn,
 			contract.Table:                    contract.ValidColumn,
 			conversation.Table:                conversation.ValidColumn,
 			department.Table:                  department.ValidColumn,

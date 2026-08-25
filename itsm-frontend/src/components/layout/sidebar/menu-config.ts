@@ -547,13 +547,6 @@ export function getMenuConfig(): MenuConfig {
             permission: 'ticket:manage',
           },
           {
-            key: '/admin/approvals',
-            icon: getIconByName('GitMerge')!,
-            label: '审批管理',
-            path: '/admin/approvals',
-            permission: 'approval:manage',
-          },
-          {
             key: '/admin/approval-chains',
             icon: getIconByName('Link')!,
             label: '审批链',

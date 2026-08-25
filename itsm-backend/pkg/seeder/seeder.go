@@ -12,6 +12,7 @@ import (
 	"itsm-backend/ent/assetlicense"
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/department"
+	"itsm-backend/ent/fielddefinition"
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/knowledgearticle"
 	"itsm-backend/ent/knownerror"
@@ -30,7 +31,6 @@ import (
 	"itsm-backend/ent/team"
 	"itsm-backend/ent/tenant"
 	"itsm-backend/ent/ticketcategory"
-	"itsm-backend/ent/fielddefinition"
 	"itsm-backend/ent/tickettemplate"
 	"itsm-backend/ent/ticketview"
 	"itsm-backend/ent/user"
@@ -60,15 +60,15 @@ var (
 
 // SeedConfig 种子数据配置结构
 type SeedConfig struct {
-	Departments       []DepartmentSeed       `json:"departments"`
-	Teams             []TeamSeed             `json:"teams"`
-	Roles             []RoleSeed             `json:"roles"`
-	SLADefinitions    []SLADefinitionSeed    `json:"sla_definitions"`
-	SLAPolicies       []SLAPolicySeed        `json:"sla_policies"`
-	ServiceCatalog    []ServiceCatalogSeed   `json:"service_catalog"`
-	ProcessBindings   []ProcessBindingSeed   `json:"process_bindings"`
-	TicketViews       []TicketViewSeed       `json:"ticket_views"`
-	CITypes           []CITypeSeed           `json:"ci_types"`
+	Departments     []DepartmentSeed     `json:"departments"`
+	Teams           []TeamSeed           `json:"teams"`
+	Roles           []RoleSeed           `json:"roles"`
+	SLADefinitions  []SLADefinitionSeed  `json:"sla_definitions"`
+	SLAPolicies     []SLAPolicySeed      `json:"sla_policies"`
+	ServiceCatalog  []ServiceCatalogSeed `json:"service_catalog"`
+	ProcessBindings []ProcessBindingSeed `json:"process_bindings"`
+	TicketViews     []TicketViewSeed     `json:"ticket_views"`
+	CITypes         []CITypeSeed         `json:"ci_types"`
 	// 新增：可配置的种子数据
 	Incidents          []IncidentSeed         `json:"incidents"`
 	Problems           []ProblemSeed          `json:"problems"`
@@ -76,11 +76,11 @@ type SeedConfig struct {
 	KnowledgeArticles  []KnowledgeArticleSeed `json:"knowledge_articles"`
 	IncidentCategories []TicketCategorySeed   `json:"incident_categories"`
 	// 新增：标准变更模板、已知错误、标签种子数据
-	StandardChanges []StandardChangeSeed `json:"standard_changes"`
-	KnownErrors     []KnownErrorSeed     `json:"known_errors"`
-	TicketTags      []TicketTagSeed      `json:"ticket_tags"`
-	TicketCategories []TicketCategorySeed  `json:"ticket_categories"`
-	TicketTemplates  []TicketTemplateSeed  `json:"ticket_templates"`
+	StandardChanges  []StandardChangeSeed `json:"standard_changes"`
+	KnownErrors      []KnownErrorSeed     `json:"known_errors"`
+	TicketTags       []TicketTagSeed      `json:"ticket_tags"`
+	TicketCategories []TicketCategorySeed `json:"ticket_categories"`
+	TicketTemplates  []TicketTemplateSeed `json:"ticket_templates"`
 	// 工作流种子配置
 	SeedWorkflows bool `json:"seed_workflows"`
 }
@@ -244,14 +244,13 @@ type TicketTagSeed struct {
 	Color       string `json:"color"`
 }
 
-
 // TicketTemplateSeed 工单模板种子数据结构
 type TicketTemplateSeed struct {
-	Name        string                `json:"name"`
-	Description string                `json:"description"`
-	Category    string                `json:"category"`
-	Priority    string                `json:"priority"`
-	IsActive    bool                  `json:"is_active"`
+	Name          string                `json:"name"`
+	Description   string                `json:"description"`
+	Category      string                `json:"category"`
+	Priority      string                `json:"priority"`
+	IsActive      bool                  `json:"is_active"`
 	CategoryIDs   []int                 `json:"category_ids"`
 	CategoryCodes []string              `json:"category_codes"`
 	Fields        []FieldDefinitionSeed `json:"fields"`
@@ -266,6 +265,7 @@ type FieldDefinitionSeed struct {
 	Options   []map[string]interface{} `json:"options"`
 	SortOrder int                      `json:"sort_order"`
 }
+
 // SLAPolicySeed SLA策略种子数据结构
 type SLAPolicySeed struct {
 	Name                  string `json:"name"`
@@ -289,6 +289,8 @@ type Seeder struct {
 	expectedPermissions     []string
 	expectedMenus           []string
 	expectedRolePermissions map[string][]string
+	// targetTenant 种子目标租户缓存（默认为 default，支持 SeedForTenant 切换）
+	targetTenant *ent.Tenant
 }
 
 // NewSeeder creates a new Seeder instance
@@ -533,8 +535,8 @@ func getEmbeddedConfig() *SeedConfig {
 
 // SeedAll runs all seeding operations
 func (s *Seeder) SeedAll(ctx context.Context) {
-	// 首先确保 default 租户存在
-	s.seedDefaultTenant(ctx)
+	// 解析目标租户（默认 default；SeedForTenant 可切换为其他租户）
+	s.tenant(ctx)
 	s.seedDepartments(ctx)
 	s.seedTeams(ctx)
 	s.seedRoles(ctx)
@@ -742,6 +744,7 @@ func (s *Seeder) seedDefaultTenant(ctx context.Context) *ent.Tenant {
 			existing = updated
 		}
 		s.sugar.Infow("default tenant already exists", "tenant_id", existing.ID)
+		s.targetTenant = existing
 		return existing
 	}
 
@@ -762,7 +765,28 @@ func (s *Seeder) seedDefaultTenant(ctx context.Context) *ent.Tenant {
 		return nil
 	}
 	s.sugar.Infow("default tenant created", "tenant_id", defaultTenant.ID)
+	s.targetTenant = defaultTenant
 	return defaultTenant
+}
+
+// tenant 返回种子目标租户（缓存解析，避免 24 处重复查询）
+func (s *Seeder) tenant(ctx context.Context) *ent.Tenant {
+	if s.targetTenant != nil {
+		return s.targetTenant
+	}
+	s.targetTenant = s.seedDefaultTenant(ctx)
+	return s.targetTenant
+}
+
+// SeedForTenant 为指定租户运行全量种子（MSP 新租户上架用）
+func (s *Seeder) SeedForTenant(ctx context.Context, target *ent.Tenant) error {
+	if target == nil || target.ID == 0 {
+		return fmt.Errorf("target tenant is required")
+	}
+	s.targetTenant = target
+	s.sugar.Infow("seeding for tenant", "tenant_id", target.ID, "tenant_code", target.Code)
+	s.SeedAll(ctx)
+	return nil
 }
 
 func (s *Seeder) deploymentMode() string {
@@ -780,9 +804,9 @@ func nilIfEmpty(value string) *string {
 }
 
 func (s *Seeder) seedAdmin(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip admin seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 	existing, err := s.client.User.Query().Where(user.UsernameEQ("admin"), user.TenantIDEQ(t.ID)).First(ctx)
@@ -834,9 +858,9 @@ func (s *Seeder) seedAdmin(ctx context.Context) {
 }
 
 func (s *Seeder) seedDepartments(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip departments seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -865,9 +889,9 @@ func (s *Seeder) seedDepartments(ctx context.Context) {
 }
 
 func (s *Seeder) seedTeams(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip teams seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -901,9 +925,9 @@ func (s *Seeder) seedTeams(ctx context.Context) {
 }
 
 func (s *Seeder) seedRoles(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip roles seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -946,9 +970,9 @@ func (s *Seeder) seedCloudServiceTemplates(ctx context.Context) {
 // 以下是使用配置文件的初始化函数
 
 func (s *Seeder) seedSLADefinitions(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip SLA definitions seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -985,9 +1009,9 @@ func (s *Seeder) seedSLADefinitions(ctx context.Context) {
 }
 
 func (s *Seeder) seedSLAAlertRules(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip SLA alert rules seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -1057,9 +1081,9 @@ func (s *Seeder) seedSLAAlertRules(ctx context.Context) {
 // 审批能力现在完全由 seedBPMNWorkflows + seedProcessBindings 提供。
 
 func (s *Seeder) seedProcessBindings(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip process bindings seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -1097,9 +1121,9 @@ func (s *Seeder) seedBPMNWorkflows(ctx context.Context) {
 		return
 	}
 
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip BPMN workflows seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -1114,9 +1138,9 @@ func (s *Seeder) seedBPMNWorkflows(ctx context.Context) {
 }
 
 func (s *Seeder) seedTicketViews(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip ticket views seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -1168,9 +1192,9 @@ func (s *Seeder) seedTicketViews(ctx context.Context) {
 
 // seedPermissions 初始化系统权限
 func (s *Seeder) seedPermissions(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip permissions seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -1360,6 +1384,12 @@ func (s *Seeder) seedPermissions(ctx context.Context) {
 		{"process_instance:read", "查看流程实例", "process_instance", "read", "查看流程实例"},
 		{"process_instance:create", "启动流程", "process_instance", "create", "启动流程实例"},
 		{"process_instance:update", "管理流程", "process_instance", "update", "暂停/恢复/取消流程"},
+		// BPMN 引擎（middleware/rbac.go 全局 ResourceActionMap 里 /api/v1/bpmn/* 实际校验的
+		// 资源名，workflow:* 只管菜单可见性——两者不是别名互通，此前这里没有目录项，
+		// rolePermissionMap 里任何角色写 bpmn:read/write 都因为查不到对应权限 ID 被静默丢弃）
+		{"bpmn:read", "查看BPMN流程引擎数据", "bpmn", "read", "查看流程定义/实例/任务等BPMN引擎数据"},
+		{"bpmn:write", "管理BPMN流程引擎数据", "bpmn", "write", "创建/更新流程定义、完成任务等BPMN引擎写操作"},
+		{"bpmn:delete", "删除BPMN流程定义", "bpmn", "delete", "删除流程定义"},
 		// 根因
 		{"root_cause:create", "设置根因", "root_cause", "create", "设置问题根因"},
 		// 解决方案
@@ -1430,9 +1460,9 @@ func (s *Seeder) seedPermissions(ctx context.Context) {
 
 // seedMenus 初始化系统菜单
 func (s *Seeder) seedMenus(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip menus seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -1467,7 +1497,8 @@ func (s *Seeder) seedMenus(ctx context.Context) {
 		{Name: "组管理", Path: "/admin/groups", Icon: "Users", PermissionCode: "groups:read", SortOrder: 230},
 		{Name: "部门管理", Path: "/admin/departments", Icon: "Activity", PermissionCode: "department:read", SortOrder: 240},
 		{Name: "团队管理", Path: "/admin/teams", Icon: "Users", PermissionCode: "team:read", SortOrder: 250},
-		{Name: "审批管理", Path: "/admin/approvals", Icon: "ClipboardList", PermissionCode: "approval:read", SortOrder: 260},
+		// "审批管理"(/admin/approvals) 页面已在 34e4b951 删除(工单审批链 Tab 改用真实 BPMN
+		// 审批决策数据)，这里同步移除菜单种子，避免继续生成指向已删除页面的死链菜单项。
 		{Name: "SLA配置", Path: "/admin/sla-definitions", Icon: "Calendar", PermissionCode: "sla:write", SortOrder: 270},
 		{Name: "系统配置", Path: "/admin/system-config", Icon: "Settings", PermissionCode: "system:write", SortOrder: 280},
 	}
@@ -1523,9 +1554,9 @@ func (s *Seeder) seedMenus(ctx context.Context) {
 
 // seedMenuAndPermissionFixes 修复菜单路径和补充缺失的权限
 func (s *Seeder) seedMenuAndPermissionFixes(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip fixes", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -1550,7 +1581,7 @@ func (s *Seeder) seedMenuAndPermissionFixes(ctx context.Context) {
 		}
 	}
 
-	_, err = s.client.Menu.Update().
+	_, err := s.client.Menu.Update().
 		Where(menu.Path("/admin/groups"), menu.TenantIDEQ(t.ID)).
 		SetPermissionCode("groups:read").
 		Save(ctx)
@@ -1606,7 +1637,7 @@ func (s *Seeder) seedMenuAndPermissionFixes(ctx context.Context) {
 		PermissionCode string
 		SortOrder      int
 	}{
-		{"工单分类", "/admin/ticket-categories", "Tag", "ticket:write", 275},
+		{"工单分类", "/admin/ticket-categories", "Tag", "ticket_category:read", 275},
 		{"CI类型管理", "/admin/cmdb-types", "Database", "cmdb:write", 290},
 		{"许可证管理", "/licenses", "Key", "license:read", 125},
 		{"SLA模板", "/admin/sla-templates", "Layers", "sla:write", 272},
@@ -1646,9 +1677,9 @@ func (s *Seeder) seedMenuAndPermissionFixes(ctx context.Context) {
 
 // seedRolePermissions 为角色分配权限关联
 func (s *Seeder) seedRolePermissions(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip role permissions seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -1678,15 +1709,16 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		"ops_director": allExcept([]string{"system:write", "msp:write", "msp_allocation:write", "msp_report:write"}),
 		// 运维经理：运维相关读写
 		"ops_manager": {
-			"ticket:read", "ticket:write", "incident:read", "incident:write",
-			"problem:read", "problem:write", "change:read", "change:write",
+			"ticket:read", "ticket:create", "ticket:update", "ticket:escalate", "incident:read", "incident:write",
+			"problem:read", "problem:write", "change:read", "change:write", "change:rollback",
 			"asset:read", "asset:write", "cmdb:read", "cmdb:write",
 			"sla:read", "workflow:read", "report:read",
 			"team:read", "department:read", "user:read",
+			"release:read", "release:approve", "release:rollback",
 		},
 		// 运维工程师：运维操作
 		"ops_engineer": {
-			"ticket:read", "ticket:write", "incident:read", "incident:write",
+			"ticket:read", "ticket:create", "ticket:update", "incident:read", "incident:write",
 			"problem:read", "change:read", "asset:read", "asset:write",
 			"cmdb:read", "cmdb:write", "sla:read", "knowledge:read", "knowledge:write",
 		},
@@ -1704,7 +1736,7 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		},
 		// 服务台主管
 		"sd_manager": {
-			"ticket:read", "ticket:write", "incident:read", "incident:write",
+			"ticket:read", "ticket:create", "ticket:update", "ticket:escalate", "incident:read", "incident:write",
 			"problem:read", "change:read", "sla:read", "sla:write",
 			"knowledge:read", "knowledge:write", "report:read",
 			"user:read", "team:read",
@@ -1716,7 +1748,12 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 			"approval:read", "approval:write",
 			"release:read", "release:write", "release:approve", "release:rollback",
 			"cmdb:read",
-			"workflow:read", "workflow:write",
+			// workflow:* 控制"工作流"菜单可见性（menu_service.go），bpmn:* 是
+			// middleware/rbac.go 全局 ResourceActionMap 里 /api/v1/bpmn/* 实际
+			// 校验的资源名——两套命名不是别名互通的，菜单可见不代表接口能调，
+			// 缺 bpmn:read 会导致"菜单进得去、列表加载失败：权限不足"。
+			"workflow:read", "workflow:write", "process_instance:read",
+			"bpmn:read", "bpmn:write", "task:read", "task:update",
 			"sla:read",
 			"report:read",
 			"knowledge:read", "knowledge:write",
@@ -1739,18 +1776,18 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		},
 		// 一线支持工程师
 		"l1_support": {
-			"ticket:read", "ticket:write", "incident:read", "incident:write",
+			"ticket:read", "ticket:create", "ticket:update", "ticket:escalate", "incident:read", "incident:write",
 			"knowledge:read", "user:read", "sla:read",
 		},
 		// 二线支持工程师
 		"l2_support": {
-			"ticket:read", "ticket:write", "incident:read", "incident:write",
+			"ticket:read", "ticket:create", "ticket:update", "incident:read", "incident:write",
 			"problem:read", "change:read", "asset:read",
 			"knowledge:read", "knowledge:write", "user:read", "sla:read",
 		},
 		// 三线专家
 		"l3_expert": {
-			"ticket:read", "ticket:write", "incident:read", "incident:write",
+			"ticket:read", "ticket:create", "ticket:update", "incident:read", "incident:write",
 			"problem:read", "problem:write", "change:read", "change:write",
 			"asset:read", "cmdb:read", "knowledge:read", "knowledge:write",
 			"sla:read", "workflow:read",
@@ -1784,20 +1821,34 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		},
 		// 部门经理
 		"dept_manager": {
-			"ticket:read", "ticket:write", "incident:read",
-			"problem:read", "change:read", "report:read",
+			"ticket:read", "ticket:create", "ticket:update", "ticket:escalate", "incident:read",
+			"problem:read", "change:read", "change:rollback", "report:read",
 			"user:read", "department:read", "team:read",
-			"knowledge:read",
+			"knowledge:read", "release:read", "release:approve", "release:rollback",
+			// release:approve/rollback 只让业务域 API（/releases/:id/approve 等）能调，
+			// 审批人查看"我的待办"走的是 /api/v1/bpmn/tasks，由全局 ResourceActionMap
+			// 的 /api/v1/bpmn/* 通配符按 bpmn:read 校验——同 change_manager 那次修复
+			// 缺 bpmn:read 的道理一样，没有它审批人能审批但看不到自己的待办列表。
+			// release:read 同理必须补：光有 approve 权限但没有 read，审批人连
+			// GET /releases/:id（发布详情页）都会被 RBAC 拒 403，真实浏览器验证时
+			// 点开发布详情直接 404，approve 按钮压根摸不到。
+			// bpmn:write：POST /api/v1/bpmn/tasks/:id/decisions（审批人真正提交同意/拒绝
+			// 走的接口）在全局 ResourceActionMap 里按 bpmn:write 校验，跟上面 bpmn:read
+			// 只覆盖"查看待办"是两个不同动作。部门经理作为审批人被正确解析成审批任务
+			// assignee 后，没有这条权限会被全局 RBACMiddleware 挡在 authorizeTaskActor
+			// （任务级"是不是你的任务"校验）之前，报"权限不足"而不是业务层错误，真实
+			// 提交-审批全链路验证时实测复现（2026-08-18）。
+			"bpmn:read", "bpmn:write", "task:read",
 		},
 		// 团队主管
 		"team_lead": {
-			"ticket:read", "ticket:write", "incident:read",
+			"ticket:read", "ticket:create", "ticket:update", "incident:read",
 			"problem:read", "change:read", "team:read",
 			"user:read", "knowledge:read",
 		},
 		// 安全审批人：可读工单/事件/问题/变更/知识库/通知，做安全审批
 		"security": {
-			"ticket:read", "ticket:write",
+			"ticket:read", "ticket:create", "ticket:update",
 			"incident:read", "incident:write",
 			"problem:read",
 			"change:read", "change:write",
@@ -1809,9 +1860,22 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		},
 		// 普通用户
 		"end_user": {
-			"ticket:read", "ticket:write", "knowledge:read", "service_catalog:read",
+			"ticket:read", "ticket:create", "ticket:update", "knowledge:read", "service_catalog:read",
 			"ticket_category:read", "ticket_template:read", "notification:read",
 			"tag:read",
+			// service_request:write/read：没有这条，终端用户从服务目录发起自助申请
+			// （POST /api/v1/service-requests，服务目录的核心使用场景）会被全局 RBAC
+			// 直接拒在 handler 之前，报"权限不足"——end_user 是唯一预期会调这个接口的
+			// 角色，之前只有 it_director/ops_director/sysadmin/service_catalog_admin
+			// 这些管理级角色有，等于普通用户永远走不通自助服务目录。
+			"service_request:write", "service_request:read",
+			// bpmn:read/bpmn:write/task:read：服务请求 BPMN 流程里第一个节点
+			// （Activity_Accept"请求受理"）没有声明 candidateGroups/candidateUsers 时，
+			// bpmn_process_engine.go 会把它默认分配给 requester_id 本人——也就是说
+			// 申请人自己就是审批链路上第一个"任务受理人"。没有这三条权限，申请人看不到
+			// （task:read/bpmn:read）也完不成（bpmn:write）分配给自己的任务，流程卡在
+			// 第一步，真实提交-审批全链路验证时实测复现（2026-08-18）。
+			"bpmn:read", "bpmn:write", "task:read",
 		},
 		// 访客
 		"guest": {
@@ -1980,9 +2044,9 @@ func allExcept(exclude []string) []string {
 }
 
 func (s *Seeder) seedServiceCatalog(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip service catalog seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -2017,9 +2081,9 @@ func (s *Seeder) seedServiceCatalog(ctx context.Context) {
 
 // seedTicketTypes 初始化默认工单类型
 func (s *Seeder) seedTicketTypes(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip ticket types seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -2105,9 +2169,9 @@ func (s *Seeder) seedTicketTypes(ctx context.Context) {
 
 // seedCITypes 初始化CI类型种子数据
 func (s *Seeder) seedCITypes(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip CI types seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -2159,9 +2223,9 @@ func (s *Seeder) seedCITypes(ctx context.Context) {
 
 // seedStandardChanges 初始化标准变更模板种子数据
 func (s *Seeder) seedStandardChanges(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip standard changes seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -2296,9 +2360,9 @@ func (s *Seeder) seedStandardChanges(ctx context.Context) {
 
 // seedTicketTags 初始化标签种子数据
 func (s *Seeder) seedTicketTags(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip ticket tags seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -2354,9 +2418,9 @@ func (s *Seeder) seedTicketTags(ctx context.Context) {
 
 // seedIncidentCategories 初始化事件分类种子数据
 func (s *Seeder) seedIncidentCategories(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip incident categories seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -2408,9 +2472,9 @@ func (s *Seeder) seedIncidentCategories(ctx context.Context) {
 
 // seedTicketCategories 初始化工单分类树（层级结构）
 func (s *Seeder) seedTicketCategories(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip ticket categories seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -2494,9 +2558,9 @@ func (s *Seeder) seedTicketCategories(ctx context.Context) {
 
 // seedTicketTemplates 初始化工单模板及自定义字段定义
 func (s *Seeder) seedTicketTemplates(ctx context.Context) {
-	t, err := s.client.Tenant.Query().Where(tenant.CodeEQ("default")).First(ctx)
-	if err != nil {
-		s.sugar.Warnw("default tenant not found; skip ticket templates seed", "error", err)
+	t := s.tenant(ctx)
+	if t == nil {
+		s.sugar.Warnw("tenant not found; skip seed")
 		return
 	}
 
@@ -2550,49 +2614,49 @@ func (s *Seeder) seedTicketTemplates(ctx context.Context) {
 			continue
 		}
 
-			// 2. 创建自定义字段定义（直接在当前事务中操作）
-			if len(tmpl.Fields) == 0 {
-				continue
-			}
+		// 2. 创建自定义字段定义（直接在当前事务中操作）
+		if len(tmpl.Fields) == 0 {
+			continue
+		}
 
-			// 删除旧定义（幂等）
-			_, err = s.client.FieldDefinition.Delete().
-				Where(
-					fielddefinition.TenantIDEQ(t.ID),
-					fielddefinition.EntityTypeEQ("ticket_template"),
-					fielddefinition.EntityIDEQ(tpl.ID),
-				).
-				Exec(ctx)
+		// 删除旧定义（幂等）
+		_, err = s.client.FieldDefinition.Delete().
+			Where(
+				fielddefinition.TenantIDEQ(t.ID),
+				fielddefinition.EntityTypeEQ("ticket_template"),
+				fielddefinition.EntityIDEQ(tpl.ID),
+			).
+			Exec(ctx)
+		if err != nil {
+			s.sugar.Warnw("delete old field definitions failed", "error", err, "template", tmpl.Name)
+		}
+
+		// 按序创建新定义
+		for i, fd := range tmpl.Fields {
+			opts := fd.Options
+			if opts == nil {
+				opts = []map[string]interface{}{}
+			}
+			sortOrder := fd.SortOrder
+			if sortOrder == 0 {
+				sortOrder = i
+			}
+			_, err := s.client.FieldDefinition.Create().
+				SetTenantID(t.ID).
+				SetEntityType("ticket_template").
+				SetEntityID(tpl.ID).
+				SetName(fd.Name).
+				SetLabel(fd.Label).
+				SetFieldType(fd.FieldType).
+				SetRequired(fd.Required).
+				SetOptions(convertOptions(fd.Options)).
+				SetSortOrder(sortOrder).
+				SetIsActive(true).
+				Save(ctx)
 			if err != nil {
-				s.sugar.Warnw("delete old field definitions failed", "error", err, "template", tmpl.Name)
+				s.sugar.Warnw("seed field definition failed", "error", err, "template", tmpl.Name, "field", fd.Name)
 			}
-
-			// 按序创建新定义
-			for i, fd := range tmpl.Fields {
-				opts := fd.Options
-				if opts == nil {
-					opts = []map[string]interface{}{}
-				}
-				sortOrder := fd.SortOrder
-				if sortOrder == 0 {
-					sortOrder = i
-				}
-				_, err := s.client.FieldDefinition.Create().
-					SetTenantID(t.ID).
-					SetEntityType("ticket_template").
-					SetEntityID(tpl.ID).
-					SetName(fd.Name).
-					SetLabel(fd.Label).
-					SetFieldType(fd.FieldType).
-					SetRequired(fd.Required).
-					SetOptions(convertOptions(fd.Options)).
-					SetSortOrder(sortOrder).
-					SetIsActive(true).
-					Save(ctx)
-				if err != nil {
-					s.sugar.Warnw("seed field definition failed", "error", err, "template", tmpl.Name, "field", fd.Name)
-				}
-			}
+		}
 		if err != nil {
 			s.sugar.Warnw("seed field definitions for template failed", "error", err, "template", tmpl.Name)
 		}

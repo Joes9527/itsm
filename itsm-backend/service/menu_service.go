@@ -12,7 +12,6 @@ import (
 	"itsm-backend/ent/role"
 	"itsm-backend/ent/rolepermission"
 	"itsm-backend/ent/user"
-	"itsm-backend/middleware"
 
 	"go.uber.org/zap"
 )
@@ -263,18 +262,9 @@ func (s *MenuService) getUserPermissions(ctx context.Context, userEntity *ent.Us
 
 	roleCodes := make([]string, 0, 1+len(userEntity.Edges.Roles))
 
-	// 从用户直接角色获取权限，兼容旧的 users.role 字段
+	// 收集直接角色（兼容旧的 users.role 字段）
 	if userEntity.Role != "" {
 		roleCodes = append(roleCodes, string(userEntity.Role))
-		rolePerms := middleware.RolePermissions[string(userEntity.Role)]
-		for _, p := range rolePerms {
-			key := p.Resource + ":" + p.Action
-			permissions[key] = true
-			// 也添加通配符权限
-			if p.Action == "*" {
-				permissions[p.Resource+":*"] = true
-			}
-		}
 	}
 
 	// 从用户-角色多对多关系收集数据库角色代码
@@ -284,21 +274,7 @@ func (s *MenuService) getUserPermissions(ctx context.Context, userEntity *ent.Us
 		}
 	}
 
-	// 如果用户有额外的角色，获取角色权限
-	if len(roleCodes) > 0 {
-		for _, roleCode := range roleCodes {
-			rolePerms := middleware.RolePermissions[roleCode]
-			for _, p := range rolePerms {
-				key := p.Resource + ":" + p.Action
-				permissions[key] = true
-				// 也添加通配符权限
-				if p.Action == "*" {
-					permissions[p.Resource+":*"] = true
-				}
-			}
-		}
-	}
-
+	// 从数据库加载角色权限（不再使用硬编码 RolePermissions）
 	s.addDatabaseRolePermissions(ctx, permissions, tenantID, roleCodes)
 
 	return permissions
@@ -477,11 +453,19 @@ func shouldRestrictMenuForRole(path string, roleCodes map[string]bool) bool {
 		return false
 	}
 
+	// /workflow 单独判：除了完全 elevated 的角色，还允许业务上确实要用到工作流引擎
+	// 视图（触发/查看自己业务对应的流程实例）的角色通过，但仍然是显式白名单，不是
+	// 移除限制——避免像 end_user 这种低权限角色即使被误授予 workflow:read 也能看到
+	// 流程引擎管理视图（TestFilterMenusByPermissionRestrictsLowPrivilegeAdminMenus
+	// 这条既有用例验证的正是这一点）。
+	if strings.HasPrefix(path, "/workflow") {
+		return !isElevatedMenuRole(roleCodes) && !isWorkflowVisibleRole(roleCodes)
+	}
+
 	restrictedPrefixes := []string{
 		"/admin",
 		"/enterprise",
 		"/system",
-		"/workflow",
 	}
 
 	for _, prefix := range restrictedPrefixes {
@@ -501,6 +485,26 @@ func isElevatedMenuRole(roleCodes map[string]bool) bool {
 	}
 
 	for _, roleCode := range elevatedRoles {
+		if roleCodes[roleCode] {
+			return true
+		}
+	}
+
+	return false
+}
+
+// isWorkflowVisibleRole 是 /workflow 菜单的显式角色白名单：这些角色的种子权限里
+// 真实授予了 workflow:read/write（见 pkg/seeder/seeder.go），需要自助查看/触发跟
+// 自己业务相关的流程实例（发布/变更审批链等），不属于完全 elevated 但也不该被
+// shouldRestrictMenuForRole 的默认限制挡住。
+func isWorkflowVisibleRole(roleCodes map[string]bool) bool {
+	workflowVisibleRoles := []string{
+		"change_manager",
+		"rd_manager",
+		"l3_expert",
+	}
+
+	for _, roleCode := range workflowVisibleRoles {
 		if roleCodes[roleCode] {
 			return true
 		}
@@ -621,7 +625,13 @@ func (s *MenuService) buildMenuTree(menus []*ent.Menu) (mainMenus, adminMenus []
 
 // isAdminMenu 判断是否为管理菜单
 func isAdminMenu(path string) bool {
-	adminPaths := []string{"/admin", "/system", "/workflow"}
+	// /workflow 不放在这里：它是否可见已经由 shouldRestrictMenuForRole 按角色白名单
+	// 过滤过一次（只有 change_manager/rd_manager/l3_expert 等真实被授予
+	// workflow:read 的角色能走到这一步）。若继续归为"管理菜单"，会被前端
+	// Sidebar.tsx 的 isAdmin（只认 user.role === 'admin'/'super_admin'，
+	// 不看后端权限过滤结果）二次拦下，导致这些角色明明通过了权限过滤，
+	// 菜单还是不可见——这正是本次要修的问题。
+	adminPaths := []string{"/admin", "/system"}
 	for _, p := range adminPaths {
 		if len(path) >= len(p) && path[:len(p)] == p {
 			return true

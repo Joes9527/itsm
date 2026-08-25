@@ -134,6 +134,8 @@ func (r *CallbackRegistry) registerDefaultHandlers() {
 	// 注册抄送处理器
 	r.RegisterHandler(NewCCTaskHandler(r.client, r.logger))
 	r.RegisterHandler(NewWebhookHandler(r.client, r.logger))
+	// 注册发布服务任务处理器
+	r.RegisterHandler(NewReleaseServiceTaskHandler(r.client, r.logger))
 }
 
 // RegisterTicketHandlerWithNotification 注册带通知服务的工单处理器

@@ -16,7 +16,7 @@ import (
 	_ "itsm-backend/connector/builtin/console"
 	_ "itsm-backend/connector/builtin/dingtalk"
 	_ "itsm-backend/connector/builtin/feishu"
-	_ "itsm-backend/connector/builtin/msgraph"
+	msgraph "itsm-backend/connector/builtin/msgraph"
 	_ "itsm-backend/connector/builtin/webhook"
 	_ "itsm-backend/connector/builtin/wecom"
 	"itsm-backend/connector/marketplace"
@@ -215,6 +215,14 @@ func NewApplication() *Application {
 	eventbus.SetGlobalEventBus(eventBus)
 	sugar.Infow("Event bus initialized successfully")
 
+	// 事件驱动审计订阅方：sla.breached / ai.triage.completed 写入 AuditLog
+	auditSubscriber := service.NewEventAuditSubscriber(client, sugar)
+	for _, topic := range service.AuditedEventTopics() {
+		if err := eventBus.Subscribe(topic, auditSubscriber); err != nil {
+			sugar.Warnw("failed to subscribe audit subscriber", "error", err, "topic", topic)
+		}
+	}
+
 	// BPMN 子服务（必须在 TicketService 之前创建）
 	processBindingService := service.NewProcessBindingService(client)
 	processEngine := service.NewCustomProcessEngine(client, sugar)
@@ -232,10 +240,40 @@ func NewApplication() *Application {
 	// Connector Manager / Registry / Market —— 连接器/插件/技能市场基础设施
 	connectorManager := connector.NewManager(connector.Default(), sugar)
 	connectorMarket := marketplace.New()
-	connectorController := controller.NewConnectorController(connectorManager, connector.Default(), connectorMarket, sugar)
+	connectorController := controller.NewConnectorController(connectorManager, connector.Default(), connectorMarket, sugar, client)
+
+	// Webhook 事件推送订阅方：sla.breached 按租户推送到已配置的 webhook 端点
+	webhookSubscriber := service.NewWebhookEventSubscriber(connectorManager, sugar)
+	for _, topic := range service.WebhookEventTopics() {
+		if err := eventBus.Subscribe(topic, webhookSubscriber); err != nil {
+			sugar.Warnw("failed to subscribe webhook subscriber", "error", err, "topic", topic)
+		}
+	}
 
 	// 通知 / 审批 / SLA / 自动化 / 序列服务（V2 子服务）
 	ticketNotificationService := service.NewTicketNotificationService(client, sugar)
+	// 邮件通知（Graph sendMail 为主，SMTP fallback）
+	emailService := service.NewEmailService(service.EmailConfig{
+		Host:     cfg.SMTP.Host,
+		Port:     cfg.SMTP.Port,
+		Username: cfg.SMTP.Username,
+		Password: cfg.SMTP.Password,
+		From:     cfg.SMTP.FromEmail,
+		FromName: cfg.SMTP.FromName,
+	}, sugar)
+	// 延迟绑定 Graph 发信：发信时动态查 msgraph 连接器（单租户 tenantID=1）
+	emailService.SetGraphProvider(func() (service.GraphMailSender, string, bool) {
+		c, ok := connectorManager.Get(1, "msgraph-email")
+		if !ok {
+			return nil, "", false
+		}
+		gc, ok := c.(*msgraph.GraphConnector)
+		if !ok {
+			return nil, "", false
+		}
+		return gc.GraphClient(), gc.Mailbox(), true
+	})
+	ticketNotificationService.SetEmailService(emailService)
 	ticketSLAService := service.NewTicketSLAService(client, sugar)
 	ticketAutomationRuleService := service.NewTicketAutomationRuleService(client, sugar)
 
@@ -264,6 +302,7 @@ func NewApplication() *Application {
 
 	// Release & Asset Management Services
 	releaseService := service.NewReleaseService(client, sugar)
+	releaseService.SetProcessTriggerService(processTriggerService)
 	assetService := service.NewAssetService(client, sugar)
 	assetLicenseService := service.NewAssetLicenseService(client, sugar)
 	// CMDB Services
@@ -348,7 +387,24 @@ func NewApplication() *Application {
 	}
 	guidanceClient := service.NewGuidanceClient(guidanceURL, sugar)
 	triageService := service.NewTriageServiceWithGuidanceAndSugaredLogger(llmGateway, guidanceClient, sugar)
-	wireEmailMsgraphConnector(client, ticketService, triageService, connectorController, sugar)
+	ticketAttachmentService := service.NewTicketAttachmentService(client, sugar)
+	// 配置了 MinIO 则切换附件存储后端为对象存储；失败回退本地文件系统。
+	if cfg.MinIO.Endpoint != "" {
+		if minioStorage, err := service.NewMinioAttachmentStorage(
+			cfg.MinIO.Endpoint, cfg.MinIO.AccessKey, cfg.MinIO.SecretKey, cfg.MinIO.Bucket, cfg.MinIO.UseSSL,
+		); err != nil {
+			sugar.Warnw("failed to init MinIO storage, falling back to local filesystem", "error", err)
+		} else {
+			ticketAttachmentService.SetStorage(minioStorage)
+			sugar.Infow("attachment storage backend: minio", "endpoint", cfg.MinIO.Endpoint, "bucket", cfg.MinIO.Bucket)
+		}
+	}
+	wireEmailMsgraphConnector(client, ticketService, triageService, ticketAttachmentService, connectorController, sugar)
+
+	// 从数据库恢复已配置的连接器（如 msgraph-email），避免进程重启后丢失
+	if err := connectorController.LoadAll(context.Background()); err != nil {
+		sugar.Warnw("Failed to restore connectors from DB", "error", err)
+	}
 
 	rootCauseService := service.NewRootCauseService(client, sugar)
 	// LLM/Embedding/VectorStore
@@ -362,7 +418,6 @@ func NewApplication() *Application {
 
 	ticketCommentService := service.NewTicketCommentService(client, sugar)
 	ticketCommentController := controller.NewTicketCommentController(ticketCommentService, sugar)
-	ticketAttachmentService := service.NewTicketAttachmentService(client, sugar)
 	ticketAttachmentController := controller.NewTicketAttachmentController(ticketAttachmentService, sugar)
 	ticketNotificationController := controller.NewTicketNotificationController(ticketNotificationService, sugar)
 	// ticketNotificationService 已在 128 行创建并注入到 V2
@@ -374,6 +429,7 @@ func NewApplication() *Application {
 	// Notification Preference Service & Controller
 	notificationPreferenceService := service.NewNotificationPreferenceService(client, sugar)
 	notificationPreferenceController := controller.NewNotificationPreferenceController(notificationPreferenceService, sugar)
+	ticketNotificationService.SetNotificationPreferenceService(notificationPreferenceService)
 
 	ticketRatingService := service.NewTicketRatingService(client, sugar)
 	ticketRatingController := controller.NewTicketRatingController(ticketRatingService, sugar)
@@ -510,6 +566,8 @@ func NewApplication() *Application {
 	// Domain: Change (DDD)
 	changeRepo := change.NewEntRepository(client, database.GetRawDB())
 	changeServiceDomain := change.NewService(changeRepo, client, sugar)
+	// 提交变更审批后自动启动 change_normal_flow，见 change.Service.SetProcessTriggerService 注释；
+	// CAB 审批决定/阶段流转完成 BPMN 任务需要 processEngine，见 SetProcessEngine 注释。
 	changeServiceDomain.SetProcessTriggerService(processTriggerService)
 	changeServiceDomain.SetProcessEngine(processEngine)
 	changeHandler := change.NewHandler(changeServiceDomain)
@@ -564,6 +622,10 @@ func NewApplication() *Application {
 
 	// Auth Controller（装配缺失的 register / forgot-password / reset-password / validate-reset-token / switch-tenant 路由）
 	authService := service.NewAuthService(client, cfg.JWT.Secret, sugar, nil)
+	authService.SetEmailService(emailService)
+	if cfg.Server.FrontendURL != "" {
+		authService.SetBaseURL(cfg.Server.FrontendURL)
+	}
 	authController := controller.NewAuthController(authService)
 
 	// Role Handler (in-memory for now)
@@ -591,8 +653,9 @@ func NewApplication() *Application {
 	auditLogService := service.NewAuditLogService(client, sugar)
 	auditLogController := controller.NewAuditLogController(auditLogService, sugar)
 
-	// Tenant Controller
+	// Tenant Controller（注入种子器：新租户上架时自动初始化默认配置）
 	tenantService := service.NewTenantService(client, sugar)
+	tenantService.SetSeeder(seeder.NewSeeder(client, sugar, cfg))
 	tenantController := controller.NewTenantController(tenantService, sugar)
 
 	// System Config Controller
@@ -629,6 +692,7 @@ func NewApplication() *Application {
 
 	// WebSocket Service
 	wsService := service.NewWebSocketService(sugar)
+	ticketNotificationService.SetWebSocketService(wsService)
 
 	// 7. 设置路由
 	// 根据配置设置 Gin 运行模式
@@ -782,12 +846,10 @@ func NewApplication() *Application {
 }
 
 func configurePermissionMode(environment string) {
-	switch strings.ToLower(strings.TrimSpace(environment)) {
-	case "development", "dev", "test", "local":
-		middleware.PermissionConfig.Mode = middleware.PermissionConfigModeFallback
-	default:
-		middleware.PermissionConfig.Mode = middleware.PermissionConfigModeDBOnly
-	}
+	// 统一 DBOnly：数据库（seeder 初始化）为唯一运行时权限权威，开发/生产行为一致。
+	// 硬编码 RolePermissions 仅保留 super_admin 代码级放行与 end_user 防御性兜底（DBOnly 下不生效）。
+	_ = environment
+	middleware.PermissionConfig.Mode = middleware.PermissionConfigModeDBOnly
 }
 
 // ValidateWebStartupConfig prevents schema or seed mutations from running in

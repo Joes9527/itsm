@@ -49,9 +49,10 @@ func (s *Service) SetProcessTriggerService(svc service.ProcessTriggerServiceInte
 	s.processTriggerService = svc
 }
 
-// SetProcessEngine 注入 BPMN 流程引擎——完成 CAB 审批任务及其级联的排期/驳回节点
-// 需要直接调用引擎的 CompleteTask，绕不开 Repository/entClient 能提供的能力。
-// 跟 SetProcessTriggerService 一样用 setter 注入，避免构造函数循环依赖。
+// SetProcessEngine 注入 BPMN 流程引擎——完成 CAB 审批任务、其级联的排期/驳回节点，
+// 以及后续阶段流转（排期/实施/验证/关闭）节点，都需要直接调用引擎的 CompleteTask，
+// 绕不开 Repository/entClient 能提供的能力。跟 SetProcessTriggerService 一样用 setter
+// 注入，避免构造函数循环依赖。
 func (s *Service) SetProcessEngine(engine service.ProcessEngine) {
 	s.processEngine = engine
 }
@@ -760,6 +761,17 @@ func (s *Service) TransitionStatus(ctx context.Context, id, tenantID, userID int
 		return s.repo.Get(ctx, id, tenantID)
 	}
 
+	// 阶段流转（start/complete）先完成对应的 change_normal_flow 阶段节点（注入
+	// change_id），再由域层写权威状态。handler 侧写入的中间值（scheduled/
+	// pending_approval）会被随后的域写覆盖，最终状态以域为准；节点不存在/已完成时
+	// completeChangeStageTasks 幂等跳过，只有节点存在但完成失败才中止，避免变更状态
+	// 与流程状态分叉。不注入 actorUserID：阶段流转的授权边界在域层（JWT + 资源权限 +
+	// 租户隔离），不强制 BPMN 任务 assignee 匹配（authorizeTaskActor 对 userID<=0
+	// 按设计跳过）。
+	if err := s.completeChangeStageTasks(ctx, tenantID, id, targetStatus); err != nil {
+		return nil, err
+	}
+
 	// H-2 / C-2 修复：
 	// 1. 终态（rejected/completed/cancelled/rolled_back）需要事务化写 change
 	// 2. 非终态直接更新
@@ -800,6 +812,96 @@ func (s *Service) TransitionStatus(ctx context.Context, id, tenantID, userID int
 
 	c.Status = targetStatus
 	return s.repo.Update(ctx, c)
+}
+
+// changeStageTask 描述一次需要原生完成的变更阶段节点。
+type changeStageTask struct {
+	key  string
+	vars map[string]interface{}
+}
+
+// changeStageTasks 返回变更阶段流转需要依次完成的 change_normal_flow 节点。
+// start（in_progress）先完成排期节点（若流程仍停在该节点，handler 写入的 scheduled
+// 随后被域写 in_progress 覆盖），再完成实施节点；complete 依次完成验证与关闭两个
+// 节点让流程走完，验证节点需带 verify_passed 供 Gateway_VerifyResult 路由。
+// 节点不存在或已完成时 completeChangeStageTasks 跳过，按顺序尝试即可。
+func changeStageTasks(targetStatus string) []changeStageTask {
+	switch targetStatus {
+	case "in_progress":
+		return []changeStageTask{
+			{key: "Activity_Schedule"},
+			{key: "Activity_Implement"},
+		}
+	case "completed":
+		return []changeStageTask{
+			{key: "Activity_Verify", vars: map[string]interface{}{"verify_passed": true}},
+			{key: "Activity_Close"},
+		}
+	default:
+		return nil
+	}
+}
+
+// completeChangeStageTasks 变更阶段流转（start/complete）的原生 BPMN 完成：依次完成
+// change_normal_flow 里排期/实施/验证/关闭节点，让流程随域状态推进——不经
+// BPMNApprovalBridge，直接用 processEngine，跟 completeChangeApprovalTask 同一套
+// 引擎依赖。语义特意保持跟旧桥接一致：变更没有关联的运行中流程实例、或指定节点当前
+// 不是待办任务（已完成/流程走了别的分支），都不是错误，跳过继续下一个节点；节点存在
+// 但 CompleteTask 调用失败才中止转换，避免变更状态和流程状态分叉。
+func (s *Service) completeChangeStageTasks(ctx context.Context, tenantID, changeID int, targetStatus string) error {
+	if s.processEngine == nil {
+		return nil
+	}
+	tasks := changeStageTasks(targetStatus)
+	if len(tasks) == 0 {
+		return nil
+	}
+
+	businessKey := fmt.Sprintf("change:%d", changeID)
+	instance, err := s.entClient.ProcessInstance.Query().
+		Where(processinstance.BusinessKey(businessKey), processinstance.TenantID(tenantID), processinstance.Status("running")).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			// 没有关联的运行中流程实例——不是所有变更都走 change_normal_flow（比如紧急
+			// 变更走 emergency 流程，或流程已经在别的分支提前结束），跳过阶段完成。
+			return nil
+		}
+		return fmt.Errorf("查询变更流程实例失败: %w", err)
+	}
+
+	// actorUserID 不注入：阶段流转的授权边界在域层（JWT + 资源权限 + 租户隔离），不
+	// 强制 BPMN 任务 assignee 匹配（authorizeTaskActor 对 userID<=0 按设计跳过）。
+	actorCtx := context.WithValue(ctx, bpmn.BPMNUserIDContextKey, 0)
+	actorCtx = context.WithValue(actorCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+
+	for _, st := range tasks {
+		task, err := s.entClient.ProcessTask.Query().
+			Where(
+				processtask.HasProcessInstanceWith(processinstance.ID(instance.ID)),
+				processtask.TaskType("user_task"),
+				processtask.TaskDefinitionKey(st.key),
+				processtask.StatusIn("created", "assigned", "started", "delegated"),
+			).
+			Only(ctx)
+		if err != nil {
+			if ent.IsNotFound(err) {
+				// 节点当前不是待办任务——可能还没走到、已经被完成过（重试场景），或
+				// 流程走了别的分支。跳过，尝试列表里的下一个节点。
+				continue
+			}
+			return fmt.Errorf("查询变更阶段任务(%s)失败: %w", st.key, err)
+		}
+
+		vars := map[string]interface{}{"change_id": changeID}
+		for k, v := range st.vars {
+			vars[k] = v
+		}
+		if err := s.processEngine.CompleteTask(actorCtx, task.TaskID, vars); err != nil {
+			return fmt.Errorf("完成变更阶段任务(%s)失败: %w", st.key, err)
+		}
+	}
+	return nil
 }
 
 // GetApprovalHistory returns approval records for a change

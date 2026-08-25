@@ -89,10 +89,9 @@ func (s *TicketRatingService) SubmitRating(
 			content += fmt.Sprintf("，评论：%s", req.Comment)
 		}
 		if err := s.notificationService.SendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
-			UserIDs: []int{updatedTicket.AssigneeID},
-			Type:    "rating",
-			Channel: "in_app",
-			Content: content,
+			UserIDs:   []int{updatedTicket.AssigneeID},
+			EventType: "ticket_updated",
+			Content:   content,
 		}, tenantID); err != nil {
 			s.logger.Warnw("Failed to send rating notification", "error", err)
 		}

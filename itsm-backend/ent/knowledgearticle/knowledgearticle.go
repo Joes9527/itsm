@@ -28,6 +28,10 @@ const (
 	FieldTenantID = "tenant_id"
 	// FieldIsPublished holds the string denoting the is_published field in the database.
 	FieldIsPublished = "is_published"
+	// FieldReviewStatus holds the string denoting the review_status field in the database.
+	FieldReviewStatus = "review_status"
+	// FieldReviewComment holds the string denoting the review_comment field in the database.
+	FieldReviewComment = "review_comment"
 	// FieldViewCount holds the string denoting the view_count field in the database.
 	FieldViewCount = "view_count"
 	// FieldLikeCount holds the string denoting the like_count field in the database.
@@ -79,6 +83,8 @@ var Columns = []string{
 	FieldAuthorID,
 	FieldTenantID,
 	FieldIsPublished,
+	FieldReviewStatus,
+	FieldReviewComment,
 	FieldViewCount,
 	FieldLikeCount,
 	FieldCreatedAt,
@@ -116,6 +122,10 @@ var (
 	TenantIDValidator func(int) error
 	// DefaultIsPublished holds the default value on creation for the "is_published" field.
 	DefaultIsPublished bool
+	// DefaultReviewStatus holds the default value on creation for the "review_status" field.
+	DefaultReviewStatus string
+	// DefaultReviewComment holds the default value on creation for the "review_comment" field.
+	DefaultReviewComment string
 	// DefaultViewCount holds the default value on creation for the "view_count" field.
 	DefaultViewCount int
 	// DefaultLikeCount holds the default value on creation for the "like_count" field.
@@ -169,6 +179,16 @@ func ByTenantID(opts ...sql.OrderTermOption) OrderOption {
 // ByIsPublished orders the results by the is_published field.
 func ByIsPublished(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldIsPublished, opts...).ToFunc()
+}
+
+// ByReviewStatus orders the results by the review_status field.
+func ByReviewStatus(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldReviewStatus, opts...).ToFunc()
+}
+
+// ByReviewComment orders the results by the review_comment field.
+func ByReviewComment(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldReviewComment, opts...).ToFunc()
 }
 
 // ByViewCount orders the results by the view_count field.

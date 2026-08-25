@@ -145,6 +145,11 @@ export class ReleaseApi {
     return httpClient.post<Release>(`/api/v1/releases/${id}/approve`);
   }
 
+  // 提交技术评审意见（桥接 release_approval_flow 的技术评审节点）
+  static async submitTechReview(id: number, comment: string): Promise<Release> {
+    return httpClient.post<Release>(`/api/v1/releases/${id}/tech-review`, { comment });
+  }
+
   static async rejectRelease(id: number, reason: string): Promise<Release> {
     return httpClient.post<Release>(`/api/v1/releases/${id}/reject`, { reason });
   }

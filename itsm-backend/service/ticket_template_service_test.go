@@ -104,3 +104,21 @@ func TestTicketTemplateService_DeleteTemplate_DeletesFieldDefinitions(t *testing
 	require.NoError(t, err)
 	assert.Empty(t, defs)
 }
+
+func TestValidateTemplateFields_RejectsUnknownFieldType(t *testing.T) {
+	err := validateTemplateFields([]FieldDefinitionInput{
+		{Name: "weird_field", Label: "怪字段", FieldType: "banana"},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "字段类型")
+}
+
+func TestValidateTemplateFields_AcceptsAllDocumentedFieldTypes(t *testing.T) {
+	validTypes := []string{"text", "textarea", "number", "date", "select", "multiselect", "boolean", "file"}
+	for _, ft := range validTypes {
+		err := validateTemplateFields([]FieldDefinitionInput{
+			{Name: "f_" + ft, Label: ft, FieldType: ft},
+		})
+		assert.NoError(t, err, "字段类型 %s 应该是合法的", ft)
+	}
+}

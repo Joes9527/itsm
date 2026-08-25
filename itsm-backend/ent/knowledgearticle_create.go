@@ -97,6 +97,34 @@ func (_c *KnowledgeArticleCreate) SetNillableIsPublished(v *bool) *KnowledgeArti
 	return _c
 }
 
+// SetReviewStatus sets the "review_status" field.
+func (_c *KnowledgeArticleCreate) SetReviewStatus(v string) *KnowledgeArticleCreate {
+	_c.mutation.SetReviewStatus(v)
+	return _c
+}
+
+// SetNillableReviewStatus sets the "review_status" field if the given value is not nil.
+func (_c *KnowledgeArticleCreate) SetNillableReviewStatus(v *string) *KnowledgeArticleCreate {
+	if v != nil {
+		_c.SetReviewStatus(*v)
+	}
+	return _c
+}
+
+// SetReviewComment sets the "review_comment" field.
+func (_c *KnowledgeArticleCreate) SetReviewComment(v string) *KnowledgeArticleCreate {
+	_c.mutation.SetReviewComment(v)
+	return _c
+}
+
+// SetNillableReviewComment sets the "review_comment" field if the given value is not nil.
+func (_c *KnowledgeArticleCreate) SetNillableReviewComment(v *string) *KnowledgeArticleCreate {
+	if v != nil {
+		_c.SetReviewComment(*v)
+	}
+	return _c
+}
+
 // SetViewCount sets the "view_count" field.
 func (_c *KnowledgeArticleCreate) SetViewCount(v int) *KnowledgeArticleCreate {
 	_c.mutation.SetViewCount(v)
@@ -251,6 +279,14 @@ func (_c *KnowledgeArticleCreate) defaults() {
 		v := knowledgearticle.DefaultIsPublished
 		_c.mutation.SetIsPublished(v)
 	}
+	if _, ok := _c.mutation.ReviewStatus(); !ok {
+		v := knowledgearticle.DefaultReviewStatus
+		_c.mutation.SetReviewStatus(v)
+	}
+	if _, ok := _c.mutation.ReviewComment(); !ok {
+		v := knowledgearticle.DefaultReviewComment
+		_c.mutation.SetReviewComment(v)
+	}
 	if _, ok := _c.mutation.ViewCount(); !ok {
 		v := knowledgearticle.DefaultViewCount
 		_c.mutation.SetViewCount(v)
@@ -297,6 +333,12 @@ func (_c *KnowledgeArticleCreate) check() error {
 	}
 	if _, ok := _c.mutation.IsPublished(); !ok {
 		return &ValidationError{Name: "is_published", err: errors.New(`ent: missing required field "KnowledgeArticle.is_published"`)}
+	}
+	if _, ok := _c.mutation.ReviewStatus(); !ok {
+		return &ValidationError{Name: "review_status", err: errors.New(`ent: missing required field "KnowledgeArticle.review_status"`)}
+	}
+	if _, ok := _c.mutation.ReviewComment(); !ok {
+		return &ValidationError{Name: "review_comment", err: errors.New(`ent: missing required field "KnowledgeArticle.review_comment"`)}
 	}
 	if _, ok := _c.mutation.ViewCount(); !ok {
 		return &ValidationError{Name: "view_count", err: errors.New(`ent: missing required field "KnowledgeArticle.view_count"`)}
@@ -363,6 +405,14 @@ func (_c *KnowledgeArticleCreate) createSpec() (*KnowledgeArticle, *sqlgraph.Cre
 	if value, ok := _c.mutation.IsPublished(); ok {
 		_spec.SetField(knowledgearticle.FieldIsPublished, field.TypeBool, value)
 		_node.IsPublished = value
+	}
+	if value, ok := _c.mutation.ReviewStatus(); ok {
+		_spec.SetField(knowledgearticle.FieldReviewStatus, field.TypeString, value)
+		_node.ReviewStatus = value
+	}
+	if value, ok := _c.mutation.ReviewComment(); ok {
+		_spec.SetField(knowledgearticle.FieldReviewComment, field.TypeString, value)
+		_node.ReviewComment = value
 	}
 	if value, ok := _c.mutation.ViewCount(); ok {
 		_spec.SetField(knowledgearticle.FieldViewCount, field.TypeInt, value)

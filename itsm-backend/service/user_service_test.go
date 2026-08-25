@@ -6,6 +6,7 @@ import (
 
 	"itsm-backend/dto"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/ent/user"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -257,6 +258,86 @@ func TestUserService_UpdateUser(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestUserService_UpdateUser_AdditionalRoleIds 验证 UpdateUserRequest.AdditionalRoleIds
+// 的三种语义：整体替换、显式清空、以及 nil 表示不修改。这段写入路径（ClearRoles+AddRoleIDs）
+// 之前从未被业务代码或测试真正跑过，属于本次新启用的 ent M2M 写入 API，必须单独验证。
+func TestUserService_UpdateUser_AdditionalRoleIds(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", testDSN())
+	defer client.Close()
+
+	logger := zaptest.NewLogger(t).Sugar()
+	userService := NewUserService(client, logger)
+
+	ctx := context.Background()
+
+	// 创建测试租户
+	testTenant, err := client.Tenant.Create().
+		SetName("Test Tenant").
+		SetCode("TEST").
+		SetDomain("test.com").
+		SetStatus("active").
+		Save(ctx)
+	require.NoError(t, err)
+
+	// 创建测试用户，主角色随便设成 end_user（附加角色不影响 RBAC 判定，只影响 BPMN 候选资格）
+	testUser, err := client.User.Create().
+		SetUsername("additional_role_user").
+		SetEmail("additional-role@example.com").
+		SetPasswordHash("hashedpassword").
+		SetName("Additional Role User").
+		SetDepartment("IT").
+		SetPhone("1234567890").
+		SetRole("end_user").
+		SetActive(true).
+		SetTenantID(testTenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	role1, err := client.Role.Create().
+		SetName("IT总监").
+		SetCode("it_director").
+		SetDescription("IT部门总监").
+		SetTenantID(testTenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	role2, err := client.Role.Create().
+		SetName("部门经理").
+		SetCode("dept_manager").
+		SetDescription("部门经理").
+		SetTenantID(testTenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	countRoles := func() int {
+		count, err := client.User.Query().Where(user.ID(testUser.ID)).QueryRoles().Count(ctx)
+		require.NoError(t, err)
+		return count
+	}
+
+	// 1. 传入两个附加角色 ID，应该整体设置成这两个角色
+	_, err = userService.UpdateUser(ctx, testUser.ID, &dto.UpdateUserRequest{
+		AdditionalRoleIds: &[]int{role1.ID, role2.ID},
+	}, testTenant.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 2, countRoles())
+
+	// 2. 传入空切片（非 nil），应该清空所有附加角色，证明 ClearRoles() 真的执行了
+	_, err = userService.UpdateUser(ctx, testUser.ID, &dto.UpdateUserRequest{
+		AdditionalRoleIds: &[]int{},
+	}, testTenant.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 0, countRoles())
+
+	// 3. AdditionalRoleIds 整体不传（nil），角色关联数量应保持不变（仍是上一步清空后的 0），
+	// 证明 nil 表示"不修改"这个语义生效了，不会因为不传就意外重新加回去。
+	_, err = userService.UpdateUser(ctx, testUser.ID, &dto.UpdateUserRequest{
+		Name: "Still No Roles",
+	}, testTenant.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 0, countRoles())
 }
 
 func TestUserService_DeleteUser(t *testing.T) {

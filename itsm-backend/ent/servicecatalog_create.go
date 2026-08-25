@@ -172,6 +172,20 @@ func (_c *ServiceCatalogCreate) SetApprovers(v []int) *ServiceCatalogCreate {
 	return _c
 }
 
+// SetProcessDefinitionKey sets the "process_definition_key" field.
+func (_c *ServiceCatalogCreate) SetProcessDefinitionKey(v string) *ServiceCatalogCreate {
+	_c.mutation.SetProcessDefinitionKey(v)
+	return _c
+}
+
+// SetNillableProcessDefinitionKey sets the "process_definition_key" field if the given value is not nil.
+func (_c *ServiceCatalogCreate) SetNillableProcessDefinitionKey(v *string) *ServiceCatalogCreate {
+	if v != nil {
+		_c.SetProcessDefinitionKey(*v)
+	}
+	return _c
+}
+
 // SetSLAResponseTime sets the "sla_response_time" field.
 func (_c *ServiceCatalogCreate) SetSLAResponseTime(v int) *ServiceCatalogCreate {
 	_c.mutation.SetSLAResponseTime(v)
@@ -507,6 +521,10 @@ func (_c *ServiceCatalogCreate) createSpec() (*ServiceCatalog, *sqlgraph.CreateS
 	if value, ok := _c.mutation.Approvers(); ok {
 		_spec.SetField(servicecatalog.FieldApprovers, field.TypeJSON, value)
 		_node.Approvers = value
+	}
+	if value, ok := _c.mutation.ProcessDefinitionKey(); ok {
+		_spec.SetField(servicecatalog.FieldProcessDefinitionKey, field.TypeString, value)
+		_node.ProcessDefinitionKey = value
 	}
 	if value, ok := _c.mutation.SLAResponseTime(); ok {
 		_spec.SetField(servicecatalog.FieldSLAResponseTime, field.TypeInt, value)

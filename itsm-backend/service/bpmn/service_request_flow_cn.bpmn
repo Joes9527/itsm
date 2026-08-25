@@ -228,44 +228,44 @@
     
     <!-- 服务类型分流 -->
     <bpmn:sequenceFlow id="Flow_ITService" sourceRef="Gateway_ServiceType" targetRef="Activity_ITServiceL1Handle">
-      <bpmn:conditionExpression><![CDATA[${variables['service_type'] == 'it_service'}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['service_type'] == 'it_service']]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_AccessRequest" sourceRef="Gateway_ServiceType" targetRef="Activity_AccessApproval">
-      <bpmn:conditionExpression><![CDATA[${variables['service_type'] == 'access_request'}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['service_type'] == 'access_request']]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_SoftwareRequest" sourceRef="Gateway_ServiceType" targetRef="Activity_SoftwareLicenseCheck">
-      <bpmn:conditionExpression><![CDATA[${variables['service_type'] == 'software_request'}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['service_type'] == 'software_request']]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_HardwareRequest" sourceRef="Gateway_ServiceType" targetRef="Activity_HardwareApproval">
-      <bpmn:conditionExpression><![CDATA[${variables['service_type'] == 'hardware_request'}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['service_type'] == 'hardware_request']]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
 
     <!-- IT服务处理路径 -->
     <bpmn:sequenceFlow id="Flow_SR_ITCheck" sourceRef="Activity_ITServiceL1Handle" targetRef="Gateway_ITServiceStatus" />
     <bpmn:sequenceFlow id="Flow_ITResolved" sourceRef="Gateway_ITServiceStatus" targetRef="Activity_NotifyRequester">
-      <bpmn:conditionExpression><![CDATA[${variables['resolved'] == true}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['resolved'] == true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_ITNeedL2" sourceRef="Gateway_ITServiceStatus" targetRef="Activity_ITServiceL2Handle">
-      <bpmn:conditionExpression><![CDATA[${variables['resolved'] != true}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['resolved'] != true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
 
     <!-- 权限申请路径 -->
     <bpmn:sequenceFlow id="Flow_SR_AccessCheck" sourceRef="Activity_AccessApproval" targetRef="Gateway_AccessStatus" />
     <bpmn:sequenceFlow id="Flow_AccessApproved" sourceRef="Gateway_AccessStatus" targetRef="Activity_GrantAccess">
-      <bpmn:conditionExpression><![CDATA[${variables['approved'] == true}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['approved'] == true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_AccessRejected" sourceRef="Gateway_AccessStatus" targetRef="Activity_ServiceRequestClose">
-      <bpmn:conditionExpression><![CDATA[${variables['approved'] != true}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['approved'] != true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_SR_Merge" sourceRef="Activity_GrantAccess" targetRef="Activity_NotifyRequester" />
 
     <!-- 软件申请路径 -->
     <bpmn:sequenceFlow id="Flow_SR_SoftwareCheck" sourceRef="Activity_SoftwareLicenseCheck" targetRef="Gateway_SoftwareStatus" />
     <bpmn:sequenceFlow id="Flow_SoftwareAvailable" sourceRef="Gateway_SoftwareStatus" targetRef="Activity_SoftwareProvision">
-      <bpmn:conditionExpression><![CDATA[${variables['license_available'] == true}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['license_available'] == true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_SoftwareNotAvailable" sourceRef="Gateway_SoftwareStatus" targetRef="Activity_SoftwarePurchase">
-      <bpmn:conditionExpression><![CDATA[${variables['license_available'] != true}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['license_available'] != true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_SR_PendingPurchase" sourceRef="Activity_SoftwarePurchase" targetRef="Activity_WaitForPurchase" />
     <bpmn:sequenceFlow id="Flow_SR_Merge2" sourceRef="Activity_SoftwareProvision" targetRef="Activity_NotifyRequester" />
@@ -274,10 +274,10 @@
     <!-- 硬件申请路径 -->
     <bpmn:sequenceFlow id="Flow_SR_HardwareCheck" sourceRef="Activity_HardwareApproval" targetRef="Gateway_HardwareStatus" />
     <bpmn:sequenceFlow id="Flow_HardwareApproved" sourceRef="Gateway_HardwareStatus" targetRef="Activity_HardwareProvision">
-      <bpmn:conditionExpression><![CDATA[${variables['approved'] == true}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['approved'] == true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_HardwareRejected" sourceRef="Gateway_HardwareStatus" targetRef="Activity_ServiceRequestClose">
-      <bpmn:conditionExpression><![CDATA[${variables['approved'] != true}]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression><![CDATA[variables['approved'] != true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_SR_Merge3" sourceRef="Activity_HardwareProvision" targetRef="Activity_NotifyRequester" />
 
