@@ -52,29 +52,60 @@ func getBPMNTenantContext(ctx *gin.Context) (context.Context, int, bool) {
 // RegisterRoutes 注册路由
 func (c *BPMNWorkflowController) RegisterRoutes(r *gin.RouterGroup) {
 	bpmn := r.Group("/bpmn")
-	bpmn.Use(middleware.RequireLegacyBPMNRoles())
 	{
-		// 流程定义管理
-		bpmn.POST("/process-definitions", c.CreateProcessDefinition)
-		bpmn.GET("/process-definitions", c.ListProcessDefinitions)
-		bpmn.GET("/process-definitions/:key", c.GetProcessDefinition)
-		bpmn.PUT("/process-definitions/:key", c.UpdateProcessDefinition)
-		bpmn.DELETE("/process-definitions/:key", c.DeleteProcessDefinition)
-		bpmn.GET("/process-definitions/:key/export", c.ExportProcessDefinition)
-		bpmn.POST("/process-definitions/:key/clone", c.CloneProcessDefinition)
-		bpmn.PUT("/process-definitions/:key/active", c.SetProcessDefinitionActive)
+		// 流程定义管理、流程实例管理、统计、版本管理：套粗粒度角色门槛
+		// （复刻收敛前 ResourceActionMap 通配符对这些接口的实际生效角色集，
+		// 详见 middleware.RequireLegacyBPMNRoles 的文档注释）。
+		managed := bpmn.Group("")
+		managed.Use(middleware.RequireLegacyBPMNRoles())
+		{
+			// 流程定义管理
+			managed.POST("/process-definitions", c.CreateProcessDefinition)
+			managed.GET("/process-definitions", c.ListProcessDefinitions)
+			managed.GET("/process-definitions/:key", c.GetProcessDefinition)
+			managed.PUT("/process-definitions/:key", c.UpdateProcessDefinition)
+			managed.DELETE("/process-definitions/:key", c.DeleteProcessDefinition)
+			managed.GET("/process-definitions/:key/export", c.ExportProcessDefinition)
+			managed.POST("/process-definitions/:key/clone", c.CloneProcessDefinition)
+			managed.PUT("/process-definitions/:key/active", c.SetProcessDefinitionActive)
 
-		// 流程实例管理
-		bpmn.POST("/process-instances", c.StartProcess)
-		bpmn.GET("/process-instances", c.ListProcessInstances)
-		bpmn.GET("/process-instances/:id", c.GetProcessInstance)
-		bpmn.GET("/process-instances/:id/approval-history", c.GetApprovalHistory)
-		bpmn.PUT("/process-instances/:id/variables", c.SetProcessInstanceVariables)
-		bpmn.PUT("/process-instances/:id/suspend", c.SuspendProcess)
-		bpmn.PUT("/process-instances/:id/resume", c.ResumeProcess)
-		bpmn.PUT("/process-instances/:id/terminate", c.TerminateProcess)
+			// 流程实例管理
+			managed.POST("/process-instances", c.StartProcess)
+			managed.GET("/process-instances", c.ListProcessInstances)
+			managed.GET("/process-instances/:id", c.GetProcessInstance)
+			managed.GET("/process-instances/:id/approval-history", c.GetApprovalHistory)
+			managed.PUT("/process-instances/:id/variables", c.SetProcessInstanceVariables)
+			managed.PUT("/process-instances/:id/suspend", c.SuspendProcess)
+			managed.PUT("/process-instances/:id/resume", c.ResumeProcess)
+			managed.PUT("/process-instances/:id/terminate", c.TerminateProcess)
 
-		// 任务管理
+			// 统计
+			managed.GET("/stats/instances", c.GetInstanceStats)
+			managed.GET("/stats/tasks", c.GetTaskStats)
+
+			// 版本管理
+			managed.GET("/versions", c.ListVersions)
+			managed.GET("/versions/:key/:version", c.GetVersion)
+			managed.POST("/versions", c.CreateVersion)
+			managed.PUT("/versions/:key/:version/activate", c.ActivateVersion)
+			managed.PUT("/versions/:key/:version/rollback", c.RollbackVersion)
+			managed.GET("/versions/:key/compare", c.CompareVersions)
+
+			// 版本变更日志 (注意：:id 路由必须在 :key 之前定义)
+			managed.GET("/process-definitions/changelogs/:id", c.GetVersionChangeLogsByID)
+			managed.GET("/process-definitions/:key/changelogs", c.GetVersionChangeLogs)
+		}
+
+		// 任务管理：不套粗粒度角色门槛。这些接口作用于"具体某个任务"，其合法操作者
+		// 是任务的 assignee/candidate（来自 BPMN candidate_groups，取值可以是任意角色名，
+		// 例如 "network_eng"，不受限于上面 managed 分组那 7 个角色），不是靠固定角色白名单
+		// 判定的。ClaimTask/CompleteTask（含 SubmitTaskDecision）/Vote 在 service 层已经通过
+		// authorizeTaskActor/isTaskCandidate 做了任务候选人级别的授权；AssignTask/CancelTask/
+		// SetTaskVariables/CreateCounterSignTasks/GetCounterSignStatus/GetTask/ListUserTasks
+		// 目前在 service 层没有对应的候选人校验（这是本次 RBAC 收敛之前就存在、且独立于本次改动
+		// 的缺口，见设计文档"已知遗留"）。给整个 /tasks/* 套 managed 分组的粗粒度角色门槛曾在这次
+		// 收敛中短暂引入，被 SSL-VPN 审批链路的 E2E 测试（network_eng 候选人被误拒）实测证伪，
+		// 现按"精确复刻收敛前行为"的原则还原为不加门槛。
 		bpmn.GET("/tasks", c.ListUserTasks)
 		bpmn.GET("/tasks/:id", c.GetTask)
 		bpmn.PUT("/tasks/:id/assign", c.AssignTask)
@@ -88,22 +119,6 @@ func (c *BPMNWorkflowController) RegisterRoutes(r *gin.RouterGroup) {
 		bpmn.POST("/tasks/:id/counter-sign", c.CreateCounterSignTasks)
 		bpmn.GET("/tasks/:id/counter-sign-status", c.GetCounterSignStatus)
 		bpmn.PUT("/tasks/:id/vote", c.Vote)
-
-		// 统计
-		bpmn.GET("/stats/instances", c.GetInstanceStats)
-		bpmn.GET("/stats/tasks", c.GetTaskStats)
-
-		// 版本管理
-		bpmn.GET("/versions", c.ListVersions)
-		bpmn.GET("/versions/:key/:version", c.GetVersion)
-		bpmn.POST("/versions", c.CreateVersion)
-		bpmn.PUT("/versions/:key/:version/activate", c.ActivateVersion)
-		bpmn.PUT("/versions/:key/:version/rollback", c.RollbackVersion)
-		bpmn.GET("/versions/:key/compare", c.CompareVersions)
-
-		// 版本变更日志 (注意：:id 路由必须在 :key 之前定义)
-		bpmn.GET("/process-definitions/changelogs/:id", c.GetVersionChangeLogsByID)
-		bpmn.GET("/process-definitions/:key/changelogs", c.GetVersionChangeLogs)
 	}
 }
 
