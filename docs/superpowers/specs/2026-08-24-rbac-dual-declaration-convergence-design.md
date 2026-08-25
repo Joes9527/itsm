@@ -1,6 +1,6 @@
 # RBAC 双轨制收敛设计
 
-**Status:** Approved — reviewed by user, ready for `writing-plans`
+**Status:** Implemented — see docs/superpowers/plans/2026-08-24-rbac-dual-declaration-convergence.md
 **Date:** 2026-08-24
 **Related:** [`2026-08-24-ticket-action-authorization-design.md`](2026-08-24-ticket-action-authorization-design.md)（Item 4b 是本项目的直接前置发现）、`docs/adr/0001-canonical-rbac-and-initialization.md`
 
