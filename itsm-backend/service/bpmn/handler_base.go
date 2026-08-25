@@ -22,6 +22,17 @@ type bpmnUserIDKey struct{}
 // It must only be populated from trusted authentication middleware.
 var BPMNUserIDContextKey = bpmnUserIDKey{}
 
+type bpmnElevatedKey struct{}
+
+// BPMNElevatedContextKey carries whether the caller holds the elevated
+// RBAC permission for the endpoint being served (e.g. process_instance:read,
+// task:read, task:update — the specific resource:action pair is decided by
+// the controller handler, not here). When true, participant-scoping is
+// skipped and the caller sees/acts on data tenant-wide, matching ops-console
+// use cases. Must only ever be set from a server-computed
+// middleware.HasResourcePermission(...) result — never from client input.
+var BPMNElevatedContextKey = bpmnElevatedKey{}
+
 // ServiceTaskHandlerInterface 服务任务处理器接口
 // 定义所有服务任务处理器需要实现的方法
 type ServiceTaskHandlerInterface interface {

@@ -49,6 +49,37 @@ func getBPMNTenantContext(ctx *gin.Context) (context.Context, int, bool) {
 	return reqCtx, tenantID, true
 }
 
+// hasElevatedBPMNAccess reports whether the caller's role holds the given
+// RBAC permission (resource:action), computed server-side from context
+// values RBACMiddleware already populated (role/tenant_id/client) — never
+// from any client-suppliable request field. Used to decide whether a BPMN
+// read/action endpoint should return/operate on tenant-wide data (ops
+// console use case) or be scoped down to the caller's own participation.
+func hasElevatedBPMNAccess(ctx *gin.Context, resource, action string) bool {
+	roleAny, exists := ctx.Get("role")
+	if !exists {
+		return false
+	}
+	role, _ := roleAny.(string)
+
+	tenantIDAny, exists := ctx.Get("tenant_id")
+	if !exists {
+		return false
+	}
+	tenantID, _ := tenantIDAny.(int)
+
+	clientAny, exists := ctx.Get("client")
+	if !exists {
+		return false
+	}
+	client, ok := clientAny.(*ent.Client)
+	if !ok {
+		return false
+	}
+
+	return middleware.HasResourcePermission(client, role, resource, action, tenantID)
+}
+
 // RegisterRoutes 注册路由
 func (c *BPMNWorkflowController) RegisterRoutes(r *gin.RouterGroup) {
 	bpmn := r.Group("/bpmn")
