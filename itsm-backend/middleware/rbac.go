@@ -543,7 +543,15 @@ var ResourceActionMap = map[string]map[string]Permission{
 	},
 }
 
-// RBACMiddleware RBAC权限控制中间件
+// RBACMiddleware is a session/tenant guard, NOT a fine-grained permission
+// check. It validates that the caller is authenticated, that the DB user
+// record exists and is active, refreshes the role from DB, resolves and
+// validates the tenant ID, and enriches the gin.Context (user_entity,
+// client, tenant_id) for downstream handlers. Actual resource:action
+// authorization is the sole responsibility of the RequirePermission /
+// RequireRole / RequireMSPPermission call attached to each specific
+// route — a route mounted under a group this middleware guards is NOT
+// automatically permission-protected.
 func RBACMiddleware(client *ent.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 调试日志
@@ -685,24 +693,6 @@ func RBACMiddleware(client *ent.Client) gin.HandlerFunc {
 				"role_interface", roleInterface,
 			)
 			common.Fail(c, common.AuthFailedCode, "角色格式错误")
-			c.Abort()
-			return
-		}
-
-		// 获取请求路径和方法
-		path := c.Request.URL.Path
-		method := c.Request.Method
-
-		// 检查权限（从数据库加载权限）
-		if !hasPermission(client, role, method, path, userID, tenantID, c) {
-			zap.S().Warnw(
-				"RBACMiddleware: permission denied",
-				"path", c.Request.URL.Path,
-				"method", c.Request.Method,
-				"user_id", userID,
-				"role", role,
-			)
-			common.Fail(c, common.ForbiddenCode, "权限不足")
 			c.Abort()
 			return
 		}

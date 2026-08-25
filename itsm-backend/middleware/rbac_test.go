@@ -1,12 +1,17 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"itsm-backend/ent/enttest"
+
 	"github.com/gin-gonic/gin"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRBACMiddleware(t *testing.T) {
@@ -38,6 +43,47 @@ func TestRBACMiddleware(t *testing.T) {
 	// Note: "No Role in Context" test requires a valid client to query the database
 	// The RBACMiddleware will attempt to fetch user from DB which panics with nil client
 	// This is expected behavior - in production, client should never be nil
+}
+
+func TestRBACMiddleware_NoLongerPerformsPermissionCheck(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	// A role/path combination that the (now-deleted) hasPermission() would
+	// have denied under the old ResourceActionMap-inference logic must no
+	// longer be rejected by RBACMiddleware itself — that job now belongs
+	// solely to the route's own RequirePermission/RequireRole call, which
+	// isn't present in this bare test context, so this only proves
+	// RBACMiddleware itself doesn't short-circuit on it.
+	//
+	// This test requires a real client because RBACMiddleware queries the
+	// user from DB (see the existing "No Role in Context" comment above) —
+	// use enttest with a seeded active user.
+	client := enttest.Open(t, "sqlite3", "file:rbacmw_test?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	tenant, err := client.Tenant.Create().
+		SetName("Test Tenant").SetCode("test").SetDomain("test.com").SetStatus("active").
+		Save(ctx)
+	require.NoError(t, err)
+	u, err := client.User.Create().
+		SetUsername("test_no_perm_check").
+		SetEmail("test_no_perm_check@example.com").
+		SetName("Test No Perm Check").
+		SetPasswordHash("x").
+		SetActive(true).
+		SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest("GET", "/api/v1/some-random-unmapped-path", nil)
+	c.Set("user_id", u.ID)
+	c.Set("tenant_id", tenant.ID)
+	c.Set("role", "end_user")
+
+	RBACMiddleware(client)(c)
+
+	assert.False(t, c.IsAborted())
 }
 
 func TestRequirePermissionForRBAC(t *testing.T) {
