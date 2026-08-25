@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"context"
-	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -771,7 +770,7 @@ func RequireRole(allowedRoles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		roleAny, exists := c.Get("role")
 		if !exists {
-			c.JSON(http.StatusForbidden, gin.H{"code": 2003, "message": "缺少角色信息"})
+			common.Fail(c, common.ForbiddenCode, "缺少角色信息")
 			c.Abort()
 			return
 		}
@@ -783,7 +782,7 @@ func RequireRole(allowedRoles ...string) gin.HandlerFunc {
 				return
 			}
 		}
-		c.JSON(http.StatusForbidden, gin.H{"code": 2003, "message": "无权限执行该操作"})
+		common.Fail(c, common.ForbiddenCode, "无权限执行该操作")
 		c.Abort()
 	}
 }
