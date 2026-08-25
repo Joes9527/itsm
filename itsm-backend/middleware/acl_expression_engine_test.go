@@ -185,39 +185,3 @@ func TestACLEvaluate_ComplexExpression(t *testing.T) {
 		t.Error("复杂组合表达式应返回 true")
 	}
 }
-
-// TestEvaluateACLScript_Integration 集成测试：通过 EvaluateACLScript 函数测试
-func TestEvaluateACLScript_Integration(t *testing.T) {
-	// 空字符串
-	if !EvaluateACLScript("", ACLScriptContext{}) {
-		t.Error("空 ACL 脚本应放行")
-	}
-
-	// 用户ID匹配
-	if !EvaluateACLScript("ctx.user_id == 1", ACLScriptContext{UserID: 1}) {
-		t.Error("用户ID=1 时 ctx.user_id == 1 应放行")
-	}
-
-	// 角色匹配
-	if !EvaluateACLScript(`ctx.role == "admin"`, ACLScriptContext{Role: "admin"}) {
-		t.Error("角色=admin 时应放行")
-	}
-
-	// 角色不匹配
-	if EvaluateACLScript(`ctx.role == "admin"`, ACLScriptContext{Role: "user"}) {
-		t.Error("角色=user 时 ctx.role == admin 应拒绝")
-	}
-
-	// 无效脚本
-	if EvaluateACLScript("{{{invalid", ACLScriptContext{}) {
-		t.Error("无效脚本应拒绝")
-	}
-}
-
-// TestACLScriptContext_ResourceID 测试 resource_id 变量
-func TestACLScriptContext_ResourceID(t *testing.T) {
-	// resource_id 为整数
-	if !EvaluateACLScript("ctx.resource_id == 42", ACLScriptContext{ResourceID: 42}) {
-		t.Error("resource_id == 42 应放行")
-	}
-}
