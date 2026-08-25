@@ -512,27 +512,24 @@ func (e *CustomProcessEngine) recordApprovalDecision(ctx context.Context, instan
 }
 
 // authorizeTaskActor ensures that task actions are performed by the assigned
-// user or an explicitly resolved candidate. System/internal calls without an
-// authenticated actor keep their existing behavior.
+// user or an explicitly resolved candidate (by ID, username, email, or
+// candidate_groups membership — see bpmn.CallerIdentity.IsTaskParticipant).
+// System/internal calls without an authenticated actor keep their existing
+// permissive behavior.
 func (e *CustomProcessEngine) authorizeTaskActor(ctx context.Context, task *ent.ProcessTask) error {
 	userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
 	if userID <= 0 {
 		return nil
 	}
-	actor, err := e.client.User.Query().Where(user.ID(userID)).Only(ctx)
+	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
+	if tenantID == 0 {
+		tenantID = task.TenantID
+	}
+	identity, err := bpmn.ResolveCallerIdentity(ctx, e.client, e.groupResolver, tenantID, userID)
 	if err != nil {
 		return fmt.Errorf("审批用户不存在: %w", err)
 	}
-	allowed := func(csv string) bool {
-		for _, candidate := range strings.Split(csv, ",") {
-			candidate = strings.TrimSpace(candidate)
-			if candidate == strconv.Itoa(userID) || candidate == actor.Username {
-				return true
-			}
-		}
-		return false
-	}
-	if allowed(task.Assignee) || allowed(task.CandidateUsers) {
+	if identity.IsTaskParticipant(task) {
 		return nil
 	}
 	return fmt.Errorf("当前用户不是该任务的审批人或候选人")
@@ -2411,24 +2408,20 @@ func (s *bpmnTaskService) AssignTask(ctx context.Context, taskID string, assigne
 	return err
 }
 
-// isTaskCandidate 复用 authorizeTaskActor 的候选人匹配语义（用户 ID 十进制字符串或用户名），
-// 用于 ClaimTask/ClaimTaskByID 校验：只有任务的 assignee 或 candidate_users 里的人才能认领
-// 未分配的任务——否则任何登录用户都能抢先认领任何审批任务（包括自己提交的工单）。
+// isTaskCandidate 复用共享的 bpmn.CallerIdentity 参与者判定（用户 ID/用户名/邮箱，或
+// candidate_groups 命中），用于 ClaimTask/ClaimTaskByID 校验：只有任务的
+// assignee/candidate_users/candidate_groups 命中的人才能认领未分配的任务——否则任何
+// 登录用户都能抢先认领任何审批任务（包括自己提交的工单）。
 func isTaskCandidate(ctx context.Context, client *ent.Client, userID int, task *ent.ProcessTask) (bool, error) {
-	actor, err := client.User.Query().Where(user.ID(userID)).Only(ctx)
+	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
+	if tenantID == 0 {
+		tenantID = task.TenantID
+	}
+	identity, err := bpmn.ResolveCallerIdentity(ctx, client, bpmn.NewGroupResolver(client), tenantID, userID)
 	if err != nil {
-		return false, fmt.Errorf("用户不存在: %w", err)
+		return false, err
 	}
-	allowed := func(csv string) bool {
-		for _, candidate := range strings.Split(csv, ",") {
-			candidate = strings.TrimSpace(candidate)
-			if candidate == strconv.Itoa(userID) || candidate == actor.Username {
-				return true
-			}
-		}
-		return false
-	}
-	return allowed(task.Assignee) || allowed(task.CandidateUsers), nil
+	return identity.IsTaskParticipant(task), nil
 }
 
 // ClaimTask 认领任务 (根据task_id字符串)

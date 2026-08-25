@@ -881,6 +881,50 @@ func TestAuthorizeTaskActor_NoActorContextIsPermissive(t *testing.T) {
 	assert.NoError(t, engine.authorizeTaskActor(ctx, task))
 }
 
+func TestAuthorizeTaskActor_AllowsCandidateGroupMatch(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
+	ctx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, actorID)
+	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+
+	_, err := engine.client.Group.Create().
+		SetName("network_eng").SetTenantID(tenantID).
+		AddMemberIDs(actorID).
+		Save(context.Background())
+	require.NoError(t, err)
+
+	_, taskID := createProcessFixture(t, engine, tenantID, "groupauthz1")
+	task, err := engine.client.ProcessTask.UpdateOneID(taskID).
+		SetCandidateGroups("network_eng").
+		Save(ctx)
+	require.NoError(t, err)
+
+	assert.NoError(t, engine.authorizeTaskActor(ctx, task),
+		"a caller who is only a candidate via candidate_groups must be allowed to act on the task")
+}
+
+func TestIsTaskCandidate_AllowsCandidateGroupMatch(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
+	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+
+	_, err := engine.client.Group.Create().
+		SetName("network_eng").SetTenantID(tenantID).
+		AddMemberIDs(actorID).
+		Save(context.Background())
+	require.NoError(t, err)
+
+	_, taskID := createProcessFixture(t, engine, tenantID, "groupcandidate1")
+	task, err := engine.client.ProcessTask.UpdateOneID(taskID).
+		SetCandidateGroups("network_eng").
+		Save(ctx)
+	require.NoError(t, err)
+
+	ok, err := isTaskCandidate(ctx, engine.client, actorID, task)
+	require.NoError(t, err)
+	assert.True(t, ok, "a caller who is only a candidate via candidate_groups must be claimable")
+}
+
 func TestBPMNServiceTask_ServiceTaskType_ReadsExtensionElementsMetaData(t *testing.T) {
 	task := &BPMNServiceTask{
 		ID: "svc1",
