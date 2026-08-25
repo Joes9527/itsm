@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -26,6 +27,7 @@ import (
 	"itsm-backend/service/approver"
 	"itsm-backend/service/bpmn"
 
+	"github.com/lib/pq"
 	"go.uber.org/zap"
 )
 
@@ -251,6 +253,15 @@ func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitio
 		SetCurrentActivityName(startEvent.Name).
 		Save(ctx)
 	if err != nil {
+		// idx_process_instances_running_unique（migration 015）是这条并发竞态的最终防线：
+		// 各业务域（如 handlers/change 的 SubmitChange）在调用这里之前都做了一次
+		// "同 businessKey 是否已有运行中实例"的应用层检查，但那是 check-then-act，
+		// 两个几乎同时的请求可能都通过检查、都走到这里——DB 唯一约束会让后到的这次
+		// INSERT 失败，转成友好错误而不是让原始 SQL 报错裸露给调用方。
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == "23505" && pqErr.Constraint == "idx_process_instances_running_unique" {
+			return nil, fmt.Errorf("该业务实体已存在一个运行中的流程实例，不能重复触发")
+		}
 		return nil, fmt.Errorf("创建流程实例失败: %w", err)
 	}
 

@@ -115,24 +115,6 @@ func (h *Handler) GetChange(c *gin.Context) {
 	common.Success(c, toDTO(res))
 }
 
-// GetApprovalSummary handles GET /api/v1/changes/:id/approval-summary
-func (h *Handler) GetApprovalSummary(c *gin.Context) {
-	id, ok := common.ParsePositiveID(c, "id")
-	if !ok {
-		return
-	}
-	tenantIDVal, _ := c.Get("tenant_id")
-	tenantID := tenantIDVal.(int)
-
-	summary, err := h.svc.GetApprovalSummary(c.Request.Context(), id, tenantID)
-	if err != nil {
-		common.InternalError(c, "获取审批摘要失败: "+err.Error())
-		return
-	}
-
-	common.Success(c, summary)
-}
-
 // GetRiskAssessment handles GET /api/v1/changes/:id/risk-assessment
 func (h *Handler) GetRiskAssessment(c *gin.Context) {
 	id, ok := common.ParsePositiveID(c, "id")
@@ -339,37 +321,6 @@ func (h *Handler) UpdateChange(c *gin.Context) {
 	}
 
 	common.Success(c, toDTO(res))
-}
-
-// SubmitApproval handles POST /api/v1/changes/:id/approvals
-func (h *Handler) SubmitApproval(c *gin.Context) {
-	changeID, ok := common.ParsePositiveID(c, "id")
-	if !ok {
-		return
-	}
-	tenantIDVal, _ := c.Get("tenant_id")
-	tenantID := tenantIDVal.(int)
-
-	var req dto.CreateChangeApprovalRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.ParamError(c, "Invalid request body: "+err.Error())
-		return
-	}
-	req.ChangeID = changeID
-
-	record := &ApprovalRecord{
-		ChangeID:   req.ChangeID,
-		ApproverID: req.ApproverID,
-		Comment:    req.Comment,
-	}
-
-	res, err := h.svc.SubmitApproval(c.Request.Context(), record, tenantID)
-	if err != nil {
-		common.InternalError(c, "提交审批失败: "+err.Error())
-		return
-	}
-
-	common.Success(c, res)
 }
 
 // SubmitChange handles POST /api/v1/changes/:id/submit

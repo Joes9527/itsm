@@ -191,19 +191,49 @@ func (s *ProcessTriggerService) TriggerByBusinessType(
 	return s.TriggerProcess(ctx, req)
 }
 
+// resolveProcessInstanceBusinessID 把 ProcessInstance 的 ent 内部整数主键翻译成
+// CustomProcessEngine.TerminateProcess/SuspendProcess/ResumeProcess 真正按查询的
+// ProcessInstanceID 字符串业务字段（形如 "PI-change_normal_flow-xxx"）。这三个引擎方法
+// 内部统一用 processinstance.ProcessInstanceID(...) 过滤，直接把整数主键
+// fmt.Sprintf("%d", ...) 传进去必然查不到任何行（业务字段的值从来不是纯数字），
+// 之前这里就是这么写的——一个从未真正生效过的静默失败：Bug 是被 SubmitChange 的
+// MarkSubmittedForApproval-失败补偿测试用真实引擎跑出来才发现的，之前的测试全部
+// 用 mock 触发服务，从没真正跑过这条路径。
+func (s *ProcessTriggerService) resolveProcessInstanceBusinessID(ctx context.Context, processInstanceID, tenantID int) (string, error) {
+	instance, err := s.client.ProcessInstance.Query().
+		Where(processinstance.ID(processInstanceID), processinstance.TenantID(tenantID)).
+		Only(ctx)
+	if err != nil {
+		return "", fmt.Errorf("查询流程实例失败: %w", err)
+	}
+	return instance.ProcessInstanceID, nil
+}
+
 // CancelProcess 取消流程
 func (s *ProcessTriggerService) CancelProcess(ctx context.Context, processInstanceID int, reason string, tenantID int) error {
-	return s.processEngine.TerminateProcess(ctx, fmt.Sprintf("%d", processInstanceID), reason)
+	businessID, err := s.resolveProcessInstanceBusinessID(ctx, processInstanceID, tenantID)
+	if err != nil {
+		return err
+	}
+	return s.processEngine.TerminateProcess(ctx, businessID, reason)
 }
 
 // SuspendProcess 暂停流程
 func (s *ProcessTriggerService) SuspendProcess(ctx context.Context, processInstanceID int, reason string, tenantID int) error {
-	return s.processEngine.SuspendProcess(ctx, fmt.Sprintf("%d", processInstanceID), reason)
+	businessID, err := s.resolveProcessInstanceBusinessID(ctx, processInstanceID, tenantID)
+	if err != nil {
+		return err
+	}
+	return s.processEngine.SuspendProcess(ctx, businessID, reason)
 }
 
 // ResumeProcess 恢复流程
 func (s *ProcessTriggerService) ResumeProcess(ctx context.Context, processInstanceID int, tenantID int) error {
-	return s.processEngine.ResumeProcess(ctx, fmt.Sprintf("%d", processInstanceID))
+	businessID, err := s.resolveProcessInstanceBusinessID(ctx, processInstanceID, tenantID)
+	if err != nil {
+		return err
+	}
+	return s.processEngine.ResumeProcess(ctx, businessID)
 }
 
 // GetProcessStatus 获取流程状态

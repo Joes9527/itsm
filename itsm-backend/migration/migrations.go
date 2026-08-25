@@ -79,6 +79,11 @@ var RegisteredMigrations = []Migration{
 		Description: "Drop legacy approval_records/approval_workflows tables (custom ApprovalWorkflow/ApprovalRecord engine fully retired; all real tenant-customized workflows verified migrated to BPMN, see Task 5/6); irreversible, forward-fix only",
 		RollbackSQL: "",
 	},
+	{
+		Version:     "015_process_instance_running_unique_guard",
+		Description: "Add a partial unique index guarding against two concurrent running BPMN process instances for the same (tenant, business key) — closes a check-then-act race in SubmitChange (and any other TriggerProcess caller) where two near-simultaneous requests could both pass the application-level idempotency check before either instance existed",
+		RollbackSQL: `DROP INDEX IF EXISTS idx_process_instances_running_unique;`,
+	},
 }
 
 // PostSchemaMigrations returns a defensive copy of the canonical active stream.
@@ -633,6 +638,35 @@ DELETE FROM field_values WHERE entity_type = 'service_request';
 -- removed directly. approval_records has FKs into approval_workflows, so it must drop first.
 DROP TABLE IF EXISTS approval_records;
 DROP TABLE IF EXISTS approval_workflows;
+`
+	case "015_process_instance_running_unique_guard":
+		return `
+-- Defensively resolve any pre-existing duplicate running instances for the same
+-- (tenant_id, business_key) before adding the unique index below, keeping only the
+-- most recently started one and terminating the rest. This should be a no-op in
+-- practice (the application-level idempotency check in SubmitChange has always been
+-- in place), but a migration adding a unique constraint must not fail against data
+-- it doesn't control.
+WITH ranked AS (
+    SELECT id, ROW_NUMBER() OVER (
+        PARTITION BY tenant_id, business_key
+        ORDER BY start_time DESC, id DESC
+    ) AS rn
+    FROM process_instances
+    WHERE status = 'running' AND business_key IS NOT NULL AND business_key != ''
+)
+UPDATE process_instances
+SET status = 'terminated', end_time = CURRENT_TIMESTAMP
+WHERE id IN (SELECT id FROM ranked WHERE rn > 1);
+
+-- Enforce at most one running process instance per (tenant, business key). No domain
+-- in this codebase treats "same business key, two concurrently running instances" as
+-- a legitimate state (BPMNApprovalBridge/handlers/change's SubmitChange both assume
+-- businessKey -> running instance is 1:1) — this is a data-integrity invariant that
+-- belongs at the DB layer, not just the application-level check-then-act guard.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_process_instances_running_unique
+ON process_instances (tenant_id, business_key)
+WHERE status = 'running' AND business_key IS NOT NULL AND business_key != '';
 `
 	default:
 		return ""

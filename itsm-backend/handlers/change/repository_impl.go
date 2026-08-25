@@ -8,6 +8,9 @@ import (
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/change"
+	"itsm-backend/ent/processapprovaldecision"
+	"itsm-backend/ent/processinstance"
+	"itsm-backend/ent/processtask"
 	entuser "itsm-backend/ent/user"
 )
 
@@ -298,35 +301,13 @@ func (r *EntRepository) GetStats(ctx context.Context, tenantID int) (*Stats, err
 	return stats, nil
 }
 
-// Approval Records (Raw SQL)
-func (r *EntRepository) CreateApprovalRecord(ctx context.Context, rec *ApprovalRecord) (*ApprovalRecord, error) {
-	query := `
-		INSERT INTO change_approvals (change_id, tenant_id, approver_id, status, comment, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		RETURNING id, created_at
-	`
-	now := time.Now()
-	err := r.db.QueryRowContext(ctx, query, rec.ChangeID, rec.TenantID, rec.ApproverID, rec.Status, rec.Comment, now, now).
-		Scan(&rec.ID, &rec.CreatedAt)
-	if err != nil {
-		return nil, err
-	}
-	return rec, nil
-}
-
-func (r *EntRepository) SubmitForApproval(
-	ctx context.Context,
-	changeID, tenantID int,
-	approverIDs []int,
-	comment string,
-) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	result, err := tx.ExecContext(ctx,
+// MarkSubmittedForApproval 只做 draft -> pending 的状态转换，不写
+// change_approvals/change_approval_chains（这两张表的写入路径正在被
+// Track4 迁移到 BPMN，见 handlers/change/service.go 的 SubmitChange）。
+// 用跟 SubmitForApproval 相同的乐观守卫：要求恰好 1 行受影响，否则说明
+// change 已经不是 draft 状态了。
+func (r *EntRepository) MarkSubmittedForApproval(ctx context.Context, changeID, tenantID int) error {
+	result, err := r.db.ExecContext(ctx,
 		`UPDATE changes SET status = 'pending', updated_at = $1
 		 WHERE id = $2 AND tenant_id = $3 AND status = 'draft'`,
 		time.Now(), changeID, tenantID)
@@ -340,174 +321,109 @@ func (r *EntRepository) SubmitForApproval(
 	if affected != 1 {
 		return fmt.Errorf("change is not an editable draft")
 	}
-
-	now := time.Now()
-	for level, approverID := range approverIDs {
-		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO change_approvals
-				(change_id, tenant_id, approver_id, status, comment, created_at, updated_at)
-			VALUES ($1, $2, $3, 'pending', $4, $5, $5)
-		`, changeID, tenantID, approverID, comment, now); err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO change_approval_chains
-				(change_id, tenant_id, level, approver_id, role, status, is_required, created_at)
-			VALUES ($1, $2, $3, $4, 'approver', 'pending', true, $5)
-		`, changeID, tenantID, level+1, approverID, now); err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
+	return nil
 }
 
-func (r *EntRepository) UpdateApprovalRecord(ctx context.Context, rec *ApprovalRecord) (*ApprovalRecord, error) {
-	// C-5 修复：必须加 AND status = 'pending' 条件，防止已驳回/已批准的审批被重复修改
-	// 校验 RowsAffected == 1，否则返回 409 冲突，避免幂等问题
-	query := `
-		UPDATE change_approvals 
-		SET status = $1, comment = $2, approved_at = $3, updated_at = $4
-		WHERE id = $5 AND tenant_id = $6 AND status = 'pending'
-		RETURNING id, change_id, tenant_id, approver_id, status, comment, approved_at, created_at
-	`
-	var approvedAt sql.NullTime
-	now := time.Now()
-	err := r.db.QueryRowContext(ctx, query, rec.Status, rec.Comment, now, now, rec.ID, rec.TenantID).
-		Scan(&rec.ID, &rec.ChangeID, &rec.TenantID, &rec.ApproverID, &rec.Status, &rec.Comment, &approvedAt, &rec.CreatedAt)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			// 没有匹配的 pending 记录：要么记录不存在，要么已被处理过（已批准/已驳回）
-			// 先读一下当前记录状态，返回更精确的错误
-			var curStatus string
-			_ = r.db.QueryRowContext(ctx, `SELECT status FROM change_approvals WHERE id = $1 AND tenant_id = $2`, rec.ID, rec.TenantID).Scan(&curStatus)
-			if curStatus != "" {
-				return nil, fmt.Errorf("审批记录已处理（当前状态=%s），不可重复审批", curStatus)
-			}
-			return nil, fmt.Errorf("审批记录不存在或跨租户")
-		}
-		return nil, err
-	}
-	if approvedAt.Valid {
-		rec.ApprovedAt = &approvedAt.Time
-	}
-	return rec, nil
-}
-
+// GetApprovalHistory 读取审批历史。数据源是 BPMN 引擎写入的
+// ent.ProcessApprovalDecision 审计表（Track4 把 change 的 CAB 审批决策路径
+// 迁移到 BPMN 之后，每次 TransitionStatus 的 approve/reject 都会在这张表
+// 落一条记录），不再是 change_approvals 表——那张表的写入路径已经在
+// SubmitChange/TransitionStatus 里被下线，留着旧查询会读到空数据。
+// DTO 形状（ApprovalRecord）保持不变，前端 ChangeDetail.tsx 不用改。
 func (r *EntRepository) GetApprovalHistory(ctx context.Context, changeID int, tenantID int) ([]*ApprovalRecord, error) {
-	query := `
-		SELECT a.id, a.approver_id, u.name as approver_name, a.status, a.comment, a.approved_at, a.created_at
-		FROM change_approvals a
-		LEFT JOIN users u ON a.approver_id = u.id
-		LEFT JOIN changes c ON a.change_id = c.id
-		WHERE a.change_id = $1 AND a.tenant_id = $2 AND c.tenant_id = $2
-		ORDER BY a.created_at ASC
-	`
-	rows, err := r.db.QueryContext(ctx, query, changeID, tenantID)
+	decisions, err := r.client.ProcessApprovalDecision.Query().
+		Where(
+			processapprovaldecision.BusinessType("change"),
+			processapprovaldecision.BusinessID(fmt.Sprintf("%d", changeID)),
+			processapprovaldecision.TenantID(tenantID),
+		).
+		Order(ent.Asc(processapprovaldecision.FieldCreatedAt)).
+		All(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("查询审批历史失败: %w", err)
 	}
-	defer rows.Close()
 
 	// 返回空切片而非 nil，避免 JSON 序列化为 null 导致前端崩溃
-	records := make([]*ApprovalRecord, 0)
-	for rows.Next() {
-		var rec ApprovalRecord
-		var approvedAt sql.NullTime
-		err := rows.Scan(&rec.ID, &rec.ApproverID, &rec.ApproverName, &rec.Status, &rec.Comment, &approvedAt, &rec.CreatedAt)
-		if err != nil {
-			return nil, err
+	records := make([]*ApprovalRecord, 0, len(decisions))
+	for _, d := range decisions {
+		var comment *string
+		if d.Comment != "" {
+			c := d.Comment
+			comment = &c
 		}
-		if approvedAt.Valid {
-			rec.ApprovedAt = &approvedAt.Time
+		createdAt := d.CreatedAt
+		// ApprovedAt 只在决策是"通过"时才有意义——驳回记录也套用同一个时间戳会让
+		// 调用方误以为一条 rejected 记录同时也是"批准时间"。
+		var approvedAt *time.Time
+		if d.Decision == "approved" {
+			approvedAt = &createdAt
 		}
-		rec.ChangeID = changeID
-		rec.TenantID = tenantID
-		records = append(records, &rec)
+		records = append(records, &ApprovalRecord{
+			ID:           d.ID,
+			ChangeID:     changeID,
+			TenantID:     tenantID,
+			ApproverID:   d.ActorID,
+			ApproverName: d.ActorName,
+			Status:       d.Decision,
+			Comment:      comment,
+			ApprovedAt:   approvedAt,
+			CreatedAt:    createdAt,
+		})
+	}
+
+	if pending := r.pendingApprovalRecord(ctx, changeID, tenantID); pending != nil {
+		records = append(records, pending)
 	}
 	return records, nil
 }
 
-// Approval Chain (Raw SQL)
-func (r *EntRepository) CreateApprovalChain(ctx context.Context, chain []*ApprovalChain) error {
-	tx, err := r.db.BeginTx(ctx, nil)
+// pendingApprovalRecord 查这个变更当前是否卡在 CAB 审批这一步，如果是，合成一条
+// Status="pending" 的 ApprovalRecord 附加到审批历史末尾。ProcessApprovalDecision
+// 只记录已经做出的决策，审批人做出决定之前审批列表天然是空的——对调用方（前端审批
+// 详情页）来说这看起来像"没人在审批"，实际是"正在等 CAB 决定"。返回 nil 表示当前
+// 没有待处理的 CAB 审批（没有运行中的流程实例、或者流程还没推进到这一步、或者已经
+// 走完了）——这些情况不是错误，静默跳过，不影响已有的审批历史返回。
+func (r *EntRepository) pendingApprovalRecord(ctx context.Context, changeID, tenantID int) *ApprovalRecord {
+	businessKey := fmt.Sprintf("change:%d", changeID)
+	instance, err := r.client.ProcessInstance.Query().
+		Where(processinstance.BusinessKey(businessKey), processinstance.TenantID(tenantID), processinstance.Status("running")).
+		Only(ctx)
 	if err != nil {
-		return err
+		return nil
 	}
-	defer tx.Rollback()
 
-	for _, item := range chain {
-		query := `
-			INSERT INTO change_approval_chains (change_id, tenant_id, level, approver_id, role, status, is_required, created_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		`
-		_, err = tx.ExecContext(ctx, query, item.ChangeID, item.TenantID, item.Level, item.ApproverID, item.Role, item.Status, item.IsRequired, time.Now())
-		if err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
-}
-
-func (r *EntRepository) GetApprovalChain(ctx context.Context, changeID int, tenantID int) ([]*ApprovalChain, error) {
-	query := `
-		SELECT c.id, c.level, c.approver_id, u.name as approver_name, c.role, c.status, c.is_required, c.created_at
-		FROM change_approval_chains c
-		LEFT JOIN users u ON c.approver_id = u.id
-		WHERE c.change_id = $1 AND c.tenant_id = $2
-		ORDER BY c.level ASC
-	`
-	rows, err := r.db.QueryContext(ctx, query, changeID, tenantID)
+	task, err := r.client.ProcessTask.Query().
+		Where(
+			processtask.HasProcessInstanceWith(processinstance.ID(instance.ID)),
+			processtask.TaskType("user_task"),
+			processtask.TaskDefinitionKey("Activity_CABApproval"),
+			processtask.StatusIn("created", "assigned", "started", "delegated"),
+		).
+		Only(ctx)
 	if err != nil {
-		return nil, err
+		return nil
 	}
-	defer rows.Close()
 
-	// 返回空切片而非 nil，避免 JSON 序列化为 null 导致前端崩溃
-	chain := make([]*ApprovalChain, 0)
-	for rows.Next() {
-		var item ApprovalChain
-		err := rows.Scan(&item.ID, &item.Level, &item.ApproverID, &item.ApproverName, &item.Role, &item.Status, &item.IsRequired, &item.CreatedAt)
-		if err != nil {
-			return nil, err
-		}
-		item.ChangeID = changeID
-		item.TenantID = tenantID
-		chain = append(chain, &item)
+	// CandidateUsers 是 resolveRoleCandidates 展开好的候选人显示名 CSV（username，
+	// 缺失兜底 email/ID），角色未解析到候选人时可能落到 CandidateGroups；两个都拿不到
+	// 就退化成裸角色名，好过什么都不显示。
+	approverName := task.CandidateUsers
+	if approverName == "" {
+		approverName = task.CandidateGroups
 	}
-	return chain, nil
-}
+	if approverName == "" {
+		approverName = "change_manager"
+	}
 
-func (r *EntRepository) DeleteApprovalChain(ctx context.Context, changeID int, tenantID int) error {
-	_, err := r.db.ExecContext(ctx, "DELETE FROM change_approval_chains WHERE change_id = $1 AND tenant_id = $2", changeID, tenantID)
-	return err
-}
-
-func (r *EntRepository) ReplaceApprovalChain(
-	ctx context.Context,
-	changeID, tenantID int,
-	chain []*ApprovalChain,
-) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
+	createdAt := task.CreatedTime
+	return &ApprovalRecord{
+		ID:           0, // 合成记录，没有真实的 ProcessApprovalDecision.ID
+		ChangeID:     changeID,
+		TenantID:     tenantID,
+		ApproverName: approverName,
+		Status:       "pending",
+		CreatedAt:    createdAt,
 	}
-	defer tx.Rollback()
-
-	if _, err := tx.ExecContext(ctx,
-		"DELETE FROM change_approval_chains WHERE change_id = $1 AND tenant_id = $2",
-		changeID, tenantID); err != nil {
-		return err
-	}
-	for _, item := range chain {
-		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO change_approval_chains
-				(change_id, tenant_id, level, approver_id, role, status, is_required, created_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		`, changeID, tenantID, item.Level, item.ApproverID, item.Role, item.Status, item.IsRequired, time.Now()); err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
 }
 
 // Risk Assessment (Raw SQL)
@@ -581,17 +497,6 @@ func (r *EntRepository) UpdateRiskAssessment(ctx context.Context, ra *RiskAssess
 		return nil, err
 	}
 	return ra, nil
-}
-
-// ValidateApproverBelongsToTenant validates that an approver belongs to the specified tenant
-func (r *EntRepository) ValidateApproverBelongsToTenant(ctx context.Context, approverID, tenantID int) (bool, error) {
-	exists, err := r.client.User.Query().
-		Where(entuser.ID(approverID), entuser.TenantID(tenantID)).
-		Exist(ctx)
-	if err != nil {
-		return false, err
-	}
-	return exists, nil
 }
 
 // ListByDateRange retrieves changes within a date range
