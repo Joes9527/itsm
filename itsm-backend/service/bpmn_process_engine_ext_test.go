@@ -870,7 +870,7 @@ func TestAuthorizeTaskActor_AllowsAssigneeAndCandidate(t *testing.T) {
 	assert.Error(t, engine.authorizeTaskActor(ctx, task3))
 }
 
-func TestAuthorizeTaskActor_NoActorContextIsPermissive(t *testing.T) {
+func TestAuthorizeTaskActor_NoActorNoSystemCallerDenied(t *testing.T) {
 	engine, baseCtx := newApprovalDecisionTestEngine(t)
 	tenantID, _ := setupApprovalDecisionFixture(t, engine)
 	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
@@ -878,8 +878,22 @@ func TestAuthorizeTaskActor_NoActorContextIsPermissive(t *testing.T) {
 	_, taskID := createProcessFixture(t, engine, tenantID, "noctx1")
 	task, err := engine.client.ProcessTask.Get(ctx, taskID)
 	require.NoError(t, err)
-	// No actor in context should not error (system/internal calls stay working)
-	assert.NoError(t, engine.authorizeTaskActor(ctx, task))
+	// No actor in context AND no explicit system-caller declaration must now
+	// be denied — replaces the old implicit "no actor = permissive" default.
+	assert.Error(t, engine.authorizeTaskActor(ctx, task))
+}
+
+func TestAuthorizeTaskActor_ExplicitSystemCallerAllowed(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, _ := setupApprovalDecisionFixture(t, engine)
+	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = context.WithValue(ctx, bpmn.BPMNSystemCallerContextKey, true)
+
+	_, taskID := createProcessFixture(t, engine, tenantID, "syscaller2")
+	task, err := engine.client.ProcessTask.Get(ctx, taskID)
+	require.NoError(t, err)
+	assert.NoError(t, engine.authorizeTaskActor(ctx, task),
+		"an explicitly declared system caller must be permitted")
 }
 
 func TestAuthorizeTaskActor_AllowsCandidateGroupMatch(t *testing.T) {

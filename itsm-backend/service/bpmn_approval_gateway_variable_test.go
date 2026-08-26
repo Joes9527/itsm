@@ -46,6 +46,11 @@ func TestApprovalGatewayReadsApplicationVariableName(t *testing.T) {
 	// guard (final whole-branch review Finding 4), which otherwise denies a
 	// non-elevated caller with no BPMNUserIDContextKey set.
 	ctx = context.WithValue(ctx, bpmn.BPMNElevatedContextKey, true)
+	// System caller: this test also drives CompleteTask directly to exercise
+	// gateway routing, not to simulate a specific end user acting on the
+	// task — authorizeTaskActor now denies by default without either a user
+	// ID or this explicit declaration.
+	ctx = context.WithValue(ctx, bpmn.BPMNSystemCallerContextKey, true)
 
 	cases := []struct {
 		processKey   string

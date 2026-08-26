@@ -95,7 +95,12 @@ func TestCompleteTask_PlatformNoTenant_CallbackSideEffectFires(t *testing.T) {
 	require.NoError(t, err)
 
 	task := findTaskByDefinitionKey(t, client, tenantCtx, instance.ID, "Activity_Assessment")
-	require.NoError(t, engine.CompleteTask(platformCtx, task.TaskID, map[string]interface{}{
+	// System caller: this test drives CompleteTask directly to exercise
+	// platform-level tenant injection, not to simulate a specific end user
+	// acting on the task — authorizeTaskActor now denies by default without
+	// either a user ID or this explicit declaration.
+	systemPlatformCtx := context.WithValue(platformCtx, bpmn.BPMNSystemCallerContextKey, true)
+	require.NoError(t, engine.CompleteTask(systemPlatformCtx, task.TaskID, map[string]interface{}{
 		"change_id": ch.ID,
 		"title":     "平台改过的标题",
 	}))
@@ -140,7 +145,12 @@ func TestCompleteTask_PlatformNoTenant_TaskStillBoundToInstanceTenant(t *testing
 	require.NoError(t, err)
 
 	task := findTaskByDefinitionKey(t, client, tenantCtx, instance.ID, "Activity_Assessment")
-	require.NoError(t, engine.CompleteTask(platformCtx, task.TaskID, map[string]interface{}{
+	// System caller: this test drives CompleteTask directly to exercise
+	// platform-level tenant boundary enforcement, not to simulate a specific
+	// end user acting on the task — authorizeTaskActor now denies by default
+	// without either a user ID or this explicit declaration.
+	systemPlatformCtx := context.WithValue(platformCtx, bpmn.BPMNSystemCallerContextKey, true)
+	require.NoError(t, engine.CompleteTask(systemPlatformCtx, task.TaskID, map[string]interface{}{
 		"change_id": otherChange.ID,
 		"title":     "越权尝试",
 	}))

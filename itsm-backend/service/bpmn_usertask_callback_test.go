@@ -43,6 +43,11 @@ func setupUserTaskCallbackEnv(t *testing.T) (*ent.Client, ProcessEngine, context
 	// guard (final whole-branch review Finding 4), which otherwise denies a
 	// non-elevated caller with no BPMNUserIDContextKey set.
 	ctx = context.WithValue(ctx, bpmn.BPMNElevatedContextKey, true)
+	// System caller: these tests also drive CompleteTask directly to exercise
+	// gateway/callback routing, not to simulate a specific end user acting on
+	// the task — authorizeTaskActor now denies by default without either a
+	// user ID or this explicit declaration.
+	ctx = context.WithValue(ctx, bpmn.BPMNSystemCallerContextKey, true)
 	return client, engine, ctx, tenant.ID
 }
 

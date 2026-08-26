@@ -67,10 +67,15 @@ func TestTransitionStatus_StageBridges_AdvanceProcessEndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Activity_Assessment", started.CurrentActivityID, "流程启动后停在评估节点")
 
-	// 完成评估节点 → 网关按 approval_required=false 路由到排期节点
+	// 完成评估节点 → 网关按 approval_required=false 路由到排期节点。
+	// System caller: this test drives CompleteTask directly to advance the
+	// gateway, not to simulate a specific end user acting on the task —
+	// authorizeTaskActor now denies by default without either a user ID or
+	// this explicit declaration.
 	assessmentTask, err := entClient.ProcessTask.Query().First(context.Background())
 	require.NoError(t, err)
-	require.NoError(t, engine.CompleteTask(workflowCtx, assessmentTask.TaskID, map[string]interface{}{
+	systemCtx := context.WithValue(workflowCtx, bpmn.BPMNSystemCallerContextKey, true)
+	require.NoError(t, engine.CompleteTask(systemCtx, assessmentTask.TaskID, map[string]interface{}{
 		"change_id": dbChange.ID,
 	}))
 	afterAssessment, err := entClient.ProcessInstance.Get(context.Background(), instance.ID)

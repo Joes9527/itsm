@@ -1015,6 +1015,11 @@ func TestCABApprovalAssignsChangeManagerRole(t *testing.T) {
 	// guard (final whole-branch review Finding 4), which otherwise denies a
 	// non-elevated caller with no BPMNUserIDContextKey set.
 	ctx = context.WithValue(ctx, bpmn.BPMNElevatedContextKey, true)
+	// System caller: this test also drives CompleteTask directly (on the
+	// assessment task, before a specific actor is involved) to advance the
+	// gateway — authorizeTaskActor now denies by default without either a
+	// user ID or this explicit declaration.
+	ctx = context.WithValue(ctx, bpmn.BPMNSystemCallerContextKey, true)
 
 	deploySvc := NewBPMNTemplateService(fx.client)
 	_, err := deploySvc.LoadAndDeployTemplates(ctx, fx.tenant.ID)
@@ -1089,7 +1094,12 @@ func TestCABApprovalGatewayRoutesToScheduleOnApprove(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, tasks, 1)
-	require.NoError(t, fx.engine.CompleteTask(ctx, tasks[0].TaskID, map[string]interface{}{}))
+	// System caller: completing the assessment task here isn't simulating a
+	// specific end user acting on it — kept off the shared `ctx` (rather than
+	// merged into it above) so it doesn't leak into actorCtx below and
+	// silently bypass the actor check the CAB decision is meant to exercise.
+	systemCtx := context.WithValue(ctx, bpmn.BPMNSystemCallerContextKey, true)
+	require.NoError(t, fx.engine.CompleteTask(systemCtx, tasks[0].TaskID, map[string]interface{}{}))
 
 	cabTask := fx.getCreatedTask(t, instance.ID, "Activity_CABApproval")
 
@@ -1137,7 +1147,12 @@ func TestCABApprovalGatewayRoutesToRejectOnReject(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, tasks, 1)
-	require.NoError(t, fx.engine.CompleteTask(ctx, tasks[0].TaskID, map[string]interface{}{}))
+	// System caller: completing the assessment task here isn't simulating a
+	// specific end user acting on it — kept off the shared `ctx` (rather than
+	// merged into it above) so it doesn't leak into actorCtx below and
+	// silently bypass the actor check the CAB decision is meant to exercise.
+	systemCtx := context.WithValue(ctx, bpmn.BPMNSystemCallerContextKey, true)
+	require.NoError(t, fx.engine.CompleteTask(systemCtx, tasks[0].TaskID, map[string]interface{}{}))
 
 	cabTask := fx.getCreatedTask(t, instance.ID, "Activity_CABApproval")
 

@@ -532,17 +532,21 @@ func (e *CustomProcessEngine) recordApprovalDecision(ctx context.Context, instan
 }
 
 // authorizeTaskActor ensures that task actions are performed by the assigned
-// user or an explicitly resolved candidate (by ID, username, email, or
-// candidate_groups membership). candidate_groups matches must additionally
-// pass isProcessInstanceRequester exclusion, since (unlike candidate_users)
-// candidate_groups isn't pre-filtered for self-approval at task-creation
-// time — see bpmn.CallerIdentity.MatchesCandidateGroup's doc comment.
-// System/internal calls without an authenticated actor keep their existing
-// permissive behavior.
+// user, an explicitly resolved candidate (by ID, username, email, or
+// candidate_groups membership), or an explicitly declared system caller
+// (bpmn.BPMNSystemCallerContextKey). candidate_groups matches must
+// additionally pass isProcessInstanceRequester exclusion, since (unlike
+// candidate_users) candidate_groups isn't pre-filtered for self-approval at
+// task-creation time — see bpmn.CallerIdentity.MatchesCandidateGroup's doc
+// comment. A call with no authenticated actor and no system-caller
+// declaration is denied — replaces the previous implicit permissive default.
 func (e *CustomProcessEngine) authorizeTaskActor(ctx context.Context, task *ent.ProcessTask) error {
+	if systemCaller, _ := ctx.Value(bpmn.BPMNSystemCallerContextKey).(bool); systemCaller {
+		return nil
+	}
 	userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
 	if userID <= 0 {
-		return nil
+		return fmt.Errorf("未认证的调用")
 	}
 	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
 	if tenantID == 0 {

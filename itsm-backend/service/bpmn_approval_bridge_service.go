@@ -166,9 +166,17 @@ func (b *BPMNApprovalBridge) CompleteBusinessStageTask(ctx context.Context, tena
 		variables[k] = v
 	}
 
-	// 注入认证操作人与租户，供引擎的 authorizeTaskActor / recordApprovalDecision 使用
+	// 注入认证操作人与租户，供引擎的 authorizeTaskActor / recordApprovalDecision 使用。
+	// actorUserID<=0 是调用方（release/change 阶段流转）的既定约定：授权边界已经在域层
+	// 做完（JWT + 资源权限 + 租户隔离），阶段流转是系统性的状态推进而非某个具体人的
+	// 审批动作，故意不强制 BPMN 任务 assignee 匹配。authorizeTaskActor 现在对无 userID
+	// 的调用默认拒绝，这里必须显式声明系统调用者身份，否则会把这类合法的阶段桥接一起拒绝。
 	workflowCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
-	workflowCtx = context.WithValue(workflowCtx, bpmn.BPMNUserIDContextKey, actorUserID)
+	if actorUserID > 0 {
+		workflowCtx = context.WithValue(workflowCtx, bpmn.BPMNUserIDContextKey, actorUserID)
+	} else {
+		workflowCtx = context.WithValue(workflowCtx, bpmn.BPMNSystemCallerContextKey, true)
+	}
 
 	engine := NewCustomProcessEngine(b.client, b.logger)
 	if err := engine.CompleteTask(workflowCtx, task.TaskID, variables); err != nil {
