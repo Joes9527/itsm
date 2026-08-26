@@ -1747,6 +1747,42 @@ func TestCreateCounterSignTasks_CrossTenantNeverLeaks(t *testing.T) {
 	assert.Error(t, err, "must never create counter-sign tasks against another tenant's parent task, regardless of elevation")
 }
 
+// TestCreateCounterSignTasks_NoUserNoSystemCallerDenied guards
+// authorizeTaskMutation's own fail-closed default in isolation. Unlike
+// AssignTask/CancelTask/SetTaskVariables, which all route through the
+// tenant-filtered s.GetTask first (gated by authorizeTaskViewer, which
+// already denies an unauthenticated/non-system caller before
+// authorizeTaskMutation is ever reached), CreateCounterSignTasks looks up
+// its parent task directly and calls authorizeTaskMutation right away — so
+// this is the one caller where authorizeTaskMutation's own userID<=0 branch
+// is actually load-bearing. A context with neither bpmn.BPMNUserIDContextKey
+// nor bpmn.BPMNSystemCallerContextKey must be denied, not silently treated
+// as an internal/system call.
+func TestCreateCounterSignTasks_NoUserNoSystemCallerDenied(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, _ := setupApprovalDecisionFixture(t, engine)
+	approver, err := engine.client.User.Create().
+		SetUsername("countersign-nouser-approver").SetEmail("countersign-nouser-approver@example.com").SetName("Approver").
+		SetPasswordHash("hash").SetRole("agent").SetActive(true).SetTenantID(tenantID).
+		Save(context.Background())
+	require.NoError(t, err)
+
+	_, taskID := createProcessFixture(t, engine, tenantID, "countersign-nouser1")
+	task, err := engine.client.ProcessTask.Get(context.Background(), taskID)
+	require.NoError(t, err)
+
+	// Deliberately no bpmn.BPMNUserIDContextKey and no
+	// bpmn.BPMNSystemCallerContextKey set.
+	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+
+	_, err = engine.TaskService().CreateCounterSignTasks(ctx, task.TaskID, &CounterSignRequest{
+		ApprovalType: "parallel",
+		Approvers:    []string{fmt.Sprintf("%d", approver.ID)},
+		Threshold:    1,
+	})
+	assert.Error(t, err, "no user and no explicit system-caller declaration must be denied by default")
+}
+
 // TestAssignTask_SystemCallerNoUserIDProducesNoAuditRecord verifies that
 // authorizeTaskMutation's permissive "no actor" case (userID<=0, matching
 // authorizeTaskActor's existing "system/internal call" convention) does NOT
