@@ -503,7 +503,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
   const isTicketFinal = isFinalStatus(ticket.status as any);
 
   return (
-    <div className="w-full space-y-4 text-slate-800 font-sans antialiased">
+    <div className="w-full space-y-4 pt-4 text-slate-800 font-sans antialiased">
       {/* ================= 工单主 Header & 规范动作控制台 ================= */}
       <div className="w-full bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-xs">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
