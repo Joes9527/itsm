@@ -19,6 +19,12 @@ type TicketNotificationServiceInterface interface {
 	SendNotification(ctx context.Context, ticketID int, req *dto.SendTicketNotificationRequest, tenantID int) error
 }
 
+// TicketStatusServiceInterface 工单状态更新服务接口（避免循环依赖，见
+// TicketService.UpdateTicketStatusForWorkflow 的注释）
+type TicketStatusServiceInterface interface {
+	UpdateTicketStatusForWorkflow(ctx context.Context, ticketID int, status string, tenantID int, operatorID int) error
+}
+
 // DefaultTicketNotificationService 默认通知服务（空实现）
 type DefaultTicketNotificationService struct{}
 
@@ -34,6 +40,7 @@ type TicketServiceTaskHandler struct {
 	client              *ent.Client
 	logger              *zap.SugaredLogger
 	notificationService TicketNotificationServiceInterface
+	statusService       TicketStatusServiceInterface
 }
 
 // NewTicketServiceTaskHandler 创建工单处理器
@@ -49,6 +56,13 @@ func NewTicketServiceTaskHandler(client *ent.Client, logger *zap.SugaredLogger) 
 // SetNotificationService 设置通知服务
 func (h *TicketServiceTaskHandler) SetNotificationService(svc TicketNotificationServiceInterface) {
 	h.notificationService = svc
+}
+
+// SetTicketService 注入工单状态服务，由 bootstrap 在 TicketService 构造完成后调用
+// （TicketService 构造时依赖的东西比 CallbackRegistry 晚初始化，不能在 NewTicketServiceTaskHandler
+// 里直接注入，跟 SetNotificationService 是同一个延迟装配模式）。
+func (h *TicketServiceTaskHandler) SetTicketService(svc TicketStatusServiceInterface) {
+	h.statusService = svc
 }
 
 // GetTaskType 返回任务类型
@@ -145,20 +159,15 @@ func (h *TicketServiceTaskHandler) updateTicketStatus(ctx context.Context, ticke
 		additionalData["form_fields"] = formFields
 	}
 
-	// 执行更新
+	// 执行更新——通过 TicketService 走状态机校验、通知、飞书同步等既有业务规则，
+	// 不再绕过领域服务直接改 Ent（AGENTS.md：Handler 不能绕过专业服务直接修改状态）。
+	if h.statusService == nil {
+		return nil, fmt.Errorf("ticket status service 未注入，无法更新工单状态")
+	}
 	tenantID := h.getTenantID(ctx, variables)
-	update := h.client.Ticket.UpdateOneID(ticketID)
-	if tenantID > 0 {
-		update = update.Where(ticket.TenantID(tenantID))
-	}
-	if newStatus == "resolved" || newStatus == "closed" {
-		update = update.SetResolvedAt(time.Now())
-	}
-	_, err := update.
-		SetStatus(newStatus).
-		SetUpdatedAt(time.Now()).
-		Save(ctx)
-	if err != nil {
+	// operatorID=0 表示系统身份（BPMN 引擎驱动的状态变更，不是某个登录用户点的按钮）；
+	// TicketService.UpdateTicketStatus 本身不强制 operatorID>0。
+	if err := h.statusService.UpdateTicketStatusForWorkflow(ctx, ticketID, newStatus, tenantID, 0); err != nil {
 		h.logger.Errorw("Failed to update ticket status", "ticket_id", ticketID, "error", err)
 		return nil, fmt.Errorf("更新工单状态失败: %w", err)
 	}

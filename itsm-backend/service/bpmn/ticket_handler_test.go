@@ -5,13 +5,27 @@ import (
 	"testing"
 
 	"itsm-backend/dto"
+	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 )
+
+// ticketStatusServiceEntStub 是给既有测试（校验 updateTicketStatus/Execute 会真正落库）用的桩：
+// updateTicketStatus 现在委托给注入的 TicketStatusServiceInterface，不再直接写 Ent，
+// 所以这里用一个会真正调用 Ent 的桩实现，让既有断言（校验 ticket.Status 已更新）继续成立；
+// 真正的状态机校验/通知/飞书同步行为由 TicketService.UpdateTicketStatus 自己的测试覆盖。
+type ticketStatusServiceEntStub struct {
+	client *ent.Client
+}
+
+func (s *ticketStatusServiceEntStub) UpdateTicketStatusForWorkflow(ctx context.Context, ticketID int, status string, tenantID int, operatorID int) error {
+	return s.client.Ticket.UpdateOneID(ticketID).SetStatus(status).Exec(ctx)
+}
 
 func TestTicketServiceTaskHandler_UpdateTicketStatus(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:ent?mode=memory&cache=shared&_fk=1")
@@ -19,6 +33,7 @@ func TestTicketServiceTaskHandler_UpdateTicketStatus(t *testing.T) {
 
 	logger := zaptest.NewLogger(t).Sugar()
 	handler := NewTicketServiceTaskHandler(client, logger)
+	handler.SetTicketService(&ticketStatusServiceEntStub{client: client})
 
 	ctx := context.Background()
 
@@ -349,6 +364,7 @@ func TestTicketServiceTaskHandler_Execute(t *testing.T) {
 
 	logger := zaptest.NewLogger(t).Sugar()
 	handler := NewTicketServiceTaskHandler(client, logger)
+	handler.SetTicketService(&ticketStatusServiceEntStub{client: client})
 
 	ctx := context.Background()
 
@@ -513,4 +529,42 @@ func TestTicketServiceTaskHandler_Validate(t *testing.T) {
 
 	err := handler.Validate(ctx, config)
 	assert.NoError(t, err)
+}
+
+func TestTicketServiceTaskHandler_UpdateStatus_RequiresInjectedService(t *testing.T) {
+	handler := NewTicketServiceTaskHandler(nil, zap.NewNop().Sugar())
+	// statusService is nil (never injected) — must fail loud, not silently no-op.
+	_, err := handler.Execute(context.Background(), nil, map[string]interface{}{
+		"business_id": 1,
+		"action":      "update_status",
+		"new_status":  "in_progress",
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "未注入")
+}
+
+func TestTicketServiceTaskHandler_UpdateStatus_DelegatesToInjectedService(t *testing.T) {
+	handler := NewTicketServiceTaskHandler(nil, zap.NewNop().Sugar())
+	fake := &fakeTicketStatusService{}
+	handler.SetTicketService(fake)
+
+	_, err := handler.Execute(context.Background(), nil, map[string]interface{}{
+		"business_id": 42,
+		"action":      "update_status",
+		"new_status":  "resolved",
+	})
+	require.NoError(t, err)
+	require.Equal(t, 42, fake.lastTicketID)
+	require.Equal(t, "resolved", fake.lastStatus)
+}
+
+type fakeTicketStatusService struct {
+	lastTicketID int
+	lastStatus   string
+}
+
+func (f *fakeTicketStatusService) UpdateTicketStatusForWorkflow(ctx context.Context, ticketID int, status string, tenantID int, operatorID int) error {
+	f.lastTicketID = ticketID
+	f.lastStatus = status
+	return nil
 }

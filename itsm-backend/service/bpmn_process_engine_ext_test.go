@@ -968,6 +968,13 @@ func TestHandleElement_ServiceTask_DispatchesByMetaDataOverAttributeGuessing(t *
 		},
 	}
 
+	// TicketServiceTaskHandler.updateTicketStatus 现在委托给注入的 TicketService（Task 5：
+	// 不再绕过领域服务直接写 Ent），跟生产环境 bootstrap 里的 SetTicketService 装配是同一个模式。
+	ticketSvc := NewTicketServiceForTest(engine.client, engine.logger)
+	if h, ok := engine.callbackRegistry.GetHandler("ticket_service_handler").(*bpmn.TicketServiceTaskHandler); ok {
+		h.SetTicketService(ticketSvc)
+	}
+
 	err = engine.handleElement(ctx, instance, process, "Activity_UpdateStatus")
 	require.NoError(t, err)
 

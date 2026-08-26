@@ -51,6 +51,7 @@ import (
 	repository_ticket "itsm-backend/repository/ticket"
 	"itsm-backend/router"
 	"itsm-backend/service"
+	"itsm-backend/service/bpmn"
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
@@ -453,6 +454,17 @@ func NewApplication() *Application {
 	ticketService.SetNotificationService(ticketNotificationService)
 	ticketCommentService.SetNotificationService(ticketNotificationService)
 	ticketRatingService.SetNotificationService(ticketNotificationService)
+
+	// 注入 TicketService 到 BPMN ticket_service_handler，
+	// 让 ServiceTask 的状态更新走领域服务（状态机校验/通知/飞书同步），不再绕过直接改 Ent。
+	// processEngine 的静态类型是 service.ProcessEngine 接口（未声明 CallbackRegistry()，
+	// 该方法只加在具体实现 *service.CustomProcessEngine 上，避免影响接口的其他实现/测试假实现），
+	// 所以这里先做一次类型断言。
+	if cpe, ok := processEngine.(*service.CustomProcessEngine); ok {
+		if h, ok := cpe.CallbackRegistry().GetHandler("ticket_service_handler").(*bpmn.TicketServiceTaskHandler); ok {
+			h.SetTicketService(ticketService)
+		}
+	}
 
 	rootCauseAnalysisService := service.NewRootCauseAnalysisService(client)
 	incidentController := controller.NewIncidentController(incidentService, incidentRuleEngine, incidentMonitoringService, incidentAlertingService, rootCauseAnalysisService, sugar)

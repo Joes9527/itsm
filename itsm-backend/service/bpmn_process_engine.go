@@ -204,6 +204,12 @@ func (e *CustomProcessEngine) TaskService() TaskService {
 	return &bpmnTaskService{client: e.client, logger: e.logger, groupResolver: e.groupResolver}
 }
 
+// CallbackRegistry 暴露内部的 ServiceTask 回调注册中心，供 bootstrap 在各领域 service
+// 构造完成后做延迟依赖注入（跟 TicketService.SetNotificationService 是同一个模式）。
+func (e *CustomProcessEngine) CallbackRegistry() *bpmn.CallbackRegistry {
+	return e.callbackRegistry
+}
+
 // StartProcess 启动流程实例
 func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitionKey string, businessKey string, businessType string, businessID int, variables map[string]interface{}) (*ent.ProcessInstance, error) {
 	// 1. 获取租户ID
