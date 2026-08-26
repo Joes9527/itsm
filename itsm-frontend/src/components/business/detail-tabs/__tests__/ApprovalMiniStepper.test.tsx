@@ -2,7 +2,7 @@
  * ApprovalMiniStepper Component Tests
  *
  * 覆盖：
- * - 有审批决策时渲染纵向 Steps（复用 toApprovalSteps 单一事实源）
+ * - 有审批决策时渲染 ✓/●/○ 时间轴（复用 toApprovalSteps 单一事实源）
  * - 无审批决策时展示空态文案
  */
 
@@ -23,7 +23,7 @@ describe('ApprovalMiniStepper', () => {
     jest.clearAllMocks();
   });
 
-  it('renders compact steps when approval decisions exist', async () => {
+  it('renders compact timeline when approval decisions exist', async () => {
     mockGetDecisions.mockResolvedValueOnce([
       {
         id: 1,
@@ -51,8 +51,10 @@ describe('ApprovalMiniStepper', () => {
       expect(screen.getByText('主管审批')).toBeInTheDocument();
     });
     expect(screen.getByText('自动化交付')).toBeInTheDocument();
-    expect(screen.getByText(/王主管 · 已通过/)).toBeInTheDocument();
-    expect(screen.getByText(/系统 · 已拒绝/)).toBeInTheDocument();
+    expect(screen.getByText('(王主管)')).toBeInTheDocument();
+    expect(screen.getByText('(系统)')).toBeInTheDocument();
+    expect(screen.getByText('已通过')).toBeInTheDocument();
+    expect(screen.getByText('已拒绝')).toBeInTheDocument();
   });
 
   it('shows empty state when there are no approval decisions', async () => {

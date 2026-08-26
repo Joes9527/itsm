@@ -56,7 +56,7 @@ describe('ServiceRequestPanel', () => {
 
     // 加载结束后应该静默不渲染，不出现任何卡片/错误提示
     expect(container).toBeEmptyDOMElement();
-    expect(screen.queryByText('服务申请信息')).not.toBeInTheDocument();
+    expect(screen.queryByText('服务申请与规格参数')).not.toBeInTheDocument();
     expect(mockListTasks).not.toHaveBeenCalled();
   });
 
@@ -83,14 +83,15 @@ describe('ServiceRequestPanel', () => {
     render(<ServiceRequestPanel ticketId={202} />);
 
     await waitFor(() => {
-      expect(screen.getByText('服务申请信息')).toBeInTheDocument();
+      expect(screen.getByText('服务申请与规格参数')).toBeInTheDocument();
     });
 
     expect(mockListTasks).toHaveBeenCalledWith(55);
     expect(screen.getByText('CC-100')).toBeInTheDocument();
-    expect(screen.getByText('aliyun')).toBeInTheDocument();
+    expect(screen.getByText('(aliyun)')).toBeInTheDocument();
     expect(screen.getByText('ecs')).toBeInTheDocument();
-    expect(screen.queryByText('开始交付')).not.toBeInTheDocument();
+    // 原型样式：开始交付按钮常驻面板头部
+    expect(screen.getByText('开始交付')).toBeInTheDocument();
 
     // 关联CI：可点击跳转到 /cmdb/cis/:id（老页面的行为，折进 ServiceRequestPanel 后不能丢）
     const ciLink = screen.getByText('CI #88');
@@ -109,7 +110,7 @@ describe('ServiceRequestPanel', () => {
     render(<ServiceRequestPanel ticketId={404} />);
 
     await waitFor(() => {
-      expect(screen.getByText('服务申请信息')).toBeInTheDocument();
+      expect(screen.getByText('服务申请与规格参数')).toBeInTheDocument();
     });
 
     expect(screen.queryByText(/^CI #/)).not.toBeInTheDocument();

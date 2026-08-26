@@ -37,6 +37,14 @@ jest.mock('@/lib/api/ticket-api', () => ({
   },
 }));
 
+jest.mock('@/lib/api/ticket-approval-api', () => ({
+  TicketApprovalApi: { getApprovalDecisions: jest.fn() },
+}));
+
+jest.mock('@/lib/api/ticket-relations-api', () => ({
+  TicketRelationsApi: { getRelationStats: jest.fn() },
+}));
+
 jest.mock('@/lib/api/user-api', () => ({
   UserApi: { getUsers: jest.fn() },
 }));
@@ -64,8 +72,8 @@ jest.mock('@/components/business/detail-tabs', () => ({
   AttachmentPanel: () => null,
   HistoryTimeline: () => null,
   ApprovalWorkflowPanel: () => null,
-  ticketCommentAdapter: {},
-  ticketAttachmentAdapter: {},
+  ticketCommentAdapter: { list: jest.fn() },
+  ticketAttachmentAdapter: { list: jest.fn() },
   fetchAuditLogHistory: jest.fn(),
 }));
 
@@ -75,13 +83,20 @@ jest.mock('@/components/ticket-relations/RelationPanel', () => ({
 
 jest.mock('../ServiceRequestPanel', () => () => null);
 jest.mock('../ServiceCatalogApprovalChain', () => () => null);
+jest.mock('../CIContextCard', () => ({ CIContextCard: () => null }));
+jest.mock('../KBRecommendCard', () => ({ KBRecommendCard: () => null }));
 
 import { TicketApi } from '@/lib/api/ticket-api';
+import { TicketApprovalApi } from '@/lib/api/ticket-approval-api';
+import { TicketRelationsApi } from '@/lib/api/ticket-relations-api';
 import { UserApi } from '@/lib/api/user-api';
 
 const mockGetTicket = TicketApi.getTicket as jest.Mock;
 const mockGetSLA = TicketApi.getTicketSLA as jest.Mock;
 const mockGetUsers = UserApi.getUsers as jest.Mock;
+const mockGetDecisions = TicketApprovalApi.getApprovalDecisions as jest.Mock;
+const mockGetRelationStats = TicketRelationsApi.getRelationStats as jest.Mock;
+const mockGetHistory = TicketApi.getTicketHistory as jest.Mock;
 
 const baseTicket = {
   id: 101,
@@ -108,6 +123,9 @@ describe('TicketDetail', () => {
     jest.clearAllMocks();
     mockGetSLA.mockResolvedValue(null);
     mockGetUsers.mockResolvedValue({ users: [] });
+    mockGetDecisions.mockResolvedValue([]);
+    mockGetRelationStats.mockResolvedValue({ totalRelations: 0 });
+    mockGetHistory.mockResolvedValue([]);
   });
 
   it('renders Chinese label for open status instead of raw "open"', async () => {

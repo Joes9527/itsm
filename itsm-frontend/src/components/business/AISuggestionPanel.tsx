@@ -145,13 +145,13 @@ export function AISuggestionPanel({
     return (
       <Card
         size="small"
-        className="mb-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200"
+        className="mb-4 bg-gradient-to-br from-orange-50/60 to-amber-50/40 border-orange-200/70"
         bodyStyle={{ padding: '12px' }}
       >
         <div className="flex items-center gap-3">
           <Spin size="small" />
           <div>
-            <Text className="text-sm font-medium text-blue-700">AI智能分析中...</Text>
+            <Text className="text-sm font-medium text-orange-900">AI智能分析中...</Text>
             <Paragraph type="secondary" className="text-xs mb-0">
               基于标题和描述分析工单分类
             </Paragraph>
@@ -201,12 +201,12 @@ export function AISuggestionPanel({
   return (
     <Card
       size="small"
-      className="mb-4 bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-200"
+      className="mb-4 bg-gradient-to-br from-orange-50/60 to-amber-50/40 border-orange-200/70"
       bodyStyle={{ padding: '12px' }}
       title={
         <Space>
-          <Sparkles className="w-4 h-4 text-indigo-600" />
-          <span className="font-medium text-indigo-700">AI智能分析建议</span>
+          <Sparkles className="w-4 h-4 text-orange-500" />
+          <span className="font-medium text-orange-900">AI 处置建议</span>
         </Space>
       }
       extra={

@@ -9,6 +9,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { TicketApi } from '@/lib/api/ticket-api';
+import { TicketApprovalApi } from '@/lib/api/ticket-approval-api';
+import { TicketRelationsApi } from '@/lib/api/ticket-relations-api';
 import { UserApi } from '@/lib/api/user-api';
 import type { Ticket } from '@/lib/api/api-config';
 import type { User } from '@/lib/api/user-api';
@@ -71,6 +73,7 @@ import { RelationPanel } from '@/components/ticket-relations/RelationPanel';
 import ServiceRequestPanel from './ServiceRequestPanel';
 import ServiceCatalogApprovalChain from './ServiceCatalogApprovalChain';
 import { CIContextCard } from './CIContextCard';
+import { KBRecommendCard } from './KBRecommendCard';
 import {
   MessageSquare,
   Paperclip,
@@ -109,6 +112,8 @@ const getSLAPercent = (total: number, remaining: number | null): number => {
   return Math.min(100, Math.max(0, Math.round(((total - remaining) / total) * 100)));
 };
 
+const formatHours = (minutes: number): string => (minutes / 60).toFixed(1);
+
 const DISABLED_ACTION_CLASS = 'opacity-40 cursor-not-allowed pointer-events-auto';
 
 export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
@@ -145,6 +150,13 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
     resolutionTimeRemaining: number | null;
     isBreached: boolean;
   } | null>(null);
+  const [tabCounts, setTabCounts] = useState<{
+    comments?: number;
+    attachments?: number;
+    approvals?: number;
+    history?: number;
+    relations?: number;
+  }>({});
 
   const [assignForm] = Form.useForm();
   const [editForm] = Form.useForm();
@@ -210,6 +222,55 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
       fetchSLAInfo();
     }
   }, [ticketId, fetchSLAInfo]);
+
+  // 底部五维 Tabs 的数量角标（失败静默，不阻塞详情页主流程）
+  useEffect(() => {
+    if (!ticketId) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const [comments, attachments, approvals, history, relations] = await Promise.allSettled([
+          ticketCommentAdapter.list(ticketId),
+          ticketAttachmentAdapter.list(ticketId),
+          TicketApprovalApi.getApprovalDecisions(ticketId),
+          TicketApi.getTicketHistory(ticketId),
+          TicketRelationsApi.getRelationStats(ticketId),
+        ]);
+        if (cancelled) return;
+
+        const next: {
+          comments?: number;
+          attachments?: number;
+          approvals?: number;
+          history?: number;
+          relations?: number;
+        } = {};
+        if (comments.status === 'fulfilled' && typeof comments.value?.total === 'number') {
+          next.comments = comments.value.total;
+        }
+        if (attachments.status === 'fulfilled' && Array.isArray(attachments.value)) {
+          next.attachments = attachments.value.length;
+        }
+        if (approvals.status === 'fulfilled' && Array.isArray(approvals.value)) {
+          next.approvals = approvals.value.length;
+        }
+        if (history.status === 'fulfilled' && Array.isArray(history.value)) {
+          next.history = history.value.length;
+        }
+        if (relations.status === 'fulfilled' && typeof relations.value?.totalRelations === 'number') {
+          next.relations = relations.value.totalRelations;
+        }
+        setTabCounts(next);
+      } catch {
+        // 任一数据源异常都静默处理，不阻塞详情页
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ticketId]);
 
   useEffect(() => {
     fetchUsers();
@@ -518,7 +579,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
               }`}
             >
               <UserCheck size={13} className="text-slate-500" />
-              <span>分配</span>
+              <span>转派分配</span>
             </button>
 
             <button
@@ -622,6 +683,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
             currentUserId={currentUser?.id}
             isTicketFinal={isTicketFinal}
             onRefresh={fetchTicket}
+            tabCounts={tabCounts}
           />
         </div>
 
@@ -635,43 +697,28 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
 
             <div className="space-y-2.5">
               <div className="flex items-center justify-between">
-                <span className="text-slate-400 text-xs">工单单号:</span>
-                <span className="font-mono text-slate-800 text-xs">{ticket.ticketNumber || `#${ticket.id}`}</span>
-              </div>
-
-              <div className="flex items-center justify-between">
                 <span className="text-slate-400 text-xs">申请人:</span>
-                <span className="text-slate-700 text-xs">
-                  {ticket.requester
-                    ? `${ticket.requester.name}${ticket.requester.department ? ` · ${ticket.requester.department}` : ''}`
-                    : '-'}
+                <span className="font-medium text-slate-800 text-xs">
+                  {ticket.requester?.name || '-'}
+                  {ticket.requester?.username ? ` (${ticket.requester.username})` : ''}
                 </span>
               </div>
 
               <div className="flex items-center justify-between">
-                <span className="text-slate-400 text-xs">处理人:</span>
-                <span className="text-slate-700 text-xs">
-                  {ticket.assignee
-                    ? `${ticket.assignee.name}${ticket.assignee.department ? ` · ${ticket.assignee.department}` : ''}`
-                    : '未分配'}
+                <span className="text-slate-400 text-xs">所属部门:</span>
+                <span className="text-slate-700 text-xs">{ticket.requester?.department || '-'}</span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 text-xs">当前处理人:</span>
+                <span className="font-semibold text-orange-800 bg-orange-50 px-2 py-0.5 rounded border border-orange-200 text-xs">
+                  {ticket.assignee?.name || '未分配'}
                 </span>
               </div>
 
               <div className="flex items-center justify-between">
                 <span className="text-slate-400 text-xs">工单分类:</span>
                 <span className="text-slate-700 text-xs">{ticket.category || '未分类'}</span>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-slate-400 text-xs">当前状态:</span>
-                <span className="font-semibold text-orange-800 bg-orange-50 px-2 py-0.5 rounded border border-orange-200 text-xs">
-                  {getTicketStatusLabel(ticket.status)}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-slate-400 text-xs">更新时间:</span>
-                <span className="text-slate-600 font-mono text-[11px]">{formatDateTime(ticket.updatedAt)}</span>
               </div>
             </div>
           </div>
@@ -787,6 +834,14 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
                             : '#52c41a'
                       }
                     />
+                    <div className="flex justify-between text-[11px] text-slate-400 font-mono">
+                      <span>
+                        {slaInfo.responseTimeRemaining !== null
+                          ? `剩余 ${formatHours(slaInfo.responseTimeRemaining)} 小时`
+                          : '--'}
+                      </span>
+                      <span>目标 {formatHours(slaInfo.responseTime)} 小时</span>
+                    </div>
                   </div>
                 )}
 
@@ -811,6 +866,14 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
                             : '#52c41a'
                       }
                     />
+                    <div className="flex justify-between text-[11px] text-slate-400 font-mono">
+                      <span>
+                        {slaInfo.resolutionTimeRemaining !== null
+                          ? `剩余 ${formatHours(slaInfo.resolutionTimeRemaining)} 小时`
+                          : '--'}
+                      </span>
+                      <span>目标 {formatHours(slaInfo.resolutionTime)} 小时</span>
+                    </div>
                   </div>
                 )}
               </div>
@@ -819,6 +882,9 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
 
           {/* 4. 关联 CMDB 配置项（CI）卡片 */}
           <CIContextCard ticketId={ticketId} source={ticket.source} />
+
+          {/* 5. 推荐操作指引 (KB) */}
+          <KBRecommendCard query={ticket.title} />
         </div>
       </div>
 
@@ -1126,6 +1192,13 @@ interface TicketDetailTabsProps {
   currentUserId?: number;
   isTicketFinal: boolean;
   onRefresh: () => void;
+  tabCounts?: {
+    comments?: number;
+    attachments?: number;
+    approvals?: number;
+    history?: number;
+    relations?: number;
+  };
 }
 
 const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
@@ -1137,14 +1210,17 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
   currentUserId,
   isTicketFinal,
   onRefresh,
+  tabCounts,
 }) => {
+  const countSuffix = (count?: number) => (count !== undefined ? ` (${count})` : '');
+
   const items = [
     {
       key: 'comments',
       label: (
         <span>
           <MessageSquare size={14} className="inline mr-1" />
-          评论
+          评论{countSuffix(tabCounts?.comments)}
         </span>
       ),
       children: (
@@ -1162,7 +1238,7 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
       label: (
         <span>
           <Paperclip size={14} className="inline mr-1" />
-          附件
+          附件{countSuffix(tabCounts?.attachments)}
         </span>
       ),
       children: (
@@ -1180,7 +1256,7 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
       label: (
         <span>
           <GitBranch size={14} className="inline mr-1" />
-          审批链
+          审批链{countSuffix(tabCounts?.approvals)}
         </span>
       ),
       children: (
@@ -1205,7 +1281,7 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
       label: (
         <span>
           <HistoryIcon size={14} className="inline mr-1" />
-          历史
+          历史{countSuffix(tabCounts?.history)}
         </span>
       ),
       children: (
@@ -1239,7 +1315,7 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
       label: (
         <span>
           <Link2 size={14} className="inline mr-1" />
-          关联
+          关联{countSuffix(tabCounts?.relations)}
         </span>
       ),
       children: (
