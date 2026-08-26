@@ -40,7 +40,7 @@ type ProcessEngine interface {
 	// 任务管理
 	TaskService() TaskService
 	// 流程执行
-	StartProcess(ctx context.Context, processDefinitionKey string, businessKey string, variables map[string]interface{}) (*ent.ProcessInstance, error)
+	StartProcess(ctx context.Context, processDefinitionKey string, businessKey string, businessType string, businessID int, variables map[string]interface{}) (*ent.ProcessInstance, error)
 	CompleteTask(ctx context.Context, taskID string, variables map[string]interface{}) error
 	SuspendProcess(ctx context.Context, processInstanceID string, reason string) error
 	ResumeProcess(ctx context.Context, processInstanceID string) error
@@ -205,7 +205,7 @@ func (e *CustomProcessEngine) TaskService() TaskService {
 }
 
 // StartProcess 启动流程实例
-func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitionKey string, businessKey string, variables map[string]interface{}) (*ent.ProcessInstance, error) {
+func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitionKey string, businessKey string, businessType string, businessID int, variables map[string]interface{}) (*ent.ProcessInstance, error) {
 	// 1. 获取租户ID
 	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
 
@@ -240,7 +240,7 @@ func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitio
 	startEvent := process.StartEvents[0]
 
 	// 4. 创建流程实例
-	instance, err := e.client.ProcessInstance.Create().
+	createInstance := e.client.ProcessInstance.Create().
 		SetProcessInstanceID(fmt.Sprintf("PI-%s-%d", processDefinitionKey, time.Now().UnixNano())).
 		SetBusinessKey(businessKey).
 		SetProcessDefinitionKey(processDefinitionKey).
@@ -250,8 +250,14 @@ func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitio
 		SetStartTime(time.Now()).
 		SetTenantID(definition.TenantID).
 		SetCurrentActivityID(startEvent.ID).
-		SetCurrentActivityName(startEvent.Name).
-		Save(ctx)
+		SetCurrentActivityName(startEvent.Name)
+	if businessType != "" {
+		createInstance = createInstance.SetBusinessType(businessType)
+	}
+	if businessID > 0 {
+		createInstance = createInstance.SetBusinessID(businessID)
+	}
+	instance, err := createInstance.Save(ctx)
 	if err != nil {
 		// idx_process_instances_running_unique（migration 015）是这条并发竞态的最终防线：
 		// 各业务域（如 handlers/change 的 SubmitChange）在调用这里之前都做了一次
@@ -507,8 +513,11 @@ func (e *CustomProcessEngine) recordApprovalDecision(ctx context.Context, instan
 	if actor, err := e.client.User.Get(ctx, actorID); err == nil {
 		actorName = actor.Name
 	}
-	businessType := fmt.Sprint(instance.Variables["business_type"])
-	businessID := fmt.Sprint(instance.Variables["business_id"])
+	businessType := instance.BusinessType
+	businessID := ""
+	if instance.BusinessID > 0 {
+		businessID = strconv.Itoa(instance.BusinessID)
+	}
 	_, err := e.client.ProcessApprovalDecision.Create().
 		SetProcessInstanceID(instance.ID).SetProcessTaskID(task.ID).
 		SetProcessInstanceKey(instance.ProcessInstanceID).SetTaskID(task.TaskID).

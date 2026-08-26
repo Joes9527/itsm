@@ -761,7 +761,8 @@ func createProcessFixture(t *testing.T, engine *CustomProcessEngine, tenantID in
 		SetProcessDefinitionKey(def.Key).
 		SetProcessDefinitionID(def.ID).
 		SetStatus("running").
-		SetVariables(map[string]interface{}{"business_type": "change", "business_id": "CHG-" + keySuffix}).
+		SetBusinessType("change").
+		SetBusinessID(1).
 		SetTenantID(tenantID).
 		Save(ctx)
 	require.NoError(t, err)
@@ -805,7 +806,7 @@ func TestRecordApprovalDecision_PersistsApproveReject(t *testing.T) {
 	assert.Equal(t, "approved", stored[0].Decision)
 	assert.Equal(t, "lgtm", stored[0].Comment)
 	assert.Equal(t, "change", stored[0].BusinessType)
-	assert.Equal(t, "CHG-approval1", stored[0].BusinessID)
+	assert.Equal(t, "1", stored[0].BusinessID)
 	assert.Equal(t, actorID, stored[0].ActorID)
 }
 

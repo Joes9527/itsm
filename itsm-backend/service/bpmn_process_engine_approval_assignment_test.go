@@ -988,7 +988,7 @@ func TestCABApprovalAssignsChangeManagerRole(t *testing.T) {
 	// 申请人自己不是 change_manager，避免被排除逻辑误判
 	requester := fx.createUser(t, "requester_cab", 0)
 
-	instance, err := fx.engine.StartProcess(ctx, "change_normal_flow", "test-cab-approval", map[string]interface{}{
+	instance, err := fx.engine.StartProcess(ctx, "change_normal_flow", "test-cab-approval", "", 0, map[string]interface{}{
 		"approval_required": true,
 		"requester_id":      float64(requester.ID),
 	})
@@ -1032,7 +1032,7 @@ func TestCABApprovalGatewayRoutesToScheduleOnApprove(t *testing.T) {
 	cmUser := fx.createUserWithRole(t, "cm_user_approve", "change_manager", 0)
 	requester := fx.createUser(t, "requester_cab_approve", 0)
 
-	instance, err := fx.engine.StartProcess(ctx, "change_normal_flow", "test-cab-decision-approve", map[string]interface{}{
+	instance, err := fx.engine.StartProcess(ctx, "change_normal_flow", "test-cab-decision-approve", "", 0, map[string]interface{}{
 		"approval_required": true,
 		"requester_id":      float64(requester.ID),
 	})
@@ -1075,7 +1075,7 @@ func TestCABApprovalGatewayRoutesToRejectOnReject(t *testing.T) {
 	cmUser := fx.createUserWithRole(t, "cm_user_reject", "change_manager", 0)
 	requester := fx.createUser(t, "requester_cab_reject", 0)
 
-	instance, err := fx.engine.StartProcess(ctx, "change_normal_flow", "test-cab-decision-reject", map[string]interface{}{
+	instance, err := fx.engine.StartProcess(ctx, "change_normal_flow", "test-cab-decision-reject", "", 0, map[string]interface{}{
 		"approval_required": true,
 		"requester_id":      float64(requester.ID),
 	})

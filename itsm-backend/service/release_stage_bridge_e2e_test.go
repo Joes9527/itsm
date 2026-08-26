@@ -81,7 +81,7 @@ func TestReleaseFlow_StageBridges_AdvanceProcessEndToEnd(t *testing.T) {
 	// 模拟 ProcessTriggerService 启动：businessKey 与实例变量按 trigger 约定写入
 	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar())
 	workflowCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
-	instance, err := engine.StartProcess(workflowCtx, "release_approval_flow", "release:"+strconv.Itoa(releaseEntity.ID), map[string]interface{}{
+	instance, err := engine.StartProcess(workflowCtx, "release_approval_flow", "release:"+strconv.Itoa(releaseEntity.ID), "", 0, map[string]interface{}{
 		"business_type": "release",
 		"business_id":   releaseEntity.ID,
 		"tenant_id":     tenant.ID,
@@ -189,7 +189,7 @@ func TestReleaseFlow_RejectApproval_EndsFlowAndCancelsRelease(t *testing.T) {
 
 	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar())
 	workflowCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
-	instance, err := engine.StartProcess(workflowCtx, "release_approval_flow", "release:"+strconv.Itoa(releaseEntity.ID), map[string]interface{}{
+	instance, err := engine.StartProcess(workflowCtx, "release_approval_flow", "release:"+strconv.Itoa(releaseEntity.ID), "", 0, map[string]interface{}{
 		"business_type": "release",
 		"business_id":   releaseEntity.ID,
 		"tenant_id":     tenant.ID,

@@ -86,12 +86,16 @@ func createBridgeProcessFixture(t *testing.T, client *ent.Client, tenantID int, 
 	if parts := strings.SplitN(businessKey, ":", 2); len(parts) == 2 {
 		bizType, bizID = parts[0], parts[1]
 	}
+	bizIDInt, err := strconv.Atoi(bizID)
+	require.NoError(t, err, "test businessKey must carry a numeric id suffix")
 
 	instance, err := client.ProcessInstance.Create().
 		SetProcessInstanceID("PI-" + keySuffix).
 		SetProcessDefinitionKey(def.Key).
 		SetProcessDefinitionID(def.ID).
 		SetBusinessKey(businessKey).
+		SetBusinessType(bizType).
+		SetBusinessID(bizIDInt).
 		SetStatus("running").
 		SetVariables(map[string]interface{}{
 			"business_type": bizType,

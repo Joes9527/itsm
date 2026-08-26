@@ -450,7 +450,7 @@ func (c *BPMNWorkflowController) StartProcess(ctx *gin.Context) {
 		return
 	}
 
-	instance, err := c.processEngine.StartProcess(workflowCtx, req.ProcessDefinitionKey, req.BusinessKey, req.Variables)
+	instance, err := c.processEngine.StartProcess(workflowCtx, req.ProcessDefinitionKey, req.BusinessKey, "", 0, req.Variables)
 	if err != nil {
 		common.InternalError(ctx, "启动流程实例失败: "+err.Error())
 		return

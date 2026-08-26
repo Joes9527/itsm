@@ -57,7 +57,7 @@ func TestTransitionStatus_StageCompletion_AdvanceProcessEndToEnd(t *testing.T) {
 	// 模拟 ProcessTriggerService 启动：businessKey 按 "change:{id}" 约定
 	engine := service.NewCustomProcessEngine(entClient, zap.NewNop().Sugar())
 	workflowCtx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, tenantID)
-	instance, err := engine.StartProcess(workflowCtx, "change_normal_flow", fmt.Sprintf("change:%d", dbChange.ID), map[string]interface{}{
+	instance, err := engine.StartProcess(workflowCtx, "change_normal_flow", fmt.Sprintf("change:%d", dbChange.ID), "", 0, map[string]interface{}{
 		"approval_required": false,
 		"business_type":     "change",
 		"business_id":       dbChange.ID,

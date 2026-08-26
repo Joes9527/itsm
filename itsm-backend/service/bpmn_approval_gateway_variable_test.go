@@ -54,7 +54,7 @@ func TestApprovalGatewayReadsApplicationVariableName(t *testing.T) {
 		t.Run(tc.processKey, func(t *testing.T) {
 			// Test case 1: approval_required=true should route to approval node
 			t.Run("approval_required=true", func(t *testing.T) {
-				instance, err := engine.StartProcess(ctx, tc.processKey, "test-business-key-approval-true-"+tc.processKey, map[string]interface{}{
+				instance, err := engine.StartProcess(ctx, tc.processKey, "test-business-key-approval-true-"+tc.processKey, "", 0, map[string]interface{}{
 					"approval_required": true,
 				})
 				require.NoError(t, err)
@@ -81,7 +81,7 @@ func TestApprovalGatewayReadsApplicationVariableName(t *testing.T) {
 
 			// Test case 2: approval_required=false should skip approval node and go to skip node
 			t.Run("approval_required=false", func(t *testing.T) {
-				instance, err := engine.StartProcess(ctx, tc.processKey, "test-business-key-approval-false-"+tc.processKey, map[string]interface{}{
+				instance, err := engine.StartProcess(ctx, tc.processKey, "test-business-key-approval-false-"+tc.processKey, "", 0, map[string]interface{}{
 					"approval_required": false,
 				})
 				require.NoError(t, err)
