@@ -1678,3 +1678,35 @@ func TestCreateCounterSignTasks_NonParticipantDeniedUnlessElevated(t *testing.T)
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, len(auditLogs), 1)
 }
+
+// TestAssignTask_SystemCallerNoUserIDProducesNoAuditRecord verifies that
+// authorizeTaskMutation's permissive "no actor" case (userID<=0, matching
+// authorizeTaskActor's existing "system/internal call" convention) does NOT
+// also produce an audit record with a bogus UserID:0/UserName:"" row. A
+// caller lacking bpmn.BPMNUserIDContextKey entirely represents an internal/
+// system call path, not an unauthenticated human — but it must still leave
+// no audit trail, since there is no real actor to attribute the action to.
+func TestAssignTask_SystemCallerNoUserIDProducesNoAuditRecord(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, _ := setupApprovalDecisionFixture(t, engine)
+	otherUser, err := engine.client.User.Create().
+		SetUsername("assignee-target-2").SetEmail("assignee-target-2@example.com").SetName("Target2").
+		SetPasswordHash("hash").SetRole("agent").SetActive(true).SetTenantID(tenantID).
+		Save(context.Background())
+	require.NoError(t, err)
+
+	_, taskID := createProcessFixture(t, engine, tenantID, "assign-noactor")
+	task, err := engine.client.ProcessTask.Get(context.Background(), taskID)
+	require.NoError(t, err)
+
+	// Deliberately no bpmn.BPMNUserIDContextKey set at all - simulates a
+	// system/internal call, not an authenticated human caller.
+	systemCtx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+
+	err = engine.TaskService().AssignTask(systemCtx, task.TaskID, fmt.Sprintf("%d", otherUser.ID))
+	require.NoError(t, err, "a system/internal call with no actor must still be permitted (matches authorizeTaskActor's convention)")
+
+	auditLogs, err := engine.client.ProcessAuditLog.Query().All(context.Background())
+	require.NoError(t, err)
+	assert.Empty(t, auditLogs, "a system/internal call with no actor must not produce an audit record")
+}

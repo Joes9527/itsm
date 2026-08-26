@@ -2697,8 +2697,10 @@ func (s *bpmnTaskService) AssignTask(ctx context.Context, taskID string, assigne
 	if assigneeID, convErr := strconv.Atoi(assignee); convErr == nil {
 		assigneeUser, _ = s.client.User.Get(ctx, assigneeID)
 	}
-	if auditErr := s.auditService.RecordTaskAssigned(ctx, task, assigneeUser, actorID, actorName); auditErr != nil {
-		s.logger.Warnw("audit record failed", "error", auditErr, "task_id", task.TaskID)
+	if actorID > 0 {
+		if auditErr := s.auditService.RecordTaskAssigned(ctx, task, assigneeUser, actorID, actorName); auditErr != nil {
+			s.logger.Warnw("audit record failed", "error", auditErr, "task_id", task.TaskID)
+		}
 	}
 	return nil
 }
@@ -2815,8 +2817,10 @@ func (s *bpmnTaskService) CancelTask(ctx context.Context, taskID string, reason 
 		return err
 	}
 
-	if auditErr := s.auditService.RecordTaskCancelled(ctx, task, actorID, actorName, reason); auditErr != nil {
-		s.logger.Warnw("audit record failed", "error", auditErr, "task_id", task.TaskID)
+	if actorID > 0 {
+		if auditErr := s.auditService.RecordTaskCancelled(ctx, task, actorID, actorName, reason); auditErr != nil {
+			s.logger.Warnw("audit record failed", "error", auditErr, "task_id", task.TaskID)
+		}
 	}
 	return nil
 }
@@ -2848,8 +2852,10 @@ func (s *bpmnTaskService) SetTaskVariables(ctx context.Context, taskID string, v
 		return err
 	}
 
-	if auditErr := s.auditService.RecordTaskVariablesChanged(ctx, task, actorID, actorName, before, variables); auditErr != nil {
-		s.logger.Warnw("audit record failed", "error", auditErr, "task_id", task.TaskID)
+	if actorID > 0 {
+		if auditErr := s.auditService.RecordTaskVariablesChanged(ctx, task, actorID, actorName, before, variables); auditErr != nil {
+			s.logger.Warnw("audit record failed", "error", auditErr, "task_id", task.TaskID)
+		}
 	}
 	return nil
 }
@@ -3099,8 +3105,10 @@ func (s *bpmnTaskService) CreateCounterSignTasks(ctx context.Context, parentTask
 		s.logger.Warnf("更新父任务变量失败: %v", err)
 	}
 
-	if auditErr := s.auditService.RecordCounterSignCreated(ctx, parentTask, actorID, actorName, len(req.Approvers)); auditErr != nil {
-		s.logger.Warnw("audit record failed", "error", auditErr, "task_id", parentTask.TaskID)
+	if actorID > 0 {
+		if auditErr := s.auditService.RecordCounterSignCreated(ctx, parentTask, actorID, actorName, len(req.Approvers)); auditErr != nil {
+			s.logger.Warnw("audit record failed", "error", auditErr, "task_id", parentTask.TaskID)
+		}
 	}
 
 	return tasks, nil
