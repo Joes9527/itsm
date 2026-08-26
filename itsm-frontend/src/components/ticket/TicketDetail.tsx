@@ -60,13 +60,8 @@ import {
   getPriorityConfig,
 } from '@/constants/taxonomy';
 import {
-  CommentPanel,
-  AttachmentPanel,
-  HistoryTimeline,
-  ApprovalWorkflowPanel,
   ticketCommentAdapter,
   ticketAttachmentAdapter,
-  fetchAuditLogHistory,
 } from '@/components/business/detail-tabs';
 import { ApprovalMiniStepper } from '@/components/business/detail-tabs/ApprovalMiniStepper';
 import { RelationPanel } from '@/components/ticket-relations/RelationPanel';
@@ -74,6 +69,10 @@ import ServiceRequestPanel from './ServiceRequestPanel';
 import ServiceCatalogApprovalChain from './ServiceCatalogApprovalChain';
 import { CIContextCard } from './CIContextCard';
 import { KBRecommendCard } from './KBRecommendCard';
+import { TicketCommentStream } from './TicketCommentStream';
+import { TicketAttachmentGrid } from './TicketAttachmentGrid';
+import { TicketHistoryList } from './TicketHistoryList';
+import { TicketApprovalCards } from './TicketApprovalCards';
 import {
   MessageSquare,
   Paperclip,
@@ -677,12 +676,9 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
           <TicketDetailTabs
             ticketId={ticketId}
             ticketNumber={ticket.ticketNumber}
-            ticketType={ticket.type as string | undefined}
-            ticketPriority={ticket.priority as string | undefined}
             ticketSource={ticket.source}
             currentUserId={currentUser?.id}
-            isTicketFinal={isTicketFinal}
-            onRefresh={fetchTicket}
+            ticketAssigneeId={ticket.assigneeId}
             tabCounts={tabCounts}
           />
         </div>
@@ -1186,12 +1182,9 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
 interface TicketDetailTabsProps {
   ticketId: number;
   ticketNumber?: string;
-  ticketType?: string;
-  ticketPriority?: string;
   ticketSource?: string;
   currentUserId?: number;
-  isTicketFinal: boolean;
-  onRefresh: () => void;
+  ticketAssigneeId?: number;
   tabCounts?: {
     comments?: number;
     attachments?: number;
@@ -1204,13 +1197,10 @@ interface TicketDetailTabsProps {
 const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
   ticketId,
   ticketNumber,
-  ticketType,
-  ticketPriority,
   ticketSource,
   currentUserId,
-  isTicketFinal,
-  onRefresh,
   tabCounts,
+  ticketAssigneeId,
 }) => {
   const countSuffix = (count?: number) => (count !== undefined ? ` (${count})` : '');
 
@@ -1220,15 +1210,14 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
       label: (
         <span>
           <MessageSquare size={14} className="inline mr-1" />
-          评论{countSuffix(tabCounts?.comments)}
+          协作沟通与评论{countSuffix(tabCounts?.comments)}
         </span>
       ),
       children: (
-        <CommentPanel
-          targetType="ticket"
-          targetId={ticketId}
-          adapter={ticketCommentAdapter}
+        <TicketCommentStream
+          ticketId={ticketId}
           currentUserId={currentUserId}
+          ticketAssigneeId={ticketAssigneeId}
           formatDateTime={formatDateTime}
         />
       ),
@@ -1241,15 +1230,7 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
           附件{countSuffix(tabCounts?.attachments)}
         </span>
       ),
-      children: (
-        <AttachmentPanel
-          targetType="ticket"
-          targetId={ticketId}
-          adapter={ticketAttachmentAdapter}
-          currentUserId={currentUserId}
-          formatDateTime={formatDateTime}
-        />
-      ),
+      children: <TicketAttachmentGrid ticketId={ticketId} />,
     },
     {
       key: 'approvals',
@@ -1264,15 +1245,7 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
           {ticketSource === 'service_catalog' && (
             <ServiceCatalogApprovalChain ticketId={ticketId} />
           )}
-          <ApprovalWorkflowPanel
-            ticketId={ticketId}
-            ticketType={ticketType}
-            priority={ticketPriority}
-            currentUserId={currentUserId}
-            isTicketFinal={isTicketFinal}
-            onRefresh={onRefresh}
-            formatDateTime={formatDateTime}
-          />
+          <TicketApprovalCards ticketId={ticketId} />
         </div>
       ),
     },
@@ -1281,41 +1254,17 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
       label: (
         <span>
           <HistoryIcon size={14} className="inline mr-1" />
-          历史{countSuffix(tabCounts?.history)}
+          历史流转{countSuffix(tabCounts?.history)}
         </span>
       ),
-      children: (
-        <HistoryTimeline
-          targetType="ticket"
-          targetId={ticketId}
-          fetchHistory={async (id) => {
-            const list = await TicketApi.getTicketHistory(Number(id));
-            const arr = Array.isArray(list) ? list : [];
-            return arr.map((raw) => {
-              const r = raw as unknown as Record<string, unknown>;
-              return {
-                id: Number(r.id ?? 0),
-                action: r.action as string | undefined,
-                createdAt: String(r.createdAt ?? r.changedAt ?? ''),
-                user: (r.user as { name?: string; username?: string }) ?? undefined,
-                fieldName: r.fieldName as string | undefined,
-                oldValue: r.oldValue as string | undefined,
-                newValue: r.newValue as string | undefined,
-                changeReason: r.changeReason as string | undefined,
-              };
-            });
-          }}
-          fetchAuditLog={fetchAuditLogHistory}
-          formatDateTime={formatDateTime}
-        />
-      ),
+      children: <TicketHistoryList ticketId={ticketId} formatDateTime={formatDateTime} />,
     },
     {
       key: 'relations',
       label: (
         <span>
           <Link2 size={14} className="inline mr-1" />
-          关联{countSuffix(tabCounts?.relations)}
+          关联工单与资产{countSuffix(tabCounts?.relations)}
         </span>
       ),
       children: (
