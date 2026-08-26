@@ -33,6 +33,22 @@ type bpmnElevatedKey struct{}
 // middleware.HasResourcePermission(...) result — never from client input.
 var BPMNElevatedContextKey = bpmnElevatedKey{}
 
+type bpmnSystemCallerKey struct{}
+
+// BPMNSystemCallerContextKey carries an explicit declaration that this call
+// originates from trusted internal/system code (e.g. a ticket creation flow
+// auto-starting a BPMN process), not from an authenticated human caller.
+// authorizeTaskViewer/authorizeTaskMutation/authorizeTaskActor/
+// authorizeProcessInstanceViewer/authorizeProcessInstanceMutation check this
+// key explicitly and fail closed when it's absent — replacing the previous
+// implicit "no userID in context = permissive" convention, which had no real
+// callers (verified 2026-08-26: zero non-HTTP, non-test call sites for any
+// of the eight public TaskService/ProcessInstanceService methods these
+// functions guard) and was a latent fail-open trap. Must only ever be set
+// by code that is itself not reachable from an HTTP request — never derived
+// from a client-suppliable field.
+var BPMNSystemCallerContextKey = bpmnSystemCallerKey{}
+
 // ServiceTaskHandlerInterface 服务任务处理器接口
 // 定义所有服务任务处理器需要实现的方法
 type ServiceTaskHandlerInterface interface {
