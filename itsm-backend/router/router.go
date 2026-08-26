@@ -598,7 +598,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 			// 我的待审批：聚合当前用户的 BPMN 审批任务
 			// legacy ApprovalController/ApprovalWorkflow 引擎已下线（存量数据已迁移至 BPMN，见 Task 5/6）
 			if config.BPMNWorkflowController != nil {
-				tenant.GET("/my-approvals", middleware.RequirePermission("task", "read"), config.BPMNWorkflowController.ListUserTasks)
+				tenant.GET("/my-approvals", config.BPMNWorkflowController.ListUserTasks)
 			}
 
 			// 工单流转工作流
@@ -1395,14 +1395,14 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 		// 简化路由：/workflow/* -> /bpmn/*
 		workflow := tenant.(*gin.RouterGroup).Group("/workflow")
 		{
-			workflow.GET("/instances", middleware.RequirePermission("process_instance", "read"), config.BPMNWorkflowController.ListProcessInstances)
-			workflow.GET("/instances/:id", middleware.RequirePermission("process_instance", "read"), config.BPMNWorkflowController.GetProcessInstance)
+			workflow.GET("/instances", config.BPMNWorkflowController.ListProcessInstances)
+			workflow.GET("/instances/:id", config.BPMNWorkflowController.GetProcessInstance)
 			workflow.POST("/instances", middleware.RequirePermission("process_instance", "create"), config.BPMNWorkflowController.StartProcess)
 			workflow.PUT("/instances/:id/terminate", middleware.RequirePermission("process_instance", "update"), config.BPMNWorkflowController.TerminateProcess)
 			workflow.PUT("/instances/:id/suspend", middleware.RequirePermission("process_instance", "update"), config.BPMNWorkflowController.SuspendProcess)
 			workflow.PUT("/instances/:id/resume", middleware.RequirePermission("process_instance", "update"), config.BPMNWorkflowController.ResumeProcess)
 			// 任务
-			workflow.GET("/tasks", middleware.RequirePermission("task", "read"), config.BPMNWorkflowController.ListUserTasks)
+			workflow.GET("/tasks", config.BPMNWorkflowController.ListUserTasks)
 			workflow.PUT("/tasks/:id/complete", middleware.RequirePermission("task", "update"), config.BPMNWorkflowController.CompleteTask)
 			workflow.POST("/tasks/:id/claim", middleware.RequirePermission("task", "update"), config.BPMNWorkflowController.ClaimTask)
 		}

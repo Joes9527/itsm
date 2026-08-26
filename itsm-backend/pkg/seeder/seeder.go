@@ -1494,9 +1494,11 @@ func (s *Seeder) seedMenus(ctx context.Context) {
 		// 但从未被加入过菜单种子——旧的 "审批管理"(/admin/approvals) 菜单在 34e4b951 因为指向已删除
 		// 的管理页面而被移除(见上面 SortOrder 260 处的注释)，但同一次改动没有补上这个真正给普通
 		// 审批人用的收件箱页面的菜单项，导致任何角色都无法从侧边栏发现它，只能靠直接输入 URL。
-		// PermissionCode 用 task:read 而不是 workflow:read——部门经理/普通用户/IT总监这些实际
-		// 需要审批的角色都有 task:read，但不是所有角色都有 workflow:read。
-		{Name: "我的待办", Path: "/approvals/pending", Icon: "CheckSquare", PermissionCode: "task:read", SortOrder: 75},
+		// PermissionCode 用 bpmn:read 而不是 task:read——2026-08-26 权限模型整改后，task:read
+		// 收窄为纯"提权"信号，只有 sysadmin/it_director/ops_director/change_manager 持有；
+		// bpmn:read 才是部门经理/普通用户等常规审批角色广泛持有、且已经是其它 BPMN 菜单项统一
+		// 使用的可见性门槛，改用它保持一致，同时不会让这些角色的"我的待办"入口消失。
+		{Name: "我的待办", Path: "/approvals/pending", Icon: "CheckSquare", PermissionCode: "bpmn:read", SortOrder: 75},
 		{Name: "知识库", Path: "/knowledge", Icon: "HelpCircle", PermissionCode: "knowledge:read", SortOrder: 80},
 		{Name: "SLA监控", Path: "/sla-dashboard", Icon: "Calendar", PermissionCode: "sla:read", SortOrder: 90},
 		{Name: "报表", Path: "/reports", Icon: "TrendingUp", PermissionCode: "report:read", SortOrder: 100},
