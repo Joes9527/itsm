@@ -583,6 +583,8 @@ func (c *BPMNWorkflowController) SetProcessInstanceVariables(ctx *gin.Context) {
 	if !ok {
 		return
 	}
+	elevated := hasElevatedBPMNAccess(ctx, "process_instance", "update")
+	workflowCtx = context.WithValue(workflowCtx, bpmn.BPMNElevatedContextKey, elevated)
 
 	err := c.processEngine.ProcessInstanceService().SetProcessInstanceVariables(workflowCtx, processInstanceID, req.Variables)
 	if err != nil {
@@ -608,6 +610,8 @@ func (c *BPMNWorkflowController) SuspendProcess(ctx *gin.Context) {
 	if !ok {
 		return
 	}
+	elevated := hasElevatedBPMNAccess(ctx, "process_instance", "update")
+	workflowCtx = context.WithValue(workflowCtx, bpmn.BPMNElevatedContextKey, elevated)
 
 	err := c.processEngine.SuspendProcess(workflowCtx, processInstanceID, req.Reason)
 	if err != nil {
@@ -625,6 +629,8 @@ func (c *BPMNWorkflowController) ResumeProcess(ctx *gin.Context) {
 	if !ok {
 		return
 	}
+	elevated := hasElevatedBPMNAccess(ctx, "process_instance", "update")
+	workflowCtx = context.WithValue(workflowCtx, bpmn.BPMNElevatedContextKey, elevated)
 
 	err := c.processEngine.ResumeProcess(workflowCtx, processInstanceID)
 	if err != nil {
@@ -650,6 +656,8 @@ func (c *BPMNWorkflowController) TerminateProcess(ctx *gin.Context) {
 	if !ok {
 		return
 	}
+	elevated := hasElevatedBPMNAccess(ctx, "process_instance", "update")
+	workflowCtx = context.WithValue(workflowCtx, bpmn.BPMNElevatedContextKey, elevated)
 
 	err := c.processEngine.TerminateProcess(workflowCtx, processInstanceID, req.Reason)
 	if err != nil {

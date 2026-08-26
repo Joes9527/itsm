@@ -1575,6 +1575,10 @@ func (e *CustomProcessEngine) SuspendProcess(ctx context.Context, processInstanc
 		return fmt.Errorf("获取流程实例失败: %w", err)
 	}
 
+	if err := authorizeProcessInstanceMutation(ctx, e.client, instance); err != nil {
+		return err
+	}
+
 	// 2. 更新实例状态
 	_, err = e.client.ProcessInstance.UpdateOne(instance).
 		SetStatus("suspended").
@@ -1624,6 +1628,10 @@ func (e *CustomProcessEngine) ResumeProcess(ctx context.Context, processInstance
 		return fmt.Errorf("获取流程实例失败: %w", err)
 	}
 
+	if err := authorizeProcessInstanceMutation(ctx, e.client, instance); err != nil {
+		return err
+	}
+
 	// 2. 更新实例状态
 	_, err = e.client.ProcessInstance.UpdateOne(instance).
 		SetStatus("running").
@@ -1668,6 +1676,10 @@ func (e *CustomProcessEngine) TerminateProcess(ctx context.Context, processInsta
 	instance, err := query.First(ctx)
 	if err != nil {
 		return fmt.Errorf("获取流程实例失败: %w", err)
+	}
+
+	if err := authorizeProcessInstanceMutation(ctx, e.client, instance); err != nil {
+		return err
 	}
 
 	// 2. 更新实例状态
@@ -2260,6 +2272,9 @@ func (s *bpmnProcessInstanceService) SetProcessInstanceVariables(ctx context.Con
 	if err != nil {
 		return err
 	}
+	if err := authorizeProcessInstanceMutation(ctx, s.client, instance); err != nil {
+		return err
+	}
 
 	for _, reserved := range reservedInstanceVariableKeys {
 		if _, exists := variables[reserved]; exists {
@@ -2564,6 +2579,38 @@ func authorizeProcessInstanceViewer(ctx context.Context, client *ent.Client, ins
 		}
 	}
 	return fmt.Errorf("当前用户无权查看该流程实例")
+}
+
+// authorizeProcessInstanceMutation gates suspend/resume/terminate/
+// SetProcessInstanceVariables — instance-lifecycle administrative actions,
+// deliberately narrower than authorizeProcessInstanceViewer: any task
+// participant can VIEW instance progress, but only the instance's own
+// initiator (cancelling/pausing their own request) or an elevated caller
+// may control its lifecycle. A participant on one approval step within the
+// instance has no business terminating the whole process.
+func authorizeProcessInstanceMutation(ctx context.Context, client *ent.Client, instance *ent.ProcessInstance) error {
+	if systemCaller, _ := ctx.Value(bpmn.BPMNSystemCallerContextKey).(bool); systemCaller {
+		return nil
+	}
+	if elevated, _ := ctx.Value(bpmn.BPMNElevatedContextKey).(bool); elevated {
+		return nil
+	}
+	userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
+	if userID <= 0 {
+		return fmt.Errorf("未认证的调用")
+	}
+	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
+	if tenantID == 0 {
+		tenantID = instance.TenantID
+	}
+	identity, err := bpmn.ResolveCallerIdentity(ctx, client, bpmn.NewGroupResolver(client), tenantID, userID)
+	if err != nil {
+		return fmt.Errorf("操作用户不存在: %w", err)
+	}
+	if instance.Initiator == identity.IDStr {
+		return nil
+	}
+	return fmt.Errorf("当前用户无权操作该流程实例")
 }
 
 // CompleteTaskByID 根据数据库自增ID完成任务

@@ -2347,3 +2347,130 @@ func TestListApprovalDecisions_NonParticipantDeniedUnlessElevated(t *testing.T) 
 	_, err = engine.TaskService().ListApprovalDecisions(elevatedCtx, instance.ProcessInstanceID)
 	require.NoError(t, err, "an elevated caller must be able to view any instance's approval history")
 }
+
+func TestSuspendProcess_InitiatorAllowedParticipantDenied(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, initiatorID := setupApprovalDecisionFixture(t, engine)
+	participant, err := engine.client.User.Create().
+		SetUsername("suspend-participant").SetEmail("suspend-participant@example.com").SetName("Participant").
+		SetPasswordHash("hash").SetRole("agent").SetActive(true).SetTenantID(tenantID).
+		Save(context.Background())
+	require.NoError(t, err)
+	instanceID, taskID := createProcessFixture(t, engine, tenantID, "suspend1")
+	instance, err := engine.client.ProcessInstance.UpdateOneID(instanceID).
+		SetInitiator(fmt.Sprintf("%d", initiatorID)).Save(context.Background())
+	require.NoError(t, err)
+	_, err = engine.client.ProcessTask.UpdateOneID(taskID).
+		SetAssignee(fmt.Sprintf("%d", participant.ID)).Save(context.Background())
+	require.NoError(t, err)
+
+	// A task participant (not the initiator) must NOT be able to suspend the
+	// whole instance — participation in one approval step is not the same
+	// authority as controlling the instance's lifecycle.
+	participantCtx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, participant.ID)
+	participantCtx = context.WithValue(participantCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	err = engine.SuspendProcess(participantCtx, instance.ProcessInstanceID, "test")
+	assert.Error(t, err, "a task participant who is not the initiator must not be able to suspend the instance")
+
+	initiatorCtx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, initiatorID)
+	initiatorCtx = context.WithValue(initiatorCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	err = engine.SuspendProcess(initiatorCtx, instance.ProcessInstanceID, "test")
+	require.NoError(t, err, "the instance's own initiator must be able to suspend it")
+}
+
+func TestSuspendProcess_ElevatedAllowed(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
+	otherUser, err := engine.client.User.Create().
+		SetUsername("suspend-other").SetEmail("suspend-other@example.com").SetName("Other").
+		SetPasswordHash("hash").SetRole("agent").SetActive(true).SetTenantID(tenantID).
+		Save(context.Background())
+	require.NoError(t, err)
+	instanceID, _ := createProcessFixture(t, engine, tenantID, "suspend2")
+	instance, err := engine.client.ProcessInstance.UpdateOneID(instanceID).
+		SetInitiator(fmt.Sprintf("%d", otherUser.ID)).Save(context.Background())
+	require.NoError(t, err)
+
+	ctx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, actorID)
+	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = context.WithValue(ctx, bpmn.BPMNElevatedContextKey, true)
+
+	err = engine.SuspendProcess(ctx, instance.ProcessInstanceID, "test")
+	require.NoError(t, err, "an elevated caller must be able to suspend any instance")
+}
+
+func TestSuspendProcess_NoUserNoSystemCallerDenied(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, _ := setupApprovalDecisionFixture(t, engine)
+	instanceID, _ := createProcessFixture(t, engine, tenantID, "suspend3")
+	instance, err := engine.client.ProcessInstance.Get(context.Background(), instanceID)
+	require.NoError(t, err)
+
+	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	err = engine.SuspendProcess(ctx, instance.ProcessInstanceID, "test")
+	assert.Error(t, err, "no user and no explicit system-caller declaration must be denied by default")
+}
+
+func TestResumeProcess_InitiatorAllowed(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, initiatorID := setupApprovalDecisionFixture(t, engine)
+	instanceID, _ := createProcessFixture(t, engine, tenantID, "resume1")
+	instance, err := engine.client.ProcessInstance.UpdateOneID(instanceID).
+		SetInitiator(fmt.Sprintf("%d", initiatorID)).SetStatus("suspended").Save(context.Background())
+	require.NoError(t, err)
+
+	ctx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, initiatorID)
+	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+	err = engine.ResumeProcess(ctx, instance.ProcessInstanceID)
+	require.NoError(t, err)
+}
+
+func TestTerminateProcess_NonInitiatorDeniedUnlessElevated(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
+	otherUser, err := engine.client.User.Create().
+		SetUsername("terminate-other").SetEmail("terminate-other@example.com").SetName("Other2").
+		SetPasswordHash("hash").SetRole("agent").SetActive(true).SetTenantID(tenantID).
+		Save(context.Background())
+	require.NoError(t, err)
+	instanceID, _ := createProcessFixture(t, engine, tenantID, "terminate1")
+	instance, err := engine.client.ProcessInstance.UpdateOneID(instanceID).
+		SetInitiator(fmt.Sprintf("%d", otherUser.ID)).Save(context.Background())
+	require.NoError(t, err)
+
+	notInitiatorCtx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, actorID)
+	notInitiatorCtx = context.WithValue(notInitiatorCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	err = engine.TerminateProcess(notInitiatorCtx, instance.ProcessInstanceID, "test")
+	assert.Error(t, err)
+
+	elevatedCtx := context.WithValue(notInitiatorCtx, bpmn.BPMNElevatedContextKey, true)
+	err = engine.TerminateProcess(elevatedCtx, instance.ProcessInstanceID, "test")
+	require.NoError(t, err)
+}
+
+func TestSetProcessInstanceVariables_InitiatorAllowedParticipantDenied(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, initiatorID := setupApprovalDecisionFixture(t, engine)
+	participant, err := engine.client.User.Create().
+		SetUsername("vars-participant").SetEmail("vars-participant@example.com").SetName("Participant2").
+		SetPasswordHash("hash").SetRole("agent").SetActive(true).SetTenantID(tenantID).
+		Save(context.Background())
+	require.NoError(t, err)
+	instanceID, taskID := createProcessFixture(t, engine, tenantID, "instvars1")
+	_, err = engine.client.ProcessInstance.UpdateOneID(instanceID).
+		SetInitiator(fmt.Sprintf("%d", initiatorID)).Save(context.Background())
+	require.NoError(t, err)
+	_, err = engine.client.ProcessTask.UpdateOneID(taskID).
+		SetAssignee(fmt.Sprintf("%d", participant.ID)).Save(context.Background())
+	require.NoError(t, err)
+
+	participantCtx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, participant.ID)
+	participantCtx = context.WithValue(participantCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	err = engine.ProcessInstanceService().SetProcessInstanceVariables(participantCtx, fmt.Sprintf("%d", instanceID), map[string]interface{}{"foo": "bar"})
+	assert.Error(t, err, "a task participant who is not the initiator must not be able to set instance variables")
+
+	initiatorCtx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, initiatorID)
+	initiatorCtx = context.WithValue(initiatorCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	err = engine.ProcessInstanceService().SetProcessInstanceVariables(initiatorCtx, fmt.Sprintf("%d", instanceID), map[string]interface{}{"foo": "bar"})
+	require.NoError(t, err)
+}
