@@ -496,7 +496,14 @@ func TestClaimTaskByID_RealCandidateCanClaim(t *testing.T) {
 	task := fx.getCreatedTask(t, instance.ID, "Activity_Approval")
 	require.Contains(t, task.CandidateUsers, "backupApprover7")
 
-	err := fx.engine.TaskService().ClaimTaskByID(fx.ctx, task.ID, backupApprover.ID)
+	// authorizeTaskViewer (called internally via GetTaskByID) now denies by
+	// default when the context carries no authenticated caller — match
+	// production's getBPMNTenantContext behavior by declaring the claiming
+	// user's identity on the context, not just as the ClaimTaskByID param.
+	claimCtx := context.WithValue(fx.ctx, bpmn.BPMNUserIDContextKey, backupApprover.ID)
+	claimCtx = context.WithValue(claimCtx, bpmn.BPMNTenantIDContextKey, fx.tenant.ID)
+
+	err := fx.engine.TaskService().ClaimTaskByID(claimCtx, task.ID, backupApprover.ID)
 	require.NoError(t, err, "真正在候选组里的人应该能成功认领")
 
 	claimed := fx.getCreatedTask(t, instance.ID, "Activity_Approval")

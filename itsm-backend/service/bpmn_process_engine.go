@@ -2382,20 +2382,26 @@ func (s *bpmnTaskService) GetTaskByID(ctx context.Context, id int) (*ent.Process
 }
 
 // authorizeTaskViewer allows a task to be read by: an elevated caller
-// (task:read permission), the task's participant (assignee/candidate_users/
-// candidate_groups — see bpmn.CallerIdentity.IsTaskParticipant), or the
-// initiator of the task's parent process instance (read-only progress
-// visibility — matches the "can I see my own submitted request's approval
-// chain" product expectation, distinct from being allowed to act on it).
-// System/internal calls without an authenticated actor stay permissive,
-// matching authorizeTaskActor's existing convention.
+// (task:read permission), an explicitly declared system caller
+// (bpmn.BPMNSystemCallerContextKey), the task's participant
+// (assignee/candidate_users/candidate_groups — see
+// bpmn.CallerIdentity.IsTaskParticipant), or the initiator of the task's
+// parent process instance (read-only progress visibility — matches the
+// "can I see my own submitted request's approval chain" product
+// expectation, distinct from being allowed to act on it). Everyone else,
+// including a call with no authenticated user and no system-caller
+// declaration, is denied — this replaces the previous implicit
+// "no userID = permissive" convention.
 func (s *bpmnTaskService) authorizeTaskViewer(ctx context.Context, task *ent.ProcessTask) error {
+	if systemCaller, _ := ctx.Value(bpmn.BPMNSystemCallerContextKey).(bool); systemCaller {
+		return nil
+	}
 	if elevated, _ := ctx.Value(bpmn.BPMNElevatedContextKey).(bool); elevated {
 		return nil
 	}
 	userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
 	if userID <= 0 {
-		return nil
+		return fmt.Errorf("未认证的调用")
 	}
 	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
 	if tenantID == 0 {

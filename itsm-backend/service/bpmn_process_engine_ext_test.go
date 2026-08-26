@@ -1768,8 +1768,14 @@ func TestAssignTask_SystemCallerNoUserIDProducesNoAuditRecord(t *testing.T) {
 	require.NoError(t, err)
 
 	// Deliberately no bpmn.BPMNUserIDContextKey set at all - simulates a
-	// system/internal call, not an authenticated human caller.
+	// system/internal call, not an authenticated human caller. AssignTask's
+	// own authorizeTaskMutation check is untouched by Task 2 and still
+	// treats userID<=0 as a permissive system/internal call, but AssignTask
+	// first calls GetTask, which is gated by authorizeTaskViewer — that now
+	// requires an explicit system-caller declaration rather than inferring
+	// it from the absence of a user, so this fixture must declare it too.
 	systemCtx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	systemCtx = context.WithValue(systemCtx, bpmn.BPMNSystemCallerContextKey, true)
 
 	err = engine.TaskService().AssignTask(systemCtx, task.TaskID, fmt.Sprintf("%d", otherUser.ID))
 	require.NoError(t, err, "a system/internal call with no actor must still be permitted (matches authorizeTaskActor's convention)")
@@ -2007,4 +2013,54 @@ func TestVote_ByCounterSignApproverNotOriginalParentAssignee(t *testing.T) {
 
 	err = engine.TaskService().Vote(voteCtx, created[0].TaskID, &VoteRequest{Approved: true, Comment: "real vote"})
 	require.NoError(t, err, "a counter-sign approver who is not the original parent task's assignee must still be able to vote")
+}
+
+func TestGetTaskByID_NoUserNoSystemCallerDenied(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, _ := setupApprovalDecisionFixture(t, engine)
+	_, taskID := createProcessFixture(t, engine, tenantID, "viewer-nouser1")
+
+	// 没有 BPMNUserIDContextKey，也没有 BPMNSystemCallerContextKey：必须拒绝，
+	// 不再是旧约定里的"没有用户就放行"。
+	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+
+	_, err := engine.TaskService().GetTaskByID(ctx, taskID)
+	assert.Error(t, err, "no user and no explicit system-caller declaration must be denied by default")
+}
+
+func TestGetTaskByID_ExplicitSystemCallerAllowed(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, _ := setupApprovalDecisionFixture(t, engine)
+	_, taskID := createProcessFixture(t, engine, tenantID, "viewer-syscaller1")
+
+	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = context.WithValue(ctx, bpmn.BPMNSystemCallerContextKey, true)
+
+	task, err := engine.TaskService().GetTaskByID(ctx, taskID)
+	require.NoError(t, err, "an explicitly declared system caller must be permitted")
+	assert.Equal(t, taskID, task.ID)
+}
+
+func TestGetCounterSignStatus_NoUserNoSystemCallerDenied(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
+	_, parentTaskID := createProcessFixture(t, engine, tenantID, "countersign-nouser1")
+	parentTask, err := engine.client.ProcessTask.Get(context.Background(), parentTaskID)
+	require.NoError(t, err)
+
+	elevatedCtx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, actorID)
+	elevatedCtx = context.WithValue(elevatedCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	elevatedCtx = context.WithValue(elevatedCtx, bpmn.BPMNElevatedContextKey, true)
+	_, err = engine.TaskService().CreateCounterSignTasks(elevatedCtx, parentTask.TaskID, &CounterSignRequest{
+		ApprovalType: "parallel",
+		Approvers:    []string{fmt.Sprintf("%d", actorID)},
+		Threshold:    1,
+	})
+	require.NoError(t, err)
+
+	// 没有用户、没有系统调用声明、也没有提权：必须拒绝——这条断言同时证明
+	// authorizeCounterSignViewer 继承了 authorizeTaskViewer 的新默认行为。
+	noAuthCtx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	_, err = engine.TaskService().GetCounterSignStatus(noAuthCtx, parentTask.TaskID)
+	assert.Error(t, err, "no user and no explicit system-caller declaration must be denied for counter-sign status too")
 }
