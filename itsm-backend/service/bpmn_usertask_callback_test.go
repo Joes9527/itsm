@@ -37,6 +37,12 @@ func setupUserTaskCallbackEnv(t *testing.T) (*ent.Client, ProcessEngine, context
 	require.NoError(t, err)
 
 	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+	// Elevated: these tests drive ListUserTasks as an internal lookup helper
+	// to find just-created tasks, not to simulate a specific end user's
+	// authorized view — matches ListUserTasks's fail-closed-for-non-elevated
+	// guard (final whole-branch review Finding 4), which otherwise denies a
+	// non-elevated caller with no BPMNUserIDContextKey set.
+	ctx = context.WithValue(ctx, bpmn.BPMNElevatedContextKey, true)
 	return client, engine, ctx, tenant.ID
 }
 

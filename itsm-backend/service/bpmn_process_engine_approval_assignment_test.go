@@ -1002,6 +1002,12 @@ func TestCreateUserTask_Approval_AssigneeTeamId_TenantIsolation(t *testing.T) {
 func TestCABApprovalAssignsChangeManagerRole(t *testing.T) {
 	fx := newApprovalAssignmentFixture(t)
 	ctx := context.WithValue(fx.ctx, bpmn.BPMNTenantIDContextKey, fx.tenant.ID)
+	// Elevated: this test drives ListUserTasks as an internal lookup helper
+	// to find the just-created task, not to simulate a specific end user's
+	// authorized view — matches ListUserTasks's fail-closed-for-non-elevated
+	// guard (final whole-branch review Finding 4), which otherwise denies a
+	// non-elevated caller with no BPMNUserIDContextKey set.
+	ctx = context.WithValue(ctx, bpmn.BPMNElevatedContextKey, true)
 
 	deploySvc := NewBPMNTemplateService(fx.client)
 	_, err := deploySvc.LoadAndDeployTemplates(ctx, fx.tenant.ID)
@@ -1049,6 +1055,12 @@ func TestCABApprovalAssignsChangeManagerRole(t *testing.T) {
 func TestCABApprovalGatewayRoutesToScheduleOnApprove(t *testing.T) {
 	fx := newApprovalAssignmentFixture(t)
 	ctx := context.WithValue(fx.ctx, bpmn.BPMNTenantIDContextKey, fx.tenant.ID)
+	// Elevated: this test drives ListUserTasks as an internal lookup helper
+	// to find the just-created task, not to simulate a specific end user's
+	// authorized view — matches ListUserTasks's fail-closed-for-non-elevated
+	// guard (final whole-branch review Finding 4), which otherwise denies a
+	// non-elevated caller with no BPMNUserIDContextKey set.
+	ctx = context.WithValue(ctx, bpmn.BPMNElevatedContextKey, true)
 
 	deploySvc := NewBPMNTemplateService(fx.client)
 	_, err := deploySvc.LoadAndDeployTemplates(ctx, fx.tenant.ID)
@@ -1092,6 +1104,12 @@ func TestCABApprovalGatewayRoutesToScheduleOnApprove(t *testing.T) {
 func TestCABApprovalGatewayRoutesToRejectOnReject(t *testing.T) {
 	fx := newApprovalAssignmentFixture(t)
 	ctx := context.WithValue(fx.ctx, bpmn.BPMNTenantIDContextKey, fx.tenant.ID)
+	// Elevated: this test drives ListUserTasks as an internal lookup helper
+	// to find the just-created task, not to simulate a specific end user's
+	// authorized view — matches ListUserTasks's fail-closed-for-non-elevated
+	// guard (final whole-branch review Finding 4), which otherwise denies a
+	// non-elevated caller with no BPMNUserIDContextKey set.
+	ctx = context.WithValue(ctx, bpmn.BPMNElevatedContextKey, true)
 
 	deploySvc := NewBPMNTemplateService(fx.client)
 	_, err := deploySvc.LoadAndDeployTemplates(ctx, fx.tenant.ID)

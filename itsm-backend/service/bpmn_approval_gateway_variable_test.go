@@ -40,6 +40,12 @@ func TestApprovalGatewayReadsApplicationVariableName(t *testing.T) {
 
 	// Set tenant ID in context for process execution
 	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+	// Elevated: this test drives ListUserTasks as an internal lookup helper
+	// to find the just-created task, not to simulate a specific end user's
+	// authorized view — matches ListUserTasks's fail-closed-for-non-elevated
+	// guard (final whole-branch review Finding 4), which otherwise denies a
+	// non-elevated caller with no BPMNUserIDContextKey set.
+	ctx = context.WithValue(ctx, bpmn.BPMNElevatedContextKey, true)
 
 	cases := []struct {
 		processKey   string
