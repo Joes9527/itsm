@@ -15,7 +15,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Spin, Empty, App } from 'antd';
 import { TicketApprovalApi, type ProcessApprovalDecision } from '@/lib/api/ticket-approval-api';
 import { ApprovalTimeline } from './ApprovalTimeline';
-import type { ApprovalStep, ApprovalStepStatus } from './types';
+import { toApprovalSteps } from './approvalUtils';
 import { getErrorMessage } from '@/lib/utils/error-message-handler';
 
 export interface ApprovalWorkflowPanelProps {
@@ -26,37 +26,6 @@ export interface ApprovalWorkflowPanelProps {
   isTicketFinal: boolean;
   onRefresh?: () => void;
   formatDateTime?: (s: string) => string;
-}
-
-function decisionStatusToStepStatus(decision: string): ApprovalStepStatus {
-  switch (decision) {
-    case 'approved':
-      return 'approved';
-    case 'rejected':
-      return 'rejected';
-    case 'delegated':
-      return 'delegated';
-    case 'timeout':
-      return 'timeout';
-    default:
-      // withdrawn / system_decision 等在 ApprovalStepStatus 里没有对应值，
-      // 归到 skipped——保留记录可见，但不暗示这是一次正常的通过/拒绝决策。
-      return 'skipped';
-  }
-}
-
-function toApprovalSteps(decisions: ProcessApprovalDecision[]): ApprovalStep[] {
-  return decisions.map((d, index) => ({
-    id: d.id,
-    level: index + 1,
-    step: d.nodeKey,
-    status: decisionStatusToStepStatus(d.decision),
-    approverId: d.actorId,
-    approverName: d.actorName,
-    comment: d.comment,
-    processedAt: d.createdAt,
-    createdAt: d.createdAt,
-  }));
 }
 
 export const ApprovalWorkflowPanel: React.FC<ApprovalWorkflowPanelProps> = ({

@@ -37,6 +37,7 @@ import {
   Space,
   Modal,
   Form,
+  Progress,
   Select,
   Input,
   Tabs,
@@ -65,9 +66,11 @@ import {
   ticketAttachmentAdapter,
   fetchAuditLogHistory,
 } from '@/components/business/detail-tabs';
+import { ApprovalMiniStepper } from '@/components/business/detail-tabs/ApprovalMiniStepper';
 import { RelationPanel } from '@/components/ticket-relations/RelationPanel';
 import ServiceRequestPanel from './ServiceRequestPanel';
 import ServiceCatalogApprovalChain from './ServiceCatalogApprovalChain';
+import { CIContextCard } from './CIContextCard';
 import {
   MessageSquare,
   Paperclip,
@@ -100,6 +103,12 @@ const getTicketStatusLabel = (status?: string): string => {
   return config?.label ?? status;
 };
 
+// 根据 SLA 总时长与剩余时长计算已消耗百分比（0-100，越接近 100 越紧迫）
+const getSLAPercent = (total: number, remaining: number | null): number => {
+  if (!total || total <= 0 || remaining === null) return 0;
+  return Math.min(100, Math.max(0, Math.round(((total - remaining) / total) * 100)));
+};
+
 const DISABLED_ACTION_CLASS = 'opacity-40 cursor-not-allowed pointer-events-auto';
 
 export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
@@ -128,6 +137,8 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
   const [rejecting, setRejecting] = useState(false);
   const [slaInfo, setSlaInfo] = useState<{
     slaName: string;
+    responseTime: number;
+    resolutionTime: number;
     responseDeadline: string | null;
     resolutionDeadline: string | null;
     responseTimeRemaining: number | null;
@@ -696,6 +707,9 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
             }}
           />
 
+          {/* 2.5 流转节点进度（Mini BPMN Stepper） */}
+          <ApprovalMiniStepper ticketId={ticketId} />
+
           {/* 3. SLA 履约时限监控卡片 */}
           {slaInfo && (
             <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs space-y-3">
@@ -751,9 +765,60 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
                     </Tag>
                   </div>
                 )}
+
+                {slaInfo.responseTime > 0 && (
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[11px] text-slate-500">
+                      <span>响应进度</span>
+                      <span>
+                        {slaInfo.responseTimeRemaining !== null
+                          ? `剩余 ${slaInfo.responseTimeRemaining} 分钟`
+                          : '--'}
+                      </span>
+                    </div>
+                    <Progress
+                      percent={getSLAPercent(slaInfo.responseTime, slaInfo.responseTimeRemaining)}
+                      size="small"
+                      strokeColor={
+                        slaInfo.responseTimeRemaining !== null && slaInfo.responseTimeRemaining < 0
+                          ? '#ff4d4f'
+                          : getSLAPercent(slaInfo.responseTime, slaInfo.responseTimeRemaining) >= 70
+                            ? '#fa8c16'
+                            : '#52c41a'
+                      }
+                    />
+                  </div>
+                )}
+
+                {slaInfo.resolutionTime > 0 && (
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[11px] text-slate-500">
+                      <span>解决进度</span>
+                      <span>
+                        {slaInfo.resolutionTimeRemaining !== null
+                          ? `剩余 ${slaInfo.resolutionTimeRemaining} 分钟`
+                          : '--'}
+                      </span>
+                    </div>
+                    <Progress
+                      percent={getSLAPercent(slaInfo.resolutionTime, slaInfo.resolutionTimeRemaining)}
+                      size="small"
+                      strokeColor={
+                        slaInfo.resolutionTimeRemaining !== null && slaInfo.resolutionTimeRemaining < 0
+                          ? '#ff4d4f'
+                          : getSLAPercent(slaInfo.resolutionTime, slaInfo.resolutionTimeRemaining) >= 70
+                            ? '#fa8c16'
+                            : '#52c41a'
+                      }
+                    />
+                  </div>
+                )}
               </div>
             </div>
           )}
+
+          {/* 4. 关联 CMDB 配置项（CI）卡片 */}
+          <CIContextCard ticketId={ticketId} source={ticket.source} />
         </div>
       </div>
 
