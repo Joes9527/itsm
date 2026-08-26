@@ -169,6 +169,9 @@ func (c *BPMNWorkflowController) GetApprovalHistory(ctx *gin.Context) {
 	if !ok {
 		return
 	}
+	elevated := hasElevatedBPMNAccess(ctx, "process_instance", "read")
+	workflowCtx = context.WithValue(workflowCtx, bpmn.BPMNElevatedContextKey, elevated)
+
 	decisions, err := c.processEngine.TaskService().ListApprovalDecisions(workflowCtx, ctx.Param("id"))
 	if err != nil {
 		common.InternalError(ctx, "查询审批历史失败: "+err.Error())
@@ -553,6 +556,8 @@ func (c *BPMNWorkflowController) GetProcessInstance(ctx *gin.Context) {
 	if !ok {
 		return
 	}
+	elevated := hasElevatedBPMNAccess(ctx, "process_instance", "read")
+	workflowCtx = context.WithValue(workflowCtx, bpmn.BPMNElevatedContextKey, elevated)
 
 	instance, err := c.processEngine.ProcessInstanceService().GetProcessInstance(workflowCtx, processInstanceID)
 	if err != nil {

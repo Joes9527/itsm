@@ -2226,3 +2226,124 @@ func TestGetCounterSignStatus_NoUserNoSystemCallerDenied(t *testing.T) {
 	_, err = engine.TaskService().GetCounterSignStatus(noAuthCtx, parentTask.TaskID)
 	assert.Error(t, err, "no user and no explicit system-caller declaration must be denied for counter-sign status too")
 }
+
+func TestGetProcessInstance_ParticipantCanView(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
+	instanceID, taskID := createProcessFixture(t, engine, tenantID, "instview1")
+	_, err := engine.client.ProcessTask.UpdateOneID(taskID).
+		SetAssignee(fmt.Sprintf("%d", actorID)).Save(context.Background())
+	require.NoError(t, err)
+
+	ctx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, actorID)
+	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+
+	instance, err := engine.ProcessInstanceService().GetProcessInstance(ctx, fmt.Sprintf("%d", instanceID))
+	require.NoError(t, err)
+	assert.Equal(t, instanceID, instance.ID)
+}
+
+func TestGetProcessInstance_InitiatorCanView(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, initiatorID := setupApprovalDecisionFixture(t, engine)
+	instanceID, taskID := createProcessFixture(t, engine, tenantID, "instview2")
+	_, err := engine.client.ProcessInstance.UpdateOneID(instanceID).
+		SetInitiator(fmt.Sprintf("%d", initiatorID)).Save(context.Background())
+	require.NoError(t, err)
+	_, err = engine.client.ProcessTask.UpdateOneID(taskID).
+		SetAssignee("someone-else").Save(context.Background())
+	require.NoError(t, err)
+
+	ctx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, initiatorID)
+	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+
+	instance, err := engine.ProcessInstanceService().GetProcessInstance(ctx, fmt.Sprintf("%d", instanceID))
+	require.NoError(t, err, "the process initiator must be able to view their own instance")
+	assert.Equal(t, instanceID, instance.ID)
+}
+
+func TestGetProcessInstance_NonParticipantDeniedUnlessElevated(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
+	otherUser, err := engine.client.User.Create().
+		SetUsername("instview-bystander").SetEmail("instview-bystander@example.com").SetName("Bystander").
+		SetPasswordHash("hash").SetRole("agent").SetActive(true).SetTenantID(tenantID).
+		Save(context.Background())
+	require.NoError(t, err)
+	instanceID, taskID := createProcessFixture(t, engine, tenantID, "instview3")
+	_, err = engine.client.ProcessInstance.UpdateOneID(instanceID).
+		SetInitiator(fmt.Sprintf("%d", otherUser.ID)).Save(context.Background())
+	require.NoError(t, err)
+	_, err = engine.client.ProcessTask.UpdateOneID(taskID).
+		SetAssignee(fmt.Sprintf("%d", otherUser.ID)).Save(context.Background())
+	require.NoError(t, err)
+
+	notParticipantCtx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, actorID)
+	notParticipantCtx = context.WithValue(notParticipantCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+
+	_, err = engine.ProcessInstanceService().GetProcessInstance(notParticipantCtx, fmt.Sprintf("%d", instanceID))
+	assert.Error(t, err, "a non-participant, non-initiator, non-elevated caller must be denied")
+
+	elevatedCtx := context.WithValue(notParticipantCtx, bpmn.BPMNElevatedContextKey, true)
+	instance, err := engine.ProcessInstanceService().GetProcessInstance(elevatedCtx, fmt.Sprintf("%d", instanceID))
+	require.NoError(t, err, "an elevated caller must be able to view any instance")
+	assert.Equal(t, instanceID, instance.ID)
+}
+
+func TestGetProcessInstance_CrossTenantNeverLeaks(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
+	otherTenant, err := engine.client.Tenant.Create().
+		SetName("Other").SetCode("instview-other").SetDomain("instview-other.example.com").SetStatus("active").
+		Save(context.Background())
+	require.NoError(t, err)
+	otherInstanceID, _ := createProcessFixture(t, engine, otherTenant.ID, "instview4-other")
+	_, err = engine.client.ProcessInstance.UpdateOneID(otherInstanceID).
+		SetInitiator(fmt.Sprintf("%d", actorID)). // same numeric ID, different tenant
+		Save(context.Background())
+	require.NoError(t, err)
+
+	ctx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, actorID)
+	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = context.WithValue(ctx, bpmn.BPMNElevatedContextKey, true) // even elevated
+
+	_, err = engine.ProcessInstanceService().GetProcessInstance(ctx, fmt.Sprintf("%d", otherInstanceID))
+	assert.Error(t, err, "must never return another tenant's instance regardless of elevation")
+}
+
+func TestGetProcessInstance_NoUserNoSystemCallerDenied(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, _ := setupApprovalDecisionFixture(t, engine)
+	instanceID, _ := createProcessFixture(t, engine, tenantID, "instview5")
+
+	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	_, err := engine.ProcessInstanceService().GetProcessInstance(ctx, fmt.Sprintf("%d", instanceID))
+	assert.Error(t, err, "no user and no explicit system-caller declaration must be denied by default")
+}
+
+func TestListApprovalDecisions_NonParticipantDeniedUnlessElevated(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
+	otherUser, err := engine.client.User.Create().
+		SetUsername("history-bystander").SetEmail("history-bystander@example.com").SetName("Bystander2").
+		SetPasswordHash("hash").SetRole("agent").SetActive(true).SetTenantID(tenantID).
+		Save(context.Background())
+	require.NoError(t, err)
+	instanceID, taskID := createProcessFixture(t, engine, tenantID, "history1")
+	instance, err := engine.client.ProcessInstance.UpdateOneID(instanceID).
+		SetInitiator(fmt.Sprintf("%d", otherUser.ID)).Save(context.Background())
+	require.NoError(t, err)
+	_, err = engine.client.ProcessTask.UpdateOneID(taskID).
+		SetAssignee(fmt.Sprintf("%d", otherUser.ID)).Save(context.Background())
+	require.NoError(t, err)
+
+	notParticipantCtx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, actorID)
+	notParticipantCtx = context.WithValue(notParticipantCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+
+	_, err = engine.TaskService().ListApprovalDecisions(notParticipantCtx, instance.ProcessInstanceID)
+	assert.Error(t, err, "a non-participant, non-initiator, non-elevated caller must be denied approval history")
+
+	elevatedCtx := context.WithValue(notParticipantCtx, bpmn.BPMNElevatedContextKey, true)
+	_, err = engine.TaskService().ListApprovalDecisions(elevatedCtx, instance.ProcessInstanceID)
+	require.NoError(t, err, "an elevated caller must be able to view any instance's approval history")
+}

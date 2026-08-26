@@ -41,12 +41,19 @@ type bpmnSystemCallerKey struct{}
 // authorizeTaskViewer/authorizeTaskMutation/authorizeTaskActor/
 // authorizeProcessInstanceViewer/authorizeProcessInstanceMutation check this
 // key explicitly and fail closed when it's absent — replacing the previous
-// implicit "no userID in context = permissive" convention, which had no real
-// callers (verified 2026-08-26: zero non-HTTP, non-test call sites for any
-// of the eight public TaskService/ProcessInstanceService methods these
-// functions guard) and was a latent fail-open trap. Must only ever be set
-// by code that is itself not reachable from an HTTP request — never derived
-// from a client-suppliable field.
+// implicit "no userID in context = permissive" convention. That convention
+// was a latent fail-open trap, and real system-caller use cases DO exist:
+// Task 4 found and fixed three production call sites in
+// service/bpmn_approval_bridge_service.go (release/change stage-transition
+// bridges calling CompleteTask with actorUserID=0 by design), plus two more
+// internal engine call sites (createUserTask's counter-sign fan-out, Vote's
+// parent-task auto-completion) that previously relied on this same implicit
+// permissiveness. Do not assume a guarded method has zero non-HTTP callers —
+// audit call sites explicitly each time one of these functions is hardened,
+// and declare this key narrowly at the specific call site that needs it,
+// not smeared over a broader ctx used for other purposes. Must only ever be
+// set by code that is itself not reachable from an HTTP request — never
+// derived from a client-suppliable field.
 var BPMNSystemCallerContextKey = bpmnSystemCallerKey{}
 
 // ServiceTaskHandlerInterface 服务任务处理器接口

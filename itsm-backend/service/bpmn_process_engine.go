@@ -2122,6 +2122,9 @@ func (s *bpmnProcessInstanceService) GetProcessInstance(ctx context.Context, pro
 	if err != nil {
 		return nil, fmt.Errorf("获取流程实例失败: %w", err)
 	}
+	if err := authorizeProcessInstanceViewer(ctx, s.client, instance); err != nil {
+		return nil, err
+	}
 
 	return instance, nil
 }
@@ -2518,6 +2521,51 @@ func (s *bpmnTaskService) authorizeTaskMutation(ctx context.Context, task *ent.P
 	return 0, "", fmt.Errorf("当前用户不是该任务的审批人或候选人")
 }
 
+// authorizeProcessInstanceViewer allows a process instance to be read by:
+// an elevated caller, an explicitly declared system caller, the instance's
+// initiator, or a participant of any task belonging to this instance
+// (mirrors authorizeTaskViewer's philosophy for the read side, extended
+// from task-scope to instance-scope). Not a method on any one service
+// struct — GetProcessInstance (bpmnProcessInstanceService) and
+// ListApprovalDecisions (bpmnTaskService) both call it, matching the
+// existing isProcessInstanceRequester/isTaskCandidate standalone-function
+// convention in this file.
+func authorizeProcessInstanceViewer(ctx context.Context, client *ent.Client, instance *ent.ProcessInstance) error {
+	if systemCaller, _ := ctx.Value(bpmn.BPMNSystemCallerContextKey).(bool); systemCaller {
+		return nil
+	}
+	if elevated, _ := ctx.Value(bpmn.BPMNElevatedContextKey).(bool); elevated {
+		return nil
+	}
+	userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
+	if userID <= 0 {
+		return fmt.Errorf("未认证的调用")
+	}
+	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
+	if tenantID == 0 {
+		tenantID = instance.TenantID
+	}
+	identity, err := bpmn.ResolveCallerIdentity(ctx, client, bpmn.NewGroupResolver(client), tenantID, userID)
+	if err != nil {
+		return fmt.Errorf("查看用户不存在: %w", err)
+	}
+	if instance.Initiator == identity.IDStr {
+		return nil
+	}
+	tasks, err := client.ProcessTask.Query().
+		Where(processtask.ProcessInstanceID(instance.ID), processtask.TenantID(tenantID)).
+		All(ctx)
+	if err != nil {
+		return fmt.Errorf("查询流程任务失败: %w", err)
+	}
+	for _, task := range tasks {
+		if identity.IsTaskParticipant(task) {
+			return nil
+		}
+	}
+	return fmt.Errorf("当前用户无权查看该流程实例")
+}
+
 // CompleteTaskByID 根据数据库自增ID完成任务
 func (s *bpmnTaskService) CompleteTaskByID(ctx context.Context, id int, variables map[string]interface{}) error {
 	engine := NewCustomProcessEngine(s.client, s.logger)
@@ -2719,6 +2767,15 @@ func (s *bpmnTaskService) ListApprovalDecisions(ctx context.Context, processInst
 	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
 	if tenantID <= 0 {
 		return nil, fmt.Errorf("缺少租户上下文")
+	}
+	instance, err := s.client.ProcessInstance.Query().
+		Where(processinstance.ProcessInstanceID(processInstanceKey), processinstance.TenantID(tenantID)).
+		Only(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("获取流程实例失败: %w", err)
+	}
+	if err := authorizeProcessInstanceViewer(ctx, s.client, instance); err != nil {
+		return nil, err
 	}
 	return s.client.ProcessApprovalDecision.Query().
 		Where(
