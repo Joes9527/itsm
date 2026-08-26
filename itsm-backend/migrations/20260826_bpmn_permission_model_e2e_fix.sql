@@ -17,11 +17,20 @@
 -- migrations/20260628_add_connector_menu.sql 的真实写法核实一致，与本迁移最初
 -- 假设的列名相符，未作调整。
 --
--- 说明：role_permissions 的 role_id/permission_id 均引用同一租户下的 roles/
--- permissions 行（seeder 按租户各自创建一套同 code 的角色与权限），因此下面
--- 按 code 关联的子查询天然是租户安全的，不需要额外显式过滤 tenant_id——这一点
--- 与 20260812_fill_missing_permissions.sql Step 3/4 的写法（用 r.tenant_id 承接、
--- 不对 role_permissions 做跨租户误连接）思路一致。
+-- 说明：以下 DELETE 没有显式过滤 tenant_id，这是安全的，但原因不是"role_permissions
+-- 的 role_id/permission_id 只会是同租户配对"——这不是数据库层面保证的不变量。
+-- service/role_service.go 的 RoleService.AssignPermissions（POST /roles/:id/permissions，
+-- 仅受 role:update 权限把关）校验传入的 permissionIDs 时用的是
+-- `s.client.Permission.Query().Where(permission.IDIn(permissionIDs...))`——没有按
+-- tenant_id 过滤，随后把这些权限 ID 和角色的 tenant_id 一起写进 role_permissions，
+-- 理论上可以经这条生产端点创建出 role_id/permission_id 分属不同租户的行。
+-- 这条迁移仍然安全，是因为它只做 DELETE（撤销授权）：即使某个角色因为上面那个缺口
+-- 意外持有了别的租户的 task:read/process_instance:read 授权，把它删掉的最坏结果也
+-- 只是多撤销了一条本就异常的授权，不会跨租户新增任何访问权限——DELETE 不产生新的
+-- 越权可能性，所以不需要额外的 tenant_id 过滤。这个理由是这条迁移专属的，不能照搬
+-- 到 INSERT/UPDATE 上：换成写入操作时，缺少 tenant_id 过滤就会是真正的跨租户泄漏。
+-- （RoleService.AssignPermissions 缺失的 tenant 过滤本身是一个独立、范围较窄
+-- 的权限模型缺口——仅管理员可达，不在本次任务范围内，记入 backlog 待后续修复。）
 --
 -- 改动前状态（供未来撤销参考，撤销方式是照此写一条新的正向迁移，参见
 -- migrations/20260814_revert_end_user_overgrant.sql 的先例——这个仓库的
@@ -35,6 +44,12 @@
 --     （某些更早的租户可能压根没有这一行——该菜单项本身是 2026-08-20 才补种进 seeder 的，
 --     此前从未被加入过菜单种子；这类租户下面的 UPDATE 不会命中任何行，属预期行为，
 --     seedMenus() 在下次应用重启时会以 bpmn:read 自愈补种这一行）。
+--
+-- 注：下面的 DELETE 只处理 task:read/process_instance:read，没有单独一条撤销
+-- task:update 的语句——这不是遗漏。dept_manager/end_user/service_catalog_admin
+-- 这三个角色在整改前的种子数据里本来就从未被授予过 task:update（seeder.go 里
+-- 这三个角色的权限清单里一直没有这个码），所以没有对应的 role_permissions 行
+-- 需要撤销。
 
 -- Step 1: 收紧 dept_manager
 DELETE FROM role_permissions
