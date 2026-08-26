@@ -1118,6 +1118,8 @@ func (c *BPMNWorkflowController) GetCounterSignStatus(ctx *gin.Context) {
 	if !ok {
 		return
 	}
+	elevated := hasElevatedBPMNAccess(ctx, "task", "read")
+	workflowCtx = context.WithValue(workflowCtx, bpmn.BPMNElevatedContextKey, elevated)
 
 	status, err := c.processEngine.TaskService().GetCounterSignStatus(workflowCtx, taskID)
 	if err != nil {

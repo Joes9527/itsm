@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/dto"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/processauditlog"
 	"itsm-backend/service/bpmn"
@@ -1200,6 +1201,84 @@ func TestStartProcess_FallsBackToRequesterIDVariableWhenNoContextUser(t *testing
 	})
 	require.NoError(t, err)
 	assert.Equal(t, fmt.Sprintf("%d", actorID), instance.Initiator)
+}
+
+// TestTriggerProcess_SeedsRequesterIDFromTriggeredByWhenCallerOmitsIt guards
+// a bug found by the final whole-branch review (Important Finding 2):
+// ProcessTriggerService.TriggerProcess passes a bare tenant-only ctx into
+// StartProcess (see triggerCtx in TriggerProcess), so StartProcess's
+// ctx-based initiator lookup (bpmn.BPMNUserIDContextKey) never fires for
+// this path — only the variables["requester_id"] fallback can populate
+// initiator. TicketService.triggerWorkflowForTicket happens to set
+// requester_id itself, but IncidentService/ProblemService only set
+// TriggeredBy (to reporter_id/created_by, respectively) and never set
+// requester_id, so incident/problem-triggered instances ended up with no
+// initiator at all — the person who reported the incident/problem could
+// never view or control the resulting BPMN instance (authorizeProcessInstanceViewer/
+// authorizeProcessInstanceMutation both key off instance.Initiator).
+//
+// This test reproduces the IncidentService/ProblemService shape exactly:
+// TriggeredBy set, requester_id NOT set in Variables. It exercises the real
+// public entrypoint (ProcessTriggerService.TriggerProcess), not a
+// hand-built ctx, so it fails the way production actually would if the fix
+// were reverted.
+func TestTriggerProcess_SeedsRequesterIDFromTriggeredByWhenCallerOmitsIt(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, reporterID := setupApprovalDecisionFixture(t, engine)
+
+	deployment, err := engine.client.ProcessDeployment.Create().
+		SetDeploymentID("DEP-trigger-initiator").SetDeploymentName("Deployment trigger-initiator").
+		SetDeploymentTime(time.Now()).SetDeployedBy("test").SetIsActive(true).
+		SetTenantID(tenantID).Save(context.Background())
+	require.NoError(t, err)
+	_, err = engine.client.ProcessDefinition.Create().
+		SetKey("incident_trigger_flow").SetName("Incident Trigger Test").SetVersion("1").
+		SetIsLatest(true).SetIsActive(true).
+		SetBpmnXML([]byte(minimalStartToEndBPMN("incident_trigger_flow"))).
+		SetDeploymentID(deployment.ID).SetDeployedAt(time.Now()).SetTenantID(tenantID).
+		Save(context.Background())
+	require.NoError(t, err)
+
+	triggerSvc := NewProcessTriggerService(engine.client, engine)
+
+	req := &dto.ProcessTriggerRequest{
+		BusinessType:         dto.BusinessTypeIncident,
+		BusinessID:           4242,
+		ProcessDefinitionKey: "incident_trigger_flow",
+		// Mirrors IncidentService: only TriggeredBy is set (to reporter_id
+		// as a string), Variables carries no requester_id at all.
+		TriggeredBy: fmt.Sprintf("%d", reporterID),
+		TriggeredAt: time.Now(),
+		TenantID:    tenantID,
+	}
+
+	resp, err := triggerSvc.TriggerProcess(baseCtx, req)
+	require.NoError(t, err)
+
+	instance, err := engine.client.ProcessInstance.Get(context.Background(), resp.ProcessInstanceID)
+	require.NoError(t, err)
+	assert.Equal(t, fmt.Sprintf("%d", reporterID), instance.Initiator,
+		"initiator must be seeded from TriggeredBy when the caller (e.g. IncidentService) never set requester_id directly")
+
+	// Prove the fix actually closes the access gap: the reporter, calling as
+	// a plain non-elevated, non-system caller, must now be able to view the
+	// instance they triggered.
+	viewerCtx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, reporterID)
+	viewerCtx = context.WithValue(viewerCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	viewed, err := engine.ProcessInstanceService().GetProcessInstance(viewerCtx, fmt.Sprintf("%d", instance.ID))
+	require.NoError(t, err, "the reporter/creator whose ID was seeded as initiator must be able to view their own triggered instance")
+	assert.Equal(t, instance.ID, viewed.ID)
+
+	// And an unrelated non-elevated caller must still be denied.
+	bystander, err := engine.client.User.Create().
+		SetUsername("trigger-initiator-bystander").SetEmail("trigger-initiator-bystander@example.com").
+		SetName("Bystander").SetPasswordHash("hash").SetRole("agent").SetActive(true).SetTenantID(tenantID).
+		Save(context.Background())
+	require.NoError(t, err)
+	bystanderCtx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, bystander.ID)
+	bystanderCtx = context.WithValue(bystanderCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	_, err = engine.ProcessInstanceService().GetProcessInstance(bystanderCtx, fmt.Sprintf("%d", instance.ID))
+	assert.Error(t, err, "a non-participant, non-initiator, non-elevated caller must still be denied")
 }
 
 // ==================== ListProcessInstances participant-scoping tests ====================

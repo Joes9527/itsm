@@ -8,6 +8,7 @@ import (
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/ent/processauditlog"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/service/bpmn"
 
@@ -1253,4 +1254,55 @@ func TestCreateUserTask_CounterSignFanOut_NotAttributedToUpstreamActor(t *testin
 		All(fx.ctx)
 	require.NoError(t, err)
 	assert.Len(t, children, 2, "应该按候选人列表创建出对应数量的会签子任务")
+}
+
+// TestCreateUserTask_CounterSignFanOut_IsAudited guards the final
+// whole-branch review's Important Finding 3: createUserTask's fan-out to
+// CreateCounterSignTasks is wrapped with bpmn.BPMNSystemCallerContextKey
+// (a correct, already-landed fix from Task 4), which makes
+// authorizeTaskMutation return actorID=0. Before this fix,
+// CreateCounterSignTasks's audit call was gated on "if actorID > 0",
+// meaning it silently skipped the audit for EVERY multi-approver
+// (ApprovalMode != "single") counter-sign auto-creation — a workflow
+// automation action that AGENTS.md requires to be audited, and unlike the
+// truly-unattributable system calls that gate AssignTask/CancelTask/
+// SetTaskVariables's audits, this one has a knowable actor: the engine's
+// own automatic fan-out.
+//
+// This test drives the exact same fan-out path as the sibling
+// NotAttributedToUpstreamActor test above, then asserts a
+// ProcessAuditLog row now exists for it, attributed to the "system"
+// sentinel actor (UserID=0, UserName="system") rather than being skipped.
+func TestCreateUserTask_CounterSignFanOut_IsAudited(t *testing.T) {
+	fx := newApprovalAssignmentFixture(t)
+
+	upstreamActor := fx.createUser(t, "audit-upstream-actor", 0)
+	fx.createUser(t, "audit-countersign-approver1", 0)
+	fx.createUser(t, "audit-countersign-approver2", 0)
+
+	instance := fx.createInstance(t, "countersign-fanout-audit", map[string]interface{}{})
+
+	task := approvalTask("Activity_MultiApprovalAudit", "多人会签-审计")
+	task.CandidateUsers = "audit-countersign-approver1,audit-countersign-approver2"
+	task.ApprovalMode = "any" // len(approvers)=2 > 1，触发 createUserTask 内部的自动会签创建
+
+	ctx := context.WithValue(fx.ctx, bpmn.BPMNTenantIDContextKey, fx.tenant.ID)
+	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, upstreamActor.ID)
+
+	err := fx.engine.createUserTask(ctx, instance, task)
+	require.NoError(t, err)
+
+	parent := fx.getCreatedTask(t, instance.ID, "Activity_MultiApprovalAudit")
+
+	logs, err := fx.client.ProcessAuditLog.Query().
+		Where(
+			processauditlog.ProcessInstanceID(instance.ID),
+			processauditlog.ActivityID(parent.TaskDefinitionKey),
+			processauditlog.Action(AuditActionActivityStarted),
+		).
+		All(fx.ctx)
+	require.NoError(t, err)
+	require.Len(t, logs, 1, "counter-sign auto-creation must produce exactly one audit record instead of being silently skipped")
+	assert.Equal(t, 0, logs[0].UserID, "system fan-out has no human actor, so UserID must stay the explicit 0 sentinel")
+	assert.Equal(t, "system", logs[0].UserName, "system fan-out must be attributed to the 'system' sentinel actor, not silently unaudited")
 }

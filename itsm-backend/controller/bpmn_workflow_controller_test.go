@@ -12,7 +12,9 @@ import (
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/middleware"
 	"itsm-backend/service"
+	"itsm-backend/service/bpmn"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -32,6 +34,11 @@ type fakeTaskService struct {
 	historyInstanceKey string
 	historyDecisions   []*ent.ProcessApprovalDecision
 	historyErr         error
+
+	counterSignStatusCalls int
+	counterSignStatusCtx   context.Context
+	counterSignStatus      *service.CounterSignStatus
+	counterSignStatusErr   error
 }
 
 func (f *fakeTaskService) GetTask(ctx context.Context, taskID string) (*ent.ProcessTask, error) {
@@ -121,7 +128,9 @@ func (f *fakeTaskService) CreateCounterSignTasks(ctx context.Context, parentTask
 }
 
 func (f *fakeTaskService) GetCounterSignStatus(ctx context.Context, parentTaskID string) (*service.CounterSignStatus, error) {
-	return nil, nil
+	f.counterSignStatusCalls++
+	f.counterSignStatusCtx = ctx
+	return f.counterSignStatus, f.counterSignStatusErr
 }
 
 func (f *fakeTaskService) Vote(ctx context.Context, taskID string, req *service.VoteRequest) error {
@@ -315,6 +324,92 @@ func TestGetApprovalHistory_PropagatesError(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(t, float64(5001), resp["code"], "service error must surface as InternalErrorCode 5001")
 	assert.Contains(t, resp["message"], "查询审批历史失败")
+}
+
+// TestGetCounterSignStatus_InjectsElevatedContext guards a bug found by the
+// final whole-branch review (Important Finding 1): GetCounterSignStatus was
+// the only one of the registry-covered handlers that never called
+// hasElevatedBPMNAccess/injected bpmn.BPMNElevatedContextKey into the
+// context it hands to the service layer, even though the authorization
+// registry declares ElevatedResource/ElevatedAction "task"/"read" for this
+// route. Without the injected flag, TaskService.GetCounterSignStatus (via
+// authorizeCounterSignViewer -> authorizeTaskViewer) would deny a genuinely
+// elevated caller (e.g. sysadmin/it_director/ops_director) who isn't a
+// participant of the parent task or any sub-task — exactly the ops-console
+// case elevation exists for. This test wires a real ent.Client + role
+// permission (mirroring seedTicketRolePermission's pattern in
+// ticket_controller_test.go) so hasElevatedBPMNAccess's real RBAC lookup
+// runs, then asserts the context the controller hands to the service layer
+// carries elevated=true.
+func TestGetCounterSignStatus_InjectsElevatedContext(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	client := RequireTestDB(t)
+	middleware.InvalidateAllPermissionCaches()
+
+	tenant := CreateTestTenantWithID(t, client, "countersign-status")
+	seedTicketRolePermission(t, client, tenant.ID, "ops_director", "task", "read")
+
+	fakeTask := &fakeTaskService{}
+	engine := &fakeProcessEngine{taskSvc: fakeTask}
+	ctrl := NewBPMNWorkflowController(engine, nil)
+
+	r := gin.New()
+	r.Use(gin.Recovery())
+	r.Use(func(c *gin.Context) {
+		// Emulates what RBACMiddleware/auth middleware populate in
+		// production: role/tenant_id/client on the gin context, plus the
+		// coarse role gate this controller's routes require.
+		c.Set("role", "ops_director")
+		c.Set("tenant_id", tenant.ID)
+		c.Set("user_id", 1)
+		c.Set("client", client)
+	})
+	g := r.Group("/api/v1")
+	ctrl.RegisterRoutes(g)
+
+	w := doRequest(t, r, "GET", "/api/v1/bpmn/tasks/PT-1/counter-sign-status", nil)
+	require.Equal(t, 200, w.Code, w.Body.String())
+
+	require.Equal(t, 1, fakeTask.counterSignStatusCalls)
+	require.NotNil(t, fakeTask.counterSignStatusCtx)
+	elevated, _ := fakeTask.counterSignStatusCtx.Value(bpmn.BPMNElevatedContextKey).(bool)
+	assert.True(t, elevated, "an elevated caller (task:read permission) must have bpmn.BPMNElevatedContextKey=true injected into the context handed to TaskService.GetCounterSignStatus")
+}
+
+// TestGetCounterSignStatus_NonElevatedContextIsFalse is the negative
+// counterpart of TestGetCounterSignStatus_InjectsElevatedContext: a caller
+// without the task:read permission must get elevated=false, so the service
+// layer still enforces participant-only access for ordinary callers.
+func TestGetCounterSignStatus_NonElevatedContextIsFalse(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	client := RequireTestDB(t)
+	middleware.InvalidateAllPermissionCaches()
+
+	tenant := CreateTestTenantWithID(t, client, "countersign-status-non-elevated")
+	// deliberately no role permission seeded for "agent"
+
+	fakeTask := &fakeTaskService{}
+	engine := &fakeProcessEngine{taskSvc: fakeTask}
+	ctrl := NewBPMNWorkflowController(engine, nil)
+
+	r := gin.New()
+	r.Use(gin.Recovery())
+	r.Use(func(c *gin.Context) {
+		c.Set("role", "agent")
+		c.Set("tenant_id", tenant.ID)
+		c.Set("user_id", 1)
+		c.Set("client", client)
+	})
+	g := r.Group("/api/v1")
+	ctrl.RegisterRoutes(g)
+
+	w := doRequest(t, r, "GET", "/api/v1/bpmn/tasks/PT-2/counter-sign-status", nil)
+	require.Equal(t, 200, w.Code, w.Body.String())
+
+	require.Equal(t, 1, fakeTask.counterSignStatusCalls)
+	require.NotNil(t, fakeTask.counterSignStatusCtx)
+	elevated, _ := fakeTask.counterSignStatusCtx.Value(bpmn.BPMNElevatedContextKey).(bool)
+	assert.False(t, elevated, "a caller without task:read must not be treated as elevated")
 }
 
 // silence unused-import lint on strconv when feature is dropped

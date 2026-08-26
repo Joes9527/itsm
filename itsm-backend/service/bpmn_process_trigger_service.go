@@ -287,6 +287,22 @@ func (s *ProcessTriggerService) buildProcessVariables(req *dto.ProcessTriggerReq
 		variables["triggered_at"] = req.TriggeredAt.Format(time.RFC3339)
 	}
 
+	// 3b. requester_id 兜底：StartProcess 的 initiator 落地逻辑（
+	// service/bpmn_process_engine.go）优先取 ctx 里的认证用户 ID，
+	// 兜底读 variables["requester_id"]。TriggerProcess 传给 StartProcess 的
+	// ctx 只带租户信息、不带用户身份，所以这条兜底路径是唯一能落地 initiator
+	// 的地方。TicketService.triggerWorkflowForTicket 已经自己把
+	// requester_id 塞进 variables，此处不覆盖；但 IncidentService/
+	// ProblemService 只设置了 TriggeredBy（reporter_id/created_by 的字符串
+	// 形式），从未设置 requester_id，导致 initiator 永远落空——报告事件/
+	// 问题的人反而看不到、控制不了由此触发的流程实例（详见最终复审
+	// Finding 2）。TriggeredBy 与 requester_id 在各调用方都是同一个"发起人
+	// 用户 ID 的字符串形式"的约定，这里做统一兜底，覆盖 TriggerProcess 的
+	// 所有调用方，而不必逐个修 IncidentService/ProblemService。
+	if _, exists := variables["requester_id"]; !exists && req.TriggeredBy != "" {
+		variables["requester_id"] = req.TriggeredBy
+	}
+
 	// 4. 添加租户信息
 	variables["tenant_id"] = req.TenantID
 

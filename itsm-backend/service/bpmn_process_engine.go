@@ -3269,10 +3269,24 @@ func (s *bpmnTaskService) CreateCounterSignTasks(ctx context.Context, parentTask
 		s.logger.Warnf("更新父任务变量失败: %v", err)
 	}
 
-	if actorID > 0 {
-		if auditErr := s.auditService.RecordCounterSignCreated(ctx, parentTask, actorID, actorName, len(req.Approvers)); auditErr != nil {
-			s.logger.Warnw("audit record failed", "error", auditErr, "task_id", parentTask.TaskID)
-		}
+	// actorID<=0 here only happens when authorizeTaskMutation saw
+	// bpmn.BPMNSystemCallerContextKey (every other path either returns a
+	// positive actorID or a non-nil err, which would already have returned
+	// above). Unlike the true system/internal calls that gate AssignTask/
+	// CancelTask/SetTaskVariables's audit on "actorID > 0" (those may have
+	// no attributable actor at all), this specific system-caller path is
+	// always createUserTask's own multi-approver fan-out (see Task 4) — a
+	// knowable "who/what triggered this". Attribute it explicitly to the
+	// engine instead of silently skipping the audit record: every
+	// multi-approver counter-sign auto-creation must stay auditable (see
+	// final whole-branch review Finding 3; AGENTS.md requires workflow
+	// automation to produce audit records).
+	auditActorID, auditActorName := actorID, actorName
+	if auditActorID <= 0 {
+		auditActorName = "system"
+	}
+	if auditErr := s.auditService.RecordCounterSignCreated(ctx, parentTask, auditActorID, auditActorName, len(req.Approvers)); auditErr != nil {
+		s.logger.Warnw("audit record failed", "error", auditErr, "task_id", parentTask.TaskID)
 	}
 
 	return tasks, nil
