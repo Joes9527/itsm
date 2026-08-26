@@ -64,7 +64,6 @@ import {
   ticketAttachmentAdapter,
 } from '@/components/business/detail-tabs';
 import { ApprovalMiniStepper } from '@/components/business/detail-tabs/ApprovalMiniStepper';
-import { RelationPanel } from '@/components/ticket-relations/RelationPanel';
 import ServiceRequestPanel from './ServiceRequestPanel';
 import ServiceCatalogApprovalChain from './ServiceCatalogApprovalChain';
 import { CIContextCard } from './CIContextCard';
@@ -73,6 +72,7 @@ import { TicketCommentStream } from './TicketCommentStream';
 import { TicketAttachmentGrid } from './TicketAttachmentGrid';
 import { TicketHistoryList } from './TicketHistoryList';
 import { TicketApprovalCards } from './TicketApprovalCards';
+import { TicketRelationCards } from './TicketRelationCards';
 import {
   MessageSquare,
   Paperclip,
@@ -675,7 +675,6 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
           {/* 3. 底部五维完整 Tabs（评论/附件/审批链/历史/关联） */}
           <TicketDetailTabs
             ticketId={ticketId}
-            ticketNumber={ticket.ticketNumber}
             ticketSource={ticket.source}
             currentUserId={currentUser?.id}
             ticketAssigneeId={ticket.assigneeId}
@@ -1181,7 +1180,6 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
 
 interface TicketDetailTabsProps {
   ticketId: number;
-  ticketNumber?: string;
   ticketSource?: string;
   currentUserId?: number;
   ticketAssigneeId?: number;
@@ -1196,7 +1194,6 @@ interface TicketDetailTabsProps {
 
 const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
   ticketId,
-  ticketNumber,
   ticketSource,
   currentUserId,
   tabCounts,
@@ -1267,11 +1264,7 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
           关联工单与资产{countSuffix(tabCounts?.relations)}
         </span>
       ),
-      children: (
-        <div className="p-6">
-          <RelationPanel ticketId={ticketId} ticketNumber={ticketNumber || String(ticketId)} />
-        </div>
-      ),
+      children: <TicketRelationCards ticketId={ticketId} />,
     },
   ];
 
