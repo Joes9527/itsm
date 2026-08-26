@@ -40,6 +40,7 @@ func setupChangeRegressionHandler(t *testing.T, dbName, actorCode string) (*gin.
 	r.POST("/api/v1/changes/:id/start", handler.TransitionStatus)
 	r.POST("/api/v1/changes/:id/complete", handler.TransitionStatus)
 	r.POST("/api/v1/changes/:id/rollback", handler.TransitionStatus)
+	r.GET("/api/v1/changes/calendar", handler.GetCalendar)
 	return r, repo, entClient, tenantID, actorID
 }
 
@@ -165,9 +166,6 @@ func TestChangeController_TransitionStatus_NonApprovalLifecycleByType(t *testing
 			afterStart, err := repo.Get(context.Background(), changeEntity.ID, tenantID)
 			require.NoError(t, err)
 			assert.Equal(t, "in_progress", afterStart.Status)
-			if tt.changeType == "emergency" {
-				assert.NotEqual(t, "scheduled", afterStart.Status, "紧急变更不应被强制卡回 scheduled")
-			}
 
 			finalReq, err := http.NewRequest("POST", fmt.Sprintf("/api/v1/changes/%d/%s", changeEntity.ID, tt.finalAction), bytes.NewBufferString(tt.finalBody))
 			require.NoError(t, err)
@@ -184,6 +182,91 @@ func TestChangeController_TransitionStatus_NonApprovalLifecycleByType(t *testing
 			stored, err := repo.Get(context.Background(), changeEntity.ID, tenantID)
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedTerminal, stored.Status)
+		})
+	}
+}
+
+// 这组生命周期测试故意不注入 processEngine：这里只锁定非审批状态机守卫和持久化行为；
+// BPMN 阶段任务推进仍由现有的 service_stage_completion_test.go 单独覆盖。
+func TestChangeController_TransitionStatus_StartGuardByType(t *testing.T) {
+	tests := []struct {
+		name        string
+		dbName      string
+		changeType  string
+		startStatus string
+		wantHTTP    int
+		wantCode    int
+		wantFinal   string
+	}{
+		{
+			name:        "standard approved can start directly",
+			dbName:      "change_start_guard_standard_ok",
+			changeType:  "standard",
+			startStatus: "approved",
+			wantHTTP:    http.StatusOK,
+			wantCode:    common.SuccessCode,
+			wantFinal:   "in_progress",
+		},
+		{
+			name:        "normal scheduled can start",
+			dbName:      "change_start_guard_normal_scheduled_ok",
+			changeType:  "normal",
+			startStatus: "scheduled",
+			wantHTTP:    http.StatusOK,
+			wantCode:    common.SuccessCode,
+			wantFinal:   "in_progress",
+		},
+		{
+			name:        "normal approved cannot skip scheduled",
+			dbName:      "change_start_guard_normal_approved_fail",
+			changeType:  "normal",
+			startStatus: "approved",
+			wantHTTP:    http.StatusInternalServerError,
+			wantCode:    common.InternalErrorCode,
+			wantFinal:   "approved",
+		},
+		{
+			name:        "emergency approved uses fast path to start",
+			dbName:      "change_start_guard_emergency_approved_ok",
+			changeType:  "emergency",
+			startStatus: "approved",
+			wantHTTP:    http.StatusOK,
+			wantCode:    common.SuccessCode,
+			wantFinal:   "in_progress",
+		},
+		{
+			name:        "emergency scheduled is rejected by type specific guard",
+			dbName:      "change_start_guard_emergency_scheduled_fail",
+			changeType:  "emergency",
+			startStatus: "scheduled",
+			wantHTTP:    http.StatusInternalServerError,
+			wantCode:    common.InternalErrorCode,
+			wantFinal:   "scheduled",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			router, repo, entClient, tenantID, actorID := setupChangeRegressionHandler(t, tt.dbName, tt.dbName)
+			changeEntity := createRegressionChange(t, entClient, tenantID, actorID, tt.changeType, tt.startStatus, []string{"INC-2001"})
+
+			req, err := http.NewRequest("POST", fmt.Sprintf("/api/v1/changes/%d/start", changeEntity.ID), bytes.NewBufferString(`{}`))
+			require.NoError(t, err)
+			req.Header.Set("Content-Type", "application/json")
+
+			recorder := httptest.NewRecorder()
+			router.ServeHTTP(recorder, req)
+
+			response := decodeChangeResponse(t, recorder)
+			assert.Equal(t, tt.wantHTTP, recorder.Code)
+			assert.Equal(t, tt.wantCode, response.Code)
+
+			stored, err := repo.Get(context.Background(), changeEntity.ID, tenantID)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantFinal, stored.Status)
+			if tt.wantHTTP == http.StatusOK {
+				assert.Equal(t, tt.wantFinal, changeResponseData(t, response)["status"])
+			}
 		})
 	}
 }
@@ -297,6 +380,23 @@ func TestChangeController_CreateChange_RequiredFieldValidation(t *testing.T) {
 		RollbackPlan:       "失败后恢复备份并验证业务恢复。",
 	}
 
+	t.Run("valid payload succeeds", func(t *testing.T) {
+		payload, err := json.Marshal(valid)
+		require.NoError(t, err)
+
+		req, err := http.NewRequest("POST", "/api/v1/changes", bytes.NewBuffer(payload))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+
+		recorder := httptest.NewRecorder()
+		router.ServeHTTP(recorder, req)
+
+		response := decodeChangeResponse(t, recorder)
+		require.Equal(t, http.StatusOK, recorder.Code)
+		require.Equal(t, common.SuccessCode, response.Code)
+		assert.Equal(t, "draft", changeResponseData(t, response)["status"])
+	})
+
 	tests := []struct {
 		name        string
 		mutate      func(*dto.CreateChangeRequest)
@@ -375,10 +475,8 @@ func TestChangeTenantIsolation_ReadAndModify(t *testing.T) {
 	changeA := createRegressionChange(t, entClient, tenantA, actorA, "normal", "draft", []string{"INC-A"})
 	changeB := createRegressionChange(t, entClient, tenantB, actorB, "emergency", "draft", []string{"INC-B"})
 
-	t.Run("tenant scoped reads stay isolated", func(t *testing.T) {
-		_, err := repo.Get(ctx, changeB.ID, tenantA)
-		require.Error(t, err)
-
+	seedAggregateFixtures := func(t *testing.T) {
+		t.Helper()
 		for _, status := range []string{"pending_review", "approved", "scheduled", "in_progress", "completed", "failed", "rolled_back", "rejected", "cancelled"} {
 			_, createErr := entClient.Change.Create().
 				SetTitle("tenant-a-stats-" + status).
@@ -412,16 +510,31 @@ func TestChangeTenantIsolation_ReadAndModify(t *testing.T) {
 				Save(ctx)
 			require.NoError(t, createErr)
 		}
+	}
+
+	t.Run("tenant scoped direct reads stay isolated", func(t *testing.T) {
+		_, err := repo.Get(ctx, changeB.ID, tenantA)
+		require.Error(t, err)
 
 		list, total, err := repo.List(ctx, tenantA, 1, 10, "", "", "")
 		require.NoError(t, err)
-		require.Equal(t, 10, total)
-		require.Len(t, list, 10)
+		require.Equal(t, 1, total)
+		require.Len(t, list, 1)
 		listIDs := make([]int, 0, len(list))
 		for _, item := range list {
 			listIDs = append(listIDs, item.ID)
 		}
 		assert.Contains(t, listIDs, changeA.ID)
+		assert.NotContains(t, listIDs, changeB.ID)
+	})
+
+	t.Run("tenant scoped aggregates stay isolated", func(t *testing.T) {
+		seedAggregateFixtures(t)
+
+		list, total, err := repo.List(ctx, tenantA, 1, 10, "", "", "")
+		require.NoError(t, err)
+		require.Equal(t, 10, total)
+		require.Len(t, list, 10)
 
 		stats, err := repo.GetStats(ctx, tenantA)
 		require.NoError(t, err)
@@ -436,10 +549,12 @@ func TestChangeTenantIsolation_ReadAndModify(t *testing.T) {
 		assert.Equal(t, 1, stats.RolledBack)
 		assert.Equal(t, 1, stats.Rejected)
 		assert.Equal(t, 1, stats.Cancelled)
+	})
 
+	t.Run("tenant scoped calendar reads stay isolated", func(t *testing.T) {
 		plannedStart := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 		plannedEnd := time.Date(2026, 9, 2, 0, 0, 0, 0, time.UTC)
-		_, err = entClient.Change.UpdateOneID(changeA.ID).
+		_, err := entClient.Change.UpdateOneID(changeA.ID).
 			SetPlannedStartDate(plannedStart).
 			SetPlannedEndDate(plannedEnd).
 			Save(ctx)
@@ -493,15 +608,6 @@ func TestChangeTenantIsolation_ReadAndModify(t *testing.T) {
 		items, ok := payload["items"].([]interface{})
 		require.True(t, ok)
 		require.Len(t, items, 1)
-
-		badReq, err := http.NewRequest("GET", "/api/v1/changes/calendar?startDate=2026-09-01", nil)
-		require.NoError(t, err)
-		badRecorder := httptest.NewRecorder()
-		router.ServeHTTP(badRecorder, badReq)
-		require.Equal(t, http.StatusBadRequest, badRecorder.Code)
-
-		badResponse := decodeChangeResponse(t, badRecorder)
-		assert.Equal(t, common.ParamErrorCode, badResponse.Code)
 	})
 
 	t.Run("tenant scoped status transitions cannot mutate another tenants change", func(t *testing.T) {
@@ -533,4 +639,18 @@ func TestChangeTenantIsolation_ReadAndModify(t *testing.T) {
 		require.NoError(t, getErr)
 		assert.Equal(t, changeB.ID, stored.ID)
 	})
+}
+
+func TestChangeController_GetCalendar_ParamValidation(t *testing.T) {
+	router, _, _, _, _ := setupChangeRegressionHandler(t, "change_calendar_param_validation", "calendar-params")
+
+	req, err := http.NewRequest("GET", "/api/v1/changes/calendar?startDate=2026-09-01", nil)
+	require.NoError(t, err)
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+	require.Equal(t, http.StatusBadRequest, recorder.Code)
+
+	response := decodeChangeResponse(t, recorder)
+	assert.Equal(t, common.ParamErrorCode, response.Code)
 }
