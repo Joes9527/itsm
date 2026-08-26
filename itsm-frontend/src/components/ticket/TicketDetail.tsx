@@ -629,6 +629,24 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
               </div>
 
               <div className="flex items-center justify-between">
+                <span className="text-slate-400 text-xs">申请人:</span>
+                <span className="text-slate-700 text-xs">
+                  {ticket.requester
+                    ? `${ticket.requester.name}${ticket.requester.department ? ` · ${ticket.requester.department}` : ''}`
+                    : '-'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 text-xs">处理人:</span>
+                <span className="text-slate-700 text-xs">
+                  {ticket.assignee
+                    ? `${ticket.assignee.name}${ticket.assignee.department ? ` · ${ticket.assignee.department}` : ''}`
+                    : '未分配'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between">
                 <span className="text-slate-400 text-xs">工单分类:</span>
                 <span className="text-slate-700 text-xs">{ticket.category || '未分类'}</span>
               </div>

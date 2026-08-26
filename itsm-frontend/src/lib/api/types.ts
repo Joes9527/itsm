@@ -53,6 +53,7 @@ export interface UserBasicInfo {
   username?: string;
   email?: string;
   avatar?: string;
+  department?: string;
 }
 
 // ==================== 工单相关类型 ====================

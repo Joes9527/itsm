@@ -200,6 +200,7 @@ func (tc *TicketController) GetTicket(c *gin.Context) {
 	}
 	resp := tc.ticketToResponse(c, ticket)
 	dto.EnrichTicketResponse(c.Request.Context(), tc.db, resp, tenantID)
+	dto.EnrichTicketResponseUsers(c.Request.Context(), tc.client, resp, tenantID)
 	common.Success(c, resp)
 }
 

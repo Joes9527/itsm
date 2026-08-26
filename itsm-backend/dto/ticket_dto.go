@@ -6,11 +6,12 @@ import (
 
 // UserBasicInfo 用户基本信息
 type UserBasicInfo struct {
-	ID       int    `json:"id"`
-	Username string `json:"username"`
-	Name     string `json:"name"`
-	Email    string `json:"email"`
-	Role     string `json:"role"`
+	ID         int    `json:"id"`
+	Username   string `json:"username"`
+	Name       string `json:"name"`
+	Email      string `json:"email"`
+	Role       string `json:"role"`
+	Department string `json:"department,omitempty"`
 }
 
 // CreateTicketRequest 创建工单请求
