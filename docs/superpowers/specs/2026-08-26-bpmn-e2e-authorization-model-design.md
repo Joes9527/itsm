@@ -30,6 +30,21 @@
 
 最终评审发现并已修复:`GetCounterSignStatus` 此前既没有租户过滤也没有任何授权检查,是这次分支最严重的一个遗漏(见该分支 ledger)。它之所以被漏掉,是因为这批接口从未有过一张"每个接口对应哪种授权原语"的清单——全靠逐个任务手动排查。本设计要把这张清单变成结构化数据,并配自动化守卫,防止下一个 `GetCounterSignStatus` 式的遗漏。
 
+### 4. `managed` 分组下,除 `ListProcessInstances` 外的全部流程实例接口,同样只有租户隔离,没有参与者/发起人/提权校验(本轮实施计划前系统性排查发现,非推测)
+
+逐一核实 `controller/bpmn_workflow_controller.go` 里 `managed` 分组(`RequireLegacyBPMNRoles()` 7 角色白名单把守)下的流程实例接口,除了本分支已经修好的 `ListProcessInstances`,其余全部只做了 `processinstance.TenantID(tenantID)` 租户过滤,没有任何参与者级别的校验:
+
+- `GetProcessInstance`(`service/bpmn_process_engine.go:2099-2115`)——读,流程实例详情。
+- `ListApprovalDecisions`(`service/bpmn_process_engine.go:2697-2709`,`GetApprovalHistory` 路由背后实际调用的方法——控制器里同名的 `WorkflowApprovalService.GetApprovalHistory` 是从未接线的死代码,不要与之混淆)——读,审批历史。
+- `SetProcessInstanceVariables`(`service/bpmn_process_engine.go:2243-2260`)——**写**,可覆盖流程实例的业务变量。
+- `SuspendProcess`(`service/bpmn_process_engine.go:1554-1596`)——**写**,暂停流程实例。
+- `ResumeProcess`(`service/bpmn_process_engine.go:1603` 起)——**写**,恢复流程实例。
+- `TerminateProcess`(`service/bpmn_process_engine.go:1649` 起)——**写**,终止流程实例。
+
+后四个写操作还各自有一条 `/api/v1/workflow/instances/:id/{suspend,resume,terminate}` 简化别名路由,用 `RequirePermission("process_instance","update")` 把关——这个权限码分发范围比 `task:read` 窄得多(只有 `it_director`/`ops_director`/`sysadmin`/`super_admin` 持有,`change_manager`/`dept_manager`/`end_user`/`service_catalog_admin` 都没有),所以这条别名路由今天暴露的风险相对有限。**但 `/api/v1/bpmn/process-instances/:id/{suspend,resume,terminate,variables}` 这几条规范路由完全不做权限码检查,只受 7 角色白名单把关**——这意味着 `end_user`/`dept_manager` 这类不持有 `process_instance:update` 的角色,今天已经能通过规范路由暂停/恢复/终止/改写租户内**任意**一个流程实例,和自己是否参与这个流程完全无关。这是和 `GetCounterSignStatus` 同一严重级别的缺口,只是作用对象是整个流程实例而不是单个任务。
+
+流程定义(`process-definitions`)、版本管理(`versions`)、统计(`stats/*`)不算同类问题——这些是流程模板/配置/聚合统计资源,不属于"谁能看到谁的审批数据"这个问题范畴,本设计不处理。
+
 ## 目标与不变式
 
 1. **参与者范围判断与提权判断,必须是两个独立的权限维度**,不能复用同一个"能否使用基础功能"的权限码。
@@ -82,6 +97,8 @@ const (
     AuthPrimitiveCounterSignViewer    AuthPrimitive = "counter_sign_viewer"   // authorizeCounterSignViewer
     AuthPrimitiveTaskActor            AuthPrimitive = "task_actor"            // authorizeTaskActor / isTaskCandidate（claim/complete/decisions/vote 的候选人级校验）
     AuthPrimitiveParticipantScoped    AuthPrimitive = "participant_scoped"    // ListUserTasks / ListProcessInstances 的强制收敛到自身身份
+    AuthPrimitiveInstanceViewer       AuthPrimitive = "instance_viewer"       // authorizeProcessInstanceViewer（组件 5，新增）
+    AuthPrimitiveInstanceMutation     AuthPrimitive = "instance_mutation"     // authorizeProcessInstanceMutation（组件 5，新增）
 )
 
 type RouteAuthEntry struct {
@@ -106,7 +123,12 @@ var BPMNTaskInstanceAuthRegistry = []RouteAuthEntry{
     {Method: "GET", Path: "/bpmn/tasks/:id/counter-sign-status", Primitive: AuthPrimitiveCounterSignViewer, ElevatedResource: "task", ElevatedAction: "read", AllowSystemCaller: false},
     {Method: "PUT", Path: "/bpmn/tasks/:id/vote", Primitive: AuthPrimitiveTaskActor, ElevatedResource: "", ElevatedAction: "", AllowSystemCaller: false},
     {Method: "GET", Path: "/bpmn/process-instances", Primitive: AuthPrimitiveParticipantScoped, ElevatedResource: "process_instance", ElevatedAction: "read", AllowSystemCaller: false},
-    {Method: "GET", Path: "/bpmn/process-instances/:id", Primitive: AuthPrimitiveTaskViewer, ElevatedResource: "process_instance", ElevatedAction: "read", AllowSystemCaller: false},
+    {Method: "GET", Path: "/bpmn/process-instances/:id", Primitive: AuthPrimitiveInstanceViewer, ElevatedResource: "process_instance", ElevatedAction: "read", AllowSystemCaller: false},
+    {Method: "GET", Path: "/bpmn/process-instances/:id/approval-history", Primitive: AuthPrimitiveInstanceViewer, ElevatedResource: "process_instance", ElevatedAction: "read", AllowSystemCaller: false},
+    {Method: "PUT", Path: "/bpmn/process-instances/:id/variables", Primitive: AuthPrimitiveInstanceMutation, ElevatedResource: "process_instance", ElevatedAction: "update", AllowSystemCaller: false},
+    {Method: "PUT", Path: "/bpmn/process-instances/:id/suspend", Primitive: AuthPrimitiveInstanceMutation, ElevatedResource: "process_instance", ElevatedAction: "update", AllowSystemCaller: false},
+    {Method: "PUT", Path: "/bpmn/process-instances/:id/resume", Primitive: AuthPrimitiveInstanceMutation, ElevatedResource: "process_instance", ElevatedAction: "update", AllowSystemCaller: false},
+    {Method: "PUT", Path: "/bpmn/process-instances/:id/terminate", Primitive: AuthPrimitiveInstanceMutation, ElevatedResource: "process_instance", ElevatedAction: "update", AllowSystemCaller: false},
 }
 ```
 
@@ -117,6 +139,89 @@ var BPMNTaskInstanceAuthRegistry = []RouteAuthEntry{
 ### 组件 4:`/my-approvals` 修复
 
 已被组件 1 覆盖(路由准入改为仅需登录 + 菜单 `PermissionCode` 改为 `bpmn:read`),不需要额外的独立改动。
+
+### 组件 5:流程实例级别授权(现状核实第 4 点的修复)
+
+新增两个函数,复用组件 2 已经建立的模式,挂在 `bpmnProcessInstanceService`(`GetProcessInstance`/`ListApprovalDecisions` 所在的同一个 struct)上:
+
+```go
+// authorizeProcessInstanceViewer allows a process instance to be read by:
+// an elevated caller, the instance's initiator, or a participant of any
+// task belonging to this instance (mirrors authorizeTaskViewer's philosophy
+// for the read side, extended from task-scope to instance-scope). No
+// implicit system-caller fail-open — see BPMNSystemCallerContextKey.
+func (s *bpmnProcessInstanceService) authorizeProcessInstanceViewer(ctx context.Context, instance *ent.ProcessInstance) error {
+    if systemCaller, _ := ctx.Value(bpmn.BPMNSystemCallerContextKey).(bool); systemCaller {
+        return nil
+    }
+    if elevated, _ := ctx.Value(bpmn.BPMNElevatedContextKey).(bool); elevated {
+        return nil
+    }
+    userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
+    if userID <= 0 {
+        return fmt.Errorf("未认证的调用")
+    }
+    tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
+    if tenantID == 0 {
+        tenantID = instance.TenantID
+    }
+    identity, err := bpmn.ResolveCallerIdentity(ctx, s.client, s.groupResolver, tenantID, userID)
+    if err != nil {
+        return fmt.Errorf("查看用户不存在: %w", err)
+    }
+    if instance.Initiator == identity.IDStr {
+        return nil
+    }
+    tasks, err := s.client.ProcessTask.Query().
+        Where(processtask.ProcessInstanceID(instance.ID), processtask.TenantID(tenantID)).
+        All(ctx)
+    if err != nil {
+        return fmt.Errorf("查询流程任务失败: %w", err)
+    }
+    for _, task := range tasks {
+        if identity.IsTaskParticipant(task) {
+            return nil
+        }
+    }
+    return fmt.Errorf("当前用户无权查看该流程实例")
+}
+
+// authorizeProcessInstanceMutation gates suspend/resume/terminate/
+// SetProcessInstanceVariables — instance-lifecycle administrative actions,
+// deliberately narrower than authorizeProcessInstanceViewer: any task
+// participant can VIEW instance progress, but only the instance's own
+// initiator (cancelling/pausing their own request) or an elevated caller
+// may control its lifecycle. A participant on one approval step within the
+// instance has no business terminating the whole process.
+func (s *bpmnProcessInstanceService) authorizeProcessInstanceMutation(ctx context.Context, instance *ent.ProcessInstance) error {
+    if systemCaller, _ := ctx.Value(bpmn.BPMNSystemCallerContextKey).(bool); systemCaller {
+        return nil
+    }
+    if elevated, _ := ctx.Value(bpmn.BPMNElevatedContextKey).(bool); elevated {
+        return nil
+    }
+    userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
+    if userID <= 0 {
+        return fmt.Errorf("未认证的调用")
+    }
+    tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
+    if tenantID == 0 {
+        tenantID = instance.TenantID
+    }
+    identity, err := bpmn.ResolveCallerIdentity(ctx, s.client, s.groupResolver, tenantID, userID)
+    if err != nil {
+        return fmt.Errorf("操作用户不存在: %w", err)
+    }
+    if instance.Initiator == identity.IDStr {
+        return nil
+    }
+    return fmt.Errorf("当前用户无权操作该流程实例")
+}
+```
+
+`GetProcessInstance`/`ListApprovalDecisions` 在返回结果前调用 `authorizeProcessInstanceViewer`；`SetProcessInstanceVariables`/`SuspendProcess`/`ResumeProcess`/`TerminateProcess` 在执行变更前调用 `authorizeProcessInstanceMutation`。`SetProcessInstanceVariables` 内部已经调用 `GetProcessInstance` 取实例,顺带获得一次 viewer 级别校验,但这不够——它是写操作,必须显式再调一次 `authorizeProcessInstanceMutation`,不能只依赖内部调用链带来的 viewer 校验。
+
+**"发起人 vs 提权"这个设计判断需要product层面确认**:`authorizeProcessInstanceMutation` 目前的设计是"只有发起人自己或提权角色能暂停/恢复/终止/改变量",不允许任何一个任务参与者(哪怕是当前审批环节的审批人)代为操作整个流程实例——这是因为暂停/终止是流程实例级别的生命周期控制,和某个任务的审批权限是两个不同层级的授权,业务上通常不应该让"审批人 A 只是流程中某一步的候选人"就能单方面终止整个流程。如果实际业务需要允许审批人也能终止自己正在处理的流程(例如"审批驳回=终止"这种产品语义),需要在实施前重新确认,而不是实施阶段随意调整这个判断。
 
 ## 权限种子迁移
 
@@ -139,7 +244,8 @@ var BPMNTaskInstanceAuthRegistry = []RouteAuthEntry{
 
 ## 验证计划
 
-- 每个受影响接口(`ListProcessInstances`/`GetTask`/`ListUserTasks`/4 个任务操作/`GetCounterSignStatus`/`Vote`)沿用本分支已建立的四态覆盖:参与者/非参与者/跨租户/提权。
+- 每个受影响接口(`ListProcessInstances`/`GetTask`/`ListUserTasks`/4 个任务操作/`GetCounterSignStatus`/`Vote`/`ClaimTask`/`CompleteTask`/`SubmitTaskDecision`)沿用本分支已建立的四态覆盖:参与者/非参与者/跨租户/提权。
+- 组件 5 新增的 6 个流程实例接口:`GetProcessInstance`/`ListApprovalDecisions` 覆盖参与者(通过任一任务)/发起人/非参与者非发起人/提权/跨租户;`SetProcessInstanceVariables`/`SuspendProcess`/`ResumeProcess`/`TerminateProcess` 覆盖发起人/非发起人任务参与者(必须被拒绝,验证"参与者不等于能操作实例"这条设计判断)/提权/跨租户。
 - **重点回归**:收紧 `task:read`/`process_instance:read`/`task:update` 种子分发范围后,必须重新跑 `tests/e2e/sslvpn_scenario_test.go`——该测试曾经在 RBAC 收敛分支里实测证伪过一次"粗粒度角色门槛误拒合法候选人"的回归,这次改权限种子数据是同一类风险,不能只看单元测试通过就下结论。
 - 新增：授权登记表守卫测试(组件 3),验证登记表与实际路由一致。
 - 新增：迁移脚本的正向验证(迁移后 `dept_manager`/`end_user`/`service_catalog_admin` 三个角色确认不再持有被收紧的权限码,但仍能通过 `/my-approvals`/`/workflow/tasks`/`/workflow/instances` 看到自己参与的任务/实例)。
