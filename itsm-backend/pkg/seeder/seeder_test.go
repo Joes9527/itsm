@@ -502,3 +502,31 @@ func mustCount(t *testing.T, query func() (int, error)) int {
 	require.NoError(t, err)
 	return count
 }
+
+func TestSeedAll_TightenedRolesLackBPMNElevatedPermissions(t *testing.T) {
+	seeder, ctx := newTestSeeder(t, tenantmode.DeploymentModePrivate)
+	seeder.SeedAll(ctx)
+
+	tightenedRoles := []string{"dept_manager", "end_user", "service_catalog_admin"}
+	revokedCodes := []string{"task:read", "process_instance:read", "task:update"}
+
+	for _, roleCode := range tightenedRoles {
+		r, err := seeder.client.Role.Query().Where(role.CodeEQ(roleCode)).Only(ctx)
+		require.NoError(t, err, "role %q must exist after seeding", roleCode)
+
+		for _, permCode := range revokedCodes {
+			perm, err := seeder.client.Permission.Query().Where(permission.CodeEQ(permCode)).Only(ctx)
+			require.NoError(t, err, "permission %q must be a defined permission", permCode)
+
+			has, err := seeder.client.RolePermission.Query().
+				Where(rolepermission.RoleID(r.ID), rolepermission.PermissionID(perm.ID)).
+				Exist(ctx)
+			require.NoError(t, err)
+			assert.False(t, has, "role %q must not hold %q after the 2026-08-26 permission model tightening", roleCode, permCode)
+		}
+	}
+
+	myApprovalsMenu, err := seeder.client.Menu.Query().Where(menu.PathEQ("/approvals/pending")).Only(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "bpmn:read", myApprovalsMenu.PermissionCode)
+}

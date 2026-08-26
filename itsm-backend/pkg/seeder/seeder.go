@@ -475,6 +475,15 @@ func getEmbeddedConfig() *SeedConfig {
 			{Name: "一线工程师", Code: "l1_support", Description: "一线支持工程师"},
 			{Name: "二线工程师", Code: "l2_support", Description: "二线支持工程师"},
 			{Name: "三线专家", Code: "l3_expert", Description: "三线技术专家"},
+			// service_catalog_admin：这个角色代码在下面 seedRolePermissions 的
+			// rolePermissionMap 里一直有权限清单条目，但在本 Roles 列表（embedded 默认配置，
+			// 单测和无 config/seed/default.json 时的生产环境都会落到这条路径）里此前一直缺失，
+			// 导致该角色实际从未被创建、rolePermissionMap 里的对应条目一直是死代码——
+			// config/seed/default.json（大多数生产部署实际加载的配置）里已经有这个角色，
+			// 这里补齐是让 embedded 默认配置与其保持一致，2026-08-26 权限模型整改的测试
+			// （TestSeedAll_TightenedRolesLackBPMNElevatedPermissions）需要这个角色真实存在
+			// 才能验证它不再持有 task:read/process_instance:read。
+			{Name: "服务目录管理员", Code: "service_catalog_admin", Description: "服务目录与请求模板管理员"},
 			{Name: "研发经理", Code: "rd_manager", Description: "研发团队经理"},
 			{Name: "开发工程师", Code: "developer", Description: "开发工程师"},
 			{Name: "测试工程师", Code: "qa_engineer", Description: "测试工程师"},
@@ -1799,8 +1808,10 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 			"sla:read",
 			"knowledge:read",
 			"tag:read",
-			"task:read",
-			"process_instance:read",
+			// task:read/process_instance:read 已在 2026-08-26 权限模型整改中移除：这两个权限码
+			// 现在是纯"提权看租户内所有任务/实例"信号，service_catalog_admin 是目录/模板配置角色，
+			// 不需要跨用户查看审批数据；本角色查看自己参与的审批走 bpmn:read 门槛的 /my-approvals，
+			// 不受影响。
 		},
 		// 一线支持工程师
 		"l1_support": {
@@ -1870,7 +1881,11 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 			// 菜单可见性（menu_service.go），不再是 API 能不能调的门槛——保留它们是为了让
 			// 部门经理在菜单里也能看到"我的待办"入口，不是因为撤掉会导致 403（backlog：BPMN
 			// 真正的 DB 驱动权限模型落地后这里的语义会变，见设计文档）。
-			"bpmn:read", "bpmn:write", "task:read",
+			// task:read 已在 2026-08-26 权限模型整改中移除：这个权限码现在是纯"提权看全部"
+			// 信号，dept_manager 只能看到自己参与/发起的任务，不再默认能看到别人的——这正是
+			// 本次整改要修的问题（之前 task:read 被误当成"我的待办"的访问门槛，导致几乎所有
+			// 角色都被误判为提权）。
+			"bpmn:read", "bpmn:write",
 		},
 		// 团队主管
 		"team_lead": {
@@ -1908,9 +1923,12 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 			// allowlist 把关（end_user 本身就在该 allowlist 里），所以这两条 bpmn:* 授权现在只
 			// 控制 BPMN 菜单可见性，不是接口能不能调的门槛，保留它们是为了让申请人在菜单里也能
 			// 看到相应入口（backlog：BPMN 真正的 DB 驱动权限模型，见设计文档）。
-			// task:read：/api/v1/workflow/tasks、/api/v1/tenant/my-approvals 等"我的待办"路由
-			// 是真正按 RequirePermission("task","read") 做 DB 驱动校验的，这条是必需的真实授权。
-			"bpmn:read", "bpmn:write", "task:read",
+			// task:read 已在 2026-08-26 权限模型整改中移除：/api/v1/workflow/tasks、
+			// /api/v1/tenant/my-approvals 这两条路由不再要求这个权限码（改为仅需登录），
+			// 可见范围完全由 ListUserTasks 的参与者收敛逻辑负责——end_user 不再需要持有这个
+			// 权限码就能看到自己的"我的待办"，而这个权限码本身收窄为纯提权信号，end_user 不应
+			// 该拥有它（否则又会被误判为能看到全租户任务，重蹈这次要修的问题）。
+			"bpmn:read", "bpmn:write",
 		},
 		// 访客
 		"guest": {
