@@ -165,7 +165,7 @@ Incident 不能通过修改 `type=problem` 变为 Problem；Problem 也不能通
 | 字段 | 说明 |
 |---|---|
 | `id` | 内部主键 |
-| `ticket_number` | 全租户内稳定编号；API 映射为 `number` 或保留 `ticketNumber` |
+| `ticket_number` | 租户内稳定且不可变的最终业务编号，直接包含专业前缀；API 映射为 `number` 或保留 `ticketNumber` |
 | `record_class` | `generic`、`service_request_item`、`incident`、`problem`、`change_request`、`catalog_task` |
 | `title`, `description` | 公共内容 |
 | `status` | 当前专业类的状态值，由专业服务校验 |
@@ -184,6 +184,15 @@ Incident 不能通过修改 `type=problem` 变为 Problem；Problem 也不能通
 | `created_at`, `updated_at`, `resolved_at`, `closed_at` | 公共生命周期时间 |
 | `tenant_id` | 租户边界 |
 | `deleted_at` | 软删除 |
+
+`tickets.ticket_number` 直接保存最终展示和检索使用的专业业务编号，例如
+`INC-202608-000001`、`PRB-202608-000001`、`CHG-202608-000001`、
+`RITM-202608-000001` 或 `TKT-202608-000001`，不再额外维护一套只供底层使用的
+WorkItem 全局编号。编号生成采用“租户 + recordClass + 时间分区”的原子序列，前缀来自可配置的
+编号规则；Redis key 建议使用
+`sequence:work_item:{tenantId}:{recordClass}:{yyyyMM}`，数据库回退路径必须使用同一分区语义。
+数据库以 `(tenant_id, ticket_number)` 唯一索引作为最终并发防线，发生冲突时重新取号，不能通过
+随机覆盖或忽略冲突继续创建。编号一经生成不可修改。
 
 ### 6.3 `recordClass` 约束
 
@@ -256,7 +265,7 @@ Incident 不能通过修改 `type=problem` 变为 Problem；Problem 也不能通
 
 现有 ServiceRequest 已接近目标模型，保留：
 
-- `work_item_id`（现有 `ticket_id`），唯一、必填；
+- 逻辑上的 `workItemId` 使用现有物理字段 `ticket_id`，唯一、必填；
 - `catalog_item_id`（现有 `catalog_id`）；
 - quantity、expected_at；
 - contact、cost center、data classification、合规和资源交付专属字段；
@@ -264,6 +273,11 @@ Incident 不能通过修改 `type=problem` 变为 Problem；Problem 也不能通
 - fulfillment 状态的派生信息。
 
 不再维护独立标题、状态、审批和公共处理字段。
+
+第一阶段不把 `service_requests.ticket_id` 重命名为 `work_item_id`。服务和 DTO 在领域语义中将其
+解释为 `workItemId`，数据库继续保留已经运行且带唯一索引的 `ticket_id`，避免一次没有业务收益的
+DDL、Ent 生成代码和查询迁移。只有在全部专业域完成统一、并决定物理重命名 `tickets` 表时，才统一
+评估这些外键列是否改名。
 
 #### CatalogTask
 
@@ -354,6 +368,25 @@ TicketTemplate 定位为内部快速录入和执行模板：
 - 不能作为终端用户服务目录的权威来源。
 
 当前 `category` 字符串应退化为展示信息或删除，权威关联使用 `categoryIds`。模板创建、更新 API 必须完整读写 `categoryIds`。
+
+### 8.3 动态自定义字段归属
+
+动态字段采用“定义来源与实例归属分离”的模型：
+
+- `field_definitions` 继续归属于 TicketTemplate 或 Catalog Item，用于定义字段名、类型、必填、
+  选项、排序和校验规则；
+- 用户提交后生成的 `field_values` 统一归属于 WorkItem，即
+  `entity_type=ticket, entity_id=workItemId`；
+- 从 Catalog Item 提交的值仍使用 Catalog Item 的字段定义进行服务端校验，并在 FieldValue 中保留
+  definition ID、name、label 和 sort order 快照；
+- Incident、Problem、Change、Requested Item 的稳定、可查询、参与业务规则的强类型专业字段必须
+  存入专业扩展表，不能伪装成动态字段；
+- `ServiceRequest.form_data` 只保留尚未结构化的复合输入或流程上下文，不能与 `field_values`
+  同时成为同一字段的权威来源；
+- 通用详情页按 WorkItem ID 批量加载 FieldValue，专业 Panel 再读取扩展表字段。
+
+这样既允许 Catalog Item 和 TicketTemplate 定义不同表单，也确保一次工作记录的动态值只有一个
+实例归属，不会再次形成 Ticket、ServiceRequest 和专业扩展三套值存储。
 
 ## 9. Intake 与分诊
 
@@ -502,17 +535,36 @@ new/approved/fulfillment -> cancelled
 
 - Controller 禁止直接返回 Ent 模型；
 - 专业详情响应由 WorkItem DTO + 专业扩展 DTO 组成；
-- 列表由服务层批量联查，避免逐行 N+1；
+- 列表由服务层批量联查，禁止逐行 N+1；
 - JSON 字段统一 camelCase；
 - 响应中可提供 `recordClass` 和 `actions`；
 - `actions` 由后端根据专业状态、RBAC 和关系计算，前端不自行推断授权。
+
+专业列表必须使用统一批量加载规范：
+
+1. 先按 tenant、recordClass、过滤条件和分页查询 WorkItem；
+2. 收集本页 WorkItem ID，一次执行
+   `WHERE work_item_id IN (...)` 查询专业扩展数据；
+3. 动态字段、关系、用户和操作权限也按 ID 集合批量加载，只有响应明确需要时才查询；
+4. Service 层使用 map 按 WorkItem ID 组装 DTO，Controller 不再补查；
+5. 列表读取不使用长事务，不在持有数据库事务时调用外部服务；
+6. 单一专业列表的基础组装预算为 WorkItem、专业扩展、必要辅助数据三个查询组；可选关系、动态
+   字段等展开数据必须由显式参数控制并分别批量查询；
+7. 为 `tickets(tenant_id, record_class, status, updated_at)` 和专业扩展
+   `work_item_id` 建立匹配索引；
+8. 分页上限和 p95 响应目标写入可配置的 API 性能预算并由集成/性能测试验证，不在 Service 中
+   硬编码阈值。
+
+共享层提供 WorkItem 批量加载器负责公共字段、用户、动态字段和操作权限投影；每个专业 Repository
+提供自己的 `ListByWorkItemIDs` 批量方法。批量加载器只编排读查询和 DTO 投影，不包含专业业务规则，
+也不通过一个跨全域的大型 JOIN 取代专业 Repository。
 
 示例：
 
 ```json
 {
   "id": 1001,
-  "number": "INC0001001",
+  "number": "INC-202608-000001",
   "recordClass": "incident",
   "title": "邮件服务不可用",
   "status": "in_progress",
@@ -725,8 +777,9 @@ MSP 操作者访问客户 tenant 时，actor tenant 与 data tenant 分开记录
 2. 建立 WorkItemRelation；
 3. 抽取共享 WorkItem repository/service，但不接管专业状态机；
 4. 评论、附件、活动、动态字段、SLA、审计接口统一接受 WorkItem ID；
-5. 增加数据完整性检查任务；
-6. 发布统一事件和 Outbox。
+5. 将现有 `service_requests.ticket_id` 明确作为逻辑 WorkItem ID 使用，本阶段不执行列重命名；
+6. 增加数据完整性检查任务；
+7. 发布统一事件和 Outbox。
 
 ### 18.4 Phase 2：Incident 迁移
 
@@ -762,7 +815,8 @@ Incident 优先迁移，因为它当前既有独立模型，又存在服务目�
 
 ### 18.7 Phase 5：服务请求层级
 
-1. 将现有 ServiceRequest 正式命名和定位为 Requested Item；
+1. 将现有 ServiceRequest 在领域和产品语义上正式定位为 Requested Item，保留物理表名和
+   `ticket_id` 列名，避免无收益 DDL；
 2. 规范 Catalog Item 的 targetClass、分类、流程、模板和 SLA 绑定；
 3. 增加按需 Catalog Task；
 4. 当多项申请成为真实需求时再增加 Request Header；
@@ -791,11 +845,15 @@ Incident 优先迁移，因为它当前既有独立模型，又存在服务目�
 
 ### 19.2 编号
 
-- 保留 Incident/Problem/Change 原编号作为 WorkItem number；
-- 通用 Ticket 保留 ticket number；
-- Request 和 Catalog Task 使用独立前缀；
-- tenant 内唯一，跨 tenant 是否唯一由现有产品要求决定；
-- 不因迁移重新编号。
+- `tickets.ticket_number` 是唯一权威业务编号列，直接保存带专业前缀的最终编号；
+- 保留 Incident/Problem/Change 原编号并回填到对应 WorkItem，不因迁移重新编号；
+- 通用 Ticket 保留现有 TKT/TICKET 编号，Requested Item、Request Header 和 Catalog Task 使用各自
+  可配置前缀；
+- 新编号按 tenant、recordClass、时间分区生成原子序列，不共享一个忽略专业类的全局计数器；
+- 数据库唯一约束统一为 `(tenant_id, ticket_number)`；迁移前检查当前全局唯一索引和历史重复情况，
+  在复合唯一索引生效后再移除旧索引；
+- 生成器以数据库唯一约束作为最终并发防线，Redis 与数据库回退必须使用相同分区规则；
+- 编号不可修改，也不因专业记录之间建立关系而复用编号；
 
 ### 19.3 孤儿记录
 
@@ -971,4 +1029,3 @@ Incident 优先迁移，因为它当前既有独立模型，又存在服务目�
 - 旧写路径、旧 JSON 关系、重复控制器和兼容字段已删除；
 - 全量后端测试、前端类型检查、相关 E2E 和迁移对账全部通过；
 - 真实用户主链路完成端到端验证。
-
