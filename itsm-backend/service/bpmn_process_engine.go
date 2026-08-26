@@ -2126,9 +2126,10 @@ func (s *bpmnProcessInstanceService) ListProcessInstances(ctx context.Context, r
 	if req.BusinessKey != "" {
 		query = query.Where(processinstance.BusinessKey(req.BusinessKey))
 	}
-	if req.TenantID > 0 {
-		query = query.Where(processinstance.TenantID(req.TenantID))
-	}
+	// 无条件带上 TenantID 谓词（Global Constraint：every query must include an
+	// explicit TenantID predicate），与下方 processtask.TenantID(req.TenantID)
+	// 保持一致，不再对 req.TenantID<=0 的情况放行不带租户过滤的查询。
+	query = query.Where(processinstance.TenantID(req.TenantID))
 
 	elevated, _ := ctx.Value(bpmn.BPMNElevatedContextKey).(bool)
 	if !elevated {
@@ -2407,11 +2408,36 @@ func (s *bpmnTaskService) authorizeTaskViewer(ctx context.Context, task *ent.Pro
 	if identity.IsTaskParticipant(task) {
 		return nil
 	}
-	instance, err := s.client.ProcessInstance.Get(ctx, task.ProcessInstanceID)
+	instance, err := s.client.ProcessInstance.Query().
+		Where(processinstance.ID(task.ProcessInstanceID), processinstance.TenantID(tenantID)).
+		Only(ctx)
 	if err == nil && instance.Initiator == identity.IDStr {
 		return nil
 	}
 	return fmt.Errorf("当前用户无权查看该任务")
+}
+
+// authorizeCounterSignViewer gates GetCounterSignStatus. It allows anyone
+// authorizeTaskViewer would allow on the PARENT task (elevated caller,
+// parent-task participant, or the process instance's initiator) — but also,
+// independently, any participant of ONE OF THE COUNTER-SIGN SUB-TASKS.
+// The sub-task fallback is required, not optional: CreateCounterSignTasks
+// fans a single parent task out into N per-approver sub-tasks without ever
+// touching the parent task's own assignee/candidate fields, so the actual
+// voters (Vote's callers, gated on their own sub-task via authorizeTaskActor)
+// are frequently NOT participants of the parent task itself. Gating solely
+// on the parent task here would incorrectly deny a legitimate counter-sign
+// approver's own Vote-triggered status lookup.
+func (s *bpmnTaskService) authorizeCounterSignViewer(ctx context.Context, parentTask *ent.ProcessTask, subTasks []*ent.ProcessTask) error {
+	if err := s.authorizeTaskViewer(ctx, parentTask); err == nil {
+		return nil
+	}
+	for _, sub := range subTasks {
+		if err := s.authorizeTaskViewer(ctx, sub); err == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("当前用户无权查看该会签状态")
 }
 
 // authorizeTaskMutation gates assign/cancel/setVariables/counter-sign the
@@ -2497,6 +2523,14 @@ func (s *bpmnTaskService) ListUserTasks(ctx context.Context, req *ListUserTasksR
 		// whatever Assignee/CandidateUsers/CandidateGroups/UserID they sent
 		// and force the query back to their own authenticated identity.
 		callerID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
+		if callerID <= 0 {
+			// No authenticated actor and not elevated: fail closed, see
+			// nothing. Without this, req.UserID stays 0, which falls
+			// through to the unfiltered "else" branch below and returns
+			// the entire tenant's task list — the opposite of fail-closed.
+			// Mirrors ListProcessInstances's identical guard.
+			return []*ent.ProcessTask{}, 0, nil
+		}
 		req.UserID = callerID
 		req.Assignee = ""
 		req.CandidateUsers = ""
@@ -2695,7 +2729,13 @@ func (s *bpmnTaskService) AssignTask(ctx context.Context, taskID string, assigne
 
 	var assigneeUser *ent.User
 	if assigneeID, convErr := strconv.Atoi(assignee); convErr == nil {
-		assigneeUser, _ = s.client.User.Get(ctx, assigneeID)
+		assigneeTenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
+		if assigneeTenantID == 0 {
+			assigneeTenantID = task.TenantID
+		}
+		assigneeUser, _ = s.client.User.Query().
+			Where(user.ID(assigneeID), user.TenantID(assigneeTenantID)).
+			Only(ctx)
 	}
 	if actorID > 0 {
 		if auditErr := s.auditService.RecordTaskAssigned(ctx, task, assigneeUser, actorID, actorName); auditErr != nil {
@@ -3114,13 +3154,43 @@ func (s *bpmnTaskService) CreateCounterSignTasks(ctx context.Context, parentTask
 }
 
 // GetCounterSignStatus 获取会签状态
+//
+// 必须先按 TenantID 取到父任务和子任务，再通过 authorizeCounterSignViewer 校验——
+// 此前这里既无租户过滤也无授权，任何持有 task_id 的用户都能读到别的租户的会签状态
+// （见 BPMN 任务/实例授权修复计划复审 Finding 1）。
+//
+// 注意：门槛不能只查 authorizeTaskViewer(parentTask)。CreateCounterSignTasks 把
+// 一个父任务派生成 N 个按审批人分别赋值 assignee 的子任务，但从不touch父任务自身的
+// assignee/candidate 字段——真正投票的人（Vote 的调用者）是子任务的参与者，不一定是
+// 父任务的参与者。曾经这样实现过，并用一个"审批人 != 父任务原 assignee"的会签场景
+// 实测验证：会导致 Vote 内部调用 GetCounterSignStatus 时被误拒——审批人明明刚刚
+// 通过 authorizeTaskActor 在子任务上通过了校验，却在这里因为父任务参与者检查失败
+// 而报错。所以这里同时接受"父任务参与者/发起人/elevated"或"任意一个会签子任务的
+// 参与者"，见 authorizeCounterSignViewer。
 func (s *bpmnTaskService) GetCounterSignStatus(ctx context.Context, parentTaskID string) (*CounterSignStatus, error) {
+	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
+
+	parentQuery := s.client.ProcessTask.Query().Where(processtask.TaskID(parentTaskID))
+	if tenantID > 0 {
+		parentQuery = parentQuery.Where(processtask.TenantID(tenantID))
+	}
+	parentTask, err := parentQuery.First(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("获取父任务失败: %w", err)
+	}
+
 	// 获取所有会签子任务
-	subTasks, err := s.client.ProcessTask.Query().
-		Where(processtask.ParentTaskID(parentTaskID)).
-		All(ctx)
+	subQuery := s.client.ProcessTask.Query().Where(processtask.ParentTaskID(parentTaskID))
+	if tenantID > 0 {
+		subQuery = subQuery.Where(processtask.TenantID(tenantID))
+	}
+	subTasks, err := subQuery.All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("获取会签子任务失败: %w", err)
+	}
+
+	if err := s.authorizeCounterSignViewer(ctx, parentTask, subTasks); err != nil {
+		return nil, err
 	}
 
 	status := &CounterSignStatus{
@@ -3152,10 +3222,8 @@ func (s *bpmnTaskService) GetCounterSignStatus(ctx context.Context, parentTaskID
 	}
 
 	threshold := status.Total
-	if parent, err := s.client.ProcessTask.Query().Where(processtask.TaskID(parentTaskID)).Only(ctx); err == nil {
-		if value, ok := numericInt(parent.TaskVariables["threshold"]); ok && value > 0 {
-			threshold = value
-		}
+	if value, ok := numericInt(parentTask.TaskVariables["threshold"]); ok && value > 0 {
+		threshold = value
 	}
 	if status.Approved >= threshold {
 		status.Status = "approved"
@@ -3180,10 +3248,18 @@ func numericInt(value interface{}) (int, bool) {
 }
 
 // Vote 投票（完成会签任务）
+//
+// 两处 ProcessTask 查询（本任务 + 父任务）都显式带 TenantID 谓词，作为纵深防御：
+// 目前即使不加这层过滤也不可利用（全局唯一的 username/email + 下游
+// isProcessInstanceRequester 自身的租户过滤恰好会失败关闭），但不应该依赖这种
+// 偶然性，凡是 ProcessTask 查询都应显式带租户谓词（见复审 Finding 2）。
 func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequest) error {
-	task, err := s.client.ProcessTask.Query().
-		Where(processtask.TaskID(taskID)).
-		First(ctx)
+	voteTenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
+	taskQuery := s.client.ProcessTask.Query().Where(processtask.TaskID(taskID))
+	if voteTenantID > 0 {
+		taskQuery = taskQuery.Where(processtask.TenantID(voteTenantID))
+	}
+	task, err := taskQuery.First(ctx)
 	if err != nil {
 		return fmt.Errorf("获取任务失败: %w", err)
 	}
@@ -3234,9 +3310,11 @@ func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequ
 	}
 
 	// 根据会签类型和阈值判断是否需要终止其他任务
-	parentTask, err := s.client.ProcessTask.Query().
-		Where(processtask.TaskID(parentTaskID)).
-		First(ctx)
+	parentTaskQuery := s.client.ProcessTask.Query().Where(processtask.TaskID(parentTaskID))
+	if voteTenantID > 0 {
+		parentTaskQuery = parentTaskQuery.Where(processtask.TenantID(voteTenantID))
+	}
+	parentTask, err := parentTaskQuery.First(ctx)
 	if err != nil {
 		return nil
 	}

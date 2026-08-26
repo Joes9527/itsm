@@ -132,12 +132,22 @@ func (c *BPMNWorkflowController) RegisterRoutes(r *gin.RouterGroup) {
 		// 例如 "network_eng"，不受限于上面 managed 分组那 7 个角色），不是靠固定角色白名单
 		// 判定的。ClaimTask/CompleteTask（含 SubmitTaskDecision）/Vote 在 service 层已经通过
 		// authorizeTaskActor/isTaskCandidate 做了任务候选人级别的授权；GetTask/GetTaskByID
-		// 现在通过 authorizeTaskViewer 做参与者/发起人/elevated 校验（见 BPMN 任务/实例授权
-		// 修复计划 Task 6）。AssignTask/CancelTask/SetTaskVariables/CreateCounterSignTasks/
-		// GetCounterSignStatus/ListUserTasks 目前在 service 层仍没有对应的候选人校验（这是本次
-		// RBAC 收敛之前就存在、且独立于本次改动的缺口，见设计文档"已知遗留"）。给整个 /tasks/*
-		// 套 managed 分组的粗粒度角色门槛曾在这次收敛中短暂引入，被 SSL-VPN 审批链路的 E2E 测试
-		// （network_eng 候选人被误拒）实测证伪，现按"精确复刻收敛前行为"的原则还原为不加门槛。
+		// 通过 authorizeTaskViewer 做参与者/发起人/elevated 校验（见 BPMN 任务/实例授权修复
+		// 计划 Task 6）；GetCounterSignStatus 通过 authorizeCounterSignViewer 做同等校验，但
+		// 额外接受"任意一个会签子任务的参与者"——父任务的 assignee/candidate 字段在
+		// CreateCounterSignTasks 派生子任务时从不被修改，真正投票的审批人往往只是子任务的
+		// 参与者，不是父任务的（见最终复审 Finding 1，及其实现过程中发现的 Vote 内部调用
+		// 回归）；AssignTask/CancelTask/
+		// SetTaskVariables/CreateCounterSignTasks 通过 authorizeTaskMutation 做参与者/elevated
+		// 校验并写审计（Task 8）；ListUserTasks 对非 elevated 调用者强制收敛到调用者自身身份，
+		// 无有效身份时直接返回空列表，不再回退到无过滤查询（Task 7 + 最终复审 Finding 4）。
+		// 至此本列表内接口在 service 层均已有候选人/参与者级别的校验，不存在"完全无校验"的
+		// 缺口；仍作为纵深防御保留、尚未收紧的一点是 Vote 内部两处 ProcessTask 查询新增的
+		// TenantID 谓词——目前并非可利用的漏洞（全局唯一 username/email + 下游
+		// isProcessInstanceRequester 自身的租户过滤恰好会失败关闭），只是不应该继续依赖这种
+		// 偶然性（见最终复审 Finding 2）。给整个 /tasks/* 套 managed 分组的粗粒度角色门槛曾在
+		// RBAC 收敛中短暂引入，被 SSL-VPN 审批链路的 E2E 测试（network_eng 候选人被误拒）实测
+		// 证伪，现按"精确复刻收敛前行为"的原则还原为不加门槛。
 		bpmn.GET("/tasks", c.ListUserTasks)
 		bpmn.GET("/tasks/:id", c.GetTask)
 		bpmn.PUT("/tasks/:id/assign", c.AssignTask)
