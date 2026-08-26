@@ -1205,8 +1205,8 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
     {
       key: 'comments',
       label: (
-        <span>
-          <MessageSquare size={14} className="inline mr-1" />
+        <span className="flex items-center gap-1.5 text-xs font-medium">
+          <MessageSquare size={13} />
           协作沟通与评论{countSuffix(tabCounts?.comments)}
         </span>
       ),
@@ -1222,8 +1222,8 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
     {
       key: 'attachments',
       label: (
-        <span>
-          <Paperclip size={14} className="inline mr-1" />
+        <span className="flex items-center gap-1.5 text-xs font-medium">
+          <Paperclip size={13} />
           附件{countSuffix(tabCounts?.attachments)}
         </span>
       ),
@@ -1232,8 +1232,8 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
     {
       key: 'approvals',
       label: (
-        <span>
-          <GitBranch size={14} className="inline mr-1" />
+        <span className="flex items-center gap-1.5 text-xs font-medium">
+          <GitBranch size={13} />
           审批链{countSuffix(tabCounts?.approvals)}
         </span>
       ),
@@ -1249,8 +1249,8 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
     {
       key: 'history',
       label: (
-        <span>
-          <HistoryIcon size={14} className="inline mr-1" />
+        <span className="flex items-center gap-1.5 text-xs font-medium">
+          <HistoryIcon size={13} />
           历史流转{countSuffix(tabCounts?.history)}
         </span>
       ),
@@ -1259,8 +1259,8 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
     {
       key: 'relations',
       label: (
-        <span>
-          <Link2 size={14} className="inline mr-1" />
+        <span className="flex items-center gap-1.5 text-xs font-medium">
+          <Link2 size={13} />
           关联工单与资产{countSuffix(tabCounts?.relations)}
         </span>
       ),
@@ -1274,7 +1274,7 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
         <Info size={13} />
         协作流、审批链与审计历史
       </div>
-      <Tabs items={items} defaultActiveKey="comments" />
+      <Tabs items={items} defaultActiveKey="comments" className="custom-ticket-tabs" />
     </div>
   );
 };
