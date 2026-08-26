@@ -683,7 +683,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
         </div>
 
         {/* 右侧 4 列: 【高密度运维工具箱 + 悬浮跟随】 */}
-        <div className="lg:col-span-4 space-y-4 sticky top-4 min-w-0">
+        <div className="lg:col-span-4 flex flex-col gap-4 sticky top-4 min-w-0">
           {/* 1. 工单上下文属性 (置顶) */}
           <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs space-y-3 text-xs">
             <span className="font-bold text-slate-800 block border-b border-slate-100 pb-2 text-xs">

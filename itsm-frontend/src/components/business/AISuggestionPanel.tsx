@@ -117,7 +117,7 @@ export function AISuggestionPanel({
     return (
       <Card
         size="small"
-        className="mb-4 border-dashed border-2 border-gray-300 bg-gray-50"
+        className="border-dashed border-2 border-gray-300 bg-gray-50"
         bodyStyle={{ padding: '12px' }}
       >
         <div className="flex items-center justify-between">
@@ -145,7 +145,7 @@ export function AISuggestionPanel({
     return (
       <Card
         size="small"
-        className="mb-4 bg-gradient-to-br from-orange-50/60 to-amber-50/40 border-orange-200/70"
+        className="bg-gradient-to-br from-orange-50/60 to-amber-50/40 border-orange-200/70"
         bodyStyle={{ padding: '12px' }}
       >
         <div className="flex items-center gap-3">
@@ -166,7 +166,7 @@ export function AISuggestionPanel({
     return (
       <Card
         size="small"
-        className="mb-4 bg-gray-50 border-gray-200"
+        className="bg-gray-50 border-gray-200"
         bodyStyle={{ padding: '12px' }}
       >
         <div className="flex items-center justify-between">
@@ -201,7 +201,7 @@ export function AISuggestionPanel({
   return (
     <Card
       size="small"
-      className="mb-4 bg-gradient-to-br from-orange-50/60 to-amber-50/40 border-orange-200/70"
+      className="bg-gradient-to-br from-orange-50/60 to-amber-50/40 border-orange-200/70"
       bodyStyle={{ padding: '12px' }}
       title={
         <Space>
