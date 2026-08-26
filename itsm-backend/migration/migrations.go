@@ -80,7 +80,12 @@ var RegisteredMigrations = []Migration{
 		RollbackSQL: "",
 	},
 	{
-		Version:     "015_add_service_request_contact_fields",
+		Version:     "015_process_instance_running_unique_guard",
+		Description: "Add a partial unique index guarding against two concurrent running BPMN process instances for the same (tenant, business key) — closes a check-then-act race in SubmitChange (and any other TriggerProcess caller) where two near-simultaneous requests could both pass the application-level idempotency check before either instance existed",
+		RollbackSQL: `DROP INDEX IF EXISTS idx_process_instances_running_unique;`,
+	},
+	{
+		Version:     "016_add_service_request_contact_fields",
 		Description: "Add contact_name/contact_email/quantity/expected_at columns to service_requests (previously fake fields that only lived in form_data and were never read back)",
 		RollbackSQL: "ALTER TABLE service_requests DROP COLUMN IF EXISTS contact_name; ALTER TABLE service_requests DROP COLUMN IF EXISTS contact_email; ALTER TABLE service_requests DROP COLUMN IF EXISTS quantity; ALTER TABLE service_requests DROP COLUMN IF EXISTS expected_at;",
 	},
@@ -639,7 +644,36 @@ DELETE FROM field_values WHERE entity_type = 'service_request';
 DROP TABLE IF EXISTS approval_records;
 DROP TABLE IF EXISTS approval_workflows;
 `
-	case "015_add_service_request_contact_fields":
+	case "015_process_instance_running_unique_guard":
+		return `
+-- Defensively resolve any pre-existing duplicate running instances for the same
+-- (tenant_id, business_key) before adding the unique index below, keeping only the
+-- most recently started one and terminating the rest. This should be a no-op in
+-- practice (the application-level idempotency check in SubmitChange has always been
+-- in place), but a migration adding a unique constraint must not fail against data
+-- it doesn't control.
+WITH ranked AS (
+    SELECT id, ROW_NUMBER() OVER (
+        PARTITION BY tenant_id, business_key
+        ORDER BY start_time DESC, id DESC
+    ) AS rn
+    FROM process_instances
+    WHERE status = 'running' AND business_key IS NOT NULL AND business_key != ''
+)
+UPDATE process_instances
+SET status = 'terminated', end_time = CURRENT_TIMESTAMP
+WHERE id IN (SELECT id FROM ranked WHERE rn > 1);
+
+-- Enforce at most one running process instance per (tenant, business key). No domain
+-- in this codebase treats "same business key, two concurrently running instances" as
+-- a legitimate state (BPMNApprovalBridge/handlers/change's SubmitChange both assume
+-- businessKey -> running instance is 1:1) — this is a data-integrity invariant that
+-- belongs at the DB layer, not just the application-level check-then-act guard.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_process_instances_running_unique
+ON process_instances (tenant_id, business_key)
+WHERE status = 'running' AND business_key IS NOT NULL AND business_key != '';
+`
+	case "016_add_service_request_contact_fields":
 		return `
 ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS contact_name VARCHAR;
 ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS contact_email VARCHAR;

@@ -49,7 +49,6 @@ func setupTestHandler(t *testing.T) (*gin.Engine, *Handler, *mockRepository) {
 	r.GET("/api/v1/changes/stats", handler.GetStats)
 	r.POST("/api/v1/changes/:id/submit", handler.SubmitChange)
 	r.POST("/api/v1/changes/:id/assign", handler.AssignChange)
-	r.GET("/api/v1/changes/:id/approval-summary", handler.GetApprovalSummary)
 	r.GET("/api/v1/changes/:id/risk-assessment", handler.GetRiskAssessment)
 	r.GET("/api/v1/changes/:id/cmdb-impact", handler.GetCMDBImpactSummary)
 
@@ -58,24 +57,19 @@ func setupTestHandler(t *testing.T) (*gin.Engine, *Handler, *mockRepository) {
 
 // mockRepository implements Repository interface for testing
 type mockRepository struct {
-	changes       map[int]*Change
-	approvals     map[int]*ApprovalRecord
-	riskAssess    map[int]*RiskAssessment
-	chains        map[int][]*ApprovalChain
-	nextID        int
-	approverValid bool
-	submitErr     error
-	replaceErr    error
+	changes    map[int]*Change
+	approvals  map[int]*ApprovalRecord
+	riskAssess map[int]*RiskAssessment
+	nextID     int
+	submitErr  error
 }
 
 func newMockRepository() *mockRepository {
 	return &mockRepository{
-		changes:       make(map[int]*Change),
-		approvals:     make(map[int]*ApprovalRecord),
-		riskAssess:    make(map[int]*RiskAssessment),
-		chains:        make(map[int][]*ApprovalChain),
-		nextID:        1,
-		approverValid: true,
+		changes:    make(map[int]*Change),
+		approvals:  make(map[int]*ApprovalRecord),
+		riskAssess: make(map[int]*RiskAssessment),
+		nextID:     1,
 	}
 }
 
@@ -154,7 +148,7 @@ func (m *mockRepository) GetStats(ctx context.Context, tenantID int) (*Stats, er
 	return stats, nil
 }
 
-func (m *mockRepository) SubmitForApproval(ctx context.Context, changeID, tenantID int, approverIDs []int, comment string) error {
+func (m *mockRepository) MarkSubmittedForApproval(ctx context.Context, changeID, tenantID int) error {
 	if m.submitErr != nil {
 		return m.submitErr
 	}
@@ -163,32 +157,7 @@ func (m *mockRepository) SubmitForApproval(ctx context.Context, changeID, tenant
 		return fmt.Errorf("change is not an editable draft")
 	}
 	c.Status = "pending"
-	for _, approverID := range approverIDs {
-		record := &ApprovalRecord{
-			ID:         m.nextID,
-			ChangeID:   changeID,
-			TenantID:   tenantID,
-			ApproverID: approverID,
-			Status:     "pending",
-			CreatedAt:  time.Now(),
-		}
-		m.nextID++
-		m.approvals[record.ID] = record
-	}
 	return nil
-}
-
-func (m *mockRepository) CreateApprovalRecord(ctx context.Context, r *ApprovalRecord) (*ApprovalRecord, error) {
-	r.ID = m.nextID
-	m.nextID++
-	r.CreatedAt = time.Now()
-	m.approvals[r.ID] = r
-	return r, nil
-}
-
-func (m *mockRepository) UpdateApprovalRecord(ctx context.Context, r *ApprovalRecord) (*ApprovalRecord, error) {
-	m.approvals[r.ID] = r
-	return r, nil
 }
 
 func (m *mockRepository) GetApprovalHistory(ctx context.Context, changeID int, tenantID int) ([]*ApprovalRecord, error) {
@@ -199,26 +168,6 @@ func (m *mockRepository) GetApprovalHistory(ctx context.Context, changeID int, t
 		}
 	}
 	return result, nil
-}
-
-func (m *mockRepository) CreateApprovalChain(ctx context.Context, chain []*ApprovalChain) error {
-	return nil
-}
-
-func (m *mockRepository) GetApprovalChain(ctx context.Context, changeID int, tenantID int) ([]*ApprovalChain, error) {
-	return m.chains[changeID], nil
-}
-
-func (m *mockRepository) DeleteApprovalChain(ctx context.Context, changeID int, tenantID int) error {
-	return nil
-}
-
-func (m *mockRepository) ReplaceApprovalChain(ctx context.Context, changeID, tenantID int, chain []*ApprovalChain) error {
-	if m.replaceErr != nil {
-		return m.replaceErr
-	}
-	m.chains[changeID] = append([]*ApprovalChain(nil), chain...)
-	return nil
 }
 
 func (m *mockRepository) CreateRiskAssessment(ctx context.Context, ra *RiskAssessment) (*RiskAssessment, error) {
@@ -245,10 +194,6 @@ func (m *mockRepository) UpdateRiskAssessment(ctx context.Context, ra *RiskAsses
 	ra.UpdatedAt = time.Now()
 	m.riskAssess[ra.ChangeID] = ra
 	return ra, nil
-}
-
-func (m *mockRepository) ValidateApproverBelongsToTenant(ctx context.Context, approverID, tenantID int) (bool, error) {
-	return m.approverValid, nil
 }
 
 func (m *mockRepository) ListByDateRange(ctx context.Context, tenantID int, startDate, endDate, status string) ([]*Change, error) {
@@ -632,8 +577,7 @@ func TestChangeController_SubmitChange(t *testing.T) {
 	change := createTestChange(repo, 1, 1)
 
 	req := dto.SubmitChangeRequest{
-		ApproverIDs: []int{2, 3},
-		Comment:     "请审批",
+		Comment: "请审批",
 	}
 	requestBody, err := json.Marshal(req)
 	require.NoError(t, err)
@@ -692,25 +636,6 @@ func TestChangeController_AssignChange(t *testing.T) {
 	}
 }
 
-// TestChangeController_GetApprovalSummary tests GET /api/v1/changes/:id/approval-summary
-func TestChangeController_GetApprovalSummary(t *testing.T) {
-	r, _, repo := setupTestHandler(t)
-
-	// Create test data
-	change := createTestChange(repo, 1, 1)
-
-	req, _ := http.NewRequest("GET", "/api/v1/changes/"+strconv.Itoa(change.ID)+"/approval-summary", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	var response common.Response
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	require.NoError(t, err)
-	assert.Equal(t, common.SuccessCode, response.Code)
-}
-
 func TestSubmitChangeAtomicFailureLeavesDraftUnchanged(t *testing.T) {
 	logger := zaptest.NewLogger(t).Sugar()
 	repo := newMockRepository()
@@ -719,31 +644,12 @@ func TestSubmitChangeAtomicFailureLeavesDraftUnchanged(t *testing.T) {
 	svc := NewService(repo, nil, logger)
 
 	_, err := svc.SubmitChange(context.Background(), 1, 1, 1, &dto.SubmitChangeRequest{
-		ApproverIDs: []int{1},
-		Comment:     "review",
+		Comment: "review",
 	})
 
 	require.ErrorContains(t, err, "提交变更审批失败")
 	require.Equal(t, "draft", repo.changes[1].Status)
 	require.Empty(t, repo.approvals)
-	require.Empty(t, repo.chains[1])
-}
-
-func TestConfigureWorkflowAtomicFailurePreservesOldChain(t *testing.T) {
-	logger := zaptest.NewLogger(t).Sugar()
-	repo := newMockRepository()
-	repo.changes[1] = &Change{ID: 1, TenantID: 1, CreatedBy: 1, Status: "draft"}
-	oldChain := []*ApprovalChain{{ID: 10, ChangeID: 1, TenantID: 1, Level: 1, ApproverID: 1}}
-	repo.chains[1] = oldChain
-	repo.replaceErr = errors.New("injected transaction failure")
-	svc := NewService(repo, nil, logger)
-
-	err := svc.ConfigureWorkflow(context.Background(), 1, 1, []*ApprovalChain{
-		{Level: 1, ApproverID: 2},
-	})
-
-	require.ErrorContains(t, err, "failed to replace approval chain")
-	require.Equal(t, oldChain, repo.chains[1])
 }
 
 // TestChangeController_GetRiskAssessment tests GET /api/v1/changes/:id/risk-assessment

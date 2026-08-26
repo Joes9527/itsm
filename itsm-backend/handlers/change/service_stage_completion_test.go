@@ -14,17 +14,18 @@ import (
 	"go.uber.org/zap"
 )
 
-// TestTransitionStatus_StageBridges_AdvanceProcessEndToEnd 是 P1 的 change 侧端到端回归：
-// change_normal_flow 的排期/实施/验证/关闭节点此前在域侧流转路径上拿不到 change_id
-// （引擎刻意不合并实例变量），状态副作用静默失败。修复后：
+// TestTransitionStatus_StageCompletion_AdvanceProcessEndToEnd 是阶段流转原生化（Track4
+// 收尾）的 change 侧端到端回归：change_normal_flow 的排期/实施/验证/关闭节点此前只能靠
+// approvalBridge 完成，现在 completeChangeStageTasks 直接用 processEngine 完成同样的节点，
+// 不再经过 BPMNApprovalBridge。
 //
-//	TransitionStatus(in_progress) → 桥接 Activity_Schedule + Activity_Implement
-//	TransitionStatus(completed)   → 桥接 Activity_Verify（带 verify_passed）+ Activity_Close
+//	TransitionStatus(in_progress) → 原生完成 Activity_Schedule + Activity_Implement
+//	TransitionStatus(completed)   → 原生完成 Activity_Verify（带 verify_passed）+ Activity_Close
 //
 // 流程从排期一路走完，域写覆盖 handler 中间值，最终状态以域为准。
-func TestTransitionStatus_StageBridges_AdvanceProcessEndToEnd(t *testing.T) {
-	entClient := newChangeBridgeEntClient(t, "change_stage_e2e")
-	tenantID, actorID := setupChangeBridgeActor(t, entClient, "stage")
+func TestTransitionStatus_StageCompletion_AdvanceProcessEndToEnd(t *testing.T) {
+	entClient := newChangeBPMNEntClient(t, "change_stage_e2e")
+	tenantID, actorID := setupChangeBPMNActor(t, entClient, "stage")
 
 	// 模板部署（change_normal_flow 的网关路由需要）
 	_, err := service.NewBPMNTemplateService(entClient).LoadAndDeployTemplates(context.Background(), tenantID)
@@ -42,7 +43,7 @@ func TestTransitionStatus_StageBridges_AdvanceProcessEndToEnd(t *testing.T) {
 	// DB 侧真实 Change 行：handler 写侧（change_handler.go）直接操作 entClient，
 	// 状态必须与域侧一致（approved），否则 handler 状态机白名单会拒绝
 	dbChange, err := entClient.Change.Create().
-		SetTitle("Stage Bridge Change").
+		SetTitle("Stage Completion Change").
 		SetStatus("approved").
 		SetCreatedBy(actorID).
 		SetTenantID(tenantID).
@@ -79,8 +80,9 @@ func TestTransitionStatus_StageBridges_AdvanceProcessEndToEnd(t *testing.T) {
 		"approval_required=false 时评估后应直达排期节点")
 
 	svc := NewService(repo, entClient, zap.NewNop().Sugar())
+	svc.SetProcessEngine(engine)
 
-	// 1. start（in_progress）：桥接 Activity_Schedule → Activity_Implement，域写 in_progress
+	// 1. start（in_progress）：原生完成 Activity_Schedule → Activity_Implement，域写 in_progress
 	updated, err := svc.TransitionStatus(context.Background(), dbChange.ID, tenantID, actorID, "in_progress", "")
 	require.NoError(t, err)
 	assert.Equal(t, "in_progress", updated.Status)
@@ -94,7 +96,7 @@ func TestTransitionStatus_StageBridges_AdvanceProcessEndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "in_progress", dbAfter.Status, "implement_change 应以注入的 change_id 生效")
 
-	// 2. complete（completed）：桥接 Activity_Verify（带 verify_passed）→ Activity_Close → End
+	// 2. complete（completed）：原生完成 Activity_Verify（带 verify_passed）→ Activity_Close → End
 	updated, err = svc.TransitionStatus(context.Background(), dbChange.ID, tenantID, actorID, "completed", "")
 	require.NoError(t, err)
 	assert.Equal(t, "completed", updated.Status)
@@ -109,38 +111,25 @@ func TestTransitionStatus_StageBridges_AdvanceProcessEndToEnd(t *testing.T) {
 	assert.False(t, dbFinal.ActualEndDate.IsZero(), "关闭动作应写入实际结束时间")
 }
 
-// TestTransitionStatus_StageBridge_CrossTenantChangeIDIsRejected 锁定 P0.2 与桥接的组合安全：
-// 域侧桥接注入的 change_id 指向别家租户时，handler 写侧 Where(TenantID) 使写入落空，
-// 域状态仍然推进（域写与 handler 写相互独立），但别家租户数据零改动。
-func TestTransitionStatus_StageBridge_CrossTenantChangeIDIsRejected(t *testing.T) {
-	entClient := newChangeBridgeEntClient(t, "change_stage_xtenant")
-	tenantID, actorID := setupChangeBridgeActor(t, entClient, "xt")
-
-	otherTenant, err := entClient.Tenant.Create().
-		SetName("Other").SetCode("xt-other").SetDomain("xt-other.com").SetStatus("active").
-		Save(context.Background())
-	require.NoError(t, err)
-	otherChange, err := entClient.Change.Create().
-		SetTitle("Other Tenant Change").
-		SetStatus("approved").
-		SetCreatedBy(1).
-		SetTenantID(otherTenant.ID).
-		Save(context.Background())
-	require.NoError(t, err)
+// TestTransitionStatus_StageCompletion_NoRunningInstanceIsNoop 锁定没有关联运行中流程实例
+// 时（比如紧急变更走 emergency 流程分支、或流程已经在别的分支提前结束）
+// completeChangeStageTasks 静默跳过，域状态照常推进，不报错。
+func TestTransitionStatus_StageCompletion_NoRunningInstanceIsNoop(t *testing.T) {
+	entClient := newChangeBPMNEntClient(t, "change_stage_noop")
+	tenantID, actorID := setupChangeBPMNActor(t, entClient, "noop")
 
 	repo := newMockRepository()
 	mockChange := createTestChange(repo, tenantID, actorID)
 	mockChange.Status = "approved"
 	mockChange.Type = "standard"
 	repo.changes[mockChange.ID] = mockChange
-	svc := NewService(repo, entClient, zap.NewNop().Sugar())
 
-	// 无绑定流程实例：桥接返回 (false, nil)，域状态正常推进，别家租户数据不受影响
+	svc := NewService(repo, entClient, zap.NewNop().Sugar())
+	svc.SetProcessEngine(service.NewCustomProcessEngine(entClient, zap.NewNop().Sugar()))
+
+	// 没有为这个变更启动过任何流程实例——completeChangeStageTasks 应该找不到运行中实例，
+	// 直接跳过，域状态正常推进到 in_progress，不报错。
 	updated, err := svc.TransitionStatus(context.Background(), mockChange.ID, tenantID, actorID, "in_progress", "")
 	require.NoError(t, err)
 	assert.Equal(t, "in_progress", updated.Status)
-
-	after, err := entClient.Change.Get(context.Background(), otherChange.ID)
-	require.NoError(t, err)
-	assert.Equal(t, "approved", after.Status, "别家租户的变更不得被写入")
 }
