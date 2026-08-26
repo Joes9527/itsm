@@ -669,18 +669,130 @@ new/approved/fulfillment -> cancelled
 
 ### 15.2 BPMN
 
-- Process Instance 以 WorkItem ID 作为统一 business ID；
-- `businessType` 使用稳定 recordClass，而不是控制器名称；
-- Catalog Item 的 `processDefinitionKey` 可覆盖通用绑定；
-- 专业服务发起流程，Controller 不直接拼装流程副作用；
+#### 15.2.1 当前断点
+
+当前流程身份、绑定和回调仍以历史专业实体为中心：
+
+- ProcessTrigger 使用 `(businessType, businessId)`，但不同调用方可能传 Ticket ID、Incident ID、
+  Problem ID 或 Change ID；
+- ProcessInstance 只有 `business_key` 和 variables JSON，没有结构化的 `business_type/business_id`
+  约束；
+- ProcessApprovalDecision 单独保存字符串类型的 `business_type/business_id`；
+- ProcessTask 不直接保存业务身份，而是通过 `process_instance_id` 关联 ProcessInstance；
+- ProcessBinding 同时存在 `ticket + businessSubType` 和 `incident/change/problem` 等不同绑定形状；
+- CallbackRegistry 同时注册 Ticket、Incident、Change、ServiceRequest、Release 和 Generic Handler，
+  多个 Handler 直接通过 Ent 修改专业实体状态。
+
+如果迁移 WorkItem 时不先固定该契约，同一 Incident 会同时存在 Incident ID 和 WorkItem ID，流程实例、
+待办任务、审批决策和 ServiceTask 回调可能使用不同 ID，最终表现为流程查不到、任务不可见或回调更新
+错误记录。
+
+#### 15.2.2 BPMN 身份契约
+
+目标契约如下：
+
+```text
+businessId   = WorkItem.ID，即 tickets.id
+businessType = WorkItem.recordClass
+businessKey  = "{recordClass}:{workItemId}"
+tenantId     = WorkItem.tenantId
+```
+
+规则：
+
+1. 所有 ProcessTriggerRequest 的 `businessId` 必须是 WorkItem ID，禁止传专业扩展表主键；
+2. `businessType` 必须来自受约束的 recordClass 注册表，不接受控制器名或任意字符串；
+3. ProcessInstance 增加结构化字符串 `business_type`、正整数 `business_id` 字段及
+   `(tenant_id, business_type, business_id, status)` 索引，variables 中的同名保留键只是运行时镜像，
+   不能成为唯一权威来源；
+4. ProcessTask 通过 `process_instance_id` 继承业务身份，不重复存储 businessId；任务查询必须联查
+   ProcessInstance 的结构化身份；
+5. ProcessApprovalDecision 可保留 businessType/businessId 查询快照，但写入值必须与所属
+   ProcessInstance 一致；现有字符串 `business_id` 在迁移期只能保存 WorkItem ID 的十进制形式，
+   由 Repository 边界完成类型转换；
+6. `business_id`、`business_type`、`business_key`、`tenant_id` 是流程保留变量，BPMN 表单、脚本和
+   ServiceTask 不能覆盖；
+7. WorkItem 与 ProcessInstance 的权威关联由结构化字段建立，`tickets.workflow_instance_id` 只能作为
+   当前主流程的便捷引用，不能替代一对多流程查询。
+
+核心 recordClass 包括 `generic`、`service_request_item`、`incident`、`problem`、
+`change_request` 和 `catalog_task`。当前代码还存在 `release` BusinessType 与 Release Handler；
+在 Release 单独完成 WorkItem 扩展设计前不得删除或错误映射为 Change，新契约迁移必须将其标记为
+明确的遗留保留值，而不是允许任意 businessType。
+
+#### 15.2.3 ProcessBinding 匹配
+
+ProcessBinding 的 `business_type` 对齐 recordClass。历史值按以下方式迁移：
+
+| 历史绑定 | 目标绑定 |
+|---|---|
+| `ticket + service_request` | `service_request_item` |
+| `ticket + incident` 或 `incident` | `incident` |
+| `ticket + problem` 或 `problem` | `problem` |
+| `ticket + change` 或 `change` | `change_request` |
+| 通用 `ticket` | `generic` 或明确的专业默认绑定 |
+
+绑定优先级：
+
+1. Catalog Item 或受信任内部调用显式指定的 `processDefinitionKey`；
+2. tenant + recordClass + scenario + category/team/department 等精确条件；
+3. tenant + recordClass 的默认绑定；
+4. 没有可用绑定时返回明确错误或执行产品配置的“无需流程”策略，禁止静默选择其他专业类流程。
+
+WorkItem priority 是匹配上下文；ProcessBinding 自身的 priority 仅用于多个候选绑定的排序，两者不能
+混为同一字段。目标 ProcessBinding schema 增加可选 `category_id` 并纳入 tenant + businessType 的
+匹配索引；历史无约束 `category` 字符串迁移后删除，其他动态条件继续由统一 conditions 解析器处理。
+
+#### 15.2.4 流程触发边界
+
+- 专业服务在 WorkItem 与扩展记录成功创建后，通过可靠事务边界触发流程；
+- 若“必须成功启动流程”是创建前提，则 WorkItem、扩展记录和流程触发 Outbox 在同一事务写入；
+- Controller 不直接组装流程身份或执行流程副作用；
+- Catalog Item 的 `processDefinitionKey` 具有最高优先级；
+- 一个 WorkItem 可以有主流程和子流程，但所有实例使用同一个 WorkItem ID；
 - 不允许专业域另建审批引擎。
+
+#### 15.2.5 ServiceTaskHandler 职责
+
+CallbackRegistry 保留按 task type 分派的能力，但 Handler 改为应用层适配器：
+
+- 通用 WorkItem Handler 处理分派、关注人、通知、Webhook、SLA 命令等共享能力；
+- Incident、Problem、Change、Requested Item、Catalog Task 的状态推进必须调用对应领域服务；
+- 通用 Handler 不能绕过专业服务直接修改 WorkItem.status；
+- 专业 Handler 不能持有 Ent Client 并直接 `UpdateOneID().SetStatus()`；
+- Handler 通过窄接口注入 `IncidentCommandService`、`ProblemCommandService`、
+  `ChangeCommandService`、`RequestedItemCommandService` 或 `WorkItemCommandService`；
+- 领域服务负责状态校验、乐观锁、tenant/RBAC、审计、事件和副作用；
+- 通知、Webhook 和连接器调用通过 Outbox/事件消费者执行，不能在数据库事务中直接调用外部系统；
+- 未识别的 task type 必须失败并暴露配置错误，不能当作成功 no-op。
+
+#### 15.2.6 运行中流程迁移
+
+迁移不能只改 ProcessBinding。每个专业域切换前必须：
+
+1. 盘点 running/suspended ProcessInstance；
+2. 通过专业记录到 WorkItem 的映射表，把 ProcessInstance 的 businessType、businessId、
+   businessKey 和保留 variables 原子改为新契约；
+3. 同步修正 ProcessApprovalDecision 快照；
+4. ProcessTask 不改业务 ID，只验证其 processInstanceId 指向已迁移实例；
+5. 对无法唯一映射的实例停止迁移并输出异常清单，不能默认使用同数值 ID；
+6. 在切换窗口暂停新触发或排空活动流程，迁移完成并对账后再恢复；
+7. 切换后禁止新写入 `ticket`、`service_request`、`incident`、`problem`、`change` 等旧
+   businessType；
+8. 已完成流程同样批量回填，以保证审计和历史查询使用统一身份。
 
 ### 15.3 审批
 
 - Requested Item、Change 和高风险 Catalog Task 均通过统一 BPMN Task/Approval 能力；
 - Change 的 CAB 是 Change 专业流程中的审批形态，不新建 CAB 引擎；
-- 审批结果写入统一任务和审计记录；
-- 自审批、代理、会签、拒绝和撤回规则由统一授权服务约束。
+- 审批结果写入标准 ProcessTask、ProcessApprovalDecision 和审计记录；
+- 自审批、代理、会签、拒绝和撤回规则由统一授权服务约束；
+- ProcessInstance/ProcessTask 的读取和操作同时验证 tenant、WorkItem 可见性、专业资源权限及任务参与者
+  身份；
+- 任务参与者包括 assignee、candidate user、candidate group 和流程发起人；拥有明确 elevated 权限的
+  角色可以越过参与者限制，但不能越过 tenant；
+- 完成任务时再次校验任务状态、WorkItem 版本和专业动作权限，避免待办打开后权限或状态已变化；
+- 系统自动任务使用明确的 service identity，并记录 actor、correlationId 和触发来源。
 
 ## 16. 权限、租户与数据可见性
 
@@ -778,8 +890,15 @@ MSP 操作者访问客户 tenant 时，actor tenant 与 data tenant 分开记录
 3. 抽取共享 WorkItem repository/service，但不接管专业状态机；
 4. 评论、附件、活动、动态字段、SLA、审计接口统一接受 WorkItem ID；
 5. 将现有 `service_requests.ticket_id` 明确作为逻辑 WorkItem ID 使用，本阶段不执行列重命名；
-6. 增加数据完整性检查任务；
-7. 发布统一事件和 Outbox。
+6. 为 ProcessInstance 增加结构化 businessType/businessId，建立 BPMN 身份一致性检查；
+7. 将 ProcessBinding 的 businessType、默认绑定和匹配优先级收敛到 recordClass；
+8. 改造 CallbackRegistry 的 Handler 依赖，使专业状态变化只能调用领域服务；
+9. 增加数据完整性检查任务；
+10. 发布统一事件和 Outbox。
+
+Phase 1 只建立新 BPMN 身份能力和迁移工具，不会在尚未拥有 WorkItem 的 Incident、Problem、Change
+上提前启用新 businessId。每个专业类在自己的迁移阶段原子切换绑定、流程身份和写路径，避免形成
+“新绑定 + 旧专业 ID”或长期双写状态。
 
 ### 18.4 Phase 2：Incident 迁移
 
@@ -789,8 +908,9 @@ MSP 操作者访问客户 tenant 时，actor tenant 与 data tenant 分开记录
 4. Incident 创建和状态变化改为事务性写 WorkItem；
 5. 服务目录 Incident 创建改走同一专业服务；
 6. 前端 Incident 详情使用统一 Shell；
-7. 删除旧公共字段写入和读取；
-8. 验证 Incident → Problem 关系。
+7. 将 Incident 流程实例、审批决策和绑定从历史 Incident ID 迁移到 WorkItem ID；
+8. 删除旧公共字段写入和读取；
+9. 验证 Incident → Problem 关系。
 
 Incident 优先迁移，因为它当前既有独立模型，又存在服务目录绕过 WorkItem 的明确断点。
 
@@ -801,7 +921,8 @@ Incident 优先迁移，因为它当前既有独立模型，又存在服务目�
 3. Incident/Problem 关系迁入 WorkItemRelation；
 4. 保留 Problem → Known Error 专业关系；
 5. RCA、Workaround、Known Error 发布入口接入统一时间线和审计；
-6. 删除重复调查入口，只保留权威服务。
+6. 将 Problem 流程实例、审批决策和绑定迁移到 WorkItem 身份；
+7. 删除重复调查入口，只保留权威服务。
 
 ### 18.6 Phase 4：Change Request
 
@@ -811,7 +932,8 @@ Incident 优先迁移，因为它当前既有独立模型，又存在服务目�
 4. Incident/Problem/Requested Item 创建 Change 时同事务建立关系；
 5. CAB、风险、窗口、实施、回滚和 PIR 继续由 ChangeService 管理；
 6. 审批统一走 BPMN；
-7. 删除旧 JSON 权威写路径。
+7. 将 Change 流程实例、审批决策和绑定迁移到 WorkItem 身份；
+8. 删除旧 JSON 权威写路径。
 
 ### 18.7 Phase 5：服务请求层级
 
@@ -881,6 +1003,11 @@ Incident 优先迁移，因为它当前既有独立模型，又存在服务目�
 - 乐观锁；
 - SLA 暂停/恢复；
 - 审计和 Outbox 原子写入；
+- ProcessTrigger 的 businessId 始终为 WorkItem ID；
+- ProcessInstance、ProcessTask 派生身份和 ProcessApprovalDecision 快照一致；
+- ProcessBinding 按显式 definition、精确条件、专业默认绑定的顺序匹配；
+- 旧 businessType 在对应专业域切换后不能产生新数据；
+- ServiceTaskHandler 通过领域服务推进专业状态，不直接更新 Ent；
 - AI/流程/连接器 actor 和来源记录。
 
 ### 20.3 合同测试
@@ -890,6 +1017,7 @@ Incident 优先迁移，因为它当前既有独立模型，又存在服务目�
 - 专业详情包含统一公共字段和扩展字段；
 - `actions` 与权限、状态一致；
 - 旧 URL 在内部迁移后保持合同；
+- ProcessInstance/ProcessTask API 使用 WorkItem 身份并执行 tenant、专业权限和参与者授权；
 - 不再返回已删除的重复字段或兼容 snake_case。
 
 ### 20.4 端到端场景
@@ -901,7 +1029,8 @@ Incident 优先迁移，因为它当前既有独立模型，又存在服务目�
 5. Requested Item → Standard/Normal Change → 交付；
 6. 邮件/监控/连接器创建记录并验证幂等；
 7. MSP 操作者在授权客户 tenant 内操作并验证审计；
-8. 跨租户读取和关系创建失败。
+8. 跨租户读取、流程任务操作和关系创建失败；
+9. 迁移前创建的运行中流程在身份回填后仍能查询、审批、回调和完成。
 
 ### 20.5 验证保真度
 
@@ -1003,6 +1132,12 @@ Incident 优先迁移，因为它当前既有独立模型，又存在服务目�
 
 接受。当前单项申请不为了模拟 ServiceNow 而引入无实际业务价值的额外层级；当多项申请和拆分履约成为真实需求时启用。
 
+### ADR-7：BPMN 身份统一使用 WorkItem
+
+接受。ProcessInstance 的 businessId 永远是 WorkItem ID，businessType 永远是 recordClass；
+ProcessTask 通过 ProcessInstance 继承该身份，ProcessApprovalDecision 只保留一致的查询快照。
+ServiceTaskHandler 是调用领域服务的适配器，不能直接更新专业实体状态。
+
 ## 25. 实施前置条件
 
 进入实施计划前必须完成：
@@ -1013,7 +1148,8 @@ Incident 优先迁移，因为它当前既有独立模型，又存在服务目�
 4. 解决审批多栈的权威路径；
 5. 选定 Incident 作为首个迁移域；
 6. 为 Incident 主链路、跨租户和状态机建立回归基线；
-7. 确认迁移期间允许的维护窗口和回滚策略。
+7. 确认迁移期间允许的维护窗口和回滚策略；
+8. 盘点所有 running/suspended ProcessInstance、历史 businessType 和无法映射的业务 ID。
 
 ## 26. 完成定义
 
