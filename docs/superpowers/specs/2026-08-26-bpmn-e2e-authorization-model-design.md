@@ -124,6 +124,17 @@ var BPMNTaskInstanceAuthRegistry = []RouteAuthEntry{
 2. 更新 `menus` 表中"我的待办"菜单项的 `permission_code` 字段,从 `task:read` 改为 `bpmn:read`。
 3. 同步更新 `pkg/seeder/seeder.go` 里对应的角色权限清单和菜单种子定义,保证新建租户和迁移后的存量租户权限数据一致(这是 AGENTS.md 强调的"幂等 seed/migration"要求)。
 
+迁移文件的注释里必须写清楚"改动前"的完整状态(被删除的每一条 `role_permissions` 行、菜单项改动前的 `permission_code` 原值),不是只写"改了什么",而是写"从什么改成什么"——这是为了让未来万一需要撤销这次改动时,能像 `migrations/20260814_revert_end_user_overgrant.sql` 撤销 `20260814_end_user_missing_permissions.sql`/`20260814_missing_permission_definitions.sql` 那样,直接照着注释写一条新的正向撤销迁移。**这个仓库里 `migrations/*.sql` 目前是单向 forward-only 迁移(已核实:没有找到这些 `.sql` 文件被接入 `migration/migrator.go` 里 `RollbackSQL`/`RollbackMigration` 机制的代码路径——那套机制服务于另一批 Go 结构体定义的迁移,不是这个目录),撤销的方式是"再写一条新迁移",不是执行某种自动回滚,所以不在这里承诺一个不存在的"down 迁移自动化测试"。**
+
+## 风险与应对
+
+| 风险 | 描述 | 应对 |
+|---|---|---|
+| 残留隐式放行 | 组件 2 只改了 `authorizeTaskViewer`/`authorizeTaskMutation`/`authorizeCounterSignViewer` 三个函数本身,但代码库里可能还有其它直接依赖 `userID<=0` 隐式放行语义的调用路径没被枚举到,尤其是非 HTTP 触发的服务内部调用。 | 实施计划第一个任务必须先执行 `grep -rn "BPMNUserIDContextKey\|userID <= 0" service/ controller/` 找出所有相关分支,逐一确认调用方是否为真实系统调用,而不是假设只有工单创建这一条路径。 |
+| 权限码残留引用未同步 | "我的待办"菜单 `PermissionCode` 从 `task:read` 改成 `bpmn:read` 后,如果前端或其它模块还有硬编码依赖 `task:read` 的地方没跟着改,会产生新的不一致。 | 已在设计阶段核实:`itsm-frontend/src` 全文搜索 `task:read` 零命中;后端除 `pkg/seeder/seeder.go`(本设计要改的目标)和 `service/bpmn_process_engine.go`/`service/bpmn/handler_base.go`(`hasElevatedBPMNAccess` 的 `"task","read"` 字符串参数,属于保留不变的提权检查代码,不是要清理的对象)外无其它引用。实施阶段仍需在改动落地后重新跑一次同样的全局搜索确认没有新代码在此期间引入新的硬编码引用。 |
+| 登记表手工维护漂移 | `BPMNTaskInstanceAuthRegistry` 是手写的 Go 切片,理论上有"改了路由忘了改登记表"的风险。 | 已通过组件 3 的守卫测试正面解决(登记表和实际注册路由双向比对,不一致直接测试失败)——这就是防漂移机制本身,不需要额外引入 `go generate`/YAML 配置等更重的代码生成工具链;当前接口数量(13 条)规模下,额外的生成工具链只会增加维护成本,不会带来生成失败时测试无法捕获的场景生成工具本身也解决不了的问题。 |
+| 迁移导致权限意外缺失 | 收紧 `dept_manager`/`end_user`/`service_catalog_admin` 的权限码,如果范围判断有误,可能意外导致这些角色的其它依赖被波及。 | 见上文迁移文件注释要求(记录改动前状态,便于后续撤销);验证计划里的"迁移脚本正向验证"项(见下)覆盖迁移后这三个角色仍能正常访问自己的任务/流程实例;`tests/rbac` 目录下现有的角色权限回归测试需要在迁移后重新跑一遍,确认没有意外波及这三个角色的其它权限。 |
+
 ## 验证计划
 
 - 每个受影响接口(`ListProcessInstances`/`GetTask`/`ListUserTasks`/4 个任务操作/`GetCounterSignStatus`/`Vote`)沿用本分支已建立的四态覆盖:参与者/非参与者/跨租户/提权。
