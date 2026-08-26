@@ -750,6 +750,8 @@ func (c *BPMNWorkflowController) AssignTask(ctx *gin.Context) {
 	if !ok {
 		return
 	}
+	elevated := hasElevatedBPMNAccess(ctx, "task", "update")
+	workflowCtx = context.WithValue(workflowCtx, bpmn.BPMNElevatedContextKey, elevated)
 
 	err := c.processEngine.TaskService().AssignTask(workflowCtx, taskID, req.Assignee)
 	if err != nil {
@@ -841,6 +843,8 @@ func (c *BPMNWorkflowController) CancelTask(ctx *gin.Context) {
 	if !ok {
 		return
 	}
+	elevated := hasElevatedBPMNAccess(ctx, "task", "update")
+	workflowCtx = context.WithValue(workflowCtx, bpmn.BPMNElevatedContextKey, elevated)
 
 	err := c.processEngine.TaskService().CancelTask(workflowCtx, taskID, req.Reason)
 	if err != nil {
@@ -866,6 +870,8 @@ func (c *BPMNWorkflowController) SetTaskVariables(ctx *gin.Context) {
 	if !ok {
 		return
 	}
+	elevated := hasElevatedBPMNAccess(ctx, "task", "update")
+	workflowCtx = context.WithValue(workflowCtx, bpmn.BPMNElevatedContextKey, elevated)
 
 	err := c.processEngine.TaskService().SetTaskVariables(workflowCtx, taskID, req.Variables)
 	if err != nil {
@@ -1070,6 +1076,8 @@ func (c *BPMNWorkflowController) CreateCounterSignTasks(ctx *gin.Context) {
 	if !ok {
 		return
 	}
+	elevated := hasElevatedBPMNAccess(ctx, "task", "update")
+	workflowCtx = context.WithValue(workflowCtx, bpmn.BPMNElevatedContextKey, elevated)
 
 	tasks, err := c.processEngine.TaskService().CreateCounterSignTasks(workflowCtx, taskID, &req)
 	if err != nil {

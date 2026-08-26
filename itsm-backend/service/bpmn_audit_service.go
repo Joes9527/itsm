@@ -200,6 +200,92 @@ func (s *BPMNAuditService) RecordTaskAssigned(ctx context.Context, task *ent.Pro
 	})
 }
 
+// RecordTaskCancelled 记录任务取消审计
+func (s *BPMNAuditService) RecordTaskCancelled(ctx context.Context, task *ent.ProcessTask, userID int, userName, reason string) error {
+	instance, err := s.client.ProcessInstance.Get(ctx, task.ProcessInstanceID)
+	processInstanceKey := ""
+	processDefinitionID := 0
+	tenantID := 0
+	if err == nil {
+		processInstanceKey = instance.ProcessInstanceID
+		processDefinitionID = instance.ProcessDefinitionID
+		tenantID = instance.TenantID
+	}
+
+	return s.RecordAudit(ctx, &AuditContext{
+		ProcessInstanceID:    task.ProcessInstanceID,
+		ProcessInstanceKey:   processInstanceKey,
+		ProcessDefinitionKey: task.ProcessDefinitionKey,
+		ProcessDefinitionID:  processDefinitionID,
+		ActivityID:           task.TaskDefinitionKey,
+		ActivityName:         task.TaskName,
+		ActivityType:         task.TaskType,
+		Action:               AuditActionTaskCancelled,
+		UserID:               userID,
+		UserName:             userName,
+		Comment:              reason,
+		TenantID:             tenantID,
+	})
+}
+
+// RecordTaskVariablesChanged 记录任务变量变更审计（区别于 RecordVariableChanged，后者是
+// 流程实例级变量；这是任务自身的 TaskVariables）
+func (s *BPMNAuditService) RecordTaskVariablesChanged(ctx context.Context, task *ent.ProcessTask, userID int, userName string, before, after map[string]interface{}) error {
+	instance, err := s.client.ProcessInstance.Get(ctx, task.ProcessInstanceID)
+	processInstanceKey := ""
+	processDefinitionID := 0
+	tenantID := 0
+	if err == nil {
+		processInstanceKey = instance.ProcessInstanceID
+		processDefinitionID = instance.ProcessDefinitionID
+		tenantID = instance.TenantID
+	}
+
+	return s.RecordAudit(ctx, &AuditContext{
+		ProcessInstanceID:    task.ProcessInstanceID,
+		ProcessInstanceKey:   processInstanceKey,
+		ProcessDefinitionKey: task.ProcessDefinitionKey,
+		ProcessDefinitionID:  processDefinitionID,
+		ActivityID:           task.TaskDefinitionKey,
+		ActivityName:         task.TaskName,
+		ActivityType:         task.TaskType,
+		Action:               AuditActionVariableChanged,
+		UserID:               userID,
+		UserName:             userName,
+		VariablesBefore:      before,
+		VariablesAfter:       after,
+		TenantID:             tenantID,
+	})
+}
+
+// RecordCounterSignCreated 记录会签任务创建审计
+func (s *BPMNAuditService) RecordCounterSignCreated(ctx context.Context, parentTask *ent.ProcessTask, userID int, userName string, approverCount int) error {
+	instance, err := s.client.ProcessInstance.Get(ctx, parentTask.ProcessInstanceID)
+	processInstanceKey := ""
+	processDefinitionID := 0
+	tenantID := 0
+	if err == nil {
+		processInstanceKey = instance.ProcessInstanceID
+		processDefinitionID = instance.ProcessDefinitionID
+		tenantID = instance.TenantID
+	}
+
+	return s.RecordAudit(ctx, &AuditContext{
+		ProcessInstanceID:    parentTask.ProcessInstanceID,
+		ProcessInstanceKey:   processInstanceKey,
+		ProcessDefinitionKey: parentTask.ProcessDefinitionKey,
+		ProcessDefinitionID:  processDefinitionID,
+		ActivityID:           parentTask.TaskDefinitionKey,
+		ActivityName:         parentTask.TaskName,
+		ActivityType:         parentTask.TaskType,
+		Action:               AuditActionActivityStarted,
+		UserID:               userID,
+		UserName:             userName,
+		Comment:              fmt.Sprintf("创建 %d 个会签任务", approverCount),
+		TenantID:             tenantID,
+	})
+}
+
 // RecordTaskClaimed 记录任务签收
 func (s *BPMNAuditService) RecordTaskClaimed(ctx context.Context, task *ent.ProcessTask, userID int, userName string) error {
 	// Get process instance to get the process instance key

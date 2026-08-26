@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"itsm-backend/ent/enttest"
+	"itsm-backend/ent/processauditlog"
 	"itsm-backend/service/bpmn"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -1558,4 +1559,122 @@ func TestListUserTasks_SubstringCandidateDoesNotLeak(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 0, total, "a substring-only candidate_users match must not leak the task")
 	assert.Empty(t, tasks)
+}
+
+func TestAssignTask_NonParticipantDeniedUnlessElevated(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
+	otherUser, err := engine.client.User.Create().
+		SetUsername("assignee-target").SetEmail("assignee-target@example.com").SetName("Target").
+		SetPasswordHash("hash").SetRole("agent").SetActive(true).SetTenantID(tenantID).
+		Save(context.Background())
+	require.NoError(t, err)
+
+	_, taskID := createProcessFixture(t, engine, tenantID, "assign1")
+	task, err := engine.client.ProcessTask.Get(context.Background(), taskID)
+	require.NoError(t, err)
+
+	notParticipantCtx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, actorID)
+	notParticipantCtx = context.WithValue(notParticipantCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	notParticipantCtx = context.WithValue(notParticipantCtx, bpmn.BPMNElevatedContextKey, false)
+
+	err = engine.TaskService().AssignTask(notParticipantCtx, task.TaskID, fmt.Sprintf("%d", otherUser.ID))
+	assert.Error(t, err, "a non-participant, non-elevated caller must not be able to reassign the task")
+
+	elevatedCtx := context.WithValue(notParticipantCtx, bpmn.BPMNElevatedContextKey, true)
+	err = engine.TaskService().AssignTask(elevatedCtx, task.TaskID, fmt.Sprintf("%d", otherUser.ID))
+	require.NoError(t, err, "an elevated caller must be able to reassign any task")
+
+	auditLogs, err := engine.client.ProcessAuditLog.Query().All(context.Background())
+	require.NoError(t, err)
+	require.Len(t, auditLogs, 1)
+	assert.Equal(t, AuditActionTaskAssigned, auditLogs[0].Action)
+	assert.Equal(t, actorID, auditLogs[0].UserID)
+}
+
+func TestCancelTask_NonParticipantDeniedUnlessElevated(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
+	_, taskID := createProcessFixture(t, engine, tenantID, "cancel1")
+	task, err := engine.client.ProcessTask.Get(context.Background(), taskID)
+	require.NoError(t, err)
+
+	notParticipantCtx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, actorID)
+	notParticipantCtx = context.WithValue(notParticipantCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	notParticipantCtx = context.WithValue(notParticipantCtx, bpmn.BPMNElevatedContextKey, false)
+
+	err = engine.TaskService().CancelTask(notParticipantCtx, task.TaskID, "no longer needed")
+	assert.Error(t, err)
+
+	elevatedCtx := context.WithValue(notParticipantCtx, bpmn.BPMNElevatedContextKey, true)
+	err = engine.TaskService().CancelTask(elevatedCtx, task.TaskID, "no longer needed")
+	require.NoError(t, err)
+
+	auditLogs, err := engine.client.ProcessAuditLog.Query().
+		Where(processauditlog.Action(AuditActionTaskCancelled)).All(context.Background())
+	require.NoError(t, err)
+	require.Len(t, auditLogs, 1)
+}
+
+func TestSetTaskVariables_ParticipantAllowedAndAudited(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
+	_, taskID := createProcessFixture(t, engine, tenantID, "vars1")
+	_, err := engine.client.ProcessTask.UpdateOneID(taskID).
+		SetAssignee(fmt.Sprintf("%d", actorID)).SetTaskVariables(map[string]interface{}{"comment": "old"}).
+		Save(context.Background())
+	require.NoError(t, err)
+	task, err := engine.client.ProcessTask.Get(context.Background(), taskID)
+	require.NoError(t, err)
+
+	ctx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, actorID)
+	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = context.WithValue(ctx, bpmn.BPMNElevatedContextKey, false)
+
+	err = engine.TaskService().SetTaskVariables(ctx, task.TaskID, map[string]interface{}{"comment": "new"})
+	require.NoError(t, err)
+
+	auditLogs, err := engine.client.ProcessAuditLog.Query().
+		Where(processauditlog.Action(AuditActionVariableChanged)).All(context.Background())
+	require.NoError(t, err)
+	require.Len(t, auditLogs, 1)
+}
+
+func TestCreateCounterSignTasks_NonParticipantDeniedUnlessElevated(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
+	approver, err := engine.client.User.Create().
+		SetUsername("countersign-approver").SetEmail("countersign-approver@example.com").SetName("Approver").
+		SetPasswordHash("hash").SetRole("agent").SetActive(true).SetTenantID(tenantID).
+		Save(context.Background())
+	require.NoError(t, err)
+
+	_, taskID := createProcessFixture(t, engine, tenantID, "countersign1")
+	task, err := engine.client.ProcessTask.Get(context.Background(), taskID)
+	require.NoError(t, err)
+
+	notParticipantCtx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, actorID)
+	notParticipantCtx = context.WithValue(notParticipantCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	notParticipantCtx = context.WithValue(notParticipantCtx, bpmn.BPMNElevatedContextKey, false)
+
+	_, err = engine.TaskService().CreateCounterSignTasks(notParticipantCtx, task.TaskID, &CounterSignRequest{
+		ApprovalType: "parallel",
+		Approvers:    []string{fmt.Sprintf("%d", approver.ID)},
+		Threshold:    1,
+	})
+	assert.Error(t, err)
+
+	elevatedCtx := context.WithValue(notParticipantCtx, bpmn.BPMNElevatedContextKey, true)
+	created, err := engine.TaskService().CreateCounterSignTasks(elevatedCtx, task.TaskID, &CounterSignRequest{
+		ApprovalType: "parallel",
+		Approvers:    []string{fmt.Sprintf("%d", approver.ID)},
+		Threshold:    1,
+	})
+	require.NoError(t, err)
+	assert.Len(t, created, 1)
+
+	auditLogs, err := engine.client.ProcessAuditLog.Query().
+		Where(processauditlog.Action(AuditActionActivityStarted)).All(context.Background())
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, len(auditLogs), 1)
 }

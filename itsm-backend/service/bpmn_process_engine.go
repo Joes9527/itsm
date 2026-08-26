@@ -125,8 +125,8 @@ func NewCustomProcessEngine(client *ent.Client, logger *zap.SugaredLogger) Proce
 	}
 	engine.processDefinitionService = &bpmnProcessDefinitionService{client: client, logger: logger}
 	engine.processInstanceService = &bpmnProcessInstanceService{client: client, logger: logger}
-	engine.taskService = &bpmnTaskService{client: client, logger: logger, groupResolver: engine.groupResolver}
 	engine.auditService = NewBPMNAuditService(client, logger)
+	engine.taskService = &bpmnTaskService{client: client, logger: logger, groupResolver: engine.groupResolver, auditService: engine.auditService}
 
 	// 注册流程相关的内置函数
 	engine.registerProcessFunctions()
@@ -199,7 +199,7 @@ func (e *CustomProcessEngine) ProcessInstanceService() ProcessInstanceService {
 
 // TaskService 返回任务服务
 func (e *CustomProcessEngine) TaskService() TaskService {
-	return &bpmnTaskService{client: e.client, logger: e.logger, groupResolver: e.groupResolver}
+	return &bpmnTaskService{client: e.client, logger: e.logger, groupResolver: e.groupResolver, auditService: e.auditService}
 }
 
 // StartProcess 启动流程实例
@@ -2343,6 +2343,7 @@ type bpmnTaskService struct {
 	client        *ent.Client
 	logger        *zap.SugaredLogger
 	groupResolver *bpmn.GroupResolver
+	auditService  *BPMNAuditService
 }
 
 // GetTask 根据任务ID (BPMN标准task_id字符串)获取任务
@@ -2411,6 +2412,63 @@ func (s *bpmnTaskService) authorizeTaskViewer(ctx context.Context, task *ent.Pro
 		return nil
 	}
 	return fmt.Errorf("当前用户无权查看该任务")
+}
+
+// authorizeTaskMutation gates assign/cancel/setVariables/counter-sign the
+// same way authorizeTaskActor gates claim/complete: elevated callers
+// (task:update permission) bypass the check entirely (managing a stuck task
+// is a legitimate admin action); everyone else must be the task's
+// assignee/candidate. Returns the resolved actor's ID and display name for
+// the caller to pass into the corresponding BPMNAuditService.Record* call —
+// every mutation this guards must be audited, elevated bypass or not.
+//
+// IMPORTANT (ruling recorded during Task 2's fix loop, see ledger): this must
+// use the same two-tier check + requester exclusion as authorizeTaskActor/
+// isTaskCandidate, NOT the combined IsTaskParticipant. candidate_groups is a
+// LIVE re-evaluated check, not pre-filtered at task-creation time the way
+// candidate_users is (createUserTask's excludeUserFromCandidates only
+// filters candidate_users) — a requester who happens to belong to the
+// configured approval group must not be able to bypass self-approval
+// prevention by cancelling/reassigning/editing variables on their own
+// approval task via that group membership. Reassignment/cancellation of
+// one's own approval request is the same segregation-of-duties concern as
+// self-approval, so this exclusion applies here too — unlike the read-only
+// authorizeTaskViewer (Task 6), where viewing one's own request's progress
+// is not a segregation-of-duties issue and needs no exclusion.
+func (s *bpmnTaskService) authorizeTaskMutation(ctx context.Context, task *ent.ProcessTask) (actorID int, actorName string, err error) {
+	userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
+	if userID <= 0 {
+		return 0, "", nil // system/internal call, matches authorizeTaskActor's existing convention
+	}
+	elevated, _ := ctx.Value(bpmn.BPMNElevatedContextKey).(bool)
+	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
+	if tenantID == 0 {
+		tenantID = task.TenantID
+	}
+	actor, actorErr := s.client.User.Query().Where(user.ID(userID), user.TenantID(tenantID)).Only(ctx)
+	if actorErr != nil {
+		return 0, "", fmt.Errorf("操作用户不存在: %w", actorErr)
+	}
+	if elevated {
+		return userID, actor.Name, nil
+	}
+	identity, identErr := bpmn.ResolveCallerIdentity(ctx, s.client, s.groupResolver, tenantID, userID)
+	if identErr != nil {
+		return 0, "", fmt.Errorf("解析调用者身份失败: %w", identErr)
+	}
+	if identity.MatchesAssigneeOrCandidateUser(task) {
+		return userID, actor.Name, nil
+	}
+	if identity.MatchesCandidateGroup(task) {
+		isRequester, reqErr := isProcessInstanceRequester(ctx, s.client, task.ProcessInstanceID, tenantID, userID)
+		if reqErr != nil {
+			return 0, "", fmt.Errorf("校验申请人身份失败: %w", reqErr)
+		}
+		if !isRequester {
+			return userID, actor.Name, nil
+		}
+	}
+	return 0, "", fmt.Errorf("当前用户不是该任务的审批人或候选人")
 }
 
 // CompleteTaskByID 根据数据库自增ID完成任务
@@ -2621,14 +2679,28 @@ func (s *bpmnTaskService) AssignTask(ctx context.Context, taskID string, assigne
 	if err != nil {
 		return err
 	}
+	actorID, actorName, err := s.authorizeTaskMutation(ctx, task)
+	if err != nil {
+		return err
+	}
 
 	_, err = s.client.ProcessTask.UpdateOne(task).
 		SetAssignee(assignee).
 		SetStatus(common.ProcessTaskStatusAssigned).
 		SetAssignedTime(time.Now()).
 		Save(ctx)
+	if err != nil {
+		return err
+	}
 
-	return err
+	var assigneeUser *ent.User
+	if assigneeID, convErr := strconv.Atoi(assignee); convErr == nil {
+		assigneeUser, _ = s.client.User.Get(ctx, assigneeID)
+	}
+	if auditErr := s.auditService.RecordTaskAssigned(ctx, task, assigneeUser, actorID, actorName); auditErr != nil {
+		s.logger.Warnw("audit record failed", "error", auditErr, "task_id", task.TaskID)
+	}
+	return nil
 }
 
 // isTaskCandidate 复用共享的 bpmn.CallerIdentity 参与者判定（用户 ID/用户名/邮箱，或
@@ -2731,12 +2803,22 @@ func (s *bpmnTaskService) CancelTask(ctx context.Context, taskID string, reason 
 	if err != nil {
 		return err
 	}
+	actorID, actorName, err := s.authorizeTaskMutation(ctx, task)
+	if err != nil {
+		return err
+	}
 
 	_, err = s.client.ProcessTask.UpdateOne(task).
 		SetStatus("cancelled").
 		Save(ctx)
+	if err != nil {
+		return err
+	}
 
-	return err
+	if auditErr := s.auditService.RecordTaskCancelled(ctx, task, actorID, actorName, reason); auditErr != nil {
+		s.logger.Warnw("audit record failed", "error", auditErr, "task_id", task.TaskID)
+	}
+	return nil
 }
 
 func (s *bpmnTaskService) GetTaskVariables(ctx context.Context, taskID string) (map[string]interface{}, error) {
@@ -2753,12 +2835,23 @@ func (s *bpmnTaskService) SetTaskVariables(ctx context.Context, taskID string, v
 	if err != nil {
 		return err
 	}
+	actorID, actorName, err := s.authorizeTaskMutation(ctx, task)
+	if err != nil {
+		return err
+	}
+	before := task.TaskVariables
 
 	_, err = s.client.ProcessTask.UpdateOne(task).
 		SetTaskVariables(variables).
 		Save(ctx)
+	if err != nil {
+		return err
+	}
 
-	return err
+	if auditErr := s.auditService.RecordTaskVariablesChanged(ctx, task, actorID, actorName, before, variables); auditErr != nil {
+		s.logger.Warnw("audit record failed", "error", auditErr, "task_id", task.TaskID)
+	}
+	return nil
 }
 
 func (s *bpmnTaskService) HandleTaskTimeout(ctx context.Context, taskID string) error {
@@ -2934,11 +3027,22 @@ func (s *bpmnTaskService) GetTaskStatistics(ctx context.Context, req *TaskStatis
 // CreateCounterSignTasks 创建会签子任务
 func (s *bpmnTaskService) CreateCounterSignTasks(ctx context.Context, parentTaskID string, req *CounterSignRequest) ([]*ent.ProcessTask, error) {
 	// 获取父任务
+	// NOTE (found while writing this task, intentionally out of scope for this plan):
+	// this lookup has NO TenantID filter at all — a caller who knows/guesses a
+	// parentTaskID from a DIFFERENT tenant can create counter-sign tasks against it
+	// today. This is a different bug class (tenant isolation) than what this plan's
+	// spec scoped (participant-level authorization on top of already-existing tenant
+	// isolation). Left unfixed, matching scope discipline; flagged to the user.
 	parentTask, err := s.client.ProcessTask.Query().
 		Where(processtask.TaskID(parentTaskID)).
 		First(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("获取父任务失败: %w", err)
+	}
+
+	actorID, actorName, err := s.authorizeTaskMutation(ctx, parentTask)
+	if err != nil {
+		return nil, err
 	}
 
 	// 生成根任务ID（如果是第一个会签任务）
@@ -2993,6 +3097,10 @@ func (s *bpmnTaskService) CreateCounterSignTasks(ctx context.Context, parentTask
 		Save(ctx)
 	if err != nil {
 		s.logger.Warnf("更新父任务变量失败: %v", err)
+	}
+
+	if auditErr := s.auditService.RecordCounterSignCreated(ctx, parentTask, actorID, actorName, len(req.Approvers)); auditErr != nil {
+		s.logger.Warnw("audit record failed", "error", auditErr, "task_id", parentTask.TaskID)
 	}
 
 	return tasks, nil
