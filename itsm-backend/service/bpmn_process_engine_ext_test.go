@@ -1409,6 +1409,35 @@ func TestGetTaskByID_ElevatedCanViewAnything(t *testing.T) {
 	assert.Equal(t, taskID, task.ID)
 }
 
+// TestGetTaskByID_CrossTenantNeverLeaks guards the explicit TenantID
+// predicate in GetTaskByID's query (service/bpmn_process_engine.go): a task
+// belonging to another tenant must be unreachable by numeric ID alone, even
+// when the caller happens to be assigned to it (same user ID reused across
+// tenants) and even when the caller is elevated — tenant isolation is a
+// harder boundary than participation/elevation and must fail closed
+// regardless of either.
+func TestGetTaskByID_CrossTenantNeverLeaks(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, viewerID := setupApprovalDecisionFixture(t, engine)
+
+	otherTenant, err := engine.client.Tenant.Create().
+		SetName("Other").SetCode("gettask-other").SetDomain("gettask-other.example.com").SetStatus("active").
+		Save(context.Background())
+	require.NoError(t, err)
+	_, otherTaskID := createProcessFixture(t, engine, otherTenant.ID, "gettask-cross-tenant")
+	_, err = engine.client.ProcessTask.UpdateOneID(otherTaskID).
+		SetAssignee(fmt.Sprintf("%d", viewerID)). // same viewer ID, different tenant
+		Save(context.Background())
+	require.NoError(t, err)
+
+	ctx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, viewerID)
+	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = context.WithValue(ctx, bpmn.BPMNElevatedContextKey, true) // even elevated
+
+	_, err = engine.TaskService().GetTaskByID(ctx, otherTaskID)
+	assert.Error(t, err, "must never return another tenant's task regardless of elevation or assignee match")
+}
+
 // ==================== ListUserTasks authorization tests ====================
 
 func TestListUserTasks_NonElevatedIgnoresOverrideParams(t *testing.T) {
