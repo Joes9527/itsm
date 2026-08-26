@@ -27,3 +27,17 @@ type AffectedTicketInfo struct {
 	ImpactType  string `json:"impactType" example:"blocked"`
 	Description string `json:"description" example:"父工单关闭可能导致此工单无法继续"`
 }
+
+// TicketRelationStats 工单关联统计 DTO (camelCase 契约)
+type TicketRelationStats struct {
+	TotalRelations int            `json:"totalRelations"`
+	RelationsByType map[string]int `json:"relationsByType"`
+	InboundCount   int            `json:"inboundCount"`
+	OutboundCount  int            `json:"outboundCount"`
+	ParentCount    int            `json:"parentCount"`
+	ChildrenCount  int            `json:"childrenCount"`
+	BlockedByCount int            `json:"blockedByCount"`
+	BlockingCount  int            `json:"blockingCount"`
+	RelatedCount   int            `json:"relatedCount"`
+	DuplicateCount int            `json:"duplicateCount"`
+}

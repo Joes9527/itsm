@@ -12,6 +12,8 @@ import { Card, Typography, Tag, Button, Space, Spin, Progress, Alert } from 'ant
 import { Sparkles, Check, X, RefreshCw, AlertCircle } from 'lucide-react';
 import { aiTriage, type TriageResult } from '@/lib/api/ai-api';
 
+import { useAuthStore } from '@/lib/store/auth-store';
+
 const { Text, Paragraph } = Typography;
 
 interface AISuggestionPanelProps {
@@ -65,6 +67,9 @@ export function AISuggestionPanel({
   onDismiss,
   initialSuggestion,
 }: AISuggestionPanelProps) {
+  const hasPermission = useAuthStore(state => state.hasPermission);
+  const canUseAI = hasPermission('ai:use') || hasPermission('ai:read') || hasPermission('ticket:write');
+
   const [loading, setLoading] = useState(false);
   const [suggestion, setSuggestion] = useState<TriageResult | null>(initialSuggestion ?? null);
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +78,7 @@ export function AISuggestionPanel({
 
   // Fetch AI suggestion when title/description change
   useEffect(() => {
-    if (!title || dismissed) return;
+    if (!title || dismissed || !canUseAI) return;
 
     const fetchSuggestion = async () => {
       setLoading(true);
@@ -82,7 +87,8 @@ export function AISuggestionPanel({
         const result = await aiTriage(title, description || '');
         setSuggestion(result);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'AI分析失败');
+        // AI suggestions are decision support; fail gracefully without crashing
+        setError(null);
         setSuggestion(null);
       } finally {
         setLoading(false);
@@ -92,7 +98,7 @@ export function AISuggestionPanel({
     // Debounce the API call
     const timer = setTimeout(fetchSuggestion, 800);
     return () => clearTimeout(timer);
-  }, [title, description, dismissed]);
+  }, [title, description, dismissed, canUseAI]);
 
   const handleAccept = () => {
     if (suggestion && onAccept) {
@@ -118,7 +124,7 @@ export function AISuggestionPanel({
       <Card
         size="small"
         className="border-dashed border-2 border-gray-300 bg-gray-50"
-        bodyStyle={{ padding: '12px' }}
+        styles={{ body: { padding: '12px' } }}
       >
         <div className="flex items-center justify-between">
           <Space>
@@ -146,7 +152,7 @@ export function AISuggestionPanel({
       <Card
         size="small"
         className="bg-gradient-to-br from-orange-50/60 to-amber-50/40 border-orange-200/70"
-        bodyStyle={{ padding: '12px' }}
+        styles={{ body: { padding: '12px' } }}
       >
         <div className="flex items-center gap-3">
           <Spin size="small" />
@@ -167,7 +173,7 @@ export function AISuggestionPanel({
       <Card
         size="small"
         className="bg-gray-50 border-gray-200"
-        bodyStyle={{ padding: '12px' }}
+        styles={{ body: { padding: '12px' } }}
       >
         <div className="flex items-center justify-between">
           <Space>
@@ -202,7 +208,7 @@ export function AISuggestionPanel({
     <Card
       size="small"
       className="bg-gradient-to-br from-orange-50/60 to-amber-50/40 border-orange-200/70"
-      bodyStyle={{ padding: '12px' }}
+      styles={{ body: { padding: '12px' } }}
       title={
         <Space>
           <Sparkles className="w-4 h-4 text-orange-500" />

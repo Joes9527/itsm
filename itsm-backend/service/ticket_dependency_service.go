@@ -136,3 +136,48 @@ func (s *TicketDependencyService) AnalyzeDependencyImpact(ctx context.Context, t
 
 	return impact, nil
 }
+
+// GetRelationStats 获取工单关联统计
+func (s *TicketDependencyService) GetRelationStats(ctx context.Context, ticketID int, tenantID int) (*dto.TicketRelationStats, error) {
+	// 查询作为父工单拥有的子工单
+	childrenCount, err := s.client.Ticket.Query().
+		Where(
+			ticket.ParentTicketIDEQ(ticketID),
+			ticket.TenantIDEQ(tenantID),
+		).
+		Count(ctx)
+	if err != nil {
+		s.logger.Errorw("Failed to count children tickets", "error", err, "ticket_id", ticketID)
+		return nil, fmt.Errorf("failed to count children tickets: %w", err)
+	}
+
+	// 检查当前工单是否有父工单
+	parentCount := 0
+	currentTicket, err := s.client.Ticket.Query().
+		Where(
+			ticket.IDEQ(ticketID),
+			ticket.TenantIDEQ(tenantID),
+		).
+		Only(ctx)
+	if err == nil && currentTicket.ParentTicketID > 0 {
+		parentCount = 1
+	}
+
+	total := childrenCount + parentCount
+	stats := &dto.TicketRelationStats{
+		TotalRelations:  total,
+		RelationsByType: map[string]int{
+			"parent_child": total,
+		},
+		InboundCount:   parentCount,
+		OutboundCount:  childrenCount,
+		ParentCount:    parentCount,
+		ChildrenCount:  childrenCount,
+		BlockedByCount: 0,
+		BlockingCount:  0,
+		RelatedCount:   0,
+		DuplicateCount: 0,
+	}
+
+	return stats, nil
+}

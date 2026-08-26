@@ -1127,3 +1127,39 @@ func isUserInputUpdateError(err error) bool {
 	}
 	return false
 }
+
+// GetRelationStats 获取工单关联统计
+// @Summary 获取工单关联统计
+// @Description 返回指定工单的关联工单统计数据（父子工单、阻塞依赖等）
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param id path int true "工单ID"
+// @Success 200 {object} common.Response{data=dto.TicketRelationStats}
+// @Router /api/v1/tickets/:id/relations/stats [get]
+func (tc *TicketController) GetRelationStats(c *gin.Context) {
+	ticketID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.Fail(c, common.ParamErrorCode, "无效的工单ID")
+		return
+	}
+	tenantID := c.GetInt("tenant_id")
+	if tenantID == 0 {
+		common.Fail(c, common.AuthFailedCode, "租户信息缺失")
+		return
+	}
+
+	if tc.ticketDependencyService == nil {
+		common.Success(c, dto.TicketRelationStats{})
+		return
+	}
+
+	stats, err := tc.ticketDependencyService.GetRelationStats(c.Request.Context(), ticketID, tenantID)
+	if err != nil {
+		tc.logger.Errorw("Failed to get ticket relation stats", "error", err, "ticket_id", ticketID, "tenant_id", tenantID)
+		common.Fail(c, common.InternalErrorCode, "获取关联统计失败")
+		return
+	}
+
+	common.Success(c, stats)
+}
