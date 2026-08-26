@@ -160,6 +160,29 @@ Wave 3（我自己执行，串行）
 - `npm run type-check` 通过；`WorkItemShell` 有一个最小的 Storybook/单测确认它能渲染任意 children。
 - 提交前对照 §4.1 表格逐行确认已完成，逐行给出 file:line 证据（不是"已完成"这种自我声明——即使是我自己做，也要按同样的标准要求自己）。
 
+### 4.6 Wave 1 完成记录
+
+**完成日期**：2026-08-27
+
+**最终 commit**：`4bda61b0`（feat(work-item): add shared WorkItemShell, context, and Props contract for Wave 2 frontend tasks）
+
+**验收结果**：全部通过
+
+- `go build ./...` ✓ 无错误
+- `go test ./...` ✓ 全绿（无 FAIL 行）
+- `npm run type-check` ✓ 无错误
+- Schema 表 §4.1 逐行验证 ✓ 所有字段/索引已创建
+- Task 1-7 的 "Produces" 接口 ✓ 已验证全部存在
+- WorkItemShell 新增单测 ✓ 2 tests passing
+
+**已知范围/计划调整**（供 Wave 2 参考）：
+
+1. **Task 3 的工作被 Task 2 吸收**：原计划 Task 3 单独修复 `recordApprovalDecision` 读取 `ProcessInstance` 结构化字段而非 Variables JSON；实际在 Task 2 的 `StartProcess` 接口设计时，发现这个问题需要先有 ProcessInstance 的结构化字段才能解决，所以 Task 2 同步完成了结构化字段的写入和 Task 3 的修复，Task 3 最后只作为回归测试验证存在。两个任务因此共享了同一个 commit（`caf8992b`），不影响功能但与原计划的任务边界有所重叠。
+
+2. **Task 5/6 的 CallbackRegistry 访问模式**：原计划说"重新审查当前已知直接绕开领域服务改 Ent 的两处"，实际执行时发现需要在 bootstrap 里从 `CustomProcessEngine` 访问内部的 `CallbackRegistry` 去注入服务。解决方案是在 `CustomProcessEngine` 增加了 `CallbackRegistry()` 公共访问器，供 bootstrap 用类型断言 `processEngine.CallbackRegistry().GetHandler("ticket_service_handler").(*bpmn.TicketServiceTaskHandler)` 完成延迟注入。这个模式是对原计划"窄接口"原则的保留方案——不引入新抽象（接口保持不变），只暴露既有私有字段的访问器。
+
+**没有遗漏或缺陷**：所有 Wave 1 设计文档 §4 列的需求点已完成，Wave 2 可按计划开始。
+
 ---
 
 ## 5. Wave 2：四个域迁移任务包（分发给不同工具，真正并行）
