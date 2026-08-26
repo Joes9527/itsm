@@ -149,13 +149,12 @@ describe('ServiceRequestPanel', () => {
     });
     mockListTasks.mockResolvedValueOnce([]);
 
-    const user = userEvent.setup();
     render(<ServiceRequestPanel ticketId={305} />);
 
     const startButton = await screen.findByText('开始交付');
-    expect(startButton.closest('button')).toBeDisabled();
-
-    await user.click(startButton);
+    const buttonElement = startButton.closest('button');
+    expect(buttonElement).toBeDisabled();
+    expect(buttonElement).toHaveAttribute('title', '申请人不能交付自己提交的服务请求');
     expect(mockStartProvisioning).not.toHaveBeenCalled();
   });
 });
