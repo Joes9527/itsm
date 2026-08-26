@@ -1708,6 +1708,45 @@ func TestCreateCounterSignTasks_NonParticipantDeniedUnlessElevated(t *testing.T)
 	assert.GreaterOrEqual(t, len(auditLogs), 1)
 }
 
+// TestCreateCounterSignTasks_CrossTenantNeverLeaks guards
+// CreateCounterSignTasks's parentTask lookup, which — unlike AssignTask/
+// CancelTask/SetTaskVariables, which all route through the tenant-filtered
+// s.GetTask — did its own inline `ProcessTask.Query().Where(TaskID(...))`
+// with no TenantID predicate at all. A caller from tenant A must not be
+// able to create counter-sign tasks against a parent task belonging to
+// tenant B by supplying that task's TaskID, even when elevated (elevated
+// bypasses the participant check inside authorizeTaskMutation entirely, so
+// tenant isolation on the initial lookup is the only remaining guard).
+func TestCreateCounterSignTasks_CrossTenantNeverLeaks(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
+
+	otherTenant, err := engine.client.Tenant.Create().
+		SetName("Other").SetCode("countersign-other").SetDomain("countersign-other.example.com").SetStatus("active").
+		Save(context.Background())
+	require.NoError(t, err)
+	_, otherTaskID := createProcessFixture(t, engine, otherTenant.ID, "countersign-cross-tenant")
+	otherTask, err := engine.client.ProcessTask.Get(context.Background(), otherTaskID)
+	require.NoError(t, err)
+
+	approver, err := engine.client.User.Create().
+		SetUsername("countersign-cross-approver").SetEmail("countersign-cross-approver@example.com").SetName("Cross Approver").
+		SetPasswordHash("hash").SetRole("agent").SetActive(true).SetTenantID(tenantID).
+		Save(context.Background())
+	require.NoError(t, err)
+
+	ctx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, actorID)
+	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = context.WithValue(ctx, bpmn.BPMNElevatedContextKey, true) // even elevated
+
+	_, err = engine.TaskService().CreateCounterSignTasks(ctx, otherTask.TaskID, &CounterSignRequest{
+		ApprovalType: "parallel",
+		Approvers:    []string{fmt.Sprintf("%d", approver.ID)},
+		Threshold:    1,
+	})
+	assert.Error(t, err, "must never create counter-sign tasks against another tenant's parent task, regardless of elevation")
+}
+
 // TestAssignTask_SystemCallerNoUserIDProducesNoAuditRecord verifies that
 // authorizeTaskMutation's permissive "no actor" case (userID<=0, matching
 // authorizeTaskActor's existing "system/internal call" convention) does NOT

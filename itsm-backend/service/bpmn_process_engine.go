@@ -3032,16 +3032,15 @@ func (s *bpmnTaskService) GetTaskStatistics(ctx context.Context, req *TaskStatis
 
 // CreateCounterSignTasks 创建会签子任务
 func (s *bpmnTaskService) CreateCounterSignTasks(ctx context.Context, parentTaskID string, req *CounterSignRequest) ([]*ent.ProcessTask, error) {
-	// 获取父任务
-	// NOTE (found while writing this task, intentionally out of scope for this plan):
-	// this lookup has NO TenantID filter at all — a caller who knows/guesses a
-	// parentTaskID from a DIFFERENT tenant can create counter-sign tasks against it
-	// today. This is a different bug class (tenant isolation) than what this plan's
-	// spec scoped (participant-level authorization on top of already-existing tenant
-	// isolation). Left unfixed, matching scope discipline; flagged to the user.
-	parentTask, err := s.client.ProcessTask.Query().
-		Where(processtask.TaskID(parentTaskID)).
-		First(ctx)
+	// 获取父任务（必须显式带 TenantID 谓词——见 Task 9 回归发现：这里此前没有
+	// 租户过滤，elevated 调用者可以对任意租户的任务发起会签，因为
+	// authorizeTaskMutation 的 elevated 分支只校验调用者自身所在租户，不校验
+	// 目标任务所属租户）。
+	query := s.client.ProcessTask.Query().Where(processtask.TaskID(parentTaskID))
+	if tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int); tenantID > 0 {
+		query = query.Where(processtask.TenantID(tenantID))
+	}
+	parentTask, err := query.First(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("获取父任务失败: %w", err)
 	}
