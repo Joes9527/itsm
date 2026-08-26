@@ -1785,6 +1785,55 @@ func TestAssignTask_SystemCallerNoUserIDProducesNoAuditRecord(t *testing.T) {
 	assert.Empty(t, auditLogs, "a system/internal call with no actor must not produce an audit record")
 }
 
+// TestAssignTask_NoUserNoSystemCallerDenied verifies authorizeTaskMutation's
+// fail-closed default: a caller with neither an authenticated user ID nor an
+// explicit bpmn.BPMNSystemCallerContextKey declaration must be denied, not
+// silently treated as an internal/system call.
+func TestAssignTask_NoUserNoSystemCallerDenied(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, _ := setupApprovalDecisionFixture(t, engine)
+	otherUser, err := engine.client.User.Create().
+		SetUsername("assignee-target-3").SetEmail("assignee-target-3@example.com").SetName("Target3").
+		SetPasswordHash("hash").SetRole("agent").SetActive(true).SetTenantID(tenantID).
+		Save(context.Background())
+	require.NoError(t, err)
+	_, taskID := createProcessFixture(t, engine, tenantID, "assign-nouser1")
+	task, err := engine.client.ProcessTask.Get(context.Background(), taskID)
+	require.NoError(t, err)
+
+	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+
+	err = engine.TaskService().AssignTask(ctx, task.TaskID, fmt.Sprintf("%d", otherUser.ID))
+	assert.Error(t, err, "no user and no explicit system-caller declaration must be denied by default")
+}
+
+// TestAssignTask_ExplicitSystemCallerAllowedNoAudit verifies that an
+// explicitly declared system caller (bpmn.BPMNSystemCallerContextKey=true) is
+// permitted through authorizeTaskMutation and still leaves no audit record,
+// since there is no real human actor to attribute the action to.
+func TestAssignTask_ExplicitSystemCallerAllowedNoAudit(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, _ := setupApprovalDecisionFixture(t, engine)
+	otherUser, err := engine.client.User.Create().
+		SetUsername("assignee-target-4").SetEmail("assignee-target-4@example.com").SetName("Target4").
+		SetPasswordHash("hash").SetRole("agent").SetActive(true).SetTenantID(tenantID).
+		Save(context.Background())
+	require.NoError(t, err)
+	_, taskID := createProcessFixture(t, engine, tenantID, "assign-syscaller1")
+	task, err := engine.client.ProcessTask.Get(context.Background(), taskID)
+	require.NoError(t, err)
+
+	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = context.WithValue(ctx, bpmn.BPMNSystemCallerContextKey, true)
+
+	err = engine.TaskService().AssignTask(ctx, task.TaskID, fmt.Sprintf("%d", otherUser.ID))
+	require.NoError(t, err, "an explicitly declared system caller must be permitted")
+
+	auditLogs, err := engine.client.ProcessAuditLog.Query().All(context.Background())
+	require.NoError(t, err)
+	assert.Empty(t, auditLogs, "a system caller with no real actor must still produce no audit record")
+}
+
 // ==================== Final fix-wave regression tests ====================
 
 // TestGetCounterSignStatus_CrossTenantNeverLeaks guards GetCounterSignStatus,
@@ -1815,7 +1864,7 @@ func TestGetCounterSignStatus_CrossTenantNeverLeaks(t *testing.T) {
 	// task, from a properly scoped other-tenant context, so there is real
 	// data to potentially leak.
 	otherTenantCtx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, otherTenant.ID)
-	otherTenantCtx = context.WithValue(otherTenantCtx, bpmn.BPMNElevatedContextKey, true)
+	otherTenantCtx = context.WithValue(otherTenantCtx, bpmn.BPMNSystemCallerContextKey, true)
 	_, err = engine.TaskService().CreateCounterSignTasks(otherTenantCtx, otherParentTask.TaskID, &CounterSignRequest{
 		ApprovalType: "parallel",
 		Approvers:    []string{fmt.Sprintf("%d", approver.ID)},
@@ -1991,15 +2040,15 @@ func TestVote_ByCounterSignApproverNotOriginalParentAssignee(t *testing.T) {
 	// parentTask.Assignee is left at its zero value — CreateCounterSignTasks
 	// never sets it, so it is NOT the approver below, by design.
 
-	elevatedCtx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
-	elevatedCtx = context.WithValue(elevatedCtx, bpmn.BPMNElevatedContextKey, true)
+	systemCtx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	systemCtx = context.WithValue(systemCtx, bpmn.BPMNSystemCallerContextKey, true)
 	// Threshold 2 with only one of the two approvers voting below keeps the
 	// counter-sign status "pending" rather than "approved" — this test is
 	// only about the vote itself succeeding (i.e. not being wrongly denied
 	// by authorizeCounterSignViewer), not about exercising the downstream
 	// parent-task-completion path (which needs a real deployed BPMN
 	// definition that this lightweight fixture doesn't provide).
-	created, err := engine.TaskService().CreateCounterSignTasks(elevatedCtx, parentTask.TaskID, &CounterSignRequest{
+	created, err := engine.TaskService().CreateCounterSignTasks(systemCtx, parentTask.TaskID, &CounterSignRequest{
 		ApprovalType: "parallel",
 		Approvers:    []string{fmt.Sprintf("%d", approver.ID), fmt.Sprintf("%d", approver2.ID)},
 		Threshold:    2,

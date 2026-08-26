@@ -2468,9 +2468,12 @@ func (s *bpmnTaskService) authorizeCounterSignViewer(ctx context.Context, parent
 // authorizeTaskViewer (Task 6), where viewing one's own request's progress
 // is not a segregation-of-duties issue and needs no exclusion.
 func (s *bpmnTaskService) authorizeTaskMutation(ctx context.Context, task *ent.ProcessTask) (actorID int, actorName string, err error) {
+	if systemCaller, _ := ctx.Value(bpmn.BPMNSystemCallerContextKey).(bool); systemCaller {
+		return 0, "", nil
+	}
 	userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
 	if userID <= 0 {
-		return 0, "", nil // system/internal call, matches authorizeTaskActor's existing convention
+		return 0, "", fmt.Errorf("未认证的调用")
 	}
 	elevated, _ := ctx.Value(bpmn.BPMNElevatedContextKey).(bool)
 	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
