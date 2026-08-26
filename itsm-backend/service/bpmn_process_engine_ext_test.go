@@ -1778,3 +1778,233 @@ func TestAssignTask_SystemCallerNoUserIDProducesNoAuditRecord(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, auditLogs, "a system/internal call with no actor must not produce an audit record")
 }
+
+// ==================== Final fix-wave regression tests ====================
+
+// TestGetCounterSignStatus_CrossTenantNeverLeaks guards GetCounterSignStatus,
+// which previously did zero tenant scoping AND zero authorization: any
+// authenticated user in any tenant holding a task_id could read another
+// tenant's counter-sign state (final whole-branch review Finding 1). Now it
+// must tenant-scope both the parent-task and sub-task queries, and gate on
+// the parent task via authorizeTaskViewer, before returning any status data.
+func TestGetCounterSignStatus_CrossTenantNeverLeaks(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, viewerID := setupApprovalDecisionFixture(t, engine)
+
+	otherTenant, err := engine.client.Tenant.Create().
+		SetName("Other").SetCode("countersign-status-other").SetDomain("countersign-status-other.example.com").SetStatus("active").
+		Save(context.Background())
+	require.NoError(t, err)
+	_, otherParentTaskID := createProcessFixture(t, engine, otherTenant.ID, "countersign-status-cross-tenant")
+	otherParentTask, err := engine.client.ProcessTask.Get(context.Background(), otherParentTaskID)
+	require.NoError(t, err)
+
+	approver, err := engine.client.User.Create().
+		SetUsername("countersign-status-approver").SetEmail("countersign-status-approver@example.com").SetName("Approver").
+		SetPasswordHash("hash").SetRole("agent").SetActive(true).SetTenantID(otherTenant.ID).
+		Save(context.Background())
+	require.NoError(t, err)
+
+	// Create real counter-sign sub-tasks under the other tenant's parent
+	// task, from a properly scoped other-tenant context, so there is real
+	// data to potentially leak.
+	otherTenantCtx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, otherTenant.ID)
+	otherTenantCtx = context.WithValue(otherTenantCtx, bpmn.BPMNElevatedContextKey, true)
+	_, err = engine.TaskService().CreateCounterSignTasks(otherTenantCtx, otherParentTask.TaskID, &CounterSignRequest{
+		ApprovalType: "parallel",
+		Approvers:    []string{fmt.Sprintf("%d", approver.ID)},
+		Threshold:    1,
+	})
+	require.NoError(t, err)
+
+	// Caller belongs to a different tenant, has no relation whatsoever to
+	// the other tenant's task, and is even elevated within their OWN
+	// tenant — elevation must not cross the tenant boundary.
+	ctx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, viewerID)
+	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = context.WithValue(ctx, bpmn.BPMNElevatedContextKey, true)
+
+	_, err = engine.TaskService().GetCounterSignStatus(ctx, otherParentTask.TaskID)
+	assert.Error(t, err, "must never return another tenant's counter-sign status regardless of elevation")
+}
+
+// TestListUserTasks_NoUserIDNonElevatedReturnsEmpty guards ListUserTasks's
+// fail-open bug: when a non-elevated caller has no resolvable user ID
+// (bpmn.BPMNUserIDContextKey absent or 0), the old code forced
+// req.UserID = 0, which then fell through to the unfiltered "else" branch
+// (req.Assignee/CandidateUsers/CandidateGroups were also blanked to "") and
+// returned the ENTIRE tenant's task list — the opposite of fail-closed.
+// Mirrors ListProcessInstances's existing "userID <= 0 -> empty" guard
+// (final whole-branch review Finding 4).
+func TestListUserTasks_NoUserIDNonElevatedReturnsEmpty(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, _ := setupApprovalDecisionFixture(t, engine)
+
+	// A task exists in the tenant, unrelated to any particular caller —
+	// this is what the old bug would have handed back wholesale.
+	_, taskID := createProcessFixture(t, engine, tenantID, "listtasks-noauth")
+	_, err := engine.client.ProcessTask.UpdateOneID(taskID).
+		SetStatus("assigned").Save(context.Background())
+	require.NoError(t, err)
+
+	// Deliberately no bpmn.BPMNUserIDContextKey set, and not elevated.
+	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = context.WithValue(ctx, bpmn.BPMNElevatedContextKey, false)
+
+	tasks, total, err := engine.TaskService().ListUserTasks(ctx, &ListUserTasksRequest{
+		TenantID: tenantID, Page: 1, PageSize: 50,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 0, total, "a non-elevated caller with no resolvable user ID must see nothing, not the whole tenant's tasks")
+	assert.Empty(t, tasks)
+}
+
+// TestListUserTasks_CrossTenantNeverLeaks closes a test-coverage gap flagged
+// by the final whole-branch review (Finding 9): ListUserTasks had no
+// cross-tenant regression test, unlike its sibling ListProcessInstances
+// (TestListProcessInstances_CrossTenantNeverLeaks). Modeled on that test.
+func TestListUserTasks_CrossTenantNeverLeaks(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, viewerID := setupApprovalDecisionFixture(t, engine)
+
+	otherTenant, err := engine.client.Tenant.Create().
+		SetName("Other").SetCode("listtasks-other").SetDomain("listtasks-other.example.com").SetStatus("active").
+		Save(context.Background())
+	require.NoError(t, err)
+	_, otherTaskID := createProcessFixture(t, engine, otherTenant.ID, "listtasks-cross-tenant")
+	_, err = engine.client.ProcessTask.UpdateOneID(otherTaskID).
+		SetAssignee(fmt.Sprintf("%d", viewerID)). // same viewer ID, different tenant
+		Save(context.Background())
+	require.NoError(t, err)
+
+	ctx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, viewerID)
+	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = context.WithValue(ctx, bpmn.BPMNElevatedContextKey, true) // even elevated
+
+	tasks, total, err := engine.TaskService().ListUserTasks(ctx, &ListUserTasksRequest{
+		UserID: viewerID, TenantID: tenantID, Page: 1, PageSize: 50,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 0, total, "must never return another tenant's task regardless of elevation or assignee match")
+	assert.Empty(t, tasks)
+}
+
+// TestSetTaskVariables_NonParticipantDeniedUnlessElevated closes a
+// test-coverage gap flagged by the final whole-branch review (Finding 8):
+// SetTaskVariables only had a participant-allowed-and-audited test, with no
+// non-participant-denied or elevated case, unlike its siblings AssignTask/
+// CancelTask. Modeled on TestAssignTask_NonParticipantDeniedUnlessElevated.
+func TestSetTaskVariables_NonParticipantDeniedUnlessElevated(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
+	_, taskID := createProcessFixture(t, engine, tenantID, "vars-nonparticipant")
+	task, err := engine.client.ProcessTask.Get(context.Background(), taskID)
+	require.NoError(t, err)
+
+	notParticipantCtx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, actorID)
+	notParticipantCtx = context.WithValue(notParticipantCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	notParticipantCtx = context.WithValue(notParticipantCtx, bpmn.BPMNElevatedContextKey, false)
+
+	err = engine.TaskService().SetTaskVariables(notParticipantCtx, task.TaskID, map[string]interface{}{"comment": "hijacked"})
+	assert.Error(t, err, "a non-participant, non-elevated caller must not be able to set task variables")
+
+	elevatedCtx := context.WithValue(notParticipantCtx, bpmn.BPMNElevatedContextKey, true)
+	err = engine.TaskService().SetTaskVariables(elevatedCtx, task.TaskID, map[string]interface{}{"comment": "elevated-set"})
+	require.NoError(t, err, "an elevated caller must be able to set variables on any task")
+
+	auditLogs, err := engine.client.ProcessAuditLog.Query().
+		Where(processauditlog.Action(AuditActionVariableChanged)).All(context.Background())
+	require.NoError(t, err)
+	require.Len(t, auditLogs, 1, "only the elevated call should produce an audit record")
+}
+
+// TestVote_CrossTenantDenied confirms (final whole-branch review Finding 2)
+// that Vote's two ProcessTask lookups, now given explicit TenantID
+// predicates as defense-in-depth, actually deny a cross-tenant vote attempt
+// rather than merely relying on incidental protection elsewhere. The
+// assignee field is deliberately set to the SAME numeric ID as the caller's
+// own user ID (just in a different tenant) — before the tenant predicate,
+// authorizeTaskActor's MatchesAssigneeOrCandidateUser would have matched on
+// that string equality alone; with the predicate, the initial task lookup
+// itself never finds the other tenant's task.
+func TestVote_CrossTenantDenied(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, viewerID := setupApprovalDecisionFixture(t, engine)
+
+	otherTenant, err := engine.client.Tenant.Create().
+		SetName("Other").SetCode("vote-other").SetDomain("vote-other.example.com").SetStatus("active").
+		Save(context.Background())
+	require.NoError(t, err)
+	_, otherTaskID := createProcessFixture(t, engine, otherTenant.ID, "vote-cross-tenant")
+	otherTask, err := engine.client.ProcessTask.Get(context.Background(), otherTaskID)
+	require.NoError(t, err)
+	_, err = engine.client.ProcessTask.UpdateOneID(otherTaskID).
+		SetAssignee(fmt.Sprintf("%d", viewerID)). // same numeric ID as the caller, different tenant
+		SetStatus("assigned").
+		Save(context.Background())
+	require.NoError(t, err)
+
+	ctx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, viewerID)
+	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = context.WithValue(ctx, bpmn.BPMNElevatedContextKey, false)
+
+	err = engine.TaskService().Vote(ctx, otherTask.TaskID, &VoteRequest{Approved: true, Comment: "should be denied"})
+	assert.Error(t, err, "must never allow a vote on another tenant's task, even with a colliding assignee ID")
+}
+
+// TestVote_ByCounterSignApproverNotOriginalParentAssignee guards against a
+// regression discovered while implementing Finding 1's fix: gating
+// GetCounterSignStatus solely on the PARENT task's participant list (via
+// authorizeTaskViewer) breaks the normal counter-sign flow. CreateCounterSignTasks
+// fans a parent task out into N per-approver sub-tasks without touching the
+// parent task's own assignee field, so a real counter-sign approver — who is
+// only ever a participant of their OWN sub-task, gated correctly by
+// authorizeTaskActor when Vote fetches it — is very often NOT a participant
+// of the parent task. Vote calls GetCounterSignStatus internally after
+// recording the vote; that internal call must not fail for this caller.
+// See authorizeCounterSignViewer, which allows either parent-task
+// participation OR any sub-task participation.
+func TestVote_ByCounterSignApproverNotOriginalParentAssignee(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, _ := setupApprovalDecisionFixture(t, engine)
+
+	approver, err := engine.client.User.Create().
+		SetUsername("countersign-vote-approver").SetEmail("countersign-vote-approver@example.com").SetName("Vote Approver").
+		SetPasswordHash("hash").SetRole("agent").SetActive(true).SetTenantID(tenantID).
+		Save(context.Background())
+	require.NoError(t, err)
+	approver2, err := engine.client.User.Create().
+		SetUsername("countersign-vote-approver2").SetEmail("countersign-vote-approver2@example.com").SetName("Vote Approver 2").
+		SetPasswordHash("hash").SetRole("agent").SetActive(true).SetTenantID(tenantID).
+		Save(context.Background())
+	require.NoError(t, err)
+
+	_, parentTaskID := createProcessFixture(t, engine, tenantID, "vote-countersign")
+	parentTask, err := engine.client.ProcessTask.Get(context.Background(), parentTaskID)
+	require.NoError(t, err)
+	// parentTask.Assignee is left at its zero value — CreateCounterSignTasks
+	// never sets it, so it is NOT the approver below, by design.
+
+	elevatedCtx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	elevatedCtx = context.WithValue(elevatedCtx, bpmn.BPMNElevatedContextKey, true)
+	// Threshold 2 with only one of the two approvers voting below keeps the
+	// counter-sign status "pending" rather than "approved" — this test is
+	// only about the vote itself succeeding (i.e. not being wrongly denied
+	// by authorizeCounterSignViewer), not about exercising the downstream
+	// parent-task-completion path (which needs a real deployed BPMN
+	// definition that this lightweight fixture doesn't provide).
+	created, err := engine.TaskService().CreateCounterSignTasks(elevatedCtx, parentTask.TaskID, &CounterSignRequest{
+		ApprovalType: "parallel",
+		Approvers:    []string{fmt.Sprintf("%d", approver.ID), fmt.Sprintf("%d", approver2.ID)},
+		Threshold:    2,
+	})
+	require.NoError(t, err)
+	require.Len(t, created, 2)
+
+	voteCtx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, approver.ID)
+	voteCtx = context.WithValue(voteCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	voteCtx = context.WithValue(voteCtx, bpmn.BPMNElevatedContextKey, false)
+
+	err = engine.TaskService().Vote(voteCtx, created[0].TaskID, &VoteRequest{Approved: true, Comment: "real vote"})
+	require.NoError(t, err, "a counter-sign approver who is not the original parent task's assignee must still be able to vote")
+}
