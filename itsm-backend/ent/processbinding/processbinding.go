@@ -36,6 +36,8 @@ const (
 	FieldScenario = "scenario"
 	// FieldCategory holds the string denoting the category field in the database.
 	FieldCategory = "category"
+	// FieldCategoryID holds the string denoting the category_id field in the database.
+	FieldCategoryID = "category_id"
 	// FieldConditions holds the string denoting the conditions field in the database.
 	FieldConditions = "conditions"
 	// FieldApprovalChainID holds the string denoting the approval_chain_id field in the database.
@@ -77,6 +79,7 @@ var Columns = []string{
 	FieldTeamID,
 	FieldScenario,
 	FieldCategory,
+	FieldCategoryID,
 	FieldConditions,
 	FieldApprovalChainID,
 	FieldSLAPolicyID,
@@ -207,6 +210,11 @@ func ByScenario(opts ...sql.OrderTermOption) OrderOption {
 // ByCategory orders the results by the category field.
 func ByCategory(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCategory, opts...).ToFunc()
+}
+
+// ByCategoryID orders the results by the category_id field.
+func ByCategoryID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCategoryID, opts...).ToFunc()
 }
 
 // ByApprovalChainID orders the results by the approval_chain_id field.

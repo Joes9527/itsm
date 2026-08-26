@@ -44,6 +44,34 @@ func (_c *ProcessInstanceCreate) SetNillableBusinessKey(v *string) *ProcessInsta
 	return _c
 }
 
+// SetBusinessType sets the "business_type" field.
+func (_c *ProcessInstanceCreate) SetBusinessType(v string) *ProcessInstanceCreate {
+	_c.mutation.SetBusinessType(v)
+	return _c
+}
+
+// SetNillableBusinessType sets the "business_type" field if the given value is not nil.
+func (_c *ProcessInstanceCreate) SetNillableBusinessType(v *string) *ProcessInstanceCreate {
+	if v != nil {
+		_c.SetBusinessType(*v)
+	}
+	return _c
+}
+
+// SetBusinessID sets the "business_id" field.
+func (_c *ProcessInstanceCreate) SetBusinessID(v int) *ProcessInstanceCreate {
+	_c.mutation.SetBusinessID(v)
+	return _c
+}
+
+// SetNillableBusinessID sets the "business_id" field if the given value is not nil.
+func (_c *ProcessInstanceCreate) SetNillableBusinessID(v *int) *ProcessInstanceCreate {
+	if v != nil {
+		_c.SetBusinessID(*v)
+	}
+	return _c
+}
+
 // SetProcessDefinitionKey sets the "process_definition_key" field.
 func (_c *ProcessInstanceCreate) SetProcessDefinitionKey(v string) *ProcessInstanceCreate {
 	_c.mutation.SetProcessDefinitionKey(v)
@@ -454,6 +482,14 @@ func (_c *ProcessInstanceCreate) createSpec() (*ProcessInstance, *sqlgraph.Creat
 	if value, ok := _c.mutation.BusinessKey(); ok {
 		_spec.SetField(processinstance.FieldBusinessKey, field.TypeString, value)
 		_node.BusinessKey = value
+	}
+	if value, ok := _c.mutation.BusinessType(); ok {
+		_spec.SetField(processinstance.FieldBusinessType, field.TypeString, value)
+		_node.BusinessType = value
+	}
+	if value, ok := _c.mutation.BusinessID(); ok {
+		_spec.SetField(processinstance.FieldBusinessID, field.TypeInt, value)
+		_node.BusinessID = value
 	}
 	if value, ok := _c.mutation.ProcessDefinitionKey(); ok {
 		_spec.SetField(processinstance.FieldProcessDefinitionKey, field.TypeString, value)

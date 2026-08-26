@@ -65,6 +65,16 @@ func BusinessKey(v string) predicate.ProcessInstance {
 	return predicate.ProcessInstance(sql.FieldEQ(FieldBusinessKey, v))
 }
 
+// BusinessType applies equality check predicate on the "business_type" field. It's identical to BusinessTypeEQ.
+func BusinessType(v string) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldEQ(FieldBusinessType, v))
+}
+
+// BusinessID applies equality check predicate on the "business_id" field. It's identical to BusinessIDEQ.
+func BusinessID(v int) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldEQ(FieldBusinessID, v))
+}
+
 // ProcessDefinitionKey applies equality check predicate on the "process_definition_key" field. It's identical to ProcessDefinitionKeyEQ.
 func ProcessDefinitionKey(v string) predicate.ProcessInstance {
 	return predicate.ProcessInstance(sql.FieldEQ(FieldProcessDefinitionKey, v))
@@ -283,6 +293,131 @@ func BusinessKeyEqualFold(v string) predicate.ProcessInstance {
 // BusinessKeyContainsFold applies the ContainsFold predicate on the "business_key" field.
 func BusinessKeyContainsFold(v string) predicate.ProcessInstance {
 	return predicate.ProcessInstance(sql.FieldContainsFold(FieldBusinessKey, v))
+}
+
+// BusinessTypeEQ applies the EQ predicate on the "business_type" field.
+func BusinessTypeEQ(v string) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldEQ(FieldBusinessType, v))
+}
+
+// BusinessTypeNEQ applies the NEQ predicate on the "business_type" field.
+func BusinessTypeNEQ(v string) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldNEQ(FieldBusinessType, v))
+}
+
+// BusinessTypeIn applies the In predicate on the "business_type" field.
+func BusinessTypeIn(vs ...string) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldIn(FieldBusinessType, vs...))
+}
+
+// BusinessTypeNotIn applies the NotIn predicate on the "business_type" field.
+func BusinessTypeNotIn(vs ...string) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldNotIn(FieldBusinessType, vs...))
+}
+
+// BusinessTypeGT applies the GT predicate on the "business_type" field.
+func BusinessTypeGT(v string) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldGT(FieldBusinessType, v))
+}
+
+// BusinessTypeGTE applies the GTE predicate on the "business_type" field.
+func BusinessTypeGTE(v string) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldGTE(FieldBusinessType, v))
+}
+
+// BusinessTypeLT applies the LT predicate on the "business_type" field.
+func BusinessTypeLT(v string) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldLT(FieldBusinessType, v))
+}
+
+// BusinessTypeLTE applies the LTE predicate on the "business_type" field.
+func BusinessTypeLTE(v string) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldLTE(FieldBusinessType, v))
+}
+
+// BusinessTypeContains applies the Contains predicate on the "business_type" field.
+func BusinessTypeContains(v string) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldContains(FieldBusinessType, v))
+}
+
+// BusinessTypeHasPrefix applies the HasPrefix predicate on the "business_type" field.
+func BusinessTypeHasPrefix(v string) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldHasPrefix(FieldBusinessType, v))
+}
+
+// BusinessTypeHasSuffix applies the HasSuffix predicate on the "business_type" field.
+func BusinessTypeHasSuffix(v string) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldHasSuffix(FieldBusinessType, v))
+}
+
+// BusinessTypeIsNil applies the IsNil predicate on the "business_type" field.
+func BusinessTypeIsNil() predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldIsNull(FieldBusinessType))
+}
+
+// BusinessTypeNotNil applies the NotNil predicate on the "business_type" field.
+func BusinessTypeNotNil() predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldNotNull(FieldBusinessType))
+}
+
+// BusinessTypeEqualFold applies the EqualFold predicate on the "business_type" field.
+func BusinessTypeEqualFold(v string) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldEqualFold(FieldBusinessType, v))
+}
+
+// BusinessTypeContainsFold applies the ContainsFold predicate on the "business_type" field.
+func BusinessTypeContainsFold(v string) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldContainsFold(FieldBusinessType, v))
+}
+
+// BusinessIDEQ applies the EQ predicate on the "business_id" field.
+func BusinessIDEQ(v int) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldEQ(FieldBusinessID, v))
+}
+
+// BusinessIDNEQ applies the NEQ predicate on the "business_id" field.
+func BusinessIDNEQ(v int) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldNEQ(FieldBusinessID, v))
+}
+
+// BusinessIDIn applies the In predicate on the "business_id" field.
+func BusinessIDIn(vs ...int) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldIn(FieldBusinessID, vs...))
+}
+
+// BusinessIDNotIn applies the NotIn predicate on the "business_id" field.
+func BusinessIDNotIn(vs ...int) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldNotIn(FieldBusinessID, vs...))
+}
+
+// BusinessIDGT applies the GT predicate on the "business_id" field.
+func BusinessIDGT(v int) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldGT(FieldBusinessID, v))
+}
+
+// BusinessIDGTE applies the GTE predicate on the "business_id" field.
+func BusinessIDGTE(v int) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldGTE(FieldBusinessID, v))
+}
+
+// BusinessIDLT applies the LT predicate on the "business_id" field.
+func BusinessIDLT(v int) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldLT(FieldBusinessID, v))
+}
+
+// BusinessIDLTE applies the LTE predicate on the "business_id" field.
+func BusinessIDLTE(v int) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldLTE(FieldBusinessID, v))
+}
+
+// BusinessIDIsNil applies the IsNil predicate on the "business_id" field.
+func BusinessIDIsNil() predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldIsNull(FieldBusinessID))
+}
+
+// BusinessIDNotNil applies the NotNil predicate on the "business_id" field.
+func BusinessIDNotNil() predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldNotNull(FieldBusinessID))
 }
 
 // ProcessDefinitionKeyEQ applies the EQ predicate on the "process_definition_key" field.

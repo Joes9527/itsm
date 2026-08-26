@@ -110,6 +110,11 @@ func CreatedBy(v int) predicate.Problem {
 	return predicate.Problem(sql.FieldEQ(FieldCreatedBy, v))
 }
 
+// WorkItemID applies equality check predicate on the "work_item_id" field. It's identical to WorkItemIDEQ.
+func WorkItemID(v int) predicate.Problem {
+	return predicate.Problem(sql.FieldEQ(FieldWorkItemID, v))
+}
+
 // TenantID applies equality check predicate on the "tenant_id" field. It's identical to TenantIDEQ.
 func TenantID(v int) predicate.Problem {
 	return predicate.Problem(sql.FieldEQ(FieldTenantID, v))
@@ -873,6 +878,56 @@ func CreatedByLT(v int) predicate.Problem {
 // CreatedByLTE applies the LTE predicate on the "created_by" field.
 func CreatedByLTE(v int) predicate.Problem {
 	return predicate.Problem(sql.FieldLTE(FieldCreatedBy, v))
+}
+
+// WorkItemIDEQ applies the EQ predicate on the "work_item_id" field.
+func WorkItemIDEQ(v int) predicate.Problem {
+	return predicate.Problem(sql.FieldEQ(FieldWorkItemID, v))
+}
+
+// WorkItemIDNEQ applies the NEQ predicate on the "work_item_id" field.
+func WorkItemIDNEQ(v int) predicate.Problem {
+	return predicate.Problem(sql.FieldNEQ(FieldWorkItemID, v))
+}
+
+// WorkItemIDIn applies the In predicate on the "work_item_id" field.
+func WorkItemIDIn(vs ...int) predicate.Problem {
+	return predicate.Problem(sql.FieldIn(FieldWorkItemID, vs...))
+}
+
+// WorkItemIDNotIn applies the NotIn predicate on the "work_item_id" field.
+func WorkItemIDNotIn(vs ...int) predicate.Problem {
+	return predicate.Problem(sql.FieldNotIn(FieldWorkItemID, vs...))
+}
+
+// WorkItemIDGT applies the GT predicate on the "work_item_id" field.
+func WorkItemIDGT(v int) predicate.Problem {
+	return predicate.Problem(sql.FieldGT(FieldWorkItemID, v))
+}
+
+// WorkItemIDGTE applies the GTE predicate on the "work_item_id" field.
+func WorkItemIDGTE(v int) predicate.Problem {
+	return predicate.Problem(sql.FieldGTE(FieldWorkItemID, v))
+}
+
+// WorkItemIDLT applies the LT predicate on the "work_item_id" field.
+func WorkItemIDLT(v int) predicate.Problem {
+	return predicate.Problem(sql.FieldLT(FieldWorkItemID, v))
+}
+
+// WorkItemIDLTE applies the LTE predicate on the "work_item_id" field.
+func WorkItemIDLTE(v int) predicate.Problem {
+	return predicate.Problem(sql.FieldLTE(FieldWorkItemID, v))
+}
+
+// WorkItemIDIsNil applies the IsNil predicate on the "work_item_id" field.
+func WorkItemIDIsNil() predicate.Problem {
+	return predicate.Problem(sql.FieldIsNull(FieldWorkItemID))
+}
+
+// WorkItemIDNotNil applies the NotNil predicate on the "work_item_id" field.
+func WorkItemIDNotNil() predicate.Problem {
+	return predicate.Problem(sql.FieldNotNull(FieldWorkItemID))
 }
 
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.

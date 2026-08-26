@@ -339,6 +339,9 @@ type User func(*sql.Selector)
 // Vendor is the predicate function for vendor builders.
 type Vendor func(*sql.Selector)
 
+// WorkItemRelation is the predicate function for workitemrelation builders.
+type WorkItemRelation func(*sql.Selector)
+
 // Workflow is the predicate function for workflow builders.
 type Workflow func(*sql.Selector)
 

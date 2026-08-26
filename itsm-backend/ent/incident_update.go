@@ -187,6 +187,33 @@ func (_u *IncidentUpdate) AddReporterID(v int) *IncidentUpdate {
 	return _u
 }
 
+// SetWorkItemID sets the "work_item_id" field.
+func (_u *IncidentUpdate) SetWorkItemID(v int) *IncidentUpdate {
+	_u.mutation.ResetWorkItemID()
+	_u.mutation.SetWorkItemID(v)
+	return _u
+}
+
+// SetNillableWorkItemID sets the "work_item_id" field if the given value is not nil.
+func (_u *IncidentUpdate) SetNillableWorkItemID(v *int) *IncidentUpdate {
+	if v != nil {
+		_u.SetWorkItemID(*v)
+	}
+	return _u
+}
+
+// AddWorkItemID adds value to the "work_item_id" field.
+func (_u *IncidentUpdate) AddWorkItemID(v int) *IncidentUpdate {
+	_u.mutation.AddWorkItemID(v)
+	return _u
+}
+
+// ClearWorkItemID clears the value of the "work_item_id" field.
+func (_u *IncidentUpdate) ClearWorkItemID() *IncidentUpdate {
+	_u.mutation.ClearWorkItemID()
+	return _u
+}
+
 // SetAssigneeID sets the "assignee_id" field.
 func (_u *IncidentUpdate) SetAssigneeID(v int) *IncidentUpdate {
 	_u.mutation.ResetAssigneeID()
@@ -940,6 +967,15 @@ func (_u *IncidentUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AddedReporterID(); ok {
 		_spec.AddField(incident.FieldReporterID, field.TypeInt, value)
 	}
+	if value, ok := _u.mutation.WorkItemID(); ok {
+		_spec.SetField(incident.FieldWorkItemID, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedWorkItemID(); ok {
+		_spec.AddField(incident.FieldWorkItemID, field.TypeInt, value)
+	}
+	if _u.mutation.WorkItemIDCleared() {
+		_spec.ClearField(incident.FieldWorkItemID, field.TypeInt)
+	}
 	if value, ok := _u.mutation.AssigneeID(); ok {
 		_spec.SetField(incident.FieldAssigneeID, field.TypeInt, value)
 	}
@@ -1544,6 +1580,33 @@ func (_u *IncidentUpdateOne) SetNillableReporterID(v *int) *IncidentUpdateOne {
 // AddReporterID adds value to the "reporter_id" field.
 func (_u *IncidentUpdateOne) AddReporterID(v int) *IncidentUpdateOne {
 	_u.mutation.AddReporterID(v)
+	return _u
+}
+
+// SetWorkItemID sets the "work_item_id" field.
+func (_u *IncidentUpdateOne) SetWorkItemID(v int) *IncidentUpdateOne {
+	_u.mutation.ResetWorkItemID()
+	_u.mutation.SetWorkItemID(v)
+	return _u
+}
+
+// SetNillableWorkItemID sets the "work_item_id" field if the given value is not nil.
+func (_u *IncidentUpdateOne) SetNillableWorkItemID(v *int) *IncidentUpdateOne {
+	if v != nil {
+		_u.SetWorkItemID(*v)
+	}
+	return _u
+}
+
+// AddWorkItemID adds value to the "work_item_id" field.
+func (_u *IncidentUpdateOne) AddWorkItemID(v int) *IncidentUpdateOne {
+	_u.mutation.AddWorkItemID(v)
+	return _u
+}
+
+// ClearWorkItemID clears the value of the "work_item_id" field.
+func (_u *IncidentUpdateOne) ClearWorkItemID() *IncidentUpdateOne {
+	_u.mutation.ClearWorkItemID()
 	return _u
 }
 
@@ -2329,6 +2392,15 @@ func (_u *IncidentUpdateOne) sqlSave(ctx context.Context) (_node *Incident, err 
 	}
 	if value, ok := _u.mutation.AddedReporterID(); ok {
 		_spec.AddField(incident.FieldReporterID, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.WorkItemID(); ok {
+		_spec.SetField(incident.FieldWorkItemID, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedWorkItemID(); ok {
+		_spec.AddField(incident.FieldWorkItemID, field.TypeInt, value)
+	}
+	if _u.mutation.WorkItemIDCleared() {
+		_spec.ClearField(incident.FieldWorkItemID, field.TypeInt)
 	}
 	if value, ok := _u.mutation.AssigneeID(); ok {
 		_spec.SetField(incident.FieldAssigneeID, field.TypeInt, value)

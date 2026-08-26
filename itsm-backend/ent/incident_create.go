@@ -141,6 +141,20 @@ func (_c *IncidentCreate) SetReporterID(v int) *IncidentCreate {
 	return _c
 }
 
+// SetWorkItemID sets the "work_item_id" field.
+func (_c *IncidentCreate) SetWorkItemID(v int) *IncidentCreate {
+	_c.mutation.SetWorkItemID(v)
+	return _c
+}
+
+// SetNillableWorkItemID sets the "work_item_id" field if the given value is not nil.
+func (_c *IncidentCreate) SetNillableWorkItemID(v *int) *IncidentCreate {
+	if v != nil {
+		_c.SetWorkItemID(*v)
+	}
+	return _c
+}
+
 // SetAssigneeID sets the "assignee_id" field.
 func (_c *IncidentCreate) SetAssigneeID(v int) *IncidentCreate {
 	_c.mutation.SetAssigneeID(v)
@@ -754,6 +768,10 @@ func (_c *IncidentCreate) createSpec() (*Incident, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ReporterID(); ok {
 		_spec.SetField(incident.FieldReporterID, field.TypeInt, value)
 		_node.ReporterID = value
+	}
+	if value, ok := _c.mutation.WorkItemID(); ok {
+		_spec.SetField(incident.FieldWorkItemID, field.TypeInt, value)
+		_node.WorkItemID = value
 	}
 	if value, ok := _c.mutation.AssigneeID(); ok {
 		_spec.SetField(incident.FieldAssigneeID, field.TypeInt, value)

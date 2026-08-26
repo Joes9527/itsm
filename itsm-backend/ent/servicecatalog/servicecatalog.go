@@ -25,6 +25,8 @@ const (
 	FieldServiceType = "service_type"
 	// FieldItsmType holds the string denoting the itsm_type field in the database.
 	FieldItsmType = "itsm_type"
+	// FieldTargetClass holds the string denoting the target_class field in the database.
+	FieldTargetClass = "target_class"
 	// FieldPrice holds the string denoting the price field in the database.
 	FieldPrice = "price"
 	// FieldDeliveryTime holds the string denoting the delivery_time field in the database.
@@ -76,6 +78,7 @@ var Columns = []string{
 	FieldIcon,
 	FieldServiceType,
 	FieldItsmType,
+	FieldTargetClass,
 	FieldPrice,
 	FieldDeliveryTime,
 	FieldUnit,
@@ -170,6 +173,11 @@ func ByServiceType(opts ...sql.OrderTermOption) OrderOption {
 // ByItsmType orders the results by the itsm_type field.
 func ByItsmType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldItsmType, opts...).ToFunc()
+}
+
+// ByTargetClass orders the results by the target_class field.
+func ByTargetClass(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTargetClass, opts...).ToFunc()
 }
 
 // ByPrice orders the results by the price field.

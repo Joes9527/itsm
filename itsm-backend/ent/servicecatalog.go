@@ -30,6 +30,8 @@ type ServiceCatalog struct {
 	ServiceType string `json:"service_type,omitempty"`
 	// ITSM类型: Request|Incident|Change，决定审批路由
 	ItsmType string `json:"itsm_type,omitempty"`
+	// WorkItem 目标类：service_request_item|incident|change_request，Wave 2 由 itsm_type 迁移填充，本阶段只加列
+	TargetClass string `json:"target_class,omitempty"`
 	// 价格
 	Price float64 `json:"price,omitempty"`
 	// 交付时间（天）
@@ -84,7 +86,7 @@ func (*ServiceCatalog) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullFloat64)
 		case servicecatalog.FieldID, servicecatalog.FieldDeliveryTime, servicecatalog.FieldApprovalLevel, servicecatalog.FieldSLAResponseTime, servicecatalog.FieldSLAResolutionTime, servicecatalog.FieldCiTypeID, servicecatalog.FieldCloudServiceID, servicecatalog.FieldTenantID, servicecatalog.FieldSortOrder:
 			values[i] = new(sql.NullInt64)
-		case servicecatalog.FieldName, servicecatalog.FieldDescription, servicecatalog.FieldCategory, servicecatalog.FieldIcon, servicecatalog.FieldServiceType, servicecatalog.FieldItsmType, servicecatalog.FieldUnit, servicecatalog.FieldProcessDefinitionKey, servicecatalog.FieldStatus:
+		case servicecatalog.FieldName, servicecatalog.FieldDescription, servicecatalog.FieldCategory, servicecatalog.FieldIcon, servicecatalog.FieldServiceType, servicecatalog.FieldItsmType, servicecatalog.FieldTargetClass, servicecatalog.FieldUnit, servicecatalog.FieldProcessDefinitionKey, servicecatalog.FieldStatus:
 			values[i] = new(sql.NullString)
 		case servicecatalog.FieldCreatedAt, servicecatalog.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -144,6 +146,12 @@ func (_m *ServiceCatalog) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field itsm_type", values[i])
 			} else if value.Valid {
 				_m.ItsmType = value.String
+			}
+		case servicecatalog.FieldTargetClass:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field target_class", values[i])
+			} else if value.Valid {
+				_m.TargetClass = value.String
 			}
 		case servicecatalog.FieldPrice:
 			if value, ok := values[i].(*sql.NullFloat64); !ok {
@@ -318,6 +326,9 @@ func (_m *ServiceCatalog) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("itsm_type=")
 	builder.WriteString(_m.ItsmType)
+	builder.WriteString(", ")
+	builder.WriteString("target_class=")
+	builder.WriteString(_m.TargetClass)
 	builder.WriteString(", ")
 	builder.WriteString("price=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Price))

@@ -24,6 +24,12 @@ func (ProcessInstance) Fields() []ent.Field {
 		field.String("business_key").
 			Comment("业务键，关联业务实体").
 			Optional(),
+		field.String("business_type").
+			Comment("结构化业务类型（recordClass：generic/service_request_item/incident/problem/change_request/catalog_task，历史保留值 release），迁移期与 business_key 由同一次 TriggerProcess 调用原子写入，不从 variables JSON 里现取").
+			Optional(),
+		field.Int("business_id").
+			Comment("结构化业务主键（迁移完成前是各专业域自己的表主键，迁移完成后是 WorkItem ID/tickets.id），与 business_type 成对使用").
+			Optional(),
 		field.String("process_definition_key").
 			Comment("流程定义Key").
 			NotEmpty(),
@@ -113,5 +119,6 @@ func (ProcessInstance) Indexes() []ent.Index {
 		index.Fields("start_time"),
 		index.Fields("parent_process_instance_id"),
 		index.Fields("root_process_instance_id"),
+		index.Fields("tenant_id", "business_type", "business_id", "status"),
 	}
 }

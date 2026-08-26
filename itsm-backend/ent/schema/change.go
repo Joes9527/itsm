@@ -6,6 +6,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
+	"entgo.io/ent/schema/index"
 )
 
 // Change holds the schema definition for the Change entity.
@@ -46,6 +47,10 @@ func (Change) Fields() []ent.Field {
 		field.Int("created_by").
 			Comment("创建人ID").
 			Positive(),
+		field.Int("work_item_id").
+			Comment("关联的 WorkItem（tickets.id），唯一，必填——迁移完成前允许为空").
+			Optional().
+			Unique(),
 		field.Int("tenant_id").
 			Comment("租户ID").
 			Positive(),
@@ -91,5 +96,12 @@ func (Change) Edges() []ent.Edge {
 			Comment("关联的问题"),
 		edge.To("pir", ChangePIR.Type).
 			Comment("实施后审查"),
+	}
+}
+
+// Indexes of the Change.
+func (Change) Indexes() []ent.Index {
+	return []ent.Index{
+		index.Fields("work_item_id"),
 	}
 }

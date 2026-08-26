@@ -38,6 +38,8 @@ type Incident struct {
 	IncidentNumber string `json:"incident_number,omitempty"`
 	// 报告人ID
 	ReporterID int `json:"reporter_id,omitempty"`
+	// 关联的 WorkItem（tickets.id），唯一，必填——Incident 迁移到 WorkItem 后每条记录必须有且仅有一条对应的 tickets 行
+	WorkItemID int `json:"work_item_id,omitempty"`
 	// 处理人ID
 	AssigneeID int `json:"assignee_id,omitempty"`
 	// 配置项ID
@@ -179,7 +181,7 @@ func (*Incident) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case incident.FieldIsAutomated, incident.FieldIsMajorIncident:
 			values[i] = new(sql.NullBool)
-		case incident.FieldID, incident.FieldReporterID, incident.FieldAssigneeID, incident.FieldConfigurationItemID, incident.FieldEscalationLevel, incident.FieldTenantID, incident.FieldVersion:
+		case incident.FieldID, incident.FieldReporterID, incident.FieldWorkItemID, incident.FieldAssigneeID, incident.FieldConfigurationItemID, incident.FieldEscalationLevel, incident.FieldTenantID, incident.FieldVersion:
 			values[i] = new(sql.NullInt64)
 		case incident.FieldTitle, incident.FieldDescription, incident.FieldStatus, incident.FieldType, incident.FieldPriority, incident.FieldSeverity, incident.FieldImpact, incident.FieldUrgency, incident.FieldIncidentNumber, incident.FieldCategory, incident.FieldSubcategory, incident.FieldSource:
 			values[i] = new(sql.NullString)
@@ -265,6 +267,12 @@ func (_m *Incident) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field reporter_id", values[i])
 			} else if value.Valid {
 				_m.ReporterID = int(value.Int64)
+			}
+		case incident.FieldWorkItemID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field work_item_id", values[i])
+			} else if value.Valid {
+				_m.WorkItemID = int(value.Int64)
 			}
 		case incident.FieldAssigneeID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -501,6 +509,9 @@ func (_m *Incident) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("reporter_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ReporterID))
+	builder.WriteString(", ")
+	builder.WriteString("work_item_id=")
+	builder.WriteString(fmt.Sprintf("%v", _m.WorkItemID))
 	builder.WriteString(", ")
 	builder.WriteString("assignee_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.AssigneeID))

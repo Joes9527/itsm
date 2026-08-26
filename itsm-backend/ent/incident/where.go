@@ -105,6 +105,11 @@ func ReporterID(v int) predicate.Incident {
 	return predicate.Incident(sql.FieldEQ(FieldReporterID, v))
 }
 
+// WorkItemID applies equality check predicate on the "work_item_id" field. It's identical to WorkItemIDEQ.
+func WorkItemID(v int) predicate.Incident {
+	return predicate.Incident(sql.FieldEQ(FieldWorkItemID, v))
+}
+
 // AssigneeID applies equality check predicate on the "assignee_id" field. It's identical to AssigneeIDEQ.
 func AssigneeID(v int) predicate.Incident {
 	return predicate.Incident(sql.FieldEQ(FieldAssigneeID, v))
@@ -823,6 +828,56 @@ func ReporterIDLT(v int) predicate.Incident {
 // ReporterIDLTE applies the LTE predicate on the "reporter_id" field.
 func ReporterIDLTE(v int) predicate.Incident {
 	return predicate.Incident(sql.FieldLTE(FieldReporterID, v))
+}
+
+// WorkItemIDEQ applies the EQ predicate on the "work_item_id" field.
+func WorkItemIDEQ(v int) predicate.Incident {
+	return predicate.Incident(sql.FieldEQ(FieldWorkItemID, v))
+}
+
+// WorkItemIDNEQ applies the NEQ predicate on the "work_item_id" field.
+func WorkItemIDNEQ(v int) predicate.Incident {
+	return predicate.Incident(sql.FieldNEQ(FieldWorkItemID, v))
+}
+
+// WorkItemIDIn applies the In predicate on the "work_item_id" field.
+func WorkItemIDIn(vs ...int) predicate.Incident {
+	return predicate.Incident(sql.FieldIn(FieldWorkItemID, vs...))
+}
+
+// WorkItemIDNotIn applies the NotIn predicate on the "work_item_id" field.
+func WorkItemIDNotIn(vs ...int) predicate.Incident {
+	return predicate.Incident(sql.FieldNotIn(FieldWorkItemID, vs...))
+}
+
+// WorkItemIDGT applies the GT predicate on the "work_item_id" field.
+func WorkItemIDGT(v int) predicate.Incident {
+	return predicate.Incident(sql.FieldGT(FieldWorkItemID, v))
+}
+
+// WorkItemIDGTE applies the GTE predicate on the "work_item_id" field.
+func WorkItemIDGTE(v int) predicate.Incident {
+	return predicate.Incident(sql.FieldGTE(FieldWorkItemID, v))
+}
+
+// WorkItemIDLT applies the LT predicate on the "work_item_id" field.
+func WorkItemIDLT(v int) predicate.Incident {
+	return predicate.Incident(sql.FieldLT(FieldWorkItemID, v))
+}
+
+// WorkItemIDLTE applies the LTE predicate on the "work_item_id" field.
+func WorkItemIDLTE(v int) predicate.Incident {
+	return predicate.Incident(sql.FieldLTE(FieldWorkItemID, v))
+}
+
+// WorkItemIDIsNil applies the IsNil predicate on the "work_item_id" field.
+func WorkItemIDIsNil() predicate.Incident {
+	return predicate.Incident(sql.FieldIsNull(FieldWorkItemID))
+}
+
+// WorkItemIDNotNil applies the NotNil predicate on the "work_item_id" field.
+func WorkItemIDNotNil() predicate.Incident {
+	return predicate.Incident(sql.FieldNotNull(FieldWorkItemID))
 }
 
 // AssigneeIDEQ applies the EQ predicate on the "assignee_id" field.

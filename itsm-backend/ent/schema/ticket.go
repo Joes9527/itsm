@@ -33,6 +33,15 @@ func (Ticket) Fields() []ent.Field {
 			Comment("工单来源：manual=手动创建，service_catalog=服务目录申请").
 			Default("manual").
 			Optional(),
+		field.String("record_class").
+			Comment("WorkItem 记录类型：generic/service_request_item/incident/problem/change_request/catalog_task；创建后不可变，由领域服务在事务内校验，不在 schema 层强制").
+			Default("generic"),
+		field.Int("opened_by_id").
+			Comment("实际录入/触发者ID（区别于 requester_id 服务接受者）").
+			Optional(),
+		field.Int("assignment_group_id").
+			Comment("当前处理组ID").
+			Optional(),
 		field.String("priority").
 			Comment("优先级").
 			Default("medium"),
@@ -188,5 +197,6 @@ func (Ticket) Indexes() []ent.Index {
 		index.Fields("tenant_id", "conversation_id").Unique(),
 		index.Fields("status", "priority"),
 		index.Fields("requester_id", "status"),
+		index.Fields("tenant_id", "record_class"),
 	}
 }

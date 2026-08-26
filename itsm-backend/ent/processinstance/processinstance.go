@@ -18,6 +18,10 @@ const (
 	FieldProcessInstanceID = "process_instance_id"
 	// FieldBusinessKey holds the string denoting the business_key field in the database.
 	FieldBusinessKey = "business_key"
+	// FieldBusinessType holds the string denoting the business_type field in the database.
+	FieldBusinessType = "business_type"
+	// FieldBusinessID holds the string denoting the business_id field in the database.
+	FieldBusinessID = "business_id"
 	// FieldProcessDefinitionKey holds the string denoting the process_definition_key field in the database.
 	FieldProcessDefinitionKey = "process_definition_key"
 	// FieldProcessDefinitionID holds the string denoting the process_definition_id field in the database.
@@ -99,6 +103,8 @@ var Columns = []string{
 	FieldID,
 	FieldProcessInstanceID,
 	FieldBusinessKey,
+	FieldBusinessType,
+	FieldBusinessID,
 	FieldProcessDefinitionKey,
 	FieldProcessDefinitionID,
 	FieldStatus,
@@ -168,6 +174,16 @@ func ByProcessInstanceID(opts ...sql.OrderTermOption) OrderOption {
 // ByBusinessKey orders the results by the business_key field.
 func ByBusinessKey(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBusinessKey, opts...).ToFunc()
+}
+
+// ByBusinessType orders the results by the business_type field.
+func ByBusinessType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBusinessType, opts...).ToFunc()
+}
+
+// ByBusinessID orders the results by the business_id field.
+func ByBusinessID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBusinessID, opts...).ToFunc()
 }
 
 // ByProcessDefinitionKey orders the results by the process_definition_key field.

@@ -34,6 +34,8 @@ const (
 	FieldIncidentNumber = "incident_number"
 	// FieldReporterID holds the string denoting the reporter_id field in the database.
 	FieldReporterID = "reporter_id"
+	// FieldWorkItemID holds the string denoting the work_item_id field in the database.
+	FieldWorkItemID = "work_item_id"
 	// FieldAssigneeID holds the string denoting the assignee_id field in the database.
 	FieldAssigneeID = "assignee_id"
 	// FieldConfigurationItemID holds the string denoting the configuration_item_id field in the database.
@@ -142,6 +144,7 @@ var Columns = []string{
 	FieldUrgency,
 	FieldIncidentNumber,
 	FieldReporterID,
+	FieldWorkItemID,
 	FieldAssigneeID,
 	FieldConfigurationItemID,
 	FieldCategory,
@@ -295,6 +298,11 @@ func ByIncidentNumber(opts ...sql.OrderTermOption) OrderOption {
 // ByReporterID orders the results by the reporter_id field.
 func ByReporterID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldReporterID, opts...).ToFunc()
+}
+
+// ByWorkItemID orders the results by the work_item_id field.
+func ByWorkItemID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWorkItemID, opts...).ToFunc()
 }
 
 // ByAssigneeID orders the results by the assignee_id field.

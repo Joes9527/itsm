@@ -203,6 +203,33 @@ func (_u *ChangeUpdate) AddCreatedBy(v int) *ChangeUpdate {
 	return _u
 }
 
+// SetWorkItemID sets the "work_item_id" field.
+func (_u *ChangeUpdate) SetWorkItemID(v int) *ChangeUpdate {
+	_u.mutation.ResetWorkItemID()
+	_u.mutation.SetWorkItemID(v)
+	return _u
+}
+
+// SetNillableWorkItemID sets the "work_item_id" field if the given value is not nil.
+func (_u *ChangeUpdate) SetNillableWorkItemID(v *int) *ChangeUpdate {
+	if v != nil {
+		_u.SetWorkItemID(*v)
+	}
+	return _u
+}
+
+// AddWorkItemID adds value to the "work_item_id" field.
+func (_u *ChangeUpdate) AddWorkItemID(v int) *ChangeUpdate {
+	_u.mutation.AddWorkItemID(v)
+	return _u
+}
+
+// ClearWorkItemID clears the value of the "work_item_id" field.
+func (_u *ChangeUpdate) ClearWorkItemID() *ChangeUpdate {
+	_u.mutation.ClearWorkItemID()
+	return _u
+}
+
 // SetTenantID sets the "tenant_id" field.
 func (_u *ChangeUpdate) SetTenantID(v int) *ChangeUpdate {
 	_u.mutation.ResetTenantID()
@@ -590,6 +617,15 @@ func (_u *ChangeUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AddedCreatedBy(); ok {
 		_spec.AddField(change.FieldCreatedBy, field.TypeInt, value)
 	}
+	if value, ok := _u.mutation.WorkItemID(); ok {
+		_spec.SetField(change.FieldWorkItemID, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedWorkItemID(); ok {
+		_spec.AddField(change.FieldWorkItemID, field.TypeInt, value)
+	}
+	if _u.mutation.WorkItemIDCleared() {
+		_spec.ClearField(change.FieldWorkItemID, field.TypeInt)
+	}
 	if value, ok := _u.mutation.TenantID(); ok {
 		_spec.SetField(change.FieldTenantID, field.TypeInt, value)
 	}
@@ -939,6 +975,33 @@ func (_u *ChangeUpdateOne) SetNillableCreatedBy(v *int) *ChangeUpdateOne {
 // AddCreatedBy adds value to the "created_by" field.
 func (_u *ChangeUpdateOne) AddCreatedBy(v int) *ChangeUpdateOne {
 	_u.mutation.AddCreatedBy(v)
+	return _u
+}
+
+// SetWorkItemID sets the "work_item_id" field.
+func (_u *ChangeUpdateOne) SetWorkItemID(v int) *ChangeUpdateOne {
+	_u.mutation.ResetWorkItemID()
+	_u.mutation.SetWorkItemID(v)
+	return _u
+}
+
+// SetNillableWorkItemID sets the "work_item_id" field if the given value is not nil.
+func (_u *ChangeUpdateOne) SetNillableWorkItemID(v *int) *ChangeUpdateOne {
+	if v != nil {
+		_u.SetWorkItemID(*v)
+	}
+	return _u
+}
+
+// AddWorkItemID adds value to the "work_item_id" field.
+func (_u *ChangeUpdateOne) AddWorkItemID(v int) *ChangeUpdateOne {
+	_u.mutation.AddWorkItemID(v)
+	return _u
+}
+
+// ClearWorkItemID clears the value of the "work_item_id" field.
+func (_u *ChangeUpdateOne) ClearWorkItemID() *ChangeUpdateOne {
+	_u.mutation.ClearWorkItemID()
 	return _u
 }
 
@@ -1358,6 +1421,15 @@ func (_u *ChangeUpdateOne) sqlSave(ctx context.Context) (_node *Change, err erro
 	}
 	if value, ok := _u.mutation.AddedCreatedBy(); ok {
 		_spec.AddField(change.FieldCreatedBy, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.WorkItemID(); ok {
+		_spec.SetField(change.FieldWorkItemID, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedWorkItemID(); ok {
+		_spec.AddField(change.FieldWorkItemID, field.TypeInt, value)
+	}
+	if _u.mutation.WorkItemIDCleared() {
+		_spec.ClearField(change.FieldWorkItemID, field.TypeInt)
 	}
 	if value, ok := _u.mutation.TenantID(); ok {
 		_spec.SetField(change.FieldTenantID, field.TypeInt, value)

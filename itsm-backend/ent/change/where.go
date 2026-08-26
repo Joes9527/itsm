@@ -105,6 +105,11 @@ func CreatedBy(v int) predicate.Change {
 	return predicate.Change(sql.FieldEQ(FieldCreatedBy, v))
 }
 
+// WorkItemID applies equality check predicate on the "work_item_id" field. It's identical to WorkItemIDEQ.
+func WorkItemID(v int) predicate.Change {
+	return predicate.Change(sql.FieldEQ(FieldWorkItemID, v))
+}
+
 // TenantID applies equality check predicate on the "tenant_id" field. It's identical to TenantIDEQ.
 func TenantID(v int) predicate.Change {
 	return predicate.Change(sql.FieldEQ(FieldTenantID, v))
@@ -778,6 +783,56 @@ func CreatedByLT(v int) predicate.Change {
 // CreatedByLTE applies the LTE predicate on the "created_by" field.
 func CreatedByLTE(v int) predicate.Change {
 	return predicate.Change(sql.FieldLTE(FieldCreatedBy, v))
+}
+
+// WorkItemIDEQ applies the EQ predicate on the "work_item_id" field.
+func WorkItemIDEQ(v int) predicate.Change {
+	return predicate.Change(sql.FieldEQ(FieldWorkItemID, v))
+}
+
+// WorkItemIDNEQ applies the NEQ predicate on the "work_item_id" field.
+func WorkItemIDNEQ(v int) predicate.Change {
+	return predicate.Change(sql.FieldNEQ(FieldWorkItemID, v))
+}
+
+// WorkItemIDIn applies the In predicate on the "work_item_id" field.
+func WorkItemIDIn(vs ...int) predicate.Change {
+	return predicate.Change(sql.FieldIn(FieldWorkItemID, vs...))
+}
+
+// WorkItemIDNotIn applies the NotIn predicate on the "work_item_id" field.
+func WorkItemIDNotIn(vs ...int) predicate.Change {
+	return predicate.Change(sql.FieldNotIn(FieldWorkItemID, vs...))
+}
+
+// WorkItemIDGT applies the GT predicate on the "work_item_id" field.
+func WorkItemIDGT(v int) predicate.Change {
+	return predicate.Change(sql.FieldGT(FieldWorkItemID, v))
+}
+
+// WorkItemIDGTE applies the GTE predicate on the "work_item_id" field.
+func WorkItemIDGTE(v int) predicate.Change {
+	return predicate.Change(sql.FieldGTE(FieldWorkItemID, v))
+}
+
+// WorkItemIDLT applies the LT predicate on the "work_item_id" field.
+func WorkItemIDLT(v int) predicate.Change {
+	return predicate.Change(sql.FieldLT(FieldWorkItemID, v))
+}
+
+// WorkItemIDLTE applies the LTE predicate on the "work_item_id" field.
+func WorkItemIDLTE(v int) predicate.Change {
+	return predicate.Change(sql.FieldLTE(FieldWorkItemID, v))
+}
+
+// WorkItemIDIsNil applies the IsNil predicate on the "work_item_id" field.
+func WorkItemIDIsNil() predicate.Change {
+	return predicate.Change(sql.FieldIsNull(FieldWorkItemID))
+}
+
+// WorkItemIDNotNil applies the NotNil predicate on the "work_item_id" field.
+func WorkItemIDNotNil() predicate.Change {
+	return predicate.Change(sql.FieldNotNull(FieldWorkItemID))
 }
 
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.

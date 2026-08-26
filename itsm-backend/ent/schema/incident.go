@@ -7,6 +7,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
+	"entgo.io/ent/schema/index"
 )
 
 // Incident holds the schema definition for the Incident entity.
@@ -69,6 +70,10 @@ func (Incident) Fields() []ent.Field {
 		field.Int("reporter_id").
 			Comment("报告人ID").
 			Positive(),
+		field.Int("work_item_id").
+			Comment("关联的 WorkItem（tickets.id），唯一，必填——Incident 迁移到 WorkItem 后每条记录必须有且仅有一条对应的 tickets 行").
+			Optional().
+			Unique(),
 		field.Int("assignee_id").
 			Comment("处理人ID").
 			Optional(),
@@ -158,5 +163,12 @@ func (Incident) Edges() []ent.Edge {
 		edge.From("problems", Problem.Type).
 			Ref("incidents").
 			Comment("关联的问题"),
+	}
+}
+
+// Indexes of the Incident.
+func (Incident) Indexes() []ent.Index {
+	return []ent.Index{
+		index.Fields("work_item_id"),
 	}
 }

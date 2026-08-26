@@ -95,6 +95,48 @@ func (_c *TicketCreate) SetNillableSource(v *string) *TicketCreate {
 	return _c
 }
 
+// SetRecordClass sets the "record_class" field.
+func (_c *TicketCreate) SetRecordClass(v string) *TicketCreate {
+	_c.mutation.SetRecordClass(v)
+	return _c
+}
+
+// SetNillableRecordClass sets the "record_class" field if the given value is not nil.
+func (_c *TicketCreate) SetNillableRecordClass(v *string) *TicketCreate {
+	if v != nil {
+		_c.SetRecordClass(*v)
+	}
+	return _c
+}
+
+// SetOpenedByID sets the "opened_by_id" field.
+func (_c *TicketCreate) SetOpenedByID(v int) *TicketCreate {
+	_c.mutation.SetOpenedByID(v)
+	return _c
+}
+
+// SetNillableOpenedByID sets the "opened_by_id" field if the given value is not nil.
+func (_c *TicketCreate) SetNillableOpenedByID(v *int) *TicketCreate {
+	if v != nil {
+		_c.SetOpenedByID(*v)
+	}
+	return _c
+}
+
+// SetAssignmentGroupID sets the "assignment_group_id" field.
+func (_c *TicketCreate) SetAssignmentGroupID(v int) *TicketCreate {
+	_c.mutation.SetAssignmentGroupID(v)
+	return _c
+}
+
+// SetNillableAssignmentGroupID sets the "assignment_group_id" field if the given value is not nil.
+func (_c *TicketCreate) SetNillableAssignmentGroupID(v *int) *TicketCreate {
+	if v != nil {
+		_c.SetAssignmentGroupID(*v)
+	}
+	return _c
+}
+
 // SetPriority sets the "priority" field.
 func (_c *TicketCreate) SetPriority(v string) *TicketCreate {
 	_c.mutation.SetPriority(v)
@@ -777,6 +819,10 @@ func (_c *TicketCreate) defaults() {
 		v := ticket.DefaultSource
 		_c.mutation.SetSource(v)
 	}
+	if _, ok := _c.mutation.RecordClass(); !ok {
+		v := ticket.DefaultRecordClass
+		_c.mutation.SetRecordClass(v)
+	}
 	if _, ok := _c.mutation.Priority(); !ok {
 		v := ticket.DefaultPriority
 		_c.mutation.SetPriority(v)
@@ -814,6 +860,9 @@ func (_c *TicketCreate) check() error {
 	}
 	if _, ok := _c.mutation.GetType(); !ok {
 		return &ValidationError{Name: "type", err: errors.New(`ent: missing required field "Ticket.type"`)}
+	}
+	if _, ok := _c.mutation.RecordClass(); !ok {
+		return &ValidationError{Name: "record_class", err: errors.New(`ent: missing required field "Ticket.record_class"`)}
 	}
 	if _, ok := _c.mutation.Priority(); !ok {
 		return &ValidationError{Name: "priority", err: errors.New(`ent: missing required field "Ticket.priority"`)}
@@ -912,6 +961,18 @@ func (_c *TicketCreate) createSpec() (*Ticket, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Source(); ok {
 		_spec.SetField(ticket.FieldSource, field.TypeString, value)
 		_node.Source = value
+	}
+	if value, ok := _c.mutation.RecordClass(); ok {
+		_spec.SetField(ticket.FieldRecordClass, field.TypeString, value)
+		_node.RecordClass = value
+	}
+	if value, ok := _c.mutation.OpenedByID(); ok {
+		_spec.SetField(ticket.FieldOpenedByID, field.TypeInt, value)
+		_node.OpenedByID = value
+	}
+	if value, ok := _c.mutation.AssignmentGroupID(); ok {
+		_spec.SetField(ticket.FieldAssignmentGroupID, field.TypeInt, value)
+		_node.AssignmentGroupID = value
 	}
 	if value, ok := _c.mutation.Priority(); ok {
 		_spec.SetField(ticket.FieldPriority, field.TypeString, value)

@@ -161,6 +161,20 @@ func (_c *ProblemCreate) SetCreatedBy(v int) *ProblemCreate {
 	return _c
 }
 
+// SetWorkItemID sets the "work_item_id" field.
+func (_c *ProblemCreate) SetWorkItemID(v int) *ProblemCreate {
+	_c.mutation.SetWorkItemID(v)
+	return _c
+}
+
+// SetNillableWorkItemID sets the "work_item_id" field if the given value is not nil.
+func (_c *ProblemCreate) SetNillableWorkItemID(v *int) *ProblemCreate {
+	if v != nil {
+		_c.SetWorkItemID(*v)
+	}
+	return _c
+}
+
 // SetTenantID sets the "tenant_id" field.
 func (_c *ProblemCreate) SetTenantID(v int) *ProblemCreate {
 	_c.mutation.SetTenantID(v)
@@ -442,6 +456,10 @@ func (_c *ProblemCreate) createSpec() (*Problem, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(problem.FieldCreatedBy, field.TypeInt, value)
 		_node.CreatedBy = value
+	}
+	if value, ok := _c.mutation.WorkItemID(); ok {
+		_spec.SetField(problem.FieldWorkItemID, field.TypeInt, value)
+		_node.WorkItemID = value
 	}
 	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(problem.FieldTenantID, field.TypeInt, value)

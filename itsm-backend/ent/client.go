@@ -126,6 +126,7 @@ import (
 	"itsm-backend/ent/workflowinstance"
 	"itsm-backend/ent/workflowtask"
 	"itsm-backend/ent/workflowversion"
+	"itsm-backend/ent/workitemrelation"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect"
@@ -360,6 +361,8 @@ type Client struct {
 	User *UserClient
 	// Vendor is the client for interacting with the Vendor builders.
 	Vendor *VendorClient
+	// WorkItemRelation is the client for interacting with the WorkItemRelation builders.
+	WorkItemRelation *WorkItemRelationClient
 	// Workflow is the client for interacting with the Workflow builders.
 	Workflow *WorkflowClient
 	// WorkflowInstance is the client for interacting with the WorkflowInstance builders.
@@ -490,6 +493,7 @@ func (c *Client) init() {
 	c.ToolInvocation = NewToolInvocationClient(c.config)
 	c.User = NewUserClient(c.config)
 	c.Vendor = NewVendorClient(c.config)
+	c.WorkItemRelation = NewWorkItemRelationClient(c.config)
 	c.Workflow = NewWorkflowClient(c.config)
 	c.WorkflowInstance = NewWorkflowInstanceClient(c.config)
 	c.WorkflowTask = NewWorkflowTaskClient(c.config)
@@ -697,6 +701,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		ToolInvocation:              NewToolInvocationClient(cfg),
 		User:                        NewUserClient(cfg),
 		Vendor:                      NewVendorClient(cfg),
+		WorkItemRelation:            NewWorkItemRelationClient(cfg),
 		Workflow:                    NewWorkflowClient(cfg),
 		WorkflowInstance:            NewWorkflowInstanceClient(cfg),
 		WorkflowTask:                NewWorkflowTaskClient(cfg),
@@ -831,6 +836,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		ToolInvocation:              NewToolInvocationClient(cfg),
 		User:                        NewUserClient(cfg),
 		Vendor:                      NewVendorClient(cfg),
+		WorkItemRelation:            NewWorkItemRelationClient(cfg),
 		Workflow:                    NewWorkflowClient(cfg),
 		WorkflowInstance:            NewWorkflowInstanceClient(cfg),
 		WorkflowTask:                NewWorkflowTaskClient(cfg),
@@ -890,7 +896,8 @@ func (c *Client) Use(hooks ...Hook) {
 		c.TicketAttachment, c.TicketAutomationRule, c.TicketCC, c.TicketCategory,
 		c.TicketComment, c.TicketNotification, c.TicketTag, c.TicketTemplate,
 		c.TicketType, c.TicketView, c.TicketWorkflowRecord, c.ToolInvocation, c.User,
-		c.Vendor, c.Workflow, c.WorkflowInstance, c.WorkflowTask, c.WorkflowVersion,
+		c.Vendor, c.WorkItemRelation, c.Workflow, c.WorkflowInstance, c.WorkflowTask,
+		c.WorkflowVersion,
 	} {
 		n.Use(hooks...)
 	}
@@ -926,7 +933,8 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.TicketAttachment, c.TicketAutomationRule, c.TicketCC, c.TicketCategory,
 		c.TicketComment, c.TicketNotification, c.TicketTag, c.TicketTemplate,
 		c.TicketType, c.TicketView, c.TicketWorkflowRecord, c.ToolInvocation, c.User,
-		c.Vendor, c.Workflow, c.WorkflowInstance, c.WorkflowTask, c.WorkflowVersion,
+		c.Vendor, c.WorkItemRelation, c.Workflow, c.WorkflowInstance, c.WorkflowTask,
+		c.WorkflowVersion,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -1157,6 +1165,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.User.mutate(ctx, m)
 	case *VendorMutation:
 		return c.Vendor.mutate(ctx, m)
+	case *WorkItemRelationMutation:
+		return c.WorkItemRelation.mutate(ctx, m)
 	case *WorkflowMutation:
 		return c.Workflow.mutate(ctx, m)
 	case *WorkflowInstanceMutation:
@@ -18957,6 +18967,139 @@ func (c *VendorClient) mutate(ctx context.Context, m *VendorMutation) (Value, er
 	}
 }
 
+// WorkItemRelationClient is a client for the WorkItemRelation schema.
+type WorkItemRelationClient struct {
+	config
+}
+
+// NewWorkItemRelationClient returns a client for the WorkItemRelation from the given config.
+func NewWorkItemRelationClient(c config) *WorkItemRelationClient {
+	return &WorkItemRelationClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `workitemrelation.Hooks(f(g(h())))`.
+func (c *WorkItemRelationClient) Use(hooks ...Hook) {
+	c.hooks.WorkItemRelation = append(c.hooks.WorkItemRelation, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `workitemrelation.Intercept(f(g(h())))`.
+func (c *WorkItemRelationClient) Intercept(interceptors ...Interceptor) {
+	c.inters.WorkItemRelation = append(c.inters.WorkItemRelation, interceptors...)
+}
+
+// Create returns a builder for creating a WorkItemRelation entity.
+func (c *WorkItemRelationClient) Create() *WorkItemRelationCreate {
+	mutation := newWorkItemRelationMutation(c.config, OpCreate)
+	return &WorkItemRelationCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of WorkItemRelation entities.
+func (c *WorkItemRelationClient) CreateBulk(builders ...*WorkItemRelationCreate) *WorkItemRelationCreateBulk {
+	return &WorkItemRelationCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *WorkItemRelationClient) MapCreateBulk(slice any, setFunc func(*WorkItemRelationCreate, int)) *WorkItemRelationCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &WorkItemRelationCreateBulk{err: fmt.Errorf("calling to WorkItemRelationClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*WorkItemRelationCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &WorkItemRelationCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for WorkItemRelation.
+func (c *WorkItemRelationClient) Update() *WorkItemRelationUpdate {
+	mutation := newWorkItemRelationMutation(c.config, OpUpdate)
+	return &WorkItemRelationUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *WorkItemRelationClient) UpdateOne(_m *WorkItemRelation) *WorkItemRelationUpdateOne {
+	mutation := newWorkItemRelationMutation(c.config, OpUpdateOne, withWorkItemRelation(_m))
+	return &WorkItemRelationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *WorkItemRelationClient) UpdateOneID(id int) *WorkItemRelationUpdateOne {
+	mutation := newWorkItemRelationMutation(c.config, OpUpdateOne, withWorkItemRelationID(id))
+	return &WorkItemRelationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for WorkItemRelation.
+func (c *WorkItemRelationClient) Delete() *WorkItemRelationDelete {
+	mutation := newWorkItemRelationMutation(c.config, OpDelete)
+	return &WorkItemRelationDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *WorkItemRelationClient) DeleteOne(_m *WorkItemRelation) *WorkItemRelationDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *WorkItemRelationClient) DeleteOneID(id int) *WorkItemRelationDeleteOne {
+	builder := c.Delete().Where(workitemrelation.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &WorkItemRelationDeleteOne{builder}
+}
+
+// Query returns a query builder for WorkItemRelation.
+func (c *WorkItemRelationClient) Query() *WorkItemRelationQuery {
+	return &WorkItemRelationQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeWorkItemRelation},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a WorkItemRelation entity by its id.
+func (c *WorkItemRelationClient) Get(ctx context.Context, id int) (*WorkItemRelation, error) {
+	return c.Query().Where(workitemrelation.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *WorkItemRelationClient) GetX(ctx context.Context, id int) *WorkItemRelation {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *WorkItemRelationClient) Hooks() []Hook {
+	return c.hooks.WorkItemRelation
+}
+
+// Interceptors returns the client interceptors.
+func (c *WorkItemRelationClient) Interceptors() []Interceptor {
+	return c.inters.WorkItemRelation
+}
+
+func (c *WorkItemRelationClient) mutate(ctx context.Context, m *WorkItemRelationMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&WorkItemRelationCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&WorkItemRelationUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&WorkItemRelationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&WorkItemRelationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown WorkItemRelation mutation op: %q", m.Op())
+	}
+}
+
 // WorkflowClient is a client for the Workflow schema.
 type WorkflowClient struct {
 	config
@@ -19627,7 +19770,7 @@ type (
 		TicketApproval, TicketAssignmentRule, TicketAttachment, TicketAutomationRule,
 		TicketCC, TicketCategory, TicketComment, TicketNotification, TicketTag,
 		TicketTemplate, TicketType, TicketView, TicketWorkflowRecord, ToolInvocation,
-		User, Vendor, Workflow, WorkflowInstance, WorkflowTask,
+		User, Vendor, WorkItemRelation, Workflow, WorkflowInstance, WorkflowTask,
 		WorkflowVersion []ent.Hook
 	}
 	inters struct {
@@ -19654,7 +19797,7 @@ type (
 		TicketApproval, TicketAssignmentRule, TicketAttachment, TicketAutomationRule,
 		TicketCC, TicketCategory, TicketComment, TicketNotification, TicketTag,
 		TicketTemplate, TicketType, TicketView, TicketWorkflowRecord, ToolInvocation,
-		User, Vendor, Workflow, WorkflowInstance, WorkflowTask,
+		User, Vendor, WorkItemRelation, Workflow, WorkflowInstance, WorkflowTask,
 		WorkflowVersion []ent.Interceptor
 	}
 )

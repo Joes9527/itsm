@@ -110,6 +110,11 @@ func Category(v string) predicate.ProcessBinding {
 	return predicate.ProcessBinding(sql.FieldEQ(FieldCategory, v))
 }
 
+// CategoryID applies equality check predicate on the "category_id" field. It's identical to CategoryIDEQ.
+func CategoryID(v int) predicate.ProcessBinding {
+	return predicate.ProcessBinding(sql.FieldEQ(FieldCategoryID, v))
+}
+
 // ApprovalChainID applies equality check predicate on the "approval_chain_id" field. It's identical to ApprovalChainIDEQ.
 func ApprovalChainID(v string) predicate.ProcessBinding {
 	return predicate.ProcessBinding(sql.FieldEQ(FieldApprovalChainID, v))
@@ -688,6 +693,56 @@ func CategoryEqualFold(v string) predicate.ProcessBinding {
 // CategoryContainsFold applies the ContainsFold predicate on the "category" field.
 func CategoryContainsFold(v string) predicate.ProcessBinding {
 	return predicate.ProcessBinding(sql.FieldContainsFold(FieldCategory, v))
+}
+
+// CategoryIDEQ applies the EQ predicate on the "category_id" field.
+func CategoryIDEQ(v int) predicate.ProcessBinding {
+	return predicate.ProcessBinding(sql.FieldEQ(FieldCategoryID, v))
+}
+
+// CategoryIDNEQ applies the NEQ predicate on the "category_id" field.
+func CategoryIDNEQ(v int) predicate.ProcessBinding {
+	return predicate.ProcessBinding(sql.FieldNEQ(FieldCategoryID, v))
+}
+
+// CategoryIDIn applies the In predicate on the "category_id" field.
+func CategoryIDIn(vs ...int) predicate.ProcessBinding {
+	return predicate.ProcessBinding(sql.FieldIn(FieldCategoryID, vs...))
+}
+
+// CategoryIDNotIn applies the NotIn predicate on the "category_id" field.
+func CategoryIDNotIn(vs ...int) predicate.ProcessBinding {
+	return predicate.ProcessBinding(sql.FieldNotIn(FieldCategoryID, vs...))
+}
+
+// CategoryIDGT applies the GT predicate on the "category_id" field.
+func CategoryIDGT(v int) predicate.ProcessBinding {
+	return predicate.ProcessBinding(sql.FieldGT(FieldCategoryID, v))
+}
+
+// CategoryIDGTE applies the GTE predicate on the "category_id" field.
+func CategoryIDGTE(v int) predicate.ProcessBinding {
+	return predicate.ProcessBinding(sql.FieldGTE(FieldCategoryID, v))
+}
+
+// CategoryIDLT applies the LT predicate on the "category_id" field.
+func CategoryIDLT(v int) predicate.ProcessBinding {
+	return predicate.ProcessBinding(sql.FieldLT(FieldCategoryID, v))
+}
+
+// CategoryIDLTE applies the LTE predicate on the "category_id" field.
+func CategoryIDLTE(v int) predicate.ProcessBinding {
+	return predicate.ProcessBinding(sql.FieldLTE(FieldCategoryID, v))
+}
+
+// CategoryIDIsNil applies the IsNil predicate on the "category_id" field.
+func CategoryIDIsNil() predicate.ProcessBinding {
+	return predicate.ProcessBinding(sql.FieldIsNull(FieldCategoryID))
+}
+
+// CategoryIDNotNil applies the NotNil predicate on the "category_id" field.
+func CategoryIDNotNil() predicate.ProcessBinding {
+	return predicate.ProcessBinding(sql.FieldNotNull(FieldCategoryID))
 }
 
 // ConditionsIsNil applies the IsNil predicate on the "conditions" field.
