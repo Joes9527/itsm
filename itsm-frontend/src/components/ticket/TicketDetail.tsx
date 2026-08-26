@@ -23,11 +23,9 @@ import {
   Save,
   X,
   Trash2,
-  Check,
   XIcon,
   Users,
   Clock,
-  Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -35,9 +33,7 @@ import {
   Card,
   Typography,
   App,
-  Badge,
   Tag,
-  Descriptions,
   Space,
   Modal,
   Form,
@@ -53,9 +49,13 @@ import { SafeTextBlock } from '@/components/common/SafeContent';
 import { AISuggestionPanel } from '@/components/business/AISuggestionPanel';
 import {
   isValidTransition,
-  getAllowedTransitions,
   isFinalStatus,
 } from '@/lib/utils/workflow-state-machine';
+import {
+  TicketStatus,
+  TicketStatusConfig,
+  getPriorityConfig,
+} from '@/constants/taxonomy';
 import {
   CommentPanel,
   AttachmentPanel,
@@ -84,42 +84,28 @@ const ticketPriorities: TicketPriority[] = ['low', 'medium', 'high', 'urgent', '
 const toTicketPriority = (value: string): TicketPriority =>
   ticketPriorities.includes(value as TicketPriority) ? (value as TicketPriority) : 'medium';
 
-const statusMap: Record<
+// 状态文案以 @/constants/taxonomy 为单一事实源，避免在详情页再维护一份字典。
+// taxonomy 未覆盖的旧状态（approved/assigned）在此补充，不做全量复制。
+const EXTRA_STATUS_CONFIG: Record<
   string,
-  { text: string; status: 'default' | 'processing' | 'success' | 'warning' | 'error' }
+  { label: string; badgeStatus: 'default' | 'processing' | 'success' | 'warning' | 'error' }
 > = {
-  new: { text: '待处理', status: 'default' },
-  in_progress: { text: '处理中', status: 'processing' },
-  pending: { text: '暂停', status: 'warning' },
-  resolved: { text: '已解决', status: 'success' },
-  closed: { text: '已关闭', status: 'default' },
-  cancelled: { text: '已取消', status: 'error' },
-  approved: { text: '已批准', status: 'processing' },
-  rejected: { text: '已拒绝', status: 'error' },
+  approved: { label: '已批准', badgeStatus: 'processing' },
+  assigned: { label: '已分配', badgeStatus: 'processing' },
 };
 
-const getPriorityText = (priority: string) => {
-  switch (priority) {
-    case 'low':
-      return '低';
-    case 'medium':
-      return '中';
-    case 'high':
-      return '高';
-    case 'urgent':
-      return '紧急';
-    case 'critical':
-      return '非常紧急';
-    default:
-      return priority;
-  }
+const getTicketStatusLabel = (status?: string): string => {
+  if (!status) return '';
+  const config = TicketStatusConfig[status as TicketStatus] ?? EXTRA_STATUS_CONFIG[status];
+  return config?.label ?? status;
 };
 
 const DISABLED_ACTION_CLASS = 'opacity-40 cursor-not-allowed pointer-events-auto';
 
-export const TicketDetail: React.FC = () => {
+export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
   const params = useParams();
-  const ticketId = Number(params?.ticketId);
+  // 支持通过 props 传入 id，或通过 useParams 获取
+  const ticketId = parseInt((propId ?? (params?.ticketId as string)) || '');
   const currentUser = useAuthStore(state => state.user);
   const hasPermission = useAuthStore(state => state.hasPermission);
   const { message: antMessage } = App.useApp();
@@ -155,6 +141,13 @@ export const TicketDetail: React.FC = () => {
 
   // Get ticket details
   const fetchTicket = useCallback(async () => {
+    // Skip if ticketId is not a valid number
+    if (!ticketId || isNaN(ticketId) || ticketId <= 0) {
+      setError('无效的工单ID');
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -213,6 +206,7 @@ export const TicketDetail: React.FC = () => {
 
   // Handle approval (轻量版：仅改状态)
   const handleApprove = async () => {
+    if (approving) return;
     try {
       setApproving(true);
       await TicketApi.updateTicketStatus(ticketId, 'approved');
@@ -251,6 +245,7 @@ export const TicketDetail: React.FC = () => {
 
   // Handle rejection (轻量版：仅改状态)
   const handleReject = async () => {
+    if (rejecting) return;
     try {
       setRejecting(true);
       await TicketApi.updateTicketStatus(ticketId, 'rejected');
@@ -305,7 +300,7 @@ export const TicketDetail: React.FC = () => {
       if (values.status && ticket?.status && values.status !== ticket.status) {
         if (!isValidTransition(ticket.status as any, values.status as any)) {
           antMessage.error(
-            `不允许从 "${statusMap[ticket.status]?.text || ticket.status}" 转换到 "${statusMap[values.status]?.text || values.status}"`
+            `不允许从 "${getTicketStatusLabel(ticket.status)}" 转换到 "${getTicketStatusLabel(values.status)}"`
           );
           return;
         }
@@ -466,10 +461,10 @@ export const TicketDetail: React.FC = () => {
               </h1>
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200">
                 <span className="w-1.5 h-1.5 rounded-full bg-orange-500 mr-1.5" />
-                {statusMap[ticket.status]?.text || ticket.status}
+                {getTicketStatusLabel(ticket.status)}
               </span>
               <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                {getPriorityText(ticket.priority)}
+                {getPriorityConfig(ticket.priority).label}
               </span>
             </div>
           </div>
@@ -635,13 +630,13 @@ export const TicketDetail: React.FC = () => {
 
               <div className="flex items-center justify-between">
                 <span className="text-slate-400 text-xs">工单分类:</span>
-                <span className="text-slate-700 text-xs">{ticket.category || '基础服务'}</span>
+                <span className="text-slate-700 text-xs">{ticket.category || '未分类'}</span>
               </div>
 
               <div className="flex items-center justify-between">
                 <span className="text-slate-400 text-xs">当前状态:</span>
                 <span className="font-semibold text-orange-800 bg-orange-50 px-2 py-0.5 rounded border border-orange-200 text-xs">
-                  {statusMap[ticket.status]?.text || ticket.status}
+                  {getTicketStatusLabel(ticket.status)}
                 </span>
               </div>
 
@@ -875,7 +870,7 @@ export const TicketDetail: React.FC = () => {
               label="状态"
               name="status"
               rules={[{ required: true, message: '请选择状态' }]}
-              extra={ticket ? `当前状态: ${statusMap[ticket.status]?.text || ticket.status}` : ''}
+              extra={ticket ? `当前状态: ${getTicketStatusLabel(ticket.status)}` : ''}
             >
               <Select
                 placeholder="请选择状态"
