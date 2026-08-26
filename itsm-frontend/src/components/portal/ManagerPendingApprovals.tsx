@@ -1,86 +1,172 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Card, Button, Tag, message, Spin, Empty } from 'antd';
-import { CheckCircle, XCircle, Clock, ArrowRight, UserCheck, ShieldCheck } from 'lucide-react';
-import { httpClient } from '@/lib/api/http-client';
-import { useAuthStore } from '@/lib/store/auth-store';
+import React, { useState, useEffect, useCallback } from 'react';
+import { App, Alert, Button, Input, Modal, Spin, Tag } from 'antd';
+import { CheckCircle, XCircle, Clock, ShieldCheck } from 'lucide-react';
+import { WorkflowApi, type BpmnMyTask } from '@/lib/api/workflow-api';
 
 interface PendingApprovalItem {
-  id: string | number;
-  processInstanceId: string;
+  id: number;
   title: string;
   requesterName: string;
   department: string;
   serviceType: string;
-  createdAt: string;
+  createdAt?: string;
   description?: string;
 }
 
-export const ManagerPendingApprovals: React.FC = () => {
-  const { user } = useAuthStore();
-  const [loading, setLoading] = useState(false);
-  const [approvals, setApprovals] = useState<PendingApprovalItem[]>([]);
-  const [actionLoading, setActionLoading] = useState<Record<string | number, boolean>>({});
+const PENDING_TASK_STATUSES = ['created', 'assigned', 'started', 'pending'] as const;
+const APPROVAL_PAGE_SIZE = 4;
 
-  const isManager = user?.role === 'dept_manager' || user?.role === 'team_lead' || user?.role === 'manager' || user?.role === 'admin' || user?.role === 'it_director';
+function formatCreatedAt(dateString?: string): string {
+  if (!dateString) return '-';
+  const time = new Date(dateString);
+  if (Number.isNaN(time.getTime())) return '-';
+  return time.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function readTaskVariable(task: BpmnMyTask, key: string): string | undefined {
+  const value = task.taskVariables?.[key];
+  return typeof value === 'string' && value.trim() ? value : undefined;
+}
+
+function toPendingApproval(task: BpmnMyTask): PendingApprovalItem {
+  return {
+    id: task.id,
+    title: task.taskName || task.taskDefinitionKey || '-',
+    requesterName:
+      readTaskVariable(task, 'requesterName') ||
+      readTaskVariable(task, 'requester_name') ||
+      '-',
+    department: readTaskVariable(task, 'department') || '-',
+    serviceType: task.businessType || task.taskPurpose || '流程审批',
+    createdAt: task.createdTime,
+    description: readTaskVariable(task, 'description'),
+  };
+}
+
+async function listApprovalTasksByStatus(status: string): Promise<BpmnMyTask[]> {
+  const approvals: BpmnMyTask[] = [];
+  let page = 1;
+
+  while (approvals.length < APPROVAL_PAGE_SIZE) {
+    const result = await WorkflowApi.listMyApprovalTasks({
+      status,
+      page,
+      pageSize: APPROVAL_PAGE_SIZE,
+    });
+    approvals.push(
+      ...result.items.filter((task) => task.taskPurpose?.toLowerCase() === 'approval')
+    );
+
+    if (
+      result.items.length < APPROVAL_PAGE_SIZE ||
+      page * APPROVAL_PAGE_SIZE >= result.total
+    ) {
+      break;
+    }
+    page += 1;
+  }
+
+  return approvals.slice(0, APPROVAL_PAGE_SIZE);
+}
+
+export const ManagerPendingApprovals: React.FC = () => {
+  const { message } = App.useApp();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [approvals, setApprovals] = useState<PendingApprovalItem[]>([]);
+  const [actionLoading, setActionLoading] = useState<Record<number, boolean>>({});
+  const [rejectingTaskId, setRejectingTaskId] = useState<number | null>(null);
+  const [rejectComment, setRejectComment] = useState('');
+
+  // 是否有待办完全由后端 BPMN 任务候选人查询结果决定——不再用本地角色
+  // 白名单前置判断，避免和 persona-config.ts 的角色配置各自维护、逐渐漂移不一致。
+  const fetchApprovals = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const pages = await Promise.all(
+        PENDING_TASK_STATUSES.map(listApprovalTasksByStatus)
+      );
+      const uniqueTasks = new Map<number, BpmnMyTask>();
+      pages.forEach((tasks) => {
+        tasks.forEach((task) => {
+          uniqueTasks.set(task.id, task);
+        });
+      });
+      const items = Array.from(uniqueTasks.values())
+        .sort((left, right) => {
+          const leftTime = left.createdTime ? Date.parse(left.createdTime) : 0;
+          const rightTime = right.createdTime ? Date.parse(right.createdTime) : 0;
+          return rightTime - leftTime;
+        })
+        .slice(0, 4)
+        .map(toPendingApproval);
+      setApprovals(items);
+    } catch (e) {
+      setError('待办审批加载失败，请重试');
+      setApprovals([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    if (!isManager) return;
-
-    const fetchApprovals = async () => {
-      setLoading(true);
-      try {
-        const res = await httpClient.get<any>('/api/v1/approvals/pending');
-        const items = (res?.items || res?.data || []).map((item: any) => ({
-          id: item.id || item.taskId,
-          processInstanceId: item.processInstanceId || item.instanceId,
-          title: item.title || item.ticketTitle || 'Copilot 生产力软件采购申请',
-          requesterName: item.requesterName || item.userName || '张小明',
-          department: item.department || '华南分公司-运营部',
-          serviceType: item.serviceType || '软件采购与许可申请',
-          createdAt: item.createdAt || '10分钟前',
-          description: item.description || '申请 Microsoft 365 Copilot 许可证（用于日常业务数据分析与多语言沟通）',
-        }));
-        setApprovals(items);
-      } catch (e) {
-        // 如果后端接口待建，提供高保真体验数据
-        setApprovals([
-          {
-            id: 'task-101',
-            processInstanceId: 'inst-copilot-01',
-            title: '【加急】Microsoft 365 Copilot 许可证采购审批',
-            requesterName: '李思源',
-            department: '华东大区-市场部',
-            serviceType: '软件采购',
-            createdAt: '25分钟前',
-            description: '申请开通 2 个 Copilot 许可证，用于 Q3 海外重点客户投标方案编制。',
-          },
-        ]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchApprovals();
-  }, [isManager]);
+  }, [fetchApprovals]);
 
-  if (!isManager || approvals.length === 0) {
+  if (loading) {
+    return (
+      <div className="mb-8 flex justify-center py-6">
+        <Spin size="small" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="mb-8">
+        <Alert
+          type="error"
+          showIcon
+          title={error}
+          action={
+            <Button size="small" onClick={() => fetchApprovals()}>
+              重试
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
+
+  if (approvals.length === 0) {
     return null;
   }
 
-  const handleApprove = async (id: string | number, approved: boolean) => {
+  const handleDecision = async (
+    id: number,
+    action: 'approve' | 'reject',
+    comment?: string
+  ) => {
     setActionLoading((prev) => ({ ...prev, [id]: true }));
     try {
-      await httpClient.post(`/api/v1/approvals/${id}/complete`, {
-        action: approved ? 'approve' : 'reject',
-        comment: approved ? '同意审批，符合业务部门预算与使用规范。' : '驳回申请，请补充详细业务诉求。',
+      await WorkflowApi.submitTaskDecision(id, {
+        action,
+        ...(comment ? { comment } : {}),
       });
-      message.success(approved ? '审批已通过，已自动流转至下一环节' : '已成功驳回该申请');
+      message.success(action === 'approve' ? '审批已通过，已自动流转至下一环节' : '已成功驳回该申请');
       setApprovals((prev) => prev.filter((item) => item.id !== id));
+      setRejectingTaskId(null);
+      setRejectComment('');
     } catch (err) {
-      message.success(approved ? '审批已通过（测试模拟）' : '已驳回（测试模拟）');
-      setApprovals((prev) => prev.filter((item) => item.id !== id));
+      message.error('操作失败，请重试');
     } finally {
       setActionLoading((prev) => ({ ...prev, [id]: false }));
     }
@@ -112,7 +198,7 @@ export const ManagerPendingApprovals: React.FC = () => {
                   {item.title}
                 </span>
                 <span className="text-xs text-slate-400 whitespace-nowrap flex items-center gap-1">
-                  <Clock size={12} /> {item.createdAt}
+                  <Clock size={12} /> {formatCreatedAt(item.createdAt)}
                 </span>
               </div>
               <div className="flex items-center gap-2 mt-2 text-xs text-slate-500">
@@ -134,7 +220,10 @@ export const ManagerPendingApprovals: React.FC = () => {
                 size="small"
                 danger
                 loading={actionLoading[item.id]}
-                onClick={() => handleApprove(item.id, false)}
+                onClick={() => {
+                  setRejectingTaskId(item.id);
+                  setRejectComment('');
+                }}
                 icon={<XCircle size={14} />}
               >
                 驳回
@@ -143,7 +232,7 @@ export const ManagerPendingApprovals: React.FC = () => {
                 size="small"
                 type="primary"
                 loading={actionLoading[item.id]}
-                onClick={() => handleApprove(item.id, true)}
+                onClick={() => handleDecision(item.id, 'approve')}
                 className="bg-emerald-600 hover:bg-emerald-500 border-none"
                 icon={<CheckCircle size={14} />}
               >
@@ -153,6 +242,31 @@ export const ManagerPendingApprovals: React.FC = () => {
           </div>
         ))}
       </div>
+      <Modal
+        title="填写驳回意见"
+        open={rejectingTaskId !== null}
+        okText="确认驳回"
+        cancelText="取消"
+        confirmLoading={rejectingTaskId !== null && Boolean(actionLoading[rejectingTaskId])}
+        okButtonProps={{ danger: true, disabled: !rejectComment.trim() }}
+        onCancel={() => {
+          setRejectingTaskId(null);
+          setRejectComment('');
+        }}
+        onOk={() => {
+          if (rejectingTaskId !== null) {
+            handleDecision(rejectingTaskId, 'reject', rejectComment.trim());
+          }
+        }}
+      >
+        <Input.TextArea
+          aria-label="审批意见"
+          value={rejectComment}
+          onChange={(event) => setRejectComment(event.target.value)}
+          placeholder="请输入驳回原因"
+          rows={4}
+        />
+      </Modal>
     </div>
   );
 };
