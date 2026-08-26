@@ -514,7 +514,14 @@ func (c *BPMNWorkflowController) ListProcessInstances(ctx *gin.Context) {
 		req.PageSize = 20
 	}
 
-	instances, total, err := c.processEngine.ProcessInstanceService().ListProcessInstances(ctx, &req)
+	workflowCtx, _, ok := getBPMNTenantContext(ctx)
+	if !ok {
+		return
+	}
+	elevated := hasElevatedBPMNAccess(ctx, "process_instance", "read")
+	workflowCtx = context.WithValue(workflowCtx, bpmn.BPMNElevatedContextKey, elevated)
+
+	instances, total, err := c.processEngine.ProcessInstanceService().ListProcessInstances(workflowCtx, &req)
 	if err != nil {
 		common.InternalError(ctx, "获取流程实例列表失败: "+err.Error())
 		return

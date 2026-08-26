@@ -2130,6 +2130,68 @@ func (s *bpmnProcessInstanceService) ListProcessInstances(ctx context.Context, r
 		query = query.Where(processinstance.TenantID(req.TenantID))
 	}
 
+	elevated, _ := ctx.Value(bpmn.BPMNElevatedContextKey).(bool)
+	if !elevated {
+		userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
+		if userID <= 0 {
+			// No authenticated actor and not elevated: fail closed, see nothing.
+			return []*ent.ProcessInstance{}, 0, nil
+		}
+		userIDStr := strconv.Itoa(userID)
+
+		// Two-step: first find which instances this user participates in via
+		// any task (assignee/candidate_users/candidate_groups), then OR that
+		// with instances they initiated. Deliberately not a single ent
+		// subquery/JOIN — ent's subquery support for "EXISTS a related row
+		// matching X" is awkward here and the two simple queries are easier
+		// to read, test, and keep tenant-scoped independently.
+		identity, err := bpmn.ResolveCallerIdentity(ctx, s.client, bpmn.NewGroupResolver(s.client), req.TenantID, userID)
+		if err != nil {
+			return nil, 0, fmt.Errorf("解析调用者身份失败: %w", err)
+		}
+		taskOrPreds := []predicate.ProcessTask{
+			processtask.Assignee(identity.IDStr),
+			processtask.CandidateUsersContains(identity.IDStr),
+		}
+		if identity.Username != "" {
+			taskOrPreds = append(taskOrPreds, processtask.Assignee(identity.Username), processtask.CandidateUsersContains(identity.Username))
+		}
+		if identity.Email != "" {
+			taskOrPreds = append(taskOrPreds, processtask.Assignee(identity.Email), processtask.CandidateUsersContains(identity.Email))
+		}
+		for _, group := range strings.Split(identity.GroupsCSV, ",") {
+			group = strings.TrimSpace(group)
+			if group != "" {
+				taskOrPreds = append(taskOrPreds, processtask.CandidateGroupsContains(group))
+			}
+		}
+		taskQuery := s.client.ProcessTask.Query().Where(processtask.Or(taskOrPreds...))
+		if req.TenantID > 0 {
+			taskQuery = taskQuery.Where(processtask.TenantID(req.TenantID))
+		}
+		participantTasks, err := taskQuery.All(ctx)
+		if err != nil {
+			return nil, 0, fmt.Errorf("查询参与任务失败: %w", err)
+		}
+		instanceIDSet := make(map[int]struct{}, len(participantTasks))
+		for _, t := range participantTasks {
+			instanceIDSet[t.ProcessInstanceID] = struct{}{}
+		}
+		instanceIDs := make([]int, 0, len(instanceIDSet))
+		for id := range instanceIDSet {
+			instanceIDs = append(instanceIDs, id)
+		}
+
+		if len(instanceIDs) > 0 {
+			query = query.Where(processinstance.Or(
+				processinstance.Initiator(userIDStr),
+				processinstance.IDIn(instanceIDs...),
+			))
+		} else {
+			query = query.Where(processinstance.Initiator(userIDStr))
+		}
+	}
+
 	total, err := query.Count(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("获取流程实例总数失败: %w", err)

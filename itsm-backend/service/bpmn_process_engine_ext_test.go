@@ -1186,3 +1186,99 @@ func TestStartProcess_FallsBackToRequesterIDVariableWhenNoContextUser(t *testing
 	require.NoError(t, err)
 	assert.Equal(t, fmt.Sprintf("%d", actorID), instance.Initiator)
 }
+
+// ==================== ListProcessInstances participant-scoping tests ====================
+
+func TestListProcessInstances_NonElevatedSeesOnlyInitiatedOrParticipated(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, viewerID := setupApprovalDecisionFixture(t, engine)
+	otherUser, err := engine.client.User.Create().
+		SetUsername("other-user").SetEmail("other-user@example.com").SetName("Other User").
+		SetPasswordHash("hash").SetRole("agent").SetActive(true).SetTenantID(tenantID).
+		Save(context.Background())
+	require.NoError(t, err)
+
+	// Instance 1: viewer is the initiator.
+	initiatedInstanceID, _ := createProcessFixture(t, engine, tenantID, "list1-initiated")
+	_, err = engine.client.ProcessInstance.UpdateOneID(initiatedInstanceID).
+		SetInitiator(fmt.Sprintf("%d", viewerID)).Save(context.Background())
+	require.NoError(t, err)
+
+	// Instance 2: viewer is not the initiator, but is a task assignee on it.
+	participatedInstanceID, participatedTaskID := createProcessFixture(t, engine, tenantID, "list1-participated")
+	_, err = engine.client.ProcessInstance.UpdateOneID(participatedInstanceID).
+		SetInitiator(fmt.Sprintf("%d", otherUser.ID)).Save(context.Background())
+	require.NoError(t, err)
+	_, err = engine.client.ProcessTask.UpdateOneID(participatedTaskID).
+		SetAssignee(fmt.Sprintf("%d", viewerID)).Save(context.Background())
+	require.NoError(t, err)
+
+	// Instance 3: viewer has no relation to it at all.
+	unrelatedInstanceID, _ := createProcessFixture(t, engine, tenantID, "list1-unrelated")
+	_, err = engine.client.ProcessInstance.UpdateOneID(unrelatedInstanceID).
+		SetInitiator(fmt.Sprintf("%d", otherUser.ID)).Save(context.Background())
+	require.NoError(t, err)
+
+	ctx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, viewerID)
+	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+	// Not elevated.
+	ctx = context.WithValue(ctx, bpmn.BPMNElevatedContextKey, false)
+
+	svc := engine.ProcessInstanceService()
+	instances, total, err := svc.ListProcessInstances(ctx, &ListProcessInstancesRequest{TenantID: tenantID, Page: 1, PageSize: 50})
+	require.NoError(t, err)
+	assert.Equal(t, 2, total)
+	ids := make([]int, 0, len(instances))
+	for _, inst := range instances {
+		ids = append(ids, inst.ID)
+	}
+	assert.ElementsMatch(t, []int{initiatedInstanceID, participatedInstanceID}, ids)
+}
+
+func TestListProcessInstances_ElevatedSeesEverythingInTenant(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, viewerID := setupApprovalDecisionFixture(t, engine)
+	otherUser, err := engine.client.User.Create().
+		SetUsername("other-user2").SetEmail("other-user2@example.com").SetName("Other User 2").
+		SetPasswordHash("hash").SetRole("agent").SetActive(true).SetTenantID(tenantID).
+		Save(context.Background())
+	require.NoError(t, err)
+
+	unrelatedInstanceID, _ := createProcessFixture(t, engine, tenantID, "list2-unrelated")
+	_, err = engine.client.ProcessInstance.UpdateOneID(unrelatedInstanceID).
+		SetInitiator(fmt.Sprintf("%d", otherUser.ID)).Save(context.Background())
+	require.NoError(t, err)
+
+	ctx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, viewerID)
+	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = context.WithValue(ctx, bpmn.BPMNElevatedContextKey, true)
+
+	svc := engine.ProcessInstanceService()
+	_, total, err := svc.ListProcessInstances(ctx, &ListProcessInstancesRequest{TenantID: tenantID, Page: 1, PageSize: 50})
+	require.NoError(t, err)
+	assert.Equal(t, 1, total, "elevated caller must see the unrelated instance too")
+}
+
+func TestListProcessInstances_CrossTenantNeverLeaks(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, viewerID := setupApprovalDecisionFixture(t, engine)
+
+	otherTenant, err := engine.client.Tenant.Create().
+		SetName("Other").SetCode("part-other").SetDomain("part-other.example.com").SetStatus("active").
+		Save(context.Background())
+	require.NoError(t, err)
+	otherInstanceID, _ := createProcessFixture(t, engine, otherTenant.ID, "list3-other-tenant")
+	_, err = engine.client.ProcessInstance.UpdateOneID(otherInstanceID).
+		SetInitiator(fmt.Sprintf("%d", viewerID)). // same viewer ID, different tenant
+		Save(context.Background())
+	require.NoError(t, err)
+
+	ctx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, viewerID)
+	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = context.WithValue(ctx, bpmn.BPMNElevatedContextKey, true) // even elevated
+
+	svc := engine.ProcessInstanceService()
+	_, total, err := svc.ListProcessInstances(ctx, &ListProcessInstancesRequest{TenantID: tenantID, Page: 1, PageSize: 50})
+	require.NoError(t, err)
+	assert.Equal(t, 0, total, "must never return another tenant's instance regardless of elevation")
+}
