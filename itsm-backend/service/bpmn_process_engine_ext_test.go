@@ -2114,6 +2114,69 @@ func TestVote_ByCounterSignApproverNotOriginalParentAssignee(t *testing.T) {
 	require.NoError(t, err, "a counter-sign approver who is not the original parent task's assignee must still be able to vote")
 }
 
+// TestVote_ThresholdReachedParentCompletionNotDeniedByAuth is a regression
+// test for Finding B (Task 4 review): once the counter-sign vote threshold
+// is reached, Vote tries to auto-complete the parent task via a fresh
+// engine.CompleteTask(workflowCtx, ...) call built from context.Background()
+// + tenant ID only — no user, and (before the fix) no system-caller
+// declaration either. Since authorizeTaskActor now fails closed by default,
+// that call was unconditionally denied with "未认证的调用" every time a
+// counter-sign vote reached its threshold, in production.
+//
+// This lightweight fixture's ProcessDefinition.BpmnXML is a placeholder
+// (`<definitions/>`, see createProcessFixture) with no real parseable
+// process, so CompleteTask cannot succeed end-to-end here (same documented
+// limitation as TestVote_ByCounterSignApproverNotOriginalParentAssignee
+// above). What this test CAN and does assert precisely: the second vote
+// must not fail with the authorization-denial message — any failure past
+// that point is the fixture's lack of a real BPMN process, not an auth
+// regression. Confirmed by temporarily reverting the fix during development:
+// without it, the error is exactly "推进会签父任务失败: 未认证的调用"; with
+// it, it changes to a BPMN-parsing error instead.
+func TestVote_ThresholdReachedParentCompletionNotDeniedByAuth(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, _ := setupApprovalDecisionFixture(t, engine)
+
+	approver, err := engine.client.User.Create().
+		SetUsername("threshold-approver1").SetEmail("threshold-approver1@example.com").SetName("Threshold Approver 1").
+		SetPasswordHash("hash").SetRole("agent").SetActive(true).SetTenantID(tenantID).
+		Save(context.Background())
+	require.NoError(t, err)
+	approver2, err := engine.client.User.Create().
+		SetUsername("threshold-approver2").SetEmail("threshold-approver2@example.com").SetName("Threshold Approver 2").
+		SetPasswordHash("hash").SetRole("agent").SetActive(true).SetTenantID(tenantID).
+		Save(context.Background())
+	require.NoError(t, err)
+
+	_, parentTaskID := createProcessFixture(t, engine, tenantID, "vote-threshold-reached")
+	parentTask, err := engine.client.ProcessTask.Get(context.Background(), parentTaskID)
+	require.NoError(t, err)
+
+	systemCtx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	systemCtx = context.WithValue(systemCtx, bpmn.BPMNSystemCallerContextKey, true)
+	created, err := engine.TaskService().CreateCounterSignTasks(systemCtx, parentTask.TaskID, &CounterSignRequest{
+		ApprovalType: "parallel",
+		Approvers:    []string{fmt.Sprintf("%d", approver.ID), fmt.Sprintf("%d", approver2.ID)},
+		Threshold:    2,
+	})
+	require.NoError(t, err)
+	require.Len(t, created, 2)
+
+	vote := func(userID int, taskID string) error {
+		ctx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, userID)
+		ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+		return engine.TaskService().Vote(ctx, taskID, &VoteRequest{Approved: true, Comment: "threshold vote"})
+	}
+	require.NoError(t, vote(approver.ID, created[0].TaskID), "first vote (below threshold) must succeed")
+
+	err = vote(approver2.ID, created[1].TaskID)
+	if err != nil {
+		assert.NotContains(t, err.Error(), "未认证的调用",
+			"parent-task auto-completion on threshold reached must not be denied for lack of a declared actor/system-caller — "+
+				"engine.CompleteTask's workflowCtx must declare bpmn.BPMNSystemCallerContextKey; got: %v", err)
+	}
+}
+
 func TestGetTaskByID_NoUserNoSystemCallerDenied(t *testing.T) {
 	engine, baseCtx := newApprovalDecisionTestEngine(t)
 	tenantID, _ := setupApprovalDecisionFixture(t, engine)

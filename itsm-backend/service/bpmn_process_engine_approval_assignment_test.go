@@ -1209,3 +1209,48 @@ func TestCreateUserTask_Approval_AssigneeProjectId_TenantIsolation(t *testing.T)
 	assert.NotEqual(t, strconv.Itoa(otherManager.ID), created.Assignee, "不能跨租户解析到另一个租户的固定项目负责人")
 	assert.Equal(t, strconv.Itoa(ownManager.ID), created.Assignee, "固定项目跨租户查不到时应该退到申请人自己部门这一级")
 }
+
+// ==================== 会签自动创建的调用者授权（Finding A，Task 4 review 追加）====================
+
+// TestCreateUserTask_CounterSignFanOut_NotAttributedToUpstreamActor 锁定
+// createUserTask 内部自动创建会签子任务这条路径：多审批人节点
+// （ApprovalMode != "single"）在 createUserTask 内部会调用
+// taskService.CreateCounterSignTasks，后者经 authorizeTaskMutation 校验调用者
+// 是不是"父任务"（刚刚创建出来的会签父任务）的 assignee/candidate。
+//
+// 问题：createUserTask 复用的是调用方 ctx——通常是完成上一个节点、推进网关到这个
+// 多审批人节点的那个人的 ctx，而这个人几乎不可能是刚创建出来的会签父任务的候选人
+// （候选人是这个节点自己配置的审批人列表）。Task 3 让 authorizeTaskMutation
+// fail-closed 之后，这条内部自动创建路径会被这个跟它毫不相关的"上一个节点的操作人"
+// 意外拒绝——引擎自己的内部记账动作，不应该被套用人类操作者的候选人校验。
+//
+// 用真实存在但跟本节点候选人无关的 upstreamActor 身份驱动 createUserTask，
+// 断言不会被 authorizeTaskMutation 拒绝。
+func TestCreateUserTask_CounterSignFanOut_NotAttributedToUpstreamActor(t *testing.T) {
+	fx := newApprovalAssignmentFixture(t)
+
+	// upstreamActor：完成了上一个节点、推进流程到这个多审批人节点的人——跟这个节点
+	// 自己的候选审批人列表（approver1/approver2）没有任何关系。
+	upstreamActor := fx.createUser(t, "upstream-actor", 0)
+	fx.createUser(t, "countersign-approver1", 0)
+	fx.createUser(t, "countersign-approver2", 0)
+
+	instance := fx.createInstance(t, "countersign-fanout", map[string]interface{}{})
+
+	task := approvalTask("Activity_MultiApproval", "多人会签")
+	task.CandidateUsers = "countersign-approver1,countersign-approver2"
+	task.ApprovalMode = "any" // len(approvers)=2 > 1，触发 createUserTask 内部的自动会签创建
+
+	ctx := context.WithValue(fx.ctx, bpmn.BPMNTenantIDContextKey, fx.tenant.ID)
+	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, upstreamActor.ID)
+
+	err := fx.engine.createUserTask(ctx, instance, task)
+	require.NoError(t, err, "会签子任务的内部自动创建不应该被跟本节点候选人无关的上一个操作人身份拒绝")
+
+	parent := fx.getCreatedTask(t, instance.ID, "Activity_MultiApproval")
+	children, err := fx.client.ProcessTask.Query().
+		Where(processtask.RootTaskID(parent.TaskID)).
+		All(fx.ctx)
+	require.NoError(t, err)
+	assert.Len(t, children, 2, "应该按候选人列表创建出对应数量的会签子任务")
+}

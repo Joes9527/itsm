@@ -1056,7 +1056,15 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 			if task.ApprovalMode == "sequential" {
 				approvalType = "serial"
 			}
-			if _, err := e.taskService.CreateCounterSignTasks(ctx, createdTask.TaskID, &CounterSignRequest{ApprovalType: approvalType, Approvers: approvers, Threshold: threshold}); err != nil {
+			// System caller: this is the engine auto-fanning-out a
+			// newly-created approval task into its counter-sign sub-tasks,
+			// not a mutation attributable to whatever actor's ctx happened
+			// to complete the preceding task/start the process —
+			// authorizeTaskMutation (reached via CreateCounterSignTasks)
+			// would otherwise deny it, since that actor is not a
+			// participant of the counter-sign parent task just created.
+			counterSignCtx := context.WithValue(ctx, bpmn.BPMNSystemCallerContextKey, true)
+			if _, err := e.taskService.CreateCounterSignTasks(counterSignCtx, createdTask.TaskID, &CounterSignRequest{ApprovalType: approvalType, Approvers: approvers, Threshold: threshold}); err != nil {
 				return fmt.Errorf("创建会签任务失败: %w", err)
 			}
 		}
@@ -3370,6 +3378,11 @@ func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequ
 			}).
 			Exec(ctx)
 		workflowCtx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, parentTask.TenantID)
+		// System caller: the engine is auto-completing the parent task based
+		// on the aggregate counter-sign vote threshold being reached, not on
+		// behalf of any single human actor — authorizeTaskActor denies by
+		// default without either a user ID or this explicit declaration.
+		workflowCtx = context.WithValue(workflowCtx, bpmn.BPMNSystemCallerContextKey, true)
 		engine := NewCustomProcessEngine(s.client, s.logger)
 		if err := engine.CompleteTask(workflowCtx, parentTask.TaskID, map[string]interface{}{"approvalResult": status.Status, "approved": status.Status == "approved"}); err != nil {
 			return fmt.Errorf("推进会签父任务失败: %w", err)
