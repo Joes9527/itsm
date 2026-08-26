@@ -64,7 +64,9 @@ if userID <= 0 {
 }
 ```
 
-需要排查现有代码里所有依赖"`userID<=0` 隐式放行"这条路径的真实系统调用点(预计集中在工单创建自动触发 BPMN 流程的路径),逐一改为显式声明,而不是假设当前没有真实依赖方。
+**范围**:除了最初列出的 `authorizeTaskViewer`/`authorizeTaskMutation`/`authorizeCounterSignViewer`,`authorizeTaskMutation` 的同类函数 `authorizeTaskActor`(`service/bpmn_process_engine.go:542-567`,把守 `CompleteTask`/`CompleteTaskByID`/`SubmitTaskDecision`/`Vote` 四个接口)有完全相同的 `if userID <= 0 { return nil }` 隐式放行模式,一并纳入本组件的改造范围——否则会在同一批 `/bpmn/tasks/*` 接口里留下"一部分显式声明、一部分隐式推导"的新碎片化。`isTaskCandidate`(把守 `ClaimTask`/`ClaimTaskByID`)没有这个模式(它直接按传入的 `userID` 解析身份,`userID<=0` 时 `ResolveCallerIdentity` 会因为查不到用户而报错,天然 fail-closed),不需要改动。
+
+**审计结论(设计阶段已核实,非待办)**:全代码库搜索确认,`GetTask`/`GetTaskByID`/`AssignTask`/`CancelTask`/`SetTaskVariables`/`CreateCounterSignTasks`/`GetCounterSignStatus`/`CompleteTask`/`CompleteTaskByID`/`Vote` 这些公开方法,除了 HTTP controller(`controller/bpmn_workflow_controller.go`)和测试代码,**没有任何其它调用方**——也就是说"系统调用隐式放行"这条分支,今天在生产代码里从未被真正触发过。因此 `BPMNSystemCallerContextKey` 机制在实施阶段的落地是纯粹的"收紧默认行为 + 为未来预留显式声明入口",不需要额外寻找、迁移现存的系统调用方——但仍然要把这四个函数原有的"没传 userID 就放行"测试用例,改成显式测试"没有系统调用声明 + 没有用户身份 = 拒绝"。
 
 ### 组件 3:集中授权登记表 + 自动化守卫
 
@@ -93,7 +95,7 @@ type RouteAuthEntry struct {
 
 var BPMNTaskInstanceAuthRegistry = []RouteAuthEntry{
     {Method: "GET", Path: "/bpmn/tasks", Primitive: AuthPrimitiveParticipantScoped, ElevatedResource: "task", ElevatedAction: "read", AllowSystemCaller: false},
-    {Method: "GET", Path: "/bpmn/tasks/:id", Primitive: AuthPrimitiveTaskViewer, ElevatedResource: "task", ElevatedAction: "read", AllowSystemCaller: true},
+    {Method: "GET", Path: "/bpmn/tasks/:id", Primitive: AuthPrimitiveTaskViewer, ElevatedResource: "task", ElevatedAction: "read", AllowSystemCaller: false},
     {Method: "PUT", Path: "/bpmn/tasks/:id/assign", Primitive: AuthPrimitiveTaskMutation, ElevatedResource: "task", ElevatedAction: "update", AllowSystemCaller: false},
     {Method: "PUT", Path: "/bpmn/tasks/:id/claim", Primitive: AuthPrimitiveTaskActor, ElevatedResource: "", ElevatedAction: "", AllowSystemCaller: false},
     {Method: "PUT", Path: "/bpmn/tasks/:id/complete", Primitive: AuthPrimitiveTaskActor, ElevatedResource: "", ElevatedAction: "", AllowSystemCaller: false},
@@ -101,14 +103,14 @@ var BPMNTaskInstanceAuthRegistry = []RouteAuthEntry{
     {Method: "PUT", Path: "/bpmn/tasks/:id/cancel", Primitive: AuthPrimitiveTaskMutation, ElevatedResource: "task", ElevatedAction: "update", AllowSystemCaller: false},
     {Method: "PUT", Path: "/bpmn/tasks/:id/variables", Primitive: AuthPrimitiveTaskMutation, ElevatedResource: "task", ElevatedAction: "update", AllowSystemCaller: false},
     {Method: "POST", Path: "/bpmn/tasks/:id/counter-sign", Primitive: AuthPrimitiveTaskMutation, ElevatedResource: "task", ElevatedAction: "update", AllowSystemCaller: false},
-    {Method: "GET", Path: "/bpmn/tasks/:id/counter-sign-status", Primitive: AuthPrimitiveCounterSignViewer, ElevatedResource: "task", ElevatedAction: "read", AllowSystemCaller: true},
+    {Method: "GET", Path: "/bpmn/tasks/:id/counter-sign-status", Primitive: AuthPrimitiveCounterSignViewer, ElevatedResource: "task", ElevatedAction: "read", AllowSystemCaller: false},
     {Method: "PUT", Path: "/bpmn/tasks/:id/vote", Primitive: AuthPrimitiveTaskActor, ElevatedResource: "", ElevatedAction: "", AllowSystemCaller: false},
     {Method: "GET", Path: "/bpmn/process-instances", Primitive: AuthPrimitiveParticipantScoped, ElevatedResource: "process_instance", ElevatedAction: "read", AllowSystemCaller: false},
-    {Method: "GET", Path: "/bpmn/process-instances/:id", Primitive: AuthPrimitiveTaskViewer, ElevatedResource: "process_instance", ElevatedAction: "read", AllowSystemCaller: true},
+    {Method: "GET", Path: "/bpmn/process-instances/:id", Primitive: AuthPrimitiveTaskViewer, ElevatedResource: "process_instance", ElevatedAction: "read", AllowSystemCaller: false},
 }
 ```
 
-上表 `AllowSystemCaller` 的取值遵循一条保守默认原则:**只读类原语(`task_viewer`/`counter_sign_viewer`/`participant_scoped`)默认允许系统调用,写类原语(`task_mutation`/`task_actor`)默认不允许**——因为写操作一旦被系统调用绕过参与者校验,后果比读操作被绕过更严重,而目前代码库里已知的系统触发场景(工单创建自动触发流程)只涉及"启动流程"而非"以系统身份操作某个具体任务"。实施计划的第一个任务必须审计代码库里所有真实的非 HTTP 内部调用点(即所有不经过 `RegisterRoutes` 注册的 handler、直接调用 `authorizeTaskViewer`/`authorizeTaskMutation`/`authorizeCounterSignViewer` 所在函数的调用方),用审计结果校正上表——审计发现的任何反例（比如某个写类调用确实需要被系统内部触发）都必须回填进这张表并写明原因,不能为了让审计通过而静默放宽默认原则。
+上表 `AllowSystemCaller` 全部为 `false`——这不是一个待定的保守默认值,而是设计阶段已经做完的审计结论(见组件 2):这些接口今天在代码库里没有任何真实的非 HTTP 内部调用方,`BPMNSystemCallerContextKey` 是为未来预留的显式声明入口,不是要迁移某个已知的现存调用方。如果实施阶段(或未来任何一次改动)确实需要让某个接口支持系统调用,必须显式把对应行的 `AllowSystemCaller` 改成 `true` 并写明原因——不允许为了让某个新用例跑通就静默改动而不留痕迹。
 
 配套守卫测试(`controller/bpmn_workflow_controller_authz_registry_test.go`):遍历 `BPMNWorkflowController.RegisterRoutes` 实际注册的路由(通过一个临时 `gin.Engine` + 路由自省,或直接复用现有测试里构造路由树的方式),对每一条 `/bpmn/tasks/*`、`/bpmn/process-instances/*` 路由,断言它出现在 `BPMNTaskInstanceAuthRegistry` 里且方法匹配;反向断言登记表里的每一条也确实被注册了(防止登记表本身腐化成"越修越对不上"的死文档)。新增接口如果没有登记,这个测试直接失败。
 
@@ -130,7 +132,7 @@ var BPMNTaskInstanceAuthRegistry = []RouteAuthEntry{
 
 | 风险 | 描述 | 应对 |
 |---|---|---|
-| 残留隐式放行 | 组件 2 只改了 `authorizeTaskViewer`/`authorizeTaskMutation`/`authorizeCounterSignViewer` 三个函数本身,但代码库里可能还有其它直接依赖 `userID<=0` 隐式放行语义的调用路径没被枚举到,尤其是非 HTTP 触发的服务内部调用。 | 实施计划第一个任务必须先执行 `grep -rn "BPMNUserIDContextKey\|userID <= 0" service/ controller/` 找出所有相关分支,逐一确认调用方是否为真实系统调用,而不是假设只有工单创建这一条路径。 |
+| 残留隐式放行 | 组件 2 覆盖 `authorizeTaskViewer`/`authorizeTaskMutation`/`authorizeCounterSignViewer`/`authorizeTaskActor` 四个函数,均已在设计阶段核实无任何真实非 HTTP 调用方(见组件 2 审计结论)。风险在于实施阶段落地这几个函数的改动到 PR 合入之间,可能有新代码引入了新的隐式依赖。 | 实施阶段落地这四个函数的改动之前,重新执行一次 `grep -rn "BPMNUserIDContextKey\|userID <= 0" service/ controller/` 确认审计结论仍然成立,而不是直接采信设计阶段的结论。 |
 | 权限码残留引用未同步 | "我的待办"菜单 `PermissionCode` 从 `task:read` 改成 `bpmn:read` 后,如果前端或其它模块还有硬编码依赖 `task:read` 的地方没跟着改,会产生新的不一致。 | 已在设计阶段核实:`itsm-frontend/src` 全文搜索 `task:read` 零命中;后端除 `pkg/seeder/seeder.go`(本设计要改的目标)和 `service/bpmn_process_engine.go`/`service/bpmn/handler_base.go`(`hasElevatedBPMNAccess` 的 `"task","read"` 字符串参数,属于保留不变的提权检查代码,不是要清理的对象)外无其它引用。实施阶段仍需在改动落地后重新跑一次同样的全局搜索确认没有新代码在此期间引入新的硬编码引用。 |
 | 登记表手工维护漂移 | `BPMNTaskInstanceAuthRegistry` 是手写的 Go 切片,理论上有"改了路由忘了改登记表"的风险。 | 已通过组件 3 的守卫测试正面解决(登记表和实际注册路由双向比对,不一致直接测试失败)——这就是防漂移机制本身,不需要额外引入 `go generate`/YAML 配置等更重的代码生成工具链;当前接口数量(13 条)规模下,额外的生成工具链只会增加维护成本,不会带来生成失败时测试无法捕获的场景生成工具本身也解决不了的问题。 |
 | 迁移导致权限意外缺失 | 收紧 `dept_manager`/`end_user`/`service_catalog_admin` 的权限码,如果范围判断有误,可能意外导致这些角色的其它依赖被波及。 | 见上文迁移文件注释要求(记录改动前状态,便于后续撤销);验证计划里的"迁移脚本正向验证"项(见下)覆盖迁移后这三个角色仍能正常访问自己的任务/流程实例;`tests/rbac` 目录下现有的角色权限回归测试需要在迁移后重新跑一遍,确认没有意外波及这三个角色的其它权限。 |
