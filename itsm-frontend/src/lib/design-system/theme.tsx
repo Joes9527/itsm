@@ -173,10 +173,10 @@ export const getAntdTheme = (isDark: boolean) => {
       boxShadowTertiary: boxShadow.xl,
 
       // 字体
-      fontSize: fontSizeValue(fontSize.base),
-      fontSizeLG: fontSizeValue(fontSize.lg),
-      fontSizeSM: fontSizeValue(fontSize.sm),
-      fontSizeXL: fontSizeValue(fontSize.xl),
+      fontSize: fontSizeValue(fontSize.sm),
+      fontSizeLG: fontSizeValue(fontSize.base),
+      fontSizeSM: fontSizeValue(fontSize.xs),
+      fontSizeXL: fontSizeValue(fontSize.lg),
 
       // 行高
       lineHeight: lineHeightValue(lineHeight.normal),
@@ -212,18 +212,38 @@ export const getAntdTheme = (isDark: boolean) => {
       // 按钮组件
       Button: {
         borderRadius: borderRadiusValue(borderRadius.lg),
-        controlHeight: 40,
-        controlHeightLG: 48,
-        controlHeightSM: 32,
+        controlHeight: 36,
+        controlHeightLG: 40,
+        controlHeightSM: 28,
         fontWeight: fontWeightValue(fontWeight.medium),
+        fontSize: fontSizeValue(fontSize.sm),
       },
 
       // 输入框组件
       Input: {
         borderRadius: borderRadiusValue(borderRadius.lg),
-        controlHeight: 40,
-        controlHeightLG: 48,
-        controlHeightSM: 32,
+        controlHeight: 36,
+        controlHeightLG: 40,
+        controlHeightSM: 28,
+        fontSize: fontSizeValue(fontSize.sm),
+      },
+
+      // 选择器组件
+      Select: {
+        borderRadius: borderRadiusValue(borderRadius.lg),
+        controlHeight: 36,
+        controlHeightLG: 40,
+        controlHeightSM: 28,
+        fontSize: fontSizeValue(fontSize.sm),
+      },
+
+      // 日期选择组件
+      DatePicker: {
+        borderRadius: borderRadiusValue(borderRadius.lg),
+        controlHeight: 36,
+        controlHeightLG: 40,
+        controlHeightSM: 28,
+        fontSize: fontSizeValue(fontSize.sm),
       },
 
       // 卡片组件
