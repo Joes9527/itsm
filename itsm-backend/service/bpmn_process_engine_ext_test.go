@@ -1282,3 +1282,43 @@ func TestListProcessInstances_CrossTenantNeverLeaks(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 0, total, "must never return another tenant's instance regardless of elevation")
 }
+
+// TestListProcessInstances_SubstringCandidateDoesNotLeak guards against the
+// coarse SQL Contains predicate (LIKE '%v%') being mistaken for an exact
+// participant match. A task whose candidate_users merely CONTAINS the
+// viewer's ID as a substring (e.g. viewer ID "1" inside candidate string
+// "19") must NOT make that task's process instance visible to the viewer —
+// only identity.IsTaskParticipant's exact, trimmed per-CSV-element
+// comparison should decide that.
+func TestListProcessInstances_SubstringCandidateDoesNotLeak(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, viewerID := setupApprovalDecisionFixture(t, engine)
+	otherUser, err := engine.client.User.Create().
+		SetUsername("other-user3").SetEmail("other-user3@example.com").SetName("Other User 3").
+		SetPasswordHash("hash").SetRole("agent").SetActive(true).SetTenantID(tenantID).
+		Save(context.Background())
+	require.NoError(t, err)
+
+	// Instance whose only task has a candidate_users value that is a
+	// superstring of the viewer's ID (not an exact CSV-token match) — e.g.
+	// viewer ID "1" makes the coarse Contains("1") predicate match a
+	// candidate string like "19", even though "19" != "1".
+	substringInstanceID, substringTaskID := createProcessFixture(t, engine, tenantID, "list4-substring")
+	_, err = engine.client.ProcessInstance.UpdateOneID(substringInstanceID).
+		SetInitiator(fmt.Sprintf("%d", otherUser.ID)).Save(context.Background())
+	require.NoError(t, err)
+	collidingCandidate := fmt.Sprintf("%d9", viewerID) // e.g. viewerID=1 -> "19"; contains "1" but != "1"
+	_, err = engine.client.ProcessTask.UpdateOneID(substringTaskID).
+		SetCandidateUsers(collidingCandidate).Save(context.Background())
+	require.NoError(t, err)
+
+	ctx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, viewerID)
+	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = context.WithValue(ctx, bpmn.BPMNElevatedContextKey, false)
+
+	svc := engine.ProcessInstanceService()
+	instances, total, err := svc.ListProcessInstances(ctx, &ListProcessInstancesRequest{TenantID: tenantID, Page: 1, PageSize: 50})
+	require.NoError(t, err)
+	assert.Equal(t, 0, total, "a substring-only candidate_users match must not leak the instance")
+	assert.Empty(t, instances)
+}

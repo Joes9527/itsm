@@ -2165,16 +2165,28 @@ func (s *bpmnProcessInstanceService) ListProcessInstances(ctx context.Context, r
 				taskOrPreds = append(taskOrPreds, processtask.CandidateGroupsContains(group))
 			}
 		}
-		taskQuery := s.client.ProcessTask.Query().Where(processtask.Or(taskOrPreds...))
-		if req.TenantID > 0 {
-			taskQuery = taskQuery.Where(processtask.TenantID(req.TenantID))
-		}
+		// The Or(...) predicates above use Contains (SQL LIKE '%v%') on
+		// CandidateUsers/CandidateGroups, which is a coarse superset
+		// pre-filter only: it has no false negatives (an exact match is
+		// always also a substring match) but can have false positives
+		// (e.g. identity.IDStr "1" substring-matches a task whose
+		// CandidateUsers is "21"). It must never be trusted as the
+		// authorization decision by itself — identity.IsTaskParticipant
+		// below re-checks each candidate task with exact, trimmed
+		// per-CSV-element comparisons, which is the single source of
+		// truth for participant matching (see service/bpmn/participation.go).
+		taskQuery := s.client.ProcessTask.Query().
+			Where(processtask.Or(taskOrPreds...)).
+			Where(processtask.TenantID(req.TenantID))
 		participantTasks, err := taskQuery.All(ctx)
 		if err != nil {
 			return nil, 0, fmt.Errorf("查询参与任务失败: %w", err)
 		}
 		instanceIDSet := make(map[int]struct{}, len(participantTasks))
 		for _, t := range participantTasks {
+			if !identity.IsTaskParticipant(t) {
+				continue
+			}
 			instanceIDSet[t.ProcessInstanceID] = struct{}{}
 		}
 		instanceIDs := make([]int, 0, len(instanceIDSet))
