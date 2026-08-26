@@ -1407,3 +1407,155 @@ func TestGetTaskByID_ElevatedCanViewAnything(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, taskID, task.ID)
 }
+
+// ==================== ListUserTasks authorization tests ====================
+
+func TestListUserTasks_NonElevatedIgnoresOverrideParams(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, viewerID := setupApprovalDecisionFixture(t, engine)
+	otherUser, err := engine.client.User.Create().
+		SetUsername("victim").SetEmail("victim@example.com").SetName("Victim").
+		SetPasswordHash("hash").SetRole("agent").SetActive(true).SetTenantID(tenantID).
+		Save(context.Background())
+	require.NoError(t, err)
+
+	_, viewerTaskID := createProcessFixture(t, engine, tenantID, "listtasks1-mine")
+	_, err = engine.client.ProcessTask.UpdateOneID(viewerTaskID).
+		SetAssignee(fmt.Sprintf("%d", viewerID)).Save(context.Background())
+	require.NoError(t, err)
+
+	_, otherTaskID := createProcessFixture(t, engine, tenantID, "listtasks1-victim")
+	_, err = engine.client.ProcessTask.UpdateOneID(otherTaskID).
+		SetAssignee(fmt.Sprintf("%d", otherUser.ID)).Save(context.Background())
+	require.NoError(t, err)
+
+	ctx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, viewerID)
+	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = context.WithValue(ctx, bpmn.BPMNElevatedContextKey, false)
+
+	// Attacker-style request: explicitly ask for the OTHER user's tasks.
+	req := &ListUserTasksRequest{
+		Assignee: fmt.Sprintf("%d", otherUser.ID),
+		TenantID: tenantID,
+		Page:     1, PageSize: 50,
+	}
+	tasks, total, err := engine.TaskService().ListUserTasks(ctx, req)
+	require.NoError(t, err)
+	require.Equal(t, 1, total, "must be forced back to the caller's own scope, not the requested override")
+	assert.Equal(t, viewerTaskID, tasks[0].ID)
+}
+
+func TestListUserTasks_ElevatedHonorsOverrideParams(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, viewerID := setupApprovalDecisionFixture(t, engine)
+	otherUser, err := engine.client.User.Create().
+		SetUsername("target-user").SetEmail("target-user@example.com").SetName("Target").
+		SetPasswordHash("hash").SetRole("agent").SetActive(true).SetTenantID(tenantID).
+		Save(context.Background())
+	require.NoError(t, err)
+
+	_, otherTaskID := createProcessFixture(t, engine, tenantID, "listtasks2-target")
+	_, err = engine.client.ProcessTask.UpdateOneID(otherTaskID).
+		SetAssignee(fmt.Sprintf("%d", otherUser.ID)).Save(context.Background())
+	require.NoError(t, err)
+
+	ctx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, viewerID)
+	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = context.WithValue(ctx, bpmn.BPMNElevatedContextKey, true)
+
+	req := &ListUserTasksRequest{
+		Assignee: fmt.Sprintf("%d", otherUser.ID),
+		TenantID: tenantID,
+		Page:     1, PageSize: 50,
+	}
+	tasks, total, err := engine.TaskService().ListUserTasks(ctx, req)
+	require.NoError(t, err)
+	require.Equal(t, 1, total)
+	assert.Equal(t, otherTaskID, tasks[0].ID)
+}
+
+func TestListUserTasks_MultiGroupCallerMatchesAnyOfTheirGroups(t *testing.T) {
+	// The brief's original version of this test put the caller in TWO
+	// groups to prove the OR-loop over identity.GroupsCSV (added in this
+	// task) beats the old single CandidateGroupsContains(wholeCSV) check.
+	// That fixture is impossible under this schema: Group.Edges().members
+	// is backed by a single nullable "group_members" FK column on `users`
+	// (see ent/migrate/schema.go), not a join table, so a user can belong
+	// to at most ONE group at a time — a second
+	// Group.Create()...AddMemberIDs(viewerID) errors with "already
+	// connected to a different group_members" (confirmed by running this
+	// fixture). This is a pre-existing, documented constraint elsewhere
+	// too (service/bpmn/bpmn_group_resolver_db_test.go:
+	// "user 只能属于一个 group...多组场景需要多用户").
+	//
+	// Given that, identity.GroupsCSV can never actually contain more than
+	// one entry for a real caller, so the OR-loop's split behavior is
+	// defensive/future-proofing rather than something a real single-user
+	// fixture can exercise as a true regression. This test instead proves
+	// the still-real, still-testable part of the same code path: a
+	// caller sees a task via their (single) candidate_groups membership,
+	// and does NOT see a task whose candidate_groups names a different
+	// group they don't belong to.
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, viewerID := setupApprovalDecisionFixture(t, engine)
+
+	_, err := engine.client.Group.Create().
+		SetName("network_eng").SetTenantID(tenantID).AddMemberIDs(viewerID).
+		Save(context.Background())
+	require.NoError(t, err)
+
+	_, matchingTaskID := createProcessFixture(t, engine, tenantID, "listtasks3-group")
+	_, err = engine.client.ProcessTask.UpdateOneID(matchingTaskID).
+		SetCandidateGroups("network_eng").Save(context.Background())
+	require.NoError(t, err)
+
+	_, otherGroupTaskID := createProcessFixture(t, engine, tenantID, "listtasks3-othergroup")
+	_, err = engine.client.ProcessTask.UpdateOneID(otherGroupTaskID).
+		SetCandidateGroups("finance_team").Save(context.Background())
+	require.NoError(t, err)
+
+	ctx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, viewerID)
+	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = context.WithValue(ctx, bpmn.BPMNElevatedContextKey, false)
+
+	tasks, total, err := engine.TaskService().ListUserTasks(ctx, &ListUserTasksRequest{
+		UserID: viewerID, TenantID: tenantID, Page: 1, PageSize: 50,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, total)
+	assert.Equal(t, matchingTaskID, tasks[0].ID)
+}
+
+// TestListUserTasks_SubstringCandidateDoesNotLeak guards against the coarse
+// SQL Contains predicate (LIKE '%v%') being mistaken for an exact
+// participant match in the req.UserID > 0 branch. A task whose
+// candidate_users/candidate_groups merely CONTAINS the caller's ID/group as
+// a substring (e.g. caller ID "1" inside candidate string "19") must NOT
+// show up in that caller's task list — only identity.IsTaskParticipant's
+// exact, trimmed per-CSV-element comparison should decide that. Modeled
+// after TestListProcessInstances_SubstringCandidateDoesNotLeak.
+func TestListUserTasks_SubstringCandidateDoesNotLeak(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, viewerID := setupApprovalDecisionFixture(t, engine)
+
+	// Task whose candidate_users value is a superstring of the viewer's ID
+	// (not an exact CSV-token match) — e.g. viewer ID "1" makes the coarse
+	// Contains("1") predicate match a candidate string like "19", even
+	// though "19" != "1".
+	_, substringTaskID := createProcessFixture(t, engine, tenantID, "listtasks4-substring")
+	collidingCandidate := fmt.Sprintf("%d9", viewerID) // e.g. viewerID=1 -> "19"; contains "1" but != "1"
+	_, err := engine.client.ProcessTask.UpdateOneID(substringTaskID).
+		SetCandidateUsers(collidingCandidate).Save(context.Background())
+	require.NoError(t, err)
+
+	ctx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, viewerID)
+	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = context.WithValue(ctx, bpmn.BPMNElevatedContextKey, false)
+
+	tasks, total, err := engine.TaskService().ListUserTasks(ctx, &ListUserTasksRequest{
+		UserID: viewerID, TenantID: tenantID, Page: 1, PageSize: 50,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 0, total, "a substring-only candidate_users match must not leak the task")
+	assert.Empty(t, tasks)
+}

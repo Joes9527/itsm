@@ -2432,10 +2432,23 @@ func (s *bpmnTaskService) CompleteTaskByID(ctx context.Context, id int, variable
 
 func (s *bpmnTaskService) ListUserTasks(ctx context.Context, req *ListUserTasksRequest) ([]*ent.ProcessTask, int, error) {
 	s.logger.Debugw("ListUserTasks called", "assignee", req.Assignee, "userID", req.UserID, "tenantID", req.TenantID)
+
+	elevated, _ := ctx.Value(bpmn.BPMNElevatedContextKey).(bool)
+	if !elevated {
+		// Non-elevated callers can never see anyone else's tasks — ignore
+		// whatever Assignee/CandidateUsers/CandidateGroups/UserID they sent
+		// and force the query back to their own authenticated identity.
+		callerID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
+		req.UserID = callerID
+		req.Assignee = ""
+		req.CandidateUsers = ""
+		req.CandidateGroups = ""
+	}
+
 	query := s.client.ProcessTask.Query()
 
-	// 「我的待办」语义：UserID 透传时，查出“分配给我 OR 我是候选人 OR 我所在组是候选组”的任务。
-	// 这样能同时覆盖 assignee / candidate_users / candidate_groups 三种途径。
+	// 「我的待办」语义：UserID 透传时，查出"分配给我 OR 我是候选人 OR 我所在组是候选组"的任务。
+	var filterInGo func([]*ent.ProcessTask) []*ent.ProcessTask
 	if req.UserID > 0 {
 		tenantID := req.TenantID
 		if tenantID == 0 {
@@ -2443,44 +2456,51 @@ func (s *bpmnTaskService) ListUserTasks(ctx context.Context, req *ListUserTasksR
 				tenantID = v
 			}
 		}
-		userIDStr := strconv.Itoa(req.UserID)
-
-		// 1. 取得该用户所在的组名（逗号分隔）
-		userGroupsCSV := ""
-		if s.groupResolver != nil {
-			groups, gErr := s.groupResolver.GetUserGroupNames(ctx, tenantID, req.UserID)
-			if gErr != nil {
-				s.logger.Warnw("查询用户所属组失败", "error", gErr, "userID", req.UserID)
-			} else {
-				userGroupsCSV = groups
-			}
+		identity, err := bpmn.ResolveCallerIdentity(ctx, s.client, s.groupResolver, tenantID, req.UserID)
+		if err != nil {
+			return nil, 0, fmt.Errorf("解析用户身份失败: %w", err)
 		}
 
-		// 2. OR 复合查询：assignee == me OR candidate_users 包含我 OR candidate_groups 包含我所在组
 		orPreds := []predicate.ProcessTask{
-			processtask.Assignee(userIDStr),
-			processtask.CandidateUsersContains(userIDStr),
+			processtask.Assignee(identity.IDStr),
+			processtask.CandidateUsersContains(identity.IDStr),
 		}
-		// 同时以 username/email 形式匹配 assignee 和 candidate_users——两个字段都可能存的是
-		// username/email/ID 混合（例如流程设计器"受理人"选择器写入的是 username，而
-		// resolveApprovalAssignee 等自动解析路径写入的是数字 ID），只匹配 ID 会导致通过
-		// 设计器指定受理人的任务在"我的待办"里对该用户不可见（2026-08-18 实测复现）。
-		if u, err := s.client.User.Get(ctx, req.UserID); err == nil && u != nil {
-			username := strings.TrimSpace(u.Username)
-			if username != "" && username != userIDStr {
-				orPreds = append(orPreds, processtask.Assignee(username))
-				orPreds = append(orPreds, processtask.CandidateUsersContains(username))
-			}
-			email := strings.TrimSpace(u.Email)
-			if email != "" && email != userIDStr && email != username {
-				orPreds = append(orPreds, processtask.Assignee(email))
-				orPreds = append(orPreds, processtask.CandidateUsersContains(email))
-			}
+		if identity.Username != "" {
+			orPreds = append(orPreds, processtask.Assignee(identity.Username), processtask.CandidateUsersContains(identity.Username))
 		}
-		if userGroupsCSV != "" {
-			orPreds = append(orPreds, processtask.CandidateGroupsContains(userGroupsCSV))
+		if identity.Email != "" {
+			orPreds = append(orPreds, processtask.Assignee(identity.Email), processtask.CandidateUsersContains(identity.Email))
+		}
+		// 每个组各自作为一条 OR 分支——之前把整份 GroupsCSV 当一个整体传给
+		// CandidateGroupsContains，只有调用者恰好只属于一个组时才碰巧能匹配上；
+		// 多组用户会被漏掉。
+		for _, group := range strings.Split(identity.GroupsCSV, ",") {
+			group = strings.TrimSpace(group)
+			if group != "" {
+				orPreds = append(orPreds, processtask.CandidateGroupsContains(group))
+			}
 		}
 		query = query.Where(processtask.Or(orPreds...))
+
+		// The Or(...) predicates above use Contains (SQL LIKE '%v%') on
+		// CandidateUsers/CandidateGroups, which is a coarse superset
+		// pre-filter only: it has no false negatives (an exact match is
+		// always also a substring match) but can have false positives (e.g.
+		// identity.IDStr "1" substring-matches a candidate string like
+		// "21"). It must never be trusted as the final authorization
+		// decision by itself — identity.IsTaskParticipant re-checks each
+		// candidate task with exact, trimmed per-CSV-element comparisons,
+		// which is the single source of truth for participant matching
+		// (see service/bpmn/participation.go).
+		filterInGo = func(tasks []*ent.ProcessTask) []*ent.ProcessTask {
+			filtered := make([]*ent.ProcessTask, 0, len(tasks))
+			for _, t := range tasks {
+				if identity.IsTaskParticipant(t) {
+					filtered = append(filtered, t)
+				}
+			}
+			return filtered
+		}
 	} else {
 		if req.Assignee != "" {
 			query = query.Where(processtask.Assignee(req.Assignee))
@@ -2503,6 +2523,32 @@ func (s *bpmnTaskService) ListUserTasks(ctx context.Context, req *ListUserTasksR
 	}
 	if req.TenantID > 0 {
 		query = query.Where(processtask.TenantID(req.TenantID))
+	}
+
+	if filterInGo != nil {
+		// UserID branch: the DB query above is only a coarse superset
+		// pre-filter, so pagination/count cannot be pushed down to SQL —
+		// fetch all matching rows, apply the exact Go-side filter, then
+		// paginate the filtered slice ourselves.
+		allTasks, err := query.Order(ent.Desc(processtask.FieldCreatedTime)).All(ctx)
+		if err != nil {
+			return nil, 0, fmt.Errorf("获取任务列表失败: %w", err)
+		}
+		filtered := filterInGo(allTasks)
+		total := len(filtered)
+
+		if req.Page > 0 && req.PageSize > 0 {
+			offset := (req.Page - 1) * req.PageSize
+			if offset >= len(filtered) {
+				return []*ent.ProcessTask{}, total, nil
+			}
+			end := offset + req.PageSize
+			if end > len(filtered) {
+				end = len(filtered)
+			}
+			return filtered[offset:end], total, nil
+		}
+		return filtered, total, nil
 	}
 
 	total, err := query.Count(ctx)

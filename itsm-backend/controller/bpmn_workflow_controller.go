@@ -662,7 +662,10 @@ func (c *BPMNWorkflowController) ListUserTasks(ctx *gin.Context) {
 	req.TenantID = tenantID.(int)
 
 	// 如果调用方没有指定 user_id / assignee / candidate_users，则按「我的待办」语义
-	// 使用当前登录用户 ID 进行过滤（包含 assign、candidate、组员命中）。
+	// 使用当前登录用户 ID 进行过滤（包含 assign、candidate、组员命中）。这个默认值
+	// 在非 elevated 调用方那里其实已经不重要了——service 层会强制覆盖回调用者自己的
+	// 身份，不管这里传不传；保留它是为了 elevated 调用方在不显式传参数时也能拿到
+	// 合理的默认行为（自己的待办），而不是空条件返回全部。
 	if req.UserID <= 0 && req.Assignee == "" && req.CandidateUsers == "" {
 		if uid, ok := ctx.Get("user_id"); ok {
 			switch v := uid.(type) {
@@ -686,7 +689,14 @@ func (c *BPMNWorkflowController) ListUserTasks(ctx *gin.Context) {
 		req.PageSize = 20
 	}
 
-	tasks, total, err := c.processEngine.TaskService().ListUserTaskViews(ctx, &req)
+	workflowCtx, _, ok := getBPMNTenantContext(ctx)
+	if !ok {
+		return
+	}
+	elevated := hasElevatedBPMNAccess(ctx, "task", "read")
+	workflowCtx = context.WithValue(workflowCtx, bpmn.BPMNElevatedContextKey, elevated)
+
+	tasks, total, err := c.processEngine.TaskService().ListUserTaskViews(workflowCtx, &req)
 	if err != nil {
 		common.InternalError(ctx, "获取用户任务列表失败: "+err.Error())
 		return
