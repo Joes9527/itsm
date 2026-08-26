@@ -1322,3 +1322,88 @@ func TestListProcessInstances_SubstringCandidateDoesNotLeak(t *testing.T) {
 	assert.Equal(t, 0, total, "a substring-only candidate_users match must not leak the instance")
 	assert.Empty(t, instances)
 }
+
+// ==================== GetTask/GetTaskByID authorization tests ====================
+
+func TestGetTaskByID_ParticipantCanView(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
+	_, taskID := createProcessFixture(t, engine, tenantID, "gettask1")
+	_, err := engine.client.ProcessTask.UpdateOneID(taskID).
+		SetAssignee(fmt.Sprintf("%d", actorID)).Save(context.Background())
+	require.NoError(t, err)
+
+	ctx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, actorID)
+	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+
+	task, err := engine.TaskService().GetTaskByID(ctx, taskID)
+	require.NoError(t, err)
+	assert.Equal(t, taskID, task.ID)
+}
+
+func TestGetTaskByID_InitiatorCanViewReadOnly(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, initiatorID := setupApprovalDecisionFixture(t, engine)
+	instanceID, taskID := createProcessFixture(t, engine, tenantID, "gettask2")
+	_, err := engine.client.ProcessInstance.UpdateOneID(instanceID).
+		SetInitiator(fmt.Sprintf("%d", initiatorID)).Save(context.Background())
+	require.NoError(t, err)
+	// Task is assigned to someone else — initiator is not a candidate on it.
+	_, err = engine.client.ProcessTask.UpdateOneID(taskID).
+		SetAssignee("someone-else").Save(context.Background())
+	require.NoError(t, err)
+
+	ctx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, initiatorID)
+	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+
+	task, err := engine.TaskService().GetTaskByID(ctx, taskID)
+	require.NoError(t, err, "the process initiator must be able to view any task in their own instance")
+	assert.Equal(t, taskID, task.ID)
+}
+
+func TestGetTaskByID_NonParticipantDenied(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
+	otherUser, err := engine.client.User.Create().
+		SetUsername("bystander").SetEmail("bystander@example.com").SetName("Bystander").
+		SetPasswordHash("hash").SetRole("agent").SetActive(true).SetTenantID(tenantID).
+		Save(context.Background())
+	require.NoError(t, err)
+
+	instanceID, taskID := createProcessFixture(t, engine, tenantID, "gettask3")
+	_, err = engine.client.ProcessInstance.UpdateOneID(instanceID).
+		SetInitiator(fmt.Sprintf("%d", otherUser.ID)).Save(context.Background())
+	require.NoError(t, err)
+	_, err = engine.client.ProcessTask.UpdateOneID(taskID).
+		SetAssignee(fmt.Sprintf("%d", otherUser.ID)).Save(context.Background())
+	require.NoError(t, err)
+
+	ctx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, actorID)
+	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+
+	_, err = engine.TaskService().GetTaskByID(ctx, taskID)
+	assert.Error(t, err, "a non-participant, non-elevated caller must not be able to view the task")
+}
+
+func TestGetTaskByID_ElevatedCanViewAnything(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
+	otherUser, err := engine.client.User.Create().
+		SetUsername("bystander2").SetEmail("bystander2@example.com").SetName("Bystander 2").
+		SetPasswordHash("hash").SetRole("agent").SetActive(true).SetTenantID(tenantID).
+		Save(context.Background())
+	require.NoError(t, err)
+
+	_, taskID := createProcessFixture(t, engine, tenantID, "gettask4")
+	_, err = engine.client.ProcessTask.UpdateOneID(taskID).
+		SetAssignee(fmt.Sprintf("%d", otherUser.ID)).Save(context.Background())
+	require.NoError(t, err)
+
+	ctx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, actorID)
+	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = context.WithValue(ctx, bpmn.BPMNElevatedContextKey, true)
+
+	task, err := engine.TaskService().GetTaskByID(ctx, taskID)
+	require.NoError(t, err)
+	assert.Equal(t, taskID, task.ID)
+}

@@ -131,12 +131,13 @@ func (c *BPMNWorkflowController) RegisterRoutes(r *gin.RouterGroup) {
 		// 是任务的 assignee/candidate（来自 BPMN candidate_groups，取值可以是任意角色名，
 		// 例如 "network_eng"，不受限于上面 managed 分组那 7 个角色），不是靠固定角色白名单
 		// 判定的。ClaimTask/CompleteTask（含 SubmitTaskDecision）/Vote 在 service 层已经通过
-		// authorizeTaskActor/isTaskCandidate 做了任务候选人级别的授权；AssignTask/CancelTask/
-		// SetTaskVariables/CreateCounterSignTasks/GetCounterSignStatus/GetTask/ListUserTasks
-		// 目前在 service 层没有对应的候选人校验（这是本次 RBAC 收敛之前就存在、且独立于本次改动
-		// 的缺口，见设计文档"已知遗留"）。给整个 /tasks/* 套 managed 分组的粗粒度角色门槛曾在这次
-		// 收敛中短暂引入，被 SSL-VPN 审批链路的 E2E 测试（network_eng 候选人被误拒）实测证伪，
-		// 现按"精确复刻收敛前行为"的原则还原为不加门槛。
+		// authorizeTaskActor/isTaskCandidate 做了任务候选人级别的授权；GetTask/GetTaskByID
+		// 现在通过 authorizeTaskViewer 做参与者/发起人/elevated 校验（见 BPMN 任务/实例授权
+		// 修复计划 Task 6）。AssignTask/CancelTask/SetTaskVariables/CreateCounterSignTasks/
+		// GetCounterSignStatus/ListUserTasks 目前在 service 层仍没有对应的候选人校验（这是本次
+		// RBAC 收敛之前就存在、且独立于本次改动的缺口，见设计文档"已知遗留"）。给整个 /tasks/*
+		// 套 managed 分组的粗粒度角色门槛曾在这次收敛中短暂引入，被 SSL-VPN 审批链路的 E2E 测试
+		// （network_eng 候选人被误拒）实测证伪，现按"精确复刻收敛前行为"的原则还原为不加门槛。
 		bpmn.GET("/tasks", c.ListUserTasks)
 		bpmn.GET("/tasks/:id", c.GetTask)
 		bpmn.PUT("/tasks/:id/assign", c.AssignTask)
@@ -703,6 +704,8 @@ func (c *BPMNWorkflowController) GetTask(ctx *gin.Context) {
 	if !ok {
 		return
 	}
+	elevated := hasElevatedBPMNAccess(ctx, "task", "read")
+	workflowCtx = context.WithValue(workflowCtx, bpmn.BPMNElevatedContextKey, elevated)
 
 	// 先尝试解析为数字ID（数据库自增ID）
 	id, err := strconv.Atoi(taskID)

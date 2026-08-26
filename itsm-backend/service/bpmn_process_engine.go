@@ -2356,7 +2356,9 @@ func (s *bpmnTaskService) GetTask(ctx context.Context, taskID string) (*ent.Proc
 	if err != nil {
 		return nil, fmt.Errorf("获取任务失败: %w", err)
 	}
-
+	if err := s.authorizeTaskViewer(ctx, task); err != nil {
+		return nil, err
+	}
 	return task, nil
 }
 
@@ -2371,8 +2373,44 @@ func (s *bpmnTaskService) GetTaskByID(ctx context.Context, id int) (*ent.Process
 	if err != nil {
 		return nil, fmt.Errorf("获取任务失败: %w", err)
 	}
-
+	if err := s.authorizeTaskViewer(ctx, task); err != nil {
+		return nil, err
+	}
 	return task, nil
+}
+
+// authorizeTaskViewer allows a task to be read by: an elevated caller
+// (task:read permission), the task's participant (assignee/candidate_users/
+// candidate_groups — see bpmn.CallerIdentity.IsTaskParticipant), or the
+// initiator of the task's parent process instance (read-only progress
+// visibility — matches the "can I see my own submitted request's approval
+// chain" product expectation, distinct from being allowed to act on it).
+// System/internal calls without an authenticated actor stay permissive,
+// matching authorizeTaskActor's existing convention.
+func (s *bpmnTaskService) authorizeTaskViewer(ctx context.Context, task *ent.ProcessTask) error {
+	if elevated, _ := ctx.Value(bpmn.BPMNElevatedContextKey).(bool); elevated {
+		return nil
+	}
+	userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
+	if userID <= 0 {
+		return nil
+	}
+	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
+	if tenantID == 0 {
+		tenantID = task.TenantID
+	}
+	identity, err := bpmn.ResolveCallerIdentity(ctx, s.client, s.groupResolver, tenantID, userID)
+	if err != nil {
+		return fmt.Errorf("查看用户不存在: %w", err)
+	}
+	if identity.IsTaskParticipant(task) {
+		return nil
+	}
+	instance, err := s.client.ProcessInstance.Get(ctx, task.ProcessInstanceID)
+	if err == nil && instance.Initiator == identity.IDStr {
+		return nil
+	}
+	return fmt.Errorf("当前用户无权查看该任务")
 }
 
 // CompleteTaskByID 根据数据库自增ID完成任务
