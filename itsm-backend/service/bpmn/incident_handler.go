@@ -13,11 +13,20 @@ import (
 	"go.uber.org/zap"
 )
 
+// IncidentDomainServiceInterface 事件领域服务接口（避免 service/bpmn 反向 import service
+// 包造成循环依赖，同 TicketStatusServiceInterface 的理由）
+type IncidentDomainServiceInterface interface {
+	CreateIncident(ctx context.Context, req *dto.CreateIncidentRequest, tenantID, userID int) (*dto.IncidentResponse, error)
+	AssignIncident(ctx context.Context, id int, assigneeID int, tenantID int) (*dto.IncidentResponse, error)
+	UpdateStatus(ctx context.Context, id int, status string, tenantID int) (*dto.IncidentResponse, error)
+}
+
 // IncidentServiceTaskHandler 事件服务任务处理器
 type IncidentServiceTaskHandler struct {
 	HandlerBase
-	client *ent.Client
-	logger *zap.SugaredLogger
+	client          *ent.Client
+	logger          *zap.SugaredLogger
+	incidentService IncidentDomainServiceInterface
 }
 
 // NewIncidentServiceTaskHandler 创建事件处理器
@@ -26,6 +35,11 @@ func NewIncidentServiceTaskHandler(client *ent.Client, logger *zap.SugaredLogger
 		client: client,
 		logger: logger,
 	}
+}
+
+// SetIncidentService 注入事件领域服务，由 bootstrap 在 IncidentService 构造完成后调用。
+func (h *IncidentServiceTaskHandler) SetIncidentService(svc IncidentDomainServiceInterface) {
+	h.incidentService = svc
 }
 
 // GetTaskType 返回任务类型
@@ -82,26 +96,27 @@ func (h *IncidentServiceTaskHandler) createIncident(ctx context.Context, variabl
 		return nil, fmt.Errorf("事件标题不能为空")
 	}
 
-	incident, err := h.client.Incident.Create().
-		SetTitle(title).
-		SetDescription(description).
-		SetType(incidentType).
-		SetPriority(priority).
-		SetSeverity(severity).
-		SetStatus(common.IncidentStatusNew).
-		SetReporterID(GetIntFromVars(variables, "reporter_id")).
-		SetTenantID(tenantID).
-		Save(ctx)
+	if h.incidentService == nil {
+		return nil, fmt.Errorf("incident service 未注入，无法创建事件")
+	}
+	reporterID := GetIntFromVars(variables, "reporter_id")
+	resp, err := h.incidentService.CreateIncident(ctx, &dto.CreateIncidentRequest{
+		Title:       title,
+		Description: description,
+		Type:        incidentType,
+		Priority:    priority,
+		Severity:    severity,
+	}, tenantID, reporterID)
 	if err != nil {
 		return nil, fmt.Errorf("创建事件失败: %w", err)
 	}
 
-	h.logger.Infow("Incident created via BPMN", "incident_id", incident.ID, "title", title)
+	h.logger.Infow("Incident created via BPMN", "incident_id", resp.ID, "title", title)
 
 	return &dto.ServiceTaskResult{
 		Success:    true,
-		Message:    fmt.Sprintf("事件 %d 已创建", incident.ID),
-		OutputVars: map[string]interface{}{"incident_id": incident.ID, "incident_number": incident.IncidentNumber},
+		Message:    fmt.Sprintf("事件 %d 已创建", resp.ID),
+		OutputVars: map[string]interface{}{"incident_id": resp.ID, "incident_number": resp.IncidentNumber},
 	}, nil
 }
 
@@ -142,16 +157,14 @@ func (h *IncidentServiceTaskHandler) assignIncident(ctx context.Context, variabl
 		return nil, err
 	}
 
-	updated, err := h.client.Incident.Update().
-		Where(incident.ID(incidentID), incident.TenantID(tenantID)).
-		SetAssigneeID(assigneeID).
-		SetStatus(common.IncidentStatusAssigned).
-		Save(ctx)
-	if err != nil {
+	if h.incidentService == nil {
+		return nil, fmt.Errorf("incident service 未注入，无法分配事件")
+	}
+	if _, err := h.incidentService.AssignIncident(ctx, incidentID, assigneeID, tenantID); err != nil {
 		return nil, fmt.Errorf("分配事件失败: %w", err)
 	}
-	if updated == 0 {
-		return nil, fmt.Errorf("事件 %d 不存在或不属于当前租户", incidentID)
+	if _, err := h.incidentService.UpdateStatus(ctx, incidentID, common.IncidentStatusAssigned, tenantID); err != nil {
+		return nil, fmt.Errorf("更新事件状态失败: %w", err)
 	}
 
 	h.logger.Infow("Incident assigned via BPMN", "incident_id", incidentID, "assignee_id", assigneeID)

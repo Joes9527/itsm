@@ -464,6 +464,11 @@ func NewApplication() *Application {
 		if h, ok := cpe.CallbackRegistry().GetHandler("ticket_service_handler").(*bpmn.TicketServiceTaskHandler); ok {
 			h.SetTicketService(ticketService)
 		}
+		// 同上，事件 ServiceTask 的 create/assign/status 写入也从裸 Ent 操作收回到
+		// IncidentService，不再绕过领域校验（如报告人/处理人必须是租户内的活跃用户）。
+		if h, ok := cpe.CallbackRegistry().GetHandler("incident_service_handler").(*bpmn.IncidentServiceTaskHandler); ok {
+			h.SetIncidentService(incidentService)
+		}
 	}
 
 	rootCauseAnalysisService := service.NewRootCauseAnalysisService(client)
