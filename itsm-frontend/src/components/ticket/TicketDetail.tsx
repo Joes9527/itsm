@@ -369,7 +369,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
       setUpdating(true);
       // 状态转换验证
       if (values.status && ticket?.status && values.status !== ticket.status) {
-        if (!isValidTransition(ticket.status as any, values.status as any)) {
+        if (!isValidTransition(ticket.status as TicketStatus, values.status as TicketStatus)) {
           antMessage.error(
             `不允许从 "${getTicketStatusLabel(ticket.status)}" 转换到 "${getTicketStatusLabel(values.status)}"`
           );
@@ -500,7 +500,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
     );
   }
 
-  const isTicketFinal = isFinalStatus(ticket.status as any);
+  const isTicketFinal = isFinalStatus(ticket.status as TicketStatus);
 
   return (
     <div className="w-full space-y-4 pt-4 text-slate-800 font-sans antialiased">
@@ -735,12 +735,12 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
                   category: suggestion.category,
                   priority: toTicketPriority(suggestion.priority),
                   version: ticket.version,
-                } as any);
+                });
                 antMessage.success(
                   `已采纳AI建议：分类 ${suggestion.category}，优先级 ${suggestion.priority}`,
                 );
-                if (updated && (updated as any).id) {
-                  setTicket(prev => (prev ? { ...prev, ...(updated as Partial<Ticket>) } : prev));
+                if (updated?.id) {
+                  setTicket(prev => (prev ? { ...prev, ...updated } : prev));
                 }
                 await fetchTicket();
               } catch (err) {
