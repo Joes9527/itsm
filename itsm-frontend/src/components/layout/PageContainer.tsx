@@ -88,7 +88,15 @@ export const PageContainer: React.FC<EnterprisePageTemplateProps> = ({
                 返回
               </Button>
             )}
-            <span className="text-lg font-semibold text-gray-900">{title}</span>
+            <span
+              style={{
+                fontSize: 'var(--font-size-lg)',
+                fontWeight: 'var(--font-weight-semibold)',
+                color: 'var(--color-text-primary)',
+              }}
+            >
+              {title}
+            </span>
           </div>
         </Col>
         <Col xs={24} sm={12} md={8}>
@@ -108,7 +116,7 @@ export const PageContainer: React.FC<EnterprisePageTemplateProps> = ({
         style={{
           marginBottom: 24,
           paddingBottom: 16,
-          borderBottom: '1px solid #e5e7eb',
+          borderBottom: '1px solid var(--color-border-primary)',
         }}
       >
         {/* 面包屑导航 */}
@@ -138,8 +146,22 @@ export const PageContainer: React.FC<EnterprisePageTemplateProps> = ({
 
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-2xl font-semibold text-gray-900 mb-1">{title}</h1>
-            {description && <p className="text-sm text-gray-500 mt-1">{description}</p>}
+            <h1
+              style={{
+                fontSize: 'var(--font-size-3xl)',
+                fontWeight: 'var(--font-weight-semibold)',
+                lineHeight: 'var(--line-height-tight)',
+                color: 'var(--color-text-primary)',
+                marginBottom: 'var(--spacing-xs)',
+              }}
+            >
+              {title}
+            </h1>
+            {description && (
+              <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
+                {description}
+              </p>
+            )}
           </div>
           {extra && <div>{extra}</div>}
         </div>
@@ -183,11 +205,18 @@ export const EnterpriseStatCard: React.FC<{
   <Card className={`enterprise-stat-card ${className}`}>
     <div className="text-center">
       {prefix && <div className="mb-2">{prefix}</div>}
-      <div className="text-3xl font-bold text-gray-900" style={valueStyle}>
+      <div
+        style={{
+          fontSize: 'var(--font-size-4xl)',
+          fontWeight: 'var(--font-weight-bold)',
+          color: 'var(--color-text-primary)',
+          ...valueStyle,
+        }}
+      >
         {value}
-        {suffix && <span className="text-lg text-gray-500 ml-1">{suffix}</span>}
+        {suffix && <span style={{ fontSize: 'var(--font-size-lg)', color: 'var(--color-text-secondary)', marginLeft: '4px' }}>{suffix}</span>}
       </div>
-      <div className="text-sm text-gray-500 mt-2">{title}</div>
+      <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', marginTop: '8px' }}>{title}</div>
     </div>
   </Card>
 );

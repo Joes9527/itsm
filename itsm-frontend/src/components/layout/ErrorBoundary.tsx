@@ -126,7 +126,7 @@ class ErrorBoundary extends Component<Props, State> {
                   padding: '16px',
                   borderRadius: '8px',
                   fontFamily: 'monospace',
-                  fontSize: '12px',
+                  fontSize: 'var(--font-size-xs)',
                   overflow: 'auto',
                   maxHeight: '200px',
                 }}
@@ -153,7 +153,7 @@ class ErrorBoundary extends Component<Props, State> {
                   borderRadius: '6px',
                 }}
               >
-                <Text type="secondary" style={{ fontSize: '12px' }}>
+                <Text type="secondary" style={{ fontSize: 'var(--font-size-sm)' }}>
                   If the problem persists, please contact technical support or try refreshing the
                   page.
                 </Text>

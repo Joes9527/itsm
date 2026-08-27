@@ -185,7 +185,7 @@ export const getAntdTheme = (isDark: boolean) => {
 
       // 字重
       fontWeight: 400,
-      fontWeightStrong: 600,
+      fontWeightStrong: 700,
 
       // 间距
       padding: spacingValue(spacing[4]),
@@ -337,17 +337,24 @@ export const generateCSSVariables = (isDark: boolean) => {
     '--box-shadow-xl': boxShadow.xl,
 
     // 字体
+    '--font-family-base': '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", "Helvetica", "Arial", sans-serif',
+    '--font-family-sans': 'var(--font-family-base)',
     '--font-size-xs': fontSize.xs,
     '--font-size-sm': fontSize.sm,
     '--font-size-base': fontSize.base,
     '--font-size-lg': fontSize.lg,
     '--font-size-xl': fontSize.xl,
     '--font-size-2xl': fontSize['2xl'],
+    '--font-size-3xl': fontSize['3xl'],
+    '--font-size-4xl': fontSize['4xl'],
+    '--font-size-5xl': fontSize['5xl'],
 
     // 行高
     '--line-height-tight': lineHeight.tight,
+    '--line-height-snug': lineHeight.snug,
     '--line-height-normal': lineHeight.normal,
     '--line-height-relaxed': lineHeight.relaxed,
+    '--line-height-loose': lineHeight.loose,
 
     // 字重
     '--font-weight-normal': fontWeight.normal,

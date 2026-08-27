@@ -162,8 +162,8 @@ export const TicketTable: React.FC<TicketTableProps> = React.memo(
         key: 'title',
         render: (text: string, record: Ticket) => (
           <div>
-            <div className="font-medium">{text}</div>
-            <div className="text-sm text-gray-500">
+            <div style={{ fontSize: 'var(--font-size-base)', fontWeight: 'var(--font-weight-medium)' }}>{text}</div>
+            <div className="text-secondary" style={{ fontSize: 'var(--font-size-sm)' }}>
               #{record.id} • {record.category || '未分类'}
             </div>
           </div>
