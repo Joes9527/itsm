@@ -30,7 +30,7 @@ export function WorkItemShell({
   }
 
   return (
-    <WorkItemProvider value={{ workItem, sla, onActionDispatch }}>
+    <WorkItemProvider value={{ workItem, actions, sla, onActionDispatch }}>
       <Space orientation="vertical" style={{ width: '100%' }} size="large">
         <Card>
           <Descriptions column={3} title={`${workItem.number} · ${workItem.title}`}>
