@@ -36,7 +36,6 @@ import (
 	"itsm-backend/handlers/change"
 	"itsm-backend/handlers/cmdb"
 	domainCommon "itsm-backend/handlers/common"
-	"itsm-backend/handlers/incident"
 	"itsm-backend/handlers/knowledge"
 	"itsm-backend/handlers/known_error"
 	"itsm-backend/handlers/problem"
@@ -571,14 +570,12 @@ func NewApplication() *Application {
 	// Domain: Service Request (DDD)
 	srRepo := service_request.NewEntRepository(client)
 	chainResolver := service.NewApprovalChainResolver(client, sugar)
-	// incidentBridge 将 handlers/incident.Service 适配为 service_request.IncidentCreator
+	// incidentBridge 把 service.IncidentService（legacy 横切分层，实际接路由的 Incident 实现，
+	// 见 router.go 的 /incidents 分组）适配为 service_request.IncidentCreator 这个最小接口，
+	// 让 Service.Create 在 isIncidentCatalog 分流时不用直接依赖 IncidentService 的完整签名。
 	incidentBridge := &srIncidentBridge{svc: incidentService}
 	srService := service_request.NewService(srRepo, scRepo, cmdbRepo, client, sugar, ticketService, chainResolver, incidentBridge)
 	srHandler := service_request.NewHandler(srService)
-
-	// Domain: Incident (DDD)
-	// Note: Incident handler has been removed from router config
-	_ = incident.NewEntRepository // Prevent unused import warning
 
 	// Domain: Problem (DDD)
 	problemRepo := problem.NewEntRepository(client)

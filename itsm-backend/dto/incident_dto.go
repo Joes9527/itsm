@@ -109,6 +109,7 @@ type IncidentResponse struct {
 	Impact              string                 `json:"impact" example:"medium"`
 	Urgency             string                 `json:"urgency" example:"medium"`
 	IncidentNumber      string                 `json:"incidentNumber" example:"INC-000001"`
+	WorkItemID          *int                   `json:"workItemId,omitempty" example:"1"`
 	ReporterID          int                    `json:"reporterId" example:"1"`
 	AssigneeID          *int                   `json:"assigneeId" example:"2"`
 	ConfigurationItemID *int                   `json:"configurationItemId,omitempty" example:"3"`
