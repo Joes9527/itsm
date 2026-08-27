@@ -580,6 +580,34 @@ func (s *IncidentService) AssignIncident(ctx context.Context, id int, assigneeID
 	return s.toIncidentResponse(updatedIncident), nil
 }
 
+// UpdateStatus 更新事件状态（租户校验 + 乐观锁版本递增 + 审计事件），不做状态机合法性
+// 校验——Incident 完整状态机是 Wave 2 迁移的范围，这里只是把 BPMN handler 现有的一次
+// "assigned" 状态写入从裸 Ent 操作收回到领域服务里，不新增业务规则。
+func (s *IncidentService) UpdateStatus(ctx context.Context, id int, status string, tenantID int) (*dto.IncidentResponse, error) {
+	updated, err := s.client.Incident.UpdateOneID(id).
+		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
+		SetStatus(status).
+		SetUpdatedAt(time.Now()).
+		AddVersion(1).
+		Save(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("incident not found")
+		}
+		return nil, fmt.Errorf("failed to update incident status: %w", err)
+	}
+	s.CreateIncidentEvent(ctx, &dto.CreateIncidentEventRequest{
+		IncidentID:  id,
+		EventType:   "status_changed",
+		EventName:   "状态变更",
+		Description: fmt.Sprintf("事件状态变更为 %s", status),
+		Status:      "active",
+		Severity:    "info",
+		Source:      "system",
+	}, tenantID)
+	return s.toIncidentResponse(updated), nil
+}
+
 func (s *IncidentService) validateIncidentAssignee(ctx context.Context, assigneeID, tenantID int) error {
 	if assigneeID <= 0 {
 		return fmt.Errorf("invalid assignee id")

@@ -41,6 +41,8 @@ type ProcessBinding struct {
 	Scenario string `json:"scenario,omitempty"`
 	// 流程分类: operations, rd, finance, hr
 	Category string `json:"category,omitempty"`
+	// TicketCategory ID，可选——比 category 字符串更精确的分类匹配条件，后续 ProcessBindingService.FindBestBinding 可以按它精确匹配
+	CategoryID int `json:"category_id,omitempty"`
 	// 匹配条件JSON
 	Conditions map[string]interface{} `json:"conditions,omitempty"`
 	// 审批链ID
@@ -91,7 +93,7 @@ func (*ProcessBinding) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case processbinding.FieldIsDefault, processbinding.FieldIsActive:
 			values[i] = new(sql.NullBool)
-		case processbinding.FieldID, processbinding.FieldProcessVersion, processbinding.FieldPriority, processbinding.FieldDepartmentID, processbinding.FieldTeamID, processbinding.FieldTenantID:
+		case processbinding.FieldID, processbinding.FieldProcessVersion, processbinding.FieldPriority, processbinding.FieldDepartmentID, processbinding.FieldTeamID, processbinding.FieldCategoryID, processbinding.FieldTenantID:
 			values[i] = new(sql.NullInt64)
 		case processbinding.FieldBusinessType, processbinding.FieldBusinessSubType, processbinding.FieldProcessDefinitionKey, processbinding.FieldScenario, processbinding.FieldCategory, processbinding.FieldApprovalChainID, processbinding.FieldSLAPolicyID:
 			values[i] = new(sql.NullString)
@@ -185,6 +187,12 @@ func (_m *ProcessBinding) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field category", values[i])
 			} else if value.Valid {
 				_m.Category = value.String
+			}
+		case processbinding.FieldCategoryID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field category_id", values[i])
+			} else if value.Valid {
+				_m.CategoryID = int(value.Int64)
 			}
 		case processbinding.FieldConditions:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -312,6 +320,9 @@ func (_m *ProcessBinding) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("category=")
 	builder.WriteString(_m.Category)
+	builder.WriteString(", ")
+	builder.WriteString("category_id=")
+	builder.WriteString(fmt.Sprintf("%v", _m.CategoryID))
 	builder.WriteString(", ")
 	builder.WriteString("conditions=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Conditions))

@@ -33,10 +33,21 @@ func NewTicketWorkflowService(client *ent.Client, logger *zap.SugaredLogger) *Ti
 		logger: logger,
 	}
 	if client != nil {
-		// P0-1：业务审批统一桥接到 BPMN 任务，避免流程实例悬挂
-		svc.approvalBridge = NewBPMNApprovalBridge(client, logger)
+		// P0-1：业务审批统一桥接到 BPMN 任务，避免流程实例悬挂。
+		// 这里先用一个本地引擎兜底，bootstrap 会通过 SetProcessEngine 换成那个
+		// 已注入 CallbackRegistry 依赖的全局引擎实例。
+		svc.approvalBridge = NewBPMNApprovalBridge(client, logger, nil)
 	}
 	return svc
+}
+
+// SetProcessEngine 注入全局流程引擎（已完成 CallbackRegistry 依赖装配的那一个），
+// 由 bootstrap 调用。不注入时审批桥接仍能完成 BPMN 任务，但 UserTask 上声明的
+// ServiceTask 回调（工单状态更新等业务副作用）会因为 registry 未装配而静默失败。
+func (s *TicketWorkflowService) SetProcessEngine(engine ProcessEngine) {
+	if s.approvalBridge != nil {
+		s.approvalBridge.SetProcessEngine(engine)
+	}
 }
 
 // SetConnectorManager 设置连接器管理器，用于飞书、钉钉、企业微信等外部渠道通知。

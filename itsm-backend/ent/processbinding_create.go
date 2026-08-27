@@ -159,6 +159,20 @@ func (_c *ProcessBindingCreate) SetNillableCategory(v *string) *ProcessBindingCr
 	return _c
 }
 
+// SetCategoryID sets the "category_id" field.
+func (_c *ProcessBindingCreate) SetCategoryID(v int) *ProcessBindingCreate {
+	_c.mutation.SetCategoryID(v)
+	return _c
+}
+
+// SetNillableCategoryID sets the "category_id" field if the given value is not nil.
+func (_c *ProcessBindingCreate) SetNillableCategoryID(v *int) *ProcessBindingCreate {
+	if v != nil {
+		_c.SetCategoryID(*v)
+	}
+	return _c
+}
+
 // SetConditions sets the "conditions" field.
 func (_c *ProcessBindingCreate) SetConditions(v map[string]interface{}) *ProcessBindingCreate {
 	_c.mutation.SetConditions(v)
@@ -458,6 +472,10 @@ func (_c *ProcessBindingCreate) createSpec() (*ProcessBinding, *sqlgraph.CreateS
 	if value, ok := _c.mutation.Category(); ok {
 		_spec.SetField(processbinding.FieldCategory, field.TypeString, value)
 		_node.Category = value
+	}
+	if value, ok := _c.mutation.CategoryID(); ok {
+		_spec.SetField(processbinding.FieldCategoryID, field.TypeInt, value)
+		_node.CategoryID = value
 	}
 	if value, ok := _c.mutation.Conditions(); ok {
 		_spec.SetField(processbinding.FieldConditions, field.TypeJSON, value)

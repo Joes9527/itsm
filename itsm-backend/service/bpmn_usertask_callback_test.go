@@ -69,7 +69,7 @@ func TestUserTaskWithServiceTaskTypeMetadataTriggersCallback(t *testing.T) {
 		SetTenantID(tenantID).
 		SaveX(ctx)
 
-	instance, err := engine.StartProcess(ctx, "change_normal_flow", "change:callback-1", map[string]interface{}{
+	instance, err := engine.StartProcess(ctx, "change_normal_flow", "change:callback-1", "", 0, map[string]interface{}{
 		"approval_required": true,
 		"change_id":         ch.ID,
 	})
@@ -119,7 +119,7 @@ func TestUserTaskMetadataPropagatedIntoTaskVariables(t *testing.T) {
 		SetTenantID(tenantID).
 		SaveX(ctx)
 
-	instance, err := engine.StartProcess(ctx, "change_normal_flow", "change:callback-2", map[string]interface{}{
+	instance, err := engine.StartProcess(ctx, "change_normal_flow", "change:callback-2", "", 0, map[string]interface{}{
 		"approval_required": true,
 		"change_id":         ch.ID,
 	})
@@ -133,7 +133,7 @@ func TestUserTaskMetadataPropagatedIntoTaskVariables(t *testing.T) {
 
 	// 反面用例：service_request_flow 的用户任务没有声明 service_task_type metadata，
 	// 不应该出现这两个 key（否则回调会对无关流程无条件触发）。
-	srInstance, err := engine.StartProcess(ctx, "service_request_flow", "service_request:callback-3", map[string]interface{}{
+	srInstance, err := engine.StartProcess(ctx, "service_request_flow", "service_request:callback-3", "", 0, map[string]interface{}{
 		"approval_required": true,
 	})
 	require.NoError(t, err)

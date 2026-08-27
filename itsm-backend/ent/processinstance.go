@@ -23,6 +23,10 @@ type ProcessInstance struct {
 	ProcessInstanceID string `json:"process_instance_id,omitempty"`
 	// 业务键，关联业务实体
 	BusinessKey string `json:"business_key,omitempty"`
+	// 结构化业务类型。Wave 1 写入的是 dto.BusinessType 取值（ticket/change/incident/service_request/problem/release，见 dto/bpmn_process_trigger_dto.go），即迁移前的词表；不是 recordClass 词表——两者有两个值对不上：change vs change_request、ticket vs generic。收敛到 recordClass（generic/service_request_item/incident/problem/change_request/catalog_task）由 Wave 2 各域迁移任务负责，在对应域拥有 WorkItem 之后进行。与 business_key 由同一次 TriggerProcess 调用原子写入，不从 variables JSON 里现取
+	BusinessType string `json:"business_type,omitempty"`
+	// 结构化业务主键（迁移完成前是各专业域自己的表主键，迁移完成后是 WorkItem ID/tickets.id），与 business_type 成对使用
+	BusinessID int `json:"business_id,omitempty"`
 	// 流程定义Key
 	ProcessDefinitionKey string `json:"process_definition_key,omitempty"`
 	// 流程定义ID
@@ -125,9 +129,9 @@ func (*ProcessInstance) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case processinstance.FieldVariables, processinstance.FieldStateSnapshot:
 			values[i] = new([]byte)
-		case processinstance.FieldID, processinstance.FieldProcessDefinitionID, processinstance.FieldTenantID, processinstance.FieldVersion:
+		case processinstance.FieldID, processinstance.FieldBusinessID, processinstance.FieldProcessDefinitionID, processinstance.FieldTenantID, processinstance.FieldVersion:
 			values[i] = new(sql.NullInt64)
-		case processinstance.FieldProcessInstanceID, processinstance.FieldBusinessKey, processinstance.FieldProcessDefinitionKey, processinstance.FieldStatus, processinstance.FieldCurrentActivityID, processinstance.FieldCurrentActivityName, processinstance.FieldSuspendedReason, processinstance.FieldInitiator, processinstance.FieldParentProcessInstanceID, processinstance.FieldRootProcessInstanceID:
+		case processinstance.FieldProcessInstanceID, processinstance.FieldBusinessKey, processinstance.FieldBusinessType, processinstance.FieldProcessDefinitionKey, processinstance.FieldStatus, processinstance.FieldCurrentActivityID, processinstance.FieldCurrentActivityName, processinstance.FieldSuspendedReason, processinstance.FieldInitiator, processinstance.FieldParentProcessInstanceID, processinstance.FieldRootProcessInstanceID:
 			values[i] = new(sql.NullString)
 		case processinstance.FieldStartTime, processinstance.FieldEndTime, processinstance.FieldSuspendedTime, processinstance.FieldCreatedAt, processinstance.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -163,6 +167,18 @@ func (_m *ProcessInstance) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field business_key", values[i])
 			} else if value.Valid {
 				_m.BusinessKey = value.String
+			}
+		case processinstance.FieldBusinessType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field business_type", values[i])
+			} else if value.Valid {
+				_m.BusinessType = value.String
+			}
+		case processinstance.FieldBusinessID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field business_id", values[i])
+			} else if value.Valid {
+				_m.BusinessID = int(value.Int64)
 			}
 		case processinstance.FieldProcessDefinitionKey:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -337,6 +353,12 @@ func (_m *ProcessInstance) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("business_key=")
 	builder.WriteString(_m.BusinessKey)
+	builder.WriteString(", ")
+	builder.WriteString("business_type=")
+	builder.WriteString(_m.BusinessType)
+	builder.WriteString(", ")
+	builder.WriteString("business_id=")
+	builder.WriteString(fmt.Sprintf("%v", _m.BusinessID))
 	builder.WriteString(", ")
 	builder.WriteString("process_definition_key=")
 	builder.WriteString(_m.ProcessDefinitionKey)

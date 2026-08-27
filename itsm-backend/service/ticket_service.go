@@ -1627,6 +1627,15 @@ func (s *TicketService) UpdateTicketStatus(ctx context.Context, ticketID int, st
 	return updated, nil
 }
 
+// UpdateTicketStatusForWorkflow 是给 BPMN ServiceTask handler 用的窄接口适配：
+// handler 不需要返回的领域 Ticket 对象，也不能 import service 包（会形成 service ->
+// service/bpmn -> service 的循环依赖），所以这里只暴露一个返回 error 的签名，供
+// service/bpmn 包本地声明的接口去匹配。
+func (s *TicketService) UpdateTicketStatusForWorkflow(ctx context.Context, ticketID int, status string, tenantID int, operatorID int) error {
+	_, err := s.UpdateTicketStatus(ctx, ticketID, status, tenantID, operatorID)
+	return err
+}
+
 // TicketSLAInfo 工单 SLA 信息
 type TicketSLAInfo struct {
 	TicketID                int        `json:"ticketId"`

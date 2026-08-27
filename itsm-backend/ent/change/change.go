@@ -34,6 +34,8 @@ const (
 	FieldAssigneeID = "assignee_id"
 	// FieldCreatedBy holds the string denoting the created_by field in the database.
 	FieldCreatedBy = "created_by"
+	// FieldWorkItemID holds the string denoting the work_item_id field in the database.
+	FieldWorkItemID = "work_item_id"
 	// FieldTenantID holds the string denoting the tenant_id field in the database.
 	FieldTenantID = "tenant_id"
 	// FieldPlannedStartDate holds the string denoting the planned_start_date field in the database.
@@ -89,6 +91,7 @@ var Columns = []string{
 	FieldRiskLevel,
 	FieldAssigneeID,
 	FieldCreatedBy,
+	FieldWorkItemID,
 	FieldTenantID,
 	FieldPlannedStartDate,
 	FieldPlannedEndDate,
@@ -210,6 +213,11 @@ func ByAssigneeID(opts ...sql.OrderTermOption) OrderOption {
 // ByCreatedBy orders the results by the created_by field.
 func ByCreatedBy(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCreatedBy, opts...).ToFunc()
+}
+
+// ByWorkItemID orders the results by the work_item_id field.
+func ByWorkItemID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWorkItemID, opts...).ToFunc()
 }
 
 // ByTenantID orders the results by the tenant_id field.

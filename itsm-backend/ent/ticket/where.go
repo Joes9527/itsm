@@ -80,6 +80,21 @@ func Source(v string) predicate.Ticket {
 	return predicate.Ticket(sql.FieldEQ(FieldSource, v))
 }
 
+// RecordClass applies equality check predicate on the "record_class" field. It's identical to RecordClassEQ.
+func RecordClass(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldRecordClass, v))
+}
+
+// OpenedByID applies equality check predicate on the "opened_by_id" field. It's identical to OpenedByIDEQ.
+func OpenedByID(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldOpenedByID, v))
+}
+
+// AssignmentGroupID applies equality check predicate on the "assignment_group_id" field. It's identical to AssignmentGroupIDEQ.
+func AssignmentGroupID(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldAssignmentGroupID, v))
+}
+
 // Priority applies equality check predicate on the "priority" field. It's identical to PriorityEQ.
 func Priority(v string) predicate.Ticket {
 	return predicate.Ticket(sql.FieldEQ(FieldPriority, v))
@@ -583,6 +598,171 @@ func SourceEqualFold(v string) predicate.Ticket {
 // SourceContainsFold applies the ContainsFold predicate on the "source" field.
 func SourceContainsFold(v string) predicate.Ticket {
 	return predicate.Ticket(sql.FieldContainsFold(FieldSource, v))
+}
+
+// RecordClassEQ applies the EQ predicate on the "record_class" field.
+func RecordClassEQ(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldRecordClass, v))
+}
+
+// RecordClassNEQ applies the NEQ predicate on the "record_class" field.
+func RecordClassNEQ(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNEQ(FieldRecordClass, v))
+}
+
+// RecordClassIn applies the In predicate on the "record_class" field.
+func RecordClassIn(vs ...string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldIn(FieldRecordClass, vs...))
+}
+
+// RecordClassNotIn applies the NotIn predicate on the "record_class" field.
+func RecordClassNotIn(vs ...string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotIn(FieldRecordClass, vs...))
+}
+
+// RecordClassGT applies the GT predicate on the "record_class" field.
+func RecordClassGT(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGT(FieldRecordClass, v))
+}
+
+// RecordClassGTE applies the GTE predicate on the "record_class" field.
+func RecordClassGTE(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGTE(FieldRecordClass, v))
+}
+
+// RecordClassLT applies the LT predicate on the "record_class" field.
+func RecordClassLT(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLT(FieldRecordClass, v))
+}
+
+// RecordClassLTE applies the LTE predicate on the "record_class" field.
+func RecordClassLTE(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLTE(FieldRecordClass, v))
+}
+
+// RecordClassContains applies the Contains predicate on the "record_class" field.
+func RecordClassContains(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldContains(FieldRecordClass, v))
+}
+
+// RecordClassHasPrefix applies the HasPrefix predicate on the "record_class" field.
+func RecordClassHasPrefix(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldHasPrefix(FieldRecordClass, v))
+}
+
+// RecordClassHasSuffix applies the HasSuffix predicate on the "record_class" field.
+func RecordClassHasSuffix(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldHasSuffix(FieldRecordClass, v))
+}
+
+// RecordClassEqualFold applies the EqualFold predicate on the "record_class" field.
+func RecordClassEqualFold(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEqualFold(FieldRecordClass, v))
+}
+
+// RecordClassContainsFold applies the ContainsFold predicate on the "record_class" field.
+func RecordClassContainsFold(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldContainsFold(FieldRecordClass, v))
+}
+
+// OpenedByIDEQ applies the EQ predicate on the "opened_by_id" field.
+func OpenedByIDEQ(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldOpenedByID, v))
+}
+
+// OpenedByIDNEQ applies the NEQ predicate on the "opened_by_id" field.
+func OpenedByIDNEQ(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNEQ(FieldOpenedByID, v))
+}
+
+// OpenedByIDIn applies the In predicate on the "opened_by_id" field.
+func OpenedByIDIn(vs ...int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldIn(FieldOpenedByID, vs...))
+}
+
+// OpenedByIDNotIn applies the NotIn predicate on the "opened_by_id" field.
+func OpenedByIDNotIn(vs ...int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotIn(FieldOpenedByID, vs...))
+}
+
+// OpenedByIDGT applies the GT predicate on the "opened_by_id" field.
+func OpenedByIDGT(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGT(FieldOpenedByID, v))
+}
+
+// OpenedByIDGTE applies the GTE predicate on the "opened_by_id" field.
+func OpenedByIDGTE(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGTE(FieldOpenedByID, v))
+}
+
+// OpenedByIDLT applies the LT predicate on the "opened_by_id" field.
+func OpenedByIDLT(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLT(FieldOpenedByID, v))
+}
+
+// OpenedByIDLTE applies the LTE predicate on the "opened_by_id" field.
+func OpenedByIDLTE(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLTE(FieldOpenedByID, v))
+}
+
+// OpenedByIDIsNil applies the IsNil predicate on the "opened_by_id" field.
+func OpenedByIDIsNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldIsNull(FieldOpenedByID))
+}
+
+// OpenedByIDNotNil applies the NotNil predicate on the "opened_by_id" field.
+func OpenedByIDNotNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotNull(FieldOpenedByID))
+}
+
+// AssignmentGroupIDEQ applies the EQ predicate on the "assignment_group_id" field.
+func AssignmentGroupIDEQ(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldAssignmentGroupID, v))
+}
+
+// AssignmentGroupIDNEQ applies the NEQ predicate on the "assignment_group_id" field.
+func AssignmentGroupIDNEQ(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNEQ(FieldAssignmentGroupID, v))
+}
+
+// AssignmentGroupIDIn applies the In predicate on the "assignment_group_id" field.
+func AssignmentGroupIDIn(vs ...int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldIn(FieldAssignmentGroupID, vs...))
+}
+
+// AssignmentGroupIDNotIn applies the NotIn predicate on the "assignment_group_id" field.
+func AssignmentGroupIDNotIn(vs ...int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotIn(FieldAssignmentGroupID, vs...))
+}
+
+// AssignmentGroupIDGT applies the GT predicate on the "assignment_group_id" field.
+func AssignmentGroupIDGT(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGT(FieldAssignmentGroupID, v))
+}
+
+// AssignmentGroupIDGTE applies the GTE predicate on the "assignment_group_id" field.
+func AssignmentGroupIDGTE(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGTE(FieldAssignmentGroupID, v))
+}
+
+// AssignmentGroupIDLT applies the LT predicate on the "assignment_group_id" field.
+func AssignmentGroupIDLT(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLT(FieldAssignmentGroupID, v))
+}
+
+// AssignmentGroupIDLTE applies the LTE predicate on the "assignment_group_id" field.
+func AssignmentGroupIDLTE(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLTE(FieldAssignmentGroupID, v))
+}
+
+// AssignmentGroupIDIsNil applies the IsNil predicate on the "assignment_group_id" field.
+func AssignmentGroupIDIsNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldIsNull(FieldAssignmentGroupID))
+}
+
+// AssignmentGroupIDNotNil applies the NotNil predicate on the "assignment_group_id" field.
+func AssignmentGroupIDNotNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotNull(FieldAssignmentGroupID))
 }
 
 // PriorityEQ applies the EQ predicate on the "priority" field.

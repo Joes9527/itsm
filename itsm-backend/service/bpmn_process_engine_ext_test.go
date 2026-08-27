@@ -761,7 +761,8 @@ func createProcessFixture(t *testing.T, engine *CustomProcessEngine, tenantID in
 		SetProcessDefinitionKey(def.Key).
 		SetProcessDefinitionID(def.ID).
 		SetStatus("running").
-		SetVariables(map[string]interface{}{"business_type": "change", "business_id": "CHG-" + keySuffix}).
+		SetBusinessType("change").
+		SetBusinessID(1).
 		SetTenantID(tenantID).
 		Save(ctx)
 	require.NoError(t, err)
@@ -805,7 +806,7 @@ func TestRecordApprovalDecision_PersistsApproveReject(t *testing.T) {
 	assert.Equal(t, "approved", stored[0].Decision)
 	assert.Equal(t, "lgtm", stored[0].Comment)
 	assert.Equal(t, "change", stored[0].BusinessType)
-	assert.Equal(t, "CHG-approval1", stored[0].BusinessID)
+	assert.Equal(t, "1", stored[0].BusinessID)
 	assert.Equal(t, actorID, stored[0].ActorID)
 }
 
@@ -965,6 +966,13 @@ func TestHandleElement_ServiceTask_DispatchesByMetaDataOverAttributeGuessing(t *
 		SequenceFlows: []*BPMNSequenceFlow{
 			{ID: "Flow_1", SourceRef: "Activity_UpdateStatus", TargetRef: "End_1"},
 		},
+	}
+
+	// TicketServiceTaskHandler.updateTicketStatus 现在委托给注入的 TicketService（Task 5：
+	// 不再绕过领域服务直接写 Ent），跟生产环境 bootstrap 里的 SetTicketService 装配是同一个模式。
+	ticketSvc := NewTicketServiceForTest(engine.client, engine.logger)
+	if h, ok := engine.callbackRegistry.GetHandler("ticket_service_handler").(*bpmn.TicketServiceTaskHandler); ok {
+		h.SetTicketService(ticketSvc)
 	}
 
 	err = engine.handleElement(ctx, instance, process, "Activity_UpdateStatus")

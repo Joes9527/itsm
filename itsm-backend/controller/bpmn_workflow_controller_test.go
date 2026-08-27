@@ -137,7 +137,7 @@ func (e *fakeProcessEngine) ProcessDefinitionService() service.ProcessDefinition
 func (e *fakeProcessEngine) ProcessInstanceService() service.ProcessInstanceService { return nil }
 func (e *fakeProcessEngine) TaskService() service.TaskService                       { return e.taskSvc }
 
-func (e *fakeProcessEngine) StartProcess(ctx context.Context, key, biz string, vars map[string]interface{}) (*ent.ProcessInstance, error) {
+func (e *fakeProcessEngine) StartProcess(ctx context.Context, key, biz string, businessType string, businessID int, vars map[string]interface{}) (*ent.ProcessInstance, error) {
 	return nil, nil
 }
 

@@ -6,6 +6,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
+	"entgo.io/ent/schema/index"
 )
 
 // Problem holds the schema definition for the Problem entity.
@@ -49,6 +50,10 @@ func (Problem) Fields() []ent.Field {
 		field.Int("created_by").
 			Comment("创建人ID").
 			Positive(),
+		field.Int("work_item_id").
+			Comment("关联的 WorkItem（tickets.id），唯一，必填——迁移完成前允许为空").
+			Optional().
+			Unique(),
 		field.Int("tenant_id").
 			Comment("租户ID").
 			Positive(),
@@ -86,5 +91,12 @@ func (Problem) Edges() []ent.Edge {
 		// 与变更的关联
 		edge.To("changes", Change.Type).
 			Comment("关联的变更"),
+	}
+}
+
+// Indexes of the Problem.
+func (Problem) Indexes() []ent.Index {
+	return []ent.Index{
+		index.Fields("work_item_id"),
 	}
 }

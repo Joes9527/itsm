@@ -29,6 +29,12 @@ type Ticket struct {
 	Type string `json:"type,omitempty"`
 	// 工单来源：manual=手动创建，service_catalog=服务目录申请
 	Source string `json:"source,omitempty"`
+	// WorkItem 记录类型：generic/service_request_item/incident/problem/change_request/catalog_task；创建后不可变，由领域服务在事务内校验，不在 schema 层强制
+	RecordClass string `json:"record_class,omitempty"`
+	// 实际录入/触发者ID（区别于 requester_id 服务接受者）
+	OpenedByID int `json:"opened_by_id,omitempty"`
+	// 当前处理组ID
+	AssignmentGroupID int `json:"assignment_group_id,omitempty"`
 	// 优先级
 	Priority string `json:"priority,omitempty"`
 	// 工单编号
@@ -292,9 +298,9 @@ func (*Ticket) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case ticket.FieldIsManagedByMsp:
 			values[i] = new(sql.NullBool)
-		case ticket.FieldID, ticket.FieldRequesterID, ticket.FieldAssigneeID, ticket.FieldTenantID, ticket.FieldTemplateID, ticket.FieldCategoryID, ticket.FieldDepartmentID, ticket.FieldParentTicketID, ticket.FieldSLADefinitionID, ticket.FieldRating, ticket.FieldRatedBy, ticket.FieldVersion, ticket.FieldMspProviderID, ticket.FieldManagedByUserID:
+		case ticket.FieldID, ticket.FieldOpenedByID, ticket.FieldAssignmentGroupID, ticket.FieldRequesterID, ticket.FieldAssigneeID, ticket.FieldTenantID, ticket.FieldTemplateID, ticket.FieldCategoryID, ticket.FieldDepartmentID, ticket.FieldParentTicketID, ticket.FieldSLADefinitionID, ticket.FieldRating, ticket.FieldRatedBy, ticket.FieldVersion, ticket.FieldMspProviderID, ticket.FieldManagedByUserID:
 			values[i] = new(sql.NullInt64)
-		case ticket.FieldTitle, ticket.FieldDescription, ticket.FieldStatus, ticket.FieldType, ticket.FieldSource, ticket.FieldPriority, ticket.FieldTicketNumber, ticket.FieldCreatorEmail, ticket.FieldExternalMessageID, ticket.FieldConversationID, ticket.FieldResolution, ticket.FieldResolutionCategory, ticket.FieldRatingComment, ticket.FieldMspTicketID:
+		case ticket.FieldTitle, ticket.FieldDescription, ticket.FieldStatus, ticket.FieldType, ticket.FieldSource, ticket.FieldRecordClass, ticket.FieldPriority, ticket.FieldTicketNumber, ticket.FieldCreatorEmail, ticket.FieldExternalMessageID, ticket.FieldConversationID, ticket.FieldResolution, ticket.FieldResolutionCategory, ticket.FieldRatingComment, ticket.FieldMspTicketID:
 			values[i] = new(sql.NullString)
 		case ticket.FieldSLAResponseDeadline, ticket.FieldSLAResolutionDeadline, ticket.FieldFirstResponseAt, ticket.FieldResolvedAt, ticket.FieldClosedAt, ticket.FieldRatedAt, ticket.FieldCreatedAt, ticket.FieldUpdatedAt, ticket.FieldDeletedAt:
 			values[i] = new(sql.NullTime)
@@ -360,6 +366,24 @@ func (_m *Ticket) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field source", values[i])
 			} else if value.Valid {
 				_m.Source = value.String
+			}
+		case ticket.FieldRecordClass:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field record_class", values[i])
+			} else if value.Valid {
+				_m.RecordClass = value.String
+			}
+		case ticket.FieldOpenedByID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field opened_by_id", values[i])
+			} else if value.Valid {
+				_m.OpenedByID = int(value.Int64)
+			}
+		case ticket.FieldAssignmentGroupID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field assignment_group_id", values[i])
+			} else if value.Valid {
+				_m.AssignmentGroupID = int(value.Int64)
 			}
 		case ticket.FieldPriority:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -730,6 +754,15 @@ func (_m *Ticket) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("source=")
 	builder.WriteString(_m.Source)
+	builder.WriteString(", ")
+	builder.WriteString("record_class=")
+	builder.WriteString(_m.RecordClass)
+	builder.WriteString(", ")
+	builder.WriteString("opened_by_id=")
+	builder.WriteString(fmt.Sprintf("%v", _m.OpenedByID))
+	builder.WriteString(", ")
+	builder.WriteString("assignment_group_id=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AssignmentGroupID))
 	builder.WriteString(", ")
 	builder.WriteString("priority=")
 	builder.WriteString(_m.Priority)

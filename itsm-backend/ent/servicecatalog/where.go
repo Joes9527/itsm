@@ -84,6 +84,11 @@ func ItsmType(v string) predicate.ServiceCatalog {
 	return predicate.ServiceCatalog(sql.FieldEQ(FieldItsmType, v))
 }
 
+// TargetClass applies equality check predicate on the "target_class" field. It's identical to TargetClassEQ.
+func TargetClass(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldEQ(FieldTargetClass, v))
+}
+
 // Price applies equality check predicate on the "price" field. It's identical to PriceEQ.
 func Price(v float64) predicate.ServiceCatalog {
 	return predicate.ServiceCatalog(sql.FieldEQ(FieldPrice, v))
@@ -582,6 +587,81 @@ func ItsmTypeEqualFold(v string) predicate.ServiceCatalog {
 // ItsmTypeContainsFold applies the ContainsFold predicate on the "itsm_type" field.
 func ItsmTypeContainsFold(v string) predicate.ServiceCatalog {
 	return predicate.ServiceCatalog(sql.FieldContainsFold(FieldItsmType, v))
+}
+
+// TargetClassEQ applies the EQ predicate on the "target_class" field.
+func TargetClassEQ(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldEQ(FieldTargetClass, v))
+}
+
+// TargetClassNEQ applies the NEQ predicate on the "target_class" field.
+func TargetClassNEQ(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldNEQ(FieldTargetClass, v))
+}
+
+// TargetClassIn applies the In predicate on the "target_class" field.
+func TargetClassIn(vs ...string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldIn(FieldTargetClass, vs...))
+}
+
+// TargetClassNotIn applies the NotIn predicate on the "target_class" field.
+func TargetClassNotIn(vs ...string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldNotIn(FieldTargetClass, vs...))
+}
+
+// TargetClassGT applies the GT predicate on the "target_class" field.
+func TargetClassGT(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldGT(FieldTargetClass, v))
+}
+
+// TargetClassGTE applies the GTE predicate on the "target_class" field.
+func TargetClassGTE(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldGTE(FieldTargetClass, v))
+}
+
+// TargetClassLT applies the LT predicate on the "target_class" field.
+func TargetClassLT(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldLT(FieldTargetClass, v))
+}
+
+// TargetClassLTE applies the LTE predicate on the "target_class" field.
+func TargetClassLTE(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldLTE(FieldTargetClass, v))
+}
+
+// TargetClassContains applies the Contains predicate on the "target_class" field.
+func TargetClassContains(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldContains(FieldTargetClass, v))
+}
+
+// TargetClassHasPrefix applies the HasPrefix predicate on the "target_class" field.
+func TargetClassHasPrefix(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldHasPrefix(FieldTargetClass, v))
+}
+
+// TargetClassHasSuffix applies the HasSuffix predicate on the "target_class" field.
+func TargetClassHasSuffix(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldHasSuffix(FieldTargetClass, v))
+}
+
+// TargetClassIsNil applies the IsNil predicate on the "target_class" field.
+func TargetClassIsNil() predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldIsNull(FieldTargetClass))
+}
+
+// TargetClassNotNil applies the NotNil predicate on the "target_class" field.
+func TargetClassNotNil() predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldNotNull(FieldTargetClass))
+}
+
+// TargetClassEqualFold applies the EqualFold predicate on the "target_class" field.
+func TargetClassEqualFold(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldEqualFold(FieldTargetClass, v))
+}
+
+// TargetClassContainsFold applies the ContainsFold predicate on the "target_class" field.
+func TargetClassContainsFold(v string) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldContainsFold(FieldTargetClass, v))
 }
 
 // PriceEQ applies the EQ predicate on the "price" field.

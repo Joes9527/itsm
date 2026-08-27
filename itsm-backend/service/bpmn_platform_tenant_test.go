@@ -34,6 +34,16 @@ func setupPlatformTenantEnv(t *testing.T) (*ent.Client, ProcessEngine, context.C
 	_, err = NewBPMNTemplateService(client).LoadAndDeployTemplates(ctx, tenant.ID)
 	require.NoError(t, err)
 
+	// incident_emergency_flow 的 Activity_AutoAssign（assign_incident）现在委托给注入的
+	// IncidentService（Task 6：不再绕过领域服务直接写 Ent），跟生产环境 bootstrap 里的
+	// SetIncidentService 装配是同一个模式，测试里也要同样装配，否则 ServiceTask 会因为
+	// "incident service 未注入" 硬失败。
+	if cpe, ok := engine.(*CustomProcessEngine); ok {
+		if h, ok := cpe.CallbackRegistry().GetHandler("incident_service_handler").(*bpmn.IncidentServiceTaskHandler); ok {
+			h.SetIncidentService(NewIncidentService(client, zap.NewNop().Sugar()))
+		}
+	}
+
 	return client, engine, ctx, tenant.ID
 }
 
@@ -59,7 +69,7 @@ func TestStartProcess_PlatformNoTenant_ServiceTaskRunsWithInstanceTenant(t *test
 		Save(platformCtx)
 	require.NoError(t, err)
 
-	instance, err := engine.StartProcess(platformCtx, "incident_emergency_flow", "incident:platform-1", map[string]interface{}{
+	instance, err := engine.StartProcess(platformCtx, "incident_emergency_flow", "incident:platform-1", "", 0, map[string]interface{}{
 		"incident_id": inc.ID,
 		"assignee_id": assignee.ID,
 	})
@@ -88,7 +98,7 @@ func TestCompleteTask_PlatformNoTenant_CallbackSideEffectFires(t *testing.T) {
 		SetTenantID(tenantID).
 		SaveX(tenantCtx)
 
-	instance, err := engine.StartProcess(tenantCtx, "change_normal_flow", "change:platform-1", map[string]interface{}{
+	instance, err := engine.StartProcess(tenantCtx, "change_normal_flow", "change:platform-1", "", 0, map[string]interface{}{
 		"approval_required": true,
 		"change_id":         ch.ID,
 	})
@@ -133,7 +143,7 @@ func TestCompleteTask_PlatformNoTenant_TaskStillBoundToInstanceTenant(t *testing
 		SetTenantID(tenantID).
 		SaveX(tenantCtx)
 
-	instance, err := engine.StartProcess(tenantCtx, "change_normal_flow", "change:platform-2", map[string]interface{}{
+	instance, err := engine.StartProcess(tenantCtx, "change_normal_flow", "change:platform-2", "", 0, map[string]interface{}{
 		"approval_required": true,
 		"change_id":         ch.ID,
 	})

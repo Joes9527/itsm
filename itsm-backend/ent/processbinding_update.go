@@ -241,6 +241,33 @@ func (_u *ProcessBindingUpdate) ClearCategory() *ProcessBindingUpdate {
 	return _u
 }
 
+// SetCategoryID sets the "category_id" field.
+func (_u *ProcessBindingUpdate) SetCategoryID(v int) *ProcessBindingUpdate {
+	_u.mutation.ResetCategoryID()
+	_u.mutation.SetCategoryID(v)
+	return _u
+}
+
+// SetNillableCategoryID sets the "category_id" field if the given value is not nil.
+func (_u *ProcessBindingUpdate) SetNillableCategoryID(v *int) *ProcessBindingUpdate {
+	if v != nil {
+		_u.SetCategoryID(*v)
+	}
+	return _u
+}
+
+// AddCategoryID adds value to the "category_id" field.
+func (_u *ProcessBindingUpdate) AddCategoryID(v int) *ProcessBindingUpdate {
+	_u.mutation.AddCategoryID(v)
+	return _u
+}
+
+// ClearCategoryID clears the value of the "category_id" field.
+func (_u *ProcessBindingUpdate) ClearCategoryID() *ProcessBindingUpdate {
+	_u.mutation.ClearCategoryID()
+	return _u
+}
+
 // SetConditions sets the "conditions" field.
 func (_u *ProcessBindingUpdate) SetConditions(v map[string]interface{}) *ProcessBindingUpdate {
 	_u.mutation.SetConditions(v)
@@ -503,6 +530,15 @@ func (_u *ProcessBindingUpdate) sqlSave(ctx context.Context) (_node int, err err
 	}
 	if _u.mutation.CategoryCleared() {
 		_spec.ClearField(processbinding.FieldCategory, field.TypeString)
+	}
+	if value, ok := _u.mutation.CategoryID(); ok {
+		_spec.SetField(processbinding.FieldCategoryID, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedCategoryID(); ok {
+		_spec.AddField(processbinding.FieldCategoryID, field.TypeInt, value)
+	}
+	if _u.mutation.CategoryIDCleared() {
+		_spec.ClearField(processbinding.FieldCategoryID, field.TypeInt)
 	}
 	if value, ok := _u.mutation.Conditions(); ok {
 		_spec.SetField(processbinding.FieldConditions, field.TypeJSON, value)
@@ -801,6 +837,33 @@ func (_u *ProcessBindingUpdateOne) ClearCategory() *ProcessBindingUpdateOne {
 	return _u
 }
 
+// SetCategoryID sets the "category_id" field.
+func (_u *ProcessBindingUpdateOne) SetCategoryID(v int) *ProcessBindingUpdateOne {
+	_u.mutation.ResetCategoryID()
+	_u.mutation.SetCategoryID(v)
+	return _u
+}
+
+// SetNillableCategoryID sets the "category_id" field if the given value is not nil.
+func (_u *ProcessBindingUpdateOne) SetNillableCategoryID(v *int) *ProcessBindingUpdateOne {
+	if v != nil {
+		_u.SetCategoryID(*v)
+	}
+	return _u
+}
+
+// AddCategoryID adds value to the "category_id" field.
+func (_u *ProcessBindingUpdateOne) AddCategoryID(v int) *ProcessBindingUpdateOne {
+	_u.mutation.AddCategoryID(v)
+	return _u
+}
+
+// ClearCategoryID clears the value of the "category_id" field.
+func (_u *ProcessBindingUpdateOne) ClearCategoryID() *ProcessBindingUpdateOne {
+	_u.mutation.ClearCategoryID()
+	return _u
+}
+
 // SetConditions sets the "conditions" field.
 func (_u *ProcessBindingUpdateOne) SetConditions(v map[string]interface{}) *ProcessBindingUpdateOne {
 	_u.mutation.SetConditions(v)
@@ -1093,6 +1156,15 @@ func (_u *ProcessBindingUpdateOne) sqlSave(ctx context.Context) (_node *ProcessB
 	}
 	if _u.mutation.CategoryCleared() {
 		_spec.ClearField(processbinding.FieldCategory, field.TypeString)
+	}
+	if value, ok := _u.mutation.CategoryID(); ok {
+		_spec.SetField(processbinding.FieldCategoryID, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedCategoryID(); ok {
+		_spec.AddField(processbinding.FieldCategoryID, field.TypeInt, value)
+	}
+	if _u.mutation.CategoryIDCleared() {
+		_spec.ClearField(processbinding.FieldCategoryID, field.TypeInt)
 	}
 	if value, ok := _u.mutation.Conditions(); ok {
 		_spec.SetField(processbinding.FieldConditions, field.TypeJSON, value)

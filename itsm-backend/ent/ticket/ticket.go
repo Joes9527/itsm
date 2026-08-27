@@ -24,6 +24,12 @@ const (
 	FieldType = "type"
 	// FieldSource holds the string denoting the source field in the database.
 	FieldSource = "source"
+	// FieldRecordClass holds the string denoting the record_class field in the database.
+	FieldRecordClass = "record_class"
+	// FieldOpenedByID holds the string denoting the opened_by_id field in the database.
+	FieldOpenedByID = "opened_by_id"
+	// FieldAssignmentGroupID holds the string denoting the assignment_group_id field in the database.
+	FieldAssignmentGroupID = "assignment_group_id"
 	// FieldPriority holds the string denoting the priority field in the database.
 	FieldPriority = "priority"
 	// FieldTicketNumber holds the string denoting the ticket_number field in the database.
@@ -230,6 +236,9 @@ var Columns = []string{
 	FieldStatus,
 	FieldType,
 	FieldSource,
+	FieldRecordClass,
+	FieldOpenedByID,
+	FieldAssignmentGroupID,
 	FieldPriority,
 	FieldTicketNumber,
 	FieldRequesterID,
@@ -309,6 +318,8 @@ var (
 	DefaultType string
 	// DefaultSource holds the default value on creation for the "source" field.
 	DefaultSource string
+	// DefaultRecordClass holds the default value on creation for the "record_class" field.
+	DefaultRecordClass string
 	// DefaultPriority holds the default value on creation for the "priority" field.
 	DefaultPriority string
 	// TicketNumberValidator is a validator for the "ticket_number" field. It is called by the builders before save.
@@ -364,6 +375,21 @@ func ByType(opts ...sql.OrderTermOption) OrderOption {
 // BySource orders the results by the source field.
 func BySource(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSource, opts...).ToFunc()
+}
+
+// ByRecordClass orders the results by the record_class field.
+func ByRecordClass(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRecordClass, opts...).ToFunc()
+}
+
+// ByOpenedByID orders the results by the opened_by_id field.
+func ByOpenedByID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOpenedByID, opts...).ToFunc()
+}
+
+// ByAssignmentGroupID orders the results by the assignment_group_id field.
+func ByAssignmentGroupID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAssignmentGroupID, opts...).ToFunc()
 }
 
 // ByPriority orders the results by the priority field.

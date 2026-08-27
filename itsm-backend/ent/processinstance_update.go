@@ -67,6 +67,53 @@ func (_u *ProcessInstanceUpdate) ClearBusinessKey() *ProcessInstanceUpdate {
 	return _u
 }
 
+// SetBusinessType sets the "business_type" field.
+func (_u *ProcessInstanceUpdate) SetBusinessType(v string) *ProcessInstanceUpdate {
+	_u.mutation.SetBusinessType(v)
+	return _u
+}
+
+// SetNillableBusinessType sets the "business_type" field if the given value is not nil.
+func (_u *ProcessInstanceUpdate) SetNillableBusinessType(v *string) *ProcessInstanceUpdate {
+	if v != nil {
+		_u.SetBusinessType(*v)
+	}
+	return _u
+}
+
+// ClearBusinessType clears the value of the "business_type" field.
+func (_u *ProcessInstanceUpdate) ClearBusinessType() *ProcessInstanceUpdate {
+	_u.mutation.ClearBusinessType()
+	return _u
+}
+
+// SetBusinessID sets the "business_id" field.
+func (_u *ProcessInstanceUpdate) SetBusinessID(v int) *ProcessInstanceUpdate {
+	_u.mutation.ResetBusinessID()
+	_u.mutation.SetBusinessID(v)
+	return _u
+}
+
+// SetNillableBusinessID sets the "business_id" field if the given value is not nil.
+func (_u *ProcessInstanceUpdate) SetNillableBusinessID(v *int) *ProcessInstanceUpdate {
+	if v != nil {
+		_u.SetBusinessID(*v)
+	}
+	return _u
+}
+
+// AddBusinessID adds value to the "business_id" field.
+func (_u *ProcessInstanceUpdate) AddBusinessID(v int) *ProcessInstanceUpdate {
+	_u.mutation.AddBusinessID(v)
+	return _u
+}
+
+// ClearBusinessID clears the value of the "business_id" field.
+func (_u *ProcessInstanceUpdate) ClearBusinessID() *ProcessInstanceUpdate {
+	_u.mutation.ClearBusinessID()
+	return _u
+}
+
 // SetProcessDefinitionKey sets the "process_definition_key" field.
 func (_u *ProcessInstanceUpdate) SetProcessDefinitionKey(v string) *ProcessInstanceUpdate {
 	_u.mutation.SetProcessDefinitionKey(v)
@@ -590,6 +637,21 @@ func (_u *ProcessInstanceUpdate) sqlSave(ctx context.Context) (_node int, err er
 	if _u.mutation.BusinessKeyCleared() {
 		_spec.ClearField(processinstance.FieldBusinessKey, field.TypeString)
 	}
+	if value, ok := _u.mutation.BusinessType(); ok {
+		_spec.SetField(processinstance.FieldBusinessType, field.TypeString, value)
+	}
+	if _u.mutation.BusinessTypeCleared() {
+		_spec.ClearField(processinstance.FieldBusinessType, field.TypeString)
+	}
+	if value, ok := _u.mutation.BusinessID(); ok {
+		_spec.SetField(processinstance.FieldBusinessID, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedBusinessID(); ok {
+		_spec.AddField(processinstance.FieldBusinessID, field.TypeInt, value)
+	}
+	if _u.mutation.BusinessIDCleared() {
+		_spec.ClearField(processinstance.FieldBusinessID, field.TypeInt)
+	}
 	if value, ok := _u.mutation.ProcessDefinitionKey(); ok {
 		_spec.SetField(processinstance.FieldProcessDefinitionKey, field.TypeString, value)
 	}
@@ -897,6 +959,53 @@ func (_u *ProcessInstanceUpdateOne) SetNillableBusinessKey(v *string) *ProcessIn
 // ClearBusinessKey clears the value of the "business_key" field.
 func (_u *ProcessInstanceUpdateOne) ClearBusinessKey() *ProcessInstanceUpdateOne {
 	_u.mutation.ClearBusinessKey()
+	return _u
+}
+
+// SetBusinessType sets the "business_type" field.
+func (_u *ProcessInstanceUpdateOne) SetBusinessType(v string) *ProcessInstanceUpdateOne {
+	_u.mutation.SetBusinessType(v)
+	return _u
+}
+
+// SetNillableBusinessType sets the "business_type" field if the given value is not nil.
+func (_u *ProcessInstanceUpdateOne) SetNillableBusinessType(v *string) *ProcessInstanceUpdateOne {
+	if v != nil {
+		_u.SetBusinessType(*v)
+	}
+	return _u
+}
+
+// ClearBusinessType clears the value of the "business_type" field.
+func (_u *ProcessInstanceUpdateOne) ClearBusinessType() *ProcessInstanceUpdateOne {
+	_u.mutation.ClearBusinessType()
+	return _u
+}
+
+// SetBusinessID sets the "business_id" field.
+func (_u *ProcessInstanceUpdateOne) SetBusinessID(v int) *ProcessInstanceUpdateOne {
+	_u.mutation.ResetBusinessID()
+	_u.mutation.SetBusinessID(v)
+	return _u
+}
+
+// SetNillableBusinessID sets the "business_id" field if the given value is not nil.
+func (_u *ProcessInstanceUpdateOne) SetNillableBusinessID(v *int) *ProcessInstanceUpdateOne {
+	if v != nil {
+		_u.SetBusinessID(*v)
+	}
+	return _u
+}
+
+// AddBusinessID adds value to the "business_id" field.
+func (_u *ProcessInstanceUpdateOne) AddBusinessID(v int) *ProcessInstanceUpdateOne {
+	_u.mutation.AddBusinessID(v)
+	return _u
+}
+
+// ClearBusinessID clears the value of the "business_id" field.
+func (_u *ProcessInstanceUpdateOne) ClearBusinessID() *ProcessInstanceUpdateOne {
+	_u.mutation.ClearBusinessID()
 	return _u
 }
 
@@ -1452,6 +1561,21 @@ func (_u *ProcessInstanceUpdateOne) sqlSave(ctx context.Context) (_node *Process
 	}
 	if _u.mutation.BusinessKeyCleared() {
 		_spec.ClearField(processinstance.FieldBusinessKey, field.TypeString)
+	}
+	if value, ok := _u.mutation.BusinessType(); ok {
+		_spec.SetField(processinstance.FieldBusinessType, field.TypeString, value)
+	}
+	if _u.mutation.BusinessTypeCleared() {
+		_spec.ClearField(processinstance.FieldBusinessType, field.TypeString)
+	}
+	if value, ok := _u.mutation.BusinessID(); ok {
+		_spec.SetField(processinstance.FieldBusinessID, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedBusinessID(); ok {
+		_spec.AddField(processinstance.FieldBusinessID, field.TypeInt, value)
+	}
+	if _u.mutation.BusinessIDCleared() {
+		_spec.ClearField(processinstance.FieldBusinessID, field.TypeInt)
 	}
 	if value, ok := _u.mutation.ProcessDefinitionKey(); ok {
 		_spec.SetField(processinstance.FieldProcessDefinitionKey, field.TypeString, value)

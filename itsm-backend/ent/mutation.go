@@ -124,6 +124,7 @@ import (
 	"itsm-backend/ent/workflowinstance"
 	"itsm-backend/ent/workflowtask"
 	"itsm-backend/ent/workflowversion"
+	"itsm-backend/ent/workitemrelation"
 	"sync"
 	"time"
 
@@ -251,6 +252,7 @@ const (
 	TypeToolInvocation              = "ToolInvocation"
 	TypeUser                        = "User"
 	TypeVendor                      = "Vendor"
+	TypeWorkItemRelation            = "WorkItemRelation"
 	TypeWorkflow                    = "Workflow"
 	TypeWorkflowInstance            = "WorkflowInstance"
 	TypeWorkflowTask                = "WorkflowTask"
@@ -19436,6 +19438,8 @@ type ChangeMutation struct {
 	addassignee_id        *int
 	created_by            *int
 	addcreated_by         *int
+	work_item_id          *int
+	addwork_item_id       *int
 	tenant_id             *int
 	addtenant_id          *int
 	planned_start_date    *time.Time
@@ -19998,6 +20002,76 @@ func (m *ChangeMutation) AddedCreatedBy() (r int, exists bool) {
 func (m *ChangeMutation) ResetCreatedBy() {
 	m.created_by = nil
 	m.addcreated_by = nil
+}
+
+// SetWorkItemID sets the "work_item_id" field.
+func (m *ChangeMutation) SetWorkItemID(i int) {
+	m.work_item_id = &i
+	m.addwork_item_id = nil
+}
+
+// WorkItemID returns the value of the "work_item_id" field in the mutation.
+func (m *ChangeMutation) WorkItemID() (r int, exists bool) {
+	v := m.work_item_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWorkItemID returns the old "work_item_id" field's value of the Change entity.
+// If the Change object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChangeMutation) OldWorkItemID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWorkItemID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWorkItemID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWorkItemID: %w", err)
+	}
+	return oldValue.WorkItemID, nil
+}
+
+// AddWorkItemID adds i to the "work_item_id" field.
+func (m *ChangeMutation) AddWorkItemID(i int) {
+	if m.addwork_item_id != nil {
+		*m.addwork_item_id += i
+	} else {
+		m.addwork_item_id = &i
+	}
+}
+
+// AddedWorkItemID returns the value that was added to the "work_item_id" field in this mutation.
+func (m *ChangeMutation) AddedWorkItemID() (r int, exists bool) {
+	v := m.addwork_item_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearWorkItemID clears the value of the "work_item_id" field.
+func (m *ChangeMutation) ClearWorkItemID() {
+	m.work_item_id = nil
+	m.addwork_item_id = nil
+	m.clearedFields[change.FieldWorkItemID] = struct{}{}
+}
+
+// WorkItemIDCleared returns if the "work_item_id" field was cleared in this mutation.
+func (m *ChangeMutation) WorkItemIDCleared() bool {
+	_, ok := m.clearedFields[change.FieldWorkItemID]
+	return ok
+}
+
+// ResetWorkItemID resets all changes to the "work_item_id" field.
+func (m *ChangeMutation) ResetWorkItemID() {
+	m.work_item_id = nil
+	m.addwork_item_id = nil
+	delete(m.clearedFields, change.FieldWorkItemID)
 }
 
 // SetTenantID sets the "tenant_id" field.
@@ -20694,7 +20768,7 @@ func (m *ChangeMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ChangeMutation) Fields() []string {
-	fields := make([]string, 0, 21)
+	fields := make([]string, 0, 22)
 	if m.title != nil {
 		fields = append(fields, change.FieldTitle)
 	}
@@ -20724,6 +20798,9 @@ func (m *ChangeMutation) Fields() []string {
 	}
 	if m.created_by != nil {
 		fields = append(fields, change.FieldCreatedBy)
+	}
+	if m.work_item_id != nil {
+		fields = append(fields, change.FieldWorkItemID)
 	}
 	if m.tenant_id != nil {
 		fields = append(fields, change.FieldTenantID)
@@ -20786,6 +20863,8 @@ func (m *ChangeMutation) Field(name string) (ent.Value, bool) {
 		return m.AssigneeID()
 	case change.FieldCreatedBy:
 		return m.CreatedBy()
+	case change.FieldWorkItemID:
+		return m.WorkItemID()
 	case change.FieldTenantID:
 		return m.TenantID()
 	case change.FieldPlannedStartDate:
@@ -20837,6 +20916,8 @@ func (m *ChangeMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldAssigneeID(ctx)
 	case change.FieldCreatedBy:
 		return m.OldCreatedBy(ctx)
+	case change.FieldWorkItemID:
+		return m.OldWorkItemID(ctx)
 	case change.FieldTenantID:
 		return m.OldTenantID(ctx)
 	case change.FieldPlannedStartDate:
@@ -20938,6 +21019,13 @@ func (m *ChangeMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetCreatedBy(v)
 		return nil
+	case change.FieldWorkItemID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWorkItemID(v)
+		return nil
 	case change.FieldTenantID:
 		v, ok := value.(int)
 		if !ok {
@@ -21029,6 +21117,9 @@ func (m *ChangeMutation) AddedFields() []string {
 	if m.addcreated_by != nil {
 		fields = append(fields, change.FieldCreatedBy)
 	}
+	if m.addwork_item_id != nil {
+		fields = append(fields, change.FieldWorkItemID)
+	}
 	if m.addtenant_id != nil {
 		fields = append(fields, change.FieldTenantID)
 	}
@@ -21044,6 +21135,8 @@ func (m *ChangeMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedAssigneeID()
 	case change.FieldCreatedBy:
 		return m.AddedCreatedBy()
+	case change.FieldWorkItemID:
+		return m.AddedWorkItemID()
 	case change.FieldTenantID:
 		return m.AddedTenantID()
 	}
@@ -21069,6 +21162,13 @@ func (m *ChangeMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddCreatedBy(v)
 		return nil
+	case change.FieldWorkItemID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddWorkItemID(v)
+		return nil
 	case change.FieldTenantID:
 		v, ok := value.(int)
 		if !ok {
@@ -21092,6 +21192,9 @@ func (m *ChangeMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(change.FieldAssigneeID) {
 		fields = append(fields, change.FieldAssigneeID)
+	}
+	if m.FieldCleared(change.FieldWorkItemID) {
+		fields = append(fields, change.FieldWorkItemID)
 	}
 	if m.FieldCleared(change.FieldPlannedStartDate) {
 		fields = append(fields, change.FieldPlannedStartDate)
@@ -21139,6 +21242,9 @@ func (m *ChangeMutation) ClearField(name string) error {
 		return nil
 	case change.FieldAssigneeID:
 		m.ClearAssigneeID()
+		return nil
+	case change.FieldWorkItemID:
+		m.ClearWorkItemID()
 		return nil
 	case change.FieldPlannedStartDate:
 		m.ClearPlannedStartDate()
@@ -21201,6 +21307,9 @@ func (m *ChangeMutation) ResetField(name string) error {
 		return nil
 	case change.FieldCreatedBy:
 		m.ResetCreatedBy()
+		return nil
+	case change.FieldWorkItemID:
+		m.ResetWorkItemID()
 		return nil
 	case change.FieldTenantID:
 		m.ResetTenantID()
@@ -45785,6 +45894,8 @@ type IncidentMutation struct {
 	incident_number            *string
 	reporter_id                *int
 	addreporter_id             *int
+	work_item_id               *int
+	addwork_item_id            *int
 	assignee_id                *int
 	addassignee_id             *int
 	configuration_item_id      *int
@@ -46328,6 +46439,76 @@ func (m *IncidentMutation) AddedReporterID() (r int, exists bool) {
 func (m *IncidentMutation) ResetReporterID() {
 	m.reporter_id = nil
 	m.addreporter_id = nil
+}
+
+// SetWorkItemID sets the "work_item_id" field.
+func (m *IncidentMutation) SetWorkItemID(i int) {
+	m.work_item_id = &i
+	m.addwork_item_id = nil
+}
+
+// WorkItemID returns the value of the "work_item_id" field in the mutation.
+func (m *IncidentMutation) WorkItemID() (r int, exists bool) {
+	v := m.work_item_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWorkItemID returns the old "work_item_id" field's value of the Incident entity.
+// If the Incident object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IncidentMutation) OldWorkItemID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWorkItemID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWorkItemID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWorkItemID: %w", err)
+	}
+	return oldValue.WorkItemID, nil
+}
+
+// AddWorkItemID adds i to the "work_item_id" field.
+func (m *IncidentMutation) AddWorkItemID(i int) {
+	if m.addwork_item_id != nil {
+		*m.addwork_item_id += i
+	} else {
+		m.addwork_item_id = &i
+	}
+}
+
+// AddedWorkItemID returns the value that was added to the "work_item_id" field in this mutation.
+func (m *IncidentMutation) AddedWorkItemID() (r int, exists bool) {
+	v := m.addwork_item_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearWorkItemID clears the value of the "work_item_id" field.
+func (m *IncidentMutation) ClearWorkItemID() {
+	m.work_item_id = nil
+	m.addwork_item_id = nil
+	m.clearedFields[incident.FieldWorkItemID] = struct{}{}
+}
+
+// WorkItemIDCleared returns if the "work_item_id" field was cleared in this mutation.
+func (m *IncidentMutation) WorkItemIDCleared() bool {
+	_, ok := m.clearedFields[incident.FieldWorkItemID]
+	return ok
+}
+
+// ResetWorkItemID resets all changes to the "work_item_id" field.
+func (m *IncidentMutation) ResetWorkItemID() {
+	m.work_item_id = nil
+	m.addwork_item_id = nil
+	delete(m.clearedFields, incident.FieldWorkItemID)
 }
 
 // SetAssigneeID sets the "assignee_id" field.
@@ -47772,7 +47953,7 @@ func (m *IncidentMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *IncidentMutation) Fields() []string {
-	fields := make([]string, 0, 31)
+	fields := make([]string, 0, 32)
 	if m.title != nil {
 		fields = append(fields, incident.FieldTitle)
 	}
@@ -47802,6 +47983,9 @@ func (m *IncidentMutation) Fields() []string {
 	}
 	if m.reporter_id != nil {
 		fields = append(fields, incident.FieldReporterID)
+	}
+	if m.work_item_id != nil {
+		fields = append(fields, incident.FieldWorkItemID)
 	}
 	if m.assignee_id != nil {
 		fields = append(fields, incident.FieldAssigneeID)
@@ -47894,6 +48078,8 @@ func (m *IncidentMutation) Field(name string) (ent.Value, bool) {
 		return m.IncidentNumber()
 	case incident.FieldReporterID:
 		return m.ReporterID()
+	case incident.FieldWorkItemID:
+		return m.WorkItemID()
 	case incident.FieldAssigneeID:
 		return m.AssigneeID()
 	case incident.FieldConfigurationItemID:
@@ -47965,6 +48151,8 @@ func (m *IncidentMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldIncidentNumber(ctx)
 	case incident.FieldReporterID:
 		return m.OldReporterID(ctx)
+	case incident.FieldWorkItemID:
+		return m.OldWorkItemID(ctx)
 	case incident.FieldAssigneeID:
 		return m.OldAssigneeID(ctx)
 	case incident.FieldConfigurationItemID:
@@ -48085,6 +48273,13 @@ func (m *IncidentMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetReporterID(v)
+		return nil
+	case incident.FieldWorkItemID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWorkItemID(v)
 		return nil
 	case incident.FieldAssigneeID:
 		v, ok := value.(int)
@@ -48244,6 +48439,9 @@ func (m *IncidentMutation) AddedFields() []string {
 	if m.addreporter_id != nil {
 		fields = append(fields, incident.FieldReporterID)
 	}
+	if m.addwork_item_id != nil {
+		fields = append(fields, incident.FieldWorkItemID)
+	}
 	if m.addassignee_id != nil {
 		fields = append(fields, incident.FieldAssigneeID)
 	}
@@ -48269,6 +48467,8 @@ func (m *IncidentMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
 	case incident.FieldReporterID:
 		return m.AddedReporterID()
+	case incident.FieldWorkItemID:
+		return m.AddedWorkItemID()
 	case incident.FieldAssigneeID:
 		return m.AddedAssigneeID()
 	case incident.FieldConfigurationItemID:
@@ -48294,6 +48494,13 @@ func (m *IncidentMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddReporterID(v)
+		return nil
+	case incident.FieldWorkItemID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddWorkItemID(v)
 		return nil
 	case incident.FieldAssigneeID:
 		v, ok := value.(int)
@@ -48340,6 +48547,9 @@ func (m *IncidentMutation) ClearedFields() []string {
 	var fields []string
 	if m.FieldCleared(incident.FieldDescription) {
 		fields = append(fields, incident.FieldDescription)
+	}
+	if m.FieldCleared(incident.FieldWorkItemID) {
+		fields = append(fields, incident.FieldWorkItemID)
 	}
 	if m.FieldCleared(incident.FieldAssigneeID) {
 		fields = append(fields, incident.FieldAssigneeID)
@@ -48393,6 +48603,9 @@ func (m *IncidentMutation) ClearField(name string) error {
 	switch name {
 	case incident.FieldDescription:
 		m.ClearDescription()
+		return nil
+	case incident.FieldWorkItemID:
+		m.ClearWorkItemID()
 		return nil
 	case incident.FieldAssigneeID:
 		m.ClearAssigneeID()
@@ -48467,6 +48680,9 @@ func (m *IncidentMutation) ResetField(name string) error {
 		return nil
 	case incident.FieldReporterID:
 		m.ResetReporterID()
+		return nil
+	case incident.FieldWorkItemID:
+		m.ResetWorkItemID()
 		return nil
 	case incident.FieldAssigneeID:
 		m.ResetAssigneeID()
@@ -74861,6 +75077,8 @@ type ProblemMutation struct {
 	addassignee_id   *int
 	created_by       *int
 	addcreated_by    *int
+	work_item_id     *int
+	addwork_item_id  *int
 	tenant_id        *int
 	addtenant_id     *int
 	created_at       *time.Time
@@ -75509,6 +75727,76 @@ func (m *ProblemMutation) ResetCreatedBy() {
 	m.addcreated_by = nil
 }
 
+// SetWorkItemID sets the "work_item_id" field.
+func (m *ProblemMutation) SetWorkItemID(i int) {
+	m.work_item_id = &i
+	m.addwork_item_id = nil
+}
+
+// WorkItemID returns the value of the "work_item_id" field in the mutation.
+func (m *ProblemMutation) WorkItemID() (r int, exists bool) {
+	v := m.work_item_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWorkItemID returns the old "work_item_id" field's value of the Problem entity.
+// If the Problem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProblemMutation) OldWorkItemID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWorkItemID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWorkItemID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWorkItemID: %w", err)
+	}
+	return oldValue.WorkItemID, nil
+}
+
+// AddWorkItemID adds i to the "work_item_id" field.
+func (m *ProblemMutation) AddWorkItemID(i int) {
+	if m.addwork_item_id != nil {
+		*m.addwork_item_id += i
+	} else {
+		m.addwork_item_id = &i
+	}
+}
+
+// AddedWorkItemID returns the value that was added to the "work_item_id" field in this mutation.
+func (m *ProblemMutation) AddedWorkItemID() (r int, exists bool) {
+	v := m.addwork_item_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearWorkItemID clears the value of the "work_item_id" field.
+func (m *ProblemMutation) ClearWorkItemID() {
+	m.work_item_id = nil
+	m.addwork_item_id = nil
+	m.clearedFields[problem.FieldWorkItemID] = struct{}{}
+}
+
+// WorkItemIDCleared returns if the "work_item_id" field was cleared in this mutation.
+func (m *ProblemMutation) WorkItemIDCleared() bool {
+	_, ok := m.clearedFields[problem.FieldWorkItemID]
+	return ok
+}
+
+// ResetWorkItemID resets all changes to the "work_item_id" field.
+func (m *ProblemMutation) ResetWorkItemID() {
+	m.work_item_id = nil
+	m.addwork_item_id = nil
+	delete(m.clearedFields, problem.FieldWorkItemID)
+}
+
 // SetTenantID sets the "tenant_id" field.
 func (m *ProblemMutation) SetTenantID(i int) {
 	m.tenant_id = &i
@@ -75980,7 +76268,7 @@ func (m *ProblemMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ProblemMutation) Fields() []string {
-	fields := make([]string, 0, 17)
+	fields := make([]string, 0, 18)
 	if m.title != nil {
 		fields = append(fields, problem.FieldTitle)
 	}
@@ -76013,6 +76301,9 @@ func (m *ProblemMutation) Fields() []string {
 	}
 	if m.created_by != nil {
 		fields = append(fields, problem.FieldCreatedBy)
+	}
+	if m.work_item_id != nil {
+		fields = append(fields, problem.FieldWorkItemID)
 	}
 	if m.tenant_id != nil {
 		fields = append(fields, problem.FieldTenantID)
@@ -76062,6 +76353,8 @@ func (m *ProblemMutation) Field(name string) (ent.Value, bool) {
 		return m.AssigneeID()
 	case problem.FieldCreatedBy:
 		return m.CreatedBy()
+	case problem.FieldWorkItemID:
+		return m.WorkItemID()
 	case problem.FieldTenantID:
 		return m.TenantID()
 	case problem.FieldCreatedAt:
@@ -76105,6 +76398,8 @@ func (m *ProblemMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldAssigneeID(ctx)
 	case problem.FieldCreatedBy:
 		return m.OldCreatedBy(ctx)
+	case problem.FieldWorkItemID:
+		return m.OldWorkItemID(ctx)
 	case problem.FieldTenantID:
 		return m.OldTenantID(ctx)
 	case problem.FieldCreatedAt:
@@ -76203,6 +76498,13 @@ func (m *ProblemMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetCreatedBy(v)
 		return nil
+	case problem.FieldWorkItemID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWorkItemID(v)
+		return nil
 	case problem.FieldTenantID:
 		v, ok := value.(int)
 		if !ok {
@@ -76259,6 +76561,9 @@ func (m *ProblemMutation) AddedFields() []string {
 	if m.addcreated_by != nil {
 		fields = append(fields, problem.FieldCreatedBy)
 	}
+	if m.addwork_item_id != nil {
+		fields = append(fields, problem.FieldWorkItemID)
+	}
 	if m.addtenant_id != nil {
 		fields = append(fields, problem.FieldTenantID)
 	}
@@ -76274,6 +76579,8 @@ func (m *ProblemMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedAssigneeID()
 	case problem.FieldCreatedBy:
 		return m.AddedCreatedBy()
+	case problem.FieldWorkItemID:
+		return m.AddedWorkItemID()
 	case problem.FieldTenantID:
 		return m.AddedTenantID()
 	}
@@ -76298,6 +76605,13 @@ func (m *ProblemMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddCreatedBy(v)
+		return nil
+	case problem.FieldWorkItemID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddWorkItemID(v)
 		return nil
 	case problem.FieldTenantID:
 		v, ok := value.(int)
@@ -76334,6 +76648,9 @@ func (m *ProblemMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(problem.FieldAssigneeID) {
 		fields = append(fields, problem.FieldAssigneeID)
+	}
+	if m.FieldCleared(problem.FieldWorkItemID) {
+		fields = append(fields, problem.FieldWorkItemID)
 	}
 	if m.FieldCleared(problem.FieldResolvedAt) {
 		fields = append(fields, problem.FieldResolvedAt)
@@ -76378,6 +76695,9 @@ func (m *ProblemMutation) ClearField(name string) error {
 		return nil
 	case problem.FieldAssigneeID:
 		m.ClearAssigneeID()
+		return nil
+	case problem.FieldWorkItemID:
+		m.ClearWorkItemID()
 		return nil
 	case problem.FieldResolvedAt:
 		m.ClearResolvedAt()
@@ -76428,6 +76748,9 @@ func (m *ProblemMutation) ResetField(name string) error {
 		return nil
 	case problem.FieldCreatedBy:
 		m.ResetCreatedBy()
+		return nil
+	case problem.FieldWorkItemID:
+		m.ResetWorkItemID()
 		return nil
 	case problem.FieldTenantID:
 		m.ResetTenantID()
@@ -80071,6 +80394,8 @@ type ProcessBindingMutation struct {
 	addteam_id                *int
 	scenario                  *string
 	category                  *string
+	category_id               *int
+	addcategory_id            *int
 	conditions                *map[string]interface{}
 	approval_chain_id         *string
 	sla_policy_id             *string
@@ -80728,6 +81053,76 @@ func (m *ProcessBindingMutation) ResetCategory() {
 	delete(m.clearedFields, processbinding.FieldCategory)
 }
 
+// SetCategoryID sets the "category_id" field.
+func (m *ProcessBindingMutation) SetCategoryID(i int) {
+	m.category_id = &i
+	m.addcategory_id = nil
+}
+
+// CategoryID returns the value of the "category_id" field in the mutation.
+func (m *ProcessBindingMutation) CategoryID() (r int, exists bool) {
+	v := m.category_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCategoryID returns the old "category_id" field's value of the ProcessBinding entity.
+// If the ProcessBinding object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessBindingMutation) OldCategoryID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCategoryID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCategoryID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCategoryID: %w", err)
+	}
+	return oldValue.CategoryID, nil
+}
+
+// AddCategoryID adds i to the "category_id" field.
+func (m *ProcessBindingMutation) AddCategoryID(i int) {
+	if m.addcategory_id != nil {
+		*m.addcategory_id += i
+	} else {
+		m.addcategory_id = &i
+	}
+}
+
+// AddedCategoryID returns the value that was added to the "category_id" field in this mutation.
+func (m *ProcessBindingMutation) AddedCategoryID() (r int, exists bool) {
+	v := m.addcategory_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearCategoryID clears the value of the "category_id" field.
+func (m *ProcessBindingMutation) ClearCategoryID() {
+	m.category_id = nil
+	m.addcategory_id = nil
+	m.clearedFields[processbinding.FieldCategoryID] = struct{}{}
+}
+
+// CategoryIDCleared returns if the "category_id" field was cleared in this mutation.
+func (m *ProcessBindingMutation) CategoryIDCleared() bool {
+	_, ok := m.clearedFields[processbinding.FieldCategoryID]
+	return ok
+}
+
+// ResetCategoryID resets all changes to the "category_id" field.
+func (m *ProcessBindingMutation) ResetCategoryID() {
+	m.category_id = nil
+	m.addcategory_id = nil
+	delete(m.clearedFields, processbinding.FieldCategoryID)
+}
+
 // SetConditions sets the "conditions" field.
 func (m *ProcessBindingMutation) SetConditions(value map[string]interface{}) {
 	m.conditions = &value
@@ -81125,7 +81520,7 @@ func (m *ProcessBindingMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ProcessBindingMutation) Fields() []string {
-	fields := make([]string, 0, 18)
+	fields := make([]string, 0, 19)
 	if m.business_type != nil {
 		fields = append(fields, processbinding.FieldBusinessType)
 	}
@@ -81158,6 +81553,9 @@ func (m *ProcessBindingMutation) Fields() []string {
 	}
 	if m.category != nil {
 		fields = append(fields, processbinding.FieldCategory)
+	}
+	if m.category_id != nil {
+		fields = append(fields, processbinding.FieldCategoryID)
 	}
 	if m.conditions != nil {
 		fields = append(fields, processbinding.FieldConditions)
@@ -81210,6 +81608,8 @@ func (m *ProcessBindingMutation) Field(name string) (ent.Value, bool) {
 		return m.Scenario()
 	case processbinding.FieldCategory:
 		return m.Category()
+	case processbinding.FieldCategoryID:
+		return m.CategoryID()
 	case processbinding.FieldConditions:
 		return m.Conditions()
 	case processbinding.FieldApprovalChainID:
@@ -81255,6 +81655,8 @@ func (m *ProcessBindingMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldScenario(ctx)
 	case processbinding.FieldCategory:
 		return m.OldCategory(ctx)
+	case processbinding.FieldCategoryID:
+		return m.OldCategoryID(ctx)
 	case processbinding.FieldConditions:
 		return m.OldConditions(ctx)
 	case processbinding.FieldApprovalChainID:
@@ -81355,6 +81757,13 @@ func (m *ProcessBindingMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetCategory(v)
 		return nil
+	case processbinding.FieldCategoryID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCategoryID(v)
+		return nil
 	case processbinding.FieldConditions:
 		v, ok := value.(map[string]interface{})
 		if !ok {
@@ -81424,6 +81833,9 @@ func (m *ProcessBindingMutation) AddedFields() []string {
 	if m.addteam_id != nil {
 		fields = append(fields, processbinding.FieldTeamID)
 	}
+	if m.addcategory_id != nil {
+		fields = append(fields, processbinding.FieldCategoryID)
+	}
 	if m.addtenant_id != nil {
 		fields = append(fields, processbinding.FieldTenantID)
 	}
@@ -81443,6 +81855,8 @@ func (m *ProcessBindingMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedDepartmentID()
 	case processbinding.FieldTeamID:
 		return m.AddedTeamID()
+	case processbinding.FieldCategoryID:
+		return m.AddedCategoryID()
 	case processbinding.FieldTenantID:
 		return m.AddedTenantID()
 	}
@@ -81482,6 +81896,13 @@ func (m *ProcessBindingMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddTeamID(v)
 		return nil
+	case processbinding.FieldCategoryID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCategoryID(v)
+		return nil
 	case processbinding.FieldTenantID:
 		v, ok := value.(int)
 		if !ok {
@@ -81511,6 +81932,9 @@ func (m *ProcessBindingMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(processbinding.FieldCategory) {
 		fields = append(fields, processbinding.FieldCategory)
+	}
+	if m.FieldCleared(processbinding.FieldCategoryID) {
+		fields = append(fields, processbinding.FieldCategoryID)
 	}
 	if m.FieldCleared(processbinding.FieldConditions) {
 		fields = append(fields, processbinding.FieldConditions)
@@ -81552,6 +81976,9 @@ func (m *ProcessBindingMutation) ClearField(name string) error {
 		return nil
 	case processbinding.FieldCategory:
 		m.ClearCategory()
+		return nil
+	case processbinding.FieldCategoryID:
+		m.ClearCategoryID()
 		return nil
 	case processbinding.FieldConditions:
 		m.ClearConditions()
@@ -81605,6 +82032,9 @@ func (m *ProcessBindingMutation) ResetField(name string) error {
 		return nil
 	case processbinding.FieldCategory:
 		m.ResetCategory()
+		return nil
+	case processbinding.FieldCategoryID:
+		m.ResetCategoryID()
 		return nil
 	case processbinding.FieldConditions:
 		m.ResetConditions()
@@ -85794,6 +86224,9 @@ type ProcessInstanceMutation struct {
 	id                         *int
 	process_instance_id        *string
 	business_key               *string
+	business_type              *string
+	business_id                *int
+	addbusiness_id             *int
 	process_definition_key     *string
 	status                     *string
 	current_activity_id        *string
@@ -86012,6 +86445,125 @@ func (m *ProcessInstanceMutation) BusinessKeyCleared() bool {
 func (m *ProcessInstanceMutation) ResetBusinessKey() {
 	m.business_key = nil
 	delete(m.clearedFields, processinstance.FieldBusinessKey)
+}
+
+// SetBusinessType sets the "business_type" field.
+func (m *ProcessInstanceMutation) SetBusinessType(s string) {
+	m.business_type = &s
+}
+
+// BusinessType returns the value of the "business_type" field in the mutation.
+func (m *ProcessInstanceMutation) BusinessType() (r string, exists bool) {
+	v := m.business_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBusinessType returns the old "business_type" field's value of the ProcessInstance entity.
+// If the ProcessInstance object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessInstanceMutation) OldBusinessType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBusinessType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBusinessType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBusinessType: %w", err)
+	}
+	return oldValue.BusinessType, nil
+}
+
+// ClearBusinessType clears the value of the "business_type" field.
+func (m *ProcessInstanceMutation) ClearBusinessType() {
+	m.business_type = nil
+	m.clearedFields[processinstance.FieldBusinessType] = struct{}{}
+}
+
+// BusinessTypeCleared returns if the "business_type" field was cleared in this mutation.
+func (m *ProcessInstanceMutation) BusinessTypeCleared() bool {
+	_, ok := m.clearedFields[processinstance.FieldBusinessType]
+	return ok
+}
+
+// ResetBusinessType resets all changes to the "business_type" field.
+func (m *ProcessInstanceMutation) ResetBusinessType() {
+	m.business_type = nil
+	delete(m.clearedFields, processinstance.FieldBusinessType)
+}
+
+// SetBusinessID sets the "business_id" field.
+func (m *ProcessInstanceMutation) SetBusinessID(i int) {
+	m.business_id = &i
+	m.addbusiness_id = nil
+}
+
+// BusinessID returns the value of the "business_id" field in the mutation.
+func (m *ProcessInstanceMutation) BusinessID() (r int, exists bool) {
+	v := m.business_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBusinessID returns the old "business_id" field's value of the ProcessInstance entity.
+// If the ProcessInstance object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessInstanceMutation) OldBusinessID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBusinessID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBusinessID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBusinessID: %w", err)
+	}
+	return oldValue.BusinessID, nil
+}
+
+// AddBusinessID adds i to the "business_id" field.
+func (m *ProcessInstanceMutation) AddBusinessID(i int) {
+	if m.addbusiness_id != nil {
+		*m.addbusiness_id += i
+	} else {
+		m.addbusiness_id = &i
+	}
+}
+
+// AddedBusinessID returns the value that was added to the "business_id" field in this mutation.
+func (m *ProcessInstanceMutation) AddedBusinessID() (r int, exists bool) {
+	v := m.addbusiness_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearBusinessID clears the value of the "business_id" field.
+func (m *ProcessInstanceMutation) ClearBusinessID() {
+	m.business_id = nil
+	m.addbusiness_id = nil
+	m.clearedFields[processinstance.FieldBusinessID] = struct{}{}
+}
+
+// BusinessIDCleared returns if the "business_id" field was cleared in this mutation.
+func (m *ProcessInstanceMutation) BusinessIDCleared() bool {
+	_, ok := m.clearedFields[processinstance.FieldBusinessID]
+	return ok
+}
+
+// ResetBusinessID resets all changes to the "business_id" field.
+func (m *ProcessInstanceMutation) ResetBusinessID() {
+	m.business_id = nil
+	m.addbusiness_id = nil
+	delete(m.clearedFields, processinstance.FieldBusinessID)
 }
 
 // SetProcessDefinitionKey sets the "process_definition_key" field.
@@ -87084,12 +87636,18 @@ func (m *ProcessInstanceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ProcessInstanceMutation) Fields() []string {
-	fields := make([]string, 0, 20)
+	fields := make([]string, 0, 22)
 	if m.process_instance_id != nil {
 		fields = append(fields, processinstance.FieldProcessInstanceID)
 	}
 	if m.business_key != nil {
 		fields = append(fields, processinstance.FieldBusinessKey)
+	}
+	if m.business_type != nil {
+		fields = append(fields, processinstance.FieldBusinessType)
+	}
+	if m.business_id != nil {
+		fields = append(fields, processinstance.FieldBusinessID)
 	}
 	if m.process_definition_key != nil {
 		fields = append(fields, processinstance.FieldProcessDefinitionKey)
@@ -87157,6 +87715,10 @@ func (m *ProcessInstanceMutation) Field(name string) (ent.Value, bool) {
 		return m.ProcessInstanceID()
 	case processinstance.FieldBusinessKey:
 		return m.BusinessKey()
+	case processinstance.FieldBusinessType:
+		return m.BusinessType()
+	case processinstance.FieldBusinessID:
+		return m.BusinessID()
 	case processinstance.FieldProcessDefinitionKey:
 		return m.ProcessDefinitionKey()
 	case processinstance.FieldProcessDefinitionID:
@@ -87206,6 +87768,10 @@ func (m *ProcessInstanceMutation) OldField(ctx context.Context, name string) (en
 		return m.OldProcessInstanceID(ctx)
 	case processinstance.FieldBusinessKey:
 		return m.OldBusinessKey(ctx)
+	case processinstance.FieldBusinessType:
+		return m.OldBusinessType(ctx)
+	case processinstance.FieldBusinessID:
+		return m.OldBusinessID(ctx)
 	case processinstance.FieldProcessDefinitionKey:
 		return m.OldProcessDefinitionKey(ctx)
 	case processinstance.FieldProcessDefinitionID:
@@ -87264,6 +87830,20 @@ func (m *ProcessInstanceMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetBusinessKey(v)
+		return nil
+	case processinstance.FieldBusinessType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBusinessType(v)
+		return nil
+	case processinstance.FieldBusinessID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBusinessID(v)
 		return nil
 	case processinstance.FieldProcessDefinitionKey:
 		v, ok := value.(string)
@@ -87399,6 +87979,9 @@ func (m *ProcessInstanceMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *ProcessInstanceMutation) AddedFields() []string {
 	var fields []string
+	if m.addbusiness_id != nil {
+		fields = append(fields, processinstance.FieldBusinessID)
+	}
 	if m.addtenant_id != nil {
 		fields = append(fields, processinstance.FieldTenantID)
 	}
@@ -87413,6 +87996,8 @@ func (m *ProcessInstanceMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *ProcessInstanceMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case processinstance.FieldBusinessID:
+		return m.AddedBusinessID()
 	case processinstance.FieldTenantID:
 		return m.AddedTenantID()
 	case processinstance.FieldVersion:
@@ -87426,6 +88011,13 @@ func (m *ProcessInstanceMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *ProcessInstanceMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case processinstance.FieldBusinessID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBusinessID(v)
+		return nil
 	case processinstance.FieldTenantID:
 		v, ok := value.(int)
 		if !ok {
@@ -87450,6 +88042,12 @@ func (m *ProcessInstanceMutation) ClearedFields() []string {
 	var fields []string
 	if m.FieldCleared(processinstance.FieldBusinessKey) {
 		fields = append(fields, processinstance.FieldBusinessKey)
+	}
+	if m.FieldCleared(processinstance.FieldBusinessType) {
+		fields = append(fields, processinstance.FieldBusinessType)
+	}
+	if m.FieldCleared(processinstance.FieldBusinessID) {
+		fields = append(fields, processinstance.FieldBusinessID)
 	}
 	if m.FieldCleared(processinstance.FieldCurrentActivityID) {
 		fields = append(fields, processinstance.FieldCurrentActivityID)
@@ -87498,6 +88096,12 @@ func (m *ProcessInstanceMutation) ClearField(name string) error {
 	case processinstance.FieldBusinessKey:
 		m.ClearBusinessKey()
 		return nil
+	case processinstance.FieldBusinessType:
+		m.ClearBusinessType()
+		return nil
+	case processinstance.FieldBusinessID:
+		m.ClearBusinessID()
+		return nil
 	case processinstance.FieldCurrentActivityID:
 		m.ClearCurrentActivityID()
 		return nil
@@ -87541,6 +88145,12 @@ func (m *ProcessInstanceMutation) ResetField(name string) error {
 		return nil
 	case processinstance.FieldBusinessKey:
 		m.ResetBusinessKey()
+		return nil
+	case processinstance.FieldBusinessType:
+		m.ResetBusinessType()
+		return nil
+	case processinstance.FieldBusinessID:
+		m.ResetBusinessID()
 		return nil
 	case processinstance.FieldProcessDefinitionKey:
 		m.ResetProcessDefinitionKey()
@@ -106726,6 +107336,7 @@ type ServiceCatalogMutation struct {
 	icon                    *string
 	service_type            *string
 	itsm_type               *string
+	target_class            *string
 	price                   *float64
 	addprice                *float64
 	delivery_time           *int
@@ -107114,6 +107725,55 @@ func (m *ServiceCatalogMutation) OldItsmType(ctx context.Context) (v string, err
 // ResetItsmType resets all changes to the "itsm_type" field.
 func (m *ServiceCatalogMutation) ResetItsmType() {
 	m.itsm_type = nil
+}
+
+// SetTargetClass sets the "target_class" field.
+func (m *ServiceCatalogMutation) SetTargetClass(s string) {
+	m.target_class = &s
+}
+
+// TargetClass returns the value of the "target_class" field in the mutation.
+func (m *ServiceCatalogMutation) TargetClass() (r string, exists bool) {
+	v := m.target_class
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTargetClass returns the old "target_class" field's value of the ServiceCatalog entity.
+// If the ServiceCatalog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ServiceCatalogMutation) OldTargetClass(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTargetClass is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTargetClass requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTargetClass: %w", err)
+	}
+	return oldValue.TargetClass, nil
+}
+
+// ClearTargetClass clears the value of the "target_class" field.
+func (m *ServiceCatalogMutation) ClearTargetClass() {
+	m.target_class = nil
+	m.clearedFields[servicecatalog.FieldTargetClass] = struct{}{}
+}
+
+// TargetClassCleared returns if the "target_class" field was cleared in this mutation.
+func (m *ServiceCatalogMutation) TargetClassCleared() bool {
+	_, ok := m.clearedFields[servicecatalog.FieldTargetClass]
+	return ok
+}
+
+// ResetTargetClass resets all changes to the "target_class" field.
+func (m *ServiceCatalogMutation) ResetTargetClass() {
+	m.target_class = nil
+	delete(m.clearedFields, servicecatalog.FieldTargetClass)
 }
 
 // SetPrice sets the "price" field.
@@ -108211,7 +108871,7 @@ func (m *ServiceCatalogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ServiceCatalogMutation) Fields() []string {
-	fields := make([]string, 0, 25)
+	fields := make([]string, 0, 26)
 	if m.name != nil {
 		fields = append(fields, servicecatalog.FieldName)
 	}
@@ -108229,6 +108889,9 @@ func (m *ServiceCatalogMutation) Fields() []string {
 	}
 	if m.itsm_type != nil {
 		fields = append(fields, servicecatalog.FieldItsmType)
+	}
+	if m.target_class != nil {
+		fields = append(fields, servicecatalog.FieldTargetClass)
 	}
 	if m.price != nil {
 		fields = append(fields, servicecatalog.FieldPrice)
@@ -108307,6 +108970,8 @@ func (m *ServiceCatalogMutation) Field(name string) (ent.Value, bool) {
 		return m.ServiceType()
 	case servicecatalog.FieldItsmType:
 		return m.ItsmType()
+	case servicecatalog.FieldTargetClass:
+		return m.TargetClass()
 	case servicecatalog.FieldPrice:
 		return m.Price()
 	case servicecatalog.FieldDeliveryTime:
@@ -108366,6 +109031,8 @@ func (m *ServiceCatalogMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldServiceType(ctx)
 	case servicecatalog.FieldItsmType:
 		return m.OldItsmType(ctx)
+	case servicecatalog.FieldTargetClass:
+		return m.OldTargetClass(ctx)
 	case servicecatalog.FieldPrice:
 		return m.OldPrice(ctx)
 	case servicecatalog.FieldDeliveryTime:
@@ -108454,6 +109121,13 @@ func (m *ServiceCatalogMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetItsmType(v)
+		return nil
+	case servicecatalog.FieldTargetClass:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTargetClass(v)
 		return nil
 	case servicecatalog.FieldPrice:
 		v, ok := value.(float64)
@@ -108738,6 +109412,9 @@ func (m *ServiceCatalogMutation) ClearedFields() []string {
 	if m.FieldCleared(servicecatalog.FieldIcon) {
 		fields = append(fields, servicecatalog.FieldIcon)
 	}
+	if m.FieldCleared(servicecatalog.FieldTargetClass) {
+		fields = append(fields, servicecatalog.FieldTargetClass)
+	}
 	if m.FieldCleared(servicecatalog.FieldPrice) {
 		fields = append(fields, servicecatalog.FieldPrice)
 	}
@@ -108793,6 +109470,9 @@ func (m *ServiceCatalogMutation) ClearField(name string) error {
 		return nil
 	case servicecatalog.FieldIcon:
 		m.ClearIcon()
+		return nil
+	case servicecatalog.FieldTargetClass:
+		m.ClearTargetClass()
 		return nil
 	case servicecatalog.FieldPrice:
 		m.ClearPrice()
@@ -108852,6 +109532,9 @@ func (m *ServiceCatalogMutation) ResetField(name string) error {
 		return nil
 	case servicecatalog.FieldItsmType:
 		m.ResetItsmType()
+		return nil
+	case servicecatalog.FieldTargetClass:
+		m.ResetTargetClass()
 		return nil
 	case servicecatalog.FieldPrice:
 		m.ResetPrice()
@@ -120728,6 +121411,11 @@ type TicketMutation struct {
 	status                     *string
 	_type                      *string
 	source                     *string
+	record_class               *string
+	opened_by_id               *int
+	addopened_by_id            *int
+	assignment_group_id        *int
+	addassignment_group_id     *int
 	priority                   *string
 	ticket_number              *string
 	creator_email              *string
@@ -121121,6 +121809,182 @@ func (m *TicketMutation) SourceCleared() bool {
 func (m *TicketMutation) ResetSource() {
 	m.source = nil
 	delete(m.clearedFields, ticket.FieldSource)
+}
+
+// SetRecordClass sets the "record_class" field.
+func (m *TicketMutation) SetRecordClass(s string) {
+	m.record_class = &s
+}
+
+// RecordClass returns the value of the "record_class" field in the mutation.
+func (m *TicketMutation) RecordClass() (r string, exists bool) {
+	v := m.record_class
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRecordClass returns the old "record_class" field's value of the Ticket entity.
+// If the Ticket object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketMutation) OldRecordClass(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRecordClass is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRecordClass requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRecordClass: %w", err)
+	}
+	return oldValue.RecordClass, nil
+}
+
+// ResetRecordClass resets all changes to the "record_class" field.
+func (m *TicketMutation) ResetRecordClass() {
+	m.record_class = nil
+}
+
+// SetOpenedByID sets the "opened_by_id" field.
+func (m *TicketMutation) SetOpenedByID(i int) {
+	m.opened_by_id = &i
+	m.addopened_by_id = nil
+}
+
+// OpenedByID returns the value of the "opened_by_id" field in the mutation.
+func (m *TicketMutation) OpenedByID() (r int, exists bool) {
+	v := m.opened_by_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOpenedByID returns the old "opened_by_id" field's value of the Ticket entity.
+// If the Ticket object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketMutation) OldOpenedByID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOpenedByID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOpenedByID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOpenedByID: %w", err)
+	}
+	return oldValue.OpenedByID, nil
+}
+
+// AddOpenedByID adds i to the "opened_by_id" field.
+func (m *TicketMutation) AddOpenedByID(i int) {
+	if m.addopened_by_id != nil {
+		*m.addopened_by_id += i
+	} else {
+		m.addopened_by_id = &i
+	}
+}
+
+// AddedOpenedByID returns the value that was added to the "opened_by_id" field in this mutation.
+func (m *TicketMutation) AddedOpenedByID() (r int, exists bool) {
+	v := m.addopened_by_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearOpenedByID clears the value of the "opened_by_id" field.
+func (m *TicketMutation) ClearOpenedByID() {
+	m.opened_by_id = nil
+	m.addopened_by_id = nil
+	m.clearedFields[ticket.FieldOpenedByID] = struct{}{}
+}
+
+// OpenedByIDCleared returns if the "opened_by_id" field was cleared in this mutation.
+func (m *TicketMutation) OpenedByIDCleared() bool {
+	_, ok := m.clearedFields[ticket.FieldOpenedByID]
+	return ok
+}
+
+// ResetOpenedByID resets all changes to the "opened_by_id" field.
+func (m *TicketMutation) ResetOpenedByID() {
+	m.opened_by_id = nil
+	m.addopened_by_id = nil
+	delete(m.clearedFields, ticket.FieldOpenedByID)
+}
+
+// SetAssignmentGroupID sets the "assignment_group_id" field.
+func (m *TicketMutation) SetAssignmentGroupID(i int) {
+	m.assignment_group_id = &i
+	m.addassignment_group_id = nil
+}
+
+// AssignmentGroupID returns the value of the "assignment_group_id" field in the mutation.
+func (m *TicketMutation) AssignmentGroupID() (r int, exists bool) {
+	v := m.assignment_group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAssignmentGroupID returns the old "assignment_group_id" field's value of the Ticket entity.
+// If the Ticket object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketMutation) OldAssignmentGroupID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAssignmentGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAssignmentGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAssignmentGroupID: %w", err)
+	}
+	return oldValue.AssignmentGroupID, nil
+}
+
+// AddAssignmentGroupID adds i to the "assignment_group_id" field.
+func (m *TicketMutation) AddAssignmentGroupID(i int) {
+	if m.addassignment_group_id != nil {
+		*m.addassignment_group_id += i
+	} else {
+		m.addassignment_group_id = &i
+	}
+}
+
+// AddedAssignmentGroupID returns the value that was added to the "assignment_group_id" field in this mutation.
+func (m *TicketMutation) AddedAssignmentGroupID() (r int, exists bool) {
+	v := m.addassignment_group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearAssignmentGroupID clears the value of the "assignment_group_id" field.
+func (m *TicketMutation) ClearAssignmentGroupID() {
+	m.assignment_group_id = nil
+	m.addassignment_group_id = nil
+	m.clearedFields[ticket.FieldAssignmentGroupID] = struct{}{}
+}
+
+// AssignmentGroupIDCleared returns if the "assignment_group_id" field was cleared in this mutation.
+func (m *TicketMutation) AssignmentGroupIDCleared() bool {
+	_, ok := m.clearedFields[ticket.FieldAssignmentGroupID]
+	return ok
+}
+
+// ResetAssignmentGroupID resets all changes to the "assignment_group_id" field.
+func (m *TicketMutation) ResetAssignmentGroupID() {
+	m.assignment_group_id = nil
+	m.addassignment_group_id = nil
+	delete(m.clearedFields, ticket.FieldAssignmentGroupID)
 }
 
 // SetPriority sets the "priority" field.
@@ -123655,7 +124519,7 @@ func (m *TicketMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TicketMutation) Fields() []string {
-	fields := make([]string, 0, 38)
+	fields := make([]string, 0, 41)
 	if m.title != nil {
 		fields = append(fields, ticket.FieldTitle)
 	}
@@ -123670,6 +124534,15 @@ func (m *TicketMutation) Fields() []string {
 	}
 	if m.source != nil {
 		fields = append(fields, ticket.FieldSource)
+	}
+	if m.record_class != nil {
+		fields = append(fields, ticket.FieldRecordClass)
+	}
+	if m.opened_by_id != nil {
+		fields = append(fields, ticket.FieldOpenedByID)
+	}
+	if m.assignment_group_id != nil {
+		fields = append(fields, ticket.FieldAssignmentGroupID)
 	}
 	if m.priority != nil {
 		fields = append(fields, ticket.FieldPriority)
@@ -123788,6 +124661,12 @@ func (m *TicketMutation) Field(name string) (ent.Value, bool) {
 		return m.GetType()
 	case ticket.FieldSource:
 		return m.Source()
+	case ticket.FieldRecordClass:
+		return m.RecordClass()
+	case ticket.FieldOpenedByID:
+		return m.OpenedByID()
+	case ticket.FieldAssignmentGroupID:
+		return m.AssignmentGroupID()
 	case ticket.FieldPriority:
 		return m.Priority()
 	case ticket.FieldTicketNumber:
@@ -123873,6 +124752,12 @@ func (m *TicketMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldType(ctx)
 	case ticket.FieldSource:
 		return m.OldSource(ctx)
+	case ticket.FieldRecordClass:
+		return m.OldRecordClass(ctx)
+	case ticket.FieldOpenedByID:
+		return m.OldOpenedByID(ctx)
+	case ticket.FieldAssignmentGroupID:
+		return m.OldAssignmentGroupID(ctx)
 	case ticket.FieldPriority:
 		return m.OldPriority(ctx)
 	case ticket.FieldTicketNumber:
@@ -123982,6 +124867,27 @@ func (m *TicketMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetSource(v)
+		return nil
+	case ticket.FieldRecordClass:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRecordClass(v)
+		return nil
+	case ticket.FieldOpenedByID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOpenedByID(v)
+		return nil
+	case ticket.FieldAssignmentGroupID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAssignmentGroupID(v)
 		return nil
 	case ticket.FieldPriority:
 		v, ok := value.(string)
@@ -124222,6 +125128,12 @@ func (m *TicketMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *TicketMutation) AddedFields() []string {
 	var fields []string
+	if m.addopened_by_id != nil {
+		fields = append(fields, ticket.FieldOpenedByID)
+	}
+	if m.addassignment_group_id != nil {
+		fields = append(fields, ticket.FieldAssignmentGroupID)
+	}
 	if m.addtenant_id != nil {
 		fields = append(fields, ticket.FieldTenantID)
 	}
@@ -124263,6 +125175,10 @@ func (m *TicketMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *TicketMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case ticket.FieldOpenedByID:
+		return m.AddedOpenedByID()
+	case ticket.FieldAssignmentGroupID:
+		return m.AddedAssignmentGroupID()
 	case ticket.FieldTenantID:
 		return m.AddedTenantID()
 	case ticket.FieldTemplateID:
@@ -124294,6 +125210,20 @@ func (m *TicketMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *TicketMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case ticket.FieldOpenedByID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddOpenedByID(v)
+		return nil
+	case ticket.FieldAssignmentGroupID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAssignmentGroupID(v)
+		return nil
 	case ticket.FieldTenantID:
 		v, ok := value.(int)
 		if !ok {
@@ -124384,6 +125314,12 @@ func (m *TicketMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(ticket.FieldSource) {
 		fields = append(fields, ticket.FieldSource)
+	}
+	if m.FieldCleared(ticket.FieldOpenedByID) {
+		fields = append(fields, ticket.FieldOpenedByID)
+	}
+	if m.FieldCleared(ticket.FieldAssignmentGroupID) {
+		fields = append(fields, ticket.FieldAssignmentGroupID)
 	}
 	if m.FieldCleared(ticket.FieldCreatorEmail) {
 		fields = append(fields, ticket.FieldCreatorEmail)
@@ -124479,6 +125415,12 @@ func (m *TicketMutation) ClearField(name string) error {
 		return nil
 	case ticket.FieldSource:
 		m.ClearSource()
+		return nil
+	case ticket.FieldOpenedByID:
+		m.ClearOpenedByID()
+		return nil
+	case ticket.FieldAssignmentGroupID:
+		m.ClearAssignmentGroupID()
 		return nil
 	case ticket.FieldCreatorEmail:
 		m.ClearCreatorEmail()
@@ -124577,6 +125519,15 @@ func (m *TicketMutation) ResetField(name string) error {
 		return nil
 	case ticket.FieldSource:
 		m.ResetSource()
+		return nil
+	case ticket.FieldRecordClass:
+		m.ResetRecordClass()
+		return nil
+	case ticket.FieldOpenedByID:
+		m.ResetOpenedByID()
+		return nil
+	case ticket.FieldAssignmentGroupID:
+		m.ResetAssignmentGroupID()
 		return nil
 	case ticket.FieldPriority:
 		m.ResetPriority()
@@ -145711,6 +146662,886 @@ func (m *VendorMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown Vendor edge %s", name)
+}
+
+// WorkItemRelationMutation represents an operation that mutates the WorkItemRelation nodes in the graph.
+type WorkItemRelationMutation struct {
+	config
+	op                     Op
+	typ                    string
+	id                     *int
+	tenant_id              *int
+	addtenant_id           *int
+	source_work_item_id    *int
+	addsource_work_item_id *int
+	target_work_item_id    *int
+	addtarget_work_item_id *int
+	relation_type          *string
+	created_by_id          *int
+	addcreated_by_id       *int
+	metadata               *map[string]interface{}
+	created_at             *time.Time
+	deleted_at             *time.Time
+	clearedFields          map[string]struct{}
+	done                   bool
+	oldValue               func(context.Context) (*WorkItemRelation, error)
+	predicates             []predicate.WorkItemRelation
+}
+
+var _ ent.Mutation = (*WorkItemRelationMutation)(nil)
+
+// workitemrelationOption allows management of the mutation configuration using functional options.
+type workitemrelationOption func(*WorkItemRelationMutation)
+
+// newWorkItemRelationMutation creates new mutation for the WorkItemRelation entity.
+func newWorkItemRelationMutation(c config, op Op, opts ...workitemrelationOption) *WorkItemRelationMutation {
+	m := &WorkItemRelationMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeWorkItemRelation,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withWorkItemRelationID sets the ID field of the mutation.
+func withWorkItemRelationID(id int) workitemrelationOption {
+	return func(m *WorkItemRelationMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *WorkItemRelation
+		)
+		m.oldValue = func(ctx context.Context) (*WorkItemRelation, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().WorkItemRelation.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withWorkItemRelation sets the old WorkItemRelation of the mutation.
+func withWorkItemRelation(node *WorkItemRelation) workitemrelationOption {
+	return func(m *WorkItemRelationMutation) {
+		m.oldValue = func(context.Context) (*WorkItemRelation, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m WorkItemRelationMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m WorkItemRelationMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *WorkItemRelationMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *WorkItemRelationMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().WorkItemRelation.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *WorkItemRelationMutation) SetTenantID(i int) {
+	m.tenant_id = &i
+	m.addtenant_id = nil
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *WorkItemRelationMutation) TenantID() (r int, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the WorkItemRelation entity.
+// If the WorkItemRelation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkItemRelationMutation) OldTenantID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// AddTenantID adds i to the "tenant_id" field.
+func (m *WorkItemRelationMutation) AddTenantID(i int) {
+	if m.addtenant_id != nil {
+		*m.addtenant_id += i
+	} else {
+		m.addtenant_id = &i
+	}
+}
+
+// AddedTenantID returns the value that was added to the "tenant_id" field in this mutation.
+func (m *WorkItemRelationMutation) AddedTenantID() (r int, exists bool) {
+	v := m.addtenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *WorkItemRelationMutation) ResetTenantID() {
+	m.tenant_id = nil
+	m.addtenant_id = nil
+}
+
+// SetSourceWorkItemID sets the "source_work_item_id" field.
+func (m *WorkItemRelationMutation) SetSourceWorkItemID(i int) {
+	m.source_work_item_id = &i
+	m.addsource_work_item_id = nil
+}
+
+// SourceWorkItemID returns the value of the "source_work_item_id" field in the mutation.
+func (m *WorkItemRelationMutation) SourceWorkItemID() (r int, exists bool) {
+	v := m.source_work_item_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSourceWorkItemID returns the old "source_work_item_id" field's value of the WorkItemRelation entity.
+// If the WorkItemRelation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkItemRelationMutation) OldSourceWorkItemID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSourceWorkItemID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSourceWorkItemID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSourceWorkItemID: %w", err)
+	}
+	return oldValue.SourceWorkItemID, nil
+}
+
+// AddSourceWorkItemID adds i to the "source_work_item_id" field.
+func (m *WorkItemRelationMutation) AddSourceWorkItemID(i int) {
+	if m.addsource_work_item_id != nil {
+		*m.addsource_work_item_id += i
+	} else {
+		m.addsource_work_item_id = &i
+	}
+}
+
+// AddedSourceWorkItemID returns the value that was added to the "source_work_item_id" field in this mutation.
+func (m *WorkItemRelationMutation) AddedSourceWorkItemID() (r int, exists bool) {
+	v := m.addsource_work_item_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSourceWorkItemID resets all changes to the "source_work_item_id" field.
+func (m *WorkItemRelationMutation) ResetSourceWorkItemID() {
+	m.source_work_item_id = nil
+	m.addsource_work_item_id = nil
+}
+
+// SetTargetWorkItemID sets the "target_work_item_id" field.
+func (m *WorkItemRelationMutation) SetTargetWorkItemID(i int) {
+	m.target_work_item_id = &i
+	m.addtarget_work_item_id = nil
+}
+
+// TargetWorkItemID returns the value of the "target_work_item_id" field in the mutation.
+func (m *WorkItemRelationMutation) TargetWorkItemID() (r int, exists bool) {
+	v := m.target_work_item_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTargetWorkItemID returns the old "target_work_item_id" field's value of the WorkItemRelation entity.
+// If the WorkItemRelation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkItemRelationMutation) OldTargetWorkItemID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTargetWorkItemID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTargetWorkItemID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTargetWorkItemID: %w", err)
+	}
+	return oldValue.TargetWorkItemID, nil
+}
+
+// AddTargetWorkItemID adds i to the "target_work_item_id" field.
+func (m *WorkItemRelationMutation) AddTargetWorkItemID(i int) {
+	if m.addtarget_work_item_id != nil {
+		*m.addtarget_work_item_id += i
+	} else {
+		m.addtarget_work_item_id = &i
+	}
+}
+
+// AddedTargetWorkItemID returns the value that was added to the "target_work_item_id" field in this mutation.
+func (m *WorkItemRelationMutation) AddedTargetWorkItemID() (r int, exists bool) {
+	v := m.addtarget_work_item_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetTargetWorkItemID resets all changes to the "target_work_item_id" field.
+func (m *WorkItemRelationMutation) ResetTargetWorkItemID() {
+	m.target_work_item_id = nil
+	m.addtarget_work_item_id = nil
+}
+
+// SetRelationType sets the "relation_type" field.
+func (m *WorkItemRelationMutation) SetRelationType(s string) {
+	m.relation_type = &s
+}
+
+// RelationType returns the value of the "relation_type" field in the mutation.
+func (m *WorkItemRelationMutation) RelationType() (r string, exists bool) {
+	v := m.relation_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRelationType returns the old "relation_type" field's value of the WorkItemRelation entity.
+// If the WorkItemRelation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkItemRelationMutation) OldRelationType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRelationType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRelationType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRelationType: %w", err)
+	}
+	return oldValue.RelationType, nil
+}
+
+// ResetRelationType resets all changes to the "relation_type" field.
+func (m *WorkItemRelationMutation) ResetRelationType() {
+	m.relation_type = nil
+}
+
+// SetCreatedByID sets the "created_by_id" field.
+func (m *WorkItemRelationMutation) SetCreatedByID(i int) {
+	m.created_by_id = &i
+	m.addcreated_by_id = nil
+}
+
+// CreatedByID returns the value of the "created_by_id" field in the mutation.
+func (m *WorkItemRelationMutation) CreatedByID() (r int, exists bool) {
+	v := m.created_by_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedByID returns the old "created_by_id" field's value of the WorkItemRelation entity.
+// If the WorkItemRelation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkItemRelationMutation) OldCreatedByID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedByID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedByID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedByID: %w", err)
+	}
+	return oldValue.CreatedByID, nil
+}
+
+// AddCreatedByID adds i to the "created_by_id" field.
+func (m *WorkItemRelationMutation) AddCreatedByID(i int) {
+	if m.addcreated_by_id != nil {
+		*m.addcreated_by_id += i
+	} else {
+		m.addcreated_by_id = &i
+	}
+}
+
+// AddedCreatedByID returns the value that was added to the "created_by_id" field in this mutation.
+func (m *WorkItemRelationMutation) AddedCreatedByID() (r int, exists bool) {
+	v := m.addcreated_by_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetCreatedByID resets all changes to the "created_by_id" field.
+func (m *WorkItemRelationMutation) ResetCreatedByID() {
+	m.created_by_id = nil
+	m.addcreated_by_id = nil
+}
+
+// SetMetadata sets the "metadata" field.
+func (m *WorkItemRelationMutation) SetMetadata(value map[string]interface{}) {
+	m.metadata = &value
+}
+
+// Metadata returns the value of the "metadata" field in the mutation.
+func (m *WorkItemRelationMutation) Metadata() (r map[string]interface{}, exists bool) {
+	v := m.metadata
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMetadata returns the old "metadata" field's value of the WorkItemRelation entity.
+// If the WorkItemRelation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkItemRelationMutation) OldMetadata(ctx context.Context) (v map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMetadata is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMetadata requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMetadata: %w", err)
+	}
+	return oldValue.Metadata, nil
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (m *WorkItemRelationMutation) ClearMetadata() {
+	m.metadata = nil
+	m.clearedFields[workitemrelation.FieldMetadata] = struct{}{}
+}
+
+// MetadataCleared returns if the "metadata" field was cleared in this mutation.
+func (m *WorkItemRelationMutation) MetadataCleared() bool {
+	_, ok := m.clearedFields[workitemrelation.FieldMetadata]
+	return ok
+}
+
+// ResetMetadata resets all changes to the "metadata" field.
+func (m *WorkItemRelationMutation) ResetMetadata() {
+	m.metadata = nil
+	delete(m.clearedFields, workitemrelation.FieldMetadata)
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *WorkItemRelationMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *WorkItemRelationMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the WorkItemRelation entity.
+// If the WorkItemRelation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkItemRelationMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *WorkItemRelationMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (m *WorkItemRelationMutation) SetDeletedAt(t time.Time) {
+	m.deleted_at = &t
+}
+
+// DeletedAt returns the value of the "deleted_at" field in the mutation.
+func (m *WorkItemRelationMutation) DeletedAt() (r time.Time, exists bool) {
+	v := m.deleted_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDeletedAt returns the old "deleted_at" field's value of the WorkItemRelation entity.
+// If the WorkItemRelation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkItemRelationMutation) OldDeletedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDeletedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDeletedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDeletedAt: %w", err)
+	}
+	return oldValue.DeletedAt, nil
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (m *WorkItemRelationMutation) ClearDeletedAt() {
+	m.deleted_at = nil
+	m.clearedFields[workitemrelation.FieldDeletedAt] = struct{}{}
+}
+
+// DeletedAtCleared returns if the "deleted_at" field was cleared in this mutation.
+func (m *WorkItemRelationMutation) DeletedAtCleared() bool {
+	_, ok := m.clearedFields[workitemrelation.FieldDeletedAt]
+	return ok
+}
+
+// ResetDeletedAt resets all changes to the "deleted_at" field.
+func (m *WorkItemRelationMutation) ResetDeletedAt() {
+	m.deleted_at = nil
+	delete(m.clearedFields, workitemrelation.FieldDeletedAt)
+}
+
+// Where appends a list predicates to the WorkItemRelationMutation builder.
+func (m *WorkItemRelationMutation) Where(ps ...predicate.WorkItemRelation) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the WorkItemRelationMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *WorkItemRelationMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.WorkItemRelation, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *WorkItemRelationMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *WorkItemRelationMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (WorkItemRelation).
+func (m *WorkItemRelationMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *WorkItemRelationMutation) Fields() []string {
+	fields := make([]string, 0, 8)
+	if m.tenant_id != nil {
+		fields = append(fields, workitemrelation.FieldTenantID)
+	}
+	if m.source_work_item_id != nil {
+		fields = append(fields, workitemrelation.FieldSourceWorkItemID)
+	}
+	if m.target_work_item_id != nil {
+		fields = append(fields, workitemrelation.FieldTargetWorkItemID)
+	}
+	if m.relation_type != nil {
+		fields = append(fields, workitemrelation.FieldRelationType)
+	}
+	if m.created_by_id != nil {
+		fields = append(fields, workitemrelation.FieldCreatedByID)
+	}
+	if m.metadata != nil {
+		fields = append(fields, workitemrelation.FieldMetadata)
+	}
+	if m.created_at != nil {
+		fields = append(fields, workitemrelation.FieldCreatedAt)
+	}
+	if m.deleted_at != nil {
+		fields = append(fields, workitemrelation.FieldDeletedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *WorkItemRelationMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case workitemrelation.FieldTenantID:
+		return m.TenantID()
+	case workitemrelation.FieldSourceWorkItemID:
+		return m.SourceWorkItemID()
+	case workitemrelation.FieldTargetWorkItemID:
+		return m.TargetWorkItemID()
+	case workitemrelation.FieldRelationType:
+		return m.RelationType()
+	case workitemrelation.FieldCreatedByID:
+		return m.CreatedByID()
+	case workitemrelation.FieldMetadata:
+		return m.Metadata()
+	case workitemrelation.FieldCreatedAt:
+		return m.CreatedAt()
+	case workitemrelation.FieldDeletedAt:
+		return m.DeletedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *WorkItemRelationMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case workitemrelation.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case workitemrelation.FieldSourceWorkItemID:
+		return m.OldSourceWorkItemID(ctx)
+	case workitemrelation.FieldTargetWorkItemID:
+		return m.OldTargetWorkItemID(ctx)
+	case workitemrelation.FieldRelationType:
+		return m.OldRelationType(ctx)
+	case workitemrelation.FieldCreatedByID:
+		return m.OldCreatedByID(ctx)
+	case workitemrelation.FieldMetadata:
+		return m.OldMetadata(ctx)
+	case workitemrelation.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case workitemrelation.FieldDeletedAt:
+		return m.OldDeletedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown WorkItemRelation field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *WorkItemRelationMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case workitemrelation.FieldTenantID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case workitemrelation.FieldSourceWorkItemID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSourceWorkItemID(v)
+		return nil
+	case workitemrelation.FieldTargetWorkItemID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTargetWorkItemID(v)
+		return nil
+	case workitemrelation.FieldRelationType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRelationType(v)
+		return nil
+	case workitemrelation.FieldCreatedByID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedByID(v)
+		return nil
+	case workitemrelation.FieldMetadata:
+		v, ok := value.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMetadata(v)
+		return nil
+	case workitemrelation.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case workitemrelation.FieldDeletedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDeletedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown WorkItemRelation field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *WorkItemRelationMutation) AddedFields() []string {
+	var fields []string
+	if m.addtenant_id != nil {
+		fields = append(fields, workitemrelation.FieldTenantID)
+	}
+	if m.addsource_work_item_id != nil {
+		fields = append(fields, workitemrelation.FieldSourceWorkItemID)
+	}
+	if m.addtarget_work_item_id != nil {
+		fields = append(fields, workitemrelation.FieldTargetWorkItemID)
+	}
+	if m.addcreated_by_id != nil {
+		fields = append(fields, workitemrelation.FieldCreatedByID)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *WorkItemRelationMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case workitemrelation.FieldTenantID:
+		return m.AddedTenantID()
+	case workitemrelation.FieldSourceWorkItemID:
+		return m.AddedSourceWorkItemID()
+	case workitemrelation.FieldTargetWorkItemID:
+		return m.AddedTargetWorkItemID()
+	case workitemrelation.FieldCreatedByID:
+		return m.AddedCreatedByID()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *WorkItemRelationMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case workitemrelation.FieldTenantID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTenantID(v)
+		return nil
+	case workitemrelation.FieldSourceWorkItemID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSourceWorkItemID(v)
+		return nil
+	case workitemrelation.FieldTargetWorkItemID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTargetWorkItemID(v)
+		return nil
+	case workitemrelation.FieldCreatedByID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCreatedByID(v)
+		return nil
+	}
+	return fmt.Errorf("unknown WorkItemRelation numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *WorkItemRelationMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(workitemrelation.FieldMetadata) {
+		fields = append(fields, workitemrelation.FieldMetadata)
+	}
+	if m.FieldCleared(workitemrelation.FieldDeletedAt) {
+		fields = append(fields, workitemrelation.FieldDeletedAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *WorkItemRelationMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *WorkItemRelationMutation) ClearField(name string) error {
+	switch name {
+	case workitemrelation.FieldMetadata:
+		m.ClearMetadata()
+		return nil
+	case workitemrelation.FieldDeletedAt:
+		m.ClearDeletedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown WorkItemRelation nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *WorkItemRelationMutation) ResetField(name string) error {
+	switch name {
+	case workitemrelation.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case workitemrelation.FieldSourceWorkItemID:
+		m.ResetSourceWorkItemID()
+		return nil
+	case workitemrelation.FieldTargetWorkItemID:
+		m.ResetTargetWorkItemID()
+		return nil
+	case workitemrelation.FieldRelationType:
+		m.ResetRelationType()
+		return nil
+	case workitemrelation.FieldCreatedByID:
+		m.ResetCreatedByID()
+		return nil
+	case workitemrelation.FieldMetadata:
+		m.ResetMetadata()
+		return nil
+	case workitemrelation.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case workitemrelation.FieldDeletedAt:
+		m.ResetDeletedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown WorkItemRelation field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *WorkItemRelationMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *WorkItemRelationMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *WorkItemRelationMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *WorkItemRelationMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *WorkItemRelationMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *WorkItemRelationMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *WorkItemRelationMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown WorkItemRelation unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *WorkItemRelationMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown WorkItemRelation edge %s", name)
 }
 
 // WorkflowMutation represents an operation that mutates the Workflow nodes in the graph.

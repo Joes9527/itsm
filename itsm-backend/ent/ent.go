@@ -121,6 +121,7 @@ import (
 	"itsm-backend/ent/workflowinstance"
 	"itsm-backend/ent/workflowtask"
 	"itsm-backend/ent/workflowversion"
+	"itsm-backend/ent/workitemrelation"
 	"reflect"
 	"sync"
 
@@ -298,6 +299,7 @@ func checkColumn(t, c string) error {
 			toolinvocation.Table:              toolinvocation.ValidColumn,
 			user.Table:                        user.ValidColumn,
 			vendor.Table:                      vendor.ValidColumn,
+			workitemrelation.Table:            workitemrelation.ValidColumn,
 			workflow.Table:                    workflow.ValidColumn,
 			workflowinstance.Table:            workflowinstance.ValidColumn,
 			workflowtask.Table:                workflowtask.ValidColumn,

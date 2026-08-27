@@ -24,10 +24,29 @@ import (
 type BPMNApprovalBridge struct {
 	client *ent.Client
 	logger *zap.SugaredLogger
+	// engine 必须是装配好 CallbackRegistry 的那一个引擎实例（bootstrap 注入的同一个）。
+	// 此前这里没有引擎字段，三个方法各自 NewCustomProcessEngine 现造一个，拿到的
+	// CallbackRegistry 永远是空的——业务审批桥接完成 UserTask 时，
+	// TicketServiceTaskHandler / IncidentServiceTaskHandler 的副作用只会 Warn 一句静默丢弃。
+	engine ProcessEngine
 }
 
-func NewBPMNApprovalBridge(client *ent.Client, logger *zap.SugaredLogger) *BPMNApprovalBridge {
-	return &BPMNApprovalBridge{client: client, logger: logger}
+// NewBPMNApprovalBridge 创建审批桥接。engine 必须传入调用方所在进程里那个唯一的、
+// 已由 bootstrap 完成 CallbackRegistry 依赖注入的引擎实例；传 nil 会退化成一个未装配的
+// 引擎（仅供不关心 ServiceTask 副作用的单元测试使用）。
+func NewBPMNApprovalBridge(client *ent.Client, logger *zap.SugaredLogger, engine ProcessEngine) *BPMNApprovalBridge {
+	if engine == nil {
+		engine = NewCustomProcessEngine(client, logger)
+	}
+	return &BPMNApprovalBridge{client: client, logger: logger, engine: engine}
+}
+
+// SetProcessEngine 替换桥接使用的流程引擎，由 bootstrap 在 CallbackRegistry 完成注入后调用。
+// 与 handlers/change 的 SetProcessEngine 是同一个延迟装配模式。
+func (b *BPMNApprovalBridge) SetProcessEngine(engine ProcessEngine) {
+	if engine != nil {
+		b.engine = engine
+	}
 }
 
 // CompleteBusinessApprovalTask 按业务键查找运行中的流程实例，并以 actorUserID 身份
@@ -79,8 +98,7 @@ func (b *BPMNApprovalBridge) CompleteBusinessApprovalTask(ctx context.Context, t
 	workflowCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
 	workflowCtx = context.WithValue(workflowCtx, bpmn.BPMNUserIDContextKey, actorUserID)
 
-	engine := NewCustomProcessEngine(b.client, b.logger)
-	if err := engine.CompleteTask(workflowCtx, task.TaskID, variables); err != nil {
+	if err := b.engine.CompleteTask(workflowCtx, task.TaskID, variables); err != nil {
 		return false, fmt.Errorf("完成流程审批任务失败: %w", err)
 	}
 
@@ -114,13 +132,12 @@ func (b *BPMNApprovalBridge) DelegateBusinessApprovalTask(ctx context.Context, t
 	workflowCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
 	workflowCtx = context.WithValue(workflowCtx, bpmn.BPMNUserIDContextKey, actorUserID)
 
-	engine := NewCustomProcessEngine(b.client, b.logger)
-	if customEngine, ok := engine.(*CustomProcessEngine); ok {
+	if customEngine, ok := b.engine.(*CustomProcessEngine); ok {
 		if err := customEngine.authorizeTaskActor(workflowCtx, task); err != nil {
 			return false, fmt.Errorf("委派流程任务失败: %w", err)
 		}
 	}
-	if err := engine.TaskService().DelegateTask(workflowCtx, task.TaskID, strconv.Itoa(newAssigneeUserID)); err != nil {
+	if err := b.engine.TaskService().DelegateTask(workflowCtx, task.TaskID, strconv.Itoa(newAssigneeUserID)); err != nil {
 		return false, fmt.Errorf("委派流程任务失败: %w", err)
 	}
 
@@ -170,8 +187,7 @@ func (b *BPMNApprovalBridge) CompleteBusinessStageTask(ctx context.Context, tena
 	workflowCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
 	workflowCtx = context.WithValue(workflowCtx, bpmn.BPMNUserIDContextKey, actorUserID)
 
-	engine := NewCustomProcessEngine(b.client, b.logger)
-	if err := engine.CompleteTask(workflowCtx, task.TaskID, variables); err != nil {
+	if err := b.engine.CompleteTask(workflowCtx, task.TaskID, variables); err != nil {
 		return false, fmt.Errorf("完成流程阶段任务失败: %w", err)
 	}
 

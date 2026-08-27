@@ -30,10 +30,20 @@ func NewReleaseService(client *ent.Client, logger *zap.SugaredLogger) *ReleaseSe
 		logger: logger,
 	}
 	if client != nil {
-		// P0-1：发布审批桥接到 BPMN 任务，避免流程实例悬挂
-		svc.approvalBridge = NewBPMNApprovalBridge(client, logger)
+		// P0-1：发布审批桥接到 BPMN 任务，避免流程实例悬挂。
+		// 这里先用一个本地引擎兜底，bootstrap 会通过 SetProcessEngine 换成那个
+		// 已注入 CallbackRegistry 依赖的全局引擎实例。
+		svc.approvalBridge = NewBPMNApprovalBridge(client, logger, nil)
 	}
 	return svc
+}
+
+// SetProcessEngine 注入全局流程引擎（已完成 CallbackRegistry 依赖装配的那一个），
+// 由 bootstrap 调用，理由同 TicketWorkflowService.SetProcessEngine。
+func (s *ReleaseService) SetProcessEngine(engine ProcessEngine) {
+	if s.approvalBridge != nil {
+		s.approvalBridge.SetProcessEngine(engine)
+	}
 }
 
 // SetProcessTriggerService 注入流程触发服务（创建发布后自动启动 release_approval_flow）。

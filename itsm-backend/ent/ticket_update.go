@@ -123,6 +123,74 @@ func (_u *TicketUpdate) ClearSource() *TicketUpdate {
 	return _u
 }
 
+// SetRecordClass sets the "record_class" field.
+func (_u *TicketUpdate) SetRecordClass(v string) *TicketUpdate {
+	_u.mutation.SetRecordClass(v)
+	return _u
+}
+
+// SetNillableRecordClass sets the "record_class" field if the given value is not nil.
+func (_u *TicketUpdate) SetNillableRecordClass(v *string) *TicketUpdate {
+	if v != nil {
+		_u.SetRecordClass(*v)
+	}
+	return _u
+}
+
+// SetOpenedByID sets the "opened_by_id" field.
+func (_u *TicketUpdate) SetOpenedByID(v int) *TicketUpdate {
+	_u.mutation.ResetOpenedByID()
+	_u.mutation.SetOpenedByID(v)
+	return _u
+}
+
+// SetNillableOpenedByID sets the "opened_by_id" field if the given value is not nil.
+func (_u *TicketUpdate) SetNillableOpenedByID(v *int) *TicketUpdate {
+	if v != nil {
+		_u.SetOpenedByID(*v)
+	}
+	return _u
+}
+
+// AddOpenedByID adds value to the "opened_by_id" field.
+func (_u *TicketUpdate) AddOpenedByID(v int) *TicketUpdate {
+	_u.mutation.AddOpenedByID(v)
+	return _u
+}
+
+// ClearOpenedByID clears the value of the "opened_by_id" field.
+func (_u *TicketUpdate) ClearOpenedByID() *TicketUpdate {
+	_u.mutation.ClearOpenedByID()
+	return _u
+}
+
+// SetAssignmentGroupID sets the "assignment_group_id" field.
+func (_u *TicketUpdate) SetAssignmentGroupID(v int) *TicketUpdate {
+	_u.mutation.ResetAssignmentGroupID()
+	_u.mutation.SetAssignmentGroupID(v)
+	return _u
+}
+
+// SetNillableAssignmentGroupID sets the "assignment_group_id" field if the given value is not nil.
+func (_u *TicketUpdate) SetNillableAssignmentGroupID(v *int) *TicketUpdate {
+	if v != nil {
+		_u.SetAssignmentGroupID(*v)
+	}
+	return _u
+}
+
+// AddAssignmentGroupID adds value to the "assignment_group_id" field.
+func (_u *TicketUpdate) AddAssignmentGroupID(v int) *TicketUpdate {
+	_u.mutation.AddAssignmentGroupID(v)
+	return _u
+}
+
+// ClearAssignmentGroupID clears the value of the "assignment_group_id" field.
+func (_u *TicketUpdate) ClearAssignmentGroupID() *TicketUpdate {
+	_u.mutation.ClearAssignmentGroupID()
+	return _u
+}
+
 // SetPriority sets the "priority" field.
 func (_u *TicketUpdate) SetPriority(v string) *TicketUpdate {
 	_u.mutation.SetPriority(v)
@@ -1398,6 +1466,27 @@ func (_u *TicketUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.SourceCleared() {
 		_spec.ClearField(ticket.FieldSource, field.TypeString)
 	}
+	if value, ok := _u.mutation.RecordClass(); ok {
+		_spec.SetField(ticket.FieldRecordClass, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.OpenedByID(); ok {
+		_spec.SetField(ticket.FieldOpenedByID, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedOpenedByID(); ok {
+		_spec.AddField(ticket.FieldOpenedByID, field.TypeInt, value)
+	}
+	if _u.mutation.OpenedByIDCleared() {
+		_spec.ClearField(ticket.FieldOpenedByID, field.TypeInt)
+	}
+	if value, ok := _u.mutation.AssignmentGroupID(); ok {
+		_spec.SetField(ticket.FieldAssignmentGroupID, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedAssignmentGroupID(); ok {
+		_spec.AddField(ticket.FieldAssignmentGroupID, field.TypeInt, value)
+	}
+	if _u.mutation.AssignmentGroupIDCleared() {
+		_spec.ClearField(ticket.FieldAssignmentGroupID, field.TypeInt)
+	}
 	if value, ok := _u.mutation.Priority(); ok {
 		_spec.SetField(ticket.FieldPriority, field.TypeString, value)
 	}
@@ -2338,6 +2427,74 @@ func (_u *TicketUpdateOne) SetNillableSource(v *string) *TicketUpdateOne {
 // ClearSource clears the value of the "source" field.
 func (_u *TicketUpdateOne) ClearSource() *TicketUpdateOne {
 	_u.mutation.ClearSource()
+	return _u
+}
+
+// SetRecordClass sets the "record_class" field.
+func (_u *TicketUpdateOne) SetRecordClass(v string) *TicketUpdateOne {
+	_u.mutation.SetRecordClass(v)
+	return _u
+}
+
+// SetNillableRecordClass sets the "record_class" field if the given value is not nil.
+func (_u *TicketUpdateOne) SetNillableRecordClass(v *string) *TicketUpdateOne {
+	if v != nil {
+		_u.SetRecordClass(*v)
+	}
+	return _u
+}
+
+// SetOpenedByID sets the "opened_by_id" field.
+func (_u *TicketUpdateOne) SetOpenedByID(v int) *TicketUpdateOne {
+	_u.mutation.ResetOpenedByID()
+	_u.mutation.SetOpenedByID(v)
+	return _u
+}
+
+// SetNillableOpenedByID sets the "opened_by_id" field if the given value is not nil.
+func (_u *TicketUpdateOne) SetNillableOpenedByID(v *int) *TicketUpdateOne {
+	if v != nil {
+		_u.SetOpenedByID(*v)
+	}
+	return _u
+}
+
+// AddOpenedByID adds value to the "opened_by_id" field.
+func (_u *TicketUpdateOne) AddOpenedByID(v int) *TicketUpdateOne {
+	_u.mutation.AddOpenedByID(v)
+	return _u
+}
+
+// ClearOpenedByID clears the value of the "opened_by_id" field.
+func (_u *TicketUpdateOne) ClearOpenedByID() *TicketUpdateOne {
+	_u.mutation.ClearOpenedByID()
+	return _u
+}
+
+// SetAssignmentGroupID sets the "assignment_group_id" field.
+func (_u *TicketUpdateOne) SetAssignmentGroupID(v int) *TicketUpdateOne {
+	_u.mutation.ResetAssignmentGroupID()
+	_u.mutation.SetAssignmentGroupID(v)
+	return _u
+}
+
+// SetNillableAssignmentGroupID sets the "assignment_group_id" field if the given value is not nil.
+func (_u *TicketUpdateOne) SetNillableAssignmentGroupID(v *int) *TicketUpdateOne {
+	if v != nil {
+		_u.SetAssignmentGroupID(*v)
+	}
+	return _u
+}
+
+// AddAssignmentGroupID adds value to the "assignment_group_id" field.
+func (_u *TicketUpdateOne) AddAssignmentGroupID(v int) *TicketUpdateOne {
+	_u.mutation.AddAssignmentGroupID(v)
+	return _u
+}
+
+// ClearAssignmentGroupID clears the value of the "assignment_group_id" field.
+func (_u *TicketUpdateOne) ClearAssignmentGroupID() *TicketUpdateOne {
+	_u.mutation.ClearAssignmentGroupID()
 	return _u
 }
 
@@ -3645,6 +3802,27 @@ func (_u *TicketUpdateOne) sqlSave(ctx context.Context) (_node *Ticket, err erro
 	}
 	if _u.mutation.SourceCleared() {
 		_spec.ClearField(ticket.FieldSource, field.TypeString)
+	}
+	if value, ok := _u.mutation.RecordClass(); ok {
+		_spec.SetField(ticket.FieldRecordClass, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.OpenedByID(); ok {
+		_spec.SetField(ticket.FieldOpenedByID, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedOpenedByID(); ok {
+		_spec.AddField(ticket.FieldOpenedByID, field.TypeInt, value)
+	}
+	if _u.mutation.OpenedByIDCleared() {
+		_spec.ClearField(ticket.FieldOpenedByID, field.TypeInt)
+	}
+	if value, ok := _u.mutation.AssignmentGroupID(); ok {
+		_spec.SetField(ticket.FieldAssignmentGroupID, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedAssignmentGroupID(); ok {
+		_spec.AddField(ticket.FieldAssignmentGroupID, field.TypeInt, value)
+	}
+	if _u.mutation.AssignmentGroupIDCleared() {
+		_spec.ClearField(ticket.FieldAssignmentGroupID, field.TypeInt)
 	}
 	if value, ok := _u.mutation.Priority(); ok {
 		_spec.SetField(ticket.FieldPriority, field.TypeString, value)

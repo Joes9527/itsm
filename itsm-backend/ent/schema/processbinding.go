@@ -76,6 +76,11 @@ func (ProcessBinding) Fields() []ent.Field {
 			Optional().
 			Default(""),
 
+		// TicketCategory ID，可选——比 category 字符串更精确的分类匹配条件
+		field.Int("category_id").
+			Comment("TicketCategory ID，可选——比 category 字符串更精确的分类匹配条件，后续 ProcessBindingService.FindBestBinding 可以按它精确匹配").
+			Optional(),
+
 		// 匹配条件JSON
 		field.JSON("conditions", map[string]interface{}{}).
 			Comment("匹配条件JSON").
@@ -139,5 +144,6 @@ func (ProcessBinding) Indexes() []ent.Index {
 		index.Fields("tenant_id"),
 		// 流程路由复合索引
 		index.Fields("tenant_id", "business_type", "is_active", "department_id", "team_id", "scenario"),
+		index.Fields("tenant_id", "business_type"),
 	}
 }

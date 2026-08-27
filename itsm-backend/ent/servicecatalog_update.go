@@ -131,6 +131,26 @@ func (_u *ServiceCatalogUpdate) SetNillableItsmType(v *string) *ServiceCatalogUp
 	return _u
 }
 
+// SetTargetClass sets the "target_class" field.
+func (_u *ServiceCatalogUpdate) SetTargetClass(v string) *ServiceCatalogUpdate {
+	_u.mutation.SetTargetClass(v)
+	return _u
+}
+
+// SetNillableTargetClass sets the "target_class" field if the given value is not nil.
+func (_u *ServiceCatalogUpdate) SetNillableTargetClass(v *string) *ServiceCatalogUpdate {
+	if v != nil {
+		_u.SetTargetClass(*v)
+	}
+	return _u
+}
+
+// ClearTargetClass clears the value of the "target_class" field.
+func (_u *ServiceCatalogUpdate) ClearTargetClass() *ServiceCatalogUpdate {
+	_u.mutation.ClearTargetClass()
+	return _u
+}
+
 // SetPrice sets the "price" field.
 func (_u *ServiceCatalogUpdate) SetPrice(v float64) *ServiceCatalogUpdate {
 	_u.mutation.ResetPrice()
@@ -607,6 +627,12 @@ func (_u *ServiceCatalogUpdate) sqlSave(ctx context.Context) (_node int, err err
 	if value, ok := _u.mutation.ItsmType(); ok {
 		_spec.SetField(servicecatalog.FieldItsmType, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.TargetClass(); ok {
+		_spec.SetField(servicecatalog.FieldTargetClass, field.TypeString, value)
+	}
+	if _u.mutation.TargetClassCleared() {
+		_spec.ClearField(servicecatalog.FieldTargetClass, field.TypeString)
+	}
 	if value, ok := _u.mutation.Price(); ok {
 		_spec.SetField(servicecatalog.FieldPrice, field.TypeFloat64, value)
 	}
@@ -858,6 +884,26 @@ func (_u *ServiceCatalogUpdateOne) SetNillableItsmType(v *string) *ServiceCatalo
 	if v != nil {
 		_u.SetItsmType(*v)
 	}
+	return _u
+}
+
+// SetTargetClass sets the "target_class" field.
+func (_u *ServiceCatalogUpdateOne) SetTargetClass(v string) *ServiceCatalogUpdateOne {
+	_u.mutation.SetTargetClass(v)
+	return _u
+}
+
+// SetNillableTargetClass sets the "target_class" field if the given value is not nil.
+func (_u *ServiceCatalogUpdateOne) SetNillableTargetClass(v *string) *ServiceCatalogUpdateOne {
+	if v != nil {
+		_u.SetTargetClass(*v)
+	}
+	return _u
+}
+
+// ClearTargetClass clears the value of the "target_class" field.
+func (_u *ServiceCatalogUpdateOne) ClearTargetClass() *ServiceCatalogUpdateOne {
+	_u.mutation.ClearTargetClass()
 	return _u
 }
 
@@ -1366,6 +1412,12 @@ func (_u *ServiceCatalogUpdateOne) sqlSave(ctx context.Context) (_node *ServiceC
 	}
 	if value, ok := _u.mutation.ItsmType(); ok {
 		_spec.SetField(servicecatalog.FieldItsmType, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.TargetClass(); ok {
+		_spec.SetField(servicecatalog.FieldTargetClass, field.TypeString, value)
+	}
+	if _u.mutation.TargetClassCleared() {
+		_spec.ClearField(servicecatalog.FieldTargetClass, field.TypeString)
 	}
 	if value, ok := _u.mutation.Price(); ok {
 		_spec.SetField(servicecatalog.FieldPrice, field.TypeFloat64, value)

@@ -2,16 +2,75 @@ package bpmn
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"itsm-backend/common"
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/ent/incident"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 )
+
+// dbBackedIncidentService 是仅用于本文件 fixture 测试的 IncidentDomainServiceInterface
+// 实现——它直接用同一个 ent.Client 做租户范围写入，行为对齐真实 service.IncidentService
+// 的 AssignIncident/UpdateStatus（找不到/跨租户返回 "incident not found"）。
+// 之所以不直接用 *service.IncidentService：itsm-backend/service 包已经反向 import
+// itsm-backend/service/bpmn（用于注册 handler），这里再 import itsm-backend/service
+// 会形成循环依赖。
+type dbBackedIncidentService struct {
+	client *ent.Client
+}
+
+func (s *dbBackedIncidentService) CreateIncident(ctx context.Context, req *dto.CreateIncidentRequest, tenantID, userID int) (*dto.IncidentResponse, error) {
+	inc, err := s.client.Incident.Create().
+		SetTitle(req.Title).
+		SetDescription(req.Description).
+		SetType(req.Type).
+		SetPriority(req.Priority).
+		SetSeverity(req.Severity).
+		SetStatus(common.IncidentStatusNew).
+		SetReporterID(userID).
+		SetTenantID(tenantID).
+		Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &dto.IncidentResponse{ID: inc.ID, IncidentNumber: inc.IncidentNumber}, nil
+}
+
+func (s *dbBackedIncidentService) AssignIncident(ctx context.Context, id int, assigneeID int, tenantID int) (*dto.IncidentResponse, error) {
+	updated, err := s.client.Incident.Update().
+		Where(incident.ID(id), incident.TenantID(tenantID)).
+		SetAssigneeID(assigneeID).
+		Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if updated == 0 {
+		return nil, fmt.Errorf("incident not found")
+	}
+	return &dto.IncidentResponse{ID: id}, nil
+}
+
+func (s *dbBackedIncidentService) UpdateStatus(ctx context.Context, id int, status string, tenantID int) (*dto.IncidentResponse, error) {
+	updated, err := s.client.Incident.Update().
+		Where(incident.ID(id), incident.TenantID(tenantID)).
+		SetStatus(status).
+		Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if updated == 0 {
+		return nil, fmt.Errorf("incident not found")
+	}
+	return &dto.IncidentResponse{ID: id}, nil
+}
 
 // setupIncidentHandlerFixture 建一个"刚创建、还没有处理人"的事件——这正是
 // incident_emergency_flow 的 Activity_AutoAssign（起始事件后的第一个 serviceTask）
@@ -49,6 +108,7 @@ func setupIncidentHandlerFixture(t *testing.T) (*ent.Client, *IncidentServiceTas
 	require.NoError(t, err)
 
 	handler := NewIncidentServiceTaskHandler(client, zaptest.NewLogger(t).Sugar())
+	handler.SetIncidentService(&dbBackedIncidentService{client: client})
 	return client, handler, tenant.ID, inc, assignee.ID
 }
 
@@ -271,4 +331,83 @@ func TestIncidentServiceTaskHandler_TenantScopedActions(t *testing.T) {
 			})
 		})
 	}
+}
+
+// 以下测试覆盖 create_incident / assign_incident 从裸 Ent 写入收回到
+// IncidentDomainServiceInterface 之后的委派契约：未注入时 fail closed，
+// 注入后把请求原样转发给领域服务，assign 额外触发一次状态更新。
+
+func TestIncidentServiceTaskHandler_CreateIncident_RequiresInjectedService(t *testing.T) {
+	handler := NewIncidentServiceTaskHandler(nil, zap.NewNop().Sugar())
+	_, err := handler.Execute(context.Background(), nil, map[string]interface{}{
+		"action": "create_incident",
+		"title":  "测试事件",
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "未注入")
+}
+
+func TestIncidentServiceTaskHandler_CreateIncident_DelegatesToInjectedService(t *testing.T) {
+	handler := NewIncidentServiceTaskHandler(nil, zap.NewNop().Sugar())
+	fake := &fakeIncidentService{createResp: &dto.IncidentResponse{ID: 7, IncidentNumber: "INC-1"}}
+	handler.SetIncidentService(fake)
+
+	result, err := handler.Execute(context.Background(), nil, map[string]interface{}{
+		"action":      "create_incident",
+		"title":       "测试事件",
+		"reporter_id": 3,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "测试事件", fake.lastCreateReq.Title)
+	require.Equal(t, 3, fake.lastCreateUserID)
+	require.Equal(t, 7, result.OutputVars["incident_id"])
+}
+
+func TestIncidentServiceTaskHandler_AssignIncident_DelegatesAndUpdatesStatus(t *testing.T) {
+	handler := NewIncidentServiceTaskHandler(nil, zap.NewNop().Sugar())
+	fake := &fakeIncidentService{}
+	handler.SetIncidentService(fake)
+
+	_, err := handler.Execute(context.Background(), nil, map[string]interface{}{
+		"action":      "assign_incident",
+		"incident_id": 9,
+		"assignee_id": 4,
+		"tenant_id":   1,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 9, fake.lastAssignID)
+	require.Equal(t, 4, fake.lastAssigneeID)
+	require.Equal(t, 9, fake.lastStatusID)
+	require.Equal(t, "assigned", fake.lastStatus)
+}
+
+type fakeIncidentService struct {
+	createResp       *dto.IncidentResponse
+	lastCreateReq    *dto.CreateIncidentRequest
+	lastCreateUserID int
+	lastAssignID     int
+	lastAssigneeID   int
+	lastStatusID     int
+	lastStatus       string
+}
+
+func (f *fakeIncidentService) CreateIncident(ctx context.Context, req *dto.CreateIncidentRequest, tenantID, userID int) (*dto.IncidentResponse, error) {
+	f.lastCreateReq = req
+	f.lastCreateUserID = userID
+	if f.createResp != nil {
+		return f.createResp, nil
+	}
+	return &dto.IncidentResponse{ID: 1}, nil
+}
+
+func (f *fakeIncidentService) AssignIncident(ctx context.Context, id int, assigneeID int, tenantID int) (*dto.IncidentResponse, error) {
+	f.lastAssignID = id
+	f.lastAssigneeID = assigneeID
+	return &dto.IncidentResponse{ID: id}, nil
+}
+
+func (f *fakeIncidentService) UpdateStatus(ctx context.Context, id int, status string, tenantID int) (*dto.IncidentResponse, error) {
+	f.lastStatusID = id
+	f.lastStatus = status
+	return &dto.IncidentResponse{ID: id}, nil
 }

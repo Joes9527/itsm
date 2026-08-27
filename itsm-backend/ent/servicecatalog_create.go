@@ -96,6 +96,20 @@ func (_c *ServiceCatalogCreate) SetNillableItsmType(v *string) *ServiceCatalogCr
 	return _c
 }
 
+// SetTargetClass sets the "target_class" field.
+func (_c *ServiceCatalogCreate) SetTargetClass(v string) *ServiceCatalogCreate {
+	_c.mutation.SetTargetClass(v)
+	return _c
+}
+
+// SetNillableTargetClass sets the "target_class" field if the given value is not nil.
+func (_c *ServiceCatalogCreate) SetNillableTargetClass(v *string) *ServiceCatalogCreate {
+	if v != nil {
+		_c.SetTargetClass(*v)
+	}
+	return _c
+}
+
 // SetPrice sets the "price" field.
 func (_c *ServiceCatalogCreate) SetPrice(v float64) *ServiceCatalogCreate {
 	_c.mutation.SetPrice(v)
@@ -497,6 +511,10 @@ func (_c *ServiceCatalogCreate) createSpec() (*ServiceCatalog, *sqlgraph.CreateS
 	if value, ok := _c.mutation.ItsmType(); ok {
 		_spec.SetField(servicecatalog.FieldItsmType, field.TypeString, value)
 		_node.ItsmType = value
+	}
+	if value, ok := _c.mutation.TargetClass(); ok {
+		_spec.SetField(servicecatalog.FieldTargetClass, field.TypeString, value)
+		_node.TargetClass = value
 	}
 	if value, ok := _c.mutation.Price(); ok {
 		_spec.SetField(servicecatalog.FieldPrice, field.TypeFloat64, value)
