@@ -3,6 +3,7 @@
 package migrate
 
 import (
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/dialect/sql/schema"
 	"entgo.io/ent/schema/field"
 )
@@ -4585,6 +4586,9 @@ var (
 				Name:    "workitemrelation_tenant_id_source_work_item_id_target_work_item_id_relation_type",
 				Unique:  true,
 				Columns: []*schema.Column{WorkItemRelationsColumns[1], WorkItemRelationsColumns[2], WorkItemRelationsColumns[3], WorkItemRelationsColumns[4]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "deleted_at IS NULL",
+				},
 			},
 			{
 				Name:    "workitemrelation_tenant_id_target_work_item_id",
