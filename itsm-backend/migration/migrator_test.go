@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -129,4 +130,26 @@ func TestMigrationSQLChecksumIsDeterministic(t *testing.T) {
 	assert.NotEmpty(t, first)
 	assert.Equal(t, first, second)
 	assert.NotEqual(t, first, checksumSQL(sql+" -- changed"))
+}
+
+func TestProcessInstanceRunningUniqueGuardIsVersioned(t *testing.T) {
+	sql := GetMigrationSQL("015_process_instance_running_unique_guard")
+	assert.NotEmpty(t, sql)
+	assert.Contains(t, sql, "CREATE UNIQUE INDEX IF NOT EXISTS idx_process_instances_running_unique")
+	assert.Contains(t, sql, "ON process_instances (tenant_id, business_key)")
+	assert.Contains(t, sql, "WHERE status = 'running'")
+	// Cleanup step must run before the index creation, otherwise pre-existing
+	// duplicate running rows would make the CREATE UNIQUE INDEX statement fail.
+	assert.Less(t,
+		strings.Index(sql, "UPDATE process_instances"),
+		strings.Index(sql, "CREATE UNIQUE INDEX"),
+	)
+
+	rollback := ""
+	for _, m := range RegisteredMigrations {
+		if m.Version == "015_process_instance_running_unique_guard" {
+			rollback = m.RollbackSQL
+		}
+	}
+	assert.Contains(t, rollback, "DROP INDEX IF EXISTS idx_process_instances_running_unique")
 }

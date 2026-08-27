@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 // setupChangeHandlerFixture 建一条 draft 状态的变更。change_normal_flow 的 7 个 userTask
@@ -48,8 +50,8 @@ func setupChangeHandlerFixture(t *testing.T) (*ent.Client, *ChangeServiceTaskHan
 // 同租户 Valid 生效、跨租户拒绝且零写入、无租户上下文 fail-closed。
 func TestChangeServiceTaskHandler_TenantScopedActions(t *testing.T) {
 	tests := []struct {
-		name        string
-		action      string
+		name   string
+		action string
 		// setupStatus 是 Valid 用例的前置状态：状态类动作必须从白名单允许的
 		// 前置状态出发（fixture 默认为 draft）
 		setupStatus string
@@ -75,13 +77,18 @@ func TestChangeServiceTaskHandler_TenantScopedActions(t *testing.T) {
 			assertValid: func(t *testing.T, client *ent.Client, changeID int) {
 				after, err := client.Change.Get(context.Background(), changeID)
 				require.NoError(t, err)
-				assert.Equal(t, "pending_approval", after.Status)
+				// approve_change 这个 action 在 CAB 审批节点本身触发，不管审批结果是
+				// approve 还是 reject 都会走到这里（节点自己的 action 是固定的，不代表
+				// 审批结果）——真正的终态判定在 schedule_change/reject_change。这里只做
+				// 存在性确认，不写状态，避免引入一个 canonical 状态机不认识的
+				// "pending_approval" 中间态。
+				assert.Equal(t, "draft", after.Status, "approve_change 本身不应该改变 Change.Status")
 			},
 		},
 		{
 			name:        "reject",
 			action:      "reject_change",
-			setupStatus: "pending_approval",
+			setupStatus: "submitted",
 			assertValid: func(t *testing.T, client *ent.Client, changeID int) {
 				after, err := client.Change.Get(context.Background(), changeID)
 				require.NoError(t, err)
@@ -249,8 +256,8 @@ func TestChangeServiceTaskHandler_ScheduleChange_DateParsing(t *testing.T) {
 	require.NoError(t, err)
 
 	result, err := handler.Execute(ctx, nil, map[string]interface{}{
-		"action":            "schedule_change",
-		"change_id":         changeEntity.ID,
+		"action":             "schedule_change",
+		"change_id":          changeEntity.ID,
 		"planned_start_date": "2026-09-01T08:00:00Z",
 	})
 	require.NoError(t, err)
@@ -262,4 +269,50 @@ func TestChangeServiceTaskHandler_ScheduleChange_DateParsing(t *testing.T) {
 	want := time.Date(2026, 9, 1, 8, 0, 0, 0, time.UTC)
 	assert.Equal(t, want, after.PlannedStartDate)
 	assert.True(t, after.PlannedEndDate.IsZero(), "未提交结束日期时不应写入")
+}
+
+// TestChangeServiceTaskHandler_ScheduleChangeAction_EmergencyStopsAtApproved covers Finding 4 of
+// the Track4 final review: emergency-type changes have no "scheduled" state in their state
+// machine (approved -> in_progress is the only legal next hop, a fast-track). scheduleChange must
+// not blindly force a second hop to "scheduled" for emergency changes — it must detect that
+// approved -> scheduled is not a legal transition for this type and stop at "approved", leaving
+// Activity_Implement to take it directly to in_progress.
+func TestChangeServiceTaskHandler_ScheduleChangeAction_EmergencyStopsAtApproved(t *testing.T) {
+	client, handler, tenantID, changeEntity := setupChangeHandlerFixture(t)
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+
+	_, err := client.Change.UpdateOne(changeEntity).SetType("emergency").SetStatus("approved").Save(ctx)
+	require.NoError(t, err)
+
+	result, err := handler.Execute(ctx, nil, map[string]interface{}{
+		"action":    "schedule_change",
+		"change_id": changeEntity.ID,
+	})
+	require.NoError(t, err)
+	assert.True(t, result.Success)
+
+	updated, err := client.Change.Get(ctx, changeEntity.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "approved", updated.Status)
+}
+
+// TestChangeServiceTaskHandler_ScheduleChangeAction_InvalidTransitionRejected 锁定
+// transitionChangeStatus 真的在遵守 IsValidChangeStatusTransition，不会静默写入非法状态。
+func TestChangeServiceTaskHandler_ScheduleChangeAction_InvalidTransitionRejected(t *testing.T) {
+	client, handler, tenantID, changeEntity := setupChangeHandlerFixture(t)
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+
+	// rejected 是终态，不允许再转成 approved —— IsValidChangeStatusTransition 必须真的被遵守。
+	_, err := client.Change.UpdateOne(changeEntity).SetStatus("rejected").Save(ctx)
+	require.NoError(t, err)
+
+	_, err = handler.Execute(ctx, nil, map[string]interface{}{
+		"action":    "schedule_change",
+		"change_id": changeEntity.ID,
+	})
+	require.Error(t, err)
+
+	updated, err := client.Change.Get(ctx, changeEntity.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "rejected", updated.Status, "非法转换必须被拒绝，不能静默写入")
 }
