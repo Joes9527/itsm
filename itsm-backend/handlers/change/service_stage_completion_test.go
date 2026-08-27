@@ -40,6 +40,11 @@ func TestTransitionStatus_StageCompletion_AdvanceProcessEndToEnd(t *testing.T) {
 	mockChange.Type = "standard"
 	repo.changes[mockChange.ID] = mockChange
 
+	// Wave 2 起 completeChangeStageTasks 通过 resolveWorkItemID 查真实 entClient.Change 的
+	// work_item_id 来构造 businessKey——必须先建一条 WorkItem 并回填，否则会被当成"没有
+	// 关联的 WorkItem"静默跳过阶段完成（这个测试恰恰要验证阶段完成确实生效）。
+	workItem := createChangeWorkItemFixture(t, entClient, tenantID, actorID, "Stage Completion Change")
+
 	// DB 侧真实 Change 行：handler 写侧（change_handler.go）直接操作 entClient，
 	// 状态必须与域侧一致（approved），否则 handler 状态机白名单会拒绝
 	dbChange, err := entClient.Change.Create().
@@ -47,6 +52,7 @@ func TestTransitionStatus_StageCompletion_AdvanceProcessEndToEnd(t *testing.T) {
 		SetStatus("approved").
 		SetCreatedBy(actorID).
 		SetTenantID(tenantID).
+		SetWorkItemID(workItem.ID).
 		Save(context.Background())
 	require.NoError(t, err)
 	// 让 mock 与 DB 使用同一个 ID（TransitionStatus 按 ID 操作 mock，handler 按 change_id 操作 DB）
@@ -57,10 +63,10 @@ func TestTransitionStatus_StageCompletion_AdvanceProcessEndToEnd(t *testing.T) {
 	// 模拟 ProcessTriggerService 启动：businessKey 按 "change:{id}" 约定
 	engine := service.NewCustomProcessEngine(entClient, zap.NewNop().Sugar())
 	workflowCtx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, tenantID)
-	instance, err := engine.StartProcess(workflowCtx, "change_normal_flow", fmt.Sprintf("change:%d", dbChange.ID), "", 0, map[string]interface{}{
+	instance, err := engine.StartProcess(workflowCtx, "change_normal_flow", fmt.Sprintf("change:%d", workItem.ID), "", 0, map[string]interface{}{
 		"approval_required": false,
 		"business_type":     "change",
-		"business_id":       dbChange.ID,
+		"business_id":       workItem.ID,
 		"tenant_id":         tenantID,
 	})
 	require.NoError(t, err)

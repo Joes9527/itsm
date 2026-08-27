@@ -85,7 +85,8 @@ func TestSubmitChange_TriggersBPMNProcess_Normal(t *testing.T) {
 	tenantID, actorID := setupChangeBPMNActor(t, entClient, "submit-normal")
 	engine, trigger := deployRealBPMNFixture(t, entClient, tenantID)
 
-	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).Save(context.Background())
+	workItem := createChangeWorkItemFixture(t, entClient, tenantID, actorID, "测试变更")
+	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
 	require.NoError(t, err)
 
 	repo := NewEntRepository(entClient, openChangeBPMNRawDB(t, "change_submit_normal"))
@@ -98,7 +99,7 @@ func TestSubmitChange_TriggersBPMNProcess_Normal(t *testing.T) {
 	assert.Equal(t, "pending", updated.Status)
 
 	instance, err := entClient.ProcessInstance.Query().
-		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID)), processinstance.TenantID(tenantID)).
+		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", workItem.ID)), processinstance.TenantID(tenantID)).
 		Only(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "change_normal_flow", instance.ProcessDefinitionKey)
@@ -110,7 +111,8 @@ func TestSubmitChange_TriggersBPMNProcess_Emergency(t *testing.T) {
 	tenantID, actorID := setupChangeBPMNActor(t, entClient, "submit-emergency")
 	engine, trigger := deployRealBPMNFixture(t, entClient, tenantID)
 
-	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("emergency").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).Save(context.Background())
+	workItem := createChangeWorkItemFixture(t, entClient, tenantID, actorID, "测试变更")
+	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("emergency").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
 	require.NoError(t, err)
 
 	repo := NewEntRepository(entClient, openChangeBPMNRawDB(t, "change_submit_emergency"))
@@ -122,7 +124,7 @@ func TestSubmitChange_TriggersBPMNProcess_Emergency(t *testing.T) {
 	require.NoError(t, err)
 
 	instance, err := entClient.ProcessInstance.Query().
-		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID)), processinstance.TenantID(tenantID)).
+		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", workItem.ID)), processinstance.TenantID(tenantID)).
 		Only(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "change_emergency_flow", instance.ProcessDefinitionKey)
@@ -139,9 +141,9 @@ func TestSubmitChange_RejectsDuplicateWhenRunningInstanceExists(t *testing.T) {
 	trigger := &mockProcessTriggerService{}
 	svc.SetProcessTriggerService(trigger)
 
-	c := createTestChange(repo, tenantID, actorID)
-	c.Type = "normal"
-	createChangeBPMNProcessFixture(t, entClient, tenantID, "dup1", fmt.Sprintf("change:%d", c.ID), actorID)
+	c := seedChangeInMockAndEnt(t, repo, entClient, tenantID, actorID, "normal")
+	require.NotNil(t, c.WorkItemID)
+	createChangeBPMNProcessFixture(t, entClient, tenantID, "dup1", fmt.Sprintf("change:%d", *c.WorkItemID), actorID)
 
 	_, err := svc.SubmitChange(context.Background(), c.ID, tenantID, actorID, &dto.SubmitChangeRequest{})
 	require.Error(t, err)
@@ -161,8 +163,7 @@ func TestSubmitChange_TriggerProcessFailureLeavesChangeDraft(t *testing.T) {
 	trigger := &mockProcessTriggerService{triggerErr: fmt.Errorf("bpmn engine unavailable")}
 	svc.SetProcessTriggerService(trigger)
 
-	c := createTestChange(repo, tenantID, actorID)
-	c.Type = "normal"
+	c := seedChangeInMockAndEnt(t, repo, entClient, tenantID, actorID, "normal")
 
 	_, err := svc.SubmitChange(context.Background(), c.ID, tenantID, actorID, &dto.SubmitChangeRequest{})
 	require.Error(t, err)
@@ -181,8 +182,16 @@ func TestSubmitChange_TriggerProcessFailureLeavesChangeDraft(t *testing.T) {
 // completeAssessmentTask 触发的真实 BPMN 回调——ChangeServiceTaskHandler.updateChange
 // 直接对 entClient 里的真实行做 UpdateOneID().Save()，纯内存 mock 满足不了这一步）。
 // 两边用同一个 ID，保持一致。
+//
+// Wave 2 起也在 entClient 里先建一条真实的 tickets 行（WorkItem）并让 real Change 的
+// work_item_id 指向它——Service.resolveWorkItemID（SubmitChange/completeAssessmentTask/
+// completeChangeApprovalTask/cancelRunningProcessInstance 等businessKey 解析都靠它）
+// 永远查真实 entClient，不读 mockRepository，所以这一步是这些方法在纯 mock repo 测试里
+// 依然能正确工作的前提；mock 结构体上的 WorkItemID 只是为了跟真实行保持一致，不参与
+// businessKey 解析。
 func seedChangeInMockAndEnt(t *testing.T, repo *mockRepository, entClient *ent.Client, tenantID, actorID int, changeType string) *Change {
 	t.Helper()
+	workItem := createChangeWorkItemFixture(t, entClient, tenantID, actorID, "测试变更")
 	real, err := entClient.Change.Create().
 		SetTitle("测试变更").
 		SetType(changeType).
@@ -191,9 +200,11 @@ func seedChangeInMockAndEnt(t *testing.T, repo *mockRepository, entClient *ent.C
 		SetImpactScope("low").
 		SetTenantID(tenantID).
 		SetCreatedBy(actorID).
+		SetWorkItemID(workItem.ID).
 		Save(context.Background())
 	require.NoError(t, err)
 
+	workItemID := workItem.ID
 	c := &Change{
 		ID:          real.ID,
 		Title:       real.Title,
@@ -203,6 +214,7 @@ func seedChangeInMockAndEnt(t *testing.T, repo *mockRepository, entClient *ent.C
 		ImpactScope: "low",
 		TenantID:    tenantID,
 		CreatedBy:   actorID,
+		WorkItemID:  &workItemID,
 	}
 	repo.changes[c.ID] = c
 	if c.ID >= repo.nextID {
@@ -236,8 +248,9 @@ func TestSubmitChange_MarkSubmittedFailureCompensatesByCancellingProcess(t *test
 
 	// 补偿真的生效了：流程实例应该被 CancelProcess（= TerminateProcess）标记成
 	// terminated，不会一直卡在 running 挡住后续重新提交的幂等检查。
+	require.NotNil(t, c.WorkItemID)
 	instance, err := entClient.ProcessInstance.Query().
-		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID)), processinstance.TenantID(tenantID)).
+		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", *c.WorkItemID)), processinstance.TenantID(tenantID)).
 		Only(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "terminated", instance.Status, "MarkSubmittedForApproval 失败后应该补偿取消刚创建的流程实例")
@@ -422,7 +435,8 @@ func TestGetApprovalHistory_IncludesPendingCABTask(t *testing.T) {
 	_, err := entClient.User.Create().SetUsername("pending-cm").SetEmail("pending-cm@example.com").SetName("Pending CM").SetPasswordHash("h").SetRole("change_manager").SetActive(true).SetTenantID(tenantID).Save(context.Background())
 	require.NoError(t, err)
 
-	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).Save(context.Background())
+	workItem := createChangeWorkItemFixture(t, entClient, tenantID, actorID, "测试变更")
+	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
 	require.NoError(t, err)
 
 	repo := NewEntRepository(entClient, openChangeBPMNRawDB(t, "change_pending_history"))
@@ -453,7 +467,8 @@ func TestGetApprovalHistory_NoPendingEntryAfterDecisionMade(t *testing.T) {
 	cmUser, err := entClient.User.Create().SetUsername("decided-cm").SetEmail("decided-cm@example.com").SetName("Decided CM").SetPasswordHash("h").SetRole("change_manager").SetActive(true).SetTenantID(tenantID).Save(context.Background())
 	require.NoError(t, err)
 
-	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).Save(context.Background())
+	workItem := createChangeWorkItemFixture(t, entClient, tenantID, actorID, "测试变更")
+	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
 	require.NoError(t, err)
 
 	repo := NewEntRepository(entClient, openChangeBPMNRawDB(t, "change_pending_history_decided"))
@@ -482,7 +497,8 @@ func TestTransitionStatus_Cancel_TerminatesRunningProcessInstance(t *testing.T) 
 	engine, trigger := deployRealBPMNFixture(t, entClient, tenantID)
 
 	tenantCtx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, tenantID)
-	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).Save(context.Background())
+	workItem := createChangeWorkItemFixture(t, entClient, tenantID, actorID, "测试变更")
+	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
 	require.NoError(t, err)
 
 	repo := NewEntRepository(entClient, openChangeBPMNRawDB(t, "change_cancel_terminates_instance"))
@@ -494,7 +510,7 @@ func TestTransitionStatus_Cancel_TerminatesRunningProcessInstance(t *testing.T) 
 	require.NoError(t, err)
 
 	instanceBefore, err := entClient.ProcessInstance.Query().
-		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID)), processinstance.TenantID(tenantID)).
+		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", workItem.ID)), processinstance.TenantID(tenantID)).
 		Only(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, "running", instanceBefore.Status, "取消之前流程实例应该还在运行中——正卡在 CAB 审批这一步没人处理")
@@ -504,7 +520,7 @@ func TestTransitionStatus_Cancel_TerminatesRunningProcessInstance(t *testing.T) 
 	assert.Equal(t, "cancelled", updated.Status)
 
 	instanceAfter, err := entClient.ProcessInstance.Query().
-		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID)), processinstance.TenantID(tenantID)).
+		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", workItem.ID)), processinstance.TenantID(tenantID)).
 		Only(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "terminated", instanceAfter.Status, "取消变更应该顺带终止还挂着的运行中流程实例，不留孤儿")
@@ -519,7 +535,8 @@ func TestTransitionStatus_Cancel_NoRunningInstanceIsNoop(t *testing.T) {
 	tenantID, actorID := setupChangeBPMNActor(t, entClient, "cancel-no-instance")
 	logger := zaptest.NewLogger(t).Sugar()
 
-	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).Save(context.Background())
+	workItem := createChangeWorkItemFixture(t, entClient, tenantID, actorID, "测试变更")
+	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
 	require.NoError(t, err)
 
 	repo := NewEntRepository(entClient, nil)

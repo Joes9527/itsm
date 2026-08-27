@@ -13,11 +13,28 @@ import (
 	"go.uber.org/zap"
 )
 
+// ChangeDomainServiceInterface 变更领域服务接口（避免 service/bpmn 反向 import
+// handlers/change 包造成循环依赖——handlers/change/service.go 已经 import service/bpmn
+// 用它的 BPMNTenantIDContextKey/BPMNUserIDContextKey，反向依赖会成环，同
+// IncidentDomainServiceInterface 的理由）。
+//
+// CreateChangeForWorkflow 是 Wave 2（统一 WorkItem 领域模型迁移）新增：把这个文件原来
+// createChange 直接 h.client.Change.Create() 建变更的代码收回到领域服务，让 BPMN 自动
+// 创建的 Change 走 handlers/change.Service.CreateChange -> EntRepository.Create 的
+// 事务化建表逻辑，同步建好 WorkItem（tickets 行，record_class="change_request"）。不这样
+// 做的话，通过 BPMN 流程自动创建的 Change（不是用户在 UI 手动创建的）永远不会有
+// WorkItem，违反统一 WorkItem 领域模型宪章 §3 的"任意专业记录必须对应且仅对应一条
+// WorkItem"不变式。
+type ChangeDomainServiceInterface interface {
+	CreateChangeForWorkflow(ctx context.Context, tenantID, createdBy int, title, description, changeType, priority string) (int, error)
+}
+
 // ChangeServiceTaskHandler 变更服务任务处理器
 type ChangeServiceTaskHandler struct {
 	HandlerBase
-	client *ent.Client
-	logger *zap.SugaredLogger
+	client        *ent.Client
+	logger        *zap.SugaredLogger
+	changeService ChangeDomainServiceInterface
 }
 
 // NewChangeServiceTaskHandler 创建变更处理器
@@ -26,6 +43,13 @@ func NewChangeServiceTaskHandler(client *ent.Client, logger *zap.SugaredLogger) 
 		client: client,
 		logger: logger,
 	}
+}
+
+// SetChangeService 注入变更领域服务，由 bootstrap 在 handlers/change.Service 构造完成后
+// 调用（同 IncidentServiceTaskHandler.SetIncidentService 的 setter 注入模式，避免构造函数
+// 循环依赖初始化顺序问题）。
+func (h *ChangeServiceTaskHandler) SetChangeService(svc ChangeDomainServiceInterface) {
+	h.changeService = svc
 }
 
 // GetTaskType 返回任务类型
@@ -75,7 +99,9 @@ func (h *ChangeServiceTaskHandler) Validate(ctx context.Context, config map[stri
 	return nil
 }
 
-// createChange 创建变更
+// createChange 创建变更。委托给 handlers/change.Service.CreateChange（通过
+// ChangeDomainServiceInterface 窄接口），不再直接 h.client.Change.Create()——那样会绕开
+// WorkItem 的事务化创建，见 ChangeDomainServiceInterface 的注释。
 func (h *ChangeServiceTaskHandler) createChange(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
 	title, _ := variables["title"].(string)
 	description, _ := variables["description"].(string)
@@ -86,26 +112,21 @@ func (h *ChangeServiceTaskHandler) createChange(ctx context.Context, variables m
 	if title == "" {
 		return nil, fmt.Errorf("变更标题不能为空")
 	}
+	if h.changeService == nil {
+		return nil, fmt.Errorf("change service 未注入，无法创建变更")
+	}
 
-	change, err := h.client.Change.Create().
-		SetTitle(title).
-		SetDescription(description).
-		SetType(changeType).
-		SetPriority(priority).
-		SetStatus("draft").
-		SetCreatedBy(GetIntFromVars(variables, "created_by")).
-		SetTenantID(tenantID).
-		Save(ctx)
+	changeID, err := h.changeService.CreateChangeForWorkflow(ctx, tenantID, GetIntFromVars(variables, "created_by"), title, description, changeType, priority)
 	if err != nil {
 		return nil, fmt.Errorf("创建变更失败: %w", err)
 	}
 
-	h.logger.Infow("Change created via BPMN", "change_id", change.ID, "title", title)
+	h.logger.Infow("Change created via BPMN", "change_id", changeID, "title", title)
 
 	return &dto.ServiceTaskResult{
 		Success:    true,
-		Message:    fmt.Sprintf("变更 %d 已创建", change.ID),
-		OutputVars: map[string]interface{}{"change_id": change.ID},
+		Message:    fmt.Sprintf("变更 %d 已创建", changeID),
+		OutputVars: map[string]interface{}{"change_id": changeID},
 	}, nil
 }
 

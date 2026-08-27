@@ -102,7 +102,8 @@ func TestChangeApprovalE2E_FullApproveFlow(t *testing.T) {
 	assert.Equal(t, "approved", history[0].Status)
 	assert.Equal(t, cmUser.ID, history[0].ApproverID)
 
-	instance, err := client.ProcessInstance.Query().Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", created.ID)), processinstance.TenantID(tenant.ID)).Only(ctx)
+	require.NotNil(t, created.WorkItemID, "repo.Create 应该已经在同一事务内建好 WorkItem 并回填")
+	instance, err := client.ProcessInstance.Query().Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", *created.WorkItemID)), processinstance.TenantID(tenant.ID)).Only(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, "running", instance.Status, "流程实例应该还在运行，停在 Activity_Implement——这是预期，不是 bug")
 	assert.Equal(t, "Activity_Implement", instance.CurrentActivityID)
@@ -170,7 +171,8 @@ func TestChangeApprovalE2E_FullRejectFlow(t *testing.T) {
 	require.Len(t, history, 1)
 	assert.Equal(t, "rejected", history[0].Status)
 
-	instance, err := client.ProcessInstance.Query().Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", created.ID)), processinstance.TenantID(tenant.ID)).Only(ctx)
+	require.NotNil(t, created.WorkItemID, "repo.Create 应该已经在同一事务内建好 WorkItem 并回填")
+	instance, err := client.ProcessInstance.Query().Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", *created.WorkItemID)), processinstance.TenantID(tenant.ID)).Only(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, "completed", instance.Status, "驳回节点走 Flow_End 直接结束，流程实例应该正确终止，不会像 approve 分支那样停在 running")
 }

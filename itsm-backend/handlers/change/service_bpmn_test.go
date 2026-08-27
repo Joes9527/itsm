@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -23,6 +24,37 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 )
+
+// testTicketNumberSeq/nextTestTicketNumber 生成测试专用、进程内唯一的工单编号——
+// tickets.ticket_number 是全局唯一索引，每个测试各自开一个独立的内存 sqlite 库不会互相
+// 撞号，但同一个测试内如果创建多条 WorkItem（比如某个夹具被调用两次）就需要避免撞号。
+var testTicketNumberSeq int64
+
+func nextTestTicketNumber() string {
+	n := atomic.AddInt64(&testTicketNumberSeq, 1)
+	return fmt.Sprintf("TKT-TEST-%08d", n)
+}
+
+// createChangeWorkItemFixture 在给定的 ent.Client 里先建一条 tickets 行
+// （record_class="change_request"，Wave 2 迁移后 Change 的 WorkItem），返回它，供调用方
+// 在创建 ent.Change 行时 .SetWorkItemID(workItem.ID)，并在构造 TriggerProcess.BusinessID /
+// businessKey 断言时使用——Wave 2 起这是唯一权威的业务身份来源，不再是 Change 自己的主键。
+// 镜像 EntRepository.Create 事务里创建 WorkItem 那部分的字段取值（测试不需要真的开事务，
+// sqlite 内存库 + 单线程测试不会产生并发中间态）。
+func createChangeWorkItemFixture(t *testing.T, client *ent.Client, tenantID, requesterID int, title string) *ent.Ticket {
+	t.Helper()
+	workItem, err := client.Ticket.Create().
+		SetTitle(title).
+		SetType("change").
+		SetRecordClass("change_request").
+		SetPriority("medium").
+		SetTicketNumber(nextTestTicketNumber()).
+		SetRequesterID(requesterID).
+		SetTenantID(tenantID).
+		Save(context.Background())
+	require.NoError(t, err)
+	return workItem
+}
 
 // newTestBPMNEngine 构造真实的 *CustomProcessEngine（通过 service.NewCustomProcessEngine
 // 的导出构造函数，返回值已经是 service.ProcessEngine 接口），不要自己发明构造方式——
@@ -184,7 +216,8 @@ func TestCompleteChangeApprovalTask_ApproveCompletesScheduleNode(t *testing.T) {
 	requester, err := client.User.Create().SetUsername("requester1").SetEmail("requester1@example.com").SetName("Requester1").SetPasswordHash("h").SetRole("agent").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 
-	c, err := client.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).Save(ctx)
+	workItem := createChangeWorkItemFixture(t, client, tenant.ID, requester.ID, "测试变更")
+	c, err := client.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).SetWorkItemID(workItem.ID).Save(ctx)
 	require.NoError(t, err)
 
 	engine := newTestBPMNEngine(t, client, logger)
@@ -196,7 +229,7 @@ func TestCompleteChangeApprovalTask_ApproveCompletesScheduleNode(t *testing.T) {
 	trigger := service.NewProcessTriggerService(client, engine)
 	_, err = trigger.TriggerProcess(tenantCtx, &dto.ProcessTriggerRequest{
 		BusinessType:         dto.BusinessTypeChange,
-		BusinessID:           c.ID,
+		BusinessID:           workItem.ID,
 		ProcessDefinitionKey: "change_normal_flow",
 		Variables:            map[string]interface{}{"approval_required": true, "requester_id": float64(requester.ID)},
 		TenantID:             tenant.ID,
@@ -219,7 +252,7 @@ func TestCompleteChangeApprovalTask_ApproveCompletesScheduleNode(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "scheduled", updated.Status, "CAB 通过后应该级联完成排期节点，Change 状态应该推进到 scheduled（经过 approved 中间态）")
 
-	instance, err := client.ProcessInstance.Query().Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID)), processinstance.TenantID(tenant.ID)).Only(ctx)
+	instance, err := client.ProcessInstance.Query().Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", workItem.ID)), processinstance.TenantID(tenant.ID)).Only(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, "Activity_Implement", instance.CurrentActivityID,
 		"级联完成排期节点后，流程应该停在变更实施这个新任务上——这是 Track4 范围边界之外的预期停留点，不是 bug")
@@ -241,7 +274,8 @@ func TestCompleteChangeApprovalTask_RejectEndsProcess(t *testing.T) {
 	requester, err := client.User.Create().SetUsername("requester2").SetEmail("requester2@example.com").SetName("Requester2").SetPasswordHash("h").SetRole("agent").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 
-	c, err := client.Change.Create().SetTitle("测试变更-驳回").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).Save(ctx)
+	workItem := createChangeWorkItemFixture(t, client, tenant.ID, requester.ID, "测试变更-驳回")
+	c, err := client.Change.Create().SetTitle("测试变更-驳回").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).SetWorkItemID(workItem.ID).Save(ctx)
 	require.NoError(t, err)
 
 	engine := newTestBPMNEngine(t, client, logger)
@@ -253,7 +287,7 @@ func TestCompleteChangeApprovalTask_RejectEndsProcess(t *testing.T) {
 	trigger := service.NewProcessTriggerService(client, engine)
 	_, err = trigger.TriggerProcess(tenantCtx, &dto.ProcessTriggerRequest{
 		BusinessType:         dto.BusinessTypeChange,
-		BusinessID:           c.ID,
+		BusinessID:           workItem.ID,
 		ProcessDefinitionKey: "change_normal_flow",
 		Variables:            map[string]interface{}{"approval_required": true, "requester_id": float64(requester.ID)},
 		TenantID:             tenant.ID,
@@ -275,7 +309,7 @@ func TestCompleteChangeApprovalTask_RejectEndsProcess(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "rejected", updated.Status)
 
-	instance, err := client.ProcessInstance.Query().Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID)), processinstance.TenantID(tenant.ID)).Only(ctx)
+	instance, err := client.ProcessInstance.Query().Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", workItem.ID)), processinstance.TenantID(tenant.ID)).Only(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, "completed", instance.Status, "驳回节点走 Flow_End 直接结束流程实例，不应该卡在 running")
 }
@@ -300,7 +334,8 @@ func TestCompleteChangeApprovalTask_WrongActorRejected(t *testing.T) {
 	requester, err := client.User.Create().SetUsername("requester3").SetEmail("requester3@example.com").SetName("Requester3").SetPasswordHash("h").SetRole("agent").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 
-	c, err := client.Change.Create().SetTitle("测试变更-越权").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).Save(ctx)
+	workItem := createChangeWorkItemFixture(t, client, tenant.ID, requester.ID, "测试变更-越权")
+	c, err := client.Change.Create().SetTitle("测试变更-越权").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).SetWorkItemID(workItem.ID).Save(ctx)
 	require.NoError(t, err)
 
 	engine := newTestBPMNEngine(t, client, logger)
@@ -312,7 +347,7 @@ func TestCompleteChangeApprovalTask_WrongActorRejected(t *testing.T) {
 	trigger := service.NewProcessTriggerService(client, engine)
 	_, err = trigger.TriggerProcess(tenantCtx, &dto.ProcessTriggerRequest{
 		BusinessType:         dto.BusinessTypeChange,
-		BusinessID:           c.ID,
+		BusinessID:           workItem.ID,
 		ProcessDefinitionKey: "change_normal_flow",
 		Variables:            map[string]interface{}{"approval_required": true, "requester_id": float64(requester.ID)},
 		TenantID:             tenant.ID,
@@ -353,7 +388,8 @@ func TestCompleteChangeApprovalTask_FiltersDecoyTaskByDefinitionKey(t *testing.T
 	requester, err := client.User.Create().SetUsername("requester4").SetEmail("requester4@example.com").SetName("Requester4").SetPasswordHash("h").SetRole("agent").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 
-	c, err := client.Change.Create().SetTitle("测试变更-伪装任务").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).Save(ctx)
+	workItem := createChangeWorkItemFixture(t, client, tenant.ID, requester.ID, "测试变更-伪装任务")
+	c, err := client.Change.Create().SetTitle("测试变更-伪装任务").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).SetWorkItemID(workItem.ID).Save(ctx)
 	require.NoError(t, err)
 
 	engine := newTestBPMNEngine(t, client, logger)
@@ -365,7 +401,7 @@ func TestCompleteChangeApprovalTask_FiltersDecoyTaskByDefinitionKey(t *testing.T
 	trigger := service.NewProcessTriggerService(client, engine)
 	_, err = trigger.TriggerProcess(tenantCtx, &dto.ProcessTriggerRequest{
 		BusinessType:         dto.BusinessTypeChange,
-		BusinessID:           c.ID,
+		BusinessID:           workItem.ID,
 		ProcessDefinitionKey: "change_normal_flow",
 		Variables:            map[string]interface{}{"approval_required": true, "requester_id": float64(requester.ID)},
 		TenantID:             tenant.ID,
@@ -376,7 +412,7 @@ func TestCompleteChangeApprovalTask_FiltersDecoyTaskByDefinitionKey(t *testing.T
 	require.NoError(t, err)
 	require.NoError(t, engine.CompleteTask(tenantCtx, assessmentTasks[0].TaskID, map[string]interface{}{}))
 
-	instance, err := client.ProcessInstance.Query().Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID)), processinstance.TenantID(tenant.ID)).Only(ctx)
+	instance, err := client.ProcessInstance.Query().Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", workItem.ID)), processinstance.TenantID(tenant.ID)).Only(ctx)
 	require.NoError(t, err)
 
 	// 伪装任务：跟真实的 Activity_CABApproval 挂在同一个流程实例上，TaskType/Status
@@ -433,7 +469,8 @@ func TestCompleteChangeApprovalTask_ResumesCascadeAfterInterruptedCall(t *testin
 	requester, err := client.User.Create().SetUsername("requester-resume").SetEmail("requester-resume@example.com").SetName("Requester Resume").SetPasswordHash("h").SetRole("agent").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 
-	c, err := client.Change.Create().SetTitle("测试变更-续做级联").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).Save(ctx)
+	workItem := createChangeWorkItemFixture(t, client, tenant.ID, requester.ID, "测试变更-续做级联")
+	c, err := client.Change.Create().SetTitle("测试变更-续做级联").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).SetWorkItemID(workItem.ID).Save(ctx)
 	require.NoError(t, err)
 
 	engine := newTestBPMNEngine(t, client, logger)
@@ -445,7 +482,7 @@ func TestCompleteChangeApprovalTask_ResumesCascadeAfterInterruptedCall(t *testin
 	trigger := service.NewProcessTriggerService(client, engine)
 	_, err = trigger.TriggerProcess(tenantCtx, &dto.ProcessTriggerRequest{
 		BusinessType:         dto.BusinessTypeChange,
-		BusinessID:           c.ID,
+		BusinessID:           workItem.ID,
 		ProcessDefinitionKey: "change_normal_flow",
 		Variables:            map[string]interface{}{"approval_required": true, "requester_id": float64(requester.ID)},
 		TenantID:             tenant.ID,
@@ -459,7 +496,7 @@ func TestCompleteChangeApprovalTask_ResumesCascadeAfterInterruptedCall(t *testin
 	// 手工完成 CAB 任务——绕开 completeChangeApprovalTask，只做它原本会做的"第一步"，
 	// 模拟"决定已经生效，级联还没做"这个中间态。
 	cabTask, err := client.ProcessTask.Query().
-		Where(processtask.HasProcessInstanceWith(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID))), processtask.TaskDefinitionKey("Activity_CABApproval")).
+		Where(processtask.HasProcessInstanceWith(processinstance.BusinessKey(fmt.Sprintf("change:%d", workItem.ID))), processtask.TaskDefinitionKey("Activity_CABApproval")).
 		Only(ctx)
 	require.NoError(t, err)
 	actorCtx := context.WithValue(tenantCtx, bpmn.BPMNUserIDContextKey, cmUser.ID)
@@ -472,7 +509,7 @@ func TestCompleteChangeApprovalTask_ResumesCascadeAfterInterruptedCall(t *testin
 
 	// 确认中间态：CAB 任务已完成，级联的排期节点还卡在待办。
 	scheduleTask, err := client.ProcessTask.Query().
-		Where(processtask.HasProcessInstanceWith(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID))), processtask.TaskDefinitionKey("Activity_Schedule")).
+		Where(processtask.HasProcessInstanceWith(processinstance.BusinessKey(fmt.Sprintf("change:%d", workItem.ID))), processtask.TaskDefinitionKey("Activity_Schedule")).
 		Only(ctx)
 	require.NoError(t, err)
 	require.Contains(t, []string{"created", "assigned"}, scheduleTask.Status, "前置条件：级联步骤应该还没做")
@@ -504,7 +541,8 @@ func TestCompleteChangeApprovalTask_RetryAfterFullSuccessIsNoop(t *testing.T) {
 	requester, err := client.User.Create().SetUsername("requester-retry-noop").SetEmail("requester-retry-noop@example.com").SetName("Requester RetryNoop").SetPasswordHash("h").SetRole("agent").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 
-	c, err := client.Change.Create().SetTitle("测试变更-幂等重试").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).Save(ctx)
+	workItem := createChangeWorkItemFixture(t, client, tenant.ID, requester.ID, "测试变更-幂等重试")
+	c, err := client.Change.Create().SetTitle("测试变更-幂等重试").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).SetWorkItemID(workItem.ID).Save(ctx)
 	require.NoError(t, err)
 
 	engine := newTestBPMNEngine(t, client, logger)
@@ -516,7 +554,7 @@ func TestCompleteChangeApprovalTask_RetryAfterFullSuccessIsNoop(t *testing.T) {
 	trigger := service.NewProcessTriggerService(client, engine)
 	_, err = trigger.TriggerProcess(tenantCtx, &dto.ProcessTriggerRequest{
 		BusinessType:         dto.BusinessTypeChange,
-		BusinessID:           c.ID,
+		BusinessID:           workItem.ID,
 		ProcessDefinitionKey: "change_normal_flow",
 		Variables:            map[string]interface{}{"approval_required": true, "requester_id": float64(requester.ID)},
 		TenantID:             tenant.ID,
@@ -553,7 +591,8 @@ func TestCompleteChangeApprovalTask_RetryWithMismatchedActionRejected(t *testing
 	requester, err := client.User.Create().SetUsername("requester-retry-mismatch").SetEmail("requester-retry-mismatch@example.com").SetName("Requester Mismatch").SetPasswordHash("h").SetRole("agent").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 
-	c, err := client.Change.Create().SetTitle("测试变更-矛盾重试").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).Save(ctx)
+	workItem := createChangeWorkItemFixture(t, client, tenant.ID, requester.ID, "测试变更-矛盾重试")
+	c, err := client.Change.Create().SetTitle("测试变更-矛盾重试").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).SetWorkItemID(workItem.ID).Save(ctx)
 	require.NoError(t, err)
 
 	engine := newTestBPMNEngine(t, client, logger)
@@ -565,7 +604,7 @@ func TestCompleteChangeApprovalTask_RetryWithMismatchedActionRejected(t *testing
 	trigger := service.NewProcessTriggerService(client, engine)
 	_, err = trigger.TriggerProcess(tenantCtx, &dto.ProcessTriggerRequest{
 		BusinessType:         dto.BusinessTypeChange,
-		BusinessID:           c.ID,
+		BusinessID:           workItem.ID,
 		ProcessDefinitionKey: "change_normal_flow",
 		Variables:            map[string]interface{}{"approval_required": true, "requester_id": float64(requester.ID)},
 		TenantID:             tenant.ID,
@@ -578,7 +617,7 @@ func TestCompleteChangeApprovalTask_RetryWithMismatchedActionRejected(t *testing
 
 	// 手工完成 CAB 任务为 approve，让级联卡在 Activity_Schedule。
 	cabTask, err := client.ProcessTask.Query().
-		Where(processtask.HasProcessInstanceWith(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID))), processtask.TaskDefinitionKey("Activity_CABApproval")).
+		Where(processtask.HasProcessInstanceWith(processinstance.BusinessKey(fmt.Sprintf("change:%d", workItem.ID))), processtask.TaskDefinitionKey("Activity_CABApproval")).
 		Only(ctx)
 	require.NoError(t, err)
 	actorCtx := context.WithValue(tenantCtx, bpmn.BPMNUserIDContextKey, cmUser.ID)
@@ -600,7 +639,7 @@ func TestCompleteChangeApprovalTask_RetryWithMismatchedActionRejected(t *testing
 
 	// 排期节点应该原封不动，没有被误判成驳回节点完成掉。
 	scheduleTask, err := client.ProcessTask.Query().
-		Where(processtask.HasProcessInstanceWith(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID))), processtask.TaskDefinitionKey("Activity_Schedule")).
+		Where(processtask.HasProcessInstanceWith(processinstance.BusinessKey(fmt.Sprintf("change:%d", workItem.ID))), processtask.TaskDefinitionKey("Activity_Schedule")).
 		Only(ctx)
 	require.NoError(t, err)
 	assert.Contains(t, []string{"created", "assigned"}, scheduleTask.Status, "矛盾的重试被拒绝后，排期节点不应该被完成")
@@ -630,7 +669,8 @@ func setupChangeForTransitionStatusTest(t *testing.T, dbName string) (*ent.Clien
 	requester, err := client.User.Create().SetUsername(dbName + "-req").SetEmail(dbName + "-req@example.com").SetName("Requester").SetPasswordHash("h").SetRole("agent").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 
-	c, err := client.Change.Create().SetTitle("TransitionStatus 测试变更").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).Save(ctx)
+	workItem := createChangeWorkItemFixture(t, client, tenant.ID, requester.ID, "TransitionStatus 测试变更")
+	c, err := client.Change.Create().SetTitle("TransitionStatus 测试变更").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).SetWorkItemID(workItem.ID).Save(ctx)
 	require.NoError(t, err)
 
 	engine := newTestBPMNEngine(t, client, logger)
@@ -642,7 +682,7 @@ func setupChangeForTransitionStatusTest(t *testing.T, dbName string) (*ent.Clien
 	trigger := service.NewProcessTriggerService(client, engine)
 	_, err = trigger.TriggerProcess(tenantCtx, &dto.ProcessTriggerRequest{
 		BusinessType:         dto.BusinessTypeChange,
-		BusinessID:           c.ID,
+		BusinessID:           workItem.ID,
 		ProcessDefinitionKey: "change_normal_flow",
 		Variables:            map[string]interface{}{"approval_required": true, "requester_id": float64(requester.ID)},
 		TenantID:             tenant.ID,
@@ -722,7 +762,8 @@ func TestTransitionStatus_Approve_NoRunningProcessInstanceFailsClosed(t *testing
 
 	// 直接建库记录，不走 SubmitChange/TriggerProcess——不部署模板、不触发流程，
 	// 所以这个 change 底下没有任何 ProcessInstance。
-	c, err := client.Change.Create().SetTitle("无绑定流程实例的变更").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(cmUser.ID).Save(ctx)
+	workItem := createChangeWorkItemFixture(t, client, tenant.ID, cmUser.ID, "无绑定流程实例的变更")
+	c, err := client.Change.Create().SetTitle("无绑定流程实例的变更").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(cmUser.ID).SetWorkItemID(workItem.ID).Save(ctx)
 	require.NoError(t, err)
 
 	// processEngine 必须非 nil，否则会在 completeChangeApprovalTask 里更早地因为
@@ -788,8 +829,9 @@ func TestSubmitChange_AutoCompletesAssessmentTask(t *testing.T) {
 	_, err = svc.SubmitChange(tenantCtx, created.ID, tenant.ID, requester.ID, &dto.SubmitChangeRequest{})
 	require.NoError(t, err)
 
+	require.NotNil(t, created.WorkItemID, "repo.Create 应该已经在同一事务内建好 WorkItem 并回填")
 	instance, err := client.ProcessInstance.Query().
-		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", created.ID)), processinstance.TenantID(tenant.ID)).
+		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", *created.WorkItemID)), processinstance.TenantID(tenant.ID)).
 		Only(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, "Activity_CABApproval", instance.CurrentActivityID,
@@ -811,7 +853,12 @@ func TestBackfillLegacyPendingChange_CreatesInstanceAndAdvancesToCAB(t *testing.
 	logger := zaptest.NewLogger(t).Sugar()
 
 	// 模拟旧审批链流程下已经提交到 pending、但从来没有对应 BPMN 流程实例的存量变更。
-	c, err := client.Change.Create().SetTitle("上线前用旧流程提交的变更").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).Save(context.Background())
+	// Wave 2 起 BackfillLegacyPendingChange 要求先有关联的 WorkItem（resolveWorkItemID
+	// fail closed），所以这里必须先建 WorkItem——现实运维顺序也是先跑
+	// cmd/backfill_change_work_item 再跑 cmd/backfill_legacy_pending_changes，见
+	// BackfillLegacyPendingChange 顶部的排期依赖说明。
+	workItem := createChangeWorkItemFixture(t, client, tenantID, actorID, "上线前用旧流程提交的变更")
+	c, err := client.Change.Create().SetTitle("上线前用旧流程提交的变更").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
 	require.NoError(t, err)
 
 	repo := NewEntRepository(client, nil)
@@ -823,7 +870,7 @@ func TestBackfillLegacyPendingChange_CreatesInstanceAndAdvancesToCAB(t *testing.
 	require.NoError(t, err)
 
 	instance, err := client.ProcessInstance.Query().
-		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID)), processinstance.TenantID(tenantID)).
+		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", workItem.ID)), processinstance.TenantID(tenantID)).
 		Only(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "running", instance.Status)
@@ -843,13 +890,14 @@ func TestBackfillLegacyPendingChange_SkipsChangeWithExistingInstance(t *testing.
 	engine, trigger := deployRealBPMNFixture(t, client, tenantID)
 	logger := zaptest.NewLogger(t).Sugar()
 
-	c, err := client.Change.Create().SetTitle("已经有流程实例的变更").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).Save(context.Background())
+	workItem := createChangeWorkItemFixture(t, client, tenantID, actorID, "已经有流程实例的变更")
+	c, err := client.Change.Create().SetTitle("已经有流程实例的变更").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
 	require.NoError(t, err)
 
 	tenantCtx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, tenantID)
 	_, err = trigger.TriggerProcess(tenantCtx, &dto.ProcessTriggerRequest{
 		BusinessType:         dto.BusinessTypeChange,
-		BusinessID:           c.ID,
+		BusinessID:           workItem.ID,
 		ProcessDefinitionKey: "change_normal_flow",
 		Variables:            map[string]interface{}{"approval_required": true, "requester_id": float64(actorID)},
 		TenantID:             tenantID,
@@ -865,7 +913,7 @@ func TestBackfillLegacyPendingChange_SkipsChangeWithExistingInstance(t *testing.
 	require.Error(t, err, "已经有流程实例（不管是不是这次 Track4 之前建的）就不该重复回填")
 
 	count, err := client.ProcessInstance.Query().
-		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID)), processinstance.TenantID(tenantID)).
+		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", workItem.ID)), processinstance.TenantID(tenantID)).
 		Count(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, 1, count, "不应该产生第二个流程实例")
@@ -877,7 +925,8 @@ func TestBackfillLegacyPendingChange_RetriesAfterTerminatedInstance(t *testing.T
 	engine, trigger := deployRealBPMNFixture(t, client, tenantID)
 	logger := zaptest.NewLogger(t).Sugar()
 
-	c, err := client.Change.Create().SetTitle("第一次回填失败过的变更").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).Save(context.Background())
+	workItem := createChangeWorkItemFixture(t, client, tenantID, actorID, "第一次回填失败过的变更")
+	c, err := client.Change.Create().SetTitle("第一次回填失败过的变更").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
 	require.NoError(t, err)
 
 	// 模拟第一次回填尝试：触发流程后失败，补偿性地 CancelProcess——跟
@@ -886,7 +935,7 @@ func TestBackfillLegacyPendingChange_RetriesAfterTerminatedInstance(t *testing.T
 	tenantCtx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, tenantID)
 	firstAttempt, err := trigger.TriggerProcess(tenantCtx, &dto.ProcessTriggerRequest{
 		BusinessType:         dto.BusinessTypeChange,
-		BusinessID:           c.ID,
+		BusinessID:           workItem.ID,
 		ProcessDefinitionKey: "change_normal_flow",
 		Variables:            map[string]interface{}{"approval_required": true, "requester_id": float64(actorID)},
 		TenantID:             tenantID,
@@ -895,7 +944,7 @@ func TestBackfillLegacyPendingChange_RetriesAfterTerminatedInstance(t *testing.T
 	require.NoError(t, trigger.CancelProcess(tenantCtx, firstAttempt.ProcessInstanceID, "模拟回填第一次尝试失败后的补偿回滚", tenantID))
 
 	terminated, err := client.ProcessInstance.Query().
-		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID)), processinstance.TenantID(tenantID)).
+		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", workItem.ID)), processinstance.TenantID(tenantID)).
 		Only(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, "terminated", terminated.Status, "测试前置条件：确认补偿回滚确实留下了 terminated 记录")
@@ -911,7 +960,7 @@ func TestBackfillLegacyPendingChange_RetriesAfterTerminatedInstance(t *testing.T
 
 	running, err := client.ProcessInstance.Query().
 		Where(
-			processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID)),
+			processinstance.BusinessKey(fmt.Sprintf("change:%d", workItem.ID)),
 			processinstance.TenantID(tenantID),
 			processinstance.StatusNEQ("terminated"),
 		).
@@ -927,7 +976,8 @@ func TestBackfillLegacyPendingChange_RejectsNonPendingChange(t *testing.T) {
 	engine, trigger := deployRealBPMNFixture(t, client, tenantID)
 	logger := zaptest.NewLogger(t).Sugar()
 
-	c, err := client.Change.Create().SetTitle("还是草稿的变更").SetType("normal").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).Save(context.Background())
+	workItem := createChangeWorkItemFixture(t, client, tenantID, actorID, "还是草稿的变更")
+	c, err := client.Change.Create().SetTitle("还是草稿的变更").SetType("normal").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
 	require.NoError(t, err)
 
 	repo := NewEntRepository(client, nil)
@@ -939,8 +989,55 @@ func TestBackfillLegacyPendingChange_RejectsNonPendingChange(t *testing.T) {
 	require.Error(t, err, "不是 pending 状态的变更不需要回填，应该明确拒绝而不是静默处理")
 
 	exists, err := client.ProcessInstance.Query().
-		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", c.ID)), processinstance.TenantID(tenantID)).
+		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", workItem.ID)), processinstance.TenantID(tenantID)).
 		Exist(context.Background())
 	require.NoError(t, err)
 	assert.False(t, exists, "被拒绝的回填不应该留下任何流程实例")
+}
+
+// ==================== ChangeServiceTaskHandler.createChange 委托到真实领域服务 ====================
+
+// TestChangeServiceTaskHandler_CreateChange_DelegatesToRealServiceAndCreatesWorkItem 是
+// service/bpmn.ChangeServiceTaskHandler 委托单测（那边用假的 ChangeDomainServiceInterface
+// 替身）的真实集成版本：用真实的 handlers/change.Service 实现注入，证明通过 BPMN
+// create_change 这条自动创建路径产生的 Change 也会在同一事务内建好 WorkItem——这正是
+// Wave 2 迁移要修的缺陷（迁移前 ChangeServiceTaskHandler.createChange 直接
+// h.client.Change.Create()，完全绕开 WorkItem 创建）。
+func TestChangeServiceTaskHandler_CreateChange_DelegatesToRealServiceAndCreatesWorkItem(t *testing.T) {
+	client := newChangeBPMNEntClient(t, "change_bpmn_handler_create_real")
+	logger := zaptest.NewLogger(t).Sugar()
+	tenantID, actorID := setupChangeBPMNActor(t, client, "bpmn-handler-create")
+
+	repo := NewEntRepository(client, openChangeBPMNRawDB(t, "change_bpmn_handler_create_real"))
+	svc := NewService(repo, client, logger)
+
+	taskHandler := bpmn.NewChangeServiceTaskHandler(client, logger)
+	taskHandler.SetChangeService(svc)
+
+	ctx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, tenantID)
+	result, err := taskHandler.Execute(ctx, nil, map[string]interface{}{
+		"action":      "create_change",
+		"title":       "BPMN 自动创建的变更",
+		"description": "验证委托到真实领域服务后同步建好 WorkItem",
+		"type":        "normal",
+		"priority":    "medium",
+		"created_by":  float64(actorID),
+	})
+	require.NoError(t, err)
+	require.True(t, result.Success)
+
+	changeID, ok := result.OutputVars["change_id"].(int)
+	require.True(t, ok, "OutputVars.change_id 应该是真实领域服务创建的 Change ID")
+
+	created, err := repo.Get(context.Background(), changeID, tenantID)
+	require.NoError(t, err)
+	require.NotNil(t, created.WorkItemID,
+		"通过 BPMN create_change 路径自动创建的 Change 也必须有关联的 WorkItem，不能绕过事务化建表")
+
+	workItem, err := client.Ticket.Get(context.Background(), *created.WorkItemID)
+	require.NoError(t, err)
+	assert.Equal(t, "change_request", workItem.RecordClass, "recordClass 必须是 change_request，不是 change")
+	assert.Equal(t, "BPMN 自动创建的变更", workItem.Title)
+	assert.Equal(t, tenantID, workItem.TenantID)
+	assert.Equal(t, "change", workItem.Type)
 }
