@@ -7,6 +7,74 @@
 @import "tailwindcss";
 @reference "tailwindcss";
 
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  font-family: var(--font-family-sans, var(--font-family-base, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif));
+  font-size: var(--font-size-base, 16px);
+  line-height: var(--line-height-normal, 1.5);
+  color: var(--color-text-primary, #111827);
+  background-color: var(--color-bg-primary, #ffffff);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.ant-typography,
+.ant-typography h1,
+.ant-typography h2,
+.ant-typography h3,
+.ant-typography h4,
+.ant-typography h5,
+.ant-typography h6,
+.ant-btn,
+.ant-input,
+.ant-select,
+.ant-select-selection-item,
+.ant-table,
+.ant-table-thead > tr > th,
+.ant-table-tbody > tr > td,
+.ant-form-item-label > label,
+.ant-tag,
+.ant-descriptions-title {
+  font-family: var(--font-family-sans, var(--font-family-base, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif));
+}
+
+.ant-table-thead > tr > th {
+  font-size: var(--font-size-sm, 14px);
+  font-weight: var(--font-weight-semibold, 600);
+  line-height: var(--line-height-normal, 1.5);
+}
+
+.ant-table-tbody > tr > td {
+  font-size: var(--font-size-sm, 14px);
+  line-height: var(--line-height-normal, 1.5);
+}
+
+.ant-tag {
+  font-size: var(--font-size-xs, 12px);
+  line-height: 1.4;
+  font-weight: var(--font-weight-medium, 500);
+}
+
+.ant-card-head-title,
+.ant-card-meta-title,
+.ant-descriptions-title,
+.ant-page-header-heading-title {
+  font-size: var(--font-size-lg, 18px);
+  font-weight: var(--font-weight-semibold, 600);
+  line-height: var(--line-height-snug, 1.35);
+}
+
 /* Tooltip 样式修复 - 修复白色透明背景问题 */
 .ant-tooltip {
   opacity: 1 !important;

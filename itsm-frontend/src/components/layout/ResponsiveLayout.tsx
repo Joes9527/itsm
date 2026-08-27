@@ -113,11 +113,17 @@ export function PageHeader({
                   </svg>
                 )}
                 {crumb.href ? (
-                  <a href={crumb.href} className="hover:text-gray-700 transition-colors">
+                  <a
+                    href={crumb.href}
+                    className="transition-colors"
+                    style={{ color: 'var(--color-text-secondary)' }}
+                  >
                     {crumb.label}
                   </a>
                 ) : (
-                  <span className="text-gray-900 font-medium">{crumb.label}</span>
+                  <span style={{ color: 'var(--color-text-primary)', fontWeight: 'var(--font-weight-medium)' }}>
+                    {crumb.label}
+                  </span>
                 )}
               </li>
             ))}
@@ -128,8 +134,22 @@ export function PageHeader({
       {/* Header Content */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold text-gray-900 truncate">{title}</h1>
-          {subtitle && <p className="mt-1 text-sm text-gray-500 truncate">{subtitle}</p>}
+          <h1
+            className="truncate"
+            style={{
+              fontSize: 'var(--font-size-2xl)',
+              fontWeight: 'var(--font-weight-bold)',
+              lineHeight: 'var(--line-height-tight)',
+              color: 'var(--color-text-primary)',
+            }}
+          >
+            {title}
+          </h1>
+          {subtitle && (
+            <p className="truncate" style={{ marginTop: '4px', fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
+              {subtitle}
+            </p>
+          )}
         </div>
 
         {/* Actions */}
@@ -189,8 +209,23 @@ export function Card({
           )}
         >
           <div className="min-w-0 flex-1">
-            {title && <h3 className="text-lg font-medium text-gray-900 truncate">{title}</h3>}
-            {subtitle && <p className="mt-1 text-sm text-gray-500 truncate">{subtitle}</p>}
+            {title && (
+              <h3
+                className="truncate"
+                style={{
+                  fontSize: 'var(--font-size-lg)',
+                  fontWeight: 'var(--font-weight-medium)',
+                  color: 'var(--color-text-primary)',
+                }}
+              >
+                {title}
+              </h3>
+            )}
+            {subtitle && (
+              <p className="truncate" style={{ marginTop: '4px', fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
+                {subtitle}
+              </p>
+            )}
           </div>
           {headerActions && <div className="flex-shrink-0 ml-4">{headerActions}</div>}
         </div>

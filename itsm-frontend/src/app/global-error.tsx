@@ -49,20 +49,20 @@ export default function GlobalError({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: '32px',
+    fontSize: 'var(--font-size-4xl)',
   };
 
   const titleStyle: React.CSSProperties = {
-    fontSize: '24px',
+    fontSize: 'var(--font-size-3xl)',
     fontWeight: 700,
     color: '#1f2937',
     marginBottom: '12px',
   };
 
   const subtitleStyle: React.CSSProperties = {
-    fontSize: '15px',
+    fontSize: 'var(--font-size-base)',
     color: '#6b7280',
-    lineHeight: '1.6',
+    lineHeight: 'var(--line-height-relaxed)',
     marginBottom: '32px',
   };
 
@@ -82,7 +82,7 @@ export default function GlobalError({
     border: 'none',
     borderRadius: '8px',
     padding: '10px 24px',
-    fontSize: '14px',
+    fontSize: 'var(--font-size-sm)',
     fontWeight: 500,
     cursor: 'pointer',
     transition: 'background 0.2s',
@@ -97,7 +97,7 @@ export default function GlobalError({
     border: '1px solid #d1d5db',
     borderRadius: '8px',
     padding: '10px 24px',
-    fontSize: '14px',
+    fontSize: 'var(--font-size-sm)',
     fontWeight: 500,
     cursor: 'pointer',
     transition: 'background 0.2s',
@@ -105,7 +105,7 @@ export default function GlobalError({
 
   const errorIdStyle: React.CSSProperties = {
     marginTop: '24px',
-    fontSize: '12px',
+    fontSize: 'var(--font-size-xs)',
     color: '#9ca3af',
   };
 

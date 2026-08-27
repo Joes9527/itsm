@@ -44,12 +44,12 @@ export const StatCard: React.FC<StatCardProps> = ({
       >
         <div className="flex items-center justify-between">
           <div className="flex-1">
-            <div className="text-sm text-gray-500 mb-1">{title}</div>
+            <div className="text-secondary mb-1" style={{ fontSize: 'var(--font-size-sm)' }}>{title}</div>
             <Statistic
               value={value}
               prefix={prefix}
               suffix={suffix}
-              valueStyle={{ color, fontSize: '24px', fontWeight: 'bold' }}
+              valueStyle={{ color, fontSize: 'var(--font-size-3xl)', fontWeight: 'var(--font-weight-bold)' }}
             />
           </div>
           {icon && (

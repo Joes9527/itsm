@@ -308,11 +308,29 @@ export const BusinessPageTemplate: React.FC<BusinessPageTemplateProps> = ({
           {/* 标题行 */}
           <div className="mb-4 flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <Title level={2} style={{ marginBottom: 0, marginTop: 0 }}>
+              <Title
+                level={2}
+                style={{
+                  marginBottom: 0,
+                  marginTop: 0,
+                  fontSize: 'var(--font-size-3xl)',
+                  lineHeight: 'var(--line-height-tight)',
+                  color: 'var(--color-text-primary)',
+                  fontWeight: 'var(--font-weight-bold)',
+                }}
+              >
                 {title}
               </Title>
               {description && (
-                <Text type="secondary" className="mt-1 block">
+                <Text
+                  type="secondary"
+                  style={{
+                    display: 'block',
+                    marginTop: '4px',
+                    fontSize: 'var(--font-size-md)',
+                    color: 'var(--color-text-secondary)',
+                  }}
+                >
                   {description}
                 </Text>
               )}
@@ -386,6 +404,7 @@ export const BusinessPageTemplate: React.FC<BusinessPageTemplateProps> = ({
               loading={searchLoading}
               className="w-full sm:w-72"
               enterButton
+              style={{ fontSize: 'var(--font-size-sm)' }}
             />
 
             <Space wrap className="w-full sm:w-auto">
@@ -454,8 +473,25 @@ export const BusinessPageTemplate: React.FC<BusinessPageTemplateProps> = ({
             </div>
           ) : error ? (
             <div className="py-12 text-center" role="alert">
-              <div className="mb-2 text-base font-medium text-red-500">{errorDescription}</div>
-              <Text type="secondary" className="mb-4 block text-sm">
+              <div
+                className="mb-2"
+                style={{
+                  fontSize: 'var(--font-size-lg)',
+                  fontWeight: 'var(--font-weight-medium)',
+                  color: 'var(--color-error)',
+                }}
+              >
+                {errorDescription}
+              </div>
+              <Text
+                type="secondary"
+                style={{
+                  display: 'block',
+                  marginBottom: '16px',
+                  fontSize: 'var(--font-size-sm)',
+                  color: 'var(--color-text-secondary)',
+                }}
+              >
                 数据加载失败，并非暂无数据，请检查网络后重试
               </Text>
               {onRetry && (

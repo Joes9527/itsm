@@ -45,8 +45,8 @@ export const KPICard: React.FC<KPICardProps> = ({
           styles={{
             content: {
               color: 'white',
-              fontSize: '32px',
-              fontWeight: '700',
+              fontSize: 'var(--font-size-4xl)',
+              fontWeight: 'var(--font-weight-bold)',
             },
           }}
         />

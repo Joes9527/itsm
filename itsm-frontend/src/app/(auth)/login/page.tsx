@@ -96,16 +96,22 @@ function LoginForm() {
       <img src="/kln-logo.png" alt="KLN" className="absolute top-5 left-6 h-8 w-auto opacity-50" />
 
       <div className="text-center mb-8">
-        <Title level={2} className="!mb-1 !text-gray-900 !text-xl !font-bold !tracking-tight">
+        <Title
+          level={2}
+          className="!mb-1 !text-gray-900 !tracking-tight"
+          style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 'var(--font-weight-bold)' }}
+        >
           {t('auth.login.title')}
         </Title>
         <div className="flex items-center justify-center gap-2 mt-1">
           <span className="w-[3px] h-3.5 rounded-full bg-[#2A2A2A]" />
-          <Text className="!text-gray-500 !text-[13px]">{t('auth.login.subtitle')}</Text>
+          <Text className="text-secondary" style={{ fontSize: 'var(--font-size-sm)' }}>
+            {t('auth.login.subtitle')}
+          </Text>
         </div>
         <div className="flex items-center justify-center gap-1.5 mt-3">
           <span className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_3px_rgba(34,197,94,.5)]" />
-          <span className="text-[11px] text-gray-400">System Online</span>
+          <span className="text-muted" style={{ fontSize: 'var(--font-size-xs)' }}>System Online</span>
         </div>
       </div>
 
@@ -209,7 +215,7 @@ function LoginForm() {
 
       <div className='flex items-center gap-3 my-5'>
         <div className='flex-1 border-t border-gray-200'></div>
-        <Text className='text-gray-400 text-xs'>或</Text>
+        <Text className='text-muted' style={{ fontSize: 'var(--font-size-xs)' }}>或</Text>
         <div className='flex-1 border-t border-gray-200'></div>
       </div>
 
@@ -230,16 +236,16 @@ function LoginForm() {
         {CAPABILITIES.map(c => (
           <div key={c.label} className="flex flex-col items-center gap-1.5">
             <span className="text-gray-300">{c.icon}</span>
-            <span className="text-gray-400 text-[11px]">{c.label}</span>
+            <span className="text-muted" style={{ fontSize: 'var(--font-size-xs)' }}>{c.label}</span>
           </div>
         ))}
       </div>
 
       <div className='text-center mt-6'>
-        <Text className='text-gray-400 text-xs'>
+        <Text className='text-muted' style={{ fontSize: 'var(--font-size-xs)' }}>
           {t('auth.login.noAccount')}{' '}
           <Link href='/register'>
-            <Button type='link' className='p-0 h-auto text-xs'>
+            <Button type='link' className='p-0 h-auto' style={{ fontSize: 'var(--font-size-xs)' }}>
               {t('auth.login.registerNow')}
             </Button>
           </Link>
