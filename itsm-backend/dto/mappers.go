@@ -434,6 +434,9 @@ func ToProblemResponse(problem *ent.Problem) *ProblemResponse {
 	if problem.AssigneeID > 0 {
 		response.AssigneeID = &problem.AssigneeID
 	}
+	if problem.WorkItemID > 0 {
+		response.WorkItemID = &problem.WorkItemID
+	}
 
 	return response
 }

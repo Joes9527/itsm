@@ -119,8 +119,8 @@ func TestProblemAssociationsEnforceTenantBoundary(t *testing.T) {
 		SetTitle("Foreign ticket").SetTicketNumber("PRB-FOREIGN").SetRequesterID(userB.ID).SetTenantID(tenantB.ID).Save(ctx)
 	require.NoError(t, err)
 
-	require.NoError(t, service.AddAssociations(ctx, tenantA.ID, p.ID, "ticket", []int{localTicket.ID, localTicket.ID}))
-	err = service.AddAssociations(ctx, tenantA.ID, p.ID, "ticket", []int{foreignTicket.ID})
+	require.NoError(t, service.AddAssociations(ctx, tenantA.ID, p.ID, userA.ID, "ticket", []int{localTicket.ID, localTicket.ID}))
+	err = service.AddAssociations(ctx, tenantA.ID, p.ID, userA.ID, "ticket", []int{foreignTicket.ID})
 	require.ErrorContains(t, err, "current tenant")
 
 	withAssociations, err := service.GetWithAssociations(ctx, p.ID, tenantA.ID)
@@ -195,8 +195,8 @@ func TestProblemServiceStateMachineTransitions(t *testing.T) {
 
 	for i, tc := range validCases {
 		p, err := service.Create(ctx, tenant.ID, &Problem{
-			Title:    fmt.Sprintf("Problem SM %d", i),
-			Priority: "medium",
+			Title:     fmt.Sprintf("Problem SM %d", i),
+			Priority:  "medium",
 			CreatedBy: user.ID,
 		})
 		require.NoError(t, err)
@@ -227,8 +227,8 @@ func TestProblemServiceStateMachineTransitions(t *testing.T) {
 
 	for i, tc := range invalidCases {
 		p, err := service.Create(ctx, tenant.ID, &Problem{
-			Title:    fmt.Sprintf("Invalid SM %d", i),
-			Priority: "low",
+			Title:     fmt.Sprintf("Invalid SM %d", i),
+			Priority:  "low",
 			CreatedBy: user.ID,
 		})
 		require.NoError(t, err)
@@ -250,8 +250,8 @@ func TestProblemServiceInvestigationAndSolutions(t *testing.T) {
 	user := createProblemHandlerUser(t, ctx, client, tenant.ID, "investigate")
 
 	p, err := service.Create(ctx, tenant.ID, &Problem{
-		Title:    "Network Packet Drop",
-		Priority: "high",
+		Title:     "Network Packet Drop",
+		Priority:  "high",
 		CreatedBy: user.ID,
 	})
 	require.NoError(t, err)
@@ -361,16 +361,16 @@ func TestProblemServiceAssociationsLifecycle(t *testing.T) {
 	require.NoError(t, err)
 
 	// Add associations
-	require.NoError(t, service.AddAssociations(ctx, tenant.ID, p.ID, "ticket", []int{ticket1.ID}))
-	require.NoError(t, service.AddAssociations(ctx, tenant.ID, p.ID, "incident", []int{incident1.ID}))
-	require.NoError(t, service.AddAssociations(ctx, tenant.ID, p.ID, "change", []int{change1.ID}))
+	require.NoError(t, service.AddAssociations(ctx, tenant.ID, p.ID, user.ID, "ticket", []int{ticket1.ID}))
+	require.NoError(t, service.AddAssociations(ctx, tenant.ID, p.ID, user.ID, "incident", []int{incident1.ID}))
+	require.NoError(t, service.AddAssociations(ctx, tenant.ID, p.ID, user.ID, "change", []int{change1.ID}))
 
 	// Invalid related type
-	err = service.AddAssociations(ctx, tenant.ID, p.ID, "unknown", []int{1})
+	err = service.AddAssociations(ctx, tenant.ID, p.ID, user.ID, "unknown", []int{1})
 	require.ErrorContains(t, err, "unsupported related type")
 
 	// Empty related IDs
-	err = service.AddAssociations(ctx, tenant.ID, p.ID, "ticket", []int{})
+	err = service.AddAssociations(ctx, tenant.ID, p.ID, user.ID, "ticket", []int{})
 	require.ErrorContains(t, err, "at least one related id is required")
 
 	// Verify loaded associations
@@ -479,4 +479,3 @@ func TestProblemServiceStats(t *testing.T) {
 	assert.Equal(t, 1, stats.Closed)
 	assert.Equal(t, 2, stats.HighPriority) // critical + high
 }
-

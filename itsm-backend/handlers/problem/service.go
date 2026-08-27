@@ -28,9 +28,16 @@ func (s *Service) Create(ctx context.Context, tenantID int, p *Problem) (*Proble
 	if !isValidProblemPriority(p.Priority) {
 		return nil, fmt.Errorf("invalid problem priority: %s", p.Priority)
 	}
+	if p.CreatedBy <= 0 {
+		return nil, fmt.Errorf("problem creator is required")
+	}
 	p.Title = strings.TrimSpace(p.Title)
 	p.Status = "open"
 	p.TenantID = tenantID
+	// 统一 WorkItem 领域模型宪章 §3.2：WorkItem 创建与专业扩展记录创建必须在同一数据库
+	// 事务中完成。repo.Create 在事务内先建 tickets 行（record_class="problem"，创建后
+	// 不可变），再建 problems 行并回填 work_item_id，任一边失败整体回滚（见
+	// EntRepository.Create）。
 	return s.repo.Create(ctx, p)
 }
 
@@ -42,12 +49,15 @@ func (s *Service) GetWithAssociations(ctx context.Context, id int, tenantID int)
 	return s.repo.GetWithAssociations(ctx, id, tenantID)
 }
 
-func (s *Service) AddAssociations(ctx context.Context, tenantID, problemID int, relatedType string, relatedIDs []int) error {
+func (s *Service) AddAssociations(ctx context.Context, tenantID, problemID, actorUserID int, relatedType string, relatedIDs []int) error {
 	relatedIDs = uniquePositiveIDs(relatedIDs)
 	if len(relatedIDs) == 0 {
 		return fmt.Errorf("at least one related id is required")
 	}
-	return s.repo.AddAssociations(ctx, tenantID, problemID, relatedType, relatedIDs)
+	if actorUserID <= 0 {
+		return fmt.Errorf("invalid actor user id")
+	}
+	return s.repo.AddAssociations(ctx, tenantID, problemID, actorUserID, relatedType, relatedIDs)
 }
 
 func (s *Service) RemoveAssociation(ctx context.Context, tenantID, problemID int, relatedType string, relatedID int) error {

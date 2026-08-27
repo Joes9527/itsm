@@ -1,9 +1,13 @@
 package known_error
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"strconv"
 	"sync"
+	"time"
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
@@ -585,7 +589,46 @@ func (h *Handler) CreateFromProblem(c *gin.Context) {
 		return
 	}
 
+	h.recordKnownErrorFromProblemAudit(c, tenantID, userID, problemID, ke.ID)
+
 	common.Success(c, ke)
+}
+
+// recordKnownErrorFromProblemAudit 显式写一条 AuditLog，记录"从问题发布已知错误"这个高风险
+// 知识沉淀动作（AGENTS.md：AI 建议、流程流转、审批、连接器动作、批量操作、高风险变更必须
+// 可追踪）。
+//
+// 之所以在这里显式写，而不是依赖全局的 middleware.AuditMiddleware——核实后发现
+// middleware.AuditMiddleware 虽然实现完整（对所有 POST/PUT/PATCH/DELETE 请求落一条
+// AuditLog），但从未在 router.go / main.go 里被 r.Use(...) 注册（全仓库搜索
+// "middleware.AuditMiddleware(" 只命中它自己的定义和 internal/bootstrap 里的两处注释，
+// 没有任何实际调用点）。这意味着当前系统里所有走这条全局中间件的写操作事实上都没有被
+// 审计到，是一个比本次 Problem 迁移范围更大的既有缺口——修复它需要改 router.go，影响全部
+// 域，超出本次任务允许修改的文件范围，已在交付说明里单独列出。这里参照
+// service/event_audit_subscriber.go 和 middleware/audit.go:RecordLoginAudit 的既有做法，
+// 直接写 AuditLog，不依赖那个未接线的全局 middleware。
+func (h *Handler) recordKnownErrorFromProblemAudit(c *gin.Context, tenantID, userID, problemID, knownErrorID int) {
+	payload, _ := json.Marshal(map[string]interface{}{
+		"problemId":    problemID,
+		"knownErrorId": knownErrorID,
+	})
+	auditCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	err := h.client.AuditLog.Create().
+		SetCreatedAt(time.Now()).
+		SetTenantID(tenantID).
+		SetUserID(userID).
+		SetResource("known_error").
+		SetAction("create_from_problem").
+		SetPath(c.Request.URL.Path).
+		SetMethod(c.Request.Method).
+		SetStatusCode(http.StatusOK).
+		SetRequestBody(string(payload)).
+		Exec(auditCtx)
+	if err != nil {
+		h.logger.Warnw("Failed to write known-error-from-problem audit log",
+			"error", err, "problem_id", problemID, "known_error_id", knownErrorID, "tenant_id", tenantID)
+	}
 }
 
 // RegisterRoutes registers the known error routes

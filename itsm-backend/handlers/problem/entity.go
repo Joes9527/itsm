@@ -23,6 +23,10 @@ type Problem struct {
 	UpdatedAt   time.Time
 	ResolvedAt  *time.Time
 	ClosedAt    *time.Time
+	// WorkItemID 关联的 WorkItem（tickets.id）。统一 WorkItem 领域模型宪章 §3.2：
+	// Problem 创建时必须在同一事务内建好对应的 tickets 行并回填这个字段。nil 只出现在
+	// 迁移前创建、尚未跑 cmd/backfill_problem_work_item 回填的存量记录上。
+	WorkItemID *int
 	// 关联数据 (eager-loaded)
 	Tickets   []*AssociatedItem
 	Incidents []*AssociatedItem
