@@ -957,7 +957,25 @@ func (s *Service) completeChangeStageTasks(ctx context.Context, tenantID, change
 		return nil
 	}
 
-	businessKey := fmt.Sprintf("change:%d", changeID)
+	// Review fix：这里原来直接用裸 changeID 拼 businessKey，跟 cancelRunningProcessInstance
+	// 同一批"收尾/尽力而为"函数里唯一没有切到 resolveWorkItemID 的一个——changes.id 和
+	// tickets.id 是两张表各自独立的自增序列，只有在全新数据库里第一条 Change 恰好也是
+	// 第一条 ticket 时两者数值才会碰巧相等，这也是原有测试
+	// TestTransitionStatus_StageCompletion_AdvanceProcessEndToEnd 没有测出这个 bug 的
+	// 原因（该测试的 Change 和 WorkItem 恰好都是各自表里的第一行）。真实环境/多条数据
+	// 下两者几乎必然不同，会导致这里永远查不到用新 businessKey 格式启动的运行中实例，
+	// 排期/实施/验证/关闭节点静默永远不会被原生完成，流程实例永久卡在 Activity_Schedule
+	// 或更早的节点——域侧状态字段仍然会正确推进（TransitionStatus 的域写在这之后，
+	// 不依赖这里成功），但 BPMN 监控台会看到大量卡死不动的流程实例，审批平台的运行
+	// 台账与域状态从此对不上。改成跟 cancelRunningProcessInstance 完全一致的
+	// changeBusinessKey 解析 + 静默跳过（这里本来就是尽力而为语义，找不到 WorkItem
+	// 或 resolveWorkItemID 失败都不应该阻塞域状态转换本身）。
+	businessKey, err := s.changeBusinessKey(ctx, tenantID, changeID)
+	if err != nil {
+		// 没有关联的 WorkItem（存量未回填数据，或 changeID 本身查不到）——按"没有可操作的
+		// 运行中实例"同等对待，静默跳过，不阻塞已经生效的域状态转换。
+		return nil
+	}
 	instance, err := s.entClient.ProcessInstance.Query().
 		Where(processinstance.BusinessKey(businessKey), processinstance.TenantID(tenantID), processinstance.Status("running")).
 		Only(ctx)

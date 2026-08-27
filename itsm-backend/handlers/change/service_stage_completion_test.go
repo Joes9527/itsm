@@ -40,6 +40,24 @@ func TestTransitionStatus_StageCompletion_AdvanceProcessEndToEnd(t *testing.T) {
 	mockChange.Type = "standard"
 	repo.changes[mockChange.ID] = mockChange
 
+	// Review fix：先建两条无关的"垫场"Change（不建对应 WorkItem），把 changes.id 序列往前
+	// 顶两步。changes.id 和 tickets.id 是两张表各自独立的自增序列，如果这里只建一条 Change
+	// 和一条 WorkItem，在全新的内存库里两者都会恰好是各自表的第 1 行，数值碰巧相等——这样
+	// 即使 completeChangeStageTasks 里错误地直接用裸 changeID 拼 businessKey（而不是解析出
+	// 真正的 workItemID），也会因为两个数字碰巧一样而拼出同一个字符串，测试照样通过，
+	// 完全测不出这个 bug（这正是这个 bug 最初能在评审前混进来的原因）。垫场行确保下面
+	// dbChange.ID 和 workItem.ID 是两个不同的数字，只有真的按 workItemID 解析才能拼出
+	// engine.StartProcess 用的那个 businessKey。
+	for i := 0; i < 2; i++ {
+		_, err := entClient.Change.Create().
+			SetTitle(fmt.Sprintf("Decoy Change %d", i)).
+			SetStatus("draft").
+			SetCreatedBy(actorID).
+			SetTenantID(tenantID).
+			Save(context.Background())
+		require.NoError(t, err)
+	}
+
 	// Wave 2 起 completeChangeStageTasks 通过 resolveWorkItemID 查真实 entClient.Change 的
 	// work_item_id 来构造 businessKey——必须先建一条 WorkItem 并回填，否则会被当成"没有
 	// 关联的 WorkItem"静默跳过阶段完成（这个测试恰恰要验证阶段完成确实生效）。
@@ -55,6 +73,8 @@ func TestTransitionStatus_StageCompletion_AdvanceProcessEndToEnd(t *testing.T) {
 		SetWorkItemID(workItem.ID).
 		Save(context.Background())
 	require.NoError(t, err)
+	require.NotEqual(t, workItem.ID, dbChange.ID,
+		"垫场行必须真的让两个 ID 不同，否则这个测试无法证明 businessKey 是按 workItemID 而不是 changeID 解析的")
 	// 让 mock 与 DB 使用同一个 ID（TransitionStatus 按 ID 操作 mock，handler 按 change_id 操作 DB）
 	delete(repo.changes, mockChange.ID)
 	mockChange.ID = dbChange.ID
