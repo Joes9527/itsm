@@ -37,6 +37,18 @@ go.work.sum
 itsm-backend/dist/
 itsm-backend/build/
 itsm-backend/tmp/
+# `go build ./cmd/<name>/` run from itsm-backend/ drops a ~70MB binary named after the
+# package into itsm-backend/ — easy to sweep up with `git add -A` by accident.
+# Covers the one-shot ops commands plus the server binary itself.
+# Listed by exact name (no wildcards) so a real source file such as
+# itsm-backend/check_admin.sql is never shadowed.
+itsm-backend/itsm-backend
+itsm-backend/backfill_legacy_pending_changes
+itsm-backend/backfill_process_instance_business_identity
+itsm-backend/check_work_item_integrity
+itsm-backend/lock_legacy_approvals
+itsm-backend/provision_tenant
+itsm-backend/sync_ehr_master_data
 
 # Logs
 *.log
