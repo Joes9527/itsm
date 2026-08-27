@@ -72,6 +72,10 @@ type ProblemResponse struct {
 	TenantID    int       `json:"tenantId"`
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
+	// WorkItemID 关联的 WorkItem（tickets.id）。统一 WorkItem 领域模型迁移（Wave 2）后
+	// 新建的 Problem 一定有值；迁移前创建、尚未跑 cmd/backfill_problem_work_item 回填的
+	// 存量记录可能为 nil。与 dto.IncidentResponse.WorkItemID 同一模式。
+	WorkItemID *int `json:"workItemId,omitempty"`
 	// 关联数据
 	AssociatedTickets   []*AssociatedItemResponse `json:"associatedTickets,omitempty"`
 	AssociatedIncidents []*AssociatedItemResponse `json:"associatedIncidents,omitempty"`

@@ -39,6 +39,7 @@ func (h *Handler) toDTO(p *Problem) *dto.ProblemResponse {
 		TenantID:    p.TenantID,
 		CreatedAt:   p.CreatedAt,
 		UpdatedAt:   p.UpdatedAt,
+		WorkItemID:  p.WorkItemID,
 	}
 	if p.AssigneeID != nil {
 		resp.AssigneeID = p.AssigneeID
@@ -195,6 +196,10 @@ func (h *Handler) AddAssociation(c *gin.Context) {
 	}
 
 	tenantID, _ := c.Get("tenant_id")
+	userID, userOK := problemActorUserID(c)
+	if !userOK {
+		return
+	}
 	// 验证问题存在
 	_, err = h.service.Get(c.Request.Context(), id, tenantID.(int))
 	if err != nil {
@@ -206,12 +211,27 @@ func (h *Handler) AddAssociation(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.AddAssociations(c.Request.Context(), tenantID.(int), id, req.RelatedType, req.RelatedIDs); err != nil {
+	if err := h.service.AddAssociations(c.Request.Context(), tenantID.(int), id, userID, req.RelatedType, req.RelatedIDs); err != nil {
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return
 	}
 
 	common.Success(c, nil)
+}
+
+// problemActorUserID 从请求上下文取出当前操作人 ID，用于 WorkItemRelation.created_by_id。
+func problemActorUserID(c *gin.Context) (int, bool) {
+	v, exists := c.Get("user_id")
+	if !exists {
+		common.Fail(c, common.AuthErrorCode, "invalid user context")
+		return 0, false
+	}
+	userID, ok := v.(int)
+	if !ok || userID <= 0 {
+		common.Fail(c, common.AuthErrorCode, "invalid user context")
+		return 0, false
+	}
+	return userID, true
 }
 
 // RemoveAssociation 移除关联
@@ -294,6 +314,7 @@ func (h *Handler) List(c *gin.Context) {
 			TenantID:    p.TenantID,
 			CreatedAt:   p.CreatedAt,
 			UpdatedAt:   p.UpdatedAt,
+			WorkItemID:  p.WorkItemID,
 		}
 		if p.AssigneeID != nil {
 			item.AssigneeID = p.AssigneeID

@@ -13,6 +13,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 
 	"itsm-backend/dto"
+	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/handlers/known_error"
 	"itsm-backend/service"
@@ -124,6 +125,21 @@ func TestProblemKnownErrorPublishingHTTPEndpoint(t *testing.T) {
 	wA := httptest.NewRecorder()
 	r.ServeHTTP(wA, httpReq)
 	require.Equal(t, http.StatusOK, wA.Code)
+
+	// AuditMiddleware is defined in itsm-backend/middleware/audit.go but is never registered
+	// via r.Use(...) anywhere in router.go/main.go (verified by repo-wide search), so this
+	// endpoint writes its own AuditLog row explicitly (known_error.Handler.
+	// recordKnownErrorFromProblemAudit) instead of relying on that unwired global middleware.
+	auditCount, err := client.AuditLog.Query().
+		Where(
+			auditlog.TenantIDEQ(tenantA.ID),
+			auditlog.UserIDEQ(userA.ID),
+			auditlog.ResourceEQ("known_error"),
+			auditlog.ActionEQ("create_from_problem"),
+		).
+		Count(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, auditCount, "publishing a known error from a problem must produce exactly one audit log entry")
 
 	// 2. Tenant B attempts to publish Known Error for Tenant A's Problem A (Cross-tenant Isolation check)
 	httpReqB := httptest.NewRequest("POST", fmt.Sprintf("/api/v1/problems/%d/known-error", problemA.ID), bytes.NewBuffer(reqBody))

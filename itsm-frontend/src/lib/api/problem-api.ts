@@ -59,6 +59,11 @@ export interface Problem {
   impact?: string;
   assigneeId?: number;
   reporterId?: number;
+  // createdBy 是后端 dto.ProblemResponse 实际返回的创建人字段名（json:"createdBy"）。
+  // 上面的 reporterId 在后端 DTO 里并不存在，是历史遗留的字段名不匹配（预先发现的
+  // 既有缺口，见 Wave 2 Problem WorkItem 迁移交付说明，未在这次任务里改名/删除以免
+  // 影响其它已经引用 reporterId 的组件——只新增这个正确字段）。
+  createdBy?: number;
   rootCause?: string;
   workaround?: string;
   resolution?: string;
@@ -70,6 +75,10 @@ export interface Problem {
   slaStatus?: 'ok' | 'warning' | 'breached';
   responseDeadline?: string;
   resolutionDeadline?: string;
+  // workItemId 关联的 WorkItem（tickets.id）。统一 WorkItem 领域模型迁移（Wave 2）后
+  // 新建的 Problem 一定有值；迁移前创建、尚未跑 cmd/backfill_problem_work_item 回填的
+  // 存量记录可能为 undefined。与 IncidentAPI 的 Incident.workItemId 同一模式。
+  workItemId?: number;
 }
 
 export interface ProblemListResponse {
