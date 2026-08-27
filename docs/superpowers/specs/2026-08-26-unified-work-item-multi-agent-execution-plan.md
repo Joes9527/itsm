@@ -183,6 +183,11 @@ Wave 3（我自己执行，串行）
 
 **没有遗漏或缺陷**：所有 Wave 1 设计文档 §4 列的需求点已完成，Wave 2 可按计划开始。
 
+**给 Wave 2 读者的两个遗留点**（均非阻塞项，写在这里避免和新回归混淆）：
+
+1. `cmd/check_work_item_integrity` 在本次验收所用的沙箱环境里没有真实 Postgres，因此没有对着一个活库跑通过；命令本身的逻辑已由 Task 4 新增的 enttest 单测覆盖并通过。Wave 2 执行者第一次拿到真实开发库时应补跑一次这个命令，确认端到端可用。
+2. 前端 Jest 有约 50 个失败用例（`sla-api.test.ts`、`template-api.test.ts`、`ServiceRequestPanel.test.tsx` 等），是 Wave 1 改动之前就存在的问题（字段命名 camelCase/snake_case 不一致、pointer-events 相关），已经过 controller 独立复核确认与本计划无关。Wave 2 执行者跑 `npx jest` 看到这些失败时不要误判为自己引入的新回归——对照失败用例文件名即可分辨。
+
 ---
 
 ## 5. Wave 2：四个域迁移任务包（分发给不同工具，真正并行）
