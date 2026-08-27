@@ -1,0 +1,284 @@
+package problem
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"testing"
+
+	_ "github.com/mattn/go-sqlite3"
+
+	"itsm-backend/common"
+	"itsm-backend/dto"
+	"itsm-backend/ent"
+	"itsm-backend/ent/enttest"
+
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
+)
+
+func strPtr(s string) *string {
+	return &s
+}
+
+func setupProblemHTTPHandlerTest(t *testing.T) (*gin.Engine, *Handler, *Service, *ent.Client) {
+	gin.SetMode(gin.TestMode)
+	client := enttest.Open(t, "sqlite3", fmt.Sprintf("file:problem-http-%s?mode=memory&cache=shared&_fk=1", t.Name()))
+	repo := NewEntRepository(client)
+	service := NewService(repo, zaptest.NewLogger(t).Sugar())
+	handler := NewHandler(service)
+
+	r := gin.New()
+	r.Use(gin.Recovery())
+
+	// Context middleware injects tenant_id and user_id from headers
+	r.Use(func(c *gin.Context) {
+		if tid := c.GetHeader("X-Tenant-ID"); tid != "" {
+			if id, err := strconv.Atoi(tid); err == nil {
+				c.Set("tenant_id", id)
+			}
+		}
+		if uid := c.GetHeader("X-User-ID"); uid != "" {
+			if id, err := strconv.Atoi(uid); err == nil {
+				c.Set("user_id", id)
+			}
+		}
+		c.Next()
+	})
+
+	api := r.Group("/api/v1/problems")
+	{
+		api.POST("", handler.Create)
+		api.GET("", handler.List)
+		api.GET("/stats", handler.GetStats)
+		api.GET("/:id", handler.Get)
+		api.PUT("/:id", handler.Update)
+		api.DELETE("/:id", handler.Delete)
+		api.GET("/:id/associations", handler.GetAssociations)
+		api.POST("/:id/associations", handler.AddAssociation)
+		api.DELETE("/:id/associations", handler.RemoveAssociation)
+		api.POST("/:id/investigate", handler.InvestigateProblem)
+		api.POST("/:id/root-cause", handler.UpdateRootCause)
+		api.POST("/:id/solution", handler.UpdateSolution)
+		api.POST("/:id/close", handler.CloseProblem)
+	}
+
+	return r, handler, service, client
+}
+
+func performProblemRequest(r http.Handler, method, path string, body interface{}, tenantID, userID int) *httptest.ResponseRecorder {
+	var reqBody []byte
+	if body != nil {
+		reqBody, _ = json.Marshal(body)
+	}
+	req := httptest.NewRequest(method, path, bytes.NewBuffer(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	if tenantID > 0 {
+		req.Header.Set("X-Tenant-ID", strconv.Itoa(tenantID))
+	}
+	if userID > 0 {
+		req.Header.Set("X-User-ID", strconv.Itoa(userID))
+	}
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	return w
+}
+
+func TestProblemHTTPHandlerCreateGetList(t *testing.T) {
+	r, _, _, client := setupProblemHTTPHandlerTest(t)
+	defer client.Close()
+	ctx := context.Background()
+
+	tenant := createProblemHandlerTenant(t, ctx, client, "http-cgl")
+	user := createProblemHandlerUser(t, ctx, client, tenant.ID, "http-cgl")
+
+	// 1. Create Problem - Valid
+	createReq := dto.CreateProblemRequest{
+		Title:       "Memory Overuse in Service X",
+		Description: "Pod restarted due to OOM",
+		Priority:    "high",
+		Category:    "backend",
+		Impact:      "medium",
+	}
+	w := performProblemRequest(r, "POST", "/api/v1/problems", createReq, tenant.ID, user.ID)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var res common.Response
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &res))
+	assert.Equal(t, 0, res.Code)
+
+	dataMap := res.Data.(map[string]interface{})
+	probID := int(dataMap["id"].(float64))
+	assert.Equal(t, "Memory Overuse in Service X", dataMap["title"])
+	assert.Equal(t, "open", dataMap["status"])
+
+	// 2. Create Problem - Invalid Params
+	wBad := performProblemRequest(r, "POST", "/api/v1/problems", "invalid json", tenant.ID, user.ID)
+	require.Equal(t, http.StatusBadRequest, wBad.Code)
+	var resBad common.Response
+	require.NoError(t, json.Unmarshal(wBad.Body.Bytes(), &resBad))
+	assert.Equal(t, common.ParamErrorCode, resBad.Code)
+
+	// 3. Get Problem - Valid
+	wGet := performProblemRequest(r, "GET", fmt.Sprintf("/api/v1/problems/%d", probID), nil, tenant.ID, user.ID)
+	require.Equal(t, http.StatusOK, wGet.Code)
+	var resGet common.Response
+	require.NoError(t, json.Unmarshal(wGet.Body.Bytes(), &resGet))
+	assert.Equal(t, 0, resGet.Code)
+
+	// 4. Get Problem - Invalid ID / Not Found
+	wNotFound := performProblemRequest(r, "GET", "/api/v1/problems/99999", nil, tenant.ID, user.ID)
+	require.Equal(t, http.StatusNotFound, wNotFound.Code)
+	var resNotFound common.Response
+	require.NoError(t, json.Unmarshal(wNotFound.Body.Bytes(), &resNotFound))
+	assert.Equal(t, common.NotFoundErrorCode, resNotFound.Code)
+
+	wInvalidID := performProblemRequest(r, "GET", "/api/v1/problems/abc", nil, tenant.ID, user.ID)
+	require.Equal(t, http.StatusBadRequest, wInvalidID.Code)
+	var resInvalidID common.Response
+	require.NoError(t, json.Unmarshal(wInvalidID.Body.Bytes(), &resInvalidID))
+	assert.Equal(t, common.ParamErrorCode, resInvalidID.Code)
+
+	// 5. List Problems
+	wList := performProblemRequest(r, "GET", "/api/v1/problems?page=1&size=10&category=backend", nil, tenant.ID, user.ID)
+	require.Equal(t, http.StatusOK, wList.Code)
+	var resList common.Response
+	require.NoError(t, json.Unmarshal(wList.Body.Bytes(), &resList))
+	assert.Equal(t, 0, resList.Code)
+}
+
+func TestProblemHTTPHandlerUpdateAndLifecycle(t *testing.T) {
+	r, _, service, client := setupProblemHTTPHandlerTest(t)
+	defer client.Close()
+	ctx := context.Background()
+
+	tenant := createProblemHandlerTenant(t, ctx, client, "http-lc")
+	user := createProblemHandlerUser(t, ctx, client, tenant.ID, "http-lc")
+	p := createProblemHandlerProblem(t, ctx, service, tenant.ID, user.ID)
+
+	// Update Problem
+	updateReq := dto.UpdateProblemRequest{
+		Title: strPtr("Updated Title HTTP"),
+	}
+	w := performProblemRequest(r, "PUT", fmt.Sprintf("/api/v1/problems/%d", p.ID), updateReq, tenant.ID, user.ID)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	// Investigate Problem
+	wInv := performProblemRequest(r, "POST", fmt.Sprintf("/api/v1/problems/%d/investigate", p.ID), nil, tenant.ID, user.ID)
+	require.Equal(t, http.StatusOK, wInv.Code)
+	var resInv common.Response
+	require.NoError(t, json.Unmarshal(wInv.Body.Bytes(), &resInv))
+	assert.Equal(t, 0, resInv.Code)
+
+	// Update Root Cause
+	rcReq := dto.UpdateProblemRootCauseRequest{
+		RootCause: "Network driver deadlock",
+	}
+	wRC := performProblemRequest(r, "POST", fmt.Sprintf("/api/v1/problems/%d/root-cause", p.ID), rcReq, tenant.ID, user.ID)
+	require.Equal(t, http.StatusOK, wRC.Code)
+
+	// Update Solution
+	solReq := dto.UpdateProblemResolutionRequest{
+		Workaround: "Restart driver service",
+		Resolution: "Patched kernel driver",
+	}
+	wSol := performProblemRequest(r, "POST", fmt.Sprintf("/api/v1/problems/%d/solution", p.ID), solReq, tenant.ID, user.ID)
+	require.Equal(t, http.StatusOK, wSol.Code)
+
+	// Close Problem
+	closeReq := dto.CloseProblemRequest{
+		Resolution: "Verified resolution in staging",
+	}
+	wClose := performProblemRequest(r, "POST", fmt.Sprintf("/api/v1/problems/%d/close", p.ID), closeReq, tenant.ID, user.ID)
+	require.Equal(t, http.StatusOK, wClose.Code)
+
+	// Get Stats
+	wStats := performProblemRequest(r, "GET", "/api/v1/problems/stats", nil, tenant.ID, user.ID)
+	require.Equal(t, http.StatusOK, wStats.Code)
+
+	// Delete Problem
+	wDel := performProblemRequest(r, "DELETE", fmt.Sprintf("/api/v1/problems/%d", p.ID), nil, tenant.ID, user.ID)
+	require.Equal(t, http.StatusOK, wDel.Code)
+}
+
+func TestProblemHTTPHandlerAssociations(t *testing.T) {
+	r, _, service, client := setupProblemHTTPHandlerTest(t)
+	defer client.Close()
+	ctx := context.Background()
+
+	tenant := createProblemHandlerTenant(t, ctx, client, "http-assoc")
+	user := createProblemHandlerUser(t, ctx, client, tenant.ID, "http-assoc")
+	p := createProblemHandlerProblem(t, ctx, service, tenant.ID, user.ID)
+
+	ticket1, err := client.Ticket.Create().
+		SetTitle("T1").SetTicketNumber("T-001").SetRequesterID(user.ID).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	// Add Association
+	assocReq := dto.ProblemAssociationRequest{
+		RelatedType: "ticket",
+		RelatedIDs:  []int{ticket1.ID},
+	}
+	w := performProblemRequest(r, "POST", fmt.Sprintf("/api/v1/problems/%d/associations", p.ID), assocReq, tenant.ID, user.ID)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	// Get Associations
+	wGet := performProblemRequest(r, "GET", fmt.Sprintf("/api/v1/problems/%d/associations", p.ID), nil, tenant.ID, user.ID)
+	require.Equal(t, http.StatusOK, wGet.Code)
+
+	// Remove Association
+	remReq := dto.ProblemRemoveAssociationRequest{
+		RelatedType: "ticket",
+		RelatedID:   ticket1.ID,
+	}
+	wRem := performProblemRequest(r, "DELETE", fmt.Sprintf("/api/v1/problems/%d/associations", p.ID), remReq, tenant.ID, user.ID)
+	require.Equal(t, http.StatusOK, wRem.Code)
+}
+
+func TestProblemHTTPHandlerCrossTenantIsolation(t *testing.T) {
+	r, _, service, client := setupProblemHTTPHandlerTest(t)
+	defer client.Close()
+	ctx := context.Background()
+
+	tenantA := createProblemHandlerTenant(t, ctx, client, "http-iso-a")
+	tenantB := createProblemHandlerTenant(t, ctx, client, "http-iso-b")
+	userA := createProblemHandlerUser(t, ctx, client, tenantA.ID, "http-iso-a")
+	userB := createProblemHandlerUser(t, ctx, client, tenantB.ID, "http-iso-b")
+
+	problemA := createProblemHandlerProblem(t, ctx, service, tenantA.ID, userA.ID)
+
+	// Tenant B attempts GET Tenant A problem
+	wGet := performProblemRequest(r, "GET", fmt.Sprintf("/api/v1/problems/%d", problemA.ID), nil, tenantB.ID, userB.ID)
+	require.Equal(t, http.StatusNotFound, wGet.Code)
+	var resGet common.Response
+	require.NoError(t, json.Unmarshal(wGet.Body.Bytes(), &resGet))
+	assert.Equal(t, common.NotFoundErrorCode, resGet.Code)
+
+	// Tenant B attempts PUT Tenant A problem
+	updateReq := dto.UpdateProblemRequest{Title: strPtr("Hacked")}
+	wPut := performProblemRequest(r, "PUT", fmt.Sprintf("/api/v1/problems/%d", problemA.ID), updateReq, tenantB.ID, userB.ID)
+	require.Equal(t, http.StatusInternalServerError, wPut.Code)
+	var resPut common.Response
+	require.NoError(t, json.Unmarshal(wPut.Body.Bytes(), &resPut))
+	assert.Equal(t, common.InternalErrorCode, resPut.Code)
+
+	// Tenant B attempts POST Investigate Tenant A problem
+	wInv := performProblemRequest(r, "POST", fmt.Sprintf("/api/v1/problems/%d/investigate", problemA.ID), nil, tenantB.ID, userB.ID)
+	require.Equal(t, http.StatusNotFound, wInv.Code)
+	var resInv common.Response
+	require.NoError(t, json.Unmarshal(wInv.Body.Bytes(), &resInv))
+	assert.Equal(t, common.NotFoundErrorCode, resInv.Code)
+
+	// Tenant B attempts DELETE Tenant A problem
+	wDel := performProblemRequest(r, "DELETE", fmt.Sprintf("/api/v1/problems/%d", problemA.ID), nil, tenantB.ID, userB.ID)
+	require.Equal(t, http.StatusInternalServerError, wDel.Code)
+	var resDel common.Response
+	require.NoError(t, json.Unmarshal(wDel.Body.Bytes(), &resDel))
+	assert.Equal(t, common.InternalErrorCode, resDel.Code)
+}
