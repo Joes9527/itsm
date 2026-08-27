@@ -63,6 +63,35 @@ func (s *Service) CreateChange(ctx context.Context, c *Change) (*Change, error) 
 	return s.repo.Create(ctx, c)
 }
 
+// CreateChangeForWorkflow 实现 service/bpmn.ChangeDomainServiceInterface，供
+// ChangeServiceTaskHandler.createChange 委托调用——BPMN 自动创建的 Change 必须走跟用户在
+// UI 手动创建同一条事务化建表路径（CreateChange -> repo.Create），同步建好 WorkItem，
+// 不能绕过（Wave 2 迁移前，service/bpmn/change_handler.go 直接 h.client.Change.Create()，
+// 完全跳过 WorkItem 创建，是一个真实缺陷，见交付说明）。
+//
+// ImpactScope/RiskLevel 固定给 "medium"：BPMN service task 的输入变量（title/description/
+// type/priority）里从来没有携带这两个字段，迁移前的直接 Ent 写法也没有显式设置它们，靠
+// ent/schema/change.go 的 field.Default("medium") 隐式生效。EntRepository.Create 现在会
+// 无条件 SetImpactScope/SetRiskLevel（不管值是不是空字符串），如果这里传空字符串会用空值
+// 覆盖掉 schema 默认值——所以必须显式传 "medium" 才能保持跟迁移前一致的行为。
+func (s *Service) CreateChangeForWorkflow(ctx context.Context, tenantID, createdBy int, title, description, changeType, priority string) (int, error) {
+	created, err := s.repo.Create(ctx, &Change{
+		Title:       title,
+		Description: description,
+		Type:        changeType,
+		Status:      "draft",
+		Priority:    priority,
+		ImpactScope: "medium",
+		RiskLevel:   "medium",
+		CreatedBy:   createdBy,
+		TenantID:    tenantID,
+	})
+	if err != nil {
+		return 0, err
+	}
+	return created.ID, nil
+}
+
 func (s *Service) GetChange(ctx context.Context, id int, tenantID int) (*Change, error) {
 	return s.repo.Get(ctx, id, tenantID)
 }
@@ -118,6 +147,42 @@ func (s *Service) GetCalendarView(ctx context.Context, tenantID int, startDate, 
 	}, nil
 }
 
+// resolveWorkItemID 返回一个变更关联的 WorkItem ID（tickets.id）——Wave 2 起这是 BPMN
+// businessKey（"change:{workItemID}"）的权威身份来源，不再是 changeID 自己。查询直接打
+// s.entClient.Change（不经过 s.repo），这样无论调用方是走真实 EntRepository 还是测试里的
+// mockRepository，只要 s.entClient 里存在这条 Change 行（且已经回填 work_item_id），
+// businessKey 解析就是一致的——这也是 completeChangeApprovalTask 等方法在纯 mock repo 测试
+// 里依然能正确工作的原因。返回 0 且非 nil error 表示这条变更不存在、不属于当前租户，或者
+// 还没有关联的 WorkItem（迁移前创建、还没跑 cmd/backfill_change_work_item 回填）——调用方
+// 必须按各自的容错策略处理：SubmitChange/completeAssessmentTask/completeChangeApprovalTask/
+// BackfillLegacyPendingChange 是显式的用户发起动作，必须 fail closed；
+// cancelRunningProcessInstance/completeChangeStageTasks 是收尾/尽力而为动作，按"没有可操作的
+// 运行中实例"同等对待，静默跳过。
+func (s *Service) resolveWorkItemID(ctx context.Context, tenantID, changeID int) (int, error) {
+	c, err := s.entClient.Change.Query().
+		Where(change.ID(changeID), change.TenantID(tenantID)).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return 0, fmt.Errorf("变更 %d 不存在或不属于当前租户", changeID)
+		}
+		return 0, fmt.Errorf("查询变更失败: %w", err)
+	}
+	if c.WorkItemID <= 0 {
+		return 0, fmt.Errorf("变更 %d 缺少关联的 WorkItem（work_item_id 未回填），请先运行 cmd/backfill_change_work_item", changeID)
+	}
+	return c.WorkItemID, nil
+}
+
+// changeBusinessKey 是 resolveWorkItemID 的便捷封装，直接返回 "change:{workItemID}"。
+func (s *Service) changeBusinessKey(ctx context.Context, tenantID, changeID int) (string, error) {
+	workItemID, err := s.resolveWorkItemID(ctx, tenantID, changeID)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("change:%d", workItemID), nil
+}
+
 // SubmitChange submits a change for approval
 // Transitions status from 'draft' to 'pending' and creates approval records for specified approvers
 func (s *Service) SubmitChange(ctx context.Context, changeID, tenantID, submitterID int, req *dto.SubmitChangeRequest) (*Change, error) {
@@ -141,10 +206,19 @@ func (s *Service) SubmitChange(ctx context.Context, changeID, tenantID, submitte
 		if c.Type == "emergency" {
 			processDefKey = "change_emergency_flow"
 		}
+		// Wave 2 起 businessKey 的身份收敛为 WorkItem ID（tickets.id），不再是 changeID
+		// 自己——resolveWorkItemID 在这里 fail closed：没有关联的 WorkItem 就不可能构造出
+		// 正确的 businessKey，宁可拒绝提交也不要用错误的业务身份启动流程（污染 BPMN
+		// 审批决策回查，参见 IncidentService.triggerWorkflowForIncident 的同款判断）。
+		workItemID, err := s.resolveWorkItemID(ctx, tenantID, changeID)
+		if err != nil {
+			return nil, err
+		}
+
 		// 幂等保护：同一个 change 不应该有两个并行的运行中流程实例（比如重复点击提交、
 		// 或者前端重试）。businessKey 的约定跟 BPMNApprovalBridge.findPendingApprovalTask
-		// 保持一致（"change:{id}"），查询逻辑复用 ent 直接查，不新增一层抽象。
-		businessKey := fmt.Sprintf("change:%d", changeID)
+		// 保持一致（"change:{workItemID}"），查询逻辑复用 ent 直接查，不新增一层抽象。
+		businessKey := fmt.Sprintf("change:%d", workItemID)
 		exists, err := s.entClient.ProcessInstance.Query().
 			Where(processinstance.BusinessKey(businessKey), processinstance.TenantID(tenantID), processinstance.Status("running")).
 			Exist(ctx)
@@ -157,7 +231,7 @@ func (s *Service) SubmitChange(ctx context.Context, changeID, tenantID, submitte
 
 		triggerResp, err := s.processTriggerService.TriggerProcess(ctx, &dto.ProcessTriggerRequest{
 			BusinessType:         dto.BusinessTypeChange,
-			BusinessID:           changeID,
+			BusinessID:           workItemID,
 			ProcessDefinitionKey: processDefKey,
 			Variables: map[string]interface{}{
 				"approval_required": true,
@@ -425,7 +499,13 @@ func (s *Service) cancelRunningProcessInstance(ctx context.Context, tenantID, ch
 	if s.processTriggerService == nil {
 		return
 	}
-	businessKey := fmt.Sprintf("change:%d", changeID)
+	businessKey, err := s.changeBusinessKey(ctx, tenantID, changeID)
+	if err != nil {
+		// 没有关联的 WorkItem（存量未回填数据，或 changeID 本身查不到）——按"没有运行中
+		// 流程实例"同等对待，静默跳过。这是收尾清理，不应该因为缺 WorkItem 就报错阻塞
+		// 已经生效的业务侧终态转换。
+		return
+	}
 	instance, err := s.entClient.ProcessInstance.Query().
 		Where(processinstance.BusinessKey(businessKey), processinstance.TenantID(tenantID), processinstance.Status("running")).
 		Only(ctx)
@@ -448,6 +528,15 @@ func (s *Service) cancelRunningProcessInstance(ctx context.Context, tenantID, ch
 // draft 了，且旧的 change_approvals/change_approval_chains 表数据不会被读取（Track4 之后
 // 这两张表已经不是权威数据源）。审批人沿用 assigneeRole=change_manager 的候选人解析，
 // 不尝试还原旧审批链里指定的具体审批人。
+//
+// ⚠️ 排期依赖（Wave 2 新增）：这个方法现在要求变更已经有关联的 WorkItem（work_item_id
+// 已回填），否则 resolveWorkItemID 会 fail closed。这意味着运维流程里
+// cmd/backfill_change_work_item 必须先于 cmd/backfill_legacy_pending_changes 运行——
+// 后者自己的 findCandidates 预过滤仍然用旧的 "change:{changeID}" 格式查重（那个文件不在
+// 本次任务允许修改的范围内），可能会把已经有 WorkItem 但旧格式查不到运行中实例的变更
+// 误判为候选，但这里的 resolveWorkItemID 会在缺 WorkItem 时正确拒绝、在有 WorkItem 时
+// 正确按新格式查重，所以不会产生错误的双重实例，只是重跑一次没有实际效果的候选而已，
+// 交付说明里有更详细的说明。
 func (s *Service) BackfillLegacyPendingChange(ctx context.Context, changeID, tenantID int) error {
 	c, err := s.repo.Get(ctx, changeID, tenantID)
 	if err != nil {
@@ -460,7 +549,12 @@ func (s *Service) BackfillLegacyPendingChange(ctx context.Context, changeID, ten
 		return fmt.Errorf("流程触发/引擎服务未初始化")
 	}
 
-	businessKey := fmt.Sprintf("change:%d", changeID)
+	workItemID, err := s.resolveWorkItemID(ctx, tenantID, changeID)
+	if err != nil {
+		return fmt.Errorf("回填旧流程前必须先有关联的 WorkItem，请先运行 cmd/backfill_change_work_item: %w", err)
+	}
+
+	businessKey := fmt.Sprintf("change:%d", workItemID)
 	// 只有非 terminated 的实例才算"已经在走 Track4 新流程"。之前失败的回填尝试
 	// 会用 CancelProcess 补偿，留下一条 terminated 记录——如果这里不排除它，
 	// 失败一次就会把这个变更永久挡在回填之外，重试也没用。
@@ -484,7 +578,7 @@ func (s *Service) BackfillLegacyPendingChange(ctx context.Context, changeID, ten
 	}
 	triggerResp, err := s.processTriggerService.TriggerProcess(ctx, &dto.ProcessTriggerRequest{
 		BusinessType:         dto.BusinessTypeChange,
-		BusinessID:           changeID,
+		BusinessID:           workItemID,
 		ProcessDefinitionKey: processDefKey,
 		Variables: map[string]interface{}{
 			"approval_required": true,
@@ -527,7 +621,10 @@ func (s *Service) completeAssessmentTask(ctx context.Context, tenantID, changeID
 		return fmt.Errorf("流程引擎未初始化")
 	}
 
-	businessKey := fmt.Sprintf("change:%d", changeID)
+	businessKey, err := s.changeBusinessKey(ctx, tenantID, changeID)
+	if err != nil {
+		return err
+	}
 	instance, err := s.entClient.ProcessInstance.Query().
 		Where(processinstance.BusinessKey(businessKey), processinstance.TenantID(tenantID), processinstance.Status("running")).
 		Only(ctx)
@@ -572,7 +669,10 @@ func (s *Service) completeChangeApprovalTask(ctx context.Context, tenantID, acto
 		return fmt.Errorf("流程引擎未初始化")
 	}
 
-	businessKey := fmt.Sprintf("change:%d", changeID)
+	businessKey, err := s.changeBusinessKey(ctx, tenantID, changeID)
+	if err != nil {
+		return err
+	}
 	instance, err := s.entClient.ProcessInstance.Query().
 		Where(processinstance.BusinessKey(businessKey), processinstance.TenantID(tenantID), processinstance.Status("running")).
 		Only(ctx)
@@ -857,7 +957,25 @@ func (s *Service) completeChangeStageTasks(ctx context.Context, tenantID, change
 		return nil
 	}
 
-	businessKey := fmt.Sprintf("change:%d", changeID)
+	// Review fix：这里原来直接用裸 changeID 拼 businessKey，跟 cancelRunningProcessInstance
+	// 同一批"收尾/尽力而为"函数里唯一没有切到 resolveWorkItemID 的一个——changes.id 和
+	// tickets.id 是两张表各自独立的自增序列，只有在全新数据库里第一条 Change 恰好也是
+	// 第一条 ticket 时两者数值才会碰巧相等，这也是原有测试
+	// TestTransitionStatus_StageCompletion_AdvanceProcessEndToEnd 没有测出这个 bug 的
+	// 原因（该测试的 Change 和 WorkItem 恰好都是各自表里的第一行）。真实环境/多条数据
+	// 下两者几乎必然不同，会导致这里永远查不到用新 businessKey 格式启动的运行中实例，
+	// 排期/实施/验证/关闭节点静默永远不会被原生完成，流程实例永久卡在 Activity_Schedule
+	// 或更早的节点——域侧状态字段仍然会正确推进（TransitionStatus 的域写在这之后，
+	// 不依赖这里成功），但 BPMN 监控台会看到大量卡死不动的流程实例，审批平台的运行
+	// 台账与域状态从此对不上。改成跟 cancelRunningProcessInstance 完全一致的
+	// changeBusinessKey 解析 + 静默跳过（这里本来就是尽力而为语义，找不到 WorkItem
+	// 或 resolveWorkItemID 失败都不应该阻塞域状态转换本身）。
+	businessKey, err := s.changeBusinessKey(ctx, tenantID, changeID)
+	if err != nil {
+		// 没有关联的 WorkItem（存量未回填数据，或 changeID 本身查不到）——按"没有可操作的
+		// 运行中实例"同等对待，静默跳过，不阻塞已经生效的域状态转换。
+		return nil
+	}
 	instance, err := s.entClient.ProcessInstance.Query().
 		Where(processinstance.BusinessKey(businessKey), processinstance.TenantID(tenantID), processinstance.Status("running")).
 		Only(ctx)

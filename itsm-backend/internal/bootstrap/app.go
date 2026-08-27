@@ -590,6 +590,15 @@ func NewApplication() *Application {
 	changeServiceDomain.SetProcessTriggerService(processTriggerService)
 	changeServiceDomain.SetProcessEngine(processEngine)
 	changeHandler := change.NewHandler(changeServiceDomain)
+	// 注入 changeServiceDomain 到 BPMN change_service_handler，让 BPMN 自动创建的 Change
+	// 走事务化建表逻辑（同步建好 WorkItem），不再绕过——同上面 incident_service_handler
+	// 的注入方式（processEngine 的静态类型是 service.ProcessEngine 接口，未声明
+	// CallbackRegistry()，需要先做一次类型断言）。
+	if cpe, ok := processEngine.(*service.CustomProcessEngine); ok {
+		if h, ok := cpe.CallbackRegistry().GetHandler("change_service_handler").(*bpmn.ChangeServiceTaskHandler); ok {
+			h.SetChangeService(changeServiceDomain)
+		}
+	}
 
 	// Analytics & Prediction Controllers
 	analyticsController := controller.NewAnalyticsController(analyticsService)

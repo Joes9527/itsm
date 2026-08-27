@@ -46,6 +46,7 @@ func toDTO(c *Change) *dto.ChangeResponse {
 		RelatedTickets:     c.RelatedTickets,
 		CreatedAt:          c.CreatedAt,
 		UpdatedAt:          c.UpdatedAt,
+		WorkItemID:         c.WorkItemID,
 	}
 	if c.Assignee != nil {
 		res.AssigneeName = &c.Assignee.Name

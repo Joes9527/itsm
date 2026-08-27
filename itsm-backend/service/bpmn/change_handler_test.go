@@ -46,6 +46,107 @@ func setupChangeHandlerFixture(t *testing.T) (*ent.Client, *ChangeServiceTaskHan
 	return client, handler, tenant.ID, changeEntity
 }
 
+// fakeChangeDomainService 是 ChangeDomainServiceInterface 的轻量测试替身，只用来验证
+// createChange 的委托逻辑本身（参数传递是否正确、错误是否透传、OutputVars 是否用领域服务
+// 返回的 ID）——不依赖 handlers/change 包（会话到 service/bpmn 反向 import handlers/change
+// 造成的编译期依赖复杂度，跟生产代码是否真的绕过 WorkItem 创建这个问题正交，那部分由
+// handlers/change 包内的集成测试
+// TestChangeServiceTaskHandler_CreateChange_DelegatesToRealServiceAndCreatesWorkItem 覆盖，
+// 那里用真实的 handlers/change.Service 实现，能验证到真实的 WorkItem 创建）。
+type fakeChangeDomainService struct {
+	calls []struct {
+		tenantID, createdBy                      int
+		title, description, changeType, priority string
+	}
+	returnID  int
+	returnErr error
+}
+
+func (f *fakeChangeDomainService) CreateChangeForWorkflow(ctx context.Context, tenantID, createdBy int, title, description, changeType, priority string) (int, error) {
+	f.calls = append(f.calls, struct {
+		tenantID, createdBy                      int
+		title, description, changeType, priority string
+	}{tenantID, createdBy, title, description, changeType, priority})
+	if f.returnErr != nil {
+		return 0, f.returnErr
+	}
+	return f.returnID, nil
+}
+
+// TestChangeServiceTaskHandler_CreateChange_DelegatesToInjectedService 锁定 Wave 2 迁移：
+// createChange 不再直接 h.client.Change.Create()（那样会绕过 WorkItem 事务化创建），必须
+// 委托给注入的 ChangeDomainServiceInterface，并且用它返回的 ID 组装 OutputVars。
+func TestChangeServiceTaskHandler_CreateChange_DelegatesToInjectedService(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:change_handler_create_delegate?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	handler := NewChangeServiceTaskHandler(client, zaptest.NewLogger(t).Sugar())
+	fake := &fakeChangeDomainService{returnID: 4242}
+	handler.SetChangeService(fake)
+
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, 7)
+	result, err := handler.Execute(ctx, nil, map[string]interface{}{
+		"action":      "create_change",
+		"title":       "委托测试变更",
+		"description": "验证委托而不是直接写 Ent",
+		"type":        "normal",
+		"priority":    "high",
+		"created_by":  float64(99),
+	})
+	require.NoError(t, err)
+	assert.True(t, result.Success)
+	assert.Equal(t, 4242, result.OutputVars["change_id"], "OutputVars 应该使用领域服务返回的 ID")
+
+	require.Len(t, fake.calls, 1)
+	call := fake.calls[0]
+	assert.Equal(t, 7, call.tenantID)
+	assert.Equal(t, 99, call.createdBy)
+	assert.Equal(t, "委托测试变更", call.title)
+	assert.Equal(t, "normal", call.changeType)
+	assert.Equal(t, "high", call.priority)
+
+	// 绕开委托、直接查 Ent：确认没有任何一条 changes 行是这次调用意外直接建出来的
+	// （Wave 2 之前的旧实现会在这里留下一条 h.client.Change.Create() 建的行）。
+	count, err := client.Change.Query().Count(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 0, count, "createChange 不应该再直接对 Ent 写 Change 行，全部应该经过注入的领域服务")
+}
+
+// TestChangeServiceTaskHandler_CreateChange_FailsClosedWithoutService 锁定：没有注入
+// ChangeDomainServiceInterface 时必须显式报错，不能静默 no-op 成功——那样会让 BPMN
+// 流程以为变更已经创建，但实际上什么都没发生。
+func TestChangeServiceTaskHandler_CreateChange_FailsClosedWithoutService(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:change_handler_create_no_service?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	handler := NewChangeServiceTaskHandler(client, zaptest.NewLogger(t).Sugar())
+	// 故意不调用 SetChangeService。
+
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, 7)
+	_, err := handler.Execute(ctx, nil, map[string]interface{}{
+		"action": "create_change",
+		"title":  "未注入领域服务的变更",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "change service 未注入")
+}
+
+// TestChangeServiceTaskHandler_CreateChange_PropagatesServiceError 锁定领域服务返回的
+// 错误（比如 creator 不存在/不活跃）会原样透传，不被吞掉或替换成一个误导性的成功结果。
+func TestChangeServiceTaskHandler_CreateChange_PropagatesServiceError(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:change_handler_create_error?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	handler := NewChangeServiceTaskHandler(client, zaptest.NewLogger(t).Sugar())
+	fake := &fakeChangeDomainService{returnErr: assert.AnError}
+	handler.SetChangeService(fake)
+
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, 7)
+	_, err := handler.Execute(ctx, nil, map[string]interface{}{
+		"action": "create_change",
+		"title":  "会失败的变更",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "创建变更失败")
+}
+
 // TestChangeServiceTaskHandler_TenantScopedActions 覆盖九个带读写动作的租户隔离三件套：
 // 同租户 Valid 生效、跨租户拒绝且零写入、无租户上下文 fail-closed。
 func TestChangeServiceTaskHandler_TenantScopedActions(t *testing.T) {
