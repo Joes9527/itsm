@@ -16,6 +16,7 @@ import (
 	"itsm-backend/ent/incidentmetric"
 	"itsm-backend/ent/incidentrule"
 	"itsm-backend/ent/processinstance"
+	entticket "itsm-backend/ent/ticket"
 	"itsm-backend/ent/user"
 
 	"go.uber.org/zap"
@@ -138,6 +139,14 @@ func (s *IncidentService) CreateIncident(ctx context.Context, req *dto.CreateInc
 	if incidentType == "" {
 		incidentType = "incident"
 	}
+	// 事件的 WorkItem 编号（tickets.ticket_number）要在事务外生成——同 generateIncidentNumber
+	// 的既有做法一致：编号分配（Redis 原子自增/DB 回退扫描）本身不是这次事务要保护的不变量，
+	// 真正需要原子性的是"WorkItem 行 + Incident 行同时存在或同时不存在"，编号只是其中一个字段。
+	workItemTicketNumber, err := s.generateWorkItemTicketNumber(ctx, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate work item ticket number: %w", err)
+	}
+
 	tx, err := s.client.Tx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start incident transaction: %w", err)
@@ -148,7 +157,32 @@ func (s *IncidentService) CreateIncident(ctx context.Context, req *dto.CreateInc
 		}
 		return nil, cause
 	}
+
+	// 统一 WorkItem 领域模型宪章 §3.2：WorkItem 创建与专业扩展记录创建必须在同一事务中完成。
+	// 这里先建 tickets 行（record_class="incident"，创建后不可变），公共字段（标题/描述/
+	// 优先级/请求人/租户）以这行为权威来源；Incident 行只保存事件专属数据 + 反向指向这行的
+	// work_item_id。WorkItem 的 status/priority 只在创建这一刻从请求参数写入一次，后续
+	// Incident 状态机的流转（assign/acknowledge/resolve/close/escalate……）不会反写
+	// tickets.status——持续双向同步要么是禁止的双写反模式，要么需要同时改遍所有状态转换
+	// 方法，超出本次事务边界修复的范围，留作独立后续项。
+	workItem, err := tx.Ticket.Create().
+		SetTitle(req.Title).
+		SetDescription(req.Description).
+		SetType("incident").
+		SetRecordClass("incident").
+		SetPriority(priority).
+		SetTicketNumber(workItemTicketNumber).
+		SetRequesterID(userID).
+		SetTenantID(tenantID).
+		SetCreatedAt(time.Now()).
+		SetUpdatedAt(time.Now()).
+		Save(ctx)
+	if err != nil {
+		return rollback(fmt.Errorf("failed to create work item for incident: %w", err))
+	}
+
 	create := tx.Incident.Create().
+		SetWorkItemID(workItem.ID).
 		SetTitle(req.Title).
 		SetDescription(req.Description).
 		SetStatus("new").
@@ -1008,6 +1042,49 @@ func (s *IncidentService) generateIncidentNumber(ctx context.Context, tenantID i
 	return s.generateIncidentNumberWithDB(ctx, tenantID, year, month)
 }
 
+// generateWorkItemTicketNumber 为事件创建时同步建立的 WorkItem（tickets 行）生成编号。
+// 复用与 repository/ticket.EntRepository.GenerateTicketNumber 完全相同的 Redis 序列 key
+// （sequence:ticket:<tenant>:<yyyymm>）与编号格式（TKT-YYYYMM-NNNNNN）——Incident 创建路径
+// 和普通工单创建路径写入的是同一张 tickets 表，必须共享同一个原子计数器，否则两条路径各自
+// 独立自增，会在同一租户同一月份内撞号。
+func (s *IncidentService) generateWorkItemTicketNumber(ctx context.Context, tenantID int) (string, error) {
+	now := time.Now()
+	year := now.Year()
+	month := int(now.Month())
+	expiredAt := time.Date(year, time.Month(month)+1, 1, 0, 0, 0, 0, time.UTC)
+	key := fmt.Sprintf("sequence:ticket:%d:%d%02d", tenantID, year, month)
+
+	if s.sequenceService != nil {
+		seq, err := s.sequenceService.GetNextSequenceWithExpiry(ctx, key, expiredAt)
+		if err != nil {
+			s.logger.Warnw("Redis sequence failed for work item ticket number, fallback to DB", "error", err)
+		} else {
+			return fmt.Sprintf("TKT-%04d%02d-%06d", year, month, seq), nil
+		}
+	}
+
+	// 备用方案：数据库查询当月已有的最大序号。与 generateIncidentNumberWithDB 同等的
+	// 尽力而为一致性（非强一致，Redis 不可用时才会走到这里）。
+	prefix := fmt.Sprintf("TKT-%04d%02d-", year, month)
+	tickets, err := s.client.Ticket.Query().
+		Where(entticket.TenantIDEQ(tenantID), entticket.TicketNumberHasPrefix(prefix)).
+		All(ctx)
+	maxSeq := 0
+	if err != nil {
+		s.logger.Warnw("Query work item ticket numbers failed, starting from 0", "error", err)
+	} else {
+		for _, t := range tickets {
+			if idx := strings.LastIndex(t.TicketNumber, "-"); idx >= 0 {
+				var seq int
+				if _, scanErr := fmt.Sscanf(t.TicketNumber[idx+1:], "%d", &seq); scanErr == nil && seq > maxSeq {
+					maxSeq = seq
+				}
+			}
+		}
+	}
+	return fmt.Sprintf("TKT-%04d%02d-%06d", year, month, maxSeq+1), nil
+}
+
 // generateIncidentNumberWithDB 使用数据库查询生成事件编号（备用方案）
 // 修复：使用 IncidentNumberContains 过滤标准格式（INC-YYYYMM-NNNNNN），
 // 避免旧格式（INC-001 等）干扰序列计算
@@ -1409,6 +1486,196 @@ func (s *IncidentService) CloseIncident(ctx context.Context, id, userID, tenantI
 	return eventErr
 }
 
+// ==================== BPMN 工作流专用写入方法 ====================
+//
+// 以下方法专供 service/bpmn.IncidentServiceTaskHandler 使用（通过 IncidentDomainServiceInterface
+// 注入），把 incident_emergency_flow.bpmn 里 escalate_incident/resolve_incident/close_incident/
+// update_incident/acknowledge_incident/categorize_incident 几个节点原来直接写 Ent 的代码收回到
+// 领域服务里（AGENTS.md：Handler 不能绕过专业服务直接修改状态）。
+//
+// 不复用上面 EscalateIncident/ResolveIncident/CloseIncident/AcknowledgeIncident 这几个面向
+// 人工/API 调用的方法，是因为它们要求非空 reason/resolution/closeNotes，并且（Resolve/Close/
+// Acknowledge）会用 isValidIncidentStatusTransition 校验状态机合法性。incident_emergency_flow
+// 是已经在生产跑的流程：自动分配节点在没有处理人时不设置状态（保持 new），后续经过
+// 主管审批（userTask，当前未接线）、初步诊断（update_incident，是否设置 status 取决于
+// 提交的表单变量）才到达 resolve/escalate 节点——不能保证状态机走到这几个 BPMN 节点时
+// current.Status 已经流转到合法的前置状态。给这几个 BPMN 动作补上完整状态机校验和必填
+// 字段校验是有价值的后续工作，但一次性引入会有直接打断现网流程的风险，超出本次
+// "把裸 Ent 写收回领域服务"的任务边界，留作独立后续项。这里只做等价迁移：保留原来的
+// 字段写入语义，同时补上审计事件（原直接写 Ent 的版本完全没有审计记录，这是真实的
+// 审计缺口，AGENTS.md 要求状态变更必须审计，顺带修掉）。
+
+// EscalateIncidentLevel 供 BPMN 自动升级节点（action=escalate_incident）使用。level<=0 时
+// 自动升级到当前级别+1，同旧的裸 Ent 实现；补充审计事件（旧实现没有）。
+func (s *IncidentService) EscalateIncidentLevel(ctx context.Context, id, tenantID, level int) (*dto.IncidentResponse, error) {
+	current, err := s.client.Incident.Query().
+		Where(incident.IDEQ(id), incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("incident not found")
+		}
+		return nil, fmt.Errorf("failed to get incident: %w", err)
+	}
+	if level <= 0 {
+		level = current.EscalationLevel + 1
+	}
+
+	now := time.Now()
+	updated, err := s.client.Incident.UpdateOneID(id).
+		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
+		SetEscalationLevel(level).
+		SetEscalatedAt(now).
+		SetStatus(common.IncidentStatusEscalated).
+		SetUpdatedAt(now).
+		AddVersion(1).
+		Save(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to escalate incident: %w", err)
+	}
+	s.CreateIncidentEvent(ctx, &dto.CreateIncidentEventRequest{
+		IncidentID: id, EventType: "escalation", EventName: "事件升级",
+		Description: fmt.Sprintf("事件升级到级别 %d（工作流自动触发）", level),
+		Status:      "active", Severity: "high", Source: "system",
+	}, tenantID)
+	return s.toIncidentResponse(updated), nil
+}
+
+// ResolveIncidentForWorkflow 供 BPMN resolve_incident 节点使用，同旧的裸 Ent 实现语义
+// （只设置 status=resolved），补上 ResolvedAt（旧实现遗漏）和审计事件。
+func (s *IncidentService) ResolveIncidentForWorkflow(ctx context.Context, id, tenantID int, resolution string) (*dto.IncidentResponse, error) {
+	now := time.Now()
+	updated, err := s.client.Incident.UpdateOneID(id).
+		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
+		SetStatus(common.IncidentStatusResolved).
+		SetResolvedAt(now).
+		SetUpdatedAt(now).
+		AddVersion(1).
+		Save(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("事件 %d 不存在或不属于当前租户", id)
+		}
+		return nil, fmt.Errorf("failed to resolve incident: %w", err)
+	}
+	s.CreateIncidentEvent(ctx, &dto.CreateIncidentEventRequest{
+		IncidentID: id, EventType: "resolution", EventName: "事件解决",
+		Description: strings.TrimSpace(resolution), Status: "active", Severity: "info", Source: "system",
+	}, tenantID)
+	return s.toIncidentResponse(updated), nil
+}
+
+// CloseIncidentForWorkflow 供 BPMN close_incident 节点使用，同旧的裸 Ent 实现语义
+// （status=closed + closed_at），补上审计事件。
+func (s *IncidentService) CloseIncidentForWorkflow(ctx context.Context, id, tenantID int, feedback string) (*dto.IncidentResponse, error) {
+	now := time.Now()
+	updated, err := s.client.Incident.UpdateOneID(id).
+		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
+		SetStatus(common.IncidentStatusClosed).
+		SetClosedAt(now).
+		SetUpdatedAt(now).
+		AddVersion(1).
+		Save(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("事件 %d 不存在或不属于当前租户", id)
+		}
+		return nil, fmt.Errorf("failed to close incident: %w", err)
+	}
+	s.CreateIncidentEvent(ctx, &dto.CreateIncidentEventRequest{
+		IncidentID: id, EventType: "closure", EventName: "事件关闭",
+		Description: strings.TrimSpace(feedback), Status: "active", Severity: "info", Source: "system",
+	}, tenantID)
+	return s.toIncidentResponse(updated), nil
+}
+
+// AcknowledgeIncidentForWorkflow 供 BPMN acknowledge_incident 节点使用，同旧的裸 Ent 实现
+// 语义（status=acknowledged），补上审计事件。
+func (s *IncidentService) AcknowledgeIncidentForWorkflow(ctx context.Context, id, tenantID int) (*dto.IncidentResponse, error) {
+	now := time.Now()
+	updated, err := s.client.Incident.UpdateOneID(id).
+		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
+		SetStatus(common.IncidentStatusAcknowledged).
+		SetUpdatedAt(now).
+		AddVersion(1).
+		Save(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("事件 %d 不存在或不属于当前租户", id)
+		}
+		return nil, fmt.Errorf("failed to acknowledge incident: %w", err)
+	}
+	s.CreateIncidentEvent(ctx, &dto.CreateIncidentEventRequest{
+		IncidentID: id, EventType: "acknowledgement", EventName: "事件确认",
+		Description: "事件由工作流自动确认", Status: "active", Severity: "info", Source: "system",
+	}, tenantID)
+	return s.toIncidentResponse(updated), nil
+}
+
+// UpdateIncidentForWorkflow 供 BPMN update_incident 节点使用（如初步诊断步骤），按提供的
+// 字段做部分更新，空字符串表示"不修改该字段"——同旧的裸 Ent 实现语义，补上审计事件。
+func (s *IncidentService) UpdateIncidentForWorkflow(ctx context.Context, id, tenantID int, title, description, priority, severity, status string) (*dto.IncidentResponse, error) {
+	updateQuery := s.client.Incident.UpdateOneID(id).
+		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
+		SetUpdatedAt(time.Now()).
+		AddVersion(1)
+	if title != "" {
+		updateQuery.SetTitle(title)
+	}
+	if description != "" {
+		updateQuery.SetDescription(description)
+	}
+	if priority != "" {
+		updateQuery.SetPriority(priority)
+	}
+	if severity != "" {
+		updateQuery.SetSeverity(severity)
+	}
+	if status != "" {
+		updateQuery.SetStatus(status)
+	}
+	updated, err := updateQuery.Save(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("事件 %d 不存在或不属于当前租户", id)
+		}
+		return nil, fmt.Errorf("failed to update incident: %w", err)
+	}
+	s.CreateIncidentEvent(ctx, &dto.CreateIncidentEventRequest{
+		IncidentID: id, EventType: "update", EventName: "事件更新",
+		Description: "事件信息已更新（工作流）", Status: "active", Severity: "info", Source: "system",
+	}, tenantID)
+	return s.toIncidentResponse(updated), nil
+}
+
+// CategorizeIncidentForWorkflow 供 BPMN categorize_incident 节点使用，同旧的裸 Ent 实现语义
+// （status=triaged + category/subcategory），补上审计事件。
+func (s *IncidentService) CategorizeIncidentForWorkflow(ctx context.Context, id, tenantID int, category, subcategory string) (*dto.IncidentResponse, error) {
+	updateQuery := s.client.Incident.UpdateOneID(id).
+		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
+		SetStatus(common.IncidentStatusTriaged).
+		SetUpdatedAt(time.Now()).
+		AddVersion(1)
+	if category != "" {
+		updateQuery.SetCategory(category)
+	}
+	if subcategory != "" {
+		updateQuery.SetSubcategory(subcategory)
+	}
+	updated, err := updateQuery.Save(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("事件 %d 不存在或不属于当前租户", id)
+		}
+		return nil, fmt.Errorf("failed to categorize incident: %w", err)
+	}
+	s.CreateIncidentEvent(ctx, &dto.CreateIncidentEventRequest{
+		IncidentID: id, EventType: "categorization", EventName: "事件分类",
+		Description: fmt.Sprintf("事件已分类: %s/%s", category, subcategory), Status: "active", Severity: "info", Source: "system",
+	}, tenantID)
+	return s.toIncidentResponse(updated), nil
+}
+
 // ReopenIncident 将已解决或已关闭的事件重新流转到 in_progress
 func (s *IncidentService) ReopenIncident(ctx context.Context, id, userID, tenantID int) error {
 	incidentEntity, err := s.client.Incident.Query().
@@ -1735,6 +2002,16 @@ func (s *IncidentService) triggerWorkflowForIncident(ctx context.Context, incide
 		return fmt.Errorf("failed to get incident: %w", err)
 	}
 
+	// 统一 WorkItem 领域模型宪章 §1.4：BPMN 的 business_id 统一收敛为 WorkItem.ID
+	// （tickets.id），不再是 Incident 自己的主键。CreateIncident 现在总是在同一事务内
+	// 建好 WorkItem 并回填 work_item_id，所以新创建路径这里永远非零；如果是零，说明
+	// 走到了存量数据（迁移前创建、还没跑 cmd/backfill_incident_work_item 回填）——
+	// 宁可拒绝触发流程也不要用错误的业务身份启动，避免产生一个 business_id=0 的
+	// ProcessInstance 污染 BPMN 审批决策回查。
+	if inc.WorkItemID <= 0 {
+		return fmt.Errorf("事件 %d 缺少关联的 WorkItem（work_item_id 未回填），拒绝触发流程；请先运行 cmd/backfill_incident_work_item", incidentID)
+	}
+
 	// 构建流程变量
 	variables := map[string]interface{}{
 		"incident_id":     inc.ID,
@@ -1759,7 +2036,7 @@ func (s *IncidentService) triggerWorkflowForIncident(ctx context.Context, incide
 	// 触发流程
 	triggerReq := &dto.ProcessTriggerRequest{
 		BusinessType:         dto.BusinessTypeIncident,
-		BusinessID:           incidentID,
+		BusinessID:           inc.WorkItemID,
 		ProcessDefinitionKey: processKey,
 		Variables:            variables,
 		TriggeredBy:          fmt.Sprintf("%d", inc.ReporterID),
@@ -1784,7 +2061,22 @@ func (s *IncidentService) triggerWorkflowForIncident(ctx context.Context, incide
 
 // GetWorkflowStatus 获取事件关联的流程状态
 func (s *IncidentService) GetWorkflowStatus(ctx context.Context, incidentID int, tenantID int) (*dto.ProcessTriggerResponse, error) {
-	businessKey := fmt.Sprintf("incident:%d", incidentID)
+	inc, err := s.client.Incident.Query().
+		Where(incident.IDEQ(incidentID), incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("incident not found")
+		}
+		return nil, fmt.Errorf("failed to get incident: %w", err)
+	}
+	// businessKey 的业务身份自 Wave 2 起是 WorkItem.ID，同 triggerWorkflowForIncident；
+	// 缺失 work_item_id 的存量事件（还没跑 backfill）在这里查不到流程，返回未找到而不是
+	// 用 Incident 自己的主键去猜一个大概率查不中的旧格式 key。
+	if inc.WorkItemID <= 0 {
+		return nil, fmt.Errorf("事件 %d 缺少关联的 WorkItem，无法查询流程状态；请先运行 cmd/backfill_incident_work_item", incidentID)
+	}
+	businessKey := fmt.Sprintf("incident:%d", inc.WorkItemID)
 
 	// 直接查询流程实例
 	processInstance, err := s.client.ProcessInstance.Query().

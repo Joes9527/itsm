@@ -16,6 +16,7 @@ import (
 	"itsm-backend/ent/incidentevent"
 	"itsm-backend/ent/incidentmetric"
 	"itsm-backend/ent/problem"
+	entticket "itsm-backend/ent/ticket"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -152,6 +153,127 @@ func TestIncidentService_CreateIncidentRejectsCrossTenantAssigneeAtomically(t *t
 	eventCount, err := client.IncidentEvent.Query().Count(ctx)
 	require.NoError(t, err)
 	assert.Zero(t, eventCount)
+	// 这个校验发生在 CreateIncident 打开事务之前（validateIncidentAssignee 是
+	// tx.Begin 之前的前置校验），所以连 WorkItem 都不应该被创建——但明确断言总比
+	// 依赖"没打开事务所以自然不会有"这条隐含推理更可靠，尤其是以后如果校验顺序被调整。
+	ticketCount, err := client.Ticket.Query().Count(ctx)
+	require.NoError(t, err)
+	assert.Zero(t, ticketCount, "校验失败必须连 WorkItem 都不留下")
+}
+
+// ==================== WorkItem 迁移测试（Wave 2） ====================
+
+// TestIncidentService_CreateIncident_CreatesWorkItemInSameTransaction 覆盖统一 WorkItem
+// 领域模型宪章 §3.2 的事务边界要求：CreateIncident 必须在同一个事务内同时建好 tickets
+// 行（record_class="incident"，创建后不可变）和 incidents 行，且 incidents.work_item_id
+// 指回那条 tickets 行；公共字段（标题/描述/优先级/请求人/租户）以 WorkItem 为权威来源。
+func TestIncidentService_CreateIncident_CreatesWorkItemInSameTransaction(t *testing.T) {
+	client, service, ctx := setupIncidentTest(t)
+	defer client.Close()
+
+	testTenant, err := createIncidentTestTenant(ctx, client, "workitem")
+	require.NoError(t, err)
+	testUser, err := createIncidentTestUser(ctx, client, testTenant.ID, "workitem")
+	require.NoError(t, err)
+
+	req := &dto.CreateIncidentRequest{
+		Title:       "数据库连接池耗尽",
+		Description: "生产库连接池被打满",
+		Priority:    "critical",
+	}
+
+	response, err := service.CreateIncident(ctx, req, testTenant.ID, testUser.ID)
+	require.NoError(t, err)
+	require.NotNil(t, response.WorkItemID, "CreateIncident 响应必须携带新建的 WorkItem ID")
+
+	workItem, err := client.Ticket.Get(ctx, *response.WorkItemID)
+	require.NoError(t, err, "incidents.work_item_id 指向的 tickets 行必须真实存在")
+	assert.Equal(t, "incident", workItem.RecordClass)
+	assert.Equal(t, req.Title, workItem.Title)
+	assert.Equal(t, req.Description, workItem.Description)
+	assert.Equal(t, req.Priority, workItem.Priority)
+	assert.Equal(t, testUser.ID, workItem.RequesterID)
+	assert.Equal(t, testTenant.ID, workItem.TenantID)
+	assert.NotEmpty(t, workItem.TicketNumber)
+
+	persistedIncident, err := client.Incident.Get(ctx, response.ID)
+	require.NoError(t, err)
+	assert.Equal(t, workItem.ID, persistedIncident.WorkItemID, "incidents.work_item_id 必须指回新建的 WorkItem")
+}
+
+// TestIncidentService_CreateIncident_ServiceCatalogDivertedPath_AlsoCreatesWorkItem
+// 覆盖服务目录 itsm_type=Incident 的报障分流路径（handlers/service_request/service.go 的
+// isIncidentCatalog + createIncidentFromCatalog）。该路径通过 IncidentCreator 接口
+// （生产环境由 internal/bootstrap/app.go 的 srIncidentBridge 适配）最终调用的正是
+// IncidentService.CreateIncident——这里用与 srIncidentBridge.CreateIncident 完全相同的
+// 请求形状直接调用同一个函数，验证服务目录分流路径同样会产生 WorkItem，不再像 Wave 2
+// 之前那样绕开 Ticket。跨包集成的另一半（Service.Create 确实会在 isIncidentCatalog
+// 命中时委托给 IncidentCreator、且不产生 ServiceRequest 行）由
+// handlers/service_request/regression_test.go 的
+// TestService_Create_IncidentCatalog_NoServiceRequestRowCreated 覆盖，该测试的注释
+// 明确把"Incident 侧完整行为"这一半留给了本任务包。
+func TestIncidentService_CreateIncident_ServiceCatalogDivertedPath_AlsoCreatesWorkItem(t *testing.T) {
+	client, service, ctx := setupIncidentTest(t)
+	defer client.Close()
+
+	testTenant, err := createIncidentTestTenant(ctx, client, "catalog")
+	require.NoError(t, err)
+	testUser, err := createIncidentTestUser(ctx, client, testTenant.ID, "catalog")
+	require.NoError(t, err)
+
+	// 镜像 srIncidentBridge.CreateIncident 传给 IncidentService.CreateIncident 的请求形状。
+	response, err := service.CreateIncident(ctx, &dto.CreateIncidentRequest{
+		Title:       "服务目录报障：VPN无法连接",
+		Description: "员工反馈无法连接VPN",
+		Type:        "incident",
+		Priority:    "medium",
+	}, testTenant.ID, testUser.ID)
+	require.NoError(t, err)
+	require.NotNil(t, response.WorkItemID)
+
+	workItem, err := client.Ticket.Get(ctx, *response.WorkItemID)
+	require.NoError(t, err)
+	assert.Equal(t, "incident", workItem.RecordClass)
+	assert.Equal(t, testTenant.ID, workItem.TenantID)
+}
+
+// TestIncidentService_CreateIncident_TenantIsolation_FailClosed 覆盖 AGENTS.md 的租户强
+// 闭合约束：跨租户既不能读到别的租户的 Incident，也不能读到它关联的 WorkItem。
+func TestIncidentService_CreateIncident_TenantIsolation_FailClosed(t *testing.T) {
+	client, service, ctx := setupIncidentTest(t)
+	defer client.Close()
+
+	tenantA, err := createIncidentTestTenant(ctx, client, "iso-a")
+	require.NoError(t, err)
+	tenantB, err := createIncidentTestTenant(ctx, client, "iso-b")
+	require.NoError(t, err)
+	userA, err := createIncidentTestUser(ctx, client, tenantA.ID, "iso-a")
+	require.NoError(t, err)
+
+	response, err := service.CreateIncident(ctx, &dto.CreateIncidentRequest{
+		Title: "租户A的机密事件",
+	}, tenantA.ID, userA.ID)
+	require.NoError(t, err)
+	require.NotNil(t, response.WorkItemID)
+
+	// 用租户 B 的身份读取租户 A 的 Incident：必须 Fail Closed（"not found"），不能静默
+	// 放行或返回空集合伪装成功。
+	_, err = service.GetIncident(ctx, response.ID, tenantB.ID)
+	require.Error(t, err, "跨租户读取 Incident 必须失败")
+
+	// WorkItem 本身也要遵守同样的租户边界——直接用 ent 查询验证底层数据没有跨租户可见。
+	_, err = client.Ticket.Query().
+		Where(entticket.IDEQ(*response.WorkItemID), entticket.TenantIDEQ(tenantB.ID)).
+		Only(ctx)
+	require.Error(t, err, "WorkItem 不能被其它租户查到")
+	require.True(t, ent.IsNotFound(err))
+
+	// 用正确的租户仍然能读到，证明上面的失败确实是租户过滤生效，不是数据本身就有问题。
+	workItem, err := client.Ticket.Query().
+		Where(entticket.IDEQ(*response.WorkItemID), entticket.TenantIDEQ(tenantA.ID)).
+		Only(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "incident", workItem.RecordClass)
 }
 
 // ==================== 获取事件测试 ====================
@@ -731,6 +853,203 @@ func TestIncidentService_ResolveRequiresResolutionAndStatusMachineFailsClosed(t 
 	require.ErrorContains(t, err, "resolution is required")
 	assert.False(t, isValidIncidentStatusTransition("legacy", "resolved"))
 	assert.False(t, isValidIncidentStatusTransition("in_progress", "closed"))
+}
+
+// ==================== BPMN 工作流专用写入方法测试 ====================
+//
+// service/bpmn.IncidentServiceTaskHandler 的测试用的是自己的 fakeIncidentService/
+// dbBackedIncidentService（避免 service/bpmn 反向 import service 造成循环依赖），
+// 不会真正跑到下面这几个方法本身——这里直接测 *IncidentService 上的真实实现，
+// 覆盖 escalate/resolve/close/acknowledge/update/categorize 六个 BPMN 动作从裸 Ent
+// 写收回领域服务之后的实际写入语义 + 审计事件。
+
+func newLifecycleIncidentFixture(t *testing.T, client *ent.Client, ctx context.Context, tenantID, userID int, number string) *ent.Incident {
+	t.Helper()
+	entity, err := client.Incident.Create().
+		SetTitle("BPMN workflow lifecycle incident").
+		SetStatus("new").
+		SetPriority("medium").
+		SetSeverity("medium").
+		SetIncidentNumber(number).
+		SetReporterID(userID).
+		SetTenantID(tenantID).
+		Save(ctx)
+	require.NoError(t, err)
+	return entity
+}
+
+func TestIncidentService_EscalateIncidentLevel_AutoIncrementsAndAudits(t *testing.T) {
+	client, service, ctx := setupIncidentTest(t)
+	defer client.Close()
+	tenant, err := createIncidentTestTenant(ctx, client, "wf-escalate")
+	require.NoError(t, err)
+	user, err := createIncidentTestUser(ctx, client, tenant.ID, "wf-escalate")
+	require.NoError(t, err)
+	entity := newLifecycleIncidentFixture(t, client, ctx, tenant.ID, user.ID, "INC-WF-ESCALATE-1")
+
+	resp, err := service.EscalateIncidentLevel(ctx, entity.ID, tenant.ID, 0)
+	require.NoError(t, err)
+	assert.Equal(t, 1, resp.EscalationLevel)
+
+	after, err := client.Incident.Get(ctx, entity.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, after.EscalationLevel)
+	assert.Equal(t, common.IncidentStatusEscalated, after.Status)
+	assert.False(t, after.EscalatedAt.IsZero())
+
+	events, err := client.IncidentEvent.Query().Where(incidentevent.IncidentIDEQ(entity.ID)).All(ctx)
+	require.NoError(t, err)
+	require.Len(t, events, 1)
+	assert.Equal(t, "escalation", events[0].EventType)
+
+	// 显式指定级别时不再自动递增。
+	resp2, err := service.EscalateIncidentLevel(ctx, entity.ID, tenant.ID, 3)
+	require.NoError(t, err)
+	assert.Equal(t, 3, resp2.EscalationLevel)
+}
+
+func TestIncidentService_ResolveIncidentForWorkflow_SetsStatusAndAudits(t *testing.T) {
+	client, service, ctx := setupIncidentTest(t)
+	defer client.Close()
+	tenant, err := createIncidentTestTenant(ctx, client, "wf-resolve")
+	require.NoError(t, err)
+	user, err := createIncidentTestUser(ctx, client, tenant.ID, "wf-resolve")
+	require.NoError(t, err)
+	entity := newLifecycleIncidentFixture(t, client, ctx, tenant.ID, user.ID, "INC-WF-RESOLVE-1")
+
+	_, err = service.ResolveIncidentForWorkflow(ctx, entity.ID, tenant.ID, "自动诊断已恢复")
+	require.NoError(t, err)
+
+	after, err := client.Incident.Get(ctx, entity.ID)
+	require.NoError(t, err)
+	assert.Equal(t, common.IncidentStatusResolved, after.Status)
+	assert.False(t, after.ResolvedAt.IsZero())
+
+	events, err := client.IncidentEvent.Query().Where(incidentevent.IncidentIDEQ(entity.ID)).All(ctx)
+	require.NoError(t, err)
+	require.Len(t, events, 1)
+	assert.Equal(t, "resolution", events[0].EventType)
+}
+
+func TestIncidentService_CloseIncidentForWorkflow_SetsStatusAndAudits(t *testing.T) {
+	client, service, ctx := setupIncidentTest(t)
+	defer client.Close()
+	tenant, err := createIncidentTestTenant(ctx, client, "wf-close")
+	require.NoError(t, err)
+	user, err := createIncidentTestUser(ctx, client, tenant.ID, "wf-close")
+	require.NoError(t, err)
+	entity := newLifecycleIncidentFixture(t, client, ctx, tenant.ID, user.ID, "INC-WF-CLOSE-1")
+
+	_, err = service.CloseIncidentForWorkflow(ctx, entity.ID, tenant.ID, "流程自动关闭")
+	require.NoError(t, err)
+
+	after, err := client.Incident.Get(ctx, entity.ID)
+	require.NoError(t, err)
+	assert.Equal(t, common.IncidentStatusClosed, after.Status)
+	assert.False(t, after.ClosedAt.IsZero())
+
+	events, err := client.IncidentEvent.Query().Where(incidentevent.IncidentIDEQ(entity.ID)).All(ctx)
+	require.NoError(t, err)
+	require.Len(t, events, 1)
+	assert.Equal(t, "closure", events[0].EventType)
+}
+
+func TestIncidentService_AcknowledgeIncidentForWorkflow_SetsStatusAndAudits(t *testing.T) {
+	client, service, ctx := setupIncidentTest(t)
+	defer client.Close()
+	tenant, err := createIncidentTestTenant(ctx, client, "wf-ack")
+	require.NoError(t, err)
+	user, err := createIncidentTestUser(ctx, client, tenant.ID, "wf-ack")
+	require.NoError(t, err)
+	entity := newLifecycleIncidentFixture(t, client, ctx, tenant.ID, user.ID, "INC-WF-ACK-1")
+
+	_, err = service.AcknowledgeIncidentForWorkflow(ctx, entity.ID, tenant.ID)
+	require.NoError(t, err)
+
+	after, err := client.Incident.Get(ctx, entity.ID)
+	require.NoError(t, err)
+	assert.Equal(t, common.IncidentStatusAcknowledged, after.Status)
+
+	events, err := client.IncidentEvent.Query().Where(incidentevent.IncidentIDEQ(entity.ID)).All(ctx)
+	require.NoError(t, err)
+	require.Len(t, events, 1)
+	assert.Equal(t, "acknowledgement", events[0].EventType)
+}
+
+func TestIncidentService_UpdateIncidentForWorkflow_PartialUpdateDoesNotTouchOtherFields(t *testing.T) {
+	client, service, ctx := setupIncidentTest(t)
+	defer client.Close()
+	tenant, err := createIncidentTestTenant(ctx, client, "wf-update")
+	require.NoError(t, err)
+	user, err := createIncidentTestUser(ctx, client, tenant.ID, "wf-update")
+	require.NoError(t, err)
+	entity := newLifecycleIncidentFixture(t, client, ctx, tenant.ID, user.ID, "INC-WF-UPDATE-1")
+
+	// 只提交 title，其它字段留空——空字符串表示"不修改"，不能被误当成"清空该字段"。
+	_, err = service.UpdateIncidentForWorkflow(ctx, entity.ID, tenant.ID, "初步诊断：数据库连接超时", "", "", "", "")
+	require.NoError(t, err)
+
+	after, err := client.Incident.Get(ctx, entity.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "初步诊断：数据库连接超时", after.Title)
+	assert.Equal(t, "new", after.Status, "update 只提交 title 时不得改状态")
+	assert.Equal(t, "medium", after.Priority, "未提交的字段不应该被清空/改变")
+}
+
+func TestIncidentService_CategorizeIncidentForWorkflow_SetsTriagedAndAudits(t *testing.T) {
+	client, service, ctx := setupIncidentTest(t)
+	defer client.Close()
+	tenant, err := createIncidentTestTenant(ctx, client, "wf-categorize")
+	require.NoError(t, err)
+	user, err := createIncidentTestUser(ctx, client, tenant.ID, "wf-categorize")
+	require.NoError(t, err)
+	entity := newLifecycleIncidentFixture(t, client, ctx, tenant.ID, user.ID, "INC-WF-CATEGORIZE-1")
+
+	_, err = service.CategorizeIncidentForWorkflow(ctx, entity.ID, tenant.ID, "network", "dns")
+	require.NoError(t, err)
+
+	after, err := client.Incident.Get(ctx, entity.ID)
+	require.NoError(t, err)
+	assert.Equal(t, common.IncidentStatusTriaged, after.Status)
+	assert.Equal(t, "network", after.Category)
+	assert.Equal(t, "dns", after.Subcategory)
+
+	events, err := client.IncidentEvent.Query().Where(incidentevent.IncidentIDEQ(entity.ID)).All(ctx)
+	require.NoError(t, err)
+	require.Len(t, events, 1)
+	assert.Equal(t, "categorization", events[0].EventType)
+}
+
+// TestIncidentService_WorkflowMethods_CrossTenantFailClosed 覆盖六个 BPMN 工作流方法
+// 共同的租户边界：跨租户调用必须失败且不产生任何写入。
+func TestIncidentService_WorkflowMethods_CrossTenantFailClosed(t *testing.T) {
+	client, service, ctx := setupIncidentTest(t)
+	defer client.Close()
+	tenant, err := createIncidentTestTenant(ctx, client, "wf-cross")
+	require.NoError(t, err)
+	other, err := createIncidentTestTenant(ctx, client, "wf-cross-other")
+	require.NoError(t, err)
+	user, err := createIncidentTestUser(ctx, client, tenant.ID, "wf-cross")
+	require.NoError(t, err)
+	entity := newLifecycleIncidentFixture(t, client, ctx, tenant.ID, user.ID, "INC-WF-CROSS-1")
+
+	_, err = service.EscalateIncidentLevel(ctx, entity.ID, other.ID, 0)
+	assert.Error(t, err)
+	_, err = service.ResolveIncidentForWorkflow(ctx, entity.ID, other.ID, "x")
+	assert.Error(t, err)
+	_, err = service.CloseIncidentForWorkflow(ctx, entity.ID, other.ID, "x")
+	assert.Error(t, err)
+	_, err = service.AcknowledgeIncidentForWorkflow(ctx, entity.ID, other.ID)
+	assert.Error(t, err)
+	_, err = service.UpdateIncidentForWorkflow(ctx, entity.ID, other.ID, "改过的标题", "", "", "", "")
+	assert.Error(t, err)
+	_, err = service.CategorizeIncidentForWorkflow(ctx, entity.ID, other.ID, "x", "y")
+	assert.Error(t, err)
+
+	after, err := client.Incident.Get(ctx, entity.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "new", after.Status, "跨租户写入必须全部失败，状态不能被改动")
+	assert.Equal(t, "BPMN workflow lifecycle incident", after.Title)
 }
 
 func TestRootCauseAnalysisService_ConvertIncidentToProblemTransactionAndTenantIsolation(t *testing.T) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
@@ -63,6 +64,125 @@ func (s *dbBackedIncidentService) UpdateStatus(ctx context.Context, id int, stat
 		Where(incident.ID(id), incident.TenantID(tenantID)).
 		SetStatus(status).
 		Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if updated == 0 {
+		return nil, fmt.Errorf("incident not found")
+	}
+	return &dto.IncidentResponse{ID: id}, nil
+}
+
+// EscalateIncidentLevel/ResolveIncidentForWorkflow/CloseIncidentForWorkflow/
+// AcknowledgeIncidentForWorkflow/UpdateIncidentForWorkflow/CategorizeIncidentForWorkflow
+// 镜像 service.IncidentService 里同名方法的写入语义（见该文件"BPMN 工作流专用写入方法"
+// 一节的注释），保持这个 fixture 与真实实现行为一致。
+
+func (s *dbBackedIncidentService) EscalateIncidentLevel(ctx context.Context, id, tenantID, level int) (*dto.IncidentResponse, error) {
+	current, err := s.client.Incident.Query().Where(incident.ID(id), incident.TenantID(tenantID)).Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("incident not found")
+		}
+		return nil, err
+	}
+	if level <= 0 {
+		level = current.EscalationLevel + 1
+	}
+	updated, err := s.client.Incident.UpdateOneID(id).
+		Where(incident.TenantID(tenantID)).
+		SetEscalationLevel(level).
+		SetEscalatedAt(time.Now()).
+		SetStatus(common.IncidentStatusEscalated).
+		Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &dto.IncidentResponse{ID: id, EscalationLevel: updated.EscalationLevel}, nil
+}
+
+func (s *dbBackedIncidentService) ResolveIncidentForWorkflow(ctx context.Context, id, tenantID int, resolution string) (*dto.IncidentResponse, error) {
+	updated, err := s.client.Incident.Update().
+		Where(incident.ID(id), incident.TenantID(tenantID)).
+		SetStatus(common.IncidentStatusResolved).
+		SetResolvedAt(time.Now()).
+		Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if updated == 0 {
+		return nil, fmt.Errorf("incident not found")
+	}
+	return &dto.IncidentResponse{ID: id}, nil
+}
+
+func (s *dbBackedIncidentService) CloseIncidentForWorkflow(ctx context.Context, id, tenantID int, feedback string) (*dto.IncidentResponse, error) {
+	updated, err := s.client.Incident.Update().
+		Where(incident.ID(id), incident.TenantID(tenantID)).
+		SetStatus(common.IncidentStatusClosed).
+		SetClosedAt(time.Now()).
+		Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if updated == 0 {
+		return nil, fmt.Errorf("incident not found")
+	}
+	return &dto.IncidentResponse{ID: id}, nil
+}
+
+func (s *dbBackedIncidentService) AcknowledgeIncidentForWorkflow(ctx context.Context, id, tenantID int) (*dto.IncidentResponse, error) {
+	updated, err := s.client.Incident.Update().
+		Where(incident.ID(id), incident.TenantID(tenantID)).
+		SetStatus(common.IncidentStatusAcknowledged).
+		Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if updated == 0 {
+		return nil, fmt.Errorf("incident not found")
+	}
+	return &dto.IncidentResponse{ID: id}, nil
+}
+
+func (s *dbBackedIncidentService) UpdateIncidentForWorkflow(ctx context.Context, id, tenantID int, title, description, priority, severity, status string) (*dto.IncidentResponse, error) {
+	q := s.client.Incident.Update().Where(incident.ID(id), incident.TenantID(tenantID))
+	if title != "" {
+		q.SetTitle(title)
+	}
+	if description != "" {
+		q.SetDescription(description)
+	}
+	if priority != "" {
+		q.SetPriority(priority)
+	}
+	if severity != "" {
+		q.SetSeverity(severity)
+	}
+	if status != "" {
+		q.SetStatus(status)
+	}
+	updated, err := q.Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if updated == 0 {
+		return nil, fmt.Errorf("incident not found")
+	}
+	return &dto.IncidentResponse{ID: id}, nil
+}
+
+func (s *dbBackedIncidentService) CategorizeIncidentForWorkflow(ctx context.Context, id, tenantID int, category, subcategory string) (*dto.IncidentResponse, error) {
+	q := s.client.Incident.Update().
+		Where(incident.ID(id), incident.TenantID(tenantID)).
+		SetStatus(common.IncidentStatusTriaged)
+	if category != "" {
+		q.SetCategory(category)
+	}
+	if subcategory != "" {
+		q.SetSubcategory(subcategory)
+	}
+	updated, err := q.Save(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -410,4 +530,31 @@ func (f *fakeIncidentService) UpdateStatus(ctx context.Context, id int, status s
 	f.lastStatusID = id
 	f.lastStatus = status
 	return &dto.IncidentResponse{ID: id}, nil
+}
+
+func (f *fakeIncidentService) EscalateIncidentLevel(ctx context.Context, id, tenantID, level int) (*dto.IncidentResponse, error) {
+	if level <= 0 {
+		level = 1
+	}
+	return &dto.IncidentResponse{ID: id, EscalationLevel: level}, nil
+}
+
+func (f *fakeIncidentService) ResolveIncidentForWorkflow(ctx context.Context, id, tenantID int, resolution string) (*dto.IncidentResponse, error) {
+	return &dto.IncidentResponse{ID: id, Status: common.IncidentStatusResolved}, nil
+}
+
+func (f *fakeIncidentService) CloseIncidentForWorkflow(ctx context.Context, id, tenantID int, feedback string) (*dto.IncidentResponse, error) {
+	return &dto.IncidentResponse{ID: id, Status: common.IncidentStatusClosed}, nil
+}
+
+func (f *fakeIncidentService) AcknowledgeIncidentForWorkflow(ctx context.Context, id, tenantID int) (*dto.IncidentResponse, error) {
+	return &dto.IncidentResponse{ID: id, Status: common.IncidentStatusAcknowledged}, nil
+}
+
+func (f *fakeIncidentService) UpdateIncidentForWorkflow(ctx context.Context, id, tenantID int, title, description, priority, severity, status string) (*dto.IncidentResponse, error) {
+	return &dto.IncidentResponse{ID: id, Title: title}, nil
+}
+
+func (f *fakeIncidentService) CategorizeIncidentForWorkflow(ctx context.Context, id, tenantID int, category, subcategory string) (*dto.IncidentResponse, error) {
+	return &dto.IncidentResponse{ID: id, Category: category, Subcategory: subcategory}, nil
 }

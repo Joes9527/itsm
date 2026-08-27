@@ -3,22 +3,32 @@ package bpmn
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
-	"itsm-backend/ent/incident"
 
 	"go.uber.org/zap"
 )
 
 // IncidentDomainServiceInterface 事件领域服务接口（避免 service/bpmn 反向 import service
 // 包造成循环依赖，同 TicketStatusServiceInterface 的理由）
+//
+// EscalateIncidentLevel/ResolveIncidentForWorkflow/CloseIncidentForWorkflow/
+// AcknowledgeIncidentForWorkflow/UpdateIncidentForWorkflow/CategorizeIncidentForWorkflow
+// 是 Wave 2（WorkItem 迁移）新增：把本文件里 escalate/resolve/close/acknowledge/update/
+// categorize 几个 BPMN 动作原来直接写 Ent 的代码收回到领域服务，理由见
+// service/incident_service.go 对应实现前的注释。
 type IncidentDomainServiceInterface interface {
 	CreateIncident(ctx context.Context, req *dto.CreateIncidentRequest, tenantID, userID int) (*dto.IncidentResponse, error)
 	AssignIncident(ctx context.Context, id int, assigneeID int, tenantID int) (*dto.IncidentResponse, error)
 	UpdateStatus(ctx context.Context, id int, status string, tenantID int) (*dto.IncidentResponse, error)
+	EscalateIncidentLevel(ctx context.Context, id, tenantID, level int) (*dto.IncidentResponse, error)
+	ResolveIncidentForWorkflow(ctx context.Context, id, tenantID int, resolution string) (*dto.IncidentResponse, error)
+	CloseIncidentForWorkflow(ctx context.Context, id, tenantID int, feedback string) (*dto.IncidentResponse, error)
+	AcknowledgeIncidentForWorkflow(ctx context.Context, id, tenantID int) (*dto.IncidentResponse, error)
+	UpdateIncidentForWorkflow(ctx context.Context, id, tenantID int, title, description, priority, severity, status string) (*dto.IncidentResponse, error)
+	CategorizeIncidentForWorkflow(ctx context.Context, id, tenantID int, category, subcategory string) (*dto.IncidentResponse, error)
 }
 
 // IncidentServiceTaskHandler 事件服务任务处理器
@@ -191,36 +201,19 @@ func (h *IncidentServiceTaskHandler) escalateIncident(ctx context.Context, varia
 		return nil, err
 	}
 
-	// 获取当前升级级别（带租户约束）
-	entity, err := h.client.Incident.Query().
-		Where(incident.ID(incidentID), incident.TenantID(tenantID)).
-		Only(ctx)
+	if h.incidentService == nil {
+		return nil, fmt.Errorf("incident service 未注入，无法升级事件")
+	}
+	resp, err := h.incidentService.EscalateIncidentLevel(ctx, incidentID, tenantID, escalationLevel)
 	if err != nil {
-		if ent.IsNotFound(err) {
-			return nil, fmt.Errorf("事件 %d 不存在或不属于当前租户", incidentID)
-		}
-		return nil, fmt.Errorf("查询事件失败: %w", err)
-	}
-
-	newLevel := escalationLevel
-	if newLevel <= 0 {
-		newLevel = entity.EscalationLevel + 1
-	}
-
-	now := time.Now()
-	if _, err := entity.Update().
-		SetEscalationLevel(newLevel).
-		SetEscalatedAt(now).
-		SetStatus(common.IncidentStatusEscalated).
-		Save(ctx); err != nil {
 		return nil, fmt.Errorf("升级事件失败: %w", err)
 	}
 
-	h.logger.Infow("Incident escalated via BPMN", "incident_id", incidentID, "escalation_level", newLevel, "reason", reason)
+	h.logger.Infow("Incident escalated via BPMN", "incident_id", incidentID, "escalation_level", resp.EscalationLevel, "reason", reason)
 
 	return &dto.ServiceTaskResult{
 		Success: true,
-		Message: fmt.Sprintf("事件 %d 已升级到第 %d 级", incidentID, newLevel),
+		Message: fmt.Sprintf("事件 %d 已升级到第 %d 级", incidentID, resp.EscalationLevel),
 	}, nil
 }
 
@@ -238,17 +231,11 @@ func (h *IncidentServiceTaskHandler) resolveIncident(ctx context.Context, variab
 		return nil, err
 	}
 
-	now := time.Now()
-	updated, err := h.client.Incident.Update().
-		Where(incident.ID(incidentID), incident.TenantID(tenantID)).
-		SetStatus(common.IncidentStatusResolved).
-		SetResolvedAt(now).
-		Save(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("解决事件失败: %w", err)
+	if h.incidentService == nil {
+		return nil, fmt.Errorf("incident service 未注入，无法解决事件")
 	}
-	if updated == 0 {
-		return nil, fmt.Errorf("事件 %d 不存在或不属于当前租户", incidentID)
+	if _, err := h.incidentService.ResolveIncidentForWorkflow(ctx, incidentID, tenantID, resolution); err != nil {
+		return nil, fmt.Errorf("解决事件失败: %w", err)
 	}
 
 	h.logger.Infow("Incident resolved via BPMN", "incident_id", incidentID, "resolution", resolution)
@@ -273,17 +260,11 @@ func (h *IncidentServiceTaskHandler) closeIncident(ctx context.Context, variable
 		return nil, err
 	}
 
-	now := time.Now()
-	updated, err := h.client.Incident.Update().
-		Where(incident.ID(incidentID), incident.TenantID(tenantID)).
-		SetStatus(common.IncidentStatusClosed).
-		SetClosedAt(now).
-		Save(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("关闭事件失败: %w", err)
+	if h.incidentService == nil {
+		return nil, fmt.Errorf("incident service 未注入，无法关闭事件")
 	}
-	if updated == 0 {
-		return nil, fmt.Errorf("事件 %d 不存在或不属于当前租户", incidentID)
+	if _, err := h.incidentService.CloseIncidentForWorkflow(ctx, incidentID, tenantID, feedback); err != nil {
+		return nil, fmt.Errorf("关闭事件失败: %w", err)
 	}
 
 	h.logger.Infow("Incident closed via BPMN", "incident_id", incidentID, "feedback", feedback)
@@ -307,31 +288,17 @@ func (h *IncidentServiceTaskHandler) updateIncident(ctx context.Context, variabl
 		return nil, err
 	}
 
-	updateQuery := h.client.Incident.Update().
-		Where(incident.ID(incidentID), incident.TenantID(tenantID))
+	title, _ := variables["title"].(string)
+	description, _ := variables["description"].(string)
+	priority, _ := variables["priority"].(string)
+	severity, _ := variables["severity"].(string)
+	status, _ := variables["status"].(string)
 
-	if title, ok := variables["title"].(string); ok && title != "" {
-		updateQuery.SetTitle(title)
+	if h.incidentService == nil {
+		return nil, fmt.Errorf("incident service 未注入，无法更新事件")
 	}
-	if description, ok := variables["description"].(string); ok && description != "" {
-		updateQuery.SetDescription(description)
-	}
-	if priority, ok := variables["priority"].(string); ok && priority != "" {
-		updateQuery.SetPriority(priority)
-	}
-	if severity, ok := variables["severity"].(string); ok && severity != "" {
-		updateQuery.SetSeverity(severity)
-	}
-	if status, ok := variables["status"].(string); ok && status != "" {
-		updateQuery.SetStatus(status)
-	}
-
-	updated, err := updateQuery.Save(ctx)
-	if err != nil {
+	if _, err := h.incidentService.UpdateIncidentForWorkflow(ctx, incidentID, tenantID, title, description, priority, severity, status); err != nil {
 		return nil, fmt.Errorf("更新事件失败: %w", err)
-	}
-	if updated == 0 {
-		return nil, fmt.Errorf("事件 %d 不存在或不属于当前租户", incidentID)
 	}
 
 	h.logger.Infow("Incident updated via BPMN", "incident_id", incidentID)
@@ -355,15 +322,11 @@ func (h *IncidentServiceTaskHandler) acknowledgeIncident(ctx context.Context, va
 		return nil, err
 	}
 
-	updated, err := h.client.Incident.Update().
-		Where(incident.ID(incidentID), incident.TenantID(tenantID)).
-		SetStatus(common.IncidentStatusAcknowledged).
-		Save(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("确认事件失败: %w", err)
+	if h.incidentService == nil {
+		return nil, fmt.Errorf("incident service 未注入，无法确认事件")
 	}
-	if updated == 0 {
-		return nil, fmt.Errorf("事件 %d 不存在或不属于当前租户", incidentID)
+	if _, err := h.incidentService.AcknowledgeIncidentForWorkflow(ctx, incidentID, tenantID); err != nil {
+		return nil, fmt.Errorf("确认事件失败: %w", err)
 	}
 
 	h.logger.Infow("Incident acknowledged via BPMN", "incident_id", incidentID)
@@ -389,22 +352,11 @@ func (h *IncidentServiceTaskHandler) categorizeIncident(ctx context.Context, var
 		return nil, err
 	}
 
-	updateQuery := h.client.Incident.Update().
-		Where(incident.ID(incidentID), incident.TenantID(tenantID)).
-		SetStatus(common.IncidentStatusTriaged)
-	if category != "" {
-		updateQuery.SetCategory(category)
+	if h.incidentService == nil {
+		return nil, fmt.Errorf("incident service 未注入，无法分类事件")
 	}
-	if subcategory != "" {
-		updateQuery.SetSubcategory(subcategory)
-	}
-
-	updated, err := updateQuery.Save(ctx)
-	if err != nil {
+	if _, err := h.incidentService.CategorizeIncidentForWorkflow(ctx, incidentID, tenantID, category, subcategory); err != nil {
 		return nil, fmt.Errorf("分类事件失败: %w", err)
-	}
-	if updated == 0 {
-		return nil, fmt.Errorf("事件 %d 不存在或不属于当前租户", incidentID)
 	}
 
 	h.logger.Infow("Incident categorized via BPMN", "incident_id", incidentID, "category", category, "subcategory", subcategory)
