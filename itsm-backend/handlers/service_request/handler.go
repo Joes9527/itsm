@@ -64,6 +64,9 @@ func (h *Handler) toDTO(req *ServiceRequest) *dto.ServiceRequestResponse {
 		NeedsPublicIP:      req.NeedsPublicIP,
 		SourceIPWhitelist:  req.SourceIPWhitelist,
 		ComplianceAck:      req.ComplianceAck,
+		ContactName:        req.ContactName,
+		ContactEmail:       req.ContactEmail,
+		Quantity:           req.Quantity,
 		Version:            req.Version,
 		ProcessorID:        req.ProcessorID,
 		StartedAt:          req.StartedAt,
@@ -79,17 +82,26 @@ func (h *Handler) toDTO(req *ServiceRequest) *dto.ServiceRequestResponse {
 		t := *req.ExpireAt
 		resp.ExpireAt = &t
 	}
+	if req.ExpectedAt != nil {
+		t := *req.ExpectedAt
+		resp.ExpectedAt = &t
+	}
 	return resp
 }
 
 // toDTOWithCustomFields wraps toDTO and additionally fills in CustomFields
-// from the field_values snapshot. Used by detail-style responses (Get,
-// Create's success branch) — List intentionally does not call this to avoid
-// N+1 queries, mirroring ToTicketResponse vs ToTicketResponseWithCustomFields.
-func (h *Handler) toDTOWithCustomFields(req *ServiceRequest, client *ent.Client) *dto.ServiceRequestResponse {
+// from the field_values snapshot, plus actions.provision（能否发起交付，见
+// service.CanProvision——同一个函数既用于这里的展示，也用于 provision 接口本身的强制校验）。
+// Used by detail-style responses (Get, Create's success branch) — List intentionally
+// does not call this to avoid N+1 queries, mirroring ToTicketResponse vs
+// ToTicketResponseWithCustomFields.
+func (h *Handler) toDTOWithCustomFields(req *ServiceRequest, client *ent.Client, actorUserID int, actorRole string) *dto.ServiceRequestResponse {
 	resp := h.toDTO(req)
 	if client == nil {
 		return resp
+	}
+	resp.Actions = map[string]dto.ActionPermission{
+		"provision": service.CanProvision(client, req.TenantID, actorUserID, actorRole, req.RequesterID),
 	}
 	values, err := service.NewFieldValueService(client).ListValues(context.Background(), req.TenantID, "ticket", req.TicketID)
 	if err != nil {
@@ -138,6 +150,10 @@ func (h *Handler) Create(c *gin.Context) {
 		CostCenter:         req.CostCenter,
 		SourceIPWhitelist:  req.SourceIPWhitelist,
 		ExpireAt:           expireAt,
+		ContactName:        req.ContactName,
+		ContactEmail:       req.ContactEmail,
+		Quantity:           req.Quantity,
+		ExpectedAt:         req.ExpectedAt,
 	}
 	if domainReq.FormData == nil {
 		domainReq.FormData = map[string]interface{}{}
@@ -158,7 +174,7 @@ func (h *Handler) Create(c *gin.Context) {
 		common.Success(c, h.toDTO(created))
 		return
 	}
-	common.Success(c, h.toDTOWithCustomFields(fullReq, h.service.Client()))
+	common.Success(c, h.toDTOWithCustomFields(fullReq, h.service.Client(), c.GetInt("user_id"), c.GetString("role")))
 }
 
 func (h *Handler) Get(c *gin.Context) {
@@ -181,7 +197,7 @@ func (h *Handler) Get(c *gin.Context) {
 		}
 		return
 	}
-	common.Success(c, h.toDTOWithCustomFields(req, h.service.Client()))
+	common.Success(c, h.toDTOWithCustomFields(req, h.service.Client(), c.GetInt("user_id"), c.GetString("role")))
 }
 
 // GetByTicket 供 ticket 详情页渲染关联的服务请求扩展面板。
@@ -203,7 +219,7 @@ func (h *Handler) GetByTicket(c *gin.Context) {
 		}
 		return
 	}
-	common.Success(c, h.toDTOWithCustomFields(req, h.service.Client()))
+	common.Success(c, h.toDTOWithCustomFields(req, h.service.Client(), c.GetInt("user_id"), c.GetString("role")))
 }
 
 func (h *Handler) List(c *gin.Context) {

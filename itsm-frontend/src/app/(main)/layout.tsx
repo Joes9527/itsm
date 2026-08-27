@@ -13,6 +13,8 @@ import { NetworkStatus } from '@/components/common/NetworkStatus';
 import { useLayoutStore } from '@/lib/store/layout-store';
 import PageTransition from '@/components/common/PageTransition';
 import { useAuthStore } from '@/lib/store/auth-store';
+import { usePersonaStore } from '@/lib/store/persona-store';
+import { PERSONAS, getRolePersonaConfig, getPersonaByPath } from '@/config/persona/persona-config';
 import type { Tenant } from '@/lib/api/api-config';
 
 const { Content } = Layout;
@@ -20,7 +22,7 @@ const { Content } = Layout;
 /**
  * 主应用布局
  * 包含 Header、Sidebar 和 Content 区域
- * 需要用户认证才能访问
+ * 支持 PortalLayout（自服务宽屏模式）与 ConsoleLayout（高密度工作台模式）
  */
 export default function MainLayout({
   children,
@@ -34,12 +36,12 @@ export default function MainLayout({
   const [checkingAuth, setCheckingAuth] = useState(true);
   const pathname = usePathname();
   const router = useRouter();
+  const { activePersona, setActivePersona, initPersonaByRole } = usePersonaStore();
 
   // 处理客户端挂载和认证检查
   useEffect(() => {
     setMounted(true);
     const checkAuth = async () => {
-      // 分别请求用户信息和租户信息，避免一个失败导致整体失败
       let userInfo = null;
       let tenantInfo = null;
 
@@ -65,6 +67,7 @@ export default function MainLayout({
 
       const tenants = Array.isArray(tenantInfo?.tenants) ? tenantInfo.tenants : [];
       const currentTenant = tenants[0];
+      const roleCode = String(userInfo?.role || 'end_user');
 
       const { login, setCurrentTenant } = useAuthStore.getState();
       login(
@@ -73,16 +76,12 @@ export default function MainLayout({
           username: String(userInfo?.username || ''),
           email: String(userInfo?.email || ''),
           name: String(userInfo?.name || ''),
-          role: String(userInfo?.role || 'end_user'),
+          role: roleCode,
           department: userInfo?.department,
-          tenantId: userInfo?.tenantId
-            ? Number(userInfo.tenantId)
-            : userInfo?.tenantId
-              ? Number(userInfo.tenantId)
-              : undefined,
+          tenantId: userInfo?.tenantId ? Number(userInfo.tenantId) : undefined,
           permissions: userInfo?.permissions,
-          createdAt: userInfo?.createdAt || userInfo?.createdAt,
-          updatedAt: userInfo?.updatedAt || userInfo?.updatedAt,
+          createdAt: userInfo?.createdAt,
+          updatedAt: userInfo?.updatedAt,
         },
         'authenticated',
         currentTenant
@@ -97,6 +96,7 @@ export default function MainLayout({
             }
           : undefined
       );
+
       if (currentTenant) {
         const tenantData: Tenant = {
           id: Number(currentTenant.id),
@@ -109,11 +109,42 @@ export default function MainLayout({
         };
         setCurrentTenant(tenantData);
       }
+
+      // 初始化 Persona——带上 userId，跨账号登录时才能正确重置，见 persona-store.ts 注释。
+      initPersonaByRole(roleCode, Number(userInfo?.id || 0));
+
+      // 如果用户直接访问了根路由或 /dashboard，重定向至该角色的默认工作台。
+      // 直接查 PERSONAS[defaultPersona].homePath，不要在这里逐个 persona 手写
+      // if/else 分支——之前漏了 'admin' 分支，导致 sysadmin/super_admin 等角色
+      // 登录后一直停在 /dashboard，不会像其它角色一样跳到自己的默认落地页。
+      if (pathname === '/' || pathname === '/dashboard') {
+        const roleConf = getRolePersonaConfig(roleCode);
+        const homePath = PERSONAS[roleConf.defaultPersona]?.homePath;
+        if (homePath) {
+          router.replace(homePath);
+        }
+      }
+
       setIsAuthenticated(true);
       setCheckingAuth(false);
     };
     checkAuth();
-  }, [router, pathname]);
+  }, [router, pathname, initPersonaByRole]);
+
+  // 根据当前访问路径同步当前 activePersona
+  useEffect(() => {
+    if (pathname) {
+      const pathPersona = getPersonaByPath(pathname);
+      if (pathPersona && pathPersona !== activePersona) {
+        // 如果访问的是特定子系统，同步更新 activePersona
+        if (pathname.startsWith('/portal')) setActivePersona('portal');
+        else if (pathname.startsWith('/workspace')) setActivePersona('workspace');
+        else if (pathname.startsWith('/manager')) setActivePersona('manager');
+        else if (pathname.startsWith('/executive')) setActivePersona('executive');
+        else if (pathname.startsWith('/admin')) setActivePersona('admin');
+      }
+    }
+  }, [pathname, activePersona, setActivePersona]);
 
   // 响应式布局：在移动端自动折叠侧边栏
   useEffect(() => {
@@ -128,7 +159,7 @@ export default function MainLayout({
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [setCollapsed]);
 
   // 在移动端，点击内容区域时折叠侧边栏
   const handleContentClick = () => {
@@ -151,16 +182,17 @@ export default function MainLayout({
     );
   }
 
-  // 未认证时不渲染布局，直接重定向（由上面的 useEffect 处理）
+  // 未认证时不渲染布局，直接重定向
   if (!isAuthenticated) {
     return null;
   }
 
-  // 根据官方布局模式，使用单一容器控制侧边栏占位
+  // 判断是否为自服务门户视图 (PortalLayout)
+  const isPortalLayout = pathname.startsWith('/portal');
+
   return (
     <ConfigProvider locale={zhCN}>
       <App>
-        {/* Skip to main content link for accessibility */}
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:bg-primary-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary-400"
@@ -168,66 +200,77 @@ export default function MainLayout({
           跳转到主要内容
         </a>
         <NetworkStatus />
-        <Layout
-          className="min-h-screen bg-[#f5f7fb]"
-          style={{
-            paddingLeft: isMobile
-              ? 0
-              : collapsed
-                ? LAYOUT_CONFIG.sider.collapsedWidth
-                : LAYOUT_CONFIG.sider.width,
-            transition: 'padding-left 0.2s ease',
-          }}
-        >
-          {/* 侧边栏 */}
-          <Sidebar
-            collapsed={collapsed}
-            onCollapse={setCollapsed}
-            mobile={isMobile}
-          />
 
-          {/* 主区域 */}
-          <Layout className="bg-[#f5f7fb] min-h-screen">
-            {/* 顶部导航栏 */}
-            <Header collapsed={collapsed} onCollapse={setCollapsed} showBreadcrumb={true} />
-
-            {/* 内容区域 */}
-            <Content
-              id="main-content"
-              tabIndex={-1}
-              onClick={handleContentClick}
-              className="bg-[#f5f7fb] w-auto min-w-0 max-w-full overflow-x-hidden shadow-none outline-none"
-              style={{
-                minHeight: LAYOUT_CONFIG.content.minHeight,
-              }}
-            >
-              <div
-                className="main-content"
-                style={{
-                  padding: isMobile ? `${LAYOUT_CONFIG.content.paddingMobile}px` : '16px',
-                }}
-              >
+        {isPortalLayout ? (
+          /* =================== 1. 自服务门户布局 (PortalLayout) =================== */
+          <Layout className="min-h-screen bg-[#f8fafc] dark:bg-slate-950 flex flex-col">
+            <Header collapsed={true} onCollapse={() => {}} showBreadcrumb={false} />
+            <Content id="main-content" tabIndex={-1} className="w-full flex-1 outline-none">
+              <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
                 <PageTransition>{children}</PageTransition>
               </div>
             </Content>
-
-            {/* 页脚（可选） */}
-            <footer className="text-center p-4 bg-transparent text-gray-400 text-xs">
-              AI-Native ITSM ©{new Date().getFullYear()} - AI驱动的IT服务管理系统
+            <footer className="text-center py-6 bg-transparent text-slate-400 text-xs">
+              AI-Native ITSM ©{new Date().getFullYear()} - 极简自服务与企业技术支持平台
             </footer>
           </Layout>
-
-        {/* 移动端遮罩层 */}
-        {!collapsed && isMobile && (
-          <div
-            onClick={() => setCollapsed(true)}
-            className="fixed inset-0 bg-black/45"
+        ) : (
+          /* =================== 2. 专业控制台布局 (ConsoleLayout) =================== */
+          <Layout
+            className="min-h-screen bg-[#f5f7fb] dark:bg-slate-950"
             style={{
-              zIndex: LAYOUT_CONFIG.zIndex.sider - 1,
+              paddingLeft: isMobile
+                ? 0
+                : collapsed
+                  ? LAYOUT_CONFIG.sider.collapsedWidth
+                  : LAYOUT_CONFIG.sider.width,
+              transition: 'padding-left 0.2s ease',
             }}
-          />
+          >
+            <Sidebar
+              collapsed={collapsed}
+              onCollapse={setCollapsed}
+              mobile={isMobile}
+            />
+
+            <Layout className="bg-[#f5f7fb] dark:bg-slate-950 min-h-screen">
+              <Header collapsed={collapsed} onCollapse={setCollapsed} showBreadcrumb={true} />
+
+              <Content
+                id="main-content"
+                tabIndex={-1}
+                onClick={handleContentClick}
+                className="bg-[#f5f7fb] dark:bg-slate-950 w-auto min-w-0 max-w-full overflow-x-hidden shadow-none outline-none"
+                style={{
+                  minHeight: LAYOUT_CONFIG.content.minHeight,
+                }}
+              >
+                <div
+                  className="main-content"
+                  style={{
+                    padding: isMobile ? `${LAYOUT_CONFIG.content.paddingMobile}px` : '16px',
+                  }}
+                >
+                  <PageTransition>{children}</PageTransition>
+                </div>
+              </Content>
+
+              <footer className="text-center p-4 bg-transparent text-gray-400 text-xs">
+                AI-Native ITSM ©{new Date().getFullYear()} - AI驱动的IT服务管理系统
+              </footer>
+            </Layout>
+
+            {!collapsed && isMobile && (
+              <div
+                onClick={() => setCollapsed(true)}
+                className="fixed inset-0 bg-black/45"
+                style={{
+                  zIndex: LAYOUT_CONFIG.zIndex.sider - 1,
+                }}
+              />
+            )}
+          </Layout>
         )}
-        </Layout>
       </App>
     </ConfigProvider>
   );

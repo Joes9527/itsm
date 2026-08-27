@@ -142,6 +142,45 @@ describe('ServiceCatalogApi', () => {
       await ServiceCatalogApi.createServiceRequest({ serviceId: '5', formData: { reason: 'Need access' } } as any);
       expect(mockPost).toHaveBeenCalledWith('/api/v1/service-requests', expect.objectContaining({ catalogId: 5 }));
     });
+
+    // 回归测试：contactName/contactEmail/quantity/expectedAt 必须原样透传到后端 payload
+    // 的顶层 key（真实落到 ent 新增列），不能被大小写误改或悄悄丢失——这个 bug class
+    // 在这个代码库反复出现过。这 4 个字段直接映射到新增列，不再经过 formData JSON
+    // 兜底路径，所以从 request 顶层读取，而不是 request.formData。
+    it('passes contactName/contactEmail/quantity/expectedAt through as top-level payload keys', async () => {
+      mockPost.mockResolvedValue({ ticketId: 1 });
+      await ServiceCatalogApi.createServiceRequest({
+        serviceId: '5',
+        formData: { reason: 'Need a VM' },
+        contactName: 'Alice',
+        contactEmail: 'alice@example.com',
+        quantity: 3,
+        expectedAt: '2026-09-01T00:00:00.000Z',
+      } as any);
+      expect(mockPost).toHaveBeenCalledWith(
+        '/api/v1/service-requests',
+        expect.objectContaining({
+          contactName: 'Alice',
+          contactEmail: 'alice@example.com',
+          quantity: 3,
+          expectedAt: '2026-09-01T00:00:00.000Z',
+        })
+      );
+    });
+
+    // 合规确认绝不能静默默认为已勾选：调用方不传 complianceAck 时，必须落到 false，
+    // 而不是曾经的 `?? true` 兜底（那会让忘记传参的调用方悄悄"代签"合规确认）。
+    it('defaults complianceAck to false when the caller does not pass it, never true', async () => {
+      mockPost.mockResolvedValue({ ticketId: 1 });
+      await ServiceCatalogApi.createServiceRequest({
+        serviceId: '5',
+        formData: { reason: 'Need access' },
+      } as any);
+      expect(mockPost).toHaveBeenCalledWith(
+        '/api/v1/service-requests',
+        expect.objectContaining({ complianceAck: false })
+      );
+    });
   });
 
   describe('getCatalogStats', () => {

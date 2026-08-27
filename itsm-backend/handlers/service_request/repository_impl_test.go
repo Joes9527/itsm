@@ -120,3 +120,77 @@ func TestEntRepository_GetByTicketID_ExcludesSoftDeleted(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, ent.IsNotFound(err), "soft-deleted ServiceRequest must not be returned by GetByTicketID, got: %v", err)
 }
+
+func TestEntRepository_Create_PersistsContactAndQuantityFields(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:sr_contact_fields?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+
+	tenant, err := client.Tenant.Create().SetName("t").SetCode("sr-contact").SetDomain("d.test").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	requester, err := client.User.Create().
+		SetUsername("req-contact").SetEmail("req-contact@test.com").SetName("Requester Contact").
+		SetPasswordHash("hash").SetRole("end_user").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	ticket, err := client.Ticket.Create().
+		SetTitle("测试工单").SetDescription("desc").SetPriority("medium").SetStatus("open").
+		SetType("service_request").SetTenantID(tenant.ID).SetRequesterID(requester.ID).SetTicketNumber("T-1").
+		Save(ctx)
+	require.NoError(t, err)
+
+	repo := NewEntRepository(client)
+	expected := time.Now().Add(48 * time.Hour)
+	created, err := repo.Create(ctx, &ServiceRequest{
+		TenantID:           tenant.ID,
+		TicketID:           ticket.ID,
+		CatalogID:          1,
+		RequesterID:        requester.ID,
+		DataClassification: "internal",
+		ContactName:        "李四",
+		ContactEmail:       "lisi@example.com",
+		Quantity:           3,
+		ExpectedAt:         &expected,
+	})
+	require.NoError(t, err)
+
+	require.Equal(t, "李四", created.ContactName)
+	require.Equal(t, "lisi@example.com", created.ContactEmail)
+	require.Equal(t, 3, created.Quantity)
+	require.NotNil(t, created.ExpectedAt)
+	require.WithinDuration(t, expected, *created.ExpectedAt, time.Second)
+
+	fetched, err := repo.Get(ctx, created.ID, tenant.ID)
+	require.NoError(t, err)
+	require.Equal(t, "李四", fetched.ContactName)
+	require.Equal(t, 3, fetched.Quantity)
+}
+
+func TestEntRepository_Create_QuantityDefaultsToOneWhenOmitted(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:sr_quantity_default?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+
+	tenant, err := client.Tenant.Create().SetName("t").SetCode("sr-qty-default").SetDomain("d.test").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	requester, err := client.User.Create().
+		SetUsername("req-qty-default").SetEmail("req-qty-default@test.com").SetName("Requester Qty Default").
+		SetPasswordHash("hash").SetRole("end_user").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	ticket, err := client.Ticket.Create().
+		SetTitle("测试工单").SetDescription("desc").SetPriority("medium").SetStatus("open").
+		SetType("service_request").SetTenantID(tenant.ID).SetRequesterID(requester.ID).SetTicketNumber("T-2").
+		Save(ctx)
+	require.NoError(t, err)
+
+	repo := NewEntRepository(client)
+	created, err := repo.Create(ctx, &ServiceRequest{
+		TenantID:           tenant.ID,
+		TicketID:           ticket.ID,
+		CatalogID:          1,
+		RequesterID:        requester.ID,
+		DataClassification: "internal",
+		// Quantity 不设置，Go 零值是 0
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, created.Quantity, "Quantity 未提供时应落到 ent schema 的默认值 1，而不是 0")
+}

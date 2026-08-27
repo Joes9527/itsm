@@ -822,7 +822,14 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
     const userTasks = elementRegistry.filter(el => el.type === 'bpmn:UserTask');
     userTasks.forEach(task => {
       const bo = task.businessObject;
-      if (!bo.assignee && !bo.candidateUsers && !bo.candidateGroups) {
+      if (
+        !bo.assignee &&
+        !bo.candidateUsers &&
+        !bo.candidateGroups &&
+        !bo.assigneeRole &&
+        !bo.assigneeDeptId &&
+        !bo.assigneeGmChain
+      ) {
         errors.push({
           type: 'warning',
           message: `用户任务 "${bo.name || task.id}" 未配置受理人或候选人`,

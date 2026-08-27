@@ -191,6 +191,7 @@ func (c *GlobalSearchController) Search(ctx *gin.Context) {
 // RegisterRoutes 注册路由
 func (c *GlobalSearchController) RegisterRoutes(r *gin.RouterGroup) {
 	search := r.Group("/global-search")
+	search.Use(middleware.RequireRole("super_admin"))
 	{
 		search.GET("", c.Search)
 	}

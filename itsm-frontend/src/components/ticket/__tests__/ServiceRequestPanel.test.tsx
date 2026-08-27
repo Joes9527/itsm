@@ -119,6 +119,7 @@ describe('ServiceRequestPanel', () => {
     mockGetByTicket.mockResolvedValueOnce({
       id: 77,
       costCenter: 'CC-200',
+      actions: { provision: { allowed: true } },
     });
     mockListTasks.mockResolvedValueOnce([]);
     mockStartProvisioning.mockResolvedValueOnce({ task: { id: 9 } });
@@ -138,5 +139,23 @@ describe('ServiceRequestPanel', () => {
     await waitFor(() => {
       expect(mockStartProvisioning).toHaveBeenCalledWith(77);
     });
+  });
+
+  it('disables the start-provisioning button when actions.provision.allowed is false', async () => {
+    mockGetByTicket.mockResolvedValueOnce({
+      id: 78,
+      costCenter: 'CC-201',
+      actions: { provision: { allowed: false, reason: '申请人不能交付自己提交的服务请求' } },
+    });
+    mockListTasks.mockResolvedValueOnce([]);
+
+    const user = userEvent.setup();
+    render(<ServiceRequestPanel ticketId={305} />);
+
+    const startButton = await screen.findByText('开始交付');
+    expect(startButton.closest('button')).toBeDisabled();
+
+    await user.click(startButton);
+    expect(mockStartProvisioning).not.toHaveBeenCalled();
   });
 });

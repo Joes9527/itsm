@@ -32,6 +32,24 @@ func TestBPMNTemplateService_ListTemplates_IncludesTicketUrgentFlow(t *testing.T
 	assert.Equal(t, "ticket_urgent_flow.bpmn", found.Filename)
 }
 
+func TestBPMNTemplateService_ListTemplates_IncludesSSLVPNApprovalFlow(t *testing.T) {
+	svc := &BPMNTemplateService{}
+	templates, err := svc.listTemplates()
+	require.NoError(t, err)
+
+	var found *TemplateInfo
+	for _, tmpl := range templates {
+		if tmpl.ID == "sslvpn_approval_flow" {
+			found = tmpl
+			break
+		}
+	}
+	require.NotNil(t, found, "sslvpn_approval_flow.bpmn 应该被发现并纳入模板清单")
+	assert.Equal(t, "SSL-VPN 申请与双级审批流", found.Name)
+	assert.Equal(t, "service_request", found.Category)
+	assert.Equal(t, "sslvpn_approval_flow.bpmn", found.Filename)
+}
+
 func TestBPMNTemplateService_TicketGeneralAndUrgentFlow_ApprovalNodeMarked(t *testing.T) {
 	parser := NewBPMNParser()
 

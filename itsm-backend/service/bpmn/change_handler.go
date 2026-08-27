@@ -226,9 +226,24 @@ func (h *ChangeServiceTaskHandler) scheduleChange(ctx context.Context, variables
 		return nil, err
 	}
 
-	// 第一跳：转移状态为 approved（CAB 批准后的状态，所有类型都要经过）
-	if err := h.transitionChangeStatus(ctx, tenantID, changeID, "approved"); err != nil {
-		return nil, err
+	current, err := h.client.Change.Query().
+		Where(change.ID(changeID), change.TenantID(tenantID)).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("变更 %d 不存在或不属于当前租户", changeID)
+		}
+		return nil, fmt.Errorf("查询变更失败: %w", err)
+	}
+
+	// 第一跳：转移状态为 approved（CAB 批准后的状态，所有类型都要经过）。已经在
+	// approved（或更靠后的状态）时跳过——重试场景下 scheduleChange 可能不是第一次
+	// 被调用（比如上一次调用完成了这一跳但后续步骤失败），再跑一次 draft/submitted
+	// -> approved 这类前向转换会被 canonical 状态机拒绝，不能把这种重试误判为非法。
+	if current.Status != "approved" {
+		if err := h.transitionChangeStatus(ctx, tenantID, changeID, "approved"); err != nil {
+			return nil, err
+		}
 	}
 
 	c, err := h.client.Change.Query().

@@ -1471,6 +1471,19 @@ func (s *TicketService) ToTicketResponseWithCustomFields(ctx context.Context, t 
 	return ToTicketResponseWithCustomFields(ctx, s.client, t)
 }
 
+// ToTicketResponseWithCustomFieldsAndActions 在 ToTicketResponseWithCustomFields 基础上
+// 额外组装 actions（批准/拒绝/分配/编辑/抄送/删除权限）。需要调用者身份（actorUserID/actorRole），
+// 只用于真正的详情响应场景——BuildTicketActions 内部会为 CanCC/CanDelete 各发起一次查询。
+func ToTicketResponseWithCustomFieldsAndActions(ctx context.Context, client *ent.Client, t *ticket.Ticket, actorUserID int, actorRole string) *dto.TicketResponse {
+	resp := ToTicketResponseWithCustomFields(ctx, client, t)
+	if resp == nil || client == nil {
+		return resp
+	}
+	actor := ActionActor{Client: client, TenantID: t.TenantID, UserID: actorUserID, Role: actorRole}
+	resp.Actions = BuildTicketActions(ctx, actor, t)
+	return resp
+}
+
 // ToTicketResponseWithCustomFields 在 ToTicketResponse 基础上额外查一次 field_values。
 // 只用于单条工单详情/创建响应，列表接口不调用（避免 N+1）。
 func ToTicketResponseWithCustomFields(ctx context.Context, client *ent.Client, t *ticket.Ticket) *dto.TicketResponse {

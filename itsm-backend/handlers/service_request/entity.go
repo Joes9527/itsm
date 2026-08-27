@@ -25,14 +25,19 @@ type ServiceRequest struct {
 	ExpireAt           *time.Time
 	ComplianceAck      bool
 	ComplianceAckSet   bool
-	Version            int
-	ProcessorID        *int
-	StartedAt          *time.Time
-	CompletedAt        *time.Time
-	CompletionNote     string
-	LastError          string
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
+	// 通用层字段：所有 service_type 都适用，取代原来只进 FormData 就没人读的假字段。
+	ContactName    string
+	ContactEmail   string
+	Quantity       int
+	ExpectedAt     *time.Time
+	Version        int
+	ProcessorID    *int
+	StartedAt      *time.Time
+	CompletedAt    *time.Time
+	CompletionNote string
+	LastError      string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 
 	// TicketTitle/TicketStatus 是列表响应场景下由 Service.List 批量回填的展示字段——
 	// 不是持久化列，只在内存里跟着 List 的返回值走一次，供 handler.toDTO 映射进

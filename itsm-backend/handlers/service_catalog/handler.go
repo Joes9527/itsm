@@ -157,6 +157,7 @@ func (h *Handler) Create(c *gin.Context) {
 		req.CloudServiceID,
 		fields,
 		req.ProcessDefinitionKey,
+		req.ServiceType,
 	)
 	if err != nil {
 		failServiceCatalog(c, err)
@@ -215,6 +216,7 @@ func (h *Handler) Update(c *gin.Context) {
 		req.CloudServiceID,
 		fields,
 		req.ProcessDefinitionKey,
+		req.ServiceType,
 	)
 	if err != nil {
 		failServiceCatalog(c, err)
@@ -335,6 +337,8 @@ func (h *Handler) toDTO(c *ServiceCatalog) dto.ServiceCatalogResponse {
 		CloudServiceID:       c.CloudServiceID,
 		ProcessDefinitionKey: c.ProcessDefinitionKey,
 		Status:               c.Status,
+		ServiceType:          c.ServiceType,
+		RequiresInfraFields:  RequiresInfraFields(c.ServiceType),
 		Fields:               fields,
 		CreatedAt:            c.CreatedAt,
 		UpdatedAt:            c.UpdatedAt,

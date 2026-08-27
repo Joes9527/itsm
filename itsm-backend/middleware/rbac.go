@@ -2,14 +2,12 @@ package middleware
 
 import (
 	"context"
-	"net/http"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"itsm-backend/common"
-	"itsm-backend/database"
 	"itsm-backend/ent"
 	"itsm-backend/ent/permission"
 	"itsm-backend/ent/role"
@@ -316,224 +314,21 @@ func loadPermissionsFromDB(client *ent.Client, roleName string, tenantID int) []
 	return perms
 }
 
-var ResourceActionMap = map[string]map[string]Permission{
-	"GET": {
-		"/api/v1/tickets":               {Resource: "ticket", Action: "read"},
-		"/api/v1/tickets/*":             {Resource: "ticket", Action: "read"},
-		"/api/v1/notifications":              {Resource: "notification", Action: "read"},
-		"/api/v1/notifications/*":            {Resource: "notification", Action: "read"},
-		"/api/v1/notification-preferences":   {Resource: "notification", Action: "read"},
-		"/api/v1/notification-preferences/*": {Resource: "notification", Action: "read"},
-		"/api/v1/ticket-categories":     {Resource: "ticket_category", Action: "read"},
-		"/api/v1/ticket-categories/*":   {Resource: "ticket_category", Action: "read"},
-		"/api/v1/tickets/templates":      {Resource: "ticket_template", Action: "read"},
-		"/api/v1/tickets/templates/*":    {Resource: "ticket_template", Action: "read"},
-		"/api/v1/ticket-tags":           {Resource: "ticket_tag", Action: "read"},
-		"/api/v1/ticket-tags/*":         {Resource: "ticket_tag", Action: "read"},
-		"/api/v1/users":                 {Resource: "user", Action: "read"},
-		"/api/v1/users/*":               {Resource: "user", Action: "read"},
-		"/api/v1/dashboard":             {Resource: "dashboard", Action: "read"},
-		"/api/v1/dashboard/*":           {Resource: "dashboard", Action: "read"},
-		"/api/v1/knowledge":             {Resource: "knowledge", Action: "read"},
-		"/api/v1/knowledge/search":      {Resource: "knowledge", Action: "read"},
-		"/api/v1/knowledge/*":           {Resource: "knowledge", Action: "read"},
-		"/api/v1/knowledge-articles":    {Resource: "knowledge", Action: "read"},
-		"/api/v1/knowledge-articles/*":  {Resource: "knowledge", Action: "read"},
-		"/api/v1/cmdb":                  {Resource: "cmdb", Action: "read"},
-		"/api/v1/cmdb/*":                {Resource: "cmdb", Action: "read"},
-		"/api/v1/configuration-items":   {Resource: "cmdb", Action: "read"},
-		"/api/v1/configuration-items/*": {Resource: "cmdb", Action: "read"},
-		"/api/v1/incidents":             {Resource: "incident", Action: "read"},
-		"/api/v1/incidents/*":           {Resource: "incident", Action: "read"},
-		"/api/v1/audit-logs":            {Resource: "audit_log", Action: "read"},
-		"/api/v1/audit-logs/*":          {Resource: "audit_log", Action: "read"},
-		"/api/v1/system/*":              {Resource: "system_config", Action: "read"},
-		"/api/v1/ai/*":                  {Resource: "ai", Action: "read"},
-		"/api/v1/agent/*":               {Resource: "ai", Action: "read"},
-		"/api/v1/service-catalogs":      {Resource: "service_catalog", Action: "read"},
-		"/api/v1/service-catalogs/*":    {Resource: "service_catalog", Action: "read"},
-		"/api/v1/service-requests":      {Resource: "service_request", Action: "read"},
-		"/api/v1/service-requests/*":    {Resource: "service_request", Action: "read"},
-		"/api/v1/provisioning-tasks/*":  {Resource: "service_request", Action: "read"},
-		"/api/v1/knowledge/articles":    {Resource: "knowledge", Action: "read"},
-		"/api/v1/knowledge/articles/*":  {Resource: "knowledge", Action: "read"},
-		"/api/v1/problems":              {Resource: "problem", Action: "read"},
-		"/api/v1/problems/*":            {Resource: "problem", Action: "read"},
-		"/api/v1/changes":               {Resource: "change", Action: "read"},
-		"/api/v1/changes/*":             {Resource: "change", Action: "read"},
-		"/api/v1/releases":              {Resource: "release", Action: "read"},
-		"/api/v1/releases/stats":        {Resource: "release", Action: "read"},
-		"/api/v1/releases/*":            {Resource: "release", Action: "read"},
-		"/api/v1/roles":                 {Resource: "role", Action: "read"},
-		"/api/v1/roles/*":               {Resource: "role", Action: "read"},
-		"/api/v1/permissions":           {Resource: "permission", Action: "read"},
-		"/api/v1/sla/*":                 {Resource: "sla", Action: "read"},
-		"/api/v1/org/*":                 {Resource: "org", Action: "read"},
-		"/api/v1/auth/me":               {Resource: "user", Action: "read"},
-		"/api/v1/auth/profile":          {Resource: "user", Action: "read"},
-		"/api/v1/auth/menus":            {Resource: "user", Action: "read"},
-		// BPMN Workflow permissions
-		"/api/v1/bpmn/*":             {Resource: "bpmn", Action: "read"},
-		"/api/v1/bpmn/tasks":         {Resource: "task", Action: "read"},
-		"/api/v1/bpmn/tasks/*":       {Resource: "task", Action: "read"},
-		"/api/v1/bpmn/instances":     {Resource: "process_instance", Action: "read"},
-		"/api/v1/bpmn/instances/*":   {Resource: "process_instance", Action: "read"},
-		"/api/v1/process-trigger/*":  {Resource: "bpmn", Action: "read"},
-		"/api/v1/process-bindings":   {Resource: "bpmn", Action: "read"},
-		"/api/v1/process-bindings/*": {Resource: "bpmn", Action: "read"},
-		// /api/v1/workflow/* 是 router.go 注册的"简化路由"（/workflow/* -> /bpmn/*
-		// 的路由注释所说的"等价"只是路由目标层面的等价，实际 URL 路径不同，之前
-		// 没人给这组路径单独补全局 ResourceActionMap 条目——全局中间件按路径查不到
-		// 就直接拒绝，路由自己声明的 RequirePermission("process_instance","read")
-		// 根本没有机会被执行到。
-		"/api/v1/workflow/instances":   {Resource: "process_instance", Action: "read"},
-		"/api/v1/workflow/instances/*": {Resource: "process_instance", Action: "read"},
-		"/api/v1/workflow/tasks":       {Resource: "task", Action: "read"},
-		"/api/v1/workflow/tasks/*":     {Resource: "task", Action: "read"},
-		// 审批工作流/审批链
-		"/api/v1/approval-workflows":     {Resource: "approval_workflow", Action: "read"},
-		"/api/v1/approval-workflows/*":   {Resource: "approval_workflow", Action: "read"},
-		"/api/v1/approval-chains":        {Resource: "approval_workflow", Action: "read"},
-		"/api/v1/approval-chains/*":      {Resource: "approval_workflow", Action: "read"},
-		"/api/v1/my-approvals":           {Resource: "task", Action: "read"},
-		"/api/v1/my-approvals/*":         {Resource: "task", Action: "read"},
-		// 通知偏好/系统配置/菜单/租户/权限
-		"/api/v1/system-configs":               {Resource: "system_config", Action: "read"},
-		"/api/v1/system-configs/*":             {Resource: "system_config", Action: "read"},
-		"/api/v1/menus":                        {Resource: "menu", Action: "read"},
-		"/api/v1/menus/*":                      {Resource: "menu", Action: "read"},
-		"/api/v1/tenants":                      {Resource: "tenant", Action: "read"},
-		"/api/v1/tenants/*":                    {Resource: "tenant", Action: "read"},
-		// 云管理/调查/视图/部件/标签/自动化
-		"/api/v1/cloud-accounts":          {Resource: "cloud_account", Action: "read"},
-		"/api/v1/cloud-accounts/*":        {Resource: "cloud_account", Action: "read"},
-		"/api/v1/cloud-resources":         {Resource: "cloud_resource", Action: "read"},
-		"/api/v1/cloud-resources/*":       {Resource: "cloud_resource", Action: "read"},
-		"/api/v1/cloud-services":          {Resource: "cloud_service", Action: "read"},
-		"/api/v1/cloud-services/*":        {Resource: "cloud_service", Action: "read"},
-		"/api/v1/investigations":          {Resource: "investigation", Action: "read"},
-		"/api/v1/investigations/*":        {Resource: "investigation", Action: "read"},
-		"/api/v1/assignment-rules":        {Resource: "assignment_rule", Action: "read"},
-		"/api/v1/assignment-rules/*":      {Resource: "assignment_rule", Action: "read"},
-		"/api/v1/automation-rules":        {Resource: "automation_rule", Action: "read"},
-		"/api/v1/automation-rules/*":      {Resource: "automation_rule", Action: "read"},
-		// MSP Permissions
-		"/api/v1/msp/status":              {Resource: "msp", Action: "read"},
-		"/api/v1/msp/context":             {Resource: "msp", Action: "read"},
-		"/api/v1/msp/allocations":         {Resource: "msp_allocation", Action: "read"},
-		"/api/v1/msp/customers":           {Resource: "msp_customer", Action: "read"},
-		"/api/v1/msp/customers/*":         {Resource: "msp_customer", Action: "read"},
-		"/api/v1/msp/customers/*/tickets": {Resource: "msp_ticket", Action: "read"},
-		"/api/v1/msp/reports/*":           {Resource: "msp_report", Action: "read"},
-	},
-	"POST": {
-		"/api/v1/tickets":               {Resource: "ticket", Action: "write"},
-		"/api/v1/tickets/*/assign":      {Resource: "ticket", Action: "assign"},
-		"/api/v1/tickets/*":             {Resource: "ticket", Action: "write"},
-		"/api/v1/ticket-categories":     {Resource: "ticket_category", Action: "write"},
-		"/api/v1/ticket-categories/*":   {Resource: "ticket_category", Action: "write"},
-		"/api/v1/tickets/templates":      {Resource: "ticket_template", Action: "write"},
-		"/api/v1/tickets/templates/*":    {Resource: "ticket_template", Action: "write"},
-		"/api/v1/ticket-tags":           {Resource: "ticket_tag", Action: "write"},
-		"/api/v1/ticket-tags/*":         {Resource: "ticket_tag", Action: "write"},
-		"/api/v1/users":                 {Resource: "user", Action: "write"},
-		"/api/v1/knowledge":             {Resource: "knowledge", Action: "write"},
-		"/api/v1/knowledge/search":      {Resource: "knowledge", Action: "read"},
-		"/api/v1/knowledge-articles":    {Resource: "knowledge", Action: "write"},
-		"/api/v1/knowledge-articles/*":  {Resource: "knowledge", Action: "write"},
-		"/api/v1/cmdb":                  {Resource: "cmdb", Action: "write"},
-		"/api/v1/cmdb/*":                {Resource: "cmdb", Action: "write"},
-		"/api/v1/configuration-items":   {Resource: "cmdb", Action: "write"},
-		"/api/v1/configuration-items/*": {Resource: "cmdb", Action: "write"},
-		"/api/v1/incidents":             {Resource: "incident", Action: "write"},
-		"/api/v1/incidents/*":           {Resource: "incident", Action: "write"},
-		"/api/v1/ai/*":                  {Resource: "ai", Action: "write"},
-		"/api/v1/agent/*":               {Resource: "ai", Action: "write"},
-		"/api/v1/service-catalogs":      {Resource: "service_catalog", Action: "write"},
-		"/api/v1/service-catalogs/*":    {Resource: "service_catalog", Action: "write"},
-		"/api/v1/service-requests":      {Resource: "service_request", Action: "write"},
-		"/api/v1/service-requests/*":    {Resource: "service_request", Action: "write"},
-		"/api/v1/provisioning-tasks/*":  {Resource: "service_request", Action: "write"},
-		"/api/v1/knowledge/articles":    {Resource: "knowledge", Action: "write"},
-		"/api/v1/knowledge/articles/*":  {Resource: "knowledge", Action: "write"},
-		"/api/v1/problems":              {Resource: "problem", Action: "write"},
-		"/api/v1/problems/*":            {Resource: "problem", Action: "write"},
-		"/api/v1/changes":               {Resource: "change", Action: "write"},
-		"/api/v1/changes/*":             {Resource: "change", Action: "write"},
-		"/api/v1/releases":              {Resource: "release", Action: "write"},
-		"/api/v1/releases/*":            {Resource: "release", Action: "write"},
-		// 动作型子路由需要单独声明，否则会被上面 /releases/* 通配符先命中成
-		// release:write——审批人（如 dept_manager）只被授予 release:approve/
-		// release:rollback，没有 release:write，会被全局中间件挡在路由自己
-		// 声明的 RequirePermission("release","approve") 之前。见 tickets/*/assign
-		// 同类先例。
-		"/api/v1/releases/*/approve":  {Resource: "release", Action: "approve"},
-		"/api/v1/releases/*/reject":   {Resource: "release", Action: "approve"},
-		"/api/v1/releases/*/rollback": {Resource: "release", Action: "rollback"},
-		"/api/v1/roles":                 {Resource: "role", Action: "write"},
-		"/api/v1/roles/*":               {Resource: "role", Action: "write"},
-		"/api/v1/system/*":              {Resource: "system_config", Action: "write"},
-		"/api/v1/org/*":                 {Resource: "org", Action: "write"},
-		"/api/v1/sla/*":                 {Resource: "sla", Action: "write"},
-		// BPMN Workflow permissions
-		"/api/v1/bpmn/*":             {Resource: "bpmn", Action: "write"},
-		"/api/v1/process-trigger":    {Resource: "bpmn", Action: "write"},
-		"/api/v1/process-trigger/*":  {Resource: "bpmn", Action: "write"},
-		"/api/v1/process-bindings":   {Resource: "bpmn", Action: "write"},
-		"/api/v1/process-bindings/*": {Resource: "bpmn", Action: "write"},
-		// /api/v1/workflow/* 简化路由，见 GET 分组同名注释
-		"/api/v1/workflow/instances": {Resource: "process_instance", Action: "create"},
-		"/api/v1/workflow/tasks/*":   {Resource: "task", Action: "update"},
-		// MSP Permissions
-		"/api/v1/msp/allocations":            {Resource: "msp_allocation", Action: "write"},
-		"/api/v1/msp/allocations/deallocate": {Resource: "msp_allocation", Action: "write"},
-		"/api/v1/msp/tickets/*/assign":       {Resource: "msp_ticket", Action: "write"},
-	},
-	"PUT": {
-		"/api/v1/tickets/*":            {Resource: "ticket", Action: "write"},
-		"/api/v1/notifications/*":            {Resource: "notification", Action: "write"},
-		"/api/v1/notification-preferences":   {Resource: "notification", Action: "write"},
-		"/api/v1/notification-preferences/*": {Resource: "notification", Action: "write"},
-		"/api/v1/ticket-categories/*":  {Resource: "ticket_category", Action: "write"},
-		"/api/v1/tickets/templates/*":   {Resource: "ticket_template", Action: "write"},
-		"/api/v1/ticket-tags/*":        {Resource: "ticket_tag", Action: "write"},
-		"/api/v1/users/*":              {Resource: "user", Action: "write"},
-		"/api/v1/knowledge/*":          {Resource: "knowledge", Action: "write"},
-		"/api/v1/cmdb/*":               {Resource: "cmdb", Action: "write"},
-		"/api/v1/incidents/*":          {Resource: "incident", Action: "write"},
-		"/api/v1/service-catalogs/*":   {Resource: "service_catalog", Action: "write"},
-		"/api/v1/service-requests/*":   {Resource: "service_request", Action: "write"},
-		"/api/v1/knowledge-articles/*": {Resource: "knowledge", Action: "write"},
-		"/api/v1/problems/*":           {Resource: "problem", Action: "write"},
-		"/api/v1/changes/*":            {Resource: "change", Action: "write"},
-		"/api/v1/releases/*":           {Resource: "release", Action: "write"},
-		// BPMN Workflow permissions
-		"/api/v1/bpmn/*": {Resource: "bpmn", Action: "write"},
-		// /api/v1/workflow/* 简化路由，见 GET 分组同名注释
-		"/api/v1/workflow/instances/*": {Resource: "process_instance", Action: "update"},
-		"/api/v1/workflow/tasks/*":     {Resource: "task", Action: "update"},
-	},
-	"DELETE": {
-		"/api/v1/tickets/*":            {Resource: "ticket", Action: "delete"},
-		"/api/v1/ticket-categories/*":  {Resource: "ticket_category", Action: "delete"},
-		"/api/v1/tickets/templates/*":   {Resource: "ticket_template", Action: "delete"},
-		"/api/v1/ticket-tags/*":        {Resource: "ticket_tag", Action: "delete"},
-		"/api/v1/users/*":              {Resource: "user", Action: "delete"},
-		"/api/v1/knowledge/*":          {Resource: "knowledge", Action: "delete"},
-		"/api/v1/cmdb/*":               {Resource: "cmdb", Action: "delete"},
-		"/api/v1/incidents/*":          {Resource: "incident", Action: "delete"},
-		"/api/v1/service-catalogs/*":   {Resource: "service_catalog", Action: "delete"},
-		"/api/v1/knowledge-articles/*": {Resource: "knowledge", Action: "delete"},
-		"/api/v1/problems/*":           {Resource: "problem", Action: "delete"},
-		"/api/v1/changes/*":            {Resource: "change", Action: "delete"},
-		"/api/v1/releases/*":           {Resource: "release", Action: "delete"},
-		"/api/v1/roles/*":              {Resource: "role", Action: "delete"},
-		// BPMN Workflow permissions
-		"/api/v1/bpmn/*": {Resource: "bpmn", Action: "delete"},
-	},
-}
-
-// RBACMiddleware RBAC权限控制中间件
+// RBACMiddleware is a session/tenant guard, NOT a fine-grained permission
+// check. It validates that the caller is authenticated, that the DB user
+// record exists and is active, resolves and validates the tenant ID, and
+// enriches the gin.Context (user_entity, client, tenant_id) for downstream
+// handlers. It does NOT refresh the authorization role from DB: the
+// userEntity it loads is used only for the Active check and is stashed in
+// "user_entity" — the "role" key used by every downstream RequirePermission /
+// RequireRole / RequireMSPPermission check is set earlier from the JWT claim
+// and is never overwritten with userEntity.Role here. So a role change in
+// the DB does not take effect for a given caller until their JWT is
+// refreshed (re-login or token renewal). Actual resource:action
+// authorization is the sole responsibility of the RequirePermission /
+// RequireRole / RequireMSPPermission call attached to each specific
+// route — a route mounted under a group this middleware guards is NOT
+// automatically permission-protected.
 func RBACMiddleware(client *ent.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 调试日志
@@ -679,24 +474,6 @@ func RBACMiddleware(client *ent.Client) gin.HandlerFunc {
 			return
 		}
 
-		// 获取请求路径和方法
-		path := c.Request.URL.Path
-		method := c.Request.Method
-
-		// 检查权限（从数据库加载权限）
-		if !hasPermission(client, role, method, path, userID, tenantID, c) {
-			zap.S().Warnw(
-				"RBACMiddleware: permission denied",
-				"path", c.Request.URL.Path,
-				"method", c.Request.Method,
-				"user_id", userID,
-				"role", role,
-			)
-			common.Fail(c, common.ForbiddenCode, "权限不足")
-			c.Abort()
-			return
-		}
-
 		// 调试日志：RBAC检查通过
 		zap.S().Infow(
 			"RBACMiddleware: access granted",
@@ -760,7 +537,7 @@ func RequireRole(allowedRoles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		roleAny, exists := c.Get("role")
 		if !exists {
-			c.JSON(http.StatusForbidden, gin.H{"code": 2003, "message": "缺少角色信息"})
+			common.Fail(c, common.ForbiddenCode, "缺少角色信息")
 			c.Abort()
 			return
 		}
@@ -772,29 +549,22 @@ func RequireRole(allowedRoles ...string) gin.HandlerFunc {
 				return
 			}
 		}
-		c.JSON(http.StatusForbidden, gin.H{"code": 2003, "message": "无权限执行该操作"})
+		common.Fail(c, common.ForbiddenCode, "无权限执行该操作")
 		c.Abort()
 	}
 }
 
-// hasPermission 检查用户是否有权限访问指定资源
-// Uses Smart Permission Checker (4-layer fallback architecture)
-func hasPermission(client *ent.Client, role, method, path string, userID, tenantID int, c *gin.Context) bool {
-	// 超级管理员拥有所有权限
-	if role == "super_admin" {
-		return true
-	}
-
-	// 特殊路径：允许所有认证用户访问自己的菜单
-	// 菜单服务会根据用户权限过滤菜单，这里不需要额外权限检查
-	if method == "GET" && (path == "/api/v1/auth/menus" || strings.HasPrefix(path, "/api/v1/auth/menus?")) {
-		return true
-	}
-
-	// 使用智能权限检查器（4层兜底架构）
-	// 获取底层数据库连接进行 ACL 查询
-	db := database.GetRawDB()
-	return SmartCheckPermission(c, db, client, role, method, path, tenantID)
+// RequireLegacyBPMNRoles gates the /api/v1/bpmn/* controller group (process
+// definitions/instances/tasks, monitoring, dashboard, AI generator, process
+// trigger). The 7-role list here exactly reproduces what the deleted global
+// inference layer's ResourceActionMap wildcard for /api/v1/bpmn/* used to
+// grant — it is NOT a deliberately designed permission model, just a
+// preserve-current-behavior allowlist captured during the RBAC
+// dual-declaration convergence. The real BPMN permission model (including
+// instance-level authorization) is a backlog item — see
+// docs/superpowers/specs/2026-08-24-rbac-dual-declaration-convergence-design.md.
+func RequireLegacyBPMNRoles() gin.HandlerFunc {
+	return RequireRole("super_admin", "change_manager", "dept_manager", "end_user", "it_director", "ops_director", "sysadmin")
 }
 
 // HasResourcePermission 检查角色是否有指定资源的操作权限（导出供 AI 工具 RBAC 校验复用）
@@ -911,60 +681,4 @@ func InvalidateAllPermissionCachesEx() {
 	if PermissionConfig.EnableCache {
 		InvalidateAllPermissionCaches()
 	}
-}
-
-// getPermissionFromPath 从路径获取权限信息
-func getPermissionFromPath(method, path string) *Permission {
-	methodMap, exists := ResourceActionMap[method]
-	if !exists {
-		return nil
-	}
-
-	// 精确匹配
-	if perm, exists := methodMap[path]; exists {
-		return &perm
-	}
-
-	// 通配符匹配。多个规则命中时选择最具体的规则，避免
-	// /tickets/* 抢先覆盖 /tickets/*/assign 这类动作权限。
-	var matched *Permission
-	bestSpecificity := -1
-	for pattern, perm := range methodMap {
-		if matchPath(pattern, path) {
-			specificity := len(strings.ReplaceAll(pattern, "*", ""))
-			if specificity > bestSpecificity {
-				permission := perm
-				matched = &permission
-				bestSpecificity = specificity
-			}
-		}
-	}
-
-	return matched
-}
-
-// matchPath 匹配路径（支持通配符）
-func matchPath(pattern, path string) bool {
-	if pattern == path {
-		return true
-	}
-
-	// 末尾 * 保持历史语义：匹配剩余任意层级。
-	if strings.Count(pattern, "*") == 1 && strings.HasSuffix(pattern, "*") {
-		prefix := strings.TrimSuffix(pattern, "*")
-		return strings.HasPrefix(path, prefix)
-	}
-
-	// 中间 * 匹配单个路径段，例如 /tickets/*/assign。
-	patternParts := strings.Split(strings.Trim(pattern, "/"), "/")
-	pathParts := strings.Split(strings.Trim(path, "/"), "/")
-	if len(patternParts) != len(pathParts) {
-		return false
-	}
-	for i := range patternParts {
-		if patternParts[i] != "*" && patternParts[i] != pathParts[i] {
-			return false
-		}
-	}
-	return true
 }

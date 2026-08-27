@@ -62,6 +62,13 @@ export type TicketPriority = 'low' | 'medium' | 'high' | 'urgent' | 'critical';
 export type TicketStatus = 'new' | 'open' | 'in_progress' | 'pending' | 'resolved' | 'closed';
 export type TicketType = 'incident' | 'problem' | 'change' | 'service_request';
 
+// ActionPermission 描述某个动作对当前登录用户是否可执行——由后端统一计算
+// （批准/拒绝/分配/编辑/抄送/删除/交付），前端只读取渲染，不重新判断业务规则。
+export interface ActionPermission {
+  allowed: boolean;
+  reason?: string;
+}
+
 export interface Ticket {
   id: number;
   ticketNumber: string;
@@ -86,6 +93,8 @@ export interface Ticket {
   closedAt?: string;
   /** 版本号（用于乐观锁冲突检测） */
   version?: number;
+  /** 后端算好的动作权限：approve/reject/assign/edit/cc/delete */
+  actions?: Record<string, ActionPermission>;
 }
 
 // TicketListResponse 已迁移到 api-config.ts（扩展 BaseTicket 含租户字段）

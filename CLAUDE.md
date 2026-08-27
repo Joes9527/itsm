@@ -204,7 +204,7 @@ All APIs return `{ code: number, message: string, data: any }`:
   - 工单标签：`ticket_tag`
   - 服务目录：`service_catalog`
   - 服务请求：`service_request`
-  - 路由、`ResourceActionMap`、数据库权限码三者必须使用相同的 `resource` 名。
+  - 路由声明的 `resource`（`RequirePermission`/`RequireRole` 参数）必须与 `permissions` 表中存储的 `resource` 字段一致。
 - Cross-tenant access must fail closed. Add tests when touching tenant-scoped queries.
 - Logs must not expose passwords, JWTs, API keys, connector secrets, prompt secrets, or private ticket content unless explicitly designed as protected audit content.
 - File upload, import, connector callback, webhook, and AI tool invocation endpoints are high-risk surfaces and need validation, size limits, and audit logs.

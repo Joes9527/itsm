@@ -37,11 +37,14 @@ func NewTicketController(ticketService *service.TicketService, ticketDependencyS
 	}
 }
 
-// ticketToResponse 工单详情/创建响应——会额外查一次自定义字段值。
-// 薄封装：真正的转换逻辑统一收敛在 service.ToTicketResponse/ToTicketResponseWithCustomFields，
+// ticketToResponse 工单详情/创建响应——额外查一次自定义字段值，并组装 actions
+// （批准/拒绝/分配/编辑/抄送/删除权限，供前端按钮直接读取，不在前端重新判断业务规则）。
+// 薄封装：真正的转换逻辑统一收敛在 service.ToTicketResponseWithCustomFieldsAndActions，
 // controller 不再自己维护一份领域模型到 DTO 的映射。
-func (tc *TicketController) ticketToResponse(ctx context.Context, t *ticket.Ticket) *dto.TicketResponse {
-	return service.ToTicketResponseWithCustomFields(ctx, tc.client, t)
+func (tc *TicketController) ticketToResponse(c *gin.Context, t *ticket.Ticket) *dto.TicketResponse {
+	return service.ToTicketResponseWithCustomFieldsAndActions(
+		c.Request.Context(), tc.client, t, c.GetInt("user_id"), c.GetString("role"),
+	)
 }
 
 // ticketListToResponse 工单列表响应——不查字段值，避免 N+1。
@@ -115,7 +118,7 @@ func (tc *TicketController) CreateTicket(c *gin.Context) {
 		return
 	}
 
-	common.Success(c, tc.ticketToResponse(c.Request.Context(), ticket))
+	common.Success(c, tc.ticketToResponse(c, ticket))
 }
 
 // UpdateTicket 更新工单
@@ -134,6 +137,17 @@ func (tc *TicketController) UpdateTicket(c *gin.Context) {
 
 	tenantID := c.GetInt("tenant_id")
 	req.UserID = c.GetInt("user_id")
+
+	current, err := tc.ticketService.GetTicket(c.Request.Context(), ticketID, tenantID)
+	if err != nil {
+		common.Fail(c, common.NotFoundCode, "工单不存在")
+		return
+	}
+	actor := service.ActionActor{Client: tc.client, TenantID: tenantID, UserID: req.UserID, Role: c.GetString("role")}
+	if perm := service.CanEdit(actor, current); !perm.Allowed {
+		common.Fail(c, common.ForbiddenCode, perm.Reason)
+		return
+	}
 
 	ticket, err := tc.ticketService.UpdateTicket(c.Request.Context(), ticketID, &req, tenantID)
 	if err != nil {
@@ -165,7 +179,7 @@ func (tc *TicketController) UpdateTicket(c *gin.Context) {
 		return
 	}
 
-	common.Success(c, tc.ticketToResponse(c.Request.Context(), ticket))
+	common.Success(c, tc.ticketToResponse(c, ticket))
 }
 
 // GetTicket 获取工单详情
@@ -184,7 +198,7 @@ func (tc *TicketController) GetTicket(c *gin.Context) {
 		common.Fail(c, common.NotFoundCode, "工单不存在")
 		return
 	}
-	resp := tc.ticketToResponse(c.Request.Context(), ticket)
+	resp := tc.ticketToResponse(c, ticket)
 	dto.EnrichTicketResponse(c.Request.Context(), tc.db, resp, tenantID)
 	common.Success(c, resp)
 }
@@ -244,6 +258,17 @@ func (tc *TicketController) DeleteTicket(c *gin.Context) {
 
 	tenantID := c.GetInt("tenant_id")
 
+	current, err := tc.ticketService.GetTicket(c.Request.Context(), ticketID, tenantID)
+	if err != nil {
+		common.Fail(c, common.NotFoundCode, "工单不存在")
+		return
+	}
+	actor := service.ActionActor{Client: tc.client, TenantID: tenantID, UserID: c.GetInt("user_id"), Role: c.GetString("role")}
+	if perm := service.CanDelete(c.Request.Context(), actor, current); !perm.Allowed {
+		common.Fail(c, common.ForbiddenCode, perm.Reason)
+		return
+	}
+
 	err = tc.ticketService.DeleteTicket(c.Request.Context(), ticketID, tenantID)
 	if err != nil {
 		tc.logger.Errorw("Failed to delete ticket", "error", err, "ticket_id", ticketID, "tenant_id", tenantID)
@@ -273,6 +298,27 @@ func (tc *TicketController) UpdateTicketStatus(c *gin.Context) {
 	tenantID := c.GetInt("tenant_id")
 	userID := c.GetInt("user_id")
 
+	// approved/rejected 是审批决策，需要 CanApprove/CanReject 的职责分离校验；
+	// 其它状态流转（in_progress/resolved 等）不属于审批语义，不走这道门。
+	if req.Status == "approved" || req.Status == "rejected" {
+		current, err := tc.ticketService.GetTicket(c.Request.Context(), ticketID, tenantID)
+		if err != nil {
+			common.Fail(c, common.NotFoundCode, "工单不存在")
+			return
+		}
+		actor := service.ActionActor{Client: tc.client, TenantID: tenantID, UserID: userID, Role: c.GetString("role")}
+		var perm dto.ActionPermission
+		if req.Status == "approved" {
+			perm = service.CanApprove(actor, current)
+		} else {
+			perm = service.CanReject(actor, current)
+		}
+		if !perm.Allowed {
+			common.Fail(c, common.ForbiddenCode, perm.Reason)
+			return
+		}
+	}
+
 	ticket, err := tc.ticketService.UpdateTicketStatus(c.Request.Context(), ticketID, req.Status, tenantID, userID)
 	if err != nil {
 		tc.logger.Errorw("Failed to update ticket status", "error", err, "ticket_id", ticketID, "tenant_id", tenantID, "status", req.Status, "user_id", userID)
@@ -280,7 +326,7 @@ func (tc *TicketController) UpdateTicketStatus(c *gin.Context) {
 		return
 	}
 
-	common.Success(c, tc.ticketToResponse(c.Request.Context(), ticket))
+	common.Success(c, tc.ticketToResponse(c, ticket))
 }
 
 // BatchDeleteTickets 批量删除工单
@@ -342,15 +388,25 @@ func (tc *TicketController) AssignTicket(c *gin.Context) {
 	tenantID := c.GetInt("tenant_id")
 	assignedBy := c.GetInt("user_id")
 
+	current, err := tc.ticketService.GetTicket(c.Request.Context(), ticketID, tenantID)
+	if err != nil {
+		common.Fail(c, common.NotFoundCode, "工单不存在")
+		return
+	}
+	actor := service.ActionActor{Client: tc.client, TenantID: tenantID, UserID: assignedBy, Role: c.GetString("role")}
+	if perm := service.CanAssign(actor, current); !perm.Allowed {
+		common.Fail(c, common.ForbiddenCode, perm.Reason)
+		return
+	}
+
 	ticket, err := tc.ticketService.AssignTicket(c.Request.Context(), ticketID, assigneeID, tenantID)
-	_ = assignedBy // V2 简化：审计参数由 repository / notification 服务处理
 	if err != nil {
 		tc.logger.Errorw("Failed to assign ticket", "error", err, "ticket_id", ticketID, "tenant_id", tenantID)
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return
 	}
 
-	common.Success(c, tc.ticketToResponse(c.Request.Context(), ticket))
+	common.Success(c, tc.ticketToResponse(c, ticket))
 }
 
 // EscalateTicket 升级工单
@@ -377,7 +433,7 @@ func (tc *TicketController) EscalateTicket(c *gin.Context) {
 		return
 	}
 
-	common.Success(c, tc.ticketToResponse(c.Request.Context(), ticket))
+	common.Success(c, tc.ticketToResponse(c, ticket))
 }
 
 // ResolveTicket 解决工单
@@ -411,7 +467,7 @@ func (tc *TicketController) ResolveTicket(c *gin.Context) {
 		return
 	}
 
-	common.Success(c, tc.ticketToResponse(c.Request.Context(), ticket))
+	common.Success(c, tc.ticketToResponse(c, ticket))
 }
 
 // CloseTicket 关闭工单
@@ -439,7 +495,7 @@ func (tc *TicketController) CloseTicket(c *gin.Context) {
 		return
 	}
 
-	common.Success(c, tc.ticketToResponse(c.Request.Context(), ticket))
+	common.Success(c, tc.ticketToResponse(c, ticket))
 }
 
 // SearchTickets 搜索工单
@@ -956,7 +1012,7 @@ func (tc *TicketController) CreateSubtask(c *gin.Context) {
 		return
 	}
 
-	common.Success(c, tc.ticketToResponse(c.Request.Context(), ticket))
+	common.Success(c, tc.ticketToResponse(c, ticket))
 }
 
 // UpdateSubtask 更新子任务
@@ -1003,7 +1059,7 @@ func (tc *TicketController) UpdateSubtask(c *gin.Context) {
 		return
 	}
 
-	common.Success(c, tc.ticketToResponse(c.Request.Context(), updatedTicket))
+	common.Success(c, tc.ticketToResponse(c, updatedTicket))
 }
 
 // DeleteSubtask 删除子任务

@@ -45,10 +45,15 @@ func (pc *ProvisioningController) StartProvisioning(c *gin.Context) {
 		common.Fail(c, common.UnauthorizedCode, "用户未认证")
 		return
 	}
+	role := c.GetString("role")
 
-	task, err := pc.provisioningService.CreateTaskFromServiceRequest(c.Request.Context(), id, tenantID, userID)
+	task, err := pc.provisioningService.CreateTaskFromServiceRequest(c.Request.Context(), id, tenantID, userID, role)
 	if err != nil {
-		common.Fail(c, common.BadRequestCode, "创建交付任务失败")
+		if isProvisionDenied(err) {
+			common.Fail(c, common.ForbiddenCode, err.Error())
+			return
+		}
+		common.Fail(c, common.BadRequestCode, err.Error())
 		return
 	}
 
@@ -138,10 +143,15 @@ func (pc *ProvisioningController) ExecuteProvisioningTask(c *gin.Context) {
 		common.Fail(c, common.UnauthorizedCode, "用户未认证")
 		return
 	}
+	role := c.GetString("role")
 
-	task, err := pc.provisioningService.ExecuteTask(c.Request.Context(), id, tenantID, userID)
+	task, err := pc.provisioningService.ExecuteTask(c.Request.Context(), id, tenantID, userID, role)
 	if err != nil {
-		common.Fail(c, common.InternalErrorCode, "执行交付任务失败")
+		if isProvisionDenied(err) {
+			common.Fail(c, common.ForbiddenCode, err.Error())
+			return
+		}
+		common.Fail(c, common.InternalErrorCode, err.Error())
 		return
 	}
 	common.Success(c, dto.ProvisioningTaskResponse{
@@ -156,4 +166,11 @@ func (pc *ProvisioningController) ExecuteProvisioningTask(c *gin.Context) {
 		CreatedAt:        task.CreatedAt,
 		UpdatedAt:        task.UpdatedAt,
 	})
+}
+
+// isProvisionDenied 判断错误是否来自 service.CanProvision 的拒绝原因，
+// 用于把职责分离/权限不足映射成 403 而不是通用 400/500。
+func isProvisionDenied(err error) bool {
+	msg := err.Error()
+	return msg == "申请人不能交付自己提交的服务请求" || msg == "无交付权限"
 }

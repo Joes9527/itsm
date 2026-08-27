@@ -252,6 +252,87 @@ func (_u *ServiceRequestUpdate) SetNillableComplianceAck(v *bool) *ServiceReques
 	return _u
 }
 
+// SetContactName sets the "contact_name" field.
+func (_u *ServiceRequestUpdate) SetContactName(v string) *ServiceRequestUpdate {
+	_u.mutation.SetContactName(v)
+	return _u
+}
+
+// SetNillableContactName sets the "contact_name" field if the given value is not nil.
+func (_u *ServiceRequestUpdate) SetNillableContactName(v *string) *ServiceRequestUpdate {
+	if v != nil {
+		_u.SetContactName(*v)
+	}
+	return _u
+}
+
+// ClearContactName clears the value of the "contact_name" field.
+func (_u *ServiceRequestUpdate) ClearContactName() *ServiceRequestUpdate {
+	_u.mutation.ClearContactName()
+	return _u
+}
+
+// SetContactEmail sets the "contact_email" field.
+func (_u *ServiceRequestUpdate) SetContactEmail(v string) *ServiceRequestUpdate {
+	_u.mutation.SetContactEmail(v)
+	return _u
+}
+
+// SetNillableContactEmail sets the "contact_email" field if the given value is not nil.
+func (_u *ServiceRequestUpdate) SetNillableContactEmail(v *string) *ServiceRequestUpdate {
+	if v != nil {
+		_u.SetContactEmail(*v)
+	}
+	return _u
+}
+
+// ClearContactEmail clears the value of the "contact_email" field.
+func (_u *ServiceRequestUpdate) ClearContactEmail() *ServiceRequestUpdate {
+	_u.mutation.ClearContactEmail()
+	return _u
+}
+
+// SetQuantity sets the "quantity" field.
+func (_u *ServiceRequestUpdate) SetQuantity(v int) *ServiceRequestUpdate {
+	_u.mutation.ResetQuantity()
+	_u.mutation.SetQuantity(v)
+	return _u
+}
+
+// SetNillableQuantity sets the "quantity" field if the given value is not nil.
+func (_u *ServiceRequestUpdate) SetNillableQuantity(v *int) *ServiceRequestUpdate {
+	if v != nil {
+		_u.SetQuantity(*v)
+	}
+	return _u
+}
+
+// AddQuantity adds value to the "quantity" field.
+func (_u *ServiceRequestUpdate) AddQuantity(v int) *ServiceRequestUpdate {
+	_u.mutation.AddQuantity(v)
+	return _u
+}
+
+// SetExpectedAt sets the "expected_at" field.
+func (_u *ServiceRequestUpdate) SetExpectedAt(v time.Time) *ServiceRequestUpdate {
+	_u.mutation.SetExpectedAt(v)
+	return _u
+}
+
+// SetNillableExpectedAt sets the "expected_at" field if the given value is not nil.
+func (_u *ServiceRequestUpdate) SetNillableExpectedAt(v *time.Time) *ServiceRequestUpdate {
+	if v != nil {
+		_u.SetExpectedAt(*v)
+	}
+	return _u
+}
+
+// ClearExpectedAt clears the value of the "expected_at" field.
+func (_u *ServiceRequestUpdate) ClearExpectedAt() *ServiceRequestUpdate {
+	_u.mutation.ClearExpectedAt()
+	return _u
+}
+
 // SetProcessorID sets the "processor_id" field.
 func (_u *ServiceRequestUpdate) SetProcessorID(v int) *ServiceRequestUpdate {
 	_u.mutation.ResetProcessorID()
@@ -483,6 +564,11 @@ func (_u *ServiceRequestUpdate) check() error {
 			return &ValidationError{Name: "requester_id", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.requester_id": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Quantity(); ok {
+		if err := servicerequest.QuantityValidator(v); err != nil {
+			return &ValidationError{Name: "quantity", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.quantity": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Version(); ok {
 		if err := servicerequest.VersionValidator(v); err != nil {
 			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.version": %w`, err)}
@@ -573,6 +659,30 @@ func (_u *ServiceRequestUpdate) sqlSave(ctx context.Context) (_node int, err err
 	}
 	if value, ok := _u.mutation.ComplianceAck(); ok {
 		_spec.SetField(servicerequest.FieldComplianceAck, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.ContactName(); ok {
+		_spec.SetField(servicerequest.FieldContactName, field.TypeString, value)
+	}
+	if _u.mutation.ContactNameCleared() {
+		_spec.ClearField(servicerequest.FieldContactName, field.TypeString)
+	}
+	if value, ok := _u.mutation.ContactEmail(); ok {
+		_spec.SetField(servicerequest.FieldContactEmail, field.TypeString, value)
+	}
+	if _u.mutation.ContactEmailCleared() {
+		_spec.ClearField(servicerequest.FieldContactEmail, field.TypeString)
+	}
+	if value, ok := _u.mutation.Quantity(); ok {
+		_spec.SetField(servicerequest.FieldQuantity, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedQuantity(); ok {
+		_spec.AddField(servicerequest.FieldQuantity, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.ExpectedAt(); ok {
+		_spec.SetField(servicerequest.FieldExpectedAt, field.TypeTime, value)
+	}
+	if _u.mutation.ExpectedAtCleared() {
+		_spec.ClearField(servicerequest.FieldExpectedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.ProcessorID(); ok {
 		_spec.SetField(servicerequest.FieldProcessorID, field.TypeInt, value)
@@ -868,6 +978,87 @@ func (_u *ServiceRequestUpdateOne) SetNillableComplianceAck(v *bool) *ServiceReq
 	return _u
 }
 
+// SetContactName sets the "contact_name" field.
+func (_u *ServiceRequestUpdateOne) SetContactName(v string) *ServiceRequestUpdateOne {
+	_u.mutation.SetContactName(v)
+	return _u
+}
+
+// SetNillableContactName sets the "contact_name" field if the given value is not nil.
+func (_u *ServiceRequestUpdateOne) SetNillableContactName(v *string) *ServiceRequestUpdateOne {
+	if v != nil {
+		_u.SetContactName(*v)
+	}
+	return _u
+}
+
+// ClearContactName clears the value of the "contact_name" field.
+func (_u *ServiceRequestUpdateOne) ClearContactName() *ServiceRequestUpdateOne {
+	_u.mutation.ClearContactName()
+	return _u
+}
+
+// SetContactEmail sets the "contact_email" field.
+func (_u *ServiceRequestUpdateOne) SetContactEmail(v string) *ServiceRequestUpdateOne {
+	_u.mutation.SetContactEmail(v)
+	return _u
+}
+
+// SetNillableContactEmail sets the "contact_email" field if the given value is not nil.
+func (_u *ServiceRequestUpdateOne) SetNillableContactEmail(v *string) *ServiceRequestUpdateOne {
+	if v != nil {
+		_u.SetContactEmail(*v)
+	}
+	return _u
+}
+
+// ClearContactEmail clears the value of the "contact_email" field.
+func (_u *ServiceRequestUpdateOne) ClearContactEmail() *ServiceRequestUpdateOne {
+	_u.mutation.ClearContactEmail()
+	return _u
+}
+
+// SetQuantity sets the "quantity" field.
+func (_u *ServiceRequestUpdateOne) SetQuantity(v int) *ServiceRequestUpdateOne {
+	_u.mutation.ResetQuantity()
+	_u.mutation.SetQuantity(v)
+	return _u
+}
+
+// SetNillableQuantity sets the "quantity" field if the given value is not nil.
+func (_u *ServiceRequestUpdateOne) SetNillableQuantity(v *int) *ServiceRequestUpdateOne {
+	if v != nil {
+		_u.SetQuantity(*v)
+	}
+	return _u
+}
+
+// AddQuantity adds value to the "quantity" field.
+func (_u *ServiceRequestUpdateOne) AddQuantity(v int) *ServiceRequestUpdateOne {
+	_u.mutation.AddQuantity(v)
+	return _u
+}
+
+// SetExpectedAt sets the "expected_at" field.
+func (_u *ServiceRequestUpdateOne) SetExpectedAt(v time.Time) *ServiceRequestUpdateOne {
+	_u.mutation.SetExpectedAt(v)
+	return _u
+}
+
+// SetNillableExpectedAt sets the "expected_at" field if the given value is not nil.
+func (_u *ServiceRequestUpdateOne) SetNillableExpectedAt(v *time.Time) *ServiceRequestUpdateOne {
+	if v != nil {
+		_u.SetExpectedAt(*v)
+	}
+	return _u
+}
+
+// ClearExpectedAt clears the value of the "expected_at" field.
+func (_u *ServiceRequestUpdateOne) ClearExpectedAt() *ServiceRequestUpdateOne {
+	_u.mutation.ClearExpectedAt()
+	return _u
+}
+
 // SetProcessorID sets the "processor_id" field.
 func (_u *ServiceRequestUpdateOne) SetProcessorID(v int) *ServiceRequestUpdateOne {
 	_u.mutation.ResetProcessorID()
@@ -1112,6 +1303,11 @@ func (_u *ServiceRequestUpdateOne) check() error {
 			return &ValidationError{Name: "requester_id", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.requester_id": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Quantity(); ok {
+		if err := servicerequest.QuantityValidator(v); err != nil {
+			return &ValidationError{Name: "quantity", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.quantity": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Version(); ok {
 		if err := servicerequest.VersionValidator(v); err != nil {
 			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.version": %w`, err)}
@@ -1219,6 +1415,30 @@ func (_u *ServiceRequestUpdateOne) sqlSave(ctx context.Context) (_node *ServiceR
 	}
 	if value, ok := _u.mutation.ComplianceAck(); ok {
 		_spec.SetField(servicerequest.FieldComplianceAck, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.ContactName(); ok {
+		_spec.SetField(servicerequest.FieldContactName, field.TypeString, value)
+	}
+	if _u.mutation.ContactNameCleared() {
+		_spec.ClearField(servicerequest.FieldContactName, field.TypeString)
+	}
+	if value, ok := _u.mutation.ContactEmail(); ok {
+		_spec.SetField(servicerequest.FieldContactEmail, field.TypeString, value)
+	}
+	if _u.mutation.ContactEmailCleared() {
+		_spec.ClearField(servicerequest.FieldContactEmail, field.TypeString)
+	}
+	if value, ok := _u.mutation.Quantity(); ok {
+		_spec.SetField(servicerequest.FieldQuantity, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedQuantity(); ok {
+		_spec.AddField(servicerequest.FieldQuantity, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.ExpectedAt(); ok {
+		_spec.SetField(servicerequest.FieldExpectedAt, field.TypeTime, value)
+	}
+	if _u.mutation.ExpectedAtCleared() {
+		_spec.ClearField(servicerequest.FieldExpectedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.ProcessorID(); ok {
 		_spec.SetField(servicerequest.FieldProcessorID, field.TypeInt, value)

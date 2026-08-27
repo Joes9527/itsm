@@ -17,6 +17,7 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/middleware"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -36,6 +37,10 @@ func setupTestTicketController(t *testing.T) (*gin.Engine, *ent.Client, *TicketC
 	// 号码生成器按 tenant 维度查询"当月最大序号"，但唯一约束是全局的，一旦某个较早测试的租户已经
 	// 占用了当月的 000001 号，后面任何新租户创建的第一张工单都会确定性撞号重试耗尽失败。
 	client := enttest.Open(t, "sqlite3", fmt.Sprintf("file:ticketctrl_%s_%d?mode=memory&cache=shared&_fk=1", t.Name(), mathrand.Int31()))
+	// middleware.HasResourcePermission 缓存的 key 是 role+tenantID，每个测试都是全新的内存库、
+	// tenant 自增 ID 又会从 1 重新开始，不同测试用同一个 role 名字时会撞进同一个缓存 key，
+	// 读到另一个测试早前缓存下来的权限集。每个测试用例开始前先清一次，保证互不影响。
+	middleware.InvalidateAllPermissionCaches()
 
 	logger := zaptest.NewLogger(t).Sugar()
 
@@ -78,6 +83,37 @@ func setupTestTicketController(t *testing.T) (*gin.Engine, *ent.Client, *TicketC
 	r.DELETE("/api/v1/tickets/:id", ticketController.DeleteTicket)
 
 	return r, client, ticketController
+}
+
+// seedTicketRolePermission grants roleCode a resource:action permission in tenantID,
+// needed now that TicketController's write-path handlers call service.CanXxx (which
+// queries role_permissions via middleware.HasResourcePermission) instead of allowing
+// any authenticated caller through unconditionally.
+func seedTicketRolePermission(t *testing.T, client *ent.Client, tenantID int, roleCode, resource, action string) {
+	t.Helper()
+	ctx := context.Background()
+	role, err := client.Role.Create().
+		SetCode(roleCode).
+		SetName(roleCode).
+		SetTenantID(tenantID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	perm, err := client.Permission.Create().
+		SetCode(resource + ":" + action).
+		SetName(resource + ":" + action).
+		SetResource(resource).
+		SetAction(action).
+		SetTenantID(tenantID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	_, err = client.RolePermission.Create().
+		SetRoleID(role.ID).
+		SetPermissionID(perm.ID).
+		SetTenantID(tenantID).
+		Save(ctx)
+	require.NoError(t, err)
 }
 
 func createTestTenantAndUserForTicket(t *testing.T, client *ent.Client) (*ent.Tenant, *ent.User) {
@@ -399,6 +435,10 @@ func TestTicketController_UpdateTicket(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
+	// 请求没有带 X-Test-Role，中间件默认用 "admin"——UpdateTicket 现在会用
+	// service.CanEdit 二次校验 ticket:update，测试库是全新的，要先补上这条权限。
+	seedTicketRolePermission(t, client, tenant.ID, "admin", "ticket", "update")
+
 	tests := []struct {
 		name         string
 		ticketID     string
@@ -475,6 +515,10 @@ func TestTicketController_DeleteTicket(t *testing.T) {
 		SetTenantID(tenant.ID).
 		Save(ctx)
 	require.NoError(t, err)
+
+	// 同 TestTicketController_UpdateTicket：默认角色 "admin" 需要先补上 ticket:delete，
+	// DeleteTicket 现在会用 service.CanDelete 二次校验。
+	seedTicketRolePermission(t, client, tenant.ID, "admin", "ticket", "delete")
 
 	tests := []struct {
 		name         string

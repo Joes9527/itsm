@@ -84,6 +84,11 @@ var RegisteredMigrations = []Migration{
 		Description: "Add a partial unique index guarding against two concurrent running BPMN process instances for the same (tenant, business key) — closes a check-then-act race in SubmitChange (and any other TriggerProcess caller) where two near-simultaneous requests could both pass the application-level idempotency check before either instance existed",
 		RollbackSQL: `DROP INDEX IF EXISTS idx_process_instances_running_unique;`,
 	},
+	{
+		Version:     "016_add_service_request_contact_fields",
+		Description: "Add contact_name/contact_email/quantity/expected_at columns to service_requests (previously fake fields that only lived in form_data and were never read back)",
+		RollbackSQL: "ALTER TABLE service_requests DROP COLUMN IF EXISTS contact_name; ALTER TABLE service_requests DROP COLUMN IF EXISTS contact_email; ALTER TABLE service_requests DROP COLUMN IF EXISTS quantity; ALTER TABLE service_requests DROP COLUMN IF EXISTS expected_at;",
+	},
 }
 
 // PostSchemaMigrations returns a defensive copy of the canonical active stream.
@@ -667,6 +672,13 @@ WHERE id IN (SELECT id FROM ranked WHERE rn > 1);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_process_instances_running_unique
 ON process_instances (tenant_id, business_key)
 WHERE status = 'running' AND business_key IS NOT NULL AND business_key != '';
+`
+	case "016_add_service_request_contact_fields":
+		return `
+ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS contact_name VARCHAR;
+ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS contact_email VARCHAR;
+ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS quantity BIGINT NOT NULL DEFAULT 1;
+ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS expected_at TIMESTAMP WITH TIME ZONE;
 `
 	default:
 		return ""

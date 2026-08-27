@@ -184,6 +184,7 @@ const ServiceCatalogManagement = () => {
         cloudServiceId: values.cloudServiceId,
         fields,
         processDefinitionKey: values.processDefinitionKey || undefined,
+        serviceType: values.serviceType || undefined,
         ...(values.status ? { status: values.status } : {}),
       } as CreateServiceItemRequest;
       if (editingCatalog) {
@@ -230,6 +231,7 @@ const ServiceCatalogManagement = () => {
       cloudServiceId: catalog.cloudServiceId,
       fields: fieldsForForm,
       processDefinitionKey: catalog.processDefinitionKey,
+      serviceType: catalog.serviceType,
     });
     setShowModal(true);
   };

@@ -4,6 +4,7 @@
 
 import type { ServiceRequestStatus } from '@/constants/service-request';
 import type { TicketStatus } from '@/types/ticket';
+import type { ActionPermission } from '@/lib/api/types';
 
 // 服务目录简要信息 (用于内嵌在服务请求中)
 export interface ServiceCatalogRef {
@@ -43,6 +44,13 @@ export interface ServiceRequest {
   expireAt?: string;
   complianceAck: boolean;
 
+  // 通用层字段：所有 service_type 都适用，直接映射到后端新增列
+  // （contactName/contactEmail/quantity/expectedAt），不再经过 formData JSON 兜底路径。
+  contactName?: string;
+  contactEmail?: string;
+  quantity: number;
+  expectedAt?: string;
+
   createdAt: string;
   updatedAt: string;
 
@@ -52,6 +60,9 @@ export interface ServiceRequest {
 
   catalog?: ServiceCatalogRef; // 后端目前可能未填充，需注意
   requester?: RequesterRef; // 后端目前可能未填充，需注意
+
+  /** 后端算好的动作权限：目前只有 provision（能否发起交付） */
+  actions?: Record<string, ActionPermission>;
 }
 
 // 创建服务请求参数
@@ -67,6 +78,12 @@ export interface CreateServiceRequestRequest {
   sourceIpWhitelist?: string[];
   expireAt?: string;
   complianceAck: boolean;
+
+  // 通用层字段：所有 service_type 都适用，直接映射到后端新增列，不再经过 formData JSON 兜底路径。
+  contactName?: string;
+  contactEmail?: string;
+  quantity?: number;
+  expectedAt?: string;
 }
 
 // 审批动作请求参数

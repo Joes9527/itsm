@@ -108986,6 +108986,11 @@ type ServiceRequestMutation struct {
 	appendsource_ip_whitelist []string
 	expire_at                 *time.Time
 	compliance_ack            *bool
+	contact_name              *string
+	contact_email             *string
+	quantity                  *int
+	addquantity               *int
+	expected_at               *time.Time
 	processor_id              *int
 	addprocessor_id           *int
 	started_at                *time.Time
@@ -109715,6 +109720,209 @@ func (m *ServiceRequestMutation) ResetComplianceAck() {
 	m.compliance_ack = nil
 }
 
+// SetContactName sets the "contact_name" field.
+func (m *ServiceRequestMutation) SetContactName(s string) {
+	m.contact_name = &s
+}
+
+// ContactName returns the value of the "contact_name" field in the mutation.
+func (m *ServiceRequestMutation) ContactName() (r string, exists bool) {
+	v := m.contact_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContactName returns the old "contact_name" field's value of the ServiceRequest entity.
+// If the ServiceRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ServiceRequestMutation) OldContactName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContactName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContactName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContactName: %w", err)
+	}
+	return oldValue.ContactName, nil
+}
+
+// ClearContactName clears the value of the "contact_name" field.
+func (m *ServiceRequestMutation) ClearContactName() {
+	m.contact_name = nil
+	m.clearedFields[servicerequest.FieldContactName] = struct{}{}
+}
+
+// ContactNameCleared returns if the "contact_name" field was cleared in this mutation.
+func (m *ServiceRequestMutation) ContactNameCleared() bool {
+	_, ok := m.clearedFields[servicerequest.FieldContactName]
+	return ok
+}
+
+// ResetContactName resets all changes to the "contact_name" field.
+func (m *ServiceRequestMutation) ResetContactName() {
+	m.contact_name = nil
+	delete(m.clearedFields, servicerequest.FieldContactName)
+}
+
+// SetContactEmail sets the "contact_email" field.
+func (m *ServiceRequestMutation) SetContactEmail(s string) {
+	m.contact_email = &s
+}
+
+// ContactEmail returns the value of the "contact_email" field in the mutation.
+func (m *ServiceRequestMutation) ContactEmail() (r string, exists bool) {
+	v := m.contact_email
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContactEmail returns the old "contact_email" field's value of the ServiceRequest entity.
+// If the ServiceRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ServiceRequestMutation) OldContactEmail(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContactEmail is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContactEmail requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContactEmail: %w", err)
+	}
+	return oldValue.ContactEmail, nil
+}
+
+// ClearContactEmail clears the value of the "contact_email" field.
+func (m *ServiceRequestMutation) ClearContactEmail() {
+	m.contact_email = nil
+	m.clearedFields[servicerequest.FieldContactEmail] = struct{}{}
+}
+
+// ContactEmailCleared returns if the "contact_email" field was cleared in this mutation.
+func (m *ServiceRequestMutation) ContactEmailCleared() bool {
+	_, ok := m.clearedFields[servicerequest.FieldContactEmail]
+	return ok
+}
+
+// ResetContactEmail resets all changes to the "contact_email" field.
+func (m *ServiceRequestMutation) ResetContactEmail() {
+	m.contact_email = nil
+	delete(m.clearedFields, servicerequest.FieldContactEmail)
+}
+
+// SetQuantity sets the "quantity" field.
+func (m *ServiceRequestMutation) SetQuantity(i int) {
+	m.quantity = &i
+	m.addquantity = nil
+}
+
+// Quantity returns the value of the "quantity" field in the mutation.
+func (m *ServiceRequestMutation) Quantity() (r int, exists bool) {
+	v := m.quantity
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldQuantity returns the old "quantity" field's value of the ServiceRequest entity.
+// If the ServiceRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ServiceRequestMutation) OldQuantity(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldQuantity is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldQuantity requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldQuantity: %w", err)
+	}
+	return oldValue.Quantity, nil
+}
+
+// AddQuantity adds i to the "quantity" field.
+func (m *ServiceRequestMutation) AddQuantity(i int) {
+	if m.addquantity != nil {
+		*m.addquantity += i
+	} else {
+		m.addquantity = &i
+	}
+}
+
+// AddedQuantity returns the value that was added to the "quantity" field in this mutation.
+func (m *ServiceRequestMutation) AddedQuantity() (r int, exists bool) {
+	v := m.addquantity
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetQuantity resets all changes to the "quantity" field.
+func (m *ServiceRequestMutation) ResetQuantity() {
+	m.quantity = nil
+	m.addquantity = nil
+}
+
+// SetExpectedAt sets the "expected_at" field.
+func (m *ServiceRequestMutation) SetExpectedAt(t time.Time) {
+	m.expected_at = &t
+}
+
+// ExpectedAt returns the value of the "expected_at" field in the mutation.
+func (m *ServiceRequestMutation) ExpectedAt() (r time.Time, exists bool) {
+	v := m.expected_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExpectedAt returns the old "expected_at" field's value of the ServiceRequest entity.
+// If the ServiceRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ServiceRequestMutation) OldExpectedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExpectedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExpectedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExpectedAt: %w", err)
+	}
+	return oldValue.ExpectedAt, nil
+}
+
+// ClearExpectedAt clears the value of the "expected_at" field.
+func (m *ServiceRequestMutation) ClearExpectedAt() {
+	m.expected_at = nil
+	m.clearedFields[servicerequest.FieldExpectedAt] = struct{}{}
+}
+
+// ExpectedAtCleared returns if the "expected_at" field was cleared in this mutation.
+func (m *ServiceRequestMutation) ExpectedAtCleared() bool {
+	_, ok := m.clearedFields[servicerequest.FieldExpectedAt]
+	return ok
+}
+
+// ResetExpectedAt resets all changes to the "expected_at" field.
+func (m *ServiceRequestMutation) ResetExpectedAt() {
+	m.expected_at = nil
+	delete(m.clearedFields, servicerequest.FieldExpectedAt)
+}
+
 // SetProcessorID sets the "processor_id" field.
 func (m *ServiceRequestMutation) SetProcessorID(i int) {
 	m.processor_id = &i
@@ -110192,7 +110400,7 @@ func (m *ServiceRequestMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ServiceRequestMutation) Fields() []string {
-	fields := make([]string, 0, 21)
+	fields := make([]string, 0, 25)
 	if m.tenant_id != nil {
 		fields = append(fields, servicerequest.FieldTenantID)
 	}
@@ -110228,6 +110436,18 @@ func (m *ServiceRequestMutation) Fields() []string {
 	}
 	if m.compliance_ack != nil {
 		fields = append(fields, servicerequest.FieldComplianceAck)
+	}
+	if m.contact_name != nil {
+		fields = append(fields, servicerequest.FieldContactName)
+	}
+	if m.contact_email != nil {
+		fields = append(fields, servicerequest.FieldContactEmail)
+	}
+	if m.quantity != nil {
+		fields = append(fields, servicerequest.FieldQuantity)
+	}
+	if m.expected_at != nil {
+		fields = append(fields, servicerequest.FieldExpectedAt)
 	}
 	if m.processor_id != nil {
 		fields = append(fields, servicerequest.FieldProcessorID)
@@ -110288,6 +110508,14 @@ func (m *ServiceRequestMutation) Field(name string) (ent.Value, bool) {
 		return m.ExpireAt()
 	case servicerequest.FieldComplianceAck:
 		return m.ComplianceAck()
+	case servicerequest.FieldContactName:
+		return m.ContactName()
+	case servicerequest.FieldContactEmail:
+		return m.ContactEmail()
+	case servicerequest.FieldQuantity:
+		return m.Quantity()
+	case servicerequest.FieldExpectedAt:
+		return m.ExpectedAt()
 	case servicerequest.FieldProcessorID:
 		return m.ProcessorID()
 	case servicerequest.FieldStartedAt:
@@ -110339,6 +110567,14 @@ func (m *ServiceRequestMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldExpireAt(ctx)
 	case servicerequest.FieldComplianceAck:
 		return m.OldComplianceAck(ctx)
+	case servicerequest.FieldContactName:
+		return m.OldContactName(ctx)
+	case servicerequest.FieldContactEmail:
+		return m.OldContactEmail(ctx)
+	case servicerequest.FieldQuantity:
+		return m.OldQuantity(ctx)
+	case servicerequest.FieldExpectedAt:
+		return m.OldExpectedAt(ctx)
 	case servicerequest.FieldProcessorID:
 		return m.OldProcessorID(ctx)
 	case servicerequest.FieldStartedAt:
@@ -110450,6 +110686,34 @@ func (m *ServiceRequestMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetComplianceAck(v)
 		return nil
+	case servicerequest.FieldContactName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContactName(v)
+		return nil
+	case servicerequest.FieldContactEmail:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContactEmail(v)
+		return nil
+	case servicerequest.FieldQuantity:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetQuantity(v)
+		return nil
+	case servicerequest.FieldExpectedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExpectedAt(v)
+		return nil
 	case servicerequest.FieldProcessorID:
 		v, ok := value.(int)
 		if !ok {
@@ -110536,6 +110800,9 @@ func (m *ServiceRequestMutation) AddedFields() []string {
 	if m.addrequester_id != nil {
 		fields = append(fields, servicerequest.FieldRequesterID)
 	}
+	if m.addquantity != nil {
+		fields = append(fields, servicerequest.FieldQuantity)
+	}
 	if m.addprocessor_id != nil {
 		fields = append(fields, servicerequest.FieldProcessorID)
 	}
@@ -110560,6 +110827,8 @@ func (m *ServiceRequestMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedCiID()
 	case servicerequest.FieldRequesterID:
 		return m.AddedRequesterID()
+	case servicerequest.FieldQuantity:
+		return m.AddedQuantity()
 	case servicerequest.FieldProcessorID:
 		return m.AddedProcessorID()
 	case servicerequest.FieldVersion:
@@ -110608,6 +110877,13 @@ func (m *ServiceRequestMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddRequesterID(v)
 		return nil
+	case servicerequest.FieldQuantity:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddQuantity(v)
+		return nil
 	case servicerequest.FieldProcessorID:
 		v, ok := value.(int)
 		if !ok {
@@ -110644,6 +110920,15 @@ func (m *ServiceRequestMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(servicerequest.FieldExpireAt) {
 		fields = append(fields, servicerequest.FieldExpireAt)
+	}
+	if m.FieldCleared(servicerequest.FieldContactName) {
+		fields = append(fields, servicerequest.FieldContactName)
+	}
+	if m.FieldCleared(servicerequest.FieldContactEmail) {
+		fields = append(fields, servicerequest.FieldContactEmail)
+	}
+	if m.FieldCleared(servicerequest.FieldExpectedAt) {
+		fields = append(fields, servicerequest.FieldExpectedAt)
 	}
 	if m.FieldCleared(servicerequest.FieldProcessorID) {
 		fields = append(fields, servicerequest.FieldProcessorID)
@@ -110691,6 +110976,15 @@ func (m *ServiceRequestMutation) ClearField(name string) error {
 		return nil
 	case servicerequest.FieldExpireAt:
 		m.ClearExpireAt()
+		return nil
+	case servicerequest.FieldContactName:
+		m.ClearContactName()
+		return nil
+	case servicerequest.FieldContactEmail:
+		m.ClearContactEmail()
+		return nil
+	case servicerequest.FieldExpectedAt:
+		m.ClearExpectedAt()
 		return nil
 	case servicerequest.FieldProcessorID:
 		m.ClearProcessorID()
@@ -110753,6 +111047,18 @@ func (m *ServiceRequestMutation) ResetField(name string) error {
 		return nil
 	case servicerequest.FieldComplianceAck:
 		m.ResetComplianceAck()
+		return nil
+	case servicerequest.FieldContactName:
+		m.ResetContactName()
+		return nil
+	case servicerequest.FieldContactEmail:
+		m.ResetContactEmail()
+		return nil
+	case servicerequest.FieldQuantity:
+		m.ResetQuantity()
+		return nil
+	case servicerequest.FieldExpectedAt:
+		m.ResetExpectedAt()
 		return nil
 	case servicerequest.FieldProcessorID:
 		m.ResetProcessorID()
