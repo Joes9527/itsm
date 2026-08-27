@@ -572,7 +572,8 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 			// 工单SLA信息
 			tickets.GET("/:id/sla", middleware.RequirePermission("ticket", "read"), config.TicketController.GetTicketSLAInfo)
 
-			// 工单关联统计
+			// 工单关联列表与统计
+			tickets.GET("/:id/relations", middleware.RequirePermission("ticket", "read"), config.TicketController.GetTicketRelations)
 			tickets.GET("/:id/relations/stats", middleware.RequirePermission("ticket", "read"), config.TicketController.GetRelationStats)
 
 			// 子任务管理

@@ -1156,10 +1156,56 @@ func (tc *TicketController) GetRelationStats(c *gin.Context) {
 
 	stats, err := tc.ticketDependencyService.GetRelationStats(c.Request.Context(), ticketID, tenantID)
 	if err != nil {
+		if strings.Contains(err.Error(), "ticket not found") {
+			tc.logger.Warnw("Ticket not found for relation stats", "ticket_id", ticketID, "tenant_id", tenantID)
+			common.Fail(c, common.NotFoundCode, "工单不存在")
+			return
+		}
 		tc.logger.Errorw("Failed to get ticket relation stats", "error", err, "ticket_id", ticketID, "tenant_id", tenantID)
 		common.Fail(c, common.InternalErrorCode, "获取关联统计失败")
 		return
 	}
 
 	common.Success(c, stats)
+}
+
+// GetTicketRelations 获取工单的关联列表
+// @Summary 获取工单的关联列表
+// @Description 返回指定工单的关联工单明细（当前仅支持父子关系）
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param id path int true "工单ID"
+// @Success 200 {object} common.Response{data=[]dto.TicketRelation}
+// @Router /api/v1/tickets/:id/relations [get]
+func (tc *TicketController) GetTicketRelations(c *gin.Context) {
+	ticketID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.Fail(c, common.ParamErrorCode, "无效的工单ID")
+		return
+	}
+	tenantID := c.GetInt("tenant_id")
+	if tenantID == 0 {
+		common.Fail(c, common.AuthFailedCode, "租户信息缺失")
+		return
+	}
+
+	if tc.ticketDependencyService == nil {
+		common.Success(c, []*dto.TicketRelation{})
+		return
+	}
+
+	relations, err := tc.ticketDependencyService.GetTicketRelations(c.Request.Context(), ticketID, tenantID)
+	if err != nil {
+		if strings.Contains(err.Error(), "ticket not found") {
+			tc.logger.Warnw("Ticket not found for relations list", "ticket_id", ticketID, "tenant_id", tenantID)
+			common.Fail(c, common.NotFoundCode, "工单不存在")
+			return
+		}
+		tc.logger.Errorw("Failed to get ticket relations", "error", err, "ticket_id", ticketID, "tenant_id", tenantID)
+		common.Fail(c, common.InternalErrorCode, "获取工单关联失败")
+		return
+	}
+
+	common.Success(c, relations)
 }
