@@ -98,7 +98,8 @@ func TestDeriveBusinessIdentity(t *testing.T) {
 	}
 }
 
-// TestFindCandidates 锁定候选筛选口径：只挑 running 且身份不全的行，
+// TestFindCandidates 锁定候选筛选口径：running 与 suspended 且身份不全的行都要进候选
+// （suspended 实例会被 resume 回 running，继续产生审批决策，不能漏），
 // 已经写好两列的行、已经结束的实例都不能进候选。
 func TestFindCandidates(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
@@ -158,6 +159,8 @@ func TestFindCandidates(t *testing.T) {
 	unresolvable := newInstance("PI-legacy-3", "no-colon", "running", "", 0, nil)
 	newInstance("PI-modern-1", "ticket:33", "running", "ticket", 33, nil)
 	newInstance("PI-done-1", "ticket:44", "completed", "", 0, nil)
+	suspended := newInstance("PI-legacy-5", "ticket:55", "suspended", "", 0,
+		map[string]interface{}{"business_type": "ticket", "business_id": 55})
 
 	resolved, skipped, err := findCandidates(ctx, client, tenant.ID)
 	require.NoError(t, err)
@@ -166,7 +169,11 @@ func TestFindCandidates(t *testing.T) {
 	for _, c := range resolved {
 		byID[c.id] = c
 	}
-	require.Len(t, resolved, 2, "只有两条 running 且能推导出身份的老实例进候选")
+	require.Len(t, resolved, 3, "running 与 suspended 且能推导出身份的老实例都要进候选")
+
+	require.Equal(t, "ticket", byID[suspended.ID].businessType,
+		"suspended 实例（会被 resume 回 running）也要回填，不能因为当前不是 running 就漏掉")
+	require.Equal(t, 55, byID[suspended.ID].businessID)
 
 	require.Equal(t, "ticket", byID[legacy.ID].businessType)
 	require.Equal(t, 11, byID[legacy.ID].businessID)

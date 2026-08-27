@@ -13,9 +13,10 @@
 //   - service/ticket_workflow_service.go（工单审批决策回查）
 //   - handlers/change/repository_impl.go（变更审批决策回查）
 //
-// 这个工具把仍在 running 的存量实例的这两列补齐：优先用 variables 里的
+// 这个工具把仍在 running/suspended 的存量实例的这两列补齐：优先用 variables 里的
 // business_type/business_id，取不到再回退解析 business_key（约定格式 "{type}:{id}"，
 // 见 BPMNApprovalBridge.findPendingBusinessTask 与 ProcessTriggerService）。
+// suspended 实例会被 resume 回 running 继续产生审批决策，因此和 running 一起处理；
 // 已经结束（completed/terminated）的实例不再产生新的审批决策，不需要回填。
 //
 // 用法（跟 cmd/backfill_legacy_pending_changes 等其它一次性运维工具一样，直接 go run，
@@ -161,7 +162,10 @@ func main() {
 func findCandidates(ctx context.Context, client *ent.Client, tenantID int) (resolved []candidate, skipped []candidate, err error) {
 	query := client.ProcessInstance.Query().
 		Where(
-			processinstance.Status("running"),
+			// running 与 suspended 都还会继续产生后续的 ProcessApprovalDecision（suspended
+			// 实例会被 resume 回 running），completed/terminated 不会再有新的审批决策，
+			// 缺失业务身份也不会再被读到，因此排除在候选之外。
+			processinstance.StatusIn("running", "suspended"),
 			processinstance.Or(
 				processinstance.BusinessTypeIsNil(),
 				processinstance.BusinessTypeEQ(""),
