@@ -572,6 +572,10 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 			// 工单SLA信息
 			tickets.GET("/:id/sla", middleware.RequirePermission("ticket", "read"), config.TicketController.GetTicketSLAInfo)
 
+			// 工单关联列表与统计
+			tickets.GET("/:id/relations", middleware.RequirePermission("ticket", "read"), config.TicketController.GetTicketRelations)
+			tickets.GET("/:id/relations/stats", middleware.RequirePermission("ticket", "read"), config.TicketController.GetRelationStats)
+
 			// 子任务管理
 			tickets.GET("/:id/subtasks", middleware.RequirePermission("ticket", "read"), config.TicketController.GetSubtasks)
 			tickets.POST("/:id/subtasks", middleware.RequirePermission("ticket", "create"), config.TicketController.CreateSubtask)
@@ -612,11 +616,11 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				tickets.POST("/workflow/resolve", middleware.RequirePermission("workflow", "update"), config.TicketWorkflowController.ResolveTicket)
 				tickets.POST("/workflow/close", middleware.RequirePermission("workflow", "update"), config.TicketWorkflowController.CloseTicket)
 				tickets.POST("/workflow/reopen", middleware.RequirePermission("workflow", "update"), config.TicketWorkflowController.ReopenTicket)
-				tickets.GET("/:id/cc", middleware.RequirePermission("workflow", "read"), config.TicketWorkflowController.ListTicketCCRecords)
-				tickets.GET("/:id/workflow/state", middleware.RequirePermission("workflow", "read"), config.TicketWorkflowController.GetTicketWorkflowState)
-				tickets.GET("/:id/workflow-history", middleware.RequirePermission("workflow", "read"), config.TicketWorkflowController.GetTicketWorkflowHistory)
-				tickets.GET("/:id/workflow_records", middleware.RequirePermission("workflow", "read"), config.TicketWorkflowController.GetTicketWorkflowHistory)
-				tickets.GET("/:id/approval-decisions", middleware.RequirePermission("workflow", "read"), config.TicketWorkflowController.GetApprovalDecisions)
+				tickets.GET("/:id/cc", middleware.RequirePermission("ticket", "read"), config.TicketWorkflowController.ListTicketCCRecords)
+				tickets.GET("/:id/workflow/state", middleware.RequirePermission("ticket", "read"), config.TicketWorkflowController.GetTicketWorkflowState)
+				tickets.GET("/:id/workflow-history", middleware.RequirePermission("ticket", "read"), config.TicketWorkflowController.GetTicketWorkflowHistory)
+				tickets.GET("/:id/workflow_records", middleware.RequirePermission("ticket", "read"), config.TicketWorkflowController.GetTicketWorkflowHistory)
+				tickets.GET("/:id/approval-decisions", middleware.RequirePermission("ticket", "read"), config.TicketWorkflowController.GetApprovalDecisions)
 			}
 
 			// 工单自动化规则

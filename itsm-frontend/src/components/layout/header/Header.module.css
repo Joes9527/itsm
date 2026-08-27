@@ -434,6 +434,11 @@
 
 .userMenuTrigger {
   min-width: 0;
+  /* 防止继承 AntHeader 的 line-height:56px 把触发器撑高，固定高度保证顶栏不被撑开 */
+  height: 44px;
+  line-height: 1;
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .userMenuDetails {

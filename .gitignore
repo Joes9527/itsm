@@ -120,6 +120,7 @@ server.log
 # Screenshots (auto-generated during testing)
 *.png
 !docs/images/*.png
+!itsm-frontend/public/kln-logo.png
 
 # API keys and secrets
 *apikey*

@@ -8,7 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"go.uber.org/zap"
 	"itsm-backend/ent"
+	"itsm-backend/ent/user"
 )
 
 // ===================================
@@ -897,6 +899,60 @@ func EnrichTicketResponse(ctx context.Context, db *sql.DB, response *TicketRespo
 	if ca.Valid {
 		t := ca.Time
 		response.ClosedAt = &t
+	}
+}
+
+// EnrichTicketResponseUsers 填充工单详情响应的申请人/处理人基本信息。
+// 只用于单条工单详情响应（列表接口不调用，避免 N+1）；查询按 tenant_id 过滤，
+// 跨租户用户不会出现在响应中（fail closed）。
+func EnrichTicketResponseUsers(ctx context.Context, client *ent.Client, response *TicketResponse, tenantID int) {
+	if client == nil || response == nil {
+		return
+	}
+
+	ids := make([]int, 0, 2)
+	if response.RequesterID > 0 {
+		ids = append(ids, response.RequesterID)
+	}
+	if response.AssigneeID > 0 {
+		ids = append(ids, response.AssigneeID)
+	}
+	if len(ids) == 0 {
+		return
+	}
+
+	users, err := client.User.Query().
+		Where(user.IDIn(ids...), user.TenantID(tenantID)).
+		All(ctx)
+	if err != nil {
+		zap.S().Warnw("Failed to enrich ticket response users",
+			"error", err, "ticket_id", response.ID, "tenant_id", tenantID)
+		return
+	}
+
+	byID := make(map[int]*ent.User, len(users))
+	for _, u := range users {
+		byID[u.ID] = u
+	}
+	if u, ok := byID[response.RequesterID]; ok {
+		response.Requester = toTicketUserBasicInfo(u)
+	}
+	if u, ok := byID[response.AssigneeID]; ok {
+		response.Assignee = toTicketUserBasicInfo(u)
+	}
+}
+
+func toTicketUserBasicInfo(u *ent.User) *UserBasicInfo {
+	if u == nil {
+		return nil
+	}
+	return &UserBasicInfo{
+		ID:         u.ID,
+		Username:   u.Username,
+		Name:       u.Name,
+		Email:      u.Email,
+		Role:       string(u.Role),
+		Department: u.Department,
 	}
 }
 

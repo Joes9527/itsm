@@ -26,7 +26,7 @@ export default function LazyLoadWrapper({
 
   if (card) {
     return (
-      <Card className="w-full" bodyStyle={{ padding: '24px' }}>
+      <Card className="w-full" styles={{ body: { padding: '24px' } }}>
         <React.Suspense fallback={content}>{children}</React.Suspense>
       </Card>
     );
