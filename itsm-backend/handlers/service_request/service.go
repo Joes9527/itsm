@@ -81,8 +81,14 @@ func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalog
 		return nil, common.NewBadRequestError("Service Catalog is not enabled", nil)
 	}
 
-	// 1b. Incident 类型：直接创建事件，跳过 SR 和审批流程。
-	if isIncidentCatalog(cat.ITSMType) {
+	// 1b. Incident 类型：直接创建事件，跳过 SR 和审批流程。判断依据是 target_class
+	// （WorkItem 目标类），不再是 itsm_type——见 entity.go isIncidentCatalog 的注释。
+	// 这要求该 ServiceCatalog 行已经跑过 cmd/backfill_servicecatalog_target_class 回填
+	// 或者是 Wave 2 之后新建/编辑过的（target_class 在写入时同步计算），否则未回填的存量
+	// Incident 类型目录项会被当成 default 落到普通 ServiceRequest 分支——这是部署顺序要求，
+	// 不是代码缺陷，与 Incident/Problem/Change 三次迁移要求先跑各自 backfill 命令再上线新
+	// 路由代码是同一个模式。
+	if isIncidentCatalog(cat.TargetClass) {
 		return s.createIncidentFromCatalog(ctx, tenantID, requesterID, catalogID, reqData)
 	}
 
@@ -115,10 +121,14 @@ func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalog
 		}
 	}
 
+	// 2a-2. 结构化字段值只提取一次，后面三处复用（必填校验 / 从 form_data 里去重 / 写入
+	// field_values），避免同一份提取逻辑跑三遍导致行为漂移（见 stripStructuredFieldKeys 和
+	// 下方第 5 步的注释）。
+	fieldValues := extractServiceRequestFieldValues(reqData.FormData)
+
 	// 2b. Validate required dynamic custom fields (server-side enforcement — the admin-configured
 	// "required" flag on a service catalog's field definitions must not be trust-the-frontend-only).
 	if s.client != nil {
-		fieldValues := extractServiceRequestFieldValues(reqData.FormData)
 		defs, err := service.NewFieldDefinitionService(s.client).ListDefinitions(ctx, tenantID, "service_catalog", catalogID)
 		if err != nil {
 			return nil, common.NewInternalError("Failed to load service catalog fields", err)
@@ -155,7 +165,7 @@ func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalog
 		Title:       title,
 		Description: reqData.reason(),
 		Priority:    "medium",
-		Type:        mapITSMType(cat.ITSMType),
+		Type:        mapTargetClassToTicketType(cat.TargetClass),
 		RequesterID: requesterID,
 		Source:      "service_catalog",
 	}
@@ -180,14 +190,17 @@ func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalog
 		ComplianceAck:      reqData.ComplianceAck,
 		NeedsPublicIP:      reqData.NeedsPublicIP,
 		DataClassification: reqData.DataClassification,
-		FormData:           injectApprovalChain(reqData.FormData, resolvedSteps),
-		CostCenter:         reqData.CostCenter,
-		SourceIPWhitelist:  reqData.SourceIPWhitelist,
-		ExpireAt:           reqData.ExpireAt,
-		ContactName:        reqData.ContactName,
-		ContactEmail:       reqData.ContactEmail,
-		Quantity:           reqData.Quantity,
-		ExpectedAt:         reqData.ExpectedAt,
+		// form_data 不再原样落库整份 FormData——已经通过 field_values 权威持久化的结构化
+		// 字段键先被 stripStructuredFieldKeys 剔除，只留 _approval_chain 这类系统流程上下文
+		// 和没有字段定义覆盖的自由内容，停止 §8.3 描述的 form_data/field_values 双写。
+		FormData:          injectApprovalChain(stripStructuredFieldKeys(reqData.FormData, fieldValues), resolvedSteps),
+		CostCenter:        reqData.CostCenter,
+		SourceIPWhitelist: reqData.SourceIPWhitelist,
+		ExpireAt:          reqData.ExpireAt,
+		ContactName:       reqData.ContactName,
+		ContactEmail:      reqData.ContactEmail,
+		Quantity:          reqData.Quantity,
+		ExpectedAt:        reqData.ExpectedAt,
 	}
 
 	if cat.CITypeID > 0 {
@@ -207,11 +220,10 @@ func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalog
 
 	// 5. Persist dynamic custom field values against the TICKET now, not the SR
 	// (entity_type/entity_id 归属改成 ticket，这样工单详情页能像其他自定义字段一样直接展示)。
-	if s.client != nil {
-		if fieldValues := extractServiceRequestFieldValues(reqData.FormData); len(fieldValues) > 0 {
-			if err := service.NewFieldValueService(s.client).CreateValues(ctx, tenantID, "service_catalog", catalogID, "ticket", createdTicket.ID, fieldValues); err != nil {
-				s.logger.Warnw("Failed to persist service request custom field values", "error", err, "ticket_id", createdTicket.ID)
-			}
+	// 复用 2a-2 提取的 fieldValues，不重新提取一遍。
+	if s.client != nil && len(fieldValues) > 0 {
+		if err := service.NewFieldValueService(s.client).CreateValues(ctx, tenantID, "service_catalog", catalogID, "ticket", createdTicket.ID, fieldValues); err != nil {
+			s.logger.Warnw("Failed to persist service request custom field values", "error", err, "ticket_id", createdTicket.ID)
 		}
 	}
 

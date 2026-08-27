@@ -338,6 +338,7 @@ func (h *Handler) toDTO(c *ServiceCatalog) dto.ServiceCatalogResponse {
 		ProcessDefinitionKey: c.ProcessDefinitionKey,
 		Status:               c.Status,
 		ServiceType:          c.ServiceType,
+		TargetClass:          c.TargetClass,
 		RequiresInfraFields:  RequiresInfraFields(c.ServiceType),
 		Fields:               fields,
 		CreatedAt:            c.CreatedAt,

@@ -1520,3 +1520,48 @@ func TestCreateTicket_RequiredFieldValidationPasses_CreatesTicket(t *testing.T) 
 	require.NoError(t, err)
 	require.NotNil(t, created)
 }
+
+// TestTicketService_CreateTicketTemplate_PersistsCategoryIDs 是 §5.4 任务包 category_ids
+// bug 的端到端回归，覆盖真实的 API 调用链：controller/ticket_controller.go 绑定
+// dto.TicketTemplate → TicketService.CreateTicketTemplate/UpdateTicketTemplate 转换成
+// service.CreateTemplateRequest/UpdateTemplateRequest → TicketTemplateService 落库。
+// service/ticket_template_service_test.go 已经覆盖了 TicketTemplateService 这一层本身；
+// 这里额外覆盖 TicketService 这层桥接代码——之前即便 TicketTemplateService 支持
+// CategoryIDs，如果 CreateTicketTemplate/UpdateTicketTemplate 转换时漏抄这个字段，
+// 从真实 API 路径提交的 categoryIds 依然会在这一层被悄悄丢弃。
+func TestTicketService_CreateTicketTemplate_PersistsCategoryIDs(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ticket_service_template_category_ids?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+
+	tenant, err := client.Tenant.Create().
+		SetName("T").SetCode("tmpl-cat-ids").SetDomain("tmpl-cat-ids.com").SetStatus("active").
+		Save(ctx)
+	require.NoError(t, err)
+
+	svc := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
+
+	createdRaw, err := svc.CreateTicketTemplate(ctx, tenant.ID, &dto.TicketTemplate{
+		Name: "网络接入申请", Category: "网络", CategoryIDs: []int{101, 102},
+	})
+	require.NoError(t, err)
+	created, ok := createdRaw.(*dto.TicketTemplate)
+	require.True(t, ok)
+	assert.ElementsMatch(t, []int{101, 102}, created.CategoryIDs, "CreateTicketTemplate 的响应必须带上提交的 categoryIds")
+
+	fetchedRaw, err := svc.GetTicketTemplate(ctx, tenant.ID, created.ID)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []int{101, 102}, fetchedRaw.CategoryIDs, "重新查询必须能读回落库的 categoryIds（不是只在内存返回值里有）")
+
+	updatedRaw, err := svc.UpdateTicketTemplate(ctx, tenant.ID, created.ID, &dto.TicketTemplate{
+		CategoryIDs: []int{201},
+	})
+	require.NoError(t, err)
+	updated, ok := updatedRaw.(*dto.TicketTemplate)
+	require.True(t, ok)
+	assert.ElementsMatch(t, []int{201}, updated.CategoryIDs, "UpdateTicketTemplate 必须能覆盖写入新的 categoryIds")
+
+	fetchedAfterUpdate, err := svc.GetTicketTemplate(ctx, tenant.ID, created.ID)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []int{201}, fetchedAfterUpdate.CategoryIDs)
+}

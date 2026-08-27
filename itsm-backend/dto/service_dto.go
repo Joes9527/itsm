@@ -86,10 +86,15 @@ type ServiceCatalogResponse struct {
 	// 为 true（security 及其余类型为 false）。前端申请表单据此决定是否渲染"成本中心/数据分级/
 	// 公网IP/IP白名单/资源过期时间/合规确认"这组基础设施字段，不自行判断 service_type
 	// （见 handlers/service_catalog/entity.go 的 RequiresInfraFields 函数注释）。
-	RequiresInfraFields bool                     `json:"requiresInfraFields"`
-	Fields              []map[string]interface{} `json:"fields,omitempty"`
-	CreatedAt           time.Time                `json:"createdAt"`
-	UpdatedAt           time.Time                `json:"updatedAt"`
+	RequiresInfraFields bool `json:"requiresInfraFields"`
+	// TargetClass 是该目录项对应的 WorkItem 目标类：service_request_item|incident|change_request，
+	// 由后端根据 itsm_type 计算并在创建/更新时同步落库（见 handlers/service_catalog 的
+	// computeTargetClass），是 service_request 域路由判断（是否走 Incident 创建路径）的唯一
+	// 权威依据，itsm_type 不再承担这个职责（design doc §7.2）。
+	TargetClass string                   `json:"targetClass,omitempty"`
+	Fields      []map[string]interface{} `json:"fields,omitempty"`
+	CreatedAt   time.Time                `json:"createdAt"`
+	UpdatedAt   time.Time                `json:"updatedAt"`
 }
 
 // ServiceRequestResponse 服务请求响应

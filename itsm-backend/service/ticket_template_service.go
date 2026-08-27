@@ -35,15 +35,18 @@ func (s *TicketTemplateService) CreateTemplate(ctx context.Context, req *CreateT
 		return nil, err
 	}
 
-	template, err := s.client.TicketTemplate.Create().
+	create := s.client.TicketTemplate.Create().
 		SetName(req.Name).
 		SetDescription(req.Description).
 		SetCategory(req.Category).
 		SetPriority(req.Priority).
 		SetWorkflowSteps(workflowStepsBytes).
 		SetIsActive(req.IsActive).
-		SetTenantID(req.TenantID).
-		Save(ctx)
+		SetTenantID(req.TenantID)
+	if req.CategoryIDs != nil {
+		create = create.SetCategoryIds(req.CategoryIDs)
+	}
+	template, err := create.Save(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -148,6 +151,9 @@ func (s *TicketTemplateService) UpdateTemplate(ctx context.Context, id int, req 
 	}
 	if req.IsActive != nil {
 		update.SetIsActive(*req.IsActive)
+	}
+	if req.CategoryIDs != nil {
+		update.SetCategoryIds(req.CategoryIDs)
 	}
 
 	update.SetUpdatedAt(time.Now())
@@ -280,11 +286,17 @@ func (s *TicketTemplateService) DeleteTemplate(ctx context.Context, id int, tena
 
 // CreateTemplateRequest 创建模板请求
 type CreateTemplateRequest struct {
-	Name          string                   `json:"name" binding:"required"`
-	Description   string                   `json:"description"`
-	Category      string                   `json:"category" binding:"required"`
-	Priority      string                   `json:"priority"`
-	Fields        []FieldDefinitionInput   `json:"fields"`
+	Name        string                 `json:"name" binding:"required"`
+	Description string                 `json:"description"`
+	Category    string                 `json:"category" binding:"required"`
+	Priority    string                 `json:"priority"`
+	Fields      []FieldDefinitionInput `json:"fields"`
+	// CategoryIDs 关联的工单分类ID列表，用于精确匹配模板与服务目录项——对应
+	// ent/schema/tickettemplate.go 的 category_ids 列。之前这个字段在
+	// CreateTemplateRequest/UpdateTemplateRequest 里完全不存在，create/update API
+	// 无论前端怎么提交都写不进数据库（只有响应结构体 dto.TicketTemplate 能读，读不出
+	// 从未写入过的数据）。
+	CategoryIDs   []int                    `json:"categoryIds"`
 	WorkflowSteps []map[string]interface{} `json:"workflowSteps"`
 	IsActive      bool                     `json:"isActive"`
 	TenantID      int                      `json:"tenantId" binding:"required"`
@@ -292,11 +304,15 @@ type CreateTemplateRequest struct {
 
 // UpdateTemplateRequest 更新模板请求
 type UpdateTemplateRequest struct {
-	Name          string                   `json:"name"`
-	Description   string                   `json:"description"`
-	Category      string                   `json:"category"`
-	Priority      string                   `json:"priority"`
-	Fields        []FieldDefinitionInput   `json:"fields"`
+	Name        string                 `json:"name"`
+	Description string                 `json:"description"`
+	Category    string                 `json:"category"`
+	Priority    string                 `json:"priority"`
+	Fields      []FieldDefinitionInput `json:"fields"`
+	// CategoryIDs 为 nil 表示不修改（同 Fields 的"nil=不变"约定，见
+	// TestTicketTemplateService_UpdateTemplate_NilFieldsPreservesExisting）；非 nil（含空切片）
+	// 会覆盖写入。
+	CategoryIDs   []int                    `json:"categoryIds"`
 	WorkflowSteps []map[string]interface{} `json:"workflowSteps"`
 	IsActive      *bool                    `json:"isActive"`
 }

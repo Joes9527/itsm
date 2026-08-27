@@ -27,8 +27,13 @@ import (
 //  4. TestService_Create_IncidentCatalog_NoServiceRequestRowCreated —— itsm_type=Incident 分流。
 //  5. TestService_CrossTenantIsolation_GetUpdateDelete —— 跨租户隔离。
 //
-// 这些测试只锁定现状行为，不修复任何已发现的缺陷（包括已知的 form_data/field_values 双写现象）——
-// 详见任务包 task-1-brief.md 的"发现 bug 怎么办"一节。
+// Wave0 版本这些测试只锁定现状行为，不修复任何已发现的缺陷。Wave2（ServiceRequest 层级规范化）
+// 改动了其中两个场景对应的现状行为，测试跟着一起更新，不是新增测试：
+//   - 场景 2：form_data/field_values 双写已收敛为 field_values 单一权威，断言从"两边相等"
+//     改为"field_values 有值且 form_data 不再重复该键"（entity.go stripStructuredFieldKeys）。
+//   - 场景 4：Incident 分流判断的依据从 itsm_type 改成 target_class（entity.go
+//     isIncidentCatalog），测试 fixture 需要同时设置两个字段模拟"已跑过
+//     cmd/backfill_servicecatalog_target_class 回填"的状态。
 
 // TestService_Create_FullChain_TicketStatusReflectedAfterChange 覆盖场景 1：
 // 服务目录提交表单 → Service.Create 生成 ServiceRequest → 委托生成关联 Ticket，
@@ -99,12 +104,13 @@ func TestService_Create_FullChain_TicketStatusReflectedAfterChange(t *testing.T)
 	assert.Equal(t, tenant.ID, fetchedByTicket.TenantID)
 }
 
-// TestService_Create_FormDataFieldValuesConsistency_FieldLevel 覆盖场景 2：这是后续
-// WorkItem 重构要对比的基线——当前实现把提交的自定义字段同时写进两个地方（真实的双写，
-// 见 service.go:445-459 extractServiceRequestFieldValues + service.go:212 CreateValues，
-// 以及 newReq.FormData 原样存整个 form_data JSON 列）。这条测试按任务包要求做精确到
-// 字段级的比对：逐个字段在 field_values（entity_type="ticket"）和 form_data JSON 里
-// 分别查值，断言两边相等——不能简化成"两边都非空"。
+// TestService_Create_FormDataFieldValuesConsistency_FieldLevel 覆盖场景 2：field_values
+// 是结构化自定义字段的唯一权威来源（design doc §8.3），form_data 不再重复存储同一批字段
+// （entity.go stripStructuredFieldKeys，Wave2 收敛掉了此前 field_values/form_data 的双写）。
+// 这条测试按任务包要求做精确到字段级的比对：field_values（entity_type="ticket"）里能查到
+// 每个提交的自定义字段且值正确；form_data JSON 里这些同名键必须不存在——不能只断言
+// "form_data 有值"，要断言"不重复"。系统上下文键（title/reason）不受影响，仍然留在
+// form_data 里。
 func TestService_Create_FormDataFieldValuesConsistency_FieldLevel(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:sr_form_data_consistency?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
@@ -172,17 +178,24 @@ func TestService_Create_FormDataFieldValuesConsistency_FieldLevel(t *testing.T) 
 	require.NoError(t, err)
 	require.NotNil(t, fetched.FormData)
 
-	// 逐字段比对：field_values 里的值必须和 form_data 里的同名字段值相等。
+	// field_values 侧：每个提交的自定义字段值必须正确、完整。
 	for name, submittedValue := range submittedCustomFields {
 		fvValue, ok := fieldValueByName[name]
 		require.True(t, ok, "field_values 表里缺少字段 %q", name)
-		fdValue, ok := fetched.FormData[name]
-		require.True(t, ok, "form_data JSON 里缺少字段 %q", name)
-
-		assert.Equal(t, submittedValue, fdValue, "form_data[%q] 必须等于提交时的原始值", name)
 		assert.Equal(t, submittedValue, fvValue, "field_values[%q] 必须等于提交时的原始值", name)
-		assert.Equal(t, fdValue, fvValue, "字段 %q 在 field_values 和 form_data 两处的值必须一致（当前实现是双写，这条断言锁定两边巧合一致的现状，作为后续重构的基线）", name)
 	}
+
+	// form_data 侧：结构化字段已经收敛到 field_values 单一权威，不能在 form_data 里重复出现——
+	// 明确断言"键不存在"，不是弱化成"值可能为空"。
+	for name := range submittedCustomFields {
+		_, stillPresent := fetched.FormData[name]
+		assert.False(t, stillPresent, "字段 %q 已经写入 field_values，不应该在 form_data 里重复出现（停止双写）", name)
+	}
+
+	// 系统上下文键不受影响：title/reason 既不经过 extractServiceRequestFieldValues 提取，
+	// 也不应该被误删。
+	assert.Equal(t, "申请一台云主机-一致性", fetched.FormData["title"])
+	assert.Equal(t, "一致性回归测试", fetched.FormData["reason"])
 }
 
 // TestService_Create_ResolvesApprovalChainIntoFormData 覆盖场景 3：
@@ -364,8 +377,13 @@ func TestService_Create_IncidentCatalog_NoServiceRequestRowCreated(t *testing.T)
 	catalog, err := scService.Create(ctx, "系统故障上报", "运维", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
 	require.NoError(t, err)
 	// Service.Create 没有暴露设置 itsm_type 的参数（默认 Request），直接用 ent 改成 Incident，
-	// 模拟目录项被配置为"事件类"目录。
-	_, err = client.ServiceCatalog.UpdateOneID(catalog.ID).SetItsmType("Incident").Save(ctx)
+	// 模拟目录项被配置为"事件类"目录。同时手动设置 target_class——路由判断（entity.go
+	// isIncidentCatalog）自 target_class 收敛改造后读的是 target_class 不是 itsm_type，
+	// 这里手动补上等价于该行已经跑过 cmd/backfill_servicecatalog_target_class 回填。
+	_, err = client.ServiceCatalog.UpdateOneID(catalog.ID).
+		SetItsmType("Incident").
+		SetTargetClass(service_catalog.TargetClassIncident).
+		Save(ctx)
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
