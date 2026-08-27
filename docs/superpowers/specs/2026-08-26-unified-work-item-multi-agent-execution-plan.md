@@ -1,6 +1,6 @@
 # 统一 Work Item 重构 — 多 Agent 执行 Spec
 
-> 状态：Proposed
+> 状态：Proposed — Wave 1 已于 2026-08-27 通过 `refactor/unified-work-item` 并入 main（merge commit `8c9bbe6c`），但 Wave 2（四域迁移）与 Wave 3（全分支终审）均未开始。这次合并早于本文档 §1 自己设定的合并闸门（"全部到齐 + Wave 3 最终评审通过后才合入 main"），详见 §4.7。
 > 日期：2026-08-26
 > 依赖：
 > - 领域模型设计：[2026-08-26-unified-work-item-model-design.md](./2026-08-26-unified-work-item-model-design.md)（本文档不重复其内容，只引用并转成可分发的任务包）
@@ -191,6 +191,21 @@ Wave 3（我自己执行，串行）
 3. **`process_instances.business_type` 用的还是迁移前的词表（全分支评审补充）**：Wave 1 给 `ProcessInstance` 加了结构化的 `business_type`/`business_id` 两列，但实际写进 `business_type` 的是 `dto.BusinessType` 的取值（`ticket`/`change`/`incident`/`service_request`/`problem`/`release`，见 `itsm-backend/dto/bpmn_process_trigger_dto.go`），不是本文档和设计文档使用的 recordClass 词表（`generic`/`service_request_item`/`incident`/`problem`/`change_request`/`catalog_task`）。两个词表有两个值对不上：`change` vs `change_request`、`ticket` vs `generic`。
 
    这是有意为之的迁移期状态：Wave 1 阶段各专业域还没有自己的 WorkItem，流程触发方只知道自己的域名字，写不出 recordClass。**收敛到 recordClass 是 Wave 2 各域迁移任务的责任**——每个域在建立 `work_item_id` 关联、拿到 WorkItem 之后，同步把该域触发流程时写入的 `business_type` 改成对应的 recordClass，并为存量行准备一次转写（可参考 `cmd/backfill_process_instance_business_identity` 的形状）。在那之前，任何按 `business_type` 过滤流程实例的新代码都必须用 `dto.BusinessType` 常量，不要用 recordClass 字面量。`ent/schema/process_instance.go` 上的字段注释已同步说明这一点。
+
+### 4.7 合并闸门违反记录与 Wave 0 收尾（2026-08-27，独立评审补充）
+
+**发现**：一次独立于原实现方的评审（外部 agent）对 `refactor/unified-work-item` 跑了一遍 §3/§4 的验收命令，结论是**不应合并到 main**——Wave 0 的 Incident（1.3%）、Problem（31.8%）覆盖率均未达标（§3.1/§3.2 门槛 40%/50%），`WorkItemRelation`/`WorkItemID` 在四个专业域生产代码里零消费点，`WorkItemShell` 的 SLA/流程/时间线/关系/统一操作区均未渲染。经核实，这些结论全部属实。
+
+**但同时发现**：`refactor/unified-work-item` 在这次评审之前已经通过 merge commit `8c9bbe6c`（2026-08-27 14:07）并入 main，并已推送到 `origin/main`——违反了本文档 §1 自己设定的合并闸门。这不是"要不要合并"的问题，而是已经合并、需要向前收尾的问题。
+
+**处理方式**：不 revert 这次合并（合并内容本身——ent schema、BPMN 结构化身份、WorkItemShell 骨架——评审通过，问题在于合并时机而非内容质量）。改为在 `test/wave0-incident-problem-backfill` 分支补齐 Wave 0 缺口：
+
+- Incident 覆盖率 1.3% → 44.0%（超过 40% 门槛），新增 `handlers/incident/service_integration_test.go`。
+- Problem 覆盖率 31.8% → 76.0%（超过 50% 门槛），新增 `handlers/problem/{handler,investigation,known_error}_test.go`，`service_test.go` 从 130 行扩充到 482 行。
+- 过程中发现一个真实路由 bug（`/problem-investigation/investigations/:id` 与 `.../:investigation_id/steps` 的 Gin 通配符参数名不一致），按任务包规则用 `t.Skip` 标注，未修复，留给 Wave 2 Problem 迁移任务处理。
+- `go build ./...`、`go vet ./handlers/incident/... ./handlers/problem/...`、`go test ./...` 全部通过（48 个包，0 FAIL）。
+
+**仍然未做、Wave 2 开始前必须明确的事**：四个专业域的创建路径仍未接入 `WorkItemID`/`WorkItemRelation`，`WorkItemShell` 仍缺 SLA/流程/时间线/关系/操作区。这些是 Wave 2 的范围，不是本次 Wave 0 收尾的范围——在 Wave 2 任务包正式分发并完成、Wave 3 全分支终审通过之前，**不应有更多假设"Wave 1 已完成"就可以在此基础上继续叠加新功能而不做终审的合并**。
 
 ---
 
