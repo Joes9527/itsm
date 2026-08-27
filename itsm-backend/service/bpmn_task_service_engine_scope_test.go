@@ -294,3 +294,81 @@ func TestTaskService_ReusesEngineInstanceAndRegistry(t *testing.T) {
 	require.Same(t, incidentHandler, reachable,
 		"任务完成路径可达的 handler 必须就是被注入的那一个")
 }
+
+// 下面两个测试锁定 Critical #1 修复后才第一次真正可达的一条路径：CompleteTask 在
+// dispatchUserTaskCallback 失败时只 Warnw、不把错误往上传（bpmn_process_engine.go
+// 的 CompleteTask 末尾固定 `return nil`，见其上方注释"任务已完成、流程已推进，不能
+// 回滚"）。修复前 statusService 恒为 nil，所有 update_status 节点都会以同样的方式
+// 静默失败，因此不存在"业务校验拒绝、但流程还是走完了"这条可观察路径——它一直被
+// "结构性拒绝"（nil service）掩盖着。现在 statusService 真的注入到位了，
+// TicketService.UpdateTicketStatus 自身的状态机校验和解决方案校验才第一次会在这条
+// 链路上被触发，而它们被拒绝时同样会被吞掉。这两个测试确认：吞掉之后，工单状态
+// 停在原地，不会被静默改成一个未经校验通过的值。
+
+// TestTaskServiceCompleteTask_RejectsResolvedWithoutResolution 覆盖
+// TicketService.UpdateTicketStatus 的"解决工单必须先有 Resolution"校验：
+// BPMN 侧没有、也不该有能力越过这条业务规则直接把工单标记为已解决。
+func TestTaskServiceCompleteTask_RejectsResolvedWithoutResolution(t *testing.T) {
+	client, engine, ctx, tenantID := setupTicketCallbackEngine(t)
+	requesterID := createRequester(t, client, ctx, tenantID, "ts-scope-4")
+
+	// in_progress -> resolved 转换本身合法（IsValidTicketStatusTransition 允许），
+	// 用来单独锁定"没有 Resolution"这条校验，不跟状态机校验混在一起。
+	tkt, err := client.Ticket.Create().
+		SetTitle("解决工单必须先有解决方案").
+		SetTicketNumber("T-TS-SCOPE-4").
+		SetStatus("in_progress").
+		SetRequesterID(requesterID).
+		SetTenantID(tenantID).
+		Save(ctx)
+	require.NoError(t, err)
+	require.Empty(t, tkt.Resolution, "夹具工单不应该带 Resolution，否则测试没有锁定目标校验")
+
+	_, handle := driveTicketFlowToHandleTask(t, client, engine, ctx, tkt.ID)
+
+	// CompleteTask 本身不报错——流程 token 必须照常前进，这是 dispatchUserTaskCallback
+	// "失败只告警不阻断"的既有设计，不是本次要验证或改变的行为。
+	require.NoError(t, engine.TaskService().CompleteTask(ctx, handle.TaskID, map[string]interface{}{
+		"business_id": tkt.ID,
+		"new_status":  "resolved",
+	}))
+
+	updated, err := client.Ticket.Get(ctx, tkt.ID)
+	require.NoError(t, err)
+	require.Equal(t, "in_progress", updated.Status,
+		"TicketService.UpdateTicketStatus 必须拒绝没有 Resolution 的 resolved 转换——"+
+			"这条校验此前从未在真实 BPMN 分发链路上被触发过（Critical #1 修复前 statusService 恒为 nil），"+
+			"若它被绕过或未被触发，工单会被 BPMN 静默标记为已解决且没有解决方案")
+}
+
+// TestTaskServiceCompleteTaskByID_RejectsIllegalNewToResolvedTransition 覆盖
+// IsValidTicketStatusTransition 的状态机校验：new 状态不允许直接跳到 resolved。
+func TestTaskServiceCompleteTaskByID_RejectsIllegalNewToResolvedTransition(t *testing.T) {
+	client, engine, ctx, tenantID := setupTicketCallbackEngine(t)
+	requesterID := createRequester(t, client, ctx, tenantID, "ts-scope-5")
+
+	// 带上 Resolution：这条测试要单独锁定状态机校验，不能被"没有 Resolution"那条
+	// 校验顺带挡住——否则去掉状态机校验后测试还是会通过，就锁不住目标缺陷了。
+	tkt, err := client.Ticket.Create().
+		SetTitle("new 不能直接跳到 resolved").
+		SetTicketNumber("T-TS-SCOPE-5").
+		SetStatus("new").
+		SetResolution("占位解决方案，仅用于隔离状态机校验").
+		SetRequesterID(requesterID).
+		SetTenantID(tenantID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	_, handle := driveTicketFlowToHandleTask(t, client, engine, ctx, tkt.ID)
+
+	require.NoError(t, engine.TaskService().CompleteTaskByID(ctx, handle.ID, map[string]interface{}{
+		"business_id": tkt.ID,
+		"new_status":  "resolved",
+	}))
+
+	updated, err := client.Ticket.Get(ctx, tkt.ID)
+	require.NoError(t, err)
+	require.Equal(t, "new", updated.Status,
+		"new -> resolved 是非法状态转换（IsValidTicketStatusTransition 不允许），"+
+			"必须被 TicketService.UpdateTicketStatus 拒绝，而不是被 BPMN 静默接受")
+}
