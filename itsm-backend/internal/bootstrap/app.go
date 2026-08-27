@@ -304,6 +304,9 @@ func NewApplication() *Application {
 	// Release & Asset Management Services
 	releaseService := service.NewReleaseService(client, sugar)
 	releaseService.SetProcessTriggerService(processTriggerService)
+	// 审批/阶段桥接必须复用这一个 processEngine：它的 CallbackRegistry 在下面被注入了
+	// TicketService/IncidentService，桥接自己造引擎会拿到空 registry，UserTask 回调静默失效。
+	releaseService.SetProcessEngine(processEngine)
 	assetService := service.NewAssetService(client, sugar)
 	assetLicenseService := service.NewAssetLicenseService(client, sugar)
 	// CMDB Services
@@ -445,6 +448,8 @@ func NewApplication() *Application {
 	// Ticket Workflow Service & Controller
 	ticketWorkflowService := service.NewTicketWorkflowService(client, sugar)
 	ticketWorkflowService.SetConnectorManager(connectorManager)
+	// 同 releaseService：审批桥接复用全局 processEngine，保证 CallbackRegistry 已装配。
+	ticketWorkflowService.SetProcessEngine(processEngine)
 	ticketWorkflowController := controller.NewTicketWorkflowController(ticketWorkflowService, database.GetRawDB(), sugar)
 
 	// Ticket Automation Rule Controller (service 已于 131 行预创建并注入 V2)

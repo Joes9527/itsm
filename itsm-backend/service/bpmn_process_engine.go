@@ -127,7 +127,12 @@ func NewCustomProcessEngine(client *ent.Client, logger *zap.SugaredLogger) Proce
 	}
 	engine.processDefinitionService = &bpmnProcessDefinitionService{client: client, logger: logger}
 	engine.processInstanceService = &bpmnProcessInstanceService{client: client, logger: logger}
-	engine.taskService = &bpmnTaskService{client: client, logger: logger, groupResolver: engine.groupResolver}
+	// taskService 持有 engine 自身的引用（而不是每次调用再 NewCustomProcessEngine 造一个新的）：
+	// callbackRegistry 是 engine 级别的状态，bootstrap 在各领域 service 构造完成后往
+	// 这一个 engine 的 registry 里注入 TicketService/IncidentService。任务完成路径若临时
+	// 新建 engine，拿到的就是一个从未被注入过的空 registry，UserTask 回调只会 Warn 一句
+	// 静默失败（见 dispatchUserTaskCallback 的"失败只告警不阻断"注释）。
+	engine.taskService = &bpmnTaskService{client: client, logger: logger, groupResolver: engine.groupResolver, engine: engine}
 	engine.auditService = NewBPMNAuditService(client, logger)
 
 	// 注册流程相关的内置函数
@@ -200,8 +205,12 @@ func (e *CustomProcessEngine) ProcessInstanceService() ProcessInstanceService {
 }
 
 // TaskService 返回任务服务
+//
+// 必须返回构造时创建的那一个实例（它持有 engine 自身的引用），不能每次现造一个：
+// 任务完成会经由 bpmnTaskService.CompleteTask/CompleteTaskByID 回到 engine.CompleteTask，
+// 而 engine 的 callbackRegistry 是被 bootstrap 注入过领域服务的实例级状态。
 func (e *CustomProcessEngine) TaskService() TaskService {
-	return &bpmnTaskService{client: e.client, logger: e.logger, groupResolver: e.groupResolver}
+	return e.taskService
 }
 
 // CallbackRegistry 暴露内部的 ServiceTask 回调注册中心，供 bootstrap 在各领域 service
@@ -2233,6 +2242,10 @@ type bpmnTaskService struct {
 	client        *ent.Client
 	logger        *zap.SugaredLogger
 	groupResolver *bpmn.GroupResolver
+	// engine 是创建本任务服务的那个引擎实例。任何需要推进流程（CompleteTask）或复用引擎
+	// 内部鉴权/审批记录逻辑（authorizeTaskActor / recordApprovalDecision）的方法都必须用它，
+	// 不能 NewCustomProcessEngine 现造——见 NewCustomProcessEngine 里的说明。
+	engine *CustomProcessEngine
 }
 
 // GetTask 根据任务ID (BPMN标准task_id字符串)获取任务
@@ -2267,7 +2280,6 @@ func (s *bpmnTaskService) GetTaskByID(ctx context.Context, id int) (*ent.Process
 
 // CompleteTaskByID 根据数据库自增ID完成任务
 func (s *bpmnTaskService) CompleteTaskByID(ctx context.Context, id int, variables map[string]interface{}) error {
-	engine := NewCustomProcessEngine(s.client, s.logger)
 	// 直接使用 ent Client 获取任务，确保应用租户过滤
 	task, err := s.client.ProcessTask.Get(ctx, id)
 	if err != nil {
@@ -2279,7 +2291,7 @@ func (s *bpmnTaskService) CompleteTaskByID(ctx context.Context, id int, variable
 			return fmt.Errorf("任务不属于当前租户")
 		}
 	}
-	return engine.CompleteTask(ctx, task.TaskID, variables)
+	return s.engine.CompleteTask(ctx, task.TaskID, variables)
 }
 
 func (s *bpmnTaskService) ListUserTasks(ctx context.Context, req *ListUserTasksRequest) ([]*ent.ProcessTask, int, error) {
@@ -2520,8 +2532,7 @@ func (s *bpmnTaskService) ClaimTaskByID(ctx context.Context, id int, userID int)
 }
 
 func (s *bpmnTaskService) CompleteTask(ctx context.Context, taskID string, variables map[string]interface{}) error {
-	engine := NewCustomProcessEngine(s.client, s.logger)
-	return engine.CompleteTask(ctx, taskID, variables)
+	return s.engine.CompleteTask(ctx, taskID, variables)
 }
 
 func (s *bpmnTaskService) CancelTask(ctx context.Context, taskID string, reason string) error {
@@ -2870,8 +2881,7 @@ func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequ
 	if err != nil {
 		return fmt.Errorf("获取任务失败: %w", err)
 	}
-	engineForAuth := NewCustomProcessEngine(s.client, s.logger).(*CustomProcessEngine)
-	if err := engineForAuth.authorizeTaskActor(ctx, task); err != nil {
+	if err := s.engine.authorizeTaskActor(ctx, task); err != nil {
 		return err
 	}
 	if task.Status == "completed" || task.Status == "cancelled" {
@@ -2899,8 +2909,7 @@ func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequ
 		if req.Approved {
 			action, decision = "approve", "approved"
 		}
-		engine := NewCustomProcessEngine(s.client, s.logger).(*CustomProcessEngine)
-		if err := engine.recordApprovalDecision(ctx, instance, task, map[string]interface{}{"approvalAction": action, "approvalResult": decision, "approvalComment": req.Comment}); err != nil {
+		if err := s.engine.recordApprovalDecision(ctx, instance, task, map[string]interface{}{"approvalAction": action, "approvalResult": decision, "approvalComment": req.Comment}); err != nil {
 			return err
 		}
 	}
@@ -2962,8 +2971,7 @@ func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequ
 			}).
 			Exec(ctx)
 		workflowCtx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, parentTask.TenantID)
-		engine := NewCustomProcessEngine(s.client, s.logger)
-		if err := engine.CompleteTask(workflowCtx, parentTask.TaskID, map[string]interface{}{"approvalResult": status.Status, "approved": status.Status == "approved"}); err != nil {
+		if err := s.engine.CompleteTask(workflowCtx, parentTask.TaskID, map[string]interface{}{"approvalResult": status.Status, "approved": status.Status == "approved"}); err != nil {
 			return fmt.Errorf("推进会签父任务失败: %w", err)
 		}
 	}

@@ -124,7 +124,7 @@ func createBridgeProcessFixture(t *testing.T, client *ent.Client, tenantID int, 
 func TestBPMNApprovalBridge_NoInstanceFallsBack(t *testing.T) {
 	client := newApprovalBridgeTestClient(t, "bridge_no_instance")
 	tenantID, actorID := setupBridgeTenantAndActor(t, client, "none")
-	bridge := NewBPMNApprovalBridge(client, zaptest.NewLogger(t).Sugar())
+	bridge := NewBPMNApprovalBridge(client, zaptest.NewLogger(t).Sugar(), nil)
 
 	handled, err := bridge.CompleteBusinessApprovalTask(context.Background(), tenantID, actorID, "ticket", 999, "approve", "")
 	require.NoError(t, err)
@@ -135,7 +135,7 @@ func TestBPMNApprovalBridge_CompletesTaskAndRecordsDecision(t *testing.T) {
 	client := newApprovalBridgeTestClient(t, "bridge_complete")
 	tenantID, actorID := setupBridgeTenantAndActor(t, client, "ok")
 	_, taskID := createBridgeProcessFixture(t, client, tenantID, "ok1", "ticket:123", actorID)
-	bridge := NewBPMNApprovalBridge(client, zaptest.NewLogger(t).Sugar())
+	bridge := NewBPMNApprovalBridge(client, zaptest.NewLogger(t).Sugar(), nil)
 
 	handled, err := bridge.CompleteBusinessApprovalTask(context.Background(), tenantID, actorID, "ticket", 123, "approve", "同意")
 	require.NoError(t, err)
@@ -163,7 +163,7 @@ func TestBPMNApprovalBridge_UnauthorizedActorFailsClosed(t *testing.T) {
 	tenantID, actorID := setupBridgeTenantAndActor(t, client, "unauth")
 	// 任务指派给其他人（actorID+1000 不存在于 assignee/candidate）
 	_, taskID := createBridgeProcessFixture(t, client, tenantID, "unauth1", "ticket:123", actorID+1000)
-	bridge := NewBPMNApprovalBridge(client, zaptest.NewLogger(t).Sugar())
+	bridge := NewBPMNApprovalBridge(client, zaptest.NewLogger(t).Sugar(), nil)
 
 	handled, err := bridge.CompleteBusinessApprovalTask(context.Background(), tenantID, actorID, "ticket", 123, "reject", "不同意")
 	require.Error(t, err, "操作人不是流程任务审批人时必须失败，防止双轨分叉")
@@ -181,7 +181,7 @@ func TestBPMNApprovalBridge_TenantIsolation(t *testing.T) {
 	tenantB, _ := setupBridgeTenantAndActor(t, client, "tb")
 	// 流程实例属于租户 B
 	createBridgeProcessFixture(t, client, tenantB, "tb1", "ticket:123", actorA)
-	bridge := NewBPMNApprovalBridge(client, zaptest.NewLogger(t).Sugar())
+	bridge := NewBPMNApprovalBridge(client, zaptest.NewLogger(t).Sugar(), nil)
 
 	// 租户 A 审批同名业务键：不应命中租户 B 的实例，应回退旧逻辑
 	handled, err := bridge.CompleteBusinessApprovalTask(context.Background(), tenantA, actorA, "ticket", 123, "approve", "")
@@ -197,7 +197,7 @@ func TestBPMNApprovalBridge_TenantIsolation(t *testing.T) {
 func TestBPMNApprovalBridge_DelegateNoInstanceFallsBack(t *testing.T) {
 	client := newApprovalBridgeTestClient(t, "bridge_delegate_none")
 	tenantID, actorID := setupBridgeTenantAndActor(t, client, "dnone")
-	bridge := NewBPMNApprovalBridge(client, zaptest.NewLogger(t).Sugar())
+	bridge := NewBPMNApprovalBridge(client, zaptest.NewLogger(t).Sugar(), nil)
 
 	handled, err := bridge.DelegateBusinessApprovalTask(context.Background(), tenantID, actorID, "ticket", 999, actorID+1)
 	require.NoError(t, err)
@@ -220,7 +220,7 @@ func TestBPMNApprovalBridge_DelegateReassignsTaskAndAllowsNewAssigneeToComplete(
 	require.NoError(t, err)
 
 	_, taskID := createBridgeProcessFixture(t, client, tenantID, "dok1", "ticket:456", actorID)
-	bridge := NewBPMNApprovalBridge(client, zaptest.NewLogger(t).Sugar())
+	bridge := NewBPMNApprovalBridge(client, zaptest.NewLogger(t).Sugar(), nil)
 
 	handled, err := bridge.DelegateBusinessApprovalTask(ctx, tenantID, actorID, "ticket", 456, delegatee.ID)
 	require.NoError(t, err)
@@ -251,7 +251,7 @@ func TestBPMNApprovalBridge_DelegateUnauthorizedActorFailsClosed(t *testing.T) {
 	tenantID, actorID := setupBridgeTenantAndActor(t, client, "dunauth")
 	// 任务指派给其他人，actor 不是审批人/候选人
 	_, taskID := createBridgeProcessFixture(t, client, tenantID, "dunauth1", "ticket:456", actorID+1000)
-	bridge := NewBPMNApprovalBridge(client, zaptest.NewLogger(t).Sugar())
+	bridge := NewBPMNApprovalBridge(client, zaptest.NewLogger(t).Sugar(), nil)
 
 	handled, err := bridge.DelegateBusinessApprovalTask(context.Background(), tenantID, actorID, "ticket", 456, actorID)
 	require.Error(t, err, "非任务审批人发起委派必须失败，防止越权改派")
@@ -272,7 +272,7 @@ func TestBPMNApprovalBridge_StageTaskCompletesMatchingKey(t *testing.T) {
 	client := newApprovalBridgeTestClient(t, "bridge_stage_ok")
 	tenantID, actorID := setupBridgeTenantAndActor(t, client, "stage-ok")
 	_, taskID := createBridgeProcessFixture(t, client, tenantID, "stageok1", "release:456", actorID)
-	bridge := NewBPMNApprovalBridge(client, zaptest.NewLogger(t).Sugar())
+	bridge := NewBPMNApprovalBridge(client, zaptest.NewLogger(t).Sugar(), nil)
 
 	handled, err := bridge.CompleteBusinessStageTask(context.Background(), tenantID, actorID, "release", 456, "Approval_1", map[string]interface{}{"comment": "评审意见"})
 	require.NoError(t, err)
@@ -294,7 +294,7 @@ func TestBPMNApprovalBridge_StageTaskKeyMismatchFallsBack(t *testing.T) {
 	client := newApprovalBridgeTestClient(t, "bridge_stage_mismatch")
 	tenantID, actorID := setupBridgeTenantAndActor(t, client, "stage-mm")
 	_, taskID := createBridgeProcessFixture(t, client, tenantID, "stagemm1", "release:457", actorID)
-	bridge := NewBPMNApprovalBridge(client, zaptest.NewLogger(t).Sugar())
+	bridge := NewBPMNApprovalBridge(client, zaptest.NewLogger(t).Sugar(), nil)
 
 	handled, err := bridge.CompleteBusinessStageTask(context.Background(), tenantID, actorID, "release", 457, "Other_Key", nil)
 	require.NoError(t, err)
@@ -310,7 +310,7 @@ func TestBPMNApprovalBridge_StageTaskChangeInjectsChangeID(t *testing.T) {
 	client := newApprovalBridgeTestClient(t, "bridge_stage_change")
 	tenantID, actorID := setupBridgeTenantAndActor(t, client, "stage-ch")
 	_, taskID := createBridgeProcessFixture(t, client, tenantID, "stagech1", "change:789", actorID)
-	bridge := NewBPMNApprovalBridge(client, zaptest.NewLogger(t).Sugar())
+	bridge := NewBPMNApprovalBridge(client, zaptest.NewLogger(t).Sugar(), nil)
 
 	handled, err := bridge.CompleteBusinessStageTask(context.Background(), tenantID, actorID, "change", 789, "Approval_1", nil)
 	require.NoError(t, err)
@@ -335,7 +335,7 @@ func TestBPMNApprovalBridge_ApprovalTaskInjectsChangeIDAndApprovalPass(t *testin
 	client := newApprovalBridgeTestClient(t, "bridge_approval_inject")
 	tenantID, actorID := setupBridgeTenantAndActor(t, client, "inject")
 	_, taskID := createBridgeProcessFixture(t, client, tenantID, "inject1", "change:790", actorID)
-	bridge := NewBPMNApprovalBridge(client, zaptest.NewLogger(t).Sugar())
+	bridge := NewBPMNApprovalBridge(client, zaptest.NewLogger(t).Sugar(), nil)
 
 	handled, err := bridge.CompleteBusinessApprovalTask(context.Background(), tenantID, actorID, "change", 790, "approve", "同意")
 	require.NoError(t, err)
