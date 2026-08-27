@@ -105,6 +105,79 @@ func TestTicketTemplateService_DeleteTemplate_DeletesFieldDefinitions(t *testing
 	assert.Empty(t, defs)
 }
 
+// TestTicketTemplateService_CreateTemplate_PersistsCategoryIDs 是 §5.4 任务包指出的独立
+// 发现的真实 bug 的直接回归：CreateTemplateRequest 之前完全没有 CategoryIDs 字段，
+// 不管 create API 提交什么，category_ids 这一列永远写不进数据库。这里验证提交非空
+// categoryIds 之后，读回（Get）能看到落库的值——不是只检查 Create() 的返回值。
+func TestTicketTemplateService_CreateTemplate_PersistsCategoryIDs(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ticket_template_category_ids_create?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	svc := NewTicketTemplateService(client)
+
+	template, err := svc.CreateTemplate(ctx, &CreateTemplateRequest{
+		Name: "网络接入申请", Category: "网络", TenantID: 1,
+		CategoryIDs: []int{10, 20, 30},
+	})
+	require.NoError(t, err)
+	require.ElementsMatch(t, []int{10, 20, 30}, template.CategoryIds, "Create() 返回值应该带上落库的 category_ids")
+
+	fetched, err := svc.GetTemplate(ctx, template.ID, 1)
+	require.NoError(t, err)
+	require.ElementsMatch(t, []int{10, 20, 30}, fetched.CategoryIds, "重新查询必须能读回 create 时提交的 category_ids")
+}
+
+// TestTicketTemplateService_UpdateTemplate_PersistsCategoryIDs 覆盖 update 路径的同一个
+// bug：UpdateTemplateRequest 之前也没有 CategoryIDs 字段。
+func TestTicketTemplateService_UpdateTemplate_PersistsCategoryIDs(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ticket_template_category_ids_update?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	svc := NewTicketTemplateService(client)
+
+	template, err := svc.CreateTemplate(ctx, &CreateTemplateRequest{
+		Name: "模板", Category: "cat", TenantID: 1,
+	})
+	require.NoError(t, err)
+	require.Empty(t, template.CategoryIds)
+
+	updated, err := svc.UpdateTemplate(ctx, template.ID, &UpdateTemplateRequest{
+		CategoryIDs: []int{7, 8},
+	}, 1)
+	require.NoError(t, err)
+	require.ElementsMatch(t, []int{7, 8}, updated.CategoryIds)
+
+	fetched, err := svc.GetTemplate(ctx, template.ID, 1)
+	require.NoError(t, err)
+	require.ElementsMatch(t, []int{7, 8}, fetched.CategoryIds, "重新查询必须能读回 update 时提交的 category_ids")
+}
+
+// TestTicketTemplateService_UpdateTemplate_NilCategoryIDsPreservesExisting 锁定跟 Fields
+// 一样的"nil=不修改"约定（见 TestTicketTemplateService_UpdateTemplate_NilFieldsPreservesExisting）：
+// UpdateTemplateRequest.CategoryIDs 为 nil 时不应该清空已有的 category_ids。
+func TestTicketTemplateService_UpdateTemplate_NilCategoryIDsPreservesExisting(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ticket_template_category_ids_nil?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	svc := NewTicketTemplateService(client)
+
+	template, err := svc.CreateTemplate(ctx, &CreateTemplateRequest{
+		Name: "模板", Category: "cat", TenantID: 1,
+		CategoryIDs: []int{1, 2, 3},
+	})
+	require.NoError(t, err)
+
+	isActive := false
+	_, err = svc.UpdateTemplate(ctx, template.ID, &UpdateTemplateRequest{
+		IsActive: &isActive,
+	}, 1)
+	require.NoError(t, err)
+
+	fetched, err := svc.GetTemplate(ctx, template.ID, 1)
+	require.NoError(t, err)
+	require.ElementsMatch(t, []int{1, 2, 3}, fetched.CategoryIds, "CategoryIDs 为 nil 的 Update 不应该清空已有的 category_ids")
+}
+
 func TestValidateTemplateFields_RejectsUnknownFieldType(t *testing.T) {
 	err := validateTemplateFields([]FieldDefinitionInput{
 		{Name: "weird_field", Label: "怪字段", FieldType: "banana"},

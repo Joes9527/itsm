@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"itsm-backend/handlers/service_catalog"
 )
 
 // ServiceRequest represents the domain entity for a service request.
@@ -108,22 +110,64 @@ func injectApprovalChain(formData map[string]interface{}, steps interface{}) map
 	return formData
 }
 
-// mapITSMType 将 catalog.itsm_type 映射为 Ticket.type。Incident 类型不通过
-// Ticket 审批路径，调用方应在入此函数前分流。
-// 映射规则：Request → service_request, Change → change, Incident 不应到达此处。
-func mapITSMType(itsmType string) string {
-	switch itsmType {
-	case "Change":
+// stripStructuredFieldKeys 返回 formData 的浅拷贝，剔除已经通过 extractServiceRequestFieldValues
+// 摘出、即将写入 field_values 的结构化字段键，只保留 _approval_chain 这类系统流程上下文键
+// 和没有对应字段定义的自由内容（design doc §8.3："ServiceRequest.form_data 只保留尚未结构化
+// 的复合输入或流程上下文，不能与 field_values 同时成为同一字段的权威来源"）。
+//
+// fieldValues 是 extractServiceRequestFieldValues(formData) 的返回值，调用方在 Create() 里只
+// 提取一次、两处复用（校验必填 + 这里去重），避免同一逻辑跑两遍导致行为漂移。
+//
+// 两种输入形状分别处理（对齐 extractServiceRequestFieldValues 的两条路径）：
+//   - 数组形状：结构化字段值整体存在 formData["customFieldValues"] 这一个键下（[]{name,value}），
+//     这个数组已经原样转换进了 fieldValues/field_values，直接删除这一个顶层键即可；不能按
+//     fieldValues 的 key 逐个删，因为那些 key 是数组元素内部的值，不是 formData 的顶层键。
+//   - 兼容的旧 map 形状：field_values 里的每个 key 本来就是 formData 顶层键，逐个删除。
+func stripStructuredFieldKeys(formData map[string]interface{}, fieldValues map[string]interface{}) map[string]interface{} {
+	if formData == nil {
+		return nil
+	}
+	result := make(map[string]interface{}, len(formData))
+	for k, v := range formData {
+		result[k] = v
+	}
+	if len(fieldValues) == 0 {
+		return result
+	}
+	if _, arrayShape := formData["customFieldValues"]; arrayShape {
+		delete(result, "customFieldValues")
+		return result
+	}
+	for k := range fieldValues {
+		delete(result, k)
+	}
+	return result
+}
+
+// mapTargetClassToTicketType 将 catalog.target_class（WorkItem 目标类）映射为 Ticket.type。
+// Wave 2 之前这里读的是 catalog.itsm_type；现在 target_class 是路由的唯一权威来源
+// （design doc §7.2、AGENTS.md 禁止 itsm_type/target_class 两个字段并存做路由依据）——
+// handlers/service_catalog 在 ServiceCatalog 创建/更新时已经把 itsm_type 同步计算进
+// target_class（见 handlers/service_catalog/entity.go 的 ComputeTargetClass），这里不再
+// 重新读取或解释 itsm_type。
+// incident 类型不通过 Ticket 审批路径，调用方应在入此函数前用 isIncidentCatalog 分流；
+// 这里的 "incident" 分支只是防御性兜底，正常不会走到。
+// 映射规则：service_request_item → service_request, change_request → change,
+// incident 不应到达此处。
+func mapTargetClassToTicketType(targetClass string) string {
+	switch targetClass {
+	case service_catalog.TargetClassChangeRequest:
 		return "change"
-	case "Incident":
+	case service_catalog.TargetClassIncident:
 		return "incident"
 	default:
-		return "service_request" // Request 及兜底
+		return "service_request" // service_request_item、空值（未跑回填）及兜底
 	}
 }
 
-// isIncidentCatalog 判断服务目录项的 ITSM 类型是否为事件——事件无需审批，
-// 直接分派给 Resolver，不走 SR→Ticket 审批流程。
-func isIncidentCatalog(itsmType string) bool {
-	return itsmType == "Incident"
+// isIncidentCatalog 判断服务目录项的 WorkItem 目标类是否为事件——事件无需审批，
+// 直接分派给 Resolver，不走 SR→Ticket 审批流程。参数是 target_class（不是 itsm_type，
+// 见 mapTargetClassToTicketType 的注释）。
+func isIncidentCatalog(targetClass string) bool {
+	return targetClass == service_catalog.TargetClassIncident
 }
