@@ -107,10 +107,23 @@ func findMismatches(ctx context.Context, client *ent.Client, tenantID int) ([]mi
 			exists, checkErr = client.Problem.Query().Where(problem.WorkItemID(t.ID)).Exist(ctx)
 		case "change_request":
 			exists, checkErr = client.Change.Query().Where(change.WorkItemID(t.ID)).Exist(ctx)
+		case "service_request_item", "catalog_task":
+			// 这两类在 Wave 1 阶段还没有对应的 work_item_id 外键（ServiceRequest 沿用
+			// 既有 ticket_id 列，CatalogTask 是 Wave 2 才新建的表），暂不检查，
+			// 留给各自的 Wave 2 任务包。
+			continue
 		default:
-			// service_request_item/catalog_task 在 Wave 1 阶段还没有对应的
-			// work_item_id 外键（ServiceRequest 沿用既有 ticket_id 列，CatalogTask
-			// 是 Wave 2 才新建的表），这两类暂不检查，留给各自的 Wave 2 任务包。
+			// 落到这里说明 record_class 是一个本工具不认识的值。以前这里跟上面两类
+			// 一样直接 continue，等于把"写错的 record_class"和"还没实现的 record_class"
+			// 混为一谈静默放行——record_class 是整个 WorkItem 模型的分派键，一个拼错的
+			// 值会让所有按它分派的逻辑（含本工具第 1 段检查）悄悄跳过这条记录。
+			// 因此单独报一种不一致，让它可见。
+			out = append(out, mismatch{
+				kind: "unknown_record_class", ticketID: t.ID, tenantID: t.TenantID,
+				recordClass: t.RecordClass,
+				detail: fmt.Sprintf("record_class=%q 不在已知取值内（generic/incident/problem/change_request/service_request_item/catalog_task）",
+					t.RecordClass),
+			})
 			continue
 		}
 		if checkErr != nil {

@@ -23,7 +23,7 @@ type ProcessInstance struct {
 	ProcessInstanceID string `json:"process_instance_id,omitempty"`
 	// 业务键，关联业务实体
 	BusinessKey string `json:"business_key,omitempty"`
-	// 结构化业务类型（recordClass：generic/service_request_item/incident/problem/change_request/catalog_task，历史保留值 release），迁移期与 business_key 由同一次 TriggerProcess 调用原子写入，不从 variables JSON 里现取
+	// 结构化业务类型。Wave 1 写入的是 dto.BusinessType 取值（ticket/change/incident/service_request/problem/release，见 dto/bpmn_process_trigger_dto.go），即迁移前的词表；不是 recordClass 词表——两者有两个值对不上：change vs change_request、ticket vs generic。收敛到 recordClass（generic/service_request_item/incident/problem/change_request/catalog_task）由 Wave 2 各域迁移任务负责，在对应域拥有 WorkItem 之后进行。与 business_key 由同一次 TriggerProcess 调用原子写入，不从 variables JSON 里现取
 	BusinessType string `json:"business_type,omitempty"`
 	// 结构化业务主键（迁移完成前是各专业域自己的表主键，迁移完成后是 WorkItem ID/tickets.id），与 business_type 成对使用
 	BusinessID int `json:"business_id,omitempty"`

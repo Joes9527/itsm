@@ -188,6 +188,10 @@ Wave 3（我自己执行，串行）
 1. `cmd/check_work_item_integrity` 在本次验收所用的沙箱环境里没有真实 Postgres，因此没有对着一个活库跑通过；命令本身的逻辑已由 Task 4 新增的 enttest 单测覆盖并通过。Wave 2 执行者第一次拿到真实开发库时应补跑一次这个命令，确认端到端可用。
 2. 前端 Jest 有约 50 个失败用例（`sla-api.test.ts`、`template-api.test.ts`、`ServiceRequestPanel.test.tsx` 等），是 Wave 1 改动之前就存在的问题（字段命名 camelCase/snake_case 不一致、pointer-events 相关），已经过 controller 独立复核确认与本计划无关。Wave 2 执行者跑 `npx jest` 看到这些失败时不要误判为自己引入的新回归——对照失败用例文件名即可分辨。
 
+3. **`process_instances.business_type` 用的还是迁移前的词表（全分支评审补充）**：Wave 1 给 `ProcessInstance` 加了结构化的 `business_type`/`business_id` 两列，但实际写进 `business_type` 的是 `dto.BusinessType` 的取值（`ticket`/`change`/`incident`/`service_request`/`problem`/`release`，见 `itsm-backend/dto/bpmn_process_trigger_dto.go`），不是本文档和设计文档使用的 recordClass 词表（`generic`/`service_request_item`/`incident`/`problem`/`change_request`/`catalog_task`）。两个词表有两个值对不上：`change` vs `change_request`、`ticket` vs `generic`。
+
+   这是有意为之的迁移期状态：Wave 1 阶段各专业域还没有自己的 WorkItem，流程触发方只知道自己的域名字，写不出 recordClass。**收敛到 recordClass 是 Wave 2 各域迁移任务的责任**——每个域在建立 `work_item_id` 关联、拿到 WorkItem 之后，同步把该域触发流程时写入的 `business_type` 改成对应的 recordClass，并为存量行准备一次转写（可参考 `cmd/backfill_process_instance_business_identity` 的形状）。在那之前，任何按 `business_type` 过滤流程实例的新代码都必须用 `dto.BusinessType` 常量，不要用 recordClass 字面量。`ent/schema/process_instance.go` 上的字段注释已同步说明这一点。
+
 ---
 
 ## 5. Wave 2：四个域迁移任务包（分发给不同工具，真正并行）

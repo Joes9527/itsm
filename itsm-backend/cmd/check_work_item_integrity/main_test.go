@@ -291,3 +291,68 @@ func TestFindMismatches_TenantMismatch(t *testing.T) {
 	require.Equal(t, tenantB.ID, mismatches[0].tenantID)
 	t.Logf("SUCCESS: tenant_mismatch correctly detected — incident belongs to tenant %d but points at ticket owned by tenant %d", tenantB.ID, tenantA.ID)
 }
+
+// TestFindMismatches_UnknownRecordClass 锁定 record_class 分派 switch 的 default 分支：
+// 一个本工具不认识的 record_class（拼错、或某个新域忘了在这里登记）以前会跟
+// service_request_item/catalog_task 一样被静默 continue 掉，等于完整性检查对这条记录
+// 完全失效。现在它必须被报成 unknown_record_class。
+func TestFindMismatches_UnknownRecordClass(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", testDSN())
+	defer client.Close()
+	ctx := context.Background()
+
+	tenant, err := client.Tenant.Create().
+		SetName("Unknown RecordClass Tenant").
+		SetCode("unknown-record-class").
+		SetDomain("unknown-record-class.example.com").
+		SetStatus("active").
+		Save(ctx)
+	require.NoError(t, err)
+
+	user, err := client.User.Create().
+		SetUsername("reporter-unknown").
+		SetEmail("reporter-unknown@example.com").
+		SetName("Reporter Unknown").
+		SetPasswordHash("hash").
+		SetRole("end_user").
+		SetActive(true).
+		SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	// 拼错的 record_class（正确值是 change_request）。
+	bad, err := client.Ticket.Create().
+		SetTitle("record_class 拼错的工单").
+		SetDescription("unknown record_class 检查").
+		SetPriority("medium").
+		SetStatus("open").
+		SetTicketNumber("TICKET-UNKNOWN-CLASS-001").
+		SetRecordClass("change").
+		SetRequesterID(user.ID).
+		SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	// Wave 1 已知的两个"暂不检查"取值仍必须静默跳过，不能被这次改动误报。
+	for i, deferredClass := range []string{"service_request_item", "catalog_task"} {
+		_, err = client.Ticket.Create().
+			SetTitle("Wave 2 才检查的类别").
+			SetDescription("暂不检查").
+			SetPriority("low").
+			SetStatus("open").
+			SetTicketNumber(fmt.Sprintf("TICKET-DEFERRED-CLASS-%03d", i+1)).
+			SetRecordClass(deferredClass).
+			SetRequesterID(user.ID).
+			SetTenantID(tenant.ID).
+			Save(ctx)
+		require.NoError(t, err)
+	}
+
+	mismatches, err := findMismatches(ctx, client, tenant.ID)
+	require.NoError(t, err)
+	require.Len(t, mismatches, 1, "expected exactly one unknown_record_class, got: %+v", mismatches)
+	require.Equal(t, "unknown_record_class", mismatches[0].kind)
+	require.Equal(t, bad.ID, mismatches[0].ticketID)
+	require.Equal(t, tenant.ID, mismatches[0].tenantID)
+	require.Equal(t, "change", mismatches[0].recordClass)
+}
