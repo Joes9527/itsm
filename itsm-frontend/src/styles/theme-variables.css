@@ -1,77 +1,154 @@
-/* ITSM 系统主题变量 - Theme Variables */
+/* ITSM 系统主题变量 - Theme Variables
+ *
+ * 规范颜色 / 间距刻度 / 圆角 / 阴影 / 字号 / 行高 / 字重的权威定义已迁移到构建期生成产物
+ * src/styles/generated/design-tokens.css（见 src/app/globals.css 顶部 @import，由
+ * scripts/generate-design-tokens.mjs 从 src/lib/design-system/token-source.json 生成）。
+ *
+ * 本文件保留两类内容：
+ *   1. 兼容别名——历史上被大量组件 CSS 直接消费的旧变量名（如 --color-primary-500、
+ *      --font-size-sm、--line-height-tight），本次统一未同步改名这些消费点（不在本任务
+ *      范围内），因此在此以 `var(--canonical-name)` 的形式转发到规范变量，只保留一份取值
+ *      来源，不再重复定义具体数值。后续任务把消费点迁移到规范变量名后可以删除对应别名。
+ *   2. 非 token 变量——不属于 token 契约十二个分组的手写常量（层级 z-index、布局尺寸、
+ *      过渡时长、字体族、工单业务色如 status/priority/sla 等），继续在此手工维护。
+ *
+ * 本文件之前还有一个 `@media (prefers-color-scheme: dark) { :root { ... } }` 块，为
+ * --color-text-*、--color-bg-*、--color-border-* 单独设置了一套深色取值——它完全不受
+ * `.dark` class 门控，只要 OS 偏好深色就会生效，与 html/:root 的 `.dark` class 切换
+ * （由 theme.tsx 驱动，唯一约定的暗色激活机制）并存并冲突：用户在应用内手动切回浅色，
+ * 只要系统仍是深色偏好，这些变量依旧会被覆盖成深色值。这与 globals.css 里被删除的
+ * `@media (prefers-color-scheme: dark) { :root.dark {...} }` 块是同一类问题，本次一并
+ * 整体删除，不合并其取值——规范的深色值统一由 design-tokens.css 的 `.dark` class 块提供。
+ */
 
 :root {
-  /* ====== 颜色系统 Color System ====== */
-  
-  /* 主色调 Primary Colors — Kerry Logistics Orange */
-  --color-primary: #F06820;
-  --color-primary-light: #F27C38;
-  --color-primary-dark: #D85E10;
-  --color-primary-50: #fff5f0;
-  --color-primary-100: #ffe8d9;
-  --color-primary-500: #F06820;
-  --color-primary-600: #D85E10;
-  --color-primary-700: #B84A08;
-  --color-charcoal: #2A2A2A;
-  
-  /* 成功色 Success */
-  --color-success: #22c55e;
-  --color-success-light: #4ade80;
-  --color-success-dark: #16a34a;
-  --color-success-bg: #f0fdf4;
-  
-  /* 警告色 Warning */
-  --color-warning: #f59e0b;
-  --color-warning-light: #fbbf24;
-  --color-warning-dark: #d97706;
-  --color-warning-bg: #fffbeb;
-  
-  /* 错误色 Error */
-  --color-error: #ef4444;
-  --color-error-light: #f87171;
-  --color-error-dark: #dc2626;
-  --color-error-bg: #fef2f2;
-  
-  /* 信息色 Info */
-  --color-info: #0ea5e9;
-  --color-info-light: #38bdf8;
-  --color-info-dark: #0284c7;
-  --color-info-bg: #f0f9ff;
-  
-  /* 中性色 Neutral */
-  --color-gray-50: #f9fafb;
-  --color-gray-100: #f3f4f6;
-  --color-gray-200: #e5e7eb;
-  --color-gray-300: #d1d5db;
-  --color-gray-400: #9ca3af;
-  --color-gray-500: #6b7280;
-  --color-gray-600: #4b5563;
-  --color-gray-700: #374151;
-  --color-gray-800: #1f2937;
-  --color-gray-900: #111827;
-  
-  /* 文本颜色 Text Colors */
-  --color-text-primary: #111827;
-  --color-text-secondary: #4b5563;
-  --color-text-tertiary: #6b7280;
-  --color-text-muted: #9ca3af;
-  --color-text-disabled: #d1d5db;
-  --color-text-inverse: #ffffff;
-  
-  /* 背景颜色 Background Colors */
-  --color-bg-primary: #ffffff;
-  --color-bg-secondary: #f9fafb;
-  --color-bg-tertiary: #f3f4f6;
-  --color-bg-overlay: rgba(0, 0, 0, 0.5);
+  /* ====== 兼容别名：品牌主色 Brand Primary（历史命名 --color-primary-*） ====== */
+  --color-primary: var(--color-brand-primary-500);
+  --color-primary-light: var(--color-brand-primary-400);
+  --color-primary-dark: var(--color-brand-primary-600);
+  --color-primary-50: var(--color-brand-primary-50);
+  --color-primary-100: var(--color-brand-primary-100);
+  --color-primary-200: var(--color-brand-primary-200);
+  --color-primary-300: var(--color-brand-primary-300);
+  --color-primary-400: var(--color-brand-primary-400);
+  --color-primary-500: var(--color-brand-primary-500);
+  --color-primary-600: var(--color-brand-primary-600);
+  --color-primary-700: var(--color-brand-primary-700);
+  --color-primary-800: var(--color-brand-primary-800);
+  --color-primary-900: var(--color-brand-primary-900);
+  --color-primary-950: var(--color-brand-primary-950);
+  --color-charcoal: var(--color-brand-charcoal);
+
+  /* ====== 兼容别名：语义状态色 Status（历史命名 --color-{info,success,warning,error}-*） ======
+   * status.* 在契约里是主题无关的单一色阶（不区分 light/dark），别名同样主题无关。 */
+  --color-success: var(--color-status-success-500);
+  --color-success-light: var(--color-status-success-400);
+  --color-success-dark: var(--color-status-success-600);
+  --color-success-bg: var(--color-status-success-50);
+  --color-success-50: var(--color-status-success-50);
+  --color-success-100: var(--color-status-success-100);
+  --color-success-200: var(--color-status-success-200);
+  --color-success-300: var(--color-status-success-300);
+  --color-success-400: var(--color-status-success-400);
+  --color-success-500: var(--color-status-success-500);
+  --color-success-600: var(--color-status-success-600);
+  --color-success-700: var(--color-status-success-700);
+  --color-success-800: var(--color-status-success-800);
+  --color-success-900: var(--color-status-success-900);
+
+  --color-warning: var(--color-status-warning-500);
+  --color-warning-light: var(--color-status-warning-400);
+  --color-warning-dark: var(--color-status-warning-600);
+  --color-warning-bg: var(--color-status-warning-50);
+  --color-warning-50: var(--color-status-warning-50);
+  --color-warning-100: var(--color-status-warning-100);
+  --color-warning-200: var(--color-status-warning-200);
+  --color-warning-300: var(--color-status-warning-300);
+  --color-warning-400: var(--color-status-warning-400);
+  --color-warning-500: var(--color-status-warning-500);
+  --color-warning-600: var(--color-status-warning-600);
+  --color-warning-700: var(--color-status-warning-700);
+  --color-warning-800: var(--color-status-warning-800);
+  --color-warning-900: var(--color-status-warning-900);
+
+  --color-error: var(--color-status-error-500);
+  --color-error-light: var(--color-status-error-400);
+  --color-error-dark: var(--color-status-error-600);
+  --color-error-bg: var(--color-status-error-50);
+  --color-error-50: var(--color-status-error-50);
+  --color-error-100: var(--color-status-error-100);
+  --color-error-200: var(--color-status-error-200);
+  --color-error-300: var(--color-status-error-300);
+  --color-error-400: var(--color-status-error-400);
+  --color-error-500: var(--color-status-error-500);
+  --color-error-600: var(--color-status-error-600);
+  --color-error-700: var(--color-status-error-700);
+  --color-error-800: var(--color-status-error-800);
+  --color-error-900: var(--color-status-error-900);
+
+  --color-info: var(--color-status-info-500);
+  --color-info-light: var(--color-status-info-400);
+  --color-info-dark: var(--color-status-info-600);
+  --color-info-bg: var(--color-status-info-50);
+  --color-info-50: var(--color-status-info-50);
+  --color-info-100: var(--color-status-info-100);
+  --color-info-200: var(--color-status-info-200);
+  --color-info-300: var(--color-status-info-300);
+  --color-info-400: var(--color-status-info-400);
+  --color-info-500: var(--color-status-info-500);
+  --color-info-600: var(--color-status-info-600);
+  --color-info-700: var(--color-status-info-700);
+  --color-info-800: var(--color-status-info-800);
+  --color-info-900: var(--color-status-info-900);
+
+  /* ====== 兼容别名：功能色 Functional（历史命名 --color-bg-*，规范命名是 --color-background-*） ======
+   * --color-text-* 与 --color-border-{primary,secondary,focus} 的历史命名与规范命名本就相同，
+   * 不需要别名，已随本文件自身的重复定义一起删除，直接使用生成产物里的同名变量。
+   * --color-text-muted 在契约里没有直接对应 key，语义上最接近 functional.text.tertiary
+   * （“弱化但仍可读”），而非 text.disabled（暗示不可交互）；按此语义选择别名目标。 */
+  --color-bg-primary: var(--color-background-primary);
+  --color-bg-secondary: var(--color-background-secondary);
+  --color-bg-tertiary: var(--color-background-tertiary);
+  --color-text-muted: var(--color-text-tertiary);
+
+  /* ====== 兼容别名：字号 / 行高（规范命名空间是 Tailwind v4 的 --text-* 与 --leading-*） ====== */
+  --font-size-xs: var(--text-xs);
+  --font-size-sm: var(--text-sm);
+  --font-size-base: var(--text-base);
+  --font-size-lg: var(--text-lg);
+  --font-size-xl: var(--text-xl);
+  --font-size-2xl: var(--text-2xl);
+  --font-size-3xl: var(--text-3xl);
+  --font-size-4xl: var(--text-4xl);
+  --font-size-5xl: var(--text-5xl);
+  --font-size-6xl: var(--text-6xl);
+  --font-size-7xl: var(--text-7xl);
+  --font-size-8xl: var(--text-8xl);
+  --font-size-9xl: var(--text-9xl);
+
+  --line-height-none: var(--leading-none);
+  --line-height-tight: var(--leading-tight);
+  --line-height-snug: var(--leading-snug);
+  --line-height-normal: var(--leading-normal);
+  --line-height-relaxed: var(--leading-relaxed);
+  --line-height-loose: var(--leading-loose);
+
+  /* --font-weight-* 的历史命名与 Tailwind v4 的 --font-weight-* 命名空间相同，不需要别名。 */
+
+  /* ====== 非 token：颜色交互态（hover/active/overlay，契约不覆盖交互态派生色） ====== */
   --color-bg-hover: #f9fafb;
   --color-bg-active: #f3f4f6;
-  
-  /* 边框颜色 Border Colors */
-  --color-border-primary: #e5e7eb;
-  --color-border-secondary: #d1d5db;
-  --color-border-focus: #F06820;
-  
-  /* ====== 间距系统 Spacing System ====== */
+  --color-bg-overlay: rgba(0, 0, 0, 0.5);
+
+  /* ====== 非 token：字体族（与 src/app/globals.css 的 --font-sans/--font-mono 是并存的
+   * 另一套字体栈，两者的取舍不属于本任务的十二个 token 契约分组，未合并） ====== */
+  --font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', 'Helvetica', 'Arial', sans-serif;
+  --font-family-mono: 'SF Mono', Monaco, 'Inconsolata', 'Roboto Mono', 'Source Code Pro', 'Menlo', 'Consolas', monospace;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Consolas', 'Liberation Mono', 'Courier New', monospace;
+
+  /* ====== 非 token：间距语义刻度（与生成产物的 spacing 倍率是不同概念——语义命名的固定
+   * 档位，不是 Tailwind 数字刻度，契约不覆盖，故继续手工维护） ====== */
   --spacing-xs: 4px;
   --spacing-sm: 8px;
   --spacing-md: 12px;
@@ -80,55 +157,24 @@
   --spacing-2xl: 32px;
   --spacing-3xl: 48px;
   --spacing-4xl: 64px;
-  
-  /* ====== 字体系统 Typography System ====== */
-  --font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', 'Helvetica', 'Arial', sans-serif;
-  --font-family-mono: 'SF Mono', Monaco, 'Inconsolata', 'Roboto Mono', 'Source Code Pro', 'Menlo', 'Consolas', monospace;
-  
-  /* 字体大小 Font Sizes */
-  --font-size-xs: 0.75rem;    /* 12px */
-  --font-size-sm: 0.875rem;   /* 14px */
-  --font-size-base: 1rem;     /* 16px */
-  --font-size-lg: 1.125rem;   /* 18px */
-  --font-size-xl: 1.25rem;    /* 20px */
-  --font-size-2xl: 1.5rem;    /* 24px */
-  --font-size-3xl: 1.875rem;  /* 30px */
-  --font-size-4xl: 2.25rem;   /* 36px */
-  
-  /* 字重 Font Weights */
-  --font-weight-normal: 400;
-  --font-weight-medium: 500;
-  --font-weight-semibold: 600;
-  --font-weight-bold: 700;
-  
-  /* 行高 Line Heights */
-  --line-height-tight: 1.25;
-  --line-height-normal: 1.5;
-  --line-height-relaxed: 1.75;
-  
-  /* ====== 圆角系统 Border Radius ====== */
-  --radius-none: 0;
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
-  --radius-2xl: 16px;
-  --radius-full: 9999px;
-  
-  /* ====== 阴影系统 Shadow System ====== */
-  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  
-  /* ====== 过渡动画 Transitions ====== */
+
+  /* ====== 非 token：过渡动画（--transition-normal 是历史别名，实际取值等同 --transition-base） ====== */
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: var(--transition-base);
   --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
-  
-  /* ====== Z-Index 层级 ====== */
+  --duration-fast: 150ms;
+  --duration-normal: 300ms;
+  --duration-slow: 500ms;
+  --easing-linear: linear;
+  --easing-ease: ease;
+  --easing-ease-in: ease-in;
+  --easing-ease-out: ease-out;
+  --easing-ease-in-out: ease-in-out;
+  --easing-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  --easing-elastic: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+
+  /* ====== 非 token：Z-Index 层级 ====== */
   --z-dropdown: 1000;
   --z-sticky: 1020;
   --z-fixed: 1030;
@@ -136,58 +182,33 @@
   --z-modal: 1050;
   --z-popover: 1060;
   --z-tooltip: 1070;
-  
-  /* ====== 布局尺寸 Layout Sizes ====== */
+
+  /* ====== 非 token：布局尺寸 Layout Sizes ====== */
   --header-height: 48px;
   --sidebar-width: 260px;
   --sidebar-collapsed-width: 0px;
   --content-max-width: 1440px;
   --card-padding: 16px;
-  
-  /* ====== 状态颜色 Status Colors ====== */
+
+  /* ====== 非 token：工单业务色（状态/优先级/SLA）——不是交互状态色 status.*，是工单领域
+   * 语义到颜色的映射，按契约边界（见设计文档「新增:语义状态色 Token」）不在本任务处理，
+   * 保留为独立、手写的业务映射，留给按调用点语义迁移的后续任务 ====== */
   --status-new: #60a5fa;
   --status-open: #f59e0b;
   --status-in-progress: #8b5cf6;
   --status-resolved: #22c55e;
   --status-closed: #6b7280;
   --status-cancelled: #ef4444;
-  
-  /* ====== 优先级颜色 Priority Colors ====== */
+
   --priority-low: #22c55e;
   --priority-medium: #F06820;
   --priority-high: #f59e0b;
   --priority-critical: #ef4444;
-  
-  /* ====== SLA颜色 SLA Colors ====== */
+
   --sla-safe: #22c55e;
   --sla-warning: #f59e0b;
   --sla-danger: #ef4444;
   --sla-expired: #7f1d1d;
-}
-
-/* ====== 深色模式 Dark Mode ====== */
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* 文本颜色 */
-    --color-text-primary: #f9fafb;
-    --color-text-secondary: #d1d5db;
-    --color-text-tertiary: #9ca3af;
-    --color-text-muted: #6b7280;
-    --color-text-disabled: #4b5563;
-    --color-text-inverse: #111827;
-    
-    /* 背景颜色 */
-    --color-bg-primary: #111827;
-    --color-bg-secondary: #1f2937;
-    --color-bg-tertiary: #374151;
-    --color-bg-overlay: rgba(0, 0, 0, 0.7);
-    --color-bg-hover: #1f2937;
-    --color-bg-active: #374151;
-    
-    /* 边框颜色 */
-    --color-border-primary: #374151;
-    --color-border-secondary: #4b5563;
-  }
 }
 
 /* ====== 响应式断点 Responsive Breakpoints ====== */
@@ -197,4 +218,3 @@
 /* lg: >= 992px (desktop) */
 /* xl: >= 1200px (large desktop) */
 /* 2xl: >= 1440px (xlarge desktop) */
-

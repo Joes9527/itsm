@@ -1,5 +1,14 @@
 /* Tailwind CSS v4 导入 */
 /* ========== 外部样式导入 (必须在所有其他规则之前) ========== */
+/* 规范化 design token CSS 变量 + Tailwind v4 `@theme inline` 映射（构建期生成产物，
+   见 scripts/generate-design-tokens.mjs；禁止手工编辑）。必须先于 theme-variables.css
+   导入——后者的兼容别名用 var() 转发到这里定义的规范变量名。
+   同时必须放在 `@import "tailwindcss"` 之前：经生产构建实测验证，若放在其后，
+   `@tailwindcss/postcss` 编译产物里这里定义的 `:root`/`.dark` 变量声明会整体消失
+   （只留下 `@theme inline` 对同名变量的 var() 转发，指向一个未定义的变量），
+   `npm run build` 本身不会报错，是静默的样式缺失——不要把这个 import 挪到
+   `@import "tailwindcss"` 之后。 */
+@import url('../styles/generated/design-tokens.css');
 @import url('../styles/theme-variables.css');
 @import url('../styles/antd-layout-overrides.css');
 @import '../components/ui/animations.css';
@@ -677,107 +686,26 @@ h6,
   max-width: 100% !important;
 }
 
-/* 设计系统 - 全局CSS变量 */
+/* 设计系统 - 全局CSS变量
+ *
+ * 颜色 / 间距 / 圆角 / 阴影 / 字号刻度已迁移到规范化 token 生成产物
+ * （src/styles/generated/design-tokens.css，见文件顶部 @import）与
+ * src/styles/theme-variables.css。这里只保留真正与 token 契约无关、且仅供本文件
+ * 内 `.accessibility-enhanced`/触摸设备/动画规则使用的变量。
+ *
+ * `--color-bg-elevated` 曾在此定义（提升层背景色），已按规范删除，不再提供兼容值——
+ * 它仅在本文件内的 antd 弹层覆盖规则中被消费，由 Task 4 负责把那些消费点改写为
+ * 规范变量（--color-background-elevated / --color-surface-elevated）。
+ */
 :root {
-  /* 主色调 - 增强对比度 */
-  --color-primary-50: #eff6ff;
-  --color-primary-100: #dbeafe;
-  --color-primary-200: #bfdbfe;
-  --color-primary-300: #93c5fd;
-  --color-primary-400: #60a5fa;
-  --color-primary-500: #D85E10;
-  /* 调整为更深色以提高对比度 */
-  --color-primary-600: #B84A08;
-  --color-primary-700: #933A06;
-  --color-primary-800: #1e3a8a;
-  --color-primary-900: #172554;
-  --color-primary-950: #0c1e3d;
-
-  /* 中性色 - 优化对比度 */
-  --color-neutral-50: #ffffff;
-  --color-neutral-100: #fafafa;
-  --color-neutral-200: #f4f4f5;
-  --color-neutral-300: #e4e4e7;
-  --color-neutral-400: #a1a1aa;
-  --color-neutral-500: #71717a;
-  --color-neutral-600: #52525b;
-  --color-neutral-700: #3f3f46;
-  --color-neutral-800: #27272a;
-  --color-neutral-900: #18181b;
-  --color-neutral-950: #000000;
-
-  /* 语义色 - 增强可访问性 */
-  --color-success-50: #f0fdf4;
-  --color-success-100: #dcfce7;
-  --color-success-200: #bbf7d0;
-  --color-success-300: #86efac;
-  --color-success-400: #4ade80;
-  --color-success-500: #16a34a;
-  /* 更深的绿色 */
-  --color-success-600: #15803d;
-  --color-success-700: #166534;
-  --color-success-800: #14532d;
-  --color-success-900: #052e16;
-
-  --color-warning-50: #fffbeb;
-  --color-warning-100: #fef3c7;
-  --color-warning-200: #fde68a;
-  --color-warning-300: #fcd34d;
-  --color-warning-400: #fbbf24;
-  --color-warning-500: #d97706;
-  /* 更深的橙色 */
-  --color-warning-600: #b45309;
-  --color-warning-700: #92400e;
-  --color-warning-800: #78350f;
-  --color-warning-900: #451a03;
-
-  --color-error-50: #fef2f2;
-  --color-error-100: #fee2e2;
-  --color-error-200: #fecaca;
-  --color-error-300: #fca5a5;
-  --color-error-400: #f87171;
-  --color-error-500: #dc2626;
-  /* 更深的红色 */
-  --color-error-600: #b91c1c;
-  --color-error-700: #991b1b;
-  --color-error-800: #7f1d1d;
-  --color-error-900: #450a0a;
-
-  /* 可访问性增强样式 */
+  /* 可访问性增强样式（.accessibility-enhanced.high-contrast 等，见下文） */
   --text-color: #18181b;
   --bg-color: #ffffff;
   --border-color: #e4e4e7;
   --link-color: #D85E10;
-  /* 提升层背景色 - 用于 tooltip/popover/dropdown 等浮层 */
-  --color-bg-elevated: #333;
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
 
-  /* 动画和过渡 */
-  --transition-fast: 150ms ease-in-out;
-  --transition-normal: 200ms ease-in-out;
-  --transition-slow: 300ms ease-in-out;
+  /* 动画和过渡（本文件内消费；--transition-* 的规范值见 theme-variables.css） */
   --animation-duration: var(--transition-normal);
-
-  /* 间距系统 */
-  --spacing-xs: 0.25rem;
-  --spacing-sm: 0.5rem;
-  --spacing-md: 1rem;
-  --spacing-lg: 1.5rem;
-  --spacing-xl: 2rem;
-  --spacing-2xl: 3rem;
-
-  /* 字体系统 */
-  --font-size-xs: 0.75rem;
-  --font-size-sm: 0.875rem;
-  --font-size-base: 1rem;
-  --font-size-lg: 1.125rem;
-  --font-size-xl: 1.25rem;
-  --font-size-2xl: 1.5rem;
-  --font-size-3xl: 1.875rem;
-  --font-size-4xl: 2.25rem;
 
   /* 触摸区域 */
   --touch-target-min: 44px;
@@ -1011,113 +939,21 @@ h6,
 }
 
 
-:root {
-  --color-info-50: #f0f9ff;
-  --color-info-100: #e0f2fe;
-  --color-info-200: #bae6fd;
-  --color-info-300: #7dd3fc;
-  --color-info-400: #38bdf8;
-  --color-info-500: #0ea5e9;
-  --color-info-600: #0284c7;
-  --color-info-700: #0369a1;
-  --color-info-800: #075985;
-  --color-info-900: #0c4a6e;
-
-  /* 功能色 */
-  --color-background-primary: #ffffff;
-  --color-background-secondary: #f8fafc;
-  --color-background-tertiary: #f1f5f9;
-  --color-surface-primary: #ffffff;
-  --color-surface-secondary: #f8fafc;
-  --color-surface-tertiary: #f1f5f9;
-  --color-border-primary: #e2e8f0;
-  --color-border-secondary: #cbd5e1;
-  --color-border-tertiary: #94a3b8;
-  --color-text-primary: #0f172a;
-  --color-text-secondary: #475569;
-  --color-text-tertiary: #64748b;
-  --color-text-disabled: #94a3b8;
-  --color-text-inverse: #ffffff;
-
-  /* 提升层级背景色（tooltips, popovers, dropdowns） */
-  --color-bg-elevated: #ffffff;
-
-  /* 字体 */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Consolas', 'Liberation Mono', 'Courier New', monospace;
-
-  /* 间距 - 优化后的紧凑间距系统 */
-  --spacing-xs: 4px;
-  --spacing-sm: 8px;
-  --spacing-md: 12px;
-  --spacing-lg: 16px;
-  --spacing-xl: 20px;
-  --spacing-2xl: 24px;
-  --spacing-3xl: 32px;
-
-  /* 圆角 */
-  --border-radius-sm: 2px;
-  --border-radius-md: 4px;
-  --border-radius-lg: 8px;
-  --border-radius-xl: 12px;
-  --border-radius-2xl: 16px;
-  --border-radius-3xl: 24px;
-  --border-radius-full: 9999px;
-
-  /* 阴影 */
-  --box-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --box-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --box-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-  --box-shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-  --box-shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
-  --box-shadow-inner: inset 0 2px 4px 0 rgb(0 0 0 / 0.05);
-
-  /* 字体大小 */
-  --font-size-xs: 12px;
-  --font-size-sm: 14px;
-  --font-size-base: 16px;
-  --font-size-lg: 18px;
-  --font-size-xl: 20px;
-  --font-size-2xl: 24px;
-  --font-size-3xl: 30px;
-  --font-size-4xl: 36px;
-  --font-size-5xl: 48px;
-  --font-size-6xl: 60px;
-  --font-size-7xl: 72px;
-  --font-size-8xl: 96px;
-  --font-size-9xl: 128px;
-
-  /* 行高 */
-  --line-height-none: 1;
-  --line-height-tight: 1.25;
-  --line-height-snug: 1.375;
-  --line-height-normal: 1.5;
-  --line-height-relaxed: 1.625;
-  --line-height-loose: 2;
-
-  /* 字重 */
-  --font-weight-thin: 100;
-  --font-weight-extralight: 200;
-  --font-weight-light: 300;
-  --font-weight-normal: 400;
-  --font-weight-medium: 500;
-  --font-weight-semibold: 600;
-  --font-weight-bold: 700;
-  --font-weight-extrabold: 800;
-  --font-weight-black: 900;
-
-  /* 动画 */
-  --duration-fast: 150ms;
-  --duration-normal: 300ms;
-  --duration-slow: 500ms;
-  --easing-linear: linear;
-  --easing-ease: ease;
-  --easing-ease-in: ease-in;
-  --easing-ease-out: ease-out;
-  --easing-ease-in-out: ease-in-out;
-  --easing-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
-  --easing-elastic: cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
+/*
+ * 本区块原先手写的颜色 / 间距 / 圆角 / 阴影 / 字号 / 行高 / 字重变量已全部由
+ * src/styles/generated/design-tokens.css（规范 token 生成产物）与
+ * src/styles/theme-variables.css 提供，此处不再重复定义：
+ *   --color-info-* / --color-background-* / --color-surface-* / --color-border-* /
+ *   --color-text-* → 见生成产物（--color-status-info-* / --color-background-* / ...）
+ *   --spacing-xs..3xl → 见 theme-variables.css（与本文件另一份定义冲突，已收敛为一份）
+ *   --border-radius-* / --box-shadow-* → 未发现任何消费者，属存量死代码，直接删除
+ *   --font-size-* / --line-height-* / --font-weight-* → 见生成产物的
+ *     --text-* / --leading-* / --font-weight-* 与 theme-variables.css 的兼容别名
+ *   --color-bg-elevated → 按规范删除，不提供兼容值（见上一个 :root 块的说明）
+ * 仅 --font-sans/--font-mono（与 theme-variables.css 的 --font-family-base/mono 是
+ * 两套并存的字体栈，非本任务范围）和 --duration-*/--easing-*（本文件动画类消费）
+ * 保留为非 token 手写变量，随文件迁移到 theme-variables.css。
+ */
 
 /* 基础样式重置 */
 @layer base {
@@ -1631,178 +1467,23 @@ h6,
 }
 
 /* 深色模式支持 */
-.dark {
-  /* 主色调（暗色主题） */
-  --color-primary-50: #172554;
-  --color-primary-100: #1e3a8a;
-  --color-primary-200: #933A06;
-  --color-primary-300: #B84A08;
-  --color-primary-400: #D85E10;
-  --color-primary-500: #F06820;
-  --color-primary-600: #60a5fa;
-  --color-primary-700: #93c5fd;
-  --color-primary-800: #bfdbfe;
-  --color-primary-900: #dbeafe;
-  --color-primary-950: #eff6ff;
-
-  /* 中性色（暗色主题） */
-  --color-neutral-50: #020617;
-  --color-neutral-100: #0f172a;
-  --color-neutral-200: #1e293b;
-  --color-neutral-300: #334155;
-  --color-neutral-400: #475569;
-  --color-neutral-500: #64748b;
-  --color-neutral-600: #94a3b8;
-  --color-neutral-700: #cbd5e1;
-  --color-neutral-800: #e2e8f0;
-  --color-neutral-900: #f1f5f9;
-  --color-neutral-950: #f8fafc;
-
-  /* 功能色（暗色主题） */
-  --color-info-50: #e0f2fe;
-  --color-info-100: #bae6fd;
-  --color-info-200: #7dd3fc;
-  --color-info-300: #38bdf8;
-  --color-info-400: #22d3ee;
-  --color-info-500: #06b6d4;
-  --color-info-600: #0891b2;
-  --color-info-700: #0e7490;
-  --color-info-800: #155e75;
-  --color-info-900: #164e63;
-  --color-success-50: #f0fdf4;
-  --color-success-100: #dcfce7;
-  --color-success-200: #bbf7d0;
-  --color-success-300: #86efac;
-  --color-success-400: #4ade80;
-  --color-success-500: #22c55e;
-  --color-success-600: #16a34a;
-  --color-success-700: #15803d;
-  --color-success-800: #166534;
-  --color-success-900: #14532d;
-  --color-warning-50: #fffbeb;
-  --color-warning-100: #fef3c7;
-  --color-warning-200: #fde68a;
-  --color-warning-300: #fcd34d;
-  --color-warning-400: #fbbf24;
-  --color-warning-500: #f59e0b;
-  --color-warning-600: #d97706;
-  --color-warning-700: #b45309;
-  --color-warning-800: #92400e;
-  --color-warning-900: #78350f;
-  --color-error-50: #fef2f2;
-  --color-error-100: #fee2e2;
-  --color-error-200: #fecaca;
-  --color-error-300: #fca5a5;
-  --color-error-400: #f87171;
-  --color-error-500: #ef4444;
-  --color-error-600: #dc2626;
-  --color-error-700: #b91c1c;
-  --color-error-800: #991b1b;
-  --color-error-900: #7f1d1d;
-  --color-bg-elevated: #1e293b;
-  --color-background-primary: #0f172a;
-  --color-background-secondary: #1e293b;
-  --color-background-tertiary: #334155;
-  --color-surface-primary: #1e293b;
-  --color-surface-secondary: #334155;
-  --color-surface-tertiary: #475569;
-  --color-border-primary: #334155;
-  --color-border-secondary: #475569;
-  --color-border-tertiary: #64748b;
-  --color-text-primary: #f8fafc;
-  --color-text-secondary: #cbd5e1;
-  --color-text-tertiary: #94a3b8;
-  --color-text-disabled: #64748b;
-  --color-text-inverse: #0f172a;
-}
-
-/* 系统主题偏好支持 */
-@media (prefers-color-scheme: dark) {
-  :root.dark {
-    /* 主色调（暗色主题） */
-    --color-primary-50: #172554;
-    --color-primary-100: #1e3a8a;
-    --color-primary-200: #933A06;
-    --color-primary-300: #B84A08;
-    --color-primary-400: #D85E10;
-    --color-primary-500: #F06820;
-    --color-primary-600: #60a5fa;
-    --color-primary-700: #93c5fd;
-    --color-primary-800: #bfdbfe;
-    --color-primary-900: #dbeafe;
-    --color-primary-950: #eff6ff;
-
-    /* 中性色（暗色主题） */
-    --color-neutral-50: #020617;
-    --color-neutral-100: #0f172a;
-    --color-neutral-200: #1e293b;
-    --color-neutral-300: #334155;
-    --color-neutral-400: #475569;
-    --color-neutral-500: #64748b;
-    --color-neutral-600: #94a3b8;
-    --color-neutral-700: #cbd5e1;
-    --color-neutral-800: #e2e8f0;
-    --color-neutral-900: #f1f5f9;
-    --color-neutral-950: #f8fafc;
-
-    /* 功能色（暗色主题） */
-    --color-info-50: #e0f2fe;
-    --color-info-100: #bae6fd;
-    --color-info-200: #7dd3fc;
-    --color-info-300: #38bdf8;
-    --color-info-400: #22d3ee;
-    --color-info-500: #06b6d4;
-    --color-info-600: #0891b2;
-    --color-info-700: #0e7490;
-    --color-info-800: #155e75;
-    --color-info-900: #164e63;
-    --color-success-50: #f0fdf4;
-    --color-success-100: #dcfce7;
-    --color-success-200: #bbf7d0;
-    --color-success-300: #86efac;
-    --color-success-400: #4ade80;
-    --color-success-500: #22c55e;
-    --color-success-600: #16a34a;
-    --color-success-700: #15803d;
-    --color-success-800: #166534;
-    --color-success-900: #14532d;
-    --color-warning-50: #fffbeb;
-    --color-warning-100: #fef3c7;
-    --color-warning-200: #fde68a;
-    --color-warning-300: #fcd34d;
-    --color-warning-400: #fbbf24;
-    --color-warning-500: #f59e0b;
-    --color-warning-600: #d97706;
-    --color-warning-700: #b45309;
-    --color-warning-800: #92400e;
-    --color-warning-900: #78350f;
-    --color-error-50: #fef2f2;
-    --color-error-100: #fee2e2;
-    --color-error-200: #fecaca;
-    --color-error-300: #fca5a5;
-    --color-error-400: #f87171;
-    --color-error-500: #ef4444;
-    --color-error-600: #dc2626;
-    --color-error-700: #b91c1c;
-    --color-error-800: #991b1b;
-    --color-error-900: #7f1d1d;
-    --color-bg-elevated: #1e293b;
-    --color-background-primary: #0f172a;
-    --color-background-secondary: #1e293b;
-    --color-background-tertiary: #334155;
-    --color-surface-primary: #1e293b;
-    --color-surface-secondary: #334155;
-    --color-surface-tertiary: #475569;
-    --color-border-primary: #334155;
-    --color-border-secondary: #475569;
-    --color-border-tertiary: #64748b;
-    --color-text-primary: #f8fafc;
-    --color-text-secondary: #cbd5e1;
-    --color-text-tertiary: #94a3b8;
-    --color-text-disabled: #64748b;
-    --color-text-inverse: #0f172a;
-  }
-}
+/*
+ * 暗色主题的品牌主色阶 / 中性色阶 / 功能色（背景/表面/边框/文本）已由
+ * src/styles/generated/design-tokens.css 的 `.dark { ... }` 块提供（见文件顶部
+ * @import），此处不再手写重复定义。
+ *
+ * 与上面 `:root` 块同理，`--color-bg-elevated` 按规范删除，不提供兼容值。
+ *
+ * 说明：本文件此前还额外手写过一份 `--color-info-*` 的暗色变体（青色系，500 步为
+ * #06b6d4），与契约 status.info 的主题无关单一色阶值（#0ea5e9）冲突。status.* 在
+ * token-source.json 中被冻结为主题无关的单一色阶（不区分 light/dark），因此这里
+ * 按规范采用契约值，丢弃了这份仅暗色主题下生效的青色变体。
+ *
+ * html/:root 的 `.dark` class 切换（由 theme.tsx 的 isDark 状态驱动）是唯一的暗色
+ * 模式激活机制。下面原本还有一个 `@media (prefers-color-scheme: dark) { :root.dark
+ * {...} } ` 块——它是第二条、与 class 切换并存且会冲突的激活路径（只有当 OS 偏好
+ * 深色且同时存在 .dark class 时才生效），已按规范整体删除，不合并其取值。
+ */
 
 /* 高对比度模式支持 */
 @media (prefers-contrast: high) {

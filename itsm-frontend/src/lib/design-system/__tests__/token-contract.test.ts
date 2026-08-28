@@ -32,6 +32,14 @@ import {
   GENERATED_FILE_MARKER,
   FRONTEND_ROOT,
 } from '../../../../scripts/design-token-baseline.mjs';
+import {
+  buildEntries,
+  renderCss,
+  readTokenSource,
+  generate,
+  OUTPUT_PATH,
+  GENERATED_FILE_MARKER as CSS_GENERATED_FILE_MARKER,
+} from '../../../../scripts/generate-design-tokens.mjs';
 
 /** Recursively collect every object key in the contract. */
 function collectKeys(value: unknown, out: string[] = []): string[] {
@@ -321,5 +329,188 @@ describe('getTokenBaseline', () => {
     expect(baseline.scannedFiles.length).toBeGreaterThan(0);
     expect(baseline.arbitraryFontSize.total).toBeGreaterThan(0);
     expect(baseline.rawColor.total).toBeGreaterThan(0);
+  });
+});
+
+describe('generate-design-tokens.mjs', () => {
+  const tokens = readTokenSource();
+  const css = renderCss(tokens);
+
+  /** Every `name: value;` declaration line inside a given top-level block. */
+  function declarationsIn(blockSelector: string): Map<string, string> {
+    const blockRe = new RegExp(
+      `${blockSelector.replace(/[.:]/g, '\\$&')} \\{\\n([\\s\\S]*?)\\n\\}`
+    );
+    const match = css.match(blockRe);
+    expect(match).not.toBeNull();
+    const body = match![1];
+    const decls = new Map<string, string>();
+    for (const line of body.split('\n')) {
+      const declMatch = line.match(/^\s*(--[a-zA-Z0-9-]+):\s*(.+);\s*$/);
+      if (declMatch) {
+        decls.set(declMatch[1], declMatch[2]);
+      }
+    }
+    return decls;
+  }
+
+  it('starts with the @generated marker inside the first 1024 bytes', () => {
+    expect(CSS_GENERATED_FILE_MARKER).toBe('@generated');
+    const head = css.slice(0, 1024);
+    expect(head).toContain('@generated');
+    expect(head).toContain('do not edit');
+  });
+
+  it('defines one canonical declaration per variable, with no duplicates, in :root', () => {
+    const root = declarationsIn(':root');
+    const seen = new Set<string>();
+    const rootStart = css.indexOf(':root {');
+    const rootBody = css.slice(rootStart, rootStart + css.slice(rootStart).indexOf('\n}\n'));
+    const bodyLines = rootBody
+      .split('\n')
+      .map(line => line.match(/^\s*(--[a-zA-Z0-9-]+):/)?.[1])
+      .filter((name): name is string => Boolean(name));
+    bodyLines.forEach(name => {
+      expect(seen.has(name)).toBe(false);
+      seen.add(name);
+    });
+    expect(root.size).toBe(bodyLines.length);
+    expect(root.size).toBeGreaterThan(100);
+  });
+
+  it('maps --color-brand-primary-500 to the frozen brand color in both :root and .dark', () => {
+    const root = declarationsIn(':root');
+    const dark = declarationsIn('.dark');
+    expect(root.get('--color-brand-primary-500')).toBe('#F06820');
+    expect(dark.get('--color-brand-primary-500')).toBe('#F06820');
+    // Light/dark genuinely differ for other steps of the same scale.
+    expect(root.get('--color-brand-primary-50')).toBe('#fff5f0');
+    expect(dark.get('--color-brand-primary-50')).toBe('#4A1D02');
+    expect(root.get('--color-brand-charcoal')).toBe('#2A2A2A');
+  });
+
+  it('defines the semantic status variables as a single theme-independent scale', () => {
+    const root = declarationsIn(':root');
+    const dark = declarationsIn('.dark');
+    expect(root.get('--color-status-info-500')).toBe('#0ea5e9');
+    expect(root.get('--color-status-success-500')).toBe('#22c55e');
+    expect(root.get('--color-status-warning-500')).toBe('#f59e0b');
+    expect(root.get('--color-status-error-500')).toBe('#ef4444');
+    // Status colors are not themed: .dark must not redeclare/override them.
+    expect(dark.has('--color-status-info-500')).toBe(false);
+    expect(dark.has('--color-status-success-500')).toBe(false);
+    expect(dark.has('--color-status-warning-500')).toBe(false);
+    expect(dark.has('--color-status-error-500')).toBe(false);
+  });
+
+  it('defines light and dark values for neutral and functional groups', () => {
+    const root = declarationsIn(':root');
+    const dark = declarationsIn('.dark');
+    expect(root.get('--color-neutral-50')).toBe(tokenContract.neutral.light[50]);
+    expect(dark.get('--color-neutral-50')).toBe(tokenContract.neutral.dark[50]);
+    expect(root.get('--color-background-primary')).toBe(
+      tokenContract.functional.light.background.primary
+    );
+    expect(dark.get('--color-background-primary')).toBe(
+      tokenContract.functional.dark.background.primary
+    );
+    expect(root.get('--color-surface-elevated')).toBe(tokenContract.functional.light.surface.elevated);
+    expect(dark.get('--color-surface-elevated')).toBe(tokenContract.functional.dark.surface.elevated);
+    expect(root.get('--color-border-focus')).toBe(tokenContract.functional.light.border.focus);
+    expect(root.get('--color-text-primary')).toBe(tokenContract.functional.light.text.primary);
+    expect(dark.get('--color-text-primary')).toBe(tokenContract.functional.dark.text.primary);
+  });
+
+  it('defines the chart palette and user-defined fallback as theme-independent variables', () => {
+    const root = declarationsIn(':root');
+    const dark = declarationsIn('.dark');
+    tokenContract.chart.series.forEach((value, index) => {
+      expect(root.get(`--color-chart-series-${index + 1}`)).toBe(value);
+    });
+    expect(dark.has('--color-chart-series-1')).toBe(false);
+    expect(root.get('--color-user-defined-fallback')).toBe(tokenContract.userDefined.fallback);
+  });
+
+  it('exposes spacing, radius, shadow and typography under Tailwind v4 theme namespaces', () => {
+    const root = declarationsIn(':root');
+    // Tailwind v4's own `--spacing` multiplier reproduces every value in tokens.spacing
+    // (calc(var(--spacing) * n)); no per-key --spacing-<n> variables are generated because
+    // several keys ("0.5", "1.5", "2.5", "3.5") contain a literal '.', which is not a valid
+    // bare CSS custom-property-name character.
+    expect(root.get('--spacing')).toBe(tokenContract.spacing['1']);
+    expect(root.has('--spacing-0.5')).toBe(false);
+    expect(root.has('--spacing-md')).toBe(false);
+
+    expect(root.get('--radius-sm')).toBe(tokenContract.radius.sm);
+    expect(root.get('--radius-full')).toBe(tokenContract.radius.full);
+    expect(root.get('--shadow-md')).toBe(tokenContract.shadow.md);
+    expect(root.get('--shadow-none')).toBe('none');
+    // fontSize -> --text-*, not --font-size-* (Tailwind v4 namespace).
+    expect(root.has('--font-size-sm')).toBe(false);
+    expect(root.get('--text-sm')).toBe(tokenContract.fontSize.sm);
+    expect(root.get('--text-xs')).toBe(tokenContract.fontSize.xs);
+    // lineHeight -> --leading-*, not --line-height-*.
+    expect(root.has('--line-height-tight')).toBe(false);
+    expect(root.get('--leading-tight')).toBe(tokenContract.lineHeight.tight);
+    // fontWeight namespace is unchanged from the contract.
+    expect(root.get('--font-weight-bold')).toBe(tokenContract.fontWeight.bold);
+  });
+
+  it('maps canonical color and typography variables into a Tailwind v4 @theme inline block', () => {
+    const themeMatch = css.match(/@theme inline \{\n([\s\S]*?)\n\}/);
+    expect(themeMatch).not.toBeNull();
+    const themeBody = themeMatch![1];
+
+    expect(themeBody).toContain('--color-brand-primary-500: var(--color-brand-primary-500);');
+    expect(themeBody).toContain('--color-status-success-500: var(--color-status-success-500);');
+    expect(themeBody).toContain('--color-status-info-500: var(--color-status-info-500);');
+    expect(themeBody).toContain('--color-status-warning-500: var(--color-status-warning-500);');
+    expect(themeBody).toContain('--color-status-error-500: var(--color-status-error-500);');
+    expect(themeBody).toContain('--radius-sm: var(--radius-sm);');
+    expect(themeBody).toContain('--text-sm: var(--text-sm);');
+    expect(themeBody).toContain('--leading-tight: var(--leading-tight);');
+    expect(themeBody).toContain('--font-weight-bold: var(--font-weight-bold);');
+
+    // Every @theme inline entry must reference a name that is actually declared in :root
+    // (no orphaned Tailwind mappings pointing at an undefined custom property).
+    const root = declarationsIn(':root');
+    const themeNames = [...themeBody.matchAll(/^\s*(--[a-zA-Z0-9-]+):/gm)].map(m => m[1]);
+    expect(themeNames.length).toBeGreaterThan(100);
+    themeNames.forEach(name => expect(root.has(name)).toBe(true));
+  });
+
+  it('does not emit legacy alias names such as --color-bg-elevated', () => {
+    expect(css).not.toContain('--color-bg-elevated');
+    // Other pre-existing abbreviated/legacy names that are superseded by canonical names.
+    expect(css).not.toMatch(/--color-primary-\d/); // superseded by --color-brand-primary-*
+    expect(css).not.toMatch(/--color-success-\d/); // superseded by --color-status-success-*
+    expect(css).not.toMatch(/--font-size-/); // superseded by --text-*
+    expect(css).not.toMatch(/--line-height-/); // superseded by --leading-*
+    expect(css).not.toMatch(/--border-radius-/); // superseded by --radius-*
+    expect(css).not.toMatch(/--box-shadow-/); // superseded by --shadow-*
+  });
+
+  it('is a pure function of token-source.json: re-rendering produces byte-identical output', () => {
+    expect(renderCss(readTokenSource())).toBe(css);
+  });
+
+  it('generate() writes the deterministic CSS to disk and is idempotent', () => {
+    const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'generate-design-tokens-'));
+    try {
+      const outputPath = path.join(fixtureRoot, 'design-tokens.css');
+      generate({ outputPath });
+      const first = fs.readFileSync(outputPath, 'utf8');
+      generate({ outputPath });
+      const second = fs.readFileSync(outputPath, 'utf8');
+      expect(second).toBe(first);
+      expect(first).toBe(css);
+    } finally {
+      fs.rmSync(fixtureRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('the committed generated file at OUTPUT_PATH matches what the generator currently produces', () => {
+    expect(fs.existsSync(OUTPUT_PATH)).toBe(true);
+    expect(fs.readFileSync(OUTPUT_PATH, 'utf8')).toBe(css);
   });
 });
