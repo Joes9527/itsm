@@ -2,7 +2,7 @@
 
 > 状态：Draft for review
 > 日期：2026-08-28
-> 范围：KAF 与 ITSM 的统一受理、WorkItem 创建、BPMN 委派和自动化处理主路径
+> 范围：KAF 与 ITSM 的统一受理、终端用户/坐席/管理员 UI、WorkItem 创建、BPMN 委派和自动化处理主路径
 > 驱动验收：SSLVPN 权限申请与 SSLVPN 连接故障
 
 ## 1. 目标
@@ -263,7 +263,41 @@ ITSM 不复制原始 prompt、完整对话或 Tool 敏感输出。KAF 返回的�
 
 现有 SSLVPN 双级审批 BPMN 在二级审批后直接结束。首期应发布包含 KAF 委派节点的新版本；新创建的 SSLVPN 请求绑定新版本，已运行实例继续按旧版本结束，不做运行中迁移。新版本回滚时只影响后续创建实例，既有实例按其启动版本执行。
 
-## 8. 验收与测试边界
+## 8. UI 与体验设计
+
+### 8.1 终端用户入口
+
+终端用户面对单一的“获取帮助”受理体验，而不在“标准申请”“自由报障”、Catalog、Incident 或优先级之间作前置选择。页面沿用现有 Ticket 页的 Ant Design `Card`、`Tag`、状态信息区和响应式布局，不引入平行视觉体系。
+
+| 路由 | 目标形态 | 迁移规则 |
+|---|---|---|
+| `/my-requests` | 我的请求列表与主要“获取帮助”按钮。 | 保留并扩展为终端用户的请求总览。 |
+| `/my-requests/new` | ITSM 内唯一的终端用户自然语言受理页：KAF 对话、追问、结构化预览与确认提交。 | 新增权威入口。 |
+| `/tickets/ai-create` | 旧 AI 建单入口。 | 重定向至 `/my-requests/new`。 |
+| `/service-catalog/request/[id]` | Catalog 详情的预填入口。 | 将选中的 Catalog 作为提示进入 `/my-requests/new`，不单独创建 WorkItem。 |
+| `/tickets/create` | 坐席/管理员快速建单工作台。 | 从终端用户导航移除，保留显式专业建单能力。 |
+
+受理页的主区域是对话流，KAF 负责理解需求与收集字段。KAF 产出结构化结果后，页面以确认卡片显示标题、推荐 Catalog、已收集字段、预期交付/SLA 和后续审批步骤；用户可返回编辑或确认提交。分类、`recordClass`、优先级与流程不是终端用户字段。Web 入口确认后以 `confirmation="confirmed"` 调用 Intake；Teams/WeCom 保持既有渠道自动创建策略。
+
+### 8.2 请求详情与信息披露
+
+终端用户通过 `/my-requests` 进入简化请求详情，而不是完整的坐席 Ticket 工作台。申请人只能看到当前状态、下一步、SLA、审批结果、面向用户的评论、附件和 KAF 的脱敏进度摘要；不得看到内部 CTI、Procedure、Tool、技术失败详情、BPMN task ID 或内部审计引用。
+
+坐席/管理员继续使用现有 `/tickets/[ticketId]` 与 Incident 详情。除既有 SLA、审批、时间线、附件和关系组件外，增加“自动化执行”信息区，显示 `kaf_delegate` ProcessTask 状态、KAF 进度、Procedure/版本、脱敏 Tool 审计引用和失败摘要。所有可见操作均以后端返回的权限与允许动作决定，前端不从状态文字推导权限。
+
+### 8.3 Workflow Designer
+
+现有 Workflow Designer 的服务任务选择器和节点属性面板增加 `KAF 委派` 类型。选择后写入 `taskType="kaf_delegate"`；管理员只能配置节点名称、说明、允许的 WorkItem 动作和超时/SLA 关联。Procedure、Tool、模型、Prompt 和 KAF 风险策略不得出现在 BPMN 节点属性中。
+
+流程实例与审计页面将该节点展示为“已委派 KAF”“等待 KAF 完成”或“已完成”，并可跳转到关联 WorkItem。节点配置必须经后端校验，与 `kaf_delegate` ServiceTask 注册表一致。
+
+### 8.4 UI 状态与验证
+
+受理页必须覆盖 KAF 分析中、补充字段、确认、提交中、创建成功和可恢复失败；用户在确认前始终可以编辑或取消。请求详情必须区分加载、空、错误和无权限状态，并在移动端保持对话、确认卡片和状态信息可读。
+
+UI 验收至少覆盖：入口收敛与旧路由重定向、Catalog 预填、Web 确认创建、移动端受理、申请人与坐席的信息隔离、`kaf_delegate` 节点配置、KAF 进度展示，以及前端不推导领域语义或权限。
+
+## 9. 验收与测试边界
 
 1. SSLVPN 权限申请可从 KAF 与 ITSM 直接入口创建，并形成同样的 `service_request_item`、8 项字段、SLA 和审批 BPMN。
 2. SSLVPN 双级审批完成后，BPMN 原子创建 `kaf_delegate ProcessTask`、审计与 Outbox；KAF 能以 `taskId` 读取对应 WorkItem，而无需旧 ITSM 全文轮询。
@@ -274,7 +308,7 @@ ITSM 不复制原始 prompt、完整对话或 Tool 敏感输出。KAF 返回的�
 7. 自动化 API 测试必须覆盖 tenant/RBAC 拒绝、任务非活跃、版本冲突、重复事件与重复动作；KAF/ITSM 合同测试使用确定性 KAF stub，真实 Tool 仅在隔离 SSLVPN 沙箱做端到端验证。
 8. KAF 仅通过受控 ITSM API 读取受委派 ticket 和写入动作；不存在直接数据库访问或前端领域语义推导。
 
-## 9. 迁移与非目标
+## 10. 迁移与非目标
 
 现有 `sr_batch` 为旧 ITSM 缺少可靠 CRUD API 时形成的适配链路。首期以 SSLVPN 服务请求验证新链路后，逐步将 `sr_batch` 的执行台账、幂等和 Tool 审计能力迁入 KAF Execution Context 与 ITSM WorkItem 审计；不保留旧工单全文重分类、Web 表单提交、`cticode` 映射或轮询恢复作为长期兼容路径。
 
