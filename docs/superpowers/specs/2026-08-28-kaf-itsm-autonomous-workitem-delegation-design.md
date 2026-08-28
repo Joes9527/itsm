@@ -31,13 +31,13 @@ KAF 与 ITSM 复用同一认证、身份、租户解析和 RBAC 体系；KAF 适
 | 入口 | 行为 | ITSM 认证主体 |
 |---|---|---|
 | KAF Web / Teams / WeCom | KAF 对话式收集需求并调用 ITSM Intake；Web 必须经用户确认，Teams/WeCom 可按渠道策略自动创建。 | 当前终端用户 |
-| ITSM 终端用户页面 | 用户留在 ITSM。可手动选择 Catalog/填写表单，或在当前页面调用 KAF 分析能力；页面不推导领域语义。 | 当前终端用户 |
+| ITSM 终端用户页面 | 用户留在 ITSM 的统一自然语言受理入口；当前页面调用 KAF 分析能力并展示提交确认，页面不推导领域语义。Catalog 浏览仅是可选捷径。 | 当前终端用户 |
 | ITSM 坐席/管理员页面 | 允许专业人员明确创建 WorkItem；创建后如 BPMN 到达 KAF 委派节点，仍进入同一 KAF 处理链路。 | 当前操作人员 |
 | KAF 自动执行 | KAF 领取 ITSM 委派任务并调用 ITSM 自动化 API。 | ITSM 内置 `KAF automation` 技术账号 |
 
 创建时，当前认证用户是 requester/opener 的权威来源；`source` 仅记录渠道事实。自动执行时，`KAF automation` 是执行 actor，原 requester 保留在 WorkItem 上。审计必须同时记录技术账号、KAF agent、Procedure、run 和步骤，不能将自动执行伪装为终端用户操作。
 
-所有入口使用同一 ITSM Intake 应用服务。前端不得使用正则、预设名称或用户优先级来推断 `recordClass`。
+所有入口使用同一 ITSM Intake 应用服务。终端用户不必先选择 Catalog、分类或专业域；KAF 生成结构化受理结果，用户确认后提交。前端不得使用正则、预设名称或用户优先级来推断 `recordClass`。坐席/管理员可在其权限范围内显式选择专业域和分类。
 
 ### 2.2 智能决策与领域裁定
 
@@ -64,7 +64,7 @@ KAF 可以更新、推进、解决和关闭 WorkItem，但不能直接写 ITSM �
 
 BPMN 不绑定 KAF Procedure，也不复制 KAF 的 Tool 权限、风险策略或审批治理。BPMN 只表达：当前流程任务委派给 KAF 处理。
 
-ITSM 通过配置化流程绑定决定哪些 WorkItem 产生 KAF 委派任务。例如 `recordClass=incident` 且 CTI 为 SSLVPN 连通性故障时，绑定 SSLVPN 自动诊断流程；未匹配该绑定的 Incident 维持既有人工流程。KAF 不能自行启动、跳过或完成未经委派的 BPMN 自动化任务。
+ITSM 通过配置化流程绑定决定哪些 WorkItem 产生 KAF 委派任务。绑定优先级为：Catalog Item 明确的 `processDefinitionKey`；`tenant + recordClass + scenario + CTI/category/department` 精确绑定；`tenant + recordClass` 默认绑定；无匹配时执行明确配置的“无需流程”或返回阻断错误。禁止静默选择其他流程。例如 `recordClass=incident` 且 CTI 为 SSLVPN 连通性故障时，绑定 SSLVPN 自动诊断流程；未匹配该绑定的 Incident 维持既有人工流程。KAF 不能自行启动、跳过或完成未经委派的 BPMN 自动化任务。
 
 KAF 收到委派后读取 WorkItem，结合当前 CTI、Catalog、表单、CI、历史、BPMN 上下文和租户知识自主选择 Procedure。KAF 的 Tool Registry 与治理机制是 Procedure/Tool 可选范围、风险控制和 Tool 调用的唯一权威来源。ITSM 仅保存最终的 `procedureRef`、版本和脱敏执行证据，不维护第二套 Procedure 或 Tool policy。
 
@@ -92,7 +92,7 @@ KAF 不保存 WorkItem 状态副本；每次展示或执行前读取 ITSM 返回
 
 ### 3.1 AutomationTask
 
-`AutomationTask` 是 ITSM 持久化的 BPMN 服务任务执行记录，也是 KAF 自动化动作的唯一授权上下文。每条任务至少关联 tenant、WorkItem、BPMN process/task、状态、`correlationId`、当前 `runId`、lease 持有者和到期时间、尝试次数、版本、创建/完成时间。
+`AutomationTask` 是 ITSM 持久化的 BPMN 服务任务执行记录，也是 KAF 自动化动作的唯一授权上下文。每条任务至少关联 tenant、WorkItem、BPMN process/task、状态、允许动作、`correlationId`、当前 `runId`、lease 持有者和到期时间、尝试次数、版本、创建/完成时间。
 
 首期状态机为：
 
@@ -111,11 +111,12 @@ ITSM 创建任务、写入审计和 Outbox 必须在同一事务中完成。KAF 
 
 ### 4.1 创建 WorkItem
 
-`CreateWorkItemCommand` 由当前认证主体调用。requester、tenant、actor 和权限由 ITSM 认证上下文派生，不接受调用方任意指定；渠道适配层只提交渠道事实、受理内容与 KAF 的结构化决策。
+`CreateWorkItemCommand` 由当前认证主体调用。requester、tenant、actor 和权限由 ITSM 认证上下文派生，不接受调用方任意指定；渠道适配层只提交渠道事实、受理内容与 KAF 的结构化决策和创建幂等键。KAF Web 与 ITSM Web 只在用户点击确认后以 `confirmation="confirmed"` 调用 ITSM；ITSM 信任已认证的调用，不保存 KAF draft 或额外确认凭据。Teams/WeCom 的自动创建由 ITSM 已配置的渠道策略决定。
 
 ```ts
 type CreateWorkItemCommand = {
-  source: "itsm_web" | "teams" | "wecom"
+  idempotencyKey: string
+  source: "kaf_web" | "itsm_web" | "teams" | "wecom"
   confirmation: "confirmed" | "channel_auto_create"
   intent: {
     recordClass: WorkItemRecordClass
@@ -145,16 +146,24 @@ ITSM 返回 `WorkItemResult`，至少包括 `id`、`number`、`recordClass`、`s
 
 当 BPMN 到达 KAF 委派节点时，ITSM Outbox 发布：
 
+事件不携带完整工单正文，但必须包含统一事件元数据：
+
 ```ts
 type KafDelegateRequested = {
   eventId: string
+  tenantId: string
+  workItemId: string
   ticketId: string
   taskId: string
+  recordClass: WorkItemRecordClass
+  actor: ActorRef
+  timestamp: string
+  version: number
   correlationId: string
 }
 ```
 
-事件不携带完整工单正文。KAF 使用 `taskId` 以 `KAF automation` 身份获取任务上下文，得到当前 WorkItem、冻结受理快照、当前 BPMN 等待点、允许动作、版本和 lease 状态。事件推送是主路径；KAF 重启或事件遗漏时，通过 `GET /automation-tasks?status=ready|retryable` 补拉自身可领取的未完成任务。
+KAF 使用 `taskId` 以 `KAF automation` 身份获取任务上下文，得到当前 WorkItem、冻结受理快照、当前 BPMN 等待点、允许动作、版本和 lease 状态。事件推送是主路径；KAF 重启或事件遗漏时，通过 `GET /automation-tasks?status=ready|retryable` 补拉自身可领取的未完成任务。
 
 领取、续租和查询接口都以 `taskId` 为对象。ITSM 必须验证该技术账号对任务所属 tenant 的自动化权限；返回的上下文仅限完成该任务所需的 WorkItem 数据。
 
@@ -190,9 +199,34 @@ type ResolveIncident = AutomationActionBase & {
     evidenceRefs: string[]
   }
 }
+
+type UpdateProgress = AutomationActionBase & {
+  action: "update_progress"
+  payload: { stage: string; summary: string; evidenceRefs: string[] }
+}
+
+type AssignWorkItem = AutomationActionBase & {
+  action: "assign"
+  payload: { assignmentGroupId?: string; assigneeId?: string; reason: string }
+}
+
+type CloseWorkItem = AutomationActionBase & {
+  action: "close"
+  payload: { closureCode: string; closureSummary: string; evidenceRefs: string[] }
+}
+
+type RecordExecutionFailure = AutomationActionBase & {
+  action: "record_execution_failure"
+  payload: {
+    failureClass: string
+    summary: string
+    retryable: boolean
+    evidenceRefs: string[]
+  }
+}
 ```
 
-`complete_bpmn_task` 必须明确完成 `taskId` 所关联的 BPMN 服务任务。`resolve` 和 `close` 先由 IncidentService 或对应专业领域服务校验，再按任务定义决定是否完成 BPMN 任务；该关联在同一事务内落地，不能由 KAF 假设隐式推进。
+`complete_bpmn_task` 必须明确完成 `taskId` 所关联的 BPMN 服务任务。`resolve` 和 `close` 先由 IncidentService 或对应专业领域服务校验，再按任务定义决定是否完成 BPMN 任务；该关联在同一事务内落地，不能由 KAF 假设隐式推进。所有动作必须存在于 `AutomationTask.allowedActions`；`assign` 还必须通过 ITSM 对目标组、人员和可见性的校验，`record_execution_failure` 仅能按任务策略转为 `retryable` 或返回拒绝。
 
 ITSM 按 WorkItem 的既有 `recordClass` 调用对应专业领域服务。这是确定性路由，不是重新智能分类。动作结果必须区分 `applied`、`already_applied`、`stale_version`、`task_not_active`、`lease_lost`、`forbidden` 与 `domain_rejected`；KAF 刷新上下文并由自身治理策略决定后续行为。
 
