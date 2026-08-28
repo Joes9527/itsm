@@ -25,9 +25,15 @@ const OUTPUT_FILE = path.resolve(__dirname, "../docs/acl-manifest.yaml");
 // ---------------------------------------------------------------------------
 
 function extractPermission(arg) {
-  // RequirePermission / RequireMSPPermission 都是权限中间件
+  // RequirePermission / RequireMSPPermission 都是权限中间件（两个参数：resource, action）
   const m = arg.match(/Require(?:MSP)?Permission\s*\(\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']\s*\)/);
   if (m) return `${m[1]}.${m[2]}`;
+  // RequireWorkItemRecordClassPermission 只传 action——resource 在请求时按
+  // tickets.record_class 动态解析（ticket/incident/problem/change 之一），路由注册
+  // 阶段静态未知，所以用 "workitem" 这个占位资源名标注，跟静态的 "<resource>.<action>"
+  // 形式区分开，提示审计者这条路由的资源不是固定的。
+  const wm = arg.match(/RequireWorkItemRecordClassPermission\s*\(\s*["']([^"']+)["']\s*\)/);
+  if (wm) return `workitem.${wm[1]}`;
   return null;
 }
 
