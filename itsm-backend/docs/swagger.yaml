@@ -1701,25 +1701,6 @@ definitions:
     - incidentId
     - message
     type: object
-  dto.CreateIncidentCommentRequest:
-    properties:
-      attachments:
-        items:
-          type: integer
-        type: array
-      content:
-        maxLength: 5000
-        minLength: 1
-        type: string
-      isInternal:
-        type: boolean
-      mentions:
-        items:
-          type: integer
-        type: array
-    required:
-    - content
-    type: object
   dto.CreateIncidentEventRequest:
     properties:
       data:
@@ -2503,33 +2484,6 @@ definitions:
       updatedAt:
         example: "2024-01-01T00:00:00Z"
         type: string
-    type: object
-  dto.IncidentCommentResponse:
-    properties:
-      attachments:
-        items:
-          type: integer
-        type: array
-      content:
-        type: string
-      createdAt:
-        type: string
-      id:
-        type: integer
-      incidentId:
-        type: integer
-      isInternal:
-        type: boolean
-      mentions:
-        items:
-          type: integer
-        type: array
-      updatedAt:
-        type: string
-      user:
-        $ref: '#/definitions/dto.UserInfo'
-      userId:
-        type: integer
     type: object
   dto.IncidentEscalationRequest:
     properties:
@@ -13642,87 +13596,6 @@ paths:
           schema:
             $ref: '#/definitions/common.Response'
       summary: 更新事件分类
-      tags:
-      - 事件管理
-  /api/v1/incidents/{id}/comments:
-    get:
-      description: 获取事件的评论列表
-      parameters:
-      - description: 事件ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/common.Response'
-            - properties:
-                data:
-                  items:
-                    $ref: '#/definitions/dto.IncidentCommentResponse'
-                  type: array
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.Response'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/common.Response'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.Response'
-      summary: 获取事件评论列表
-      tags:
-      - 事件管理
-    post:
-      consumes:
-      - application/json
-      description: 为事件创建评论
-      parameters:
-      - description: 事件ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: 创建评论请求
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.CreateIncidentCommentRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/common.Response'
-            - properties:
-                data:
-                  $ref: '#/definitions/dto.IncidentCommentResponse'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.Response'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/common.Response'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.Response'
-      summary: 创建事件评论
       tags:
       - 事件管理
   /api/v1/incidents/{id}/convert-to-problem:
