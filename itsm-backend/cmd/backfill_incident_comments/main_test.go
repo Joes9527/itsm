@@ -282,12 +282,47 @@ func TestPreviewBackfill_CountsWithoutWriting(t *testing.T) {
 	eligible := createCommentEvent(t, client, ctx, inc, user.ID, "会被回填", time.Now())
 	ineligible := createCommentEvent(t, client, ctx, inc, 0, "user_id缺失会被跳过", time.Now())
 
-	wouldCreate, wouldSkip, err := previewBackfill(ctx, client, []*ent.IncidentEvent{eligible, ineligible})
+	wouldCreate, skipReasons, failed, err := previewBackfill(ctx, client, []*ent.IncidentEvent{eligible, ineligible})
 	require.NoError(t, err)
 	require.Equal(t, 1, wouldCreate)
-	require.Equal(t, 1, wouldSkip)
+	require.Equal(t, 0, failed)
+	require.Equal(t, 1, len(skipReasons), "只有一种跳过原因")
+	require.Equal(t, 1, skipReasons["评论事件缺少可归属的 user_id"])
 
 	count, err := client.TicketComment.Query().Count(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 0, count, "dry-run 预览不能实际写入")
+}
+
+// TestPreviewBackfill_BreaksDownDistinctSkipReasons 验证不同跳过原因在 skipReasons
+// 里各自计数，而不是像旧版 wouldSkip 那样被折叠成一个笼统的总数——运维需要区分
+// "incident 尚未回填 work_item_id"（评论一旦前端切换就永久不可见，必须先跑
+// cmd/backfill_incident_work_item）和其他跳过原因，折叠后就看不出该不该优先处理。
+func TestPreviewBackfill_BreaksDownDistinctSkipReasons(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", testDSN())
+	defer client.Close()
+	ctx := context.Background()
+
+	tenant, user := setupTenantAndUser(t, client, ctx, "breakdown")
+	incWithWorkItem := setupIncidentWithWorkItem(t, client, ctx, tenant.ID, user.ID, "breakdown-wi")
+	incNoWorkItem, err := client.Incident.Create().
+		SetTitle("未回填WorkItem").SetIncidentNumber("INC-BREAKDOWN-1").
+		SetReporterID(user.ID).SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	missingWorkItem := createCommentEvent(t, client, ctx, incNoWorkItem, user.ID, "评论内容", time.Now())
+	missingWorkItem2 := createCommentEvent(t, client, ctx, incNoWorkItem, user.ID, "另一条评论", time.Now())
+	emptyContent := createCommentEvent(t, client, ctx, incWithWorkItem, user.ID, "", time.Now())
+
+	wouldCreate, skipReasons, failed, err := previewBackfill(
+		ctx, client,
+		[]*ent.IncidentEvent{missingWorkItem, missingWorkItem2, emptyContent},
+	)
+	require.NoError(t, err)
+	require.Equal(t, 0, wouldCreate)
+	require.Equal(t, 0, failed)
+	require.Equal(t, 2, len(skipReasons), "两种不同的跳过原因应该产生两个独立的 map 条目")
+	require.Equal(t, 2, skipReasons["incident 尚未回填 work_item_id（先跑 cmd/backfill_incident_work_item）"])
+	require.Equal(t, 1, skipReasons["评论事件 description 为空"])
 }

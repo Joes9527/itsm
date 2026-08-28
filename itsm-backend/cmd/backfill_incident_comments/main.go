@@ -148,28 +148,41 @@ func backfillOne(ctx context.Context, client *ent.Client, event *ent.IncidentEve
 }
 
 // previewBackfill 是 -dry-run 用的只读版本：跑跟 backfillOne 完全相同的判断链路
-// （resolvePlan + alreadyMigrated），但不调用 Create，只统计数量。
-func previewBackfill(ctx context.Context, client *ent.Client, events []*ent.IncidentEvent) (wouldCreate, wouldSkip int, err error) {
+// （resolvePlan + alreadyMigrated），但不调用 Create，只统计数量。skipReasons 按
+// resolvePlan/alreadyMigrated 给出的原因字符串分组计数，而不是只给一个笼统的总数——
+// 不同跳过原因的运维含义差别很大（比如"incident 尚未回填 work_item_id"意味着这些评论
+// 一旦前端切换就永久不可见，需要操作员在正式回填前先跑 cmd/backfill_incident_work_item），
+// 折叠成一个数字会让操作员看不出该不该先处理别的问题。
+//
+// failed 统计 resolvePlan/alreadyMigrated 查询本身出错（不是主动判定该跳过）的行数，
+// 处理方式跟下面 main() 里真实回填循环的 failed 计数完全对应：单独一行查询出错不应该
+// 像以前那样让整个预览直接 Fatal 掉、看不到其余行的预览结果——预览不该比真实回填更脆弱。
+func previewBackfill(ctx context.Context, client *ent.Client, events []*ent.IncidentEvent) (wouldCreate int, skipReasons map[string]int, failed int, err error) {
+	skipReasons = make(map[string]int)
 	for _, event := range events {
-		plan, ok, _, err := resolvePlan(ctx, client, event)
-		if err != nil {
-			return 0, 0, err
-		}
-		if !ok {
-			wouldSkip++
+		plan, ok, reason, resolveErr := resolvePlan(ctx, client, event)
+		if resolveErr != nil {
+			failed++
 			continue
 		}
-		exists, err := alreadyMigrated(ctx, client, plan)
-		if err != nil {
-			return 0, 0, err
+		if !ok {
+			skipReasons[reason]++
+			continue
+		}
+		exists, existsErr := alreadyMigrated(ctx, client, plan)
+		if existsErr != nil {
+			failed++
+			continue
 		}
 		if exists {
-			wouldSkip++
+			// 与 backfillOne 命中查重时使用的原因字符串保持一致，保证预览和实际运行
+			// 对"已经回填过"这一种情况报告出同样的文案。
+			skipReasons["已经回填过（命中查重）"]++
 			continue
 		}
 		wouldCreate++
 	}
-	return wouldCreate, wouldSkip, nil
+	return wouldCreate, skipReasons, failed, nil
 }
 
 func main() {
@@ -213,11 +226,11 @@ func main() {
 	sugar.Infow("找到待回填评论事件", "count", len(candidates), "tenant_id", *tenantID, "dry_run", *dryRun)
 
 	if *dryRun {
-		wouldCreate, wouldSkip, err := previewBackfill(ctx, client, candidates)
+		wouldCreate, skipReasons, failed, err := previewBackfill(ctx, client, candidates)
 		if err != nil {
 			sugar.Fatalw("预览回填失败", "error", err)
 		}
-		sugar.Infow("dry-run 预览完成", "would_create", wouldCreate, "would_skip", wouldSkip)
+		sugar.Infow("dry-run 预览完成", "would_create", wouldCreate, "skip_reasons", skipReasons, "failed", failed)
 		sugar.Infow("dry-run 模式，未实际写入——确认列表无误后加 -dry-run=false 重新运行")
 		return
 	}
