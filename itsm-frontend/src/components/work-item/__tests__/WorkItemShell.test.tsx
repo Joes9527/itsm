@@ -4,6 +4,23 @@ import { WorkItemShell } from '../WorkItemShell';
 import { useWorkItemContext } from '../WorkItemContext';
 import type { WorkItemCommon } from '../WorkItemTypes';
 
+// Mock detail-tabs components to prevent real network calls from CommentPanel/AttachmentPanel
+jest.mock('@/components/business/detail-tabs', () => ({
+  CommentPanel: ({ targetType, targetId }: { targetType: string; targetId: number }) => (
+    <div data-testid="mocked-comment-panel" data-target-type={targetType} data-target-id={targetId} />
+  ),
+  AttachmentPanel: ({ targetType, targetId }: { targetType: string; targetId: number }) => (
+    <div data-testid="mocked-attachment-panel" data-target-type={targetType} data-target-id={targetId} />
+  ),
+  ticketCommentAdapter: {},
+  ticketAttachmentAdapter: {},
+}));
+
+// Mock auth store to provide user context for WorkItemComments
+jest.mock('@/lib/store/auth-store', () => ({
+  useAuthStore: () => ({ user: { id: 1 } }),
+}));
+
 const workItem: WorkItemCommon = {
   id: 1,
   number: 'INC-202608-000001',
