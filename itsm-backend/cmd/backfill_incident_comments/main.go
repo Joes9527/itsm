@@ -26,9 +26,19 @@ package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
+	"os"
 	"time"
 
+	"itsm-backend/common/tenantctx"
+	"itsm-backend/config"
+	"itsm-backend/database"
 	"itsm-backend/ent"
+	"itsm-backend/ent/incidentevent"
+	"itsm-backend/ent/ticketcomment"
+
+	"go.uber.org/zap"
 )
 
 // commentPlan 是 resolvePlan 对一条 incident_events 评论事件算出的、待写入 ticket_comments
@@ -69,4 +79,166 @@ func resolvePlan(ctx context.Context, client *ent.Client, event *ent.IncidentEve
 		tenantID:  event.TenantID,
 		createdAt: event.CreatedAt,
 	}, true, "", nil
+}
+
+// outcome 是 backfillOne 处理一条评论事件的结果。
+type outcome int
+
+const (
+	outcomeCreated outcome = iota
+	outcomeSkipped
+)
+
+// findCandidates 返回所有 event_type="comment" 的 IncidentEvent（可选按租户收窄）。是否真的
+// 写入由 resolvePlan/backfillOne 逐条判断——这里只做粗筛，不查所属 Incident。
+func findCandidates(ctx context.Context, client *ent.Client, tenantID int) ([]*ent.IncidentEvent, error) {
+	q := client.IncidentEvent.Query().Where(incidentevent.EventType("comment"))
+	if tenantID > 0 {
+		q = q.Where(incidentevent.TenantID(tenantID))
+	}
+	return q.All(ctx)
+}
+
+// alreadyMigrated 用 (ticket_id, user_id, content, created_at) 四元组查重——同一条评论事件
+// 重复回填时命中同一行，不产生第二条 ticket_comments。
+func alreadyMigrated(ctx context.Context, client *ent.Client, plan commentPlan) (bool, error) {
+	return client.TicketComment.Query().
+		Where(
+			ticketcomment.TicketID(plan.ticketID),
+			ticketcomment.UserID(plan.userID),
+			ticketcomment.Content(plan.content),
+			ticketcomment.CreatedAt(plan.createdAt),
+		).
+		Exist(ctx)
+}
+
+// backfillOne 处理一条评论事件：resolvePlan 判断是否该写入，alreadyMigrated 查重，
+// 不存在则写入一条 ticket_comments。返回的 outcome 供调用方统计 created/skipped 数量，
+// reason 在 outcomeSkipped 时说明原因（已迁移过 / 不满足写入条件），仅用于日志展示。
+func backfillOne(ctx context.Context, client *ent.Client, event *ent.IncidentEvent) (outcome, string, error) {
+	plan, ok, reason, err := resolvePlan(ctx, client, event)
+	if err != nil {
+		return outcomeSkipped, "", err
+	}
+	if !ok {
+		return outcomeSkipped, reason, nil
+	}
+
+	exists, err := alreadyMigrated(ctx, client, plan)
+	if err != nil {
+		return outcomeSkipped, "", fmt.Errorf("查重失败: %w", err)
+	}
+	if exists {
+		return outcomeSkipped, "已经回填过（命中查重）", nil
+	}
+
+	_, err = client.TicketComment.Create().
+		SetTicketID(plan.ticketID).
+		SetUserID(plan.userID).
+		SetContent(plan.content).
+		SetIsInternal(false).
+		SetTenantID(plan.tenantID).
+		SetCreatedAt(plan.createdAt).
+		SetUpdatedAt(plan.createdAt).
+		Save(ctx)
+	if err != nil {
+		return outcomeSkipped, "", fmt.Errorf("写入 ticket_comments 失败: %w", err)
+	}
+	return outcomeCreated, "", nil
+}
+
+// previewBackfill 是 -dry-run 用的只读版本：跑跟 backfillOne 完全相同的判断链路
+// （resolvePlan + alreadyMigrated），但不调用 Create，只统计数量。
+func previewBackfill(ctx context.Context, client *ent.Client, events []*ent.IncidentEvent) (wouldCreate, wouldSkip int, err error) {
+	for _, event := range events {
+		plan, ok, _, err := resolvePlan(ctx, client, event)
+		if err != nil {
+			return 0, 0, err
+		}
+		if !ok {
+			wouldSkip++
+			continue
+		}
+		exists, err := alreadyMigrated(ctx, client, plan)
+		if err != nil {
+			return 0, 0, err
+		}
+		if exists {
+			wouldSkip++
+			continue
+		}
+		wouldCreate++
+	}
+	return wouldCreate, wouldSkip, nil
+}
+
+func main() {
+	tenantID := flag.Int("tenant-id", 0, "只处理指定租户（<=0 表示处理所有租户）")
+	dryRun := flag.Bool("dry-run", true, "true 只打印候选统计，不实际写入；确认无误后用 -dry-run=false 真正回填")
+	flag.Parse()
+
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load config: %v\n", err)
+		os.Exit(1)
+	}
+	logger, err := zap.NewProduction()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "initialize logger: %v\n", err)
+		os.Exit(1)
+	}
+	defer logger.Sync()
+	sugar := logger.Sugar()
+
+	client, err := database.InitDatabaseWithRLS(&cfg.Database, &cfg.RLS, sugar)
+	if err != nil {
+		sugar.Fatalw("connect database", "error", err)
+	}
+	defer client.Close()
+
+	ctx := tenantctx.SystemContext(
+		context.Background(),
+		"ops:backfill_incident_comments",
+		"WorkItem 详情页能力对齐：把 incident_events 里的存量评论事件搬到 ticket_comments",
+	)
+
+	candidates, err := findCandidates(ctx, client, *tenantID)
+	if err != nil {
+		sugar.Fatalw("查找待回填评论事件失败", "error", err)
+	}
+	if len(candidates) == 0 {
+		sugar.Infow("没有找到需要回填的评论事件", "tenant_id", *tenantID)
+		return
+	}
+	sugar.Infow("找到待回填评论事件", "count", len(candidates), "tenant_id", *tenantID, "dry_run", *dryRun)
+
+	if *dryRun {
+		wouldCreate, wouldSkip, err := previewBackfill(ctx, client, candidates)
+		if err != nil {
+			sugar.Fatalw("预览回填失败", "error", err)
+		}
+		sugar.Infow("dry-run 预览完成", "would_create", wouldCreate, "would_skip", wouldSkip)
+		sugar.Infow("dry-run 模式，未实际写入——确认列表无误后加 -dry-run=false 重新运行")
+		return
+	}
+
+	created, skipped, failed := 0, 0, 0
+	for _, event := range candidates {
+		result, reason, err := backfillOne(ctx, client, event)
+		switch {
+		case err != nil:
+			sugar.Errorw("回填评论失败", "incident_event_id", event.ID, "error", err)
+			failed++
+		case result == outcomeSkipped:
+			sugar.Infow("跳过评论事件", "incident_event_id", event.ID, "reason", reason)
+			skipped++
+		default:
+			created++
+		}
+	}
+
+	sugar.Infow("回填完成", "created", created, "skipped", skipped, "failed", failed, "total", len(candidates))
+	if failed > 0 {
+		os.Exit(1)
+	}
 }
