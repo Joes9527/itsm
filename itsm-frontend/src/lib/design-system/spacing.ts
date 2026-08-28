@@ -1,47 +1,16 @@
 /**
  * 设计系统间距和网格配置
  * 提供统一的间距、网格和布局系统
+ *
+ * 间距/圆角/阴影/字体刻度不在本文件维护：全部派生自 `token-contract.ts`
+ * （数据源 `token-source.json`）。本文件只保留由这些刻度组合出来的
+ * 语义化间距、网格、布局、动画和响应式工具。
  */
 
+import { tokenContract } from './token-contract';
+
 // 基础间距单位（基于8px网格系统）
-export const spacing = {
-  // 基础间距
-  px: '1px',
-  0: '0px',
-  0.5: '2px', // 0.25rem
-  1: '4px', // 0.25rem
-  1.5: '6px', // 0.375rem
-  2: '8px', // 0.5rem
-  2.5: '10px', // 0.625rem
-  3: '12px', // 0.75rem
-  3.5: '14px', // 0.875rem
-  4: '16px', // 1rem
-  5: '20px', // 1.25rem
-  6: '24px', // 1.5rem
-  7: '28px', // 1.75rem
-  8: '32px', // 2rem
-  9: '36px', // 2.25rem
-  10: '40px', // 2.5rem
-  11: '44px', // 2.75rem
-  12: '48px', // 3rem
-  14: '56px', // 3.5rem
-  16: '64px', // 4rem
-  20: '80px', // 5rem
-  24: '96px', // 6rem
-  28: '112px', // 7rem
-  32: '128px', // 8rem
-  36: '144px', // 9rem
-  40: '160px', // 10rem
-  44: '176px', // 11rem
-  48: '192px', // 12rem
-  52: '208px', // 13rem
-  56: '224px', // 14rem
-  60: '240px', // 15rem
-  64: '256px', // 16rem
-  72: '288px', // 18rem
-  80: '320px', // 20rem
-  96: '384px', // 24rem
-} as const;
+export const spacing = tokenContract.spacing;
 
 // 语义化间距
 export const semanticSpacing = {
@@ -181,67 +150,19 @@ export const layout = {
 } as const;
 
 // 圆角系统
-export const borderRadius = {
-  none: '0px',
-  sm: '2px',
-  md: '4px',
-  lg: '8px',
-  xl: '12px',
-  '2xl': '16px',
-  '3xl': '24px',
-  full: '9999px',
-} as const;
+export const borderRadius = tokenContract.radius;
 
 // 阴影系统
-export const boxShadow = {
-  none: 'none',
-  sm: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
-  md: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
-  lg: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
-  xl: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)',
-  '2xl': '0 25px 50px -12px rgb(0 0 0 / 0.25)',
-  inner: 'inset 0 2px 4px 0 rgb(0 0 0 / 0.05)',
-} as const;
+export const boxShadow = tokenContract.shadow;
 
 // 字体大小系统
-export const fontSize = {
-  xs: '12px',
-  sm: '14px',
-  base: '16px',
-  lg: '18px',
-  xl: '20px',
-  '2xl': '24px',
-  '3xl': '30px',
-  '4xl': '36px',
-  '5xl': '48px',
-  '6xl': '60px',
-  '7xl': '72px',
-  '8xl': '96px',
-  '9xl': '128px',
-} as const;
+export const fontSize = tokenContract.fontSize;
 
 // 行高系统
-export const lineHeight = {
-  none: '1',
-  tight: '1.25',
-  snug: '1.375',
-  normal: '1.5',
-  relaxed: '1.625',
-  loose: '2',
-} as const;
+export const lineHeight = tokenContract.lineHeight;
 
 // 字重系统
-export const fontWeight = {
-  thin: '100',
-  extralight: '200',
-  light: '300',
-  normal: '400',
-  medium: '500',
-  semibold: '600',
-  bold: '700',
-  extrabold: '800',
-  black: '900',
-} as const;
+export const fontWeight = tokenContract.fontWeight;
 
 // 动画系统
 export const animation = {

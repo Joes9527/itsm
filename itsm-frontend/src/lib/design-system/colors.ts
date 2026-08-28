@@ -1,186 +1,40 @@
 /**
  * 设计系统颜色配置
  * 提供统一的颜色变量和主题支持
+ *
+ * 色值不在本文件维护：全部派生自 `token-contract.ts`（数据源 `token-source.json`），
+ * 这样 React/antd、构建期 CSS 生成脚本和 Tailwind 消费的是同一份取值。
  */
 
-// 基础颜色定义
+import { tokenContract } from './token-contract';
+
+// 基础颜色定义（浅色主题）
 export const colors = {
-  // 主色调
-  // KLN Brand Orange
-  primary: {
-    50: '#fff5f0',
-    100: '#ffe8d9',
-    200: '#ffd1b3',
-    300: '#ffb380',
-    400: '#F27C38',
-    500: '#F06820', // KLN Orange
-    600: '#D85E10',
-    700: '#B84A08',
-    800: '#933A06',
-    900: '#6E2B04',
-    950: '#4A1D02',
-  },
-  charcoal: '#2A2A2A',
+  // 主色调 — KLN Brand Orange
+  primary: tokenContract.brand.primary.light,
+  charcoal: tokenContract.brand.charcoal,
 
   // 中性色
-  neutral: {
-    50: '#f8fafc',
-    100: '#f1f5f9',
-    200: '#e2e8f0',
-    300: '#cbd5e1',
-    400: '#94a3b8',
-    500: '#64748b',
-    600: '#475569',
-    700: '#334155',
-    800: '#1e293b',
-    900: '#0f172a',
-    950: '#020617',
-  },
+  neutral: tokenContract.neutral.light,
 
-  // 语义色
-  semantic: {
-    success: {
-      50: '#f0fdf4',
-      100: '#dcfce7',
-      200: '#bbf7d0',
-      300: '#86efac',
-      400: '#4ade80',
-      500: '#22c55e',
-      600: '#16a34a',
-      700: '#15803d',
-      800: '#166534',
-      900: '#14532d',
-    },
-    warning: {
-      50: '#fffbeb',
-      100: '#fef3c7',
-      200: '#fde68a',
-      300: '#fcd34d',
-      400: '#fbbf24',
-      500: '#f59e0b',
-      600: '#d97706',
-      700: '#b45309',
-      800: '#92400e',
-      900: '#78350f',
-    },
-    error: {
-      50: '#fef2f2',
-      100: '#fee2e2',
-      200: '#fecaca',
-      300: '#fca5a5',
-      400: '#f87171',
-      500: '#ef4444',
-      600: '#dc2626',
-      700: '#b91c1c',
-      800: '#991b1b',
-      900: '#7f1d1d',
-    },
-    info: {
-      50: '#f0f9ff',
-      100: '#e0f2fe',
-      200: '#bae6fd',
-      300: '#7dd3fc',
-      400: '#38bdf8',
-      500: '#0ea5e9',
-      600: '#0284c7',
-      700: '#0369a1',
-      800: '#075985',
-      900: '#0c4a6e',
-    },
-  },
+  // 语义色（契约中的 status 组）
+  semantic: tokenContract.status,
 
   // 功能色
-  functional: {
-    background: {
-      primary: '#ffffff',
-      secondary: '#f8fafc',
-      tertiary: '#f1f5f9',
-      elevated: '#ffffff',
-    },
-    surface: {
-      primary: '#ffffff',
-      secondary: '#f8fafc',
-      tertiary: '#f1f5f9',
-      elevated: '#ffffff',
-    },
-    border: {
-      primary: '#e2e8f0',
-      secondary: '#cbd5e1',
-      tertiary: '#94a3b8',
-      focus: '#F06820',
-    },
-    text: {
-      primary: '#0f172a',
-      secondary: '#475569',
-      tertiary: '#64748b',
-      disabled: '#94a3b8',
-      inverse: '#ffffff',
-    },
-  },
+  functional: tokenContract.functional.light,
 } as const;
 
 // 暗色主题颜色
 export const darkColors = {
-  // 主色调（暗色主题下调整）
-  // KLN Orange — dark theme (inverted scale: lightest at 50)
-  primary: {
-    50: '#4A1D02',
-    100: '#6E2B04',
-    200: '#933A06',
-    300: '#B84A08',
-    400: '#D85E10',
-    500: '#F06820', // KLN Orange
-    600: '#F27C38',
-    700: '#ffb380',
-    800: '#ffd1b3',
-    900: '#ffe8d9',
-    950: '#fff5f0',
-  },
-  charcoal: '#2A2A2A',
+  // 主色调（暗色主题下反转色阶：50 最浅）
+  primary: tokenContract.brand.primary.dark,
+  charcoal: tokenContract.brand.charcoal,
 
   // 中性色（暗色主题）
-  neutral: {
-    50: '#020617',
-    100: '#0f172a',
-    200: '#1e293b',
-    300: '#334155',
-    400: '#475569',
-    500: '#64748b',
-    600: '#94a3b8',
-    700: '#cbd5e1',
-    800: '#e2e8f0',
-    900: '#f1f5f9',
-    950: '#f8fafc',
-  },
+  neutral: tokenContract.neutral.dark,
 
   // 功能色（暗色主题）
-  functional: {
-    background: {
-      primary: '#0f172a',
-      secondary: '#1e293b',
-      tertiary: '#334155',
-      elevated: '#1e293b',
-    },
-    surface: {
-      primary: '#1e293b',
-      secondary: '#334155',
-      tertiary: '#475569',
-      elevated: '#334155',
-    },
-    border: {
-      primary: '#334155',
-      secondary: '#475569',
-      tertiary: '#64748b',
-      focus: '#F06820',
-    },
-    text: {
-      primary: '#f8fafc',
-      secondary: '#cbd5e1',
-      tertiary: '#94a3b8',
-      disabled: '#64748b',
-      inverse: '#0f172a',
-    },
-  },
+  functional: tokenContract.functional.dark,
 } as const;
 
 // 颜色使用指南
