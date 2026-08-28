@@ -89,6 +89,11 @@ var RegisteredMigrations = []Migration{
 		Description: "Add contact_name/contact_email/quantity/expected_at columns to service_requests (previously fake fields that only lived in form_data and were never read back)",
 		RollbackSQL: "ALTER TABLE service_requests DROP COLUMN IF EXISTS contact_name; ALTER TABLE service_requests DROP COLUMN IF EXISTS contact_email; ALTER TABLE service_requests DROP COLUMN IF EXISTS quantity; ALTER TABLE service_requests DROP COLUMN IF EXISTS expected_at;",
 	},
+	{
+		Version:     "017_drop_ticket_type_legacy_approval_fields",
+		Description: "Drop ticket_types.approval_workflow_id/approval_chain (dangling references to the approval_workflows/approval_records tables already dropped in 014; zero read/write callers outside ent-generated code, superseded by ProcessBinding/BPMN)",
+		RollbackSQL: "ALTER TABLE ticket_types ADD COLUMN IF NOT EXISTS approval_workflow_id BIGINT; ALTER TABLE ticket_types ADD COLUMN IF NOT EXISTS approval_chain JSONB DEFAULT '[]';",
+	},
 }
 
 // PostSchemaMigrations returns a defensive copy of the canonical active stream.
@@ -679,6 +684,15 @@ ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS contact_name VARCHAR;
 ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS contact_email VARCHAR;
 ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS quantity BIGINT NOT NULL DEFAULT 1;
 ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS expected_at TIMESTAMP WITH TIME ZONE;
+`
+	case "017_drop_ticket_type_legacy_approval_fields":
+		return `
+-- approval_workflow_id/approval_chain pointed at the legacy ApprovalWorkflow engine
+-- (approval_workflows/approval_records) dropped in 014. Nothing outside ent-generated
+-- code ever read or wrote these columns; live ticket-type approval routing goes through
+-- ProcessBinding/BPMN instead.
+ALTER TABLE ticket_types DROP COLUMN IF EXISTS approval_workflow_id;
+ALTER TABLE ticket_types DROP COLUMN IF EXISTS approval_chain;
 `
 	default:
 		return ""

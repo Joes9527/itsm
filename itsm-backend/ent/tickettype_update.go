@@ -127,45 +127,6 @@ func (_u *TicketTypeUpdate) SetNillableApprovalEnabled(v *bool) *TicketTypeUpdat
 	return _u
 }
 
-// SetApprovalWorkflowID sets the "approval_workflow_id" field.
-func (_u *TicketTypeUpdate) SetApprovalWorkflowID(v int64) *TicketTypeUpdate {
-	_u.mutation.ResetApprovalWorkflowID()
-	_u.mutation.SetApprovalWorkflowID(v)
-	return _u
-}
-
-// SetNillableApprovalWorkflowID sets the "approval_workflow_id" field if the given value is not nil.
-func (_u *TicketTypeUpdate) SetNillableApprovalWorkflowID(v *int64) *TicketTypeUpdate {
-	if v != nil {
-		_u.SetApprovalWorkflowID(*v)
-	}
-	return _u
-}
-
-// AddApprovalWorkflowID adds value to the "approval_workflow_id" field.
-func (_u *TicketTypeUpdate) AddApprovalWorkflowID(v int64) *TicketTypeUpdate {
-	_u.mutation.AddApprovalWorkflowID(v)
-	return _u
-}
-
-// ClearApprovalWorkflowID clears the value of the "approval_workflow_id" field.
-func (_u *TicketTypeUpdate) ClearApprovalWorkflowID() *TicketTypeUpdate {
-	_u.mutation.ClearApprovalWorkflowID()
-	return _u
-}
-
-// SetApprovalChain sets the "approval_chain" field.
-func (_u *TicketTypeUpdate) SetApprovalChain(v []interface{}) *TicketTypeUpdate {
-	_u.mutation.SetApprovalChain(v)
-	return _u
-}
-
-// AppendApprovalChain appends value to the "approval_chain" field.
-func (_u *TicketTypeUpdate) AppendApprovalChain(v []interface{}) *TicketTypeUpdate {
-	_u.mutation.AppendApprovalChain(v)
-	return _u
-}
-
 // SetSLAEnabled sets the "sla_enabled" field.
 func (_u *TicketTypeUpdate) SetSLAEnabled(v bool) *TicketTypeUpdate {
 	_u.mutation.SetSLAEnabled(v)
@@ -453,23 +414,6 @@ func (_u *TicketTypeUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	if value, ok := _u.mutation.ApprovalEnabled(); ok {
 		_spec.SetField(tickettype.FieldApprovalEnabled, field.TypeBool, value)
 	}
-	if value, ok := _u.mutation.ApprovalWorkflowID(); ok {
-		_spec.SetField(tickettype.FieldApprovalWorkflowID, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedApprovalWorkflowID(); ok {
-		_spec.AddField(tickettype.FieldApprovalWorkflowID, field.TypeInt64, value)
-	}
-	if _u.mutation.ApprovalWorkflowIDCleared() {
-		_spec.ClearField(tickettype.FieldApprovalWorkflowID, field.TypeInt64)
-	}
-	if value, ok := _u.mutation.ApprovalChain(); ok {
-		_spec.SetField(tickettype.FieldApprovalChain, field.TypeJSON, value)
-	}
-	if value, ok := _u.mutation.AppendedApprovalChain(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, tickettype.FieldApprovalChain, value)
-		})
-	}
 	if value, ok := _u.mutation.SLAEnabled(); ok {
 		_spec.SetField(tickettype.FieldSLAEnabled, field.TypeBool, value)
 	}
@@ -647,45 +591,6 @@ func (_u *TicketTypeUpdateOne) SetNillableApprovalEnabled(v *bool) *TicketTypeUp
 	if v != nil {
 		_u.SetApprovalEnabled(*v)
 	}
-	return _u
-}
-
-// SetApprovalWorkflowID sets the "approval_workflow_id" field.
-func (_u *TicketTypeUpdateOne) SetApprovalWorkflowID(v int64) *TicketTypeUpdateOne {
-	_u.mutation.ResetApprovalWorkflowID()
-	_u.mutation.SetApprovalWorkflowID(v)
-	return _u
-}
-
-// SetNillableApprovalWorkflowID sets the "approval_workflow_id" field if the given value is not nil.
-func (_u *TicketTypeUpdateOne) SetNillableApprovalWorkflowID(v *int64) *TicketTypeUpdateOne {
-	if v != nil {
-		_u.SetApprovalWorkflowID(*v)
-	}
-	return _u
-}
-
-// AddApprovalWorkflowID adds value to the "approval_workflow_id" field.
-func (_u *TicketTypeUpdateOne) AddApprovalWorkflowID(v int64) *TicketTypeUpdateOne {
-	_u.mutation.AddApprovalWorkflowID(v)
-	return _u
-}
-
-// ClearApprovalWorkflowID clears the value of the "approval_workflow_id" field.
-func (_u *TicketTypeUpdateOne) ClearApprovalWorkflowID() *TicketTypeUpdateOne {
-	_u.mutation.ClearApprovalWorkflowID()
-	return _u
-}
-
-// SetApprovalChain sets the "approval_chain" field.
-func (_u *TicketTypeUpdateOne) SetApprovalChain(v []interface{}) *TicketTypeUpdateOne {
-	_u.mutation.SetApprovalChain(v)
-	return _u
-}
-
-// AppendApprovalChain appends value to the "approval_chain" field.
-func (_u *TicketTypeUpdateOne) AppendApprovalChain(v []interface{}) *TicketTypeUpdateOne {
-	_u.mutation.AppendApprovalChain(v)
 	return _u
 }
 
@@ -1005,23 +910,6 @@ func (_u *TicketTypeUpdateOne) sqlSave(ctx context.Context) (_node *TicketType, 
 	}
 	if value, ok := _u.mutation.ApprovalEnabled(); ok {
 		_spec.SetField(tickettype.FieldApprovalEnabled, field.TypeBool, value)
-	}
-	if value, ok := _u.mutation.ApprovalWorkflowID(); ok {
-		_spec.SetField(tickettype.FieldApprovalWorkflowID, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedApprovalWorkflowID(); ok {
-		_spec.AddField(tickettype.FieldApprovalWorkflowID, field.TypeInt64, value)
-	}
-	if _u.mutation.ApprovalWorkflowIDCleared() {
-		_spec.ClearField(tickettype.FieldApprovalWorkflowID, field.TypeInt64)
-	}
-	if value, ok := _u.mutation.ApprovalChain(); ok {
-		_spec.SetField(tickettype.FieldApprovalChain, field.TypeJSON, value)
-	}
-	if value, ok := _u.mutation.AppendedApprovalChain(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, tickettype.FieldApprovalChain, value)
-		})
 	}
 	if value, ok := _u.mutation.SLAEnabled(); ok {
 		_spec.SetField(tickettype.FieldSLAEnabled, field.TypeBool, value)

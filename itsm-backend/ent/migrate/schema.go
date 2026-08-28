@@ -4335,8 +4335,6 @@ var (
 		{Name: "color", Type: field.TypeString, Size: 20},
 		{Name: "status", Type: field.TypeString, Default: "active"},
 		{Name: "approval_enabled", Type: field.TypeBool, Default: false},
-		{Name: "approval_workflow_id", Type: field.TypeInt64, Nullable: true},
-		{Name: "approval_chain", Type: field.TypeJSON},
 		{Name: "sla_enabled", Type: field.TypeBool, Default: false},
 		{Name: "default_sla_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "auto_assign_enabled", Type: field.TypeBool, Default: false},
@@ -4359,12 +4357,12 @@ var (
 			{
 				Name:    "tickettype_code_tenant_id",
 				Unique:  true,
-				Columns: []*schema.Column{TicketTypesColumns[1], TicketTypesColumns[16]},
+				Columns: []*schema.Column{TicketTypesColumns[1], TicketTypesColumns[14]},
 			},
 			{
 				Name:    "tickettype_tenant_id",
 				Unique:  false,
-				Columns: []*schema.Column{TicketTypesColumns[16]},
+				Columns: []*schema.Column{TicketTypesColumns[14]},
 			},
 			{
 				Name:    "tickettype_status",

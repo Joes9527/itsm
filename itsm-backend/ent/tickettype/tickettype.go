@@ -25,10 +25,6 @@ const (
 	FieldStatus = "status"
 	// FieldApprovalEnabled holds the string denoting the approval_enabled field in the database.
 	FieldApprovalEnabled = "approval_enabled"
-	// FieldApprovalWorkflowID holds the string denoting the approval_workflow_id field in the database.
-	FieldApprovalWorkflowID = "approval_workflow_id"
-	// FieldApprovalChain holds the string denoting the approval_chain field in the database.
-	FieldApprovalChain = "approval_chain"
 	// FieldSLAEnabled holds the string denoting the sla_enabled field in the database.
 	FieldSLAEnabled = "sla_enabled"
 	// FieldDefaultSLAID holds the string denoting the default_sla_id field in the database.
@@ -67,8 +63,6 @@ var Columns = []string{
 	FieldColor,
 	FieldStatus,
 	FieldApprovalEnabled,
-	FieldApprovalWorkflowID,
-	FieldApprovalChain,
 	FieldSLAEnabled,
 	FieldDefaultSLAID,
 	FieldAutoAssignEnabled,
@@ -155,11 +149,6 @@ func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 // ByApprovalEnabled orders the results by the approval_enabled field.
 func ByApprovalEnabled(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldApprovalEnabled, opts...).ToFunc()
-}
-
-// ByApprovalWorkflowID orders the results by the approval_workflow_id field.
-func ByApprovalWorkflowID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldApprovalWorkflowID, opts...).ToFunc()
 }
 
 // BySLAEnabled orders the results by the sla_enabled field.

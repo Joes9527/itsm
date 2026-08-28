@@ -34,7 +34,7 @@ func TestRunPostSchemaMigrationsAppliesVersion007(t *testing.T) {
 
 	require.NoError(t, err)
 	require.True(t, runner.ensured)
-	require.Len(t, runner.migrations, 10)
+	require.Len(t, runner.migrations, 11)
 	require.Equal(t, "007_add_change_execution_tables", runner.migrations[0].Version)
 	require.Equal(t, "008_add_initialization_ledger", runner.migrations[1].Version)
 	require.Equal(t, "009_enable_rls_tenant_isolation", runner.migrations[2].Version)
@@ -45,6 +45,7 @@ func TestRunPostSchemaMigrationsAppliesVersion007(t *testing.T) {
 	require.Equal(t, "014_drop_legacy_approval_workflow", runner.migrations[7].Version)
 	require.Equal(t, "015_process_instance_running_unique_guard", runner.migrations[8].Version)
 	require.Equal(t, "016_add_service_request_contact_fields", runner.migrations[9].Version)
+	require.Equal(t, "017_drop_ticket_type_legacy_approval_fields", runner.migrations[10].Version)
 }
 
 func TestRunPostSchemaMigrationsFailsClosed(t *testing.T) {

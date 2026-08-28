@@ -136864,42 +136864,38 @@ func (m *TicketTemplateMutation) ResetEdge(name string) error {
 // TicketTypeMutation represents an operation that mutates the TicketType nodes in the graph.
 type TicketTypeMutation struct {
 	config
-	op                      Op
-	typ                     string
-	id                      *int
-	code                    *string
-	name                    *string
-	description             *string
-	icon                    *string
-	color                   *string
-	status                  *string
-	approval_enabled        *bool
-	approval_workflow_id    *int64
-	addapproval_workflow_id *int64
-	approval_chain          *[]interface{}
-	appendapproval_chain    []interface{}
-	sla_enabled             *bool
-	default_sla_id          *int64
-	adddefault_sla_id       *int64
-	auto_assign_enabled     *bool
-	assignment_rules        *[]interface{}
-	appendassignment_rules  []interface{}
-	notification_config     *map[string]interface{}
-	permission_config       *map[string]interface{}
-	tenant_id               *int64
-	addtenant_id            *int64
-	created_by              *int64
-	addcreated_by           *int64
-	created_at              *time.Time
-	updated_at              *time.Time
-	updated_by              *int64
-	addupdated_by           *int64
-	usage_count             *int
-	addusage_count          *int
-	clearedFields           map[string]struct{}
-	done                    bool
-	oldValue                func(context.Context) (*TicketType, error)
-	predicates              []predicate.TicketType
+	op                     Op
+	typ                    string
+	id                     *int
+	code                   *string
+	name                   *string
+	description            *string
+	icon                   *string
+	color                  *string
+	status                 *string
+	approval_enabled       *bool
+	sla_enabled            *bool
+	default_sla_id         *int64
+	adddefault_sla_id      *int64
+	auto_assign_enabled    *bool
+	assignment_rules       *[]interface{}
+	appendassignment_rules []interface{}
+	notification_config    *map[string]interface{}
+	permission_config      *map[string]interface{}
+	tenant_id              *int64
+	addtenant_id           *int64
+	created_by             *int64
+	addcreated_by          *int64
+	created_at             *time.Time
+	updated_at             *time.Time
+	updated_by             *int64
+	addupdated_by          *int64
+	usage_count            *int
+	addusage_count         *int
+	clearedFields          map[string]struct{}
+	done                   bool
+	oldValue               func(context.Context) (*TicketType, error)
+	predicates             []predicate.TicketType
 }
 
 var _ ent.Mutation = (*TicketTypeMutation)(nil)
@@ -137250,127 +137246,6 @@ func (m *TicketTypeMutation) OldApprovalEnabled(ctx context.Context) (v bool, er
 // ResetApprovalEnabled resets all changes to the "approval_enabled" field.
 func (m *TicketTypeMutation) ResetApprovalEnabled() {
 	m.approval_enabled = nil
-}
-
-// SetApprovalWorkflowID sets the "approval_workflow_id" field.
-func (m *TicketTypeMutation) SetApprovalWorkflowID(i int64) {
-	m.approval_workflow_id = &i
-	m.addapproval_workflow_id = nil
-}
-
-// ApprovalWorkflowID returns the value of the "approval_workflow_id" field in the mutation.
-func (m *TicketTypeMutation) ApprovalWorkflowID() (r int64, exists bool) {
-	v := m.approval_workflow_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldApprovalWorkflowID returns the old "approval_workflow_id" field's value of the TicketType entity.
-// If the TicketType object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *TicketTypeMutation) OldApprovalWorkflowID(ctx context.Context) (v int64, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldApprovalWorkflowID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldApprovalWorkflowID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldApprovalWorkflowID: %w", err)
-	}
-	return oldValue.ApprovalWorkflowID, nil
-}
-
-// AddApprovalWorkflowID adds i to the "approval_workflow_id" field.
-func (m *TicketTypeMutation) AddApprovalWorkflowID(i int64) {
-	if m.addapproval_workflow_id != nil {
-		*m.addapproval_workflow_id += i
-	} else {
-		m.addapproval_workflow_id = &i
-	}
-}
-
-// AddedApprovalWorkflowID returns the value that was added to the "approval_workflow_id" field in this mutation.
-func (m *TicketTypeMutation) AddedApprovalWorkflowID() (r int64, exists bool) {
-	v := m.addapproval_workflow_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ClearApprovalWorkflowID clears the value of the "approval_workflow_id" field.
-func (m *TicketTypeMutation) ClearApprovalWorkflowID() {
-	m.approval_workflow_id = nil
-	m.addapproval_workflow_id = nil
-	m.clearedFields[tickettype.FieldApprovalWorkflowID] = struct{}{}
-}
-
-// ApprovalWorkflowIDCleared returns if the "approval_workflow_id" field was cleared in this mutation.
-func (m *TicketTypeMutation) ApprovalWorkflowIDCleared() bool {
-	_, ok := m.clearedFields[tickettype.FieldApprovalWorkflowID]
-	return ok
-}
-
-// ResetApprovalWorkflowID resets all changes to the "approval_workflow_id" field.
-func (m *TicketTypeMutation) ResetApprovalWorkflowID() {
-	m.approval_workflow_id = nil
-	m.addapproval_workflow_id = nil
-	delete(m.clearedFields, tickettype.FieldApprovalWorkflowID)
-}
-
-// SetApprovalChain sets the "approval_chain" field.
-func (m *TicketTypeMutation) SetApprovalChain(i []interface{}) {
-	m.approval_chain = &i
-	m.appendapproval_chain = nil
-}
-
-// ApprovalChain returns the value of the "approval_chain" field in the mutation.
-func (m *TicketTypeMutation) ApprovalChain() (r []interface{}, exists bool) {
-	v := m.approval_chain
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldApprovalChain returns the old "approval_chain" field's value of the TicketType entity.
-// If the TicketType object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *TicketTypeMutation) OldApprovalChain(ctx context.Context) (v []interface{}, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldApprovalChain is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldApprovalChain requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldApprovalChain: %w", err)
-	}
-	return oldValue.ApprovalChain, nil
-}
-
-// AppendApprovalChain adds i to the "approval_chain" field.
-func (m *TicketTypeMutation) AppendApprovalChain(i []interface{}) {
-	m.appendapproval_chain = append(m.appendapproval_chain, i...)
-}
-
-// AppendedApprovalChain returns the list of values that were appended to the "approval_chain" field in this mutation.
-func (m *TicketTypeMutation) AppendedApprovalChain() ([]interface{}, bool) {
-	if len(m.appendapproval_chain) == 0 {
-		return nil, false
-	}
-	return m.appendapproval_chain, true
-}
-
-// ResetApprovalChain resets all changes to the "approval_chain" field.
-func (m *TicketTypeMutation) ResetApprovalChain() {
-	m.approval_chain = nil
-	m.appendapproval_chain = nil
 }
 
 // SetSLAEnabled sets the "sla_enabled" field.
@@ -137982,7 +137857,7 @@ func (m *TicketTypeMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TicketTypeMutation) Fields() []string {
-	fields := make([]string, 0, 21)
+	fields := make([]string, 0, 19)
 	if m.code != nil {
 		fields = append(fields, tickettype.FieldCode)
 	}
@@ -138003,12 +137878,6 @@ func (m *TicketTypeMutation) Fields() []string {
 	}
 	if m.approval_enabled != nil {
 		fields = append(fields, tickettype.FieldApprovalEnabled)
-	}
-	if m.approval_workflow_id != nil {
-		fields = append(fields, tickettype.FieldApprovalWorkflowID)
-	}
-	if m.approval_chain != nil {
-		fields = append(fields, tickettype.FieldApprovalChain)
 	}
 	if m.sla_enabled != nil {
 		fields = append(fields, tickettype.FieldSLAEnabled)
@@ -138068,10 +137937,6 @@ func (m *TicketTypeMutation) Field(name string) (ent.Value, bool) {
 		return m.Status()
 	case tickettype.FieldApprovalEnabled:
 		return m.ApprovalEnabled()
-	case tickettype.FieldApprovalWorkflowID:
-		return m.ApprovalWorkflowID()
-	case tickettype.FieldApprovalChain:
-		return m.ApprovalChain()
 	case tickettype.FieldSLAEnabled:
 		return m.SLAEnabled()
 	case tickettype.FieldDefaultSLAID:
@@ -138119,10 +137984,6 @@ func (m *TicketTypeMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldStatus(ctx)
 	case tickettype.FieldApprovalEnabled:
 		return m.OldApprovalEnabled(ctx)
-	case tickettype.FieldApprovalWorkflowID:
-		return m.OldApprovalWorkflowID(ctx)
-	case tickettype.FieldApprovalChain:
-		return m.OldApprovalChain(ctx)
 	case tickettype.FieldSLAEnabled:
 		return m.OldSLAEnabled(ctx)
 	case tickettype.FieldDefaultSLAID:
@@ -138204,20 +138065,6 @@ func (m *TicketTypeMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetApprovalEnabled(v)
-		return nil
-	case tickettype.FieldApprovalWorkflowID:
-		v, ok := value.(int64)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetApprovalWorkflowID(v)
-		return nil
-	case tickettype.FieldApprovalChain:
-		v, ok := value.([]interface{})
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetApprovalChain(v)
 		return nil
 	case tickettype.FieldSLAEnabled:
 		v, ok := value.(bool)
@@ -138311,9 +138158,6 @@ func (m *TicketTypeMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *TicketTypeMutation) AddedFields() []string {
 	var fields []string
-	if m.addapproval_workflow_id != nil {
-		fields = append(fields, tickettype.FieldApprovalWorkflowID)
-	}
 	if m.adddefault_sla_id != nil {
 		fields = append(fields, tickettype.FieldDefaultSLAID)
 	}
@@ -138337,8 +138181,6 @@ func (m *TicketTypeMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *TicketTypeMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
-	case tickettype.FieldApprovalWorkflowID:
-		return m.AddedApprovalWorkflowID()
 	case tickettype.FieldDefaultSLAID:
 		return m.AddedDefaultSLAID()
 	case tickettype.FieldTenantID:
@@ -138358,13 +138200,6 @@ func (m *TicketTypeMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *TicketTypeMutation) AddField(name string, value ent.Value) error {
 	switch name {
-	case tickettype.FieldApprovalWorkflowID:
-		v, ok := value.(int64)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddApprovalWorkflowID(v)
-		return nil
 	case tickettype.FieldDefaultSLAID:
 		v, ok := value.(int64)
 		if !ok {
@@ -138408,9 +138243,6 @@ func (m *TicketTypeMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *TicketTypeMutation) ClearedFields() []string {
 	var fields []string
-	if m.FieldCleared(tickettype.FieldApprovalWorkflowID) {
-		fields = append(fields, tickettype.FieldApprovalWorkflowID)
-	}
 	if m.FieldCleared(tickettype.FieldDefaultSLAID) {
 		fields = append(fields, tickettype.FieldDefaultSLAID)
 	}
@@ -138431,9 +138263,6 @@ func (m *TicketTypeMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *TicketTypeMutation) ClearField(name string) error {
 	switch name {
-	case tickettype.FieldApprovalWorkflowID:
-		m.ClearApprovalWorkflowID()
-		return nil
 	case tickettype.FieldDefaultSLAID:
 		m.ClearDefaultSLAID()
 		return nil
@@ -138468,12 +138297,6 @@ func (m *TicketTypeMutation) ResetField(name string) error {
 		return nil
 	case tickettype.FieldApprovalEnabled:
 		m.ResetApprovalEnabled()
-		return nil
-	case tickettype.FieldApprovalWorkflowID:
-		m.ResetApprovalWorkflowID()
-		return nil
-	case tickettype.FieldApprovalChain:
-		m.ResetApprovalChain()
 		return nil
 	case tickettype.FieldSLAEnabled:
 		m.ResetSLAEnabled()

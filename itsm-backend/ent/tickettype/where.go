@@ -89,11 +89,6 @@ func ApprovalEnabled(v bool) predicate.TicketType {
 	return predicate.TicketType(sql.FieldEQ(FieldApprovalEnabled, v))
 }
 
-// ApprovalWorkflowID applies equality check predicate on the "approval_workflow_id" field. It's identical to ApprovalWorkflowIDEQ.
-func ApprovalWorkflowID(v int64) predicate.TicketType {
-	return predicate.TicketType(sql.FieldEQ(FieldApprovalWorkflowID, v))
-}
-
 // SLAEnabled applies equality check predicate on the "sla_enabled" field. It's identical to SLAEnabledEQ.
 func SLAEnabled(v bool) predicate.TicketType {
 	return predicate.TicketType(sql.FieldEQ(FieldSLAEnabled, v))
@@ -537,56 +532,6 @@ func ApprovalEnabledEQ(v bool) predicate.TicketType {
 // ApprovalEnabledNEQ applies the NEQ predicate on the "approval_enabled" field.
 func ApprovalEnabledNEQ(v bool) predicate.TicketType {
 	return predicate.TicketType(sql.FieldNEQ(FieldApprovalEnabled, v))
-}
-
-// ApprovalWorkflowIDEQ applies the EQ predicate on the "approval_workflow_id" field.
-func ApprovalWorkflowIDEQ(v int64) predicate.TicketType {
-	return predicate.TicketType(sql.FieldEQ(FieldApprovalWorkflowID, v))
-}
-
-// ApprovalWorkflowIDNEQ applies the NEQ predicate on the "approval_workflow_id" field.
-func ApprovalWorkflowIDNEQ(v int64) predicate.TicketType {
-	return predicate.TicketType(sql.FieldNEQ(FieldApprovalWorkflowID, v))
-}
-
-// ApprovalWorkflowIDIn applies the In predicate on the "approval_workflow_id" field.
-func ApprovalWorkflowIDIn(vs ...int64) predicate.TicketType {
-	return predicate.TicketType(sql.FieldIn(FieldApprovalWorkflowID, vs...))
-}
-
-// ApprovalWorkflowIDNotIn applies the NotIn predicate on the "approval_workflow_id" field.
-func ApprovalWorkflowIDNotIn(vs ...int64) predicate.TicketType {
-	return predicate.TicketType(sql.FieldNotIn(FieldApprovalWorkflowID, vs...))
-}
-
-// ApprovalWorkflowIDGT applies the GT predicate on the "approval_workflow_id" field.
-func ApprovalWorkflowIDGT(v int64) predicate.TicketType {
-	return predicate.TicketType(sql.FieldGT(FieldApprovalWorkflowID, v))
-}
-
-// ApprovalWorkflowIDGTE applies the GTE predicate on the "approval_workflow_id" field.
-func ApprovalWorkflowIDGTE(v int64) predicate.TicketType {
-	return predicate.TicketType(sql.FieldGTE(FieldApprovalWorkflowID, v))
-}
-
-// ApprovalWorkflowIDLT applies the LT predicate on the "approval_workflow_id" field.
-func ApprovalWorkflowIDLT(v int64) predicate.TicketType {
-	return predicate.TicketType(sql.FieldLT(FieldApprovalWorkflowID, v))
-}
-
-// ApprovalWorkflowIDLTE applies the LTE predicate on the "approval_workflow_id" field.
-func ApprovalWorkflowIDLTE(v int64) predicate.TicketType {
-	return predicate.TicketType(sql.FieldLTE(FieldApprovalWorkflowID, v))
-}
-
-// ApprovalWorkflowIDIsNil applies the IsNil predicate on the "approval_workflow_id" field.
-func ApprovalWorkflowIDIsNil() predicate.TicketType {
-	return predicate.TicketType(sql.FieldIsNull(FieldApprovalWorkflowID))
-}
-
-// ApprovalWorkflowIDNotNil applies the NotNil predicate on the "approval_workflow_id" field.
-func ApprovalWorkflowIDNotNil() predicate.TicketType {
-	return predicate.TicketType(sql.FieldNotNull(FieldApprovalWorkflowID))
 }
 
 // SLAEnabledEQ applies the EQ predicate on the "sla_enabled" field.

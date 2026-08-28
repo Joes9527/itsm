@@ -21,8 +21,6 @@ func (TicketType) Fields() []ent.Field {
 		field.String("color").MaxLen(20),
 		field.String("status").Default("active"),
 		field.Bool("approval_enabled").Default(false),
-		field.Int64("approval_workflow_id").Optional(),
-		field.JSON("approval_chain", []interface{}{}),
 		field.Bool("sla_enabled").Default(false),
 		field.Int64("default_sla_id").Optional(),
 		field.Bool("auto_assign_enabled").Default(false),

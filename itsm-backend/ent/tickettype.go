@@ -32,10 +32,6 @@ type TicketType struct {
 	Status string `json:"status,omitempty"`
 	// ApprovalEnabled holds the value of the "approval_enabled" field.
 	ApprovalEnabled bool `json:"approval_enabled,omitempty"`
-	// ApprovalWorkflowID holds the value of the "approval_workflow_id" field.
-	ApprovalWorkflowID int64 `json:"approval_workflow_id,omitempty"`
-	// ApprovalChain holds the value of the "approval_chain" field.
-	ApprovalChain []interface{} `json:"approval_chain,omitempty"`
 	// SLAEnabled holds the value of the "sla_enabled" field.
 	SLAEnabled bool `json:"sla_enabled,omitempty"`
 	// DefaultSLAID holds the value of the "default_sla_id" field.
@@ -68,11 +64,11 @@ func (*TicketType) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case tickettype.FieldApprovalChain, tickettype.FieldAssignmentRules, tickettype.FieldNotificationConfig, tickettype.FieldPermissionConfig:
+		case tickettype.FieldAssignmentRules, tickettype.FieldNotificationConfig, tickettype.FieldPermissionConfig:
 			values[i] = new([]byte)
 		case tickettype.FieldApprovalEnabled, tickettype.FieldSLAEnabled, tickettype.FieldAutoAssignEnabled:
 			values[i] = new(sql.NullBool)
-		case tickettype.FieldID, tickettype.FieldApprovalWorkflowID, tickettype.FieldDefaultSLAID, tickettype.FieldTenantID, tickettype.FieldCreatedBy, tickettype.FieldUpdatedBy, tickettype.FieldUsageCount:
+		case tickettype.FieldID, tickettype.FieldDefaultSLAID, tickettype.FieldTenantID, tickettype.FieldCreatedBy, tickettype.FieldUpdatedBy, tickettype.FieldUsageCount:
 			values[i] = new(sql.NullInt64)
 		case tickettype.FieldCode, tickettype.FieldName, tickettype.FieldDescription, tickettype.FieldIcon, tickettype.FieldColor, tickettype.FieldStatus:
 			values[i] = new(sql.NullString)
@@ -140,20 +136,6 @@ func (_m *TicketType) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field approval_enabled", values[i])
 			} else if value.Valid {
 				_m.ApprovalEnabled = value.Bool
-			}
-		case tickettype.FieldApprovalWorkflowID:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field approval_workflow_id", values[i])
-			} else if value.Valid {
-				_m.ApprovalWorkflowID = value.Int64
-			}
-		case tickettype.FieldApprovalChain:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field approval_chain", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &_m.ApprovalChain); err != nil {
-					return fmt.Errorf("unmarshal field approval_chain: %w", err)
-				}
 			}
 		case tickettype.FieldSLAEnabled:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -289,12 +271,6 @@ func (_m *TicketType) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("approval_enabled=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ApprovalEnabled))
-	builder.WriteString(", ")
-	builder.WriteString("approval_workflow_id=")
-	builder.WriteString(fmt.Sprintf("%v", _m.ApprovalWorkflowID))
-	builder.WriteString(", ")
-	builder.WriteString("approval_chain=")
-	builder.WriteString(fmt.Sprintf("%v", _m.ApprovalChain))
 	builder.WriteString(", ")
 	builder.WriteString("sla_enabled=")
 	builder.WriteString(fmt.Sprintf("%v", _m.SLAEnabled))

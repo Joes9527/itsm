@@ -3735,15 +3735,15 @@ func init() {
 	// tickettype.DefaultApprovalEnabled holds the default value on creation for the approval_enabled field.
 	tickettype.DefaultApprovalEnabled = tickettypeDescApprovalEnabled.Default.(bool)
 	// tickettypeDescSLAEnabled is the schema descriptor for sla_enabled field.
-	tickettypeDescSLAEnabled := tickettypeFields[9].Descriptor()
+	tickettypeDescSLAEnabled := tickettypeFields[7].Descriptor()
 	// tickettype.DefaultSLAEnabled holds the default value on creation for the sla_enabled field.
 	tickettype.DefaultSLAEnabled = tickettypeDescSLAEnabled.Default.(bool)
 	// tickettypeDescAutoAssignEnabled is the schema descriptor for auto_assign_enabled field.
-	tickettypeDescAutoAssignEnabled := tickettypeFields[11].Descriptor()
+	tickettypeDescAutoAssignEnabled := tickettypeFields[9].Descriptor()
 	// tickettype.DefaultAutoAssignEnabled holds the default value on creation for the auto_assign_enabled field.
 	tickettype.DefaultAutoAssignEnabled = tickettypeDescAutoAssignEnabled.Default.(bool)
 	// tickettypeDescUsageCount is the schema descriptor for usage_count field.
-	tickettypeDescUsageCount := tickettypeFields[20].Descriptor()
+	tickettypeDescUsageCount := tickettypeFields[18].Descriptor()
 	// tickettype.DefaultUsageCount holds the default value on creation for the usage_count field.
 	tickettype.DefaultUsageCount = tickettypeDescUsageCount.Default.(int)
 	ticketviewFields := schema.TicketView{}.Fields()

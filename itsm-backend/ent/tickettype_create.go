@@ -78,26 +78,6 @@ func (_c *TicketTypeCreate) SetNillableApprovalEnabled(v *bool) *TicketTypeCreat
 	return _c
 }
 
-// SetApprovalWorkflowID sets the "approval_workflow_id" field.
-func (_c *TicketTypeCreate) SetApprovalWorkflowID(v int64) *TicketTypeCreate {
-	_c.mutation.SetApprovalWorkflowID(v)
-	return _c
-}
-
-// SetNillableApprovalWorkflowID sets the "approval_workflow_id" field if the given value is not nil.
-func (_c *TicketTypeCreate) SetNillableApprovalWorkflowID(v *int64) *TicketTypeCreate {
-	if v != nil {
-		_c.SetApprovalWorkflowID(*v)
-	}
-	return _c
-}
-
-// SetApprovalChain sets the "approval_chain" field.
-func (_c *TicketTypeCreate) SetApprovalChain(v []interface{}) *TicketTypeCreate {
-	_c.mutation.SetApprovalChain(v)
-	return _c
-}
-
 // SetSLAEnabled sets the "sla_enabled" field.
 func (_c *TicketTypeCreate) SetSLAEnabled(v bool) *TicketTypeCreate {
 	_c.mutation.SetSLAEnabled(v)
@@ -310,9 +290,6 @@ func (_c *TicketTypeCreate) check() error {
 	if _, ok := _c.mutation.ApprovalEnabled(); !ok {
 		return &ValidationError{Name: "approval_enabled", err: errors.New(`ent: missing required field "TicketType.approval_enabled"`)}
 	}
-	if _, ok := _c.mutation.ApprovalChain(); !ok {
-		return &ValidationError{Name: "approval_chain", err: errors.New(`ent: missing required field "TicketType.approval_chain"`)}
-	}
 	if _, ok := _c.mutation.SLAEnabled(); !ok {
 		return &ValidationError{Name: "sla_enabled", err: errors.New(`ent: missing required field "TicketType.sla_enabled"`)}
 	}
@@ -396,14 +373,6 @@ func (_c *TicketTypeCreate) createSpec() (*TicketType, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ApprovalEnabled(); ok {
 		_spec.SetField(tickettype.FieldApprovalEnabled, field.TypeBool, value)
 		_node.ApprovalEnabled = value
-	}
-	if value, ok := _c.mutation.ApprovalWorkflowID(); ok {
-		_spec.SetField(tickettype.FieldApprovalWorkflowID, field.TypeInt64, value)
-		_node.ApprovalWorkflowID = value
-	}
-	if value, ok := _c.mutation.ApprovalChain(); ok {
-		_spec.SetField(tickettype.FieldApprovalChain, field.TypeJSON, value)
-		_node.ApprovalChain = value
 	}
 	if value, ok := _c.mutation.SLAEnabled(); ok {
 		_spec.SetField(tickettype.FieldSLAEnabled, field.TypeBool, value)
