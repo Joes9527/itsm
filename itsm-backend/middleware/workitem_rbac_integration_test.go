@@ -30,6 +30,15 @@ func buildWorkItemTestRouter(client *ent.Client, tenantID int, role string) *gin
 	r.GET("/api/v1/tickets/:id/comments", RequireWorkItemRecordClassPermission("read"), func(c *gin.Context) {
 		common.Success(c, gin.H{"ok": true})
 	})
+	// 形状与 router.go 的 tickets.POST("/:id/comments", ..., RequireWorkItemRecordClassPermission("create"), ...)
+	// 和 tickets.PUT("/:id/comments/:comment_id", ..., RequireWorkItemRecordClassPermission("update"), ...)
+	// 完全一致，用于验证 Fix 1 的 create/update → write 归一化在真实路由匹配链路里同样生效。
+	r.POST("/api/v1/tickets/:id/comments", RequireWorkItemRecordClassPermission("create"), func(c *gin.Context) {
+		common.Success(c, gin.H{"ok": true})
+	})
+	r.PUT("/api/v1/tickets/:id/comments/:comment_id", RequireWorkItemRecordClassPermission("update"), func(c *gin.Context) {
+		common.Success(c, gin.H{"ok": true})
+	})
 	return r
 }
 
@@ -74,5 +83,42 @@ func TestWorkItemSharedRoute_IntegrationThroughRealRouter(t *testing.T) {
 		req, _ := http.NewRequest("GET", "/api/v1/tickets/"+itoa(problemTicket.ID)+"/comments", nil)
 		changeRouter.ServeHTTP(w, req)
 		require.Equal(t, http.StatusForbidden, w.Code)
+	})
+
+	// Fix 1 regression coverage through the real router: a role holding only
+	// "<resource>:write" (the only mutation permission code that exists for
+	// incident/problem/change — see pkg/seeder/seeder.go) must be able to reach the
+	// POST/PUT routes registered with RequireWorkItemRecordClassPermission("create"/"update").
+	withHardcodedPermissions(t, "problem_writer", []Permission{{Resource: "problem", Action: "write"}})
+	withHardcodedPermissions(t, "change_writer", []Permission{{Resource: "change", Action: "write"}})
+	problemWriterRouter := buildWorkItemTestRouter(client, tenantID, "problem_writer")
+	changeWriterRouter := buildWorkItemTestRouter(client, tenantID, "change_writer")
+
+	t.Run("problem writer can POST create a comment via problem:write (create normalizes to write)", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("POST", "/api/v1/tickets/"+itoa(problemTicket.ID)+"/comments", nil)
+		problemWriterRouter.ServeHTTP(w, req)
+		require.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("problem writer can PUT update a comment via problem:write (update normalizes to write)", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("PUT", "/api/v1/tickets/"+itoa(problemTicket.ID)+"/comments/1", nil)
+		problemWriterRouter.ServeHTTP(w, req)
+		require.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("change writer can POST create a comment via change:write (create normalizes to write)", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("POST", "/api/v1/tickets/"+itoa(changeTicket.ID)+"/comments", nil)
+		changeWriterRouter.ServeHTTP(w, req)
+		require.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("change writer can PUT update a comment via change:write (update normalizes to write)", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("PUT", "/api/v1/tickets/"+itoa(changeTicket.ID)+"/comments/1", nil)
+		changeWriterRouter.ServeHTTP(w, req)
+		require.Equal(t, http.StatusOK, w.Code)
 	})
 }

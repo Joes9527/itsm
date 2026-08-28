@@ -8,6 +8,7 @@ import (
 	"itsm-backend/ent/ticket"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 // resourceForRecordClass 把 tickets.record_class 映射到 RBAC 资源名，供
@@ -24,6 +25,26 @@ func resourceForRecordClass(recordClass string) string {
 		return "change"
 	default:
 		return "ticket"
+	}
+}
+
+// resolveWorkItemPermission 把 (tickets.record_class, 路由声明的 action) 解析成
+// RBAC 实际要检查的 (resource, resolvedAction) 二元组。incident/problem/change 三个
+// 资源的权限词表只有 read/write/delete（见 pkg/seeder/seeder.go 的权限定义），没有独立的
+// create/update——历史上 Incident 自己的评论路由用的就是 incident:write（router.go 里
+// inc.POST("/:id/comments", ..., RequirePermission("incident", "write"), ...)），所以这里把
+// create/update 归一化成 write，不引入第二套动作词表。ticket 资源保留原有的细分动作
+// （ticket:create/ticket:update 都是真实存在的权限码），不做任何归一化。
+func resolveWorkItemPermission(recordClass, action string) (resource string, resolvedAction string) {
+	resource = resourceForRecordClass(recordClass)
+	if resource == "ticket" {
+		return resource, action
+	}
+	switch action {
+	case "create", "update":
+		return resource, "write"
+	default:
+		return resource, action
 	}
 }
 
@@ -71,6 +92,19 @@ func RequireWorkItemRecordClassPermission(action string) gin.HandlerFunc {
 			Where(ticket.ID(id), ticket.TenantID(tenantID), ticket.DeletedAtIsNil()).
 			Only(c.Request.Context())
 		if err != nil {
+			if !ent.IsNotFound(err) {
+				// 真正的 DB 故障（连接断开、超时……）不能和"工单不存在"混为一谈——否则一次
+				// 数据库中断会被误读成一堆正常的 404，掩盖真实的可观测性信号。
+				zap.S().Warnw(
+					"RequireWorkItemRecordClassPermission: ticket lookup failed",
+					"ticket_id", id,
+					"tenant_id", tenantID,
+					"error", err.Error(),
+				)
+				common.Fail(c, common.InternalErrorCode, "查询工单失败")
+				c.Abort()
+				return
+			}
 			// 查不到该 ticket（不存在、跨租户、或已软删除）统一返回 404，不是 403——避免让响应
 			// 差异变成一个可以探测其它租户 ID 是否存在的信号；DeletedAtIsNil() 与
 			// repository/ticket/repository_impl.go 的 EntRepository.GetByID 保持一致，
@@ -80,8 +114,15 @@ func RequireWorkItemRecordClassPermission(action string) gin.HandlerFunc {
 			return
 		}
 
-		resource := resourceForRecordClass(t.RecordClass)
-		if !hasResourcePermission(client, role.(string), resource, action, tenantID) {
+		resource, resolvedAction := resolveWorkItemPermission(t.RecordClass, action)
+		if !hasResourcePermission(client, role.(string), resource, resolvedAction, tenantID) {
+			zap.S().Warnw(
+				"RequireWorkItemRecordClassPermission: permission denied",
+				"role", role,
+				"resource", resource,
+				"resolved_action", resolvedAction,
+				"ticket_id", t.ID,
+			)
 			common.Fail(c, common.ForbiddenCode, "权限不足")
 			c.Abort()
 			return
