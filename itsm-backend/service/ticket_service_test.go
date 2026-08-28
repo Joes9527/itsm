@@ -202,9 +202,9 @@ func TestTicketService_CreateTicketPersistsAssociations(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:ticket_create_associations?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
 	ctx := context.Background()
-	tenant := createTicketAssociationTenant(t, ctx, client, "create-associations")
-	requester := createTicketAssociationUser(t, ctx, client, tenant.ID, "create-requester")
-	assignee := createTicketAssociationUser(t, ctx, client, tenant.ID, "create-assignee")
+	tenant := createNamedTestTenant(t, ctx, client, "create-associations")
+	requester := createNamedTestUser(t, ctx, client, tenant.ID, "create-requester")
+	assignee := createNamedTestUser(t, ctx, client, tenant.ID, "create-assignee")
 	category, err := client.TicketCategory.Create().
 		SetName("Hardware").SetCode("create-hardware").SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
@@ -247,8 +247,8 @@ func TestTicketService_CreateTicketPersistsCustomFieldValues(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:ticket_create_custom_fields_v2?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
 	ctx := context.Background()
-	tenant := createTicketAssociationTenant(t, ctx, client, "create-custom-fields-v2")
-	requester := createTicketAssociationUser(t, ctx, client, tenant.ID, "create-custom-fields-v2-requester")
+	tenant := createNamedTestTenant(t, ctx, client, "create-custom-fields-v2")
+	requester := createNamedTestUser(t, ctx, client, tenant.ID, "create-custom-fields-v2-requester")
 	template, err := client.TicketTemplate.Create().
 		SetName("网络接入").SetCategory("网络").SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
@@ -278,8 +278,8 @@ func TestTicketService_CreateTicketWithoutFormFieldsLeavesCustomFieldValuesEmpty
 	client := enttest.Open(t, "sqlite3", "file:ticket_create_no_custom_fields?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
 	ctx := context.Background()
-	tenant := createTicketAssociationTenant(t, ctx, client, "create-no-custom-fields")
-	requester := createTicketAssociationUser(t, ctx, client, tenant.ID, "create-no-custom-fields-requester")
+	tenant := createNamedTestTenant(t, ctx, client, "create-no-custom-fields")
+	requester := createNamedTestUser(t, ctx, client, tenant.ID, "create-no-custom-fields-requester")
 	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
 
 	created, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
@@ -297,8 +297,8 @@ func TestTicketService_CreateTicket_AdHocFieldValuesWithoutTemplate(t *testing.T
 	client := enttest.Open(t, "sqlite3", "file:ticket_create_adhoc_fields?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
 	ctx := context.Background()
-	tenant := createTicketAssociationTenant(t, ctx, client, "create-adhoc-fields")
-	requester := createTicketAssociationUser(t, ctx, client, tenant.ID, "create-adhoc-fields-requester")
+	tenant := createNamedTestTenant(t, ctx, client, "create-adhoc-fields")
+	requester := createNamedTestUser(t, ctx, client, tenant.ID, "create-adhoc-fields-requester")
 	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
 
 	created, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
@@ -325,8 +325,8 @@ func TestToTicketResponse_IncludesCustomFieldValuesOrdered(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:to_ticket_response_fields?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
 	ctx := context.Background()
-	tenant := createTicketAssociationTenant(t, ctx, client, "to-response-fields")
-	requester := createTicketAssociationUser(t, ctx, client, tenant.ID, "to-response-fields-requester")
+	tenant := createNamedTestTenant(t, ctx, client, "to-response-fields")
+	requester := createNamedTestUser(t, ctx, client, tenant.ID, "to-response-fields-requester")
 	template, err := client.TicketTemplate.Create().
 		SetName("t").SetCategory("c").SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
@@ -368,8 +368,8 @@ func TestTicketService_CreateTicket_SourceSurvivesToTicketResponse(t *testing.T)
 	client := enttest.Open(t, "sqlite3", "file:ticket_source_round_trip?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
 	ctx := context.Background()
-	tenant := createTicketAssociationTenant(t, ctx, client, "source-round-trip")
-	requester := createTicketAssociationUser(t, ctx, client, tenant.ID, "source-round-trip-requester")
+	tenant := createNamedTestTenant(t, ctx, client, "source-round-trip")
+	requester := createNamedTestUser(t, ctx, client, tenant.ID, "source-round-trip-requester")
 
 	svc := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
 
@@ -406,10 +406,10 @@ func TestTicketService_CreateTicketRejectsCrossTenantReferences(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:ticket_create_cross_tenant?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
 	ctx := context.Background()
-	tenantA := createTicketAssociationTenant(t, ctx, client, "create-tenant-a")
-	tenantB := createTicketAssociationTenant(t, ctx, client, "create-tenant-b")
-	userA := createTicketAssociationUser(t, ctx, client, tenantA.ID, "create-user-a")
-	userB := createTicketAssociationUser(t, ctx, client, tenantB.ID, "create-user-b")
+	tenantA := createNamedTestTenant(t, ctx, client, "create-tenant-a")
+	tenantB := createNamedTestTenant(t, ctx, client, "create-tenant-b")
+	userA := createNamedTestUser(t, ctx, client, tenantA.ID, "create-user-a")
+	userB := createNamedTestUser(t, ctx, client, tenantB.ID, "create-user-b")
 	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
 	foreignParent, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
 		Title: "Foreign parent", Description: "foreign", Priority: "medium", RequesterID: userB.ID,
@@ -942,9 +942,9 @@ func TestTicketService_UpdateTicketPersistsTypeCategoryAndTags(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:ticket_update_contract?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
 	ctx := context.Background()
-	tenant := createTicketAssociationTenant(t, ctx, client, "update-contract")
-	otherTenant := createTicketAssociationTenant(t, ctx, client, "update-contract-other")
-	user := createTicketAssociationUser(t, ctx, client, tenant.ID, "update-contract-user")
+	tenant := createNamedTestTenant(t, ctx, client, "update-contract")
+	otherTenant := createNamedTestTenant(t, ctx, client, "update-contract-other")
+	user := createNamedTestUser(t, ctx, client, tenant.ID, "update-contract-user")
 	category, err := client.TicketCategory.Create().SetName("Software").SetCode("update-software").SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 	foreignCategory, err := client.TicketCategory.Create().SetName("Foreign").SetCode("update-foreign").SetTenantID(otherTenant.ID).Save(ctx)
@@ -1365,8 +1365,8 @@ func TestTicketService_CreateTicket_ValuesArrayFormatSurvivesUnderscoreNames(t *
 	client := enttest.Open(t, "sqlite3", "file:ticket_create_values_array?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
 	ctx := context.Background()
-	tenant := createTicketAssociationTenant(t, ctx, client, "create-values-array")
-	requester := createTicketAssociationUser(t, ctx, client, tenant.ID, "create-values-array-requester")
+	tenant := createNamedTestTenant(t, ctx, client, "create-values-array")
+	requester := createNamedTestUser(t, ctx, client, tenant.ID, "create-values-array-requester")
 	template, err := client.TicketTemplate.Create().
 		SetName("云主机申请").SetCategory("云").SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
@@ -1402,8 +1402,8 @@ func TestTicketService_CreateTicket_ValuesMapFormatStillWorks(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:ticket_create_values_map_compat?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
 	ctx := context.Background()
-	tenant := createTicketAssociationTenant(t, ctx, client, "create-values-map-compat")
-	requester := createTicketAssociationUser(t, ctx, client, tenant.ID, "create-values-map-compat-requester")
+	tenant := createNamedTestTenant(t, ctx, client, "create-values-map-compat")
+	requester := createNamedTestUser(t, ctx, client, tenant.ID, "create-values-map-compat-requester")
 	template, err := client.TicketTemplate.Create().
 		SetName("模板").SetCategory("c").SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
@@ -1564,4 +1564,31 @@ func TestTicketService_CreateTicketTemplate_PersistsCategoryIDs(t *testing.T) {
 	fetchedAfterUpdate, err := svc.GetTicketTemplate(ctx, tenant.ID, created.ID)
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []int{201}, fetchedAfterUpdate.CategoryIDs)
+}
+
+func createNamedTestTenant(t *testing.T, ctx context.Context, client *ent.Client, code string) *ent.Tenant {
+	t.Helper()
+	tenant, err := client.Tenant.Create().
+		SetName(code).
+		SetCode(code).
+		SetDomain(code + ".example.com").
+		SetStatus("active").
+		Save(ctx)
+	require.NoError(t, err)
+	return tenant
+}
+
+func createNamedTestUser(t *testing.T, ctx context.Context, client *ent.Client, tenantID int, username string) *ent.User {
+	t.Helper()
+	user, err := client.User.Create().
+		SetUsername(username).
+		SetEmail(username + "@example.com").
+		SetName(username).
+		SetPasswordHash("hash").
+		SetRole("agent").
+		SetActive(true).
+		SetTenantID(tenantID).
+		Save(ctx)
+	require.NoError(t, err)
+	return user
 }

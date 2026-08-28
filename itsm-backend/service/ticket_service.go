@@ -644,6 +644,19 @@ func isSupportedTicketType(value string) bool {
 	}
 }
 
+func uniqueIDs(ids []int) []int {
+	seen := make(map[int]struct{}, len(ids))
+	result := make([]int, 0, len(ids))
+	for _, id := range ids {
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		result = append(result, id)
+	}
+	return result
+}
+
 // isTicketDataScopeAllRole 判断角色是否拥有全租户工单可见权限（DataScopeAll）。
 // 阻断8：管理角色（super_admin/sysadmin）可见全租户工单，
 // 其余角色（end_user 等）只能查看本人创建或分配给自己的工单。
