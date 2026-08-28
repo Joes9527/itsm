@@ -552,7 +552,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 			tickets.DELETE("/templates/:id", middleware.RequirePermission("ticket_template", "delete"), config.TicketController.DeleteTicketTemplate)
 
 			tickets.POST("/:id/escalate", middleware.RequirePermission("ticket", "escalate"), config.TicketController.EscalateTicket)
-			tickets.GET("/:id/history", middleware.RequirePermission("ticket", "read"), config.TicketController.GetTicketActivity)
+			tickets.GET("/:id/history", middleware.RequireWorkItemRecordClassPermission("read"), config.TicketController.GetTicketActivity)
 			tickets.GET("/types", middleware.RequirePermission("ticket", "read"), func(c *gin.Context) {
 				common.Success(c, gin.H{"types": []gin.H{
 					{"id": 1, "name": " Incident", "code": "incident"},
@@ -570,11 +570,11 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 			tickets.POST("/:id/close", middleware.RequirePermission("ticket", "update"), config.TicketController.CloseTicket)
 
 			// 工单SLA信息
-			tickets.GET("/:id/sla", middleware.RequirePermission("ticket", "read"), config.TicketController.GetTicketSLAInfo)
+			tickets.GET("/:id/sla", middleware.RequireWorkItemRecordClassPermission("read"), config.TicketController.GetTicketSLAInfo)
 
 			// 工单关联列表与统计
-			tickets.GET("/:id/relations", middleware.RequirePermission("ticket", "read"), config.TicketController.GetTicketRelations)
-			tickets.GET("/:id/relations/stats", middleware.RequirePermission("ticket", "read"), config.TicketController.GetRelationStats)
+			tickets.GET("/:id/relations", middleware.RequireWorkItemRecordClassPermission("read"), config.TicketController.GetTicketRelations)
+			tickets.GET("/:id/relations/stats", middleware.RequireWorkItemRecordClassPermission("read"), config.TicketController.GetRelationStats)
 
 			// 子任务管理
 			tickets.GET("/:id/subtasks", middleware.RequirePermission("ticket", "read"), config.TicketController.GetSubtasks)
@@ -584,19 +584,19 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 
 			// 评论
 			if config.TicketCommentController != nil {
-				tickets.GET("/:id/comments", middleware.RequirePermission("ticket", "read"), config.TicketCommentController.ListTicketComments)
-				tickets.POST("/:id/comments", middleware.RequirePermission("ticket", "create"), config.TicketCommentController.CreateTicketComment)
-				tickets.PUT("/:id/comments/:comment_id", middleware.RequirePermission("ticket", "update"), config.TicketCommentController.UpdateTicketComment)
-				tickets.DELETE("/:id/comments/:comment_id", middleware.RequirePermission("ticket", "delete"), config.TicketCommentController.DeleteTicketComment)
+				tickets.GET("/:id/comments", middleware.RequireWorkItemRecordClassPermission("read"), config.TicketCommentController.ListTicketComments)
+				tickets.POST("/:id/comments", middleware.RequireWorkItemRecordClassPermission("create"), config.TicketCommentController.CreateTicketComment)
+				tickets.PUT("/:id/comments/:comment_id", middleware.RequireWorkItemRecordClassPermission("update"), config.TicketCommentController.UpdateTicketComment)
+				tickets.DELETE("/:id/comments/:comment_id", middleware.RequireWorkItemRecordClassPermission("delete"), config.TicketCommentController.DeleteTicketComment)
 			}
 
 			// 附件
 			if config.TicketAttachmentController != nil {
-				tickets.GET("/:id/attachments", middleware.RequirePermission("ticket", "read"), config.TicketAttachmentController.ListTicketAttachments)
-				tickets.POST("/:id/attachments", middleware.RequirePermission("ticket", "create"), config.TicketAttachmentController.UploadAttachment)
-				tickets.GET("/:id/attachments/:attachment_id", middleware.RequirePermission("ticket", "read"), config.TicketAttachmentController.DownloadAttachment)
-				tickets.GET("/:id/attachments/:attachment_id/preview", middleware.RequirePermission("ticket", "read"), config.TicketAttachmentController.PreviewAttachment)
-				tickets.DELETE("/:id/attachments/:attachment_id", middleware.RequirePermission("ticket", "delete"), config.TicketAttachmentController.DeleteAttachment)
+				tickets.GET("/:id/attachments", middleware.RequireWorkItemRecordClassPermission("read"), config.TicketAttachmentController.ListTicketAttachments)
+				tickets.POST("/:id/attachments", middleware.RequireWorkItemRecordClassPermission("create"), config.TicketAttachmentController.UploadAttachment)
+				tickets.GET("/:id/attachments/:attachment_id", middleware.RequireWorkItemRecordClassPermission("read"), config.TicketAttachmentController.DownloadAttachment)
+				tickets.GET("/:id/attachments/:attachment_id/preview", middleware.RequireWorkItemRecordClassPermission("read"), config.TicketAttachmentController.PreviewAttachment)
+				tickets.DELETE("/:id/attachments/:attachment_id", middleware.RequireWorkItemRecordClassPermission("delete"), config.TicketAttachmentController.DeleteAttachment)
 			}
 
 			// 我的待审批：聚合当前用户的 BPMN 审批任务
