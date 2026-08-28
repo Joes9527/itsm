@@ -14,7 +14,7 @@ KAF 是终端用户的主要体验层，负责多渠道对话、自然语言理�
 ```text
 KAF 或 ITSM 直接入口
   -> ITSM Intake 创建 WorkItem
-  -> ITSM BPMN 创建 AutomationTask 并委派 KAF
+  -> ITSM BPMN 创建 kaf_delegate ProcessTask 并通知 KAF
   -> KAF 获取 WorkItem 并自主选择 Procedure/Tools
   -> KAF 回报进度和完成结果
   -> ITSM 校验动作、更新 WorkItem 并推进 BPMN
@@ -33,7 +33,7 @@ KAF 与 ITSM 复用同一认证、身份、租户解析和 RBAC 体系；KAF 适
 | KAF Web / Teams / WeCom | KAF 对话式收集需求并调用 ITSM Intake；Web 必须经用户确认，Teams/WeCom 可按渠道策略自动创建。 | 当前终端用户 |
 | ITSM 终端用户页面 | 用户留在 ITSM 的统一自然语言受理入口；当前页面调用 KAF 分析能力并展示提交确认，页面不推导领域语义。Catalog 浏览仅是可选捷径。 | 当前终端用户 |
 | ITSM 坐席/管理员页面 | 允许专业人员明确创建 WorkItem；创建后如 BPMN 到达 KAF 委派节点，仍进入同一 KAF 处理链路。 | 当前操作人员 |
-| KAF 自动执行 | KAF 领取 ITSM 委派任务并调用 ITSM 自动化 API。 | ITSM 内置 `KAF automation` 技术账号 |
+| KAF 自动执行 | KAF 接收 ITSM 委派任务并调用任务范围自动化 API。 | ITSM 内置 `KAF automation` 技术账号 |
 
 创建时，当前认证用户是 requester/opener 的权威来源；`source` 仅记录渠道事实。自动执行时，`KAF automation` 是执行 actor，原 requester 保留在 WorkItem 上。审计必须同时记录技术账号、KAF agent、Procedure、run 和步骤，不能将自动执行伪装为终端用户操作。
 
@@ -66,6 +66,8 @@ BPMN 不绑定 KAF Procedure，也不复制 KAF 的 Tool 权限、风险策略�
 
 ITSM 通过配置化流程绑定决定哪些 WorkItem 产生 KAF 委派任务。绑定优先级为：Catalog Item 明确的 `processDefinitionKey`；`tenant + recordClass + scenario + CTI/category/department` 精确绑定；`tenant + recordClass` 默认绑定；无匹配时执行明确配置的“无需流程”或返回阻断错误。禁止静默选择其他流程。例如 `recordClass=incident` 且 CTI 为 SSLVPN 连通性故障时，绑定 SSLVPN 自动诊断流程；未匹配该绑定的 Incident 维持既有人工流程。KAF 不能自行启动、跳过或完成未经委派的 BPMN 自动化任务。
 
+KAF 委派节点是注册的 BPMN `serviceTask` 类型，`taskType="kaf_delegate"`。节点只声明委派语义和允许的 WorkItem 动作，不声明 Procedure、Tool 或 KAF 风险策略。流程到达节点时，ITSM 创建现有 `ProcessTask`、写入审计与 Outbox，并停在该节点；KAF 最终完成关联 `ProcessTask` 后，BPMN 才沿出边继续。
+
 KAF 收到委派后读取 WorkItem，结合当前 CTI、Catalog、表单、CI、历史、BPMN 上下文和租户知识自主选择 Procedure。KAF 的 Tool Registry 与治理机制是 Procedure/Tool 可选范围、风险控制和 Tool 调用的唯一权威来源。ITSM 仅保存最终的 `procedureRef`、版本和脱敏执行证据，不维护第二套 Procedure 或 Tool policy。
 
 ITSM BPMN 仍是流程状态、审批、超时和 WorkItem 生命周期的唯一权威来源。KAF 完成工作后请求 ITSM 落地动作；ITSM 返回最新状态和结构化拒绝原因。
@@ -79,33 +81,24 @@ ITSM BPMN 仍是流程状态、审批、超时和 WorkItem 生命周期的唯一
 创建事务：ITSM Intake
   WorkItem、专业扩展、受理快照、SLA、BPMN、审计
 
-委派事务：ITSM AutomationTask
-  BPMN 服务任务关联、领取状态、租约、run、幂等和 Outbox 事件
+委派事务：ITSM kaf_delegate ProcessTask
+  BPMN 等待点、允许动作、审计和 Outbox 事件
 
 执行中：KAF Execution Context
-  taskId、runId、stepId、Procedure/Tool 执行遥测与幂等键
+  taskId、runId、stepId、Procedure/Tool 执行、重试遥测与幂等键
 ```
 
 ITSM 在 Intake 创建时冻结受理快照：CTI、Catalog 版本、已确认表单、`recordClass`、来源渠道和 KAF 的受理决策。KAF 在开始自动化执行时冻结执行快照：实际选中的 Procedure、版本、输入上下文摘要、模型/提示词版本、置信度、`runId` 和 `stepId`。
 
 KAF 不保存 WorkItem 状态副本；每次展示或执行前读取 ITSM 返回的当前版本和可执行动作。Procedure 选择不在 Intake 时冻结，因为它由 KAF 在 BPMN 委派时基于最新的 WorkItem 上下文决定。
 
-### 3.1 AutomationTask
+### 3.1 KAF 委派 ProcessTask
 
-`AutomationTask` 是 ITSM 持久化的 BPMN 服务任务执行记录，也是 KAF 自动化动作的唯一授权上下文。每条任务至少关联 tenant、WorkItem、BPMN process/task、状态、允许动作、`correlationId`、当前 `runId`、lease 持有者和到期时间、尝试次数、版本、创建/完成时间。
+`kaf_delegate` 复用现有 `ProcessTask`，而不是引入第二套 `AutomationTask` 实体或状态机。`ProcessTask` 是 ITSM/BPMN 的等待点，至少关联 tenant、WorkItem、BPMN process/task、`delegated` 状态、允许动作、`correlationId`、创建/完成时间和版本。
 
-首期状态机为：
+ITSM 在同一事务内创建 `ProcessTask`、审计和 Outbox。KAF 的 `runId`、重试、Tool 执行和内部并发协调属于 KAF Execution Context，不由 ITSM 以 lease 或独立自动化任务状态管理。KAF 重复提交 ITSM 动作时，以 `tenantId + taskId + runId + stepId` 为幂等边界；重复提交返回已应用结果而非重复写入。
 
-```text
-ready -> running -> completed
-  ^        |
-  |        v
-  +--- retryable
-```
-
-ITSM 创建任务、写入审计和 Outbox 必须在同一事务中完成。KAF 以 `runId` 领取 `ready` 或 `retryable` 任务并持有可续租 lease；同一任务同一时间只能有一个有效 run。lease 过期后任务转为 `retryable`，可被新 `runId` 重领。人工接管、长期失败编排和补偿流程不在首期状态机范围。
-
-每个实际 ITSM 动作以 `tenantId + taskId + runId + stepId` 为幂等边界。重复提交返回已应用结果而非重复写入；语义动作不得在未刷新上下文时盲重试。
+`KAF automation` 是全局 ITSM 内置自动化主体，但只拥有任务范围权限：可补拉被委派的 `kaf_delegate` 任务、通过 `taskId` 读取其 ticket 上下文，以及提交该任务声明允许的动作。ITSM 始终以关联 `ProcessTask.tenantId` 和 `taskType` 强制租户及任务类型隔离；KAF 不能调用通用 WorkItem 查询或修改 API。
 
 ## 4. 接口契约
 
@@ -142,7 +135,7 @@ type CreateWorkItemCommand = {
 
 ITSM 返回 `WorkItemResult`，至少包括 `id`、`number`、`recordClass`、`status`、CTI、Catalog、当前 BPMN/SLA 摘要、版本和详情链接。Catalog/CTI/CI 不可见、Catalog `targetClass` 冲突、表单无效或确认策略不满足时，返回机器可读的校验错误；这不是 ITSM 的二次分类。
 
-### 4.2 委派事件、任务领取与补偿拉取
+### 4.2 委派事件与任务范围 API
 
 当 BPMN 到达 KAF 委派节点时，ITSM Outbox 发布：
 
@@ -163,9 +156,14 @@ type KafDelegateRequested = {
 }
 ```
 
-KAF 使用 `taskId` 以 `KAF automation` 身份获取任务上下文，得到当前 WorkItem、冻结受理快照、当前 BPMN 等待点、允许动作、版本和 lease 状态。事件推送是主路径；KAF 重启或事件遗漏时，通过 `GET /automation-tasks?status=ready|retryable` 补拉自身可领取的未完成任务。
+事件推送是主路径；KAF 重启或事件遗漏时，通过 `GET /bpmn/process-tasks/kaf-delegated?status=delegated` 补拉其有权处理的未完成任务。MVP 不提供 claim 或 lease API，KAF 自身负责执行协调。
 
-领取、续租和查询接口都以 `taskId` 为对象。ITSM 必须验证该技术账号对任务所属 tenant 的自动化权限；返回的上下文仅限完成该任务所需的 WorkItem 数据。
+任务范围 API 为：
+
+- `GET /bpmn/process-tasks/{taskId}/kaf-context`：返回该任务关联的 WorkItem、冻结受理快照、当前 BPMN 等待点、允许动作和当前版本；
+- `POST /bpmn/process-tasks/{taskId}/actions`：提交 typed action；`complete_bpmn_task` 成功时完成关联 `ProcessTask` 并推进 BPMN。
+
+ITSM 必须验证 `KAF automation` 对关联 `ProcessTask` 的 tenant、类型和状态具有权限；上下文仅限完成该任务所需的数据。动作结果返回最新 WorkItem 版本与结构化结果。
 
 ### 4.3 任务绑定的 typed action contract
 
@@ -186,7 +184,7 @@ type AutomationActionBase = {
   }
 }
 
-type CompleteAutomationTask = AutomationActionBase & {
+type CompleteKafDelegateTask = AutomationActionBase & {
   action: "complete_bpmn_task"
   payload: { resultSummary: string; evidenceRefs: string[] }
 }
@@ -220,27 +218,26 @@ type RecordExecutionFailure = AutomationActionBase & {
   payload: {
     failureClass: string
     summary: string
-    retryable: boolean
     evidenceRefs: string[]
   }
 }
 ```
 
-`complete_bpmn_task` 必须明确完成 `taskId` 所关联的 BPMN 服务任务。`resolve` 和 `close` 先由 IncidentService 或对应专业领域服务校验，再按任务定义决定是否完成 BPMN 任务；该关联在同一事务内落地，不能由 KAF 假设隐式推进。所有动作必须存在于 `AutomationTask.allowedActions`；`assign` 还必须通过 ITSM 对目标组、人员和可见性的校验，`record_execution_failure` 仅能按任务策略转为 `retryable` 或返回拒绝。
+`complete_bpmn_task` 必须明确完成 `taskId` 所关联的 BPMN 服务任务。`resolve` 和 `close` 先由 IncidentService 或对应专业领域服务校验，再按任务定义决定是否完成 BPMN 任务；该关联在同一事务内落地，不能由 KAF 假设隐式推进。所有动作必须存在于 `kaf_delegate ProcessTask` 声明的允许动作；`assign` 还必须通过 ITSM 对目标组、人员和可见性的校验。`record_execution_failure` 只记录失败证据，不改变 BPMN 等待点；KAF 按自身治理策略决定是否重试。
 
-ITSM 按 WorkItem 的既有 `recordClass` 调用对应专业领域服务。这是确定性路由，不是重新智能分类。动作结果必须区分 `applied`、`already_applied`、`stale_version`、`task_not_active`、`lease_lost`、`forbidden` 与 `domain_rejected`；KAF 刷新上下文并由自身治理策略决定后续行为。
+ITSM 按 WorkItem 的既有 `recordClass` 调用对应专业领域服务。这是确定性路由，不是重新智能分类。动作结果必须区分 `applied`、`already_applied`、`stale_version`、`task_not_active`、`forbidden` 与 `domain_rejected`；KAF 刷新上下文并由自身治理策略决定后续行为。
 
 ## 5. 数据治理与审计
 
 ITSM WorkItem 时间线只保存脱敏的执行摘要、Procedure/版本、Tool 审计引用、动作结果和 `correlationId`。原始模型输入输出、敏感工具输出和完整 Langfuse trace 留在 KAF；KAF 按同租户 RBAC、脱敏和保留期策略管理它们。
 
-ITSM 不复制原始 prompt、完整对话或 Tool 敏感输出。KAF 返回的证据引用必须可审计但不应泄露凭据、令牌、密码或受保护内容。 `correlationId` 用于关联 KAF session、Langfuse trace、WorkItem、BPMN、AutomationTask、KAF run/step 和 ITSM 审计，而不是绕过权限读取数据的凭据。
+ITSM 不复制原始 prompt、完整对话或 Tool 敏感输出。KAF 返回的证据引用必须可审计但不应泄露凭据、令牌、密码或受保护内容。 `correlationId` 用于关联 KAF session、Langfuse trace、WorkItem、BPMN、ProcessTask、KAF run/step 和 ITSM 审计，而不是绕过权限读取数据的凭据。
 
 ## 6. 首期专业域行为
 
 | 专业域 | 委派资格与 KAF 行为 | ITSM 动作落点 |
 |---|---|---|
-| `service_request_item` | 已获批且 BPMN 到达 KAF 委派节点后，KAF 读取服务申请，自主选择开通 Procedure，调用受治理 Tool 并回报进度。 | `complete_bpmn_task` 完成委派任务；BPMN 和 ServiceRequestService 判断 Requested Item 是否完成。 |
+| `service_request_item` | 已获批且 BPMN 到达 KAF 委派节点后，KAF 读取服务申请，自主选择开通 Procedure，调用受治理 Tool 并回报进度。 | `complete_bpmn_task` 完成 `kaf_delegate ProcessTask`；BPMN 和 ServiceRequestService 判断 Requested Item 是否完成。 |
 | `incident` | 仅命中配置化自动诊断流程绑定的 Incident 才委派。KAF 诊断、检索知识、选择修复 Procedure、调用受治理 Tool 并形成解决证据。 | `update_progress` 与 `resolve` 由 IncidentService 校验；关闭遵循既有关闭规则。 |
 
 ## 7. SSLVPN 驱动场景与 BPMN 迁移
@@ -250,16 +247,16 @@ ITSM 不复制原始 prompt、完整对话或 Tool 敏感输出。KAF 返回的�
 1. 用户通过 KAF 或 ITSM 直接入口提交 SSLVPN 远程访问权限申请，包含既有 8 个动态字段。
 2. ITSM 创建 `service_request_item`，保存受理快照，启动 SSLVPN 双级审批 BPMN 和 SLA。
 3. 部门领导与 L2 网络运维完成既有审批。
-4. 新版 BPMN 随后创建 KAF Delegate `AutomationTask`，并发布 `KafDelegateRequested`。
-5. KAF 领取任务、获取 WorkItem，自主选择 VPN 开通 Procedure，执行受治理 Tool，并将步骤进度和审计引用写回 ITSM。
-6. KAF 提交 `CompleteAutomationTask`；ITSM 原子完成任务、记录审计，并按 BPMN/ServiceRequestService 规则推进 Requested Item。
+4. 新版 BPMN 随后创建 `kaf_delegate ProcessTask`，并发布 `KafDelegateRequested`。
+5. KAF 接收任务、获取 WorkItem，自主选择 VPN 开通 Procedure，执行受治理 Tool，并将步骤进度和审计引用写回 ITSM。
+6. KAF 提交 `CompleteKafDelegateTask`；ITSM 原子完成任务、记录审计，并按 BPMN/ServiceRequestService 规则推进 Requested Item。
 
 ### 7.2 SSLVPN 无法连接：Incident
 
 1. 用户通过 KAF 或 ITSM 直接入口描述 SSLVPN 无法连接。
 2. KAF 识别 `recordClass=incident`；ITSM Intake 校验引用后创建 Incident WorkItem 和专业扩展。
-3. ITSM 的 SSLVPN 连通性 Incident 流程绑定命中后，BPMN 创建并委派 `AutomationTask`。
-4. KAF 领取任务，执行知识检索、诊断和受治理修复 Tool，并回报进度与脱敏证据。
+3. ITSM 的 SSLVPN 连通性 Incident 流程绑定命中后，BPMN 创建并委派 `kaf_delegate ProcessTask`。
+4. KAF 接收任务，执行知识检索、诊断和受治理修复 Tool，并回报进度与脱敏证据。
 5. 满足 IncidentService 规则时，KAF 提交 `ResolveIncident`；ITSM 记录实际动作、审计和最新 Incident 状态。
 
 ### 7.3 流程版本策略
@@ -269,12 +266,12 @@ ITSM 不复制原始 prompt、完整对话或 Tool 敏感输出。KAF 返回的�
 ## 8. 验收与测试边界
 
 1. SSLVPN 权限申请可从 KAF 与 ITSM 直接入口创建，并形成同样的 `service_request_item`、8 项字段、SLA 和审批 BPMN。
-2. SSLVPN 双级审批完成后，BPMN 原子创建 `AutomationTask`、审计与 Outbox；KAF 能以 `taskId` 读取对应 WorkItem，而无需旧 ITSM 全文轮询。
+2. SSLVPN 双级审批完成后，BPMN 原子创建 `kaf_delegate ProcessTask`、审计与 Outbox；KAF 能以 `taskId` 读取对应 WorkItem，而无需旧 ITSM 全文轮询。
 3. KAF 选中的 Procedure、版本、Tool 审计引用、进度和最终动作均可在 KAF 执行记录与 ITSM WorkItem 时间线中追溯，且 ITSM 不保存敏感原始内容。
-4. 同一 `tenantId + taskId + runId + stepId` 的重放不会重复落地动作；lease 到期后的新 run 可安全重领任务。
+4. 同一 `tenantId + taskId + runId + stepId` 的重放不会重复落地动作；重复事件由 KAF 幂等处理，重复动作由 ITSM 返回已应用结果。
 5. SSLVPN 无法连接可创建 `incident`；只有命中流程绑定时才委派 KAF，且 IncidentService 是 `resolve` 的唯一状态校验入口。
-6. 每条验收链路均可用同一 `correlationId` 关联 KAF session、Langfuse trace、WorkItem、BPMN 任务、AutomationTask、KAF run/step 和审计记录。
-7. 自动化 API 测试必须覆盖 tenant/RBAC 拒绝、任务非活跃、lease 丢失、版本冲突、重复事件与重复动作；KAF/ITSM 合同测试使用确定性 KAF stub，真实 Tool 仅在隔离 SSLVPN 沙箱做端到端验证。
+6. 每条验收链路均可用同一 `correlationId` 关联 KAF session、Langfuse trace、WorkItem、BPMN 任务、ProcessTask、KAF run/step 和审计记录。
+7. 自动化 API 测试必须覆盖 tenant/RBAC 拒绝、任务非活跃、版本冲突、重复事件与重复动作；KAF/ITSM 合同测试使用确定性 KAF stub，真实 Tool 仅在隔离 SSLVPN 沙箱做端到端验证。
 8. KAF 仅通过受控 ITSM API 读取受委派 ticket 和写入动作；不存在直接数据库访问或前端领域语义推导。
 
 ## 9. 迁移与非目标
