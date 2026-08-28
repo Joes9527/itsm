@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { App, Button } from 'antd';
+import { Alert, App, Button } from 'antd';
 import { ArrowLeft } from 'lucide-react';
 import { useRouter, useParams } from 'next/navigation';
 import IncidentDetail from '@/components/incident/IncidentDetail';
@@ -131,7 +131,15 @@ export default function IncidentDetailPage() {
             professionalPanelSlot={detailAndTabs}
           />
         ) : (
-          detailAndTabs
+          <>
+            <Alert
+              type="info"
+              showIcon
+              message="该事件尚未关联 WorkItem，评论/附件/历史/关联等协作能力暂不可用"
+              style={{ marginBottom: 16 }}
+            />
+            {detailAndTabs}
+          </>
         )}
       </div>
     </App>

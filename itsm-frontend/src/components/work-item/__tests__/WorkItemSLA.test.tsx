@@ -9,6 +9,21 @@ describe('WorkItemSLA', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it('renders nothing when sla has no deadlines and no positive time targets (backend no-SLA fallback)', () => {
+    const sla: WorkItemSLAState = {
+      slaName: '默认SLA',
+      responseTime: 0,
+      resolutionTime: 0,
+      responseDeadline: null,
+      resolutionDeadline: null,
+      responseTimeRemaining: null,
+      resolutionTimeRemaining: null,
+      isBreached: false,
+    };
+    const { container } = render(<WorkItemSLA sla={sla} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it('renders the SLA name and deadlines when sla is present', () => {
     const sla: WorkItemSLAState = {
       slaName: '标准 SLA',

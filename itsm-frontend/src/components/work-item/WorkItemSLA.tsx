@@ -15,7 +15,7 @@ const getSLAPercent = (total: number, remaining: number | null): number => {
 const formatHours = (minutes: number): string => (minutes / 60).toFixed(1);
 
 export function WorkItemSLA({ sla }: { sla?: WorkItemSLAState }) {
-  if (!sla) {
+  if (!sla || (!sla.responseDeadline && !sla.resolutionDeadline && sla.responseTime <= 0 && sla.resolutionTime <= 0)) {
     return null;
   }
 

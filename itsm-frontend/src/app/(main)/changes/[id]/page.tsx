@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { App, Card } from 'antd';
+import { Alert, App, Card } from 'antd';
 import { GitBranch } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import ChangeDetail from '@/components/change/ChangeDetail';
@@ -198,7 +198,15 @@ export default function ChangeDetailPage() {
           professionalPanelSlot={detailAndTabs}
         />
       ) : (
-        detailAndTabs
+        <>
+          <Alert
+            type="info"
+            showIcon
+            message="该变更尚未关联 WorkItem，评论/附件/历史/关联等协作能力暂不可用"
+            style={{ marginBottom: 16 }}
+          />
+          {detailAndTabs}
+        </>
       )}
     </App>
   );
