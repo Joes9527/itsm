@@ -1,14 +1,14 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { App, Button, Card, Tabs } from 'antd';
+import { App, Button, Card, Empty, Tabs } from 'antd';
 import { ArrowLeft, MessageSquare, Clock as HistoryIcon } from 'lucide-react';
 import { useRouter, useParams } from 'next/navigation';
 import IncidentDetail from '@/components/incident/IncidentDetail';
 import {
   CommentPanel,
   HistoryTimeline,
-  incidentCommentAdapter,
+  ticketCommentAdapter,
   fetchAuditLogHistory,
 } from '@/components/business/detail-tabs';
 import { useAuthStore } from '@/lib/store/auth-store';
@@ -95,15 +95,17 @@ export default function IncidentDetailPage() {
                     评论
                   </span>
                 ),
-                children: (
+                children: workItem ? (
                   <CommentPanel
                     targetType="incident"
-                    targetId={numericId}
-                    adapter={incidentCommentAdapter}
+                    targetId={workItem.id}
+                    adapter={ticketCommentAdapter}
                     currentUserId={user?.id}
                     formatDateTime={formatDateTime}
-                    showInternalToggle={false}
+                    showInternalToggle
                   />
+                ) : (
+                  <Empty description="该事件尚未关联 WorkItem，暂不支持评论" />
                 ),
               },
               {
