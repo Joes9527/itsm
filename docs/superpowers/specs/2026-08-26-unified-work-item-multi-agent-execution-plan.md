@@ -1,6 +1,6 @@
 # 统一 Work Item 重构 — 多 Agent 执行 Spec
 
-> 状态：Proposed — Wave 1 已于 2026-08-27 通过 `refactor/unified-work-item` 并入 main（merge commit `8c9bbe6c`），但 Wave 2（四域迁移）与 Wave 3（全分支终审）均未开始。这次合并早于本文档 §1 自己设定的合并闸门（"全部到齐 + Wave 3 最终评审通过后才合入 main"），详见 §4.7。
+> 状态：Proposed — Wave 1 已于 2026-08-27 通过 `refactor/unified-work-item` 并入 main（merge commit `8c9bbe6c`，早于本文档 §1 自己设定的合并闸门，详见 §4.7）。Wave 2（四域迁移：Incident/Problem/Change/ServiceRequest）已于 2026-08-28 全部完成并直接合入 main（不再经过集成分支，理由同上），详见 §5.5。Wave 3（全分支终审）尚未开始。
 > 日期：2026-08-26
 > 依赖：
 > - 领域模型设计：[2026-08-26-unified-work-item-model-design.md](./2026-08-26-unified-work-item-model-design.md)（本文档不重复其内容，只引用并转成可分发的任务包）
@@ -244,6 +244,23 @@ Wave 3（我自己执行，串行）
 - **必须完成**：`ServiceCatalog` 新增 `target_class`（枚举，替代 `itsm_type` 的裁决职责，`itsm_type`/`service_type` 按设计文档 §7.2 拆分职责）；停止 `form_data`/`field_values` 双写，选 `field_values` 为唯一权威（`form_data` 只保留非结构化上下文，按设计文档 §8.3）；修复 `TicketTemplate` 的 `categoryIds` 写路径（这是一个独立发现的真实 bug，不是"顺手做的范围外重构"——不修的话新模型下这个字段会继续是死的）；前端接入 `WorkItemShell`。
 - **验收标准**：`go test ./handlers/service_request/... -cover` 不低于 Wave 0 基线；新增测试断言"提交表单后 `field_values` 有值，`form_data` 不再包含重复的结构化字段"；`categoryIds` 的 create/update 集成测试（提交非空 `categoryIds`，读回确认落库）。
 - **禁止项**：不新增 `itsm_type`/`target_class` 两个字段并存的过渡态超过这一次提交——要么这次切完，要么明确记录为需要迁移窗口的独立后续项。
+
+### 5.5 Wave 2 完成记录（2026-08-28）
+
+四个任务包全部执行完成并独立复核后合入 `main`（未走本文档 §1 原定的 `refactor/unified-work-item` 集成分支——该分支已在 Wave 1 阶段被提前合并，见 §4.6 之后的合并闸门违反记录；Wave 2 因此直接在 `main` 上串行合并）：
+
+| 域 | 合并 commit | 复核结果 |
+|---|---|---|
+| Incident | `329e8dad` | 独立验证通过 |
+| Problem | `3c7ac90d` | 独立验证通过；期间发现并撤回了一次评审者自己引入的过度修复（把 Problem 的工单编号生成器强行对齐到 Ticket/Incident 的共享 key，结果让任意两个新租户同月首次建单必然撞号——细节见下面"已知问题：ticket_number 跨域撞号"） |
+| Change | `82db1a40` | 发现并修复一个真实 bug：`completeChangeStageTasks`（7 个 `businessKey` 构造点之一）漏改，仍用裸 `changeID` 拼 key，会让排期/实施/验证/关闭节点永久静默失败，流程实例卡死——`changes.id` 与 `tickets.id` 是独立自增序列，原有测试因为两者巧合相等而没测出来 |
+| ServiceRequest | `afc2c1d1` | 独立验证通过，无需干预；与前三次性质不同——`ticket_id` 从建表起就必填，不需要事务化创建/回填，工作内容是 `target_class` 路由收敛 + 停止 `form_data`/`field_values` 双写 + 修复 `TicketTemplate.categoryIds` 死列 |
+
+**ServiceRequest 的 `WorkItemShell` 接入项，评估后标记为不适用（N/A），不是遗漏**：ServiceRequest 详情页渲染依赖的是共享的 `itsm-frontend/src/components/ticket/TicketDetail.tsx`（1282 行，已有 SLA/评论/附件/历史/关联/审批链 Tab 的完整实现），而 `WorkItemShell.tsx` 本身仍是 Wave 1 落地时的最小版本（48 行，只有编号/标题/状态/优先级/处理人，评论/附件是未接后端的占位组件）。把 `TicketDetail.tsx` 包进当前的 `WorkItemShell` 会是功能降级或纯冗余包装，违反 AGENTS.md"Do Not Patch Around Problems"（禁止"adding a new routing layer while keeping the old one alive"）和前端规范"use shared components only when reuse is real"——这里的复用目前不是真实的。此事经用户确认（2026-08-28）后不做代码改动，直接记录结论。
+
+**已知问题：ticket_number 跨域撞号（backlog，用户已确认延后处理）**：`ent/schema/ticket.go` 的 `ticket_number` 是全局唯一索引，但 Ticket（`repository/ticket/repository_impl.go`）、Incident、Problem、Change 四条生成器全部按租户维度计数（`sequence:ticket:<tenant>:<yyyymm>`）——任意两条路径、任意两个租户，只要在同一个月生成到同一个序号，就会撞上全局唯一约束。根治需要 ent schema 变更（唯一约束改成 `(tenant_id, ticket_number)` 复合）+ 四处生成逻辑收敛成一个，不属于任何单域任务范围。ServiceRequest 不受影响（它不生成新的 `ticket_number`，走 `ticket_id` 委托）。
+
+**真正的后续项：`WorkItemShell` 补强，不是 ServiceRequest 接入它**：现状是反过来的——Incident/Problem/Change 三个域的专属详情页用的是这个偏薄的 `WorkItemShell`，而 ServiceRequest/普通工单走的 `TicketDetail.tsx` 已经更完整。真正值得做的后续工作是把 `TicketDetail.tsx` 里 SLA、时间线、关系、统一操作区的成熟实现模式搬到 `WorkItemShell`/`WorkItemComments`/`WorkItemAttachments` 上，让 Incident/Problem/Change 三个页面追上这个水平——这是一次跨越 4 个页面的独立前端工作，不在 Wave 2 范围内，优先级和排期由用户后续决定。
 
 ---
 
