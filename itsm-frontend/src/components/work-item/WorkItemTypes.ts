@@ -21,10 +21,14 @@ export interface WorkItemCommon {
 }
 
 export interface WorkItemSLAState {
-  remainingSeconds: number | null;
-  isBreached: boolean;
+  slaName: string;
+  responseTime: number; // 目标响应时长，分钟
+  resolutionTime: number; // 目标解决时长，分钟
   responseDeadline: string | null;
   resolutionDeadline: string | null;
+  responseTimeRemaining: number | null; // 剩余响应时长，分钟；负数表示已超时
+  resolutionTimeRemaining: number | null; // 剩余解决时长，分钟；负数表示已超时
+  isBreached: boolean;
 }
 
 export type WorkItemActionType = 'approve' | 'reject' | 'resolve' | 'close' | 'assign' | string;
