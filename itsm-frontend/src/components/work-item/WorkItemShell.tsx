@@ -16,13 +16,15 @@ import { TicketRelationCards } from '@/components/ticket/TicketRelationCards';
 // 本组件本身不实现任何专业 Panel——那是各域专业组件（IncidentDetail/ProblemDetail/
 // ChangeDetail）的范围。
 //
-// 不做的事：不在这里拼装任何具体域的 API 调用。所有动作都通过 onActionDispatch 回调
-// 交给调用方处理，专业 Panel 也应该复用同一个回调，不要在 Panel 内部单独发 HTTP 请求。
+// 不做的事：不在这里拼装任何具体域的 API 调用。通用动作通过 onActionDispatch 回调
+// 交给调用方处理；Incident、Problem 和 Change Panel 保留各自的专用 API 调用，因为
+// 它们的动作需要领域特有的 payload 和 modal。
 export function WorkItemShell({
   workItem,
   actions,
   sla,
   onActionDispatch,
+  showActionBar = false,
   professionalPanelSlot,
   loading,
   error,
@@ -43,7 +45,7 @@ export function WorkItemShell({
             <Descriptions.Item label="优先级">{workItem.priority}</Descriptions.Item>
             <Descriptions.Item label="处理人">{workItem.assigneeId ?? '未分配'}</Descriptions.Item>
           </Descriptions>
-          <WorkItemActionBar />
+          {showActionBar && <WorkItemActionBar />}
         </Card>
         <WorkItemSLA sla={sla} />
         <Card>{professionalPanelSlot}</Card>
