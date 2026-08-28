@@ -125,12 +125,6 @@ describe('IncidentAPI', () => {
     });
   });
 
-  describe('deleteIncidentComment', () => {
-    it('should throw not implemented', async () => {
-      await expect(IncidentAPI.deleteIncidentComment(1, 1)).rejects.toThrow();
-    });
-  });
-
   describe('escalateIncident', () => {
     it('should escalate an incident', async () => {
       mockPost.mockResolvedValue({ id: 1 });
@@ -139,33 +133,11 @@ describe('IncidentAPI', () => {
     });
   });
 
-  describe('addComment', () => {
-    it('should add comment to incident', async () => {
-      mockPost.mockResolvedValue({ id: 1 });
-      await IncidentAPI.addComment(1, { content: 'Investigating' });
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents/1/comments', { content: 'Investigating' });
-    });
-  });
-
   describe('reopenIncident', () => {
     it('should reopen an incident', async () => {
       mockPost.mockResolvedValue({ id: 1, status: 'in_progress' });
       await IncidentAPI.reopenIncident(1);
       expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents/1/reopen', {});
-    });
-  });
-
-  describe('getIncidentComments', () => {
-    it('should get incident comments', async () => {
-      mockGet.mockResolvedValue([{ id: 1, content: 'test' }]);
-      const result = await IncidentAPI.getIncidentComments(1);
-      expect(mockGet).toHaveBeenCalledWith('/api/v1/incidents/1/comments');
-      expect(result).toHaveLength(1);
-    });
-
-    it('should propagate errors', async () => {
-      mockGet.mockRejectedValue(new Error('fail'));
-      await expect(IncidentAPI.getIncidentComments(1)).rejects.toThrow('fail');
     });
   });
 

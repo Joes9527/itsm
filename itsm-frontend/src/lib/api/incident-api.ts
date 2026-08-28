@@ -314,18 +314,6 @@ export interface CloudProductEventRequest {
 
 // ==================== 新增类型定义（类外部）====================
 
-// 事件评论类型
-export interface IncidentComment {
-  id: number;
-  incidentId: number;
-  eventType: string;
-  content: string;
-  userId: number;
-  userName?: string;
-  createdAt: string;
-  updatedAt?: string;
-}
-
 // 告警类型定义
 export interface IncidentAlert {
   id: number;
@@ -466,12 +454,6 @@ export class IncidentAPI {
     return response;
   }
 
-  // 添加评论（注意：后端期望 content 字段）
-  static async addComment(id: number, data: { content: string }): Promise<Incident> {
-    const response = await httpClient.post<Incident>(`/api/v1/incidents/${id}/comments`, data);
-    return response;
-  }
-
   // ==================== 新增：确认/关闭/评论/告警 ====================
 
   /**
@@ -529,30 +511,6 @@ export class IncidentAPI {
   static async reopenIncident(id: number): Promise<Incident> {
     const response = await httpClient.post<Incident>(`/api/v1/incidents/${id}/reopen`, {});
     return response;
-  }
-
-  /**
-   * 获取事件评论列表
-   * 后端: GET /api/v1/incidents/:id/comments
-   */
-  static async getIncidentComments(incidentId: number): Promise<IncidentComment[]> {
-    try {
-      const response = await httpClient.get<IncidentComment[]>(
-        `/api/v1/incidents/${incidentId}/comments`
-      );
-      return response;
-    } catch (error) {
-      console.error('IncidentAPI.getIncidentComments error:', error);
-      throw error;
-    }
-  }
-
-  /** 删除事件评论（后端暂未提供该 API） */
-  static async deleteIncidentComment(
-    _incidentId: number,
-    _commentId: number
-  ): Promise<void> {
-    throw new Error('事件评论删除功能开发中');
   }
 
   /**

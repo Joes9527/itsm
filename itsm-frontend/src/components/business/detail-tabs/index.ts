@@ -19,4 +19,3 @@ export * from './types';
 export { ticketCommentAdapter } from './adapters/ticket-comment-adapter';
 export { ticketAttachmentAdapter } from './adapters/ticket-attachment-adapter';
 export { fetchAuditLogHistory } from './adapters/audit-log-history-adapter';
-export { incidentCommentAdapter } from './adapters/incident-comment-adapter';
