@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **统一 WorkItem 领域模型（Incident/Problem/Change）** — Incident、Problem、Change 创建时改为在同一事务内建对应的 `tickets` 行（`record_class`）并回填 `work_item_id`；BPMN `businessId`/`businessKey` 三个域统一收敛为 WorkItem ID，不再各自用专业主键；Problem↔Ticket、Change↔Ticket 的关联从旧的 JSON 字段/ent edge 迁移到结构化的 `WorkItemRelation` 表。ServiceRequest 因为 `ticket_id` 从建表起就必填，不需要同等改造。设计文档：`docs/superpowers/specs/2026-08-26-unified-work-item-model-design.md`；执行记录：`docs/superpowers/specs/2026-08-26-unified-work-item-multi-agent-execution-plan.md`。
+  - **已知遗留问题**：`tickets.ticket_number` 仍是全局唯一索引而非 `(tenant_id, ticket_number)` 复合唯一，Ticket/Incident/Problem/Change 四条按租户维度计数的生成器之间仍有撞号可能，尚未修复。
+  - **未执行的收尾项**：`ticket_type` 表上的旧审批字段（`approval_workflow_id`/`approval_chain`）清理、`tickets` 是否物理改名为 `work_items` 的决策。
+
 ### Fixed
 
 - **服务目录对普通用户显示为空** — `end_user` 角色缺少 `ticket_category:read` 权限，且 DTO 映射器 `ToTicketCategoryResponse` 未设置 `Level` 字段（导致前端按 level 过滤失效）。已在 seeder/硬编码 RBAC 中补全权限、在 DTO 和 mapper 中补充 `Level` 字段，并提供迁移 SQL 修复已有租户。

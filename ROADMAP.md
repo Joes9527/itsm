@@ -93,6 +93,22 @@ Concretely that means:
       CMDB impact analysis, SLA escalation. Lives at `itsm-backend/tests/integration/`.
 - [ ] **itsm-cli / itsm-skill / itsm-agent** in CI (path-scoped workflows
       + coverage)
+- [x] **Unified WorkItem model (Incident/Problem/Change/ServiceRequest)** —
+      Incident, Problem, and Change now create their `tickets` row
+      (`record_class`) transactionally alongside the professional record;
+      BPMN `businessId`/`businessKey` for all three converged onto the
+      WorkItem id instead of each domain's own primary key; cross-record
+      associations (Problem↔Ticket, Change↔Ticket) moved off ad hoc JSON/
+      edges onto the structured `WorkItemRelation` table. ServiceRequest
+      needed no equivalent change (`ticket_id` was already required from
+      day one). Design: `docs/superpowers/specs/2026-08-26-unified-work-item-model-design.md`;
+      execution record: `docs/superpowers/specs/2026-08-26-unified-work-item-multi-agent-execution-plan.md`.
+      **Not yet done**: `ticket_number`'s unique constraint is still global
+      instead of `(tenant_id, ticket_number)`, so the four generators that
+      write into it (Ticket/Incident/Problem/Change, all counting per-tenant)
+      can still collide with each other — tracked, not fixed. Phase 6
+      physical cleanup (old approval-workflow fields on `ticket_type`,
+      `tickets`→`work_items` rename decision) also still open.
 
 ### Product
 
