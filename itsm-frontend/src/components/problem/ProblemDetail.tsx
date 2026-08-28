@@ -11,7 +11,7 @@ import { useRouter, useParams } from 'next/navigation';
 
 import { ProblemApi } from '@/lib/api/';
 import { ProblemStatus, ProblemStatusLabels } from '@/constants/problem';
-import type { Problem } from '@/types/biz/problem';
+import type { Problem } from '@/lib/api/problem-api';
 import ProblemInvestigationTab from './ProblemInvestigationTab';
 import BasicInfoCard from './BasicInfoCard';
 
@@ -32,7 +32,7 @@ const ProblemDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
     setLoading(true);
     try {
       const problem = await ProblemApi.getProblem(Number(id));
-      setData(problem as unknown as Problem);
+      setData(problem);
     } catch (error) {
       message.error('加载问题详情失败');
     } finally {
@@ -118,7 +118,7 @@ const ProblemDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
               {data.title}
             </Title>
             <Tag color={data.status === ProblemStatus.RESOLVED ? 'success' : 'blue'}>
-              {ProblemStatusLabels[data.status]}
+              {ProblemStatusLabels[data.status as ProblemStatus]}
             </Tag>
           </Space>
           <Space>
