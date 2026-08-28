@@ -476,7 +476,11 @@ func NewApplication() *Application {
 	}
 
 	rootCauseAnalysisService := service.NewRootCauseAnalysisService(client)
-	incidentController := controller.NewIncidentController(incidentService, incidentRuleEngine, incidentMonitoringService, incidentAlertingService, rootCauseAnalysisService, sugar)
+	problemRepo := problem.NewEntRepository(client)
+	problemRepo.SetSequenceService(sequenceService)
+	problemServiceDomain := problem.NewService(problemRepo, sugar)
+	problemHandler := problem.NewHandler(problemServiceDomain)
+	incidentController := controller.NewIncidentController(incidentService, incidentRuleEngine, incidentMonitoringService, incidentAlertingService, rootCauseAnalysisService, problemServiceDomain, sugar)
 
 	provisioningService := service.NewProvisioningService(client, sugar)
 	provisioningController := controller.NewProvisioningController(provisioningService)
@@ -576,11 +580,6 @@ func NewApplication() *Application {
 	incidentBridge := &srIncidentBridge{svc: incidentService}
 	srService := service_request.NewService(srRepo, scRepo, cmdbRepo, client, sugar, ticketService, chainResolver, incidentBridge)
 	srHandler := service_request.NewHandler(srService)
-
-	// Domain: Problem (DDD)
-	problemRepo := problem.NewEntRepository(client)
-	problemServiceDomain := problem.NewService(problemRepo, sugar)
-	problemHandler := problem.NewHandler(problemServiceDomain)
 
 	// Domain: Change (DDD)
 	changeRepo := change.NewEntRepository(client, database.GetRawDB())

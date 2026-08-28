@@ -20,29 +20,9 @@ func NewHandler(service *Service) *Handler {
 }
 
 func (h *Handler) toDTO(p *Problem) *dto.ProblemResponse {
-	if p == nil {
+	resp := ToResponse(p)
+	if resp == nil {
 		return nil
-	}
-
-	resp := dto.ProblemResponse{
-		ID:          p.ID,
-		Title:       p.Title,
-		Description: p.Description,
-		Status:      p.Status,
-		Priority:    p.Priority,
-		Category:    p.Category,
-		RootCause:   p.RootCause,
-		Workaround:  p.Workaround,
-		Resolution:  p.Resolution,
-		Impact:      p.Impact,
-		CreatedBy:   p.CreatedBy,
-		TenantID:    p.TenantID,
-		CreatedAt:   p.CreatedAt,
-		UpdatedAt:   p.UpdatedAt,
-		WorkItemID:  p.WorkItemID,
-	}
-	if p.AssigneeID != nil {
-		resp.AssigneeID = p.AssigneeID
 	}
 
 	// 映射关联数据
@@ -81,6 +61,37 @@ func (h *Handler) toDTO(p *Problem) *dto.ProblemResponse {
 				Type:   ch.Type,
 			})
 		}
+	}
+
+	return resp
+}
+
+// ToResponse maps the Problem base fields to the public API contract. Handlers
+// that load associations enrich this response in their own wrapper.
+func ToResponse(p *Problem) *dto.ProblemResponse {
+	if p == nil {
+		return nil
+	}
+
+	resp := dto.ProblemResponse{
+		ID:          p.ID,
+		Title:       p.Title,
+		Description: p.Description,
+		Status:      p.Status,
+		Priority:    p.Priority,
+		Category:    p.Category,
+		RootCause:   p.RootCause,
+		Workaround:  p.Workaround,
+		Resolution:  p.Resolution,
+		Impact:      p.Impact,
+		CreatedBy:   p.CreatedBy,
+		TenantID:    p.TenantID,
+		CreatedAt:   p.CreatedAt,
+		UpdatedAt:   p.UpdatedAt,
+		WorkItemID:  p.WorkItemID,
+	}
+	if p.AssigneeID != nil {
+		resp.AssigneeID = p.AssigneeID
 	}
 
 	return &resp

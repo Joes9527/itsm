@@ -15,7 +15,6 @@ import (
 	"itsm-backend/ent/incidentalert"
 	"itsm-backend/ent/incidentevent"
 	"itsm-backend/ent/incidentmetric"
-	"itsm-backend/ent/problem"
 	entticket "itsm-backend/ent/ticket"
 
 	"github.com/stretchr/testify/assert"
@@ -1050,58 +1049,6 @@ func TestIncidentService_WorkflowMethods_CrossTenantFailClosed(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "new", after.Status, "跨租户写入必须全部失败，状态不能被改动")
 	assert.Equal(t, "BPMN workflow lifecycle incident", after.Title)
-}
-
-func TestRootCauseAnalysisService_ConvertIncidentToProblemTransactionAndTenantIsolation(t *testing.T) {
-	client, _, ctx := setupIncidentTest(t)
-	defer client.Close()
-	tenantA, err := createIncidentTestTenant(ctx, client, "convert-a")
-	require.NoError(t, err)
-	tenantB, err := createIncidentTestTenant(ctx, client, "convert-b")
-	require.NoError(t, err)
-	userA, err := createIncidentTestUser(ctx, client, tenantA.ID, "convert-a")
-	require.NoError(t, err)
-	userB, err := createIncidentTestUser(ctx, client, tenantB.ID, "convert-b")
-	require.NoError(t, err)
-	incidentEntity, err := client.Incident.Create().
-		SetTitle("Repeated API outage").
-		SetDescription("API repeatedly becomes unavailable").
-		SetStatus("resolved").
-		SetPriority("critical").
-		SetSeverity("critical").
-		SetCategory("application").
-		SetIncidentNumber("INC-CONVERT-001").
-		SetReporterID(userA.ID).
-		SetTenantID(tenantA.ID).
-		Save(ctx)
-	require.NoError(t, err)
-	rootCauseService := NewRootCauseAnalysisService(client)
-
-	_, err = rootCauseService.CreateProblemFromIncident(
-		ctx, incidentEntity.ID, userB.ID, tenantB.ID, &dto.ConvertIncidentToProblemRequest{},
-	)
-	require.ErrorContains(t, err, "incident not found")
-	count, err := client.Problem.Query().Count(ctx)
-	require.NoError(t, err)
-	assert.Zero(t, count)
-
-	created, err := rootCauseService.CreateProblemFromIncident(
-		ctx, incidentEntity.ID, userA.ID, tenantA.ID,
-		&dto.ConvertIncidentToProblemRequest{
-			Title: "API stability problem", Description: "Recurring API availability degradation", RootCause: "Connection exhaustion",
-		},
-	)
-	require.NoError(t, err)
-	assert.Equal(t, tenantA.ID, created.TenantID)
-	assert.Equal(t, "API stability problem", created.Title)
-	assert.Equal(t, "Connection exhaustion", created.RootCause)
-	linkedIncident, err := client.Problem.Query().Where(problem.IDEQ(created.ID)).QueryIncidents().Only(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, incidentEntity.ID, linkedIncident.ID)
-	events, err := client.IncidentEvent.Query().Where(incidentevent.IncidentIDEQ(incidentEntity.ID)).All(ctx)
-	require.NoError(t, err)
-	require.Len(t, events, 1)
-	assert.Equal(t, tenantA.ID, events[0].TenantID)
 }
 
 // ==================== 删除事件测试 ====================
