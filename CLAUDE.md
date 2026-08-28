@@ -63,9 +63,24 @@ go run main.go           # Start server (http://localhost:8090)
 go build -o itsm-backend main.go # Binary build
 ./itsm-backend           # Run binary
 go test ./...            # Run all tests
-# Database migrations (use build tags)
-go run -tags migrate main.go
 go run -tags create_user main.go
+```
+
+### Database Migrations
+
+⚠️ `go run -tags migrate main.go` (or `go run -tags migrate .`) does **not** run incremental
+migrations — it runs `migrate_fresh.go`, which unconditionally does `DROP DATABASE IF EXISTS`
+and rebuilds from scratch. Running it against any database with real data (including a shared
+dev database) destroys it. It only exists for throwaway local resets.
+
+For actual incremental migrations, use `cmd/migrate` instead:
+
+```bash
+cd itsm-backend
+go run -tags migrate ./cmd/migrate -status   # show pending/applied migrations
+go run -tags migrate ./cmd/migrate -up       # apply pending migrations
+go run -tags migrate ./cmd/migrate -dry-run  # preview SQL without executing
+# -fresh on this tool is the explicit, opt-in destructive drop+recreate+seed path
 ```
 
 ### Environment Setup

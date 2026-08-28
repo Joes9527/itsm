@@ -1,6 +1,6 @@
 # 统一 Work Item 重构 — 多 Agent 执行 Spec
 
-> 状态：Proposed — Wave 1 已于 2026-08-27 通过 `refactor/unified-work-item` 并入 main（merge commit `8c9bbe6c`，早于本文档 §1 自己设定的合并闸门，详见 §4.7）。Wave 2（四域迁移：Incident/Problem/Change/ServiceRequest）已于 2026-08-28 全部完成并直接合入 main（不再经过集成分支，理由同上），详见 §5.5。Wave 3（全分支终审）尚未开始。
+> 状态：Wave 1/2/3 均已完成（2026-08-27 ~ 2026-08-28，详见 §4.6/§4.7、§5.5、§6.1）；整个计划仍标 Proposed 而非 Completed，因为 Phase 6 物理清理（表改名决策、`ticket_type.go` 审批残留字段删除）和真实 Postgres 端到端验证（`cmd/check_work_item_integrity` 从未对着活库跑通过）两项仍未关闭，且 ticket_number 跨域撞号缺陷待修——这些都不是"完成"能省略的收尾项，是明确记录的独立后续工作。Wave 1 通过 `refactor/unified-work-item` 并入 main（merge commit `8c9bbe6c`），Wave 2/3 之后直接在 main 上串行完成，均早于/绕开了本文档 §1 自己设定的"集成分支+终审后才合入"闸门。
 > 日期：2026-08-26
 > 依赖：
 > - 领域模型设计：[2026-08-26-unified-work-item-model-design.md](./2026-08-26-unified-work-item-model-design.md)（本文档不重复其内容，只引用并转成可分发的任务包）
@@ -267,6 +267,26 @@ Wave 3（我自己执行，串行）
 ## 6. Wave 3：整合与最终评审（我自己执行）
 
 - 全部 Wave 2 任务包合入 `refactor/unified-work-item` 后，做一次**覆盖整个集成分支的最终评审**（不是四次任务级评审的简单叠加）——重点检查跨任务集成点：四个专业 Panel 对 `WorkItemShell` 的用法是否一致、`WorkItemRelation` 的 `relation_type` 取值是否在四个域之间保持语义一致、`ProcessBinding` 的 `business_type` 取值集合是否真的收敛（不再有历史的 `ticket+incident` 两层形状残留）。
+
+### 6.1 Wave 3 执行记录（2026-08-28）
+
+**跨任务集成点核查（均通过）**：
+
+1. 三个专属详情页（`incidents`/`problems`/`changes`）对 `WorkItemShell` 的用法逐字节一致：都是 `actions={{}}` + `onActionDispatch={async () => {}}` 占位、`workItemId` 缺失时优雅退化到原有专业详情组件，没有任何一个域悄悄改了契约。
+2. `WorkItemRelation.relation_type`：Change（`changeTicketRelationType`）和 Problem（`problemTicketRelationType`）两处生产代码都解析为字面量 `"related_to"`，语义一致；没有某个域偷偷用了不同字符串表示同一个概念。Incident 这次没有写 `WorkItemRelation`（不在其任务范围内）。
+3. `ProcessBinding.business_type`：`dto.BusinessType` 枚举和 `config/seed/default.json` 里的取值集合是干净的单层字符串（`ticket`/`incident`/`problem`/`change`/`release`/...），没有发现计划担心的历史"两层形状"残留。
+
+**全量验证**：`go build ./...`、`go vet ./...`、`go test ./...`（51 个包全绿）、`npm run type-check` 在当前 main HEAD（`030c8f49`）上重新跑通过。
+
+**Phase 6 清理项现状（未执行，逐条记录，供后续决策）**：
+
+1. `ent/schema/ticket_type.go` 仍有 `approval_workflow_id`/`approval_chain` 两个字段——审批机制单轨化文档（`2026-08-26-approval-single-track-convergence-design.md`）里点名要删的历史残留，本次 Wave 3 只确认它们还在，没有删（ent schema 字段删除需要迁移，且属于审批收口范围而非 WorkItem 迁移范围，两份工作各自独立）。
+2. `docs/docs.go`（swag 自动生成）里仍有 3 处 `/approval-workflows` 过期 swagger 声明，是上面第 1 条的连带产物，同一批处理。
+3. 是否把物理表 `tickets` 改名为 `work_items`（设计文档 §18.8 第 4 条）——未决策，属于需要用户拍板的产品/命名决定，不是这次评审能替用户做的选择。
+
+**⚠️ 一个不在原计划范围内、但严重程度较高的发现：`go run -tags migrate main.go`（CLAUDE.md 文档里的标准命令）实际会先执行 `DROP DATABASE IF EXISTS`，不是增量迁移**。尝试对本机开发库（`itsm-postgres-dev`，7832 行 `users`、15 行 `tickets`）跑 `cmd/check_work_item_integrity` 时发现该库 schema 落后（缺 `record_class` 列，说明自 Wave 1 起从未有人对着一个真实 Postgres 跑过迁移），准备照着 CLAUDE.md 文档跑 `go run -tags migrate .` 补齐 schema，命令因为数据库当前有其他连接占用而失败在 `DROP DATABASE` 这一步——没有实际造成损失（已用 `psql` 核对行数确认库完好），但如果当时没有别的连接占着，这条命令会直接清空整个开发库。根因：仓库根目录同时存在 `main.go`（默认）和 `migrate_fresh.go`（`//go:build migrate`，无条件 drop+recreate），两者共享同一个 `go run -tags migrate .` 入口；真正安全的增量迁移工具在 `cmd/migrate/main.go`（`-status`/`-up`/`-list`/`-dry-run` 等 flag，`-fresh` 才是破坏性选项，且需要显式传）。**建议**：更新 CLAUDE.md 的文档命令，明确区分这两个工具，避免下一个照着文档操作的人（人或 agent）无意清空开发库。因为这个发现，`cmd/check_work_item_integrity` 最终没有对着真实 Postgres 跑通——这个验证缺口从 Wave 1 延续到现在仍未关闭。
+
+**结论**：Wave 2 四个域的代码集成层面没有发现新的一致性问题；Phase 6 物理清理和真实数据库端到端验证仍是未关闭项，均已记录为独立后续工作，不阻塞当前 main 状态的可用性（全部测试绿、类型检查绿）。
 - Phase 6 清理项（设计文档 §18.8）：删除重复公共字段和旧写路径、死服务、旧审批入口残留（`ticket_type.go` 的 `approval_workflow_id`/`approval_chain`、`docs/docs.go` 过期 swagger）。
 - 决定是否物理重命名 `tickets` → `work_items`（设计文档 ADR-1 建议第一阶段不做，这里重新评估，不预设结论）。
 - 全量验证：`go test ./...`、`npm run type-check`、相关 E2E、`docs/architecture-and-roadmap-assessment-2026-08-26.md` 里列的实测指标（覆盖率、controller 体积）重新测一遍存档对比。
