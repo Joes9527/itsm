@@ -15511,6 +15511,10 @@ const docTemplate = `{
                 "version": {
                     "type": "integer",
                     "example": 1
+                },
+                "workItemId": {
+                    "type": "integer",
+                    "example": 1
                 }
             }
         },
@@ -18525,6 +18529,10 @@ const docTemplate = `{
                 "updated_at": {
                     "description": "更新时间",
                     "type": "string"
+                },
+                "work_item_id": {
+                    "description": "关联的 WorkItem（tickets.id），唯一，必填——迁移完成前允许为空",
+                    "type": "integer"
                 }
             }
         },
@@ -19676,6 +19684,10 @@ const docTemplate = `{
                 },
                 "version": {
                     "description": "版本号（乐观锁）",
+                    "type": "integer"
+                },
+                "work_item_id": {
+                    "description": "关联的 WorkItem（tickets.id），唯一，必填——Incident 迁移到 WorkItem 后每条记录必须有且仅有一条对应的 tickets 行",
                     "type": "integer"
                 }
             }
@@ -21022,6 +21034,10 @@ const docTemplate = `{
                     "description": "更新时间",
                     "type": "string"
                 },
+                "work_item_id": {
+                    "description": "关联的 WorkItem（tickets.id），唯一，必填——迁移完成前允许为空",
+                    "type": "integer"
+                },
                 "workaround": {
                     "description": "临时解决方案",
                     "type": "string"
@@ -21072,6 +21088,10 @@ const docTemplate = `{
                 "category": {
                     "description": "流程分类: operations, rd, finance, hr",
                     "type": "string"
+                },
+                "category_id": {
+                    "description": "TicketCategory ID，可选——比 category 字符串更精确的分类匹配条件，后续 ProcessBindingService.FindBestBinding 可以按它精确匹配",
+                    "type": "integer"
                 },
                 "conditions": {
                     "description": "匹配条件JSON",
@@ -21453,8 +21473,16 @@ const docTemplate = `{
         "ent.ProcessInstance": {
             "type": "object",
             "properties": {
+                "business_id": {
+                    "description": "结构化业务主键（迁移完成前是各专业域自己的表主键，迁移完成后是 WorkItem ID/tickets.id），与 business_type 成对使用",
+                    "type": "integer"
+                },
                 "business_key": {
                     "description": "业务键，关联业务实体",
+                    "type": "string"
+                },
+                "business_type": {
+                    "description": "结构化业务类型。Wave 1 写入的是 dto.BusinessType 取值（ticket/change/incident/service_request/problem/release，见 dto/bpmn_process_trigger_dto.go），即迁移前的词表；不是 recordClass 词表——两者有两个值对不上：change vs change_request、ticket vs generic。收敛到 recordClass（generic/service_request_item/incident/problem/change_request/catalog_task）由 Wave 2 各域迁移任务负责，在对应域拥有 WorkItem 之后进行。与 business_key 由同一次 TriggerProcess 调用原子写入，不从 variables JSON 里现取",
                     "type": "string"
                 },
                 "created_at": {
@@ -22955,6 +22983,10 @@ const docTemplate = `{
                     "description": "处理人ID",
                     "type": "integer"
                 },
+                "assignment_group_id": {
+                    "description": "当前处理组ID",
+                    "type": "integer"
+                },
                 "category_id": {
                     "description": "分类ID",
                     "type": "integer"
@@ -23028,6 +23060,10 @@ const docTemplate = `{
                     "description": "MSP工单ID(跨租户)",
                     "type": "string"
                 },
+                "opened_by_id": {
+                    "description": "实际录入/触发者ID（区别于 requester_id 服务接受者）",
+                    "type": "integer"
+                },
                 "parent_ticket_id": {
                     "description": "父工单ID",
                     "type": "integer"
@@ -23050,6 +23086,10 @@ const docTemplate = `{
                 },
                 "rating_comment": {
                     "description": "评分评论",
+                    "type": "string"
+                },
+                "record_class": {
+                    "description": "WorkItem 记录类型：generic/service_request_item/incident/problem/change_request/catalog_task；创建后不可变，由领域服务在事务内校验，不在 schema 层强制",
                     "type": "string"
                 },
                 "requester_id": {

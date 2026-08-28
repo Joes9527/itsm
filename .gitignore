@@ -143,6 +143,8 @@ graphify-out/cache/
 .graphify_*
 
 # AI tool configs are developer-specific; only project-owned Skill definitions are tracked.
+.agents/
+SKILL.md
 .trae/
 !.trae/
 .trae/*
@@ -157,6 +159,7 @@ graphify-out/cache/
 .codex-loop/
 .workbuddy/
 .playwright-cli/
+.playwright-mcp/
 
 # Python / Test
 # 注释：tests/ 目录本身需要被跟踪,只有 ephemeral 测试产物应该被忽略。
