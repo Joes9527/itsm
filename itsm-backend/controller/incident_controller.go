@@ -1314,7 +1314,7 @@ func (c *IncidentController) UpdateClassification(ctx *gin.Context) {
 // @Tags 事件管理
 // @Produce json
 // @Param id path int true "事件ID"
-// @Success 200 {object} common.Response{data=[]gin.H}
+// @Success 200 {object} common.Response{data=[]dto.IncidentCommentResponse}
 // @Failure 400 {object} common.Response
 // @Failure 404 {object} common.Response
 // @Failure 500 {object} common.Response
@@ -1409,7 +1409,7 @@ func (c *IncidentController) GetIncidentComments(ctx *gin.Context) {
 // @Produce json
 // @Param id path int true "事件ID"
 // @Param request body dto.CreateIncidentCommentRequest true "创建评论请求"
-// @Success 200 {object} common.Response{data=gin.H}
+// @Success 200 {object} common.Response{data=dto.IncidentCommentResponse}
 // @Failure 400 {object} common.Response
 // @Failure 404 {object} common.Response
 // @Failure 500 {object} common.Response

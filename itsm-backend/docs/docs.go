@@ -15,194 +15,6 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/ai/chat": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "基于知识库的检索增强问答",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "ai"
-                ],
-                "summary": "AI 问答（RAG）",
-                "parameters": [
-                    {
-                        "description": "查询参数",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/controller.ChatRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/ai/tools": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "列出可用工具",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "ai"
-                ],
-                "summary": "工具清单",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/ai/tools/execute": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "只读工具直接执行，危险工具生成审批记录",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "ai"
-                ],
-                "summary": "执行工具",
-                "parameters": [
-                    {
-                        "description": "执行参数",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/controller.ToolExecRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/ai/tools/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "根据ID查询工具执行记录状态与结果",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "ai"
-                ],
-                "summary": "查询工具执行状态",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "invocation id",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/ai/tools/{id}/approve": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员审批危险工具执行请求",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "ai"
-                ],
-                "summary": "审批工具执行",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "invocation id",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "审批参数",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/controller.ApproveRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
         "/api/knowledge/search": {
             "post": {
                 "description": "基于关键词搜索知识库文章",
@@ -719,164 +531,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/approval-workflows": {
-            "get": {
-                "description": "获取所有审批工作流，支持分页和过滤",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "审批管理"
-                ],
-                "summary": "获取审批工作流列表",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "工单类型",
-                        "name": "ticket_type",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "优先级",
-                        "name": "priority",
-                        "in": "query"
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "是否激活",
-                        "name": "is_active",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "页码",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "每页数量",
-                        "name": "page_size",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "description": "创建新的审批工作流定义",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "审批管理"
-                ],
-                "summary": "创建审批工作流",
-                "parameters": [
-                    {
-                        "description": "工作流信息",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.CreateApprovalWorkflowRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/approval-workflows/{id}": {
-            "put": {
-                "description": "更新已有的审批工作流定义",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "审批管理"
-                ],
-                "summary": "更新审批工作流",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "工作流ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "工作流信息",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.UpdateApprovalWorkflowRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "description": "删除指定的审批工作流",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "审批管理"
-                ],
-                "summary": "删除审批工作流",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "工作流ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/assets": {
             "get": {
                 "description": "获取所有资产的列表，支持分页和筛选",
@@ -1137,7 +791,7 @@ const docTemplate = `{
         },
         "/api/v1/auth/login": {
             "post": {
-                "description": "使用用户名/邮箱和密码登录，返回访问令牌和刷新令牌",
+                "description": "使用用户名/邮箱和密码登录，通过 HttpOnly Cookie 建立会话",
                 "consumes": [
                     "application/json"
                 ],
@@ -1161,7 +815,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "登录成功，返回 tokens 和用户信息",
+                        "description": "登录成功，返回用户和租户信息",
                         "schema": {
                             "$ref": "#/definitions/dto.LoginResponse"
                         }
@@ -1280,7 +934,7 @@ const docTemplate = `{
         },
         "/api/v1/auth/refresh": {
             "post": {
-                "description": "使用刷新令牌获取新的访问令牌",
+                "description": "使用 HttpOnly 刷新令牌 Cookie 获取新的访问令牌",
                 "consumes": [
                     "application/json"
                 ],
@@ -1293,10 +947,9 @@ const docTemplate = `{
                 "summary": "刷新访问令牌",
                 "parameters": [
                     {
-                        "description": "刷新令牌请求",
+                        "description": "非浏览器客户端的刷新令牌（兼容）",
                         "name": "request",
                         "in": "body",
-                        "required": true,
                         "schema": {
                             "$ref": "#/definitions/dto.RefreshTokenRequest"
                         }
@@ -1304,7 +957,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "刷新成功，返回新的访问令牌",
+                        "description": "刷新成功，Cookie 已更新",
                         "schema": {
                             "$ref": "#/definitions/dto.RefreshTokenResponse"
                         }
@@ -1453,7 +1106,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "切换成功，返回新的租户信息",
+                        "description": "切换成功，Cookie 已更新并返回新的租户信息",
                         "schema": {
                             "$ref": "#/definitions/dto.LoginResponse"
                         }
@@ -1735,432 +1388,6 @@ const docTemplate = `{
                                     }
                                 }
                             ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/changes/approval-workflows": {
-            "post": {
-                "description": "为指定变更创建审批工作流",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "变更审批"
-                ],
-                "summary": "创建变更审批工作流",
-                "parameters": [
-                    {
-                        "description": "创建审批工作流请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.ChangeApprovalWorkflowRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/changes/approvals": {
-            "post": {
-                "description": "为指定变更创建审批记录",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "变更审批"
-                ],
-                "summary": "创建变更审批",
-                "parameters": [
-                    {
-                        "description": "创建审批请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.CreateChangeApprovalRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.ChangeApprovalResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/changes/approvals/{id}": {
-            "put": {
-                "description": "更新指定审批记录的状态",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "变更审批"
-                ],
-                "summary": "更新变更审批状态",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "审批ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "更新审批请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.UpdateChangeApprovalRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.ChangeApprovalResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/changes/implementation-plans": {
-            "post": {
-                "description": "为指定变更创建实施计划",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "变更实施计划"
-                ],
-                "summary": "创建变更实施计划",
-                "parameters": [
-                    {
-                        "description": "创建实施计划请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.CreateChangeImplementationPlanRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.ChangeImplementationPlanResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/changes/risk-assessments": {
-            "post": {
-                "description": "为指定变更创建风险评估",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "变更风险评估"
-                ],
-                "summary": "创建变更风险评估",
-                "parameters": [
-                    {
-                        "description": "创建风险评估请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.CreateChangeRiskAssessmentRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.ChangeRiskAssessmentResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/changes/rollback-plans": {
-            "post": {
-                "description": "为指定变更创建回滚计划",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "变更回滚计划"
-                ],
-                "summary": "创建变更回滚计划",
-                "parameters": [
-                    {
-                        "description": "创建回滚计划请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.CreateChangeRollbackPlanRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.ChangeRollbackPlanResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/changes/{id}/approval-summary": {
-            "get": {
-                "description": "获取指定变更的审批摘要信息",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "变更审批"
-                ],
-                "summary": "获取变更审批摘要",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "变更ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.ChangeApprovalSummary"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/changes/{id}/risk-assessment": {
-            "get": {
-                "description": "获取指定变更的风险评估信息",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "变更风险评估"
-                ],
-                "summary": "获取变更风险评估",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "变更ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.ChangeRiskAssessmentResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/changes/{id}/rollback-plans/{rollbackPlanId}/execute": {
-            "post": {
-                "description": "执行指定变更的回滚操作",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "变更回滚计划"
-                ],
-                "summary": "执行变更回滚",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "变更ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "回滚计划ID",
-                        "name": "rollbackPlanId",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "回滚执行请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.ChangeRollbackExecutionResponse"
                         }
                     },
                     "400": {
@@ -7647,7 +6874,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/gin.H"
+                                                "$ref": "#/definitions/dto.IncidentCommentResponse"
                                             }
                                         }
                                     }
@@ -7717,7 +6944,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/gin.H"
+                                            "$ref": "#/definitions/dto.IncidentCommentResponse"
                                         }
                                     }
                                 }
@@ -9920,634 +9147,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/service-catalogs": {
-            "get": {
-                "description": "分页获取服务目录列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "服务目录"
-                ],
-                "summary": "获取服务目录列表",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "页码",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 10,
-                        "description": "每页数量",
-                        "name": "size",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "分类过滤",
-                        "name": "category",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "状态过滤",
-                        "name": "status",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/common.Response"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/dto.ServiceCatalogListResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "创建新的服务目录",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "服务目录"
-                ],
-                "summary": "创建服务目录",
-                "parameters": [
-                    {
-                        "description": "服务目录信息",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.CreateServiceCatalogRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/common.Response"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/dto.ServiceCatalogResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/service-catalogs/{id}": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "更新指定的服务目录",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "服务目录"
-                ],
-                "summary": "更新服务目录",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "服务目录ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "服务目录更新信息",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.UpdateServiceCatalogRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/common.Response"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/dto.ServiceCatalogResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/service-requests": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "发起新的服务请求",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "服务请求"
-                ],
-                "summary": "创建服务请求",
-                "parameters": [
-                    {
-                        "description": "服务请求信息",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.CreateServiceRequestRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/common.Response"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/dto.ServiceRequestResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/service-requests/approvals/pending": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "根据当前用户角色返回需要其处理的服务请求列表（V0：默认三段审批）",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "服务请求"
-                ],
-                "summary": "获取审批待办",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "页码",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 10,
-                        "description": "每页数量",
-                        "name": "size",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/common.Response"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/dto.ServiceRequestListResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/service-requests/me": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "查询当前登录用户的服务请求列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "服务请求"
-                ],
-                "summary": "获取当前用户的服务请求列表",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "页码",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 10,
-                        "description": "每页数量",
-                        "name": "size",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "pending",
-                            "in_progress",
-                            "completed",
-                            "rejected"
-                        ],
-                        "type": "string",
-                        "description": "状态",
-                        "name": "status",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/common.Response"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/dto.ServiceRequestListResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/service-requests/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "根据ID获取服务请求详情",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "服务请求"
-                ],
-                "summary": "获取服务请求详情",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "服务请求ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/common.Response"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/dto.ServiceRequestResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/service-requests/{id}/approvals": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "返回指定服务请求的审批记录列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "服务请求"
-                ],
-                "summary": "获取服务请求审批记录",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "服务请求ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/common.Response"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/dto.ServiceRequestApprovalResponse"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "对当前步骤执行 approve/reject（V0：默认三段审批）",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "服务请求"
-                ],
-                "summary": "服务请求审批",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "服务请求ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "审批动作",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.ServiceRequestApprovalActionRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/common.Response"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/dto.ServiceRequestResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/service-requests/{id}/provision": {
             "post": {
                 "security": [
@@ -10665,82 +9264,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/service-requests/{id}/status": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "更新服务请求的状态",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "服务请求"
-                ],
-                "summary": "更新服务请求状态",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "服务请求ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "状态更新信息",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.UpdateServiceRequestStatusRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/common.Response"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/dto.ServiceRequestResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/simple/notifications": {
             "get": {
                 "description": "获取当前用户的通知列表",
@@ -10781,242 +9304,6 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "description": "通知ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/sla-policies": {
-            "get": {
-                "description": "获取所有SLA策略列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "SLA策略管理"
-                ],
-                "summary": "获取SLA策略列表",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "description": "创建新的SLA策略",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "SLA策略管理"
-                ],
-                "summary": "创建SLA策略",
-                "parameters": [
-                    {
-                        "description": "SLA策略信息",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.CreateSLAPolicyRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/sla-policies/compliance-rate": {
-            "get": {
-                "description": "获取指定时间范围内的SLA合规率",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "SLA策略管理"
-                ],
-                "summary": "获取SLA合规率",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "开始日期",
-                        "name": "start_date",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "结束日期",
-                        "name": "end_date",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/sla-policies/match": {
-            "get": {
-                "description": "根据工单属性匹配最优SLA策略",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "SLA策略管理"
-                ],
-                "summary": "匹配SLA策略",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "工单类型",
-                        "name": "ticket_type",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "优先级",
-                        "name": "priority",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "客户等级",
-                        "name": "customer_tier",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/sla-policies/{id}": {
-            "get": {
-                "description": "根据ID获取SLA策略详情",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "SLA策略管理"
-                ],
-                "summary": "获取单个SLA策略",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "SLA策略ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "description": "更新SLA策略信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "SLA策略管理"
-                ],
-                "summary": "更新SLA策略",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "SLA策略ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "SLA策略信息",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.UpdateSLAPolicyRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "description": "删除SLA策略",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "SLA策略管理"
-                ],
-                "summary": "删除SLA策略",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "SLA策略ID",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -11406,253 +9693,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/ticket-types": {
-            "get": {
-                "description": "获取工单类型列表，支持分页和筛选",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "工单类型"
-                ],
-                "summary": "获取工单类型列表",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "状态筛选",
-                        "name": "status",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "关键词搜索",
-                        "name": "keyword",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "页码",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 20,
-                        "description": "每页数量",
-                        "name": "page_size",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/common.Response"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/dto.TicketTypeListResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            },
-            "post": {
-                "description": "创建新的工单类型，包括自定义字段、审批流程等配置",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "工单类型"
-                ],
-                "summary": "创建工单类型",
-                "parameters": [
-                    {
-                        "description": "创建工单类型请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.CreateTicketTypeRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/common.Response"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/dto.TicketTypeDefinition"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/ticket-types/:id": {
-            "get": {
-                "description": "根据ID获取工单类型的详细信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "工单类型"
-                ],
-                "summary": "获取工单类型详情",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "工单类型ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/common.Response"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/dto.TicketTypeDefinition"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            },
-            "put": {
-                "description": "更新工单类型配置",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "工单类型"
-                ],
-                "summary": "更新工单类型",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "工单类型ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "更新工单类型请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.UpdateTicketTypeRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/common.Response"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/dto.TicketTypeDefinition"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "description": "删除指定的工单类型",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "工单类型"
-                ],
-                "summary": "删除工单类型",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "工单类型ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/common.Response"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "object",
-                                            "additionalProperties": {
-                                                "type": "string"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/tickets": {
             "post": {
                 "description": "创建新的工单",
@@ -11682,6 +9722,50 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/common.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tickets/:id/approval-decisions": {
+            "get": {
+                "description": "返回该工单在 BPMN 引擎里留下的全部审批决策记录（只读）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "工单流转"
+                ],
+                "summary": "获取工单的 BPMN 审批决策历史",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "工单ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/common.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/dto.ProcessApprovalDecisionResponse"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     }
                 }
@@ -11719,6 +9803,97 @@ const docTemplate = `{
                                     "properties": {
                                         "data": {
                                             "$ref": "#/definitions/dto.TicketCCListResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tickets/:id/relations": {
+            "get": {
+                "description": "返回指定工单的关联工单明细（当前仅支持父子关系）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "工单管理"
+                ],
+                "summary": "获取工单的关联列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "工单ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/common.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/dto.TicketRelation"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tickets/:id/relations/stats": {
+            "get": {
+                "description": "返回指定工单的关联工单统计数据（父子工单、阻塞依赖等）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "工单管理"
+                ],
+                "summary": "获取工单关联统计",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "工单ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/common.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.TicketRelationStats"
                                         }
                                     }
                                 }
@@ -13321,6 +11496,40 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "cirelationship.ImpactLevel": {
+            "type": "string",
+            "enum": [
+                "medium",
+                "critical",
+                "high",
+                "medium",
+                "low"
+            ],
+            "x-enum-varnames": [
+                "DefaultImpactLevel",
+                "ImpactLevelCritical",
+                "ImpactLevelHigh",
+                "ImpactLevelMedium",
+                "ImpactLevelLow"
+            ]
+        },
+        "cirelationship.Strength": {
+            "type": "string",
+            "enum": [
+                "medium",
+                "critical",
+                "high",
+                "medium",
+                "low"
+            ],
+            "x-enum-varnames": [
+                "DefaultStrength",
+                "StrengthCritical",
+                "StrengthHigh",
+                "StrengthMedium",
+                "StrengthLow"
+            ]
+        },
         "common.Response": {
             "type": "object",
             "properties": {
@@ -13329,49 +11538,6 @@ const docTemplate = `{
                 },
                 "data": {},
                 "message": {
-                    "type": "string"
-                }
-            }
-        },
-        "controller.ApproveRequest": {
-            "type": "object",
-            "properties": {
-                "approve": {
-                    "type": "boolean"
-                },
-                "reason": {
-                    "type": "string"
-                }
-            }
-        },
-        "controller.ChatRequest": {
-            "type": "object",
-            "required": [
-                "query"
-            ],
-            "properties": {
-                "conversationId": {
-                    "type": "integer"
-                },
-                "limit": {
-                    "type": "integer"
-                },
-                "query": {
-                    "type": "string"
-                }
-            }
-        },
-        "controller.ToolExecRequest": {
-            "type": "object",
-            "required": [
-                "name"
-            ],
-            "properties": {
-                "args": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "name": {
                     "type": "string"
                 }
             }
@@ -13453,76 +11619,6 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
-        },
-        "dto.ApprovalChainDefinition": {
-            "type": "object",
-            "properties": {
-                "allowDelegate": {
-                    "type": "boolean"
-                },
-                "allowReject": {
-                    "type": "boolean"
-                },
-                "approvalType": {
-                    "description": "any, all, majority",
-                    "type": "string"
-                },
-                "approvers": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.ApproverInfo"
-                    }
-                },
-                "conditions": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.ApprovalCondition"
-                    }
-                },
-                "id": {
-                    "type": "string"
-                },
-                "level": {
-                    "type": "integer"
-                },
-                "minimumApprovals": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "rejectAction": {
-                    "description": "end, return, custom",
-                    "type": "string"
-                },
-                "returnToLevel": {
-                    "type": "integer"
-                },
-                "timeout": {
-                    "description": "超时时间（小时）",
-                    "type": "integer"
-                },
-                "timeoutAction": {
-                    "description": "auto_approve, auto_reject, escalate",
-                    "type": "string"
-                }
-            }
-        },
-        "dto.ApprovalCondition": {
-            "type": "object",
-            "properties": {
-                "field": {
-                    "type": "string"
-                },
-                "operator": {
-                    "description": "equals, not_equals, greater_than, less_than",
-                    "type": "string"
-                },
-                "value": {}
-            }
-        },
-        "dto.ApprovalNodeRequest": {
-            "type": "object"
         },
         "dto.ApprovalRecord": {
             "type": "object",
@@ -13615,21 +11711,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.ApproverInfo": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string"
-                },
-                "type": {
-                    "description": "user, role, department, dynamic",
-                    "type": "string"
-                },
-                "value": {
-                    "description": "用户ID、角色名、部门ID等"
-                }
-            }
-        },
         "dto.ArticleParticipantResponse": {
             "type": "object",
             "properties": {
@@ -13708,57 +11789,6 @@ const docTemplate = `{
                 "customerTenantId": {
                     "type": "integer"
                 }
-            }
-        },
-        "dto.AssignToConfig": {
-            "type": "object",
-            "properties": {
-                "type": {
-                    "description": "user, role, department, round_robin, load_balance",
-                    "type": "string"
-                },
-                "value": {
-                    "description": "用户ID、角色名、部门ID等"
-                }
-            }
-        },
-        "dto.AssignmentRule": {
-            "type": "object",
-            "properties": {
-                "assignTo": {
-                    "$ref": "#/definitions/dto.AssignToConfig"
-                },
-                "conditions": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.AssignmentRuleCondition"
-                    }
-                },
-                "enabled": {
-                    "type": "boolean"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "priority": {
-                    "type": "integer"
-                }
-            }
-        },
-        "dto.AssignmentRuleCondition": {
-            "type": "object",
-            "properties": {
-                "field": {
-                    "type": "string"
-                },
-                "operator": {
-                    "description": "equals, not_equals, contains, greater_than, less_than",
-                    "type": "string"
-                },
-                "value": {}
             }
         },
         "dto.AttachmentInfo": {
@@ -14873,495 +12903,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.ChangeApprovalChainItem": {
-            "type": "object",
-            "required": [
-                "approverId",
-                "level",
-                "role"
-            ],
-            "properties": {
-                "approverId": {
-                    "description": "审批人ID",
-                    "type": "integer"
-                },
-                "isRequired": {
-                    "description": "是否必需审批",
-                    "type": "boolean"
-                },
-                "level": {
-                    "description": "审批级别",
-                    "type": "integer"
-                },
-                "role": {
-                    "description": "审批角色",
-                    "type": "string"
-                }
-            }
-        },
-        "dto.ChangeApprovalChainResponse": {
-            "type": "object",
-            "properties": {
-                "approverId": {
-                    "description": "审批人ID",
-                    "type": "integer"
-                },
-                "approverName": {
-                    "description": "审批人姓名",
-                    "type": "string"
-                },
-                "changeId": {
-                    "description": "变更ID",
-                    "type": "integer"
-                },
-                "createdAt": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "id": {
-                    "description": "审批链ID",
-                    "type": "integer"
-                },
-                "isRequired": {
-                    "description": "是否必需审批",
-                    "type": "boolean"
-                },
-                "level": {
-                    "description": "审批级别",
-                    "type": "integer"
-                },
-                "role": {
-                    "description": "审批角色",
-                    "type": "string"
-                },
-                "status": {
-                    "description": "审批状态",
-                    "type": "string"
-                }
-            }
-        },
-        "dto.ChangeApprovalResponse": {
-            "type": "object",
-            "properties": {
-                "approvedAt": {
-                    "description": "审批时间",
-                    "type": "string"
-                },
-                "approverId": {
-                    "description": "审批人ID",
-                    "type": "integer"
-                },
-                "approverName": {
-                    "description": "审批人姓名",
-                    "type": "string"
-                },
-                "changeId": {
-                    "description": "变更ID",
-                    "type": "integer"
-                },
-                "comment": {
-                    "description": "审批意见",
-                    "type": "string"
-                },
-                "createdAt": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "id": {
-                    "description": "审批ID",
-                    "type": "integer"
-                },
-                "status": {
-                    "description": "审批状态",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/dto.ChangeStatus"
-                        }
-                    ]
-                }
-            }
-        },
-        "dto.ChangeApprovalStatus": {
-            "type": "string",
-            "enum": [
-                "pending",
-                "approved",
-                "rejected"
-            ],
-            "x-enum-varnames": [
-                "ChangeApprovalStatusPending",
-                "ChangeApprovalStatusApproved",
-                "ChangeApprovalStatusRejected"
-            ]
-        },
-        "dto.ChangeApprovalSummary": {
-            "type": "object",
-            "properties": {
-                "approvalHistory": {
-                    "description": "审批历史",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.ChangeApprovalResponse"
-                    }
-                },
-                "approvalStatus": {
-                    "description": "审批状态",
-                    "type": "string"
-                },
-                "changeId": {
-                    "description": "变更ID",
-                    "type": "integer"
-                },
-                "currentLevel": {
-                    "description": "当前审批级别",
-                    "type": "integer"
-                },
-                "nextApprover": {
-                    "description": "下一个审批人",
-                    "type": "string"
-                },
-                "pendingApprovals": {
-                    "description": "待审批项目",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.ChangeApprovalChainResponse"
-                    }
-                },
-                "totalLevels": {
-                    "description": "总审批级别",
-                    "type": "integer"
-                }
-            }
-        },
-        "dto.ChangeApprovalWorkflowRequest": {
-            "type": "object",
-            "required": [
-                "approvalChain",
-                "changeId"
-            ],
-            "properties": {
-                "approvalChain": {
-                    "description": "审批链",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.ChangeApprovalChainItem"
-                    }
-                },
-                "changeId": {
-                    "description": "变更ID",
-                    "type": "integer"
-                }
-            }
-        },
-        "dto.ChangeImplementationPlanResponse": {
-            "type": "object",
-            "properties": {
-                "changeId": {
-                    "description": "变更ID",
-                    "type": "integer"
-                },
-                "createdAt": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "dependencies": {
-                    "description": "依赖关系",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "description": {
-                    "description": "阶段描述",
-                    "type": "string"
-                },
-                "endDate": {
-                    "description": "结束时间",
-                    "type": "string"
-                },
-                "id": {
-                    "description": "实施计划ID",
-                    "type": "integer"
-                },
-                "phase": {
-                    "description": "实施阶段",
-                    "type": "string"
-                },
-                "prerequisites": {
-                    "description": "前置条件",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "responsible": {
-                    "description": "负责人",
-                    "type": "string"
-                },
-                "startDate": {
-                    "description": "开始时间",
-                    "type": "string"
-                },
-                "status": {
-                    "description": "状态",
-                    "type": "string"
-                },
-                "successCriteria": {
-                    "description": "成功标准",
-                    "type": "string"
-                },
-                "tasks": {
-                    "description": "具体任务",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "updatedAt": {
-                    "description": "更新时间",
-                    "type": "string"
-                }
-            }
-        },
-        "dto.ChangeRisk": {
-            "type": "string",
-            "enum": [
-                "low",
-                "medium",
-                "high"
-            ],
-            "x-enum-comments": {
-                "ChangeRiskHigh": "高",
-                "ChangeRiskLow": "低",
-                "ChangeRiskMedium": "中"
-            },
-            "x-enum-descriptions": [
-                "低",
-                "中",
-                "高"
-            ],
-            "x-enum-varnames": [
-                "ChangeRiskLow",
-                "ChangeRiskMedium",
-                "ChangeRiskHigh"
-            ]
-        },
-        "dto.ChangeRiskAssessmentResponse": {
-            "type": "object",
-            "properties": {
-                "changeId": {
-                    "description": "变更ID",
-                    "type": "integer"
-                },
-                "contingencyPlan": {
-                    "description": "应急计划",
-                    "type": "string"
-                },
-                "createdAt": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "id": {
-                    "description": "风险评估ID",
-                    "type": "integer"
-                },
-                "impactAnalysis": {
-                    "description": "影响分析",
-                    "type": "string"
-                },
-                "mitigationMeasures": {
-                    "description": "缓解措施",
-                    "type": "string"
-                },
-                "riskDescription": {
-                    "description": "风险描述",
-                    "type": "string"
-                },
-                "riskLevel": {
-                    "description": "风险等级",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/dto.ChangeRisk"
-                        }
-                    ]
-                },
-                "riskOwner": {
-                    "description": "风险责任人",
-                    "type": "string"
-                },
-                "riskReviewDate": {
-                    "description": "风险评审日期",
-                    "type": "string"
-                },
-                "updatedAt": {
-                    "description": "更新时间",
-                    "type": "string"
-                }
-            }
-        },
-        "dto.ChangeRollbackExecutionResponse": {
-            "type": "object",
-            "properties": {
-                "changeId": {
-                    "description": "变更ID",
-                    "type": "integer"
-                },
-                "comments": {
-                    "description": "备注",
-                    "type": "string"
-                },
-                "createdAt": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "endTime": {
-                    "description": "结束时间",
-                    "type": "string"
-                },
-                "id": {
-                    "description": "执行记录ID",
-                    "type": "integer"
-                },
-                "initiatedBy": {
-                    "description": "发起人ID",
-                    "type": "integer"
-                },
-                "initiatedByName": {
-                    "description": "发起人姓名",
-                    "type": "string"
-                },
-                "result": {
-                    "description": "执行结果",
-                    "type": "string"
-                },
-                "rollbackPlanId": {
-                    "description": "回滚计划ID",
-                    "type": "integer"
-                },
-                "startTime": {
-                    "description": "开始时间",
-                    "type": "string"
-                },
-                "status": {
-                    "description": "状态",
-                    "type": "string"
-                },
-                "triggerReason": {
-                    "description": "触发原因",
-                    "type": "string"
-                },
-                "updatedAt": {
-                    "description": "更新时间",
-                    "type": "string"
-                }
-            }
-        },
-        "dto.ChangeRollbackPlanResponse": {
-            "type": "object",
-            "properties": {
-                "approvalRequired": {
-                    "description": "是否需要审批",
-                    "type": "boolean"
-                },
-                "changeId": {
-                    "description": "变更ID",
-                    "type": "integer"
-                },
-                "communicationPlan": {
-                    "description": "沟通计划",
-                    "type": "string"
-                },
-                "createdAt": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "estimatedTime": {
-                    "description": "预估时间",
-                    "type": "string"
-                },
-                "id": {
-                    "description": "回滚计划ID",
-                    "type": "integer"
-                },
-                "responsible": {
-                    "description": "负责人",
-                    "type": "string"
-                },
-                "rollbackSteps": {
-                    "description": "回滚步骤",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "testPlan": {
-                    "description": "测试计划",
-                    "type": "string"
-                },
-                "triggerConditions": {
-                    "description": "触发条件",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "updatedAt": {
-                    "description": "更新时间",
-                    "type": "string"
-                }
-            }
-        },
-        "dto.ChangeStatus": {
-            "type": "string",
-            "enum": [
-                "draft",
-                "pending",
-                "approved",
-                "rejected",
-                "scheduled",
-                "in_progress",
-                "completed",
-                "failed",
-                "rolled_back",
-                "cancelled"
-            ],
-            "x-enum-comments": {
-                "ChangeStatusApproved": "已批准",
-                "ChangeStatusCancelled": "已取消",
-                "ChangeStatusCompleted": "已完成",
-                "ChangeStatusDraft": "草稿",
-                "ChangeStatusFailed": "实施失败",
-                "ChangeStatusInProgress": "实施中",
-                "ChangeStatusPending": "待审批",
-                "ChangeStatusRejected": "已拒绝",
-                "ChangeStatusRolledBack": "已回滚",
-                "ChangeStatusScheduled": "已排期"
-            },
-            "x-enum-descriptions": [
-                "草稿",
-                "待审批",
-                "已批准",
-                "已拒绝",
-                "已排期",
-                "实施中",
-                "已完成",
-                "实施失败",
-                "已回滚",
-                "已取消"
-            ],
-            "x-enum-varnames": [
-                "ChangeStatusDraft",
-                "ChangeStatusPending",
-                "ChangeStatusApproved",
-                "ChangeStatusRejected",
-                "ChangeStatusScheduled",
-                "ChangeStatusInProgress",
-                "ChangeStatusCompleted",
-                "ChangeStatusFailed",
-                "ChangeStatusRolledBack",
-                "ChangeStatusCancelled"
-            ]
-        },
         "dto.ChangeUserStatusRequest": {
             "type": "object",
             "properties": {
@@ -15695,9 +13236,6 @@ const docTemplate = `{
                     ]
                 }
             }
-        },
-        "dto.CreateApprovalWorkflowRequest": {
-            "type": "object"
         },
         "dto.CreateAssetRequest": {
             "type": "object",
@@ -16169,188 +13707,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.CreateChangeApprovalRequest": {
-            "type": "object",
-            "required": [
-                "approverId",
-                "changeId"
-            ],
-            "properties": {
-                "approverId": {
-                    "description": "审批人ID",
-                    "type": "integer"
-                },
-                "changeId": {
-                    "description": "变更ID",
-                    "type": "integer"
-                },
-                "comment": {
-                    "description": "审批意见",
-                    "type": "string"
-                }
-            }
-        },
-        "dto.CreateChangeImplementationPlanRequest": {
-            "type": "object",
-            "required": [
-                "changeId",
-                "description",
-                "phase",
-                "responsible",
-                "successCriteria",
-                "tasks"
-            ],
-            "properties": {
-                "changeId": {
-                    "description": "变更ID",
-                    "type": "integer"
-                },
-                "dependencies": {
-                    "description": "依赖关系",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "description": {
-                    "description": "阶段描述",
-                    "type": "string"
-                },
-                "endDate": {
-                    "description": "结束时间",
-                    "type": "string"
-                },
-                "phase": {
-                    "description": "实施阶段",
-                    "type": "string"
-                },
-                "prerequisites": {
-                    "description": "前置条件",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "responsible": {
-                    "description": "负责人",
-                    "type": "string"
-                },
-                "startDate": {
-                    "description": "开始时间",
-                    "type": "string"
-                },
-                "successCriteria": {
-                    "description": "成功标准",
-                    "type": "string"
-                },
-                "tasks": {
-                    "description": "具体任务",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
-        "dto.CreateChangeRiskAssessmentRequest": {
-            "type": "object",
-            "required": [
-                "changeId",
-                "impactAnalysis",
-                "mitigationMeasures",
-                "riskDescription",
-                "riskLevel",
-                "riskOwner"
-            ],
-            "properties": {
-                "changeId": {
-                    "description": "变更ID",
-                    "type": "integer"
-                },
-                "contingencyPlan": {
-                    "description": "应急计划",
-                    "type": "string"
-                },
-                "impactAnalysis": {
-                    "description": "影响分析",
-                    "type": "string"
-                },
-                "mitigationMeasures": {
-                    "description": "缓解措施",
-                    "type": "string"
-                },
-                "riskDescription": {
-                    "description": "风险描述",
-                    "type": "string"
-                },
-                "riskLevel": {
-                    "description": "风险等级",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/dto.ChangeRisk"
-                        }
-                    ]
-                },
-                "riskOwner": {
-                    "description": "风险责任人",
-                    "type": "string"
-                },
-                "riskReviewDate": {
-                    "description": "风险评审日期",
-                    "type": "string"
-                }
-            }
-        },
-        "dto.CreateChangeRollbackPlanRequest": {
-            "type": "object",
-            "required": [
-                "changeId",
-                "estimatedTime",
-                "responsible",
-                "rollbackSteps",
-                "triggerConditions"
-            ],
-            "properties": {
-                "approvalRequired": {
-                    "description": "是否需要审批",
-                    "type": "boolean"
-                },
-                "changeId": {
-                    "description": "变更ID",
-                    "type": "integer"
-                },
-                "communicationPlan": {
-                    "description": "沟通计划",
-                    "type": "string"
-                },
-                "estimatedTime": {
-                    "description": "预估时间",
-                    "type": "string"
-                },
-                "responsible": {
-                    "description": "负责人",
-                    "type": "string"
-                },
-                "rollbackSteps": {
-                    "description": "回滚步骤",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "testPlan": {
-                    "description": "测试计划",
-                    "type": "string"
-                },
-                "triggerConditions": {
-                    "description": "触发条件",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
         "dto.CreateCloudAccountRequest": {
             "type": "object",
             "required": [
@@ -16730,148 +14086,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.CreateSLAPolicyRequest": {
-            "type": "object",
-            "required": [
-                "name"
-            ],
-            "properties": {
-                "businessHours": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "customerTier": {
-                    "description": "platinum/gold/silver/bronze",
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "escalationRules": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "excludeHolidays": {
-                    "type": "boolean"
-                },
-                "excludeWeekends": {
-                    "type": "boolean"
-                },
-                "isActive": {
-                    "type": "boolean"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "priority": {
-                    "description": "critical/high/medium/low",
-                    "type": "string"
-                },
-                "priorityScore": {
-                    "type": "integer"
-                },
-                "resolutionTimeMinutes": {
-                    "type": "integer"
-                },
-                "responseTimeMinutes": {
-                    "type": "integer"
-                },
-                "tenantId": {
-                    "type": "integer"
-                },
-                "ticketType": {
-                    "description": "incident/problem/change/request",
-                    "type": "string"
-                }
-            }
-        },
-        "dto.CreateServiceCatalogRequest": {
-            "type": "object",
-            "required": [
-                "category",
-                "name"
-            ],
-            "properties": {
-                "category": {
-                    "type": "string",
-                    "maxLength": 100
-                },
-                "ciTypeId": {
-                    "type": "integer"
-                },
-                "cloudServiceId": {
-                    "type": "integer"
-                },
-                "deliveryTime": {
-                    "type": "string",
-                    "maxLength": 50
-                },
-                "description": {
-                    "type": "string",
-                    "maxLength": 1000
-                },
-                "name": {
-                    "type": "string",
-                    "maxLength": 255
-                },
-                "status": {
-                    "type": "string",
-                    "enum": [
-                        "enabled",
-                        "disabled"
-                    ]
-                }
-            }
-        },
-        "dto.CreateServiceRequestRequest": {
-            "type": "object",
-            "properties": {
-                "catalogId": {
-                    "type": "integer",
-                    "minimum": 1
-                },
-                "complianceAck": {
-                    "type": "boolean"
-                },
-                "costCenter": {
-                    "type": "string",
-                    "maxLength": 100
-                },
-                "dataClassification": {
-                    "type": "string",
-                    "enum": [
-                        "public",
-                        "internal",
-                        "confidential",
-                        "restricted"
-                    ]
-                },
-                "expireAt": {
-                    "type": "string"
-                },
-                "formData": {
-                    "type": "object",
-                    "additionalProperties": {}
-                },
-                "needsPublicIp": {
-                    "type": "boolean"
-                },
-                "reason": {
-                    "type": "string",
-                    "maxLength": 500
-                },
-                "sourceIpWhitelist": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "title": {
-                    "type": "string",
-                    "maxLength": 255
-                }
-            }
-        },
         "dto.CreateTenantRequest": {
             "type": "object",
             "required": [
@@ -16992,6 +14206,9 @@ const docTemplate = `{
                 "title"
             ],
             "properties": {
+                "approvalChain": {
+                    "description": "审批链步骤（由 SR 流程注入，BPMN 变量用）"
+                },
                 "assigneeId": {
                     "type": "integer"
                 },
@@ -17009,10 +14226,22 @@ const docTemplate = `{
                     "description": "分类ID（优先使用）",
                     "type": "integer"
                 },
+                "conversationId": {
+                    "description": "邮件对话线程ID（Graph conversationId），用于识别用户回复",
+                    "type": "string"
+                },
+                "creatorEmail": {
+                    "description": "创建人邮箱（邮件建单等非交互式来源记录原始发件邮箱）",
+                    "type": "string"
+                },
                 "description": {
                     "type": "string",
                     "maxLength": 5000,
                     "minLength": 0
+                },
+                "externalMessageId": {
+                    "description": "外部消息ID（如邮件 internetMessageId），用于建单去重",
+                    "type": "string"
                 },
                 "formFields": {
                     "type": "object",
@@ -17034,6 +14263,14 @@ const docTemplate = `{
                 "requesterId": {
                     "description": "从认证上下文中获取，前端可不传",
                     "type": "integer"
+                },
+                "source": {
+                    "description": "工单来源：manual=手动创建，service_catalog=服务目录申请",
+                    "type": "string",
+                    "enum": [
+                        "manual",
+                        "service_catalog"
+                    ]
                 },
                 "tagIds": {
                     "description": "标签ID列表",
@@ -17078,66 +14315,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.CreateTicketTypeRequest": {
-            "type": "object",
-            "required": [
-                "code",
-                "name"
-            ],
-            "properties": {
-                "approvalChain": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.ApprovalChainDefinition"
-                    }
-                },
-                "approvalEnabled": {
-                    "type": "boolean"
-                },
-                "assignmentRules": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.AssignmentRule"
-                    }
-                },
-                "autoAssignEnabled": {
-                    "type": "boolean"
-                },
-                "code": {
-                    "type": "string"
-                },
-                "color": {
-                    "type": "string"
-                },
-                "customFields": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.CustomFieldDefinition"
-                    }
-                },
-                "defaultSlaId": {
-                    "type": "integer"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "icon": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "notificationConfig": {
-                    "$ref": "#/definitions/dto.NotificationConfig"
-                },
-                "permissionConfig": {
-                    "$ref": "#/definitions/dto.PermissionConfig"
-                },
-                "slaEnabled": {
-                    "type": "boolean"
-                }
-            }
-        },
         "dto.CreateUserRequest": {
             "type": "object",
             "required": [
@@ -17150,8 +14327,28 @@ const docTemplate = `{
                 "department": {
                     "type": "string"
                 },
+                "departmentId": {
+                    "type": "integer"
+                },
                 "email": {
                     "type": "string"
+                },
+                "functionLine": {
+                    "type": "string"
+                },
+                "gender": {
+                    "type": "string",
+                    "enum": [
+                        "male",
+                        "female"
+                    ]
+                },
+                "isLeader": {
+                    "type": "boolean"
+                },
+                "managerId": {
+                    "description": "ManagerID 直属上级（汇报线，个人级别），不同于 DepartmentID 代表的正式组织归属",
+                    "type": "integer"
                 },
                 "mspRole": {
                     "description": "MSP角色，仅当用户属于MSP租户时使用",
@@ -17169,7 +14366,8 @@ const docTemplate = `{
                 },
                 "password": {
                     "type": "string",
-                    "minLength": 6
+                    "maxLength": 128,
+                    "minLength": 12
                 },
                 "phone": {
                     "type": "string"
@@ -17179,13 +14377,24 @@ const docTemplate = `{
                     "type": "string",
                     "enum": [
                         "super_admin",
-                        "admin",
-                        "manager",
-                        "agent",
-                        "technician",
-                        "security",
+                        "sysadmin",
+                        "it_director",
+                        "ops_director",
+                        "ops_manager",
+                        "ops_engineer",
+                        "dba",
+                        "network_eng",
+                        "sd_manager",
+                        "change_manager",
+                        "service_catalog_admin",
+                        "l1_support",
+                        "l2_support",
+                        "l3_expert",
+                        "security_admin",
+                        "audit_admin",
+                        "dept_manager",
                         "end_user",
-                        "user"
+                        "guest"
                     ]
                 },
                 "tenantId": {
@@ -17195,118 +14404,6 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 50,
                     "minLength": 3
-                }
-            }
-        },
-        "dto.CustomFieldConditionalDisplay": {
-            "type": "object",
-            "properties": {
-                "field": {
-                    "type": "string"
-                },
-                "operator": {
-                    "description": "equals, not_equals, contains",
-                    "type": "string"
-                },
-                "value": {}
-            }
-        },
-        "dto.CustomFieldDefinition": {
-            "type": "object",
-            "properties": {
-                "conditionalDisplay": {
-                    "$ref": "#/definitions/dto.CustomFieldConditionalDisplay"
-                },
-                "defaultValue": {},
-                "description": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "label": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "options": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.CustomFieldOption"
-                    }
-                },
-                "order": {
-                    "type": "integer"
-                },
-                "placeholder": {
-                    "type": "string"
-                },
-                "required": {
-                    "type": "boolean"
-                },
-                "type": {
-                    "$ref": "#/definitions/dto.CustomFieldType"
-                },
-                "validation": {
-                    "$ref": "#/definitions/dto.CustomFieldValidation"
-                }
-            }
-        },
-        "dto.CustomFieldOption": {
-            "type": "object",
-            "properties": {
-                "label": {
-                    "type": "string"
-                },
-                "value": {}
-            }
-        },
-        "dto.CustomFieldType": {
-            "type": "string",
-            "enum": [
-                "text",
-                "textarea",
-                "number",
-                "date",
-                "datetime",
-                "select",
-                "multi_select",
-                "checkbox",
-                "radio",
-                "file",
-                "user_picker",
-                "department_picker"
-            ],
-            "x-enum-varnames": [
-                "CustomFieldTypeText",
-                "CustomFieldTypeTextarea",
-                "CustomFieldTypeNumber",
-                "CustomFieldTypeDate",
-                "CustomFieldTypeDatetime",
-                "CustomFieldTypeSelect",
-                "CustomFieldTypeMultiSelect",
-                "CustomFieldTypeCheckbox",
-                "CustomFieldTypeRadio",
-                "CustomFieldTypeFile",
-                "CustomFieldTypeUserPicker",
-                "CustomFieldTypeDepartmentPicker"
-            ]
-        },
-        "dto.CustomFieldValidation": {
-            "type": "object",
-            "properties": {
-                "max": {
-                    "type": "integer"
-                },
-                "message": {
-                    "type": "string"
-                },
-                "min": {
-                    "type": "integer"
-                },
-                "pattern": {
-                    "type": "string"
                 }
             }
         },
@@ -17959,6 +15056,47 @@ const docTemplate = `{
                 "updatedAt": {
                     "type": "string",
                     "example": "2024-01-01T00:00:00Z"
+                }
+            }
+        },
+        "dto.IncidentCommentResponse": {
+            "type": "object",
+            "properties": {
+                "attachments": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "content": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "incidentId": {
+                    "type": "integer"
+                },
+                "isInternal": {
+                    "type": "boolean"
+                },
+                "mentions": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "user": {
+                    "$ref": "#/definitions/dto.UserInfo"
+                },
+                "userId": {
+                    "type": "integer"
                 }
             }
         },
@@ -18656,12 +15794,6 @@ const docTemplate = `{
         "dto.LoginResponse": {
             "type": "object",
             "properties": {
-                "accessToken": {
-                    "type": "string"
-                },
-                "refreshToken": {
-                    "type": "string"
-                },
                 "tenant": {
                     "$ref": "#/definitions/ent.Tenant"
                 },
@@ -18738,44 +15870,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.NotificationConfig": {
-            "type": "object",
-            "properties": {
-                "onApproval": {
-                    "$ref": "#/definitions/dto.NotificationRecipients"
-                },
-                "onComplete": {
-                    "$ref": "#/definitions/dto.NotificationRecipients"
-                },
-                "onCreate": {
-                    "$ref": "#/definitions/dto.NotificationRecipients"
-                },
-                "onReject": {
-                    "$ref": "#/definitions/dto.NotificationRecipients"
-                },
-                "onUpdate": {
-                    "$ref": "#/definitions/dto.NotificationRecipients"
-                }
-            }
-        },
-        "dto.NotificationRecipients": {
-            "type": "object",
-            "properties": {
-                "enabled": {
-                    "type": "boolean"
-                },
-                "recipients": {
-                    "description": "requester, assignee, approvers, watchers等",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "template": {
-                    "type": "string"
-                }
-            }
-        },
         "dto.PagedGroupsResponse": {
             "type": "object",
             "properties": {
@@ -18835,7 +15929,8 @@ const docTemplate = `{
                 },
                 "password": {
                     "type": "string",
-                    "minLength": 8
+                    "maxLength": 128,
+                    "minLength": 12
                 },
                 "passwordConfirm": {
                     "type": "string"
@@ -18850,41 +15945,6 @@ const docTemplate = `{
             "properties": {
                 "message": {
                     "type": "string"
-                }
-            }
-        },
-        "dto.PermissionConfig": {
-            "type": "object",
-            "properties": {
-                "canApprove": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "canCreate": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "canDelete": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "canEdit": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "canView": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
                 }
             }
         },
@@ -18957,6 +16017,60 @@ const docTemplate = `{
                 "useCases": {
                     "description": "适用场景说明",
                     "type": "string"
+                }
+            }
+        },
+        "dto.ProcessApprovalDecisionResponse": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string"
+                },
+                "actorId": {
+                    "type": "integer"
+                },
+                "actorName": {
+                    "type": "string"
+                },
+                "businessId": {
+                    "type": "string"
+                },
+                "businessType": {
+                    "type": "string"
+                },
+                "comment": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "decision": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "nodeKey": {
+                    "type": "string"
+                },
+                "processDefinitionKey": {
+                    "type": "string"
+                },
+                "processInstanceId": {
+                    "type": "integer"
+                },
+                "processInstanceKey": {
+                    "type": "string"
+                },
+                "processTaskId": {
+                    "type": "integer"
+                },
+                "taskId": {
+                    "type": "string"
+                },
+                "variablesSnapshot": {
+                    "type": "object",
+                    "additionalProperties": true
                 }
             }
         },
@@ -19060,25 +16174,15 @@ const docTemplate = `{
         },
         "dto.RefreshTokenRequest": {
             "type": "object",
-            "required": [
-                "refreshToken"
-            ],
             "properties": {
                 "refreshToken": {
+                    "description": "Kept for non-browser clients during the migration to cookie-only browser\nsessions. Browser requests obtain this value from the HttpOnly cookie.",
                     "type": "string"
                 }
             }
         },
         "dto.RefreshTokenResponse": {
-            "type": "object",
-            "properties": {
-                "accessToken": {
-                    "type": "string"
-                },
-                "refreshToken": {
-                    "type": "string"
-                }
-            }
+            "type": "object"
         },
         "dto.RegisterRequest": {
             "type": "object",
@@ -19241,7 +16345,8 @@ const docTemplate = `{
             "properties": {
                 "newPassword": {
                     "type": "string",
-                    "minLength": 6
+                    "maxLength": 128,
+                    "minLength": 12
                 }
             }
         },
@@ -19355,254 +16460,6 @@ const docTemplate = `{
                 },
                 "status": {
                     "type": "string"
-                }
-            }
-        },
-        "dto.ServiceCatalogListResponse": {
-            "type": "object",
-            "properties": {
-                "catalogs": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.ServiceCatalogResponse"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "size": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "dto.ServiceCatalogResponse": {
-            "type": "object",
-            "properties": {
-                "category": {
-                    "type": "string"
-                },
-                "ciTypeId": {
-                    "type": "integer"
-                },
-                "cloudServiceId": {
-                    "type": "integer"
-                },
-                "createdAt": {
-                    "type": "string"
-                },
-                "deliveryTime": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "updatedAt": {
-                    "type": "string"
-                }
-            }
-        },
-        "dto.ServiceRequestApprovalActionRequest": {
-            "type": "object",
-            "required": [
-                "action"
-            ],
-            "properties": {
-                "action": {
-                    "type": "string",
-                    "enum": [
-                        "approve",
-                        "reject"
-                    ]
-                },
-                "comment": {
-                    "type": "string",
-                    "maxLength": 2000
-                }
-            }
-        },
-        "dto.ServiceRequestApprovalResponse": {
-            "type": "object",
-            "properties": {
-                "action": {
-                    "type": "string"
-                },
-                "approverId": {
-                    "type": "integer"
-                },
-                "approverName": {
-                    "type": "string"
-                },
-                "comment": {
-                    "type": "string"
-                },
-                "createdAt": {
-                    "type": "string"
-                },
-                "delegatedToId": {
-                    "description": "转交审批人ID",
-                    "type": "integer"
-                },
-                "dueAt": {
-                    "description": "到期时间",
-                    "type": "string"
-                },
-                "escalationReason": {
-                    "description": "升级原因",
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "isEscalated": {
-                    "description": "是否已升级",
-                    "type": "boolean"
-                },
-                "level": {
-                    "type": "integer"
-                },
-                "processedAt": {
-                    "type": "string"
-                },
-                "serviceRequestId": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "step": {
-                    "type": "string"
-                },
-                "timeoutHours": {
-                    "description": "V1 新增字段",
-                    "type": "integer"
-                }
-            }
-        },
-        "dto.ServiceRequestListResponse": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.ServiceRequestResponse"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "size": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "dto.ServiceRequestResponse": {
-            "type": "object",
-            "properties": {
-                "approvals": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.ServiceRequestApprovalResponse"
-                    }
-                },
-                "approvedAt": {
-                    "type": "string"
-                },
-                "catalog": {
-                    "$ref": "#/definitions/dto.ServiceCatalogResponse"
-                },
-                "catalogId": {
-                    "type": "integer"
-                },
-                "ciId": {
-                    "type": "integer"
-                },
-                "completedAt": {
-                    "type": "string"
-                },
-                "completionNote": {
-                    "type": "string"
-                },
-                "complianceAck": {
-                    "type": "boolean"
-                },
-                "costCenter": {
-                    "type": "string"
-                },
-                "createdAt": {
-                    "type": "string"
-                },
-                "currentLevel": {
-                    "type": "integer"
-                },
-                "dataClassification": {
-                    "type": "string"
-                },
-                "expireAt": {
-                    "type": "string"
-                },
-                "formData": {
-                    "type": "object",
-                    "additionalProperties": {}
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "lastError": {
-                    "type": "string"
-                },
-                "needsPublicIp": {
-                    "type": "boolean"
-                },
-                "processorId": {
-                    "type": "integer"
-                },
-                "reason": {
-                    "type": "string"
-                },
-                "requester": {
-                    "$ref": "#/definitions/dto.UserResponse"
-                },
-                "requesterId": {
-                    "type": "integer"
-                },
-                "sourceIpWhitelist": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "startedAt": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string"
-                },
-                "totalLevels": {
-                    "type": "integer"
-                },
-                "updatedAt": {
-                    "type": "string"
-                },
-                "version": {
-                    "type": "integer"
                 }
             }
         },
@@ -19833,36 +16690,9 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.TicketTypeDefinition": {
+        "dto.TicketRelation": {
             "type": "object",
             "properties": {
-                "approvalChain": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.ApprovalChainDefinition"
-                    }
-                },
-                "approvalEnabled": {
-                    "type": "boolean"
-                },
-                "approvalWorkflowId": {
-                    "type": "string"
-                },
-                "assignmentRules": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.AssignmentRule"
-                    }
-                },
-                "autoAssignEnabled": {
-                    "type": "boolean"
-                },
-                "code": {
-                    "type": "string"
-                },
-                "color": {
-                    "type": "string"
-                },
                 "createdAt": {
                     "type": "string"
                 },
@@ -19872,91 +16702,92 @@ const docTemplate = `{
                 "createdByName": {
                     "type": "string"
                 },
-                "customFields": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.CustomFieldDefinition"
-                    }
-                },
-                "defaultSlaId": {
-                    "type": "integer"
-                },
                 "description": {
                     "type": "string"
                 },
-                "icon": {
+                "direction": {
                     "type": "string"
                 },
                 "id": {
-                    "type": "integer"
-                },
-                "name": {
                     "type": "string"
                 },
-                "notificationConfig": {
-                    "$ref": "#/definitions/dto.NotificationConfig"
-                },
-                "permissionConfig": {
-                    "$ref": "#/definitions/dto.PermissionConfig"
-                },
-                "slaEnabled": {
-                    "type": "boolean"
-                },
-                "status": {
-                    "$ref": "#/definitions/dto.TicketTypeStatus"
-                },
-                "tenantId": {
-                    "type": "integer"
-                },
-                "updatedAt": {
+                "relationType": {
                     "type": "string"
                 },
-                "updatedBy": {
+                "sourceTicket": {
+                    "$ref": "#/definitions/dto.TicketRelationTicketRef"
+                },
+                "sourceTicketId": {
                     "type": "integer"
                 },
-                "updatedByName": {
+                "sourceTicketNumber": {
                     "type": "string"
                 },
-                "usageCount": {
+                "targetTicket": {
+                    "$ref": "#/definitions/dto.TicketRelationTicketRef"
+                },
+                "targetTicketId": {
                     "type": "integer"
+                },
+                "targetTicketNumber": {
+                    "type": "string"
                 }
             }
         },
-        "dto.TicketTypeListResponse": {
+        "dto.TicketRelationStats": {
             "type": "object",
             "properties": {
-                "page": {
+                "blockedByCount": {
                     "type": "integer"
                 },
-                "pageSize": {
+                "blockingCount": {
                     "type": "integer"
                 },
-                "total": {
+                "childrenCount": {
                     "type": "integer"
                 },
-                "totalPages": {
+                "duplicateCount": {
                     "type": "integer"
                 },
-                "types": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.TicketTypeDefinition"
+                "inboundCount": {
+                    "type": "integer"
+                },
+                "outboundCount": {
+                    "type": "integer"
+                },
+                "parentCount": {
+                    "type": "integer"
+                },
+                "relatedCount": {
+                    "type": "integer"
+                },
+                "relationsByType": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
                     }
+                },
+                "totalRelations": {
+                    "type": "integer"
                 }
             }
         },
-        "dto.TicketTypeStatus": {
-            "type": "string",
-            "enum": [
-                "active",
-                "inactive",
-                "draft"
-            ],
-            "x-enum-varnames": [
-                "TicketTypeStatusActive",
-                "TicketTypeStatusInactive",
-                "TicketTypeStatusDraft"
-            ]
+        "dto.TicketRelationTicketRef": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "ticketNumber": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
         },
         "dto.TicketWorkflowAction": {
             "type": "string",
@@ -20152,32 +16983,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "typeName": {
-                    "type": "string"
-                }
-            }
-        },
-        "dto.UpdateApprovalWorkflowRequest": {
-            "type": "object",
-            "properties": {
-                "description": {
-                    "type": "string"
-                },
-                "isActive": {
-                    "type": "boolean"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "nodes": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.ApprovalNodeRequest"
-                    }
-                },
-                "priority": {
-                    "type": "string"
-                },
-                "ticketType": {
                     "type": "string"
                 }
             }
@@ -20497,26 +17302,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.UpdateChangeApprovalRequest": {
-            "type": "object",
-            "required": [
-                "status"
-            ],
-            "properties": {
-                "comment": {
-                    "description": "审批意见",
-                    "type": "string"
-                },
-                "status": {
-                    "description": "审批状态",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/dto.ChangeApprovalStatus"
-                        }
-                    ]
-                }
-            }
-        },
         "dto.UpdateCloudAccountRequest": {
             "type": "object",
             "properties": {
@@ -20772,97 +17557,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.UpdateSLAPolicyRequest": {
-            "type": "object",
-            "properties": {
-                "businessHours": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "customerTier": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "escalationRules": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "excludeHolidays": {
-                    "type": "boolean"
-                },
-                "excludeWeekends": {
-                    "type": "boolean"
-                },
-                "isActive": {
-                    "type": "boolean"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "priority": {
-                    "type": "string"
-                },
-                "priorityScore": {
-                    "type": "integer"
-                },
-                "resolutionTimeMinutes": {
-                    "type": "integer"
-                },
-                "responseTimeMinutes": {
-                    "type": "integer"
-                },
-                "ticketType": {
-                    "type": "string"
-                }
-            }
-        },
-        "dto.UpdateServiceCatalogRequest": {
-            "type": "object",
-            "properties": {
-                "category": {
-                    "type": "string",
-                    "maxLength": 100
-                },
-                "ciTypeId": {
-                    "type": "integer"
-                },
-                "cloudServiceId": {
-                    "type": "integer"
-                },
-                "deliveryTime": {
-                    "type": "string",
-                    "maxLength": 50
-                },
-                "description": {
-                    "type": "string",
-                    "maxLength": 1000
-                },
-                "name": {
-                    "type": "string",
-                    "maxLength": 255
-                },
-                "status": {
-                    "type": "string",
-                    "enum": [
-                        "enabled",
-                        "disabled"
-                    ]
-                }
-            }
-        },
-        "dto.UpdateServiceRequestStatusRequest": {
-            "type": "object",
-            "required": [
-                "status"
-            ],
-            "properties": {
-                "status": {
-                    "type": "string"
-                }
-            }
-        },
         "dto.UpdateTenantRequest": {
             "type": "object",
             "properties": {
@@ -20935,70 +17629,44 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.UpdateTicketTypeRequest": {
-            "type": "object",
-            "properties": {
-                "approvalChain": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.ApprovalChainDefinition"
-                    }
-                },
-                "approvalEnabled": {
-                    "type": "boolean"
-                },
-                "assignmentRules": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.AssignmentRule"
-                    }
-                },
-                "autoAssignEnabled": {
-                    "type": "boolean"
-                },
-                "color": {
-                    "type": "string"
-                },
-                "customFields": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.CustomFieldDefinition"
-                    }
-                },
-                "defaultSlaId": {
-                    "type": "integer"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "icon": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "notificationConfig": {
-                    "$ref": "#/definitions/dto.NotificationConfig"
-                },
-                "permissionConfig": {
-                    "$ref": "#/definitions/dto.PermissionConfig"
-                },
-                "slaEnabled": {
-                    "type": "boolean"
-                },
-                "status": {
-                    "$ref": "#/definitions/dto.TicketTypeStatus"
-                }
-            }
-        },
         "dto.UpdateUserRequest": {
             "type": "object",
             "properties": {
+                "additionalRoleIds": {
+                    "description": "AdditionalRoleIds 是附加角色（多对多，走 User.roles 边），只影响 BPMN 按角色路由\n审批任务时的候选资格（resolveRoleCandidates），不影响 RBAC 权限判定——RBAC 权限\n判定只看上面单一的 Role 字段。传 nil 表示不修改；传 []int{} 表示清空所有附加角色。",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
                 "department": {
                     "type": "string"
                 },
+                "departmentId": {
+                    "description": "DepartmentID 传 nil 表示不修改；传具体值（含 0）表示整体替换所属部门。",
+                    "type": "integer"
+                },
                 "email": {
                     "type": "string"
+                },
+                "functionLine": {
+                    "description": "FunctionLine 传空字符串表示不修改——这个字段目前只从 HR 源数据回填，正常不会有人\n手动清空它，跟 Department/Phone 用同样的\"空值=不改\"约定，不用额外搞指针。",
+                    "type": "string"
+                },
+                "gender": {
+                    "type": "string",
+                    "enum": [
+                        "male",
+                        "female"
+                    ]
+                },
+                "isLeader": {
+                    "description": "IsLeader 传 nil 表示不修改",
+                    "type": "boolean"
+                },
+                "managerId": {
+                    "description": "ManagerID 传 nil 表示不修改；传具体值（含 0）表示整体替换直属上级。",
+                    "type": "integer"
                 },
                 "name": {
                     "type": "string",
@@ -21013,13 +17681,24 @@ const docTemplate = `{
                     "type": "string",
                     "enum": [
                         "super_admin",
-                        "admin",
-                        "manager",
-                        "agent",
-                        "technician",
-                        "security",
+                        "sysadmin",
+                        "it_director",
+                        "ops_director",
+                        "ops_manager",
+                        "ops_engineer",
+                        "dba",
+                        "network_eng",
+                        "sd_manager",
+                        "change_manager",
+                        "service_catalog_admin",
+                        "l1_support",
+                        "l2_support",
+                        "l3_expert",
+                        "security_admin",
+                        "audit_admin",
+                        "dept_manager",
                         "end_user",
-                        "user"
+                        "guest"
                     ]
                 },
                 "username": {
@@ -21055,17 +17734,45 @@ const docTemplate = `{
                 "active": {
                     "type": "boolean"
                 },
+                "additionalRoleIds": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
                 "createdAt": {
                     "type": "string"
                 },
                 "department": {
                     "type": "string"
                 },
+                "departmentId": {
+                    "type": "integer"
+                },
                 "email": {
+                    "type": "string"
+                },
+                "functionLine": {
+                    "type": "string"
+                },
+                "gender": {
                     "type": "string"
                 },
                 "id": {
                     "type": "integer"
+                },
+                "isLeader": {
+                    "type": "boolean"
+                },
+                "jobTitle": {
+                    "type": "string"
+                },
+                "managerId": {
+                    "type": "integer"
+                },
+                "managerName": {
+                    "description": "ManagerName 是冗余展示字段，service 层按当页 ManagerID 批量补充（见\nUserService.enrichManagerNames），dto.ToUserDetailResponse 本身不填它——\nmapper 只接触单条 ent.User，够不到\"上级也是个 user，需要另查一次\"这件事。",
+                    "type": "string"
                 },
                 "mspRole": {
                     "type": "string"
@@ -21224,6 +17931,10 @@ const docTemplate = `{
                     "description": "创建时间",
                     "type": "string"
                 },
+                "deleted_at": {
+                    "description": "软删除时间",
+                    "type": "string"
+                },
                 "description": {
                     "description": "应用描述",
                     "type": "string"
@@ -21297,185 +18008,55 @@ const docTemplate = `{
                 }
             }
         },
-        "ent.ApprovalRecord": {
+        "ent.BootstrapToken": {
             "type": "object",
             "properties": {
-                "action": {
-                    "description": "操作: approve, reject, delegate",
-                    "type": "string"
-                },
-                "approver_id": {
-                    "description": "审批人ID",
-                    "type": "integer"
-                },
-                "approver_name": {
-                    "description": "审批人姓名",
-                    "type": "string"
-                },
-                "comment": {
-                    "description": "审批意见",
-                    "type": "string"
-                },
                 "created_at": {
                     "description": "创建时间",
                     "type": "string"
                 },
-                "current_level": {
-                    "description": "当前审批级别",
-                    "type": "integer"
-                },
-                "due_date": {
-                    "description": "到期时间",
-                    "type": "string"
-                },
                 "edges": {
-                    "description": "Edges holds the relations/edges for other nodes in the graph.\nThe values are being populated by the ApprovalRecordQuery when eager-loading is set.",
+                    "description": "Edges holds the relations/edges for other nodes in the graph.\nThe values are being populated by the BootstrapTokenQuery when eager-loading is set.",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/ent.ApprovalRecordEdges"
+                            "$ref": "#/definitions/ent.BootstrapTokenEdges"
                         }
                     ]
                 },
+                "expires_at": {
+                    "description": "token过期时间",
+                    "type": "string"
+                },
                 "id": {
                     "description": "ID of the ent.",
-                    "type": "integer"
-                },
-                "processed_at": {
-                    "description": "处理时间",
-                    "type": "string"
-                },
-                "status": {
-                    "description": "状态: pending, approved, rejected, delegated, timeout",
-                    "type": "string"
-                },
-                "step_order": {
-                    "description": "节点顺序",
                     "type": "integer"
                 },
                 "tenant_id": {
                     "description": "租户ID",
                     "type": "integer"
                 },
-                "ticket_id": {
-                    "description": "工单ID",
-                    "type": "integer"
-                },
-                "ticket_number": {
-                    "description": "工单编号",
+                "token_hash": {
+                    "description": "bootstrap token bcrypt哈希",
                     "type": "string"
                 },
-                "ticket_title": {
-                    "description": "工单标题",
-                    "type": "string"
-                },
-                "total_levels": {
-                    "description": "总审批级别数",
-                    "type": "integer"
-                },
-                "workflow_id": {
-                    "description": "工作流ID",
-                    "type": "integer"
-                },
-                "workflow_name": {
-                    "description": "工作流名称",
-                    "type": "string"
-                }
-            }
-        },
-        "ent.ApprovalRecordEdges": {
-            "type": "object",
-            "properties": {
-                "ticket": {
-                    "description": "关联的工单",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/ent.Ticket"
-                        }
-                    ]
-                },
-                "workflow": {
-                    "description": "关联的工作流",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/ent.ApprovalWorkflow"
-                        }
-                    ]
-                }
-            }
-        },
-        "ent.ApprovalWorkflow": {
-            "type": "object",
-            "properties": {
-                "completed_at": {
-                    "description": "完成时间",
-                    "type": "string"
-                },
-                "created_at": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "description": {
-                    "description": "工作流描述",
-                    "type": "string"
-                },
-                "edges": {
-                    "description": "Edges holds the relations/edges for other nodes in the graph.\nThe values are being populated by the ApprovalWorkflowQuery when eager-loading is set.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/ent.ApprovalWorkflowEdges"
-                        }
-                    ]
-                },
-                "id": {
-                    "description": "ID of the ent.",
-                    "type": "integer"
-                },
-                "is_active": {
-                    "description": "是否启用",
+                "used": {
+                    "description": "是否已使用",
                     "type": "boolean"
                 },
-                "name": {
-                    "description": "工作流名称",
-                    "type": "string"
-                },
-                "nodes": {
-                    "description": "审批节点配置",
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "additionalProperties": true
-                    }
-                },
-                "priority": {
-                    "description": "优先级",
-                    "type": "string"
-                },
-                "status": {
-                    "description": "状态: pending, approved, rejected, returned, cancelled",
-                    "type": "string"
-                },
-                "tenant_id": {
-                    "description": "租户ID",
+                "used_by": {
+                    "description": "创建的管理员用户ID",
                     "type": "integer"
-                },
-                "ticket_type": {
-                    "description": "工单类型",
-                    "type": "string"
-                },
-                "updated_at": {
-                    "description": "更新时间",
-                    "type": "string"
                 }
             }
         },
-        "ent.ApprovalWorkflowEdges": {
+        "ent.BootstrapTokenEdges": {
             "type": "object",
             "properties": {
-                "approval_records": {
-                    "description": "审批记录",
+                "tenant": {
+                    "description": "Tenant holds the value of the tenant edge.",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/ent.ApprovalRecord"
+                        "$ref": "#/definitions/ent.Tenant"
                     }
                 }
             }
@@ -21624,7 +18205,7 @@ const docTemplate = `{
                     "description": "影响程度",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/itsm-backend_ent_cirelationship.ImpactLevel"
+                            "$ref": "#/definitions/cirelationship.ImpactLevel"
                         }
                     ]
                 },
@@ -21653,7 +18234,7 @@ const docTemplate = `{
                     "description": "关系强度",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/itsm-backend_ent_cirelationship.Strength"
+                            "$ref": "#/definitions/cirelationship.Strength"
                         }
                     ]
                 },
@@ -22461,6 +19042,10 @@ const docTemplate = `{
                     "description": "生命周期状态",
                     "type": "string"
                 },
+                "local_modified_at": {
+                    "description": "客户本地修改时间，用于三方合并冲突检测",
+                    "type": "string"
+                },
                 "location": {
                     "description": "位置",
                     "type": "string"
@@ -22475,6 +19060,10 @@ const docTemplate = `{
                 },
                 "owned_by": {
                     "description": "拥有者",
+                    "type": "string"
+                },
+                "ownership_mode": {
+                    "description": "ownership模式: managed(平台管理)/customer(客户托管)/sla(SLA覆盖)",
                     "type": "string"
                 },
                 "serial_number": {
@@ -22615,7 +19204,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "operator_id": {
-                    "description": "操作人ID",
+                    "description": "操作人ID，0 表示系统操作者",
                     "type": "integer"
                 },
                 "operator_name": {
@@ -22649,15 +19238,75 @@ const docTemplate = `{
                 }
             }
         },
+        "ent.Conversation": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "description": "CreatedAt holds the value of the \"created_at\" field.",
+                    "type": "string"
+                },
+                "edges": {
+                    "description": "Edges holds the relations/edges for other nodes in the graph.\nThe values are being populated by the ConversationQuery when eager-loading is set.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/ent.ConversationEdges"
+                        }
+                    ]
+                },
+                "id": {
+                    "description": "ID of the ent.",
+                    "type": "integer"
+                },
+                "tenant_id": {
+                    "description": "TenantID holds the value of the \"tenant_id\" field.",
+                    "type": "integer"
+                },
+                "title": {
+                    "description": "Title holds the value of the \"title\" field.",
+                    "type": "string"
+                },
+                "user_id": {
+                    "description": "UserID holds the value of the \"user_id\" field.",
+                    "type": "integer"
+                }
+            }
+        },
+        "ent.ConversationEdges": {
+            "type": "object",
+            "properties": {
+                "messages": {
+                    "description": "Messages holds the value of the messages edge.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ent.Message"
+                    }
+                },
+                "tool_invocations": {
+                    "description": "ToolInvocations holds the value of the tool_invocations edge.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ent.ToolInvocation"
+                    }
+                }
+            }
+        },
         "ent.Department": {
             "type": "object",
             "properties": {
+                "area_name": {
+                    "description": "区域/地域名称",
+                    "type": "string"
+                },
                 "code": {
                     "description": "部门代码",
                     "type": "string"
                 },
                 "created_at": {
                     "description": "创建时间",
+                    "type": "string"
+                },
+                "deleted_at": {
+                    "description": "软删除时间",
                     "type": "string"
                 },
                 "description": {
@@ -22682,6 +19331,10 @@ const docTemplate = `{
                 },
                 "name": {
                     "description": "部门名称",
+                    "type": "string"
+                },
+                "org_type": {
+                    "description": "组织类型: department=行政部门, warehouse=仓库/物流节点",
                     "type": "string"
                 },
                 "parent_id": {
@@ -23457,6 +20110,10 @@ const docTemplate = `{
                     "description": "创建时间",
                     "type": "string"
                 },
+                "deleted_at": {
+                    "description": "软删除时间",
+                    "type": "string"
+                },
                 "edges": {
                     "description": "Edges holds the relations/edges for other nodes in the graph.\nThe values are being populated by the KnowledgeArticleQuery when eager-loading is set.",
                     "allOf": [
@@ -23476,6 +20133,14 @@ const docTemplate = `{
                 "like_count": {
                     "description": "点赞次数",
                     "type": "integer"
+                },
+                "review_comment": {
+                    "description": "审核意见",
+                    "type": "string"
+                },
+                "review_status": {
+                    "description": "审核状态: draft/under_review/published/archived",
+                    "type": "string"
                 },
                 "tags": {
                     "description": "标签",
@@ -23504,11 +20169,10 @@ const docTemplate = `{
             "properties": {
                 "sessions": {
                     "description": "Sessions holds the value of the sessions edge.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/ent.KnowledgeArticleSession"
-                        }
-                    ]
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ent.KnowledgeArticleSession"
+                    }
                 },
                 "user_likes": {
                     "description": "UserLikes holds the value of the user_likes edge.",
@@ -23519,11 +20183,10 @@ const docTemplate = `{
                 },
                 "versions": {
                     "description": "Versions holds the value of the versions edge.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/ent.KnowledgeArticleVersion"
-                        }
-                    ]
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ent.KnowledgeArticleVersion"
+                    }
                 }
             }
         },
@@ -23668,7 +20331,7 @@ const docTemplate = `{
                     "description": "状态",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/itsm-backend_ent_knowledgearticlesession.Status"
+                            "$ref": "#/definitions/knowledgearticlesession.Status"
                         }
                     ]
                 },
@@ -23683,10 +20346,11 @@ const docTemplate = `{
             "properties": {
                 "article": {
                     "description": "Article holds the value of the article edge.",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/ent.KnowledgeArticle"
-                    }
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/ent.KnowledgeArticle"
+                        }
+                    ]
                 },
                 "participants": {
                     "description": "Participants holds the value of the participants edge.",
@@ -23762,10 +20426,11 @@ const docTemplate = `{
             "properties": {
                 "article": {
                     "description": "Article holds the value of the article edge.",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/ent.KnowledgeArticle"
-                    }
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/ent.KnowledgeArticle"
+                        }
+                    ]
                 }
             }
         },
@@ -23997,6 +20662,56 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/ent.ItemVersion"
                     }
+                }
+            }
+        },
+        "ent.Message": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "description": "Content holds the value of the \"content\" field.",
+                    "type": "string"
+                },
+                "conversation_id": {
+                    "description": "ConversationID holds the value of the \"conversation_id\" field.",
+                    "type": "integer"
+                },
+                "created_at": {
+                    "description": "CreatedAt holds the value of the \"created_at\" field.",
+                    "type": "string"
+                },
+                "edges": {
+                    "description": "Edges holds the relations/edges for other nodes in the graph.\nThe values are being populated by the MessageQuery when eager-loading is set.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/ent.MessageEdges"
+                        }
+                    ]
+                },
+                "id": {
+                    "description": "ID of the ent.",
+                    "type": "integer"
+                },
+                "request_id": {
+                    "description": "RequestID holds the value of the \"request_id\" field.",
+                    "type": "string"
+                },
+                "role": {
+                    "description": "Role holds the value of the \"role\" field.",
+                    "type": "string"
+                }
+            }
+        },
+        "ent.MessageEdges": {
+            "type": "object",
+            "properties": {
+                "conversation": {
+                    "description": "Conversation holds the value of the conversation edge.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/ent.Conversation"
+                        }
+                    ]
                 }
             }
         },
@@ -25573,6 +22288,13 @@ const docTemplate = `{
                     "type": "object",
                     "additionalProperties": true
                 },
+                "category_ids": {
+                    "description": "绑定的工单分类ID列表",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
                 "conditions": {
                     "description": "适用条件",
                     "type": "object",
@@ -25598,6 +22320,14 @@ const docTemplate = `{
                     "description": "升级规则",
                     "type": "object",
                     "additionalProperties": true
+                },
+                "exclude_holidays": {
+                    "description": "是否排除节假日",
+                    "type": "boolean"
+                },
+                "exclude_weekends": {
+                    "description": "是否排除周末",
+                    "type": "boolean"
                 },
                 "id": {
                     "description": "ID of the ent.",
@@ -25955,6 +22685,10 @@ const docTemplate = `{
                     "description": "创建时间",
                     "type": "string"
                 },
+                "deleted_at": {
+                    "description": "软删除时间",
+                    "type": "string"
+                },
                 "description": {
                     "description": "团队描述",
                     "type": "string"
@@ -26091,7 +22825,7 @@ const docTemplate = `{
                     "description": "租户类型: internal|saas_customer|msp_provider|msp_customer，保留 standard|msp|customer 兼容历史数据",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/itsm-backend_ent_tenant.Type"
+                            "$ref": "#/definitions/tenant.Type"
                         }
                     ]
                 },
@@ -26104,6 +22838,13 @@ const docTemplate = `{
         "ent.TenantEdges": {
             "type": "object",
             "properties": {
+                "bootstrap_tokens": {
+                    "description": "bootstrap token",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ent.BootstrapToken"
+                    }
+                },
                 "msp_customer_allocations": {
                     "description": "MSP客户分配",
                     "type": "array",
@@ -26222,9 +22963,22 @@ const docTemplate = `{
                     "description": "关闭时间",
                     "type": "string"
                 },
+                "conversation_id": {
+                    "description": "邮件对话线程ID（Graph conversationId），用于识别用户回复并追加评论而非重复建单",
+                    "type": "string"
+                },
                 "created_at": {
                     "description": "创建时间",
                     "type": "string"
+                },
+                "creator_email": {
+                    "description": "创建人邮箱（邮件开单时记录，非注册用户也可创建）",
+                    "type": "string"
+                },
+                "custom_field_values": {
+                    "description": "工单创建时提交的自定义字段值（key 为模板字段 name）",
+                    "type": "object",
+                    "additionalProperties": true
                 },
                 "deleted_at": {
                     "description": "删除时间",
@@ -26245,6 +22999,10 @@ const docTemplate = `{
                             "$ref": "#/definitions/ent.TicketEdges"
                         }
                     ]
+                },
+                "external_message_id": {
+                    "description": "外部消息ID（如邮件 internetMessageId），用于同一来源消息的建单去重判断",
+                    "type": "string"
                 },
                 "first_response_at": {
                     "description": "首次响应时间",
@@ -26320,6 +23078,10 @@ const docTemplate = `{
                 },
                 "sla_response_deadline": {
                     "description": "SLA响应截止时间",
+                    "type": "string"
+                },
+                "source": {
+                    "description": "工单来源：manual=手动创建，service_catalog=服务目录申请",
                     "type": "string"
                 },
                 "status": {
@@ -26577,6 +23339,14 @@ const docTemplate = `{
                     "description": "创建时间",
                     "type": "string"
                 },
+                "default_priority": {
+                    "description": "默认优先级: P1/P2/P3/P4",
+                    "type": "string"
+                },
+                "default_resolver": {
+                    "description": "默认处理团队/角色",
+                    "type": "string"
+                },
                 "department_id": {
                     "description": "所属部门ID",
                     "type": "integer"
@@ -26601,6 +23371,14 @@ const docTemplate = `{
                     "description": "是否启用",
                     "type": "boolean"
                 },
+                "is_user_facing": {
+                    "description": "是否面向用户展示",
+                    "type": "boolean"
+                },
+                "itsm_type": {
+                    "description": "ITSM类型: Request/Incident/Change",
+                    "type": "string"
+                },
                 "level": {
                     "description": "分类层级",
                     "type": "integer"
@@ -26612,6 +23390,10 @@ const docTemplate = `{
                 "parent_id": {
                     "description": "父分类ID",
                     "type": "integer"
+                },
+                "sla_tier": {
+                    "description": "SLA等级: 标准服务/快速标准服务/审批类服务/安全响应服务等",
+                    "type": "string"
                 },
                 "sort_order": {
                     "description": "排序顺序",
@@ -26757,13 +23539,6 @@ const docTemplate = `{
         "ent.TicketEdges": {
             "type": "object",
             "properties": {
-                "approval_records": {
-                    "description": "ApprovalRecords holds the value of the approval_records edge.",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/ent.ApprovalRecord"
-                    }
-                },
                 "approvals": {
                     "description": "Approvals holds the value of the approvals edge.",
                     "type": "array",
@@ -27019,8 +23794,8 @@ const docTemplate = `{
                     "description": "操作备注",
                     "type": "string"
                 },
-                "create_time": {
-                    "description": "CreateTime holds the value of the \"create_time\" field.",
+                "created_at": {
+                    "description": "创建时间（DB column: created_at）",
                     "type": "string"
                 },
                 "edges": {
@@ -27087,6 +23862,120 @@ const docTemplate = `{
                 }
             }
         },
+        "ent.ToolInvocation": {
+            "type": "object",
+            "properties": {
+                "approval_reason": {
+                    "description": "ApprovalReason holds the value of the \"approval_reason\" field.",
+                    "type": "string"
+                },
+                "approval_state": {
+                    "description": "ApprovalState holds the value of the \"approval_state\" field.",
+                    "type": "string"
+                },
+                "approved_at": {
+                    "description": "ApprovedAt holds the value of the \"approved_at\" field.",
+                    "type": "string"
+                },
+                "approved_by": {
+                    "description": "ApprovedBy holds the value of the \"approved_by\" field.",
+                    "type": "integer"
+                },
+                "arguments": {
+                    "description": "Arguments holds the value of the \"arguments\" field.",
+                    "type": "string"
+                },
+                "conversation_id": {
+                    "description": "ConversationID holds the value of the \"conversation_id\" field.",
+                    "type": "integer"
+                },
+                "created_at": {
+                    "description": "CreatedAt holds the value of the \"created_at\" field.",
+                    "type": "string"
+                },
+                "dry_run": {
+                    "description": "DryRun holds the value of the \"dry_run\" field.",
+                    "type": "boolean"
+                },
+                "edges": {
+                    "description": "Edges holds the relations/edges for other nodes in the graph.\nThe values are being populated by the ToolInvocationQuery when eager-loading is set.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/ent.ToolInvocationEdges"
+                        }
+                    ]
+                },
+                "error": {
+                    "description": "Error holds the value of the \"error\" field.",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "ID of the ent.",
+                    "type": "integer"
+                },
+                "needs_approval": {
+                    "description": "NeedsApproval holds the value of the \"needs_approval\" field.",
+                    "type": "boolean"
+                },
+                "permission_check": {
+                    "description": "权限校验结果: passed|denied|skipped",
+                    "type": "string"
+                },
+                "permission_reason": {
+                    "description": "权限校验原因/拒绝原因",
+                    "type": "string"
+                },
+                "request_id": {
+                    "description": "RequestID holds the value of the \"request_id\" field.",
+                    "type": "string"
+                },
+                "result": {
+                    "description": "Result holds the value of the \"result\" field.",
+                    "type": "string"
+                },
+                "role_snapshot": {
+                    "description": "调用时角色快照，便于事后审计",
+                    "type": "string"
+                },
+                "status": {
+                    "description": "Status holds the value of the \"status\" field.",
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "description": "TenantID holds the value of the \"tenant_id\" field.",
+                    "type": "integer"
+                },
+                "tool_name": {
+                    "description": "ToolName holds the value of the \"tool_name\" field.",
+                    "type": "string"
+                },
+                "user_id": {
+                    "description": "工具触发者用户 ID",
+                    "type": "integer"
+                }
+            }
+        },
+        "ent.ToolInvocationEdges": {
+            "type": "object",
+            "properties": {
+                "conversation": {
+                    "description": "Conversation holds the value of the conversation edge.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/ent.Conversation"
+                        }
+                    ]
+                },
+                "user": {
+                    "description": "User holds the value of the user edge.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/ent.User"
+                        }
+                    ]
+                }
+            }
+        },
         "ent.User": {
             "type": "object",
             "properties": {
@@ -27126,15 +24015,39 @@ const docTemplate = `{
                     "description": "飞书用户OpenID",
                     "type": "string"
                 },
+                "function_line": {
+                    "description": "职能条线：HR 系统里跨法人实体的横向职能分组（如'SPT_资讯科技服务部'），独立于 department_id 代表的正式组织树——同一条线的人可能分散在不同法人实体/仓库下面。来自 ehr-data.xlsx person 表的 depart_line 字段。",
+                    "type": "string"
+                },
+                "gender": {
+                    "description": "性别: male/female，留空表示未填写",
+                    "type": "string"
+                },
                 "id": {
                     "description": "ID of the ent.",
+                    "type": "integer"
+                },
+                "is_bootstrap_admin": {
+                    "description": "是否通过bootstrap token创建",
+                    "type": "boolean"
+                },
+                "is_leader": {
+                    "description": "是否为部门负责人/领导，用于组织架构展示",
+                    "type": "boolean"
+                },
+                "job_title": {
+                    "description": "职位头衔，来自HR系统 employee_post 字段，用于 PersonalManagerResolver 按关键字识别审批层级（如\"总经理\"）。跟 function_line（职能条线）是两个不同维度：job_title 是这个人自己的头衔，function_line 是这个人所属的横向业务分组。",
+                    "type": "string"
+                },
+                "manager_id": {
+                    "description": "直属上级的用户ID（汇报线，个人级别，跟 department.manager_id 那种部门级负责人是两个概念）。来自 ehr-data.xlsx person 表的 direct_supervisor字段（格式\"姓名:工号\"，按工号匹配到 username）。跟 department.manager_id一样是普通整型外键，不建 ent edge。0/未设置表示无记录或没匹配上。",
                     "type": "integer"
                 },
                 "msp_role": {
                     "description": "MSP角色: provider_admin=MSP管理员, provider_agent=MSP客服, customer_user=客户用户",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/itsm-backend_ent_user.MspRole"
+                            "$ref": "#/definitions/user.MspRole"
                         }
                     ]
                 },
@@ -27151,12 +24064,8 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "role": {
-                    "description": "角色",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/itsm-backend_ent_user.Role"
-                        }
-                    ]
+                    "description": "角色代码，对应 roles 表的 code 字段",
+                    "type": "string"
                 },
                 "tenant_id": {
                     "description": "租户ID",
@@ -27273,6 +24182,13 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/ent.Ticket"
+                    }
+                },
+                "tool_invocations": {
+                    "description": "AI 工具调用记录",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ent.ToolInvocation"
                     }
                 },
                 "version_changelogs": {
@@ -27644,10 +24560,6 @@ const docTemplate = `{
                 }
             }
         },
-        "gin.H": {
-            "type": "object",
-            "additionalProperties": {}
-        },
         "handlers.DashboardOverview": {
             "type": "object",
             "properties": {
@@ -27965,41 +24877,7 @@ const docTemplate = `{
                 "StatusWithdrawn"
             ]
         },
-        "itsm-backend_ent_cirelationship.ImpactLevel": {
-            "type": "string",
-            "enum": [
-                "medium",
-                "critical",
-                "high",
-                "medium",
-                "low"
-            ],
-            "x-enum-varnames": [
-                "DefaultImpactLevel",
-                "ImpactLevelCritical",
-                "ImpactLevelHigh",
-                "ImpactLevelMedium",
-                "ImpactLevelLow"
-            ]
-        },
-        "itsm-backend_ent_cirelationship.Strength": {
-            "type": "string",
-            "enum": [
-                "medium",
-                "critical",
-                "high",
-                "medium",
-                "low"
-            ],
-            "x-enum-varnames": [
-                "DefaultStrength",
-                "StrengthCritical",
-                "StrengthHigh",
-                "StrengthMedium",
-                "StrengthLow"
-            ]
-        },
-        "itsm-backend_ent_knowledgearticlesession.Status": {
+        "knowledgearticlesession.Status": {
             "type": "string",
             "enum": [
                 "active",
@@ -28010,65 +24888,6 @@ const docTemplate = `{
                 "StatusActive",
                 "StatusIdle",
                 "StatusInactive"
-            ]
-        },
-        "itsm-backend_ent_tenant.Type": {
-            "type": "string",
-            "enum": [
-                "standard",
-                "standard",
-                "msp",
-                "customer",
-                "internal",
-                "saas_customer",
-                "msp_provider",
-                "msp_customer"
-            ],
-            "x-enum-varnames": [
-                "DefaultType",
-                "TypeStandard",
-                "TypeMsp",
-                "TypeCustomer",
-                "TypeInternal",
-                "TypeSaasCustomer",
-                "TypeMspProvider",
-                "TypeMspCustomer"
-            ]
-        },
-        "itsm-backend_ent_user.MspRole": {
-            "type": "string",
-            "enum": [
-                "provider_admin",
-                "provider_agent",
-                "customer_user"
-            ],
-            "x-enum-varnames": [
-                "MspRoleProviderAdmin",
-                "MspRoleProviderAgent",
-                "MspRoleCustomerUser"
-            ]
-        },
-        "itsm-backend_ent_user.Role": {
-            "type": "string",
-            "enum": [
-                "end_user",
-                "super_admin",
-                "admin",
-                "manager",
-                "agent",
-                "technician",
-                "security",
-                "end_user"
-            ],
-            "x-enum-varnames": [
-                "DefaultRole",
-                "RoleSuperAdmin",
-                "RoleAdmin",
-                "RoleManager",
-                "RoleAgent",
-                "RoleTechnician",
-                "RoleSecurity",
-                "RoleEndUser"
             ]
         },
         "marketplaceitem.Status": {
@@ -28290,11 +25109,17 @@ const docTemplate = `{
                 "complianceRate": {
                     "type": "number"
                 },
+                "compliantTickets": {
+                    "type": "integer"
+                },
                 "resolutionTimeCompliance": {
                     "type": "number"
                 },
                 "responseTimeCompliance": {
                     "type": "number"
+                },
+                "totalTickets": {
+                    "type": "integer"
                 }
             }
         },
@@ -28344,6 +25169,29 @@ const docTemplate = `{
                 }
             }
         },
+        "tenant.Type": {
+            "type": "string",
+            "enum": [
+                "standard",
+                "standard",
+                "msp",
+                "customer",
+                "internal",
+                "saas_customer",
+                "msp_provider",
+                "msp_customer"
+            ],
+            "x-enum-varnames": [
+                "DefaultType",
+                "TypeStandard",
+                "TypeMsp",
+                "TypeCustomer",
+                "TypeInternal",
+                "TypeSaasCustomer",
+                "TypeMspProvider",
+                "TypeMspCustomer"
+            ]
+        },
         "tenantinstallation.Status": {
             "type": "string",
             "enum": [
@@ -28361,6 +25209,19 @@ const docTemplate = `{
                 "StatusDisabled",
                 "StatusFailed",
                 "StatusUninstalled"
+            ]
+        },
+        "user.MspRole": {
+            "type": "string",
+            "enum": [
+                "provider_admin",
+                "provider_agent",
+                "customer_user"
+            ],
+            "x-enum-varnames": [
+                "MspRoleProviderAdmin",
+                "MspRoleProviderAgent",
+                "MspRoleCustomerUser"
             ]
         }
     }

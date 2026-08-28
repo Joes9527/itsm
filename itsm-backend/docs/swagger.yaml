@@ -1,4 +1,32 @@
 definitions:
+  cirelationship.ImpactLevel:
+    enum:
+    - medium
+    - critical
+    - high
+    - medium
+    - low
+    type: string
+    x-enum-varnames:
+    - DefaultImpactLevel
+    - ImpactLevelCritical
+    - ImpactLevelHigh
+    - ImpactLevelMedium
+    - ImpactLevelLow
+  cirelationship.Strength:
+    enum:
+    - medium
+    - critical
+    - high
+    - medium
+    - low
+    type: string
+    x-enum-varnames:
+    - DefaultStrength
+    - StrengthCritical
+    - StrengthHigh
+    - StrengthMedium
+    - StrengthLow
   common.Response:
     properties:
       code:
@@ -6,34 +34,6 @@ definitions:
       data: {}
       message:
         type: string
-    type: object
-  controller.ApproveRequest:
-    properties:
-      approve:
-        type: boolean
-      reason:
-        type: string
-    type: object
-  controller.ChatRequest:
-    properties:
-      conversationId:
-        type: integer
-      limit:
-        type: integer
-      query:
-        type: string
-    required:
-    - query
-    type: object
-  controller.ToolExecRequest:
-    properties:
-      args:
-        additionalProperties: true
-        type: object
-      name:
-        type: string
-    required:
-    - name
     type: object
   dto.AcceptTicketRequest:
     properties:
@@ -85,54 +85,6 @@ definitions:
         type: string
       title:
         type: string
-    type: object
-  dto.ApprovalChainDefinition:
-    properties:
-      allowDelegate:
-        type: boolean
-      allowReject:
-        type: boolean
-      approvalType:
-        description: any, all, majority
-        type: string
-      approvers:
-        items:
-          $ref: '#/definitions/dto.ApproverInfo'
-        type: array
-      conditions:
-        items:
-          $ref: '#/definitions/dto.ApprovalCondition'
-        type: array
-      id:
-        type: string
-      level:
-        type: integer
-      minimumApprovals:
-        type: integer
-      name:
-        type: string
-      rejectAction:
-        description: end, return, custom
-        type: string
-      returnToLevel:
-        type: integer
-      timeout:
-        description: 超时时间（小时）
-        type: integer
-      timeoutAction:
-        description: auto_approve, auto_reject, escalate
-        type: string
-    type: object
-  dto.ApprovalCondition:
-    properties:
-      field:
-        type: string
-      operator:
-        description: equals, not_equals, greater_than, less_than
-        type: string
-      value: {}
-    type: object
-  dto.ApprovalNodeRequest:
     type: object
   dto.ApprovalRecord:
     properties:
@@ -198,16 +150,6 @@ definitions:
     - action
     - approvalId
     type: object
-  dto.ApproverInfo:
-    properties:
-      name:
-        type: string
-      type:
-        description: user, role, department, dynamic
-        type: string
-      value:
-        description: 用户ID、角色名、部门ID等
-    type: object
   dto.ArticleParticipantResponse:
     properties:
       avatar:
@@ -259,40 +201,6 @@ definitions:
         type: integer
     required:
     - customerTenantId
-    type: object
-  dto.AssignToConfig:
-    properties:
-      type:
-        description: user, role, department, round_robin, load_balance
-        type: string
-      value:
-        description: 用户ID、角色名、部门ID等
-    type: object
-  dto.AssignmentRule:
-    properties:
-      assignTo:
-        $ref: '#/definitions/dto.AssignToConfig'
-      conditions:
-        items:
-          $ref: '#/definitions/dto.AssignmentRuleCondition'
-        type: array
-      enabled:
-        type: boolean
-      id:
-        type: string
-      name:
-        type: string
-      priority:
-        type: integer
-    type: object
-  dto.AssignmentRuleCondition:
-    properties:
-      field:
-        type: string
-      operator:
-        description: equals, not_equals, contains, greater_than, less_than
-        type: string
-      value: {}
     type: object
   dto.AttachmentInfo:
     properties:
@@ -1062,369 +970,6 @@ definitions:
       updatedAt:
         type: string
     type: object
-  dto.ChangeApprovalChainItem:
-    properties:
-      approverId:
-        description: 审批人ID
-        type: integer
-      isRequired:
-        description: 是否必需审批
-        type: boolean
-      level:
-        description: 审批级别
-        type: integer
-      role:
-        description: 审批角色
-        type: string
-    required:
-    - approverId
-    - level
-    - role
-    type: object
-  dto.ChangeApprovalChainResponse:
-    properties:
-      approverId:
-        description: 审批人ID
-        type: integer
-      approverName:
-        description: 审批人姓名
-        type: string
-      changeId:
-        description: 变更ID
-        type: integer
-      createdAt:
-        description: 创建时间
-        type: string
-      id:
-        description: 审批链ID
-        type: integer
-      isRequired:
-        description: 是否必需审批
-        type: boolean
-      level:
-        description: 审批级别
-        type: integer
-      role:
-        description: 审批角色
-        type: string
-      status:
-        description: 审批状态
-        type: string
-    type: object
-  dto.ChangeApprovalResponse:
-    properties:
-      approvedAt:
-        description: 审批时间
-        type: string
-      approverId:
-        description: 审批人ID
-        type: integer
-      approverName:
-        description: 审批人姓名
-        type: string
-      changeId:
-        description: 变更ID
-        type: integer
-      comment:
-        description: 审批意见
-        type: string
-      createdAt:
-        description: 创建时间
-        type: string
-      id:
-        description: 审批ID
-        type: integer
-      status:
-        allOf:
-        - $ref: '#/definitions/dto.ChangeStatus'
-        description: 审批状态
-    type: object
-  dto.ChangeApprovalStatus:
-    enum:
-    - pending
-    - approved
-    - rejected
-    type: string
-    x-enum-varnames:
-    - ChangeApprovalStatusPending
-    - ChangeApprovalStatusApproved
-    - ChangeApprovalStatusRejected
-  dto.ChangeApprovalSummary:
-    properties:
-      approvalHistory:
-        description: 审批历史
-        items:
-          $ref: '#/definitions/dto.ChangeApprovalResponse'
-        type: array
-      approvalStatus:
-        description: 审批状态
-        type: string
-      changeId:
-        description: 变更ID
-        type: integer
-      currentLevel:
-        description: 当前审批级别
-        type: integer
-      nextApprover:
-        description: 下一个审批人
-        type: string
-      pendingApprovals:
-        description: 待审批项目
-        items:
-          $ref: '#/definitions/dto.ChangeApprovalChainResponse'
-        type: array
-      totalLevels:
-        description: 总审批级别
-        type: integer
-    type: object
-  dto.ChangeApprovalWorkflowRequest:
-    properties:
-      approvalChain:
-        description: 审批链
-        items:
-          $ref: '#/definitions/dto.ChangeApprovalChainItem'
-        type: array
-      changeId:
-        description: 变更ID
-        type: integer
-    required:
-    - approvalChain
-    - changeId
-    type: object
-  dto.ChangeImplementationPlanResponse:
-    properties:
-      changeId:
-        description: 变更ID
-        type: integer
-      createdAt:
-        description: 创建时间
-        type: string
-      dependencies:
-        description: 依赖关系
-        items:
-          type: string
-        type: array
-      description:
-        description: 阶段描述
-        type: string
-      endDate:
-        description: 结束时间
-        type: string
-      id:
-        description: 实施计划ID
-        type: integer
-      phase:
-        description: 实施阶段
-        type: string
-      prerequisites:
-        description: 前置条件
-        items:
-          type: string
-        type: array
-      responsible:
-        description: 负责人
-        type: string
-      startDate:
-        description: 开始时间
-        type: string
-      status:
-        description: 状态
-        type: string
-      successCriteria:
-        description: 成功标准
-        type: string
-      tasks:
-        description: 具体任务
-        items:
-          type: string
-        type: array
-      updatedAt:
-        description: 更新时间
-        type: string
-    type: object
-  dto.ChangeRisk:
-    enum:
-    - low
-    - medium
-    - high
-    type: string
-    x-enum-comments:
-      ChangeRiskHigh: 高
-      ChangeRiskLow: 低
-      ChangeRiskMedium: 中
-    x-enum-descriptions:
-    - 低
-    - 中
-    - 高
-    x-enum-varnames:
-    - ChangeRiskLow
-    - ChangeRiskMedium
-    - ChangeRiskHigh
-  dto.ChangeRiskAssessmentResponse:
-    properties:
-      changeId:
-        description: 变更ID
-        type: integer
-      contingencyPlan:
-        description: 应急计划
-        type: string
-      createdAt:
-        description: 创建时间
-        type: string
-      id:
-        description: 风险评估ID
-        type: integer
-      impactAnalysis:
-        description: 影响分析
-        type: string
-      mitigationMeasures:
-        description: 缓解措施
-        type: string
-      riskDescription:
-        description: 风险描述
-        type: string
-      riskLevel:
-        allOf:
-        - $ref: '#/definitions/dto.ChangeRisk'
-        description: 风险等级
-      riskOwner:
-        description: 风险责任人
-        type: string
-      riskReviewDate:
-        description: 风险评审日期
-        type: string
-      updatedAt:
-        description: 更新时间
-        type: string
-    type: object
-  dto.ChangeRollbackExecutionResponse:
-    properties:
-      changeId:
-        description: 变更ID
-        type: integer
-      comments:
-        description: 备注
-        type: string
-      createdAt:
-        description: 创建时间
-        type: string
-      endTime:
-        description: 结束时间
-        type: string
-      id:
-        description: 执行记录ID
-        type: integer
-      initiatedBy:
-        description: 发起人ID
-        type: integer
-      initiatedByName:
-        description: 发起人姓名
-        type: string
-      result:
-        description: 执行结果
-        type: string
-      rollbackPlanId:
-        description: 回滚计划ID
-        type: integer
-      startTime:
-        description: 开始时间
-        type: string
-      status:
-        description: 状态
-        type: string
-      triggerReason:
-        description: 触发原因
-        type: string
-      updatedAt:
-        description: 更新时间
-        type: string
-    type: object
-  dto.ChangeRollbackPlanResponse:
-    properties:
-      approvalRequired:
-        description: 是否需要审批
-        type: boolean
-      changeId:
-        description: 变更ID
-        type: integer
-      communicationPlan:
-        description: 沟通计划
-        type: string
-      createdAt:
-        description: 创建时间
-        type: string
-      estimatedTime:
-        description: 预估时间
-        type: string
-      id:
-        description: 回滚计划ID
-        type: integer
-      responsible:
-        description: 负责人
-        type: string
-      rollbackSteps:
-        description: 回滚步骤
-        items:
-          type: string
-        type: array
-      testPlan:
-        description: 测试计划
-        type: string
-      triggerConditions:
-        description: 触发条件
-        items:
-          type: string
-        type: array
-      updatedAt:
-        description: 更新时间
-        type: string
-    type: object
-  dto.ChangeStatus:
-    enum:
-    - draft
-    - pending
-    - approved
-    - rejected
-    - scheduled
-    - in_progress
-    - completed
-    - failed
-    - rolled_back
-    - cancelled
-    type: string
-    x-enum-comments:
-      ChangeStatusApproved: 已批准
-      ChangeStatusCancelled: 已取消
-      ChangeStatusCompleted: 已完成
-      ChangeStatusDraft: 草稿
-      ChangeStatusFailed: 实施失败
-      ChangeStatusInProgress: 实施中
-      ChangeStatusPending: 待审批
-      ChangeStatusRejected: 已拒绝
-      ChangeStatusRolledBack: 已回滚
-      ChangeStatusScheduled: 已排期
-    x-enum-descriptions:
-    - 草稿
-    - 待审批
-    - 已批准
-    - 已拒绝
-    - 已排期
-    - 实施中
-    - 已完成
-    - 实施失败
-    - 已回滚
-    - 已取消
-    x-enum-varnames:
-    - ChangeStatusDraft
-    - ChangeStatusPending
-    - ChangeStatusApproved
-    - ChangeStatusRejected
-    - ChangeStatusScheduled
-    - ChangeStatusInProgress
-    - ChangeStatusCompleted
-    - ChangeStatusFailed
-    - ChangeStatusRolledBack
-    - ChangeStatusCancelled
   dto.ChangeUserStatusRequest:
     properties:
       active:
@@ -1652,8 +1197,6 @@ definitions:
     required:
     - customerTenantId
     - mspUserId
-    type: object
-  dto.CreateApprovalWorkflowRequest:
     type: object
   dto.CreateAssetRequest:
     properties:
@@ -1989,139 +1532,6 @@ definitions:
     required:
     - name
     type: object
-  dto.CreateChangeApprovalRequest:
-    properties:
-      approverId:
-        description: 审批人ID
-        type: integer
-      changeId:
-        description: 变更ID
-        type: integer
-      comment:
-        description: 审批意见
-        type: string
-    required:
-    - approverId
-    - changeId
-    type: object
-  dto.CreateChangeImplementationPlanRequest:
-    properties:
-      changeId:
-        description: 变更ID
-        type: integer
-      dependencies:
-        description: 依赖关系
-        items:
-          type: string
-        type: array
-      description:
-        description: 阶段描述
-        type: string
-      endDate:
-        description: 结束时间
-        type: string
-      phase:
-        description: 实施阶段
-        type: string
-      prerequisites:
-        description: 前置条件
-        items:
-          type: string
-        type: array
-      responsible:
-        description: 负责人
-        type: string
-      startDate:
-        description: 开始时间
-        type: string
-      successCriteria:
-        description: 成功标准
-        type: string
-      tasks:
-        description: 具体任务
-        items:
-          type: string
-        type: array
-    required:
-    - changeId
-    - description
-    - phase
-    - responsible
-    - successCriteria
-    - tasks
-    type: object
-  dto.CreateChangeRiskAssessmentRequest:
-    properties:
-      changeId:
-        description: 变更ID
-        type: integer
-      contingencyPlan:
-        description: 应急计划
-        type: string
-      impactAnalysis:
-        description: 影响分析
-        type: string
-      mitigationMeasures:
-        description: 缓解措施
-        type: string
-      riskDescription:
-        description: 风险描述
-        type: string
-      riskLevel:
-        allOf:
-        - $ref: '#/definitions/dto.ChangeRisk'
-        description: 风险等级
-      riskOwner:
-        description: 风险责任人
-        type: string
-      riskReviewDate:
-        description: 风险评审日期
-        type: string
-    required:
-    - changeId
-    - impactAnalysis
-    - mitigationMeasures
-    - riskDescription
-    - riskLevel
-    - riskOwner
-    type: object
-  dto.CreateChangeRollbackPlanRequest:
-    properties:
-      approvalRequired:
-        description: 是否需要审批
-        type: boolean
-      changeId:
-        description: 变更ID
-        type: integer
-      communicationPlan:
-        description: 沟通计划
-        type: string
-      estimatedTime:
-        description: 预估时间
-        type: string
-      responsible:
-        description: 负责人
-        type: string
-      rollbackSteps:
-        description: 回滚步骤
-        items:
-          type: string
-        type: array
-      testPlan:
-        description: 测试计划
-        type: string
-      triggerConditions:
-        description: 触发条件
-        items:
-          type: string
-        type: array
-    required:
-    - changeId
-    - estimatedTime
-    - responsible
-    - rollbackSteps
-    - triggerConditions
-    type: object
   dto.CreateCloudAccountRequest:
     properties:
       accountId:
@@ -2394,106 +1804,6 @@ definitions:
     required:
     - name
     type: object
-  dto.CreateSLAPolicyRequest:
-    properties:
-      businessHours:
-        additionalProperties: true
-        type: object
-      customerTier:
-        description: platinum/gold/silver/bronze
-        type: string
-      description:
-        type: string
-      escalationRules:
-        additionalProperties: true
-        type: object
-      excludeHolidays:
-        type: boolean
-      excludeWeekends:
-        type: boolean
-      isActive:
-        type: boolean
-      name:
-        type: string
-      priority:
-        description: critical/high/medium/low
-        type: string
-      priorityScore:
-        type: integer
-      resolutionTimeMinutes:
-        type: integer
-      responseTimeMinutes:
-        type: integer
-      tenantId:
-        type: integer
-      ticketType:
-        description: incident/problem/change/request
-        type: string
-    required:
-    - name
-    type: object
-  dto.CreateServiceCatalogRequest:
-    properties:
-      category:
-        maxLength: 100
-        type: string
-      ciTypeId:
-        type: integer
-      cloudServiceId:
-        type: integer
-      deliveryTime:
-        maxLength: 50
-        type: string
-      description:
-        maxLength: 1000
-        type: string
-      name:
-        maxLength: 255
-        type: string
-      status:
-        enum:
-        - enabled
-        - disabled
-        type: string
-    required:
-    - category
-    - name
-    type: object
-  dto.CreateServiceRequestRequest:
-    properties:
-      catalogId:
-        minimum: 1
-        type: integer
-      complianceAck:
-        type: boolean
-      costCenter:
-        maxLength: 100
-        type: string
-      dataClassification:
-        enum:
-        - public
-        - internal
-        - confidential
-        - restricted
-        type: string
-      expireAt:
-        type: string
-      formData:
-        additionalProperties: {}
-        type: object
-      needsPublicIp:
-        type: boolean
-      reason:
-        maxLength: 500
-        type: string
-      sourceIpWhitelist:
-        items:
-          type: string
-        type: array
-      title:
-        maxLength: 255
-        type: string
-    type: object
   dto.CreateTenantRequest:
     properties:
       billingEnabled:
@@ -2577,6 +1887,8 @@ definitions:
     type: object
   dto.CreateTicketRequest:
     properties:
+      approvalChain:
+        description: 审批链步骤（由 SR 流程注入，BPMN 变量用）
       assigneeId:
         type: integer
       attachments:
@@ -2589,9 +1901,18 @@ definitions:
       categoryId:
         description: 分类ID（优先使用）
         type: integer
+      conversationId:
+        description: 邮件对话线程ID（Graph conversationId），用于识别用户回复
+        type: string
+      creatorEmail:
+        description: 创建人邮箱（邮件建单等非交互式来源记录原始发件邮箱）
+        type: string
       description:
         maxLength: 5000
         minLength: 0
+        type: string
+      externalMessageId:
+        description: 外部消息ID（如邮件 internetMessageId），用于建单去重
         type: string
       formFields:
         additionalProperties: true
@@ -2609,6 +1930,12 @@ definitions:
       requesterId:
         description: 从认证上下文中获取，前端可不传
         type: integer
+      source:
+        description: 工单来源：manual=手动创建，service_catalog=服务目录申请
+        enum:
+        - manual
+        - service_catalog
+        type: string
       tagIds:
         description: 标签ID列表
         items:
@@ -2645,52 +1972,26 @@ definitions:
     - priority
     - title
     type: object
-  dto.CreateTicketTypeRequest:
-    properties:
-      approvalChain:
-        items:
-          $ref: '#/definitions/dto.ApprovalChainDefinition'
-        type: array
-      approvalEnabled:
-        type: boolean
-      assignmentRules:
-        items:
-          $ref: '#/definitions/dto.AssignmentRule'
-        type: array
-      autoAssignEnabled:
-        type: boolean
-      code:
-        type: string
-      color:
-        type: string
-      customFields:
-        items:
-          $ref: '#/definitions/dto.CustomFieldDefinition'
-        type: array
-      defaultSlaId:
-        type: integer
-      description:
-        type: string
-      icon:
-        type: string
-      name:
-        type: string
-      notificationConfig:
-        $ref: '#/definitions/dto.NotificationConfig'
-      permissionConfig:
-        $ref: '#/definitions/dto.PermissionConfig'
-      slaEnabled:
-        type: boolean
-    required:
-    - code
-    - name
-    type: object
   dto.CreateUserRequest:
     properties:
       department:
         type: string
+      departmentId:
+        type: integer
       email:
         type: string
+      functionLine:
+        type: string
+      gender:
+        enum:
+        - male
+        - female
+        type: string
+      isLeader:
+        type: boolean
+      managerId:
+        description: ManagerID 直属上级（汇报线，个人级别），不同于 DepartmentID 代表的正式组织归属
+        type: integer
       mspRole:
         description: MSP角色，仅当用户属于MSP租户时使用
         enum:
@@ -2703,7 +2004,8 @@ definitions:
         minLength: 1
         type: string
       password:
-        minLength: 6
+        maxLength: 128
+        minLength: 12
         type: string
       phone:
         type: string
@@ -2711,13 +2013,24 @@ definitions:
         description: 角色，可选；不提供时使用后端默认值（end_user）
         enum:
         - super_admin
-        - admin
-        - manager
-        - agent
-        - technician
-        - security
+        - sysadmin
+        - it_director
+        - ops_director
+        - ops_manager
+        - ops_engineer
+        - dba
+        - network_eng
+        - sd_manager
+        - change_manager
+        - service_catalog_admin
+        - l1_support
+        - l2_support
+        - l3_expert
+        - security_admin
+        - audit_admin
+        - dept_manager
         - end_user
-        - user
+        - guest
         type: string
       tenantId:
         type: integer
@@ -2730,88 +2043,6 @@ definitions:
     - name
     - password
     - username
-    type: object
-  dto.CustomFieldConditionalDisplay:
-    properties:
-      field:
-        type: string
-      operator:
-        description: equals, not_equals, contains
-        type: string
-      value: {}
-    type: object
-  dto.CustomFieldDefinition:
-    properties:
-      conditionalDisplay:
-        $ref: '#/definitions/dto.CustomFieldConditionalDisplay'
-      defaultValue: {}
-      description:
-        type: string
-      id:
-        type: string
-      label:
-        type: string
-      name:
-        type: string
-      options:
-        items:
-          $ref: '#/definitions/dto.CustomFieldOption'
-        type: array
-      order:
-        type: integer
-      placeholder:
-        type: string
-      required:
-        type: boolean
-      type:
-        $ref: '#/definitions/dto.CustomFieldType'
-      validation:
-        $ref: '#/definitions/dto.CustomFieldValidation'
-    type: object
-  dto.CustomFieldOption:
-    properties:
-      label:
-        type: string
-      value: {}
-    type: object
-  dto.CustomFieldType:
-    enum:
-    - text
-    - textarea
-    - number
-    - date
-    - datetime
-    - select
-    - multi_select
-    - checkbox
-    - radio
-    - file
-    - user_picker
-    - department_picker
-    type: string
-    x-enum-varnames:
-    - CustomFieldTypeText
-    - CustomFieldTypeTextarea
-    - CustomFieldTypeNumber
-    - CustomFieldTypeDate
-    - CustomFieldTypeDatetime
-    - CustomFieldTypeSelect
-    - CustomFieldTypeMultiSelect
-    - CustomFieldTypeCheckbox
-    - CustomFieldTypeRadio
-    - CustomFieldTypeFile
-    - CustomFieldTypeUserPicker
-    - CustomFieldTypeDepartmentPicker
-  dto.CustomFieldValidation:
-    properties:
-      max:
-        type: integer
-      message:
-        type: string
-      min:
-        type: integer
-      pattern:
-        type: string
     type: object
   dto.DashboardKPIResponse:
     properties:
@@ -3272,6 +2503,33 @@ definitions:
       updatedAt:
         example: "2024-01-01T00:00:00Z"
         type: string
+    type: object
+  dto.IncidentCommentResponse:
+    properties:
+      attachments:
+        items:
+          type: integer
+        type: array
+      content:
+        type: string
+      createdAt:
+        type: string
+      id:
+        type: integer
+      incidentId:
+        type: integer
+      isInternal:
+        type: boolean
+      mentions:
+        items:
+          type: integer
+        type: array
+      updatedAt:
+        type: string
+      user:
+        $ref: '#/definitions/dto.UserInfo'
+      userId:
+        type: integer
     type: object
   dto.IncidentEscalationRequest:
     properties:
@@ -3758,10 +3016,6 @@ definitions:
     type: object
   dto.LoginResponse:
     properties:
-      accessToken:
-        type: string
-      refreshToken:
-        type: string
       tenant:
         $ref: '#/definitions/ent.Tenant'
       user:
@@ -3812,31 +3066,6 @@ definitions:
       阿里云:
         type: integer
     type: object
-  dto.NotificationConfig:
-    properties:
-      onApproval:
-        $ref: '#/definitions/dto.NotificationRecipients'
-      onComplete:
-        $ref: '#/definitions/dto.NotificationRecipients'
-      onCreate:
-        $ref: '#/definitions/dto.NotificationRecipients'
-      onReject:
-        $ref: '#/definitions/dto.NotificationRecipients'
-      onUpdate:
-        $ref: '#/definitions/dto.NotificationRecipients'
-    type: object
-  dto.NotificationRecipients:
-    properties:
-      enabled:
-        type: boolean
-      recipients:
-        description: requester, assignee, approvers, watchers等
-        items:
-          type: string
-        type: array
-      template:
-        type: string
-    type: object
   dto.PagedGroupsResponse:
     properties:
       groups:
@@ -3871,7 +3100,8 @@ definitions:
       email:
         type: string
       password:
-        minLength: 8
+        maxLength: 128
+        minLength: 12
         type: string
       passwordConfirm:
         type: string
@@ -3887,29 +3117,6 @@ definitions:
     properties:
       message:
         type: string
-    type: object
-  dto.PermissionConfig:
-    properties:
-      canApprove:
-        items:
-          type: string
-        type: array
-      canCreate:
-        items:
-          type: string
-        type: array
-      canDelete:
-        items:
-          type: string
-        type: array
-      canEdit:
-        items:
-          type: string
-        type: array
-      canView:
-        items:
-          type: string
-        type: array
     type: object
   dto.PreviewBPMNRequest:
     properties:
@@ -3964,6 +3171,42 @@ definitions:
       useCases:
         description: 适用场景说明
         type: string
+    type: object
+  dto.ProcessApprovalDecisionResponse:
+    properties:
+      action:
+        type: string
+      actorId:
+        type: integer
+      actorName:
+        type: string
+      businessId:
+        type: string
+      businessType:
+        type: string
+      comment:
+        type: string
+      createdAt:
+        type: string
+      decision:
+        type: string
+      id:
+        type: integer
+      nodeKey:
+        type: string
+      processDefinitionKey:
+        type: string
+      processInstanceId:
+        type: integer
+      processInstanceKey:
+        type: string
+      processTaskId:
+        type: integer
+      taskId:
+        type: string
+      variablesSnapshot:
+        additionalProperties: true
+        type: object
     type: object
   dto.ProcessTriggerRequest:
     properties:
@@ -4034,16 +3277,12 @@ definitions:
   dto.RefreshTokenRequest:
     properties:
       refreshToken:
+        description: |-
+          Kept for non-browser clients during the migration to cookie-only browser
+          sessions. Browser requests obtain this value from the HttpOnly cookie.
         type: string
-    required:
-    - refreshToken
     type: object
   dto.RefreshTokenResponse:
-    properties:
-      accessToken:
-        type: string
-      refreshToken:
-        type: string
     type: object
   dto.RegisterRequest:
     properties:
@@ -4153,7 +3392,8 @@ definitions:
   dto.ResetPasswordRequest:
     properties:
       newPassword:
-        minLength: 6
+        maxLength: 128
+        minLength: 12
         type: string
     required:
     - newPassword
@@ -4232,172 +3472,6 @@ definitions:
         type: string
       status:
         type: string
-    type: object
-  dto.ServiceCatalogListResponse:
-    properties:
-      catalogs:
-        items:
-          $ref: '#/definitions/dto.ServiceCatalogResponse'
-        type: array
-      page:
-        type: integer
-      size:
-        type: integer
-      total:
-        type: integer
-    type: object
-  dto.ServiceCatalogResponse:
-    properties:
-      category:
-        type: string
-      ciTypeId:
-        type: integer
-      cloudServiceId:
-        type: integer
-      createdAt:
-        type: string
-      deliveryTime:
-        type: string
-      description:
-        type: string
-      id:
-        type: integer
-      name:
-        type: string
-      status:
-        type: string
-      updatedAt:
-        type: string
-    type: object
-  dto.ServiceRequestApprovalActionRequest:
-    properties:
-      action:
-        enum:
-        - approve
-        - reject
-        type: string
-      comment:
-        maxLength: 2000
-        type: string
-    required:
-    - action
-    type: object
-  dto.ServiceRequestApprovalResponse:
-    properties:
-      action:
-        type: string
-      approverId:
-        type: integer
-      approverName:
-        type: string
-      comment:
-        type: string
-      createdAt:
-        type: string
-      delegatedToId:
-        description: 转交审批人ID
-        type: integer
-      dueAt:
-        description: 到期时间
-        type: string
-      escalationReason:
-        description: 升级原因
-        type: string
-      id:
-        type: integer
-      isEscalated:
-        description: 是否已升级
-        type: boolean
-      level:
-        type: integer
-      processedAt:
-        type: string
-      serviceRequestId:
-        type: integer
-      status:
-        type: string
-      step:
-        type: string
-      timeoutHours:
-        description: V1 新增字段
-        type: integer
-    type: object
-  dto.ServiceRequestListResponse:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/dto.ServiceRequestResponse'
-        type: array
-      page:
-        type: integer
-      size:
-        type: integer
-      total:
-        type: integer
-    type: object
-  dto.ServiceRequestResponse:
-    properties:
-      approvals:
-        items:
-          $ref: '#/definitions/dto.ServiceRequestApprovalResponse'
-        type: array
-      approvedAt:
-        type: string
-      catalog:
-        $ref: '#/definitions/dto.ServiceCatalogResponse'
-      catalogId:
-        type: integer
-      ciId:
-        type: integer
-      completedAt:
-        type: string
-      completionNote:
-        type: string
-      complianceAck:
-        type: boolean
-      costCenter:
-        type: string
-      createdAt:
-        type: string
-      currentLevel:
-        type: integer
-      dataClassification:
-        type: string
-      expireAt:
-        type: string
-      formData:
-        additionalProperties: {}
-        type: object
-      id:
-        type: integer
-      lastError:
-        type: string
-      needsPublicIp:
-        type: boolean
-      processorId:
-        type: integer
-      reason:
-        type: string
-      requester:
-        $ref: '#/definitions/dto.UserResponse'
-      requesterId:
-        type: integer
-      sourceIpWhitelist:
-        items:
-          type: string
-        type: array
-      startedAt:
-        type: string
-      status:
-        type: string
-      title:
-        type: string
-      totalLevels:
-        type: integer
-      updatedAt:
-        type: string
-      version:
-        type: integer
     type: object
   dto.SessionHeartbeatRequest:
     properties:
@@ -4548,90 +3622,71 @@ definitions:
       user:
         $ref: '#/definitions/dto.WorkflowUserInfo'
     type: object
-  dto.TicketTypeDefinition:
+  dto.TicketRelation:
     properties:
-      approvalChain:
-        items:
-          $ref: '#/definitions/dto.ApprovalChainDefinition'
-        type: array
-      approvalEnabled:
-        type: boolean
-      approvalWorkflowId:
-        type: string
-      assignmentRules:
-        items:
-          $ref: '#/definitions/dto.AssignmentRule'
-        type: array
-      autoAssignEnabled:
-        type: boolean
-      code:
-        type: string
-      color:
-        type: string
       createdAt:
         type: string
       createdBy:
         type: integer
       createdByName:
         type: string
-      customFields:
-        items:
-          $ref: '#/definitions/dto.CustomFieldDefinition'
-        type: array
-      defaultSlaId:
-        type: integer
       description:
         type: string
-      icon:
+      direction:
         type: string
       id:
-        type: integer
-      name:
         type: string
-      notificationConfig:
-        $ref: '#/definitions/dto.NotificationConfig'
-      permissionConfig:
-        $ref: '#/definitions/dto.PermissionConfig'
-      slaEnabled:
-        type: boolean
-      status:
-        $ref: '#/definitions/dto.TicketTypeStatus'
-      tenantId:
-        type: integer
-      updatedAt:
+      relationType:
         type: string
-      updatedBy:
+      sourceTicket:
+        $ref: '#/definitions/dto.TicketRelationTicketRef'
+      sourceTicketId:
         type: integer
-      updatedByName:
+      sourceTicketNumber:
         type: string
-      usageCount:
+      targetTicket:
+        $ref: '#/definitions/dto.TicketRelationTicketRef'
+      targetTicketId:
         type: integer
+      targetTicketNumber:
+        type: string
     type: object
-  dto.TicketTypeListResponse:
+  dto.TicketRelationStats:
     properties:
-      page:
+      blockedByCount:
         type: integer
-      pageSize:
+      blockingCount:
         type: integer
-      total:
+      childrenCount:
         type: integer
-      totalPages:
+      duplicateCount:
         type: integer
-      types:
-        items:
-          $ref: '#/definitions/dto.TicketTypeDefinition'
-        type: array
+      inboundCount:
+        type: integer
+      outboundCount:
+        type: integer
+      parentCount:
+        type: integer
+      relatedCount:
+        type: integer
+      relationsByType:
+        additionalProperties:
+          type: integer
+        type: object
+      totalRelations:
+        type: integer
     type: object
-  dto.TicketTypeStatus:
-    enum:
-    - active
-    - inactive
-    - draft
-    type: string
-    x-enum-varnames:
-    - TicketTypeStatusActive
-    - TicketTypeStatusInactive
-    - TicketTypeStatusDraft
+  dto.TicketRelationTicketRef:
+    properties:
+      id:
+        type: integer
+      status:
+        type: string
+      ticketNumber:
+        type: string
+      title:
+        type: string
+    type: object
   dto.TicketWorkflowAction:
     enum:
     - accept
@@ -4768,23 +3823,6 @@ definitions:
       type:
         type: string
       typeName:
-        type: string
-    type: object
-  dto.UpdateApprovalWorkflowRequest:
-    properties:
-      description:
-        type: string
-      isActive:
-        type: boolean
-      name:
-        type: string
-      nodes:
-        items:
-          $ref: '#/definitions/dto.ApprovalNodeRequest'
-        type: array
-      priority:
-        type: string
-      ticketType:
         type: string
     type: object
   dto.UpdateAutomationRuleRequest:
@@ -5007,18 +4045,6 @@ definitions:
         minimum: 1
         type: integer
     type: object
-  dto.UpdateChangeApprovalRequest:
-    properties:
-      comment:
-        description: 审批意见
-        type: string
-      status:
-        allOf:
-        - $ref: '#/definitions/dto.ChangeApprovalStatus'
-        description: 审批状态
-    required:
-    - status
-    type: object
   dto.UpdateCloudAccountRequest:
     properties:
       accountName:
@@ -5200,68 +4226,6 @@ definitions:
       sortOrder:
         type: integer
     type: object
-  dto.UpdateSLAPolicyRequest:
-    properties:
-      businessHours:
-        additionalProperties: true
-        type: object
-      customerTier:
-        type: string
-      description:
-        type: string
-      escalationRules:
-        additionalProperties: true
-        type: object
-      excludeHolidays:
-        type: boolean
-      excludeWeekends:
-        type: boolean
-      isActive:
-        type: boolean
-      name:
-        type: string
-      priority:
-        type: string
-      priorityScore:
-        type: integer
-      resolutionTimeMinutes:
-        type: integer
-      responseTimeMinutes:
-        type: integer
-      ticketType:
-        type: string
-    type: object
-  dto.UpdateServiceCatalogRequest:
-    properties:
-      category:
-        maxLength: 100
-        type: string
-      ciTypeId:
-        type: integer
-      cloudServiceId:
-        type: integer
-      deliveryTime:
-        maxLength: 50
-        type: string
-      description:
-        maxLength: 1000
-        type: string
-      name:
-        maxLength: 255
-        type: string
-      status:
-        enum:
-        - enabled
-        - disabled
-        type: string
-    type: object
-  dto.UpdateServiceRequestStatusRequest:
-    properties:
-      status:
-        type: string
-    required:
-    - status
-    type: object
   dto.UpdateTenantRequest:
     properties:
       billingEnabled:
@@ -5314,49 +4278,39 @@ definitions:
         - customer
         type: string
     type: object
-  dto.UpdateTicketTypeRequest:
-    properties:
-      approvalChain:
-        items:
-          $ref: '#/definitions/dto.ApprovalChainDefinition'
-        type: array
-      approvalEnabled:
-        type: boolean
-      assignmentRules:
-        items:
-          $ref: '#/definitions/dto.AssignmentRule'
-        type: array
-      autoAssignEnabled:
-        type: boolean
-      color:
-        type: string
-      customFields:
-        items:
-          $ref: '#/definitions/dto.CustomFieldDefinition'
-        type: array
-      defaultSlaId:
-        type: integer
-      description:
-        type: string
-      icon:
-        type: string
-      name:
-        type: string
-      notificationConfig:
-        $ref: '#/definitions/dto.NotificationConfig'
-      permissionConfig:
-        $ref: '#/definitions/dto.PermissionConfig'
-      slaEnabled:
-        type: boolean
-      status:
-        $ref: '#/definitions/dto.TicketTypeStatus'
-    type: object
   dto.UpdateUserRequest:
     properties:
+      additionalRoleIds:
+        description: |-
+          AdditionalRoleIds 是附加角色（多对多，走 User.roles 边），只影响 BPMN 按角色路由
+          审批任务时的候选资格（resolveRoleCandidates），不影响 RBAC 权限判定——RBAC 权限
+          判定只看上面单一的 Role 字段。传 nil 表示不修改；传 []int{} 表示清空所有附加角色。
+        items:
+          type: integer
+        type: array
       department:
         type: string
+      departmentId:
+        description: DepartmentID 传 nil 表示不修改；传具体值（含 0）表示整体替换所属部门。
+        type: integer
       email:
         type: string
+      functionLine:
+        description: |-
+          FunctionLine 传空字符串表示不修改——这个字段目前只从 HR 源数据回填，正常不会有人
+          手动清空它，跟 Department/Phone 用同样的"空值=不改"约定，不用额外搞指针。
+        type: string
+      gender:
+        enum:
+        - male
+        - female
+        type: string
+      isLeader:
+        description: IsLeader 传 nil 表示不修改
+        type: boolean
+      managerId:
+        description: ManagerID 传 nil 表示不修改；传具体值（含 0）表示整体替换直属上级。
+        type: integer
       name:
         maxLength: 100
         minLength: 1
@@ -5367,13 +4321,24 @@ definitions:
         description: 角色更新，仅管理员有权限更新
         enum:
         - super_admin
-        - admin
-        - manager
-        - agent
-        - technician
-        - security
+        - sysadmin
+        - it_director
+        - ops_director
+        - ops_manager
+        - ops_engineer
+        - dba
+        - network_eng
+        - sd_manager
+        - change_manager
+        - service_catalog_admin
+        - l1_support
+        - l2_support
+        - l3_expert
+        - security_admin
+        - audit_admin
+        - dept_manager
         - end_user
-        - user
+        - guest
         type: string
       username:
         maxLength: 50
@@ -5397,14 +4362,36 @@ definitions:
     properties:
       active:
         type: boolean
+      additionalRoleIds:
+        items:
+          type: integer
+        type: array
       createdAt:
         type: string
       department:
         type: string
+      departmentId:
+        type: integer
       email:
+        type: string
+      functionLine:
+        type: string
+      gender:
         type: string
       id:
         type: integer
+      isLeader:
+        type: boolean
+      jobTitle:
+        type: string
+      managerId:
+        type: integer
+      managerName:
+        description: |-
+          ManagerName 是冗余展示字段，service 层按当页 ManagerID 批量补充（见
+          UserService.enrichManagerNames），dto.ToUserDetailResponse 本身不填它——
+          mapper 只接触单条 ent.User，够不到"上级也是个 user，需要另查一次"这件事。
+        type: string
       mspRole:
         type: string
       name:
@@ -5508,6 +4495,9 @@ definitions:
       created_at:
         description: 创建时间
         type: string
+      deleted_at:
+        description: 软删除时间
+        type: string
       description:
         description: 应用描述
         type: string
@@ -5559,134 +4549,42 @@ definitions:
           $ref: '#/definitions/ent.Tag'
         type: array
     type: object
-  ent.ApprovalRecord:
+  ent.BootstrapToken:
     properties:
-      action:
-        description: '操作: approve, reject, delegate'
-        type: string
-      approver_id:
-        description: 审批人ID
-        type: integer
-      approver_name:
-        description: 审批人姓名
-        type: string
-      comment:
-        description: 审批意见
-        type: string
       created_at:
         description: 创建时间
         type: string
-      current_level:
-        description: 当前审批级别
-        type: integer
-      due_date:
-        description: 到期时间
-        type: string
       edges:
         allOf:
-        - $ref: '#/definitions/ent.ApprovalRecordEdges'
+        - $ref: '#/definitions/ent.BootstrapTokenEdges'
         description: |-
           Edges holds the relations/edges for other nodes in the graph.
-          The values are being populated by the ApprovalRecordQuery when eager-loading is set.
+          The values are being populated by the BootstrapTokenQuery when eager-loading is set.
+      expires_at:
+        description: token过期时间
+        type: string
       id:
         description: ID of the ent.
-        type: integer
-      processed_at:
-        description: 处理时间
-        type: string
-      status:
-        description: '状态: pending, approved, rejected, delegated, timeout'
-        type: string
-      step_order:
-        description: 节点顺序
         type: integer
       tenant_id:
         description: 租户ID
         type: integer
-      ticket_id:
-        description: 工单ID
-        type: integer
-      ticket_number:
-        description: 工单编号
+      token_hash:
+        description: bootstrap token bcrypt哈希
         type: string
-      ticket_title:
-        description: 工单标题
-        type: string
-      total_levels:
-        description: 总审批级别数
-        type: integer
-      workflow_id:
-        description: 工作流ID
-        type: integer
-      workflow_name:
-        description: 工作流名称
-        type: string
-    type: object
-  ent.ApprovalRecordEdges:
-    properties:
-      ticket:
-        allOf:
-        - $ref: '#/definitions/ent.Ticket'
-        description: 关联的工单
-      workflow:
-        allOf:
-        - $ref: '#/definitions/ent.ApprovalWorkflow'
-        description: 关联的工作流
-    type: object
-  ent.ApprovalWorkflow:
-    properties:
-      completed_at:
-        description: 完成时间
-        type: string
-      created_at:
-        description: 创建时间
-        type: string
-      description:
-        description: 工作流描述
-        type: string
-      edges:
-        allOf:
-        - $ref: '#/definitions/ent.ApprovalWorkflowEdges'
-        description: |-
-          Edges holds the relations/edges for other nodes in the graph.
-          The values are being populated by the ApprovalWorkflowQuery when eager-loading is set.
-      id:
-        description: ID of the ent.
-        type: integer
-      is_active:
-        description: 是否启用
+      used:
+        description: 是否已使用
         type: boolean
-      name:
-        description: 工作流名称
-        type: string
-      nodes:
-        description: 审批节点配置
-        items:
-          additionalProperties: true
-          type: object
-        type: array
-      priority:
-        description: 优先级
-        type: string
-      status:
-        description: '状态: pending, approved, rejected, returned, cancelled'
-        type: string
-      tenant_id:
-        description: 租户ID
+      used_by:
+        description: 创建的管理员用户ID
         type: integer
-      ticket_type:
-        description: 工单类型
-        type: string
-      updated_at:
-        description: 更新时间
-        type: string
     type: object
-  ent.ApprovalWorkflowEdges:
+  ent.BootstrapTokenEdges:
     properties:
-      approval_records:
-        description: 审批记录
+      tenant:
+        description: Tenant holds the value of the tenant edge.
         items:
-          $ref: '#/definitions/ent.ApprovalRecord'
+          $ref: '#/definitions/ent.Tenant'
         type: array
     type: object
   ent.CIAttributeDefinition:
@@ -5792,7 +4690,7 @@ definitions:
         type: integer
       impact_level:
         allOf:
-        - $ref: '#/definitions/itsm-backend_ent_cirelationship.ImpactLevel'
+        - $ref: '#/definitions/cirelationship.ImpactLevel'
         description: 影响程度
       is_active:
         description: 是否启用
@@ -5813,7 +4711,7 @@ definitions:
         type: integer
       strength:
         allOf:
-        - $ref: '#/definitions/itsm-backend_ent_cirelationship.Strength'
+        - $ref: '#/definitions/cirelationship.Strength'
         description: 关系强度
       target_ci_id:
         description: 目标CI ID
@@ -6391,6 +5289,9 @@ definitions:
       lifecycle_status:
         description: 生命周期状态
         type: string
+      local_modified_at:
+        description: 客户本地修改时间，用于三方合并冲突检测
+        type: string
       location:
         description: 位置
         type: string
@@ -6402,6 +5303,9 @@ definitions:
         type: string
       owned_by:
         description: 拥有者
+        type: string
+      ownership_mode:
+        description: 'ownership模式: managed(平台管理)/customer(客户托管)/sla(SLA覆盖)'
         type: string
       serial_number:
         description: 序列号
@@ -6500,7 +5404,7 @@ definitions:
         description: '操作类型: create/update/delete'
         type: string
       operator_id:
-        description: 操作人ID
+        description: 操作人ID，0 表示系统操作者
         type: integer
       operator_name:
         description: 操作人姓名
@@ -6522,13 +5426,56 @@ definitions:
         - $ref: '#/definitions/ent.ConfigurationItem'
         description: Ci holds the value of the ci edge.
     type: object
+  ent.Conversation:
+    properties:
+      created_at:
+        description: CreatedAt holds the value of the "created_at" field.
+        type: string
+      edges:
+        allOf:
+        - $ref: '#/definitions/ent.ConversationEdges'
+        description: |-
+          Edges holds the relations/edges for other nodes in the graph.
+          The values are being populated by the ConversationQuery when eager-loading is set.
+      id:
+        description: ID of the ent.
+        type: integer
+      tenant_id:
+        description: TenantID holds the value of the "tenant_id" field.
+        type: integer
+      title:
+        description: Title holds the value of the "title" field.
+        type: string
+      user_id:
+        description: UserID holds the value of the "user_id" field.
+        type: integer
+    type: object
+  ent.ConversationEdges:
+    properties:
+      messages:
+        description: Messages holds the value of the messages edge.
+        items:
+          $ref: '#/definitions/ent.Message'
+        type: array
+      tool_invocations:
+        description: ToolInvocations holds the value of the tool_invocations edge.
+        items:
+          $ref: '#/definitions/ent.ToolInvocation'
+        type: array
+    type: object
   ent.Department:
     properties:
+      area_name:
+        description: 区域/地域名称
+        type: string
       code:
         description: 部门代码
         type: string
       created_at:
         description: 创建时间
+        type: string
+      deleted_at:
+        description: 软删除时间
         type: string
       description:
         description: 部门描述
@@ -6547,6 +5494,9 @@ definitions:
         type: integer
       name:
         description: 部门名称
+        type: string
+      org_type:
+        description: '组织类型: department=行政部门, warehouse=仓库/物流节点'
         type: string
       parent_id:
         description: 父部门ID
@@ -7099,6 +6049,9 @@ definitions:
       created_at:
         description: 创建时间
         type: string
+      deleted_at:
+        description: 软删除时间
+        type: string
       edges:
         allOf:
         - $ref: '#/definitions/ent.KnowledgeArticleEdges'
@@ -7114,6 +6067,12 @@ definitions:
       like_count:
         description: 点赞次数
         type: integer
+      review_comment:
+        description: 审核意见
+        type: string
+      review_status:
+        description: '审核状态: draft/under_review/published/archived'
+        type: string
       tags:
         description: 标签
         type: string
@@ -7133,18 +6092,20 @@ definitions:
   ent.KnowledgeArticleEdges:
     properties:
       sessions:
-        allOf:
-        - $ref: '#/definitions/ent.KnowledgeArticleSession'
         description: Sessions holds the value of the sessions edge.
+        items:
+          $ref: '#/definitions/ent.KnowledgeArticleSession'
+        type: array
       user_likes:
         description: UserLikes holds the value of the user_likes edge.
         items:
           $ref: '#/definitions/ent.KnowledgeArticleLike'
         type: array
       versions:
-        allOf:
-        - $ref: '#/definitions/ent.KnowledgeArticleVersion'
         description: Versions holds the value of the versions edge.
+        items:
+          $ref: '#/definitions/ent.KnowledgeArticleVersion'
+        type: array
     type: object
   ent.KnowledgeArticleLike:
     properties:
@@ -7245,7 +6206,7 @@ definitions:
         type: string
       status:
         allOf:
-        - $ref: '#/definitions/itsm-backend_ent_knowledgearticlesession.Status'
+        - $ref: '#/definitions/knowledgearticlesession.Status'
         description: 状态
       user_id:
         description: 用户ID
@@ -7254,10 +6215,9 @@ definitions:
   ent.KnowledgeArticleSessionEdges:
     properties:
       article:
+        allOf:
+        - $ref: '#/definitions/ent.KnowledgeArticle'
         description: Article holds the value of the article edge.
-        items:
-          $ref: '#/definitions/ent.KnowledgeArticle'
-        type: array
       participants:
         description: Participants holds the value of the participants edge.
         items:
@@ -7311,10 +6271,9 @@ definitions:
   ent.KnowledgeArticleVersionEdges:
     properties:
       article:
+        allOf:
+        - $ref: '#/definitions/ent.KnowledgeArticle'
         description: Article holds the value of the article edge.
-        items:
-          $ref: '#/definitions/ent.KnowledgeArticle'
-        type: array
     type: object
   ent.MSPAllocation:
     properties:
@@ -7476,6 +6435,40 @@ definitions:
         items:
           $ref: '#/definitions/ent.ItemVersion'
         type: array
+    type: object
+  ent.Message:
+    properties:
+      content:
+        description: Content holds the value of the "content" field.
+        type: string
+      conversation_id:
+        description: ConversationID holds the value of the "conversation_id" field.
+        type: integer
+      created_at:
+        description: CreatedAt holds the value of the "created_at" field.
+        type: string
+      edges:
+        allOf:
+        - $ref: '#/definitions/ent.MessageEdges'
+        description: |-
+          Edges holds the relations/edges for other nodes in the graph.
+          The values are being populated by the MessageQuery when eager-loading is set.
+      id:
+        description: ID of the ent.
+        type: integer
+      request_id:
+        description: RequestID holds the value of the "request_id" field.
+        type: string
+      role:
+        description: Role holds the value of the "role" field.
+        type: string
+    type: object
+  ent.MessageEdges:
+    properties:
+      conversation:
+        allOf:
+        - $ref: '#/definitions/ent.Conversation'
+        description: Conversation holds the value of the conversation edge.
     type: object
   ent.Microservice:
     properties:
@@ -8600,6 +7593,11 @@ definitions:
         additionalProperties: true
         description: 营业时间配置
         type: object
+      category_ids:
+        description: 绑定的工单分类ID列表
+        items:
+          type: integer
+        type: array
       conditions:
         additionalProperties: true
         description: 适用条件
@@ -8620,6 +7618,12 @@ definitions:
         additionalProperties: true
         description: 升级规则
         type: object
+      exclude_holidays:
+        description: 是否排除节假日
+        type: boolean
+      exclude_weekends:
+        description: 是否排除周末
+        type: boolean
       id:
         description: ID of the ent.
         type: integer
@@ -8873,6 +7877,9 @@ definitions:
       created_at:
         description: 创建时间
         type: string
+      deleted_at:
+        description: 软删除时间
+        type: string
       description:
         description: 团队描述
         type: string
@@ -8972,7 +7979,7 @@ definitions:
         type: string
       type:
         allOf:
-        - $ref: '#/definitions/itsm-backend_ent_tenant.Type'
+        - $ref: '#/definitions/tenant.Type'
         description: '租户类型: internal|saas_customer|msp_provider|msp_customer，保留 standard|msp|customer
           兼容历史数据'
       updated_at:
@@ -8981,6 +7988,11 @@ definitions:
     type: object
   ent.TenantEdges:
     properties:
+      bootstrap_tokens:
+        description: bootstrap token
+        items:
+          $ref: '#/definitions/ent.BootstrapToken'
+        type: array
       msp_customer_allocations:
         description: MSP客户分配
         items:
@@ -9063,9 +8075,19 @@ definitions:
       closed_at:
         description: 关闭时间
         type: string
+      conversation_id:
+        description: 邮件对话线程ID（Graph conversationId），用于识别用户回复并追加评论而非重复建单
+        type: string
       created_at:
         description: 创建时间
         type: string
+      creator_email:
+        description: 创建人邮箱（邮件开单时记录，非注册用户也可创建）
+        type: string
+      custom_field_values:
+        additionalProperties: true
+        description: 工单创建时提交的自定义字段值（key 为模板字段 name）
+        type: object
       deleted_at:
         description: 删除时间
         type: string
@@ -9081,6 +8103,9 @@ definitions:
         description: |-
           Edges holds the relations/edges for other nodes in the graph.
           The values are being populated by the TicketQuery when eager-loading is set.
+      external_message_id:
+        description: 外部消息ID（如邮件 internetMessageId），用于同一来源消息的建单去重判断
+        type: string
       first_response_at:
         description: 首次响应时间
         type: string
@@ -9137,6 +8162,9 @@ definitions:
         type: string
       sla_response_deadline:
         description: SLA响应截止时间
+        type: string
+      source:
+        description: 工单来源：manual=手动创建，service_catalog=服务目录申请
         type: string
       status:
         description: 状态
@@ -9316,6 +8344,12 @@ definitions:
       created_at:
         description: 创建时间
         type: string
+      default_priority:
+        description: '默认优先级: P1/P2/P3/P4'
+        type: string
+      default_resolver:
+        description: 默认处理团队/角色
+        type: string
       department_id:
         description: 所属部门ID
         type: integer
@@ -9334,6 +8368,12 @@ definitions:
       is_active:
         description: 是否启用
         type: boolean
+      is_user_facing:
+        description: 是否面向用户展示
+        type: boolean
+      itsm_type:
+        description: 'ITSM类型: Request/Incident/Change'
+        type: string
       level:
         description: 分类层级
         type: integer
@@ -9343,6 +8383,9 @@ definitions:
       parent_id:
         description: 父分类ID
         type: integer
+      sla_tier:
+        description: 'SLA等级: 标准服务/快速标准服务/审批类服务/安全响应服务等'
+        type: string
       sort_order:
         description: 排序顺序
         type: integer
@@ -9437,11 +8480,6 @@ definitions:
     type: object
   ent.TicketEdges:
     properties:
-      approval_records:
-        description: ApprovalRecords holds the value of the approval_records edge.
-        items:
-          $ref: '#/definitions/ent.ApprovalRecord'
-        type: array
       approvals:
         description: Approvals holds the value of the approvals edge.
         items:
@@ -9620,8 +8658,8 @@ definitions:
       comment:
         description: 操作备注
         type: string
-      create_time:
-        description: CreateTime holds the value of the "create_time" field.
+      created_at:
+        description: '创建时间（DB column: created_at）'
         type: string
       edges:
         allOf:
@@ -9668,6 +8706,86 @@ definitions:
         - $ref: '#/definitions/ent.Ticket'
         description: 所属工单
     type: object
+  ent.ToolInvocation:
+    properties:
+      approval_reason:
+        description: ApprovalReason holds the value of the "approval_reason" field.
+        type: string
+      approval_state:
+        description: ApprovalState holds the value of the "approval_state" field.
+        type: string
+      approved_at:
+        description: ApprovedAt holds the value of the "approved_at" field.
+        type: string
+      approved_by:
+        description: ApprovedBy holds the value of the "approved_by" field.
+        type: integer
+      arguments:
+        description: Arguments holds the value of the "arguments" field.
+        type: string
+      conversation_id:
+        description: ConversationID holds the value of the "conversation_id" field.
+        type: integer
+      created_at:
+        description: CreatedAt holds the value of the "created_at" field.
+        type: string
+      dry_run:
+        description: DryRun holds the value of the "dry_run" field.
+        type: boolean
+      edges:
+        allOf:
+        - $ref: '#/definitions/ent.ToolInvocationEdges'
+        description: |-
+          Edges holds the relations/edges for other nodes in the graph.
+          The values are being populated by the ToolInvocationQuery when eager-loading is set.
+      error:
+        description: Error holds the value of the "error" field.
+        type: string
+      id:
+        description: ID of the ent.
+        type: integer
+      needs_approval:
+        description: NeedsApproval holds the value of the "needs_approval" field.
+        type: boolean
+      permission_check:
+        description: '权限校验结果: passed|denied|skipped'
+        type: string
+      permission_reason:
+        description: 权限校验原因/拒绝原因
+        type: string
+      request_id:
+        description: RequestID holds the value of the "request_id" field.
+        type: string
+      result:
+        description: Result holds the value of the "result" field.
+        type: string
+      role_snapshot:
+        description: 调用时角色快照，便于事后审计
+        type: string
+      status:
+        description: Status holds the value of the "status" field.
+        type: string
+      tenant_id:
+        description: TenantID holds the value of the "tenant_id" field.
+        type: integer
+      tool_name:
+        description: ToolName holds the value of the "tool_name" field.
+        type: string
+      user_id:
+        description: 工具触发者用户 ID
+        type: integer
+    type: object
+  ent.ToolInvocationEdges:
+    properties:
+      conversation:
+        allOf:
+        - $ref: '#/definitions/ent.Conversation'
+        description: Conversation holds the value of the conversation edge.
+      user:
+        allOf:
+        - $ref: '#/definitions/ent.User'
+        description: User holds the value of the user edge.
+    type: object
   ent.User:
     properties:
       active:
@@ -9697,12 +8815,34 @@ definitions:
       feishu_open_id:
         description: 飞书用户OpenID
         type: string
+      function_line:
+        description: 职能条线：HR 系统里跨法人实体的横向职能分组（如'SPT_资讯科技服务部'），独立于 department_id 代表的正式组织树——同一条线的人可能分散在不同法人实体/仓库下面。来自
+          ehr-data.xlsx person 表的 depart_line 字段。
+        type: string
+      gender:
+        description: '性别: male/female，留空表示未填写'
+        type: string
       id:
         description: ID of the ent.
         type: integer
+      is_bootstrap_admin:
+        description: 是否通过bootstrap token创建
+        type: boolean
+      is_leader:
+        description: 是否为部门负责人/领导，用于组织架构展示
+        type: boolean
+      job_title:
+        description: 职位头衔，来自HR系统 employee_post 字段，用于 PersonalManagerResolver 按关键字识别审批层级（如"总经理"）。跟
+          function_line（职能条线）是两个不同维度：job_title 是这个人自己的头衔，function_line 是这个人所属的横向业务分组。
+        type: string
+      manager_id:
+        description: 直属上级的用户ID（汇报线，个人级别，跟 department.manager_id 那种部门级负责人是两个概念）。来自
+          ehr-data.xlsx person 表的 direct_supervisor字段（格式"姓名:工号"，按工号匹配到 username）。跟
+          department.manager_id一样是普通整型外键，不建 ent edge。0/未设置表示无记录或没匹配上。
+        type: integer
       msp_role:
         allOf:
-        - $ref: '#/definitions/itsm-backend_ent_user.MspRole'
+        - $ref: '#/definitions/user.MspRole'
         description: 'MSP角色: provider_admin=MSP管理员, provider_agent=MSP客服, customer_user=客户用户'
       name:
         description: 姓名
@@ -9714,9 +8854,8 @@ definitions:
         description: 电话
         type: string
       role:
-        allOf:
-        - $ref: '#/definitions/itsm-backend_ent_user.Role'
-        description: 角色
+        description: 角色代码，对应 roles 表的 code 字段
+        type: string
       tenant_id:
         description: 租户ID
         type: integer
@@ -9796,6 +8935,11 @@ definitions:
         description: 用户提交的工单
         items:
           $ref: '#/definitions/ent.Ticket'
+        type: array
+      tool_invocations:
+        description: AI 工具调用记录
+        items:
+          $ref: '#/definitions/ent.ToolInvocation'
         type: array
       version_changelogs:
         description: 版本变更日志
@@ -10057,9 +9201,6 @@ definitions:
         - $ref: '#/definitions/ent.Workflow'
         description: Workflow holds the value of the workflow edge.
     type: object
-  gin.H:
-    additionalProperties: {}
-    type: object
   handlers.DashboardOverview:
     properties:
       incidentDistribution:
@@ -10271,35 +9412,7 @@ definitions:
     - StatusPublished
     - StatusDeprecated
     - StatusWithdrawn
-  itsm-backend_ent_cirelationship.ImpactLevel:
-    enum:
-    - medium
-    - critical
-    - high
-    - medium
-    - low
-    type: string
-    x-enum-varnames:
-    - DefaultImpactLevel
-    - ImpactLevelCritical
-    - ImpactLevelHigh
-    - ImpactLevelMedium
-    - ImpactLevelLow
-  itsm-backend_ent_cirelationship.Strength:
-    enum:
-    - medium
-    - critical
-    - high
-    - medium
-    - low
-    type: string
-    x-enum-varnames:
-    - DefaultStrength
-    - StrengthCritical
-    - StrengthHigh
-    - StrengthMedium
-    - StrengthLow
-  itsm-backend_ent_knowledgearticlesession.Status:
+  knowledgearticlesession.Status:
     enum:
     - active
     - idle
@@ -10309,56 +9422,6 @@ definitions:
     - StatusActive
     - StatusIdle
     - StatusInactive
-  itsm-backend_ent_tenant.Type:
-    enum:
-    - standard
-    - standard
-    - msp
-    - customer
-    - internal
-    - saas_customer
-    - msp_provider
-    - msp_customer
-    type: string
-    x-enum-varnames:
-    - DefaultType
-    - TypeStandard
-    - TypeMsp
-    - TypeCustomer
-    - TypeInternal
-    - TypeSaasCustomer
-    - TypeMspProvider
-    - TypeMspCustomer
-  itsm-backend_ent_user.MspRole:
-    enum:
-    - provider_admin
-    - provider_agent
-    - customer_user
-    type: string
-    x-enum-varnames:
-    - MspRoleProviderAdmin
-    - MspRoleProviderAgent
-    - MspRoleCustomerUser
-  itsm-backend_ent_user.Role:
-    enum:
-    - end_user
-    - super_admin
-    - admin
-    - manager
-    - agent
-    - technician
-    - security
-    - end_user
-    type: string
-    x-enum-varnames:
-    - DefaultRole
-    - RoleSuperAdmin
-    - RoleAdmin
-    - RoleManager
-    - RoleAgent
-    - RoleTechnician
-    - RoleSecurity
-    - RoleEndUser
   marketplaceitem.Status:
     enum:
     - draft
@@ -10512,10 +9575,14 @@ definitions:
         type: integer
       complianceRate:
         type: number
+      compliantTickets:
+        type: integer
       resolutionTimeCompliance:
         type: number
       responseTimeCompliance:
         type: number
+      totalTickets:
+        type: integer
     type: object
   service.SearchKnowledgeRequest:
     properties:
@@ -10547,6 +9614,26 @@ definitions:
       title:
         type: string
     type: object
+  tenant.Type:
+    enum:
+    - standard
+    - standard
+    - msp
+    - customer
+    - internal
+    - saas_customer
+    - msp_provider
+    - msp_customer
+    type: string
+    x-enum-varnames:
+    - DefaultType
+    - TypeStandard
+    - TypeMsp
+    - TypeCustomer
+    - TypeInternal
+    - TypeSaasCustomer
+    - TypeMspProvider
+    - TypeMspCustomer
   tenantinstallation.Status:
     enum:
     - installing
@@ -10563,127 +9650,19 @@ definitions:
     - StatusDisabled
     - StatusFailed
     - StatusUninstalled
+  user.MspRole:
+    enum:
+    - provider_admin
+    - provider_agent
+    - customer_user
+    type: string
+    x-enum-varnames:
+    - MspRoleProviderAdmin
+    - MspRoleProviderAgent
+    - MspRoleCustomerUser
 info:
   contact: {}
 paths:
-  /ai/chat:
-    post:
-      consumes:
-      - application/json
-      description: 基于知识库的检索增强问答
-      parameters:
-      - description: 查询参数
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/controller.ChatRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: AI 问答（RAG）
-      tags:
-      - ai
-  /ai/tools:
-    get:
-      description: 列出可用工具
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 工具清单
-      tags:
-      - ai
-  /ai/tools/{id}:
-    get:
-      description: 根据ID查询工具执行记录状态与结果
-      parameters:
-      - description: invocation id
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 查询工具执行状态
-      tags:
-      - ai
-  /ai/tools/{id}/approve:
-    post:
-      consumes:
-      - application/json
-      description: 管理员审批危险工具执行请求
-      parameters:
-      - description: invocation id
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: 审批参数
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/controller.ApproveRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 审批工具执行
-      tags:
-      - ai
-  /ai/tools/execute:
-    post:
-      consumes:
-      - application/json
-      description: 只读工具直接执行，危险工具生成审批记录
-      parameters:
-      - description: 执行参数
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/controller.ToolExecRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 执行工具
-      tags:
-      - ai
   /api/knowledge/search:
     post:
       consumes:
@@ -11006,110 +9985,6 @@ paths:
       summary: 创建应用
       tags:
       - 应用管理
-  /api/v1/approval-workflows:
-    get:
-      consumes:
-      - application/json
-      description: 获取所有审批工作流，支持分页和过滤
-      parameters:
-      - description: 工单类型
-        in: query
-        name: ticket_type
-        type: string
-      - description: 优先级
-        in: query
-        name: priority
-        type: string
-      - description: 是否激活
-        in: query
-        name: is_active
-        type: boolean
-      - description: 页码
-        in: query
-        name: page
-        type: integer
-      - description: 每页数量
-        in: query
-        name: page_size
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/common.Response'
-      summary: 获取审批工作流列表
-      tags:
-      - 审批管理
-    post:
-      consumes:
-      - application/json
-      description: 创建新的审批工作流定义
-      parameters:
-      - description: 工作流信息
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.CreateApprovalWorkflowRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/common.Response'
-      summary: 创建审批工作流
-      tags:
-      - 审批管理
-  /api/v1/approval-workflows/{id}:
-    delete:
-      consumes:
-      - application/json
-      description: 删除指定的审批工作流
-      parameters:
-      - description: 工作流ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/common.Response'
-      summary: 删除审批工作流
-      tags:
-      - 审批管理
-    put:
-      consumes:
-      - application/json
-      description: 更新已有的审批工作流定义
-      parameters:
-      - description: 工作流ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: 工作流信息
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.UpdateApprovalWorkflowRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/common.Response'
-      summary: 更新审批工作流
-      tags:
-      - 审批管理
   /api/v1/assets:
     get:
       consumes:
@@ -11284,7 +10159,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: 使用用户名/邮箱和密码登录，返回访问令牌和刷新令牌
+      description: 使用用户名/邮箱和密码登录，通过 HttpOnly Cookie 建立会话
       parameters:
       - description: 登录请求（username/email + password）
         in: body
@@ -11296,7 +10171,7 @@ paths:
       - application/json
       responses:
         "200":
-          description: 登录成功，返回 tokens 和用户信息
+          description: 登录成功，返回用户和租户信息
           schema:
             $ref: '#/definitions/dto.LoginResponse'
         "400":
@@ -11375,19 +10250,18 @@ paths:
     post:
       consumes:
       - application/json
-      description: 使用刷新令牌获取新的访问令牌
+      description: 使用 HttpOnly 刷新令牌 Cookie 获取新的访问令牌
       parameters:
-      - description: 刷新令牌请求
+      - description: 非浏览器客户端的刷新令牌（兼容）
         in: body
         name: request
-        required: true
         schema:
           $ref: '#/definitions/dto.RefreshTokenRequest'
       produces:
       - application/json
       responses:
         "200":
-          description: 刷新成功，返回新的访问令牌
+          description: 刷新成功，Cookie 已更新
           schema:
             $ref: '#/definitions/dto.RefreshTokenResponse'
         "400":
@@ -11483,7 +10357,7 @@ paths:
       - application/json
       responses:
         "200":
-          description: 切换成功，返回新的租户信息
+          description: 切换成功，Cookie 已更新并返回新的租户信息
           schema:
             $ref: '#/definitions/dto.LoginResponse'
         "400":
@@ -11674,286 +10548,6 @@ paths:
       summary: 获取流程模板建议
       tags:
       - BPMN AI
-  /api/v1/changes/{id}/approval-summary:
-    get:
-      description: 获取指定变更的审批摘要信息
-      parameters:
-      - description: 变更ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/dto.ChangeApprovalSummary'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.Response'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.Response'
-      summary: 获取变更审批摘要
-      tags:
-      - 变更审批
-  /api/v1/changes/{id}/risk-assessment:
-    get:
-      description: 获取指定变更的风险评估信息
-      parameters:
-      - description: 变更ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/dto.ChangeRiskAssessmentResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.Response'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.Response'
-      summary: 获取变更风险评估
-      tags:
-      - 变更风险评估
-  /api/v1/changes/{id}/rollback-plans/{rollbackPlanId}/execute:
-    post:
-      consumes:
-      - application/json
-      description: 执行指定变更的回滚操作
-      parameters:
-      - description: 变更ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: 回滚计划ID
-        in: path
-        name: rollbackPlanId
-        required: true
-        type: integer
-      - description: 回滚执行请求
-        in: body
-        name: request
-        required: true
-        schema:
-          additionalProperties: true
-          type: object
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/dto.ChangeRollbackExecutionResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.Response'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.Response'
-      summary: 执行变更回滚
-      tags:
-      - 变更回滚计划
-  /api/v1/changes/approval-workflows:
-    post:
-      consumes:
-      - application/json
-      description: 为指定变更创建审批工作流
-      parameters:
-      - description: 创建审批工作流请求
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.ChangeApprovalWorkflowRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/common.Response'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.Response'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.Response'
-      summary: 创建变更审批工作流
-      tags:
-      - 变更审批
-  /api/v1/changes/approvals:
-    post:
-      consumes:
-      - application/json
-      description: 为指定变更创建审批记录
-      parameters:
-      - description: 创建审批请求
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.CreateChangeApprovalRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/dto.ChangeApprovalResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.Response'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.Response'
-      summary: 创建变更审批
-      tags:
-      - 变更审批
-  /api/v1/changes/approvals/{id}:
-    put:
-      consumes:
-      - application/json
-      description: 更新指定审批记录的状态
-      parameters:
-      - description: 审批ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: 更新审批请求
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.UpdateChangeApprovalRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/dto.ChangeApprovalResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.Response'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.Response'
-      summary: 更新变更审批状态
-      tags:
-      - 变更审批
-  /api/v1/changes/implementation-plans:
-    post:
-      consumes:
-      - application/json
-      description: 为指定变更创建实施计划
-      parameters:
-      - description: 创建实施计划请求
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.CreateChangeImplementationPlanRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/dto.ChangeImplementationPlanResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.Response'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.Response'
-      summary: 创建变更实施计划
-      tags:
-      - 变更实施计划
-  /api/v1/changes/risk-assessments:
-    post:
-      consumes:
-      - application/json
-      description: 为指定变更创建风险评估
-      parameters:
-      - description: 创建风险评估请求
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.CreateChangeRiskAssessmentRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/dto.ChangeRiskAssessmentResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.Response'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.Response'
-      summary: 创建变更风险评估
-      tags:
-      - 变更风险评估
-  /api/v1/changes/rollback-plans:
-    post:
-      consumes:
-      - application/json
-      description: 为指定变更创建回滚计划
-      parameters:
-      - description: 创建回滚计划请求
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.CreateChangeRollbackPlanRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/dto.ChangeRollbackPlanResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.Response'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.Response'
-      summary: 创建变更回滚计划
-      tags:
-      - 变更回滚计划
   /api/v1/cloud/accounts:
     get:
       consumes:
@@ -15032,7 +13626,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/gin.H'
+                    $ref: '#/definitions/dto.IncidentCommentResponse'
                   type: array
               type: object
         "400":
@@ -15076,7 +13670,7 @@ paths:
             - $ref: '#/definitions/common.Response'
             - properties:
                 data:
-                  $ref: '#/definitions/gin.H'
+                  $ref: '#/definitions/dto.IncidentCommentResponse'
               type: object
         "400":
           description: Bad Request
@@ -16764,295 +15358,6 @@ paths:
       summary: 创建角色
       tags:
       - 角色管理
-  /api/v1/service-catalogs:
-    get:
-      consumes:
-      - application/json
-      description: 分页获取服务目录列表
-      parameters:
-      - default: 1
-        description: 页码
-        in: query
-        name: page
-        type: integer
-      - default: 10
-        description: 每页数量
-        in: query
-        name: size
-        type: integer
-      - description: 分类过滤
-        in: query
-        name: category
-        type: string
-      - description: 状态过滤
-        in: query
-        name: status
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/common.Response'
-            - properties:
-                data:
-                  $ref: '#/definitions/dto.ServiceCatalogListResponse'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.Response'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.Response'
-      summary: 获取服务目录列表
-      tags:
-      - 服务目录
-    post:
-      consumes:
-      - application/json
-      description: 创建新的服务目录
-      parameters:
-      - description: 服务目录信息
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.CreateServiceCatalogRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/common.Response'
-            - properties:
-                data:
-                  $ref: '#/definitions/dto.ServiceCatalogResponse'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.Response'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.Response'
-      security:
-      - BearerAuth: []
-      summary: 创建服务目录
-      tags:
-      - 服务目录
-  /api/v1/service-catalogs/{id}:
-    put:
-      consumes:
-      - application/json
-      description: 更新指定的服务目录
-      parameters:
-      - description: 服务目录ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: 服务目录更新信息
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.UpdateServiceCatalogRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/common.Response'
-            - properties:
-                data:
-                  $ref: '#/definitions/dto.ServiceCatalogResponse'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.Response'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/common.Response'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.Response'
-      security:
-      - BearerAuth: []
-      summary: 更新服务目录
-      tags:
-      - 服务目录
-  /api/v1/service-requests:
-    post:
-      consumes:
-      - application/json
-      description: 发起新的服务请求
-      parameters:
-      - description: 服务请求信息
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.CreateServiceRequestRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/common.Response'
-            - properties:
-                data:
-                  $ref: '#/definitions/dto.ServiceRequestResponse'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.Response'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.Response'
-      security:
-      - BearerAuth: []
-      summary: 创建服务请求
-      tags:
-      - 服务请求
-  /api/v1/service-requests/{id}:
-    get:
-      consumes:
-      - application/json
-      description: 根据ID获取服务请求详情
-      parameters:
-      - description: 服务请求ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/common.Response'
-            - properties:
-                data:
-                  $ref: '#/definitions/dto.ServiceRequestResponse'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.Response'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/common.Response'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.Response'
-      security:
-      - BearerAuth: []
-      summary: 获取服务请求详情
-      tags:
-      - 服务请求
-  /api/v1/service-requests/{id}/approvals:
-    get:
-      consumes:
-      - application/json
-      description: 返回指定服务请求的审批记录列表
-      parameters:
-      - description: 服务请求ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/common.Response'
-            - properties:
-                data:
-                  items:
-                    $ref: '#/definitions/dto.ServiceRequestApprovalResponse'
-                  type: array
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.Response'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.Response'
-      security:
-      - BearerAuth: []
-      summary: 获取服务请求审批记录
-      tags:
-      - 服务请求
-    post:
-      consumes:
-      - application/json
-      description: 对当前步骤执行 approve/reject（V0：默认三段审批）
-      parameters:
-      - description: 服务请求ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: 审批动作
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.ServiceRequestApprovalActionRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/common.Response'
-            - properties:
-                data:
-                  $ref: '#/definitions/dto.ServiceRequestResponse'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.Response'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/common.Response'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.Response'
-      security:
-      - BearerAuth: []
-      summary: 服务请求审批
-      tags:
-      - 服务请求
   /api/v1/service-requests/{id}/provision:
     post:
       parameters:
@@ -17121,143 +15426,6 @@ paths:
       summary: 获取交付任务列表
       tags:
       - 交付
-  /api/v1/service-requests/{id}/status:
-    put:
-      consumes:
-      - application/json
-      description: 更新服务请求的状态
-      parameters:
-      - description: 服务请求ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: 状态更新信息
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.UpdateServiceRequestStatusRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/common.Response'
-            - properties:
-                data:
-                  $ref: '#/definitions/dto.ServiceRequestResponse'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.Response'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/common.Response'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.Response'
-      security:
-      - BearerAuth: []
-      summary: 更新服务请求状态
-      tags:
-      - 服务请求
-  /api/v1/service-requests/approvals/pending:
-    get:
-      consumes:
-      - application/json
-      description: 根据当前用户角色返回需要其处理的服务请求列表（V0：默认三段审批）
-      parameters:
-      - default: 1
-        description: 页码
-        in: query
-        name: page
-        type: integer
-      - default: 10
-        description: 每页数量
-        in: query
-        name: size
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/common.Response'
-            - properties:
-                data:
-                  $ref: '#/definitions/dto.ServiceRequestListResponse'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.Response'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.Response'
-      security:
-      - BearerAuth: []
-      summary: 获取审批待办
-      tags:
-      - 服务请求
-  /api/v1/service-requests/me:
-    get:
-      consumes:
-      - application/json
-      description: 查询当前登录用户的服务请求列表
-      parameters:
-      - default: 1
-        description: 页码
-        in: query
-        name: page
-        type: integer
-      - default: 10
-        description: 每页数量
-        in: query
-        name: size
-        type: integer
-      - description: 状态
-        enum:
-        - pending
-        - in_progress
-        - completed
-        - rejected
-        in: query
-        name: status
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/common.Response'
-            - properties:
-                data:
-                  $ref: '#/definitions/dto.ServiceRequestListResponse'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.Response'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/common.Response'
-      security:
-      - BearerAuth: []
-      summary: 获取当前用户的服务请求列表
-      tags:
-      - 服务请求
   /api/v1/simple/notifications:
     get:
       consumes:
@@ -17294,161 +15462,6 @@ paths:
       summary: 标记通知为已读
       tags:
       - 通知管理
-  /api/v1/sla-policies:
-    get:
-      consumes:
-      - application/json
-      description: 获取所有SLA策略列表
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/common.Response'
-      summary: 获取SLA策略列表
-      tags:
-      - SLA策略管理
-    post:
-      consumes:
-      - application/json
-      description: 创建新的SLA策略
-      parameters:
-      - description: SLA策略信息
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.CreateSLAPolicyRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/common.Response'
-      summary: 创建SLA策略
-      tags:
-      - SLA策略管理
-  /api/v1/sla-policies/{id}:
-    delete:
-      consumes:
-      - application/json
-      description: 删除SLA策略
-      parameters:
-      - description: SLA策略ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/common.Response'
-      summary: 删除SLA策略
-      tags:
-      - SLA策略管理
-    get:
-      consumes:
-      - application/json
-      description: 根据ID获取SLA策略详情
-      parameters:
-      - description: SLA策略ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/common.Response'
-      summary: 获取单个SLA策略
-      tags:
-      - SLA策略管理
-    put:
-      consumes:
-      - application/json
-      description: 更新SLA策略信息
-      parameters:
-      - description: SLA策略ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: SLA策略信息
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.UpdateSLAPolicyRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/common.Response'
-      summary: 更新SLA策略
-      tags:
-      - SLA策略管理
-  /api/v1/sla-policies/compliance-rate:
-    get:
-      consumes:
-      - application/json
-      description: 获取指定时间范围内的SLA合规率
-      parameters:
-      - description: 开始日期
-        in: query
-        name: start_date
-        type: string
-      - description: 结束日期
-        in: query
-        name: end_date
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/common.Response'
-      summary: 获取SLA合规率
-      tags:
-      - SLA策略管理
-  /api/v1/sla-policies/match:
-    get:
-      consumes:
-      - application/json
-      description: 根据工单属性匹配最优SLA策略
-      parameters:
-      - description: 工单类型
-        in: query
-        name: ticket_type
-        type: string
-      - description: 优先级
-        in: query
-        name: priority
-        type: string
-      - description: 客户等级
-        in: query
-        name: customer_tier
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/common.Response'
-      summary: 匹配SLA策略
-      tags:
-      - SLA策略管理
   /api/v1/tags:
     post:
       consumes:
@@ -17686,155 +15699,6 @@ paths:
       summary: 更新工单分类
       tags:
       - 工单分类
-  /api/v1/ticket-types:
-    get:
-      consumes:
-      - application/json
-      description: 获取工单类型列表，支持分页和筛选
-      parameters:
-      - description: 状态筛选
-        in: query
-        name: status
-        type: string
-      - description: 关键词搜索
-        in: query
-        name: keyword
-        type: string
-      - default: 1
-        description: 页码
-        in: query
-        name: page
-        type: integer
-      - default: 20
-        description: 每页数量
-        in: query
-        name: page_size
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/common.Response'
-            - properties:
-                data:
-                  $ref: '#/definitions/dto.TicketTypeListResponse'
-              type: object
-      summary: 获取工单类型列表
-      tags:
-      - 工单类型
-    post:
-      consumes:
-      - application/json
-      description: 创建新的工单类型，包括自定义字段、审批流程等配置
-      parameters:
-      - description: 创建工单类型请求
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.CreateTicketTypeRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/common.Response'
-            - properties:
-                data:
-                  $ref: '#/definitions/dto.TicketTypeDefinition'
-              type: object
-      summary: 创建工单类型
-      tags:
-      - 工单类型
-  /api/v1/ticket-types/:id:
-    delete:
-      consumes:
-      - application/json
-      description: 删除指定的工单类型
-      parameters:
-      - description: 工单类型ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/common.Response'
-            - properties:
-                data:
-                  additionalProperties:
-                    type: string
-                  type: object
-              type: object
-      summary: 删除工单类型
-      tags:
-      - 工单类型
-    get:
-      consumes:
-      - application/json
-      description: 根据ID获取工单类型的详细信息
-      parameters:
-      - description: 工单类型ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/common.Response'
-            - properties:
-                data:
-                  $ref: '#/definitions/dto.TicketTypeDefinition'
-              type: object
-      summary: 获取工单类型详情
-      tags:
-      - 工单类型
-    put:
-      consumes:
-      - application/json
-      description: 更新工单类型配置
-      parameters:
-      - description: 工单类型ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: 更新工单类型请求
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.UpdateTicketTypeRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/common.Response'
-            - properties:
-                data:
-                  $ref: '#/definitions/dto.TicketTypeDefinition'
-              type: object
-      summary: 更新工单类型
-      tags:
-      - 工单类型
   /api/v1/tickets:
     post:
       consumes:
@@ -17857,6 +15721,32 @@ paths:
       summary: 创建工单
       tags:
       - 工单管理
+  /api/v1/tickets/:id/approval-decisions:
+    get:
+      description: 返回该工单在 BPMN 引擎里留下的全部审批决策记录（只读）
+      parameters:
+      - description: 工单ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/common.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/dto.ProcessApprovalDecisionResponse'
+                  type: array
+              type: object
+      summary: 获取工单的 BPMN 审批决策历史
+      tags:
+      - 工单流转
   /api/v1/tickets/:id/cc:
     get:
       description: 返回指定工单的抄送记录
@@ -17881,6 +15771,60 @@ paths:
       summary: 获取工单抄送记录
       tags:
       - 工单流转
+  /api/v1/tickets/:id/relations:
+    get:
+      consumes:
+      - application/json
+      description: 返回指定工单的关联工单明细（当前仅支持父子关系）
+      parameters:
+      - description: 工单ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/common.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/dto.TicketRelation'
+                  type: array
+              type: object
+      summary: 获取工单的关联列表
+      tags:
+      - 工单管理
+  /api/v1/tickets/:id/relations/stats:
+    get:
+      consumes:
+      - application/json
+      description: 返回指定工单的关联工单统计数据（父子工单、阻塞依赖等）
+      parameters:
+      - description: 工单ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/common.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.TicketRelationStats'
+              type: object
+      summary: 获取工单关联统计
+      tags:
+      - 工单管理
   /api/v1/tickets/:id/workflow-history:
     get:
       consumes:
