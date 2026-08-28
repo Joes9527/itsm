@@ -952,6 +952,26 @@ Incident 优先迁移，因为它当前既有独立模型，又存在服务目�
 4. 决定是否将物理 `tickets` 表改名为 `work_items`；
 5. 更新 OpenAPI、ER 图、运维手册和迁移 SOP。
 
+**关于第 4 条的倾向性结论（2026-08-28，讨论产出，未执行，依赖 Phase 1-5 落地后重新评估）：**
+倾向于**不改物理表名**，与 18.7 节 `service_requests.ticket_id` 的决定保持同一原则——避免无收益
+DDL。理由：
+
+- 改名 blast radius 巨大：ent schema（`ticket.go`）、全部 Go 引用（`ent.Ticket`/
+  `TicketService`/`TicketController` 等）、前端（`Ticket` 类型、`TicketList.tsx`、
+  `ticketApi.ts` 等）、OpenAPI、ER 图、运维手册、迁移 SOP，以及任何直接读物理表名的外部
+  BI/报表，都要跟着改，是跨两个语言栈的机械改名，出错面很大；
+- 本 spec 18.7 节已有同类先例：`service_requests.ticket_id` 明确选择保留物理列名，"避免无收益
+  DDL"；表级改名是同一类决策，没有理由采用不同原则；
+- 与 CLAUDE.md 的 Domain Ownership 原则存在张力："ticket/incident/problem/change/
+  service_request 是独立业务域，不要把生命周期规则收拢成一个通用 ticket 抽象，除非现有代码已经
+  这么做了"——物理改名等于把 WorkItem 抽象焊死在数据库层，比 Phase 1-5 的代码层抽象更激进，值得
+  等 WorkItem 模式在 Phase 1-5 真正跑出效果后再决定；
+- 语义清晰可以在代码层解决（ent/TS 类型名叫 `WorkItem`，物理表继续叫 `tickets`），不需要动
+  DDL 才能达到。
+
+这是讨论产出的倾向性结论，不是最终决定；Phase 1-5 尚未落地，正式决策留到 Phase 6 启动时基于实际
+WorkItem 抽象效果重新评估。
+
 ## 19. 数据回填规则
 
 ### 19.1 公共字段冲突
