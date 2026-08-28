@@ -1,18 +1,15 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { App, Button, Card, Tabs } from 'antd';
-import { ArrowLeft, Link2, Clock as HistoryIcon } from 'lucide-react';
+import { App, Button, Card } from 'antd';
+import { ArrowLeft, Link2 } from 'lucide-react';
 import { useRouter, useParams } from 'next/navigation';
 import ProblemDetail from '@/components/problem/ProblemDetail';
 import ProblemAssociationsTab from '@/components/problem/ProblemAssociationsTab';
-import { HistoryTimeline, fetchAuditLogHistory } from '@/components/business/detail-tabs';
 import { ProblemApi, type Problem } from '@/lib/api/problem-api';
+import { TicketApi } from '@/lib/api/ticket-api';
 import { WorkItemShell } from '@/components/work-item/WorkItemShell';
-import type { WorkItemCommon } from '@/components/work-item/WorkItemTypes';
-import dayjs from 'dayjs';
-
-const formatDateTime = (v?: string) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-');
+import type { WorkItemCommon, WorkItemSLAState } from '@/components/work-item/WorkItemTypes';
 
 // 把 Problem 响应映射成 WorkItemShell 的公共字段契约。同 Incident 迁移那次的模式
 // （itsm-frontend/src/app/(main)/incidents/[id]/page.tsx）：id 用 workItemId
@@ -48,6 +45,26 @@ export default function ProblemDetailPage() {
   const numericId = Number(id);
 
   const [workItem, setWorkItem] = useState<WorkItemCommon | null>(null);
+  const [sla, setSla] = useState<WorkItemSLAState | undefined>(undefined);
+
+  const loadSLA = useCallback(async (workItemId: number) => {
+    try {
+      const data = await TicketApi.getTicketSLA(workItemId);
+      setSla({
+        slaName: data.slaName,
+        responseTime: data.responseTime,
+        resolutionTime: data.resolutionTime,
+        responseDeadline: data.responseDeadline,
+        resolutionDeadline: data.resolutionDeadline,
+        responseTimeRemaining: data.responseTimeRemaining,
+        resolutionTimeRemaining: data.resolutionTimeRemaining,
+        isBreached: data.isBreached,
+      });
+    } catch (err) {
+      console.warn('[ProblemDetailPage] Failed to load SLA', err);
+      setSla(undefined);
+    }
+  }, []);
 
   const loadWorkItemSummary = useCallback(async () => {
     if (!Number.isFinite(numericId) || numericId <= 0) {
@@ -69,6 +86,12 @@ export default function ProblemDetailPage() {
     loadWorkItemSummary();
   }, [loadWorkItemSummary]);
 
+  useEffect(() => {
+    if (workItem?.id) {
+      void loadSLA(workItem.id);
+    }
+  }, [workItem?.id, loadSLA]);
+
   const detailAndTabs = (
     <>
       {/* 主详情组件保持不变——根因/临时解决方案/最终解决方案/影响范围等 Problem 专业
@@ -76,41 +99,18 @@ export default function ProblemDetailPage() {
           信息，不重新实现这些逻辑。 */}
       <ProblemDetail id={id} />
 
-      {/* 追加：关联 + 历史 Tabs */}
+      {/* 追加：关联（工单/事件/变更）。历史现在由 WorkItemShell 自己的区块渲染，不再
+          在这里重复一份——见 docs/superpowers/specs/2026-08-28-work-item-detail-page-parity-design.md
+          §5.2。这里仍然保留 ProblemAssociationsTab：它的数据走 ProblemApi 专属的关联接口，
+          跟 WorkItemShell 的 TicketRelationCards（走 /tickets/:id/relations）不是同一份数据，
+          删掉会丢功能，不是去重。 */}
       {Number.isFinite(numericId) && numericId > 0 && (
         <Card className="mt-4 rounded-lg shadow-sm border border-gray-200">
-          <Tabs
-            defaultActiveKey="associations"
-            items={[
-              {
-                key: 'associations',
-                label: (
-                  <span>
-                    <Link2 size={14} className="inline mr-1" />
-                    关联（工单/事件/变更）
-                  </span>
-                ),
-                children: <ProblemAssociationsTab problemId={numericId} />,
-              },
-              {
-                key: 'history',
-                label: (
-                  <span>
-                    <HistoryIcon size={14} className="inline mr-1" />
-                    历史（审计日志）
-                  </span>
-                ),
-                children: (
-                  <HistoryTimeline
-                    targetType="problem"
-                    targetId={numericId}
-                    fetchAuditLog={fetchAuditLogHistory}
-                    formatDateTime={formatDateTime}
-                  />
-                ),
-              },
-            ]}
-          />
+          <div className="flex items-center gap-1.5 mb-3 text-sm font-medium text-gray-700">
+            <Link2 size={14} />
+            关联（工单/事件/变更）
+          </div>
+          <ProblemAssociationsTab problemId={numericId} />
         </Card>
       )}
     </>
@@ -138,6 +138,7 @@ export default function ProblemDetailPage() {
         {workItem ? (
           <WorkItemShell
             workItem={workItem}
+            sla={sla}
             // Problem 各专业操作（调查/记录根因/提供解决方案/关闭……）仍由下面
             // ProblemDetail 内部既有的按钮 + ProblemApi 调用处理，尚未统一收口到
             // onActionDispatch——那需要后端补一个"动作可用性"契约（actions 参数目前也

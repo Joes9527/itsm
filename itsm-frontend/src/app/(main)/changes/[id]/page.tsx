@@ -1,20 +1,19 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { App, Card, Tabs } from 'antd';
-import { GitBranch, Clock as HistoryIcon } from 'lucide-react';
+import { App, Card } from 'antd';
+import { GitBranch } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import ChangeDetail from '@/components/change/ChangeDetail';
 import { ChangeApi, type Change, type ChangeApproval } from '@/lib/api/change-api';
+import { TicketApi } from '@/lib/api/ticket-api';
 import {
   ApprovalTimeline,
-  HistoryTimeline,
-  fetchAuditLogHistory,
   type ApprovalStep,
   type ApprovalStepStatus,
 } from '@/components/business/detail-tabs';
 import { WorkItemShell } from '@/components/work-item/WorkItemShell';
-import type { WorkItemCommon } from '@/components/work-item/WorkItemTypes';
+import type { WorkItemCommon, WorkItemSLAState } from '@/components/work-item/WorkItemTypes';
 import dayjs from 'dayjs';
 
 const formatDateTime = (v?: string) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-');
@@ -69,6 +68,26 @@ export default function ChangeDetailPage() {
   const [approvals, setApprovals] = useState<ApprovalStep[]>([]);
   const [approvalLoading, setApprovalLoading] = useState(false);
   const [workItem, setWorkItem] = useState<WorkItemCommon | null>(null);
+  const [sla, setSla] = useState<WorkItemSLAState | undefined>(undefined);
+
+  const loadSLA = useCallback(async (workItemId: number) => {
+    try {
+      const data = await TicketApi.getTicketSLA(workItemId);
+      setSla({
+        slaName: data.slaName,
+        responseTime: data.responseTime,
+        resolutionTime: data.resolutionTime,
+        responseDeadline: data.responseDeadline,
+        resolutionDeadline: data.resolutionDeadline,
+        responseTimeRemaining: data.responseTimeRemaining,
+        resolutionTimeRemaining: data.resolutionTimeRemaining,
+        isBreached: data.isBreached,
+      });
+    } catch (err) {
+      console.warn('[ChangeDetailPage] Failed to load SLA', err);
+      setSla(undefined);
+    }
+  }, []);
 
   const loadApprovals = useCallback(async () => {
     if (!Number.isFinite(numericId) || numericId <= 0) return;
@@ -120,6 +139,12 @@ export default function ChangeDetailPage() {
     void loadWorkItemSummary();
   }, [loadWorkItemSummary]);
 
+  useEffect(() => {
+    if (workItem?.id) {
+      void loadSLA(workItem.id);
+    }
+  }, [workItem?.id, loadSLA]);
+
   const detailAndTabs = (
     <>
       {/* 主详情组件保持不变——风险等级/CAB/发布窗口（计划开始结束时间）/实施结果/PIR 等
@@ -127,51 +152,25 @@ export default function ChangeDetailPage() {
           公共身份信息，不重新实现这些逻辑。 */}
       <ChangeDetail />
 
-      {/* 追加：审批链 + 历史 Tabs */}
+      {/* 追加：审批时间线。历史现在由 WorkItemShell 自己的区块渲染，不再在这里重复一份——
+          见 docs/superpowers/specs/2026-08-28-work-item-detail-page-parity-design.md §5.2。 */}
       {Number.isFinite(numericId) && numericId > 0 && (
         <div style={{ padding: '0 24px 24px' }}>
           <Card className="mt-4 rounded-lg shadow-sm border border-gray-200">
-            <Tabs
-              defaultActiveKey="approvals"
-              items={[
-                {
-                  key: 'approvals',
-                  label: (
-                    <span>
-                      <GitBranch size={14} className="inline mr-1" />
-                      审批时间线
-                    </span>
-                  ),
-                  children: approvalLoading ? (
-                    <div className="p-6 text-center">加载中...</div>
-                  ) : (
-                    <ApprovalTimeline
-                      approvals={approvals}
-                      canApprove={false}
-                      showApprovalActions={false}
-                      formatDateTime={formatDateTime}
-                    />
-                  ),
-                },
-                {
-                  key: 'history',
-                  label: (
-                    <span>
-                      <HistoryIcon size={14} className="inline mr-1" />
-                      历史（审计日志）
-                    </span>
-                  ),
-                  children: (
-                    <HistoryTimeline
-                      targetType="change"
-                      targetId={numericId}
-                      fetchAuditLog={fetchAuditLogHistory}
-                      formatDateTime={formatDateTime}
-                    />
-                  ),
-                },
-              ]}
-            />
+            <div className="flex items-center gap-1.5 mb-3 text-sm font-medium text-gray-700">
+              <GitBranch size={14} />
+              审批时间线
+            </div>
+            {approvalLoading ? (
+              <div className="p-6 text-center">加载中...</div>
+            ) : (
+              <ApprovalTimeline
+                approvals={approvals}
+                canApprove={false}
+                showApprovalActions={false}
+                formatDateTime={formatDateTime}
+              />
+            )}
           </Card>
         </div>
       )}
@@ -188,6 +187,7 @@ export default function ChangeDetailPage() {
       {workItem ? (
         <WorkItemShell
           workItem={workItem}
+          sla={sla}
           // Change 各专业操作（提交审批/CAB 批准驳回/排期/实施/关闭……）仍由下面
           // ChangeDetail 内部既有的按钮 + ChangeApi 调用处理，尚未统一收口到
           // onActionDispatch——那需要后端补一个"动作可用性"契约（actions 参数目前也

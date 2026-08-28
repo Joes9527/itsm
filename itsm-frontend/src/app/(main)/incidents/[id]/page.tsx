@@ -1,23 +1,14 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { App, Button, Card, Empty, Tabs } from 'antd';
-import { ArrowLeft, MessageSquare, Clock as HistoryIcon } from 'lucide-react';
+import { App, Button } from 'antd';
+import { ArrowLeft } from 'lucide-react';
 import { useRouter, useParams } from 'next/navigation';
 import IncidentDetail from '@/components/incident/IncidentDetail';
-import {
-  CommentPanel,
-  HistoryTimeline,
-  ticketCommentAdapter,
-  fetchAuditLogHistory,
-} from '@/components/business/detail-tabs';
-import { useAuthStore } from '@/lib/store/auth-store';
 import { IncidentAPI, type Incident } from '@/lib/api/incident-api';
+import { TicketApi } from '@/lib/api/ticket-api';
 import { WorkItemShell } from '@/components/work-item/WorkItemShell';
-import type { WorkItemCommon } from '@/components/work-item/WorkItemTypes';
-import dayjs from 'dayjs';
-
-const formatDateTime = (v?: string) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-');
+import type { WorkItemCommon, WorkItemSLAState } from '@/components/work-item/WorkItemTypes';
 
 // 把 Incident 响应映射成 WorkItemShell 的公共字段契约。注意 id 用的是 workItemId
 // （tickets.id，评论/附件/未来的 SLA 都挂在这个 ID 下），number 用的是 incidentNumber
@@ -50,9 +41,28 @@ export default function IncidentDetailPage() {
   const params = useParams();
   const id = params?.id as string;
   const numericId = Number(id);
-  const { user } = useAuthStore();
 
   const [workItem, setWorkItem] = useState<WorkItemCommon | null>(null);
+  const [sla, setSla] = useState<WorkItemSLAState | undefined>(undefined);
+
+  const loadSLA = useCallback(async (workItemId: number) => {
+    try {
+      const data = await TicketApi.getTicketSLA(workItemId);
+      setSla({
+        slaName: data.slaName,
+        responseTime: data.responseTime,
+        resolutionTime: data.resolutionTime,
+        responseDeadline: data.responseDeadline,
+        resolutionDeadline: data.resolutionDeadline,
+        responseTimeRemaining: data.responseTimeRemaining,
+        resolutionTimeRemaining: data.resolutionTimeRemaining,
+        isBreached: data.isBreached,
+      });
+    } catch (err) {
+      console.warn('[IncidentDetailPage] Failed to load SLA', err);
+      setSla(undefined);
+    }
+  }, []);
 
   const loadWorkItemSummary = useCallback(async () => {
     if (!Number.isFinite(numericId) || numericId <= 0) {
@@ -74,62 +84,19 @@ export default function IncidentDetailPage() {
     loadWorkItemSummary();
   }, [loadWorkItemSummary]);
 
-  const detailAndTabs = (
-    <>
-      {/* 主详情组件保持不变——严重程度/影响范围/紧急程度/关联CI/升级状态等 Incident
-          专业字段、以及所有编辑动作都在这个组件内部完成，WorkItemShell 只包一层公共
-          身份信息，不重新实现这些逻辑。 */}
-      <IncidentDetail id={id} />
+  useEffect(() => {
+    if (workItem?.id) {
+      void loadSLA(workItem.id);
+    }
+  }, [workItem?.id, loadSLA]);
 
-      {/* 追加：协作与历史 Tabs */}
-      {Number.isFinite(numericId) && numericId > 0 && (
-        <Card className="mt-4 rounded-lg shadow-sm border border-gray-200">
-          <Tabs
-            defaultActiveKey="comments"
-            items={[
-              {
-                key: 'comments',
-                label: (
-                  <span>
-                    <MessageSquare size={14} className="inline mr-1" />
-                    评论
-                  </span>
-                ),
-                children: workItem ? (
-                  <CommentPanel
-                    targetType="incident"
-                    targetId={workItem.id}
-                    adapter={ticketCommentAdapter}
-                    currentUserId={user?.id}
-                    formatDateTime={formatDateTime}
-                    showInternalToggle
-                  />
-                ) : (
-                  <Empty description="该事件尚未关联 WorkItem，暂不支持评论" />
-                ),
-              },
-              {
-                key: 'history',
-                label: (
-                  <span>
-                    <HistoryIcon size={14} className="inline mr-1" />
-                    历史（审计日志）
-                  </span>
-                ),
-                children: (
-                  <HistoryTimeline
-                    targetType="incident"
-                    targetId={numericId}
-                    fetchAuditLog={fetchAuditLogHistory}
-                    formatDateTime={formatDateTime}
-                  />
-                ),
-              },
-            ]}
-          />
-        </Card>
-      )}
-    </>
+  const detailAndTabs = (
+    // 主详情组件保持不变——严重程度/影响范围/紧急程度/关联CI/升级状态等 Incident
+    // 专业字段、以及所有编辑动作都在这个组件内部完成，WorkItemShell 只包一层公共
+    // 身份信息，不重新实现这些逻辑。评论/历史现在由 WorkItemShell 自己的区块渲染
+    // （见 docs/superpowers/specs/2026-08-28-work-item-detail-page-parity-design.md
+    // §5.2），不再在这里重复一份。
+    <IncidentDetail id={id} />
   );
 
   return (
@@ -154,6 +121,7 @@ export default function IncidentDetailPage() {
         {workItem ? (
           <WorkItemShell
             workItem={workItem}
+            sla={sla}
             // Incident 各专业操作（确认/解决/关闭/升级/分配……）仍由下面 IncidentDetail
             // 内部既有的按钮 + IncidentAPI 调用处理，尚未统一收口到 onActionDispatch——
             // 那需要后端补一个"动作可用性"契约（actions 参数目前也是空的），是比这次
