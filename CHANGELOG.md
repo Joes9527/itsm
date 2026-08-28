@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **模板前端 API 路径错误** — `template-api.ts` 中所有请求路径由 `/api/v1/templates` 修正为 `/api/v1/tickets/templates`，与后端实际路由一致。
 - **end_user 缺少 ticket_template:read 和 notification:read** — 工单创建页加载模板和通知轮询均返回 403。已在 seeder、硬编码 RBAC 中补全权限，创建迁移 SQL，并补齐缺失的 `notification:*` 权限定义。
 
+### Migration Notes
+
+- **Incident comment migration to `ticket_comments`**: The `/api/v1/incidents/:id/comments` GET/POST endpoints have been removed; the frontend now reads/writes Incident comments through `ticketCommentAdapter` against `ticket_comments`. Before deploying this branch, run `go run ./cmd/backfill_incident_work_item -dry-run=false` first to ensure no Incident has `work_item_id == 0` — comments belonging to such an Incident are permanently skipped (not deferred) by the next tool. Then run `go run ./cmd/backfill_incident_comments -dry-run=true` to review the would-create/would-skip counts, followed by `-dry-run=false` to actually backfill. Only deploy the frontend after both backfills succeed: deploying frontend first makes existing comments appear to have vanished (old data still sits in `incident_events`, new UI reads `ticket_comments`), and deploying backend before frontend for any window means an old frontend hitting the now-deleted `/api/v1/incidents/:id/comments` route gets a 404.
+
 ---
 
 ## [1.6.8] - 2026-08-04
