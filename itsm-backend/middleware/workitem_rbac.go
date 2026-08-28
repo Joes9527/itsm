@@ -68,11 +68,13 @@ func RequireWorkItemRecordClassPermission(action string) gin.HandlerFunc {
 		}
 
 		t, err := client.Ticket.Query().
-			Where(ticket.ID(id), ticket.TenantID(tenantID)).
+			Where(ticket.ID(id), ticket.TenantID(tenantID), ticket.DeletedAtIsNil()).
 			Only(c.Request.Context())
 		if err != nil {
-			// 查不到该 ticket（不存在或跨租户）统一返回 404，不是 403——避免让响应差异
-			// 变成一个可以探测其它租户 ID 是否存在的信号。
+			// 查不到该 ticket（不存在、跨租户、或已软删除）统一返回 404，不是 403——避免让响应
+			// 差异变成一个可以探测其它租户 ID 是否存在的信号；DeletedAtIsNil() 与
+			// repository/ticket/repository_impl.go 的 EntRepository.GetByID 保持一致，
+			// 避免软删除的工单还能通过这条共享路由的 RBAC 网关被访问。
 			common.Fail(c, common.NotFoundCode, "工单不存在")
 			c.Abort()
 			return

@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
@@ -176,6 +177,20 @@ func TestRequireWorkItemRecordClassPermission_NotFoundNotForbidden(t *testing.T)
 	t.Run("ticket exists but in a different tenant returns 404, not 403", func(t *testing.T) {
 		other := setupWorkItemRBACTestTicket(t, client, 2, "incident")
 		c, w := newWorkItemRBACTestContext(t, client, other.ID, 1, "any_role")
+		RequireWorkItemRecordClassPermission("read")(c)
+		require.Equal(t, http.StatusNotFound, w.Code)
+		require.True(t, c.IsAborted())
+	})
+
+	t.Run("soft-deleted ticket returns 404, not reachable via RBAC gate even with permission", func(t *testing.T) {
+		deleted := setupWorkItemRBACTestTicket(t, client, 1, "generic")
+		_, err := client.Ticket.UpdateOneID(deleted.ID).SetDeletedAt(time.Now()).Save(context.Background())
+		require.NoError(t, err)
+
+		// "any_role" holds {Resource: "ticket", Action: "read"} (set up above), which would
+		// pass hasResourcePermission for a live "generic" ticket — proving the 404 here comes
+		// from the DeletedAtIsNil() filter, not from a permission failure.
+		c, w := newWorkItemRBACTestContext(t, client, deleted.ID, 1, "any_role")
 		RequireWorkItemRecordClassPermission("read")(c)
 		require.Equal(t, http.StatusNotFound, w.Code)
 		require.True(t, c.IsAborted())
