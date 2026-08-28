@@ -71,7 +71,6 @@ export interface Problem {
   relatedChanges?: number[];
   createdAt: string;
   updatedAt: string;
-  // P0 修复暴露的预先 TS 错误：ProblemSLACard 引用 problem.slaStatus
   slaStatus?: 'ok' | 'warning' | 'breached';
   responseDeadline?: string;
   resolutionDeadline?: string;
