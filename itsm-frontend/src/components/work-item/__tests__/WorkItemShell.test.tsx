@@ -21,6 +21,36 @@ jest.mock('@/lib/store/auth-store', () => ({
   useAuthStore: () => ({ user: { id: 1 } }),
 }));
 
+// Mock the API modules backing the newly-wired TicketHistoryList/TicketRelationCards
+// (Task 4) so their real network calls don't fire during render.
+jest.mock('@/lib/api/ticket-api', () => ({
+  TicketApi: {
+    getTicketHistory: jest.fn().mockResolvedValue([]),
+  },
+}));
+
+jest.mock('@/lib/api/ticket-relations-api', () => ({
+  TicketRelationsApi: {
+    getTicketRelations: jest.fn().mockResolvedValue([]),
+  },
+}));
+
+// Defensive mocks: CommentPanel/AttachmentPanel are already mocked above (whole
+// @/components/business/detail-tabs module), so the real ticket-comment-adapter/
+// ticket-attachment-adapter (and thus these API modules) never load in this test file.
+// Mocked anyway per plan brief in case that indirection changes.
+jest.mock('@/lib/api/ticket-comment-api', () => ({
+  TicketCommentApi: {
+    getComments: jest.fn().mockResolvedValue({ comments: [], total: 0 }),
+  },
+}));
+
+jest.mock('@/lib/api/ticket-attachment-api', () => ({
+  TicketAttachmentApi: {
+    listAttachments: jest.fn().mockResolvedValue({ attachments: [] }),
+  },
+}));
+
 const workItem: WorkItemCommon = {
   id: 1,
   number: 'INC-202608-000001',
@@ -90,5 +120,39 @@ describe('WorkItemShell', () => {
       />
     );
     expect(screen.queryByTestId('probe')).not.toBeInTheDocument();
+  });
+
+  it('renders the SLA card when sla is provided', () => {
+    render(
+      <WorkItemShell
+        workItem={workItem}
+        actions={{}}
+        sla={{
+          slaName: '标准 SLA',
+          responseTime: 60,
+          resolutionTime: 480,
+          responseDeadline: '2026-08-28T10:00:00Z',
+          resolutionDeadline: '2026-08-28T18:00:00Z',
+          responseTimeRemaining: 30,
+          resolutionTimeRemaining: 200,
+          isBreached: false,
+        }}
+        onActionDispatch={jest.fn()}
+        professionalPanelSlot={<div />}
+      />
+    );
+    expect(screen.getByText('标准 SLA')).toBeInTheDocument();
+  });
+
+  it('does not render an SLA card when sla is not provided', () => {
+    render(
+      <WorkItemShell
+        workItem={workItem}
+        actions={{}}
+        onActionDispatch={jest.fn()}
+        professionalPanelSlot={<div />}
+      />
+    );
+    expect(screen.queryByText(/SLA 时效与承诺/)).not.toBeInTheDocument();
   });
 });
