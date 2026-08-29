@@ -549,7 +549,16 @@ func (e *CustomProcessEngine) recordApprovalDecision(ctx context.Context, instan
 // authorizeTaskActor ensures that task actions are performed by the assigned
 // user or an explicitly resolved candidate. System/internal calls without an
 // authenticated actor keep their existing behavior.
+// kafAutomationRole 是 KAF 自动化账号在 ent.User.Role 上的取值。KAF 与 ITSM
+// 是同一应用的不同模块，不引入独立的技术账号/scoped-token 体系——KAF 以真实
+// ITSM 用户身份（绑定这个角色）调用 API，走跟其他调用方相同的认证中间件。
+const kafAutomationRole = "kaf_automation"
+
 func (e *CustomProcessEngine) authorizeTaskActor(ctx context.Context, task *ent.ProcessTask) error {
+	if task.TaskType == bpmn.KafDelegateTaskType {
+		return e.authorizeKafAutomationActor(ctx, task)
+	}
+
 	userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
 	if userID <= 0 {
 		return nil
@@ -571,6 +580,29 @@ func (e *CustomProcessEngine) authorizeTaskActor(ctx context.Context, task *ent.
 		return nil
 	}
 	return fmt.Errorf("当前用户不是该任务的审批人或候选人")
+}
+
+// authorizeKafAutomationActor 校验 kaf_delegate 任务只能被 kaf_automation 角色的
+// 账号完成，且任务必须处于 delegated 状态。assignee/candidateUsers 对机器完成的
+// 任务没有意义——同一租户下所有 kaf_delegate 任务都由同一个账号处理，不存在
+// "候选人"概念。无用户上下文时直接拒绝，不复用人工任务分支"无上下文即放行"的口子：
+// kaf_delegate 必须始终有明确的认证主体。
+func (e *CustomProcessEngine) authorizeKafAutomationActor(ctx context.Context, task *ent.ProcessTask) error {
+	userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
+	if userID <= 0 {
+		return fmt.Errorf("委派任务必须由已认证的 KAF 自动化账号完成")
+	}
+	actor, err := e.client.User.Query().Where(user.ID(userID)).Only(ctx)
+	if err != nil {
+		return fmt.Errorf("KAF 自动化账号不存在: %w", err)
+	}
+	if actor.Role != kafAutomationRole {
+		return fmt.Errorf("当前账号不是 KAF 自动化账号，无权完成委派任务")
+	}
+	if task.Status != "delegated" {
+		return fmt.Errorf("委派任务当前状态不允许完成: %s", task.Status)
+	}
+	return nil
 }
 
 // mergeVariablesWithOptimisticLock 使用乐观锁合并流程实例变量，防止并发覆写

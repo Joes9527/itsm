@@ -1173,3 +1173,89 @@ func TestHandleElement_AsyncServiceTask_PausesAndCreatesDelegatedTask(t *testing
 	assert.Equal(t, "delegate", delegatedTask.TaskVariables["action"])
 	assert.Equal(t, "resolve,update_progress", delegatedTask.TaskVariables["allowed_actions"])
 }
+
+func TestAuthorizeTaskActor_KafDelegate_AllowsKafAutomationRoleWhenDelegated(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, _ := setupApprovalDecisionFixture(t, engine)
+	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+
+	kafUser, err := engine.client.User.Create().
+		SetUsername("kaf_automation_bot").
+		SetEmail("kaf-automation@example.com").
+		SetName("KAF Automation").
+		SetPasswordHash("hash").
+		SetRole("kaf_automation").
+		SetActive(true).
+		SetTenantID(tenantID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	_, taskID := createProcessFixture(t, engine, tenantID, "kaf-authz-1")
+	task, err := engine.client.ProcessTask.UpdateOneID(taskID).
+		SetTaskType(bpmn.KafDelegateTaskType).
+		SetStatus("delegated").
+		Save(ctx)
+	require.NoError(t, err)
+
+	actorCtx := context.WithValue(ctx, bpmn.BPMNUserIDContextKey, kafUser.ID)
+	assert.NoError(t, engine.authorizeTaskActor(actorCtx, task))
+}
+
+func TestAuthorizeTaskActor_KafDelegate_RejectsNonKafAutomationRole(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, actorID := setupApprovalDecisionFixture(t, engine) // role 是 "agent"，不是 kaf_automation
+	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+
+	_, taskID := createProcessFixture(t, engine, tenantID, "kaf-authz-2")
+	task, err := engine.client.ProcessTask.UpdateOneID(taskID).
+		SetTaskType(bpmn.KafDelegateTaskType).
+		SetStatus("delegated").
+		Save(ctx)
+	require.NoError(t, err)
+
+	actorCtx := context.WithValue(ctx, bpmn.BPMNUserIDContextKey, actorID)
+	assert.Error(t, engine.authorizeTaskActor(actorCtx, task))
+}
+
+func TestAuthorizeTaskActor_KafDelegate_RejectsNoActorContext(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, _ := setupApprovalDecisionFixture(t, engine)
+	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+
+	_, taskID := createProcessFixture(t, engine, tenantID, "kaf-authz-3")
+	task, err := engine.client.ProcessTask.UpdateOneID(taskID).
+		SetTaskType(bpmn.KafDelegateTaskType).
+		SetStatus("delegated").
+		Save(ctx)
+	require.NoError(t, err)
+
+	// 跟人工任务"无上下文即放行"的分支不同：kaf_delegate 任务没有认证主体必须拒绝。
+	assert.Error(t, engine.authorizeTaskActor(ctx, task))
+}
+
+func TestAuthorizeTaskActor_KafDelegate_RejectsWhenNotDelegatedStatus(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, _ := setupApprovalDecisionFixture(t, engine)
+	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+
+	kafUser, err := engine.client.User.Create().
+		SetUsername("kaf_automation_bot2").
+		SetEmail("kaf-automation2@example.com").
+		SetName("KAF Automation").
+		SetPasswordHash("hash").
+		SetRole("kaf_automation").
+		SetActive(true).
+		SetTenantID(tenantID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	_, taskID := createProcessFixture(t, engine, tenantID, "kaf-authz-4")
+	task, err := engine.client.ProcessTask.UpdateOneID(taskID).
+		SetTaskType(bpmn.KafDelegateTaskType).
+		SetStatus("completed").
+		Save(ctx)
+	require.NoError(t, err)
+
+	actorCtx := context.WithValue(ctx, bpmn.BPMNUserIDContextKey, kafUser.ID)
+	assert.Error(t, engine.authorizeTaskActor(actorCtx, task))
+}
