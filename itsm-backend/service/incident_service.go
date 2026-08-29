@@ -277,7 +277,7 @@ func (s *IncidentService) GetIncidentWithActions(ctx context.Context, id int, ac
 	}
 	response := s.toIncidentResponse(incidentEntity)
 	actor.Client = s.client
-	response.Actions = BuildIncidentActions(actor, incidentEntity)
+	response.Actions = BuildIncidentActions(ctx, actor, incidentEntity)
 	return response, nil
 }
 

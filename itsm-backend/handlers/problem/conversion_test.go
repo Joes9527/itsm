@@ -193,6 +193,46 @@ func TestCreateFromIncidentCreatesWorkItemsRelationAndAuditAtomically(t *testing
 	legacyProblems, err := f.client.Incident.QueryProblems(incidentEnt).Count(f.ctx)
 	require.NoError(t, err)
 	assert.Zero(t, legacyProblems, "conversion must not write the legacy Problem-Incident edge")
+
+	withAssociations, err := f.service.GetWithAssociations(f.ctx, created.ID, f.tenantID)
+	require.NoError(t, err)
+	require.Len(t, withAssociations.Incidents, 1, "converted Problem must expose its source Incident")
+	assert.Equal(t, f.incidentID, withAssociations.Incidents[0].ID)
+	assert.Equal(t, "CONV-INC-"+strings.NewReplacer("/", "-", " ", "-").Replace(t.Name()), withAssociations.Incidents[0].Number)
+}
+
+func TestGetWithAssociationsOmitsDeletedConvertedIncident(t *testing.T) {
+	f := newConversionFixture(t, "new", true)
+	created, err := f.service.CreateFromIncident(
+		f.ctx, f.tenantID, f.incidentID, f.actorID,
+		dto.ConvertIncidentToProblemRequest{Title: "Deleted source trace"},
+	)
+	require.NoError(t, err)
+
+	_, err = f.client.Incident.UpdateOneID(f.incidentID).SetDeletedAt(time.Now()).Save(f.ctx)
+	require.NoError(t, err)
+
+	withAssociations, err := f.service.GetWithAssociations(f.ctx, created.ID, f.tenantID)
+	require.NoError(t, err)
+	assert.Empty(t, withAssociations.Incidents)
+}
+
+func TestGetWithAssociationsOmitsDeletedLegacyIncident(t *testing.T) {
+	f := newConversionFixture(t, "new", true)
+	created, err := f.service.Create(f.ctx, f.tenantID, &Problem{
+		Title: "Legacy association", Priority: "medium", CreatedBy: f.actorID,
+	})
+	require.NoError(t, err)
+	require.NoError(t, f.service.AddAssociations(
+		f.ctx, f.tenantID, created.ID, f.actorID, "incident", []int{f.incidentID},
+	))
+
+	_, err = f.client.Incident.UpdateOneID(f.incidentID).SetDeletedAt(time.Now()).Save(f.ctx)
+	require.NoError(t, err)
+
+	withAssociations, err := f.service.GetWithAssociations(f.ctx, created.ID, f.tenantID)
+	require.NoError(t, err)
+	assert.Empty(t, withAssociations.Incidents)
 }
 
 func TestCreateFromIncidentRejectsIneligibleSourceWithoutWrites(t *testing.T) {

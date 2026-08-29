@@ -22,8 +22,7 @@ func TestBuildProblemActionsUsesCanonicalStatuses(t *testing.T) {
 	require.Len(t, openActions, 4)
 	require.True(t, openActions["edit"].Allowed)
 	require.True(t, openActions["start_investigation"].Allowed)
-	require.False(t, openActions["resolve"].Allowed)
-	require.NotEmpty(t, openActions["resolve"].Reason)
+	require.True(t, openActions["resolve"].Allowed)
 	require.False(t, openActions["close"].Allowed)
 	require.NotEmpty(t, openActions["close"].Reason)
 
@@ -34,6 +33,8 @@ func TestBuildProblemActionsUsesCanonicalStatuses(t *testing.T) {
 	require.True(t, CanResolveProblem(actor, identifiedProblem).Allowed)
 	require.True(t, CanResolveProblem(actor, legacyInProgressProblem).Allowed)
 	require.False(t, CanResolveProblem(actor, resolvedProblem).Allowed)
+	require.True(t, CanStartInvestigation(actor, identifiedProblem).Allowed)
+	require.True(t, CanStartInvestigation(actor, resolvedProblem).Allowed)
 
 	require.True(t, CanCloseProblem(actor, resolvedProblem).Allowed)
 	require.False(t, CanCloseProblem(actor, investigatingProblem).Allowed)

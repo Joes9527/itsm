@@ -431,7 +431,7 @@ func (r *EntRepository) GetWithAssociations(ctx context.Context, id int, tenantI
 	e, err := r.client.Problem.Query().
 		Where(problem.ID(id), problem.TenantID(tenantID), problem.DeletedAtIsNil()).
 		WithIncidents(func(q *ent.IncidentQuery) {
-			q.Where(incident.TenantIDEQ(tenantID)).
+			q.Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
 				Select("id", "title", "status", "incident_number")
 		}).
 		WithChanges(func(q *ent.ChangeQuery) {
@@ -443,12 +443,83 @@ func (r *EntRepository) GetWithAssociations(ctx context.Context, id int, tenantI
 		return nil, err
 	}
 	p := r.toDomainWithAssociations(e)
+	incidents, err := r.loadIncidentAssociations(ctx, tenantID, e.WorkItemID)
+	if err != nil {
+		return nil, err
+	}
+	p.Incidents = mergeAssociatedItems(p.Incidents, incidents)
 	tickets, err := r.loadTicketAssociations(ctx, tenantID, e.WorkItemID)
 	if err != nil {
 		return nil, err
 	}
 	p.Tickets = tickets
 	return p, nil
+}
+
+// loadIncidentAssociations resolves Incident -> Problem investigated_by links.
+// The relation stores WorkItem IDs, while the public association contract uses
+// professional Incident IDs, so the join is completed at the repository boundary.
+func (r *EntRepository) loadIncidentAssociations(ctx context.Context, tenantID, problemWorkItemID int) ([]*AssociatedItem, error) {
+	if problemWorkItemID <= 0 {
+		return []*AssociatedItem{}, nil
+	}
+	relations, err := r.client.WorkItemRelation.Query().
+		Where(
+			workitemrelation.TenantID(tenantID),
+			workitemrelation.TargetWorkItemID(problemWorkItemID),
+			workitemrelation.RelationType(incidentProblemRelationType),
+			workitemrelation.DeletedAtIsNil(),
+		).
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query incident problem relations: %w", err)
+	}
+	if len(relations) == 0 {
+		return []*AssociatedItem{}, nil
+	}
+
+	sourceWorkItemIDs := make([]int, 0, len(relations))
+	for _, relation := range relations {
+		sourceWorkItemIDs = append(sourceWorkItemIDs, relation.SourceWorkItemID)
+	}
+	incidents, err := r.client.Incident.Query().
+		Where(
+			incident.TenantIDEQ(tenantID),
+			incident.WorkItemIDIn(sourceWorkItemIDs...),
+			incident.DeletedAtIsNil(),
+		).
+		Select("id", "title", "status", "incident_number").
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load linked incidents: %w", err)
+	}
+
+	items := make([]*AssociatedItem, 0, len(incidents))
+	for _, inc := range incidents {
+		items = append(items, &AssociatedItem{
+			ID: inc.ID, Title: inc.Title, Status: inc.Status,
+			Number: inc.IncidentNumber, Type: "incident",
+		})
+	}
+	return items, nil
+}
+
+func mergeAssociatedItems(existing, additional []*AssociatedItem) []*AssociatedItem {
+	seen := make(map[int]struct{}, len(existing)+len(additional))
+	merged := make([]*AssociatedItem, 0, len(existing)+len(additional))
+	for _, items := range [][]*AssociatedItem{existing, additional} {
+		for _, item := range items {
+			if item == nil {
+				continue
+			}
+			if _, ok := seen[item.ID]; ok {
+				continue
+			}
+			seen[item.ID] = struct{}{}
+			merged = append(merged, item)
+		}
+	}
+	return merged
 }
 
 // loadTicketAssociations 通过 WorkItemRelation 读取 Problem 关联的普通工单（Wave 2 起

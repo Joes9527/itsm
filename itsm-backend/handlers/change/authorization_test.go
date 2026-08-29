@@ -19,7 +19,7 @@ func TestBuildChangeActions(t *testing.T) {
 	require.False(t, actions["approve"].Allowed)
 	require.Equal(t, "只有已提交待审批的变更可以批准", actions["approve"].Reason)
 	require.False(t, actions["reject"].Allowed)
-	require.Equal(t, "只有已提交待审批的变更可以批准", actions["reject"].Reason)
+	require.Equal(t, "只有已提交待审批的变更可以驳回", actions["reject"].Reason)
 	require.False(t, actions["start_implementation"].Allowed)
 	require.Equal(t, "当前状态和变更类型不允许开始实施", actions["start_implementation"].Reason)
 	require.False(t, actions["complete_implementation"].Allowed)

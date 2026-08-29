@@ -834,6 +834,15 @@ func (s *Service) TransitionStatus(ctx context.Context, id, tenantID, userID int
 	if err != nil {
 		return nil, fmt.Errorf("change not found")
 	}
+	if targetStatus == "approved" || targetStatus == "rejected" {
+		decisionGuard := canApproveChange
+		if targetStatus == "rejected" {
+			decisionGuard = canRejectChange
+		}
+		if err := decisionGuard(userID, c); err != nil {
+			return nil, err
+		}
+	}
 
 	// Validate state transition (使用 service 包的 canonical 状态机，保证与 legacy service 一致)
 	if !service.IsValidChangeStatusTransition(c.Status, targetStatus, c.Type) {
@@ -853,9 +862,6 @@ func (s *Service) TransitionStatus(ctx context.Context, id, tenantID, userID int
 		action := "approve"
 		if targetStatus == "rejected" {
 			action = "reject"
-		}
-		if err := canApproveChange(userID, c); err != nil {
-			return nil, err
 		}
 		if err := s.completeChangeApprovalTask(ctx, tenantID, userID, id, action, comment); err != nil {
 			return nil, err

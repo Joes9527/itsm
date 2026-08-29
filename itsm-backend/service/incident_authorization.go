@@ -68,14 +68,13 @@ func CanMarkMajorIncident(actor ActionActor, incident *ent.Incident) dto.ActionP
 	return CanEditIncident(actor)
 }
 
-func hasIncidentProblemRelation(actor ActionActor, incident *ent.Incident) (bool, error) {
+func hasIncidentProblemRelation(ctx context.Context, actor ActionActor, incident *ent.Incident) (bool, error) {
 	if actor.Client == nil {
 		return false, fmt.Errorf("incident relation client is unavailable")
 	}
 	if incident.WorkItemID <= 0 {
 		return false, fmt.Errorf("incident WorkItem is missing")
 	}
-	ctx := context.Background()
 	_, err := actor.Client.Ticket.Query().
 		Where(
 			ticket.IDEQ(incident.WorkItemID),
@@ -97,11 +96,11 @@ func hasIncidentProblemRelation(actor ActionActor, incident *ent.Incident) (bool
 		Exist(ctx)
 }
 
-func CanConvertToProblem(actor ActionActor, incident *ent.Incident) dto.ActionPermission {
+func CanConvertToProblem(ctx context.Context, actor ActionActor, incident *ent.Incident) dto.ActionPermission {
 	if incident.Status == common.IncidentStatusClosed {
 		return dto.ActionPermission{Allowed: false, Reason: "已关闭的事件不能转为问题"}
 	}
-	converted, err := hasIncidentProblemRelation(actor, incident)
+	converted, err := hasIncidentProblemRelation(ctx, actor, incident)
 	if err != nil {
 		return dto.ActionPermission{Allowed: false, Reason: "无法确认事件是否已转为问题"}
 	}
@@ -111,7 +110,7 @@ func CanConvertToProblem(actor ActionActor, incident *ent.Incident) dto.ActionPe
 	return CanEditIncident(actor)
 }
 
-func BuildIncidentActions(actor ActionActor, incident *ent.Incident) map[string]dto.ActionPermission {
+func BuildIncidentActions(ctx context.Context, actor ActionActor, incident *ent.Incident) map[string]dto.ActionPermission {
 	return map[string]dto.ActionPermission{
 		"edit":                CanEditIncident(actor),
 		"resolve":             CanResolveIncident(actor, incident),
@@ -120,6 +119,6 @@ func BuildIncidentActions(actor ActionActor, incident *ent.Incident) map[string]
 		"escalate":            CanEscalateIncident(actor, incident),
 		"assign":              CanAssignIncident(actor, incident),
 		"mark_major_incident": CanMarkMajorIncident(actor, incident),
-		"convert_to_problem":  CanConvertToProblem(actor, incident),
+		"convert_to_problem":  CanConvertToProblem(ctx, actor, incident),
 	}
 }

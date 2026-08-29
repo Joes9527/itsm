@@ -72,7 +72,7 @@ function IncidentActionButton({ action, actionName, children, button }: Incident
     <Space size={4}>
       <Button
         {...button}
-        disabled={!action.allowed}
+        disabled={!action.allowed || button.disabled === true}
         title={action.reason}
         aria-describedby={!action.allowed && action.reason ? reasonId : undefined}
       >
@@ -183,6 +183,8 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({ id: propId, fallbackAct
     workItemContext?.actions ??
     fallbackActions ??
     EMPTY_ACTIONS;
+  const actionMutationInFlight =
+    escalating || assigning || escalatingMajor || resolving || closing || converting || reopening;
 
   const loadData = useCallback(async () => {
     if (!id) return;
@@ -617,56 +619,56 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({ id: propId, fallbackAct
               <IncidentActionButton
                 action={actions.edit}
                 actionName="edit"
-                button={{ icon: <Pencil />, onClick: () => router.push(`/incidents/${data.id}/edit`) }}
+                button={{ icon: <Pencil />, disabled: actionMutationInFlight, onClick: () => router.push(`/incidents/${data.id}/edit`) }}
               >
                 编辑
               </IncidentActionButton>
               <IncidentActionButton
                 action={actions.escalate}
                 actionName="escalate"
-                button={{ icon: <ArrowUp />, onClick: handleEscalate, loading: escalating }}
+                button={{ icon: <ArrowUp />, onClick: handleEscalate, loading: escalating, disabled: actionMutationInFlight }}
               >
                 升级
               </IncidentActionButton>
               <IncidentActionButton
                 action={actions.assign}
                 actionName="assign"
-                button={{ icon: <UserCheck />, onClick: handleAssignClick, loading: loadingUsers }}
+                button={{ icon: <UserCheck />, onClick: handleAssignClick, loading: loadingUsers, disabled: actionMutationInFlight }}
               >
                 指派
               </IncidentActionButton>
               <IncidentActionButton
                 action={actions.mark_major_incident}
                 actionName="mark-major-incident"
-                button={{ danger: true, icon: <Siren />, onClick: () => setMajorModalVisible(true) }}
+                button={{ danger: true, icon: <Siren />, disabled: actionMutationInFlight, onClick: () => setMajorModalVisible(true) }}
               >
                 升级为重大事件
               </IncidentActionButton>
               <IncidentActionButton
                 action={actions.resolve}
                 actionName="resolve"
-                button={{ type: 'primary', icon: <CheckCircle />, onClick: handleResolveClick, loading: resolving }}
+                button={{ type: 'primary', icon: <CheckCircle />, onClick: handleResolveClick, loading: resolving, disabled: actionMutationInFlight }}
               >
                 解决
               </IncidentActionButton>
               <IncidentActionButton
                 action={actions.close}
                 actionName="close"
-                button={{ danger: true, onClick: handleClose, loading: closing }}
+                button={{ danger: true, onClick: handleClose, loading: closing, disabled: actionMutationInFlight }}
               >
                 关闭
               </IncidentActionButton>
               <IncidentActionButton
                 action={actions.convert_to_problem}
                 actionName="convert-to-problem"
-                button={{ icon: <ArrowRight />, onClick: handleConvertToProblem, loading: converting }}
+                button={{ icon: <ArrowRight />, onClick: handleConvertToProblem, loading: converting, disabled: actionMutationInFlight }}
               >
                 转为问题
               </IncidentActionButton>
               <IncidentActionButton
                 action={actions.reopen}
                 actionName="reopen"
-                button={{ onClick: handleReopen, loading: reopening }}
+                button={{ onClick: handleReopen, loading: reopening, disabled: actionMutationInFlight }}
               >
                 重新打开
               </IncidentActionButton>

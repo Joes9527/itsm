@@ -218,4 +218,18 @@ describe('IncidentDetail action eligibility', () => {
     expect(await screen.findByRole('button', { name: /关\s*闭/ })).toBeEnabled();
     await expectDisabledAction('解决', '只有处理中的事件可以解决');
   });
+
+  it('disables sibling actions while an incident mutation is in flight', async () => {
+    mockCloseIncident.mockImplementation(() => new Promise(() => {}));
+    renderWithProvider({
+      close: { allowed: true },
+      reopen: { allowed: true },
+    });
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: /关\s*闭/ }));
+    await waitFor(() => expect(mockCloseIncident).toHaveBeenCalledWith(301));
+
+    expect(screen.getByRole('button', { name: '重新打开' })).toBeDisabled();
+  });
 });

@@ -1,7 +1,7 @@
 package change
 
 import (
-	"fmt"
+	"errors"
 
 	"itsm-backend/dto"
 	"itsm-backend/middleware"
@@ -33,11 +33,19 @@ func isChangeSubmitted(status string) bool {
 // canApproveChange is shared by the read projection and command path so direct
 // approve/reject requests cannot bypass the self-approval guard.
 func canApproveChange(actorUserID int, c *Change) error {
+	return canDecideChange(actorUserID, c, "不能审批自己提交的变更", "只有已提交待审批的变更可以批准")
+}
+
+func canRejectChange(actorUserID int, c *Change) error {
+	return canDecideChange(actorUserID, c, "不能驳回自己提交的变更", "只有已提交待审批的变更可以驳回")
+}
+
+func canDecideChange(actorUserID int, c *Change, selfReason, statusReason string) error {
 	if c.CreatedBy == actorUserID {
-		return fmt.Errorf("不能审批自己提交的变更")
+		return errors.New(selfReason)
 	}
 	if !isChangeSubmitted(c.Status) {
-		return fmt.Errorf("只有已提交待审批的变更可以批准")
+		return errors.New(statusReason)
 	}
 	return nil
 }
@@ -53,11 +61,13 @@ func CanApproveChange(actor service.ActionActor, c *Change) dto.ActionPermission
 }
 
 func CanRejectChange(actor service.ActionActor, c *Change) dto.ActionPermission {
-	perm := CanApproveChange(actor, c)
-	if !perm.Allowed && perm.Reason == "不能审批自己提交的变更" {
-		perm.Reason = "不能驳回自己提交的变更"
+	if err := canRejectChange(actor.UserID, c); err != nil {
+		return dto.ActionPermission{Allowed: false, Reason: err.Error()}
 	}
-	return perm
+	if !canApproveChangePermission(actor) {
+		return dto.ActionPermission{Allowed: false, Reason: "无权限驳回变更"}
+	}
+	return dto.ActionPermission{Allowed: true}
 }
 
 func CanStartImplementation(actor service.ActionActor, c *Change) dto.ActionPermission {

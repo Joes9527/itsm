@@ -20,19 +20,19 @@ func CanEditProblem(actor service.ActionActor) dto.ActionPermission {
 }
 
 func CanStartInvestigation(actor service.ActionActor, p *Problem) dto.ActionPermission {
-	if strings.TrimSpace(p.Status) != "open" {
-		return dto.ActionPermission{Allowed: false, Reason: "只有待处理的问题可以开始调查"}
+	status := strings.TrimSpace(p.Status)
+	if status == "investigating" || !isValidProblemStatusTransition(status, "investigating") {
+		return dto.ActionPermission{Allowed: false, Reason: "当前状态的问题不能开始调查"}
 	}
 	return CanEditProblem(actor)
 }
 
 func CanResolveProblem(actor service.ActionActor, p *Problem) dto.ActionPermission {
-	switch strings.TrimSpace(p.Status) {
-	case "investigating", "identified", "in_progress":
-		return CanEditProblem(actor)
-	default:
-		return dto.ActionPermission{Allowed: false, Reason: "只有调查中或已识别的问题可以标记解决"}
+	status := strings.TrimSpace(p.Status)
+	if status == "resolved" || !isValidProblemStatusTransition(status, "resolved") {
+		return dto.ActionPermission{Allowed: false, Reason: "当前状态的问题不能标记解决"}
 	}
+	return CanEditProblem(actor)
 }
 
 func CanCloseProblem(actor service.ActionActor, p *Problem) dto.ActionPermission {

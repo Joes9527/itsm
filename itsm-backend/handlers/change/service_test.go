@@ -191,11 +191,22 @@ func TestTransitionStatusRejectsSelfApprovalAndSelfRejection(t *testing.T) {
 
 	_, err = svc.TransitionStatus(ctx, c.ID, tenant.ID, c.CreatedBy, "rejected", "我驳回我自己")
 	require.Error(t, err)
-	require.ErrorContains(t, err, "不能审批自己提交的变更")
+	require.ErrorContains(t, err, "不能驳回自己提交的变更")
 
 	updated, err = client.Change.Get(ctx, c.ID)
 	require.NoError(t, err)
 	require.Equal(t, "pending", updated.Status)
+}
+
+func TestTransitionStatusUsesRejectGuardBeforeGenericStateValidation(t *testing.T) {
+	client, svc, tenant, changeManager, c := setupChangeForTransitionStatusTest(t, "transition_reject_state_reason")
+	ctx := context.Background()
+
+	_, err := client.Change.UpdateOneID(c.ID).SetStatus("draft").Save(ctx)
+	require.NoError(t, err)
+
+	_, err = svc.TransitionStatus(ctx, c.ID, tenant.ID, changeManager.ID, "rejected", "风险不可接受")
+	require.ErrorContains(t, err, "只有已提交待审批的变更可以驳回")
 }
 
 // seedChangeInMockAndEnt 双写一个 change：一份进 mockRepository（供 s.repo.Get/
