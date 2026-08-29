@@ -73,7 +73,7 @@ ITSM 通过配置化流程绑定决定哪些 WorkItem 产生 KAF 委派任务。
 
 KAF 委派节点是注册的 BPMN `serviceTask` 类型，`taskType="kaf_delegate"`。节点只声明委派语义和允许的 WorkItem 动作，不声明 Procedure、Tool 或 KAF 风险策略。流程到达节点时，ITSM 创建现有 `ProcessTask`、写入审计与 Outbox，并停在该节点；KAF 最终完成关联 `ProcessTask` 后，BPMN 才沿出边继续。
 
-> **现状核查（2026-08-29）**：ITSM 自定义引擎（`service/bpmn_process_engine.go`）今天只有 `user_task` 会在节点暂停等待外部完成；`service_task` 是同步语义——`handleElement` 调用 `handler.Execute()` 后在同一调用栈内立即 `executeStep` 继续往下走，不存在「创建 ProcessTask 后停在节点」这种异步等待能力。`ServiceTaskHandlerInterface`/`CallbackRegistry` 的按 `taskType` 分发机制确实存在，新增 `kaf_delegate` handler 不需要 fork 引擎；但引擎本身需要先新增一种「暂停型 service task」执行语义（创建 ProcessTask → 挂起 → 等外部调用完成任务 → 恢复），这是本方案体量最大的单项前置工程，详见第 11 节 P0-1。
+> **现状核查（2026-08-29）**：ITSM 自定义引擎（`service/bpmn_process_engine.go`）已增加 `AsyncServiceTaskHandler`：`kaf_delegate` 可创建 `ProcessTask`、挂起，并在外部完成任务后恢复流程。`ServiceTaskHandlerInterface`/`CallbackRegistry` 的按 `taskType` 分发机制可复用，无需 fork 引擎。当前不足是 ProcessTask 创建、审计与事件投递尚未处于同一可靠事务边界，且没有 Outbox 保障 KAF 收到委派消息；详见第 11 节 P0-1。
 
 KAF 收到委派后读取 WorkItem，结合当前 CTI、Catalog、表单、CI、历史、BPMN 上下文和租户知识自主选择 Procedure。KAF 的 Tool Registry 与治理机制是 Procedure/Tool 可选范围、风险控制和 Tool 调用的唯一权威来源。ITSM 仅保存最终的 `procedureRef`、版本和脱敏执行证据，不维护第二套 Procedure 或 Tool policy。
 
@@ -107,7 +107,7 @@ ITSM 在同一事务内创建 `ProcessTask`、审计和 Outbox。KAF 的 `runId`
 
 `KAF automation` 是全局 ITSM 内置自动化主体，但只拥有任务范围权限：可补拉被委派的 `kaf_delegate` 任务、通过 `taskId` 读取其 ticket 上下文，以及提交该任务声明允许的动作。ITSM 始终以关联 `ProcessTask.tenantId` 和 `taskType` 强制租户及任务类型隔离；KAF 不能调用通用 WorkItem 查询或修改 API。
 
-> **现状核查（2026-08-29）**：`ent/schema/process_task.go` 目前没有 `version`（乐观锁）、`correlation_id`、`allowed_actions` 字段，且与 WorkItem 的关联是经 `ProcessInstance.business_id/business_type` 间接引用，不是直接外键——本节及 4.2/4.3 节描述的能力需要一次 schema 迁移才能成立，详见第 11 节 P1-1。「任务范围权限」（KAF 只能操作被委派的那个 `taskId`，不能调用通用 WorkItem API）在现有 RBAC 模型（`middleware/rbac.go` 的 `role+tenant → resource:action` 粗粒度模型）中也没有对应机制，没有按记录/任务实例限权的能力，也没有内置系统账号的字段设计，需要新设计，详见第 11 节 P0-2。
+> **现状核查（2026-08-29）**：`ent/schema/process_task.go` 已有 `correlation_id`，但创建委派任务时尚未写入或暴露；仍缺 `version`（乐观锁）和结构化 `allowed_actions`，且与 WorkItem 的关联是经 `ProcessInstance.business_id/business_type` 间接引用，不是直接外键——详见第 11 节 P1-1。「任务范围权限」（KAF 只能操作被委派的那个 `taskId`，不能调用通用 WorkItem API）在现有 RBAC 模型（`middleware/rbac.go` 的 `role+tenant → resource:action` 粗粒度模型）中也没有对应机制，没有按记录/任务实例限权的能力，也没有内置系统账号的字段设计，需要新设计，详见第 11 节 P0-2。
 
 ## 4. 接口契约
 
@@ -290,11 +290,15 @@ ITSM 不复制原始 prompt、完整对话或 Tool 敏感输出。KAF 返回的�
 | `/service-catalog/request/[id]` | Catalog 详情的预填入口。 | 将选中的 Catalog 作为提示进入 `/my-requests/new`，不单独创建 WorkItem。 |
 | `/tickets/create` | 坐席/管理员快速建单工作台。 | 从终端用户导航移除，保留显式专业建单能力。 |
 
-受理页的主区域是对话流，KAF 负责理解需求与收集字段。KAF 产出结构化结果后，页面以确认卡片显示标题、推荐 Catalog、已收集字段、预期交付/SLA 和后续审批步骤；用户可返回编辑或确认提交。分类、`recordClass`、优先级与流程不是终端用户字段。Web 入口确认后以 `confirmation="confirmed"` 调用 Intake；Teams/WeCom 保持既有渠道自动创建策略。
+受理页的主区域是对话流，KAF 负责理解需求与收集字段。KAF 可先展示高相关知识或自助操作建议；用户可直接结束，或选择“仍需帮助”继续同一受理会话并提交，不形成第二种建单入口。KAF 产出结构化结果后，页面以确认卡片显示标题、推荐 Catalog、已收集字段、预期交付/SLA 和后续审批步骤；用户可返回编辑或确认提交。分类、`recordClass`、优先级与流程不是终端用户字段。Web 入口确认后以 `confirmation="confirmed"` 调用 Intake；Teams/WeCom 保持既有渠道自动创建策略。
 
 ### 8.2 请求详情与信息披露
 
-终端用户通过 `/my-requests` 进入简化请求详情，而不是完整的坐席 Ticket 工作台。申请人只能看到当前状态、下一步、SLA、审批结果、面向用户的评论、附件和 KAF 的脱敏进度摘要；不得看到内部 CTI、Procedure、Tool、技术失败详情、BPMN task ID 或内部审计引用。
+终端用户通过 `/my-requests` 进入简化请求详情，而不是完整的坐席 Ticket 工作台。申请人只能看到服务阶段、当前状态、下一步、SLA、审批结果、面向用户的评论、附件和 KAF 的脱敏进度摘要；不得看到内部 CTI、Procedure、Tool、技术失败详情、BPMN task ID 或内部审计引用。
+
+服务阶段是 ITSM 对专业状态与 BPMN 的配置化用户视图投影，而非前端或 KAF 重新解释流程。首期标准阶段为：`已提交`、`需要你的操作`、`正在处理`、`等待验证` 和 `已完成`。每个 Catalog/Incident 场景可配置其内部状态和节点到服务阶段的映射；页面只显示当前阶段、下一步和更新时间，不显示内部节点名称。
+
+处理中复用现有公开评论与附件能力，供申请人与坐席协作；评论不会改变 KAF 正在执行的任务上下文。KAF 需要补充信息或用户验证时，必须由明确的 ITSM/BPMN 用户操作节点发起；首期不提供自由聊天输入或用户追问恢复。
 
 坐席/管理员继续使用现有 `/tickets/[ticketId]` 与 Incident 详情。除既有 SLA、审批、时间线、附件和关系组件外，增加“自动化执行”信息区，显示 `kaf_delegate` ProcessTask 状态、KAF 进度、Procedure/版本、脱敏 Tool 审计引用和失败摘要。所有可见操作均以后端返回的权限与允许动作决定，前端不从状态文字推导权限。
 
@@ -304,11 +308,15 @@ ITSM 不复制原始 prompt、完整对话或 Tool 敏感输出。KAF 返回的�
 
 流程实例与审计页面将该节点展示为“已委派 KAF”“等待 KAF 完成”或“已完成”，并可跳转到关联 WorkItem。节点配置必须经后端校验，与 `kaf_delegate` ServiceTask 注册表一致。
 
-### 8.4 UI 状态与验证
+### 8.4 通知
+
+ITSM 的 WorkItem 状态和流程事件是用户通知的权威来源。KAF 将用户可见摘要投递回原始渠道：Web 使用站内通知，Teams/WeCom 使用原会话消息；`/my-requests` 始终保留完整进度作为可追溯入口。通知只包含服务阶段、下一步和可见摘要，不包含内部自动化、Procedure、Tool 或技术失败细节。
+
+### 8.5 UI 状态与验证
 
 受理页必须覆盖 KAF 分析中、补充字段、确认、提交中、创建成功和可恢复失败；用户在确认前始终可以编辑或取消。请求详情必须区分加载、空、错误和无权限状态，并在移动端保持对话、确认卡片和状态信息可读。
 
-UI 验收至少覆盖：入口收敛与旧路由重定向、Catalog 预填、Web 确认创建、移动端受理、申请人与坐席的信息隔离、`kaf_delegate` 节点配置、KAF 进度展示，以及前端不推导领域语义或权限。
+UI 验收至少覆盖：入口收敛与旧路由重定向、知识建议后继续提交、Catalog 预填、Web 确认创建、移动端受理、服务阶段投影、申请人与坐席的信息隔离、公开评论不影响 KAF 执行、原渠道通知、`kaf_delegate` 节点配置、KAF 进度展示，以及前端不推导领域语义或权限。
 
 ## 9. 验收与测试边界
 
@@ -335,7 +343,7 @@ UI 验收至少覆盖：入口收敛与旧路由重定向、Catalog 预填、Web
 
 | 编号 | 缺口 | 涉及章节 | 说明 |
 |---|---|---|---|
-| P0-1 | BPMN 引擎不支持「暂停型 service task」 | §2.3 | `service_task` 今天是同步执行，只有 `user_task` 会在节点暂停。`kaf_delegate` 需要引擎新增「创建 ProcessTask → 挂起 → 外部完成 → 恢复」的执行语义，这是全篇方案体量最大的单项工程，需要独立设计评审，不能作为委派节点 handler 的附带工作量。 |
+| P0-1 | 暂停型 `service_task` 的一致性仍未闭环 | §2.3 | 已实现 `AsyncServiceTaskHandler`、`kaf_delegate` 的 `ProcessTask` 暂停/完成恢复和角色校验。仍须将 ProcessTask、审计和 Outbox 放入可靠事务边界；当前缺少可靠事件投递，不能视为完整 KAF 委派链路。 |
 | P0-2 | ITSM 无任务范围（task-scoped）权限模型 | §3.1 | 现有 RBAC 是 `role+tenant → resource:action` 粗粒度模型，没有按单条记录/任务实例限权的机制，也没有内置系统账号的字段设计。`KAF automation`「只拥有任务范围权限」这一安全边界需要新设计（例如绑定单个 `taskId`、短时效的 scoped token），不能假设复用现有 `RequirePermission`。 |
 | P0-3 | `AuditMiddleware` 从未挂载 | §5 | 中间件已定义但未在 router 中启用，是死代码。本设计对审计的全部承诺（技术账号、Procedure、run/step 可追溯）需要这条通路先生效。 |
 | P0-4 | Outbox 模式不存在 | §4.2 | `itsm-backend` 中没有任何 Outbox 表/发布服务的实现，`KafDelegateRequested` 事件的可靠投递需要新建这块基础设施，而不是接入已有能力。 |
@@ -345,7 +353,7 @@ UI 验收至少覆盖：入口收敛与旧路由重定向、Catalog 预填、Web
 
 | 编号 | 缺口 | 涉及章节 | 说明 |
 |---|---|---|---|
-| P1-1 | `ProcessTask` schema 缺字段 | §3.1 | 缺 `version`（乐观锁）、`correlation_id`、`allowed_actions`，且与 WorkItem 是经 `ProcessInstance.business_id/business_type` 间接关联而非直接外键。需要一次 schema 迁移，建议与 P0-1 的引擎改造合并设计。 |
+| P1-1 | `ProcessTask` 执行字段仍未完全落地 | §3.1 | `correlation_id` 已增加，但创建委派任务时尚未写入或暴露；仍缺任务级 version/乐观锁和结构化 `allowed_actions`，且与 WorkItem 是经 `ProcessInstance.business_id/business_type` 间接关联而非直接外键。 |
 | P1-2 | 领域动作方法不支持调用方传入 `expectedVersion`；`AssignIncident` 缺状态/版本守卫 | §4.3 | `ResolveIncident`/`CloseIncident` 的版本校验是方法内部重查，签名不接受外部 `expectedVersion`，需要扩展签名。`AssignIncident` 今天完全没有版本检查或状态机守卫，需要先补齐再纳入本 typed action contract。这批动作的最终合法性表格应与 [WorkItem parity Phase 4](../plans/2026-08-28-workitem-parity-phase4-actions-spec-scoping.md) 的结论对齐，避免两份文档给出不一致的判定。 |
 | P1-3 | KAF `ProcedureManifest` 缺 version 字段 | §4.3 | `execution.procedureVersion` 是硬性字段，但 KAF 的 `ProcedureManifest`（`src/acp/models/procedure_manifest.py`）今天没有 version 列，需要新增。 |
 | P1-4 | KAF 侧命名空间隔离 | §2.1 | KAF 已有 `src/acp/itsm/` 对接另一套遗留系统（紫羚/Gazellio），新的委派客户端必须使用独立命名空间（如 `acp/itsm_delegate/`），不得复用其认证模式或与之混淆。 |
