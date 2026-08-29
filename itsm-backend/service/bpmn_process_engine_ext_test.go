@@ -1259,3 +1259,99 @@ func TestAuthorizeTaskActor_KafDelegate_RejectsWhenNotDelegatedStatus(t *testing
 	actorCtx := context.WithValue(ctx, bpmn.BPMNUserIDContextKey, kafUser.ID)
 	assert.Error(t, engine.authorizeTaskActor(actorCtx, task))
 }
+
+const resumeTestFlowBPMN = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                 targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="resume_test_flow" name="Resume Test Flow" isExecutable="true">
+    <bpmn:startEvent id="Start_1" name="开始">
+      <bpmn:outgoing>Flow_0</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:serviceTask id="Activity_KafDelegate" name="KAF 委派">
+      <bpmn:extensionElements>
+        <bpmn:metaData name="service_task_type">kaf_delegate</bpmn:metaData>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_0</bpmn:incoming>
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="End_1" name="结束">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_0" sourceRef="Start_1" targetRef="Activity_KafDelegate" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Activity_KafDelegate" targetRef="End_1" />
+  </bpmn:process>
+</bpmn:definitions>`
+
+func TestCompleteTask_ResumesDelegatedTask_AfterAsyncPause(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
+	authorCtx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	authorCtx = context.WithValue(authorCtx, bpmn.BPMNUserIDContextKey, actorID)
+
+	fakeHandler := &fakeAsyncServiceTaskHandler{taskType: bpmn.KafDelegateTaskType, handlerID: "fake_async_handler2"}
+	engine.callbackRegistry.RegisterHandler(fakeHandler)
+
+	instanceID, _ := createProcessFixture(t, engine, tenantID, "resume-1")
+	instance, err := engine.client.ProcessInstance.Get(authorCtx, instanceID)
+	require.NoError(t, err)
+
+	// CompleteTask 内部会重新 ParseXML 解析流程定义，所以要把真实 XML（而不是纯 Go
+	// 结构体）写回 ProcessDefinition，跟生产路径保持一致。
+	_, err = engine.client.ProcessDefinition.UpdateOneID(instance.ProcessDefinitionID).
+		SetBpmnXML([]byte(resumeTestFlowBPMN)).
+		Save(authorCtx)
+	require.NoError(t, err)
+
+	def, err := engine.client.ProcessDefinition.Get(authorCtx, instance.ProcessDefinitionID)
+	require.NoError(t, err)
+	parsed, err := engine.parser.ParseXML(def.BpmnXML)
+	require.NoError(t, err)
+	process := parsed.Processes[0]
+
+	// 1. 到达委派节点：暂停，创建 ProcessTask。
+	err = engine.handleElement(authorCtx, instance, process, "Activity_KafDelegate")
+	require.NoError(t, err)
+	assert.Equal(t, 0, fakeHandler.executed)
+
+	delegatedTask, err := engine.client.ProcessTask.Query().
+		Where(processtask.ProcessInstanceID(instance.ID), processtask.TaskDefinitionKey("Activity_KafDelegate")).
+		Only(authorCtx)
+	require.NoError(t, err)
+
+	kafUser, err := engine.client.User.Create().
+		SetUsername("kaf_automation_bot3").
+		SetEmail("kaf-automation3@example.com").
+		SetName("KAF Automation").
+		SetPasswordHash("hash").
+		SetRole("kaf_automation").
+		SetActive(true).
+		SetTenantID(tenantID).
+		Save(authorCtx)
+	require.NoError(t, err)
+
+	// 2. 非 kaf_automation 账号调用应该被拒绝，且不改变任务状态。
+	err = engine.CompleteTask(authorCtx, delegatedTask.TaskID, map[string]interface{}{})
+	assert.Error(t, err)
+	stillDelegated, err := engine.client.ProcessTask.Get(authorCtx, delegatedTask.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "delegated", stillDelegated.Status)
+
+	// 3. kaf_automation 账号调用：完成任务并推进流程。
+	kafCtx := context.WithValue(authorCtx, bpmn.BPMNUserIDContextKey, kafUser.ID)
+	err = engine.CompleteTask(kafCtx, delegatedTask.TaskID, map[string]interface{}{"resultSummary": "done"})
+	require.NoError(t, err)
+
+	completed, err := engine.client.ProcessTask.Get(kafCtx, delegatedTask.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "completed", completed.Status)
+	assert.Equal(t, 1, fakeHandler.executed, "完成时应该经 dispatchUserTaskCallback 触发一次 handler.Execute 用于记录")
+
+	updatedInstance, err := engine.client.ProcessInstance.Get(kafCtx, instance.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "End_1", updatedInstance.CurrentActivityID, "流程应该已经推进到结束节点")
+
+	// 4. 重复完成：报错，不重复推进流程或重复触发 handler。
+	err = engine.CompleteTask(kafCtx, delegatedTask.TaskID, map[string]interface{}{})
+	assert.Error(t, err)
+	assert.Equal(t, 1, fakeHandler.executed, "重复完成不应该再次触发 handler")
+}
