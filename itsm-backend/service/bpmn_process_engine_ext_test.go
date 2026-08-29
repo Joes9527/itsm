@@ -1288,7 +1288,7 @@ func TestCompleteTask_ResumesDelegatedTask_AfterAsyncPause(t *testing.T) {
 	authorCtx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
 	authorCtx = context.WithValue(authorCtx, bpmn.BPMNUserIDContextKey, actorID)
 
-	fakeHandler := &fakeAsyncServiceTaskHandler{taskType: bpmn.KafDelegateTaskType, handlerID: "fake_async_handler2"}
+	fakeHandler := &fakeAsyncServiceTaskHandler{taskType: bpmn.KafDelegateTaskType, handlerID: "kaf_delegate_handler"}
 	engine.callbackRegistry.RegisterHandler(fakeHandler)
 
 	instanceID, _ := createProcessFixture(t, engine, tenantID, "resume-1")
