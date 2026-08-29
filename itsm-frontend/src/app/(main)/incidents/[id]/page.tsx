@@ -46,6 +46,15 @@ export default function IncidentDetailPage() {
   const [incident, setIncident] = useState<Incident | null>(null);
   const [sla, setSla] = useState<WorkItemSLAState | undefined>(undefined);
 
+  const syncIncidentSummary = useCallback((nextIncident: Incident) => {
+    setIncident(nextIncident);
+    setWorkItem(toWorkItemCommon(nextIncident));
+  }, []);
+
+  const handleIncidentLoaded = useCallback((loadedIncident: unknown) => {
+    syncIncidentSummary(loadedIncident as Incident);
+  }, [syncIncidentSummary]);
+
   const loadSLA = useCallback(async (workItemId: number) => {
     try {
       const data = await TicketApi.getTicketSLA(workItemId);
@@ -71,8 +80,7 @@ export default function IncidentDetailPage() {
     }
     try {
       const incident = await IncidentAPI.getIncident(numericId);
-      setWorkItem(toWorkItemCommon(incident));
-      setIncident(incident);
+      syncIncidentSummary(incident);
     } catch (err) {
       // WorkItemShell 只是这里的外层展示壳（专业字段仍然由下面完整功能的 IncidentDetail
       // 负责渲染/编辑），summary 拉取失败时不阻塞整页——workItem 保持 null，下面直接
@@ -80,7 +88,7 @@ export default function IncidentDetailPage() {
       // 内部另有一次完整的事件详情拉取 + 错误处理，这里的失败不影响那条路径。
       console.warn('[IncidentDetailPage] Failed to load WorkItem summary', err);
     }
-  }, [numericId]);
+  }, [numericId, syncIncidentSummary]);
 
   useEffect(() => {
     loadWorkItemSummary();
@@ -98,9 +106,15 @@ export default function IncidentDetailPage() {
     // 身份信息，不重新实现这些逻辑。评论/历史现在由 WorkItemShell 自己的区块渲染
     // （见 docs/superpowers/specs/2026-08-28-work-item-detail-page-parity-design.md
     // §5.2），不再在这里重复一份。
-    <IncidentDetail id={id} />
+    <IncidentDetail id={id} onIncidentLoaded={handleIncidentLoaded} />
   );
-  const fallbackDetail = <IncidentDetail id={id} fallbackActions={incident?.actions} />;
+  const fallbackDetail = (
+    <IncidentDetail
+      id={id}
+      fallbackActions={incident?.actions}
+      onIncidentLoaded={handleIncidentLoaded}
+    />
+  );
 
   return (
     <App>

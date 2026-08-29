@@ -10,6 +10,7 @@ const mockGetRootCauseAnalysis = jest.fn();
 const mockGetImpactAssessment = jest.fn();
 const mockGetIncidentClassification = jest.fn();
 const mockResolveIncident = jest.fn();
+const mockCloseIncident = jest.fn();
 const hasPermission = () => false;
 
 jest.mock('next/navigation', () => ({
@@ -24,6 +25,7 @@ jest.mock('@/lib/api/', () => ({
     getImpactAssessment: (...args: unknown[]) => mockGetImpactAssessment(...args),
     getIncidentClassification: (...args: unknown[]) => mockGetIncidentClassification(...args),
     resolveIncident: (...args: unknown[]) => mockResolveIncident(...args),
+    closeIncident: (...args: unknown[]) => mockCloseIncident(...args),
   },
 }));
 
@@ -61,6 +63,7 @@ const incident = {
   category: 'database',
   subcategory: 'connection',
   source: 'monitoring',
+  type: 'service',
 };
 
 const deniedActions = {
@@ -89,6 +92,31 @@ function renderWithoutProvider(fallbackActions?: Record<string, WorkItemActionSt
   return render(<IncidentDetail id="301" fallbackActions={fallbackActions} />);
 }
 
+function IncidentDetailProviderHarness() {
+  const [currentWorkItem, setCurrentWorkItem] = React.useState<WorkItemCommon>({
+    ...workItem,
+    status: 'in_progress',
+  });
+  const [currentActions, setCurrentActions] = React.useState<Record<string, WorkItemActionState>>({
+    resolve: { allowed: true },
+  });
+  const handleIncidentLoaded = React.useCallback((loaded: unknown) => {
+    const loadedIncident = loaded as typeof incident & { actions?: Record<string, WorkItemActionState> };
+    setCurrentWorkItem(prev => ({
+      ...prev,
+      status: loadedIncident.status,
+      title: loadedIncident.title,
+    }));
+    setCurrentActions(loadedIncident.actions ?? {});
+  }, []);
+
+  return (
+    <WorkItemProvider value={{ workItem: currentWorkItem, actions: currentActions, onActionDispatch: jest.fn() }}>
+      <IncidentDetail id="301" onIncidentLoaded={handleIncidentLoaded} />
+    </WorkItemProvider>
+  );
+}
+
 async function expectDisabledAction(label: string, reason: string) {
   const reasonNode = await screen.findByText(reason);
   const actionGroup = reasonNode.closest('.ant-space');
@@ -109,6 +137,7 @@ describe('IncidentDetail action eligibility', () => {
     mockGetImpactAssessment.mockResolvedValue(null);
     mockGetIncidentClassification.mockResolvedValue(null);
     mockResolveIncident.mockResolvedValue(incident);
+    mockCloseIncident.mockResolvedValue(incident);
   });
 
   it('disables every denied incident action and shows the backend reason', async () => {
@@ -156,5 +185,35 @@ describe('IncidentDetail action eligibility', () => {
 
     await expectDisabledAction('重新打开', '历史事件未回填 WorkItem');
     expect(mockGetIncident).toHaveBeenCalledWith(301);
+  });
+
+  it('refreshes provider actions from the backend detail response after resolve', async () => {
+    mockGetIncident
+      .mockResolvedValueOnce({
+        ...incident,
+        status: 'in_progress',
+        actions: { resolve: { allowed: true } },
+      })
+      .mockResolvedValueOnce({
+        ...incident,
+        status: 'resolved',
+        actions: {
+          resolve: { allowed: false, reason: '只有处理中的事件可以解决' },
+          close: { allowed: true },
+        },
+      });
+
+    const user = userEvent.setup();
+    render(<IncidentDetailProviderHarness />);
+
+    await user.click(await screen.findByRole('button', { name: '解决' }));
+
+    const dialog = await screen.findByRole('dialog', { name: '解决事件' });
+    await user.type(within(dialog).getByLabelText('解决方案'), '已恢复数据库连接并验证服务正常');
+    await user.click(within(dialog).getByRole('button', { name: '确认解决' }));
+
+    await waitFor(() => expect(mockGetIncident).toHaveBeenCalledTimes(2));
+    expect(await screen.findByRole('button', { name: /关\s*闭/ })).toBeEnabled();
+    await expectDisabledAction('解决', '只有处理中的事件可以解决');
   });
 });

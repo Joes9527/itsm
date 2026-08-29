@@ -55,6 +55,7 @@ interface IncidentActionButtonProps {
 interface IncidentDetailProps {
   id?: string;
   fallbackActions?: Record<string, WorkItemActionState>;
+  onIncidentLoaded?: (incident: IncidentDetailData) => void;
 }
 
 const EMPTY_ACTIONS: Record<string, WorkItemActionState> = {};
@@ -125,7 +126,7 @@ interface IncidentClassificationData {
   createdAt?: string;
 }
 
-const IncidentDetail: React.FC<IncidentDetailProps> = ({ id: propId, fallbackActions }) => {
+const IncidentDetail: React.FC<IncidentDetailProps> = ({ id: propId, fallbackActions, onIncidentLoaded }) => {
   const params = useParams();
   const router = useRouter();
   // 支持通过props传入id，或通过useParams获取
@@ -181,23 +182,24 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({ id: propId, fallbackAct
   const actions =
     workItemContext?.actions ??
     fallbackActions ??
-    data?.actions ??
     EMPTY_ACTIONS;
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     setLoadError(false);
     try {
       const resp = await IncidentAPI.getIncident(Number(id));
-      setData(resp as IncidentDetailData);
+      const incident = resp as IncidentDetailData;
+      setData(incident);
+      onIncidentLoaded?.(incident);
     } catch (error) {
       setLoadError(true);
       handleError(error, 'loadIncident', '加载事件详情失败');
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, handleError, onIncidentLoaded]);
 
   // 加载分析数据（根因分析、影响评估、事件分类）
   const loadAnalysisData = useCallback(async () => {
@@ -231,7 +233,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({ id: propId, fallbackAct
 
   useEffect(() => {
     loadData();
-  }, [id]);
+  }, [loadData]);
 
   // 加载用户列表，用于负责人/报告人姓名展示与指派选择
   useEffect(() => {
