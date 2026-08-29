@@ -41,3 +41,7 @@ export function useWorkItemContext(): WorkItemContextValue {
   }
   return ctx;
 }
+
+export function useOptionalWorkItemContext(): WorkItemContextValue | null {
+  return useContext(WorkItemContext);
+}

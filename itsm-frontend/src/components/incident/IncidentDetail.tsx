@@ -42,7 +42,49 @@ import {
 import type { Incident } from '@/types/biz/incident';
 import { useErrorHandler } from '@/lib/hooks/useErrorHandler';
 import { SafeContent, SafeTextBlock } from '@/components/common/SafeContent';
-import { isValidIncidentTransition } from '@/lib/utils/workflow-state-machine';
+import { useOptionalWorkItemContext } from '@/components/work-item/WorkItemContext';
+import type { WorkItemActionState } from '@/components/work-item/WorkItemTypes';
+
+interface IncidentActionButtonProps {
+  action: WorkItemActionState | undefined;
+  actionName: string;
+  children: React.ReactNode;
+  button: React.ComponentProps<typeof Button>;
+}
+
+interface IncidentDetailProps {
+  id?: string;
+  fallbackActions?: Record<string, WorkItemActionState>;
+}
+
+const EMPTY_ACTIONS: Record<string, WorkItemActionState> = {};
+type IncidentDetailData = Incident & { actions?: Record<string, WorkItemActionState> };
+
+function IncidentActionButton({ action, actionName, children, button }: IncidentActionButtonProps) {
+  if (!action) {
+    return null;
+  }
+
+  const reasonId = `incident-action-${actionName}-reason`;
+
+  return (
+    <Space size={4}>
+      <Button
+        {...button}
+        disabled={!action.allowed}
+        title={action.reason}
+        aria-describedby={!action.allowed && action.reason ? reasonId : undefined}
+      >
+        {children}
+      </Button>
+      {!action.allowed && action.reason && (
+        <span id={reasonId} role="note" style={{ color: '#8c8c8c', fontSize: 12 }}>
+          {action.reason}
+        </span>
+      )}
+    </Space>
+  );
+}
 
 // 根因分析类型
 interface RootCauseData {
@@ -83,16 +125,17 @@ interface IncidentClassificationData {
   createdAt?: string;
 }
 
-const IncidentDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
+const IncidentDetail: React.FC<IncidentDetailProps> = ({ id: propId, fallbackActions }) => {
   const params = useParams();
   const router = useRouter();
   // 支持通过props传入id，或通过useParams获取
   const id = propId || (params?.id as string);
+  const workItemContext = useOptionalWorkItemContext();
   const { handleError } = useErrorHandler();
   const hasPermission = useAuthStore(s => s.hasPermission);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
-  const [data, setData] = useState<Incident | null>(null);
+  const [data, setData] = useState<IncidentDetailData | null>(null);
   const [escalateModalVisible, setEscalateModalVisible] = useState(false);
   const [resolveModalVisible, setResolveModalVisible] = useState(false);
   const [closing, setClosing] = useState(false);
@@ -135,6 +178,11 @@ const IncidentDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
   const [rootCauseForm] = Form.useForm();
   const [impactForm] = Form.useForm();
   const [categoryForm] = Form.useForm();
+  const actions =
+    workItemContext?.actions ??
+    fallbackActions ??
+    data?.actions ??
+    EMPTY_ACTIONS;
 
   const loadData = async () => {
     if (!id) return;
@@ -142,7 +190,7 @@ const IncidentDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
     setLoadError(false);
     try {
       const resp = await IncidentAPI.getIncident(Number(id));
-      setData(resp as unknown as Incident);
+      setData(resp as IncidentDetailData);
     } catch (error) {
       setLoadError(true);
       handleError(error, 'loadIncident', '加载事件详情失败');
@@ -257,12 +305,6 @@ const IncidentDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
   // 提交解决方案（ITIL 合规：要求填写解决方案）
   const handleResolveSubmit = async (values: { resolution: string; resolutionCode?: string }) => {
     if (!data) return;
-
-    // 状态转换验证
-    if (!isValidIncidentTransition(data.status, 'resolved')) {
-      message.error('当前状态不允许直接解决');
-      return;
-    }
 
     setResolving(true);
     try {
@@ -570,54 +612,62 @@ const IncidentDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
               </Tag>
             </div>
             <Space wrap>
-              <Button
-                icon={<Pencil />}
-                onClick={() => router.push(`/incidents/${data.id}/edit`)}
+              <IncidentActionButton
+                action={actions.edit}
+                actionName="edit"
+                button={{ icon: <Pencil />, onClick: () => router.push(`/incidents/${data.id}/edit`) }}
               >
                 编辑
-              </Button>
-              <Button icon={<ArrowUp />} onClick={handleEscalate} loading={escalating}>
+              </IncidentActionButton>
+              <IncidentActionButton
+                action={actions.escalate}
+                actionName="escalate"
+                button={{ icon: <ArrowUp />, onClick: handleEscalate, loading: escalating }}
+              >
                 升级
-              </Button>
-              {data.status !== IncidentStatus.RESOLVED && data.status !== IncidentStatus.CLOSED && (
-                <Button icon={<UserCheck />} onClick={handleAssignClick} loading={loadingUsers}>
-                  指派
-                </Button>
-              )}
-              {!data.isMajorIncident &&
-                data.status !== IncidentStatus.RESOLVED &&
-                data.status !== IncidentStatus.CLOSED && (
-                  <Button danger icon={<Siren />} onClick={() => setMajorModalVisible(true)}>
-                    升级为重大事件
-                  </Button>
-                )}
-              {data.status !== IncidentStatus.RESOLVED && data.status !== IncidentStatus.CLOSED && (
-                <Button
-                  type="primary"
-                  icon={<CheckCircle />}
-                  onClick={handleResolveClick}
-                  loading={resolving}
-                >
-                  解决
-                </Button>
-              )}
-              {/* 已解决 → 关闭 */}
-              {data.status === IncidentStatus.RESOLVED && (
-                <Button danger onClick={handleClose} loading={closing}>
-                  关闭
-                </Button>
-              )}
-              {/* 转为问题单 */}
-              {!data.problemId && data.status !== IncidentStatus.CLOSED && (
-                <Button icon={<ArrowRight />} onClick={handleConvertToProblem} loading={converting}>
-                  转为问题
-                </Button>
-              )}
-              {(data.status === IncidentStatus.RESOLVED || data.status === IncidentStatus.CLOSED) && (
-                <Button onClick={handleReopen} loading={reopening}>
-                  重新打开
-                </Button>
-              )}
+              </IncidentActionButton>
+              <IncidentActionButton
+                action={actions.assign}
+                actionName="assign"
+                button={{ icon: <UserCheck />, onClick: handleAssignClick, loading: loadingUsers }}
+              >
+                指派
+              </IncidentActionButton>
+              <IncidentActionButton
+                action={actions.mark_major_incident}
+                actionName="mark-major-incident"
+                button={{ danger: true, icon: <Siren />, onClick: () => setMajorModalVisible(true) }}
+              >
+                升级为重大事件
+              </IncidentActionButton>
+              <IncidentActionButton
+                action={actions.resolve}
+                actionName="resolve"
+                button={{ type: 'primary', icon: <CheckCircle />, onClick: handleResolveClick, loading: resolving }}
+              >
+                解决
+              </IncidentActionButton>
+              <IncidentActionButton
+                action={actions.close}
+                actionName="close"
+                button={{ danger: true, onClick: handleClose, loading: closing }}
+              >
+                关闭
+              </IncidentActionButton>
+              <IncidentActionButton
+                action={actions.convert_to_problem}
+                actionName="convert-to-problem"
+                button={{ icon: <ArrowRight />, onClick: handleConvertToProblem, loading: converting }}
+              >
+                转为问题
+              </IncidentActionButton>
+              <IncidentActionButton
+                action={actions.reopen}
+                actionName="reopen"
+                button={{ onClick: handleReopen, loading: reopening }}
+              >
+                重新打开
+              </IncidentActionButton>
             </Space>
           </div>
           {(data.escalationLevel ?? 0) > 0 && (

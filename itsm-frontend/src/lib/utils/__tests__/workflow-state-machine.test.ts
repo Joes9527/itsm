@@ -5,7 +5,6 @@ import {
   validateTransitionOrThrow,
   isFinalStatus,
   isActiveStatus,
-  isValidIncidentTransition,
   isValidChangeTransition,
   InvalidStateTransitionError,
 } from '../workflow-state-machine';
@@ -88,15 +87,6 @@ describe('isFinalStatus / isActiveStatus', () => {
   it('OPEN is active', () => {
     expect(isActiveStatus(TicketStatus.OPEN)).toBe(true);
     expect(isFinalStatus(TicketStatus.OPEN)).toBe(false);
-  });
-});
-
-describe('isValidIncidentTransition', () => {
-  it('allows new -> investigating', () => {
-    expect(isValidIncidentTransition('new', 'investigating')).toBe(true);
-  });
-  it('disallows closed -> new', () => {
-    expect(isValidIncidentTransition('closed', 'new')).toBe(false);
   });
 });
 

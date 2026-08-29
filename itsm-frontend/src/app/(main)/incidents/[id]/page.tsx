@@ -43,6 +43,7 @@ export default function IncidentDetailPage() {
   const numericId = Number(id);
 
   const [workItem, setWorkItem] = useState<WorkItemCommon | null>(null);
+  const [incident, setIncident] = useState<Incident | null>(null);
   const [sla, setSla] = useState<WorkItemSLAState | undefined>(undefined);
 
   const loadSLA = useCallback(async (workItemId: number) => {
@@ -71,6 +72,7 @@ export default function IncidentDetailPage() {
     try {
       const incident = await IncidentAPI.getIncident(numericId);
       setWorkItem(toWorkItemCommon(incident));
+      setIncident(incident);
     } catch (err) {
       // WorkItemShell 只是这里的外层展示壳（专业字段仍然由下面完整功能的 IncidentDetail
       // 负责渲染/编辑），summary 拉取失败时不阻塞整页——workItem 保持 null，下面直接
@@ -98,6 +100,7 @@ export default function IncidentDetailPage() {
     // §5.2），不再在这里重复一份。
     <IncidentDetail id={id} />
   );
+  const fallbackDetail = <IncidentDetail id={id} fallbackActions={incident?.actions} />;
 
   return (
     <App>
@@ -118,15 +121,12 @@ export default function IncidentDetailPage() {
             loadWorkItemSummary 的 catch）、或存量未回填事件这三种情况下 workItem 都是
             null，直接退化为原有的纯 IncidentDetail 展示——不用 WorkItemShell 自己的
             loading/error 态挡住已经完整可用的 IncidentDetail。 */}
-        {workItem ? (
+        {workItem && incident ? (
           <WorkItemShell
             workItem={workItem}
             sla={sla}
-            // Incident 各专业操作（确认/解决/关闭/升级/分配……）仍由下面 IncidentDetail
-            // 内部既有的按钮 + IncidentAPI 调用处理，尚未统一收口到 onActionDispatch——
-            // 那需要后端补一个"动作可用性"契约（actions 参数目前也是空的），是比这次
-            // WorkItem 迁移更大的后续改造，不在本任务范围内。
-            actions={{}}
+            actions={incident.actions ?? {}}
+            showActionBar={false}
             onActionDispatch={async () => {}}
             professionalPanelSlot={detailAndTabs}
           />
@@ -138,7 +138,7 @@ export default function IncidentDetailPage() {
               message="该事件尚未关联 WorkItem，评论/附件/历史/关联等协作能力暂不可用"
               style={{ marginBottom: 16 }}
             />
-            {detailAndTabs}
+            {fallbackDetail}
           </>
         )}
       </div>
