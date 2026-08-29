@@ -347,6 +347,26 @@ func (_u *ProcessTaskUpdate) ClearDescription() *ProcessTaskUpdate {
 	return _u
 }
 
+// SetCorrelationID sets the "correlation_id" field.
+func (_u *ProcessTaskUpdate) SetCorrelationID(v string) *ProcessTaskUpdate {
+	_u.mutation.SetCorrelationID(v)
+	return _u
+}
+
+// SetNillableCorrelationID sets the "correlation_id" field if the given value is not nil.
+func (_u *ProcessTaskUpdate) SetNillableCorrelationID(v *string) *ProcessTaskUpdate {
+	if v != nil {
+		_u.SetCorrelationID(*v)
+	}
+	return _u
+}
+
+// ClearCorrelationID clears the value of the "correlation_id" field.
+func (_u *ProcessTaskUpdate) ClearCorrelationID() *ProcessTaskUpdate {
+	_u.mutation.ClearCorrelationID()
+	return _u
+}
+
 // SetParentTaskID sets the "parent_task_id" field.
 func (_u *ProcessTaskUpdate) SetParentTaskID(v string) *ProcessTaskUpdate {
 	_u.mutation.SetParentTaskID(v)
@@ -613,6 +633,12 @@ func (_u *ProcessTaskUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	}
 	if _u.mutation.DescriptionCleared() {
 		_spec.ClearField(processtask.FieldDescription, field.TypeString)
+	}
+	if value, ok := _u.mutation.CorrelationID(); ok {
+		_spec.SetField(processtask.FieldCorrelationID, field.TypeString, value)
+	}
+	if _u.mutation.CorrelationIDCleared() {
+		_spec.ClearField(processtask.FieldCorrelationID, field.TypeString)
 	}
 	if value, ok := _u.mutation.ParentTaskID(); ok {
 		_spec.SetField(processtask.FieldParentTaskID, field.TypeString, value)
@@ -1005,6 +1031,26 @@ func (_u *ProcessTaskUpdateOne) ClearDescription() *ProcessTaskUpdateOne {
 	return _u
 }
 
+// SetCorrelationID sets the "correlation_id" field.
+func (_u *ProcessTaskUpdateOne) SetCorrelationID(v string) *ProcessTaskUpdateOne {
+	_u.mutation.SetCorrelationID(v)
+	return _u
+}
+
+// SetNillableCorrelationID sets the "correlation_id" field if the given value is not nil.
+func (_u *ProcessTaskUpdateOne) SetNillableCorrelationID(v *string) *ProcessTaskUpdateOne {
+	if v != nil {
+		_u.SetCorrelationID(*v)
+	}
+	return _u
+}
+
+// ClearCorrelationID clears the value of the "correlation_id" field.
+func (_u *ProcessTaskUpdateOne) ClearCorrelationID() *ProcessTaskUpdateOne {
+	_u.mutation.ClearCorrelationID()
+	return _u
+}
+
 // SetParentTaskID sets the "parent_task_id" field.
 func (_u *ProcessTaskUpdateOne) SetParentTaskID(v string) *ProcessTaskUpdateOne {
 	_u.mutation.SetParentTaskID(v)
@@ -1301,6 +1347,12 @@ func (_u *ProcessTaskUpdateOne) sqlSave(ctx context.Context) (_node *ProcessTask
 	}
 	if _u.mutation.DescriptionCleared() {
 		_spec.ClearField(processtask.FieldDescription, field.TypeString)
+	}
+	if value, ok := _u.mutation.CorrelationID(); ok {
+		_spec.SetField(processtask.FieldCorrelationID, field.TypeString, value)
+	}
+	if _u.mutation.CorrelationIDCleared() {
+		_spec.ClearField(processtask.FieldCorrelationID, field.TypeString)
 	}
 	if value, ok := _u.mutation.ParentTaskID(); ok {
 		_spec.SetField(processtask.FieldParentTaskID, field.TypeString, value)

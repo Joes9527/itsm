@@ -52,6 +52,8 @@ const (
 	FieldTaskVariables = "task_variables"
 	// FieldDescription holds the string denoting the description field in the database.
 	FieldDescription = "description"
+	// FieldCorrelationID holds the string denoting the correlation_id field in the database.
+	FieldCorrelationID = "correlation_id"
 	// FieldParentTaskID holds the string denoting the parent_task_id field in the database.
 	FieldParentTaskID = "parent_task_id"
 	// FieldRootTaskID holds the string denoting the root_task_id field in the database.
@@ -97,6 +99,7 @@ var Columns = []string{
 	FieldFormKey,
 	FieldTaskVariables,
 	FieldDescription,
+	FieldCorrelationID,
 	FieldParentTaskID,
 	FieldRootTaskID,
 	FieldTenantID,
@@ -239,6 +242,11 @@ func ByFormKey(opts ...sql.OrderTermOption) OrderOption {
 // ByDescription orders the results by the description field.
 func ByDescription(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDescription, opts...).ToFunc()
+}
+
+// ByCorrelationID orders the results by the correlation_id field.
+func ByCorrelationID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCorrelationID, opts...).ToFunc()
 }
 
 // ByParentTaskID orders the results by the parent_task_id field.

@@ -75,6 +75,9 @@ func (ProcessTask) Fields() []ent.Field {
 		field.Text("description").
 			Comment("任务描述").
 			Optional(),
+		field.String("correlation_id").
+			Comment("跨系统关联 ID（如 KAF session/Langfuse trace），用于委派任务的端到端追踪").
+			Optional(),
 		field.String("parent_task_id").
 			Comment("父任务ID").
 			Optional(),

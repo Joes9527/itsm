@@ -57,6 +57,8 @@ type ProcessTask struct {
 	TaskVariables map[string]interface{} `json:"task_variables,omitempty"`
 	// 任务描述
 	Description string `json:"description,omitempty"`
+	// 跨系统关联 ID（如 KAF session/Langfuse trace），用于委派任务的端到端追踪
+	CorrelationID string `json:"correlation_id,omitempty"`
 	// 父任务ID
 	ParentTaskID string `json:"parent_task_id,omitempty"`
 	// 根任务ID
@@ -102,7 +104,7 @@ func (*ProcessTask) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case processtask.FieldID, processtask.FieldProcessInstanceID, processtask.FieldTenantID:
 			values[i] = new(sql.NullInt64)
-		case processtask.FieldTaskID, processtask.FieldProcessDefinitionKey, processtask.FieldTaskDefinitionKey, processtask.FieldTaskName, processtask.FieldTaskType, processtask.FieldAssignee, processtask.FieldCandidateUsers, processtask.FieldCandidateGroups, processtask.FieldStatus, processtask.FieldPriority, processtask.FieldFormKey, processtask.FieldDescription, processtask.FieldParentTaskID, processtask.FieldRootTaskID:
+		case processtask.FieldTaskID, processtask.FieldProcessDefinitionKey, processtask.FieldTaskDefinitionKey, processtask.FieldTaskName, processtask.FieldTaskType, processtask.FieldAssignee, processtask.FieldCandidateUsers, processtask.FieldCandidateGroups, processtask.FieldStatus, processtask.FieldPriority, processtask.FieldFormKey, processtask.FieldDescription, processtask.FieldCorrelationID, processtask.FieldParentTaskID, processtask.FieldRootTaskID:
 			values[i] = new(sql.NullString)
 		case processtask.FieldDueDate, processtask.FieldCreatedTime, processtask.FieldAssignedTime, processtask.FieldStartedTime, processtask.FieldCompletedTime, processtask.FieldCreatedAt, processtask.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -243,6 +245,12 @@ func (_m *ProcessTask) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Description = value.String
 			}
+		case processtask.FieldCorrelationID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field correlation_id", values[i])
+			} else if value.Valid {
+				_m.CorrelationID = value.String
+			}
 		case processtask.FieldParentTaskID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field parent_task_id", values[i])
@@ -370,6 +378,9 @@ func (_m *ProcessTask) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("description=")
 	builder.WriteString(_m.Description)
+	builder.WriteString(", ")
+	builder.WriteString("correlation_id=")
+	builder.WriteString(_m.CorrelationID)
 	builder.WriteString(", ")
 	builder.WriteString("parent_task_id=")
 	builder.WriteString(_m.ParentTaskID)

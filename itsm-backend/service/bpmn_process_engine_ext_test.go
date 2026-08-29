@@ -1076,3 +1076,21 @@ func TestHandleElement_ServiceTask_IncidentAutoAssign_NoAssignee_ContinuesFlow(t
 	assert.Zero(t, updatedIncident.AssigneeID, "空态跳过时不得写入处理人")
 	assert.Equal(t, "new", updatedIncident.Status, "空态跳过时不得改状态")
 }
+
+func TestProcessTask_CorrelationIDRoundTrip(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, _ := setupApprovalDecisionFixture(t, engine)
+	ctx := baseCtx
+
+	_, taskID := createProcessFixture(t, engine, tenantID, "correlation1")
+
+	updated, err := engine.client.ProcessTask.UpdateOneID(taskID).
+		SetCorrelationID("corr-abc-123").
+		Save(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "corr-abc-123", updated.CorrelationID)
+
+	reloaded, err := engine.client.ProcessTask.Get(ctx, taskID)
+	require.NoError(t, err)
+	assert.Equal(t, "corr-abc-123", reloaded.CorrelationID)
+}

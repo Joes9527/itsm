@@ -2413,15 +2413,15 @@ func init() {
 	// processtask.DefaultCreatedTime holds the default value on creation for the created_time field.
 	processtask.DefaultCreatedTime = processtaskDescCreatedTime.Default.(func() time.Time)
 	// processtaskDescTenantID is the schema descriptor for tenant_id field.
-	processtaskDescTenantID := processtaskFields[21].Descriptor()
+	processtaskDescTenantID := processtaskFields[22].Descriptor()
 	// processtask.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	processtask.TenantIDValidator = processtaskDescTenantID.Validators[0].(func(int) error)
 	// processtaskDescCreatedAt is the schema descriptor for created_at field.
-	processtaskDescCreatedAt := processtaskFields[22].Descriptor()
+	processtaskDescCreatedAt := processtaskFields[23].Descriptor()
 	// processtask.DefaultCreatedAt holds the default value on creation for the created_at field.
 	processtask.DefaultCreatedAt = processtaskDescCreatedAt.Default.(func() time.Time)
 	// processtaskDescUpdatedAt is the schema descriptor for updated_at field.
-	processtaskDescUpdatedAt := processtaskFields[23].Descriptor()
+	processtaskDescUpdatedAt := processtaskFields[24].Descriptor()
 	// processtask.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	processtask.DefaultUpdatedAt = processtaskDescUpdatedAt.Default.(func() time.Time)
 	// processtask.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

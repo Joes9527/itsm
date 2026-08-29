@@ -88388,6 +88388,7 @@ type ProcessTaskMutation struct {
 	form_key                *string
 	task_variables          *map[string]interface{}
 	description             *string
+	correlation_id          *string
 	parent_task_id          *string
 	root_task_id            *string
 	tenant_id               *int
@@ -89314,6 +89315,55 @@ func (m *ProcessTaskMutation) ResetDescription() {
 	delete(m.clearedFields, processtask.FieldDescription)
 }
 
+// SetCorrelationID sets the "correlation_id" field.
+func (m *ProcessTaskMutation) SetCorrelationID(s string) {
+	m.correlation_id = &s
+}
+
+// CorrelationID returns the value of the "correlation_id" field in the mutation.
+func (m *ProcessTaskMutation) CorrelationID() (r string, exists bool) {
+	v := m.correlation_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCorrelationID returns the old "correlation_id" field's value of the ProcessTask entity.
+// If the ProcessTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessTaskMutation) OldCorrelationID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCorrelationID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCorrelationID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCorrelationID: %w", err)
+	}
+	return oldValue.CorrelationID, nil
+}
+
+// ClearCorrelationID clears the value of the "correlation_id" field.
+func (m *ProcessTaskMutation) ClearCorrelationID() {
+	m.correlation_id = nil
+	m.clearedFields[processtask.FieldCorrelationID] = struct{}{}
+}
+
+// CorrelationIDCleared returns if the "correlation_id" field was cleared in this mutation.
+func (m *ProcessTaskMutation) CorrelationIDCleared() bool {
+	_, ok := m.clearedFields[processtask.FieldCorrelationID]
+	return ok
+}
+
+// ResetCorrelationID resets all changes to the "correlation_id" field.
+func (m *ProcessTaskMutation) ResetCorrelationID() {
+	m.correlation_id = nil
+	delete(m.clearedFields, processtask.FieldCorrelationID)
+}
+
 // SetParentTaskID sets the "parent_task_id" field.
 func (m *ProcessTaskMutation) SetParentTaskID(s string) {
 	m.parent_task_id = &s
@@ -89601,7 +89651,7 @@ func (m *ProcessTaskMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ProcessTaskMutation) Fields() []string {
-	fields := make([]string, 0, 24)
+	fields := make([]string, 0, 25)
 	if m.task_id != nil {
 		fields = append(fields, processtask.FieldTaskID)
 	}
@@ -89658,6 +89708,9 @@ func (m *ProcessTaskMutation) Fields() []string {
 	}
 	if m.description != nil {
 		fields = append(fields, processtask.FieldDescription)
+	}
+	if m.correlation_id != nil {
+		fields = append(fields, processtask.FieldCorrelationID)
 	}
 	if m.parent_task_id != nil {
 		fields = append(fields, processtask.FieldParentTaskID)
@@ -89720,6 +89773,8 @@ func (m *ProcessTaskMutation) Field(name string) (ent.Value, bool) {
 		return m.TaskVariables()
 	case processtask.FieldDescription:
 		return m.Description()
+	case processtask.FieldCorrelationID:
+		return m.CorrelationID()
 	case processtask.FieldParentTaskID:
 		return m.ParentTaskID()
 	case processtask.FieldRootTaskID:
@@ -89777,6 +89832,8 @@ func (m *ProcessTaskMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldTaskVariables(ctx)
 	case processtask.FieldDescription:
 		return m.OldDescription(ctx)
+	case processtask.FieldCorrelationID:
+		return m.OldCorrelationID(ctx)
 	case processtask.FieldParentTaskID:
 		return m.OldParentTaskID(ctx)
 	case processtask.FieldRootTaskID:
@@ -89929,6 +89986,13 @@ func (m *ProcessTaskMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetDescription(v)
 		return nil
+	case processtask.FieldCorrelationID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCorrelationID(v)
+		return nil
 	case processtask.FieldParentTaskID:
 		v, ok := value.(string)
 		if !ok {
@@ -90039,6 +90103,9 @@ func (m *ProcessTaskMutation) ClearedFields() []string {
 	if m.FieldCleared(processtask.FieldDescription) {
 		fields = append(fields, processtask.FieldDescription)
 	}
+	if m.FieldCleared(processtask.FieldCorrelationID) {
+		fields = append(fields, processtask.FieldCorrelationID)
+	}
 	if m.FieldCleared(processtask.FieldParentTaskID) {
 		fields = append(fields, processtask.FieldParentTaskID)
 	}
@@ -90088,6 +90155,9 @@ func (m *ProcessTaskMutation) ClearField(name string) error {
 		return nil
 	case processtask.FieldDescription:
 		m.ClearDescription()
+		return nil
+	case processtask.FieldCorrelationID:
+		m.ClearCorrelationID()
 		return nil
 	case processtask.FieldParentTaskID:
 		m.ClearParentTaskID()
@@ -90159,6 +90229,9 @@ func (m *ProcessTaskMutation) ResetField(name string) error {
 		return nil
 	case processtask.FieldDescription:
 		m.ResetDescription()
+		return nil
+	case processtask.FieldCorrelationID:
+		m.ResetCorrelationID()
 		return nil
 	case processtask.FieldParentTaskID:
 		m.ResetParentTaskID()

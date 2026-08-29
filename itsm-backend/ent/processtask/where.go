@@ -145,6 +145,11 @@ func Description(v string) predicate.ProcessTask {
 	return predicate.ProcessTask(sql.FieldEQ(FieldDescription, v))
 }
 
+// CorrelationID applies equality check predicate on the "correlation_id" field. It's identical to CorrelationIDEQ.
+func CorrelationID(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldEQ(FieldCorrelationID, v))
+}
+
 // ParentTaskID applies equality check predicate on the "parent_task_id" field. It's identical to ParentTaskIDEQ.
 func ParentTaskID(v string) predicate.ProcessTask {
 	return predicate.ProcessTask(sql.FieldEQ(FieldParentTaskID, v))
@@ -1268,6 +1273,81 @@ func DescriptionEqualFold(v string) predicate.ProcessTask {
 // DescriptionContainsFold applies the ContainsFold predicate on the "description" field.
 func DescriptionContainsFold(v string) predicate.ProcessTask {
 	return predicate.ProcessTask(sql.FieldContainsFold(FieldDescription, v))
+}
+
+// CorrelationIDEQ applies the EQ predicate on the "correlation_id" field.
+func CorrelationIDEQ(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldEQ(FieldCorrelationID, v))
+}
+
+// CorrelationIDNEQ applies the NEQ predicate on the "correlation_id" field.
+func CorrelationIDNEQ(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldNEQ(FieldCorrelationID, v))
+}
+
+// CorrelationIDIn applies the In predicate on the "correlation_id" field.
+func CorrelationIDIn(vs ...string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldIn(FieldCorrelationID, vs...))
+}
+
+// CorrelationIDNotIn applies the NotIn predicate on the "correlation_id" field.
+func CorrelationIDNotIn(vs ...string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldNotIn(FieldCorrelationID, vs...))
+}
+
+// CorrelationIDGT applies the GT predicate on the "correlation_id" field.
+func CorrelationIDGT(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldGT(FieldCorrelationID, v))
+}
+
+// CorrelationIDGTE applies the GTE predicate on the "correlation_id" field.
+func CorrelationIDGTE(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldGTE(FieldCorrelationID, v))
+}
+
+// CorrelationIDLT applies the LT predicate on the "correlation_id" field.
+func CorrelationIDLT(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldLT(FieldCorrelationID, v))
+}
+
+// CorrelationIDLTE applies the LTE predicate on the "correlation_id" field.
+func CorrelationIDLTE(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldLTE(FieldCorrelationID, v))
+}
+
+// CorrelationIDContains applies the Contains predicate on the "correlation_id" field.
+func CorrelationIDContains(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldContains(FieldCorrelationID, v))
+}
+
+// CorrelationIDHasPrefix applies the HasPrefix predicate on the "correlation_id" field.
+func CorrelationIDHasPrefix(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldHasPrefix(FieldCorrelationID, v))
+}
+
+// CorrelationIDHasSuffix applies the HasSuffix predicate on the "correlation_id" field.
+func CorrelationIDHasSuffix(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldHasSuffix(FieldCorrelationID, v))
+}
+
+// CorrelationIDIsNil applies the IsNil predicate on the "correlation_id" field.
+func CorrelationIDIsNil() predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldIsNull(FieldCorrelationID))
+}
+
+// CorrelationIDNotNil applies the NotNil predicate on the "correlation_id" field.
+func CorrelationIDNotNil() predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldNotNull(FieldCorrelationID))
+}
+
+// CorrelationIDEqualFold applies the EqualFold predicate on the "correlation_id" field.
+func CorrelationIDEqualFold(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldEqualFold(FieldCorrelationID, v))
+}
+
+// CorrelationIDContainsFold applies the ContainsFold predicate on the "correlation_id" field.
+func CorrelationIDContainsFold(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldContainsFold(FieldCorrelationID, v))
 }
 
 // ParentTaskIDEQ applies the EQ predicate on the "parent_task_id" field.

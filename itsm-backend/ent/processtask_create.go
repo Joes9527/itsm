@@ -239,6 +239,20 @@ func (_c *ProcessTaskCreate) SetNillableDescription(v *string) *ProcessTaskCreat
 	return _c
 }
 
+// SetCorrelationID sets the "correlation_id" field.
+func (_c *ProcessTaskCreate) SetCorrelationID(v string) *ProcessTaskCreate {
+	_c.mutation.SetCorrelationID(v)
+	return _c
+}
+
+// SetNillableCorrelationID sets the "correlation_id" field if the given value is not nil.
+func (_c *ProcessTaskCreate) SetNillableCorrelationID(v *string) *ProcessTaskCreate {
+	if v != nil {
+		_c.SetCorrelationID(*v)
+	}
+	return _c
+}
+
 // SetParentTaskID sets the "parent_task_id" field.
 func (_c *ProcessTaskCreate) SetParentTaskID(v string) *ProcessTaskCreate {
 	_c.mutation.SetParentTaskID(v)
@@ -535,6 +549,10 @@ func (_c *ProcessTaskCreate) createSpec() (*ProcessTask, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Description(); ok {
 		_spec.SetField(processtask.FieldDescription, field.TypeString, value)
 		_node.Description = value
+	}
+	if value, ok := _c.mutation.CorrelationID(); ok {
+		_spec.SetField(processtask.FieldCorrelationID, field.TypeString, value)
+		_node.CorrelationID = value
 	}
 	if value, ok := _c.mutation.ParentTaskID(); ok {
 		_spec.SetField(processtask.FieldParentTaskID, field.TypeString, value)

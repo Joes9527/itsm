@@ -2845,6 +2845,7 @@ var (
 		{Name: "form_key", Type: field.TypeString, Nullable: true},
 		{Name: "task_variables", Type: field.TypeJSON, Nullable: true},
 		{Name: "description", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "correlation_id", Type: field.TypeString, Nullable: true},
 		{Name: "parent_task_id", Type: field.TypeString, Nullable: true},
 		{Name: "root_task_id", Type: field.TypeString, Nullable: true},
 		{Name: "tenant_id", Type: field.TypeInt},
@@ -2860,7 +2861,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "process_tasks_process_instances_process_tasks",
-				Columns:    []*schema.Column{ProcessTasksColumns[24]},
+				Columns:    []*schema.Column{ProcessTasksColumns[25]},
 				RefColumns: []*schema.Column{ProcessInstancesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -2874,7 +2875,7 @@ var (
 			{
 				Name:    "processtask_process_instance_id",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessTasksColumns[24]},
+				Columns: []*schema.Column{ProcessTasksColumns[25]},
 			},
 			{
 				Name:    "processtask_process_definition_key",
@@ -2909,7 +2910,7 @@ var (
 			{
 				Name:    "processtask_tenant_id",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessTasksColumns[21]},
+				Columns: []*schema.Column{ProcessTasksColumns[22]},
 			},
 			{
 				Name:    "processtask_created_time",
@@ -2919,12 +2920,12 @@ var (
 			{
 				Name:    "processtask_parent_task_id",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessTasksColumns[19]},
+				Columns: []*schema.Column{ProcessTasksColumns[20]},
 			},
 			{
 				Name:    "processtask_root_task_id",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessTasksColumns[20]},
+				Columns: []*schema.Column{ProcessTasksColumns[21]},
 			},
 		},
 	}
