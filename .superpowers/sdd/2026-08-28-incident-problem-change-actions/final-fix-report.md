@@ -170,3 +170,34 @@ Verification:
 Residuals:
 
 - `itsm-frontend/test-results/junit.xml` remains dirty and was not staged or committed.
+
+## Incident Freshness Test Stabilization
+
+Date: 2026-08-29
+Head before fix: `ddc870b4`
+Fix commit: `76a8a52d test(incident): stabilize action freshness input`
+
+Changed file:
+
+- `itsm-frontend/src/components/incident/__tests__/IncidentDetail.test.tsx`
+
+Result:
+
+- Replaced only the freshness regression's character-by-character `user.type` call with one `fireEvent.change` carrying the same 15-character resolution.
+- Retained real `userEvent` clicks for opening and submitting the resolve modal and retained the resolve/refetch path, refetch count, close-enabled, and stale resolve disabled/reason assertions.
+- Left the separate allowed-resolve test's `user.type` path unchanged.
+
+Verification:
+
+- Before the fix, the standalone freshness test passed in 7.571 seconds test time and 10.51 seconds wall time, reproducing the path close to the controller timeout.
+- Three consecutive standalone post-fix executions passed without increasing the timeout: 7.251/10.12 seconds, 5.272/8.22 seconds, and 6.570/9.47 seconds test/wall time.
+- `cd itsm-frontend && npx jest --runInBand --coverage=false src/components/incident/__tests__/IncidentDetail.test.tsx` passed: 1 suite, 5 tests.
+- `cd itsm-frontend && npx jest --runInBand --coverage=false src/components/incident/__tests__/IncidentDetail.test.tsx src/components/problem/__tests__/ProblemDetail.test.tsx src/components/change/__tests__/ChangeDetail.test.tsx src/lib/utils/__tests__/workflow-state-machine.test.ts src/lib/__tests__/message-channel-shim.test.ts` passed: 5 suites, 36 tests.
+- `cd itsm-frontend && npm run type-check` passed.
+- `cd itsm-frontend && npm run lint:check` passed with 0 errors and the same 3 unrelated unused eslint-disable warnings.
+- `git diff --check` passed.
+
+Residuals:
+
+- Focused and combined Jest runs still emit the existing Ant Design static `message` context warning from success paths.
+- `itsm-frontend/test-results/junit.xml` remains dirty and was not staged or committed.
