@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -12,6 +13,19 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
+
+type fakeSQLStateError struct {
+	code string
+	msg  string
+}
+
+func (e fakeSQLStateError) Error() string {
+	return e.msg
+}
+
+func (e fakeSQLStateError) SQLState() string {
+	return e.code
+}
 
 func incidentProblemRelationMigrationTestDB(t *testing.T) *sql.DB {
 	t.Helper()
@@ -48,6 +62,71 @@ func withIncidentProblemRelationMigrationTestSchema(t *testing.T, db *sql.DB, fn
 	})
 
 	fn(ctx)
+}
+
+func TestIsMissingTableErrorStrictClassification(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "nil",
+			err:  nil,
+			want: false,
+		},
+		{
+			name: "sqlite target table missing",
+			err:  errors.New("no such table: work_item_relations"),
+			want: true,
+		},
+		{
+			name: "wrapped sqlite target table missing",
+			err:  fmt.Errorf("probe work_item_relations: %w", errors.New("no such table: work_item_relations")),
+			want: true,
+		},
+		{
+			name: "postgres undefined table sqlstate",
+			err:  fakeSQLStateError{code: "42P01", msg: `pq: relation "work_item_relations" does not exist`},
+			want: true,
+		},
+		{
+			name: "wrapped postgres undefined table sqlstate",
+			err:  fmt.Errorf("probe work_item_relations: %w", fakeSQLStateError{code: "42P01", msg: "undefined_table"}),
+			want: true,
+		},
+		{
+			name: "unrelated resource does not exist",
+			err:  errors.New("resource does not exist"),
+			want: false,
+		},
+		{
+			name: "different sqlite table missing",
+			err:  errors.New("no such table: service_requests"),
+			want: false,
+		},
+		{
+			name: "other sqlstate",
+			err:  fakeSQLStateError{code: "42501", msg: "permission denied for table work_item_relations"},
+			want: false,
+		},
+		{
+			name: "syntax error",
+			err:  errors.New(`near "FROMM": syntax error`),
+			want: false,
+		},
+		{
+			name: "connection failure mentioning target table",
+			err:  errors.New("connection refused while probing work_item_relations"),
+			want: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, isMissingTableError(tc.err))
+		})
+	}
 }
 
 func TestPrepareIncidentProblemRelationMigrationSkipsMissingTable(t *testing.T) {

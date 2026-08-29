@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -121,12 +122,20 @@ func workItemRelationsTableExists(ctx context.Context, db *sql.DB) (bool, error)
 	return true, rows.Close()
 }
 
+type sqlStateError interface {
+	SQLState() string
+}
+
 func isMissingTableError(err error) bool {
 	if err == nil {
 		return false
 	}
+
+	var stateErr sqlStateError
+	if errors.As(err, &stateErr) && stateErr.SQLState() == "42P01" {
+		return true
+	}
+
 	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "no such table") ||
-		strings.Contains(msg, "does not exist") ||
-		strings.Contains(msg, "undefined_table")
+	return strings.Contains(msg, "no such table: work_item_relations")
 }
