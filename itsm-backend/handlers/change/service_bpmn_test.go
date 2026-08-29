@@ -743,27 +743,6 @@ func TestTransitionStatus_Approve_WrongActorRejected(t *testing.T) {
 	assert.Equal(t, "pending", updated.Status, "越权调用失败后不应该残留任何状态变化")
 }
 
-func TestTransitionStatusRejectsSelfApprovalAndSelfRejection(t *testing.T) {
-	client, svc, tenant, _, c := setupChangeForTransitionStatusTest(t, "transition_self_guard")
-	ctx := context.Background()
-
-	_, err := svc.TransitionStatus(ctx, c.ID, tenant.ID, c.CreatedBy, "approved", "我批准我自己")
-	require.Error(t, err)
-	require.ErrorContains(t, err, "不能审批自己提交的变更")
-
-	updated, err := client.Change.Get(ctx, c.ID)
-	require.NoError(t, err)
-	require.Equal(t, "pending", updated.Status)
-
-	_, err = svc.TransitionStatus(ctx, c.ID, tenant.ID, c.CreatedBy, "rejected", "我驳回我自己")
-	require.Error(t, err)
-	require.ErrorContains(t, err, "不能审批自己提交的变更")
-
-	updated, err = client.Change.Get(ctx, c.ID)
-	require.NoError(t, err)
-	require.Equal(t, "pending", updated.Status)
-}
-
 // TestTransitionStatus_Approve_NoRunningProcessInstanceFailsClosed 覆盖移除旧的桥接
 // 机制之后的行为反转：旧实现在没有关联运行中流程实例时会静默回退为纯业务审批（approve 照样成功）；
 // 新实现完全交给 completeChangeApprovalTask，没有运行中的 ProcessInstance 时必须 fail-closed，

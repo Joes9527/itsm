@@ -177,6 +177,27 @@ func TestSubmitChange_TriggerProcessFailureLeavesChangeDraft(t *testing.T) {
 	require.Len(t, trigger.triggerCalls, 1, "TriggerProcess should have been attempted once")
 }
 
+func TestTransitionStatusRejectsSelfApprovalAndSelfRejection(t *testing.T) {
+	client, svc, tenant, _, c := setupChangeForTransitionStatusTest(t, "transition_self_guard")
+	ctx := context.Background()
+
+	_, err := svc.TransitionStatus(ctx, c.ID, tenant.ID, c.CreatedBy, "approved", "我批准我自己")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "不能审批自己提交的变更")
+
+	updated, err := client.Change.Get(ctx, c.ID)
+	require.NoError(t, err)
+	require.Equal(t, "pending", updated.Status)
+
+	_, err = svc.TransitionStatus(ctx, c.ID, tenant.ID, c.CreatedBy, "rejected", "我驳回我自己")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "不能审批自己提交的变更")
+
+	updated, err = client.Change.Get(ctx, c.ID)
+	require.NoError(t, err)
+	require.Equal(t, "pending", updated.Status)
+}
+
 // seedChangeInMockAndEnt 双写一个 change：一份进 mockRepository（供 s.repo.Get/
 // MarkSubmittedForApproval 用，submitErr 可控失败），一份进真实 ent.Client（供
 // completeAssessmentTask 触发的真实 BPMN 回调——ChangeServiceTaskHandler.updateChange

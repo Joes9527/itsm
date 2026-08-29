@@ -1,5 +1,4 @@
 import '@testing-library/jest-dom';
-import { MessageChannel as NodeMessageChannel } from 'node:worker_threads';
 
 // Mock dayjs - required for Ant Design DatePicker
 // Must mock both default and named exports
@@ -126,7 +125,32 @@ jest.mock('dayjs', () => {
 });
 
 if (typeof globalThis.MessageChannel === 'undefined') {
-  globalThis.MessageChannel = NodeMessageChannel;
+  class TestMessagePort {
+    onmessage = null;
+    peer = null;
+
+    postMessage(data) {
+      setTimeout(() => {
+        this.peer?.onmessage?.({ data });
+      }, 0);
+    }
+
+    start() {}
+
+    close() {
+      this.onmessage = null;
+      this.peer = null;
+    }
+  }
+
+  globalThis.MessageChannel = class TestMessageChannel {
+    constructor() {
+      this.port1 = new TestMessagePort();
+      this.port2 = new TestMessagePort();
+      this.port1.peer = this.port2;
+      this.port2.peer = this.port1;
+    }
+  };
 }
 
 // Mock Next.js router
