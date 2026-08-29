@@ -5,16 +5,25 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
+	"strings"
 	"time"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/outboxevent"
+
+	"github.com/google/uuid"
 )
 
 const (
 	outboxEventStatusPending    = "pending"
 	outboxEventStatusPublishing = "publishing"
 	outboxEventStatusPublished  = "published"
+
+	outboxEventClaimLeaseDuration = 5 * time.Minute
+	outboxEventLastErrorMaxLength = 512
+	outboxEventClaimRetryAttempts = 5
+	outboxEventClaimRetryDelay    = 5 * time.Millisecond
 )
 
 var (
@@ -22,7 +31,11 @@ var (
 	// event ID already persisted by the domain transaction.
 	ErrDuplicateOutboxEvent = errors.New("duplicate outbox event")
 
-	errOutboxEventNotPublishing = errors.New("outbox event is not publishing")
+	// ErrOutboxEventClaimLost reports a completion attempt for an expired or
+	// superseded publishing lease.
+	ErrOutboxEventClaimLost = errors.New("outbox event claim is no longer active")
+
+	outboxSensitiveErrorValuePattern = regexp.MustCompile(`(?i)\b(authorization|token|secret|password|api[_-]?key)\b\s*[:=]\s*(?:bearer\s+)?[^\s,;]+`)
 )
 
 // NewOutboxEvent contains the immutable delivery data captured with the
@@ -40,10 +53,11 @@ type NewOutboxEvent struct {
 // OutboxEventRepository persists and atomically claims reliable events.
 type OutboxEventRepository struct {
 	client *ent.Client
+	clock  func() time.Time
 }
 
 func NewOutboxEventRepository(client *ent.Client) *OutboxEventRepository {
-	return &OutboxEventRepository{client: client}
+	return &OutboxEventRepository{client: client, clock: time.Now}
 }
 
 // Enqueue writes an event through the caller's transaction when supplied, so
@@ -74,19 +88,56 @@ func (r *OutboxEventRepository) Enqueue(ctx context.Context, tx *ent.Tx, event N
 	return persisted, nil
 }
 
-// ClaimDue moves eligible pending events to publishing within one transaction.
-// Every candidate is conditionally updated again, so a competing dispatcher
-// that claimed it first is never returned to this caller.
+// ClaimDue first returns expired publishing leases to pending, then moves
+// eligible events to publishing within the same transaction. Every candidate
+// is conditionally updated again, so a competing dispatcher that claimed it
+// first is never returned to this caller.
 func (r *OutboxEventRepository) ClaimDue(ctx context.Context, now time.Time, limit int) ([]*ent.OutboxEvent, error) {
+	for attempt := 0; attempt < outboxEventClaimRetryAttempts; attempt++ {
+		claimed, err := r.claimDue(ctx, now, limit)
+		if err == nil || !isRetryableOutboxClaimError(err) || attempt == outboxEventClaimRetryAttempts-1 {
+			return claimed, err
+		}
+
+		timer := time.NewTimer(time.Duration(attempt+1) * outboxEventClaimRetryDelay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return nil, nil
+}
+
+func (r *OutboxEventRepository) claimDue(ctx context.Context, now time.Time, limit int) ([]*ent.OutboxEvent, error) {
 	if limit <= 0 {
 		return nil, nil
 	}
+	now = now.UTC()
+	claimExpiresAt := now.Add(outboxEventClaimLeaseDuration)
 
 	tx, err := r.client.Tx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("start outbox claim transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+
+	_, err = tx.OutboxEvent.Update().
+		Where(
+			outboxevent.StatusEQ(outboxEventStatusPublishing),
+			outboxevent.Or(
+				outboxevent.ClaimExpiresAtLTE(now),
+				outboxevent.ClaimExpiresAtIsNil(),
+			),
+		).
+		SetStatus(outboxEventStatusPending).
+		ClearClaimToken().
+		ClearClaimExpiresAt().
+		Save(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("recover expired outbox claims: %w", err)
+	}
 
 	candidates, err := tx.OutboxEvent.Query().
 		Where(
@@ -102,6 +153,7 @@ func (r *OutboxEventRepository) ClaimDue(ctx context.Context, now time.Time, lim
 
 	claimedIDs := make([]int, 0, len(candidates))
 	for _, candidate := range candidates {
+		claimToken := uuid.NewString()
 		updated, err := tx.OutboxEvent.Update().
 			Where(
 				outboxevent.IDEQ(candidate.ID),
@@ -109,6 +161,8 @@ func (r *OutboxEventRepository) ClaimDue(ctx context.Context, now time.Time, lim
 				outboxevent.NextAttemptAtLTE(now),
 			).
 			SetStatus(outboxEventStatusPublishing).
+			SetClaimToken(claimToken).
+			SetClaimExpiresAt(claimExpiresAt).
 			Save(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("claim outbox event %d: %w", candidate.ID, err)
@@ -145,43 +199,72 @@ func (r *OutboxEventRepository) ClaimDue(ctx context.Context, now time.Time, lim
 	return ordered, nil
 }
 
-// MarkRetry makes a failed claim eligible for a later delivery attempt.
-func (r *OutboxEventRepository) MarkRetry(ctx context.Context, eventID int, lastError string, nextAttemptAt time.Time) error {
+// MarkRetry makes an active failed claim eligible for a later delivery attempt.
+func (r *OutboxEventRepository) MarkRetry(ctx context.Context, eventID int, claimToken, lastError string, nextAttemptAt time.Time) error {
 	updated, err := r.client.OutboxEvent.Update().
 		Where(
 			outboxevent.IDEQ(eventID),
 			outboxevent.StatusEQ(outboxEventStatusPublishing),
+			outboxevent.ClaimTokenEQ(claimToken),
+			outboxevent.ClaimExpiresAtGT(r.currentTime()),
 		).
 		SetStatus(outboxEventStatusPending).
 		AddAttemptCount(1).
-		SetLastError(lastError).
+		SetLastError(summarizeOutboxError(lastError)).
 		SetNextAttemptAt(nextAttemptAt).
+		ClearClaimToken().
+		ClearClaimExpiresAt().
 		Save(ctx)
 	if err != nil {
 		return fmt.Errorf("schedule outbox retry: %w", err)
 	}
 	if updated == 0 {
-		return errOutboxEventNotPublishing
+		return ErrOutboxEventClaimLost
 	}
 	return nil
 }
 
-// MarkPublished finalizes a successfully delivered publishing lease.
-func (r *OutboxEventRepository) MarkPublished(ctx context.Context, eventID int, publishedAt time.Time) error {
+// MarkPublished finalizes an active, successfully delivered publishing lease.
+func (r *OutboxEventRepository) MarkPublished(ctx context.Context, eventID int, claimToken string, publishedAt time.Time) error {
 	updated, err := r.client.OutboxEvent.Update().
 		Where(
 			outboxevent.IDEQ(eventID),
 			outboxevent.StatusEQ(outboxEventStatusPublishing),
+			outboxevent.ClaimTokenEQ(claimToken),
+			outboxevent.ClaimExpiresAtGT(r.currentTime()),
 		).
 		SetStatus(outboxEventStatusPublished).
 		SetPublishedAt(publishedAt).
 		ClearLastError().
+		ClearClaimToken().
+		ClearClaimExpiresAt().
 		Save(ctx)
 	if err != nil {
 		return fmt.Errorf("mark outbox event published: %w", err)
 	}
 	if updated == 0 {
-		return errOutboxEventNotPublishing
+		return ErrOutboxEventClaimLost
 	}
 	return nil
+}
+
+func (r *OutboxEventRepository) currentTime() time.Time {
+	return r.clock().UTC()
+}
+
+func summarizeOutboxError(lastError string) string {
+	summary := strings.Join(strings.Fields(lastError), " ")
+	summary = outboxSensitiveErrorValuePattern.ReplaceAllString(summary, "$1=[redacted]")
+	if len(summary) <= outboxEventLastErrorMaxLength {
+		return summary
+	}
+	return summary[:outboxEventLastErrorMaxLength]
+}
+
+func isRetryableOutboxClaimError(err error) bool {
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "database is locked") ||
+		strings.Contains(message, "database table is locked") ||
+		strings.Contains(message, "could not serialize access") ||
+		strings.Contains(message, "deadlock detected")
 }

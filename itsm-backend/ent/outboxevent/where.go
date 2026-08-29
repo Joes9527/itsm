@@ -94,6 +94,16 @@ func NextAttemptAt(v time.Time) predicate.OutboxEvent {
 	return predicate.OutboxEvent(sql.FieldEQ(FieldNextAttemptAt, v))
 }
 
+// ClaimToken applies equality check predicate on the "claim_token" field. It's identical to ClaimTokenEQ.
+func ClaimToken(v string) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldEQ(FieldClaimToken, v))
+}
+
+// ClaimExpiresAt applies equality check predicate on the "claim_expires_at" field. It's identical to ClaimExpiresAtEQ.
+func ClaimExpiresAt(v time.Time) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldEQ(FieldClaimExpiresAt, v))
+}
+
 // PublishedAt applies equality check predicate on the "published_at" field. It's identical to PublishedAtEQ.
 func PublishedAt(v time.Time) predicate.OutboxEvent {
 	return predicate.OutboxEvent(sql.FieldEQ(FieldPublishedAt, v))
@@ -557,6 +567,131 @@ func NextAttemptAtLT(v time.Time) predicate.OutboxEvent {
 // NextAttemptAtLTE applies the LTE predicate on the "next_attempt_at" field.
 func NextAttemptAtLTE(v time.Time) predicate.OutboxEvent {
 	return predicate.OutboxEvent(sql.FieldLTE(FieldNextAttemptAt, v))
+}
+
+// ClaimTokenEQ applies the EQ predicate on the "claim_token" field.
+func ClaimTokenEQ(v string) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldEQ(FieldClaimToken, v))
+}
+
+// ClaimTokenNEQ applies the NEQ predicate on the "claim_token" field.
+func ClaimTokenNEQ(v string) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldNEQ(FieldClaimToken, v))
+}
+
+// ClaimTokenIn applies the In predicate on the "claim_token" field.
+func ClaimTokenIn(vs ...string) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldIn(FieldClaimToken, vs...))
+}
+
+// ClaimTokenNotIn applies the NotIn predicate on the "claim_token" field.
+func ClaimTokenNotIn(vs ...string) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldNotIn(FieldClaimToken, vs...))
+}
+
+// ClaimTokenGT applies the GT predicate on the "claim_token" field.
+func ClaimTokenGT(v string) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldGT(FieldClaimToken, v))
+}
+
+// ClaimTokenGTE applies the GTE predicate on the "claim_token" field.
+func ClaimTokenGTE(v string) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldGTE(FieldClaimToken, v))
+}
+
+// ClaimTokenLT applies the LT predicate on the "claim_token" field.
+func ClaimTokenLT(v string) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldLT(FieldClaimToken, v))
+}
+
+// ClaimTokenLTE applies the LTE predicate on the "claim_token" field.
+func ClaimTokenLTE(v string) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldLTE(FieldClaimToken, v))
+}
+
+// ClaimTokenContains applies the Contains predicate on the "claim_token" field.
+func ClaimTokenContains(v string) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldContains(FieldClaimToken, v))
+}
+
+// ClaimTokenHasPrefix applies the HasPrefix predicate on the "claim_token" field.
+func ClaimTokenHasPrefix(v string) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldHasPrefix(FieldClaimToken, v))
+}
+
+// ClaimTokenHasSuffix applies the HasSuffix predicate on the "claim_token" field.
+func ClaimTokenHasSuffix(v string) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldHasSuffix(FieldClaimToken, v))
+}
+
+// ClaimTokenIsNil applies the IsNil predicate on the "claim_token" field.
+func ClaimTokenIsNil() predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldIsNull(FieldClaimToken))
+}
+
+// ClaimTokenNotNil applies the NotNil predicate on the "claim_token" field.
+func ClaimTokenNotNil() predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldNotNull(FieldClaimToken))
+}
+
+// ClaimTokenEqualFold applies the EqualFold predicate on the "claim_token" field.
+func ClaimTokenEqualFold(v string) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldEqualFold(FieldClaimToken, v))
+}
+
+// ClaimTokenContainsFold applies the ContainsFold predicate on the "claim_token" field.
+func ClaimTokenContainsFold(v string) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldContainsFold(FieldClaimToken, v))
+}
+
+// ClaimExpiresAtEQ applies the EQ predicate on the "claim_expires_at" field.
+func ClaimExpiresAtEQ(v time.Time) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldEQ(FieldClaimExpiresAt, v))
+}
+
+// ClaimExpiresAtNEQ applies the NEQ predicate on the "claim_expires_at" field.
+func ClaimExpiresAtNEQ(v time.Time) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldNEQ(FieldClaimExpiresAt, v))
+}
+
+// ClaimExpiresAtIn applies the In predicate on the "claim_expires_at" field.
+func ClaimExpiresAtIn(vs ...time.Time) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldIn(FieldClaimExpiresAt, vs...))
+}
+
+// ClaimExpiresAtNotIn applies the NotIn predicate on the "claim_expires_at" field.
+func ClaimExpiresAtNotIn(vs ...time.Time) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldNotIn(FieldClaimExpiresAt, vs...))
+}
+
+// ClaimExpiresAtGT applies the GT predicate on the "claim_expires_at" field.
+func ClaimExpiresAtGT(v time.Time) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldGT(FieldClaimExpiresAt, v))
+}
+
+// ClaimExpiresAtGTE applies the GTE predicate on the "claim_expires_at" field.
+func ClaimExpiresAtGTE(v time.Time) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldGTE(FieldClaimExpiresAt, v))
+}
+
+// ClaimExpiresAtLT applies the LT predicate on the "claim_expires_at" field.
+func ClaimExpiresAtLT(v time.Time) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldLT(FieldClaimExpiresAt, v))
+}
+
+// ClaimExpiresAtLTE applies the LTE predicate on the "claim_expires_at" field.
+func ClaimExpiresAtLTE(v time.Time) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldLTE(FieldClaimExpiresAt, v))
+}
+
+// ClaimExpiresAtIsNil applies the IsNil predicate on the "claim_expires_at" field.
+func ClaimExpiresAtIsNil() predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldIsNull(FieldClaimExpiresAt))
+}
+
+// ClaimExpiresAtNotNil applies the NotNil predicate on the "claim_expires_at" field.
+func ClaimExpiresAtNotNil() predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldNotNull(FieldClaimExpiresAt))
 }
 
 // PublishedAtEQ applies the EQ predicate on the "published_at" field.

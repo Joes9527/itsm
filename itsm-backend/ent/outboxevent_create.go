@@ -99,6 +99,34 @@ func (_c *OutboxEventCreate) SetNillableNextAttemptAt(v *time.Time) *OutboxEvent
 	return _c
 }
 
+// SetClaimToken sets the "claim_token" field.
+func (_c *OutboxEventCreate) SetClaimToken(v string) *OutboxEventCreate {
+	_c.mutation.SetClaimToken(v)
+	return _c
+}
+
+// SetNillableClaimToken sets the "claim_token" field if the given value is not nil.
+func (_c *OutboxEventCreate) SetNillableClaimToken(v *string) *OutboxEventCreate {
+	if v != nil {
+		_c.SetClaimToken(*v)
+	}
+	return _c
+}
+
+// SetClaimExpiresAt sets the "claim_expires_at" field.
+func (_c *OutboxEventCreate) SetClaimExpiresAt(v time.Time) *OutboxEventCreate {
+	_c.mutation.SetClaimExpiresAt(v)
+	return _c
+}
+
+// SetNillableClaimExpiresAt sets the "claim_expires_at" field if the given value is not nil.
+func (_c *OutboxEventCreate) SetNillableClaimExpiresAt(v *time.Time) *OutboxEventCreate {
+	if v != nil {
+		_c.SetClaimExpiresAt(*v)
+	}
+	return _c
+}
+
 // SetPublishedAt sets the "published_at" field.
 func (_c *OutboxEventCreate) SetPublishedAt(v time.Time) *OutboxEventCreate {
 	_c.mutation.SetPublishedAt(v)
@@ -333,6 +361,14 @@ func (_c *OutboxEventCreate) createSpec() (*OutboxEvent, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.NextAttemptAt(); ok {
 		_spec.SetField(outboxevent.FieldNextAttemptAt, field.TypeTime, value)
 		_node.NextAttemptAt = value
+	}
+	if value, ok := _c.mutation.ClaimToken(); ok {
+		_spec.SetField(outboxevent.FieldClaimToken, field.TypeString, value)
+		_node.ClaimToken = value
+	}
+	if value, ok := _c.mutation.ClaimExpiresAt(); ok {
+		_spec.SetField(outboxevent.FieldClaimExpiresAt, field.TypeTime, value)
+		_node.ClaimExpiresAt = value
 	}
 	if value, ok := _c.mutation.PublishedAt(); ok {
 		_spec.SetField(outboxevent.FieldPublishedAt, field.TypeTime, value)

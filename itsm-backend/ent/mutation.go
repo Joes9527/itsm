@@ -72752,6 +72752,8 @@ type OutboxEventMutation struct {
 	attempt_count    *int
 	addattempt_count *int
 	next_attempt_at  *time.Time
+	claim_token      *string
+	claim_expires_at *time.Time
 	published_at     *time.Time
 	last_error       *string
 	created_at       *time.Time
@@ -73239,6 +73241,104 @@ func (m *OutboxEventMutation) ResetNextAttemptAt() {
 	m.next_attempt_at = nil
 }
 
+// SetClaimToken sets the "claim_token" field.
+func (m *OutboxEventMutation) SetClaimToken(s string) {
+	m.claim_token = &s
+}
+
+// ClaimToken returns the value of the "claim_token" field in the mutation.
+func (m *OutboxEventMutation) ClaimToken() (r string, exists bool) {
+	v := m.claim_token
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldClaimToken returns the old "claim_token" field's value of the OutboxEvent entity.
+// If the OutboxEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OutboxEventMutation) OldClaimToken(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldClaimToken is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldClaimToken requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldClaimToken: %w", err)
+	}
+	return oldValue.ClaimToken, nil
+}
+
+// ClearClaimToken clears the value of the "claim_token" field.
+func (m *OutboxEventMutation) ClearClaimToken() {
+	m.claim_token = nil
+	m.clearedFields[outboxevent.FieldClaimToken] = struct{}{}
+}
+
+// ClaimTokenCleared returns if the "claim_token" field was cleared in this mutation.
+func (m *OutboxEventMutation) ClaimTokenCleared() bool {
+	_, ok := m.clearedFields[outboxevent.FieldClaimToken]
+	return ok
+}
+
+// ResetClaimToken resets all changes to the "claim_token" field.
+func (m *OutboxEventMutation) ResetClaimToken() {
+	m.claim_token = nil
+	delete(m.clearedFields, outboxevent.FieldClaimToken)
+}
+
+// SetClaimExpiresAt sets the "claim_expires_at" field.
+func (m *OutboxEventMutation) SetClaimExpiresAt(t time.Time) {
+	m.claim_expires_at = &t
+}
+
+// ClaimExpiresAt returns the value of the "claim_expires_at" field in the mutation.
+func (m *OutboxEventMutation) ClaimExpiresAt() (r time.Time, exists bool) {
+	v := m.claim_expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldClaimExpiresAt returns the old "claim_expires_at" field's value of the OutboxEvent entity.
+// If the OutboxEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OutboxEventMutation) OldClaimExpiresAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldClaimExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldClaimExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldClaimExpiresAt: %w", err)
+	}
+	return oldValue.ClaimExpiresAt, nil
+}
+
+// ClearClaimExpiresAt clears the value of the "claim_expires_at" field.
+func (m *OutboxEventMutation) ClearClaimExpiresAt() {
+	m.claim_expires_at = nil
+	m.clearedFields[outboxevent.FieldClaimExpiresAt] = struct{}{}
+}
+
+// ClaimExpiresAtCleared returns if the "claim_expires_at" field was cleared in this mutation.
+func (m *OutboxEventMutation) ClaimExpiresAtCleared() bool {
+	_, ok := m.clearedFields[outboxevent.FieldClaimExpiresAt]
+	return ok
+}
+
+// ResetClaimExpiresAt resets all changes to the "claim_expires_at" field.
+func (m *OutboxEventMutation) ResetClaimExpiresAt() {
+	m.claim_expires_at = nil
+	delete(m.clearedFields, outboxevent.FieldClaimExpiresAt)
+}
+
 // SetPublishedAt sets the "published_at" field.
 func (m *OutboxEventMutation) SetPublishedAt(t time.Time) {
 	m.published_at = &t
@@ -73443,7 +73543,7 @@ func (m *OutboxEventMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *OutboxEventMutation) Fields() []string {
-	fields := make([]string, 0, 13)
+	fields := make([]string, 0, 15)
 	if m.event_id != nil {
 		fields = append(fields, outboxevent.FieldEventID)
 	}
@@ -73470,6 +73570,12 @@ func (m *OutboxEventMutation) Fields() []string {
 	}
 	if m.next_attempt_at != nil {
 		fields = append(fields, outboxevent.FieldNextAttemptAt)
+	}
+	if m.claim_token != nil {
+		fields = append(fields, outboxevent.FieldClaimToken)
+	}
+	if m.claim_expires_at != nil {
+		fields = append(fields, outboxevent.FieldClaimExpiresAt)
 	}
 	if m.published_at != nil {
 		fields = append(fields, outboxevent.FieldPublishedAt)
@@ -73509,6 +73615,10 @@ func (m *OutboxEventMutation) Field(name string) (ent.Value, bool) {
 		return m.AttemptCount()
 	case outboxevent.FieldNextAttemptAt:
 		return m.NextAttemptAt()
+	case outboxevent.FieldClaimToken:
+		return m.ClaimToken()
+	case outboxevent.FieldClaimExpiresAt:
+		return m.ClaimExpiresAt()
 	case outboxevent.FieldPublishedAt:
 		return m.PublishedAt()
 	case outboxevent.FieldLastError:
@@ -73544,6 +73654,10 @@ func (m *OutboxEventMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldAttemptCount(ctx)
 	case outboxevent.FieldNextAttemptAt:
 		return m.OldNextAttemptAt(ctx)
+	case outboxevent.FieldClaimToken:
+		return m.OldClaimToken(ctx)
+	case outboxevent.FieldClaimExpiresAt:
+		return m.OldClaimExpiresAt(ctx)
 	case outboxevent.FieldPublishedAt:
 		return m.OldPublishedAt(ctx)
 	case outboxevent.FieldLastError:
@@ -73623,6 +73737,20 @@ func (m *OutboxEventMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetNextAttemptAt(v)
+		return nil
+	case outboxevent.FieldClaimToken:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetClaimToken(v)
+		return nil
+	case outboxevent.FieldClaimExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetClaimExpiresAt(v)
 		return nil
 	case outboxevent.FieldPublishedAt:
 		v, ok := value.(time.Time)
@@ -73709,6 +73837,12 @@ func (m *OutboxEventMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *OutboxEventMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(outboxevent.FieldClaimToken) {
+		fields = append(fields, outboxevent.FieldClaimToken)
+	}
+	if m.FieldCleared(outboxevent.FieldClaimExpiresAt) {
+		fields = append(fields, outboxevent.FieldClaimExpiresAt)
+	}
 	if m.FieldCleared(outboxevent.FieldPublishedAt) {
 		fields = append(fields, outboxevent.FieldPublishedAt)
 	}
@@ -73729,6 +73863,12 @@ func (m *OutboxEventMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *OutboxEventMutation) ClearField(name string) error {
 	switch name {
+	case outboxevent.FieldClaimToken:
+		m.ClearClaimToken()
+		return nil
+	case outboxevent.FieldClaimExpiresAt:
+		m.ClearClaimExpiresAt()
+		return nil
 	case outboxevent.FieldPublishedAt:
 		m.ClearPublishedAt()
 		return nil
@@ -73769,6 +73909,12 @@ func (m *OutboxEventMutation) ResetField(name string) error {
 		return nil
 	case outboxevent.FieldNextAttemptAt:
 		m.ResetNextAttemptAt()
+		return nil
+	case outboxevent.FieldClaimToken:
+		m.ResetClaimToken()
+		return nil
+	case outboxevent.FieldClaimExpiresAt:
+		m.ResetClaimExpiresAt()
 		return nil
 	case outboxevent.FieldPublishedAt:
 		m.ResetPublishedAt()

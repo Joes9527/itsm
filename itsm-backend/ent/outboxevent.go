@@ -29,17 +29,21 @@ type OutboxEvent struct {
 	// Owning aggregate identifier
 	AggregateID string `json:"aggregate_id,omitempty"`
 	// Serialized event payload
-	Payload json.RawMessage `json:"payload,omitempty"`
+	Payload json.RawMessage `json:"-"`
 	// Delivery status: pending, publishing, published
 	Status string `json:"status,omitempty"`
 	// Number of failed delivery attempts
 	AttemptCount int `json:"attempt_count,omitempty"`
 	// Earliest time this event may be claimed for delivery
 	NextAttemptAt time.Time `json:"next_attempt_at,omitempty"`
+	// Opaque identity for the active publishing lease
+	ClaimToken string `json:"-"`
+	// Expiry of the active publishing lease
+	ClaimExpiresAt time.Time `json:"claim_expires_at,omitempty"`
 	// Time at which the event was successfully delivered
 	PublishedAt time.Time `json:"published_at,omitempty"`
 	// Last delivery failure summary
-	LastError string `json:"last_error,omitempty"`
+	LastError string `json:"-"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -56,9 +60,9 @@ func (*OutboxEvent) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case outboxevent.FieldID, outboxevent.FieldTenantID, outboxevent.FieldAttemptCount:
 			values[i] = new(sql.NullInt64)
-		case outboxevent.FieldEventID, outboxevent.FieldEventType, outboxevent.FieldAggregateType, outboxevent.FieldAggregateID, outboxevent.FieldStatus, outboxevent.FieldLastError:
+		case outboxevent.FieldEventID, outboxevent.FieldEventType, outboxevent.FieldAggregateType, outboxevent.FieldAggregateID, outboxevent.FieldStatus, outboxevent.FieldClaimToken, outboxevent.FieldLastError:
 			values[i] = new(sql.NullString)
-		case outboxevent.FieldNextAttemptAt, outboxevent.FieldPublishedAt, outboxevent.FieldCreatedAt, outboxevent.FieldUpdatedAt:
+		case outboxevent.FieldNextAttemptAt, outboxevent.FieldClaimExpiresAt, outboxevent.FieldPublishedAt, outboxevent.FieldCreatedAt, outboxevent.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -137,6 +141,18 @@ func (_m *OutboxEvent) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.NextAttemptAt = value.Time
 			}
+		case outboxevent.FieldClaimToken:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field claim_token", values[i])
+			} else if value.Valid {
+				_m.ClaimToken = value.String
+			}
+		case outboxevent.FieldClaimExpiresAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field claim_expires_at", values[i])
+			} else if value.Valid {
+				_m.ClaimExpiresAt = value.Time
+			}
 		case outboxevent.FieldPublishedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field published_at", values[i])
@@ -212,8 +228,7 @@ func (_m *OutboxEvent) String() string {
 	builder.WriteString("aggregate_id=")
 	builder.WriteString(_m.AggregateID)
 	builder.WriteString(", ")
-	builder.WriteString("payload=")
-	builder.WriteString(fmt.Sprintf("%v", _m.Payload))
+	builder.WriteString("payload=<sensitive>")
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(_m.Status)
@@ -224,11 +239,15 @@ func (_m *OutboxEvent) String() string {
 	builder.WriteString("next_attempt_at=")
 	builder.WriteString(_m.NextAttemptAt.Format(time.ANSIC))
 	builder.WriteString(", ")
+	builder.WriteString("claim_token=<sensitive>")
+	builder.WriteString(", ")
+	builder.WriteString("claim_expires_at=")
+	builder.WriteString(_m.ClaimExpiresAt.Format(time.ANSIC))
+	builder.WriteString(", ")
 	builder.WriteString("published_at=")
 	builder.WriteString(_m.PublishedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
-	builder.WriteString("last_error=")
-	builder.WriteString(_m.LastError)
+	builder.WriteString("last_error=<sensitive>")
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

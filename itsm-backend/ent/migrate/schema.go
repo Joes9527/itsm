@@ -2216,6 +2216,8 @@ var (
 		{Name: "status", Type: field.TypeString, Default: "pending"},
 		{Name: "attempt_count", Type: field.TypeInt, Default: 0},
 		{Name: "next_attempt_at", Type: field.TypeTime},
+		{Name: "claim_token", Type: field.TypeString, Nullable: true},
+		{Name: "claim_expires_at", Type: field.TypeTime, Nullable: true},
 		{Name: "published_at", Type: field.TypeTime, Nullable: true},
 		{Name: "last_error", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "created_at", Type: field.TypeTime},
@@ -2236,6 +2238,11 @@ var (
 				Name:    "outboxevent_tenant_id_status_next_attempt_at",
 				Unique:  false,
 				Columns: []*schema.Column{OutboxEventsColumns[3], OutboxEventsColumns[7], OutboxEventsColumns[9]},
+			},
+			{
+				Name:    "outboxevent_status_claim_expires_at",
+				Unique:  false,
+				Columns: []*schema.Column{OutboxEventsColumns[7], OutboxEventsColumns[11]},
 			},
 		},
 	}

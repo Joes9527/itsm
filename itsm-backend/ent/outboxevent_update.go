@@ -44,27 +44,6 @@ func (_u *OutboxEventUpdate) SetNillableEventType(v *string) *OutboxEventUpdate 
 	return _u
 }
 
-// SetTenantID sets the "tenant_id" field.
-func (_u *OutboxEventUpdate) SetTenantID(v int) *OutboxEventUpdate {
-	_u.mutation.ResetTenantID()
-	_u.mutation.SetTenantID(v)
-	return _u
-}
-
-// SetNillableTenantID sets the "tenant_id" field if the given value is not nil.
-func (_u *OutboxEventUpdate) SetNillableTenantID(v *int) *OutboxEventUpdate {
-	if v != nil {
-		_u.SetTenantID(*v)
-	}
-	return _u
-}
-
-// AddTenantID adds value to the "tenant_id" field.
-func (_u *OutboxEventUpdate) AddTenantID(v int) *OutboxEventUpdate {
-	_u.mutation.AddTenantID(v)
-	return _u
-}
-
 // SetAggregateType sets the "aggregate_type" field.
 func (_u *OutboxEventUpdate) SetAggregateType(v string) *OutboxEventUpdate {
 	_u.mutation.SetAggregateType(v)
@@ -151,6 +130,46 @@ func (_u *OutboxEventUpdate) SetNillableNextAttemptAt(v *time.Time) *OutboxEvent
 	if v != nil {
 		_u.SetNextAttemptAt(*v)
 	}
+	return _u
+}
+
+// SetClaimToken sets the "claim_token" field.
+func (_u *OutboxEventUpdate) SetClaimToken(v string) *OutboxEventUpdate {
+	_u.mutation.SetClaimToken(v)
+	return _u
+}
+
+// SetNillableClaimToken sets the "claim_token" field if the given value is not nil.
+func (_u *OutboxEventUpdate) SetNillableClaimToken(v *string) *OutboxEventUpdate {
+	if v != nil {
+		_u.SetClaimToken(*v)
+	}
+	return _u
+}
+
+// ClearClaimToken clears the value of the "claim_token" field.
+func (_u *OutboxEventUpdate) ClearClaimToken() *OutboxEventUpdate {
+	_u.mutation.ClearClaimToken()
+	return _u
+}
+
+// SetClaimExpiresAt sets the "claim_expires_at" field.
+func (_u *OutboxEventUpdate) SetClaimExpiresAt(v time.Time) *OutboxEventUpdate {
+	_u.mutation.SetClaimExpiresAt(v)
+	return _u
+}
+
+// SetNillableClaimExpiresAt sets the "claim_expires_at" field if the given value is not nil.
+func (_u *OutboxEventUpdate) SetNillableClaimExpiresAt(v *time.Time) *OutboxEventUpdate {
+	if v != nil {
+		_u.SetClaimExpiresAt(*v)
+	}
+	return _u
+}
+
+// ClearClaimExpiresAt clears the value of the "claim_expires_at" field.
+func (_u *OutboxEventUpdate) ClearClaimExpiresAt() *OutboxEventUpdate {
+	_u.mutation.ClearClaimExpiresAt()
 	return _u
 }
 
@@ -262,11 +281,6 @@ func (_u *OutboxEventUpdate) check() error {
 			return &ValidationError{Name: "event_type", err: fmt.Errorf(`ent: validator failed for field "OutboxEvent.event_type": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.TenantID(); ok {
-		if err := outboxevent.TenantIDValidator(v); err != nil {
-			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "OutboxEvent.tenant_id": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.AggregateType(); ok {
 		if err := outboxevent.AggregateTypeValidator(v); err != nil {
 			return &ValidationError{Name: "aggregate_type", err: fmt.Errorf(`ent: validator failed for field "OutboxEvent.aggregate_type": %w`, err)}
@@ -295,12 +309,6 @@ func (_u *OutboxEventUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	if value, ok := _u.mutation.EventType(); ok {
 		_spec.SetField(outboxevent.FieldEventType, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.TenantID(); ok {
-		_spec.SetField(outboxevent.FieldTenantID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedTenantID(); ok {
-		_spec.AddField(outboxevent.FieldTenantID, field.TypeInt, value)
-	}
 	if value, ok := _u.mutation.AggregateType(); ok {
 		_spec.SetField(outboxevent.FieldAggregateType, field.TypeString, value)
 	}
@@ -326,6 +334,18 @@ func (_u *OutboxEventUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	}
 	if value, ok := _u.mutation.NextAttemptAt(); ok {
 		_spec.SetField(outboxevent.FieldNextAttemptAt, field.TypeTime, value)
+	}
+	if value, ok := _u.mutation.ClaimToken(); ok {
+		_spec.SetField(outboxevent.FieldClaimToken, field.TypeString, value)
+	}
+	if _u.mutation.ClaimTokenCleared() {
+		_spec.ClearField(outboxevent.FieldClaimToken, field.TypeString)
+	}
+	if value, ok := _u.mutation.ClaimExpiresAt(); ok {
+		_spec.SetField(outboxevent.FieldClaimExpiresAt, field.TypeTime, value)
+	}
+	if _u.mutation.ClaimExpiresAtCleared() {
+		_spec.ClearField(outboxevent.FieldClaimExpiresAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.PublishedAt(); ok {
 		_spec.SetField(outboxevent.FieldPublishedAt, field.TypeTime, value)
@@ -376,27 +396,6 @@ func (_u *OutboxEventUpdateOne) SetNillableEventType(v *string) *OutboxEventUpda
 	if v != nil {
 		_u.SetEventType(*v)
 	}
-	return _u
-}
-
-// SetTenantID sets the "tenant_id" field.
-func (_u *OutboxEventUpdateOne) SetTenantID(v int) *OutboxEventUpdateOne {
-	_u.mutation.ResetTenantID()
-	_u.mutation.SetTenantID(v)
-	return _u
-}
-
-// SetNillableTenantID sets the "tenant_id" field if the given value is not nil.
-func (_u *OutboxEventUpdateOne) SetNillableTenantID(v *int) *OutboxEventUpdateOne {
-	if v != nil {
-		_u.SetTenantID(*v)
-	}
-	return _u
-}
-
-// AddTenantID adds value to the "tenant_id" field.
-func (_u *OutboxEventUpdateOne) AddTenantID(v int) *OutboxEventUpdateOne {
-	_u.mutation.AddTenantID(v)
 	return _u
 }
 
@@ -486,6 +485,46 @@ func (_u *OutboxEventUpdateOne) SetNillableNextAttemptAt(v *time.Time) *OutboxEv
 	if v != nil {
 		_u.SetNextAttemptAt(*v)
 	}
+	return _u
+}
+
+// SetClaimToken sets the "claim_token" field.
+func (_u *OutboxEventUpdateOne) SetClaimToken(v string) *OutboxEventUpdateOne {
+	_u.mutation.SetClaimToken(v)
+	return _u
+}
+
+// SetNillableClaimToken sets the "claim_token" field if the given value is not nil.
+func (_u *OutboxEventUpdateOne) SetNillableClaimToken(v *string) *OutboxEventUpdateOne {
+	if v != nil {
+		_u.SetClaimToken(*v)
+	}
+	return _u
+}
+
+// ClearClaimToken clears the value of the "claim_token" field.
+func (_u *OutboxEventUpdateOne) ClearClaimToken() *OutboxEventUpdateOne {
+	_u.mutation.ClearClaimToken()
+	return _u
+}
+
+// SetClaimExpiresAt sets the "claim_expires_at" field.
+func (_u *OutboxEventUpdateOne) SetClaimExpiresAt(v time.Time) *OutboxEventUpdateOne {
+	_u.mutation.SetClaimExpiresAt(v)
+	return _u
+}
+
+// SetNillableClaimExpiresAt sets the "claim_expires_at" field if the given value is not nil.
+func (_u *OutboxEventUpdateOne) SetNillableClaimExpiresAt(v *time.Time) *OutboxEventUpdateOne {
+	if v != nil {
+		_u.SetClaimExpiresAt(*v)
+	}
+	return _u
+}
+
+// ClearClaimExpiresAt clears the value of the "claim_expires_at" field.
+func (_u *OutboxEventUpdateOne) ClearClaimExpiresAt() *OutboxEventUpdateOne {
+	_u.mutation.ClearClaimExpiresAt()
 	return _u
 }
 
@@ -610,11 +649,6 @@ func (_u *OutboxEventUpdateOne) check() error {
 			return &ValidationError{Name: "event_type", err: fmt.Errorf(`ent: validator failed for field "OutboxEvent.event_type": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.TenantID(); ok {
-		if err := outboxevent.TenantIDValidator(v); err != nil {
-			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "OutboxEvent.tenant_id": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.AggregateType(); ok {
 		if err := outboxevent.AggregateTypeValidator(v); err != nil {
 			return &ValidationError{Name: "aggregate_type", err: fmt.Errorf(`ent: validator failed for field "OutboxEvent.aggregate_type": %w`, err)}
@@ -660,12 +694,6 @@ func (_u *OutboxEventUpdateOne) sqlSave(ctx context.Context) (_node *OutboxEvent
 	if value, ok := _u.mutation.EventType(); ok {
 		_spec.SetField(outboxevent.FieldEventType, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.TenantID(); ok {
-		_spec.SetField(outboxevent.FieldTenantID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedTenantID(); ok {
-		_spec.AddField(outboxevent.FieldTenantID, field.TypeInt, value)
-	}
 	if value, ok := _u.mutation.AggregateType(); ok {
 		_spec.SetField(outboxevent.FieldAggregateType, field.TypeString, value)
 	}
@@ -691,6 +719,18 @@ func (_u *OutboxEventUpdateOne) sqlSave(ctx context.Context) (_node *OutboxEvent
 	}
 	if value, ok := _u.mutation.NextAttemptAt(); ok {
 		_spec.SetField(outboxevent.FieldNextAttemptAt, field.TypeTime, value)
+	}
+	if value, ok := _u.mutation.ClaimToken(); ok {
+		_spec.SetField(outboxevent.FieldClaimToken, field.TypeString, value)
+	}
+	if _u.mutation.ClaimTokenCleared() {
+		_spec.ClearField(outboxevent.FieldClaimToken, field.TypeString)
+	}
+	if value, ok := _u.mutation.ClaimExpiresAt(); ok {
+		_spec.SetField(outboxevent.FieldClaimExpiresAt, field.TypeTime, value)
+	}
+	if _u.mutation.ClaimExpiresAtCleared() {
+		_spec.ClearField(outboxevent.FieldClaimExpiresAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.PublishedAt(); ok {
 		_spec.SetField(outboxevent.FieldPublishedAt, field.TypeTime, value)

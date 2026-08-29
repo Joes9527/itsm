@@ -31,6 +31,10 @@ const (
 	FieldAttemptCount = "attempt_count"
 	// FieldNextAttemptAt holds the string denoting the next_attempt_at field in the database.
 	FieldNextAttemptAt = "next_attempt_at"
+	// FieldClaimToken holds the string denoting the claim_token field in the database.
+	FieldClaimToken = "claim_token"
+	// FieldClaimExpiresAt holds the string denoting the claim_expires_at field in the database.
+	FieldClaimExpiresAt = "claim_expires_at"
 	// FieldPublishedAt holds the string denoting the published_at field in the database.
 	FieldPublishedAt = "published_at"
 	// FieldLastError holds the string denoting the last_error field in the database.
@@ -55,6 +59,8 @@ var Columns = []string{
 	FieldStatus,
 	FieldAttemptCount,
 	FieldNextAttemptAt,
+	FieldClaimToken,
+	FieldClaimExpiresAt,
 	FieldPublishedAt,
 	FieldLastError,
 	FieldCreatedAt,
@@ -142,6 +148,16 @@ func ByAttemptCount(opts ...sql.OrderTermOption) OrderOption {
 // ByNextAttemptAt orders the results by the next_attempt_at field.
 func ByNextAttemptAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldNextAttemptAt, opts...).ToFunc()
+}
+
+// ByClaimToken orders the results by the claim_token field.
+func ByClaimToken(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldClaimToken, opts...).ToFunc()
+}
+
+// ByClaimExpiresAt orders the results by the claim_expires_at field.
+func ByClaimExpiresAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldClaimExpiresAt, opts...).ToFunc()
 }
 
 // ByPublishedAt orders the results by the published_at field.

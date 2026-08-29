@@ -2016,11 +2016,11 @@ func init() {
 	// outboxevent.DefaultNextAttemptAt holds the default value on creation for the next_attempt_at field.
 	outboxevent.DefaultNextAttemptAt = outboxeventDescNextAttemptAt.Default.(func() time.Time)
 	// outboxeventDescCreatedAt is the schema descriptor for created_at field.
-	outboxeventDescCreatedAt := outboxeventFields[11].Descriptor()
+	outboxeventDescCreatedAt := outboxeventFields[13].Descriptor()
 	// outboxevent.DefaultCreatedAt holds the default value on creation for the created_at field.
 	outboxevent.DefaultCreatedAt = outboxeventDescCreatedAt.Default.(func() time.Time)
 	// outboxeventDescUpdatedAt is the schema descriptor for updated_at field.
-	outboxeventDescUpdatedAt := outboxeventFields[12].Descriptor()
+	outboxeventDescUpdatedAt := outboxeventFields[14].Descriptor()
 	// outboxevent.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	outboxevent.DefaultUpdatedAt = outboxeventDescUpdatedAt.Default.(func() time.Time)
 	// outboxevent.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

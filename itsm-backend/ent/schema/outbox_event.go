@@ -28,6 +28,7 @@ func (OutboxEvent) Fields() []ent.Field {
 			NotEmpty(),
 		field.Int("tenant_id").
 			Comment("Tenant that owns the event").
+			Immutable().
 			Positive(),
 		field.String("aggregate_type").
 			Comment("Owning aggregate type").
@@ -36,7 +37,8 @@ func (OutboxEvent) Fields() []ent.Field {
 			Comment("Owning aggregate identifier").
 			NotEmpty(),
 		field.JSON("payload", json.RawMessage{}).
-			Comment("Serialized event payload"),
+			Comment("Serialized event payload").
+			Sensitive(),
 		field.String("status").
 			Comment("Delivery status: pending, publishing, published").
 			Default("pending"),
@@ -46,12 +48,20 @@ func (OutboxEvent) Fields() []ent.Field {
 		field.Time("next_attempt_at").
 			Comment("Earliest time this event may be claimed for delivery").
 			Default(time.Now),
+		field.String("claim_token").
+			Comment("Opaque identity for the active publishing lease").
+			Optional().
+			Sensitive(),
+		field.Time("claim_expires_at").
+			Comment("Expiry of the active publishing lease").
+			Optional(),
 		field.Time("published_at").
 			Comment("Time at which the event was successfully delivered").
 			Optional(),
 		field.Text("last_error").
 			Comment("Last delivery failure summary").
-			Optional(),
+			Optional().
+			Sensitive(),
 		field.Time("created_at").
 			Default(time.Now),
 		field.Time("updated_at").
@@ -65,5 +75,6 @@ func (OutboxEvent) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("event_id").Unique(),
 		index.Fields("tenant_id", "status", "next_attempt_at"),
+		index.Fields("status", "claim_expires_at"),
 	}
 }
