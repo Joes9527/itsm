@@ -45,7 +45,7 @@ components:
   schemas:
     KafDelegateRequested:
       type: object
-      required: [event_type, eventId, tenantId, workItemId, ticketId, taskId, recordClass, timestamp, version, correlationId]
+      required: [event_type, eventId, tenantId, workItemId, ticketId, taskId, recordClass, actor, timestamp, version, correlationId]
       properties:
         event_type:
           type: string
@@ -54,8 +54,8 @@ components:
           type: string
           format: uuid
         tenantId:
-          type: integer
-          minimum: 1
+          type: string
+          minLength: 1
         workItemId:
           type: string
         ticketId:
@@ -65,6 +65,8 @@ components:
         recordClass:
           type: string
           enum: [service_request_item, incident]
+        actor:
+          $ref: '#/components/schemas/ActorRef'
         timestamp:
           type: string
           format: date-time
@@ -72,6 +74,19 @@ components:
           type: integer
           minimum: 1
         correlationId:
+          type: string
+          minLength: 1
+    ActorRef:
+      type: object
+      required: [id, kind, displayName]
+      properties:
+        id:
+          type: string
+          minLength: 1
+        kind:
+          type: string
+          enum: [system]
+        displayName:
           type: string
           minLength: 1
     KafWebhookAccepted:
