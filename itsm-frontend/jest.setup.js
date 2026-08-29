@@ -125,30 +125,85 @@ jest.mock('dayjs', () => {
 });
 
 if (typeof globalThis.MessageChannel === 'undefined') {
-  class TestMessagePort {
-    onmessage = null;
-    peer = null;
+  const { MessageChannel: NodeMessageChannel } = require('node:worker_threads');
 
-    postMessage(data) {
-      setTimeout(() => {
-        this.peer?.onmessage?.({ data });
-      }, 0);
+  class TestMessagePort {
+    constructor(port) {
+      this.port = port;
+      this.peer = null;
+      this.port.unref?.();
     }
 
-    start() {}
+    setPeer(peer) {
+      this.peer = peer;
+    }
 
-    close() {
-      this.onmessage = null;
-      this.peer = null;
+    get onmessage() {
+      return this.port.onmessage;
+    }
+
+    set onmessage(handler) {
+      this.port.onmessage = handler;
+      // Attaching listeners can re-reference native ports, so immediately unref again.
+      this.port.unref?.();
+    }
+
+    get onmessageerror() {
+      return this.port.onmessageerror;
+    }
+
+    set onmessageerror(handler) {
+      this.port.onmessageerror = handler;
+      this.port.unref?.();
+    }
+
+    addEventListener(...args) {
+      const result = this.port.addEventListener(...args);
+      this.port.unref?.();
+      return result;
+    }
+
+    removeEventListener(...args) {
+      return this.port.removeEventListener(...args);
+    }
+
+    dispatchEvent(...args) {
+      return this.port.dispatchEvent(...args);
+    }
+
+    postMessage(...args) {
+      const result = this.port.postMessage(...args);
+      this.port.unref?.();
+      this.peer?.port?.unref?.();
+      return result;
+    }
+
+    start(...args) {
+      const result = this.port.start?.(...args);
+      this.port.unref?.();
+      return result;
+    }
+
+    close(...args) {
+      return this.port.close(...args);
+    }
+
+    ref(...args) {
+      return this.port.ref?.(...args);
+    }
+
+    unref(...args) {
+      return this.port.unref?.(...args);
     }
   }
 
   globalThis.MessageChannel = class TestMessageChannel {
     constructor() {
-      this.port1 = new TestMessagePort();
-      this.port2 = new TestMessagePort();
-      this.port1.peer = this.port2;
-      this.port2.peer = this.port1;
+      const channel = new NodeMessageChannel();
+      this.port1 = new TestMessagePort(channel.port1);
+      this.port2 = new TestMessagePort(channel.port2);
+      this.port1.setPeer(this.port2);
+      this.port2.setPeer(this.port1);
     }
   };
 }
