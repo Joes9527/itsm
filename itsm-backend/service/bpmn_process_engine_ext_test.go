@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
@@ -1174,6 +1175,83 @@ func TestHandleElement_AsyncServiceTask_PausesAndCreatesDelegatedTask(t *testing
 	assert.Equal(t, "resolve,update_progress", delegatedTask.TaskVariables["allowed_actions"])
 }
 
+// TestHandleElement_AsyncServiceTask_LegacyAttributeFallback_PausesAndCreatesDelegatedTask
+// 是 Important #1 的回归：handleElement 的 serviceTask 分支有两条 handler 解析路径——
+// metaData 路径（上面的测试覆盖）和没有声明 service_task_type 时的 legacy 路径（按
+// Implementation/Class/DelegateExpression/OperationRef/Name/ID 属性猜 handler ID）。
+// 修复前，legacy 路径完全没有异步检查：猜出来的 handler 即使是异步的，也会被立刻同步
+// Execute 并推进流程——这正是本分支要防止的"过早完成"问题在另一条代码路径上的重现。
+func TestHandleElement_AsyncServiceTask_LegacyAttributeFallback_PausesAndCreatesDelegatedTask(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
+	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, actorID)
+
+	instanceID, _ := createProcessFixture(t, engine, tenantID, "async-pause-legacy-1")
+	instance, err := engine.client.ProcessInstance.Get(ctx, instanceID)
+	require.NoError(t, err)
+
+	// handlerID 故意跟 DelegateExpression 一致：legacy 路径按 GetHandler(serviceRef) 精确匹配
+	// handler ID，serviceRef 在这里就是 DelegateExpression 的值（没有 Implementation/Class）。
+	fakeHandler := &fakeAsyncServiceTaskHandler{taskType: "fake_async_legacy_task", handlerID: "legacy_async_delegate_expression"}
+	engine.callbackRegistry.RegisterHandler(fakeHandler)
+
+	process := &BPMNProcess{
+		ServiceTasks: []*BPMNServiceTask{
+			{
+				ID:                 "Activity_LegacyAsync",
+				Name:               "Legacy 异步任务",
+				DelegateExpression: "legacy_async_delegate_expression",
+				// 刻意不声明 ExtensionElements/service_task_type metaData——这才是触发
+				// legacy 属性猜测路径的条件。
+			},
+		},
+		EndEvents: []*BPMNEndEvent{{ID: "End_1", Name: "结束"}},
+		SequenceFlows: []*BPMNSequenceFlow{
+			{ID: "Flow_1", SourceRef: "Activity_LegacyAsync", TargetRef: "End_1"},
+		},
+	}
+
+	err = engine.handleElement(ctx, instance, process, "Activity_LegacyAsync")
+	require.NoError(t, err)
+
+	assert.Equal(t, 0, fakeHandler.executed, "legacy 属性猜测路径解析出的异步 handler 也不应该被同步 Execute")
+
+	updatedInstance, err := engine.client.ProcessInstance.Get(ctx, instance.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "Activity_LegacyAsync", updatedInstance.CurrentActivityID, "流程应该停在委派节点，不应该推进到结束节点")
+
+	delegatedTask, err := engine.client.ProcessTask.Query().
+		Where(processtask.ProcessInstanceID(instance.ID), processtask.TaskDefinitionKey("Activity_LegacyAsync")).
+		Only(ctx)
+	require.NoError(t, err)
+	// TaskType 必须记录 legacy 路径实际命中 handler 时用的那个字符串（这里是
+	// DelegateExpression 的值），而不是空串（serviceTask.ServiceTaskType() 在这条路径下
+	// 恒为空）——否则 authorizeTaskActor/dispatchUserTaskCallback 之后用 TaskType 重新
+	// findHandlerByTaskType 会查不到同一个 handler。
+	assert.Equal(t, "legacy_async_delegate_expression", delegatedTask.TaskType)
+	assert.Equal(t, common.ProcessTaskStatusDelegated, delegatedTask.Status)
+	assert.Equal(t, "legacy_async_delegate_expression", delegatedTask.TaskVariables["service_task_type"])
+
+	// 鉴权口子必须跟暂停判断一致：同一个 TaskType 拿去 authorizeTaskActor，必须走
+	// authorizeKafAutomationActor 分支——而不是人工任务分支（那条分支下 assignee/
+	// candidateUsers 都是空，一个 kaf_automation 账号会被当成"不是审批人/候选人"拒绝；
+	// 只有真的走到 authorizeKafAutomationActor，kaf_automation 角色 + delegated 状态 +
+	// 同租户才会放行）。
+	kafUser, err := engine.client.User.Create().
+		SetUsername("kaf_automation_bot_legacy").
+		SetEmail("kaf-automation-legacy@example.com").
+		SetName("KAF Automation").
+		SetPasswordHash("hash").
+		SetRole("kaf_automation").
+		SetActive(true).
+		SetTenantID(tenantID).
+		Save(ctx)
+	require.NoError(t, err)
+	kafCtx := context.WithValue(ctx, bpmn.BPMNUserIDContextKey, kafUser.ID)
+	assert.NoError(t, engine.authorizeTaskActor(kafCtx, delegatedTask), "legacy 路径解析出的异步任务必须走 authorizeKafAutomationActor 并允许 kaf_automation 账号完成")
+}
+
 func TestAuthorizeTaskActor_KafDelegate_AllowsKafAutomationRoleWhenDelegated(t *testing.T) {
 	engine, baseCtx := newApprovalDecisionTestEngine(t)
 	tenantID, _ := setupApprovalDecisionFixture(t, engine)
@@ -1191,6 +1269,37 @@ func TestAuthorizeTaskActor_KafDelegate_AllowsKafAutomationRoleWhenDelegated(t *
 	require.NoError(t, err)
 
 	_, taskID := createProcessFixture(t, engine, tenantID, "kaf-authz-1")
+	task, err := engine.client.ProcessTask.UpdateOneID(taskID).
+		SetTaskType(bpmn.KafDelegateTaskType).
+		SetStatus("delegated").
+		Save(ctx)
+	require.NoError(t, err)
+
+	actorCtx := context.WithValue(ctx, bpmn.BPMNUserIDContextKey, kafUser.ID)
+	assert.NoError(t, engine.authorizeTaskActor(actorCtx, task))
+}
+
+// TestAuthorizeTaskActor_KafDelegate_AllowsRoleWithCasingAndWhitespaceVariance 是 Minor #6
+// 的回归：角色比较要跟 middleware.RequireRole（HTTP 层的角色门禁）用同一套
+// strings.ToLower(strings.TrimSpace(...)) 归一化口径，大小写/首尾空白的差异不应该让
+// 一个本应合法的 kaf_automation 账号被误判为无权限。
+func TestAuthorizeTaskActor_KafDelegate_AllowsRoleWithCasingAndWhitespaceVariance(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, _ := setupApprovalDecisionFixture(t, engine)
+	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+
+	kafUser, err := engine.client.User.Create().
+		SetUsername("kaf_automation_bot_casing").
+		SetEmail("kaf-automation-casing@example.com").
+		SetName("KAF Automation").
+		SetPasswordHash("hash").
+		SetRole(" KAF_Automation ").
+		SetActive(true).
+		SetTenantID(tenantID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	_, taskID := createProcessFixture(t, engine, tenantID, "kaf-authz-6")
 	task, err := engine.client.ProcessTask.UpdateOneID(taskID).
 		SetTaskType(bpmn.KafDelegateTaskType).
 		SetStatus("delegated").
@@ -1260,6 +1369,46 @@ func TestAuthorizeTaskActor_KafDelegate_RejectsWhenNotDelegatedStatus(t *testing
 	assert.Error(t, engine.authorizeTaskActor(actorCtx, task))
 }
 
+// TestAuthorizeTaskActor_KafDelegate_RejectsCrossTenantActor 是 Important #3 的回归：
+// CompleteTask 在 ctx 不带租户信息时会跳过它自己的租户过滤（平台级调用的既有行为，
+// 不受这次改动影响）——如果 authorizeKafAutomationActor 不自己再校验一次租户，任何
+// 租户的 kaf_automation 账号都能完成任意其他租户的委派任务，这是一个跨租户越权口子。
+func TestAuthorizeTaskActor_KafDelegate_RejectsCrossTenantActor(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, _ := setupApprovalDecisionFixture(t, engine)
+
+	// 另一个租户下的 kaf_automation 账号——角色和状态都合法，唯独租户不匹配。
+	otherTenant, err := engine.client.Tenant.Create().
+		SetName("Other Tenant").
+		SetCode("other").
+		SetDomain("other.example.com").
+		SetStatus("active").
+		Save(baseCtx)
+	require.NoError(t, err)
+	kafUserOtherTenant, err := engine.client.User.Create().
+		SetUsername("kaf_automation_bot_other_tenant").
+		SetEmail("kaf-automation-other@example.com").
+		SetName("KAF Automation (other tenant)").
+		SetPasswordHash("hash").
+		SetRole("kaf_automation").
+		SetActive(true).
+		SetTenantID(otherTenant.ID).
+		Save(baseCtx)
+	require.NoError(t, err)
+
+	_, taskID := createProcessFixture(t, engine, tenantID, "kaf-authz-5")
+	task, err := engine.client.ProcessTask.UpdateOneID(taskID).
+		SetTaskType(bpmn.KafDelegateTaskType).
+		SetStatus("delegated").
+		Save(baseCtx)
+	require.NoError(t, err)
+
+	// 故意不注入 BPMNTenantIDContextKey，模拟 CompleteTask 平台级调用跳过租户过滤那条路径——
+	// authorizeKafAutomationActor 必须靠自己的 actor.TenantID vs task.TenantID 比较兜底。
+	actorCtx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, kafUserOtherTenant.ID)
+	assert.Error(t, engine.authorizeTaskActor(actorCtx, task), "跨租户的 kaf_automation 账号不应该被允许完成委派任务")
+}
+
 const resumeTestFlowBPMN = `<?xml version="1.0" encoding="UTF-8"?>
 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
                  targetNamespace="http://bpmn.io/schema/bpmn">
@@ -1270,6 +1419,7 @@ const resumeTestFlowBPMN = `<?xml version="1.0" encoding="UTF-8"?>
     <bpmn:serviceTask id="Activity_KafDelegate" name="KAF 委派">
       <bpmn:extensionElements>
         <bpmn:metaData name="service_task_type">kaf_delegate</bpmn:metaData>
+        <bpmn:metaData name="allowed_actions">resolve,update_progress</bpmn:metaData>
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_0</bpmn:incoming>
       <bpmn:outgoing>Flow_1</bpmn:outgoing>
@@ -1317,6 +1467,11 @@ func TestCompleteTask_ResumesDelegatedTask_AfterAsyncPause(t *testing.T) {
 		Where(processtask.ProcessInstanceID(instance.ID), processtask.TaskDefinitionKey("Activity_KafDelegate")).
 		Only(authorCtx)
 	require.NoError(t, err)
+	// Minor #7 回归：allowed_actions 必须真的经过 XML -> ExtensionElements.GetMetaData
+	// 解析出来（而不是只在 Task 2 的 Go 结构体字面量测试里验证过），这里用的是真实
+	// ParseXML 产出的 process，不是手写的 BPMNProcess{}。
+	assert.Equal(t, "resolve,update_progress", delegatedTask.TaskVariables["allowed_actions"],
+		"allowed_actions metaData 应该从真实 BPMN XML 解析出来并写入 ProcessTask.TaskVariables")
 
 	kafUser, err := engine.client.User.Create().
 		SetUsername("kaf_automation_bot3").

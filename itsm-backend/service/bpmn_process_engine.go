@@ -513,6 +513,18 @@ func (e *CustomProcessEngine) findHandlerByTaskType(taskType string) bpmn.Servic
 	return nil
 }
 
+// isAsyncHandler reports whether handler opts into the pause/resume execution
+// semantics (bpmn.AsyncServiceTaskHandler, IsAsync()==true) instead of the
+// default synchronous Execute-then-advance behavior. Both the pause decision
+// (handleElement's two serviceTask resolution paths) and the authorization
+// decision (authorizeTaskActor) must use this exact same check against a
+// handler resolved via findHandlerByTaskType — otherwise the two gates can
+// key on different things and diverge.
+func isAsyncHandler(handler bpmn.ServiceTaskHandlerInterface) bool {
+	asyncHandler, ok := handler.(bpmn.AsyncServiceTaskHandler)
+	return ok && asyncHandler.IsAsync()
+}
+
 func (e *CustomProcessEngine) recordApprovalDecision(ctx context.Context, instance *ent.ProcessInstance, task *ent.ProcessTask, variables map[string]interface{}) error {
 	action, _ := variables["approvalAction"].(string)
 	if action == "" {
@@ -546,16 +558,23 @@ func (e *CustomProcessEngine) recordApprovalDecision(ctx context.Context, instan
 	return nil
 }
 
-// authorizeTaskActor ensures that task actions are performed by the assigned
-// user or an explicitly resolved candidate. System/internal calls without an
-// authenticated actor keep their existing behavior.
 // kafAutomationRole 是 KAF 自动化账号在 ent.User.Role 上的取值。KAF 与 ITSM
 // 是同一应用的不同模块，不引入独立的技术账号/scoped-token 体系——KAF 以真实
 // ITSM 用户身份（绑定这个角色）调用 API，走跟其他调用方相同的认证中间件。
 const kafAutomationRole = "kaf_automation"
 
+// authorizeTaskActor ensures that task actions are performed by the assigned
+// user or an explicitly resolved candidate. System/internal calls without an
+// authenticated actor keep their existing behavior — except tasks whose
+// TaskType resolves, via findHandlerByTaskType, to a handler implementing
+// AsyncServiceTaskHandler with IsAsync()==true (e.g. kaf_delegate): those are
+// never authorized through this permissive no-context path and always go
+// through authorizeKafAutomationActor instead. Using the same
+// findHandlerByTaskType+isAsyncHandler lookup that handleElement uses to
+// decide whether to pause in the first place guarantees the pause decision
+// and the authorization decision can never diverge.
 func (e *CustomProcessEngine) authorizeTaskActor(ctx context.Context, task *ent.ProcessTask) error {
-	if task.TaskType == bpmn.KafDelegateTaskType {
+	if handler := e.findHandlerByTaskType(task.TaskType); handler != nil && isAsyncHandler(handler) {
 		return e.authorizeKafAutomationActor(ctx, task)
 	}
 
@@ -582,11 +601,15 @@ func (e *CustomProcessEngine) authorizeTaskActor(ctx context.Context, task *ent.
 	return fmt.Errorf("当前用户不是该任务的审批人或候选人")
 }
 
-// authorizeKafAutomationActor 校验 kaf_delegate 任务只能被 kaf_automation 角色的
-// 账号完成，且任务必须处于 delegated 状态。assignee/candidateUsers 对机器完成的
-// 任务没有意义——同一租户下所有 kaf_delegate 任务都由同一个账号处理，不存在
-// "候选人"概念。无用户上下文时直接拒绝，不复用人工任务分支"无上下文即放行"的口子：
-// kaf_delegate 必须始终有明确的认证主体。
+// authorizeKafAutomationActor 校验异步委派任务（如 kaf_delegate）只能被 kaf_automation
+// 角色的账号完成，任务必须处于 delegated 状态，且账号所属租户必须与任务所属租户一致。
+// assignee/candidateUsers 对机器完成的任务没有意义——同一租户下所有委派任务都由
+// 同一个账号处理，不存在"候选人"概念。无用户上下文时直接拒绝，不复用人工任务分支
+// "无上下文即放行"的口子：委派任务必须始终有明确的认证主体。
+//
+// 租户校验是必须的：CompleteTask 在 ctx 不带租户信息时会跳过它自己的租户过滤（这是
+// 平台级调用的既有行为，不在这次改动范围内），如果这里不再校验一次，任何租户的
+// kaf_automation 账号都能完成任意其他租户的委派任务——一个跨租户越权口子。
 func (e *CustomProcessEngine) authorizeKafAutomationActor(ctx context.Context, task *ent.ProcessTask) error {
 	userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
 	if userID <= 0 {
@@ -596,10 +619,15 @@ func (e *CustomProcessEngine) authorizeKafAutomationActor(ctx context.Context, t
 	if err != nil {
 		return fmt.Errorf("KAF 自动化账号不存在: %w", err)
 	}
-	if actor.Role != kafAutomationRole {
+	// 角色比较做大小写/首尾空白归一化，跟 middleware.RequireRole（HTTP 层的角色门禁）
+	// 保持一致，避免同一份数据在两层用不同的比较口径。
+	if strings.ToLower(strings.TrimSpace(actor.Role)) != kafAutomationRole {
 		return fmt.Errorf("当前账号不是 KAF 自动化账号，无权完成委派任务")
 	}
-	if task.Status != "delegated" {
+	if actor.TenantID != task.TenantID {
+		return fmt.Errorf("KAF 自动化账号与委派任务所属租户不一致，拒绝跨租户完成任务")
+	}
+	if task.Status != common.ProcessTaskStatusDelegated {
 		return fmt.Errorf("委派任务当前状态不允许完成: %s", task.Status)
 	}
 	return nil
@@ -741,8 +769,8 @@ func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.P
 		// 在 UserTask 和 ServiceTask 两种节点类型上表现一致。
 		if serviceTaskType := serviceTask.ServiceTaskType(); serviceTaskType != "" {
 			if handler := e.findHandlerByTaskType(serviceTaskType); handler != nil {
-				if asyncHandler, ok := handler.(bpmn.AsyncServiceTaskHandler); ok && asyncHandler.IsAsync() {
-					return e.createDelegatedTask(ctx, instance, serviceTask)
+				if isAsyncHandler(handler) {
+					return e.createDelegatedTask(ctx, instance, serviceTask, serviceTaskType)
 				}
 				callbackVars := mergeServiceTaskVariables(instance.Variables, serviceTask)
 				if action := serviceTask.ServiceTaskAction(); action != "" {
@@ -779,11 +807,22 @@ func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.P
 		}
 
 		if e.callbackRegistry != nil {
-			handler := e.callbackRegistry.GetHandler(serviceRef)
+			// resolvedTaskType 记录到底是 serviceRef 还是 GetType() 兜底值命中的 handler——
+			// 如果这个节点解析出的 handler 是异步的，createDelegatedTask 需要把这个值原样
+			// 写进 ProcessTask.TaskType/TaskVariables["service_task_type"]，这样后续
+			// authorizeTaskActor（完成鉴权）和 dispatchUserTaskCallback（完成回调）用
+			// findHandlerByTaskType 重新查找时，能查到同一个 handler——三处必须用同一套
+			// 查找口径，否则会出现 Important #2 那种鉴权跟暂停判断各自为政的分裂。
+			resolvedTaskType := serviceRef
+			handler := e.callbackRegistry.GetHandler(resolvedTaskType)
 			if handler == nil {
-				handler = e.callbackRegistry.GetHandler(serviceTask.GetType())
+				resolvedTaskType = serviceTask.GetType()
+				handler = e.callbackRegistry.GetHandler(resolvedTaskType)
 			}
 			if handler != nil {
+				if isAsyncHandler(handler) {
+					return e.createDelegatedTask(ctx, instance, serviceTask, resolvedTaskType)
+				}
 				e.logger.Infow("执行 ServiceTask 回调", "serviceRef", serviceRef, "elementID", elementID)
 				taskVariables := mergeServiceTaskVariables(instance.Variables, serviceTask)
 				if _, err := handler.Execute(ctx, nil, taskVariables); err != nil {
@@ -1072,11 +1111,17 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 // createDelegatedTask 为声明了异步 handler 的 serviceTask 节点创建 ProcessTask 并暂停流程：
 // 不调用 handler.Execute、不推进 executeStep，流程实例的 CurrentActivityID（handleElement
 // 顶部已设置）停在这个节点，直到外部通过 CompleteTask 显式完成该任务才会继续。
-func (e *CustomProcessEngine) createDelegatedTask(ctx context.Context, instance *ent.ProcessInstance, serviceTask *BPMNServiceTask) error {
-	serviceTaskType := serviceTask.ServiceTaskType()
-
+//
+// taskType 是调用方（handleElement 的两条 serviceTask 解析路径）实际用来
+// findHandlerByTaskType 命中这个异步 handler 的那个字符串——metaData 路径下是
+// serviceTask.ServiceTaskType()，legacy 属性猜测路径下是命中的 serviceRef/GetType()
+// 兜底值。必须原样传入（而不是在这里重新调用 ServiceTaskType()，legacy 路径下那会是
+// 空串），因为 ProcessTask.TaskType/TaskVariables["service_task_type"] 之后要分别喂给
+// authorizeTaskActor 和 dispatchUserTaskCallback 重新做 findHandlerByTaskType 查找——
+// 三处用的必须是同一个能查到同一个 handler 的字符串。
+func (e *CustomProcessEngine) createDelegatedTask(ctx context.Context, instance *ent.ProcessInstance, serviceTask *BPMNServiceTask, taskType string) error {
 	taskVariables := map[string]interface{}{
-		bpmnMetaDataServiceTaskType: serviceTaskType,
+		bpmnMetaDataServiceTaskType: taskType,
 	}
 	if action := serviceTask.ServiceTaskAction(); action != "" {
 		taskVariables[bpmnMetaDataAction] = action
@@ -1091,8 +1136,8 @@ func (e *CustomProcessEngine) createDelegatedTask(ctx context.Context, instance 
 		SetProcessDefinitionKey(instance.ProcessDefinitionKey).
 		SetTaskDefinitionKey(serviceTask.ID).
 		SetTaskName(serviceTask.Name).
-		SetTaskType(serviceTaskType).
-		SetStatus("delegated").
+		SetTaskType(taskType).
+		SetStatus(common.ProcessTaskStatusDelegated).
 		SetTaskVariables(taskVariables).
 		SetTenantID(instance.TenantID).
 		SetCreatedTime(time.Now()).
@@ -1101,7 +1146,7 @@ func (e *CustomProcessEngine) createDelegatedTask(ctx context.Context, instance 
 		return fmt.Errorf("创建委派任务失败: %w", err)
 	}
 	e.logger.Infow("异步 ServiceTask 已暂停，等待外部完成",
-		"elementID", serviceTask.ID, "serviceTaskType", serviceTaskType, "instanceID", instance.ProcessInstanceID)
+		"elementID", serviceTask.ID, "serviceTaskType", taskType, "instanceID", instance.ProcessInstanceID)
 	return nil
 }
 
