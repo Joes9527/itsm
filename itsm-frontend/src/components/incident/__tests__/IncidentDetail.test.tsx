@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor, within } from '@/lib/test-utils';
+import { fireEvent, render, screen, waitFor, within } from '@/lib/test-utils';
 import userEvent from '@testing-library/user-event';
 import IncidentDetail from '../IncidentDetail';
 import { WorkItemProvider } from '@/components/work-item/WorkItemContext';
@@ -209,7 +209,9 @@ describe('IncidentDetail action eligibility', () => {
     await user.click(await screen.findByRole('button', { name: '解决' }));
 
     const dialog = await screen.findByRole('dialog', { name: '解决事件' });
-    await user.type(within(dialog).getByLabelText('解决方案'), '已恢复数据库连接并验证服务正常');
+    fireEvent.change(within(dialog).getByLabelText('解决方案'), {
+      target: { value: '已恢复数据库连接并验证服务正常' },
+    });
     await user.click(within(dialog).getByRole('button', { name: '确认解决' }));
 
     await waitFor(() => expect(mockGetIncident).toHaveBeenCalledTimes(2));
