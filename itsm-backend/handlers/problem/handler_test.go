@@ -325,6 +325,12 @@ func TestProblemHTTPHandlerGetProjectsActionsAndFailsClosedWithoutActorIdentity(
 		w := performProblemRequestWithRole(r, http.MethodGet, fmt.Sprintf("/api/v1/problems/%d", prob.ID), nil, tenant.ID, user.ID, "super_admin")
 		require.Equal(t, http.StatusOK, w.Code)
 
+		var raw map[string]any
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &raw))
+		detailData, ok := raw["data"].(map[string]any)
+		require.True(t, ok)
+		require.Contains(t, detailData, "actions")
+
 		var res problemEnvelope
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &res))
 		require.True(t, res.Data.Actions["edit"].Allowed)
@@ -338,6 +344,17 @@ func TestProblemHTTPHandlerGetProjectsActionsAndFailsClosedWithoutActorIdentity(
 	t.Run("list response stays free of actions", func(t *testing.T) {
 		w := performProblemRequest(r, http.MethodGet, "/api/v1/problems?page=1&pageSize=10", nil, tenant.ID, user.ID)
 		require.Equal(t, http.StatusOK, w.Code)
+
+		var raw map[string]any
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &raw))
+		data, ok := raw["data"].(map[string]any)
+		require.True(t, ok)
+		problems, ok := data["problems"].([]any)
+		require.True(t, ok)
+		require.Len(t, problems, 1)
+		problemJSON, ok := problems[0].(map[string]any)
+		require.True(t, ok)
+		require.NotContains(t, problemJSON, "actions")
 
 		var res struct {
 			Code int `json:"code"`
