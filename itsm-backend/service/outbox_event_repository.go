@@ -36,7 +36,7 @@ var (
 	ErrOutboxEventClaimLost = errors.New("outbox event claim is no longer active")
 
 	outboxSensitiveErrorValuePattern       = regexp.MustCompile(`(?i)(^|[^[:alnum:]_])(authorization|access[_ -]?token|client[_ -]?secret|token|secret|password|api[_ -]?key)\s*[:=]\s*(?:bearer\s+)?[^\s,;]+`)
-	outboxSensitiveErrorURLUserinfoPattern = regexp.MustCompile(`(?i)([a-z][a-z0-9+.-]*://)[^/\s:@]+:[^/\s@]+@`)
+	outboxSensitiveErrorURLUserinfoPattern = regexp.MustCompile(`(?i)([a-z][a-z0-9+.-]*://)[^/\s:@]*:[^/\s@]+@`)
 )
 
 // NewOutboxEvent contains the immutable delivery data captured with the

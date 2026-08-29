@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -14,6 +15,8 @@ import (
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/outboxevent"
 
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -270,6 +273,11 @@ func TestSummarizeOutboxError_RedactsCommonCredentialSpellings(t *testing.T) {
 			input: "delivery rejected: POST https://webhook-user:webhook-password@api.example.test/events",
 			want:  "delivery rejected: POST https://[redacted]@api.example.test/events",
 		},
+		{
+			name:  "URL userinfo with empty username",
+			input: "delivery rejected: POST https://:webhook-password@api.example.test/events",
+			want:  "delivery rejected: POST https://[redacted]@api.example.test/events",
+		},
 	}
 
 	for _, tt := range tests {
@@ -281,7 +289,12 @@ func TestSummarizeOutboxError_RedactsCommonCredentialSpellings(t *testing.T) {
 
 func newOutboxRepository(t *testing.T) (*OutboxEventRepository, *ent.Client) {
 	t.Helper()
-	client := enttest.Open(t, "sqlite3", fmt.Sprintf("file:outbox_repository_%d?mode=memory&cache=shared&_fk=1", time.Now().UnixNano()))
+	db, err := sql.Open("sqlite3", fmt.Sprintf("file:outbox_repository_%d?mode=memory&cache=shared&_fk=1", time.Now().UnixNano()))
+	require.NoError(t, err)
+	// SQLite permits one writer. A single connection keeps this integration
+	// fixture deterministic while concurrent callers exercise ClaimDue itself.
+	db.SetMaxOpenConns(1)
+	client := enttest.NewClient(t, enttest.WithOptions(ent.Driver(entsql.OpenDB(dialect.SQLite, db))))
 	t.Cleanup(func() { _ = client.Close() })
 	return NewOutboxEventRepository(client), client
 }

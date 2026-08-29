@@ -27,6 +27,12 @@ Completed after review and rereview fixes.
 - Expanded retry-error sanitization to redact case-insensitive `access_token` and `client_secret` spellings with underscore, hyphen, or space separators, as well as URL userinfo credentials.
 - Added table-driven regression coverage for the newly redacted credential formats.
 
+## Final Re-Review Fixes
+
+- Updated URL-userinfo redaction to sanitize a password even when the username is empty, such as `https://:webhook-password@api.example.test/events`.
+- Kept the real two-goroutine `ClaimDue` integration test and its exactly-one-claim assertion, but changed the SQLite in-memory fixture to one connection. SQLite has a single-writer model; this removes the shared-cache transaction-upgrade race while continuing to exercise the actual repository, transaction, conditional update, and error paths.
+- Preserved the bounded retry and returned-error handling in `ClaimDue`; no concurrency guarantee or error assertion was weakened.
+
 ## Verification
 
 - `cd itsm-backend && go generate ./ent` exited 0.
@@ -37,6 +43,10 @@ Completed after review and rereview fixes.
 - Re-review red/green evidence: credential-spelling regression cases first failed because the retry-error sanitizer did not match underscore key separators or URL userinfo; they passed after expanding the sanitizer patterns.
 - Re-review verification: `cd itsm-backend && go test ./service -run 'TestOutboxEventRepository_|TestSummarizeOutboxError_' -count=1 -v` exited 0: 10 tests passed.
 - Re-review verification: `cd itsm-backend && go build ./...` exited 0.
+- Final re-review red evidence: `cd itsm-backend && go test ./service -run '^TestSummarizeOutboxError_RedactsCommonCredentialSpellings$' -count=1 -v` failed for the empty-username URL case, showing the password in the actual persisted summary. `go test ./service -run '^TestOutboxEventRepository_ClaimDueAllowsOnlyOneConcurrentClaimer$' -count=100 -v` also reproduced multiple zero-total-claim failures before the SQLite fixture change.
+- Final re-review verification: `cd itsm-backend && go test ./service -run '^(TestOutboxEventRepository_|TestSummarizeOutboxError_)' -count=1 -v` exited 0: all 10 focused tests passed.
+- Final re-review concurrency verification: `cd itsm-backend && go test ./service -run '^TestOutboxEventRepository_ClaimDueAllowsOnlyOneConcurrentClaimer$' -count=20` exited 0; an additional `-count=100` stress run also exited 0.
+- Final re-review build verification: `cd itsm-backend && go build ./...` exited 0.
 
 ## Deviations
 
