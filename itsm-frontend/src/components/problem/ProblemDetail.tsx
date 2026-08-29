@@ -12,20 +12,68 @@ import { useRouter, useParams } from 'next/navigation';
 import { ProblemApi } from '@/lib/api/';
 import { ProblemStatus, ProblemStatusLabels } from '@/constants/problem';
 import type { Problem } from '@/lib/api/problem-api';
+import { useOptionalWorkItemContext } from '@/components/work-item/WorkItemContext';
+import type { WorkItemActionState } from '@/components/work-item/WorkItemTypes';
 import ProblemInvestigationTab from './ProblemInvestigationTab';
 import BasicInfoCard from './BasicInfoCard';
 
 const { Title } = Typography;
 
-const ProblemDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
+interface ProblemActionButtonProps {
+  action: WorkItemActionState | undefined;
+  actionName: string;
+  children: React.ReactNode;
+  button: React.ComponentProps<typeof Button>;
+}
+
+interface ProblemDetailProps {
+  id?: string;
+  fallbackActions?: Record<string, WorkItemActionState>;
+}
+
+const EMPTY_ACTIONS: Record<string, WorkItemActionState> = {};
+
+function ProblemActionButton({ action, actionName, children, button }: ProblemActionButtonProps) {
+  if (!action) {
+    return null;
+  }
+
+  const reasonId = `problem-action-${actionName}-reason`;
+
+  return (
+    <Space size={4}>
+      <Button
+        {...button}
+        disabled={!action.allowed || button.disabled === true}
+        title={action.reason}
+        aria-describedby={!action.allowed && action.reason ? reasonId : undefined}
+      >
+        {children}
+      </Button>
+      {!action.allowed && action.reason && (
+        <span id={reasonId} role="note" style={{ color: '#8c8c8c', fontSize: 12 }}>
+          {action.reason}
+        </span>
+      )}
+    </Space>
+  );
+}
+
+const ProblemDetail: React.FC<ProblemDetailProps> = ({ id: propId, fallbackActions }) => {
   const params = useParams();
   const router = useRouter();
   // 支持通过props传入id，或通过useParams获取
   const id = propId || (params?.id as string);
+  const workItemContext = useOptionalWorkItemContext();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<Problem | null>(null);
   // 状态流转 loading：记录正在提交的目标状态，防止重复点击
   const [updatingStatus, setUpdatingStatus] = useState<ProblemStatus | null>(null);
+  const actions =
+    workItemContext?.actions ??
+    fallbackActions ??
+    data?.actions ??
+    EMPTY_ACTIONS;
 
   const loadData = async () => {
     if (!id) return;
@@ -122,41 +170,51 @@ const ProblemDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
             </Tag>
           </Space>
           <Space>
-            <Button
-              icon={<Pencil />}
-              onClick={() => router.push(`/problems/${data.id}/edit`)}
+            <ProblemActionButton
+              action={actions.edit}
+              actionName="edit"
+              button={{
+                icon: <Pencil />,
+                onClick: () => router.push(`/problems/${data.id}/edit`),
+              }}
             >
               编辑
-            </Button>
-            {data.status === ProblemStatus.OPEN && (
-              <Button
-                type="primary"
-                loading={updatingStatus === ProblemStatus.IN_PROGRESS}
-                disabled={updatingStatus !== null}
-                onClick={() => handleUpdateStatus(ProblemStatus.IN_PROGRESS)}
-              >
-                开始处理
-              </Button>
-            )}
-            {data.status === ProblemStatus.IN_PROGRESS && (
-              <Button
-                type="primary"
-                loading={updatingStatus === ProblemStatus.RESOLVED}
-                disabled={updatingStatus !== null}
-                onClick={() => handleUpdateStatus(ProblemStatus.RESOLVED)}
-              >
-                标记解决
-              </Button>
-            )}
-            {data.status === ProblemStatus.RESOLVED && (
-              <Button
-                loading={updatingStatus === ProblemStatus.CLOSED}
-                disabled={updatingStatus !== null}
-                onClick={handleCloseProblem}
-              >
-                关闭问题
-              </Button>
-            )}
+            </ProblemActionButton>
+            <ProblemActionButton
+              action={actions.start_investigation}
+              actionName="start_investigation"
+              button={{
+                type: 'primary',
+                loading: updatingStatus === ProblemStatus.INVESTIGATING,
+                disabled: updatingStatus !== null,
+                onClick: () => handleUpdateStatus(ProblemStatus.INVESTIGATING),
+              }}
+            >
+              开始调查
+            </ProblemActionButton>
+            <ProblemActionButton
+              action={actions.resolve}
+              actionName="resolve"
+              button={{
+                type: 'primary',
+                loading: updatingStatus === ProblemStatus.RESOLVED,
+                disabled: updatingStatus !== null,
+                onClick: () => handleUpdateStatus(ProblemStatus.RESOLVED),
+              }}
+            >
+              标记解决
+            </ProblemActionButton>
+            <ProblemActionButton
+              action={actions.close}
+              actionName="close"
+              button={{
+                loading: updatingStatus === ProblemStatus.CLOSED,
+                disabled: updatingStatus !== null,
+                onClick: handleCloseProblem,
+              }}
+            >
+              关闭问题
+            </ProblemActionButton>
           </Space>
         </div>
       </Card>

@@ -45,6 +45,7 @@ export default function ProblemDetailPage() {
   const numericId = Number(id);
 
   const [workItem, setWorkItem] = useState<WorkItemCommon | null>(null);
+  const [problem, setProblem] = useState<Problem | null>(null);
   const [sla, setSla] = useState<WorkItemSLAState | undefined>(undefined);
 
   const loadSLA = useCallback(async (workItemId: number) => {
@@ -72,6 +73,7 @@ export default function ProblemDetailPage() {
     }
     try {
       const problem = await ProblemApi.getProblem(numericId);
+      setProblem(problem);
       setWorkItem(toWorkItemCommon(problem));
     } catch (err) {
       // WorkItemShell 只是这里的外层展示壳（专业字段仍然由下面完整功能的 ProblemDetail
@@ -115,6 +117,7 @@ export default function ProblemDetailPage() {
       )}
     </>
   );
+  const fallbackDetail = <ProblemDetail id={id} fallbackActions={problem?.actions} />;
 
   return (
     <App>
@@ -135,16 +138,12 @@ export default function ProblemDetailPage() {
             loadWorkItemSummary 的 catch）、或存量未回填问题这三种情况下 workItem 都是
             null，直接退化为原有的纯 ProblemDetail 展示——不用 WorkItemShell 自己的
             loading/error 态挡住已经完整可用的 ProblemDetail。 */}
-        {workItem ? (
+        {workItem && problem ? (
           <WorkItemShell
             workItem={workItem}
             sla={sla}
-            // Problem 各专业操作（调查/记录根因/提供解决方案/关闭……）仍由下面
-            // ProblemDetail 内部既有的按钮 + ProblemApi 调用处理，尚未统一收口到
-            // onActionDispatch——那需要后端补一个"动作可用性"契约（actions 参数目前也
-            // 是空的），是比这次 WorkItem 迁移更大的后续改造，不在本任务范围内。与
-            // Incident 迁移那次（incidents/[id]/page.tsx）的处理方式一致。
-            actions={{}}
+            actions={problem.actions ?? {}}
+            showActionBar={false}
             onActionDispatch={async () => {}}
             professionalPanelSlot={detailAndTabs}
           />
@@ -156,7 +155,7 @@ export default function ProblemDetailPage() {
               message="该问题尚未关联 WorkItem，评论/附件/历史/关联等协作能力暂不可用"
               style={{ marginBottom: 16 }}
             />
-            {detailAndTabs}
+            {fallbackDetail}
           </>
         )}
       </div>

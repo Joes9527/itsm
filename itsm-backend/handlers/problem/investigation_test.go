@@ -160,7 +160,7 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 	// =========================================================================
 	// Entry Point 1: /api/v1/problems/:id/investigate (handlers/problem/Handler)
 	// =========================================================================
-	probHandler := problem.NewHandler(probHandlerSvc)
+	probHandler := problem.NewHandler(probHandlerSvc, client)
 	r1 := gin.New()
 	r1.Use(func(c *gin.Context) {
 		c.Set("tenant_id", tenant.ID)

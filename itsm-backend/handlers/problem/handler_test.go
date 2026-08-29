@@ -32,7 +32,7 @@ func setupProblemHTTPHandlerTest(t *testing.T) (*gin.Engine, *Handler, *Service,
 	client := enttest.Open(t, "sqlite3", fmt.Sprintf("file:problem-http-%s?mode=memory&cache=shared&_fk=1", t.Name()))
 	repo := NewEntRepository(client)
 	service := NewService(repo, zaptest.NewLogger(t).Sugar())
-	handler := NewHandler(service)
+	handler := NewHandler(service, client)
 
 	r := gin.New()
 	r.Use(gin.Recovery())
@@ -48,6 +48,9 @@ func setupProblemHTTPHandlerTest(t *testing.T) (*gin.Engine, *Handler, *Service,
 			if id, err := strconv.Atoi(uid); err == nil {
 				c.Set("user_id", id)
 			}
+		}
+		if role := c.GetHeader("X-User-Role"); role != "" {
+			c.Set("role", role)
 		}
 		c.Next()
 	})
@@ -90,6 +93,27 @@ func performProblemRequest(r http.Handler, method, path string, body interface{}
 	return w
 }
 
+func performProblemRequestWithRole(r http.Handler, method, path string, body interface{}, tenantID, userID int, role string) *httptest.ResponseRecorder {
+	var reqBody []byte
+	if body != nil {
+		reqBody, _ = json.Marshal(body)
+	}
+	req := httptest.NewRequest(method, path, bytes.NewBuffer(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	if tenantID > 0 {
+		req.Header.Set("X-Tenant-ID", strconv.Itoa(tenantID))
+	}
+	if userID > 0 {
+		req.Header.Set("X-User-ID", strconv.Itoa(userID))
+	}
+	if role != "" {
+		req.Header.Set("X-User-Role", role)
+	}
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	return w
+}
+
 func TestProblemHTTPHandlerCreateGetList(t *testing.T) {
 	r, _, _, client := setupProblemHTTPHandlerTest(t)
 	defer client.Close()
@@ -126,14 +150,14 @@ func TestProblemHTTPHandlerCreateGetList(t *testing.T) {
 	assert.Equal(t, common.ParamErrorCode, resBad.Code)
 
 	// 3. Get Problem - Valid
-	wGet := performProblemRequest(r, "GET", fmt.Sprintf("/api/v1/problems/%d", probID), nil, tenant.ID, user.ID)
+	wGet := performProblemRequestWithRole(r, "GET", fmt.Sprintf("/api/v1/problems/%d", probID), nil, tenant.ID, user.ID, "super_admin")
 	require.Equal(t, http.StatusOK, wGet.Code)
 	var resGet common.Response
 	require.NoError(t, json.Unmarshal(wGet.Body.Bytes(), &resGet))
 	assert.Equal(t, 0, resGet.Code)
 
 	// 4. Get Problem - Invalid ID / Not Found
-	wNotFound := performProblemRequest(r, "GET", "/api/v1/problems/99999", nil, tenant.ID, user.ID)
+	wNotFound := performProblemRequestWithRole(r, "GET", "/api/v1/problems/99999", nil, tenant.ID, user.ID, "super_admin")
 	require.Equal(t, http.StatusNotFound, wNotFound.Code)
 	var resNotFound common.Response
 	require.NoError(t, json.Unmarshal(wNotFound.Body.Bytes(), &resNotFound))
@@ -254,7 +278,7 @@ func TestProblemHTTPHandlerCrossTenantIsolation(t *testing.T) {
 	problemA := createProblemHandlerProblem(t, ctx, service, tenantA.ID, userA.ID)
 
 	// Tenant B attempts GET Tenant A problem
-	wGet := performProblemRequest(r, "GET", fmt.Sprintf("/api/v1/problems/%d", problemA.ID), nil, tenantB.ID, userB.ID)
+	wGet := performProblemRequestWithRole(r, "GET", fmt.Sprintf("/api/v1/problems/%d", problemA.ID), nil, tenantB.ID, userB.ID, "super_admin")
 	require.Equal(t, http.StatusNotFound, wGet.Code)
 	var resGet common.Response
 	require.NoError(t, json.Unmarshal(wGet.Body.Bytes(), &resGet))
@@ -281,4 +305,68 @@ func TestProblemHTTPHandlerCrossTenantIsolation(t *testing.T) {
 	var resDel common.Response
 	require.NoError(t, json.Unmarshal(wDel.Body.Bytes(), &resDel))
 	assert.Equal(t, common.InternalErrorCode, resDel.Code)
+}
+
+func TestProblemHTTPHandlerGetProjectsActionsAndFailsClosedWithoutActorIdentity(t *testing.T) {
+	r, _, service, client := setupProblemHTTPHandlerTest(t)
+	defer client.Close()
+	ctx := context.Background()
+
+	tenant := createProblemHandlerTenant(t, ctx, client, "http-actions")
+	user := createProblemHandlerUser(t, ctx, client, tenant.ID, "http-actions")
+	prob := createProblemHandlerProblem(t, ctx, service, tenant.ID, user.ID)
+
+	type problemEnvelope struct {
+		Code int                 `json:"code"`
+		Data dto.ProblemResponse `json:"data"`
+	}
+
+	t.Run("projects detail actions on get only", func(t *testing.T) {
+		w := performProblemRequestWithRole(r, http.MethodGet, fmt.Sprintf("/api/v1/problems/%d", prob.ID), nil, tenant.ID, user.ID, "super_admin")
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var res problemEnvelope
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &res))
+		require.True(t, res.Data.Actions["edit"].Allowed)
+		require.True(t, res.Data.Actions["start_investigation"].Allowed)
+		require.False(t, res.Data.Actions["resolve"].Allowed)
+		require.NotEmpty(t, res.Data.Actions["resolve"].Reason)
+		require.False(t, res.Data.Actions["close"].Allowed)
+		require.NotEmpty(t, res.Data.Actions["close"].Reason)
+	})
+
+	t.Run("list response stays free of actions", func(t *testing.T) {
+		w := performProblemRequest(r, http.MethodGet, "/api/v1/problems?page=1&pageSize=10", nil, tenant.ID, user.ID)
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var res struct {
+			Code int `json:"code"`
+			Data struct {
+				Problems []dto.ProblemResponse `json:"problems"`
+			} `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &res))
+		require.Len(t, res.Data.Problems, 1)
+		require.Nil(t, res.Data.Problems[0].Actions)
+	})
+
+	for _, tc := range []struct {
+		name     string
+		tenantID int
+		userID   int
+		role     string
+	}{
+		{name: "missing role", tenantID: tenant.ID, userID: user.ID},
+		{name: "missing user", tenantID: tenant.ID, role: "super_admin"},
+		{name: "missing tenant", userID: user.ID, role: "super_admin"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := performProblemRequestWithRole(r, http.MethodGet, fmt.Sprintf("/api/v1/problems/%d", prob.ID), nil, tc.tenantID, tc.userID, tc.role)
+			require.Equal(t, http.StatusUnauthorized, w.Code)
+
+			var res common.Response
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &res))
+			require.Equal(t, common.AuthErrorCode, res.Code)
+		})
+	}
 }

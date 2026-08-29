@@ -7,16 +7,18 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
 type Handler struct {
 	service *Service
+	client  *ent.Client
 }
 
-func NewHandler(service *Service) *Handler {
-	return &Handler{service: service}
+func NewHandler(service *Service, client *ent.Client) *Handler {
+	return &Handler{service: service, client: client}
 }
 
 func (h *Handler) toDTO(p *Problem) *dto.ProblemResponse {
@@ -137,8 +139,12 @@ func (h *Handler) Get(c *gin.Context) {
 		return
 	}
 
-	tenantID, _ := c.Get("tenant_id")
-	p, err := h.service.GetWithAssociations(c.Request.Context(), id, tenantID.(int))
+	actor, ok := h.problemActionActor(c)
+	if !ok {
+		return
+	}
+
+	p, err := h.service.GetWithAssociations(c.Request.Context(), id, actor.TenantID)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			common.Fail(c, common.NotFoundErrorCode, "Problem not found")
@@ -147,7 +153,9 @@ func (h *Handler) Get(c *gin.Context) {
 		}
 		return
 	}
-	common.Success(c, h.toDTO(p))
+	response := h.toDTO(p)
+	response.Actions = BuildProblemActions(actor, p)
+	common.Success(c, response)
 }
 
 // GetAssociations 获取问题的关联项
@@ -243,6 +251,26 @@ func problemActorUserID(c *gin.Context) (int, bool) {
 		return 0, false
 	}
 	return userID, true
+}
+
+func (h *Handler) problemActionActor(c *gin.Context) (service.ActionActor, bool) {
+	tenantValue, tenantExists := c.Get("tenant_id")
+	tenantID, tenantOK := tenantValue.(int)
+	userValue, userExists := c.Get("user_id")
+	userID, userOK := userValue.(int)
+	role := strings.TrimSpace(c.GetString("role"))
+
+	if !tenantExists || !tenantOK || tenantID <= 0 || !userExists || !userOK || userID <= 0 || role == "" {
+		common.Fail(c, common.AuthErrorCode, "invalid action actor context")
+		return service.ActionActor{}, false
+	}
+
+	return service.ActionActor{
+		Client:   h.client,
+		TenantID: tenantID,
+		UserID:   userID,
+		Role:     role,
+	}, true
 }
 
 // RemoveAssociation 移除关联

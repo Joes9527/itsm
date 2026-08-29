@@ -479,7 +479,7 @@ func NewApplication() *Application {
 	problemRepo := problem.NewEntRepository(client)
 	problemRepo.SetSequenceService(sequenceService)
 	problemServiceDomain := problem.NewService(problemRepo, sugar)
-	problemHandler := problem.NewHandler(problemServiceDomain)
+	problemHandler := problem.NewHandler(problemServiceDomain, client)
 	incidentController := controller.NewIncidentController(incidentService, incidentRuleEngine, incidentMonitoringService, incidentAlertingService, rootCauseAnalysisService, problemServiceDomain, sugar)
 
 	provisioningService := service.NewProvisioningService(client, sugar)
