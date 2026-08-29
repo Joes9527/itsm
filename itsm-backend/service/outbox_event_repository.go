@@ -152,7 +152,7 @@ func (r *OutboxEventRepository) claimDue(ctx context.Context, now time.Time, lim
 		return nil, fmt.Errorf("query due outbox events: %w", err)
 	}
 
-	claimedIDs := make([]int, 0, len(candidates))
+	claimed := make([]*ent.OutboxEvent, 0, len(candidates))
 	for _, candidate := range candidates {
 		claimToken := uuid.NewString()
 		updated, err := tx.OutboxEvent.Update().
@@ -169,35 +169,23 @@ func (r *OutboxEventRepository) claimDue(ctx context.Context, now time.Time, lim
 			return nil, fmt.Errorf("claim outbox event %d: %w", candidate.ID, err)
 		}
 		if updated == 1 {
-			claimedIDs = append(claimedIDs, candidate.ID)
+			// The conditional update is the authoritative claim result. Returning
+			// this snapshot avoids a separate post-commit read racing another
+			// SQLite connection while retaining the exact lease the caller owns.
+			candidate.Status = outboxEventStatusPublishing
+			candidate.ClaimToken = claimToken
+			candidate.ClaimExpiresAt = claimExpiresAt
+			claimed = append(claimed, candidate)
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit outbox claims: %w", err)
 	}
-	if len(claimedIDs) == 0 {
+	if len(claimed) == 0 {
 		return nil, nil
 	}
-
-	claimed, err := r.client.OutboxEvent.Query().
-		Where(outboxevent.IDIn(claimedIDs...)).
-		All(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("load claimed outbox events: %w", err)
-	}
-	byID := make(map[int]*ent.OutboxEvent, len(claimed))
-	for _, event := range claimed {
-		byID[event.ID] = event
-	}
-
-	ordered := make([]*ent.OutboxEvent, 0, len(claimedIDs))
-	for _, id := range claimedIDs {
-		if event, ok := byID[id]; ok {
-			ordered = append(ordered, event)
-		}
-	}
-	return ordered, nil
+	return claimed, nil
 }
 
 // MarkRetry makes an active failed claim eligible for a later delivery attempt.

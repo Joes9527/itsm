@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -17,10 +18,12 @@ import (
 
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+var outboxSQLiteDriverID atomic.Uint64
 
 func TestOutboxEventRepository_EnqueueDeduplicatesEventID(t *testing.T) {
 	repo, client := newOutboxRepository(t)
@@ -116,10 +119,28 @@ func TestOutboxEventRepository_ClaimDueOnlyClaimsOnceAndSchedulesRetry(t *testin
 }
 
 func TestOutboxEventRepository_ClaimDueAllowsOnlyOneConcurrentClaimer(t *testing.T) {
-	repo, _ := newOutboxRepository(t)
+	tracker := newSQLiteOutboxUpdateTracker()
+	repo, client, db := newOutboxRepositoryWithSQLiteDriver(t, tracker)
 	ctx := context.Background()
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	seedPendingEvent(t, repo, "evt-concurrent", now.Add(-time.Second))
+
+	// Keep SQLite's write lock through four prepared updates. The first two
+	// belong to the concurrent callers; reaching four requires at least one
+	// retry after the lock error, without serializing through a one-connection
+	// pool.
+	lockConn, err := db.Conn(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = lockConn.Close() })
+	_, err = lockConn.ExecContext(ctx, "BEGIN IMMEDIATE")
+	require.NoError(t, err)
+	lockHeld := true
+	t.Cleanup(func() {
+		if lockHeld {
+			_, _ = lockConn.ExecContext(ctx, "ROLLBACK")
+		}
+	})
+	tracker.enabled.Store(true)
 
 	start := make(chan struct{})
 	results := make(chan []*ent.OutboxEvent, 2)
@@ -136,6 +157,12 @@ func TestOutboxEventRepository_ClaimDueAllowsOnlyOneConcurrentClaimer(t *testing
 		}()
 	}
 	close(start)
+	waitForSQLiteOutboxUpdateAttempts(t, tracker, 4)
+	require.NoError(t, func() error {
+		_, err := lockConn.ExecContext(ctx, "COMMIT")
+		return err
+	}())
+	lockHeld = false
 	wait.Wait()
 	close(results)
 	close(errs)
@@ -147,7 +174,14 @@ func TestOutboxEventRepository_ClaimDueAllowsOnlyOneConcurrentClaimer(t *testing
 	for claimed := range results {
 		claimedCount += len(claimed)
 	}
-	assert.Equal(t, 1, claimedCount)
+	event, err := client.OutboxEvent.Query().
+		Where(outboxevent.EventIDEQ("evt-concurrent")).
+		Only(ctx)
+	require.NoError(t, err)
+	assert.Equalf(t, 1, claimedCount, "final status=%q claim token present=%t", event.Status, event.ClaimToken != "")
+	assert.Equal(t, outboxEventStatusPublishing, event.Status)
+	assert.NotEmpty(t, event.ClaimToken)
+	assert.GreaterOrEqual(t, tracker.attempts.Load(), int32(7), "the callers must retry after the held write lock before exactly one claims")
 }
 
 func TestOutboxEventRepository_ClaimDueRecoversExpiredLease(t *testing.T) {
@@ -289,14 +323,72 @@ func TestSummarizeOutboxError_RedactsCommonCredentialSpellings(t *testing.T) {
 
 func newOutboxRepository(t *testing.T) (*OutboxEventRepository, *ent.Client) {
 	t.Helper()
-	db, err := sql.Open("sqlite3", fmt.Sprintf("file:outbox_repository_%d?mode=memory&cache=shared&_fk=1", time.Now().UnixNano()))
+	repo, client, _ := newOutboxRepositoryWithDriver(t, "sqlite3")
+	return repo, client
+}
+
+func newOutboxRepositoryWithSQLiteDriver(t *testing.T, tracker *sqliteOutboxUpdateTracker) (*OutboxEventRepository, *ent.Client, *sql.DB) {
+	t.Helper()
+	driverName := fmt.Sprintf("sqlite3_outbox_repository_%d", outboxSQLiteDriverID.Add(1))
+	sql.Register(driverName, &sqlite3.SQLiteDriver{
+		ConnectHook: func(conn *sqlite3.SQLiteConn) error {
+			if tracker == nil {
+				return nil
+			}
+			connectionID := tracker.connectionIDs.Add(1)
+			conn.RegisterAuthorizer(func(actionCode int, arg1, _, _ string) int {
+				if tracker.enabled.Load() && actionCode == sqlite3.SQLITE_UPDATE && arg1 == "outbox_events" {
+					tracker.attempts.Add(1)
+					select {
+					case tracker.updateAttempts <- connectionID:
+					default:
+					}
+				}
+				return sqlite3.SQLITE_OK
+			})
+			return nil
+		},
+	})
+	return newOutboxRepositoryWithDriver(t, driverName)
+}
+
+func newOutboxRepositoryWithDriver(t *testing.T, driverName string) (*OutboxEventRepository, *ent.Client, *sql.DB) {
+	t.Helper()
+	db, err := sql.Open(driverName, fmt.Sprintf("file:outbox_repository_%d?mode=memory&cache=shared&_fk=1&_busy_timeout=1", time.Now().UnixNano()))
 	require.NoError(t, err)
-	// SQLite permits one writer. A single connection keeps this integration
-	// fixture deterministic while concurrent callers exercise ClaimDue itself.
-	db.SetMaxOpenConns(1)
+	db.SetMaxOpenConns(4)
+	db.SetMaxIdleConns(4)
 	client := enttest.NewClient(t, enttest.WithOptions(ent.Driver(entsql.OpenDB(dialect.SQLite, db))))
 	t.Cleanup(func() { _ = client.Close() })
-	return NewOutboxEventRepository(client), client
+	return NewOutboxEventRepository(client), client, db
+}
+
+type sqliteOutboxUpdateTracker struct {
+	connectionIDs  atomic.Uint64
+	enabled        atomic.Bool
+	attempts       atomic.Int32
+	updateAttempts chan uint64
+}
+
+func newSQLiteOutboxUpdateTracker() *sqliteOutboxUpdateTracker {
+	return &sqliteOutboxUpdateTracker{updateAttempts: make(chan uint64, 16)}
+}
+
+func waitForSQLiteOutboxUpdateAttempts(t *testing.T, tracker *sqliteOutboxUpdateTracker, want int) {
+	t.Helper()
+	timeout := time.NewTimer(time.Second)
+	defer timeout.Stop()
+	observed := 0
+	connections := make(map[uint64]struct{}, 2)
+	for observed < want || len(connections) < 2 {
+		select {
+		case connectionID := <-tracker.updateAttempts:
+			observed++
+			connections[connectionID] = struct{}{}
+		case <-timeout.C:
+			t.Fatalf("timed out waiting for %d SQLite outbox update attempts across two connections; observed %d attempts on %d connections", want, tracker.attempts.Load(), len(connections))
+		}
+	}
 }
 
 func seedPendingEvent(t *testing.T, repo *OutboxEventRepository, eventID string, nextAttemptAt time.Time) {

@@ -30,8 +30,10 @@ Completed after review and rereview fixes.
 ## Final Re-Review Fixes
 
 - Updated URL-userinfo redaction to sanitize a password even when the username is empty, such as `https://:webhook-password@api.example.test/events`.
-- Kept the real two-goroutine `ClaimDue` integration test and its exactly-one-claim assertion, but changed the SQLite in-memory fixture to one connection. SQLite has a single-writer model; this removes the shared-cache transaction-upgrade race while continuing to exercise the actual repository, transaction, conditional update, and error paths.
-- Preserved the bounded retry and returned-error handling in `ClaimDue`; no concurrency guarantee or error assertion was weakened.
+- Replaced the serialized fixture with a shared-cache SQLite pool (`MaxOpenConns(4)`) and a short busy timeout. The concurrent test holds a real `BEGIN IMMEDIATE` write lock through four `outbox_events` update preparations from at least two distinct pooled connections, which requires a lock-error retry before releasing two independent `ClaimDue` callers.
+- The test records SQLite authorizer update preparations and requires at least seven: lock-error retries while the lock is held plus the successful post-lock claim sequence. It requires exactly one returned claim and a persisted publishing lease.
+- `ClaimDue` now returns the transaction candidate whose conditional update succeeded, populated with its generated claim token and expiry. This removes the post-commit cross-connection reload that could persist a lease yet return no claimed row under SQLite contention.
+- Preserved all retry-error sanitization coverage, including the empty-username URL-userinfo regression.
 
 ## Verification
 
@@ -43,10 +45,10 @@ Completed after review and rereview fixes.
 - Re-review red/green evidence: credential-spelling regression cases first failed because the retry-error sanitizer did not match underscore key separators or URL userinfo; they passed after expanding the sanitizer patterns.
 - Re-review verification: `cd itsm-backend && go test ./service -run 'TestOutboxEventRepository_|TestSummarizeOutboxError_' -count=1 -v` exited 0: 10 tests passed.
 - Re-review verification: `cd itsm-backend && go build ./...` exited 0.
-- Final re-review red evidence: `cd itsm-backend && go test ./service -run '^TestSummarizeOutboxError_RedactsCommonCredentialSpellings$' -count=1 -v` failed for the empty-username URL case, showing the password in the actual persisted summary. `go test ./service -run '^TestOutboxEventRepository_ClaimDueAllowsOnlyOneConcurrentClaimer$' -count=100 -v` also reproduced multiple zero-total-claim failures before the SQLite fixture change.
 - Final re-review verification: `cd itsm-backend && go test ./service -run '^(TestOutboxEventRepository_|TestSummarizeOutboxError_)' -count=1 -v` exited 0: all 10 focused tests passed.
-- Final re-review concurrency verification: `cd itsm-backend && go test ./service -run '^TestOutboxEventRepository_ClaimDueAllowsOnlyOneConcurrentClaimer$' -count=20` exited 0; an additional `-count=100` stress run also exited 0.
-- Final re-review build verification: `cd itsm-backend && go build ./...` exited 0.
+- Blocking-finding verification: `cd itsm-backend && go test ./service -run '^TestOutboxEventRepository_ClaimDueAllowsOnlyOneConcurrentClaimer$' -count=500` exited 0; the required fresh `-count=100` run also exited 0.
+- Blocking-finding race verification: `cd itsm-backend && go test -race ./service -run '^TestOutboxEventRepository_ClaimDueAllowsOnlyOneConcurrentClaimer$' -count=1 -v` exited 0.
+- Blocking-finding build verification: `cd itsm-backend && go build ./...` exited 0.
 
 ## Deviations
 
