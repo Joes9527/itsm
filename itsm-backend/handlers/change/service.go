@@ -854,6 +854,9 @@ func (s *Service) TransitionStatus(ctx context.Context, id, tenantID, userID int
 		if targetStatus == "rejected" {
 			action = "reject"
 		}
+		if err := canApproveChange(userID, c); err != nil {
+			return nil, err
+		}
 		if err := s.completeChangeApprovalTask(ctx, tenantID, userID, id, action, comment); err != nil {
 			return nil, err
 		}

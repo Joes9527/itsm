@@ -36,13 +36,16 @@ import {
   ChangeImpactLabels,
   ChangeRiskLabels,
 } from '@/constants/change';
-import type { Change, ApprovalRecord } from '@/types/biz/change';
+import type { ApprovalRecord } from '@/types/biz/change';
+import type { Change } from '@/lib/api/change-api';
 import { getErrorMessage } from '@/lib/utils/error-message-handler';
 import ChangeRiskAssessment from './ChangeRiskAssessment';
 import ChangeCMDBImpactPanel from './ChangeCMDBImpactPanel';
 import ChangeImpactAnalysis from './ChangeImpactAnalysis';
 import ChangeRollbackPlan from './ChangeRollbackPlan';
 import { SafeTextBlock } from '@/components/common/SafeContent';
+import { useOptionalWorkItemContext } from '@/components/work-item/WorkItemContext';
+import type { WorkItemActionState } from '@/components/work-item/WorkItemTypes';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -56,9 +59,52 @@ const statusColors: Record<string, string> = {
   [ChangeStatus.ROLLED_BACK]: 'magenta',
 };
 
-const ChangeDetail: React.FC = () => {
-  const { id } = useParams() as { id: string };
+interface ChangeActionButtonProps {
+  action: WorkItemActionState | undefined;
+  actionName: string;
+  children: React.ReactNode;
+  button: React.ComponentProps<typeof Button>;
+}
+
+interface ChangeDetailProps {
+  id?: string;
+  fallbackActions?: Record<string, WorkItemActionState>;
+  onChangeLoaded?: (change: Change) => void;
+}
+
+const EMPTY_ACTIONS: Record<string, WorkItemActionState> = {};
+
+function ChangeActionButton({ action, actionName, children, button }: ChangeActionButtonProps) {
+  if (!action) {
+    return null;
+  }
+
+  const reasonId = `change-action-${actionName}-reason`;
+
+  return (
+    <Space size={4}>
+      <Button
+        {...button}
+        disabled={!action.allowed || button.disabled === true}
+        title={action.reason}
+        aria-describedby={!action.allowed && action.reason ? reasonId : undefined}
+      >
+        {children}
+      </Button>
+      {!action.allowed && action.reason && (
+        <span id={reasonId} role="note" style={{ color: '#8c8c8c', fontSize: 12 }}>
+          {action.reason}
+        </span>
+      )}
+    </Space>
+  );
+}
+
+const ChangeDetail: React.FC<ChangeDetailProps> = ({ id: propId, fallbackActions, onChangeLoaded }) => {
+  const params = useParams() as { id?: string };
+  const id = propId || params?.id;
   const router = useRouter();
+  const workItemContext = useOptionalWorkItemContext();
   const [loading, setLoading] = useState(true);
   const [change, setChange] = useState<Change | null>(null);
   const [approvals, setApprovals] = useState<ApprovalRecord[]>([]);
@@ -70,6 +116,10 @@ const ChangeDetail: React.FC = () => {
   const [rejectModalVisible, setRejectModalVisible] = useState(false);
   const [approvalComment, setApprovalComment] = useState('');
   const [processing, setProcessing] = useState(false);
+  const actions =
+    workItemContext?.actions ??
+    fallbackActions ??
+    EMPTY_ACTIONS;
 
   useEffect(() => {
     if (id) {
@@ -77,9 +127,6 @@ const ChangeDetail: React.FC = () => {
     }
      
   }, [id]);
-
-  // 检查是否可以审批
-  const canApprove = change?.status === ChangeStatus.PENDING;
 
   // 批准变更
   const handleApprove = async () => {
@@ -90,7 +137,7 @@ const ChangeDetail: React.FC = () => {
       message.success('变更已批准');
       setApprovalModalVisible(false);
       setApprovalComment('');
-      loadDetail();
+      void loadDetail();
     } catch (error) {
       message.error(getErrorMessage(error) || '批准失败');
     } finally {
@@ -113,7 +160,7 @@ const ChangeDetail: React.FC = () => {
       message.success('变更已拒绝');
       setRejectModalVisible(false);
       setApprovalComment('');
-      loadDetail();
+      void loadDetail();
     } catch (error) {
       message.error(getErrorMessage(error) || '拒绝失败');
     } finally {
@@ -130,7 +177,7 @@ const ChangeDetail: React.FC = () => {
     try {
       await ChangeApi.submitForApproval(change.id);
       message.success('已提交审批');
-      loadDetail();
+      void loadDetail();
     } catch (error) {
       message.error('提交审批失败');
     } finally {
@@ -145,7 +192,7 @@ const ChangeDetail: React.FC = () => {
     try {
       await ChangeApi.startImplementation(change.id);
       message.success('已开始实施');
-      loadDetail();
+      void loadDetail();
     } catch (error) {
       message.error('开始实施失败');
     } finally {
@@ -160,7 +207,7 @@ const ChangeDetail: React.FC = () => {
     try {
       await ChangeApi.completeImplementation(change.id);
       message.success('变更已完成');
-      loadDetail();
+      void loadDetail();
     } catch (error) {
       message.error('完成变更失败');
     } finally {
@@ -173,6 +220,7 @@ const ChangeDetail: React.FC = () => {
     try {
       const data = await ChangeApi.getChange(Number(id!));
       setChange(data as Change);
+      onChangeLoaded?.(data as Change);
 
       // Try to load approval summary
       try {
@@ -293,55 +341,84 @@ const ChangeDetail: React.FC = () => {
           >
             <Title level={3}>{change.title}</Title>
             <Tag color={statusColors[change.status]} style={{ padding: '4px 12px', fontSize: 14 }}>
-              {ChangeStatusLabels[change.status]}
+              {ChangeStatusLabels[change.status as ChangeStatus]}
             </Tag>
-            {change.status === ChangeStatus.DRAFT && (
-              <Button type="primary" loading={processing} onClick={handleSubmitForApproval}>
+            <Space wrap>
+              <ChangeActionButton
+                action={actions.submit_for_approval}
+                actionName="submit-for-approval"
+                button={{
+                  type: 'primary',
+                  loading: processing,
+                  disabled: processing,
+                  onClick: handleSubmitForApproval,
+                }}
+              >
                 提交审批
-              </Button>
-            )}
-            {canApprove && (
-              <Space>
-                <Button
-                  type="primary"
-                  icon={<CheckCircle />}
-                  onClick={() => setApprovalModalVisible(true)}
-                >
-                  批准
-                </Button>
-                <Button
-                  danger
-                  icon={<XCircle />}
-                  onClick={() => setRejectModalVisible(true)}
-                >
-                  拒绝
-                </Button>
-              </Space>
-            )}
-            {(change.status === ChangeStatus.APPROVED || change.status === ChangeStatus.SCHEDULED) && (
-              <Button type="primary" loading={processing} onClick={handleStartImplementation}>
+              </ChangeActionButton>
+              <ChangeActionButton
+                action={actions.approve}
+                actionName="approve"
+                button={{
+                  type: 'primary',
+                  icon: <CheckCircle />,
+                  disabled: processing,
+                  onClick: () => setApprovalModalVisible(true),
+                }}
+              >
+                批准
+              </ChangeActionButton>
+              <ChangeActionButton
+                action={actions.reject}
+                actionName="reject"
+                button={{
+                  danger: true,
+                  icon: <XCircle />,
+                  disabled: processing,
+                  onClick: () => setRejectModalVisible(true),
+                }}
+              >
+                拒绝
+              </ChangeActionButton>
+              <ChangeActionButton
+                action={actions.start_implementation}
+                actionName="start-implementation"
+                button={{
+                  type: 'primary',
+                  loading: processing,
+                  disabled: processing,
+                  onClick: handleStartImplementation,
+                }}
+              >
                 开始实施
-              </Button>
-            )}
-            {change.status === ChangeStatus.IN_PROGRESS && (
-              <Button type="primary" loading={processing} onClick={handleCompleteImplementation}>
+              </ChangeActionButton>
+              <ChangeActionButton
+                action={actions.complete_implementation}
+                actionName="complete-implementation"
+                button={{
+                  type: 'primary',
+                  loading: processing,
+                  disabled: processing,
+                  onClick: handleCompleteImplementation,
+                }}
+              >
                 完成
-              </Button>
-            )}
+              </ChangeActionButton>
+            </Space>
           </div>
         </div>
 
         <Descriptions bordered column={2}>
           <Descriptions.Item label="变更编号">{change.id}</Descriptions.Item>
-          <Descriptions.Item label="变更类型">{ChangeTypeLabels[change.type]}</Descriptions.Item>
+          <Descriptions.Item label="变更类型">{ChangeTypeLabels[change.type as keyof typeof ChangeTypeLabels]}</Descriptions.Item>
           <Descriptions.Item label="优先级">
-            {ChangePriorityLabels[change.priority]}
+            {ChangePriorityLabels[change.priority as keyof typeof ChangePriorityLabels]}
           </Descriptions.Item>
           <Descriptions.Item label="风险等级">
-            {ChangeRiskLabels[change.riskLevel]}
+            {ChangeRiskLabels[change.riskLevel as keyof typeof ChangeRiskLabels]}
           </Descriptions.Item>
           <Descriptions.Item label="影响范围">
-            {ChangeImpactLabels[change.impactScope]}
+            {ChangeImpactLabels[change.impactScope as keyof typeof ChangeImpactLabels]}
           </Descriptions.Item>
           <Descriptions.Item label="负责人">{change.assigneeName || '未分配'}</Descriptions.Item>
           <Descriptions.Item label="计划起始">

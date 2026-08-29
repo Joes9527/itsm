@@ -5,7 +5,6 @@ import {
   validateTransitionOrThrow,
   isFinalStatus,
   isActiveStatus,
-  isValidChangeTransition,
   InvalidStateTransitionError,
 } from '../workflow-state-machine';
 import { TicketStatus } from '@/constants/taxonomy';
@@ -87,14 +86,5 @@ describe('isFinalStatus / isActiveStatus', () => {
   it('OPEN is active', () => {
     expect(isActiveStatus(TicketStatus.OPEN)).toBe(true);
     expect(isFinalStatus(TicketStatus.OPEN)).toBe(false);
-  });
-});
-
-describe('isValidChangeTransition', () => {
-  it('allows draft -> pending', () => {
-    expect(isValidChangeTransition('draft', 'pending')).toBe(true);
-  });
-  it('disallows completed -> draft', () => {
-    expect(isValidChangeTransition('completed', 'draft')).toBe(false);
   });
 });

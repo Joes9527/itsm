@@ -6,6 +6,7 @@ import (
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
+	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -104,16 +105,38 @@ func (h *Handler) GetChange(c *gin.Context) {
 	if !ok {
 		return
 	}
-	tenantIDVal, _ := c.Get("tenant_id")
-	tenantID := tenantIDVal.(int)
+	actor, ok := h.actionActor(c)
+	if !ok {
+		return
+	}
 
-	res, err := h.svc.GetChange(c.Request.Context(), id, tenantID)
+	res, err := h.svc.GetChange(c.Request.Context(), id, actor.TenantID)
 	if err != nil {
 		common.NotFound(c, "Change not found")
 		return
 	}
 
-	common.Success(c, toDTO(res))
+	resp := toDTO(res)
+	resp.Actions = BuildChangeActions(actor, res)
+	common.Success(c, resp)
+}
+
+func (h *Handler) actionActor(c *gin.Context) (service.ActionActor, bool) {
+	tenantIDVal, tenantOK := c.Get("tenant_id")
+	userIDVal, userOK := c.Get("user_id")
+	tenantID, tenantTypeOK := tenantIDVal.(int)
+	userID, userTypeOK := userIDVal.(int)
+	role := strings.TrimSpace(c.GetString("role"))
+	if !tenantOK || !userOK || !tenantTypeOK || !userTypeOK || tenantID <= 0 || userID <= 0 || role == "" {
+		common.AuthFailed(c, "认证信息缺失")
+		return service.ActionActor{}, false
+	}
+	return service.ActionActor{
+		Client:   h.svc.entClient,
+		TenantID: tenantID,
+		UserID:   userID,
+		Role:     role,
+	}, true
 }
 
 // GetRiskAssessment handles GET /api/v1/changes/:id/risk-assessment

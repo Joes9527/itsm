@@ -35,8 +35,25 @@ func setupTestHandler(t *testing.T) (*gin.Engine, *Handler, *mockRepository) {
 
 	// Add auth middleware mock
 	r.Use(func(c *gin.Context) {
-		c.Set("user_id", 1)
-		c.Set("tenant_id", 1)
+		if tid := c.GetHeader("X-Tenant-ID"); tid != "" {
+			if id, err := strconv.Atoi(tid); err == nil {
+				c.Set("tenant_id", id)
+			}
+		} else {
+			c.Set("tenant_id", 1)
+		}
+		if uid := c.GetHeader("X-User-ID"); uid != "" {
+			if id, err := strconv.Atoi(uid); err == nil {
+				c.Set("user_id", id)
+			}
+		} else {
+			c.Set("user_id", 1)
+		}
+		if role := c.GetHeader("X-User-Role"); role != "" {
+			c.Set("role", role)
+		} else {
+			c.Set("role", "super_admin")
+		}
 		c.Next()
 	})
 
@@ -430,6 +447,97 @@ func TestChangeController_GetChange(t *testing.T) {
 			err := json.Unmarshal(w.Body.Bytes(), &response)
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedCode, response.Code)
+		})
+	}
+}
+
+func TestChangeController_GetChangeIncludesDetailActionsOnly(t *testing.T) {
+	r, _, repo := setupTestHandler(t)
+	change := createTestChange(repo, 1, 42)
+
+	detailReq, err := http.NewRequest("GET", "/api/v1/changes/"+strconv.Itoa(change.ID), nil)
+	require.NoError(t, err)
+	detailReq.Header.Set("X-User-Role", "super_admin")
+
+	detailResp := httptest.NewRecorder()
+	r.ServeHTTP(detailResp, detailReq)
+	require.Equal(t, http.StatusOK, detailResp.Code)
+
+	var detail common.Response
+	require.NoError(t, json.Unmarshal(detailResp.Body.Bytes(), &detail))
+	detailData := detail.Data.(map[string]interface{})
+	actions, ok := detailData["actions"].(map[string]interface{})
+	require.True(t, ok, "detail response should include actions")
+	require.Len(t, actions, 5)
+	require.Contains(t, actions, "submit_for_approval")
+	require.Contains(t, actions, "approve")
+	require.Contains(t, actions, "reject")
+	require.Contains(t, actions, "start_implementation")
+	require.Contains(t, actions, "complete_implementation")
+
+	listReq, err := http.NewRequest("GET", "/api/v1/changes", nil)
+	require.NoError(t, err)
+	listReq.Header.Set("X-User-Role", "super_admin")
+
+	listResp := httptest.NewRecorder()
+	r.ServeHTTP(listResp, listReq)
+	require.Equal(t, http.StatusOK, listResp.Code)
+
+	var list common.Response
+	require.NoError(t, json.Unmarshal(listResp.Body.Bytes(), &list))
+	listData := list.Data.(map[string]interface{})
+	changes := listData["changes"].([]interface{})
+	first := changes[0].(map[string]interface{})
+	require.NotContains(t, first, "actions", "list response should omit detail-only actions")
+}
+
+func TestChangeController_GetChangeRejectsInvalidActionActorContext(t *testing.T) {
+	r, _, repo := setupTestHandler(t)
+	change := createTestChange(repo, 1, 1)
+
+	tests := []struct {
+		name   string
+		header func(*http.Request)
+	}{
+		{
+			name: "missing tenant",
+			header: func(req *http.Request) {
+				req.Header.Set("X-User-ID", "1")
+				req.Header.Set("X-User-Role", "super_admin")
+				req.Header.Set("X-Tenant-ID", "bad")
+			},
+		},
+		{
+			name: "missing user",
+			header: func(req *http.Request) {
+				req.Header.Set("X-Tenant-ID", "1")
+				req.Header.Set("X-User-ID", "0")
+				req.Header.Set("X-User-Role", "super_admin")
+			},
+		},
+		{
+			name: "missing role",
+			header: func(req *http.Request) {
+				req.Header.Set("X-Tenant-ID", "1")
+				req.Header.Set("X-User-ID", "1")
+				req.Header.Set("X-User-Role", " ")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req, err := http.NewRequest("GET", "/api/v1/changes/"+strconv.Itoa(change.ID), nil)
+			require.NoError(t, err)
+			tt.header(req)
+
+			resp := httptest.NewRecorder()
+			r.ServeHTTP(resp, req)
+			require.Equal(t, http.StatusUnauthorized, resp.Code)
+
+			var body common.Response
+			require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+			require.Equal(t, common.AuthErrorCode, body.Code)
 		})
 	}
 }
