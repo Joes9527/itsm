@@ -5,6 +5,7 @@ import ProblemDetail from '../ProblemDetail';
 import { WorkItemProvider } from '@/components/work-item/WorkItemContext';
 import type { WorkItemActionState, WorkItemCommon } from '@/components/work-item/WorkItemTypes';
 import { ProblemStatus } from '@/constants/problem';
+import type { Problem } from '@/lib/api/problem-api';
 
 const mockGetProblem = jest.fn();
 const mockUpdateProblem = jest.fn();
@@ -57,6 +58,20 @@ const problem = {
   updatedAt: '2026-08-28T00:00:00Z',
 };
 
+const openActions = {
+  edit: { allowed: true },
+  start_investigation: { allowed: true },
+  resolve: { allowed: false, reason: '只有调查中的问题可以标记解决' },
+  close: { allowed: false, reason: '只有已解决的问题可以关闭' },
+} satisfies Record<string, WorkItemActionState>;
+
+const investigatingActions = {
+  edit: { allowed: true },
+  start_investigation: { allowed: false, reason: '只有待处理的问题可以开始调查' },
+  resolve: { allowed: true },
+  close: { allowed: false, reason: '只有已解决的问题可以关闭' },
+} satisfies Record<string, WorkItemActionState>;
+
 function renderWithWorkItemContext(
   actions: Record<string, WorkItemActionState>,
   fallbackActions?: Record<string, WorkItemActionState>
@@ -70,6 +85,40 @@ function renderWithWorkItemContext(
 
 function renderWithoutProvider(fallbackActions?: Record<string, WorkItemActionState>) {
   return render(<ProblemDetail id="401" fallbackActions={fallbackActions} />);
+}
+
+function renderWithRefreshingProvider(initialActions: Record<string, WorkItemActionState>) {
+  function Harness() {
+    const [summaryProblem, setSummaryProblem] = React.useState<Problem>({
+      ...problem,
+      actions: initialActions,
+      workItemId: workItem.id,
+    });
+    const providerWorkItem: WorkItemCommon = {
+      ...workItem,
+      status: summaryProblem.status,
+      title: summaryProblem.title,
+      priority: summaryProblem.priority,
+    };
+
+    return (
+      <WorkItemProvider
+        value={{
+          workItem: providerWorkItem,
+          actions: summaryProblem.actions ?? {},
+          onActionDispatch: jest.fn(),
+        }}
+      >
+        <ProblemDetail
+          id="401"
+          fallbackActions={summaryProblem.actions}
+          onProblemLoaded={setSummaryProblem}
+        />
+      </WorkItemProvider>
+    );
+  }
+
+  return render(<Harness />);
 }
 
 async function expectDisabledAction(label: string, reason: string) {
@@ -92,12 +141,7 @@ describe('ProblemDetail action eligibility', () => {
   });
 
   it('starts investigation with the canonical investigating status', async () => {
-    renderWithWorkItemContext({
-      edit: { allowed: true },
-      start_investigation: { allowed: true },
-      resolve: { allowed: false, reason: '只有调查中的问题可以标记解决' },
-      close: { allowed: false, reason: '只有已解决的问题可以关闭' },
-    });
+    renderWithWorkItemContext(openActions);
 
     const user = userEvent.setup();
     await user.click(await screen.findByRole('button', { name: '开始调查' }));
@@ -105,6 +149,24 @@ describe('ProblemDetail action eligibility', () => {
     await waitFor(() =>
       expect(mockUpdateProblem).toHaveBeenCalledWith(401, expect.objectContaining({ status: ProblemStatus.INVESTIGATING }))
     );
+  });
+
+  it('refreshes provider actions after detail refetch so resolve replaces stale start_investigation eligibility', async () => {
+    mockGetProblem
+      .mockResolvedValueOnce({ ...problem, status: ProblemStatus.OPEN, actions: openActions })
+      .mockResolvedValueOnce({ ...problem, status: ProblemStatus.INVESTIGATING, actions: investigatingActions });
+
+    renderWithRefreshingProvider(openActions);
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: '开始调查' }));
+
+    await waitFor(() =>
+      expect(mockUpdateProblem).toHaveBeenCalledWith(401, expect.objectContaining({ status: ProblemStatus.INVESTIGATING }))
+    );
+
+    await expectDisabledAction('开始调查', '只有待处理的问题可以开始调查');
+    expect(screen.getByRole('button', { name: '标记解决' })).toBeInTheDocument();
   });
 
   it('prefers provider actions over fallback actions and exposes denied reasons', async () => {

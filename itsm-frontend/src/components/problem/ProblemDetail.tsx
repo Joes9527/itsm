@@ -29,6 +29,7 @@ interface ProblemActionButtonProps {
 interface ProblemDetailProps {
   id?: string;
   fallbackActions?: Record<string, WorkItemActionState>;
+  onProblemLoaded?: (problem: Problem) => void;
 }
 
 const EMPTY_ACTIONS: Record<string, WorkItemActionState> = {};
@@ -59,7 +60,7 @@ function ProblemActionButton({ action, actionName, children, button }: ProblemAc
   );
 }
 
-const ProblemDetail: React.FC<ProblemDetailProps> = ({ id: propId, fallbackActions }) => {
+const ProblemDetail: React.FC<ProblemDetailProps> = ({ id: propId, fallbackActions, onProblemLoaded }) => {
   const params = useParams();
   const router = useRouter();
   // 支持通过props传入id，或通过useParams获取
@@ -72,7 +73,6 @@ const ProblemDetail: React.FC<ProblemDetailProps> = ({ id: propId, fallbackActio
   const actions =
     workItemContext?.actions ??
     fallbackActions ??
-    data?.actions ??
     EMPTY_ACTIONS;
 
   const loadData = async () => {
@@ -81,6 +81,7 @@ const ProblemDetail: React.FC<ProblemDetailProps> = ({ id: propId, fallbackActio
     try {
       const problem = await ProblemApi.getProblem(Number(id));
       setData(problem);
+      onProblemLoaded?.(problem);
     } catch (error) {
       message.error('加载问题详情失败');
     } finally {
@@ -90,7 +91,7 @@ const ProblemDetail: React.FC<ProblemDetailProps> = ({ id: propId, fallbackActio
 
   useEffect(() => {
     loadData();
-  }, [id]);
+  }, [id, onProblemLoaded]);
 
   const handleUpdateStatus = async (status: ProblemStatus) => {
     if (!id) return;

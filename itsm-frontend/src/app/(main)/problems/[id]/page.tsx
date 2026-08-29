@@ -48,6 +48,11 @@ export default function ProblemDetailPage() {
   const [problem, setProblem] = useState<Problem | null>(null);
   const [sla, setSla] = useState<WorkItemSLAState | undefined>(undefined);
 
+  const syncProblemSummary = useCallback((nextProblem: Problem) => {
+    setProblem(nextProblem);
+    setWorkItem(toWorkItemCommon(nextProblem));
+  }, []);
+
   const loadSLA = useCallback(async (workItemId: number) => {
     try {
       const data = await TicketApi.getTicketSLA(workItemId);
@@ -73,8 +78,7 @@ export default function ProblemDetailPage() {
     }
     try {
       const problem = await ProblemApi.getProblem(numericId);
-      setProblem(problem);
-      setWorkItem(toWorkItemCommon(problem));
+      syncProblemSummary(problem);
     } catch (err) {
       // WorkItemShell 只是这里的外层展示壳（专业字段仍然由下面完整功能的 ProblemDetail
       // 负责渲染/编辑），summary 拉取失败时不阻塞整页——workItem 保持 null，下面直接
@@ -82,7 +86,7 @@ export default function ProblemDetailPage() {
       // 内部另有一次完整的问题详情拉取 + 错误处理，这里的失败不影响那条路径。
       console.warn('[ProblemDetailPage] Failed to load WorkItem summary', err);
     }
-  }, [numericId]);
+  }, [numericId, syncProblemSummary]);
 
   useEffect(() => {
     loadWorkItemSummary();
@@ -99,7 +103,7 @@ export default function ProblemDetailPage() {
       {/* 主详情组件保持不变——根因/临时解决方案/最终解决方案/影响范围等 Problem 专业
           字段、以及所有编辑动作都在这个组件内部完成，WorkItemShell 只包一层公共身份
           信息，不重新实现这些逻辑。 */}
-      <ProblemDetail id={id} />
+      <ProblemDetail id={id} onProblemLoaded={syncProblemSummary} />
 
       {/* 追加：关联（工单/事件/变更）。历史现在由 WorkItemShell 自己的区块渲染，不再
           在这里重复一份——见 docs/superpowers/specs/2026-08-28-work-item-detail-page-parity-design.md
@@ -117,7 +121,13 @@ export default function ProblemDetailPage() {
       )}
     </>
   );
-  const fallbackDetail = <ProblemDetail id={id} fallbackActions={problem?.actions} />;
+  const fallbackDetail = (
+    <ProblemDetail
+      id={id}
+      fallbackActions={problem?.actions}
+      onProblemLoaded={syncProblemSummary}
+    />
+  );
 
   return (
     <App>
