@@ -2,7 +2,7 @@
 
 ## Status
 
-Completed after review fixes.
+Completed after review and rereview fixes.
 
 ## Commit
 
@@ -22,6 +22,11 @@ Completed after review fixes.
 - Marked payload, claim token, and last error sensitive. Retry errors are whitespace-normalized, credential-value-redacted, and truncated to 512 bytes before persistence.
 - Added regression coverage for caller-transaction rollback, tenant immutability and scoped reads, concurrent claims, stale-lease recovery, stale retry/publish rejection, and generated entity redaction.
 
+## Re-Review Fixes
+
+- Expanded retry-error sanitization to redact case-insensitive `access_token` and `client_secret` spellings with underscore, hyphen, or space separators, as well as URL userinfo credentials.
+- Added table-driven regression coverage for the newly redacted credential formats.
+
 ## Verification
 
 - `cd itsm-backend && go generate ./ent` exited 0.
@@ -29,6 +34,9 @@ Completed after review fixes.
 - `cd itsm-backend && go build ./...` exited 0.
 - `git diff --check` exited 0 before commit.
 - Review red/green evidence: the new regression suite first failed because the generated model lacked lease fields and completion methods lacked a claim token; the concurrent claim test then exposed SQLite's transient write lock and passed after `ClaimDue` added bounded retry handling.
+- Re-review red/green evidence: credential-spelling regression cases first failed because the retry-error sanitizer did not match underscore key separators or URL userinfo; they passed after expanding the sanitizer patterns.
+- Re-review verification: `cd itsm-backend && go test ./service -run 'TestOutboxEventRepository_|TestSummarizeOutboxError_' -count=1 -v` exited 0: 10 tests passed.
+- Re-review verification: `cd itsm-backend && go build ./...` exited 0.
 
 ## Deviations
 

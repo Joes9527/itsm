@@ -239,6 +239,46 @@ func TestOutboxEventRepository_RedactsSensitiveEntityFieldsAndSanitizesRetryErro
 	assert.LessOrEqual(t, len(event.LastError), outboxEventLastErrorMaxLength)
 }
 
+func TestSummarizeOutboxError_RedactsCommonCredentialSpellings(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "access token with underscore",
+			input: "delivery rejected: access_token=live-access-token",
+			want:  "delivery rejected: access_token=[redacted]",
+		},
+		{
+			name:  "access token with hyphen and mixed case",
+			input: "delivery rejected: ACCESS-TOKEN: mixed-case-access-token",
+			want:  "delivery rejected: ACCESS-TOKEN=[redacted]",
+		},
+		{
+			name:  "client secret with underscore",
+			input: "delivery rejected: client_secret=client-secret-value",
+			want:  "delivery rejected: client_secret=[redacted]",
+		},
+		{
+			name:  "client secret with hyphen and mixed case",
+			input: "delivery rejected: Client-Secret: mixed-case-client-secret",
+			want:  "delivery rejected: Client-Secret=[redacted]",
+		},
+		{
+			name:  "URL userinfo",
+			input: "delivery rejected: POST https://webhook-user:webhook-password@api.example.test/events",
+			want:  "delivery rejected: POST https://[redacted]@api.example.test/events",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, summarizeOutboxError(tt.input))
+		})
+	}
+}
+
 func newOutboxRepository(t *testing.T) (*OutboxEventRepository, *ent.Client) {
 	t.Helper()
 	client := enttest.Open(t, "sqlite3", fmt.Sprintf("file:outbox_repository_%d?mode=memory&cache=shared&_fk=1", time.Now().UnixNano()))

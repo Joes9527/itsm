@@ -35,7 +35,8 @@ var (
 	// superseded publishing lease.
 	ErrOutboxEventClaimLost = errors.New("outbox event claim is no longer active")
 
-	outboxSensitiveErrorValuePattern = regexp.MustCompile(`(?i)\b(authorization|token|secret|password|api[_-]?key)\b\s*[:=]\s*(?:bearer\s+)?[^\s,;]+`)
+	outboxSensitiveErrorValuePattern       = regexp.MustCompile(`(?i)(^|[^[:alnum:]_])(authorization|access[_ -]?token|client[_ -]?secret|token|secret|password|api[_ -]?key)\s*[:=]\s*(?:bearer\s+)?[^\s,;]+`)
+	outboxSensitiveErrorURLUserinfoPattern = regexp.MustCompile(`(?i)([a-z][a-z0-9+.-]*://)[^/\s:@]+:[^/\s@]+@`)
 )
 
 // NewOutboxEvent contains the immutable delivery data captured with the
@@ -254,7 +255,8 @@ func (r *OutboxEventRepository) currentTime() time.Time {
 
 func summarizeOutboxError(lastError string) string {
 	summary := strings.Join(strings.Fields(lastError), " ")
-	summary = outboxSensitiveErrorValuePattern.ReplaceAllString(summary, "$1=[redacted]")
+	summary = outboxSensitiveErrorURLUserinfoPattern.ReplaceAllString(summary, "$1[redacted]@")
+	summary = outboxSensitiveErrorValuePattern.ReplaceAllString(summary, "$1$2=[redacted]")
 	if len(summary) <= outboxEventLastErrorMaxLength {
 		return summary
 	}
