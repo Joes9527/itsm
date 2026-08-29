@@ -6,7 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/dto"
+	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/ent/processtask"
 	"itsm-backend/service/bpmn"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -1093,4 +1096,80 @@ func TestProcessTask_CorrelationIDRoundTrip(t *testing.T) {
 	reloaded, err := engine.client.ProcessTask.Get(ctx, taskID)
 	require.NoError(t, err)
 	assert.Equal(t, "corr-abc-123", reloaded.CorrelationID)
+}
+
+// fakeAsyncServiceTaskHandler 是测试专用的最小异步 handler：实现
+// ServiceTaskHandlerInterface + AsyncServiceTaskHandler，记录 Execute 被调用次数，
+// 用于断言暂停时不执行、完成时只执行一次。
+type fakeAsyncServiceTaskHandler struct {
+	taskType  string
+	handlerID string
+	executed  int
+}
+
+func (h *fakeAsyncServiceTaskHandler) GetTaskType() string  { return h.taskType }
+func (h *fakeAsyncServiceTaskHandler) GetHandlerID() string { return h.handlerID }
+func (h *fakeAsyncServiceTaskHandler) IsAsync() bool        { return true }
+func (h *fakeAsyncServiceTaskHandler) Validate(ctx context.Context, config map[string]interface{}) error {
+	return nil
+}
+func (h *fakeAsyncServiceTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+	h.executed++
+	return &dto.ServiceTaskResult{Success: true}, nil
+}
+
+var _ bpmn.ServiceTaskHandlerInterface = (*fakeAsyncServiceTaskHandler)(nil)
+var _ bpmn.AsyncServiceTaskHandler = (*fakeAsyncServiceTaskHandler)(nil)
+
+func TestHandleElement_AsyncServiceTask_PausesAndCreatesDelegatedTask(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
+	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, actorID)
+
+	instanceID, _ := createProcessFixture(t, engine, tenantID, "async-pause-1")
+	instance, err := engine.client.ProcessInstance.Get(ctx, instanceID)
+	require.NoError(t, err)
+
+	fakeHandler := &fakeAsyncServiceTaskHandler{taskType: "fake_async_task", handlerID: "fake_async_handler"}
+	engine.callbackRegistry.RegisterHandler(fakeHandler)
+
+	process := &BPMNProcess{
+		ServiceTasks: []*BPMNServiceTask{
+			{
+				ID:   "Activity_KafDelegate",
+				Name: "KAF 委派",
+				ExtensionElements: &BPMNExtensionElements{
+					MetaData: []BPMNMetaData{
+						{Name: "service_task_type", Value: "fake_async_task"},
+						{Name: "action", Value: "delegate"},
+						{Name: "allowed_actions", Value: "resolve,update_progress"},
+					},
+				},
+			},
+		},
+		EndEvents: []*BPMNEndEvent{{ID: "End_1", Name: "结束"}},
+		SequenceFlows: []*BPMNSequenceFlow{
+			{ID: "Flow_1", SourceRef: "Activity_KafDelegate", TargetRef: "End_1"},
+		},
+	}
+
+	err = engine.handleElement(ctx, instance, process, "Activity_KafDelegate")
+	require.NoError(t, err)
+
+	assert.Equal(t, 0, fakeHandler.executed, "异步 handler 在暂停时不应该被 Execute")
+
+	updatedInstance, err := engine.client.ProcessInstance.Get(ctx, instance.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "Activity_KafDelegate", updatedInstance.CurrentActivityID, "流程应该停在委派节点，不应该推进到结束节点")
+
+	delegatedTask, err := engine.client.ProcessTask.Query().
+		Where(processtask.ProcessInstanceID(instance.ID), processtask.TaskDefinitionKey("Activity_KafDelegate")).
+		Only(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "fake_async_task", delegatedTask.TaskType)
+	assert.Equal(t, "delegated", delegatedTask.Status)
+	assert.Equal(t, "fake_async_task", delegatedTask.TaskVariables["service_task_type"])
+	assert.Equal(t, "delegate", delegatedTask.TaskVariables["action"])
+	assert.Equal(t, "resolve,update_progress", delegatedTask.TaskVariables["allowed_actions"])
 }

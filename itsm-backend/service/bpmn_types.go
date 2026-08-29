@@ -10,6 +10,7 @@ import (
 const (
 	bpmnMetaDataServiceTaskType = "service_task_type"
 	bpmnMetaDataAction          = "action"
+	bpmnMetaDataAllowedActions  = "allowed_actions"
 )
 
 // BPMNElement BPMN元素的基础接口
@@ -195,6 +196,12 @@ func (e *BPMNServiceTask) ServiceTaskType() string {
 // ServiceTaskAction 返回该服务任务声明的 action metaData，未声明时返回空串。
 func (e *BPMNServiceTask) ServiceTaskAction() string {
 	return e.ExtensionElements.GetMetaData(bpmnMetaDataAction)
+}
+
+// AllowedActions 返回该服务任务声明的 allowed_actions metaData（逗号分隔的动作名列表），
+// 未声明时返回空串。读法跟 ServiceTaskType/ServiceTaskAction 完全一致。
+func (e *BPMNServiceTask) AllowedActions() string {
+	return e.ExtensionElements.GetMetaData(bpmnMetaDataAllowedActions)
 }
 
 // GetID 获取ID

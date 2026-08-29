@@ -709,6 +709,9 @@ func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.P
 		// 在 UserTask 和 ServiceTask 两种节点类型上表现一致。
 		if serviceTaskType := serviceTask.ServiceTaskType(); serviceTaskType != "" {
 			if handler := e.findHandlerByTaskType(serviceTaskType); handler != nil {
+				if asyncHandler, ok := handler.(bpmn.AsyncServiceTaskHandler); ok && asyncHandler.IsAsync() {
+					return e.createDelegatedTask(ctx, instance, serviceTask)
+				}
 				callbackVars := mergeServiceTaskVariables(instance.Variables, serviceTask)
 				if action := serviceTask.ServiceTaskAction(); action != "" {
 					callbackVars[bpmnMetaDataAction] = action
@@ -1031,6 +1034,42 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 		}
 	}
 	e.logger.Infow("User task created with auto-assignment", "taskID", task.ID, "taskName", task.Name, "assignee", assignee)
+	return nil
+}
+
+// createDelegatedTask 为声明了异步 handler 的 serviceTask 节点创建 ProcessTask 并暂停流程：
+// 不调用 handler.Execute、不推进 executeStep，流程实例的 CurrentActivityID（handleElement
+// 顶部已设置）停在这个节点，直到外部通过 CompleteTask 显式完成该任务才会继续。
+func (e *CustomProcessEngine) createDelegatedTask(ctx context.Context, instance *ent.ProcessInstance, serviceTask *BPMNServiceTask) error {
+	serviceTaskType := serviceTask.ServiceTaskType()
+
+	taskVariables := map[string]interface{}{
+		bpmnMetaDataServiceTaskType: serviceTaskType,
+	}
+	if action := serviceTask.ServiceTaskAction(); action != "" {
+		taskVariables[bpmnMetaDataAction] = action
+	}
+	if allowedActions := serviceTask.AllowedActions(); allowedActions != "" {
+		taskVariables[bpmnMetaDataAllowedActions] = allowedActions
+	}
+
+	_, err := e.client.ProcessTask.Create().
+		SetTaskID(fmt.Sprintf("TASK-%s-%d", serviceTask.ID, time.Now().UnixNano())).
+		SetProcessInstanceID(instance.ID).
+		SetProcessDefinitionKey(instance.ProcessDefinitionKey).
+		SetTaskDefinitionKey(serviceTask.ID).
+		SetTaskName(serviceTask.Name).
+		SetTaskType(serviceTaskType).
+		SetStatus("delegated").
+		SetTaskVariables(taskVariables).
+		SetTenantID(instance.TenantID).
+		SetCreatedTime(time.Now()).
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("创建委派任务失败: %w", err)
+	}
+	e.logger.Infow("异步 ServiceTask 已暂停，等待外部完成",
+		"elementID", serviceTask.ID, "serviceTaskType", serviceTaskType, "instanceID", instance.ProcessInstanceID)
 	return nil
 }
 
