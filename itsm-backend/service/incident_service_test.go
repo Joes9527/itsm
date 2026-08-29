@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -398,6 +399,82 @@ func TestIncidentService_AssignIncident_ValidatesAssigneeAndReturnsUpdatedIncide
 	require.NoError(t, err)
 	_, err = incidentService.AssignIncident(ctx, incidentEntity.ID, inactive.ID, tenant.ID)
 	require.ErrorContains(t, err, "assignee not found or inactive")
+}
+
+func TestAssignIncidentRejectsResolvedAndClosed(t *testing.T) {
+	for _, status := range []string{common.IncidentStatusResolved, common.IncidentStatusClosed} {
+		t.Run(status, func(t *testing.T) {
+			client, incidentService, ctx := setupIncidentTest(t)
+			defer client.Close()
+			tenant, err := createIncidentTestTenant(ctx, client, "assign-"+status)
+			require.NoError(t, err)
+			reporter, err := createIncidentTestUser(ctx, client, tenant.ID, "assign-reporter-"+status)
+			require.NoError(t, err)
+			assignee, err := createIncidentTestUser(ctx, client, tenant.ID, "assign-target-"+status)
+			require.NoError(t, err)
+			incidentEntity, err := client.Incident.Create().
+				SetTitle("Lifecycle guarded assignment").
+				SetStatus(status).
+				SetIncidentNumber("INC-ASSIGN-" + status).
+				SetReporterID(reporter.ID).
+				SetTenantID(tenant.ID).
+				Save(ctx)
+			require.NoError(t, err)
+
+			_, err = incidentService.AssignIncident(ctx, incidentEntity.ID, assignee.ID, tenant.ID)
+			require.ErrorContains(t, err, "resolved or closed incidents cannot be reassigned")
+
+			persisted, err := client.Incident.Get(ctx, incidentEntity.ID)
+			require.NoError(t, err)
+			require.Zero(t, persisted.AssigneeID)
+		})
+	}
+}
+
+func TestGetIncidentWithActionsUsesOneEntitySnapshot(t *testing.T) {
+	var incidentSelects int
+	countIncidentSelects := func(args ...any) {
+		statement := fmt.Sprint(args...)
+		if strings.Contains(statement, "SELECT") && strings.Contains(statement, "FROM `incidents`") {
+			incidentSelects++
+		}
+	}
+	client := enttest.Open(t, "sqlite3", testDSN(), enttest.WithOptions(ent.Log(countIncidentSelects), ent.Debug()))
+	defer client.Close()
+	ctx := context.Background()
+	tenant, err := createIncidentTestTenant(ctx, client, "detail-snapshot")
+	require.NoError(t, err)
+	reporter, err := createIncidentTestUser(ctx, client, tenant.ID, "detail-snapshot")
+	require.NoError(t, err)
+	workItem, err := client.Ticket.Create().
+		SetTitle("Snapshot WorkItem").
+		SetTicketNumber("TKT-SNAPSHOT").
+		SetStatus("open").
+		SetPriority("high").
+		SetRequesterID(reporter.ID).
+		SetTenantID(tenant.ID).
+		SetRecordClass("incident").
+		Save(ctx)
+	require.NoError(t, err)
+	incidentEntity, err := client.Incident.Create().
+		SetTitle("Snapshot Incident").
+		SetStatus(common.IncidentStatusInProgress).
+		SetIncidentNumber("INC-SNAPSHOT").
+		SetReporterID(reporter.ID).
+		SetWorkItemID(workItem.ID).
+		SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	incidentSelects = 0
+	incidentService := NewIncidentService(client, zaptest.NewLogger(t).Sugar())
+	response, err := incidentService.GetIncidentWithActions(ctx, incidentEntity.ID, ActionActor{
+		Client: client, TenantID: tenant.ID, UserID: reporter.ID, Role: "super_admin",
+	})
+	require.NoError(t, err)
+	require.Equal(t, common.IncidentStatusInProgress, response.Status)
+	require.True(t, response.Actions["resolve"].Allowed)
+	require.Equal(t, 1, incidentSelects, "detail DTO and actions must derive from one Incident entity read")
 }
 
 // ==================== 列出事件测试 ====================

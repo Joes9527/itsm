@@ -795,7 +795,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				inc.POST("/:id/resolve", middleware.RequirePermission("incident", "write"), config.IncidentController.ResolveIncident)
 				inc.POST("/:id/close", middleware.RequirePermission("incident", "write"), config.IncidentController.CloseIncident)
 				inc.POST("/:id/reopen", middleware.RequirePermission("incident", "write"), config.IncidentController.ReopenIncident)
-				inc.POST("/:id/assign", middleware.RequirePermission("incident", "assign"), config.IncidentController.AssignIncident)
+				inc.POST("/:id/assign", middleware.RequirePermission("incident", "write"), config.IncidentController.AssignIncident)
 				inc.POST("/:id/major-incident", middleware.RequirePermission("incident", "write"), config.IncidentController.EscalateMajorIncident)
 				inc.POST("/:id/convert-to-problem", middleware.RequirePermission("incident", "write"), config.IncidentController.ConvertToProblem)
 				inc.GET("/:id/impact", middleware.RequirePermission("incident", "read"), config.IncidentController.AnalyzeIncidentImpact)

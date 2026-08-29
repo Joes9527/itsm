@@ -123,7 +123,23 @@ func (c *IncidentController) GetIncident(ctx *gin.Context) {
 	if !ok {
 		return
 	}
-	response, err := c.incidentService.GetIncident(ctx.Request.Context(), id, tenantID)
+	if tenantID <= 0 {
+		common.Fail(ctx, common.AuthFailedCode, "获取租户ID失败")
+		return
+	}
+	userID, err := middleware.GetUserID(ctx)
+	if err != nil || userID <= 0 {
+		common.Fail(ctx, common.AuthFailedCode, "获取用户ID失败")
+		return
+	}
+	role := strings.TrimSpace(ctx.GetString("role"))
+	if role == "" {
+		common.Fail(ctx, common.AuthFailedCode, "获取用户角色失败")
+		return
+	}
+	response, err := c.incidentService.GetIncidentWithActions(ctx.Request.Context(), id, service.ActionActor{
+		TenantID: tenantID, UserID: userID, Role: role,
+	})
 	if err != nil {
 		if err.Error() == "incident not found" {
 			common.Fail(ctx, common.ParamErrorCode, "事件不存在")

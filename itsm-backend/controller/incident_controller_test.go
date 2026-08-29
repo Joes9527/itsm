@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -232,4 +233,97 @@ func TestIncidentController_ListIncidents(t *testing.T) {
 			r.ServeHTTP(w, req)
 		})
 	}
+}
+
+func TestIncidentDetailHasActionsButListDoesNot(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	client := enttest.Open(t, "sqlite3", "file:incident_detail_actions?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	tenant, err := client.Tenant.Create().SetName("detail").SetCode("detail").SetDomain("detail.test").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	user, err := client.User.Create().
+		SetUsername("detail-user").SetEmail("detail@example.com").SetName("Detail User").
+		SetPasswordHash("x").SetRole("super_admin").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	workItem, err := client.Ticket.Create().
+		SetTitle("Detail WorkItem").SetTicketNumber("TKT-DETAIL").SetStatus("open").SetPriority("high").
+		SetRequesterID(user.ID).SetTenantID(tenant.ID).SetRecordClass("incident").Save(ctx)
+	require.NoError(t, err)
+	incidentEntity, err := client.Incident.Create().
+		SetTitle("Detail Incident").SetStatus(common.IncidentStatusInProgress).SetIncidentNumber("INC-DETAIL").
+		SetReporterID(user.ID).SetWorkItemID(workItem.ID).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	controller := NewIncidentController(service.NewIncidentService(client, zaptest.NewLogger(t).Sugar()), nil, nil, nil, nil, nil, zaptest.NewLogger(t).Sugar())
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set("user_id", user.ID)
+		c.Set("role", "super_admin")
+		c.Set("tenant_id", tenant.ID)
+		c.Set(middleware.TenantContextKey, &middleware.TenantContext{TenantID: tenant.ID, Tenant: tenant})
+		c.Next()
+	})
+	router.GET("/api/v1/incidents", controller.ListIncidents)
+	router.GET("/api/v1/incidents/:id", controller.GetIncident)
+
+	detail := performIncidentRequest(t, router, http.MethodGet, "/api/v1/incidents/"+strconv.Itoa(incidentEntity.ID))
+	require.Equal(t, http.StatusOK, detail.Code)
+	detailData := responseDataMap(t, detail.Body.Bytes())
+	require.Contains(t, detailData, "actions")
+
+	list := performIncidentRequest(t, router, http.MethodGet, "/api/v1/incidents")
+	require.Equal(t, http.StatusOK, list.Code)
+	listData := responseDataMap(t, list.Body.Bytes())
+	incidents, ok := listData["incidents"].([]any)
+	require.True(t, ok)
+	require.Len(t, incidents, 1)
+	listIncident, ok := incidents[0].(map[string]any)
+	require.True(t, ok)
+	require.NotContains(t, listIncident, "actions")
+}
+
+func TestGetIncidentRequiresAuthenticatedActionActor(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	client := enttest.Open(t, "sqlite3", "file:incident_detail_actor?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	tenant, err := client.Tenant.Create().SetName("actor").SetCode("actor").SetDomain("actor.test").SetStatus("active").Save(context.Background())
+	require.NoError(t, err)
+	controller := NewIncidentController(service.NewIncidentService(client, zaptest.NewLogger(t).Sugar()), nil, nil, nil, nil, nil, zaptest.NewLogger(t).Sugar())
+
+	for _, testCase := range []struct {
+		name   string
+		userID int
+		role   string
+	}{{name: "missing user", role: "super_admin"}, {name: "missing role", userID: 9}} {
+		t.Run(testCase.name, func(t *testing.T) {
+			router := gin.New()
+			router.Use(func(c *gin.Context) {
+				c.Set("user_id", testCase.userID)
+				c.Set("role", testCase.role)
+				c.Set(middleware.TenantContextKey, &middleware.TenantContext{TenantID: tenant.ID, Tenant: tenant})
+				c.Next()
+			})
+			router.GET("/api/v1/incidents/:id", controller.GetIncident)
+			response := performIncidentRequest(t, router, http.MethodGet, "/api/v1/incidents/1")
+			require.Equal(t, http.StatusUnauthorized, response.Code)
+		})
+	}
+}
+
+func performIncidentRequest(t *testing.T, router http.Handler, method, path string) *httptest.ResponseRecorder {
+	t.Helper()
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(method, path, nil))
+	return recorder
+}
+
+func responseDataMap(t *testing.T, body []byte) map[string]any {
+	t.Helper()
+	var response struct {
+		Data map[string]any `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(body, &response))
+	require.NotNil(t, response.Data)
+	return response.Data
 }

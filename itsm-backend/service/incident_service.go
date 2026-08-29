@@ -263,6 +263,25 @@ func (s *IncidentService) CreateIncident(ctx context.Context, req *dto.CreateInc
 
 // GetIncident 获取事件
 func (s *IncidentService) GetIncident(ctx context.Context, id int, tenantID int) (*dto.IncidentResponse, error) {
+	incidentEntity, err := s.getIncidentEntity(ctx, id, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	return s.toIncidentResponse(incidentEntity), nil
+}
+
+func (s *IncidentService) GetIncidentWithActions(ctx context.Context, id int, actor ActionActor) (*dto.IncidentResponse, error) {
+	incidentEntity, err := s.getIncidentEntity(ctx, id, actor.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	response := s.toIncidentResponse(incidentEntity)
+	actor.Client = s.client
+	response.Actions = BuildIncidentActions(actor, incidentEntity)
+	return response, nil
+}
+
+func (s *IncidentService) getIncidentEntity(ctx context.Context, id int, tenantID int) (*ent.Incident, error) {
 	incidentEntity, err := s.client.Incident.Query().
 		Where(
 			incident.IDEQ(id),
@@ -279,7 +298,7 @@ func (s *IncidentService) GetIncident(ctx context.Context, id int, tenantID int)
 		return nil, fmt.Errorf("failed to get incident: %w", err)
 	}
 
-	return s.toIncidentResponse(incidentEntity), nil
+	return incidentEntity, nil
 }
 
 // ListIncidents 获取事件列表
@@ -569,11 +588,15 @@ func (s *IncidentService) UpdateIncident(ctx context.Context, id int, req *dto.U
 }
 
 // AssignIncident 分配事件
+func canAssignIncidentStatus(status string) bool {
+	return status != common.IncidentStatusResolved && status != common.IncidentStatusClosed
+}
+
 func (s *IncidentService) AssignIncident(ctx context.Context, id int, assigneeID int, tenantID int) (*dto.IncidentResponse, error) {
 	s.logger.Infow("Assigning incident", "id", id, "assignee_id", assigneeID, "tenant_id", tenantID)
 
 	// 获取当前事件
-	_, err := s.client.Incident.Query().
+	current, err := s.client.Incident.Query().
 		Where(incident.IDEQ(id), incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
 		Only(ctx)
 	if err != nil {
@@ -581,6 +604,9 @@ func (s *IncidentService) AssignIncident(ctx context.Context, id int, assigneeID
 			return nil, fmt.Errorf("incident not found")
 		}
 		return nil, fmt.Errorf("failed to get incident: %w", err)
+	}
+	if !canAssignIncidentStatus(current.Status) {
+		return nil, fmt.Errorf("resolved or closed incidents cannot be reassigned")
 	}
 
 	if err := s.validateIncidentAssignee(ctx, assigneeID, tenantID); err != nil {
