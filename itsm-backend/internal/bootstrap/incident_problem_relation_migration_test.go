@@ -81,6 +81,11 @@ func TestIsMissingTableErrorStrictClassification(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "sqlite target table missing with surrounding spaces",
+			err:  errors.New("  no such table: work_item_relations  "),
+			want: true,
+		},
+		{
 			name: "wrapped sqlite target table missing",
 			err:  fmt.Errorf("probe work_item_relations: %w", errors.New("no such table: work_item_relations")),
 			want: true,
@@ -103,6 +108,26 @@ func TestIsMissingTableErrorStrictClassification(t *testing.T) {
 		{
 			name: "different sqlite table missing",
 			err:  errors.New("no such table: service_requests"),
+			want: false,
+		},
+		{
+			name: "sqlite suffix table name missing",
+			err:  errors.New("no such table: work_item_relations_backup"),
+			want: false,
+		},
+		{
+			name: "sqlite prefix table name missing",
+			err:  errors.New("no such table: prefix_work_item_relations"),
+			want: false,
+		},
+		{
+			name: "sqlite target table text followed by punctuation",
+			err:  errors.New("no such table: work_item_relations."),
+			want: false,
+		},
+		{
+			name: "wrapped sqlite suffix table name missing",
+			err:  fmt.Errorf("probe work_item_relations: %w", errors.New("no such table: work_item_relations_backup")),
 			want: false,
 		},
 		{

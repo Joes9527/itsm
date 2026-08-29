@@ -136,6 +136,6 @@ func isMissingTableError(err error) bool {
 		return true
 	}
 
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "no such table: work_item_relations")
+	msg := strings.TrimSpace(strings.ToLower(err.Error()))
+	return strings.HasSuffix(msg, "no such table: work_item_relations")
 }
