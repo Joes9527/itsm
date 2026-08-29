@@ -16,6 +16,7 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/middleware"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -42,6 +43,7 @@ func setupProblemHTTPHandlerTest(t *testing.T) (*gin.Engine, *Handler, *Service,
 		if tid := c.GetHeader("X-Tenant-ID"); tid != "" {
 			if id, err := strconv.Atoi(tid); err == nil {
 				c.Set("tenant_id", id)
+				c.Set(middleware.TenantContextKey, &middleware.TenantContext{TenantID: id})
 			}
 		}
 		if uid := c.GetHeader("X-User-ID"); uid != "" {
@@ -51,6 +53,21 @@ func setupProblemHTTPHandlerTest(t *testing.T) (*gin.Engine, *Handler, *Service,
 		}
 		if role := c.GetHeader("X-User-Role"); role != "" {
 			c.Set("role", role)
+		}
+		if customer := c.GetHeader("X-MSP-Customer-ID"); customer != "" {
+			if customerID, err := strconv.Atoi(customer); err == nil {
+				mspCtx := &middleware.MSPContext{
+					IsMSP:            true,
+					MSPUserID:        c.GetInt("user_id"),
+					CustomerTenantID: &customerID,
+				}
+				if allowed := c.GetHeader("X-MSP-Allowed-Customer-ID"); allowed != "" {
+					if allowedID, err := strconv.Atoi(allowed); err == nil {
+						mspCtx.AllowedCustomers = []int{allowedID}
+					}
+				}
+				c.Set(middleware.MSPContextKey, mspCtx)
+			}
 		}
 		c.Next()
 	})
@@ -177,6 +194,66 @@ func TestProblemHTTPHandlerCreateGetList(t *testing.T) {
 	assert.Equal(t, 0, resList.Code)
 }
 
+func TestProblemHTTPHandlerGetUsesResolvedMSPTenant(t *testing.T) {
+	r, _, service, client := setupProblemHTTPHandlerTest(t)
+	defer client.Close()
+	ctx := context.Background()
+
+	homeTenant := createProblemHandlerTenant(t, ctx, client, "msp-home")
+	customerTenant := createProblemHandlerTenant(t, ctx, client, "msp-customer")
+	user := createProblemHandlerUser(t, ctx, client, homeTenant.ID, "msp-agent")
+	customerCreator := createProblemHandlerUser(t, ctx, client, customerTenant.ID, "msp-customer-creator")
+	p := createProblemHandlerProblem(t, ctx, service, customerTenant.ID, customerCreator.ID)
+
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/problems/%d", p.ID), nil)
+	req.Header.Set("X-Tenant-ID", strconv.Itoa(homeTenant.ID))
+	req.Header.Set("X-User-ID", strconv.Itoa(user.ID))
+	req.Header.Set("X-User-Role", "super_admin")
+	req.Header.Set("X-MSP-Customer-ID", strconv.Itoa(customerTenant.ID))
+	req.Header.Set("X-MSP-Allowed-Customer-ID", strconv.Itoa(customerTenant.ID))
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var res common.Response
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &res))
+	require.Equal(t, common.SuccessCode, res.Code)
+	data := res.Data.(map[string]interface{})
+	require.Equal(t, float64(customerTenant.ID), data["tenantId"])
+
+	wSameTenant := performProblemRequestWithRole(r, http.MethodGet, fmt.Sprintf("/api/v1/problems/%d", p.ID), nil, customerTenant.ID, user.ID, "super_admin")
+	require.Equal(t, http.StatusOK, wSameTenant.Code)
+}
+
+func TestProblemHTTPHandlerGetDeniesUnauthorizedMSPTenant(t *testing.T) {
+	r, _, service, client := setupProblemHTTPHandlerTest(t)
+	defer client.Close()
+	ctx := context.Background()
+
+	homeTenant := createProblemHandlerTenant(t, ctx, client, "msp-denied-home")
+	customerTenant := createProblemHandlerTenant(t, ctx, client, "msp-denied-customer")
+	allowedTenant := createProblemHandlerTenant(t, ctx, client, "msp-denied-allowed")
+	user := createProblemHandlerUser(t, ctx, client, homeTenant.ID, "msp-denied-agent")
+	customerCreator := createProblemHandlerUser(t, ctx, client, customerTenant.ID, "msp-denied-customer-creator")
+	p := createProblemHandlerProblem(t, ctx, service, customerTenant.ID, customerCreator.ID)
+
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/problems/%d", p.ID), nil)
+	req.Header.Set("X-Tenant-ID", strconv.Itoa(homeTenant.ID))
+	req.Header.Set("X-User-ID", strconv.Itoa(user.ID))
+	req.Header.Set("X-User-Role", "super_admin")
+	req.Header.Set("X-MSP-Customer-ID", strconv.Itoa(customerTenant.ID))
+	req.Header.Set("X-MSP-Allowed-Customer-ID", strconv.Itoa(allowedTenant.ID))
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusForbidden, w.Code)
+
+	var res common.Response
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &res))
+	require.Equal(t, 2003, res.Code)
+}
+
 func TestProblemHTTPHandlerUpdateAndLifecycle(t *testing.T) {
 	r, _, service, client := setupProblemHTTPHandlerTest(t)
 	defer client.Close()
@@ -214,6 +291,12 @@ func TestProblemHTTPHandlerUpdateAndLifecycle(t *testing.T) {
 	}
 	wSol := performProblemRequest(r, "POST", fmt.Sprintf("/api/v1/problems/%d/solution", p.ID), solReq, tenant.ID, user.ID)
 	require.Equal(t, http.StatusOK, wSol.Code)
+
+	statusResolved := "resolved"
+	wResolved := performProblemRequest(r, "PUT", fmt.Sprintf("/api/v1/problems/%d", p.ID), dto.UpdateProblemRequest{
+		Status: &statusResolved,
+	}, tenant.ID, user.ID)
+	require.Equal(t, http.StatusOK, wResolved.Code)
 
 	// Close Problem
 	closeReq := dto.CloseProblemRequest{

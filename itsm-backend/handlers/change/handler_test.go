@@ -19,6 +19,7 @@ import (
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
+	"itsm-backend/middleware"
 )
 
 // setupTestHandler creates a test handler with in-memory repository
@@ -38,9 +39,11 @@ func setupTestHandler(t *testing.T) (*gin.Engine, *Handler, *mockRepository) {
 		if tid := c.GetHeader("X-Tenant-ID"); tid != "" {
 			if id, err := strconv.Atoi(tid); err == nil {
 				c.Set("tenant_id", id)
+				c.Set(middleware.TenantContextKey, &middleware.TenantContext{TenantID: id})
 			}
 		} else {
 			c.Set("tenant_id", 1)
+			c.Set(middleware.TenantContextKey, &middleware.TenantContext{TenantID: 1})
 		}
 		if uid := c.GetHeader("X-User-ID"); uid != "" {
 			if id, err := strconv.Atoi(uid); err == nil {
@@ -53,6 +56,21 @@ func setupTestHandler(t *testing.T) (*gin.Engine, *Handler, *mockRepository) {
 			c.Set("role", role)
 		} else {
 			c.Set("role", "super_admin")
+		}
+		if customer := c.GetHeader("X-MSP-Customer-ID"); customer != "" {
+			if customerID, err := strconv.Atoi(customer); err == nil {
+				mspCtx := &middleware.MSPContext{
+					IsMSP:            true,
+					MSPUserID:        c.GetInt("user_id"),
+					CustomerTenantID: &customerID,
+				}
+				if allowed := c.GetHeader("X-MSP-Allowed-Customer-ID"); allowed != "" {
+					if allowedID, err := strconv.Atoi(allowed); err == nil {
+						mspCtx.AllowedCustomers = []int{allowedID}
+					}
+				}
+				c.Set(middleware.MSPContextKey, mspCtx)
+			}
 		}
 		c.Next()
 	})
@@ -489,6 +507,59 @@ func TestChangeController_GetChangeIncludesDetailActionsOnly(t *testing.T) {
 	changes := listData["changes"].([]interface{})
 	first := changes[0].(map[string]interface{})
 	require.NotContains(t, first, "actions", "list response should omit detail-only actions")
+}
+
+func TestChangeController_GetChangeUsesResolvedMSPTenant(t *testing.T) {
+	r, _, repo := setupTestHandler(t)
+	change := createTestChange(repo, 200, 42)
+
+	req, err := http.NewRequest("GET", "/api/v1/changes/"+strconv.Itoa(change.ID), nil)
+	require.NoError(t, err)
+	req.Header.Set("X-Tenant-ID", "500")
+	req.Header.Set("X-User-ID", "7")
+	req.Header.Set("X-User-Role", "super_admin")
+	req.Header.Set("X-MSP-Customer-ID", "200")
+	req.Header.Set("X-MSP-Allowed-Customer-ID", "200")
+
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, req)
+	require.Equal(t, http.StatusOK, resp.Code)
+
+	var body common.Response
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+	require.Equal(t, common.SuccessCode, body.Code)
+	data := body.Data.(map[string]interface{})
+	require.Equal(t, float64(200), data["tenantId"])
+
+	sameTenantReq, err := http.NewRequest("GET", "/api/v1/changes/"+strconv.Itoa(change.ID), nil)
+	require.NoError(t, err)
+	sameTenantReq.Header.Set("X-Tenant-ID", "200")
+	sameTenantReq.Header.Set("X-User-ID", "7")
+	sameTenantReq.Header.Set("X-User-Role", "super_admin")
+	sameTenantResp := httptest.NewRecorder()
+	r.ServeHTTP(sameTenantResp, sameTenantReq)
+	require.Equal(t, http.StatusOK, sameTenantResp.Code)
+}
+
+func TestChangeController_GetChangeDeniesUnauthorizedMSPTenant(t *testing.T) {
+	r, _, repo := setupTestHandler(t)
+	change := createTestChange(repo, 200, 42)
+
+	req, err := http.NewRequest("GET", "/api/v1/changes/"+strconv.Itoa(change.ID), nil)
+	require.NoError(t, err)
+	req.Header.Set("X-Tenant-ID", "500")
+	req.Header.Set("X-User-ID", "7")
+	req.Header.Set("X-User-Role", "super_admin")
+	req.Header.Set("X-MSP-Customer-ID", "200")
+	req.Header.Set("X-MSP-Allowed-Customer-ID", "300")
+
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, req)
+	require.Equal(t, http.StatusForbidden, resp.Code)
+
+	var body common.Response
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+	require.Equal(t, 2003, body.Code)
 }
 
 func TestChangeController_GetChangeRejectsInvalidActionActorContext(t *testing.T) {

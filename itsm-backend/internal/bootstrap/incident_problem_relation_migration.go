@@ -16,15 +16,8 @@ func prepareIncidentProblemRelationMigration(ctx context.Context, db *sql.DB, lo
 		return nil
 	}
 
-	var tableExists bool
-	if err := db.QueryRowContext(ctx, `
-		SELECT EXISTS (
-			SELECT 1
-			FROM information_schema.tables
-			WHERE table_schema = current_schema()
-			  AND table_name = 'work_item_relations'
-		)
-	`).Scan(&tableExists); err != nil {
+	tableExists, err := workItemRelationsTableExists(ctx, db)
+	if err != nil {
 		return fmt.Errorf("inspect work_item_relations table: %w", err)
 	}
 	if !tableExists {
@@ -115,4 +108,25 @@ func prepareIncidentProblemRelationMigration(ctx context.Context, db *sql.DB, lo
 	}
 
 	return nil
+}
+
+func workItemRelationsTableExists(ctx context.Context, db *sql.DB) (bool, error) {
+	rows, err := db.QueryContext(ctx, `SELECT 1 FROM work_item_relations LIMIT 0`)
+	if err != nil {
+		if isMissingTableError(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, rows.Close()
+}
+
+func isMissingTableError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "no such table") ||
+		strings.Contains(msg, "does not exist") ||
+		strings.Contains(msg, "undefined_table")
 }

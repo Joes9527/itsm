@@ -36,7 +36,7 @@ func CanResolveProblem(actor service.ActionActor, p *Problem) dto.ActionPermissi
 }
 
 func CanCloseProblem(actor service.ActionActor, p *Problem) dto.ActionPermission {
-	if strings.TrimSpace(p.Status) != "resolved" {
+	if !canCloseProblemStatus(p.Status) {
 		return dto.ActionPermission{Allowed: false, Reason: "只有已解决的问题可以关闭"}
 	}
 	return CanEditProblem(actor)

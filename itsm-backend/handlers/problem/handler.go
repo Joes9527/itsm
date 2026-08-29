@@ -7,6 +7,7 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/middleware"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -139,7 +140,12 @@ func (h *Handler) Get(c *gin.Context) {
 		return
 	}
 
-	actor, ok := h.problemActionActor(c)
+	tenantID, err := middleware.ResolveRequestTenantID(c)
+	if middleware.AbortIfTenantError(c, err) {
+		return
+	}
+
+	actor, ok := h.problemActionActor(c, tenantID)
 	if !ok {
 		return
 	}
@@ -253,14 +259,12 @@ func problemActorUserID(c *gin.Context) (int, bool) {
 	return userID, true
 }
 
-func (h *Handler) problemActionActor(c *gin.Context) (service.ActionActor, bool) {
-	tenantValue, tenantExists := c.Get("tenant_id")
-	tenantID, tenantOK := tenantValue.(int)
+func (h *Handler) problemActionActor(c *gin.Context, tenantID int) (service.ActionActor, bool) {
 	userValue, userExists := c.Get("user_id")
 	userID, userOK := userValue.(int)
 	role := strings.TrimSpace(c.GetString("role"))
 
-	if !tenantExists || !tenantOK || tenantID <= 0 || !userExists || !userOK || userID <= 0 || role == "" {
+	if tenantID <= 0 || !userExists || !userOK || userID <= 0 || role == "" {
 		common.Fail(c, common.AuthErrorCode, "invalid action actor context")
 		return service.ActionActor{}, false
 	}

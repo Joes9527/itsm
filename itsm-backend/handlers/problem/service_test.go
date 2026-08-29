@@ -179,18 +179,14 @@ func TestProblemServiceStateMachineTransitions(t *testing.T) {
 		{"open", "investigating"},
 		{"open", "identified"},
 		{"open", "resolved"},
-		{"open", "closed"},
 		{"investigating", "identified"},
 		{"investigating", "resolved"},
-		{"investigating", "closed"},
 		{"identified", "investigating"},
 		{"identified", "resolved"},
-		{"identified", "closed"},
 		{"resolved", "investigating"},
 		{"resolved", "closed"},
 		{"in_progress", "identified"},
 		{"in_progress", "resolved"},
-		{"in_progress", "closed"},
 	}
 
 	for i, tc := range validCases {
@@ -223,6 +219,10 @@ func TestProblemServiceStateMachineTransitions(t *testing.T) {
 		{"resolved", "open"},
 		{"open", "invalid_status"},
 		{"investigating", "open"},
+		{"open", "closed"},
+		{"investigating", "closed"},
+		{"identified", "closed"},
+		{"in_progress", "closed"},
 	}
 
 	for i, tc := range invalidCases {
@@ -241,6 +241,67 @@ func TestProblemServiceStateMachineTransitions(t *testing.T) {
 		_, err = service.Update(ctx, tenant.ID, p.ID, &Problem{Status: tc.to})
 		require.ErrorContains(t, err, "invalid problem status transition", "Transition %s -> %s should fail", tc.from, tc.to)
 	}
+}
+
+func TestProblemServiceUpdateRejectsDirectCloseUntilResolved(t *testing.T) {
+	client, service, ctx := setupProblemHandlerTest(t)
+	defer client.Close()
+	tenant := createProblemHandlerTenant(t, ctx, client, "update-close")
+	user := createProblemHandlerUser(t, ctx, client, tenant.ID, "update-close")
+
+	rejectedStatuses := []string{"open", "investigating", "identified", "in_progress"}
+	for _, status := range rejectedStatuses {
+		t.Run(status, func(t *testing.T) {
+			p := createProblemHandlerProblem(t, ctx, service, tenant.ID, user.ID)
+			if status != "open" {
+				_, err := client.Problem.UpdateOneID(p.ID).SetStatus(status).Save(ctx)
+				require.NoError(t, err)
+			}
+
+			_, err := service.Update(ctx, tenant.ID, p.ID, &Problem{Status: "closed"})
+			require.ErrorContains(t, err, "invalid problem status transition")
+		})
+	}
+
+	p := createProblemHandlerProblem(t, ctx, service, tenant.ID, user.ID)
+	_, err := client.Problem.UpdateOneID(p.ID).SetStatus("resolved").Save(ctx)
+	require.NoError(t, err)
+
+	updated, err := service.Update(ctx, tenant.ID, p.ID, &Problem{Status: "closed"})
+	require.NoError(t, err)
+	require.Equal(t, "closed", updated.Status)
+	require.NotNil(t, updated.ClosedAt)
+}
+
+func TestProblemServiceCloseProblemRejectsUntilResolved(t *testing.T) {
+	client, service, ctx := setupProblemHandlerTest(t)
+	defer client.Close()
+	tenant := createProblemHandlerTenant(t, ctx, client, "close-method")
+	user := createProblemHandlerUser(t, ctx, client, tenant.ID, "close-method")
+
+	rejectedStatuses := []string{"open", "investigating", "identified", "in_progress"}
+	for _, status := range rejectedStatuses {
+		t.Run(status, func(t *testing.T) {
+			p := createProblemHandlerProblem(t, ctx, service, tenant.ID, user.ID)
+			if status != "open" {
+				_, err := client.Problem.UpdateOneID(p.ID).SetStatus(status).Save(ctx)
+				require.NoError(t, err)
+			}
+
+			_, err := service.CloseProblem(ctx, tenant.ID, p.ID, "final resolution")
+			require.ErrorContains(t, err, "invalid problem status transition")
+		})
+	}
+
+	p := createProblemHandlerProblem(t, ctx, service, tenant.ID, user.ID)
+	_, err := client.Problem.UpdateOneID(p.ID).SetStatus("resolved").Save(ctx)
+	require.NoError(t, err)
+
+	updated, err := service.CloseProblem(ctx, tenant.ID, p.ID, "final resolution")
+	require.NoError(t, err)
+	require.Equal(t, "closed", updated.Status)
+	require.Equal(t, "final resolution", updated.Resolution)
+	require.NotNil(t, updated.ClosedAt)
 }
 
 func TestProblemServiceInvestigationAndSolutions(t *testing.T) {
@@ -277,6 +338,9 @@ func TestProblemServiceInvestigationAndSolutions(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Reduce MTU to 1400", p3.Workaround)
 	assert.Equal(t, "Upgrade switch firmware", p3.Resolution)
+
+	_, err = service.Update(ctx, tenant.ID, p.ID, &Problem{Status: "resolved"})
+	require.NoError(t, err)
 
 	// CloseProblem
 	p4, err := service.CloseProblem(ctx, tenant.ID, p.ID, "Firmware deployed and verified")
@@ -465,6 +529,8 @@ func TestProblemServiceStats(t *testing.T) {
 
 	// Closed + low
 	p4, err := service.Create(ctx, tenant.ID, &Problem{Title: "P4", Priority: "low", CreatedBy: user.ID})
+	require.NoError(t, err)
+	_, err = service.Update(ctx, tenant.ID, p4.ID, &Problem{Status: "resolved"})
 	require.NoError(t, err)
 	_, err = service.CloseProblem(ctx, tenant.ID, p4.ID, "Done")
 	require.NoError(t, err)

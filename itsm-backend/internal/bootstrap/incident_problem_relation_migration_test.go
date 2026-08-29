@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	_ "github.com/lib/pq"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
@@ -57,6 +58,79 @@ func TestPrepareIncidentProblemRelationMigrationSkipsMissingTable(t *testing.T) 
 		err := prepareIncidentProblemRelationMigration(ctx, db, zap.NewNop().Sugar())
 		require.NoError(t, err)
 	})
+}
+
+func TestPrepareIncidentProblemRelationMigrationSQLiteSkipsMissingTable(t *testing.T) {
+	db, err := sql.Open("sqlite3", "file:incident_problem_relation_missing?mode=memory&cache=shared")
+	require.NoError(t, err)
+	defer db.Close()
+
+	err = prepareIncidentProblemRelationMigration(context.Background(), db, zap.NewNop().Sugar())
+	require.NoError(t, err)
+}
+
+func TestPrepareIncidentProblemRelationMigrationSQLiteAllowsExistingTableWithoutDuplicates(t *testing.T) {
+	db, err := sql.Open("sqlite3", "file:incident_problem_relation_unique?mode=memory&cache=shared")
+	require.NoError(t, err)
+	defer db.Close()
+
+	_, err = db.ExecContext(context.Background(), `
+		CREATE TABLE work_item_relations (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			tenant_id INTEGER NOT NULL,
+			source_work_item_id INTEGER NOT NULL,
+			target_work_item_id INTEGER NOT NULL,
+			relation_type TEXT NOT NULL,
+			deleted_at DATETIME
+		)
+	`)
+	require.NoError(t, err)
+	_, err = db.ExecContext(context.Background(), `
+		INSERT INTO work_item_relations
+			(tenant_id, source_work_item_id, target_work_item_id, relation_type, deleted_at)
+		VALUES
+			(1, 10, 20, 'investigated_by', NULL),
+			(1, 11, 30, 'investigated_by', NULL),
+			(1, 10, 40, 'blocks', NULL),
+			(1, 10, 50, 'investigated_by', '2026-08-28 00:00:00')
+	`)
+	require.NoError(t, err)
+
+	err = prepareIncidentProblemRelationMigration(context.Background(), db, zap.NewNop().Sugar())
+	require.NoError(t, err)
+}
+
+func TestPrepareIncidentProblemRelationMigrationSQLiteRejectsDuplicateLiveRelations(t *testing.T) {
+	db, err := sql.Open("sqlite3", "file:incident_problem_relation_duplicate?mode=memory&cache=shared")
+	require.NoError(t, err)
+	defer db.Close()
+
+	_, err = db.ExecContext(context.Background(), `
+		CREATE TABLE work_item_relations (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			tenant_id INTEGER NOT NULL,
+			source_work_item_id INTEGER NOT NULL,
+			target_work_item_id INTEGER NOT NULL,
+			relation_type TEXT NOT NULL,
+			deleted_at DATETIME
+		)
+	`)
+	require.NoError(t, err)
+	_, err = db.ExecContext(context.Background(), `
+		INSERT INTO work_item_relations
+			(tenant_id, source_work_item_id, target_work_item_id, relation_type)
+		VALUES
+			(2, 100, 200, 'investigated_by'),
+			(2, 100, 300, 'investigated_by')
+	`)
+	require.NoError(t, err)
+
+	err = prepareIncidentProblemRelationMigration(context.Background(), db, zap.NewNop().Sugar())
+	require.Error(t, err)
+	require.ErrorContains(t, err, "tenant_id=2")
+	require.ErrorContains(t, err, "source_work_item_id=100")
+	require.ErrorContains(t, err, "target_work_item_ids=[200 300]")
+	require.ErrorContains(t, err, "relation_ids=[1 2]")
 }
 
 func TestPrepareIncidentProblemRelationMigrationRejectsDuplicateLiveRelations(t *testing.T) {

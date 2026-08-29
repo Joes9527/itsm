@@ -6,6 +6,7 @@ import (
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
+	"itsm-backend/middleware"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -105,7 +106,11 @@ func (h *Handler) GetChange(c *gin.Context) {
 	if !ok {
 		return
 	}
-	actor, ok := h.actionActor(c)
+	tenantID, err := middleware.ResolveRequestTenantID(c)
+	if middleware.AbortIfTenantError(c, err) {
+		return
+	}
+	actor, ok := h.actionActor(c, tenantID)
 	if !ok {
 		return
 	}
@@ -121,13 +126,11 @@ func (h *Handler) GetChange(c *gin.Context) {
 	common.Success(c, resp)
 }
 
-func (h *Handler) actionActor(c *gin.Context) (service.ActionActor, bool) {
-	tenantIDVal, tenantOK := c.Get("tenant_id")
+func (h *Handler) actionActor(c *gin.Context, tenantID int) (service.ActionActor, bool) {
 	userIDVal, userOK := c.Get("user_id")
-	tenantID, tenantTypeOK := tenantIDVal.(int)
 	userID, userTypeOK := userIDVal.(int)
 	role := strings.TrimSpace(c.GetString("role"))
-	if !tenantOK || !userOK || !tenantTypeOK || !userTypeOK || tenantID <= 0 || userID <= 0 || role == "" {
+	if !userOK || !userTypeOK || tenantID <= 0 || userID <= 0 || role == "" {
 		common.AuthFailed(c, "认证信息缺失")
 		return service.ActionActor{}, false
 	}
