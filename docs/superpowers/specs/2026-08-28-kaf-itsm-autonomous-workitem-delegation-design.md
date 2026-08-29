@@ -107,7 +107,7 @@ ITSM 在同一事务内创建 `ProcessTask`、审计和 Outbox。KAF 的 `runId`
 
 `KAF automation` 是全局 ITSM 内置自动化主体，但只拥有任务范围权限：可补拉被委派的 `kaf_delegate` 任务、通过 `taskId` 读取其 ticket 上下文，以及提交该任务声明允许的动作。ITSM 始终以关联 `ProcessTask.tenantId` 和 `taskType` 强制租户及任务类型隔离；KAF 不能调用通用 WorkItem 查询或修改 API。
 
-> **现状核查（2026-08-29）**：`ent/schema/process_task.go` 已有 `correlation_id`，但创建委派任务时尚未写入或暴露；仍缺 `version`（乐观锁）和结构化 `allowed_actions`，且与 WorkItem 的关联是经 `ProcessInstance.business_id/business_type` 间接引用，不是直接外键——详见第 11 节 P1-1。「任务范围权限」（KAF 只能操作被委派的那个 `taskId`，不能调用通用 WorkItem API）在现有 RBAC 模型（`middleware/rbac.go` 的 `role+tenant → resource:action` 粗粒度模型）中也没有对应机制，没有按记录/任务实例限权的能力，也没有内置系统账号的字段设计，需要新设计，详见第 11 节 P0-2。
+> **现状核查（2026-08-29）**：`ent/schema/process_task.go` 已有 `correlation_id`，但创建委派任务时尚未写入或暴露；仍缺 `version`（乐观锁）和结构化 `allowed_actions`，且与 WorkItem 的关联是经 `ProcessInstance.business_id/business_type` 间接引用，不是直接外键——详见第 11 节 P1-1。`CustomProcessEngine.authorizeKafAutomationActor` 已在 `complete_bpmn_task` 路径对具体 `ProcessTask` 执行 `kaf_automation` 角色、任务租户和 `delegated` 状态三重校验。`kaf-context` 与 `actions` 端点应提取并复用同一 per-task 授权策略，而非新建 scoped-token 或平行权限体系，详见第 11 节 P0-2。
 
 ## 4. 接口契约
 
@@ -172,7 +172,7 @@ type KafDelegateRequested = {
 - `GET /bpmn/process-tasks/{taskId}/kaf-context`：返回该任务关联的 WorkItem、冻结受理快照、当前 BPMN 等待点、允许动作和当前版本；
 - `POST /bpmn/process-tasks/{taskId}/actions`：提交 typed action；`complete_bpmn_task` 成功时完成关联 `ProcessTask` 并推进 BPMN。
 
-ITSM 必须验证 `KAF automation` 对关联 `ProcessTask` 的 tenant、类型和状态具有权限；上下文仅限完成该任务所需的数据。动作结果返回最新 WorkItem 版本与结构化结果。
+ITSM 必须复用 `authorizeKafAutomationActor` 的 per-task 校验策略：先按 `taskId` 读取 `ProcessTask`，再校验 `kaf_automation` 角色、任务租户、`taskType="kaf_delegate"` 与 `delegated` 状态；上下文仅限完成该任务所需的数据。动作结果返回最新 WorkItem 版本与结构化结果。不能仅依赖通用 `RequirePermission`，也不引入 scoped-token 体系。
 
 ### 4.3 任务绑定的 typed action contract
 
@@ -236,7 +236,7 @@ type RecordExecutionFailure = AutomationActionBase & {
 
 ITSM 按 WorkItem 的既有 `recordClass` 调用对应专业领域服务。这是确定性路由，不是重新智能分类。动作结果必须区分 `applied`、`already_applied`、`stale_version`、`task_not_active`、`forbidden` 与 `domain_rejected`；KAF 刷新上下文并由自身治理策略决定后续行为。
 
-> **现状核查（2026-08-29）**：`ResolveIncident`/`CloseIncident` 内部确实有版本校验和状态机守卫（`incident_service.go`），但版本是方法内部重查得到的，方法签名今天不接受调用方传入 `expectedVersion`——需要先扩展这些方法的签名才能支撑本节的 `stale_version` 语义。更需要注意的是 `AssignIncident` 今天**没有任何版本检查也没有状态机守卫**（已关闭的 Incident 也能被重新指派），本节假设「`assign` 必须通过 ITSM 对目标组、人员和可见性的校验」在这一点上不成立，需要先补齐 `AssignIncident` 的状态/版本守卫，再纳入本 typed action contract。此外这批 Incident/Problem/Change 动作的真实合法性表格正在 [WorkItem parity Phase 4](../plans/2026-08-28-workitem-parity-phase4-actions-spec-scoping.md) 单独设计中，本节的 `resolve`/`close`/`assign` 语义应以该文档的结论为准，避免两份文档对同一批动作给出不一致的判定，详见第 11 节 P1-2。
+> **现状核查（2026-08-29）**：`ResolveIncident`/`CloseIncident` 内部确实有版本校验和状态机守卫（`incident_service.go`），但版本是方法内部重查得到的，方法签名今天不接受调用方传入 `expectedVersion`——需要先扩展这些方法的签名才能支撑本节的 `stale_version` 语义。更需要注意的是 `AssignIncident` 今天**没有任何版本检查也没有状态机守卫**（已关闭的 Incident 也能被重新指派），本节假设「`assign` 必须通过 ITSM 对目标组、人员和可见性的校验」在这一点上不成立，需要在 KAF typed action 的领域服务改造中显式补齐 `AssignIncident` 的状态/版本守卫。WorkItem parity Phase 4 只负责面向人类坐席 UI 的 `ActionPermission` 投影，不能作为自动化动作合法性或并发守卫的权威来源；详见第 11 节 P1-2。
 
 ## 5. 数据治理与审计
 
@@ -244,7 +244,7 @@ ITSM WorkItem 时间线只保存脱敏的执行摘要、Procedure/版本、Tool 
 
 ITSM 不复制原始 prompt、完整对话或 Tool 敏感输出。KAF 返回的证据引用必须可审计但不应泄露凭据、令牌、密码或受保护内容。 `correlationId` 用于关联 KAF session、Langfuse trace、WorkItem、BPMN、ProcessTask、KAF run/step 和 ITSM 审计，而不是绕过权限读取数据的凭据。
 
-> **现状核查（2026-08-29）**：`middleware/audit.go` 已定义 `AuditMiddleware`，但从未在 router 中挂载（`router.go`/`main.go` 均无 `r.Use(...)` 调用），是死代码。本节「审计必须同时记录技术账号、KAF agent、Procedure、run 和步骤」的承诺目前没有生效的审计通路支撑，属于本设计落地前必须先解决的基础设施缺口，详见第 11 节 P0-3。
+> **现状核查（2026-08-29）**：`middleware/audit.go` 已定义 `AuditMiddleware`，但从未在 router 中挂载（`router.go`/`main.go` 均无 `r.Use(...)` 调用）。本链路不以挂载全局中间件为前置条件：参照 `handlers/known_error/handler.go` 的既有模式，在 `kaf-context`/`actions`/`complete_bpmn_task` 等高风险落点由应用服务显式写入 `AuditLog`，记录技术账号、KAF agent、Procedure、run、step 和结果。全局 AuditMiddleware 是否接线是独立的平台治理议题，不阻塞本设计，详见第 11 节 P0-3。
 
 ## 6. 首期专业域行为
 
@@ -331,33 +331,32 @@ UI 验收至少覆盖：入口收敛与旧路由重定向、知识建议后继�
 
 ## 10. 迁移与非目标
 
-现有 `sr_batch` 为旧 ITSM 缺少可靠 CRUD API 时形成的适配链路。首期以 SSLVPN 服务请求验证新链路后，逐步将 `sr_batch` 的执行台账、幂等和 Tool 审计能力迁入 KAF Execution Context 与 ITSM WorkItem 审计；不保留旧工单全文重分类、Web 表单提交、`cticode` 映射或轮询恢复作为长期兼容路径。
+现有 `sr_batch` 为旧 ITSM 缺少可靠 CRUD API 时形成的适配链路。此结论来自 KAF 代码库核查，当前 `itsm-backend` 仓库不包含该实现；详细依据见 [终端用户受理体验分析](2026-08-28-end-user-ticketing-experience-analysis.md)。首期以 SSLVPN 服务请求验证新链路后，逐步将 `sr_batch` 的执行台账、幂等和 Tool 审计能力迁入 KAF Execution Context 与 ITSM WorkItem 审计；不保留旧工单全文重分类、Web 表单提交、`cticode` 映射或轮询恢复作为长期兼容路径。
 
 首期不实现人工接管、用户追问恢复、审批恢复、长期失败补偿、Problem、Change 或复杂失败编排。这些作为后续 backlog 单独设计，避免将人工协作状态机混入 KAF 自主执行主路径。
 
 ## 11. 前置工程条件
 
-本节汇总 §2.1/§2.3/§3.1/§4.3/§5 就地标注的现状核查结论。这份文档描述的是目标态架构；下表列出的条目是**在能从本文档拆出可执行的 `writing-plans` 实现计划之前**必须先完成（或至少先出独立子 spec）的前置工程。架构决策本身不受这些条目影响——它们都是"今天代码里还没有"，不是"设计错了"。
+本节汇总 §2.1/§2.3/§3.1/§4.3/§5 就地标注的现状核查结论。这份文档描述的是目标态架构；P0-1 必须先形成独立技术设计，P0-2 至 P0-4 必须在随后的实现计划中明确落地与验证。架构决策本身不受这些条目影响——它们都是"今天代码里还没有"，不是"设计错了"。
 
 ### P0：阻塞整体链路，必须先落地
 
 | 编号 | 缺口 | 涉及章节 | 说明 |
 |---|---|---|---|
-| P0-1 | 暂停型 `service_task` 的一致性仍未闭环 | §2.3 | 已实现 `AsyncServiceTaskHandler`、`kaf_delegate` 的 `ProcessTask` 暂停/完成恢复和角色校验。仍须将 ProcessTask、审计和 Outbox 放入可靠事务边界；当前缺少可靠事件投递，不能视为完整 KAF 委派链路。 |
-| P0-2 | ITSM 无任务范围（task-scoped）权限模型 | §3.1 | 现有 RBAC 是 `role+tenant → resource:action` 粗粒度模型，没有按单条记录/任务实例限权的机制，也没有内置系统账号的字段设计。`KAF automation`「只拥有任务范围权限」这一安全边界需要新设计（例如绑定单个 `taskId`、短时效的 scoped token），不能假设复用现有 `RequirePermission`。 |
-| P0-3 | `AuditMiddleware` 从未挂载 | §5 | 中间件已定义但未在 router 中启用，是死代码。本设计对审计的全部承诺（技术账号、Procedure、run/step 可追溯）需要这条通路先生效。 |
-| P0-4 | Outbox 模式不存在 | §4.2 | `itsm-backend` 中没有任何 Outbox 表/发布服务的实现，`KafDelegateRequested` 事件的可靠投递需要新建这块基础设施，而不是接入已有能力。 |
-| P0-5 | 幂等键机制不存在 | §4.1/§4.3 | ITSM 没有任何 `idempotencyKey` 的既有实现（现有"幂等"只是局部的唯一索引/状态空操作保护）。`CreateWorkItemCommand.idempotencyKey` 与各 typed action 的幂等键需要新建统一的幂等基础设施，且要与 P0-4 的 Outbox 投递语义配合设计（至少一次投递 + 消费端去重）。 |
+| P0-1 | KAF 委派的事务性投递（Outbox）尚未落地 | §2.3/§3.1/§4.2 | 已实现 `AsyncServiceTaskHandler`、`kaf_delegate` 的 `ProcessTask` 暂停/完成恢复和角色校验；仍须将 ProcessTask 创建、显式审计与 Outbox 记录放入同一事务，并实现 `KafDelegateRequested` 的可靠投递、重试和消费去重。原 P0-1 的流程暂停一致性与原 P0-4 的 Outbox 缺口由同一项设计解决，不单独拆分。 |
+| P0-2 | 任务范围授权尚未覆盖 KAF 新 API | §3.1/§4.2 | `authorizeKafAutomationActor` 已在 `complete_bpmn_task` 对具体任务完成角色、租户和状态校验。新增 `GET kaf-context` 与 `POST actions` 必须复用/提取同一 per-task 授权策略，并补 `taskType="kaf_delegate"` 校验；不新建 scoped-token 或平行权限模型。 |
+| P0-3 | KAF 高风险落点的显式审计尚未实现 | §5 | 不要求挂载全局 `AuditMiddleware`。参照已存在的显式 `AuditLog` 写入模式，在 KAF 上下文读取、typed action 和 BPMN 完成的应用服务落点写入所需审计字段；全局中间件接线另作平台治理。 |
+| P0-4 | 幂等键机制不存在 | §4.1/§4.3 | ITSM 没有任何 `idempotencyKey` 的既有实现（现有"幂等"只是局部的唯一索引/状态空操作保护）。`CreateWorkItemCommand.idempotencyKey` 与各 typed action 的幂等键需要新建统一的幂等基础设施，并与 P0-1 的至少一次投递和消费端去重语义配合设计。 |
 
 ### P1：需要在对应实现计划中显式排期，不阻塞本文档评审通过
 
 | 编号 | 缺口 | 涉及章节 | 说明 |
 |---|---|---|---|
 | P1-1 | `ProcessTask` 执行字段仍未完全落地 | §3.1 | `correlation_id` 已增加，但创建委派任务时尚未写入或暴露；仍缺任务级 version/乐观锁和结构化 `allowed_actions`，且与 WorkItem 是经 `ProcessInstance.business_id/business_type` 间接关联而非直接外键。 |
-| P1-2 | 领域动作方法不支持调用方传入 `expectedVersion`；`AssignIncident` 缺状态/版本守卫 | §4.3 | `ResolveIncident`/`CloseIncident` 的版本校验是方法内部重查，签名不接受外部 `expectedVersion`，需要扩展签名。`AssignIncident` 今天完全没有版本检查或状态机守卫，需要先补齐再纳入本 typed action contract。这批动作的最终合法性表格应与 [WorkItem parity Phase 4](../plans/2026-08-28-workitem-parity-phase4-actions-spec-scoping.md) 的结论对齐，避免两份文档给出不一致的判定。 |
+| P1-2 | 领域动作方法不支持调用方传入 `expectedVersion`；`AssignIncident` 缺状态/版本守卫 | §4.3 | `ResolveIncident`/`CloseIncident` 的版本校验是方法内部重查，签名不接受外部 `expectedVersion`，需要扩展签名。`AssignIncident` 今天完全没有版本检查或状态机守卫，需要在 KAF typed action 落地时先补齐。WorkItem parity Phase 4 仅定义面向人类 UI 的 `ActionPermission`，不承接自动化动作的合法性或并发规则。 |
 | P1-3 | KAF `ProcedureManifest` 缺 version 字段 | §4.3 | `execution.procedureVersion` 是硬性字段，但 KAF 的 `ProcedureManifest`（`src/acp/models/procedure_manifest.py`）今天没有 version 列，需要新增。 |
 | P1-4 | KAF 侧命名空间隔离 | §2.1 | KAF 已有 `src/acp/itsm/` 对接另一套遗留系统（紫羚/Gazellio），新的委派客户端必须使用独立命名空间（如 `acp/itsm_delegate/`），不得复用其认证模式或与之混淆。 |
 | P1-5 | `runId`/`stepId` 与既有 `WorkflowStepLedger` 的关系未定义 | §3（KAF Execution Context） | KAF 已有 `WorkflowStepLedger`（`workflow_id`/`step_index`/`idempotency_key`）承担同样职责，字段命名不同。需要在实现前决定：扩展复用该台账，还是引入平行概念——后者会违反双方 AGENTS.md「不为已有能力再建一套」的原则。 |
 | P1-6 | KAF 新入口在 Layer Map 中的归属未定义 | 全文 | KAF 现有调度是 `TurnPipeline` 对话轮次驱动，`kaf_delegate` 委派由 ITSM 事件/轮询触发，不是对话轮次。需要明确新入口（新 Worker？独立后台服务？）挂在哪一层，以符合 KAF AGENTS.md「downward only」的依赖方向。 |
 
-以上条目中 P0-1、P0-2、P0-3、P0-4、P0-5 建议各自产出独立的技术设计（不必是完整 spec，但至少需要经过一次 `brainstorming` 或等价的设计评审），再回来对本文档做拆解排期；P1 类条目可以在对应领域的实现计划里作为前置 task 处理，不需要单独拦截本文档的评审通过。
+以上条目中 P0-1 应作为一份「KAF 委派事务性投递（Outbox）」技术设计统一处理；P0-2、P0-3、P0-4 可作为该链路实现计划中的明确工作包，并在设计评审中确认复用边界。P1 类条目可以在对应领域的实现计划中作为前置 task 处理，不需要单独拦截本文档的评审通过。
