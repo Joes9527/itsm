@@ -1018,7 +1018,10 @@ func (c *IncidentController) ConvertToProblem(ctx *gin.Context) {
 		return
 	}
 
-	tenantID := ctx.GetInt("tenant_id")
+	tenantID, ok := c.resolveTenantID(ctx)
+	if !ok {
+		return
+	}
 	created, err := c.problemConversionService.CreateFromIncident(
 		ctx.Request.Context(), tenantID, incidentID, userID, req,
 	)

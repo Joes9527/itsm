@@ -17,6 +17,7 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent/enttest"
 	problemDomain "itsm-backend/handlers/problem"
+	"itsm-backend/middleware"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -30,6 +31,7 @@ type fakeProblemConversionService struct {
 	incidentID  int
 	actorUserID int
 	req         dto.ConvertIncidentToProblemRequest
+	called      bool
 }
 
 func (f *fakeProblemConversionService) CreateFromIncident(
@@ -37,6 +39,7 @@ func (f *fakeProblemConversionService) CreateFromIncident(
 	tenantID, incidentID, actorUserID int,
 	req dto.ConvertIncidentToProblemRequest,
 ) (*problemDomain.Problem, error) {
+	f.called = true
 	f.tenantID = tenantID
 	f.incidentID = incidentID
 	f.actorUserID = actorUserID
@@ -91,6 +94,7 @@ func TestConvertToProblemControllerUsesConversionServiceAndPublicMapper(t *testi
 	router.Use(func(c *gin.Context) {
 		c.Set("tenant_id", 19)
 		c.Set("user_id", 73)
+		c.Set(middleware.TenantContextKey, &middleware.TenantContext{TenantID: 19})
 		c.Next()
 	})
 	router.POST("/api/v1/incidents/:id/convert-to-problem", controller.ConvertToProblem)
@@ -115,6 +119,79 @@ func TestConvertToProblemControllerUsesConversionServiceAndPublicMapper(t *testi
 	assert.Equal(t, 27, fake.incidentID)
 	assert.Equal(t, 73, fake.actorUserID)
 	assert.Equal(t, "Custom problem", fake.req.Title)
+}
+
+func TestConvertToProblemControllerUsesAuthorizedMSPCustomerTenant(t *testing.T) {
+	workItemID := 913
+	fake := &fakeProblemConversionService{result: &problemDomain.Problem{
+		ID: 42, Title: "Customer problem", Status: "open", Priority: "high",
+		CreatedBy: 73, TenantID: 200, WorkItemID: &workItemID,
+	}}
+	controller := NewIncidentController(nil, nil, nil, nil, nil, fake, zaptest.NewLogger(t).Sugar())
+	router := gin.New()
+	customerTenantID := 200
+	router.Use(func(c *gin.Context) {
+		c.Set("tenant_id", 500)
+		c.Set("user_id", 73)
+		c.Set(middleware.TenantContextKey, &middleware.TenantContext{TenantID: 500})
+		c.Set(middleware.MSPContextKey, &middleware.MSPContext{
+			IsMSP:            true,
+			MSPUserID:        73,
+			CustomerTenantID: &customerTenantID,
+			AllowedCustomers: []int{200, 300},
+		})
+		c.Next()
+	})
+	router.POST("/api/v1/incidents/:id/convert-to-problem", controller.ConvertToProblem)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/incidents/28/convert-to-problem", bytes.NewReader([]byte(`{}`)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.True(t, fake.called)
+	assert.Equal(t, customerTenantID, fake.tenantID)
+	assert.Equal(t, 28, fake.incidentID)
+}
+
+func TestConvertToProblemControllerDeniesUnauthorizedMSPCustomerTenant(t *testing.T) {
+	workItemID := 914
+	fake := &fakeProblemConversionService{result: &problemDomain.Problem{
+		ID: 43, Title: "Must not be created", Status: "open", Priority: "high",
+		CreatedBy: 73, TenantID: 999, WorkItemID: &workItemID,
+	}}
+	controller := NewIncidentController(nil, nil, nil, nil, nil, fake, zaptest.NewLogger(t).Sugar())
+	router := gin.New()
+	deniedTenantID := 999
+	router.Use(func(c *gin.Context) {
+		c.Set("tenant_id", 500)
+		c.Set("user_id", 73)
+		c.Set(middleware.TenantContextKey, &middleware.TenantContext{TenantID: 500})
+		c.Set(middleware.MSPContextKey, &middleware.MSPContext{
+			IsMSP:            true,
+			MSPUserID:        73,
+			CustomerTenantID: &deniedTenantID,
+			AllowedCustomers: []int{200, 300},
+		})
+		c.Next()
+	})
+	router.POST("/api/v1/incidents/:id/convert-to-problem", controller.ConvertToProblem)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/incidents/29/convert-to-problem", bytes.NewReader([]byte(`{}`)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusForbidden, w.Code)
+	assert.False(t, fake.called, "tenant denial must happen before conversion service invocation")
+	var response struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+	assert.Equal(t, 2003, response.Code)
+	assert.Equal(t, "MSP员工无权访问该客户租户", response.Message)
 }
 
 func TestIncidentController_ListIncidents(t *testing.T) {
