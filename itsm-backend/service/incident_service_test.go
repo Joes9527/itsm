@@ -431,6 +431,86 @@ func TestAssignIncidentRejectsResolvedAndClosed(t *testing.T) {
 	}
 }
 
+func TestAssignIncidentRejectsConcurrentSnapshotChange(t *testing.T) {
+	for _, testCase := range []struct {
+		name       string
+		mutateRace func(context.Context, *ent.Client, int) error
+		assertErr  func(*testing.T, error)
+	}{
+		{
+			name: "terminal status without version bump",
+			mutateRace: func(ctx context.Context, racer *ent.Client, incidentID int) error {
+				return racer.Incident.UpdateOneID(incidentID).
+					SetStatus(common.IncidentStatusResolved).
+					Exec(ctx)
+			},
+			assertErr: func(t *testing.T, err error) {
+				require.ErrorContains(t, err, "resolved or closed incidents cannot be reassigned")
+			},
+		},
+		{
+			name: "version change while status remains eligible",
+			mutateRace: func(ctx context.Context, racer *ent.Client, incidentID int) error {
+				return racer.Incident.UpdateOneID(incidentID).AddVersion(1).Exec(ctx)
+			},
+			assertErr: func(t *testing.T, err error) {
+				var conflict *common.VersionConflictError
+				require.ErrorAs(t, err, &conflict)
+			},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			dsn := testDSN()
+			client := enttest.Open(t, "sqlite3", dsn)
+			defer client.Close()
+			racer, err := ent.Open("sqlite3", dsn)
+			require.NoError(t, err)
+			defer racer.Close()
+			ctx := context.Background()
+			tenant, err := createIncidentTestTenant(ctx, client, "assign-race-"+testCase.name)
+			require.NoError(t, err)
+			reporter, err := createIncidentTestUser(ctx, client, tenant.ID, "assign-race-reporter-"+testCase.name)
+			require.NoError(t, err)
+			assignee, err := createIncidentTestUser(ctx, client, tenant.ID, "assign-race-target-"+testCase.name)
+			require.NoError(t, err)
+			incidentEntity, err := client.Incident.Create().
+				SetTitle("Concurrent assignment").
+				SetStatus(common.IncidentStatusNew).
+				SetIncidentNumber("INC-ASSIGN-RACE-" + testCase.name).
+				SetReporterID(reporter.ID).
+				SetTenantID(tenant.ID).
+				Save(ctx)
+			require.NoError(t, err)
+
+			raced := false
+			client.Incident.Use(func(next ent.Mutator) ent.Mutator {
+				return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+					if !raced {
+						raced = true
+						require.NoError(t, testCase.mutateRace(ctx, racer, incidentEntity.ID))
+					}
+					return next.Mutate(ctx, mutation)
+				})
+			})
+
+			incidentService := NewIncidentService(client, zaptest.NewLogger(t).Sugar())
+			_, err = incidentService.AssignIncident(ctx, incidentEntity.ID, assignee.ID, tenant.ID)
+			require.Error(t, err)
+			testCase.assertErr(t, err)
+			require.True(t, raced)
+
+			persisted, err := client.Incident.Get(ctx, incidentEntity.ID)
+			require.NoError(t, err)
+			require.Zero(t, persisted.AssigneeID)
+			eventCount, err := client.IncidentEvent.Query().
+				Where(incidentevent.IncidentIDEQ(incidentEntity.ID), incidentevent.EventTypeEQ("assignment")).
+				Count(ctx)
+			require.NoError(t, err)
+			require.Zero(t, eventCount)
+		})
+	}
+}
+
 func TestGetIncidentWithActionsUsesOneEntitySnapshot(t *testing.T) {
 	var incidentSelects int
 	countIncidentSelects := func(args ...any) {

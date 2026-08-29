@@ -615,12 +615,32 @@ func (s *IncidentService) AssignIncident(ctx context.Context, id int, assigneeID
 
 	// 更新分配人
 	updatedIncident, err := s.client.Incident.UpdateOneID(id).
-		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
+		Where(
+			incident.TenantIDEQ(tenantID),
+			incident.DeletedAtIsNil(),
+			incident.VersionEQ(current.Version),
+			incident.StatusEQ(current.Status),
+		).
 		SetAssigneeID(assigneeID).
 		SetUpdatedAt(time.Now()).
 		AddVersion(1).
 		Save(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			latest, lookupErr := s.client.Incident.Query().
+				Where(incident.IDEQ(id), incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
+				Only(ctx)
+			if lookupErr == nil {
+				if !canAssignIncidentStatus(latest.Status) {
+					return nil, fmt.Errorf("resolved or closed incidents cannot be reassigned")
+				}
+				return nil, common.NewVersionConflictError("事件", id, current.Version, latest.Version)
+			}
+			if ent.IsNotFound(lookupErr) {
+				return nil, fmt.Errorf("incident not found")
+			}
+			return nil, fmt.Errorf("failed to verify incident assignment conflict: %w", lookupErr)
+		}
 		s.logger.Errorw("Failed to assign incident", "error", err, "id", id)
 		return nil, fmt.Errorf("failed to assign incident: %w", err)
 	}

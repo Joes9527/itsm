@@ -7,6 +7,7 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/workitemrelation"
 	"itsm-backend/middleware"
 )
@@ -74,6 +75,18 @@ func hasIncidentProblemRelation(actor ActionActor, incident *ent.Incident) (bool
 	if incident.WorkItemID <= 0 {
 		return false, fmt.Errorf("incident WorkItem is missing")
 	}
+	ctx := context.Background()
+	_, err := actor.Client.Ticket.Query().
+		Where(
+			ticket.IDEQ(incident.WorkItemID),
+			ticket.TenantIDEQ(actor.TenantID),
+			ticket.RecordClassEQ("incident"),
+			ticket.DeletedAtIsNil(),
+		).
+		Only(ctx)
+	if err != nil {
+		return false, fmt.Errorf("validate incident source WorkItem: %w", err)
+	}
 	return actor.Client.WorkItemRelation.Query().
 		Where(
 			workitemrelation.TenantIDEQ(actor.TenantID),
@@ -81,7 +94,7 @@ func hasIncidentProblemRelation(actor ActionActor, incident *ent.Incident) (bool
 			workitemrelation.RelationTypeEQ("investigated_by"),
 			workitemrelation.DeletedAtIsNil(),
 		).
-		Exist(context.Background())
+		Exist(ctx)
 }
 
 func CanConvertToProblem(actor ActionActor, incident *ent.Incident) dto.ActionPermission {
