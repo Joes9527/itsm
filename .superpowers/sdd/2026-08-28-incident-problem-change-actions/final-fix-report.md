@@ -138,3 +138,35 @@ Verification:
 Residuals:
 
 - `itsm-frontend/test-results/junit.xml` remains dirty and was not staged or committed.
+
+## Final Classifier Edge Fix
+
+Date: 2026-08-29
+Head before fix: `8ad7c095`
+Fix commit: `d79fc408 fix(bootstrap): match sqlite missing table exactly`
+
+Changed files:
+
+- `itsm-backend/internal/bootstrap/incident_problem_relation_migration.go`
+- `itsm-backend/internal/bootstrap/incident_problem_relation_migration_test.go`
+
+Result:
+
+- Replaced SQLite `strings.Contains` classification with `strings.HasSuffix(strings.TrimSpace(strings.ToLower(err.Error())), "no such table: work_item_relations")`.
+- Legitimate wrapped target messages still classify because wrapper prefixes end with the exact target message.
+- Similar table names such as `work_item_relations_backup` and `prefix_work_item_relations` no longer classify as a missing target table.
+- Exact target text followed by punctuation is rejected.
+
+Verification:
+
+- Red: `cd itsm-backend && go test ./internal/bootstrap -run TestIsMissingTableErrorStrictClassification -count=1` failed before the fix on suffix/punctuation false positives.
+- Green: `cd itsm-backend && go test ./internal/bootstrap -run 'Test(IsMissingTableErrorStrictClassification|PrepareIncidentProblemRelationMigration)' -count=1` passed.
+- `cd itsm-backend && go test ./internal/bootstrap -count=1` passed.
+- `cd itsm-backend && go test ./internal/bootstrap ./ent/schema ./handlers/problem ./handlers/change ./controller ./service -count=1` passed.
+- `cd itsm-backend && go vet ./...` passed.
+- `cd itsm-backend && go build ./...` passed.
+- `git diff --check` passed.
+
+Residuals:
+
+- `itsm-frontend/test-results/junit.xml` remains dirty and was not staged or committed.
