@@ -105,3 +105,36 @@ Combined commands:
 - `itsm-frontend/test-results/junit.xml` was dirty before this wave and was not staged or committed.
 - Focused Jest runs still emit existing Ant Design static `message` context warnings from Incident/Problem success paths. They do not fail the requested Jest bundle and were outside this fix wave.
 - Optional Incident backend relation-check context threading was not included because it would require changing authorization signatures and tests outside the exact touched backend finding scope.
+
+## Final Re-review Fix
+
+Date: 2026-08-29
+Head before fix: `c8f0ec60`
+Fix commit: `8f280d8c fix(bootstrap): narrow missing relation table detection`
+
+Changed files:
+
+- `itsm-backend/internal/bootstrap/incident_problem_relation_migration.go`
+- `itsm-backend/internal/bootstrap/incident_problem_relation_migration_test.go`
+
+Result:
+
+- Removed broad `does not exist` and `undefined_table` string matching from `isMissingTableError`.
+- Added a production-local `SQLState() string` interface and `errors.As` classification for PostgreSQL undefined-table errors only when SQLSTATE is `42P01`.
+- Restricted SQLite missing-table classification to the target-specific normalized message `no such table: work_item_relations`.
+- Added focused classifier tests for nil, target SQLite missing table, PostgreSQL SQLSTATE `42P01`, wrapped variants, unrelated `resource does not exist`, different SQLite table, other SQLSTATE, syntax error, and connection failure.
+- Retained the real SQLite preflight coverage for fresh missing table, valid existing table, and duplicate live relation diagnostics.
+
+Verification:
+
+- Red: `cd itsm-backend && go test ./internal/bootstrap -run TestIsMissingTableErrorStrictClassification -count=1` failed before the fix because unrelated `resource does not exist` and `no such table: service_requests` returned true.
+- Green: `cd itsm-backend && go test ./internal/bootstrap -run 'Test(IsMissingTableErrorStrictClassification|PrepareIncidentProblemRelationMigration)' -count=1` passed.
+- `cd itsm-backend && go test ./internal/bootstrap -count=1` passed.
+- `cd itsm-backend && go test ./internal/bootstrap ./ent/schema ./handlers/problem ./handlers/change ./controller ./service -count=1` passed.
+- `cd itsm-backend && go vet ./...` passed.
+- `cd itsm-backend && go build ./...` passed.
+- `git diff --check` passed.
+
+Residuals:
+
+- `itsm-frontend/test-results/junit.xml` remains dirty and was not staged or committed.
