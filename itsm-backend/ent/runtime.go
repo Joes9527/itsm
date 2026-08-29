@@ -60,6 +60,7 @@ import (
 	"itsm-backend/ent/mspallocation"
 	"itsm-backend/ent/notification"
 	"itsm-backend/ent/notificationpreference"
+	"itsm-backend/ent/outboxevent"
 	"itsm-backend/ent/passwordresettoken"
 	"itsm-backend/ent/permission"
 	"itsm-backend/ent/permissiondefinition"
@@ -1980,6 +1981,50 @@ func init() {
 	notificationpreference.DefaultUpdatedAt = notificationpreferenceDescUpdatedAt.Default.(func() time.Time)
 	// notificationpreference.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	notificationpreference.UpdateDefaultUpdatedAt = notificationpreferenceDescUpdatedAt.UpdateDefault.(func() time.Time)
+	outboxeventFields := schema.OutboxEvent{}.Fields()
+	_ = outboxeventFields
+	// outboxeventDescEventID is the schema descriptor for event_id field.
+	outboxeventDescEventID := outboxeventFields[0].Descriptor()
+	// outboxevent.EventIDValidator is a validator for the "event_id" field. It is called by the builders before save.
+	outboxevent.EventIDValidator = outboxeventDescEventID.Validators[0].(func(string) error)
+	// outboxeventDescEventType is the schema descriptor for event_type field.
+	outboxeventDescEventType := outboxeventFields[1].Descriptor()
+	// outboxevent.EventTypeValidator is a validator for the "event_type" field. It is called by the builders before save.
+	outboxevent.EventTypeValidator = outboxeventDescEventType.Validators[0].(func(string) error)
+	// outboxeventDescTenantID is the schema descriptor for tenant_id field.
+	outboxeventDescTenantID := outboxeventFields[2].Descriptor()
+	// outboxevent.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	outboxevent.TenantIDValidator = outboxeventDescTenantID.Validators[0].(func(int) error)
+	// outboxeventDescAggregateType is the schema descriptor for aggregate_type field.
+	outboxeventDescAggregateType := outboxeventFields[3].Descriptor()
+	// outboxevent.AggregateTypeValidator is a validator for the "aggregate_type" field. It is called by the builders before save.
+	outboxevent.AggregateTypeValidator = outboxeventDescAggregateType.Validators[0].(func(string) error)
+	// outboxeventDescAggregateID is the schema descriptor for aggregate_id field.
+	outboxeventDescAggregateID := outboxeventFields[4].Descriptor()
+	// outboxevent.AggregateIDValidator is a validator for the "aggregate_id" field. It is called by the builders before save.
+	outboxevent.AggregateIDValidator = outboxeventDescAggregateID.Validators[0].(func(string) error)
+	// outboxeventDescStatus is the schema descriptor for status field.
+	outboxeventDescStatus := outboxeventFields[6].Descriptor()
+	// outboxevent.DefaultStatus holds the default value on creation for the status field.
+	outboxevent.DefaultStatus = outboxeventDescStatus.Default.(string)
+	// outboxeventDescAttemptCount is the schema descriptor for attempt_count field.
+	outboxeventDescAttemptCount := outboxeventFields[7].Descriptor()
+	// outboxevent.DefaultAttemptCount holds the default value on creation for the attempt_count field.
+	outboxevent.DefaultAttemptCount = outboxeventDescAttemptCount.Default.(int)
+	// outboxeventDescNextAttemptAt is the schema descriptor for next_attempt_at field.
+	outboxeventDescNextAttemptAt := outboxeventFields[8].Descriptor()
+	// outboxevent.DefaultNextAttemptAt holds the default value on creation for the next_attempt_at field.
+	outboxevent.DefaultNextAttemptAt = outboxeventDescNextAttemptAt.Default.(func() time.Time)
+	// outboxeventDescCreatedAt is the schema descriptor for created_at field.
+	outboxeventDescCreatedAt := outboxeventFields[11].Descriptor()
+	// outboxevent.DefaultCreatedAt holds the default value on creation for the created_at field.
+	outboxevent.DefaultCreatedAt = outboxeventDescCreatedAt.Default.(func() time.Time)
+	// outboxeventDescUpdatedAt is the schema descriptor for updated_at field.
+	outboxeventDescUpdatedAt := outboxeventFields[12].Descriptor()
+	// outboxevent.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	outboxevent.DefaultUpdatedAt = outboxeventDescUpdatedAt.Default.(func() time.Time)
+	// outboxevent.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	outboxevent.UpdateDefaultUpdatedAt = outboxeventDescUpdatedAt.UpdateDefault.(func() time.Time)
 	passwordresettokenFields := schema.PasswordResetToken{}.Fields()
 	_ = passwordresettokenFields
 	// passwordresettokenDescToken is the schema descriptor for token field.
