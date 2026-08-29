@@ -126,86 +126,28 @@ jest.mock('dayjs', () => {
 
 if (typeof globalThis.MessageChannel === 'undefined') {
   const { MessageChannel: NodeMessageChannel } = require('node:worker_threads');
+  const openMessageChannels = new Set();
 
-  class TestMessagePort {
-    constructor(port) {
-      this.port = port;
-      this.peer = null;
-      this.port.unref?.();
-    }
-
-    setPeer(peer) {
-      this.peer = peer;
-    }
-
-    get onmessage() {
-      return this.port.onmessage;
-    }
-
-    set onmessage(handler) {
-      this.port.onmessage = handler;
-      // Attaching listeners can re-reference native ports, so immediately unref again.
-      this.port.unref?.();
-    }
-
-    get onmessageerror() {
-      return this.port.onmessageerror;
-    }
-
-    set onmessageerror(handler) {
-      this.port.onmessageerror = handler;
-      this.port.unref?.();
-    }
-
-    addEventListener(...args) {
-      const result = this.port.addEventListener(...args);
-      this.port.unref?.();
-      return result;
-    }
-
-    removeEventListener(...args) {
-      return this.port.removeEventListener(...args);
-    }
-
-    dispatchEvent(...args) {
-      return this.port.dispatchEvent(...args);
-    }
-
-    postMessage(...args) {
-      const result = this.port.postMessage(...args);
-      this.port.unref?.();
-      this.peer?.port?.unref?.();
-      return result;
-    }
-
-    start(...args) {
-      const result = this.port.start?.(...args);
-      this.port.unref?.();
-      return result;
-    }
-
-    close(...args) {
-      return this.port.close(...args);
-    }
-
-    ref(...args) {
-      return this.port.ref?.(...args);
-    }
-
-    unref(...args) {
-      return this.port.unref?.(...args);
+  // React scheduler expects native MessageChannel delivery ordering, but Node ports
+  // keep Jest open until we deterministically close them after each test file.
+  class TestMessageChannel {
+    constructor() {
+      const channel = new NodeMessageChannel();
+      this.port1 = channel.port1;
+      this.port2 = channel.port2;
+      openMessageChannels.add(this);
     }
   }
 
-  globalThis.MessageChannel = class TestMessageChannel {
-    constructor() {
-      const channel = new NodeMessageChannel();
-      this.port1 = new TestMessagePort(channel.port1);
-      this.port2 = new TestMessagePort(channel.port2);
-      this.port1.setPeer(this.port2);
-      this.port2.setPeer(this.port1);
+  globalThis.MessageChannel = TestMessageChannel;
+
+  afterAll(() => {
+    for (const channel of openMessageChannels) {
+      channel.port1.close();
+      channel.port2.close();
     }
-  };
+    openMessageChannels.clear();
+  });
 }
 
 // Mock Next.js router
