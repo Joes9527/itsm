@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"testing"
 
+	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
@@ -331,6 +332,59 @@ func TestGetApprovalHistory_PropagatesError(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(t, float64(5001), resp["code"], "service error must surface as InternalErrorCode 5001")
 	assert.Contains(t, resp["message"], "查询审批历史失败")
+}
+
+func TestBPMNErrorHTTPAuthorizationStatus(t *testing.T) {
+	cases := []struct {
+		name        string
+		err         error
+		fallback    string
+		wantStatus  int
+		wantCode    int
+		wantMessage string
+	}{
+		{
+			name: "wrapped forbidden", err: errors.Join(errors.New("authorization failed"), common.NewForbiddenError("forbidden")),
+			fallback: "operation failed", wantStatus: http.StatusForbidden, wantCode: common.ForbiddenCode, wantMessage: "forbidden",
+		},
+		{
+			name: "not found", err: common.NewNotFoundError("process instance"),
+			fallback: "operation failed", wantStatus: http.StatusNotFound, wantCode: common.NotFoundCode, wantMessage: "process instance not found",
+		},
+		{
+			name: "validation", err: common.NewValidationError("invalid input", errors.New("private validation detail")),
+			fallback: "operation failed", wantStatus: http.StatusBadRequest, wantCode: common.ParamErrorCode, wantMessage: "invalid input",
+		},
+		{
+			name: "bad request", err: common.NewBadRequestError("bad input", errors.New("private request detail")),
+			fallback: "operation failed", wantStatus: http.StatusBadRequest, wantCode: common.ParamErrorCode, wantMessage: "bad input",
+		},
+		{
+			name: "conflict", err: common.NewConflictError("vote", "private conflict detail"),
+			fallback: "operation failed", wantStatus: http.StatusConflict, wantCode: common.ConflictCode, wantMessage: "vote already exists",
+		},
+		{
+			name: "unknown", err: errors.New("SELECT * FROM tenants WHERE secret = 'task-variable-secret'"),
+			fallback: "operation failed", wantStatus: http.StatusInternalServerError, wantCode: common.InternalErrorCode, wantMessage: "operation failed",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			ctx, _ := gin.CreateTestContext(recorder)
+			respondBPMNError(ctx, tc.err, tc.fallback)
+
+			assert.Equal(t, tc.wantStatus, recorder.Code, recorder.Body.String())
+			var response common.Response
+			require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
+			assert.Equal(t, tc.wantCode, response.Code)
+			assert.Equal(t, tc.wantMessage, response.Message)
+			assert.NotContains(t, recorder.Body.String(), "private")
+			assert.NotContains(t, recorder.Body.String(), "SELECT")
+			assert.NotContains(t, recorder.Body.String(), "task-variable-secret")
+		})
+	}
 }
 
 // silence unused-import lint on strconv when feature is dropped

@@ -147,7 +147,7 @@ func (c *BPMNProcessTriggerController) CancelProcess(ctx *gin.Context) {
 
 	err = c.triggerService.CancelProcess(workflowCtx, instanceID, req.Reason, tenantID)
 	if err != nil {
-		common.Fail(ctx, 5001, err.Error())
+		respondBPMNError(ctx, err, "取消流程失败")
 		return
 	}
 
@@ -174,7 +174,7 @@ func (c *BPMNProcessTriggerController) SuspendProcess(ctx *gin.Context) {
 
 	err = c.triggerService.SuspendProcess(workflowCtx, instanceID, req.Reason, tenantID)
 	if err != nil {
-		common.Fail(ctx, 5001, err.Error())
+		respondBPMNError(ctx, err, "暂停流程失败")
 		return
 	}
 
@@ -196,7 +196,7 @@ func (c *BPMNProcessTriggerController) ResumeProcess(ctx *gin.Context) {
 
 	err = c.triggerService.ResumeProcess(workflowCtx, instanceID, tenantID)
 	if err != nil {
-		common.Fail(ctx, 5001, err.Error())
+		respondBPMNError(ctx, err, "恢复流程失败")
 		return
 	}
 

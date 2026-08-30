@@ -162,7 +162,7 @@ func TestBPMNProcessTriggerMutationsUseTrustedUpdateScope(t *testing.T) {
 	}
 }
 
-func TestBPMNProcessTriggerMutationsRequireUpdatePermission(t *testing.T) {
+func TestBPMNProcessTriggerHTTPAuthorizationStatus(t *testing.T) {
 	f := newProcessTriggerMutationHTTPFixture(t)
 	tests := []struct {
 		name, route, initialStatus string
@@ -175,9 +175,16 @@ func TestBPMNProcessTriggerMutationsRequireUpdatePermission(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			instance := f.seedInstance(t, "denied-"+tt.name, tt.initialStatus)
-			_, response := performProcessTriggerMutationRequest(t, f.router(f.endUser, "end_user"), fmt.Sprintf("/api/v1/process-trigger/%s/%d", tt.route, instance.ID))
+			recorder, response := performProcessTriggerMutationRequest(t, f.router(f.endUser, "end_user"), fmt.Sprintf("/api/v1/process-trigger/%s/%d", tt.route, instance.ID))
+			assert.Equal(t, http.StatusForbidden, recorder.Code, recorder.Body.String())
+			assert.Equal(t, common.ForbiddenCode, response.Code)
 			assert.NotEqual(t, common.SuccessCode, response.Code)
 			assert.Contains(t, response.Message, "无权修改流程实例")
+			assert.NotContains(t, recorder.Body.String(), f.tenant.Code)
+			assert.NotContains(t, recorder.Body.String(), "tenant_id")
+			assert.NotContains(t, recorder.Body.String(), "candidate")
+			assert.NotContains(t, recorder.Body.String(), "SELECT")
+			assert.NotContains(t, recorder.Body.String(), "variables")
 
 			after, err := f.client.ProcessInstance.Get(context.Background(), instance.ID)
 			require.NoError(t, err)

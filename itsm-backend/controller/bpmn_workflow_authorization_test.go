@@ -1,11 +1,14 @@
 package controller
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -286,4 +289,218 @@ func TestListUserTasksHTTPRejectsFilterOverride(t *testing.T) {
 	require.Equal(t, 1, response.Data.Pagination.Total)
 	require.Len(t, response.Data.Data, 1)
 	assert.Equal(t, "controller-task-mine", response.Data.Data[0].TaskID)
+}
+
+type bpmnHTTPAuthorizationFixture struct {
+	client      *ent.Client
+	router      *gin.Engine
+	tenant      *ent.Tenant
+	otherTenant *ent.Tenant
+	actors      map[string]*ent.User
+	task        *ent.ProcessTask
+}
+
+func newBPMNHTTPAuthorizationFixture(t *testing.T) *bpmnHTTPAuthorizationFixture {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	client := enttest.Open(t, "sqlite3", fmt.Sprintf("file:bpmn_http_authorization_%d?mode=memory&cache=shared&_fk=1", time.Now().UnixNano()))
+	t.Cleanup(func() { require.NoError(t, client.Close()) })
+	middleware.InvalidateAllPermissionCaches()
+	t.Cleanup(middleware.InvalidateAllPermissionCaches)
+
+	dbCtx := context.Background()
+	createTenant := func(code string) *ent.Tenant {
+		tenant, err := client.Tenant.Create().SetCode(code).SetName(code).SetStatus("active").Save(dbCtx)
+		require.NoError(t, err)
+		return tenant
+	}
+	tenant := createTenant("bpmn-http-auth")
+	otherTenant := createTenant("bpmn-http-auth-other")
+	createUser := func(name, role string, tenantID int) *ent.User {
+		user, err := client.User.Create().
+			SetUsername(name).
+			SetEmail(name + "@example.test").
+			SetName(name).
+			SetPasswordHash("test").
+			SetRole(role).
+			SetActive(true).
+			SetTenantID(tenantID).
+			Save(dbCtx)
+		require.NoError(t, err)
+		return user
+	}
+	actors := map[string]*ent.User{
+		"participant":         createUser("http.participant", "end_user", tenant.ID),
+		"outsider":            createUser("http.outsider", "end_user", tenant.ID),
+		"other_tenant":        createUser("http.other.tenant", "end_user", otherTenant.ID),
+		"other_tenant_reader": createUser("http.other.tenant.reader", "super_admin", otherTenant.ID),
+		"instance_updater":    createUser("http.instance.updater", "super_admin", tenant.ID),
+		"instance_reader":     createUser("http.instance.reader", "super_admin", tenant.ID),
+		"task_reader":         createUser("http.task.reader", "super_admin", tenant.ID),
+		"task_owner":          createUser("http.task.owner", "end_user", tenant.ID),
+	}
+
+	deployment, err := client.ProcessDeployment.Create().
+		SetDeploymentID("HTTP-AUTH-DEPLOYMENT").
+		SetDeploymentName("HTTP authorization deployment").
+		SetTenantID(tenant.ID).
+		Save(dbCtx)
+	require.NoError(t, err)
+	definition, err := client.ProcessDefinition.Create().
+		SetKey("http_authorization").
+		SetName("HTTP authorization").
+		SetBpmnXML([]byte("<definitions/>")).
+		SetDeploymentID(deployment.ID).
+		SetTenantID(tenant.ID).
+		Save(dbCtx)
+	require.NoError(t, err)
+	instance, err := client.ProcessInstance.Create().
+		SetProcessInstanceID("PI-1").
+		SetProcessDefinitionKey(definition.Key).
+		SetProcessDefinitionID(definition.ID).
+		SetCurrentActivityID("approval").
+		SetCurrentActivityName("Approval").
+		SetVariables(map[string]interface{}{"privateVariable": "task-variable-secret"}).
+		SetTenantID(tenant.ID).
+		Save(dbCtx)
+	require.NoError(t, err)
+	_, err = client.ProcessTask.Create().
+		SetTaskID("TASK-PARTICIPANT").
+		SetProcessInstanceID(instance.ID).
+		SetProcessDefinitionKey(definition.Key).
+		SetTaskDefinitionKey("participant-task").
+		SetTaskName("Participant task").
+		SetCandidateUsers(actors["participant"].Username).
+		SetTenantID(tenant.ID).
+		Save(dbCtx)
+	require.NoError(t, err)
+	task, err := client.ProcessTask.Create().
+		SetTaskID("TASK-OTHER-ACTOR").
+		SetProcessInstanceID(instance.ID).
+		SetProcessDefinitionKey(definition.Key).
+		SetTaskDefinitionKey("other-actor-task").
+		SetTaskName("Other actor task").
+		SetAssignee(strconv.Itoa(actors["task_owner"].ID)).
+		SetCandidateGroups("sensitive-candidate-expression").
+		SetTaskVariables(map[string]interface{}{"privateVariable": "task-variable-secret"}).
+		SetTenantID(tenant.ID).
+		Save(dbCtx)
+	require.NoError(t, err)
+
+	engine := service.NewCustomProcessEngine(client, zap.NewNop().Sugar())
+	controller := NewBPMNWorkflowController(engine, nil)
+	router := gin.New()
+	api := router.Group("/api/v1")
+	api.Use(func(ctx *gin.Context) {
+		actorName := ctx.GetHeader("X-Test-Actor")
+		actor := actors[actorName]
+		require.NotNil(t, actor, "unknown test actor %q", actorName)
+		actorTenant := tenant
+		if actorName == "other_tenant" || actorName == "other_tenant_reader" {
+			actorTenant = otherTenant
+		}
+		requestCtx := middleware.WithAuthenticatedTenantID(ctx.Request.Context(), actorTenant.ID)
+		ctx.Request = ctx.Request.WithContext(requestCtx)
+		ctx.Set("tenant_id", actorTenant.ID)
+		ctx.Set("user_id", actor.ID)
+		ctx.Set("role", actor.Role)
+		ctx.Set("client", client)
+		ctx.Next()
+	})
+	controller.RegisterRoutes(api)
+	workflow := api.Group("/workflow")
+	workflow.GET("/instances", middleware.RequirePermission("process_instance", "read"), controller.ListProcessInstances)
+	workflow.GET("/instances/:id", middleware.RequirePermission("process_instance", "read"), controller.GetProcessInstance)
+	workflow.POST("/instances", middleware.RequirePermission("process_instance", "create"), controller.StartProcess)
+	workflow.PUT("/instances/:id/terminate", middleware.RequirePermission("process_instance", "update"), controller.TerminateProcess)
+	workflow.PUT("/instances/:id/suspend", middleware.RequirePermission("process_instance", "update"), controller.SuspendProcess)
+	workflow.PUT("/instances/:id/resume", middleware.RequirePermission("process_instance", "update"), controller.ResumeProcess)
+	workflow.GET("/tasks", middleware.RequirePermission("task", "read"), controller.ListUserTasks)
+	workflow.PUT("/tasks/:id/complete", middleware.RequirePermission("task", "update"), controller.CompleteTask)
+	workflow.POST("/tasks/:id/claim", middleware.RequirePermission("task", "update"), controller.ClaimTask)
+
+	return &bpmnHTTPAuthorizationFixture{
+		client: client, router: router, tenant: tenant, otherTenant: otherTenant, actors: actors, task: task,
+	}
+}
+
+func (f *bpmnHTTPAuthorizationFixture) seedTaskForOtherActor() *ent.ProcessTask {
+	return f.task
+}
+
+func (f *bpmnHTTPAuthorizationFixture) doAsActor(t *testing.T, actor, method, path, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	if body == "" && method == http.MethodPut {
+		body = `{"reason":"maintenance"}`
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(method, path, bytes.NewBufferString(body))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-Test-Actor", actor)
+	f.router.ServeHTTP(recorder, request)
+	return recorder
+}
+
+func assertBPMNDenialBodyIsSafe(t *testing.T, response *httptest.ResponseRecorder, secrets ...string) {
+	t.Helper()
+	body := strings.ToLower(response.Body.String())
+	for _, secret := range secrets {
+		assert.NotContains(t, body, strings.ToLower(secret), response.Body.String())
+	}
+}
+
+func TestBPMNTaskHTTPAuthorizationStatus(t *testing.T) {
+	f := newBPMNHTTPAuthorizationFixture(t)
+	task := f.seedTaskForOtherActor()
+	cases := []struct{ method, path, body string }{
+		{http.MethodGet, "/api/v1/bpmn/tasks/" + task.TaskID, ""},
+		{http.MethodPut, "/api/v1/bpmn/tasks/" + task.TaskID + "/assign", `{"assignee":"7"}`},
+		{http.MethodPut, "/api/v1/bpmn/tasks/" + task.TaskID + "/cancel", `{"reason":"x"}`},
+		{http.MethodPut, "/api/v1/bpmn/tasks/" + task.TaskID + "/variables", `{"variables":{"x":1}}`},
+	}
+	for _, tc := range cases {
+		resp := f.doAsActor(t, "outsider", tc.method, tc.path, tc.body)
+		assert.Equal(t, http.StatusForbidden, resp.Code, tc.path+": "+resp.Body.String())
+		assertBPMNDenialBodyIsSafe(t, resp,
+			f.tenant.Code, f.otherTenant.Code,
+			fmt.Sprintf(`"tenantId":%d`, f.tenant.ID), fmt.Sprintf(`"tenantId":%d`, f.otherTenant.ID),
+			fmt.Sprintf("tenant_id=%d", f.tenant.ID), fmt.Sprintf("tenant_id=%d", f.otherTenant.ID),
+			"sensitive-candidate-expression", "select ", "sql", "task-variable-secret", "privateVariable",
+		)
+	}
+}
+
+func TestBPMNInstanceAndRouteHTTPAuthorizationStatus(t *testing.T) {
+	f := newBPMNHTTPAuthorizationFixture(t)
+	cases := []struct {
+		actor, method, path string
+		want                int
+	}{
+		{"participant", http.MethodGet, "/api/v1/bpmn/process-instances/PI-1", http.StatusOK},
+		{"outsider", http.MethodGet, "/api/v1/bpmn/process-instances/PI-1", http.StatusForbidden},
+		{"other_tenant", http.MethodGet, "/api/v1/bpmn/process-instances/PI-1", http.StatusNotFound},
+		{"outsider", http.MethodGet, "/api/v1/bpmn/process-instances/PI-1/approval-history", http.StatusForbidden},
+		{"other_tenant", http.MethodGet, "/api/v1/bpmn/process-instances/PI-1/approval-history", http.StatusNotFound},
+		{"instance_updater", http.MethodPut, "/api/v1/bpmn/process-instances/PI-1/suspend", http.StatusOK},
+		{"participant", http.MethodPut, "/api/v1/bpmn/process-instances/PI-1/suspend", http.StatusForbidden},
+		{"participant", http.MethodGet, "/api/v1/bpmn/stats/instances", http.StatusForbidden},
+		{"task_reader", http.MethodGet, "/api/v1/bpmn/stats/tasks", http.StatusOK},
+		{"participant", http.MethodGet, "/api/v1/workflow/instances", http.StatusForbidden},
+		{"instance_reader", http.MethodGet, "/api/v1/workflow/instances", http.StatusOK},
+		{"other_tenant_reader", http.MethodGet, "/api/v1/workflow/instances/PI-1", http.StatusNotFound},
+	}
+	for _, tc := range cases {
+		t.Run(tc.actor+"_"+tc.method+"_"+strings.TrimPrefix(tc.path, "/api/v1/"), func(t *testing.T) {
+			resp := f.doAsActor(t, tc.actor, tc.method, tc.path, "")
+			assert.Equal(t, tc.want, resp.Code, tc.path+": "+resp.Body.String())
+			if tc.want == http.StatusForbidden || tc.want == http.StatusNotFound {
+				assertBPMNDenialBodyIsSafe(t, resp,
+					f.tenant.Code, f.otherTenant.Code,
+					fmt.Sprintf(`"tenantId":%d`, f.tenant.ID), fmt.Sprintf(`"tenantId":%d`, f.otherTenant.ID),
+					fmt.Sprintf("tenant_id=%d", f.tenant.ID), fmt.Sprintf("tenant_id=%d", f.otherTenant.ID),
+					"sensitive-candidate-expression", "select ", "sql", "task-variable-secret", "privateVariable",
+				)
+			}
+		})
+	}
 }

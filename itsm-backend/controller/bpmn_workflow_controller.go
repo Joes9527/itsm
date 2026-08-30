@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"itsm-backend/service/bpmn"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 // BPMNWorkflowController BPMN工作流控制器
@@ -60,6 +62,32 @@ func getBPMNTenantContext(ctx *gin.Context) (context.Context, int, bool) {
 	reqCtx = context.WithValue(reqCtx, bpmn.BPMNUserIDContextKey, userID)
 	reqCtx = service.WithBPMNAccessScope(reqCtx, scope)
 	return reqCtx, tenantID, true
+}
+
+func respondBPMNError(ctx *gin.Context, err error, fallback string) {
+	zap.S().Warnw("BPMN request failed", "operation", fallback, "error", err)
+
+	var appErr *common.AppError
+	if errors.As(err, &appErr) {
+		switch appErr.Code {
+		case common.ErrCodeForbidden:
+			common.Forbidden(ctx, appErr.Message)
+		case common.ErrCodeNotFound:
+			common.NotFound(ctx, appErr.Message)
+		case common.ErrCodeBadRequest, common.ErrCodeValidation:
+			common.Fail(ctx, common.ParamErrorCode, appErr.Message)
+		case common.ErrCodeConflict:
+			common.Fail(ctx, common.ConflictCode, appErr.Message)
+		default:
+			common.InternalError(ctx, fallback)
+		}
+		return
+	}
+	if ent.IsNotFound(err) {
+		common.NotFound(ctx, fallback)
+		return
+	}
+	common.InternalError(ctx, fallback)
 }
 
 // RegisterRoutes 注册路由
@@ -142,7 +170,7 @@ func (c *BPMNWorkflowController) GetApprovalHistory(ctx *gin.Context) {
 	}
 	decisions, err := c.processEngine.TaskService().ListApprovalDecisions(workflowCtx, ctx.Param("id"))
 	if err != nil {
-		common.InternalError(ctx, "查询审批历史失败: "+err.Error())
+		respondBPMNError(ctx, err, "查询审批历史失败")
 		return
 	}
 	common.Success(ctx, dto.ToProcessApprovalDecisionResponseList(decisions))
@@ -183,7 +211,7 @@ func (c *BPMNWorkflowController) SubmitTaskDecision(ctx *gin.Context) {
 		err = c.processEngine.TaskService().CompleteTask(workflowCtx, taskID, variables)
 	}
 	if err != nil {
-		common.Fail(ctx, common.ParamErrorCode, "提交审批决策失败: "+err.Error())
+		respondBPMNError(ctx, err, "提交审批决策失败")
 		return
 	}
 	common.SuccessWithMessage(ctx, "审批决策提交成功", nil)
@@ -465,7 +493,7 @@ func (c *BPMNWorkflowController) StartProcess(ctx *gin.Context) {
 
 	instance, err := c.processEngine.StartProcess(workflowCtx, req.ProcessDefinitionKey, req.BusinessKey, "", 0, req.Variables)
 	if err != nil {
-		common.InternalError(ctx, "启动流程实例失败: "+err.Error())
+		respondBPMNError(ctx, err, "启动流程实例失败")
 		return
 	}
 
@@ -496,7 +524,7 @@ func (c *BPMNWorkflowController) ListProcessInstances(ctx *gin.Context) {
 
 	instances, total, err := c.processEngine.ProcessInstanceService().ListProcessInstances(workflowCtx, &req)
 	if err != nil {
-		common.InternalError(ctx, "获取流程实例列表失败: "+err.Error())
+		respondBPMNError(ctx, err, "获取流程实例列表失败")
 		return
 	}
 
@@ -518,7 +546,7 @@ func (c *BPMNWorkflowController) GetProcessInstance(ctx *gin.Context) {
 
 	instance, err := c.processEngine.ProcessInstanceService().GetProcessInstance(workflowCtx, processInstanceID)
 	if err != nil {
-		common.NotFound(ctx, "流程实例不存在: "+err.Error())
+		respondBPMNError(ctx, err, "流程实例不存在")
 		return
 	}
 
@@ -543,7 +571,7 @@ func (c *BPMNWorkflowController) SetProcessInstanceVariables(ctx *gin.Context) {
 
 	err := c.processEngine.ProcessInstanceService().SetProcessInstanceVariables(workflowCtx, processInstanceID, req.Variables)
 	if err != nil {
-		common.InternalError(ctx, "设置流程实例变量失败: "+err.Error())
+		respondBPMNError(ctx, err, "设置流程实例变量失败")
 		return
 	}
 
@@ -568,7 +596,7 @@ func (c *BPMNWorkflowController) SuspendProcess(ctx *gin.Context) {
 
 	err := c.processEngine.SuspendProcess(workflowCtx, processInstanceID, req.Reason)
 	if err != nil {
-		common.InternalError(ctx, "暂停流程实例失败: "+err.Error())
+		respondBPMNError(ctx, err, "暂停流程实例失败")
 		return
 	}
 
@@ -585,7 +613,7 @@ func (c *BPMNWorkflowController) ResumeProcess(ctx *gin.Context) {
 
 	err := c.processEngine.ResumeProcess(workflowCtx, processInstanceID)
 	if err != nil {
-		common.InternalError(ctx, "恢复流程实例失败: "+err.Error())
+		respondBPMNError(ctx, err, "恢复流程实例失败")
 		return
 	}
 
@@ -610,7 +638,7 @@ func (c *BPMNWorkflowController) TerminateProcess(ctx *gin.Context) {
 
 	err := c.processEngine.TerminateProcess(workflowCtx, processInstanceID, req.Reason)
 	if err != nil {
-		common.InternalError(ctx, "终止流程实例失败: "+err.Error())
+		respondBPMNError(ctx, err, "终止流程实例失败")
 		return
 	}
 
@@ -641,7 +669,7 @@ func (c *BPMNWorkflowController) ListUserTasks(ctx *gin.Context) {
 
 	tasks, total, err := c.processEngine.TaskService().ListUserTaskViews(workflowCtx, &req)
 	if err != nil {
-		common.InternalError(ctx, "获取用户任务列表失败: "+err.Error())
+		respondBPMNError(ctx, err, "获取用户任务列表失败")
 		return
 	}
 
@@ -669,7 +697,7 @@ func (c *BPMNWorkflowController) GetTask(ctx *gin.Context) {
 		task, err = c.processEngine.TaskService().GetTask(workflowCtx, taskID)
 	}
 	if err != nil {
-		common.NotFound(ctx, "任务不存在: "+err.Error())
+		respondBPMNError(ctx, err, "任务不存在")
 		return
 	}
 
@@ -694,7 +722,7 @@ func (c *BPMNWorkflowController) AssignTask(ctx *gin.Context) {
 
 	err := c.processEngine.TaskService().AssignTask(workflowCtx, taskID, req.Assignee)
 	if err != nil {
-		common.InternalError(ctx, "分配任务失败: "+err.Error())
+		respondBPMNError(ctx, err, "分配任务失败")
 		return
 	}
 
@@ -727,7 +755,7 @@ func (c *BPMNWorkflowController) ClaimTask(ctx *gin.Context) {
 		claimErr = c.processEngine.TaskService().ClaimTask(workflowCtx, taskID, fmt.Sprintf("%d", userID))
 	}
 	if claimErr != nil {
-		common.InternalError(ctx, "认领任务失败: "+claimErr.Error())
+		respondBPMNError(ctx, claimErr, "认领任务失败")
 		return
 	}
 
@@ -760,7 +788,7 @@ func (c *BPMNWorkflowController) CompleteTask(ctx *gin.Context) {
 		err = c.processEngine.TaskService().CompleteTask(workflowCtx, taskID, req.Variables)
 	}
 	if err != nil {
-		common.InternalError(ctx, "完成任务失败: "+err.Error())
+		respondBPMNError(ctx, err, "完成任务失败")
 		return
 	}
 
@@ -785,7 +813,7 @@ func (c *BPMNWorkflowController) CancelTask(ctx *gin.Context) {
 
 	err := c.processEngine.TaskService().CancelTask(workflowCtx, taskID, req.Reason)
 	if err != nil {
-		common.InternalError(ctx, "取消任务失败: "+err.Error())
+		respondBPMNError(ctx, err, "取消任务失败")
 		return
 	}
 
@@ -810,7 +838,7 @@ func (c *BPMNWorkflowController) SetTaskVariables(ctx *gin.Context) {
 
 	err := c.processEngine.TaskService().SetTaskVariables(workflowCtx, taskID, req.Variables)
 	if err != nil {
-		common.InternalError(ctx, "设置任务变量失败: "+err.Error())
+		respondBPMNError(ctx, err, "设置任务变量失败")
 		return
 	}
 
@@ -964,7 +992,7 @@ func (c *BPMNWorkflowController) GetInstanceStats(ctx *gin.Context) {
 
 	stats, err := c.processEngine.ProcessInstanceService().GetInstanceStatistics(workflowCtx, &req)
 	if err != nil {
-		common.InternalError(ctx, "获取实例统计失败: "+err.Error())
+		respondBPMNError(ctx, err, "获取实例统计失败")
 		return
 	}
 
@@ -987,7 +1015,7 @@ func (c *BPMNWorkflowController) GetTaskStats(ctx *gin.Context) {
 
 	stats, err := c.processEngine.TaskService().GetTaskStatistics(workflowCtx, &req)
 	if err != nil {
-		common.InternalError(ctx, "获取任务统计失败: "+err.Error())
+		respondBPMNError(ctx, err, "获取任务统计失败")
 		return
 	}
 
@@ -1010,7 +1038,7 @@ func (c *BPMNWorkflowController) CreateCounterSignTasks(ctx *gin.Context) {
 
 	tasks, err := c.processEngine.TaskService().CreateCounterSignTasks(workflowCtx, taskID, &req)
 	if err != nil {
-		common.InternalError(ctx, "创建会签任务失败: "+err.Error())
+		respondBPMNError(ctx, err, "创建会签任务失败")
 		return
 	}
 
@@ -1027,7 +1055,7 @@ func (c *BPMNWorkflowController) GetCounterSignStatus(ctx *gin.Context) {
 
 	status, err := c.processEngine.TaskService().GetCounterSignStatus(workflowCtx, taskID)
 	if err != nil {
-		common.InternalError(ctx, "获取会签状态失败: "+err.Error())
+		respondBPMNError(ctx, err, "获取会签状态失败")
 		return
 	}
 
@@ -1050,7 +1078,7 @@ func (c *BPMNWorkflowController) Vote(ctx *gin.Context) {
 
 	err := c.processEngine.TaskService().Vote(workflowCtx, taskID, &req)
 	if err != nil {
-		common.InternalError(ctx, "投票失败: "+err.Error())
+		respondBPMNError(ctx, err, "投票失败")
 		return
 	}
 
