@@ -129,16 +129,15 @@ func NewCustomProcessEngine(client *ent.Client, logger *zap.SugaredLogger) Proce
 		groupResolver:         groupResolver,
 		participationResolver: participationResolver,
 	}
+	engine.auditService = NewBPMNAuditService(client, logger)
 	engine.processDefinitionService = &bpmnProcessDefinitionService{client: client, logger: logger}
-	engine.processInstanceService = &bpmnProcessInstanceService{client: client, logger: logger, participationResolver: participationResolver}
+	engine.processInstanceService = &bpmnProcessInstanceService{client: client, logger: logger, participationResolver: participationResolver, auditService: engine.auditService}
 	// taskService 持有 engine 自身的引用（而不是每次调用再 NewCustomProcessEngine 造一个新的）：
 	// callbackRegistry 是 engine 级别的状态，bootstrap 在各领域 service 构造完成后往
 	// 这一个 engine 的 registry 里注入 TicketService/IncidentService。任务完成路径若临时
 	// 新建 engine，拿到的就是一个从未被注入过的空 registry，UserTask 回调只会 Warn 一句
 	// 静默失败（见 dispatchUserTaskCallback 的"失败只告警不阻断"注释）。
 	engine.taskService = &bpmnTaskService{client: client, logger: logger, groupResolver: engine.groupResolver, participationResolver: participationResolver, engine: engine}
-	engine.auditService = NewBPMNAuditService(client, logger)
-
 	// 注册流程相关的内置函数
 	engine.registerProcessFunctions()
 
@@ -205,7 +204,12 @@ func (e *CustomProcessEngine) ProcessDefinitionService() ProcessDefinitionServic
 
 // ProcessInstanceService 返回流程实例服务
 func (e *CustomProcessEngine) ProcessInstanceService() ProcessInstanceService {
-	return &bpmnProcessInstanceService{client: e.client, participationResolver: e.participationResolver}
+	return &bpmnProcessInstanceService{
+		client:                e.client,
+		logger:                e.logger,
+		participationResolver: e.participationResolver,
+		auditService:          e.auditService,
+	}
 }
 
 // TaskService 返回任务服务
@@ -1657,20 +1661,50 @@ func (e *CustomProcessEngine) findServiceTask(process *BPMNProcess, id string) *
 	return nil
 }
 
-func (e *CustomProcessEngine) SuspendProcess(ctx context.Context, processInstanceID string, reason string) error {
-	// 1. 获取流程实例
-	query := e.client.ProcessInstance.Query().
-		Where(processinstance.ProcessInstanceID(processInstanceID))
-	if tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int); tenantID > 0 {
-		query = query.Where(processinstance.TenantID(tenantID))
-	}
-	instance, err := query.First(ctx)
+func requireProcessInstanceUpdateScope(ctx context.Context) (BPMNAccessScope, error) {
+	scope, err := BPMNAccessScopeFromContext(ctx)
 	if err != nil {
-		return fmt.Errorf("获取流程实例失败: %w", err)
+		return BPMNAccessScope{}, err
+	}
+	if !scope.CanUpdateAllInstances {
+		return BPMNAccessScope{}, common.NewForbiddenError("无权修改流程实例")
+	}
+	return scope, nil
+}
+
+func loadProcessInstanceMutationActor(ctx context.Context, client *ent.Client, scope BPMNAccessScope) (*ent.User, error) {
+	actor, err := client.User.Query().
+		Where(
+			user.ID(scope.UserID),
+			user.TenantID(scope.TenantID),
+		).
+		Only(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("获取流程实例操作用户失败: %w", err)
+	}
+	return actor, nil
+}
+
+func (e *CustomProcessEngine) SuspendProcess(ctx context.Context, processInstanceID string, reason string) error {
+	scope, err := requireProcessInstanceUpdateScope(ctx)
+	if err != nil {
+		return err
+	}
+	instance, err := e.processInstanceService.loadProcessInstance(ctx, processInstanceID, scope.TenantID)
+	if err != nil {
+		return err
+	}
+	tx, err := e.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("开启暂停流程事务失败: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	actor, err := loadProcessInstanceMutationActor(ctx, tx.Client(), scope)
+	if err != nil {
+		return err
 	}
 
-	// 2. 更新实例状态
-	_, err = e.client.ProcessInstance.UpdateOne(instance).
+	_, err = tx.Client().ProcessInstance.UpdateOne(instance).
 		SetStatus("suspended").
 		SetSuspendedTime(time.Now()).
 		SetSuspendedReason(reason).
@@ -1678,15 +1712,7 @@ func (e *CustomProcessEngine) SuspendProcess(ctx context.Context, processInstanc
 	if err != nil {
 		return fmt.Errorf("暂停流程实例失败: %w", err)
 	}
-
-	// 3. 记录审计日志
-	userID := 0
-	userName := ""
-	if u, ok := ctx.Value("user").(*ent.User); ok {
-		userID = u.ID
-		userName = u.Name
-	}
-	if err := e.auditService.RecordAudit(ctx, &AuditContext{
+	if err := e.auditService.ForClient(tx.Client()).RecordAudit(ctx, &AuditContext{
 		ProcessInstanceID:    instance.ID,
 		ProcessInstanceKey:   instance.ProcessInstanceID,
 		ProcessDefinitionKey: instance.ProcessDefinitionKey,
@@ -1695,45 +1721,47 @@ func (e *CustomProcessEngine) SuspendProcess(ctx context.Context, processInstanc
 		ActivityName:         instance.CurrentActivityName,
 		ActivityType:         ActivityTypeUserTask,
 		Action:               AuditActionProcessSuspended,
-		UserID:               userID,
-		UserName:             userName,
+		UserID:               actor.ID,
+		UserName:             actor.Name,
+		VariablesBefore:      map[string]interface{}{"status": instance.Status},
+		VariablesAfter:       map[string]interface{}{"status": "suspended"},
 		Comment:              reason,
 		TenantID:             instance.TenantID,
 	}); err != nil {
-		e.logger.Warnw("audit record failed", "error", err)
+		return err
 	}
-
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("提交暂停流程事务失败: %w", err)
+	}
 	return nil
 }
 
 func (e *CustomProcessEngine) ResumeProcess(ctx context.Context, processInstanceID string) error {
-	// 1. 获取流程实例
-	query := e.client.ProcessInstance.Query().
-		Where(processinstance.ProcessInstanceID(processInstanceID))
-	if tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int); tenantID > 0 {
-		query = query.Where(processinstance.TenantID(tenantID))
-	}
-	instance, err := query.First(ctx)
+	scope, err := requireProcessInstanceUpdateScope(ctx)
 	if err != nil {
-		return fmt.Errorf("获取流程实例失败: %w", err)
+		return err
+	}
+	instance, err := e.processInstanceService.loadProcessInstance(ctx, processInstanceID, scope.TenantID)
+	if err != nil {
+		return err
+	}
+	tx, err := e.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("开启恢复流程事务失败: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	actor, err := loadProcessInstanceMutationActor(ctx, tx.Client(), scope)
+	if err != nil {
+		return err
 	}
 
-	// 2. 更新实例状态
-	_, err = e.client.ProcessInstance.UpdateOne(instance).
+	_, err = tx.Client().ProcessInstance.UpdateOne(instance).
 		SetStatus("running").
 		Save(ctx)
 	if err != nil {
 		return fmt.Errorf("恢复流程实例失败: %w", err)
 	}
-
-	// 3. 记录审计日志
-	userID := 0
-	userName := ""
-	if u, ok := ctx.Value("user").(*ent.User); ok {
-		userID = u.ID
-		userName = u.Name
-	}
-	if err := e.auditService.RecordAudit(ctx, &AuditContext{
+	if err := e.auditService.ForClient(tx.Client()).RecordAudit(ctx, &AuditContext{
 		ProcessInstanceID:    instance.ID,
 		ProcessInstanceKey:   instance.ProcessInstanceID,
 		ProcessDefinitionKey: instance.ProcessDefinitionKey,
@@ -1742,57 +1770,61 @@ func (e *CustomProcessEngine) ResumeProcess(ctx context.Context, processInstance
 		ActivityName:         instance.CurrentActivityName,
 		ActivityType:         ActivityTypeUserTask,
 		Action:               AuditActionProcessResumed,
-		UserID:               userID,
-		UserName:             userName,
+		UserID:               actor.ID,
+		UserName:             actor.Name,
+		VariablesBefore:      map[string]interface{}{"status": instance.Status},
+		VariablesAfter:       map[string]interface{}{"status": "running"},
 		TenantID:             instance.TenantID,
 	}); err != nil {
-		e.logger.Warnw("audit record failed", "error", err)
+		return err
 	}
-
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("提交恢复流程事务失败: %w", err)
+	}
 	return nil
 }
 
 func (e *CustomProcessEngine) TerminateProcess(ctx context.Context, processInstanceID string, reason string) error {
-	// 1. 获取流程实例
-	query := e.client.ProcessInstance.Query().
-		Where(processinstance.ProcessInstanceID(processInstanceID))
-	if tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int); tenantID > 0 {
-		query = query.Where(processinstance.TenantID(tenantID))
-	}
-	instance, err := query.First(ctx)
+	scope, err := requireProcessInstanceUpdateScope(ctx)
 	if err != nil {
-		return fmt.Errorf("获取流程实例失败: %w", err)
+		return err
 	}
+	instance, err := e.processInstanceService.loadProcessInstance(ctx, processInstanceID, scope.TenantID)
+	if err != nil {
+		return err
+	}
+	tx, err := e.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("开启终止流程事务失败: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	actor, err := loadProcessInstanceMutationActor(ctx, tx.Client(), scope)
+	if err != nil {
+		return err
+	}
+	terminatedAt := time.Now()
 
-	// 2. 更新实例状态
-	_, err = e.client.ProcessInstance.UpdateOne(instance).
+	_, err = tx.Client().ProcessInstance.UpdateOne(instance).
 		SetStatus("terminated").
-		SetEndTime(time.Now()).
+		SetEndTime(terminatedAt).
 		Save(ctx)
 	if err != nil {
 		return fmt.Errorf("终止流程实例失败: %w", err)
 	}
-
-	// 3. 取消所有进行中的任务
-	_, err = e.client.ProcessTask.Update().
-		Where(processtask.ProcessInstanceID(instance.ID)).
+	_, err = tx.Client().ProcessTask.Update().
+		Where(
+			processtask.ProcessInstanceID(instance.ID),
+			processtask.TenantID(scope.TenantID),
+		).
 		Where(processtask.StatusNEQ("completed")).
 		Where(processtask.StatusNEQ("cancelled")).
 		SetStatus("cancelled").
-		SetCompletedTime(time.Now()).
+		SetCompletedTime(terminatedAt).
 		Save(ctx)
 	if err != nil {
-		e.logger.Warnw("取消流程任务失败", "error", err)
+		return fmt.Errorf("取消流程任务失败: %w", err)
 	}
-
-	// 4. 记录审计日志
-	userID := 0
-	userName := ""
-	if u, ok := ctx.Value("user").(*ent.User); ok {
-		userID = u.ID
-		userName = u.Name
-	}
-	if err := e.auditService.RecordAudit(ctx, &AuditContext{
+	if err := e.auditService.ForClient(tx.Client()).RecordAudit(ctx, &AuditContext{
 		ProcessInstanceID:    instance.ID,
 		ProcessInstanceKey:   instance.ProcessInstanceID,
 		ProcessDefinitionKey: instance.ProcessDefinitionKey,
@@ -1801,14 +1833,18 @@ func (e *CustomProcessEngine) TerminateProcess(ctx context.Context, processInsta
 		ActivityName:         instance.CurrentActivityName,
 		ActivityType:         ActivityTypeEndEvent,
 		Action:               AuditActionProcessTerminated,
-		UserID:               userID,
-		UserName:             userName,
+		UserID:               actor.ID,
+		UserName:             actor.Name,
+		VariablesBefore:      map[string]interface{}{"status": instance.Status},
+		VariablesAfter:       map[string]interface{}{"status": "terminated"},
 		Comment:              reason,
 		TenantID:             instance.TenantID,
 	}); err != nil {
-		e.logger.Warnw("audit record failed", "error", err)
+		return err
 	}
-
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("提交终止流程事务失败: %w", err)
+	}
 	return nil
 }
 
@@ -2201,6 +2237,7 @@ type bpmnProcessInstanceService struct {
 	client                *ent.Client
 	logger                *zap.SugaredLogger
 	participationResolver *bpmnParticipationResolver
+	auditService          *BPMNAuditService
 }
 
 func (s *bpmnProcessInstanceService) loadProcessInstance(ctx context.Context, instanceKey string, tenantID int) (*ent.ProcessInstance, error) {
@@ -2344,8 +2381,11 @@ func (s *bpmnProcessInstanceService) GetProcessInstanceVariables(ctx context.Con
 var reservedInstanceVariableKeys = []string{"business_id", "business_type", "business_key", "tenant_id"}
 
 func (s *bpmnProcessInstanceService) SetProcessInstanceVariables(ctx context.Context, processInstanceID string, variables map[string]interface{}) error {
-	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
-	instance, err := s.loadProcessInstance(ctx, processInstanceID, tenantID)
+	scope, err := requireProcessInstanceUpdateScope(ctx)
+	if err != nil {
+		return err
+	}
+	instance, err := s.loadProcessInstance(ctx, processInstanceID, scope.TenantID)
 	if err != nil {
 		return err
 	}
@@ -2356,11 +2396,42 @@ func (s *bpmnProcessInstanceService) SetProcessInstanceVariables(ctx context.Con
 		}
 	}
 
-	_, err = s.client.ProcessInstance.UpdateOne(instance).
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("开启流程变量事务失败: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	actor, err := loadProcessInstanceMutationActor(ctx, tx.Client(), scope)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Client().ProcessInstance.UpdateOne(instance).
 		SetVariables(variables).
 		Save(ctx)
-
-	return err
+	if err != nil {
+		return fmt.Errorf("设置流程实例变量失败: %w", err)
+	}
+	if err := s.auditService.ForClient(tx.Client()).RecordAudit(ctx, &AuditContext{
+		ProcessInstanceID:    instance.ID,
+		ProcessInstanceKey:   instance.ProcessInstanceID,
+		ProcessDefinitionKey: instance.ProcessDefinitionKey,
+		ProcessDefinitionID:  instance.ProcessDefinitionID,
+		ActivityID:           "variable",
+		ActivityName:         "流程变量变更",
+		ActivityType:         ActivityTypeServiceTask,
+		Action:               AuditActionVariableChanged,
+		UserID:               actor.ID,
+		UserName:             actor.Name,
+		VariablesBefore:      instance.Variables,
+		VariablesAfter:       variables,
+		TenantID:             instance.TenantID,
+	}); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("提交流程变量事务失败: %w", err)
+	}
+	return nil
 }
 
 func (s *bpmnProcessInstanceService) GetProcessInstanceHistory(ctx context.Context, processInstanceID string) ([]*ent.ProcessExecutionHistory, error) {

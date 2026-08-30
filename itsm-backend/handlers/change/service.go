@@ -183,6 +183,14 @@ func (s *Service) changeBusinessKey(ctx context.Context, tenantID, changeID int)
 	return fmt.Sprintf("change:%d", workItemID), nil
 }
 
+func withProcessInstanceUpdateScope(ctx context.Context, userID, tenantID int) context.Context {
+	return service.WithBPMNAccessScope(ctx, service.BPMNAccessScope{
+		UserID:                userID,
+		TenantID:              tenantID,
+		CanUpdateAllInstances: true,
+	})
+}
+
 // SubmitChange submits a change for approval
 // Transitions status from 'draft' to 'pending' and creates approval records for specified approvers
 func (s *Service) SubmitChange(ctx context.Context, changeID, tenantID, submitterID int, req *dto.SubmitChangeRequest) (*Change, error) {
@@ -256,7 +264,8 @@ func (s *Service) SubmitChange(ctx context.Context, changeID, tenantID, submitte
 		// 保护挡住无法重新提交的运行中实例。
 		if err := s.completeAssessmentTask(ctx, tenantID, changeID); err != nil {
 			if triggerResp != nil {
-				if cancelErr := s.processTriggerService.CancelProcess(ctx, triggerResp.ProcessInstanceID,
+				mutationCtx := withProcessInstanceUpdateScope(ctx, submitterID, tenantID)
+				if cancelErr := s.processTriggerService.CancelProcess(mutationCtx, triggerResp.ProcessInstanceID,
 					"SubmitChange: compensating rollback after assessment auto-completion failure", tenantID); cancelErr != nil {
 					s.logger.Warnw("SubmitChange: 补偿取消流程实例失败，可能残留运行中实例阻塞后续重新提交",
 						"error", cancelErr, "change_id", changeID, "process_instance_id", triggerResp.ProcessInstanceID)
@@ -273,7 +282,8 @@ func (s *Service) SubmitChange(ctx context.Context, changeID, tenantID, submitte
 			// 会去完成/取消它）。取消失败不掩盖原始错误——只记录警告，仍然返回
 			// MarkSubmittedForApproval 的原始错误。
 			if triggerResp != nil {
-				if cancelErr := s.processTriggerService.CancelProcess(ctx, triggerResp.ProcessInstanceID,
+				mutationCtx := withProcessInstanceUpdateScope(ctx, submitterID, tenantID)
+				if cancelErr := s.processTriggerService.CancelProcess(mutationCtx, triggerResp.ProcessInstanceID,
 					"SubmitChange: compensating rollback after MarkSubmittedForApproval failure", tenantID); cancelErr != nil {
 					s.logger.Warnw("SubmitChange: 补偿取消流程实例失败，可能残留运行中实例阻塞后续重新提交",
 						"error", cancelErr, "change_id", changeID, "process_instance_id", triggerResp.ProcessInstanceID)
@@ -495,7 +505,7 @@ func inferITILPractices(summary *dto.ChangeCMDBImpactSummary) []string {
 // 或者取消调用本身失败，都只记日志，不向调用方传播错误，不影响已经提交成功的业务侧
 // 状态转换。s.processTriggerService 未注入时直接跳过（理论上不应该发生在生产环境，
 // 但测试或未完全 bootstrap 的环境可能出现，参照 SubmitChange 同样的判空处理）。
-func (s *Service) cancelRunningProcessInstance(ctx context.Context, tenantID, changeID int, reason string) {
+func (s *Service) cancelRunningProcessInstance(ctx context.Context, tenantID, userID, changeID int, reason string) {
 	if s.processTriggerService == nil {
 		return
 	}
@@ -515,7 +525,8 @@ func (s *Service) cancelRunningProcessInstance(ctx context.Context, tenantID, ch
 		}
 		return
 	}
-	if err := s.processTriggerService.CancelProcess(ctx, instance.ID, reason, tenantID); err != nil {
+	mutationCtx := withProcessInstanceUpdateScope(ctx, userID, tenantID)
+	if err := s.processTriggerService.CancelProcess(mutationCtx, instance.ID, reason, tenantID); err != nil {
 		s.logger.Warnw("cancelRunningProcessInstance: 取消流程实例失败，可能残留在工作流控制台", "error", err, "change_id", changeID, "process_instance_id", instance.ID)
 	}
 }
@@ -598,7 +609,8 @@ func (s *Service) BackfillLegacyPendingChange(ctx context.Context, changeID, ten
 		// 流程实例已经创建，评估节点没推进成功——补偿取消掉，避免留下一个孤儿实例，
 		// 保持"回填要么完整成功、要么完全没发生"这个不变式，方便这个一次性工具重跑。
 		if triggerResp != nil && s.processTriggerService != nil {
-			if cancelErr := s.processTriggerService.CancelProcess(ctx, triggerResp.ProcessInstanceID,
+			mutationCtx := withProcessInstanceUpdateScope(ctx, c.CreatedBy, tenantID)
+			if cancelErr := s.processTriggerService.CancelProcess(mutationCtx, triggerResp.ProcessInstanceID,
 				"BackfillLegacyPendingChange: compensating rollback after assessment failure", tenantID); cancelErr != nil {
 				s.logger.Warnw("BackfillLegacyPendingChange: 补偿取消流程实例失败", "error", cancelErr, "change_id", changeID)
 			}
@@ -914,7 +926,7 @@ func (s *Service) TransitionStatus(ctx context.Context, id, tenantID, userID int
 		// 堆积孤儿实例（包括理论上还能被人误操作完成的待办任务）。这一步是收尾性质的
 		// 清理，找不到运行中实例（最常见情况：CAB 驳回已经通过 Flow_End 正常终止了）
 		// 或者取消本身失败都只记警告，不影响已经提交成功的业务侧终态转换。
-		s.cancelRunningProcessInstance(ctx, tenantID, c.ID, fmt.Sprintf("change transitioned to %s", targetStatus))
+		s.cancelRunningProcessInstance(ctx, tenantID, userID, c.ID, fmt.Sprintf("change transitioned to %s", targetStatus))
 		c.Status = targetStatus
 		return c, nil
 	}

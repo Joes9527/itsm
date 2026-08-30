@@ -25,6 +25,11 @@ func NewBPMNAuditService(client *ent.Client, logger *zap.SugaredLogger) *BPMNAud
 	}
 }
 
+// ForClient binds audit writes to the caller's Ent client, including transaction clients.
+func (s *BPMNAuditService) ForClient(client *ent.Client) *BPMNAuditService {
+	return &BPMNAuditService{client: client, logger: s.logger}
+}
+
 // AuditAction 审计操作类型
 const (
 	AuditActionProcessStarted    = "started"

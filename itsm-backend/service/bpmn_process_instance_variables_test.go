@@ -7,14 +7,13 @@ import (
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
-	"itsm-backend/service/bpmn"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
 
-func setupInstanceVariablesFixture(t *testing.T) (*ent.Client, *bpmnProcessInstanceService, int, *ent.ProcessInstance) {
+func setupInstanceVariablesFixture(t *testing.T) (*ent.Client, *bpmnProcessInstanceService, int, int, *ent.ProcessInstance) {
 	t.Helper()
 	client := enttest.Open(t, "sqlite3", "file:piv_test?mode=memory&cache=shared&_fk=1")
 	t.Cleanup(func() { client.Close() })
@@ -22,6 +21,14 @@ func setupInstanceVariablesFixture(t *testing.T) (*ent.Client, *bpmnProcessInsta
 
 	tenant, err := client.Tenant.Create().
 		SetName("T").SetCode("piv-1").SetDomain("piv-1.com").SetStatus("active").
+		Save(ctx)
+	require.NoError(t, err)
+	actor, err := client.User.Create().
+		SetUsername("piv-actor").
+		SetEmail("piv-actor@example.test").
+		SetName("PIV Actor").
+		SetPasswordHash("test").
+		SetTenantID(tenant.ID).
 		Save(ctx)
 	require.NoError(t, err)
 
@@ -51,16 +58,23 @@ func setupInstanceVariablesFixture(t *testing.T) (*ent.Client, *bpmnProcessInsta
 		Save(ctx)
 	require.NoError(t, err)
 
-	svc := &bpmnProcessInstanceService{client: client, logger: zaptest.NewLogger(t).Sugar()}
-	return client, svc, tenant.ID, instance
+	logger := zaptest.NewLogger(t).Sugar()
+	svc := &bpmnProcessInstanceService{
+		client:       client,
+		logger:       logger,
+		auditService: NewBPMNAuditService(client, logger),
+	}
+	return client, svc, tenant.ID, actor.ID, instance
 }
 
 // TestSetProcessInstanceVariables_RejectsReservedKeys 锁定纵深防御白名单：
 // 流程身份键（business_id/business_type/business_key/tenant_id）由触发方写入，
 // 不允许经该端点覆盖，防止实例归属方污染自己实例的身份上下文。
 func TestSetProcessInstanceVariables_RejectsReservedKeys(t *testing.T) {
-	client, svc, tenantID, instance := setupInstanceVariablesFixture(t)
-	ctx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, tenantID)
+	client, svc, tenantID, actorID, instance := setupInstanceVariablesFixture(t)
+	ctx := WithBPMNAccessScope(context.Background(), BPMNAccessScope{
+		UserID: actorID, TenantID: tenantID, CanUpdateAllInstances: true,
+	})
 
 	for _, key := range reservedInstanceVariableKeys {
 		t.Run(key, func(t *testing.T) {
@@ -77,8 +91,10 @@ func TestSetProcessInstanceVariables_RejectsReservedKeys(t *testing.T) {
 
 // TestSetProcessInstanceVariables_AllowsBusinessVars 普通业务键仍可经该端点写入。
 func TestSetProcessInstanceVariables_AllowsBusinessVars(t *testing.T) {
-	client, svc, tenantID, instance := setupInstanceVariablesFixture(t)
-	ctx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, tenantID)
+	client, svc, tenantID, actorID, instance := setupInstanceVariablesFixture(t)
+	ctx := WithBPMNAccessScope(context.Background(), BPMNAccessScope{
+		UserID: actorID, TenantID: tenantID, CanUpdateAllInstances: true,
+	})
 
 	err := svc.SetProcessInstanceVariables(ctx, strconv.Itoa(instance.ID), map[string]interface{}{"custom": "x", "priority": "high"})
 	require.NoError(t, err)

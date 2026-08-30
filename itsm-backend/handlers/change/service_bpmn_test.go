@@ -951,7 +951,8 @@ func TestBackfillLegacyPendingChange_RetriesAfterTerminatedInstance(t *testing.T
 		TenantID:             tenantID,
 	})
 	require.NoError(t, err)
-	require.NoError(t, trigger.CancelProcess(tenantCtx, firstAttempt.ProcessInstanceID, "模拟回填第一次尝试失败后的补偿回滚", tenantID))
+	mutationCtx := withProcessInstanceUpdateScope(tenantCtx, actorID, tenantID)
+	require.NoError(t, trigger.CancelProcess(mutationCtx, firstAttempt.ProcessInstanceID, "模拟回填第一次尝试失败后的补偿回滚", tenantID))
 
 	terminated, err := client.ProcessInstance.Query().
 		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", workItem.ID)), processinstance.TenantID(tenantID)).

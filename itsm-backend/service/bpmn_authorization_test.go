@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"testing"
 	"time"
@@ -9,6 +10,8 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/ent/processauditlog"
+	"itsm-backend/ent/processtask"
 	"itsm-backend/service/bpmn"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -393,6 +396,187 @@ func TestInstanceStatisticsAuthorization(t *testing.T) {
 	assert.Equal(t, f.tenant.ID, req.TenantID)
 }
 
+func TestProcessInstanceMutationsRequireUpdatePermission(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	instance := f.seedRunningInstance(t, "mutation-permission")
+	mutations := map[string]func(context.Context) error{
+		"suspend": func(ctx context.Context) error {
+			return f.engine.SuspendProcess(ctx, instance.ProcessInstanceID, "maintenance")
+		},
+		"resume": func(ctx context.Context) error {
+			return f.engine.ResumeProcess(ctx, instance.ProcessInstanceID)
+		},
+		"terminate": func(ctx context.Context) error {
+			return f.engine.TerminateProcess(ctx, instance.ProcessInstanceID, "cancelled")
+		},
+		"variables": func(ctx context.Context) error {
+			return f.engine.ProcessInstanceService().SetProcessInstanceVariables(ctx, instance.ProcessInstanceID, map[string]interface{}{"safe": true})
+		},
+	}
+
+	for name, mutate := range mutations {
+		t.Run(name, func(t *testing.T) {
+			requireBPMNForbidden(t, mutate(f.scopedCtx(false, false, false, false)))
+			requireBPMNForbidden(t, mutate(f.scopedCtx(true, false, false, false)))
+			requireBPMNForbidden(t, mutate(f.userCtx))
+		})
+	}
+}
+
+func TestProcessInstanceMutationAuditRollback(t *testing.T) {
+	forcedAuditErr := errors.New("forced audit failure")
+	tests := []struct {
+		name    string
+		prepare func(*testing.T, *bpmnAuthorizationFixture, *ent.ProcessInstance) *ent.ProcessInstance
+		mutate  func(*bpmnAuthorizationFixture, context.Context, *ent.ProcessInstance) error
+	}{
+		{
+			name: "suspend",
+			mutate: func(f *bpmnAuthorizationFixture, ctx context.Context, instance *ent.ProcessInstance) error {
+				return f.engine.SuspendProcess(ctx, instance.ProcessInstanceID, "maintenance")
+			},
+		},
+		{
+			name: "resume",
+			prepare: func(t *testing.T, f *bpmnAuthorizationFixture, instance *ent.ProcessInstance) *ent.ProcessInstance {
+				updated, err := f.client.ProcessInstance.UpdateOne(instance).SetStatus("suspended").Save(f.userCtx)
+				require.NoError(t, err)
+				return updated
+			},
+			mutate: func(f *bpmnAuthorizationFixture, ctx context.Context, instance *ent.ProcessInstance) error {
+				return f.engine.ResumeProcess(ctx, instance.ProcessInstanceID)
+			},
+		},
+		{
+			name: "terminate",
+			mutate: func(f *bpmnAuthorizationFixture, ctx context.Context, instance *ent.ProcessInstance) error {
+				return f.engine.TerminateProcess(ctx, instance.ProcessInstanceID, "cancelled")
+			},
+		},
+		{
+			name: "variables",
+			mutate: func(f *bpmnAuthorizationFixture, ctx context.Context, instance *ent.ProcessInstance) error {
+				return f.engine.ProcessInstanceService().SetProcessInstanceVariables(ctx, instance.ProcessInstanceID, map[string]interface{}{"safe": true})
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newBPMNAuthorizationFixture(t)
+			instance := f.seedRunningInstance(t, "rollback-"+tt.name)
+			if tt.prepare != nil {
+				instance = tt.prepare(t, f, instance)
+			}
+			beforeTasks, err := f.client.ProcessTask.Query().
+				Where(processtask.ProcessInstanceID(instance.ID)).
+				Order(ent.Asc(processtask.FieldID)).
+				All(f.userCtx)
+			require.NoError(t, err)
+			beforeTaskStatuses := make([]string, len(beforeTasks))
+			for i, task := range beforeTasks {
+				beforeTaskStatuses[i] = task.Status
+			}
+
+			f.client.Use(func(next ent.Mutator) ent.Mutator {
+				return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+					if _, ok := mutation.(*ent.ProcessAuditLogMutation); ok {
+						return nil, forcedAuditErr
+					}
+					return next.Mutate(ctx, mutation)
+				})
+			})
+
+			err = tt.mutate(f, f.scopedCtx(false, true, false, false), instance)
+			require.ErrorIs(t, err, forcedAuditErr)
+			after, queryErr := f.client.ProcessInstance.Get(f.userCtx, instance.ID)
+			require.NoError(t, queryErr)
+			assert.Equal(t, instance.Status, after.Status)
+			assert.Equal(t, instance.Variables, after.Variables)
+
+			afterTasks, queryErr := f.client.ProcessTask.Query().
+				Where(processtask.ProcessInstanceID(instance.ID)).
+				Order(ent.Asc(processtask.FieldID)).
+				All(f.userCtx)
+			require.NoError(t, queryErr)
+			require.Len(t, afterTasks, len(beforeTaskStatuses))
+			for i, task := range afterTasks {
+				assert.Equal(t, beforeTaskStatuses[i], task.Status)
+			}
+			assert.Zero(t, f.client.ProcessAuditLog.Query().Where(processauditlog.ProcessInstanceID(instance.ID)).CountX(f.userCtx))
+		})
+	}
+}
+
+func TestProcessInstanceMutationAuditMetadata(t *testing.T) {
+	tests := []struct {
+		name    string
+		prepare func(*testing.T, *bpmnAuthorizationFixture, *ent.ProcessInstance) *ent.ProcessInstance
+		mutate  func(*bpmnAuthorizationFixture, context.Context, *ent.ProcessInstance) error
+		action  string
+		reason  string
+		before  map[string]interface{}
+		after   map[string]interface{}
+	}{
+		{
+			name: "suspend", action: AuditActionProcessSuspended, reason: "maintenance",
+			before: map[string]interface{}{"status": "running"}, after: map[string]interface{}{"status": "suspended"},
+			mutate: func(f *bpmnAuthorizationFixture, ctx context.Context, instance *ent.ProcessInstance) error {
+				return f.engine.SuspendProcess(ctx, instance.ProcessInstanceID, "maintenance")
+			},
+		},
+		{
+			name: "resume", action: AuditActionProcessResumed,
+			before: map[string]interface{}{"status": "suspended"}, after: map[string]interface{}{"status": "running"},
+			prepare: func(t *testing.T, f *bpmnAuthorizationFixture, instance *ent.ProcessInstance) *ent.ProcessInstance {
+				updated, err := f.client.ProcessInstance.UpdateOne(instance).SetStatus("suspended").Save(f.userCtx)
+				require.NoError(t, err)
+				return updated
+			},
+			mutate: func(f *bpmnAuthorizationFixture, ctx context.Context, instance *ent.ProcessInstance) error {
+				return f.engine.ResumeProcess(ctx, instance.ProcessInstanceID)
+			},
+		},
+		{
+			name: "terminate", action: AuditActionProcessTerminated, reason: "cancelled",
+			before: map[string]interface{}{"status": "running"}, after: map[string]interface{}{"status": "terminated"},
+			mutate: func(f *bpmnAuthorizationFixture, ctx context.Context, instance *ent.ProcessInstance) error {
+				return f.engine.TerminateProcess(ctx, instance.ProcessInstanceID, "cancelled")
+			},
+		},
+		{
+			name: "variables", action: AuditActionVariableChanged,
+			before: map[string]interface{}{"existing": "value"}, after: map[string]interface{}{"safe": true},
+			mutate: func(f *bpmnAuthorizationFixture, ctx context.Context, instance *ent.ProcessInstance) error {
+				return f.engine.ProcessInstanceService().SetProcessInstanceVariables(ctx, instance.ProcessInstanceID, map[string]interface{}{"safe": true})
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newBPMNAuthorizationFixture(t)
+			instance := f.seedRunningInstance(t, "metadata-"+tt.name)
+			if tt.prepare != nil {
+				instance = tt.prepare(t, f, instance)
+			}
+			ctx := context.WithValue(f.scopedCtx(false, true, false, false), "user", f.outsider)
+			require.NoError(t, tt.mutate(f, ctx, instance))
+
+			audit := f.client.ProcessAuditLog.Query().
+				Where(processauditlog.ProcessInstanceID(instance.ID)).
+				OnlyX(f.userCtx)
+			assert.Equal(t, f.actor.ID, audit.UserID)
+			assert.Equal(t, f.actor.Name, audit.UserName)
+			assert.Equal(t, f.tenant.ID, audit.TenantID)
+			assert.Equal(t, tt.action, audit.Action)
+			assert.Equal(t, tt.reason, audit.Comment)
+			assert.Equal(t, tt.before, audit.VariablesBefore)
+			assert.Equal(t, tt.after, audit.VariablesAfter)
+		})
+	}
+}
+
 func TestListUserTasksForcesCallerScopeWithoutTaskRead(t *testing.T) {
 	f := newBPMNAuthorizationFixture(t)
 	mine, _ := f.seedMineAndOtherTasks(t)
@@ -568,6 +752,22 @@ func (f *bpmnAuthorizationFixture) createProcessInstance(t *testing.T, tenant *e
 		SetProcessDefinitionID(definition.ID).
 		SetTenantID(tenant.ID).
 		Save(f.userCtx)
+	require.NoError(t, err)
+	return instance
+}
+
+func (f *bpmnAuthorizationFixture) seedRunningInstance(t *testing.T, suffix string) *ent.ProcessInstance {
+	t.Helper()
+	instance := f.createProcessInstance(t, f.tenant, suffix)
+	instance, err := f.client.ProcessInstance.UpdateOne(instance).
+		SetCurrentActivityID("approval").
+		SetCurrentActivityName("Approval").
+		SetVariables(map[string]interface{}{"existing": "value"}).
+		Save(f.userCtx)
+	require.NoError(t, err)
+	f.createProcessTask(t, instance, f.tenant.ID, suffix+"-active", strconv.Itoa(f.actor.ID), "", "")
+	completed := f.createProcessTask(t, instance, f.tenant.ID, suffix+"-completed", strconv.Itoa(f.actor.ID), "", "")
+	_, err = f.client.ProcessTask.UpdateOne(completed).SetStatus("completed").Save(f.userCtx)
 	require.NoError(t, err)
 	return instance
 }
