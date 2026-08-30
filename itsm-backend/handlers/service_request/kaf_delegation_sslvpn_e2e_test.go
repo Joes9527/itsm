@@ -140,13 +140,12 @@ func TestSSLVPNRequest_ConflictingRecordClassVariableCannotReachKAF(t *testing.T
 	require.NoError(t, completeSSLVPNApproval(t, fx, instance, "Approval_1"))
 	err := completeSSLVPNApprovalWithVariables(t, fx, instance, "Approval_2", map[string]interface{}{"approvalAction": "approve", "approvalResult": "approved", "record_class": "incident"})
 	require.ErrorContains(t, err, "record class variable conflicts")
+	assertSSLVPNApprovalRemainsActionableWithoutConflictingRecordClass(t, fx, instance, "Approval_2")
 
-	delegatedCount, err := fx.client.ProcessTask.Query().Where(processtask.ProcessInstanceIDEQ(instance.ID), processtask.TaskTypeEQ(bpmn.KafDelegateTaskType)).Count(fx.ctx)
-	require.NoError(t, err)
-	assert.Zero(t, delegatedCount)
-	outboxCount, err := fx.client.OutboxEvent.Query().Where(outboxevent.TenantIDEQ(fx.tenant.ID), outboxevent.EventTypeEQ("kaf_delegate_requested")).Count(fx.ctx)
-	require.NoError(t, err)
-	assert.Zero(t, outboxCount)
+	// The same approval task must remain retryable after its invalid input is rejected.
+	require.NoError(t, completeSSLVPNApproval(t, fx, instance, "Approval_2"))
+	assertTwoSSLVPNApprovalDecisions(t, fx, instance)
+	assertOneSSLVPNDelegation(t, fx, instance)
 }
 
 func TestSSLVPNIncident_UsesSameDelegationTransportWithoutServiceRequestConversion(t *testing.T) {
@@ -247,6 +246,27 @@ func assertNoSSLVPNDelegation(t *testing.T, fx *sslvpnDelegationFixture, instanc
 	count, err := fx.client.ProcessTask.Query().Where(processtask.ProcessInstanceIDEQ(instance.ID), processtask.TaskTypeEQ(bpmn.KafDelegateTaskType)).Count(fx.ctx)
 	require.NoError(t, err)
 	assert.Zero(t, count)
+}
+
+func assertSSLVPNApprovalRemainsActionableWithoutConflictingRecordClass(t *testing.T, fx *sslvpnDelegationFixture, instance *ent.ProcessInstance, definitionKey string) {
+	t.Helper()
+	task, err := fx.client.ProcessTask.Query().
+		Where(processtask.ProcessInstanceIDEQ(instance.ID), processtask.TaskDefinitionKeyEQ(definitionKey)).
+		Only(fx.ctx)
+	require.NoError(t, err)
+	assert.Contains(t, []string{common.ProcessTaskStatusAssigned, common.ProcessTaskStatusCreated}, task.Status)
+	assert.NotContains(t, task.TaskVariables, "record_class")
+
+	persisted, err := fx.client.ProcessInstance.Get(fx.ctx, instance.ID)
+	require.NoError(t, err)
+	assert.NotEqual(t, "incident", persisted.Variables["record_class"])
+	assertNoSSLVPNDelegation(t, fx, persisted)
+
+	approvalCount, err := fx.client.ProcessApprovalDecision.Query().
+		Where(processapprovaldecision.ProcessInstanceIDEQ(instance.ID), processapprovaldecision.DecisionEQ("approved")).
+		Count(fx.ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, approvalCount)
 }
 
 func assertTwoSSLVPNApprovalDecisions(t *testing.T, fx *sslvpnDelegationFixture, instance *ent.ProcessInstance) {

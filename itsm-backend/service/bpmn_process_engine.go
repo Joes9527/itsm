@@ -21,6 +21,7 @@ import (
 	"itsm-backend/ent/processtask"
 	"itsm-backend/ent/role"
 	"itsm-backend/ent/rolepermission"
+	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketassignmentrule"
 	"itsm-backend/ent/user"
 	"itsm-backend/ent/workflowtask"
@@ -373,6 +374,9 @@ func (e *CustomProcessEngine) CompleteTask(ctx context.Context, taskID string, v
 	if task.Status == "completed" || task.Status == "cancelled" {
 		return fmt.Errorf("任务已结束，不能重复完成")
 	}
+	if err := e.validateTicketRecordClassInput(ctx, instance, variables); err != nil {
+		return err
+	}
 
 	updated, err := e.client.ProcessTask.Update().
 		Where(
@@ -436,6 +440,33 @@ func (e *CustomProcessEngine) CompleteTask(ctx context.Context, taskID string, v
 		e.logger.Warnw("audit record failed", "error", err)
 	}
 
+	return nil
+}
+
+// validateTicketRecordClassInput rejects caller-controlled class changes before
+// completion writes any task or process state. Non-ticket workflows retain
+// their established variable behavior.
+func (e *CustomProcessEngine) validateTicketRecordClassInput(ctx context.Context, instance *ent.ProcessInstance, variables map[string]interface{}) error {
+	if instance.BusinessType != "ticket" {
+		return nil
+	}
+	provided, present := variables["record_class"]
+	if !present {
+		return nil
+	}
+	if instance.BusinessID <= 0 {
+		return fmt.Errorf("ticket process instance %d has no work item ID", instance.ID)
+	}
+	workItem, err := e.client.Ticket.Query().
+		Where(ticket.IDEQ(instance.BusinessID), ticket.TenantIDEQ(instance.TenantID), ticket.DeletedAtIsNil()).
+		Only(ctx)
+	if err != nil {
+		return fmt.Errorf("load ticket-backed work item record class: %w", err)
+	}
+	recordClass, ok := provided.(string)
+	if !ok || recordClass != workItem.RecordClass {
+		return fmt.Errorf("record class variable conflicts with persisted work item record class")
+	}
 	return nil
 }
 

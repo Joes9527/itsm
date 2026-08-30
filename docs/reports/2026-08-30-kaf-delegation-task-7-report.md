@@ -25,10 +25,11 @@ so the specification was not modified.
   injects a real Ent ServiceRequest create failure. It proves the failed
   aggregate leaves no `service_request_item` Ticket, no ServiceRequest
   extension, and no ProcessInstance.
-- `TestSSLVPNRequest_ConflictingRecordClassVariableCannotReachKAF` completes
-  the real two-approval SSLVPN flow with `record_class="incident"` on the
-  second approval. ITSM rejects the conflicting mutable variable before KAF
-  task/outbox creation, so a wrong-class event cannot reach KAF.
+- `TestSSLVPNRequest_ConflictingRecordClassVariableCannotReachKAF` submits
+  `record_class="incident"` on the second real SSLVPN approval. ITSM rejects
+  it before completing the approval or persisting task/process variables; the
+  approval remains actionable, and a subsequent valid completion creates
+  exactly one KAF task and outbox event.
 - Ticket-backed KAF workflows now tenant-scope the persisted Ticket lookup,
   use its immutable `record_class` as the only record-class authority, and
   reject any present process variable that differs.
