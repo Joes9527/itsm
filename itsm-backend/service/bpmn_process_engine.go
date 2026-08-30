@@ -2782,7 +2782,8 @@ func (s *bpmnTaskService) ClaimTask(ctx context.Context, taskID string, userID s
 
 // ClaimTaskByID 认领任务 (根据数据库自增ID)
 func (s *bpmnTaskService) ClaimTaskByID(ctx context.Context, id int, userID int) error {
-	task, err := s.GetTaskByID(ctx, id)
+	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
+	task, err := s.loadTaskByID(ctx, id, tenantID)
 	if err != nil {
 		return err
 	}
@@ -2898,7 +2899,8 @@ func (s *bpmnTaskService) RetryTask(ctx context.Context, taskID string, maxRetri
 }
 
 func (s *bpmnTaskService) DelegateTask(ctx context.Context, taskID string, newAssignee string) error {
-	task, err := s.GetTask(ctx, taskID)
+	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
+	task, err := s.loadTaskByKey(ctx, taskID, tenantID)
 	if err != nil {
 		return err
 	}
