@@ -599,15 +599,19 @@ const kafAutomationRole = "kaf_automation"
 // decide whether to pause in the first place guarantees the pause decision
 // and the authorization decision can never diverge.
 func (e *CustomProcessEngine) authorizeTaskActor(ctx context.Context, task *ent.ProcessTask) error {
+	return e.authorizeTaskActorWithClient(ctx, e.client, task)
+}
+
+func (e *CustomProcessEngine) authorizeTaskActorWithClient(ctx context.Context, client *ent.Client, task *ent.ProcessTask) error {
 	if handler := e.findHandlerByTaskType(task.TaskType); handler != nil && isAsyncHandler(handler) {
-		return e.authorizeKafAutomationActor(ctx, task)
+		return e.authorizeKafAutomationActorWithClient(ctx, client, task)
 	}
 
 	userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
 	if userID <= 0 {
 		return nil
 	}
-	actor, err := e.client.User.Query().Where(user.ID(userID)).Only(ctx)
+	actor, err := client.User.Query().Where(user.ID(userID)).Only(ctx)
 	if err != nil {
 		return fmt.Errorf("审批用户不存在: %w", err)
 	}
@@ -636,11 +640,15 @@ func (e *CustomProcessEngine) authorizeTaskActor(ctx context.Context, task *ent.
 // 平台级调用的既有行为，不在这次改动范围内），如果这里不再校验一次，任何租户的
 // kaf_automation 账号都能完成任意其他租户的委派任务——一个跨租户越权口子。
 func (e *CustomProcessEngine) authorizeKafAutomationActor(ctx context.Context, task *ent.ProcessTask) error {
+	return e.authorizeKafAutomationActorWithClient(ctx, e.client, task)
+}
+
+func (e *CustomProcessEngine) authorizeKafAutomationActorWithClient(ctx context.Context, client *ent.Client, task *ent.ProcessTask) error {
 	userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
 	if userID <= 0 {
 		return fmt.Errorf("委派任务必须由已认证的 KAF 自动化账号完成")
 	}
-	actor, err := e.client.User.Query().Where(user.ID(userID)).Only(ctx)
+	actor, err := client.User.Query().Where(user.ID(userID)).Only(ctx)
 	if err != nil {
 		return fmt.Errorf("KAF 自动化账号不存在: %w", err)
 	}
@@ -3410,25 +3418,23 @@ func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequ
 	if err != nil {
 		return err
 	}
-	task, err := s.loadTaskByKey(ctx, taskID, scope.TenantID)
-	if err != nil {
-		return err
-	}
-	if err := s.engine.authorizeTaskActor(ctx, task); err != nil {
-		return err
-	}
-	if task.Status == "completed" || task.Status == "cancelled" {
-		return fmt.Errorf("会签任务已结束")
-	}
-	if task.ParentTaskID != "" && task.Status != common.ProcessTaskStatusAssigned {
-		return fmt.Errorf("会签任务尚未轮到当前审批人")
-	}
-
 	tx, err := s.client.Tx(ctx)
 	if err != nil {
 		return fmt.Errorf("开启会签投票事务失败: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	task, err := tx.Client().ProcessTask.Query().
+		Where(processtask.TaskID(taskID), processtask.TenantID(scope.TenantID)).
+		Only(ctx)
+	if err != nil {
+		return fmt.Errorf("获取会签任务失败: %w", err)
+	}
+	if err := s.engine.authorizeTaskActorWithClient(ctx, tx.Client(), task); err != nil {
+		return err
+	}
+	if task.Status != common.ProcessTaskStatusAssigned {
+		return taskVoteConflict()
+	}
 	actor, err := loadTaskMutationActor(ctx, tx.Client(), scope)
 	if err != nil {
 		return err
@@ -3437,14 +3443,21 @@ func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequ
 		"approved": req.Approved,
 		"comment":  req.Comment,
 	}
-	_, err = tx.Client().ProcessTask.UpdateOneID(task.ID).
-		Where(processtask.TenantID(scope.TenantID)).
+	affected, err := tx.Client().ProcessTask.Update().
+		Where(
+			processtask.ID(task.ID),
+			processtask.TenantID(scope.TenantID),
+			processtask.Status(common.ProcessTaskStatusAssigned),
+		).
 		SetStatus("completed").
 		SetCompletedTime(time.Now()).
 		SetTaskVariables(voteVariables).
 		Save(ctx)
 	if err != nil {
 		return fmt.Errorf("完成任务失败: %w", err)
+	}
+	if affected != 1 {
+		return taskVoteConflict()
 	}
 	instance, err := tx.Client().ProcessInstance.Query().
 		Where(processinstance.ID(task.ProcessInstanceID), processinstance.TenantID(scope.TenantID)).
@@ -3540,4 +3553,8 @@ func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequ
 		}
 	}
 	return nil
+}
+
+func taskVoteConflict() error {
+	return common.NewConflictError("process task vote", "task is no longer assigned or was already voted")
 }

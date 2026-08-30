@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"strconv"
 	"testing"
@@ -15,6 +16,8 @@ import (
 	"itsm-backend/ent/processtask"
 	"itsm-backend/service/bpmn"
 
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -35,9 +38,18 @@ type bpmnAuthorizationFixture struct {
 }
 
 func newBPMNAuthorizationFixture(t *testing.T) *bpmnAuthorizationFixture {
+	return newBPMNAuthorizationFixtureWithDSN(t, testDSN())
+}
+
+func newBPMNAuthorizationFixtureWithDSN(t *testing.T, dsn string) *bpmnAuthorizationFixture {
+	t.Helper()
+	client := enttest.Open(t, "sqlite3", dsn)
+	return newBPMNAuthorizationFixtureWithClient(t, client)
+}
+
+func newBPMNAuthorizationFixtureWithClient(t *testing.T, client *ent.Client) *bpmnAuthorizationFixture {
 	t.Helper()
 	ctx := context.Background()
-	client := enttest.Open(t, "sqlite3", testDSN())
 	t.Cleanup(func() { require.NoError(t, client.Close()) })
 
 	tenant, err := client.Tenant.Create().
@@ -883,6 +895,107 @@ func TestVoteTenantScopesRelatedTasks(t *testing.T) {
 	assert.Zero(t, f.client.ProcessApprovalDecision.Query().Where(processapprovaldecision.TenantID(f.otherTenant.ID)).CountX(f.userCtx))
 }
 
+func TestTaskAuditRejectsForeignProcessInstance(t *testing.T) {
+	mutations := taskMutationCases()
+	mutations["vote"] = func(f *bpmnAuthorizationFixture, ctx context.Context, task *ent.ProcessTask) error {
+		ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, f.tenant.ID)
+		ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, f.actor.ID)
+		return f.engine.TaskService().Vote(ctx, task.TaskID, &VoteRequest{Approved: true, Comment: "invalid reference"})
+	}
+
+	for name, mutate := range mutations {
+		t.Run(name, func(t *testing.T) {
+			f := newBPMNAuthorizationFixture(t)
+			foreignInstance := f.createProcessInstance(t, f.otherTenant, "foreign-audit-instance-"+name)
+			task := f.createProcessTask(t, foreignInstance, f.tenant.ID, "foreign-audit-task-"+name, strconv.Itoa(f.actor.ID), "", "")
+			task, err := f.client.ProcessTask.UpdateOne(task).
+				SetStatus(common.ProcessTaskStatusAssigned).
+				SetTaskVariables(map[string]interface{}{"before": "unchanged"}).
+				Save(f.userCtx)
+			require.NoError(t, err)
+
+			err = mutate(f, f.scopedCtx(false, false, false, false), task)
+			require.Error(t, err)
+			after := f.client.ProcessTask.GetX(f.userCtx, task.ID)
+			assert.Equal(t, common.ProcessTaskStatusAssigned, after.Status)
+			assert.Equal(t, task.Assignee, after.Assignee)
+			assert.Equal(t, map[string]interface{}{"before": "unchanged"}, after.TaskVariables)
+			assert.Zero(t, f.client.ProcessTask.Query().Where(processtask.ParentTaskID(task.TaskID)).CountX(f.userCtx))
+			assert.Zero(t, f.client.ProcessApprovalDecision.Query().CountX(f.userCtx))
+			assert.Zero(t, f.client.ProcessAuditLog.Query().CountX(f.userCtx))
+		})
+	}
+
+	t.Run("completion audit helper", func(t *testing.T) {
+		f := newBPMNAuthorizationFixture(t)
+		foreignInstance := f.createProcessInstance(t, f.otherTenant, "foreign-completion-audit")
+		task := f.createProcessTask(t, foreignInstance, f.tenant.ID, "foreign-completion-audit", strconv.Itoa(f.actor.ID), "", "")
+		err := f.engine.auditService.RecordTaskCompleted(f.userCtx, task, f.actor.ID, f.actor.Name, nil, map[string]interface{}{"approved": true})
+		require.Error(t, err)
+		assert.Zero(t, f.client.ProcessAuditLog.Query().CountX(f.userCtx))
+	})
+}
+
+func TestVoteDuplicateReturnsConflictWithoutDuplicateEffects(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	instance := f.createProcessInstance(t, f.tenant, "vote-duplicate")
+	task := f.createProcessTask(t, instance, f.tenant.ID, "vote-duplicate", strconv.Itoa(f.actor.ID), "", "")
+	_, err := f.client.ProcessTask.UpdateOne(task).SetStatus(common.ProcessTaskStatusAssigned).Save(f.userCtx)
+	require.NoError(t, err)
+	voteCtx := context.WithValue(f.scopedCtx(false, false, false, false), bpmn.BPMNTenantIDContextKey, f.tenant.ID)
+	voteCtx = context.WithValue(voteCtx, bpmn.BPMNUserIDContextKey, f.actor.ID)
+
+	require.NoError(t, f.engine.TaskService().Vote(voteCtx, task.TaskID, &VoteRequest{Approved: true, Comment: "first"}))
+	err = f.engine.TaskService().Vote(voteCtx, task.TaskID, &VoteRequest{Approved: false, Comment: "duplicate"})
+	requireBPMNConflict(t, err)
+	assert.NotContains(t, err.Error(), task.TaskID)
+	assert.NotContains(t, err.Error(), f.tenant.Code)
+	assert.Equal(t, 1, f.client.ProcessApprovalDecision.Query().Where(processapprovaldecision.ProcessTaskID(task.ID)).CountX(f.userCtx))
+	assert.Equal(t, 1, f.client.ProcessAuditLog.Query().Where(processauditlog.ProcessInstanceID(instance.ID), processauditlog.ActivityID(task.TaskDefinitionKey)).CountX(f.userCtx))
+}
+
+func TestVoteConcurrentCallsCommitOnce(t *testing.T) {
+	rawDB, err := sql.Open("sqlite3", testDSN())
+	require.NoError(t, err)
+	rawDB.SetMaxOpenConns(1)
+	client := ent.NewClient(ent.Driver(entsql.OpenDB(dialect.SQLite, rawDB)))
+	require.NoError(t, client.Schema.Create(context.Background()))
+	f := newBPMNAuthorizationFixtureWithClient(t, client)
+	instance := f.createProcessInstance(t, f.tenant, "vote-concurrent")
+	task := f.createProcessTask(t, instance, f.tenant.ID, "vote-concurrent", strconv.Itoa(f.actor.ID), "", "")
+	_, err = f.client.ProcessTask.UpdateOne(task).SetStatus(common.ProcessTaskStatusAssigned).Save(f.userCtx)
+	require.NoError(t, err)
+	voteCtx := context.WithValue(f.scopedCtx(false, false, false, false), bpmn.BPMNTenantIDContextKey, f.tenant.ID)
+	voteCtx = context.WithValue(voteCtx, bpmn.BPMNUserIDContextKey, f.actor.ID)
+
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for i := 0; i < 2; i++ {
+		go func(approved bool) {
+			<-start
+			results <- f.engine.TaskService().Vote(voteCtx, task.TaskID, &VoteRequest{Approved: approved, Comment: "concurrent"})
+		}(i == 0)
+	}
+	close(start)
+
+	errs := []error{<-results, <-results}
+	successes, conflicts := 0, 0
+	for _, voteErr := range errs {
+		if voteErr == nil {
+			successes++
+			continue
+		}
+		var appErr *common.AppError
+		if errors.As(voteErr, &appErr) && appErr.Code == common.ErrCodeConflict {
+			conflicts++
+		}
+	}
+	assert.Equal(t, 1, successes, "concurrent vote errors: %v", errs)
+	assert.Equal(t, 1, conflicts, "concurrent vote errors: %v", errs)
+	assert.Equal(t, 1, f.client.ProcessApprovalDecision.Query().Where(processapprovaldecision.ProcessTaskID(task.ID)).CountX(f.userCtx))
+	assert.Equal(t, 1, f.client.ProcessAuditLog.Query().Where(processauditlog.ProcessInstanceID(instance.ID), processauditlog.ActivityID(task.TaskDefinitionKey)).CountX(f.userCtx))
+}
+
 type taskMutation func(*bpmnAuthorizationFixture, context.Context, *ent.ProcessTask) error
 
 func taskMutationCases() map[string]taskMutation {
@@ -934,6 +1047,13 @@ func failProcessAuditCreation(client *ent.Client, forcedErr error) {
 			return next.Mutate(ctx, mutation)
 		})
 	})
+}
+
+func requireBPMNConflict(t *testing.T, err error) {
+	t.Helper()
+	var appErr *common.AppError
+	require.ErrorAs(t, err, &appErr)
+	assert.Equal(t, common.ErrCodeConflict, appErr.Code)
 }
 
 func (f *bpmnAuthorizationFixture) seedParticipantAndNonParticipantInstances(t *testing.T) (*ent.ProcessInstance, *ent.ProcessInstance) {
