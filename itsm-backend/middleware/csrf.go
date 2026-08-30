@@ -63,6 +63,16 @@ func CSRFTokenGenerator(length int) string {
 	return base64.URLEncoding.EncodeToString(uid[:])
 }
 
+func shouldSetSecureCSRFCookie(c *gin.Context, config *CSRFConfig) bool {
+	if config == nil || !config.Secure {
+		return false
+	}
+	if c.Request != nil && c.Request.TLS != nil {
+		return true
+	}
+	return strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https")
+}
+
 // GenerateCSRFToken 生成 CSRF token 并设置到 cookie
 func GenerateCSRFToken(c *gin.Context, config *CSRFConfig) string {
 	token := CSRFTokenGenerator(config.TokenLength)
@@ -73,7 +83,7 @@ func GenerateCSRFToken(c *gin.Context, config *CSRFConfig) string {
 		config.CookieMaxAge,
 		"/",
 		config.Domain,
-		config.Secure,
+		shouldSetSecureCSRFCookie(c, config),
 		true, // HttpOnly - 前端 JS 无法读取
 	)
 
