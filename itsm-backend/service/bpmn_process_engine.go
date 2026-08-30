@@ -547,6 +547,10 @@ func isAsyncHandler(handler bpmn.ServiceTaskHandlerInterface) bool {
 }
 
 func (e *CustomProcessEngine) recordApprovalDecision(ctx context.Context, instance *ent.ProcessInstance, task *ent.ProcessTask, variables map[string]interface{}) error {
+	return e.recordApprovalDecisionWithClient(ctx, e.client, instance, task, variables)
+}
+
+func (e *CustomProcessEngine) recordApprovalDecisionWithClient(ctx context.Context, client *ent.Client, instance *ent.ProcessInstance, task *ent.ProcessTask, variables map[string]interface{}) error {
 	action, _ := variables["approvalAction"].(string)
 	if action == "" {
 		return nil
@@ -558,7 +562,7 @@ func (e *CustomProcessEngine) recordApprovalDecision(ctx context.Context, instan
 		return fmt.Errorf("审批决策缺少认证操作人")
 	}
 	actorName := ""
-	if actor, err := e.client.User.Get(ctx, actorID); err == nil {
+	if actor, err := client.User.Query().Where(user.ID(actorID), user.TenantID(instance.TenantID)).Only(ctx); err == nil {
 		actorName = actor.Name
 	}
 	businessType := instance.BusinessType
@@ -566,7 +570,7 @@ func (e *CustomProcessEngine) recordApprovalDecision(ctx context.Context, instan
 	if instance.BusinessID > 0 {
 		businessID = strconv.Itoa(instance.BusinessID)
 	}
-	_, err := e.client.ProcessApprovalDecision.Create().
+	_, err := client.ProcessApprovalDecision.Create().
 		SetProcessInstanceID(instance.ID).SetProcessTaskID(task.ID).
 		SetProcessInstanceKey(instance.ProcessInstanceID).SetTaskID(task.TaskID).
 		SetProcessDefinitionKey(instance.ProcessDefinitionKey).SetNodeKey(task.TaskDefinitionKey).
@@ -1120,7 +1124,8 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 			if task.ApprovalMode == "sequential" {
 				approvalType = "serial"
 			}
-			if _, err := e.taskService.CreateCounterSignTasks(ctx, createdTask.TaskID, &CounterSignRequest{ApprovalType: approvalType, Approvers: approvers, Threshold: threshold}); err != nil {
+			actorID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
+			if _, err := e.taskService.createCounterSignTasks(ctx, createdTask, &CounterSignRequest{ApprovalType: approvalType, Approvers: approvers, Threshold: threshold}, actorID); err != nil {
 				return fmt.Errorf("创建会签任务失败: %w", err)
 			}
 		}
@@ -2574,6 +2579,55 @@ func (s *bpmnTaskService) authorizeTaskRead(ctx context.Context, task *ent.Proce
 	return nil
 }
 
+func (s *bpmnTaskService) authorizeTaskUpdate(ctx context.Context, task *ent.ProcessTask) (BPMNAccessScope, error) {
+	scope, err := BPMNAccessScopeFromContext(ctx)
+	if err != nil {
+		return BPMNAccessScope{}, err
+	}
+	if task == nil || task.TenantID != scope.TenantID {
+		return BPMNAccessScope{}, common.NewNotFoundError("process task")
+	}
+	if scope.CanUpdateAllTasks {
+		return scope, nil
+	}
+	if s.participationResolver == nil {
+		return BPMNAccessScope{}, common.NewForbiddenError("无权操作该流程任务")
+	}
+	actor, err := s.participationResolver.resolveActor(ctx, scope)
+	if err != nil || !s.participationResolver.matchesTask(task, actor) {
+		return BPMNAccessScope{}, common.NewForbiddenError("无权操作该流程任务")
+	}
+	return scope, nil
+}
+
+func loadTaskMutationActor(ctx context.Context, client *ent.Client, scope BPMNAccessScope) (*ent.User, error) {
+	actor, err := client.User.Query().
+		Where(user.ID(scope.UserID), user.TenantID(scope.TenantID), user.Active(true)).
+		Only(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("获取任务操作用户失败: %w", err)
+	}
+	return actor, nil
+}
+
+func resolveTaskAssignee(ctx context.Context, client *ent.Client, tenantID int, identifier string) (*ent.User, error) {
+	identifier = strings.TrimSpace(identifier)
+	if identifier == "" {
+		return nil, fmt.Errorf("任务处理人不能为空")
+	}
+	predicates := []predicate.User{user.UsernameEqualFold(identifier), user.EmailEqualFold(identifier)}
+	if userID, err := strconv.Atoi(identifier); err == nil && userID > 0 {
+		predicates = append(predicates, user.ID(userID))
+	}
+	assignee, err := client.User.Query().
+		Where(user.TenantID(tenantID), user.Active(true), user.Or(predicates...)).
+		Only(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("任务处理人不存在: %w", err)
+	}
+	return assignee, nil
+}
+
 // GetTask 根据任务ID (BPMN标准task_id字符串)获取任务
 func (s *bpmnTaskService) GetTask(ctx context.Context, taskID string) (*ent.ProcessTask, error) {
 	scope, err := BPMNAccessScopeFromContext(ctx)
@@ -2784,18 +2838,45 @@ func (s *bpmnTaskService) ListApprovalDecisions(ctx context.Context, processInst
 }
 
 func (s *bpmnTaskService) AssignTask(ctx context.Context, taskID string, assignee string) error {
-	task, err := s.GetTask(ctx, taskID)
+	scope, err := BPMNAccessScopeFromContext(ctx)
 	if err != nil {
 		return err
 	}
-
-	_, err = s.client.ProcessTask.UpdateOne(task).
+	task, err := s.loadTaskByKey(ctx, taskID, scope.TenantID)
+	if err != nil {
+		return err
+	}
+	if _, err := s.authorizeTaskUpdate(ctx, task); err != nil {
+		return err
+	}
+	assigneeUser, err := resolveTaskAssignee(ctx, s.client, scope.TenantID, assignee)
+	if err != nil {
+		return err
+	}
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("开启任务分配事务失败: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	actor, err := loadTaskMutationActor(ctx, tx.Client(), scope)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Client().ProcessTask.UpdateOne(task).
 		SetAssignee(assignee).
 		SetStatus(common.ProcessTaskStatusAssigned).
 		SetAssignedTime(time.Now()).
 		Save(ctx)
-
-	return err
+	if err != nil {
+		return fmt.Errorf("分配任务失败: %w", err)
+	}
+	if err := s.engine.auditService.ForClient(tx.Client()).RecordTaskAssigned(ctx, task, assigneeUser, actor.ID, actor.Name); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("提交任务分配事务失败: %w", err)
+	}
+	return nil
 }
 
 // isTaskCandidate 复用 authorizeTaskActor 的候选人匹配语义（用户 ID 十进制字符串或用户名），
@@ -2886,16 +2967,39 @@ func (s *bpmnTaskService) CompleteTask(ctx context.Context, taskID string, varia
 }
 
 func (s *bpmnTaskService) CancelTask(ctx context.Context, taskID string, reason string) error {
-	task, err := s.GetTask(ctx, taskID)
+	scope, err := BPMNAccessScopeFromContext(ctx)
 	if err != nil {
 		return err
 	}
-
-	_, err = s.client.ProcessTask.UpdateOne(task).
+	task, err := s.loadTaskByKey(ctx, taskID, scope.TenantID)
+	if err != nil {
+		return err
+	}
+	if _, err := s.authorizeTaskUpdate(ctx, task); err != nil {
+		return err
+	}
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("开启任务取消事务失败: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	actor, err := loadTaskMutationActor(ctx, tx.Client(), scope)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Client().ProcessTask.UpdateOne(task).
 		SetStatus("cancelled").
 		Save(ctx)
-
-	return err
+	if err != nil {
+		return fmt.Errorf("取消任务失败: %w", err)
+	}
+	if err := s.engine.auditService.ForClient(tx.Client()).RecordTaskCancelled(ctx, task, actor.ID, actor.Name, reason); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("提交任务取消事务失败: %w", err)
+	}
+	return nil
 }
 
 func (s *bpmnTaskService) GetTaskVariables(ctx context.Context, taskID string) (map[string]interface{}, error) {
@@ -2908,16 +3012,39 @@ func (s *bpmnTaskService) GetTaskVariables(ctx context.Context, taskID string) (
 }
 
 func (s *bpmnTaskService) SetTaskVariables(ctx context.Context, taskID string, variables map[string]interface{}) error {
-	task, err := s.GetTask(ctx, taskID)
+	scope, err := BPMNAccessScopeFromContext(ctx)
 	if err != nil {
 		return err
 	}
-
-	_, err = s.client.ProcessTask.UpdateOne(task).
+	task, err := s.loadTaskByKey(ctx, taskID, scope.TenantID)
+	if err != nil {
+		return err
+	}
+	if _, err := s.authorizeTaskUpdate(ctx, task); err != nil {
+		return err
+	}
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("开启任务变量事务失败: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	actor, err := loadTaskMutationActor(ctx, tx.Client(), scope)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Client().ProcessTask.UpdateOne(task).
 		SetTaskVariables(variables).
 		Save(ctx)
-
-	return err
+	if err != nil {
+		return fmt.Errorf("设置任务变量失败: %w", err)
+	}
+	if err := s.engine.auditService.ForClient(tx.Client()).RecordTaskVariablesChanged(ctx, task, actor.ID, actor.Name, task.TaskVariables, variables); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("提交任务变量事务失败: %w", err)
+	}
+	return nil
 }
 
 func (s *bpmnTaskService) HandleTaskTimeout(ctx context.Context, taskID string) error {
@@ -3098,16 +3225,48 @@ func (s *bpmnTaskService) GetTaskStatistics(ctx context.Context, req *TaskStatis
 
 // CreateCounterSignTasks 创建会签子任务
 func (s *bpmnTaskService) CreateCounterSignTasks(ctx context.Context, parentTaskID string, req *CounterSignRequest) ([]*ent.ProcessTask, error) {
-	// 获取父任务
-	parentTask, err := s.client.ProcessTask.Query().
-		Where(processtask.TaskID(parentTaskID)).
-		First(ctx)
+	scope, err := BPMNAccessScopeFromContext(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("获取父任务失败: %w", err)
+		return nil, err
+	}
+	parentTask, err := s.loadTaskByKey(ctx, parentTaskID, scope.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.authorizeTaskUpdate(ctx, parentTask); err != nil {
+		return nil, err
+	}
+	return s.createCounterSignTasks(ctx, parentTask, req, scope.UserID)
+}
+
+func (s *bpmnTaskService) createCounterSignTasks(ctx context.Context, parentTask *ent.ProcessTask, req *CounterSignRequest, actorID int) ([]*ent.ProcessTask, error) {
+	if req == nil || len(req.Approvers) == 0 {
+		return nil, fmt.Errorf("会签审批人不能为空")
+	}
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("开启会签任务事务失败: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	actorName := ""
+	if actorID > 0 {
+		actor, actorErr := tx.Client().User.Query().
+			Where(user.ID(actorID), user.TenantID(parentTask.TenantID), user.Active(true)).
+			Only(ctx)
+		if actorErr != nil {
+			return nil, fmt.Errorf("获取会签操作用户失败: %w", actorErr)
+		}
+		actorName = actor.Name
+	}
+	for _, approver := range req.Approvers {
+		if _, err := resolveTaskAssignee(ctx, tx.Client(), parentTask.TenantID, approver); err != nil {
+			return nil, err
+		}
 	}
 
 	// 生成根任务ID（如果是第一个会签任务）
-	rootTaskID := parentTaskID
+	rootTaskID := parentTask.TaskID
 	if parentTask.RootTaskID != "" {
 		rootTaskID = parentTask.RootTaskID
 	}
@@ -3119,12 +3278,12 @@ func (s *bpmnTaskService) CreateCounterSignTasks(ctx context.Context, parentTask
 
 	var tasks []*ent.ProcessTask
 	for i, approver := range req.Approvers {
-		taskID := fmt.Sprintf("%s_countersign_%d", parentTaskID, i)
+		taskID := fmt.Sprintf("%s_countersign_%d", parentTask.TaskID, i)
 		status := common.ProcessTaskStatusAssigned
 		if req.ApprovalType == "serial" && i > 0 {
 			status = "created"
 		}
-		task, err := s.client.ProcessTask.Create().
+		task, err := tx.Client().ProcessTask.Create().
 			SetTaskID(taskID).
 			SetProcessInstanceID(parentTask.ProcessInstanceID).
 			SetProcessDefinitionKey(parentTask.ProcessDefinitionKey).
@@ -3134,7 +3293,7 @@ func (s *bpmnTaskService) CreateCounterSignTasks(ctx context.Context, parentTask
 			SetAssignee(approver).
 			SetStatus(status).
 			SetPriority(parentTask.Priority).
-			SetParentTaskID(parentTaskID).
+			SetParentTaskID(parentTask.TaskID).
 			SetRootTaskID(rootTaskID).
 			SetTenantID(parentTask.TenantID).
 			SetCreatedTime(time.Now()).
@@ -3146,7 +3305,8 @@ func (s *bpmnTaskService) CreateCounterSignTasks(ctx context.Context, parentTask
 	}
 
 	// 更新父任务状态为会签中
-	_, err = s.client.ProcessTask.UpdateOneID(parentTask.ID).
+	_, err = tx.Client().ProcessTask.UpdateOneID(parentTask.ID).
+		Where(processtask.TenantID(parentTask.TenantID)).
 		SetTaskVariables(map[string]interface{}{
 			"approval_type": req.ApprovalType,
 			"threshold":     threshold,
@@ -3157,7 +3317,16 @@ func (s *bpmnTaskService) CreateCounterSignTasks(ctx context.Context, parentTask
 		}).
 		Save(ctx)
 	if err != nil {
-		s.logger.Warnf("更新父任务变量失败: %v", err)
+		return nil, fmt.Errorf("更新会签父任务失败: %w", err)
+	}
+	if err := s.engine.auditService.ForClient(tx.Client()).RecordCounterSignCreated(ctx, parentTask, actorID, actorName, len(req.Approvers)); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("提交会签任务事务失败: %w", err)
+	}
+	for _, task := range tasks {
+		task.Unwrap()
 	}
 
 	return tasks, nil
@@ -3169,16 +3338,20 @@ func (s *bpmnTaskService) GetCounterSignStatus(ctx context.Context, parentTaskID
 	if err != nil {
 		return nil, err
 	}
+	return getCounterSignStatus(ctx, s.client, parent)
+}
+
+func getCounterSignStatus(ctx context.Context, client *ent.Client, parent *ent.ProcessTask) (*CounterSignStatus, error) {
 	// 获取所有会签子任务
-	subTasks, err := s.client.ProcessTask.Query().
-		Where(processtask.ParentTaskID(parentTaskID), processtask.TenantID(parent.TenantID)).
+	subTasks, err := client.ProcessTask.Query().
+		Where(processtask.ParentTaskID(parent.TaskID), processtask.TenantID(parent.TenantID)).
 		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("获取会签子任务失败: %w", err)
 	}
 
 	status := &CounterSignStatus{
-		ParentTaskID: parentTaskID,
+		ParentTaskID: parent.TaskID,
 		Total:        len(subTasks),
 		Completed:    0,
 		Approved:     0,
@@ -3233,11 +3406,13 @@ func numericInt(value interface{}) (int, bool) {
 
 // Vote 投票（完成会签任务）
 func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequest) error {
-	task, err := s.client.ProcessTask.Query().
-		Where(processtask.TaskID(taskID)).
-		First(ctx)
+	scope, err := BPMNAccessScopeFromContext(ctx)
 	if err != nil {
-		return fmt.Errorf("获取任务失败: %w", err)
+		return err
+	}
+	task, err := s.loadTaskByKey(ctx, taskID, scope.TenantID)
+	if err != nil {
+		return err
 	}
 	if err := s.engine.authorizeTaskActor(ctx, task); err != nil {
 		return err
@@ -3249,46 +3424,62 @@ func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequ
 		return fmt.Errorf("会签任务尚未轮到当前审批人")
 	}
 
-	// 更新任务状态为完成
-	_, err = s.client.ProcessTask.UpdateOneID(task.ID).
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("开启会签投票事务失败: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	actor, err := loadTaskMutationActor(ctx, tx.Client(), scope)
+	if err != nil {
+		return err
+	}
+	voteVariables := map[string]interface{}{
+		"approved": req.Approved,
+		"comment":  req.Comment,
+	}
+	_, err = tx.Client().ProcessTask.UpdateOneID(task.ID).
+		Where(processtask.TenantID(scope.TenantID)).
 		SetStatus("completed").
 		SetCompletedTime(time.Now()).
-		SetTaskVariables(map[string]interface{}{
-			"approved": req.Approved,
-			"comment":  req.Comment,
-		}).
+		SetTaskVariables(voteVariables).
 		Save(ctx)
 	if err != nil {
 		return fmt.Errorf("完成任务失败: %w", err)
 	}
-	instance, err := s.client.ProcessInstance.Get(ctx, task.ProcessInstanceID)
-	if err == nil {
-		action, decision := "reject", "rejected"
-		if req.Approved {
-			action, decision = "approve", "approved"
-		}
-		if err := s.engine.recordApprovalDecision(ctx, instance, task, map[string]interface{}{"approvalAction": action, "approvalResult": decision, "approvalComment": req.Comment}); err != nil {
-			return err
-		}
+	instance, err := tx.Client().ProcessInstance.Query().
+		Where(processinstance.ID(task.ProcessInstanceID), processinstance.TenantID(scope.TenantID)).
+		Only(ctx)
+	if err != nil {
+		return fmt.Errorf("获取会签流程实例失败: %w", err)
+	}
+	action, decision := "reject", "rejected"
+	if req.Approved {
+		action, decision = "approve", "approved"
+	}
+	decisionVariables := map[string]interface{}{"approvalAction": action, "approvalResult": decision, "approvalComment": req.Comment}
+	if err := s.engine.recordApprovalDecisionWithClient(ctx, tx.Client(), instance, task, decisionVariables); err != nil {
+		return err
+	}
+	if err := s.engine.auditService.ForClient(tx.Client()).RecordTaskCompleted(ctx, task, actor.ID, actor.Name, task.TaskVariables, voteVariables); err != nil {
+		return err
 	}
 
-	// 获取会签状态
 	parentTaskID := task.ParentTaskID
 	if parentTaskID == "" {
-		return nil // 没有父任务，不需要检查会签状态
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("提交会签投票事务失败: %w", err)
+		}
+		return nil
 	}
-
-	status, err := s.GetCounterSignStatus(ctx, parentTaskID)
+	parentTask, err := tx.Client().ProcessTask.Query().
+		Where(processtask.TaskID(parentTaskID), processtask.TenantID(scope.TenantID)).
+		Only(ctx)
+	if err != nil {
+		return fmt.Errorf("获取会签父任务失败: %w", err)
+	}
+	status, err := getCounterSignStatus(ctx, tx.Client(), parentTask)
 	if err != nil {
 		return fmt.Errorf("获取会签状态失败: %w", err)
-	}
-
-	// 根据会签类型和阈值判断是否需要终止其他任务
-	parentTask, err := s.client.ProcessTask.Query().
-		Where(processtask.TaskID(parentTaskID)).
-		First(ctx)
-	if err != nil {
-		return nil
 	}
 
 	vars := parentTask.TaskVariables
@@ -3305,19 +3496,28 @@ func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequ
 	}
 
 	if approvalType == "serial" && req.Approved && status.Status == "pending" {
-		next, err := s.client.ProcessTask.Query().Where(processtask.ParentTaskID(parentTaskID), processtask.Status("created")).Order(ent.Asc(processtask.FieldID)).First(ctx)
+		next, err := tx.Client().ProcessTask.Query().
+			Where(processtask.ParentTaskID(parentTaskID), processtask.TenantID(scope.TenantID), processtask.Status("created")).
+			Order(ent.Asc(processtask.FieldID)).
+			First(ctx)
 		if err == nil {
-			_ = s.client.ProcessTask.UpdateOneID(next.ID).SetStatus(common.ProcessTaskStatusAssigned).Exec(ctx)
+			if err := tx.Client().ProcessTask.UpdateOneID(next.ID).Where(processtask.TenantID(scope.TenantID)).SetStatus(common.ProcessTaskStatusAssigned).Exec(ctx); err != nil {
+				return fmt.Errorf("激活下一会签任务失败: %w", err)
+			}
+		} else if !ent.IsNotFound(err) {
+			return fmt.Errorf("获取下一会签任务失败: %w", err)
 		}
 	}
 
-	// 检查是否达到阈值
-	if status.Status == "approved" || status.Status == "rejected" {
-		_, _ = s.client.ProcessTask.Update().
-			Where(processtask.ParentTaskID(parentTaskID), processtask.StatusNEQ("completed"), processtask.StatusNEQ("cancelled")).
-			SetStatus("cancelled").SetCompletedTime(time.Now()).Save(ctx)
-		// 更新父任务
-		s.client.ProcessTask.UpdateOneID(parentTask.ID).
+	final := status.Status == "approved" || status.Status == "rejected"
+	if final {
+		if _, err := tx.Client().ProcessTask.Update().
+			Where(processtask.ParentTaskID(parentTaskID), processtask.TenantID(scope.TenantID), processtask.StatusNEQ("completed"), processtask.StatusNEQ("cancelled")).
+			SetStatus("cancelled").SetCompletedTime(time.Now()).Save(ctx); err != nil {
+			return fmt.Errorf("取消剩余会签任务失败: %w", err)
+		}
+		if err := tx.Client().ProcessTask.UpdateOneID(parentTask.ID).
+			Where(processtask.TenantID(scope.TenantID)).
 			SetTaskVariables(map[string]interface{}{
 				"approval_type": approvalType,
 				"threshold":     threshold,
@@ -3327,12 +3527,17 @@ func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequ
 				"rejected":      status.Rejected,
 				"final_status":  status.Status,
 			}).
-			Exec(ctx)
-		workflowCtx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, parentTask.TenantID)
-		if err := s.engine.CompleteTask(workflowCtx, parentTask.TaskID, map[string]interface{}{"approvalResult": status.Status, "approved": status.Status == "approved"}); err != nil {
+			Exec(ctx); err != nil {
+			return fmt.Errorf("更新会签父任务失败: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("提交会签投票事务失败: %w", err)
+	}
+	if final {
+		if err := s.engine.CompleteTask(ctx, parentTask.TaskID, map[string]interface{}{"approvalResult": status.Status, "approved": status.Status == "approved"}); err != nil {
 			return fmt.Errorf("推进会签父任务失败: %w", err)
 		}
 	}
-
 	return nil
 }

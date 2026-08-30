@@ -10,6 +10,7 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/ent/processapprovaldecision"
 	"itsm-backend/ent/processauditlog"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/service/bpmn"
@@ -709,6 +710,230 @@ func TestTaskStatisticsAuthorization(t *testing.T) {
 	assert.Equal(t, f.tenant.ID, req.TenantID)
 	assert.Contains(t, stats.AssigneeBreakdown, mine.Assignee)
 	assert.NotContains(t, stats.AssigneeBreakdown, strconv.Itoa(f.otherActor.ID))
+}
+
+func TestTaskMutationsRequireParticipantOrTaskUpdate(t *testing.T) {
+	mutations := taskMutationCases()
+	for name, mutate := range mutations {
+		t.Run(name, func(t *testing.T) {
+			f := newBPMNAuthorizationFixture(t)
+			_, task := f.seedMineAndOtherTasks(t)
+			requireBPMNForbidden(t, mutate(f, f.scopedCtx(false, false, false, false), task))
+		})
+	}
+}
+
+func TestTaskParticipantCanMutateOwnTask(t *testing.T) {
+	for name, mutate := range taskMutationCases() {
+		t.Run(name, func(t *testing.T) {
+			f := newBPMNAuthorizationFixture(t)
+			task, _ := f.seedMineAndOtherTasks(t)
+			require.NoError(t, mutate(f, f.scopedCtx(false, false, false, false), task))
+			audit := f.client.ProcessAuditLog.Query().
+				Where(processauditlog.ProcessInstanceID(task.ProcessInstanceID)).
+				OnlyX(f.userCtx)
+			assert.Equal(t, expectedTaskMutationAuditAction(name), audit.Action)
+			assert.Equal(t, f.actor.ID, audit.UserID)
+			assert.Equal(t, f.tenant.ID, audit.TenantID)
+			if name == "counter-sign" {
+				assert.Equal(t, 1, f.client.ProcessTask.Query().Where(processtask.ParentTaskID(task.TaskID), processtask.TenantID(f.tenant.ID)).CountX(f.userCtx))
+				assert.Equal(t, float64(1), f.client.ProcessTask.GetX(f.userCtx, task.ID).TaskVariables["total"])
+			}
+		})
+	}
+}
+
+func TestTaskUpdaterCanMutateOtherTask(t *testing.T) {
+	for name, mutate := range taskMutationCases() {
+		t.Run(name, func(t *testing.T) {
+			f := newBPMNAuthorizationFixture(t)
+			_, task := f.seedMineAndOtherTasks(t)
+			require.NoError(t, mutate(f, f.scopedCtx(false, false, false, true), task))
+			assert.Equal(t, 1, f.client.ProcessAuditLog.Query().
+				Where(processauditlog.ProcessInstanceID(task.ProcessInstanceID)).
+				CountX(f.userCtx))
+		})
+	}
+}
+
+func TestTaskMutationRejectsCrossTenant(t *testing.T) {
+	for name, mutate := range taskMutationCases() {
+		t.Run(name+" target", func(t *testing.T) {
+			f := newBPMNAuthorizationFixture(t)
+			instance := f.createProcessInstance(t, f.otherTenant, "mutation-cross-tenant-"+name)
+			task := f.createProcessTask(t, instance, f.otherTenant.ID, "mutation-cross-tenant-"+name, strconv.Itoa(f.otherActor.ID), "", "")
+			err := mutate(f, f.scopedCtx(false, false, false, true), task)
+			require.Error(t, err)
+			assert.True(t, ent.IsNotFound(err), "cross-tenant mutation must be indistinguishable from absence: %v", err)
+		})
+	}
+
+	t.Run("assign foreign user", func(t *testing.T) {
+		f := newBPMNAuthorizationFixture(t)
+		task, _ := f.seedMineAndOtherTasks(t)
+		err := f.engine.TaskService().AssignTask(f.scopedCtx(false, false, false, false), task.TaskID, strconv.Itoa(f.otherActor.ID))
+		require.Error(t, err)
+		assert.Equal(t, task.Assignee, f.client.ProcessTask.GetX(f.userCtx, task.ID).Assignee)
+	})
+
+	t.Run("counter-sign foreign approver", func(t *testing.T) {
+		f := newBPMNAuthorizationFixture(t)
+		task, _ := f.seedMineAndOtherTasks(t)
+		_, err := f.engine.TaskService().CreateCounterSignTasks(
+			f.scopedCtx(false, false, false, false),
+			task.TaskID,
+			&CounterSignRequest{Approvers: []string{strconv.Itoa(f.otherActor.ID)}, ApprovalType: "parallel", Threshold: 1},
+		)
+		require.Error(t, err)
+		assert.Zero(t, f.client.ProcessTask.Query().Where(processtask.ParentTaskID(task.TaskID)).CountX(f.userCtx))
+	})
+}
+
+func TestTaskMutationAuditRollback(t *testing.T) {
+	forcedAuditErr := errors.New("forced task audit failure")
+	for name, mutate := range taskMutationCasesWithoutCounterSign() {
+		t.Run(name, func(t *testing.T) {
+			f := newBPMNAuthorizationFixture(t)
+			task, _ := f.seedMineAndOtherTasks(t)
+			before := f.client.ProcessTask.GetX(f.userCtx, task.ID)
+			failProcessAuditCreation(f.client, forcedAuditErr)
+
+			err := mutate(f, f.scopedCtx(false, false, false, false), task)
+			require.ErrorIs(t, err, forcedAuditErr)
+			after := f.client.ProcessTask.GetX(f.userCtx, task.ID)
+			assert.Equal(t, before.Status, after.Status)
+			assert.Equal(t, before.Assignee, after.Assignee)
+			assert.Equal(t, before.TaskVariables, after.TaskVariables)
+			assert.Zero(t, f.client.ProcessAuditLog.Query().Where(processauditlog.ProcessInstanceID(task.ProcessInstanceID)).CountX(f.userCtx))
+		})
+	}
+}
+
+func TestCounterSignCreatesChildrenParentAndAuditAtomically(t *testing.T) {
+	forcedAuditErr := errors.New("forced counter-sign audit failure")
+	f := newBPMNAuthorizationFixture(t)
+	parent, _ := f.seedMineAndOtherTasks(t)
+	beforeVariables := parent.TaskVariables
+	failProcessAuditCreation(f.client, forcedAuditErr)
+
+	children, err := f.engine.TaskService().CreateCounterSignTasks(
+		f.scopedCtx(false, false, false, false),
+		parent.TaskID,
+		&CounterSignRequest{Approvers: []string{strconv.Itoa(f.actor.ID), strconv.Itoa(f.outsider.ID)}, ApprovalType: "parallel", Threshold: 2},
+	)
+	require.ErrorIs(t, err, forcedAuditErr)
+	assert.Nil(t, children)
+	assert.Zero(t, f.client.ProcessTask.Query().Where(processtask.ParentTaskID(parent.TaskID)).CountX(f.userCtx))
+	assert.Equal(t, beforeVariables, f.client.ProcessTask.GetX(f.userCtx, parent.ID).TaskVariables)
+	assert.Zero(t, f.client.ProcessAuditLog.Query().Where(processauditlog.ProcessInstanceID(parent.ProcessInstanceID)).CountX(f.userCtx))
+}
+
+func TestVoteWritesDecisionAndCompletesTaskAtomically(t *testing.T) {
+	forcedAuditErr := errors.New("forced vote audit failure")
+	f := newBPMNAuthorizationFixture(t)
+	instance := f.createProcessInstance(t, f.tenant, "vote-rollback")
+	task := f.createProcessTask(t, instance, f.tenant.ID, "vote-rollback", strconv.Itoa(f.actor.ID), "", "")
+	_, err := f.client.ProcessTask.UpdateOne(task).SetStatus(common.ProcessTaskStatusAssigned).Save(f.userCtx)
+	require.NoError(t, err)
+	failProcessAuditCreation(f.client, forcedAuditErr)
+
+	voteCtx := context.WithValue(f.scopedCtx(false, false, false, false), bpmn.BPMNTenantIDContextKey, f.tenant.ID)
+	voteCtx = context.WithValue(voteCtx, bpmn.BPMNUserIDContextKey, f.actor.ID)
+	err = f.engine.TaskService().Vote(
+		voteCtx,
+		task.TaskID,
+		&VoteRequest{Approved: true, Comment: "approved"},
+	)
+	require.ErrorIs(t, err, forcedAuditErr)
+	after := f.client.ProcessTask.GetX(f.userCtx, task.ID)
+	assert.Equal(t, common.ProcessTaskStatusAssigned, after.Status)
+	assert.Empty(t, after.TaskVariables)
+	assert.Zero(t, f.client.ProcessApprovalDecision.Query().CountX(f.userCtx))
+	assert.Zero(t, f.client.ProcessAuditLog.Query().Where(processauditlog.ProcessInstanceID(instance.ID)).CountX(f.userCtx))
+}
+
+func TestVoteTenantScopesRelatedTasks(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	instance := f.createProcessInstance(t, f.tenant, "vote-tenant-scope")
+	parent := f.createProcessTask(t, instance, f.tenant.ID, "vote-tenant-parent", strconv.Itoa(f.actor.ID), "", "")
+	otherInstance := f.createProcessInstance(t, f.otherTenant, "vote-tenant-scope-other")
+	foreignChild := f.createProcessTask(t, otherInstance, f.otherTenant.ID, "vote-foreign-child", strconv.Itoa(f.otherActor.ID), "", "")
+	foreignChild, err := f.client.ProcessTask.UpdateOne(foreignChild).
+		SetParentTaskID(parent.TaskID).
+		SetStatus("created").
+		Save(f.userCtx)
+	require.NoError(t, err)
+
+	children, err := f.engine.TaskService().CreateCounterSignTasks(
+		f.scopedCtx(false, false, false, false),
+		parent.TaskID,
+		&CounterSignRequest{Approvers: []string{strconv.Itoa(f.actor.ID), strconv.Itoa(f.outsider.ID)}, ApprovalType: "serial", Threshold: 2},
+	)
+	require.NoError(t, err)
+	require.Len(t, children, 2)
+
+	voteCtx := context.WithValue(f.scopedCtx(false, false, false, false), bpmn.BPMNTenantIDContextKey, f.tenant.ID)
+	voteCtx = context.WithValue(voteCtx, bpmn.BPMNUserIDContextKey, f.actor.ID)
+	require.NoError(t, f.engine.TaskService().Vote(voteCtx, children[0].TaskID, &VoteRequest{Approved: true, Comment: "first approval"}))
+
+	assert.Equal(t, "completed", f.client.ProcessTask.GetX(f.userCtx, children[0].ID).Status)
+	assert.Equal(t, common.ProcessTaskStatusAssigned, f.client.ProcessTask.GetX(f.userCtx, children[1].ID).Status)
+	assert.Equal(t, "created", f.client.ProcessTask.GetX(f.userCtx, foreignChild.ID).Status)
+	assert.Equal(t, 1, f.client.ProcessApprovalDecision.Query().Where(processapprovaldecision.TenantID(f.tenant.ID)).CountX(f.userCtx))
+	assert.Zero(t, f.client.ProcessApprovalDecision.Query().Where(processapprovaldecision.TenantID(f.otherTenant.ID)).CountX(f.userCtx))
+}
+
+type taskMutation func(*bpmnAuthorizationFixture, context.Context, *ent.ProcessTask) error
+
+func taskMutationCases() map[string]taskMutation {
+	mutations := taskMutationCasesWithoutCounterSign()
+	mutations["counter-sign"] = func(f *bpmnAuthorizationFixture, ctx context.Context, task *ent.ProcessTask) error {
+		_, err := f.engine.TaskService().CreateCounterSignTasks(ctx, task.TaskID, &CounterSignRequest{
+			Approvers: []string{strconv.Itoa(f.actor.ID)}, ApprovalType: "parallel", Threshold: 1,
+		})
+		return err
+	}
+	return mutations
+}
+
+func taskMutationCasesWithoutCounterSign() map[string]taskMutation {
+	return map[string]taskMutation{
+		"assign": func(f *bpmnAuthorizationFixture, ctx context.Context, task *ent.ProcessTask) error {
+			return f.engine.TaskService().AssignTask(ctx, task.TaskID, strconv.Itoa(f.outsider.ID))
+		},
+		"cancel": func(f *bpmnAuthorizationFixture, ctx context.Context, task *ent.ProcessTask) error {
+			return f.engine.TaskService().CancelTask(ctx, task.TaskID, "invalid")
+		},
+		"variables": func(f *bpmnAuthorizationFixture, ctx context.Context, task *ent.ProcessTask) error {
+			return f.engine.TaskService().SetTaskVariables(ctx, task.TaskID, map[string]interface{}{"x": 1})
+		},
+	}
+}
+
+func expectedTaskMutationAuditAction(name string) string {
+	switch name {
+	case "assign":
+		return AuditActionTaskAssigned
+	case "cancel":
+		return AuditActionTaskCancelled
+	case "variables":
+		return AuditActionTaskVariablesChanged
+	case "counter-sign":
+		return AuditActionCounterSignCreated
+	default:
+		return ""
+	}
+}
+
+func failProcessAuditCreation(client *ent.Client, forcedErr error) {
+	client.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			if _, ok := mutation.(*ent.ProcessAuditLogMutation); ok {
+				return nil, forcedErr
+			}
+			return next.Mutate(ctx, mutation)
+		})
+	})
 }
 
 func (f *bpmnAuthorizationFixture) seedParticipantAndNonParticipantInstances(t *testing.T) (*ent.ProcessInstance, *ent.ProcessInstance) {

@@ -32,21 +32,23 @@ func (s *BPMNAuditService) ForClient(client *ent.Client) *BPMNAuditService {
 
 // AuditAction 审计操作类型
 const (
-	AuditActionProcessStarted    = "started"
-	AuditActionProcessCompleted  = "completed"
-	AuditActionProcessSuspended  = "suspended"
-	AuditActionProcessResumed    = "resumed"
-	AuditActionProcessTerminated = "terminated"
-	AuditActionTaskAssigned      = "assigned"
-	AuditActionTaskUnassigned    = "unassigned"
-	AuditActionTaskClaimed       = "claimed"
-	AuditActionTaskCompleted     = "completed"
-	AuditActionTaskCancelled     = "cancelled"
-	AuditActionTaskEscalated     = "escalated"
-	AuditActionTaskReassigned    = "reassigned"
-	AuditActionVariableChanged   = "variable_changed"
-	AuditActionActivityStarted   = "activity_started"
-	AuditActionActivityCompleted = "activity_completed"
+	AuditActionProcessStarted       = "started"
+	AuditActionProcessCompleted     = "completed"
+	AuditActionProcessSuspended     = "suspended"
+	AuditActionProcessResumed       = "resumed"
+	AuditActionProcessTerminated    = "terminated"
+	AuditActionTaskAssigned         = "assigned"
+	AuditActionTaskUnassigned       = "unassigned"
+	AuditActionTaskClaimed          = "claimed"
+	AuditActionTaskCompleted        = "completed"
+	AuditActionTaskCancelled        = "task_cancelled"
+	AuditActionTaskVariablesChanged = "task_variables_changed"
+	AuditActionCounterSignCreated   = "counter_sign_created"
+	AuditActionTaskEscalated        = "escalated"
+	AuditActionTaskReassigned       = "reassigned"
+	AuditActionVariableChanged      = "variable_changed"
+	AuditActionActivityStarted      = "activity_started"
+	AuditActionActivityCompleted    = "activity_completed"
 )
 
 // ActivityType 活动类型
@@ -203,6 +205,56 @@ func (s *BPMNAuditService) RecordTaskAssigned(ctx context.Context, task *ent.Pro
 		AssigneeName:         assigneeName,
 		TenantID:             tenantID,
 	})
+}
+
+// RecordTaskCancelled records a user-visible task cancellation and its reason.
+func (s *BPMNAuditService) RecordTaskCancelled(ctx context.Context, task *ent.ProcessTask, userID int, userName, reason string) error {
+	auditCtx := s.taskAuditContext(ctx, task, userID, userName)
+	auditCtx.Action = AuditActionTaskCancelled
+	auditCtx.Comment = reason
+	return s.RecordAudit(ctx, auditCtx)
+}
+
+// RecordTaskVariablesChanged records task-local variable changes.
+func (s *BPMNAuditService) RecordTaskVariablesChanged(ctx context.Context, task *ent.ProcessTask, userID int, userName string, before, after map[string]interface{}) error {
+	auditCtx := s.taskAuditContext(ctx, task, userID, userName)
+	auditCtx.Action = AuditActionTaskVariablesChanged
+	auditCtx.VariablesBefore = before
+	auditCtx.VariablesAfter = after
+	return s.RecordAudit(ctx, auditCtx)
+}
+
+// RecordCounterSignCreated records creation of a counter-sign task set.
+func (s *BPMNAuditService) RecordCounterSignCreated(ctx context.Context, parentTask *ent.ProcessTask, userID int, userName string, approverCount int) error {
+	auditCtx := s.taskAuditContext(ctx, parentTask, userID, userName)
+	auditCtx.Action = AuditActionCounterSignCreated
+	auditCtx.Comment = fmt.Sprintf("创建 %d 个会签任务", approverCount)
+	auditCtx.Metadata = map[string]interface{}{"approverCount": approverCount}
+	return s.RecordAudit(ctx, auditCtx)
+}
+
+func (s *BPMNAuditService) taskAuditContext(ctx context.Context, task *ent.ProcessTask, userID int, userName string) *AuditContext {
+	instance, err := s.client.ProcessInstance.Get(ctx, task.ProcessInstanceID)
+	processInstanceKey := ""
+	processDefinitionID := 0
+	tenantID := task.TenantID
+	if err == nil {
+		processInstanceKey = instance.ProcessInstanceID
+		processDefinitionID = instance.ProcessDefinitionID
+		tenantID = instance.TenantID
+	}
+	return &AuditContext{
+		ProcessInstanceID:    task.ProcessInstanceID,
+		ProcessInstanceKey:   processInstanceKey,
+		ProcessDefinitionKey: task.ProcessDefinitionKey,
+		ProcessDefinitionID:  processDefinitionID,
+		ActivityID:           task.TaskDefinitionKey,
+		ActivityName:         task.TaskName,
+		ActivityType:         task.TaskType,
+		UserID:               userID,
+		UserName:             userName,
+		TenantID:             tenantID,
+	}
 }
 
 // RecordTaskClaimed 记录任务签收
