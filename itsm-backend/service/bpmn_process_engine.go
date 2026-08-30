@@ -112,6 +112,8 @@ type CustomProcessEngine struct {
 	taskService              *bpmnTaskService
 	// 审计服务
 	auditService *BPMNAuditService
+	// KAF 委派服务负责委派任务、审计和 Outbox 的原子写入。
+	kafDelegationService *KafDelegationService
 }
 
 // NewCustomProcessEngine 创建自定义流程引擎实例
@@ -134,6 +136,7 @@ func NewCustomProcessEngine(client *ent.Client, logger *zap.SugaredLogger) Proce
 	// 静默失败（见 dispatchUserTaskCallback 的"失败只告警不阻断"注释）。
 	engine.taskService = &bpmnTaskService{client: client, logger: logger, groupResolver: engine.groupResolver, engine: engine}
 	engine.auditService = NewBPMNAuditService(client, logger)
+	engine.kafDelegationService = NewKafDelegationService(client)
 
 	// 注册流程相关的内置函数
 	engine.registerProcessFunctions()
@@ -1120,6 +1123,17 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 // authorizeTaskActor 和 dispatchUserTaskCallback 重新做 findHandlerByTaskType 查找——
 // 三处用的必须是同一个能查到同一个 handler 的字符串。
 func (e *CustomProcessEngine) createDelegatedTask(ctx context.Context, instance *ent.ProcessInstance, serviceTask *BPMNServiceTask, taskType string) error {
+	if taskType == bpmn.KafDelegateTaskType {
+		if e.kafDelegationService == nil {
+			return fmt.Errorf("KAF delegation service is not configured")
+		}
+		if _, err := e.kafDelegationService.CreateDelegatedTask(ctx, instance.ID, serviceTask); err != nil {
+			return fmt.Errorf("创建 KAF 委派任务失败: %w", err)
+		}
+		e.logger.Infow("KAF ServiceTask 已暂停，等待外部完成", "elementID", serviceTask.ID, "instanceID", instance.ProcessInstanceID)
+		return nil
+	}
+
 	taskVariables := map[string]interface{}{
 		bpmnMetaDataServiceTaskType: taskType,
 	}

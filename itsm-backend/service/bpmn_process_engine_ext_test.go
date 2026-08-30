@@ -10,6 +10,7 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/ent/outboxevent"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/service/bpmn"
 
@@ -1175,6 +1176,42 @@ func TestHandleElement_AsyncServiceTask_PausesAndCreatesDelegatedTask(t *testing
 	assert.Equal(t, "resolve,update_progress", delegatedTask.TaskVariables["allowed_actions"])
 }
 
+func TestHandleElement_KafDelegate_PersistsTransactionalDelegation(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
+	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, actorID)
+
+	instanceID, _ := createProcessFixture(t, engine, tenantID, "kaf-transactional-delegation")
+	instance, err := engine.client.ProcessInstance.UpdateOneID(instanceID).
+		SetBusinessType("incident").
+		SetBusinessID(42).
+		Save(ctx)
+	require.NoError(t, err)
+	engine.callbackRegistry.RegisterHandler(&fakeAsyncServiceTaskHandler{taskType: bpmn.KafDelegateTaskType, handlerID: "kaf_delegate_handler"})
+
+	process := &BPMNProcess{ServiceTasks: []*BPMNServiceTask{kafDelegateTask("complete_bpmn_task,update_progress")}}
+	err = engine.handleElement(ctx, instance, process, "Activity_KafDelegate")
+	require.NoError(t, err)
+
+	delegatedTask, err := engine.client.ProcessTask.Query().
+		Where(processtask.ProcessInstanceID(instance.ID), processtask.TaskDefinitionKey("Activity_KafDelegate")).
+		Only(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, bpmn.KafDelegateTaskType, delegatedTask.TaskType)
+	assert.NotEmpty(t, delegatedTask.CorrelationID)
+
+	pendingEvents, err := engine.client.OutboxEvent.Query().
+		Where(outboxevent.AggregateIDEQ(delegatedTask.TaskID), outboxevent.StatusEQ("pending")).
+		Count(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, pendingEvents)
+
+	updatedInstance, err := engine.client.ProcessInstance.Get(ctx, instance.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "Activity_KafDelegate", updatedInstance.CurrentActivityID)
+}
+
 // TestHandleElement_AsyncServiceTask_LegacyAttributeFallback_PausesAndCreatesDelegatedTask
 // 是 Important #1 的回归：handleElement 的 serviceTask 分支有两条 handler 解析路径——
 // metaData 路径（上面的测试覆盖）和没有声明 service_task_type 时的 legacy 路径（按
@@ -1443,6 +1480,15 @@ func TestCompleteTask_ResumesDelegatedTask_AfterAsyncPause(t *testing.T) {
 
 	instanceID, _ := createProcessFixture(t, engine, tenantID, "resume-1")
 	instance, err := engine.client.ProcessInstance.Get(authorCtx, instanceID)
+	require.NoError(t, err)
+	// kaf_delegate 的投递合同只允许 Incident 或 Service Request。这个回归覆盖
+	// KAF 委派恢复路径，因此夹具必须表示一个可投递的 Incident，而不是通用审批
+	// 夹具默认的 change。
+	instance, err = engine.client.ProcessInstance.UpdateOne(instance).
+		SetBusinessKey("incident:42").
+		SetBusinessType("incident").
+		SetBusinessID(42).
+		Save(authorCtx)
 	require.NoError(t, err)
 
 	// CompleteTask 内部会重新 ParseXML 解析流程定义，所以要把真实 XML（而不是纯 Go
