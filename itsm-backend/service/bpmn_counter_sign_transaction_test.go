@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"testing"
+	"time"
 
 	"itsm-backend/common"
 	"itsm-backend/ent"
@@ -32,6 +33,34 @@ func automaticCounterSignBPMNXML(approvalMode, sourceApprover, counterSignApprov
     <bpmn:sequenceFlow id="to-end" sourceRef="counter-sign" targetRef="end" />
   </bpmn:process>
 </bpmn:definitions>`, sourceApprover, approvalMode, counterSignApprovers))
+}
+
+func durableCallbackCounterSignBPMNXML(taskType, approvalMode, counterSignApprovers string) []byte {
+	return []byte(fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="durable-callback-counter-sign" isExecutable="true">
+    <bpmn:startEvent id="start" />
+    <bpmn:userTask id="approval" name="Approval" />
+    <bpmn:serviceTask id="callback" name="Callback">
+      <bpmn:extensionElements><bpmn:metaData name="service_task_type">%s</bpmn:metaData></bpmn:extensionElements>
+    </bpmn:serviceTask>
+    <bpmn:userTask id="counter-sign" name="Counter sign" taskPurpose="approval" approvalMode="%s" candidateUsers="%s" />
+    <bpmn:endEvent id="end" />
+    <bpmn:sequenceFlow id="to-approval" sourceRef="start" targetRef="approval" />
+    <bpmn:sequenceFlow id="to-callback" sourceRef="approval" targetRef="callback" />
+    <bpmn:sequenceFlow id="to-counter-sign" sourceRef="callback" targetRef="counter-sign" />
+    <bpmn:sequenceFlow id="to-end" sourceRef="counter-sign" targetRef="end" />
+  </bpmn:process>
+</bpmn:definitions>`, taskType, approvalMode, counterSignApprovers))
+}
+
+func counterSignGeneratedTaskCount(t *testing.T, f *bpmnAuthorizationFixture, instanceID int) int {
+	t.Helper()
+	return f.client.ProcessTask.Query().Where(
+		processtask.TenantID(f.tenant.ID),
+		processtask.ProcessInstanceID(instanceID),
+		processtask.TaskDefinitionKeyIn("counter-sign", "counter-sign_counter"),
+	).CountX(f.userCtx)
 }
 
 func startAutomaticCounterSignProcess(t *testing.T, approvalMode string) (*bpmnAuthorizationFixture, context.Context, *ent.ProcessInstance, *ent.ProcessTask) {
@@ -124,14 +153,7 @@ func TestCounterSignCreationFailureRollsBackSourceCompletionAndChildren(t *testi
 	assert.Equal(t, beforeInstance.CurrentActivityID, afterInstance.CurrentActivityID)
 	assert.Equal(t, beforeInstance.Version, afterInstance.Version)
 	assert.Equal(t, beforeInstance.Variables, afterInstance.Variables)
-	assert.Zero(t, f.client.ProcessTask.Query().Where(
-		processtask.ProcessInstanceID(instance.ID),
-		processtask.TaskDefinitionKey("counter-sign"),
-	).CountX(f.userCtx))
-	assert.Zero(t, f.client.ProcessTask.Query().Where(
-		processtask.ProcessInstanceID(instance.ID),
-		processtask.ParentTaskID(source.TaskID),
-	).CountX(f.userCtx))
+	assert.Zero(t, counterSignGeneratedTaskCount(t, f, instance.ID))
 	assert.Zero(t, f.client.ProcessAuditLog.Query().Where(
 		processauditlog.ProcessInstanceID(instance.ID),
 		processauditlog.Action(AuditActionCounterSignCreated),
@@ -143,6 +165,97 @@ func TestCounterSignCreationFailureRollsBackSourceCompletionAndChildren(t *testi
 	assert.Zero(t, f.client.ProcessCallbackOutbox.Query().Where(
 		processcallbackoutbox.ProcessInstanceID(instance.ID),
 	).CountX(f.userCtx))
+}
+
+func TestCallbackCompletionFailureRollsBackCounterSignAdvanceAndRetries(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	now := time.Date(2026, 8, 31, 12, 0, 0, 0, time.UTC)
+	setCallbackTestClock(f.engine, &now)
+	handler := newCountingIdempotentCallbackHandler("counter_sign_callback", "counter_sign_callback_handler", 1)
+	task := f.seedNonParticipantApprovalTask(t, "callback-counter-sign")
+	task, err := f.client.ProcessTask.UpdateOne(task).SetCandidateUsers(f.actor.Email).Save(f.userCtx)
+	require.NoError(t, err)
+	instance := f.client.ProcessInstance.GetX(f.userCtx, task.ProcessInstanceID)
+	definition := f.client.ProcessDefinition.GetX(f.userCtx, instance.ProcessDefinitionID)
+	_, err = f.client.ProcessDefinition.UpdateOne(definition).SetBpmnXML(durableCallbackCounterSignBPMNXML(
+		handler.GetTaskType(),
+		"sequential",
+		strconv.Itoa(f.actor.ID)+","+strconv.Itoa(f.outsider.ID),
+	)).Save(f.userCtx)
+	require.NoError(t, err)
+	f.engine.CallbackRegistry().RegisterHandler(handler)
+
+	require.NoError(t, f.engine.CompleteTask(f.typedTaskScopeOnlyCtx(f.actor, false), task.TaskID, map[string]interface{}{"approved": true}))
+	row := callbackRowForInstance(t, f, instance.ID)
+	require.Equal(t, bpmnCallbackStatusPending, row.Status)
+	require.Equal(t, "handler_error", row.LastErrorClass)
+	beforeCallback := f.client.ProcessInstance.GetX(f.userCtx, instance.ID)
+	beforeAuditCount := f.client.ProcessAuditLog.Query().Where(
+		processauditlog.TenantID(f.tenant.ID),
+		processauditlog.ProcessInstanceID(instance.ID),
+	).CountX(f.userCtx)
+	require.Equal(t, "callback", beforeCallback.CurrentActivityID)
+	require.Zero(t, counterSignGeneratedTaskCount(t, f, instance.ID))
+
+	failNextCallbackCompletion(f.client, errors.New("forced callback completion failure after counter-sign creation"))
+	now = row.NextAttemptAt
+	completed, err := f.engine.ProcessPendingCallbacks(context.Background(), "counter-sign-rollback-worker", 50)
+	require.Error(t, err)
+	assert.Zero(t, completed)
+
+	row = callbackRowForInstance(t, f, instance.ID)
+	afterFailure := f.client.ProcessInstance.GetX(f.userCtx, instance.ID)
+	assert.Equal(t, bpmnCallbackStatusPending, row.Status)
+	assert.Zero(t, row.CompletedAt)
+	assert.Empty(t, row.LeaseOwner)
+	assert.Zero(t, row.LeaseExpiresAt)
+	assert.Equal(t, "advance_error", row.LastErrorClass)
+	assert.Equal(t, beforeCallback.CurrentActivityID, afterFailure.CurrentActivityID)
+	assert.Equal(t, beforeCallback.CurrentActivityName, afterFailure.CurrentActivityName)
+	assert.Equal(t, beforeCallback.Status, afterFailure.Status)
+	assert.Equal(t, beforeCallback.Version, afterFailure.Version)
+	assert.Equal(t, beforeCallback.Variables, afterFailure.Variables)
+	assert.Zero(t, counterSignGeneratedTaskCount(t, f, instance.ID))
+	assert.Zero(t, f.client.ProcessAuditLog.Query().Where(
+		processauditlog.TenantID(f.tenant.ID),
+		processauditlog.ProcessInstanceID(instance.ID),
+		processauditlog.Action(AuditActionCounterSignCreated),
+	).CountX(f.userCtx))
+	assert.Equal(t, beforeAuditCount, f.client.ProcessAuditLog.Query().Where(
+		processauditlog.TenantID(f.tenant.ID),
+		processauditlog.ProcessInstanceID(instance.ID),
+	).CountX(f.userCtx))
+
+	now = row.NextAttemptAt
+	completed, err = f.engine.ProcessPendingCallbacks(context.Background(), "counter-sign-retry-worker", 50)
+	require.NoError(t, err)
+	require.Equal(t, 1, completed)
+
+	row = callbackRowForInstance(t, f, instance.ID)
+	parent := f.client.ProcessTask.Query().Where(
+		processtask.TenantID(f.tenant.ID),
+		processtask.ProcessInstanceID(instance.ID),
+		processtask.TaskDefinitionKey("counter-sign"),
+	).OnlyX(f.userCtx)
+	children := f.client.ProcessTask.Query().Where(
+		processtask.TenantID(f.tenant.ID),
+		processtask.ProcessInstanceID(instance.ID),
+		processtask.ParentTaskID(parent.TaskID),
+		processtask.RootTaskID(parent.TaskID),
+		processtask.TaskDefinitionKey("counter-sign_counter"),
+	).Order(ent.Asc(processtask.FieldID)).AllX(f.userCtx)
+	assert.Equal(t, bpmnCallbackStatusCompleted, row.Status)
+	assert.Equal(t, "counter-sign", f.client.ProcessInstance.GetX(f.userCtx, instance.ID).CurrentActivityID)
+	assert.Equal(t, 3, counterSignGeneratedTaskCount(t, f, instance.ID))
+	require.Len(t, children, 2)
+	assert.Equal(t, common.ProcessTaskStatusAssigned, children[0].Status)
+	assert.Equal(t, common.ProcessTaskStatusCreated, children[1].Status)
+	assert.Equal(t, 1, f.client.ProcessAuditLog.Query().Where(
+		processauditlog.TenantID(f.tenant.ID),
+		processauditlog.ProcessInstanceID(instance.ID),
+		processauditlog.Action(AuditActionCounterSignCreated),
+	).CountX(f.userCtx))
+	assert.Equal(t, 1, handler.EffectCount())
 }
 
 func TestTransactionEngineRebindsTaskServiceToTransactionClient(t *testing.T) {
