@@ -104,9 +104,9 @@ Ticket 的批准、拒绝、委派必须直接操作具体 `ProcessTask`，并�
 
 - `StartProcess` 持久化 initiator。
 - 统一解析 assignee、candidate users、candidate groups 和 initiator。
-- `ListProcessInstances`、`GetTask`、`ListUserTasks` 收敛读范围。
+- `ListProcessInstances`、`GetProcessInstance`、审批历史、`GetTask`、`ListUserTasks` 收敛读范围。
 - assign、cancel、set variables、counter-sign 及其状态读取接入相同策略。
-- elevated 权限继续使用现有 `process_instance:read`、`task:read`、`task:update`，不新增角色体系。
+- 流程实例 suspend/resume/terminate/set variables 要求现有 `process_instance:update`；任务 elevated 权限继续使用现有 `task:read`、`task:update`，不新增角色体系。
 - 所有写动作补 `ProcessAuditLog`，并对 tenant 与 task/instance 关联 fail closed。
 
 验收：参与者只能访问自己参与的对象；同租户非参与者被拒；跨租户即使猜中 ID 也被拒；elevated 权限有明确测试；所有高风险写动作有审计。
