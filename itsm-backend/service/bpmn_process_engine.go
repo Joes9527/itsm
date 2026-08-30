@@ -500,6 +500,13 @@ func (e *CustomProcessEngine) forClient(client *ent.Client, executionKeys *[]str
 	clone.participationResolver = newBPMNParticipationResolver(client, clone.groupResolver)
 	clone.auditService = e.auditService.ForClient(client)
 	clone.callbackExecutionKeys = executionKeys
+	clone.taskService = &bpmnTaskService{
+		client:                client,
+		logger:                clone.logger,
+		groupResolver:         clone.groupResolver,
+		participationResolver: clone.participationResolver,
+		engine:                &clone,
+	}
 	return &clone
 }
 
@@ -1459,7 +1466,7 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 				approvalType = "serial"
 			}
 			actorID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
-			if _, err := e.taskService.createCounterSignTasks(ctx, createdTask, &CounterSignRequest{ApprovalType: approvalType, Approvers: approvers, Threshold: threshold}, actorID); err != nil {
+			if _, err := e.taskService.createCounterSignTasksWithClient(ctx, e.client, createdTask, &CounterSignRequest{ApprovalType: approvalType, Approvers: approvers, Threshold: threshold}, actorID); err != nil {
 				return fmt.Errorf("创建会签任务失败: %w", err)
 			}
 		}
@@ -3602,29 +3609,41 @@ func (s *bpmnTaskService) CreateCounterSignTasks(ctx context.Context, parentTask
 	if err != nil {
 		return nil, err
 	}
-	parentTask, err := s.loadTaskByKey(ctx, parentTaskID, scope.TenantID)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := s.authorizeTaskUpdate(ctx, parentTask); err != nil {
-		return nil, err
-	}
-	return s.createCounterSignTasks(ctx, parentTask, req, scope.UserID)
-}
-
-func (s *bpmnTaskService) createCounterSignTasks(ctx context.Context, parentTask *ent.ProcessTask, req *CounterSignRequest, actorID int) ([]*ent.ProcessTask, error) {
-	if req == nil || len(req.Approvers) == 0 {
-		return nil, fmt.Errorf("会签审批人不能为空")
-	}
 	tx, err := s.client.Tx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("开启会签任务事务失败: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	txTaskService := s.engine.forClient(tx.Client(), nil).taskService
+	parentTask, err := txTaskService.loadTaskByKey(ctx, parentTaskID, scope.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := txTaskService.authorizeTaskUpdate(ctx, parentTask); err != nil {
+		return nil, err
+	}
+	tasks, err := txTaskService.createCounterSignTasksWithClient(ctx, tx.Client(), parentTask, req, scope.UserID)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("提交会签任务事务失败: %w", err)
+	}
+	for _, task := range tasks {
+		task.Unwrap()
+	}
+	return tasks, nil
+}
+
+func (s *bpmnTaskService) createCounterSignTasksWithClient(ctx context.Context, client *ent.Client, parentTask *ent.ProcessTask, req *CounterSignRequest, actorID int) ([]*ent.ProcessTask, error) {
+	if req == nil || len(req.Approvers) == 0 {
+		return nil, fmt.Errorf("会签审批人不能为空")
+	}
+
 	actorName := ""
 	if actorID > 0 {
-		actor, actorErr := tx.Client().User.Query().
+		actor, actorErr := client.User.Query().
 			Where(user.ID(actorID), user.TenantID(parentTask.TenantID), user.Active(true)).
 			Only(ctx)
 		if actorErr != nil {
@@ -3633,7 +3652,7 @@ func (s *bpmnTaskService) createCounterSignTasks(ctx context.Context, parentTask
 		actorName = actor.Name
 	}
 	for _, approver := range req.Approvers {
-		if _, err := resolveTaskAssignee(ctx, tx.Client(), parentTask.TenantID, approver); err != nil {
+		if _, err := resolveTaskAssignee(ctx, client, parentTask.TenantID, approver); err != nil {
 			return nil, err
 		}
 	}
@@ -3656,7 +3675,7 @@ func (s *bpmnTaskService) createCounterSignTasks(ctx context.Context, parentTask
 		if req.ApprovalType == "serial" && i > 0 {
 			status = "created"
 		}
-		task, err := tx.Client().ProcessTask.Create().
+		task, err := client.ProcessTask.Create().
 			SetTaskID(taskID).
 			SetProcessInstanceID(parentTask.ProcessInstanceID).
 			SetProcessDefinitionKey(parentTask.ProcessDefinitionKey).
@@ -3678,7 +3697,7 @@ func (s *bpmnTaskService) createCounterSignTasks(ctx context.Context, parentTask
 	}
 
 	// 更新父任务状态为会签中
-	_, err = tx.Client().ProcessTask.UpdateOneID(parentTask.ID).
+	_, err := client.ProcessTask.UpdateOneID(parentTask.ID).
 		Where(processtask.TenantID(parentTask.TenantID)).
 		SetTaskVariables(map[string]interface{}{
 			"approval_type": req.ApprovalType,
@@ -3692,14 +3711,8 @@ func (s *bpmnTaskService) createCounterSignTasks(ctx context.Context, parentTask
 	if err != nil {
 		return nil, fmt.Errorf("更新会签父任务失败: %w", err)
 	}
-	if err := s.engine.auditService.ForClient(tx.Client()).RecordCounterSignCreated(ctx, parentTask, actorID, actorName, len(req.Approvers)); err != nil {
+	if err := s.engine.auditService.ForClient(client).RecordCounterSignCreated(ctx, parentTask, actorID, actorName, len(req.Approvers)); err != nil {
 		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("提交会签任务事务失败: %w", err)
-	}
-	for _, task := range tasks {
-		task.Unwrap()
 	}
 
 	return tasks, nil
