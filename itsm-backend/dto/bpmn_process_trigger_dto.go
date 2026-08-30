@@ -269,13 +269,3 @@ type ServiceTaskResult struct {
 	OutputVars  map[string]interface{} `json:"outputVars,omitempty"`
 	UpdatedData map[string]interface{} `json:"updatedData,omitempty"`
 }
-
-// CallbackRequest 流程回调请求
-type CallbackRequest struct {
-	ProcessInstanceID int               `json:"processInstanceId" binding:"required"`
-	ActivityID        string            `json:"activityId" binding:"required"`
-	ActivityType      string            `json:"activityType" binding:"required"` // service_task/script_task
-	Result            ServiceTaskResult `json:"result"`
-	ExecutedBy        string            `json:"executedBy"`
-	ExecutedAt        time.Time         `json:"executedAt"`
-}

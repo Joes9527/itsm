@@ -1,15 +1,10 @@
 package bpmn
 
 import (
-	"context"
-	"fmt"
 	"sync"
 
-	"itsm-backend/dto"
 	"itsm-backend/ent"
-	"itsm-backend/ent/processtask"
 
-	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
 
@@ -55,63 +50,6 @@ func (r *CallbackRegistry) GetHandler(handlerID string) ServiceTaskHandlerInterf
 	r.handlersMu.RLock()
 	defer r.handlersMu.RUnlock()
 	return r.handlers[handlerID]
-}
-
-// HandleCallback 处理流程回调
-func (r *CallbackRegistry) HandleCallback(ctx context.Context, req *dto.CallbackRequest) error {
-	// 1. 获取任务
-	task, err := r.client.ProcessTask.Query().
-		Where(processtask.ID(req.ProcessInstanceID)). // 实际应该是 task_id
-		Only(ctx)
-	if err != nil {
-		return errors.Wrap(err, "查询任务失败")
-	}
-
-	// 2. 获取处理器
-	handler := r.getHandler(req.ActivityType)
-	if handler == nil {
-		return fmt.Errorf("未找到任务类型 %s 的处理器", req.ActivityType)
-	}
-
-	// 3. 执行处理器
-	_, err = handler.Execute(ctx, nil, req.Result.OutputVars)
-	if err != nil {
-		return errors.Wrap(err, "执行服务任务失败")
-	}
-
-	// 4. 更新任务状态
-	_, err = r.client.ProcessTask.Update().
-		Where(processtask.ID(task.ID)).
-		SetStatus("completed").
-		Save(ctx)
-	if err != nil {
-		return errors.Wrap(err, "更新任务状态失败")
-	}
-
-	// 5. 如果流程引擎需要，推进流程
-	// （由流程引擎自己处理）
-
-	return nil
-}
-
-// getHandler 获取处理器
-func (r *CallbackRegistry) getHandler(taskType string) ServiceTaskHandlerInterface {
-	r.handlersMu.RLock()
-	defer r.handlersMu.RUnlock()
-
-	// 精确匹配
-	if handler, ok := r.handlers[taskType]; ok {
-		return handler
-	}
-
-	// 通配匹配
-	for _, handler := range r.handlers {
-		if handler.GetTaskType() == taskType {
-			return handler
-		}
-	}
-
-	return nil
 }
 
 // registerDefaultHandlers 注册默认处理器

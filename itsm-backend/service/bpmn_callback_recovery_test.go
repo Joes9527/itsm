@@ -158,6 +158,21 @@ func failNextCallbackCompletion(client *ent.Client, forcedErr error) {
 	})
 }
 
+func failNextCallbackTokenAdvance(client *ent.Client, targetActivityID string, forcedErr error) {
+	var failOnce atomic.Bool
+	failOnce.Store(true)
+	client.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			if instanceMutation, ok := mutation.(*ent.ProcessInstanceMutation); ok {
+				if activityID, exists := instanceMutation.CurrentActivityID(); exists && activityID == targetActivityID && failOnce.CompareAndSwap(true, false) {
+					return nil, forcedErr
+				}
+			}
+			return next.Mutate(ctx, mutation)
+		})
+	})
+}
+
 func callbackRowForInstance(t *testing.T, f *bpmnAuthorizationFixture, instanceID int) *ent.ProcessCallbackOutbox {
 	t.Helper()
 	return f.client.ProcessCallbackOutbox.Query().Where(
@@ -217,7 +232,7 @@ func TestCallbackHandlerSuccessThenAdvanceFailureRetriesAndCompletesToken(t *tes
 	setCallbackTestClock(f.engine, &now)
 	handler := newCountingIdempotentCallbackHandler("durable_service_task", "durable_service_handler", 0)
 	task, instance := seedDurableServiceCallbackTask(t, f, "advance-retry", handler)
-	failNextCallbackCompletion(f.client, errors.New("forced callback advancement rollback"))
+	failNextCallbackTokenAdvance(f.client, "end", errors.New("forced process token advancement rollback"))
 
 	require.NoError(t, f.engine.CompleteTask(f.typedTaskScopeOnlyCtx(f.actor, false), task.TaskID, map[string]interface{}{}))
 	row := callbackRowForInstance(t, f, instance.ID)
@@ -307,7 +322,7 @@ func TestUserTaskCallbackWithoutRegisteredHandlerIsDurablyRetryable(t *testing.T
 	).Only(f.userCtx)
 	require.NoError(t, err)
 	assert.Equal(t, "user_task_callback", row.CallbackKind)
-	assert.Equal(t, "future_user_callback", row.HandlerID)
+	assert.Equal(t, "__unresolved_user_task_callback__", row.HandlerID)
 	assert.Equal(t, "future_user_callback", row.TaskType)
 	assert.Equal(t, bpmnCallbackStatusPending, row.Status)
 	assert.Equal(t, "handler_error", row.LastErrorClass)
@@ -321,6 +336,77 @@ func TestUserTaskCallbackWithoutRegisteredHandlerIsDurablyRetryable(t *testing.T
 	row = callbackRowForInstance(t, f, task.ProcessInstanceID)
 	assert.Equal(t, bpmnCallbackStatusCompleted, row.Status)
 	assert.Equal(t, 1, handler.EffectCount())
+}
+
+func TestUserTaskCallbackNormalizesPersistedTaskTypeWhenMetadataUsesHandlerID(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	handler := newCountingIdempotentCallbackHandler("normalized_user_type", "declared_user_handler_id", 0)
+	f.engine.CallbackRegistry().RegisterHandler(handler)
+	task := f.seedNonParticipantApprovalTask(t, "user-callback-handler-id")
+	task, err := f.client.ProcessTask.UpdateOne(task).
+		SetCandidateUsers(f.actor.Email).
+		SetTaskVariables(map[string]interface{}{
+			bpmnMetaDataServiceTaskType: handler.GetHandlerID(),
+			bpmnMetaDataAction:          "record_completion",
+		}).
+		Save(f.userCtx)
+	require.NoError(t, err)
+
+	require.NoError(t, f.engine.CompleteTask(f.typedTaskScopeOnlyCtx(f.actor, false), task.TaskID, map[string]interface{}{}))
+	row := callbackRowForInstance(t, f, task.ProcessInstanceID)
+	assert.Equal(t, handler.GetHandlerID(), row.HandlerID)
+	assert.Equal(t, handler.GetTaskType(), row.TaskType)
+	assert.Equal(t, bpmnCallbackStatusCompleted, row.Status)
+	assert.Equal(t, 1, handler.EffectCount())
+}
+
+func TestCallbackExecutorUsesPersistedHandlerIDWhenTaskTypesMatch(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	now := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
+	setCallbackTestClock(f.engine, &now)
+	exact := newCountingIdempotentCallbackHandler("shared_callback_type", "exact_shared_handler", 1)
+	task, instance := seedDurableServiceCallbackTask(t, f, "exact-handler-id", exact)
+
+	require.NoError(t, f.engine.CompleteTask(f.typedTaskScopeOnlyCtx(f.actor, false), task.TaskID, map[string]interface{}{}))
+	row := callbackRowForInstance(t, f, instance.ID)
+	require.Equal(t, bpmnCallbackStatusPending, row.Status)
+	require.Equal(t, exact.GetHandlerID(), row.HandlerID)
+
+	wrong := newCountingIdempotentCallbackHandler(exact.GetTaskType(), exact.GetTaskType(), 0)
+	f.engine.CallbackRegistry().RegisterHandler(wrong)
+	now = now.Add(time.Second)
+	completed, err := f.engine.ProcessPendingCallbacks(context.Background(), "exact-handler-worker", 50)
+	require.NoError(t, err)
+	require.Equal(t, 1, completed)
+	row = callbackRowForInstance(t, f, instance.ID)
+	assert.Equal(t, bpmnCallbackStatusCompleted, row.Status)
+	assert.Equal(t, 2, exact.AttemptCount())
+	assert.Equal(t, 1, exact.EffectCount())
+	assert.Zero(t, wrong.AttemptCount())
+}
+
+func TestCallbackExecutorRejectsPersistedHandlerTypeMismatchWithoutWrongExecution(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	now := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
+	setCallbackTestClock(f.engine, &now)
+	original := newCountingIdempotentCallbackHandler("replaceable_handler", "replaceable_handler", 1)
+	task, instance := seedDurableServiceCallbackTask(t, f, "handler-type-mismatch", original)
+
+	require.NoError(t, f.engine.CompleteTask(f.typedTaskScopeOnlyCtx(f.actor, false), task.TaskID, map[string]interface{}{}))
+	row := callbackRowForInstance(t, f, instance.ID)
+	require.Equal(t, bpmnCallbackStatusPending, row.Status)
+
+	wrong := newCountingIdempotentCallbackHandler("different_task_type", original.GetHandlerID(), 0)
+	f.engine.CallbackRegistry().RegisterHandler(wrong)
+	now = now.Add(time.Second)
+	completed, err := f.engine.ProcessPendingCallbacks(context.Background(), "mismatched-handler-worker", 50)
+	require.Error(t, err)
+	assert.Zero(t, completed)
+	row = callbackRowForInstance(t, f, instance.ID)
+	assert.Equal(t, bpmnCallbackStatusPending, row.Status)
+	assert.Equal(t, "handler_error", row.LastErrorClass)
+	assert.Equal(t, "callback", f.client.ProcessInstance.GetX(f.userCtx, instance.ID).CurrentActivityID)
+	assert.Zero(t, wrong.AttemptCount())
 }
 
 func TestAsyncKafHandlerIsNotEnqueuedAsSynchronousCallback(t *testing.T) {

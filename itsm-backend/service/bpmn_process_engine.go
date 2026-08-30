@@ -245,11 +245,16 @@ func resolveProcessInitiator(ctx context.Context, variables map[string]interface
 
 // StartProcess 启动流程实例
 func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitionKey string, businessKey string, businessType string, businessID int, variables map[string]interface{}) (*ent.ProcessInstance, error) {
-	// 1. 获取租户ID
 	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
+	tx, err := e.client.Tx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("开启流程启动事务失败: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	executionKeys := make([]string, 0)
+	txEngine := e.forClient(tx.Client(), &executionKeys)
 
-	// 2. 获取流程定义
-	query := e.client.ProcessDefinition.Query().
+	query := tx.Client().ProcessDefinition.Query().
 		Where(processdefinition.Key(processDefinitionKey)).
 		Where(processdefinition.IsActive(true)).
 		Where(processdefinition.IsLatest(true))
@@ -261,7 +266,6 @@ func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitio
 		return nil, fmt.Errorf("获取流程定义失败: %w", err)
 	}
 
-	// 3. 解析BPMN
 	bpmnDefinitions, err := e.parser.ParseXML(definition.BpmnXML)
 	if err != nil {
 		return nil, fmt.Errorf("解析BPMN失败: %w", err)
@@ -272,14 +276,12 @@ func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitio
 	}
 	process := bpmnDefinitions.Processes[0]
 
-	// 3. 找到开始事件
 	if len(process.StartEvents) == 0 {
 		return nil, fmt.Errorf("流程缺少开始事件")
 	}
 	startEvent := process.StartEvents[0]
 
-	// 4. 创建流程实例
-	createInstance := e.client.ProcessInstance.Create().
+	createInstance := tx.Client().ProcessInstance.Create().
 		SetProcessInstanceID(fmt.Sprintf("PI-%s-%d", processDefinitionKey, time.Now().UnixNano())).
 		SetBusinessKey(businessKey).
 		SetProcessDefinitionKey(processDefinitionKey).
@@ -311,7 +313,6 @@ func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitio
 		return nil, fmt.Errorf("创建流程实例失败: %w", err)
 	}
 
-	// 5. 执行流程推进（从StartEvent开始）
 	// 平台级操作（ctx 无租户键：controller 的 getBPMNTenantContext 对 tenant_id=0
 	// 不注入）此前会在带 RequireTenantID 的 ServiceTask 上硬失败。实例租户跟随流程
 	// 定义（definition.TenantID 是 Positive 校验过的权威值），把它注入 ctx 后 handler
@@ -320,22 +321,25 @@ func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitio
 	if tenantID <= 0 {
 		ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, definition.TenantID)
 	}
-	if err := e.executeStep(ctx, instance, process, startEvent.ID, variables); err != nil {
+	if err := txEngine.executeStep(ctx, instance, process, startEvent.ID, variables); err != nil {
 		return nil, err
 	}
 
-	// 6. 记录审计日志 - 流程启动
-	// 从context中获取用户信息
 	userID := 0
 	userName := ""
 	if u, ok := ctx.Value("user").(*ent.User); ok {
 		userID = u.ID
 		userName = u.Name
 	}
-	if err := e.auditService.RecordProcessStarted(ctx, instance, userID, userName, variables); err != nil {
-		e.logger.Warnw("audit record failed", "error", err)
+	if err := txEngine.auditService.RecordProcessStarted(ctx, instance, userID, userName, variables); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("提交流程启动事务失败: %w", err)
 	}
 
+	instance.Unwrap()
+	e.processCommittedCallbackKeys(ctx, definition.TenantID, executionKeys)
 	return instance, nil
 }
 
@@ -477,11 +481,13 @@ func (e *CustomProcessEngine) completeTaskWithClient(ctx context.Context, client
 		effect.asyncHandler = handler
 		return effect, nil
 	}
-	handlerID := serviceTaskType
+	handlerID := bpmnUnresolvedUserTaskCallbackHandlerID
+	callbackTaskType := serviceTaskType
 	if handler != nil {
 		handlerID = handler.GetHandlerID()
+		callbackTaskType = handler.GetTaskType()
 	}
-	if err := txEngine.enqueueUserTaskCallback(ctx, task, handlerID, serviceTaskType, callbackVariables); err != nil {
+	if err := txEngine.enqueueUserTaskCallback(ctx, task, handlerID, callbackTaskType, callbackVariables); err != nil {
 		return nil, err
 	}
 	return effect, nil
@@ -888,12 +894,9 @@ func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.P
 				if action := serviceTask.ServiceTaskAction(); action != "" {
 					callbackVars[bpmnMetaDataAction] = action
 				}
-				return e.enqueueServiceTaskCallback(ctx, instance, handler, serviceTaskType, elementID, callbackVars)
+				return e.enqueueServiceTaskCallback(ctx, instance, handler, handler.GetTaskType(), elementID, callbackVars)
 			}
-			// 声明了类型但没有注册对应 handler（比如未来新增了类型但忘了注册）：
-			// 按既有约定视为 NoOp，只告警不阻断流程。
-			e.logger.Warnw("ServiceTask 声明的 service_task_type 没有注册处理器，跳过执行", "elementID", elementID, "serviceTaskType", serviceTaskType)
-			return e.executeStep(ctx, instance, process, elementID, instance.Variables)
+			return fmt.Errorf("ServiceTask %s 声明的处理器未注册", elementID)
 		}
 
 		// 没有声明 metaData 时，保留原有按 implementation/class/expression/operationRef
@@ -931,12 +934,10 @@ func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.P
 					return e.createDelegatedTask(ctx, instance, serviceTask, resolvedTaskType)
 				}
 				taskVariables := mergeServiceTaskVariables(instance.Variables, serviceTask)
-				return e.enqueueServiceTaskCallback(ctx, instance, handler, resolvedTaskType, elementID, taskVariables)
-			} else {
-				e.logger.Warnw("未注册的 ServiceTask，跳过执行", "serviceRef", serviceRef, "elementID", elementID)
+				return e.enqueueServiceTaskCallback(ctx, instance, handler, handler.GetTaskType(), elementID, taskVariables)
 			}
 		}
-		return e.executeStep(ctx, instance, process, elementID, instance.Variables)
+		return fmt.Errorf("ServiceTask %s 声明的处理器未注册", elementID)
 	}
 
 	return e.executeStep(ctx, instance, process, elementID, instance.Variables)
@@ -1044,11 +1045,8 @@ func (e *CustomProcessEngine) executeClaimedCallback(ctx context.Context, worker
 	if err != nil {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
 	}
-	handler := e.findHandlerByTaskType(claimedRow.TaskType)
-	if handler == nil || isAsyncHandler(handler) {
-		return bpmnCallbackExecutionResult{}, newBPMNCallbackHandlerError(errors.New("callback handler is unavailable"))
-	}
-	if claimedRow.HandlerID != claimedRow.TaskType && handler.GetHandlerID() != claimedRow.HandlerID {
+	handler := e.resolveClaimedCallbackHandler(claimedRow)
+	if handler == nil {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackHandlerError(errors.New("callback handler is unavailable"))
 	}
 	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, claimedRow.TenantID)
@@ -1064,6 +1062,34 @@ func (e *CustomProcessEngine) executeClaimedCallback(ctx context.Context, worker
 	default:
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(errors.New("unsupported callback kind"))
 	}
+}
+
+func (e *CustomProcessEngine) resolveClaimedCallbackHandler(row *ent.ProcessCallbackOutbox) bpmn.ServiceTaskHandlerInterface {
+	if e.callbackRegistry == nil || row == nil || row.TaskType == "" {
+		return nil
+	}
+	if row.HandlerID == bpmnUnresolvedUserTaskCallbackHandlerID {
+		if row.CallbackKind != "user_task_callback" {
+			return nil
+		}
+		var match bpmn.ServiceTaskHandlerInterface
+		for _, handler := range e.callbackRegistry.ListHandlers() {
+			if handler.GetTaskType() != row.TaskType || isAsyncHandler(handler) {
+				continue
+			}
+			if match != nil {
+				return nil
+			}
+			match = handler
+		}
+		return match
+	}
+
+	handler := e.callbackRegistry.GetHandler(row.HandlerID)
+	if handler == nil || handler.GetHandlerID() != row.HandlerID || handler.GetTaskType() != row.TaskType || isAsyncHandler(handler) {
+		return nil
+	}
+	return handler
 }
 
 func (e *CustomProcessEngine) loadClaimedCallback(ctx context.Context, workerID string, row *ent.ProcessCallbackOutbox) (*ent.ProcessCallbackOutbox, error) {

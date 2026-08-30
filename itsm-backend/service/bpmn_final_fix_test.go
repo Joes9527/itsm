@@ -16,6 +16,7 @@ import (
 	"itsm-backend/ent/processapprovaldecision"
 	"itsm-backend/ent/processauditlog"
 	"itsm-backend/ent/processcallbackoutbox"
+	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/service/bpmn"
 
@@ -25,6 +26,241 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func startProcessServiceTaskXML(taskType string) []byte {
+	return []byte(fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="start-callback" isExecutable="true">
+    <bpmn:startEvent id="start" />
+    <bpmn:serviceTask id="callback" name="Callback">
+      <bpmn:extensionElements><bpmn:metaData name="service_task_type">%s</bpmn:metaData></bpmn:extensionElements>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="end" />
+    <bpmn:sequenceFlow id="to-callback" sourceRef="start" targetRef="callback" />
+    <bpmn:sequenceFlow id="to-end" sourceRef="callback" targetRef="end" />
+  </bpmn:process>
+</bpmn:definitions>`, taskType))
+}
+
+func startProcessLegacyServiceTaskXML(handlerID string) []byte {
+	return []byte(fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="start-legacy-callback" isExecutable="true">
+    <bpmn:startEvent id="start" />
+    <bpmn:serviceTask id="callback" name="Callback" implementation="%s" />
+    <bpmn:endEvent id="end" />
+    <bpmn:sequenceFlow id="to-callback" sourceRef="start" targetRef="callback" />
+    <bpmn:sequenceFlow id="to-end" sourceRef="callback" targetRef="end" />
+  </bpmn:process>
+</bpmn:definitions>`, handlerID))
+}
+
+func startProcessUserTaskXML() []byte {
+	return []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="start-user-task" isExecutable="true">
+    <bpmn:startEvent id="start" />
+    <bpmn:userTask id="approval" name="Approval" />
+    <bpmn:endEvent id="end" />
+    <bpmn:sequenceFlow id="to-approval" sourceRef="start" targetRef="approval" />
+    <bpmn:sequenceFlow id="to-end" sourceRef="approval" targetRef="end" />
+  </bpmn:process>
+</bpmn:definitions>`)
+}
+
+func approvalThenServiceTaskXML(taskType string) []byte {
+	return []byte(fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="approval-callback" isExecutable="true">
+    <bpmn:startEvent id="start" />
+    <bpmn:userTask id="approval" name="Approval" />
+    <bpmn:serviceTask id="callback" name="Callback">
+      <bpmn:extensionElements><bpmn:metaData name="service_task_type">%s</bpmn:metaData></bpmn:extensionElements>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="end" />
+    <bpmn:sequenceFlow id="to-approval" sourceRef="start" targetRef="approval" />
+    <bpmn:sequenceFlow id="to-callback" sourceRef="approval" targetRef="callback" />
+    <bpmn:sequenceFlow id="to-end" sourceRef="callback" targetRef="end" />
+  </bpmn:process>
+</bpmn:definitions>`, taskType))
+}
+
+func configureStartProcessDefinition(t *testing.T, f *bpmnAuthorizationFixture, xml []byte) {
+	t.Helper()
+	_, err := f.client.ProcessDefinition.UpdateOne(f.definition).SetBpmnXML(xml).Save(f.userCtx)
+	require.NoError(t, err)
+}
+
+func startProcessContext(f *bpmnAuthorizationFixture) context.Context {
+	ctx := context.WithValue(f.userCtx, bpmn.BPMNTenantIDContextKey, f.tenant.ID)
+	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, f.actor.ID)
+	return context.WithValue(ctx, "user", f.actor)
+}
+
+func assertNoStartedProcessState(t *testing.T, f *bpmnAuthorizationFixture) {
+	t.Helper()
+	assert.Zero(t, f.client.ProcessInstance.Query().CountX(f.userCtx))
+	assert.Zero(t, f.client.ProcessExecutionHistory.Query().CountX(f.userCtx))
+	assert.Zero(t, f.client.ProcessTask.Query().CountX(f.userCtx))
+	assert.Zero(t, f.client.ProcessCallbackOutbox.Query().CountX(f.userCtx))
+	assert.Zero(t, f.client.ProcessAuditLog.Query().CountX(f.userCtx))
+}
+
+func failProcessCallbackOutboxCreation(client *ent.Client, forcedErr error) {
+	var failOnce atomic.Bool
+	failOnce.Store(true)
+	client.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			if _, ok := mutation.(*ent.ProcessCallbackOutboxMutation); ok && failOnce.CompareAndSwap(true, false) {
+				return nil, forcedErr
+			}
+			return next.Mutate(ctx, mutation)
+		})
+	})
+}
+
+func TestStartProcessAuditFailureRollsBackAllRecoverableState(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	configureStartProcessDefinition(t, f, startProcessUserTaskXML())
+	forcedErr := errors.New("forced process started audit failure")
+	failProcessAuditCreation(f.client, forcedErr)
+
+	_, err := f.engine.StartProcess(startProcessContext(f), f.definition.Key, "start-audit-rollback", "ticket", 101, map[string]interface{}{})
+	require.ErrorIs(t, err, forcedErr)
+	assertNoStartedProcessState(t, f)
+}
+
+func TestStartProcessAuditFailureRollsBackInitialCallbackOutbox(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	handler := newCountingIdempotentCallbackHandler("start_audit_failure", "start_audit_failure_handler", 0)
+	f.engine.CallbackRegistry().RegisterHandler(handler)
+	configureStartProcessDefinition(t, f, startProcessServiceTaskXML(handler.GetTaskType()))
+	forcedErr := errors.New("forced process started audit failure after enqueue")
+	failProcessAuditCreation(f.client, forcedErr)
+
+	_, err := f.engine.StartProcess(startProcessContext(f), f.definition.Key, "start-audit-outbox-rollback", "ticket", 105, map[string]interface{}{})
+	require.ErrorIs(t, err, forcedErr)
+	assertNoStartedProcessState(t, f)
+	assert.Zero(t, handler.AttemptCount())
+}
+
+func TestStartProcessOutboxFailureRollsBackAllRecoverableState(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	handler := newCountingIdempotentCallbackHandler("start_outbox_failure", "start_outbox_failure_handler", 0)
+	f.engine.CallbackRegistry().RegisterHandler(handler)
+	configureStartProcessDefinition(t, f, startProcessServiceTaskXML(handler.GetTaskType()))
+	failProcessCallbackOutboxCreation(f.client, errors.New("forced initial callback outbox failure"))
+
+	_, err := f.engine.StartProcess(startProcessContext(f), f.definition.Key, "start-outbox-rollback", "ticket", 102, map[string]interface{}{})
+	require.Error(t, err)
+	assertNoStartedProcessState(t, f)
+	assert.Zero(t, handler.AttemptCount())
+}
+
+func TestStartProcessMissingDeclaredServiceTaskHandlerRollsBackScheduling(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	configureStartProcessDefinition(t, f, startProcessServiceTaskXML("missing_declared_handler"))
+
+	_, err := f.engine.StartProcess(startProcessContext(f), f.definition.Key, "start-missing-handler", "ticket", 103, map[string]interface{}{})
+	require.Error(t, err)
+	assertNoStartedProcessState(t, f)
+}
+
+func TestStartProcessMissingLegacyServiceTaskHandlerRollsBackScheduling(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	configureStartProcessDefinition(t, f, startProcessLegacyServiceTaskXML("missing_legacy_handler"))
+
+	_, err := f.engine.StartProcess(startProcessContext(f), f.definition.Key, "start-missing-legacy-handler", "ticket", 108, map[string]interface{}{})
+	require.Error(t, err)
+	assertNoStartedProcessState(t, f)
+}
+
+func TestStartProcessRunsInitialCallbackOnlyAfterAtomicCommit(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	handler := &startProcessCommitProbeHandler{
+		client: f.client, tenantID: f.tenant.ID, businessKey: "start-post-commit",
+	}
+	f.engine.CallbackRegistry().RegisterHandler(handler)
+	configureStartProcessDefinition(t, f, startProcessServiceTaskXML(handler.GetTaskType()))
+
+	instance, err := f.engine.StartProcess(startProcessContext(f), f.definition.Key, handler.businessKey, "ticket", 104, map[string]interface{}{})
+	require.NoError(t, err)
+	assert.True(t, handler.observedCommittedState)
+	assert.Equal(t, common.ProcessTaskStatusCompleted, f.client.ProcessInstance.GetX(f.userCtx, instance.ID).Status)
+	row := callbackRowForInstance(t, f, instance.ID)
+	assert.Equal(t, bpmnCallbackStatusCompleted, row.Status)
+}
+
+func TestStartProcessReturnsSuccessWhenInlineCallbackAttemptFails(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	handler := newCountingIdempotentCallbackHandler("start_inline_failure", "start_inline_failure_handler", 1)
+	f.engine.CallbackRegistry().RegisterHandler(handler)
+	configureStartProcessDefinition(t, f, startProcessServiceTaskXML(handler.GetTaskType()))
+
+	instance, err := f.engine.StartProcess(startProcessContext(f), f.definition.Key, "start-inline-failure", "ticket", 106, map[string]interface{}{})
+	require.NoError(t, err)
+	row := callbackRowForInstance(t, f, instance.ID)
+	assert.Equal(t, bpmnCallbackStatusPending, row.Status)
+	assert.Equal(t, "handler_error", row.LastErrorClass)
+	assert.Equal(t, "callback", f.client.ProcessInstance.GetX(f.userCtx, instance.ID).CurrentActivityID)
+	assert.Equal(t, 1, f.client.ProcessAuditLog.Query().Where(
+		processauditlog.TenantID(f.tenant.ID),
+		processauditlog.ProcessInstanceID(instance.ID),
+		processauditlog.Action(AuditActionProcessStarted),
+	).CountX(f.userCtx))
+}
+
+func TestStartProcessNormalizesPersistedTaskTypeWhenDefinitionUsesHandlerID(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	handler := newCountingIdempotentCallbackHandler("normalized_start_type", "declared_start_handler_id", 0)
+	f.engine.CallbackRegistry().RegisterHandler(handler)
+	configureStartProcessDefinition(t, f, startProcessServiceTaskXML(handler.GetHandlerID()))
+
+	instance, err := f.engine.StartProcess(startProcessContext(f), f.definition.Key, "start-handler-id", "ticket", 107, map[string]interface{}{})
+	require.NoError(t, err)
+	row := callbackRowForInstance(t, f, instance.ID)
+	assert.Equal(t, handler.GetHandlerID(), row.HandlerID)
+	assert.Equal(t, handler.GetTaskType(), row.TaskType)
+	assert.Equal(t, bpmnCallbackStatusCompleted, row.Status)
+	assert.Equal(t, 1, handler.EffectCount())
+}
+
+type startProcessCommitProbeHandler struct {
+	client                 *ent.Client
+	tenantID               int
+	businessKey            string
+	observedCommittedState bool
+}
+
+func (h *startProcessCommitProbeHandler) GetTaskType() string  { return "start_commit_probe" }
+func (h *startProcessCommitProbeHandler) GetHandlerID() string { return "start_commit_probe_handler" }
+func (h *startProcessCommitProbeHandler) Validate(context.Context, map[string]interface{}) error {
+	return nil
+}
+func (h *startProcessCommitProbeHandler) Execute(ctx context.Context, _ *ent.ProcessTask, _ map[string]interface{}) (*dto.ServiceTaskResult, error) {
+	instance, err := h.client.ProcessInstance.Query().Where(
+		processinstance.TenantID(h.tenantID),
+		processinstance.BusinessKey(h.businessKey),
+	).Only(ctx)
+	if err != nil {
+		return nil, err
+	}
+	audits, err := h.client.ProcessAuditLog.Query().Where(
+		processauditlog.TenantID(h.tenantID),
+		processauditlog.ProcessInstanceID(instance.ID),
+		processauditlog.Action(AuditActionProcessStarted),
+	).Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+	h.observedCommittedState = audits == 1
+	if !h.observedCommittedState {
+		return nil, errors.New("initial callback observed uncommitted start state")
+	}
+	return &dto.ServiceTaskResult{Success: true}, nil
+}
+
+var _ bpmn.ServiceTaskHandlerInterface = (*startProcessCommitProbeHandler)(nil)
 
 func TestCompleteTaskRollsBackDatabaseStateWhenAuditFails(t *testing.T) {
 	f := newBPMNAuthorizationFixture(t)
@@ -117,6 +353,32 @@ func TestCompleteTaskReturnsSuccessWhenInlineCallbackAttemptFails(t *testing.T) 
 	assert.Equal(t, "handler_error", row.LastErrorClass)
 	assert.Equal(t, common.ProcessTaskStatusCompleted, f.client.ProcessTask.GetX(f.userCtx, task.ID).Status)
 	assert.Equal(t, "callback", f.client.ProcessInstance.GetX(f.userCtx, instance.ID).CurrentActivityID)
+}
+
+func TestCompleteTaskMissingDeclaredServiceTaskHandlerRollsBackScheduling(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	task := f.seedNonParticipantApprovalTask(t, "missing-declared-service-handler")
+	task, err := f.client.ProcessTask.UpdateOne(task).SetCandidateUsers(f.actor.Email).Save(f.userCtx)
+	require.NoError(t, err)
+	instance := f.client.ProcessInstance.GetX(f.userCtx, task.ProcessInstanceID)
+	definition := f.client.ProcessDefinition.GetX(f.userCtx, instance.ProcessDefinitionID)
+	_, err = f.client.ProcessDefinition.UpdateOne(definition).
+		SetBpmnXML(approvalThenServiceTaskXML("missing_declared_handler_after_user_task")).
+		Save(f.userCtx)
+	require.NoError(t, err)
+
+	err = f.engine.CompleteTask(f.typedTaskScopeOnlyCtx(f.actor, false), task.TaskID, map[string]interface{}{})
+	require.Error(t, err)
+	assert.Equal(t, common.ProcessTaskStatusCreated, f.client.ProcessTask.GetX(f.userCtx, task.ID).Status)
+	assert.Equal(t, "approval", f.client.ProcessInstance.GetX(f.userCtx, instance.ID).CurrentActivityID)
+	assert.Zero(t, f.client.ProcessCallbackOutbox.Query().Where(
+		processcallbackoutbox.TenantID(f.tenant.ID),
+		processcallbackoutbox.ProcessInstanceID(instance.ID),
+	).CountX(f.userCtx))
+	assert.Zero(t, f.client.ProcessAuditLog.Query().Where(
+		processauditlog.TenantID(f.tenant.ID),
+		processauditlog.ProcessInstanceID(instance.ID),
+	).CountX(f.userCtx))
 }
 
 func TestCompleteTaskAuditUsesTypedScopeActor(t *testing.T) {

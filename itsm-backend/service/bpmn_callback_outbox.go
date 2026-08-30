@@ -19,6 +19,8 @@ const (
 	bpmnCallbackStatusProcessing = "processing"
 	bpmnCallbackStatusCompleted  = "completed"
 	bpmnCallbackLeaseDuration    = 60 * time.Second
+
+	bpmnUnresolvedUserTaskCallbackHandlerID = "__unresolved_user_task_callback__"
 )
 
 type bpmnCallbackEnqueueRequest struct {

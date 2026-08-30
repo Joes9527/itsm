@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"itsm-backend/dto"
-	"itsm-backend/ent"
 )
 
 // ProcessTriggerServiceInterface 流程触发服务接口
@@ -50,31 +49,4 @@ type ProcessBindingServiceInterface interface {
 
 	// BatchCreateBindings 批量创建流程绑定
 	BatchCreateBindings(ctx context.Context, req *dto.BatchProcessBindingRequest) error
-}
-
-// ServiceTaskHandlerInterface 服务任务处理器接口
-type ServiceTaskHandlerInterface interface {
-	// GetTaskType 返回处理器支持的任务类型
-	GetTaskType() string
-
-	// Execute 执行服务任务
-	Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*dto.ServiceTaskResult, error)
-
-	// Validate 验证参数
-	Validate(ctx context.Context, config map[string]interface{}) error
-
-	// GetHandlerID 返回处理器标识
-	GetHandlerID() string
-}
-
-// ProcessCallbackServiceInterface 流程回调服务接口
-type ProcessCallbackServiceInterface interface {
-	// HandleCallback 处理流程回调
-	HandleCallback(ctx context.Context, req *dto.CallbackRequest) error
-
-	// RegisterHandler 注册服务任务处理器
-	RegisterHandler(handler ServiceTaskHandlerInterface)
-
-	// UnregisterHandler 注销处理器
-	UnregisterHandler(handlerID string)
 }
