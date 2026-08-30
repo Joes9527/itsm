@@ -17,7 +17,7 @@
 - KAF action identity is exactly `tenantId:taskId:runId:stepId`; every persistence lookup and mutation is tenant-scoped and fails closed.
 - `KafTaskActionLedger` replaces, rather than supplements, `ProcessTask.task_variables["kaf_action_results"]`.
 - Raw Tool inputs/outputs remain in KAF. ITSM timeline, receipts, audit and API payloads contain only redacted structured information.
-- The only completion action in scope is `complete_bpmn_task`; do not add `assign`, `resolve`, or `close` actions.
+- The only BPMN-advancing action in scope is `complete_bpmn_task`; do not add `assign`, `resolve`, or `close` actions. Existing `update_progress` and `record_execution_failure` actions must atomically persist their effect, ledger finalization, timeline, and audit.
 - KAF delivery status becomes `completed` only for an ITSM `resultStatus` of `applied` or `already_applied`.
 
 ---
@@ -174,7 +174,7 @@ Create `KafTaskCompletionReceipt` with a unique `ledger_id`, tenant ID, task ID,
 
 - [ ] **Step 4: Implement reconciliation rather than a second BPMN completion**
 
-When a claimed ledger sees a completed task, load its receipt. If it is `callback_succeeded`, finalize the ledger without calling `CompleteTask`. If it is pending or failed, run only the receipt-scoped callback recovery path, passing the ledger scope in context; do not call generic `CompleteTask` again. If the task is still delegated, invoke `CompleteKafDelegatedTask` once. `applied` is legal only after both a successful receipt and completed task state are observed.
+When a claimed ledger sees a completed task, load its receipt and verify that the authoritative process instance advanced beyond the exact task definition. If it is `callback_succeeded` and process advancement is proven, finalize the ledger without calling `CompleteTask`. If the receipt is pending or failed but advancement is proven, run only the receipt-scoped callback recovery path, passing the ledger scope in context; do not call generic `CompleteTask` again. If the task is still delegated, invoke `CompleteKafDelegatedTask` once. `applied` is legal only after a successful receipt, exact task scope, and authoritative process advancement are observed; task status alone remains retryable.
 
 - [ ] **Step 5: Run tests, full service build, and commit**
 
@@ -354,3 +354,17 @@ Record exact commands, pass counts, and any intentionally unexecuted environment
 git add itsm-backend/handlers/service_request/kaf_delegation_sslvpn_e2e_test.go itsm-backend/service/kaf_delegation_service_test.go docs/reports/2026-08-30-kaf-delegation-execution-integrity-report.md
 git commit -m "test: verify KAF delegation execution integrity"
 ```
+
+---
+
+## Final Review Remediation Amendment (2026-08-31)
+
+- [x] Require exact-scope task identity plus authoritative process advancement before reconciliation can return `applied`; add task-only crash and legitimately advanced tests.
+- [x] Carry the concrete ITSM ledger owner through completion, fence every callback/receipt/finalization predicate on an unexpired executing lease, and make receipt states monotonic.
+- [x] Put non-completing action effect, process version, timeline, ledger, and audit in one Ent transaction; prove rollback and retry convergence after forced finalization failure.
+- [x] Recursively redact and bound structured exception strings and outbound summaries/evidence references, including nested credentials and oversized values.
+- [x] Persist the outbound KAF completion payload and replay it from local recovery even when ITSM no longer lists the task.
+- [x] Register forced-RLS policies for both new ITSM tenant tables and add deterministic SQL plus PostgreSQL tenant-isolation coverage.
+- [x] Heartbeat the KAF lease during long Procedure execution and cancel/fail closed on ownership loss.
+- [x] Deterministically adopt one pre-lease legacy delivery and mark additional rows `superseded` with an observable remediation code.
+- [x] Correct the spec, plan, and evidence to report only behavior proven by production-path tests.

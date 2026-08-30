@@ -1,101 +1,44 @@
 # KAF Delegation Execution Integrity Acceptance Report
 
-Date: 2026-08-30
+Date: 2026-08-31
 
 ## Status
 
-Task 5 fix-round acceptance passed in the requested linked worktrees. This is
-automated local evidence only; no external SSLVPN deployment, network change,
-or production credential operation was executed.
+The final review remediation passed automated production-path tests in both
+linked worktrees. ITSM code commit `adb2b904` and KAF commit `6e4bedb7` close
+the accepted execution-integrity findings. No live SSLVPN deployment, external
+network change, or production credential operation was performed.
 
-KAF commits in scope:
+## Corrected Acceptance Evidence
 
-- `cf01648fb233c621f4785820a3e4297afdc69da4` - redact credential-bearing
-  non-hierarchical URI suffixes without misclassifying URI syntax.
-- `1ca123f831f2101e3d8876d8508953fe2dad2d3f` - initial delivery cardinality
-  acceptance coverage.
-- `903a69c2932fad667746928ca3a647f10f1149f1` - real SQLite SQLAlchemy delivery
-  identity, interleaving, reclaim, and lease-owner-fencing coverage.
-
-The ITSM fix-round commit is reported in the Task 5 scratch handoff because
-this authoritative report is part of that commit.
-
-## Acceptance Matrix
-
-| Requirement | Production-boundary evidence and exact outcome |
+| Requirement | Evidence and outcome |
 | --- | --- |
-| SSLVPN applied/replay cardinality | `TestSSLVPNKafDelegation_OneAppliedActionAdvancesBPMNOnce` passed. It proves first `applied`, exact replay `already_applied`, one completed BPMN task/process, one applied ledger, one successful receipt, one audit, and no legacy action-result task variable. |
-| Callback failure recovery | `TestExecuteAction_RealEngineCallbackFailureRecoversWithoutSecondBPMNCompletion` passed against `CustomProcessEngine` and a registered fail-once callback handler. It proves one completion write/BPMN advancement, one persisted callback domain/timeline comment, one audit, one eventually successful receipt, and no callback or completion on exact replay. |
-| Completed task with failed receipt | `TestReconcileCompletedTaskWithoutSuccessfulReceipt_DoesNotCompleteBPMNAgain` passed, proving callback-only reconciliation and no second completion. |
-| Duplicate webhook identity | `test_sqlite_duplicate_webhooks_commit_one_unique_identity_and_one_execution` passed with two real SQLite `AsyncSession`s. Coordinated stale reads exercise the production unique index and commit conflict, leaving one persisted completed identity and one execution. |
-| Webhook/recovery interleaving | `test_sqlite_webhook_and_recovery_interleaving_preserves_live_lease_owner` passed through the production pipeline/session factory, proving duplicate webhook plus recovery cannot replace a live owner and leave one completed persisted delivery/execution. |
-| Expired KAF lease | `test_sqlite_recovery_reclaims_expired_running_delivery_and_fences_stale_owner` passed against real SQLite conditional updates and commits, proving one reclaimed identity, a new owner, rejected stale-owner finalization, and final `completed` state. |
-| Expired/live ITSM ledger lease | `TestExecuteAction_RetryAfterAppliedFinalizationFailureCreatesOneAudit` and `TestExecuteAction_RejectsActiveLeaseWithoutCallingEngine` passed. Reclaim creates one audit; a live lease creates no engine, task, timeline, or audit effect. |
-| Canonical mismatch | `TestExecuteAction_RejectsSameScopeWithDifferentKey` passed, proving no second ledger, engine, timeline, audit, or task effect. |
-| Concurrent action cardinality | `TestExecuteAction_ConcurrentClaimsCompleteExactlyOnce` passed under `go test -race`, proving one ledger, audit, timeline comment, task completion, and engine call. |
-| Tenant isolation | `TestKafContext_RejectsDifferentTenantAutomationActor`, `TestKafContext_RejectsValidKafActorWithDifferentRequestTenant`, `TestKafAction_RejectsValidKafActorWithDifferentRequestTenant`, `TestKafAction_IdempotentReplayRejectsValidKafActorWithDifferentRequestTenant`, and `TestAuthorizeTaskActor_KafDelegate_RejectsCrossTenantActor` all passed; cross-tenant context, action, replay, and engine authorization fail closed. |
-| Authentication/actor scope | `TestAuthorizeTaskActor_KafDelegate_RejectsNonKafAutomationRole` and `TestAuthorizeTaskActor_KafDelegate_RejectsNoActorContext` passed; delegated completion rejects an unauthorized role and absent actor context. |
-| Legacy state absent | The SSLVPN test rejects `task_variables["kaf_action_results"]`; the production Go source search below found no legacy identifier. |
-| Persisted URI redaction | The focused persisted-`last_error` matrix passed for `mailto:`, `urn:`, `data:`, `s3:`, and generic RFC-style schemes while preserving sensitive `key=value` and `key:value` redaction. |
+| Partial BPMN completion | `TestReconcileTaskOnlyCompletion_DoesNotReportApplied` proves a completed task row without authoritative process advancement remains retryable and does not invoke the callback. Existing positive reconciliation tests now advance the process instance beyond the exact task definition before success. |
+| ITSM owner fencing | `TestCompleteKafDelegatedTask_RejectsStaleLedgerOwnerBeforeCallback` proves an expired/reclaimed owner cannot enter completion or change a receipt. Every completion, callback, receipt, and ledger-finalization predicate requires the exact unexpired executing owner. |
+| Monotonic receipts | `TestKafCompletionReceipt_LateFailureCannotRegressSuccess` proves a late failure cannot replace `callback_succeeded`. |
+| Commit-then-error convergence | `TestExecuteAction_RealEngineCallbackFailureRecoversWithoutSecondBPMNCompletion` commits a ledger-scope-keyed domain timeline effect and then returns an error. Retry observes the same idempotency key and converges with one domain mutation, one audit, one timeline row, and one successful receipt. This replaces the prior report's weaker fail-before-mutation evidence. |
+| Non-completing actions | `TestExecuteAction_NonCompletingFinalizationFailureRollsBackEffectAndRetriesOnce` forces ledger finalization failure inside the Ent transaction. The first attempt leaves the process version and timeline unchanged; retry produces one version increment, timeline effect, ledger result, and audit. |
+| Recursive and outbound redaction | KAF contract/pipeline tests cover nested bearer credentials, userinfo/query credentials, oversized structured scalar strings, bounded `resultSummary`, and bounded/redacted `evidenceRefs`. |
+| Remote-applied recovery | The remote-applied/lease-stolen crash test proves the exact persisted completion payload is replayed and the local row converges even when ITSM's delegated-task list is empty. |
+| Long Procedure lease | Deterministic short-TTL tests prove periodic owner-fenced renewal and cancellation/fail-closed behavior when renewal loses ownership. |
+| Legacy migration | Migration/runtime tests prove deterministic canonical adoption by `(received_at, event_id)` and observable `superseded` status for additional pre-lease rows. |
+| RLS | Registered migration `019_kaf_execution_integrity_rls` enables and forces policies for both new tenant tables. Deterministic migration SQL/checksum tests pass; the tagged PostgreSQL tenant-isolation tests compile but skip without `RLS_TEST_DSN`. |
 
-## Focused Red/Green Evidence
-
-The SQLite identity test was mutation-checked by temporarily disabling the
-production model's unique identity flag. The selected test failed because two
-rows persisted instead of one (`1 failed, 101 deselected`); restoring the
-constraint returned the three focused SQLite cases to `3 passed, 99 deselected`.
-
-The expired-reclaim test was mutation-checked by temporarily removing
-`lease_owner == lease_owner` from production finalization. It failed at the
-stale owner's finalization assertion (`1 failed, 101 deselected`); restoring
-owner fencing returned the focused suite to green. Neither mutation remains in
-the committed tree.
-
-```bash
-ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/_work/kaf/kaf/.venv/bin/python -m pytest tests/test_kaf_delegation_pipeline.py -q -k 'sqlite_duplicate_webhooks or sqlite_webhook_and_recovery_interleaving or sqlite_recovery_reclaims_expired_running' -vv
-```
-
-Result: `3 passed, 99 deselected in 5.85s`.
-
-```bash
-ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/_work/kaf/kaf/.venv/bin/python -m pytest tests/test_kaf_delegation_pipeline.py -q -k 'non_hierarchical_uri_suffixes or preserves_real_sensitive_assignment_boundaries or ambiguous_delimiter_suffixes or bounded_text_redaction'
-```
-
-Result: `46 passed, 56 deselected in 4.96s`.
+The prior positive claim for task-only callback reconciliation is withdrawn: a
+task row marked complete is not proof that the process token advanced. The
+prior callback claim is also replaced by the commit-then-error regression
+above. Application tenant checks are not presented as substitutes for RLS.
 
 ## ITSM Verification
 
 Worktree: `/home/administrator/project/itsm/.worktrees/kaf-delegation-transactional-delivery`
 
 ```bash
-cd itsm-backend && go test ./handlers/service_request ./service -run 'TestSSLVPNKafDelegation_OneAppliedActionAdvancesBPMNOnce' -count=1 -v
+cd itsm-backend && go test ./... -count=1
 ```
 
-Result: PASS; one handler test passed and service had no matching test.
-
-```bash
-cd itsm-backend && go test ./service ./controller ./handlers/service_request -run 'Test(Kaf|SSLVPN)' -count=1 -v
-```
-
-Result: PASS; 28 tests passed: 11 service, 12 controller, and 5 handler tests.
-
-```bash
-cd itsm-backend && go test ./service -run 'Test(ExecuteAction_|ReconcileCompletedTask|CompleteKafDelegatedTask)' -count=1 -v
-```
-
-Result: PASS; 9 tests passed, including the real-engine fail-once callback test.
-
-```bash
-cd itsm-backend && go test ./controller ./service -run 'Test(KafContext_Rejects(DifferentTenantAutomationActor|ValidKafActorWithDifferentRequestTenant)|KafAction_(RejectsValidKafActorWithDifferentRequestTenant|IdempotentReplayRejectsValidKafActorWithDifferentRequestTenant)|AuthorizeTaskActor_KafDelegate_Rejects(NonKafAutomationRole|NoActorContext|CrossTenantActor))' -count=1 -v
-```
-
-Result: PASS; all 7 named tenant/auth actor-scope tests passed.
-
-```bash
-cd itsm-backend && go test -race ./service -run 'TestExecuteAction_ConcurrentClaimsCompleteExactlyOnce' -count=1 -v
-```
-
-Result: PASS; one race-enabled test passed.
+Result: PASS for every Go package; `service` passed in 21.668s and the command
+exited 0.
 
 ```bash
 cd itsm-backend && go build ./...
@@ -104,46 +47,76 @@ cd itsm-backend && go build ./...
 Result: PASS, exit code 0.
 
 ```bash
-rg -n 'kaf_action_results|kafActionResult|putKafActionResult' itsm-backend --glob '*.go' --glob '!*_test.go'
+cd itsm-backend && go test -race ./service -run 'Test(ExecuteAction_ConcurrentClaimsCompleteExactlyOnce|CompleteKafDelegatedTask_RejectsStaleLedgerOwnerBeforeCallback|KafCompletionReceipt_LateFailureCannotRegressSuccess)' -count=1
 ```
 
-Result: no matches; expected `rg` exit code 1.
+Result: PASS; three selected race-enabled service regressions, package time
+1.196s.
+
+```bash
+cd itsm-backend && go test ./service -run 'Test(ReconcileTaskOnlyCompletion_DoesNotReportApplied|ExecuteAction_RealEngineCallbackFailureRecoversWithoutSecondBPMNCompletion|ExecuteAction_NonCompletingFinalizationFailureRollsBackEffectAndRetriesOnce|CompleteKafDelegatedTask_RejectsStaleLedgerOwnerBeforeCallback)' -count=1 -v
+```
+
+Result: PASS for all four named production regressions.
+
+```bash
+cd itsm-backend && go test -tags integration_rls ./database/rls -count=1 -v
+```
+
+Result: PASS for deterministic policy tests; five PostgreSQL integration tests,
+including the new KAF cross-tenant table test, skipped because `RLS_TEST_DSN`
+was not set.
+
+```bash
+cd itsm-backend && gofmt -l database/rls/rls_integration_test.go internal/bootstrap/post_schema_migrations_test.go migration/migrations.go migration/migrator_test.go service/bpmn/kaf_delegate_handler.go service/bpmn_process_engine.go service/bpmn_process_engine_ext_test.go service/kaf_delegation_service.go service/kaf_delegation_service_test.go
+```
+
+Result: no output; all changed Go files were formatted.
 
 ## KAF Verification
 
 Worktree: `/mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-worktrees/kaf-delegation-transactional-delivery`
 
 ```bash
-ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/_work/kaf/kaf/.venv/bin/python -m pytest tests/test_kaf_delegation_contract.py tests/test_kaf_delegation_pipeline.py -q
+ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/_work/kaf/kaf/.venv/bin/python -m pytest tests/test_kaf_delegation_contract.py tests/test_kaf_delegation_pipeline.py tests/test_kaf_delegation_delivery_migration.py -q
 ```
 
-Result: `104 passed, 1 skipped in 10.30s`. The pre-existing optional
-PostgreSQL concurrency probe skipped after configured credentials were rejected;
-all real SQLite SQLAlchemy acceptance tests ran.
+Result: `110 passed, 1 skipped in 10.84s`. The skip is the optional configured
+PostgreSQL probe; all SQLite production SQLAlchemy tests ran.
 
 ```bash
-ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/_work/kaf/kaf/.venv/bin/python -m ruff check src/acp/orchestration/headless_tasks/kaf_delegation_pipeline.py src/acp/models/kaf_delegation_delivery.py tests/test_kaf_delegation_pipeline.py
-ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/_work/kaf/kaf/.venv/bin/python -m ruff format --check src/acp/orchestration/headless_tasks/kaf_delegation_pipeline.py src/acp/models/kaf_delegation_delivery.py tests/test_kaf_delegation_pipeline.py
-```
-
-Results: `All checks passed!`; all 3 files already formatted.
-
-```bash
-ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/_work/kaf/kaf/.venv/bin/python -m compileall -q src/acp/orchestration/headless_tasks/kaf_delegation_pipeline.py tests/test_kaf_delegation_pipeline.py
 ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/_work/kaf/kaf/.venv/bin/python -m pytest tests/test_migration_dag.py -q
+```
+
+Result: `2 passed in 4.71s`.
+
+```bash
+ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/_work/kaf/kaf/.venv/bin/python -m ruff check alembic/versions/035_kaf_delegation_delivery_leases.py alembic/versions/036_kaf_delivery_completion_replay.py src/acp/models/kaf_delegation_delivery.py src/acp/orchestration/headless_tasks/kaf_delegation_pipeline.py tests/test_kaf_delegation_contract.py tests/test_kaf_delegation_pipeline.py tests/test_kaf_delegation_delivery_migration.py
+ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/_work/kaf/kaf/.venv/bin/python -m ruff format --check alembic/versions/035_kaf_delegation_delivery_leases.py alembic/versions/036_kaf_delivery_completion_replay.py src/acp/models/kaf_delegation_delivery.py src/acp/orchestration/headless_tasks/kaf_delegation_pipeline.py tests/test_kaf_delegation_contract.py tests/test_kaf_delegation_pipeline.py tests/test_kaf_delegation_delivery_migration.py
+```
+
+Results: Ruff checks passed; all seven files were formatted.
+
+```bash
 ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/_work/kaf/kaf/.venv/bin/python -m alembic heads
 ```
 
-Results: compile PASS; migration DAG `2 passed in 7.42s`; head is
-`035_kaf_delivery_leases`.
+Result: `036_kaf_completion_replay (head)`.
 
-Both repositories passed `git diff --check` before commit. The KAF worktree was
-clean after commit. Protected historical untracked ITSM review files were not
-modified, staged, or removed.
+The repository-wide KAF `pytest -q` command did not collect tests because the
+environment lacks optional dependency `sentence_transformers`, imported by
+`tests/test_eval_embedding_models_cli.py`. This is an external environment
+limitation, not a passing full-suite result.
 
-## Residual Scope
+Both repositories passed `git diff --check`. The KAF worktree was clean after
+commit. Protected untracked historical ITSM review files were not modified,
+staged, or removed.
 
+## Residual Limits
+
+- PostgreSQL RLS and concurrency probes need configured test credentials to run
+  rather than skip; deterministic SQL and SQLite transaction paths passed.
 - No live SSLVPN infrastructure or external deployment was exercised.
-- The optional PostgreSQL concurrency probe remains environment-blocked by the
-  configured test credentials; real SQLite production SQLAlchemy boundaries
-  provide the required deterministic acceptance evidence.
+- The generic non-KAF `CompleteTask` API remains multi-step by design; the
+  exact-scope advancement and owner-fenced recovery guarantees apply to the
+  dedicated KAF completion path.
