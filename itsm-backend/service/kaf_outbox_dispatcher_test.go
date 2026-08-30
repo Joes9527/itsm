@@ -154,6 +154,55 @@ func TestKafOutboxDispatcher_RetriesNon2xxWithoutDroppingEvent(t *testing.T) {
 	assert.Nil(t, audit.RequestBody)
 }
 
+func TestKafOutboxDispatcher_RedactsJSONCredentialsFromClientRejection(t *testing.T) {
+	repo, client := newOutboxRepository(t)
+	event := validKafDelegateRequested()
+	payload, err := json.Marshal(event)
+	require.NoError(t, err)
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	_, err = repo.Enqueue(context.Background(), nil, NewOutboxEvent{
+		EventID:       event.EventID,
+		EventType:     event.EventType,
+		TenantID:      7,
+		AggregateType: "process_task",
+		AggregateID:   event.TaskID,
+		Payload:       payload,
+		NextAttemptAt: now.Add(-time.Second),
+	})
+	require.NoError(t, err)
+
+	const responseSecret = "webhook-response-token"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"detail":"invalid_webhook_signature","token":"` + responseSecret + `"}`))
+	}))
+	defer server.Close()
+	dispatcher, err := NewKafOutboxDispatcher(repo, KafOutboxConfig{
+		WebhookURL:    server.URL,
+		WebhookSecret: "test-secret",
+		BatchSize:     1,
+		PollInterval:  time.Second,
+	})
+	require.NoError(t, err)
+	dispatcher.now = func() time.Time { return now }
+
+	require.NoError(t, dispatcher.DispatchOnce(context.Background()))
+
+	persisted, err := client.OutboxEvent.Query().
+		Where(outboxevent.EventIDEQ(event.EventID)).
+		Only(context.Background())
+	require.NoError(t, err)
+	assert.NotContains(t, persisted.LastError, responseSecret)
+	assert.Contains(t, persisted.LastError, "invalid_webhook_signature")
+
+	audit, err := client.AuditLog.Query().
+		Where(auditlog.RequestIDEQ(event.EventID), auditlog.ActionEQ("kaf_outbox.delivery_rejected")).
+		Only(context.Background())
+	require.NoError(t, err)
+	assert.NotContains(t, audit.String(), responseSecret)
+	assert.Nil(t, audit.RequestBody)
+}
+
 func TestKafOutboxDispatcher_KeepsClientRejectionAuditAfterSuccessfulRetry(t *testing.T) {
 	repo, client := newOutboxRepository(t)
 	event := validKafDelegateRequested()

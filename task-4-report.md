@@ -8,6 +8,10 @@
   operators to correlate a rejection back to the delivered event.
 - Audit records deliberately contain no request body or delivery payload. Retry
   errors continue through the existing redaction and length-limiting path.
+- Retry-error sanitization now redacts quoted credential values in direct and
+  string-escaped JSON response details before they can reach `last_error`.
+  It retains the HTTP status and non-sensitive diagnostic fields, and the
+  rejection audit remains payload-free.
 - If the audit insert fails, the transaction rolls back: the event remains
   claimed, with no retry count, error, or next-attempt update committed.
 - A later successful delivery only publishes the event and does not remove the
@@ -20,6 +24,11 @@
 - `TestKafOutboxDispatcher_RollsBackRetryWhenClientRejectionAuditFails`
   injects an audit persistence failure and verifies that retry state is rolled
   back with it.
+- `TestKafOutboxDispatcher_RedactsJSONCredentialsFromClientRejection` verifies
+  a 401 JSON response secret reaches neither persisted `last_error` nor audit
+  data while retaining the rejection detail.
+- `TestSummarizeOutboxError_RedactsQuotedJSONCredentialValues` covers common
+  quoted JSON credential keys and their string-escaped variants.
 
 ## Verification
 

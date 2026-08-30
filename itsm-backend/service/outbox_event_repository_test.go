@@ -321,6 +321,54 @@ func TestSummarizeOutboxError_RedactsCommonCredentialSpellings(t *testing.T) {
 	}
 }
 
+func TestSummarizeOutboxError_RedactsQuotedJSONCredentialValues(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      string
+		secret     string
+		diagnostic string
+	}{
+		{
+			name:       "JSON token",
+			input:      `delivery rejected: {"detail":"invalid signature","token":"json-token-secret"}`,
+			secret:     "json-token-secret",
+			diagnostic: "invalid signature",
+		},
+		{
+			name:       "JSON access token with underscore",
+			input:      `delivery rejected: {"access_token":"json-access-token-secret"}`,
+			secret:     "json-access-token-secret",
+			diagnostic: "access_token",
+		},
+		{
+			name:       "JSON client secret with hyphen",
+			input:      `delivery rejected: {"client-secret":"json-client-secret"}`,
+			secret:     "json-client-secret",
+			diagnostic: "client-secret",
+		},
+		{
+			name:       "escaped JSON API key",
+			input:      `delivery rejected: {\"api-key\":\"escaped-api-key-secret\"}`,
+			secret:     "escaped-api-key-secret",
+			diagnostic: "api-key",
+		},
+		{
+			name:       "escaped JSON password",
+			input:      `delivery rejected: {\"password\":\"escaped-password-secret\"}`,
+			secret:     "escaped-password-secret",
+			diagnostic: "password",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			summary := summarizeOutboxError(tt.input)
+			assert.NotContains(t, summary, tt.secret)
+			assert.Contains(t, summary, tt.diagnostic)
+		})
+	}
+}
+
 func newOutboxRepository(t *testing.T) (*OutboxEventRepository, *ent.Client) {
 	t.Helper()
 	repo, client, _ := newOutboxRepositoryWithDriver(t, "sqlite3")

@@ -35,6 +35,7 @@ var (
 	// superseded publishing lease.
 	ErrOutboxEventClaimLost = errors.New("outbox event claim is no longer active")
 
+	outboxSensitiveErrorJSONValuePattern   = regexp.MustCompile(`(?i)("(?:authorization|access[_ -]?token|client[_ -]?secret|token|secret|password|api[_ -]?key)"\s*:\s*")(?:\\.|[^"\\])*(")`)
 	outboxSensitiveErrorValuePattern       = regexp.MustCompile(`(?i)(^|[^[:alnum:]_])(authorization|access[_ -]?token|client[_ -]?secret|token|secret|password|api[_ -]?key)\s*[:=]\s*(?:bearer\s+)?[^\s,;]+`)
 	outboxSensitiveErrorURLUserinfoPattern = regexp.MustCompile(`(?i)([a-z][a-z0-9+.-]*://)[^/\s:@]*:[^/\s@]+@`)
 )
@@ -322,6 +323,10 @@ func (r *OutboxEventRepository) currentTime() time.Time {
 func summarizeOutboxError(lastError string) string {
 	summary := strings.Join(strings.Fields(lastError), " ")
 	summary = outboxSensitiveErrorURLUserinfoPattern.ReplaceAllString(summary, "$1[redacted]@")
+	// Error payloads can be embedded JSON; normalize escaped quotes so the same
+	// redactor covers both direct and string-escaped response bodies.
+	summary = strings.ReplaceAll(summary, `\"`, `"`)
+	summary = outboxSensitiveErrorJSONValuePattern.ReplaceAllString(summary, "$1[redacted]$2")
 	summary = outboxSensitiveErrorValuePattern.ReplaceAllString(summary, "$1$2=[redacted]")
 	if len(summary) <= outboxEventLastErrorMaxLength {
 		return summary
