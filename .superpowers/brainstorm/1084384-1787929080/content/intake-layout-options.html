@@ -1,0 +1,56 @@
+<style>
+  .layout-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; }
+  .layout-option { border:1px solid #d9d0c4; border-radius:14px; overflow:hidden; background:#fffdf9; cursor:pointer; }
+  .layout-option.selected { outline:3px solid #bb5b32; }
+  .layout-option h3 { margin:0; padding:12px 16px; background:#f4eadc; }
+  .frame { margin:14px; border:1px solid #cfc5b7; border-radius:8px; min-height:285px; overflow:hidden; color:#34302a; font-family:Georgia,serif; }
+  .bar { padding:9px 12px; background:#243b35; color:#fff; font:12px sans-serif; }
+  .hero { padding:22px; background:#f8f2e9; }
+  .hero b { font-size:18px; }
+  .input { margin-top:14px; padding:12px; border:1px solid #b7aa9b; border-radius:6px; background:#fff; color:#827568; font:12px sans-serif; }
+  .chips { display:flex; gap:7px; flex-wrap:wrap; margin-top:10px; }
+  .chip { border-radius:99px; padding:5px 8px; background:#e5efe9; color:#315a4b; font:11px sans-serif; }
+  .preview { margin:14px 22px; padding:12px; border-left:3px solid #b85a33; background:#fff; font:12px sans-serif; }
+  .nav { display:flex; gap:12px; padding:10px 15px; border-bottom:1px solid #ddd2c3; font:11px sans-serif; }
+  .catalog { margin:14px 22px; display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .catalog div { border:1px solid #ddd2c3; padding:10px; border-radius:5px; font:11px sans-serif; }
+  .caption { padding:0 16px 15px; font-size:13px; line-height:1.45; }
+  @media (max-width: 760px) { .layout-grid { grid-template-columns:1fr; } }
+</style>
+
+<h2>终端用户受理入口</h2>
+<p class="subtitle">两种布局都保留自然语言受理和可选 Catalog 浏览。请选择更符合“用户只描述需求，不学习 ITSM 分类”的体验。</p>
+
+<div class="layout-grid">
+  <div class="layout-option" data-choice="conversation-first" onclick="toggleSelect(this)">
+    <h3>A. 对话优先</h3>
+    <div class="frame">
+      <div class="bar">KAF 服务台　 我的请求　 服务目录</div>
+      <div class="hero">
+        <b>今天需要什么帮助？</b>
+        <div class="input">例如：我需要申请 SSLVPN，或无法连接公司网络...</div>
+        <div class="chips"><span class="chip">申请 SSLVPN</span><span class="chip">报告故障</span><span class="chip">浏览服务</span></div>
+      </div>
+      <div class="preview"><b>KAF 正在梳理需求</b><br>识别服务、补充字段、确认后提交 ITSM</div>
+    </div>
+    <p class="caption">一个明确的自然语言起点。Catalog 是建议与捷径，不是用户必须理解的导航结构。</p>
+  </div>
+
+  <div class="layout-option" data-choice="catalog-first" onclick="toggleSelect(this)">
+    <h3>B. 服务目录优先</h3>
+    <div class="frame">
+      <div class="bar">IT 服务门户　 我的请求　 获取帮助</div>
+      <div class="nav">常用服务　 帐号与访问　 设备　 网络　 软件</div>
+      <div class="catalog">
+        <div><b>SSLVPN 权限申请</b><br>远程访问</div>
+        <div><b>网络连接问题</b><br>报告故障</div>
+        <div><b>新员工服务包</b><br>帐号与设备</div>
+        <div><b>其他帮助</b><br>让 KAF 协助</div>
+      </div>
+      <div class="preview"><b>不确定要申请什么？</b><br>用自然语言告诉 KAF</div>
+    </div>
+    <p class="caption">适合目录成熟、用户高频申请已知服务的组织，但更容易让用户先做错误分类。</p>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:18px">点击选项后，在终端告诉我你希望保留或调整的地方。</p>

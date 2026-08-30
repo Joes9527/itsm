@@ -1,0 +1,560 @@
+<style>
+  :root {
+    --bg: #f5f7fa;
+    --panel: #ffffff;
+    --line: #e5e7eb;
+    --text: #111827;
+    --muted: #6b7280;
+    --blue: #2563eb;
+    --blue-soft: #eff6ff;
+    --green: #16a34a;
+    --orange: #ea580c;
+    --red: #dc2626;
+  }
+
+  .proto-wrap {
+    display: grid;
+    gap: 24px;
+    padding: 20px;
+    background: var(--bg);
+  }
+
+  .intro {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 18px 20px;
+  }
+
+  .intro h1 {
+    margin: 0 0 8px;
+    font-size: 24px;
+  }
+
+  .intro p {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .proto-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px;
+  }
+
+  .proto {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    overflow: hidden;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+  }
+
+  .proto-head {
+    padding: 18px 20px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .proto-head h2 {
+    margin: 0 0 6px;
+    font-size: 18px;
+  }
+
+  .proto-head p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: var(--blue-soft);
+    color: var(--blue);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .surface {
+    padding: 18px;
+    background: #f8fafc;
+  }
+
+  .shell {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    overflow: hidden;
+  }
+
+  .hero {
+    padding: 20px 22px 16px;
+    border-bottom: 1px solid var(--line);
+    background: white;
+  }
+
+  .hero-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .title {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .subtitle {
+    margin: 6px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .btns {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    padding: 9px 14px;
+    background: white;
+    font-size: 13px;
+  }
+
+  .btn.primary {
+    background: var(--blue);
+    color: white;
+    border-color: var(--blue);
+  }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 16px;
+  }
+
+  .stat {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 14px;
+    background: white;
+  }
+
+  .stat .label {
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .stat .value {
+    margin-top: 8px;
+    font-size: 26px;
+    font-weight: 700;
+  }
+
+  .blue { color: var(--blue); }
+  .green { color: var(--green); }
+  .orange { color: var(--orange); }
+  .red { color: var(--red); }
+
+  .body {
+    padding: 18px 22px 22px;
+  }
+
+  .toolbar {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 14px;
+    display: grid;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .toolbar-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .search {
+    flex: 1 1 320px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    padding: 10px 12px;
+    color: #94a3b8;
+    background: #f8fafc;
+  }
+
+  .chip, .tab {
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 12px;
+    border: 1px solid var(--line);
+    background: #fff;
+  }
+
+  .chip.active, .tab.active {
+    background: var(--blue-soft);
+    color: var(--blue);
+    border-color: #bfdbfe;
+    font-weight: 600;
+  }
+
+  .cards {
+    display: grid;
+    gap: 14px;
+  }
+
+  .cards.grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cards.list {
+    grid-template-columns: 1fr;
+  }
+
+  .card {
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 16px;
+    background: white;
+  }
+
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #60a5fa, #2563eb);
+  }
+
+  .line-1, .line-2, .line-3 {
+    border-radius: 999px;
+    background: #e2e8f0;
+  }
+
+  .line-1 { height: 14px; width: 72%; margin-bottom: 8px; }
+  .line-2 { height: 10px; width: 92%; margin-bottom: 6px; }
+  .line-3 { height: 10px; width: 62%; }
+
+  .meta {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+
+  .pill {
+    padding: 5px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    border: 1px solid #dbeafe;
+    background: #eff6ff;
+    color: #1d4ed8;
+  }
+
+  .footer {
+    margin-top: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .split {
+    display: grid;
+    grid-template-columns: 230px 1fr;
+    gap: 16px;
+  }
+
+  .sidebar {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: white;
+    padding: 14px;
+  }
+
+  .sidebar h3, .section h3 {
+    margin: 0 0 12px;
+    font-size: 13px;
+    color: #475569;
+  }
+
+  .nav-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    padding: 9px 10px;
+    border-radius: 10px;
+    font-size: 12px;
+    color: #334155;
+    background: #fff;
+    border: 1px solid transparent;
+  }
+
+  .nav-item.active {
+    background: var(--blue-soft);
+    border-color: #bfdbfe;
+    color: var(--blue);
+    font-weight: 600;
+  }
+
+  .section {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: white;
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+
+  .list-row {
+    display: grid;
+    grid-template-columns: 48px 1fr 120px 120px 110px;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 0;
+    border-top: 1px solid #eef2f7;
+  }
+
+  .list-row:first-of-type {
+    border-top: none;
+  }
+
+  .small {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .choose {
+    padding: 14px 18px 18px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    background: #fcfcfd;
+  }
+
+  .choose button {
+    border: 1px solid var(--blue);
+    color: var(--blue);
+    background: white;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  @media (max-width: 1200px) {
+    .proto-grid { grid-template-columns: 1fr; }
+  }
+</style>
+
+<div class="proto-wrap">
+  <div class="intro">
+    <h1>Service Catalog 页面重构 Prototype</h1>
+    <p>下面是 2 个方向：A 更贴近 tickets 的后台工作台骨架；B 保留目录浏览感，但让信息层次与运维页面统一。看完后告诉我更偏哪一个，或者指出想混搭的部分。</p>
+  </div>
+
+  <div class="proto-grid">
+    <section class="proto">
+      <div class="proto-head">
+        <div>
+          <h2>Prototype A · Tickets Shell</h2>
+          <p>最接近 tickets：白色页头、4 个统计卡、单主内容容器。目录浏览保留，但整体更“运营台”。</p>
+        </div>
+        <span class="badge">更统一 / 更后台</span>
+      </div>
+      <div class="surface">
+        <div class="shell">
+          <div class="hero">
+            <div class="hero-top">
+              <div>
+                <h3 class="title">服务目录</h3>
+                <p class="subtitle">标准化自助申请入口，支持审批、SLA 与交付状态跟踪</p>
+              </div>
+              <div class="btns">
+                <div class="btn">高级筛选</div>
+                <div class="btn">我的审批</div>
+                <div class="btn primary">发起申请</div>
+              </div>
+            </div>
+            <div class="stats">
+              <div class="stat"><div class="label">已发布服务</div><div class="value blue">48</div></div>
+              <div class="stat"><div class="label">免审批服务</div><div class="value green">12</div></div>
+              <div class="stat"><div class="label">需审批服务</div><div class="value orange">31</div></div>
+              <div class="stat"><div class="label">高频申请</div><div class="value red">9</div></div>
+            </div>
+          </div>
+          <div class="body">
+            <div class="toolbar">
+              <div class="toolbar-row">
+                <div class="search">搜索服务名称、描述、关键字...</div>
+                <div class="tab active">卡片视图</div>
+                <div class="tab">列表视图</div>
+              </div>
+              <div class="toolbar-row">
+                <div class="chip active">全部</div>
+                <div class="chip">云资源</div>
+                <div class="chip">账号权限</div>
+                <div class="chip">安全服务</div>
+                <div class="chip">办公支持</div>
+                <div class="chip">审批：全部</div>
+                <div class="chip">排序：推荐</div>
+              </div>
+            </div>
+            <div class="cards grid">
+              <div class="card">
+                <div class="card-top"><div class="icon"></div><div class="small">4h SLA</div></div>
+                <div class="line-1"></div><div class="line-2"></div><div class="line-3"></div>
+                <div class="meta"><span class="pill">云资源</span><span class="pill">免审批</span></div>
+                <div class="footer"><span>预计 30 分钟交付</span><strong>立即申请</strong></div>
+              </div>
+              <div class="card">
+                <div class="card-top"><div class="icon" style="background:linear-gradient(135deg,#f59e0b,#ea580c)"></div><div class="small">8h SLA</div></div>
+                <div class="line-1" style="width:78%"></div><div class="line-2"></div><div class="line-3" style="width:58%"></div>
+                <div class="meta"><span class="pill">账号权限</span><span class="pill">需审批</span></div>
+                <div class="footer"><span>支持审批链查看</span><strong>查看详情</strong></div>
+              </div>
+              <div class="card">
+                <div class="card-top"><div class="icon" style="background:linear-gradient(135deg,#f43f5e,#dc2626)"></div><div class="small">24h SLA</div></div>
+                <div class="line-1" style="width:64%"></div><div class="line-2" style="width:85%"></div><div class="line-3"></div>
+                <div class="meta"><span class="pill">安全服务</span><span class="pill">需审批</span></div>
+                <div class="footer"><span>审计记录完整</span><strong>立即申请</strong></div>
+              </div>
+              <div class="card">
+                <div class="card-top"><div class="icon" style="background:linear-gradient(135deg,#14b8a6,#0f766e)"></div><div class="small">12h SLA</div></div>
+                <div class="line-1" style="width:70%"></div><div class="line-2" style="width:88%"></div><div class="line-3" style="width:50%"></div>
+                <div class="meta"><span class="pill">办公支持</span><span class="pill">标准服务</span></div>
+                <div class="footer"><span>适合高频常规需求</span><strong>查看详情</strong></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="choose">
+        <div class="small">特点：最像 tickets，统计与操作优先，浏览体验次之</div>
+        <button>我倾向 A</button>
+      </div>
+    </section>
+
+    <section class="proto">
+      <div class="proto-head">
+        <div>
+          <h2>Prototype B · Hybrid Explorer</h2>
+          <p>仍然采用 tickets 的页头与统计，但主内容改成“左侧分类 + 右侧目录结果”，更像真正的服务目录。</p>
+        </div>
+        <span class="badge">更适合目录浏览</span>
+      </div>
+      <div class="surface">
+        <div class="shell">
+          <div class="hero">
+            <div class="hero-top">
+              <div>
+                <h3 class="title">服务目录</h3>
+                <p class="subtitle">按分类快速浏览标准服务，直接对比审批方式、交付时效与适用场景</p>
+              </div>
+              <div class="btns">
+                <div class="btn">查看申请单</div>
+                <div class="btn">快捷筛选</div>
+                <div class="btn primary">新建申请</div>
+              </div>
+            </div>
+            <div class="stats">
+              <div class="stat"><div class="label">全部服务</div><div class="value blue">48</div></div>
+              <div class="stat"><div class="label">云资源</div><div class="value green">16</div></div>
+              <div class="stat"><div class="label">账号权限</div><div class="value orange">14</div></div>
+              <div class="stat"><div class="label">安全服务</div><div class="value red">8</div></div>
+            </div>
+          </div>
+          <div class="body">
+            <div class="toolbar">
+              <div class="toolbar-row">
+                <div class="search">搜索服务、场景、交付关键字...</div>
+                <div class="chip active">审批：全部</div>
+                <div class="chip">排序：SLA</div>
+                <div class="tab active">列表优先</div>
+              </div>
+            </div>
+            <div class="split">
+              <aside class="sidebar">
+                <h3>服务分类</h3>
+                <div class="nav-item active"><span>全部服务</span><strong>48</strong></div>
+                <div class="nav-item"><span>云资源</span><strong>16</strong></div>
+                <div class="nav-item"><span>账号权限</span><strong>14</strong></div>
+                <div class="nav-item"><span>安全服务</span><strong>8</strong></div>
+                <div class="nav-item"><span>办公支持</span><strong>10</strong></div>
+              </aside>
+              <div>
+                <div class="section">
+                  <h3>推荐服务</h3>
+                  <div class="cards grid">
+                    <div class="card">
+                      <div class="card-top"><div class="icon"></div><div class="small">热门</div></div>
+                      <div class="line-1"></div><div class="line-2" style="width:84%"></div><div class="meta"><span class="pill">免审批</span></div>
+                    </div>
+                    <div class="card">
+                      <div class="card-top"><div class="icon" style="background:linear-gradient(135deg,#a78bfa,#6d28d9)"></div><div class="small">常用</div></div>
+                      <div class="line-1" style="width:66%"></div><div class="line-2" style="width:89%"></div><div class="meta"><span class="pill">需审批</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="section">
+                  <h3>服务清单</h3>
+                  <div class="list-row">
+                    <div class="icon" style="width:38px;height:38px"></div>
+                    <div><div class="line-1" style="width:55%"></div><div class="line-2" style="width:72%"></div></div>
+                    <div class="small">云资源</div>
+                    <div class="small">4h SLA</div>
+                    <div class="small">免审批</div>
+                  </div>
+                  <div class="list-row">
+                    <div class="icon" style="width:38px;height:38px;background:linear-gradient(135deg,#f59e0b,#ea580c)"></div>
+                    <div><div class="line-1" style="width:64%"></div><div class="line-2" style="width:80%"></div></div>
+                    <div class="small">账号权限</div>
+                    <div class="small">8h SLA</div>
+                    <div class="small">需审批</div>
+                  </div>
+                  <div class="list-row">
+                    <div class="icon" style="width:38px;height:38px;background:linear-gradient(135deg,#f43f5e,#dc2626)"></div>
+                    <div><div class="line-1" style="width:48%"></div><div class="line-2" style="width:68%"></div></div>
+                    <div class="small">安全服务</div>
+                    <div class="small">24h SLA</div>
+                    <div class="small">需审批</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="choose">
+        <div class="small">特点：更像服务目录，分类导航更强，但与 tickets 完全同构的程度较低</div>
+        <button>我倾向 B</button>
+      </div>
+    </section>
+  </div>
+</div>

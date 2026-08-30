@@ -1,0 +1,118 @@
+<h2>现在的问题:三份"颜色/字号清单",互相不知道对方存在</h2>
+<p class="subtitle">想象一下,同一件商品在三张不同的价目表上标了三个价格——收银台改了价,仓库那张表和网店那张表都没跟着改</p>
+
+<div class="section">
+  <div style="display:flex; gap:16px; align-items:stretch; justify-content:center; flex-wrap:wrap;">
+    <div class="mockup" style="flex:1; min-width:220px;">
+      <div class="mockup-header">📗 design-system/theme.tsx</div>
+      <div class="mockup-body" style="font-family:monospace; font-size:13px; line-height:1.8;">
+        primary: <span style="color:#F06820">#F06820</span><br>
+        radius: 8px<br>
+        shadow: soft
+      </div>
+    </div>
+    <div class="mockup" style="flex:1; min-width:220px;">
+      <div class="mockup-header">📘 tailwind.config.mjs</div>
+      <div class="mockup-body" style="font-family:monospace; font-size:13px; line-height:1.8;">
+        primary: <span style="color:#F06820">#F06820</span> <em style="color:#999">(手抄的一份)</em><br>
+        radius: 8px<br>
+        shadow: soft <em style="color:#999">(定义不一样)</em>
+      </div>
+    </div>
+    <div class="mockup" style="flex:1; min-width:220px;">
+      <div class="mockup-header">📙 globals.css</div>
+      <div class="mockup-body" style="font-family:monospace; font-size:13px; line-height:1.8;">
+        --btn-color: <span style="color:#1890ff">#1890ff</span> <em style="color:#999">(第三份,还对不上)</em>
+      </div>
+    </div>
+  </div>
+  <p style="text-align:center; color:#999; margin-top:10px;">⚠️ 三份清单各管各的,改一份不会同步到另外两份 —— 这就是 1524 处硬编码颜色、118 处随手写的字号从哪儿来的</p>
+</div>
+
+<h3>改完之后:只有一份清单,大家都从它这里拿数据</h3>
+
+<div class="mockup">
+  <div class="mockup-header">🎯 唯一源头:colors.ts / spacing.ts</div>
+  <div class="mockup-body" style="text-align:center; padding:20px;">
+    <div style="display:inline-block; background:#fff; border:2px solid #F06820; border-radius:10px; padding:14px 24px; font-family:monospace; font-size:14px;">
+      primary: #F06820 &nbsp;|&nbsp; radius: 8px &nbsp;|&nbsp; shadow: soft
+    </div>
+    <div style="margin:18px 0; font-size:24px; color:#999;">↓ ↓ ↓</div>
+    <div style="display:flex; gap:16px; justify-content:center; flex-wrap:wrap;">
+      <div class="placeholder" style="flex:1; min-width:150px;">antd 主题<br><small>(theme.tsx)</small></div>
+      <div class="placeholder" style="flex:1; min-width:150px;">Tailwind 配置<br><small>(tailwind.config.mjs)</small></div>
+      <div class="placeholder" style="flex:1; min-width:150px;">页面里的 CSS 变量<br><small>(globals.css)</small></div>
+    </div>
+  </div>
+</div>
+<p style="text-align:center; color:#52c41a; margin-top:8px;">✅ 以后改一处,三边自动同步 —— 这就是"架构级统一"真正的意思</p>
+
+<h3>字号那个小争议点:10px / 11px / 12px / 13px 到底差多少</h3>
+<p class="subtitle">同一个"小标签文字"的角色,现在代码里四种字号都在用,我建议统一收到 12px(Tailwind 自带的 text-xs)</p>
+
+<div class="mockup">
+  <div class="mockup-body">
+    <div style="display:flex; align-items:baseline; gap:40px; justify-content:center; padding:16px 0;">
+      <div style="text-align:center;">
+        <div style="font-size:10px; color:#333;">申请人: 张三</div>
+        <div class="label" style="margin-top:6px; color:#ff4d4f;">10px（现状,偏小）</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-size:11px; color:#333;">申请人: 张三</div>
+        <div class="label" style="margin-top:6px; color:#999;">11px（现状,最常见）</div>
+      </div>
+      <div style="text-align:center; background:#fff7ed; border:1px dashed #F06820; border-radius:8px; padding:4px 10px;">
+        <div style="font-size:12px; color:#333;">申请人: 张三</div>
+        <div class="label" style="margin-top:6px; color:#F06820;">12px（建议统一到这个）</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-size:13px; color:#333;">申请人: 张三</div>
+        <div class="label" style="margin-top:6px; color:#999;">13px（现状,偶尔出现）</div>
+      </div>
+    </div>
+  </div>
+</div>
+<p style="text-align:center; color:#666;">肉眼几乎看不出差别,但代码里这是四套不同的写法。统一到 12px 之后,10px 的地方会略微变大一点点,13px 的地方略微变小一点点。</p>
+
+<h3>状态色:红/绿/黄/蓝 现在是散落的"魔法数字"</h3>
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">现状:每个文件自己抄一遍色值</div>
+    <div class="mockup-body">
+      <div style="display:flex; flex-direction:column; gap:8px; font-family:monospace; font-size:12px;">
+        <div>TicketKanban.tsx: <code style="background:#e6f4ff;color:#1890ff;padding:2px 6px;border-radius:4px;">'#1890ff'</code></div>
+        <div>SLACard.tsx: <code style="background:#e6f4ff;color:#1890ff;padding:2px 6px;border-radius:4px;">'#1890ff'</code> <span class="label" style="color:#ff4d4f;">(万一打错一个字符呢?)</span></div>
+        <div>StatusBadge.tsx: <code style="background:#e6f4ff;color:#1890ff;padding:2px 6px;border-radius:4px;">'#1890FF'</code> <span class="label" style="color:#ff4d4f;">(大小写都不一致)</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">改完:给颜色起个名字,大家喊名字</div>
+    <div class="mockup-body">
+      <div style="display:flex; flex-direction:column; gap:8px; font-family:monospace; font-size:12px;">
+        <div>TicketKanban.tsx: <code style="background:#e6f4ff;color:#1890ff;padding:2px 6px;border-radius:4px;">statusColors.info</code></div>
+        <div>SLACard.tsx: <code style="background:#e6f4ff;color:#1890ff;padding:2px 6px;border-radius:4px;">statusColors.info</code></div>
+        <div>StatusBadge.tsx: <code style="background:#e6f4ff;color:#1890ff;padding:2px 6px;border-radius:4px;">statusColors.info</code></div>
+      </div>
+      <p style="color:#52c41a; margin-top:10px; margin-bottom:0;">颜色本身完全不变,只是从"抄一遍数字"变成"引用同一个名字" —— 以后想统一调整,改一处就行</p>
+    </div>
+  </div>
+</div>
+
+<h3>关于 12px 这个小调整,你还认可吗?</h3>
+<div class="options">
+  <div class="option" data-choice="agree" onclick="toggleSelect(this)">
+    <div class="letter">✓</div>
+    <div class="content">
+      <h3>认可,收到 12px</h3>
+      <p>10px/13px 这种极小的偏移可以接受,继续往下设计</p>
+    </div>
+  </div>
+  <div class="option" data-choice="disagree" onclick="toggleSelect(this)">
+    <div class="letter">✗</div>
+    <div class="content">
+      <h3>不要动像素值</h3>
+      <p>严格保持像素级不变,10px/11px/13px 各自保留原样,只做纯引用替换</p>
+    </div>
+  </div>
+</div>
