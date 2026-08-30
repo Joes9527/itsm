@@ -1,7 +1,7 @@
 # Incident/Problem/Change actions 计算设计
 
 - 日期：2026-08-28
-- 状态：设计阶段，待审阅
+- 状态：已实现并完成最终审查加固（2026-08-30）
 - 依赖：`docs/superpowers/plans/2026-08-28-workitem-parity-phase4-actions-spec-scoping.md`
   （本设计的头脑风暴记录，含全部决策的推导过程）、
   `docs/superpowers/specs/2026-08-28-work-item-detail-page-parity-design.md` §5.3、§7 point 4
@@ -768,3 +768,41 @@ Problem 和 Change 的 actions 可独立实施；Incident 的 `convert_to_proble
   端到端场景验证页面上看到的按钮可点性和后端 `actions` 字段一致（不是从组件内部状态算出
   一份、从 API 又读出另一份）。Incident 的详情服务测试还必须断言状态 DTO 与 actions 使用同一
   次实体读取的快照，避免通过“先 `GetIncident`、再查实体”的双读取实现造成并发下的自相矛盾响应。
+
+## 9. 最终实现契约与审查加固
+
+本节记录 2026-08-30 最终代码审查后的权威实现，优先级高于前文实施前示例。前文中的
+snake_case 动作名称用于描述业务动作或内部审计值时仍然有效；通过 HTTP 返回的 `actions`
+对象属性必须遵循 `AGENTS.md` 的 camelCase 约定：
+
+| 域 | 最终公开 Actions key |
+|---|---|
+| Incident | `edit`、`resolve`、`close`、`reopen`、`escalate`、`assign`、`markMajorIncident`、`convertToProblem` |
+| Problem | `edit`、`startInvestigation`、`resolve`、`close` |
+| Change | `submitForApproval`、`approve`、`reject`、`startImplementation`、`completeImplementation` |
+
+`IncidentEvent.event_name=convert_to_problem` 和 `AuditLog.action=convert_to_problem` 是内部领域/审计
+词汇，不是 JSON 字段名，因此本次不改名。
+
+最终审查加固包含以下约束：
+
+1. Change 与 Problem 的所有客户域 handler，包括创建、详情、列表、关联、生命周期变更和删除，
+   统一调用 `middleware.ResolveRequestTenantID`。MSP 选定客户租户后，读写使用同一租户；缺失或
+   未授权的租户上下文 fail closed，不回退到裸 JWT `tenant_id`。
+2. Incident 的 `closed` 与 `cancelled` 统一由 `common.IsIncidentFinalStatus` 表达。转换为 Problem、
+   标记重大事件、升级和指派的读写侧共享该终态语义；指派继续额外禁止 `resolved`。
+3. `investigated_by` 关系类型下沉为 `common.WorkItemRelationInvestigatedBy`。删除由 Incident 转换
+   得到的 Problem 时，在一个 Ent 事务中软删 Problem 和指向其 WorkItem 的实时关系，使源 Incident
+   可以重新发起转换。
+4. `CanStartImplementation` 不再维护平行状态集合，而是调用
+   `service.IsValidChangeStatusTransition(current, in_progress, type)`；因此标准和紧急变更的合法
+   `draft -> in_progress` 快速路径会正确投影为可执行。
+5. Incident 指派路由继续使用现有 `incident:write` ACL。代码库没有已定义或已初始化的
+   `incident:assign` 权限；如需细粒度指派权限，必须单独完成权限种子、角色迁移、路由和动作投影
+   的整体设计，不能只修改路由字符串。
+6. 三个专业详情页复用 `WorkItemActionButton`，统一缺失动作隐藏、拒绝原因、后端禁用与请求中
+   互斥禁用行为；专业动作的 Modal 和 API 调用仍由各自 Detail 组件拥有。
+
+最终验证证据：后端 `go test ./... -count=1` 通过；前端 5 个动作相关 Jest suite 共 27 个测试
+通过；`npm run type-check`、`npm run lint:check`（0 error，3 个既有 warning）、`npm run build`
+和 `git diff --check` 通过。

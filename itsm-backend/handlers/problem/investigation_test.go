@@ -17,6 +17,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	problem "itsm-backend/handlers/problem"
+	"itsm-backend/middleware"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -164,6 +165,7 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 	r1 := gin.New()
 	r1.Use(func(c *gin.Context) {
 		c.Set("tenant_id", tenant.ID)
+		c.Set(middleware.TenantContextKey, &middleware.TenantContext{TenantID: tenant.ID})
 		c.Set("user_id", user.ID)
 		c.Next()
 	})

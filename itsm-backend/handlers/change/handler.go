@@ -20,6 +20,14 @@ func NewHandler(svc *Service) *Handler {
 	return &Handler{svc: svc}
 }
 
+func resolveChangeTenantID(c *gin.Context) (int, bool) {
+	tenantID, err := middleware.ResolveRequestTenantID(c)
+	if middleware.AbortIfTenantError(c, err) {
+		return 0, false
+	}
+	return tenantID, true
+}
+
 // Map domain to DTO
 func toDTO(c *Change) *dto.ChangeResponse {
 	if c == nil {
@@ -67,8 +75,10 @@ func (h *Handler) CreateChange(c *gin.Context) {
 		return
 	}
 
-	tenantIDVal, _ := c.Get("tenant_id")
-	tenantID := tenantIDVal.(int)
+	tenantID, ok := resolveChangeTenantID(c)
+	if !ok {
+		return
+	}
 	userIDVal, _ := c.Get("user_id")
 	userID := userIDVal.(int)
 
@@ -106,8 +116,8 @@ func (h *Handler) GetChange(c *gin.Context) {
 	if !ok {
 		return
 	}
-	tenantID, err := middleware.ResolveRequestTenantID(c)
-	if middleware.AbortIfTenantError(c, err) {
+	tenantID, ok := resolveChangeTenantID(c)
+	if !ok {
 		return
 	}
 	actor, ok := h.actionActor(c, tenantID)
@@ -148,8 +158,10 @@ func (h *Handler) GetRiskAssessment(c *gin.Context) {
 	if !ok {
 		return
 	}
-	tenantIDVal, _ := c.Get("tenant_id")
-	tenantID, _ := tenantIDVal.(int)
+	tenantID, ok := resolveChangeTenantID(c)
+	if !ok {
+		return
+	}
 
 	ra, err := h.svc.GetRisk(c.Request.Context(), id, tenantID)
 	if err != nil {
@@ -194,8 +206,10 @@ func (h *Handler) UpdateRisk(c *gin.Context) {
 		common.ParamError(c, "Invalid risk level")
 		return
 	}
-	tenantIDVal, _ := c.Get("tenant_id")
-	tenantID, _ := tenantIDVal.(int)
+	tenantID, ok := resolveChangeTenantID(c)
+	if !ok {
+		return
+	}
 	assessment, err := h.svc.UpdateRisk(c.Request.Context(), &RiskAssessment{
 		ChangeID:           id,
 		TenantID:           tenantID,
@@ -233,8 +247,10 @@ func (h *Handler) GetCMDBImpactSummary(c *gin.Context) {
 		return
 	}
 
-	tenantIDVal, _ := c.Get("tenant_id")
-	tenantID := tenantIDVal.(int)
+	tenantID, ok := resolveChangeTenantID(c)
+	if !ok {
+		return
+	}
 
 	summary, err := h.svc.GetCMDBImpactSummary(c.Request.Context(), id, tenantID)
 	if err != nil {
@@ -256,8 +272,10 @@ func (h *Handler) ListChanges(c *gin.Context) {
 	if riskLevel == "" {
 		riskLevel = c.Query("riskLevel")
 	}
-	tenantIDVal, _ := c.Get("tenant_id")
-	tenantID := tenantIDVal.(int)
+	tenantID, ok := resolveChangeTenantID(c)
+	if !ok {
+		return
+	}
 
 	list, total, err := h.svc.ListChanges(c.Request.Context(), tenantID, page, pageSize, status, search, riskLevel)
 	if err != nil {
@@ -284,8 +302,10 @@ func (h *Handler) UpdateChange(c *gin.Context) {
 	if !ok {
 		return
 	}
-	tenantIDVal, _ := c.Get("tenant_id")
-	tenantID := tenantIDVal.(int)
+	tenantID, ok := resolveChangeTenantID(c)
+	if !ok {
+		return
+	}
 
 	var req dto.UpdateChangeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -356,8 +376,10 @@ func (h *Handler) SubmitChange(c *gin.Context) {
 	if !ok {
 		return
 	}
-	tenantIDVal, _ := c.Get("tenant_id")
-	tenantID := tenantIDVal.(int)
+	tenantID, ok := resolveChangeTenantID(c)
+	if !ok {
+		return
+	}
 	userIDVal, _ := c.Get("user_id")
 	userID := userIDVal.(int)
 
@@ -378,8 +400,10 @@ func (h *Handler) SubmitChange(c *gin.Context) {
 
 // GetStats handles GET /api/v1/changes/stats
 func (h *Handler) GetStats(c *gin.Context) {
-	tenantIDVal, _ := c.Get("tenant_id")
-	tenantID := tenantIDVal.(int)
+	tenantID, ok := resolveChangeTenantID(c)
+	if !ok {
+		return
+	}
 	res, err := h.svc.GetStats(c.Request.Context(), tenantID)
 	if err != nil {
 		common.InternalError(c, "获取统计信息失败: "+err.Error())
@@ -416,8 +440,10 @@ func (h *Handler) TransitionStatus(c *gin.Context) {
 	if !ok {
 		return
 	}
-	tenantIDVal, _ := c.Get("tenant_id")
-	tenantID := tenantIDVal.(int)
+	tenantID, ok := resolveChangeTenantID(c)
+	if !ok {
+		return
+	}
 	userIDVal, _ := c.Get("user_id")
 	userID := userIDVal.(int)
 
@@ -464,8 +490,10 @@ func (h *Handler) AssignChange(c *gin.Context) {
 	if !ok {
 		return
 	}
-	tenantIDVal, _ := c.Get("tenant_id")
-	tenantID := tenantIDVal.(int)
+	tenantID, ok := resolveChangeTenantID(c)
+	if !ok {
+		return
+	}
 
 	var req struct {
 		AssigneeID int `json:"assigneeId" binding:"required"`
@@ -495,8 +523,10 @@ func (h *Handler) GetApprovals(c *gin.Context) {
 	if !ok {
 		return
 	}
-	tenantIDVal, _ := c.Get("tenant_id")
-	tenantID := tenantIDVal.(int)
+	tenantID, ok := resolveChangeTenantID(c)
+	if !ok {
+		return
+	}
 	history, err := h.svc.GetApprovalHistory(c.Request.Context(), id, tenantID)
 	if err != nil {
 		common.InternalError(c, "获取审批历史失败: "+err.Error())
@@ -511,8 +541,10 @@ func (h *Handler) DeleteChange(c *gin.Context) {
 	if !ok {
 		return
 	}
-	tenantIDVal, _ := c.Get("tenant_id")
-	tenantID := tenantIDVal.(int)
+	tenantID, ok := resolveChangeTenantID(c)
+	if !ok {
+		return
+	}
 
 	if err := h.svc.DeleteChange(c.Request.Context(), id, tenantID); err != nil {
 		common.InternalError(c, "删除变更失败: "+err.Error())
@@ -529,8 +561,10 @@ func (h *Handler) GetCalendar(c *gin.Context) {
 		return
 	}
 
-	tenantIDVal, _ := c.Get("tenant_id")
-	tenantID := tenantIDVal.(int)
+	tenantID, ok := resolveChangeTenantID(c)
+	if !ok {
+		return
+	}
 
 	res, err := h.svc.GetCalendarView(c.Request.Context(), tenantID, req.StartDate, req.EndDate, req.Status)
 	if err != nil {
@@ -550,8 +584,10 @@ func (h *Handler) CreatePIR(c *gin.Context) {
 		return
 	}
 
-	tenantIDVal, _ := c.Get("tenant_id")
-	tenantID := tenantIDVal.(int)
+	tenantID, ok := resolveChangeTenantID(c)
+	if !ok {
+		return
+	}
 	userIDVal, _ := c.Get("user_id")
 	userID := userIDVal.(int)
 
@@ -582,8 +618,10 @@ func (h *Handler) GetPIR(c *gin.Context) {
 		return
 	}
 
-	tenantIDVal, _ := c.Get("tenant_id")
-	tenantID := tenantIDVal.(int)
+	tenantID, ok := resolveChangeTenantID(c)
+	if !ok {
+		return
+	}
 
 	pir, err := h.svc.GetPIRByChange(c.Request.Context(), changeID, tenantID)
 	if err != nil {
@@ -604,8 +642,10 @@ func (h *Handler) ListPIRs(c *gin.Context) {
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "10"))
 	result := c.Query("result")
 
-	tenantIDVal, _ := c.Get("tenant_id")
-	tenantID := tenantIDVal.(int)
+	tenantID, ok := resolveChangeTenantID(c)
+	if !ok {
+		return
+	}
 
 	pirs, err := h.svc.ListPIRs(c.Request.Context(), tenantID, page, pageSize, result)
 	if err != nil {
@@ -623,8 +663,10 @@ func (h *Handler) UpdatePIR(c *gin.Context) {
 		return
 	}
 
-	tenantIDVal, _ := c.Get("tenant_id")
-	tenantID := tenantIDVal.(int)
+	tenantID, ok := resolveChangeTenantID(c)
+	if !ok {
+		return
+	}
 
 	var req dto.UpdateChangePIRRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -652,8 +694,10 @@ func (h *Handler) DeletePIR(c *gin.Context) {
 		return
 	}
 
-	tenantIDVal, _ := c.Get("tenant_id")
-	tenantID := tenantIDVal.(int)
+	tenantID, ok := resolveChangeTenantID(c)
+	if !ok {
+		return
+	}
 
 	if err := h.svc.DeletePIR(c.Request.Context(), pirID, tenantID); err != nil {
 		if strings.Contains(err.Error(), "不存在") {

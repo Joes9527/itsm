@@ -401,8 +401,8 @@ func TestIncidentService_AssignIncident_ValidatesAssigneeAndReturnsUpdatedIncide
 	require.ErrorContains(t, err, "assignee not found or inactive")
 }
 
-func TestAssignIncidentRejectsResolvedAndClosed(t *testing.T) {
-	for _, status := range []string{common.IncidentStatusResolved, common.IncidentStatusClosed} {
+func TestAssignIncidentRejectsTerminalStatuses(t *testing.T) {
+	for _, status := range []string{common.IncidentStatusResolved, common.IncidentStatusClosed, common.IncidentStatusCancelled} {
 		t.Run(status, func(t *testing.T) {
 			client, incidentService, ctx := setupIncidentTest(t)
 			defer client.Close()
@@ -422,7 +422,7 @@ func TestAssignIncidentRejectsResolvedAndClosed(t *testing.T) {
 			require.NoError(t, err)
 
 			_, err = incidentService.AssignIncident(ctx, incidentEntity.ID, assignee.ID, tenant.ID)
-			require.ErrorContains(t, err, "resolved or closed incidents cannot be reassigned")
+			require.ErrorContains(t, err, "cannot be reassigned")
 
 			persisted, err := client.Incident.Get(ctx, incidentEntity.ID)
 			require.NoError(t, err)

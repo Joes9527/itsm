@@ -15,15 +15,15 @@ func TestBuildChangeActions(t *testing.T) {
 	actions := BuildChangeActions(actor, change)
 
 	require.Len(t, actions, 5)
-	require.True(t, actions["submit_for_approval"].Allowed)
+	require.True(t, actions["submitForApproval"].Allowed)
 	require.False(t, actions["approve"].Allowed)
 	require.Equal(t, "只有已提交待审批的变更可以批准", actions["approve"].Reason)
 	require.False(t, actions["reject"].Allowed)
 	require.Equal(t, "只有已提交待审批的变更可以驳回", actions["reject"].Reason)
-	require.False(t, actions["start_implementation"].Allowed)
-	require.Equal(t, "当前状态和变更类型不允许开始实施", actions["start_implementation"].Reason)
-	require.False(t, actions["complete_implementation"].Allowed)
-	require.Equal(t, "只有实施中的变更可以标记完成", actions["complete_implementation"].Reason)
+	require.False(t, actions["startImplementation"].Allowed)
+	require.Equal(t, "当前状态和变更类型不允许开始实施", actions["startImplementation"].Reason)
+	require.False(t, actions["completeImplementation"].Allowed)
+	require.Equal(t, "只有实施中的变更可以标记完成", actions["completeImplementation"].Reason)
 }
 
 func TestBuildChangeActionsUsesDistinctSelfApprovalAndRejectionReasons(t *testing.T) {
@@ -47,4 +47,6 @@ func TestCanStartImplementationIsTypeAware(t *testing.T) {
 	require.True(t, CanStartImplementation(actor, &Change{Type: "standard", Status: "scheduled"}).Allowed)
 	require.True(t, CanStartImplementation(actor, &Change{Type: "emergency", Status: "approved"}).Allowed)
 	require.False(t, CanStartImplementation(actor, &Change{Type: "emergency", Status: "scheduled"}).Allowed)
+	require.True(t, CanStartImplementation(actor, &Change{Type: "standard", Status: "draft"}).Allowed)
+	require.True(t, CanStartImplementation(actor, &Change{Type: "emergency", Status: "draft"}).Allowed)
 }

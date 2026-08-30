@@ -44,9 +44,9 @@ func CanCloseProblem(actor service.ActionActor, p *Problem) dto.ActionPermission
 
 func BuildProblemActions(actor service.ActionActor, p *Problem) map[string]dto.ActionPermission {
 	return map[string]dto.ActionPermission{
-		"edit":                CanEditProblem(actor),
-		"start_investigation": CanStartInvestigation(actor, p),
-		"resolve":             CanResolveProblem(actor, p),
-		"close":               CanCloseProblem(actor, p),
+		"edit":               CanEditProblem(actor),
+		"startInvestigation": CanStartInvestigation(actor, p),
+		"resolve":            CanResolveProblem(actor, p),
+		"close":              CanCloseProblem(actor, p),
 	}
 }

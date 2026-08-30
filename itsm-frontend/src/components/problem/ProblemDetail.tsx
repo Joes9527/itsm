@@ -14,17 +14,11 @@ import { ProblemStatus, ProblemStatusLabels } from '@/constants/problem';
 import type { Problem } from '@/lib/api/problem-api';
 import { useOptionalWorkItemContext } from '@/components/work-item/WorkItemContext';
 import type { WorkItemActionState } from '@/components/work-item/WorkItemTypes';
+import { WorkItemActionButton } from '@/components/work-item/WorkItemActionButton';
 import ProblemInvestigationTab from './ProblemInvestigationTab';
 import BasicInfoCard from './BasicInfoCard';
 
 const { Title } = Typography;
-
-interface ProblemActionButtonProps {
-  action: WorkItemActionState | undefined;
-  actionName: string;
-  children: React.ReactNode;
-  button: React.ComponentProps<typeof Button>;
-}
 
 interface ProblemDetailProps {
   id?: string;
@@ -34,33 +28,11 @@ interface ProblemDetailProps {
 
 const EMPTY_ACTIONS: Record<string, WorkItemActionState> = {};
 
-function ProblemActionButton({ action, actionName, children, button }: ProblemActionButtonProps) {
-  if (!action) {
-    return null;
-  }
-
-  const reasonId = `problem-action-${actionName}-reason`;
-
-  return (
-    <Space size={4}>
-      <Button
-        {...button}
-        disabled={!action.allowed || button.disabled === true}
-        title={action.reason}
-        aria-describedby={!action.allowed && action.reason ? reasonId : undefined}
-      >
-        {children}
-      </Button>
-      {!action.allowed && action.reason && (
-        <span id={reasonId} role="note" style={{ color: '#8c8c8c', fontSize: 12 }}>
-          {action.reason}
-        </span>
-      )}
-    </Space>
-  );
-}
-
-const ProblemDetail: React.FC<ProblemDetailProps> = ({ id: propId, fallbackActions, onProblemLoaded }) => {
+const ProblemDetail: React.FC<ProblemDetailProps> = ({
+  id: propId,
+  fallbackActions,
+  onProblemLoaded,
+}) => {
   const params = useParams();
   const router = useRouter();
   // 支持通过props传入id，或通过useParams获取
@@ -70,10 +42,7 @@ const ProblemDetail: React.FC<ProblemDetailProps> = ({ id: propId, fallbackActio
   const [data, setData] = useState<Problem | null>(null);
   // 状态流转 loading：记录正在提交的目标状态，防止重复点击
   const [updatingStatus, setUpdatingStatus] = useState<ProblemStatus | null>(null);
-  const actions =
-    workItemContext?.actions ??
-    fallbackActions ??
-    EMPTY_ACTIONS;
+  const actions = workItemContext?.actions ?? fallbackActions ?? EMPTY_ACTIONS;
 
   const loadData = async () => {
     if (!id) return;
@@ -155,7 +124,7 @@ const ProblemDetail: React.FC<ProblemDetailProps> = ({ id: propId, fallbackActio
   ];
 
   return (
-    <Space orientation="vertical" style={{ width: '100%' }} size="middle">
+    <Space orientation='vertical' style={{ width: '100%' }} size='middle'>
       {/* 操作栏 */}
       <Card styles={{ body: { padding: '16px 24px' } }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -171,19 +140,19 @@ const ProblemDetail: React.FC<ProblemDetailProps> = ({ id: propId, fallbackActio
             </Tag>
           </Space>
           <Space>
-            <ProblemActionButton
+            <WorkItemActionButton
               action={actions.edit}
-              actionName="edit"
+              actionName='edit'
               button={{
                 icon: <Pencil />,
                 onClick: () => router.push(`/problems/${data.id}/edit`),
               }}
             >
               编辑
-            </ProblemActionButton>
-            <ProblemActionButton
-              action={actions.start_investigation}
-              actionName="start_investigation"
+            </WorkItemActionButton>
+            <WorkItemActionButton
+              action={actions.startInvestigation}
+              actionName='startInvestigation'
               button={{
                 type: 'primary',
                 loading: updatingStatus === ProblemStatus.INVESTIGATING,
@@ -192,10 +161,10 @@ const ProblemDetail: React.FC<ProblemDetailProps> = ({ id: propId, fallbackActio
               }}
             >
               开始调查
-            </ProblemActionButton>
-            <ProblemActionButton
+            </WorkItemActionButton>
+            <WorkItemActionButton
               action={actions.resolve}
-              actionName="resolve"
+              actionName='resolve'
               button={{
                 type: 'primary',
                 loading: updatingStatus === ProblemStatus.RESOLVED,
@@ -204,10 +173,10 @@ const ProblemDetail: React.FC<ProblemDetailProps> = ({ id: propId, fallbackActio
               }}
             >
               标记解决
-            </ProblemActionButton>
-            <ProblemActionButton
+            </WorkItemActionButton>
+            <WorkItemActionButton
               action={actions.close}
-              actionName="close"
+              actionName='close'
               button={{
                 loading: updatingStatus === ProblemStatus.CLOSED,
                 disabled: updatingStatus !== null,
@@ -215,14 +184,14 @@ const ProblemDetail: React.FC<ProblemDetailProps> = ({ id: propId, fallbackActio
               }}
             >
               关闭问题
-            </ProblemActionButton>
+            </WorkItemActionButton>
           </Space>
         </div>
       </Card>
 
       {/* Tab 内容 */}
       <Card>
-        <Tabs items={tabItems} defaultActiveKey="basic" />
+        <Tabs items={tabItems} defaultActiveKey='basic' />
       </Card>
     </Space>
   );

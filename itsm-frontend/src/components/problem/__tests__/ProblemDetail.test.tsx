@@ -60,14 +60,14 @@ const problem = {
 
 const openActions = {
   edit: { allowed: true },
-  start_investigation: { allowed: true },
+  startInvestigation: { allowed: true },
   resolve: { allowed: false, reason: '只有调查中的问题可以标记解决' },
   close: { allowed: false, reason: '只有已解决的问题可以关闭' },
 } satisfies Record<string, WorkItemActionState>;
 
 const investigatingActions = {
   edit: { allowed: true },
-  start_investigation: { allowed: false, reason: '只有待处理的问题可以开始调查' },
+  startInvestigation: { allowed: false, reason: '只有待处理的问题可以开始调查' },
   resolve: { allowed: true },
   close: { allowed: false, reason: '只有已解决的问题可以关闭' },
 } satisfies Record<string, WorkItemActionState>;
@@ -78,13 +78,13 @@ function renderWithWorkItemContext(
 ) {
   return render(
     <WorkItemProvider value={{ workItem, actions, onActionDispatch: jest.fn() }}>
-      <ProblemDetail id="401" fallbackActions={fallbackActions} />
+      <ProblemDetail id='401' fallbackActions={fallbackActions} />
     </WorkItemProvider>
   );
 }
 
 function renderWithoutProvider(fallbackActions?: Record<string, WorkItemActionState>) {
-  return render(<ProblemDetail id="401" fallbackActions={fallbackActions} />);
+  return render(<ProblemDetail id='401' fallbackActions={fallbackActions} />);
 }
 
 function renderWithRefreshingProvider(initialActions: Record<string, WorkItemActionState>) {
@@ -110,7 +110,7 @@ function renderWithRefreshingProvider(initialActions: Record<string, WorkItemAct
         }}
       >
         <ProblemDetail
-          id="401"
+          id='401'
           fallbackActions={summaryProblem.actions}
           onProblemLoaded={setSummaryProblem}
         />
@@ -147,14 +147,21 @@ describe('ProblemDetail action eligibility', () => {
     await user.click(await screen.findByRole('button', { name: '开始调查' }));
 
     await waitFor(() =>
-      expect(mockUpdateProblem).toHaveBeenCalledWith(401, expect.objectContaining({ status: ProblemStatus.INVESTIGATING }))
+      expect(mockUpdateProblem).toHaveBeenCalledWith(
+        401,
+        expect.objectContaining({ status: ProblemStatus.INVESTIGATING })
+      )
     );
   });
 
-  it('refreshes provider actions after detail refetch so resolve replaces stale start_investigation eligibility', async () => {
+  it('refreshes provider actions after detail refetch so resolve replaces stale startInvestigation eligibility', async () => {
     mockGetProblem
       .mockResolvedValueOnce({ ...problem, status: ProblemStatus.OPEN, actions: openActions })
-      .mockResolvedValueOnce({ ...problem, status: ProblemStatus.INVESTIGATING, actions: investigatingActions });
+      .mockResolvedValueOnce({
+        ...problem,
+        status: ProblemStatus.INVESTIGATING,
+        actions: investigatingActions,
+      });
 
     renderWithRefreshingProvider(openActions);
 
@@ -162,7 +169,10 @@ describe('ProblemDetail action eligibility', () => {
     await user.click(await screen.findByRole('button', { name: '开始调查' }));
 
     await waitFor(() =>
-      expect(mockUpdateProblem).toHaveBeenCalledWith(401, expect.objectContaining({ status: ProblemStatus.INVESTIGATING }))
+      expect(mockUpdateProblem).toHaveBeenCalledWith(
+        401,
+        expect.objectContaining({ status: ProblemStatus.INVESTIGATING })
+      )
     );
 
     await expectDisabledAction('开始调查', '只有待处理的问题可以开始调查');
@@ -171,8 +181,8 @@ describe('ProblemDetail action eligibility', () => {
 
   it('prefers provider actions over fallback actions and exposes denied reasons', async () => {
     renderWithWorkItemContext(
-      { start_investigation: { allowed: false, reason: '上下文动作优先' } },
-      { start_investigation: { allowed: true } }
+      { startInvestigation: { allowed: false, reason: '上下文动作优先' } },
+      { startInvestigation: { allowed: true } }
     );
 
     await expectDisabledAction('开始调查', '上下文动作优先');

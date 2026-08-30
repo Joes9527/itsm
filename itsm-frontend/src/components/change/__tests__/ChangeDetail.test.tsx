@@ -61,7 +61,13 @@ jest.mock('dayjs', () => {
 });
 
 import ChangeDetail from '../ChangeDetail';
-import { ChangeType, ChangePriority, ChangeStatus, ChangeImpact, ChangeRisk } from '@/constants/change';
+import {
+  ChangeType,
+  ChangePriority,
+  ChangeStatus,
+  ChangeImpact,
+  ChangeRisk,
+} from '@/constants/change';
 import type { Change } from '@/lib/api/change-api';
 
 const workItem: WorkItemCommon = {
@@ -98,11 +104,11 @@ const pendingChange = {
 };
 
 const allowedPendingActions = {
-  submit_for_approval: { allowed: false, reason: '只有草稿状态的变更可以提交审批' },
+  submitForApproval: { allowed: false, reason: '只有草稿状态的变更可以提交审批' },
   approve: { allowed: true },
   reject: { allowed: true },
-  start_implementation: { allowed: false, reason: '当前状态和变更类型不允许开始实施' },
-  complete_implementation: { allowed: false, reason: '只有实施中的变更可以标记完成' },
+  startImplementation: { allowed: false, reason: '当前状态和变更类型不允许开始实施' },
+  completeImplementation: { allowed: false, reason: '只有实施中的变更可以标记完成' },
 } satisfies Record<string, WorkItemActionState>;
 
 function renderWithWorkItemContext(
@@ -111,13 +117,13 @@ function renderWithWorkItemContext(
 ) {
   return render(
     <WorkItemProvider value={{ workItem, actions, onActionDispatch: jest.fn() }}>
-      <ChangeDetail id="1" fallbackActions={fallbackActions} />
+      <ChangeDetail id='1' fallbackActions={fallbackActions} />
     </WorkItemProvider>
   );
 }
 
 function renderWithoutProvider(fallbackActions?: Record<string, WorkItemActionState>) {
-  return render(<ChangeDetail id="1" fallbackActions={fallbackActions} />);
+  return render(<ChangeDetail id='1' fallbackActions={fallbackActions} />);
 }
 
 function renderWithRefreshingProvider(initialActions: Record<string, WorkItemActionState>) {
@@ -137,7 +143,7 @@ function renderWithRefreshingProvider(initialActions: Record<string, WorkItemAct
         }}
       >
         <ChangeDetail
-          id="1"
+          id='1'
           fallbackActions={summaryChange.actions}
           onChangeLoaded={setSummaryChange}
         />
@@ -224,14 +230,20 @@ describe('ChangeDetail action eligibility', () => {
     mockApproveChange.mockResolvedValue({ ...pendingChange, status: ChangeStatus.APPROVED });
     mockRejectChange.mockResolvedValue({ ...pendingChange, status: ChangeStatus.REJECTED });
     mockSubmitForApproval.mockResolvedValue({ ...pendingChange, status: ChangeStatus.PENDING });
-    mockStartImplementation.mockResolvedValue({ ...pendingChange, status: ChangeStatus.IN_PROGRESS });
-    mockCompleteImplementation.mockResolvedValue({ ...pendingChange, status: ChangeStatus.COMPLETED });
+    mockStartImplementation.mockResolvedValue({
+      ...pendingChange,
+      status: ChangeStatus.IN_PROGRESS,
+    });
+    mockCompleteImplementation.mockResolvedValue({
+      ...pendingChange,
+      status: ChangeStatus.COMPLETED,
+    });
   });
 
   it('prefers provider actions over fallback actions and exposes denied reasons', async () => {
     renderWithWorkItemContext(
-      { start_implementation: { allowed: false, reason: '上下文动作优先' } },
-      { start_implementation: { allowed: true } }
+      { startImplementation: { allowed: false, reason: '上下文动作优先' } },
+      { startImplementation: { allowed: true } }
     );
 
     await expectDisabledAction('开始实施', '上下文动作优先');
@@ -239,7 +251,7 @@ describe('ChangeDetail action eligibility', () => {
 
   it('uses fallback actions without a WorkItemProvider', async () => {
     renderWithoutProvider({
-      complete_implementation: { allowed: false, reason: '历史变更未回填 WorkItem 动作' },
+      completeImplementation: { allowed: false, reason: '历史变更未回填 WorkItem 动作' },
     });
 
     await expectDisabledAction('完成', '历史变更未回填 WorkItem 动作');
@@ -264,7 +276,7 @@ describe('ChangeDetail action eligibility', () => {
     });
 
     renderWithWorkItemContext({
-      start_implementation: { allowed: false, reason: '当前状态和变更类型不允许开始实施' },
+      startImplementation: { allowed: false, reason: '当前状态和变更类型不允许开始实施' },
     });
 
     await expectDisabledAction('开始实施', '当前状态和变更类型不允许开始实施');
@@ -285,7 +297,7 @@ describe('ChangeDetail action eligibility', () => {
     const approvedActions = {
       approve: { allowed: false, reason: '只有已提交待审批的变更可以批准' },
       reject: { allowed: false, reason: '只有已提交待审批的变更可以批准' },
-      start_implementation: { allowed: false, reason: '当前状态和变更类型不允许开始实施' },
+      startImplementation: { allowed: false, reason: '当前状态和变更类型不允许开始实施' },
     } satisfies Record<string, WorkItemActionState>;
 
     mockGetChange

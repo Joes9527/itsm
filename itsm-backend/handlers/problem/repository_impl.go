@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/common"
 	"itsm-backend/ent"
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/incident"
@@ -467,7 +468,7 @@ func (r *EntRepository) loadIncidentAssociations(ctx context.Context, tenantID, 
 		Where(
 			workitemrelation.TenantID(tenantID),
 			workitemrelation.TargetWorkItemID(problemWorkItemID),
-			workitemrelation.RelationType(incidentProblemRelationType),
+			workitemrelation.RelationType(common.WorkItemRelationInvestigatedBy),
 			workitemrelation.DeletedAtIsNil(),
 		).
 		All(ctx)
@@ -655,15 +656,44 @@ func (r *EntRepository) Update(ctx context.Context, p *Problem) (*Problem, error
 }
 
 func (r *EntRepository) Delete(ctx context.Context, id int, tenantID int) error {
-	updated, err := r.client.Problem.Update().
-		Where(problem.IDEQ(id), problem.TenantIDEQ(tenantID), problem.DeletedAtIsNil()).
-		SetDeletedAt(time.Now()).
-		Save(ctx)
+	tx, err := r.client.Tx(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("start problem delete transaction: %w", err)
 	}
-	if updated != 1 {
-		return fmt.Errorf("problem not found")
+	fail := func(cause error) error {
+		return rollbackProblemTx(tx, cause)
+	}
+
+	existing, err := tx.Problem.Query().Where(
+		problem.IDEQ(id),
+		problem.TenantIDEQ(tenantID),
+		problem.DeletedAtIsNil(),
+	).Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return fail(fmt.Errorf("problem not found"))
+		}
+		return fail(fmt.Errorf("load problem for delete: %w", err))
+	}
+
+	deletedAt := time.Now()
+	if existing.WorkItemID > 0 {
+		_, err = tx.WorkItemRelation.Update().Where(
+			workitemrelation.TenantIDEQ(tenantID),
+			workitemrelation.TargetWorkItemIDEQ(existing.WorkItemID),
+			workitemrelation.RelationTypeEQ(common.WorkItemRelationInvestigatedBy),
+			workitemrelation.DeletedAtIsNil(),
+		).SetDeletedAt(deletedAt).Save(ctx)
+		if err != nil {
+			return fail(fmt.Errorf("soft-delete incident problem relations: %w", err))
+		}
+	}
+
+	if _, err = tx.Problem.UpdateOne(existing).SetDeletedAt(deletedAt).Save(ctx); err != nil {
+		return fail(fmt.Errorf("soft-delete problem: %w", err))
+	}
+	if err = tx.Commit(); err != nil {
+		return rollbackProblemTx(tx, fmt.Errorf("commit problem delete transaction: %w", err))
 	}
 	return nil
 }

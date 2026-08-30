@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-08-28-incident-problem-change-actions-design.md`
 
+**Status:** Completed. Final review hardening and verification were completed on 2026-08-30.
+
 ## Global Constraints
 
 - `itsm-backend` remains the authority for RBAC, tenant isolation, lifecycle rules, audit, and API contracts; frontend only renders its projection.
@@ -650,6 +652,37 @@ git commit -m "test: verify incident problem change action contracts"
 ```
 
 Only create this commit when Step 1 or verification uncovered and fixed an actual regression; otherwise do not create an empty commit.
+
+## Task 9: Apply Final Review Hardening
+
+**Final public contract:** HTTP `actions` keys are camelCase. Internal Incident conversion event and audit
+values remain `convert_to_problem` because they are domain identifiers rather than JSON field names.
+
+- [x] Resolve the selected MSP customer tenant for every Change and Problem customer-domain handler; update
+  direct-handler fixtures to install the same `TenantContext` supplied by production middleware.
+- [x] Reject `cancelled` Incident conversion, major-incident escalation, and assignment on both read and write
+  paths using the shared final-status predicate.
+- [x] Soft-delete live `investigated_by` relations in the same transaction as Problem soft deletion, and prove
+  that the source Incident can be converted again.
+- [x] Make Change start-implementation projection call the canonical status transition function, including
+  standard/emergency `draft -> in_progress` paths.
+- [x] Publish camelCase keys: `markMajorIncident`, `convertToProblem`, `startInvestigation`,
+  `submitForApproval`, `startImplementation`, and `completeImplementation`; update all frontend consumers and
+  contract tests atomically.
+- [x] Move `investigated_by` to `common.WorkItemRelationInvestigatedBy` without introducing an upward
+  dependency from `service` to `handlers/problem`.
+- [x] Extract the repeated detail button behavior into `WorkItemActionButton` and retain professional handlers,
+  modals, loading state, and reason presentation.
+
+**Verification evidence:**
+
+- `cd itsm-backend && go test ./... -count=1` — pass.
+- Five focused frontend suites (`WorkItemActionButton`, `WorkItemActionBar`, Incident, Problem, Change) —
+  27 tests pass.
+- `cd itsm-frontend && npm run type-check` — pass.
+- `cd itsm-frontend && npm run lint:check` — 0 errors; 3 unrelated pre-existing warnings.
+- `cd itsm-frontend && npm run build` — pass.
+- `git diff --check` — pass.
 
 ## Plan Self-Review
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/incident"
@@ -14,7 +15,6 @@ import (
 )
 
 const (
-	incidentProblemRelationType = "investigated_by"
 	incidentConversionAuditPath = "/api/v1/incidents/:id/convert-to-problem"
 )
 
@@ -56,8 +56,8 @@ func (r *EntRepository) CreateFromIncident(
 		}
 		return fail(fmt.Errorf("load incident for conversion: %w", err))
 	}
-	if source.Status == "closed" {
-		return fail(fmt.Errorf("closed incident cannot be converted to a problem"))
+	if common.IsIncidentFinalStatus(source.Status) {
+		return fail(fmt.Errorf("%s incident cannot be converted to a problem", source.Status))
 	}
 	if source.WorkItemID <= 0 {
 		return fail(fmt.Errorf("incident source work item is missing"))
@@ -79,7 +79,7 @@ func (r *EntRepository) CreateFromIncident(
 	alreadyConverted, err := tx.WorkItemRelation.Query().Where(
 		workitemrelation.TenantID(tenantID),
 		workitemrelation.SourceWorkItemID(source.WorkItemID),
-		workitemrelation.RelationType(incidentProblemRelationType),
+		workitemrelation.RelationType(common.WorkItemRelationInvestigatedBy),
 		workitemrelation.DeletedAtIsNil(),
 	).Exist(ctx)
 	if err != nil {
@@ -120,7 +120,7 @@ func (r *EntRepository) CreateFromIncident(
 		SetTenantID(tenantID).
 		SetSourceWorkItemID(source.WorkItemID).
 		SetTargetWorkItemID(*created.WorkItemID).
-		SetRelationType(incidentProblemRelationType).
+		SetRelationType(common.WorkItemRelationInvestigatedBy).
 		SetCreatedByID(actorUserID).
 		Save(ctx)
 	if err != nil {

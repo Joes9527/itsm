@@ -73,8 +73,8 @@ const deniedActions = {
   reopen: { allowed: false, reason: '当前事件不能重新打开' },
   escalate: { allowed: false, reason: '当前事件不能升级' },
   assign: { allowed: false, reason: '无权指派该事件' },
-  mark_major_incident: { allowed: false, reason: '当前事件不能标记为重大事件' },
-  convert_to_problem: { allowed: false, reason: '当前事件不能转为问题' },
+  markMajorIncident: { allowed: false, reason: '当前事件不能标记为重大事件' },
+  convertToProblem: { allowed: false, reason: '当前事件不能转为问题' },
 } satisfies Record<string, WorkItemActionState>;
 
 function renderWithProvider(
@@ -83,13 +83,13 @@ function renderWithProvider(
 ) {
   return render(
     <WorkItemProvider value={{ workItem, actions, onActionDispatch: jest.fn() }}>
-      <IncidentDetail id="301" fallbackActions={fallbackActions} />
+      <IncidentDetail id='301' fallbackActions={fallbackActions} />
     </WorkItemProvider>
   );
 }
 
 function renderWithoutProvider(fallbackActions?: Record<string, WorkItemActionState>) {
-  return render(<IncidentDetail id="301" fallbackActions={fallbackActions} />);
+  return render(<IncidentDetail id='301' fallbackActions={fallbackActions} />);
 }
 
 function IncidentDetailProviderHarness() {
@@ -101,7 +101,9 @@ function IncidentDetailProviderHarness() {
     resolve: { allowed: true },
   });
   const handleIncidentLoaded = React.useCallback((loaded: unknown) => {
-    const loadedIncident = loaded as typeof incident & { actions?: Record<string, WorkItemActionState> };
+    const loadedIncident = loaded as typeof incident & {
+      actions?: Record<string, WorkItemActionState>;
+    };
     setCurrentWorkItem(prev => ({
       ...prev,
       status: loadedIncident.status,
@@ -111,8 +113,10 @@ function IncidentDetailProviderHarness() {
   }, []);
 
   return (
-    <WorkItemProvider value={{ workItem: currentWorkItem, actions: currentActions, onActionDispatch: jest.fn() }}>
-      <IncidentDetail id="301" onIncidentLoaded={handleIncidentLoaded} />
+    <WorkItemProvider
+      value={{ workItem: currentWorkItem, actions: currentActions, onActionDispatch: jest.fn() }}
+    >
+      <IncidentDetail id='301' onIncidentLoaded={handleIncidentLoaded} />
     </WorkItemProvider>
   );
 }
@@ -149,8 +153,8 @@ describe('IncidentDetail action eligibility', () => {
     await expectDisabledAction('重新打开', deniedActions.reopen.reason);
     await expectDisabledAction('升级', deniedActions.escalate.reason);
     await expectDisabledAction('指派', deniedActions.assign.reason);
-    await expectDisabledAction('升级为重大事件', deniedActions.mark_major_incident.reason);
-    await expectDisabledAction('转为问题', deniedActions.convert_to_problem.reason);
+    await expectDisabledAction('升级为重大事件', deniedActions.markMajorIncident.reason);
+    await expectDisabledAction('转为问题', deniedActions.convertToProblem.reason);
   });
 
   it('prefers work item context actions over fallback actions when a provider is present', async () => {

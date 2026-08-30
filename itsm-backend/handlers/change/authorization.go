@@ -71,16 +71,7 @@ func CanRejectChange(actor service.ActionActor, c *Change) dto.ActionPermission 
 }
 
 func CanStartImplementation(actor service.ActionActor, c *Change) dto.ActionPermission {
-	var allowed bool
-	switch c.Type {
-	case string(dto.ChangeTypeStandard):
-		allowed = c.Status == string(dto.ChangeStatusApproved) || c.Status == string(dto.ChangeStatusScheduled)
-	case string(dto.ChangeTypeEmergency):
-		allowed = c.Status == string(dto.ChangeStatusApproved)
-	default:
-		allowed = c.Status == string(dto.ChangeStatusScheduled)
-	}
-	if !allowed {
+	if !service.IsValidChangeStatusTransition(c.Status, string(dto.ChangeStatusInProgress), c.Type) {
 		return dto.ActionPermission{Allowed: false, Reason: "当前状态和变更类型不允许开始实施"}
 	}
 	if !canWriteChange(actor) {
@@ -101,10 +92,10 @@ func CanCompleteImplementation(actor service.ActionActor, c *Change) dto.ActionP
 
 func BuildChangeActions(actor service.ActionActor, c *Change) map[string]dto.ActionPermission {
 	return map[string]dto.ActionPermission{
-		"submit_for_approval":     CanSubmitForApproval(actor, c),
-		"approve":                 CanApproveChange(actor, c),
-		"reject":                  CanRejectChange(actor, c),
-		"start_implementation":    CanStartImplementation(actor, c),
-		"complete_implementation": CanCompleteImplementation(actor, c),
+		"submitForApproval":      CanSubmitForApproval(actor, c),
+		"approve":                CanApproveChange(actor, c),
+		"reject":                 CanRejectChange(actor, c),
+		"startImplementation":    CanStartImplementation(actor, c),
+		"completeImplementation": CanCompleteImplementation(actor, c),
 	}
 }

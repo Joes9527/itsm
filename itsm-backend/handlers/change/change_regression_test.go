@@ -13,6 +13,7 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/middleware"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -34,6 +35,7 @@ func setupChangeRegressionHandler(t *testing.T, dbName, actorCode string) (*gin.
 	r.Use(func(c *gin.Context) {
 		c.Set("user_id", actorID)
 		c.Set("tenant_id", tenantID)
+		c.Set(middleware.TenantContextKey, &middleware.TenantContext{TenantID: tenantID})
 		c.Next()
 	})
 	r.POST("/api/v1/changes", handler.CreateChange)
@@ -679,6 +681,7 @@ func TestChangeTenantIsolation_ReadAndModify(t *testing.T) {
 		router := gin.New()
 		router.Use(func(c *gin.Context) {
 			c.Set("tenant_id", tenantA)
+			c.Set(middleware.TenantContextKey, &middleware.TenantContext{TenantID: tenantA})
 			c.Next()
 		})
 		router.GET("/api/v1/changes/calendar", handler.GetCalendar)
@@ -769,7 +772,7 @@ func TestChangeWorkItemAndRelations_TenantIsolation(t *testing.T) {
 	// 租户 A 自己名下的同编号工单则应该能正常关联——证明上面的空结果是因为跨租户过滤，
 	// 不是因为查询逻辑整体坏掉了。
 	_, err = entClient.Ticket.Create().
-		SetTitle("租户A的工单").SetType("incident").SetTicketNumber(ticketNumber+"-A").
+		SetTitle("租户A的工单").SetType("incident").SetTicketNumber(ticketNumber + "-A").
 		SetRequesterID(actorA).SetTenantID(tenantA).
 		Save(ctx)
 	require.NoError(t, err)

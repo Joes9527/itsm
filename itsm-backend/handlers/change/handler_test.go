@@ -487,11 +487,11 @@ func TestChangeController_GetChangeIncludesDetailActionsOnly(t *testing.T) {
 	actions, ok := detailData["actions"].(map[string]interface{})
 	require.True(t, ok, "detail response should include actions")
 	require.Len(t, actions, 5)
-	require.Contains(t, actions, "submit_for_approval")
+	require.Contains(t, actions, "submitForApproval")
 	require.Contains(t, actions, "approve")
 	require.Contains(t, actions, "reject")
-	require.Contains(t, actions, "start_implementation")
-	require.Contains(t, actions, "complete_implementation")
+	require.Contains(t, actions, "startImplementation")
+	require.Contains(t, actions, "completeImplementation")
 
 	listReq, err := http.NewRequest("GET", "/api/v1/changes", nil)
 	require.NoError(t, err)
@@ -560,6 +560,44 @@ func TestChangeController_GetChangeDeniesUnauthorizedMSPTenant(t *testing.T) {
 	var body common.Response
 	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
 	require.Equal(t, 2003, body.Code)
+}
+
+func TestChangeControllerMutationsUseResolvedMSPTenant(t *testing.T) {
+	r, _, repo := setupTestHandler(t)
+	const homeTenantID = 1
+	const customerTenantID = 2
+
+	t.Run("update", func(t *testing.T) {
+		change := createTestChange(repo, customerTenantID, 1)
+		body, err := json.Marshal(dto.UpdateChangeRequest{Title: strPtr("MSP updated change")})
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/changes/"+strconv.Itoa(change.ID), bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Tenant-ID", strconv.Itoa(homeTenantID))
+		req.Header.Set("X-MSP-Customer-ID", strconv.Itoa(customerTenantID))
+		req.Header.Set("X-MSP-Allowed-Customer-ID", strconv.Itoa(customerTenantID))
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		require.Equal(t, "MSP updated change", repo.changes[change.ID].Title)
+	})
+
+	t.Run("assign", func(t *testing.T) {
+		change := createTestChange(repo, customerTenantID, 1)
+		body := bytes.NewBufferString(`{"assigneeId":42}`)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/changes/"+strconv.Itoa(change.ID)+"/assign", body)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Tenant-ID", strconv.Itoa(homeTenantID))
+		req.Header.Set("X-MSP-Customer-ID", strconv.Itoa(customerTenantID))
+		req.Header.Set("X-MSP-Allowed-Customer-ID", strconv.Itoa(customerTenantID))
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		require.NotNil(t, repo.changes[change.ID].AssigneeID)
+		require.Equal(t, 42, *repo.changes[change.ID].AssigneeID)
+	})
 }
 
 func TestChangeController_GetChangeRejectsInvalidActionActorContext(t *testing.T) {

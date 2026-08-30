@@ -22,6 +22,14 @@ func NewHandler(service *Service, client *ent.Client) *Handler {
 	return &Handler{service: service, client: client}
 }
 
+func resolveProblemTenantID(c *gin.Context) (int, bool) {
+	tenantID, err := middleware.ResolveRequestTenantID(c)
+	if middleware.AbortIfTenantError(c, err) {
+		return 0, false
+	}
+	return tenantID, true
+}
+
 func (h *Handler) toDTO(p *Problem) *dto.ProblemResponse {
 	resp := ToResponse(p)
 	if resp == nil {
@@ -107,7 +115,10 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 
-	tenantID, _ := c.Get("tenant_id")
+	tenantID, ok := resolveProblemTenantID(c)
+	if !ok {
+		return
+	}
 	userID, _ := c.Get("user_id") // Override req.CreatedBy with actual user?
 
 	// Legacy DTO has CreatedBy in request, but better to enforce from context
@@ -124,7 +135,7 @@ func (h *Handler) Create(c *gin.Context) {
 		CreatedBy:   createdBy,
 	}
 
-	created, err := h.service.Create(c.Request.Context(), tenantID.(int), problem)
+	created, err := h.service.Create(c.Request.Context(), tenantID, problem)
 	if err != nil {
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return
@@ -140,8 +151,8 @@ func (h *Handler) Get(c *gin.Context) {
 		return
 	}
 
-	tenantID, err := middleware.ResolveRequestTenantID(c)
-	if middleware.AbortIfTenantError(c, err) {
+	tenantID, ok := resolveProblemTenantID(c)
+	if !ok {
 		return
 	}
 
@@ -172,8 +183,11 @@ func (h *Handler) GetAssociations(c *gin.Context) {
 		return
 	}
 
-	tenantID, _ := c.Get("tenant_id")
-	p, err := h.service.GetWithAssociations(c.Request.Context(), id, tenantID.(int))
+	tenantID, ok := resolveProblemTenantID(c)
+	if !ok {
+		return
+	}
+	p, err := h.service.GetWithAssociations(c.Request.Context(), id, tenantID)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			common.Fail(c, common.NotFoundErrorCode, "Problem not found")
@@ -220,13 +234,16 @@ func (h *Handler) AddAssociation(c *gin.Context) {
 		return
 	}
 
-	tenantID, _ := c.Get("tenant_id")
+	tenantID, ok := resolveProblemTenantID(c)
+	if !ok {
+		return
+	}
 	userID, userOK := problemActorUserID(c)
 	if !userOK {
 		return
 	}
 	// 验证问题存在
-	_, err = h.service.Get(c.Request.Context(), id, tenantID.(int))
+	_, err = h.service.Get(c.Request.Context(), id, tenantID)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			common.Fail(c, common.NotFoundErrorCode, "Problem not found")
@@ -236,7 +253,7 @@ func (h *Handler) AddAssociation(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.AddAssociations(c.Request.Context(), tenantID.(int), id, userID, req.RelatedType, req.RelatedIDs); err != nil {
+	if err := h.service.AddAssociations(c.Request.Context(), tenantID, id, userID, req.RelatedType, req.RelatedIDs); err != nil {
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return
 	}
@@ -291,9 +308,12 @@ func (h *Handler) RemoveAssociation(c *gin.Context) {
 		return
 	}
 
-	tenantID, _ := c.Get("tenant_id")
+	tenantID, ok := resolveProblemTenantID(c)
+	if !ok {
+		return
+	}
 	// 验证问题存在
-	_, err = h.service.Get(c.Request.Context(), id, tenantID.(int))
+	_, err = h.service.Get(c.Request.Context(), id, tenantID)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			common.Fail(c, common.NotFoundErrorCode, "Problem not found")
@@ -303,7 +323,7 @@ func (h *Handler) RemoveAssociation(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.RemoveAssociation(c.Request.Context(), tenantID.(int), id, req.RelatedType, req.RelatedID); err != nil {
+	if err := h.service.RemoveAssociation(c.Request.Context(), tenantID, id, req.RelatedType, req.RelatedID); err != nil {
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return
 	}
@@ -318,7 +338,10 @@ func (h *Handler) List(c *gin.Context) {
 		return
 	}
 
-	tenantID, _ := c.Get("tenant_id")
+	tenantID, ok := resolveProblemTenantID(c)
+	if !ok {
+		return
+	}
 
 	// Convert DTO filters to map
 	filters := make(map[string]interface{})
@@ -335,7 +358,7 @@ func (h *Handler) List(c *gin.Context) {
 		filters["keyword"] = req.Keyword
 	}
 
-	list, total, err := h.service.List(c.Request.Context(), tenantID.(int), req.Page, req.PageSize, filters)
+	list, total, err := h.service.List(c.Request.Context(), tenantID, req.Page, req.PageSize, filters)
 	if err != nil {
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return
@@ -394,7 +417,10 @@ func (h *Handler) Update(c *gin.Context) {
 		return
 	}
 
-	tenantID, _ := c.Get("tenant_id")
+	tenantID, ok := resolveProblemTenantID(c)
+	if !ok {
+		return
+	}
 
 	// 将 DTO 指针字段转换为 domain entity
 	updates := &Problem{}
@@ -420,7 +446,7 @@ func (h *Handler) Update(c *gin.Context) {
 		updates.Impact = *req.Impact
 	}
 
-	updated, err := h.service.Update(c.Request.Context(), tenantID.(int), id, updates)
+	updated, err := h.service.Update(c.Request.Context(), tenantID, id, updates)
 	if err != nil {
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return
@@ -490,10 +516,8 @@ func problemRequestContext(c *gin.Context) (int, int, bool) {
 		common.Fail(c, common.ParamErrorCode, "invalid id")
 		return 0, 0, false
 	}
-	tenantValue, exists := c.Get("tenant_id")
-	tenantID, valid := tenantValue.(int)
-	if !exists || !valid || tenantID <= 0 {
-		common.Fail(c, common.AuthErrorCode, "invalid tenant context")
+	tenantID, ok := resolveProblemTenantID(c)
+	if !ok {
 		return 0, 0, false
 	}
 	return id, tenantID, true
@@ -520,8 +544,11 @@ func (h *Handler) Delete(c *gin.Context) {
 		return
 	}
 
-	tenantID, _ := c.Get("tenant_id")
-	err = h.service.Delete(c.Request.Context(), id, tenantID.(int))
+	tenantID, ok := resolveProblemTenantID(c)
+	if !ok {
+		return
+	}
+	err = h.service.Delete(c.Request.Context(), id, tenantID)
 	if err != nil {
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return
@@ -531,8 +558,11 @@ func (h *Handler) Delete(c *gin.Context) {
 }
 
 func (h *Handler) GetStats(c *gin.Context) {
-	tenantID, _ := c.Get("tenant_id")
-	stats, err := h.service.GetStats(c.Request.Context(), tenantID.(int))
+	tenantID, ok := resolveProblemTenantID(c)
+	if !ok {
+		return
+	}
+	stats, err := h.service.GetStats(c.Request.Context(), tenantID)
 	if err != nil {
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return

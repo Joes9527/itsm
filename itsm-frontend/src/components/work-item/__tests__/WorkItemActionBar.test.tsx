@@ -63,13 +63,13 @@ describe('WorkItemActionBar', () => {
       <WorkItemProvider
         value={{
           workItem,
-          actions: { convert_to_problem: { allowed: true } },
+          actions: { convertToProblem: { allowed: true } },
           onActionDispatch: jest.fn(),
         }}
       >
         <WorkItemActionBar />
       </WorkItemProvider>
     );
-    expect(screen.getByRole('button', { name: 'convert_to_problem' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'convertToProblem' })).toBeInTheDocument();
   });
 });

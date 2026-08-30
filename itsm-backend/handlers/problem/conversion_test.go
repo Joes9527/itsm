@@ -256,6 +256,15 @@ func TestCreateFromIncidentRejectsIneligibleSourceWithoutWrites(t *testing.T) {
 		requireConversionCounts(t, f, before)
 	})
 
+	t.Run("cancelled incident", func(t *testing.T) {
+		f := newConversionFixture(t, "cancelled", true)
+		before := readConversionCounts(t, f)
+
+		_, err := f.service.CreateFromIncident(f.ctx, f.tenantID, f.incidentID, f.actorID, dto.ConvertIncidentToProblemRequest{})
+		require.ErrorContains(t, err, "cancelled")
+		requireConversionCounts(t, f, before)
+	})
+
 	t.Run("missing source work item", func(t *testing.T) {
 		f := newConversionFixture(t, "new", false)
 		before := readConversionCounts(t, f)
@@ -288,6 +297,34 @@ func TestCreateFromIncidentRejectsIneligibleSourceWithoutWrites(t *testing.T) {
 		require.ErrorContains(t, err, "source work item not found")
 		requireConversionCounts(t, f, before)
 	})
+}
+
+func TestDeleteConvertedProblemSoftDeletesInvestigationRelation(t *testing.T) {
+	f := newConversionFixture(t, "new", true)
+	created, err := f.service.CreateFromIncident(
+		f.ctx, f.tenantID, f.incidentID, f.actorID,
+		dto.ConvertIncidentToProblemRequest{Title: "Temporary investigation"},
+	)
+	require.NoError(t, err)
+	require.NotNil(t, created.WorkItemID)
+
+	require.NoError(t, f.service.Delete(f.ctx, created.ID, f.tenantID))
+	live, err := f.client.WorkItemRelation.Query().Where(
+		workitemrelation.TenantID(f.tenantID),
+		workitemrelation.SourceWorkItemID(f.incidentWorkItem),
+		workitemrelation.TargetWorkItemID(*created.WorkItemID),
+		workitemrelation.RelationType("investigated_by"),
+		workitemrelation.DeletedAtIsNil(),
+	).Exist(f.ctx)
+	require.NoError(t, err)
+	require.False(t, live)
+
+	recreated, err := f.service.CreateFromIncident(
+		f.ctx, f.tenantID, f.incidentID, f.actorID,
+		dto.ConvertIncidentToProblemRequest{Title: "Replacement investigation"},
+	)
+	require.NoError(t, err)
+	require.NotEqual(t, created.ID, recreated.ID)
 }
 
 func TestCreateFromIncidentRollsBackWhenRelationAlreadyExists(t *testing.T) {

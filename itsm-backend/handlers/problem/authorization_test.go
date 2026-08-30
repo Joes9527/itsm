@@ -21,7 +21,7 @@ func TestBuildProblemActionsUsesCanonicalStatuses(t *testing.T) {
 	openActions := BuildProblemActions(actor, openProblem)
 	require.Len(t, openActions, 4)
 	require.True(t, openActions["edit"].Allowed)
-	require.True(t, openActions["start_investigation"].Allowed)
+	require.True(t, openActions["startInvestigation"].Allowed)
 	require.True(t, openActions["resolve"].Allowed)
 	require.False(t, openActions["close"].Allowed)
 	require.NotEmpty(t, openActions["close"].Reason)

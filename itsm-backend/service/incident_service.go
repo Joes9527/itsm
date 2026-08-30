@@ -589,7 +589,7 @@ func (s *IncidentService) UpdateIncident(ctx context.Context, id int, req *dto.U
 
 // AssignIncident 分配事件
 func canAssignIncidentStatus(status string) bool {
-	return status != common.IncidentStatusResolved && status != common.IncidentStatusClosed
+	return status != common.IncidentStatusResolved && !common.IsIncidentFinalStatus(status)
 }
 
 func (s *IncidentService) AssignIncident(ctx context.Context, id int, assigneeID int, tenantID int) (*dto.IncidentResponse, error) {
@@ -606,7 +606,7 @@ func (s *IncidentService) AssignIncident(ctx context.Context, id int, assigneeID
 		return nil, fmt.Errorf("failed to get incident: %w", err)
 	}
 	if !canAssignIncidentStatus(current.Status) {
-		return nil, fmt.Errorf("resolved or closed incidents cannot be reassigned")
+		return nil, fmt.Errorf("resolved, closed, or cancelled incidents cannot be reassigned")
 	}
 
 	if err := s.validateIncidentAssignee(ctx, assigneeID, tenantID); err != nil {

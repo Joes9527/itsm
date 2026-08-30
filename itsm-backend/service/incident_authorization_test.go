@@ -29,11 +29,16 @@ func TestBuildIncidentActionsMirrorsIncidentCommandRules(t *testing.T) {
 	inProgress := &ent.Incident{Status: common.IncidentStatusInProgress, WorkItemID: workItem.ID}
 	resolved := &ent.Incident{Status: common.IncidentStatusResolved, WorkItemID: workItem.ID}
 	closed := &ent.Incident{Status: common.IncidentStatusClosed, WorkItemID: workItem.ID}
+	cancelled := &ent.Incident{Status: common.IncidentStatusCancelled, WorkItemID: workItem.ID}
 
 	require.True(t, BuildIncidentActions(ctx, actor, inProgress)["resolve"].Allowed)
 	require.False(t, BuildIncidentActions(ctx, actor, resolved)["resolve"].Allowed)
 	require.True(t, BuildIncidentActions(ctx, actor, closed)["reopen"].Allowed)
 	require.False(t, BuildIncidentActions(ctx, actor, closed)["assign"].Allowed)
+	cancelledActions := BuildIncidentActions(ctx, actor, cancelled)
+	require.False(t, cancelledActions["assign"].Allowed)
+	require.False(t, cancelledActions["markMajorIncident"].Allowed)
+	require.False(t, cancelledActions["convertToProblem"].Allowed)
 }
 
 func TestCanConvertToProblemFailsClosed(t *testing.T) {

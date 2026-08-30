@@ -45,7 +45,7 @@ func CanReopenIncident(actor ActionActor, incident *ent.Incident) dto.ActionPerm
 }
 
 func CanEscalateIncident(actor ActionActor, incident *ent.Incident) dto.ActionPermission {
-	if incident.Status == common.IncidentStatusClosed || incident.Status == common.IncidentStatusCancelled {
+	if common.IsIncidentFinalStatus(incident.Status) {
 		return dto.ActionPermission{Allowed: false, Reason: "终态事件不能升级"}
 	}
 	return CanEditIncident(actor)
@@ -62,8 +62,8 @@ func CanMarkMajorIncident(actor ActionActor, incident *ent.Incident) dto.ActionP
 	if incident.IsMajorIncident {
 		return dto.ActionPermission{Allowed: false, Reason: "已经是重大事件"}
 	}
-	if incident.Status == common.IncidentStatusResolved || incident.Status == common.IncidentStatusClosed {
-		return dto.ActionPermission{Allowed: false, Reason: "已解决或已关闭的事件不能标记为重大事件"}
+	if incident.Status == common.IncidentStatusResolved || common.IsIncidentFinalStatus(incident.Status) {
+		return dto.ActionPermission{Allowed: false, Reason: "已解决、已关闭或已取消的事件不能标记为重大事件"}
 	}
 	return CanEditIncident(actor)
 }
@@ -90,15 +90,15 @@ func hasIncidentProblemRelation(ctx context.Context, actor ActionActor, incident
 		Where(
 			workitemrelation.TenantIDEQ(actor.TenantID),
 			workitemrelation.SourceWorkItemIDEQ(incident.WorkItemID),
-			workitemrelation.RelationTypeEQ("investigated_by"),
+			workitemrelation.RelationTypeEQ(common.WorkItemRelationInvestigatedBy),
 			workitemrelation.DeletedAtIsNil(),
 		).
 		Exist(ctx)
 }
 
 func CanConvertToProblem(ctx context.Context, actor ActionActor, incident *ent.Incident) dto.ActionPermission {
-	if incident.Status == common.IncidentStatusClosed {
-		return dto.ActionPermission{Allowed: false, Reason: "已关闭的事件不能转为问题"}
+	if common.IsIncidentFinalStatus(incident.Status) {
+		return dto.ActionPermission{Allowed: false, Reason: "已关闭或已取消的事件不能转为问题"}
 	}
 	converted, err := hasIncidentProblemRelation(ctx, actor, incident)
 	if err != nil {
@@ -112,13 +112,13 @@ func CanConvertToProblem(ctx context.Context, actor ActionActor, incident *ent.I
 
 func BuildIncidentActions(ctx context.Context, actor ActionActor, incident *ent.Incident) map[string]dto.ActionPermission {
 	return map[string]dto.ActionPermission{
-		"edit":                CanEditIncident(actor),
-		"resolve":             CanResolveIncident(actor, incident),
-		"close":               CanCloseIncident(actor, incident),
-		"reopen":              CanReopenIncident(actor, incident),
-		"escalate":            CanEscalateIncident(actor, incident),
-		"assign":              CanAssignIncident(actor, incident),
-		"mark_major_incident": CanMarkMajorIncident(actor, incident),
-		"convert_to_problem":  CanConvertToProblem(ctx, actor, incident),
+		"edit":              CanEditIncident(actor),
+		"resolve":           CanResolveIncident(actor, incident),
+		"close":             CanCloseIncident(actor, incident),
+		"reopen":            CanReopenIncident(actor, incident),
+		"escalate":          CanEscalateIncident(actor, incident),
+		"assign":            CanAssignIncident(actor, incident),
+		"markMajorIncident": CanMarkMajorIncident(actor, incident),
+		"convertToProblem":  CanConvertToProblem(ctx, actor, incident),
 	}
 }

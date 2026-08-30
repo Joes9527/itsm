@@ -254,6 +254,47 @@ func TestProblemHTTPHandlerGetDeniesUnauthorizedMSPTenant(t *testing.T) {
 	require.Equal(t, 2003, res.Code)
 }
 
+func TestProblemHTTPHandlerMutationsUseResolvedMSPTenant(t *testing.T) {
+	r, _, service, client := setupProblemHTTPHandlerTest(t)
+	defer client.Close()
+	ctx := context.Background()
+
+	homeTenant := createProblemHandlerTenant(t, ctx, client, "msp-write-home")
+	customerTenant := createProblemHandlerTenant(t, ctx, client, "msp-write-customer")
+	user := createProblemHandlerUser(t, ctx, client, homeTenant.ID, "msp-write-agent")
+	creator := createProblemHandlerUser(t, ctx, client, customerTenant.ID, "msp-write-creator")
+	p := createProblemHandlerProblem(t, ctx, service, customerTenant.ID, creator.ID)
+
+	request := func(method, path string, body interface{}) *httptest.ResponseRecorder {
+		var payload []byte
+		if body != nil {
+			var err error
+			payload, err = json.Marshal(body)
+			require.NoError(t, err)
+		}
+		req := httptest.NewRequest(method, path, bytes.NewReader(payload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Tenant-ID", strconv.Itoa(homeTenant.ID))
+		req.Header.Set("X-User-ID", strconv.Itoa(user.ID))
+		req.Header.Set("X-MSP-Customer-ID", strconv.Itoa(customerTenant.ID))
+		req.Header.Set("X-MSP-Allowed-Customer-ID", strconv.Itoa(customerTenant.ID))
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		return w
+	}
+
+	w := request(http.MethodPut, fmt.Sprintf("/api/v1/problems/%d", p.ID), dto.UpdateProblemRequest{Title: strPtr("MSP updated problem")})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	w = request(http.MethodPost, fmt.Sprintf("/api/v1/problems/%d/investigate", p.ID), nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	updated, err := service.Get(ctx, p.ID, customerTenant.ID)
+	require.NoError(t, err)
+	require.Equal(t, "MSP updated problem", updated.Title)
+	require.Equal(t, "investigating", updated.Status)
+}
+
 func TestProblemHTTPHandlerUpdateAndLifecycle(t *testing.T) {
 	r, _, service, client := setupProblemHTTPHandlerTest(t)
 	defer client.Close()
@@ -417,7 +458,7 @@ func TestProblemHTTPHandlerGetProjectsActionsAndFailsClosedWithoutActorIdentity(
 		var res problemEnvelope
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &res))
 		require.True(t, res.Data.Actions["edit"].Allowed)
-		require.True(t, res.Data.Actions["start_investigation"].Allowed)
+		require.True(t, res.Data.Actions["startInvestigation"].Allowed)
 		require.True(t, res.Data.Actions["resolve"].Allowed)
 		require.False(t, res.Data.Actions["close"].Allowed)
 		require.NotEmpty(t, res.Data.Actions["close"].Reason)
