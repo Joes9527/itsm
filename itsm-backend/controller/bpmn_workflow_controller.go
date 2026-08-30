@@ -32,9 +32,10 @@ func NewBPMNWorkflowController(processEngine service.ProcessEngine, versionServi
 }
 
 func getBPMNTenantContext(ctx *gin.Context) (context.Context, int, bool) {
-	tenantID := ctx.GetInt("tenant_id")
+	tenantID, hasAuthenticatedTenant := middleware.AuthenticatedTenantIDFromContext(ctx.Request.Context())
+	resolvedTenantID := ctx.GetInt("tenant_id")
 	userID := ctx.GetInt("user_id")
-	if tenantID <= 0 || userID <= 0 {
+	if !hasAuthenticatedTenant || tenantID <= 0 || resolvedTenantID != tenantID || userID <= 0 {
 		common.AuthFailed(ctx, "未授权访问")
 		return nil, 0, false
 	}

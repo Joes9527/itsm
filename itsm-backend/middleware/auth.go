@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -10,6 +11,20 @@ import (
 	"go.uber.org/zap"
 	"itsm-backend/common"
 )
+
+type authenticatedTenantIDContextKey struct{}
+
+// WithAuthenticatedTenantID preserves tenant identity established by a trusted
+// authentication adapter independently of later request tenant resolution.
+func WithAuthenticatedTenantID(ctx context.Context, tenantID int) context.Context {
+	return context.WithValue(ctx, authenticatedTenantIDContextKey{}, tenantID)
+}
+
+// AuthenticatedTenantIDFromContext returns the immutable tenant identity from authentication.
+func AuthenticatedTenantIDFromContext(ctx context.Context) (int, bool) {
+	tenantID, ok := ctx.Value(authenticatedTenantIDContextKey{}).(int)
+	return tenantID, ok
+}
 
 type Claims struct {
 	UserID    int    `json:"userId"`
@@ -228,6 +243,7 @@ func AuthMiddleware(jwtSecret string) gin.HandlerFunc {
 			c.Set("role", claims.Role)
 			c.Set("tenant_id", claims.TenantID) // 添加租户ID
 			c.Set("token", tokenString)
+			c.Request = c.Request.WithContext(WithAuthenticatedTenantID(c.Request.Context(), claims.TenantID))
 
 			// 调试日志：认证成功
 			zap.S().Infow(

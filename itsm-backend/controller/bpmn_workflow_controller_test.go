@@ -13,6 +13,7 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/middleware"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -168,6 +169,7 @@ func newBPMNWorkflowTestRouter(t *testing.T) (*gin.Engine, *fakeTaskService) {
 	// These tests exercise business logic behind the RBAC gate, so authenticate
 	// as an allowed role up front rather than re-deriving the role set here.
 	r.Use(func(c *gin.Context) {
+		c.Request = c.Request.WithContext(middleware.WithAuthenticatedTenantID(c.Request.Context(), 1))
 		c.Set("tenant_id", 1)
 		c.Set("user_id", 7)
 		c.Set("role", "super_admin")
