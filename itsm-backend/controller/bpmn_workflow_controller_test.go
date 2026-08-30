@@ -12,9 +12,11 @@ import (
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/enttest"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -155,6 +157,8 @@ func (e *fakeProcessEngine) TerminateProcess(ctx context.Context, id, reason str
 
 func newBPMNWorkflowTestRouter(t *testing.T) (*gin.Engine, *fakeTaskService) {
 	gin.SetMode(gin.TestMode)
+	client := enttest.Open(t, "sqlite3", "file:bpmn_workflow_controller?mode=memory&cache=shared&_fk=1")
+	t.Cleanup(func() { _ = client.Close() })
 	fakeTask := &fakeTaskService{}
 	engine := &fakeProcessEngine{taskSvc: fakeTask}
 	ctrl := NewBPMNWorkflowController(engine, nil)
@@ -164,7 +168,10 @@ func newBPMNWorkflowTestRouter(t *testing.T) (*gin.Engine, *fakeTaskService) {
 	// These tests exercise business logic behind the RBAC gate, so authenticate
 	// as an allowed role up front rather than re-deriving the role set here.
 	r.Use(func(c *gin.Context) {
+		c.Set("tenant_id", 1)
+		c.Set("user_id", 7)
 		c.Set("role", "super_admin")
+		c.Set("client", client)
 	})
 	g := r.Group("/api/v1")
 	ctrl.RegisterRoutes(g)

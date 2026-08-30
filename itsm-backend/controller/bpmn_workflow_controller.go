@@ -33,19 +33,31 @@ func NewBPMNWorkflowController(processEngine service.ProcessEngine, versionServi
 
 func getBPMNTenantContext(ctx *gin.Context) (context.Context, int, bool) {
 	tenantID := ctx.GetInt("tenant_id")
-	// 仅在明确需要租户上下文时拒绝 tenant_id=0，允许平台级操作通过
-	if tenantID < 0 {
+	userID := ctx.GetInt("user_id")
+	if tenantID <= 0 || userID <= 0 {
 		common.AuthFailed(ctx, "未授权访问")
 		return nil, 0, false
 	}
-	// tenantID=0 允许通过，但服务层会忽略该过滤条件
+
+	role := ctx.GetString("role")
+	clientValue, _ := ctx.Get("client")
+	client, _ := clientValue.(*ent.Client)
+	hasPermission := func(resource, action string) bool {
+		return client != nil && middleware.HasResourcePermission(client, role, resource, action, tenantID)
+	}
+	scope := service.BPMNAccessScope{
+		UserID:                userID,
+		TenantID:              tenantID,
+		CanReadAllInstances:   hasPermission("process_instance", "read"),
+		CanUpdateAllInstances: hasPermission("process_instance", "update"),
+		CanReadAllTasks:       hasPermission("task", "read"),
+		CanUpdateAllTasks:     hasPermission("task", "update"),
+	}
+
 	reqCtx := ctx.Request.Context()
-	if tenantID > 0 {
-		reqCtx = context.WithValue(reqCtx, bpmn.BPMNTenantIDContextKey, tenantID)
-	}
-	if userID := ctx.GetInt("user_id"); userID > 0 {
-		reqCtx = context.WithValue(reqCtx, bpmn.BPMNUserIDContextKey, userID)
-	}
+	reqCtx = context.WithValue(reqCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	reqCtx = context.WithValue(reqCtx, bpmn.BPMNUserIDContextKey, userID)
+	reqCtx = service.WithBPMNAccessScope(reqCtx, scope)
 	return reqCtx, tenantID, true
 }
 
