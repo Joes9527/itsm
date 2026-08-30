@@ -48,6 +48,7 @@ var (
 	ErrKafDelegationInvalidCursor = errors.New("KAF delegated task cursor is invalid")
 	ErrKafActionInvalid           = errors.New("KAF action is invalid")
 	ErrKafActionConflict          = errors.New("KAF action version conflict")
+	ErrKafActionInProgress        = errors.New("KAF action is in progress")
 )
 
 const (
@@ -377,6 +378,7 @@ func (s *KafDelegationService) ExecuteAction(ctx context.Context, taskID string,
 		return &result, nil
 	}
 	if reconciled, err := s.reconcileCompletedKafAction(ctx, task, req, ledger, engine); err != nil {
+		_ = s.finalizeKafAction(ctx, ledger, "failed_retryable", "action_reconciliation_failed")
 		return nil, err
 	} else if reconciled {
 		return &result, nil
@@ -417,7 +419,7 @@ func (s *KafDelegationService) ExecuteAction(ctx context.Context, taskID string,
 		_ = s.finalizeKafAction(ctx, ledger, "failed_retryable", "action_persistence_failed")
 		return nil, err
 	}
-	if err := s.recordActionAudit(ctx, task, req, http.StatusOK); err != nil {
+	if err := s.recordActionAudit(ctx, task, req, ledger, KafActionApplied, http.StatusOK); err != nil {
 		_ = s.finalizeKafAction(ctx, ledger, "failed_retryable", "audit_write_failed")
 		return nil, fmt.Errorf("record KAF action audit: %w", err)
 	}
@@ -476,6 +478,9 @@ func (s *KafDelegationService) reconcileCompletedKafAction(ctx context.Context, 
 			return false, fmt.Errorf("recover delegated BPMN callback: %w", err)
 		}
 	}
+	if err := s.recordActionAudit(ctx, task, req, ledger, KafActionApplied, http.StatusOK); err != nil {
+		return false, fmt.Errorf("record recovered KAF action audit: %w", err)
+	}
 	if err := s.finalizeKafAction(ctx, ledger, "applied", ""); err != nil {
 		return false, err
 	}
@@ -520,6 +525,21 @@ func validateKafActionKey(task *ent.ProcessTask, req KafActionRequest) error {
 // ClaimKafAction persists the immutable execution scope and atomically leases
 // it for execution. A false claim is returned only for an already-applied row.
 func (s *KafDelegationService) ClaimKafAction(ctx context.Context, task *ent.ProcessTask, req KafActionRequest) (*ent.KafTaskActionLedger, bool, error) {
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		ledger, claimed, err := s.claimKafActionOnce(ctx, task, req)
+		if err == nil || !isTransientKafActionLedgerLock(err) {
+			return ledger, claimed, err
+		}
+		lastErr = err
+		if err := waitForKafActionLedgerRetry(ctx, time.Duration(attempt+1)*5*time.Millisecond); err != nil {
+			return nil, false, err
+		}
+	}
+	return nil, false, lastErr
+}
+
+func (s *KafDelegationService) claimKafActionOnce(ctx context.Context, task *ent.ProcessTask, req KafActionRequest) (*ent.KafTaskActionLedger, bool, error) {
 	if task == nil {
 		return nil, false, fmt.Errorf("%w: task is required", ErrKafActionInvalid)
 	}
@@ -583,13 +603,28 @@ func (s *KafDelegationService) ClaimKafAction(ctx context.Context, task *ent.Pro
 		if current.ResultStatus == "applied" {
 			return current, false, nil
 		}
-		return nil, false, fmt.Errorf("%w: action lease is active", ErrKafActionConflict)
+		return nil, false, fmt.Errorf("%w: %w", ErrKafActionConflict, ErrKafActionInProgress)
 	}
 	ledger, err = s.client.KafTaskActionLedger.Get(ctx, ledger.ID)
 	if err != nil {
 		return nil, false, fmt.Errorf("load claimed KAF action ledger: %w", err)
 	}
 	return ledger, true, nil
+}
+
+func isTransientKafActionLedgerLock(err error) bool {
+	return err != nil && (strings.Contains(err.Error(), "database is locked") || strings.Contains(err.Error(), "database table is locked"))
+}
+
+func waitForKafActionLedgerRetry(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func (s *KafDelegationService) loadKafActionLedger(ctx context.Context, task *ent.ProcessTask, req KafActionRequest) (*ent.KafTaskActionLedger, error) {
@@ -701,13 +736,16 @@ func kafActionTimelineContent(req KafActionRequest) string {
 	return prefix + " " + summarizeOutboxError(summary)
 }
 
-func (s *KafDelegationService) recordActionAudit(ctx context.Context, task *ent.ProcessTask, req KafActionRequest, statusCode int) error {
+func (s *KafDelegationService) recordActionAudit(ctx context.Context, task *ent.ProcessTask, req KafActionRequest, ledger *ent.KafTaskActionLedger, resultStatus string, statusCode int) error {
+	if ledger == nil {
+		return errors.New("KAF action ledger is required for audit")
+	}
 	actorID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
 	body, err := json.Marshal(map[string]interface{}{
-		"taskId": task.TaskID, "correlationId": task.CorrelationID, "action": req.Action,
+		"ledgerId": ledger.ID, "taskId": task.TaskID, "correlationId": task.CorrelationID, "action": req.Action,
 		"runId": req.Execution.RunID, "stepId": req.Execution.StepID, "procedureRef": req.Execution.ProcedureRef,
 		"procedureVersion": req.Execution.ProcedureVersion, "idempotencyKey": req.Execution.IdempotencyKey,
-		"resultCode": statusCode,
+		"resultStatus": resultStatus, "resultCode": statusCode,
 	})
 	if err != nil {
 		return err

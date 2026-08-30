@@ -115,6 +115,8 @@ func writeKafDelegationError(ctx *gin.Context, err error) {
 		writeKafValidationError(ctx, "invalid KAF action")
 	case errors.Is(err, service.ErrKafDelegationInvalidCursor):
 		writeKafValidationError(ctx, "invalid KAF delegated list cursor")
+	case errors.Is(err, service.ErrKafActionInProgress):
+		common.Conflict(ctx, "KAF action is in progress", gin.H{"code": "in_progress"})
 	case errors.Is(err, service.ErrKafActionConflict):
 		common.Conflict(ctx, "KAF action version conflict", nil)
 	default:

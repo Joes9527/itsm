@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -254,6 +255,12 @@ type statefulKafCompletionEngine struct {
 	calls  int
 }
 
+type blockingKafCompletionEngine struct {
+	*statefulKafCompletionEngine
+	entered chan<- struct{}
+	release <-chan struct{}
+}
+
 type scopeCapturingKafCallbackHandler struct {
 	scope   bpmn.KafActionScope
 	scopeOK bool
@@ -306,6 +313,12 @@ func (e *statefulKafCompletionEngine) CompleteKafDelegatedTask(ctx context.Conte
 	return nil
 }
 
+func (e *blockingKafCompletionEngine) CompleteKafDelegatedTask(ctx context.Context, ledgerID int, taskID string, variables map[string]interface{}) error {
+	e.entered <- struct{}{}
+	<-e.release
+	return e.statefulKafCompletionEngine.CompleteKafDelegatedTask(ctx, ledgerID, taskID, variables)
+}
+
 func newKafActionFixture(t *testing.T) (*CustomProcessEngine, *KafDelegationService, *ent.ProcessTask, context.Context) {
 	t.Helper()
 
@@ -352,9 +365,14 @@ func TestExecuteAction_RecoversCompletedTaskAfterAuditFailureWithoutSecondEngine
 	_, svc, task, ctx := newKafActionFixture(t)
 	req := validCompleteRequest(task, "run-1", "finish")
 	engine := &statefulKafCompletionEngine{client: svc.client}
-	svc.client.AuditLog.Use(func(ent.Mutator) ent.Mutator {
-		return ent.MutateFunc(func(context.Context, ent.Mutation) (ent.Value, error) {
-			return nil, errors.New("audit storage unavailable")
+	auditAttempts := 0
+	svc.client.AuditLog.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(hookCtx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			auditAttempts++
+			if auditAttempts == 1 {
+				return nil, errors.New("audit storage unavailable")
+			}
+			return next.Mutate(hookCtx, mutation)
 		})
 	})
 
@@ -367,6 +385,7 @@ func TestExecuteAction_RecoversCompletedTaskAfterAuditFailureWithoutSecondEngine
 
 	assert.Equal(t, KafActionAlreadyApplied, second.ResultStatus)
 	assert.Equal(t, 1, engine.calls)
+	assert.Equal(t, 2, auditAttempts)
 	ledger, err := svc.client.KafTaskActionLedger.Query().Where(
 		kaftaskactionledger.TenantIDEQ(task.TenantID), kaftaskactionledger.IdempotencyKeyEQ(req.Execution.IdempotencyKey),
 	).Only(ctx)
@@ -385,6 +404,103 @@ func TestExecuteAction_RejectsActiveLeaseWithoutCallingEngine(t *testing.T) {
 	_, err = svc.ExecuteAction(ctx, task.TaskID, req, engine)
 	require.ErrorIs(t, err, ErrKafActionConflict)
 	assert.Zero(t, engine.calls)
+}
+
+func TestExecuteAction_ConcurrentClaimsCompleteExactlyOnce(t *testing.T) {
+	_, svc, task, ctx := newKafActionFixture(t)
+	req := validCompleteRequest(task, "run-1", "finish")
+	entered := make(chan struct{}, 1)
+	release := make(chan struct{})
+	secondClaimAttempted := make(chan struct{})
+	engine := &blockingKafCompletionEngine{
+		statefulKafCompletionEngine: &statefulKafCompletionEngine{client: svc.client},
+		entered:                     entered,
+		release:                     release,
+	}
+	claimAttempts := 0
+	var claimAttemptsMu sync.Mutex
+	svc.client.KafTaskActionLedger.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(hookCtx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			if ledgerMutation, ok := mutation.(*ent.KafTaskActionLedgerMutation); ok {
+				if status, exists := ledgerMutation.ResultStatus(); exists && status == "executing" {
+					claimAttemptsMu.Lock()
+					claimAttempts++
+					if claimAttempts == 2 {
+						close(secondClaimAttempted)
+					}
+					claimAttemptsMu.Unlock()
+				}
+			}
+			return next.Mutate(hookCtx, mutation)
+		})
+	})
+
+	type executionResult struct {
+		result *KafActionResult
+		err    error
+	}
+	start := make(chan struct{})
+	results := make(chan executionResult, 2)
+	var ready sync.WaitGroup
+	ready.Add(2)
+	for range 2 {
+		go func() {
+			ready.Done()
+			<-start
+			result, err := svc.ExecuteAction(ctx, task.TaskID, req, engine)
+			results <- executionResult{result: result, err: err}
+		}()
+	}
+	ready.Wait()
+	close(start)
+	<-entered
+	<-secondClaimAttempted
+	close(release)
+
+	successes := 0
+	for range 2 {
+		outcome := <-results
+		if outcome.err == nil {
+			require.NotNil(t, outcome.result)
+			successes++
+			continue
+		}
+		require.ErrorIs(t, outcome.err, ErrKafActionConflict)
+	}
+	assert.Equal(t, 1, successes)
+	assert.Equal(t, 1, engine.calls)
+
+	replay, err := svc.ExecuteAction(ctx, task.TaskID, req, engine)
+	require.NoError(t, err)
+	assert.Equal(t, KafActionAlreadyApplied, replay.ResultStatus)
+	assert.Equal(t, 1, engine.calls)
+}
+
+func TestExecuteAction_AuditReferencesAppliedLedger(t *testing.T) {
+	_, svc, task, ctx := newKafActionFixture(t)
+	req := validCompleteRequest(task, "run-1", "finish")
+	engine := &statefulKafCompletionEngine{client: svc.client}
+
+	result, err := svc.ExecuteAction(ctx, task.TaskID, req, engine)
+	require.NoError(t, err)
+	assert.Equal(t, KafActionApplied, result.ResultStatus)
+	ledger, err := svc.client.KafTaskActionLedger.Query().Where(
+		kaftaskactionledger.TenantIDEQ(task.TenantID), kaftaskactionledger.IdempotencyKeyEQ(req.Execution.IdempotencyKey),
+	).Only(ctx)
+	require.NoError(t, err)
+	audit, err := svc.client.AuditLog.Query().Where(
+		auditlog.TenantIDEQ(task.TenantID), auditlog.ActionEQ("kaf_delegate."+req.Action),
+	).Only(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, audit.RequestBody)
+	var body map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(*audit.RequestBody), &body))
+	assert.Equal(t, float64(ledger.ID), body["ledgerId"])
+	assert.Equal(t, task.TaskID, body["taskId"])
+	assert.Equal(t, req.Execution.CorrelationID, body["correlationId"])
+	assert.Equal(t, req.Execution.ProcedureRef, body["procedureRef"])
+	assert.Equal(t, req.Execution.ProcedureVersion, body["procedureVersion"])
+	assert.Equal(t, KafActionApplied, body["resultStatus"])
 }
 
 func TestExecuteAction_RejectsSameScopeWithDifferentKey(t *testing.T) {

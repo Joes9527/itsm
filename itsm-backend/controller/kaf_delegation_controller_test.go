@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -12,7 +13,9 @@ import (
 
 	"itsm-backend/common"
 	"itsm-backend/ent"
+	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/ent/kaftaskcompletionreceipt"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/ent/ticketcomment"
 	"itsm-backend/ent/user"
@@ -34,6 +37,28 @@ type kafHTTPFixture struct {
 	taskType                string
 	status                  string
 	allowedActions          string
+	failingCompletionError  string
+}
+
+type failingKafCompletionEngine struct {
+	service.ProcessEngine
+	client *ent.Client
+	err    error
+}
+
+func (e *failingKafCompletionEngine) CompleteKafDelegatedTask(ctx context.Context, ledgerID int, taskID string, _ map[string]interface{}) error {
+	ledger, err := e.client.KafTaskActionLedger.Get(ctx, ledgerID)
+	if err != nil {
+		return err
+	}
+	_, err = e.client.KafTaskCompletionReceipt.Create().
+		SetLedgerID(ledgerID).SetTenantID(ledger.TenantID).SetTaskID(taskID).
+		SetStatus("callback_failed").SetErrorCode("callback_failed").
+		Save(ctx)
+	if err != nil && !ent.IsConstraintError(err) {
+		return err
+	}
+	return e.err
 }
 
 func newKafDelegationHTTPFixture(t *testing.T, fixture kafHTTPFixture) (*gin.Engine, string, *ent.Client) {
@@ -87,7 +112,10 @@ func newKafDelegationHTTPFixture(t *testing.T, fixture kafHTTPFixture) (*gin.Eng
 		SetCorrelationID("corr-kaf-http").SetTenantID(taskTenant.ID).Save(ctx)
 	require.NoError(t, err)
 
-	engine := service.NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar())
+	var engine service.ProcessEngine = service.NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar())
+	if fixture.failingCompletionError != "" {
+		engine = &failingKafCompletionEngine{client: client, err: errors.New(fixture.failingCompletionError)}
+	}
 	controller := NewKafDelegationController(client, engine)
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
@@ -119,6 +147,13 @@ func doKafRequest(t *testing.T, router http.Handler, method, target, body string
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, req)
 	return response
+}
+
+func kafActionKey(t *testing.T, client *ent.Client, taskID, runID, stepID string) string {
+	t.Helper()
+	task, err := client.ProcessTask.Query().Where(processtask.TaskIDEQ(taskID)).Only(context.Background())
+	require.NoError(t, err)
+	return fmt.Sprintf("%d:%s:%s:%s", task.TenantID, taskID, runID, stepID)
 }
 
 func TestKafContext_RejectsDifferentTenantAutomationActor(t *testing.T) {
@@ -206,8 +241,8 @@ func TestKafAction_RejectsResolveUntilIncidentTypedActionExists(t *testing.T) {
 }
 
 func TestKafAction_RejectsActionNotAllowedByTheDelegatedTask(t *testing.T) {
-	router, taskID, _ := newKafDelegationHTTPFixture(t, kafHTTPFixture{actorTenantID: 1, taskTenantID: 1, taskType: "kaf_delegate", status: common.ProcessTaskStatusDelegated, allowedActions: "update_progress"})
-	body := `{"action":"complete_bpmn_task","expectedVersion":3,"execution":{"runId":"run-1","stepId":"finish","idempotencyKey":"1:` + taskID + `:run-1:finish","correlationId":"corr-kaf-http","procedureRef":"vpn-grant","procedureVersion":"1"},"payload":{"resultSummary":"completed"}}`
+	router, taskID, client := newKafDelegationHTTPFixture(t, kafHTTPFixture{actorTenantID: 1, taskTenantID: 1, taskType: "kaf_delegate", status: common.ProcessTaskStatusDelegated, allowedActions: "update_progress"})
+	body := `{"action":"complete_bpmn_task","expectedVersion":3,"execution":{"runId":"run-1","stepId":"finish","idempotencyKey":"` + kafActionKey(t, client, taskID, "run-1", "finish") + `","correlationId":"corr-kaf-http","procedureRef":"vpn-grant","procedureVersion":"1"},"payload":{"resultSummary":"completed"}}`
 	response := doKafRequest(t, router, http.MethodPost, "/api/v1/bpmn/process-tasks/"+taskID+"/actions", body)
 	assert.Equal(t, http.StatusUnprocessableEntity, response.Code)
 }
@@ -215,7 +250,7 @@ func TestKafAction_RejectsActionNotAllowedByTheDelegatedTask(t *testing.T) {
 func TestKafAction_RejectsValidKafActorWithDifferentRequestTenant(t *testing.T) {
 	router, taskID, client := newKafDelegationHTTPFixture(t, kafHTTPFixture{actorTenantID: 1, taskTenantID: 1, useForeignRequestTenant: true, taskType: "kaf_delegate", status: common.ProcessTaskStatusDelegated})
 	attachKafWorkItem(t, client, taskID)
-	body := `{"action":"update_progress","expectedVersion":3,"execution":{"runId":"run-1","stepId":"progress","idempotencyKey":"1:` + taskID + `:run-1:progress","correlationId":"corr-kaf-http","procedureRef":"vpn-grant","procedureVersion":"1"},"payload":{"resultSummary":"queued"}}`
+	body := `{"action":"update_progress","expectedVersion":3,"execution":{"runId":"run-1","stepId":"progress","idempotencyKey":"` + kafActionKey(t, client, taskID, "run-1", "progress") + `","correlationId":"corr-kaf-http","procedureRef":"vpn-grant","procedureVersion":"1"},"payload":{"resultSummary":"queued"}}`
 	response := doKafRequest(t, router, http.MethodPost, "/api/v1/bpmn/process-tasks/"+taskID+"/actions", body)
 	assert.Equal(t, http.StatusNotFound, response.Code)
 }
@@ -223,7 +258,7 @@ func TestKafAction_RejectsValidKafActorWithDifferentRequestTenant(t *testing.T) 
 func TestKafAction_IdempotentReplayRejectsValidKafActorWithDifferentRequestTenant(t *testing.T) {
 	router, taskID, client := newKafDelegationHTTPFixture(t, kafHTTPFixture{actorTenantID: 1, taskTenantID: 1, useForeignRequestTenant: true, taskType: "kaf_delegate", status: common.ProcessTaskStatusDelegated})
 	attachKafWorkItem(t, client, taskID)
-	body := `{"action":"update_progress","expectedVersion":3,"execution":{"runId":"run-1","stepId":"progress","idempotencyKey":"1:` + taskID + `:run-1:progress","correlationId":"corr-kaf-http","procedureRef":"vpn-grant","procedureVersion":"1"},"payload":{"resultSummary":"queued"}}`
+	body := `{"action":"update_progress","expectedVersion":3,"execution":{"runId":"run-1","stepId":"progress","idempotencyKey":"` + kafActionKey(t, client, taskID, "run-1", "progress") + `","correlationId":"corr-kaf-http","procedureRef":"vpn-grant","procedureVersion":"1"},"payload":{"resultSummary":"queued"}}`
 	task, err := client.ProcessTask.Query().Where(processtask.TaskIDEQ(taskID)).Only(context.Background())
 	require.NoError(t, err)
 	actor, err := client.User.Query().Where(user.TenantIDEQ(task.TenantID)).Only(context.Background())
@@ -232,7 +267,7 @@ func TestKafAction_IdempotentReplayRejectsValidKafActorWithDifferentRequestTenan
 	workflowCtx = context.WithValue(workflowCtx, bpmn.BPMNUserIDContextKey, actor.ID)
 	_, err = service.NewKafDelegationService(client).ExecuteAction(workflowCtx, taskID, service.KafActionRequest{
 		Action: "update_progress", ExpectedVersion: 3,
-		Execution: service.KafActionExecution{RunID: "run-1", StepID: "progress", IdempotencyKey: "1:" + taskID + ":run-1:progress", CorrelationID: "corr-kaf-http", ProcedureRef: "vpn-grant", ProcedureVersion: "1"},
+		Execution: service.KafActionExecution{RunID: "run-1", StepID: "progress", IdempotencyKey: kafActionKey(t, client, taskID, "run-1", "progress"), CorrelationID: "corr-kaf-http", ProcedureRef: "vpn-grant", ProcedureVersion: "1"},
 		Payload:   service.KafActionPayload{ResultSummary: "queued"},
 	}, nil)
 	require.NoError(t, err)
@@ -243,7 +278,7 @@ func TestKafAction_IdempotentReplayRejectsValidKafActorWithDifferentRequestTenan
 
 func TestKafAction_CompleteIsIdempotentForACompletedDelegatedTask(t *testing.T) {
 	router, taskID, client := newKafDelegationHTTPFixture(t, kafHTTPFixture{actorTenantID: 1, taskTenantID: 1, taskType: "kaf_delegate", status: common.ProcessTaskStatusDelegated})
-	body := `{"action":"complete_bpmn_task","expectedVersion":3,"execution":{"runId":"run-1","stepId":"finish","idempotencyKey":"1:` + taskID + `:run-1:finish","correlationId":"corr-kaf-http","procedureRef":"vpn-grant","procedureVersion":"1"},"payload":{"resultSummary":"completed","evidenceRefs":[]}}`
+	body := `{"action":"complete_bpmn_task","expectedVersion":3,"execution":{"runId":"run-1","stepId":"finish","idempotencyKey":"` + kafActionKey(t, client, taskID, "run-1", "finish") + `","correlationId":"corr-kaf-http","procedureRef":"vpn-grant","procedureVersion":"1"},"payload":{"resultSummary":"completed","evidenceRefs":[]}}`
 	first := doKafRequest(t, router, http.MethodPost, "/api/v1/bpmn/process-tasks/"+taskID+"/actions", body)
 	assert.Equal(t, http.StatusOK, first.Code)
 	second := doKafRequest(t, router, http.MethodPost, "/api/v1/bpmn/process-tasks/"+taskID+"/actions", body)
@@ -253,10 +288,78 @@ func TestKafAction_CompleteIsIdempotentForACompletedDelegatedTask(t *testing.T) 
 	assert.Equal(t, 1, completed)
 }
 
+func TestExecuteAction_ReturnsResultStatusForReplay(t *testing.T) {
+	router, taskID, client := newKafDelegationHTTPFixture(t, kafHTTPFixture{actorTenantID: 1, taskTenantID: 1, taskType: "kaf_delegate", status: common.ProcessTaskStatusDelegated})
+	task, err := client.ProcessTask.Query().Where(processtask.TaskIDEQ(taskID)).Only(context.Background())
+	require.NoError(t, err)
+	key := fmt.Sprintf("%d:%s:run-1:finish", task.TenantID, taskID)
+	body := `{"action":"complete_bpmn_task","expectedVersion":3,"execution":{"runId":"run-1","stepId":"finish","idempotencyKey":"` + key + `","correlationId":"corr-kaf-http","procedureRef":"vpn-grant","procedureVersion":"1"},"payload":{"resultSummary":"completed"}}`
+
+	first := doKafRequest(t, router, http.MethodPost, "/api/v1/bpmn/process-tasks/"+taskID+"/actions", body)
+	require.Equal(t, http.StatusOK, first.Code)
+	response := doKafRequest(t, router, http.MethodPost, "/api/v1/bpmn/process-tasks/"+taskID+"/actions", body)
+
+	assert.Equal(t, http.StatusOK, response.Code)
+	assert.JSONEq(t, `{"code":0,"message":"success","data":{"action":"complete_bpmn_task","idempotencyKey":"`+key+`","resultStatus":"already_applied","expectedVersion":3}}`, response.Body.String())
+}
+
+func TestExecuteAction_ReturnsConflictForLiveLedgerLease(t *testing.T) {
+	router, taskID, client := newKafDelegationHTTPFixture(t, kafHTTPFixture{actorTenantID: 1, taskTenantID: 1, taskType: "kaf_delegate", status: common.ProcessTaskStatusDelegated})
+	task, err := client.ProcessTask.Query().Where(processtask.TaskIDEQ(taskID)).Only(context.Background())
+	require.NoError(t, err)
+	_, err = client.KafTaskActionLedger.Create().
+		SetTenantID(task.TenantID).SetTaskID(taskID).
+		SetRunID("run-1").SetStepID("finish").SetAction("complete_bpmn_task").
+		SetIdempotencyKey(fmt.Sprintf("%d:%s:run-1:finish", task.TenantID, taskID)).
+		SetCorrelationID(task.CorrelationID).SetProcedureRef("vpn-grant").SetProcedureVersion("1").
+		SetResultStatus("executing").SetLeaseOwner("private-lease-owner").SetLeaseExpiresAt(time.Now().Add(time.Minute)).
+		Save(context.Background())
+	require.NoError(t, err)
+	body := `{"action":"complete_bpmn_task","expectedVersion":3,"execution":{"runId":"run-1","stepId":"finish","idempotencyKey":"` + fmt.Sprintf("%d:%s:run-1:finish", task.TenantID, taskID) + `","correlationId":"corr-kaf-http","procedureRef":"vpn-grant","procedureVersion":"1"},"payload":{"resultSummary":"completed"}}`
+
+	response := doKafRequest(t, router, http.MethodPost, "/api/v1/bpmn/process-tasks/"+taskID+"/actions", body)
+
+	assert.Equal(t, http.StatusConflict, response.Code)
+	assert.JSONEq(t, `{"code":4090,"message":"KAF action is in progress","data":{"code":"in_progress"}}`, response.Body.String())
+	assert.NotContains(t, response.Body.String(), "private-lease-owner")
+}
+
+func TestExecuteAction_RedactsCompletionFailureAcrossPersistenceAndResponse(t *testing.T) {
+	const token = "Bearer fake-kaf-token"
+	router, taskID, client := newKafDelegationHTTPFixture(t, kafHTTPFixture{
+		actorTenantID: 1, taskTenantID: 1, taskType: "kaf_delegate", status: common.ProcessTaskStatusDelegated,
+		failingCompletionError: "callback failed with " + token,
+	})
+	task, err := client.ProcessTask.Query().Where(processtask.TaskIDEQ(taskID)).Only(context.Background())
+	require.NoError(t, err)
+	body := `{"action":"complete_bpmn_task","expectedVersion":3,"execution":{"runId":"run-1","stepId":"finish","idempotencyKey":"` + fmt.Sprintf("%d:%s:run-1:finish", task.TenantID, taskID) + `","correlationId":"corr-kaf-http","procedureRef":"vpn-grant","procedureVersion":"1"},"payload":{"resultSummary":"completed"}}`
+
+	response := doKafRequest(t, router, http.MethodPost, "/api/v1/bpmn/process-tasks/"+taskID+"/actions", body)
+
+	assert.Equal(t, http.StatusInternalServerError, response.Code)
+	assert.NotContains(t, response.Body.String(), token)
+	receipt, err := client.KafTaskCompletionReceipt.Query().Where(kaftaskcompletionreceipt.TaskIDEQ(taskID)).Only(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "callback_failed", receipt.ErrorCode)
+	assert.NotContains(t, receipt.ErrorCode, token)
+	audits, err := client.AuditLog.Query().Where(auditlog.TenantIDEQ(task.TenantID)).All(context.Background())
+	require.NoError(t, err)
+	for _, audit := range audits {
+		if audit.RequestBody != nil {
+			assert.NotContains(t, *audit.RequestBody, token)
+		}
+	}
+	comments, err := client.TicketComment.Query().Where(ticketcomment.TenantIDEQ(task.TenantID)).All(context.Background())
+	require.NoError(t, err)
+	for _, comment := range comments {
+		assert.NotContains(t, comment.Content, token)
+	}
+}
+
 func TestKafAction_UpdateProgressWritesRedactedInternalTimelineRecord(t *testing.T) {
 	router, taskID, client := newKafDelegationHTTPFixture(t, kafHTTPFixture{actorTenantID: 1, taskTenantID: 1, taskType: "kaf_delegate", status: common.ProcessTaskStatusDelegated})
 	ticketID := attachKafWorkItem(t, client, taskID)
-	body := `{"action":"update_progress","expectedVersion":3,"execution":{"runId":"run-1","stepId":"progress","idempotencyKey":"1:` + taskID + `:run-1:progress","correlationId":"corr-kaf-http","procedureRef":"vpn-grant","procedureVersion":"1"},"payload":{"resultSummary":"VPN grant queued authorization: Bearer super-secret access_token=also-secret"}}`
+	body := `{"action":"update_progress","expectedVersion":3,"execution":{"runId":"run-1","stepId":"progress","idempotencyKey":"` + kafActionKey(t, client, taskID, "run-1", "progress") + `","correlationId":"corr-kaf-http","procedureRef":"vpn-grant","procedureVersion":"1"},"payload":{"resultSummary":"VPN grant queued authorization: Bearer super-secret access_token=also-secret"}}`
 
 	response := doKafRequest(t, router, http.MethodPost, "/api/v1/bpmn/process-tasks/"+taskID+"/actions", body)
 	require.Equal(t, http.StatusOK, response.Code)
@@ -273,7 +376,7 @@ func TestKafAction_UpdateProgressWritesRedactedInternalTimelineRecord(t *testing
 func TestKafAction_RecordExecutionFailureWritesRedactedTimelineRecordAndKeepsDelegated(t *testing.T) {
 	router, taskID, client := newKafDelegationHTTPFixture(t, kafHTTPFixture{actorTenantID: 1, taskTenantID: 1, taskType: "kaf_delegate", status: common.ProcessTaskStatusDelegated})
 	ticketID := attachKafWorkItem(t, client, taskID)
-	body := `{"action":"record_execution_failure","expectedVersion":3,"execution":{"runId":"run-1","stepId":"execute","idempotencyKey":"1:` + taskID + `:run-1:execute","correlationId":"corr-kaf-http","procedureRef":"vpn-grant","procedureVersion":"1"},"payload":{"failureSummary":"VPN grant failed password=super-secret api_key=also-secret"}}`
+	body := `{"action":"record_execution_failure","expectedVersion":3,"execution":{"runId":"run-1","stepId":"execute","idempotencyKey":"` + kafActionKey(t, client, taskID, "run-1", "execute") + `","correlationId":"corr-kaf-http","procedureRef":"vpn-grant","procedureVersion":"1"},"payload":{"failureSummary":"VPN grant failed password=super-secret api_key=also-secret"}}`
 
 	response := doKafRequest(t, router, http.MethodPost, "/api/v1/bpmn/process-tasks/"+taskID+"/actions", body)
 	require.Equal(t, http.StatusOK, response.Code)
