@@ -627,7 +627,7 @@ func (e *CustomProcessEngine) authorizeTaskActorWithClient(ctx context.Context, 
 	if allowed(task.Assignee) || allowed(task.CandidateUsers) {
 		return nil
 	}
-	return fmt.Errorf("当前用户不是该任务的审批人或候选人")
+	return common.NewForbiddenError("当前用户不是该任务的审批人或候选人")
 }
 
 // authorizeKafAutomationActor 校验异步委派任务（如 kaf_delegate）只能被 kaf_automation

@@ -35,6 +35,14 @@ go run -tags migrate main.go
 go run -tags create_user main.go
 ```
 
+### BPMN instance authorization
+
+Trusted BPMN scope is built only from authenticated `tenant_id`, `user_id`, role, and RBAC state. Elevated permissions are `process_instance:read`, `process_instance:update`, `task:read`, and `task:update`; request parameters never grant scope.
+
+```bash
+go test ./service/bpmn ./service ./controller -run 'BPMN|ProcessTask|ProcessInstance|KafDelegate' -count=1
+```
+
 ### 环境配置
 
 ```bash

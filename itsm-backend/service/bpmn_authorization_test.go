@@ -170,6 +170,16 @@ func (f *bpmnAuthorizationFixture) actorScopeCtx(actor *ent.User, tenant *ent.Te
 	})
 }
 
+func (f *bpmnAuthorizationFixture) taskActorScopeCtx(actor *ent.User, tenant *ent.Tenant, canReadAll bool) context.Context {
+	ctx := context.WithValue(f.userCtx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, actor.ID)
+	return WithBPMNAccessScope(ctx, BPMNAccessScope{
+		UserID:          actor.ID,
+		TenantID:        tenant.ID,
+		CanReadAllTasks: canReadAll,
+	})
+}
+
 func requireBPMNForbidden(t *testing.T, err error) {
 	t.Helper()
 	var appErr *common.AppError
@@ -303,6 +313,10 @@ func TestGetProcessInstanceAuthorization(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, instance.ID, got.ID)
 
+	got, err = f.engine.ProcessInstanceService().GetProcessInstance(f.actorScopeCtx(f.outsider, f.tenant, true), instanceID)
+	require.NoError(t, err)
+	assert.Equal(t, instance.ID, got.ID)
+
 	_, err = f.engine.ProcessInstanceService().GetProcessInstance(f.actorScopeCtx(f.outsider, f.tenant, false), instanceID)
 	requireBPMNForbidden(t, err)
 
@@ -317,6 +331,10 @@ func TestGetProcessInstanceVariablesAuthorization(t *testing.T) {
 	instanceID := strconv.Itoa(instance.ID)
 
 	variables, err := f.engine.ProcessInstanceService().GetProcessInstanceVariables(f.actorScopeCtx(f.actor, f.tenant, false), instanceID)
+	require.NoError(t, err)
+	assert.Equal(t, "visible", variables["classification"])
+
+	variables, err = f.engine.ProcessInstanceService().GetProcessInstanceVariables(f.actorScopeCtx(f.outsider, f.tenant, true), instanceID)
 	require.NoError(t, err)
 	assert.Equal(t, "visible", variables["classification"])
 
@@ -346,6 +364,11 @@ func TestGetProcessInstanceHistoryAuthorization(t *testing.T) {
 	instanceID := strconv.Itoa(instance.ID)
 
 	history, err := f.engine.ProcessInstanceService().GetProcessInstanceHistory(f.actorScopeCtx(f.actor, f.tenant, false), instanceID)
+	require.NoError(t, err)
+	require.Len(t, history, 1)
+	assert.Equal(t, "authorization-history", history[0].HistoryID)
+
+	history, err = f.engine.ProcessInstanceService().GetProcessInstanceHistory(f.actorScopeCtx(f.outsider, f.tenant, true), instanceID)
 	require.NoError(t, err)
 	require.Len(t, history, 1)
 	assert.Equal(t, "authorization-history", history[0].HistoryID)
@@ -382,6 +405,11 @@ func TestListApprovalDecisionsAuthorization(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, numericDecisions, 1)
 	assert.Equal(t, decisions[0].ID, numericDecisions[0].ID)
+
+	elevatedDecisions, err := f.engine.TaskService().ListApprovalDecisions(f.actorScopeCtx(f.outsider, f.tenant, true), instance.ProcessInstanceID)
+	require.NoError(t, err)
+	require.Len(t, elevatedDecisions, 1)
+	assert.Equal(t, decisions[0].ID, elevatedDecisions[0].ID)
 
 	_, err = f.engine.TaskService().ListApprovalDecisions(f.actorScopeCtx(f.outsider, f.tenant, false), instance.ProcessInstanceID)
 	requireBPMNForbidden(t, err)
@@ -653,21 +681,34 @@ func TestTaskCandidateMatchingDoesNotMatchSubstring(t *testing.T) {
 
 func TestGetTaskVariablesAuthorization(t *testing.T) {
 	f := newBPMNAuthorizationFixture(t)
-	_, other := f.seedMineAndOtherTasks(t)
-	other, err := f.client.ProcessTask.UpdateOne(other).
+	mine, _ := f.seedMineAndOtherTasks(t)
+	mine, err := f.client.ProcessTask.UpdateOne(mine).
 		SetTaskVariables(map[string]interface{}{"secret": "other actor data"}).
 		Save(f.userCtx)
 	require.NoError(t, err)
 
-	variables, err := f.engine.TaskService().GetTaskVariables(f.scopedCtx(false, false, false, false), other.TaskID)
+	variables, err := f.engine.TaskService().GetTaskVariables(f.taskActorScopeCtx(f.actor, f.tenant, false), mine.TaskID)
+	require.NoError(t, err)
+	assert.Equal(t, "other actor data", variables["secret"])
+
+	variables, err = f.engine.TaskService().GetTaskVariables(f.taskActorScopeCtx(f.outsider, f.tenant, false), mine.TaskID)
 	requireBPMNForbidden(t, err)
+	assert.Nil(t, variables)
+
+	variables, err = f.engine.TaskService().GetTaskVariables(f.taskActorScopeCtx(f.outsider, f.tenant, true), mine.TaskID)
+	require.NoError(t, err)
+	assert.Equal(t, "other actor data", variables["secret"])
+
+	variables, err = f.engine.TaskService().GetTaskVariables(f.taskActorScopeCtx(f.otherActor, f.otherTenant, true), mine.TaskID)
+	require.Error(t, err)
+	assert.True(t, ent.IsNotFound(err))
 	assert.Nil(t, variables)
 }
 
 func TestGetCounterSignStatusAuthorization(t *testing.T) {
 	f := newBPMNAuthorizationFixture(t)
 	instance := f.createProcessInstance(t, f.tenant, "counter-sign-auth")
-	parent := f.createProcessTask(t, instance, f.tenant.ID, "counter-sign-parent", strconv.Itoa(f.outsider.ID), "", "")
+	parent := f.createProcessTask(t, instance, f.tenant.ID, "counter-sign-parent", strconv.Itoa(f.actor.ID), "", "")
 	_, err := f.client.ProcessTask.Create().
 		SetTaskID("task-counter-sign-child").
 		SetProcessInstanceID(instance.ID).
@@ -694,13 +735,24 @@ func TestGetCounterSignStatusAuthorization(t *testing.T) {
 		Save(f.userCtx)
 	require.NoError(t, err)
 
-	status, err := f.engine.TaskService().GetCounterSignStatus(f.scopedCtx(false, false, false, false), parent.TaskID)
-	requireBPMNForbidden(t, err)
-	assert.Nil(t, status)
-	status, err = f.engine.TaskService().GetCounterSignStatus(f.scopedCtx(false, false, true, false), parent.TaskID)
+	status, err := f.engine.TaskService().GetCounterSignStatus(f.taskActorScopeCtx(f.actor, f.tenant, false), parent.TaskID)
 	require.NoError(t, err)
 	assert.Equal(t, 1, status.Total)
 	assert.Zero(t, status.Approved)
+
+	status, err = f.engine.TaskService().GetCounterSignStatus(f.taskActorScopeCtx(f.outsider, f.tenant, false), parent.TaskID)
+	requireBPMNForbidden(t, err)
+	assert.Nil(t, status)
+
+	status, err = f.engine.TaskService().GetCounterSignStatus(f.taskActorScopeCtx(f.outsider, f.tenant, true), parent.TaskID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, status.Total)
+	assert.Zero(t, status.Approved)
+
+	status, err = f.engine.TaskService().GetCounterSignStatus(f.taskActorScopeCtx(f.otherActor, f.otherTenant, true), parent.TaskID)
+	require.Error(t, err)
+	assert.True(t, ent.IsNotFound(err))
+	assert.Nil(t, status)
 }
 
 func TestTaskStatisticsAuthorization(t *testing.T) {
