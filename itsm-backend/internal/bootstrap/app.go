@@ -527,7 +527,7 @@ func NewApplication() *Application {
 	ticketTagService := service.NewTicketTagService(client)
 	ticketTagController := controller.NewTicketTagController(ticketTagService, sugar.Desugar())
 
-	bpmnWorkflowController := controller.NewBPMNWorkflowController(processEngine, bpmnVersionService)
+	bpmnWorkflowController := controller.NewBPMNWorkflowController(processEngine, bpmnVersionService, client)
 	bpmnTemplateService := service.NewBPMNTemplateService(client)
 
 	// BPMN Process Trigger Controller (processBindingService/processTriggerService 已于 119-122 行预创建并注入 V2)

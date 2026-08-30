@@ -578,7 +578,7 @@ const kafAutomationRole = "kaf_automation"
 // and the authorization decision can never diverge.
 func (e *CustomProcessEngine) authorizeTaskActor(ctx context.Context, task *ent.ProcessTask) error {
 	if handler := e.findHandlerByTaskType(task.TaskType); handler != nil && isAsyncHandler(handler) {
-		return e.authorizeKafAutomationActor(ctx, task)
+		return e.kafDelegationService.AuthorizeTask(ctx, task)
 	}
 
 	userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
@@ -602,38 +602,6 @@ func (e *CustomProcessEngine) authorizeTaskActor(ctx context.Context, task *ent.
 		return nil
 	}
 	return fmt.Errorf("当前用户不是该任务的审批人或候选人")
-}
-
-// authorizeKafAutomationActor 校验异步委派任务（如 kaf_delegate）只能被 kaf_automation
-// 角色的账号完成，任务必须处于 delegated 状态，且账号所属租户必须与任务所属租户一致。
-// assignee/candidateUsers 对机器完成的任务没有意义——同一租户下所有委派任务都由
-// 同一个账号处理，不存在"候选人"概念。无用户上下文时直接拒绝，不复用人工任务分支
-// "无上下文即放行"的口子：委派任务必须始终有明确的认证主体。
-//
-// 租户校验是必须的：CompleteTask 在 ctx 不带租户信息时会跳过它自己的租户过滤（这是
-// 平台级调用的既有行为，不在这次改动范围内），如果这里不再校验一次，任何租户的
-// kaf_automation 账号都能完成任意其他租户的委派任务——一个跨租户越权口子。
-func (e *CustomProcessEngine) authorizeKafAutomationActor(ctx context.Context, task *ent.ProcessTask) error {
-	userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
-	if userID <= 0 {
-		return fmt.Errorf("委派任务必须由已认证的 KAF 自动化账号完成")
-	}
-	actor, err := e.client.User.Query().Where(user.ID(userID)).Only(ctx)
-	if err != nil {
-		return fmt.Errorf("KAF 自动化账号不存在: %w", err)
-	}
-	// 角色比较做大小写/首尾空白归一化，跟 middleware.RequireRole（HTTP 层的角色门禁）
-	// 保持一致，避免同一份数据在两层用不同的比较口径。
-	if strings.ToLower(strings.TrimSpace(actor.Role)) != kafAutomationRole {
-		return fmt.Errorf("当前账号不是 KAF 自动化账号，无权完成委派任务")
-	}
-	if actor.TenantID != task.TenantID {
-		return fmt.Errorf("KAF 自动化账号与委派任务所属租户不一致，拒绝跨租户完成任务")
-	}
-	if task.Status != common.ProcessTaskStatusDelegated {
-		return fmt.Errorf("委派任务当前状态不允许完成: %s", task.Status)
-	}
-	return nil
 }
 
 // mergeVariablesWithOptimisticLock 使用乐观锁合并流程实例变量，防止并发覆写
