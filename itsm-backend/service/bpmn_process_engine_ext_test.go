@@ -20,7 +20,9 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
+	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
+	"go.uber.org/zap/zaptest/observer"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1130,6 +1132,8 @@ var _ bpmn.AsyncServiceTaskHandler = (*fakeAsyncServiceTaskHandler)(nil)
 type failingUserTaskCallbackHandler struct {
 	taskType  string
 	handlerID string
+	scope     bpmn.KafActionScope
+	scopeOK   bool
 }
 
 func (h *failingUserTaskCallbackHandler) GetTaskType() string  { return h.taskType }
@@ -1137,7 +1141,8 @@ func (h *failingUserTaskCallbackHandler) GetHandlerID() string { return h.handle
 func (h *failingUserTaskCallbackHandler) Validate(context.Context, map[string]interface{}) error {
 	return nil
 }
-func (h *failingUserTaskCallbackHandler) Execute(context.Context, *ent.ProcessTask, map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *failingUserTaskCallbackHandler) Execute(ctx context.Context, _ *ent.ProcessTask, _ map[string]interface{}) (*dto.ServiceTaskResult, error) {
+	h.scope, h.scopeOK = bpmn.KafActionScopeFromContext(ctx)
 	return nil, errors.New("callback rejected Bearer secret-token")
 }
 
@@ -1145,6 +1150,8 @@ var _ bpmn.ServiceTaskHandlerInterface = (*failingUserTaskCallbackHandler)(nil)
 
 func TestCompleteKafDelegatedTask_CallbackFailureReturnsErrorAndWritesReceipt(t *testing.T) {
 	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	core, logs := observer.New(zap.WarnLevel)
+	engine.logger = zap.New(core).Sugar()
 	tenantID, _ := setupApprovalDecisionFixture(t, engine)
 	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
 	instanceID, taskID := createProcessFixture(t, engine, tenantID, "kaf-callback-failure")
@@ -1166,10 +1173,16 @@ func TestCompleteKafDelegatedTask_CallbackFailureReturnsErrorAndWritesReceipt(t 
 		SetCorrelationID(task.CorrelationID).SetProcedureRef("ssl-vpn").SetProcedureVersion("v1").
 		Save(ctx)
 	require.NoError(t, err)
-	engine.callbackRegistry.RegisterHandler(&failingUserTaskCallbackHandler{taskType: "failing_kaf_callback", handlerID: "failing_kaf_callback_handler"})
+	handler := &failingUserTaskCallbackHandler{taskType: "failing_kaf_callback", handlerID: "failing_kaf_callback_handler"}
+	engine.callbackRegistry.RegisterHandler(handler)
 
 	err = engine.CompleteKafDelegatedTask(ctx, ledger.ID, task.TaskID, map[string]interface{}{"kaf_result_summary": "done"})
 	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "Bearer")
+	require.True(t, handler.scopeOK)
+	assert.Equal(t, ledger.ID, handler.scope.LedgerID())
+	assert.Equal(t, task.TaskID, handler.scope.TaskID())
+	assert.Equal(t, "run-1", handler.scope.RunID())
 	receipt, err := engine.client.KafTaskCompletionReceipt.Query().Where(
 		kaftaskcompletionreceipt.LedgerIDEQ(ledger.ID),
 	).Only(ctx)
@@ -1177,6 +1190,9 @@ func TestCompleteKafDelegatedTask_CallbackFailureReturnsErrorAndWritesReceipt(t 
 	assert.Equal(t, "callback_failed", receipt.Status)
 	assert.Equal(t, "callback_failed", receipt.ErrorCode)
 	assert.NotContains(t, receipt.ErrorCode, "Bearer")
+	for _, entry := range logs.All() {
+		assert.NotContains(t, entry.Message+fmt.Sprint(entry.Context), "Bearer")
+	}
 	_, err = engine.client.ProcessInstance.Get(ctx, instanceID)
 	require.NoError(t, err)
 }

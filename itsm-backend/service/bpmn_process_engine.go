@@ -343,6 +343,11 @@ func (e *CustomProcessEngine) CompleteKafDelegatedTask(ctx context.Context, ledg
 	if ledger.TaskID != taskID {
 		return fmt.Errorf("KAF completion ledger does not match task")
 	}
+	ctx = bpmn.WithKafActionScope(ctx, bpmn.NewKafActionScope(
+		ledger.ID, ledger.TenantID, ledger.TaskID, ledger.RunID, ledger.StepID,
+		ledger.Action, ledger.IdempotencyKey, ledger.CorrelationID,
+		ledger.ProcedureRef, ledger.ProcedureVersion,
+	))
 	receipt, err := e.ensureKafCompletionReceipt(ctx, ledgerID, ledger.TenantID, taskID)
 	if err != nil {
 		return err
@@ -618,8 +623,8 @@ func (e *CustomProcessEngine) dispatchUserTaskCallback(ctx context.Context, task
 	if _, err := handler.Execute(ctx, task, callbackVars); err != nil {
 		e.logger.Warnw("UserTask 完成后回调执行失败",
 			"taskID", task.TaskID, "taskDefinitionKey", task.TaskDefinitionKey,
-			"serviceTaskType", serviceTaskType, "error", err)
-		return err
+			"serviceTaskType", serviceTaskType, "errorCode", "user_task_callback_failed")
+		return errors.New("user task callback failed")
 	}
 	e.logger.Infow("UserTask 完成后回调执行成功",
 		"taskID", task.TaskID, "taskDefinitionKey", task.TaskDefinitionKey,

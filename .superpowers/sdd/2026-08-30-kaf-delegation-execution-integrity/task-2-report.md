@@ -35,3 +35,11 @@ Implementation commit: `1e6d3174 feat(bpmn): coordinate KAF completion receipts`
 - The public generic `ProcessEngine` interface was not changed.
 - The protected, user-owned untracked historical review artifacts were not modified or staged.
 - No delegation or routine approval wait was used, per the task brief.
+
+## Round 1 Review Fixes
+
+- Added `bpmn.KafActionScope`: an exported typed scope with immutable private fields, read-only accessors, `WithKafActionScope`, and `KafActionScopeFromContext`. The action coordinator attaches the ledger-derived scope for both first completion and recovery; `CustomProcessEngine.CompleteKafDelegatedTask` also derives and installs the same scope, so direct engine callers and recovery callbacks cannot lose it.
+- Callback handlers can now read the ledger ID, tenant, task, run/step, action, canonical idempotency key, correlation ID, and procedure identity from context without trusting callback variables.
+- Replaced raw callback-error logging and propagation with the stable `user task callback failed` error and `user_task_callback_failed` log code. Receipt persistence remains the stable `callback_failed` code. The callback's original error text is neither logged nor persisted.
+- Strengthened recovery evidence with the real `CustomProcessEngine`: an Ent hook counts `ProcessTask` transitions to `completed` after setup, and recovery asserts zero attempts while the callback handler runs once and receives the immutable action scope.
+- TDD red phase for this round: focused tests failed because `bpmn.KafActionScope` and `bpmn.KafActionScopeFromContext` did not exist. After adding the shared contract and propagation, the focused tests passed.

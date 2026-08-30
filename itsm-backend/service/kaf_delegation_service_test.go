@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"itsm-backend/common"
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/enttest"
@@ -253,6 +254,25 @@ type statefulKafCompletionEngine struct {
 	calls  int
 }
 
+type scopeCapturingKafCallbackHandler struct {
+	scope   bpmn.KafActionScope
+	scopeOK bool
+	calls   int
+}
+
+func (h *scopeCapturingKafCallbackHandler) GetTaskType() string  { return "kaf_scope_capture" }
+func (h *scopeCapturingKafCallbackHandler) GetHandlerID() string { return "kaf_scope_capture_handler" }
+func (h *scopeCapturingKafCallbackHandler) Validate(context.Context, map[string]interface{}) error {
+	return nil
+}
+func (h *scopeCapturingKafCallbackHandler) Execute(ctx context.Context, _ *ent.ProcessTask, _ map[string]interface{}) (*dto.ServiceTaskResult, error) {
+	h.calls++
+	h.scope, h.scopeOK = bpmn.KafActionScopeFromContext(ctx)
+	return &dto.ServiceTaskResult{Success: true}, nil
+}
+
+var _ bpmn.ServiceTaskHandlerInterface = (*scopeCapturingKafCallbackHandler)(nil)
+
 func (e *statefulKafCompletionEngine) CompleteTask(ctx context.Context, taskID string, variables map[string]interface{}) error {
 	e.calls++
 	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
@@ -383,6 +403,7 @@ func TestReconcileCompletedTaskWithoutSuccessfulReceipt_DoesNotCompleteBPMNAgain
 	engine, svc, task, ctx := newKafActionFixture(t)
 	req := validCompleteRequest(task, "run-1", "finish")
 	completedVariables := cloneKafVariables(task.TaskVariables)
+	completedVariables[bpmnMetaDataServiceTaskType] = "kaf_scope_capture"
 	completedVariables["kaf_execution"] = map[string]string{
 		"run_id": "run-1", "step_id": "finish", "procedure_ref": "ssl-vpn", "procedure_version": "v1",
 	}
@@ -404,10 +425,29 @@ func TestReconcileCompletedTaskWithoutSuccessfulReceipt_DoesNotCompleteBPMNAgain
 		SetStatus("callback_pending").
 		Save(ctx)
 	require.NoError(t, err)
+	handler := &scopeCapturingKafCallbackHandler{}
+	engine.callbackRegistry.RegisterHandler(handler)
+	completionAttempts := 0
+	svc.client.ProcessTask.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(hookCtx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			if processMutation, ok := mutation.(*ent.ProcessTaskMutation); ok {
+				if status, exists := processMutation.Status(); exists && status == common.ProcessTaskStatusCompleted {
+					completionAttempts++
+				}
+			}
+			return next.Mutate(hookCtx, mutation)
+		})
+	})
 
 	result, err := svc.ExecuteAction(ctx, task.TaskID, req, engine)
 	require.NoError(t, err)
 	assert.Equal(t, KafActionAlreadyApplied, result.ResultStatus)
+	assert.Zero(t, completionAttempts)
+	assert.Equal(t, 1, handler.calls)
+	require.True(t, handler.scopeOK)
+	assert.Equal(t, ledger.ID, handler.scope.LedgerID())
+	assert.Equal(t, task.TaskID, handler.scope.TaskID())
+	assert.Equal(t, req.Execution.IdempotencyKey, handler.scope.IdempotencyKey())
 	receipt, err := svc.client.KafTaskCompletionReceipt.Query().Where(
 		kaftaskcompletionreceipt.LedgerIDEQ(ledger.ID),
 	).Only(ctx)
