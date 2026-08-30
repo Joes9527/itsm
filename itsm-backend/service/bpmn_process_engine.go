@@ -1851,18 +1851,18 @@ type ListProcessInstancesRequest struct {
 }
 
 type ListUserTasksRequest struct {
-	Assignee        string `json:"assignee"`
-	CandidateUsers  string `json:"candidateUsers"`
-	CandidateGroups string `json:"candidateGroups"`
+	Assignee        string `json:"assignee" form:"assignee"`
+	CandidateUsers  string `json:"candidateUsers" form:"candidateUsers"`
+	CandidateGroups string `json:"candidateGroups" form:"candidateGroups"`
 	// UserID 为「我的待办」语义：查询“分配给我 OR 我在候选人 OR 我所在组作为候选组”的任务。
 	// 传入后：Assignee/CandidateUsers/CandidateGroups 会被忽略（可选透传）。
-	UserID               int    `json:"userId"`
-	Status               string `json:"status"`
-	ProcessDefinitionKey string `json:"processDefinitionKey"`
-	ProcessInstanceID    int    `json:"processInstanceId"`
-	TenantID             int    `json:"tenantId"`
-	Page                 int    `json:"page"`
-	PageSize             int    `json:"pageSize"`
+	UserID               int    `json:"userId" form:"userId"`
+	Status               string `json:"status" form:"status"`
+	ProcessDefinitionKey string `json:"processDefinitionKey" form:"processDefinitionKey"`
+	ProcessInstanceID    int    `json:"processInstanceId" form:"processInstanceId"`
+	TenantID             int    `json:"tenantId" form:"tenantId"`
+	Page                 int    `json:"page" form:"page"`
+	PageSize             int    `json:"pageSize" form:"pageSize"`
 }
 
 type TaskStatisticsRequest struct {
@@ -2460,33 +2460,78 @@ type bpmnTaskService struct {
 	engine *CustomProcessEngine
 }
 
-// GetTask 根据任务ID (BPMN标准task_id字符串)获取任务
-func (s *bpmnTaskService) GetTask(ctx context.Context, taskID string) (*ent.ProcessTask, error) {
-	query := s.client.ProcessTask.Query().
-		Where(processtask.TaskID(taskID))
-	if tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int); tenantID > 0 {
-		query = query.Where(processtask.TenantID(tenantID))
+func (s *bpmnTaskService) loadTaskByKey(ctx context.Context, taskID string, tenantID int) (*ent.ProcessTask, error) {
+	if tenantID <= 0 {
+		return nil, common.NewForbiddenError("缺少 BPMN 任务租户上下文")
 	}
-	task, err := query.First(ctx)
+	task, err := s.client.ProcessTask.Query().
+		Where(processtask.TaskID(taskID), processtask.TenantID(tenantID)).
+		First(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("获取任务失败: %w", err)
 	}
+	return task, nil
+}
 
+func (s *bpmnTaskService) loadTaskByID(ctx context.Context, id, tenantID int) (*ent.ProcessTask, error) {
+	if tenantID <= 0 {
+		return nil, common.NewForbiddenError("缺少 BPMN 任务租户上下文")
+	}
+	task, err := s.client.ProcessTask.Query().
+		Where(processtask.ID(id), processtask.TenantID(tenantID)).
+		First(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("获取任务失败: %w", err)
+	}
+	return task, nil
+}
+
+func (s *bpmnTaskService) authorizeTaskRead(ctx context.Context, task *ent.ProcessTask, scope BPMNAccessScope) error {
+	if task == nil || task.TenantID != scope.TenantID {
+		return common.NewForbiddenError("无权读取任务")
+	}
+	if scope.CanReadAllTasks {
+		return nil
+	}
+	if s.participationResolver == nil {
+		return common.NewForbiddenError("无权读取任务")
+	}
+	actor, err := s.participationResolver.resolveActor(ctx, scope)
+	if err != nil || !s.participationResolver.matchesTask(task, actor) {
+		return common.NewForbiddenError("无权读取任务")
+	}
+	return nil
+}
+
+// GetTask 根据任务ID (BPMN标准task_id字符串)获取任务
+func (s *bpmnTaskService) GetTask(ctx context.Context, taskID string) (*ent.ProcessTask, error) {
+	scope, err := BPMNAccessScopeFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	task, err := s.loadTaskByKey(ctx, taskID, scope.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.authorizeTaskRead(ctx, task, scope); err != nil {
+		return nil, err
+	}
 	return task, nil
 }
 
 // GetTaskByID 根据数据库自增ID获取任务
 func (s *bpmnTaskService) GetTaskByID(ctx context.Context, id int) (*ent.ProcessTask, error) {
-	query := s.client.ProcessTask.Query().
-		Where(processtask.ID(id))
-	if tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int); tenantID > 0 {
-		query = query.Where(processtask.TenantID(tenantID))
-	}
-	task, err := query.First(ctx)
+	scope, err := BPMNAccessScopeFromContext(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("获取任务失败: %w", err)
+		return nil, err
 	}
-
+	task, err := s.loadTaskByID(ctx, id, scope.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.authorizeTaskRead(ctx, task, scope); err != nil {
+		return nil, err
+	}
 	return task, nil
 }
 
@@ -2507,56 +2552,30 @@ func (s *bpmnTaskService) CompleteTaskByID(ctx context.Context, id int, variable
 }
 
 func (s *bpmnTaskService) ListUserTasks(ctx context.Context, req *ListUserTasksRequest) ([]*ent.ProcessTask, int, error) {
+	scope, err := BPMNAccessScopeFromContext(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	req.TenantID = scope.TenantID
 	s.logger.Debugw("ListUserTasks called", "assignee", req.Assignee, "userID", req.UserID, "tenantID", req.TenantID)
-	query := s.client.ProcessTask.Query()
+	query := s.client.ProcessTask.Query().Where(processtask.TenantID(scope.TenantID))
 
-	// 「我的待办」语义：UserID 透传时，查出“分配给我 OR 我是候选人 OR 我所在组是候选组”的任务。
-	// 这样能同时覆盖 assignee / candidate_users / candidate_groups 三种途径。
-	if req.UserID > 0 {
-		tenantID := req.TenantID
-		if tenantID == 0 {
-			if v, ok := ctx.Value(bpmn.BPMNTenantIDContextKey).(int); ok {
-				tenantID = v
-			}
+	var actor *bpmnActorIdentity
+	if !scope.CanReadAllTasks {
+		if s.participationResolver == nil {
+			return nil, 0, common.NewForbiddenError("无权读取任务")
 		}
-		userIDStr := strconv.Itoa(req.UserID)
-
-		// 1. 取得该用户所在的组名（逗号分隔）
-		userGroupsCSV := ""
-		if s.groupResolver != nil {
-			groups, gErr := s.groupResolver.GetUserGroupNames(ctx, tenantID, req.UserID)
-			if gErr != nil {
-				s.logger.Warnw("查询用户所属组失败", "error", gErr, "userID", req.UserID)
-			} else {
-				userGroupsCSV = groups
-			}
+		actor, err = s.participationResolver.resolveActor(ctx, scope)
+		if err != nil {
+			return nil, 0, common.NewForbiddenError("无权读取任务")
 		}
-
-		// 2. OR 复合查询：assignee == me OR candidate_users 包含我 OR candidate_groups 包含我所在组
-		orPreds := []predicate.ProcessTask{
-			processtask.Assignee(userIDStr),
-			processtask.CandidateUsersContains(userIDStr),
+	} else if req.UserID > 0 {
+		requestedScope := scope
+		requestedScope.UserID = req.UserID
+		actor, err = s.participationResolver.resolveActor(ctx, requestedScope)
+		if err != nil {
+			return nil, 0, fmt.Errorf("解析任务用户范围失败: %w", err)
 		}
-		// 同时以 username/email 形式匹配 assignee 和 candidate_users——两个字段都可能存的是
-		// username/email/ID 混合（例如流程设计器"受理人"选择器写入的是 username，而
-		// resolveApprovalAssignee 等自动解析路径写入的是数字 ID），只匹配 ID 会导致通过
-		// 设计器指定受理人的任务在"我的待办"里对该用户不可见（2026-08-18 实测复现）。
-		if u, err := s.client.User.Get(ctx, req.UserID); err == nil && u != nil {
-			username := strings.TrimSpace(u.Username)
-			if username != "" && username != userIDStr {
-				orPreds = append(orPreds, processtask.Assignee(username))
-				orPreds = append(orPreds, processtask.CandidateUsersContains(username))
-			}
-			email := strings.TrimSpace(u.Email)
-			if email != "" && email != userIDStr && email != username {
-				orPreds = append(orPreds, processtask.Assignee(email))
-				orPreds = append(orPreds, processtask.CandidateUsersContains(email))
-			}
-		}
-		if userGroupsCSV != "" {
-			orPreds = append(orPreds, processtask.CandidateGroupsContains(userGroupsCSV))
-		}
-		query = query.Where(processtask.Or(orPreds...))
 	} else {
 		if req.Assignee != "" {
 			query = query.Where(processtask.Assignee(req.Assignee))
@@ -2568,6 +2587,19 @@ func (s *bpmnTaskService) ListUserTasks(ctx context.Context, req *ListUserTasksR
 			query = query.Where(processtask.CandidateGroupsContains(req.CandidateGroups))
 		}
 	}
+	if actor != nil {
+		prefilter := make([]predicate.ProcessTask, 0, len(actor.UserTokens)*2+len(actor.GroupTokens))
+		for token := range actor.UserTokens {
+			prefilter = append(prefilter,
+				processtask.AssigneeContainsFold(token),
+				processtask.CandidateUsersContainsFold(token),
+			)
+		}
+		for token := range actor.GroupTokens {
+			prefilter = append(prefilter, processtask.CandidateGroupsContainsFold(token))
+		}
+		query = query.Where(processtask.Or(prefilter...))
+	}
 	if req.Status != "" {
 		query = query.Where(processtask.Status(req.Status))
 	}
@@ -2577,23 +2609,46 @@ func (s *bpmnTaskService) ListUserTasks(ctx context.Context, req *ListUserTasksR
 	if req.ProcessInstanceID > 0 {
 		query = query.Where(processtask.ProcessInstanceID(req.ProcessInstanceID))
 	}
-	if req.TenantID > 0 {
-		query = query.Where(processtask.TenantID(req.TenantID))
-	}
-
-	total, err := query.Count(ctx)
-	if err != nil {
-		return nil, 0, fmt.Errorf("获取任务总数失败: %w", err)
-	}
-
-	if req.Page > 0 && req.PageSize > 0 {
-		offset := (req.Page - 1) * req.PageSize
-		query = query.Offset(offset).Limit(req.PageSize)
+	if actor == nil {
+		total, err := query.Count(ctx)
+		if err != nil {
+			return nil, 0, fmt.Errorf("获取任务总数失败: %w", err)
+		}
+		if req.Page > 0 && req.PageSize > 0 {
+			query = query.Offset((req.Page - 1) * req.PageSize).Limit(req.PageSize)
+		}
+		tasks, err := query.Order(ent.Desc(processtask.FieldCreatedTime)).All(ctx)
+		if err != nil {
+			return nil, 0, fmt.Errorf("获取任务列表失败: %w", err)
+		}
+		return tasks, total, nil
 	}
 
 	tasks, err := query.Order(ent.Desc(processtask.FieldCreatedTime)).All(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("获取任务列表失败: %w", err)
+	}
+	if actor != nil {
+		filtered := make([]*ent.ProcessTask, 0, len(tasks))
+		for _, task := range tasks {
+			if s.participationResolver.matchesTask(task, actor) {
+				filtered = append(filtered, task)
+			}
+		}
+		tasks = filtered
+	}
+	total := len(tasks)
+	if req.Page > 0 && req.PageSize > 0 {
+		start := (req.Page - 1) * req.PageSize
+		if start >= total {
+			tasks = nil
+		} else {
+			end := start + req.PageSize
+			if end > total {
+				end = total
+			}
+			tasks = tasks[start:end]
+		}
 	}
 
 	return tasks, total, nil
@@ -2619,7 +2674,7 @@ func (s *bpmnTaskService) ListUserTaskViews(ctx context.Context, req *ListUserTa
 	instanceMap := make(map[int]*ent.ProcessInstance, len(instanceIDs))
 	if len(instanceIDs) > 0 {
 		instances, err := s.client.ProcessInstance.Query().
-			Where(processinstance.IDIn(instanceIDs...)).
+			Where(processinstance.IDIn(instanceIDs...), processinstance.TenantID(req.TenantID)).
 			All(ctx)
 		if err != nil {
 			return nil, 0, fmt.Errorf("加载任务所属流程实例失败: %w", err)
@@ -2899,7 +2954,15 @@ func (s *bpmnTaskService) BatchAssignTasks(ctx context.Context, taskIDs []string
 }
 
 func (s *bpmnTaskService) GetTaskStatistics(ctx context.Context, req *TaskStatisticsRequest) (*TaskStatistics, error) {
-	query := s.client.ProcessTask.Query()
+	scope, err := BPMNAccessScopeFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !scope.CanReadAllTasks {
+		return nil, common.NewForbiddenError("无权读取任务统计")
+	}
+	req.TenantID = scope.TenantID
+	query := s.client.ProcessTask.Query().Where(processtask.TenantID(scope.TenantID))
 
 	if req.ProcessDefinitionKey != "" {
 		query = query.Where(processtask.ProcessDefinitionKey(req.ProcessDefinitionKey))
@@ -2909,9 +2972,6 @@ func (s *bpmnTaskService) GetTaskStatistics(ctx context.Context, req *TaskStatis
 	}
 	if req.Status != "" {
 		query = query.Where(processtask.Status(req.Status))
-	}
-	if req.TenantID > 0 {
-		query = query.Where(processtask.TenantID(req.TenantID))
 	}
 	if req.StartDate != nil {
 		query = query.Where(processtask.CreatedTimeGTE(*req.StartDate))
@@ -3032,9 +3092,13 @@ func (s *bpmnTaskService) CreateCounterSignTasks(ctx context.Context, parentTask
 
 // GetCounterSignStatus 获取会签状态
 func (s *bpmnTaskService) GetCounterSignStatus(ctx context.Context, parentTaskID string) (*CounterSignStatus, error) {
+	parent, err := s.GetTask(ctx, parentTaskID)
+	if err != nil {
+		return nil, err
+	}
 	// 获取所有会签子任务
 	subTasks, err := s.client.ProcessTask.Query().
-		Where(processtask.ParentTaskID(parentTaskID)).
+		Where(processtask.ParentTaskID(parentTaskID), processtask.TenantID(parent.TenantID)).
 		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("获取会签子任务失败: %w", err)
@@ -3069,10 +3133,8 @@ func (s *bpmnTaskService) GetCounterSignStatus(ctx context.Context, parentTaskID
 	}
 
 	threshold := status.Total
-	if parent, err := s.client.ProcessTask.Query().Where(processtask.TaskID(parentTaskID)).Only(ctx); err == nil {
-		if value, ok := numericInt(parent.TaskVariables["threshold"]); ok && value > 0 {
-			threshold = value
-		}
+	if value, ok := numericInt(parent.TaskVariables["threshold"]); ok && value > 0 {
+		threshold = value
 	}
 	if status.Approved >= threshold {
 		status.Status = "approved"

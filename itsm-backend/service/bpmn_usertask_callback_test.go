@@ -29,6 +29,15 @@ func setupUserTaskCallbackEnv(t *testing.T) (*ent.Client, ProcessEngine, context
 		SetStatus("active").
 		Save(ctx)
 	require.NoError(t, err)
+	reader, err := client.User.Create().
+		SetUsername("usertask-callback-reader").
+		SetEmail("usertask-callback-reader@example.test").
+		SetName("UserTask Callback Reader").
+		SetPasswordHash("test").
+		SetActive(true).
+		SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
 
 	logger := zap.NewNop().Sugar()
 	engine := NewCustomProcessEngine(client, logger)
@@ -37,6 +46,7 @@ func setupUserTaskCallbackEnv(t *testing.T) (*ent.Client, ProcessEngine, context
 	require.NoError(t, err)
 
 	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+	ctx = WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: reader.ID, TenantID: tenant.ID, CanReadAllTasks: true})
 	return client, engine, ctx, tenant.ID
 }
 

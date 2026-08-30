@@ -393,6 +393,140 @@ func TestInstanceStatisticsAuthorization(t *testing.T) {
 	assert.Equal(t, f.tenant.ID, req.TenantID)
 }
 
+func TestListUserTasksForcesCallerScopeWithoutTaskRead(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	mine, _ := f.seedMineAndOtherTasks(t)
+	req := &ListUserTasksRequest{
+		TenantID:       f.otherTenant.ID,
+		UserID:         f.otherActor.ID,
+		Assignee:       strconv.Itoa(f.outsider.ID),
+		CandidateUsers: f.outsider.Username,
+		Page:           1,
+		PageSize:       20,
+	}
+
+	rows, total, err := f.engine.TaskService().ListUserTasks(f.scopedCtx(false, false, false, false), req)
+	require.NoError(t, err)
+	require.Equal(t, 1, total)
+	require.Len(t, rows, 1)
+	assert.Equal(t, mine.TaskID, rows[0].TaskID)
+}
+
+func TestGetTaskRejectsSameTenantNonParticipant(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	_, other := f.seedMineAndOtherTasks(t)
+
+	_, err := f.engine.TaskService().GetTask(f.scopedCtx(false, false, false, false), other.TaskID)
+	requireBPMNForbidden(t, err)
+	_, err = f.engine.TaskService().GetTaskByID(f.scopedCtx(false, false, false, false), other.ID)
+	requireBPMNForbidden(t, err)
+}
+
+func TestGetTaskRejectsCrossTenant(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	instance := f.createProcessInstance(t, f.otherTenant, "cross-tenant-task-read")
+	task := f.createProcessTask(t, instance, f.otherTenant.ID, "cross-tenant-task-read", strconv.Itoa(f.otherActor.ID), "", "")
+
+	_, err := f.engine.TaskService().GetTask(f.scopedCtx(false, false, true, false), task.TaskID)
+	require.Error(t, err)
+	assert.True(t, ent.IsNotFound(err), "cross-tenant task lookup must be indistinguishable from absence: %v", err)
+	assert.NotContains(t, err.Error(), task.TaskName)
+}
+
+func TestGetTaskAllowsElevatedReader(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	_, other := f.seedMineAndOtherTasks(t)
+
+	got, err := f.engine.TaskService().GetTask(f.scopedCtx(false, false, true, false), other.TaskID)
+	require.NoError(t, err)
+	assert.Equal(t, other.ID, got.ID)
+	got, err = f.engine.TaskService().GetTaskByID(f.scopedCtx(false, false, true, false), other.ID)
+	require.NoError(t, err)
+	assert.Equal(t, other.ID, got.ID)
+}
+
+func TestTaskCandidateMatchingDoesNotMatchSubstring(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	instance := f.createProcessInstance(t, f.tenant, "substring-task-read")
+	task := f.createProcessTask(t, instance, f.tenant.ID, "substring-task-read", "", strconv.Itoa(f.actor.ID)+"1", "")
+
+	_, err := f.engine.TaskService().GetTask(f.scopedCtx(false, false, false, false), task.TaskID)
+	requireBPMNForbidden(t, err)
+}
+
+func TestGetTaskVariablesAuthorization(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	_, other := f.seedMineAndOtherTasks(t)
+	other, err := f.client.ProcessTask.UpdateOne(other).
+		SetTaskVariables(map[string]interface{}{"secret": "other actor data"}).
+		Save(f.userCtx)
+	require.NoError(t, err)
+
+	variables, err := f.engine.TaskService().GetTaskVariables(f.scopedCtx(false, false, false, false), other.TaskID)
+	requireBPMNForbidden(t, err)
+	assert.Nil(t, variables)
+}
+
+func TestGetCounterSignStatusAuthorization(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	instance := f.createProcessInstance(t, f.tenant, "counter-sign-auth")
+	parent := f.createProcessTask(t, instance, f.tenant.ID, "counter-sign-parent", strconv.Itoa(f.outsider.ID), "", "")
+	_, err := f.client.ProcessTask.Create().
+		SetTaskID("task-counter-sign-child").
+		SetProcessInstanceID(instance.ID).
+		SetProcessDefinitionKey(instance.ProcessDefinitionKey).
+		SetTaskDefinitionKey("counter-sign-child").
+		SetTaskName("Counter sign child").
+		SetParentTaskID(parent.TaskID).
+		SetAssignee(strconv.Itoa(f.actor.ID)).
+		SetTenantID(f.tenant.ID).
+		Save(f.userCtx)
+	require.NoError(t, err)
+	otherInstance := f.createProcessInstance(t, f.otherTenant, "counter-sign-auth-other")
+	_, err = f.client.ProcessTask.Create().
+		SetTaskID("task-counter-sign-child-other").
+		SetProcessInstanceID(otherInstance.ID).
+		SetProcessDefinitionKey(otherInstance.ProcessDefinitionKey).
+		SetTaskDefinitionKey("counter-sign-child-other").
+		SetTaskName("Counter sign child other tenant").
+		SetParentTaskID(parent.TaskID).
+		SetAssignee(strconv.Itoa(f.otherActor.ID)).
+		SetStatus("completed").
+		SetTaskVariables(map[string]interface{}{"approved": true}).
+		SetTenantID(f.otherTenant.ID).
+		Save(f.userCtx)
+	require.NoError(t, err)
+
+	status, err := f.engine.TaskService().GetCounterSignStatus(f.scopedCtx(false, false, false, false), parent.TaskID)
+	requireBPMNForbidden(t, err)
+	assert.Nil(t, status)
+	status, err = f.engine.TaskService().GetCounterSignStatus(f.scopedCtx(false, false, true, false), parent.TaskID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, status.Total)
+	assert.Zero(t, status.Approved)
+}
+
+func TestTaskStatisticsAuthorization(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	mine, _ := f.seedMineAndOtherTasks(t)
+	otherInstance := f.createProcessInstance(t, f.otherTenant, "task-statistics-other")
+	f.createProcessTask(t, otherInstance, f.otherTenant.ID, "task-statistics-other", strconv.Itoa(f.otherActor.ID), "", "")
+
+	_, err := f.engine.TaskService().GetTaskStatistics(
+		f.scopedCtx(false, false, false, false),
+		&TaskStatisticsRequest{TenantID: f.tenant.ID},
+	)
+	requireBPMNForbidden(t, err)
+
+	req := &TaskStatisticsRequest{TenantID: f.otherTenant.ID}
+	stats, err := f.engine.TaskService().GetTaskStatistics(f.scopedCtx(false, false, true, false), req)
+	require.NoError(t, err)
+	assert.Equal(t, 2, stats.TotalTasks)
+	assert.Equal(t, f.tenant.ID, req.TenantID)
+	assert.Contains(t, stats.AssigneeBreakdown, mine.Assignee)
+	assert.NotContains(t, stats.AssigneeBreakdown, strconv.Itoa(f.otherActor.ID))
+}
+
 func (f *bpmnAuthorizationFixture) seedParticipantAndNonParticipantInstances(t *testing.T) (*ent.ProcessInstance, *ent.ProcessInstance) {
 	t.Helper()
 	visible := f.createProcessInstance(t, f.tenant, "participant-visible")
@@ -438,9 +572,17 @@ func (f *bpmnAuthorizationFixture) createProcessInstance(t *testing.T, tenant *e
 	return instance
 }
 
-func (f *bpmnAuthorizationFixture) createProcessTask(t *testing.T, instance *ent.ProcessInstance, tenantID int, suffix, assignee, candidateUsers, candidateGroups string) {
+func (f *bpmnAuthorizationFixture) seedMineAndOtherTasks(t *testing.T) (*ent.ProcessTask, *ent.ProcessTask) {
 	t.Helper()
-	_, err := f.client.ProcessTask.Create().
+	instance := f.createProcessInstance(t, f.tenant, "task-read-scope")
+	mine := f.createProcessTask(t, instance, f.tenant.ID, "task-read-mine", strconv.Itoa(f.actor.ID), "", "")
+	other := f.createProcessTask(t, instance, f.tenant.ID, "task-read-other", strconv.Itoa(f.outsider.ID), f.outsider.Username, "")
+	return mine, other
+}
+
+func (f *bpmnAuthorizationFixture) createProcessTask(t *testing.T, instance *ent.ProcessInstance, tenantID int, suffix, assignee, candidateUsers, candidateGroups string) *ent.ProcessTask {
+	t.Helper()
+	task, err := f.client.ProcessTask.Create().
 		SetTaskID("task-" + suffix).
 		SetProcessInstanceID(instance.ID).
 		SetProcessDefinitionKey(instance.ProcessDefinitionKey).
@@ -452,4 +594,5 @@ func (f *bpmnAuthorizationFixture) createProcessTask(t *testing.T, instance *ent
 		SetTenantID(tenantID).
 		Save(f.userCtx)
 	require.NoError(t, err)
+	return task
 }

@@ -617,7 +617,7 @@ func (c *BPMNWorkflowController) TerminateProcess(ctx *gin.Context) {
 	common.SuccessWithMessage(ctx, "流程实例终止成功", nil)
 }
 
-// ListUserTasks 获取用户任务列表（默认「我的待办」语义）
+// ListUserTasks 获取用户任务列表
 func (c *BPMNWorkflowController) ListUserTasks(ctx *gin.Context) {
 	var req service.ListUserTasksRequest
 	if err := ctx.ShouldBindQuery(&req); err != nil {
@@ -625,30 +625,11 @@ func (c *BPMNWorkflowController) ListUserTasks(ctx *gin.Context) {
 		return
 	}
 
-	// 从JWT获取租户ID
-	tenantID, exists := ctx.Get("tenant_id")
-	if !exists {
-		common.AuthFailed(ctx, "未授权访问")
+	workflowCtx, tenantID, ok := getBPMNTenantContext(ctx)
+	if !ok {
 		return
 	}
-	req.TenantID = tenantID.(int)
-
-	// 如果调用方没有指定 user_id / assignee / candidate_users，则按「我的待办」语义
-	// 使用当前登录用户 ID 进行过滤（包含 assign、candidate、组员命中）。
-	if req.UserID <= 0 && req.Assignee == "" && req.CandidateUsers == "" {
-		if uid, ok := ctx.Get("user_id"); ok {
-			switch v := uid.(type) {
-			case int:
-				req.UserID = v
-			case int64:
-				req.UserID = int(v)
-			case string:
-				if id, err := strconv.Atoi(v); err == nil {
-					req.UserID = id
-				}
-			}
-		}
-	}
+	req.TenantID = tenantID
 
 	// 设置默认分页参数
 	if req.Page <= 0 {
@@ -658,7 +639,7 @@ func (c *BPMNWorkflowController) ListUserTasks(ctx *gin.Context) {
 		req.PageSize = 20
 	}
 
-	tasks, total, err := c.processEngine.TaskService().ListUserTaskViews(ctx, &req)
+	tasks, total, err := c.processEngine.TaskService().ListUserTaskViews(workflowCtx, &req)
 	if err != nil {
 		common.InternalError(ctx, "获取用户任务列表失败: "+err.Error())
 		return
@@ -998,15 +979,13 @@ func (c *BPMNWorkflowController) GetTaskStats(ctx *gin.Context) {
 		return
 	}
 
-	// 从JWT获取租户ID
-	tenantID, exists := ctx.Get("tenant_id")
-	if !exists {
-		common.AuthFailed(ctx, "未授权访问")
+	workflowCtx, tenantID, ok := getBPMNTenantContext(ctx)
+	if !ok {
 		return
 	}
-	req.TenantID = tenantID.(int)
+	req.TenantID = tenantID
 
-	stats, err := c.processEngine.TaskService().GetTaskStatistics(ctx, &req)
+	stats, err := c.processEngine.TaskService().GetTaskStatistics(workflowCtx, &req)
 	if err != nil {
 		common.InternalError(ctx, "获取任务统计失败: "+err.Error())
 		return

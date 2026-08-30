@@ -35,6 +35,8 @@ type fakeTaskService struct {
 	historyInstanceKey string
 	historyDecisions   []*ent.ProcessApprovalDecision
 	historyErr         error
+	listCtx            context.Context
+	statsCtx           context.Context
 }
 
 func (f *fakeTaskService) GetTask(ctx context.Context, taskID string) (*ent.ProcessTask, error) {
@@ -64,6 +66,7 @@ func (f *fakeTaskService) ListUserTasks(ctx context.Context, req *service.ListUs
 }
 
 func (f *fakeTaskService) ListUserTaskViews(ctx context.Context, req *service.ListUserTasksRequest) ([]*dto.BPMNTaskResponse, int, error) {
+	f.listCtx = ctx
 	return nil, 0, nil
 }
 
@@ -110,7 +113,8 @@ func (f *fakeTaskService) BatchAssignTasks(ctx context.Context, taskIDs []string
 }
 
 func (f *fakeTaskService) GetTaskStatistics(ctx context.Context, req *service.TaskStatisticsRequest) (*service.TaskStatistics, error) {
-	return nil, nil
+	f.statsCtx = ctx
+	return &service.TaskStatistics{}, nil
 }
 
 func (f *fakeTaskService) ListApprovalDecisions(ctx context.Context, processInstanceKey string) ([]*ent.ProcessApprovalDecision, error) {

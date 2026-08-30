@@ -203,6 +203,7 @@ func TestBackfillOne_MigratesRunningProcessInstanceBusinessKey_EndToEnd(t *testi
 	//    SubmitChange 的行为：BusinessID: legacy.ID，不是 workItemID（那时候还不存在）。
 	engine := service.NewCustomProcessEngine(client, logger)
 	tenantCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+	tenantCtx = service.WithBPMNAccessScope(tenantCtx, service.BPMNAccessScope{UserID: requester.ID, TenantID: tenant.ID, CanReadAllTasks: true})
 	_, err = service.NewBPMNTemplateService(client).LoadAndDeployTemplates(tenantCtx, tenant.ID)
 	require.NoError(t, err)
 

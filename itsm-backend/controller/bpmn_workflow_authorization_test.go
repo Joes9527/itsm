@@ -2,11 +2,14 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/middleware"
@@ -16,6 +19,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 type contextCapturingProcessInstanceService struct {
@@ -154,4 +158,132 @@ func TestProcessInstanceListAndStatsPassWorkflowContext(t *testing.T) {
 		assert.Equal(t, 7, scope.UserID)
 		assert.Equal(t, 42, scope.TenantID)
 	}
+}
+
+func TestTaskListAndStatsPassWorkflowContext(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	client := enttest.Open(t, "sqlite3", "file:bpmn_controller_task_context?mode=memory&cache=shared&_fk=1")
+	t.Cleanup(func() { _ = client.Close() })
+	taskSvc := &fakeTaskService{}
+	controller := NewBPMNWorkflowController(&fakeProcessEngine{taskSvc: taskSvc}, nil)
+
+	for path, handler := range map[string]gin.HandlerFunc{
+		"/api/v1/bpmn/tasks":       controller.ListUserTasks,
+		"/api/v1/bpmn/stats/tasks": controller.GetTaskStats,
+	} {
+		recorder := httptest.NewRecorder()
+		ctx, _ := gin.CreateTestContext(recorder)
+		ctx.Request = httptest.NewRequest(http.MethodGet, path, nil)
+		ctx.Request = ctx.Request.WithContext(middleware.WithAuthenticatedTenantID(ctx.Request.Context(), 42))
+		ctx.Set("tenant_id", 42)
+		ctx.Set("user_id", 7)
+		ctx.Set("role", "end_user")
+		ctx.Set("client", client)
+
+		handler(ctx)
+		require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	}
+
+	for _, received := range []context.Context{taskSvc.listCtx, taskSvc.statsCtx} {
+		require.NotNil(t, received)
+		scope, err := service.BPMNAccessScopeFromContext(received)
+		require.NoError(t, err)
+		assert.Equal(t, 7, scope.UserID)
+		assert.Equal(t, 42, scope.TenantID)
+	}
+}
+
+func TestListUserTasksHTTPRejectsFilterOverride(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	client := enttest.Open(t, "sqlite3", "file:bpmn_controller_task_scope?mode=memory&cache=shared&_fk=1")
+	t.Cleanup(func() { _ = client.Close() })
+	ctx := context.Background()
+	tenant, err := client.Tenant.Create().
+		SetCode("controller-task-scope").
+		SetName("Controller Task Scope").
+		SetStatus("active").
+		Save(ctx)
+	require.NoError(t, err)
+	actor, err := client.User.Create().
+		SetUsername("controller.actor").
+		SetEmail("controller.actor@example.test").
+		SetName("Controller Actor").
+		SetPasswordHash("test").
+		SetRole("end_user").
+		SetActive(true).
+		SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+	other, err := client.User.Create().
+		SetUsername("controller.other").
+		SetEmail("controller.other@example.test").
+		SetName("Controller Other").
+		SetPasswordHash("test").
+		SetRole("end_user").
+		SetActive(true).
+		SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+	deployment, err := client.ProcessDeployment.Create().
+		SetDeploymentID("controller-task-deployment").
+		SetDeploymentName("Controller Task Deployment").
+		SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+	definition, err := client.ProcessDefinition.Create().
+		SetKey("controller_task_scope").
+		SetName("Controller Task Scope").
+		SetBpmnXML([]byte("<definitions/>")).
+		SetDeploymentID(deployment.ID).
+		SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+	instance, err := client.ProcessInstance.Create().
+		SetProcessInstanceID("controller-task-instance").
+		SetProcessDefinitionKey(definition.Key).
+		SetProcessDefinitionID(definition.ID).
+		SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+	createTask := func(taskID, assignee string) {
+		_, createErr := client.ProcessTask.Create().
+			SetTaskID(taskID).
+			SetProcessInstanceID(instance.ID).
+			SetProcessDefinitionKey(definition.Key).
+			SetTaskDefinitionKey(taskID).
+			SetTaskName(taskID).
+			SetAssignee(assignee).
+			SetTenantID(tenant.ID).
+			Save(ctx)
+		require.NoError(t, createErr)
+	}
+	createTask("controller-task-mine", strconv.Itoa(actor.ID))
+	createTask("controller-task-other", strconv.Itoa(other.ID))
+
+	engine := service.NewCustomProcessEngine(client, zap.NewNop().Sugar())
+	controller := NewBPMNWorkflowController(engine, nil)
+	recorder := httptest.NewRecorder()
+	ginCtx, _ := gin.CreateTestContext(recorder)
+	path := "/api/v1/bpmn/tasks?userId=" + strconv.Itoa(other.ID) + "&Assignee=" + strconv.Itoa(other.ID)
+	ginCtx.Request = httptest.NewRequest(http.MethodGet, path, nil)
+	ginCtx.Request = ginCtx.Request.WithContext(middleware.WithAuthenticatedTenantID(ginCtx.Request.Context(), tenant.ID))
+	ginCtx.Set("tenant_id", tenant.ID)
+	ginCtx.Set("user_id", actor.ID)
+	ginCtx.Set("role", "end_user")
+	ginCtx.Set("client", client)
+
+	controller.ListUserTasks(ginCtx)
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	var response struct {
+		Data struct {
+			Data       []dto.BPMNTaskResponse `json:"data"`
+			Pagination struct {
+				Total int `json:"total"`
+			} `json:"pagination"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
+	require.Equal(t, 1, response.Data.Pagination.Total)
+	require.Len(t, response.Data.Data, 1)
+	assert.Equal(t, "controller-task-mine", response.Data.Data[0].TaskID)
 }

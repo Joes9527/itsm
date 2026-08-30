@@ -29,6 +29,15 @@ func TestApprovalGatewayReadsApplicationVariableName(t *testing.T) {
 		SetStatus("active").
 		Save(ctx)
 	require.NoError(t, err)
+	reader, err := client.User.Create().
+		SetUsername("approval-gateway-reader").
+		SetEmail("approval-gateway-reader@example.test").
+		SetName("Approval Gateway Reader").
+		SetPasswordHash("test").
+		SetActive(true).
+		SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
 
 	logger := zap.NewNop().Sugar()
 	engine := NewCustomProcessEngine(client, logger)
@@ -40,6 +49,7 @@ func TestApprovalGatewayReadsApplicationVariableName(t *testing.T) {
 
 	// Set tenant ID in context for process execution
 	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+	ctx = WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: reader.ID, TenantID: tenant.ID, CanReadAllTasks: true})
 
 	cases := []struct {
 		processKey   string

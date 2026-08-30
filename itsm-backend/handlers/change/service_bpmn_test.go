@@ -237,7 +237,8 @@ func TestCompleteChangeApprovalTask_ApproveCompletesScheduleNode(t *testing.T) {
 	require.NoError(t, err)
 
 	// 完成"变更评估"这一步，推进到 CAB 审批
-	assessmentTasks, _, err := engine.TaskService().ListUserTasks(tenantCtx, &service.ListUserTasksRequest{PageSize: 10})
+	readCtx := service.WithBPMNAccessScope(tenantCtx, service.BPMNAccessScope{UserID: requester.ID, TenantID: tenant.ID, CanReadAllTasks: true})
+	assessmentTasks, _, err := engine.TaskService().ListUserTasks(readCtx, &service.ListUserTasksRequest{PageSize: 10})
 	require.NoError(t, err)
 	require.NoError(t, engine.CompleteTask(tenantCtx, assessmentTasks[0].TaskID, map[string]interface{}{}))
 
@@ -294,7 +295,8 @@ func TestCompleteChangeApprovalTask_RejectEndsProcess(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	assessmentTasks, _, err := engine.TaskService().ListUserTasks(tenantCtx, &service.ListUserTasksRequest{PageSize: 10})
+	readCtx := service.WithBPMNAccessScope(tenantCtx, service.BPMNAccessScope{UserID: requester.ID, TenantID: tenant.ID, CanReadAllTasks: true})
+	assessmentTasks, _, err := engine.TaskService().ListUserTasks(readCtx, &service.ListUserTasksRequest{PageSize: 10})
 	require.NoError(t, err)
 	require.NoError(t, engine.CompleteTask(tenantCtx, assessmentTasks[0].TaskID, map[string]interface{}{}))
 
@@ -354,7 +356,8 @@ func TestCompleteChangeApprovalTask_WrongActorRejected(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	assessmentTasks, _, err := engine.TaskService().ListUserTasks(tenantCtx, &service.ListUserTasksRequest{PageSize: 10})
+	readCtx := service.WithBPMNAccessScope(tenantCtx, service.BPMNAccessScope{UserID: requester.ID, TenantID: tenant.ID, CanReadAllTasks: true})
+	assessmentTasks, _, err := engine.TaskService().ListUserTasks(readCtx, &service.ListUserTasksRequest{PageSize: 10})
 	require.NoError(t, err)
 	require.NoError(t, engine.CompleteTask(tenantCtx, assessmentTasks[0].TaskID, map[string]interface{}{}))
 
@@ -408,7 +411,8 @@ func TestCompleteChangeApprovalTask_FiltersDecoyTaskByDefinitionKey(t *testing.T
 	})
 	require.NoError(t, err)
 
-	assessmentTasks, _, err := engine.TaskService().ListUserTasks(tenantCtx, &service.ListUserTasksRequest{PageSize: 10})
+	readCtx := service.WithBPMNAccessScope(tenantCtx, service.BPMNAccessScope{UserID: requester.ID, TenantID: tenant.ID, CanReadAllTasks: true})
+	assessmentTasks, _, err := engine.TaskService().ListUserTasks(readCtx, &service.ListUserTasksRequest{PageSize: 10})
 	require.NoError(t, err)
 	require.NoError(t, engine.CompleteTask(tenantCtx, assessmentTasks[0].TaskID, map[string]interface{}{}))
 
@@ -489,7 +493,8 @@ func TestCompleteChangeApprovalTask_ResumesCascadeAfterInterruptedCall(t *testin
 	})
 	require.NoError(t, err)
 
-	assessmentTasks, _, err := engine.TaskService().ListUserTasks(tenantCtx, &service.ListUserTasksRequest{PageSize: 10})
+	readCtx := service.WithBPMNAccessScope(tenantCtx, service.BPMNAccessScope{UserID: requester.ID, TenantID: tenant.ID, CanReadAllTasks: true})
+	assessmentTasks, _, err := engine.TaskService().ListUserTasks(readCtx, &service.ListUserTasksRequest{PageSize: 10})
 	require.NoError(t, err)
 	require.NoError(t, engine.CompleteTask(tenantCtx, assessmentTasks[0].TaskID, map[string]interface{}{}))
 
@@ -561,7 +566,8 @@ func TestCompleteChangeApprovalTask_RetryAfterFullSuccessIsNoop(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	assessmentTasks, _, err := engine.TaskService().ListUserTasks(tenantCtx, &service.ListUserTasksRequest{PageSize: 10})
+	readCtx := service.WithBPMNAccessScope(tenantCtx, service.BPMNAccessScope{UserID: requester.ID, TenantID: tenant.ID, CanReadAllTasks: true})
+	assessmentTasks, _, err := engine.TaskService().ListUserTasks(readCtx, &service.ListUserTasksRequest{PageSize: 10})
 	require.NoError(t, err)
 	require.NoError(t, engine.CompleteTask(tenantCtx, assessmentTasks[0].TaskID, map[string]interface{}{}))
 
@@ -611,7 +617,8 @@ func TestCompleteChangeApprovalTask_RetryWithMismatchedActionRejected(t *testing
 	})
 	require.NoError(t, err)
 
-	assessmentTasks, _, err := engine.TaskService().ListUserTasks(tenantCtx, &service.ListUserTasksRequest{PageSize: 10})
+	readCtx := service.WithBPMNAccessScope(tenantCtx, service.BPMNAccessScope{UserID: requester.ID, TenantID: tenant.ID, CanReadAllTasks: true})
+	assessmentTasks, _, err := engine.TaskService().ListUserTasks(readCtx, &service.ListUserTasksRequest{PageSize: 10})
 	require.NoError(t, err)
 	require.NoError(t, engine.CompleteTask(tenantCtx, assessmentTasks[0].TaskID, map[string]interface{}{}))
 
@@ -689,7 +696,8 @@ func setupChangeForTransitionStatusTest(t *testing.T, dbName string) (*ent.Clien
 	})
 	require.NoError(t, err)
 
-	assessmentTasks, _, err := engine.TaskService().ListUserTasks(tenantCtx, &service.ListUserTasksRequest{PageSize: 10})
+	readCtx := service.WithBPMNAccessScope(tenantCtx, service.BPMNAccessScope{UserID: requester.ID, TenantID: tenant.ID, CanReadAllTasks: true})
+	assessmentTasks, _, err := engine.TaskService().ListUserTasks(readCtx, &service.ListUserTasksRequest{PageSize: 10})
 	require.NoError(t, err)
 	require.NoError(t, engine.CompleteTask(tenantCtx, assessmentTasks[0].TaskID, map[string]interface{}{}))
 
