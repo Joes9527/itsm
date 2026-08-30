@@ -94,8 +94,14 @@ func (r *OutboxEventRepository) Enqueue(ctx context.Context, tx *ent.Tx, event N
 // is conditionally updated again, so a competing dispatcher that claimed it
 // first is never returned to this caller.
 func (r *OutboxEventRepository) ClaimDue(ctx context.Context, now time.Time, limit int) ([]*ent.OutboxEvent, error) {
+	return r.ClaimDueByEventType(ctx, now, limit, "")
+}
+
+// ClaimDueByEventType applies the same lease protocol as ClaimDue while
+// preventing one delivery integration from claiming another event type.
+func (r *OutboxEventRepository) ClaimDueByEventType(ctx context.Context, now time.Time, limit int, eventType string) ([]*ent.OutboxEvent, error) {
 	for attempt := 0; attempt < outboxEventClaimRetryAttempts; attempt++ {
-		claimed, err := r.claimDue(ctx, now, limit)
+		claimed, err := r.claimDue(ctx, now, limit, eventType)
 		if err == nil || !isRetryableOutboxClaimError(err) || attempt == outboxEventClaimRetryAttempts-1 {
 			return claimed, err
 		}
@@ -111,7 +117,7 @@ func (r *OutboxEventRepository) ClaimDue(ctx context.Context, now time.Time, lim
 	return nil, nil
 }
 
-func (r *OutboxEventRepository) claimDue(ctx context.Context, now time.Time, limit int) ([]*ent.OutboxEvent, error) {
+func (r *OutboxEventRepository) claimDue(ctx context.Context, now time.Time, limit int, eventType string) ([]*ent.OutboxEvent, error) {
 	if limit <= 0 {
 		return nil, nil
 	}
@@ -124,14 +130,18 @@ func (r *OutboxEventRepository) claimDue(ctx context.Context, now time.Time, lim
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	_, err = tx.OutboxEvent.Update().
+	expiredClaims := tx.OutboxEvent.Update().
 		Where(
 			outboxevent.StatusEQ(outboxEventStatusPublishing),
 			outboxevent.Or(
 				outboxevent.ClaimExpiresAtLTE(now),
 				outboxevent.ClaimExpiresAtIsNil(),
 			),
-		).
+		)
+	if eventType != "" {
+		expiredClaims = expiredClaims.Where(outboxevent.EventTypeEQ(eventType))
+	}
+	_, err = expiredClaims.
 		SetStatus(outboxEventStatusPending).
 		ClearClaimToken().
 		ClearClaimExpiresAt().
@@ -140,11 +150,15 @@ func (r *OutboxEventRepository) claimDue(ctx context.Context, now time.Time, lim
 		return nil, fmt.Errorf("recover expired outbox claims: %w", err)
 	}
 
-	candidates, err := tx.OutboxEvent.Query().
+	candidateQuery := tx.OutboxEvent.Query().
 		Where(
 			outboxevent.StatusEQ(outboxEventStatusPending),
 			outboxevent.NextAttemptAtLTE(now),
-		).
+		)
+	if eventType != "" {
+		candidateQuery = candidateQuery.Where(outboxevent.EventTypeEQ(eventType))
+	}
+	candidates, err := candidateQuery.
 		Order(ent.Asc(outboxevent.FieldNextAttemptAt)).
 		Limit(limit).
 		All(ctx)
@@ -155,12 +169,16 @@ func (r *OutboxEventRepository) claimDue(ctx context.Context, now time.Time, lim
 	claimed := make([]*ent.OutboxEvent, 0, len(candidates))
 	for _, candidate := range candidates {
 		claimToken := uuid.NewString()
-		updated, err := tx.OutboxEvent.Update().
+		claim := tx.OutboxEvent.Update().
 			Where(
 				outboxevent.IDEQ(candidate.ID),
 				outboxevent.StatusEQ(outboxEventStatusPending),
 				outboxevent.NextAttemptAtLTE(now),
-			).
+			)
+		if eventType != "" {
+			claim = claim.Where(outboxevent.EventTypeEQ(eventType))
+		}
+		updated, err := claim.
 			SetStatus(outboxEventStatusPublishing).
 			SetClaimToken(claimToken).
 			SetClaimExpiresAt(claimExpiresAt).
