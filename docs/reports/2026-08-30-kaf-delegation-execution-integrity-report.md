@@ -1,104 +1,158 @@
-# KAF Delegation Execution Integrity Evidence
+# KAF Delegation Execution Integrity Acceptance Report
 
 Date: 2026-08-30
 
-## Outcome
+## Status
 
-Task 5 acceptance passed across the ITSM and KAF linked worktrees. The SSLVPN
-completion returns `applied` on first execution and `already_applied` on
-replay, with one completed BPMN task, one completed process instance, one
-applied action ledger, one successful completion receipt, and one action audit.
-No production `kaf_action_results`, `kafActionResult`, or
-`putKafActionResult` state remains.
+Task 5 final acceptance passed in the two requested linked worktrees. This is
+automated local acceptance evidence only. No real external SSLVPN deployment,
+network change, or production credential operation was executed or claimed.
 
-The carried KAF security finding is fixed. Persisted delivery errors redact
-credential suffixes containing non-hierarchical and generic RFC-style URI
-schemes after delimiters while preserving ordinary sensitive `key=value` and
-`key:value` redaction.
+KAF Task 5 commits:
 
-## Acceptance Evidence
+- `cf01648fb233c621f4785820a3e4297afdc69da4` - redact non-hierarchical URI credential suffixes.
+- `1ca123f831f2101e3d8876d8508953fe2dad2d3f` - verify webhook/recovery execution cardinality.
 
-| Requirement | Automated evidence |
+The ITSM commit is reported in the Task 5 handoff because this report is part
+of that commit.
+
+## Acceptance Matrix
+
+| Requirement | Evidence |
 | --- | --- |
-| SSLVPN applied then replay | `TestSSLVPNKafDelegation_OneAppliedActionAdvancesBPMNOnce` asserts `applied`, `already_applied`, and one task, process, ledger, receipt, and audit. |
-| Duplicate webhook and recovery interleaving | `test_webhook_and_recovery_interleaving_keeps_one_active_execution` holds one execution open while duplicate webhook and recovery run, then asserts one delivery, execution, ITSM action, and enqueue. |
-| Expired KAF lease | `test_recovery_reclaims_expired_delivery_without_new_event_identity` asserts the existing delivery is completed and exactly one ITSM action is sent. |
-| Live ITSM ledger lease | `TestExecuteAction_RejectsActiveLeaseWithoutCallingEngine` asserts one executing ledger, a delegated task, and zero engine, timeline, or audit effects. |
-| Forced callback failure and reconciliation | `TestExecuteAction_CallbackFailureRecoversWithoutSecondBPMNCompletion` asserts one BPMN completion write, one successful receipt, one callback timeline comment, and one audit after recovery. |
-| Completed task with failed receipt | `TestReconcileCompletedTaskWithoutSuccessfulReceipt_DoesNotCompleteBPMNAgain` asserts callback-only recovery and zero second task completion writes. |
-| Canonical key mismatch | `TestExecuteAction_RejectsSameScopeWithDifferentKey` asserts rejection with one original ledger, engine call, completed task, timeline comment, and audit. |
-| Concurrent same-scope execution | `TestExecuteAction_ConcurrentClaimsCompleteExactlyOnce` asserts one applied result, one in-progress loser, one replay result, and one ledger, completed task, timeline comment, and audit. |
-| Legacy mutable state absent | SSLVPN persistence asserts no `task_variables["kaf_action_results"]`; a production-source search returned no legacy identifiers. |
-| Persisted URI credential redaction | `test_pipeline_redacts_non_hierarchical_uri_suffixes_from_persisted_errors` covers `mailto:`, `urn:`, `data:`, `s3:`, and generic schemes across five delimiters. The assignment-boundary test covers both `=` and `:`. |
+| SSLVPN applied/replay cardinality | `TestSSLVPNKafDelegation_OneAppliedActionAdvancesBPMNOnce` proves `applied`, then `already_applied`, with one completed BPMN task, completed process, applied ledger, successful receipt, and action audit. |
+| Callback failure recovery | `TestExecuteAction_CallbackFailureRecoversWithoutSecondBPMNCompletion` proves a failed receipt is recovered through the scoped callback with one BPMN completion write, one domain comment, one successful receipt, and one audit. |
+| Completed task with failed receipt | `TestReconcileCompletedTaskWithoutSuccessfulReceipt_DoesNotCompleteBPMNAgain` proves callback-only reconciliation and zero second completion writes. |
+| Webhook/recovery interleaving | `test_webhook_and_recovery_interleaving_keeps_one_active_execution` pauses the webhook owner while duplicate webhook and recovery run, then proves one delivery, procedure execution, enqueue, and ITSM action. |
+| Expired leases | `test_recovery_reclaims_expired_delivery_without_new_event_identity` reclaims the existing KAF delivery; `TestExecuteAction_RetryAfterAppliedFinalizationFailureCreatesOneAudit` reclaims an expired ITSM ledger lease. |
+| Live ITSM ledger lease | `TestExecuteAction_RejectsActiveLeaseWithoutCallingEngine` proves one executing ledger and zero engine, timeline, audit, or task-transition effects. |
+| Canonical mismatch | `TestExecuteAction_RejectsSameScopeWithDifferentKey` proves the mismatched replay adds no ledger, engine, timeline, audit, or task effect beyond the original action. |
+| One audit/timeline/domain effect | `TestExecuteAction_ConcurrentClaimsCompleteExactlyOnce` checks one ledger, audit, timeline comment, task completion, and engine call after contention and replay. |
+| Legacy state absent | The SSLVPN test rejects `task_variables["kaf_action_results"]`; the production Go source search below returned no legacy identifier. |
+| Persisted URI redaction | The KAF persisted-`last_error` matrix covers `mailto:`, `urn:`, `data:`, `s3:`, and generic valid schemes after pipe, slash, comma, semicolon, and ampersand, while sensitive `key=value` and `key:value` boundaries remain detected. |
 
-## Commands And Results
+## TDD Evidence
 
-ITSM worktree:
-`/home/administrator/project/itsm/.worktrees/kaf-delegation-transactional-delivery`
+KAF RED:
 
-1. Targeted SSLVPN acceptance:
+```bash
+ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/_work/kaf/kaf/.venv/bin/python -m pytest tests/test_kaf_delegation_pipeline.py -q -k 'non_hierarchical_uri_suffixes or preserves_real_sensitive_assignment_boundaries'
+```
 
-   `cd itsm-backend && go test ./handlers/service_request ./service -run 'TestSSLVPNKafDelegation_OneAppliedActionAdvancesBPMNOnce' -v`
+Result before the production fix: expected failure, `20 failed, 7 passed, 66 deselected`.
+Every parser-recognized opaque URI suffix remained in persisted `last_error`;
+the real sensitive assignment controls passed.
 
-   Result: PASS. One selected handler test passed; the service package had no
-   matching test. The initial red run failed because the fixture refreshed
-   delegated-only context before replay; reusing the original immutable action
-   request made the acceptance path green.
+KAF GREEN:
 
-2. Exact focused ITSM suite from the brief:
+```bash
+ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/_work/kaf/kaf/.venv/bin/python -m pytest tests/test_kaf_delegation_pipeline.py -q -k 'non_hierarchical_uri_suffixes or preserves_real_sensitive_assignment_boundaries or ambiguous_delimiter_suffixes or bounded_text_redaction'
+```
 
-   `cd itsm-backend && go test ./service ./controller ./handlers/service_request -run 'Test(Kaf|SSLVPN)' -v`
+Result: `46 passed, 52 deselected in 5.01s`.
 
-   Result: PASS, 28 tests total: 11 service, 12 controller, and 5 SSLVPN handler
-   tests.
+ITSM RED:
 
-3. Explicit execution-integrity service suite:
+```bash
+cd itsm-backend && go test ./handlers/service_request -run 'TestSSLVPNRequest_ApprovalDelegationDeliveryAndCompletion' -count=1 -v
+```
 
-   `cd itsm-backend && go test ./service -run 'Test(ExecuteAction_|ReconcileCompletedTask|CompleteKafDelegatedTask)' -v`
+Result before Task 5 fixture wiring: expected failure at canonical validation
+because the SSLVPN fixture used the tenant code instead of the authoritative
+numeric tenant ID. The immutable canonical request was then reused for replay.
 
-   Result: PASS, 9 tests.
+## Final ITSM Verification
 
-4. Exact build from the brief:
+Worktree: `/home/administrator/project/itsm/.worktrees/kaf-delegation-transactional-delivery`
 
-   `cd itsm-backend && go build ./...`
+```bash
+cd itsm-backend && go test ./handlers/service_request ./service -run 'TestSSLVPNKafDelegation_OneAppliedActionAdvancesBPMNOnce' -count=1 -v
+```
 
-   Result: PASS.
+Result: PASS; one handler test passed and the service package reported no matching tests.
 
-5. Legacy production-state search:
+```bash
+cd itsm-backend && go test ./service ./controller ./handlers/service_request -run 'Test(Kaf|SSLVPN)' -count=1 -v
+```
 
-   `rg -n 'kaf_action_results|kafActionResult|putKafActionResult' itsm-backend --glob '!**/*_test.go' || true`
+Result: PASS; 28 tests passed: 11 service, 12 controller, and 5 handler tests.
 
-   Result: PASS, no matches.
+```bash
+cd itsm-backend && go test ./service -run 'Test(ExecuteAction_|ReconcileCompletedTask|CompleteKafDelegatedTask)' -count=1 -v
+```
 
-KAF worktree:
-`/mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-worktrees/kaf-delegation-transactional-delivery`
+Result: PASS; 9 tests passed.
 
-1. Redaction mutation check:
+```bash
+cd itsm-backend && go test -race ./service -run 'TestExecuteAction_ConcurrentClaimsCompleteExactlyOnce' -count=1 -v
+```
 
-   `ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/_work/kaf/kaf/.venv/bin/python -m pytest tests/test_kaf_delegation_pipeline.py -k 'non_hierarchical_uri_suffixes or preserves_real_sensitive_assignment_boundaries' -q`
+Result: PASS; 1 race-enabled test passed.
 
-   Result with the old URI boundary predicate temporarily restored: expected
-   FAIL, 25 failed and 7 passed. Result after restoring the fix: PASS, 32
-   passed and 66 deselected.
+```bash
+cd itsm-backend && go build ./...
+```
 
-2. Exact KAF suite from the brief:
+Result: PASS, exit code 0.
 
-   `ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/_work/kaf/kaf/.venv/bin/python -m pytest tests/test_kaf_delegation_contract.py tests/test_kaf_delegation_pipeline.py -q`
+```bash
+rg -n 'kaf_action_results|kafActionResult|putKafActionResult' itsm-backend --glob '*.go' --glob '!*_test.go'
+```
 
-   Result: PASS, 101 passed and 1 skipped in 8.26 seconds. The skip is
-   `test_recovery_auth_transition_preserves_a_concurrently_running_real_delivery`,
-   which intentionally requires a configured external test database; the
-   SQLite concurrency and lease-fencing tests ran.
+Result: no matches; expected `rg` exit code 1.
 
-3. Repository checks:
+## Final KAF Verification
 
-   `git diff --check`
+Worktree: `/mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-worktrees/kaf-delegation-transactional-delivery`
 
-   Result: PASS in both repositories.
+```bash
+ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/_work/kaf/kaf/.venv/bin/python -m pytest tests/test_kaf_delegation_contract.py tests/test_kaf_delegation_pipeline.py -q -rs
+```
 
-## Scope
+Result: `101 passed, 1 skipped in 9.62s`. The skip is the pre-existing
+PostgreSQL-only real-session concurrency probe; configured credentials failed
+with `InvalidPasswordError`. SQLite SQLAlchemy contention and lease-fencing
+tests executed.
 
-No live SSLVPN infrastructure or deployment credential check was executed;
-those are explicitly out of scope in the design. The environment-dependent KAF
-real-session database regression was skipped as described above. User-owned
-untracked historical ITSM review files were not modified, staged, or deleted.
+```bash
+ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/_work/kaf/kaf/.venv/bin/python -m ruff check src/acp/orchestration/headless_tasks/kaf_delegation_pipeline.py tests/test_kaf_delegation_pipeline.py
+```
+
+Result: `All checks passed!`
+
+```bash
+ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/_work/kaf/kaf/.venv/bin/python -m ruff format --check src/acp/orchestration/headless_tasks/kaf_delegation_pipeline.py tests/test_kaf_delegation_pipeline.py
+```
+
+Result: `2 files already formatted`.
+
+```bash
+ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/_work/kaf/kaf/.venv/bin/python -m compileall -q src/acp/orchestration/headless_tasks/kaf_delegation_pipeline.py tests/test_kaf_delegation_pipeline.py
+```
+
+Result: PASS, no output, exit code 0.
+
+Migration files were not changed in Task 5. The existing graph was still checked:
+
+```bash
+ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/_work/kaf/kaf/.venv/bin/python -m pytest tests/test_migration_dag.py -q
+ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/_work/kaf/kaf/.venv/bin/python -m alembic heads
+ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/_work/kaf/kaf/.venv/bin/python -m alembic upgrade 035_kaf_delivery_leases --sql
+```
+
+Results: migration DAG `2 passed in 5.08s`; head is
+`035_kaf_delivery_leases`; offline PostgreSQL SQL generation exited 0. No live
+database migration was applied.
+
+```bash
+git diff --check
+git diff --cached --check
+```
+
+Result: PASS in both repositories before final commit; no output, exit code 0.
+
+## Concerns
+
+- The optional real-PostgreSQL KAF concurrency probe did not run because the configured test database rejected credentials.
+- No live SSLVPN infrastructure or external deployment was exercised; this is intentionally out of scope.
+- Protected historical untracked ITSM review artifacts were not modified, staged, or removed.
