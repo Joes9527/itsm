@@ -140,9 +140,12 @@ func (c *BPMNProcessTriggerController) CancelProcess(ctx *gin.Context) {
 	}
 	ctx.ShouldBindJSON(&req)
 
-	tenantID, _ := ctx.Get("tenant_id")
+	workflowCtx, tenantID, ok := getBPMNTenantContext(ctx)
+	if !ok {
+		return
+	}
 
-	err = c.triggerService.CancelProcess(ctx.Request.Context(), instanceID, req.Reason, tenantID.(int))
+	err = c.triggerService.CancelProcess(workflowCtx, instanceID, req.Reason, tenantID)
 	if err != nil {
 		common.Fail(ctx, 5001, err.Error())
 		return
@@ -164,9 +167,12 @@ func (c *BPMNProcessTriggerController) SuspendProcess(ctx *gin.Context) {
 	}
 	ctx.ShouldBindJSON(&req)
 
-	tenantID, _ := ctx.Get("tenant_id")
+	workflowCtx, tenantID, ok := getBPMNTenantContext(ctx)
+	if !ok {
+		return
+	}
 
-	err = c.triggerService.SuspendProcess(ctx.Request.Context(), instanceID, req.Reason, tenantID.(int))
+	err = c.triggerService.SuspendProcess(workflowCtx, instanceID, req.Reason, tenantID)
 	if err != nil {
 		common.Fail(ctx, 5001, err.Error())
 		return
@@ -183,9 +189,12 @@ func (c *BPMNProcessTriggerController) ResumeProcess(ctx *gin.Context) {
 		return
 	}
 
-	tenantID, _ := ctx.Get("tenant_id")
+	workflowCtx, tenantID, ok := getBPMNTenantContext(ctx)
+	if !ok {
+		return
+	}
 
-	err = c.triggerService.ResumeProcess(ctx.Request.Context(), instanceID, tenantID.(int))
+	err = c.triggerService.ResumeProcess(workflowCtx, instanceID, tenantID)
 	if err != nil {
 		common.Fail(ctx, 5001, err.Error())
 		return

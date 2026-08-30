@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/common"
 	"itsm-backend/connector"
 	feishuConnector "itsm-backend/connector/builtin/feishu"
 
@@ -775,6 +776,13 @@ func (s *TicketService) GetWorkflowStatus(ctx context.Context, ticketID int, ten
 
 // CancelWorkflow 取消工单关联的流程
 func (s *TicketService) CancelWorkflow(ctx context.Context, ticketID int, tenantID int, reason string) error {
+	scope, err := BPMNAccessScopeFromContext(ctx)
+	if err != nil {
+		return err
+	}
+	if scope.TenantID != tenantID || !scope.CanUpdateAllInstances {
+		return common.NewForbiddenError("无权取消工单流程")
+	}
 	if s.client == nil {
 		return fmt.Errorf("ent client not available for workflow cancel")
 	}
