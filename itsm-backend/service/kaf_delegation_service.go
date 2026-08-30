@@ -216,7 +216,7 @@ func (s *KafDelegationService) GetTaskContext(ctx context.Context, taskID string
 	if err != nil {
 		return nil, fmt.Errorf("load KAF process instance: %w", err)
 	}
-	recordClass, err := kafDelegationRecordClass(instance)
+	recordClass, err := kafDelegationRecordClass(ctx, s.client, instance)
 	if err != nil {
 		return nil, err
 	}
@@ -617,7 +617,7 @@ func (s *KafDelegationService) CreateDelegatedTask(ctx context.Context, instance
 		return nil, fmt.Errorf("create KAF delegation audit log: %w", err)
 	}
 
-	event, err := newKafDelegateOutboxEvent(task, instance, s.now())
+	event, err := newKafDelegateOutboxEvent(ctx, tx.Client(), task, instance, s.now())
 	if err != nil {
 		return nil, err
 	}
@@ -639,8 +639,8 @@ func newKafDelegationCorrelationID() string {
 	return uuid.NewString()
 }
 
-func newKafDelegateOutboxEvent(task *ent.ProcessTask, instance *ent.ProcessInstance, occurredAt time.Time) (NewOutboxEvent, error) {
-	recordClass, err := kafDelegationRecordClass(instance)
+func newKafDelegateOutboxEvent(ctx context.Context, client *ent.Client, task *ent.ProcessTask, instance *ent.ProcessInstance, occurredAt time.Time) (NewOutboxEvent, error) {
+	recordClass, err := kafDelegationRecordClass(ctx, client, instance)
 	if err != nil {
 		return NewOutboxEvent{}, err
 	}
@@ -679,7 +679,7 @@ func newKafDelegateOutboxEvent(task *ent.ProcessTask, instance *ent.ProcessInsta
 	}, nil
 }
 
-func kafDelegationRecordClass(instance *ent.ProcessInstance) (string, error) {
+func kafDelegationRecordClass(ctx context.Context, client *ent.Client, instance *ent.ProcessInstance) (string, error) {
 	switch instance.BusinessType {
 	case "incident":
 		return "incident", nil
@@ -689,6 +689,19 @@ func kafDelegationRecordClass(instance *ent.ProcessInstance) (string, error) {
 		if recordClass, _ := instance.Variables["record_class"].(string); recordClass == "incident" || recordClass == "service_request_item" {
 			return recordClass, nil
 		}
+		if instance.BusinessID <= 0 {
+			return "", fmt.Errorf("KAF delegation ticket instance %d has no work item ID", instance.ID)
+		}
+		workItem, err := client.Ticket.Query().
+			Where(ticket.IDEQ(instance.BusinessID), ticket.TenantIDEQ(instance.TenantID), ticket.DeletedAtIsNil()).
+			Only(ctx)
+		if err != nil {
+			return "", fmt.Errorf("load KAF delegation work item: %w", err)
+		}
+		if workItem.RecordClass == "incident" || workItem.RecordClass == "service_request_item" {
+			return workItem.RecordClass, nil
+		}
+		return "", fmt.Errorf("unsupported KAF delegation work item record class %q", workItem.RecordClass)
 	}
 	return "", fmt.Errorf("unsupported KAF delegation record class %q", instance.BusinessType)
 }
