@@ -1171,12 +1171,13 @@ func TestCompleteKafDelegatedTask_CallbackFailureReturnsErrorAndWritesReceipt(t 
 		SetRunID("run-1").SetStepID("finish").SetAction(kafActionComplete).
 		SetIdempotencyKey(fmt.Sprintf("%d:%s:run-1:finish", tenantID, task.TaskID)).
 		SetCorrelationID(task.CorrelationID).SetProcedureRef("ssl-vpn").SetProcedureVersion("v1").
+		SetResultStatus("executing").SetLeaseOwner("owner-1").SetLeaseExpiresAt(time.Now().Add(time.Minute)).
 		Save(ctx)
 	require.NoError(t, err)
 	handler := &failingUserTaskCallbackHandler{taskType: "failing_kaf_callback", handlerID: "failing_kaf_callback_handler"}
 	engine.callbackRegistry.RegisterHandler(handler)
 
-	err = engine.CompleteKafDelegatedTask(ctx, ledger.ID, task.TaskID, map[string]interface{}{"kaf_result_summary": "done"})
+	err = engine.CompleteKafDelegatedTask(ctx, ledger.ID, ledger.LeaseOwner, task.TaskID, map[string]interface{}{"kaf_result_summary": "done"})
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "Bearer")
 	require.True(t, handler.scopeOK)
@@ -1195,6 +1196,68 @@ func TestCompleteKafDelegatedTask_CallbackFailureReturnsErrorAndWritesReceipt(t 
 	}
 	_, err = engine.client.ProcessInstance.Get(ctx, instanceID)
 	require.NoError(t, err)
+}
+
+func TestCompleteKafDelegatedTask_RejectsStaleLedgerOwnerBeforeCallback(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, _ := setupApprovalDecisionFixture(t, engine)
+	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	_, taskID := createProcessFixture(t, engine, tenantID, "kaf-stale-owner")
+	task, err := engine.client.ProcessTask.UpdateOneID(taskID).
+		SetTaskID("PT-kaf-stale-owner").
+		SetStatus(common.ProcessTaskStatusCompleted).
+		SetTaskType(bpmn.KafDelegateTaskType).
+		SetCorrelationID("kaf-stale-owner-correlation").
+		SetTaskVariables(map[string]interface{}{bpmnMetaDataServiceTaskType: "stale_owner_callback"}).
+		Save(ctx)
+	require.NoError(t, err)
+	ledger, err := engine.client.KafTaskActionLedger.Create().
+		SetTenantID(tenantID).SetTaskID(task.TaskID).
+		SetRunID("run-1").SetStepID("finish").SetAction(kafActionComplete).
+		SetIdempotencyKey(fmt.Sprintf("%d:%s:run-1:finish", tenantID, task.TaskID)).
+		SetCorrelationID(task.CorrelationID).SetProcedureRef("ssl-vpn").SetProcedureVersion("v1").
+		SetResultStatus("executing").SetLeaseOwner("stale-owner").SetLeaseExpiresAt(time.Now().Add(-time.Second)).
+		Save(ctx)
+	require.NoError(t, err)
+	require.NoError(t, engine.client.KafTaskActionLedger.UpdateOneID(ledger.ID).
+		SetLeaseOwner("new-owner").SetLeaseExpiresAt(time.Now().Add(time.Minute)).Exec(ctx))
+	handler := &failingUserTaskCallbackHandler{taskType: "stale_owner_callback", handlerID: "stale_owner_callback_handler"}
+	engine.callbackRegistry.RegisterHandler(handler)
+
+	err = engine.CompleteKafDelegatedTask(ctx, ledger.ID, "stale-owner", task.TaskID, map[string]interface{}{"kaf_result_summary": "done"})
+	require.ErrorContains(t, err, "lease owner")
+	assert.False(t, handler.scopeOK)
+	receiptCount, err := engine.client.KafTaskCompletionReceipt.Query().Where(
+		kaftaskcompletionreceipt.LedgerIDEQ(ledger.ID),
+	).Count(ctx)
+	require.NoError(t, err)
+	assert.Zero(t, receiptCount)
+}
+
+func TestKafCompletionReceipt_LateFailureCannotRegressSuccess(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, _ := setupApprovalDecisionFixture(t, engine)
+	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ledger, err := engine.client.KafTaskActionLedger.Create().
+		SetTenantID(tenantID).SetTaskID("PT-monotonic").SetRunID("run-1").SetStepID("finish").
+		SetAction(kafActionComplete).SetIdempotencyKey(fmt.Sprintf("%d:PT-monotonic:run-1:finish", tenantID)).
+		SetCorrelationID("corr-monotonic").SetProcedureRef("ssl-vpn").SetProcedureVersion("v1").
+		SetResultStatus("executing").SetLeaseOwner("owner-1").SetLeaseExpiresAt(time.Now().Add(time.Minute)).
+		Save(ctx)
+	require.NoError(t, err)
+	receipt, err := engine.client.KafTaskCompletionReceipt.Create().
+		SetLedgerID(ledger.ID).SetTenantID(tenantID).SetTaskID(ledger.TaskID).
+		SetStatus("callback_succeeded").Save(ctx)
+	require.NoError(t, err)
+
+	err = engine.updateKafCompletionReceipt(
+		ctx, ledger.ID, ledger.LeaseOwner, receipt.ID, "callback_failed", "callback_failed", errors.New("late failure"),
+	)
+	require.ErrorContains(t, err, "non-monotonic")
+	receipt, err = engine.client.KafTaskCompletionReceipt.Get(ctx, receipt.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "callback_succeeded", receipt.Status)
+	assert.Empty(t, receipt.ErrorCode)
 }
 
 func TestHandleElement_AsyncServiceTask_PausesAndCreatesDelegatedTask(t *testing.T) {

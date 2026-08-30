@@ -11,6 +11,7 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/kaftaskactionledger"
 	"itsm-backend/ent/kaftaskcompletionreceipt"
 	"itsm-backend/ent/permission"
 	"itsm-backend/ent/predicate"
@@ -29,6 +30,7 @@ import (
 	"itsm-backend/service/approver"
 	"itsm-backend/service/bpmn"
 
+	entsql "entgo.io/ent/dialect/sql"
 	"github.com/lib/pq"
 	"go.uber.org/zap"
 )
@@ -332,8 +334,8 @@ func (e *CustomProcessEngine) CompleteTask(ctx context.Context, taskID string, v
 // CompleteKafDelegatedTask completes one KAF-ledger-scoped task and durably
 // records the callback outcome. It intentionally does not widen ProcessEngine:
 // generic callers retain CompleteTask's established best-effort callback behavior.
-func (e *CustomProcessEngine) CompleteKafDelegatedTask(ctx context.Context, ledgerID int, taskID string, variables map[string]interface{}) error {
-	ledger, err := e.client.KafTaskActionLedger.Get(ctx, ledgerID)
+func (e *CustomProcessEngine) CompleteKafDelegatedTask(ctx context.Context, ledgerID int, leaseOwner, taskID string, variables map[string]interface{}) error {
+	ledger, err := e.loadExecutingKafLedger(ctx, ledgerID, leaseOwner)
 	if err != nil {
 		return fmt.Errorf("load KAF completion ledger: %w", err)
 	}
@@ -359,7 +361,7 @@ func (e *CustomProcessEngine) CompleteKafDelegatedTask(ctx context.Context, ledg
 		return fmt.Errorf("load KAF delegated task: %w", err)
 	}
 	if task.Status == common.ProcessTaskStatusCompleted {
-		return e.recoverKafCompletionCallback(ctx, receipt, task)
+		return e.recoverKafCompletionCallback(ctx, ledgerID, leaseOwner, receipt, task)
 	}
 
 	completionVariables := cloneKafVariables(task.TaskVariables)
@@ -367,11 +369,33 @@ func (e *CustomProcessEngine) CompleteKafDelegatedTask(ctx context.Context, ledg
 		completionVariables[key] = value
 	}
 	return e.completeTask(ctx, taskID, completionVariables, func(callbackCtx context.Context, callbackTask *ent.ProcessTask, callbackVariables map[string]interface{}) error {
-		if err := e.dispatchUserTaskCallback(callbackCtx, callbackTask, callbackVariables); err != nil {
-			return e.updateKafCompletionReceipt(callbackCtx, receipt.ID, "callback_failed", "callback_failed", err)
+		if _, err := e.loadExecutingKafLedger(callbackCtx, ledgerID, leaseOwner); err != nil {
+			return err
 		}
-		return e.updateKafCompletionReceipt(callbackCtx, receipt.ID, "callback_succeeded", "", nil)
+		if err := e.dispatchUserTaskCallback(callbackCtx, callbackTask, callbackVariables); err != nil {
+			return e.updateKafCompletionReceipt(callbackCtx, ledgerID, leaseOwner, receipt.ID, "callback_failed", "callback_failed", err)
+		}
+		return e.updateKafCompletionReceipt(callbackCtx, ledgerID, leaseOwner, receipt.ID, "callback_succeeded", "", nil)
 	})
+}
+
+func (e *CustomProcessEngine) loadExecutingKafLedger(ctx context.Context, ledgerID int, leaseOwner string) (*ent.KafTaskActionLedger, error) {
+	if strings.TrimSpace(leaseOwner) == "" {
+		return nil, fmt.Errorf("KAF completion lease owner is required")
+	}
+	ledger, err := e.client.KafTaskActionLedger.Query().Where(
+		kaftaskactionledger.IDEQ(ledgerID),
+		kaftaskactionledger.ResultStatusEQ("executing"),
+		kaftaskactionledger.LeaseOwnerEQ(leaseOwner),
+		kaftaskactionledger.LeaseExpiresAtGT(time.Now()),
+	).Only(ctx)
+	if ent.IsNotFound(err) {
+		return nil, fmt.Errorf("KAF completion lease owner is stale or expired")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("load executing KAF completion ledger: %w", err)
+	}
+	return ledger, nil
 }
 
 func (e *CustomProcessEngine) completeTask(ctx context.Context, taskID string, variables map[string]interface{}, callback func(context.Context, *ent.ProcessTask, map[string]interface{}) error) error {
@@ -525,28 +549,58 @@ func (e *CustomProcessEngine) ensureKafCompletionReceipt(ctx context.Context, le
 	return e.ensureKafCompletionReceipt(ctx, ledgerID, tenantID, taskID)
 }
 
-func (e *CustomProcessEngine) recoverKafCompletionCallback(ctx context.Context, receipt *ent.KafTaskCompletionReceipt, task *ent.ProcessTask) error {
+func (e *CustomProcessEngine) recoverKafCompletionCallback(ctx context.Context, ledgerID int, leaseOwner string, receipt *ent.KafTaskCompletionReceipt, task *ent.ProcessTask) error {
 	if receipt.Status == "callback_succeeded" {
 		return nil
 	}
-	if err := e.dispatchUserTaskCallback(ctx, task, task.TaskVariables); err != nil {
-		return e.updateKafCompletionReceipt(ctx, receipt.ID, "callback_failed", "callback_failed", err)
+	if _, err := e.loadExecutingKafLedger(ctx, ledgerID, leaseOwner); err != nil {
+		return err
 	}
-	return e.updateKafCompletionReceipt(ctx, receipt.ID, "callback_succeeded", "", nil)
+	if err := e.dispatchUserTaskCallback(ctx, task, task.TaskVariables); err != nil {
+		return e.updateKafCompletionReceipt(ctx, ledgerID, leaseOwner, receipt.ID, "callback_failed", "callback_failed", err)
+	}
+	return e.updateKafCompletionReceipt(ctx, ledgerID, leaseOwner, receipt.ID, "callback_succeeded", "", nil)
 }
 
-func (e *CustomProcessEngine) updateKafCompletionReceipt(ctx context.Context, receiptID int, status, errorCode string, callbackErr error) error {
-	update := e.client.KafTaskCompletionReceipt.UpdateOneID(receiptID).SetStatus(status)
+func (e *CustomProcessEngine) updateKafCompletionReceipt(ctx context.Context, ledgerID int, leaseOwner string, receiptID int, status, errorCode string, callbackErr error) error {
+	allowedFrom := []string{"callback_pending", "callback_failed"}
+	update := e.client.KafTaskCompletionReceipt.Update().Where(
+		kaftaskcompletionreceipt.IDEQ(receiptID),
+		kaftaskcompletionreceipt.LedgerIDEQ(ledgerID),
+		kaftaskcompletionreceipt.StatusIn(allowedFrom...),
+		kafReceiptOwnedByExecutingLease(ledgerID, leaseOwner, time.Now()),
+	).SetStatus(status)
 	if errorCode == "" {
 		update.ClearErrorCode()
 	} else {
 		// Do not persist callback text: it can include credentials or external payloads.
 		update.SetErrorCode(errorCode)
 	}
-	if err := update.Exec(ctx); err != nil {
+	updated, err := update.Save(ctx)
+	if err != nil {
 		return fmt.Errorf("update KAF completion receipt: %w", err)
 	}
+	if updated != 1 {
+		receipt, loadErr := e.client.KafTaskCompletionReceipt.Get(ctx, receiptID)
+		if loadErr == nil && receipt.Status == "callback_succeeded" && status == "callback_succeeded" {
+			return nil
+		}
+		return fmt.Errorf("KAF completion receipt transition is stale or non-monotonic")
+	}
 	return callbackErr
+}
+
+func kafReceiptOwnedByExecutingLease(ledgerID int, leaseOwner string, now time.Time) predicate.KafTaskCompletionReceipt {
+	return func(selector *entsql.Selector) {
+		ledger := entsql.Table(kaftaskactionledger.Table)
+		ownedLedger := entsql.Select(ledger.C(kaftaskactionledger.FieldID)).From(ledger).Where(entsql.And(
+			entsql.EQ(ledger.C(kaftaskactionledger.FieldID), ledgerID),
+			entsql.EQ(ledger.C(kaftaskactionledger.FieldResultStatus), "executing"),
+			entsql.EQ(ledger.C(kaftaskactionledger.FieldLeaseOwner), leaseOwner),
+			entsql.GT(ledger.C(kaftaskactionledger.FieldLeaseExpiresAt), now),
+		))
+		selector.Where(entsql.In(selector.C(kaftaskcompletionreceipt.FieldLedgerID), ownedLedger))
+	}
 }
 
 // validateTicketRecordClassInput rejects caller-controlled class changes before

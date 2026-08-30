@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMigration_Struct(t *testing.T) {
@@ -152,4 +153,17 @@ func TestProcessInstanceRunningUniqueGuardIsVersioned(t *testing.T) {
 		}
 	}
 	assert.Contains(t, rollback, "DROP INDEX IF EXISTS idx_process_instances_running_unique")
+}
+
+func TestKafExecutionIntegrityTablesHaveRegisteredTenantRLS(t *testing.T) {
+	sql := GetMigrationSQL("019_kaf_execution_integrity_rls")
+	require.NotEmpty(t, sql)
+	for _, table := range []string{"kaf_task_action_ledgers", "kaf_task_completion_receipts"} {
+		assert.Contains(t, sql, "ALTER TABLE "+table+" ENABLE ROW LEVEL SECURITY")
+		assert.Contains(t, sql, "ALTER TABLE "+table+" FORCE ROW LEVEL SECURITY")
+		assert.Contains(t, sql, "CREATE POLICY tenant_isolation_"+table+" ON "+table)
+		assert.Contains(t, sql, "USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint)")
+		assert.Contains(t, sql, "WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint)")
+	}
+	assert.Equal(t, checksumSQL(sql), checksumSQL(GetMigrationSQL("019_kaf_execution_integrity_rls")))
 }

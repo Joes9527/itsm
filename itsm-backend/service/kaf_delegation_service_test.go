@@ -303,18 +303,31 @@ func (h *failOncePersistingKafCallbackHandler) Validate(context.Context, map[str
 func (h *failOncePersistingKafCallbackHandler) Execute(ctx context.Context, _ *ent.ProcessTask, _ map[string]interface{}) (*dto.ServiceTaskResult, error) {
 	h.calls++
 	h.scope, h.scopeOK = bpmn.KafActionScopeFromContext(ctx)
-	if h.calls == 1 {
-		return nil, errors.New("forced callback failure")
+	if !h.scopeOK {
+		return nil, errors.New("missing KAF action scope")
 	}
-	err := h.client.TicketComment.Create().
+	content := "KAF callback effect " + h.scope.IdempotencyKey()
+	applied, err := h.client.TicketComment.Query().Where(
+		ticketcomment.TicketIDEQ(h.workItemID), ticketcomment.ContentEQ(content),
+	).Exist(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if applied {
+		return &dto.ServiceTaskResult{Success: true}, nil
+	}
+	err = h.client.TicketComment.Create().
 		SetTicketID(h.workItemID).
 		SetUserID(h.actorID).
-		SetContent("KAF callback recovery applied").
+		SetContent(content).
 		SetIsInternal(true).
 		SetTenantID(h.scope.TenantID()).
 		Exec(ctx)
 	if err != nil {
 		return nil, err
+	}
+	if h.calls == 1 {
+		return nil, errors.New("forced callback error after committed effect")
 	}
 	return &dto.ServiceTaskResult{Success: true}, nil
 }
@@ -324,6 +337,12 @@ var _ bpmn.ServiceTaskHandlerInterface = (*failOncePersistingKafCallbackHandler)
 func (e *statefulKafCompletionEngine) CompleteTask(ctx context.Context, taskID string, variables map[string]interface{}) error {
 	e.calls++
 	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
+	task, err := e.client.ProcessTask.Query().Where(
+		processtask.TaskIDEQ(taskID), processtask.TenantIDEQ(tenantID),
+	).Only(ctx)
+	if err != nil {
+		return err
+	}
 	updated, err := e.client.ProcessTask.Update().Where(
 		processtask.TaskIDEQ(taskID), processtask.TenantIDEQ(tenantID),
 	).SetStatus(common.ProcessTaskStatusCompleted).SetTaskVariables(variables).Save(ctx)
@@ -333,10 +352,11 @@ func (e *statefulKafCompletionEngine) CompleteTask(ctx context.Context, taskID s
 	if updated != 1 {
 		return errors.New("stateful KAF engine could not complete task")
 	}
-	return nil
+	return e.client.ProcessInstance.UpdateOneID(task.ProcessInstanceID).
+		SetStatus("completed").SetCurrentActivityID("End").SetCurrentActivityName("End").Exec(ctx)
 }
 
-func (e *statefulKafCompletionEngine) CompleteKafDelegatedTask(ctx context.Context, ledgerID int, taskID string, variables map[string]interface{}) error {
+func (e *statefulKafCompletionEngine) CompleteKafDelegatedTask(ctx context.Context, ledgerID int, _ string, taskID string, variables map[string]interface{}) error {
 	if err := e.CompleteTask(ctx, taskID, variables); err != nil {
 		return err
 	}
@@ -357,10 +377,10 @@ func (e *statefulKafCompletionEngine) CompleteKafDelegatedTask(ctx context.Conte
 	return nil
 }
 
-func (e *blockingKafCompletionEngine) CompleteKafDelegatedTask(ctx context.Context, ledgerID int, taskID string, variables map[string]interface{}) error {
+func (e *blockingKafCompletionEngine) CompleteKafDelegatedTask(ctx context.Context, ledgerID int, leaseOwner, taskID string, variables map[string]interface{}) error {
 	e.entered <- struct{}{}
 	<-e.release
-	return e.statefulKafCompletionEngine.CompleteKafDelegatedTask(ctx, ledgerID, taskID, variables)
+	return e.statefulKafCompletionEngine.CompleteKafDelegatedTask(ctx, ledgerID, leaseOwner, taskID, variables)
 }
 
 func newKafActionFixture(t *testing.T) (*CustomProcessEngine, *KafDelegationService, *ent.ProcessTask, context.Context) {
@@ -471,6 +491,54 @@ func TestExecuteAction_RetryAfterAppliedFinalizationFailureCreatesOneAudit(t *te
 	require.NoError(t, err)
 	assert.Equal(t, KafActionApplied, result.ResultStatus)
 	auditCount, err = svc.client.AuditLog.Query().Where(
+		auditlog.TenantIDEQ(task.TenantID), auditlog.ActionEQ("kaf_delegate."+req.Action),
+	).Count(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, auditCount)
+}
+
+func TestExecuteAction_NonCompletingFinalizationFailureRollsBackEffectAndRetriesOnce(t *testing.T) {
+	_, svc, task, ctx := newKafActionFixture(t)
+	workItemID := attachKafActionWorkItem(t, svc, task, ctx)
+	task, err := svc.client.ProcessTask.UpdateOneID(task.ID).
+		SetTaskVariables(map[string]interface{}{bpmnMetaDataAllowedActions: kafActionComplete + "," + kafActionProgress}).
+		Save(ctx)
+	require.NoError(t, err)
+	req := validCompleteRequest(task, "run-progress", "progress")
+	req.Action = kafActionProgress
+	req.Payload = KafActionPayload{ResultSummary: "halfway"}
+	failures := 0
+	svc.client.KafTaskActionLedger.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(hookCtx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			if ledgerMutation, ok := mutation.(*ent.KafTaskActionLedgerMutation); ok {
+				if status, exists := ledgerMutation.ResultStatus(); exists && status == "applied" && failures == 0 {
+					failures++
+					return nil, errors.New("forced non-completing finalization failure")
+				}
+			}
+			return next.Mutate(hookCtx, mutation)
+		})
+	})
+
+	_, err = svc.ExecuteAction(ctx, task.TaskID, req, nil)
+	require.ErrorContains(t, err, "forced non-completing finalization failure")
+	instance, err := svc.client.ProcessInstance.Get(ctx, task.ProcessInstanceID)
+	require.NoError(t, err)
+	assert.Equal(t, req.ExpectedVersion, instance.Version)
+	commentCount, err := svc.client.TicketComment.Query().Where(ticketcomment.TicketIDEQ(workItemID)).Count(ctx)
+	require.NoError(t, err)
+	assert.Zero(t, commentCount)
+
+	result, err := svc.ExecuteAction(ctx, task.TaskID, req, nil)
+	require.NoError(t, err)
+	assert.Equal(t, KafActionApplied, result.ResultStatus)
+	instance, err = svc.client.ProcessInstance.Get(ctx, task.ProcessInstanceID)
+	require.NoError(t, err)
+	assert.Equal(t, req.ExpectedVersion+1, instance.Version)
+	commentCount, err = svc.client.TicketComment.Query().Where(ticketcomment.TicketIDEQ(workItemID)).Count(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, commentCount)
+	auditCount, err := svc.client.AuditLog.Query().Where(
 		auditlog.TenantIDEQ(task.TenantID), auditlog.ActionEQ("kaf_delegate."+req.Action),
 	).Count(ctx)
 	require.NoError(t, err)
@@ -655,7 +723,7 @@ func TestExecuteAction_RejectsSameScopeWithDifferentKey(t *testing.T) {
 	assert.Equal(t, 1, completedCount)
 }
 
-func TestReconcileCompletedTaskWithoutSuccessfulReceipt_DoesNotCompleteBPMNAgain(t *testing.T) {
+func TestReconcileTaskOnlyCompletion_DoesNotReportApplied(t *testing.T) {
 	engine, svc, task, ctx := newKafActionFixture(t)
 	req := validCompleteRequest(task, "run-1", "finish")
 	completedVariables := cloneKafVariables(task.TaskVariables)
@@ -696,19 +764,18 @@ func TestReconcileCompletedTaskWithoutSuccessfulReceipt_DoesNotCompleteBPMNAgain
 	})
 
 	result, err := svc.ExecuteAction(ctx, task.TaskID, req, engine)
-	require.NoError(t, err)
-	assert.Equal(t, KafActionApplied, result.ResultStatus)
+	require.ErrorContains(t, err, "process instance did not advance")
+	assert.Nil(t, result)
 	assert.Zero(t, completionAttempts)
-	assert.Equal(t, 1, handler.calls)
-	require.True(t, handler.scopeOK)
-	assert.Equal(t, ledger.ID, handler.scope.LedgerID())
-	assert.Equal(t, task.TaskID, handler.scope.TaskID())
-	assert.Equal(t, req.Execution.IdempotencyKey, handler.scope.IdempotencyKey())
+	assert.Zero(t, handler.calls)
 	receipt, err := svc.client.KafTaskCompletionReceipt.Query().Where(
 		kaftaskcompletionreceipt.LedgerIDEQ(ledger.ID),
 	).Only(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, "callback_succeeded", receipt.Status)
+	assert.Equal(t, "callback_pending", receipt.Status)
+	ledger, err = svc.client.KafTaskActionLedger.Get(ctx, ledger.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "failed_retryable", ledger.ResultStatus)
 }
 
 func TestExecuteAction_RealEngineCallbackFailureRecoversWithoutSecondBPMNCompletion(t *testing.T) {
@@ -772,7 +839,7 @@ func TestExecuteAction_RealEngineCallbackFailureRecoversWithoutSecondBPMNComplet
 		ticketcomment.TicketIDEQ(workItemID),
 	).Count(ctx)
 	require.NoError(t, err)
-	assert.Zero(t, commentCount)
+	assert.Equal(t, 1, commentCount)
 	auditCount, err := svc.client.AuditLog.Query().Where(
 		auditlog.TenantIDEQ(task.TenantID),
 		auditlog.ActionEQ("kaf_delegate."+req.Action),

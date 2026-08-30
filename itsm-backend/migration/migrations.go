@@ -113,6 +113,11 @@ var RegisteredMigrations = []Migration{
 			"are already identity, so it is safe to run in environments not affected by this.",
 		RollbackSQL: "",
 	},
+	{
+		Version:     "019_kaf_execution_integrity_rls",
+		Description: "Enable and force tenant RLS on KAF action ledgers and completion receipts",
+		RollbackSQL: "",
+	},
 }
 
 // PostSchemaMigrations returns a defensive copy of the canonical active stream.
@@ -750,6 +755,22 @@ BEGIN
         EXECUTE format('DROP SEQUENCE IF EXISTS %I', tbl || '_id_seq');
     END LOOP;
 END $$;
+`
+	case "019_kaf_execution_integrity_rls":
+		return `
+ALTER TABLE kaf_task_action_ledgers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE kaf_task_action_ledgers FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_kaf_task_action_ledgers ON kaf_task_action_ledgers;
+CREATE POLICY tenant_isolation_kaf_task_action_ledgers ON kaf_task_action_ledgers
+    USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint)
+    WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint);
+
+ALTER TABLE kaf_task_completion_receipts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE kaf_task_completion_receipts FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_kaf_task_completion_receipts ON kaf_task_completion_receipts;
+CREATE POLICY tenant_isolation_kaf_task_completion_receipts ON kaf_task_completion_receipts
+    USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint)
+    WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint);
 `
 	default:
 		return ""
