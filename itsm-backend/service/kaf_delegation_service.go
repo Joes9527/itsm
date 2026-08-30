@@ -369,18 +369,23 @@ func (s *KafDelegationService) ExecuteAction(ctx context.Context, taskID string,
 	}
 	result := KafActionResult{
 		Action: req.Action, IdempotencyKey: req.Execution.IdempotencyKey,
-		ResultStatus: KafActionAlreadyApplied, ExpectedVersion: req.ExpectedVersion,
+		ResultStatus: KafActionApplied, ExpectedVersion: req.ExpectedVersion,
 	}
 	if !claimed {
 		if ledger.ResultStatus != "applied" {
 			return nil, fmt.Errorf("%w: action is not claimable", ErrKafActionConflict)
 		}
+		result.ResultStatus = KafActionAlreadyApplied
 		return &result, nil
 	}
 	if reconciled, err := s.reconcileCompletedKafAction(ctx, task, req, ledger, engine); err != nil {
 		_ = s.finalizeKafAction(ctx, ledger, "failed_retryable", "action_reconciliation_failed")
 		return nil, err
 	} else if reconciled {
+		if err := s.finalizeAppliedKafAction(ctx, task, req, ledger, http.StatusOK); err != nil {
+			_ = s.finalizeKafAction(ctx, ledger, "failed_retryable", "action_finalization_failed")
+			return nil, err
+		}
 		return &result, nil
 	}
 	instance, err := s.client.ProcessInstance.Query().Where(
@@ -419,14 +424,10 @@ func (s *KafDelegationService) ExecuteAction(ctx context.Context, taskID string,
 		_ = s.finalizeKafAction(ctx, ledger, "failed_retryable", "action_persistence_failed")
 		return nil, err
 	}
-	if err := s.recordActionAudit(ctx, task, req, ledger, KafActionApplied, http.StatusOK); err != nil {
-		_ = s.finalizeKafAction(ctx, ledger, "failed_retryable", "audit_write_failed")
-		return nil, fmt.Errorf("record KAF action audit: %w", err)
-	}
-	if err := s.finalizeKafAction(ctx, ledger, "applied", ""); err != nil {
+	if err := s.finalizeAppliedKafAction(ctx, task, req, ledger, http.StatusOK); err != nil {
+		_ = s.finalizeKafAction(ctx, ledger, "failed_retryable", "action_finalization_failed")
 		return nil, err
 	}
-	result.ResultStatus = KafActionApplied
 	return &result, nil
 }
 
@@ -477,12 +478,6 @@ func (s *KafDelegationService) reconcileCompletedKafAction(ctx context.Context, 
 		if err := completionEngine.CompleteKafDelegatedTask(recoveryCtx, ledger.ID, task.TaskID, completedTask.TaskVariables); err != nil {
 			return false, fmt.Errorf("recover delegated BPMN callback: %w", err)
 		}
-	}
-	if err := s.recordActionAudit(ctx, task, req, ledger, KafActionApplied, http.StatusOK); err != nil {
-		return false, fmt.Errorf("record recovered KAF action audit: %w", err)
-	}
-	if err := s.finalizeKafAction(ctx, ledger, "applied", ""); err != nil {
-		return false, err
 	}
 	return true, nil
 }
@@ -596,13 +591,6 @@ func (s *KafDelegationService) claimKafActionOnce(ctx context.Context, task *ent
 		return nil, false, fmt.Errorf("claim KAF action ledger: %w", err)
 	}
 	if updated != 1 {
-		current, loadErr := s.loadKafActionLedger(ctx, task, req)
-		if loadErr != nil {
-			return nil, false, loadErr
-		}
-		if current.ResultStatus == "applied" {
-			return current, false, nil
-		}
 		return nil, false, fmt.Errorf("%w: %w", ErrKafActionConflict, ErrKafActionInProgress)
 	}
 	ledger, err = s.client.KafTaskActionLedger.Get(ctx, ledger.ID)
@@ -683,6 +671,41 @@ func (s *KafDelegationService) finalizeKafAction(ctx context.Context, ledger *en
 	return nil
 }
 
+// finalizeAppliedKafAction commits the durable audit reference and applied
+// ledger state together so recovery cannot duplicate the audit after a failed
+// finalization attempt.
+func (s *KafDelegationService) finalizeAppliedKafAction(ctx context.Context, task *ent.ProcessTask, req KafActionRequest, ledger *ent.KafTaskActionLedger, statusCode int) error {
+	if ledger == nil || ledger.LeaseOwner == "" {
+		return fmt.Errorf("%w: action lease is required for finalization", ErrKafActionConflict)
+	}
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("start KAF action finalization transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	payload, err := json.Marshal(map[string]interface{}{"action": ledger.Action, "idempotencyKey": ledger.IdempotencyKey})
+	if err != nil {
+		return fmt.Errorf("marshal KAF action result payload: %w", err)
+	}
+	updated, err := tx.KafTaskActionLedger.Update().Where(
+		kaftaskactionledger.IDEQ(ledger.ID), kaftaskactionledger.ResultStatusEQ("executing"),
+		kaftaskactionledger.LeaseOwnerEQ(ledger.LeaseOwner),
+	).SetResultStatus("applied").SetResultPayload(payload).ClearLastErrorCode().ClearLeaseOwner().ClearLeaseExpiresAt().Save(ctx)
+	if err != nil {
+		return fmt.Errorf("finalize KAF action ledger: %w", err)
+	}
+	if updated != 1 {
+		return fmt.Errorf("%w: action lease was lost before finalization", ErrKafActionConflict)
+	}
+	if err := recordActionAudit(ctx, tx.Client(), task, req, ledger, KafActionApplied, statusCode); err != nil {
+		return fmt.Errorf("record KAF action audit: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit KAF action finalization transaction: %w", err)
+	}
+	return nil
+}
+
 func (s *KafDelegationService) persistNonCompletingAction(ctx context.Context, task *ent.ProcessTask, instance *ent.ProcessInstance, req KafActionRequest) error {
 	actorID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
 	if actorID <= 0 {
@@ -736,7 +759,7 @@ func kafActionTimelineContent(req KafActionRequest) string {
 	return prefix + " " + summarizeOutboxError(summary)
 }
 
-func (s *KafDelegationService) recordActionAudit(ctx context.Context, task *ent.ProcessTask, req KafActionRequest, ledger *ent.KafTaskActionLedger, resultStatus string, statusCode int) error {
+func recordActionAudit(ctx context.Context, client *ent.Client, task *ent.ProcessTask, req KafActionRequest, ledger *ent.KafTaskActionLedger, resultStatus string, statusCode int) error {
 	if ledger == nil {
 		return errors.New("KAF action ledger is required for audit")
 	}
@@ -750,7 +773,7 @@ func (s *KafDelegationService) recordActionAudit(ctx context.Context, task *ent.
 	if err != nil {
 		return err
 	}
-	create := s.client.AuditLog.Create().SetTenantID(task.TenantID).SetResource("work_item").
+	create := client.AuditLog.Create().SetTenantID(task.TenantID).SetResource("work_item").
 		SetAction("kaf_delegate." + req.Action).SetPath("bpmn/process-tasks/actions").SetMethod("POST").
 		SetStatusCode(statusCode).SetRequestBody(string(body))
 	if actorID > 0 {

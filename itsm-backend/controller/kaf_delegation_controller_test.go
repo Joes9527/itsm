@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"itsm-backend/common"
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/enttest"
@@ -40,26 +41,18 @@ type kafHTTPFixture struct {
 	failingCompletionError  string
 }
 
-type failingKafCompletionEngine struct {
-	service.ProcessEngine
-	client *ent.Client
-	err    error
+type failingKafCallbackHandler struct{ err error }
+
+func (h *failingKafCallbackHandler) GetTaskType() string  { return "failing_kaf_callback" }
+func (h *failingKafCallbackHandler) GetHandlerID() string { return "failing_kaf_callback_handler" }
+func (h *failingKafCallbackHandler) Validate(context.Context, map[string]interface{}) error {
+	return nil
+}
+func (h *failingKafCallbackHandler) Execute(context.Context, *ent.ProcessTask, map[string]interface{}) (*dto.ServiceTaskResult, error) {
+	return nil, h.err
 }
 
-func (e *failingKafCompletionEngine) CompleteKafDelegatedTask(ctx context.Context, ledgerID int, taskID string, _ map[string]interface{}) error {
-	ledger, err := e.client.KafTaskActionLedger.Get(ctx, ledgerID)
-	if err != nil {
-		return err
-	}
-	_, err = e.client.KafTaskCompletionReceipt.Create().
-		SetLedgerID(ledgerID).SetTenantID(ledger.TenantID).SetTaskID(taskID).
-		SetStatus("callback_failed").SetErrorCode("callback_failed").
-		Save(ctx)
-	if err != nil && !ent.IsConstraintError(err) {
-		return err
-	}
-	return e.err
-}
+var _ bpmn.ServiceTaskHandlerInterface = (*failingKafCallbackHandler)(nil)
 
 func newKafDelegationHTTPFixture(t *testing.T, fixture kafHTTPFixture) (*gin.Engine, string, *ent.Client) {
 	t.Helper()
@@ -105,16 +98,21 @@ func newKafDelegationHTTPFixture(t *testing.T, fixture kafHTTPFixture) (*gin.Eng
 	if allowedActions == "" {
 		allowedActions = "complete_bpmn_task,update_progress,record_execution_failure"
 	}
+	taskVariables := map[string]interface{}{"allowed_actions": allowedActions}
+	if fixture.failingCompletionError != "" {
+		taskVariables["service_task_type"] = "failing_kaf_callback"
+		taskVariables["action"] = "complete"
+	}
 	task, err := client.ProcessTask.Create().
 		SetTaskID("TASK-kaf-http").SetProcessInstanceID(instance.ID).SetProcessDefinitionKey(instance.ProcessDefinitionKey).
 		SetTaskDefinitionKey("Activity_Kaf").SetTaskName("KAF task").SetTaskType(fixture.taskType).
-		SetStatus(fixture.status).SetTaskVariables(map[string]interface{}{"allowed_actions": allowedActions}).
+		SetStatus(fixture.status).SetTaskVariables(taskVariables).
 		SetCorrelationID("corr-kaf-http").SetTenantID(taskTenant.ID).Save(ctx)
 	require.NoError(t, err)
 
-	var engine service.ProcessEngine = service.NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar())
+	engine := service.NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar()).(*service.CustomProcessEngine)
 	if fixture.failingCompletionError != "" {
-		engine = &failingKafCompletionEngine{client: client, err: errors.New(fixture.failingCompletionError)}
+		engine.CallbackRegistry().RegisterHandler(&failingKafCallbackHandler{err: errors.New(fixture.failingCompletionError)})
 	}
 	controller := NewKafDelegationController(client, engine)
 	router := gin.New()
@@ -332,6 +330,7 @@ func TestExecuteAction_RedactsCompletionFailureAcrossPersistenceAndResponse(t *t
 	})
 	task, err := client.ProcessTask.Query().Where(processtask.TaskIDEQ(taskID)).Only(context.Background())
 	require.NoError(t, err)
+	ticketID := attachKafWorkItem(t, client, taskID)
 	body := `{"action":"complete_bpmn_task","expectedVersion":3,"execution":{"runId":"run-1","stepId":"finish","idempotencyKey":"` + fmt.Sprintf("%d:%s:run-1:finish", task.TenantID, taskID) + `","correlationId":"corr-kaf-http","procedureRef":"vpn-grant","procedureVersion":"1"},"payload":{"resultSummary":"completed"}}`
 
 	response := doKafRequest(t, router, http.MethodPost, "/api/v1/bpmn/process-tasks/"+taskID+"/actions", body)
@@ -344,13 +343,15 @@ func TestExecuteAction_RedactsCompletionFailureAcrossPersistenceAndResponse(t *t
 	assert.NotContains(t, receipt.ErrorCode, token)
 	audits, err := client.AuditLog.Query().Where(auditlog.TenantIDEQ(task.TenantID)).All(context.Background())
 	require.NoError(t, err)
+	assert.Empty(t, audits)
 	for _, audit := range audits {
 		if audit.RequestBody != nil {
 			assert.NotContains(t, *audit.RequestBody, token)
 		}
 	}
-	comments, err := client.TicketComment.Query().Where(ticketcomment.TenantIDEQ(task.TenantID)).All(context.Background())
+	comments, err := client.TicketComment.Query().Where(ticketcomment.TicketIDEQ(ticketID)).All(context.Background())
 	require.NoError(t, err)
+	assert.Empty(t, comments)
 	for _, comment := range comments {
 		assert.NotContains(t, comment.Content, token)
 	}
