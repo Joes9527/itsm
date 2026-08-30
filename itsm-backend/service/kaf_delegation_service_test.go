@@ -142,6 +142,8 @@ func TestCreateDelegatedTask_CommitsTaskAuditAndOutboxWithSameCorrelationID(t *t
 	require.NoError(t, err)
 	require.NotNil(t, audit.RequestBody)
 	assert.Contains(t, *audit.RequestBody, fmt.Sprintf(`"correlationId":%q`, task.CorrelationID))
+	actorID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
+	assert.Equal(t, actorID, audit.UserID)
 
 	event, err := svc.client.OutboxEvent.Query().
 		Where(outboxevent.AggregateIDEQ(task.TaskID)).
@@ -153,4 +155,89 @@ func TestCreateDelegatedTask_CommitsTaskAuditAndOutboxWithSameCorrelationID(t *t
 	require.NoError(t, json.Unmarshal(event.Payload, &payload))
 	assert.Equal(t, task.CorrelationID, payload.CorrelationID)
 	assert.Equal(t, "incident", payload.RecordClass)
+}
+
+func TestCreateDelegatedTask_RejectsMissingOrMismatchedTenantContext(t *testing.T) {
+	tests := []struct {
+		name     string
+		buildCtx func(context.Context, *KafDelegationService) context.Context
+	}{
+		{
+			name: "missing tenant",
+			buildCtx: func(ctx context.Context, _ *KafDelegationService) context.Context {
+				return context.WithValue(context.Background(), bpmn.BPMNUserIDContextKey, ctx.Value(bpmn.BPMNUserIDContextKey))
+			},
+		},
+		{
+			name: "mismatched tenant",
+			buildCtx: func(ctx context.Context, svc *KafDelegationService) context.Context {
+				foreignTenant, err := svc.client.Tenant.Create().
+					SetName("Foreign KAF Tenant").
+					SetCode("foreign-kaf-delegation").
+					SetDomain("foreign-kaf-delegation.example.com").
+					SetStatus("active").
+					Save(ctx)
+				require.NoError(t, err)
+				return context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, foreignTenant.ID)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, svc, ctx, instance := newDelegationFixture(t)
+			_, err := svc.CreateDelegatedTask(tt.buildCtx(ctx, svc), instance.ID, kafDelegateTask("resolve"))
+			require.Error(t, err)
+			assertNoKafDelegationRecords(t, svc, ctx, instance)
+		})
+	}
+}
+
+func TestCreateDelegatedTask_RejectsCrossTenantAuditActor(t *testing.T) {
+	_, svc, ctx, instance := newDelegationFixture(t)
+
+	foreignTenant, err := svc.client.Tenant.Create().
+		SetName("Foreign Audit Tenant").
+		SetCode("foreign-audit-tenant").
+		SetDomain("foreign-audit.example.com").
+		SetStatus("active").
+		Save(ctx)
+	require.NoError(t, err)
+	foreignActor, err := svc.client.User.Create().
+		SetUsername("foreign-kaf-actor").
+		SetEmail("foreign-kaf-actor@example.com").
+		SetName("Foreign KAF Actor").
+		SetPasswordHash("hash").
+		SetRole("agent").
+		SetActive(true).
+		SetTenantID(foreignTenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	foreignActorCtx := context.WithValue(ctx, bpmn.BPMNUserIDContextKey, foreignActor.ID)
+	_, err = svc.CreateDelegatedTask(foreignActorCtx, instance.ID, kafDelegateTask("resolve"))
+	require.Error(t, err)
+	assertNoKafDelegationRecords(t, svc, ctx, instance)
+}
+
+func assertNoKafDelegationRecords(t *testing.T, svc *KafDelegationService, ctx context.Context, instance *ent.ProcessInstance) {
+	t.Helper()
+
+	taskCount, err := svc.client.ProcessTask.Query().
+		Where(processtask.ProcessInstanceIDEQ(instance.ID)).
+		Count(ctx)
+	require.NoError(t, err)
+	assert.Zero(t, taskCount)
+
+	auditCount, err := svc.client.AuditLog.Query().
+		Where(auditlog.TenantIDEQ(instance.TenantID), auditlog.ActionEQ("kaf_delegate.created")).
+		Count(ctx)
+	require.NoError(t, err)
+	assert.Zero(t, auditCount)
+
+	eventCount, err := svc.client.OutboxEvent.Query().
+		Where(outboxevent.TenantIDEQ(instance.TenantID), outboxevent.EventTypeEQ("kaf_delegate_requested")).
+		Count(ctx)
+	require.NoError(t, err)
+	assert.Zero(t, eventCount)
 }

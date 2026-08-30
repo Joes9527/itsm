@@ -11,6 +11,7 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processinstance"
+	"itsm-backend/ent/user"
 	"itsm-backend/service/bpmn"
 
 	"github.com/google/uuid"
@@ -37,14 +38,19 @@ func NewKafDelegationService(client *ent.Client) *KafDelegationService {
 	}
 }
 
-// CreateDelegatedTask creates the BPMN wait state, its audit record, and its
-// delivery event in one transaction. Any failed write rolls back all three.
+// CreateDelegatedTask creates the BPMN wait state, its activity update, audit
+// record, and delivery event in one transaction. Any failed write rolls back
+// the complete delegation transition.
 func (s *KafDelegationService) CreateDelegatedTask(ctx context.Context, instanceID int, serviceTask *BPMNServiceTask) (*ent.ProcessTask, error) {
 	if serviceTask == nil {
 		return nil, fmt.Errorf("KAF delegation service task is required")
 	}
 	if s.outbox == nil {
 		return nil, fmt.Errorf("KAF delegation outbox repository is required")
+	}
+	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
+	if tenantID <= 0 {
+		return nil, fmt.Errorf("KAF delegation tenant context is required")
 	}
 
 	tx, err := s.client.Tx(ctx)
@@ -53,13 +59,31 @@ func (s *KafDelegationService) CreateDelegatedTask(ctx context.Context, instance
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	instanceQuery := tx.ProcessInstance.Query().Where(processinstance.IDEQ(instanceID))
-	if tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int); tenantID > 0 {
-		instanceQuery = instanceQuery.Where(processinstance.TenantIDEQ(tenantID))
-	}
-	instance, err := instanceQuery.Only(ctx)
+	instance, err := tx.ProcessInstance.Query().
+		Where(processinstance.IDEQ(instanceID), processinstance.TenantIDEQ(tenantID)).
+		Only(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("load KAF delegation process instance: %w", err)
+	}
+
+	actorID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
+	if actorID > 0 {
+		actorExists, err := tx.User.Query().
+			Where(user.IDEQ(actorID), user.TenantIDEQ(instance.TenantID)).
+			Exist(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("validate KAF delegation audit actor: %w", err)
+		}
+		if !actorExists {
+			return nil, fmt.Errorf("KAF delegation audit actor %d does not belong to tenant %d", actorID, instance.TenantID)
+		}
+	}
+
+	if _, err := tx.ProcessInstance.UpdateOne(instance).
+		SetCurrentActivityID(serviceTask.ID).
+		SetCurrentActivityName(serviceTask.ID).
+		Save(ctx); err != nil {
+		return nil, fmt.Errorf("update KAF delegation process activity: %w", err)
 	}
 
 	task, err := tx.ProcessTask.Create().
@@ -89,7 +113,7 @@ func (s *KafDelegationService) CreateDelegatedTask(ctx context.Context, instance
 		SetMethod("SYSTEM").
 		SetStatusCode(http.StatusCreated).
 		SetRequestBody(fmt.Sprintf(`{"taskId":%q,"correlationId":%q}`, task.TaskID, task.CorrelationID))
-	if actorID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int); actorID > 0 {
+	if actorID > 0 {
 		auditCreate.SetUserID(actorID)
 	}
 	if err := auditCreate.Exec(ctx); err != nil {

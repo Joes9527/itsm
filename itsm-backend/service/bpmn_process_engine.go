@@ -739,6 +739,10 @@ func (e *CustomProcessEngine) executeStep(ctx context.Context, instance *ent.Pro
 }
 
 func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.ProcessInstance, process *BPMNProcess, elementID string) error {
+	if serviceTask := e.findServiceTask(process, elementID); serviceTask != nil && e.isKafDelegationServiceTask(serviceTask) {
+		return e.createDelegatedTask(ctx, instance, serviceTask, bpmn.KafDelegateTaskType)
+	}
+
 	// Find the element name for logging
 	elementName := elementID
 	if task := e.findUserTask(process, elementID); task != nil {
@@ -839,6 +843,14 @@ func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.P
 	}
 
 	return e.executeStep(ctx, instance, process, elementID, instance.Variables)
+}
+
+func (e *CustomProcessEngine) isKafDelegationServiceTask(serviceTask *BPMNServiceTask) bool {
+	if serviceTask == nil || serviceTask.ServiceTaskType() != bpmn.KafDelegateTaskType {
+		return false
+	}
+	handler := e.findHandlerByTaskType(bpmn.KafDelegateTaskType)
+	return handler != nil && isAsyncHandler(handler)
 }
 
 func mergeServiceTaskVariables(instanceVariables map[string]interface{}, task *BPMNServiceTask) map[string]interface{} {

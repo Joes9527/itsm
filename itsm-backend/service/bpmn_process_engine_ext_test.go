@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -9,7 +10,9 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/ent/hook"
 	"itsm-backend/ent/outboxevent"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/service/bpmn"
@@ -1210,6 +1213,67 @@ func TestHandleElement_KafDelegate_PersistsTransactionalDelegation(t *testing.T)
 	updatedInstance, err := engine.client.ProcessInstance.Get(ctx, instance.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "Activity_KafDelegate", updatedInstance.CurrentActivityID)
+}
+
+func TestHandleElement_KafDelegate_RollsBackActivityAndDelegationRecordsOnPersistenceFailure(t *testing.T) {
+	tests := []struct {
+		name   string
+		inject func(*CustomProcessEngine)
+		want   string
+	}{
+		{
+			name: "audit insert",
+			inject: func(engine *CustomProcessEngine) {
+				engine.client.AuditLog.Use(hook.On(hook.FixedError(errors.New("audit unavailable")), ent.OpCreate))
+			},
+			want: "audit unavailable",
+		},
+		{
+			name: "outbox insert",
+			inject: func(engine *CustomProcessEngine) {
+				engine.kafDelegationService.outbox = failingKafOutboxRepository{err: errors.New("outbox unavailable")}
+			},
+			want: "outbox unavailable",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			engine, baseCtx := newApprovalDecisionTestEngine(t)
+			tenantID, actorID := setupApprovalDecisionFixture(t, engine)
+			ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+			ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, actorID)
+
+			instanceID, _ := createProcessFixture(t, engine, tenantID, "kaf-rollback-"+tt.name)
+			instance, err := engine.client.ProcessInstance.UpdateOneID(instanceID).
+				SetBusinessType("incident").
+				SetBusinessID(42).
+				SetCurrentActivityID("Activity_Previous").
+				SetCurrentActivityName("Previous activity").
+				Save(ctx)
+			require.NoError(t, err)
+			engine.callbackRegistry.RegisterHandler(&fakeAsyncServiceTaskHandler{taskType: bpmn.KafDelegateTaskType, handlerID: "kaf_delegate_handler"})
+			tt.inject(engine)
+
+			err = engine.handleElement(ctx, instance, &BPMNProcess{ServiceTasks: []*BPMNServiceTask{kafDelegateTask("resolve")}}, "Activity_KafDelegate")
+			require.ErrorContains(t, err, tt.want)
+
+			updatedInstance, err := engine.client.ProcessInstance.Get(ctx, instance.ID)
+			require.NoError(t, err)
+			assert.Equal(t, "Activity_Previous", updatedInstance.CurrentActivityID)
+			assert.Equal(t, "Previous activity", updatedInstance.CurrentActivityName)
+
+			taskCount, err := engine.client.ProcessTask.Query().Where(processtask.ProcessInstanceIDEQ(instance.ID)).Count(ctx)
+			require.NoError(t, err)
+			assert.Equal(t, 1, taskCount, "only the fixture task should remain")
+			auditCount, err := engine.client.AuditLog.Query().Where(auditlog.TenantIDEQ(tenantID), auditlog.ActionEQ("kaf_delegate.created")).Count(ctx)
+			require.NoError(t, err)
+			assert.Zero(t, auditCount)
+			eventCount, err := engine.client.OutboxEvent.Query().Where(outboxevent.TenantIDEQ(tenantID), outboxevent.EventTypeEQ("kaf_delegate_requested")).Count(ctx)
+			require.NoError(t, err)
+			assert.Zero(t, eventCount)
+		})
+	}
 }
 
 // TestHandleElement_AsyncServiceTask_LegacyAttributeFallback_PausesAndCreatesDelegatedTask
