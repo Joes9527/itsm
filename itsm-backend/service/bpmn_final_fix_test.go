@@ -15,6 +15,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/processapprovaldecision"
 	"itsm-backend/ent/processauditlog"
+	"itsm-backend/ent/processcallbackoutbox"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/service/bpmn"
 
@@ -52,6 +53,70 @@ func TestCompleteTaskRollsBackDatabaseStateWhenAuditFails(t *testing.T) {
 	assert.Equal(t, instance.Variables, afterInstance.Variables)
 	assert.Zero(t, f.client.ProcessApprovalDecision.Query().CountX(f.userCtx))
 	assert.Zero(t, f.client.ProcessAuditLog.Query().CountX(f.userCtx))
+}
+
+func TestCompleteTaskCommitsCallbackOutboxAtomically(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	handler := newCountingIdempotentCallbackHandler("durable_service_task", "durable_service_handler", 0)
+	task, instance := seedDurableServiceCallbackTask(t, f, "atomic-commit", handler)
+
+	require.NoError(t, f.engine.CompleteTask(
+		f.typedTaskScopeOnlyCtx(f.actor, false), task.TaskID, map[string]interface{}{"approved": true},
+	))
+
+	row := f.client.ProcessCallbackOutbox.Query().Where(
+		processcallbackoutbox.TenantID(f.tenant.ID),
+		processcallbackoutbox.ProcessInstanceID(instance.ID),
+	).OnlyX(f.userCtx)
+	assert.Equal(t, bpmnCallbackStatusCompleted, row.Status)
+	assert.Equal(t, "service_task", row.CallbackKind)
+	assert.Equal(t, "callback", row.ElementID)
+	assert.NotEmpty(t, row.ExecutionKey)
+	assert.Equal(t, common.ProcessTaskStatusCompleted, f.client.ProcessTask.GetX(f.userCtx, task.ID).Status)
+	assert.Equal(t, 1, f.client.ProcessAuditLog.Query().Where(
+		processauditlog.ProcessInstanceID(instance.ID),
+		processauditlog.Action(AuditActionTaskCompleted),
+	).CountX(f.userCtx))
+}
+
+func TestCompleteTaskAuditFailureLeavesNoCallbackOutbox(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	handler := newCountingIdempotentCallbackHandler("durable_service_task", "durable_service_handler", 0)
+	task, instance := seedDurableServiceCallbackTask(t, f, "audit-outbox-rollback", handler)
+	forcedErr := errors.New("forced callback audit rollback")
+	failProcessAuditCreation(f.client, forcedErr)
+
+	err := f.engine.CompleteTask(
+		f.typedTaskScopeOnlyCtx(f.actor, false), task.TaskID, map[string]interface{}{"approved": true},
+	)
+	require.ErrorIs(t, err, forcedErr)
+
+	assert.Equal(t, common.ProcessTaskStatusCreated, f.client.ProcessTask.GetX(f.userCtx, task.ID).Status)
+	assert.Equal(t, "approval", f.client.ProcessInstance.GetX(f.userCtx, instance.ID).CurrentActivityID)
+	assert.Zero(t, f.client.ProcessCallbackOutbox.Query().Where(
+		processcallbackoutbox.TenantID(f.tenant.ID),
+		processcallbackoutbox.ProcessInstanceID(instance.ID),
+	).CountX(f.userCtx))
+	assert.Zero(t, handler.AttemptCount())
+}
+
+func TestCompleteTaskReturnsSuccessWhenInlineCallbackAttemptFails(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	handler := newCountingIdempotentCallbackHandler("durable_service_task", "durable_service_handler", 1)
+	task, instance := seedDurableServiceCallbackTask(t, f, "inline-failure", handler)
+
+	require.NoError(t, f.engine.CompleteTask(
+		f.typedTaskScopeOnlyCtx(f.actor, false), task.TaskID, map[string]interface{}{"approved": true},
+	))
+
+	row := f.client.ProcessCallbackOutbox.Query().Where(
+		processcallbackoutbox.TenantID(f.tenant.ID),
+		processcallbackoutbox.ProcessInstanceID(instance.ID),
+	).OnlyX(f.userCtx)
+	assert.Equal(t, bpmnCallbackStatusPending, row.Status)
+	assert.Equal(t, "handler_error", row.LastErrorClass)
+	assert.Equal(t, common.ProcessTaskStatusCompleted, f.client.ProcessTask.GetX(f.userCtx, task.ID).Status)
+	assert.Equal(t, "callback", f.client.ProcessInstance.GetX(f.userCtx, instance.ID).CurrentActivityID)
 }
 
 func TestCompleteTaskAuditUsesTypedScopeActor(t *testing.T) {

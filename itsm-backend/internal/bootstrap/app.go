@@ -53,19 +53,25 @@ import (
 	"itsm-backend/service/bpmn"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"go.uber.org/zap"
 )
 
+type bpmnCallbackWorker interface {
+	RunCallbackOutboxWorker(context.Context, string, time.Duration)
+}
+
 type Application struct {
-	Cfg         *config.Config
-	Logger      *zap.SugaredLogger
-	DBClient    *ent.Client
-	Router      *gin.Engine
-	Embedder    service.Embedder
-	VectorStore *service.VectorStore
+	Cfg            *config.Config
+	Logger         *zap.SugaredLogger
+	DBClient       *ent.Client
+	Router         *gin.Engine
+	Embedder       service.Embedder
+	VectorStore    *service.VectorStore
+	callbackWorker bpmnCallbackWorker
 }
 
 // prepareRolePermissionTenantMigration upgrades installations created before
@@ -225,7 +231,8 @@ func NewApplication() *Application {
 
 	// BPMN 子服务（必须在 TicketService 之前创建）
 	processBindingService := service.NewProcessBindingService(client)
-	processEngine := service.NewCustomProcessEngine(client, sugar)
+	concreteProcessEngine := service.NewCustomProcessEngine(client, sugar).(*service.CustomProcessEngine)
+	var processEngine service.ProcessEngine = concreteProcessEngine
 	processTriggerService := service.NewProcessTriggerService(client, processEngine)
 	processResolver := service.NewProcessResolver(client, processBindingService)
 	bpmnVersionService := service.NewBPMNVersionService(client, sugar)
@@ -863,12 +870,13 @@ func NewApplication() *Application {
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	return &Application{
-		Cfg:         cfg,
-		Logger:      sugar,
-		DBClient:    client,
-		Router:      r,
-		Embedder:    embedder,
-		VectorStore: vectorStore,
+		Cfg:            cfg,
+		Logger:         sugar,
+		DBClient:       client,
+		Router:         r,
+		Embedder:       embedder,
+		VectorStore:    vectorStore,
+		callbackWorker: concreteProcessEngine,
 	}
 }
 
@@ -1050,8 +1058,9 @@ func (app *Application) Run() {
 	defer app.Logger.Sync()
 	defer app.DBClient.Close()
 
-	// Start background tasks
-	app.startBackgroundTasks()
+	backgroundCtx, cancelBackground := context.WithCancel(context.Background())
+	defer cancelBackground()
+	app.startBackgroundTasks(backgroundCtx)
 
 	app.Logger.Infof("Server starting on port %d", app.Cfg.Server.Port)
 	if err := app.Router.Run(fmt.Sprintf(":%d", app.Cfg.Server.Port)); err != nil {
@@ -1059,7 +1068,9 @@ func (app *Application) Run() {
 	}
 }
 
-func (app *Application) startBackgroundTasks() {
+func (app *Application) startBackgroundTasks(lifecycleCtx context.Context) {
+	app.startCallbackOutboxWorker(lifecycleCtx)
+
 	go func() {
 		pipeline := service.NewEmbeddingPipeline(app.DBClient, app.Embedder, app.Logger, app.VectorStore)
 		ctx := context.Background()
@@ -1132,6 +1143,14 @@ func (app *Application) startBackgroundTasks() {
 			}
 		}
 	}()
+}
+
+func (app *Application) startCallbackOutboxWorker(ctx context.Context) {
+	if app.callbackWorker == nil {
+		return
+	}
+	workerID := "bpmn-callback-" + uuid.NewString()
+	go app.callbackWorker.RunCallbackOutboxWorker(ctx, workerID, 2*time.Second)
 }
 
 // srIncidentBridge 将 service.IncidentService 适配为 service_request.IncidentCreator，

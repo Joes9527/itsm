@@ -14,6 +14,7 @@ import (
 	"itsm-backend/ent/permission"
 	"itsm-backend/ent/predicate"
 	"itsm-backend/ent/processapprovaldecision"
+	"itsm-backend/ent/processcallbackoutbox"
 	"itsm-backend/ent/processdefinition"
 	"itsm-backend/ent/processdeployment"
 	"itsm-backend/ent/processexecutionhistory"
@@ -27,6 +28,7 @@ import (
 	"itsm-backend/service/approver"
 	"itsm-backend/service/bpmn"
 
+	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"go.uber.org/zap"
 )
@@ -107,7 +109,8 @@ type CustomProcessEngine struct {
 	callbackRegistry      *bpmn.CallbackRegistry // 服务任务回调注册中心
 	groupResolver         *bpmn.GroupResolver    // 审批组解析器：candidateGroups → 候选用户
 	participationResolver *bpmnParticipationResolver
-	deferredCallbacks     *[]deferredProcessCallback
+	callbackOutbox        *bpmnCallbackOutbox
+	callbackExecutionKeys *[]string
 	// 内部服务
 	processDefinitionService *bpmnProcessDefinitionService
 	processInstanceService   *bpmnProcessInstanceService
@@ -131,13 +134,13 @@ func NewCustomProcessEngine(client *ent.Client, logger *zap.SugaredLogger) Proce
 		participationResolver: participationResolver,
 	}
 	engine.auditService = NewBPMNAuditService(client, logger)
+	engine.callbackOutbox = &bpmnCallbackOutbox{client: client, executor: engine}
 	engine.processDefinitionService = &bpmnProcessDefinitionService{client: client, logger: logger}
 	engine.processInstanceService = &bpmnProcessInstanceService{client: client, logger: logger, participationResolver: participationResolver, auditService: engine.auditService}
 	// taskService 持有 engine 自身的引用（而不是每次调用再 NewCustomProcessEngine 造一个新的）：
 	// callbackRegistry 是 engine 级别的状态，bootstrap 在各领域 service 构造完成后往
 	// 这一个 engine 的 registry 里注入 TicketService/IncidentService。任务完成路径若临时
-	// 新建 engine，拿到的就是一个从未被注入过的空 registry，UserTask 回调只会 Warn 一句
-	// 静默失败（见 dispatchUserTaskCallback 的"失败只告警不阻断"注释）。
+	// 新建 engine，持久化执行和 worker 恢复都会拿到未注入的空 registry。
 	engine.taskService = &bpmnTaskService{client: client, logger: logger, groupResolver: engine.groupResolver, participationResolver: participationResolver, engine: engine}
 	// 注册流程相关的内置函数
 	engine.registerProcessFunctions()
@@ -336,30 +339,23 @@ func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitio
 	return instance, nil
 }
 
-type deferredProcessCallback struct {
-	handler    bpmn.ServiceTaskHandlerInterface
-	instanceID int
-	tenantID   int
-	process    *BPMNProcess
-	elementID  string
-	variables  map[string]interface{}
-}
-
 type completedTaskEffect struct {
-	task      *ent.ProcessTask
-	variables map[string]interface{}
+	task         *ent.ProcessTask
+	variables    map[string]interface{}
+	asyncHandler bpmn.ServiceTaskHandlerInterface
 }
 
-// CompleteTask commits all recoverable BPMN database state and audit in one
-// transaction. External service handlers run only after that commit.
+// CompleteTask commits task state, audit, and callback intent atomically. The
+// post-commit attempt is only a latency optimization; durable recovery owns any
+// callback failure after the task transaction commits.
 func (e *CustomProcessEngine) CompleteTask(ctx context.Context, taskID string, variables map[string]interface{}) error {
 	tx, err := e.client.Tx(ctx)
 	if err != nil {
 		return fmt.Errorf("开启任务完成事务失败: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	callbacks := make([]deferredProcessCallback, 0)
-	effect, err := e.completeTaskWithClient(ctx, tx.Client(), taskID, variables, &callbacks)
+	executionKeys := make([]string, 0)
+	effect, err := e.completeTaskWithClient(ctx, tx.Client(), taskID, variables, &executionKeys)
 	if err != nil {
 		return err
 	}
@@ -369,14 +365,12 @@ func (e *CustomProcessEngine) CompleteTask(ctx context.Context, taskID string, v
 	if tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int); tenantID <= 0 {
 		ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, effect.task.TenantID)
 	}
-	if err := e.runDeferredProcessCallbacks(ctx, callbacks); err != nil {
-		return err
-	}
-	e.dispatchUserTaskCallback(ctx, effect.task, effect.variables)
+	e.processCommittedCallbackKeys(ctx, effect.task.TenantID, executionKeys)
+	e.executeAsyncUserTaskCompletion(ctx, effect)
 	return nil
 }
 
-func (e *CustomProcessEngine) completeTaskWithClient(ctx context.Context, client *ent.Client, taskID string, variables map[string]interface{}, callbacks *[]deferredProcessCallback) (*completedTaskEffect, error) {
+func (e *CustomProcessEngine) completeTaskWithClient(ctx context.Context, client *ent.Client, taskID string, variables map[string]interface{}, executionKeys *[]string) (*completedTaskEffect, error) {
 	taskQuery := client.ProcessTask.Query().Where(processtask.TaskID(taskID))
 	if _, scopePresent := bpmnAccessScopeValue(ctx); scopePresent {
 		scope, err := BPMNAccessScopeFromContext(ctx)
@@ -454,7 +448,7 @@ func (e *CustomProcessEngine) completeTaskWithClient(ctx context.Context, client
 	}
 	instance.Variables = merged
 	instance.Version++
-	txEngine := e.forClient(client, callbacks)
+	txEngine := e.forClient(client, executionKeys)
 	process := definitions.Processes[0]
 	if err := txEngine.executeStep(ctx, instance, process, task.TaskDefinitionKey, merged); err != nil {
 		return nil, err
@@ -471,16 +465,35 @@ func (e *CustomProcessEngine) completeTaskWithClient(ctx context.Context, client
 	); err != nil {
 		return nil, err
 	}
-	return &completedTaskEffect{task: task, variables: merged}, nil
+	effect := &completedTaskEffect{task: task}
+	serviceTaskType, _ := task.TaskVariables[bpmnMetaDataServiceTaskType].(string)
+	if serviceTaskType == "" {
+		return effect, nil
+	}
+	handler := e.findHandlerByTaskType(serviceTaskType)
+	callbackVariables := completedUserTaskCallbackVariables(task, variables)
+	if handler != nil && isAsyncHandler(handler) {
+		effect.variables = callbackVariables
+		effect.asyncHandler = handler
+		return effect, nil
+	}
+	handlerID := serviceTaskType
+	if handler != nil {
+		handlerID = handler.GetHandlerID()
+	}
+	if err := txEngine.enqueueUserTaskCallback(ctx, task, handlerID, serviceTaskType, callbackVariables); err != nil {
+		return nil, err
+	}
+	return effect, nil
 }
 
-func (e *CustomProcessEngine) forClient(client *ent.Client, callbacks *[]deferredProcessCallback) *CustomProcessEngine {
+func (e *CustomProcessEngine) forClient(client *ent.Client, executionKeys *[]string) *CustomProcessEngine {
 	clone := *e
 	clone.client = client
 	clone.groupResolver = bpmn.NewGroupResolver(client)
 	clone.participationResolver = newBPMNParticipationResolver(client, clone.groupResolver)
 	clone.auditService = e.auditService.ForClient(client)
-	clone.deferredCallbacks = callbacks
+	clone.callbackExecutionKeys = executionKeys
 	return &clone
 }
 
@@ -512,59 +525,34 @@ func (e *CustomProcessEngine) completionAuditActor(ctx context.Context, client *
 	return 0, "", nil, nil
 }
 
-// dispatchUserTaskCallback 在用户任务完成后，按其 service_task_type metaData 找到对应的
-// ServiceTaskHandler 并执行，把"人工完成节点"的业务副作用交给已有的 handler 实现。
-//
-// 只有模板显式声明了 service_task_type 的 UserTask 才会走到这里，未声明的普通用户任务
-// （绝大多数流程）完全不受影响。
-//
-// 传给 handler 的变量刻意只取"完成任务时提交的 variables" + metaData 里的 action，
-// 不把 instance.Variables 整个合进去。原因是 ProcessTriggerService 会把 business_id
-// 写进实例变量，而 TicketServiceTaskHandler 正是按 business_id 取工单、按 action
-// 改状态的——一旦合并实例变量，像 ticket_general_flow 的 Activity_Handle/Activity_Resolve
-// （action=update_status）这类节点会在任何一次人工完成时把工单状态强制改成默认的
-// in_progress，等于凭空回退业务状态。让调用方显式传业务 ID 才触发副作用，
-// 是这里唯一安全的默认值。
-//
-// 失败只告警不阻断：走到这一步时任务已置为 completed、流程也已推进，返回错误既回滚不了
-// 也会诱导调用方重试（重试会撞上"任务已结束，不能重复完成"）。副作用失败留待告警与审计追踪。
-func (e *CustomProcessEngine) dispatchUserTaskCallback(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) {
-	if e.callbackRegistry == nil || task == nil {
-		return
-	}
-	serviceTaskType, _ := task.TaskVariables[bpmnMetaDataServiceTaskType].(string)
-	if serviceTaskType == "" {
-		return
-	}
-
-	handler := e.findHandlerByTaskType(serviceTaskType)
-	if handler == nil {
-		// 模板声明了类型但没有注册对应 handler（例如 release_task），按 ServiceTask
-		// 分支的既有约定视为 NoOp，仅告警不阻断流程。
-		e.logger.Warnw("UserTask 声明的 service_task_type 没有注册处理器，跳过回调",
-			"taskID", task.TaskID, "serviceTaskType", serviceTaskType)
-		return
-	}
-
-	callbackVars := make(map[string]interface{}, len(variables)+1)
-	for k, v := range variables {
-		callbackVars[k] = v
-	}
-	// metaData 的 action 是节点固有语义，优先级高于调用方传入的同名变量，
-	// 避免外部请求体伪造 action 让节点执行别的业务动作。
+func completedUserTaskCallbackVariables(task *ent.ProcessTask, variables map[string]interface{}) map[string]interface{} {
+	callbackVariables := copyBPMNCallbackVariables(variables)
 	if action, ok := task.TaskVariables[bpmnMetaDataAction].(string); ok && action != "" {
-		callbackVars[bpmnMetaDataAction] = action
+		callbackVariables[bpmnMetaDataAction] = action
 	}
+	return callbackVariables
+}
 
-	if _, err := handler.Execute(ctx, task, callbackVars); err != nil {
-		e.logger.Warnw("UserTask 完成后回调执行失败",
-			"taskID", task.TaskID, "taskDefinitionKey", task.TaskDefinitionKey,
-			"serviceTaskType", serviceTaskType, "error", err)
+func (e *CustomProcessEngine) enqueueUserTaskCallback(ctx context.Context, task *ent.ProcessTask, handlerID, taskType string, variables map[string]interface{}) error {
+	row, err := e.callbackOutbox.enqueue(ctx, e.client, bpmnCallbackEnqueueRequest{
+		TenantID: task.TenantID, ProcessInstanceID: task.ProcessInstanceID,
+		ProcessTaskID: task.ID, TaskID: task.TaskID,
+		CallbackKind: "user_task_callback", HandlerID: handlerID,
+		TaskType: taskType, ElementID: task.TaskDefinitionKey,
+		Variables: variables,
+	})
+	if err != nil {
+		return fmt.Errorf("enqueue user task callback failed")
+	}
+	e.collectCallbackExecutionKey(row.ExecutionKey)
+	return nil
+}
+
+func (e *CustomProcessEngine) executeAsyncUserTaskCompletion(ctx context.Context, effect *completedTaskEffect) {
+	if effect == nil || effect.asyncHandler == nil {
 		return
 	}
-	e.logger.Infow("UserTask 完成后回调执行成功",
-		"taskID", task.TaskID, "taskDefinitionKey", task.TaskDefinitionKey,
-		"serviceTaskType", serviceTaskType)
+	_, _ = effect.asyncHandler.Execute(ctx, effect.task, effect.variables)
 }
 
 // findHandlerByTaskType 按 handler 的 GetTaskType() 查找处理器。
@@ -887,8 +875,8 @@ func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.P
 	} else if gateway := e.findExclusiveGateway(process, elementID); gateway != nil {
 		return e.executeStep(ctx, instance, process, elementID, instance.Variables)
 	} else if serviceTask := e.findServiceTask(process, elementID); serviceTask != nil {
-		// 优先按 metaData 里的 service_task_type/action 分发——跟 UserTask 走
-		// dispatchUserTaskCallback 时用的是同一套 findHandlerByTaskType 查找口径，
+		// 优先按 metaData 里的 service_task_type/action 分发。UserTask callback
+		// enqueue uses the same findHandlerByTaskType lookup,
 		// 保证"模板声明了 service_task_type 就一定能找到对应 handler"这条规则
 		// 在 UserTask 和 ServiceTask 两种节点类型上表现一致。
 		if serviceTaskType := serviceTask.ServiceTaskType(); serviceTaskType != "" {
@@ -900,22 +888,10 @@ func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.P
 				if action := serviceTask.ServiceTaskAction(); action != "" {
 					callbackVars[bpmnMetaDataAction] = action
 				}
-				if e.deferredCallbacks != nil {
-					*e.deferredCallbacks = append(*e.deferredCallbacks, deferredProcessCallback{
-						handler: handler, instanceID: instance.ID, tenantID: instance.TenantID,
-						process: process, elementID: elementID, variables: callbackVars,
-					})
-					return nil
-				}
-				e.logger.Infow("执行 ServiceTask 回调（metaData 分发）", "serviceTaskType", serviceTaskType, "elementID", elementID)
-				if _, err := handler.Execute(ctx, nil, callbackVars); err != nil {
-					return fmt.Errorf("ServiceTask %s 执行失败: %w", elementID, err)
-				}
-				return e.executeStep(ctx, instance, process, elementID, instance.Variables)
+				return e.enqueueServiceTaskCallback(ctx, instance, handler, serviceTaskType, elementID, callbackVars)
 			}
 			// 声明了类型但没有注册对应 handler（比如未来新增了类型但忘了注册）：
-			// 按既有约定视为 NoOp，只告警不阻断流程，跟 dispatchUserTaskCallback
-			// 遇到同样情况时的处理方式保持一致。
+			// 按既有约定视为 NoOp，只告警不阻断流程。
 			e.logger.Warnw("ServiceTask 声明的 service_task_type 没有注册处理器，跳过执行", "elementID", elementID, "serviceTaskType", serviceTaskType)
 			return e.executeStep(ctx, instance, process, elementID, instance.Variables)
 		}
@@ -941,7 +917,7 @@ func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.P
 			// resolvedTaskType 记录到底是 serviceRef 还是 GetType() 兜底值命中的 handler——
 			// 如果这个节点解析出的 handler 是异步的，createDelegatedTask 需要把这个值原样
 			// 写进 ProcessTask.TaskType/TaskVariables["service_task_type"]，这样后续
-			// authorizeTaskActor（完成鉴权）和 dispatchUserTaskCallback（完成回调）用
+			// authorizeTaskActor（完成鉴权）和 UserTask callback enqueue 用
 			// findHandlerByTaskType 重新查找时，能查到同一个 handler——三处必须用同一套
 			// 查找口径，否则会出现 Important #2 那种鉴权跟暂停判断各自为政的分裂。
 			resolvedTaskType := serviceRef
@@ -955,17 +931,7 @@ func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.P
 					return e.createDelegatedTask(ctx, instance, serviceTask, resolvedTaskType)
 				}
 				taskVariables := mergeServiceTaskVariables(instance.Variables, serviceTask)
-				if e.deferredCallbacks != nil {
-					*e.deferredCallbacks = append(*e.deferredCallbacks, deferredProcessCallback{
-						handler: handler, instanceID: instance.ID, tenantID: instance.TenantID,
-						process: process, elementID: elementID, variables: taskVariables,
-					})
-					return nil
-				}
-				e.logger.Infow("执行 ServiceTask 回调", "serviceRef", serviceRef, "elementID", elementID)
-				if _, err := handler.Execute(ctx, nil, taskVariables); err != nil {
-					return fmt.Errorf("ServiceTask %s 执行失败: %w", serviceRef, err)
-				}
+				return e.enqueueServiceTaskCallback(ctx, instance, handler, resolvedTaskType, elementID, taskVariables)
 			} else {
 				e.logger.Warnw("未注册的 ServiceTask，跳过执行", "serviceRef", serviceRef, "elementID", elementID)
 			}
@@ -976,43 +942,233 @@ func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.P
 	return e.executeStep(ctx, instance, process, elementID, instance.Variables)
 }
 
-// runDeferredProcessCallbacks provides an at-least-once post-commit boundary:
-// handlers never run while a database transaction is open, and successful
-// handlers are followed by a fresh atomic token advance. Handlers registered
-// for synchronous service tasks must therefore remain idempotent.
-func (e *CustomProcessEngine) runDeferredProcessCallbacks(ctx context.Context, callbacks []deferredProcessCallback) error {
-	for _, callback := range callbacks {
-		if _, err := callback.handler.Execute(ctx, nil, callback.variables); err != nil {
-			return fmt.Errorf("ServiceTask %s 执行失败: %w", callback.elementID, err)
-		}
-		if err := e.advanceAfterDeferredCallback(ctx, callback); err != nil {
-			return err
-		}
+func (e *CustomProcessEngine) enqueueServiceTaskCallback(
+	ctx context.Context,
+	instance *ent.ProcessInstance,
+	handler bpmn.ServiceTaskHandlerInterface,
+	taskType string,
+	elementID string,
+	variables map[string]interface{},
+) error {
+	row, err := e.callbackOutbox.enqueue(ctx, e.client, bpmnCallbackEnqueueRequest{
+		TenantID: instance.TenantID, ProcessInstanceID: instance.ID,
+		CallbackKind: "service_task", HandlerID: handler.GetHandlerID(),
+		TaskType: taskType, ElementID: elementID, Variables: variables,
+	})
+	if err != nil {
+		return fmt.Errorf("enqueue service task callback failed")
 	}
+	if e.callbackExecutionKeys != nil {
+		*e.callbackExecutionKeys = append(*e.callbackExecutionKeys, row.ExecutionKey)
+		return nil
+	}
+	e.processCommittedCallbackKeys(ctx, instance.TenantID, []string{row.ExecutionKey})
 	return nil
 }
 
-func (e *CustomProcessEngine) advanceAfterDeferredCallback(ctx context.Context, callback deferredProcessCallback) error {
+func (e *CustomProcessEngine) collectCallbackExecutionKey(executionKey string) {
+	if e.callbackExecutionKeys != nil {
+		*e.callbackExecutionKeys = append(*e.callbackExecutionKeys, executionKey)
+	}
+}
+
+func (e *CustomProcessEngine) processCommittedCallbackKeys(ctx context.Context, tenantID int, executionKeys []string) {
+	if len(executionKeys) == 0 || tenantID <= 0 {
+		return
+	}
+	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+	_, err := e.callbackOutbox.processExecutionKeys(ctx, "bpmn-inline-"+uuid.NewString(), executionKeys)
+	if err == nil {
+		return
+	}
+	for _, executionKey := range executionKeys {
+		row, queryErr := e.client.ProcessCallbackOutbox.Query().Where(
+			processcallbackoutbox.ExecutionKey(executionKey),
+			processcallbackoutbox.TenantID(tenantID),
+		).Only(ctx)
+		if queryErr == nil && row.Status == bpmnCallbackStatusCompleted {
+			continue
+		}
+		callbackKind := ""
+		attemptCount := 0
+		errorClass := "unknown_error"
+		if queryErr == nil {
+			callbackKind = row.CallbackKind
+			attemptCount = row.AttemptCount
+			if isBPMNCallbackErrorClass(row.LastErrorClass) {
+				errorClass = row.LastErrorClass
+			}
+		}
+		e.logger.Warnw("BPMN callback attempt remains durable for retry",
+			"execution_key", executionKey,
+			"tenant_id", tenantID,
+			"callback_kind", callbackKind,
+			"attempt_count", attemptCount,
+			"error_class", errorClass,
+		)
+	}
+}
+
+// ProcessPendingCallbacks performs one deterministic durable callback sweep.
+func (e *CustomProcessEngine) ProcessPendingCallbacks(ctx context.Context, workerID string, limit int) (int, error) {
+	if e.callbackOutbox == nil {
+		return 0, fmt.Errorf("bpmn callback outbox is not configured")
+	}
+	return e.callbackOutbox.processPending(ctx, workerID, limit)
+}
+
+// RunCallbackOutboxWorker performs an immediate sweep and then polls until the
+// caller cancels the lifecycle context.
+func (e *CustomProcessEngine) RunCallbackOutboxWorker(ctx context.Context, workerID string, interval time.Duration) {
+	if validateBPMNCallbackWorkerID(workerID) != nil {
+		return
+	}
+	if interval <= 0 {
+		interval = 2 * time.Second
+	}
+	_, _ = e.ProcessPendingCallbacks(ctx, workerID, 50)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			_, _ = e.ProcessPendingCallbacks(ctx, workerID, 50)
+		}
+	}
+}
+
+func (e *CustomProcessEngine) executeClaimedCallback(ctx context.Context, workerID string, row *ent.ProcessCallbackOutbox) (bpmnCallbackExecutionResult, error) {
+	claimedRow, err := e.loadClaimedCallback(ctx, workerID, row)
+	if err != nil {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+	}
+	handler := e.findHandlerByTaskType(claimedRow.TaskType)
+	if handler == nil || isAsyncHandler(handler) {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackHandlerError(errors.New("callback handler is unavailable"))
+	}
+	if claimedRow.HandlerID != claimedRow.TaskType && handler.GetHandlerID() != claimedRow.HandlerID {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackHandlerError(errors.New("callback handler is unavailable"))
+	}
+	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, claimedRow.TenantID)
+	ctx = bpmn.WithBPMNCallbackExecutionKey(ctx, claimedRow.ExecutionKey)
+	claimedRow.Variables = copyBPMNCallbackVariables(claimedRow.Variables)
+	claimedRow.Variables["bpmn_callback_execution_key"] = claimedRow.ExecutionKey
+
+	switch claimedRow.CallbackKind {
+	case "service_task":
+		return e.executeClaimedServiceTaskCallback(ctx, workerID, claimedRow, handler)
+	case "user_task_callback":
+		return e.executeClaimedUserTaskCallback(ctx, workerID, claimedRow, handler)
+	default:
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(errors.New("unsupported callback kind"))
+	}
+}
+
+func (e *CustomProcessEngine) loadClaimedCallback(ctx context.Context, workerID string, row *ent.ProcessCallbackOutbox) (*ent.ProcessCallbackOutbox, error) {
+	if row == nil || row.ID <= 0 || row.TenantID <= 0 {
+		return nil, errors.New("callback identity is incomplete")
+	}
+	return e.client.ProcessCallbackOutbox.Query().Where(
+		processcallbackoutbox.ID(row.ID),
+		processcallbackoutbox.TenantID(row.TenantID),
+		processcallbackoutbox.StatusEQ(bpmnCallbackStatusProcessing),
+		processcallbackoutbox.LeaseOwner(workerID),
+	).Only(ctx)
+}
+
+func (e *CustomProcessEngine) executeClaimedServiceTaskCallback(
+	ctx context.Context,
+	workerID string,
+	row *ent.ProcessCallbackOutbox,
+	handler bpmn.ServiceTaskHandlerInterface,
+) (bpmnCallbackExecutionResult, error) {
+	if _, err := handler.Execute(ctx, nil, row.Variables); err != nil {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackHandlerError(err)
+	}
+
 	tx, err := e.client.Tx(ctx)
 	if err != nil {
-		return fmt.Errorf("开启 ServiceTask 推进事务失败: %w", err)
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	instance, err := tx.Client().ProcessInstance.Query().Where(
-		processinstance.ID(callback.instanceID), processinstance.TenantID(callback.tenantID),
+	txRow, err := tx.Client().ProcessCallbackOutbox.Query().Where(
+		processcallbackoutbox.ID(row.ID),
+		processcallbackoutbox.TenantID(row.TenantID),
+		processcallbackoutbox.StatusEQ(bpmnCallbackStatusProcessing),
+		processcallbackoutbox.LeaseOwner(workerID),
 	).Only(ctx)
 	if err != nil {
-		return fmt.Errorf("重新加载 ServiceTask 流程实例失败: %w", err)
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
 	}
-	nested := make([]deferredProcessCallback, 0)
-	txEngine := e.forClient(tx.Client(), &nested)
-	if err := txEngine.executeStep(ctx, instance, callback.process, callback.elementID, instance.Variables); err != nil {
-		return err
+	instance, err := tx.Client().ProcessInstance.Query().Where(
+		processinstance.ID(txRow.ProcessInstanceID),
+		processinstance.TenantID(txRow.TenantID),
+	).Only(ctx)
+	if err != nil || instance.CurrentActivityID != txRow.ElementID {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+	}
+	definition, err := tx.Client().ProcessDefinition.Query().Where(
+		processdefinition.ID(instance.ProcessDefinitionID),
+		processdefinition.TenantID(instance.TenantID),
+	).Only(ctx)
+	if err != nil {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+	}
+	definitions, err := e.parser.ParseXML(definition.BpmnXML)
+	if err != nil || len(definitions.Processes) == 0 {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+	}
+	downstreamExecutionKeys := make([]string, 0)
+	txEngine := e.forClient(tx.Client(), &downstreamExecutionKeys)
+	if err := txEngine.executeStep(ctx, instance, definitions.Processes[0], txRow.ElementID, instance.Variables); err != nil {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+	}
+	completed, err := e.callbackOutbox.completeWithClient(ctx, tx.Client(), workerID, txRow)
+	if err != nil || !completed {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
 	}
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("提交 ServiceTask 推进事务失败: %w", err)
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
 	}
-	return e.runDeferredProcessCallbacks(ctx, nested)
+	return bpmnCallbackExecutionResult{CompletionCommitted: true}, nil
+}
+
+func (e *CustomProcessEngine) executeClaimedUserTaskCallback(
+	ctx context.Context,
+	workerID string,
+	row *ent.ProcessCallbackOutbox,
+	handler bpmn.ServiceTaskHandlerInterface,
+) (bpmnCallbackExecutionResult, error) {
+	task, err := e.client.ProcessTask.Query().Where(
+		processtask.ID(row.ProcessTaskID),
+		processtask.TenantID(row.TenantID),
+		processtask.ProcessInstanceID(row.ProcessInstanceID),
+		processtask.TaskID(row.TaskID),
+		processtask.TaskDefinitionKey(row.ElementID),
+		processtask.Status(common.ProcessTaskStatusCompleted),
+	).Only(ctx)
+	if err != nil {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+	}
+	if _, err := handler.Execute(ctx, task, row.Variables); err != nil {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackHandlerError(err)
+	}
+
+	tx, err := e.client.Tx(ctx)
+	if err != nil {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	completed, err := e.callbackOutbox.completeWithClient(ctx, tx.Client(), workerID, row)
+	if err != nil || !completed {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+	}
+	if err := tx.Commit(); err != nil {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+	}
+	return bpmnCallbackExecutionResult{CompletionCommitted: true}, nil
 }
 
 func mergeServiceTaskVariables(instanceVariables map[string]interface{}, task *BPMNServiceTask) map[string]interface{} {
@@ -1295,8 +1451,8 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 // serviceTask.ServiceTaskType()，legacy 属性猜测路径下是命中的 serviceRef/GetType()
 // 兜底值。必须原样传入（而不是在这里重新调用 ServiceTaskType()，legacy 路径下那会是
 // 空串），因为 ProcessTask.TaskType/TaskVariables["service_task_type"] 之后要分别喂给
-// authorizeTaskActor 和 dispatchUserTaskCallback 重新做 findHandlerByTaskType 查找——
-// 三处用的必须是同一个能查到同一个 handler 的字符串。
+// authorizeTaskActor 和异步完成分发重新做 findHandlerByTaskType 查找——三处用的必须是
+// 同一个能查到同一个 handler 的字符串。
 func (e *CustomProcessEngine) createDelegatedTask(ctx context.Context, instance *ent.ProcessInstance, serviceTask *BPMNServiceTask, taskType string) error {
 	taskVariables := map[string]interface{}{
 		bpmnMetaDataServiceTaskType: taskType,
@@ -3606,7 +3762,7 @@ func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequ
 		return fmt.Errorf("开启会签投票事务失败: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	callbacks := make([]deferredProcessCallback, 0)
+	executionKeys := make([]string, 0)
 	var parentEffect *completedTaskEffect
 	task, err := tx.Client().ProcessTask.Query().
 		Where(processtask.TaskID(taskID), processtask.TenantID(scope.TenantID)).
@@ -3731,7 +3887,7 @@ func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequ
 		parentEffect, err = s.engine.completeTaskWithClient(
 			ctx, tx.Client(), parentTask.TaskID,
 			map[string]interface{}{"approvalResult": status.Status, "approved": status.Status == "approved"},
-			&callbacks,
+			&executionKeys,
 		)
 		if err != nil {
 			return fmt.Errorf("推进会签父任务失败: %w", err)
@@ -3745,11 +3901,9 @@ func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequ
 			ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, parentEffect.task.TenantID)
 		}
 	}
-	if err := s.engine.runDeferredProcessCallbacks(ctx, callbacks); err != nil {
-		return err
-	}
 	if parentEffect != nil {
-		s.engine.dispatchUserTaskCallback(ctx, parentEffect.task, parentEffect.variables)
+		s.engine.processCommittedCallbackKeys(ctx, parentEffect.task.TenantID, executionKeys)
+		s.engine.executeAsyncUserTaskCompletion(ctx, parentEffect)
 	}
 	return nil
 }

@@ -1009,6 +1009,21 @@ func TestHandleElement_ServiceTask_IncidentAutoAssign_NoAssignee_ContinuesFlow(t
 		Save(ctx)
 	require.NoError(t, err)
 	require.Zero(t, inc.AssigneeID, "新建事件默认没有处理人，这正是生产里的常态")
+	processXML := `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="incident_autoassign_test_flow" isExecutable="true">
+	<bpmn:startEvent id="Start_1" name="开始" />
+    <bpmn:serviceTask id="Activity_AutoAssign" name="自动分配">
+      <bpmn:extensionElements>
+        <bpmn:metaData name="service_task_type">incident_task</bpmn:metaData>
+        <bpmn:metaData name="action">assign_incident</bpmn:metaData>
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="End_1" name="结束" />
+	<bpmn:sequenceFlow id="Flow_0" sourceRef="Start_1" targetRef="Activity_AutoAssign" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Activity_AutoAssign" targetRef="End_1" />
+  </bpmn:process>
+</bpmn:definitions>`
 
 	deployment, err := engine.client.ProcessDeployment.Create().
 		SetDeploymentID("DEP-incident-autoassign").
@@ -1024,7 +1039,7 @@ func TestHandleElement_ServiceTask_IncidentAutoAssign_NoAssignee_ContinuesFlow(t
 		SetName("Incident AutoAssign Test Flow").
 		SetVersion("1").
 		SetIsLatest(true).
-		SetBpmnXML([]byte("<definitions/>")).
+		SetBpmnXML([]byte(processXML)).
 		SetDeploymentID(deployment.ID).
 		SetDeployedAt(time.Now()).
 		SetTenantID(tenantID).

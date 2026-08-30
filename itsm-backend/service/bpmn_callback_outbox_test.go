@@ -15,19 +15,20 @@ import (
 )
 
 type fakeBPMNCallbackExecutor struct {
-	err  error
-	keys []string
-	vars []map[string]interface{}
+	err                 error
+	keys                []string
+	vars                []map[string]interface{}
+	completionCommitted bool
 }
 
-func (e *fakeBPMNCallbackExecutor) executeClaimedCallback(ctx context.Context, _ string, row *ent.ProcessCallbackOutbox) error {
+func (e *fakeBPMNCallbackExecutor) executeClaimedCallback(ctx context.Context, _ string, row *ent.ProcessCallbackOutbox) (bpmnCallbackExecutionResult, error) {
 	key, ok := bpmn.BPMNCallbackExecutionKey(ctx)
 	if !ok {
-		return errors.New("missing execution key")
+		return bpmnCallbackExecutionResult{}, errors.New("missing execution key")
 	}
 	e.keys = append(e.keys, key)
 	e.vars = append(e.vars, row.Variables)
-	return e.err
+	return bpmnCallbackExecutionResult{CompletionCommitted: e.completionCommitted}, e.err
 }
 
 func openBPMNCallbackOutboxClient(t *testing.T) *ent.Client {
@@ -227,7 +228,8 @@ func TestBPMNCallbackOutboxProcessExecutionKeysReclaimsExpiredLease(t *testing.T
 		SetStatus("processing").SetLeaseOwner("worker-a").SetLeaseExpiresAt(now.Add(-time.Second)).Save(context.Background())
 	require.NoError(t, err)
 
-	completed, err := outbox.processExecutionKeys(context.Background(), "worker-b", []string{row.ExecutionKey})
+	ctx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, 7)
+	completed, err := outbox.processExecutionKeys(ctx, "worker-b", []string{row.ExecutionKey})
 	require.NoError(t, err)
 	require.Equal(t, 1, completed)
 	saved := client.ProcessCallbackOutbox.Query().
@@ -242,7 +244,8 @@ func TestBPMNCallbackOutboxProcessExecutionKeysRejectsBlankWorker(t *testing.T) 
 	outbox := newBPMNCallbackOutboxForTest(client, &fakeBPMNCallbackExecutor{}, now)
 	row := enqueueBPMNCallbackOutboxForTest(t, outbox, "callback-targeted-blank-worker")
 
-	completed, err := outbox.processExecutionKeys(context.Background(), "  ", []string{row.ExecutionKey})
+	ctx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, 7)
+	completed, err := outbox.processExecutionKeys(ctx, "  ", []string{row.ExecutionKey})
 	require.Zero(t, completed)
 	require.Error(t, err)
 	saved := client.ProcessCallbackOutbox.Query().
@@ -300,4 +303,21 @@ func TestBPMNCallbackExecutionKeyIsStableAcrossRetry(t *testing.T) {
 	require.Equal(t, []string{"callback-stable-key", "callback-stable-key"}, executor.keys)
 	require.Equal(t, "callback-stable-key", executor.vars[0]["bpmn_callback_execution_key"])
 	require.Equal(t, "callback-stable-key", executor.vars[1]["bpmn_callback_execution_key"])
+}
+
+func TestBPMNCallbackOutboxVerifiesExecutorCommittedCompletion(t *testing.T) {
+	client := openBPMNCallbackOutboxClient(t)
+	now := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
+	executor := &fakeBPMNCallbackExecutor{completionCommitted: true}
+	outbox := newBPMNCallbackOutboxForTest(client, executor, now)
+	row := enqueueBPMNCallbackOutboxForTest(t, outbox, "callback-unpersisted-completion")
+
+	completed, err := outbox.processPending(context.Background(), "worker-a", 1)
+	require.Error(t, err)
+	require.Zero(t, completed)
+	saved := client.ProcessCallbackOutbox.Query().
+		Where(processcallbackoutbox.ID(row.ID), processcallbackoutbox.TenantID(7)).
+		OnlyX(context.Background())
+	require.Equal(t, bpmnCallbackStatusPending, saved.Status)
+	require.Equal(t, "lease_lost", saved.LastErrorClass)
 }
