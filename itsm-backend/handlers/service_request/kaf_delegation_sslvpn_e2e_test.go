@@ -21,6 +21,7 @@ import (
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/ent/servicerequest"
+	"itsm-backend/ent/ticket"
 	"itsm-backend/handlers/cmdb"
 	"itsm-backend/handlers/service_catalog"
 	itsmservice "itsm-backend/service"
@@ -96,6 +97,58 @@ func TestSSLVPNRequest_ApprovalDelegationDeliveryAndCompletion(t *testing.T) {
 	assertNoSensitiveSSLVPNPayload(t, event)
 }
 
+func TestSSLVPNRequest_CreateRollsBackWorkItemAndDoesNotStartBPMNWhenExtensionPersistenceFails(t *testing.T) {
+	fx := newSSLVPNDelegationFixture(t)
+	deploySSLVPNDefinition(t, fx, "sslvpn_extension_failure", fmt.Sprintf(sslvpnApprovalNodes, fx.approver.ID, fx.approver.ID), sslvpnApprovalFlows)
+	fx.client.ServiceRequest.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			if mutation.Op().Is(ent.OpCreate) {
+				return nil, fmt.Errorf("injected service request persistence failure")
+			}
+			return next.Mutate(ctx, mutation)
+		})
+	})
+
+	logger := zaptest.NewLogger(t).Sugar()
+	scRepo := service_catalog.NewEntRepository(fx.client)
+	catalog, err := service_catalog.NewService(scRepo, fx.client, logger).Create(fx.ctx, "SSLVPN access", "SSLVPN access request", "Delegated SSLVPN access", 1, fx.tenant.ID, "enabled", 0, 0, nil, "sslvpn_extension_failure", "access")
+	require.NoError(t, err)
+	ticketSvc := itsmservice.NewTicketServiceForTest(fx.client, logger)
+	ticketSvc.SetProcessTriggerService(itsmservice.NewProcessTriggerService(fx.client, fx.engine))
+	svc := NewService(NewEntRepository(fx.client), scRepo, cmdb.NewEntRepository(fx.client), fx.client, logger, ticketSvc, nil, nil)
+
+	_, err = svc.Create(fx.ctx, fx.tenant.ID, fx.requester.ID, catalog.ID, &ServiceRequest{ComplianceAck: true, FormData: map[string]interface{}{"title": "SSLVPN extension failure", "reason": "verify atomic creation"}})
+	require.ErrorContains(t, err, "Failed to create service request")
+
+	classifiedCount, err := fx.client.Ticket.Query().Where(ticket.TenantIDEQ(fx.tenant.ID), ticket.RecordClassEQ("service_request_item")).Count(fx.ctx)
+	require.NoError(t, err)
+	assert.Zero(t, classifiedCount)
+	extensionCount, err := fx.client.ServiceRequest.Query().Where(servicerequest.TenantIDEQ(fx.tenant.ID)).Count(fx.ctx)
+	require.NoError(t, err)
+	assert.Zero(t, extensionCount)
+	processCount, err := fx.client.ProcessInstance.Query().Where(processinstance.TenantIDEQ(fx.tenant.ID)).Count(fx.ctx)
+	require.NoError(t, err)
+	assert.Zero(t, processCount)
+}
+
+func TestSSLVPNRequest_ConflictingRecordClassVariableCannotReachKAF(t *testing.T) {
+	fx := newSSLVPNDelegationFixture(t)
+	deploySSLVPNDefinition(t, fx, "sslvpn_record_class_conflict", fmt.Sprintf(sslvpnApprovalNodes, fx.approver.ID, fx.approver.ID), sslvpnApprovalFlows)
+
+	sr := createSSLVPNServiceRequestForDefinition(t, fx, "sslvpn_record_class_conflict")
+	instance := awaitSSLVPNInstance(t, fx, "ticket", sr.TicketID)
+	require.NoError(t, completeSSLVPNApproval(t, fx, instance, "Approval_1"))
+	err := completeSSLVPNApprovalWithVariables(t, fx, instance, "Approval_2", map[string]interface{}{"approvalAction": "approve", "approvalResult": "approved", "record_class": "incident"})
+	require.ErrorContains(t, err, "record class variable conflicts")
+
+	delegatedCount, err := fx.client.ProcessTask.Query().Where(processtask.ProcessInstanceIDEQ(instance.ID), processtask.TaskTypeEQ(bpmn.KafDelegateTaskType)).Count(fx.ctx)
+	require.NoError(t, err)
+	assert.Zero(t, delegatedCount)
+	outboxCount, err := fx.client.OutboxEvent.Query().Where(outboxevent.TenantIDEQ(fx.tenant.ID), outboxevent.EventTypeEQ("kaf_delegate_requested")).Count(fx.ctx)
+	require.NoError(t, err)
+	assert.Zero(t, outboxCount)
+}
+
 func TestSSLVPNIncident_UsesSameDelegationTransportWithoutServiceRequestConversion(t *testing.T) {
 	fx := newSSLVPNDelegationFixture(t)
 	deploySSLVPNDefinition(t, fx, "incident_emergency_flow", "", sslvpnIncidentFlows)
@@ -145,10 +198,14 @@ func deploySSLVPNDefinition(t *testing.T, fx *sslvpnDelegationFixture, key, node
 }
 
 func createSSLVPNServiceRequest(t *testing.T, fx *sslvpnDelegationFixture) *ServiceRequest {
+	return createSSLVPNServiceRequestForDefinition(t, fx, "sslvpn_service_request")
+}
+
+func createSSLVPNServiceRequestForDefinition(t *testing.T, fx *sslvpnDelegationFixture, definitionKey string) *ServiceRequest {
 	t.Helper()
 	logger := zaptest.NewLogger(t).Sugar()
 	scRepo := service_catalog.NewEntRepository(fx.client)
-	catalog, err := service_catalog.NewService(scRepo, fx.client, logger).Create(fx.ctx, "SSLVPN access", "SSLVPN access request", "Delegated SSLVPN access", 1, fx.tenant.ID, "enabled", 0, 0, nil, "sslvpn_service_request", "access")
+	catalog, err := service_catalog.NewService(scRepo, fx.client, logger).Create(fx.ctx, "SSLVPN access", "SSLVPN access request", "Delegated SSLVPN access", 1, fx.tenant.ID, "enabled", 0, 0, nil, definitionKey, "access")
 	require.NoError(t, err)
 	ticketSvc := itsmservice.NewTicketServiceForTest(fx.client, logger)
 	ticketSvc.SetProcessTriggerService(itsmservice.NewProcessTriggerService(fx.client, fx.engine))
@@ -173,12 +230,16 @@ func awaitSSLVPNInstance(t *testing.T, fx *sslvpnDelegationFixture, businessType
 	return nil
 }
 
-func completeSSLVPNApproval(t *testing.T, fx *sslvpnDelegationFixture, instance *ent.ProcessInstance, definitionKey string) {
+func completeSSLVPNApproval(t *testing.T, fx *sslvpnDelegationFixture, instance *ent.ProcessInstance, definitionKey string) error {
+	return completeSSLVPNApprovalWithVariables(t, fx, instance, definitionKey, map[string]interface{}{"approvalAction": "approve", "approvalResult": "approved"})
+}
+
+func completeSSLVPNApprovalWithVariables(t *testing.T, fx *sslvpnDelegationFixture, instance *ent.ProcessInstance, definitionKey string, variables map[string]interface{}) error {
 	t.Helper()
 	task, err := fx.client.ProcessTask.Query().Where(processtask.ProcessInstanceIDEQ(instance.ID), processtask.TaskDefinitionKeyEQ(definitionKey), processtask.StatusIn(common.ProcessTaskStatusAssigned, common.ProcessTaskStatusCreated)).Only(fx.ctx)
 	require.NoError(t, err)
 	approvalCtx := context.WithValue(context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, fx.tenant.ID), bpmn.BPMNUserIDContextKey, fx.approver.ID)
-	require.NoError(t, fx.engine.CompleteTask(approvalCtx, task.TaskID, map[string]interface{}{"approvalAction": "approve", "approvalResult": "approved"}))
+	return fx.engine.CompleteTask(approvalCtx, task.TaskID, variables)
 }
 
 func assertNoSSLVPNDelegation(t *testing.T, fx *sslvpnDelegationFixture, instance *ent.ProcessInstance) {

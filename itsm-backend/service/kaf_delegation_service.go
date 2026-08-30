@@ -686,9 +686,6 @@ func kafDelegationRecordClass(ctx context.Context, client *ent.Client, instance 
 	case "service_request", "service_request_item":
 		return "service_request_item", nil
 	case "ticket":
-		if recordClass, _ := instance.Variables["record_class"].(string); recordClass == "incident" || recordClass == "service_request_item" {
-			return recordClass, nil
-		}
 		if instance.BusinessID <= 0 {
 			return "", fmt.Errorf("KAF delegation ticket instance %d has no work item ID", instance.ID)
 		}
@@ -697,6 +694,12 @@ func kafDelegationRecordClass(ctx context.Context, client *ent.Client, instance 
 			Only(ctx)
 		if err != nil {
 			return "", fmt.Errorf("load KAF delegation work item: %w", err)
+		}
+		if provided, present := instance.Variables["record_class"]; present {
+			recordClass, ok := provided.(string)
+			if !ok || recordClass != workItem.RecordClass {
+				return "", fmt.Errorf("KAF delegation record class variable conflicts with persisted work item record class")
+			}
 		}
 		if workItem.RecordClass == "incident" || workItem.RecordClass == "service_request_item" {
 			return workItem.RecordClass, nil
