@@ -15,7 +15,6 @@ type BPMNAccessScope struct {
 }
 
 type bpmnAccessScopeContextKey struct{}
-type noBPMNAccessScope struct{}
 
 func WithBPMNAccessScope(ctx context.Context, scope BPMNAccessScope) context.Context {
 	return context.WithValue(ctx, bpmnAccessScopeContextKey{}, scope)
@@ -24,11 +23,6 @@ func WithBPMNAccessScope(ctx context.Context, scope BPMNAccessScope) context.Con
 func bpmnAccessScopeValue(ctx context.Context) (BPMNAccessScope, bool) {
 	scope, ok := ctx.Value(bpmnAccessScopeContextKey{}).(BPMNAccessScope)
 	return scope, ok
-}
-
-// WithoutBPMNAccessScope marks an established internal call as having no external actor scope.
-func WithoutBPMNAccessScope(ctx context.Context) context.Context {
-	return context.WithValue(ctx, bpmnAccessScopeContextKey{}, noBPMNAccessScope{})
 }
 
 func BPMNAccessScopeFromContext(ctx context.Context) (BPMNAccessScope, error) {

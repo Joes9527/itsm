@@ -263,6 +263,10 @@ func (s *BPMNAuditService) RecordTaskClaimed(ctx context.Context, task *ent.Proc
 
 // RecordTaskCompleted 记录任务完成
 func (s *BPMNAuditService) RecordTaskCompleted(ctx context.Context, task *ent.ProcessTask, userID int, userName string, variablesBefore, variablesAfter map[string]interface{}) error {
+	return s.RecordTaskCompletedWithMetadata(ctx, task, userID, userName, variablesBefore, variablesAfter, nil)
+}
+
+func (s *BPMNAuditService) RecordTaskCompletedWithMetadata(ctx context.Context, task *ent.ProcessTask, userID int, userName string, variablesBefore, variablesAfter, metadata map[string]interface{}) error {
 	auditCtx, err := s.taskAuditContext(ctx, task, userID, userName)
 	if err != nil {
 		return err
@@ -270,6 +274,7 @@ func (s *BPMNAuditService) RecordTaskCompleted(ctx context.Context, task *ent.Pr
 	auditCtx.Action = AuditActionTaskCompleted
 	auditCtx.VariablesBefore = variablesBefore
 	auditCtx.VariablesAfter = variablesAfter
+	auditCtx.Metadata = metadata
 	return s.RecordAudit(ctx, auditCtx)
 }
 

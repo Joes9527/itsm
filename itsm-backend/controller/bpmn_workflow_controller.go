@@ -65,9 +65,19 @@ func getBPMNTenantContext(ctx *gin.Context) (context.Context, int, bool) {
 }
 
 func respondBPMNError(ctx *gin.Context, err error, fallback string) {
-	zap.S().Warnw("BPMN request failed", "operation", fallback, "error", err)
-
 	var appErr *common.AppError
+	errorClass := "internal"
+	if errors.As(err, &appErr) {
+		errorClass = string(appErr.Code)
+	} else if ent.IsNotFound(err) {
+		errorClass = "not_found"
+	}
+	zap.S().Warnw("BPMN request failed",
+		"operation", fallback,
+		"error_class", errorClass,
+		"request_id", ctx.GetString("request_id"),
+	)
+
 	if errors.As(err, &appErr) {
 		switch appErr.Code {
 		case common.ErrCodeForbidden:

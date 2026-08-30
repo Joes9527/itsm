@@ -568,8 +568,6 @@ func bpmnAuthorizationOperations() map[string]bpmnAuthorizationOperation {
 			method: http.MethodPut, path: instancePath("/variables"),
 			body: func(*bpmnHTTPAuthorizationFixture) string { return "{\"variables\":{\"matrix\":true}}" }, want: instanceUpdate,
 		},
-		// Execution history has no separate HTTP endpoint; approval history is the registered history projection.
-		"instance_history": {method: http.MethodGet, path: instancePath("/approval-history"), want: instanceRead},
 		"instance_stats": {method: http.MethodGet, path: func(*bpmnHTTPAuthorizationFixture) string {
 			return "/api/v1/bpmn/stats/instances"
 		}, want: aggregate},
@@ -592,8 +590,7 @@ func bpmnAuthorizationOperations() map[string]bpmnAuthorizationOperation {
 			outsiderID := strconv.Itoa(f.actors["outsider"].ID)
 			return "/api/v1/bpmn/tasks?userId=" + outsiderID + "&Assignee=" + outsiderID
 		}, want: taskLists},
-		"get_task":       {method: http.MethodGet, path: taskPath(""), want: taskRead},
-		"task_variables": {method: http.MethodGet, path: taskPath(""), want: taskRead},
+		"get_task": {method: http.MethodGet, path: taskPath(""), want: taskRead},
 		"task_stats": {method: http.MethodGet, path: func(*bpmnHTTPAuthorizationFixture) string {
 			return "/api/v1/bpmn/stats/tasks"
 		}, want: aggregate},
@@ -669,8 +666,8 @@ func runBPMNAuthorizationMatrixCase(t *testing.T, actor, operation string, wantS
 func TestBPMNAuthorizationMatrix(t *testing.T) {
 	operations := []string{
 		"list_instances", "get_instance", "approval_history", "instance_variables",
-		"instance_history", "instance_stats", "suspend_instance", "resume_instance",
-		"terminate_instance", "list_tasks_with_override", "get_task", "task_variables",
+		"instance_stats", "suspend_instance", "resume_instance",
+		"terminate_instance", "list_tasks_with_override", "get_task",
 		"task_stats", "assign_task", "cancel_task", "set_task_variables",
 		"create_counter_sign", "get_counter_sign", "claim_task", "complete_task",
 		"submit_decision", "vote",

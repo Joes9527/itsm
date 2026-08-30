@@ -750,16 +750,14 @@ func (s *Service) completeChangeApprovalTask(ctx context.Context, tenantID, acto
 
 // completeCascadeTask 用系统身份完成 CAB 审批之后紧邻的排期/驳回节点
 // （Activity_Schedule/Activity_Reject）。这两个节点在 BPMN 图里是 userTask，没有任何机制
-// 会自动完成它们，不完成会变成永远挂起的孤儿任务。用系统身份（不注入 actorUserID）——这
-// 不是一个新的、独立的人工决定，是 CAB 决定的自动延伸——如果这里也要求 actorUserID 通过
-// assignee/candidateUsers 校验，会因为 Activity_Schedule/Activity_Reject 没有声明
-// assigneeRole 而始终失败。
+// 会自动完成它们，不完成会变成永远挂起的孤儿任务。它不是一个新的人工决定，而是 CAB
+// 决定的自动延伸，因此走限定 source、租户、实例和节点的系统级联入口；不能退回通用的
+// actorless CompleteTask 绕过参与者授权。
 func (s *Service) completeCascadeTask(ctx context.Context, instanceID, tenantID, changeID int) error {
-	systemCtx := service.WithoutBPMNAccessScope(ctx)
-	systemCtx = context.WithValue(systemCtx, bpmn.BPMNTenantIDContextKey, tenantID)
 	nextTask, err := s.entClient.ProcessTask.Query().
 		Where(
-			processtask.HasProcessInstanceWith(processinstance.ID(instanceID)),
+			processtask.TenantID(tenantID),
+			processtask.HasProcessInstanceWith(processinstance.ID(instanceID), processinstance.TenantID(tenantID)),
 			processtask.TaskType("user_task"),
 			processtask.TaskDefinitionKeyIn("Activity_Schedule", "Activity_Reject"),
 			processtask.StatusIn("created", "assigned", "started", "delegated"),
@@ -775,8 +773,10 @@ func (s *Service) completeCascadeTask(ctx context.Context, instanceID, tenantID,
 		}
 		return fmt.Errorf("查询审批后续任务失败: %w", err)
 	}
-	if err := s.processEngine.CompleteTask(systemCtx, nextTask.TaskID, map[string]interface{}{
-		"change_id": changeID,
+	if err := service.CompleteBPMNInternalCascade(ctx, s.processEngine, service.BPMNInternalCascadeRequest{
+		TenantID: tenantID, InstanceID: instanceID, TaskID: nextTask.TaskID,
+		NodeKey: nextTask.TaskDefinitionKey, Source: service.BPMNInternalSourceChangeCABCascade,
+		Variables: map[string]interface{}{"change_id": changeID},
 	}); err != nil {
 		return fmt.Errorf("级联完成审批后续任务失败: %w", err)
 	}

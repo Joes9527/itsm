@@ -30,6 +30,13 @@ func newBPMNParticipationResolver(client *ent.Client, groupResolver *bpmn.GroupR
 	return &bpmnParticipationResolver{client: client, groupResolver: groupResolver}
 }
 
+func (r *bpmnParticipationResolver) forClient(client *ent.Client) *bpmnParticipationResolver {
+	if client == nil {
+		return r
+	}
+	return newBPMNParticipationResolver(client, bpmn.NewGroupResolver(client))
+}
+
 func (r *bpmnParticipationResolver) resolveActor(ctx context.Context, scope BPMNAccessScope) (*bpmnActorIdentity, error) {
 	actor, err := r.client.User.Query().
 		Where(

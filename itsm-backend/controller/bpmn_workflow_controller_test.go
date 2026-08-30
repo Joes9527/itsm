@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -21,7 +22,30 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 )
+
+func TestRespondBPMNErrorDoesNotLogRawError(t *testing.T) {
+	core, logs := observer.New(zap.WarnLevel)
+	previous := zap.L()
+	zap.ReplaceGlobals(zap.New(core))
+	t.Cleanup(func() { zap.ReplaceGlobals(previous) })
+
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Set("request_id", "request-safe-123")
+	const sensitive = "tenant-42-secret-candidate-expression"
+	respondBPMNError(ctx, fmt.Errorf("database failure: %s", sensitive), "complete task")
+
+	require.Len(t, logs.All(), 1)
+	entry := logs.All()[0]
+	assert.Equal(t, "BPMN request failed", entry.Message)
+	fields := entry.ContextMap()
+	assert.Equal(t, "complete task", fields["operation"])
+	assert.Equal(t, "request-safe-123", fields["request_id"])
+	assert.Equal(t, "internal", fields["error_class"])
+	assert.NotContains(t, fmt.Sprint(fields), sensitive)
+}
 
 // ===================== Fake engine + TaskService for controller tests =====================
 
