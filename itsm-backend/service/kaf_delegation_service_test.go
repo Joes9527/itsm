@@ -16,6 +16,7 @@ import (
 	"itsm-backend/ent/kaftaskactionledger"
 	"itsm-backend/ent/kaftaskcompletionreceipt"
 	"itsm-backend/ent/outboxevent"
+	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/ent/ticketcomment"
 	"itsm-backend/service/bpmn"
@@ -262,19 +263,19 @@ type blockingKafCompletionEngine struct {
 	release <-chan struct{}
 }
 
-type recoveringKafCallbackEngine struct {
-	ProcessEngine
-	client           *ent.Client
-	workItemID       int
-	actorID          int
-	callbackCalls    int
-	completionWrites int
-}
-
 type scopeCapturingKafCallbackHandler struct {
 	scope   bpmn.KafActionScope
 	scopeOK bool
 	calls   int
+}
+
+type failOncePersistingKafCallbackHandler struct {
+	client     *ent.Client
+	workItemID int
+	actorID    int
+	calls      int
+	scope      bpmn.KafActionScope
+	scopeOK    bool
 }
 
 func (h *scopeCapturingKafCallbackHandler) GetTaskType() string  { return "kaf_scope_capture" }
@@ -289,6 +290,36 @@ func (h *scopeCapturingKafCallbackHandler) Execute(ctx context.Context, _ *ent.P
 }
 
 var _ bpmn.ServiceTaskHandlerInterface = (*scopeCapturingKafCallbackHandler)(nil)
+
+func (h *failOncePersistingKafCallbackHandler) GetTaskType() string {
+	return "kaf_fail_once_persisting_callback"
+}
+func (h *failOncePersistingKafCallbackHandler) GetHandlerID() string {
+	return "kaf_fail_once_persisting_callback_handler"
+}
+func (h *failOncePersistingKafCallbackHandler) Validate(context.Context, map[string]interface{}) error {
+	return nil
+}
+func (h *failOncePersistingKafCallbackHandler) Execute(ctx context.Context, _ *ent.ProcessTask, _ map[string]interface{}) (*dto.ServiceTaskResult, error) {
+	h.calls++
+	h.scope, h.scopeOK = bpmn.KafActionScopeFromContext(ctx)
+	if h.calls == 1 {
+		return nil, errors.New("forced callback failure")
+	}
+	err := h.client.TicketComment.Create().
+		SetTicketID(h.workItemID).
+		SetUserID(h.actorID).
+		SetContent("KAF callback recovery applied").
+		SetIsInternal(true).
+		SetTenantID(h.scope.TenantID()).
+		Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &dto.ServiceTaskResult{Success: true}, nil
+}
+
+var _ bpmn.ServiceTaskHandlerInterface = (*failOncePersistingKafCallbackHandler)(nil)
 
 func (e *statefulKafCompletionEngine) CompleteTask(ctx context.Context, taskID string, variables map[string]interface{}) error {
 	e.calls++
@@ -330,52 +361,6 @@ func (e *blockingKafCompletionEngine) CompleteKafDelegatedTask(ctx context.Conte
 	e.entered <- struct{}{}
 	<-e.release
 	return e.statefulKafCompletionEngine.CompleteKafDelegatedTask(ctx, ledgerID, taskID, variables)
-}
-
-func (e *recoveringKafCallbackEngine) CompleteTask(context.Context, string, map[string]interface{}) error {
-	return errors.New("generic completion must not be used for KAF callback recovery")
-}
-
-func (e *recoveringKafCallbackEngine) CompleteKafDelegatedTask(ctx context.Context, ledgerID int, taskID string, variables map[string]interface{}) error {
-	e.callbackCalls++
-	if e.callbackCalls == 1 {
-		e.completionWrites++
-		updated, err := e.client.ProcessTask.Update().Where(
-			processtask.TaskIDEQ(taskID),
-			processtask.StatusNEQ(common.ProcessTaskStatusCompleted),
-		).SetStatus(common.ProcessTaskStatusCompleted).SetTaskVariables(variables).Save(ctx)
-		if err != nil {
-			return err
-		}
-		if updated != 1 {
-			return errors.New("KAF callback fixture could not complete task")
-		}
-		ledger, err := e.client.KafTaskActionLedger.Get(ctx, ledgerID)
-		if err != nil {
-			return err
-		}
-		_, err = e.client.KafTaskCompletionReceipt.Create().
-			SetLedgerID(ledgerID).SetTenantID(ledger.TenantID).SetTaskID(taskID).
-			SetStatus("callback_failed").SetErrorCode("callback_failed").
-			Save(ctx)
-		if err != nil {
-			return err
-		}
-		return errors.New("forced callback failure")
-	}
-	receipt, err := e.client.KafTaskCompletionReceipt.Query().Where(
-		kaftaskcompletionreceipt.LedgerIDEQ(ledgerID),
-	).Only(ctx)
-	if err != nil {
-		return err
-	}
-	if err := e.client.KafTaskCompletionReceipt.UpdateOneID(receipt.ID).
-		SetStatus("callback_succeeded").ClearErrorCode().Exec(ctx); err != nil {
-		return err
-	}
-	return e.client.TicketComment.Create().SetTicketID(e.workItemID).SetUserID(e.actorID).
-		SetContent("KAF callback recovery applied").SetIsInternal(true).
-		SetTenantID(receipt.TenantID).Exec(ctx)
 }
 
 func newKafActionFixture(t *testing.T) (*CustomProcessEngine, *KafDelegationService, *ent.ProcessTask, context.Context) {
@@ -726,29 +711,82 @@ func TestReconcileCompletedTaskWithoutSuccessfulReceipt_DoesNotCompleteBPMNAgain
 	assert.Equal(t, "callback_succeeded", receipt.Status)
 }
 
-func TestExecuteAction_CallbackFailureRecoversWithoutSecondBPMNCompletion(t *testing.T) {
-	_, svc, task, ctx := newKafActionFixture(t)
+func TestExecuteAction_RealEngineCallbackFailureRecoversWithoutSecondBPMNCompletion(t *testing.T) {
+	engine, svc, task, ctx := newKafActionFixture(t)
 	workItemID := attachKafActionWorkItem(t, svc, task, ctx)
 	actorID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
 	req := validCompleteRequest(task, "run-callback-recovery", "finish")
-	engine := &recoveringKafCallbackEngine{
+
+	instance, err := svc.client.ProcessInstance.Get(ctx, task.ProcessInstanceID)
+	require.NoError(t, err)
+	const callbackRecoveryBPMN = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="https://itsm.example.test/bpmn">
+  <bpmn:process id="kaf_delegation_flow" name="KAF callback recovery" isExecutable="true">
+    <bpmn:startEvent id="Start" />
+    <bpmn:serviceTask id="Activity_KafDelegate" name="KAF delegated task" />
+    <bpmn:endEvent id="End" />
+    <bpmn:sequenceFlow id="Flow_Start_Kaf" sourceRef="Start" targetRef="Activity_KafDelegate" />
+    <bpmn:sequenceFlow id="Flow_Kaf_End" sourceRef="Activity_KafDelegate" targetRef="End" />
+  </bpmn:process>
+</bpmn:definitions>`
+	require.NoError(t, svc.client.ProcessDefinition.UpdateOneID(instance.ProcessDefinitionID).
+		SetBpmnXML([]byte(callbackRecoveryBPMN)).
+		Exec(ctx))
+
+	handler := &failOncePersistingKafCallbackHandler{
 		client: svc.client, workItemID: workItemID, actorID: actorID,
 	}
+	engine.callbackRegistry.RegisterHandler(handler)
+	task, err = svc.client.ProcessTask.UpdateOneID(task.ID).
+		SetTaskVariables(map[string]interface{}{
+			bpmnMetaDataAllowedActions:  kafActionComplete,
+			bpmnMetaDataServiceTaskType: handler.GetTaskType(),
+			bpmnMetaDataAction:          "complete",
+		}).
+		Save(ctx)
+	require.NoError(t, err)
 
-	_, err := svc.ExecuteAction(ctx, task.TaskID, req, engine)
-	require.ErrorContains(t, err, "forced callback failure")
+	completionWrites := 0
+	svc.client.ProcessTask.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(hookCtx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			if taskMutation, ok := mutation.(*ent.ProcessTaskMutation); ok {
+				if status, exists := taskMutation.Status(); exists && status == common.ProcessTaskStatusCompleted {
+					completionWrites++
+				}
+			}
+			return next.Mutate(hookCtx, mutation)
+		})
+	})
+
+	_, err = svc.ExecuteAction(ctx, task.TaskID, req, engine)
+	require.ErrorContains(t, err, "user task callback failed")
 	failedReceipt, err := svc.client.KafTaskCompletionReceipt.Query().Where(
 		kaftaskcompletionreceipt.TaskIDEQ(task.TaskID),
 	).Only(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, "callback_failed", failedReceipt.Status)
 	assert.Equal(t, "callback_failed", failedReceipt.ErrorCode)
+	assert.Equal(t, 1, completionWrites)
+	assert.Equal(t, 1, handler.calls)
+	commentCount, err := svc.client.TicketComment.Query().Where(
+		ticketcomment.TicketIDEQ(workItemID),
+	).Count(ctx)
+	require.NoError(t, err)
+	assert.Zero(t, commentCount)
+	auditCount, err := svc.client.AuditLog.Query().Where(
+		auditlog.TenantIDEQ(task.TenantID),
+		auditlog.ActionEQ("kaf_delegate."+req.Action),
+	).Count(ctx)
+	require.NoError(t, err)
+	assert.Zero(t, auditCount)
 
 	result, err := svc.ExecuteAction(ctx, task.TaskID, req, engine)
 	require.NoError(t, err)
 	assert.Equal(t, KafActionApplied, result.ResultStatus)
-	assert.Equal(t, 2, engine.callbackCalls)
-	assert.Equal(t, 1, engine.completionWrites)
+	assert.Equal(t, 2, handler.calls)
+	require.True(t, handler.scopeOK)
+	assert.Equal(t, req.Execution.IdempotencyKey, handler.scope.IdempotencyKey())
+	assert.Equal(t, 1, completionWrites)
 	completedCount, err := svc.client.ProcessTask.Query().Where(
 		processtask.IDEQ(task.ID), processtask.StatusEQ(common.ProcessTaskStatusCompleted),
 	).Count(ctx)
@@ -760,15 +798,27 @@ func TestExecuteAction_CallbackFailureRecoversWithoutSecondBPMNCompletion(t *tes
 	).Count(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 1, receiptCount)
-	commentCount, err := svc.client.TicketComment.Query().Where(
+	commentCount, err = svc.client.TicketComment.Query().Where(
 		ticketcomment.TicketIDEQ(workItemID),
 	).Count(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 1, commentCount)
-	auditCount, err := svc.client.AuditLog.Query().Where(
+	auditCount, err = svc.client.AuditLog.Query().Where(
 		auditlog.TenantIDEQ(task.TenantID),
 		auditlog.ActionEQ("kaf_delegate."+req.Action),
 	).Count(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 1, auditCount)
+	completedInstanceCount, err := svc.client.ProcessInstance.Query().Where(
+		processinstance.IDEQ(instance.ID),
+		processinstance.StatusEQ("completed"),
+	).Count(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, completedInstanceCount)
+
+	replay, err := svc.ExecuteAction(ctx, task.TaskID, req, engine)
+	require.NoError(t, err)
+	assert.Equal(t, KafActionAlreadyApplied, replay.ResultStatus)
+	assert.Equal(t, 2, handler.calls)
+	assert.Equal(t, 1, completionWrites)
 }
