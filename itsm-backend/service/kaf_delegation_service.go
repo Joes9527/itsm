@@ -188,7 +188,7 @@ func (s *KafDelegationService) taskForTenant(ctx context.Context, taskID string)
 		return nil, fmt.Errorf("%w: tenant context is required", ErrKafDelegationForbidden)
 	}
 	task, err := s.client.ProcessTask.Query().
-		Where(processtask.TaskIDEQ(taskID)).
+		Where(processtask.TaskIDEQ(taskID), processtask.TenantIDEQ(tenantID)).
 		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
