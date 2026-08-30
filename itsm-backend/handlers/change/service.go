@@ -755,7 +755,8 @@ func (s *Service) completeChangeApprovalTask(ctx context.Context, tenantID, acto
 // assignee/candidateUsers 校验，会因为 Activity_Schedule/Activity_Reject 没有声明
 // assigneeRole 而始终失败。
 func (s *Service) completeCascadeTask(ctx context.Context, instanceID, tenantID, changeID int) error {
-	systemCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+	systemCtx := service.WithoutBPMNAccessScope(ctx)
+	systemCtx = context.WithValue(systemCtx, bpmn.BPMNTenantIDContextKey, tenantID)
 	nextTask, err := s.entClient.ProcessTask.Query().
 		Where(
 			processtask.HasProcessInstanceWith(processinstance.ID(instanceID)),

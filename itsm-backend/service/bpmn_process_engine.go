@@ -340,7 +340,13 @@ func (e *CustomProcessEngine) CompleteTask(ctx context.Context, taskID string, v
 	// 1. 获取任务
 	taskQuery := e.client.ProcessTask.Query().
 		Where(processtask.TaskID(taskID))
-	if tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int); tenantID > 0 {
+	if _, scopePresent := bpmnAccessScopeValue(ctx); scopePresent {
+		scope, err := BPMNAccessScopeFromContext(ctx)
+		if err != nil {
+			return err
+		}
+		taskQuery = taskQuery.Where(processtask.TenantID(scope.TenantID))
+	} else if tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int); tenantID > 0 {
 		taskQuery = taskQuery.Where(processtask.TenantID(tenantID))
 	}
 	task, err := taskQuery.First(ctx)
@@ -558,6 +564,16 @@ func (e *CustomProcessEngine) recordApprovalDecisionWithClient(ctx context.Conte
 	decision, _ := variables["approvalResult"].(string)
 	comment, _ := variables["approvalComment"].(string)
 	actorID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
+	if _, scopePresent := bpmnAccessScopeValue(ctx); scopePresent {
+		scope, err := BPMNAccessScopeFromContext(ctx)
+		if err != nil {
+			return err
+		}
+		if scope.TenantID != instance.TenantID {
+			return common.NewForbiddenError("审批操作人与流程实例租户不一致")
+		}
+		actorID = scope.UserID
+	}
 	if actorID <= 0 {
 		return fmt.Errorf("审批决策缺少认证操作人")
 	}
@@ -607,17 +623,33 @@ func (e *CustomProcessEngine) authorizeTaskActorWithClient(ctx context.Context, 
 		return e.authorizeKafAutomationActorWithClient(ctx, client, task)
 	}
 
+	if _, scopePresent := bpmnAccessScopeValue(ctx); scopePresent {
+		scope, err := BPMNAccessScopeFromContext(ctx)
+		if err != nil {
+			return err
+		}
+		if scope.TenantID != task.TenantID {
+			return common.NewForbiddenError("任务不属于当前租户")
+		}
+		if scope.CanUpdateAllTasks {
+			return nil
+		}
+		return authorizeTaskParticipant(ctx, client, task, scope.UserID, scope.TenantID)
+	}
+
 	userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
 	if userID <= 0 {
 		return nil
 	}
-	if scope, scopeErr := BPMNAccessScopeFromContext(ctx); scopeErr == nil &&
-		scope.UserID == userID &&
-		scope.TenantID == task.TenantID &&
-		scope.CanUpdateAllTasks {
-		return nil
+	return authorizeTaskParticipant(ctx, client, task, userID, 0)
+}
+
+func authorizeTaskParticipant(ctx context.Context, client *ent.Client, task *ent.ProcessTask, userID, tenantID int) error {
+	query := client.User.Query().Where(user.ID(userID))
+	if tenantID > 0 {
+		query = query.Where(user.TenantID(tenantID))
 	}
-	actor, err := client.User.Query().Where(user.ID(userID)).Only(ctx)
+	actor, err := query.Only(ctx)
 	if err != nil {
 		return fmt.Errorf("审批用户不存在: %w", err)
 	}
@@ -2681,8 +2713,16 @@ func (s *bpmnTaskService) CompleteTaskByID(ctx context.Context, id int, variable
 	if err != nil {
 		return fmt.Errorf("获取任务失败: %w", err)
 	}
-	// 如果上下文中有租户 ID，验证任务属于该租户
-	if tenantID := ctx.Value(bpmn.BPMNTenantIDContextKey); tenantID != nil && tenantID.(int) > 0 {
+	// Typed scopes are authoritative; legacy tenant keys are only for established internal calls.
+	if _, scopePresent := bpmnAccessScopeValue(ctx); scopePresent {
+		scope, scopeErr := BPMNAccessScopeFromContext(ctx)
+		if scopeErr != nil {
+			return scopeErr
+		}
+		if task.TenantID != scope.TenantID {
+			return common.NewForbiddenError("任务不属于当前租户")
+		}
+	} else if tenantID := ctx.Value(bpmn.BPMNTenantIDContextKey); tenantID != nil && tenantID.(int) > 0 {
 		if task.TenantID != tenantID.(int) {
 			return fmt.Errorf("任务不属于当前租户")
 		}
@@ -2963,7 +3003,11 @@ func taskClaimContext(ctx context.Context, requestedUserID int) (context.Context
 	if requestedUserID <= 0 {
 		return nil, 0, fmt.Errorf("无效的用户ID")
 	}
-	if scope, err := BPMNAccessScopeFromContext(ctx); err == nil {
+	if _, scopePresent := bpmnAccessScopeValue(ctx); scopePresent {
+		scope, err := BPMNAccessScopeFromContext(ctx)
+		if err != nil {
+			return nil, 0, err
+		}
 		if requestedUserID != scope.UserID {
 			return nil, 0, common.NewForbiddenError("只能以当前认证用户认领任务")
 		}

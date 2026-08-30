@@ -258,7 +258,11 @@ func TestBackfillOne_MigratesRunningProcessInstanceBusinessKey_EndToEnd(t *testi
 	svc := changedomain.NewService(repo, client, logger)
 	svc.SetProcessEngine(engine)
 
-	updated, err := svc.TransitionStatus(tenantCtx, legacy.ID, tenant.ID, cmUser.ID, "approved", "迁移后审批验证")
+	approverCtx := service.WithBPMNAccessScope(tenantCtx, service.BPMNAccessScope{
+		UserID:   cmUser.ID,
+		TenantID: tenant.ID,
+	})
+	updated, err := svc.TransitionStatus(approverCtx, legacy.ID, tenant.ID, cmUser.ID, "approved", "迁移后审批验证")
 	require.NoError(t, err, "迁移后，Track4 的 CAB 审批必须能通过新 businessKey 找到并推进这条实例")
 	assert.Equal(t, "scheduled", updated.Status, "normal 类型两跳推进到 scheduled")
 

@@ -46,7 +46,12 @@ func setupUserTaskCallbackEnv(t *testing.T) (*ent.Client, ProcessEngine, context
 	require.NoError(t, err)
 
 	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
-	ctx = WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: reader.ID, TenantID: tenant.ID, CanReadAllTasks: true})
+	ctx = WithBPMNAccessScope(ctx, BPMNAccessScope{
+		UserID:            reader.ID,
+		TenantID:          tenant.ID,
+		CanReadAllTasks:   true,
+		CanUpdateAllTasks: true,
+	})
 	return client, engine, ctx, tenant.ID
 }
 

@@ -1054,7 +1054,7 @@ func TestCABApprovalGatewayRoutesToScheduleOnApprove(t *testing.T) {
 	cabTask := fx.getCreatedTask(t, instance.ID, "Activity_CABApproval")
 
 	// change_manager 身份完成 CAB 审批，决策为通过
-	actorCtx := context.WithValue(ctx, bpmn.BPMNUserIDContextKey, cmUser.ID)
+	actorCtx := WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: cmUser.ID, TenantID: fx.tenant.ID})
 	err = fx.engine.CompleteTask(actorCtx, cabTask.TaskID, map[string]interface{}{
 		"approvalAction":  "approve",
 		"approvalResult":  "approved",
@@ -1097,7 +1097,7 @@ func TestCABApprovalGatewayRoutesToRejectOnReject(t *testing.T) {
 	cabTask := fx.getCreatedTask(t, instance.ID, "Activity_CABApproval")
 
 	// change_manager 身份完成 CAB 审批，决策为驳回
-	actorCtx := context.WithValue(ctx, bpmn.BPMNUserIDContextKey, cmUser.ID)
+	actorCtx := WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: cmUser.ID, TenantID: fx.tenant.ID})
 	err = fx.engine.CompleteTask(actorCtx, cabTask.TaskID, map[string]interface{}{
 		"approvalAction":  "reject",
 		"approvalResult":  "rejected",

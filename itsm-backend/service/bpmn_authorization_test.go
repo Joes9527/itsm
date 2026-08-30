@@ -162,10 +162,12 @@ func (f *bpmnAuthorizationFixture) scopedCtx(canReadInstances, canUpdateInstance
 	})
 }
 
-func (f *bpmnAuthorizationFixture) humanTaskCtx(canUpdateTasks bool) context.Context {
-	ctx := f.scopedCtx(false, false, false, canUpdateTasks)
-	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, f.tenant.ID)
-	return context.WithValue(ctx, bpmn.BPMNUserIDContextKey, f.actor.ID)
+func (f *bpmnAuthorizationFixture) typedTaskScopeOnlyCtx(actor *ent.User, canUpdateTasks bool) context.Context {
+	return WithBPMNAccessScope(context.Background(), BPMNAccessScope{
+		UserID:            actor.ID,
+		TenantID:          f.tenant.ID,
+		CanUpdateAllTasks: canUpdateTasks,
+	})
 }
 
 func (f *bpmnAuthorizationFixture) actorScopeCtx(actor *ent.User, tenant *ent.Tenant, canReadAll bool) context.Context {
@@ -873,17 +875,35 @@ func TestTaskUpdaterCanClaimCompleteAndVoteNonParticipant(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name+" rejects read-only nonparticipant", func(t *testing.T) {
+		t.Run(tt.name+" allows typed-scope-only participant", func(t *testing.T) {
+			f := newBPMNAuthorizationFixture(t)
+			task := f.seedNonParticipantApprovalTask(t, "participant-"+strings.ReplaceAll(tt.name, " ", "-"))
+			task, err := f.client.ProcessTask.UpdateOne(task).SetCandidateUsers(f.actor.Username).Save(f.userCtx)
+			require.NoError(t, err)
+			require.NoError(t, tt.mutate(f, f.typedTaskScopeOnlyCtx(f.actor, false), task))
+		})
+		t.Run(tt.name+" rejects typed-scope-only read-only nonparticipant", func(t *testing.T) {
 			f := newBPMNAuthorizationFixture(t)
 			task := f.seedNonParticipantApprovalTask(t, "readonly-"+strings.ReplaceAll(tt.name, " ", "-"))
-			requireBPMNForbidden(t, tt.mutate(f, f.humanTaskCtx(false), task))
+			requireBPMNForbidden(t, tt.mutate(f, f.typedTaskScopeOnlyCtx(f.actor, false), task))
 		})
-		t.Run(tt.name+" allows task updater nonparticipant", func(t *testing.T) {
+		t.Run(tt.name+" allows typed-scope-only task updater nonparticipant", func(t *testing.T) {
 			f := newBPMNAuthorizationFixture(t)
 			task := f.seedNonParticipantApprovalTask(t, "updater-"+strings.ReplaceAll(tt.name, " ", "-"))
-			require.NoError(t, tt.mutate(f, f.humanTaskCtx(true), task))
+			require.NoError(t, tt.mutate(f, f.typedTaskScopeOnlyCtx(f.actor, true), task))
 		})
 	}
+}
+
+func TestTypedScopeOnlyClaimRejectsRequestedIdentityMismatch(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	task := f.seedNonParticipantApprovalTask(t, "claim-identity-mismatch")
+	err := f.engine.TaskService().ClaimTask(
+		f.typedTaskScopeOnlyCtx(f.actor, true),
+		task.TaskID,
+		strconv.Itoa(f.outsider.ID),
+	)
+	requireBPMNForbidden(t, err)
 }
 
 func TestTaskMutationRejectsCrossTenant(t *testing.T) {
