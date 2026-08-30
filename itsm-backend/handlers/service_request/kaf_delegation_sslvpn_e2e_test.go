@@ -14,8 +14,11 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/incident"
+	"itsm-backend/ent/kaftaskactionledger"
+	"itsm-backend/ent/kaftaskcompletionreceipt"
 	"itsm-backend/ent/outboxevent"
 	"itsm-backend/ent/processapprovaldecision"
 	"itsm-backend/ent/processinstance"
@@ -95,6 +98,63 @@ func TestSSLVPNRequest_ApprovalDelegationDeliveryAndCompletion(t *testing.T) {
 	assertSSLVPNProcessAdvancedOnce(t, fx, instance, event.TaskID)
 	assertExclusiveSSLVPNServiceRequestClass(t, fx, workItem.ID)
 	assertNoSensitiveSSLVPNPayload(t, event)
+}
+
+func TestSSLVPNKafDelegation_OneAppliedActionAdvancesBPMNOnce(t *testing.T) {
+	fx := newSSLVPNDelegationFixture(t)
+	deploySSLVPNDefinition(t, fx, "sslvpn_execution_integrity", fmt.Sprintf(sslvpnApprovalNodes, fx.approver.ID, fx.approver.ID), sslvpnApprovalFlows)
+
+	sr := createSSLVPNServiceRequestForDefinition(t, fx, "sslvpn_execution_integrity")
+	instance := awaitSSLVPNInstance(t, fx, "ticket", sr.TicketID)
+	require.NoError(t, completeSSLVPNApproval(t, fx, instance, "Approval_1"))
+	require.NoError(t, completeSSLVPNApproval(t, fx, instance, "Approval_2"))
+	task := assertOneSSLVPNDelegation(t, fx, instance)
+	event := dispatchSSLVPNDelegate(t, fx, task)
+	kafContext := kafSSLVPNContext(t, fx, event.TaskID)
+	req := sslvpnCompletionRequest(fx, event.TaskID, kafContext, "run-sslvpn", "finish")
+
+	first, err := fx.delegation.ExecuteAction(fx.ctx, event.TaskID, req, fx.engine)
+	require.NoError(t, err)
+	replay, err := fx.delegation.ExecuteAction(fx.ctx, event.TaskID, req, fx.engine)
+	require.NoError(t, err)
+	require.Equal(t, itsmservice.KafActionApplied, first.ResultStatus)
+	require.Equal(t, itsmservice.KafActionAlreadyApplied, replay.ResultStatus)
+
+	completedTaskCount, err := fx.client.ProcessTask.Query().Where(
+		processtask.TaskIDEQ(event.TaskID),
+		processtask.StatusEQ(common.ProcessTaskStatusCompleted),
+	).Count(fx.ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, completedTaskCount)
+	completedInstanceCount, err := fx.client.ProcessInstance.Query().Where(
+		processinstance.IDEQ(instance.ID),
+		processinstance.StatusEQ("completed"),
+	).Count(fx.ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, completedInstanceCount)
+	ledgerCount, err := fx.client.KafTaskActionLedger.Query().Where(
+		kaftaskactionledger.TenantIDEQ(fx.tenant.ID),
+		kaftaskactionledger.TaskIDEQ(event.TaskID),
+		kaftaskactionledger.ResultStatusEQ("applied"),
+	).Count(fx.ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, ledgerCount)
+	receiptCount, err := fx.client.KafTaskCompletionReceipt.Query().Where(
+		kaftaskcompletionreceipt.TenantIDEQ(fx.tenant.ID),
+		kaftaskcompletionreceipt.TaskIDEQ(event.TaskID),
+		kaftaskcompletionreceipt.StatusEQ("callback_succeeded"),
+	).Count(fx.ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, receiptCount)
+	auditCount, err := fx.client.AuditLog.Query().Where(
+		auditlog.TenantIDEQ(fx.tenant.ID),
+		auditlog.ActionEQ("kaf_delegate.complete_bpmn_task"),
+	).Count(fx.ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, auditCount)
+	persistedTask, err := fx.client.ProcessTask.Get(fx.ctx, task.ID)
+	require.NoError(t, err)
+	assert.NotContains(t, persistedTask.TaskVariables, "kaf_action_results")
 }
 
 func TestSSLVPNRequest_CreateRollsBackWorkItemAndDoesNotStartBPMNWhenExtensionPersistenceFails(t *testing.T) {
@@ -329,9 +389,19 @@ func kafSSLVPNContext(t *testing.T, fx *sslvpnDelegationFixture, taskID string) 
 
 func completeSSLVPNDelegate(t *testing.T, fx *sslvpnDelegationFixture, taskID, runID, stepID string) {
 	t.Helper()
+	executeSSLVPNDelegate(t, fx, taskID, runID, stepID)
+}
+
+func executeSSLVPNDelegate(t *testing.T, fx *sslvpnDelegationFixture, taskID, runID, stepID string) *itsmservice.KafActionResult {
+	t.Helper()
 	kafContext := kafSSLVPNContext(t, fx, taskID)
-	_, err := fx.delegation.ExecuteAction(fx.ctx, taskID, itsmservice.KafActionRequest{Action: "complete_bpmn_task", ExpectedVersion: kafContext.ExpectedVersion, Execution: itsmservice.KafActionExecution{RunID: runID, StepID: stepID, IdempotencyKey: fx.tenant.Code + ":" + taskID + ":" + runID + ":" + stepID, CorrelationID: kafContext.CorrelationID, ProcedureRef: "sslvpn-grant", ProcedureVersion: "test-v1"}, Payload: itsmservice.KafActionPayload{ResultSummary: "SSLVPN grant completed"}}, fx.engine)
+	result, err := fx.delegation.ExecuteAction(fx.ctx, taskID, sslvpnCompletionRequest(fx, taskID, kafContext, runID, stepID), fx.engine)
 	require.NoError(t, err)
+	return result
+}
+
+func sslvpnCompletionRequest(fx *sslvpnDelegationFixture, taskID string, kafContext *itsmservice.KafTaskContext, runID, stepID string) itsmservice.KafActionRequest {
+	return itsmservice.KafActionRequest{Action: "complete_bpmn_task", ExpectedVersion: kafContext.ExpectedVersion, Execution: itsmservice.KafActionExecution{RunID: runID, StepID: stepID, IdempotencyKey: strconv.Itoa(fx.tenant.ID) + ":" + taskID + ":" + runID + ":" + stepID, CorrelationID: kafContext.CorrelationID, ProcedureRef: "sslvpn-grant", ProcedureVersion: "test-v1"}, Payload: itsmservice.KafActionPayload{ResultSummary: "SSLVPN grant completed"}}
 }
 
 func assertSSLVPNProcessAdvancedOnce(t *testing.T, fx *sslvpnDelegationFixture, instance *ent.ProcessInstance, taskID string) {
