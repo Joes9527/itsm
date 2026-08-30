@@ -70,6 +70,7 @@ import (
 	"itsm-backend/ent/processapprovaldecision"
 	"itsm-backend/ent/processauditlog"
 	"itsm-backend/ent/processbinding"
+	"itsm-backend/ent/processcallbackoutbox"
 	"itsm-backend/ent/processdefinition"
 	"itsm-backend/ent/processdeployment"
 	"itsm-backend/ent/processexecutionhistory"
@@ -252,6 +253,7 @@ func checkColumn(t, c string) error {
 			processapprovaldecision.Table:     processapprovaldecision.ValidColumn,
 			processauditlog.Table:             processauditlog.ValidColumn,
 			processbinding.Table:              processbinding.ValidColumn,
+			processcallbackoutbox.Table:       processcallbackoutbox.ValidColumn,
 			processdefinition.Table:           processdefinition.ValidColumn,
 			processdeployment.Table:           processdeployment.ValidColumn,
 			processexecutionhistory.Table:     processexecutionhistory.ValidColumn,

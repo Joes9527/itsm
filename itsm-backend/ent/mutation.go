@@ -72,6 +72,7 @@ import (
 	"itsm-backend/ent/processapprovaldecision"
 	"itsm-backend/ent/processauditlog"
 	"itsm-backend/ent/processbinding"
+	"itsm-backend/ent/processcallbackoutbox"
 	"itsm-backend/ent/processdefinition"
 	"itsm-backend/ent/processdeployment"
 	"itsm-backend/ent/processexecutionhistory"
@@ -205,6 +206,7 @@ const (
 	TypeProcessApprovalDecision     = "ProcessApprovalDecision"
 	TypeProcessAuditLog             = "ProcessAuditLog"
 	TypeProcessBinding              = "ProcessBinding"
+	TypeProcessCallbackOutbox       = "ProcessCallbackOutbox"
 	TypeProcessDefinition           = "ProcessDefinition"
 	TypeProcessDeployment           = "ProcessDeployment"
 	TypeProcessExecutionHistory     = "ProcessExecutionHistory"
@@ -82133,6 +82135,1576 @@ func (m *ProcessBindingMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown ProcessBinding edge %s", name)
+}
+
+// ProcessCallbackOutboxMutation represents an operation that mutates the ProcessCallbackOutbox nodes in the graph.
+type ProcessCallbackOutboxMutation struct {
+	config
+	op                     Op
+	typ                    string
+	id                     *int
+	execution_key          *string
+	tenant_id              *int
+	addtenant_id           *int
+	process_instance_id    *int
+	addprocess_instance_id *int
+	process_task_id        *int
+	addprocess_task_id     *int
+	task_id                *string
+	callback_kind          *string
+	handler_id             *string
+	task_type              *string
+	element_id             *string
+	variables              *map[string]interface{}
+	status                 *string
+	attempt_count          *int
+	addattempt_count       *int
+	next_attempt_at        *time.Time
+	lease_owner            *string
+	lease_expires_at       *time.Time
+	last_error_class       *string
+	completed_at           *time.Time
+	created_at             *time.Time
+	updated_at             *time.Time
+	clearedFields          map[string]struct{}
+	done                   bool
+	oldValue               func(context.Context) (*ProcessCallbackOutbox, error)
+	predicates             []predicate.ProcessCallbackOutbox
+}
+
+var _ ent.Mutation = (*ProcessCallbackOutboxMutation)(nil)
+
+// processcallbackoutboxOption allows management of the mutation configuration using functional options.
+type processcallbackoutboxOption func(*ProcessCallbackOutboxMutation)
+
+// newProcessCallbackOutboxMutation creates new mutation for the ProcessCallbackOutbox entity.
+func newProcessCallbackOutboxMutation(c config, op Op, opts ...processcallbackoutboxOption) *ProcessCallbackOutboxMutation {
+	m := &ProcessCallbackOutboxMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeProcessCallbackOutbox,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withProcessCallbackOutboxID sets the ID field of the mutation.
+func withProcessCallbackOutboxID(id int) processcallbackoutboxOption {
+	return func(m *ProcessCallbackOutboxMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *ProcessCallbackOutbox
+		)
+		m.oldValue = func(ctx context.Context) (*ProcessCallbackOutbox, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().ProcessCallbackOutbox.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withProcessCallbackOutbox sets the old ProcessCallbackOutbox of the mutation.
+func withProcessCallbackOutbox(node *ProcessCallbackOutbox) processcallbackoutboxOption {
+	return func(m *ProcessCallbackOutboxMutation) {
+		m.oldValue = func(context.Context) (*ProcessCallbackOutbox, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m ProcessCallbackOutboxMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m ProcessCallbackOutboxMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *ProcessCallbackOutboxMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *ProcessCallbackOutboxMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().ProcessCallbackOutbox.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetExecutionKey sets the "execution_key" field.
+func (m *ProcessCallbackOutboxMutation) SetExecutionKey(s string) {
+	m.execution_key = &s
+}
+
+// ExecutionKey returns the value of the "execution_key" field in the mutation.
+func (m *ProcessCallbackOutboxMutation) ExecutionKey() (r string, exists bool) {
+	v := m.execution_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExecutionKey returns the old "execution_key" field's value of the ProcessCallbackOutbox entity.
+// If the ProcessCallbackOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessCallbackOutboxMutation) OldExecutionKey(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExecutionKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExecutionKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExecutionKey: %w", err)
+	}
+	return oldValue.ExecutionKey, nil
+}
+
+// ResetExecutionKey resets all changes to the "execution_key" field.
+func (m *ProcessCallbackOutboxMutation) ResetExecutionKey() {
+	m.execution_key = nil
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *ProcessCallbackOutboxMutation) SetTenantID(i int) {
+	m.tenant_id = &i
+	m.addtenant_id = nil
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *ProcessCallbackOutboxMutation) TenantID() (r int, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the ProcessCallbackOutbox entity.
+// If the ProcessCallbackOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessCallbackOutboxMutation) OldTenantID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// AddTenantID adds i to the "tenant_id" field.
+func (m *ProcessCallbackOutboxMutation) AddTenantID(i int) {
+	if m.addtenant_id != nil {
+		*m.addtenant_id += i
+	} else {
+		m.addtenant_id = &i
+	}
+}
+
+// AddedTenantID returns the value that was added to the "tenant_id" field in this mutation.
+func (m *ProcessCallbackOutboxMutation) AddedTenantID() (r int, exists bool) {
+	v := m.addtenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *ProcessCallbackOutboxMutation) ResetTenantID() {
+	m.tenant_id = nil
+	m.addtenant_id = nil
+}
+
+// SetProcessInstanceID sets the "process_instance_id" field.
+func (m *ProcessCallbackOutboxMutation) SetProcessInstanceID(i int) {
+	m.process_instance_id = &i
+	m.addprocess_instance_id = nil
+}
+
+// ProcessInstanceID returns the value of the "process_instance_id" field in the mutation.
+func (m *ProcessCallbackOutboxMutation) ProcessInstanceID() (r int, exists bool) {
+	v := m.process_instance_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProcessInstanceID returns the old "process_instance_id" field's value of the ProcessCallbackOutbox entity.
+// If the ProcessCallbackOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessCallbackOutboxMutation) OldProcessInstanceID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProcessInstanceID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProcessInstanceID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProcessInstanceID: %w", err)
+	}
+	return oldValue.ProcessInstanceID, nil
+}
+
+// AddProcessInstanceID adds i to the "process_instance_id" field.
+func (m *ProcessCallbackOutboxMutation) AddProcessInstanceID(i int) {
+	if m.addprocess_instance_id != nil {
+		*m.addprocess_instance_id += i
+	} else {
+		m.addprocess_instance_id = &i
+	}
+}
+
+// AddedProcessInstanceID returns the value that was added to the "process_instance_id" field in this mutation.
+func (m *ProcessCallbackOutboxMutation) AddedProcessInstanceID() (r int, exists bool) {
+	v := m.addprocess_instance_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetProcessInstanceID resets all changes to the "process_instance_id" field.
+func (m *ProcessCallbackOutboxMutation) ResetProcessInstanceID() {
+	m.process_instance_id = nil
+	m.addprocess_instance_id = nil
+}
+
+// SetProcessTaskID sets the "process_task_id" field.
+func (m *ProcessCallbackOutboxMutation) SetProcessTaskID(i int) {
+	m.process_task_id = &i
+	m.addprocess_task_id = nil
+}
+
+// ProcessTaskID returns the value of the "process_task_id" field in the mutation.
+func (m *ProcessCallbackOutboxMutation) ProcessTaskID() (r int, exists bool) {
+	v := m.process_task_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProcessTaskID returns the old "process_task_id" field's value of the ProcessCallbackOutbox entity.
+// If the ProcessCallbackOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessCallbackOutboxMutation) OldProcessTaskID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProcessTaskID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProcessTaskID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProcessTaskID: %w", err)
+	}
+	return oldValue.ProcessTaskID, nil
+}
+
+// AddProcessTaskID adds i to the "process_task_id" field.
+func (m *ProcessCallbackOutboxMutation) AddProcessTaskID(i int) {
+	if m.addprocess_task_id != nil {
+		*m.addprocess_task_id += i
+	} else {
+		m.addprocess_task_id = &i
+	}
+}
+
+// AddedProcessTaskID returns the value that was added to the "process_task_id" field in this mutation.
+func (m *ProcessCallbackOutboxMutation) AddedProcessTaskID() (r int, exists bool) {
+	v := m.addprocess_task_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearProcessTaskID clears the value of the "process_task_id" field.
+func (m *ProcessCallbackOutboxMutation) ClearProcessTaskID() {
+	m.process_task_id = nil
+	m.addprocess_task_id = nil
+	m.clearedFields[processcallbackoutbox.FieldProcessTaskID] = struct{}{}
+}
+
+// ProcessTaskIDCleared returns if the "process_task_id" field was cleared in this mutation.
+func (m *ProcessCallbackOutboxMutation) ProcessTaskIDCleared() bool {
+	_, ok := m.clearedFields[processcallbackoutbox.FieldProcessTaskID]
+	return ok
+}
+
+// ResetProcessTaskID resets all changes to the "process_task_id" field.
+func (m *ProcessCallbackOutboxMutation) ResetProcessTaskID() {
+	m.process_task_id = nil
+	m.addprocess_task_id = nil
+	delete(m.clearedFields, processcallbackoutbox.FieldProcessTaskID)
+}
+
+// SetTaskID sets the "task_id" field.
+func (m *ProcessCallbackOutboxMutation) SetTaskID(s string) {
+	m.task_id = &s
+}
+
+// TaskID returns the value of the "task_id" field in the mutation.
+func (m *ProcessCallbackOutboxMutation) TaskID() (r string, exists bool) {
+	v := m.task_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTaskID returns the old "task_id" field's value of the ProcessCallbackOutbox entity.
+// If the ProcessCallbackOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessCallbackOutboxMutation) OldTaskID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTaskID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTaskID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTaskID: %w", err)
+	}
+	return oldValue.TaskID, nil
+}
+
+// ClearTaskID clears the value of the "task_id" field.
+func (m *ProcessCallbackOutboxMutation) ClearTaskID() {
+	m.task_id = nil
+	m.clearedFields[processcallbackoutbox.FieldTaskID] = struct{}{}
+}
+
+// TaskIDCleared returns if the "task_id" field was cleared in this mutation.
+func (m *ProcessCallbackOutboxMutation) TaskIDCleared() bool {
+	_, ok := m.clearedFields[processcallbackoutbox.FieldTaskID]
+	return ok
+}
+
+// ResetTaskID resets all changes to the "task_id" field.
+func (m *ProcessCallbackOutboxMutation) ResetTaskID() {
+	m.task_id = nil
+	delete(m.clearedFields, processcallbackoutbox.FieldTaskID)
+}
+
+// SetCallbackKind sets the "callback_kind" field.
+func (m *ProcessCallbackOutboxMutation) SetCallbackKind(s string) {
+	m.callback_kind = &s
+}
+
+// CallbackKind returns the value of the "callback_kind" field in the mutation.
+func (m *ProcessCallbackOutboxMutation) CallbackKind() (r string, exists bool) {
+	v := m.callback_kind
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCallbackKind returns the old "callback_kind" field's value of the ProcessCallbackOutbox entity.
+// If the ProcessCallbackOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessCallbackOutboxMutation) OldCallbackKind(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCallbackKind is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCallbackKind requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCallbackKind: %w", err)
+	}
+	return oldValue.CallbackKind, nil
+}
+
+// ResetCallbackKind resets all changes to the "callback_kind" field.
+func (m *ProcessCallbackOutboxMutation) ResetCallbackKind() {
+	m.callback_kind = nil
+}
+
+// SetHandlerID sets the "handler_id" field.
+func (m *ProcessCallbackOutboxMutation) SetHandlerID(s string) {
+	m.handler_id = &s
+}
+
+// HandlerID returns the value of the "handler_id" field in the mutation.
+func (m *ProcessCallbackOutboxMutation) HandlerID() (r string, exists bool) {
+	v := m.handler_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHandlerID returns the old "handler_id" field's value of the ProcessCallbackOutbox entity.
+// If the ProcessCallbackOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessCallbackOutboxMutation) OldHandlerID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHandlerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHandlerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHandlerID: %w", err)
+	}
+	return oldValue.HandlerID, nil
+}
+
+// ResetHandlerID resets all changes to the "handler_id" field.
+func (m *ProcessCallbackOutboxMutation) ResetHandlerID() {
+	m.handler_id = nil
+}
+
+// SetTaskType sets the "task_type" field.
+func (m *ProcessCallbackOutboxMutation) SetTaskType(s string) {
+	m.task_type = &s
+}
+
+// TaskType returns the value of the "task_type" field in the mutation.
+func (m *ProcessCallbackOutboxMutation) TaskType() (r string, exists bool) {
+	v := m.task_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTaskType returns the old "task_type" field's value of the ProcessCallbackOutbox entity.
+// If the ProcessCallbackOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessCallbackOutboxMutation) OldTaskType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTaskType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTaskType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTaskType: %w", err)
+	}
+	return oldValue.TaskType, nil
+}
+
+// ResetTaskType resets all changes to the "task_type" field.
+func (m *ProcessCallbackOutboxMutation) ResetTaskType() {
+	m.task_type = nil
+}
+
+// SetElementID sets the "element_id" field.
+func (m *ProcessCallbackOutboxMutation) SetElementID(s string) {
+	m.element_id = &s
+}
+
+// ElementID returns the value of the "element_id" field in the mutation.
+func (m *ProcessCallbackOutboxMutation) ElementID() (r string, exists bool) {
+	v := m.element_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldElementID returns the old "element_id" field's value of the ProcessCallbackOutbox entity.
+// If the ProcessCallbackOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessCallbackOutboxMutation) OldElementID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldElementID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldElementID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldElementID: %w", err)
+	}
+	return oldValue.ElementID, nil
+}
+
+// ResetElementID resets all changes to the "element_id" field.
+func (m *ProcessCallbackOutboxMutation) ResetElementID() {
+	m.element_id = nil
+}
+
+// SetVariables sets the "variables" field.
+func (m *ProcessCallbackOutboxMutation) SetVariables(value map[string]interface{}) {
+	m.variables = &value
+}
+
+// Variables returns the value of the "variables" field in the mutation.
+func (m *ProcessCallbackOutboxMutation) Variables() (r map[string]interface{}, exists bool) {
+	v := m.variables
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldVariables returns the old "variables" field's value of the ProcessCallbackOutbox entity.
+// If the ProcessCallbackOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessCallbackOutboxMutation) OldVariables(ctx context.Context) (v map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldVariables is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldVariables requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldVariables: %w", err)
+	}
+	return oldValue.Variables, nil
+}
+
+// ClearVariables clears the value of the "variables" field.
+func (m *ProcessCallbackOutboxMutation) ClearVariables() {
+	m.variables = nil
+	m.clearedFields[processcallbackoutbox.FieldVariables] = struct{}{}
+}
+
+// VariablesCleared returns if the "variables" field was cleared in this mutation.
+func (m *ProcessCallbackOutboxMutation) VariablesCleared() bool {
+	_, ok := m.clearedFields[processcallbackoutbox.FieldVariables]
+	return ok
+}
+
+// ResetVariables resets all changes to the "variables" field.
+func (m *ProcessCallbackOutboxMutation) ResetVariables() {
+	m.variables = nil
+	delete(m.clearedFields, processcallbackoutbox.FieldVariables)
+}
+
+// SetStatus sets the "status" field.
+func (m *ProcessCallbackOutboxMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *ProcessCallbackOutboxMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the ProcessCallbackOutbox entity.
+// If the ProcessCallbackOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessCallbackOutboxMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *ProcessCallbackOutboxMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetAttemptCount sets the "attempt_count" field.
+func (m *ProcessCallbackOutboxMutation) SetAttemptCount(i int) {
+	m.attempt_count = &i
+	m.addattempt_count = nil
+}
+
+// AttemptCount returns the value of the "attempt_count" field in the mutation.
+func (m *ProcessCallbackOutboxMutation) AttemptCount() (r int, exists bool) {
+	v := m.attempt_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAttemptCount returns the old "attempt_count" field's value of the ProcessCallbackOutbox entity.
+// If the ProcessCallbackOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessCallbackOutboxMutation) OldAttemptCount(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAttemptCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAttemptCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAttemptCount: %w", err)
+	}
+	return oldValue.AttemptCount, nil
+}
+
+// AddAttemptCount adds i to the "attempt_count" field.
+func (m *ProcessCallbackOutboxMutation) AddAttemptCount(i int) {
+	if m.addattempt_count != nil {
+		*m.addattempt_count += i
+	} else {
+		m.addattempt_count = &i
+	}
+}
+
+// AddedAttemptCount returns the value that was added to the "attempt_count" field in this mutation.
+func (m *ProcessCallbackOutboxMutation) AddedAttemptCount() (r int, exists bool) {
+	v := m.addattempt_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAttemptCount resets all changes to the "attempt_count" field.
+func (m *ProcessCallbackOutboxMutation) ResetAttemptCount() {
+	m.attempt_count = nil
+	m.addattempt_count = nil
+}
+
+// SetNextAttemptAt sets the "next_attempt_at" field.
+func (m *ProcessCallbackOutboxMutation) SetNextAttemptAt(t time.Time) {
+	m.next_attempt_at = &t
+}
+
+// NextAttemptAt returns the value of the "next_attempt_at" field in the mutation.
+func (m *ProcessCallbackOutboxMutation) NextAttemptAt() (r time.Time, exists bool) {
+	v := m.next_attempt_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNextAttemptAt returns the old "next_attempt_at" field's value of the ProcessCallbackOutbox entity.
+// If the ProcessCallbackOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessCallbackOutboxMutation) OldNextAttemptAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNextAttemptAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNextAttemptAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNextAttemptAt: %w", err)
+	}
+	return oldValue.NextAttemptAt, nil
+}
+
+// ResetNextAttemptAt resets all changes to the "next_attempt_at" field.
+func (m *ProcessCallbackOutboxMutation) ResetNextAttemptAt() {
+	m.next_attempt_at = nil
+}
+
+// SetLeaseOwner sets the "lease_owner" field.
+func (m *ProcessCallbackOutboxMutation) SetLeaseOwner(s string) {
+	m.lease_owner = &s
+}
+
+// LeaseOwner returns the value of the "lease_owner" field in the mutation.
+func (m *ProcessCallbackOutboxMutation) LeaseOwner() (r string, exists bool) {
+	v := m.lease_owner
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLeaseOwner returns the old "lease_owner" field's value of the ProcessCallbackOutbox entity.
+// If the ProcessCallbackOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessCallbackOutboxMutation) OldLeaseOwner(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLeaseOwner is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLeaseOwner requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLeaseOwner: %w", err)
+	}
+	return oldValue.LeaseOwner, nil
+}
+
+// ClearLeaseOwner clears the value of the "lease_owner" field.
+func (m *ProcessCallbackOutboxMutation) ClearLeaseOwner() {
+	m.lease_owner = nil
+	m.clearedFields[processcallbackoutbox.FieldLeaseOwner] = struct{}{}
+}
+
+// LeaseOwnerCleared returns if the "lease_owner" field was cleared in this mutation.
+func (m *ProcessCallbackOutboxMutation) LeaseOwnerCleared() bool {
+	_, ok := m.clearedFields[processcallbackoutbox.FieldLeaseOwner]
+	return ok
+}
+
+// ResetLeaseOwner resets all changes to the "lease_owner" field.
+func (m *ProcessCallbackOutboxMutation) ResetLeaseOwner() {
+	m.lease_owner = nil
+	delete(m.clearedFields, processcallbackoutbox.FieldLeaseOwner)
+}
+
+// SetLeaseExpiresAt sets the "lease_expires_at" field.
+func (m *ProcessCallbackOutboxMutation) SetLeaseExpiresAt(t time.Time) {
+	m.lease_expires_at = &t
+}
+
+// LeaseExpiresAt returns the value of the "lease_expires_at" field in the mutation.
+func (m *ProcessCallbackOutboxMutation) LeaseExpiresAt() (r time.Time, exists bool) {
+	v := m.lease_expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLeaseExpiresAt returns the old "lease_expires_at" field's value of the ProcessCallbackOutbox entity.
+// If the ProcessCallbackOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessCallbackOutboxMutation) OldLeaseExpiresAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLeaseExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLeaseExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLeaseExpiresAt: %w", err)
+	}
+	return oldValue.LeaseExpiresAt, nil
+}
+
+// ClearLeaseExpiresAt clears the value of the "lease_expires_at" field.
+func (m *ProcessCallbackOutboxMutation) ClearLeaseExpiresAt() {
+	m.lease_expires_at = nil
+	m.clearedFields[processcallbackoutbox.FieldLeaseExpiresAt] = struct{}{}
+}
+
+// LeaseExpiresAtCleared returns if the "lease_expires_at" field was cleared in this mutation.
+func (m *ProcessCallbackOutboxMutation) LeaseExpiresAtCleared() bool {
+	_, ok := m.clearedFields[processcallbackoutbox.FieldLeaseExpiresAt]
+	return ok
+}
+
+// ResetLeaseExpiresAt resets all changes to the "lease_expires_at" field.
+func (m *ProcessCallbackOutboxMutation) ResetLeaseExpiresAt() {
+	m.lease_expires_at = nil
+	delete(m.clearedFields, processcallbackoutbox.FieldLeaseExpiresAt)
+}
+
+// SetLastErrorClass sets the "last_error_class" field.
+func (m *ProcessCallbackOutboxMutation) SetLastErrorClass(s string) {
+	m.last_error_class = &s
+}
+
+// LastErrorClass returns the value of the "last_error_class" field in the mutation.
+func (m *ProcessCallbackOutboxMutation) LastErrorClass() (r string, exists bool) {
+	v := m.last_error_class
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastErrorClass returns the old "last_error_class" field's value of the ProcessCallbackOutbox entity.
+// If the ProcessCallbackOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessCallbackOutboxMutation) OldLastErrorClass(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastErrorClass is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastErrorClass requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastErrorClass: %w", err)
+	}
+	return oldValue.LastErrorClass, nil
+}
+
+// ClearLastErrorClass clears the value of the "last_error_class" field.
+func (m *ProcessCallbackOutboxMutation) ClearLastErrorClass() {
+	m.last_error_class = nil
+	m.clearedFields[processcallbackoutbox.FieldLastErrorClass] = struct{}{}
+}
+
+// LastErrorClassCleared returns if the "last_error_class" field was cleared in this mutation.
+func (m *ProcessCallbackOutboxMutation) LastErrorClassCleared() bool {
+	_, ok := m.clearedFields[processcallbackoutbox.FieldLastErrorClass]
+	return ok
+}
+
+// ResetLastErrorClass resets all changes to the "last_error_class" field.
+func (m *ProcessCallbackOutboxMutation) ResetLastErrorClass() {
+	m.last_error_class = nil
+	delete(m.clearedFields, processcallbackoutbox.FieldLastErrorClass)
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (m *ProcessCallbackOutboxMutation) SetCompletedAt(t time.Time) {
+	m.completed_at = &t
+}
+
+// CompletedAt returns the value of the "completed_at" field in the mutation.
+func (m *ProcessCallbackOutboxMutation) CompletedAt() (r time.Time, exists bool) {
+	v := m.completed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompletedAt returns the old "completed_at" field's value of the ProcessCallbackOutbox entity.
+// If the ProcessCallbackOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessCallbackOutboxMutation) OldCompletedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompletedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompletedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompletedAt: %w", err)
+	}
+	return oldValue.CompletedAt, nil
+}
+
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (m *ProcessCallbackOutboxMutation) ClearCompletedAt() {
+	m.completed_at = nil
+	m.clearedFields[processcallbackoutbox.FieldCompletedAt] = struct{}{}
+}
+
+// CompletedAtCleared returns if the "completed_at" field was cleared in this mutation.
+func (m *ProcessCallbackOutboxMutation) CompletedAtCleared() bool {
+	_, ok := m.clearedFields[processcallbackoutbox.FieldCompletedAt]
+	return ok
+}
+
+// ResetCompletedAt resets all changes to the "completed_at" field.
+func (m *ProcessCallbackOutboxMutation) ResetCompletedAt() {
+	m.completed_at = nil
+	delete(m.clearedFields, processcallbackoutbox.FieldCompletedAt)
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *ProcessCallbackOutboxMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *ProcessCallbackOutboxMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the ProcessCallbackOutbox entity.
+// If the ProcessCallbackOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessCallbackOutboxMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *ProcessCallbackOutboxMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *ProcessCallbackOutboxMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *ProcessCallbackOutboxMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the ProcessCallbackOutbox entity.
+// If the ProcessCallbackOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessCallbackOutboxMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *ProcessCallbackOutboxMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the ProcessCallbackOutboxMutation builder.
+func (m *ProcessCallbackOutboxMutation) Where(ps ...predicate.ProcessCallbackOutbox) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the ProcessCallbackOutboxMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *ProcessCallbackOutboxMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.ProcessCallbackOutbox, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *ProcessCallbackOutboxMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *ProcessCallbackOutboxMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (ProcessCallbackOutbox).
+func (m *ProcessCallbackOutboxMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *ProcessCallbackOutboxMutation) Fields() []string {
+	fields := make([]string, 0, 19)
+	if m.execution_key != nil {
+		fields = append(fields, processcallbackoutbox.FieldExecutionKey)
+	}
+	if m.tenant_id != nil {
+		fields = append(fields, processcallbackoutbox.FieldTenantID)
+	}
+	if m.process_instance_id != nil {
+		fields = append(fields, processcallbackoutbox.FieldProcessInstanceID)
+	}
+	if m.process_task_id != nil {
+		fields = append(fields, processcallbackoutbox.FieldProcessTaskID)
+	}
+	if m.task_id != nil {
+		fields = append(fields, processcallbackoutbox.FieldTaskID)
+	}
+	if m.callback_kind != nil {
+		fields = append(fields, processcallbackoutbox.FieldCallbackKind)
+	}
+	if m.handler_id != nil {
+		fields = append(fields, processcallbackoutbox.FieldHandlerID)
+	}
+	if m.task_type != nil {
+		fields = append(fields, processcallbackoutbox.FieldTaskType)
+	}
+	if m.element_id != nil {
+		fields = append(fields, processcallbackoutbox.FieldElementID)
+	}
+	if m.variables != nil {
+		fields = append(fields, processcallbackoutbox.FieldVariables)
+	}
+	if m.status != nil {
+		fields = append(fields, processcallbackoutbox.FieldStatus)
+	}
+	if m.attempt_count != nil {
+		fields = append(fields, processcallbackoutbox.FieldAttemptCount)
+	}
+	if m.next_attempt_at != nil {
+		fields = append(fields, processcallbackoutbox.FieldNextAttemptAt)
+	}
+	if m.lease_owner != nil {
+		fields = append(fields, processcallbackoutbox.FieldLeaseOwner)
+	}
+	if m.lease_expires_at != nil {
+		fields = append(fields, processcallbackoutbox.FieldLeaseExpiresAt)
+	}
+	if m.last_error_class != nil {
+		fields = append(fields, processcallbackoutbox.FieldLastErrorClass)
+	}
+	if m.completed_at != nil {
+		fields = append(fields, processcallbackoutbox.FieldCompletedAt)
+	}
+	if m.created_at != nil {
+		fields = append(fields, processcallbackoutbox.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, processcallbackoutbox.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *ProcessCallbackOutboxMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case processcallbackoutbox.FieldExecutionKey:
+		return m.ExecutionKey()
+	case processcallbackoutbox.FieldTenantID:
+		return m.TenantID()
+	case processcallbackoutbox.FieldProcessInstanceID:
+		return m.ProcessInstanceID()
+	case processcallbackoutbox.FieldProcessTaskID:
+		return m.ProcessTaskID()
+	case processcallbackoutbox.FieldTaskID:
+		return m.TaskID()
+	case processcallbackoutbox.FieldCallbackKind:
+		return m.CallbackKind()
+	case processcallbackoutbox.FieldHandlerID:
+		return m.HandlerID()
+	case processcallbackoutbox.FieldTaskType:
+		return m.TaskType()
+	case processcallbackoutbox.FieldElementID:
+		return m.ElementID()
+	case processcallbackoutbox.FieldVariables:
+		return m.Variables()
+	case processcallbackoutbox.FieldStatus:
+		return m.Status()
+	case processcallbackoutbox.FieldAttemptCount:
+		return m.AttemptCount()
+	case processcallbackoutbox.FieldNextAttemptAt:
+		return m.NextAttemptAt()
+	case processcallbackoutbox.FieldLeaseOwner:
+		return m.LeaseOwner()
+	case processcallbackoutbox.FieldLeaseExpiresAt:
+		return m.LeaseExpiresAt()
+	case processcallbackoutbox.FieldLastErrorClass:
+		return m.LastErrorClass()
+	case processcallbackoutbox.FieldCompletedAt:
+		return m.CompletedAt()
+	case processcallbackoutbox.FieldCreatedAt:
+		return m.CreatedAt()
+	case processcallbackoutbox.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *ProcessCallbackOutboxMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case processcallbackoutbox.FieldExecutionKey:
+		return m.OldExecutionKey(ctx)
+	case processcallbackoutbox.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case processcallbackoutbox.FieldProcessInstanceID:
+		return m.OldProcessInstanceID(ctx)
+	case processcallbackoutbox.FieldProcessTaskID:
+		return m.OldProcessTaskID(ctx)
+	case processcallbackoutbox.FieldTaskID:
+		return m.OldTaskID(ctx)
+	case processcallbackoutbox.FieldCallbackKind:
+		return m.OldCallbackKind(ctx)
+	case processcallbackoutbox.FieldHandlerID:
+		return m.OldHandlerID(ctx)
+	case processcallbackoutbox.FieldTaskType:
+		return m.OldTaskType(ctx)
+	case processcallbackoutbox.FieldElementID:
+		return m.OldElementID(ctx)
+	case processcallbackoutbox.FieldVariables:
+		return m.OldVariables(ctx)
+	case processcallbackoutbox.FieldStatus:
+		return m.OldStatus(ctx)
+	case processcallbackoutbox.FieldAttemptCount:
+		return m.OldAttemptCount(ctx)
+	case processcallbackoutbox.FieldNextAttemptAt:
+		return m.OldNextAttemptAt(ctx)
+	case processcallbackoutbox.FieldLeaseOwner:
+		return m.OldLeaseOwner(ctx)
+	case processcallbackoutbox.FieldLeaseExpiresAt:
+		return m.OldLeaseExpiresAt(ctx)
+	case processcallbackoutbox.FieldLastErrorClass:
+		return m.OldLastErrorClass(ctx)
+	case processcallbackoutbox.FieldCompletedAt:
+		return m.OldCompletedAt(ctx)
+	case processcallbackoutbox.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case processcallbackoutbox.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown ProcessCallbackOutbox field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ProcessCallbackOutboxMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case processcallbackoutbox.FieldExecutionKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExecutionKey(v)
+		return nil
+	case processcallbackoutbox.FieldTenantID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case processcallbackoutbox.FieldProcessInstanceID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProcessInstanceID(v)
+		return nil
+	case processcallbackoutbox.FieldProcessTaskID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProcessTaskID(v)
+		return nil
+	case processcallbackoutbox.FieldTaskID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTaskID(v)
+		return nil
+	case processcallbackoutbox.FieldCallbackKind:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCallbackKind(v)
+		return nil
+	case processcallbackoutbox.FieldHandlerID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHandlerID(v)
+		return nil
+	case processcallbackoutbox.FieldTaskType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTaskType(v)
+		return nil
+	case processcallbackoutbox.FieldElementID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetElementID(v)
+		return nil
+	case processcallbackoutbox.FieldVariables:
+		v, ok := value.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetVariables(v)
+		return nil
+	case processcallbackoutbox.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case processcallbackoutbox.FieldAttemptCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAttemptCount(v)
+		return nil
+	case processcallbackoutbox.FieldNextAttemptAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNextAttemptAt(v)
+		return nil
+	case processcallbackoutbox.FieldLeaseOwner:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLeaseOwner(v)
+		return nil
+	case processcallbackoutbox.FieldLeaseExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLeaseExpiresAt(v)
+		return nil
+	case processcallbackoutbox.FieldLastErrorClass:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastErrorClass(v)
+		return nil
+	case processcallbackoutbox.FieldCompletedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompletedAt(v)
+		return nil
+	case processcallbackoutbox.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case processcallbackoutbox.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ProcessCallbackOutbox field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *ProcessCallbackOutboxMutation) AddedFields() []string {
+	var fields []string
+	if m.addtenant_id != nil {
+		fields = append(fields, processcallbackoutbox.FieldTenantID)
+	}
+	if m.addprocess_instance_id != nil {
+		fields = append(fields, processcallbackoutbox.FieldProcessInstanceID)
+	}
+	if m.addprocess_task_id != nil {
+		fields = append(fields, processcallbackoutbox.FieldProcessTaskID)
+	}
+	if m.addattempt_count != nil {
+		fields = append(fields, processcallbackoutbox.FieldAttemptCount)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *ProcessCallbackOutboxMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case processcallbackoutbox.FieldTenantID:
+		return m.AddedTenantID()
+	case processcallbackoutbox.FieldProcessInstanceID:
+		return m.AddedProcessInstanceID()
+	case processcallbackoutbox.FieldProcessTaskID:
+		return m.AddedProcessTaskID()
+	case processcallbackoutbox.FieldAttemptCount:
+		return m.AddedAttemptCount()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ProcessCallbackOutboxMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case processcallbackoutbox.FieldTenantID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTenantID(v)
+		return nil
+	case processcallbackoutbox.FieldProcessInstanceID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddProcessInstanceID(v)
+		return nil
+	case processcallbackoutbox.FieldProcessTaskID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddProcessTaskID(v)
+		return nil
+	case processcallbackoutbox.FieldAttemptCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAttemptCount(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ProcessCallbackOutbox numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *ProcessCallbackOutboxMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(processcallbackoutbox.FieldProcessTaskID) {
+		fields = append(fields, processcallbackoutbox.FieldProcessTaskID)
+	}
+	if m.FieldCleared(processcallbackoutbox.FieldTaskID) {
+		fields = append(fields, processcallbackoutbox.FieldTaskID)
+	}
+	if m.FieldCleared(processcallbackoutbox.FieldVariables) {
+		fields = append(fields, processcallbackoutbox.FieldVariables)
+	}
+	if m.FieldCleared(processcallbackoutbox.FieldLeaseOwner) {
+		fields = append(fields, processcallbackoutbox.FieldLeaseOwner)
+	}
+	if m.FieldCleared(processcallbackoutbox.FieldLeaseExpiresAt) {
+		fields = append(fields, processcallbackoutbox.FieldLeaseExpiresAt)
+	}
+	if m.FieldCleared(processcallbackoutbox.FieldLastErrorClass) {
+		fields = append(fields, processcallbackoutbox.FieldLastErrorClass)
+	}
+	if m.FieldCleared(processcallbackoutbox.FieldCompletedAt) {
+		fields = append(fields, processcallbackoutbox.FieldCompletedAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *ProcessCallbackOutboxMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *ProcessCallbackOutboxMutation) ClearField(name string) error {
+	switch name {
+	case processcallbackoutbox.FieldProcessTaskID:
+		m.ClearProcessTaskID()
+		return nil
+	case processcallbackoutbox.FieldTaskID:
+		m.ClearTaskID()
+		return nil
+	case processcallbackoutbox.FieldVariables:
+		m.ClearVariables()
+		return nil
+	case processcallbackoutbox.FieldLeaseOwner:
+		m.ClearLeaseOwner()
+		return nil
+	case processcallbackoutbox.FieldLeaseExpiresAt:
+		m.ClearLeaseExpiresAt()
+		return nil
+	case processcallbackoutbox.FieldLastErrorClass:
+		m.ClearLastErrorClass()
+		return nil
+	case processcallbackoutbox.FieldCompletedAt:
+		m.ClearCompletedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown ProcessCallbackOutbox nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *ProcessCallbackOutboxMutation) ResetField(name string) error {
+	switch name {
+	case processcallbackoutbox.FieldExecutionKey:
+		m.ResetExecutionKey()
+		return nil
+	case processcallbackoutbox.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case processcallbackoutbox.FieldProcessInstanceID:
+		m.ResetProcessInstanceID()
+		return nil
+	case processcallbackoutbox.FieldProcessTaskID:
+		m.ResetProcessTaskID()
+		return nil
+	case processcallbackoutbox.FieldTaskID:
+		m.ResetTaskID()
+		return nil
+	case processcallbackoutbox.FieldCallbackKind:
+		m.ResetCallbackKind()
+		return nil
+	case processcallbackoutbox.FieldHandlerID:
+		m.ResetHandlerID()
+		return nil
+	case processcallbackoutbox.FieldTaskType:
+		m.ResetTaskType()
+		return nil
+	case processcallbackoutbox.FieldElementID:
+		m.ResetElementID()
+		return nil
+	case processcallbackoutbox.FieldVariables:
+		m.ResetVariables()
+		return nil
+	case processcallbackoutbox.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case processcallbackoutbox.FieldAttemptCount:
+		m.ResetAttemptCount()
+		return nil
+	case processcallbackoutbox.FieldNextAttemptAt:
+		m.ResetNextAttemptAt()
+		return nil
+	case processcallbackoutbox.FieldLeaseOwner:
+		m.ResetLeaseOwner()
+		return nil
+	case processcallbackoutbox.FieldLeaseExpiresAt:
+		m.ResetLeaseExpiresAt()
+		return nil
+	case processcallbackoutbox.FieldLastErrorClass:
+		m.ResetLastErrorClass()
+		return nil
+	case processcallbackoutbox.FieldCompletedAt:
+		m.ResetCompletedAt()
+		return nil
+	case processcallbackoutbox.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case processcallbackoutbox.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown ProcessCallbackOutbox field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *ProcessCallbackOutboxMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *ProcessCallbackOutboxMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *ProcessCallbackOutboxMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *ProcessCallbackOutboxMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *ProcessCallbackOutboxMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *ProcessCallbackOutboxMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *ProcessCallbackOutboxMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown ProcessCallbackOutbox unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *ProcessCallbackOutboxMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown ProcessCallbackOutbox edge %s", name)
 }
 
 // ProcessDefinitionMutation represents an operation that mutates the ProcessDefinition nodes in the graph.

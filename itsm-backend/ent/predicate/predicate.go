@@ -198,6 +198,9 @@ type ProcessAuditLog func(*sql.Selector)
 // ProcessBinding is the predicate function for processbinding builders.
 type ProcessBinding func(*sql.Selector)
 
+// ProcessCallbackOutbox is the predicate function for processcallbackoutbox builders.
+type ProcessCallbackOutbox func(*sql.Selector)
+
 // ProcessDefinition is the predicate function for processdefinition builders.
 type ProcessDefinition func(*sql.Selector)
 

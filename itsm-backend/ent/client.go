@@ -75,6 +75,7 @@ import (
 	"itsm-backend/ent/processapprovaldecision"
 	"itsm-backend/ent/processauditlog"
 	"itsm-backend/ent/processbinding"
+	"itsm-backend/ent/processcallbackoutbox"
 	"itsm-backend/ent/processdefinition"
 	"itsm-backend/ent/processdeployment"
 	"itsm-backend/ent/processexecutionhistory"
@@ -267,6 +268,8 @@ type Client struct {
 	ProcessAuditLog *ProcessAuditLogClient
 	// ProcessBinding is the client for interacting with the ProcessBinding builders.
 	ProcessBinding *ProcessBindingClient
+	// ProcessCallbackOutbox is the client for interacting with the ProcessCallbackOutbox builders.
+	ProcessCallbackOutbox *ProcessCallbackOutboxClient
 	// ProcessDefinition is the client for interacting with the ProcessDefinition builders.
 	ProcessDefinition *ProcessDefinitionClient
 	// ProcessDeployment is the client for interacting with the ProcessDeployment builders.
@@ -446,6 +449,7 @@ func (c *Client) init() {
 	c.ProcessApprovalDecision = NewProcessApprovalDecisionClient(c.config)
 	c.ProcessAuditLog = NewProcessAuditLogClient(c.config)
 	c.ProcessBinding = NewProcessBindingClient(c.config)
+	c.ProcessCallbackOutbox = NewProcessCallbackOutboxClient(c.config)
 	c.ProcessDefinition = NewProcessDefinitionClient(c.config)
 	c.ProcessDeployment = NewProcessDeploymentClient(c.config)
 	c.ProcessExecutionHistory = NewProcessExecutionHistoryClient(c.config)
@@ -654,6 +658,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		ProcessApprovalDecision:     NewProcessApprovalDecisionClient(cfg),
 		ProcessAuditLog:             NewProcessAuditLogClient(cfg),
 		ProcessBinding:              NewProcessBindingClient(cfg),
+		ProcessCallbackOutbox:       NewProcessCallbackOutboxClient(cfg),
 		ProcessDefinition:           NewProcessDefinitionClient(cfg),
 		ProcessDeployment:           NewProcessDeploymentClient(cfg),
 		ProcessExecutionHistory:     NewProcessExecutionHistoryClient(cfg),
@@ -789,6 +794,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		ProcessApprovalDecision:     NewProcessApprovalDecisionClient(cfg),
 		ProcessAuditLog:             NewProcessAuditLogClient(cfg),
 		ProcessBinding:              NewProcessBindingClient(cfg),
+		ProcessCallbackOutbox:       NewProcessCallbackOutboxClient(cfg),
 		ProcessDefinition:           NewProcessDefinitionClient(cfg),
 		ProcessDeployment:           NewProcessDeploymentClient(cfg),
 		ProcessExecutionHistory:     NewProcessExecutionHistoryClient(cfg),
@@ -885,19 +891,19 @@ func (c *Client) Use(hooks ...Hook) {
 		c.MSPAllocation, c.MarketplaceItem, c.Menu, c.Message, c.Microservice,
 		c.Notification, c.NotificationPreference, c.PasswordResetToken, c.Permission,
 		c.PermissionDefinition, c.Problem, c.ProcessApprovalDecision,
-		c.ProcessAuditLog, c.ProcessBinding, c.ProcessDefinition, c.ProcessDeployment,
-		c.ProcessExecutionHistory, c.ProcessInstance, c.ProcessTask, c.ProcessVariable,
-		c.ProcessVersionChangelog, c.Project, c.PromptTemplate, c.ProvisioningTask,
-		c.RelationshipType, c.Release, c.Role, c.RolePermission, c.RootCauseAnalysis,
-		c.SLAAlertHistory, c.SLAAlertRule, c.SLADefinition, c.SLAMetric,
-		c.SLAViolation, c.ServiceCatalog, c.ServiceRequest, c.StandardChange, c.Survey,
-		c.SurveyResponse, c.SystemConfig, c.Tag, c.Team, c.Tenant,
-		c.TenantInstallation, c.Ticket, c.TicketApproval, c.TicketAssignmentRule,
-		c.TicketAttachment, c.TicketAutomationRule, c.TicketCC, c.TicketCategory,
-		c.TicketComment, c.TicketNotification, c.TicketTag, c.TicketTemplate,
-		c.TicketType, c.TicketView, c.TicketWorkflowRecord, c.ToolInvocation, c.User,
-		c.Vendor, c.WorkItemRelation, c.Workflow, c.WorkflowInstance, c.WorkflowTask,
-		c.WorkflowVersion,
+		c.ProcessAuditLog, c.ProcessBinding, c.ProcessCallbackOutbox,
+		c.ProcessDefinition, c.ProcessDeployment, c.ProcessExecutionHistory,
+		c.ProcessInstance, c.ProcessTask, c.ProcessVariable, c.ProcessVersionChangelog,
+		c.Project, c.PromptTemplate, c.ProvisioningTask, c.RelationshipType, c.Release,
+		c.Role, c.RolePermission, c.RootCauseAnalysis, c.SLAAlertHistory,
+		c.SLAAlertRule, c.SLADefinition, c.SLAMetric, c.SLAViolation, c.ServiceCatalog,
+		c.ServiceRequest, c.StandardChange, c.Survey, c.SurveyResponse, c.SystemConfig,
+		c.Tag, c.Team, c.Tenant, c.TenantInstallation, c.Ticket, c.TicketApproval,
+		c.TicketAssignmentRule, c.TicketAttachment, c.TicketAutomationRule, c.TicketCC,
+		c.TicketCategory, c.TicketComment, c.TicketNotification, c.TicketTag,
+		c.TicketTemplate, c.TicketType, c.TicketView, c.TicketWorkflowRecord,
+		c.ToolInvocation, c.User, c.Vendor, c.WorkItemRelation, c.Workflow,
+		c.WorkflowInstance, c.WorkflowTask, c.WorkflowVersion,
 	} {
 		n.Use(hooks...)
 	}
@@ -922,19 +928,19 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.MSPAllocation, c.MarketplaceItem, c.Menu, c.Message, c.Microservice,
 		c.Notification, c.NotificationPreference, c.PasswordResetToken, c.Permission,
 		c.PermissionDefinition, c.Problem, c.ProcessApprovalDecision,
-		c.ProcessAuditLog, c.ProcessBinding, c.ProcessDefinition, c.ProcessDeployment,
-		c.ProcessExecutionHistory, c.ProcessInstance, c.ProcessTask, c.ProcessVariable,
-		c.ProcessVersionChangelog, c.Project, c.PromptTemplate, c.ProvisioningTask,
-		c.RelationshipType, c.Release, c.Role, c.RolePermission, c.RootCauseAnalysis,
-		c.SLAAlertHistory, c.SLAAlertRule, c.SLADefinition, c.SLAMetric,
-		c.SLAViolation, c.ServiceCatalog, c.ServiceRequest, c.StandardChange, c.Survey,
-		c.SurveyResponse, c.SystemConfig, c.Tag, c.Team, c.Tenant,
-		c.TenantInstallation, c.Ticket, c.TicketApproval, c.TicketAssignmentRule,
-		c.TicketAttachment, c.TicketAutomationRule, c.TicketCC, c.TicketCategory,
-		c.TicketComment, c.TicketNotification, c.TicketTag, c.TicketTemplate,
-		c.TicketType, c.TicketView, c.TicketWorkflowRecord, c.ToolInvocation, c.User,
-		c.Vendor, c.WorkItemRelation, c.Workflow, c.WorkflowInstance, c.WorkflowTask,
-		c.WorkflowVersion,
+		c.ProcessAuditLog, c.ProcessBinding, c.ProcessCallbackOutbox,
+		c.ProcessDefinition, c.ProcessDeployment, c.ProcessExecutionHistory,
+		c.ProcessInstance, c.ProcessTask, c.ProcessVariable, c.ProcessVersionChangelog,
+		c.Project, c.PromptTemplate, c.ProvisioningTask, c.RelationshipType, c.Release,
+		c.Role, c.RolePermission, c.RootCauseAnalysis, c.SLAAlertHistory,
+		c.SLAAlertRule, c.SLADefinition, c.SLAMetric, c.SLAViolation, c.ServiceCatalog,
+		c.ServiceRequest, c.StandardChange, c.Survey, c.SurveyResponse, c.SystemConfig,
+		c.Tag, c.Team, c.Tenant, c.TenantInstallation, c.Ticket, c.TicketApproval,
+		c.TicketAssignmentRule, c.TicketAttachment, c.TicketAutomationRule, c.TicketCC,
+		c.TicketCategory, c.TicketComment, c.TicketNotification, c.TicketTag,
+		c.TicketTemplate, c.TicketType, c.TicketView, c.TicketWorkflowRecord,
+		c.ToolInvocation, c.User, c.Vendor, c.WorkItemRelation, c.Workflow,
+		c.WorkflowInstance, c.WorkflowTask, c.WorkflowVersion,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -1071,6 +1077,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.ProcessAuditLog.mutate(ctx, m)
 	case *ProcessBindingMutation:
 		return c.ProcessBinding.mutate(ctx, m)
+	case *ProcessCallbackOutboxMutation:
+		return c.ProcessCallbackOutbox.mutate(ctx, m)
 	case *ProcessDefinitionMutation:
 		return c.ProcessDefinition.mutate(ctx, m)
 	case *ProcessDeploymentMutation:
@@ -11148,6 +11156,139 @@ func (c *ProcessBindingClient) mutate(ctx context.Context, m *ProcessBindingMuta
 	}
 }
 
+// ProcessCallbackOutboxClient is a client for the ProcessCallbackOutbox schema.
+type ProcessCallbackOutboxClient struct {
+	config
+}
+
+// NewProcessCallbackOutboxClient returns a client for the ProcessCallbackOutbox from the given config.
+func NewProcessCallbackOutboxClient(c config) *ProcessCallbackOutboxClient {
+	return &ProcessCallbackOutboxClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `processcallbackoutbox.Hooks(f(g(h())))`.
+func (c *ProcessCallbackOutboxClient) Use(hooks ...Hook) {
+	c.hooks.ProcessCallbackOutbox = append(c.hooks.ProcessCallbackOutbox, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `processcallbackoutbox.Intercept(f(g(h())))`.
+func (c *ProcessCallbackOutboxClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ProcessCallbackOutbox = append(c.inters.ProcessCallbackOutbox, interceptors...)
+}
+
+// Create returns a builder for creating a ProcessCallbackOutbox entity.
+func (c *ProcessCallbackOutboxClient) Create() *ProcessCallbackOutboxCreate {
+	mutation := newProcessCallbackOutboxMutation(c.config, OpCreate)
+	return &ProcessCallbackOutboxCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ProcessCallbackOutbox entities.
+func (c *ProcessCallbackOutboxClient) CreateBulk(builders ...*ProcessCallbackOutboxCreate) *ProcessCallbackOutboxCreateBulk {
+	return &ProcessCallbackOutboxCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ProcessCallbackOutboxClient) MapCreateBulk(slice any, setFunc func(*ProcessCallbackOutboxCreate, int)) *ProcessCallbackOutboxCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ProcessCallbackOutboxCreateBulk{err: fmt.Errorf("calling to ProcessCallbackOutboxClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ProcessCallbackOutboxCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ProcessCallbackOutboxCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ProcessCallbackOutbox.
+func (c *ProcessCallbackOutboxClient) Update() *ProcessCallbackOutboxUpdate {
+	mutation := newProcessCallbackOutboxMutation(c.config, OpUpdate)
+	return &ProcessCallbackOutboxUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ProcessCallbackOutboxClient) UpdateOne(_m *ProcessCallbackOutbox) *ProcessCallbackOutboxUpdateOne {
+	mutation := newProcessCallbackOutboxMutation(c.config, OpUpdateOne, withProcessCallbackOutbox(_m))
+	return &ProcessCallbackOutboxUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ProcessCallbackOutboxClient) UpdateOneID(id int) *ProcessCallbackOutboxUpdateOne {
+	mutation := newProcessCallbackOutboxMutation(c.config, OpUpdateOne, withProcessCallbackOutboxID(id))
+	return &ProcessCallbackOutboxUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ProcessCallbackOutbox.
+func (c *ProcessCallbackOutboxClient) Delete() *ProcessCallbackOutboxDelete {
+	mutation := newProcessCallbackOutboxMutation(c.config, OpDelete)
+	return &ProcessCallbackOutboxDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ProcessCallbackOutboxClient) DeleteOne(_m *ProcessCallbackOutbox) *ProcessCallbackOutboxDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ProcessCallbackOutboxClient) DeleteOneID(id int) *ProcessCallbackOutboxDeleteOne {
+	builder := c.Delete().Where(processcallbackoutbox.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ProcessCallbackOutboxDeleteOne{builder}
+}
+
+// Query returns a query builder for ProcessCallbackOutbox.
+func (c *ProcessCallbackOutboxClient) Query() *ProcessCallbackOutboxQuery {
+	return &ProcessCallbackOutboxQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeProcessCallbackOutbox},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ProcessCallbackOutbox entity by its id.
+func (c *ProcessCallbackOutboxClient) Get(ctx context.Context, id int) (*ProcessCallbackOutbox, error) {
+	return c.Query().Where(processcallbackoutbox.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ProcessCallbackOutboxClient) GetX(ctx context.Context, id int) *ProcessCallbackOutbox {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *ProcessCallbackOutboxClient) Hooks() []Hook {
+	return c.hooks.ProcessCallbackOutbox
+}
+
+// Interceptors returns the client interceptors.
+func (c *ProcessCallbackOutboxClient) Interceptors() []Interceptor {
+	return c.inters.ProcessCallbackOutbox
+}
+
+func (c *ProcessCallbackOutboxClient) mutate(ctx context.Context, m *ProcessCallbackOutboxMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ProcessCallbackOutboxCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ProcessCallbackOutboxUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ProcessCallbackOutboxUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ProcessCallbackOutboxDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ProcessCallbackOutbox mutation op: %q", m.Op())
+	}
+}
+
 // ProcessDefinitionClient is a client for the ProcessDefinition schema.
 type ProcessDefinitionClient struct {
 	config
@@ -19760,17 +19901,18 @@ type (
 		KnowledgeArticleVersion, KnownError, MSPAllocation, MarketplaceItem, Menu,
 		Message, Microservice, Notification, NotificationPreference,
 		PasswordResetToken, Permission, PermissionDefinition, Problem,
-		ProcessApprovalDecision, ProcessAuditLog, ProcessBinding, ProcessDefinition,
-		ProcessDeployment, ProcessExecutionHistory, ProcessInstance, ProcessTask,
-		ProcessVariable, ProcessVersionChangelog, Project, PromptTemplate,
-		ProvisioningTask, RelationshipType, Release, Role, RolePermission,
-		RootCauseAnalysis, SLAAlertHistory, SLAAlertRule, SLADefinition, SLAMetric,
-		SLAViolation, ServiceCatalog, ServiceRequest, StandardChange, Survey,
-		SurveyResponse, SystemConfig, Tag, Team, Tenant, TenantInstallation, Ticket,
-		TicketApproval, TicketAssignmentRule, TicketAttachment, TicketAutomationRule,
-		TicketCC, TicketCategory, TicketComment, TicketNotification, TicketTag,
-		TicketTemplate, TicketType, TicketView, TicketWorkflowRecord, ToolInvocation,
-		User, Vendor, WorkItemRelation, Workflow, WorkflowInstance, WorkflowTask,
+		ProcessApprovalDecision, ProcessAuditLog, ProcessBinding,
+		ProcessCallbackOutbox, ProcessDefinition, ProcessDeployment,
+		ProcessExecutionHistory, ProcessInstance, ProcessTask, ProcessVariable,
+		ProcessVersionChangelog, Project, PromptTemplate, ProvisioningTask,
+		RelationshipType, Release, Role, RolePermission, RootCauseAnalysis,
+		SLAAlertHistory, SLAAlertRule, SLADefinition, SLAMetric, SLAViolation,
+		ServiceCatalog, ServiceRequest, StandardChange, Survey, SurveyResponse,
+		SystemConfig, Tag, Team, Tenant, TenantInstallation, Ticket, TicketApproval,
+		TicketAssignmentRule, TicketAttachment, TicketAutomationRule, TicketCC,
+		TicketCategory, TicketComment, TicketNotification, TicketTag, TicketTemplate,
+		TicketType, TicketView, TicketWorkflowRecord, ToolInvocation, User, Vendor,
+		WorkItemRelation, Workflow, WorkflowInstance, WorkflowTask,
 		WorkflowVersion []ent.Hook
 	}
 	inters struct {
@@ -19787,17 +19929,18 @@ type (
 		KnowledgeArticleVersion, KnownError, MSPAllocation, MarketplaceItem, Menu,
 		Message, Microservice, Notification, NotificationPreference,
 		PasswordResetToken, Permission, PermissionDefinition, Problem,
-		ProcessApprovalDecision, ProcessAuditLog, ProcessBinding, ProcessDefinition,
-		ProcessDeployment, ProcessExecutionHistory, ProcessInstance, ProcessTask,
-		ProcessVariable, ProcessVersionChangelog, Project, PromptTemplate,
-		ProvisioningTask, RelationshipType, Release, Role, RolePermission,
-		RootCauseAnalysis, SLAAlertHistory, SLAAlertRule, SLADefinition, SLAMetric,
-		SLAViolation, ServiceCatalog, ServiceRequest, StandardChange, Survey,
-		SurveyResponse, SystemConfig, Tag, Team, Tenant, TenantInstallation, Ticket,
-		TicketApproval, TicketAssignmentRule, TicketAttachment, TicketAutomationRule,
-		TicketCC, TicketCategory, TicketComment, TicketNotification, TicketTag,
-		TicketTemplate, TicketType, TicketView, TicketWorkflowRecord, ToolInvocation,
-		User, Vendor, WorkItemRelation, Workflow, WorkflowInstance, WorkflowTask,
+		ProcessApprovalDecision, ProcessAuditLog, ProcessBinding,
+		ProcessCallbackOutbox, ProcessDefinition, ProcessDeployment,
+		ProcessExecutionHistory, ProcessInstance, ProcessTask, ProcessVariable,
+		ProcessVersionChangelog, Project, PromptTemplate, ProvisioningTask,
+		RelationshipType, Release, Role, RolePermission, RootCauseAnalysis,
+		SLAAlertHistory, SLAAlertRule, SLADefinition, SLAMetric, SLAViolation,
+		ServiceCatalog, ServiceRequest, StandardChange, Survey, SurveyResponse,
+		SystemConfig, Tag, Team, Tenant, TenantInstallation, Ticket, TicketApproval,
+		TicketAssignmentRule, TicketAttachment, TicketAutomationRule, TicketCC,
+		TicketCategory, TicketComment, TicketNotification, TicketTag, TicketTemplate,
+		TicketType, TicketView, TicketWorkflowRecord, ToolInvocation, User, Vendor,
+		WorkItemRelation, Workflow, WorkflowInstance, WorkflowTask,
 		WorkflowVersion []ent.Interceptor
 	}
 )

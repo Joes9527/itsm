@@ -2516,6 +2516,62 @@ var (
 			},
 		},
 	}
+	// ProcessCallbackOutboxesColumns holds the columns for the "process_callback_outboxes" table.
+	ProcessCallbackOutboxesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "execution_key", Type: field.TypeString, Unique: true},
+		{Name: "tenant_id", Type: field.TypeInt},
+		{Name: "process_instance_id", Type: field.TypeInt},
+		{Name: "process_task_id", Type: field.TypeInt, Nullable: true},
+		{Name: "task_id", Type: field.TypeString, Nullable: true},
+		{Name: "callback_kind", Type: field.TypeString},
+		{Name: "handler_id", Type: field.TypeString},
+		{Name: "task_type", Type: field.TypeString},
+		{Name: "element_id", Type: field.TypeString},
+		{Name: "variables", Type: field.TypeJSON, Nullable: true},
+		{Name: "status", Type: field.TypeString, Default: "pending"},
+		{Name: "attempt_count", Type: field.TypeInt, Default: 0},
+		{Name: "next_attempt_at", Type: field.TypeTime},
+		{Name: "lease_owner", Type: field.TypeString, Nullable: true},
+		{Name: "lease_expires_at", Type: field.TypeTime, Nullable: true},
+		{Name: "last_error_class", Type: field.TypeString, Nullable: true, Size: 128},
+		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// ProcessCallbackOutboxesTable holds the schema information for the "process_callback_outboxes" table.
+	ProcessCallbackOutboxesTable = &schema.Table{
+		Name:       "process_callback_outboxes",
+		Columns:    ProcessCallbackOutboxesColumns,
+		PrimaryKey: []*schema.Column{ProcessCallbackOutboxesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "processcallbackoutbox_tenant_id_status_next_attempt_at",
+				Unique:  false,
+				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[2], ProcessCallbackOutboxesColumns[11], ProcessCallbackOutboxesColumns[13]},
+			},
+			{
+				Name:    "processcallbackoutbox_status_lease_expires_at",
+				Unique:  false,
+				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[11], ProcessCallbackOutboxesColumns[15]},
+			},
+			{
+				Name:    "processcallbackoutbox_process_instance_id_status",
+				Unique:  false,
+				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[3], ProcessCallbackOutboxesColumns[11]},
+			},
+			{
+				Name:    "processcallbackoutbox_process_task_id",
+				Unique:  false,
+				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[4]},
+			},
+			{
+				Name:    "processcallbackoutbox_execution_key",
+				Unique:  true,
+				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[1]},
+			},
+		},
+	}
 	// ProcessDefinitionsColumns holds the columns for the "process_definitions" table.
 	ProcessDefinitionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -5193,6 +5249,7 @@ var (
 		ProcessApprovalDecisionsTable,
 		ProcessAuditLogsTable,
 		ProcessBindingsTable,
+		ProcessCallbackOutboxesTable,
 		ProcessDefinitionsTable,
 		ProcessDeploymentsTable,
 		ProcessExecutionHistoriesTable,

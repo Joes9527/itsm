@@ -776,6 +776,18 @@ func (f ProcessBindingFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Val
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ProcessBindingMutation", m)
 }
 
+// The ProcessCallbackOutboxFunc type is an adapter to allow the use of ordinary
+// function as ProcessCallbackOutbox mutator.
+type ProcessCallbackOutboxFunc func(context.Context, *ent.ProcessCallbackOutboxMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ProcessCallbackOutboxFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ProcessCallbackOutboxMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ProcessCallbackOutboxMutation", m)
+}
+
 // The ProcessDefinitionFunc type is an adapter to allow the use of ordinary
 // function as ProcessDefinition mutator.
 type ProcessDefinitionFunc func(context.Context, *ent.ProcessDefinitionMutation) (ent.Value, error)

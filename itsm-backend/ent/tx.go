@@ -140,6 +140,8 @@ type Tx struct {
 	ProcessAuditLog *ProcessAuditLogClient
 	// ProcessBinding is the client for interacting with the ProcessBinding builders.
 	ProcessBinding *ProcessBindingClient
+	// ProcessCallbackOutbox is the client for interacting with the ProcessCallbackOutbox builders.
+	ProcessCallbackOutbox *ProcessCallbackOutboxClient
 	// ProcessDefinition is the client for interacting with the ProcessDefinition builders.
 	ProcessDefinition *ProcessDefinitionClient
 	// ProcessDeployment is the client for interacting with the ProcessDeployment builders.
@@ -439,6 +441,7 @@ func (tx *Tx) init() {
 	tx.ProcessApprovalDecision = NewProcessApprovalDecisionClient(tx.config)
 	tx.ProcessAuditLog = NewProcessAuditLogClient(tx.config)
 	tx.ProcessBinding = NewProcessBindingClient(tx.config)
+	tx.ProcessCallbackOutbox = NewProcessCallbackOutboxClient(tx.config)
 	tx.ProcessDefinition = NewProcessDefinitionClient(tx.config)
 	tx.ProcessDeployment = NewProcessDeploymentClient(tx.config)
 	tx.ProcessExecutionHistory = NewProcessExecutionHistoryClient(tx.config)
