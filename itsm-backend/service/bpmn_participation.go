@@ -8,6 +8,7 @@ import (
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/predicate"
+	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/ent/role"
 	"itsm-backend/ent/user"
@@ -101,6 +102,7 @@ func (r *bpmnParticipationResolver) participatingInstanceIDs(ctx context.Context
 			processtask.TenantID(actor.TenantID),
 			processtask.Or(prefilter...),
 		).
+		Order(ent.Asc(processtask.FieldID)).
 		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("query BPMN participant tasks: %w", err)
@@ -118,7 +120,32 @@ func (r *bpmnParticipationResolver) participatingInstanceIDs(ctx context.Context
 		seen[task.ProcessInstanceID] = struct{}{}
 		instanceIDs = append(instanceIDs, task.ProcessInstanceID)
 	}
-	return instanceIDs, nil
+	if len(instanceIDs) == 0 {
+		return nil, nil
+	}
+
+	tenantInstanceIDs, err := r.client.ProcessInstance.Query().
+		Where(
+			processinstance.TenantID(actor.TenantID),
+			processinstance.IDIn(instanceIDs...),
+		).
+		Select(processinstance.FieldID).
+		Ints(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("validate BPMN participant instances: %w", err)
+	}
+
+	allowed := make(map[int]struct{}, len(tenantInstanceIDs))
+	for _, instanceID := range tenantInstanceIDs {
+		allowed[instanceID] = struct{}{}
+	}
+	validated := make([]int, 0, len(tenantInstanceIDs))
+	for _, instanceID := range instanceIDs {
+		if _, ok := allowed[instanceID]; ok {
+			validated = append(validated, instanceID)
+		}
+	}
+	return validated, nil
 }
 
 func csvTokens(value string) []string {

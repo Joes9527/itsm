@@ -138,6 +138,7 @@ func TestParticipationResolverParticipatingInstanceIDsExactAndDeduplicated(t *te
 	f.createProcessTask(t, second, f.tenant.ID, "actor-role", "", "", "network_eng")
 	f.createProcessTask(t, second, f.tenant.ID, "id-prefix-only", "", strconv.Itoa(f.actor.ID)+"1", "")
 	f.createProcessTask(t, other, f.otherTenant.ID, "other-tenant", strconv.Itoa(f.actor.ID), "", "")
+	f.createProcessTask(t, other, f.tenant.ID, "cross-tenant-instance", strconv.Itoa(f.actor.ID), "", "")
 
 	ids, err := f.resolver.participatingInstanceIDs(f.userCtx, actor)
 	require.NoError(t, err)
