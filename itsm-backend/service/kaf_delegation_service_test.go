@@ -490,6 +490,15 @@ func TestExecuteAction_ConcurrentClaimsCompleteExactlyOnce(t *testing.T) {
 	require.NoError(t, winner.err)
 	require.NotNil(t, winner.result)
 	assert.Equal(t, KafActionApplied, winner.result.ResultStatus)
+	assert.Equal(t, 1, engine.calls)
+	ledgerCount, err := svc.client.KafTaskActionLedger.Query().Where(
+		kaftaskactionledger.TenantIDEQ(task.TenantID),
+		kaftaskactionledger.TaskIDEQ(task.TaskID),
+		kaftaskactionledger.RunIDEQ(req.Execution.RunID),
+		kaftaskactionledger.StepIDEQ(req.Execution.StepID),
+	).Count(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, ledgerCount)
 	auditCount, err := svc.client.AuditLog.Query().Where(
 		auditlog.TenantIDEQ(task.TenantID), auditlog.ActionEQ("kaf_delegate."+req.Action),
 	).Count(ctx)
