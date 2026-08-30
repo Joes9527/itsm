@@ -93,7 +93,7 @@ func seedBPMNRolePermissions(t *testing.T, client *ent.Client, tenantID int, rol
 		parts := strings.SplitN(permission, ":", 2)
 		require.Len(t, parts, 2)
 		definition, createErr := client.Permission.Create().
-			SetCode(permission).
+			SetCode(roleCode + ":" + permission).
 			SetName(permission).
 			SetResource(parts[0]).
 			SetAction(parts[1]).
@@ -429,11 +429,15 @@ func newBPMNHTTPAuthorizationFixture(t *testing.T) *bpmnHTTPAuthorizationFixture
 	}
 	seedBPMNRolePermissions(t, client, tenant.ID, "sysadmin", allPermissions...)
 	seedBPMNRolePermissions(t, client, otherTenant.ID, "sysadmin", allPermissions...)
+	seedBPMNRolePermissions(t, client, tenant.ID, "change_manager", "process_instance:read")
+	seedBPMNRolePermissions(t, client, tenant.ID, "dept_manager", "task:read")
 	actors := map[string]*ent.User{
-		"participant":  createUser("http.participant", "end_user", tenant.ID),
-		"outsider":     createUser("http.outsider", "end_user", tenant.ID),
-		"elevated":     createUser("http.elevated", "sysadmin", tenant.ID),
-		"cross_tenant": createUser("http.cross.tenant", "sysadmin", otherTenant.ID),
+		"participant":     createUser("http.participant", "end_user", tenant.ID),
+		"outsider":        createUser("http.outsider", "end_user", tenant.ID),
+		"elevated":        createUser("http.elevated", "sysadmin", tenant.ID),
+		"instance_reader": createUser("http.instance.reader", "change_manager", tenant.ID),
+		"task_reader":     createUser("http.task.reader", "dept_manager", tenant.ID),
+		"cross_tenant":    createUser("http.cross.tenant", "sysadmin", otherTenant.ID),
 	}
 
 	deployment, err := client.ProcessDeployment.Create().
@@ -475,7 +479,7 @@ func newBPMNHTTPAuthorizationFixture(t *testing.T) *bpmnHTTPAuthorizationFixture
 		SetProcessDefinitionKey(definition.Key).
 		SetTaskDefinitionKey("participant-task").
 		SetTaskName("Participant task").
-		SetCandidateUsers(strings.Join([]string{actors["participant"].Username, actors["elevated"].Username}, ",")).
+		SetCandidateUsers(actors["participant"].Username).
 		SetCandidateGroups("sensitive-candidate-expression").
 		SetTaskVariables(map[string]interface{}{"privateVariable": "task-variable-secret"}).
 		SetTenantID(tenant.ID).
@@ -503,16 +507,7 @@ func newBPMNHTTPAuthorizationFixture(t *testing.T) *bpmnHTTPAuthorizationFixture
 		ctx.Next()
 	})
 	controller.RegisterRoutes(api)
-	workflow := api.Group("/workflow")
-	workflow.GET("/instances", middleware.RequirePermission("process_instance", "read"), controller.ListProcessInstances)
-	workflow.GET("/instances/:id", middleware.RequirePermission("process_instance", "read"), controller.GetProcessInstance)
-	workflow.POST("/instances", middleware.RequirePermission("process_instance", "create"), controller.StartProcess)
-	workflow.PUT("/instances/:id/terminate", middleware.RequirePermission("process_instance", "update"), controller.TerminateProcess)
-	workflow.PUT("/instances/:id/suspend", middleware.RequirePermission("process_instance", "update"), controller.SuspendProcess)
-	workflow.PUT("/instances/:id/resume", middleware.RequirePermission("process_instance", "update"), controller.ResumeProcess)
-	workflow.GET("/tasks", middleware.RequirePermission("task", "read"), controller.ListUserTasks)
-	workflow.PUT("/tasks/:id/complete", middleware.RequirePermission("task", "update"), controller.CompleteTask)
-	workflow.POST("/tasks/:id/claim", middleware.RequirePermission("task", "update"), controller.ClaimTask)
+	controller.RegisterWorkflowAliasRoutes(api)
 
 	return &bpmnHTTPAuthorizationFixture{
 		client: client, router: router, tenant: tenant, otherTenant: otherTenant, actors: actors, instance: instance, task: task,
@@ -635,11 +630,8 @@ func bpmnAuthorizationOperations() map[string]bpmnAuthorizationOperation {
 		"vote": {
 			method: http.MethodPut, path: taskPath("/vote"),
 			body: func(*bpmnHTTPAuthorizationFixture) string { return "{\"approved\":true,\"comment\":\"matrix\"}" }, want: taskUpdate,
-			prepare: func(t *testing.T, f *bpmnHTTPAuthorizationFixture, actor string) {
-				assignee := f.actors[actor]
-				if actor == "outsider" || actor == "cross_tenant" {
-					assignee = f.actors["participant"]
-				}
+			prepare: func(t *testing.T, f *bpmnHTTPAuthorizationFixture, _ string) {
+				assignee := f.actors["participant"]
 				_, err := f.client.ProcessTask.UpdateOne(f.task).
 					SetAssignee(strconv.Itoa(assignee.ID)).
 					SetStatus("assigned").
@@ -705,9 +697,11 @@ func TestBPMNWorkflowAliasesRetainStricterRBAC(t *testing.T) {
 		want              int
 	}{
 		{"participant instance alias denied", "participant", "/api/v1/workflow/instances", http.StatusForbidden},
-		{"instance reader alias allowed", "elevated", "/api/v1/workflow/instances", http.StatusOK},
+		{"instance reader alias allowed", "instance_reader", "/api/v1/workflow/instances", http.StatusOK},
+		{"task reader cannot use instance alias", "task_reader", "/api/v1/workflow/instances", http.StatusForbidden},
 		{"participant task alias denied", "participant", "/api/v1/workflow/tasks", http.StatusForbidden},
-		{"task reader alias allowed", "elevated", "/api/v1/workflow/tasks", http.StatusOK},
+		{"task reader alias allowed", "task_reader", "/api/v1/workflow/tasks", http.StatusOK},
+		{"instance reader cannot use task alias", "instance_reader", "/api/v1/workflow/tasks", http.StatusForbidden},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

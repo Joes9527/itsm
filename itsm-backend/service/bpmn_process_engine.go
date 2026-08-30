@@ -589,7 +589,7 @@ func (e *CustomProcessEngine) recordApprovalDecisionWithClient(ctx context.Conte
 const kafAutomationRole = "kaf_automation"
 
 // authorizeTaskActor ensures that task actions are performed by the assigned
-// user or an explicitly resolved candidate. System/internal calls without an
+// user, an explicitly resolved candidate, or a tenant-bound trusted task updater. System/internal calls without an
 // authenticated actor keep their existing behavior — except tasks whose
 // TaskType resolves, via findHandlerByTaskType, to a handler implementing
 // AsyncServiceTaskHandler with IsAsync()==true (e.g. kaf_delegate): those are
@@ -609,6 +609,12 @@ func (e *CustomProcessEngine) authorizeTaskActorWithClient(ctx context.Context, 
 
 	userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
 	if userID <= 0 {
+		return nil
+	}
+	if scope, scopeErr := BPMNAccessScopeFromContext(ctx); scopeErr == nil &&
+		scope.UserID == userID &&
+		scope.TenantID == task.TenantID &&
+		scope.CanUpdateAllTasks {
 		return nil
 	}
 	actor, err := client.User.Query().Where(user.ID(userID)).Only(ctx)
@@ -2887,48 +2893,30 @@ func (s *bpmnTaskService) AssignTask(ctx context.Context, taskID string, assigne
 	return nil
 }
 
-// isTaskCandidate 复用 authorizeTaskActor 的候选人匹配语义（用户 ID 十进制字符串或用户名），
-// 用于 ClaimTask/ClaimTaskByID 校验：只有任务的 assignee 或 candidate_users 里的人才能认领
-// 未分配的任务——否则任何登录用户都能抢先认领任何审批任务（包括自己提交的工单）。
-func isTaskCandidate(ctx context.Context, client *ent.Client, userID int, task *ent.ProcessTask) (bool, error) {
-	actor, err := client.User.Query().Where(user.ID(userID)).Only(ctx)
-	if err != nil {
-		return false, fmt.Errorf("用户不存在: %w", err)
-	}
-	allowed := func(csv string) bool {
-		for _, candidate := range strings.Split(csv, ",") {
-			candidate = strings.TrimSpace(candidate)
-			if candidate == strconv.Itoa(userID) || candidate == actor.Username {
-				return true
-			}
-		}
-		return false
-	}
-	return allowed(task.Assignee) || allowed(task.CandidateUsers), nil
-}
-
 // ClaimTask 认领任务 (根据task_id字符串)
 func (s *bpmnTaskService) ClaimTask(ctx context.Context, taskID string, userID string) error {
-	task, err := s.GetTask(ctx, taskID)
+	uid, err := strconv.Atoi(userID)
+	if err != nil || uid <= 0 {
+		return fmt.Errorf("无效的用户ID")
+	}
+	claimCtx, tenantID, err := taskClaimContext(ctx, uid)
 	if err != nil {
+		return err
+	}
+	task, err := s.loadTaskByKey(claimCtx, taskID, tenantID)
+	if err != nil {
+		return err
+	}
+	if handler := s.engine.findHandlerByTaskType(task.TaskType); handler != nil && isAsyncHandler(handler) {
+		return common.NewForbiddenError("异步委派任务不能通过人工认领")
+	}
+	if err := s.engine.authorizeTaskActor(claimCtx, task); err != nil {
 		return err
 	}
 
 	// 检查任务是否已分配 (assignee不为空且不为"0")
 	if task.Assignee != "" && task.Assignee != "0" {
 		return fmt.Errorf("任务已被其他用户认领")
-	}
-
-	uid, err := strconv.Atoi(userID)
-	if err != nil || uid <= 0 {
-		return fmt.Errorf("无效的用户ID")
-	}
-	ok, err := isTaskCandidate(ctx, s.client, uid, task)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return fmt.Errorf("当前用户不是该任务的候选人，无法认领")
 	}
 
 	_, err = s.client.ProcessTask.UpdateOne(task).
@@ -2942,23 +2930,24 @@ func (s *bpmnTaskService) ClaimTask(ctx context.Context, taskID string, userID s
 
 // ClaimTaskByID 认领任务 (根据数据库自增ID)
 func (s *bpmnTaskService) ClaimTaskByID(ctx context.Context, id int, userID int) error {
-	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
-	task, err := s.loadTaskByID(ctx, id, tenantID)
+	claimCtx, tenantID, err := taskClaimContext(ctx, userID)
 	if err != nil {
+		return err
+	}
+	task, err := s.loadTaskByID(claimCtx, id, tenantID)
+	if err != nil {
+		return err
+	}
+	if handler := s.engine.findHandlerByTaskType(task.TaskType); handler != nil && isAsyncHandler(handler) {
+		return common.NewForbiddenError("异步委派任务不能通过人工认领")
+	}
+	if err := s.engine.authorizeTaskActor(claimCtx, task); err != nil {
 		return err
 	}
 
 	// 检查任务是否已分配 (assignee不为空且不为"0")
 	if task.Assignee != "" && task.Assignee != "0" {
 		return fmt.Errorf("任务已被其他用户认领")
-	}
-
-	ok, err := isTaskCandidate(ctx, s.client, userID, task)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return fmt.Errorf("当前用户不是该任务的候选人，无法认领")
 	}
 
 	_, err = s.client.ProcessTask.UpdateOne(task).
@@ -2968,6 +2957,28 @@ func (s *bpmnTaskService) ClaimTaskByID(ctx context.Context, id int, userID int)
 		Save(ctx)
 
 	return err
+}
+
+func taskClaimContext(ctx context.Context, requestedUserID int) (context.Context, int, error) {
+	if requestedUserID <= 0 {
+		return nil, 0, fmt.Errorf("无效的用户ID")
+	}
+	if scope, err := BPMNAccessScopeFromContext(ctx); err == nil {
+		if requestedUserID != scope.UserID {
+			return nil, 0, common.NewForbiddenError("只能以当前认证用户认领任务")
+		}
+		return ctx, scope.TenantID, nil
+	}
+
+	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
+	actorID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
+	if actorID > 0 && requestedUserID != actorID {
+		return nil, 0, common.NewForbiddenError("只能以当前认证用户认领任务")
+	}
+	if actorID <= 0 {
+		ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, requestedUserID)
+	}
+	return ctx, tenantID, nil
 }
 
 func (s *bpmnTaskService) CompleteTask(ctx context.Context, taskID string, variables map[string]interface{}) error {

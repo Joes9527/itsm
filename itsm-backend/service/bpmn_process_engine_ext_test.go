@@ -1323,6 +1323,11 @@ func TestAuthorizeTaskActor_KafDelegate_RejectsNonKafAutomationRole(t *testing.T
 	require.NoError(t, err)
 
 	actorCtx := context.WithValue(ctx, bpmn.BPMNUserIDContextKey, actorID)
+	actorCtx = WithBPMNAccessScope(actorCtx, BPMNAccessScope{
+		UserID:            actorID,
+		TenantID:          tenantID,
+		CanUpdateAllTasks: true,
+	})
 	assert.Error(t, engine.authorizeTaskActor(actorCtx, task))
 }
 

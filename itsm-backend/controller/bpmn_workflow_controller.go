@@ -141,7 +141,7 @@ func (c *BPMNWorkflowController) RegisterRoutes(r *gin.RouterGroup) {
 		// 是任务的 assignee/candidate（来自 BPMN candidate_groups，取值可以是任意角色名，
 		// 例如 "network_eng"，不受限于上面 managed 分组那 7 个角色），不是靠固定角色白名单
 		// 判定的。ClaimTask/CompleteTask（含 SubmitTaskDecision）/Vote 在 service 层已经通过
-		// authorizeTaskActor/isTaskCandidate 做了任务候选人级别的授权；AssignTask/CancelTask/
+		// authorizeTaskActor 做了任务候选人级别的授权；AssignTask/CancelTask/
 		// SetTaskVariables/CreateCounterSignTasks/GetCounterSignStatus/GetTask/ListUserTasks
 		// 目前在 service 层没有对应的候选人校验（这是本次 RBAC 收敛之前就存在、且独立于本次改动
 		// 的缺口，见设计文档"已知遗留"）。给整个 /tasks/* 套 managed 分组的粗粒度角色门槛曾在这次
@@ -160,6 +160,22 @@ func (c *BPMNWorkflowController) RegisterRoutes(r *gin.RouterGroup) {
 		bpmn.POST("/tasks/:id/counter-sign", c.CreateCounterSignTasks)
 		bpmn.GET("/tasks/:id/counter-sign-status", c.GetCounterSignStatus)
 		bpmn.PUT("/tasks/:id/vote", c.Vote)
+	}
+}
+
+// RegisterWorkflowAliasRoutes registers the stricter permission-gated workflow aliases.
+func (c *BPMNWorkflowController) RegisterWorkflowAliasRoutes(r *gin.RouterGroup) {
+	workflow := r.Group("/workflow")
+	{
+		workflow.GET("/instances", middleware.RequirePermission("process_instance", "read"), c.ListProcessInstances)
+		workflow.GET("/instances/:id", middleware.RequirePermission("process_instance", "read"), c.GetProcessInstance)
+		workflow.POST("/instances", middleware.RequirePermission("process_instance", "create"), c.StartProcess)
+		workflow.PUT("/instances/:id/terminate", middleware.RequirePermission("process_instance", "update"), c.TerminateProcess)
+		workflow.PUT("/instances/:id/suspend", middleware.RequirePermission("process_instance", "update"), c.SuspendProcess)
+		workflow.PUT("/instances/:id/resume", middleware.RequirePermission("process_instance", "update"), c.ResumeProcess)
+		workflow.GET("/tasks", middleware.RequirePermission("task", "read"), c.ListUserTasks)
+		workflow.PUT("/tasks/:id/complete", middleware.RequirePermission("task", "update"), c.CompleteTask)
+		workflow.POST("/tasks/:id/claim", middleware.RequirePermission("task", "update"), c.ClaimTask)
 	}
 }
 

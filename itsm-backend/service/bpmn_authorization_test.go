@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -159,6 +160,12 @@ func (f *bpmnAuthorizationFixture) scopedCtx(canReadInstances, canUpdateInstance
 		CanReadAllTasks:       canReadTasks,
 		CanUpdateAllTasks:     canUpdateTasks,
 	})
+}
+
+func (f *bpmnAuthorizationFixture) humanTaskCtx(canUpdateTasks bool) context.Context {
+	ctx := f.scopedCtx(false, false, false, canUpdateTasks)
+	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, f.tenant.ID)
+	return context.WithValue(ctx, bpmn.BPMNUserIDContextKey, f.actor.ID)
 }
 
 func (f *bpmnAuthorizationFixture) actorScopeCtx(actor *ent.User, tenant *ent.Tenant, canReadAll bool) context.Context {
@@ -820,6 +827,65 @@ func TestTaskUpdaterCanMutateOtherTask(t *testing.T) {
 	}
 }
 
+func TestTaskUpdaterCanClaimCompleteAndVoteNonParticipant(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*bpmnAuthorizationFixture, context.Context, *ent.ProcessTask) error
+	}{
+		{
+			name: "claim",
+			mutate: func(f *bpmnAuthorizationFixture, ctx context.Context, task *ent.ProcessTask) error {
+				return f.engine.TaskService().ClaimTask(ctx, task.TaskID, strconv.Itoa(f.actor.ID))
+			},
+		},
+		{
+			name: "claim by id",
+			mutate: func(f *bpmnAuthorizationFixture, ctx context.Context, task *ent.ProcessTask) error {
+				return f.engine.TaskService().ClaimTaskByID(ctx, task.ID, f.actor.ID)
+			},
+		},
+		{
+			name: "complete",
+			mutate: func(f *bpmnAuthorizationFixture, ctx context.Context, task *ent.ProcessTask) error {
+				return f.engine.TaskService().CompleteTask(ctx, task.TaskID, map[string]interface{}{"approved": true})
+			},
+		},
+		{
+			name: "submit decision",
+			mutate: func(f *bpmnAuthorizationFixture, ctx context.Context, task *ent.ProcessTask) error {
+				return f.engine.TaskService().CompleteTask(ctx, task.TaskID, map[string]interface{}{
+					"approvalAction":  "approve",
+					"approvalResult":  "approved",
+					"approvalComment": "approved",
+				})
+			},
+		},
+		{
+			name: "vote",
+			mutate: func(f *bpmnAuthorizationFixture, ctx context.Context, task *ent.ProcessTask) error {
+				task, err := f.client.ProcessTask.UpdateOne(task).SetStatus(common.ProcessTaskStatusAssigned).Save(f.userCtx)
+				if err != nil {
+					return err
+				}
+				return f.engine.TaskService().Vote(ctx, task.TaskID, &VoteRequest{Approved: true, Comment: "approved"})
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name+" rejects read-only nonparticipant", func(t *testing.T) {
+			f := newBPMNAuthorizationFixture(t)
+			task := f.seedNonParticipantApprovalTask(t, "readonly-"+strings.ReplaceAll(tt.name, " ", "-"))
+			requireBPMNForbidden(t, tt.mutate(f, f.humanTaskCtx(false), task))
+		})
+		t.Run(tt.name+" allows task updater nonparticipant", func(t *testing.T) {
+			f := newBPMNAuthorizationFixture(t)
+			task := f.seedNonParticipantApprovalTask(t, "updater-"+strings.ReplaceAll(tt.name, " ", "-"))
+			require.NoError(t, tt.mutate(f, f.humanTaskCtx(true), task))
+		})
+	}
+}
+
 func TestTaskMutationRejectsCrossTenant(t *testing.T) {
 	for name, mutate := range taskMutationCases() {
 		t.Run(name+" target", func(t *testing.T) {
@@ -1125,6 +1191,53 @@ func (f *bpmnAuthorizationFixture) createAuthorizedReadInstance(t *testing.T) *e
 	require.NoError(t, err)
 	f.createProcessTask(t, instance, f.tenant.ID, "authorized-read", "", f.actor.Username, "")
 	return instance
+}
+
+func (f *bpmnAuthorizationFixture) seedNonParticipantApprovalTask(t *testing.T, suffix string) *ent.ProcessTask {
+	t.Helper()
+	deployment, err := f.client.ProcessDeployment.Create().
+		SetDeploymentID("deployment-nonparticipant-" + suffix).
+		SetDeploymentName("Nonparticipant " + suffix).
+		SetTenantID(f.tenant.ID).
+		Save(f.userCtx)
+	require.NoError(t, err)
+	definition, err := f.client.ProcessDefinition.Create().
+		SetKey("nonparticipant-" + suffix).
+		SetName("Nonparticipant " + suffix).
+		SetBpmnXML([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="nonparticipant" isExecutable="true">
+    <bpmn:startEvent id="start" />
+    <bpmn:userTask id="approval" name="Approval" />
+    <bpmn:endEvent id="end" />
+    <bpmn:sequenceFlow id="to-approval" sourceRef="start" targetRef="approval" />
+    <bpmn:sequenceFlow id="to-end" sourceRef="approval" targetRef="end" />
+  </bpmn:process>
+</bpmn:definitions>`)).
+		SetDeploymentID(deployment.ID).
+		SetTenantID(f.tenant.ID).
+		Save(f.userCtx)
+	require.NoError(t, err)
+	instance, err := f.client.ProcessInstance.Create().
+		SetProcessInstanceID("instance-nonparticipant-" + suffix).
+		SetProcessDefinitionKey(definition.Key).
+		SetProcessDefinitionID(definition.ID).
+		SetCurrentActivityID("approval").
+		SetCurrentActivityName("Approval").
+		SetTenantID(f.tenant.ID).
+		Save(f.userCtx)
+	require.NoError(t, err)
+	task, err := f.client.ProcessTask.Create().
+		SetTaskID("task-nonparticipant-" + suffix).
+		SetProcessInstanceID(instance.ID).
+		SetProcessDefinitionKey(definition.Key).
+		SetTaskDefinitionKey("approval").
+		SetTaskName("Approval").
+		SetCandidateUsers(f.outsider.Username).
+		SetTenantID(f.tenant.ID).
+		Save(f.userCtx)
+	require.NoError(t, err)
+	return task
 }
 
 func (f *bpmnAuthorizationFixture) createProcessInstance(t *testing.T, tenant *ent.Tenant, suffix string) *ent.ProcessInstance {

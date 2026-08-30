@@ -1388,21 +1388,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 		// ==================== BPMN Workflow ====================
 		if config.BPMNWorkflowController != nil {
 			config.BPMNWorkflowController.RegisterRoutes(tenant.(*gin.RouterGroup))
-		}
-
-		// 简化路由：/workflow/* -> /bpmn/*
-		workflow := tenant.(*gin.RouterGroup).Group("/workflow")
-		{
-			workflow.GET("/instances", middleware.RequirePermission("process_instance", "read"), config.BPMNWorkflowController.ListProcessInstances)
-			workflow.GET("/instances/:id", middleware.RequirePermission("process_instance", "read"), config.BPMNWorkflowController.GetProcessInstance)
-			workflow.POST("/instances", middleware.RequirePermission("process_instance", "create"), config.BPMNWorkflowController.StartProcess)
-			workflow.PUT("/instances/:id/terminate", middleware.RequirePermission("process_instance", "update"), config.BPMNWorkflowController.TerminateProcess)
-			workflow.PUT("/instances/:id/suspend", middleware.RequirePermission("process_instance", "update"), config.BPMNWorkflowController.SuspendProcess)
-			workflow.PUT("/instances/:id/resume", middleware.RequirePermission("process_instance", "update"), config.BPMNWorkflowController.ResumeProcess)
-			// 任务
-			workflow.GET("/tasks", middleware.RequirePermission("task", "read"), config.BPMNWorkflowController.ListUserTasks)
-			workflow.PUT("/tasks/:id/complete", middleware.RequirePermission("task", "update"), config.BPMNWorkflowController.CompleteTask)
-			workflow.POST("/tasks/:id/claim", middleware.RequirePermission("task", "update"), config.BPMNWorkflowController.ClaimTask)
+			config.BPMNWorkflowController.RegisterWorkflowAliasRoutes(tenant.(*gin.RouterGroup))
 		}
 
 		// BPMN Process Trigger Controller (统一流程触发接口)
