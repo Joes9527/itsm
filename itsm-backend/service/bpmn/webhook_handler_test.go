@@ -1,6 +1,17 @@
 package bpmn
 
-import "testing"
+import (
+	"context"
+	"fmt"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
+)
 
 func TestValidateWebhookURLBlocksSSRF(t *testing.T) {
 	blocked := []string{
@@ -18,5 +29,40 @@ func TestValidateWebhookURLBlocksSSRF(t *testing.T) {
 	}
 	if err := validateWebhookURL("https://hooks.example.com/event"); err != nil {
 		t.Fatalf("expected public HTTPS URL to be accepted: %v", err)
+	}
+}
+
+func TestWebhookExecutePropagatesIdempotencyKey(t *testing.T) {
+	const responseBodySentinel = "tenant-7-secret-sql"
+	keys := make([]string, 0, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		keys = append(keys, r.Header.Get("Idempotency-Key"))
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(responseBodySentinel))
+	}))
+	defer server.Close()
+
+	core, logs := observer.New(zap.DebugLevel)
+	handler := NewWebhookHandler(nil, zap.New(core).Sugar())
+	serverAddress := server.Listener.Addr().String()
+	handler.httpClient = &http.Client{Transport: &http.Transport{
+		DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, network, serverAddress)
+		},
+	}}
+
+	ctx := WithBPMNCallbackExecutionKey(context.Background(), "callback-idempotency-key")
+	variables := map[string]interface{}{
+		"webhook_url": "http://hooks.example.com/event",
+		"headers":     `{"Idempotency-Key":"caller-supplied-key"}`,
+	}
+	_, err := handler.Execute(ctx, nil, variables)
+	require.NoError(t, err)
+	_, err = handler.Execute(ctx, nil, variables)
+	require.NoError(t, err)
+	require.Equal(t, []string{"callback-idempotency-key", "callback-idempotency-key"}, keys)
+	for _, entry := range logs.All() {
+		require.NotContains(t, entry.Message, responseBodySentinel)
+		require.NotContains(t, fmt.Sprint(entry.ContextMap()), responseBodySentinel)
 	}
 }

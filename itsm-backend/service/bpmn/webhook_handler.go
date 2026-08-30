@@ -169,6 +169,9 @@ func (h *WebhookHandler) callWebhook(ctx context.Context, variables map[string]i
 			}
 		}
 	}
+	if executionKey, ok := BPMNCallbackExecutionKey(ctx); ok {
+		req.Header.Set("Idempotency-Key", executionKey)
+	}
 
 	// 设置超时
 	timeoutValue := 30 // 默认30秒

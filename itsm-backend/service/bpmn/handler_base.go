@@ -3,6 +3,7 @@ package bpmn
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
@@ -21,6 +22,29 @@ type bpmnUserIDKey struct{}
 // BPMNUserIDContextKey carries the authenticated actor into workflow services.
 // It must only be populated from trusted authentication middleware.
 var BPMNUserIDContextKey = bpmnUserIDKey{}
+
+type bpmnCallbackExecutionKeyContextKey struct{}
+
+// WithBPMNCallbackExecutionKey attaches the durable callback idempotency label.
+// It is deliberately separate from authorization and tenant context.
+func WithBPMNCallbackExecutionKey(ctx context.Context, key string) context.Context {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		panic("bpmn callback execution key is required")
+	}
+	return context.WithValue(ctx, bpmnCallbackExecutionKeyContextKey{}, key)
+}
+
+// BPMNCallbackExecutionKey returns the durable idempotency label when a caller
+// entered through the callback outbox processor.
+func BPMNCallbackExecutionKey(ctx context.Context) (string, bool) {
+	if ctx == nil {
+		return "", false
+	}
+	key, ok := ctx.Value(bpmnCallbackExecutionKeyContextKey{}).(string)
+	key = strings.TrimSpace(key)
+	return key, ok && key != ""
+}
 
 // ServiceTaskHandlerInterface 服务任务处理器接口
 // 定义所有服务任务处理器需要实现的方法
