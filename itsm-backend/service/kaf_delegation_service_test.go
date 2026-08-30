@@ -244,11 +244,26 @@ func assertNoKafDelegationRecords(t *testing.T, svc *KafDelegationService, ctx c
 	assert.Zero(t, eventCount)
 }
 
-// fakeCompletedKafEngine isolates the BPMN boundary while keeping the ledger
-// persistence and authorization path backed by the real Ent test database.
-type fakeCompletedKafEngine struct{ ProcessEngine }
+// statefulKafCompletionEngine persists the generic engine's completed-task
+// boundary and records invocations without needing a parsed BPMN definition.
+type statefulKafCompletionEngine struct {
+	ProcessEngine
+	client *ent.Client
+	calls  int
+}
 
-func (fakeCompletedKafEngine) CompleteTask(context.Context, string, map[string]interface{}) error {
+func (e *statefulKafCompletionEngine) CompleteTask(ctx context.Context, taskID string, variables map[string]interface{}) error {
+	e.calls++
+	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
+	updated, err := e.client.ProcessTask.Update().Where(
+		processtask.TaskIDEQ(taskID), processtask.TenantIDEQ(tenantID),
+	).SetStatus(common.ProcessTaskStatusCompleted).SetTaskVariables(variables).Save(ctx)
+	if err != nil {
+		return err
+	}
+	if updated != 1 {
+		return errors.New("stateful KAF engine could not complete task")
+	}
 	return nil
 }
 
@@ -294,27 +309,53 @@ func countKafActionLedgers(t *testing.T, client *ent.Client, tenantID int) int {
 	return count
 }
 
-func TestExecuteAction_ConcurrentScopeReturnsAppliedThenAlreadyApplied(t *testing.T) {
+func TestExecuteAction_RecoversCompletedTaskAfterAuditFailureWithoutSecondEngineCall(t *testing.T) {
 	svc, task, ctx := newKafActionFixture(t)
 	req := validCompleteRequest(task, "run-1", "finish")
+	engine := &statefulKafCompletionEngine{client: svc.client}
+	svc.client.AuditLog.Use(func(ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(context.Context, ent.Mutation) (ent.Value, error) {
+			return nil, errors.New("audit storage unavailable")
+		})
+	})
 
-	first, err := svc.ExecuteAction(ctx, task.TaskID, req, fakeCompletedKafEngine{})
-	require.NoError(t, err)
-	second, err := svc.ExecuteAction(ctx, task.TaskID, req, fakeCompletedKafEngine{})
+	_, err := svc.ExecuteAction(ctx, task.TaskID, req, engine)
+	require.ErrorContains(t, err, "audit storage unavailable")
+	assert.Equal(t, 1, engine.calls)
+
+	second, err := svc.ExecuteAction(ctx, task.TaskID, req, engine)
 	require.NoError(t, err)
 
-	assert.Equal(t, KafActionApplied, first.ResultStatus)
 	assert.Equal(t, KafActionAlreadyApplied, second.ResultStatus)
-	assert.Equal(t, 1, countKafActionLedgers(t, svc.client, task.TenantID))
+	assert.Equal(t, 1, engine.calls)
+	ledger, err := svc.client.KafTaskActionLedger.Query().Where(
+		kaftaskactionledger.TenantIDEQ(task.TenantID), kaftaskactionledger.IdempotencyKeyEQ(req.Execution.IdempotencyKey),
+	).Only(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "applied", ledger.ResultStatus)
+}
+
+func TestExecuteAction_RejectsActiveLeaseWithoutCallingEngine(t *testing.T) {
+	svc, task, ctx := newKafActionFixture(t)
+	req := validCompleteRequest(task, "run-1", "finish")
+	_, claimed, err := svc.ClaimKafAction(ctx, task, req)
+	require.NoError(t, err)
+	require.True(t, claimed)
+
+	engine := &statefulKafCompletionEngine{client: svc.client}
+	_, err = svc.ExecuteAction(ctx, task.TaskID, req, engine)
+	require.ErrorIs(t, err, ErrKafActionConflict)
+	assert.Zero(t, engine.calls)
 }
 
 func TestExecuteAction_RejectsSameScopeWithDifferentKey(t *testing.T) {
 	svc, task, ctx := newKafActionFixture(t)
-	_, err := svc.ExecuteAction(ctx, task.TaskID, validCompleteRequest(task, "run-1", "finish"), fakeCompletedKafEngine{})
+	engine := &statefulKafCompletionEngine{client: svc.client}
+	_, err := svc.ExecuteAction(ctx, task.TaskID, validCompleteRequest(task, "run-1", "finish"), engine)
 	require.NoError(t, err)
 
 	conflicting := validCompleteRequest(task, "run-1", "finish")
 	conflicting.Execution.IdempotencyKey = "wrong-key"
-	_, err = svc.ExecuteAction(ctx, task.TaskID, conflicting, fakeCompletedKafEngine{})
+	_, err = svc.ExecuteAction(ctx, task.TaskID, conflicting, engine)
 	require.ErrorIs(t, err, ErrKafActionInvalid)
 }

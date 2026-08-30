@@ -342,7 +342,10 @@ func (s *KafDelegationService) ExecuteAction(ctx context.Context, taskID string,
 	if err := requireKafDelegatedTaskType(task); err != nil {
 		return nil, err
 	}
-	if err := s.AuthorizeTask(ctx, task); err != nil {
+	if err := validateKafActionKey(task, req); err != nil {
+		return nil, err
+	}
+	if err := s.authorizeKafActionTask(ctx, task, req.Action); err != nil {
 		return nil, err
 	}
 	if !kafActionAllowed(task, req.Action) {
@@ -350,9 +353,6 @@ func (s *KafDelegationService) ExecuteAction(ctx context.Context, taskID string,
 	}
 	if task.CorrelationID != req.Execution.CorrelationID {
 		return nil, fmt.Errorf("%w: correlation ID does not match task", ErrKafActionInvalid)
-	}
-	if err := validateKafActionKey(task, req); err != nil {
-		return nil, err
 	}
 	if req.Action == kafActionComplete && engine == nil {
 		return nil, fmt.Errorf("complete KAF BPMN task: process engine is required")
@@ -369,6 +369,11 @@ func (s *KafDelegationService) ExecuteAction(ctx context.Context, taskID string,
 		if ledger.ResultStatus != "applied" {
 			return nil, fmt.Errorf("%w: action is not claimable", ErrKafActionConflict)
 		}
+		return &result, nil
+	}
+	if reconciled, err := s.reconcileCompletedKafAction(ctx, task, req, ledger); err != nil {
+		return nil, err
+	} else if reconciled {
 		return &result, nil
 	}
 	instance, err := s.client.ProcessInstance.Query().Where(
@@ -406,6 +411,50 @@ func (s *KafDelegationService) ExecuteAction(ctx context.Context, taskID string,
 	}
 	result.ResultStatus = KafActionApplied
 	return &result, nil
+}
+
+func (s *KafDelegationService) authorizeKafActionTask(ctx context.Context, task *ent.ProcessTask, action string) error {
+	if task.Status == common.ProcessTaskStatusDelegated {
+		return s.AuthorizeTask(ctx, task)
+	}
+	if action == kafActionComplete && task.Status == common.ProcessTaskStatusCompleted {
+		return s.authorizeActor(ctx, task)
+	}
+	return s.AuthorizeTask(ctx, task)
+}
+
+// reconcileCompletedKafAction closes the partial-success window between the
+// generic engine's task completion write and ledger finalization. Task 2 will
+// replace this fallback with receipt-aware reconciliation.
+func (s *KafDelegationService) reconcileCompletedKafAction(ctx context.Context, task *ent.ProcessTask, req KafActionRequest, ledger *ent.KafTaskActionLedger) (bool, error) {
+	if req.Action != kafActionComplete {
+		return false, nil
+	}
+	completedTask, err := s.client.ProcessTask.Query().Where(
+		processtask.TaskIDEQ(task.TaskID), processtask.TenantIDEQ(task.TenantID),
+	).Only(ctx)
+	if err != nil {
+		return false, fmt.Errorf("reconcile KAF completed task: %w", err)
+	}
+	if completedTask.Status != common.ProcessTaskStatusCompleted {
+		return false, nil
+	}
+	if completedTask.CorrelationID != req.Execution.CorrelationID || !matchesKafExecution(completedTask.TaskVariables, req.Execution) {
+		return false, fmt.Errorf("%w: completed task execution context does not match action scope", ErrKafActionInvalid)
+	}
+	if err := s.finalizeKafAction(ctx, ledger, "applied", ""); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func matchesKafExecution(variables map[string]interface{}, execution KafActionExecution) bool {
+	value, ok := variables["kaf_execution"].(map[string]interface{})
+	if !ok {
+		return false
+	}
+	return value["run_id"] == execution.RunID && value["step_id"] == execution.StepID &&
+		value["procedure_ref"] == execution.ProcedureRef && value["procedure_version"] == execution.ProcedureVersion
 }
 
 func validateKafAction(req KafActionRequest) error {
