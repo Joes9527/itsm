@@ -47,6 +47,7 @@ import (
 	"itsm-backend/ent/incidentrule"
 	"itsm-backend/ent/incidentruleexecution"
 	"itsm-backend/ent/itemversion"
+	"itsm-backend/ent/kaftaskactionledger"
 	"itsm-backend/ent/knowledgearticle"
 	"itsm-backend/ent/knowledgearticlelike"
 	"itsm-backend/ent/knowledgearticleparticipant"
@@ -1627,6 +1628,58 @@ func init() {
 	itemversion.DefaultUpdatedAt = itemversionDescUpdatedAt.Default.(func() time.Time)
 	// itemversion.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	itemversion.UpdateDefaultUpdatedAt = itemversionDescUpdatedAt.UpdateDefault.(func() time.Time)
+	kaftaskactionledgerFields := schema.KafTaskActionLedger{}.Fields()
+	_ = kaftaskactionledgerFields
+	// kaftaskactionledgerDescTenantID is the schema descriptor for tenant_id field.
+	kaftaskactionledgerDescTenantID := kaftaskactionledgerFields[0].Descriptor()
+	// kaftaskactionledger.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	kaftaskactionledger.TenantIDValidator = kaftaskactionledgerDescTenantID.Validators[0].(func(int) error)
+	// kaftaskactionledgerDescTaskID is the schema descriptor for task_id field.
+	kaftaskactionledgerDescTaskID := kaftaskactionledgerFields[1].Descriptor()
+	// kaftaskactionledger.TaskIDValidator is a validator for the "task_id" field. It is called by the builders before save.
+	kaftaskactionledger.TaskIDValidator = kaftaskactionledgerDescTaskID.Validators[0].(func(string) error)
+	// kaftaskactionledgerDescRunID is the schema descriptor for run_id field.
+	kaftaskactionledgerDescRunID := kaftaskactionledgerFields[2].Descriptor()
+	// kaftaskactionledger.RunIDValidator is a validator for the "run_id" field. It is called by the builders before save.
+	kaftaskactionledger.RunIDValidator = kaftaskactionledgerDescRunID.Validators[0].(func(string) error)
+	// kaftaskactionledgerDescStepID is the schema descriptor for step_id field.
+	kaftaskactionledgerDescStepID := kaftaskactionledgerFields[3].Descriptor()
+	// kaftaskactionledger.StepIDValidator is a validator for the "step_id" field. It is called by the builders before save.
+	kaftaskactionledger.StepIDValidator = kaftaskactionledgerDescStepID.Validators[0].(func(string) error)
+	// kaftaskactionledgerDescAction is the schema descriptor for action field.
+	kaftaskactionledgerDescAction := kaftaskactionledgerFields[4].Descriptor()
+	// kaftaskactionledger.ActionValidator is a validator for the "action" field. It is called by the builders before save.
+	kaftaskactionledger.ActionValidator = kaftaskactionledgerDescAction.Validators[0].(func(string) error)
+	// kaftaskactionledgerDescIdempotencyKey is the schema descriptor for idempotency_key field.
+	kaftaskactionledgerDescIdempotencyKey := kaftaskactionledgerFields[5].Descriptor()
+	// kaftaskactionledger.IdempotencyKeyValidator is a validator for the "idempotency_key" field. It is called by the builders before save.
+	kaftaskactionledger.IdempotencyKeyValidator = kaftaskactionledgerDescIdempotencyKey.Validators[0].(func(string) error)
+	// kaftaskactionledgerDescCorrelationID is the schema descriptor for correlation_id field.
+	kaftaskactionledgerDescCorrelationID := kaftaskactionledgerFields[6].Descriptor()
+	// kaftaskactionledger.CorrelationIDValidator is a validator for the "correlation_id" field. It is called by the builders before save.
+	kaftaskactionledger.CorrelationIDValidator = kaftaskactionledgerDescCorrelationID.Validators[0].(func(string) error)
+	// kaftaskactionledgerDescProcedureRef is the schema descriptor for procedure_ref field.
+	kaftaskactionledgerDescProcedureRef := kaftaskactionledgerFields[7].Descriptor()
+	// kaftaskactionledger.ProcedureRefValidator is a validator for the "procedure_ref" field. It is called by the builders before save.
+	kaftaskactionledger.ProcedureRefValidator = kaftaskactionledgerDescProcedureRef.Validators[0].(func(string) error)
+	// kaftaskactionledgerDescProcedureVersion is the schema descriptor for procedure_version field.
+	kaftaskactionledgerDescProcedureVersion := kaftaskactionledgerFields[8].Descriptor()
+	// kaftaskactionledger.ProcedureVersionValidator is a validator for the "procedure_version" field. It is called by the builders before save.
+	kaftaskactionledger.ProcedureVersionValidator = kaftaskactionledgerDescProcedureVersion.Validators[0].(func(string) error)
+	// kaftaskactionledgerDescResultStatus is the schema descriptor for result_status field.
+	kaftaskactionledgerDescResultStatus := kaftaskactionledgerFields[9].Descriptor()
+	// kaftaskactionledger.DefaultResultStatus holds the default value on creation for the result_status field.
+	kaftaskactionledger.DefaultResultStatus = kaftaskactionledgerDescResultStatus.Default.(string)
+	// kaftaskactionledgerDescCreatedAt is the schema descriptor for created_at field.
+	kaftaskactionledgerDescCreatedAt := kaftaskactionledgerFields[14].Descriptor()
+	// kaftaskactionledger.DefaultCreatedAt holds the default value on creation for the created_at field.
+	kaftaskactionledger.DefaultCreatedAt = kaftaskactionledgerDescCreatedAt.Default.(func() time.Time)
+	// kaftaskactionledgerDescUpdatedAt is the schema descriptor for updated_at field.
+	kaftaskactionledgerDescUpdatedAt := kaftaskactionledgerFields[15].Descriptor()
+	// kaftaskactionledger.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	kaftaskactionledger.DefaultUpdatedAt = kaftaskactionledgerDescUpdatedAt.Default.(func() time.Time)
+	// kaftaskactionledger.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	kaftaskactionledger.UpdateDefaultUpdatedAt = kaftaskactionledgerDescUpdatedAt.UpdateDefault.(func() time.Time)
 	knowledgearticleFields := schema.KnowledgeArticle{}.Fields()
 	_ = knowledgearticleFields
 	// knowledgearticleDescTitle is the schema descriptor for title field.

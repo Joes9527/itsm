@@ -8,9 +8,11 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/common"
 	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/ent/kaftaskactionledger"
 	"itsm-backend/ent/outboxevent"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/service/bpmn"
@@ -240,4 +242,79 @@ func assertNoKafDelegationRecords(t *testing.T, svc *KafDelegationService, ctx c
 		Count(ctx)
 	require.NoError(t, err)
 	assert.Zero(t, eventCount)
+}
+
+// fakeCompletedKafEngine isolates the BPMN boundary while keeping the ledger
+// persistence and authorization path backed by the real Ent test database.
+type fakeCompletedKafEngine struct{ ProcessEngine }
+
+func (fakeCompletedKafEngine) CompleteTask(context.Context, string, map[string]interface{}) error {
+	return nil
+}
+
+func newKafActionFixture(t *testing.T) (*KafDelegationService, *ent.ProcessTask, context.Context) {
+	t.Helper()
+
+	_, svc, ctx, instance := newDelegationFixture(t)
+	actorID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
+	require.NoError(t, svc.client.User.UpdateOneID(actorID).SetRole(kafAutomationRole).Exec(ctx))
+	task, err := svc.client.ProcessTask.Create().
+		SetTaskID("PT-kaf-action").
+		SetProcessInstanceID(instance.ID).
+		SetProcessDefinitionKey(instance.ProcessDefinitionKey).
+		SetTaskDefinitionKey("Activity_KafDelegate").
+		SetTaskName("KAF action").
+		SetTaskType(bpmn.KafDelegateTaskType).
+		SetStatus(common.ProcessTaskStatusDelegated).
+		SetCorrelationID("correlation-kaf-action").
+		SetTenantID(instance.TenantID).
+		SetTaskVariables(map[string]interface{}{bpmnMetaDataAllowedActions: kafActionComplete}).
+		Save(ctx)
+	require.NoError(t, err)
+	return svc, task, ctx
+}
+
+func validCompleteRequest(task *ent.ProcessTask, runID, stepID string) KafActionRequest {
+	return KafActionRequest{
+		Action:          kafActionComplete,
+		ExpectedVersion: 1,
+		Execution: KafActionExecution{
+			RunID: runID, StepID: stepID,
+			IdempotencyKey: fmt.Sprintf("%d:%s:%s:%s", task.TenantID, task.TaskID, runID, stepID),
+			CorrelationID:  task.CorrelationID, ProcedureRef: "ssl-vpn", ProcedureVersion: "v1",
+		},
+		Payload: KafActionPayload{ResultSummary: "KAF completed the delegated task"},
+	}
+}
+
+func countKafActionLedgers(t *testing.T, client *ent.Client, tenantID int) int {
+	t.Helper()
+	count, err := client.KafTaskActionLedger.Query().Where(kaftaskactionledger.TenantIDEQ(tenantID)).Count(context.Background())
+	require.NoError(t, err)
+	return count
+}
+
+func TestExecuteAction_ConcurrentScopeReturnsAppliedThenAlreadyApplied(t *testing.T) {
+	svc, task, ctx := newKafActionFixture(t)
+	req := validCompleteRequest(task, "run-1", "finish")
+
+	first, err := svc.ExecuteAction(ctx, task.TaskID, req, fakeCompletedKafEngine{})
+	require.NoError(t, err)
+	second, err := svc.ExecuteAction(ctx, task.TaskID, req, fakeCompletedKafEngine{})
+	require.NoError(t, err)
+
+	assert.Equal(t, KafActionApplied, first.ResultStatus)
+	assert.Equal(t, KafActionAlreadyApplied, second.ResultStatus)
+	assert.Equal(t, 1, countKafActionLedgers(t, svc.client, task.TenantID))
+}
+
+func TestExecuteAction_RejectsSameScopeWithDifferentKey(t *testing.T) {
+	svc, task, ctx := newKafActionFixture(t)
+	_, err := svc.ExecuteAction(ctx, task.TaskID, validCompleteRequest(task, "run-1", "finish"), fakeCompletedKafEngine{})
+	require.NoError(t, err)
+
+	conflicting := validCompleteRequest(task, "run-1", "finish")
+	conflicting.Execution.IdempotencyKey = "wrong-key"
+	_, err = svc.ExecuteAction(ctx, task.TaskID, conflicting, fakeCompletedKafEngine{})
+	require.ErrorIs(t, err, ErrKafActionInvalid)
 }

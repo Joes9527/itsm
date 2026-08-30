@@ -50,6 +50,7 @@ import (
 	"itsm-backend/ent/incidentrule"
 	"itsm-backend/ent/incidentruleexecution"
 	"itsm-backend/ent/itemversion"
+	"itsm-backend/ent/kaftaskactionledger"
 	"itsm-backend/ent/knowledgearticle"
 	"itsm-backend/ent/knowledgearticlelike"
 	"itsm-backend/ent/knowledgearticleparticipant"
@@ -233,6 +234,7 @@ func checkColumn(t, c string) error {
 			incidentrule.Table:                incidentrule.ValidColumn,
 			incidentruleexecution.Table:       incidentruleexecution.ValidColumn,
 			itemversion.Table:                 itemversion.ValidColumn,
+			kaftaskactionledger.Table:         kaftaskactionledger.ValidColumn,
 			knowledgearticle.Table:            knowledgearticle.ValidColumn,
 			knowledgearticlelike.Table:        knowledgearticlelike.ValidColumn,
 			knowledgearticleparticipant.Table: knowledgearticleparticipant.ValidColumn,

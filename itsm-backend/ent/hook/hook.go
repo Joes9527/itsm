@@ -536,6 +536,18 @@ func (f ItemVersionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value,
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ItemVersionMutation", m)
 }
 
+// The KafTaskActionLedgerFunc type is an adapter to allow the use of ordinary
+// function as KafTaskActionLedger mutator.
+type KafTaskActionLedgerFunc func(context.Context, *ent.KafTaskActionLedgerMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f KafTaskActionLedgerFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.KafTaskActionLedgerMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.KafTaskActionLedgerMutation", m)
+}
+
 // The KnowledgeArticleFunc type is an adapter to allow the use of ordinary
 // function as KnowledgeArticle mutator.
 type KnowledgeArticleFunc func(context.Context, *ent.KnowledgeArticleMutation) (ent.Value, error)

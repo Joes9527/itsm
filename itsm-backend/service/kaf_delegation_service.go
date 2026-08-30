@@ -13,6 +13,7 @@ import (
 
 	"itsm-backend/common"
 	"itsm-backend/ent"
+	"itsm-backend/ent/kaftaskactionledger"
 	"itsm-backend/ent/predicate"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
@@ -48,6 +49,10 @@ const (
 	kafActionComplete = "complete_bpmn_task"
 	kafActionProgress = "update_progress"
 	kafActionFailure  = "record_execution_failure"
+	kafActionLeaseTTL = 30 * time.Second
+
+	KafActionApplied        = "applied"
+	KafActionAlreadyApplied = "already_applied"
 )
 
 // KafTaskContext is the only task-scoped data KAF may retrieve before it runs
@@ -116,7 +121,7 @@ type KafActionPayload struct {
 type KafActionResult struct {
 	Action          string `json:"action"`
 	IdempotencyKey  string `json:"idempotencyKey"`
-	Applied         bool   `json:"applied"`
+	ResultStatus    string `json:"resultStatus"`
 	ExpectedVersion int    `json:"expectedVersion"`
 }
 
@@ -337,16 +342,6 @@ func (s *KafDelegationService) ExecuteAction(ctx context.Context, taskID string,
 	if err := requireKafDelegatedTaskType(task); err != nil {
 		return nil, err
 	}
-	if result, ok := kafActionResult(task, req.Execution.IdempotencyKey); ok {
-		if err := s.authorizeActor(ctx, task); err != nil {
-			return nil, err
-		}
-		if result.Action != req.Action {
-			return nil, fmt.Errorf("%w: idempotency key was already used for %s", ErrKafActionInvalid, result.Action)
-		}
-		result.Applied = false
-		return &result, nil
-	}
 	if err := s.AuthorizeTask(ctx, task); err != nil {
 		return nil, err
 	}
@@ -356,36 +351,60 @@ func (s *KafDelegationService) ExecuteAction(ctx context.Context, taskID string,
 	if task.CorrelationID != req.Execution.CorrelationID {
 		return nil, fmt.Errorf("%w: correlation ID does not match task", ErrKafActionInvalid)
 	}
+	if err := validateKafActionKey(task, req); err != nil {
+		return nil, err
+	}
+	if req.Action == kafActionComplete && engine == nil {
+		return nil, fmt.Errorf("complete KAF BPMN task: process engine is required")
+	}
+	ledger, claimed, err := s.ClaimKafAction(ctx, task, req)
+	if err != nil {
+		return nil, err
+	}
+	result := KafActionResult{
+		Action: req.Action, IdempotencyKey: req.Execution.IdempotencyKey,
+		ResultStatus: KafActionAlreadyApplied, ExpectedVersion: req.ExpectedVersion,
+	}
+	if !claimed {
+		if ledger.ResultStatus != "applied" {
+			return nil, fmt.Errorf("%w: action is not claimable", ErrKafActionConflict)
+		}
+		return &result, nil
+	}
 	instance, err := s.client.ProcessInstance.Query().Where(
 		processinstance.IDEQ(task.ProcessInstanceID), processinstance.TenantIDEQ(task.TenantID),
 	).Only(ctx)
 	if err != nil {
+		_ = s.finalizeKafAction(ctx, ledger, "failed_retryable", "process_instance_load_failed")
 		return nil, fmt.Errorf("load KAF action process instance: %w", err)
 	}
 	if instance.Version != req.ExpectedVersion {
+		_ = s.finalizeKafAction(ctx, ledger, "failed_retryable", "expected_version_conflict")
 		return nil, fmt.Errorf("%w: expected %d, current %d", ErrKafActionConflict, req.ExpectedVersion, instance.Version)
 	}
-	result := KafActionResult{Action: req.Action, IdempotencyKey: req.Execution.IdempotencyKey, Applied: true, ExpectedVersion: req.ExpectedVersion}
 	if req.Action == kafActionComplete {
-		if engine == nil {
-			return nil, fmt.Errorf("complete KAF BPMN task: process engine is required")
-		}
 		variables := cloneKafVariables(task.TaskVariables)
-		putKafActionResult(variables, result)
 		variables["kaf_execution"] = map[string]string{
 			"run_id": req.Execution.RunID, "step_id": req.Execution.StepID,
 			"procedure_ref": req.Execution.ProcedureRef, "procedure_version": req.Execution.ProcedureVersion,
 		}
 		variables["kaf_result_summary"] = strings.TrimSpace(req.Payload.ResultSummary)
 		if err := engine.CompleteTask(ctx, taskID, variables); err != nil {
+			_ = s.finalizeKafAction(ctx, ledger, "failed_retryable", "bpmn_completion_failed")
 			return nil, fmt.Errorf("complete delegated BPMN task: %w", err)
 		}
-	} else if err := s.persistNonCompletingAction(ctx, task, instance, req, result); err != nil {
+	} else if err := s.persistNonCompletingAction(ctx, task, instance, req); err != nil {
+		_ = s.finalizeKafAction(ctx, ledger, "failed_retryable", "action_persistence_failed")
 		return nil, err
 	}
 	if err := s.recordActionAudit(ctx, task, req, http.StatusOK); err != nil {
+		_ = s.finalizeKafAction(ctx, ledger, "failed_retryable", "audit_write_failed")
 		return nil, fmt.Errorf("record KAF action audit: %w", err)
 	}
+	if err := s.finalizeKafAction(ctx, ledger, "applied", ""); err != nil {
+		return nil, err
+	}
+	result.ResultStatus = KafActionApplied
 	return &result, nil
 }
 
@@ -407,9 +426,146 @@ func validateKafAction(req KafActionRequest) error {
 	return nil
 }
 
-func (s *KafDelegationService) persistNonCompletingAction(ctx context.Context, task *ent.ProcessTask, instance *ent.ProcessInstance, req KafActionRequest, result KafActionResult) error {
-	variables := cloneKafVariables(task.TaskVariables)
-	putKafActionResult(variables, result)
+func validateKafActionKey(task *ent.ProcessTask, req KafActionRequest) error {
+	canonicalKey := fmt.Sprintf("%d:%s:%s:%s", task.TenantID, task.TaskID, req.Execution.RunID, req.Execution.StepID)
+	if req.Execution.IdempotencyKey != canonicalKey {
+		return fmt.Errorf("%w: idempotency key must equal execution scope", ErrKafActionInvalid)
+	}
+	return nil
+}
+
+// ClaimKafAction persists the immutable execution scope and atomically leases
+// it for execution. A false claim is returned only for an already-applied row.
+func (s *KafDelegationService) ClaimKafAction(ctx context.Context, task *ent.ProcessTask, req KafActionRequest) (*ent.KafTaskActionLedger, bool, error) {
+	if task == nil {
+		return nil, false, fmt.Errorf("%w: task is required", ErrKafActionInvalid)
+	}
+	if err := validateKafActionKey(task, req); err != nil {
+		return nil, false, err
+	}
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return nil, false, fmt.Errorf("start KAF action claim transaction: %w", err)
+	}
+	ledger, err := tx.KafTaskActionLedger.Create().
+		SetTenantID(task.TenantID).SetTaskID(task.TaskID).
+		SetRunID(req.Execution.RunID).SetStepID(req.Execution.StepID).
+		SetAction(req.Action).SetIdempotencyKey(req.Execution.IdempotencyKey).
+		SetCorrelationID(req.Execution.CorrelationID).
+		SetProcedureRef(req.Execution.ProcedureRef).SetProcedureVersion(req.Execution.ProcedureVersion).
+		Save(ctx)
+	if err == nil {
+		if err := tx.Commit(); err != nil {
+			return nil, false, fmt.Errorf("commit KAF action claim transaction: %w", err)
+		}
+	} else {
+		_ = tx.Rollback()
+		if !ent.IsConstraintError(err) {
+			return nil, false, fmt.Errorf("create KAF action ledger: %w", err)
+		}
+		ledger, err = s.loadKafActionLedger(ctx, task, req)
+		if err != nil {
+			return nil, false, err
+		}
+	}
+	if err := validateKafActionLedger(ledger, task, req); err != nil {
+		return nil, false, err
+	}
+	if ledger.ResultStatus == "applied" {
+		return ledger, false, nil
+	}
+	if ledger.ResultStatus == "failed_terminal" {
+		return nil, false, fmt.Errorf("%w: action has a terminal failure", ErrKafActionInvalid)
+	}
+	now := s.now()
+	leaseOwner := uuid.NewString()
+	updated, err := s.client.KafTaskActionLedger.Update().Where(
+		kaftaskactionledger.IDEQ(ledger.ID),
+		kaftaskactionledger.Or(
+			kaftaskactionledger.ResultStatusIn("pending", "failed_retryable"),
+			kaftaskactionledger.And(
+				kaftaskactionledger.ResultStatusEQ("executing"),
+				kaftaskactionledger.LeaseExpiresAtLT(now),
+			),
+		),
+	).SetResultStatus("executing").SetLeaseOwner(leaseOwner).SetLeaseExpiresAt(now.Add(kafActionLeaseTTL)).Save(ctx)
+	if err != nil {
+		return nil, false, fmt.Errorf("claim KAF action ledger: %w", err)
+	}
+	if updated != 1 {
+		current, loadErr := s.loadKafActionLedger(ctx, task, req)
+		if loadErr != nil {
+			return nil, false, loadErr
+		}
+		if current.ResultStatus == "applied" {
+			return current, false, nil
+		}
+		return nil, false, fmt.Errorf("%w: action lease is active", ErrKafActionConflict)
+	}
+	ledger, err = s.client.KafTaskActionLedger.Get(ctx, ledger.ID)
+	if err != nil {
+		return nil, false, fmt.Errorf("load claimed KAF action ledger: %w", err)
+	}
+	return ledger, true, nil
+}
+
+func (s *KafDelegationService) loadKafActionLedger(ctx context.Context, task *ent.ProcessTask, req KafActionRequest) (*ent.KafTaskActionLedger, error) {
+	ledger, err := s.client.KafTaskActionLedger.Query().Where(
+		kaftaskactionledger.TenantIDEQ(task.TenantID), kaftaskactionledger.TaskIDEQ(task.TaskID),
+		kaftaskactionledger.RunIDEQ(req.Execution.RunID), kaftaskactionledger.StepIDEQ(req.Execution.StepID),
+	).Only(ctx)
+	if err == nil {
+		return ledger, nil
+	}
+	if !ent.IsNotFound(err) {
+		return nil, fmt.Errorf("load KAF action ledger: %w", err)
+	}
+	ledger, err = s.client.KafTaskActionLedger.Query().Where(
+		kaftaskactionledger.TenantIDEQ(task.TenantID), kaftaskactionledger.IdempotencyKeyEQ(req.Execution.IdempotencyKey),
+	).Only(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("load KAF action ledger by idempotency key: %w", err)
+	}
+	return ledger, nil
+}
+
+func validateKafActionLedger(ledger *ent.KafTaskActionLedger, task *ent.ProcessTask, req KafActionRequest) error {
+	if ledger.TenantID != task.TenantID || ledger.TaskID != task.TaskID || ledger.RunID != req.Execution.RunID || ledger.StepID != req.Execution.StepID ||
+		ledger.Action != req.Action || ledger.IdempotencyKey != req.Execution.IdempotencyKey || ledger.CorrelationID != req.Execution.CorrelationID ||
+		ledger.ProcedureRef != req.Execution.ProcedureRef || ledger.ProcedureVersion != req.Execution.ProcedureVersion {
+		return fmt.Errorf("%w: execution scope was already used with different immutable metadata", ErrKafActionInvalid)
+	}
+	return nil
+}
+
+func (s *KafDelegationService) finalizeKafAction(ctx context.Context, ledger *ent.KafTaskActionLedger, status, errorCode string) error {
+	if ledger == nil || ledger.LeaseOwner == "" {
+		return fmt.Errorf("%w: action lease is required for finalization", ErrKafActionConflict)
+	}
+	update := s.client.KafTaskActionLedger.Update().Where(
+		kaftaskactionledger.IDEQ(ledger.ID), kaftaskactionledger.ResultStatusEQ("executing"),
+		kaftaskactionledger.LeaseOwnerEQ(ledger.LeaseOwner),
+	).SetResultStatus(status).ClearLeaseOwner().ClearLeaseExpiresAt()
+	if status == "applied" {
+		payload, err := json.Marshal(map[string]interface{}{"action": ledger.Action, "idempotencyKey": ledger.IdempotencyKey})
+		if err != nil {
+			return fmt.Errorf("marshal KAF action result payload: %w", err)
+		}
+		update.SetResultPayload(payload).ClearLastErrorCode()
+	} else {
+		update.SetLastErrorCode(errorCode)
+	}
+	updated, err := update.Save(ctx)
+	if err != nil {
+		return fmt.Errorf("finalize KAF action ledger: %w", err)
+	}
+	if updated != 1 {
+		return fmt.Errorf("%w: action lease was lost before finalization", ErrKafActionConflict)
+	}
+	return nil
+}
+
+func (s *KafDelegationService) persistNonCompletingAction(ctx context.Context, task *ent.ProcessTask, instance *ent.ProcessInstance, req KafActionRequest) error {
 	actorID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
 	if actorID <= 0 {
 		return fmt.Errorf("%w: authenticated KAF automation actor is required", ErrKafDelegationForbidden)
@@ -427,9 +583,6 @@ func (s *KafDelegationService) persistNonCompletingAction(ctx context.Context, t
 	}
 	if updated != 1 {
 		return fmt.Errorf("%w: task was changed by another actor", ErrKafActionConflict)
-	}
-	if err := tx.ProcessTask.UpdateOneID(task.ID).SetTaskVariables(variables).Exec(ctx); err != nil {
-		return fmt.Errorf("persist KAF action idempotency record: %w", err)
 	}
 	workItem, err := tx.Ticket.Query().Where(
 		ticket.IDEQ(instance.BusinessID), ticket.TenantIDEQ(task.TenantID), ticket.DeletedAtIsNil(),
@@ -513,26 +666,6 @@ func cloneKafVariables(variables map[string]interface{}) map[string]interface{} 
 		copy[key] = value
 	}
 	return copy
-}
-
-func kafActionResult(task *ent.ProcessTask, key string) (KafActionResult, bool) {
-	results, _ := task.TaskVariables["kaf_action_results"].(map[string]interface{})
-	value, ok := results[key].(map[string]interface{})
-	if !ok {
-		return KafActionResult{}, false
-	}
-	action, _ := value["action"].(string)
-	version, _ := value["expectedVersion"].(float64)
-	return KafActionResult{Action: action, IdempotencyKey: key, Applied: true, ExpectedVersion: int(version)}, action != ""
-}
-
-func putKafActionResult(variables map[string]interface{}, result KafActionResult) {
-	results, _ := variables["kaf_action_results"].(map[string]interface{})
-	if results == nil {
-		results = make(map[string]interface{})
-	}
-	results[result.IdempotencyKey] = map[string]interface{}{"action": result.Action, "expectedVersion": result.ExpectedVersion}
-	variables["kaf_action_results"] = results
 }
 
 // CreateDelegatedTask creates the BPMN wait state, its activity update, audit

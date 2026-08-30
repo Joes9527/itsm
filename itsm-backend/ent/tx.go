@@ -100,6 +100,8 @@ type Tx struct {
 	IncidentRuleExecution *IncidentRuleExecutionClient
 	// ItemVersion is the client for interacting with the ItemVersion builders.
 	ItemVersion *ItemVersionClient
+	// KafTaskActionLedger is the client for interacting with the KafTaskActionLedger builders.
+	KafTaskActionLedger *KafTaskActionLedgerClient
 	// KnowledgeArticle is the client for interacting with the KnowledgeArticle builders.
 	KnowledgeArticle *KnowledgeArticleClient
 	// KnowledgeArticleLike is the client for interacting with the KnowledgeArticleLike builders.
@@ -421,6 +423,7 @@ func (tx *Tx) init() {
 	tx.IncidentRule = NewIncidentRuleClient(tx.config)
 	tx.IncidentRuleExecution = NewIncidentRuleExecutionClient(tx.config)
 	tx.ItemVersion = NewItemVersionClient(tx.config)
+	tx.KafTaskActionLedger = NewKafTaskActionLedgerClient(tx.config)
 	tx.KnowledgeArticle = NewKnowledgeArticleClient(tx.config)
 	tx.KnowledgeArticleLike = NewKnowledgeArticleLikeClient(tx.config)
 	tx.KnowledgeArticleParticipant = NewKnowledgeArticleParticipantClient(tx.config)
