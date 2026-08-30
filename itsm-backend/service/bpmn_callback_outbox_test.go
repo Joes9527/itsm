@@ -123,7 +123,7 @@ func TestBPMNCallbackOutboxReclaimsExpiredLease(t *testing.T) {
 func TestBPMNCallbackOutboxFailureReturnsToPendingWithBackoff(t *testing.T) {
 	client := openBPMNCallbackOutboxClient(t)
 	now := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
-	executor := &fakeBPMNCallbackExecutor{err: errors.New("tenant-7-secret-sql")}
+	executor := &fakeBPMNCallbackExecutor{err: newBPMNCallbackHandlerError(errors.New("tenant-7-secret-sql"))}
 	outbox := newBPMNCallbackOutboxForTest(client, executor, now)
 	row := enqueueBPMNCallbackOutboxForTest(t, outbox, "callback-retry")
 
@@ -149,6 +149,53 @@ func TestBPMNCallbackOutboxFailureReturnsToPendingWithBackoff(t *testing.T) {
 		Where(processcallbackoutbox.ID(row.ID), processcallbackoutbox.TenantID(7)).OnlyX(context.Background())
 	require.Equal(t, now.Add(300*time.Second), saved.NextAttemptAt)
 	require.Equal(t, 300*time.Second, bpmnCallbackRetryDelay(1000))
+}
+
+func TestBPMNCallbackOutboxClassifiesExecutorErrors(t *testing.T) {
+	const errorSentinel = "tenant-7-secret-sql"
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{
+			name: "handler error",
+			err:  newBPMNCallbackHandlerError(errors.New(errorSentinel)),
+			want: "handler_error",
+		},
+		{
+			name: "advance error",
+			err:  newBPMNCallbackAdvanceError(errors.New(errorSentinel)),
+			want: "advance_error",
+		},
+		{
+			name: "untyped error",
+			err:  errors.New(errorSentinel),
+			want: "unknown_error",
+		},
+		{
+			name: "invalid typed error",
+			err:  newBPMNCallbackExecutionError("invalid_error_class"),
+			want: "unknown_error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := openBPMNCallbackOutboxClient(t)
+			now := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
+			outbox := newBPMNCallbackOutboxForTest(client, &fakeBPMNCallbackExecutor{err: tt.err}, now)
+			row := enqueueBPMNCallbackOutboxForTest(t, outbox, "callback-class-"+tt.name)
+
+			completed, err := outbox.processPending(context.Background(), "worker-a", 1)
+			require.Zero(t, completed)
+			require.Error(t, err)
+			saved := client.ProcessCallbackOutbox.Query().
+				Where(processcallbackoutbox.ID(row.ID), processcallbackoutbox.TenantID(7)).OnlyX(context.Background())
+			require.Equal(t, tt.want, saved.LastErrorClass)
+			require.NotContains(t, saved.LastErrorClass, errorSentinel)
+		})
+	}
 }
 
 func TestBPMNCallbackOutboxSuccessRequiresMatchingLeaseOwner(t *testing.T) {
@@ -187,6 +234,53 @@ func TestBPMNCallbackOutboxProcessExecutionKeysReclaimsExpiredLease(t *testing.T
 		Where(processcallbackoutbox.ID(row.ID), processcallbackoutbox.TenantID(7)).OnlyX(context.Background())
 	require.Equal(t, "completed", saved.Status)
 	require.Equal(t, 1, saved.AttemptCount)
+}
+
+func TestBPMNCallbackOutboxProcessExecutionKeysRejectsBlankWorker(t *testing.T) {
+	client := openBPMNCallbackOutboxClient(t)
+	now := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
+	outbox := newBPMNCallbackOutboxForTest(client, &fakeBPMNCallbackExecutor{}, now)
+	row := enqueueBPMNCallbackOutboxForTest(t, outbox, "callback-targeted-blank-worker")
+
+	completed, err := outbox.processExecutionKeys(context.Background(), "  ", []string{row.ExecutionKey})
+	require.Zero(t, completed)
+	require.Error(t, err)
+	saved := client.ProcessCallbackOutbox.Query().
+		Where(processcallbackoutbox.ID(row.ID), processcallbackoutbox.TenantID(7)).OnlyX(context.Background())
+	require.Equal(t, "pending", saved.Status)
+	require.Empty(t, saved.LeaseOwner)
+	require.Zero(t, saved.AttemptCount)
+}
+
+func TestBPMNCallbackOutboxRejectsStaleOwnerTransitions(t *testing.T) {
+	client := openBPMNCallbackOutboxClient(t)
+	now := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
+	outbox := newBPMNCallbackOutboxForTest(client, &fakeBPMNCallbackExecutor{}, now)
+	row := enqueueBPMNCallbackOutboxForTest(t, outbox, "callback-stale-owner")
+
+	claimed, err := outbox.claim(context.Background(), "worker-a", row)
+	require.NoError(t, err)
+	require.True(t, claimed)
+	outbox.now = func() time.Time { return now.Add(bpmnCallbackLeaseDuration + time.Second) }
+	claimed, err = outbox.claim(context.Background(), "worker-b", row)
+	require.NoError(t, err)
+	require.True(t, claimed)
+
+	completed, err := outbox.complete(context.Background(), "worker-a", row)
+	require.NoError(t, err)
+	require.False(t, completed)
+	require.Error(t, outbox.retry(context.Background(), "worker-a", row, "handler_error"))
+	saved := client.ProcessCallbackOutbox.Query().
+		Where(processcallbackoutbox.ID(row.ID), processcallbackoutbox.TenantID(7)).OnlyX(context.Background())
+	require.Equal(t, "processing", saved.Status)
+	require.Equal(t, "worker-b", saved.LeaseOwner)
+
+	completed, err = outbox.complete(context.Background(), "worker-b", row)
+	require.NoError(t, err)
+	require.True(t, completed)
+	saved = client.ProcessCallbackOutbox.Query().
+		Where(processcallbackoutbox.ID(row.ID), processcallbackoutbox.TenantID(7)).OnlyX(context.Background())
+	require.Equal(t, "completed", saved.Status)
 }
 
 func TestBPMNCallbackExecutionKeyIsStableAcrossRetry(t *testing.T) {

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -35,6 +36,32 @@ type bpmnCallbackEnqueueRequest struct {
 
 type bpmnCallbackExecutor interface {
 	executeClaimedCallback(context.Context, string, *ent.ProcessCallbackOutbox) error
+}
+
+// bpmnCallbackExecutionError carries only an allowlisted operational class.
+// The original handler or advancement error is intentionally not retained.
+type bpmnCallbackExecutionError struct {
+	errorClass string
+}
+
+func (e *bpmnCallbackExecutionError) Error() string {
+	return "bpmn callback execution failed"
+}
+
+func newBPMNCallbackExecutionError(errorClass string) error {
+	return &bpmnCallbackExecutionError{errorClass: errorClass}
+}
+
+// newBPMNCallbackHandlerError marks a handler execution failure without
+// retaining its raw text in the durable callback path.
+func newBPMNCallbackHandlerError(_ error) error {
+	return newBPMNCallbackExecutionError("handler_error")
+}
+
+// newBPMNCallbackAdvanceError marks token advancement failure without
+// retaining its raw text in the durable callback path.
+func newBPMNCallbackAdvanceError(_ error) error {
+	return newBPMNCallbackExecutionError("advance_error")
 }
 
 // bpmnCallbackOutbox owns the durable callback lease lifecycle. Task 3 supplies
@@ -75,11 +102,11 @@ func (o *bpmnCallbackOutbox) enqueue(ctx context.Context, client *ent.Client, re
 }
 
 func (o *bpmnCallbackOutbox) processPending(ctx context.Context, workerID string, limit int) (int, error) {
+	if err := validateBPMNCallbackWorkerID(workerID); err != nil {
+		return 0, err
+	}
 	if limit <= 0 {
 		return 0, nil
-	}
-	if strings.TrimSpace(workerID) == "" {
-		return 0, fmt.Errorf("bpmn callback worker id is required")
 	}
 
 	now := o.clock()
@@ -132,7 +159,7 @@ func (o *bpmnCallbackOutbox) processPending(ctx context.Context, workerID string
 		executionCtx := bpmn.WithBPMNCallbackExecutionKey(ctx, claimedRow.ExecutionKey)
 		if err := o.executor.executeClaimedCallback(executionCtx, workerID, &claimedRow); err != nil {
 			failed = true
-			if retryErr := o.retry(ctx, workerID, &claimedRow, "handler_error"); retryErr != nil {
+			if retryErr := o.retry(ctx, workerID, &claimedRow, bpmnCallbackExecutionErrorClass(err)); retryErr != nil {
 				failed = true
 			}
 			continue
@@ -152,6 +179,9 @@ func (o *bpmnCallbackOutbox) processPending(ctx context.Context, workerID string
 }
 
 func (o *bpmnCallbackOutbox) processExecutionKeys(ctx context.Context, workerID string, keys []string) (int, error) {
+	if err := validateBPMNCallbackWorkerID(workerID); err != nil {
+		return 0, err
+	}
 	if len(keys) == 0 {
 		return 0, nil
 	}
@@ -191,7 +221,7 @@ func (o *bpmnCallbackOutbox) processExecutionKeys(ctx context.Context, workerID 
 		}
 		if err := o.executor.executeClaimedCallback(bpmn.WithBPMNCallbackExecutionKey(ctx, claimedRow.ExecutionKey), workerID, &claimedRow); err != nil {
 			failed = true
-			_ = o.retry(ctx, workerID, &claimedRow, "handler_error")
+			_ = o.retry(ctx, workerID, &claimedRow, bpmnCallbackExecutionErrorClass(err))
 			continue
 		}
 		completedRow, completeErr := o.complete(ctx, workerID, &claimedRow)
@@ -208,6 +238,9 @@ func (o *bpmnCallbackOutbox) processExecutionKeys(ctx context.Context, workerID 
 }
 
 func (o *bpmnCallbackOutbox) claim(ctx context.Context, workerID string, row *ent.ProcessCallbackOutbox) (bool, error) {
+	if err := validateBPMNCallbackWorkerID(workerID); err != nil {
+		return false, err
+	}
 	if row == nil || row.TenantID <= 0 {
 		return false, fmt.Errorf("bpmn callback row is missing tenant")
 	}
@@ -233,6 +266,9 @@ func (o *bpmnCallbackOutbox) claim(ctx context.Context, workerID string, row *en
 }
 
 func (o *bpmnCallbackOutbox) complete(ctx context.Context, workerID string, row *ent.ProcessCallbackOutbox) (bool, error) {
+	if err := validateBPMNCallbackWorkerID(workerID); err != nil {
+		return false, err
+	}
 	affected, err := o.client.ProcessCallbackOutbox.Update().
 		Where(
 			processcallbackoutbox.ID(row.ID),
@@ -253,6 +289,9 @@ func (o *bpmnCallbackOutbox) complete(ctx context.Context, workerID string, row 
 }
 
 func (o *bpmnCallbackOutbox) retry(ctx context.Context, workerID string, row *ent.ProcessCallbackOutbox, errorClass string) error {
+	if err := validateBPMNCallbackWorkerID(workerID); err != nil {
+		return err
+	}
 	if !isBPMNCallbackErrorClass(errorClass) {
 		errorClass = "unknown_error"
 	}
@@ -304,6 +343,21 @@ func isBPMNCallbackErrorClass(errorClass string) bool {
 	default:
 		return false
 	}
+}
+
+func bpmnCallbackExecutionErrorClass(err error) string {
+	var executionErr *bpmnCallbackExecutionError
+	if errors.As(err, &executionErr) && isBPMNCallbackErrorClass(executionErr.errorClass) {
+		return executionErr.errorClass
+	}
+	return "unknown_error"
+}
+
+func validateBPMNCallbackWorkerID(workerID string) error {
+	if strings.TrimSpace(workerID) == "" {
+		return fmt.Errorf("bpmn callback worker id is required")
+	}
+	return nil
 }
 
 func copyBPMNCallbackVariables(variables map[string]interface{}) map[string]interface{} {

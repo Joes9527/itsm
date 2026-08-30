@@ -2,6 +2,7 @@ package bpmn
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -65,4 +66,31 @@ func TestWebhookExecutePropagatesIdempotencyKey(t *testing.T) {
 		require.NotContains(t, entry.Message, responseBodySentinel)
 		require.NotContains(t, fmt.Sprint(entry.ContextMap()), responseBodySentinel)
 	}
+}
+
+func TestWebhookExecuteSanitizesTransportFailureLog(t *testing.T) {
+	const (
+		endpointURL   = "http://hooks.example.com/sensitive-endpoint"
+		errorSentinel = "tenant-7-secret-sql"
+	)
+	core, logs := observer.New(zap.DebugLevel)
+	handler := NewWebhookHandler(nil, zap.New(core).Sugar())
+	handler.httpClient = &http.Client{Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
+		return nil, errors.New(errorSentinel)
+	})}
+
+	_, err := handler.Execute(context.Background(), nil, map[string]interface{}{"webhook_url": endpointURL})
+	require.Error(t, err)
+	for _, entry := range logs.All() {
+		require.NotContains(t, entry.Message, errorSentinel)
+		require.NotContains(t, fmt.Sprint(entry.ContextMap()), errorSentinel)
+		require.NotContains(t, entry.Message, endpointURL)
+		require.NotContains(t, fmt.Sprint(entry.ContextMap()), endpointURL)
+	}
+}
+
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
 }

@@ -141,7 +141,6 @@ func (h *WebhookHandler) callWebhook(ctx context.Context, variables map[string]i
 
 	h.logger.Infow(
 		"Calling webhook via BPMN",
-		"webhook_url", webhookURL,
 		"method", method,
 	)
 
@@ -188,8 +187,8 @@ func (h *WebhookHandler) callWebhook(ctx context.Context, variables map[string]i
 	// 发送请求
 	resp, err := h.httpClient.Do(req)
 	if err != nil {
-		h.logger.Errorw("Webhook call failed", "webhook_url", webhookURL, "error", err)
-		return nil, fmt.Errorf("调用Webhook失败: %w", err)
+		h.logger.Errorw("Webhook call failed", "error_class", "handler_error")
+		return nil, fmt.Errorf("调用Webhook失败")
 	}
 	defer resp.Body.Close()
 
@@ -203,7 +202,6 @@ func (h *WebhookHandler) callWebhook(ctx context.Context, variables map[string]i
 
 	h.logger.Infow(
 		"Webhook called successfully",
-		"webhook_url", webhookURL,
 		"status_code", resp.StatusCode,
 	)
 
