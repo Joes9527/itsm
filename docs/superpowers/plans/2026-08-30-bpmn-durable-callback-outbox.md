@@ -190,9 +190,11 @@ type bpmnCallbackEnqueueRequest struct {
 }
 
 type bpmnCallbackExecutor interface {
-	executeClaimedCallback(context.Context, *ent.ProcessCallbackOutbox) error
+	executeClaimedCallback(context.Context, string, *ent.ProcessCallbackOutbox) error
 }
 ```
+
+The string argument is the current `workerID`; callback completion and token advancement must condition their outbox update on that exact lease owner.
 
 Generate `ExecutionKey` with `github.com/google/uuid` when enqueue receives an empty key. Claim rows ordered by `next_attempt_at, id`; use an Ent conditional update requiring either `pending` with `next_attempt_at <= now` or `processing` with an expired lease. Set a 60-second lease, increment `attempt_count`, and require exactly one affected row. Retry delays are `min(2^(attempt-1), 300)` seconds. Store only one of these error classes: `handler_error`, `advance_error`, `lease_lost`, or `unknown_error`.
 
