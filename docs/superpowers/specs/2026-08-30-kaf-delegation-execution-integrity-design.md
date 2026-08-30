@@ -7,11 +7,17 @@
 
 ## 1. Goal
 
-Make one autonomous KAF execution of one delegated ITSM `ProcessTask` durable,
-recoverable, and exactly-once from the perspective of ITSM side effects. KAF
-still selects Procedures and governs Tools. ITSM remains authoritative for task
-state, BPMN advancement, professional lifecycle transitions, tenant isolation,
-and audit.
+Make one autonomous KAF execution of one delegated ITSM `ProcessTask` durable
+and recoverable, with exactly-once acceptance at the ITSM action boundary and
+one convergent ITSM completion outcome. A full cross-engine ACID transaction is
+not an existing capability: `CompleteTask` currently commits task state,
+variable merging, process advancement, callbacks, and audit separately. This
+design therefore uses a durable coordinator rather than claiming that those
+operations are one transaction.
+
+KAF still selects Procedures and governs Tools. ITSM remains authoritative for
+task state, BPMN advancement, professional lifecycle transitions, tenant
+isolation, and audit.
 
 This design replaces the current interpretation that a Procedure callback
 returning successfully is enough to complete a KAF delivery.
@@ -23,7 +29,9 @@ returning successfully is enough to complete a KAF delivery.
 - KAF marks a delivery `completed` only after ITSM returns action result
   `applied` or `already_applied` for the same execution scope.
 - ITSM action idempotency is an immutable, tenant-scoped persistence contract,
-  not mutable `ProcessTask.task_variables` state.
+  not mutable `ProcessTask.task_variables` state. The existing
+  `kaf_action_results` map and its read/write helpers are removed in the same
+  migration; they are not retained as a fallback or dual-write path.
 - KAF execution coordination is local to KAF. It uses one active lease per
   `(tenant_id, task_id, correlation_id)` and does not create a parallel BPMN
   or WorkItem state machine.
@@ -34,37 +42,86 @@ returning successfully is enough to complete a KAF delivery.
 
 ### 3.1 Data model
 
-ITSM adds `KafTaskActionLedger` with immutable fields:
+ITSM adds `KafTaskActionLedger` with immutable request fields and coordinator
+state:
 
 ```text
 tenant_id, task_id, run_id, step_id, action,
 idempotency_key, correlation_id, procedure_ref, procedure_version,
-result_status, result_payload, created_at
+result_status, result_payload, lease_owner, lease_expires_at,
+last_error_code, created_at, updated_at
 ```
 
 The unique constraint is `(tenant_id, task_id, run_id, step_id)`. A second
 unique constraint on `(tenant_id, idempotency_key)` protects malformed callers
-from reusing a key for a different execution scope. Result payloads contain
-only structured action result metadata, never raw evidence or Tool output.
+from reusing a key for a different execution scope. `result_status` is one of
+`pending`, `executing`, `applied`, `failed_retryable`, or `failed_terminal`.
+Only terminal successful rows contain an immutable structured result payload;
+payloads never contain raw evidence or Tool output.
+
+The HTTP response contract replaces `KafActionResult.Applied bool` with
+`resultStatus: "applied" | "already_applied"` plus `action`,
+`idempotencyKey`, and `expectedVersion`. `already_applied` is a response
+meaning, not a separately persisted ledger state. DTO, controller mapper, KAF
+client, and contract tests change together.
 
 ### 3.2 Action algorithm
 
 1. Derive tenant and actor from authentication, tenant-scope the `ProcessTask`,
-   and validate KAF per-task authorization.
-2. Validate that the caller key is the canonical
-   `tenantId:taskId:runId:stepId` representation. Reject any mismatch.
-3. Begin one transaction. Insert a pending ledger row using the execution-scope
-   unique constraint.
-4. If insert conflicts, load the immutable result and return `already_applied`;
-   never repeat a domain transition, timeline write, BPMN completion, or audit.
-5. For a fresh row, validate version, allowed action, correlation, and domain
-   rules; write the domain side effect, redacted timeline, audit, and final
-   `applied` result in the same transaction.
-6. If validation or a side effect fails, roll back the ledger insert and every
-   side effect. The caller receives the existing typed rejection response.
+   validate KAF per-task authorization, and validate the canonical
+   `tenantId:taskId:runId:stepId` key.
+2. In a short transaction, insert the immutable request as `pending`. A
+   uniqueness conflict loads the existing row: a successful row returns
+   `already_applied`; a live `pending`/`executing` lease returns a typed
+   in-progress conflict; an expired or retryable row is eligible for recovery.
+   A request whose action, correlation, procedure, or canonical key differs
+   from the stored scope is rejected.
+3. Atomically claim a `pending`, `failed_retryable`, or expired `executing` row
+   by setting `executing` and a bounded lease. Only the lease owner may drive
+   completion or finalize a result.
+4. The coordinator invokes the dedicated KAF delegated-completion entry point.
+   `complete_bpmn_task` remains the only action that advances BPMN. It must
+   return synchronous UserTask callback failures; logging and returning `nil`
+   is forbidden for this path.
+5. On a successful completion result, a short transaction writes the redacted
+   timeline, audit reference, and ledger `applied` payload. The response is
+   `applied`. A retry that finds this row returns `already_applied` without
+   repeating the completion request.
+6. On an engine or callback failure, the coordinator records
+   `failed_retryable` (or `failed_terminal` for authorization/validation) and
+   clears its lease. It never marks the action applied merely because an
+   earlier partial BPMN write exists.
 
-`complete_bpmn_task` remains the only action that advances BPMN. The action
-ledger result is committed atomically with `CompleteTask` and its audit.
+This is a durable coordination protocol, not a promise that today's generic
+`CompleteTask` is externally transaction-composable. Recovery reconciles the
+ledger with the authoritative task and completion receipt before selecting a
+retry or a final result.
+
+### 3.3 BPMN completion and callback contract
+
+The implementation adds a KAF-specific completion coordinator at the BPMN
+boundary rather than attempting to pass one caller transaction through every
+`executeStep` and `ServiceTaskHandlerInterface` implementation.
+
+- `dispatchUserTaskCallback` returns an error. For KAF-delegated completion,
+  handler failure is persisted as a failed completion receipt and is returned
+  to the action coordinator; it cannot be log-only success.
+- A completion receipt is durable and keyed by the action-ledger ID. It records
+  `callback_pending`, `callback_succeeded`, or `callback_failed`, the task ID,
+  and a redacted error code. It lets recovery distinguish "task already moved"
+  from "all required business callbacks succeeded".
+- Callback handlers that mutate ITSM domain state receive the immutable action
+  scope and must use it as their own idempotency boundary. They either commit
+  their effect once and report success, or report an error without claiming
+  success. The coordinator may only finalize `applied` after the receipt is
+  `callback_succeeded` and the task/instance reflects the completed scope.
+- If reconciliation finds a completed task with no successful receipt, it
+  leaves the ledger retryable and routes the callback through its same scoped
+  idempotency boundary. It does not invoke generic `CompleteTask` again.
+
+The existing generic `CompleteTask` remains a multi-step engine API. Its
+non-KAF callers retain existing semantics; KAF's dedicated entry point is the
+only scope changed by this design.
 
 ## 4. KAF Execution Lease And Completion
 
@@ -111,7 +168,8 @@ retrying a stale-version rejection.
 | Duplicate webhook or recovery sees active lease | No new execution | Unchanged |
 | KAF crash after claim | `running` becomes claimable after expiry | Unchanged |
 | Tool/procedure error | `retryable` with redacted detail | Unchanged unless a separate failure action is applied |
-| ITSM `applied` / `already_applied` | `completed` | Effect committed once; BPMN advances only for completion |
+| ITSM `applied` / `already_applied` | `completed` | Completion receipt succeeded; BPMN advances only once |
+| ITSM completion/callback failure | `retryable` | Ledger is not applied; receipt and task are reconciled before retry |
 | ITSM `failed_auth` / 401 / 403 | `failed_auth`, configured alert | Unchanged |
 | ITSM domain rejection or stale version | `retryable`, context refresh before retry | Unchanged |
 
@@ -123,10 +181,16 @@ retrying a stale-version rejection.
    tenant/task/correlation identity.
 3. An expired-running-lease test proves recovery resumes the existing delivery.
 4. Concurrent same-scope ITSM actions yield one `applied` and one
-   `already_applied`, with one timeline/audit/domain side effect.
+   `already_applied`, with one timeline/audit/domain side effect. A live lease
+   returns an in-progress response rather than pretending to be applied.
 5. Same run/step with a different idempotency key is rejected before side
    effects; key reuse for a different scope is rejected.
-6. All new persistence paths are tenant-scoped, redacted, and covered by
+6. A forced KAF callback failure is observable to the action caller, leaves a
+   non-applied completion receipt, and is recoverable without a second BPMN
+   completion or duplicate domain mutation.
+7. `kaf_action_results`, `kafActionResult`, `putKafActionResult`, and all
+   `task_variables` idempotency writes are absent after migration.
+8. All new persistence paths are tenant-scoped, redacted, and covered by
    schema/transaction tests.
 
 ## 7. Out Of Scope
@@ -135,3 +199,5 @@ retrying a stale-version rejection.
 - Altering KAF Procedure/Tool policy selection.
 - Creating a second ITSM approval or workflow engine.
 - Live SSLVPN infrastructure execution or deployment credentials.
+- Wiring production alert delivery channels; this increment records the
+  configured alert condition but does not select or operate a notifier.
