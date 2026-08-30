@@ -113,15 +113,10 @@ func (d *KafOutboxDispatcher) dispatchEvent(ctx context.Context, event *ent.Outb
 		if detail := strings.TrimSpace(string(responseBody)); detail != "" {
 			deliveryError += ": " + detail
 		}
-		if err := d.scheduleRetry(ctx, event, deliveryError); err != nil {
-			return err
-		}
 		if response.StatusCode >= http.StatusBadRequest && response.StatusCode < http.StatusInternalServerError {
-			if err := d.recordKafWebhookClientError(ctx, event, response.StatusCode); err != nil {
-				return err
-			}
+			return d.scheduleClientErrorRetry(ctx, event, deliveryError, response.StatusCode)
 		}
-		return nil
+		return d.scheduleRetry(ctx, event, deliveryError)
 	}
 	if err := d.repository.MarkPublished(ctx, event.ID, event.ClaimToken, d.now().UTC()); err != nil {
 		return fmt.Errorf("mark KAF webhook event published: %w", err)
@@ -137,16 +132,18 @@ func (d *KafOutboxDispatcher) scheduleRetry(ctx context.Context, event *ent.Outb
 	return nil
 }
 
-func (d *KafOutboxDispatcher) recordKafWebhookClientError(ctx context.Context, event *ent.OutboxEvent, statusCode int) error {
-	if err := d.repository.client.AuditLog.Create().
-		SetTenantID(event.TenantID).
-		SetResource("outbox_event").
-		SetAction("kaf_outbox.delivery_rejected").
-		SetPath("kaf/webhook").
-		SetMethod(http.MethodPost).
-		SetStatusCode(statusCode).
-		Exec(ctx); err != nil {
-		return fmt.Errorf("audit KAF webhook HTTP %d response: %w", statusCode, err)
+func (d *KafOutboxDispatcher) scheduleClientErrorRetry(ctx context.Context, event *ent.OutboxEvent, deliveryError string, statusCode int) error {
+	nextAttemptAt := d.now().UTC().Add(kafOutboxRetryDelay(event.AttemptCount + 1))
+	if err := d.repository.MarkRetryWithAudit(ctx, event.ID, event.ClaimToken, deliveryError, nextAttemptAt, OutboxRetryAudit{
+		TenantID:   event.TenantID,
+		RequestID:  event.EventID,
+		Resource:   "outbox_event",
+		Action:     "kaf_outbox.delivery_rejected",
+		Path:       "kaf/webhook",
+		Method:     http.MethodPost,
+		StatusCode: statusCode,
+	}); err != nil {
+		return fmt.Errorf("schedule KAF webhook client-error retry: %w", err)
 	}
 	return nil
 }

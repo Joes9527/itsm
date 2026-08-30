@@ -51,6 +51,18 @@ type NewOutboxEvent struct {
 	NextAttemptAt time.Time
 }
 
+// OutboxRetryAudit is the payload-free audit evidence recorded with a failed
+// delivery retry transition.
+type OutboxRetryAudit struct {
+	TenantID   int
+	RequestID  string
+	Resource   string
+	Action     string
+	Path       string
+	Method     string
+	StatusCode int
+}
+
 // OutboxEventRepository persists and atomically claims reliable events.
 type OutboxEventRepository struct {
 	client *ent.Client
@@ -227,6 +239,54 @@ func (r *OutboxEventRepository) MarkRetry(ctx context.Context, eventID int, clai
 	}
 	if updated == 0 {
 		return ErrOutboxEventClaimLost
+	}
+	return nil
+}
+
+// MarkRetryWithAudit atomically returns an active claim to pending and records
+// audit evidence for the failed delivery. A rejection can never become
+// retryable unless its audit record commits with the same transition.
+func (r *OutboxEventRepository) MarkRetryWithAudit(ctx context.Context, eventID int, claimToken, lastError string, nextAttemptAt time.Time, audit OutboxRetryAudit) error {
+	tx, err := r.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("start outbox retry audit transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	updated, err := tx.OutboxEvent.Update().
+		Where(
+			outboxevent.IDEQ(eventID),
+			outboxevent.StatusEQ(outboxEventStatusPublishing),
+			outboxevent.ClaimTokenEQ(claimToken),
+			outboxevent.ClaimExpiresAtGT(r.currentTime()),
+		).
+		SetStatus(outboxEventStatusPending).
+		AddAttemptCount(1).
+		SetLastError(summarizeOutboxError(lastError)).
+		SetNextAttemptAt(nextAttemptAt).
+		ClearClaimToken().
+		ClearClaimExpiresAt().
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("schedule outbox retry: %w", err)
+	}
+	if updated == 0 {
+		return ErrOutboxEventClaimLost
+	}
+
+	if err := tx.AuditLog.Create().
+		SetTenantID(audit.TenantID).
+		SetRequestID(audit.RequestID).
+		SetResource(audit.Resource).
+		SetAction(audit.Action).
+		SetPath(audit.Path).
+		SetMethod(audit.Method).
+		SetStatusCode(audit.StatusCode).
+		Exec(ctx); err != nil {
+		return fmt.Errorf("record outbox retry audit: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit outbox retry audit transaction: %w", err)
 	}
 	return nil
 }
