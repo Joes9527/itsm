@@ -3,6 +3,8 @@ package controller
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,6 +14,8 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/processtask"
+	"itsm-backend/ent/ticketcomment"
+	"itsm-backend/ent/user"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -130,6 +134,59 @@ func TestKafDelegatedList_ReturnsOnlyCurrentTenantDelegatedKafTasks(t *testing.T
 	assert.Contains(t, response.Body.String(), taskID)
 }
 
+func TestKafDelegatedList_PaginatesBeyondOneHundredTasks(t *testing.T) {
+	router, _, client := newKafDelegationHTTPFixture(t, kafHTTPFixture{actorTenantID: 1, taskTenantID: 1, taskType: "kaf_delegate", status: common.ProcessTaskStatusDelegated})
+	ctx := context.Background()
+	instance, err := client.ProcessInstance.Query().Only(ctx)
+	require.NoError(t, err)
+
+	for index := 0; index < 101; index++ {
+		_, err := client.ProcessTask.Create().
+			SetTaskID(fmt.Sprintf("TASK-kaf-recovery-%03d", index)).
+			SetProcessInstanceID(instance.ID).
+			SetProcessDefinitionKey(instance.ProcessDefinitionKey).
+			SetTaskDefinitionKey("Activity_Kaf").
+			SetTaskName("KAF recovery task").
+			SetTaskType("kaf_delegate").
+			SetStatus(common.ProcessTaskStatusDelegated).
+			SetTaskVariables(map[string]interface{}{"allowed_actions": "update_progress"}).
+			SetCorrelationID(fmt.Sprintf("corr-kaf-recovery-%03d", index)).
+			SetTenantID(instance.TenantID).
+			Save(ctx)
+		require.NoError(t, err)
+	}
+
+	first := doKafRequest(t, router, http.MethodGet, "/api/v1/bpmn/process-tasks/kaf-delegated?status=delegated&limit=100", "")
+	require.Equal(t, http.StatusOK, first.Code)
+	var firstPage struct {
+		Code int `json:"code"`
+		Data struct {
+			Items      []service.KafTaskContext `json:"items"`
+			Limit      int                      `json:"limit"`
+			NextCursor string                   `json:"nextCursor"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(first.Body.Bytes(), &firstPage))
+	assert.Equal(t, common.SuccessCode, firstPage.Code)
+	assert.Len(t, firstPage.Data.Items, 100)
+	assert.Equal(t, 100, firstPage.Data.Limit)
+	require.NotEmpty(t, firstPage.Data.NextCursor)
+
+	second := doKafRequest(t, router, http.MethodGet, "/api/v1/bpmn/process-tasks/kaf-delegated?status=delegated&limit=100&cursor="+firstPage.Data.NextCursor, "")
+	require.Equal(t, http.StatusOK, second.Code)
+	var secondPage struct {
+		Code int `json:"code"`
+		Data struct {
+			Items      []service.KafTaskContext `json:"items"`
+			NextCursor string                   `json:"nextCursor"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(second.Body.Bytes(), &secondPage))
+	assert.Equal(t, common.SuccessCode, secondPage.Code)
+	assert.Len(t, secondPage.Data.Items, 2)
+	assert.Empty(t, secondPage.Data.NextCursor)
+}
+
 func TestKafAction_RejectsResolveUntilIncidentTypedActionExists(t *testing.T) {
 	router, taskID, _ := newKafDelegationHTTPFixture(t, kafHTTPFixture{actorTenantID: 1, taskTenantID: 1, taskType: "kaf_delegate", status: common.ProcessTaskStatusDelegated})
 	response := doKafRequest(t, router, http.MethodPost, "/api/v1/bpmn/process-tasks/"+taskID+"/actions", `{"action":"resolve"}`)
@@ -153,4 +210,61 @@ func TestKafAction_CompleteIsIdempotentForACompletedDelegatedTask(t *testing.T) 
 	completed, err := client.ProcessTask.Query().Where(processtask.TaskIDEQ(taskID), processtask.StatusEQ("completed")).Count(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, 1, completed)
+}
+
+func TestKafAction_UpdateProgressWritesRedactedInternalTimelineRecord(t *testing.T) {
+	router, taskID, client := newKafDelegationHTTPFixture(t, kafHTTPFixture{actorTenantID: 1, taskTenantID: 1, taskType: "kaf_delegate", status: common.ProcessTaskStatusDelegated})
+	ticketID := attachKafWorkItem(t, client, taskID)
+	body := `{"action":"update_progress","expectedVersion":3,"execution":{"runId":"run-1","stepId":"progress","idempotencyKey":"1:` + taskID + `:run-1:progress","correlationId":"corr-kaf-http","procedureRef":"vpn-grant","procedureVersion":"1"},"payload":{"resultSummary":"VPN grant queued authorization: Bearer super-secret access_token=also-secret"}}`
+
+	response := doKafRequest(t, router, http.MethodPost, "/api/v1/bpmn/process-tasks/"+taskID+"/actions", body)
+	require.Equal(t, http.StatusOK, response.Code)
+	comment, err := client.TicketComment.Query().Where(ticketcomment.TicketIDEQ(ticketID)).Only(context.Background())
+	require.NoError(t, err)
+	assert.True(t, comment.IsInternal)
+	assert.Contains(t, comment.Content, "KAF progress:")
+	assert.Contains(t, comment.Content, "VPN grant queued")
+	assert.Contains(t, comment.Content, "[redacted]")
+	assert.NotContains(t, comment.Content, "super-secret")
+	assert.NotContains(t, comment.Content, "also-secret")
+}
+
+func TestKafAction_RecordExecutionFailureWritesRedactedTimelineRecordAndKeepsDelegated(t *testing.T) {
+	router, taskID, client := newKafDelegationHTTPFixture(t, kafHTTPFixture{actorTenantID: 1, taskTenantID: 1, taskType: "kaf_delegate", status: common.ProcessTaskStatusDelegated})
+	ticketID := attachKafWorkItem(t, client, taskID)
+	body := `{"action":"record_execution_failure","expectedVersion":3,"execution":{"runId":"run-1","stepId":"execute","idempotencyKey":"1:` + taskID + `:run-1:execute","correlationId":"corr-kaf-http","procedureRef":"vpn-grant","procedureVersion":"1"},"payload":{"failureSummary":"VPN grant failed password=super-secret api_key=also-secret"}}`
+
+	response := doKafRequest(t, router, http.MethodPost, "/api/v1/bpmn/process-tasks/"+taskID+"/actions", body)
+	require.Equal(t, http.StatusOK, response.Code)
+	comment, err := client.TicketComment.Query().Where(ticketcomment.TicketIDEQ(ticketID)).Only(context.Background())
+	require.NoError(t, err)
+	assert.True(t, comment.IsInternal)
+	assert.Contains(t, comment.Content, "KAF execution failure:")
+	assert.Contains(t, comment.Content, "VPN grant failed")
+	assert.Contains(t, comment.Content, "[redacted]")
+	assert.NotContains(t, comment.Content, "super-secret")
+	assert.NotContains(t, comment.Content, "also-secret")
+
+	task, err := client.ProcessTask.Query().Where(processtask.TaskIDEQ(taskID)).Only(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, common.ProcessTaskStatusDelegated, task.Status)
+}
+
+func attachKafWorkItem(t *testing.T, client *ent.Client, taskID string) int {
+	t.Helper()
+	ctx := context.Background()
+	task, err := client.ProcessTask.Query().Where(processtask.TaskIDEQ(taskID)).Only(ctx)
+	require.NoError(t, err)
+	actor, err := client.User.Query().Where(user.TenantIDEQ(task.TenantID)).Only(ctx)
+	require.NoError(t, err)
+	workItem, err := client.Ticket.Create().
+		SetTitle("KAF delegated VPN access").
+		SetTicketNumber("TCK-kaf-" + taskID).
+		SetRequesterID(actor.ID).
+		SetTenantID(task.TenantID).
+		Save(ctx)
+	require.NoError(t, err)
+	_, err = client.ProcessInstance.UpdateOneID(task.ProcessInstanceID).SetBusinessID(workItem.ID).Save(ctx)
+	require.NoError(t, err)
+	return workItem.ID
 }

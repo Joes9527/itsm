@@ -67,12 +67,12 @@ func (c *KafDelegationController) ListDelegated(ctx *gin.Context) {
 		}
 		limit = parsed
 	}
-	items, err := c.service.ListDelegatedTasks(workflowCtx, limit)
+	page, err := c.service.ListDelegatedTaskPage(workflowCtx, limit, ctx.Query("cursor"))
 	if err != nil {
 		writeKafDelegationError(ctx, err)
 		return
 	}
-	common.Success(ctx, gin.H{"items": items, "limit": limit})
+	common.Success(ctx, gin.H{"items": page.Items, "limit": page.Limit, "nextCursor": page.NextCursor})
 }
 
 func (c *KafDelegationController) ExecuteAction(ctx *gin.Context) {
@@ -113,6 +113,8 @@ func writeKafDelegationError(ctx *gin.Context, err error) {
 		common.NotFound(ctx, "KAF delegated task not found")
 	case errors.Is(err, service.ErrKafActionInvalid):
 		writeKafValidationError(ctx, "invalid KAF action")
+	case errors.Is(err, service.ErrKafDelegationInvalidCursor):
+		writeKafValidationError(ctx, "invalid KAF delegated list cursor")
 	case errors.Is(err, service.ErrKafActionConflict):
 		common.Conflict(ctx, "KAF action version conflict", nil)
 	default:

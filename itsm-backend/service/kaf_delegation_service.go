@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 
 	"itsm-backend/common"
 	"itsm-backend/ent"
+	"itsm-backend/ent/predicate"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/ent/ticket"
@@ -35,10 +37,11 @@ type KafDelegationService struct {
 }
 
 var (
-	ErrKafDelegationForbidden = errors.New("KAF delegation access is forbidden")
-	ErrKafDelegationNotFound  = errors.New("KAF delegated task was not found")
-	ErrKafActionInvalid       = errors.New("KAF action is invalid")
-	ErrKafActionConflict      = errors.New("KAF action version conflict")
+	ErrKafDelegationForbidden     = errors.New("KAF delegation access is forbidden")
+	ErrKafDelegationNotFound      = errors.New("KAF delegated task was not found")
+	ErrKafDelegationInvalidCursor = errors.New("KAF delegated task cursor is invalid")
+	ErrKafActionInvalid           = errors.New("KAF action is invalid")
+	ErrKafActionConflict          = errors.New("KAF action version conflict")
 )
 
 const (
@@ -115,6 +118,18 @@ type KafActionResult struct {
 	IdempotencyKey  string `json:"idempotencyKey"`
 	Applied         bool   `json:"applied"`
 	ExpectedVersion int    `json:"expectedVersion"`
+}
+
+// KafDelegatedTaskPage provides an opaque continuation token so recovery can
+// drain a tenant's delegated work without an unbounded response.
+type KafDelegatedTaskPage struct {
+	Items      []KafTaskContext `json:"items"`
+	Limit      int              `json:"limit"`
+	NextCursor string           `json:"nextCursor,omitempty"`
+}
+
+type kafDelegatedTaskCursor struct {
+	TaskID int `json:"taskId"`
 }
 
 func NewKafDelegationService(client *ent.Client) *KafDelegationService {
@@ -227,6 +242,14 @@ func (s *KafDelegationService) GetTaskContext(ctx context.Context, taskID string
 }
 
 func (s *KafDelegationService) ListDelegatedTasks(ctx context.Context, limit int) ([]KafTaskContext, error) {
+	page, err := s.ListDelegatedTaskPage(ctx, limit, "")
+	if err != nil {
+		return nil, err
+	}
+	return page.Items, nil
+}
+
+func (s *KafDelegationService) ListDelegatedTaskPage(ctx context.Context, limit int, cursor string) (*KafDelegatedTaskPage, error) {
 	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
 	if tenantID <= 0 {
 		return nil, fmt.Errorf("%w: tenant context is required", ErrKafDelegationForbidden)
@@ -234,20 +257,32 @@ func (s *KafDelegationService) ListDelegatedTasks(ctx context.Context, limit int
 	if limit <= 0 || limit > 100 {
 		limit = 100
 	}
-	tasks, err := s.client.ProcessTask.Query().Where(
+	if err := s.authorizeListActor(ctx, tenantID); err != nil {
+		return nil, err
+	}
+	decodedCursor, err := decodeKafDelegatedTaskCursor(cursor)
+	if err != nil {
+		return nil, err
+	}
+	predicates := []predicate.ProcessTask{
 		processtask.TenantIDEQ(tenantID), processtask.TaskTypeEQ(bpmn.KafDelegateTaskType),
 		processtask.StatusEQ(common.ProcessTaskStatusDelegated),
-	).Order(ent.Asc(processtask.FieldCreatedAt)).Limit(limit).All(ctx)
+	}
+	if decodedCursor != nil {
+		predicates = append(predicates, processtask.IDGT(decodedCursor.TaskID))
+	}
+	tasks, err := s.client.ProcessTask.Query().Where(predicates...).
+		Order(ent.Asc(processtask.FieldID)).Limit(limit + 1).All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list KAF delegated tasks: %w", err)
 	}
-	if len(tasks) == 0 {
-		// A list endpoint must still authenticate the automation principal even
-		// when this tenant has no current delegated tasks.
-		if err := s.authorizeListActor(ctx, tenantID); err != nil {
+	page := &KafDelegatedTaskPage{Items: []KafTaskContext{}, Limit: limit}
+	if len(tasks) > limit {
+		page.NextCursor, err = encodeKafDelegatedTaskCursor(tasks[limit-1])
+		if err != nil {
 			return nil, err
 		}
-		return []KafTaskContext{}, nil
+		tasks = tasks[:limit]
 	}
 	items := make([]KafTaskContext, 0, len(tasks))
 	for _, task := range tasks {
@@ -260,7 +295,31 @@ func (s *KafDelegationService) ListDelegatedTasks(ctx context.Context, limit int
 		}
 		items = append(items, *item)
 	}
-	return items, nil
+	page.Items = items
+	return page, nil
+}
+
+func decodeKafDelegatedTaskCursor(raw string) (*kafDelegatedTaskCursor, error) {
+	if raw == "" {
+		return nil, nil
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(raw)
+	if err != nil {
+		return nil, fmt.Errorf("%w: malformed encoding", ErrKafDelegationInvalidCursor)
+	}
+	var cursor kafDelegatedTaskCursor
+	if err := json.Unmarshal(decoded, &cursor); err != nil || cursor.TaskID <= 0 {
+		return nil, fmt.Errorf("%w: malformed value", ErrKafDelegationInvalidCursor)
+	}
+	return &cursor, nil
+}
+
+func encodeKafDelegatedTaskCursor(task *ent.ProcessTask) (string, error) {
+	encoded, err := json.Marshal(kafDelegatedTaskCursor{TaskID: task.ID})
+	if err != nil {
+		return "", fmt.Errorf("encode KAF delegated task cursor: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(encoded), nil
 }
 
 func (s *KafDelegationService) authorizeListActor(ctx context.Context, tenantID int) error {
@@ -351,6 +410,10 @@ func validateKafAction(req KafActionRequest) error {
 func (s *KafDelegationService) persistNonCompletingAction(ctx context.Context, task *ent.ProcessTask, instance *ent.ProcessInstance, req KafActionRequest, result KafActionResult) error {
 	variables := cloneKafVariables(task.TaskVariables)
 	putKafActionResult(variables, result)
+	actorID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
+	if actorID <= 0 {
+		return fmt.Errorf("%w: authenticated KAF automation actor is required", ErrKafDelegationForbidden)
+	}
 	tx, err := s.client.Tx(ctx)
 	if err != nil {
 		return fmt.Errorf("start KAF action transaction: %w", err)
@@ -368,10 +431,38 @@ func (s *KafDelegationService) persistNonCompletingAction(ctx context.Context, t
 	if err := tx.ProcessTask.UpdateOneID(task.ID).SetTaskVariables(variables).Exec(ctx); err != nil {
 		return fmt.Errorf("persist KAF action idempotency record: %w", err)
 	}
+	workItem, err := tx.Ticket.Query().Where(
+		ticket.IDEQ(instance.BusinessID), ticket.TenantIDEQ(task.TenantID), ticket.DeletedAtIsNil(),
+	).Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return fmt.Errorf("persist KAF action timeline: WorkItem %d was not found", instance.BusinessID)
+		}
+		return fmt.Errorf("load KAF action WorkItem: %w", err)
+	}
+	if _, err := tx.TicketComment.Create().
+		SetTicketID(workItem.ID).
+		SetUserID(actorID).
+		SetContent(kafActionTimelineContent(req)).
+		SetIsInternal(true).
+		SetTenantID(task.TenantID).
+		Save(ctx); err != nil {
+		return fmt.Errorf("persist KAF action timeline: %w", err)
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit KAF action transaction: %w", err)
 	}
 	return nil
+}
+
+func kafActionTimelineContent(req KafActionRequest) string {
+	summary := strings.TrimSpace(req.Payload.ResultSummary)
+	prefix := "KAF progress:"
+	if req.Action == kafActionFailure {
+		summary = strings.TrimSpace(req.Payload.FailureSummary)
+		prefix = "KAF execution failure:"
+	}
+	return prefix + " " + summarizeOutboxError(summary)
 }
 
 func (s *KafDelegationService) recordActionAudit(ctx context.Context, task *ent.ProcessTask, req KafActionRequest, statusCode int) error {
