@@ -42,9 +42,9 @@ func (ProcessCallbackOutbox) Fields() []ent.Field {
 func (ProcessCallbackOutbox) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("tenant_id", "status", "next_attempt_at"),
-		index.Fields("status", "lease_expires_at"),
-		index.Fields("process_instance_id", "status"),
-		index.Fields("process_task_id"),
+		index.Fields("tenant_id", "status", "lease_expires_at"),
+		index.Fields("tenant_id", "process_instance_id", "status"),
+		index.Fields("tenant_id", "process_task_id"),
 		index.Fields("execution_key").Unique(),
 	}
 }

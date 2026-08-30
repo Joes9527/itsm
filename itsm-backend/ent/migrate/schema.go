@@ -2551,19 +2551,19 @@ var (
 				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[2], ProcessCallbackOutboxesColumns[11], ProcessCallbackOutboxesColumns[13]},
 			},
 			{
-				Name:    "processcallbackoutbox_status_lease_expires_at",
+				Name:    "processcallbackoutbox_tenant_id_status_lease_expires_at",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[11], ProcessCallbackOutboxesColumns[15]},
+				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[2], ProcessCallbackOutboxesColumns[11], ProcessCallbackOutboxesColumns[15]},
 			},
 			{
-				Name:    "processcallbackoutbox_process_instance_id_status",
+				Name:    "processcallbackoutbox_tenant_id_process_instance_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[3], ProcessCallbackOutboxesColumns[11]},
+				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[2], ProcessCallbackOutboxesColumns[3], ProcessCallbackOutboxesColumns[11]},
 			},
 			{
-				Name:    "processcallbackoutbox_process_task_id",
+				Name:    "processcallbackoutbox_tenant_id_process_task_id",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[4]},
+				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[2], ProcessCallbackOutboxesColumns[4]},
 			},
 			{
 				Name:    "processcallbackoutbox_execution_key",
