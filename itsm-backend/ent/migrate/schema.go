@@ -1833,6 +1833,35 @@ var (
 			},
 		},
 	}
+	// KafTaskCompletionReceiptsColumns holds the columns for the "kaf_task_completion_receipts" table.
+	KafTaskCompletionReceiptsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "ledger_id", Type: field.TypeInt},
+		{Name: "tenant_id", Type: field.TypeInt},
+		{Name: "task_id", Type: field.TypeString},
+		{Name: "status", Type: field.TypeString, Default: "callback_pending"},
+		{Name: "error_code", Type: field.TypeString, Nullable: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// KafTaskCompletionReceiptsTable holds the schema information for the "kaf_task_completion_receipts" table.
+	KafTaskCompletionReceiptsTable = &schema.Table{
+		Name:       "kaf_task_completion_receipts",
+		Columns:    KafTaskCompletionReceiptsColumns,
+		PrimaryKey: []*schema.Column{KafTaskCompletionReceiptsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "kaftaskcompletionreceipt_ledger_id",
+				Unique:  true,
+				Columns: []*schema.Column{KafTaskCompletionReceiptsColumns[1]},
+			},
+			{
+				Name:    "kaftaskcompletionreceipt_tenant_id_task_id",
+				Unique:  false,
+				Columns: []*schema.Column{KafTaskCompletionReceiptsColumns[2], KafTaskCompletionReceiptsColumns[3]},
+			},
+		},
+	}
 	// KnowledgeArticlesColumns holds the columns for the "knowledge_articles" table.
 	KnowledgeArticlesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -5246,6 +5275,7 @@ var (
 		IncidentRuleExecutionsTable,
 		ItemVersionsTable,
 		KafTaskActionLedgersTable,
+		KafTaskCompletionReceiptsTable,
 		KnowledgeArticlesTable,
 		KnowledgeArticleLikesTable,
 		KnowledgeArticleParticipantsTable,

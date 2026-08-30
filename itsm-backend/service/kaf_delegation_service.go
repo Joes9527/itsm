@@ -14,6 +14,7 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/ent"
 	"itsm-backend/ent/kaftaskactionledger"
+	"itsm-backend/ent/kaftaskcompletionreceipt"
 	"itsm-backend/ent/predicate"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
@@ -36,6 +37,12 @@ type KafDelegationService struct {
 	outbox kafDelegationOutbox
 	now    func() time.Time
 }
+
+type kafDelegatedTaskCompletionEngine interface {
+	CompleteKafDelegatedTask(ctx context.Context, ledgerID int, taskID string, variables map[string]interface{}) error
+}
+
+type kafActionLedgerContextKey struct{}
 
 var (
 	ErrKafDelegationForbidden     = errors.New("KAF delegation access is forbidden")
@@ -371,7 +378,7 @@ func (s *KafDelegationService) ExecuteAction(ctx context.Context, taskID string,
 		}
 		return &result, nil
 	}
-	if reconciled, err := s.reconcileCompletedKafAction(ctx, task, req, ledger); err != nil {
+	if reconciled, err := s.reconcileCompletedKafAction(ctx, task, req, ledger, engine); err != nil {
 		return nil, err
 	} else if reconciled {
 		return &result, nil
@@ -394,7 +401,13 @@ func (s *KafDelegationService) ExecuteAction(ctx context.Context, taskID string,
 			"procedure_ref": req.Execution.ProcedureRef, "procedure_version": req.Execution.ProcedureVersion,
 		}
 		variables["kaf_result_summary"] = strings.TrimSpace(req.Payload.ResultSummary)
-		if err := engine.CompleteTask(ctx, taskID, variables); err != nil {
+		completionEngine, ok := engine.(kafDelegatedTaskCompletionEngine)
+		if !ok {
+			_ = s.finalizeKafAction(ctx, ledger, "failed_terminal", "kaf_completion_engine_required")
+			return nil, fmt.Errorf("complete delegated BPMN task: receipt-aware KAF completion engine is required")
+		}
+		completionCtx := context.WithValue(ctx, kafActionLedgerContextKey{}, ledger.ID)
+		if err := completionEngine.CompleteKafDelegatedTask(completionCtx, ledger.ID, taskID, variables); err != nil {
 			_ = s.finalizeKafAction(ctx, ledger, "failed_retryable", "bpmn_completion_failed")
 			return nil, fmt.Errorf("complete delegated BPMN task: %w", err)
 		}
@@ -423,10 +436,9 @@ func (s *KafDelegationService) authorizeKafActionTask(ctx context.Context, task 
 	return s.AuthorizeTask(ctx, task)
 }
 
-// reconcileCompletedKafAction closes the partial-success window between the
-// generic engine's task completion write and ledger finalization. Task 2 will
-// replace this fallback with receipt-aware reconciliation.
-func (s *KafDelegationService) reconcileCompletedKafAction(ctx context.Context, task *ent.ProcessTask, req KafActionRequest, ledger *ent.KafTaskActionLedger) (bool, error) {
+// reconcileCompletedKafAction resolves a prior KAF completion using its receipt
+// and never invokes generic ProcessEngine.CompleteTask for an already-completed task.
+func (s *KafDelegationService) reconcileCompletedKafAction(ctx context.Context, task *ent.ProcessTask, req KafActionRequest, ledger *ent.KafTaskActionLedger, engine ProcessEngine) (bool, error) {
 	if req.Action != kafActionComplete {
 		return false, nil
 	}
@@ -441,6 +453,21 @@ func (s *KafDelegationService) reconcileCompletedKafAction(ctx context.Context, 
 	}
 	if completedTask.CorrelationID != req.Execution.CorrelationID || !matchesKafExecution(completedTask.TaskVariables, req.Execution) {
 		return false, fmt.Errorf("%w: completed task execution context does not match action scope", ErrKafActionInvalid)
+	}
+	receipt, err := s.client.KafTaskCompletionReceipt.Query().Where(
+		kaftaskcompletionreceipt.LedgerIDEQ(ledger.ID),
+	).Only(ctx)
+	if err != nil && !ent.IsNotFound(err) {
+		return false, fmt.Errorf("load KAF completion receipt: %w", err)
+	}
+	if ent.IsNotFound(err) || receipt.Status != "callback_succeeded" {
+		completionEngine, ok := engine.(kafDelegatedTaskCompletionEngine)
+		if !ok {
+			return false, fmt.Errorf("recover delegated BPMN callback: receipt-aware KAF completion engine is required")
+		}
+		if err := completionEngine.CompleteKafDelegatedTask(context.WithValue(ctx, kafActionLedgerContextKey{}, ledger.ID), ledger.ID, task.TaskID, completedTask.TaskVariables); err != nil {
+			return false, fmt.Errorf("recover delegated BPMN callback: %w", err)
+		}
 	}
 	if err := s.finalizeKafAction(ctx, ledger, "applied", ""); err != nil {
 		return false, err

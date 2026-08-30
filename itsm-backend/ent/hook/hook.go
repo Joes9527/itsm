@@ -548,6 +548,18 @@ func (f KafTaskActionLedgerFunc) Mutate(ctx context.Context, m ent.Mutation) (en
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.KafTaskActionLedgerMutation", m)
 }
 
+// The KafTaskCompletionReceiptFunc type is an adapter to allow the use of ordinary
+// function as KafTaskCompletionReceipt mutator.
+type KafTaskCompletionReceiptFunc func(context.Context, *ent.KafTaskCompletionReceiptMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f KafTaskCompletionReceiptFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.KafTaskCompletionReceiptMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.KafTaskCompletionReceiptMutation", m)
+}
+
 // The KnowledgeArticleFunc type is an adapter to allow the use of ordinary
 // function as KnowledgeArticle mutator.
 type KnowledgeArticleFunc func(context.Context, *ent.KnowledgeArticleMutation) (ent.Value, error)

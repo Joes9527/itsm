@@ -102,6 +102,8 @@ type Tx struct {
 	ItemVersion *ItemVersionClient
 	// KafTaskActionLedger is the client for interacting with the KafTaskActionLedger builders.
 	KafTaskActionLedger *KafTaskActionLedgerClient
+	// KafTaskCompletionReceipt is the client for interacting with the KafTaskCompletionReceipt builders.
+	KafTaskCompletionReceipt *KafTaskCompletionReceiptClient
 	// KnowledgeArticle is the client for interacting with the KnowledgeArticle builders.
 	KnowledgeArticle *KnowledgeArticleClient
 	// KnowledgeArticleLike is the client for interacting with the KnowledgeArticleLike builders.
@@ -424,6 +426,7 @@ func (tx *Tx) init() {
 	tx.IncidentRuleExecution = NewIncidentRuleExecutionClient(tx.config)
 	tx.ItemVersion = NewItemVersionClient(tx.config)
 	tx.KafTaskActionLedger = NewKafTaskActionLedgerClient(tx.config)
+	tx.KafTaskCompletionReceipt = NewKafTaskCompletionReceiptClient(tx.config)
 	tx.KnowledgeArticle = NewKnowledgeArticleClient(tx.config)
 	tx.KnowledgeArticleLike = NewKnowledgeArticleLikeClient(tx.config)
 	tx.KnowledgeArticleParticipant = NewKnowledgeArticleParticipantClient(tx.config)

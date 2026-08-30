@@ -141,6 +141,9 @@ type ItemVersion func(*sql.Selector)
 // KafTaskActionLedger is the predicate function for kaftaskactionledger builders.
 type KafTaskActionLedger func(*sql.Selector)
 
+// KafTaskCompletionReceipt is the predicate function for kaftaskcompletionreceipt builders.
+type KafTaskCompletionReceipt func(*sql.Selector)
+
 // KnowledgeArticle is the predicate function for knowledgearticle builders.
 type KnowledgeArticle func(*sql.Selector)
 

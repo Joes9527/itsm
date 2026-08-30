@@ -13,6 +13,7 @@ import (
 	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/hook"
+	"itsm-backend/ent/kaftaskcompletionreceipt"
 	"itsm-backend/ent/outboxevent"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/service/bpmn"
@@ -1125,6 +1126,60 @@ func (h *fakeAsyncServiceTaskHandler) Execute(ctx context.Context, task *ent.Pro
 
 var _ bpmn.ServiceTaskHandlerInterface = (*fakeAsyncServiceTaskHandler)(nil)
 var _ bpmn.AsyncServiceTaskHandler = (*fakeAsyncServiceTaskHandler)(nil)
+
+type failingUserTaskCallbackHandler struct {
+	taskType  string
+	handlerID string
+}
+
+func (h *failingUserTaskCallbackHandler) GetTaskType() string  { return h.taskType }
+func (h *failingUserTaskCallbackHandler) GetHandlerID() string { return h.handlerID }
+func (h *failingUserTaskCallbackHandler) Validate(context.Context, map[string]interface{}) error {
+	return nil
+}
+func (h *failingUserTaskCallbackHandler) Execute(context.Context, *ent.ProcessTask, map[string]interface{}) (*dto.ServiceTaskResult, error) {
+	return nil, errors.New("callback rejected Bearer secret-token")
+}
+
+var _ bpmn.ServiceTaskHandlerInterface = (*failingUserTaskCallbackHandler)(nil)
+
+func TestCompleteKafDelegatedTask_CallbackFailureReturnsErrorAndWritesReceipt(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, _ := setupApprovalDecisionFixture(t, engine)
+	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	instanceID, taskID := createProcessFixture(t, engine, tenantID, "kaf-callback-failure")
+	task, err := engine.client.ProcessTask.UpdateOneID(taskID).
+		SetTaskID("PT-kaf-callback-failure").
+		SetStatus(common.ProcessTaskStatusCompleted).
+		SetTaskType(bpmn.KafDelegateTaskType).
+		SetCorrelationID("kaf-callback-correlation").
+		SetTaskVariables(map[string]interface{}{
+			bpmnMetaDataServiceTaskType: "failing_kaf_callback",
+			bpmnMetaDataAction:          "complete",
+		}).
+		Save(ctx)
+	require.NoError(t, err)
+	ledger, err := engine.client.KafTaskActionLedger.Create().
+		SetTenantID(tenantID).SetTaskID(task.TaskID).
+		SetRunID("run-1").SetStepID("finish").SetAction(kafActionComplete).
+		SetIdempotencyKey(fmt.Sprintf("%d:%s:run-1:finish", tenantID, task.TaskID)).
+		SetCorrelationID(task.CorrelationID).SetProcedureRef("ssl-vpn").SetProcedureVersion("v1").
+		Save(ctx)
+	require.NoError(t, err)
+	engine.callbackRegistry.RegisterHandler(&failingUserTaskCallbackHandler{taskType: "failing_kaf_callback", handlerID: "failing_kaf_callback_handler"})
+
+	err = engine.CompleteKafDelegatedTask(ctx, ledger.ID, task.TaskID, map[string]interface{}{"kaf_result_summary": "done"})
+	require.Error(t, err)
+	receipt, err := engine.client.KafTaskCompletionReceipt.Query().Where(
+		kaftaskcompletionreceipt.LedgerIDEQ(ledger.ID),
+	).Only(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "callback_failed", receipt.Status)
+	assert.Equal(t, "callback_failed", receipt.ErrorCode)
+	assert.NotContains(t, receipt.ErrorCode, "Bearer")
+	_, err = engine.client.ProcessInstance.Get(ctx, instanceID)
+	require.NoError(t, err)
+}
 
 func TestHandleElement_AsyncServiceTask_PausesAndCreatesDelegatedTask(t *testing.T) {
 	engine, baseCtx := newApprovalDecisionTestEngine(t)

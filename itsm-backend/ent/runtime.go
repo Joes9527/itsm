@@ -48,6 +48,7 @@ import (
 	"itsm-backend/ent/incidentruleexecution"
 	"itsm-backend/ent/itemversion"
 	"itsm-backend/ent/kaftaskactionledger"
+	"itsm-backend/ent/kaftaskcompletionreceipt"
 	"itsm-backend/ent/knowledgearticle"
 	"itsm-backend/ent/knowledgearticlelike"
 	"itsm-backend/ent/knowledgearticleparticipant"
@@ -1680,6 +1681,34 @@ func init() {
 	kaftaskactionledger.DefaultUpdatedAt = kaftaskactionledgerDescUpdatedAt.Default.(func() time.Time)
 	// kaftaskactionledger.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	kaftaskactionledger.UpdateDefaultUpdatedAt = kaftaskactionledgerDescUpdatedAt.UpdateDefault.(func() time.Time)
+	kaftaskcompletionreceiptFields := schema.KafTaskCompletionReceipt{}.Fields()
+	_ = kaftaskcompletionreceiptFields
+	// kaftaskcompletionreceiptDescLedgerID is the schema descriptor for ledger_id field.
+	kaftaskcompletionreceiptDescLedgerID := kaftaskcompletionreceiptFields[0].Descriptor()
+	// kaftaskcompletionreceipt.LedgerIDValidator is a validator for the "ledger_id" field. It is called by the builders before save.
+	kaftaskcompletionreceipt.LedgerIDValidator = kaftaskcompletionreceiptDescLedgerID.Validators[0].(func(int) error)
+	// kaftaskcompletionreceiptDescTenantID is the schema descriptor for tenant_id field.
+	kaftaskcompletionreceiptDescTenantID := kaftaskcompletionreceiptFields[1].Descriptor()
+	// kaftaskcompletionreceipt.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	kaftaskcompletionreceipt.TenantIDValidator = kaftaskcompletionreceiptDescTenantID.Validators[0].(func(int) error)
+	// kaftaskcompletionreceiptDescTaskID is the schema descriptor for task_id field.
+	kaftaskcompletionreceiptDescTaskID := kaftaskcompletionreceiptFields[2].Descriptor()
+	// kaftaskcompletionreceipt.TaskIDValidator is a validator for the "task_id" field. It is called by the builders before save.
+	kaftaskcompletionreceipt.TaskIDValidator = kaftaskcompletionreceiptDescTaskID.Validators[0].(func(string) error)
+	// kaftaskcompletionreceiptDescStatus is the schema descriptor for status field.
+	kaftaskcompletionreceiptDescStatus := kaftaskcompletionreceiptFields[3].Descriptor()
+	// kaftaskcompletionreceipt.DefaultStatus holds the default value on creation for the status field.
+	kaftaskcompletionreceipt.DefaultStatus = kaftaskcompletionreceiptDescStatus.Default.(string)
+	// kaftaskcompletionreceiptDescCreatedAt is the schema descriptor for created_at field.
+	kaftaskcompletionreceiptDescCreatedAt := kaftaskcompletionreceiptFields[5].Descriptor()
+	// kaftaskcompletionreceipt.DefaultCreatedAt holds the default value on creation for the created_at field.
+	kaftaskcompletionreceipt.DefaultCreatedAt = kaftaskcompletionreceiptDescCreatedAt.Default.(func() time.Time)
+	// kaftaskcompletionreceiptDescUpdatedAt is the schema descriptor for updated_at field.
+	kaftaskcompletionreceiptDescUpdatedAt := kaftaskcompletionreceiptFields[6].Descriptor()
+	// kaftaskcompletionreceipt.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	kaftaskcompletionreceipt.DefaultUpdatedAt = kaftaskcompletionreceiptDescUpdatedAt.Default.(func() time.Time)
+	// kaftaskcompletionreceipt.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	kaftaskcompletionreceipt.UpdateDefaultUpdatedAt = kaftaskcompletionreceiptDescUpdatedAt.UpdateDefault.(func() time.Time)
 	knowledgearticleFields := schema.KnowledgeArticle{}.Fields()
 	_ = knowledgearticleFields
 	// knowledgearticleDescTitle is the schema descriptor for title field.

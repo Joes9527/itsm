@@ -56,6 +56,7 @@ import (
 	"itsm-backend/ent/incidentruleexecution"
 	"itsm-backend/ent/itemversion"
 	"itsm-backend/ent/kaftaskactionledger"
+	"itsm-backend/ent/kaftaskcompletionreceipt"
 	"itsm-backend/ent/knowledgearticle"
 	"itsm-backend/ent/knowledgearticlelike"
 	"itsm-backend/ent/knowledgearticleparticipant"
@@ -231,6 +232,8 @@ type Client struct {
 	ItemVersion *ItemVersionClient
 	// KafTaskActionLedger is the client for interacting with the KafTaskActionLedger builders.
 	KafTaskActionLedger *KafTaskActionLedgerClient
+	// KafTaskCompletionReceipt is the client for interacting with the KafTaskCompletionReceipt builders.
+	KafTaskCompletionReceipt *KafTaskCompletionReceiptClient
 	// KnowledgeArticle is the client for interacting with the KnowledgeArticle builders.
 	KnowledgeArticle *KnowledgeArticleClient
 	// KnowledgeArticleLike is the client for interacting with the KnowledgeArticleLike builders.
@@ -433,6 +436,7 @@ func (c *Client) init() {
 	c.IncidentRuleExecution = NewIncidentRuleExecutionClient(c.config)
 	c.ItemVersion = NewItemVersionClient(c.config)
 	c.KafTaskActionLedger = NewKafTaskActionLedgerClient(c.config)
+	c.KafTaskCompletionReceipt = NewKafTaskCompletionReceiptClient(c.config)
 	c.KnowledgeArticle = NewKnowledgeArticleClient(c.config)
 	c.KnowledgeArticleLike = NewKnowledgeArticleLikeClient(c.config)
 	c.KnowledgeArticleParticipant = NewKnowledgeArticleParticipantClient(c.config)
@@ -643,6 +647,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		IncidentRuleExecution:       NewIncidentRuleExecutionClient(cfg),
 		ItemVersion:                 NewItemVersionClient(cfg),
 		KafTaskActionLedger:         NewKafTaskActionLedgerClient(cfg),
+		KafTaskCompletionReceipt:    NewKafTaskCompletionReceiptClient(cfg),
 		KnowledgeArticle:            NewKnowledgeArticleClient(cfg),
 		KnowledgeArticleLike:        NewKnowledgeArticleLikeClient(cfg),
 		KnowledgeArticleParticipant: NewKnowledgeArticleParticipantClient(cfg),
@@ -780,6 +785,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		IncidentRuleExecution:       NewIncidentRuleExecutionClient(cfg),
 		ItemVersion:                 NewItemVersionClient(cfg),
 		KafTaskActionLedger:         NewKafTaskActionLedgerClient(cfg),
+		KafTaskCompletionReceipt:    NewKafTaskCompletionReceiptClient(cfg),
 		KnowledgeArticle:            NewKnowledgeArticleClient(cfg),
 		KnowledgeArticleLike:        NewKnowledgeArticleLikeClient(cfg),
 		KnowledgeArticleParticipant: NewKnowledgeArticleParticipantClient(cfg),
@@ -892,24 +898,25 @@ func (c *Client) Use(hooks ...Hook) {
 		c.EngineerSkill, c.FeishuTicketSync, c.FieldDefinition, c.FieldValue, c.Group,
 		c.Incident, c.IncidentAlert, c.IncidentEscalationRule, c.IncidentEvent,
 		c.IncidentMetric, c.IncidentRule, c.IncidentRuleExecution, c.ItemVersion,
-		c.KafTaskActionLedger, c.KnowledgeArticle, c.KnowledgeArticleLike,
-		c.KnowledgeArticleParticipant, c.KnowledgeArticleSession,
-		c.KnowledgeArticleVersion, c.KnownError, c.MSPAllocation, c.MarketplaceItem,
-		c.Menu, c.Message, c.Microservice, c.Notification, c.NotificationPreference,
-		c.OutboxEvent, c.PasswordResetToken, c.Permission, c.PermissionDefinition,
-		c.Problem, c.ProcessApprovalDecision, c.ProcessAuditLog, c.ProcessBinding,
-		c.ProcessDefinition, c.ProcessDeployment, c.ProcessExecutionHistory,
-		c.ProcessInstance, c.ProcessTask, c.ProcessVariable, c.ProcessVersionChangelog,
-		c.Project, c.PromptTemplate, c.ProvisioningTask, c.RelationshipType, c.Release,
-		c.Role, c.RolePermission, c.RootCauseAnalysis, c.SLAAlertHistory,
-		c.SLAAlertRule, c.SLADefinition, c.SLAMetric, c.SLAViolation, c.ServiceCatalog,
-		c.ServiceRequest, c.StandardChange, c.Survey, c.SurveyResponse, c.SystemConfig,
-		c.Tag, c.Team, c.Tenant, c.TenantInstallation, c.Ticket, c.TicketApproval,
-		c.TicketAssignmentRule, c.TicketAttachment, c.TicketAutomationRule, c.TicketCC,
-		c.TicketCategory, c.TicketComment, c.TicketNotification, c.TicketTag,
-		c.TicketTemplate, c.TicketType, c.TicketView, c.TicketWorkflowRecord,
-		c.ToolInvocation, c.User, c.Vendor, c.WorkItemRelation, c.Workflow,
-		c.WorkflowInstance, c.WorkflowTask, c.WorkflowVersion,
+		c.KafTaskActionLedger, c.KafTaskCompletionReceipt, c.KnowledgeArticle,
+		c.KnowledgeArticleLike, c.KnowledgeArticleParticipant,
+		c.KnowledgeArticleSession, c.KnowledgeArticleVersion, c.KnownError,
+		c.MSPAllocation, c.MarketplaceItem, c.Menu, c.Message, c.Microservice,
+		c.Notification, c.NotificationPreference, c.OutboxEvent, c.PasswordResetToken,
+		c.Permission, c.PermissionDefinition, c.Problem, c.ProcessApprovalDecision,
+		c.ProcessAuditLog, c.ProcessBinding, c.ProcessDefinition, c.ProcessDeployment,
+		c.ProcessExecutionHistory, c.ProcessInstance, c.ProcessTask, c.ProcessVariable,
+		c.ProcessVersionChangelog, c.Project, c.PromptTemplate, c.ProvisioningTask,
+		c.RelationshipType, c.Release, c.Role, c.RolePermission, c.RootCauseAnalysis,
+		c.SLAAlertHistory, c.SLAAlertRule, c.SLADefinition, c.SLAMetric,
+		c.SLAViolation, c.ServiceCatalog, c.ServiceRequest, c.StandardChange, c.Survey,
+		c.SurveyResponse, c.SystemConfig, c.Tag, c.Team, c.Tenant,
+		c.TenantInstallation, c.Ticket, c.TicketApproval, c.TicketAssignmentRule,
+		c.TicketAttachment, c.TicketAutomationRule, c.TicketCC, c.TicketCategory,
+		c.TicketComment, c.TicketNotification, c.TicketTag, c.TicketTemplate,
+		c.TicketType, c.TicketView, c.TicketWorkflowRecord, c.ToolInvocation, c.User,
+		c.Vendor, c.WorkItemRelation, c.Workflow, c.WorkflowInstance, c.WorkflowTask,
+		c.WorkflowVersion,
 	} {
 		n.Use(hooks...)
 	}
@@ -929,24 +936,25 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.EngineerSkill, c.FeishuTicketSync, c.FieldDefinition, c.FieldValue, c.Group,
 		c.Incident, c.IncidentAlert, c.IncidentEscalationRule, c.IncidentEvent,
 		c.IncidentMetric, c.IncidentRule, c.IncidentRuleExecution, c.ItemVersion,
-		c.KafTaskActionLedger, c.KnowledgeArticle, c.KnowledgeArticleLike,
-		c.KnowledgeArticleParticipant, c.KnowledgeArticleSession,
-		c.KnowledgeArticleVersion, c.KnownError, c.MSPAllocation, c.MarketplaceItem,
-		c.Menu, c.Message, c.Microservice, c.Notification, c.NotificationPreference,
-		c.OutboxEvent, c.PasswordResetToken, c.Permission, c.PermissionDefinition,
-		c.Problem, c.ProcessApprovalDecision, c.ProcessAuditLog, c.ProcessBinding,
-		c.ProcessDefinition, c.ProcessDeployment, c.ProcessExecutionHistory,
-		c.ProcessInstance, c.ProcessTask, c.ProcessVariable, c.ProcessVersionChangelog,
-		c.Project, c.PromptTemplate, c.ProvisioningTask, c.RelationshipType, c.Release,
-		c.Role, c.RolePermission, c.RootCauseAnalysis, c.SLAAlertHistory,
-		c.SLAAlertRule, c.SLADefinition, c.SLAMetric, c.SLAViolation, c.ServiceCatalog,
-		c.ServiceRequest, c.StandardChange, c.Survey, c.SurveyResponse, c.SystemConfig,
-		c.Tag, c.Team, c.Tenant, c.TenantInstallation, c.Ticket, c.TicketApproval,
-		c.TicketAssignmentRule, c.TicketAttachment, c.TicketAutomationRule, c.TicketCC,
-		c.TicketCategory, c.TicketComment, c.TicketNotification, c.TicketTag,
-		c.TicketTemplate, c.TicketType, c.TicketView, c.TicketWorkflowRecord,
-		c.ToolInvocation, c.User, c.Vendor, c.WorkItemRelation, c.Workflow,
-		c.WorkflowInstance, c.WorkflowTask, c.WorkflowVersion,
+		c.KafTaskActionLedger, c.KafTaskCompletionReceipt, c.KnowledgeArticle,
+		c.KnowledgeArticleLike, c.KnowledgeArticleParticipant,
+		c.KnowledgeArticleSession, c.KnowledgeArticleVersion, c.KnownError,
+		c.MSPAllocation, c.MarketplaceItem, c.Menu, c.Message, c.Microservice,
+		c.Notification, c.NotificationPreference, c.OutboxEvent, c.PasswordResetToken,
+		c.Permission, c.PermissionDefinition, c.Problem, c.ProcessApprovalDecision,
+		c.ProcessAuditLog, c.ProcessBinding, c.ProcessDefinition, c.ProcessDeployment,
+		c.ProcessExecutionHistory, c.ProcessInstance, c.ProcessTask, c.ProcessVariable,
+		c.ProcessVersionChangelog, c.Project, c.PromptTemplate, c.ProvisioningTask,
+		c.RelationshipType, c.Release, c.Role, c.RolePermission, c.RootCauseAnalysis,
+		c.SLAAlertHistory, c.SLAAlertRule, c.SLADefinition, c.SLAMetric,
+		c.SLAViolation, c.ServiceCatalog, c.ServiceRequest, c.StandardChange, c.Survey,
+		c.SurveyResponse, c.SystemConfig, c.Tag, c.Team, c.Tenant,
+		c.TenantInstallation, c.Ticket, c.TicketApproval, c.TicketAssignmentRule,
+		c.TicketAttachment, c.TicketAutomationRule, c.TicketCC, c.TicketCategory,
+		c.TicketComment, c.TicketNotification, c.TicketTag, c.TicketTemplate,
+		c.TicketType, c.TicketView, c.TicketWorkflowRecord, c.ToolInvocation, c.User,
+		c.Vendor, c.WorkItemRelation, c.Workflow, c.WorkflowInstance, c.WorkflowTask,
+		c.WorkflowVersion,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -1045,6 +1053,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.ItemVersion.mutate(ctx, m)
 	case *KafTaskActionLedgerMutation:
 		return c.KafTaskActionLedger.mutate(ctx, m)
+	case *KafTaskCompletionReceiptMutation:
+		return c.KafTaskCompletionReceipt.mutate(ctx, m)
 	case *KnowledgeArticleMutation:
 		return c.KnowledgeArticle.mutate(ctx, m)
 	case *KnowledgeArticleLikeMutation:
@@ -8186,6 +8196,139 @@ func (c *KafTaskActionLedgerClient) mutate(ctx context.Context, m *KafTaskAction
 		return (&KafTaskActionLedgerDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown KafTaskActionLedger mutation op: %q", m.Op())
+	}
+}
+
+// KafTaskCompletionReceiptClient is a client for the KafTaskCompletionReceipt schema.
+type KafTaskCompletionReceiptClient struct {
+	config
+}
+
+// NewKafTaskCompletionReceiptClient returns a client for the KafTaskCompletionReceipt from the given config.
+func NewKafTaskCompletionReceiptClient(c config) *KafTaskCompletionReceiptClient {
+	return &KafTaskCompletionReceiptClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `kaftaskcompletionreceipt.Hooks(f(g(h())))`.
+func (c *KafTaskCompletionReceiptClient) Use(hooks ...Hook) {
+	c.hooks.KafTaskCompletionReceipt = append(c.hooks.KafTaskCompletionReceipt, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `kaftaskcompletionreceipt.Intercept(f(g(h())))`.
+func (c *KafTaskCompletionReceiptClient) Intercept(interceptors ...Interceptor) {
+	c.inters.KafTaskCompletionReceipt = append(c.inters.KafTaskCompletionReceipt, interceptors...)
+}
+
+// Create returns a builder for creating a KafTaskCompletionReceipt entity.
+func (c *KafTaskCompletionReceiptClient) Create() *KafTaskCompletionReceiptCreate {
+	mutation := newKafTaskCompletionReceiptMutation(c.config, OpCreate)
+	return &KafTaskCompletionReceiptCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of KafTaskCompletionReceipt entities.
+func (c *KafTaskCompletionReceiptClient) CreateBulk(builders ...*KafTaskCompletionReceiptCreate) *KafTaskCompletionReceiptCreateBulk {
+	return &KafTaskCompletionReceiptCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *KafTaskCompletionReceiptClient) MapCreateBulk(slice any, setFunc func(*KafTaskCompletionReceiptCreate, int)) *KafTaskCompletionReceiptCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &KafTaskCompletionReceiptCreateBulk{err: fmt.Errorf("calling to KafTaskCompletionReceiptClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*KafTaskCompletionReceiptCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &KafTaskCompletionReceiptCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for KafTaskCompletionReceipt.
+func (c *KafTaskCompletionReceiptClient) Update() *KafTaskCompletionReceiptUpdate {
+	mutation := newKafTaskCompletionReceiptMutation(c.config, OpUpdate)
+	return &KafTaskCompletionReceiptUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *KafTaskCompletionReceiptClient) UpdateOne(_m *KafTaskCompletionReceipt) *KafTaskCompletionReceiptUpdateOne {
+	mutation := newKafTaskCompletionReceiptMutation(c.config, OpUpdateOne, withKafTaskCompletionReceipt(_m))
+	return &KafTaskCompletionReceiptUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *KafTaskCompletionReceiptClient) UpdateOneID(id int) *KafTaskCompletionReceiptUpdateOne {
+	mutation := newKafTaskCompletionReceiptMutation(c.config, OpUpdateOne, withKafTaskCompletionReceiptID(id))
+	return &KafTaskCompletionReceiptUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for KafTaskCompletionReceipt.
+func (c *KafTaskCompletionReceiptClient) Delete() *KafTaskCompletionReceiptDelete {
+	mutation := newKafTaskCompletionReceiptMutation(c.config, OpDelete)
+	return &KafTaskCompletionReceiptDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *KafTaskCompletionReceiptClient) DeleteOne(_m *KafTaskCompletionReceipt) *KafTaskCompletionReceiptDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *KafTaskCompletionReceiptClient) DeleteOneID(id int) *KafTaskCompletionReceiptDeleteOne {
+	builder := c.Delete().Where(kaftaskcompletionreceipt.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &KafTaskCompletionReceiptDeleteOne{builder}
+}
+
+// Query returns a query builder for KafTaskCompletionReceipt.
+func (c *KafTaskCompletionReceiptClient) Query() *KafTaskCompletionReceiptQuery {
+	return &KafTaskCompletionReceiptQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeKafTaskCompletionReceipt},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a KafTaskCompletionReceipt entity by its id.
+func (c *KafTaskCompletionReceiptClient) Get(ctx context.Context, id int) (*KafTaskCompletionReceipt, error) {
+	return c.Query().Where(kaftaskcompletionreceipt.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *KafTaskCompletionReceiptClient) GetX(ctx context.Context, id int) *KafTaskCompletionReceipt {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *KafTaskCompletionReceiptClient) Hooks() []Hook {
+	return c.hooks.KafTaskCompletionReceipt
+}
+
+// Interceptors returns the client interceptors.
+func (c *KafTaskCompletionReceiptClient) Interceptors() []Interceptor {
+	return c.inters.KafTaskCompletionReceipt
+}
+
+func (c *KafTaskCompletionReceiptClient) mutate(ctx context.Context, m *KafTaskCompletionReceiptMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&KafTaskCompletionReceiptCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&KafTaskCompletionReceiptUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&KafTaskCompletionReceiptUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&KafTaskCompletionReceiptDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown KafTaskCompletionReceipt mutation op: %q", m.Op())
 	}
 }
 
@@ -20038,21 +20181,21 @@ type (
 		EngineerSkill, FeishuTicketSync, FieldDefinition, FieldValue, Group, Incident,
 		IncidentAlert, IncidentEscalationRule, IncidentEvent, IncidentMetric,
 		IncidentRule, IncidentRuleExecution, ItemVersion, KafTaskActionLedger,
-		KnowledgeArticle, KnowledgeArticleLike, KnowledgeArticleParticipant,
-		KnowledgeArticleSession, KnowledgeArticleVersion, KnownError, MSPAllocation,
-		MarketplaceItem, Menu, Message, Microservice, Notification,
-		NotificationPreference, OutboxEvent, PasswordResetToken, Permission,
-		PermissionDefinition, Problem, ProcessApprovalDecision, ProcessAuditLog,
-		ProcessBinding, ProcessDefinition, ProcessDeployment, ProcessExecutionHistory,
-		ProcessInstance, ProcessTask, ProcessVariable, ProcessVersionChangelog,
-		Project, PromptTemplate, ProvisioningTask, RelationshipType, Release, Role,
-		RolePermission, RootCauseAnalysis, SLAAlertHistory, SLAAlertRule,
-		SLADefinition, SLAMetric, SLAViolation, ServiceCatalog, ServiceRequest,
-		StandardChange, Survey, SurveyResponse, SystemConfig, Tag, Team, Tenant,
-		TenantInstallation, Ticket, TicketApproval, TicketAssignmentRule,
-		TicketAttachment, TicketAutomationRule, TicketCC, TicketCategory,
-		TicketComment, TicketNotification, TicketTag, TicketTemplate, TicketType,
-		TicketView, TicketWorkflowRecord, ToolInvocation, User, Vendor,
+		KafTaskCompletionReceipt, KnowledgeArticle, KnowledgeArticleLike,
+		KnowledgeArticleParticipant, KnowledgeArticleSession, KnowledgeArticleVersion,
+		KnownError, MSPAllocation, MarketplaceItem, Menu, Message, Microservice,
+		Notification, NotificationPreference, OutboxEvent, PasswordResetToken,
+		Permission, PermissionDefinition, Problem, ProcessApprovalDecision,
+		ProcessAuditLog, ProcessBinding, ProcessDefinition, ProcessDeployment,
+		ProcessExecutionHistory, ProcessInstance, ProcessTask, ProcessVariable,
+		ProcessVersionChangelog, Project, PromptTemplate, ProvisioningTask,
+		RelationshipType, Release, Role, RolePermission, RootCauseAnalysis,
+		SLAAlertHistory, SLAAlertRule, SLADefinition, SLAMetric, SLAViolation,
+		ServiceCatalog, ServiceRequest, StandardChange, Survey, SurveyResponse,
+		SystemConfig, Tag, Team, Tenant, TenantInstallation, Ticket, TicketApproval,
+		TicketAssignmentRule, TicketAttachment, TicketAutomationRule, TicketCC,
+		TicketCategory, TicketComment, TicketNotification, TicketTag, TicketTemplate,
+		TicketType, TicketView, TicketWorkflowRecord, ToolInvocation, User, Vendor,
 		WorkItemRelation, Workflow, WorkflowInstance, WorkflowTask,
 		WorkflowVersion []ent.Hook
 	}
@@ -20066,21 +20209,21 @@ type (
 		EngineerSkill, FeishuTicketSync, FieldDefinition, FieldValue, Group, Incident,
 		IncidentAlert, IncidentEscalationRule, IncidentEvent, IncidentMetric,
 		IncidentRule, IncidentRuleExecution, ItemVersion, KafTaskActionLedger,
-		KnowledgeArticle, KnowledgeArticleLike, KnowledgeArticleParticipant,
-		KnowledgeArticleSession, KnowledgeArticleVersion, KnownError, MSPAllocation,
-		MarketplaceItem, Menu, Message, Microservice, Notification,
-		NotificationPreference, OutboxEvent, PasswordResetToken, Permission,
-		PermissionDefinition, Problem, ProcessApprovalDecision, ProcessAuditLog,
-		ProcessBinding, ProcessDefinition, ProcessDeployment, ProcessExecutionHistory,
-		ProcessInstance, ProcessTask, ProcessVariable, ProcessVersionChangelog,
-		Project, PromptTemplate, ProvisioningTask, RelationshipType, Release, Role,
-		RolePermission, RootCauseAnalysis, SLAAlertHistory, SLAAlertRule,
-		SLADefinition, SLAMetric, SLAViolation, ServiceCatalog, ServiceRequest,
-		StandardChange, Survey, SurveyResponse, SystemConfig, Tag, Team, Tenant,
-		TenantInstallation, Ticket, TicketApproval, TicketAssignmentRule,
-		TicketAttachment, TicketAutomationRule, TicketCC, TicketCategory,
-		TicketComment, TicketNotification, TicketTag, TicketTemplate, TicketType,
-		TicketView, TicketWorkflowRecord, ToolInvocation, User, Vendor,
+		KafTaskCompletionReceipt, KnowledgeArticle, KnowledgeArticleLike,
+		KnowledgeArticleParticipant, KnowledgeArticleSession, KnowledgeArticleVersion,
+		KnownError, MSPAllocation, MarketplaceItem, Menu, Message, Microservice,
+		Notification, NotificationPreference, OutboxEvent, PasswordResetToken,
+		Permission, PermissionDefinition, Problem, ProcessApprovalDecision,
+		ProcessAuditLog, ProcessBinding, ProcessDefinition, ProcessDeployment,
+		ProcessExecutionHistory, ProcessInstance, ProcessTask, ProcessVariable,
+		ProcessVersionChangelog, Project, PromptTemplate, ProvisioningTask,
+		RelationshipType, Release, Role, RolePermission, RootCauseAnalysis,
+		SLAAlertHistory, SLAAlertRule, SLADefinition, SLAMetric, SLAViolation,
+		ServiceCatalog, ServiceRequest, StandardChange, Survey, SurveyResponse,
+		SystemConfig, Tag, Team, Tenant, TenantInstallation, Ticket, TicketApproval,
+		TicketAssignmentRule, TicketAttachment, TicketAutomationRule, TicketCC,
+		TicketCategory, TicketComment, TicketNotification, TicketTag, TicketTemplate,
+		TicketType, TicketView, TicketWorkflowRecord, ToolInvocation, User, Vendor,
 		WorkItemRelation, Workflow, WorkflowInstance, WorkflowTask,
 		WorkflowVersion []ent.Interceptor
 	}

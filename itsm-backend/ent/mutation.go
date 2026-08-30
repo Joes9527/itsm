@@ -52,6 +52,7 @@ import (
 	"itsm-backend/ent/incidentruleexecution"
 	"itsm-backend/ent/itemversion"
 	"itsm-backend/ent/kaftaskactionledger"
+	"itsm-backend/ent/kaftaskcompletionreceipt"
 	"itsm-backend/ent/knowledgearticle"
 	"itsm-backend/ent/knowledgearticlelike"
 	"itsm-backend/ent/knowledgearticleparticipant"
@@ -188,6 +189,7 @@ const (
 	TypeIncidentRuleExecution       = "IncidentRuleExecution"
 	TypeItemVersion                 = "ItemVersion"
 	TypeKafTaskActionLedger         = "KafTaskActionLedger"
+	TypeKafTaskCompletionReceipt    = "KafTaskCompletionReceipt"
 	TypeKnowledgeArticle            = "KnowledgeArticle"
 	TypeKnowledgeArticleLike        = "KnowledgeArticleLike"
 	TypeKnowledgeArticleParticipant = "KnowledgeArticleParticipant"
@@ -59187,6 +59189,747 @@ func (m *KafTaskActionLedgerMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *KafTaskActionLedgerMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown KafTaskActionLedger edge %s", name)
+}
+
+// KafTaskCompletionReceiptMutation represents an operation that mutates the KafTaskCompletionReceipt nodes in the graph.
+type KafTaskCompletionReceiptMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int
+	ledger_id     *int
+	addledger_id  *int
+	tenant_id     *int
+	addtenant_id  *int
+	task_id       *string
+	status        *string
+	error_code    *string
+	created_at    *time.Time
+	updated_at    *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*KafTaskCompletionReceipt, error)
+	predicates    []predicate.KafTaskCompletionReceipt
+}
+
+var _ ent.Mutation = (*KafTaskCompletionReceiptMutation)(nil)
+
+// kaftaskcompletionreceiptOption allows management of the mutation configuration using functional options.
+type kaftaskcompletionreceiptOption func(*KafTaskCompletionReceiptMutation)
+
+// newKafTaskCompletionReceiptMutation creates new mutation for the KafTaskCompletionReceipt entity.
+func newKafTaskCompletionReceiptMutation(c config, op Op, opts ...kaftaskcompletionreceiptOption) *KafTaskCompletionReceiptMutation {
+	m := &KafTaskCompletionReceiptMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeKafTaskCompletionReceipt,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withKafTaskCompletionReceiptID sets the ID field of the mutation.
+func withKafTaskCompletionReceiptID(id int) kaftaskcompletionreceiptOption {
+	return func(m *KafTaskCompletionReceiptMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *KafTaskCompletionReceipt
+		)
+		m.oldValue = func(ctx context.Context) (*KafTaskCompletionReceipt, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().KafTaskCompletionReceipt.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withKafTaskCompletionReceipt sets the old KafTaskCompletionReceipt of the mutation.
+func withKafTaskCompletionReceipt(node *KafTaskCompletionReceipt) kaftaskcompletionreceiptOption {
+	return func(m *KafTaskCompletionReceiptMutation) {
+		m.oldValue = func(context.Context) (*KafTaskCompletionReceipt, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m KafTaskCompletionReceiptMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m KafTaskCompletionReceiptMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *KafTaskCompletionReceiptMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *KafTaskCompletionReceiptMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().KafTaskCompletionReceipt.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetLedgerID sets the "ledger_id" field.
+func (m *KafTaskCompletionReceiptMutation) SetLedgerID(i int) {
+	m.ledger_id = &i
+	m.addledger_id = nil
+}
+
+// LedgerID returns the value of the "ledger_id" field in the mutation.
+func (m *KafTaskCompletionReceiptMutation) LedgerID() (r int, exists bool) {
+	v := m.ledger_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLedgerID returns the old "ledger_id" field's value of the KafTaskCompletionReceipt entity.
+// If the KafTaskCompletionReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskCompletionReceiptMutation) OldLedgerID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLedgerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLedgerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLedgerID: %w", err)
+	}
+	return oldValue.LedgerID, nil
+}
+
+// AddLedgerID adds i to the "ledger_id" field.
+func (m *KafTaskCompletionReceiptMutation) AddLedgerID(i int) {
+	if m.addledger_id != nil {
+		*m.addledger_id += i
+	} else {
+		m.addledger_id = &i
+	}
+}
+
+// AddedLedgerID returns the value that was added to the "ledger_id" field in this mutation.
+func (m *KafTaskCompletionReceiptMutation) AddedLedgerID() (r int, exists bool) {
+	v := m.addledger_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetLedgerID resets all changes to the "ledger_id" field.
+func (m *KafTaskCompletionReceiptMutation) ResetLedgerID() {
+	m.ledger_id = nil
+	m.addledger_id = nil
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *KafTaskCompletionReceiptMutation) SetTenantID(i int) {
+	m.tenant_id = &i
+	m.addtenant_id = nil
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *KafTaskCompletionReceiptMutation) TenantID() (r int, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the KafTaskCompletionReceipt entity.
+// If the KafTaskCompletionReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskCompletionReceiptMutation) OldTenantID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// AddTenantID adds i to the "tenant_id" field.
+func (m *KafTaskCompletionReceiptMutation) AddTenantID(i int) {
+	if m.addtenant_id != nil {
+		*m.addtenant_id += i
+	} else {
+		m.addtenant_id = &i
+	}
+}
+
+// AddedTenantID returns the value that was added to the "tenant_id" field in this mutation.
+func (m *KafTaskCompletionReceiptMutation) AddedTenantID() (r int, exists bool) {
+	v := m.addtenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *KafTaskCompletionReceiptMutation) ResetTenantID() {
+	m.tenant_id = nil
+	m.addtenant_id = nil
+}
+
+// SetTaskID sets the "task_id" field.
+func (m *KafTaskCompletionReceiptMutation) SetTaskID(s string) {
+	m.task_id = &s
+}
+
+// TaskID returns the value of the "task_id" field in the mutation.
+func (m *KafTaskCompletionReceiptMutation) TaskID() (r string, exists bool) {
+	v := m.task_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTaskID returns the old "task_id" field's value of the KafTaskCompletionReceipt entity.
+// If the KafTaskCompletionReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskCompletionReceiptMutation) OldTaskID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTaskID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTaskID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTaskID: %w", err)
+	}
+	return oldValue.TaskID, nil
+}
+
+// ResetTaskID resets all changes to the "task_id" field.
+func (m *KafTaskCompletionReceiptMutation) ResetTaskID() {
+	m.task_id = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *KafTaskCompletionReceiptMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *KafTaskCompletionReceiptMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the KafTaskCompletionReceipt entity.
+// If the KafTaskCompletionReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskCompletionReceiptMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *KafTaskCompletionReceiptMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetErrorCode sets the "error_code" field.
+func (m *KafTaskCompletionReceiptMutation) SetErrorCode(s string) {
+	m.error_code = &s
+}
+
+// ErrorCode returns the value of the "error_code" field in the mutation.
+func (m *KafTaskCompletionReceiptMutation) ErrorCode() (r string, exists bool) {
+	v := m.error_code
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldErrorCode returns the old "error_code" field's value of the KafTaskCompletionReceipt entity.
+// If the KafTaskCompletionReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskCompletionReceiptMutation) OldErrorCode(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldErrorCode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldErrorCode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldErrorCode: %w", err)
+	}
+	return oldValue.ErrorCode, nil
+}
+
+// ClearErrorCode clears the value of the "error_code" field.
+func (m *KafTaskCompletionReceiptMutation) ClearErrorCode() {
+	m.error_code = nil
+	m.clearedFields[kaftaskcompletionreceipt.FieldErrorCode] = struct{}{}
+}
+
+// ErrorCodeCleared returns if the "error_code" field was cleared in this mutation.
+func (m *KafTaskCompletionReceiptMutation) ErrorCodeCleared() bool {
+	_, ok := m.clearedFields[kaftaskcompletionreceipt.FieldErrorCode]
+	return ok
+}
+
+// ResetErrorCode resets all changes to the "error_code" field.
+func (m *KafTaskCompletionReceiptMutation) ResetErrorCode() {
+	m.error_code = nil
+	delete(m.clearedFields, kaftaskcompletionreceipt.FieldErrorCode)
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *KafTaskCompletionReceiptMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *KafTaskCompletionReceiptMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the KafTaskCompletionReceipt entity.
+// If the KafTaskCompletionReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskCompletionReceiptMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *KafTaskCompletionReceiptMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *KafTaskCompletionReceiptMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *KafTaskCompletionReceiptMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the KafTaskCompletionReceipt entity.
+// If the KafTaskCompletionReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskCompletionReceiptMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *KafTaskCompletionReceiptMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the KafTaskCompletionReceiptMutation builder.
+func (m *KafTaskCompletionReceiptMutation) Where(ps ...predicate.KafTaskCompletionReceipt) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the KafTaskCompletionReceiptMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *KafTaskCompletionReceiptMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.KafTaskCompletionReceipt, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *KafTaskCompletionReceiptMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *KafTaskCompletionReceiptMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (KafTaskCompletionReceipt).
+func (m *KafTaskCompletionReceiptMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *KafTaskCompletionReceiptMutation) Fields() []string {
+	fields := make([]string, 0, 7)
+	if m.ledger_id != nil {
+		fields = append(fields, kaftaskcompletionreceipt.FieldLedgerID)
+	}
+	if m.tenant_id != nil {
+		fields = append(fields, kaftaskcompletionreceipt.FieldTenantID)
+	}
+	if m.task_id != nil {
+		fields = append(fields, kaftaskcompletionreceipt.FieldTaskID)
+	}
+	if m.status != nil {
+		fields = append(fields, kaftaskcompletionreceipt.FieldStatus)
+	}
+	if m.error_code != nil {
+		fields = append(fields, kaftaskcompletionreceipt.FieldErrorCode)
+	}
+	if m.created_at != nil {
+		fields = append(fields, kaftaskcompletionreceipt.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, kaftaskcompletionreceipt.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *KafTaskCompletionReceiptMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case kaftaskcompletionreceipt.FieldLedgerID:
+		return m.LedgerID()
+	case kaftaskcompletionreceipt.FieldTenantID:
+		return m.TenantID()
+	case kaftaskcompletionreceipt.FieldTaskID:
+		return m.TaskID()
+	case kaftaskcompletionreceipt.FieldStatus:
+		return m.Status()
+	case kaftaskcompletionreceipt.FieldErrorCode:
+		return m.ErrorCode()
+	case kaftaskcompletionreceipt.FieldCreatedAt:
+		return m.CreatedAt()
+	case kaftaskcompletionreceipt.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *KafTaskCompletionReceiptMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case kaftaskcompletionreceipt.FieldLedgerID:
+		return m.OldLedgerID(ctx)
+	case kaftaskcompletionreceipt.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case kaftaskcompletionreceipt.FieldTaskID:
+		return m.OldTaskID(ctx)
+	case kaftaskcompletionreceipt.FieldStatus:
+		return m.OldStatus(ctx)
+	case kaftaskcompletionreceipt.FieldErrorCode:
+		return m.OldErrorCode(ctx)
+	case kaftaskcompletionreceipt.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case kaftaskcompletionreceipt.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown KafTaskCompletionReceipt field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *KafTaskCompletionReceiptMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case kaftaskcompletionreceipt.FieldLedgerID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLedgerID(v)
+		return nil
+	case kaftaskcompletionreceipt.FieldTenantID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case kaftaskcompletionreceipt.FieldTaskID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTaskID(v)
+		return nil
+	case kaftaskcompletionreceipt.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case kaftaskcompletionreceipt.FieldErrorCode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetErrorCode(v)
+		return nil
+	case kaftaskcompletionreceipt.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case kaftaskcompletionreceipt.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown KafTaskCompletionReceipt field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *KafTaskCompletionReceiptMutation) AddedFields() []string {
+	var fields []string
+	if m.addledger_id != nil {
+		fields = append(fields, kaftaskcompletionreceipt.FieldLedgerID)
+	}
+	if m.addtenant_id != nil {
+		fields = append(fields, kaftaskcompletionreceipt.FieldTenantID)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *KafTaskCompletionReceiptMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case kaftaskcompletionreceipt.FieldLedgerID:
+		return m.AddedLedgerID()
+	case kaftaskcompletionreceipt.FieldTenantID:
+		return m.AddedTenantID()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *KafTaskCompletionReceiptMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case kaftaskcompletionreceipt.FieldLedgerID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddLedgerID(v)
+		return nil
+	case kaftaskcompletionreceipt.FieldTenantID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTenantID(v)
+		return nil
+	}
+	return fmt.Errorf("unknown KafTaskCompletionReceipt numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *KafTaskCompletionReceiptMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(kaftaskcompletionreceipt.FieldErrorCode) {
+		fields = append(fields, kaftaskcompletionreceipt.FieldErrorCode)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *KafTaskCompletionReceiptMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *KafTaskCompletionReceiptMutation) ClearField(name string) error {
+	switch name {
+	case kaftaskcompletionreceipt.FieldErrorCode:
+		m.ClearErrorCode()
+		return nil
+	}
+	return fmt.Errorf("unknown KafTaskCompletionReceipt nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *KafTaskCompletionReceiptMutation) ResetField(name string) error {
+	switch name {
+	case kaftaskcompletionreceipt.FieldLedgerID:
+		m.ResetLedgerID()
+		return nil
+	case kaftaskcompletionreceipt.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case kaftaskcompletionreceipt.FieldTaskID:
+		m.ResetTaskID()
+		return nil
+	case kaftaskcompletionreceipt.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case kaftaskcompletionreceipt.FieldErrorCode:
+		m.ResetErrorCode()
+		return nil
+	case kaftaskcompletionreceipt.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case kaftaskcompletionreceipt.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown KafTaskCompletionReceipt field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *KafTaskCompletionReceiptMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *KafTaskCompletionReceiptMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *KafTaskCompletionReceiptMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *KafTaskCompletionReceiptMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *KafTaskCompletionReceiptMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *KafTaskCompletionReceiptMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *KafTaskCompletionReceiptMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown KafTaskCompletionReceipt unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *KafTaskCompletionReceiptMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown KafTaskCompletionReceipt edge %s", name)
 }
 
 // KnowledgeArticleMutation represents an operation that mutates the KnowledgeArticle nodes in the graph.

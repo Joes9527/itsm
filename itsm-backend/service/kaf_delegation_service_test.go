@@ -13,6 +13,7 @@ import (
 	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/kaftaskactionledger"
+	"itsm-backend/ent/kaftaskcompletionreceipt"
 	"itsm-backend/ent/outboxevent"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/service/bpmn"
@@ -267,10 +268,28 @@ func (e *statefulKafCompletionEngine) CompleteTask(ctx context.Context, taskID s
 	return nil
 }
 
-func newKafActionFixture(t *testing.T) (*KafDelegationService, *ent.ProcessTask, context.Context) {
+func (e *statefulKafCompletionEngine) CompleteKafDelegatedTask(ctx context.Context, ledgerID int, taskID string, variables map[string]interface{}) error {
+	if err := e.CompleteTask(ctx, taskID, variables); err != nil {
+		return err
+	}
+	ledger, err := e.client.KafTaskActionLedger.Get(ctx, ledgerID)
+	if err != nil {
+		return err
+	}
+	_, err = e.client.KafTaskCompletionReceipt.Create().
+		SetLedgerID(ledgerID).SetTenantID(ledger.TenantID).SetTaskID(taskID).
+		SetStatus("callback_succeeded").
+		Save(ctx)
+	if err != nil && !ent.IsConstraintError(err) {
+		return err
+	}
+	return nil
+}
+
+func newKafActionFixture(t *testing.T) (*CustomProcessEngine, *KafDelegationService, *ent.ProcessTask, context.Context) {
 	t.Helper()
 
-	_, svc, ctx, instance := newDelegationFixture(t)
+	engine, svc, ctx, instance := newDelegationFixture(t)
 	actorID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
 	require.NoError(t, svc.client.User.UpdateOneID(actorID).SetRole(kafAutomationRole).Exec(ctx))
 	task, err := svc.client.ProcessTask.Create().
@@ -286,7 +305,7 @@ func newKafActionFixture(t *testing.T) (*KafDelegationService, *ent.ProcessTask,
 		SetTaskVariables(map[string]interface{}{bpmnMetaDataAllowedActions: kafActionComplete}).
 		Save(ctx)
 	require.NoError(t, err)
-	return svc, task, ctx
+	return engine, svc, task, ctx
 }
 
 func validCompleteRequest(task *ent.ProcessTask, runID, stepID string) KafActionRequest {
@@ -310,7 +329,7 @@ func countKafActionLedgers(t *testing.T, client *ent.Client, tenantID int) int {
 }
 
 func TestExecuteAction_RecoversCompletedTaskAfterAuditFailureWithoutSecondEngineCall(t *testing.T) {
-	svc, task, ctx := newKafActionFixture(t)
+	_, svc, task, ctx := newKafActionFixture(t)
 	req := validCompleteRequest(task, "run-1", "finish")
 	engine := &statefulKafCompletionEngine{client: svc.client}
 	svc.client.AuditLog.Use(func(ent.Mutator) ent.Mutator {
@@ -336,7 +355,7 @@ func TestExecuteAction_RecoversCompletedTaskAfterAuditFailureWithoutSecondEngine
 }
 
 func TestExecuteAction_RejectsActiveLeaseWithoutCallingEngine(t *testing.T) {
-	svc, task, ctx := newKafActionFixture(t)
+	_, svc, task, ctx := newKafActionFixture(t)
 	req := validCompleteRequest(task, "run-1", "finish")
 	_, claimed, err := svc.ClaimKafAction(ctx, task, req)
 	require.NoError(t, err)
@@ -349,7 +368,7 @@ func TestExecuteAction_RejectsActiveLeaseWithoutCallingEngine(t *testing.T) {
 }
 
 func TestExecuteAction_RejectsSameScopeWithDifferentKey(t *testing.T) {
-	svc, task, ctx := newKafActionFixture(t)
+	_, svc, task, ctx := newKafActionFixture(t)
 	engine := &statefulKafCompletionEngine{client: svc.client}
 	_, err := svc.ExecuteAction(ctx, task.TaskID, validCompleteRequest(task, "run-1", "finish"), engine)
 	require.NoError(t, err)
@@ -358,4 +377,40 @@ func TestExecuteAction_RejectsSameScopeWithDifferentKey(t *testing.T) {
 	conflicting.Execution.IdempotencyKey = "wrong-key"
 	_, err = svc.ExecuteAction(ctx, task.TaskID, conflicting, engine)
 	require.ErrorIs(t, err, ErrKafActionInvalid)
+}
+
+func TestReconcileCompletedTaskWithoutSuccessfulReceipt_DoesNotCompleteBPMNAgain(t *testing.T) {
+	engine, svc, task, ctx := newKafActionFixture(t)
+	req := validCompleteRequest(task, "run-1", "finish")
+	completedVariables := cloneKafVariables(task.TaskVariables)
+	completedVariables["kaf_execution"] = map[string]string{
+		"run_id": "run-1", "step_id": "finish", "procedure_ref": "ssl-vpn", "procedure_version": "v1",
+	}
+	require.NoError(t, svc.client.ProcessTask.UpdateOneID(task.ID).
+		SetStatus(common.ProcessTaskStatusCompleted).
+		SetTaskVariables(completedVariables).
+		Exec(ctx))
+	ledger, err := svc.client.KafTaskActionLedger.Create().
+		SetTenantID(task.TenantID).SetTaskID(task.TaskID).
+		SetRunID(req.Execution.RunID).SetStepID(req.Execution.StepID).
+		SetAction(req.Action).SetIdempotencyKey(req.Execution.IdempotencyKey).
+		SetCorrelationID(req.Execution.CorrelationID).
+		SetProcedureRef(req.Execution.ProcedureRef).SetProcedureVersion(req.Execution.ProcedureVersion).
+		SetResultStatus("failed_retryable").
+		Save(ctx)
+	require.NoError(t, err)
+	_, err = svc.client.KafTaskCompletionReceipt.Create().
+		SetLedgerID(ledger.ID).SetTenantID(task.TenantID).SetTaskID(task.TaskID).
+		SetStatus("callback_pending").
+		Save(ctx)
+	require.NoError(t, err)
+
+	result, err := svc.ExecuteAction(ctx, task.TaskID, req, engine)
+	require.NoError(t, err)
+	assert.Equal(t, KafActionAlreadyApplied, result.ResultStatus)
+	receipt, err := svc.client.KafTaskCompletionReceipt.Query().Where(
+		kaftaskcompletionreceipt.LedgerIDEQ(ledger.ID),
+	).Only(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "callback_succeeded", receipt.Status)
 }
