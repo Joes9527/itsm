@@ -2,7 +2,16 @@
 
 > 评估日期：2026-08-30
 >
-> 依据：当前 `main` 分支代码、运行时本地开发验证，以及 [AGENTS.md](../AGENTS.md) 中的领域与架构约束。
+> 依据：当前 `main` 分支代码、运行时本地开发验证，以及 [AGENTS.md](../AGENTS.md) 中的领域与架构约束
+> （含 2026-08-26 新增的"统一 Work Item 领域模型契约"一节）。
+>
+> 与既有评估的关系：本次评估对照并核实了
+> [architecture-and-roadmap-assessment-2026-08-26.md](./architecture-and-roadmap-assessment-2026-08-26.md)
+> （4 天前，file:line 级证据）与更早的 [architecture-assessment-2026-08.md](./architecture-assessment-2026-08.md)
+> 的结论；凡本文与前两份结论不一致处，均以本次重新核实的代码现状为准，并在正文标注差异原因，
+> 不直接假定前份结论仍然成立（08-26 报告本身也记录了一次"分支落后 origin/main 24 个提交导致
+> 结论过期"的教训，见其"审批机制单轨化"一节的更新说明，值得作为核实方法参考）。
+>
 > 范围：ITSM 架构、领域功能闭环、技术债与演进路线；不涵盖组织、预算或管理汇报。
 
 ## 1. 架构现状与边界
@@ -44,11 +53,13 @@ flowchart LR
 
 ### 1.3 架构瓶颈与隐患
 
-#### A. 租户隔离“有中间件、缺最后防线”
+#### A. 租户隔离“有中间件、缺最后防线”——但 shadow/enforce 机制本身已经就绪，缺的是灰度执行
 
-租户中间件会校验 JWT 租户并把 `tenant_id` 注入 request context；这是正确的第一层防线。但 `RLS_MODE` 默认值为 `off`，当前本地运行日志也显示 RLS driver 为 off。若某个 repository、Raw SQL、后台任务或未来扩展遗漏 tenant 条件，数据库不能阻止跨租户读取或写入。
+租户中间件会校验 JWT 租户并把 `tenant_id` 注入 request context；这是正确的第一层防线。`RLS_MODE` 默认值为 `off`，当前本地运行日志也显示 RLS driver 为 off，若某个 repository、Raw SQL、后台任务或未来扩展遗漏 tenant 条件，数据库不能阻止跨租户读取或写入——这个风险判断成立。
 
-**建议：**先以 shadow 模式统计所有无 tenant query，再使用应用角色与管理员角色分离，把租户表逐步升级为 RLS enforce。应用中间件仍保留，但不应是唯一隔离保障。
+但需要订正的是：`database/rls/driver.go` 显示 `off`/`shadow`/`enforce` 三档模式**已经实现**（"R2A skeleton. off + shadow verified; enforce implemented but disabled until R2B灰度收尾"），项目内部已有命名好的灰度阶段划分（R2A 骨架已完成，R2B 灰度收尾未开始）。也就是说“先建 shadow 模式”这一步已经做完，不是待办事项；真正缺的是**在真实环境里把 `RLS_MODE` 切到 `shadow` 跑起来、收集缺失 tenant 条件的覆盖率数据、按表/模块修复、再推进到 R2B enforce 切换**。
+
+**建议：**核实 shadow 模式是否已在任一环境（预发/生产）实际运行过、当前缺失 tenant 条件的统计结果如何；若尚未运行，第一步是启用 shadow 并接入可观测性，而不是重新设计 shadow 机制；应用中间件仍保留，但不应是唯一隔离保障。
 
 #### B. 旧实现与新垂直切片并存，依赖方向容易失控
 
@@ -58,7 +69,7 @@ flowchart LR
 
 #### C. 同步业务提交与事件发布不具备原子性
 
-系统已经不再是“零事件发布者”，但数据库提交与 `Publish()` 仍是两步操作。当业务记录成功、Redis 发布失败时，Webhook、审计订阅、连接器或自动化会缺少事件；反之重试也可能产生重复消费。
+系统已经不再是“零事件发布者”（`docs/superpowers/specs/2026-08-13-event-bus-wiring-design.md` 记录的当时状态是 `Publish()` 全仓库零调用；目前已有至少一处生产调用，`handlers/ticket/aggregate.go:599`），但数据库提交与 `Publish()` 仍是两步操作。当业务记录成功、Redis 发布失败时，Webhook、审计订阅、连接器或自动化会缺少事件；反之重试也可能产生重复消费。全仓库搜索确认目前没有 `outbox` 相关实现，这是真实缺口，08-13 设计稿也未覆盖 outbox（其状态标注为“不实施——工单生命周期正在重构”，未来接续需求方需要一并确认该设计稿的其余结论是否仍然有效）。
 
 **建议：**在同一领域事务内写 `outbox_events`，由 Worker 可靠发布到 Streams；消费者以事件 ID 做幂等，配置退避重试、死信队列、重放和消费延迟指标。
 
@@ -90,14 +101,26 @@ Connector 有 Manifest、Capability、Registry、生命周期和健康检查模�
 
 ## 2. ITSM 领域功能闭环
 
+### 2.0 统一 Work Item 模型契约落地核实
+
+AGENTS.md 2026-08-26 新增的"统一 Work Item 领域模型契约"是当前对 Ticket/Incident/Problem/Change/Service Request 关系约束最具体的一节（`recordClass` 创建后不可变、专业扩展表不得复制共享字段、WorkItem 与专业扩展记录必须同事务创建），下面这份评估的领域功能闭环判断以此为准绳重新核实，而不是把这些领域当作互不相关的传统模块看待。
+
+核实结论：
+
+- **模型骨架已落地**：`ent/schema/ticket.go` 已有 `record_class` 字段，`cmd/backfill_incident_work_item`、`cmd/backfill_problem_work_item`、`cmd/backfill_change_work_item` 三个回填 CLI 已存在；`recordClass` 创建后不可变这一约束在 Incident/Problem/Change 的 `repository_impl.go`/`*_service.go` 创建路径的代码注释里被显式提及并遵守（例如 `handlers/change/repository_impl.go:302`、`handlers/problem/repository_impl.go:274`）。
+- **共享字段复制问题真实存在，且是团队已知、已显式记录、主动延后处理的技术债**：`service/incident_service.go:160-198` 的创建逻辑里，`title`/`description` 在同一事务内被同时写入 `tx.Ticket.Create()`（WorkItem 权威行）和 `tx.Incident.Create()`（专业扩展行），`ent/schema/incident.go` 也确实定义了自己的 `title`/`description`/`status`/`priority` 字段——这正是契约里"专业扩展表不得复制共享字段"要禁止的模式。代码注释坦承了这一点：状态/优先级只在创建时写一次，后续 Incident 状态机流转（assign/acknowledge/resolve/close/escalate…）不会反写 `tickets.status`，并明确写道"持续双向同步要么是禁止的双写反模式，要么需要同时改遍所有状态转换方法，超出本次事务边界修复的范围，留作独立后续项"。Problem/Change 的扩展表大概率是同一模式（未逐个复核，建议后续评估补齐）。
+- **影响**：只要 `tickets.status`/`priority` 在创建之后不再是权威值，任何直接查询 WorkItem 基表（而不是专业扩展表）做统一列表、统一 SLA 计算或跨域报表的代码，读到的字段都可能是创建时刻的快照而非当前真实状态。这是一个比"接口风格不一致"更高优先级的正确性风险，建议单独立项，不要被淹没在其他 P1 治理项里。
+
+**建议：**把"WorkItem 共享字段权威来源收口"列为独立 P1 项——审计 Incident/Problem/Change/Service Request 四个扩展表当前对 `title`/`description`/`status`/`priority` 等共享字段的读写路径，明确"以扩展表为唯一权威、WorkItem 基表只读镜像"或反之，二选一，禁止两边都能写。
+
 ### 2.1 核心领域评估
 
 | 领域 | 已实现能力 | 闭环 GAP 与用户影响 | 建议 |
 |---|---|---|---|
-| Ticket | 创建、分派、评论、附件、关系、SLA、工作流、评分、自动化规则、智能分派。 | `TicketDetail` 的批准动作仍把状态改为 `approved`，而真实路径是 BPMN workflow approval；审批人可能直接失败，或绕开应有决策链。 | 统一只调用 `TicketApprovalApi.submitApproval`/BPMN 接口；补 E2E：授权、拒绝、重复提交、状态推进。 |
+| Ticket | 创建、分派、评论、附件、关系、SLA、工作流、评分、自动化规则、智能分派。 | `TicketDetail.tsx:283` 的批准动作仍调用 `TicketApi.updateTicketStatus(ticketId, 'approved')`，而真实路径是 BPMN workflow approval；审批人可能直接失败，或绕开应有决策链。核实结论：这是 Ticket 域审批收敛链路上**唯一**仍未收口的活跃问题（`TicketApproval.Create()` 全仓库仅在委派分支出现一次、`ApprovalChain` 仅是流程变量路由的展示元数据、不是竞争写路径），08-26 评估已将其单独列为 P0-3 跟踪，不是新发现；请沿用同一编号避免重复建单。 | 统一只调用 `TicketApprovalApi.submitApproval`/BPMN 接口；补 E2E：授权、拒绝、重复提交、状态推进。 |
 | Incident | 生命周期、升级、影响分析、根因、重大事件、转问题、CI 关联。 | 当前前端已有“转为问题”调用，较历史评估已有改进；仍需验证转换后的 WorkItem 关系、审计、权限和失败回滚。 | 建立 Incident→Problem 的真实数据回归集，并在详情页展示关联问题、已知错误与恢复进度。 |
 | Problem / Known Error | Problem 调查、根因、解决、关闭；后端已注册 Problem→Known Error 路由。 | 未发现问题详情页调用已知错误创建 API 的前端证据，用户可能无法把根因沉淀为可检索知识。 | 在 Problem 详情提供“发布已知错误”，自动预填根因/绕过方案，并显示知识状态和引用量。 |
-| Change / CAB | Change 状态机、风险、审批、排程、实施、回滚、PIR 与 BPMN 集成。 | 多套历史审批模型/桥接痕迹仍增加理解和维护负担；未注册 service task 目前告警后 NoOp，可能导致流程推进但副作用未执行。 | 以 BPMN 决策为唯一事实源；未知任务类型改为 fail-closed 或显式“待处理”，不得静默跳过。 |
+| Change / CAB | Change 状态机、风险、审批、排程、实施、回滚、PIR 与 BPMN 集成。 | Change 审批已通过 PR#6（2026-08-25 合并）完整收口到 BPMN——`SubmitChange` 同步触发流程且失败即报错，`TransitionStatus` 的 approve/reject 完全交给 BPMN，`change_approvals`/`change_approval_chains` 写入路径已删除，历史评估里“多套历史审批模型并存”的判断已过期，不应再作为待办列出。真实剩余风险是通用机制层面的：未注册 service task 目前告警后 NoOp，可能导致流程推进但副作用未执行（`service/bpmn_process_engine.go:788,832` 已确认）；`docs/superpowers/specs/2026-08-29-bpmn-async-service-task-design.md`（评估前一天的设计稿）已经在设计相邻但更具体的“暂停型 service task”语义，值得在同一批改动里一并处理 fail-closed 语义。 | 以 BPMN 决策为唯一事实源（已基本达成）；未知任务类型改为 fail-closed 或显式“待处理”，不得静默跳过；结合 08-29 设计稿一并落地。 |
 | Service Request / Catalog | 服务目录、动态表单、请求、履约任务、审批链数据。 | 目录项与目标专业领域、SLA、履约/流程绑定的组合需通过配置校验约束，否则管理员可配置出不可执行请求。 | 在发布 Catalog Item 时校验表单、目标 record class、流程、SLA、履约能力和权限。 |
 | SLA | SLA 定义、告警规则、监控、升级、统计和仪表盘。 | 监控/升级在 Web 进程内执行，多副本或故障恢复时存在重复或遗漏；升级动作需要更可见的回执。 | Worker 化，记录每次评估/升级的幂等键与执行结果；在工单时间线显示下一 SLA 节点。 |
 | CMDB | CI 类型、属性、关系、拓扑、影响分析、导入导出、发现模型。 | 发现/同步的外部执行、结果对账和失败治理决定其真实价值；若只停在任务记录，CMDB 会失去“可信配置基线”。 | 用 Connector Worker 执行发现任务，保证 source-aware reconciliation、幂等导入、差异预览与回滚。 |
@@ -153,7 +176,7 @@ Connector 有 Manifest、Capability、Registry、生命周期和健康检查模�
 |---|---|---|---|
 | 统一工单审批 | 前端改用 BPMN 审批 API；删除普通 `approved` 状态写入路径。 | BPMN task/decision API。 | 创建待审批工单后，批准/拒绝均写入 `ProcessApprovalDecision`，流程只推进一次。 |
 | 关键流程 E2E | 覆盖 Ticket、Incident→Problem、Problem→Known Error、Change/CAB、Service Request。 | 测试数据、角色矩阵。 | 每链路包含 happy path、权限拒绝、跨租户拒绝、重试/重复提交。 |
-| RLS 上线准备 | 增加缺 tenant 查询指标，按表/模块修复，先 shadow 后 enforce。 | 双角色 DB 账户、迁移。 | 关键租户表在 enforce 下通过集成测试；跨租户读写均被 DB 拒绝。 |
+| RLS 上线准备 | shadow/enforce driver 已实现（`database/rls`），本项是启用与执行灰度，不是重新建设：在预发/生产启用 `RLS_MODE=shadow`，收集缺 tenant 查询指标并按表/模块修复，再推进 R2B enforce 切换。 | 双角色 DB 账户、迁移。 | 关键租户表在 enforce 下通过集成测试；跨租户读写均被 DB 拒绝。 |
 | 编号一致性 | 统一 WorkItem 编号生成与唯一约束。 | 数据迁移与回填评估。 | 并发、多租户、Ticket/Incident/Problem/Change 创建不发生冲突。 |
 | 配置 Preflight | 对 DB、Redis、RLS、MinIO、ENV、LLM 配置做启动检查。 | 配置 schema。 | 环境错误在启动前明确失败；可选能力降级有显式状态。 |
 | 审计补齐 | 覆盖领域状态迁移、审批、连接器、批量操作和 AI 写动作。 | AuditLog schema/服务。 | 抽样关键动作可追溯 actor、tenant、前后状态、来源和 correlation ID。 |
@@ -164,7 +187,7 @@ Connector 有 Manifest、Capability、Registry、生命周期和健康检查模�
 |---|---|---|---|
 | Outbox 与事件治理 | 为 Ticket、Incident、Change、SLA、Connector 事件建立 Outbox。 | DB migration、Worker。 | 业务事务与 Outbox 原子；发布可重试；消费者幂等；具备 DLQ/replay。 |
 | Worker 化 | 迁移 SLA、Embedding、Webhook、Connector 同步、导出、长 AI 任务。 | Job state、lease、metrics。 | 多 API 副本不重复执行；Worker 重启可恢复任务。 |
-| 审批机制收敛 | BPMN 决策为唯一事实源，逐步退役 legacy approval 表与 bridge。 | 迁移脚本、数据审计。 | 新代码无旧审批写路径；历史数据可查询但不可再写。 |
+| 审批机制收敛（收尾） | 核实结论：Change 域已通过 PR#6 收口，legacy `ApprovalWorkflow`/`ApprovalRecord` 已下线；剩余范围收窄为——① 修复 P0 中的 `TicketDetail.tsx` 审批接线 bug；② 确认 `TicketApproval`/`ApprovalChain` 两张表当前是否已无活跃写路径，若确认后清理为只读/下线。这是收尾工作，不是重新收敛一个多轨系统。 | P0 项（Ticket 前端接线）先行；数据审计确认后再下线遗留表。 | `TicketApproval`/`ApprovalChain` 无新增写入；确认后按计划下线或明确保留原因。 |
 | 模块化重构 | 拆 Router/BPMN/Ticket/CMDB，handler 数据访问下沉 repository。 | 合同测试。 | 领域边界可独立测试；无跨域 repository 直接调用。 |
 | 连接器平台 | Manifest、Capability 派发、secret、health、inbound 校验、retry/DLQ。 | Worker、审计、权限策略。 | 新连接器不修改核心业务 switch；生命周期可安装、启停、回滚和审计。 |
 | AI 评估与控制台 | 建议/引用/置信度/反馈/工具审批的统一界面和数据模型。 | 审计、反馈表、评测集。 | 可查询每次 AI 建议的来源、质量、采纳与执行结果。 |
@@ -193,3 +216,14 @@ Connector 有 Manifest、Capability、Registry、生命周期和健康检查模�
 - 工单审批客户端：[ticket-approval-api.ts](../itsm-frontend/src/lib/api/ticket-approval-api.ts)
 - 当前错误审批调用：[TicketDetail.tsx](../itsm-frontend/src/components/ticket/TicketDetail.tsx)
 - Incident 转 Problem：[incident-api.ts](../itsm-frontend/src/lib/api/incident-api.ts)、[IncidentDetail.tsx](../itsm-frontend/src/components/incident/IncidentDetail.tsx)
+- WorkItem 共享字段双写示例：[service/incident_service.go](../itsm-backend/service/incident_service.go)、[ent/schema/incident.go](../itsm-backend/ent/schema/incident.go)、[handlers/change/repository_impl.go](../itsm-backend/handlers/change/repository_impl.go)、[handlers/problem/repository_impl.go](../itsm-backend/handlers/problem/repository_impl.go)
+- BPMN 未注册 service task 的 NoOp 行为：[service/bpmn_process_engine.go](../itsm-backend/service/bpmn_process_engine.go)
+
+### 既有评估与设计稿（本次核实对照的前置文档）
+
+- [architecture-and-roadmap-assessment-2026-08-26.md](./architecture-and-roadmap-assessment-2026-08-26.md) — 4 天前的架构诊断，file:line 级证据，本次评估的主要对照基线
+- [architecture-assessment-2026-08.md](./architecture-assessment-2026-08.md) — 更早一轮评估
+- [superpowers/specs/2026-08-26-approval-single-track-convergence-design.md](./superpowers/specs/2026-08-26-approval-single-track-convergence-design.md) — 审批单轨化收尾核实，确认 Change 域已通过 PR#6 收口
+- [superpowers/specs/2026-08-13-event-bus-wiring-design.md](./superpowers/specs/2026-08-13-event-bus-wiring-design.md) — 事件总线现状盘点（当时 `Publish()` 零调用）
+- [superpowers/specs/2026-08-29-bpmn-async-service-task-design.md](./superpowers/specs/2026-08-29-bpmn-async-service-task-design.md) — 暂停型 service task 执行语义设计，与本报告 BPMN NoOp 发现相邻
+- [superpowers/specs/2026-08-26-unified-work-item-model-design.md](./superpowers/specs/2026-08-26-unified-work-item-model-design.md) — 统一 WorkItem 模型详细设计，AGENTS.md 对应契约的完整版本
