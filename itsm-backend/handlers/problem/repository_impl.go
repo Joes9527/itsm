@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/common"
 	"itsm-backend/ent"
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/incident"
@@ -38,8 +39,6 @@ func NewEntRepository(client *ent.Client) *EntRepository {
 
 // SetSequenceService 注入 Redis 原子序列服务，用于生成 WorkItem 工单编号。未注入时
 // generateWorkItemTicketNumber 总是走数据库兜底分支（与 Redis 不可用时的行为一致）。
-// 注：本次 Problem WorkItem 迁移任务不允许修改 internal/bootstrap/app.go，所以这个 setter
-// 目前没有被调用方注入——是一个已知的、明确记录的后续接线项，不是运行时缺陷。
 func (r *EntRepository) SetSequenceService(sp SequenceProvider) {
 	r.sequenceService = sp
 }
@@ -279,15 +278,22 @@ func (r *EntRepository) RemoveAssociation(ctx context.Context, tenantID, problem
 func (r *EntRepository) Create(ctx context.Context, p *Problem) (*Problem, error) {
 	tx, err := r.client.Tx(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to start problem transaction: %w", err)
-	}
-	rollback := func(cause error) (*Problem, error) {
-		if rbErr := tx.Rollback(); rbErr != nil {
-			return nil, fmt.Errorf("%w (rollback also failed: %v)", cause, rbErr)
-		}
-		return nil, cause
+		return nil, fmt.Errorf("start problem transaction: %w", err)
 	}
 
+	created, err := r.createInTx(ctx, tx, p)
+	if err != nil {
+		return nil, rollbackProblemTx(tx, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, rollbackProblemTx(tx, fmt.Errorf("commit problem transaction: %w", err))
+	}
+	return created, nil
+}
+
+// createInTx creates the WorkItem base and Problem extension in the caller's
+// transaction. Transaction lifecycle is owned by the caller.
+func (r *EntRepository) createInTx(ctx context.Context, tx *ent.Tx, p *Problem) (*Problem, error) {
 	// Ticket.requester_id 是一条指向 users 表的必填 FK edge（edge.From("requester",
 	// User.Type).Required()），Problem 自己的 created_by 字段历史上没有这层约束。既然
 	// 现在每条 Problem 都会同步建一条 tickets 行并把 requester_id 设成 Problem 的创建人，
@@ -298,15 +304,15 @@ func (r *EntRepository) Create(ctx context.Context, p *Problem) (*Problem, error
 		Where(user.IDEQ(p.CreatedBy), user.TenantIDEQ(p.TenantID), user.ActiveEQ(true)).
 		Exist(ctx)
 	if err != nil {
-		return rollback(fmt.Errorf("failed to validate problem creator: %w", err))
+		return nil, fmt.Errorf("failed to validate problem creator: %w", err)
 	}
 	if !creatorExists {
-		return rollback(fmt.Errorf("problem creator not found or inactive"))
+		return nil, fmt.Errorf("problem creator not found or inactive")
 	}
 
 	ticketNumber, err := r.generateWorkItemTicketNumber(ctx, tx.Client(), p.TenantID)
 	if err != nil {
-		return rollback(fmt.Errorf("failed to generate work item ticket number: %w", err))
+		return nil, fmt.Errorf("failed to generate work item ticket number: %w", err)
 	}
 
 	now := time.Now()
@@ -323,7 +329,7 @@ func (r *EntRepository) Create(ctx context.Context, p *Problem) (*Problem, error
 		SetUpdatedAt(now).
 		Save(ctx)
 	if err != nil {
-		return rollback(fmt.Errorf("failed to create work item: %w", err))
+		return nil, fmt.Errorf("failed to create work item: %w", err)
 	}
 
 	create := tx.Problem.Create().
@@ -348,13 +354,17 @@ func (r *EntRepository) Create(ctx context.Context, p *Problem) (*Problem, error
 
 	saved, err := create.Save(ctx)
 	if err != nil {
-		return rollback(fmt.Errorf("failed to create problem: %w", err))
+		return nil, fmt.Errorf("failed to create problem: %w", err)
 	}
 
-	if err := tx.Commit(); err != nil {
-		return rollback(fmt.Errorf("failed to commit problem transaction: %w", err))
-	}
 	return r.toDomain(saved), nil
+}
+
+func rollbackProblemTx(tx *ent.Tx, cause error) error {
+	if rollbackErr := tx.Rollback(); rollbackErr != nil {
+		return fmt.Errorf("%w (rollback also failed: %v)", cause, rollbackErr)
+	}
+	return cause
 }
 
 // generateWorkItemTicketNumber 为 Problem 创建时同步建立的 WorkItem（tickets 行）生成
@@ -422,7 +432,7 @@ func (r *EntRepository) GetWithAssociations(ctx context.Context, id int, tenantI
 	e, err := r.client.Problem.Query().
 		Where(problem.ID(id), problem.TenantID(tenantID), problem.DeletedAtIsNil()).
 		WithIncidents(func(q *ent.IncidentQuery) {
-			q.Where(incident.TenantIDEQ(tenantID)).
+			q.Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
 				Select("id", "title", "status", "incident_number")
 		}).
 		WithChanges(func(q *ent.ChangeQuery) {
@@ -434,12 +444,83 @@ func (r *EntRepository) GetWithAssociations(ctx context.Context, id int, tenantI
 		return nil, err
 	}
 	p := r.toDomainWithAssociations(e)
+	incidents, err := r.loadIncidentAssociations(ctx, tenantID, e.WorkItemID)
+	if err != nil {
+		return nil, err
+	}
+	p.Incidents = mergeAssociatedItems(p.Incidents, incidents)
 	tickets, err := r.loadTicketAssociations(ctx, tenantID, e.WorkItemID)
 	if err != nil {
 		return nil, err
 	}
 	p.Tickets = tickets
 	return p, nil
+}
+
+// loadIncidentAssociations resolves Incident -> Problem investigated_by links.
+// The relation stores WorkItem IDs, while the public association contract uses
+// professional Incident IDs, so the join is completed at the repository boundary.
+func (r *EntRepository) loadIncidentAssociations(ctx context.Context, tenantID, problemWorkItemID int) ([]*AssociatedItem, error) {
+	if problemWorkItemID <= 0 {
+		return []*AssociatedItem{}, nil
+	}
+	relations, err := r.client.WorkItemRelation.Query().
+		Where(
+			workitemrelation.TenantID(tenantID),
+			workitemrelation.TargetWorkItemID(problemWorkItemID),
+			workitemrelation.RelationType(common.WorkItemRelationInvestigatedBy),
+			workitemrelation.DeletedAtIsNil(),
+		).
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query incident problem relations: %w", err)
+	}
+	if len(relations) == 0 {
+		return []*AssociatedItem{}, nil
+	}
+
+	sourceWorkItemIDs := make([]int, 0, len(relations))
+	for _, relation := range relations {
+		sourceWorkItemIDs = append(sourceWorkItemIDs, relation.SourceWorkItemID)
+	}
+	incidents, err := r.client.Incident.Query().
+		Where(
+			incident.TenantIDEQ(tenantID),
+			incident.WorkItemIDIn(sourceWorkItemIDs...),
+			incident.DeletedAtIsNil(),
+		).
+		Select("id", "title", "status", "incident_number").
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load linked incidents: %w", err)
+	}
+
+	items := make([]*AssociatedItem, 0, len(incidents))
+	for _, inc := range incidents {
+		items = append(items, &AssociatedItem{
+			ID: inc.ID, Title: inc.Title, Status: inc.Status,
+			Number: inc.IncidentNumber, Type: "incident",
+		})
+	}
+	return items, nil
+}
+
+func mergeAssociatedItems(existing, additional []*AssociatedItem) []*AssociatedItem {
+	seen := make(map[int]struct{}, len(existing)+len(additional))
+	merged := make([]*AssociatedItem, 0, len(existing)+len(additional))
+	for _, items := range [][]*AssociatedItem{existing, additional} {
+		for _, item := range items {
+			if item == nil {
+				continue
+			}
+			if _, ok := seen[item.ID]; ok {
+				continue
+			}
+			seen[item.ID] = struct{}{}
+			merged = append(merged, item)
+		}
+	}
+	return merged
 }
 
 // loadTicketAssociations 通过 WorkItemRelation 读取 Problem 关联的普通工单（Wave 2 起
@@ -575,15 +656,44 @@ func (r *EntRepository) Update(ctx context.Context, p *Problem) (*Problem, error
 }
 
 func (r *EntRepository) Delete(ctx context.Context, id int, tenantID int) error {
-	updated, err := r.client.Problem.Update().
-		Where(problem.IDEQ(id), problem.TenantIDEQ(tenantID), problem.DeletedAtIsNil()).
-		SetDeletedAt(time.Now()).
-		Save(ctx)
+	tx, err := r.client.Tx(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("start problem delete transaction: %w", err)
 	}
-	if updated != 1 {
-		return fmt.Errorf("problem not found")
+	fail := func(cause error) error {
+		return rollbackProblemTx(tx, cause)
+	}
+
+	existing, err := tx.Problem.Query().Where(
+		problem.IDEQ(id),
+		problem.TenantIDEQ(tenantID),
+		problem.DeletedAtIsNil(),
+	).Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return fail(fmt.Errorf("problem not found"))
+		}
+		return fail(fmt.Errorf("load problem for delete: %w", err))
+	}
+
+	deletedAt := time.Now()
+	if existing.WorkItemID > 0 {
+		_, err = tx.WorkItemRelation.Update().Where(
+			workitemrelation.TenantIDEQ(tenantID),
+			workitemrelation.TargetWorkItemIDEQ(existing.WorkItemID),
+			workitemrelation.RelationTypeEQ(common.WorkItemRelationInvestigatedBy),
+			workitemrelation.DeletedAtIsNil(),
+		).SetDeletedAt(deletedAt).Save(ctx)
+		if err != nil {
+			return fail(fmt.Errorf("soft-delete incident problem relations: %w", err))
+		}
+	}
+
+	if _, err = tx.Problem.UpdateOne(existing).SetDeletedAt(deletedAt).Save(ctx); err != nil {
+		return fail(fmt.Errorf("soft-delete problem: %w", err))
+	}
+	if err = tx.Commit(); err != nil {
+		return rollbackProblemTx(tx, fmt.Errorf("commit problem delete transaction: %w", err))
 	}
 	return nil
 }

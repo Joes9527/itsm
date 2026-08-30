@@ -1,14 +1,20 @@
 package router
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"itsm-backend/controller"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/middleware"
 	"itsm-backend/migration"
+	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/mattn/go-sqlite3"
@@ -240,6 +246,55 @@ func TestSetupRoutes_IncidentControllerNil(t *testing.T) {
 	r := gin.New()
 
 	assert.NotPanics(t, func() { SetupRoutes(r, cfg) })
+}
+
+func TestAssignRouteUsesIncidentWritePermission(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:assign_route_write?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	middleware.InvalidateAllPermissionCaches()
+	ctx := context.Background()
+	tenant, err := client.Tenant.Create().SetName("assign-route").SetCode("assign-route").SetDomain("assign-route.test").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	role, err := client.Role.Create().SetCode("incident_writer").SetName("Incident Writer").SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	permission, err := client.Permission.Create().
+		SetCode("incident:write").SetName("Incident Write").SetResource("incident").SetAction("write").SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	_, err = client.RolePermission.Create().SetRoleID(role.ID).SetPermissionID(permission.ID).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	reporter, err := client.User.Create().
+		SetUsername("route-reporter").SetEmail("route-reporter@example.com").SetName("Route Reporter").
+		SetPasswordHash("x").SetRole(role.Code).SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	assignee, err := client.User.Create().
+		SetUsername("route-assignee").SetEmail("route-assignee@example.com").SetName("Route Assignee").
+		SetPasswordHash("x").SetRole(role.Code).SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	incidentEntity, err := client.Incident.Create().
+		SetTitle("Route assignment").SetStatus("new").SetIncidentNumber("INC-ROUTE-ASSIGN").
+		SetReporterID(reporter.ID).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	const jwtSecret = "assign-route-secret"
+	logger := zaptest.NewLogger(t).Sugar()
+	incidentController := controller.NewIncidentController(service.NewIncidentService(client, logger), nil, nil, nil, nil, nil, logger)
+	router := gin.New()
+	SetupRoutes(router, &RouterConfig{
+		JWTSecret: jwtSecret, Logger: logger, Client: client, IncidentController: incidentController,
+	})
+	token, err := middleware.GenerateAccessToken(reporter.ID, reporter.Username, role.Code, tenant.ID, jwtSecret, time.Hour)
+	require.NoError(t, err)
+	body := []byte(fmt.Sprintf(`{"assigneeId":%d}`, assignee.ID))
+	request := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/incidents/%d/assign", incidentEntity.ID), bytes.NewReader(body))
+	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	updated, err := client.Incident.Get(ctx, incidentEntity.ID)
+	require.NoError(t, err)
+	require.Equal(t, assignee.ID, updated.AssigneeID)
 }
 
 func TestSetupRoutes_AuthMiddleware_HealthUnauthenticated(t *testing.T) {

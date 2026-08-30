@@ -47,6 +47,31 @@ func TestWorkItemRelation_UniqueConstraint(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestWorkItemRelationInvestigatedByUniquePerSource(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:workitemrelation_investigated_by?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+
+	_, err := client.WorkItemRelation.Create().
+		SetTenantID(1).
+		SetSourceWorkItemID(10).
+		SetTargetWorkItemID(20).
+		SetRelationType("investigated_by").
+		SetCreatedByID(1).
+		Save(ctx)
+	require.NoError(t, err)
+
+	// A single incident can have only one live investigated_by problem relation.
+	_, err = client.WorkItemRelation.Create().
+		SetTenantID(1).
+		SetSourceWorkItemID(10).
+		SetTargetWorkItemID(30).
+		SetRelationType("investigated_by").
+		SetCreatedByID(1).
+		Save(ctx)
+	require.Error(t, err)
+}
+
 // TestWorkItemRelation_RelinkAfterSoftDelete 锁定唯一索引必须是"只约束未软删除行"的
 // 部分索引：解除关联（软删除，写 deleted_at）之后再把同一对 WorkItem 用同一
 // relation_type 关联回来，必须能成功。

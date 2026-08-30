@@ -4,21 +4,12 @@ import (
 	"context"
 
 	"itsm-backend/dto"
-	"itsm-backend/ent"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/middleware"
 	"itsm-backend/repository/ticket"
 
 	"fmt"
 )
-
-// ActionActor 描述发起动作判断的调用者上下文——CanXxx 系列函数的公共入参子集。
-type ActionActor struct {
-	Client   *ent.Client
-	TenantID int
-	UserID   int
-	Role     string
-}
 
 func isRequester(t *ticket.Ticket, actorUserID int) bool {
 	return t.RequesterID == actorUserID

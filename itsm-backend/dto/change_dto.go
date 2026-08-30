@@ -119,7 +119,8 @@ type ChangeResponse struct {
 	// 总是非空；存量记录在跑 cmd/backfill_change_work_item 之前可能为 nil。与
 	// dto.IncidentResponse.WorkItemID / dto.ProblemResponse.WorkItemID 同一模式，供前端
 	// WorkItemShell 使用。
-	WorkItemID *int `json:"workItemId,omitempty"`
+	WorkItemID *int                        `json:"workItemId,omitempty"`
+	Actions    map[string]ActionPermission `json:"actions,omitempty"`
 }
 
 // ChangeListResponse 变更列表响应

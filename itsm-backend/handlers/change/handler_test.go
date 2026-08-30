@@ -19,6 +19,7 @@ import (
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
+	"itsm-backend/middleware"
 )
 
 // setupTestHandler creates a test handler with in-memory repository
@@ -35,8 +36,42 @@ func setupTestHandler(t *testing.T) (*gin.Engine, *Handler, *mockRepository) {
 
 	// Add auth middleware mock
 	r.Use(func(c *gin.Context) {
-		c.Set("user_id", 1)
-		c.Set("tenant_id", 1)
+		if tid := c.GetHeader("X-Tenant-ID"); tid != "" {
+			if id, err := strconv.Atoi(tid); err == nil {
+				c.Set("tenant_id", id)
+				c.Set(middleware.TenantContextKey, &middleware.TenantContext{TenantID: id})
+			}
+		} else {
+			c.Set("tenant_id", 1)
+			c.Set(middleware.TenantContextKey, &middleware.TenantContext{TenantID: 1})
+		}
+		if uid := c.GetHeader("X-User-ID"); uid != "" {
+			if id, err := strconv.Atoi(uid); err == nil {
+				c.Set("user_id", id)
+			}
+		} else {
+			c.Set("user_id", 1)
+		}
+		if role := c.GetHeader("X-User-Role"); role != "" {
+			c.Set("role", role)
+		} else {
+			c.Set("role", "super_admin")
+		}
+		if customer := c.GetHeader("X-MSP-Customer-ID"); customer != "" {
+			if customerID, err := strconv.Atoi(customer); err == nil {
+				mspCtx := &middleware.MSPContext{
+					IsMSP:            true,
+					MSPUserID:        c.GetInt("user_id"),
+					CustomerTenantID: &customerID,
+				}
+				if allowed := c.GetHeader("X-MSP-Allowed-Customer-ID"); allowed != "" {
+					if allowedID, err := strconv.Atoi(allowed); err == nil {
+						mspCtx.AllowedCustomers = []int{allowedID}
+					}
+				}
+				c.Set(middleware.MSPContextKey, mspCtx)
+			}
+		}
 		c.Next()
 	})
 
@@ -430,6 +465,188 @@ func TestChangeController_GetChange(t *testing.T) {
 			err := json.Unmarshal(w.Body.Bytes(), &response)
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedCode, response.Code)
+		})
+	}
+}
+
+func TestChangeController_GetChangeIncludesDetailActionsOnly(t *testing.T) {
+	r, _, repo := setupTestHandler(t)
+	change := createTestChange(repo, 1, 42)
+
+	detailReq, err := http.NewRequest("GET", "/api/v1/changes/"+strconv.Itoa(change.ID), nil)
+	require.NoError(t, err)
+	detailReq.Header.Set("X-User-Role", "super_admin")
+
+	detailResp := httptest.NewRecorder()
+	r.ServeHTTP(detailResp, detailReq)
+	require.Equal(t, http.StatusOK, detailResp.Code)
+
+	var detail common.Response
+	require.NoError(t, json.Unmarshal(detailResp.Body.Bytes(), &detail))
+	detailData := detail.Data.(map[string]interface{})
+	actions, ok := detailData["actions"].(map[string]interface{})
+	require.True(t, ok, "detail response should include actions")
+	require.Len(t, actions, 5)
+	require.Contains(t, actions, "submitForApproval")
+	require.Contains(t, actions, "approve")
+	require.Contains(t, actions, "reject")
+	require.Contains(t, actions, "startImplementation")
+	require.Contains(t, actions, "completeImplementation")
+
+	listReq, err := http.NewRequest("GET", "/api/v1/changes", nil)
+	require.NoError(t, err)
+	listReq.Header.Set("X-User-Role", "super_admin")
+
+	listResp := httptest.NewRecorder()
+	r.ServeHTTP(listResp, listReq)
+	require.Equal(t, http.StatusOK, listResp.Code)
+
+	var list common.Response
+	require.NoError(t, json.Unmarshal(listResp.Body.Bytes(), &list))
+	listData := list.Data.(map[string]interface{})
+	changes := listData["changes"].([]interface{})
+	first := changes[0].(map[string]interface{})
+	require.NotContains(t, first, "actions", "list response should omit detail-only actions")
+}
+
+func TestChangeController_GetChangeUsesResolvedMSPTenant(t *testing.T) {
+	r, _, repo := setupTestHandler(t)
+	change := createTestChange(repo, 200, 42)
+
+	req, err := http.NewRequest("GET", "/api/v1/changes/"+strconv.Itoa(change.ID), nil)
+	require.NoError(t, err)
+	req.Header.Set("X-Tenant-ID", "500")
+	req.Header.Set("X-User-ID", "7")
+	req.Header.Set("X-User-Role", "super_admin")
+	req.Header.Set("X-MSP-Customer-ID", "200")
+	req.Header.Set("X-MSP-Allowed-Customer-ID", "200")
+
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, req)
+	require.Equal(t, http.StatusOK, resp.Code)
+
+	var body common.Response
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+	require.Equal(t, common.SuccessCode, body.Code)
+	data := body.Data.(map[string]interface{})
+	require.Equal(t, float64(200), data["tenantId"])
+
+	sameTenantReq, err := http.NewRequest("GET", "/api/v1/changes/"+strconv.Itoa(change.ID), nil)
+	require.NoError(t, err)
+	sameTenantReq.Header.Set("X-Tenant-ID", "200")
+	sameTenantReq.Header.Set("X-User-ID", "7")
+	sameTenantReq.Header.Set("X-User-Role", "super_admin")
+	sameTenantResp := httptest.NewRecorder()
+	r.ServeHTTP(sameTenantResp, sameTenantReq)
+	require.Equal(t, http.StatusOK, sameTenantResp.Code)
+}
+
+func TestChangeController_GetChangeDeniesUnauthorizedMSPTenant(t *testing.T) {
+	r, _, repo := setupTestHandler(t)
+	change := createTestChange(repo, 200, 42)
+
+	req, err := http.NewRequest("GET", "/api/v1/changes/"+strconv.Itoa(change.ID), nil)
+	require.NoError(t, err)
+	req.Header.Set("X-Tenant-ID", "500")
+	req.Header.Set("X-User-ID", "7")
+	req.Header.Set("X-User-Role", "super_admin")
+	req.Header.Set("X-MSP-Customer-ID", "200")
+	req.Header.Set("X-MSP-Allowed-Customer-ID", "300")
+
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, req)
+	require.Equal(t, http.StatusForbidden, resp.Code)
+
+	var body common.Response
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+	require.Equal(t, 2003, body.Code)
+}
+
+func TestChangeControllerMutationsUseResolvedMSPTenant(t *testing.T) {
+	r, _, repo := setupTestHandler(t)
+	const homeTenantID = 1
+	const customerTenantID = 2
+
+	t.Run("update", func(t *testing.T) {
+		change := createTestChange(repo, customerTenantID, 1)
+		body, err := json.Marshal(dto.UpdateChangeRequest{Title: strPtr("MSP updated change")})
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/changes/"+strconv.Itoa(change.ID), bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Tenant-ID", strconv.Itoa(homeTenantID))
+		req.Header.Set("X-MSP-Customer-ID", strconv.Itoa(customerTenantID))
+		req.Header.Set("X-MSP-Allowed-Customer-ID", strconv.Itoa(customerTenantID))
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		require.Equal(t, "MSP updated change", repo.changes[change.ID].Title)
+	})
+
+	t.Run("assign", func(t *testing.T) {
+		change := createTestChange(repo, customerTenantID, 1)
+		body := bytes.NewBufferString(`{"assigneeId":42}`)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/changes/"+strconv.Itoa(change.ID)+"/assign", body)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Tenant-ID", strconv.Itoa(homeTenantID))
+		req.Header.Set("X-MSP-Customer-ID", strconv.Itoa(customerTenantID))
+		req.Header.Set("X-MSP-Allowed-Customer-ID", strconv.Itoa(customerTenantID))
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		require.NotNil(t, repo.changes[change.ID].AssigneeID)
+		require.Equal(t, 42, *repo.changes[change.ID].AssigneeID)
+	})
+}
+
+func TestChangeController_GetChangeRejectsInvalidActionActorContext(t *testing.T) {
+	r, _, repo := setupTestHandler(t)
+	change := createTestChange(repo, 1, 1)
+
+	tests := []struct {
+		name   string
+		header func(*http.Request)
+	}{
+		{
+			name: "missing tenant",
+			header: func(req *http.Request) {
+				req.Header.Set("X-User-ID", "1")
+				req.Header.Set("X-User-Role", "super_admin")
+				req.Header.Set("X-Tenant-ID", "bad")
+			},
+		},
+		{
+			name: "missing user",
+			header: func(req *http.Request) {
+				req.Header.Set("X-Tenant-ID", "1")
+				req.Header.Set("X-User-ID", "0")
+				req.Header.Set("X-User-Role", "super_admin")
+			},
+		},
+		{
+			name: "missing role",
+			header: func(req *http.Request) {
+				req.Header.Set("X-Tenant-ID", "1")
+				req.Header.Set("X-User-ID", "1")
+				req.Header.Set("X-User-Role", " ")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req, err := http.NewRequest("GET", "/api/v1/changes/"+strconv.Itoa(change.ID), nil)
+			require.NoError(t, err)
+			tt.header(req)
+
+			resp := httptest.NewRecorder()
+			r.ServeHTTP(resp, req)
+			require.Equal(t, http.StatusUnauthorized, resp.Code)
+
+			var body common.Response
+			require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+			require.Equal(t, common.AuthErrorCode, body.Code)
 		})
 	}
 }

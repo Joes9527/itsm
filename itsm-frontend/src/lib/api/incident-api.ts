@@ -1,6 +1,7 @@
 import { httpClient } from './http-client';
 import type { ListQueryParams, PaginationResponse } from './types';
 import { API_URLS } from './types';
+import type { WorkItemActionState } from '@/components/work-item/WorkItemTypes';
 
 // 事件管理API接口
 export interface Incident {
@@ -62,6 +63,7 @@ export interface Incident {
   resolutionCode?: string;
   problemId?: number; // 关联的问题ID
   escalationLevel?: number;
+  actions?: Record<string, WorkItemActionState>;
   impactAnalysis?: {
     businessImpact?: {
       affectedUsers?: number;

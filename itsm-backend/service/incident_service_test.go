@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,7 +16,6 @@ import (
 	"itsm-backend/ent/incidentalert"
 	"itsm-backend/ent/incidentevent"
 	"itsm-backend/ent/incidentmetric"
-	"itsm-backend/ent/problem"
 	entticket "itsm-backend/ent/ticket"
 
 	"github.com/stretchr/testify/assert"
@@ -399,6 +399,162 @@ func TestIncidentService_AssignIncident_ValidatesAssigneeAndReturnsUpdatedIncide
 	require.NoError(t, err)
 	_, err = incidentService.AssignIncident(ctx, incidentEntity.ID, inactive.ID, tenant.ID)
 	require.ErrorContains(t, err, "assignee not found or inactive")
+}
+
+func TestAssignIncidentRejectsTerminalStatuses(t *testing.T) {
+	for _, status := range []string{common.IncidentStatusResolved, common.IncidentStatusClosed, common.IncidentStatusCancelled} {
+		t.Run(status, func(t *testing.T) {
+			client, incidentService, ctx := setupIncidentTest(t)
+			defer client.Close()
+			tenant, err := createIncidentTestTenant(ctx, client, "assign-"+status)
+			require.NoError(t, err)
+			reporter, err := createIncidentTestUser(ctx, client, tenant.ID, "assign-reporter-"+status)
+			require.NoError(t, err)
+			assignee, err := createIncidentTestUser(ctx, client, tenant.ID, "assign-target-"+status)
+			require.NoError(t, err)
+			incidentEntity, err := client.Incident.Create().
+				SetTitle("Lifecycle guarded assignment").
+				SetStatus(status).
+				SetIncidentNumber("INC-ASSIGN-" + status).
+				SetReporterID(reporter.ID).
+				SetTenantID(tenant.ID).
+				Save(ctx)
+			require.NoError(t, err)
+
+			_, err = incidentService.AssignIncident(ctx, incidentEntity.ID, assignee.ID, tenant.ID)
+			require.ErrorContains(t, err, "cannot be reassigned")
+
+			persisted, err := client.Incident.Get(ctx, incidentEntity.ID)
+			require.NoError(t, err)
+			require.Zero(t, persisted.AssigneeID)
+		})
+	}
+}
+
+func TestAssignIncidentRejectsConcurrentSnapshotChange(t *testing.T) {
+	for _, testCase := range []struct {
+		name       string
+		mutateRace func(context.Context, *ent.Client, int) error
+		assertErr  func(*testing.T, error)
+	}{
+		{
+			name: "terminal status without version bump",
+			mutateRace: func(ctx context.Context, racer *ent.Client, incidentID int) error {
+				return racer.Incident.UpdateOneID(incidentID).
+					SetStatus(common.IncidentStatusResolved).
+					Exec(ctx)
+			},
+			assertErr: func(t *testing.T, err error) {
+				require.ErrorContains(t, err, "resolved or closed incidents cannot be reassigned")
+			},
+		},
+		{
+			name: "version change while status remains eligible",
+			mutateRace: func(ctx context.Context, racer *ent.Client, incidentID int) error {
+				return racer.Incident.UpdateOneID(incidentID).AddVersion(1).Exec(ctx)
+			},
+			assertErr: func(t *testing.T, err error) {
+				var conflict *common.VersionConflictError
+				require.ErrorAs(t, err, &conflict)
+			},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			dsn := testDSN()
+			client := enttest.Open(t, "sqlite3", dsn)
+			defer client.Close()
+			racer, err := ent.Open("sqlite3", dsn)
+			require.NoError(t, err)
+			defer racer.Close()
+			ctx := context.Background()
+			tenant, err := createIncidentTestTenant(ctx, client, "assign-race-"+testCase.name)
+			require.NoError(t, err)
+			reporter, err := createIncidentTestUser(ctx, client, tenant.ID, "assign-race-reporter-"+testCase.name)
+			require.NoError(t, err)
+			assignee, err := createIncidentTestUser(ctx, client, tenant.ID, "assign-race-target-"+testCase.name)
+			require.NoError(t, err)
+			incidentEntity, err := client.Incident.Create().
+				SetTitle("Concurrent assignment").
+				SetStatus(common.IncidentStatusNew).
+				SetIncidentNumber("INC-ASSIGN-RACE-" + testCase.name).
+				SetReporterID(reporter.ID).
+				SetTenantID(tenant.ID).
+				Save(ctx)
+			require.NoError(t, err)
+
+			raced := false
+			client.Incident.Use(func(next ent.Mutator) ent.Mutator {
+				return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+					if !raced {
+						raced = true
+						require.NoError(t, testCase.mutateRace(ctx, racer, incidentEntity.ID))
+					}
+					return next.Mutate(ctx, mutation)
+				})
+			})
+
+			incidentService := NewIncidentService(client, zaptest.NewLogger(t).Sugar())
+			_, err = incidentService.AssignIncident(ctx, incidentEntity.ID, assignee.ID, tenant.ID)
+			require.Error(t, err)
+			testCase.assertErr(t, err)
+			require.True(t, raced)
+
+			persisted, err := client.Incident.Get(ctx, incidentEntity.ID)
+			require.NoError(t, err)
+			require.Zero(t, persisted.AssigneeID)
+			eventCount, err := client.IncidentEvent.Query().
+				Where(incidentevent.IncidentIDEQ(incidentEntity.ID), incidentevent.EventTypeEQ("assignment")).
+				Count(ctx)
+			require.NoError(t, err)
+			require.Zero(t, eventCount)
+		})
+	}
+}
+
+func TestGetIncidentWithActionsUsesOneEntitySnapshot(t *testing.T) {
+	var incidentSelects int
+	countIncidentSelects := func(args ...any) {
+		statement := fmt.Sprint(args...)
+		if strings.Contains(statement, "SELECT") && strings.Contains(statement, "FROM `incidents`") {
+			incidentSelects++
+		}
+	}
+	client := enttest.Open(t, "sqlite3", testDSN(), enttest.WithOptions(ent.Log(countIncidentSelects), ent.Debug()))
+	defer client.Close()
+	ctx := context.Background()
+	tenant, err := createIncidentTestTenant(ctx, client, "detail-snapshot")
+	require.NoError(t, err)
+	reporter, err := createIncidentTestUser(ctx, client, tenant.ID, "detail-snapshot")
+	require.NoError(t, err)
+	workItem, err := client.Ticket.Create().
+		SetTitle("Snapshot WorkItem").
+		SetTicketNumber("TKT-SNAPSHOT").
+		SetStatus("open").
+		SetPriority("high").
+		SetRequesterID(reporter.ID).
+		SetTenantID(tenant.ID).
+		SetRecordClass("incident").
+		Save(ctx)
+	require.NoError(t, err)
+	incidentEntity, err := client.Incident.Create().
+		SetTitle("Snapshot Incident").
+		SetStatus(common.IncidentStatusInProgress).
+		SetIncidentNumber("INC-SNAPSHOT").
+		SetReporterID(reporter.ID).
+		SetWorkItemID(workItem.ID).
+		SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	incidentSelects = 0
+	incidentService := NewIncidentService(client, zaptest.NewLogger(t).Sugar())
+	response, err := incidentService.GetIncidentWithActions(ctx, incidentEntity.ID, ActionActor{
+		Client: client, TenantID: tenant.ID, UserID: reporter.ID, Role: "super_admin",
+	})
+	require.NoError(t, err)
+	require.Equal(t, common.IncidentStatusInProgress, response.Status)
+	require.True(t, response.Actions["resolve"].Allowed)
+	require.Equal(t, 1, incidentSelects, "detail DTO and actions must derive from one Incident entity read")
 }
 
 // ==================== 列出事件测试 ====================
@@ -1050,58 +1206,6 @@ func TestIncidentService_WorkflowMethods_CrossTenantFailClosed(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "new", after.Status, "跨租户写入必须全部失败，状态不能被改动")
 	assert.Equal(t, "BPMN workflow lifecycle incident", after.Title)
-}
-
-func TestRootCauseAnalysisService_ConvertIncidentToProblemTransactionAndTenantIsolation(t *testing.T) {
-	client, _, ctx := setupIncidentTest(t)
-	defer client.Close()
-	tenantA, err := createIncidentTestTenant(ctx, client, "convert-a")
-	require.NoError(t, err)
-	tenantB, err := createIncidentTestTenant(ctx, client, "convert-b")
-	require.NoError(t, err)
-	userA, err := createIncidentTestUser(ctx, client, tenantA.ID, "convert-a")
-	require.NoError(t, err)
-	userB, err := createIncidentTestUser(ctx, client, tenantB.ID, "convert-b")
-	require.NoError(t, err)
-	incidentEntity, err := client.Incident.Create().
-		SetTitle("Repeated API outage").
-		SetDescription("API repeatedly becomes unavailable").
-		SetStatus("resolved").
-		SetPriority("critical").
-		SetSeverity("critical").
-		SetCategory("application").
-		SetIncidentNumber("INC-CONVERT-001").
-		SetReporterID(userA.ID).
-		SetTenantID(tenantA.ID).
-		Save(ctx)
-	require.NoError(t, err)
-	rootCauseService := NewRootCauseAnalysisService(client)
-
-	_, err = rootCauseService.CreateProblemFromIncident(
-		ctx, incidentEntity.ID, userB.ID, tenantB.ID, &dto.ConvertIncidentToProblemRequest{},
-	)
-	require.ErrorContains(t, err, "incident not found")
-	count, err := client.Problem.Query().Count(ctx)
-	require.NoError(t, err)
-	assert.Zero(t, count)
-
-	created, err := rootCauseService.CreateProblemFromIncident(
-		ctx, incidentEntity.ID, userA.ID, tenantA.ID,
-		&dto.ConvertIncidentToProblemRequest{
-			Title: "API stability problem", Description: "Recurring API availability degradation", RootCause: "Connection exhaustion",
-		},
-	)
-	require.NoError(t, err)
-	assert.Equal(t, tenantA.ID, created.TenantID)
-	assert.Equal(t, "API stability problem", created.Title)
-	assert.Equal(t, "Connection exhaustion", created.RootCause)
-	linkedIncident, err := client.Problem.Query().Where(problem.IDEQ(created.ID)).QueryIncidents().Only(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, incidentEntity.ID, linkedIncident.ID)
-	events, err := client.IncidentEvent.Query().Where(incidentevent.IncidentIDEQ(incidentEntity.ID)).All(ctx)
-	require.NoError(t, err)
-	require.Len(t, events, 1)
-	assert.Equal(t, tenantA.ID, events[0].TenantID)
 }
 
 // ==================== 删除事件测试 ====================

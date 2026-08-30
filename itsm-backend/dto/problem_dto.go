@@ -57,21 +57,22 @@ type ListProblemsRequest struct {
 
 // ProblemResponse 问题响应
 type ProblemResponse struct {
-	ID          int       `json:"id"`
-	Title       string    `json:"title"`
-	Description string    `json:"description"`
-	Status      string    `json:"status"`
-	Priority    string    `json:"priority"`
-	Category    string    `json:"category"`
-	RootCause   string    `json:"rootCause"`
-	Workaround  string    `json:"workaround"`
-	Resolution  string    `json:"resolution"`
-	Impact      string    `json:"impact"`
-	AssigneeID  *int      `json:"assigneeId,omitempty"`
-	CreatedBy   int       `json:"createdBy"`
-	TenantID    int       `json:"tenantId"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	ID          int                         `json:"id"`
+	Title       string                      `json:"title"`
+	Description string                      `json:"description"`
+	Status      string                      `json:"status"`
+	Priority    string                      `json:"priority"`
+	Category    string                      `json:"category"`
+	RootCause   string                      `json:"rootCause"`
+	Workaround  string                      `json:"workaround"`
+	Resolution  string                      `json:"resolution"`
+	Impact      string                      `json:"impact"`
+	AssigneeID  *int                        `json:"assigneeId,omitempty"`
+	CreatedBy   int                         `json:"createdBy"`
+	TenantID    int                         `json:"tenantId"`
+	CreatedAt   time.Time                   `json:"createdAt"`
+	UpdatedAt   time.Time                   `json:"updatedAt"`
+	Actions     map[string]ActionPermission `json:"actions,omitempty"`
 	// WorkItemID 关联的 WorkItem（tickets.id）。统一 WorkItem 领域模型迁移（Wave 2）后
 	// 新建的 Problem 一定有值；迁移前创建、尚未跑 cmd/backfill_problem_work_item 回填的
 	// 存量记录可能为 nil。与 dto.IncidentResponse.WorkItemID 同一模式。

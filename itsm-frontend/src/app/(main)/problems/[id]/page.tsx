@@ -45,7 +45,13 @@ export default function ProblemDetailPage() {
   const numericId = Number(id);
 
   const [workItem, setWorkItem] = useState<WorkItemCommon | null>(null);
+  const [problem, setProblem] = useState<Problem | null>(null);
   const [sla, setSla] = useState<WorkItemSLAState | undefined>(undefined);
+
+  const syncProblemSummary = useCallback((nextProblem: Problem) => {
+    setProblem(nextProblem);
+    setWorkItem(toWorkItemCommon(nextProblem));
+  }, []);
 
   const loadSLA = useCallback(async (workItemId: number) => {
     try {
@@ -72,7 +78,7 @@ export default function ProblemDetailPage() {
     }
     try {
       const problem = await ProblemApi.getProblem(numericId);
-      setWorkItem(toWorkItemCommon(problem));
+      syncProblemSummary(problem);
     } catch (err) {
       // WorkItemShell 只是这里的外层展示壳（专业字段仍然由下面完整功能的 ProblemDetail
       // 负责渲染/编辑），summary 拉取失败时不阻塞整页——workItem 保持 null，下面直接
@@ -80,7 +86,7 @@ export default function ProblemDetailPage() {
       // 内部另有一次完整的问题详情拉取 + 错误处理，这里的失败不影响那条路径。
       console.warn('[ProblemDetailPage] Failed to load WorkItem summary', err);
     }
-  }, [numericId]);
+  }, [numericId, syncProblemSummary]);
 
   useEffect(() => {
     loadWorkItemSummary();
@@ -97,7 +103,7 @@ export default function ProblemDetailPage() {
       {/* 主详情组件保持不变——根因/临时解决方案/最终解决方案/影响范围等 Problem 专业
           字段、以及所有编辑动作都在这个组件内部完成，WorkItemShell 只包一层公共身份
           信息，不重新实现这些逻辑。 */}
-      <ProblemDetail id={id} />
+      <ProblemDetail id={id} onProblemLoaded={syncProblemSummary} />
 
       {/* 追加：关联（工单/事件/变更）。历史现在由 WorkItemShell 自己的区块渲染，不再
           在这里重复一份——见 docs/superpowers/specs/2026-08-28-work-item-detail-page-parity-design.md
@@ -114,6 +120,13 @@ export default function ProblemDetailPage() {
         </Card>
       )}
     </>
+  );
+  const fallbackDetail = (
+    <ProblemDetail
+      id={id}
+      fallbackActions={problem?.actions}
+      onProblemLoaded={syncProblemSummary}
+    />
   );
 
   return (
@@ -135,16 +148,12 @@ export default function ProblemDetailPage() {
             loadWorkItemSummary 的 catch）、或存量未回填问题这三种情况下 workItem 都是
             null，直接退化为原有的纯 ProblemDetail 展示——不用 WorkItemShell 自己的
             loading/error 态挡住已经完整可用的 ProblemDetail。 */}
-        {workItem ? (
+        {workItem && problem ? (
           <WorkItemShell
             workItem={workItem}
             sla={sla}
-            // Problem 各专业操作（调查/记录根因/提供解决方案/关闭……）仍由下面
-            // ProblemDetail 内部既有的按钮 + ProblemApi 调用处理，尚未统一收口到
-            // onActionDispatch——那需要后端补一个"动作可用性"契约（actions 参数目前也
-            // 是空的），是比这次 WorkItem 迁移更大的后续改造，不在本任务范围内。与
-            // Incident 迁移那次（incidents/[id]/page.tsx）的处理方式一致。
-            actions={{}}
+            actions={problem.actions ?? {}}
+            showActionBar={false}
             onActionDispatch={async () => {}}
             professionalPanelSlot={detailAndTabs}
           />
@@ -156,7 +165,7 @@ export default function ProblemDetailPage() {
               message="该问题尚未关联 WorkItem，评论/附件/历史/关联等协作能力暂不可用"
               style={{ marginBottom: 16 }}
             />
-            {detailAndTabs}
+            {fallbackDetail}
           </>
         )}
       </div>

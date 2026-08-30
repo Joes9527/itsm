@@ -7,6 +7,7 @@ import (
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
+	problemDomain "itsm-backend/handlers/problem"
 	"itsm-backend/middleware"
 	"itsm-backend/service"
 
@@ -20,6 +21,7 @@ type IncidentController struct {
 	monitoringService        *service.IncidentMonitoringService
 	alertingService          *service.IncidentAlertingService
 	rootCauseAnalysisService *service.RootCauseAnalysisService
+	problemConversionService problemDomain.ConversionService
 	logger                   *zap.SugaredLogger
 }
 
@@ -29,6 +31,7 @@ func NewIncidentController(
 	monitoringService *service.IncidentMonitoringService,
 	alertingService *service.IncidentAlertingService,
 	rootCauseAnalysisService *service.RootCauseAnalysisService,
+	problemConversionService problemDomain.ConversionService,
 	logger *zap.SugaredLogger,
 ) *IncidentController {
 	return &IncidentController{
@@ -37,6 +40,7 @@ func NewIncidentController(
 		monitoringService:        monitoringService,
 		alertingService:          alertingService,
 		rootCauseAnalysisService: rootCauseAnalysisService,
+		problemConversionService: problemConversionService,
 		logger:                   logger,
 	}
 }
@@ -119,7 +123,23 @@ func (c *IncidentController) GetIncident(ctx *gin.Context) {
 	if !ok {
 		return
 	}
-	response, err := c.incidentService.GetIncident(ctx.Request.Context(), id, tenantID)
+	if tenantID <= 0 {
+		common.Fail(ctx, common.AuthFailedCode, "获取租户ID失败")
+		return
+	}
+	userID, err := middleware.GetUserID(ctx)
+	if err != nil || userID <= 0 {
+		common.Fail(ctx, common.AuthFailedCode, "获取用户ID失败")
+		return
+	}
+	role := strings.TrimSpace(ctx.GetString("role"))
+	if role == "" {
+		common.Fail(ctx, common.AuthFailedCode, "获取用户角色失败")
+		return
+	}
+	response, err := c.incidentService.GetIncidentWithActions(ctx.Request.Context(), id, service.ActionActor{
+		TenantID: tenantID, UserID: userID, Role: role,
+	})
 	if err != nil {
 		if err.Error() == "incident not found" {
 			common.Fail(ctx, common.ParamErrorCode, "事件不存在")
@@ -991,7 +1011,7 @@ func (c *IncidentController) GetAlertStatistics(ctx *gin.Context) {
 // @Produce json
 // @Param id path int true "事件ID"
 // @Param request body dto.ConvertIncidentToProblemRequest true "转换请求"
-// @Success 200 {object} common.Response{data=ent.Problem}
+// @Success 200 {object} common.Response{data=dto.ProblemResponse}
 // @Failure 400 {object} common.Response
 // @Failure 500 {object} common.Response
 // @Router /api/v1/incidents/{id}/convert-to-problem [post]
@@ -1014,9 +1034,12 @@ func (c *IncidentController) ConvertToProblem(ctx *gin.Context) {
 		return
 	}
 
-	tenantID := ctx.GetInt("tenant_id")
-	problem, err := c.rootCauseAnalysisService.CreateProblemFromIncident(
-		ctx.Request.Context(), incidentID, userID, tenantID, &req,
+	tenantID, ok := c.resolveTenantID(ctx)
+	if !ok {
+		return
+	}
+	created, err := c.problemConversionService.CreateFromIncident(
+		ctx.Request.Context(), tenantID, incidentID, userID, req,
 	)
 	if err != nil {
 		c.logger.Errorw("Failed to convert incident to problem", "error", err, "incident_id", incidentID)
@@ -1024,7 +1047,7 @@ func (c *IncidentController) ConvertToProblem(ctx *gin.Context) {
 		return
 	}
 
-	common.Success(ctx, dto.ToProblemResponse(problem))
+	common.Success(ctx, problemDomain.ToResponse(created))
 }
 
 // GetRootCause 获取根因分析

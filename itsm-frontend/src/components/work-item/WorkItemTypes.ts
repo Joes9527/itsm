@@ -42,6 +42,8 @@ export interface WorkItemShellProps {
   actions: Record<string, WorkItemActionState>;
   sla?: WorkItemSLAState;
   onActionDispatch: WorkItemActionDispatch;
+  /** Whether to render the generic action bar; professional panels own their domain-specific actions. */
+  showActionBar?: boolean;
   /** 专业 Panel（Incident/Problem/Change/ServiceRequestItem 各自实现）挂载点 */
   professionalPanelSlot: React.ReactNode;
   loading?: boolean;

@@ -4590,6 +4590,14 @@ var (
 				},
 			},
 			{
+				Name:    "workitemrelation_tenant_id_source_work_item_id",
+				Unique:  true,
+				Columns: []*schema.Column{WorkItemRelationsColumns[1], WorkItemRelationsColumns[2]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "deleted_at IS NULL AND relation_type = 'investigated_by'",
+				},
+			},
+			{
 				Name:    "workitemrelation_tenant_id_target_work_item_id",
 				Unique:  false,
 				Columns: []*schema.Column{WorkItemRelationsColumns[1], WorkItemRelationsColumns[3]},

@@ -7,42 +7,33 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/middleware"
+	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
 type Handler struct {
 	service *Service
+	client  *ent.Client
 }
 
-func NewHandler(service *Service) *Handler {
-	return &Handler{service: service}
+func NewHandler(service *Service, client *ent.Client) *Handler {
+	return &Handler{service: service, client: client}
+}
+
+func resolveProblemTenantID(c *gin.Context) (int, bool) {
+	tenantID, err := middleware.ResolveRequestTenantID(c)
+	if middleware.AbortIfTenantError(c, err) {
+		return 0, false
+	}
+	return tenantID, true
 }
 
 func (h *Handler) toDTO(p *Problem) *dto.ProblemResponse {
-	if p == nil {
+	resp := ToResponse(p)
+	if resp == nil {
 		return nil
-	}
-
-	resp := dto.ProblemResponse{
-		ID:          p.ID,
-		Title:       p.Title,
-		Description: p.Description,
-		Status:      p.Status,
-		Priority:    p.Priority,
-		Category:    p.Category,
-		RootCause:   p.RootCause,
-		Workaround:  p.Workaround,
-		Resolution:  p.Resolution,
-		Impact:      p.Impact,
-		CreatedBy:   p.CreatedBy,
-		TenantID:    p.TenantID,
-		CreatedAt:   p.CreatedAt,
-		UpdatedAt:   p.UpdatedAt,
-		WorkItemID:  p.WorkItemID,
-	}
-	if p.AssigneeID != nil {
-		resp.AssigneeID = p.AssigneeID
 	}
 
 	// 映射关联数据
@@ -83,6 +74,37 @@ func (h *Handler) toDTO(p *Problem) *dto.ProblemResponse {
 		}
 	}
 
+	return resp
+}
+
+// ToResponse maps the Problem base fields to the public API contract. Handlers
+// that load associations enrich this response in their own wrapper.
+func ToResponse(p *Problem) *dto.ProblemResponse {
+	if p == nil {
+		return nil
+	}
+
+	resp := dto.ProblemResponse{
+		ID:          p.ID,
+		Title:       p.Title,
+		Description: p.Description,
+		Status:      p.Status,
+		Priority:    p.Priority,
+		Category:    p.Category,
+		RootCause:   p.RootCause,
+		Workaround:  p.Workaround,
+		Resolution:  p.Resolution,
+		Impact:      p.Impact,
+		CreatedBy:   p.CreatedBy,
+		TenantID:    p.TenantID,
+		CreatedAt:   p.CreatedAt,
+		UpdatedAt:   p.UpdatedAt,
+		WorkItemID:  p.WorkItemID,
+	}
+	if p.AssigneeID != nil {
+		resp.AssigneeID = p.AssigneeID
+	}
+
 	return &resp
 }
 
@@ -93,7 +115,10 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 
-	tenantID, _ := c.Get("tenant_id")
+	tenantID, ok := resolveProblemTenantID(c)
+	if !ok {
+		return
+	}
 	userID, _ := c.Get("user_id") // Override req.CreatedBy with actual user?
 
 	// Legacy DTO has CreatedBy in request, but better to enforce from context
@@ -110,7 +135,7 @@ func (h *Handler) Create(c *gin.Context) {
 		CreatedBy:   createdBy,
 	}
 
-	created, err := h.service.Create(c.Request.Context(), tenantID.(int), problem)
+	created, err := h.service.Create(c.Request.Context(), tenantID, problem)
 	if err != nil {
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return
@@ -126,8 +151,17 @@ func (h *Handler) Get(c *gin.Context) {
 		return
 	}
 
-	tenantID, _ := c.Get("tenant_id")
-	p, err := h.service.GetWithAssociations(c.Request.Context(), id, tenantID.(int))
+	tenantID, ok := resolveProblemTenantID(c)
+	if !ok {
+		return
+	}
+
+	actor, ok := h.problemActionActor(c, tenantID)
+	if !ok {
+		return
+	}
+
+	p, err := h.service.GetWithAssociations(c.Request.Context(), id, actor.TenantID)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			common.Fail(c, common.NotFoundErrorCode, "Problem not found")
@@ -136,7 +170,9 @@ func (h *Handler) Get(c *gin.Context) {
 		}
 		return
 	}
-	common.Success(c, h.toDTO(p))
+	response := h.toDTO(p)
+	response.Actions = BuildProblemActions(actor, p)
+	common.Success(c, response)
 }
 
 // GetAssociations 获取问题的关联项
@@ -147,8 +183,11 @@ func (h *Handler) GetAssociations(c *gin.Context) {
 		return
 	}
 
-	tenantID, _ := c.Get("tenant_id")
-	p, err := h.service.GetWithAssociations(c.Request.Context(), id, tenantID.(int))
+	tenantID, ok := resolveProblemTenantID(c)
+	if !ok {
+		return
+	}
+	p, err := h.service.GetWithAssociations(c.Request.Context(), id, tenantID)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			common.Fail(c, common.NotFoundErrorCode, "Problem not found")
@@ -195,13 +234,16 @@ func (h *Handler) AddAssociation(c *gin.Context) {
 		return
 	}
 
-	tenantID, _ := c.Get("tenant_id")
+	tenantID, ok := resolveProblemTenantID(c)
+	if !ok {
+		return
+	}
 	userID, userOK := problemActorUserID(c)
 	if !userOK {
 		return
 	}
 	// 验证问题存在
-	_, err = h.service.Get(c.Request.Context(), id, tenantID.(int))
+	_, err = h.service.Get(c.Request.Context(), id, tenantID)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			common.Fail(c, common.NotFoundErrorCode, "Problem not found")
@@ -211,7 +253,7 @@ func (h *Handler) AddAssociation(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.AddAssociations(c.Request.Context(), tenantID.(int), id, userID, req.RelatedType, req.RelatedIDs); err != nil {
+	if err := h.service.AddAssociations(c.Request.Context(), tenantID, id, userID, req.RelatedType, req.RelatedIDs); err != nil {
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return
 	}
@@ -234,6 +276,24 @@ func problemActorUserID(c *gin.Context) (int, bool) {
 	return userID, true
 }
 
+func (h *Handler) problemActionActor(c *gin.Context, tenantID int) (service.ActionActor, bool) {
+	userValue, userExists := c.Get("user_id")
+	userID, userOK := userValue.(int)
+	role := strings.TrimSpace(c.GetString("role"))
+
+	if tenantID <= 0 || !userExists || !userOK || userID <= 0 || role == "" {
+		common.Fail(c, common.AuthErrorCode, "invalid action actor context")
+		return service.ActionActor{}, false
+	}
+
+	return service.ActionActor{
+		Client:   h.client,
+		TenantID: tenantID,
+		UserID:   userID,
+		Role:     role,
+	}, true
+}
+
 // RemoveAssociation 移除关联
 func (h *Handler) RemoveAssociation(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
@@ -248,9 +308,12 @@ func (h *Handler) RemoveAssociation(c *gin.Context) {
 		return
 	}
 
-	tenantID, _ := c.Get("tenant_id")
+	tenantID, ok := resolveProblemTenantID(c)
+	if !ok {
+		return
+	}
 	// 验证问题存在
-	_, err = h.service.Get(c.Request.Context(), id, tenantID.(int))
+	_, err = h.service.Get(c.Request.Context(), id, tenantID)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			common.Fail(c, common.NotFoundErrorCode, "Problem not found")
@@ -260,7 +323,7 @@ func (h *Handler) RemoveAssociation(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.RemoveAssociation(c.Request.Context(), tenantID.(int), id, req.RelatedType, req.RelatedID); err != nil {
+	if err := h.service.RemoveAssociation(c.Request.Context(), tenantID, id, req.RelatedType, req.RelatedID); err != nil {
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return
 	}
@@ -275,7 +338,10 @@ func (h *Handler) List(c *gin.Context) {
 		return
 	}
 
-	tenantID, _ := c.Get("tenant_id")
+	tenantID, ok := resolveProblemTenantID(c)
+	if !ok {
+		return
+	}
 
 	// Convert DTO filters to map
 	filters := make(map[string]interface{})
@@ -292,7 +358,7 @@ func (h *Handler) List(c *gin.Context) {
 		filters["keyword"] = req.Keyword
 	}
 
-	list, total, err := h.service.List(c.Request.Context(), tenantID.(int), req.Page, req.PageSize, filters)
+	list, total, err := h.service.List(c.Request.Context(), tenantID, req.Page, req.PageSize, filters)
 	if err != nil {
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return
@@ -351,7 +417,10 @@ func (h *Handler) Update(c *gin.Context) {
 		return
 	}
 
-	tenantID, _ := c.Get("tenant_id")
+	tenantID, ok := resolveProblemTenantID(c)
+	if !ok {
+		return
+	}
 
 	// 将 DTO 指针字段转换为 domain entity
 	updates := &Problem{}
@@ -377,7 +446,7 @@ func (h *Handler) Update(c *gin.Context) {
 		updates.Impact = *req.Impact
 	}
 
-	updated, err := h.service.Update(c.Request.Context(), tenantID.(int), id, updates)
+	updated, err := h.service.Update(c.Request.Context(), tenantID, id, updates)
 	if err != nil {
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return
@@ -447,10 +516,8 @@ func problemRequestContext(c *gin.Context) (int, int, bool) {
 		common.Fail(c, common.ParamErrorCode, "invalid id")
 		return 0, 0, false
 	}
-	tenantValue, exists := c.Get("tenant_id")
-	tenantID, valid := tenantValue.(int)
-	if !exists || !valid || tenantID <= 0 {
-		common.Fail(c, common.AuthErrorCode, "invalid tenant context")
+	tenantID, ok := resolveProblemTenantID(c)
+	if !ok {
 		return 0, 0, false
 	}
 	return id, tenantID, true
@@ -477,8 +544,11 @@ func (h *Handler) Delete(c *gin.Context) {
 		return
 	}
 
-	tenantID, _ := c.Get("tenant_id")
-	err = h.service.Delete(c.Request.Context(), id, tenantID.(int))
+	tenantID, ok := resolveProblemTenantID(c)
+	if !ok {
+		return
+	}
+	err = h.service.Delete(c.Request.Context(), id, tenantID)
 	if err != nil {
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return
@@ -488,8 +558,11 @@ func (h *Handler) Delete(c *gin.Context) {
 }
 
 func (h *Handler) GetStats(c *gin.Context) {
-	tenantID, _ := c.Get("tenant_id")
-	stats, err := h.service.GetStats(c.Request.Context(), tenantID.(int))
+	tenantID, ok := resolveProblemTenantID(c)
+	if !ok {
+		return
+	}
+	stats, err := h.service.GetStats(c.Request.Context(), tenantID)
 	if err != nil {
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return

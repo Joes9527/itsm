@@ -757,13 +757,15 @@ func TestTransitionStatus_Approve_NoRunningProcessInstanceFailsClosed(t *testing
 
 	tenant, err := client.Tenant.Create().SetName("NoInstance Tenant").SetCode("transition_no_running_instance").SetDomain("transition-no-running-instance.example.com").SetStatus("active").Save(ctx)
 	require.NoError(t, err)
+	requester, err := client.User.Create().SetUsername("no-instance-requester").SetEmail("no-instance-requester@example.com").SetName("Requester").SetPasswordHash("h").SetRole("user").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
 	cmUser, err := client.User.Create().SetUsername("no-instance-cm").SetEmail("no-instance-cm@example.com").SetName("CM").SetPasswordHash("h").SetRole("change_manager").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 
 	// 直接建库记录，不走 SubmitChange/TriggerProcess——不部署模板、不触发流程，
 	// 所以这个 change 底下没有任何 ProcessInstance。
-	workItem := createChangeWorkItemFixture(t, client, tenant.ID, cmUser.ID, "无绑定流程实例的变更")
-	c, err := client.Change.Create().SetTitle("无绑定流程实例的变更").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(cmUser.ID).SetWorkItemID(workItem.ID).Save(ctx)
+	workItem := createChangeWorkItemFixture(t, client, tenant.ID, requester.ID, "无绑定流程实例的变更")
+	c, err := client.Change.Create().SetTitle("无绑定流程实例的变更").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).SetWorkItemID(workItem.ID).Save(ctx)
 	require.NoError(t, err)
 
 	// processEngine 必须非 nil，否则会在 completeChangeApprovalTask 里更早地因为

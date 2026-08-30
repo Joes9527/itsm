@@ -1,4 +1,4 @@
-package problem
+package problem_test
 
 import (
 	"bytes"
@@ -14,7 +14,10 @@ import (
 
 	"itsm-backend/controller"
 	"itsm-backend/dto"
+	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	problem "itsm-backend/handlers/problem"
+	"itsm-backend/middleware"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -22,6 +25,33 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
+
+func createProblemInvestigationTenant(t *testing.T, ctx context.Context, client *ent.Client, suffix string) *ent.Tenant {
+	t.Helper()
+	tenant, err := client.Tenant.Create().
+		SetName("Problem Investigation Tenant " + suffix).
+		SetCode("problem-investigation-" + suffix).
+		SetDomain("problem-investigation-" + suffix + ".example.com").
+		SetStatus("active").
+		Save(ctx)
+	require.NoError(t, err)
+	return tenant
+}
+
+func createProblemInvestigationUser(t *testing.T, ctx context.Context, client *ent.Client, tenantID int, suffix string) *ent.User {
+	t.Helper()
+	user, err := client.User.Create().
+		SetUsername("problem-investigation-" + suffix).
+		SetEmail("problem-investigation-" + suffix + "@example.com").
+		SetName("Problem Investigation User").
+		SetPasswordHash("hash").
+		SetRole("agent").
+		SetActive(true).
+		SetTenantID(tenantID).
+		Save(ctx)
+	require.NoError(t, err)
+	return user
+}
 
 func TestProblemInvestigationRouterConflictBug(t *testing.T) {
 	t.Skip("已知缺陷，留给后续重构阶段处理：router/router.go 中 /problem-investigation/investigations/:id 与 /problem-investigation/investigations/:investigation_id/steps 路由参数名不一致（:id vs :investigation_id），导致 Gin 引擎初始化注册路由时发生 wildcard 冲突 panic")
@@ -114,13 +144,13 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 	ctx := context.Background()
 	logger := zaptest.NewLogger(t).Sugar()
 
-	tenant := createProblemHandlerTenant(t, ctx, client, "dual-inv")
-	user := createProblemHandlerUser(t, ctx, client, tenant.ID, "dual-inv")
+	tenant := createProblemInvestigationTenant(t, ctx, client, "dual-inv")
+	user := createProblemInvestigationUser(t, ctx, client, tenant.ID, "dual-inv")
 
 	// Create problem
-	probRepo := NewEntRepository(client)
-	probHandlerSvc := NewService(probRepo, logger)
-	p, err := probHandlerSvc.Create(ctx, tenant.ID, &Problem{
+	probRepo := problem.NewEntRepository(client)
+	probHandlerSvc := problem.NewService(probRepo, logger)
+	p, err := probHandlerSvc.Create(ctx, tenant.ID, &problem.Problem{
 		Title:       "High Latency in API Gateway",
 		Description: "p99 latency > 2s",
 		Priority:    "critical",
@@ -131,10 +161,11 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 	// =========================================================================
 	// Entry Point 1: /api/v1/problems/:id/investigate (handlers/problem/Handler)
 	// =========================================================================
-	probHandler := NewHandler(probHandlerSvc)
+	probHandler := problem.NewHandler(probHandlerSvc, client)
 	r1 := gin.New()
 	r1.Use(func(c *gin.Context) {
 		c.Set("tenant_id", tenant.ID)
+		c.Set(middleware.TenantContextKey, &middleware.TenantContext{TenantID: tenant.ID})
 		c.Set("user_id", user.ID)
 		c.Next()
 	})

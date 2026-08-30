@@ -63,6 +63,12 @@ const workItem: WorkItemCommon = {
   updatedAt: '2026-08-26T00:00:00Z',
 };
 
+const props = {
+  workItem,
+  actions: { approve: { allowed: true } },
+  onActionDispatch: jest.fn(),
+};
+
 function ProbePanel() {
   const { workItem: fromContext, actions } = useWorkItemContext();
   return (
@@ -76,6 +82,18 @@ function ProbePanel() {
 }
 
 describe('WorkItemShell', () => {
+  it('does not render the generic action bar unless explicitly enabled', () => {
+    render(<WorkItemShell {...props} professionalPanelSlot={<div>panel</div>} />);
+
+    expect(screen.queryByRole('button', { name: '批准' })).not.toBeInTheDocument();
+  });
+
+  it('renders the generic action bar when showActionBar is true', () => {
+    render(<WorkItemShell {...props} showActionBar professionalPanelSlot={<div>panel</div>} />);
+
+    expect(screen.getByRole('button', { name: '批准' })).toBeInTheDocument();
+  });
+
   it('renders the common fields and exposes them via useWorkItemContext to the professional panel slot', () => {
     render(
       <WorkItemShell

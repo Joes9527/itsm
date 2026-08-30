@@ -43,7 +43,17 @@ export default function IncidentDetailPage() {
   const numericId = Number(id);
 
   const [workItem, setWorkItem] = useState<WorkItemCommon | null>(null);
+  const [incident, setIncident] = useState<Incident | null>(null);
   const [sla, setSla] = useState<WorkItemSLAState | undefined>(undefined);
+
+  const syncIncidentSummary = useCallback((nextIncident: Incident) => {
+    setIncident(nextIncident);
+    setWorkItem(toWorkItemCommon(nextIncident));
+  }, []);
+
+  const handleIncidentLoaded = useCallback((loadedIncident: unknown) => {
+    syncIncidentSummary(loadedIncident as Incident);
+  }, [syncIncidentSummary]);
 
   const loadSLA = useCallback(async (workItemId: number) => {
     try {
@@ -70,7 +80,7 @@ export default function IncidentDetailPage() {
     }
     try {
       const incident = await IncidentAPI.getIncident(numericId);
-      setWorkItem(toWorkItemCommon(incident));
+      syncIncidentSummary(incident);
     } catch (err) {
       // WorkItemShell 只是这里的外层展示壳（专业字段仍然由下面完整功能的 IncidentDetail
       // 负责渲染/编辑），summary 拉取失败时不阻塞整页——workItem 保持 null，下面直接
@@ -78,7 +88,7 @@ export default function IncidentDetailPage() {
       // 内部另有一次完整的事件详情拉取 + 错误处理，这里的失败不影响那条路径。
       console.warn('[IncidentDetailPage] Failed to load WorkItem summary', err);
     }
-  }, [numericId]);
+  }, [numericId, syncIncidentSummary]);
 
   useEffect(() => {
     loadWorkItemSummary();
@@ -96,7 +106,14 @@ export default function IncidentDetailPage() {
     // 身份信息，不重新实现这些逻辑。评论/历史现在由 WorkItemShell 自己的区块渲染
     // （见 docs/superpowers/specs/2026-08-28-work-item-detail-page-parity-design.md
     // §5.2），不再在这里重复一份。
-    <IncidentDetail id={id} />
+    <IncidentDetail id={id} onIncidentLoaded={handleIncidentLoaded} />
+  );
+  const fallbackDetail = (
+    <IncidentDetail
+      id={id}
+      fallbackActions={incident?.actions}
+      onIncidentLoaded={handleIncidentLoaded}
+    />
   );
 
   return (
@@ -118,15 +135,12 @@ export default function IncidentDetailPage() {
             loadWorkItemSummary 的 catch）、或存量未回填事件这三种情况下 workItem 都是
             null，直接退化为原有的纯 IncidentDetail 展示——不用 WorkItemShell 自己的
             loading/error 态挡住已经完整可用的 IncidentDetail。 */}
-        {workItem ? (
+        {workItem && incident ? (
           <WorkItemShell
             workItem={workItem}
             sla={sla}
-            // Incident 各专业操作（确认/解决/关闭/升级/分配……）仍由下面 IncidentDetail
-            // 内部既有的按钮 + IncidentAPI 调用处理，尚未统一收口到 onActionDispatch——
-            // 那需要后端补一个"动作可用性"契约（actions 参数目前也是空的），是比这次
-            // WorkItem 迁移更大的后续改造，不在本任务范围内。
-            actions={{}}
+            actions={incident.actions ?? {}}
+            showActionBar={false}
             onActionDispatch={async () => {}}
             professionalPanelSlot={detailAndTabs}
           />
@@ -138,7 +152,7 @@ export default function IncidentDetailPage() {
               message="该事件尚未关联 WorkItem，评论/附件/历史/关联等协作能力暂不可用"
               style={{ marginBottom: 16 }}
             />
-            {detailAndTabs}
+            {fallbackDetail}
           </>
         )}
       </div>

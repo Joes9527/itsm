@@ -176,14 +176,17 @@ func isValidProblemStatusTransition(current, next string) bool {
 	if current == next {
 		return true
 	}
+	if next == "closed" {
+		return canCloseProblemStatus(current)
+	}
 	transitions := map[string]map[string]struct{}{
-		"open":          {"investigating": {}, "identified": {}, "resolved": {}, "closed": {}},
-		"investigating": {"identified": {}, "resolved": {}, "closed": {}},
-		"identified":    {"investigating": {}, "resolved": {}, "closed": {}},
-		"resolved":      {"investigating": {}, "closed": {}},
+		"open":          {"investigating": {}, "identified": {}, "resolved": {}},
+		"investigating": {"identified": {}, "resolved": {}},
+		"identified":    {"investigating": {}, "resolved": {}},
+		"resolved":      {"investigating": {}},
 		"closed":        {},
 		// 兼容存量 in_progress 数据，仅允许进入规范状态。
-		"in_progress": {"identified": {}, "resolved": {}, "closed": {}},
+		"in_progress": {"identified": {}, "resolved": {}},
 	}
 	allowed, ok := transitions[current]
 	if !ok {
@@ -191,6 +194,10 @@ func isValidProblemStatusTransition(current, next string) bool {
 	}
 	_, ok = allowed[next]
 	return ok
+}
+
+func canCloseProblemStatus(status string) bool {
+	return strings.TrimSpace(status) == "resolved"
 }
 
 func uniquePositiveIDs(ids []int) []int {

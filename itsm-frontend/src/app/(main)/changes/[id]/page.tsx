@@ -68,7 +68,13 @@ export default function ChangeDetailPage() {
   const [approvals, setApprovals] = useState<ApprovalStep[]>([]);
   const [approvalLoading, setApprovalLoading] = useState(false);
   const [workItem, setWorkItem] = useState<WorkItemCommon | null>(null);
+  const [change, setChange] = useState<Change | null>(null);
   const [sla, setSla] = useState<WorkItemSLAState | undefined>(undefined);
+
+  const syncChangeSummary = useCallback((nextChange: Change) => {
+    setChange(nextChange);
+    setWorkItem(toWorkItemCommon(nextChange));
+  }, []);
 
   const loadSLA = useCallback(async (workItemId: number) => {
     try {
@@ -120,7 +126,7 @@ export default function ChangeDetailPage() {
     }
     try {
       const change = await ChangeApi.getChange(numericId);
-      setWorkItem(toWorkItemCommon(change));
+      syncChangeSummary(change);
     } catch (err) {
       // WorkItemShell 只是这里的外层展示壳（风险等级/CAB/发布窗口/实施结果/PIR 等专业字段
       // 仍然由下面完整功能的 ChangeDetail 负责渲染/编辑），summary 拉取失败时不阻塞整页——
@@ -129,7 +135,7 @@ export default function ChangeDetailPage() {
       // 那条路径。
       console.warn('[ChangeDetailPage] Failed to load WorkItem summary', err);
     }
-  }, [numericId]);
+  }, [numericId, syncChangeSummary]);
 
   useEffect(() => {
     void loadApprovals();
@@ -145,12 +151,16 @@ export default function ChangeDetailPage() {
     }
   }, [workItem?.id, loadSLA]);
 
-  const detailAndTabs = (
+  const renderDetailAndTabs = (fallbackActions?: Change['actions']) => (
     <>
       {/* 主详情组件保持不变——风险等级/CAB/发布窗口（计划开始结束时间）/实施结果/PIR 等
           Change 专业字段、以及所有编辑动作都在这个组件内部完成，WorkItemShell 只包一层
           公共身份信息，不重新实现这些逻辑。 */}
-      <ChangeDetail />
+      <ChangeDetail
+        id={id}
+        fallbackActions={fallbackActions}
+        onChangeLoaded={syncChangeSummary}
+      />
 
       {/* 追加：审批时间线。历史现在由 WorkItemShell 自己的区块渲染，不再在这里重复一份——
           见 docs/superpowers/specs/2026-08-28-work-item-detail-page-parity-design.md §5.2。 */}
@@ -184,18 +194,14 @@ export default function ChangeDetailPage() {
           loadWorkItemSummary 的 catch）、或存量未回填变更这三种情况下 workItem 都是
           null，直接退化为原有的纯 ChangeDetail 展示——不用 WorkItemShell 自己的
           loading/error 态挡住已经完整可用的 ChangeDetail。 */}
-      {workItem ? (
+      {workItem && change ? (
         <WorkItemShell
           workItem={workItem}
           sla={sla}
-          // Change 各专业操作（提交审批/CAB 批准驳回/排期/实施/关闭……）仍由下面
-          // ChangeDetail 内部既有的按钮 + ChangeApi 调用处理，尚未统一收口到
-          // onActionDispatch——那需要后端补一个"动作可用性"契约（actions 参数目前也
-          // 是空的），是比这次 WorkItem 迁移更大的后续改造，不在本任务范围内。与
-          // Incident/Problem 迁移那次的处理方式一致。
-          actions={{}}
+          actions={change.actions ?? {}}
+          showActionBar={false}
           onActionDispatch={async () => {}}
-          professionalPanelSlot={detailAndTabs}
+          professionalPanelSlot={renderDetailAndTabs()}
         />
       ) : (
         <>
@@ -205,7 +211,7 @@ export default function ChangeDetailPage() {
             message="该变更尚未关联 WorkItem，评论/附件/历史/关联等协作能力暂不可用"
             style={{ marginBottom: 16 }}
           />
-          {detailAndTabs}
+          {renderDetailAndTabs(change?.actions)}
         </>
       )}
     </App>

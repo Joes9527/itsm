@@ -3,6 +3,7 @@
  */
 
 import { httpClient } from './http-client';
+import type { WorkItemActionState } from '@/components/work-item/WorkItemTypes';
 
 // 变更状态类型
 export type ChangeStatus =
@@ -78,6 +79,7 @@ export interface Change {
    * 供 changes/[id]/page.tsx 接入 WorkItemShell 使用。
    */
   workItemId?: number;
+  actions?: Record<string, WorkItemActionState>;
 }
 
 // 变更列表响应

@@ -3,6 +3,7 @@
  * 兼容旧代码使用
  */
 
+import type { WorkItemActionState } from '@/components/work-item/WorkItemTypes';
 import { httpClient } from './http-client';
 
 // ==================== 问题趋势相关类型 ====================
@@ -78,6 +79,7 @@ export interface Problem {
   // 新建的 Problem 一定有值；迁移前创建、尚未跑 cmd/backfill_problem_work_item 回填的
   // 存量记录可能为 undefined。与 IncidentAPI 的 Incident.workItemId 同一模式。
   workItemId?: number;
+  actions?: Record<string, WorkItemActionState>;
 }
 
 export interface ProblemListResponse {

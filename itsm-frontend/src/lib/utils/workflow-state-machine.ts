@@ -137,55 +137,6 @@ export function isActiveStatus(status: TicketStatus): boolean {
   return !isFinalStatus(status);
 }
 
-/**
- * 事件状态转换规则
- */
-export const INCIDENT_STATUS_TRANSITIONS: Record<string, string[]> = {
-  new: ['investigating', 'resolved', 'cancelled'],
-  investigating: ['identified', 'monitoring', 'resolved', 'cancelled'],
-  identified: ['monitoring', 'resolved', 'cancelled'],
-  monitoring: ['resolved', 'cancelled'],
-  resolved: ['closed'],
-  closed: [],
-  cancelled: [],
-};
-
-/**
- * 验证事件状态转换
- */
-export function isValidIncidentTransition(
-  currentStatus: string,
-  targetStatus: string
-): boolean {
-  const allowed = INCIDENT_STATUS_TRANSITIONS[currentStatus];
-  return allowed?.includes(targetStatus) ?? false;
-}
-
-/**
- * 变更状态转换规则
- */
-export const CHANGE_STATUS_TRANSITIONS: Record<string, string[]> = {
-  draft: ['pending', 'cancelled'],
-  pending: ['approved', 'rejected', 'cancelled'],
-  approved: ['in_progress', 'cancelled'],
-  inProgress: ['completed', 'rolled_back', 'cancelled'],
-  completed: [],
-  rejected: ['draft', 'cancelled'],
-  rolledBack: [],
-  cancelled: [],
-};
-
-/**
- * 验证变更状态转换
- */
-export function isValidChangeTransition(
-  currentStatus: string,
-  targetStatus: string
-): boolean {
-  const allowed = CHANGE_STATUS_TRANSITIONS[currentStatus];
-  return allowed?.includes(targetStatus) ?? false;
-}
-
 export default {
   isValidTransition,
   getTransitionAction,
@@ -193,9 +144,5 @@ export default {
   validateTransitionOrThrow,
   isFinalStatus,
   isActiveStatus,
-  isValidIncidentTransition,
-  isValidChangeTransition,
   VALID_TICKET_TRANSITIONS,
-  INCIDENT_STATUS_TRANSITIONS,
-  CHANGE_STATUS_TRANSITIONS,
 };

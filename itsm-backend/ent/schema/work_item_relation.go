@@ -58,17 +58,18 @@ func (WorkItemRelation) Fields() []ent.Field {
 // Indexes of the WorkItemRelation.
 func (WorkItemRelation) Indexes() []ent.Index {
 	return []ent.Index{
-		// 部分唯一索引：只约束"活着"的关系行。deleted_at 是软删除标记，若唯一索引
-		// 覆盖已软删除的行，则解除关联后再重新关联同一对 WorkItem + 同一 relation_type
-		// 会永久撞唯一约束——第一次软删除之后这条关系就再也建不回来了。
+		// Only live duplicate relation tuples are rejected; soft-deleted rows do
+		// not prevent relinking the same WorkItems.
 		//
-		// entsql.IndexWhere 在 SQLite 和 PostgreSQL 上都生成部分索引（ent v0.14.6），
-		// 正好覆盖本项目的测试库和生产库，所以不需要退化成硬删除。
-		// WHERE 子句要跟数据库里存储的规范形式一致（见 entsql.IndexWhere 的文档注释），
-		// 因此写成大写的 "deleted_at IS NULL"。
+		// entsql.IndexWhere generates a partial index in both SQLite and PostgreSQL.
 		index.Fields("tenant_id", "source_work_item_id", "target_work_item_id", "relation_type").
 			Unique().
 			Annotations(entsql.IndexWhere("deleted_at IS NULL")),
+		// An incident can have only one active investigated_by Problem relation.
+		// Soft-deleted relations do not participate so a replacement may be linked.
+		index.Fields("tenant_id", "source_work_item_id").
+			Unique().
+			Annotations(entsql.IndexWhere("deleted_at IS NULL AND relation_type = 'investigated_by'")),
 		index.Fields("tenant_id", "target_work_item_id"),
 	}
 }

@@ -36,13 +36,17 @@ import {
   ChangeImpactLabels,
   ChangeRiskLabels,
 } from '@/constants/change';
-import type { Change, ApprovalRecord } from '@/types/biz/change';
+import type { ApprovalRecord } from '@/types/biz/change';
+import type { Change } from '@/lib/api/change-api';
 import { getErrorMessage } from '@/lib/utils/error-message-handler';
 import ChangeRiskAssessment from './ChangeRiskAssessment';
 import ChangeCMDBImpactPanel from './ChangeCMDBImpactPanel';
 import ChangeImpactAnalysis from './ChangeImpactAnalysis';
 import ChangeRollbackPlan from './ChangeRollbackPlan';
 import { SafeTextBlock } from '@/components/common/SafeContent';
+import { useOptionalWorkItemContext } from '@/components/work-item/WorkItemContext';
+import type { WorkItemActionState } from '@/components/work-item/WorkItemTypes';
+import { WorkItemActionButton } from '@/components/work-item/WorkItemActionButton';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -56,9 +60,23 @@ const statusColors: Record<string, string> = {
   [ChangeStatus.ROLLED_BACK]: 'magenta',
 };
 
-const ChangeDetail: React.FC = () => {
-  const { id } = useParams() as { id: string };
+interface ChangeDetailProps {
+  id?: string;
+  fallbackActions?: Record<string, WorkItemActionState>;
+  onChangeLoaded?: (change: Change) => void;
+}
+
+const EMPTY_ACTIONS: Record<string, WorkItemActionState> = {};
+
+const ChangeDetail: React.FC<ChangeDetailProps> = ({
+  id: propId,
+  fallbackActions,
+  onChangeLoaded,
+}) => {
+  const params = useParams() as { id?: string };
+  const id = propId || params?.id;
   const router = useRouter();
+  const workItemContext = useOptionalWorkItemContext();
   const [loading, setLoading] = useState(true);
   const [change, setChange] = useState<Change | null>(null);
   const [approvals, setApprovals] = useState<ApprovalRecord[]>([]);
@@ -70,16 +88,13 @@ const ChangeDetail: React.FC = () => {
   const [rejectModalVisible, setRejectModalVisible] = useState(false);
   const [approvalComment, setApprovalComment] = useState('');
   const [processing, setProcessing] = useState(false);
+  const actions = workItemContext?.actions ?? fallbackActions ?? EMPTY_ACTIONS;
 
   useEffect(() => {
     if (id) {
       loadDetail();
     }
-     
   }, [id]);
-
-  // 检查是否可以审批
-  const canApprove = change?.status === ChangeStatus.PENDING;
 
   // 批准变更
   const handleApprove = async () => {
@@ -90,7 +105,7 @@ const ChangeDetail: React.FC = () => {
       message.success('变更已批准');
       setApprovalModalVisible(false);
       setApprovalComment('');
-      loadDetail();
+      void loadDetail();
     } catch (error) {
       message.error(getErrorMessage(error) || '批准失败');
     } finally {
@@ -113,7 +128,7 @@ const ChangeDetail: React.FC = () => {
       message.success('变更已拒绝');
       setRejectModalVisible(false);
       setApprovalComment('');
-      loadDetail();
+      void loadDetail();
     } catch (error) {
       message.error(getErrorMessage(error) || '拒绝失败');
     } finally {
@@ -130,7 +145,7 @@ const ChangeDetail: React.FC = () => {
     try {
       await ChangeApi.submitForApproval(change.id);
       message.success('已提交审批');
-      loadDetail();
+      void loadDetail();
     } catch (error) {
       message.error('提交审批失败');
     } finally {
@@ -145,7 +160,7 @@ const ChangeDetail: React.FC = () => {
     try {
       await ChangeApi.startImplementation(change.id);
       message.success('已开始实施');
-      loadDetail();
+      void loadDetail();
     } catch (error) {
       message.error('开始实施失败');
     } finally {
@@ -160,7 +175,7 @@ const ChangeDetail: React.FC = () => {
     try {
       await ChangeApi.completeImplementation(change.id);
       message.success('变更已完成');
-      loadDetail();
+      void loadDetail();
     } catch (error) {
       message.error('完成变更失败');
     } finally {
@@ -173,6 +188,7 @@ const ChangeDetail: React.FC = () => {
     try {
       const data = await ChangeApi.getChange(Number(id!));
       setChange(data as Change);
+      onChangeLoaded?.(data as Change);
 
       // Try to load approval summary
       try {
@@ -264,11 +280,11 @@ const ChangeDetail: React.FC = () => {
     return (
       <Card>
         <Result
-          status="404"
-          title="404"
-          subTitle="抱歉，您访问的变更不存在"
+          status='404'
+          title='404'
+          subTitle='抱歉，您访问的变更不存在'
           extra={
-            <Button type="primary" onClick={() => router.push('/changes')}>
+            <Button type='primary' onClick={() => router.push('/changes')}>
               返回列表
             </Button>
           }
@@ -278,7 +294,7 @@ const ChangeDetail: React.FC = () => {
   }
 
   return (
-    <Space orientation="vertical" style={{ width: '100%' }} size="large">
+    <Space orientation='vertical' style={{ width: '100%' }} size='large'>
       <Card>
         <div style={{ marginBottom: 24 }}>
           <Button
@@ -293,69 +309,100 @@ const ChangeDetail: React.FC = () => {
           >
             <Title level={3}>{change.title}</Title>
             <Tag color={statusColors[change.status]} style={{ padding: '4px 12px', fontSize: 14 }}>
-              {ChangeStatusLabels[change.status]}
+              {ChangeStatusLabels[change.status as ChangeStatus]}
             </Tag>
-            {change.status === ChangeStatus.DRAFT && (
-              <Button type="primary" loading={processing} onClick={handleSubmitForApproval}>
+            <Space wrap>
+              <WorkItemActionButton
+                action={actions.submitForApproval}
+                actionName='submit-for-approval'
+                button={{
+                  type: 'primary',
+                  loading: processing,
+                  disabled: processing,
+                  onClick: handleSubmitForApproval,
+                }}
+              >
                 提交审批
-              </Button>
-            )}
-            {canApprove && (
-              <Space>
-                <Button
-                  type="primary"
-                  icon={<CheckCircle />}
-                  onClick={() => setApprovalModalVisible(true)}
-                >
-                  批准
-                </Button>
-                <Button
-                  danger
-                  icon={<XCircle />}
-                  onClick={() => setRejectModalVisible(true)}
-                >
-                  拒绝
-                </Button>
-              </Space>
-            )}
-            {(change.status === ChangeStatus.APPROVED || change.status === ChangeStatus.SCHEDULED) && (
-              <Button type="primary" loading={processing} onClick={handleStartImplementation}>
+              </WorkItemActionButton>
+              <WorkItemActionButton
+                action={actions.approve}
+                actionName='approve'
+                button={{
+                  type: 'primary',
+                  icon: <CheckCircle />,
+                  disabled: processing,
+                  onClick: () => setApprovalModalVisible(true),
+                }}
+              >
+                批准
+              </WorkItemActionButton>
+              <WorkItemActionButton
+                action={actions.reject}
+                actionName='reject'
+                button={{
+                  danger: true,
+                  icon: <XCircle />,
+                  disabled: processing,
+                  onClick: () => setRejectModalVisible(true),
+                }}
+              >
+                拒绝
+              </WorkItemActionButton>
+              <WorkItemActionButton
+                action={actions.startImplementation}
+                actionName='start-implementation'
+                button={{
+                  type: 'primary',
+                  loading: processing,
+                  disabled: processing,
+                  onClick: handleStartImplementation,
+                }}
+              >
                 开始实施
-              </Button>
-            )}
-            {change.status === ChangeStatus.IN_PROGRESS && (
-              <Button type="primary" loading={processing} onClick={handleCompleteImplementation}>
+              </WorkItemActionButton>
+              <WorkItemActionButton
+                action={actions.completeImplementation}
+                actionName='complete-implementation'
+                button={{
+                  type: 'primary',
+                  loading: processing,
+                  disabled: processing,
+                  onClick: handleCompleteImplementation,
+                }}
+              >
                 完成
-              </Button>
-            )}
+              </WorkItemActionButton>
+            </Space>
           </div>
         </div>
 
         <Descriptions bordered column={2}>
-          <Descriptions.Item label="变更编号">{change.id}</Descriptions.Item>
-          <Descriptions.Item label="变更类型">{ChangeTypeLabels[change.type]}</Descriptions.Item>
-          <Descriptions.Item label="优先级">
-            {ChangePriorityLabels[change.priority]}
+          <Descriptions.Item label='变更编号'>{change.id}</Descriptions.Item>
+          <Descriptions.Item label='变更类型'>
+            {ChangeTypeLabels[change.type as keyof typeof ChangeTypeLabels]}
           </Descriptions.Item>
-          <Descriptions.Item label="风险等级">
-            {ChangeRiskLabels[change.riskLevel]}
+          <Descriptions.Item label='优先级'>
+            {ChangePriorityLabels[change.priority as keyof typeof ChangePriorityLabels]}
           </Descriptions.Item>
-          <Descriptions.Item label="影响范围">
-            {ChangeImpactLabels[change.impactScope]}
+          <Descriptions.Item label='风险等级'>
+            {ChangeRiskLabels[change.riskLevel as keyof typeof ChangeRiskLabels]}
           </Descriptions.Item>
-          <Descriptions.Item label="负责人">{change.assigneeName || '未分配'}</Descriptions.Item>
-          <Descriptions.Item label="计划起始">
+          <Descriptions.Item label='影响范围'>
+            {ChangeImpactLabels[change.impactScope as keyof typeof ChangeImpactLabels]}
+          </Descriptions.Item>
+          <Descriptions.Item label='负责人'>{change.assigneeName || '未分配'}</Descriptions.Item>
+          <Descriptions.Item label='计划起始'>
             {change.plannedStartDate
               ? dayjs(change.plannedStartDate).format('YYYY-MM-DD HH:mm')
               : '-'}
           </Descriptions.Item>
-          <Descriptions.Item label="计划截止">
+          <Descriptions.Item label='计划截止'>
             {change.plannedEndDate ? dayjs(change.plannedEndDate).format('YYYY-MM-DD HH:mm') : '-'}
           </Descriptions.Item>
         </Descriptions>
 
         <Tabs
-          defaultActiveKey="1"
+          defaultActiveKey='1'
           style={{ marginTop: 24 }}
           onChange={activeKey => {
             if (activeKey === '3' && !riskAssessment) loadRiskAssessment();
@@ -368,24 +415,24 @@ const ChangeDetail: React.FC = () => {
               children: (
                 <>
                   <Title level={5}>变更原因 / 理由</Title>
-                  <SafeTextBlock content={change.justification} fallback="无" />
+                  <SafeTextBlock content={change.justification} fallback='无' />
 
                   <Title level={5}>变更描述</Title>
-                  <SafeTextBlock content={change.description} fallback="无" />
+                  <SafeTextBlock content={change.description} fallback='无' />
 
                   <Divider />
 
                   <Title level={5}>实施计划</Title>
                   <SafeTextBlock
                     content={change.implementationPlan}
-                    fallback="未提供实施计划"
+                    fallback='未提供实施计划'
                     preserveNewlines
                   />
 
                   <Title level={5}>回滚计划</Title>
                   <SafeTextBlock
                     content={change.rollbackPlan}
-                    fallback="未提供回滚计划"
+                    fallback='未提供回滚计划'
                     preserveNewlines
                   />
                 </>
@@ -397,7 +444,7 @@ const ChangeDetail: React.FC = () => {
               children:
                 approvals.length > 0 ? (
                   <List
-                    itemLayout="horizontal"
+                    itemLayout='horizontal'
                     dataSource={approvals}
                     renderItem={record => (
                       <List.Item>
@@ -415,8 +462,10 @@ const ChangeDetail: React.FC = () => {
                               <Tag color={statusColors[record.status]}>
                                 {ChangeStatusLabels[record.status]}
                               </Tag>
-                              <Text type="secondary">
-                                {record.createdAt ? dayjs(record.createdAt).format('YYYY-MM-DD HH:mm') : '-'}
+                              <Text type='secondary'>
+                                {record.createdAt
+                                  ? dayjs(record.createdAt).format('YYYY-MM-DD HH:mm')
+                                  : '-'}
                               </Text>
                             </Space>
                           }
@@ -426,7 +475,7 @@ const ChangeDetail: React.FC = () => {
                     )}
                   />
                 ) : (
-                  <Empty description="暂无审批记录" />
+                  <Empty description='暂无审批记录' />
                 ),
             },
             {
@@ -477,9 +526,9 @@ const ChangeDetail: React.FC = () => {
               key: '6',
               label: '实施后审查 (PIR)',
               children: (
-                <div className="py-4">
-                  <p className="text-gray-500 mb-4">评估变更实施结果，总结经验教训</p>
-                  <Button type="primary" onClick={() => router.push(`/changes/${id}/pir`)}>
+                <div className='py-4'>
+                  <p className='text-gray-500 mb-4'>评估变更实施结果，总结经验教训</p>
+                  <Button type='primary' onClick={() => router.push(`/changes/${id}/pir`)}>
                     {change.status === 'completed' ? '填写PIR' : '查看PIR'}
                   </Button>
                 </div>
@@ -491,24 +540,24 @@ const ChangeDetail: React.FC = () => {
 
       {/* 批准弹窗 */}
       <Modal
-        title="批准变更"
+        title='批准变更'
         open={approvalModalVisible}
         onCancel={() => setApprovalModalVisible(false)}
         footer={[
-          <Button key="cancel" onClick={() => setApprovalModalVisible(false)}>
+          <Button key='cancel' onClick={() => setApprovalModalVisible(false)}>
             取消
           </Button>,
-          <Button key="approve" type="primary" loading={processing} onClick={handleApprove}>
+          <Button key='approve' type='primary' loading={processing} onClick={handleApprove}>
             批准
           </Button>,
         ]}
       >
-        <div className="py-4">
-          <p className="mb-2">审批意见（可选）：</p>
+        <div className='py-4'>
+          <p className='mb-2'>审批意见（可选）：</p>
           <Input.TextArea
             value={approvalComment}
             onChange={e => setApprovalComment(e.target.value)}
-            placeholder="请输入审批意见..."
+            placeholder='请输入审批意见...'
             rows={3}
           />
         </div>
@@ -516,26 +565,26 @@ const ChangeDetail: React.FC = () => {
 
       {/* 拒绝弹窗 */}
       <Modal
-        title="拒绝变更"
+        title='拒绝变更'
         open={rejectModalVisible}
         onCancel={() => setRejectModalVisible(false)}
         footer={[
-          <Button key="cancel" onClick={() => setRejectModalVisible(false)}>
+          <Button key='cancel' onClick={() => setRejectModalVisible(false)}>
             取消
           </Button>,
-          <Button key="reject" danger loading={processing} onClick={handleReject}>
+          <Button key='reject' danger loading={processing} onClick={handleReject}>
             拒绝
           </Button>,
         ]}
       >
-        <div className="py-4">
-          <p className="mb-2">
-            拒绝原因<span className="text-red-500 ml-1">*</span>：
+        <div className='py-4'>
+          <p className='mb-2'>
+            拒绝原因<span className='text-red-500 ml-1'>*</span>：
           </p>
           <Input.TextArea
             value={approvalComment}
             onChange={e => setApprovalComment(e.target.value)}
-            placeholder="请输入拒绝原因..."
+            placeholder='请输入拒绝原因...'
             rows={3}
           />
         </div>
