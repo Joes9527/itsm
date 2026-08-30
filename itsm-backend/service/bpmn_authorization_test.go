@@ -238,7 +238,7 @@ func TestStartProcessUsesTrustedRequesterFallback(t *testing.T) {
 	assert.Equal(t, strconv.Itoa(f.actor.ID), instance.Initiator)
 }
 
-func TestStartProcessDoesNotUseRequesterFallbackForAuthenticatedSystemActor(t *testing.T) {
+func TestStartProcessUsesRequesterFallbackForZeroActor(t *testing.T) {
 	f := newBPMNAuthorizationFixture(t)
 	ctx := context.WithValue(f.userCtx, bpmn.BPMNTenantIDContextKey, f.tenant.ID)
 	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, 0)
@@ -246,7 +246,7 @@ func TestStartProcessDoesNotUseRequesterFallbackForAuthenticatedSystemActor(t *t
 		"requesterId": f.actor.ID,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "system", instance.Initiator)
+	assert.Equal(t, strconv.Itoa(f.actor.ID), instance.Initiator)
 }
 
 func TestListProcessInstancesScopesParticipantAndElevatedReader(t *testing.T) {
@@ -362,6 +362,10 @@ func TestListApprovalDecisionsAuthorization(t *testing.T) {
 	decisions, err := f.engine.TaskService().ListApprovalDecisions(f.actorScopeCtx(f.actor, f.tenant, false), instance.ProcessInstanceID)
 	require.NoError(t, err)
 	require.Len(t, decisions, 1)
+	numericDecisions, err := f.engine.TaskService().ListApprovalDecisions(f.actorScopeCtx(f.actor, f.tenant, false), strconv.Itoa(instance.ID))
+	require.NoError(t, err)
+	require.Len(t, numericDecisions, 1)
+	assert.Equal(t, decisions[0].ID, numericDecisions[0].ID)
 
 	_, err = f.engine.TaskService().ListApprovalDecisions(f.actorScopeCtx(f.outsider, f.tenant, false), instance.ProcessInstanceID)
 	requireBPMNForbidden(t, err)

@@ -224,11 +224,8 @@ func (e *CustomProcessEngine) CallbackRegistry() *bpmn.CallbackRegistry {
 }
 
 func resolveProcessInitiator(ctx context.Context, variables map[string]interface{}) string {
-	if userID, authenticated := ctx.Value(bpmn.BPMNUserIDContextKey).(int); authenticated {
-		if userID > 0 {
-			return strconv.Itoa(userID)
-		}
-		return "system"
+	if userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int); userID > 0 {
+		return strconv.Itoa(userID)
 	}
 	for _, key := range []string{"requester_id", "requesterId"} {
 		if requesterID := bpmn.GetIntFromVars(variables, key); requesterID > 0 {
@@ -2653,7 +2650,7 @@ func (s *bpmnTaskService) ListApprovalDecisions(ctx context.Context, processInst
 	}
 	return s.client.ProcessApprovalDecision.Query().
 		Where(
-			processapprovaldecision.ProcessInstanceKey(processInstanceKey),
+			processapprovaldecision.ProcessInstanceKey(instance.ProcessInstanceID),
 			processapprovaldecision.TenantID(scope.TenantID),
 		).
 		Order(ent.Asc(processapprovaldecision.FieldCreatedAt)).
