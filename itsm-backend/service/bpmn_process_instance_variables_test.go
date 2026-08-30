@@ -7,6 +7,7 @@ import (
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/service/bpmn"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -58,8 +59,8 @@ func setupInstanceVariablesFixture(t *testing.T) (*ent.Client, *bpmnProcessInsta
 // 流程身份键（business_id/business_type/business_key/tenant_id）由触发方写入，
 // 不允许经该端点覆盖，防止实例归属方污染自己实例的身份上下文。
 func TestSetProcessInstanceVariables_RejectsReservedKeys(t *testing.T) {
-	client, svc, _, instance := setupInstanceVariablesFixture(t)
-	ctx := context.Background()
+	client, svc, tenantID, instance := setupInstanceVariablesFixture(t)
+	ctx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, tenantID)
 
 	for _, key := range reservedInstanceVariableKeys {
 		t.Run(key, func(t *testing.T) {
@@ -76,8 +77,8 @@ func TestSetProcessInstanceVariables_RejectsReservedKeys(t *testing.T) {
 
 // TestSetProcessInstanceVariables_AllowsBusinessVars 普通业务键仍可经该端点写入。
 func TestSetProcessInstanceVariables_AllowsBusinessVars(t *testing.T) {
-	client, svc, _, instance := setupInstanceVariablesFixture(t)
-	ctx := context.Background()
+	client, svc, tenantID, instance := setupInstanceVariablesFixture(t)
+	ctx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, tenantID)
 
 	err := svc.SetProcessInstanceVariables(ctx, strconv.Itoa(instance.ID), map[string]interface{}{"custom": "x", "priority": "high"})
 	require.NoError(t, err)

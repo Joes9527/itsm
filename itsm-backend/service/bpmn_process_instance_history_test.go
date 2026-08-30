@@ -21,6 +21,7 @@ func TestBPMNProcessInstanceService_GetProcessInstanceHistory_ReturnsOrderedHist
 	defer client.Close()
 
 	ctx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, 1)
+	ctx = WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: 1, TenantID: 1, CanReadAllInstances: true})
 	svc := &bpmnProcessInstanceService{client: client, logger: zaptest.NewLogger(t).Sugar()}
 
 	instance := createBPMNHistoryInstance(t, ctx, client, 1, "approval-flow", "PI-HISTORY-001")
@@ -46,6 +47,8 @@ func TestBPMNProcessInstanceService_GetProcessInstanceHistory_RespectsTenantIsol
 
 	ctxTenant1 := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, 1)
 	ctxTenant2 := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, 2)
+	ctxTenant1 = WithBPMNAccessScope(ctxTenant1, BPMNAccessScope{UserID: 1, TenantID: 1, CanReadAllInstances: true})
+	ctxTenant2 = WithBPMNAccessScope(ctxTenant2, BPMNAccessScope{UserID: 2, TenantID: 2, CanReadAllInstances: true})
 
 	instanceTenant1 := createBPMNHistoryInstance(t, ctxTenant1, client, 1, "approval-flow", "PI-HISTORY-002")
 	_ = createBPMNHistoryInstance(t, ctxTenant2, client, 2, "approval-flow", "PI-HISTORY-003")
@@ -53,8 +56,9 @@ func TestBPMNProcessInstanceService_GetProcessInstanceHistory_RespectsTenantIsol
 	createBPMNExecutionHistory(t, ctxTenant1, client, instanceTenant1.ID, 1, "tenant1-hist", "start", "开始", "start_event", "start", time.Now().UTC())
 
 	history, err := svc.GetProcessInstanceHistory(ctxTenant2, "1")
-	require.NoError(t, err)
-	assert.Empty(t, history)
+	require.Error(t, err)
+	assert.Nil(t, history)
+	assert.True(t, ent.IsNotFound(err))
 }
 
 func createBPMNHistoryInstance(t *testing.T, ctx context.Context, client *ent.Client, tenantID int, definitionKey, instanceKey string) *ent.ProcessInstance {

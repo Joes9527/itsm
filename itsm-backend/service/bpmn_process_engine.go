@@ -223,6 +223,21 @@ func (e *CustomProcessEngine) CallbackRegistry() *bpmn.CallbackRegistry {
 	return e.callbackRegistry
 }
 
+func resolveProcessInitiator(ctx context.Context, variables map[string]interface{}) string {
+	if userID, authenticated := ctx.Value(bpmn.BPMNUserIDContextKey).(int); authenticated {
+		if userID > 0 {
+			return strconv.Itoa(userID)
+		}
+		return "system"
+	}
+	for _, key := range []string{"requester_id", "requesterId"} {
+		if requesterID := bpmn.GetIntFromVars(variables, key); requesterID > 0 {
+			return strconv.Itoa(requesterID)
+		}
+	}
+	return "system"
+}
+
 // StartProcess 启动流程实例
 func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitionKey string, businessKey string, businessType string, businessID int, variables map[string]interface{}) (*ent.ProcessInstance, error) {
 	// 1. 获取租户ID
@@ -266,6 +281,7 @@ func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitio
 		SetProcessDefinitionID(definition.ID).
 		SetStatus("running").
 		SetVariables(variables).
+		SetInitiator(resolveProcessInitiator(ctx, variables)).
 		SetStartTime(time.Now()).
 		SetTenantID(definition.TenantID).
 		SetCurrentActivityID(startEvent.ID).
@@ -2190,26 +2206,78 @@ type bpmnProcessInstanceService struct {
 	participationResolver *bpmnParticipationResolver
 }
 
-func (s *bpmnProcessInstanceService) GetProcessInstance(ctx context.Context, processInstanceID string) (*ent.ProcessInstance, error) {
-	id, err := strconv.Atoi(processInstanceID)
-	if err != nil {
-		return nil, fmt.Errorf("无效的流程实例ID: %w", err)
+func (s *bpmnProcessInstanceService) loadProcessInstance(ctx context.Context, instanceKey string, tenantID int) (*ent.ProcessInstance, error) {
+	if tenantID <= 0 {
+		return nil, common.NewForbiddenError("缺少 BPMN 实例租户上下文")
 	}
-	query := s.client.ProcessInstance.Query().
-		Where(processinstance.ID(id))
-	if tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int); tenantID > 0 {
-		query = query.Where(processinstance.TenantID(tenantID))
+	var instancePredicate predicate.ProcessInstance
+	if id, err := strconv.Atoi(instanceKey); err == nil {
+		instancePredicate = processinstance.ID(id)
+	} else {
+		instancePredicate = processinstance.ProcessInstanceID(instanceKey)
 	}
-	instance, err := query.First(ctx)
+	instance, err := s.client.ProcessInstance.Query().
+		Where(
+			processinstance.TenantID(tenantID),
+			instancePredicate,
+		).
+		First(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("获取流程实例失败: %w", err)
 	}
+	return instance, nil
+}
 
+func (s *bpmnProcessInstanceService) authorizeProcessInstanceRead(ctx context.Context, instance *ent.ProcessInstance, scope BPMNAccessScope) error {
+	if instance == nil || instance.TenantID != scope.TenantID {
+		return common.NewForbiddenError("无权读取流程实例")
+	}
+	if scope.CanReadAllInstances || instance.Initiator == strconv.Itoa(scope.UserID) {
+		return nil
+	}
+	if s.participationResolver == nil {
+		return common.NewForbiddenError("无权读取流程实例")
+	}
+	actor, err := s.participationResolver.resolveActor(ctx, scope)
+	if err != nil {
+		return common.NewForbiddenError("无权读取流程实例")
+	}
+	instanceIDs, err := s.participationResolver.participatingInstanceIDs(ctx, actor)
+	if err != nil {
+		return fmt.Errorf("解析流程实例参与范围失败: %w", err)
+	}
+	for _, instanceID := range instanceIDs {
+		if instanceID == instance.ID {
+			return nil
+		}
+	}
+	return common.NewForbiddenError("无权读取流程实例")
+}
+
+func (s *bpmnProcessInstanceService) GetProcessInstance(ctx context.Context, processInstanceID string) (*ent.ProcessInstance, error) {
+	scope, err := BPMNAccessScopeFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	instance, err := s.loadProcessInstance(ctx, processInstanceID, scope.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.authorizeProcessInstanceRead(ctx, instance, scope); err != nil {
+		return nil, err
+	}
 	return instance, nil
 }
 
 func (s *bpmnProcessInstanceService) ListProcessInstances(ctx context.Context, req *ListProcessInstancesRequest) ([]*ent.ProcessInstance, int, error) {
-	query := s.client.ProcessInstance.Query()
+	scope, err := BPMNAccessScopeFromContext(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	if req.TenantID > 0 && req.TenantID != scope.TenantID {
+		return nil, 0, common.NewForbiddenError("无权读取其他租户的流程实例")
+	}
+	query := s.client.ProcessInstance.Query().Where(processinstance.TenantID(scope.TenantID))
 
 	if req.ProcessDefinitionKey != "" {
 		query = query.Where(processinstance.ProcessDefinitionKey(req.ProcessDefinitionKey))
@@ -2220,8 +2288,27 @@ func (s *bpmnProcessInstanceService) ListProcessInstances(ctx context.Context, r
 	if req.BusinessKey != "" {
 		query = query.Where(processinstance.BusinessKey(req.BusinessKey))
 	}
-	if req.TenantID > 0 {
-		query = query.Where(processinstance.TenantID(req.TenantID))
+	if !scope.CanReadAllInstances {
+		if s.participationResolver == nil {
+			return nil, 0, common.NewForbiddenError("无权读取流程实例")
+		}
+		actor, resolveErr := s.participationResolver.resolveActor(ctx, scope)
+		if resolveErr != nil {
+			return nil, 0, common.NewForbiddenError("无权读取流程实例")
+		}
+		participatingIDs, participationErr := s.participationResolver.participatingInstanceIDs(ctx, actor)
+		if participationErr != nil {
+			return nil, 0, fmt.Errorf("解析流程实例参与范围失败: %w", participationErr)
+		}
+		initiatorPredicate := processinstance.Initiator(strconv.Itoa(scope.UserID))
+		if len(participatingIDs) == 0 {
+			query = query.Where(initiatorPredicate)
+		} else {
+			query = query.Where(processinstance.Or(
+				initiatorPredicate,
+				processinstance.IDIn(participatingIDs...),
+			))
+		}
 	}
 
 	total, err := query.Count(ctx)
@@ -2260,7 +2347,8 @@ func (s *bpmnProcessInstanceService) GetProcessInstanceVariables(ctx context.Con
 var reservedInstanceVariableKeys = []string{"business_id", "business_type", "business_key", "tenant_id"}
 
 func (s *bpmnProcessInstanceService) SetProcessInstanceVariables(ctx context.Context, processInstanceID string, variables map[string]interface{}) error {
-	instance, err := s.GetProcessInstance(ctx, processInstanceID)
+	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
+	instance, err := s.loadProcessInstance(ctx, processInstanceID, tenantID)
 	if err != nil {
 		return err
 	}
@@ -2279,16 +2367,16 @@ func (s *bpmnProcessInstanceService) SetProcessInstanceVariables(ctx context.Con
 }
 
 func (s *bpmnProcessInstanceService) GetProcessInstanceHistory(ctx context.Context, processInstanceID string) ([]*ent.ProcessExecutionHistory, error) {
-	id, err := strconv.Atoi(processInstanceID)
+	instance, err := s.GetProcessInstance(ctx, processInstanceID)
 	if err != nil {
-		return nil, fmt.Errorf("无效的流程实例ID: %w", err)
+		return nil, err
 	}
 
 	query := s.client.ProcessExecutionHistory.Query().
-		Where(processexecutionhistory.ProcessInstanceID(id))
-	if tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int); tenantID > 0 {
-		query = query.Where(processexecutionhistory.TenantID(tenantID))
-	}
+		Where(
+			processexecutionhistory.ProcessInstanceID(instance.ID),
+			processexecutionhistory.TenantID(instance.TenantID),
+		)
 
 	history, err := query.Order(ent.Asc(processexecutionhistory.FieldTimestamp)).All(ctx)
 	if err != nil {
@@ -2300,13 +2388,18 @@ func (s *bpmnProcessInstanceService) GetProcessInstanceHistory(ctx context.Conte
 
 // GetInstanceStatistics 获取实例统计
 func (s *bpmnProcessInstanceService) GetInstanceStatistics(ctx context.Context, req *InstanceStatisticsRequest) (*InstanceStatistics, error) {
-	query := s.client.ProcessInstance.Query()
+	scope, err := BPMNAccessScopeFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !scope.CanReadAllInstances {
+		return nil, common.NewForbiddenError("无权读取流程实例统计")
+	}
+	req.TenantID = scope.TenantID
+	query := s.client.ProcessInstance.Query().Where(processinstance.TenantID(req.TenantID))
 
 	if req.ProcessDefinitionKey != "" {
 		query = query.Where(processinstance.ProcessDefinitionKey(req.ProcessDefinitionKey))
-	}
-	if req.TenantID > 0 {
-		query = query.Where(processinstance.TenantID(req.TenantID))
 	}
 	if req.StartDate != nil {
 		query = query.Where(processinstance.StartTimeGTE(*req.StartDate))
@@ -2543,14 +2636,25 @@ func (s *bpmnTaskService) ListUserTaskViews(ctx context.Context, req *ListUserTa
 }
 
 func (s *bpmnTaskService) ListApprovalDecisions(ctx context.Context, processInstanceKey string) ([]*ent.ProcessApprovalDecision, error) {
-	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
-	if tenantID <= 0 {
-		return nil, fmt.Errorf("缺少租户上下文")
+	scope, err := BPMNAccessScopeFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	instanceService := &bpmnProcessInstanceService{
+		client:                s.client,
+		participationResolver: s.participationResolver,
+	}
+	instance, err := instanceService.loadProcessInstance(ctx, processInstanceKey, scope.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	if err := instanceService.authorizeProcessInstanceRead(ctx, instance, scope); err != nil {
+		return nil, err
 	}
 	return s.client.ProcessApprovalDecision.Query().
 		Where(
 			processapprovaldecision.ProcessInstanceKey(processInstanceKey),
-			processapprovaldecision.TenantID(tenantID),
+			processapprovaldecision.TenantID(scope.TenantID),
 		).
 		Order(ent.Asc(processapprovaldecision.FieldCreatedAt)).
 		All(ctx)

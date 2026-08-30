@@ -30,9 +30,37 @@ func TestApprovalDecisionHistoryTenantIsolationAndUniqueness(t *testing.T) {
 	if err := create(1, 100, "PI-1"); err == nil {
 		t.Fatal("expected duplicate task decision to fail")
 	}
+	deployment, err := client.ProcessDeployment.Create().
+		SetDeploymentID("approval-decisions").
+		SetDeploymentName("Approval Decisions").
+		SetTenantID(1).
+		Save(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	definition, err := client.ProcessDefinition.Create().
+		SetKey("approval-decisions").
+		SetName("Approval Decisions").
+		SetBpmnXML([]byte("<definitions/>")).
+		SetDeploymentID(deployment.ID).
+		SetTenantID(1).
+		Save(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = client.ProcessInstance.Create().
+		SetProcessInstanceID("PI-1").
+		SetProcessDefinitionKey(definition.Key).
+		SetProcessDefinitionID(definition.ID).
+		SetTenantID(1).
+		Save(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	svc := &bpmnTaskService{client: client}
 	tenantOne := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, 1)
+	tenantOne = WithBPMNAccessScope(tenantOne, BPMNAccessScope{UserID: 1, TenantID: 1, CanReadAllInstances: true})
 	history, err := svc.ListApprovalDecisions(tenantOne, "PI-1")
 	if err != nil {
 		t.Fatal(err)

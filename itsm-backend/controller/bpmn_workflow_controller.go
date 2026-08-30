@@ -480,13 +480,11 @@ func (c *BPMNWorkflowController) ListProcessInstances(ctx *gin.Context) {
 		return
 	}
 
-	// 从JWT获取租户ID
-	tenantID, exists := ctx.Get("tenant_id")
-	if !exists {
-		common.AuthFailed(ctx, "未授权访问")
+	workflowCtx, tenantID, ok := getBPMNTenantContext(ctx)
+	if !ok {
 		return
 	}
-	req.TenantID = tenantID.(int)
+	req.TenantID = tenantID
 
 	// 设置默认分页参数
 	if req.Page <= 0 {
@@ -496,7 +494,7 @@ func (c *BPMNWorkflowController) ListProcessInstances(ctx *gin.Context) {
 		req.PageSize = 20
 	}
 
-	instances, total, err := c.processEngine.ProcessInstanceService().ListProcessInstances(ctx, &req)
+	instances, total, err := c.processEngine.ProcessInstanceService().ListProcessInstances(workflowCtx, &req)
 	if err != nil {
 		common.InternalError(ctx, "获取流程实例列表失败: "+err.Error())
 		return
@@ -977,15 +975,13 @@ func (c *BPMNWorkflowController) GetInstanceStats(ctx *gin.Context) {
 		return
 	}
 
-	// 从JWT获取租户ID
-	tenantID, exists := ctx.Get("tenant_id")
-	if !exists {
-		common.AuthFailed(ctx, "未授权访问")
+	workflowCtx, tenantID, ok := getBPMNTenantContext(ctx)
+	if !ok {
 		return
 	}
-	req.TenantID = tenantID.(int)
+	req.TenantID = tenantID
 
-	stats, err := c.processEngine.ProcessInstanceService().GetInstanceStatistics(ctx, &req)
+	stats, err := c.processEngine.ProcessInstanceService().GetInstanceStatistics(workflowCtx, &req)
 	if err != nil {
 		common.InternalError(ctx, "获取实例统计失败: "+err.Error())
 		return

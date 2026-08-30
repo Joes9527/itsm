@@ -132,13 +132,16 @@ func (f *fakeTaskService) Vote(ctx context.Context, taskID string, req *service.
 }
 
 type fakeProcessEngine struct {
-	taskSvc *fakeTaskService
+	taskSvc            *fakeTaskService
+	processInstanceSvc service.ProcessInstanceService
 }
 
 func (e *fakeProcessEngine) ProcessDefinitionService() service.ProcessDefinitionService { return nil }
 
-func (e *fakeProcessEngine) ProcessInstanceService() service.ProcessInstanceService { return nil }
-func (e *fakeProcessEngine) TaskService() service.TaskService                       { return e.taskSvc }
+func (e *fakeProcessEngine) ProcessInstanceService() service.ProcessInstanceService {
+	return e.processInstanceSvc
+}
+func (e *fakeProcessEngine) TaskService() service.TaskService { return e.taskSvc }
 
 func (e *fakeProcessEngine) StartProcess(ctx context.Context, key, biz string, businessType string, businessID int, vars map[string]interface{}) (*ent.ProcessInstance, error) {
 	return nil, nil
