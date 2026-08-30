@@ -99,13 +99,14 @@ type TaskService interface {
 // CustomProcessEngine 是ProcessEngine接口的实现
 // 充当领域服务(Domain Service)，协调流程定义、实例和任务实体的生命周期
 type CustomProcessEngine struct {
-	client           *ent.Client
-	logger           *zap.SugaredLogger
-	parser           *BPMNParser            // 使用自定义的BPMN解析器
-	exprEngine       *ExpressionEngine      // 表达式引擎
-	expressionVars   map[string]interface{} // 表达式变量
-	callbackRegistry *bpmn.CallbackRegistry // 服务任务回调注册中心
-	groupResolver    *bpmn.GroupResolver    // 审批组解析器：candidateGroups → 候选用户
+	client                *ent.Client
+	logger                *zap.SugaredLogger
+	parser                *BPMNParser            // 使用自定义的BPMN解析器
+	exprEngine            *ExpressionEngine      // 表达式引擎
+	expressionVars        map[string]interface{} // 表达式变量
+	callbackRegistry      *bpmn.CallbackRegistry // 服务任务回调注册中心
+	groupResolver         *bpmn.GroupResolver    // 审批组解析器：candidateGroups → 候选用户
+	participationResolver *bpmnParticipationResolver
 	// 内部服务
 	processDefinitionService *bpmnProcessDefinitionService
 	processInstanceService   *bpmnProcessInstanceService
@@ -116,23 +117,26 @@ type CustomProcessEngine struct {
 
 // NewCustomProcessEngine 创建自定义流程引擎实例
 func NewCustomProcessEngine(client *ent.Client, logger *zap.SugaredLogger) ProcessEngine {
+	groupResolver := bpmn.NewGroupResolver(client)
+	participationResolver := newBPMNParticipationResolver(client, groupResolver)
 	engine := &CustomProcessEngine{
-		client:           client,
-		logger:           logger,
-		parser:           NewBPMNParser(),
-		exprEngine:       NewExpressionEngine(),
-		expressionVars:   make(map[string]interface{}),
-		callbackRegistry: bpmn.NewCallbackRegistry(client, logger),
-		groupResolver:    bpmn.NewGroupResolver(client),
+		client:                client,
+		logger:                logger,
+		parser:                NewBPMNParser(),
+		exprEngine:            NewExpressionEngine(),
+		expressionVars:        make(map[string]interface{}),
+		callbackRegistry:      bpmn.NewCallbackRegistry(client, logger),
+		groupResolver:         groupResolver,
+		participationResolver: participationResolver,
 	}
 	engine.processDefinitionService = &bpmnProcessDefinitionService{client: client, logger: logger}
-	engine.processInstanceService = &bpmnProcessInstanceService{client: client, logger: logger}
+	engine.processInstanceService = &bpmnProcessInstanceService{client: client, logger: logger, participationResolver: participationResolver}
 	// taskService 持有 engine 自身的引用（而不是每次调用再 NewCustomProcessEngine 造一个新的）：
 	// callbackRegistry 是 engine 级别的状态，bootstrap 在各领域 service 构造完成后往
 	// 这一个 engine 的 registry 里注入 TicketService/IncidentService。任务完成路径若临时
 	// 新建 engine，拿到的就是一个从未被注入过的空 registry，UserTask 回调只会 Warn 一句
 	// 静默失败（见 dispatchUserTaskCallback 的"失败只告警不阻断"注释）。
-	engine.taskService = &bpmnTaskService{client: client, logger: logger, groupResolver: engine.groupResolver, engine: engine}
+	engine.taskService = &bpmnTaskService{client: client, logger: logger, groupResolver: engine.groupResolver, participationResolver: participationResolver, engine: engine}
 	engine.auditService = NewBPMNAuditService(client, logger)
 
 	// 注册流程相关的内置函数
@@ -201,7 +205,7 @@ func (e *CustomProcessEngine) ProcessDefinitionService() ProcessDefinitionServic
 
 // ProcessInstanceService 返回流程实例服务
 func (e *CustomProcessEngine) ProcessInstanceService() ProcessInstanceService {
-	return &bpmnProcessInstanceService{client: e.client}
+	return &bpmnProcessInstanceService{client: e.client, participationResolver: e.participationResolver}
 }
 
 // TaskService 返回任务服务
@@ -2181,8 +2185,9 @@ func (s *bpmnProcessDefinitionService) SetProcessDefinitionActive(ctx context.Co
 }
 
 type bpmnProcessInstanceService struct {
-	client *ent.Client
-	logger *zap.SugaredLogger
+	client                *ent.Client
+	logger                *zap.SugaredLogger
+	participationResolver *bpmnParticipationResolver
 }
 
 func (s *bpmnProcessInstanceService) GetProcessInstance(ctx context.Context, processInstanceID string) (*ent.ProcessInstance, error) {
@@ -2355,9 +2360,10 @@ func (s *bpmnProcessInstanceService) GetInstanceStatistics(ctx context.Context, 
 }
 
 type bpmnTaskService struct {
-	client        *ent.Client
-	logger        *zap.SugaredLogger
-	groupResolver *bpmn.GroupResolver
+	client                *ent.Client
+	logger                *zap.SugaredLogger
+	groupResolver         *bpmn.GroupResolver
+	participationResolver *bpmnParticipationResolver
 	// engine 是创建本任务服务的那个引擎实例。任何需要推进流程（CompleteTask）或复用引擎
 	// 内部鉴权/审批记录逻辑（authorizeTaskActor / recordApprovalDecision）的方法都必须用它，
 	// 不能 NewCustomProcessEngine 现造——见 NewCustomProcessEngine 里的说明。
