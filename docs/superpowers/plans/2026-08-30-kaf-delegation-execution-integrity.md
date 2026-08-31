@@ -1,6 +1,6 @@
 # KAF Delegation Execution Integrity Implementation Plan（历史执行记录）
 
-> **状态警告（2026-08-31）：** 本计划对应的 Tasks 1–5 和两轮审查整改已经实施，并通过 `dc1233c8` 合并到 ITSM `main`。不得再把本文交给 `executing-plans` 或 `subagent-driven-development` 从头执行。下方未勾选的 Steps 是为追溯保留的原始 TDD 配方，不是当前完成度。当前唯一未闭合项是文末明确保留的真实 Dev 跨进程 SSLVPN/RLS 发布证据，其范围由父设计 §12.8 约束。
+> **状态警告（2026-09-01）：** 本计划对应的 Tasks 1–5 和两轮审查整改已经实施，并通过 `dc1233c8` 合并到 ITSM `main`；真实 Dev 跨进程 SSLVPN/RLS 证据随后由 release-closeout 计划闭合。不得再把本文交给 `executing-plans` 或 `subagent-driven-development` 从头执行；下方勾选项是历史完成记录。
 
 **Goal:** Make KAF delegated-task completion durable and recoverable through an ITSM action ledger, completion receipts, propagated callback failures, and KAF delivery leases.
 
@@ -10,7 +10,7 @@
 
 **Spec:** [KAF Delegation Execution Integrity Design](../specs/2026-08-30-kaf-delegation-execution-integrity-design.md)
 
-> **Implementation status (2026-08-31):** ITSM implementation and documentation are on `main@dc1233c8`; the historical ITSM feature worktree is at `41b24068`. KAF implementation is on its feature worktree at `b533daea` (`afbc1645` plus formatting). The remaining release-evidence gap is the explicitly unchecked live cross-process SSLVPN/RLS flow near the end of this document; see the execution-integrity report and §12.8 of the parent autonomous-delegation design. Unified Intake, Incident typed actions, KAF execution-model cleanup and UI remain separate product increments and were intentionally not implemented by this plan.
+> **Implementation status (updated 2026-09-01): COMPLETE for this plan's scope.** ITSM implementation and documentation are on `main@dc1233c8`; the historical ITSM feature worktree is at `41b24068`. KAF implementation is on its feature worktree at `b533daea` (`afbc1645` plus formatting). The former live cross-process SSLVPN/RLS evidence gap was closed by the 2026-08-31 release-closeout plan and report. Unified Intake subsequently completed as a separate increment; Incident typed actions, KAF execution-model cleanup and UI remain separate product increments.
 
 ## Global Constraints
 
@@ -56,7 +56,7 @@
 - Produces `ClaimKafAction(ctx, task, req) (*ent.KafTaskActionLedger, bool, error)`, where `bool` is true only for a newly claimed lease.
 - Consumes the existing `KafActionRequest` and `KafDelegationService.AuthorizeTask` behavior.
 
-- [ ] **Step 1: Write failing ledger and response-contract tests**
+- [x] **Step 1: Write failing ledger and response-contract tests**
 
 ```go
 func TestExecuteAction_ConcurrentScopeReturnsAppliedThenAlreadyApplied(t *testing.T) {
@@ -82,19 +82,19 @@ func TestExecuteAction_RejectsSameScopeWithDifferentKey(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run tests and confirm the old boolean contract fails**
+- [x] **Step 2: Run tests and confirm the old boolean contract fails**
 
 Run: `cd itsm-backend && go test ./service -run 'TestExecuteAction_(ConcurrentScope|RejectsSameScope)' -v`
 
 Expected: FAIL because `ResultStatus` and `KafTaskActionLedger` do not yet exist.
 
-- [ ] **Step 3: Add the Ent schema and generate Ent**
+- [x] **Step 3: Add the Ent schema and generate Ent**
 
 Create the schema with non-empty immutable request fields `tenant_id`, `task_id`, `run_id`, `step_id`, `action`, `idempotency_key`, `correlation_id`, `procedure_ref`, and `procedure_version`; coordinator fields `result_status`, `result_payload`, `lease_owner`, `lease_expires_at`, and `last_error_code`; plus timestamps. Add unique indexes exactly on `(tenant_id, task_id, run_id, step_id)` and `(tenant_id, idempotency_key)`. `result_status` defaults to `pending` and is constrained by service code to `pending`, `executing`, `applied`, `failed_retryable`, or `failed_terminal`.
 
 Run: `cd itsm-backend && go generate ./ent`
 
-- [ ] **Step 4: Implement canonical validation and short-transaction claim/finalize methods**
+- [x] **Step 4: Implement canonical validation and short-transaction claim/finalize methods**
 
 Use `fmt.Sprintf("%d:%s:%s:%s", task.TenantID, task.TaskID, req.Execution.RunID, req.Execution.StepID)` as the only accepted key. In a transaction, insert `pending`; on scope-key uniqueness conflict load the ledger and compare action, correlation, procedure reference/version, and canonical key. Return `already_applied` only for `applied`; return `ErrKafActionConflict` for a live lease; conditionally claim `pending`, `failed_retryable`, or expired `executing` with `Where(result_status in ..., lease_expires_at < now)`.
 
@@ -114,11 +114,11 @@ type KafActionResult struct {
 }
 ```
 
-- [ ] **Step 5: Remove the obsolete mutable idempotency mechanism**
+- [x] **Step 5: Remove the obsolete mutable idempotency mechanism**
 
 Delete `kafActionResult`, `putKafActionResult`, all `kaf_action_results` writes, and the old boolean replay behavior. Preserve `kaf_execution` only as non-authoritative BPMN context if the engine still requires it; it must never be queried for idempotency.
 
-- [ ] **Step 6: Run focused tests, build, and commit**
+- [x] **Step 6: Run focused tests, build, and commit**
 
 Run:
 
@@ -144,7 +144,7 @@ git commit -m "feat(kaf): persist delegated action ledger"
 - Produces one receipt per ledger with `callback_pending`, `callback_succeeded`, or `callback_failed`.
 - Consumes Task 1 ledger lease; generic `ProcessEngine.CompleteTask` interface remains unchanged for non-KAF callers.
 
-- [ ] **Step 1: Write failing callback-failure and recovery tests**
+- [x] **Step 1: Write failing callback-failure and recovery tests**
 
 ```go
 func TestCompleteKafDelegatedTask_CallbackFailureReturnsErrorAndWritesReceipt(t *testing.T) {
@@ -164,21 +164,21 @@ func TestReconcileCompletedTaskWithoutSuccessfulReceipt_DoesNotCompleteBPMNAgain
 }
 ```
 
-- [ ] **Step 2: Run the focused tests and confirm they fail**
+- [x] **Step 2: Run the focused tests and confirm they fail**
 
 Run: `cd itsm-backend && go test ./service -run 'Test(CompleteKafDelegatedTask|ReconcileCompletedTask)' -v`
 
 Expected: FAIL because there is no receipt or KAF-specific engine method.
 
-- [ ] **Step 3: Add receipt schema and a KAF-only completion coordinator**
+- [x] **Step 3: Add receipt schema and a KAF-only completion coordinator**
 
 Create `KafTaskCompletionReceipt` with a unique `ledger_id`, tenant ID, task ID, `status`, optional redacted `error_code`, and timestamps. In `CompleteKafDelegatedTask`, create/read the receipt before execution. Change `dispatchUserTaskCallback` to return `error`; keep missing handler as the existing explicit no-op behavior, but return `handler.Execute` errors. For KAF completion, persist `callback_failed` before returning that error and `callback_succeeded` only after the handler succeeds.
 
-- [ ] **Step 4: Implement reconciliation rather than a second BPMN completion**
+- [x] **Step 4: Implement reconciliation rather than a second BPMN completion**
 
 When a claimed ledger sees a completed task, load its receipt and verify that the authoritative process instance advanced beyond the exact task definition. If it is `callback_succeeded` and process advancement is proven, finalize the ledger without calling `CompleteTask`. If the receipt is pending or failed but advancement is proven, run only the receipt-scoped callback recovery path, passing the ledger scope in context; do not call generic `CompleteTask` again. If the task is still delegated, invoke `CompleteKafDelegatedTask` once. `applied` is legal only after a successful receipt, exact task scope, and authoritative process advancement are observed; task status alone remains retryable.
 
-- [ ] **Step 5: Run tests, full service build, and commit**
+- [x] **Step 5: Run tests, full service build, and commit**
 
 Run:
 
@@ -202,7 +202,7 @@ git commit -m "feat(bpmn): coordinate KAF completion receipts"
 - Consumes Task 1 `KafActionResult.ResultStatus` and Task 2 completion receipt.
 - Produces HTTP 200 for `applied`/`already_applied`, 409 with a typed `in_progress` code for a live ledger lease, and existing authorization/validation status mapping.
 
-- [ ] **Step 1: Write controller contract tests**
+- [x] **Step 1: Write controller contract tests**
 
 ```go
 func TestExecuteAction_ReturnsResultStatusForReplay(t *testing.T) {
@@ -218,21 +218,21 @@ func TestExecuteAction_ReturnsConflictForLiveLedgerLease(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run controller tests to verify failure**
+- [x] **Step 2: Run controller tests to verify failure**
 
 Run: `cd itsm-backend && go test ./controller -run 'TestExecuteAction_(ReturnsResultStatus|ReturnsConflict)' -v`
 
 Expected: FAIL because the controller does not map the new result and conflict semantics.
 
-- [ ] **Step 3: Keep the controller thin and make audit refer to the ledger**
+- [x] **Step 3: Keep the controller thin and make audit refer to the ledger**
 
 Map `ErrKafActionConflict` caused by a live lease to HTTP 409 and code `in_progress`; do not expose lease owner, internal receipt details, raw exception text, or Tool output. Update `recordActionAudit` so an applied action records its immutable ledger ID, task ID, correlation ID, procedure reference/version, and `resultStatus`; replay records a separate audit event only if current audit policy requires it, never a second domain timeline entry.
 
-- [ ] **Step 4: Add race and redaction regression tests**
+- [x] **Step 4: Add race and redaction regression tests**
 
 Use two goroutines and a barrier around the ledger claim to assert exactly one engine completion. Assert an error containing a fake bearer token is stored only as a safe code, never in `KafTaskCompletionReceipt`, `AuditLog`, JSON response, or `TicketComment`.
 
-- [ ] **Step 5: Run verification and commit**
+- [x] **Step 5: Run verification and commit**
 
 Run:
 
@@ -256,7 +256,7 @@ git commit -m "fix(kaf): expose durable action outcomes"
 - Produces `KafExecutionContext` action client method `complete_bpmn_task(...) -> KafActionResponse`.
 - Produces one active delivery lease per `(tenant_id, task_id, correlation_id)`.
 
-- [ ] **Step 1: Write failing KAF lease and action-gate tests**
+- [x] **Step 1: Write failing KAF lease and action-gate tests**
 
 ```python
 @pytest.mark.asyncio
@@ -274,21 +274,21 @@ async def test_recovery_reclaims_expired_delivery_without_new_event_identity(ses
     assert (await delivery_by_task(session, event.tenant_id, event.task_id, event.correlation_id)).id == delivery.id
 ```
 
-- [ ] **Step 2: Run the focused tests and confirm they fail**
+- [x] **Step 2: Run the focused tests and confirm they fail**
 
 Run: `cd /mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-worktrees/kaf-delegation-transactional-delivery && ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/_work/kaf/kaf/.venv/bin/python -m pytest tests/test_kaf_delegation_pipeline.py -q`
 
 Expected: FAIL because delivery has no correlation/lease fields and the runner has no action client.
 
-- [ ] **Step 3: Migrate delivery identity and implement atomic claims**
+- [x] **Step 3: Migrate delivery identity and implement atomic claims**
 
 Add `correlation_id`, `lease_owner`, and `lease_expires_at`; add a unique index for `(tenant_id, task_id, correlation_id)`. Use SQLAlchemy conditional `UPDATE` for `received`, `retryable`, or an expired `running` lease. A duplicate webhook resolves the existing identity record. Recovery must query the existing identity row and must never synthesize a new event ID for a task already represented locally.
 
-- [ ] **Step 4: Add the typed action client and completion gate**
+- [x] **Step 4: Add the typed action client and completion gate**
 
 Extend `KafItsmContextClient` with `complete_kaf_task(task_id: str, payload: dict[str, Any]) -> dict[str, Any]`; implement it in `HttpKafItsmContextClient` with the configured KAF automation bearer token. Add a typed action callable to `KafExecutionContext`. Build the canonical action key from context and Procedure run/step IDs. Mark delivery completed only for `resultStatus in {"applied", "already_applied"}`. On transport, stale-version, in-progress, or invalid result keep/release a retryable delivery lease; on 401/403 use `failed_auth` and existing configured alert behavior.
 
-- [ ] **Step 5: Run KAF verification and commit in the KAF worktree**
+- [x] **Step 5: Run KAF verification and commit in the KAF worktree**
 
 Run:
 
@@ -312,7 +312,7 @@ git commit -m "feat(kaf): lease delegated task execution"
 - Consumes Tasks 1-4.
 - Produces automated acceptance evidence for the design §6 and a concise report of commands/results.
 
-- [ ] **Step 1: Add failing cross-system acceptance tests**
+- [x] **Step 1: Add failing cross-system acceptance tests**
 
 ```go
 func TestSSLVPNKafDelegation_OneAppliedActionAdvancesBPMNOnce(t *testing.T) {
@@ -327,17 +327,17 @@ func TestSSLVPNKafDelegation_OneAppliedActionAdvancesBPMNOnce(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the targeted acceptance tests and confirm failure before final wiring**
+- [x] **Step 2: Run the targeted acceptance tests and confirm failure before final wiring**
 
 Run: `cd itsm-backend && go test ./handlers/service_request ./service -run 'TestSSLVPNKafDelegation_OneAppliedActionAdvancesBPMNOnce' -v`
 
 Expected: FAIL until Tasks 1-4 are fully integrated.
 
-- [ ] **Step 3: Add recovery and callback-failure assertions**
+- [x] **Step 3: Add recovery and callback-failure assertions**
 
 Cover: duplicate webhook plus recovery interleaving; expired KAF lease; live ITSM ledger lease; forced callback failure; reconciliation of a completed task with a failed receipt; and a canonical-key mismatch. Each test must prove one domain transition/timeline/audit, never merely one HTTP request.
 
-- [ ] **Step 4: Run the final verification suite and write the evidence report**
+- [x] **Step 4: Run the final verification suite and write the evidence report**
 
 Run:
 
@@ -350,7 +350,7 @@ git diff --check
 
 Record exact commands, pass counts, and any intentionally unexecuted environment-dependent check in `docs/reports/2026-08-30-kaf-delegation-execution-integrity-report.md`.
 
-- [ ] **Step 5: Commit verification evidence**
+- [x] **Step 5: Commit verification evidence**
 
 ```bash
 git add itsm-backend/handlers/service_request/kaf_delegation_sslvpn_e2e_test.go itsm-backend/service/kaf_delegation_service_test.go docs/reports/2026-08-30-kaf-delegation-execution-integrity-report.md
@@ -384,6 +384,6 @@ git commit -m "test: verify KAF delegation execution integrity"
   suite can collect without the `embedding` extra.
 - [x] Upgrade the local KAF Dev PostgreSQL database from revision 033 through
   036 and start current source successfully against it.
-- [ ] Run a live cross-process SSLVPN flow with a real Dev `kaf_automation`
+- [x] Run a live cross-process SSLVPN flow with a real Dev `kaf_automation`
   principal and execute PostgreSQL RLS probes with `RLS_TEST_DSN`; these remain
   release gates rather than inferred passes.

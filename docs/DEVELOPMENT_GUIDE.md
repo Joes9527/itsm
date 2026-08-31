@@ -134,7 +134,15 @@ Unified Intake 是 Service Request 与 Incident 的唯一新建边界。普通 I
 
 ### 迁移顺序与 RLS 预检
 
-先由一次性 bootstrap/migration 进程运行迁移，常驻 Web 进程保持 `ITSM_AUTO_MIGRATE=false`。相关迁移顺序不可跳跃：`019_kaf_execution_integrity_rls` → `020_unified_intake_rls` → `021_work_item_authority` → `022_external_identity_version`。`021` 会在旧 Incident/Service Request 没有权威 WorkItem 时主动失败，必须先按迁移工具修复数据，禁止临时绕过约束。
+先由一次性 bootstrap/migration 进程运行迁移，常驻 Web 进程保持 `ITSM_AUTO_MIGRATE=false`。相关迁移顺序不可跳跃：`019_kaf_execution_integrity_rls` → `020_unified_intake_rls` → `021_work_item_authority` → `022_external_identity_version`。`021` 会在旧 Incident/Service Request 没有权威 WorkItem 时主动失败，禁止临时绕过约束。
+
+升级前先运行只读检查：
+
+```bash
+go run ./cmd/check_work_item_integrity -tenant-id=0
+```
+
+若检查发现 Incident 缺少 WorkItem，当前树没有可写修复命令：历史 `cmd/backfill_incident_work_item` 已删除，而 Problem/Change 回填工具不能代替它。这是 `021` 的发布阻塞，必须先交付并验证新的幂等、可审计、支持 dry-run 的 Incident 回填工具，再在生产副本演练后升级。不要直接改表、删除异常行或关闭 `021` 的 fail-closed 检查。已在早期版本完成回填且完整性检查为零异常的环境可以继续执行迁移。
 
 启用发布前，使用管理员连接确认三个表已启用且强制 RLS：
 

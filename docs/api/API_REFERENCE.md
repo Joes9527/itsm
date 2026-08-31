@@ -307,6 +307,75 @@ Content-Type: multipart/form-data
 file: [binary data]
 ```
 
+## Unified Intake 创建接口
+
+Incident 和 Service Request Item 的新建统一经过 Intake。一般客户端使用现有 Access JWT；KAF connector 先调用公开的身份交换端点取得短期、仅含 `intake:create` scope 的令牌。请求体不能包含 `tenantId`、`actorId`、`requesterId`、角色或授权结论，未知字段会被拒绝。
+
+### 创建 Incident WorkItem
+
+```http
+POST /intake/work-items
+Authorization: Bearer <accessToken-or-intakeToken>
+Content-Type: application/json
+
+{
+  "idempotencyKey": "client-stable-key",
+  "intakeKind": "incident",
+  "title": "服务器不可用",
+  "description": "已确认服务中断",
+  "cti": {"categoryId": 1},
+  "ciIds": [12],
+  "incident": {
+    "severity": "critical",
+    "impact": "high",
+    "urgency": "high"
+  }
+}
+```
+
+### 创建 Service Request Item
+
+```http
+POST /intake/work-items
+Authorization: Bearer <accessToken-or-intakeToken>
+Content-Type: application/json
+
+{
+  "idempotencyKey": "client-stable-key",
+  "intakeKind": "catalog_item",
+  "title": "申请目录服务",
+  "catalogItemId": 42,
+  "formValues": {
+    "cost_center": "CC-001"
+  }
+}
+```
+
+首次提交返回 HTTP 201；同 actor/channel/key 且 payload 完全一致的重放返回 HTTP 200 和同一个 WorkItem，`replayed=true`。同 key 不同 payload 返回 HTTP 409。示例响应：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "workItemId": 101,
+    "number": "TKT-202609-000101",
+    "recordClass": "incident",
+    "professionalReference": {"type": "incident", "id": 55},
+    "workflowStartStatus": "pending",
+    "replayed": false
+  }
+}
+```
+
+`workflowStartStatus=pending` 表示 WorkItem 已提交，BPMN 将由可靠 Outbox worker 启动；客户端不能因此换 key 重建。`manual_intervention_required` 由具有 `intake:intervene` 权限的操作者在修复根因后通过 `POST /intake/work-items/{id}/workflow-start/retry` 恢复。
+
+### KAF 身份交换与映射管理
+
+- `POST /intake/identity-exchange`：公开但要求规范化 HMAC assertion；Redis nonce 存储不可用时返回 503，禁止降级绕过防重放。
+- `GET/POST /intake/external-identities`、`POST /intake/external-identities/{id}/disable`：仅 `intake:identity_admin`。
+- assertion、HMAC secret 和返回 JWT 不得写入日志、测试报告或工单正文。
+
 ## 事件管理接口
 
 ### 获取事件列表
@@ -328,6 +397,7 @@ Query Parameters:
 ```http
 POST /incidents
 Authorization: Bearer <accessToken>
+Idempotency-Key: <client-stable-key>
 Content-Type: application/json
 
 {
@@ -338,6 +408,8 @@ Content-Type: application/json
   "categoryId": 1
 }
 ```
+
+该专业端点保留兼容请求形状，但内部是 Unified Intake 的薄适配器；缺少 `Idempotency-Key` 会被拒绝。
 
 ### 获取事件详情
 
@@ -588,6 +660,27 @@ Query Parameters:
 GET /service-catalog/{id}
 Authorization: Bearer <accessToken>
 ```
+
+### 提交服务请求
+
+```http
+POST /service-requests
+Authorization: Bearer <accessToken>
+Idempotency-Key: <client-stable-key>
+Content-Type: application/json
+
+{
+  "catalogId": 42,
+  "title": "申请目录服务",
+  "formData": {
+    "customFieldValues": [
+      {"name": "environment", "value": "production"}
+    ]
+  }
+}
+```
+
+该端点同样是 Unified Intake 薄适配器。调用方必须为一次用户确认生成稳定 key，并在网络重试时复用相同 header 和 payload。
 
 ## 知识库接口
 
@@ -1280,6 +1373,7 @@ Query Parameters:
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| Unreleased | 2026-09-01 | 增加 Unified Intake、身份交换及专业创建端点的幂等要求 |
 | 1.0.0 | 2024-01-01 | 初始版本 |
 
 ## 联系支持

@@ -194,6 +194,30 @@ ITSM_BACKEND_URL=http://localhost:8090 ITSM_ADMIN_USER=admin ITSM_ADMIN_PASS=adm
 python3 output/itsm_functional_test.py
 ```
 
+### 2.7 Unified Intake / PostgreSQL RLS 验证
+
+以下命令必须使用两个相互独立的一次性 PostgreSQL 数据库；不要指向共享 Dev 或生产库：
+
+```bash
+cd itsm-backend
+
+INTAKE_POSTGRES_TEST_DSN='<fresh disposable PostgreSQL DSN>' \
+  go test -tags integration_postgres -v ./handlers/intake -run E2E -count=1
+
+RLS_TEST_DSN='<separate disposable PostgreSQL owner DSN>' \
+  go test -tags integration_rls -v ./database/rls/... -count=1
+```
+
+RLS suite 必须零 skip。它会启用并强制 tenant policy，所以不能与普通 Intake E2E 复用数据库。详细验收边界见 `docs/e2e-testing-guide.md`。
+
+升级到 migration `021_work_item_authority` 前运行：
+
+```bash
+go run ./cmd/check_work_item_integrity -tenant-id=0
+```
+
+若发现缺少 WorkItem 的 Incident，停止升级；当前树没有可写 Incident 回填命令，不能用直接 SQL 或关闭迁移检查替代。
+
 ---
 
 ## 三、生产环境（Production）

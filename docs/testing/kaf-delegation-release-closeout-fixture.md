@@ -1,6 +1,7 @@
 # KAF 委派发布收口真实变更夹具
 
-> 状态：已确认测试对象与会话设计，等待书面规格审阅和实施计划批准后执行
+> 状态：已执行并归档（2026-08-31）。真实 Dev 结果、基数、重放和最终权限恢复见
+> `docs/reports/2026-08-30-kaf-delegation-execution-integrity-report.md`；本文仅保留 fixture 与恢复契约。
 > 日期：2026-08-31
 > 范围：KAF → Microsoft Graph → Azure AD Security Group 的真实成员变更
 

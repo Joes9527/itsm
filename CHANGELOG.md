@@ -9,11 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Unified Intake** — Added one authenticated, tenant-scoped and idempotent creation boundary for Incident and Service Request Item. A single transaction writes the receipt, WorkItem, professional extension, dynamic values/CI links, immutable resolution snapshot, audit and frozen workflow-start Outbox. KAF uses signed channel assertions and a short-lived Intake-only JWT instead of caller-supplied tenant/requester data or the automation token. Added bounded Prometheus metrics, tenant-scoped identity mappings, RLS probes, manual workflow-start retry and real PostgreSQL HTTP/replay/recovery evidence. See `docs/reports/2026-08-31-unified-intake-implementation-report.md`.
+
 ### Changed
 
-- **统一 WorkItem 领域模型（Incident/Problem/Change）** — Incident、Problem、Change 创建时改为在同一事务内建对应的 `tickets` 行（`record_class`）并回填 `work_item_id`；BPMN `businessId`/`businessKey` 三个域统一收敛为 WorkItem ID，不再各自用专业主键；Problem↔Ticket、Change↔Ticket 的关联从旧的 JSON 字段/ent edge 迁移到结构化的 `WorkItemRelation` 表。ServiceRequest 因为 `ticket_id` 从建表起就必填，不需要同等改造。设计文档：`docs/superpowers/specs/2026-08-26-unified-work-item-model-design.md`；执行记录：`docs/superpowers/specs/2026-08-26-unified-work-item-multi-agent-execution-plan.md`。
+- **统一 WorkItem 领域模型** — Incident、Problem、Change 的创建路径均会在同一事务内建立 `tickets` 行并设置 `work_item_id`；BPMN `businessId`/`businessKey` 收敛为 WorkItem ID，Problem/Change 回填工具可将旧关联迁到结构化 `WorkItemRelation`。Unified Intake 与 migration `021_work_item_authority` 已进一步完成 Incident/Service Request 公共字段权威收口。Problem/Change 扩展表仍复制公共字段、允许空 `work_item_id`，Change 仍保留关系 JSON，故这两个域的最终权威收口继续作为 P1，而非宣称整个 WorkItem 改造已经完成。设计文档：`docs/superpowers/specs/2026-08-26-unified-work-item-model-design.md`；执行记录：`docs/superpowers/specs/2026-08-26-unified-work-item-multi-agent-execution-plan.md`。
   - **已知遗留问题**：`tickets.ticket_number` 仍是全局唯一索引而非 `(tenant_id, ticket_number)` 复合唯一，Ticket/Incident/Problem/Change 四条按租户维度计数的生成器之间仍有撞号可能，尚未修复。
-  - **未执行的收尾项**：`ticket_type` 表上的旧审批字段（`approval_workflow_id`/`approval_chain`）清理、`tickets` 是否物理改名为 `work_items` 的决策。
+  - **已完成的收尾项**：migration `017_drop_ticket_type_legacy_approval_fields` 已删除 `ticket_types.approval_workflow_id`/`approval_chain`。
+  - **保留的独立决策**：`tickets` 是否物理改名为 `work_items` 不属于本增量；在单独迁移决策前继续复用 `tickets` 表。
 
 ### Fixed
 
@@ -24,7 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Migration Notes
 
-- **Incident comment migration to `ticket_comments`**: The `/api/v1/incidents/:id/comments` GET/POST endpoints have been removed; the frontend now reads/writes Incident comments through `ticketCommentAdapter` against `ticket_comments`. Before deploying this branch, run `go run ./cmd/backfill_incident_work_item -dry-run=false` first to ensure no Incident has `work_item_id == 0` — comments belonging to such an Incident are permanently skipped (not deferred) by the next tool. Then run `go run ./cmd/backfill_incident_comments -dry-run=true` to review the would-create/would-skip counts, followed by `-dry-run=false` to actually backfill. Only deploy the frontend after both backfills succeed: deploying frontend first makes existing comments appear to have vanished (old data still sits in `incident_events`, new UI reads `ticket_comments`), and deploying backend before frontend for any window means an old frontend hitting the now-deleted `/api/v1/incidents/:id/comments` route gets a 404.
+- **WorkItem authority / Incident comments**: Before migration `021_work_item_authority`, run `go run ./cmd/check_work_item_integrity -tenant-id=0`. If any Incident lacks a WorkItem, stop: the current tree no longer ships the historical writable `cmd/backfill_incident_work_item`, so an upgrade-safe replacement is a release blocker for that database. Do not bypass `021` or repair rows with ad hoc SQL. For databases whose integrity check is clean, run `go run ./cmd/backfill_incident_comments -dry-run=true`, review counts, then `-dry-run=false` before deploying the frontend. Deploying the frontend first makes old comments appear missing; an old frontend against the new backend receives 404 from the removed Incident-comment routes.
+- **Unified Intake migrations**: Apply post-schema migrations in order: `019_kaf_execution_integrity_rls` → `020_unified_intake_rls` → `021_work_item_authority` → `022_external_identity_version`. Run them through the one-shot bootstrap/migration process; keep long-running web processes on `ITSM_AUTO_MIGRATE=false`.
 
 ---
 

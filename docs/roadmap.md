@@ -1,12 +1,12 @@
 # 🛣️ ITSM Roadmap
 
 > **Source of truth for what is shipping, what is shipping next, and what
-> is parked.** Updated as part of every release. Last synced: 2026-06-28.
+> is parked.** Updated as part of every release. Last synced: 2026-09-01.
 >
 > Cross-references:
 > - PRD library: [prd/](./prd)
-> - v1.0 GA readiness: [docs/v1-ga-readiness.md](./docs/v1-ga-readiness.md)
-> - Architecture: [docs/architecture/](./docs/architecture)
+> - v1.0 GA readiness: [v1-ga-readiness.md](./v1-ga-readiness.md)
+> - Architecture: [architecture/](./architecture)
 > - Open issues & milestones: GitHub [Issues](https://github.com/heidsoft/itsm/issues) and [Projects](https://github.com/heidsoft/itsm/projects)
 
 ---
@@ -17,7 +17,7 @@
 ServiceNow-class workflows without the lock-in or the footprint.**
 
 Concretely that means:
-1. **Process parity** with the ITIL v4 core (already at ~95% with v1.0 GA).
+1. **Process parity** with the ITIL v4 core, backed by lifecycle and E2E evidence.
 2. **AI that earns its seat** — classification, summarization, RAG, and
    impact analysis that are measurable, not vibes.
 3. **Native integration surface** — Feishu / DingTalk / WeCom / Webhook
@@ -86,13 +86,21 @@ Concretely that means:
 - [ ] **Coverage backfill sprint** — bring `service/*` and `controller/*`
       packages from 2% → **40%** overall, focusing on ticket / incident /
       change / approval / auth (the user-facing critical paths)
-- [ ] **Controller split** — break up `incident_controller.go` (45k),
-      `ticket_controller.go` (27k), `cmdb_controller.go` (28k),
-      `bpmn_workflow_controller.go` (30k) into feature-scoped sub-controllers
+- [ ] **Controller split** — break up `incident_controller.go` (1,392 lines),
+      `ticket_controller.go` (1,211), `cmdb_controller.go` (1,879), and
+      `bpmn_workflow_controller.go` (1,111), measured 2026-09-01, into
+      feature-scoped sub-controllers
 - [ ] **Integration test suite** — RBAC cross-tenant, BPMN happy paths,
       CMDB impact analysis, SLA escalation. Lives at `itsm-backend/tests/integration/`.
-- [ ] **itsm-cli / itsm-skill / itsm-agent** in CI (path-scoped workflows
-      + coverage)
+- [x] **itsm-cli / itsm-skill / itsm-agent path-scoped CI** —
+      `.github/workflows/extensions-ci.yml` builds/tests the tracked extension
+      modules; `itsm-skill` remains skipped when it is not present in a checkout
+- [x] **Unified Intake transactional creation boundary** — authenticated ITSM
+      and KAF creation for Incident/Service Request Item, exact replay,
+      tenant-scoped identity exchange, frozen workflow Outbox, metrics and real
+      PostgreSQL/RLS evidence. Owner: `handlers/intake`, BPMN Outbox worker and
+      KAF typed client. Non-goals: new Intake UI and additional professional
+      classes. Evidence: [implementation report](./reports/2026-08-31-unified-intake-implementation-report.md).
 
 ### Product
 
@@ -106,10 +114,65 @@ Concretely that means:
 
 ### Quality
 
-- [ ] **Incremental coverage gate** (60% on new/modified lines) — already
-      is tracked through backend CI coverage artifacts and regression tests.
-- [ ] **Dependabot auto-merge** — patch-level updates auto-merge after
-      green CI (handled in v1.0.x hotfix).
+- [ ] **Incremental line-coverage gate** — enforce 60% on new/modified lines.
+      Current `test-coverage-guard` only requires source/test co-change and CI
+      uploads aggregate coverage; neither proves the 60% diff threshold.
+- [ ] **Dependabot auto-merge decision** — current policy deliberately requires
+      normal CI and maintainer review and does not auto-merge. Add automation
+      only after branch protection and rollback ownership are documented.
+
+### Unified Intake follow-on queue
+
+- [ ] **Upgrade-safe Incident WorkItem backfill** — outcome: operators can
+      upgrade old databases through migration `021` without direct SQL. Scope:
+      restore/replace a dry-run, idempotent and audited Incident backfill tool;
+      non-goal: bypassing integrity checks. Owner: migration/ops commands.
+      Dependency/risk: legacy Incident rows and ticket-number collisions.
+      Acceptance: repeated backfill is cardinality-stable,
+      `check_work_item_integrity` is clean, and `021` → `022` passes on a
+      production copy. Status: planned. Evidence:
+      [implementation report §7](./reports/2026-08-31-unified-intake-implementation-report.md).
+      Score (impact/security/ITIL/alignment/effort): `5/4/5/5/3`.
+- [ ] **KAF Intake release configuration and test isolation** — outcome: tenant
+      operators can enable `bastion_permission_apply` and
+      `business_system_account_request`, and maintainers get a
+      green repository suite. Scope: real Catalog Item IDs plus isolated
+      PostgreSQL fixtures; non-goal: fallback creation. Owner: KAF config/test
+      bootstrap. Dependencies: tenant catalog provisioning and test database.
+      Acceptance: real Dev create/replay succeeds and full `pytest -q` exits 0
+      without hiding failures. Status: planned.
+      Score: `5/3/5/5/3`.
+- [ ] **Typed professional actions and creator expansion** — outcome: agents
+      can perform version-fenced Incident actions and create Problem, Change
+      Request and Catalog Task through owning domain services. Non-goal: a giant
+      record-class state machine. Owner: professional services + Intake
+      registry. Dependencies: action audit contract and per-domain migrations.
+      Acceptance: expected-version conflicts, tenant/RBAC denial, atomic
+      extension creation and lifecycle tests. Status: proposed.
+      Score: `5/4/5/5/5`.
+- [ ] **Problem/Change WorkItem authority convergence** — outcome: operators
+      and reports see one authoritative title/status/priority/assignment/tenant
+      value. Scope: move reads/writes to WorkItem, make `work_item_id` required,
+      replace extension RLS with ticket joins and migrate Change relationship
+      JSON; non-goal: merging professional state machines. Owner:
+      Problem/Change services and migrations. Dependencies: audited backfills
+      and running-process identity review. Acceptance: no shared extension
+      columns or dual writes, structured relations only, PostgreSQL RLS and
+      lifecycle suites pass. Status: planned. Score: `5/3/5/5/5`.
+- [ ] **Unified Intake OpenAPI contract** — outcome: integrators can discover
+      create, identity exchange/mapping and retry contracts from generated
+      Swagger. Owner: Intake handlers + generated backend docs. Dependency:
+      stable auth/error annotations. Acceptance: JSON/YAML/Go artifacts contain
+      every Intake route and CI detects drift. Status: planned. Score:
+      `3/2/3/3/2`.
+- [ ] **Intake interaction experience** — outcome: requesters get Intake UI,
+      draft/session support, attachment staging, knowledge deflection and
+      multi-channel status feedback. Owner: Intake application/frontend.
+      Dependencies: retention policy, upload security, permission-filtered RAG
+      and channel identity. Acceptance: browser E2E, audit/redaction evidence,
+      abandoned-session cleanup and no alternate WorkItem creation path.
+      Status: proposed.
+      Score: `4/4/3/5/5`.
 
 ---
 
@@ -197,7 +260,7 @@ These don't belong to a single release; they ship incrementally:
 
 ### Testing & Quality
 
-- Incremental coverage gate (60% on new code) — landed v1.1
+- Source/test co-change guard — landed v1.1; true 60% diff coverage remains planned
 - End-to-end smoke on every PR — landed v1.0
 - Frontend visual regression — planned v1.5
 - Property-based tests for critical parsers (BPMN XML, RAG chunking)
@@ -205,7 +268,7 @@ These don't belong to a single release; they ship incrementally:
 
 ### Security
 
-- CodeQL + Trivy + govulncheck — landed v1.1
+- gosec + Trivy + govulncheck — landed v1.1; CodeQL analysis remains planned
 - Quarterly threat-model review
 - Annual pen-test
 - 连接器凭据（`connector_configs.credentials`）AES 加密存储 — backlog（当前 JSON 明文，含 Azure client_secret）
@@ -255,5 +318,5 @@ and the **target** for the next major release.
 
 ## 📜 Changelog
 
-Major releases are tracked in [CHANGELOG.md](./CHANGELOG.md) and via
+Major releases are tracked in the repository-root `CHANGELOG.md` and via
 GitHub [Releases](https://github.com/heidsoft/itsm/releases).

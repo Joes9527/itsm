@@ -390,6 +390,11 @@ TicketTemplate 定位为内部快速录入和执行模板：
 
 ## 9. Intake 与分诊
 
+> 2026-09-01 实施状态：已完成明确 `catalog_item`/`incident` 的 authenticated Unified
+> Intake、幂等 receipt、决策 snapshot、身份交换和 workflow Outbox。下述
+> `recordClass=generic` 分诊、Interaction/Session、附件 staging 与知识分流尚未实施，
+> 继续作为独立产品增量。
+
 ServiceNow 有 Interaction 等接入概念。当前产品可先采用轻量方案：
 
 - 邮件、门户“报告问题”、坐席人工录入、监控告警可创建 `recordClass=generic` WorkItem；

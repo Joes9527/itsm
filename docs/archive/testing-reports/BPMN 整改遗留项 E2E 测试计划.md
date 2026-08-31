@@ -1,5 +1,11 @@
 # BPMN 整改遗留项 E2E 测试计划
 
+> **归档状态（2026-09-01）：已执行。** S1–S5、S7 以 HTTP + DB 证据完成，
+> S6/S8/S9 以自动化测试替代浏览器路径；S10–S15 的跨进程 Dev 验收由
+> `docs/reports/2026-08-30-kaf-delegation-execution-integrity-report.md` 收口。
+> 本文保留历史环境步骤，当前 Unified Intake/RLS 命令以
+> `docs/e2e-testing-guide.md` 和 Unified Intake 实施报告为准。
+
 > 对应工作分支的 4 个遗留项整改（租户隔离 fail-closed / Release·Change 域侧桥接 / service_request 白名单收敛 / 平台级操作恢复）+ 顺带修复的 4 个模板缺陷。
 > 测试通过前**不提交**；每轮测试发现的问题记录在文末"结果记录表"，修复后重新执行对应场景。
 
@@ -204,8 +210,8 @@ curl -s -X PUT http://localhost:8090/api/v1/bpmn/process-instances/<INSTANCE_ID>
 > **UI 覆盖面更正**：管理端字段构建器（`CustomFieldsEditor.tsx`）目前只能配出
 > text/textarea/number/date/select 5 种类型，配不出 multiselect/boolean/file——这是
 > 原始审计发现的独立缺口（未在这轮整改范围内），不是这次改动引入的回归。
-> 工单创建页的字段渲染器（`tickets/create/page.tsx`）同理：`field.type` 的联合类型
-> 里根本没有 `'multiselect'`/`'boolean'`，未识别的类型一律退化成单行文本框——
+> 截至 2026-09-01，工单创建页的字段渲染器已支持 `file`，但仍没有
+> `'multiselect'`/`'boolean'`；未识别的类型会退化成单行文本框——
 > 就算后端已经存了一个 multiselect 字段定义，这个页面也只会给你一个文本框，
 > 提交的是字符串而不是数组，会稳定触发 `validateFieldValue` 的"需要数组类型的值"
 > 报错，测的其实是"UI 传错类型"而不是 multiselect 校验本身。
@@ -221,23 +227,23 @@ curl -s -X PUT http://localhost:8090/api/v1/bpmn/process-instances/<INSTANCE_ID>
 
 **7.2 API 直测（覆盖 multiselect，以及 select 越界值，UI 走不到的路径）**：
 ```bash
-# 先建一个带 multiselect 字段的模板定义（options: x/y/z），记 TEMPLATE_ID
-curl -s -X PUT http://localhost:8090/api/v1/ticket-templates/<TEMPLATE_ID>/field-definitions \
+# 通过真实模板端点创建/更新带 multiselect 字段的模板，记 TEMPLATE_ID
+curl -s -X PUT http://localhost:8090/api/v1/tickets/templates/<TEMPLATE_ID> \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"fields":[{"name":"impacted_systems","label":"受影响系统","fieldType":"multiselect","required":false,
+  -d '{"fields":[{"name":"impacted_systems","label":"受影响系统","type":"multiselect","required":false,
        "options":[{"label":"x","value":"x"},{"label":"y","value":"y"},{"label":"z","value":"z"}]}]}'
 
 # 提交越界值 → 预期 400，报"包含不在允许范围内的值: w"
 curl -s -X POST http://localhost:8090/api/v1/tickets \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{"title":"multiselect越界测试","priority":"medium","templateId":<TEMPLATE_ID>,
-       "formFields":{"impacted_systems":["x","w"]}}'
+       "formFields":{"values":[{"name":"impacted_systems","value":["x","w"]}]}}'
 
 # 合法值 → 预期创建成功
 curl -s -X POST http://localhost:8090/api/v1/tickets \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{"title":"multiselect合法测试","priority":"medium","templateId":<TEMPLATE_ID>,
-       "formFields":{"impacted_systems":["x","y"]}}'
+       "formFields":{"values":[{"name":"impacted_systems","value":["x","y"]}]}}'
 ```
 
 **失败判定**：7.1 UI 路径任一步校验未生效或留孤儿行；7.2 API 越界值未被拒绝，或合法值创建失败。
@@ -343,6 +349,12 @@ curl -s -X POST http://localhost:8090/api/v1/tickets \
 | S7 自定义字段 | ✅ | 1) 测试计划文档里的 `/field-definitions` 端点和扁平 `formFields` 形状在当前代码里都不存在（文档过期，非代码缺陷，已按 `PUT /tickets/templates/:id` + `formFields.values` 数组形状改写执行）；2) **真实缺陷**：`CreateTicket` 对字段值的格式/范围校验（number/select/multiselect）只在落库*之后*的 `CreateValues` 里跑，写入失败被当成"持久化失败"静默吞掉——越界值/错误类型既不报错也不落库，调用方拿到 `code:0` 成功响应但数据被悄悄丢弃 | `service/ticket_service.go`：新增 `validateFieldValueFormats`，在 `s.repo.Create` 之前校验，越界/类型错误直接 400 系列拒绝，不再落库 | ✅ |
 | S8 service_request | ✅（单测覆盖，非真实设计器） | 无浏览器/设计器可用，改用现有 `service/bpmn/service_request_handler_test.go`（11/11 通过），未做真实设计器建流程+部署+启动实例的端到端验证 | 无 | — |
 | S9 平台级操作 | ✅（自动化覆盖，未手工验证） | 环境无 tenant_id=0 平台账号，按测试计划的兜底条款改跑 `bpmn_platform_tenant_test.go`（3/3 通过） | 无 | — |
+| S10 KAF 健康/迁移 | ✅ | 当前源码运行，Dev PostgreSQL 到 `036_kaf_completion_replay` | release closeout report | ✅ |
+| S11 SSLVPN 委派主路径 | ✅ | SR 35 / WorkItem 18 / process 144 完成；Outbox、delivery、ledger、receipt、Graph action 基数均为 1 | Live Dev Closeout Addendum | ✅ |
+| S12 重复/崩溃恢复 | ✅ | 精确 payload replay 返回 `already_applied`，未重复执行 Graph；lease/recovery breakers 通过 | ITSM 19 + KAF 7 deterministic breakers | ✅ |
+| S13 认证/租户/配置 | ✅ | 普通主体 403、跨租户 404、专用 secret fail-closed | closeout breakers/audit | ✅ |
+| S14 附件最小披露 | ✅ | 只返回一个同租户 opaque attachment ID，无文件名/路径/URL | closeout context evidence | ✅ |
+| S15 回调失败/部分推进 | ✅ | callback、successor、terminal reconciliation breakers 全部收敛且无重复副作用 | closeout deterministic evidence | ✅ |
 
 **顺带修复（测试过程中发现，非某一场景专属）**：
 - `service/bpmn_process_binding_service.go` 的 `InitDefaultBindings` 每次进程启动都会重复插入一整套流程绑定（无去重，`CreateBinding` 从不返回代码里期望的 "already exists"），本轮测试过程中已从 800+ 条脏数据清理到 26 条并补上幂等检查。
@@ -350,6 +362,7 @@ curl -s -X POST http://localhost:8090/api/v1/tickets \
 
 **验证保真度说明**：本轮全程无浏览器自动化工具，S1-S5、S7 均通过直接 HTTP 客户端（curl）+ DB 查询走查完成，覆盖不到前端 http-client 请求体转换、真实表单交互与客户端校验；S6/S8/S9 用现有单测替代，覆盖不到设计器/表单的真实浏览器路径。
 
-**测试计划文档本身发现的过期内容（未改测试计划正文，供后续更新参考）**：
-- S7.2 的 `PUT /api/v1/ticket-templates/<TEMPLATE_ID>/field-definitions` 端点在当前代码里不存在；自定义字段是内嵌在 `PUT/POST /api/v1/tickets/templates/:id` 请求体的 `fields` 数组里，且字段类型键名是 `type` 不是 `fieldType`。
-- S7.2 的 `formFields:{"impacted_systems":[...]}` 扁平形状不会被后端解析（`extractCustomFieldValues` 只认 `formFields.values` 数组或 `formFields.values` 映射两种形状），按扁平形状提交会被静默忽略而不是校验/报错。
+**2026-09-01 文档校正**：S7.2 已改为真实
+`PUT /api/v1/tickets/templates/:id`、字段键 `type` 和
+`formFields.values` 数组形状。仍未完成的产品能力是共享字段编辑器与创建页对
+`multiselect`/`boolean` 的一致支持，而不是继续使用不存在的端点测试。

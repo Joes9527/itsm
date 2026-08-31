@@ -78,3 +78,33 @@ npm run test:e2e:business
 2. **测试数据准备**：实现测试夹具（fixtures）自动准备测试数据
 3. **测试报告**：集成 Allure 或 HTML 报告生成
 4. **测试并行化**：配置 Playwright 并行执行加速 CI
+
+---
+
+## Unified Intake PostgreSQL E2E（2026-09-01）
+
+Unified Intake 的权威集成证据位于 `itsm-backend/handlers/intake/e2e_test.go`。它不是 SQLite 替代测试：必须连接一次性 PostgreSQL 数据库，通过真实 Gin HTTP 路由验证 Access JWT、KAF assertion exchange、精确重放、伪造 assertion 拒绝，以及 workflow Outbox 的 `dead → pending → published` 恢复。
+
+```bash
+cd itsm-backend
+INTAKE_POSTGRES_TEST_DSN='<fresh disposable PostgreSQL DSN>' \
+  go test -tags integration_postgres -v ./handlers/intake -run E2E -count=1
+
+RLS_TEST_DSN='<separate disposable PostgreSQL owner DSN>' \
+  go test -tags integration_rls -v ./database/rls/... -count=1
+```
+
+两个 suite 应使用不同的一次性数据库。RLS suite 会启用并强制策略；若复用同一数据库，普通 Intake E2E 没有 RLS session tenant 时会按设计 fail-closed，不能把该 503 误判为创建逻辑回归。RLS 输出出现任何 skip 都不构成发布证据。
+
+Intake E2E 对每条命令断言恰好一个 receipt、WorkItem、专业扩展、resolution snapshot、workflow-start Outbox 和 process instance。测试结束后删除一次性数据库；禁止在共享 Dev/生产数据库运行会创建或清理探针数据的 suite。
+
+完整的已执行命令、计数和非绿色基线见 [Unified Intake 实施报告](./reports/2026-08-31-unified-intake-implementation-report.md)。
+
+### 尚未覆盖的真实浏览器路径
+
+- BPMN 设计器对不支持元素的 warning 目前只有 React 单测，没有真实点击/保存 E2E。
+- 自定义字段管理 UI 仍不能配置 `multiselect`/`boolean`；`file` 在工单创建页可渲染，但共享管理编辑器没有对应选项。
+- Service Request 自定义流程部署和 tenant_id=0 平台操作目前由 Go 自动化覆盖，没有浏览器级验收。
+- Unified Intake 还没有独立 UI/Session/附件 staging；现有 Incident 和 Service Catalog 页面通过专业 API 薄适配器进入 Intake。
+
+历史场景与当时结果保存在 [BPMN 整改遗留项 E2E 测试计划](./archive/testing-reports/BPMN%20整改遗留项%20E2E%20测试计划.md)；其中命令和环境值仅作归档，当前执行以本指南和实施报告为准。

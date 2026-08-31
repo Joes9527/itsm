@@ -106,13 +106,13 @@ Connector 有 Manifest、Capability、Registry、生命周期和健康检查模�
 
 AGENTS.md 2026-08-26 新增的"统一 Work Item 领域模型契约"是当前对 Ticket/Incident/Problem/Change/Service Request 关系约束最具体的一节（`recordClass` 创建后不可变、专业扩展表不得复制共享字段、WorkItem 与专业扩展记录必须同事务创建），下面这份评估的领域功能闭环判断以此为准绳重新核实，而不是把这些领域当作互不相关的传统模块看待。
 
-核实结论：
+核实结论（2026-09-01 更新）：
 
-- **模型骨架已落地**：`ent/schema/ticket.go` 已有 `record_class` 字段，`cmd/backfill_incident_work_item`、`cmd/backfill_problem_work_item`、`cmd/backfill_change_work_item` 三个回填 CLI 已存在；`recordClass` 创建后不可变这一约束在 Incident/Problem/Change 的 `repository_impl.go`/`*_service.go` 创建路径的代码注释里被显式提及并遵守（例如 `handlers/change/repository_impl.go:302`、`handlers/problem/repository_impl.go:274`）。
-- **共享字段复制问题真实存在，且是团队已知、已显式记录、主动延后处理的技术债**：`service/incident_service.go:160-198` 的创建逻辑里，`title`/`description` 在同一事务内被同时写入 `tx.Ticket.Create()`（WorkItem 权威行）和 `tx.Incident.Create()`（专业扩展行），`ent/schema/incident.go` 也确实定义了自己的 `title`/`description`/`status`/`priority` 字段——这正是契约里"专业扩展表不得复制共享字段"要禁止的模式。代码注释坦承了这一点：状态/优先级只在创建时写一次，后续 Incident 状态机流转（assign/acknowledge/resolve/close/escalate…）不会反写 `tickets.status`，并明确写道"持续双向同步要么是禁止的双写反模式，要么需要同时改遍所有状态转换方法，超出本次事务边界修复的范围，留作独立后续项"。Problem/Change 的扩展表大概率是同一模式（未逐个复核，建议后续评估补齐）。
-- **影响**：只要 `tickets.status`/`priority` 在创建之后不再是权威值，任何直接查询 WorkItem 基表（而不是专业扩展表）做统一列表、统一 SLA 计算或跨域报表的代码，读到的字段都可能是创建时刻的快照而非当前真实状态。这是一个比"接口风格不一致"更高优先级的正确性风险，建议单独立项，不要被淹没在其他 P1 治理项里。
+- **Incident/Service Request 已收口**：Unified Intake 和 migration `021_work_item_authority` 已将两类公共字段迁到 WorkItem，Incident 扩展只保留专业字段，Service Request 通过 `ticket_id` 读取公共字段；旧创建入口均为 Intake 薄适配器。
+- **旧库升级仍有 Incident 回填阻塞**：当前树保留只读 `cmd/check_work_item_integrity` 和 Problem/Change 回填 CLI，但历史可写 `cmd/backfill_incident_work_item` 已删除。若旧数据库仍有 `work_item_id IS NULL` 的 Incident，`021` 会正确 fail-closed，却没有仓库内修复命令；必须先恢复/替代幂等且可审计的回填工具。
+- **Problem/Change 尚未收口**：两张扩展 schema 仍复制 `title`、`description`、`status`、`priority`、assignee/tenant/公共时间戳，且 `work_item_id` 仍 Optional；Change 还保留 `related_tickets` JSON。统一列表、SLA、报表和跨域关系仍可能读到分叉值。
 
-**建议：**把"WorkItem 共享字段权威来源收口"列为独立 P1 项——审计 Incident/Problem/Change/Service Request 四个扩展表当前对 `title`/`description`/`status`/`priority` 等共享字段的读写路径，明确"以扩展表为唯一权威、WorkItem 基表只读镜像"或反之，二选一，禁止两边都能写。
+**建议：**将“升级安全的 Incident 回填工具”作为 P0 发布项；将 Problem/Change 公共字段、RLS 和关系结构化收口作为独立 P1，明确 WorkItem 为唯一权威，禁止继续双写。
 
 ### 2.1 核心领域评估
 

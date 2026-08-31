@@ -31,7 +31,7 @@ ITSM 实施提交（设计到跨仓切换）：
 - `b6276439` — verified channel identity exchange
 - `535d4db7` — preserve authenticated provider
 
-本报告、指标和最终验证修正在包含本文件的 `docs(intake): record unified intake verification` 提交中；可用 `git log -1 -- docs/reports/2026-08-31-unified-intake-implementation-report.md` 精确解析。
+本报告、指标和最终验证修正在 `f28988ec docs(intake): record unified intake verification` 提交中。
 
 KAF 切换提交：`16b1bae feat(itsm): create work items through unified intake`。KAF 删除了 Gazellio/Web Form/邮件成功兜底等创建旁路，保留互不相关的读取、密码与通知能力。KAF 不再读取 automation token 创建工单，也不接受权威 employee/tenant/requester 输入。
 
@@ -106,7 +106,41 @@ Prometheus 指标已注册并由创建服务、身份交换和 workflow worker �
 
 ## 6. 已知限制与发布边界
 
-- 两个 KAF Catalog procedure 尚无真实租户 `catalog_item_id` 配置；它们现在会明确 fail-closed，不能再退化为邮件或直接 CTI 创建。上线前须按租户配置真实 Catalog Item ID。
+- KAF `bastion_permission_apply` 与 `business_system_account_request` 尚无真实租户 `catalog_item_id` 配置；它们现在会明确 fail-closed，不能再退化为邮件或直接 CTI 创建。上线前须按租户配置真实 Catalog Item ID。
 - 窄范围前端 Jest 命令会被全局 coverage 阈值判为非零；CI 应运行完整 coverage suite，或把 focused smoke 明确配置为不收集全局覆盖率。
 - KAF 全仓测试需要可用且凭据匹配的 PostgreSQL 测试服务；在修复该既有环境前不能宣称 KAF repository-wide suite 绿色。
 - 发布必须先运行迁移和 RLS 预检，再启用 KAF identity exchange；Redis 不可用时 exchange 按设计返回 503，不允许绕过 nonce 防重放。
+
+## 7. 文档审计后的未完成工作
+
+以下项目不否定首期 Unified Intake 的完成状态；它们是发布配置、测试基础设施或下一阶段产品能力。评分为客户/业务影响、安全/合规风险、ITIL 关键性、战略一致性、实施不确定性（均为 1–5，最后一项越高越难）。
+
+| 优先级 | 结果与目标用户 | 负责边界 | 影响/安全/ITIL/战略/难度 | 状态 |
+| --- | --- | --- | --- | --- |
+| P0 | 为升级自旧数据模型的运维人员提供可执行的 Incident WorkItem 回填路径 | `cmd/backfill_*`、migration `021` | 5/4/5/5/3 | planned |
+| P0 | 为两个 KAF Catalog procedure 配置真实租户 Catalog Item ID | KAF procedure/config registry | 5/3/5/5/2 | planned |
+| P0 | 让 KAF repository-wide pytest 使用隔离且凭据可靠的 PostgreSQL fixture | KAF test bootstrap/settings | 4/2/3/4/3 | planned |
+| P1 | Incident typed actions 支持 `expectedVersion` 并保留审计/租户边界 | Incident professional service/API | 4/4/5/5/3 | proposed |
+| P1 | 移除 Problem/Change 对 WorkItem 公共字段的双重权威并使 `work_item_id` 必填 | Problem/Change schema/services/migration | 5/3/5/5/5 | planned |
+| P1 | 收敛 KAF Procedure 权威版本、manifest 与执行模型 | KAF procedure registry/assembler | 4/4/4/5/4 | proposed |
+| P1 | 修复 BPMN lower-camel query binding 与流程实例 ID 语义不一致 | BPMN controller/service contract | 3/3/4/4/2 | planned |
+| P1 | 将 Intake create/exchange/mapping/retry 路由纳入生成的 Swagger/OpenAPI | Intake handlers + `itsm-backend/docs` | 3/2/3/3/2 | planned |
+| P1 | 让 generic `CompleteTask` 获得与 KAF 专用路径等价的事务/恢复保证 | BPMN task completion | 4/4/5/5/5 | proposed |
+| P1 | 修复默认 `incident_emergency_flow.bpmn` 的 solved 网关回路并补真实浏览器 BPMN E2E | BPMN template/browser suite | 4/3/5/4/3 | planned |
+| P2 | 增加 Unified Intake UI、Intake Session、附件 staging、知识分流和多渠道状态反馈 | Intake frontend/application slice | 4/3/3/5/5 | proposed |
+| P2 | 扩展 `ProfessionalCreator` 到 Problem、Change Request、Catalog Task | owning professional services + Intake registry | 5/3/5/5/5 | proposed |
+| P2 | 将 `tickets.ticket_number` 唯一性改为 tenant-scoped 并完成存量冲突迁移 | Ticket schema/number allocator | 4/3/4/5/4 | proposed |
+
+### 当前唯一的迁移发布阻塞
+
+`021_work_item_authority` 会在任何 Incident 缺少权威 WorkItem 时 fail-closed；这是正确的安全门禁。但当前树已删除历史 `cmd/backfill_incident_work_item`，只剩只读的 `cmd/check_work_item_integrity`，因此从尚未完成 Incident 回填的旧版本直接升级时没有仓库内的修复命令。发布到这类环境前必须恢复/替代一个可审计、幂等、支持 dry-run 的 Incident 回填工具，并用生产副本演练 `integrity check → backfill → 021 → 022`。已经完成早期 WorkItem 回填且完整性检查为零异常的环境不受此阻塞影响。
+
+### 验收边界
+
+- P0 迁移工具：dry-run 给出候选基数；重复执行不新增 WorkItem；事务失败无部分状态；`check_work_item_integrity` 零异常后 `021`、`022` 连续通过。
+- P0 Catalog 配置：两个 procedure 都从租户配置解析真实 Catalog Item ID；未知/停用项 fail-closed；真实 Dev 创建和精确重放各通过一次。
+- P0 KAF 测试环境：全仓 `pytest -q` 在隔离数据库上退出 0；不得通过屏蔽 96 个失败或改成 skip 达成。
+- Problem/Change 权威收口：所有公共读写迁到 WorkItem，扩展表删除 title/description/status/priority/assignee/tenant/公共时间戳副本，`work_item_id` 变为必填并由 ticket join 实施 RLS；Change 的关系 JSON 迁到结构化关系表。
+- BPMN 合同：lower-camel query 有 HTTP contract test；变量端点只接受一种公开且文档化的实例标识；旧标识若移除需显式迁移，不保留含糊双语义。
+- OpenAPI：四类 Intake 路由、认证方式、稳定错误和幂等重放响应出现在生成的 Swagger JSON/YAML/Go 中，并由契约检查防止再次漂移；本次只更新了手写 `docs/api/API_REFERENCE.md`。
+- 后续产品增量继续遵守独立 spec → plan → implementation，不回写首期 Intake 的完成状态。

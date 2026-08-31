@@ -1,6 +1,6 @@
 # 统一 Work Item 重构 — 多 Agent 执行 Spec
 
-> 状态：Wave 1/2/3 均已完成（2026-08-27 ~ 2026-08-28，详见 §4.6/§4.7、§5.5、§6.1）；整个计划仍标 Proposed 而非 Completed，因为 Phase 6 物理清理（表改名决策、`ticket_type.go` 审批残留字段删除）和真实 Postgres 端到端验证（`cmd/check_work_item_integrity` 从未对着活库跑通过）两项仍未关闭，且 ticket_number 跨域撞号缺陷待修——这些都不是"完成"能省略的收尾项，是明确记录的独立后续工作。Wave 1 通过 `refactor/unified-work-item` 并入 main（merge commit `8c9bbe6c`），Wave 2/3 之后直接在 main 上串行完成，均早于/绕开了本文档 §1 自己设定的"集成分支+终审后才合入"闸门。
+> 状态（2026-09-01 更新）：Wave 1/2/3 已完成；`ticket_types` 旧审批字段已由 migration 017 删除，Incident/Service Request 公共字段已由 Unified Intake + migration 021 收口，并完成真实 PostgreSQL Intake/RLS 验证。整个 WorkItem 计划仍不是 Completed：Problem/Change 仍复制公共字段且 `work_item_id` 可空，旧库缺少当前可执行的 Incident 回填工具，`ticket_number` 仍是全局唯一，物理表改名仍待独立决策。Wave 1 通过 `refactor/unified-work-item` 并入 main（merge commit `8c9bbe6c`），Wave 2/3 之后直接在 main 上串行完成，均早于/绕开了本文档 §1 自己设定的"集成分支+终审后才合入"闸门。
 > 日期：2026-08-26
 > 依赖：
 > - 领域模型设计：[2026-08-26-unified-work-item-model-design.md](./2026-08-26-unified-work-item-model-design.md)（本文档不重复其内容，只引用并转成可分发的任务包）
@@ -9,7 +9,7 @@
 
 ## 0. 文档定位
 
-这不是重新设计领域模型——那份工作已经在 `2026-08-26-unified-work-item-model-design.md` 里做完并核实过（现状诊断经独立 agent 核实，准确率 95%+）。本文档要解决的是**执行方式**问题：这次重构要跨 Incident/Problem/Change/ServiceRequest 四个域和 BPMN 身份契约，用户计划把不同部分分给不同工具（Gemini/Codex/Copilot/Claude）在各自独立的 worktree/session 里并行执行，我（Claude，当前 session）作为总协调——写任务包、做逐任务评审、做最终整分支评审，不直接调用/监控其他工具的执行过程（环境里没有 codex/gemini/copilot 的 CLI，参见探索记录）。
+这不是重新设计领域模型——那份工作已经在 `2026-08-26-unified-work-item-model-design.md` 里完成。本文档要解决的是**执行方式**问题：这次重构要跨 Incident/Problem/Change/ServiceRequest 四个域和 BPMN 身份契约，用户计划把不同部分分给不同工具（Gemini/Codex/Copilot/Claude）在各自独立的 worktree/session 里并行执行，我（Claude，当前 session）作为总协调——写任务包、做逐任务评审、做最终整分支评审，不直接调用/监控其他工具的执行过程（环境里没有 codex/gemini/copilot 的 CLI，参见探索记录）。
 
 **核心约束（决定了下面 Wave 划分的唯一理由）**：Ent 是全量代码生成框架，一次 `go generate` 会重写 `client.go`/`tx.go`/`mutation.go`/`runtime.go` 等共享文件。如果多个并行 worktree 各自改 `ent/schema/*.go` 并独立跑 codegen，合并时这些生成文件必然发生结构性冲突，无法人工合理解决。因此**所有 ent schema 变更必须先在一个单点串行完成**，下游的业务逻辑实现才能安全并行。
 

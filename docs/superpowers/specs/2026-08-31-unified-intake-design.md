@@ -1,6 +1,8 @@
 # Unified Intake 设计
 
-> 状态：整体设计已批准，待书面审阅
+> 状态：首期已实施并完成 Dev 验证（2026-09-01）。实施证据见
+> `docs/reports/2026-08-31-unified-intake-implementation-report.md`；第 17 节项目仍是独立后续增量，
+> 不属于首期未完成项。
 > 日期：2026-08-31
 > 上位设计：`2026-08-28-kaf-itsm-autonomous-workitem-delegation-design.md`
 > 前置门禁：`2026-08-31-kaf-delegation-release-closeout-design.md` 已完成，Live Dev 结论为 Dev PASS
@@ -456,5 +458,7 @@ verified channel identity
 2. KAF Procedure 权威版本和执行模型收敛。
 3. Unified Intake UI、Intake Session、附件 staging、知识分流和产品级多渠道状态反馈。
 4. Problem、Change、Catalog Task 等新的 ProfessionalCreator。
+5. Problem/Change 扩展表公共字段和可空 `work_item_id` 的权威收口；该项属于既有
+   Unified WorkItem 合同债务，不由首期仅覆盖 Incident/Service Request 的 migration 021 代替。
 
 这些后续项不得倒灌到首期 Unified Intake 实施计划。

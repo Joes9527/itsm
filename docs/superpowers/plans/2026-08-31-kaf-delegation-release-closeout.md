@@ -2,6 +2,12 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Implementation status (2026-08-31): COMPLETE.** Tasks 1–8 and the Task 6A repair were
+> accepted by the Live Dev Closeout Addendum in
+> `docs/reports/2026-08-30-kaf-delegation-execution-integrity-report.md`. The subsequent
+> Unified Intake increment also completed on 2026-09-01; it does not change this closeout's
+> no-PROD boundary.
+
 **Goal:** Turn the merged ITSM/KAF delegation capabilities into a reproducible Dev baseline proven by persistent read auditing, a Graph-only SSLVPN procedure, one real cross-process Azure AD grant, replay-only recovery, deterministic breakers, PostgreSQL RLS, and verified cleanup.
 
 **Architecture:** ITSM remains authoritative for Service Request, BPMN, tenant scope, task actions, ledger, receipt, timeline, and audit; KAF remains authoritative for Procedure retrieval, typed Tool invocation, delivery leases, and completion replay. The one real path uses the official Service Request API, the existing process trigger and variables API, the authoritative `vpn_permission_grant` Procedure, and the registered Graph tools; all duplicate/recovery checks after the grant reuse the persisted completion payload and must not invoke Graph again.
@@ -68,7 +74,7 @@
 - Produces: `buildKafTaskContext(context.Context, *ent.ProcessTask) (*KafTaskContext, error)` and `recordKafReadAudit(context.Context, int, string, string, map[string]interface{}) error`.
 - Public behavior: `GetTaskContext` writes action `kaf_delegate.context_read`; `ListDelegatedTaskPage` writes action `kaf_delegate.list`; either audit write failure prevents a successful response.
 
-- [ ] **Step 1: Add failing HTTP tests for one sanitized context audit**
+- [x] **Step 1: Add failing HTTP tests for one sanitized context audit**
 
 Add a test that attaches a WorkItem and sensitive attachment, performs one successful GET, and inspects the single audit row:
 
@@ -114,7 +120,7 @@ func TestKafContext_RecordsOneSanitizedReadAudit(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Add failing tests for one aggregate list audit and zero per-item context audits**
+- [x] **Step 2: Add failing tests for one aggregate list audit and zero per-item context audits**
 
 ```go
 func TestKafDelegatedList_RecordsOneAggregateAudit(t *testing.T) {
@@ -137,7 +143,7 @@ func TestKafDelegatedList_RecordsOneAggregateAudit(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: Add a failing audit-write test that proves context is not returned**
+- [x] **Step 3: Add a failing audit-write test that proves context is not returned**
 
 Close the Ent client after fixture construction so the context assembly reaches the persistence boundary but the audit insert cannot succeed; assert a 5xx and no serialized `KafTaskContext`:
 
@@ -164,7 +170,7 @@ func TestKafContext_AuditPersistenceFailureDoesNotReturnContext(t *testing.T) {
 
 The Ent mutation hook is installed only after fixture creation, so context reads still succeed and the test deterministically fails only the persistent audit insert. Do not add a production injection seam, endpoint, or silent fallback for this test.
 
-- [ ] **Step 4: Run the new tests and confirm the missing-audit failures**
+- [x] **Step 4: Run the new tests and confirm the missing-audit failures**
 
 Run:
 
@@ -175,7 +181,7 @@ go test ./controller -run 'TestKaf(Context_RecordsOneSanitizedReadAudit|Context_
 
 Expected: FAIL because no `kaf_delegate.context_read`/`kaf_delegate.list` rows exist; the persistence-failure test must not pass accidentally.
 
-- [ ] **Step 5: Split context assembly and add fail-closed audit persistence**
+- [x] **Step 5: Split context assembly and add fail-closed audit persistence**
 
 Refactor only the already-authorized assembly body into this private method:
 
@@ -279,7 +285,7 @@ func (s *KafDelegationService) recordKafReadAudit(
 }
 ```
 
-- [ ] **Step 6: Run focused and existing authorization/attachment tests**
+- [x] **Step 6: Run focused and existing authorization/attachment tests**
 
 Run:
 
@@ -291,7 +297,7 @@ go test ./service -run 'TestKaf' -count=1 -v
 
 Expected: PASS; successful list requests have one list audit and zero context-read audits, while rejected requests remain fail closed.
 
-- [ ] **Step 7: Commit the ITSM read-audit slice**
+- [x] **Step 7: Commit the ITSM read-audit slice**
 
 ```bash
 cd /home/administrator/project/itsm
@@ -311,7 +317,7 @@ git commit -m "feat(kaf): audit delegated task reads"
 - Consumes: `service.NewBPMNParser()`, `(*BPMNParser).ParseXML([]byte)`, `(*BPMNServiceTask).ServiceTaskType()`, `(*BPMNServiceTask).AllowedActions()`.
 - Produces: BPMN service task `ServiceTask_KafDelegate` with `service_task_type=kaf_delegate` and `allowed_actions=complete_bpmn_task`, located after L2 approval and before the end event.
 
-- [ ] **Step 1: Add a failing structural fixture test**
+- [x] **Step 1: Add a failing structural fixture test**
 
 Read the shipped BPMN, parse it, locate the exact task, and assert its only outgoing route reaches the end:
 
@@ -343,7 +349,7 @@ func TestSSLVPNApprovalFlow_DelegatesToKafAfterL2Approval(t *testing.T) {
 
 Add the necessary `os`, `service`, and `service/bpmn` imports using the package’s existing import style.
 
-- [ ] **Step 2: Run the structural test and verify it fails**
+- [x] **Step 2: Run the structural test and verify it fails**
 
 ```bash
 cd /home/administrator/project/itsm/itsm-backend
@@ -352,7 +358,7 @@ go test ./tests/fixtures -run TestSSLVPNApprovalFlow_DelegatesToKafAfterL2Approv
 
 Expected: FAIL because `ServiceTask_KafDelegate` is absent.
 
-- [ ] **Step 3: Add the service task, metadata, sequence flows, and diagram shape**
+- [x] **Step 3: Add the service task, metadata, sequence flows, and diagram shape**
 
 Replace the current L2-to-end flow with:
 
@@ -369,7 +375,7 @@ Replace the current L2-to-end flow with:
 
 The local parser derives routing from `sequenceFlow`, so do not add unsupported `incoming`/`outgoing` fields to `BPMNServiceTask`. Replace `Flow_To_End`, move `EndEvent_1` to the right, and add a KAF `BPMNShape` plus both new `BPMNEdge` elements. Preserve the existing approval task IDs, candidate groups, and metadata.
 
-- [ ] **Step 4: Run fixture and in-process SSLVPN delegation tests**
+- [x] **Step 4: Run fixture and in-process SSLVPN delegation tests**
 
 ```bash
 cd /home/administrator/project/itsm/itsm-backend
@@ -379,7 +385,7 @@ go test ./handlers/service_request -run 'TestServiceRequestKafDelegationSSLVPN' 
 
 Expected: PASS; the shipped fixture contains KAF metadata, and existing transactional/outbox/ledger/receipt/replay coverage remains green.
 
-- [ ] **Step 5: Commit the shipped BPMN slice**
+- [x] **Step 5: Commit the shipped BPMN slice**
 
 ```bash
 cd /home/administrator/project/itsm
@@ -400,7 +406,7 @@ git commit -m "feat(bpmn): delegate sslvpn fulfillment to kaf"
 - Produces: assembler initial state `collected_fields: dict[str, object]`; raises `ValueError("kaf_procedure_collected_fields_invalid")` before Procedure lookup/execution when the nested value is not a mapping.
 - Preserves: existing `ProcedureRunner = Callable[[KafExecutionContext], Awaitable[None]]` and persisted completion-payload replay semantics.
 
-- [ ] **Step 1: Change the default-runner success test to require nested collected fields**
+- [x] **Step 1: Change the default-runner success test to require nested collected fields**
 
 In `test_default_runner_resolves_workspace_scopes_execution_and_completes_itsm`, make the fake graph reject the old whole-snapshot projection:
 
@@ -428,7 +434,7 @@ client.context_response.update(
 )
 ```
 
-- [ ] **Step 2: Add a failing non-object collected-fields test**
+- [x] **Step 2: Add a failing non-object collected-fields test**
 
 Reuse `_seed_workspace`, `FakeItsmClient`, and `InMemoryDeliverySession`; make Procedure lookup fail the test if called:
 
@@ -470,7 +476,7 @@ async def test_default_runner_rejects_non_mapping_collected_fields(
     assert client.action_calls == []
 ```
 
-- [ ] **Step 3: Run both tests and verify the old projection fails**
+- [x] **Step 3: Run both tests and verify the old projection fails**
 
 ```bash
 cd /mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-worktrees/kaf-delegation-transactional-delivery
@@ -481,7 +487,7 @@ ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/
 
 Expected: FAIL because the graph currently receives the entire `intakeSnapshot` and invalid nested data is not rejected.
 
-- [ ] **Step 4: Validate and project the nested object generically**
+- [x] **Step 4: Validate and project the nested object generically**
 
 Immediately after validating `operationKind`, add:
 
@@ -499,7 +505,7 @@ Then change only the assembler state assignment:
 
 Do not inspect `operationKind` for VPN-specific behavior and do not supply a default user or group.
 
-- [ ] **Step 5: Run the focused pipeline and replay suites**
+- [x] **Step 5: Run the focused pipeline and replay suites**
 
 ```bash
 cd /mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-worktrees/kaf-delegation-transactional-delivery
@@ -509,7 +515,7 @@ ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/
 
 Expected: PASS, including `test_sqlite_pending_completion_replay_never_reexecutes_listed_procedure` with `procedure_calls == 1`.
 
-- [ ] **Step 6: Commit the nested projection slice**
+- [x] **Step 6: Commit the nested projection slice**
 
 ```bash
 cd /mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-worktrees/kaf-delegation-transactional-delivery
@@ -533,7 +539,7 @@ git commit -m "fix(kaf): project delegated intake fields"
 - Produces metadata: `OpType.GRAPH_API`, `RiskLevel.HIGH`, `audit_required=True`, `requires_operator_review=False`, `agent_visible=False`, `case_types=("service_request",)`, `read_only=False`, `retry_on_failure=True`.
 - Approval ownership: `requires_operator_review=False` is intentional because the two BPMN user tasks are the explicit approval boundary; KAF must not fabricate a second unresumable gate.
 
-- [ ] **Step 1: Add a failing exact-kwargs binder test**
+- [x] **Step 1: Add a failing exact-kwargs binder test**
 
 Place this beside the existing LDAP binder tests without deleting those global-capability tests:
 
@@ -552,7 +558,7 @@ def test_bind_tool_params_ad_grant_vpn_access_uses_only_collected_identifier():
     }
 ```
 
-- [ ] **Step 2: Add a failing registry metadata test**
+- [x] **Step 2: Add a failing registry metadata test**
 
 Replace the registry-test import with this exact import, then assert the full security posture:
 
@@ -580,7 +586,7 @@ def test_ad_grant_vpn_access_metadata_is_high_risk_workflow_only_graph_write():
     assert metadata.retry_on_failure is True
 ```
 
-- [ ] **Step 3: Run the tests and verify both contracts are absent**
+- [x] **Step 3: Run the tests and verify both contracts are absent**
 
 ```bash
 cd /mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-worktrees/kaf-delegation-transactional-delivery
@@ -591,7 +597,7 @@ ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/
 
 Expected: FAIL because the assembler lacks the Graph branch and `TOOL_REGISTRY` lacks this key.
 
-- [ ] **Step 4: Add the minimal typed binder**
+- [x] **Step 4: Add the minimal typed binder**
 
 Add before the legacy LDAP branch:
 
@@ -605,7 +611,7 @@ if tool_name == "ad_grant_vpn_access":
 
 Do not pass group ID, reason, tenant, requester, expiry, vendor state, or LDAP options.
 
-- [ ] **Step 5: Register the existing Graph Tool metadata**
+- [x] **Step 5: Register the existing Graph Tool metadata**
 
 Add one authoritative registry entry in the high-risk/write section:
 
@@ -626,7 +632,7 @@ Add one authoritative registry entry in the high-risk/write section:
 
 Do not make the Tool agent-visible and do not change the LDAP registry entries; LDAP retirement outside this Procedure is explicitly out of scope.
 
-- [ ] **Step 6: Run assembler, governance, registry, and Graph Tool tests**
+- [x] **Step 6: Run assembler, governance, registry, and Graph Tool tests**
 
 ```bash
 cd /mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-worktrees/kaf-delegation-transactional-delivery
@@ -636,7 +642,7 @@ ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/
 
 Expected: PASS; existing Graph already-member behavior and explicit missing-config/user-resolution failures remain covered.
 
-- [ ] **Step 7: Commit the binder and metadata slice**
+- [x] **Step 7: Commit the binder and metadata slice**
 
 ```bash
 cd /mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-worktrees/kaf-delegation-transactional-delivery
@@ -659,7 +665,7 @@ git commit -m "feat(vpn): bind graph grant tool"
 - Produces: Procedure frontmatter with exactly one required field (`user_identifier`) and exactly one step (`{"type":"tool","name":"ad_grant_vpn_access"}`).
 - Explicitly removes from this Procedure: `engineer_confirmation`, `ldap_grant_vpn_access`, `target_vpn_group`, `valid_end`, `is_vendor`, `vendor_name`, OU routing, organization-specific groups/domains, renew/vendor subflows.
 
-- [ ] **Step 1: Rewrite the document contract tests to fail on the current LDAP Procedure**
+- [x] **Step 1: Rewrite the document contract tests to fail on the current LDAP Procedure**
 
 Keep the existing YAML-frontmatter loader and replace its legacy assertions with exact set/list assertions:
 
@@ -692,7 +698,7 @@ def test_vpn_permission_grant_is_graph_only():
 
 Reuse the existing `_frontmatter()` parser; do not create a second YAML parser.
 
-- [ ] **Step 2: Update intent and worker fixtures to expect the Graph step**
+- [x] **Step 2: Update intent and worker fixtures to expect the Graph step**
 
 Replace only the `vpn_permission_grant` fixture fragments:
 
@@ -721,7 +727,7 @@ assert result.case_outcome == CaseOutcome.FULFILLED
 
 For this test, set `ticket.required_fields` to `{"user_identifier": "user@company.example"}` and return `{"success": True, "data": {"user_identifier": "user@company.example", "already_member": False}}` from the mock. Rename the old gate-suspension VPN test to assert direct execution after ITSM approval; retain generic gate tests for Procedures that actually own KAF gates.
 
-- [ ] **Step 3: Run the changed tests and confirm they reject the legacy document**
+- [x] **Step 3: Run the changed tests and confirm they reject the legacy document**
 
 ```bash
 cd /mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-worktrees/kaf-delegation-transactional-delivery
@@ -731,7 +737,7 @@ ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/
 
 Expected: FAIL on LDAP/gate/extra-field expectations until the Procedure and fixtures agree.
 
-- [ ] **Step 4: Replace the Procedure with a concise Graph-only source of truth**
+- [x] **Step 4: Replace the Procedure with a concise Graph-only source of truth**
 
 Use this complete frontmatter contract:
 
@@ -768,7 +774,7 @@ steps:
 
 The Markdown body must state: ITSM BPMN owns approval; KAF uses `IT_BACKEND=graph`; the Tool resolves `VPN_USERS_GROUP_ID`; missing configuration, unresolved user, or invalid group fails explicitly; an existing member is idempotent success. Do not document concrete tenants, domains, group IDs, user fixtures, LDAP routing, expiry, vendor, grant/revoke classification, or another approval gate.
 
-- [ ] **Step 5: Run Procedure, intent, worker, assembler, and pipeline focused tests**
+- [x] **Step 5: Run Procedure, intent, worker, assembler, and pipeline focused tests**
 
 ```bash
 cd /mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-worktrees/kaf-delegation-transactional-delivery
@@ -779,7 +785,7 @@ ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/
 
 Expected: PASS; the authoritative Procedure contains one Graph Tool step and the headless flow completes without a KAF interrupt.
 
-- [ ] **Step 6: Commit the Graph-only Procedure slice**
+- [x] **Step 6: Commit the Graph-only Procedure slice**
 
 ```bash
 cd /mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-worktrees/kaf-delegation-transactional-delivery
@@ -804,7 +810,7 @@ git commit -m "feat(vpn): make grant procedure graph only"
 - Produces: current-source ITSM on `127.0.0.1:8090`, current-source KAF on `127.0.0.1:8001`, KAF Alembic revision `036_kaf_completion_replay`, and a Dev Procedure registry whose retrieved step/hash matches PostgreSQL `ProcedureManifest`.
 - Secret handling: tests check only presence and equality of non-secret endpoints/group ID; no command echoes token or secret values.
 
-- [ ] **Step 1: Establish a private evidence directory and assert the environment boundary**
+- [x] **Step 1: Establish a private evidence directory and assert the environment boundary**
 
 ```bash
 set -euo pipefail
@@ -856,7 +862,7 @@ PY
 
 Expected: every assertion exits zero. A failure is a pre-mutation blocker; stop before ingest or Graph calls.
 
-- [ ] **Step 2: Run ITSM focused, full, build, and diff verification**
+- [x] **Step 2: Run ITSM focused, full, build, and diff verification**
 
 ```bash
 cd /home/administrator/project/itsm/itsm-backend
@@ -872,7 +878,7 @@ git diff --check
 
 Expected: every command exits zero. Capture exact durations/counts into the private evidence directory; do not proceed on an ITSM failure.
 
-- [ ] **Step 3: Run KAF focused formatting and test verification**
+- [x] **Step 3: Run KAF focused formatting and test verification**
 
 ```bash
 cd /mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-worktrees/kaf-delegation-transactional-delivery
@@ -898,7 +904,7 @@ git diff --check
 
 Expected: focused commands exit zero. Do not run the live mutation if a changed-scope KAF test fails.
 
-- [ ] **Step 4: Record the repository-wide KAF result truthfully**
+- [x] **Step 4: Record the repository-wide KAF result truthfully**
 
 ```bash
 cd /mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-worktrees/kaf-delegation-transactional-delivery
@@ -913,7 +919,7 @@ printf 'exit_code=%s\n' "$KAF_FULL_EXIT" >"$CLOSEOUT_EVIDENCE_DIR/kaf-full-pytes
 
 Expected: store the actual exit code and terminal count line. Compare every modified-scope failure against Step 3; any new modified-scope failure blocks live execution. Never rewrite a nonzero result as “all green.”
 
-- [ ] **Step 5: Bring the KAF Dev data plane to the exact migration head**
+- [x] **Step 5: Bring the KAF Dev data plane to the exact migration head**
 
 ```bash
 cd /mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-worktrees/kaf-delegation-transactional-delivery
@@ -927,7 +933,7 @@ docker exec kaf-dev-postgres psql -U ai01 -d control_plane -Atc \
 
 Expected: source and database both report exactly `036_kaf_completion_replay`; zero alternate heads.
 
-- [ ] **Step 6: Ingest the changed authoritative Procedure through the existing pipeline**
+- [x] **Step 6: Ingest the changed authoritative Procedure through the existing pipeline**
 
 ```bash
 cd /mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-worktrees/kaf-delegation-transactional-delivery
@@ -937,7 +943,7 @@ PYTHONPATH=src /home/administrator/actions-runner/_work/kaf/kaf/.venv/bin/python
 
 Expected: CLI exit zero and `failed=0`; do not edit Qdrant or PostgreSQL directly.
 
-- [ ] **Step 7: Verify Qdrant retrieval and ProcedureManifest agree**
+- [x] **Step 7: Verify Qdrant retrieval and ProcedureManifest agree**
 
 Run this read-only check with the loaded Dev environment:
 
@@ -971,7 +977,7 @@ PY
 
 Expected: one sanitized dictionary with the Graph Tool step; no document body or secret output.
 
-- [ ] **Step 8: Start or prove current-source ITSM/KAF processes and record exact commits**
+- [x] **Step 8: Start or prove current-source ITSM/KAF processes and record exact commits**
 
 Use the process working directory, not a container name, to prove an already-running listener is current source. Otherwise start it and persist its PID under the private evidence directory:
 
@@ -1702,4 +1708,7 @@ untracked and unstaged.
 
 ## Execution Gate
 
-Do not begin a separate unified Intake brainstorm until Task 8 records either a supported `PASS` or an explicit `FAIL`/blocker and Task 7 proves final Graph membership is false. A Dev `PASS` is a stable-baseline result, not approval for KAF PROD or a production deployment.
+This gate was satisfied on 2026-08-31: Task 8 recorded `PASS` and Task 7 proved final Graph
+membership `false`. The separate Unified Intake increment subsequently completed on 2026-09-01.
+The Dev `PASS` remains a stable-baseline result, not approval for KAF PROD or a production
+deployment.

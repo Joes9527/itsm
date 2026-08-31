@@ -12,7 +12,8 @@ with zero skips after two fail-closed connection defects were repaired and
 independently reviewed.
 
 This is not production rollout approval. No request was sent to KAF PROD
-`10.128.35.195`, and the separate unified Intake design has not begun.
+`10.128.35.195`. The separate Unified Intake increment subsequently completed
+on 2026-09-01; see `docs/reports/2026-08-31-unified-intake-implementation-report.md`.
 
 ## Full-Implementation Review Addendum
 
@@ -262,5 +263,5 @@ zero-skip PostgreSQL results below.
 
 **Closeout verdict: PASS.** This establishes a reproducible, audited Dev
 baseline for KAF delegation execution integrity. It does not authorize KAF PROD
-deployment. Unified Intake remains intentionally deferred to a separate
-brainstorm and design phase.
+deployment. Unified Intake was intentionally outside this closeout and was later
+implemented as the separate increment linked above.
