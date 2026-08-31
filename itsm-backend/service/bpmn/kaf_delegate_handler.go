@@ -55,7 +55,11 @@ func (h *KafDelegateServiceTaskHandler) Execute(ctx context.Context, task *ent.P
 		taskID = task.TaskID
 		tenantID = task.TenantID
 	}
-	h.logger.Infow("KAF 委派任务已完成", "taskID", taskID, "tenantID", tenantID)
+	if scope, ok := KafActionScopeFromContext(ctx); ok {
+		h.logger.Infow("KAF 委派任务已完成", "taskID", taskID, "tenantID", tenantID, "ledgerID", scope.LedgerID(), "runID", scope.RunID(), "stepID", scope.StepID())
+	} else {
+		h.logger.Infow("KAF 委派任务已完成", "taskID", taskID, "tenantID", tenantID)
+	}
 	return &dto.ServiceTaskResult{Success: true, Message: "kaf_delegate 任务已完成"}, nil
 }
 

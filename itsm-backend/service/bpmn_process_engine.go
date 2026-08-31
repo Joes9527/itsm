@@ -107,12 +107,22 @@ type CustomProcessEngine struct {
 	participationResolver *bpmnParticipationResolver
 	callbackOutbox        *bpmnCallbackOutbox
 	callbackExecutionKeys *[]string
+	transactionBound      bool
 	// 内部服务
 	processDefinitionService *bpmnProcessDefinitionService
 	processInstanceService   *bpmnProcessInstanceService
 	taskService              *bpmnTaskService
 	// 审计服务
 	auditService *BPMNAuditService
+	// KAF 委派服务负责委派任务、审计和 Outbox 的原子写入。
+	kafDelegationService *KafDelegationService
+}
+
+type kafCompletionFenceContextKey struct{}
+
+type kafCompletionFence struct {
+	ledgerID   int
+	leaseOwner string
 }
 
 // NewCustomProcessEngine 创建自定义流程引擎实例
@@ -138,6 +148,7 @@ func NewCustomProcessEngine(client *ent.Client, logger *zap.SugaredLogger) Proce
 	// 这一个 engine 的 registry 里注入 TicketService/IncidentService。任务完成路径若临时
 	// 新建 engine，持久化执行和 worker 恢复都会拿到未注入的空 registry。
 	engine.taskService = &bpmnTaskService{client: client, logger: logger, groupResolver: engine.groupResolver, participationResolver: participationResolver, engine: engine}
+	engine.kafDelegationService = NewKafDelegationService(client)
 	// 注册流程相关的内置函数
 	engine.registerProcessFunctions()
 
@@ -419,6 +430,9 @@ func (e *CustomProcessEngine) completeAuthorizedTaskWithClient(ctx context.Conte
 		return nil, fmt.Errorf("解析BPMN失败: 流程定义不包含可执行流程")
 	}
 	process := definitions.Processes[0]
+	if err := e.validateTicketRecordClassInputWithClient(ctx, client, instance, variables); err != nil {
+		return nil, err
+	}
 	descriptor, err := e.descriptorForProcessTask(ctx, client, task, process)
 	if err != nil {
 		return nil, err
@@ -516,6 +530,7 @@ func (e *CustomProcessEngine) forClient(client *ent.Client, executionKeys *[]str
 	clone.participationResolver = newBPMNParticipationResolver(client, clone.groupResolver)
 	clone.auditService = e.auditService.ForClient(client)
 	clone.callbackExecutionKeys = executionKeys
+	clone.transactionBound = true
 	clone.taskService = &bpmnTaskService{
 		client:                client,
 		logger:                clone.logger,
@@ -691,6 +706,9 @@ func (e *CustomProcessEngine) authorizeTaskActorWithClient(ctx context.Context, 
 	if scope.TenantID != task.TenantID {
 		return common.NewForbiddenError("任务不属于当前租户")
 	}
+	if task.TaskType == bpmn.KafDelegateTaskType {
+		return e.authorizeKafAutomationActorWithClient(ctx, client, task, scope)
+	}
 	callbackTaskType := task.CallbackTaskType
 	if callbackTaskType == "" {
 		callbackTaskType = task.TaskType
@@ -755,6 +773,10 @@ func (e *CustomProcessEngine) authorizeKafAutomationActor(ctx context.Context, t
 }
 
 func (e *CustomProcessEngine) authorizeKafAutomationActorWithClient(ctx context.Context, client *ent.Client, task *ent.ProcessTask, scope BPMNAccessScope) error {
+	return e.authorizeKafAutomationActorForStatusWithClient(ctx, client, task, scope, common.ProcessTaskStatusDelegated)
+}
+
+func (e *CustomProcessEngine) authorizeKafAutomationActorForStatusWithClient(ctx context.Context, client *ent.Client, task *ent.ProcessTask, scope BPMNAccessScope, allowedStatus string) error {
 	actor, err := client.User.Query().Where(user.ID(scope.UserID), user.TenantID(scope.TenantID)).Only(ctx)
 	if err != nil {
 		return fmt.Errorf("KAF 自动化账号不存在: %w", err)
@@ -767,7 +789,10 @@ func (e *CustomProcessEngine) authorizeKafAutomationActorWithClient(ctx context.
 	if actor.TenantID != task.TenantID {
 		return fmt.Errorf("KAF 自动化账号与委派任务所属租户不一致，拒绝跨租户完成任务")
 	}
-	if task.Status != common.ProcessTaskStatusDelegated {
+	if task.TaskType != bpmn.KafDelegateTaskType {
+		return fmt.Errorf("任务不是 KAF 委派任务")
+	}
+	if task.Status != allowedStatus {
 		return fmt.Errorf("委派任务当前状态不允许完成: %s", task.Status)
 	}
 	return nil
@@ -816,6 +841,12 @@ func (e *CustomProcessEngine) mergeVariablesWithOptimisticLock(ctx context.Conte
 		}
 
 		if count > 0 {
+			if fence, ok := ctx.Value(kafCompletionFenceContextKey{}).(kafCompletionFence); ok {
+				if err := assertKafCompletionFence(ctx, tx.Client(), fence); err != nil {
+					_ = tx.Rollback()
+					return nil, err
+				}
+			}
 			// 更新成功，提交事务
 			if err := tx.Commit(); err != nil {
 				return nil, fmt.Errorf("提交事务失败: %w", err)
@@ -876,6 +907,10 @@ func (e *CustomProcessEngine) executeStep(ctx context.Context, instance *ent.Pro
 }
 
 func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.ProcessInstance, process *BPMNProcess, elementID string) error {
+	if serviceTask := e.findServiceTask(process, elementID); serviceTask != nil && e.isKafDelegationServiceTask(serviceTask) {
+		return e.createDelegatedTask(ctx, instance, serviceTask, bpmn.KafDelegateTaskType)
+	}
+
 	// Find the element name for logging
 	elementName := elementID
 	if task := e.findUserTask(process, elementID); task != nil {
@@ -884,7 +919,7 @@ func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.P
 		elementName = endEvent.Name
 	}
 
-	_, err := e.client.ProcessInstance.UpdateOne(instance).
+	_, err := e.client.ProcessInstance.UpdateOneID(instance.ID).
 		SetCurrentActivityID(elementID).
 		SetCurrentActivityName(elementName).
 		Save(ctx)
@@ -1243,6 +1278,14 @@ func (e *CustomProcessEngine) executeClaimedUserTaskCallback(
 	return bpmnCallbackExecutionResult{CompletionCommitted: true}, nil
 }
 
+func (e *CustomProcessEngine) isKafDelegationServiceTask(serviceTask *BPMNServiceTask) bool {
+	if serviceTask == nil || serviceTask.ServiceTaskType() != bpmn.KafDelegateTaskType {
+		return false
+	}
+	handler := e.findHandlerByTaskType(bpmn.KafDelegateTaskType)
+	return handler != nil && isAsyncHandler(handler)
+}
+
 func mergeServiceTaskVariables(instanceVariables map[string]interface{}, task *BPMNServiceTask) map[string]interface{} {
 	variables := make(map[string]interface{}, len(instanceVariables)+12)
 	for key, value := range instanceVariables {
@@ -1522,6 +1565,22 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 // authorizeTaskActor 和异步完成分发重新做 findHandlerByTaskType 查找——三处用的必须是
 // 同一个能查到同一个 handler 的字符串。
 func (e *CustomProcessEngine) createDelegatedTask(ctx context.Context, instance *ent.ProcessInstance, serviceTask *BPMNServiceTask, taskType string) error {
+	if taskType == bpmn.KafDelegateTaskType {
+		if e.kafDelegationService == nil {
+			return fmt.Errorf("KAF delegation service is not configured")
+		}
+		var err error
+		if e.transactionBound {
+			_, err = e.kafDelegationService.CreateDelegatedTaskWithClient(ctx, e.client, instance.ID, serviceTask)
+		} else {
+			_, err = e.kafDelegationService.CreateDelegatedTask(ctx, instance.ID, serviceTask)
+		}
+		if err != nil {
+			return fmt.Errorf("创建 KAF 委派任务失败: %w", err)
+		}
+		e.logger.Infow("KAF ServiceTask 已暂停，等待外部完成", "elementID", serviceTask.ID, "instanceID", instance.ProcessInstanceID)
+		return nil
+	}
 	descriptor := e.callbackDescriptor(taskType, serviceTask.ServiceTaskAction(), serviceTask.CallbackConfigRef())
 	if descriptor.HandlerID == bpmnUnresolvedUserTaskCallbackHandlerID || descriptor.HandlerID == bpmnNoUserTaskCallbackHandlerID {
 		return fmt.Errorf("异步 ServiceTask %s 的回调描述符无法解析", serviceTask.ID)
@@ -1944,7 +2003,7 @@ func matchRuleConditions(conditions []map[string]interface{}, taskName string) b
 }
 
 func (e *CustomProcessEngine) completeProcess(ctx context.Context, instance *ent.ProcessInstance) error {
-	_, err := e.client.ProcessInstance.UpdateOne(instance).
+	_, err := e.client.ProcessInstance.UpdateOneID(instance.ID).
 		SetStatus("completed").
 		SetEndTime(time.Now()).
 		Save(ctx)

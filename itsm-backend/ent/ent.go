@@ -50,6 +50,8 @@ import (
 	"itsm-backend/ent/incidentrule"
 	"itsm-backend/ent/incidentruleexecution"
 	"itsm-backend/ent/itemversion"
+	"itsm-backend/ent/kaftaskactionledger"
+	"itsm-backend/ent/kaftaskcompletionreceipt"
 	"itsm-backend/ent/knowledgearticle"
 	"itsm-backend/ent/knowledgearticlelike"
 	"itsm-backend/ent/knowledgearticleparticipant"
@@ -63,6 +65,7 @@ import (
 	"itsm-backend/ent/mspallocation"
 	"itsm-backend/ent/notification"
 	"itsm-backend/ent/notificationpreference"
+	"itsm-backend/ent/outboxevent"
 	"itsm-backend/ent/passwordresettoken"
 	"itsm-backend/ent/permission"
 	"itsm-backend/ent/permissiondefinition"
@@ -233,6 +236,8 @@ func checkColumn(t, c string) error {
 			incidentrule.Table:                incidentrule.ValidColumn,
 			incidentruleexecution.Table:       incidentruleexecution.ValidColumn,
 			itemversion.Table:                 itemversion.ValidColumn,
+			kaftaskactionledger.Table:         kaftaskactionledger.ValidColumn,
+			kaftaskcompletionreceipt.Table:    kaftaskcompletionreceipt.ValidColumn,
 			knowledgearticle.Table:            knowledgearticle.ValidColumn,
 			knowledgearticlelike.Table:        knowledgearticlelike.ValidColumn,
 			knowledgearticleparticipant.Table: knowledgearticleparticipant.ValidColumn,
@@ -246,6 +251,7 @@ func checkColumn(t, c string) error {
 			microservice.Table:                microservice.ValidColumn,
 			notification.Table:                notification.ValidColumn,
 			notificationpreference.Table:      notificationpreference.ValidColumn,
+			outboxevent.Table:                 outboxevent.ValidColumn,
 			passwordresettoken.Table:          passwordresettoken.ValidColumn,
 			permission.Table:                  permission.ValidColumn,
 			permissiondefinition.Table:        permissiondefinition.ValidColumn,

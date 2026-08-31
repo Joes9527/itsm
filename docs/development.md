@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- **Go** 1.24+
+- **Go** 1.25+（`go.mod` 当前固定 1.25.12，与 `itsm-backend/Dockerfile.prod` 一致）
 - **Node.js** 22+
 - **Docker** & Docker Compose v2
 - **pnpm** 9+

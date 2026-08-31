@@ -734,6 +734,15 @@ func (s *TicketService) triggerWorkflowForTicket(ctx context.Context, tkt *ticke
 	return nil
 }
 
+// TriggerWorkflowForExistingTicket starts BPMN for a Ticket whose owning domain
+// has already committed its aggregate transaction.
+func (s *TicketService) TriggerWorkflowForExistingTicket(ctx context.Context, tkt *ticket.Ticket, tenantID int, workflowDefinitionKey string, approvalChain interface{}) error {
+	if s.processTriggerSvc == nil {
+		return nil
+	}
+	return s.triggerWorkflowForTicket(ctx, tkt, tenantID, workflowDefinitionKey, approvalChain)
+}
+
 // GetWorkflowStatus 获取工单关联的流程状态
 // 与 V1 (ticket_service.go:282-319) 等价
 func (s *TicketService) GetWorkflowStatus(ctx context.Context, ticketID int, tenantID int) (*dto.ProcessTriggerResponse, error) {

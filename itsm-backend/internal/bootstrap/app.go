@@ -3,10 +3,16 @@ package bootstrap
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
+	"net"
+	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"itsm-backend/common"
@@ -69,14 +75,15 @@ type ticketNotificationWorker interface {
 }
 
 type Application struct {
-	Cfg                *config.Config
-	Logger             *zap.SugaredLogger
-	DBClient           *ent.Client
-	Router             *gin.Engine
-	Embedder           service.Embedder
-	VectorStore        *service.VectorStore
-	callbackWorker     bpmnCallbackWorker
-	notificationWorker ticketNotificationWorker
+	Cfg                 *config.Config
+	Logger              *zap.SugaredLogger
+	DBClient            *ent.Client
+	Router              *gin.Engine
+	Embedder            service.Embedder
+	VectorStore         *service.VectorStore
+	callbackWorker      bpmnCallbackWorker
+	notificationWorker  ticketNotificationWorker
+	KAFOutboxDispatcher kafOutboxRunner
 }
 
 // prepareTicketCCIndexMigration removes the pre-partial-index definition.
@@ -93,6 +100,10 @@ func prepareTicketCCIndexMigration(ctx context.Context, db *sql.DB, logger *zap.
 		logger.Debugw("legacy TicketCC natural index removed when present")
 	}
 	return nil
+}
+
+type kafOutboxRunner interface {
+	Run(context.Context)
 }
 
 // prepareRolePermissionTenantMigration upgrades installations created before
@@ -223,6 +234,24 @@ func NewApplication() *Application {
 	client, err := database.InitDatabaseWithRLS(&cfg.Database, &cfg.RLS, sugar)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	var kafOutboxDispatcher kafOutboxRunner
+	if cfg.KAFOutbox.WebhookURL == "" {
+		sugar.Warn("KAF outbox dispatcher disabled because KAF_WEBHOOK_URL is not configured")
+	} else {
+		dispatcher, err := service.NewKafOutboxDispatcher(
+			service.NewOutboxEventRepository(client),
+			service.KafOutboxConfig{
+				WebhookURL:    cfg.KAFOutbox.WebhookURL,
+				WebhookSecret: cfg.KAFOutbox.WebhookSecret,
+				BatchSize:     cfg.KAFOutbox.BatchSize,
+				PollInterval:  cfg.KAFOutbox.PollInterval,
+			},
+		)
+		if err != nil {
+			log.Fatalf("Invalid KAF outbox configuration: %v", err)
+		}
+		kafOutboxDispatcher = dispatcher
 	}
 
 	// 6. 初始化服务层 & 控制器
@@ -535,7 +564,7 @@ func NewApplication() *Application {
 	ticketTagService := service.NewTicketTagService(client)
 	ticketTagController := controller.NewTicketTagController(ticketTagService, sugar.Desugar())
 
-	bpmnWorkflowController := controller.NewBPMNWorkflowController(processEngine, bpmnVersionService)
+	bpmnWorkflowController := controller.NewBPMNWorkflowController(processEngine, bpmnVersionService, client)
 	bpmnTemplateService := service.NewBPMNTemplateService(client)
 
 	// BPMN Process Trigger Controller (processBindingService/processTriggerService 已于 119-122 行预创建并注入 V2)
@@ -896,14 +925,15 @@ func NewApplication() *Application {
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	return &Application{
-		Cfg:                cfg,
-		Logger:             sugar,
-		DBClient:           client,
-		Router:             r,
-		Embedder:           embedder,
-		VectorStore:        vectorStore,
-		callbackWorker:     concreteProcessEngine,
-		notificationWorker: ticketNotificationService,
+		Cfg:                 cfg,
+		Logger:              sugar,
+		DBClient:            client,
+		Router:              r,
+		Embedder:            embedder,
+		VectorStore:         vectorStore,
+		callbackWorker:      concreteProcessEngine,
+		notificationWorker:  ticketNotificationService,
+		KAFOutboxDispatcher: kafOutboxDispatcher,
 	}
 }
 
@@ -1090,14 +1120,63 @@ func needsBootstrapAdmin(ctx context.Context, client *ent.Client) (bool, error) 
 func (app *Application) Run() {
 	defer app.Logger.Sync()
 	defer app.DBClient.Close()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	waitForKAFOutbox := app.startKafOutboxDispatcher(ctx)
+	defer waitForKAFOutbox()
 
 	backgroundCtx, cancelBackground := context.WithCancel(context.Background())
 	defer cancelBackground()
 	app.startBackgroundTasks(backgroundCtx)
 
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", app.Cfg.Server.Port))
+	if err != nil {
+		log.Fatalf("Failed to listen on server port: %v", err)
+	}
+	server := &http.Server{Handler: app.Router}
 	app.Logger.Infof("Server starting on port %d", app.Cfg.Server.Port)
-	if err := app.Router.Run(fmt.Sprintf(":%d", app.Cfg.Server.Port)); err != nil {
+	if err := serveUntilContextCancelled(ctx, server, listener); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
+	}
+}
+
+func (app *Application) startKafOutboxDispatcher(ctx context.Context) func() {
+	if app.KAFOutboxDispatcher == nil {
+		return func() {}
+	}
+
+	var waitGroup sync.WaitGroup
+	waitGroup.Add(1)
+	go func() {
+		defer waitGroup.Done()
+		app.KAFOutboxDispatcher.Run(ctx)
+	}()
+	return waitGroup.Wait
+}
+
+func serveUntilContextCancelled(ctx context.Context, server *http.Server, listener net.Listener) error {
+	serveError := make(chan error, 1)
+	go func() {
+		serveError <- server.Serve(listener)
+	}()
+
+	select {
+	case err := <-serveError:
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			return err
+		}
+		err := <-serveError
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
 	}
 }
 

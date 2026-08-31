@@ -281,6 +281,11 @@ func (e *CustomProcessEngine) descriptorForProcessTask(ctx context.Context, clie
 		if taskType == "" {
 			taskType = e.definitionDeclaredServiceTaskType(serviceTask)
 		}
+		// KAF tasks created before immutable callback descriptors were added
+		// persist their authoritative type on ProcessTask.
+		if taskType == "" && task.TaskType == bpmn.KafDelegateTaskType {
+			taskType = task.TaskType
+		}
 		if taskType == "" {
 			return bpmnCallbackDescriptor{}, fmt.Errorf("服务任务 %s 未声明回调类型", task.TaskDefinitionKey)
 		}

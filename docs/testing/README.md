@@ -5,8 +5,7 @@
 ## 当前入口
 
 - [角色视角产品测试方案](./role-based-product-test-plan.md)
-- [完整产品冒烟测试报告](./full-product-smoke-2026-06-06.md)
-- [系统测试报告](./system-test-report-2026-05-17.md)
+- [测试用例目录](./test-cases/README.md)
 
 ## 维护规则
 

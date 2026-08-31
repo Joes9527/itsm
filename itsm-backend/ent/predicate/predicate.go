@@ -138,6 +138,12 @@ type IncidentRuleExecution func(*sql.Selector)
 // ItemVersion is the predicate function for itemversion builders.
 type ItemVersion func(*sql.Selector)
 
+// KafTaskActionLedger is the predicate function for kaftaskactionledger builders.
+type KafTaskActionLedger func(*sql.Selector)
+
+// KafTaskCompletionReceipt is the predicate function for kaftaskcompletionreceipt builders.
+type KafTaskCompletionReceipt func(*sql.Selector)
+
 // KnowledgeArticle is the predicate function for knowledgearticle builders.
 type KnowledgeArticle func(*sql.Selector)
 
@@ -176,6 +182,9 @@ type Notification func(*sql.Selector)
 
 // NotificationPreference is the predicate function for notificationpreference builders.
 type NotificationPreference func(*sql.Selector)
+
+// OutboxEvent is the predicate function for outboxevent builders.
+type OutboxEvent func(*sql.Selector)
 
 // PasswordResetToken is the predicate function for passwordresettoken builders.
 type PasswordResetToken func(*sql.Selector)

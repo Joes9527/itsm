@@ -130,7 +130,7 @@ cd ../itsm-frontend && npm run type-check && npm run build
 - [ビルド・デプロイガイド](./docs/deployment.md)
 - [運用ガイド](./docs/operations.md)
 - [設定リファレンス](./docs/configuration.md)
-- [本番準備プログラム](./docs/delivery/production-readiness-program.md)
+- [本番初期化runbook](./docs/runbooks/production-initialization.md)
 - [コントリビューションガイド](./CONTRIBUTING.md)
 
 ## ライセンス

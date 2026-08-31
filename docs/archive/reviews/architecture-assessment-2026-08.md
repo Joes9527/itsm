@@ -1,5 +1,8 @@
 # ITSM 架构评估报告 — 基于 Roadmap 与 AGENT.md 合规审计
 
+> **[已归档]** 本文档的结论已被 [architecture-product-assessment-2026-08-30.md](../../architecture-product-assessment-2026-08-30.md)
+> 核实并订正，请以该文档为准。本文档保留作为历史记录。
+
 > 评估日期: 2026-08-13
 > 依据: docs/roadmap.md (v1.1 in progress)、CLAUDE.md、AGENTS.md
 > 方法: 三路并行代码审计（工程项 / 产品项 / 架构合规）

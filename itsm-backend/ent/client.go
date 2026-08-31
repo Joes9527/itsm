@@ -55,6 +55,8 @@ import (
 	"itsm-backend/ent/incidentrule"
 	"itsm-backend/ent/incidentruleexecution"
 	"itsm-backend/ent/itemversion"
+	"itsm-backend/ent/kaftaskactionledger"
+	"itsm-backend/ent/kaftaskcompletionreceipt"
 	"itsm-backend/ent/knowledgearticle"
 	"itsm-backend/ent/knowledgearticlelike"
 	"itsm-backend/ent/knowledgearticleparticipant"
@@ -68,6 +70,7 @@ import (
 	"itsm-backend/ent/mspallocation"
 	"itsm-backend/ent/notification"
 	"itsm-backend/ent/notificationpreference"
+	"itsm-backend/ent/outboxevent"
 	"itsm-backend/ent/passwordresettoken"
 	"itsm-backend/ent/permission"
 	"itsm-backend/ent/permissiondefinition"
@@ -228,6 +231,10 @@ type Client struct {
 	IncidentRuleExecution *IncidentRuleExecutionClient
 	// ItemVersion is the client for interacting with the ItemVersion builders.
 	ItemVersion *ItemVersionClient
+	// KafTaskActionLedger is the client for interacting with the KafTaskActionLedger builders.
+	KafTaskActionLedger *KafTaskActionLedgerClient
+	// KafTaskCompletionReceipt is the client for interacting with the KafTaskCompletionReceipt builders.
+	KafTaskCompletionReceipt *KafTaskCompletionReceiptClient
 	// KnowledgeArticle is the client for interacting with the KnowledgeArticle builders.
 	KnowledgeArticle *KnowledgeArticleClient
 	// KnowledgeArticleLike is the client for interacting with the KnowledgeArticleLike builders.
@@ -254,6 +261,8 @@ type Client struct {
 	Notification *NotificationClient
 	// NotificationPreference is the client for interacting with the NotificationPreference builders.
 	NotificationPreference *NotificationPreferenceClient
+	// OutboxEvent is the client for interacting with the OutboxEvent builders.
+	OutboxEvent *OutboxEventClient
 	// PasswordResetToken is the client for interacting with the PasswordResetToken builders.
 	PasswordResetToken *PasswordResetTokenClient
 	// Permission is the client for interacting with the Permission builders.
@@ -429,6 +438,8 @@ func (c *Client) init() {
 	c.IncidentRule = NewIncidentRuleClient(c.config)
 	c.IncidentRuleExecution = NewIncidentRuleExecutionClient(c.config)
 	c.ItemVersion = NewItemVersionClient(c.config)
+	c.KafTaskActionLedger = NewKafTaskActionLedgerClient(c.config)
+	c.KafTaskCompletionReceipt = NewKafTaskCompletionReceiptClient(c.config)
 	c.KnowledgeArticle = NewKnowledgeArticleClient(c.config)
 	c.KnowledgeArticleLike = NewKnowledgeArticleLikeClient(c.config)
 	c.KnowledgeArticleParticipant = NewKnowledgeArticleParticipantClient(c.config)
@@ -442,6 +453,7 @@ func (c *Client) init() {
 	c.Microservice = NewMicroserviceClient(c.config)
 	c.Notification = NewNotificationClient(c.config)
 	c.NotificationPreference = NewNotificationPreferenceClient(c.config)
+	c.OutboxEvent = NewOutboxEventClient(c.config)
 	c.PasswordResetToken = NewPasswordResetTokenClient(c.config)
 	c.Permission = NewPermissionClient(c.config)
 	c.PermissionDefinition = NewPermissionDefinitionClient(c.config)
@@ -638,6 +650,8 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		IncidentRule:                NewIncidentRuleClient(cfg),
 		IncidentRuleExecution:       NewIncidentRuleExecutionClient(cfg),
 		ItemVersion:                 NewItemVersionClient(cfg),
+		KafTaskActionLedger:         NewKafTaskActionLedgerClient(cfg),
+		KafTaskCompletionReceipt:    NewKafTaskCompletionReceiptClient(cfg),
 		KnowledgeArticle:            NewKnowledgeArticleClient(cfg),
 		KnowledgeArticleLike:        NewKnowledgeArticleLikeClient(cfg),
 		KnowledgeArticleParticipant: NewKnowledgeArticleParticipantClient(cfg),
@@ -651,6 +665,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Microservice:                NewMicroserviceClient(cfg),
 		Notification:                NewNotificationClient(cfg),
 		NotificationPreference:      NewNotificationPreferenceClient(cfg),
+		OutboxEvent:                 NewOutboxEventClient(cfg),
 		PasswordResetToken:          NewPasswordResetTokenClient(cfg),
 		Permission:                  NewPermissionClient(cfg),
 		PermissionDefinition:        NewPermissionDefinitionClient(cfg),
@@ -774,6 +789,8 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		IncidentRule:                NewIncidentRuleClient(cfg),
 		IncidentRuleExecution:       NewIncidentRuleExecutionClient(cfg),
 		ItemVersion:                 NewItemVersionClient(cfg),
+		KafTaskActionLedger:         NewKafTaskActionLedgerClient(cfg),
+		KafTaskCompletionReceipt:    NewKafTaskCompletionReceiptClient(cfg),
 		KnowledgeArticle:            NewKnowledgeArticleClient(cfg),
 		KnowledgeArticleLike:        NewKnowledgeArticleLikeClient(cfg),
 		KnowledgeArticleParticipant: NewKnowledgeArticleParticipantClient(cfg),
@@ -787,6 +804,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Microservice:                NewMicroserviceClient(cfg),
 		Notification:                NewNotificationClient(cfg),
 		NotificationPreference:      NewNotificationPreferenceClient(cfg),
+		OutboxEvent:                 NewOutboxEventClient(cfg),
 		PasswordResetToken:          NewPasswordResetTokenClient(cfg),
 		Permission:                  NewPermissionClient(cfg),
 		PermissionDefinition:        NewPermissionDefinitionClient(cfg),
@@ -886,11 +904,12 @@ func (c *Client) Use(hooks ...Hook) {
 		c.EngineerSkill, c.FeishuTicketSync, c.FieldDefinition, c.FieldValue, c.Group,
 		c.Incident, c.IncidentAlert, c.IncidentEscalationRule, c.IncidentEvent,
 		c.IncidentMetric, c.IncidentRule, c.IncidentRuleExecution, c.ItemVersion,
-		c.KnowledgeArticle, c.KnowledgeArticleLike, c.KnowledgeArticleParticipant,
+		c.KafTaskActionLedger, c.KafTaskCompletionReceipt, c.KnowledgeArticle,
+		c.KnowledgeArticleLike, c.KnowledgeArticleParticipant,
 		c.KnowledgeArticleSession, c.KnowledgeArticleVersion, c.KnownError,
 		c.MSPAllocation, c.MarketplaceItem, c.Menu, c.Message, c.Microservice,
-		c.Notification, c.NotificationPreference, c.PasswordResetToken, c.Permission,
-		c.PermissionDefinition, c.Problem, c.ProcessApprovalDecision,
+		c.Notification, c.NotificationPreference, c.OutboxEvent, c.PasswordResetToken,
+		c.Permission, c.PermissionDefinition, c.Problem, c.ProcessApprovalDecision,
 		c.ProcessAuditLog, c.ProcessBinding, c.ProcessCallbackOutbox,
 		c.ProcessDefinition, c.ProcessDeployment, c.ProcessExecutionHistory,
 		c.ProcessInstance, c.ProcessTask, c.ProcessVariable, c.ProcessVersionChangelog,
@@ -923,11 +942,12 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.EngineerSkill, c.FeishuTicketSync, c.FieldDefinition, c.FieldValue, c.Group,
 		c.Incident, c.IncidentAlert, c.IncidentEscalationRule, c.IncidentEvent,
 		c.IncidentMetric, c.IncidentRule, c.IncidentRuleExecution, c.ItemVersion,
-		c.KnowledgeArticle, c.KnowledgeArticleLike, c.KnowledgeArticleParticipant,
+		c.KafTaskActionLedger, c.KafTaskCompletionReceipt, c.KnowledgeArticle,
+		c.KnowledgeArticleLike, c.KnowledgeArticleParticipant,
 		c.KnowledgeArticleSession, c.KnowledgeArticleVersion, c.KnownError,
 		c.MSPAllocation, c.MarketplaceItem, c.Menu, c.Message, c.Microservice,
-		c.Notification, c.NotificationPreference, c.PasswordResetToken, c.Permission,
-		c.PermissionDefinition, c.Problem, c.ProcessApprovalDecision,
+		c.Notification, c.NotificationPreference, c.OutboxEvent, c.PasswordResetToken,
+		c.Permission, c.PermissionDefinition, c.Problem, c.ProcessApprovalDecision,
 		c.ProcessAuditLog, c.ProcessBinding, c.ProcessCallbackOutbox,
 		c.ProcessDefinition, c.ProcessDeployment, c.ProcessExecutionHistory,
 		c.ProcessInstance, c.ProcessTask, c.ProcessVariable, c.ProcessVersionChangelog,
@@ -1037,6 +1057,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.IncidentRuleExecution.mutate(ctx, m)
 	case *ItemVersionMutation:
 		return c.ItemVersion.mutate(ctx, m)
+	case *KafTaskActionLedgerMutation:
+		return c.KafTaskActionLedger.mutate(ctx, m)
+	case *KafTaskCompletionReceiptMutation:
+		return c.KafTaskCompletionReceipt.mutate(ctx, m)
 	case *KnowledgeArticleMutation:
 		return c.KnowledgeArticle.mutate(ctx, m)
 	case *KnowledgeArticleLikeMutation:
@@ -1063,6 +1087,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Notification.mutate(ctx, m)
 	case *NotificationPreferenceMutation:
 		return c.NotificationPreference.mutate(ctx, m)
+	case *OutboxEventMutation:
+		return c.OutboxEvent.mutate(ctx, m)
 	case *PasswordResetTokenMutation:
 		return c.PasswordResetToken.mutate(ctx, m)
 	case *PermissionMutation:
@@ -8048,6 +8074,272 @@ func (c *ItemVersionClient) mutate(ctx context.Context, m *ItemVersionMutation) 
 	}
 }
 
+// KafTaskActionLedgerClient is a client for the KafTaskActionLedger schema.
+type KafTaskActionLedgerClient struct {
+	config
+}
+
+// NewKafTaskActionLedgerClient returns a client for the KafTaskActionLedger from the given config.
+func NewKafTaskActionLedgerClient(c config) *KafTaskActionLedgerClient {
+	return &KafTaskActionLedgerClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `kaftaskactionledger.Hooks(f(g(h())))`.
+func (c *KafTaskActionLedgerClient) Use(hooks ...Hook) {
+	c.hooks.KafTaskActionLedger = append(c.hooks.KafTaskActionLedger, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `kaftaskactionledger.Intercept(f(g(h())))`.
+func (c *KafTaskActionLedgerClient) Intercept(interceptors ...Interceptor) {
+	c.inters.KafTaskActionLedger = append(c.inters.KafTaskActionLedger, interceptors...)
+}
+
+// Create returns a builder for creating a KafTaskActionLedger entity.
+func (c *KafTaskActionLedgerClient) Create() *KafTaskActionLedgerCreate {
+	mutation := newKafTaskActionLedgerMutation(c.config, OpCreate)
+	return &KafTaskActionLedgerCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of KafTaskActionLedger entities.
+func (c *KafTaskActionLedgerClient) CreateBulk(builders ...*KafTaskActionLedgerCreate) *KafTaskActionLedgerCreateBulk {
+	return &KafTaskActionLedgerCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *KafTaskActionLedgerClient) MapCreateBulk(slice any, setFunc func(*KafTaskActionLedgerCreate, int)) *KafTaskActionLedgerCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &KafTaskActionLedgerCreateBulk{err: fmt.Errorf("calling to KafTaskActionLedgerClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*KafTaskActionLedgerCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &KafTaskActionLedgerCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for KafTaskActionLedger.
+func (c *KafTaskActionLedgerClient) Update() *KafTaskActionLedgerUpdate {
+	mutation := newKafTaskActionLedgerMutation(c.config, OpUpdate)
+	return &KafTaskActionLedgerUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *KafTaskActionLedgerClient) UpdateOne(_m *KafTaskActionLedger) *KafTaskActionLedgerUpdateOne {
+	mutation := newKafTaskActionLedgerMutation(c.config, OpUpdateOne, withKafTaskActionLedger(_m))
+	return &KafTaskActionLedgerUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *KafTaskActionLedgerClient) UpdateOneID(id int) *KafTaskActionLedgerUpdateOne {
+	mutation := newKafTaskActionLedgerMutation(c.config, OpUpdateOne, withKafTaskActionLedgerID(id))
+	return &KafTaskActionLedgerUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for KafTaskActionLedger.
+func (c *KafTaskActionLedgerClient) Delete() *KafTaskActionLedgerDelete {
+	mutation := newKafTaskActionLedgerMutation(c.config, OpDelete)
+	return &KafTaskActionLedgerDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *KafTaskActionLedgerClient) DeleteOne(_m *KafTaskActionLedger) *KafTaskActionLedgerDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *KafTaskActionLedgerClient) DeleteOneID(id int) *KafTaskActionLedgerDeleteOne {
+	builder := c.Delete().Where(kaftaskactionledger.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &KafTaskActionLedgerDeleteOne{builder}
+}
+
+// Query returns a query builder for KafTaskActionLedger.
+func (c *KafTaskActionLedgerClient) Query() *KafTaskActionLedgerQuery {
+	return &KafTaskActionLedgerQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeKafTaskActionLedger},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a KafTaskActionLedger entity by its id.
+func (c *KafTaskActionLedgerClient) Get(ctx context.Context, id int) (*KafTaskActionLedger, error) {
+	return c.Query().Where(kaftaskactionledger.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *KafTaskActionLedgerClient) GetX(ctx context.Context, id int) *KafTaskActionLedger {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *KafTaskActionLedgerClient) Hooks() []Hook {
+	return c.hooks.KafTaskActionLedger
+}
+
+// Interceptors returns the client interceptors.
+func (c *KafTaskActionLedgerClient) Interceptors() []Interceptor {
+	return c.inters.KafTaskActionLedger
+}
+
+func (c *KafTaskActionLedgerClient) mutate(ctx context.Context, m *KafTaskActionLedgerMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&KafTaskActionLedgerCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&KafTaskActionLedgerUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&KafTaskActionLedgerUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&KafTaskActionLedgerDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown KafTaskActionLedger mutation op: %q", m.Op())
+	}
+}
+
+// KafTaskCompletionReceiptClient is a client for the KafTaskCompletionReceipt schema.
+type KafTaskCompletionReceiptClient struct {
+	config
+}
+
+// NewKafTaskCompletionReceiptClient returns a client for the KafTaskCompletionReceipt from the given config.
+func NewKafTaskCompletionReceiptClient(c config) *KafTaskCompletionReceiptClient {
+	return &KafTaskCompletionReceiptClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `kaftaskcompletionreceipt.Hooks(f(g(h())))`.
+func (c *KafTaskCompletionReceiptClient) Use(hooks ...Hook) {
+	c.hooks.KafTaskCompletionReceipt = append(c.hooks.KafTaskCompletionReceipt, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `kaftaskcompletionreceipt.Intercept(f(g(h())))`.
+func (c *KafTaskCompletionReceiptClient) Intercept(interceptors ...Interceptor) {
+	c.inters.KafTaskCompletionReceipt = append(c.inters.KafTaskCompletionReceipt, interceptors...)
+}
+
+// Create returns a builder for creating a KafTaskCompletionReceipt entity.
+func (c *KafTaskCompletionReceiptClient) Create() *KafTaskCompletionReceiptCreate {
+	mutation := newKafTaskCompletionReceiptMutation(c.config, OpCreate)
+	return &KafTaskCompletionReceiptCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of KafTaskCompletionReceipt entities.
+func (c *KafTaskCompletionReceiptClient) CreateBulk(builders ...*KafTaskCompletionReceiptCreate) *KafTaskCompletionReceiptCreateBulk {
+	return &KafTaskCompletionReceiptCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *KafTaskCompletionReceiptClient) MapCreateBulk(slice any, setFunc func(*KafTaskCompletionReceiptCreate, int)) *KafTaskCompletionReceiptCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &KafTaskCompletionReceiptCreateBulk{err: fmt.Errorf("calling to KafTaskCompletionReceiptClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*KafTaskCompletionReceiptCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &KafTaskCompletionReceiptCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for KafTaskCompletionReceipt.
+func (c *KafTaskCompletionReceiptClient) Update() *KafTaskCompletionReceiptUpdate {
+	mutation := newKafTaskCompletionReceiptMutation(c.config, OpUpdate)
+	return &KafTaskCompletionReceiptUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *KafTaskCompletionReceiptClient) UpdateOne(_m *KafTaskCompletionReceipt) *KafTaskCompletionReceiptUpdateOne {
+	mutation := newKafTaskCompletionReceiptMutation(c.config, OpUpdateOne, withKafTaskCompletionReceipt(_m))
+	return &KafTaskCompletionReceiptUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *KafTaskCompletionReceiptClient) UpdateOneID(id int) *KafTaskCompletionReceiptUpdateOne {
+	mutation := newKafTaskCompletionReceiptMutation(c.config, OpUpdateOne, withKafTaskCompletionReceiptID(id))
+	return &KafTaskCompletionReceiptUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for KafTaskCompletionReceipt.
+func (c *KafTaskCompletionReceiptClient) Delete() *KafTaskCompletionReceiptDelete {
+	mutation := newKafTaskCompletionReceiptMutation(c.config, OpDelete)
+	return &KafTaskCompletionReceiptDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *KafTaskCompletionReceiptClient) DeleteOne(_m *KafTaskCompletionReceipt) *KafTaskCompletionReceiptDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *KafTaskCompletionReceiptClient) DeleteOneID(id int) *KafTaskCompletionReceiptDeleteOne {
+	builder := c.Delete().Where(kaftaskcompletionreceipt.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &KafTaskCompletionReceiptDeleteOne{builder}
+}
+
+// Query returns a query builder for KafTaskCompletionReceipt.
+func (c *KafTaskCompletionReceiptClient) Query() *KafTaskCompletionReceiptQuery {
+	return &KafTaskCompletionReceiptQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeKafTaskCompletionReceipt},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a KafTaskCompletionReceipt entity by its id.
+func (c *KafTaskCompletionReceiptClient) Get(ctx context.Context, id int) (*KafTaskCompletionReceipt, error) {
+	return c.Query().Where(kaftaskcompletionreceipt.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *KafTaskCompletionReceiptClient) GetX(ctx context.Context, id int) *KafTaskCompletionReceipt {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *KafTaskCompletionReceiptClient) Hooks() []Hook {
+	return c.hooks.KafTaskCompletionReceipt
+}
+
+// Interceptors returns the client interceptors.
+func (c *KafTaskCompletionReceiptClient) Interceptors() []Interceptor {
+	return c.inters.KafTaskCompletionReceipt
+}
+
+func (c *KafTaskCompletionReceiptClient) mutate(ctx context.Context, m *KafTaskCompletionReceiptMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&KafTaskCompletionReceiptCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&KafTaskCompletionReceiptUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&KafTaskCompletionReceiptUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&KafTaskCompletionReceiptDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown KafTaskCompletionReceipt mutation op: %q", m.Op())
+	}
+}
+
 // KnowledgeArticleClient is a client for the KnowledgeArticle schema.
 type KnowledgeArticleClient struct {
 	config
@@ -10126,6 +10418,139 @@ func (c *NotificationPreferenceClient) mutate(ctx context.Context, m *Notificati
 		return (&NotificationPreferenceDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown NotificationPreference mutation op: %q", m.Op())
+	}
+}
+
+// OutboxEventClient is a client for the OutboxEvent schema.
+type OutboxEventClient struct {
+	config
+}
+
+// NewOutboxEventClient returns a client for the OutboxEvent from the given config.
+func NewOutboxEventClient(c config) *OutboxEventClient {
+	return &OutboxEventClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `outboxevent.Hooks(f(g(h())))`.
+func (c *OutboxEventClient) Use(hooks ...Hook) {
+	c.hooks.OutboxEvent = append(c.hooks.OutboxEvent, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `outboxevent.Intercept(f(g(h())))`.
+func (c *OutboxEventClient) Intercept(interceptors ...Interceptor) {
+	c.inters.OutboxEvent = append(c.inters.OutboxEvent, interceptors...)
+}
+
+// Create returns a builder for creating a OutboxEvent entity.
+func (c *OutboxEventClient) Create() *OutboxEventCreate {
+	mutation := newOutboxEventMutation(c.config, OpCreate)
+	return &OutboxEventCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of OutboxEvent entities.
+func (c *OutboxEventClient) CreateBulk(builders ...*OutboxEventCreate) *OutboxEventCreateBulk {
+	return &OutboxEventCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *OutboxEventClient) MapCreateBulk(slice any, setFunc func(*OutboxEventCreate, int)) *OutboxEventCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &OutboxEventCreateBulk{err: fmt.Errorf("calling to OutboxEventClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*OutboxEventCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &OutboxEventCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for OutboxEvent.
+func (c *OutboxEventClient) Update() *OutboxEventUpdate {
+	mutation := newOutboxEventMutation(c.config, OpUpdate)
+	return &OutboxEventUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *OutboxEventClient) UpdateOne(_m *OutboxEvent) *OutboxEventUpdateOne {
+	mutation := newOutboxEventMutation(c.config, OpUpdateOne, withOutboxEvent(_m))
+	return &OutboxEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *OutboxEventClient) UpdateOneID(id int) *OutboxEventUpdateOne {
+	mutation := newOutboxEventMutation(c.config, OpUpdateOne, withOutboxEventID(id))
+	return &OutboxEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for OutboxEvent.
+func (c *OutboxEventClient) Delete() *OutboxEventDelete {
+	mutation := newOutboxEventMutation(c.config, OpDelete)
+	return &OutboxEventDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *OutboxEventClient) DeleteOne(_m *OutboxEvent) *OutboxEventDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *OutboxEventClient) DeleteOneID(id int) *OutboxEventDeleteOne {
+	builder := c.Delete().Where(outboxevent.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &OutboxEventDeleteOne{builder}
+}
+
+// Query returns a query builder for OutboxEvent.
+func (c *OutboxEventClient) Query() *OutboxEventQuery {
+	return &OutboxEventQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeOutboxEvent},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a OutboxEvent entity by its id.
+func (c *OutboxEventClient) Get(ctx context.Context, id int) (*OutboxEvent, error) {
+	return c.Query().Where(outboxevent.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *OutboxEventClient) GetX(ctx context.Context, id int) *OutboxEvent {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *OutboxEventClient) Hooks() []Hook {
+	return c.hooks.OutboxEvent
+}
+
+// Interceptors returns the client interceptors.
+func (c *OutboxEventClient) Interceptors() []Interceptor {
+	return c.inters.OutboxEvent
+}
+
+func (c *OutboxEventClient) mutate(ctx context.Context, m *OutboxEventMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&OutboxEventCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&OutboxEventUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&OutboxEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&OutboxEventDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown OutboxEvent mutation op: %q", m.Op())
 	}
 }
 
@@ -19896,23 +20321,23 @@ type (
 		DiscoveryJob, DiscoveryResult, DiscoverySource, DomainConfig, EndpointACL,
 		EngineerSkill, FeishuTicketSync, FieldDefinition, FieldValue, Group, Incident,
 		IncidentAlert, IncidentEscalationRule, IncidentEvent, IncidentMetric,
-		IncidentRule, IncidentRuleExecution, ItemVersion, KnowledgeArticle,
-		KnowledgeArticleLike, KnowledgeArticleParticipant, KnowledgeArticleSession,
-		KnowledgeArticleVersion, KnownError, MSPAllocation, MarketplaceItem, Menu,
-		Message, Microservice, Notification, NotificationPreference,
-		PasswordResetToken, Permission, PermissionDefinition, Problem,
-		ProcessApprovalDecision, ProcessAuditLog, ProcessBinding,
-		ProcessCallbackOutbox, ProcessDefinition, ProcessDeployment,
-		ProcessExecutionHistory, ProcessInstance, ProcessTask, ProcessVariable,
-		ProcessVersionChangelog, Project, PromptTemplate, ProvisioningTask,
-		RelationshipType, Release, Role, RolePermission, RootCauseAnalysis,
-		SLAAlertHistory, SLAAlertRule, SLADefinition, SLAMetric, SLAViolation,
-		ServiceCatalog, ServiceRequest, StandardChange, Survey, SurveyResponse,
-		SystemConfig, Tag, Team, Tenant, TenantInstallation, Ticket, TicketApproval,
-		TicketAssignmentRule, TicketAttachment, TicketAutomationRule, TicketCC,
-		TicketCategory, TicketComment, TicketNotification, TicketTag, TicketTemplate,
-		TicketType, TicketView, TicketWorkflowRecord, ToolInvocation, User, Vendor,
-		WorkItemRelation, Workflow, WorkflowInstance, WorkflowTask,
+		IncidentRule, IncidentRuleExecution, ItemVersion, KafTaskActionLedger,
+		KafTaskCompletionReceipt, KnowledgeArticle, KnowledgeArticleLike,
+		KnowledgeArticleParticipant, KnowledgeArticleSession, KnowledgeArticleVersion,
+		KnownError, MSPAllocation, MarketplaceItem, Menu, Message, Microservice,
+		Notification, NotificationPreference, OutboxEvent, PasswordResetToken,
+		Permission, PermissionDefinition, Problem, ProcessApprovalDecision,
+		ProcessAuditLog, ProcessBinding, ProcessCallbackOutbox, ProcessDefinition,
+		ProcessDeployment, ProcessExecutionHistory, ProcessInstance, ProcessTask,
+		ProcessVariable, ProcessVersionChangelog, Project, PromptTemplate,
+		ProvisioningTask, RelationshipType, Release, Role, RolePermission,
+		RootCauseAnalysis, SLAAlertHistory, SLAAlertRule, SLADefinition, SLAMetric,
+		SLAViolation, ServiceCatalog, ServiceRequest, StandardChange, Survey,
+		SurveyResponse, SystemConfig, Tag, Team, Tenant, TenantInstallation, Ticket,
+		TicketApproval, TicketAssignmentRule, TicketAttachment, TicketAutomationRule,
+		TicketCC, TicketCategory, TicketComment, TicketNotification, TicketTag,
+		TicketTemplate, TicketType, TicketView, TicketWorkflowRecord, ToolInvocation,
+		User, Vendor, WorkItemRelation, Workflow, WorkflowInstance, WorkflowTask,
 		WorkflowVersion []ent.Hook
 	}
 	inters struct {
@@ -19924,23 +20349,23 @@ type (
 		DiscoveryJob, DiscoveryResult, DiscoverySource, DomainConfig, EndpointACL,
 		EngineerSkill, FeishuTicketSync, FieldDefinition, FieldValue, Group, Incident,
 		IncidentAlert, IncidentEscalationRule, IncidentEvent, IncidentMetric,
-		IncidentRule, IncidentRuleExecution, ItemVersion, KnowledgeArticle,
-		KnowledgeArticleLike, KnowledgeArticleParticipant, KnowledgeArticleSession,
-		KnowledgeArticleVersion, KnownError, MSPAllocation, MarketplaceItem, Menu,
-		Message, Microservice, Notification, NotificationPreference,
-		PasswordResetToken, Permission, PermissionDefinition, Problem,
-		ProcessApprovalDecision, ProcessAuditLog, ProcessBinding,
-		ProcessCallbackOutbox, ProcessDefinition, ProcessDeployment,
-		ProcessExecutionHistory, ProcessInstance, ProcessTask, ProcessVariable,
-		ProcessVersionChangelog, Project, PromptTemplate, ProvisioningTask,
-		RelationshipType, Release, Role, RolePermission, RootCauseAnalysis,
-		SLAAlertHistory, SLAAlertRule, SLADefinition, SLAMetric, SLAViolation,
-		ServiceCatalog, ServiceRequest, StandardChange, Survey, SurveyResponse,
-		SystemConfig, Tag, Team, Tenant, TenantInstallation, Ticket, TicketApproval,
-		TicketAssignmentRule, TicketAttachment, TicketAutomationRule, TicketCC,
-		TicketCategory, TicketComment, TicketNotification, TicketTag, TicketTemplate,
-		TicketType, TicketView, TicketWorkflowRecord, ToolInvocation, User, Vendor,
-		WorkItemRelation, Workflow, WorkflowInstance, WorkflowTask,
+		IncidentRule, IncidentRuleExecution, ItemVersion, KafTaskActionLedger,
+		KafTaskCompletionReceipt, KnowledgeArticle, KnowledgeArticleLike,
+		KnowledgeArticleParticipant, KnowledgeArticleSession, KnowledgeArticleVersion,
+		KnownError, MSPAllocation, MarketplaceItem, Menu, Message, Microservice,
+		Notification, NotificationPreference, OutboxEvent, PasswordResetToken,
+		Permission, PermissionDefinition, Problem, ProcessApprovalDecision,
+		ProcessAuditLog, ProcessBinding, ProcessCallbackOutbox, ProcessDefinition,
+		ProcessDeployment, ProcessExecutionHistory, ProcessInstance, ProcessTask,
+		ProcessVariable, ProcessVersionChangelog, Project, PromptTemplate,
+		ProvisioningTask, RelationshipType, Release, Role, RolePermission,
+		RootCauseAnalysis, SLAAlertHistory, SLAAlertRule, SLADefinition, SLAMetric,
+		SLAViolation, ServiceCatalog, ServiceRequest, StandardChange, Survey,
+		SurveyResponse, SystemConfig, Tag, Team, Tenant, TenantInstallation, Ticket,
+		TicketApproval, TicketAssignmentRule, TicketAttachment, TicketAutomationRule,
+		TicketCC, TicketCategory, TicketComment, TicketNotification, TicketTag,
+		TicketTemplate, TicketType, TicketView, TicketWorkflowRecord, ToolInvocation,
+		User, Vendor, WorkItemRelation, Workflow, WorkflowInstance, WorkflowTask,
 		WorkflowVersion []ent.Interceptor
 	}
 )

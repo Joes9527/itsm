@@ -83,6 +83,12 @@ func (r *EntRepository) Create(ctx context.Context, params *CreateParams, tenant
 			SetTenantID(tenantID).
 			SetStatus(string(StatusNew))
 
+		// A Service Request's ticket is its WorkItem base record, so its class
+		// must be persisted when the authoritative ticket creation path runs.
+		if params.Type == TypeServiceRequest {
+			builder.SetRecordClass("service_request_item")
+		}
+
 		if params.AssigneeID != nil {
 			builder.SetAssigneeID(*params.AssigneeID)
 		}
