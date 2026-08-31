@@ -75,6 +75,11 @@ func TenantID(v int) predicate.TicketCC {
 	return predicate.TicketCC(sql.FieldEQ(FieldTenantID, v))
 }
 
+// DeliveryKey applies equality check predicate on the "delivery_key" field. It's identical to DeliveryKeyEQ.
+func DeliveryKey(v string) predicate.TicketCC {
+	return predicate.TicketCC(sql.FieldEQ(FieldDeliveryKey, v))
+}
+
 // AddedAt applies equality check predicate on the "added_at" field. It's identical to AddedAtEQ.
 func AddedAt(v time.Time) predicate.TicketCC {
 	return predicate.TicketCC(sql.FieldEQ(FieldAddedAt, v))
@@ -223,6 +228,81 @@ func TenantIDLT(v int) predicate.TicketCC {
 // TenantIDLTE applies the LTE predicate on the "tenant_id" field.
 func TenantIDLTE(v int) predicate.TicketCC {
 	return predicate.TicketCC(sql.FieldLTE(FieldTenantID, v))
+}
+
+// DeliveryKeyEQ applies the EQ predicate on the "delivery_key" field.
+func DeliveryKeyEQ(v string) predicate.TicketCC {
+	return predicate.TicketCC(sql.FieldEQ(FieldDeliveryKey, v))
+}
+
+// DeliveryKeyNEQ applies the NEQ predicate on the "delivery_key" field.
+func DeliveryKeyNEQ(v string) predicate.TicketCC {
+	return predicate.TicketCC(sql.FieldNEQ(FieldDeliveryKey, v))
+}
+
+// DeliveryKeyIn applies the In predicate on the "delivery_key" field.
+func DeliveryKeyIn(vs ...string) predicate.TicketCC {
+	return predicate.TicketCC(sql.FieldIn(FieldDeliveryKey, vs...))
+}
+
+// DeliveryKeyNotIn applies the NotIn predicate on the "delivery_key" field.
+func DeliveryKeyNotIn(vs ...string) predicate.TicketCC {
+	return predicate.TicketCC(sql.FieldNotIn(FieldDeliveryKey, vs...))
+}
+
+// DeliveryKeyGT applies the GT predicate on the "delivery_key" field.
+func DeliveryKeyGT(v string) predicate.TicketCC {
+	return predicate.TicketCC(sql.FieldGT(FieldDeliveryKey, v))
+}
+
+// DeliveryKeyGTE applies the GTE predicate on the "delivery_key" field.
+func DeliveryKeyGTE(v string) predicate.TicketCC {
+	return predicate.TicketCC(sql.FieldGTE(FieldDeliveryKey, v))
+}
+
+// DeliveryKeyLT applies the LT predicate on the "delivery_key" field.
+func DeliveryKeyLT(v string) predicate.TicketCC {
+	return predicate.TicketCC(sql.FieldLT(FieldDeliveryKey, v))
+}
+
+// DeliveryKeyLTE applies the LTE predicate on the "delivery_key" field.
+func DeliveryKeyLTE(v string) predicate.TicketCC {
+	return predicate.TicketCC(sql.FieldLTE(FieldDeliveryKey, v))
+}
+
+// DeliveryKeyContains applies the Contains predicate on the "delivery_key" field.
+func DeliveryKeyContains(v string) predicate.TicketCC {
+	return predicate.TicketCC(sql.FieldContains(FieldDeliveryKey, v))
+}
+
+// DeliveryKeyHasPrefix applies the HasPrefix predicate on the "delivery_key" field.
+func DeliveryKeyHasPrefix(v string) predicate.TicketCC {
+	return predicate.TicketCC(sql.FieldHasPrefix(FieldDeliveryKey, v))
+}
+
+// DeliveryKeyHasSuffix applies the HasSuffix predicate on the "delivery_key" field.
+func DeliveryKeyHasSuffix(v string) predicate.TicketCC {
+	return predicate.TicketCC(sql.FieldHasSuffix(FieldDeliveryKey, v))
+}
+
+// DeliveryKeyIsNil applies the IsNil predicate on the "delivery_key" field.
+func DeliveryKeyIsNil() predicate.TicketCC {
+	return predicate.TicketCC(sql.FieldIsNull(FieldDeliveryKey))
+}
+
+// DeliveryKeyNotNil applies the NotNil predicate on the "delivery_key" field.
+func DeliveryKeyNotNil() predicate.TicketCC {
+	return predicate.TicketCC(sql.FieldNotNull(FieldDeliveryKey))
+}
+
+// DeliveryKeyEqualFold applies the EqualFold predicate on the "delivery_key" field.
+func DeliveryKeyEqualFold(v string) predicate.TicketCC {
+	return predicate.TicketCC(sql.FieldEqualFold(FieldDeliveryKey, v))
+}
+
+// DeliveryKeyContainsFold applies the ContainsFold predicate on the "delivery_key" field.
+func DeliveryKeyContainsFold(v string) predicate.TicketCC {
+	return predicate.TicketCC(sql.FieldContainsFold(FieldDeliveryKey, v))
 }
 
 // AddedAtEQ applies the EQ predicate on the "added_at" field.

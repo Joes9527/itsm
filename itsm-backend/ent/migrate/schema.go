@@ -4219,6 +4219,7 @@ var (
 		{Name: "user_id", Type: field.TypeInt},
 		{Name: "added_by", Type: field.TypeInt},
 		{Name: "tenant_id", Type: field.TypeInt},
+		{Name: "delivery_key", Type: field.TypeString, Nullable: true},
 		{Name: "added_at", Type: field.TypeTime},
 		{Name: "is_active", Type: field.TypeBool, Default: true},
 		{Name: "ticket_id", Type: field.TypeInt},
@@ -4231,16 +4232,16 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "ticket_ccs_tickets_cc_users",
-				Columns:    []*schema.Column{TicketCcsColumns[6]},
+				Columns:    []*schema.Column{TicketCcsColumns[7]},
 				RefColumns: []*schema.Column{TicketsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 		},
 		Indexes: []*schema.Index{
 			{
-				Name:    "ticketcc_tenant_id_ticket_id_user_id",
+				Name:    "ticketcc_tenant_id_delivery_key_user_id",
 				Unique:  true,
-				Columns: []*schema.Column{TicketCcsColumns[3], TicketCcsColumns[6], TicketCcsColumns[1]},
+				Columns: []*schema.Column{TicketCcsColumns[3], TicketCcsColumns[4], TicketCcsColumns[1]},
 			},
 		},
 	}

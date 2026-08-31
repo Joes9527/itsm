@@ -22,6 +22,8 @@ const (
 	FieldAddedBy = "added_by"
 	// FieldTenantID holds the string denoting the tenant_id field in the database.
 	FieldTenantID = "tenant_id"
+	// FieldDeliveryKey holds the string denoting the delivery_key field in the database.
+	FieldDeliveryKey = "delivery_key"
 	// FieldAddedAt holds the string denoting the added_at field in the database.
 	FieldAddedAt = "added_at"
 	// FieldIsActive holds the string denoting the is_active field in the database.
@@ -46,6 +48,7 @@ var Columns = []string{
 	FieldUserID,
 	FieldAddedBy,
 	FieldTenantID,
+	FieldDeliveryKey,
 	FieldAddedAt,
 	FieldIsActive,
 }
@@ -93,6 +96,11 @@ func ByAddedBy(opts ...sql.OrderTermOption) OrderOption {
 // ByTenantID orders the results by the tenant_id field.
 func ByTenantID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTenantID, opts...).ToFunc()
+}
+
+// ByDeliveryKey orders the results by the delivery_key field.
+func ByDeliveryKey(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDeliveryKey, opts...).ToFunc()
 }
 
 // ByAddedAt orders the results by the added_at field.

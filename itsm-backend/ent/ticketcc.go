@@ -26,6 +26,8 @@ type TicketCC struct {
 	AddedBy int `json:"added_by,omitempty"`
 	// 租户ID
 	TenantID int `json:"tenant_id,omitempty"`
+	// 内部回调投递幂等键，不对 API 暴露
+	DeliveryKey *string `json:"-"`
 	// 添加时间
 	AddedAt time.Time `json:"added_at,omitempty"`
 	// 是否有效
@@ -65,6 +67,8 @@ func (*TicketCC) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case ticketcc.FieldID, ticketcc.FieldTicketID, ticketcc.FieldUserID, ticketcc.FieldAddedBy, ticketcc.FieldTenantID:
 			values[i] = new(sql.NullInt64)
+		case ticketcc.FieldDeliveryKey:
+			values[i] = new(sql.NullString)
 		case ticketcc.FieldAddedAt:
 			values[i] = new(sql.NullTime)
 		default:
@@ -111,6 +115,13 @@ func (_m *TicketCC) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
 				_m.TenantID = int(value.Int64)
+			}
+		case ticketcc.FieldDeliveryKey:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field delivery_key", values[i])
+			} else if value.Valid {
+				_m.DeliveryKey = new(string)
+				*_m.DeliveryKey = value.String
 			}
 		case ticketcc.FieldAddedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -176,6 +187,8 @@ func (_m *TicketCC) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("tenant_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.TenantID))
+	builder.WriteString(", ")
+	builder.WriteString("delivery_key=<sensitive>")
 	builder.WriteString(", ")
 	builder.WriteString("added_at=")
 	builder.WriteString(_m.AddedAt.Format(time.ANSIC))

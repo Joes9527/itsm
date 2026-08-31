@@ -2,6 +2,9 @@ package service
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"sync/atomic"
@@ -10,6 +13,8 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
+	"itsm-backend/connector"
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/ticket"
@@ -20,6 +25,34 @@ import (
 )
 
 // ==================== TicketWorkflowService 测试设置 ====================
+
+type ticketWorkflowCCConnector struct {
+	sent int32
+}
+
+func (c *ticketWorkflowCCConnector) Manifest() connector.Manifest {
+	return connector.Manifest{
+		Name:                "email",
+		Version:             "1.0.0",
+		Title:               "Ticket workflow CC test connector",
+		Type:                connector.TypeEmail,
+		Capabilities:        []connector.Capability{connector.CapSendMessage},
+		RequiredPermissions: []string{"connector:write"},
+	}
+}
+
+func (c *ticketWorkflowCCConnector) Init(context.Context, connector.Config) error { return nil }
+
+func (c *ticketWorkflowCCConnector) Send(context.Context, *connector.Message) error {
+	atomic.AddInt32(&c.sent, 1)
+	return nil
+}
+
+func (c *ticketWorkflowCCConnector) HealthCheck(context.Context) connector.HealthStatus {
+	return connector.HealthStatus{OK: true}
+}
+
+func (c *ticketWorkflowCCConnector) Close() error { return nil }
 
 func setupTicketWorkflowTest(t *testing.T) (*TicketWorkflowService, *ent.Client, context.Context) {
 	client := enttest.Open(t, "sqlite3", "file:ticket_workflow_test?mode=memory&cache=shared&_fk=1")
@@ -64,6 +97,24 @@ func createTicketWorkflowTestTicket(ctx context.Context, client *ent.Client, ten
 		Save(ctx)
 }
 
+func setupTicketWorkflowCCConnector(t *testing.T, service *TicketWorkflowService, ctx context.Context, tenantID int) *ticketWorkflowCCConnector {
+	t.Helper()
+	fake := &ticketWorkflowCCConnector{}
+	registry := connector.NewRegistry()
+	registry.Register(func() connector.Connector { return fake })
+	manager := connector.NewManager(registry, zaptest.NewLogger(t).Sugar())
+	require.NoError(t, manager.Provision(ctx, connector.Config{
+		TenantID: tenantID,
+		Name:     "email",
+		Type:     connector.TypeEmail,
+		Provider: "task-3-test",
+		Enabled:  true,
+	}))
+	t.Cleanup(manager.CloseAll)
+	service.SetConnectorManager(manager)
+	return fake
+}
+
 // ==================== TicketWorkflowService 基础测试 ====================
 
 func TestTicketWorkflowService_NewTicketWorkflowService(t *testing.T) {
@@ -86,6 +137,285 @@ func TestTicketWorkflowService_SetConnectorManager(t *testing.T) {
 	service.SetConnectorManager(nil)
 	// 不应 panic
 	assert.NotNil(t, service)
+}
+
+func TestCCTicketReactivatesHighestInactiveRow(t *testing.T) {
+	service, client, ctx := setupTicketWorkflowTest(t)
+	t.Cleanup(func() { _ = client.Close() })
+	tenant, err := createTicketWorkflowTestTenant(ctx, client, "cc-reactivate")
+	require.NoError(t, err)
+	operator, err := createTicketWorkflowTestUser(ctx, client, tenant.ID, "cc-operator")
+	require.NoError(t, err)
+	recipient, err := createTicketWorkflowTestUser(ctx, client, tenant.ID, "cc-recipient")
+	require.NoError(t, err)
+	alreadyActive, err := createTicketWorkflowTestUser(ctx, client, tenant.ID, "cc-active")
+	require.NoError(t, err)
+	tk, err := createTicketWorkflowTestTicket(ctx, client, tenant.ID, operator.ID, "open")
+	require.NoError(t, err)
+
+	db, err := sql.Open("sqlite3", "file:ticket_workflow_test?mode=memory&cache=shared&_fk=1")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	_, err = db.ExecContext(ctx, "DROP INDEX IF EXISTS ticketcc_tenant_id_ticket_id_user_id")
+	require.NoError(t, err)
+
+	oldTime := time.Date(2026, 8, 30, 10, 0, 0, 0, time.UTC)
+	lower := client.TicketCC.Create().
+		SetTicketID(tk.ID).
+		SetUserID(recipient.ID).
+		SetAddedBy(recipient.ID).
+		SetTenantID(tenant.ID).
+		SetAddedAt(oldTime).
+		SetIsActive(false).
+		SaveX(ctx)
+	higher := client.TicketCC.Create().
+		SetTicketID(tk.ID).
+		SetUserID(recipient.ID).
+		SetAddedBy(recipient.ID).
+		SetTenantID(tenant.ID).
+		SetAddedAt(oldTime.Add(time.Hour)).
+		SetIsActive(false).
+		SaveX(ctx)
+	active := client.TicketCC.Create().
+		SetTicketID(tk.ID).
+		SetUserID(alreadyActive.ID).
+		SetAddedBy(operator.ID).
+		SetTenantID(tenant.ID).
+		SetAddedAt(oldTime).
+		SetIsActive(true).
+		SaveX(ctx)
+
+	err = service.CCTicket(ctx, &dto.CCTicketRequest{
+		TicketID: tk.ID,
+		CCUsers:  []int{recipient.ID, alreadyActive.ID},
+		Comment:  "reactivate one historical relation",
+	}, operator.ID, tenant.ID)
+	require.NoError(t, err)
+
+	lower = client.TicketCC.GetX(ctx, lower.ID)
+	higher = client.TicketCC.GetX(ctx, higher.ID)
+	active = client.TicketCC.GetX(ctx, active.ID)
+	assert.False(t, lower.IsActive)
+	assert.True(t, higher.IsActive)
+	assert.Equal(t, operator.ID, higher.AddedBy)
+	assert.True(t, higher.AddedAt.After(oldTime.Add(time.Hour)))
+	assert.True(t, active.IsActive)
+	assert.Equal(t, 3, client.TicketCC.Query().CountX(ctx), "reactivation must not create another relation")
+	assert.Equal(t, 1, client.TicketNotification.Query().CountX(ctx))
+	assert.Equal(t, recipient.ID, client.TicketNotification.Query().OnlyX(ctx).UserID)
+	assert.Equal(t, 1, client.Notification.Query().CountX(ctx))
+	assert.Equal(t, recipient.ID, client.Notification.Query().OnlyX(ctx).UserID)
+
+	record := client.TicketWorkflowRecord.Query().OnlyX(ctx)
+	metadata, err := json.Marshal(record.Metadata)
+	require.NoError(t, err)
+	assert.JSONEq(t, fmt.Sprintf(`{"cc_users":[%d],"notify_channels":["in_app"]}`, recipient.ID), string(metadata))
+}
+
+func TestCCTicketReactivationClearsCallbackDeliveryKey(t *testing.T) {
+	service, client, ctx := setupTicketWorkflowTest(t)
+	t.Cleanup(func() { _ = client.Close() })
+	tenant, err := createTicketWorkflowTestTenant(ctx, client, "cc-clear-key")
+	require.NoError(t, err)
+	operator, err := createTicketWorkflowTestUser(ctx, client, tenant.ID, "cc-clear-operator")
+	require.NoError(t, err)
+	recipient, err := createTicketWorkflowTestUser(ctx, client, tenant.ID, "cc-clear-recipient")
+	require.NoError(t, err)
+	tk, err := createTicketWorkflowTestTicket(ctx, client, tenant.ID, operator.ID, "open")
+	require.NoError(t, err)
+	inactive := client.TicketCC.Create().
+		SetTicketID(tk.ID).
+		SetUserID(recipient.ID).
+		SetAddedBy(recipient.ID).
+		SetTenantID(tenant.ID).
+		SetAddedAt(time.Now().Add(-time.Hour)).
+		SetIsActive(false).
+		SaveX(ctx)
+
+	db, err := sql.Open("sqlite3", "file:ticket_workflow_test?mode=memory&cache=shared&_fk=1")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	_, err = db.ExecContext(ctx, "UPDATE ticket_ccs SET delivery_key = ? WHERE id = ?", "retired-callback-key", inactive.ID)
+	require.NoError(t, err)
+
+	err = service.CCTicket(ctx, &dto.CCTicketRequest{TicketID: tk.ID, CCUsers: []int{recipient.ID}}, operator.ID, tenant.ID)
+	require.NoError(t, err)
+	var storedKey sql.NullString
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT delivery_key FROM ticket_ccs WHERE id = ?", inactive.ID).Scan(&storedKey))
+	assert.False(t, storedKey.Valid)
+	assert.True(t, client.TicketCC.GetX(ctx, inactive.ID).IsActive)
+	assert.Equal(t, 1, client.TicketCC.Query().CountX(ctx))
+}
+
+func TestCCTicketCreatesOrdinaryRelationWithoutDeliveryKeyOrDTOExposure(t *testing.T) {
+	service, client, ctx := setupTicketWorkflowTest(t)
+	t.Cleanup(func() { _ = client.Close() })
+	tenant, err := createTicketWorkflowTestTenant(ctx, client, "cc-null-key")
+	require.NoError(t, err)
+	operator, err := createTicketWorkflowTestUser(ctx, client, tenant.ID, "cc-null-operator")
+	require.NoError(t, err)
+	recipient, err := createTicketWorkflowTestUser(ctx, client, tenant.ID, "cc-null-recipient")
+	require.NoError(t, err)
+	tk, err := createTicketWorkflowTestTicket(ctx, client, tenant.ID, operator.ID, "open")
+	require.NoError(t, err)
+
+	err = service.CCTicket(ctx, &dto.CCTicketRequest{TicketID: tk.ID, CCUsers: []int{recipient.ID}}, operator.ID, tenant.ID)
+	require.NoError(t, err)
+	db, err := sql.Open("sqlite3", "file:ticket_workflow_test?mode=memory&cache=shared&_fk=1")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	var storedKey sql.NullString
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT delivery_key FROM ticket_ccs").Scan(&storedKey))
+	assert.False(t, storedKey.Valid)
+
+	response, err := service.ListTicketCCRecords(ctx, tk.ID, operator.ID, tenant.ID)
+	require.NoError(t, err)
+	encoded, err := json.Marshal(response)
+	require.NoError(t, err)
+	assert.NotContains(t, string(encoded), "deliveryKey")
+	assert.NotContains(t, string(encoded), "delivery_key")
+}
+
+func TestCCTicketRollbackOnPersistenceOrHistoryFailure(t *testing.T) {
+	tests := []struct {
+		name            string
+		prepareInactive bool
+		failMutation    func(ent.Mutation) bool
+		wantCCRows      int
+	}{
+		{
+			name:            "relation update failure",
+			prepareInactive: true,
+			failMutation: func(mutation ent.Mutation) bool {
+				_, ok := mutation.(*ent.TicketCCMutation)
+				return ok
+			},
+			wantCCRows: 1,
+		},
+		{
+			name: "notification persistence failure",
+			failMutation: func(mutation ent.Mutation) bool {
+				_, ok := mutation.(*ent.TicketNotificationMutation)
+				return ok
+			},
+		},
+		{
+			name: "workflow history failure",
+			failMutation: func(mutation ent.Mutation) bool {
+				_, ok := mutation.(*ent.TicketWorkflowRecordMutation)
+				return ok
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service, client, ctx := setupTicketWorkflowTest(t)
+			t.Cleanup(func() { _ = client.Close() })
+			tenant, err := createTicketWorkflowTestTenant(ctx, client, "cc-rollback-"+strconv.Itoa(len(tt.name)))
+			require.NoError(t, err)
+			operator, err := createTicketWorkflowTestUser(ctx, client, tenant.ID, "cc-rollback-operator-"+strconv.Itoa(len(tt.name)))
+			require.NoError(t, err)
+			recipient, err := createTicketWorkflowTestUser(ctx, client, tenant.ID, "cc-rollback-recipient-"+strconv.Itoa(len(tt.name)))
+			require.NoError(t, err)
+			tk, err := createTicketWorkflowTestTicket(ctx, client, tenant.ID, operator.ID, "open")
+			require.NoError(t, err)
+			var inactiveID int
+			if tt.prepareInactive {
+				inactive := client.TicketCC.Create().
+					SetTicketID(tk.ID).
+					SetUserID(recipient.ID).
+					SetAddedBy(recipient.ID).
+					SetTenantID(tenant.ID).
+					SetAddedAt(time.Now().Add(-time.Hour)).
+					SetIsActive(false).
+					SaveX(ctx)
+				inactiveID = inactive.ID
+			}
+			client.Use(func(next ent.Mutator) ent.Mutator {
+				return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+					if tt.failMutation(mutation) {
+						return nil, errors.New("injected CC transaction failure")
+					}
+					return next.Mutate(ctx, mutation)
+				})
+			})
+
+			err = service.CCTicket(ctx, &dto.CCTicketRequest{TicketID: tk.ID, CCUsers: []int{recipient.ID}}, operator.ID, tenant.ID)
+			require.ErrorContains(t, err, "injected CC transaction failure")
+			assert.Equal(t, tt.wantCCRows, client.TicketCC.Query().CountX(ctx))
+			if inactiveID != 0 {
+				assert.False(t, client.TicketCC.GetX(ctx, inactiveID).IsActive)
+			}
+			assert.Zero(t, client.TicketNotification.Query().CountX(ctx))
+			assert.Zero(t, client.Notification.Query().CountX(ctx))
+			assert.Zero(t, client.TicketWorkflowRecord.Query().CountX(ctx))
+		})
+	}
+}
+
+func TestCCTicketDoesNotDispatchConnectorBeforeTransactionCommit(t *testing.T) {
+	service, client, ctx := setupTicketWorkflowTest(t)
+	t.Cleanup(func() { _ = client.Close() })
+	tenant, err := createTicketWorkflowTestTenant(ctx, client, "cc-connector-rollback")
+	require.NoError(t, err)
+	operator, err := createTicketWorkflowTestUser(ctx, client, tenant.ID, "cc-connector-operator")
+	require.NoError(t, err)
+	recipient, err := createTicketWorkflowTestUser(ctx, client, tenant.ID, "cc-connector-recipient")
+	require.NoError(t, err)
+	tk, err := createTicketWorkflowTestTicket(ctx, client, tenant.ID, operator.ID, "open")
+	require.NoError(t, err)
+	fake := setupTicketWorkflowCCConnector(t, service, ctx, tenant.ID)
+	client.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			if _, ok := mutation.(*ent.TicketWorkflowRecordMutation); ok {
+				return nil, errors.New("injected history failure before connector dispatch")
+			}
+			return next.Mutate(ctx, mutation)
+		})
+	})
+
+	err = service.CCTicket(ctx, &dto.CCTicketRequest{
+		TicketID:       tk.ID,
+		CCUsers:        []int{recipient.ID},
+		NotifyChannels: []string{"email"},
+	}, operator.ID, tenant.ID)
+
+	require.ErrorContains(t, err, "injected history failure before connector dispatch")
+	assert.Zero(t, atomic.LoadInt32(&fake.sent))
+	assert.Zero(t, client.TicketCC.Query().CountX(ctx))
+	assert.Zero(t, client.TicketNotification.Query().CountX(ctx))
+	assert.Zero(t, client.Notification.Query().CountX(ctx))
+	assert.Zero(t, client.TicketWorkflowRecord.Query().CountX(ctx))
+}
+
+func TestCCTicketDispatchesConnectorAfterCommittedEffects(t *testing.T) {
+	service, client, ctx := setupTicketWorkflowTest(t)
+	t.Cleanup(func() { _ = client.Close() })
+	tenant, err := createTicketWorkflowTestTenant(ctx, client, "cc-connector-success")
+	require.NoError(t, err)
+	operator, err := createTicketWorkflowTestUser(ctx, client, tenant.ID, "cc-connector-success-operator")
+	require.NoError(t, err)
+	recipient, err := createTicketWorkflowTestUser(ctx, client, tenant.ID, "cc-connector-success-recipient")
+	require.NoError(t, err)
+	tk, err := createTicketWorkflowTestTicket(ctx, client, tenant.ID, operator.ID, "open")
+	require.NoError(t, err)
+	fake := setupTicketWorkflowCCConnector(t, service, ctx, tenant.ID)
+
+	err = service.CCTicket(ctx, &dto.CCTicketRequest{
+		TicketID:       tk.ID,
+		CCUsers:        []int{recipient.ID},
+		NotifyChannels: []string{"email"},
+	}, operator.ID, tenant.ID)
+
+	require.NoError(t, err)
+	assert.Equal(t, int32(1), atomic.LoadInt32(&fake.sent))
+	notification := client.TicketNotification.Query().OnlyX(ctx)
+	assert.Equal(t, "sent", notification.Status)
+	assert.False(t, notification.SentAt.IsZero())
+	assert.Equal(t, 1, client.TicketCC.Query().CountX(ctx))
+	assert.Equal(t, 1, client.Notification.Query().CountX(ctx))
+	assert.Equal(t, 1, client.TicketWorkflowRecord.Query().CountX(ctx))
 }
 
 // ==================== TicketWorkflowService 状态转换测试 ====================
@@ -532,7 +862,7 @@ func TestTicketWorkflowService_GetApprovalDecisions_ReturnsOrderedByCreatedAt(t 
 		SetProcessInstanceID(instance.ID).SetProcessTaskID(taskOther.ID).
 		SetProcessInstanceKey(instance.ProcessInstanceID).SetTaskID(taskOther.TaskID).
 		SetProcessDefinitionKey("ticket_general_flow").SetNodeKey("Activity_Approve").
-		SetBusinessType("ticket").SetBusinessID(strconv.Itoa(tkt.ID+999)).
+		SetBusinessType("ticket").SetBusinessID(strconv.Itoa(tkt.ID + 999)).
 		SetActorID(actor.ID).SetAction("approve").SetDecision("approved").
 		SetTenantID(tenant.ID).
 		Save(ctx)

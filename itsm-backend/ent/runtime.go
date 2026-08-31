@@ -3576,11 +3576,11 @@ func init() {
 	ticketccFields := schema.TicketCC{}.Fields()
 	_ = ticketccFields
 	// ticketccDescAddedAt is the schema descriptor for added_at field.
-	ticketccDescAddedAt := ticketccFields[4].Descriptor()
+	ticketccDescAddedAt := ticketccFields[5].Descriptor()
 	// ticketcc.DefaultAddedAt holds the default value on creation for the added_at field.
 	ticketcc.DefaultAddedAt = ticketccDescAddedAt.Default.(func() time.Time)
 	// ticketccDescIsActive is the schema descriptor for is_active field.
-	ticketccDescIsActive := ticketccFields[5].Descriptor()
+	ticketccDescIsActive := ticketccFields[6].Descriptor()
 	// ticketcc.DefaultIsActive holds the default value on creation for the is_active field.
 	ticketcc.DefaultIsActive = ticketccDescIsActive.Default.(bool)
 	ticketcategoryFields := schema.TicketCategory{}.Fields()

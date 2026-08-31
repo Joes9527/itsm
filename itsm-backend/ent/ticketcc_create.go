@@ -45,6 +45,20 @@ func (_c *TicketCCCreate) SetTenantID(v int) *TicketCCCreate {
 	return _c
 }
 
+// SetDeliveryKey sets the "delivery_key" field.
+func (_c *TicketCCCreate) SetDeliveryKey(v string) *TicketCCCreate {
+	_c.mutation.SetDeliveryKey(v)
+	return _c
+}
+
+// SetNillableDeliveryKey sets the "delivery_key" field if the given value is not nil.
+func (_c *TicketCCCreate) SetNillableDeliveryKey(v *string) *TicketCCCreate {
+	if v != nil {
+		_c.SetDeliveryKey(*v)
+	}
+	return _c
+}
+
 // SetAddedAt sets the "added_at" field.
 func (_c *TicketCCCreate) SetAddedAt(v time.Time) *TicketCCCreate {
 	_c.mutation.SetAddedAt(v)
@@ -183,6 +197,10 @@ func (_c *TicketCCCreate) createSpec() (*TicketCC, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(ticketcc.FieldTenantID, field.TypeInt, value)
 		_node.TenantID = value
+	}
+	if value, ok := _c.mutation.DeliveryKey(); ok {
+		_spec.SetField(ticketcc.FieldDeliveryKey, field.TypeString, value)
+		_node.DeliveryKey = &value
 	}
 	if value, ok := _c.mutation.AddedAt(); ok {
 		_spec.SetField(ticketcc.FieldAddedAt, field.TypeTime, value)

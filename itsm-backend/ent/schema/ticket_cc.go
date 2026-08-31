@@ -25,6 +25,11 @@ func (TicketCC) Fields() []ent.Field {
 			Comment("添加人ID"),
 		field.Int("tenant_id").
 			Comment("租户ID"),
+		field.String("delivery_key").
+			Comment("内部回调投递幂等键，不对 API 暴露").
+			Optional().
+			Nillable().
+			Sensitive(),
 		field.Time("added_at").
 			Default(time.Now).
 			Comment("添加时间"),
@@ -49,6 +54,6 @@ func (TicketCC) Edges() []ent.Edge {
 // Indexes of the TicketCC.
 func (TicketCC) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("tenant_id", "ticket_id", "user_id").Unique(),
+		index.Fields("tenant_id", "delivery_key", "user_id").Unique(),
 	}
 }

@@ -41,6 +41,17 @@ func NewTicketWorkflowService(client *ent.Client, logger *zap.SugaredLogger) *Ti
 	return svc
 }
 
+func (s *TicketWorkflowService) withClient(client *ent.Client) *TicketWorkflowService {
+	rebound := *s
+	rebound.client = client
+	if s.approvalBridge != nil {
+		bridge := *s.approvalBridge
+		bridge.client = client
+		rebound.approvalBridge = &bridge
+	}
+	return &rebound
+}
+
 // SetProcessEngine 注入全局流程引擎（已完成 CallbackRegistry 依赖装配的那一个），
 // 由 bootstrap 调用。不注入时审批桥接仍能完成 BPMN 任务，但 UserTask 上声明的
 // ServiceTask 回调（工单状态更新等业务副作用）会因为 registry 未装配而静默失败。
@@ -263,79 +274,122 @@ func (s *TicketWorkflowService) ForwardTicket(ctx context.Context, req *dto.Forw
 func (s *TicketWorkflowService) CCTicket(ctx context.Context, req *dto.CCTicketRequest, userID, tenantID int) error {
 	s.logger.Infow("CC ticket", "ticket_id", req.TicketID, "cc_users", req.CCUsers, "user_id", userID)
 
-	// 检查工单是否存在
-	tk, err := s.getTicket(ctx, req.TicketID, tenantID)
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("开启抄送事务失败: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	txService := s.withClient(tx.Client())
+
+	tk, err := txService.getTicket(ctx, req.TicketID, tenantID)
 	if err != nil {
 		return err
 	}
-
-	if err := s.EnsureCanCCTicket(ctx, tk, userID, tenantID); err != nil {
+	if err := txService.EnsureCanCCTicket(ctx, tk, userID, tenantID); err != nil {
 		return err
 	}
 
-	targetUsers, err := s.client.User.Query().
+	requestedUserIDs := uniqueInts(req.CCUsers)
+	targetUsers, err := txService.client.User.Query().
 		Where(user.IDIn(req.CCUsers...), user.TenantID(tenantID), user.Active(true)).
+		Order(ent.Asc(user.FieldID)).
 		Select(user.FieldID).
 		Ints(ctx)
 	if err != nil {
 		return fmt.Errorf("校验抄送用户失败: %w", err)
 	}
-	if len(targetUsers) != len(uniqueInts(req.CCUsers)) {
+	if len(targetUsers) != len(requestedUserIDs) {
 		return fmt.Errorf("抄送用户不存在、未激活或不属于当前租户")
 	}
 
-	// 添加抄送人
 	addedUserIDs := make([]int, 0, len(targetUsers))
+	addedAt := time.Now()
 	for _, ccUserID := range targetUsers {
-		// 检查是否已存在抄送记录
-		exists, err := s.client.TicketCC.Query().
+		exists, err := txService.client.TicketCC.Query().
 			Where(ticketcc.TicketID(req.TicketID),
 				ticketcc.UserID(ccUserID),
 				ticketcc.TenantID(tenantID),
 				ticketcc.IsActive(true)).
 			Exist(ctx)
 		if err != nil {
-			s.logger.Warnw("Failed to check CC existence", "error", err, "user_id", ccUserID)
+			return fmt.Errorf("检查抄送关系失败: %w", err)
+		}
+		if exists {
 			continue
 		}
-		if !exists {
-			err = s.client.TicketCC.Create().
+
+		inactive, err := txService.client.TicketCC.Query().
+			Where(
+				ticketcc.TicketID(req.TicketID),
+				ticketcc.UserID(ccUserID),
+				ticketcc.TenantID(tenantID),
+				ticketcc.IsActive(false),
+			).
+			Order(ent.Desc(ticketcc.FieldID)).
+			First(ctx)
+		switch {
+		case err == nil:
+			_, err = txService.client.TicketCC.UpdateOneID(inactive.ID).
+				Where(
+					ticketcc.TicketID(req.TicketID),
+					ticketcc.UserID(ccUserID),
+					ticketcc.TenantID(tenantID),
+					ticketcc.IsActive(false),
+				).
+				SetAddedBy(userID).
+				SetAddedAt(addedAt).
+				SetIsActive(true).
+				ClearDeliveryKey().
+				Save(ctx)
+			if err != nil {
+				return fmt.Errorf("重新激活抄送关系失败: %w", err)
+			}
+		case ent.IsNotFound(err):
+			err = txService.client.TicketCC.Create().
 				SetTicketID(req.TicketID).
 				SetUserID(ccUserID).
 				SetAddedBy(userID).
 				SetTenantID(tenantID).
-				SetAddedAt(time.Now()).
+				SetAddedAt(addedAt).
 				SetIsActive(true).
 				Exec(ctx)
 			if err != nil {
-				s.logger.Warnw("Failed to add CC user", "error", err, "user_id", ccUserID)
-				continue
+				return fmt.Errorf("创建抄送关系失败: %w", err)
 			}
-			addedUserIDs = append(addedUserIDs, ccUserID)
+		default:
+			return fmt.Errorf("查询历史抄送关系失败: %w", err)
+		}
+		addedUserIDs = append(addedUserIDs, ccUserID)
+	}
+
+	var connectorDeliveries []ccConnectorDelivery
+	if len(addedUserIDs) > 0 {
+		connectorDeliveries, err = txService.createCCNotifications(ctx, tk, addedUserIDs, req.NotifyChannels, tenantID)
+		if err != nil {
+			return err
 		}
 	}
 
-	if len(addedUserIDs) > 0 {
-		s.createCCNotifications(ctx, tk, addedUserIDs, req.NotifyChannels, userID, tenantID)
-	}
-
-	// 记录流转记录
-	ccUserIDs := make([]int, len(targetUsers))
-	copy(ccUserIDs, targetUsers)
-
-	err = s.createWorkflowRecord(ctx, &dto.TicketWorkflowRecord{
+	err = txService.createWorkflowRecord(ctx, &dto.TicketWorkflowRecord{
 		TicketID:  req.TicketID,
 		Action:    dto.WorkflowActionCC,
 		Operator:  dto.WorkflowUserInfo{ID: userID},
 		Comment:   req.Comment,
 		CreatedAt: time.Now(),
 		Metadata: map[string]interface{}{
-			"cc_users":        ccUserIDs,
+			"cc_users":        append([]int(nil), addedUserIDs...),
 			"notify_channels": normalizeNotifyChannels(req.NotifyChannels),
 		},
 	}, tenantID)
+	if err != nil {
+		return fmt.Errorf("记录抄送流转失败: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("提交抄送事务失败: %w", err)
+	}
 
-	return err
+	s.dispatchCCConnectorNotifications(ctx, tk, connectorDeliveries, tenantID)
+	return nil
 }
 
 // ListMyCCRecords 查询当前用户收到的抄送记录
@@ -1073,21 +1127,31 @@ func normalizeNotifyChannels(channels []string) []string {
 	return result
 }
 
-func (s *TicketWorkflowService) createCCNotifications(ctx context.Context, tk *ent.Ticket, userIDs []int, channels []string, addedBy, tenantID int) {
+type ccConnectorDelivery struct {
+	notificationID int
+	channel        string
+	recipient      *ent.User
+	content        string
+}
+
+func (s *TicketWorkflowService) createCCNotifications(ctx context.Context, tk *ent.Ticket, userIDs []int, channels []string, tenantID int) ([]ccConnectorDelivery, error) {
 	now := time.Now()
 	content := fmt.Sprintf("工单 %s「%s」已抄送给你", tk.TicketNumber, tk.Title)
 	notifyChannels := normalizeNotifyChannels(channels)
 	users, err := s.client.User.Query().Where(user.IDIn(uniqueInts(userIDs)...), user.TenantID(tenantID)).All(ctx)
 	if err != nil {
-		s.logger.Warnw("Failed to query CC notification users", "error", err, "ticket_id", tk.ID)
-		return
+		return nil, fmt.Errorf("查询抄送通知用户失败: %w", err)
 	}
 	userByID := make(map[int]*ent.User, len(users))
 	for _, u := range users {
 		userByID[u.ID] = u
 	}
-
+	deliveries := make([]ccConnectorDelivery, 0)
 	for _, userID := range userIDs {
+		recipient := userByID[userID]
+		if recipient == nil {
+			return nil, fmt.Errorf("抄送通知用户不存在")
+		}
 		for _, channel := range notifyChannels {
 			status := "pending"
 			create := s.client.TicketNotification.Create().
@@ -1103,24 +1167,16 @@ func (s *TicketWorkflowService) createCCNotifications(ctx context.Context, tk *e
 			}
 			notification, err := create.Save(ctx)
 			if err != nil {
-				s.logger.Warnw("Failed to create ticket CC notification", "error", err, "ticket_id", tk.ID, "user_id", userID, "channel", channel)
-				continue
+				return nil, fmt.Errorf("创建工单抄送通知失败: %w", err)
 			}
 
 			if channel != "in_app" && s.connectorManager != nil {
-				sendErr := s.sendConnectorCCNotification(ctx, tenantID, channel, tk, userByID[userID], content)
-				nextStatus := "sent"
-				if sendErr != nil {
-					nextStatus = "failed"
-					s.logger.Warnw("Failed to send CC notification through connector", "error", sendErr, "ticket_id", tk.ID, "user_id", userID, "channel", channel)
-				}
-				update := s.client.TicketNotification.UpdateOneID(notification.ID).SetStatus(nextStatus)
-				if sendErr == nil {
-					update.SetSentAt(now)
-				}
-				if _, err := update.Save(ctx); err != nil {
-					s.logger.Warnw("Failed to update connector CC notification status", "error", err, "notification_id", notification.ID)
-				}
+				deliveries = append(deliveries, ccConnectorDelivery{
+					notificationID: notification.ID,
+					channel:        channel,
+					recipient:      recipient,
+					content:        content,
+				})
 			}
 		}
 
@@ -1133,7 +1189,26 @@ func (s *TicketWorkflowService) createCCNotifications(ctx context.Context, tk *e
 			SetActionURL(fmt.Sprintf("/tickets/%d", tk.ID)).
 			SetActionText("查看工单").
 			Save(ctx); err != nil {
-			s.logger.Warnw("Failed to create unified CC notification", "error", err, "ticket_id", tk.ID, "user_id", userID, "added_by", addedBy)
+			return nil, fmt.Errorf("创建统一抄送通知失败: %w", err)
+		}
+	}
+	return deliveries, nil
+}
+
+func (s *TicketWorkflowService) dispatchCCConnectorNotifications(ctx context.Context, tk *ent.Ticket, deliveries []ccConnectorDelivery, tenantID int) {
+	for _, delivery := range deliveries {
+		sendErr := s.sendConnectorCCNotification(ctx, tenantID, delivery.channel, tk, delivery.recipient, delivery.content)
+		nextStatus := "sent"
+		if sendErr != nil {
+			nextStatus = "failed"
+			s.logger.Warnw("Failed to send CC notification through connector", "error_class", "connector_send", "ticket_id", tk.ID, "user_id", delivery.recipient.ID, "channel", delivery.channel)
+		}
+		update := s.client.TicketNotification.UpdateOneID(delivery.notificationID).SetStatus(nextStatus)
+		if sendErr == nil {
+			update.SetSentAt(time.Now())
+		}
+		if _, err := update.Save(ctx); err != nil {
+			s.logger.Warnw("Failed to update connector CC notification status", "error_class", "notification_status_update", "notification_id", delivery.notificationID)
 		}
 	}
 }

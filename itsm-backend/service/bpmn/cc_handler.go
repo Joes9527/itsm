@@ -79,6 +79,11 @@ func (h *CCTaskHandler) NormalizeCallbackPayload(action string, variables map[st
 
 // Execute 执行抄送服务任务
 func (h *CCTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+	deliveryKey, ok := BPMNCallbackExecutionKey(ctx)
+	if !ok {
+		return nil, fmt.Errorf("抄送回调执行键不能为空")
+	}
+
 	// 获取参数
 	ticketID := GetIntFromVars(variables, "ticket_id")
 	ccType := GetStringFromVars(variables, "ccType")
@@ -134,7 +139,21 @@ func (h *CCTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, vari
 	// 添加抄送人
 	var addedUsers []int
 	for _, ccUserID := range ccUsers {
-		// 检查是否已存在抄送记录
+		delivered, err := tx.Client().TicketCC.Query().
+			Where(
+				ticketcc.TenantID(tenantID),
+				ticketcc.DeliveryKey(deliveryKey),
+				ticketcc.UserID(ccUserID),
+			).
+			Exist(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("检查抄送回调投递失败")
+		}
+		if delivered {
+			continue
+		}
+
+		// 已有普通有效关系时不重复创建回调关系或通知。
 		exists, err := tx.Client().TicketCC.Query().
 			Where(ticketcc.TicketID(ticketID),
 				ticketcc.UserID(ccUserID),
@@ -150,6 +169,7 @@ func (h *CCTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, vari
 				SetUserID(ccUserID).
 				SetAddedBy(addedBy).
 				SetTenantID(tenantID).
+				SetDeliveryKey(deliveryKey).
 				SetAddedAt(time.Now()).
 				SetIsActive(true).
 				Exec(ctx)

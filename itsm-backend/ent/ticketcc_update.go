@@ -106,6 +106,26 @@ func (_u *TicketCCUpdate) AddTenantID(v int) *TicketCCUpdate {
 	return _u
 }
 
+// SetDeliveryKey sets the "delivery_key" field.
+func (_u *TicketCCUpdate) SetDeliveryKey(v string) *TicketCCUpdate {
+	_u.mutation.SetDeliveryKey(v)
+	return _u
+}
+
+// SetNillableDeliveryKey sets the "delivery_key" field if the given value is not nil.
+func (_u *TicketCCUpdate) SetNillableDeliveryKey(v *string) *TicketCCUpdate {
+	if v != nil {
+		_u.SetDeliveryKey(*v)
+	}
+	return _u
+}
+
+// ClearDeliveryKey clears the value of the "delivery_key" field.
+func (_u *TicketCCUpdate) ClearDeliveryKey() *TicketCCUpdate {
+	_u.mutation.ClearDeliveryKey()
+	return _u
+}
+
 // SetAddedAt sets the "added_at" field.
 func (_u *TicketCCUpdate) SetAddedAt(v time.Time) *TicketCCUpdate {
 	_u.mutation.SetAddedAt(v)
@@ -214,6 +234,12 @@ func (_u *TicketCCUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedTenantID(); ok {
 		_spec.AddField(ticketcc.FieldTenantID, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.DeliveryKey(); ok {
+		_spec.SetField(ticketcc.FieldDeliveryKey, field.TypeString, value)
+	}
+	if _u.mutation.DeliveryKeyCleared() {
+		_spec.ClearField(ticketcc.FieldDeliveryKey, field.TypeString)
 	}
 	if value, ok := _u.mutation.AddedAt(); ok {
 		_spec.SetField(ticketcc.FieldAddedAt, field.TypeTime, value)
@@ -344,6 +370,26 @@ func (_u *TicketCCUpdateOne) SetNillableTenantID(v *int) *TicketCCUpdateOne {
 // AddTenantID adds value to the "tenant_id" field.
 func (_u *TicketCCUpdateOne) AddTenantID(v int) *TicketCCUpdateOne {
 	_u.mutation.AddTenantID(v)
+	return _u
+}
+
+// SetDeliveryKey sets the "delivery_key" field.
+func (_u *TicketCCUpdateOne) SetDeliveryKey(v string) *TicketCCUpdateOne {
+	_u.mutation.SetDeliveryKey(v)
+	return _u
+}
+
+// SetNillableDeliveryKey sets the "delivery_key" field if the given value is not nil.
+func (_u *TicketCCUpdateOne) SetNillableDeliveryKey(v *string) *TicketCCUpdateOne {
+	if v != nil {
+		_u.SetDeliveryKey(*v)
+	}
+	return _u
+}
+
+// ClearDeliveryKey clears the value of the "delivery_key" field.
+func (_u *TicketCCUpdateOne) ClearDeliveryKey() *TicketCCUpdateOne {
+	_u.mutation.ClearDeliveryKey()
 	return _u
 }
 
@@ -485,6 +531,12 @@ func (_u *TicketCCUpdateOne) sqlSave(ctx context.Context) (_node *TicketCC, err 
 	}
 	if value, ok := _u.mutation.AddedTenantID(); ok {
 		_spec.AddField(ticketcc.FieldTenantID, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.DeliveryKey(); ok {
+		_spec.SetField(ticketcc.FieldDeliveryKey, field.TypeString, value)
+	}
+	if _u.mutation.DeliveryKeyCleared() {
+		_spec.ClearField(ticketcc.FieldDeliveryKey, field.TypeString)
 	}
 	if value, ok := _u.mutation.AddedAt(); ok {
 		_spec.SetField(ticketcc.FieldAddedAt, field.TypeTime, value)

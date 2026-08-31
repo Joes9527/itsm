@@ -132809,6 +132809,7 @@ type TicketCCMutation struct {
 	addadded_by   *int
 	tenant_id     *int
 	addtenant_id  *int
+	delivery_key  *string
 	added_at      *time.Time
 	is_active     *bool
 	clearedFields map[string]struct{}
@@ -133121,6 +133122,55 @@ func (m *TicketCCMutation) ResetTenantID() {
 	m.addtenant_id = nil
 }
 
+// SetDeliveryKey sets the "delivery_key" field.
+func (m *TicketCCMutation) SetDeliveryKey(s string) {
+	m.delivery_key = &s
+}
+
+// DeliveryKey returns the value of the "delivery_key" field in the mutation.
+func (m *TicketCCMutation) DeliveryKey() (r string, exists bool) {
+	v := m.delivery_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDeliveryKey returns the old "delivery_key" field's value of the TicketCC entity.
+// If the TicketCC object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketCCMutation) OldDeliveryKey(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDeliveryKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDeliveryKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDeliveryKey: %w", err)
+	}
+	return oldValue.DeliveryKey, nil
+}
+
+// ClearDeliveryKey clears the value of the "delivery_key" field.
+func (m *TicketCCMutation) ClearDeliveryKey() {
+	m.delivery_key = nil
+	m.clearedFields[ticketcc.FieldDeliveryKey] = struct{}{}
+}
+
+// DeliveryKeyCleared returns if the "delivery_key" field was cleared in this mutation.
+func (m *TicketCCMutation) DeliveryKeyCleared() bool {
+	_, ok := m.clearedFields[ticketcc.FieldDeliveryKey]
+	return ok
+}
+
+// ResetDeliveryKey resets all changes to the "delivery_key" field.
+func (m *TicketCCMutation) ResetDeliveryKey() {
+	m.delivery_key = nil
+	delete(m.clearedFields, ticketcc.FieldDeliveryKey)
+}
+
 // SetAddedAt sets the "added_at" field.
 func (m *TicketCCMutation) SetAddedAt(t time.Time) {
 	m.added_at = &t
@@ -133254,7 +133304,7 @@ func (m *TicketCCMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TicketCCMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 7)
 	if m.ticket != nil {
 		fields = append(fields, ticketcc.FieldTicketID)
 	}
@@ -133266,6 +133316,9 @@ func (m *TicketCCMutation) Fields() []string {
 	}
 	if m.tenant_id != nil {
 		fields = append(fields, ticketcc.FieldTenantID)
+	}
+	if m.delivery_key != nil {
+		fields = append(fields, ticketcc.FieldDeliveryKey)
 	}
 	if m.added_at != nil {
 		fields = append(fields, ticketcc.FieldAddedAt)
@@ -133289,6 +133342,8 @@ func (m *TicketCCMutation) Field(name string) (ent.Value, bool) {
 		return m.AddedBy()
 	case ticketcc.FieldTenantID:
 		return m.TenantID()
+	case ticketcc.FieldDeliveryKey:
+		return m.DeliveryKey()
 	case ticketcc.FieldAddedAt:
 		return m.AddedAt()
 	case ticketcc.FieldIsActive:
@@ -133310,6 +133365,8 @@ func (m *TicketCCMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldAddedBy(ctx)
 	case ticketcc.FieldTenantID:
 		return m.OldTenantID(ctx)
+	case ticketcc.FieldDeliveryKey:
+		return m.OldDeliveryKey(ctx)
 	case ticketcc.FieldAddedAt:
 		return m.OldAddedAt(ctx)
 	case ticketcc.FieldIsActive:
@@ -133350,6 +133407,13 @@ func (m *TicketCCMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetTenantID(v)
+		return nil
+	case ticketcc.FieldDeliveryKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDeliveryKey(v)
 		return nil
 	case ticketcc.FieldAddedAt:
 		v, ok := value.(time.Time)
@@ -133433,7 +133497,11 @@ func (m *TicketCCMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *TicketCCMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(ticketcc.FieldDeliveryKey) {
+		fields = append(fields, ticketcc.FieldDeliveryKey)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -133446,6 +133514,11 @@ func (m *TicketCCMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *TicketCCMutation) ClearField(name string) error {
+	switch name {
+	case ticketcc.FieldDeliveryKey:
+		m.ClearDeliveryKey()
+		return nil
+	}
 	return fmt.Errorf("unknown TicketCC nullable field %s", name)
 }
 
@@ -133464,6 +133537,9 @@ func (m *TicketCCMutation) ResetField(name string) error {
 		return nil
 	case ticketcc.FieldTenantID:
 		m.ResetTenantID()
+		return nil
+	case ticketcc.FieldDeliveryKey:
+		m.ResetDeliveryKey()
 		return nil
 	case ticketcc.FieldAddedAt:
 		m.ResetAddedAt()
