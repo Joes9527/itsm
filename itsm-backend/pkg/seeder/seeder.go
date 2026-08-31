@@ -1279,6 +1279,10 @@ func (s *Seeder) seedPermissions(ctx context.Context) {
 		// provision 管"对（他人提交的）服务请求执行交付"，两者不能共用同一个权限码，否则给普通
 		// 用户开自助提单权限时会顺带解锁对任意服务请求发起交付。见 ticket:assign 的既有先例。
 		{"service_request:provision", "执行服务请求交付", "service_request", "provision", "启动/执行服务请求的交付任务"},
+		// 统一 Intake 权限：创建与高风险运维/身份治理分离。
+		{"intake:create", "统一入口创建工作项", "intake", "create", "通过统一入口创建事件或服务请求"},
+		{"intake:intervene", "统一入口人工干预", "intake", "intervene", "处理工作流启动等人工干预事项"},
+		{"intake:identity_admin", "统一入口身份映射管理", "intake", "identity_admin", "管理外部渠道身份映射"},
 		// SLA权限
 		{"sla:read", "查看SLA", "sla", "read", "查看SLA定义"},
 		{"sla:write", "管理SLA", "sla", "write", "管理SLA定义"},
@@ -1720,9 +1724,10 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		// IT总监：全局读写（不含系统管理）
 		"it_director": allExcept([]string{"system:write", "msp:write", "msp_allocation:write"}),
 		// 运维总监：运维相关读写
-		"ops_director": allExcept([]string{"system:write", "msp:write", "msp_allocation:write", "msp_report:write"}),
+		"ops_director": allExcept([]string{"system:write", "msp:write", "msp_allocation:write", "msp_report:write", "intake:identity_admin"}),
 		// 运维经理：运维相关读写
 		"ops_manager": {
+			"intake:create", "intake:intervene",
 			"ticket:read", "ticket:create", "ticket:update", "ticket:escalate", "incident:read", "incident:write",
 			"problem:read", "problem:write", "change:read", "change:write", "change:rollback",
 			"asset:read", "asset:write", "cmdb:read", "cmdb:write",
@@ -1734,6 +1739,7 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		},
 		// 运维工程师：运维操作
 		"ops_engineer": {
+			"intake:create",
 			"ticket:read", "ticket:create", "ticket:update", "incident:read", "incident:write",
 			"problem:read", "change:read", "asset:read", "asset:write",
 			"cmdb:read", "cmdb:write", "sla:read", "knowledge:read", "knowledge:write",
@@ -1758,6 +1764,7 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		},
 		// 服务台主管
 		"sd_manager": {
+			"intake:create", "intake:intervene",
 			"ticket:read", "ticket:create", "ticket:update", "ticket:escalate", "incident:read", "incident:write",
 			"problem:read", "change:read", "sla:read", "sla:write",
 			"knowledge:read", "knowledge:write", "report:read",
@@ -1786,6 +1793,7 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		},
 		// 服务目录管理员：负责服务目录、服务请求模板和工单模板配置
 		"service_catalog_admin": {
+			"intake:create",
 			"service:read", "service:write",
 			"service_catalog:read", "service_catalog:write", "service_catalog:delete",
 			"service_request:read", "service_request:write", "service_request:delete", "service_request:provision",
@@ -1802,6 +1810,7 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		},
 		// 一线支持工程师
 		"l1_support": {
+			"intake:create",
 			"ticket:read", "ticket:create", "ticket:update", "ticket:escalate", "incident:read", "incident:write",
 			"knowledge:read", "user:read", "sla:read",
 			// service_request:provision：一线工程师是账号/终端类服务目录项最常见的履约角色。
@@ -1809,6 +1818,7 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		},
 		// 二线支持工程师
 		"l2_support": {
+			"intake:create",
 			"ticket:read", "ticket:create", "ticket:update", "incident:read", "incident:write",
 			"problem:read", "change:read", "asset:read",
 			"knowledge:read", "knowledge:write", "user:read", "sla:read",
@@ -1817,6 +1827,7 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		},
 		// 三线专家
 		"l3_expert": {
+			"intake:create",
 			"ticket:read", "ticket:create", "ticket:update", "incident:read", "incident:write",
 			"problem:read", "problem:write", "change:read", "change:write",
 			"asset:read", "cmdb:read", "knowledge:read", "knowledge:write",
@@ -1890,6 +1901,7 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		},
 		// 普通用户
 		"end_user": {
+			"intake:create",
 			"ticket:read", "ticket:create", "ticket:update", "knowledge:read", "service_catalog:read",
 			"ticket_category:read", "ticket_template:read", "notification:read",
 			"tag:read",
@@ -2010,6 +2022,7 @@ func allPermissionCodes() []string {
 		"service:read", "service:write",
 		"service_catalog:read", "service_catalog:write", "service_catalog:delete",
 		"service_request:read", "service_request:write", "service_request:delete", "service_request:provision",
+		"intake:create", "intake:intervene", "intake:identity_admin",
 		"sla:read", "sla:write", "sla:delete",
 		"user:read", "user:write", "user:delete",
 		"group:read", "group:write",

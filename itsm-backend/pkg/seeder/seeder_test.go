@@ -413,6 +413,38 @@ func TestSeedProductionPreservesTenantOwnedGrantOnManagedRole(t *testing.T) {
 	assert.True(t, exists)
 }
 
+func TestSeedProductionScopesUnifiedIntakePermissions(t *testing.T) {
+	seeder, ctx := newTestSeeder(t, tenantmode.DeploymentModePrivate)
+	require.NoError(t, seeder.SeedProduction(ctx))
+	rootTenant, err := seeder.client.Tenant.Query().Where(tenant.CodeEQ("default")).Only(ctx)
+	require.NoError(t, err)
+
+	for _, test := range []struct {
+		role string
+		code string
+		want bool
+	}{
+		{role: "end_user", code: "intake:create", want: true},
+		{role: "end_user", code: "intake:intervene", want: false},
+		{role: "ops_manager", code: "intake:create", want: true},
+		{role: "ops_manager", code: "intake:intervene", want: true},
+		{role: "ops_manager", code: "intake:identity_admin", want: false},
+		{role: "sysadmin", code: "intake:identity_admin", want: true},
+	} {
+		t.Run(test.role+"/"+test.code, func(t *testing.T) {
+			roleRow, queryErr := seeder.client.Role.Query().Where(role.CodeEQ(test.role), role.TenantIDEQ(rootTenant.ID)).Only(ctx)
+			require.NoError(t, queryErr)
+			permissionRow, queryErr := seeder.client.Permission.Query().Where(permission.CodeEQ(test.code), permission.TenantIDEQ(rootTenant.ID)).Only(ctx)
+			require.NoError(t, queryErr)
+			exists, queryErr := seeder.client.RolePermission.Query().Where(
+				rolepermission.RoleIDEQ(roleRow.ID), rolepermission.PermissionIDEQ(permissionRow.ID), rolepermission.TenantIDEQ(rootTenant.ID),
+			).Exist(ctx)
+			require.NoError(t, queryErr)
+			require.Equal(t, test.want, exists)
+		})
+	}
+}
+
 func TestProvisionTenantReadinessAcrossDeploymentModes(t *testing.T) {
 	for _, mode := range []string{
 		tenantmode.DeploymentModePrivate,

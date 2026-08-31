@@ -8,9 +8,20 @@ import (
 
 // Response 统一响应结构
 type Response struct {
-	Code    int         `json:"code"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
+	Code      int         `json:"code"`
+	Message   string      `json:"message"`
+	Data      interface{} `json:"data,omitempty"`
+	RequestID string      `json:"requestId,omitempty"`
+}
+
+// TypedErrorResponse is used by newer APIs that publish stable string error
+// codes and retry semantics while preserving the common response envelope.
+type TypedErrorResponse struct {
+	Code        string      `json:"code"`
+	Message     string      `json:"message"`
+	RequestID   string      `json:"requestId"`
+	Retryable   bool        `json:"retryable"`
+	FieldErrors interface{} `json:"fieldErrors,omitempty"`
 }
 
 // 响应码定义
@@ -42,6 +53,27 @@ func Success(c *gin.Context, data interface{}) {
 		Message: "success",
 		Data:    data,
 	})
+}
+
+// SuccessWithStatus writes the common success envelope with an explicit HTTP
+// status and the correlation ID established by RequestIDMiddleware.
+func SuccessWithStatus(c *gin.Context, status int, data interface{}) {
+	c.JSON(status, Response{
+		Code:      SuccessCode,
+		Message:   "success",
+		Data:      data,
+		RequestID: c.GetString("request_id"),
+	})
+}
+
+// TypedFail writes a stable, payload-safe error without exposing wrapped
+// infrastructure errors.
+func TypedFail(c *gin.Context, status int, code, message string, retryable bool, fieldErrors interface{}) {
+	c.JSON(status, TypedErrorResponse{
+		Code: code, Message: message, RequestID: c.GetString("request_id"),
+		Retryable: retryable, FieldErrors: fieldErrors,
+	})
+	c.Abort()
 }
 
 // Fail 失败响应

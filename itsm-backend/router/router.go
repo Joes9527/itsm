@@ -21,6 +21,7 @@ import (
 	"itsm-backend/handlers/change"
 	"itsm-backend/handlers/cmdb"
 	domainCommon "itsm-backend/handlers/common"
+	"itsm-backend/handlers/intake"
 	"itsm-backend/handlers/knowledge"
 	"itsm-backend/handlers/known_error"
 	"itsm-backend/handlers/problem"
@@ -258,6 +259,7 @@ type RouterConfig struct {
 	// Domain Handlers
 	ServiceCatalogHandler *service_catalog.Handler
 	ServiceRequestHandler *service_request.Handler
+	IntakeHandler         *intake.Handler
 	CMDBHandler           *cmdb.Handler
 
 	ProblemHandler        *problem.Handler
@@ -291,6 +293,7 @@ type RouterConfig struct {
 // SetupRoutes 设置路由
 func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 	// 全局中间件
+	r.Use(middleware.RequestIDMiddleware())
 	r.Use(gin.Logger())
 	r.Use(gin.Recovery())
 	r.Use(middleware.CORSMiddleware())
@@ -490,6 +493,14 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 	{
 		// 租户中间件
 		tenant := auth.Use(middleware.TenantMiddleware(config.Client))
+
+		if config.IntakeHandler != nil {
+			tenant.(*gin.RouterGroup).POST(
+				"/intake/work-items",
+				middleware.RequirePermission("intake", "create"),
+				config.IntakeHandler.CreateWorkItem,
+			)
+		}
 
 		// ==================== Ticket Categories & Tags ====================
 		if config.TicketCategoryController != nil {

@@ -12,6 +12,7 @@ import (
 	"itsm-backend/controller"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/handlers/intake"
 	"itsm-backend/middleware"
 	"itsm-backend/migration"
 	"itsm-backend/service"
@@ -96,6 +97,21 @@ func TestSetupRoutes_AllControllersNil(t *testing.T) {
 
 	assert.True(t, routeMap["GET /api/v1/health"], "health should be registered")
 	assert.True(t, routeMap["GET /api/v1/version"], "version should be registered")
+}
+
+func TestSetupRoutesRegistersAuthenticatedIntakeCreateRoute(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:router_intake?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	router := gin.New()
+	SetupRoutes(router, &RouterConfig{
+		JWTSecret: "test-secret", Logger: zaptest.NewLogger(t).Sugar(), Client: client,
+		IntakeHandler: intake.NewHandler(nil),
+	})
+	routes := make(map[string]bool)
+	for _, route := range router.Routes() {
+		routes[route.Method+" "+route.Path] = true
+	}
+	require.True(t, routes["POST /api/v1/intake/work-items"])
 }
 
 // =====================================================================

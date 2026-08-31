@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strconv"
+	"strings"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/incident"
@@ -19,6 +20,12 @@ const (
 	workflowStartEventType = "workflow.start.requested"
 	intakeCreatePath       = "/api/v1/intake/work-items"
 )
+
+type requestIDContextKey struct{}
+
+func WithRequestID(ctx context.Context, requestID string) context.Context {
+	return context.WithValue(ctx, requestIDContextKey{}, strings.TrimSpace(requestID))
+}
 
 type referenceResolver interface {
 	Resolve(context.Context, *ent.Tx, Identity, CreateWorkItemCommand) (*ResolvedIntake, error)
@@ -133,7 +140,7 @@ func (s *Service) createAttempt(ctx context.Context, identity Identity, command 
 	}
 	if err := s.audits.RecordCreated(ctx, tx, CreatedAuditInput{
 		TenantID: identity.TenantID, UserID: identity.ActorID, WorkItemID: workItem.ID,
-		RequestID: auditRequestID(identity, digest), Path: intakeCreatePath, Method: "POST", StatusCode: 201,
+		RequestID: auditRequestID(ctx, identity, digest), Path: intakeCreatePath, Method: "POST", StatusCode: 201,
 	}); err != nil {
 		return nil, false, err
 	}
@@ -197,7 +204,10 @@ func buildSnapshot(receiptID, workItemID int, digest string, resolved *ResolvedI
 	return input
 }
 
-func auditRequestID(identity Identity, digest string) string {
+func auditRequestID(ctx context.Context, identity Identity, digest string) string {
+	if requestID, _ := ctx.Value(requestIDContextKey{}).(string); requestID != "" {
+		return requestID
+	}
 	if identity.TokenID != "" {
 		return identity.TokenID
 	}

@@ -42,6 +42,7 @@ import (
 	"itsm-backend/handlers/change"
 	"itsm-backend/handlers/cmdb"
 	domainCommon "itsm-backend/handlers/common"
+	"itsm-backend/handlers/intake"
 	"itsm-backend/handlers/knowledge"
 	"itsm-backend/handlers/known_error"
 	"itsm-backend/handlers/problem"
@@ -265,6 +266,21 @@ func NewApplication() *Application {
 	ticketRepoImpl.SetSequenceService(sequenceService)
 	// 注入原生数据库连接（用于事务性编号生成）
 	ticketRepoImpl.SetRawDB(database.GetRawDB())
+
+	intakeCreators := intake.NewCreatorRegistry()
+	if err := intakeCreators.Register(intake.NewIncidentCreator(incidentService)); err != nil {
+		log.Fatalf("register incident intake creator: %v", err)
+	}
+	if err := intakeCreators.Register(intake.NewServiceRequestItemCreator()); err != nil {
+		log.Fatalf("register service request intake creator: %v", err)
+	}
+	intakeService := intake.NewService(
+		client,
+		intake.NewResolver(processBindingService, nil),
+		intakeCreators,
+		intake.NewWorkItemCreator(intake.WorkItemNumberFunc(ticketRepoImpl.GenerateTicketNumber)),
+	)
+	intakeHandler := intake.NewHandler(intakeService)
 
 	// Connector Manager / Registry / Market —— 连接器/插件/技能市场基础设施
 	connectorManager := connector.NewManager(connector.Default(), sugar)
@@ -852,6 +868,7 @@ func NewApplication() *Application {
 		// Domain Handlers
 		ServiceCatalogHandler: scHandler,
 		ServiceRequestHandler: srHandler,
+		IntakeHandler:         intakeHandler,
 		ProblemHandler:        problemHandler,
 		ChangeHandler:         changeHandler,
 		KnowledgeHandler:      knowledgeHandler,
