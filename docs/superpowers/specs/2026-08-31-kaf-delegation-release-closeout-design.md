@@ -1,6 +1,6 @@
 # KAF 委派执行完整性发布收口设计
 
-> 状态：设计已批准，等待书面规格审阅与实施计划
+> 状态：设计已批准，实施计划已编写，等待执行方式确认
 > 日期：2026-08-31
 > 上位设计：`2026-08-28-kaf-itsm-autonomous-workitem-delegation-design.md`
 > 已实现基线：`2026-08-30-kaf-delegation-execution-integrity-design.md`
@@ -12,7 +12,7 @@ ITSM `main` 已包含 KAF 委派、事务性 Outbox、任务范围 API、action 
 
 本增量以一个真实 SSLVPN Service Request 为权威场景，在当前机器的 KAF Dev 环境使用真实 `kaf_automation` 主体和 Microsoft Graph，把 `Julian@dawnpro.onmicrosoft.com` 加入固定 Azure AD Security Group，证明跨进程链路、恰好一次 ITSM 接受语义和外部权限恢复闭环成立。同时用不触发第二次 Graph 状态变更的确定性 breaker 覆盖重放、恢复、认证、租户、附件和 RLS。
 
-发布收口通过之后，才单独 brainstorm 和设计统一 Intake。此处通过现有官方 process-trigger API 注入冻结的 `intake_snapshot`，只作为验收建单方式，不建立第二套 Intake 产品合同。
+发布收口通过之后，才单独 brainstorm 和设计统一 Intake。现有 Service Request API 会在创建后通过 process-trigger 自动启动绑定流程，但创建 DTO 不能携带 `intake_snapshot`；因此验收在首个审批完成前，通过现有受鉴权的 process-instance variables API 注入冻结快照。这只是一项验收设置，不建立第二套 Intake 产品合同或测试专用端点。
 
 ## 2. 已确认决策
 
@@ -51,7 +51,8 @@ ITSM `main` 已包含 KAF 委派、事务性 Outbox、任务范围 API、action 
 ```text
 ITSM official WorkItem/Service Request API
   -> WorkItem
-  -> official process-trigger API + frozen intake_snapshot
+  -> existing process-trigger starts the bound BPMN
+  -> official process-instance variables API freezes intake_snapshot
   -> existing BPMN approval path
   -> KAF delegation Outbox/webhook
   -> KAF delivery claim and authoritative vpn_permission_grant
@@ -102,7 +103,7 @@ Procedure 修改后必须使用仓库既有 ingest 流程发布到 Dev 的 Qdran
 
 ### 5.3 验收建单与委派
 
-在统一 Intake 尚未实现期间，验证器先通过现有官方 WorkItem/Service Request API 创建记录，再使用 `/api/v1/process-trigger` 启动既有流程，并在 `Variables` 中提供冻结的 `intake_snapshot`。最小业务内容包括：
+在统一 Intake 尚未实现期间，验证器通过现有官方 Service Request API 创建记录，由服务内部的 process-trigger 启动目录项绑定的既有流程。验证器取得该流程实例后，在完成首个审批前调用 `PUT /api/v1/bpmn/process-instances/:id/variables`，以 `Variables` 提供冻结的 `intake_snapshot`。最小业务内容包括：
 
 ```json
 {
