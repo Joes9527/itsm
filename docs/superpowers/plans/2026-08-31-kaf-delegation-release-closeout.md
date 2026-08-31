@@ -1035,6 +1035,122 @@ git -C /mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-worktrees/kaf-delegatio
 
 Expected: both health calls succeed; `/proc/$KAF_PID/cwd` is the feature worktree, not the old `acp-backend:8000` container.
 
+### Task 6A: Repair and Verify the Atomic BPMN-to-KAF Handoff
+
+> **Approved live-finding remediation:** Do not add a Web startup migration check, automatic orphan compatibility path, VPN-specific branch, test endpoint, or direct business-table repair. Keep schema migration in the explicit bootstrap job and keep Graph/Procedure/Tool execution outside the ITSM transaction.
+
+**Files:**
+
+- Modify: `itsm-backend/service/bpmn_process_engine.go`
+- Modify: `itsm-backend/service/kaf_delegation_service.go`
+- Test: `itsm-backend/service/kaf_delegation_service_test.go`
+- Test: `itsm-backend/handlers/service_request/kaf_delegation_sslvpn_e2e_test.go`
+- Verify: `itsm-backend/internal/bootstrap/post_schema_migrations_test.go`
+- Runtime evidence: existing protected closeout evidence directory
+
+**Interfaces:**
+
+- Consumes: the existing BPMN decision path, `CustomProcessEngine`, `KafDelegationService`, Ent transaction, approval-decision schema, audit service, and Outbox repository.
+- Produces: one database transaction covering the source task, process variable/version/activity transition, approval decision, KAF delegated task, source/delegation audits, and Outbox event.
+- Excludes: runtime auto-migration/readiness gates, synchronous Graph/Procedure/Tool work, a second workflow engine, process-143-specific behavior, and direct database repair.
+
+- [ ] **Step 1: Add a failing end-to-end service test for Outbox failure at the L2 handoff**
+
+Extend the existing SSLVPN/service fixture so the KAF Outbox repository fails while the real L2 approval is submitted. Before implementation, prove the test fails because the current engine leaves the source task completed or advances process state.
+
+The expected contract after the repair is:
+
+```text
+decision returns an explicit persistence error
+L2 source task remains in its pre-decision actionable status
+source task variables/completed_time are unchanged
+process variables, version, and current activity remain unchanged
+approval decision count remains zero for L2
+delegated KAF task count remains zero
+kaf_delegate.created and source-task completed audit counts remain zero
+outbox event count remains zero
+Graph/KAF runtime is not involved
+```
+
+Run the narrow RED test and preserve its expected assertion failure in the private evidence directory.
+
+- [ ] **Step 2: Implement one transaction for the persistent KAF handoff**
+
+Refactor the existing KAF delegated-task creation so it can participate in a caller-owned Ent transaction while retaining its current public all-or-nothing entry point. In the BPMN engine, only the transition whose resolved successor is the registered KAF async wait state uses the combined transaction.
+
+Inside that transaction:
+
+1. conditionally complete the source task from a non-terminal state;
+2. merge instance variables and increment the authoritative version with optimistic concurrency protection;
+3. update the process current activity to the KAF service task;
+4. create the approval decision using the same transaction client;
+5. create the delegated task, sanitized creation audit, and Outbox event using the same transaction;
+6. record source-task completion audit using the same transaction;
+7. commit once; on any error, roll back every write.
+
+Do not call Graph, KAF HTTP, Procedure, Tool, or user-task business callbacks inside the transaction. Preserve the existing post-commit callback behavior. Do not add logic for a particular BPMN key, catalog, record ID, UPN, group, or operation kind.
+
+- [ ] **Step 3: Prove rollback, retry, concurrency, and cardinality**
+
+After the RED test turns GREEN, restore the Outbox repository and retry the same L2 task. Assert exactly one approval decision, delegated task, creation audit, source completion audit, and Outbox event, with the process waiting at the KAF activity and the source task completed.
+
+Add a concurrent double-decision assertion: one caller succeeds, the other receives the existing conflict/processed error, and all authoritative side-effect counts remain one. Retain the existing invalid `record_class` retry test and all KAF completion replay tests.
+
+Run:
+
+```bash
+cd /home/administrator/project/itsm/.worktrees/kaf-delegation-transactional-delivery/itsm-backend
+go test ./service -run 'Test.*Kaf.*(Transaction|Rollback|Retry|Concurrent)' -count=1 -v
+go test ./handlers/service_request -run 'TestSSLVPN' -count=1 -v
+go test ./service ./controller ./handlers/service_request -count=1
+go test ./... -count=1
+go build ./...
+cd ..
+git diff --check
+```
+
+Expected: all commands exit zero; no tracked file outside the approved remediation scope changes.
+
+- [ ] **Step 4: Run the explicit ITSM bootstrap migration with no seed**
+
+Stop only the feature ITSM listener on `127.0.0.1:8090`. Source the private ITSM Dev env without printing values, then execute the repository-supported one-shot bootstrap:
+
+```bash
+cd /home/administrator/project/itsm/.worktrees/kaf-delegation-transactional-delivery/itsm-backend
+set -a
+. "$ITSM_DEV_ENV_FILE"
+set +a
+ITSM_BOOTSTRAP_ONLY=true ITSM_AUTO_MIGRATE=true ITSM_AUTO_SEED=false \
+  ITSM_RELEASE_VERSION=kaf-delegation-closeout go run .
+```
+
+Read-only verification must prove:
+
+```text
+schema_migrations contains 019_kaf_execution_integrity_rls
+outbox_events exists
+kaf_task_action_ledgers exists with forced tenant RLS
+kaf_task_completion_receipts exists with forced tenant RLS
+no seed run was requested
+```
+
+Restart the feature ITSM listener with migration flags unset and verify `/proc/<pid>/cwd` plus health. No migration-head check is added to the Web application.
+
+- [ ] **Step 5: Close the failed Dev process through the official API**
+
+Renew the short-lived administrative token through the established private helper. Call the existing authorized endpoint:
+
+```text
+PUT /api/v1/bpmn/process-instances/<process-instance-key>/terminate
+{"reason":"Release-closeout preflight failed before KAF delegation because the ITSM execution-integrity schema was not applied"}
+```
+
+Read back process 143 and prove `status=terminated`, Graph membership remains false, and no KAF task/outbox/action exists for the failed process. Preserve SR 34 / WorkItem 17 / process 143 as failure evidence. Do not reset task 197, directly edit any table, or manually start another process.
+
+- [ ] **Step 6: Independent review checkpoint**
+
+A fresh reviewer must verify the implementation against this Task 6A contract and `AGENTS.md`: one authoritative transaction boundary, no compatibility layer, no hardcoded VPN/process behavior, tenant-safe writes, explicit errors, and tests demonstrating rollback plus retry. Address every finding before Task 7 resumes.
+
 ### Task 7: Execute One Real SSLVPN Main Path, Persist Evidence, Replay, and Restore
 
 **Files:**
@@ -1046,7 +1162,7 @@ Expected: both health calls succeed; `/proc/$KAF_PID/cwd` is the feature worktre
 **Interfaces:**
 
 - Consumes: official Service Request, process-instance variables, BPMN decision, attachment, KAF context/list, and task-action endpoints.
-- Produces: one completed WorkItem/BPMN task, one published outbox event, one completed KAF delivery, one applied ledger/receipt, one Graph grant external action with sanitized audit rows, one exact-payload replay returning `already_applied`, and final Graph `member=false`.
+- Produces: one newly created successful WorkItem/BPMN path after the preserved, officially terminated preflight failure; one published outbox event, one completed KAF delivery, one applied ledger/receipt, one Graph grant external action with sanitized audit rows, one exact-payload replay returning `already_applied`, and final Graph `member=false`.
 - Stop rule: after cleanup is armed, every failure path runs the Graph membership check and `remove_vpn_access(user_identifier)` when necessary; cleanup failure stops all further real-change work and marks closeout failed.
 
 - [ ] **Step 1: Define read-only membership and controlled cleanup helpers**

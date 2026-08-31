@@ -1,6 +1,6 @@
 # KAF 委派执行完整性发布收口设计
 
-> 状态：设计已批准，实施计划已编写，等待执行方式确认
+> 状态：设计已批准并执行中；Live Dev 暴露的 BPMN → KAF 交接完整性修订已于 2026-08-31 批准
 > 日期：2026-08-31
 > 上位设计：`2026-08-28-kaf-itsm-autonomous-workitem-delegation-design.md`
 > 已实现基线：`2026-08-30-kaf-delegation-execution-integrity-design.md`
@@ -23,6 +23,8 @@ ITSM `main` 已包含 KAF 委派、事务性 Outbox、任务范围 API、action 
 - 并发、错误主体、跨租户、附件最小披露、callback failure 和 RLS 使用确定性或本地 PostgreSQL 探针验证，不重复制造真实权限变更。
 - 修改现有唯一权威 `vpn_permission_grant` Procedure，使其从 LDAP 收敛到 Microsoft Graph；不创建 E2E 专用 Procedure、测试专用生产端点或 headless VPN 特判。
 - ITSM 仍是 WorkItem、BPMN、租户、权限、action ledger、timeline 和 audit 的权威系统；KAF 仍是 Procedure 选择、Tool 调用和执行恢复的权威系统。
+- ITSM schema 迁移继续由显式 bootstrap/deployment job 负责；Web 运行进程不执行迁移，也不增加 migration-head 启动门禁。发布和验收 preflight 必须分别验证 ITSM post-schema head 与 KAF Alembic head。
+- 当人工任务的后继节点是 KAF 异步等待点时，源任务完成、流程变量/version/current activity、审批决策、delegated task、KAF 创建审计和 Outbox event 必须在同一 ITSM 数据库事务中提交；Graph、Procedure 和 Tool 仍只在事务提交后由 Outbox 驱动。
 
 ## 3. 范围
 
@@ -36,6 +38,7 @@ ITSM `main` 已包含 KAF 委派、事务性 Outbox、任务范围 API、action 
 6. 验证 ITSM/KAF 健康、迁移、专用认证配置和真实跨进程 SSLVPN Service Request 主路径。
 7. 验证 completion replay、恢复竞争、认证/租户拒绝、附件最小披露、callback failure 和 PostgreSQL RLS。
 8. 将命令、结果、基数、失败和恢复状态写入既有执行完整性验收报告的 Live Dev Closeout Addendum。
+9. 收敛 BPMN 人工审批到 KAF wait state 的持久化交接边界，使 Outbox/委派创建失败时源审批任务保持可重试。
 
 ### 3.2 明确不包含
 
@@ -135,11 +138,28 @@ ITSM 返回 `applied` 后 KAF 收敛为 completed；相同 scope/payload 再次�
 
 执行器首先通过 Microsoft Graph 只读查询当前成员状态。正式场景的起点必须是非成员；如果当前为成员，先执行受控移除并再次只读确认。主路径结束或后续任何证据步骤失败时，只要 Julian 为成员，都必须进入 finally-style 恢复并确认非成员。
 
+### 5.6 BPMN → KAF 原子交接修订
+
+Live Dev 首次 L2 验收确认了一个 P1 完整性缺口：ITSM Dev 尚未执行 `019_kaf_execution_integrity_rls`，缺少 `outbox_events`、`kaf_task_action_ledgers` 和 `kaf_task_completion_receipts`。`completeTask` 先分别提交源任务完成和流程变量，再进入 KAF delegated-task 事务；因此缺表导致后继事务回滚时，源任务已经不可重试。
+
+迁移缺失是本次触发条件，不是充分修复。任何 Outbox 或 delegated-task 持久化故障都可能造成相同孤儿状态。按照 ITSM 后端对 BPMN、事务和审计的权威边界，人工任务进入 KAF 异步等待点时，下列数据库写入必须共享一个事务：
+
+- 条件更新源 `ProcessTask` 为 completed，并持久化本次决策变量；
+- 以 process instance version 做并发保护，合并变量并更新 current activity；
+- 创建唯一的 `ProcessApprovalDecision`；
+- 创建 KAF delegated `ProcessTask`、`kaf_delegate.created` 审计和唯一 Outbox event；
+- 创建源任务完成审计；任何一步失败都回滚上述全部写入。
+
+事务不得包含 HTTP、Graph、Procedure 或 Tool 调用。KAF 交付仍从已提交 Outbox 开始，保持现有跨进程恢复与 replay-only 合同。实现复用现有 `CustomProcessEngine`、`KafDelegationService` 和 Outbox repository，不增加 VPN 分支、第二套流程服务、测试端点或运行时迁移逻辑。
+
+首次验收产生的 SR 34 / WorkItem 17 / process 143 作为失败证据保留。修复和 bootstrap 完成后，通过现有受权 API 终止该 process 并记录原因；不为它增加自动 orphan 兼容分支，也不直接改数据库。正式主路径由新的官方 Service Request 自动触发唯一新流程，不手工启动流程。
+
 ## 6. 失败、恢复与停止条件
 
 | 条件 | 预期行为 | 外部状态要求 |
 |---|---|---|
 | 健康、迁移、配置、身份或 Graph 预检失败 | 停止正式场景并记录 blocker | 不发生加组 |
+| 人工审批到 KAF wait state 的任一持久化写入失败 | 整个交接事务回滚；原审批任务和流程 activity/version 保持可重试；不得留下 decision、delegated task、创建审计或 Outbox | 不调用 Graph |
 | context 认证或审计持久化失败 | KAF 标记可重试或 `failed_auth`；BPMN 保持等待 | 不调用 Graph |
 | Graph grant 失败 | 不生成成功 completion，不推进 BPMN | 确认为非成员或立即恢复 |
 | Graph 已加组、completion payload 尚未持久化时 KAF 崩溃 | Procedure 可能被恢复后再次调用；Graph add 必须依靠 Tool 幂等收敛 | 只允许一次成员状态变化，可有可解释的重复 HTTP 尝试 |
@@ -166,6 +186,7 @@ ITSM 返回 `applied` 后 KAF 收敛为 completed；相同 scope/payload 再次�
 5. 错误主体、task scope、跨租户和附件访问继续 fail closed。
 6. 执行 KAF 委派相关 focused tests、`go test ./... -count=1`、`go build ./...`。
 7. 使用真实 `RLS_TEST_DSN` 执行带 `integration_rls` tag 的 PostgreSQL 探针；任何 skip 都不能算通过。
+8. 注入 KAF Outbox 写入失败时，L2 任务、流程变量/version/activity、审批决策、delegated task、创建审计和 Outbox 全部保持事务前状态；恢复依赖后重试同一任务只生成一组权威记录。
 
 ### 7.2 KAF 自动化验证
 
@@ -222,6 +243,7 @@ ITSM 返回 `applied` 后 KAF 收敛为 completed；相同 scope/payload 再次�
 7. PostgreSQL RLS 探针使用真实 `RLS_TEST_DSN` 执行，不能由 deterministic SQL、SQLite 或 skip 代替。
 8. Julian 最终经 Graph 确认为目标组非成员；恢复失败时无条件判定收口失败。
 9. Live Dev Closeout Addendum 与命令输出、持久化记录和 Graph 状态一致。
+10. ITSM 已通过显式 bootstrap 达到 `019_kaf_execution_integrity_rls`，且审批到 KAF wait state 的失败回滚/成功重试测试证明无孤儿状态。
 
 收口通过只建立 Dev 稳定基线，不构成 PROD 发布批准。统一 Intake、Incident typed actions、KAF 执行模型收敛和 UI 仍按上位设计中的独立 spec → plan → implementation 周期推进。
 
@@ -230,6 +252,7 @@ ITSM 返回 `applied` 后 KAF 收敛为 completed；相同 scope/payload 再次�
 实施计划应围绕以下现有边界细化任务，不引入新的横向抽象：
 
 - ITSM：`KafDelegationService` 的 context/list audit 及其 service/controller/tenant/RLS 回归测试。
+- ITSM：在既有 BPMN engine 与 `KafDelegationService` 内收敛人工任务到 KAF wait state 的单一事务边界；不建立平行完成路径或针对 SSLVPN/process 143 的恢复分支。
 - KAF：`scripts/procedures/vpn_permission_grant.md`、assembler 的 typed input binding、既有 Procedure ingest 与相关测试。
 - Dev 验收：复用官方 process-trigger、BPMN、delegation、action 和 Graph Tool 接口的可重复验证步骤。
 - 文档：真实变更夹具与既有执行完整性验收报告 addendum。
