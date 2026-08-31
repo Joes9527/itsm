@@ -1110,9 +1110,9 @@ func kafDelegationRecordClass(ctx context.Context, client *ent.Client, instance 
 		return "incident", nil
 	case "service_request", "service_request_item":
 		return "service_request_item", nil
-	case "ticket":
+	case "ticket", "work_item":
 		if instance.BusinessID <= 0 {
-			return "", fmt.Errorf("KAF delegation ticket instance %d has no work item ID", instance.ID)
+			return "", fmt.Errorf("KAF delegation WorkItem instance %d has no work item ID", instance.ID)
 		}
 		workItem, err := client.Ticket.Query().
 			Where(ticket.IDEQ(instance.BusinessID), ticket.TenantIDEQ(instance.TenantID), ticket.DeletedAtIsNil()).

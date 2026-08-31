@@ -269,6 +269,7 @@ func NewApplication() *Application {
 			BatchSize: cfg.WorkflowOutbox.BatchSize, PollInterval: cfg.WorkflowOutbox.PollInterval, MaxAttempts: cfg.WorkflowOutbox.MaxAttempts,
 		},
 	)
+	workflowOutboxDispatcher.SetObserver(intake.DefaultMetrics())
 	workflowInterventionHandler := intake.NewWorkflowInterventionHandler(workflowOutboxRepository)
 	processTriggerService := service.NewProcessTriggerService(client, processEngine)
 	processResolver := service.NewProcessResolver(client, processBindingService)

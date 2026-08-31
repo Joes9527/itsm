@@ -30,6 +30,7 @@ import (
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/ent/ticket"
+	"itsm-backend/handlers/intake"
 	"itsm-backend/handlers/service_catalog"
 	"itsm-backend/handlers/service_request"
 	"itsm-backend/middleware"
@@ -42,6 +43,21 @@ import (
 const testJWTSecret = "sslvpn-e2e-test-jwt-secret"
 
 var dbCounter int64
+var intakeFixtureCounter int64
+
+func newServiceRequestIntake(t testing.TB, client *ent.Client, workflow intake.IntakeWorkflowResolver) *intake.Service {
+	t.Helper()
+	creators := intake.NewCreatorRegistry()
+	require.NoError(t, creators.Register(intake.NewServiceRequestItemCreator()))
+	return intake.NewService(
+		client,
+		intake.NewResolver(workflow, intake.PermissionCheckFunc(func(*ent.Client, intake.Identity, string, string) bool { return true })),
+		creators,
+		intake.NewWorkItemCreator(intake.WorkItemNumberFunc(func(context.Context, int) (string, error) {
+			return fmt.Sprintf("TKT-INTAKE-E2E-%d", atomic.AddInt64(&intakeFixtureCounter, 1)), nil
+		})),
+	)
+}
 
 func testDSN() string {
 	return fmt.Sprintf("file:sslvpn_e2e_%d_%d?mode=memory&cache=shared&_fk=1&_busy_timeout=5000", time.Now().UnixNano(), atomic.AddInt64(&dbCounter, 1))
@@ -134,7 +150,7 @@ func setupSSLVPNTestHarness(t *testing.T) *sslvpnTestHarness {
 
 	srRepo := service_request.NewEntRepository(client)
 	srService := service_request.NewService(srRepo, client, logger)
-	srHandler := service_request.NewHandler(srService)
+	srHandler := service_request.NewHandler(srService, newServiceRequestIntake(t, client, service.NewProcessBindingService(client)))
 
 	// Generate JWT tokens for test roles
 	userToken, err := middleware.GenerateAccessToken(fixResult.Users.EndUser.ID, fixResult.Users.EndUser.Username, fixResult.Users.EndUser.Role, tenant.ID, testJWTSecret, 24*time.Hour)
@@ -192,6 +208,9 @@ func doRequest(t *testing.T, r http.Handler, token, method, path string, body in
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
+	if method == http.MethodPost && path == "/api/v1/service-requests" {
+		req.Header.Set("Idempotency-Key", "sslvpn-scenario-service-request")
+	}
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -247,7 +266,7 @@ func TestSSLVPNScenarioE2E(t *testing.T) {
 		Where(ticket.IDEQ(ticketID), ticket.TenantIDEQ(h.tenant.ID)).
 		Only(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, string(repoTicket.StatusNew), dbTicket.Status, "ticket initial status in ITSM core is 'new'")
+	assert.Equal(t, "open", dbTicket.Status, "Unified Intake creates an open WorkItem")
 	assert.Equal(t, h.tenant.ID, dbTicket.TenantID, "tenant ID must match")
 	assert.NotNil(t, dbTicket.SLAResponseDeadline, "SLA response deadline should be populated")
 	assert.NotNil(t, dbTicket.SLAResolutionDeadline, "SLA resolution deadline should be populated")
@@ -256,8 +275,8 @@ func TestSSLVPNScenarioE2E(t *testing.T) {
 	dbFieldValues, err := h.client.FieldValue.Query().
 		Where(
 			fieldvalue.TenantIDEQ(h.tenant.ID),
-			fieldvalue.EntityTypeEQ("ticket"),
-			fieldvalue.EntityIDEQ(ticketID),
+			fieldvalue.EntityTypeEQ("service_request"),
+			fieldvalue.EntityIDEQ(srResp.ID),
 		).
 		Order(ent.Asc(fieldvalue.FieldSortOrder)).
 		All(ctx)
@@ -298,13 +317,24 @@ func TestSSLVPNScenarioE2E(t *testing.T) {
 		assert.Equal(t, expectedValues[k], val, "custom field %s value mismatch", k)
 	}
 
-	// 3. BPMN Process Instance (ACTIVE) - wait briefly for async trigger goroutine if needed
-	businessKey := fmt.Sprintf("ticket:%d", ticketID)
+	// 3. Dispatch the committed Outbox event, then load the structured WorkItem process.
+	_, err = h.client.OutboxEvent.Update().Where(
+		outboxevent.EventTypeEQ("workflow.start.requested"), outboxevent.StatusEQ("pending"),
+	).SetNextAttemptAt(time.Now().UTC().Add(-time.Second)).Save(ctx)
+	require.NoError(t, err)
+	customEngine, ok := h.engine.(*service.CustomProcessEngine)
+	require.True(t, ok)
+	dispatcher := service.NewWorkflowStartOutboxDispatcher(
+		service.NewOutboxEventRepository(h.client), customEngine,
+		service.WorkflowStartOutboxConfig{BatchSize: 10, PollInterval: time.Second, MaxAttempts: 3},
+	)
+	require.NoError(t, dispatcher.DispatchOnce(ctx))
 	var processInst *ent.ProcessInstance
 	require.Eventually(t, func() bool {
 		pi, qErr := h.client.ProcessInstance.Query().
 			Where(
-				processinstance.BusinessKeyEQ(businessKey),
+				processinstance.BusinessTypeEQ("work_item"),
+				processinstance.BusinessIDEQ(ticketID),
 				processinstance.TenantIDEQ(h.tenant.ID),
 			).
 			First(ctx)

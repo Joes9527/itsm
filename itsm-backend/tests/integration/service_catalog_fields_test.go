@@ -2,24 +2,51 @@ package integration
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"sync/atomic"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/handlers/intake"
 	"itsm-backend/handlers/service_catalog"
 	"itsm-backend/handlers/service_request"
+	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
+
+var serviceCatalogIntakeCounter atomic.Int64
+
+type noProcessIntakeWorkflow struct{}
+
+func (noProcessIntakeWorkflow) ResolveIntakeBinding(context.Context, *ent.Tx, int, string, string) (*service.IntakeProcessBinding, error) {
+	return &service.IntakeProcessBinding{NoProcess: true}, nil
+}
+
+func newServiceCatalogIntake(t testing.TB, client *ent.Client) *intake.Service {
+	t.Helper()
+	creators := intake.NewCreatorRegistry()
+	require.NoError(t, creators.Register(intake.NewServiceRequestItemCreator()))
+	return intake.NewService(
+		client,
+		intake.NewResolver(noProcessIntakeWorkflow{}, intake.PermissionCheckFunc(func(*ent.Client, intake.Identity, string, string) bool { return true })),
+		creators,
+		intake.NewWorkItemCreator(intake.WorkItemNumberFunc(func(context.Context, int) (string, error) {
+			return fmt.Sprintf("TKT-INTAKE-INTEGRATION-%d", serviceCatalogIntakeCounter.Add(1)), nil
+		})),
+	)
+}
 
 func setupServiceCatalogFieldsRouter(t *testing.T) (*gin.Engine, *ent.Tenant, *ent.User) {
 	t.Helper()
@@ -42,7 +69,7 @@ func setupServiceCatalogFieldsRouter(t *testing.T) (*gin.Engine, *ent.Tenant, *e
 
 	srRepo := service_request.NewEntRepository(client)
 	srService := service_request.NewService(srRepo, client, logger)
-	srHandler := service_request.NewHandler(srService)
+	srHandler := service_request.NewHandler(srService, newServiceCatalogIntake(t, client))
 
 	r := gin.New()
 	r.Use(gin.Recovery())
@@ -69,6 +96,9 @@ func doServiceCatalogFieldsRequest(t *testing.T, r http.Handler, method, path st
 	}
 	req := httptest.NewRequest(method, path, &buf)
 	req.Header.Set("Content-Type", "application/json")
+	if method == http.MethodPost && path == "/api/v1/service-requests" {
+		req.Header.Set("Idempotency-Key", "service-catalog-fields-request")
+	}
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	var env apiEnvelope
@@ -89,6 +119,7 @@ func TestServiceCatalogFields(t *testing.T) {
 
 	createCatalogReq := map[string]interface{}{
 		"name": "云主机申请", "category": "云服务", "description": "测试",
+		"targetClass": "service_request_item",
 		"fields": []map[string]interface{}{
 			{"name": "office_location", "label": "办公地点", "type": "text", "required": true},
 		},

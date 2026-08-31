@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"time"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/incident"
@@ -69,6 +70,7 @@ type Service struct {
 	snapshots   snapshotWriter
 	audits      auditWriter
 	outbox      outboxWriter
+	metrics     *Metrics
 }
 
 func NewService(client *ent.Client, resolver referenceResolver, registry *CreatorRegistry, workItems workItemWriter) *Service {
@@ -76,10 +78,22 @@ func NewService(client *ent.Client, resolver referenceResolver, registry *Creato
 		client: client, resolver: resolver, receipts: NewIdempotencyRepository(), registry: registry, workItems: workItems,
 		fieldValues: itsmservice.NewFieldValueService(client), snapshots: NewSnapshotRepository(),
 		audits: NewAuditRepository(), outbox: itsmservice.NewOutboxEventRepository(client),
+		metrics: defaultMetrics,
 	}
 }
 
-func (s *Service) Create(ctx context.Context, identity Identity, command CreateWorkItemCommand) (*CreateWorkItemResult, error) {
+func (s *Service) Create(ctx context.Context, identity Identity, command CreateWorkItemCommand) (result *CreateWorkItemResult, resultErr error) {
+	started := time.Now()
+	defer func() {
+		if s == nil || s.metrics == nil {
+			return
+		}
+		recordClass, outcome := createMetricResult(result, resultErr)
+		s.metrics.ObserveCreate(identity.Channel, recordClass, outcome, time.Since(started))
+		if resultErr == nil && result != nil && !result.Replayed && result.WorkflowStartStatus == "pending" {
+			s.metrics.ObserveWorkflowStart(identity.Channel, result.RecordClass, "pending")
+		}
+	}()
 	if s == nil || s.client == nil || s.resolver == nil || s.receipts == nil || s.registry == nil || s.workItems == nil || s.fieldValues == nil || s.snapshots == nil || s.audits == nil || s.outbox == nil {
 		return nil, NewInternalFailure("intake service is not fully configured", nil)
 	}

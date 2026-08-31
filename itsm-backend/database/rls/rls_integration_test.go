@@ -115,14 +115,21 @@ func countChangesAs(t *testing.T, db *sql.DB, ctx context.Context) int {
 func TestAcquireConn_TenantScopeIsolation(t *testing.T) {
 	db := openTestDB(t)
 	defer db.Close()
+	marker := fmt.Sprintf("rls-change-%d", time.Now().UnixNano())
+	if _, err := db.Exec(`
+		INSERT INTO changes (title, created_by, tenant_id, created_at, updated_at)
+		VALUES ($1, 1, 1, NOW(), NOW())`, marker); err != nil {
+		t.Fatalf("seed tenant-scoped change: %v", err)
+	}
+	defer func() { _, _ = db.Exec("DELETE FROM changes WHERE title = $1", marker) }()
 	teardown := setupPolicy(t, db)
 	defer teardown()
 
-	// tenant=1 must see > 0 rows (assumes dev DB has changes for tenant 1)
+	// tenant=1 sees the self-contained probe row seeded above.
 	ctx1 := WithTenant(context.Background(), 1)
 	n1 := countChangesAs(t, db, ctx1)
 	if n1 == 0 {
-		t.Fatalf("tenant 1 saw 0 rows; dev DB may be missing seed data")
+		t.Fatalf("tenant 1 saw 0 rows; RLS hid its own probe")
 	}
 
 	// tenant=999 must see 0 rows (unless someone seeded it, which is a bug)
@@ -218,18 +225,18 @@ func TestUnifiedIntakeTablesIsolateTenantRows(t *testing.T) {
 		rowID := baseID + int64(offset*10)
 		execIntakeProbeAsTenant(t, db, tenantID, `
 			INSERT INTO intake_requests
-				(id, tenant_id, actor_id, channel, operation, idempotency_key, request_digest, digest_version, status)
-			VALUES ($1, $2, 1, 'rls_test', 'create', $3, $4, 'v1', 'pending')`,
+				(id, tenant_id, actor_id, channel, operation, idempotency_key, request_digest, digest_version, status, created_at)
+			VALUES ($1, $2, 1, 'rls_test', 'create', $3, $4, 'v1', 'pending', NOW())`,
 			rowID, tenantID, fmt.Sprintf("%s-%d", marker, tenantID), marker)
 		execIntakeProbeAsTenant(t, db, tenantID, `
 			INSERT INTO intake_resolution_snapshots
-				(id, tenant_id, intake_request_id, work_item_id, channel, source_provider, record_class, ci_ids, no_process, resolver_version, request_digest)
-			VALUES ($1, $2, $3, $4, 'rls_test', 'integration', 'incident', '[]'::jsonb, true, 'v1', $5)`,
+				(id, tenant_id, intake_request_id, work_item_id, channel, source_provider, record_class, ci_ids, no_process, resolver_version, request_digest, created_at)
+			VALUES ($1, $2, $3, $4, 'rls_test', 'integration', 'incident', '[]'::jsonb, true, 'v1', $5, NOW())`,
 			rowID+1, tenantID, rowID, rowID, marker)
 		execIntakeProbeAsTenant(t, db, tenantID, `
 			INSERT INTO external_identities
-				(id, tenant_id, provider, workspace, subject, user_id, active)
-			VALUES ($1, $2, $3, 'rls-test', $4, 1, true)`,
+				(id, tenant_id, provider, workspace, subject, user_id, active, created_at, updated_at)
+			VALUES ($1, $2, $3, 'rls-test', $4, 1, true, NOW(), NOW())`,
 			rowID+2, tenantID, marker, fmt.Sprintf("subject-%d", tenantID))
 	}
 

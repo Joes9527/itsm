@@ -118,3 +118,54 @@ docker exec <container> wget -qO- http://localhost:8090/api/v1/health
    代码交付、单测/集成测通过，都不能替代一次端到端的真实操作验证；至少要用真实 HTTP 客户端路径走一遍主链路。
 7. **复用旧代码时，要重新审视它当初依赖的假设是否还成立。**
    当一个此前半成品的功能第一次被真正打通、有真实数据流过时，依赖它的旧代码需要重新审视，不能假设其历史设计假设仍然合理。
+
+---
+
+## 4. Unified Intake 运维
+
+Unified Intake 是 Service Request 与 Incident 的唯一新建边界。普通 ITSM Access JWT 和 KAF 交换得到的五分钟 Intake JWT 都只调用 `POST /api/v1/intake/work-items`；调用方不能提交租户、请求人或操作者字段。
+
+### 配置与密钥边界
+
+- ITSM：设置 `KAF_INTAKE_EXCHANGE_ENABLED=true` 与独立的 `KAF_INTAKE_EXCHANGE_SECRET`。Redis 必须可用，否则 assertion nonce 无法防重放，交换接口会闭锁返回 503。
+- KAF：设置 `ITSM_KAF_URL` 与 `ITSM_KAF_INTAKE_EXCHANGE_SECRET`，后者必须和 ITSM 的 exchange secret 一致。
+- Exchange secret 不得复用 `JWT_SECRET`、`KAF_WEBHOOK_SECRET` 或 `ITSM_KAF_AUTOMATION_TOKEN`。Intake 创建路径也不得读取 automation token。
+- `WORKFLOW_OUTBOX_BATCH_SIZE`、`WORKFLOW_OUTBOX_POLL_INTERVAL`、`WORKFLOW_OUTBOX_MAX_ATTEMPTS` 分别控制批量、轮询间隔和进入人工干预前的最大次数。
+
+### 迁移顺序与 RLS 预检
+
+先由一次性 bootstrap/migration 进程运行迁移，常驻 Web 进程保持 `ITSM_AUTO_MIGRATE=false`。相关迁移顺序不可跳跃：`019_kaf_execution_integrity_rls` → `020_unified_intake_rls` → `021_work_item_authority` → `022_external_identity_version`。`021` 会在旧 Incident/Service Request 没有权威 WorkItem 时主动失败，必须先按迁移工具修复数据，禁止临时绕过约束。
+
+启用发布前，使用管理员连接确认三个表已启用且强制 RLS：
+
+```sql
+SELECT tablename, rowsecurity, forcerowsecurity
+FROM pg_tables
+WHERE schemaname = 'public'
+  AND tablename IN ('intake_requests', 'intake_resolution_snapshots', 'external_identities');
+```
+
+然后用一次性测试库执行零跳过验证：
+
+```bash
+RLS_TEST_DSN='<disposable PostgreSQL DSN>' \
+  go test -tags integration_rls -v ./database/rls/... -count=1
+```
+
+### Worker 健康、指标与人工重试
+
+`/metrics` 暴露以下低基数指标：
+
+- `itsm_intake_requests_total` 与 `itsm_intake_request_duration_seconds`：`created/replayed/conflict/error`；
+- `itsm_intake_workflow_start_total`：`pending/published/retry/dead`；
+- `itsm_intake_identity_exchange_total`：`issued/denied`。
+
+标签只包含收敛后的 channel、record class 和结果枚举。没有租户、用户、WorkItem、幂等键或原始错误标签。持续出现 `retry` 或任何 `dead` 表示工作流 worker/引擎需要处理；先检查后端进程和数据库连接，再查看已脱敏的 Outbox `last_error` 与审计记录。
+
+修复根因后，由具有 Intake 管理权限的操作者调用：
+
+```text
+POST /api/v1/intake/work-items/{workItemId}/workflow-start/retry
+```
+
+该接口只把当前租户的 `dead` 工作流启动事件恢复为 `pending` 并写审计；不得直接更新 Outbox 表。worker 会使用快照中冻结的流程定义和稳定 dedupe key 继续投递。

@@ -573,7 +573,7 @@ func (s *TicketWorkflowService) ApproveTicket(ctx context.Context, req *dto.Appr
 func (s *TicketWorkflowService) GetApprovalDecisions(ctx context.Context, ticketID, tenantID int) ([]*ent.ProcessApprovalDecision, error) {
 	return s.client.ProcessApprovalDecision.Query().
 		Where(
-			processapprovaldecision.BusinessType("ticket"),
+			processapprovaldecision.BusinessTypeIn("ticket", "work_item"),
 			processapprovaldecision.BusinessID(strconv.Itoa(ticketID)),
 			processapprovaldecision.TenantID(tenantID),
 		).

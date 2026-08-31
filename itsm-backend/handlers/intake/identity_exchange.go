@@ -71,12 +71,13 @@ type IdentityExchangeHandler struct {
 	assertionMaxAge time.Duration
 	tokenTTL        time.Duration
 	now             func() time.Time
+	metrics         *Metrics
 }
 
 func NewIdentityExchangeHandler(client *ent.Client, nonces NonceStore, exchangeSecret, jwtSecret string, assertionMaxAge, tokenTTL time.Duration) *IdentityExchangeHandler {
 	return &IdentityExchangeHandler{
 		client: client, nonces: nonces, exchangeSecret: exchangeSecret, jwtSecret: jwtSecret,
-		assertionMaxAge: assertionMaxAge, tokenTTL: tokenTTL, now: time.Now,
+		assertionMaxAge: assertionMaxAge, tokenTTL: tokenTTL, now: time.Now, metrics: defaultMetrics,
 	}
 }
 
@@ -143,6 +144,7 @@ func exchangeFailure(c *gin.Context, status int, code, message string, retryable
 
 func (h *IdentityExchangeHandler) deny(c *gin.Context, tenantID, userID, status int, code, message string, retryable bool) {
 	if h != nil {
+		h.metrics.ObserveIdentityDenial(c.GetString("intake_metric_channel"), code)
 		_ = h.audit(c.Request.Context(), tenantID, userID, status, "intake.identity_exchange.denied", code, "", c.GetString("request_id"), c.ClientIP())
 	}
 	exchangeFailure(c, status, code, message, retryable)
@@ -150,6 +152,9 @@ func (h *IdentityExchangeHandler) deny(c *gin.Context, tenantID, userID, status 
 
 func (h *IdentityExchangeHandler) Exchange(c *gin.Context) {
 	if h == nil || h.client == nil || strings.TrimSpace(h.exchangeSecret) == "" || strings.TrimSpace(h.jwtSecret) == "" {
+		if h != nil {
+			h.metrics.ObserveIdentityDenial("", "IDENTITY_EXCHANGE_UNAVAILABLE")
+		}
 		exchangeFailure(c, http.StatusServiceUnavailable, "IDENTITY_EXCHANGE_UNAVAILABLE", "identity exchange is unavailable", true)
 		return
 	}
@@ -161,6 +166,7 @@ func (h *IdentityExchangeHandler) Exchange(c *gin.Context) {
 		h.deny(c, 0, 0, http.StatusBadRequest, "INVALID_ASSERTION", "connector assertion is invalid", false)
 		return
 	}
+	c.Set("intake_metric_channel", strings.TrimSpace(assertion.Channel))
 	var extra any
 	if err := decoder.Decode(&extra); err != io.EOF {
 		h.deny(c, 0, 0, http.StatusBadRequest, "INVALID_ASSERTION", "connector assertion is invalid", false)
@@ -235,4 +241,5 @@ func (h *IdentityExchangeHandler) Exchange(c *gin.Context) {
 	common.Success(c, IdentityExchangeResponse{
 		Token: token, TokenType: middleware.IntakeTokenType, ExpiresIn: int64(h.tokenTTL.Seconds()), Scope: []string{middleware.IntakeCreateScope},
 	})
+	h.metrics.ObserveIdentitySuccess(assertion.Channel)
 }

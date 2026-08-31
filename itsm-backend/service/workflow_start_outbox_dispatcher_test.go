@@ -28,6 +28,14 @@ type failPublishOnceWorkflowRepository struct {
 	fail bool
 }
 
+type recordingWorkflowStartObserver struct {
+	results []string
+}
+
+func (o *recordingWorkflowStartObserver) ObserveWorkflowStart(_, _, result string) {
+	o.results = append(o.results, result)
+}
+
 func (r *failPublishOnceWorkflowRepository) MarkPublished(ctx context.Context, eventID int, claimToken string, publishedAt time.Time) error {
 	if r.fail {
 		r.fail = false
@@ -55,6 +63,8 @@ func TestWorkflowStartOutboxDispatcherUsesFrozenDefinitionAndPublishes(t *testin
 	seedWorkflowStartEvent(t, repo, payload, now.Add(-time.Second))
 	engine := &stubFrozenDefinitionEngine{}
 	dispatcher := NewWorkflowStartOutboxDispatcher(repo, engine, WorkflowStartOutboxConfig{BatchSize: 10, PollInterval: time.Second, MaxAttempts: 3})
+	observer := &recordingWorkflowStartObserver{}
+	dispatcher.SetObserver(observer)
 	dispatcher.now = func() time.Time { return now }
 
 	require.NoError(t, dispatcher.DispatchOnce(context.Background()))
@@ -65,6 +75,7 @@ func TestWorkflowStartOutboxDispatcherUsesFrozenDefinitionAndPublishes(t *testin
 	event, err := client.OutboxEvent.Query().Where(outboxevent.EventIDEQ(payload.DedupeKey)).Only(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, outboxEventStatusPublished, event.Status)
+	require.Equal(t, []string{"published"}, observer.results)
 }
 
 func TestWorkflowStartOutboxDispatcherRetriesThenMarksDeadWithSafeAudit(t *testing.T) {
@@ -76,6 +87,8 @@ func TestWorkflowStartOutboxDispatcherRetriesThenMarksDeadWithSafeAudit(t *testi
 		seedWorkflowStartEvent(t, repo, payload, now.Add(-time.Second))
 		engine := &stubFrozenDefinitionEngine{err: errors.New("database password=workflow-secret")}
 		dispatcher := NewWorkflowStartOutboxDispatcher(repo, engine, WorkflowStartOutboxConfig{BatchSize: 1, PollInterval: time.Second, MaxAttempts: 2})
+		observer := &recordingWorkflowStartObserver{}
+		dispatcher.SetObserver(observer)
 		dispatcher.now = func() time.Time { return now }
 
 		require.NoError(t, dispatcher.DispatchOnce(context.Background()))
@@ -84,6 +97,7 @@ func TestWorkflowStartOutboxDispatcherRetriesThenMarksDeadWithSafeAudit(t *testi
 		require.Equal(t, outboxEventStatusPending, event.Status)
 		require.Equal(t, 1, event.AttemptCount)
 		require.NotContains(t, event.LastError, "workflow-secret")
+		require.Equal(t, []string{"retry"}, observer.results)
 	})
 
 	t.Run("invalid payload dead letters", func(t *testing.T) {
@@ -97,6 +111,8 @@ func TestWorkflowStartOutboxDispatcherRetriesThenMarksDeadWithSafeAudit(t *testi
 		})
 		require.NoError(t, err)
 		dispatcher := NewWorkflowStartOutboxDispatcher(repo, &stubFrozenDefinitionEngine{}, WorkflowStartOutboxConfig{BatchSize: 1, PollInterval: time.Second, MaxAttempts: 1})
+		observer := &recordingWorkflowStartObserver{}
+		dispatcher.SetObserver(observer)
 		dispatcher.now = func() time.Time { return now }
 
 		require.NoError(t, dispatcher.DispatchOnce(context.Background()))
@@ -106,6 +122,7 @@ func TestWorkflowStartOutboxDispatcherRetriesThenMarksDeadWithSafeAudit(t *testi
 		auditCount, err := client.AuditLog.Query().Where(auditlog.ActionEQ("intake.workflow_start.manual_intervention_required")).Count(context.Background())
 		require.NoError(t, err)
 		require.Equal(t, 1, auditCount)
+		require.Equal(t, []string{"dead"}, observer.results)
 	})
 }
 

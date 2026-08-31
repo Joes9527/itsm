@@ -45,11 +45,22 @@ type workflowStartRepository interface {
 	MarkPublished(context.Context, int, string, time.Time) error
 }
 
+type WorkflowStartObserver interface {
+	ObserveWorkflowStart(channel, recordClass, result string)
+}
+
 type WorkflowStartOutboxDispatcher struct {
 	repository workflowStartRepository
 	engine     frozenDefinitionProcessEngine
 	config     WorkflowStartOutboxConfig
 	now        func() time.Time
+	observer   WorkflowStartObserver
+}
+
+func (d *WorkflowStartOutboxDispatcher) SetObserver(observer WorkflowStartObserver) {
+	if d != nil {
+		d.observer = observer
+	}
 }
 
 func NewWorkflowStartOutboxDispatcher(repository workflowStartRepository, engine frozenDefinitionProcessEngine, config WorkflowStartOutboxConfig) *WorkflowStartOutboxDispatcher {
@@ -98,6 +109,7 @@ func (d *WorkflowStartOutboxDispatcher) Run(ctx context.Context) {
 func (d *WorkflowStartOutboxDispatcher) dispatchEvent(ctx context.Context, event *ent.OutboxEvent) error {
 	eventContext := tenantctx.WithTenantID(ctx, event.TenantID)
 	payload, err := decodeWorkflowStartRequested(event)
+	channel, recordClass := payload.Channel, payload.RecordClass
 	if err == nil {
 		tenantContext := tenantctx.WithTenantID(eventContext, payload.TenantID)
 		tenantContext = context.WithValue(tenantContext, bpmn.BPMNTenantIDContextKey, payload.TenantID)
@@ -110,11 +122,12 @@ func (d *WorkflowStartOutboxDispatcher) dispatchEvent(ctx context.Context, event
 		)
 	}
 	if err != nil {
-		return d.recordFailure(eventContext, event, err)
+		return d.recordFailure(eventContext, event, channel, recordClass, err)
 	}
 	if err := d.repository.MarkPublished(eventContext, event.ID, event.ClaimToken, d.now().UTC()); err != nil {
 		return fmt.Errorf("mark workflow start published: %w", err)
 	}
+	d.observe(channel, recordClass, "published")
 	return nil
 }
 
@@ -151,7 +164,7 @@ func decodeWorkflowStartRequested(event *ent.OutboxEvent) (WorkflowStartRequeste
 	return payload, nil
 }
 
-func (d *WorkflowStartOutboxDispatcher) recordFailure(ctx context.Context, event *ent.OutboxEvent, deliveryErr error) error {
+func (d *WorkflowStartOutboxDispatcher) recordFailure(ctx context.Context, event *ent.OutboxEvent, channel, recordClass string, deliveryErr error) error {
 	attempt := event.AttemptCount + 1
 	if attempt >= d.config.MaxAttempts {
 		err := d.repository.MarkDead(ctx, event.ID, event.ClaimToken, deliveryErr.Error(), OutboxRetryAudit{
@@ -162,13 +175,21 @@ func (d *WorkflowStartOutboxDispatcher) recordFailure(ctx context.Context, event
 		if err != nil {
 			return fmt.Errorf("mark workflow start dead: %w", err)
 		}
+		d.observe(channel, recordClass, "dead")
 		return nil
 	}
 	nextAttemptAt := d.now().UTC().Add(workflowStartRetryDelay(attempt))
 	if err := d.repository.MarkRetry(ctx, event.ID, event.ClaimToken, deliveryErr.Error(), nextAttemptAt); err != nil {
 		return fmt.Errorf("schedule workflow start retry: %w", err)
 	}
+	d.observe(channel, recordClass, "retry")
 	return nil
+}
+
+func (d *WorkflowStartOutboxDispatcher) observe(channel, recordClass, result string) {
+	if d != nil && d.observer != nil {
+		d.observer.ObserveWorkflowStart(channel, recordClass, result)
+	}
 }
 
 func workflowStartRetryDelay(attempt int) time.Duration {

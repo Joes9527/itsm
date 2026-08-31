@@ -954,14 +954,15 @@ func assertKafCompletionFence(ctx context.Context, client *ent.Client, fence kaf
 }
 
 // validateTicketRecordClassInput rejects caller-controlled class changes before
-// completion writes any task or process state. Non-ticket workflows retain
-// their established variable behavior.
+// completion writes any task or process state. "ticket" is the legacy process
+// business type; new Unified Intake processes use "work_item". Both identify
+// the authoritative tickets-table WorkItem and share the same protection.
 func (e *CustomProcessEngine) validateTicketRecordClassInput(ctx context.Context, instance *ent.ProcessInstance, variables map[string]interface{}) error {
 	return e.validateTicketRecordClassInputWithClient(ctx, e.client, instance, variables)
 }
 
 func (e *CustomProcessEngine) validateTicketRecordClassInputWithClient(ctx context.Context, client *ent.Client, instance *ent.ProcessInstance, variables map[string]interface{}) error {
-	if instance.BusinessType != "ticket" {
+	if instance.BusinessType != "ticket" && instance.BusinessType != "work_item" {
 		return nil
 	}
 	provided, present := variables["record_class"]

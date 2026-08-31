@@ -553,15 +553,18 @@ func dispatchSSLVPNWorkflowStart(t *testing.T, fx *sslvpnDelegationFixture) {
 func awaitSSLVPNInstance(t *testing.T, fx *sslvpnDelegationFixture, businessType string, workItemID int) *ent.ProcessInstance {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
-	businessKey := businessType + ":" + strconv.Itoa(workItemID)
 	for time.Now().Before(deadline) {
-		instance, err := fx.client.ProcessInstance.Query().Where(processinstance.BusinessKeyEQ(businessKey), processinstance.TenantIDEQ(fx.tenant.ID)).Only(fx.ctx)
+		instance, err := fx.client.ProcessInstance.Query().Where(
+			processinstance.BusinessTypeEQ(businessType),
+			processinstance.BusinessIDEQ(workItemID),
+			processinstance.TenantIDEQ(fx.tenant.ID),
+		).Only(fx.ctx)
 		if err == nil {
 			return instance
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	require.Failf(t, "workflow instance was not created", "business key %q", businessKey)
+	require.Failf(t, "workflow instance was not created", "business type %q and WorkItem %d", businessType, workItemID)
 	return nil
 }
 
