@@ -97,6 +97,8 @@ func createBridgeProcessFixture(t *testing.T, client *ent.Client, tenantID int, 
 		SetBusinessType(bizType).
 		SetBusinessID(bizIDInt).
 		SetStatus("running").
+		SetCurrentActivityID("Approval_1").
+		SetCurrentActivityName("审批").
 		SetVariables(map[string]interface{}{
 			"business_type": bizType,
 			"business_id":   bizID,

@@ -614,7 +614,7 @@ func (s *KafDelegationService) ClaimKafAction(ctx context.Context, task *ent.Pro
 	var lastErr error
 	for attempt := 0; attempt < 3; attempt++ {
 		ledger, claimed, err := s.claimKafActionOnce(ctx, task, req)
-		if err == nil || !isTransientKafActionLedgerLock(err) {
+		if err == nil || !isRetryableDatabaseConflict(err) {
 			return ledger, claimed, err
 		}
 		lastErr = err
@@ -689,10 +689,6 @@ func (s *KafDelegationService) claimKafActionOnce(ctx context.Context, task *ent
 		return nil, false, fmt.Errorf("load claimed KAF action ledger: %w", err)
 	}
 	return ledger, true, nil
-}
-
-func isTransientKafActionLedgerLock(err error) bool {
-	return err != nil && (strings.Contains(err.Error(), "database is locked") || strings.Contains(err.Error(), "database table is locked"))
 }
 
 func waitForKafActionLedgerRetry(ctx context.Context, delay time.Duration) error {

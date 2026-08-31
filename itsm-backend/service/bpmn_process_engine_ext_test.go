@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
+	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,6 +18,9 @@ import (
 	"itsm-backend/ent/hook"
 	"itsm-backend/ent/kaftaskcompletionreceipt"
 	"itsm-backend/ent/outboxevent"
+	"itsm-backend/ent/processapprovaldecision"
+	"itsm-backend/ent/processauditlog"
+	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/service/bpmn"
 
@@ -772,6 +778,8 @@ func createProcessFixture(t *testing.T, engine *CustomProcessEngine, tenantID in
 		SetProcessDefinitionKey(def.Key).
 		SetProcessDefinitionID(def.ID).
 		SetStatus("running").
+		SetCurrentActivityID("node_" + keySuffix).
+		SetCurrentActivityName("Approval Task " + keySuffix).
 		SetBusinessType("change").
 		SetBusinessID(1).
 		SetTenantID(tenantID).
@@ -789,6 +797,346 @@ func createProcessFixture(t *testing.T, engine *CustomProcessEngine, tenantID in
 		Save(ctx)
 	require.NoError(t, err)
 	return instance.ID, task.ID
+}
+
+const atomicKafReviewBPMN = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="https://itsm.example.test/bpmn">
+  <bpmn:process id="atomic_kaf_review" name="Atomic KAF review" isExecutable="true">
+    <bpmn:startEvent id="Start" />
+    <bpmn:userTask id="Approval" name="Approval" />
+    <bpmn:serviceTask id="Activity_KafDelegate" name="KAF delegation">
+      <bpmn:extensionElements>
+        <bpmn:metaData name="service_task_type">kaf_delegate</bpmn:metaData>
+        <bpmn:metaData name="allowed_actions">complete_bpmn_task</bpmn:metaData>
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="End" name="End" />
+    <bpmn:sequenceFlow id="Flow_Start_Approval" sourceRef="Start" targetRef="Approval" />
+    <bpmn:sequenceFlow id="Flow_Approval_Kaf" sourceRef="Approval" targetRef="Activity_KafDelegate">
+      <bpmn:conditionExpression><![CDATA[route_to_kaf == true]]></bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_Approval_End" sourceRef="Approval" targetRef="End">
+      <bpmn:conditionExpression><![CDATA[route_to_kaf == false]]></bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_Kaf_End" sourceRef="Activity_KafDelegate" targetRef="End" />
+  </bpmn:process>
+</bpmn:definitions>`
+
+const singleEvaluationReviewBPMN = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="https://itsm.example.test/bpmn">
+  <bpmn:process id="single_evaluation_review" name="Single evaluation review" isExecutable="true">
+    <bpmn:startEvent id="Start" />
+    <bpmn:userTask id="Approval" name="Approval" />
+    <bpmn:endEvent id="End" name="End" />
+    <bpmn:sequenceFlow id="Flow_Start_Approval" sourceRef="Start" targetRef="Approval" />
+    <bpmn:sequenceFlow id="Flow_Approval_End" sourceRef="Approval" targetRef="End">
+      <bpmn:conditionExpression><![CDATA[random(0, 1) > 0.5]]></bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+  </bpmn:process>
+</bpmn:definitions>`
+
+const singleEvaluationKafReviewBPMN = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="https://itsm.example.test/bpmn">
+  <bpmn:process id="single_evaluation_kaf_review" name="Single evaluation KAF review" isExecutable="true">
+    <bpmn:startEvent id="Start" />
+    <bpmn:userTask id="Approval" name="Approval" />
+    <bpmn:serviceTask id="Activity_KafDelegate" name="KAF delegation">
+      <bpmn:extensionElements>
+        <bpmn:metaData name="service_task_type">kaf_delegate</bpmn:metaData>
+        <bpmn:metaData name="allowed_actions">complete_bpmn_task</bpmn:metaData>
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="End" name="End" />
+    <bpmn:sequenceFlow id="Flow_Start_Approval" sourceRef="Start" targetRef="Approval" />
+    <bpmn:sequenceFlow id="Flow_Approval_Kaf" sourceRef="Approval" targetRef="Activity_KafDelegate">
+      <bpmn:conditionExpression><![CDATA[random(0, 1) > 0.5]]></bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_Approval_End" sourceRef="Approval" targetRef="End" />
+    <bpmn:sequenceFlow id="Flow_Kaf_End" sourceRef="Activity_KafDelegate" targetRef="End" />
+  </bpmn:process>
+</bpmn:definitions>`
+
+func newAtomicKafReviewFixture(t *testing.T, suffix, bpmnXML string, variables map[string]interface{}) (*CustomProcessEngine, context.Context, *ent.ProcessInstance, *ent.ProcessTask) {
+	t.Helper()
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	return populateAtomicKafReviewFixture(t, engine, baseCtx, suffix, bpmnXML, variables)
+}
+
+func newWALAtomicKafReviewFixture(t *testing.T, suffix string, variables map[string]interface{}) (*CustomProcessEngine, context.Context, *ent.ProcessInstance, *ent.ProcessTask) {
+	t.Helper()
+	databasePath := filepath.Join(t.TempDir(), "atomic-kaf-review.db")
+	client := enttest.Open(t, "sqlite3", fmt.Sprintf("file:%s?_fk=1&_journal_mode=WAL&_busy_timeout=5000", databasePath))
+	t.Cleanup(func() { _ = client.Close() })
+	engineIface := NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar())
+	engine, ok := engineIface.(*CustomProcessEngine)
+	require.True(t, ok)
+	return populateAtomicKafReviewFixture(t, engine, context.Background(), suffix, atomicKafReviewBPMN, variables)
+}
+
+func populateAtomicKafReviewFixture(t *testing.T, engine *CustomProcessEngine, baseCtx context.Context, suffix, bpmnXML string, variables map[string]interface{}) (*CustomProcessEngine, context.Context, *ent.ProcessInstance, *ent.ProcessTask) {
+	t.Helper()
+	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
+	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, actorID)
+	instanceID, taskID := createProcessFixture(t, engine, tenantID, suffix)
+	instance, err := engine.client.ProcessInstance.UpdateOneID(instanceID).
+		SetBusinessType("incident").
+		SetBusinessID(42).
+		SetCurrentActivityID("Approval").
+		SetCurrentActivityName("Approval").
+		SetVariables(variables).
+		Save(ctx)
+	require.NoError(t, err)
+	require.NoError(t, engine.client.ProcessDefinition.UpdateOneID(instance.ProcessDefinitionID).
+		SetBpmnXML([]byte(bpmnXML)).
+		Exec(ctx))
+	task, err := engine.client.ProcessTask.UpdateOneID(taskID).
+		SetTaskDefinitionKey("Approval").
+		SetTaskName("Approval").
+		SetStatus(common.ProcessTaskStatusCreated).
+		SetAssignee(strconv.Itoa(actorID)).
+		Save(ctx)
+	require.NoError(t, err)
+	return engine, ctx, instance, task
+}
+
+func blockAtomicSourceCompletion(t *testing.T, engine *CustomProcessEngine) (<-chan struct{}, func()) {
+	t.Helper()
+	reached := make(chan struct{})
+	release := make(chan struct{})
+	var reachedOnce sync.Once
+	var releaseOnce sync.Once
+	engine.client.ProcessTask.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			if processTaskMutation, ok := mutation.(*ent.ProcessTaskMutation); ok {
+				if status, set := processTaskMutation.Status(); set && status == common.ProcessTaskStatusCompleted {
+					reachedOnce.Do(func() { close(reached) })
+					<-release
+				}
+			}
+			return next.Mutate(ctx, mutation)
+		})
+	})
+	t.Cleanup(func() { releaseOnce.Do(func() { close(release) }) })
+	return reached, func() { releaseOnce.Do(func() { close(release) }) }
+}
+
+func awaitAtomicSourceCompletion(t *testing.T, reached <-chan struct{}) {
+	t.Helper()
+	select {
+	case <-reached:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for the atomic handoff source-task update")
+	}
+}
+
+func assertNoAtomicKafHandoffArtifacts(t *testing.T, engine *CustomProcessEngine, ctx context.Context, instance *ent.ProcessInstance) {
+	t.Helper()
+	decisionCount, err := engine.client.ProcessApprovalDecision.Query().Where(processapprovaldecision.ProcessInstanceIDEQ(instance.ID)).Count(ctx)
+	require.NoError(t, err)
+	assert.Zero(t, decisionCount)
+	delegatedCount, err := engine.client.ProcessTask.Query().Where(processtask.ProcessInstanceIDEQ(instance.ID), processtask.TaskTypeEQ(bpmn.KafDelegateTaskType)).Count(ctx)
+	require.NoError(t, err)
+	assert.Zero(t, delegatedCount)
+	outboxCount, err := engine.client.OutboxEvent.Query().Where(outboxevent.TenantIDEQ(instance.TenantID)).Count(ctx)
+	require.NoError(t, err)
+	assert.Zero(t, outboxCount)
+	delegationAuditCount, err := engine.client.AuditLog.Query().Where(auditlog.TenantIDEQ(instance.TenantID), auditlog.ActionEQ("kaf_delegate.created")).Count(ctx)
+	require.NoError(t, err)
+	assert.Zero(t, delegationAuditCount)
+	sourceAuditCount, err := engine.client.ProcessAuditLog.Query().Where(processauditlog.ProcessInstanceIDEQ(instance.ID), processauditlog.ActivityIDEQ("Approval"), processauditlog.ActionEQ(AuditActionTaskCompleted)).Count(ctx)
+	require.NoError(t, err)
+	assert.Zero(t, sourceAuditCount)
+}
+
+func TestCompleteTask_KafSuccessorWithoutRegisteredHandlerFailsClosedBeforeWrites(t *testing.T) {
+	engine, ctx, instance, task := newAtomicKafReviewFixture(t, "kaf-missing-handler", atomicKafReviewBPMN, map[string]interface{}{"route_to_kaf": true})
+	engine.callbackRegistry.UnregisterHandler("kaf_delegate_handler")
+
+	err := engine.CompleteTask(ctx, task.TaskID, map[string]interface{}{"approvalAction": "approve", "approvalResult": "approved"})
+	require.ErrorContains(t, err, "handler is not registered")
+
+	persistedTask, err := engine.client.ProcessTask.Get(ctx, task.ID)
+	require.NoError(t, err)
+	assert.Equal(t, common.ProcessTaskStatusCreated, persistedTask.Status)
+	assert.True(t, persistedTask.CompletedTime.IsZero())
+	assert.Equal(t, task.TaskVariables, persistedTask.TaskVariables)
+	persistedInstance, err := engine.client.ProcessInstance.Get(ctx, instance.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "running", persistedInstance.Status)
+	assert.Equal(t, "Approval", persistedInstance.CurrentActivityID)
+	assert.Equal(t, instance.Version, persistedInstance.Version)
+	decisionCount, err := engine.client.ProcessApprovalDecision.Query().Where(processapprovaldecision.ProcessInstanceIDEQ(instance.ID)).Count(ctx)
+	require.NoError(t, err)
+	assert.Zero(t, decisionCount)
+	delegatedCount, err := engine.client.ProcessTask.Query().Where(processtask.ProcessInstanceIDEQ(instance.ID), processtask.TaskTypeEQ(bpmn.KafDelegateTaskType)).Count(ctx)
+	require.NoError(t, err)
+	assert.Zero(t, delegatedCount)
+	outboxCount, err := engine.client.OutboxEvent.Query().Where(outboxevent.TenantIDEQ(instance.TenantID)).Count(ctx)
+	require.NoError(t, err)
+	assert.Zero(t, outboxCount)
+	delegationAuditCount, err := engine.client.AuditLog.Query().Where(auditlog.TenantIDEQ(instance.TenantID), auditlog.ActionEQ("kaf_delegate.created")).Count(ctx)
+	require.NoError(t, err)
+	assert.Zero(t, delegationAuditCount)
+	sourceAuditCount, err := engine.client.ProcessAuditLog.Query().Where(processauditlog.ProcessInstanceIDEQ(instance.ID), processauditlog.ActivityIDEQ("Approval"), processauditlog.ActionEQ(AuditActionTaskCompleted)).Count(ctx)
+	require.NoError(t, err)
+	assert.Zero(t, sourceAuditCount)
+}
+
+func TestCompleteTask_ResolvesNonKafConditionExactlyOnce(t *testing.T) {
+	engine, ctx, instance, task := newAtomicKafReviewFixture(t, "single-route-evaluation", singleEvaluationReviewBPMN, nil)
+	callCount := 0
+	engine.exprEngine.RegisterFunction("random", func(min, max float64) float64 {
+		callCount++
+		if callCount == 1 {
+			return 0.75
+		}
+		return 0.25
+	})
+
+	require.NoError(t, engine.CompleteTask(ctx, task.TaskID, nil))
+	assert.Equal(t, 1, callCount)
+	persistedInstance, err := engine.client.ProcessInstance.Get(ctx, instance.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "completed", persistedInstance.Status)
+}
+
+func TestCompleteTask_RouteResolutionErrorLeavesSourceTaskActionable(t *testing.T) {
+	engine, ctx, instance, task := newAtomicKafReviewFixture(t, "route-resolution-error", atomicKafReviewBPMN, nil)
+
+	err := engine.CompleteTask(ctx, task.TaskID, map[string]interface{}{"approvalAction": "approve", "approvalResult": "approved"})
+	require.ErrorContains(t, err, "没有符合条件的路径")
+	persistedTask, loadErr := engine.client.ProcessTask.Get(ctx, task.ID)
+	require.NoError(t, loadErr)
+	assert.Equal(t, common.ProcessTaskStatusCreated, persistedTask.Status)
+	assert.True(t, persistedTask.CompletedTime.IsZero())
+	persistedInstance, loadErr := engine.client.ProcessInstance.Get(ctx, instance.ID)
+	require.NoError(t, loadErr)
+	assert.Equal(t, "running", persistedInstance.Status)
+	assert.Equal(t, "Approval", persistedInstance.CurrentActivityID)
+	assert.Equal(t, instance.Version, persistedInstance.Version)
+	assertNoAtomicKafHandoffArtifacts(t, engine, ctx, instance)
+}
+
+func TestCompleteTask_KafHandoffRetryReusesSingleRouteResolution(t *testing.T) {
+	engine, ctx, instance, task := newAtomicKafReviewFixture(t, "kaf-retry-single-route", singleEvaluationKafReviewBPMN, nil)
+	engine.callbackRegistry.RegisterHandler(&fakeAsyncServiceTaskHandler{taskType: bpmn.KafDelegateTaskType, handlerID: "kaf_delegate_handler"})
+	conditionCalls := 0
+	engine.exprEngine.RegisterFunction("random", func(min, max float64) float64 {
+		conditionCalls++
+		if conditionCalls == 1 {
+			return 0.75
+		}
+		return 0.25
+	})
+	sourceUpdateAttempts := 0
+	engine.client.ProcessTask.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			if processTaskMutation, ok := mutation.(*ent.ProcessTaskMutation); ok {
+				if status, set := processTaskMutation.Status(); set && status == common.ProcessTaskStatusCompleted {
+					sourceUpdateAttempts++
+					if sourceUpdateAttempts == 1 {
+						return nil, errors.New("database table is locked: injected handoff retry")
+					}
+				}
+			}
+			return next.Mutate(ctx, mutation)
+		})
+	})
+
+	require.NoError(t, engine.CompleteTask(ctx, task.TaskID, map[string]interface{}{"approvalAction": "approve", "approvalResult": "approved"}))
+	assert.Equal(t, 2, sourceUpdateAttempts)
+	assert.Equal(t, 1, conditionCalls, "retry must reuse the route resolved from an identical authoritative snapshot")
+	persistedInstance, err := engine.client.ProcessInstance.Get(ctx, instance.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "Activity_KafDelegate", persistedInstance.CurrentActivityID)
+	delegatedCount, err := engine.client.ProcessTask.Query().Where(processtask.ProcessInstanceIDEQ(instance.ID), processtask.TaskTypeEQ(bpmn.KafDelegateTaskType)).Count(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, delegatedCount)
+	outboxCount, err := engine.client.OutboxEvent.Query().Where(outboxevent.TenantIDEQ(instance.TenantID)).Count(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, outboxCount)
+}
+
+func TestCompleteTask_ConcurrentVariableRerouteRejectsStaleKafHandoff(t *testing.T) {
+	engine, ctx, instance, task := newWALAtomicKafReviewFixture(t, "concurrent-reroute", map[string]interface{}{"route_to_kaf": true})
+	engine.callbackRegistry.RegisterHandler(&fakeAsyncServiceTaskHandler{taskType: bpmn.KafDelegateTaskType, handlerID: "kaf_delegate_handler"})
+	reached, release := blockAtomicSourceCompletion(t, engine)
+	result := make(chan error, 1)
+	go func() {
+		result <- engine.CompleteTask(ctx, task.TaskID, map[string]interface{}{"approvalAction": "approve", "approvalResult": "approved"})
+	}()
+	awaitAtomicSourceCompletion(t, reached)
+
+	updated, err := engine.client.ProcessInstance.Update().Where(processinstance.IDEQ(instance.ID), processinstance.VersionEQ(instance.Version)).
+		SetVariables(map[string]interface{}{"route_to_kaf": false}).
+		SetVersion(instance.Version + 1).
+		Save(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, updated)
+	release()
+	require.Error(t, <-result)
+
+	persistedInstance, err := engine.client.ProcessInstance.Get(ctx, instance.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "running", persistedInstance.Status)
+	assert.Equal(t, "Approval", persistedInstance.CurrentActivityID)
+	assert.Equal(t, instance.Version+1, persistedInstance.Version)
+	assert.Equal(t, false, persistedInstance.Variables["route_to_kaf"])
+	persistedTask, err := engine.client.ProcessTask.Get(ctx, task.ID)
+	require.NoError(t, err)
+	assert.Equal(t, common.ProcessTaskStatusCreated, persistedTask.Status)
+	assertNoAtomicKafHandoffArtifacts(t, engine, ctx, instance)
+}
+
+func TestCompleteTask_ConcurrentSuspendOrTerminateRejectsKafHandoff(t *testing.T) {
+	tests := []struct {
+		name           string
+		mutate         func(*CustomProcessEngine, context.Context, *ent.ProcessInstance) error
+		wantStatus     string
+		wantTaskStatus string
+	}{
+		{
+			name: "suspend",
+			mutate: func(engine *CustomProcessEngine, ctx context.Context, instance *ent.ProcessInstance) error {
+				return engine.SuspendProcess(ctx, instance.ProcessInstanceID, "concurrent release hold")
+			},
+			wantStatus:     "suspended",
+			wantTaskStatus: common.ProcessTaskStatusCreated,
+		},
+		{
+			name: "terminate",
+			mutate: func(engine *CustomProcessEngine, ctx context.Context, instance *ent.ProcessInstance) error {
+				return engine.TerminateProcess(ctx, instance.ProcessInstanceID, "concurrent cancellation")
+			},
+			wantStatus:     "terminated",
+			wantTaskStatus: common.ProcessTaskStatusCancelled,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			engine, ctx, instance, task := newWALAtomicKafReviewFixture(t, "concurrent-"+tt.name, map[string]interface{}{"route_to_kaf": true})
+			engine.callbackRegistry.RegisterHandler(&fakeAsyncServiceTaskHandler{taskType: bpmn.KafDelegateTaskType, handlerID: "kaf_delegate_handler"})
+			reached, release := blockAtomicSourceCompletion(t, engine)
+			result := make(chan error, 1)
+			go func() {
+				result <- engine.CompleteTask(ctx, task.TaskID, map[string]interface{}{"approvalAction": "approve", "approvalResult": "approved"})
+			}()
+			awaitAtomicSourceCompletion(t, reached)
+			require.NoError(t, tt.mutate(engine, ctx, instance))
+			release()
+			require.Error(t, <-result)
+
+			persistedInstance, err := engine.client.ProcessInstance.Get(ctx, instance.ID)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantStatus, persistedInstance.Status)
+			assert.Equal(t, "Approval", persistedInstance.CurrentActivityID)
+			persistedTask, err := engine.client.ProcessTask.Get(ctx, task.ID)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantTaskStatus, persistedTask.Status)
+			assertNoAtomicKafHandoffArtifacts(t, engine, ctx, instance)
+		})
+	}
 }
 
 func TestRecordApprovalDecision_PersistsApproveReject(t *testing.T) {

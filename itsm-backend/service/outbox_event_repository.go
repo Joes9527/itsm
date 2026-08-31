@@ -115,7 +115,7 @@ func (r *OutboxEventRepository) ClaimDue(ctx context.Context, now time.Time, lim
 func (r *OutboxEventRepository) ClaimDueByEventType(ctx context.Context, now time.Time, limit int, eventType string) ([]*ent.OutboxEvent, error) {
 	for attempt := 0; attempt < outboxEventClaimRetryAttempts; attempt++ {
 		claimed, err := r.claimDue(ctx, now, limit, eventType)
-		if err == nil || !isRetryableOutboxClaimError(err) || attempt == outboxEventClaimRetryAttempts-1 {
+		if err == nil || !isRetryableDatabaseConflict(err) || attempt == outboxEventClaimRetryAttempts-1 {
 			return claimed, err
 		}
 
@@ -332,12 +332,4 @@ func summarizeOutboxError(lastError string) string {
 		return summary
 	}
 	return summary[:outboxEventLastErrorMaxLength]
-}
-
-func isRetryableOutboxClaimError(err error) bool {
-	message := strings.ToLower(err.Error())
-	return strings.Contains(message, "database is locked") ||
-		strings.Contains(message, "database table is locked") ||
-		strings.Contains(message, "could not serialize access") ||
-		strings.Contains(message, "deadlock detected")
 }

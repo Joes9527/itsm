@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"itsm-backend/common"
@@ -463,18 +465,12 @@ func (e *CustomProcessEngine) completeTask(ctx context.Context, taskID string, v
 	if task.Status == "completed" || task.Status == "cancelled" {
 		return fmt.Errorf("任务已结束，不能重复完成")
 	}
-	if err := e.validateTicketRecordClassInput(ctx, instance, variables); err != nil {
+	resolved, instance, kafCommitted, err := e.resolveCompletionAndMaybeEnterKafWaitState(ctx, task, instance, process, variables)
+	if err != nil {
 		return err
 	}
-	mergedVariables := mergeProcessVariables(instance.Variables, variables)
-	if targetRef, resolveErr := e.resolveNextElement(instance, process, task.TaskDefinitionKey, mergedVariables); resolveErr == nil {
-		if serviceTask := e.findServiceTask(process, targetRef); serviceTask != nil && e.isKafDelegationServiceTask(serviceTask) {
-			instance, err = e.completeTaskIntoKafWaitState(ctx, task, instance, serviceTask, variables)
-			if err != nil {
-				return err
-			}
-			return callback(ctx, task, instance.Variables)
-		}
+	if kafCommitted {
+		return callback(ctx, task, instance.Variables)
 	}
 
 	updated := 0
@@ -507,7 +503,7 @@ func (e *CustomProcessEngine) completeTask(ctx context.Context, taskID string, v
 	}
 
 	// 6. 执行流程推进（从当前UserTask继续）
-	if err := e.executeStep(ctx, instance, process, task.TaskDefinitionKey, instance.Variables); err != nil {
+	if err := e.handleResolvedElement(ctx, instance, process, resolved); err != nil {
 		return err
 	}
 	if err := e.recordApprovalDecision(ctx, instance, task, variables); err != nil {
@@ -560,43 +556,6 @@ func mergeProcessVariables(current, incoming map[string]interface{}) map[string]
 	return merged
 }
 
-// completeTaskIntoKafWaitState owns the single persistent transaction for a
-// user-task transition into the registered KAF asynchronous wait state.
-func (e *CustomProcessEngine) completeTaskIntoKafWaitState(ctx context.Context, task *ent.ProcessTask, instance *ent.ProcessInstance, serviceTask *BPMNServiceTask, variables map[string]interface{}) (*ent.ProcessInstance, error) {
-	const maxAttempts = 5
-	var lastErr error
-	for attempt := 0; attempt < maxAttempts; attempt++ {
-		updated, err := e.completeTaskIntoKafWaitStateOnce(ctx, task, instance, serviceTask, variables)
-		if err == nil || !isRetryableBPMNHandoffConflict(err) {
-			return updated, err
-		}
-		lastErr = err
-		if err := waitForBPMNHandoffRetry(ctx, time.Duration(attempt+1)*5*time.Millisecond); err != nil {
-			return nil, err
-		}
-	}
-	completed, err := e.client.ProcessTask.Query().Where(
-		processtask.IDEQ(task.ID),
-		processtask.TenantIDEQ(instance.TenantID),
-		processtask.StatusEQ(common.ProcessTaskStatusCompleted),
-	).Exist(ctx)
-	if err == nil && completed {
-		return nil, fmt.Errorf("任务已被处理，请刷新后重试")
-	}
-	return nil, lastErr
-}
-
-func isRetryableBPMNHandoffConflict(err error) bool {
-	if err == nil {
-		return false
-	}
-	message := strings.ToLower(err.Error())
-	return strings.Contains(message, "database is locked") ||
-		strings.Contains(message, "database table is locked") ||
-		strings.Contains(message, "could not serialize access") ||
-		strings.Contains(message, "deadlock detected")
-}
-
 func waitForBPMNHandoffRetry(ctx context.Context, delay time.Duration) error {
 	timer := time.NewTimer(delay)
 	defer timer.Stop()
@@ -608,12 +567,118 @@ func waitForBPMNHandoffRetry(ctx context.Context, delay time.Duration) error {
 	}
 }
 
-func (e *CustomProcessEngine) completeTaskIntoKafWaitStateOnce(ctx context.Context, task *ent.ProcessTask, instance *ent.ProcessInstance, serviceTask *BPMNServiceTask, variables map[string]interface{}) (*ent.ProcessInstance, error) {
+// resolveCompletionAndMaybeEnterKafWaitState resolves the completion route
+// exactly once from an authoritative process-instance snapshot. KAF wait-state
+// persistence remains in this same transaction; non-KAF callers consume the
+// returned resolved element through the established completion path.
+func (e *CustomProcessEngine) resolveCompletionAndMaybeEnterKafWaitState(ctx context.Context, task *ent.ProcessTask, instance *ent.ProcessInstance, process *BPMNProcess, variables map[string]interface{}) (*resolvedProcessElement, *ent.ProcessInstance, bool, error) {
+	const maxAttempts = 8
+	retryLane := bpmnHandoffRetryLane.Add(1)
+	var snapshot *kafHandoffRouteSnapshot
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		resolved, current, committed, nextSnapshot, err := e.resolveCompletionAndMaybeEnterKafWaitStateOnce(ctx, task, instance, process, variables, snapshot)
+		if err == nil {
+			return resolved, current, committed, nil
+		}
+		if nextSnapshot != nil {
+			snapshot = nextSnapshot
+		}
+		if snapshot == nil || !isRetryableDatabaseConflict(err) {
+			return nil, nil, false, err
+		}
+		if attempt == maxAttempts-1 {
+			return nil, nil, false, e.normalizeKafHandoffConflict(ctx, task, instance, err)
+		}
+		delay := time.Duration(attempt+1)*5*time.Millisecond + time.Duration(retryLane%8)*time.Millisecond
+		if err := waitForBPMNHandoffRetry(ctx, delay); err != nil {
+			return nil, nil, false, err
+		}
+	}
+	return nil, nil, false, fmt.Errorf("KAF 交接重试次数已耗尽")
+}
+
+// bpmnHandoffRetryLane prevents same-task SQLite contenders used by local and
+// deterministic tests from retrying in lockstep. PostgreSQL correctness still
+// comes from SQLSTATE classification plus the authoritative snapshot guards.
+var bpmnHandoffRetryLane atomic.Uint64
+
+type kafHandoffRouteSnapshot struct {
+	status            string
+	currentActivityID string
+	version           int
+	variables         map[string]interface{}
+	resolved          *resolvedProcessElement
+}
+
+func (s *kafHandoffRouteSnapshot) matches(instance *ent.ProcessInstance) bool {
+	return s != nil && instance != nil &&
+		instance.Status == s.status &&
+		instance.CurrentActivityID == s.currentActivityID &&
+		instance.Version == s.version &&
+		reflect.DeepEqual(mergeProcessVariables(instance.Variables, nil), s.variables)
+}
+
+func (e *CustomProcessEngine) resolveCompletionAndMaybeEnterKafWaitStateOnce(ctx context.Context, task *ent.ProcessTask, instance *ent.ProcessInstance, process *BPMNProcess, variables map[string]interface{}, snapshot *kafHandoffRouteSnapshot) (*resolvedProcessElement, *ent.ProcessInstance, bool, *kafHandoffRouteSnapshot, error) {
 	tx, err := e.client.Tx(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("开启 KAF 交接事务失败: %w", err)
+		return nil, nil, false, snapshot, fmt.Errorf("开启任务路由事务失败: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+
+	currentTask, err := tx.ProcessTask.Query().Where(
+		processtask.IDEQ(task.ID),
+		processtask.TenantIDEQ(instance.TenantID),
+	).Only(ctx)
+	if err != nil {
+		return nil, nil, false, snapshot, fmt.Errorf("查询任务路由源任务失败: %w", err)
+	}
+	if currentTask.Status == common.ProcessTaskStatusCompleted || currentTask.Status == common.ProcessTaskStatusCancelled {
+		return nil, nil, false, snapshot, fmt.Errorf("任务已被处理，请刷新后重试")
+	}
+	current, err := tx.ProcessInstance.Query().Where(
+		processinstance.IDEQ(instance.ID),
+		processinstance.TenantIDEQ(instance.TenantID),
+	).Only(ctx)
+	if err != nil {
+		return nil, nil, false, snapshot, fmt.Errorf("查询任务路由流程实例失败: %w", err)
+	}
+	if current.Status != "running" {
+		return nil, nil, false, snapshot, fmt.Errorf("流程实例不是运行状态，不能完成任务")
+	}
+	if current.CurrentActivityID != task.TaskDefinitionKey {
+		return nil, nil, false, snapshot, fmt.Errorf("流程实例当前活动已变化，请刷新后重试")
+	}
+	if err := e.validateTicketRecordClassInputWithClient(ctx, tx.Client(), current, variables); err != nil {
+		return nil, nil, false, snapshot, err
+	}
+	merged := mergeProcessVariables(current.Variables, variables)
+	var resolved *resolvedProcessElement
+	if snapshot == nil {
+		resolved, err = e.resolveNextProcessElement(current, process, task.TaskDefinitionKey, merged)
+		if err != nil {
+			return nil, nil, false, nil, err
+		}
+	} else {
+		if !snapshot.matches(current) {
+			return nil, nil, false, snapshot, fmt.Errorf("KAF 交接流程实例已被并发更新，请刷新后重试")
+		}
+		resolved = snapshot.resolved
+	}
+	if resolved == nil || !resolved.isKafAsyncWaitState() {
+		return resolved, current, false, nil, nil
+	}
+	if e.kafDelegationService == nil {
+		return nil, nil, false, nil, fmt.Errorf("KAF delegation service is not configured")
+	}
+	if snapshot == nil {
+		snapshot = &kafHandoffRouteSnapshot{
+			status:            current.Status,
+			currentActivityID: current.CurrentActivityID,
+			version:           current.Version,
+			variables:         mergeProcessVariables(current.Variables, nil),
+			resolved:          resolved,
+		}
+	}
 
 	completedAt := time.Now()
 	updated, err := tx.ProcessTask.Update().Where(
@@ -627,46 +692,40 @@ func (e *CustomProcessEngine) completeTaskIntoKafWaitStateOnce(ctx context.Conte
 		SetTaskVariables(variables).
 		Save(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("更新 KAF 交接源任务失败: %w", err)
+		return nil, nil, false, snapshot, fmt.Errorf("更新 KAF 交接源任务失败: %w", err)
 	}
 	if updated != 1 {
-		return nil, fmt.Errorf("任务已被处理，请刷新后重试")
+		return nil, nil, false, snapshot, fmt.Errorf("任务已被处理，请刷新后重试")
 	}
 
-	current, err := tx.ProcessInstance.Query().Where(
-		processinstance.IDEQ(instance.ID),
-		processinstance.TenantIDEQ(instance.TenantID),
-	).Only(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("查询 KAF 交接流程实例失败: %w", err)
-	}
-	merged := mergeProcessVariables(current.Variables, variables)
 	updated, err = tx.ProcessInstance.Update().Where(
 		processinstance.IDEQ(current.ID),
 		processinstance.TenantIDEQ(current.TenantID),
+		processinstance.StatusEQ("running"),
+		processinstance.CurrentActivityIDEQ(task.TaskDefinitionKey),
 		processinstance.VersionEQ(current.Version),
 	).
 		SetVariables(merged).
 		SetVersion(current.Version + 1).
-		SetCurrentActivityID(serviceTask.ID).
-		SetCurrentActivityName(serviceTask.ID).
+		SetCurrentActivityID(resolved.serviceTask.ID).
+		SetCurrentActivityName(resolved.serviceTask.ID).
 		Save(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("更新 KAF 交接流程实例失败: %w", err)
+		return nil, nil, false, snapshot, fmt.Errorf("更新 KAF 交接流程实例失败: %w", err)
 	}
 	if updated != 1 {
-		return nil, fmt.Errorf("KAF 交接流程实例已被并发更新，请刷新后重试")
+		return nil, nil, false, snapshot, fmt.Errorf("KAF 交接流程实例已被并发更新，请刷新后重试")
 	}
 	current.Variables = merged
 	current.Version++
-	current.CurrentActivityID = serviceTask.ID
-	current.CurrentActivityName = serviceTask.ID
+	current.CurrentActivityID = resolved.serviceTask.ID
+	current.CurrentActivityName = resolved.serviceTask.ID
 
 	if err := e.recordApprovalDecisionWithClient(ctx, tx.Client(), current, task, variables); err != nil {
-		return nil, err
+		return nil, nil, false, snapshot, err
 	}
-	if _, err := e.kafDelegationService.createDelegatedTaskInTx(ctx, tx, current, serviceTask); err != nil {
-		return nil, fmt.Errorf("创建 KAF 委派任务失败: %w", err)
+	if _, err := e.kafDelegationService.createDelegatedTaskInTx(ctx, tx, current, resolved.serviceTask); err != nil {
+		return nil, nil, false, snapshot, fmt.Errorf("创建 KAF 委派任务失败: %w", err)
 	}
 
 	userID := 0
@@ -676,14 +735,46 @@ func (e *CustomProcessEngine) completeTaskIntoKafWaitStateOnce(ctx context.Conte
 		userName = actor.Name
 	}
 	transactionalAudit := NewBPMNAuditService(tx.Client(), e.logger)
-	if err := transactionalAudit.RecordTaskCompleted(ctx, task, userID, userName, task.TaskVariables, variables); err != nil {
-		return nil, fmt.Errorf("记录 KAF 交接源任务审计失败: %w", err)
+	if err := transactionalAudit.RecordTaskCompleted(ctx, currentTask, userID, userName, currentTask.TaskVariables, variables); err != nil {
+		return nil, nil, false, snapshot, fmt.Errorf("记录 KAF 交接源任务审计失败: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("提交 KAF 交接事务失败: %w", err)
+		return nil, nil, false, nil, e.normalizeKafHandoffConflict(ctx, task, instance, fmt.Errorf("提交 KAF 交接事务失败: %w", err))
 	}
-	return current, nil
+	return resolved, current, true, nil, nil
+}
+
+func (e *CustomProcessEngine) normalizeKafHandoffConflict(ctx context.Context, task *ent.ProcessTask, instance *ent.ProcessInstance, conflict error) error {
+	if !isRetryableDatabaseConflict(conflict) {
+		return conflict
+	}
+	for attempt := 0; attempt < 5; attempt++ {
+		completed, err := e.client.ProcessTask.Query().Where(
+			processtask.IDEQ(task.ID),
+			processtask.TenantIDEQ(instance.TenantID),
+			processtask.StatusEQ(common.ProcessTaskStatusCompleted),
+		).Exist(ctx)
+		if err == nil {
+			if completed {
+				return fmt.Errorf("任务已被处理，请刷新后重试")
+			}
+			if attempt == 4 {
+				return fmt.Errorf("KAF 交接发生数据库并发冲突，请重试: %w", conflict)
+			}
+			if err := waitForBPMNHandoffRetry(ctx, time.Duration(attempt+1)*5*time.Millisecond); err != nil {
+				return err
+			}
+			continue
+		}
+		if !isRetryableDatabaseConflict(err) {
+			return fmt.Errorf("检查 KAF 交接并发结果失败: %w", err)
+		}
+		if err := waitForBPMNHandoffRetry(ctx, time.Duration(attempt+1)*5*time.Millisecond); err != nil {
+			return err
+		}
+	}
+	return fmt.Errorf("KAF 交接发生数据库并发冲突，请重试: %w", conflict)
 }
 
 func (e *CustomProcessEngine) ensureKafCompletionReceipt(ctx context.Context, ledgerID, tenantID int, taskID string) (*ent.KafTaskCompletionReceipt, error) {
@@ -812,6 +903,10 @@ func assertKafCompletionFence(ctx context.Context, client *ent.Client, fence kaf
 // completion writes any task or process state. Non-ticket workflows retain
 // their established variable behavior.
 func (e *CustomProcessEngine) validateTicketRecordClassInput(ctx context.Context, instance *ent.ProcessInstance, variables map[string]interface{}) error {
+	return e.validateTicketRecordClassInputWithClient(ctx, e.client, instance, variables)
+}
+
+func (e *CustomProcessEngine) validateTicketRecordClassInputWithClient(ctx context.Context, client *ent.Client, instance *ent.ProcessInstance, variables map[string]interface{}) error {
 	if instance.BusinessType != "ticket" {
 		return nil
 	}
@@ -822,7 +917,7 @@ func (e *CustomProcessEngine) validateTicketRecordClassInput(ctx context.Context
 	if instance.BusinessID <= 0 {
 		return fmt.Errorf("ticket process instance %d has no work item ID", instance.ID)
 	}
-	workItem, err := e.client.Ticket.Query().
+	workItem, err := client.Ticket.Query().
 		Where(ticket.IDEQ(instance.BusinessID), ticket.TenantIDEQ(instance.TenantID), ticket.DeletedAtIsNil()).
 		Only(ctx)
 	if err != nil {
@@ -1072,19 +1167,98 @@ func (e *CustomProcessEngine) mergeVariablesWithOptimisticLock(ctx context.Conte
 	return nil, fmt.Errorf("变量更新冲突，已重试%d次", maxRetries)
 }
 
-// executeStep 执行流程步骤
+type resolvedProcessElement struct {
+	elementID          string
+	serviceTask        *BPMNServiceTask
+	serviceTaskType    string
+	serviceTaskHandler bpmn.ServiceTaskHandlerInterface
+}
+
+func (r *resolvedProcessElement) isKafAsyncWaitState() bool {
+	return r != nil && r.serviceTask != nil &&
+		r.serviceTaskType == bpmn.KafDelegateTaskType &&
+		isAsyncHandler(r.serviceTaskHandler)
+}
+
+// executeStep resolves one outgoing route exactly once and executes that same
+// resolved target. This matters for non-deterministic conditions such as
+// random/currentTime and keeps dispatch validation aligned with execution.
 func (e *CustomProcessEngine) executeStep(ctx context.Context, instance *ent.ProcessInstance, process *BPMNProcess, currentElementID string, variables map[string]interface{}) error {
-	targetRef, err := e.resolveNextElement(instance, process, currentElementID, variables)
+	resolved, err := e.resolveNextProcessElement(instance, process, currentElementID, variables)
 	if err != nil {
 		return err
 	}
-	if targetRef == "" {
+	if resolved == nil {
 		if e.isEndEvent(process, currentElementID) {
 			return e.completeProcess(ctx, instance)
 		}
 		return nil
 	}
-	return e.handleElement(ctx, instance, process, targetRef)
+	return e.handleResolvedElement(ctx, instance, process, resolved)
+}
+
+func (e *CustomProcessEngine) resolveNextProcessElement(instance *ent.ProcessInstance, process *BPMNProcess, currentElementID string, variables map[string]interface{}) (*resolvedProcessElement, error) {
+	targetRef, err := e.resolveNextElement(instance, process, currentElementID, variables)
+	if err != nil {
+		return nil, err
+	}
+	if targetRef == "" {
+		return nil, nil
+	}
+	return e.resolveProcessElement(process, targetRef)
+}
+
+func (e *CustomProcessEngine) resolveProcessElement(process *BPMNProcess, elementID string) (*resolvedProcessElement, error) {
+	resolved := &resolvedProcessElement{elementID: elementID}
+	serviceTask := e.findServiceTask(process, elementID)
+	if serviceTask == nil {
+		return resolved, nil
+	}
+	taskType, handler, err := e.resolveServiceTaskDispatch(serviceTask)
+	if err != nil {
+		return nil, err
+	}
+	resolved.serviceTask = serviceTask
+	resolved.serviceTaskType = taskType
+	resolved.serviceTaskHandler = handler
+	return resolved, nil
+}
+
+func (e *CustomProcessEngine) resolveServiceTaskDispatch(serviceTask *BPMNServiceTask) (string, bpmn.ServiceTaskHandlerInterface, error) {
+	if serviceTask == nil {
+		return "", nil, fmt.Errorf("service task is nil")
+	}
+	if taskType := serviceTask.ServiceTaskType(); taskType != "" {
+		handler := e.findHandlerByTaskType(taskType)
+		if handler == nil {
+			return "", nil, fmt.Errorf("ServiceTask %s handler is not registered for service_task_type %s", serviceTask.ID, taskType)
+		}
+		return taskType, handler, nil
+	}
+
+	serviceRef := serviceTask.ID
+	if serviceTask.Name != "" {
+		serviceRef = serviceTask.Name
+	}
+	if serviceTask.Implementation != "" {
+		serviceRef = serviceTask.Implementation
+	} else if serviceTask.Class != "" {
+		serviceRef = serviceTask.Class
+	} else if serviceTask.DelegateExpression != "" {
+		serviceRef = serviceTask.DelegateExpression
+	} else if serviceTask.OperationRef != "" {
+		serviceRef = serviceTask.OperationRef
+	}
+
+	if handler := e.findHandlerByTaskType(serviceRef); handler != nil {
+		return serviceRef, handler, nil
+	}
+	if taskType := serviceTask.GetType(); taskType != "" && taskType != serviceRef {
+		if handler := e.findHandlerByTaskType(taskType); handler != nil {
+			return taskType, handler, nil
+		}
+	}
+	return "", nil, fmt.Errorf("ServiceTask %s handler is not registered for dispatch reference %s", serviceTask.ID, serviceRef)
 }
 
 func (e *CustomProcessEngine) resolveNextElement(instance *ent.ProcessInstance, process *BPMNProcess, currentElementID string, variables map[string]interface{}) (string, error) {
@@ -1125,8 +1299,20 @@ func (e *CustomProcessEngine) resolveNextElement(instance *ent.ProcessInstance, 
 }
 
 func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.ProcessInstance, process *BPMNProcess, elementID string) error {
-	if serviceTask := e.findServiceTask(process, elementID); serviceTask != nil && e.isKafDelegationServiceTask(serviceTask) {
-		return e.createDelegatedTask(ctx, instance, serviceTask, bpmn.KafDelegateTaskType)
+	resolved, err := e.resolveProcessElement(process, elementID)
+	if err != nil {
+		return err
+	}
+	return e.handleResolvedElement(ctx, instance, process, resolved)
+}
+
+func (e *CustomProcessEngine) handleResolvedElement(ctx context.Context, instance *ent.ProcessInstance, process *BPMNProcess, resolved *resolvedProcessElement) error {
+	if resolved == nil {
+		return nil
+	}
+	elementID := resolved.elementID
+	if resolved.isKafAsyncWaitState() {
+		return e.createDelegatedTask(ctx, instance, resolved.serviceTask, resolved.serviceTaskType)
 	}
 
 	// Find the element name for logging
@@ -1158,88 +1344,22 @@ func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.P
 		return e.completeProcess(ctx, instance)
 	} else if gateway := e.findExclusiveGateway(process, elementID); gateway != nil {
 		return e.executeStep(ctx, instance, process, elementID, instance.Variables)
-	} else if serviceTask := e.findServiceTask(process, elementID); serviceTask != nil {
-		// 优先按 metaData 里的 service_task_type/action 分发——跟 UserTask 走
-		// dispatchUserTaskCallback 时用的是同一套 findHandlerByTaskType 查找口径，
-		// 保证"模板声明了 service_task_type 就一定能找到对应 handler"这条规则
-		// 在 UserTask 和 ServiceTask 两种节点类型上表现一致。
-		if serviceTaskType := serviceTask.ServiceTaskType(); serviceTaskType != "" {
-			if handler := e.findHandlerByTaskType(serviceTaskType); handler != nil {
-				if isAsyncHandler(handler) {
-					return e.createDelegatedTask(ctx, instance, serviceTask, serviceTaskType)
-				}
-				callbackVars := mergeServiceTaskVariables(instance.Variables, serviceTask)
-				if action := serviceTask.ServiceTaskAction(); action != "" {
-					callbackVars[bpmnMetaDataAction] = action
-				}
-				e.logger.Infow("执行 ServiceTask 回调（metaData 分发）", "serviceTaskType", serviceTaskType, "elementID", elementID)
-				if _, err := handler.Execute(ctx, nil, callbackVars); err != nil {
-					return fmt.Errorf("ServiceTask %s 执行失败: %w", elementID, err)
-				}
-				return e.executeStep(ctx, instance, process, elementID, instance.Variables)
-			}
-			// 声明了类型但没有注册对应 handler（比如未来新增了类型但忘了注册）：
-			// 按既有约定视为 NoOp，只告警不阻断流程，跟 dispatchUserTaskCallback
-			// 遇到同样情况时的处理方式保持一致。
-			e.logger.Warnw("ServiceTask 声明的 service_task_type 没有注册处理器，跳过执行", "elementID", elementID, "serviceTaskType", serviceTaskType)
-			return e.executeStep(ctx, instance, process, elementID, instance.Variables)
+	} else if serviceTask := resolved.serviceTask; serviceTask != nil {
+		if isAsyncHandler(resolved.serviceTaskHandler) {
+			return e.createDelegatedTask(ctx, instance, serviceTask, resolved.serviceTaskType)
 		}
-
-		// 没有声明 metaData 时，保留原有按 implementation/class/expression/operationRef
-		// 属性猜 handler ID 的兜底逻辑——这是历史行为，目前没有任何内置模板会走到这里
-		// （全部改成了 metaData 声明），但不删除它，避免破坏可能存在的自定义模板。
-		serviceRef := serviceTask.ID
-		if serviceTask.Name != "" {
-			serviceRef = serviceTask.Name
+		callbackVars := mergeServiceTaskVariables(instance.Variables, serviceTask)
+		if action := serviceTask.ServiceTaskAction(); action != "" {
+			callbackVars[bpmnMetaDataAction] = action
 		}
-		if serviceTask.Implementation != "" {
-			serviceRef = serviceTask.Implementation
-		} else if serviceTask.Class != "" {
-			serviceRef = serviceTask.Class
-		} else if serviceTask.DelegateExpression != "" {
-			serviceRef = serviceTask.DelegateExpression
-		} else if serviceTask.OperationRef != "" {
-			serviceRef = serviceTask.OperationRef
-		}
-
-		if e.callbackRegistry != nil {
-			// resolvedTaskType 记录到底是 serviceRef 还是 GetType() 兜底值命中的 handler——
-			// 如果这个节点解析出的 handler 是异步的，createDelegatedTask 需要把这个值原样
-			// 写进 ProcessTask.TaskType/TaskVariables["service_task_type"]，这样后续
-			// authorizeTaskActor（完成鉴权）和 dispatchUserTaskCallback（完成回调）用
-			// findHandlerByTaskType 重新查找时，能查到同一个 handler——三处必须用同一套
-			// 查找口径，否则会出现 Important #2 那种鉴权跟暂停判断各自为政的分裂。
-			resolvedTaskType := serviceRef
-			handler := e.callbackRegistry.GetHandler(resolvedTaskType)
-			if handler == nil {
-				resolvedTaskType = serviceTask.GetType()
-				handler = e.callbackRegistry.GetHandler(resolvedTaskType)
-			}
-			if handler != nil {
-				if isAsyncHandler(handler) {
-					return e.createDelegatedTask(ctx, instance, serviceTask, resolvedTaskType)
-				}
-				e.logger.Infow("执行 ServiceTask 回调", "serviceRef", serviceRef, "elementID", elementID)
-				taskVariables := mergeServiceTaskVariables(instance.Variables, serviceTask)
-				if _, err := handler.Execute(ctx, nil, taskVariables); err != nil {
-					return fmt.Errorf("ServiceTask %s 执行失败: %w", serviceRef, err)
-				}
-			} else {
-				e.logger.Warnw("未注册的 ServiceTask，跳过执行", "serviceRef", serviceRef, "elementID", elementID)
-			}
+		e.logger.Infow("执行 ServiceTask 回调", "serviceTaskType", resolved.serviceTaskType, "elementID", elementID)
+		if _, err := resolved.serviceTaskHandler.Execute(ctx, nil, callbackVars); err != nil {
+			return fmt.Errorf("ServiceTask %s 执行失败: %w", elementID, err)
 		}
 		return e.executeStep(ctx, instance, process, elementID, instance.Variables)
 	}
 
 	return e.executeStep(ctx, instance, process, elementID, instance.Variables)
-}
-
-func (e *CustomProcessEngine) isKafDelegationServiceTask(serviceTask *BPMNServiceTask) bool {
-	if serviceTask == nil || serviceTask.ServiceTaskType() != bpmn.KafDelegateTaskType {
-		return false
-	}
-	handler := e.findHandlerByTaskType(bpmn.KafDelegateTaskType)
-	return handler != nil && isAsyncHandler(handler)
 }
 
 func mergeServiceTaskVariables(instanceVariables map[string]interface{}, task *BPMNServiceTask) map[string]interface{} {
