@@ -120,6 +120,13 @@ type CustomProcessEngine struct {
 	kafDelegationService *KafDelegationService
 }
 
+type kafCompletionFenceContextKey struct{}
+
+type kafCompletionFence struct {
+	ledgerID   int
+	leaseOwner string
+}
+
 // NewCustomProcessEngine 创建自定义流程引擎实例
 func NewCustomProcessEngine(client *ent.Client, logger *zap.SugaredLogger) ProcessEngine {
 	engine := &CustomProcessEngine{
@@ -350,6 +357,9 @@ func (e *CustomProcessEngine) CompleteKafDelegatedTask(ctx context.Context, ledg
 		ledger.Action, ledger.IdempotencyKey, ledger.CorrelationID,
 		ledger.ProcedureRef, ledger.ProcedureVersion,
 	))
+	ctx = context.WithValue(ctx, kafCompletionFenceContextKey{}, kafCompletionFence{
+		ledgerID: ledger.ID, leaseOwner: leaseOwner,
+	})
 	receipt, err := e.ensureKafCompletionReceipt(ctx, ledgerID, ledger.TenantID, taskID)
 	if err != nil {
 		return err
@@ -457,17 +467,22 @@ func (e *CustomProcessEngine) completeTask(ctx context.Context, taskID string, v
 		return err
 	}
 
-	updated, err := e.client.ProcessTask.Update().
-		Where(
-			processtask.ID(task.ID),
-			processtask.TenantID(instance.TenantID),
-			processtask.StatusNEQ("completed"),
-			processtask.StatusNEQ("cancelled"),
-		).
-		SetStatus("completed").
-		SetCompletedTime(time.Now()).
-		SetTaskVariables(variables).
-		Save(ctx)
+	updated := 0
+	err = e.runKafFencedWrite(ctx, func(client *ent.Client) error {
+		var updateErr error
+		updated, updateErr = client.ProcessTask.Update().
+			Where(
+				processtask.ID(task.ID),
+				processtask.TenantID(instance.TenantID),
+				processtask.StatusNEQ("completed"),
+				processtask.StatusNEQ("cancelled"),
+			).
+			SetStatus("completed").
+			SetCompletedTime(time.Now()).
+			SetTaskVariables(variables).
+			Save(ctx)
+		return updateErr
+	})
 	if err != nil {
 		return fmt.Errorf("更新任务状态失败: %w", err)
 	}
@@ -537,9 +552,13 @@ func (e *CustomProcessEngine) ensureKafCompletionReceipt(ctx context.Context, le
 	if !ent.IsNotFound(err) {
 		return nil, fmt.Errorf("load KAF completion receipt: %w", err)
 	}
-	receipt, err = e.client.KafTaskCompletionReceipt.Create().
-		SetLedgerID(ledgerID).SetTenantID(tenantID).SetTaskID(taskID).
-		SetStatus("callback_pending").Save(ctx)
+	err = e.runKafFencedWrite(ctx, func(client *ent.Client) error {
+		var createErr error
+		receipt, createErr = client.KafTaskCompletionReceipt.Create().
+			SetLedgerID(ledgerID).SetTenantID(tenantID).SetTaskID(taskID).
+			SetStatus("callback_pending").Save(ctx)
+		return createErr
+	})
 	if err == nil {
 		return receipt, nil
 	}
@@ -601,6 +620,45 @@ func kafReceiptOwnedByExecutingLease(ledgerID int, leaseOwner string, now time.T
 		))
 		selector.Where(entsql.In(selector.C(kaftaskcompletionreceipt.FieldLedgerID), ownedLedger))
 	}
+}
+
+func (e *CustomProcessEngine) runKafFencedWrite(ctx context.Context, write func(*ent.Client) error) error {
+	fence, fenced := ctx.Value(kafCompletionFenceContextKey{}).(kafCompletionFence)
+	if !fenced {
+		return write(e.client)
+	}
+	tx, err := e.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("start KAF owner-fenced write: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := write(tx.Client()); err != nil {
+		return err
+	}
+	if err := assertKafCompletionFence(ctx, tx.Client(), fence); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit KAF owner-fenced write: %w", err)
+	}
+	return nil
+}
+
+func assertKafCompletionFence(ctx context.Context, client *ent.Client, fence kafCompletionFence) error {
+	now := time.Now()
+	updated, err := client.KafTaskActionLedger.Update().Where(
+		kaftaskactionledger.IDEQ(fence.ledgerID),
+		kaftaskactionledger.ResultStatusEQ("executing"),
+		kaftaskactionledger.LeaseOwnerEQ(fence.leaseOwner),
+		kaftaskactionledger.LeaseExpiresAtGT(now),
+	).SetUpdatedAt(now).Save(ctx)
+	if err != nil {
+		return fmt.Errorf("fence KAF completion write: %w", err)
+	}
+	if updated != 1 {
+		return fmt.Errorf("KAF completion lease owner is stale or expired")
+	}
+	return nil
 }
 
 // validateTicketRecordClassInput rejects caller-controlled class changes before
@@ -839,6 +897,12 @@ func (e *CustomProcessEngine) mergeVariablesWithOptimisticLock(ctx context.Conte
 		}
 
 		if count > 0 {
+			if fence, ok := ctx.Value(kafCompletionFenceContextKey{}).(kafCompletionFence); ok {
+				if err := assertKafCompletionFence(ctx, tx.Client(), fence); err != nil {
+					_ = tx.Rollback()
+					return nil, err
+				}
+			}
 			// 更新成功，提交事务
 			if err := tx.Commit(); err != nil {
 				return nil, fmt.Errorf("提交事务失败: %w", err)
@@ -911,10 +975,13 @@ func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.P
 		elementName = endEvent.Name
 	}
 
-	_, err := e.client.ProcessInstance.UpdateOne(instance).
-		SetCurrentActivityID(elementID).
-		SetCurrentActivityName(elementName).
-		Save(ctx)
+	err := e.runKafFencedWrite(ctx, func(client *ent.Client) error {
+		_, updateErr := client.ProcessInstance.UpdateOneID(instance.ID).
+			SetCurrentActivityID(elementID).
+			SetCurrentActivityName(elementName).
+			Save(ctx)
+		return updateErr
+	})
 	if err != nil {
 		return err
 	}
@@ -1241,22 +1308,27 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 			taskConfig[bpmnMetaDataAction] = action
 		}
 	}
-	createdTask, err := e.client.ProcessTask.Create().
-		SetTaskID(fmt.Sprintf("TASK-%s-%d", task.ID, time.Now().UnixNano())).
-		SetProcessInstanceID(instance.ID).
-		SetProcessDefinitionKey(instance.ProcessDefinitionKey).
-		SetTaskDefinitionKey(task.ID).
-		SetTaskName(task.Name).
-		SetTaskType("user_task").
-		SetStatus("created").
-		SetAssignee(assignee).
-		SetCandidateUsers(expandedCandidateUsers).
-		SetCandidateGroups(candidateGroupsToExpand).
-		SetFormKey(task.FormKey).
-		SetTaskVariables(taskConfig).
-		SetTenantID(instance.TenantID).
-		SetCreatedTime(time.Now()).
-		Save(ctx)
+	var createdTask *ent.ProcessTask
+	err := e.runKafFencedWrite(ctx, func(client *ent.Client) error {
+		var createErr error
+		createdTask, createErr = client.ProcessTask.Create().
+			SetTaskID(fmt.Sprintf("TASK-%s-%d", task.ID, time.Now().UnixNano())).
+			SetProcessInstanceID(instance.ID).
+			SetProcessDefinitionKey(instance.ProcessDefinitionKey).
+			SetTaskDefinitionKey(task.ID).
+			SetTaskName(task.Name).
+			SetTaskType("user_task").
+			SetStatus("created").
+			SetAssignee(assignee).
+			SetCandidateUsers(expandedCandidateUsers).
+			SetCandidateGroups(candidateGroupsToExpand).
+			SetFormKey(task.FormKey).
+			SetTaskVariables(taskConfig).
+			SetTenantID(instance.TenantID).
+			SetCreatedTime(time.Now()).
+			Save(ctx)
+		return createErr
+	})
 	if err != nil {
 		return fmt.Errorf("创建用户任务失败: %w", err)
 	}
@@ -1316,18 +1388,21 @@ func (e *CustomProcessEngine) createDelegatedTask(ctx context.Context, instance 
 		taskVariables[bpmnMetaDataAllowedActions] = allowedActions
 	}
 
-	_, err := e.client.ProcessTask.Create().
-		SetTaskID(fmt.Sprintf("TASK-%s-%d", serviceTask.ID, time.Now().UnixNano())).
-		SetProcessInstanceID(instance.ID).
-		SetProcessDefinitionKey(instance.ProcessDefinitionKey).
-		SetTaskDefinitionKey(serviceTask.ID).
-		SetTaskName(serviceTask.Name).
-		SetTaskType(taskType).
-		SetStatus(common.ProcessTaskStatusDelegated).
-		SetTaskVariables(taskVariables).
-		SetTenantID(instance.TenantID).
-		SetCreatedTime(time.Now()).
-		Save(ctx)
+	err := e.runKafFencedWrite(ctx, func(client *ent.Client) error {
+		_, createErr := client.ProcessTask.Create().
+			SetTaskID(fmt.Sprintf("TASK-%s-%d", serviceTask.ID, time.Now().UnixNano())).
+			SetProcessInstanceID(instance.ID).
+			SetProcessDefinitionKey(instance.ProcessDefinitionKey).
+			SetTaskDefinitionKey(serviceTask.ID).
+			SetTaskName(serviceTask.Name).
+			SetTaskType(taskType).
+			SetStatus(common.ProcessTaskStatusDelegated).
+			SetTaskVariables(taskVariables).
+			SetTenantID(instance.TenantID).
+			SetCreatedTime(time.Now()).
+			Save(ctx)
+		return createErr
+	})
 	if err != nil {
 		return fmt.Errorf("创建委派任务失败: %w", err)
 	}
@@ -1730,11 +1805,13 @@ func matchRuleConditions(conditions []map[string]interface{}, taskName string) b
 }
 
 func (e *CustomProcessEngine) completeProcess(ctx context.Context, instance *ent.ProcessInstance) error {
-	_, err := e.client.ProcessInstance.UpdateOne(instance).
-		SetStatus("completed").
-		SetEndTime(time.Now()).
-		Save(ctx)
-	return err
+	return e.runKafFencedWrite(ctx, func(client *ent.Client) error {
+		_, err := client.ProcessInstance.UpdateOneID(instance.ID).
+			SetStatus("completed").
+			SetEndTime(time.Now()).
+			Save(ctx)
+		return err
+	})
 }
 
 func (e *CustomProcessEngine) findOutgoingFlows(process *BPMNProcess, sourceRef string) []*BPMNSequenceFlow {

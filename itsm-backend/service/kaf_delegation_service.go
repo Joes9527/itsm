@@ -467,7 +467,7 @@ func (s *KafDelegationService) reconcileCompletedKafAction(ctx context.Context, 
 		return false, err
 	}
 	if !advanced {
-		return false, fmt.Errorf("reconcile KAF completed task: process instance did not advance past task scope")
+		return false, fmt.Errorf("reconcile KAF completed task: process has no durable successor or terminal process outcome")
 	}
 	receipt, err := s.client.KafTaskCompletionReceipt.Query().Where(
 		kaftaskcompletionreceipt.LedgerIDEQ(ledger.ID),
@@ -499,13 +499,16 @@ func (s *KafDelegationService) kafProcessAdvancedPastTask(ctx context.Context, t
 	if err != nil {
 		return false, fmt.Errorf("load KAF completion process instance: %w", err)
 	}
-	if instance.Status == "completed" || instance.CurrentActivityID != task.TaskDefinitionKey {
-		return true, nil
+	if instance.Status == "completed" {
+		return instance.CurrentActivityID != task.TaskDefinitionKey, nil
+	}
+	if instance.CurrentActivityID == "" || instance.CurrentActivityID == task.TaskDefinitionKey {
+		return false, nil
 	}
 	nextTaskExists, err := s.client.ProcessTask.Query().Where(
 		processtask.ProcessInstanceIDEQ(task.ProcessInstanceID),
 		processtask.TenantIDEQ(task.TenantID),
-		processtask.TaskDefinitionKeyEQ(task.TaskDefinitionKey),
+		processtask.TaskDefinitionKeyEQ(instance.CurrentActivityID),
 		processtask.IDNEQ(task.ID),
 		processtask.StatusNotIn(common.ProcessTaskStatusCompleted, common.ProcessTaskStatusCancelled),
 	).Exist(ctx)
@@ -958,6 +961,11 @@ func (s *KafDelegationService) CreateDelegatedTask(ctx context.Context, instance
 	}
 	if _, err := s.outbox.Enqueue(ctx, tx, event); err != nil {
 		return nil, fmt.Errorf("enqueue KAF delegation outbox event: %w", err)
+	}
+	if fence, ok := ctx.Value(kafCompletionFenceContextKey{}).(kafCompletionFence); ok {
+		if err := assertKafCompletionFence(ctx, tx.Client(), fence); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := tx.Commit(); err != nil {

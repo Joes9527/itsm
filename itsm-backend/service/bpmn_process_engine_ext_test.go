@@ -1234,6 +1234,190 @@ func TestCompleteKafDelegatedTask_RejectsStaleLedgerOwnerBeforeCallback(t *testi
 	assert.Zero(t, receiptCount)
 }
 
+const kafOwnerFenceSuccessorBPMN = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="https://itsm.example.test/bpmn">
+  <bpmn:process id="kaf_owner_fence" name="KAF owner fence" isExecutable="true">
+    <bpmn:startEvent id="Start" />
+    <bpmn:serviceTask id="Activity_KafDelegate" name="KAF delegated task" />
+    <bpmn:userTask id="Activity_Successor" name="Successor" />
+    <bpmn:endEvent id="End" name="End" />
+    <bpmn:sequenceFlow id="Flow_Start_Kaf" sourceRef="Start" targetRef="Activity_KafDelegate" />
+    <bpmn:sequenceFlow id="Flow_Kaf_Successor" sourceRef="Activity_KafDelegate" targetRef="Activity_Successor" />
+    <bpmn:sequenceFlow id="Flow_Successor_End" sourceRef="Activity_Successor" targetRef="End" />
+  </bpmn:process>
+</bpmn:definitions>`
+
+const kafOwnerFenceTerminalBPMN = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="https://itsm.example.test/bpmn">
+  <bpmn:process id="kaf_owner_fence_terminal" name="KAF owner fence terminal" isExecutable="true">
+    <bpmn:startEvent id="Start" />
+    <bpmn:serviceTask id="Activity_KafDelegate" name="KAF delegated task" />
+    <bpmn:endEvent id="End" name="End" />
+    <bpmn:sequenceFlow id="Flow_Start_Kaf" sourceRef="Start" targetRef="Activity_KafDelegate" />
+    <bpmn:sequenceFlow id="Flow_Kaf_End" sourceRef="Activity_KafDelegate" targetRef="End" />
+  </bpmn:process>
+</bpmn:definitions>`
+
+func newKafOwnerFenceFixture(t *testing.T, bpmnXML string) (*CustomProcessEngine, context.Context, *ent.ProcessTask, *ent.KafTaskActionLedger) {
+	t.Helper()
+	engine, svc, task, ctx := newKafActionFixture(t)
+	instance, err := svc.client.ProcessInstance.Get(ctx, task.ProcessInstanceID)
+	require.NoError(t, err)
+	require.NoError(t, svc.client.ProcessDefinition.UpdateOneID(instance.ProcessDefinitionID).
+		SetBpmnXML([]byte(bpmnXML)).
+		Exec(ctx))
+	require.NoError(t, svc.client.ProcessInstance.UpdateOneID(instance.ID).
+		SetStatus("running").
+		SetCurrentActivityID(task.TaskDefinitionKey).
+		Exec(ctx))
+	ledger, err := svc.client.KafTaskActionLedger.Create().
+		SetTenantID(task.TenantID).SetTaskID(task.TaskID).
+		SetRunID("run-fence").SetStepID("finish").SetAction(kafActionComplete).
+		SetIdempotencyKey(fmt.Sprintf("%d:%s:run-fence:finish", task.TenantID, task.TaskID)).
+		SetCorrelationID(task.CorrelationID).SetProcedureRef("ssl-vpn").SetProcedureVersion("v1").
+		SetResultStatus("executing").SetLeaseOwner("owner-before-reclaim").SetLeaseExpiresAt(time.Now().Add(time.Minute)).
+		Save(ctx)
+	require.NoError(t, err)
+	return engine, ctx, task, ledger
+}
+
+func reclaimKafLedger(t *testing.T, engine *CustomProcessEngine, ctx context.Context, ledgerID int) {
+	t.Helper()
+	require.NoError(t, engine.client.KafTaskActionLedger.UpdateOneID(ledgerID).
+		SetLeaseOwner("owner-after-reclaim").
+		SetLeaseExpiresAt(time.Now().Add(time.Minute)).
+		Exec(ctx))
+}
+
+func createPendingKafReceipt(t *testing.T, engine *CustomProcessEngine, ctx context.Context, task *ent.ProcessTask, ledger *ent.KafTaskActionLedger) {
+	t.Helper()
+	_, err := engine.client.KafTaskCompletionReceipt.Create().
+		SetLedgerID(ledger.ID).SetTenantID(task.TenantID).SetTaskID(task.TaskID).
+		SetStatus("callback_pending").
+		Save(ctx)
+	require.NoError(t, err)
+}
+
+func TestCompleteKafDelegatedTask_ReclaimDuringReceiptCreateRollsBackReceiptAndCompletion(t *testing.T) {
+	engine, ctx, task, ledger := newKafOwnerFenceFixture(t, kafOwnerFenceSuccessorBPMN)
+	reclaimed := false
+	engine.client.KafTaskCompletionReceipt.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(hookCtx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			if _, ok := mutation.(*ent.KafTaskCompletionReceiptMutation); ok && !reclaimed {
+				reclaimed = true
+				reclaimKafLedger(t, engine, hookCtx, ledger.ID)
+			}
+			return next.Mutate(hookCtx, mutation)
+		})
+	})
+
+	err := engine.CompleteKafDelegatedTask(ctx, ledger.ID, ledger.LeaseOwner, task.TaskID, nil)
+	require.ErrorContains(t, err, "lease owner")
+	require.True(t, reclaimed)
+	receiptCount, err := engine.client.KafTaskCompletionReceipt.Query().Count(ctx)
+	require.NoError(t, err)
+	assert.Zero(t, receiptCount)
+	task, err = engine.client.ProcessTask.Get(ctx, task.ID)
+	require.NoError(t, err)
+	assert.Equal(t, common.ProcessTaskStatusDelegated, task.Status)
+}
+
+func TestCompleteKafDelegatedTask_ReclaimDuringTaskCompletionRollsBackTaskWrite(t *testing.T) {
+	engine, ctx, task, ledger := newKafOwnerFenceFixture(t, kafOwnerFenceSuccessorBPMN)
+	createPendingKafReceipt(t, engine, ctx, task, ledger)
+	reclaimed := false
+	engine.client.ProcessTask.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(hookCtx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			if taskMutation, ok := mutation.(*ent.ProcessTaskMutation); ok && !reclaimed {
+				if status, exists := taskMutation.Status(); exists && status == common.ProcessTaskStatusCompleted {
+					reclaimed = true
+					reclaimKafLedger(t, engine, hookCtx, ledger.ID)
+				}
+			}
+			return next.Mutate(hookCtx, mutation)
+		})
+	})
+
+	err := engine.CompleteKafDelegatedTask(ctx, ledger.ID, ledger.LeaseOwner, task.TaskID, nil)
+	require.ErrorContains(t, err, "lease owner")
+	require.True(t, reclaimed)
+	task, err = engine.client.ProcessTask.Get(ctx, task.ID)
+	require.NoError(t, err)
+	assert.Equal(t, common.ProcessTaskStatusDelegated, task.Status)
+}
+
+func TestMergeKafCompletionVariables_StaleOwnerRollsBackProcessWrite(t *testing.T) {
+	engine, ctx, task, ledger := newKafOwnerFenceFixture(t, kafOwnerFenceSuccessorBPMN)
+	ctx = context.WithValue(ctx, kafCompletionFenceContextKey{}, kafCompletionFence{
+		ledgerID: ledger.ID, leaseOwner: ledger.LeaseOwner,
+	})
+	require.NoError(t, engine.client.KafTaskActionLedger.UpdateOneID(ledger.ID).
+		SetLeaseOwner("owner-after-reclaim").
+		SetLeaseExpiresAt(time.Now().Add(time.Minute)).
+		Exec(ctx))
+
+	_, err := engine.mergeVariablesWithOptimisticLock(ctx, task.ProcessInstanceID, map[string]interface{}{"result": "done"})
+	require.ErrorContains(t, err, "lease owner")
+	instance, err := engine.client.ProcessInstance.Get(ctx, task.ProcessInstanceID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, instance.Version)
+	assert.NotContains(t, instance.Variables, "result")
+}
+
+func TestCompleteKafDelegatedTask_ReclaimDuringActivityWriteRollsBackProcessWrite(t *testing.T) {
+	engine, ctx, task, ledger := newKafOwnerFenceFixture(t, kafOwnerFenceSuccessorBPMN)
+	createPendingKafReceipt(t, engine, ctx, task, ledger)
+	reclaimed := false
+	engine.client.ProcessInstance.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(hookCtx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			if instanceMutation, ok := mutation.(*ent.ProcessInstanceMutation); ok && !reclaimed {
+				if activityID, exists := instanceMutation.CurrentActivityID(); exists && activityID == "Activity_Successor" {
+					reclaimed = true
+					reclaimKafLedger(t, engine, hookCtx, ledger.ID)
+				}
+			}
+			return next.Mutate(hookCtx, mutation)
+		})
+	})
+
+	err := engine.CompleteKafDelegatedTask(ctx, ledger.ID, ledger.LeaseOwner, task.TaskID, nil)
+	require.ErrorContains(t, err, "lease owner")
+	require.True(t, reclaimed)
+	instance, err := engine.client.ProcessInstance.Get(ctx, task.ProcessInstanceID)
+	require.NoError(t, err)
+	assert.Equal(t, task.TaskDefinitionKey, instance.CurrentActivityID)
+	successorCount, err := engine.client.ProcessTask.Query().Where(
+		processtask.ProcessInstanceIDEQ(task.ProcessInstanceID),
+		processtask.TaskDefinitionKeyEQ("Activity_Successor"),
+	).Count(ctx)
+	require.NoError(t, err)
+	assert.Zero(t, successorCount)
+}
+
+func TestCompleteKafDelegatedTask_ReclaimDuringTerminalWriteRollsBackProcessCompletion(t *testing.T) {
+	engine, ctx, task, ledger := newKafOwnerFenceFixture(t, kafOwnerFenceTerminalBPMN)
+	createPendingKafReceipt(t, engine, ctx, task, ledger)
+	reclaimed := false
+	engine.client.ProcessInstance.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(hookCtx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			if instanceMutation, ok := mutation.(*ent.ProcessInstanceMutation); ok && !reclaimed {
+				if status, exists := instanceMutation.Status(); exists && status == "completed" {
+					reclaimed = true
+					reclaimKafLedger(t, engine, hookCtx, ledger.ID)
+				}
+			}
+			return next.Mutate(hookCtx, mutation)
+		})
+	})
+
+	err := engine.CompleteKafDelegatedTask(ctx, ledger.ID, ledger.LeaseOwner, task.TaskID, nil)
+	require.ErrorContains(t, err, "lease owner")
+	require.True(t, reclaimed)
+	instance, err := engine.client.ProcessInstance.Get(ctx, task.ProcessInstanceID)
+	require.NoError(t, err)
+	assert.Equal(t, "running", instance.Status)
+}
+
 func TestKafCompletionReceipt_LateFailureCannotRegressSuccess(t *testing.T) {
 	engine, baseCtx := newApprovalDecisionTestEngine(t)
 	tenantID, _ := setupApprovalDecisionFixture(t, engine)

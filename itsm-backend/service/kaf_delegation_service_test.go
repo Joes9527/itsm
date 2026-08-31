@@ -764,7 +764,7 @@ func TestReconcileTaskOnlyCompletion_DoesNotReportApplied(t *testing.T) {
 	})
 
 	result, err := svc.ExecuteAction(ctx, task.TaskID, req, engine)
-	require.ErrorContains(t, err, "process instance did not advance")
+	require.ErrorContains(t, err, "durable successor or terminal process")
 	assert.Nil(t, result)
 	assert.Zero(t, completionAttempts)
 	assert.Zero(t, handler.calls)
@@ -776,6 +776,54 @@ func TestReconcileTaskOnlyCompletion_DoesNotReportApplied(t *testing.T) {
 	ledger, err = svc.client.KafTaskActionLedger.Get(ctx, ledger.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "failed_retryable", ledger.ResultStatus)
+}
+
+func assertStrandedKafActivityDoesNotReconcile(t *testing.T, activityID string) {
+	t.Helper()
+	engine, svc, task, ctx := newKafActionFixture(t)
+	req := validCompleteRequest(task, "run-stranded", "finish")
+	completedVariables := cloneKafVariables(task.TaskVariables)
+	completedVariables["kaf_execution"] = map[string]string{
+		"run_id": req.Execution.RunID, "step_id": req.Execution.StepID,
+		"procedure_ref": req.Execution.ProcedureRef, "procedure_version": req.Execution.ProcedureVersion,
+	}
+	require.NoError(t, svc.client.ProcessTask.UpdateOneID(task.ID).
+		SetStatus(common.ProcessTaskStatusCompleted).
+		SetTaskVariables(completedVariables).
+		Exec(ctx))
+	require.NoError(t, svc.client.ProcessInstance.UpdateOneID(task.ProcessInstanceID).
+		SetStatus("running").
+		SetCurrentActivityID(activityID).
+		Exec(ctx))
+	ledger, err := svc.client.KafTaskActionLedger.Create().
+		SetTenantID(task.TenantID).SetTaskID(task.TaskID).
+		SetRunID(req.Execution.RunID).SetStepID(req.Execution.StepID).
+		SetAction(req.Action).SetIdempotencyKey(req.Execution.IdempotencyKey).
+		SetCorrelationID(req.Execution.CorrelationID).
+		SetProcedureRef(req.Execution.ProcedureRef).SetProcedureVersion(req.Execution.ProcedureVersion).
+		SetResultStatus("failed_retryable").
+		Save(ctx)
+	require.NoError(t, err)
+	_, err = svc.client.KafTaskCompletionReceipt.Create().
+		SetLedgerID(ledger.ID).SetTenantID(task.TenantID).SetTaskID(task.TaskID).
+		SetStatus("callback_succeeded").
+		Save(ctx)
+	require.NoError(t, err)
+
+	result, err := svc.ExecuteAction(ctx, task.TaskID, req, engine)
+	require.ErrorContains(t, err, "durable successor or terminal process")
+	assert.Nil(t, result)
+	ledger, err = svc.client.KafTaskActionLedger.Get(ctx, ledger.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "failed_retryable", ledger.ResultStatus)
+}
+
+func TestReconcileActivityWrittenWithoutSuccessor_DoesNotReportApplied(t *testing.T) {
+	assertStrandedKafActivityDoesNotReconcile(t, "Activity_Successor")
+}
+
+func TestReconcileEndActivityWrittenWithoutTerminalProcess_DoesNotReportApplied(t *testing.T) {
+	assertStrandedKafActivityDoesNotReconcile(t, "End")
 }
 
 func TestExecuteAction_RealEngineCallbackFailureRecoversWithoutSecondBPMNCompletion(t *testing.T) {
