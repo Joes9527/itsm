@@ -90,6 +90,34 @@ func (_c *ProcessCallbackOutboxCreate) SetElementID(v string) *ProcessCallbackOu
 	return _c
 }
 
+// SetAction sets the "action" field.
+func (_c *ProcessCallbackOutboxCreate) SetAction(v string) *ProcessCallbackOutboxCreate {
+	_c.mutation.SetAction(v)
+	return _c
+}
+
+// SetNillableAction sets the "action" field if the given value is not nil.
+func (_c *ProcessCallbackOutboxCreate) SetNillableAction(v *string) *ProcessCallbackOutboxCreate {
+	if v != nil {
+		_c.SetAction(*v)
+	}
+	return _c
+}
+
+// SetConfigRef sets the "config_ref" field.
+func (_c *ProcessCallbackOutboxCreate) SetConfigRef(v string) *ProcessCallbackOutboxCreate {
+	_c.mutation.SetConfigRef(v)
+	return _c
+}
+
+// SetNillableConfigRef sets the "config_ref" field if the given value is not nil.
+func (_c *ProcessCallbackOutboxCreate) SetNillableConfigRef(v *string) *ProcessCallbackOutboxCreate {
+	if v != nil {
+		_c.SetConfigRef(*v)
+	}
+	return _c
+}
+
 // SetVariables sets the "variables" field.
 func (_c *ProcessCallbackOutboxCreate) SetVariables(v map[string]interface{}) *ProcessCallbackOutboxCreate {
 	_c.mutation.SetVariables(v)
@@ -428,6 +456,14 @@ func (_c *ProcessCallbackOutboxCreate) createSpec() (*ProcessCallbackOutbox, *sq
 	if value, ok := _c.mutation.ElementID(); ok {
 		_spec.SetField(processcallbackoutbox.FieldElementID, field.TypeString, value)
 		_node.ElementID = value
+	}
+	if value, ok := _c.mutation.Action(); ok {
+		_spec.SetField(processcallbackoutbox.FieldAction, field.TypeString, value)
+		_node.Action = value
+	}
+	if value, ok := _c.mutation.ConfigRef(); ok {
+		_spec.SetField(processcallbackoutbox.FieldConfigRef, field.TypeString, value)
+		_node.ConfigRef = value
 	}
 	if value, ok := _c.mutation.Variables(); ok {
 		_spec.SetField(processcallbackoutbox.FieldVariables, field.TypeJSON, value)

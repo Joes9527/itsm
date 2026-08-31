@@ -1068,8 +1068,8 @@ Expected: FAIL —— ticket 状态还是 `open`（走的是旧的属性猜测�
 
 ```go
 	} else if serviceTask := e.findServiceTask(process, elementID); serviceTask != nil {
-		// 优先按 metaData 里的 service_task_type/action 分发——跟 UserTask 走
-		// dispatchUserTaskCallback 时用的是同一套 findHandlerByTaskType 查找口径，
+		// 优先按 metaData 里的 service_task_type/action 分发——跟 UserTask 完成回调
+		// 使用同一套 findHandlerByTaskType 查找口径，
 		// 保证"模板声明了 service_task_type 就一定能找到对应 handler"这条规则
 		// 在 UserTask 和 ServiceTask 两种节点类型上表现一致。
 		if serviceTaskType := serviceTask.ServiceTaskType(); serviceTaskType != "" {
@@ -1085,7 +1085,7 @@ Expected: FAIL —— ticket 状态还是 `open`（走的是旧的属性猜测�
 				return e.executeStep(ctx, instance, process, elementID, instance.Variables)
 			}
 			// 声明了类型但没有注册对应 handler（比如未来新增了类型但忘了注册）：
-			// 按既有约定视为 NoOp，只告警不阻断流程，跟 dispatchUserTaskCallback
+			// 按既有约定视为 NoOp，只告警不阻断流程，与 UserTask 完成回调
 			// 遇到同样情况时的处理方式保持一致。
 			e.logger.Warnw("ServiceTask 声明的 service_task_type 没有注册处理器，跳过执行", "elementID", elementID, "serviceTaskType", serviceTaskType)
 			return e.executeStep(ctx, instance, process, elementID, instance.Variables)
@@ -1855,7 +1855,7 @@ git commit -m "fix(bpmn): ServiceRequestServiceTaskHandler 补真实实现，状
 - Consumes: `dto.ReleaseStatus*` 常量（`draft/scheduled/in-progress/completed/cancelled/failed/rolled_back`）；`ent/release` 生成的查询谓词
 - **重要的包依赖约束**：`service/bpmn` 包不能 import `itsm-backend/service`——`service` 包本身在 `bpmn_process_engine.go` 里 import 了 `itsm-backend/service/bpmn`（`callbackRegistry *bpmn.CallbackRegistry`），反向 import 会形成循环依赖，编译不过。所以这个 handler **不能**直接调用 `service/release_service.go` 的 `ReleaseService.UpdateReleaseStatus`，只能直接操作 Ent，并在本文件内复制一份状态机白名单校验（参照 `ChangeServiceTaskHandler` 已经采用的"和 `handlers/change` 手动保持同步"注释约定）。
 - 5 个节点的 action 值（已在 `release_approval_flow.bpmn` 核实）：`tech_review`、`approval`、`schedule`、`execute`、`verify`
-- 关键设计约束：`approval` 动作**不**在这个 handler 里做状态转换——`ReleaseService.ApplyReleaseApproval`（审批的真正业务入口）会先调用 `approvalBridge.CompleteBusinessApprovalTask` 完成对应的 BPMN 任务（这一步会触发 `dispatchUserTaskCallback` 从而进到这个 handler），然后才在自己函数体后半段把 `Release.Status` 设成 scheduled/cancelled——也就是说 handler 执行 `approval` 动作的这一刻，权威的状态转换还没发生，这里再猜一次目标状态是多余且有出错风险的（不知道这次是 approve 还是 reject）。这个动作在这个 handler 里必须是有文档说明的空操作，不是缺陷。
+- 关键设计约束：`approval` 动作**不**在这个 handler 里做状态转换——`ReleaseService.ApplyReleaseApproval` 会先完成 BPMN 任务并触发完成回调，然后才把 `Release.Status` 设成 scheduled/cancelled。handler 执行时权威决策尚未落库，因此该动作必须是有文档说明的空操作。
 
 - [ ] **Step 1: 写失败测试**
 

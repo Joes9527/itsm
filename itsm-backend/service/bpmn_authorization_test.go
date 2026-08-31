@@ -256,6 +256,7 @@ func TestStartProcessPersistsAuthenticatedInitiator(t *testing.T) {
 	f := newBPMNAuthorizationFixture(t)
 	ctx := context.WithValue(f.userCtx, bpmn.BPMNTenantIDContextKey, f.tenant.ID)
 	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, f.actor.ID)
+	ctx = WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: f.actor.ID, TenantID: f.tenant.ID})
 	instance, err := f.engine.StartProcess(ctx, f.definition.Key, "ticket-1", "ticket", 1, map[string]interface{}{
 		"requester_id": f.outsider.ID,
 	})
@@ -266,6 +267,7 @@ func TestStartProcessPersistsAuthenticatedInitiator(t *testing.T) {
 func TestStartProcessUsesTrustedRequesterFallback(t *testing.T) {
 	f := newBPMNAuthorizationFixture(t)
 	ctx := context.WithValue(f.userCtx, bpmn.BPMNTenantIDContextKey, f.tenant.ID)
+	ctx = WithTrustedBPMNTenantContext(ctx, f.tenant.ID)
 	instance, err := f.engine.StartProcess(ctx, f.definition.Key, "ticket-2", "ticket", 2, map[string]interface{}{
 		"requester_id": float64(f.actor.ID),
 	})
@@ -277,6 +279,7 @@ func TestStartProcessUsesRequesterFallbackForZeroActor(t *testing.T) {
 	f := newBPMNAuthorizationFixture(t)
 	ctx := context.WithValue(f.userCtx, bpmn.BPMNTenantIDContextKey, f.tenant.ID)
 	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, 0)
+	ctx = WithTrustedBPMNTenantContext(ctx, f.tenant.ID)
 	instance, err := f.engine.StartProcess(ctx, f.definition.Key, "ticket-3", "ticket", 3, map[string]interface{}{
 		"requesterId": f.actor.ID,
 	})

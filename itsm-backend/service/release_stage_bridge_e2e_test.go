@@ -81,11 +81,8 @@ func TestReleaseFlow_StageBridges_AdvanceProcessEndToEnd(t *testing.T) {
 	// 模拟 ProcessTriggerService 启动：businessKey 与实例变量按 trigger 约定写入
 	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar())
 	workflowCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
-	instance, err := engine.StartProcess(workflowCtx, "release_approval_flow", "release:"+strconv.Itoa(releaseEntity.ID), "", 0, map[string]interface{}{
-		"business_type": "release",
-		"business_id":   releaseEntity.ID,
-		"tenant_id":     tenant.ID,
-	})
+	workflowCtx = WithTrustedBPMNTenantContext(workflowCtx, tenant.ID)
+	instance, err := engine.StartProcess(workflowCtx, "release_approval_flow", "release:"+strconv.Itoa(releaseEntity.ID), "release", releaseEntity.ID, map[string]interface{}{})
 	require.NoError(t, err)
 	started, err := client.ProcessInstance.Get(ctx, instance.ID)
 	require.NoError(t, err)
@@ -115,7 +112,7 @@ func TestReleaseFlow_StageBridges_AdvanceProcessEndToEnd(t *testing.T) {
 
 	// 3. 计划发布：域写幂等（scheduled→scheduled）；Activity_Schedule 已在审批时完成，
 	//    这里的桥接调用应找不到待办任务、安全空转，流程节点保持不变
-	scheduled, err := releaseService.UpdateReleaseStatus(ctx, releaseEntity.ID, tenant.ID, "scheduled")
+	scheduled, err := releaseService.UpdateReleaseStatus(ctx, releaseEntity.ID, tenant.ID, creator.ID, "scheduled")
 	require.NoError(t, err)
 	assert.Equal(t, "scheduled", scheduled.Status)
 
@@ -124,7 +121,7 @@ func TestReleaseFlow_StageBridges_AdvanceProcessEndToEnd(t *testing.T) {
 	assert.Equal(t, "Activity_Execute", afterSchedule.CurrentActivityID, "Schedule 桥接已随审批完成，同值调用应保持流程节点不变")
 
 	// 4. 执行发布：桥接完成 Activity_Execute
-	inProgress, err := releaseService.UpdateReleaseStatus(ctx, releaseEntity.ID, tenant.ID, "in-progress")
+	inProgress, err := releaseService.UpdateReleaseStatus(ctx, releaseEntity.ID, tenant.ID, creator.ID, "in-progress")
 	require.NoError(t, err)
 	assert.Equal(t, "in-progress", inProgress.Status)
 
@@ -133,7 +130,7 @@ func TestReleaseFlow_StageBridges_AdvanceProcessEndToEnd(t *testing.T) {
 	assert.Equal(t, "Activity_Verify", afterExecute.CurrentActivityID, "执行后流程应推进到验证确认节点")
 
 	// 5. 验证完成：桥接完成 Activity_Verify，流程走到终点
-	completed, err := releaseService.UpdateReleaseStatus(ctx, releaseEntity.ID, tenant.ID, "completed")
+	completed, err := releaseService.UpdateReleaseStatus(ctx, releaseEntity.ID, tenant.ID, creator.ID, "completed")
 	require.NoError(t, err)
 	assert.Equal(t, "completed", completed.Status)
 	assert.NotNil(t, completed.ActualReleaseDate)
@@ -189,11 +186,8 @@ func TestReleaseFlow_RejectApproval_EndsFlowAndCancelsRelease(t *testing.T) {
 
 	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar())
 	workflowCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
-	instance, err := engine.StartProcess(workflowCtx, "release_approval_flow", "release:"+strconv.Itoa(releaseEntity.ID), "", 0, map[string]interface{}{
-		"business_type": "release",
-		"business_id":   releaseEntity.ID,
-		"tenant_id":     tenant.ID,
-	})
+	workflowCtx = WithTrustedBPMNTenantContext(workflowCtx, tenant.ID)
+	instance, err := engine.StartProcess(workflowCtx, "release_approval_flow", "release:"+strconv.Itoa(releaseEntity.ID), "release", releaseEntity.ID, map[string]interface{}{})
 	require.NoError(t, err)
 
 	// 技术评审通过 → 审批节点

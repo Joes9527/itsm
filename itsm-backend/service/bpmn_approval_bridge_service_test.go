@@ -267,7 +267,7 @@ func TestBPMNApprovalBridge_DelegateUnauthorizedActorFailsClosed(t *testing.T) {
 // ==================== P1 阶段桥接测试 ====================
 
 // TestBPMNApprovalBridge_StageTaskCompletesMatchingKey 锁定 CompleteBusinessStageTask 的
-// 节点精确匹配语义：命中 taskDefinitionKey 时完成任务并注入 business_id。
+// 节点精确匹配语义：命中 taskDefinitionKey 时完成任务，但不把业务身份复制到表单变量。
 func TestBPMNApprovalBridge_StageTaskCompletesMatchingKey(t *testing.T) {
 	client := newApprovalBridgeTestClient(t, "bridge_stage_ok")
 	tenantID, actorID := setupBridgeTenantAndActor(t, client, "stage-ok")
@@ -283,9 +283,7 @@ func TestBPMNApprovalBridge_StageTaskCompletesMatchingKey(t *testing.T) {
 	assert.Equal(t, "completed", task.Status)
 	vars := task.TaskVariables
 	require.NotNil(t, vars)
-	businessID, ok := vars["business_id"].(float64)
-	require.True(t, ok, "应注入 business_id")
-	assert.Equal(t, 456, int(businessID))
+	assert.NotContains(t, vars, "business_id", "业务身份只能来自 ProcessInstance")
 	assert.Equal(t, "评审意见", vars["comment"], "extraVars 应透传")
 }
 
@@ -305,8 +303,9 @@ func TestBPMNApprovalBridge_StageTaskKeyMismatchFallsBack(t *testing.T) {
 	assert.Equal(t, "assigned", task.Status, "不匹配的任务必须保持待办")
 }
 
-// TestBPMNApprovalBridge_StageTaskChangeInjectsChangeID 变更业务类型注入 change_id。
-func TestBPMNApprovalBridge_StageTaskChangeInjectsChangeID(t *testing.T) {
+// TestBPMNApprovalBridge_StageTaskChangeKeepsBusinessIdentityOutOfFormVariables
+// verifies that a bridge completion cannot create a mutable callback target.
+func TestBPMNApprovalBridge_StageTaskChangeKeepsBusinessIdentityOutOfFormVariables(t *testing.T) {
 	client := newApprovalBridgeTestClient(t, "bridge_stage_change")
 	tenantID, actorID := setupBridgeTenantAndActor(t, client, "stage-ch")
 	_, taskID := createBridgeProcessFixture(t, client, tenantID, "stagech1", "change:789", actorID)
@@ -320,18 +319,13 @@ func TestBPMNApprovalBridge_StageTaskChangeInjectsChangeID(t *testing.T) {
 	require.NoError(t, err)
 	vars := task.TaskVariables
 	require.NotNil(t, vars)
-	changeID, ok := vars["change_id"].(float64)
-	require.True(t, ok, "change 业务类型应注入 change_id")
-	assert.Equal(t, 789, int(changeID))
-	businessID, ok := vars["business_id"].(float64)
-	require.True(t, ok, "change 业务类型同样应注入 business_id")
-	assert.Equal(t, 789, int(businessID))
+	assert.NotContains(t, vars, "change_id")
+	assert.NotContains(t, vars, "business_id")
 }
 
-// TestBPMNApprovalBridge_ApprovalTaskInjectsChangeIDAndApprovalPass 锁定审批桥的两个新变量：
-// change 业务类型注入 change_id（change_task handler 依赖）、写入 approval_pass 供
-// release_approval_flow 的审批网关路由。
-func TestBPMNApprovalBridge_ApprovalTaskInjectsChangeIDAndApprovalPass(t *testing.T) {
+// TestBPMNApprovalBridge_ApprovalTaskPersistsDecisionWithoutBusinessIdentity
+// keeps gateway input while preventing mutable business-target fields.
+func TestBPMNApprovalBridge_ApprovalTaskPersistsDecisionWithoutBusinessIdentity(t *testing.T) {
 	client := newApprovalBridgeTestClient(t, "bridge_approval_inject")
 	tenantID, actorID := setupBridgeTenantAndActor(t, client, "inject")
 	_, taskID := createBridgeProcessFixture(t, client, tenantID, "inject1", "change:790", actorID)
@@ -345,9 +339,8 @@ func TestBPMNApprovalBridge_ApprovalTaskInjectsChangeIDAndApprovalPass(t *testin
 	require.NoError(t, err)
 	vars := task.TaskVariables
 	require.NotNil(t, vars)
-	changeID, ok := vars["change_id"].(float64)
-	require.True(t, ok, "change 审批桥应注入 change_id")
-	assert.Equal(t, 790, int(changeID))
+	assert.NotContains(t, vars, "change_id")
+	assert.NotContains(t, vars, "business_id")
 	approvalPass, ok := vars["approval_pass"].(bool)
 	require.True(t, ok, "审批桥应写入 approval_pass")
 	assert.True(t, approvalPass)

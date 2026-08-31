@@ -1,0 +1,382 @@
+package service
+
+import (
+	"context"
+	"fmt"
+	"math"
+	"strings"
+
+	"itsm-backend/ent"
+	"itsm-backend/ent/change"
+	"itsm-backend/ent/incident"
+	"itsm-backend/ent/problem"
+	"itsm-backend/ent/processtask"
+	"itsm-backend/ent/release"
+	"itsm-backend/ent/servicerequest"
+	"itsm-backend/ent/ticket"
+	"itsm-backend/service/bpmn"
+)
+
+const (
+	bpmnNoUserTaskCallbackHandlerID         = "__no_user_task_callback__"
+	bpmnUnresolvedUserTaskCallbackHandlerID = "__unresolved_user_task_callback__"
+	maxBPMNParticipantVariableDepth         = 8
+	maxBPMNParticipantVariableEntries       = 1024
+)
+
+type bpmnCallbackDescriptor struct {
+	HandlerID string
+	TaskType  string
+	Action    string
+	ConfigRef string
+}
+
+var reservedBPMNParticipantVariableKeys = map[string]struct{}{
+	"action": {}, "allowed_actions": {}, "callback_action": {}, "callback_config_ref": {},
+	"callback_handler_id": {}, "callback_task_type": {}, "service_task_type": {},
+	"bpmn_callback_execution_key": {}, "handler_id": {}, "task_type": {},
+	"tenant_id": {}, "tenantid": {}, "business_id": {}, "businessid": {},
+	"business_type": {}, "businesstype": {}, "business_key": {}, "businesskey": {},
+	"ticket_id": {}, "change_id": {}, "incident_id": {}, "problem_id": {},
+	"request_id": {}, "release_id": {}, "work_item_id": {}, "workitemid": {},
+	"webhook_url": {}, "webhook_headers": {}, "headers": {}, "payload": {},
+	"method": {}, "timeout": {}, "taskpurpose": {}, "approvalmode": {},
+	"approvalthreshold": {}, "rejectstrategy": {}, "timeoutaction": {},
+	"allowdelegate": {}, "allowaddapprover": {}, "commentrequiredonreject": {},
+	"approval_type": {}, "threshold": {}, "total": {}, "completed": {},
+	"rejected": {}, "final_status": {}, "retry_count": {}, "last_retry_time": {},
+	"delegated_from": {}, "delegated_time": {}, "escalation_level_internal": {},
+	"escalation_reason_internal": {}, "escalated_time": {},
+}
+
+func isReservedBPMNParticipantVariableKey(key string) bool {
+	_, reserved := reservedBPMNParticipantVariableKeys[strings.ToLower(strings.TrimSpace(key))]
+	return reserved
+}
+
+func validateAndCloneBPMNParticipantVariables(variables map[string]interface{}, rejectReserved bool) (map[string]interface{}, error) {
+	if variables == nil {
+		return map[string]interface{}{}, nil
+	}
+	if len(variables) > maxBPMNParticipantVariableEntries {
+		return nil, fmt.Errorf("任务表单变量数量超过限制")
+	}
+	result := make(map[string]interface{}, len(variables))
+	for key, value := range variables {
+		key = strings.TrimSpace(key)
+		if key == "" || len(key) > 128 {
+			return nil, fmt.Errorf("任务表单变量名无效")
+		}
+		if isReservedBPMNParticipantVariableKey(key) {
+			if rejectReserved {
+				return nil, fmt.Errorf("任务表单变量 %q 为系统保留字段", key)
+			}
+			continue
+		}
+		cloned, err := cloneBPMNJSONValue(value, 0)
+		if err != nil {
+			return nil, fmt.Errorf("任务表单变量 %q 类型无效: %w", key, err)
+		}
+		result[key] = cloned
+	}
+	return result, nil
+}
+
+func cloneBPMNJSONValue(value interface{}, depth int) (interface{}, error) {
+	if depth > maxBPMNParticipantVariableDepth {
+		return nil, fmt.Errorf("嵌套层级超过限制")
+	}
+	switch typed := value.(type) {
+	case nil, bool, string, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		return typed, nil
+	case float32:
+		if math.IsNaN(float64(typed)) || math.IsInf(float64(typed), 0) {
+			return nil, fmt.Errorf("非有限数值")
+		}
+		return typed, nil
+	case float64:
+		if math.IsNaN(typed) || math.IsInf(typed, 0) {
+			return nil, fmt.Errorf("非有限数值")
+		}
+		return typed, nil
+	case map[string]interface{}:
+		if len(typed) > maxBPMNParticipantVariableEntries {
+			return nil, fmt.Errorf("对象字段数量超过限制")
+		}
+		copy := make(map[string]interface{}, len(typed))
+		for key, item := range typed {
+			if strings.TrimSpace(key) == "" || len(key) > 128 {
+				return nil, fmt.Errorf("对象字段名无效")
+			}
+			cloned, err := cloneBPMNJSONValue(item, depth+1)
+			if err != nil {
+				return nil, err
+			}
+			copy[key] = cloned
+		}
+		return copy, nil
+	case []interface{}:
+		if len(typed) > maxBPMNParticipantVariableEntries {
+			return nil, fmt.Errorf("数组长度超过限制")
+		}
+		copy := make([]interface{}, len(typed))
+		for i, item := range typed {
+			cloned, err := cloneBPMNJSONValue(item, depth+1)
+			if err != nil {
+				return nil, err
+			}
+			copy[i] = cloned
+		}
+		return copy, nil
+	case []string:
+		copy := append([]string(nil), typed...)
+		return copy, nil
+	case []int:
+		copy := append([]int(nil), typed...)
+		return copy, nil
+	default:
+		return nil, fmt.Errorf("仅允许 JSON 标量、对象和数组")
+	}
+}
+
+func mergeBPMNTaskVariables(existing, incoming map[string]interface{}) map[string]interface{} {
+	merged := make(map[string]interface{}, len(existing)+len(incoming))
+	for key, value := range existing {
+		merged[key] = value
+	}
+	for key, value := range incoming {
+		merged[key] = value
+	}
+	return merged
+}
+
+func mergeBPMNTaskCompletionVariables(existing, incoming map[string]interface{}) map[string]interface{} {
+	merged := mergeBPMNTaskVariables(existing, incoming)
+	if _, counterSignSummary := existing["approval_type"]; !counterSignSummary {
+		return merged
+	}
+	// Completion variables also feed process gateways. Keep those values on the
+	// process instance, but do not let a boolean `approved` overwrite the
+	// counter-sign count persisted on the parent task.
+	for _, key := range []string{"approval_type", "threshold", "total", "completed", "approved", "rejected", "final_status"} {
+		if value, ok := existing[key]; ok {
+			merged[key] = value
+		}
+	}
+	return merged
+}
+
+func filterBPMNCallbackPayload(handler bpmn.ServiceTaskHandlerInterface, action string, variables map[string]interface{}) (map[string]interface{}, error) {
+	policy, ok := handler.(bpmn.CallbackPayloadPolicy)
+	if !ok {
+		return map[string]interface{}{}, nil
+	}
+	allowed := policy.CallbackPayloadFields(action)
+	payload := make(map[string]interface{}, len(allowed))
+	for _, key := range allowed {
+		value, exists := variables[key]
+		if !exists {
+			continue
+		}
+		cloned, err := cloneBPMNJSONValue(value, 0)
+		if err != nil {
+			return nil, fmt.Errorf("回调字段 %q 类型无效", key)
+		}
+		payload[key] = cloned
+	}
+	return payload, nil
+}
+
+func (e *CustomProcessEngine) callbackDescriptor(taskType, action, configRef string) bpmnCallbackDescriptor {
+	taskType = strings.TrimSpace(taskType)
+	if taskType == "" {
+		return bpmnCallbackDescriptor{HandlerID: bpmnNoUserTaskCallbackHandlerID}
+	}
+	handler := e.findHandlerByTaskType(taskType)
+	if handler == nil {
+		return bpmnCallbackDescriptor{
+			HandlerID: bpmnUnresolvedUserTaskCallbackHandlerID,
+			TaskType:  taskType,
+			Action:    strings.TrimSpace(action),
+			ConfigRef: strings.TrimSpace(configRef),
+		}
+	}
+	return bpmnCallbackDescriptor{
+		HandlerID: handler.GetHandlerID(),
+		TaskType:  handler.GetTaskType(),
+		Action:    strings.TrimSpace(action),
+		ConfigRef: strings.TrimSpace(configRef),
+	}
+}
+
+func (e *CustomProcessEngine) descriptorForProcessTask(ctx context.Context, client *ent.Client, task *ent.ProcessTask, process *BPMNProcess) (bpmnCallbackDescriptor, error) {
+	if strings.TrimSpace(task.CallbackHandlerID) != "" {
+		return bpmnCallbackDescriptor{
+			HandlerID: task.CallbackHandlerID,
+			TaskType:  task.CallbackTaskType,
+			Action:    task.CallbackAction,
+			ConfigRef: task.CallbackConfigRef,
+		}, nil
+	}
+
+	descriptor := bpmnCallbackDescriptor{HandlerID: bpmnNoUserTaskCallbackHandlerID}
+	if userTask := e.findUserTask(process, task.TaskDefinitionKey); userTask != nil {
+		descriptor = e.callbackDescriptor(userTask.ServiceTaskType(), userTask.ServiceTaskAction(), userTask.CallbackConfigRef())
+	} else if serviceTask := e.findServiceTask(process, task.TaskDefinitionKey); serviceTask != nil {
+		taskType := serviceTask.ServiceTaskType()
+		if taskType == "" {
+			taskType = e.definitionDeclaredServiceTaskType(serviceTask)
+		}
+		descriptor = e.callbackDescriptor(taskType, serviceTask.ServiceTaskAction(), serviceTask.CallbackConfigRef())
+	}
+
+	update := client.ProcessTask.UpdateOneID(task.ID).
+		Where(processtask.TenantID(task.TenantID)).
+		SetCallbackHandlerID(descriptor.HandlerID).
+		SetCallbackTaskType(descriptor.TaskType).
+		SetCallbackAction(descriptor.Action).
+		SetCallbackConfigRef(descriptor.ConfigRef)
+	if err := update.Exec(ctx); err != nil {
+		return bpmnCallbackDescriptor{}, fmt.Errorf("持久化任务回调描述符失败: %w", err)
+	}
+	task.CallbackHandlerID = descriptor.HandlerID
+	task.CallbackTaskType = descriptor.TaskType
+	task.CallbackAction = descriptor.Action
+	task.CallbackConfigRef = descriptor.ConfigRef
+	return descriptor, nil
+}
+
+func (e *CustomProcessEngine) definitionDeclaredServiceTaskType(task *BPMNServiceTask) string {
+	if task == nil {
+		return ""
+	}
+	for _, candidate := range []string{task.Implementation, task.Class, task.DelegateExpression, task.OperationRef} {
+		if strings.TrimSpace(candidate) != "" && e.findHandlerByTaskType(candidate) != nil {
+			return candidate
+		}
+	}
+	return ""
+}
+
+func (e *CustomProcessEngine) authoritativeCallbackVariables(
+	ctx context.Context,
+	instance *ent.ProcessInstance,
+	handler bpmn.ServiceTaskHandlerInterface,
+	payload map[string]interface{},
+) (map[string]interface{}, error) {
+	if instance == nil || instance.TenantID <= 0 {
+		return nil, fmt.Errorf("回调流程实例缺少权威租户")
+	}
+	variables := copyBPMNCallbackVariables(payload)
+	variables["tenant_id"] = instance.TenantID
+	if instance.BusinessType != "" {
+		variables["business_type"] = instance.BusinessType
+	}
+	if instance.BusinessID > 0 {
+		variables["business_id"] = instance.BusinessID
+	}
+
+	if !isBuiltInBusinessCallbackHandler(handler.GetTaskType()) {
+		return variables, nil
+	}
+	if instance.BusinessType == "" || instance.BusinessID <= 0 {
+		return nil, fmt.Errorf("回调流程实例缺少权威业务身份")
+	}
+
+	businessType := strings.ToLower(strings.TrimSpace(instance.BusinessType))
+	workItemID := 0
+	switch businessType {
+	case "ticket", "generic":
+		if _, err := e.client.Ticket.Query().Where(
+			ticket.ID(instance.BusinessID), ticket.TenantID(instance.TenantID),
+		).Only(ctx); err != nil {
+			return nil, fmt.Errorf("权威工单目标不存在")
+		}
+		workItemID = instance.BusinessID
+		variables["ticket_id"] = workItemID
+	case "change", "change_request":
+		entity, err := e.client.Change.Query().Where(
+			change.WorkItemID(instance.BusinessID), change.TenantID(instance.TenantID),
+		).Only(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("权威变更目标不存在")
+		}
+		workItemID = instance.BusinessID
+		variables["change_id"] = entity.ID
+		variables["ticket_id"] = workItemID
+	case "incident":
+		entity, err := e.client.Incident.Query().Where(
+			incident.WorkItemID(instance.BusinessID), incident.TenantID(instance.TenantID),
+		).Only(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("权威事件目标不存在")
+		}
+		workItemID = instance.BusinessID
+		variables["incident_id"] = entity.ID
+		variables["ticket_id"] = workItemID
+	case "problem":
+		entity, err := e.client.Problem.Query().Where(
+			problem.WorkItemID(instance.BusinessID), problem.TenantID(instance.TenantID),
+		).Only(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("权威问题目标不存在")
+		}
+		workItemID = instance.BusinessID
+		variables["problem_id"] = entity.ID
+		variables["ticket_id"] = workItemID
+	case "service_request", "service_request_item":
+		entity, err := e.client.ServiceRequest.Query().Where(
+			servicerequest.TicketID(instance.BusinessID), servicerequest.TenantID(instance.TenantID),
+		).Only(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("权威服务请求目标不存在")
+		}
+		workItemID = instance.BusinessID
+		variables["request_id"] = entity.ID
+		variables["ticket_id"] = workItemID
+	case "release":
+		if _, err := e.client.Release.Query().Where(
+			release.ID(instance.BusinessID), release.TenantID(instance.TenantID),
+		).Only(ctx); err != nil {
+			return nil, fmt.Errorf("权威发布目标不存在")
+		}
+		variables["release_id"] = instance.BusinessID
+	default:
+		return nil, fmt.Errorf("不支持的权威业务类型")
+	}
+
+	switch handler.GetTaskType() {
+	case "change_task":
+		if _, ok := variables["change_id"]; !ok {
+			return nil, fmt.Errorf("变更回调与流程业务类型不匹配")
+		}
+	case "incident_task":
+		if _, ok := variables["incident_id"]; !ok {
+			return nil, fmt.Errorf("事件回调与流程业务类型不匹配")
+		}
+	case "service_request_task":
+		if _, ok := variables["request_id"]; !ok {
+			return nil, fmt.Errorf("服务请求回调与流程业务类型不匹配")
+		}
+	case "release_task":
+		if businessType != "release" {
+			return nil, fmt.Errorf("发布回调与流程业务类型不匹配")
+		}
+	case "ticket_task", "generic_task", "cc_task":
+		if workItemID <= 0 {
+			return nil, fmt.Errorf("工单回调与流程业务类型不匹配")
+		}
+		variables["business_id"] = workItemID
+	}
+	return variables, nil
+}
+
+func isBuiltInBusinessCallbackHandler(taskType string) bool {
+	switch taskType {
+	case "change_task", "incident_task", "ticket_task", "generic_task",
+		"service_request_task", "notification_task", "cc_task", "webhook_task", "release_task":
+		return true
+	default:
+		return false
+	}
+}

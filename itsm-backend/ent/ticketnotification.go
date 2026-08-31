@@ -35,6 +35,8 @@ type TicketNotification struct {
 	ReadAt time.Time `json:"read_at,omitempty"`
 	// 状态: pending, sent, read
 	Status string `json:"status,omitempty"`
+	// 内部回调投递幂等键，不对 API 暴露
+	DeliveryKey *string `json:"-"`
 	// 租户ID
 	TenantID int `json:"tenant_id,omitempty"`
 	// 创建时间
@@ -85,7 +87,7 @@ func (*TicketNotification) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case ticketnotification.FieldID, ticketnotification.FieldTicketID, ticketnotification.FieldUserID, ticketnotification.FieldTenantID:
 			values[i] = new(sql.NullInt64)
-		case ticketnotification.FieldType, ticketnotification.FieldChannel, ticketnotification.FieldContent, ticketnotification.FieldStatus:
+		case ticketnotification.FieldType, ticketnotification.FieldChannel, ticketnotification.FieldContent, ticketnotification.FieldStatus, ticketnotification.FieldDeliveryKey:
 			values[i] = new(sql.NullString)
 		case ticketnotification.FieldSentAt, ticketnotification.FieldReadAt, ticketnotification.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -157,6 +159,13 @@ func (_m *TicketNotification) assignValues(columns []string, values []any) error
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				_m.Status = value.String
+			}
+		case ticketnotification.FieldDeliveryKey:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field delivery_key", values[i])
+			} else if value.Valid {
+				_m.DeliveryKey = new(string)
+				*_m.DeliveryKey = value.String
 			}
 		case ticketnotification.FieldTenantID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -239,6 +248,8 @@ func (_m *TicketNotification) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(_m.Status)
+	builder.WriteString(", ")
+	builder.WriteString("delivery_key=<sensitive>")
 	builder.WriteString(", ")
 	builder.WriteString("tenant_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.TenantID))

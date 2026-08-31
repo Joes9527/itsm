@@ -2164,6 +2164,7 @@ var (
 		{Name: "action_text", Type: field.TypeString, Nullable: true},
 		{Name: "user_id", Type: field.TypeInt},
 		{Name: "tenant_id", Type: field.TypeInt},
+		{Name: "delivery_key", Type: field.TypeString, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 	}
@@ -2172,6 +2173,13 @@ var (
 		Name:       "notifications",
 		Columns:    NotificationsColumns,
 		PrimaryKey: []*schema.Column{NotificationsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "notification_tenant_id_delivery_key_user_id",
+				Unique:  true,
+				Columns: []*schema.Column{NotificationsColumns[8], NotificationsColumns[9], NotificationsColumns[7]},
+			},
+		},
 	}
 	// NotificationPreferencesColumns holds the columns for the "notification_preferences" table.
 	NotificationPreferencesColumns = []*schema.Column{
@@ -2528,6 +2536,8 @@ var (
 		{Name: "handler_id", Type: field.TypeString},
 		{Name: "task_type", Type: field.TypeString},
 		{Name: "element_id", Type: field.TypeString},
+		{Name: "action", Type: field.TypeString, Nullable: true},
+		{Name: "config_ref", Type: field.TypeString, Nullable: true},
 		{Name: "variables", Type: field.TypeJSON, Nullable: true},
 		{Name: "status", Type: field.TypeString, Default: "pending"},
 		{Name: "attempt_count", Type: field.TypeInt, Default: 0},
@@ -2548,17 +2558,17 @@ var (
 			{
 				Name:    "processcallbackoutbox_tenant_id_status_next_attempt_at",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[2], ProcessCallbackOutboxesColumns[11], ProcessCallbackOutboxesColumns[13]},
+				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[2], ProcessCallbackOutboxesColumns[13], ProcessCallbackOutboxesColumns[15]},
 			},
 			{
 				Name:    "processcallbackoutbox_tenant_id_status_lease_expires_at",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[2], ProcessCallbackOutboxesColumns[11], ProcessCallbackOutboxesColumns[15]},
+				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[2], ProcessCallbackOutboxesColumns[13], ProcessCallbackOutboxesColumns[17]},
 			},
 			{
 				Name:    "processcallbackoutbox_tenant_id_process_instance_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[2], ProcessCallbackOutboxesColumns[3], ProcessCallbackOutboxesColumns[11]},
+				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[2], ProcessCallbackOutboxesColumns[3], ProcessCallbackOutboxesColumns[13]},
 			},
 			{
 				Name:    "processcallbackoutbox_tenant_id_process_task_id",
@@ -2900,6 +2910,11 @@ var (
 		{Name: "completed_time", Type: field.TypeTime, Nullable: true},
 		{Name: "form_key", Type: field.TypeString, Nullable: true},
 		{Name: "task_variables", Type: field.TypeJSON, Nullable: true},
+		{Name: "callback_handler_id", Type: field.TypeString, Nullable: true},
+		{Name: "callback_task_type", Type: field.TypeString, Nullable: true},
+		{Name: "callback_action", Type: field.TypeString, Nullable: true},
+		{Name: "callback_config_ref", Type: field.TypeString, Nullable: true},
+		{Name: "aggregation_version", Type: field.TypeInt, Default: 0},
 		{Name: "description", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "correlation_id", Type: field.TypeString, Nullable: true},
 		{Name: "parent_task_id", Type: field.TypeString, Nullable: true},
@@ -2917,7 +2932,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "process_tasks_process_instances_process_tasks",
-				Columns:    []*schema.Column{ProcessTasksColumns[25]},
+				Columns:    []*schema.Column{ProcessTasksColumns[30]},
 				RefColumns: []*schema.Column{ProcessInstancesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -2931,7 +2946,7 @@ var (
 			{
 				Name:    "processtask_process_instance_id",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessTasksColumns[25]},
+				Columns: []*schema.Column{ProcessTasksColumns[30]},
 			},
 			{
 				Name:    "processtask_process_definition_key",
@@ -2966,7 +2981,7 @@ var (
 			{
 				Name:    "processtask_tenant_id",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessTasksColumns[22]},
+				Columns: []*schema.Column{ProcessTasksColumns[27]},
 			},
 			{
 				Name:    "processtask_created_time",
@@ -2976,12 +2991,12 @@ var (
 			{
 				Name:    "processtask_parent_task_id",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessTasksColumns[20]},
+				Columns: []*schema.Column{ProcessTasksColumns[25]},
 			},
 			{
 				Name:    "processtask_root_task_id",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessTasksColumns[21]},
+				Columns: []*schema.Column{ProcessTasksColumns[26]},
 			},
 		},
 	}
@@ -4221,6 +4236,13 @@ var (
 				OnDelete:   schema.NoAction,
 			},
 		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "ticketcc_tenant_id_ticket_id_user_id",
+				Unique:  true,
+				Columns: []*schema.Column{TicketCcsColumns[3], TicketCcsColumns[6], TicketCcsColumns[1]},
+			},
+		},
 	}
 	// TicketCategoriesColumns holds the columns for the "ticket_categories" table.
 	TicketCategoriesColumns = []*schema.Column{
@@ -4311,6 +4333,7 @@ var (
 		{Name: "sent_at", Type: field.TypeTime, Nullable: true},
 		{Name: "read_at", Type: field.TypeTime, Nullable: true},
 		{Name: "status", Type: field.TypeString, Default: "pending"},
+		{Name: "delivery_key", Type: field.TypeString, Nullable: true},
 		{Name: "tenant_id", Type: field.TypeInt},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "ticket_id", Type: field.TypeInt},
@@ -4324,15 +4347,22 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "ticket_notifications_tickets_notifications",
-				Columns:    []*schema.Column{TicketNotificationsColumns[9]},
+				Columns:    []*schema.Column{TicketNotificationsColumns[10]},
 				RefColumns: []*schema.Column{TicketsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "ticket_notifications_users_ticket_notifications",
-				Columns:    []*schema.Column{TicketNotificationsColumns[10]},
+				Columns:    []*schema.Column{TicketNotificationsColumns[11]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "ticketnotification_tenant_id_delivery_key_ticket_id_user_id_channel",
+				Unique:  true,
+				Columns: []*schema.Column{TicketNotificationsColumns[8], TicketNotificationsColumns[7], TicketNotificationsColumns[10], TicketNotificationsColumns[11], TicketNotificationsColumns[2]},
 			},
 		},
 	}

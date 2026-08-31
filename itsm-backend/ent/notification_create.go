@@ -100,6 +100,20 @@ func (_c *NotificationCreate) SetTenantID(v int) *NotificationCreate {
 	return _c
 }
 
+// SetDeliveryKey sets the "delivery_key" field.
+func (_c *NotificationCreate) SetDeliveryKey(v string) *NotificationCreate {
+	_c.mutation.SetDeliveryKey(v)
+	return _c
+}
+
+// SetNillableDeliveryKey sets the "delivery_key" field if the given value is not nil.
+func (_c *NotificationCreate) SetNillableDeliveryKey(v *string) *NotificationCreate {
+	if v != nil {
+		_c.SetDeliveryKey(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *NotificationCreate) SetCreatedAt(v time.Time) *NotificationCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -284,6 +298,10 @@ func (_c *NotificationCreate) createSpec() (*Notification, *sqlgraph.CreateSpec)
 	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(notification.FieldTenantID, field.TypeInt, value)
 		_node.TenantID = value
+	}
+	if value, ok := _c.mutation.DeliveryKey(); ok {
+		_spec.SetField(notification.FieldDeliveryKey, field.TypeString, value)
+		_node.DeliveryKey = &value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(notification.FieldCreatedAt, field.TypeTime, value)

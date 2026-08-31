@@ -94,6 +94,11 @@ func TenantID(v int) predicate.Notification {
 	return predicate.Notification(sql.FieldEQ(FieldTenantID, v))
 }
 
+// DeliveryKey applies equality check predicate on the "delivery_key" field. It's identical to DeliveryKeyEQ.
+func DeliveryKey(v string) predicate.Notification {
+	return predicate.Notification(sql.FieldEQ(FieldDeliveryKey, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.Notification {
 	return predicate.Notification(sql.FieldEQ(FieldCreatedAt, v))
@@ -537,6 +542,81 @@ func TenantIDLT(v int) predicate.Notification {
 // TenantIDLTE applies the LTE predicate on the "tenant_id" field.
 func TenantIDLTE(v int) predicate.Notification {
 	return predicate.Notification(sql.FieldLTE(FieldTenantID, v))
+}
+
+// DeliveryKeyEQ applies the EQ predicate on the "delivery_key" field.
+func DeliveryKeyEQ(v string) predicate.Notification {
+	return predicate.Notification(sql.FieldEQ(FieldDeliveryKey, v))
+}
+
+// DeliveryKeyNEQ applies the NEQ predicate on the "delivery_key" field.
+func DeliveryKeyNEQ(v string) predicate.Notification {
+	return predicate.Notification(sql.FieldNEQ(FieldDeliveryKey, v))
+}
+
+// DeliveryKeyIn applies the In predicate on the "delivery_key" field.
+func DeliveryKeyIn(vs ...string) predicate.Notification {
+	return predicate.Notification(sql.FieldIn(FieldDeliveryKey, vs...))
+}
+
+// DeliveryKeyNotIn applies the NotIn predicate on the "delivery_key" field.
+func DeliveryKeyNotIn(vs ...string) predicate.Notification {
+	return predicate.Notification(sql.FieldNotIn(FieldDeliveryKey, vs...))
+}
+
+// DeliveryKeyGT applies the GT predicate on the "delivery_key" field.
+func DeliveryKeyGT(v string) predicate.Notification {
+	return predicate.Notification(sql.FieldGT(FieldDeliveryKey, v))
+}
+
+// DeliveryKeyGTE applies the GTE predicate on the "delivery_key" field.
+func DeliveryKeyGTE(v string) predicate.Notification {
+	return predicate.Notification(sql.FieldGTE(FieldDeliveryKey, v))
+}
+
+// DeliveryKeyLT applies the LT predicate on the "delivery_key" field.
+func DeliveryKeyLT(v string) predicate.Notification {
+	return predicate.Notification(sql.FieldLT(FieldDeliveryKey, v))
+}
+
+// DeliveryKeyLTE applies the LTE predicate on the "delivery_key" field.
+func DeliveryKeyLTE(v string) predicate.Notification {
+	return predicate.Notification(sql.FieldLTE(FieldDeliveryKey, v))
+}
+
+// DeliveryKeyContains applies the Contains predicate on the "delivery_key" field.
+func DeliveryKeyContains(v string) predicate.Notification {
+	return predicate.Notification(sql.FieldContains(FieldDeliveryKey, v))
+}
+
+// DeliveryKeyHasPrefix applies the HasPrefix predicate on the "delivery_key" field.
+func DeliveryKeyHasPrefix(v string) predicate.Notification {
+	return predicate.Notification(sql.FieldHasPrefix(FieldDeliveryKey, v))
+}
+
+// DeliveryKeyHasSuffix applies the HasSuffix predicate on the "delivery_key" field.
+func DeliveryKeyHasSuffix(v string) predicate.Notification {
+	return predicate.Notification(sql.FieldHasSuffix(FieldDeliveryKey, v))
+}
+
+// DeliveryKeyIsNil applies the IsNil predicate on the "delivery_key" field.
+func DeliveryKeyIsNil() predicate.Notification {
+	return predicate.Notification(sql.FieldIsNull(FieldDeliveryKey))
+}
+
+// DeliveryKeyNotNil applies the NotNil predicate on the "delivery_key" field.
+func DeliveryKeyNotNil() predicate.Notification {
+	return predicate.Notification(sql.FieldNotNull(FieldDeliveryKey))
+}
+
+// DeliveryKeyEqualFold applies the EqualFold predicate on the "delivery_key" field.
+func DeliveryKeyEqualFold(v string) predicate.Notification {
+	return predicate.Notification(sql.FieldEqualFold(FieldDeliveryKey, v))
+}
+
+// DeliveryKeyContainsFold applies the ContainsFold predicate on the "delivery_key" field.
+func DeliveryKeyContainsFold(v string) predicate.Notification {
+	return predicate.Notification(sql.FieldContainsFold(FieldDeliveryKey, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

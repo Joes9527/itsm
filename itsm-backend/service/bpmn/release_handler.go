@@ -3,6 +3,7 @@ package bpmn
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"itsm-backend/dto"
@@ -65,7 +66,7 @@ func (h *ReleaseServiceTaskHandler) Execute(ctx context.Context, task *ent.Proce
 	case "verify":
 		return h.updateStatus(ctx, variables, string(dto.ReleaseStatusCompleted))
 	default:
-		return &dto.ServiceTaskResult{Success: true, Message: "无操作执行"}, nil
+		return nil, fmt.Errorf("不支持的发布回调动作")
 	}
 }
 
@@ -104,12 +105,14 @@ func (h *ReleaseServiceTaskHandler) techReview(ctx context.Context, variables ma
 		return nil, fmt.Errorf("获取发布记录失败: %w", err)
 	}
 	notes := entity.ReleaseNotes
-	if comment != "" {
-		if notes != "" {
-			notes += "\n"
-		}
-		notes += fmt.Sprintf("[技术评审] %s", comment)
+	entry := fmt.Sprintf("[技术评审] %s", comment)
+	if comment == "" || strings.Contains(notes, entry) {
+		return &dto.ServiceTaskResult{Success: true, Message: "技术评审意见已记录"}, nil
 	}
+	if notes != "" {
+		notes += "\n"
+	}
+	notes += entry
 	if _, err := entity.Update().SetReleaseNotes(notes).Save(ctx); err != nil {
 		return nil, fmt.Errorf("记录技术评审失败: %w", err)
 	}
@@ -136,6 +139,9 @@ func (h *ReleaseServiceTaskHandler) updateStatus(ctx context.Context, variables 
 
 	if current.Status != status && !isValidReleaseStatusTransitionForBPMN(current.Status, status) {
 		return nil, fmt.Errorf("非法的发布状态转换: %s -> %s", current.Status, status)
+	}
+	if current.Status == status {
+		return &dto.ServiceTaskResult{Success: true, Message: fmt.Sprintf("发布 %d 已处于 %s", releaseID, status)}, nil
 	}
 
 	update := current.Update().SetStatus(status)

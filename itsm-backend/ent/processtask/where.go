@@ -140,6 +140,31 @@ func FormKey(v string) predicate.ProcessTask {
 	return predicate.ProcessTask(sql.FieldEQ(FieldFormKey, v))
 }
 
+// CallbackHandlerID applies equality check predicate on the "callback_handler_id" field. It's identical to CallbackHandlerIDEQ.
+func CallbackHandlerID(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldEQ(FieldCallbackHandlerID, v))
+}
+
+// CallbackTaskType applies equality check predicate on the "callback_task_type" field. It's identical to CallbackTaskTypeEQ.
+func CallbackTaskType(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldEQ(FieldCallbackTaskType, v))
+}
+
+// CallbackAction applies equality check predicate on the "callback_action" field. It's identical to CallbackActionEQ.
+func CallbackAction(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldEQ(FieldCallbackAction, v))
+}
+
+// CallbackConfigRef applies equality check predicate on the "callback_config_ref" field. It's identical to CallbackConfigRefEQ.
+func CallbackConfigRef(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldEQ(FieldCallbackConfigRef, v))
+}
+
+// AggregationVersion applies equality check predicate on the "aggregation_version" field. It's identical to AggregationVersionEQ.
+func AggregationVersion(v int) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldEQ(FieldAggregationVersion, v))
+}
+
 // Description applies equality check predicate on the "description" field. It's identical to DescriptionEQ.
 func Description(v string) predicate.ProcessTask {
 	return predicate.ProcessTask(sql.FieldEQ(FieldDescription, v))
@@ -1198,6 +1223,346 @@ func TaskVariablesIsNil() predicate.ProcessTask {
 // TaskVariablesNotNil applies the NotNil predicate on the "task_variables" field.
 func TaskVariablesNotNil() predicate.ProcessTask {
 	return predicate.ProcessTask(sql.FieldNotNull(FieldTaskVariables))
+}
+
+// CallbackHandlerIDEQ applies the EQ predicate on the "callback_handler_id" field.
+func CallbackHandlerIDEQ(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldEQ(FieldCallbackHandlerID, v))
+}
+
+// CallbackHandlerIDNEQ applies the NEQ predicate on the "callback_handler_id" field.
+func CallbackHandlerIDNEQ(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldNEQ(FieldCallbackHandlerID, v))
+}
+
+// CallbackHandlerIDIn applies the In predicate on the "callback_handler_id" field.
+func CallbackHandlerIDIn(vs ...string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldIn(FieldCallbackHandlerID, vs...))
+}
+
+// CallbackHandlerIDNotIn applies the NotIn predicate on the "callback_handler_id" field.
+func CallbackHandlerIDNotIn(vs ...string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldNotIn(FieldCallbackHandlerID, vs...))
+}
+
+// CallbackHandlerIDGT applies the GT predicate on the "callback_handler_id" field.
+func CallbackHandlerIDGT(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldGT(FieldCallbackHandlerID, v))
+}
+
+// CallbackHandlerIDGTE applies the GTE predicate on the "callback_handler_id" field.
+func CallbackHandlerIDGTE(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldGTE(FieldCallbackHandlerID, v))
+}
+
+// CallbackHandlerIDLT applies the LT predicate on the "callback_handler_id" field.
+func CallbackHandlerIDLT(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldLT(FieldCallbackHandlerID, v))
+}
+
+// CallbackHandlerIDLTE applies the LTE predicate on the "callback_handler_id" field.
+func CallbackHandlerIDLTE(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldLTE(FieldCallbackHandlerID, v))
+}
+
+// CallbackHandlerIDContains applies the Contains predicate on the "callback_handler_id" field.
+func CallbackHandlerIDContains(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldContains(FieldCallbackHandlerID, v))
+}
+
+// CallbackHandlerIDHasPrefix applies the HasPrefix predicate on the "callback_handler_id" field.
+func CallbackHandlerIDHasPrefix(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldHasPrefix(FieldCallbackHandlerID, v))
+}
+
+// CallbackHandlerIDHasSuffix applies the HasSuffix predicate on the "callback_handler_id" field.
+func CallbackHandlerIDHasSuffix(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldHasSuffix(FieldCallbackHandlerID, v))
+}
+
+// CallbackHandlerIDIsNil applies the IsNil predicate on the "callback_handler_id" field.
+func CallbackHandlerIDIsNil() predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldIsNull(FieldCallbackHandlerID))
+}
+
+// CallbackHandlerIDNotNil applies the NotNil predicate on the "callback_handler_id" field.
+func CallbackHandlerIDNotNil() predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldNotNull(FieldCallbackHandlerID))
+}
+
+// CallbackHandlerIDEqualFold applies the EqualFold predicate on the "callback_handler_id" field.
+func CallbackHandlerIDEqualFold(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldEqualFold(FieldCallbackHandlerID, v))
+}
+
+// CallbackHandlerIDContainsFold applies the ContainsFold predicate on the "callback_handler_id" field.
+func CallbackHandlerIDContainsFold(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldContainsFold(FieldCallbackHandlerID, v))
+}
+
+// CallbackTaskTypeEQ applies the EQ predicate on the "callback_task_type" field.
+func CallbackTaskTypeEQ(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldEQ(FieldCallbackTaskType, v))
+}
+
+// CallbackTaskTypeNEQ applies the NEQ predicate on the "callback_task_type" field.
+func CallbackTaskTypeNEQ(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldNEQ(FieldCallbackTaskType, v))
+}
+
+// CallbackTaskTypeIn applies the In predicate on the "callback_task_type" field.
+func CallbackTaskTypeIn(vs ...string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldIn(FieldCallbackTaskType, vs...))
+}
+
+// CallbackTaskTypeNotIn applies the NotIn predicate on the "callback_task_type" field.
+func CallbackTaskTypeNotIn(vs ...string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldNotIn(FieldCallbackTaskType, vs...))
+}
+
+// CallbackTaskTypeGT applies the GT predicate on the "callback_task_type" field.
+func CallbackTaskTypeGT(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldGT(FieldCallbackTaskType, v))
+}
+
+// CallbackTaskTypeGTE applies the GTE predicate on the "callback_task_type" field.
+func CallbackTaskTypeGTE(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldGTE(FieldCallbackTaskType, v))
+}
+
+// CallbackTaskTypeLT applies the LT predicate on the "callback_task_type" field.
+func CallbackTaskTypeLT(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldLT(FieldCallbackTaskType, v))
+}
+
+// CallbackTaskTypeLTE applies the LTE predicate on the "callback_task_type" field.
+func CallbackTaskTypeLTE(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldLTE(FieldCallbackTaskType, v))
+}
+
+// CallbackTaskTypeContains applies the Contains predicate on the "callback_task_type" field.
+func CallbackTaskTypeContains(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldContains(FieldCallbackTaskType, v))
+}
+
+// CallbackTaskTypeHasPrefix applies the HasPrefix predicate on the "callback_task_type" field.
+func CallbackTaskTypeHasPrefix(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldHasPrefix(FieldCallbackTaskType, v))
+}
+
+// CallbackTaskTypeHasSuffix applies the HasSuffix predicate on the "callback_task_type" field.
+func CallbackTaskTypeHasSuffix(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldHasSuffix(FieldCallbackTaskType, v))
+}
+
+// CallbackTaskTypeIsNil applies the IsNil predicate on the "callback_task_type" field.
+func CallbackTaskTypeIsNil() predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldIsNull(FieldCallbackTaskType))
+}
+
+// CallbackTaskTypeNotNil applies the NotNil predicate on the "callback_task_type" field.
+func CallbackTaskTypeNotNil() predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldNotNull(FieldCallbackTaskType))
+}
+
+// CallbackTaskTypeEqualFold applies the EqualFold predicate on the "callback_task_type" field.
+func CallbackTaskTypeEqualFold(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldEqualFold(FieldCallbackTaskType, v))
+}
+
+// CallbackTaskTypeContainsFold applies the ContainsFold predicate on the "callback_task_type" field.
+func CallbackTaskTypeContainsFold(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldContainsFold(FieldCallbackTaskType, v))
+}
+
+// CallbackActionEQ applies the EQ predicate on the "callback_action" field.
+func CallbackActionEQ(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldEQ(FieldCallbackAction, v))
+}
+
+// CallbackActionNEQ applies the NEQ predicate on the "callback_action" field.
+func CallbackActionNEQ(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldNEQ(FieldCallbackAction, v))
+}
+
+// CallbackActionIn applies the In predicate on the "callback_action" field.
+func CallbackActionIn(vs ...string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldIn(FieldCallbackAction, vs...))
+}
+
+// CallbackActionNotIn applies the NotIn predicate on the "callback_action" field.
+func CallbackActionNotIn(vs ...string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldNotIn(FieldCallbackAction, vs...))
+}
+
+// CallbackActionGT applies the GT predicate on the "callback_action" field.
+func CallbackActionGT(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldGT(FieldCallbackAction, v))
+}
+
+// CallbackActionGTE applies the GTE predicate on the "callback_action" field.
+func CallbackActionGTE(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldGTE(FieldCallbackAction, v))
+}
+
+// CallbackActionLT applies the LT predicate on the "callback_action" field.
+func CallbackActionLT(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldLT(FieldCallbackAction, v))
+}
+
+// CallbackActionLTE applies the LTE predicate on the "callback_action" field.
+func CallbackActionLTE(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldLTE(FieldCallbackAction, v))
+}
+
+// CallbackActionContains applies the Contains predicate on the "callback_action" field.
+func CallbackActionContains(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldContains(FieldCallbackAction, v))
+}
+
+// CallbackActionHasPrefix applies the HasPrefix predicate on the "callback_action" field.
+func CallbackActionHasPrefix(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldHasPrefix(FieldCallbackAction, v))
+}
+
+// CallbackActionHasSuffix applies the HasSuffix predicate on the "callback_action" field.
+func CallbackActionHasSuffix(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldHasSuffix(FieldCallbackAction, v))
+}
+
+// CallbackActionIsNil applies the IsNil predicate on the "callback_action" field.
+func CallbackActionIsNil() predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldIsNull(FieldCallbackAction))
+}
+
+// CallbackActionNotNil applies the NotNil predicate on the "callback_action" field.
+func CallbackActionNotNil() predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldNotNull(FieldCallbackAction))
+}
+
+// CallbackActionEqualFold applies the EqualFold predicate on the "callback_action" field.
+func CallbackActionEqualFold(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldEqualFold(FieldCallbackAction, v))
+}
+
+// CallbackActionContainsFold applies the ContainsFold predicate on the "callback_action" field.
+func CallbackActionContainsFold(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldContainsFold(FieldCallbackAction, v))
+}
+
+// CallbackConfigRefEQ applies the EQ predicate on the "callback_config_ref" field.
+func CallbackConfigRefEQ(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldEQ(FieldCallbackConfigRef, v))
+}
+
+// CallbackConfigRefNEQ applies the NEQ predicate on the "callback_config_ref" field.
+func CallbackConfigRefNEQ(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldNEQ(FieldCallbackConfigRef, v))
+}
+
+// CallbackConfigRefIn applies the In predicate on the "callback_config_ref" field.
+func CallbackConfigRefIn(vs ...string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldIn(FieldCallbackConfigRef, vs...))
+}
+
+// CallbackConfigRefNotIn applies the NotIn predicate on the "callback_config_ref" field.
+func CallbackConfigRefNotIn(vs ...string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldNotIn(FieldCallbackConfigRef, vs...))
+}
+
+// CallbackConfigRefGT applies the GT predicate on the "callback_config_ref" field.
+func CallbackConfigRefGT(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldGT(FieldCallbackConfigRef, v))
+}
+
+// CallbackConfigRefGTE applies the GTE predicate on the "callback_config_ref" field.
+func CallbackConfigRefGTE(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldGTE(FieldCallbackConfigRef, v))
+}
+
+// CallbackConfigRefLT applies the LT predicate on the "callback_config_ref" field.
+func CallbackConfigRefLT(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldLT(FieldCallbackConfigRef, v))
+}
+
+// CallbackConfigRefLTE applies the LTE predicate on the "callback_config_ref" field.
+func CallbackConfigRefLTE(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldLTE(FieldCallbackConfigRef, v))
+}
+
+// CallbackConfigRefContains applies the Contains predicate on the "callback_config_ref" field.
+func CallbackConfigRefContains(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldContains(FieldCallbackConfigRef, v))
+}
+
+// CallbackConfigRefHasPrefix applies the HasPrefix predicate on the "callback_config_ref" field.
+func CallbackConfigRefHasPrefix(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldHasPrefix(FieldCallbackConfigRef, v))
+}
+
+// CallbackConfigRefHasSuffix applies the HasSuffix predicate on the "callback_config_ref" field.
+func CallbackConfigRefHasSuffix(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldHasSuffix(FieldCallbackConfigRef, v))
+}
+
+// CallbackConfigRefIsNil applies the IsNil predicate on the "callback_config_ref" field.
+func CallbackConfigRefIsNil() predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldIsNull(FieldCallbackConfigRef))
+}
+
+// CallbackConfigRefNotNil applies the NotNil predicate on the "callback_config_ref" field.
+func CallbackConfigRefNotNil() predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldNotNull(FieldCallbackConfigRef))
+}
+
+// CallbackConfigRefEqualFold applies the EqualFold predicate on the "callback_config_ref" field.
+func CallbackConfigRefEqualFold(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldEqualFold(FieldCallbackConfigRef, v))
+}
+
+// CallbackConfigRefContainsFold applies the ContainsFold predicate on the "callback_config_ref" field.
+func CallbackConfigRefContainsFold(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldContainsFold(FieldCallbackConfigRef, v))
+}
+
+// AggregationVersionEQ applies the EQ predicate on the "aggregation_version" field.
+func AggregationVersionEQ(v int) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldEQ(FieldAggregationVersion, v))
+}
+
+// AggregationVersionNEQ applies the NEQ predicate on the "aggregation_version" field.
+func AggregationVersionNEQ(v int) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldNEQ(FieldAggregationVersion, v))
+}
+
+// AggregationVersionIn applies the In predicate on the "aggregation_version" field.
+func AggregationVersionIn(vs ...int) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldIn(FieldAggregationVersion, vs...))
+}
+
+// AggregationVersionNotIn applies the NotIn predicate on the "aggregation_version" field.
+func AggregationVersionNotIn(vs ...int) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldNotIn(FieldAggregationVersion, vs...))
+}
+
+// AggregationVersionGT applies the GT predicate on the "aggregation_version" field.
+func AggregationVersionGT(v int) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldGT(FieldAggregationVersion, v))
+}
+
+// AggregationVersionGTE applies the GTE predicate on the "aggregation_version" field.
+func AggregationVersionGTE(v int) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldGTE(FieldAggregationVersion, v))
+}
+
+// AggregationVersionLT applies the LT predicate on the "aggregation_version" field.
+func AggregationVersionLT(v int) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldLT(FieldAggregationVersion, v))
+}
+
+// AggregationVersionLTE applies the LTE predicate on the "aggregation_version" field.
+func AggregationVersionLTE(v int) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldLTE(FieldAggregationVersion, v))
 }
 
 // DescriptionEQ applies the EQ predicate on the "description" field.

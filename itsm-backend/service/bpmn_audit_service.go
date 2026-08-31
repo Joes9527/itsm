@@ -190,6 +190,21 @@ func (s *BPMNAuditService) RecordTaskAssigned(ctx context.Context, task *ent.Pro
 	return s.RecordAudit(ctx, auditCtx)
 }
 
+// RecordTaskDelegated records the actor and tenant-validated target assignee.
+func (s *BPMNAuditService) RecordTaskDelegated(ctx context.Context, task *ent.ProcessTask, actorID int, actorName string, assignee *ent.User) error {
+	auditCtx, err := s.taskAuditContext(ctx, task, actorID, actorName)
+	if err != nil {
+		return err
+	}
+	auditCtx.Action = AuditActionTaskReassigned
+	auditCtx.Metadata = map[string]interface{}{"previous_assignee": task.Assignee}
+	if assignee != nil {
+		auditCtx.AssigneeID = assignee.ID
+		auditCtx.AssigneeName = assignee.Name
+	}
+	return s.RecordAudit(ctx, auditCtx)
+}
+
 // RecordTaskCancelled records a user-visible task cancellation and its reason.
 func (s *BPMNAuditService) RecordTaskCancelled(ctx context.Context, task *ent.ProcessTask, userID int, userName, reason string) error {
 	auditCtx, err := s.taskAuditContext(ctx, task, userID, userName)

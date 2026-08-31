@@ -25,15 +25,6 @@ type TicketStatusServiceInterface interface {
 	UpdateTicketStatusForWorkflow(ctx context.Context, ticketID int, status string, tenantID int, operatorID int) error
 }
 
-// DefaultTicketNotificationService 默认通知服务（空实现）
-type DefaultTicketNotificationService struct{}
-
-// SendNotification 默认不发送通知
-func (d *DefaultTicketNotificationService) SendNotification(ctx context.Context, ticketID int, req *dto.SendTicketNotificationRequest, tenantID int) error {
-	// 默认实现不执行任何操作
-	return nil
-}
-
 // TicketServiceTaskHandler 工单服务任务处理器
 type TicketServiceTaskHandler struct {
 	HandlerBase
@@ -46,9 +37,8 @@ type TicketServiceTaskHandler struct {
 // NewTicketServiceTaskHandler 创建工单处理器
 func NewTicketServiceTaskHandler(client *ent.Client, logger *zap.SugaredLogger) *TicketServiceTaskHandler {
 	handler := &TicketServiceTaskHandler{
-		client:              client,
-		logger:              logger,
-		notificationService: &DefaultTicketNotificationService{},
+		client: client,
+		logger: logger,
 	}
 	return handler
 }
@@ -56,6 +46,20 @@ func NewTicketServiceTaskHandler(client *ent.Client, logger *zap.SugaredLogger) 
 // SetNotificationService 设置通知服务
 func (h *TicketServiceTaskHandler) SetNotificationService(svc TicketNotificationServiceInterface) {
 	h.notificationService = svc
+}
+
+func (h *TicketServiceTaskHandler) sendNotification(ctx context.Context, ticketID int, req *dto.SendTicketNotificationRequest, tenantID int) error {
+	if h.notificationService == nil {
+		return fmt.Errorf("ticket notification service 未注入")
+	}
+	if req == nil {
+		return fmt.Errorf("工单通知请求不能为空")
+	}
+	if key, durable := BPMNCallbackExecutionKey(ctx); durable {
+		req.DeliveryKey = key
+		req.InAppOnly = true
+	}
+	return h.notificationService.SendNotification(ctx, ticketID, req, tenantID)
 }
 
 // SetTicketService 注入工单状态服务，由 bootstrap 在 TicketService 构造完成后调用
@@ -75,30 +79,14 @@ func (h *TicketServiceTaskHandler) GetHandlerID() string {
 	return "ticket_service_handler"
 }
 
-func (h *TicketServiceTaskHandler) getTenantID(ctx context.Context, variables map[string]interface{}) int {
-	if tenantID, ok := ctx.Value(BPMNTenantIDContextKey).(int); ok && tenantID > 0 {
-		return tenantID
-	}
-	if variables == nil {
-		return 0
-	}
-	switch v := variables["tenant_id"].(type) {
-	case int:
-		return v
-	case float64:
-		return int(v)
-	default:
-		return 0
-	}
+func (h *TicketServiceTaskHandler) getTenantID(ctx context.Context, variables map[string]interface{}) (int, error) {
+	return RequireTenantID(ctx, variables)
 }
 
 func (h *TicketServiceTaskHandler) getTicket(ctx context.Context, ticketID int, tenantID int) (*ent.Ticket, error) {
-	if tenantID > 0 {
-		return h.client.Ticket.Query().
-			Where(ticket.ID(ticketID), ticket.TenantID(tenantID)).
-			Only(ctx)
-	}
-	return h.client.Ticket.Get(ctx, ticketID)
+	return h.client.Ticket.Query().
+		Where(ticket.ID(ticketID), ticket.TenantID(tenantID)).
+		Only(ctx)
 }
 
 // Execute 执行工单服务任务
@@ -133,10 +121,7 @@ func (h *TicketServiceTaskHandler) Execute(ctx context.Context, task *ent.Proces
 		// 分配任务
 		return h.assignTicket(ctx, businessID, variables)
 	default:
-		return &dto.ServiceTaskResult{
-			Success: true,
-			Message: "无操作执行",
-		}, nil
+		return nil, fmt.Errorf("不支持的工单回调动作")
 	}
 }
 
@@ -164,11 +149,23 @@ func (h *TicketServiceTaskHandler) updateTicketStatus(ctx context.Context, ticke
 	if h.statusService == nil {
 		return nil, fmt.Errorf("ticket status service 未注入，无法更新工单状态")
 	}
-	tenantID := h.getTenantID(ctx, variables)
+	tenantID, err := h.getTenantID(ctx, variables)
+	if err != nil {
+		return nil, err
+	}
+	current, err := h.getTicket(ctx, ticketID, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("工单不存在: %w", err)
+	}
+	if current.Status == newStatus {
+		return &dto.ServiceTaskResult{
+			Success: true, Message: fmt.Sprintf("工单 %d 已处于 %s", ticketID, newStatus), UpdatedData: additionalData,
+		}, nil
+	}
 	// operatorID=0 表示系统身份（BPMN 引擎驱动的状态变更，不是某个登录用户点的按钮）；
 	// TicketService.UpdateTicketStatus 本身不强制 operatorID>0。
 	if err := h.statusService.UpdateTicketStatusForWorkflow(ctx, ticketID, newStatus, tenantID, 0); err != nil {
-		h.logger.Errorw("Failed to update ticket status", "ticket_id", ticketID, "error", err)
+		h.logger.Errorw("Failed to update ticket status", "ticket_id", ticketID, "error_class", "domain_update")
 		return nil, fmt.Errorf("更新工单状态失败: %w", err)
 	}
 
@@ -191,7 +188,10 @@ func (h *TicketServiceTaskHandler) notifyRequester(ctx context.Context, ticketID
 	content, _ := variables["content"].(string)
 
 	// 获取工单信息
-	tenantID := h.getTenantID(ctx, variables)
+	tenantID, err := h.getTenantID(ctx, variables)
+	if err != nil {
+		return nil, err
+	}
 	ticketEntity, err := h.getTicket(ctx, ticketID, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("工单不存在: %w", err)
@@ -199,13 +199,18 @@ func (h *TicketServiceTaskHandler) notifyRequester(ctx context.Context, ticketID
 
 	// 发送通知给请求人
 	if ticketEntity.RequesterID > 0 {
-		err = h.notificationService.SendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
+		req := &dto.SendTicketNotificationRequest{
 			UserIDs:   []int{ticketEntity.RequesterID},
 			EventType: mapBPMNNotificationType(notificationType),
 			Content:   content,
-		}, ticketEntity.TenantID)
+		}
+		if key, durable := BPMNCallbackExecutionKey(ctx); durable {
+			req.DeliveryKey = key
+			req.InAppOnly = true
+		}
+		err = h.sendNotification(ctx, ticketID, req, ticketEntity.TenantID)
 		if err != nil {
-			h.logger.Warnw("Failed to notify requester", "ticket_id", ticketID, "requester_id", ticketEntity.RequesterID, "error", err)
+			return nil, fmt.Errorf("通知请求人失败")
 		}
 	}
 
@@ -227,7 +232,10 @@ func (h *TicketServiceTaskHandler) notifyHandler(ctx context.Context, ticketID i
 	content, _ := variables["content"].(string)
 
 	// 获取工单信息
-	tenantID := h.getTenantID(ctx, variables)
+	tenantID, err := h.getTenantID(ctx, variables)
+	if err != nil {
+		return nil, err
+	}
 	ticketEntity, err := h.getTicket(ctx, ticketID, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("工单不存在: %w", err)
@@ -235,13 +243,18 @@ func (h *TicketServiceTaskHandler) notifyHandler(ctx context.Context, ticketID i
 
 	// 发送通知给处理人
 	if ticketEntity.AssigneeID > 0 {
-		err = h.notificationService.SendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
+		req := &dto.SendTicketNotificationRequest{
 			UserIDs:   []int{ticketEntity.AssigneeID},
 			EventType: mapBPMNNotificationType(notificationType),
 			Content:   content,
-		}, ticketEntity.TenantID)
+		}
+		if key, durable := BPMNCallbackExecutionKey(ctx); durable {
+			req.DeliveryKey = key
+			req.InAppOnly = true
+		}
+		err = h.sendNotification(ctx, ticketID, req, ticketEntity.TenantID)
 		if err != nil {
-			h.logger.Warnw("Failed to notify handler", "ticket_id", ticketID, "handler_id", ticketEntity.AssigneeID, "error", err)
+			return nil, fmt.Errorf("通知处理人失败")
 		}
 	}
 
@@ -263,39 +276,47 @@ func (h *TicketServiceTaskHandler) escalateTicket(ctx context.Context, ticketID 
 	escalationReason, _ := variables["escalation_reason"].(string)
 
 	// 获取工单信息
-	tenantID := h.getTenantID(ctx, variables)
+	tenantID, err := h.getTenantID(ctx, variables)
+	if err != nil {
+		return nil, err
+	}
 	ticketEntity, err := h.getTicket(ctx, ticketID, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("工单不存在: %w", err)
 	}
 
-	// 升级工单：更新优先级和状态
-	update := h.client.Ticket.UpdateOneID(ticketID)
-	if tenantID > 0 {
-		update = update.Where(ticket.TenantID(tenantID))
+	if ticketEntity.Priority == escalateTo && ticketEntity.Status == "escalated" {
+		return &dto.ServiceTaskResult{
+			Success: true,
+			Message: fmt.Sprintf("工单 %d 已升级为 %s", ticketID, escalateTo),
+		}, nil
 	}
-	_, err = update.
+
+	// 通知管理员或升级处理人
+	adminIDs := GetIntSliceFromVars(variables, "notify_admin_ids")
+	if len(adminIDs) > 0 {
+		content := fmt.Sprintf("工单 %s (#%s) 已升级，原因：%s", ticketEntity.Title, ticketEntity.TicketNumber, escalationReason)
+		for _, adminID := range adminIDs {
+			if err := h.sendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
+				UserIDs:   []int{adminID},
+				EventType: "ticket_updated",
+				Content:   content,
+			}, ticketEntity.TenantID); err != nil {
+				h.logger.Warnw("failed to send escalation notification", "error_class", "notification_delivery", "ticket_id", ticketID, "admin_id", adminID)
+				return nil, fmt.Errorf("升级通知失败")
+			}
+		}
+	}
+
+	// Notify first. A stable delivery key deduplicates a retry if the state write
+	// fails after notification persistence.
+	_, err = h.client.Ticket.UpdateOneID(ticketID).Where(ticket.TenantID(tenantID)).
 		SetPriority(escalateTo).
 		SetStatus("escalated").
 		SetUpdatedAt(time.Now()).
 		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("升级工单失败: %w", err)
-	}
-
-	// 通知管理员或升级处理人
-	adminIDs, _ := variables["notify_admin_ids"].([]int)
-	if len(adminIDs) > 0 {
-		content := fmt.Sprintf("工单 %s (#%s) 已升级，原因：%s", ticketEntity.Title, ticketEntity.TicketNumber, escalationReason)
-		for _, adminID := range adminIDs {
-			if err := h.notificationService.SendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
-				UserIDs:   []int{adminID},
-				EventType: "ticket_updated",
-				Content:   content,
-			}, ticketEntity.TenantID); err != nil {
-				h.logger.Warnw("failed to send escalation notification", "error", err, "ticket_id", ticketID, "admin_id", adminID)
-			}
-		}
 	}
 
 	h.logger.Infow("Ticket escalated via BPMN", "ticket_id", ticketID, "escalated_to", escalateTo, "reason", escalationReason)
@@ -321,24 +342,20 @@ func (h *TicketServiceTaskHandler) assignTicket(ctx context.Context, ticketID in
 	}
 
 	// 获取工单信息
-	tenantID := h.getTenantID(ctx, variables)
+	tenantID, err := h.getTenantID(ctx, variables)
+	if err != nil {
+		return nil, err
+	}
 	ticketEntity, err := h.getTicket(ctx, ticketID, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("工单不存在: %w", err)
 	}
 
-	// 更新工单分配
-	update := h.client.Ticket.UpdateOneID(ticketID)
-	if tenantID > 0 {
-		update = update.Where(ticket.TenantID(tenantID))
-	}
-	_, err = update.
-		SetAssigneeID(assigneeID).
-		SetStatus(common.TicketStatusAssigned).
-		SetUpdatedAt(time.Now()).
-		Save(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("分配工单失败: %w", err)
+	if ticketEntity.AssigneeID == assigneeID && ticketEntity.Status == common.TicketStatusAssigned {
+		return &dto.ServiceTaskResult{
+			Success: true,
+			Message: fmt.Sprintf("工单 %d 已分配给用户 %d", ticketID, assigneeID),
+		}, nil
 	}
 
 	// 发送通知给新的处理人
@@ -346,12 +363,22 @@ func (h *TicketServiceTaskHandler) assignTicket(ctx context.Context, ticketID in
 	if notifyContent == "" {
 		notifyContent = fmt.Sprintf("您被分配了一个新工单：%s (#%s)", ticketEntity.Title, ticketEntity.TicketNumber)
 	}
-	if err := h.notificationService.SendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
+	if err := h.sendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
 		UserIDs:   []int{assigneeID},
 		EventType: "ticket_assigned",
 		Content:   notifyContent,
 	}, ticketEntity.TenantID); err != nil {
-		h.logger.Warnw("failed to send assignment notification", "error", err, "ticket_id", ticketID, "assignee_id", assigneeID)
+		h.logger.Warnw("failed to send assignment notification", "error_class", "notification_delivery", "ticket_id", ticketID, "assignee_id", assigneeID)
+		return nil, fmt.Errorf("分配通知失败")
+	}
+
+	_, err = h.client.Ticket.UpdateOneID(ticketID).Where(ticket.TenantID(tenantID)).
+		SetAssigneeID(assigneeID).
+		SetStatus(common.TicketStatusAssigned).
+		SetUpdatedAt(time.Now()).
+		Save(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("分配工单失败: %w", err)
 	}
 
 	h.logger.Infow("Ticket assigned via BPMN", "ticket_id", ticketID, "assignee_id", assigneeID)

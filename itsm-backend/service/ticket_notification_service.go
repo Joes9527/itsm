@@ -65,35 +65,44 @@ func (s *TicketNotificationService) SendNotification(
 	s.logger.Infow("Sending ticket notification", "ticket_id", ticketID, "event_type", req.EventType)
 
 	// 验证工单是否存在
-	ticketExists, err := s.client.Ticket.Query().
+	ticketEntity, err := s.client.Ticket.Query().
 		Where(
 			ticket.ID(ticketID),
 			ticket.TenantID(tenantID),
 		).
-		Exist(ctx)
+		Only(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to check ticket existence: %w", err)
-	}
-	if !ticketExists {
 		return fmt.Errorf("ticket not found")
-	}
-
-	ticketEntity, err := s.client.Ticket.Get(ctx, ticketID)
-	if err != nil {
-		return fmt.Errorf("failed to get ticket: %w", err)
 	}
 
 	now := time.Now()
 	for _, userID := range req.UserIDs {
 		// 验证用户是否存在
-		userEntity, err := s.client.User.Get(ctx, userID)
+		userEntity, err := s.client.User.Query().Where(user.ID(userID), user.TenantID(tenantID)).Only(ctx)
 		if err != nil || userEntity == nil {
 			s.logger.Warnw("User not found, skipping notification", "user_id", userID)
 			continue
 		}
+		if req.DeliveryKey != "" {
+			exists, err := s.client.TicketNotification.Query().Where(
+				ticketnotification.TenantID(tenantID),
+				ticketnotification.TicketID(ticketID),
+				ticketnotification.UserID(userID),
+				ticketnotification.DeliveryKey(req.DeliveryKey),
+			).Exist(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to check notification delivery state")
+			}
+			if exists {
+				continue
+			}
+		}
 
 		// 查该用户对该事件类型的偏好（带默认值兜底）
 		prefs := s.resolvePreferences(ctx, userID, tenantID, req.EventType)
+		if req.InAppOnly {
+			prefs = &dto.NotificationPreferenceResponse{InAppEnabled: prefs.InAppEnabled}
+		}
 
 		// 1. 站内信：总是创建通知记录（现有语义）
 		if prefs.InAppEnabled {
@@ -164,33 +173,41 @@ func (s *TicketNotificationService) createInAppNotification(
 	ctx context.Context, ticketID, userID int,
 	req *dto.SendTicketNotificationRequest, tenantID int, now time.Time,
 ) {
-	notification, err := s.client.TicketNotification.Create().
+	create := s.client.TicketNotification.Create().
 		SetTicketID(ticketID).
 		SetUserID(userID).
 		SetType(req.EventType).
 		SetChannel("in_app").
 		SetContent(req.Content).
 		SetTenantID(tenantID).
-		SetStatus("pending").
-		Save(ctx)
+		SetStatus("pending")
+	if req.DeliveryKey != "" {
+		create.SetDeliveryKey(req.DeliveryKey)
+	}
+	notificationEntity, err := create.Save(ctx)
 	if err != nil {
 		s.logger.Errorw("Failed to create notification", "error", err, "user_id", userID)
 		return
 	}
 
 	// 同步创建到通用 notifications 表（供前端统一查询）
-	_, _ = s.client.Notification.Create().
+	unifiedCreate := s.client.Notification.Create().
 		SetTitle(req.EventType).
 		SetMessage(req.Content).
 		SetType(req.EventType).
 		SetUserID(userID).
 		SetTenantID(tenantID).
 		SetNillableActionURL(ticketNotificationStringPtr(fmt.Sprintf("/tickets/%d", ticketID))).
-		SetNillableActionText(ticketNotificationStringPtr("查看工单")).
-		Save(ctx)
+		SetNillableActionText(ticketNotificationStringPtr("查看工单"))
+	if req.DeliveryKey != "" {
+		unifiedCreate.SetDeliveryKey(req.DeliveryKey)
+	}
+	if _, err := unifiedCreate.Save(ctx); err != nil {
+		s.logger.Warnw("Failed to create unified notification", "user_id", userID)
+	}
 
 	// 站内消息立即标记为已发送
-	_, err = s.client.TicketNotification.UpdateOneID(notification.ID).
+	_, err = s.client.TicketNotification.UpdateOneID(notificationEntity.ID).
 		SetStatus("sent").
 		SetNillableSentAt(&now).
 		Save(ctx)

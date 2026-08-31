@@ -13,8 +13,8 @@ import (
 //
 // 它是异步 handler（IsAsync()==true）：流程到达声明了 service_task_type="kaf_delegate"
 // 的节点时，引擎的 handleElement 不会调用它的 Execute，而是创建 ProcessTask 并暂停
-// （见 CustomProcessEngine.createDelegatedTask）。Execute 只在任务完成时经
-// dispatchUserTaskCallback 触发一次，用于记录/审计，不产生任何业务副作用——真正的
+// （见 CustomProcessEngine.createDelegatedTask）。Execute 只在任务完成后的异步回调
+// 阶段触发一次，用于记录/审计，不产生任何业务副作用——真正的
 // WorkItem 动作（resolve/close 等）走上游委派设计 §4.3 的 typed action API，
 // 不经过这个 Execute。
 type KafDelegateServiceTaskHandler struct {
@@ -46,14 +46,16 @@ func (h *KafDelegateServiceTaskHandler) Validate(ctx context.Context, config map
 	return nil
 }
 
-// Execute 只在委派任务完成时被调用一次（经 dispatchUserTaskCallback），用于记录完成事件，
+// Execute 只在委派任务完成后的异步回调阶段被调用一次，用于记录完成事件，
 // 不产生业务副作用。
 func (h *KafDelegateServiceTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
 	taskID := ""
+	tenantID := 0
 	if task != nil {
 		taskID = task.TaskID
+		tenantID = task.TenantID
 	}
-	h.logger.Infow("KAF 委派任务已完成", "taskID", taskID, "variables", variables)
+	h.logger.Infow("KAF 委派任务已完成", "taskID", taskID, "tenantID", tenantID)
 	return &dto.ServiceTaskResult{Success: true, Message: "kaf_delegate 任务已完成"}, nil
 }
 

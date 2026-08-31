@@ -225,6 +225,76 @@ func (_c *ProcessTaskCreate) SetTaskVariables(v map[string]interface{}) *Process
 	return _c
 }
 
+// SetCallbackHandlerID sets the "callback_handler_id" field.
+func (_c *ProcessTaskCreate) SetCallbackHandlerID(v string) *ProcessTaskCreate {
+	_c.mutation.SetCallbackHandlerID(v)
+	return _c
+}
+
+// SetNillableCallbackHandlerID sets the "callback_handler_id" field if the given value is not nil.
+func (_c *ProcessTaskCreate) SetNillableCallbackHandlerID(v *string) *ProcessTaskCreate {
+	if v != nil {
+		_c.SetCallbackHandlerID(*v)
+	}
+	return _c
+}
+
+// SetCallbackTaskType sets the "callback_task_type" field.
+func (_c *ProcessTaskCreate) SetCallbackTaskType(v string) *ProcessTaskCreate {
+	_c.mutation.SetCallbackTaskType(v)
+	return _c
+}
+
+// SetNillableCallbackTaskType sets the "callback_task_type" field if the given value is not nil.
+func (_c *ProcessTaskCreate) SetNillableCallbackTaskType(v *string) *ProcessTaskCreate {
+	if v != nil {
+		_c.SetCallbackTaskType(*v)
+	}
+	return _c
+}
+
+// SetCallbackAction sets the "callback_action" field.
+func (_c *ProcessTaskCreate) SetCallbackAction(v string) *ProcessTaskCreate {
+	_c.mutation.SetCallbackAction(v)
+	return _c
+}
+
+// SetNillableCallbackAction sets the "callback_action" field if the given value is not nil.
+func (_c *ProcessTaskCreate) SetNillableCallbackAction(v *string) *ProcessTaskCreate {
+	if v != nil {
+		_c.SetCallbackAction(*v)
+	}
+	return _c
+}
+
+// SetCallbackConfigRef sets the "callback_config_ref" field.
+func (_c *ProcessTaskCreate) SetCallbackConfigRef(v string) *ProcessTaskCreate {
+	_c.mutation.SetCallbackConfigRef(v)
+	return _c
+}
+
+// SetNillableCallbackConfigRef sets the "callback_config_ref" field if the given value is not nil.
+func (_c *ProcessTaskCreate) SetNillableCallbackConfigRef(v *string) *ProcessTaskCreate {
+	if v != nil {
+		_c.SetCallbackConfigRef(*v)
+	}
+	return _c
+}
+
+// SetAggregationVersion sets the "aggregation_version" field.
+func (_c *ProcessTaskCreate) SetAggregationVersion(v int) *ProcessTaskCreate {
+	_c.mutation.SetAggregationVersion(v)
+	return _c
+}
+
+// SetNillableAggregationVersion sets the "aggregation_version" field if the given value is not nil.
+func (_c *ProcessTaskCreate) SetNillableAggregationVersion(v *int) *ProcessTaskCreate {
+	if v != nil {
+		_c.SetAggregationVersion(*v)
+	}
+	return _c
+}
+
 // SetDescription sets the "description" field.
 func (_c *ProcessTaskCreate) SetDescription(v string) *ProcessTaskCreate {
 	_c.mutation.SetDescription(v)
@@ -371,6 +441,10 @@ func (_c *ProcessTaskCreate) defaults() {
 		v := processtask.DefaultCreatedTime()
 		_c.mutation.SetCreatedTime(v)
 	}
+	if _, ok := _c.mutation.AggregationVersion(); !ok {
+		v := processtask.DefaultAggregationVersion
+		_c.mutation.SetAggregationVersion(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := processtask.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -434,6 +508,14 @@ func (_c *ProcessTaskCreate) check() error {
 	}
 	if _, ok := _c.mutation.CreatedTime(); !ok {
 		return &ValidationError{Name: "created_time", err: errors.New(`ent: missing required field "ProcessTask.created_time"`)}
+	}
+	if _, ok := _c.mutation.AggregationVersion(); !ok {
+		return &ValidationError{Name: "aggregation_version", err: errors.New(`ent: missing required field "ProcessTask.aggregation_version"`)}
+	}
+	if v, ok := _c.mutation.AggregationVersion(); ok {
+		if err := processtask.AggregationVersionValidator(v); err != nil {
+			return &ValidationError{Name: "aggregation_version", err: fmt.Errorf(`ent: validator failed for field "ProcessTask.aggregation_version": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "ProcessTask.tenant_id"`)}
@@ -545,6 +627,26 @@ func (_c *ProcessTaskCreate) createSpec() (*ProcessTask, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.TaskVariables(); ok {
 		_spec.SetField(processtask.FieldTaskVariables, field.TypeJSON, value)
 		_node.TaskVariables = value
+	}
+	if value, ok := _c.mutation.CallbackHandlerID(); ok {
+		_spec.SetField(processtask.FieldCallbackHandlerID, field.TypeString, value)
+		_node.CallbackHandlerID = value
+	}
+	if value, ok := _c.mutation.CallbackTaskType(); ok {
+		_spec.SetField(processtask.FieldCallbackTaskType, field.TypeString, value)
+		_node.CallbackTaskType = value
+	}
+	if value, ok := _c.mutation.CallbackAction(); ok {
+		_spec.SetField(processtask.FieldCallbackAction, field.TypeString, value)
+		_node.CallbackAction = value
+	}
+	if value, ok := _c.mutation.CallbackConfigRef(); ok {
+		_spec.SetField(processtask.FieldCallbackConfigRef, field.TypeString, value)
+		_node.CallbackConfigRef = value
+	}
+	if value, ok := _c.mutation.AggregationVersion(); ok {
+		_spec.SetField(processtask.FieldAggregationVersion, field.TypeInt, value)
+		_node.AggregationVersion = value
 	}
 	if value, ok := _c.mutation.Description(); ok {
 		_spec.SetField(processtask.FieldDescription, field.TypeString, value)

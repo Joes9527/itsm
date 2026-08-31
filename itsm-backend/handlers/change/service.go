@@ -237,7 +237,8 @@ func (s *Service) SubmitChange(ctx context.Context, changeID, tenantID, submitte
 			return nil, fmt.Errorf("该变更已经有一个正在进行的审批流程，不能重复提交")
 		}
 
-		triggerResp, err := s.processTriggerService.TriggerProcess(ctx, &dto.ProcessTriggerRequest{
+		triggerCtx := service.WithTrustedBPMNTenantContext(ctx, tenantID)
+		triggerResp, err := s.processTriggerService.TriggerProcess(triggerCtx, &dto.ProcessTriggerRequest{
 			BusinessType:         dto.BusinessTypeChange,
 			BusinessID:           workItemID,
 			ProcessDefinitionKey: processDefKey,
@@ -262,7 +263,7 @@ func (s *Service) SubmitChange(ctx context.Context, changeID, tenantID, submitte
 		// 是同一个模式。失败时的补偿处理跟下面 MarkSubmittedForApproval 失败时一致：
 		// 取消刚创建的流程实例，避免留下一个永远卡在 Activity_Assessment、又被幂等
 		// 保护挡住无法重新提交的运行中实例。
-		if err := s.completeAssessmentTask(ctx, tenantID, changeID); err != nil {
+		if err := s.completeAssessmentTask(ctx, tenantID, submitterID, changeID); err != nil {
 			if triggerResp != nil {
 				mutationCtx := withProcessInstanceUpdateScope(ctx, submitterID, tenantID)
 				if cancelErr := s.processTriggerService.CancelProcess(mutationCtx, triggerResp.ProcessInstanceID,
@@ -587,7 +588,8 @@ func (s *Service) BackfillLegacyPendingChange(ctx context.Context, changeID, ten
 	if c.Type == "emergency" {
 		processDefKey = "change_emergency_flow"
 	}
-	triggerResp, err := s.processTriggerService.TriggerProcess(ctx, &dto.ProcessTriggerRequest{
+	triggerCtx := service.WithTrustedBPMNTenantContext(ctx, tenantID)
+	triggerResp, err := s.processTriggerService.TriggerProcess(triggerCtx, &dto.ProcessTriggerRequest{
 		BusinessType:         dto.BusinessTypeChange,
 		BusinessID:           workItemID,
 		ProcessDefinitionKey: processDefKey,
@@ -605,7 +607,7 @@ func (s *Service) BackfillLegacyPendingChange(ctx context.Context, changeID, ten
 		return fmt.Errorf("触发审批流程失败: %w", err)
 	}
 
-	if err := s.completeAssessmentTask(ctx, tenantID, changeID); err != nil {
+	if err := s.completeAssessmentTask(ctx, tenantID, c.CreatedBy, changeID); err != nil {
 		// 流程实例已经创建，评估节点没推进成功——补偿取消掉，避免留下一个孤儿实例，
 		// 保持"回填要么完整成功、要么完全没发生"这个不变式，方便这个一次性工具重跑。
 		if triggerResp != nil && s.processTriggerService != nil {
@@ -620,7 +622,8 @@ func (s *Service) BackfillLegacyPendingChange(ctx context.Context, changeID, ten
 	return nil
 }
 
-// completeAssessmentTask 用系统身份自动完成一个刚触发流程的变更的 Activity_Assessment
+// completeAssessmentTask uses the authenticated domain actor with a typed task
+// update capability to advance the non-interactive assessment node.
 // （变更评估）任务，把流程从"评估中"直接推进到 CAB 审批节点。Activity_Assessment 没有
 // 声明 assigneeRole，所以这里不注入 actorUserID（跟 completeChangeApprovalTask 级联完成
 // Activity_Schedule/Activity_Reject 时用系统身份的理由一样：不注入的话 authorizeTaskActor
@@ -628,7 +631,7 @@ func (s *Service) BackfillLegacyPendingChange(ctx context.Context, changeID, ten
 // updateChange（Activity_Assessment 声明的 action=update_change）只在 change_id 传对时
 // 才不会短路失败——其余字段（title/description/status）全部可选，传空变量表示"确认存在、
 // 不改任何字段"的空更新，是安全的。
-func (s *Service) completeAssessmentTask(ctx context.Context, tenantID, changeID int) error {
+func (s *Service) completeAssessmentTask(ctx context.Context, tenantID, actorUserID, changeID int) error {
 	if s.processEngine == nil {
 		return fmt.Errorf("流程引擎未初始化")
 	}
@@ -662,10 +665,12 @@ func (s *Service) completeAssessmentTask(ctx context.Context, tenantID, changeID
 		return fmt.Errorf("查询待办评估任务失败: %w", err)
 	}
 
-	systemCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
-	if err := s.processEngine.CompleteTask(systemCtx, task.TaskID, map[string]interface{}{
-		"change_id": changeID,
-	}); err != nil {
+	actorCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+	actorCtx = context.WithValue(actorCtx, bpmn.BPMNUserIDContextKey, actorUserID)
+	actorCtx = service.WithBPMNAccessScope(actorCtx, service.BPMNAccessScope{
+		UserID: actorUserID, TenantID: tenantID, CanUpdateAllTasks: true,
+	})
+	if err := s.processEngine.CompleteTask(actorCtx, task.TaskID, map[string]interface{}{}); err != nil {
 		return fmt.Errorf("完成变更评估任务失败: %w", err)
 	}
 	return nil
@@ -722,14 +727,9 @@ func (s *Service) completeChangeApprovalTask(ctx context.Context, tenantID, acto
 
 	actorCtx := context.WithValue(ctx, bpmn.BPMNUserIDContextKey, actorUserID)
 	actorCtx = context.WithValue(actorCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	actorCtx = service.WithBPMNAccessScope(actorCtx, service.BPMNAccessScope{UserID: actorUserID, TenantID: tenantID})
 
-	// change_id 必须显式传给 CompleteTask：UserTask 完成后触发的
-	// ChangeServiceTaskHandler 回调只看"完成任务时提交的 variables"，不会自动合并
-	// 流程实例变量（ProcessTriggerService 写进实例变量的是 business_id，键名跟
-	// ChangeServiceTaskHandler 期望的 change_id 也对不上），漏传会导致
-	// approveChange/scheduleChange/rejectChange 都因为 changeID<=0 静默跳过。
 	if err := s.processEngine.CompleteTask(actorCtx, task.TaskID, map[string]interface{}{
-		"change_id":       changeID,
 		"approvalAction":  action,
 		"approvalResult":  approvalResult,
 		"approvalComment": comment,
@@ -776,7 +776,7 @@ func (s *Service) completeCascadeTask(ctx context.Context, instanceID, tenantID,
 	if err := service.CompleteBPMNInternalCascade(ctx, s.processEngine, service.BPMNInternalCascadeRequest{
 		TenantID: tenantID, InstanceID: instanceID, TaskID: nextTask.TaskID,
 		NodeKey: nextTask.TaskDefinitionKey, Source: service.BPMNInternalSourceChangeCABCascade,
-		Variables: map[string]interface{}{"change_id": changeID},
+		Variables: map[string]interface{}{},
 	}); err != nil {
 		return fmt.Errorf("级联完成审批后续任务失败: %w", err)
 	}
@@ -890,7 +890,7 @@ func (s *Service) TransitionStatus(ctx context.Context, id, tenantID, userID int
 	// 与流程状态分叉。不注入 actorUserID：阶段流转的授权边界在域层（JWT + 资源权限 +
 	// 租户隔离），不强制 BPMN 任务 assignee 匹配（authorizeTaskActor 对 userID<=0
 	// 按设计跳过）。
-	if err := s.completeChangeStageTasks(ctx, tenantID, id, targetStatus); err != nil {
+	if err := s.completeChangeStageTasks(ctx, tenantID, userID, id, targetStatus); err != nil {
 		return nil, err
 	}
 
@@ -970,7 +970,7 @@ func changeStageTasks(targetStatus string) []changeStageTask {
 // 引擎依赖。语义特意保持跟旧桥接一致：变更没有关联的运行中流程实例、或指定节点当前
 // 不是待办任务（已完成/流程走了别的分支），都不是错误，跳过继续下一个节点；节点存在
 // 但 CompleteTask 调用失败才中止转换，避免变更状态和流程状态分叉。
-func (s *Service) completeChangeStageTasks(ctx context.Context, tenantID, changeID int, targetStatus string) error {
+func (s *Service) completeChangeStageTasks(ctx context.Context, tenantID, actorUserID, changeID int, targetStatus string) error {
 	if s.processEngine == nil {
 		return nil
 	}
@@ -1010,10 +1010,11 @@ func (s *Service) completeChangeStageTasks(ctx context.Context, tenantID, change
 		return fmt.Errorf("查询变更流程实例失败: %w", err)
 	}
 
-	// actorUserID 不注入：阶段流转的授权边界在域层（JWT + 资源权限 + 租户隔离），不
-	// 强制 BPMN 任务 assignee 匹配（authorizeTaskActor 对 userID<=0 按设计跳过）。
-	actorCtx := context.WithValue(ctx, bpmn.BPMNUserIDContextKey, 0)
+	actorCtx := context.WithValue(ctx, bpmn.BPMNUserIDContextKey, actorUserID)
 	actorCtx = context.WithValue(actorCtx, bpmn.BPMNTenantIDContextKey, tenantID)
+	actorCtx = service.WithBPMNAccessScope(actorCtx, service.BPMNAccessScope{
+		UserID: actorUserID, TenantID: tenantID, CanUpdateAllTasks: true,
+	})
 
 	for _, st := range tasks {
 		task, err := s.entClient.ProcessTask.Query().
@@ -1033,7 +1034,7 @@ func (s *Service) completeChangeStageTasks(ctx context.Context, tenantID, change
 			return fmt.Errorf("查询变更阶段任务(%s)失败: %w", st.key, err)
 		}
 
-		vars := map[string]interface{}{"change_id": changeID}
+		vars := map[string]interface{}{}
 		for k, v := range st.vars {
 			vars[k] = v
 		}

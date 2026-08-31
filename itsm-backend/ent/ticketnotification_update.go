@@ -154,6 +154,26 @@ func (_u *TicketNotificationUpdate) SetNillableStatus(v *string) *TicketNotifica
 	return _u
 }
 
+// SetDeliveryKey sets the "delivery_key" field.
+func (_u *TicketNotificationUpdate) SetDeliveryKey(v string) *TicketNotificationUpdate {
+	_u.mutation.SetDeliveryKey(v)
+	return _u
+}
+
+// SetNillableDeliveryKey sets the "delivery_key" field if the given value is not nil.
+func (_u *TicketNotificationUpdate) SetNillableDeliveryKey(v *string) *TicketNotificationUpdate {
+	if v != nil {
+		_u.SetDeliveryKey(*v)
+	}
+	return _u
+}
+
+// ClearDeliveryKey clears the value of the "delivery_key" field.
+func (_u *TicketNotificationUpdate) ClearDeliveryKey() *TicketNotificationUpdate {
+	_u.mutation.ClearDeliveryKey()
+	return _u
+}
+
 // SetTenantID sets the "tenant_id" field.
 func (_u *TicketNotificationUpdate) SetTenantID(v int) *TicketNotificationUpdate {
 	_u.mutation.ResetTenantID()
@@ -314,6 +334,12 @@ func (_u *TicketNotificationUpdate) sqlSave(ctx context.Context) (_node int, err
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(ticketnotification.FieldStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.DeliveryKey(); ok {
+		_spec.SetField(ticketnotification.FieldDeliveryKey, field.TypeString, value)
+	}
+	if _u.mutation.DeliveryKeyCleared() {
+		_spec.ClearField(ticketnotification.FieldDeliveryKey, field.TypeString)
 	}
 	if value, ok := _u.mutation.TenantID(); ok {
 		_spec.SetField(ticketnotification.FieldTenantID, field.TypeInt, value)
@@ -526,6 +552,26 @@ func (_u *TicketNotificationUpdateOne) SetNillableStatus(v *string) *TicketNotif
 	return _u
 }
 
+// SetDeliveryKey sets the "delivery_key" field.
+func (_u *TicketNotificationUpdateOne) SetDeliveryKey(v string) *TicketNotificationUpdateOne {
+	_u.mutation.SetDeliveryKey(v)
+	return _u
+}
+
+// SetNillableDeliveryKey sets the "delivery_key" field if the given value is not nil.
+func (_u *TicketNotificationUpdateOne) SetNillableDeliveryKey(v *string) *TicketNotificationUpdateOne {
+	if v != nil {
+		_u.SetDeliveryKey(*v)
+	}
+	return _u
+}
+
+// ClearDeliveryKey clears the value of the "delivery_key" field.
+func (_u *TicketNotificationUpdateOne) ClearDeliveryKey() *TicketNotificationUpdateOne {
+	_u.mutation.ClearDeliveryKey()
+	return _u
+}
+
 // SetTenantID sets the "tenant_id" field.
 func (_u *TicketNotificationUpdateOne) SetTenantID(v int) *TicketNotificationUpdateOne {
 	_u.mutation.ResetTenantID()
@@ -716,6 +762,12 @@ func (_u *TicketNotificationUpdateOne) sqlSave(ctx context.Context) (_node *Tick
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(ticketnotification.FieldStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.DeliveryKey(); ok {
+		_spec.SetField(ticketnotification.FieldDeliveryKey, field.TypeString, value)
+	}
+	if _u.mutation.DeliveryKeyCleared() {
+		_spec.ClearField(ticketnotification.FieldDeliveryKey, field.TypeString)
 	}
 	if value, ok := _u.mutation.TenantID(); ok {
 		_spec.SetField(ticketnotification.FieldTenantID, field.TypeInt, value)

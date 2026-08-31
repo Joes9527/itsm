@@ -5,12 +5,12 @@ import (
 	"strings"
 )
 
-// BPMN metaData 的 key 常量。写进 ProcessTask.TaskVariables 时沿用同名 key，
-// CompleteTask 再按同名 key 读回来做回调分发。
+// BPMN metaData keys are parsed into immutable ProcessTask callback fields.
 const (
 	bpmnMetaDataServiceTaskType = "service_task_type"
 	bpmnMetaDataAction          = "action"
 	bpmnMetaDataAllowedActions  = "allowed_actions"
+	bpmnMetaDataCallbackConfig  = "callback_config_ref"
 )
 
 // BPMNElement BPMN元素的基础接口
@@ -153,6 +153,11 @@ func (e *BPMNUserTask) ServiceTaskAction() string {
 	return e.ExtensionElements.GetMetaData(bpmnMetaDataAction)
 }
 
+// CallbackConfigRef returns the trusted connector configuration reference.
+func (e *BPMNUserTask) CallbackConfigRef() string {
+	return e.ExtensionElements.GetMetaData(bpmnMetaDataCallbackConfig)
+}
+
 // GetID 获取ID
 func (e *BPMNUserTask) GetID() string { return e.ID }
 
@@ -196,6 +201,11 @@ func (e *BPMNServiceTask) ServiceTaskType() string {
 // ServiceTaskAction 返回该服务任务声明的 action metaData，未声明时返回空串。
 func (e *BPMNServiceTask) ServiceTaskAction() string {
 	return e.ExtensionElements.GetMetaData(bpmnMetaDataAction)
+}
+
+// CallbackConfigRef returns the trusted connector configuration reference.
+func (e *BPMNServiceTask) CallbackConfigRef() string {
+	return e.ExtensionElements.GetMetaData(bpmnMetaDataCallbackConfig)
 }
 
 // AllowedActions 返回该服务任务声明的 allowed_actions metaData（逗号分隔的动作名列表），

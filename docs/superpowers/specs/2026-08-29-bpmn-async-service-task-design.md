@@ -17,7 +17,7 @@
 ## 2. 现状梳理（设计依据）
 
 - **恢复路径已经是通用的**：`CompleteTask(ctx, taskID, variables)` 只依赖 `ProcessTask.TaskDefinitionKey`/`ProcessInstanceID` 重新解析 BPMN 并调用 `executeStep` 继续推进，不关心当初暂停节点在 XML 里是 `userTask` 还是 `serviceTask`。
-- **完成回调分发已经是元素类型无关的**：`dispatchUserTaskCallback`（`bpmn_process_engine.go:455`）完全依据 `task.TaskVariables["service_task_type"]`/`["action"]`（存的是节点 metaData，不是元素类型）查找 handler 并调用 `Execute`，跟 `serviceTask` 分支（710-721 行）用的是同一个 `findHandlerByTaskType`。Change 流程的 `Activity_CABApproval` 等节点已经在用"UserTask 声明 `service_task_type` metaData，完成后触发 ServiceTask 同款 handler 副作用"这个模式，证明该机制成立。
+- **完成回调分发已经是元素类型无关的**：当时的完成后回调依据任务 metaData 中的 handler 类型和 action 调用 `Execute`，与 `serviceTask` 使用同一 handler 查找口径。Change 的 CAB 节点证明 UserTask 可声明同款副作用。
 - **`ExtensionElements.GetMetaData(key)` 是通用键值访问器**：`ServiceTaskType()`/`ServiceTaskAction()`（`bpmn_types.go:191-197`）只是对它的两个具名封装，读任意新 metaData key（比如新增的 `allowed_actions`）不需要改 XML 解析器结构体。
 - **`authorizeTaskActor`（`bpmn_process_engine.go:552`）今天有一个口子**：`ctx` 里没有注入 `BPMNUserIDContextKey`（无人类用户）时直接放行，不做任何校验——这是为平台级调用留的通道，但如果 KAF 的调用直接复用这条路径，会绕开"只能完成分配给自己的任务"这层校验。
 - **`SuspendProcess`/`ResumeProcess`（`bpmn_process_engine.go:1527/1576`）是正交概念**：只是把 `ProcessInstance.Status` 整体标记为 `suspended`（管理员主动冻结整个实例），跟本设计的"某个节点级暂停等待外部完成"不是同一回事，互不影响。
@@ -68,7 +68,7 @@ if handler := e.findHandlerByTaskType(serviceTaskType); handler != nil {
 不新增恢复函数。上游设计 §4.2 的 `complete_bpmn_task` typed action 落地时，controller 内部直接调用现有 `CompleteTask(ctx, taskID, variables)`：
 
 - 步骤 1-4（查任务、鉴权、查实例、原子标记完成）不变，鉴权规则见 3.4；
-- 步骤 5（乐观锁合并变量）、步骤 6（`executeStep` 从 `task.TaskDefinitionKey` 继续）、步骤 6.5（`dispatchUserTaskCallback` 按 `task_variables["service_task_type"]` 找回 `KafDelegateServiceTaskHandler` 调用 `Execute`——这次 `Execute` 只做记录/审计，不做业务副作用）、步骤 7（审计）全部原样复用；
+- 步骤 5（乐观锁合并变量）、步骤 6（`executeStep` 从 `task.TaskDefinitionKey` 继续）、步骤 6.5（按任务声明找回 `KafDelegateServiceTaskHandler` 调用只做记录/审计的 `Execute`）、步骤 7（审计）全部原样复用；
 - 重复调用 `complete_bpmn_task`（比如 KAF 超时重试）会撞上步骤 4 现有的 `updated != 1` 分支，返回"任务已被处理"——上游 API 契约里 `already_applied` 的判定就基于这个错误。这次设计只保证引擎层给出可区分的错误，具体映射到 `applied`/`already_applied` 的 HTTP 层语义留给上游 API 设计（不在本设计范围）。
 
 ### 3.4 鉴权：复用现有 RBAC，不新增技术账号体系
@@ -101,7 +101,7 @@ if task.TaskType == "kaf_delegate" {
 
 ## 4. 错误处理
 
-- 节点声明的 `service_task_type` 找不到已注册 handler：沿用现有约定（`serviceTask` 分支 722-725 行、`dispatchUserTaskCallback` 466-470 行），记警告日志、视为 NoOp，不阻断流程——`kaf_delegate` 类型必须在部署前确保 handler 已注册，否则流程会悄悄跳过暂停直接往下走，这是现有约定的已知代价，本设计不改变它。
+- 节点声明的 `service_task_type` 找不到已注册 handler：当时的约定是记警告并视为 NoOp；`kaf_delegate` 必须在部署前注册，本设计不改变该约定。
 - 重复 `complete_bpmn_task`：见 3.3，复用现有"任务已被处理"错误。
 - 非 `kaf_automation` 角色调用 `complete_bpmn_task`：`authorizeKafAutomationActor` 拒绝，返回权限错误，不触及任务状态。
 - `task.Status != "delegated"`（比如任务已被取消）：`authorizeKafAutomationActor` 一并拒绝。
@@ -110,12 +110,12 @@ if task.TaskType == "kaf_delegate" {
 
 **回归**（确保零行为变化）：
 - 现有 9 个 handler 的同步执行路径（`serviceTask` 分支）行为不变；
-- 现有 `user_task` 创建/完成/`dispatchUserTaskCallback` 行为不变；
+- 现有 `user_task` 创建、完成和完成后 handler 回调行为不变；
 - 现有全部 BPMN 流程模板（SSLVPN 双级审批、Change CAB 审批等）端到端跑通，不因新增的类型断言分支引入回归。
 
 **新增**：
 - 异步 handler 声明 `IsAsync()==true` 时，流程到达节点后创建 `ProcessTask`（`status="delegated"`）且实例 `CurrentActivityID` 停在该节点，不继续推进；
-- 通过 `CompleteTask` 完成该任务后，流程沿正确出边继续，`dispatchUserTaskCallback` 触发 handler 的 `Execute` 且不产生额外业务副作用；
+- 通过 `CompleteTask` 完成该任务后，流程沿正确出边继续并触发 handler 的 `Execute`，且不产生额外业务副作用；
 - 重复调用 `CompleteTask` 完成同一任务返回"已处理"错误，不重复推进流程；
 - 非 `kaf_automation` 角色调用被 `authorizeKafAutomationActor` 拒绝；`kaf_automation` 角色但 `task.Status != "delegated"` 也被拒绝；
 - `allowed_actions` metaData 能正确从 BPMN XML 经 `ExtensionElements.GetMetaData` 读出并写入 `task_variables`。

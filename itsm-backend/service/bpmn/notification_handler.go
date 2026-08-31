@@ -6,6 +6,8 @@ import (
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/notification"
+	"itsm-backend/ent/user"
 
 	"go.uber.org/zap"
 )
@@ -46,9 +48,9 @@ func (h *NotificationHandler) Execute(ctx context.Context, task *ent.ProcessTask
 	case "send_in_app":
 		return h.sendInAppNotification(ctx, variables)
 	case "send_webhook":
-		return h.sendWebhookNotification(ctx, variables)
+		return nil, fmt.Errorf("Webhook 通知必须使用带可信连接器配置的 webhook_task")
 	default:
-		return h.sendInAppNotification(ctx, variables)
+		return nil, fmt.Errorf("不支持的通知动作")
 	}
 }
 
@@ -59,52 +61,12 @@ func (h *NotificationHandler) Validate(ctx context.Context, config map[string]in
 
 // sendEmail 发送邮件通知
 func (h *NotificationHandler) sendEmail(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
-	recipients := GetStringFromVars(variables, "recipients")
-	subject := GetStringFromVars(variables, "subject")
-	body := GetStringFromVars(variables, "body")
-
-	if recipients == "" {
-		return nil, fmt.Errorf("邮件收件人不能为空")
-	}
-
-	h.logger.Infow(
-		"Sending email notification via BPMN",
-		"recipients", recipients,
-		"subject", subject,
-		"body_length", len(body),
-	)
-
-	// 这里应该调用邮件服务发送邮件
-	// 简化处理，只记录日志
-
-	return &dto.ServiceTaskResult{
-		Success: true,
-		Message: fmt.Sprintf("邮件已发送到 %s", recipients),
-	}, nil
+	return nil, fmt.Errorf("BPMN 邮件通知适配器未配置，不能声明发送成功")
 }
 
 // sendSMS 发送短信通知
 func (h *NotificationHandler) sendSMS(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
-	phoneNumbers := GetStringFromVars(variables, "phone_numbers")
-	message := GetStringFromVars(variables, "message")
-
-	if phoneNumbers == "" {
-		return nil, fmt.Errorf("手机号不能为空")
-	}
-
-	h.logger.Infow(
-		"Sending SMS notification via BPMN",
-		"phone_numbers", phoneNumbers,
-		"message", message,
-	)
-
-	// 这里应该调用短信服务发送短信
-	// 简化处理，只记录日志
-
-	return &dto.ServiceTaskResult{
-		Success: true,
-		Message: fmt.Sprintf("短信已发送到 %s", phoneNumbers),
-	}, nil
+	return nil, fmt.Errorf("BPMN 短信通知适配器未配置，不能声明发送成功")
 }
 
 // sendInAppNotification 发送应用内通知
@@ -117,45 +79,52 @@ func (h *NotificationHandler) sendInAppNotification(ctx context.Context, variabl
 	if userIDs == 0 {
 		return nil, fmt.Errorf("用户ID不能为空")
 	}
+	if h.client == nil {
+		return nil, fmt.Errorf("通知存储未配置")
+	}
+	tenantID, err := RequireTenantID(ctx, variables)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := h.client.User.Query().Where(user.ID(userIDs), user.TenantID(tenantID), user.Active(true)).Only(ctx); err != nil {
+		return nil, fmt.Errorf("通知接收人不存在或不属于当前租户")
+	}
+	if notificationType == "" {
+		notificationType = "info"
+	}
+	deliveryKey, durable := BPMNCallbackExecutionKey(ctx)
+	if durable {
+		exists, err := h.client.Notification.Query().Where(
+			notification.TenantID(tenantID),
+			notification.UserID(userIDs),
+			notification.DeliveryKey(deliveryKey),
+		).Exist(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("检查通知幂等状态失败")
+		}
+		if exists {
+			return &dto.ServiceTaskResult{Success: true, Message: fmt.Sprintf("应用内通知已发送给用户 %d", userIDs)}, nil
+		}
+	}
 
-	h.logger.Infow(
-		"Sending in-app notification via BPMN",
-		"user_id", userIDs,
-		"title", title,
-		"type", notificationType,
-		"content_length", len(content),
-	)
+	create := h.client.Notification.Create().
+		SetTitle(title).
+		SetMessage(content).
+		SetType(notificationType).
+		SetUserID(userIDs).
+		SetTenantID(tenantID)
+	if durable {
+		create.SetDeliveryKey(deliveryKey)
+	}
+	if _, err := create.Save(ctx); err != nil {
+		return nil, fmt.Errorf("创建应用内通知失败")
+	}
 
-	// 这里应该调用通知服务发送应用内通知
-	// 简化处理，只记录日志
+	h.logger.Infow("In-app notification persisted via BPMN", "user_id", userIDs, "tenant_id", tenantID)
 
 	return &dto.ServiceTaskResult{
 		Success: true,
 		Message: fmt.Sprintf("应用内通知已发送给用户 %d", userIDs),
-	}, nil
-}
-
-// sendWebhookNotification 发送Webhook通知
-func (h *NotificationHandler) sendWebhookNotification(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
-	webhookURL := GetStringFromVars(variables, "webhook_url")
-	payload := GetStringFromVars(variables, "payload")
-
-	if webhookURL == "" {
-		return nil, fmt.Errorf("webhook URL不能为空")
-	}
-
-	h.logger.Infow(
-		"Sending webhook notification via BPMN",
-		"webhook_url", webhookURL,
-		"payload", payload,
-	)
-
-	// 这里应该调用Webhook服务发送通知
-	// 简化处理，只记录日志
-
-	return &dto.ServiceTaskResult{
-		Success: true,
-		Message: fmt.Sprintf("Webhook通知已发送到 %s", webhookURL),
 	}, nil
 }
 

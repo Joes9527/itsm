@@ -8,6 +8,7 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/ticket"
+	"itsm-backend/ent/ticketnotification"
 
 	"go.uber.org/zap"
 )
@@ -37,10 +38,8 @@ func (h *GenericServiceTaskHandler) GetHandlerID() string {
 	return "generic_service_handler"
 }
 
-// Execute 执行通用服务任务。已知的 action 对应内置模板（service_request_flow /
-// service_request_urgent_flow / incident_emergency_flow）里真实声明的动作，做真实的
-// Ticket/Notification 写入；未识别的 action 保留原有的变量透传行为，不强行猜测语义——
-// generic_task 这个类型本身的定位就是给未来自定义模板留的通用出口。
+// Execute 执行通用服务任务。已知 action 对应内置模板的真实业务写入；
+// 未知 action 必须失败关闭，不能在未产生业务效果时推进流程。
 func (h *GenericServiceTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
 	action, _ := variables["action"].(string)
 	switch action {
@@ -51,16 +50,7 @@ func (h *GenericServiceTaskHandler) Execute(ctx context.Context, task *ent.Proce
 	case "notify":
 		return h.notifyRequester(ctx, variables, "有新的处理进展，请查看")
 	default:
-		operation, _ := variables["operation"].(string)
-		result := &dto.ServiceTaskResult{
-			Success:    true,
-			Message:    fmt.Sprintf("通用任务 %s 执行完成", operation),
-			OutputVars: make(map[string]interface{}),
-		}
-		for k, v := range variables {
-			result.OutputVars[k] = v
-		}
-		return result, nil
+		return nil, fmt.Errorf("不支持的通用回调动作")
 	}
 }
 
@@ -77,11 +67,8 @@ func (h *GenericServiceTaskHandler) Validate(ctx context.Context, config map[str
 // business_type=incident、business_id=<事件ID> 触发的——事件 ID 和工单 ID 是两个完全
 // 独立的 ID 空间，撞号时会读到毫不相干的工单，甚至是别的租户的工单。
 //
-// 空串同样放行：ProcessTriggerService 会把 business_type 写进实例变量，
-// mergeServiceTaskVariables 会把实例变量整体带进 ServiceTask 分发路径，所以内置模板里
-// 所有 generic_task 节点（全部是 serviceTask）都能看到它；但 dispatchUserTaskCallback
-// 刻意不合并实例变量，自定义模板若把 generic_task 挂在 UserTask 上就会看不到 business_type。
-// 那种情况下保持既有行为（按工单处理），不因为收紧而误伤存量自定义模板。
+// ProcessTriggerService 将 business_type 写入实例，回调执行时再从权威实例身份补齐。
+// 空串仅保留给不涉及持久化 UserTask 回调的直接调用兼容路径。
 var ticketBackedBusinessTypes = map[string]struct{}{
 	"":                {},
 	"ticket":          {},
@@ -117,8 +104,18 @@ func (h *GenericServiceTaskHandler) completeService(ctx context.Context, variabl
 	if err != nil {
 		return nil, err
 	}
-	update := h.client.Ticket.UpdateOneID(ticketID).Where(ticket.TenantID(tenantID))
-	if _, err := update.SetStatus("resolved").SetResolvedAt(time.Now()).SetUpdatedAt(time.Now()).Save(ctx); err != nil {
+	current, err := h.getTicket(ctx, ticketID, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("完成服务请求失败: %w", err)
+	}
+	if current.Status == "resolved" && !current.ResolvedAt.IsZero() {
+		return &dto.ServiceTaskResult{Success: true, Message: fmt.Sprintf("工单 %d 已完成", ticketID)}, nil
+	}
+	update := current.Update().SetStatus("resolved").SetUpdatedAt(time.Now())
+	if current.ResolvedAt.IsZero() {
+		update.SetResolvedAt(time.Now())
+	}
+	if _, err := update.Save(ctx); err != nil {
 		return nil, fmt.Errorf("完成服务请求失败: %w", err)
 	}
 	h.logger.Infow("Service request completed via BPMN generic handler", "ticket_id", ticketID)
@@ -171,8 +168,29 @@ func (h *GenericServiceTaskHandler) notifyRequester(ctx context.Context, variabl
 	}
 	content = fmt.Sprintf("工单 %s「%s」：%s", ticketEntity.TicketNumber, ticketEntity.Title, content)
 
+	deliveryKey, durable := BPMNCallbackExecutionKey(ctx)
+	tx, err := h.client.Tx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("开启通知事务失败: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if durable {
+		exists, err := tx.TicketNotification.Query().Where(
+			ticketnotification.TenantID(tenantID),
+			ticketnotification.TicketID(ticketID),
+			ticketnotification.UserID(ticketEntity.RequesterID),
+			ticketnotification.DeliveryKey(deliveryKey),
+		).Exist(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("检查通知幂等状态失败: %w", err)
+		}
+		if exists {
+			return &dto.ServiceTaskResult{Success: true, Message: "通知已发送"}, nil
+		}
+	}
+
 	now := time.Now()
-	if _, err := h.client.TicketNotification.Create().
+	ticketCreate := tx.TicketNotification.Create().
 		SetTicketID(ticketID).
 		SetUserID(ticketEntity.RequesterID).
 		SetType("workflow").
@@ -180,20 +198,29 @@ func (h *GenericServiceTaskHandler) notifyRequester(ctx context.Context, variabl
 		SetContent(content).
 		SetTenantID(tenantID).
 		SetStatus("sent").
-		SetSentAt(now).
-		Save(ctx); err != nil {
+		SetSentAt(now)
+	if durable {
+		ticketCreate.SetDeliveryKey(deliveryKey)
+	}
+	if _, err := ticketCreate.Save(ctx); err != nil {
 		return nil, fmt.Errorf("创建工单通知失败: %w", err)
 	}
-	if _, err := h.client.Notification.Create().
+	notificationCreate := tx.Notification.Create().
 		SetTitle("工单进展通知").
 		SetMessage(content).
 		SetType("info").
 		SetUserID(ticketEntity.RequesterID).
 		SetTenantID(tenantID).
 		SetActionURL(fmt.Sprintf("/tickets/%d", ticketID)).
-		SetActionText("查看工单").
-		Save(ctx); err != nil {
-		h.logger.Warnw("Failed to create unified notification via BPMN generic handler", "error", err, "ticket_id", ticketID)
+		SetActionText("查看工单")
+	if durable {
+		notificationCreate.SetDeliveryKey(deliveryKey)
+	}
+	if _, err := notificationCreate.Save(ctx); err != nil {
+		return nil, fmt.Errorf("创建统一通知失败: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("提交通知事务失败: %w", err)
 	}
 
 	return &dto.ServiceTaskResult{Success: true, Message: "通知已发送"}, nil

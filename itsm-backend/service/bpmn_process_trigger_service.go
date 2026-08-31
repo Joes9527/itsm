@@ -44,6 +44,14 @@ func (s *ProcessTriggerService) TriggerProcess(ctx context.Context, req *dto.Pro
 	if err := s.validateTriggerRequest(req); err != nil {
 		return nil, err
 	}
+	if _, present := bpmnAccessScopeValue(ctx); present {
+		scope, err := BPMNAccessScopeFromContext(ctx)
+		if err != nil || scope.TenantID != req.TenantID {
+			return nil, fmt.Errorf("流程触发租户授权上下文不一致")
+		}
+	} else if trustedTenantID, ok := trustedBPMNTenantFromContext(ctx); !ok || trustedTenantID != req.TenantID {
+		return nil, fmt.Errorf("流程触发缺少可信租户授权上下文")
+	}
 
 	// 2. 如果没有指定流程定义，则根据业务类型查找
 	processDefKey := req.ProcessDefinitionKey
@@ -89,7 +97,8 @@ func (s *ProcessTriggerService) TriggerProcess(ctx context.Context, req *dto.Pro
 	variables := s.buildProcessVariables(req, definition)
 
 	// 6. 设置租户上下文并启动流程
-	triggerCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, req.TenantID)
+	triggerCtx := WithTrustedBPMNTenantContext(ctx, req.TenantID)
+	triggerCtx = context.WithValue(triggerCtx, bpmn.BPMNTenantIDContextKey, req.TenantID)
 	instance, err := s.processEngine.StartProcess(triggerCtx, processDefKey, businessKey, strings.ToLower(string(req.BusinessType)), req.BusinessID, variables)
 	if err != nil {
 		return nil, errors.Wrap(err, "启动流程失败")

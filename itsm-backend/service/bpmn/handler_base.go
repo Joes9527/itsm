@@ -62,6 +62,13 @@ type ServiceTaskHandlerInterface interface {
 	GetHandlerID() string
 }
 
+// CallbackPayloadPolicy declares the only participant/process fields a handler
+// permits in durable callback storage. Handlers without this interface receive
+// an empty durable payload.
+type CallbackPayloadPolicy interface {
+	CallbackPayloadFields(action string) []string
+}
+
 // HandlerBase 处理器基类
 // 提供通用的辅助方法
 type HandlerBase struct {
@@ -86,7 +93,10 @@ func GetIntFromVars(variables map[string]interface{}, key string) int {
 // GetIntSliceFromVars 从变量中提取整数切片
 func GetIntSliceFromVars(variables map[string]interface{}, key string) []int {
 	if v, ok := variables[key]; ok {
-		if val, ok := v.([]interface{}); ok {
+		switch val := v.(type) {
+		case []int:
+			return append([]int(nil), val...)
+		case []interface{}:
 			res := make([]int, 0, len(val))
 			for _, item := range val {
 				switch i := item.(type) {
@@ -131,27 +141,15 @@ func GetStringFromVars(variables map[string]interface{}, key string) string {
 	return ""
 }
 
-// GetTenantIDFromVars 解析当前操作的租户ID，优先级与
-// TicketServiceTaskHandler.getTenantID 完全一致：
-//
-//  1. ctx 里的 BPMNTenantIDContextKey —— 唯一可信来源。它由认证中间件解析出的 JWT 会话
-//     经 controller 的 getBPMNTenantContext / BPMNApprovalBridge 注入，客户端伪造不了。
-//  2. variables["tenant_id"] —— 仅作兜底。ServiceTask 分发路径上它来自
-//     ProcessTriggerService 写入的实例变量（可信），但 UserTask 回调路径
-//     （PUT /tasks/:id/complete → dispatchUserTaskCallback）会把请求体里的
-//     req.Variables 原样透传进来，所以这一层整体上必须当作不可信输入。
-//  3. 两者都没有 → 返回 0，fail closed。
-//
-// 绝不能像旧实现那样默认回落到租户 1：调用方可以带着别的租户的 business_id 完成自己的
-// 合法任务，租户解析一旦默认到 1，越权写入就正好落在租户 1 的真实业务数据上。
-// 返回 0 时，调用方必须自己拒绝执行租户范围内的读写（见各 handler 的 requireTenantID）。
+// GetTenantIDFromVars returns only the execution context tenant. Callback
+// variables are untrusted and can never select a tenant.
 func GetTenantIDFromVars(ctx context.Context, variables map[string]interface{}) int {
 	if ctx != nil {
 		if tenantID, ok := ctx.Value(BPMNTenantIDContextKey).(int); ok && tenantID > 0 {
 			return tenantID
 		}
 	}
-	return GetIntFromVars(variables, "tenant_id")
+	return 0
 }
 
 // RequireTenantID 在 GetTenantIDFromVars 之上加一道 fail-closed 断言：

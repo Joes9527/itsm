@@ -789,6 +789,7 @@ func TestRecordApprovalDecision_PersistsApproveReject(t *testing.T) {
 	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
 	ctx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, actorID)
 	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: actorID, TenantID: tenantID})
 
 	instanceID, taskID := createProcessFixture(t, engine, tenantID, "approval1")
 	instance, err := engine.client.ProcessInstance.Get(ctx, instanceID)
@@ -852,6 +853,7 @@ func TestAuthorizeTaskActor_AllowsAssigneeAndCandidate(t *testing.T) {
 	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
 	ctx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, actorID)
 	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: actorID, TenantID: tenantID})
 
 	_, taskID1 := createProcessFixture(t, engine, tenantID, "authz1")
 	_, taskID2 := createProcessFixture(t, engine, tenantID, "authz2")
@@ -874,7 +876,7 @@ func TestAuthorizeTaskActor_AllowsAssigneeAndCandidate(t *testing.T) {
 	assert.Error(t, engine.authorizeTaskActor(ctx, task3))
 }
 
-func TestAuthorizeTaskActor_NoActorContextIsPermissive(t *testing.T) {
+func TestAuthorizeTaskActor_RejectsMissingTypedScope(t *testing.T) {
 	engine, baseCtx := newApprovalDecisionTestEngine(t)
 	tenantID, _ := setupApprovalDecisionFixture(t, engine)
 	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
@@ -882,8 +884,7 @@ func TestAuthorizeTaskActor_NoActorContextIsPermissive(t *testing.T) {
 	_, taskID := createProcessFixture(t, engine, tenantID, "noctx1")
 	task, err := engine.client.ProcessTask.Get(ctx, taskID)
 	require.NoError(t, err)
-	// No actor in context should not error (system/internal calls stay working)
-	assert.NoError(t, engine.authorizeTaskActor(ctx, task))
+	assert.Error(t, engine.authorizeTaskActor(ctx, task))
 }
 
 func TestBPMNServiceTask_ServiceTaskType_ReadsExtensionElementsMetaData(t *testing.T) {
@@ -947,8 +948,10 @@ func TestHandleElement_ServiceTask_DispatchesByMetaDataOverAttributeGuessing(t *
 		SetProcessDefinitionKey(def.Key).
 		SetProcessDefinitionID(def.ID).
 		SetBusinessKey(fmt.Sprintf("ticket:%d", tkt.ID)).
+		SetBusinessType("ticket").
+		SetBusinessID(tkt.ID).
 		SetStatus("running").SetTenantID(tenantID).
-		SetVariables(map[string]interface{}{"business_type": "ticket", "business_id": tkt.ID}).
+		SetVariables(map[string]interface{}{}).
 		Save(ctx)
 	require.NoError(t, err)
 
@@ -1000,11 +1003,21 @@ func TestHandleElement_ServiceTask_IncidentAutoAssign_NoAssignee_ContinuesFlow(t
 	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
 	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, actorID)
 
+	workItem := engine.client.Ticket.Create().
+		SetTitle("自动分配空态回归").
+		SetTicketNumber("T-INC-AUTOASSIGN-1").
+		SetType("incident").
+		SetRecordClass("incident").
+		SetStatus("new").
+		SetRequesterID(actorID).
+		SetTenantID(tenantID).
+		SaveX(ctx)
 	inc, err := engine.client.Incident.Create().
 		SetTitle("自动分配空态回归").
 		SetIncidentNumber("INC-AUTOASSIGN-1").
 		SetStatus("new").
 		SetReporterID(actorID).
+		SetWorkItemID(workItem.ID).
 		SetTenantID(tenantID).
 		Save(ctx)
 	require.NoError(t, err)
@@ -1050,14 +1063,12 @@ func TestHandleElement_ServiceTask_IncidentAutoAssign_NoAssignee_ContinuesFlow(t
 		SetProcessInstanceID("PI-incident-autoassign").
 		SetProcessDefinitionKey(def.Key).
 		SetProcessDefinitionID(def.ID).
-		SetBusinessKey(fmt.Sprintf("incident:%d", inc.ID)).
+		SetBusinessKey(fmt.Sprintf("incident:%d", workItem.ID)).
+		SetBusinessType("incident").
+		SetBusinessID(workItem.ID).
 		SetStatus("running").SetTenantID(tenantID).
 		SetVariables(map[string]interface{}{
-			"business_type": "incident",
-			"business_id":   inc.ID,
-			"incident_id":   inc.ID,
-			"assignee_id":   inc.AssigneeID, // 0：没有可用处理人
-			"tenant_id":     tenantID,
+			"assignee_id": inc.AssigneeID, // 0：没有可用处理人
 		}).
 		Save(ctx)
 	require.NoError(t, err)
@@ -1185,9 +1196,10 @@ func TestHandleElement_AsyncServiceTask_PausesAndCreatesDelegatedTask(t *testing
 	require.NoError(t, err)
 	assert.Equal(t, "fake_async_task", delegatedTask.TaskType)
 	assert.Equal(t, "delegated", delegatedTask.Status)
-	assert.Equal(t, "fake_async_task", delegatedTask.TaskVariables["service_task_type"])
-	assert.Equal(t, "delegate", delegatedTask.TaskVariables["action"])
-	assert.Equal(t, "resolve,update_progress", delegatedTask.TaskVariables["allowed_actions"])
+	assert.Empty(t, delegatedTask.TaskVariables)
+	assert.Equal(t, "fake_async_handler", delegatedTask.CallbackHandlerID)
+	assert.Equal(t, "fake_async_task", delegatedTask.CallbackTaskType)
+	assert.Equal(t, "delegate", delegatedTask.CallbackAction)
 }
 
 // TestHandleElement_AsyncServiceTask_LegacyAttributeFallback_PausesAndCreatesDelegatedTask
@@ -1240,13 +1252,13 @@ func TestHandleElement_AsyncServiceTask_LegacyAttributeFallback_PausesAndCreates
 		Where(processtask.ProcessInstanceID(instance.ID), processtask.TaskDefinitionKey("Activity_LegacyAsync")).
 		Only(ctx)
 	require.NoError(t, err)
-	// TaskType 必须记录 legacy 路径实际命中 handler 时用的那个字符串（这里是
-	// DelegateExpression 的值），而不是空串（serviceTask.ServiceTaskType() 在这条路径下
-	// 恒为空）——否则 authorizeTaskActor/dispatchUserTaskCallback 之后用 TaskType 重新
-	// findHandlerByTaskType 会查不到同一个 handler。
+	// TaskType preserves the legacy reference for compatibility, while callback
+	// execution and authorization use the separately persisted exact descriptor.
 	assert.Equal(t, "legacy_async_delegate_expression", delegatedTask.TaskType)
 	assert.Equal(t, common.ProcessTaskStatusDelegated, delegatedTask.Status)
-	assert.Equal(t, "legacy_async_delegate_expression", delegatedTask.TaskVariables["service_task_type"])
+	assert.Empty(t, delegatedTask.TaskVariables)
+	assert.Equal(t, "legacy_async_delegate_expression", delegatedTask.CallbackHandlerID)
+	assert.Equal(t, "fake_async_legacy_task", delegatedTask.CallbackTaskType)
 
 	// 鉴权口子必须跟暂停判断一致：同一个 TaskType 拿去 authorizeTaskActor，必须走
 	// authorizeKafAutomationActor 分支——而不是人工任务分支（那条分支下 assignee/
@@ -1263,7 +1275,7 @@ func TestHandleElement_AsyncServiceTask_LegacyAttributeFallback_PausesAndCreates
 		SetTenantID(tenantID).
 		Save(ctx)
 	require.NoError(t, err)
-	kafCtx := context.WithValue(ctx, bpmn.BPMNUserIDContextKey, kafUser.ID)
+	kafCtx := WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: kafUser.ID, TenantID: tenantID})
 	assert.NoError(t, engine.authorizeTaskActor(kafCtx, delegatedTask), "legacy 路径解析出的异步任务必须走 authorizeKafAutomationActor 并允许 kaf_automation 账号完成")
 }
 
@@ -1290,7 +1302,7 @@ func TestAuthorizeTaskActor_KafDelegate_AllowsKafAutomationRoleWhenDelegated(t *
 		Save(ctx)
 	require.NoError(t, err)
 
-	actorCtx := context.WithValue(ctx, bpmn.BPMNUserIDContextKey, kafUser.ID)
+	actorCtx := WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: kafUser.ID, TenantID: tenantID})
 	assert.NoError(t, engine.authorizeTaskActor(actorCtx, task))
 }
 
@@ -1321,7 +1333,7 @@ func TestAuthorizeTaskActor_KafDelegate_AllowsRoleWithCasingAndWhitespaceVarianc
 		Save(ctx)
 	require.NoError(t, err)
 
-	actorCtx := context.WithValue(ctx, bpmn.BPMNUserIDContextKey, kafUser.ID)
+	actorCtx := WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: kafUser.ID, TenantID: tenantID})
 	assert.NoError(t, engine.authorizeTaskActor(actorCtx, task))
 }
 
@@ -1384,7 +1396,7 @@ func TestAuthorizeTaskActor_KafDelegate_RejectsWhenNotDelegatedStatus(t *testing
 		Save(ctx)
 	require.NoError(t, err)
 
-	actorCtx := context.WithValue(ctx, bpmn.BPMNUserIDContextKey, kafUser.ID)
+	actorCtx := WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: kafUser.ID, TenantID: tenantID})
 	assert.Error(t, engine.authorizeTaskActor(actorCtx, task))
 }
 
@@ -1422,9 +1434,9 @@ func TestAuthorizeTaskActor_KafDelegate_RejectsCrossTenantActor(t *testing.T) {
 		Save(baseCtx)
 	require.NoError(t, err)
 
-	// 故意不注入 BPMNTenantIDContextKey，模拟 CompleteTask 平台级调用跳过租户过滤那条路径——
-	// authorizeKafAutomationActor 必须靠自己的 actor.TenantID vs task.TenantID 比较兜底。
-	actorCtx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, kafUserOtherTenant.ID)
+	actorCtx := WithBPMNAccessScope(baseCtx, BPMNAccessScope{
+		UserID: kafUserOtherTenant.ID, TenantID: otherTenant.ID,
+	})
 	assert.Error(t, engine.authorizeTaskActor(actorCtx, task), "跨租户的 kaf_automation 账号不应该被允许完成委派任务")
 }
 
@@ -1456,6 +1468,7 @@ func TestCompleteTask_ResumesDelegatedTask_AfterAsyncPause(t *testing.T) {
 	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
 	authorCtx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
 	authorCtx = context.WithValue(authorCtx, bpmn.BPMNUserIDContextKey, actorID)
+	authorCtx = WithBPMNAccessScope(authorCtx, BPMNAccessScope{UserID: actorID, TenantID: tenantID})
 
 	fakeHandler := &fakeAsyncServiceTaskHandler{taskType: bpmn.KafDelegateTaskType, handlerID: "kaf_delegate_handler"}
 	engine.callbackRegistry.RegisterHandler(fakeHandler)
@@ -1486,11 +1499,9 @@ func TestCompleteTask_ResumesDelegatedTask_AfterAsyncPause(t *testing.T) {
 		Where(processtask.ProcessInstanceID(instance.ID), processtask.TaskDefinitionKey("Activity_KafDelegate")).
 		Only(authorCtx)
 	require.NoError(t, err)
-	// Minor #7 回归：allowed_actions 必须真的经过 XML -> ExtensionElements.GetMetaData
-	// 解析出来（而不是只在 Task 2 的 Go 结构体字面量测试里验证过），这里用的是真实
-	// ParseXML 产出的 process，不是手写的 BPMNProcess{}。
-	assert.Equal(t, "resolve,update_progress", delegatedTask.TaskVariables["allowed_actions"],
-		"allowed_actions metaData 应该从真实 BPMN XML 解析出来并写入 ProcessTask.TaskVariables")
+	assert.Empty(t, delegatedTask.TaskVariables)
+	assert.Equal(t, "kaf_delegate_handler", delegatedTask.CallbackHandlerID)
+	assert.Equal(t, bpmn.KafDelegateTaskType, delegatedTask.CallbackTaskType)
 
 	kafUser, err := engine.client.User.Create().
 		SetUsername("kaf_automation_bot3").
@@ -1511,14 +1522,14 @@ func TestCompleteTask_ResumesDelegatedTask_AfterAsyncPause(t *testing.T) {
 	assert.Equal(t, "delegated", stillDelegated.Status)
 
 	// 3. kaf_automation 账号调用：完成任务并推进流程。
-	kafCtx := context.WithValue(authorCtx, bpmn.BPMNUserIDContextKey, kafUser.ID)
+	kafCtx := WithBPMNAccessScope(authorCtx, BPMNAccessScope{UserID: kafUser.ID, TenantID: tenantID})
 	err = engine.CompleteTask(kafCtx, delegatedTask.TaskID, map[string]interface{}{"resultSummary": "done"})
 	require.NoError(t, err)
 
 	completed, err := engine.client.ProcessTask.Get(kafCtx, delegatedTask.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "completed", completed.Status)
-	assert.Equal(t, 1, fakeHandler.executed, "完成时应该经 dispatchUserTaskCallback 触发一次 handler.Execute 用于记录")
+	assert.Equal(t, 1, fakeHandler.executed, "完成时应该触发一次异步 handler.Execute 用于记录")
 
 	updatedInstance, err := engine.client.ProcessInstance.Get(kafCtx, instance.ID)
 	require.NoError(t, err)

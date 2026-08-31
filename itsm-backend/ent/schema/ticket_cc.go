@@ -6,6 +6,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
+	"entgo.io/ent/schema/index"
 )
 
 // TicketCC holds the schema definition for the TicketCC entity.
@@ -42,5 +43,12 @@ func (TicketCC) Edges() []ent.Edge {
 			Unique().
 			Required().
 			Comment("所属工单"),
+	}
+}
+
+// Indexes of the TicketCC.
+func (TicketCC) Indexes() []ent.Index {
+	return []ent.Index{
+		index.Fields("tenant_id", "ticket_id", "user_id").Unique(),
 	}
 }

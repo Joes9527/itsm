@@ -21,11 +21,8 @@ import (
 // PUT /workflow/tasks/:id/complete 走的是
 // processEngine.TaskService().CompleteTaskByID(...)，而 bpmnTaskService 的
 // CompleteTask/CompleteTaskByID 每次都 NewCustomProcessEngine(...) 现造一个引擎——
-// 新引擎带的是一个全新的、从没被注入过的 CallbackRegistry。于是
-// dispatchUserTaskCallback 找到的 TicketServiceTaskHandler 的 statusService 是 nil，
-// 回调返回 "ticket status service 未注入"，而该错误在 dispatchUserTaskCallback 里
-// 只被 Warnw 吞掉（设计如此：任务已完成、流程已推进，不能回滚），所以工单状态
-// 在生产环境里静默地永远不会被 BPMN 改动，且没有任何请求会失败。
+// 新引擎带的是一个全新的、从没被注入过的 CallbackRegistry。于是持久化回调无法
+// 使用应用启动时装配好的 TicketServiceTaskHandler，工单状态永远不会被 BPMN 改动。
 //
 // 因此这些测试必须断言"数据库里的业务状态真的变了"，只断言 CompleteTask 不返回
 // error 是抓不到这个 bug 的。
@@ -51,8 +48,8 @@ import (
 // 所以这里部署一个只为本回归存在的最小流程：没有网关，两个 UserTask，
 // 第二个节点带 service_task_type=ticket_task / action=update_status 的 metaData——
 // 它和生产模板里 Activity_Handle 的声明完全一致，走的也是同一条分发链路
-// （TaskService().CompleteTask → engine.CompleteTask → dispatchUserTaskCallback →
-// findHandlerByTaskType → 被注入的 TicketServiceTaskHandler → TicketService）。
+// （TaskService().CompleteTask → durable callback outbox → immutable handler descriptor →
+// 被注入的 TicketServiceTaskHandler → TicketService）。
 const engineScopeFixtureProcessKey = "ticket_engine_scope_fixture_flow"
 
 const engineScopeFixtureBPMN = `<?xml version="1.0" encoding="UTF-8"?>
@@ -113,7 +110,8 @@ func setupTicketCallbackEngine(t *testing.T) (*ent.Client, *CustomProcessEngine,
 
 	// 用引擎自身的流程定义服务部署夹具（和管理端 /bpmn/definitions 走同一条路径），
 	// 而不是手写 ent 插入，保证 definition/deployment 行的形状与生产一致。
-	_, err = engine.ProcessDefinitionService().CreateProcessDefinition(ctx, &CreateProcessDefinitionRequest{
+	definitionCtx := WithTrustedBPMNTenantContext(ctx, tenant.ID)
+	_, err = engine.ProcessDefinitionService().CreateProcessDefinition(definitionCtx, &CreateProcessDefinitionRequest{
 		Key:      engineScopeFixtureProcessKey,
 		Name:     "任务服务引擎作用域回归夹具",
 		Category: "ticket",
@@ -148,7 +146,7 @@ func createRequester(t *testing.T, client *ent.Client, ctx context.Context, tena
 }
 
 // driveTicketFlowToHandleTask 启动夹具流程并把它推进到 Activity_Handle
-//（action=update_status，正是委托给注入的 TicketService 的那个节点），返回该待办任务。
+// （action=update_status，正是委托给注入的 TicketService 的那个节点），返回该待办任务。
 // 中间的 Activity_Assign 一并通过 TaskService 完成，保证整条链路都是"生产路径"
 // 而不是直接调 engine.CompleteTask。
 func driveTicketFlowToHandleTask(t *testing.T, client *ent.Client, engine *CustomProcessEngine, ctx context.Context, ticketID int) (*ent.ProcessInstance, *ent.ProcessTask) {
@@ -175,6 +173,7 @@ func driveTicketFlowToHandleTask(t *testing.T, client *ent.Client, engine *Custo
 func TestTaskServiceCompleteTask_DispatchesToInjectedTicketService(t *testing.T) {
 	client, engine, ctx, tenantID := setupTicketCallbackEngine(t)
 	requesterID := createRequester(t, client, ctx, tenantID, "ts-scope-1")
+	ctx = WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: requesterID, TenantID: tenantID, CanUpdateAllTasks: true})
 
 	tkt, err := client.Ticket.Create().
 		SetTitle("TaskService 注入回归").
@@ -197,7 +196,7 @@ func TestTaskServiceCompleteTask_DispatchesToInjectedTicketService(t *testing.T)
 	require.Equal(t, "in_progress", updated.Status,
 		"通过 TaskService().CompleteTask 完成 update_status 节点必须真的更新工单状态——"+
 			"若 bpmnTaskService 又开始自己 NewCustomProcessEngine，注入过的 CallbackRegistry 就丢了，"+
-			"回调会被 dispatchUserTaskCallback 静默 Warn 掉，这里会看到状态没变")
+			"持久化回调会失去已装配的 handler，这里会看到状态没变")
 }
 
 // TestTaskServiceCompleteTaskByID_DispatchesToInjectedTicketService 覆盖
@@ -207,6 +206,7 @@ func TestTaskServiceCompleteTask_DispatchesToInjectedTicketService(t *testing.T)
 func TestTaskServiceCompleteTaskByID_DispatchesToInjectedTicketService(t *testing.T) {
 	client, engine, ctx, tenantID := setupTicketCallbackEngine(t)
 	requesterID := createRequester(t, client, ctx, tenantID, "ts-scope-2")
+	ctx = WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: requesterID, TenantID: tenantID, CanUpdateAllTasks: true})
 
 	tkt, err := client.Ticket.Create().
 		SetTitle("TaskService ByID 注入回归").
@@ -236,6 +236,7 @@ func TestTaskServiceCompleteTaskByID_DispatchesToInjectedTicketService(t *testin
 func TestBPMNApprovalBridge_DispatchesToInjectedTicketService(t *testing.T) {
 	client, engine, ctx, tenantID := setupTicketCallbackEngine(t)
 	requesterID := createRequester(t, client, ctx, tenantID, "ts-scope-3")
+	ctx = WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: requesterID, TenantID: tenantID, CanUpdateAllTasks: true})
 
 	tkt, err := client.Ticket.Create().
 		SetTitle("审批桥接注入回归").
@@ -250,7 +251,7 @@ func TestBPMNApprovalBridge_DispatchesToInjectedTicketService(t *testing.T) {
 
 	// 与 bootstrap 一致：桥接拿到的是同一个已装配的引擎。
 	bridge := NewBPMNApprovalBridge(client, zap.NewNop().Sugar(), engine)
-	handled, err := bridge.CompleteBusinessStageTask(context.Background(), tenantID, 0, "ticket", tkt.ID,
+	handled, err := bridge.CompleteBusinessStageTask(ctx, tenantID, requesterID, "ticket", tkt.ID,
 		"Activity_Handle", map[string]interface{}{"new_status": "in_progress"})
 	require.NoError(t, err)
 	require.True(t, handled, "存在待办的 Activity_Handle 任务时桥接必须接管")
@@ -295,10 +296,9 @@ func TestTaskService_ReusesEngineInstanceAndRegistry(t *testing.T) {
 		"任务完成路径可达的 handler 必须就是被注入的那一个")
 }
 
-// 下面两个测试锁定 Critical #1 修复后才第一次真正可达的一条路径：CompleteTask 在
-// dispatchUserTaskCallback 失败时只 Warnw、不把错误往上传（bpmn_process_engine.go
-// 的 CompleteTask 末尾固定 `return nil`，见其上方注释"任务已完成、流程已推进，不能
-// 回滚"）。修复前 statusService 恒为 nil，所有 update_status 节点都会以同样的方式
+// 下面两个测试锁定 Critical #1 修复后才第一次真正可达的一条路径：CompleteTask
+// 原子提交任务与持久化回调意图，首次回调失败由 outbox 重试而不回滚已提交任务。
+// 修复前 statusService 恒为 nil，所有 update_status 节点都会以同样的方式
 // 静默失败，因此不存在"业务校验拒绝、但流程还是走完了"这条可观察路径——它一直被
 // "结构性拒绝"（nil service）掩盖着。现在 statusService 真的注入到位了，
 // TicketService.UpdateTicketStatus 自身的状态机校验和解决方案校验才第一次会在这条
@@ -311,6 +311,7 @@ func TestTaskService_ReusesEngineInstanceAndRegistry(t *testing.T) {
 func TestTaskServiceCompleteTask_RejectsResolvedWithoutResolution(t *testing.T) {
 	client, engine, ctx, tenantID := setupTicketCallbackEngine(t)
 	requesterID := createRequester(t, client, ctx, tenantID, "ts-scope-4")
+	ctx = WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: requesterID, TenantID: tenantID, CanUpdateAllTasks: true})
 
 	// in_progress -> resolved 转换本身合法（IsValidTicketStatusTransition 允许），
 	// 用来单独锁定"没有 Resolution"这条校验，不跟状态机校验混在一起。
@@ -326,8 +327,7 @@ func TestTaskServiceCompleteTask_RejectsResolvedWithoutResolution(t *testing.T) 
 
 	_, handle := driveTicketFlowToHandleTask(t, client, engine, ctx, tkt.ID)
 
-	// CompleteTask 本身不报错——流程 token 必须照常前进，这是 dispatchUserTaskCallback
-	// "失败只告警不阻断"的既有设计，不是本次要验证或改变的行为。
+	// CompleteTask 本身不报错：任务完成和回调意图已经提交，失败回调由 outbox 重试。
 	require.NoError(t, engine.TaskService().CompleteTask(ctx, handle.TaskID, map[string]interface{}{
 		"business_id": tkt.ID,
 		"new_status":  "resolved",
@@ -346,6 +346,7 @@ func TestTaskServiceCompleteTask_RejectsResolvedWithoutResolution(t *testing.T) 
 func TestTaskServiceCompleteTaskByID_RejectsIllegalNewToResolvedTransition(t *testing.T) {
 	client, engine, ctx, tenantID := setupTicketCallbackEngine(t)
 	requesterID := createRequester(t, client, ctx, tenantID, "ts-scope-5")
+	ctx = WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: requesterID, TenantID: tenantID, CanUpdateAllTasks: true})
 
 	// 带上 Resolution：这条测试要单独锁定状态机校验，不能被"没有 Resolution"那条
 	// 校验顺带挡住——否则去掉状态机校验后测试还是会通过，就锁不住目标缺陷了。

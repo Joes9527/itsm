@@ -477,7 +477,9 @@ func TestClaimTaskByID_RequesterCannotClaimOwnCandidateGroupFallbackTask(t *test
 	require.Equal(t, "", task.Assignee)
 	require.NotContains(t, task.CandidateUsers, "requester14")
 
-	claimCtx := context.WithValue(fx.ctx, bpmn.BPMNTenantIDContextKey, fx.tenant.ID)
+	claimCtx := WithBPMNAccessScope(fx.ctx, BPMNAccessScope{
+		UserID: requester.ID, TenantID: fx.tenant.ID,
+	})
 	err := fx.engine.TaskService().ClaimTaskByID(claimCtx, task.ID, requester.ID)
 	assert.Error(t, err, "申请人不是候选人，不应该能认领落到候选组兜底的审批任务")
 }
@@ -497,7 +499,9 @@ func TestClaimTaskByID_RealCandidateCanClaim(t *testing.T) {
 	task := fx.getCreatedTask(t, instance.ID, "Activity_Approval")
 	require.Contains(t, task.CandidateUsers, "backupApprover7")
 
-	claimCtx := context.WithValue(fx.ctx, bpmn.BPMNTenantIDContextKey, fx.tenant.ID)
+	claimCtx := WithBPMNAccessScope(fx.ctx, BPMNAccessScope{
+		UserID: backupApprover.ID, TenantID: fx.tenant.ID,
+	})
 	err := fx.engine.TaskService().ClaimTaskByID(claimCtx, task.ID, backupApprover.ID)
 	require.NoError(t, err, "真正在候选组里的人应该能成功认领")
 

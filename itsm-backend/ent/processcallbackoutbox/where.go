@@ -99,6 +99,16 @@ func ElementID(v string) predicate.ProcessCallbackOutbox {
 	return predicate.ProcessCallbackOutbox(sql.FieldEQ(FieldElementID, v))
 }
 
+// Action applies equality check predicate on the "action" field. It's identical to ActionEQ.
+func Action(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldEQ(FieldAction, v))
+}
+
+// ConfigRef applies equality check predicate on the "config_ref" field. It's identical to ConfigRefEQ.
+func ConfigRef(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldEQ(FieldConfigRef, v))
+}
+
 // Status applies equality check predicate on the "status" field. It's identical to StatusEQ.
 func Status(v string) predicate.ProcessCallbackOutbox {
 	return predicate.ProcessCallbackOutbox(sql.FieldEQ(FieldStatus, v))
@@ -672,6 +682,156 @@ func ElementIDEqualFold(v string) predicate.ProcessCallbackOutbox {
 // ElementIDContainsFold applies the ContainsFold predicate on the "element_id" field.
 func ElementIDContainsFold(v string) predicate.ProcessCallbackOutbox {
 	return predicate.ProcessCallbackOutbox(sql.FieldContainsFold(FieldElementID, v))
+}
+
+// ActionEQ applies the EQ predicate on the "action" field.
+func ActionEQ(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldEQ(FieldAction, v))
+}
+
+// ActionNEQ applies the NEQ predicate on the "action" field.
+func ActionNEQ(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldNEQ(FieldAction, v))
+}
+
+// ActionIn applies the In predicate on the "action" field.
+func ActionIn(vs ...string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldIn(FieldAction, vs...))
+}
+
+// ActionNotIn applies the NotIn predicate on the "action" field.
+func ActionNotIn(vs ...string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldNotIn(FieldAction, vs...))
+}
+
+// ActionGT applies the GT predicate on the "action" field.
+func ActionGT(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldGT(FieldAction, v))
+}
+
+// ActionGTE applies the GTE predicate on the "action" field.
+func ActionGTE(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldGTE(FieldAction, v))
+}
+
+// ActionLT applies the LT predicate on the "action" field.
+func ActionLT(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldLT(FieldAction, v))
+}
+
+// ActionLTE applies the LTE predicate on the "action" field.
+func ActionLTE(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldLTE(FieldAction, v))
+}
+
+// ActionContains applies the Contains predicate on the "action" field.
+func ActionContains(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldContains(FieldAction, v))
+}
+
+// ActionHasPrefix applies the HasPrefix predicate on the "action" field.
+func ActionHasPrefix(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldHasPrefix(FieldAction, v))
+}
+
+// ActionHasSuffix applies the HasSuffix predicate on the "action" field.
+func ActionHasSuffix(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldHasSuffix(FieldAction, v))
+}
+
+// ActionIsNil applies the IsNil predicate on the "action" field.
+func ActionIsNil() predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldIsNull(FieldAction))
+}
+
+// ActionNotNil applies the NotNil predicate on the "action" field.
+func ActionNotNil() predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldNotNull(FieldAction))
+}
+
+// ActionEqualFold applies the EqualFold predicate on the "action" field.
+func ActionEqualFold(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldEqualFold(FieldAction, v))
+}
+
+// ActionContainsFold applies the ContainsFold predicate on the "action" field.
+func ActionContainsFold(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldContainsFold(FieldAction, v))
+}
+
+// ConfigRefEQ applies the EQ predicate on the "config_ref" field.
+func ConfigRefEQ(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldEQ(FieldConfigRef, v))
+}
+
+// ConfigRefNEQ applies the NEQ predicate on the "config_ref" field.
+func ConfigRefNEQ(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldNEQ(FieldConfigRef, v))
+}
+
+// ConfigRefIn applies the In predicate on the "config_ref" field.
+func ConfigRefIn(vs ...string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldIn(FieldConfigRef, vs...))
+}
+
+// ConfigRefNotIn applies the NotIn predicate on the "config_ref" field.
+func ConfigRefNotIn(vs ...string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldNotIn(FieldConfigRef, vs...))
+}
+
+// ConfigRefGT applies the GT predicate on the "config_ref" field.
+func ConfigRefGT(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldGT(FieldConfigRef, v))
+}
+
+// ConfigRefGTE applies the GTE predicate on the "config_ref" field.
+func ConfigRefGTE(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldGTE(FieldConfigRef, v))
+}
+
+// ConfigRefLT applies the LT predicate on the "config_ref" field.
+func ConfigRefLT(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldLT(FieldConfigRef, v))
+}
+
+// ConfigRefLTE applies the LTE predicate on the "config_ref" field.
+func ConfigRefLTE(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldLTE(FieldConfigRef, v))
+}
+
+// ConfigRefContains applies the Contains predicate on the "config_ref" field.
+func ConfigRefContains(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldContains(FieldConfigRef, v))
+}
+
+// ConfigRefHasPrefix applies the HasPrefix predicate on the "config_ref" field.
+func ConfigRefHasPrefix(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldHasPrefix(FieldConfigRef, v))
+}
+
+// ConfigRefHasSuffix applies the HasSuffix predicate on the "config_ref" field.
+func ConfigRefHasSuffix(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldHasSuffix(FieldConfigRef, v))
+}
+
+// ConfigRefIsNil applies the IsNil predicate on the "config_ref" field.
+func ConfigRefIsNil() predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldIsNull(FieldConfigRef))
+}
+
+// ConfigRefNotNil applies the NotNil predicate on the "config_ref" field.
+func ConfigRefNotNil() predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldNotNull(FieldConfigRef))
+}
+
+// ConfigRefEqualFold applies the EqualFold predicate on the "config_ref" field.
+func ConfigRefEqualFold(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldEqualFold(FieldConfigRef, v))
+}
+
+// ConfigRefContainsFold applies the ContainsFold predicate on the "config_ref" field.
+func ConfigRefContainsFold(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldContainsFold(FieldConfigRef, v))
 }
 
 // VariablesIsNil applies the IsNil predicate on the "variables" field.

@@ -50,6 +50,16 @@ const (
 	FieldFormKey = "form_key"
 	// FieldTaskVariables holds the string denoting the task_variables field in the database.
 	FieldTaskVariables = "task_variables"
+	// FieldCallbackHandlerID holds the string denoting the callback_handler_id field in the database.
+	FieldCallbackHandlerID = "callback_handler_id"
+	// FieldCallbackTaskType holds the string denoting the callback_task_type field in the database.
+	FieldCallbackTaskType = "callback_task_type"
+	// FieldCallbackAction holds the string denoting the callback_action field in the database.
+	FieldCallbackAction = "callback_action"
+	// FieldCallbackConfigRef holds the string denoting the callback_config_ref field in the database.
+	FieldCallbackConfigRef = "callback_config_ref"
+	// FieldAggregationVersion holds the string denoting the aggregation_version field in the database.
+	FieldAggregationVersion = "aggregation_version"
 	// FieldDescription holds the string denoting the description field in the database.
 	FieldDescription = "description"
 	// FieldCorrelationID holds the string denoting the correlation_id field in the database.
@@ -98,6 +108,11 @@ var Columns = []string{
 	FieldCompletedTime,
 	FieldFormKey,
 	FieldTaskVariables,
+	FieldCallbackHandlerID,
+	FieldCallbackTaskType,
+	FieldCallbackAction,
+	FieldCallbackConfigRef,
+	FieldAggregationVersion,
 	FieldDescription,
 	FieldCorrelationID,
 	FieldParentTaskID,
@@ -136,6 +151,10 @@ var (
 	DefaultPriority string
 	// DefaultCreatedTime holds the default value on creation for the "created_time" field.
 	DefaultCreatedTime func() time.Time
+	// DefaultAggregationVersion holds the default value on creation for the "aggregation_version" field.
+	DefaultAggregationVersion int
+	// AggregationVersionValidator is a validator for the "aggregation_version" field. It is called by the builders before save.
+	AggregationVersionValidator func(int) error
 	// TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	TenantIDValidator func(int) error
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
@@ -237,6 +256,31 @@ func ByCompletedTime(opts ...sql.OrderTermOption) OrderOption {
 // ByFormKey orders the results by the form_key field.
 func ByFormKey(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldFormKey, opts...).ToFunc()
+}
+
+// ByCallbackHandlerID orders the results by the callback_handler_id field.
+func ByCallbackHandlerID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCallbackHandlerID, opts...).ToFunc()
+}
+
+// ByCallbackTaskType orders the results by the callback_task_type field.
+func ByCallbackTaskType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCallbackTaskType, opts...).ToFunc()
+}
+
+// ByCallbackAction orders the results by the callback_action field.
+func ByCallbackAction(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCallbackAction, opts...).ToFunc()
+}
+
+// ByCallbackConfigRef orders the results by the callback_config_ref field.
+func ByCallbackConfigRef(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCallbackConfigRef, opts...).ToFunc()
+}
+
+// ByAggregationVersion orders the results by the aggregation_version field.
+func ByAggregationVersion(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAggregationVersion, opts...).ToFunc()
 }
 
 // ByDescription orders the results by the description field.

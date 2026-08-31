@@ -95,6 +95,11 @@ func Status(v string) predicate.TicketNotification {
 	return predicate.TicketNotification(sql.FieldEQ(FieldStatus, v))
 }
 
+// DeliveryKey applies equality check predicate on the "delivery_key" field. It's identical to DeliveryKeyEQ.
+func DeliveryKey(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEQ(FieldDeliveryKey, v))
+}
+
 // TenantID applies equality check predicate on the "tenant_id" field. It's identical to TenantIDEQ.
 func TenantID(v int) predicate.TicketNotification {
 	return predicate.TicketNotification(sql.FieldEQ(FieldTenantID, v))
@@ -503,6 +508,81 @@ func StatusEqualFold(v string) predicate.TicketNotification {
 // StatusContainsFold applies the ContainsFold predicate on the "status" field.
 func StatusContainsFold(v string) predicate.TicketNotification {
 	return predicate.TicketNotification(sql.FieldContainsFold(FieldStatus, v))
+}
+
+// DeliveryKeyEQ applies the EQ predicate on the "delivery_key" field.
+func DeliveryKeyEQ(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEQ(FieldDeliveryKey, v))
+}
+
+// DeliveryKeyNEQ applies the NEQ predicate on the "delivery_key" field.
+func DeliveryKeyNEQ(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNEQ(FieldDeliveryKey, v))
+}
+
+// DeliveryKeyIn applies the In predicate on the "delivery_key" field.
+func DeliveryKeyIn(vs ...string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldIn(FieldDeliveryKey, vs...))
+}
+
+// DeliveryKeyNotIn applies the NotIn predicate on the "delivery_key" field.
+func DeliveryKeyNotIn(vs ...string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNotIn(FieldDeliveryKey, vs...))
+}
+
+// DeliveryKeyGT applies the GT predicate on the "delivery_key" field.
+func DeliveryKeyGT(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldGT(FieldDeliveryKey, v))
+}
+
+// DeliveryKeyGTE applies the GTE predicate on the "delivery_key" field.
+func DeliveryKeyGTE(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldGTE(FieldDeliveryKey, v))
+}
+
+// DeliveryKeyLT applies the LT predicate on the "delivery_key" field.
+func DeliveryKeyLT(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldLT(FieldDeliveryKey, v))
+}
+
+// DeliveryKeyLTE applies the LTE predicate on the "delivery_key" field.
+func DeliveryKeyLTE(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldLTE(FieldDeliveryKey, v))
+}
+
+// DeliveryKeyContains applies the Contains predicate on the "delivery_key" field.
+func DeliveryKeyContains(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldContains(FieldDeliveryKey, v))
+}
+
+// DeliveryKeyHasPrefix applies the HasPrefix predicate on the "delivery_key" field.
+func DeliveryKeyHasPrefix(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldHasPrefix(FieldDeliveryKey, v))
+}
+
+// DeliveryKeyHasSuffix applies the HasSuffix predicate on the "delivery_key" field.
+func DeliveryKeyHasSuffix(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldHasSuffix(FieldDeliveryKey, v))
+}
+
+// DeliveryKeyIsNil applies the IsNil predicate on the "delivery_key" field.
+func DeliveryKeyIsNil() predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldIsNull(FieldDeliveryKey))
+}
+
+// DeliveryKeyNotNil applies the NotNil predicate on the "delivery_key" field.
+func DeliveryKeyNotNil() predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNotNull(FieldDeliveryKey))
+}
+
+// DeliveryKeyEqualFold applies the EqualFold predicate on the "delivery_key" field.
+func DeliveryKeyEqualFold(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEqualFold(FieldDeliveryKey, v))
+}
+
+// DeliveryKeyContainsFold applies the ContainsFold predicate on the "delivery_key" field.
+func DeliveryKeyContainsFold(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldContainsFold(FieldDeliveryKey, v))
 }
 
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.

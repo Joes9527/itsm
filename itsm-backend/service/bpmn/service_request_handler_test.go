@@ -119,6 +119,35 @@ func TestServiceRequestHandler_ProvisionResource_SetsStartedAt(t *testing.T) {
 	assert.False(t, updated.StartedAt.IsZero())
 }
 
+func TestServiceRequestHandler_RetryPreservesFirstEffectTimestamps(t *testing.T) {
+	client, handler, tenantID, tkt, sr := setupServiceRequestHandlerFixture(t)
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+
+	provision := map[string]interface{}{
+		"action": "provision_resource", "request_id": sr.ID, "resource_type": "vm",
+	}
+	_, err := handler.Execute(ctx, nil, provision)
+	require.NoError(t, err)
+	firstStarted := client.ServiceRequest.GetX(ctx, sr.ID).StartedAt
+	_, err = handler.Execute(ctx, nil, provision)
+	require.NoError(t, err)
+	assert.Equal(t, firstStarted, client.ServiceRequest.GetX(ctx, sr.ID).StartedAt)
+
+	complete := map[string]interface{}{
+		"action": "complete_request", "request_id": sr.ID, "completion_note": "ready",
+	}
+	_, err = handler.Execute(ctx, nil, complete)
+	require.NoError(t, err)
+	firstRequest := client.ServiceRequest.GetX(ctx, sr.ID)
+	firstTicket := client.Ticket.GetX(ctx, tkt.ID)
+	_, err = handler.Execute(ctx, nil, complete)
+	require.NoError(t, err)
+	afterRequest := client.ServiceRequest.GetX(ctx, sr.ID)
+	afterTicket := client.Ticket.GetX(ctx, tkt.ID)
+	assert.Equal(t, firstRequest.CompletedAt, afterRequest.CompletedAt)
+	assert.Equal(t, firstTicket.ResolvedAt, afterTicket.ResolvedAt)
+}
+
 func TestServiceRequestHandler_CreateRequest_ReturnsExplicitUnsupportedError(t *testing.T) {
 	_, handler, tenantID, _, _ := setupServiceRequestHandlerFixture(t)
 	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
@@ -146,12 +175,12 @@ func TestServiceRequestHandler_UpdateRequest_WritesFormFields(t *testing.T) {
 	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
 
 	result, err := handler.Execute(ctx, nil, map[string]interface{}{
-		"action":             "update_request",
-		"request_id":         float64(sr.ID),
-		"cost_center":        "CC-001",
+		"action":              "update_request",
+		"request_id":          float64(sr.ID),
+		"cost_center":         "CC-001",
 		"data_classification": "confidential",
-		"needs_public_ip":    true,
-		"compliance_ack":     true,
+		"needs_public_ip":     true,
+		"compliance_ack":      true,
 	})
 	require.NoError(t, err)
 	assert.True(t, result.Success)

@@ -30,6 +30,8 @@ const (
 	FieldReadAt = "read_at"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
+	// FieldDeliveryKey holds the string denoting the delivery_key field in the database.
+	FieldDeliveryKey = "delivery_key"
 	// FieldTenantID holds the string denoting the tenant_id field in the database.
 	FieldTenantID = "tenant_id"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
@@ -67,6 +69,7 @@ var Columns = []string{
 	FieldSentAt,
 	FieldReadAt,
 	FieldStatus,
+	FieldDeliveryKey,
 	FieldTenantID,
 	FieldCreatedAt,
 }
@@ -146,6 +149,11 @@ func ByReadAt(opts ...sql.OrderTermOption) OrderOption {
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
+}
+
+// ByDeliveryKey orders the results by the delivery_key field.
+func ByDeliveryKey(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDeliveryKey, opts...).ToFunc()
 }
 
 // ByTenantID orders the results by the tenant_id field.

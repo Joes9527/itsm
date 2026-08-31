@@ -608,6 +608,9 @@ func (s *IncidentService) AssignIncident(ctx context.Context, id int, assigneeID
 	if !canAssignIncidentStatus(current.Status) {
 		return nil, fmt.Errorf("resolved, closed, or cancelled incidents cannot be reassigned")
 	}
+	if current.AssigneeID == assigneeID {
+		return s.toIncidentResponse(current), nil
+	}
 
 	if err := s.validateIncidentAssignee(ctx, assigneeID, tenantID); err != nil {
 		return nil, err
@@ -664,6 +667,18 @@ func (s *IncidentService) AssignIncident(ctx context.Context, id int, assigneeID
 // 校验——Incident 完整状态机是 Wave 2 迁移的范围，这里只是把 BPMN handler 现有的一次
 // "assigned" 状态写入从裸 Ent 操作收回到领域服务里，不新增业务规则。
 func (s *IncidentService) UpdateStatus(ctx context.Context, id int, status string, tenantID int) (*dto.IncidentResponse, error) {
+	current, err := s.client.Incident.Query().
+		Where(incident.IDEQ(id), incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("incident not found")
+		}
+		return nil, fmt.Errorf("failed to get incident: %w", err)
+	}
+	if current.Status == status {
+		return s.toIncidentResponse(current), nil
+	}
 	updated, err := s.client.Incident.UpdateOneID(id).
 		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
 		SetStatus(status).
@@ -1551,8 +1566,8 @@ func (s *IncidentService) CloseIncident(ctx context.Context, id, userID, tenantI
 // 字段写入语义，同时补上审计事件（原直接写 Ent 的版本完全没有审计记录，这是真实的
 // 审计缺口，AGENTS.md 要求状态变更必须审计，顺带修掉）。
 
-// EscalateIncidentLevel 供 BPMN 自动升级节点（action=escalate_incident）使用。level<=0 时
-// 自动升级到当前级别+1，同旧的裸 Ent 实现；补充审计事件（旧实现没有）。
+// EscalateIncidentLevel 供 BPMN 自动升级节点使用。level<=0 的稳定目标是一级，
+// 而不是依赖当前值递增；这样同一 durable callback 的重试不会重复升级。
 func (s *IncidentService) EscalateIncidentLevel(ctx context.Context, id, tenantID, level int) (*dto.IncidentResponse, error) {
 	current, err := s.client.Incident.Query().
 		Where(incident.IDEQ(id), incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
@@ -1564,12 +1579,15 @@ func (s *IncidentService) EscalateIncidentLevel(ctx context.Context, id, tenantI
 		return nil, fmt.Errorf("failed to get incident: %w", err)
 	}
 	if level <= 0 {
-		level = current.EscalationLevel + 1
+		level = 1
+	}
+	if current.Status == common.IncidentStatusEscalated && current.EscalationLevel >= level {
+		return s.toIncidentResponse(current), nil
 	}
 
 	now := time.Now()
 	updated, err := s.client.Incident.UpdateOneID(id).
-		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
+		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil(), incident.VersionEQ(current.Version)).
 		SetEscalationLevel(level).
 		SetEscalatedAt(now).
 		SetStatus(common.IncidentStatusEscalated).
@@ -1590,9 +1608,16 @@ func (s *IncidentService) EscalateIncidentLevel(ctx context.Context, id, tenantI
 // ResolveIncidentForWorkflow 供 BPMN resolve_incident 节点使用，同旧的裸 Ent 实现语义
 // （只设置 status=resolved），补上 ResolvedAt（旧实现遗漏）和审计事件。
 func (s *IncidentService) ResolveIncidentForWorkflow(ctx context.Context, id, tenantID int, resolution string) (*dto.IncidentResponse, error) {
+	current, err := s.workflowIncident(ctx, id, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if current.Status == common.IncidentStatusResolved && !current.ResolvedAt.IsZero() {
+		return s.toIncidentResponse(current), nil
+	}
 	now := time.Now()
 	updated, err := s.client.Incident.UpdateOneID(id).
-		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
+		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil(), incident.VersionEQ(current.Version)).
 		SetStatus(common.IncidentStatusResolved).
 		SetResolvedAt(now).
 		SetUpdatedAt(now).
@@ -1614,9 +1639,16 @@ func (s *IncidentService) ResolveIncidentForWorkflow(ctx context.Context, id, te
 // CloseIncidentForWorkflow 供 BPMN close_incident 节点使用，同旧的裸 Ent 实现语义
 // （status=closed + closed_at），补上审计事件。
 func (s *IncidentService) CloseIncidentForWorkflow(ctx context.Context, id, tenantID int, feedback string) (*dto.IncidentResponse, error) {
+	current, err := s.workflowIncident(ctx, id, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if current.Status == common.IncidentStatusClosed && !current.ClosedAt.IsZero() {
+		return s.toIncidentResponse(current), nil
+	}
 	now := time.Now()
 	updated, err := s.client.Incident.UpdateOneID(id).
-		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
+		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil(), incident.VersionEQ(current.Version)).
 		SetStatus(common.IncidentStatusClosed).
 		SetClosedAt(now).
 		SetUpdatedAt(now).
@@ -1638,9 +1670,16 @@ func (s *IncidentService) CloseIncidentForWorkflow(ctx context.Context, id, tena
 // AcknowledgeIncidentForWorkflow 供 BPMN acknowledge_incident 节点使用，同旧的裸 Ent 实现
 // 语义（status=acknowledged），补上审计事件。
 func (s *IncidentService) AcknowledgeIncidentForWorkflow(ctx context.Context, id, tenantID int) (*dto.IncidentResponse, error) {
+	current, err := s.workflowIncident(ctx, id, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if current.Status == common.IncidentStatusAcknowledged {
+		return s.toIncidentResponse(current), nil
+	}
 	now := time.Now()
 	updated, err := s.client.Incident.UpdateOneID(id).
-		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
+		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil(), incident.VersionEQ(current.Version)).
 		SetStatus(common.IncidentStatusAcknowledged).
 		SetUpdatedAt(now).
 		AddVersion(1).
@@ -1661,8 +1700,20 @@ func (s *IncidentService) AcknowledgeIncidentForWorkflow(ctx context.Context, id
 // UpdateIncidentForWorkflow 供 BPMN update_incident 节点使用（如初步诊断步骤），按提供的
 // 字段做部分更新，空字符串表示"不修改该字段"——同旧的裸 Ent 实现语义，补上审计事件。
 func (s *IncidentService) UpdateIncidentForWorkflow(ctx context.Context, id, tenantID int, title, description, priority, severity, status string) (*dto.IncidentResponse, error) {
+	current, err := s.workflowIncident(ctx, id, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	unchanged := (title == "" || title == current.Title) &&
+		(description == "" || description == current.Description) &&
+		(priority == "" || priority == current.Priority) &&
+		(severity == "" || severity == current.Severity) &&
+		(status == "" || status == current.Status)
+	if unchanged {
+		return s.toIncidentResponse(current), nil
+	}
 	updateQuery := s.client.Incident.UpdateOneID(id).
-		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
+		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil(), incident.VersionEQ(current.Version)).
 		SetUpdatedAt(time.Now()).
 		AddVersion(1)
 	if title != "" {
@@ -1697,8 +1748,17 @@ func (s *IncidentService) UpdateIncidentForWorkflow(ctx context.Context, id, ten
 // CategorizeIncidentForWorkflow 供 BPMN categorize_incident 节点使用，同旧的裸 Ent 实现语义
 // （status=triaged + category/subcategory），补上审计事件。
 func (s *IncidentService) CategorizeIncidentForWorkflow(ctx context.Context, id, tenantID int, category, subcategory string) (*dto.IncidentResponse, error) {
+	current, err := s.workflowIncident(ctx, id, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if current.Status == common.IncidentStatusTriaged &&
+		(category == "" || category == current.Category) &&
+		(subcategory == "" || subcategory == current.Subcategory) {
+		return s.toIncidentResponse(current), nil
+	}
 	updateQuery := s.client.Incident.UpdateOneID(id).
-		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
+		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil(), incident.VersionEQ(current.Version)).
 		SetStatus(common.IncidentStatusTriaged).
 		SetUpdatedAt(time.Now()).
 		AddVersion(1)
@@ -1720,6 +1780,19 @@ func (s *IncidentService) CategorizeIncidentForWorkflow(ctx context.Context, id,
 		Description: fmt.Sprintf("事件已分类: %s/%s", category, subcategory), Status: "active", Severity: "info", Source: "system",
 	}, tenantID)
 	return s.toIncidentResponse(updated), nil
+}
+
+func (s *IncidentService) workflowIncident(ctx context.Context, id, tenantID int) (*ent.Incident, error) {
+	entity, err := s.client.Incident.Query().
+		Where(incident.IDEQ(id), incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("事件 %d 不存在或不属于当前租户", id)
+		}
+		return nil, fmt.Errorf("failed to get incident: %w", err)
+	}
+	return entity, nil
 }
 
 // ReopenIncident 将已解决或已关闭的事件重新流转到 in_progress
@@ -2090,7 +2163,7 @@ func (s *IncidentService) triggerWorkflowForIncident(ctx context.Context, incide
 		TenantID:             tenantID,
 	}
 
-	resp, err := s.processTriggerService.TriggerProcess(ctx, triggerReq)
+	resp, err := s.processTriggerService.TriggerProcess(WithTrustedBPMNTenantContext(ctx, tenantID), triggerReq)
 	if err != nil {
 		return fmt.Errorf("failed to trigger workflow: %w", err)
 	}

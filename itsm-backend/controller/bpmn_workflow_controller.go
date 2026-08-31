@@ -251,17 +251,14 @@ func (c *BPMNWorkflowController) CreateProcessDefinition(ctx *gin.Context) {
 		return
 	}
 
-	// 从JWT获取租户ID
-	tenantID, exists := ctx.Get("tenant_id")
-	if !exists {
-		common.AuthFailed(ctx, "未授权访问")
+	workflowCtx, _, ok := getBPMNTenantContext(ctx)
+	if !ok {
 		return
 	}
-	req.TenantID = tenantID.(int)
 
-	definition, err := c.processEngine.ProcessDefinitionService().CreateProcessDefinition(ctx, &req)
+	definition, err := c.processEngine.ProcessDefinitionService().CreateProcessDefinition(workflowCtx, &req)
 	if err != nil {
-		common.InternalError(ctx, "创建流程定义失败: "+err.Error())
+		respondBPMNError(ctx, err, "创建流程定义失败")
 		return
 	}
 
@@ -276,13 +273,10 @@ func (c *BPMNWorkflowController) ListProcessDefinitions(ctx *gin.Context) {
 		return
 	}
 
-	// 从JWT获取租户ID
-	tenantID, exists := ctx.Get("tenant_id")
-	if !exists {
-		common.AuthFailed(ctx, "未授权访问")
+	workflowCtx, _, ok := getBPMNTenantContext(ctx)
+	if !ok {
 		return
 	}
-	req.TenantID = tenantID.(int)
 
 	// 设置默认分页参数
 	if req.Page <= 0 {
@@ -292,9 +286,9 @@ func (c *BPMNWorkflowController) ListProcessDefinitions(ctx *gin.Context) {
 		req.PageSize = 20
 	}
 
-	definitions, total, err := c.processEngine.ProcessDefinitionService().ListProcessDefinitions(ctx, &req)
+	definitions, total, err := c.processEngine.ProcessDefinitionService().ListProcessDefinitions(workflowCtx, &req)
 	if err != nil {
-		common.InternalError(ctx, "获取流程定义列表失败: "+err.Error())
+		respondBPMNError(ctx, err, "获取流程定义列表失败")
 		return
 	}
 
@@ -874,7 +868,10 @@ func (c *BPMNWorkflowController) SetTaskVariables(ctx *gin.Context) {
 // ListVersions 获取版本列表
 func (c *BPMNWorkflowController) ListVersions(ctx *gin.Context) {
 	processKey := ctx.Query("process_key")
-	tenantID := ctx.GetInt("tenant_id")
+	workflowCtx, tenantID, ok := getBPMNTenantContext(ctx)
+	if !ok {
+		return
+	}
 
 	if processKey == "" {
 		common.Fail(ctx, common.BadRequestCode, "缺少process_key参数")
@@ -883,10 +880,6 @@ func (c *BPMNWorkflowController) ListVersions(ctx *gin.Context) {
 
 	// 如果 process_key 是数字ID，尝试查找对应的流程定义key
 	if id, err := strconv.Atoi(processKey); err == nil {
-		workflowCtx, _, ok := getBPMNTenantContext(ctx)
-		if !ok {
-			return
-		}
 		def, err := c.processEngine.ProcessDefinitionService().GetProcessDefinitionByID(workflowCtx, id)
 		if err != nil {
 			common.NotFound(ctx, "流程定义不存在")
@@ -895,9 +888,9 @@ func (c *BPMNWorkflowController) ListVersions(ctx *gin.Context) {
 		processKey = def.Key
 	}
 
-	versions, err := c.versionService.ListVersions(ctx, processKey, tenantID)
+	versions, err := c.versionService.ListVersions(workflowCtx, processKey, tenantID)
 	if err != nil {
-		common.InternalError(ctx, "获取版本列表失败: "+err.Error())
+		respondBPMNError(ctx, err, "获取版本列表失败")
 		return
 	}
 
@@ -908,9 +901,12 @@ func (c *BPMNWorkflowController) ListVersions(ctx *gin.Context) {
 func (c *BPMNWorkflowController) GetVersion(ctx *gin.Context) {
 	processKey := ctx.Param("key")
 	versionStr := ctx.Param("version")
-	tenantID := ctx.GetInt("tenant_id")
+	workflowCtx, tenantID, ok := getBPMNTenantContext(ctx)
+	if !ok {
+		return
+	}
 
-	versionInfo, err := c.versionService.GetVersion(ctx, processKey, versionStr, tenantID)
+	versionInfo, err := c.versionService.GetVersion(workflowCtx, processKey, versionStr, tenantID)
 	if err != nil {
 		common.NotFound(ctx, "版本不存在")
 		return
@@ -927,12 +923,14 @@ func (c *BPMNWorkflowController) CreateVersion(ctx *gin.Context) {
 		return
 	}
 
-	req.TenantID = ctx.GetInt("tenant_id")
-	req.CreatedBy = ctx.GetString("user_id")
+	workflowCtx, _, ok := getBPMNTenantContext(ctx)
+	if !ok {
+		return
+	}
 
-	version, err := c.versionService.CreateVersion(ctx, &req)
+	version, err := c.versionService.CreateVersion(workflowCtx, &req)
 	if err != nil {
-		common.InternalError(ctx, "创建版本失败: "+err.Error())
+		respondBPMNError(ctx, err, "创建版本失败")
 		return
 	}
 
@@ -943,11 +941,14 @@ func (c *BPMNWorkflowController) CreateVersion(ctx *gin.Context) {
 func (c *BPMNWorkflowController) ActivateVersion(ctx *gin.Context) {
 	processKey := ctx.Param("key")
 	versionStr := ctx.Param("version")
-	tenantID := ctx.GetInt("tenant_id")
+	workflowCtx, tenantID, ok := getBPMNTenantContext(ctx)
+	if !ok {
+		return
+	}
 
-	err := c.versionService.ActivateVersion(ctx, processKey, versionStr, tenantID)
+	err := c.versionService.ActivateVersion(workflowCtx, processKey, versionStr, tenantID)
 	if err != nil {
-		common.InternalError(ctx, "激活版本失败: "+err.Error())
+		respondBPMNError(ctx, err, "激活版本失败")
 		return
 	}
 
@@ -958,16 +959,19 @@ func (c *BPMNWorkflowController) ActivateVersion(ctx *gin.Context) {
 func (c *BPMNWorkflowController) RollbackVersion(ctx *gin.Context) {
 	processKey := ctx.Param("key")
 	versionStr := ctx.Param("version")
-	tenantID := ctx.GetInt("tenant_id")
+	workflowCtx, tenantID, ok := getBPMNTenantContext(ctx)
+	if !ok {
+		return
+	}
 
 	var req struct {
 		Reason string `json:"reason"`
 	}
 	ctx.ShouldBindJSON(&req)
 
-	err := c.versionService.RollbackToVersion(ctx, processKey, versionStr, tenantID, req.Reason)
+	err := c.versionService.RollbackToVersion(workflowCtx, processKey, versionStr, tenantID, req.Reason)
 	if err != nil {
-		common.InternalError(ctx, "回滚版本失败: "+err.Error())
+		respondBPMNError(ctx, err, "回滚版本失败")
 		return
 	}
 
@@ -979,7 +983,10 @@ func (c *BPMNWorkflowController) CompareVersions(ctx *gin.Context) {
 	processKey := ctx.Param("key")
 	baseVersion := ctx.Query("base_version")
 	targetVersion := ctx.Query("target_version")
-	tenantID := ctx.GetInt("tenant_id")
+	workflowCtx, tenantID, ok := getBPMNTenantContext(ctx)
+	if !ok {
+		return
+	}
 
 	// 如果没有提供版本参数，返回友好错误
 	if baseVersion == "" || targetVersion == "" {
@@ -993,9 +1000,9 @@ func (c *BPMNWorkflowController) CompareVersions(ctx *gin.Context) {
 		return
 	}
 
-	comparison, err := c.versionService.CompareVersions(ctx, processKey, baseVersion, targetVersion, tenantID)
+	comparison, err := c.versionService.CompareVersions(workflowCtx, processKey, baseVersion, targetVersion, tenantID)
 	if err != nil {
-		common.InternalError(ctx, "版本比较失败: "+err.Error())
+		respondBPMNError(ctx, err, "版本比较失败")
 		return
 	}
 
@@ -1114,11 +1121,14 @@ func (c *BPMNWorkflowController) Vote(ctx *gin.Context) {
 // GetVersionChangeLogs 获取流程定义的版本变更日志列表
 func (c *BPMNWorkflowController) GetVersionChangeLogs(ctx *gin.Context) {
 	processKey := ctx.Param("key")
-	tenantID := ctx.GetInt("tenant_id")
+	workflowCtx, tenantID, ok := getBPMNTenantContext(ctx)
+	if !ok {
+		return
+	}
 
-	changelogs, err := c.versionService.GetChangeLogsByProcessKey(ctx, processKey, tenantID)
+	changelogs, err := c.versionService.GetChangeLogsByProcessKey(workflowCtx, processKey, tenantID)
 	if err != nil {
-		common.InternalError(ctx, "获取变更日志失败: "+err.Error())
+		respondBPMNError(ctx, err, "获取变更日志失败")
 		return
 	}
 
@@ -1134,9 +1144,13 @@ func (c *BPMNWorkflowController) GetVersionChangeLogsByID(ctx *gin.Context) {
 		return
 	}
 
-	changelogs, err := c.versionService.GetChangeLogsByProcessDefinitionID(ctx, processDefID)
+	workflowCtx, _, ok := getBPMNTenantContext(ctx)
+	if !ok {
+		return
+	}
+	changelogs, err := c.versionService.GetChangeLogsByProcessDefinitionID(workflowCtx, processDefID)
 	if err != nil {
-		common.InternalError(ctx, "获取变更日志失败: "+err.Error())
+		respondBPMNError(ctx, err, "获取变更日志失败")
 		return
 	}
 

@@ -36,7 +36,11 @@ type ProcessCallbackOutbox struct {
 	TaskType string `json:"task_type,omitempty"`
 	// ElementID holds the value of the "element_id" field.
 	ElementID string `json:"element_id,omitempty"`
-	// Variables holds the value of the "variables" field.
+	// Action holds the value of the "action" field.
+	Action string `json:"action,omitempty"`
+	// 可信连接器配置引用；端点和凭据在执行时解析，绝不持久化到回调载荷
+	ConfigRef string `json:"config_ref,omitempty"`
+	// 按处理器声明字段过滤后的非敏感业务载荷
 	Variables map[string]interface{} `json:"variables,omitempty"`
 	// Status holds the value of the "status" field.
 	Status string `json:"status,omitempty"`
@@ -68,7 +72,7 @@ func (*ProcessCallbackOutbox) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case processcallbackoutbox.FieldID, processcallbackoutbox.FieldTenantID, processcallbackoutbox.FieldProcessInstanceID, processcallbackoutbox.FieldProcessTaskID, processcallbackoutbox.FieldAttemptCount:
 			values[i] = new(sql.NullInt64)
-		case processcallbackoutbox.FieldExecutionKey, processcallbackoutbox.FieldTaskID, processcallbackoutbox.FieldCallbackKind, processcallbackoutbox.FieldHandlerID, processcallbackoutbox.FieldTaskType, processcallbackoutbox.FieldElementID, processcallbackoutbox.FieldStatus, processcallbackoutbox.FieldLeaseOwner, processcallbackoutbox.FieldLastErrorClass:
+		case processcallbackoutbox.FieldExecutionKey, processcallbackoutbox.FieldTaskID, processcallbackoutbox.FieldCallbackKind, processcallbackoutbox.FieldHandlerID, processcallbackoutbox.FieldTaskType, processcallbackoutbox.FieldElementID, processcallbackoutbox.FieldAction, processcallbackoutbox.FieldConfigRef, processcallbackoutbox.FieldStatus, processcallbackoutbox.FieldLeaseOwner, processcallbackoutbox.FieldLastErrorClass:
 			values[i] = new(sql.NullString)
 		case processcallbackoutbox.FieldNextAttemptAt, processcallbackoutbox.FieldLeaseExpiresAt, processcallbackoutbox.FieldCompletedAt, processcallbackoutbox.FieldCreatedAt, processcallbackoutbox.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -146,6 +150,18 @@ func (_m *ProcessCallbackOutbox) assignValues(columns []string, values []any) er
 				return fmt.Errorf("unexpected type %T for field element_id", values[i])
 			} else if value.Valid {
 				_m.ElementID = value.String
+			}
+		case processcallbackoutbox.FieldAction:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field action", values[i])
+			} else if value.Valid {
+				_m.Action = value.String
+			}
+		case processcallbackoutbox.FieldConfigRef:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field config_ref", values[i])
+			} else if value.Valid {
+				_m.ConfigRef = value.String
 			}
 		case processcallbackoutbox.FieldVariables:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -271,6 +287,12 @@ func (_m *ProcessCallbackOutbox) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("element_id=")
 	builder.WriteString(_m.ElementID)
+	builder.WriteString(", ")
+	builder.WriteString("action=")
+	builder.WriteString(_m.Action)
+	builder.WriteString(", ")
+	builder.WriteString("config_ref=")
+	builder.WriteString(_m.ConfigRef)
 	builder.WriteString(", ")
 	builder.WriteString("variables=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Variables))

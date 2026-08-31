@@ -6,6 +6,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
+	"entgo.io/ent/schema/index"
 )
 
 // TicketNotification holds the schema definition for the TicketNotification entity.
@@ -40,6 +41,11 @@ func (TicketNotification) Fields() []ent.Field {
 		field.String("status").
 			Comment("状态: pending, sent, read").
 			Default("pending"),
+		field.String("delivery_key").
+			Comment("内部回调投递幂等键，不对 API 暴露").
+			Optional().
+			Nillable().
+			Sensitive(),
 		field.Int("tenant_id").
 			Comment("租户ID").
 			Positive(),
@@ -64,5 +70,12 @@ func (TicketNotification) Edges() []ent.Edge {
 			Required().
 			Unique().
 			Comment("接收人"),
+	}
+}
+
+// Indexes of the TicketNotification.
+func (TicketNotification) Indexes() []ent.Index {
+	return []ent.Index{
+		index.Fields("tenant_id", "delivery_key", "ticket_id", "user_id", "channel").Unique(),
 	}
 }

@@ -29,9 +29,11 @@ type ListTicketNotificationsResponse struct {
 
 // SendTicketNotificationRequest 发送工单通知请求
 type SendTicketNotificationRequest struct {
-	UserIDs   []int  `json:"userIds" binding:"required,min=1"` // 接收人ID列表
-	EventType string `json:"eventType" binding:"required"`     // 事件类型（偏好查询键）：ticket_created / comment_added 等
-	Content   string `json:"content" binding:"required"`       // 通知内容
+	UserIDs     []int  `json:"userIds" binding:"required,min=1"` // 接收人ID列表
+	EventType   string `json:"eventType" binding:"required"`     // 事件类型（偏好查询键）：ticket_created / comment_added 等
+	Content     string `json:"content" binding:"required"`       // 通知内容
+	DeliveryKey string `json:"-"`                                // 仅供内部 durable callback 去重
+	InAppOnly   bool   `json:"-"`                                // durable callback 不直接调用无幂等协议的外部渠道
 }
 
 // UpdateNotificationPreferencesRequest 更新通知偏好请求

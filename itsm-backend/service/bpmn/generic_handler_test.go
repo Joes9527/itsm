@@ -91,7 +91,27 @@ func TestGenericServiceTaskHandler_Notify_CreatesNotificationForRequester(t *tes
 	assert.Equal(t, 1, count)
 }
 
-func TestGenericServiceTaskHandler_UnknownAction_KeepsPassthroughBehavior(t *testing.T) {
+func TestGenericServiceTaskHandler_RetryUsesStableExecutionKey(t *testing.T) {
+	client, handler, tenantID, tkt := setupGenericHandlerFixture(t)
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+	ctx = WithBPMNCallbackExecutionKey(ctx, "generic-notification-retry-key")
+	variables := map[string]interface{}{
+		"action": "notify_rejection", "business_id": tkt.ID, "reject_reason": "not approved",
+	}
+
+	_, err := handler.Execute(ctx, nil, variables)
+	require.NoError(t, err)
+	_, err = handler.Execute(ctx, nil, variables)
+	require.NoError(t, err)
+
+	count, err := client.TicketNotification.Query().
+		Where(ticketnotification.TicketID(tkt.ID), ticketnotification.UserID(tkt.RequesterID)).
+		Count(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+}
+
+func TestGenericServiceTaskHandler_UnknownActionFailsClosed(t *testing.T) {
 	_, handler, tenantID, _ := setupGenericHandlerFixture(t)
 	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
 
@@ -99,9 +119,8 @@ func TestGenericServiceTaskHandler_UnknownAction_KeepsPassthroughBehavior(t *tes
 		"action": "some_future_custom_action",
 		"foo":    "bar",
 	})
-	require.NoError(t, err)
-	assert.True(t, result.Success)
-	assert.Equal(t, "bar", result.OutputVars["foo"], "未识别的 action 应该保留原有透传行为，不破坏自定义模板")
+	require.Error(t, err)
+	assert.Nil(t, result)
 }
 
 func TestGenericServiceTaskHandler_MissingBusinessID_ReturnsError(t *testing.T) {

@@ -150,6 +150,11 @@ func (rc *ReleaseController) UpdateReleaseStatus(c *gin.Context) {
 		common.Fail(c, common.UnauthorizedCode, "未授权访问")
 		return
 	}
+	userID, err := middleware.GetUserID(c)
+	if err != nil || userID == 0 {
+		common.Fail(c, common.UnauthorizedCode, "未授权访问")
+		return
+	}
 
 	releaseID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -163,7 +168,7 @@ func (rc *ReleaseController) UpdateReleaseStatus(c *gin.Context) {
 		return
 	}
 
-	release, err := rc.releaseService.UpdateReleaseStatus(c.Request.Context(), releaseID, tenantID, string(req.Status))
+	release, err := rc.releaseService.UpdateReleaseStatus(c.Request.Context(), releaseID, tenantID, userID, string(req.Status))
 	if err != nil {
 		rc.logger.Errorw("Update release status failed", "error", err, "release_id", releaseID)
 		common.Fail(c, common.InternalErrorCode, "更新发布状态失败: "+err.Error())
@@ -296,12 +301,17 @@ func (rc *ReleaseController) updateReleaseActionStatus(c *gin.Context, status, r
 		common.Fail(c, common.UnauthorizedCode, "未授权访问")
 		return
 	}
+	userID, err := middleware.GetUserID(c)
+	if err != nil || userID == 0 {
+		common.Fail(c, common.UnauthorizedCode, "未授权访问")
+		return
+	}
 	releaseID, err := strconv.Atoi(c.Param("id"))
 	if err != nil || releaseID <= 0 {
 		common.Fail(c, common.BadRequestCode, "无效的发布ID")
 		return
 	}
-	release, err := rc.releaseService.UpdateReleaseStatus(c.Request.Context(), releaseID, tenantID, status)
+	release, err := rc.releaseService.UpdateReleaseStatus(c.Request.Context(), releaseID, tenantID, userID, status)
 	if err != nil {
 		rc.logger.Errorw("Release action failed", "error", err, "release_id", releaseID, "status", status)
 		common.Fail(c, common.InternalErrorCode, "更新发布状态失败: "+err.Error())

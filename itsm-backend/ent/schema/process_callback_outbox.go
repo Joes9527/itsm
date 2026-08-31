@@ -25,7 +25,13 @@ func (ProcessCallbackOutbox) Fields() []ent.Field {
 		field.String("handler_id").NotEmpty(),
 		field.String("task_type").NotEmpty(),
 		field.String("element_id").NotEmpty(),
-		field.JSON("variables", map[string]interface{}{}).Optional(),
+		field.String("action").Optional(),
+		field.String("config_ref").
+			Comment("可信连接器配置引用；端点和凭据在执行时解析，绝不持久化到回调载荷").
+			Optional(),
+		field.JSON("variables", map[string]interface{}{}).
+			Comment("按处理器声明字段过滤后的非敏感业务载荷").
+			Optional(),
 		field.String("status").Default("pending"),
 		field.Int("attempt_count").NonNegative().Default(0),
 		field.Time("next_attempt_at").Default(time.Now),

@@ -1176,6 +1176,44 @@ func TestIncidentService_CategorizeIncidentForWorkflow_SetsTriagedAndAudits(t *t
 	assert.Equal(t, "categorization", events[0].EventType)
 }
 
+func TestIncidentService_WorkflowRetryPreservesFirstBusinessEffect(t *testing.T) {
+	client, incidentService, ctx := setupIncidentTest(t)
+	defer client.Close()
+	tenant, err := createIncidentTestTenant(ctx, client, "wf-retry")
+	require.NoError(t, err)
+	user, err := createIncidentTestUser(ctx, client, tenant.ID, "wf-retry")
+	require.NoError(t, err)
+
+	t.Run("escalation", func(t *testing.T) {
+		entity := newLifecycleIncidentFixture(t, client, ctx, tenant.ID, user.ID, "INC-WF-RETRY-ESC")
+		_, err := incidentService.EscalateIncidentLevel(ctx, entity.ID, tenant.ID, 0)
+		require.NoError(t, err)
+		first := client.Incident.GetX(ctx, entity.ID)
+
+		_, err = incidentService.EscalateIncidentLevel(ctx, entity.ID, tenant.ID, 0)
+		require.NoError(t, err)
+		after := client.Incident.GetX(ctx, entity.ID)
+		assert.Equal(t, 1, after.EscalationLevel)
+		assert.Equal(t, first.Version, after.Version)
+		assert.Equal(t, first.EscalatedAt, after.EscalatedAt)
+		assert.Equal(t, 1, client.IncidentEvent.Query().Where(incidentevent.IncidentIDEQ(entity.ID)).CountX(ctx))
+	})
+
+	t.Run("resolution", func(t *testing.T) {
+		entity := newLifecycleIncidentFixture(t, client, ctx, tenant.ID, user.ID, "INC-WF-RETRY-RES")
+		_, err := incidentService.ResolveIncidentForWorkflow(ctx, entity.ID, tenant.ID, "restored")
+		require.NoError(t, err)
+		first := client.Incident.GetX(ctx, entity.ID)
+
+		_, err = incidentService.ResolveIncidentForWorkflow(ctx, entity.ID, tenant.ID, "restored")
+		require.NoError(t, err)
+		after := client.Incident.GetX(ctx, entity.ID)
+		assert.Equal(t, first.Version, after.Version)
+		assert.Equal(t, first.ResolvedAt, after.ResolvedAt)
+		assert.Equal(t, 1, client.IncidentEvent.Query().Where(incidentevent.IncidentIDEQ(entity.ID)).CountX(ctx))
+	})
+}
+
 // TestIncidentService_WorkflowMethods_CrossTenantFailClosed 覆盖六个 BPMN 工作流方法
 // 共同的租户边界：跨租户调用必须失败且不产生任何写入。
 func TestIncidentService_WorkflowMethods_CrossTenantFailClosed(t *testing.T) {

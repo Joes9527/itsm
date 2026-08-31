@@ -2,15 +2,20 @@ package bpmn
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
+	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 func TestKafDelegateServiceTaskHandler_TypeAndAsync(t *testing.T) {
@@ -23,6 +28,20 @@ func TestKafDelegateServiceTaskHandler_TypeAndAsync(t *testing.T) {
 	assert.Equal(t, "kaf_delegate", handler.GetTaskType())
 	assert.Equal(t, "kaf_delegate_handler", handler.GetHandlerID())
 	assert.True(t, handler.IsAsync())
+}
+
+func TestKafDelegateHandler_DoesNotLogCompletionVariables(t *testing.T) {
+	core, logs := observer.New(zapcore.DebugLevel)
+	handler := NewKafDelegateServiceTaskHandler(nil, zap.New(core).Sugar())
+	sentinel := "kaf-completion-secret"
+
+	_, err := handler.Execute(context.Background(), &ent.ProcessTask{TaskID: "task-1", TenantID: 7}, map[string]interface{}{
+		"completion_note": sentinel,
+	})
+	require.NoError(t, err)
+	for _, entry := range logs.All() {
+		assert.NotContains(t, entry.Message+fmt.Sprint(entry.ContextMap()), sentinel)
+	}
 }
 
 func TestKafDelegateServiceTaskHandler_Execute_ReturnsSuccessWithoutSideEffects(t *testing.T) {

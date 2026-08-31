@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - 现有 9 个 `ServiceTaskHandlerInterface` 实现（Ticket/Change/Incident/Generic/ServiceRequest/Notification/CC/Webhook/Release）不得修改一行；新增能力只能通过可选接口类型断言接入。
-- `user_task` 的创建（`createUserTask`）、完成（`CompleteTask` 对 assignee/candidateUsers 的鉴权分支）、`dispatchUserTaskCallback` 行为必须保持不变——每个改动点都要有明确证据（现有测试继续通过）证明未受影响。
+- `user_task` 的创建、完成鉴权与当时的完成后 handler 回调行为必须保持不变，每个改动点都要有明确回归证据。
 - `authorizeTaskActor` 现有"无用户上下文即放行"分支只能继续对非 `kaf_delegate` 类型任务生效；新分支必须在到达这个放行逻辑之前拦截 `kaf_delegate` 任务。
 - 不实现：Outbox 事件发布、上游委派设计 §4.1-4.3 的 HTTP API 契约（`GET kaf-context`/`POST actions`）、幂等键中间件、`AuditMiddleware` 挂载、Workflow Designer 前端。这些是独立条目，不在本计划范围。
 - 每个任务完成后运行 `cd itsm-backend && go build ./...`，确保全仓库编译通过；涉及的包运行 `go test ./service/... -run <TestName> -v` 验证目标测试，另外完整跑一次 `go test ./service/...` 确认无回归。
@@ -626,7 +626,7 @@ func TestCompleteTask_ResumesDelegatedTask_AfterAsyncPause(t *testing.T) {
 	completed, err := engine.client.ProcessTask.Get(kafCtx, delegatedTask.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "completed", completed.Status)
-	assert.Equal(t, 1, fakeHandler.executed, "完成时应该经 dispatchUserTaskCallback 触发一次 handler.Execute 用于记录")
+	assert.Equal(t, 1, fakeHandler.executed, "完成时应该触发一次 handler.Execute 用于记录")
 
 	updatedInstance, err := engine.client.ProcessInstance.Get(kafCtx, instance.ID)
 	require.NoError(t, err)
@@ -754,8 +754,8 @@ import (
 //
 // 它是异步 handler（IsAsync()==true）：流程到达声明了 service_task_type="kaf_delegate"
 // 的节点时，引擎的 handleElement 不会调用它的 Execute，而是创建 ProcessTask 并暂停
-// （见 CustomProcessEngine.createDelegatedTask）。Execute 只在任务完成时经
-// dispatchUserTaskCallback 触发一次，用于记录/审计，不产生任何业务副作用——真正的
+// （见 CustomProcessEngine.createDelegatedTask）。Execute 只在任务完成后触发一次，
+// 用于记录/审计，不产生任何业务副作用——真正的
 // WorkItem 动作（resolve/close 等）走上游委派设计 §4.3 的 typed action API，
 // 不经过这个 Execute。
 type KafDelegateServiceTaskHandler struct {
@@ -787,7 +787,7 @@ func (h *KafDelegateServiceTaskHandler) Validate(ctx context.Context, config map
 	return nil
 }
 
-// Execute 只在委派任务完成时被调用一次（经 dispatchUserTaskCallback），用于记录完成事件，
+// Execute 只在委派任务完成时被调用一次，用于记录完成事件，
 // 不产生业务副作用。
 func (h *KafDelegateServiceTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
 	taskID := ""

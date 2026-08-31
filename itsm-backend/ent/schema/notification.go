@@ -5,6 +5,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/schema/field"
+	"entgo.io/ent/schema/index"
 )
 
 // Notification holds the schema definition for the Notification entity.
@@ -39,6 +40,11 @@ func (Notification) Fields() []ent.Field {
 		field.Int("tenant_id").
 			Comment("租户ID").
 			Positive(),
+		field.String("delivery_key").
+			Comment("内部回调投递幂等键，不对 API 暴露").
+			Optional().
+			Nillable().
+			Sensitive(),
 		field.Time("created_at").
 			Comment("创建时间").
 			Default(time.Now),
@@ -52,4 +58,11 @@ func (Notification) Fields() []ent.Field {
 // Edges of the Notification.
 func (Notification) Edges() []ent.Edge {
 	return nil
+}
+
+// Indexes of the Notification.
+func (Notification) Indexes() []ent.Index {
+	return []ent.Index{
+		index.Fields("tenant_id", "delivery_key", "user_id").Unique(),
+	}
 }

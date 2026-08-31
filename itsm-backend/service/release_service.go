@@ -17,10 +17,10 @@ import (
 
 // ReleaseService 发布管理服务
 type ReleaseService struct {
-	client             *ent.Client
-	logger             *zap.SugaredLogger
-	approvalBridge     *BPMNApprovalBridge
-	processTriggerSvc  ProcessTriggerServiceInterface
+	client            *ent.Client
+	logger            *zap.SugaredLogger
+	approvalBridge    *BPMNApprovalBridge
+	processTriggerSvc ProcessTriggerServiceInterface
 }
 
 // NewReleaseService 创建发布管理服务
@@ -119,8 +119,9 @@ func (s *ReleaseService) CreateRelease(ctx context.Context, req *dto.CreateRelea
 	// fail-soft 与工单/事件域一致：触发失败只告警不阻断创建——域侧状态流转的
 	// 桥接对"无关联流程实例"回退纯业务路径，发布生命周期本身不依赖流程。
 	if s.processTriggerSvc != nil {
+		triggerCtx := WithTrustedBPMNTenantContext(ctx, tenantID)
 		if _, triggerErr := s.processTriggerSvc.TriggerByBusinessType(
-			ctx, dto.BusinessTypeRelease, releaseEntity.ID, nil, strconv.Itoa(createdBy), tenantID,
+			triggerCtx, dto.BusinessTypeRelease, releaseEntity.ID, nil, strconv.Itoa(createdBy), tenantID,
 		); triggerErr != nil {
 			s.logger.Warnw("Failed to trigger release workflow",
 				"release_id", releaseEntity.ID, "tenant_id", tenantID, "error", triggerErr)
@@ -298,7 +299,7 @@ func (s *ReleaseService) UpdateRelease(ctx context.Context, id, tenantID int, re
 //   - scheduled → in-progress / cancelled
 //   - in-progress → completed / failed / rolled_back / cancelled
 //   - completed / cancelled / rolled_back / failed 为终态（不可被复活）
-func (s *ReleaseService) UpdateReleaseStatus(ctx context.Context, id, tenantID int, status string) (*dto.ReleaseResponse, error) {
+func (s *ReleaseService) UpdateReleaseStatus(ctx context.Context, id, tenantID, actorID int, status string) (*dto.ReleaseResponse, error) {
 	status = func() string { s1 := status; return s1 }()
 	releaseEntity, err := s.client.Release.Query().
 		Where(release.IDEQ(id), release.TenantIDEQ(tenantID)).
@@ -330,16 +331,15 @@ func (s *ReleaseService) UpdateReleaseStatus(ctx context.Context, id, tenantID i
 		return nil, fmt.Errorf("failed to update release status: %w", err)
 	}
 
-	// P1 域侧桥接：状态写完后完成对应的 release_approval_flow 阶段节点（注入 business_id），
+	// P1 域侧桥接：状态写完后完成对应的 release_approval_flow 阶段节点，
 	// 让流程推进到下一节点。release_task handler 会再做一次同值状态写入，状态机白名单
 	// 对同值转换幂等放行。桥接失败（存在待办任务但完成不了）则中止，避免发布状态与
-	// 流程状态分叉。actorUserID 传 0：阶段流转的授权边界在域层（JWT + 资源权限 +
-	// 租户隔离），不强制 BPMN 任务 assignee 匹配——任务未配置处理人时强制校验会误伤
-	// 合法流转（authorizeTaskActor 对 userID<=0 按设计跳过）。
+	// 流程状态分叉。actorID is the authenticated domain caller; ordinary stage
+	// mutations never use an actorless BPMN bypass.
 	if s.approvalBridge != nil {
 		if taskKey, ok := releaseStageTaskKey(status); ok {
 			if _, bridgeErr := s.approvalBridge.CompleteBusinessStageTask(
-				ctx, tenantID, 0, string(dto.BusinessTypeRelease), id, taskKey, nil,
+				ctx, tenantID, actorID, string(dto.BusinessTypeRelease), id, taskKey, nil,
 			); bridgeErr != nil {
 				return nil, fmt.Errorf("同步流程阶段任务失败: %w", bridgeErr)
 			}
@@ -477,7 +477,7 @@ func (s *ReleaseService) ApplyReleaseApproval(ctx context.Context, id, tenantID,
 	if action == "approve" && s.approvalBridge != nil {
 		if taskKey, ok := releaseStageTaskKey(targetStatus); ok {
 			if _, bridgeErr := s.approvalBridge.CompleteBusinessStageTask(
-				ctx, tenantID, 0, string(dto.BusinessTypeRelease), id, taskKey, nil,
+				ctx, tenantID, actorID, string(dto.BusinessTypeRelease), id, taskKey, nil,
 			); bridgeErr != nil {
 				return nil, fmt.Errorf("同步流程计划节点失败: %w", bridgeErr)
 			}

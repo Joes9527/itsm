@@ -302,10 +302,8 @@ func TestIncidentServiceTaskHandler_AssignIncident_InvalidIncidentID_StillErrors
 	assert.Error(t, err, "无效的事件ID是真实接线错误，必须继续报错")
 }
 
-// TestIncidentServiceTaskHandler_AssignIncident_CrossTenant 证明分配写入带租户过滤：
-// incident_task 的动作也会经 dispatchUserTaskCallback 收到调用方提交的变量
-// （Activity_Diagnosis/Resolve/Close 都是 incident_task 的 userTask），
-// 所以 incident_id 属于可被伪造的输入。
+// TestIncidentServiceTaskHandler_AssignIncident_CrossTenant 证明分配写入带租户过滤。
+// 回调业务身份必须来自流程实例，handler 仍需对权威租户做目标行过滤。
 func TestIncidentServiceTaskHandler_AssignIncident_CrossTenant(t *testing.T) {
 	client, handler, tenantID, inc, assigneeID := setupIncidentHandlerFixture(t)
 	otherCtx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID+9999)
@@ -459,7 +457,8 @@ func TestIncidentServiceTaskHandler_TenantScopedActions(t *testing.T) {
 
 func TestIncidentServiceTaskHandler_CreateIncident_RequiresInjectedService(t *testing.T) {
 	handler := NewIncidentServiceTaskHandler(nil, zap.NewNop().Sugar())
-	_, err := handler.Execute(context.Background(), nil, map[string]interface{}{
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, 1)
+	_, err := handler.Execute(ctx, nil, map[string]interface{}{
 		"action": "create_incident",
 		"title":  "测试事件",
 	})
@@ -472,7 +471,8 @@ func TestIncidentServiceTaskHandler_CreateIncident_DelegatesToInjectedService(t 
 	fake := &fakeIncidentService{createResp: &dto.IncidentResponse{ID: 7, IncidentNumber: "INC-1"}}
 	handler.SetIncidentService(fake)
 
-	result, err := handler.Execute(context.Background(), nil, map[string]interface{}{
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, 1)
+	result, err := handler.Execute(ctx, nil, map[string]interface{}{
 		"action":      "create_incident",
 		"title":       "测试事件",
 		"reporter_id": 3,
@@ -488,11 +488,11 @@ func TestIncidentServiceTaskHandler_AssignIncident_DelegatesAndUpdatesStatus(t *
 	fake := &fakeIncidentService{}
 	handler.SetIncidentService(fake)
 
-	_, err := handler.Execute(context.Background(), nil, map[string]interface{}{
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, 1)
+	_, err := handler.Execute(ctx, nil, map[string]interface{}{
 		"action":      "assign_incident",
 		"incident_id": 9,
 		"assignee_id": 4,
-		"tenant_id":   1,
 	})
 	require.NoError(t, err)
 	require.Equal(t, 9, fake.lastAssignID)

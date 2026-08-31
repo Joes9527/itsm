@@ -28,7 +28,7 @@ func TestBPMNVersionService_CreateVersion_DemotesOldLatest(t *testing.T) {
 
 	svc := NewBPMNVersionService(client, logger)
 
-	v1, err := svc.CreateVersion(ctx, &CreateVersionRequest{
+	v1, err := svc.CreateVersion(newTenantCtx(ctx, tenant.ID), &CreateVersionRequest{
 		ProcessDefinitionKey: "test_flow",
 		Name:                 "测试流程",
 		BPMNXML:              "<bpmn:definitions/>",
@@ -37,7 +37,7 @@ func TestBPMNVersionService_CreateVersion_DemotesOldLatest(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	v2, err := svc.CreateVersion(ctx, &CreateVersionRequest{
+	v2, err := svc.CreateVersion(newTenantCtx(ctx, tenant.ID), &CreateVersionRequest{
 		ProcessDefinitionKey: "test_flow",
 		Name:                 "测试流程",
 		BPMNXML:              "<bpmn:definitions/>",
@@ -76,12 +76,12 @@ func TestBPMNVersionService_ActivateVersion_DoesNotBreakIsLatest(t *testing.T) {
 	require.NoError(t, err)
 
 	svc := NewBPMNVersionService(client, logger)
-	v1, err := svc.CreateVersion(ctx, &CreateVersionRequest{
+	v1, err := svc.CreateVersion(newTenantCtx(ctx, tenant.ID), &CreateVersionRequest{
 		ProcessDefinitionKey: "test_flow2", Name: "流程2", BPMNXML: "<x/>",
 		TenantID: tenant.ID, CreatedBy: "tester",
 	})
 	require.NoError(t, err)
-	v2, err := svc.CreateVersion(ctx, &CreateVersionRequest{
+	v2, err := svc.CreateVersion(newTenantCtx(ctx, tenant.ID), &CreateVersionRequest{
 		ProcessDefinitionKey: "test_flow2", Name: "流程2", BPMNXML: "<x/>",
 		TenantID: tenant.ID, CreatedBy: "tester",
 	})
@@ -89,7 +89,7 @@ func TestBPMNVersionService_ActivateVersion_DoesNotBreakIsLatest(t *testing.T) {
 
 	// 激活回第一个版本，is_latest 不应该跟着 is_active 一起被搞乱——
 	// 激活的是旧版本，但"最新版本"这个概念不应该因为激活操作而改变。
-	require.NoError(t, svc.ActivateVersion(ctx, "test_flow2", v1.Version, tenant.ID))
+	require.NoError(t, svc.ActivateVersion(newTenantCtx(ctx, tenant.ID), "test_flow2", v1.Version, tenant.ID))
 
 	latestCount, err := client.ProcessDefinition.Query().
 		Where(processdefinition.Key("test_flow2"), processdefinition.TenantID(tenant.ID), processdefinition.IsLatest(true)).
@@ -116,12 +116,12 @@ func TestBPMNVersionService_GetLatestProcessDefinition_ReturnsMostRecentlyCreate
 	require.NoError(t, err)
 
 	versionSvc := NewBPMNVersionService(client, logger)
-	_, err = versionSvc.CreateVersion(ctx, &CreateVersionRequest{
+	_, err = versionSvc.CreateVersion(newTenantCtx(ctx, tenant.ID), &CreateVersionRequest{
 		ProcessDefinitionKey: "test_flow3", Name: "流程3", BPMNXML: "<x/>",
 		TenantID: tenant.ID, CreatedBy: "tester",
 	})
 	require.NoError(t, err)
-	v2, err := versionSvc.CreateVersion(ctx, &CreateVersionRequest{
+	v2, err := versionSvc.CreateVersion(newTenantCtx(ctx, tenant.ID), &CreateVersionRequest{
 		ProcessDefinitionKey: "test_flow3", Name: "流程3", BPMNXML: "<x/>",
 		TenantID: tenant.ID, CreatedBy: "tester",
 	})
@@ -154,7 +154,7 @@ func TestBPMNVersionService_CreateVersion_TenantIsolation(t *testing.T) {
 
 	// 在两个租户下为同一个 ProcessDefinitionKey 创建版本
 	// 租户A的第一个版本
-	aV1, err := svc.CreateVersion(ctx, &CreateVersionRequest{
+	aV1, err := svc.CreateVersion(newTenantCtx(ctx, tenantA.ID), &CreateVersionRequest{
 		ProcessDefinitionKey: "shared_key",
 		Name:                 "共享流程",
 		BPMNXML:              "<bpmn:definitions/>",
@@ -164,7 +164,7 @@ func TestBPMNVersionService_CreateVersion_TenantIsolation(t *testing.T) {
 	require.NoError(t, err)
 
 	// 租户B的第一个版本（同一个 key）
-	bV1, err := svc.CreateVersion(ctx, &CreateVersionRequest{
+	bV1, err := svc.CreateVersion(newTenantCtx(ctx, tenantB.ID), &CreateVersionRequest{
 		ProcessDefinitionKey: "shared_key",
 		Name:                 "共享流程",
 		BPMNXML:              "<bpmn:definitions/>",
@@ -195,7 +195,7 @@ func TestBPMNVersionService_CreateVersion_TenantIsolation(t *testing.T) {
 	assert.Equal(t, 1, tenantBLatestCount, "租户B应该有一行 is_latest=true")
 
 	// 只为租户A创建第二个版本，这应该只会降级租户A的旧版本，不应该影响租户B
-	aV2, err := svc.CreateVersion(ctx, &CreateVersionRequest{
+	aV2, err := svc.CreateVersion(newTenantCtx(ctx, tenantA.ID), &CreateVersionRequest{
 		ProcessDefinitionKey: "shared_key",
 		Name:                 "共享流程",
 		BPMNXML:              "<bpmn:definitions/>",
@@ -249,7 +249,8 @@ func TestBPMNVersionService_CreateVersion_TenantIsolation(t *testing.T) {
 }
 
 func newTenantCtx(ctx context.Context, tenantID int) context.Context {
-	return context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+	return WithTrustedBPMNTenantContext(ctx, tenantID)
 }
 
 // TestBPMNVersionService_CreateVersion_ConvergesMultiplePreExistingLatest 复现原始审计
@@ -298,7 +299,7 @@ func TestBPMNVersionService_CreateVersion_ConvergesMultiplePreExistingLatest(t *
 	require.Equal(t, 3, preCount, "前置条件：确实存在多行 is_latest=true 的脏数据")
 
 	svc := NewBPMNVersionService(client, logger)
-	newVersion, err := svc.CreateVersion(ctx, &CreateVersionRequest{
+	newVersion, err := svc.CreateVersion(newTenantCtx(ctx, tenant.ID), &CreateVersionRequest{
 		ProcessDefinitionKey: "dirty_flow",
 		Name:                 "脏数据流程",
 		BPMNXML:              "<bpmn:definitions/>",
@@ -334,7 +335,7 @@ func TestBPMNVersionService_CreateVersion_RollsBackDemoteOnCreateFailure(t *test
 	require.NoError(t, err)
 
 	svc := NewBPMNVersionService(client, logger)
-	v1, err := svc.CreateVersion(ctx, &CreateVersionRequest{
+	v1, err := svc.CreateVersion(newTenantCtx(ctx, tenant.ID), &CreateVersionRequest{
 		ProcessDefinitionKey: "rollback_flow", Name: "回滚流程", BPMNXML: "<x/>",
 		TenantID: tenant.ID, CreatedBy: "tester",
 	})
@@ -351,7 +352,7 @@ func TestBPMNVersionService_CreateVersion_RollsBackDemoteOnCreateFailure(t *test
 		Save(ctx)
 	require.NoError(t, err)
 
-	_, err = svc.CreateVersion(ctx, &CreateVersionRequest{
+	_, err = svc.CreateVersion(newTenantCtx(ctx, tenant.ID), &CreateVersionRequest{
 		ProcessDefinitionKey: "rollback_flow", Name: "回滚流程", BPMNXML: "<x/>",
 		TenantID: tenant.ID, CreatedBy: "tester",
 	})

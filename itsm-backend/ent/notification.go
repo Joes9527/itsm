@@ -33,6 +33,8 @@ type Notification struct {
 	UserID int `json:"user_id,omitempty"`
 	// 租户ID
 	TenantID int `json:"tenant_id,omitempty"`
+	// 内部回调投递幂等键，不对 API 暴露
+	DeliveryKey *string `json:"-"`
 	// 创建时间
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// 更新时间
@@ -49,7 +51,7 @@ func (*Notification) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case notification.FieldID, notification.FieldUserID, notification.FieldTenantID:
 			values[i] = new(sql.NullInt64)
-		case notification.FieldTitle, notification.FieldMessage, notification.FieldType, notification.FieldActionURL, notification.FieldActionText:
+		case notification.FieldTitle, notification.FieldMessage, notification.FieldType, notification.FieldActionURL, notification.FieldActionText, notification.FieldDeliveryKey:
 			values[i] = new(sql.NullString)
 		case notification.FieldCreatedAt, notification.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -122,6 +124,13 @@ func (_m *Notification) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.TenantID = int(value.Int64)
 			}
+		case notification.FieldDeliveryKey:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field delivery_key", values[i])
+			} else if value.Valid {
+				_m.DeliveryKey = new(string)
+				*_m.DeliveryKey = value.String
+			}
 		case notification.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
@@ -193,6 +202,8 @@ func (_m *Notification) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("tenant_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.TenantID))
+	builder.WriteString(", ")
+	builder.WriteString("delivery_key=<sensitive>")
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

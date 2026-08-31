@@ -67,6 +67,26 @@ func findTaskByDefinitionKey(t *testing.T, client *ent.Client, ctx context.Conte
 	return task
 }
 
+func createUserTaskCallbackChange(t *testing.T, client *ent.Client, ctx context.Context, tenantID, requesterID int, number string) (*ent.Ticket, *ent.Change) {
+	t.Helper()
+	workItem := client.Ticket.Create().
+		SetTitle("User task callback change").
+		SetTicketNumber(number).
+		SetType("change").
+		SetRecordClass("change_request").
+		SetRequesterID(requesterID).
+		SetTenantID(tenantID).
+		SaveX(ctx)
+	changeEntity := client.Change.Create().
+		SetTitle(workItem.Title).
+		SetStatus("draft").
+		SetCreatedBy(requesterID).
+		SetWorkItemID(workItem.ID).
+		SetTenantID(tenantID).
+		SaveX(ctx)
+	return workItem, changeEntity
+}
+
 // TestUserTaskWithServiceTaskTypeMetadataTriggersCallback 是回归测试：
 // change_normal_flow.bpmn 的 Activity_CABApproval 是 UserTask，但带了
 // service_task_type=change_task / action=approve_change 的 extensionElements metaData，
@@ -77,16 +97,12 @@ func findTaskByDefinitionKey(t *testing.T, client *ent.Client, ctx context.Conte
 func TestUserTaskWithServiceTaskTypeMetadataTriggersCallback(t *testing.T) {
 	client, engine, ctx, tenantID := setupUserTaskCallbackEnv(t)
 
-	ch := client.Change.Create().
-		SetTitle("测试变更").
-		SetStatus("draft").
-		SetCreatedBy(1).
-		SetTenantID(tenantID).
-		SaveX(ctx)
+	scope, err := BPMNAccessScopeFromContext(ctx)
+	require.NoError(t, err)
+	workItem, ch := createUserTaskCallbackChange(t, client, ctx, tenantID, scope.UserID, "T-USER-CALLBACK-1")
 
-	instance, err := engine.StartProcess(ctx, "change_normal_flow", "change:callback-1", "", 0, map[string]interface{}{
+	instance, err := engine.StartProcess(ctx, "change_normal_flow", "change:callback-1", "change", workItem.ID, map[string]interface{}{
 		"approval_required": true,
-		"change_id":         ch.ID,
 	})
 	require.NoError(t, err)
 
@@ -98,9 +114,7 @@ func TestUserTaskWithServiceTaskTypeMetadataTriggersCallback(t *testing.T) {
 
 	// 完成变更评估节点，让审批网关把流程路由到 CAB 审批节点。
 	assessment := findTaskByDefinitionKey(t, client, ctx, instance.ID, "Activity_Assessment")
-	require.NoError(t, engine.CompleteTask(ctx, assessment.TaskID, map[string]interface{}{
-		"change_id": ch.ID,
-	}))
+	require.NoError(t, engine.CompleteTask(ctx, assessment.TaskID, map[string]interface{}{}))
 
 	advanced, err := client.ProcessInstance.Get(ctx, instance.ID)
 	require.NoError(t, err)
@@ -110,9 +124,7 @@ func TestUserTaskWithServiceTaskTypeMetadataTriggersCallback(t *testing.T) {
 	// 核心断言：完成 UserTask 形态的 CAB 审批节点，必须触发
 	// ChangeServiceTaskHandler.approveChange，把 Change.Status 改成 pending_approval。
 	cabTask := findTaskByDefinitionKey(t, client, ctx, instance.ID, "Activity_CABApproval")
-	require.NoError(t, engine.CompleteTask(ctx, cabTask.TaskID, map[string]interface{}{
-		"change_id": ch.ID,
-	}))
+	require.NoError(t, engine.CompleteTask(ctx, cabTask.TaskID, map[string]interface{}{}))
 
 	updated, err := client.Change.Get(ctx, ch.ID)
 	require.NoError(t, err)
@@ -120,35 +132,36 @@ func TestUserTaskWithServiceTaskTypeMetadataTriggersCallback(t *testing.T) {
 		"完成 Activity_CABApproval 触发 ChangeServiceTaskHandler.approveChange，但该回调不改变状态（approve_change 是节点本身的固定 action，不代表审批结果），真正的状态转换发生在后续的 schedule_change/reject_change")
 }
 
-// TestUserTaskMetadataPropagatedIntoTaskVariables 锁定 metadata 的传播链路：
-// XML extensionElements → BPMNUserTask → createUserTask 的 taskConfig → ProcessTask.TaskVariables。
-// 同时验证反面：没有声明 service_task_type 的 UserTask 不会凭空多出这两个 key，
-// 保证回调分发是"按需触发"而不是对所有 UserTask 无条件触发。
-func TestUserTaskMetadataPropagatedIntoTaskVariables(t *testing.T) {
+// TestUserTaskMetadataPersistsOnlyInImmutableDescriptor verifies that routing
+// metadata never enters participant-editable form variables.
+func TestUserTaskMetadataPersistsOnlyInImmutableDescriptor(t *testing.T) {
 	client, engine, ctx, tenantID := setupUserTaskCallbackEnv(t)
 
-	ch := client.Change.Create().
-		SetTitle("metadata 传播测试").
-		SetStatus("draft").
-		SetCreatedBy(1).
-		SetTenantID(tenantID).
-		SaveX(ctx)
+	scope, err := BPMNAccessScopeFromContext(ctx)
+	require.NoError(t, err)
+	workItem, _ := createUserTaskCallbackChange(t, client, ctx, tenantID, scope.UserID, "T-USER-CALLBACK-2")
 
-	instance, err := engine.StartProcess(ctx, "change_normal_flow", "change:callback-2", "", 0, map[string]interface{}{
+	instance, err := engine.StartProcess(ctx, "change_normal_flow", "change:callback-2", "change", workItem.ID, map[string]interface{}{
 		"approval_required": true,
-		"change_id":         ch.ID,
 	})
 	require.NoError(t, err)
 
 	assessment := findTaskByDefinitionKey(t, client, ctx, instance.ID, "Activity_Assessment")
-	require.Equal(t, "change_task", assessment.TaskVariables["service_task_type"],
-		"BPMN metaData service_task_type 必须解析并写进 ProcessTask.TaskVariables")
-	require.Equal(t, "update_change", assessment.TaskVariables["action"],
-		"BPMN metaData action 必须解析并写进 ProcessTask.TaskVariables")
+	require.NotContains(t, assessment.TaskVariables, "service_task_type")
+	require.NotContains(t, assessment.TaskVariables, "action")
+	require.Equal(t, "change_service_handler", assessment.CallbackHandlerID)
+	require.Equal(t, "change_task", assessment.CallbackTaskType)
+	require.Equal(t, "update_change", assessment.CallbackAction)
 
 	// 反面用例：service_request_flow 的用户任务没有声明 service_task_type metadata，
 	// 不应该出现这两个 key（否则回调会对无关流程无条件触发）。
-	srInstance, err := engine.StartProcess(ctx, "service_request_flow", "service_request:callback-3", "", 0, map[string]interface{}{
+	requestWorkItem := client.Ticket.Create().
+		SetTitle("Service request callback").SetTicketNumber("T-USER-CALLBACK-SR-1").
+		SetType("service_request").SetRecordClass("service_request_item").
+		SetRequesterID(scope.UserID).SetTenantID(tenantID).SaveX(ctx)
+	client.ServiceRequest.Create().SetTenantID(tenantID).SetTicketID(requestWorkItem.ID).
+		SetCatalogID(1).SetRequesterID(scope.UserID).SaveX(ctx)
+	srInstance, err := engine.StartProcess(ctx, "service_request_flow", "service_request:callback-3", "service_request", requestWorkItem.ID, map[string]interface{}{
 		"approval_required": true,
 	})
 	require.NoError(t, err)
@@ -163,6 +176,7 @@ func TestUserTaskMetadataPropagatedIntoTaskVariables(t *testing.T) {
 		"未声明 service_task_type 的 UserTask 不应被写入该变量")
 	require.NotContains(t, srTasks[0].TaskVariables, "action",
 		"未声明 action 的 UserTask 不应被写入该变量")
+	require.Equal(t, bpmnNoUserTaskCallbackHandlerID, srTasks[0].CallbackHandlerID)
 
 	// 完成这个无 metadata 的用户任务不应报错（回调分发必须整体跳过）。
 	require.NoError(t, engine.CompleteTask(ctx, srTasks[0].TaskID, map[string]interface{}{}))

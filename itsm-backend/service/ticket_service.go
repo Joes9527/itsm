@@ -719,7 +719,7 @@ func (s *TicketService) triggerWorkflowForTicket(ctx context.Context, tkt *ticke
 		TenantID:             tenantID,
 	}
 
-	resp, err := s.processTriggerSvc.TriggerProcess(ctx, triggerReq)
+	resp, err := s.processTriggerSvc.TriggerProcess(WithTrustedBPMNTenantContext(ctx, tenantID), triggerReq)
 	if err != nil {
 		return fmt.Errorf("failed to trigger workflow: %w", err)
 	}

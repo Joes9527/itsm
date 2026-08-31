@@ -23,6 +23,12 @@ type ticketStatusServiceEntStub struct {
 	client *ent.Client
 }
 
+type ticketNotificationStub struct{}
+
+func (*ticketNotificationStub) SendNotification(context.Context, int, *dto.SendTicketNotificationRequest, int) error {
+	return nil
+}
+
 func (s *ticketStatusServiceEntStub) UpdateTicketStatusForWorkflow(ctx context.Context, ticketID int, status string, tenantID int, operatorID int) error {
 	return s.client.Ticket.UpdateOneID(ticketID).SetStatus(status).Exec(ctx)
 }
@@ -33,6 +39,7 @@ func TestTicketServiceTaskHandler_UpdateTicketStatus(t *testing.T) {
 
 	logger := zaptest.NewLogger(t).Sugar()
 	handler := NewTicketServiceTaskHandler(client, logger)
+	handler.SetNotificationService(&ticketNotificationStub{})
 	handler.SetTicketService(&ticketStatusServiceEntStub{client: client})
 
 	ctx := context.Background()
@@ -45,6 +52,7 @@ func TestTicketServiceTaskHandler_UpdateTicketStatus(t *testing.T) {
 		SetStatus("active").
 		Save(ctx)
 	require.NoError(t, err)
+	ctx = context.WithValue(ctx, BPMNTenantIDContextKey, testTenant.ID)
 
 	testUser, err := client.User.Create().
 		SetUsername("testuser").
@@ -147,6 +155,7 @@ func TestTicketServiceTaskHandler_EscalateTicket(t *testing.T) {
 		SetStatus("active").
 		Save(ctx)
 	require.NoError(t, err)
+	ctx = context.WithValue(ctx, BPMNTenantIDContextKey, testTenant.ID)
 
 	testUser, err := client.User.Create().
 		SetUsername("testuser").
@@ -245,6 +254,7 @@ func TestTicketServiceTaskHandler_AssignTicket(t *testing.T) {
 
 	logger := zaptest.NewLogger(t).Sugar()
 	handler := NewTicketServiceTaskHandler(client, logger)
+	handler.SetNotificationService(&ticketNotificationStub{})
 
 	ctx := context.Background()
 
@@ -256,6 +266,7 @@ func TestTicketServiceTaskHandler_AssignTicket(t *testing.T) {
 		SetStatus("active").
 		Save(ctx)
 	require.NoError(t, err)
+	ctx = context.WithValue(ctx, BPMNTenantIDContextKey, testTenant.ID)
 
 	testUser, err := client.User.Create().
 		SetUsername("testuser").
@@ -365,6 +376,7 @@ func TestTicketServiceTaskHandler_Execute(t *testing.T) {
 	logger := zaptest.NewLogger(t).Sugar()
 	handler := NewTicketServiceTaskHandler(client, logger)
 	handler.SetTicketService(&ticketStatusServiceEntStub{client: client})
+	handler.SetNotificationService(&ticketNotificationStub{})
 
 	ctx := context.Background()
 
@@ -376,6 +388,7 @@ func TestTicketServiceTaskHandler_Execute(t *testing.T) {
 		SetStatus("active").
 		Save(ctx)
 	require.NoError(t, err)
+	ctx = context.WithValue(ctx, BPMNTenantIDContextKey, testTenant.ID)
 
 	testUser, err := client.User.Create().
 		SetUsername("testuser").
@@ -452,16 +465,13 @@ func TestTicketServiceTaskHandler_Execute(t *testing.T) {
 			checkResult:   nil,
 		},
 		{
-			name: "默认动作",
+			name: "未知动作失败关闭",
 			variables: map[string]interface{}{
 				"business_id": testTicket.ID,
 				"action":      "unknown_action",
 			},
-			expectedError: false,
-			checkResult: func(t *testing.T, result *dto.ServiceTaskResult) {
-				assert.True(t, result.Success)
-				assert.Equal(t, "无操作执行", result.Message)
-			},
+			expectedError: true,
+			checkResult:   nil,
 		},
 	}
 
@@ -543,18 +553,44 @@ func TestTicketServiceTaskHandler_UpdateStatus_RequiresInjectedService(t *testin
 	require.Contains(t, err.Error(), "未注入")
 }
 
+func TestTicketServiceTaskHandler_NotificationRequiresInjectedService(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ticket_handler_notification_dependency?mode=memory&cache=shared&_fk=1")
+	t.Cleanup(func() { _ = client.Close() })
+	ctx := context.Background()
+	tenant := client.Tenant.Create().SetName("T").SetCode("ticket-notification-dependency").SetDomain("ticket-notification-dependency.test").SetStatus("active").SaveX(ctx)
+	requester := client.User.Create().SetUsername("ticket-notification-user").SetEmail("ticket-notification-user@test.invalid").SetPasswordHash("x").SetName("User").SetTenantID(tenant.ID).SetActive(true).SaveX(ctx)
+	ticket := client.Ticket.Create().SetTitle("Ticket").SetTicketNumber("T-NOTIFY-DEPENDENCY").SetStatus("open").SetRequesterID(requester.ID).SetTenantID(tenant.ID).SaveX(ctx)
+	handler := NewTicketServiceTaskHandler(client, zap.NewNop().Sugar())
+	ctx = context.WithValue(ctx, BPMNTenantIDContextKey, tenant.ID)
+
+	_, err := handler.Execute(ctx, nil, map[string]interface{}{
+		"business_id": ticket.ID,
+		"action":      "notify_requester",
+		"content":     "callback message",
+	})
+
+	require.Error(t, err)
+}
+
 func TestTicketServiceTaskHandler_UpdateStatus_DelegatesToInjectedService(t *testing.T) {
-	handler := NewTicketServiceTaskHandler(nil, zap.NewNop().Sugar())
+	client := enttest.Open(t, "sqlite3", "file:ticket_handler_delegate?mode=memory&cache=shared&_fk=1")
+	t.Cleanup(func() { _ = client.Close() })
+	ctx := context.Background()
+	tenant := client.Tenant.Create().SetName("T").SetCode("ticket-delegate").SetDomain("ticket-delegate.test").SetStatus("active").SaveX(ctx)
+	requester := client.User.Create().SetUsername("ticket-delegate-user").SetEmail("ticket-delegate@test.invalid").SetPasswordHash("x").SetName("User").SetTenantID(tenant.ID).SetActive(true).SaveX(ctx)
+	tkt := client.Ticket.Create().SetTitle("Ticket").SetTicketNumber("T-DELEGATE").SetStatus("open").SetRequesterID(requester.ID).SetTenantID(tenant.ID).SaveX(ctx)
+	handler := NewTicketServiceTaskHandler(client, zap.NewNop().Sugar())
 	fake := &fakeTicketStatusService{}
 	handler.SetTicketService(fake)
+	ctx = context.WithValue(ctx, BPMNTenantIDContextKey, tenant.ID)
 
-	_, err := handler.Execute(context.Background(), nil, map[string]interface{}{
-		"business_id": 42,
+	_, err := handler.Execute(ctx, nil, map[string]interface{}{
+		"business_id": tkt.ID,
 		"action":      "update_status",
 		"new_status":  "resolved",
 	})
 	require.NoError(t, err)
-	require.Equal(t, 42, fake.lastTicketID)
+	require.Equal(t, tkt.ID, fake.lastTicketID)
 	require.Equal(t, "resolved", fake.lastStatus)
 }
 

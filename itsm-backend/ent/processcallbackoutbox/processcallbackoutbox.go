@@ -31,6 +31,10 @@ const (
 	FieldTaskType = "task_type"
 	// FieldElementID holds the string denoting the element_id field in the database.
 	FieldElementID = "element_id"
+	// FieldAction holds the string denoting the action field in the database.
+	FieldAction = "action"
+	// FieldConfigRef holds the string denoting the config_ref field in the database.
+	FieldConfigRef = "config_ref"
 	// FieldVariables holds the string denoting the variables field in the database.
 	FieldVariables = "variables"
 	// FieldStatus holds the string denoting the status field in the database.
@@ -67,6 +71,8 @@ var Columns = []string{
 	FieldHandlerID,
 	FieldTaskType,
 	FieldElementID,
+	FieldAction,
+	FieldConfigRef,
 	FieldVariables,
 	FieldStatus,
 	FieldAttemptCount,
@@ -175,6 +181,16 @@ func ByTaskType(opts ...sql.OrderTermOption) OrderOption {
 // ByElementID orders the results by the element_id field.
 func ByElementID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldElementID, opts...).ToFunc()
+}
+
+// ByAction orders the results by the action field.
+func ByAction(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAction, opts...).ToFunc()
+}
+
+// ByConfigRef orders the results by the config_ref field.
+func ByConfigRef(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldConfigRef, opts...).ToFunc()
 }
 
 // ByStatus orders the results by the status field.

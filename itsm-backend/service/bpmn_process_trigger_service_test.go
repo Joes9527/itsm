@@ -29,6 +29,7 @@ func TestTriggerProcess_PopulatesStructuredBusinessIdentity(t *testing.T) {
 	logger := zaptest.NewLogger(t).Sugar()
 	engine := NewCustomProcessEngine(client, logger)
 	tenantCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+	tenantCtx = WithTrustedBPMNTenantContext(tenantCtx, tenant.ID)
 
 	deploySvc := NewBPMNTemplateService(client)
 	_, err = deploySvc.LoadAndDeployTemplates(tenantCtx, tenant.ID)

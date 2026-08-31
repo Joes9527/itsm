@@ -128,15 +128,34 @@ func seedDurableUserCallbackTask(
 	task := f.seedNonParticipantApprovalTask(t, suffix)
 	task, err := f.client.ProcessTask.UpdateOne(task).
 		SetCandidateUsers(f.actor.Email).
-		SetTaskType(handler.GetTaskType()).
-		SetTaskVariables(map[string]interface{}{
-			bpmnMetaDataServiceTaskType: handler.GetTaskType(),
-			bpmnMetaDataAction:          "record_completion",
-		}).
 		Save(f.userCtx)
 	require.NoError(t, err)
+	configureLegacyUserCallbackDefinition(t, f, task, handler.GetTaskType(), "record_completion")
 	f.engine.CallbackRegistry().RegisterHandler(handler)
 	return task, f.client.ProcessInstance.GetX(f.userCtx, task.ProcessInstanceID)
+}
+
+func configureLegacyUserCallbackDefinition(t *testing.T, f *bpmnAuthorizationFixture, task *ent.ProcessTask, taskType, action string) {
+	t.Helper()
+	instance := f.client.ProcessInstance.GetX(f.userCtx, task.ProcessInstanceID)
+	definition := f.client.ProcessDefinition.GetX(f.userCtx, instance.ProcessDefinitionID)
+	xml := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="legacy-user-callback" isExecutable="true">
+    <bpmn:startEvent id="start" />
+    <bpmn:userTask id="%s" name="Approval">
+      <bpmn:extensionElements>
+        <bpmn:metaData name="service_task_type">%s</bpmn:metaData>
+        <bpmn:metaData name="action">%s</bpmn:metaData>
+      </bpmn:extensionElements>
+    </bpmn:userTask>
+    <bpmn:endEvent id="end" />
+    <bpmn:sequenceFlow id="to-approval" sourceRef="start" targetRef="%s" />
+    <bpmn:sequenceFlow id="to-end" sourceRef="%s" targetRef="end" />
+  </bpmn:process>
+</bpmn:definitions>`, task.TaskDefinitionKey, taskType, action, task.TaskDefinitionKey, task.TaskDefinitionKey)
+	_, err := f.client.ProcessDefinition.UpdateOne(definition).SetBpmnXML([]byte(xml)).Save(f.userCtx)
+	require.NoError(t, err)
 }
 
 func setCallbackTestClock(engine *CustomProcessEngine, now *time.Time) {
@@ -254,6 +273,81 @@ func TestCallbackHandlerSuccessThenAdvanceFailureRetriesAndCompletesToken(t *tes
 	assert.Equal(t, []string{row.ExecutionKey, row.ExecutionKey}, handler.ExecutionKeys())
 }
 
+func TestChangeCallbackBusinessEffectSurvivesAdvanceFailureWithoutReplay(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	now := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
+	setCallbackTestClock(f.engine, &now)
+
+	workItem := f.client.Ticket.Create().
+		SetTitle("Durable callback change").
+		SetType("change").
+		SetRecordClass("change_request").
+		SetPriority("medium").
+		SetTicketNumber("BPMN-CALLBACK-CHANGE-1").
+		SetRequesterID(f.actor.ID).
+		SetTenantID(f.tenant.ID).
+		SaveX(f.userCtx)
+	changeEntity := f.client.Change.Create().
+		SetTitle(workItem.Title).
+		SetType("normal").
+		SetStatus("submitted").
+		SetRiskLevel("medium").
+		SetImpactScope("low").
+		SetCreatedBy(f.actor.ID).
+		SetTenantID(f.tenant.ID).
+		SetWorkItemID(workItem.ID).
+		SaveX(f.userCtx)
+
+	task := f.seedNonParticipantApprovalTask(t, "real-change-advance-retry")
+	task = f.client.ProcessTask.UpdateOne(task).
+		SetCandidateUsers(f.actor.Email).
+		SaveX(f.userCtx)
+	instance := f.client.ProcessInstance.GetX(f.userCtx, task.ProcessInstanceID)
+	instance = f.client.ProcessInstance.UpdateOne(instance).
+		SetBusinessKey(fmt.Sprintf("change:%d", workItem.ID)).
+		SetBusinessType("change").
+		SetBusinessID(workItem.ID).
+		SaveX(f.userCtx)
+	definition := f.client.ProcessDefinition.GetX(f.userCtx, instance.ProcessDefinitionID)
+	definitionXML := `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="durable-change" isExecutable="true">
+    <bpmn:startEvent id="start" />
+    <bpmn:userTask id="approval" name="Approval" />
+    <bpmn:serviceTask id="callback" name="Schedule change">
+      <bpmn:extensionElements>
+        <bpmn:metaData name="service_task_type">change_task</bpmn:metaData>
+        <bpmn:metaData name="action">schedule_change</bpmn:metaData>
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="end" />
+    <bpmn:sequenceFlow id="to-approval" sourceRef="start" targetRef="approval" />
+    <bpmn:sequenceFlow id="to-callback" sourceRef="approval" targetRef="callback" />
+    <bpmn:sequenceFlow id="to-end" sourceRef="callback" targetRef="end" />
+  </bpmn:process>
+</bpmn:definitions>`
+	f.client.ProcessDefinition.UpdateOne(definition).SetBpmnXML([]byte(definitionXML)).ExecX(f.userCtx)
+	failNextCallbackTokenAdvance(f.client, "end", errors.New("forced process token advancement rollback"))
+
+	require.NoError(t, f.engine.CompleteTask(f.typedTaskScopeOnlyCtx(f.actor, false), task.TaskID, nil))
+	firstEffect := f.client.Change.GetX(f.userCtx, changeEntity.ID)
+	require.Equal(t, "scheduled", firstEffect.Status)
+	row := callbackRowForInstance(t, f, instance.ID)
+	require.Equal(t, bpmnCallbackStatusPending, row.Status)
+	require.Equal(t, "advance_error", row.LastErrorClass)
+
+	now = now.Add(time.Second)
+	completed, err := f.engine.ProcessPendingCallbacks(context.Background(), "real-change-retry-worker", 50)
+	require.NoError(t, err)
+	require.Equal(t, 1, completed)
+	afterRetry := f.client.Change.GetX(f.userCtx, changeEntity.ID)
+	assert.Equal(t, "scheduled", afterRetry.Status)
+	assert.Equal(t, firstEffect.PlannedStartDate, afterRetry.PlannedStartDate)
+	assert.Equal(t, firstEffect.PlannedEndDate, afterRetry.PlannedEndDate)
+	assert.Equal(t, bpmnCallbackStatusCompleted, callbackRowForInstance(t, f, instance.ID).Status)
+	assert.Equal(t, "completed", f.client.ProcessInstance.GetX(f.userCtx, instance.ID).Status)
+}
+
 func TestCallbackCompletionAndTokenAdvanceRollbackTogether(t *testing.T) {
 	f := newBPMNAuthorizationFixture(t)
 	now := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
@@ -305,12 +399,9 @@ func TestUserTaskCallbackWithoutRegisteredHandlerIsDurablyRetryable(t *testing.T
 	task := f.seedNonParticipantApprovalTask(t, "user-callback-missing-handler")
 	task, err := f.client.ProcessTask.UpdateOne(task).
 		SetCandidateUsers(f.actor.Email).
-		SetTaskVariables(map[string]interface{}{
-			bpmnMetaDataServiceTaskType: "future_user_callback",
-			bpmnMetaDataAction:          "record_completion",
-		}).
 		Save(f.userCtx)
 	require.NoError(t, err)
+	configureLegacyUserCallbackDefinition(t, f, task, "future_user_callback", "record_completion")
 
 	require.NoError(t, f.engine.CompleteTask(
 		f.typedTaskScopeOnlyCtx(f.actor, false), task.TaskID, map[string]interface{}{"business_id": 42},
@@ -331,11 +422,11 @@ func TestUserTaskCallbackWithoutRegisteredHandlerIsDurablyRetryable(t *testing.T
 	f.engine.CallbackRegistry().RegisterHandler(handler)
 	now = now.Add(time.Second)
 	completed, err := f.engine.ProcessPendingCallbacks(context.Background(), "future-handler-worker", 50)
-	require.NoError(t, err)
-	require.Equal(t, 1, completed)
+	require.Error(t, err)
+	require.Zero(t, completed)
 	row = callbackRowForInstance(t, f, task.ProcessInstanceID)
-	assert.Equal(t, bpmnCallbackStatusCompleted, row.Status)
-	assert.Equal(t, 1, handler.EffectCount())
+	assert.Equal(t, bpmnCallbackStatusPending, row.Status)
+	assert.Zero(t, handler.EffectCount())
 }
 
 func TestUserTaskCallbackNormalizesPersistedTaskTypeWhenMetadataUsesHandlerID(t *testing.T) {
@@ -345,12 +436,9 @@ func TestUserTaskCallbackNormalizesPersistedTaskTypeWhenMetadataUsesHandlerID(t 
 	task := f.seedNonParticipantApprovalTask(t, "user-callback-handler-id")
 	task, err := f.client.ProcessTask.UpdateOne(task).
 		SetCandidateUsers(f.actor.Email).
-		SetTaskVariables(map[string]interface{}{
-			bpmnMetaDataServiceTaskType: handler.GetHandlerID(),
-			bpmnMetaDataAction:          "record_completion",
-		}).
 		Save(f.userCtx)
 	require.NoError(t, err)
+	configureLegacyUserCallbackDefinition(t, f, task, handler.GetHandlerID(), "record_completion")
 
 	require.NoError(t, f.engine.CompleteTask(f.typedTaskScopeOnlyCtx(f.actor, false), task.TaskID, map[string]interface{}{}))
 	row := callbackRowForInstance(t, f, task.ProcessInstanceID)
@@ -417,7 +505,8 @@ func TestAsyncKafHandlerIsNotEnqueuedAsSynchronousCallback(t *testing.T) {
 	task, err := f.client.ProcessTask.UpdateOne(task).
 		SetStatus(common.ProcessTaskStatusDelegated).
 		SetTaskType(bpmn.KafDelegateTaskType).
-		SetTaskVariables(map[string]interface{}{bpmnMetaDataServiceTaskType: bpmn.KafDelegateTaskType}).
+		SetCallbackHandlerID(handler.GetHandlerID()).
+		SetCallbackTaskType(handler.GetTaskType()).
 		Save(f.userCtx)
 	require.NoError(t, err)
 	kafActor, err := f.client.User.Create().
@@ -432,6 +521,7 @@ func TestAsyncKafHandlerIsNotEnqueuedAsSynchronousCallback(t *testing.T) {
 	require.NoError(t, err)
 	ctx := context.WithValue(f.userCtx, bpmn.BPMNTenantIDContextKey, f.tenant.ID)
 	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, kafActor.ID)
+	ctx = WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: kafActor.ID, TenantID: f.tenant.ID})
 
 	require.NoError(t, f.engine.CompleteTask(ctx, task.TaskID, map[string]interface{}{"result": "complete"}))
 	assert.Equal(t, 1, handler.executed)

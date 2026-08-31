@@ -83,7 +83,7 @@ func (h *IncidentServiceTaskHandler) Execute(ctx context.Context, task *ent.Proc
 	case "categorize_incident":
 		return h.categorizeIncident(ctx, variables)
 	default:
-		return &dto.ServiceTaskResult{Success: true, Message: "无操作执行"}, nil
+		return nil, fmt.Errorf("不支持的事件回调动作")
 	}
 }
 
@@ -94,13 +94,18 @@ func (h *IncidentServiceTaskHandler) Validate(ctx context.Context, config map[st
 
 // createIncident 创建事件
 func (h *IncidentServiceTaskHandler) createIncident(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+	if _, durable := BPMNCallbackExecutionKey(ctx); durable {
+		return nil, fmt.Errorf("持久化回调必须使用流程实例中的既有事件目标")
+	}
 	title, _ := variables["title"].(string)
 	description, _ := variables["description"].(string)
 	incidentType, _ := variables["type"].(string)
 	priority, _ := variables["priority"].(string)
 	severity, _ := variables["severity"].(string)
-	// tenant_id 为 0 时 Ent 的 Positive() 校验会直接拒绝创建，天然 fail closed
-	tenantID := GetTenantIDFromVars(ctx, variables)
+	tenantID, err := RequireTenantID(ctx, variables)
+	if err != nil {
+		return nil, err
+	}
 
 	if title == "" {
 		return nil, fmt.Errorf("事件标题不能为空")

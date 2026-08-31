@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"itsm-backend/common"
-	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
@@ -82,21 +81,14 @@ func (b *BPMNApprovalBridge) CompleteBusinessApprovalTask(ctx context.Context, t
 		"approvalAction":  action,
 		"approvalResult":  approvalResult,
 		"approvalComment": strings.TrimSpace(comment),
-		"business_type":   strings.ToLower(businessType),
-		"business_id":     businessID,
 		// release_approval_flow 的 Gateway_ApprovalResult 按 approval_pass 路由到
 		// Activity_Schedule；此前无人写这个变量，审批完成后流程停在网关上。
 		"approval_pass": action == "approve",
 	}
-	// change_task 的动作读 change_id：审批桥完成 Activity_CABApproval 时 approveChange/
-	// rejectChange 的副作用依赖它，此前缺失导致回调静默失败（引擎只 Warn 不阻断）。
-	if strings.EqualFold(businessType, string(dto.BusinessTypeChange)) {
-		variables["change_id"] = businessID
-	}
-
 	// 注入认证操作人与租户，供引擎的 authorizeTaskActor / recordApprovalDecision 使用
 	workflowCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
 	workflowCtx = context.WithValue(workflowCtx, bpmn.BPMNUserIDContextKey, actorUserID)
+	workflowCtx = WithBPMNAccessScope(workflowCtx, BPMNAccessScope{UserID: actorUserID, TenantID: tenantID})
 
 	if err := b.engine.CompleteTask(workflowCtx, task.TaskID, variables); err != nil {
 		return false, fmt.Errorf("完成流程审批任务失败: %w", err)
@@ -131,6 +123,7 @@ func (b *BPMNApprovalBridge) DelegateBusinessApprovalTask(ctx context.Context, t
 	// 注入认证操作人与租户，委派前校验操作人必须是当前任务的审批人/候选人，防止越权改派
 	workflowCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
 	workflowCtx = context.WithValue(workflowCtx, bpmn.BPMNUserIDContextKey, actorUserID)
+	workflowCtx = WithBPMNAccessScope(workflowCtx, BPMNAccessScope{UserID: actorUserID, TenantID: tenantID})
 
 	if customEngine, ok := b.engine.(*CustomProcessEngine); ok {
 		if err := customEngine.authorizeTaskActor(workflowCtx, task); err != nil {
@@ -153,9 +146,8 @@ func (b *BPMNApprovalBridge) DelegateBusinessApprovalTask(ctx context.Context, t
 //
 // 与 CompleteBusinessApprovalTask 的区别：
 //   - 按节点定义键精确匹配（审批桥取"当前任一待办任务"，阶段桥必须落在声明语义的节点上）；
-//   - 变量注入 business_id（businessType=change 时同时注入 change_id），满足 handler 侧
-//     "调用方显式传业务 ID 才触发副作用"的契约（见 bpmn_process_engine.go
-//     dispatchUserTaskCallback 的设计注释，引擎刻意不合并实例变量）。
+//   - 业务身份由流程实例提供，参与者提交变量不能覆盖 business_id/change_id。
+//     完成后由持久化回调描述符和净化后的 payload 驱动 handler。
 //
 // 返回语义与 CompleteBusinessApprovalTask 一致：无匹配任务返回 (false, nil)，调用方回退
 // 旧逻辑；有匹配任务但完成失败返回错误，调用方必须中止业务侧状态流转。
@@ -172,13 +164,7 @@ func (b *BPMNApprovalBridge) CompleteBusinessStageTask(ctx context.Context, tena
 		return false, nil
 	}
 
-	variables := map[string]interface{}{
-		"business_type": strings.ToLower(businessType),
-		"business_id":   businessID,
-	}
-	if strings.EqualFold(businessType, string(dto.BusinessTypeChange)) {
-		variables["change_id"] = businessID
-	}
+	variables := map[string]interface{}{}
 	for k, v := range extraVars {
 		variables[k] = v
 	}
@@ -186,6 +172,9 @@ func (b *BPMNApprovalBridge) CompleteBusinessStageTask(ctx context.Context, tena
 	// 注入认证操作人与租户，供引擎的 authorizeTaskActor / recordApprovalDecision 使用
 	workflowCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
 	workflowCtx = context.WithValue(workflowCtx, bpmn.BPMNUserIDContextKey, actorUserID)
+	workflowCtx = WithBPMNAccessScope(workflowCtx, BPMNAccessScope{
+		UserID: actorUserID, TenantID: tenantID, CanUpdateAllTasks: true,
+	})
 
 	if err := b.engine.CompleteTask(workflowCtx, task.TaskID, variables); err != nil {
 		return false, fmt.Errorf("完成流程阶段任务失败: %w", err)

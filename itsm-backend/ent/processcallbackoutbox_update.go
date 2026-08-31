@@ -187,6 +187,46 @@ func (_u *ProcessCallbackOutboxUpdate) SetNillableElementID(v *string) *ProcessC
 	return _u
 }
 
+// SetAction sets the "action" field.
+func (_u *ProcessCallbackOutboxUpdate) SetAction(v string) *ProcessCallbackOutboxUpdate {
+	_u.mutation.SetAction(v)
+	return _u
+}
+
+// SetNillableAction sets the "action" field if the given value is not nil.
+func (_u *ProcessCallbackOutboxUpdate) SetNillableAction(v *string) *ProcessCallbackOutboxUpdate {
+	if v != nil {
+		_u.SetAction(*v)
+	}
+	return _u
+}
+
+// ClearAction clears the value of the "action" field.
+func (_u *ProcessCallbackOutboxUpdate) ClearAction() *ProcessCallbackOutboxUpdate {
+	_u.mutation.ClearAction()
+	return _u
+}
+
+// SetConfigRef sets the "config_ref" field.
+func (_u *ProcessCallbackOutboxUpdate) SetConfigRef(v string) *ProcessCallbackOutboxUpdate {
+	_u.mutation.SetConfigRef(v)
+	return _u
+}
+
+// SetNillableConfigRef sets the "config_ref" field if the given value is not nil.
+func (_u *ProcessCallbackOutboxUpdate) SetNillableConfigRef(v *string) *ProcessCallbackOutboxUpdate {
+	if v != nil {
+		_u.SetConfigRef(*v)
+	}
+	return _u
+}
+
+// ClearConfigRef clears the value of the "config_ref" field.
+func (_u *ProcessCallbackOutboxUpdate) ClearConfigRef() *ProcessCallbackOutboxUpdate {
+	_u.mutation.ClearConfigRef()
+	return _u
+}
+
 // SetVariables sets the "variables" field.
 func (_u *ProcessCallbackOutboxUpdate) SetVariables(v map[string]interface{}) *ProcessCallbackOutboxUpdate {
 	_u.mutation.SetVariables(v)
@@ -484,6 +524,18 @@ func (_u *ProcessCallbackOutboxUpdate) sqlSave(ctx context.Context) (_node int, 
 	if value, ok := _u.mutation.ElementID(); ok {
 		_spec.SetField(processcallbackoutbox.FieldElementID, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.Action(); ok {
+		_spec.SetField(processcallbackoutbox.FieldAction, field.TypeString, value)
+	}
+	if _u.mutation.ActionCleared() {
+		_spec.ClearField(processcallbackoutbox.FieldAction, field.TypeString)
+	}
+	if value, ok := _u.mutation.ConfigRef(); ok {
+		_spec.SetField(processcallbackoutbox.FieldConfigRef, field.TypeString, value)
+	}
+	if _u.mutation.ConfigRefCleared() {
+		_spec.ClearField(processcallbackoutbox.FieldConfigRef, field.TypeString)
+	}
 	if value, ok := _u.mutation.Variables(); ok {
 		_spec.SetField(processcallbackoutbox.FieldVariables, field.TypeJSON, value)
 	}
@@ -705,6 +757,46 @@ func (_u *ProcessCallbackOutboxUpdateOne) SetNillableElementID(v *string) *Proce
 	if v != nil {
 		_u.SetElementID(*v)
 	}
+	return _u
+}
+
+// SetAction sets the "action" field.
+func (_u *ProcessCallbackOutboxUpdateOne) SetAction(v string) *ProcessCallbackOutboxUpdateOne {
+	_u.mutation.SetAction(v)
+	return _u
+}
+
+// SetNillableAction sets the "action" field if the given value is not nil.
+func (_u *ProcessCallbackOutboxUpdateOne) SetNillableAction(v *string) *ProcessCallbackOutboxUpdateOne {
+	if v != nil {
+		_u.SetAction(*v)
+	}
+	return _u
+}
+
+// ClearAction clears the value of the "action" field.
+func (_u *ProcessCallbackOutboxUpdateOne) ClearAction() *ProcessCallbackOutboxUpdateOne {
+	_u.mutation.ClearAction()
+	return _u
+}
+
+// SetConfigRef sets the "config_ref" field.
+func (_u *ProcessCallbackOutboxUpdateOne) SetConfigRef(v string) *ProcessCallbackOutboxUpdateOne {
+	_u.mutation.SetConfigRef(v)
+	return _u
+}
+
+// SetNillableConfigRef sets the "config_ref" field if the given value is not nil.
+func (_u *ProcessCallbackOutboxUpdateOne) SetNillableConfigRef(v *string) *ProcessCallbackOutboxUpdateOne {
+	if v != nil {
+		_u.SetConfigRef(*v)
+	}
+	return _u
+}
+
+// ClearConfigRef clears the value of the "config_ref" field.
+func (_u *ProcessCallbackOutboxUpdateOne) ClearConfigRef() *ProcessCallbackOutboxUpdateOne {
+	_u.mutation.ClearConfigRef()
 	return _u
 }
 
@@ -1034,6 +1126,18 @@ func (_u *ProcessCallbackOutboxUpdateOne) sqlSave(ctx context.Context) (_node *P
 	}
 	if value, ok := _u.mutation.ElementID(); ok {
 		_spec.SetField(processcallbackoutbox.FieldElementID, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Action(); ok {
+		_spec.SetField(processcallbackoutbox.FieldAction, field.TypeString, value)
+	}
+	if _u.mutation.ActionCleared() {
+		_spec.ClearField(processcallbackoutbox.FieldAction, field.TypeString)
+	}
+	if value, ok := _u.mutation.ConfigRef(); ok {
+		_spec.SetField(processcallbackoutbox.FieldConfigRef, field.TypeString, value)
+	}
+	if _u.mutation.ConfigRefCleared() {
+		_spec.ClearField(processcallbackoutbox.FieldConfigRef, field.TypeString)
 	}
 	if value, ok := _u.mutation.Variables(); ok {
 		_spec.SetField(processcallbackoutbox.FieldVariables, field.TypeJSON, value)

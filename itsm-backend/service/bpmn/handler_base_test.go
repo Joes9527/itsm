@@ -16,9 +16,8 @@ import (
 //  1. 认证上下文注入的租户 ID 是唯一可信来源，优先级高于流程变量；
 //  2. 两者都没有时 fail closed（返回 0），绝不回退到硬编码的租户 1。
 //
-// PUT /tasks/:id/complete 的 req.Variables 完全由客户端提供，
-// dispatchUserTaskCallback 会原样透传给 handler，所以 variables["tenant_id"] 属于
-// 可伪造输入；默认到 1 会让越权写入正好落在租户 1 的业务数据上。
+// 参与者变量是不可信输入，tenant_id 不能成为 handler 的租户权威来源；
+// 默认到 1 会让越权写入正好落在租户 1 的业务数据上。
 func TestGetTenantIDFromVars(t *testing.T) {
 	cases := []struct {
 		name      string
@@ -45,16 +44,16 @@ func TestGetTenantIDFromVars(t *testing.T) {
 			want:      7,
 		},
 		{
-			name:      "只有 variables 时回退到 variables",
+			name:      "只有 variables 时拒绝不可信租户",
 			ctx:       context.Background(),
 			variables: map[string]interface{}{"tenant_id": 5},
-			want:      5,
+			want:      0,
 		},
 		{
-			name:      "variables 里的 JSON 数字（float64）也能识别",
+			name:      "variables 里的 JSON 数字也不授予租户范围",
 			ctx:       context.Background(),
 			variables: map[string]interface{}{"tenant_id": float64(5)},
-			want:      5,
+			want:      0,
 		},
 		{
 			name:      "两者冲突时以 ctx（认证态）为准，忽略可伪造的 variables",
@@ -63,10 +62,10 @@ func TestGetTenantIDFromVars(t *testing.T) {
 			want:      5,
 		},
 		{
-			name:      "ctx 里的非法租户（<=0）不生效，回退 variables",
+			name:      "ctx 里的非法租户不回退 variables",
 			ctx:       context.WithValue(context.Background(), BPMNTenantIDContextKey, 0),
 			variables: map[string]interface{}{"tenant_id": 3},
-			want:      3,
+			want:      0,
 		},
 	}
 
@@ -114,4 +113,25 @@ func TestReleaseHandler_NoTenantContext_FailsClosed(t *testing.T) {
 	after, err := client.Release.Query().Where(release.ID(rel.ID)).Only(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, "draft", after.Status, "fail closed 时不得写入任何状态")
+}
+
+func TestStatefulBuiltInHandlersRejectUnknownActions(t *testing.T) {
+	handlers := []ServiceTaskHandlerInterface{
+		NewTicketServiceTaskHandler(nil, nil),
+		NewChangeServiceTaskHandler(nil, nil),
+		NewIncidentServiceTaskHandler(nil, nil),
+		NewGenericServiceTaskHandler(nil, nil),
+		NewServiceRequestServiceTaskHandler(nil, nil),
+		NewReleaseServiceTaskHandler(nil, nil),
+	}
+
+	for _, handler := range handlers {
+		t.Run(handler.GetHandlerID(), func(t *testing.T) {
+			_, err := handler.Execute(context.Background(), nil, map[string]interface{}{
+				"action":      "unsupported_action",
+				"business_id": 1,
+			})
+			require.Error(t, err)
+		})
+	}
 }

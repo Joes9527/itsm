@@ -327,6 +327,107 @@ func (_u *ProcessTaskUpdate) ClearTaskVariables() *ProcessTaskUpdate {
 	return _u
 }
 
+// SetCallbackHandlerID sets the "callback_handler_id" field.
+func (_u *ProcessTaskUpdate) SetCallbackHandlerID(v string) *ProcessTaskUpdate {
+	_u.mutation.SetCallbackHandlerID(v)
+	return _u
+}
+
+// SetNillableCallbackHandlerID sets the "callback_handler_id" field if the given value is not nil.
+func (_u *ProcessTaskUpdate) SetNillableCallbackHandlerID(v *string) *ProcessTaskUpdate {
+	if v != nil {
+		_u.SetCallbackHandlerID(*v)
+	}
+	return _u
+}
+
+// ClearCallbackHandlerID clears the value of the "callback_handler_id" field.
+func (_u *ProcessTaskUpdate) ClearCallbackHandlerID() *ProcessTaskUpdate {
+	_u.mutation.ClearCallbackHandlerID()
+	return _u
+}
+
+// SetCallbackTaskType sets the "callback_task_type" field.
+func (_u *ProcessTaskUpdate) SetCallbackTaskType(v string) *ProcessTaskUpdate {
+	_u.mutation.SetCallbackTaskType(v)
+	return _u
+}
+
+// SetNillableCallbackTaskType sets the "callback_task_type" field if the given value is not nil.
+func (_u *ProcessTaskUpdate) SetNillableCallbackTaskType(v *string) *ProcessTaskUpdate {
+	if v != nil {
+		_u.SetCallbackTaskType(*v)
+	}
+	return _u
+}
+
+// ClearCallbackTaskType clears the value of the "callback_task_type" field.
+func (_u *ProcessTaskUpdate) ClearCallbackTaskType() *ProcessTaskUpdate {
+	_u.mutation.ClearCallbackTaskType()
+	return _u
+}
+
+// SetCallbackAction sets the "callback_action" field.
+func (_u *ProcessTaskUpdate) SetCallbackAction(v string) *ProcessTaskUpdate {
+	_u.mutation.SetCallbackAction(v)
+	return _u
+}
+
+// SetNillableCallbackAction sets the "callback_action" field if the given value is not nil.
+func (_u *ProcessTaskUpdate) SetNillableCallbackAction(v *string) *ProcessTaskUpdate {
+	if v != nil {
+		_u.SetCallbackAction(*v)
+	}
+	return _u
+}
+
+// ClearCallbackAction clears the value of the "callback_action" field.
+func (_u *ProcessTaskUpdate) ClearCallbackAction() *ProcessTaskUpdate {
+	_u.mutation.ClearCallbackAction()
+	return _u
+}
+
+// SetCallbackConfigRef sets the "callback_config_ref" field.
+func (_u *ProcessTaskUpdate) SetCallbackConfigRef(v string) *ProcessTaskUpdate {
+	_u.mutation.SetCallbackConfigRef(v)
+	return _u
+}
+
+// SetNillableCallbackConfigRef sets the "callback_config_ref" field if the given value is not nil.
+func (_u *ProcessTaskUpdate) SetNillableCallbackConfigRef(v *string) *ProcessTaskUpdate {
+	if v != nil {
+		_u.SetCallbackConfigRef(*v)
+	}
+	return _u
+}
+
+// ClearCallbackConfigRef clears the value of the "callback_config_ref" field.
+func (_u *ProcessTaskUpdate) ClearCallbackConfigRef() *ProcessTaskUpdate {
+	_u.mutation.ClearCallbackConfigRef()
+	return _u
+}
+
+// SetAggregationVersion sets the "aggregation_version" field.
+func (_u *ProcessTaskUpdate) SetAggregationVersion(v int) *ProcessTaskUpdate {
+	_u.mutation.ResetAggregationVersion()
+	_u.mutation.SetAggregationVersion(v)
+	return _u
+}
+
+// SetNillableAggregationVersion sets the "aggregation_version" field if the given value is not nil.
+func (_u *ProcessTaskUpdate) SetNillableAggregationVersion(v *int) *ProcessTaskUpdate {
+	if v != nil {
+		_u.SetAggregationVersion(*v)
+	}
+	return _u
+}
+
+// AddAggregationVersion adds value to the "aggregation_version" field.
+func (_u *ProcessTaskUpdate) AddAggregationVersion(v int) *ProcessTaskUpdate {
+	_u.mutation.AddAggregationVersion(v)
+	return _u
+}
+
 // SetDescription sets the "description" field.
 func (_u *ProcessTaskUpdate) SetDescription(v string) *ProcessTaskUpdate {
 	_u.mutation.SetDescription(v)
@@ -527,6 +628,11 @@ func (_u *ProcessTaskUpdate) check() error {
 			return &ValidationError{Name: "task_name", err: fmt.Errorf(`ent: validator failed for field "ProcessTask.task_name": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.AggregationVersion(); ok {
+		if err := processtask.AggregationVersionValidator(v); err != nil {
+			return &ValidationError{Name: "aggregation_version", err: fmt.Errorf(`ent: validator failed for field "ProcessTask.aggregation_version": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.TenantID(); ok {
 		if err := processtask.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "ProcessTask.tenant_id": %w`, err)}
@@ -627,6 +733,36 @@ func (_u *ProcessTaskUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	}
 	if _u.mutation.TaskVariablesCleared() {
 		_spec.ClearField(processtask.FieldTaskVariables, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.CallbackHandlerID(); ok {
+		_spec.SetField(processtask.FieldCallbackHandlerID, field.TypeString, value)
+	}
+	if _u.mutation.CallbackHandlerIDCleared() {
+		_spec.ClearField(processtask.FieldCallbackHandlerID, field.TypeString)
+	}
+	if value, ok := _u.mutation.CallbackTaskType(); ok {
+		_spec.SetField(processtask.FieldCallbackTaskType, field.TypeString, value)
+	}
+	if _u.mutation.CallbackTaskTypeCleared() {
+		_spec.ClearField(processtask.FieldCallbackTaskType, field.TypeString)
+	}
+	if value, ok := _u.mutation.CallbackAction(); ok {
+		_spec.SetField(processtask.FieldCallbackAction, field.TypeString, value)
+	}
+	if _u.mutation.CallbackActionCleared() {
+		_spec.ClearField(processtask.FieldCallbackAction, field.TypeString)
+	}
+	if value, ok := _u.mutation.CallbackConfigRef(); ok {
+		_spec.SetField(processtask.FieldCallbackConfigRef, field.TypeString, value)
+	}
+	if _u.mutation.CallbackConfigRefCleared() {
+		_spec.ClearField(processtask.FieldCallbackConfigRef, field.TypeString)
+	}
+	if value, ok := _u.mutation.AggregationVersion(); ok {
+		_spec.SetField(processtask.FieldAggregationVersion, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedAggregationVersion(); ok {
+		_spec.AddField(processtask.FieldAggregationVersion, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(processtask.FieldDescription, field.TypeString, value)
@@ -1011,6 +1147,107 @@ func (_u *ProcessTaskUpdateOne) ClearTaskVariables() *ProcessTaskUpdateOne {
 	return _u
 }
 
+// SetCallbackHandlerID sets the "callback_handler_id" field.
+func (_u *ProcessTaskUpdateOne) SetCallbackHandlerID(v string) *ProcessTaskUpdateOne {
+	_u.mutation.SetCallbackHandlerID(v)
+	return _u
+}
+
+// SetNillableCallbackHandlerID sets the "callback_handler_id" field if the given value is not nil.
+func (_u *ProcessTaskUpdateOne) SetNillableCallbackHandlerID(v *string) *ProcessTaskUpdateOne {
+	if v != nil {
+		_u.SetCallbackHandlerID(*v)
+	}
+	return _u
+}
+
+// ClearCallbackHandlerID clears the value of the "callback_handler_id" field.
+func (_u *ProcessTaskUpdateOne) ClearCallbackHandlerID() *ProcessTaskUpdateOne {
+	_u.mutation.ClearCallbackHandlerID()
+	return _u
+}
+
+// SetCallbackTaskType sets the "callback_task_type" field.
+func (_u *ProcessTaskUpdateOne) SetCallbackTaskType(v string) *ProcessTaskUpdateOne {
+	_u.mutation.SetCallbackTaskType(v)
+	return _u
+}
+
+// SetNillableCallbackTaskType sets the "callback_task_type" field if the given value is not nil.
+func (_u *ProcessTaskUpdateOne) SetNillableCallbackTaskType(v *string) *ProcessTaskUpdateOne {
+	if v != nil {
+		_u.SetCallbackTaskType(*v)
+	}
+	return _u
+}
+
+// ClearCallbackTaskType clears the value of the "callback_task_type" field.
+func (_u *ProcessTaskUpdateOne) ClearCallbackTaskType() *ProcessTaskUpdateOne {
+	_u.mutation.ClearCallbackTaskType()
+	return _u
+}
+
+// SetCallbackAction sets the "callback_action" field.
+func (_u *ProcessTaskUpdateOne) SetCallbackAction(v string) *ProcessTaskUpdateOne {
+	_u.mutation.SetCallbackAction(v)
+	return _u
+}
+
+// SetNillableCallbackAction sets the "callback_action" field if the given value is not nil.
+func (_u *ProcessTaskUpdateOne) SetNillableCallbackAction(v *string) *ProcessTaskUpdateOne {
+	if v != nil {
+		_u.SetCallbackAction(*v)
+	}
+	return _u
+}
+
+// ClearCallbackAction clears the value of the "callback_action" field.
+func (_u *ProcessTaskUpdateOne) ClearCallbackAction() *ProcessTaskUpdateOne {
+	_u.mutation.ClearCallbackAction()
+	return _u
+}
+
+// SetCallbackConfigRef sets the "callback_config_ref" field.
+func (_u *ProcessTaskUpdateOne) SetCallbackConfigRef(v string) *ProcessTaskUpdateOne {
+	_u.mutation.SetCallbackConfigRef(v)
+	return _u
+}
+
+// SetNillableCallbackConfigRef sets the "callback_config_ref" field if the given value is not nil.
+func (_u *ProcessTaskUpdateOne) SetNillableCallbackConfigRef(v *string) *ProcessTaskUpdateOne {
+	if v != nil {
+		_u.SetCallbackConfigRef(*v)
+	}
+	return _u
+}
+
+// ClearCallbackConfigRef clears the value of the "callback_config_ref" field.
+func (_u *ProcessTaskUpdateOne) ClearCallbackConfigRef() *ProcessTaskUpdateOne {
+	_u.mutation.ClearCallbackConfigRef()
+	return _u
+}
+
+// SetAggregationVersion sets the "aggregation_version" field.
+func (_u *ProcessTaskUpdateOne) SetAggregationVersion(v int) *ProcessTaskUpdateOne {
+	_u.mutation.ResetAggregationVersion()
+	_u.mutation.SetAggregationVersion(v)
+	return _u
+}
+
+// SetNillableAggregationVersion sets the "aggregation_version" field if the given value is not nil.
+func (_u *ProcessTaskUpdateOne) SetNillableAggregationVersion(v *int) *ProcessTaskUpdateOne {
+	if v != nil {
+		_u.SetAggregationVersion(*v)
+	}
+	return _u
+}
+
+// AddAggregationVersion adds value to the "aggregation_version" field.
+func (_u *ProcessTaskUpdateOne) AddAggregationVersion(v int) *ProcessTaskUpdateOne {
+	_u.mutation.AddAggregationVersion(v)
+	return _u
+}
+
 // SetDescription sets the "description" field.
 func (_u *ProcessTaskUpdateOne) SetDescription(v string) *ProcessTaskUpdateOne {
 	_u.mutation.SetDescription(v)
@@ -1224,6 +1461,11 @@ func (_u *ProcessTaskUpdateOne) check() error {
 			return &ValidationError{Name: "task_name", err: fmt.Errorf(`ent: validator failed for field "ProcessTask.task_name": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.AggregationVersion(); ok {
+		if err := processtask.AggregationVersionValidator(v); err != nil {
+			return &ValidationError{Name: "aggregation_version", err: fmt.Errorf(`ent: validator failed for field "ProcessTask.aggregation_version": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.TenantID(); ok {
 		if err := processtask.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "ProcessTask.tenant_id": %w`, err)}
@@ -1341,6 +1583,36 @@ func (_u *ProcessTaskUpdateOne) sqlSave(ctx context.Context) (_node *ProcessTask
 	}
 	if _u.mutation.TaskVariablesCleared() {
 		_spec.ClearField(processtask.FieldTaskVariables, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.CallbackHandlerID(); ok {
+		_spec.SetField(processtask.FieldCallbackHandlerID, field.TypeString, value)
+	}
+	if _u.mutation.CallbackHandlerIDCleared() {
+		_spec.ClearField(processtask.FieldCallbackHandlerID, field.TypeString)
+	}
+	if value, ok := _u.mutation.CallbackTaskType(); ok {
+		_spec.SetField(processtask.FieldCallbackTaskType, field.TypeString, value)
+	}
+	if _u.mutation.CallbackTaskTypeCleared() {
+		_spec.ClearField(processtask.FieldCallbackTaskType, field.TypeString)
+	}
+	if value, ok := _u.mutation.CallbackAction(); ok {
+		_spec.SetField(processtask.FieldCallbackAction, field.TypeString, value)
+	}
+	if _u.mutation.CallbackActionCleared() {
+		_spec.ClearField(processtask.FieldCallbackAction, field.TypeString)
+	}
+	if value, ok := _u.mutation.CallbackConfigRef(); ok {
+		_spec.SetField(processtask.FieldCallbackConfigRef, field.TypeString, value)
+	}
+	if _u.mutation.CallbackConfigRefCleared() {
+		_spec.ClearField(processtask.FieldCallbackConfigRef, field.TypeString)
+	}
+	if value, ok := _u.mutation.AggregationVersion(); ok {
+		_spec.SetField(processtask.FieldAggregationVersion, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedAggregationVersion(); ok {
+		_spec.AddField(processtask.FieldAggregationVersion, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(processtask.FieldDescription, field.TypeString, value)

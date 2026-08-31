@@ -2,6 +2,7 @@ package bpmn
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"itsm-backend/ent"
@@ -110,6 +111,29 @@ func TestReleaseHandler_Schedule_IsIdempotentOnAlreadyScheduled(t *testing.T) {
 	})
 	require.NoError(t, err, "已经是 scheduled 时重复调用应该是幂等成功，不是状态机错误")
 	assert.True(t, result.Success)
+}
+
+func TestReleaseHandler_RetryDoesNotRewriteEffect(t *testing.T) {
+	client, handler, tenantID, release := setupReleaseHandlerFixture(t)
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+
+	review := map[string]interface{}{
+		"action": "tech_review", "business_id": release.ID, "comment": "approved",
+	}
+	_, err := handler.Execute(ctx, nil, review)
+	require.NoError(t, err)
+	_, err = handler.Execute(ctx, nil, review)
+	require.NoError(t, err)
+	assert.Equal(t, 1, strings.Count(client.Release.GetX(ctx, release.ID).ReleaseNotes, "[技术评审] approved"))
+
+	client.Release.UpdateOneID(release.ID).SetStatus("in-progress").ExecX(ctx)
+	verify := map[string]interface{}{"action": "verify", "business_id": release.ID}
+	_, err = handler.Execute(ctx, nil, verify)
+	require.NoError(t, err)
+	firstDate := client.Release.GetX(ctx, release.ID).ActualReleaseDate
+	_, err = handler.Execute(ctx, nil, verify)
+	require.NoError(t, err)
+	assert.Equal(t, firstDate, client.Release.GetX(ctx, release.ID).ActualReleaseDate)
 }
 
 func TestReleaseHandler_InvalidBusinessID_ReturnsError(t *testing.T) {

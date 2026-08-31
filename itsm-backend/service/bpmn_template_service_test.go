@@ -96,6 +96,7 @@ func TestBPMNTemplateService_DeployAndStartTicketUrgentFlow(t *testing.T) {
 	require.True(t, ok)
 
 	runCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+	runCtx = WithTrustedBPMNTenantContext(runCtx, tenant.ID)
 	instance, err := engine.StartProcess(runCtx, "ticket_urgent_flow", "TICKET-URGENT-1", "", 0, map[string]interface{}{
 		"requester_id": float64(1),
 	})
@@ -145,6 +146,7 @@ func TestBPMNTemplateService_DeployAndStartChangeEmergencyFlow(t *testing.T) {
 	require.True(t, ok)
 
 	runCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+	runCtx = WithTrustedBPMNTenantContext(runCtx, tenant.ID)
 	instance, err := engine.StartProcess(runCtx, "change_emergency_flow", "CHANGE-EMERGENCY-1", "", 0, map[string]interface{}{
 		"requester_id": float64(1),
 	})

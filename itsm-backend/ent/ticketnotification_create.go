@@ -102,6 +102,20 @@ func (_c *TicketNotificationCreate) SetNillableStatus(v *string) *TicketNotifica
 	return _c
 }
 
+// SetDeliveryKey sets the "delivery_key" field.
+func (_c *TicketNotificationCreate) SetDeliveryKey(v string) *TicketNotificationCreate {
+	_c.mutation.SetDeliveryKey(v)
+	return _c
+}
+
+// SetNillableDeliveryKey sets the "delivery_key" field if the given value is not nil.
+func (_c *TicketNotificationCreate) SetNillableDeliveryKey(v *string) *TicketNotificationCreate {
+	if v != nil {
+		_c.SetDeliveryKey(*v)
+	}
+	return _c
+}
+
 // SetTenantID sets the "tenant_id" field.
 func (_c *TicketNotificationCreate) SetTenantID(v int) *TicketNotificationCreate {
 	_c.mutation.SetTenantID(v)
@@ -287,6 +301,10 @@ func (_c *TicketNotificationCreate) createSpec() (*TicketNotification, *sqlgraph
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(ticketnotification.FieldStatus, field.TypeString, value)
 		_node.Status = value
+	}
+	if value, ok := _c.mutation.DeliveryKey(); ok {
+		_spec.SetField(ticketnotification.FieldDeliveryKey, field.TypeString, value)
+		_node.DeliveryKey = &value
 	}
 	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(ticketnotification.FieldTenantID, field.TypeInt, value)

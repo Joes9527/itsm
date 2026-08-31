@@ -89,19 +89,18 @@ func (c *BPMNProcessTriggerController) RegisterRoutes(r *gin.RouterGroup) {
 func (c *BPMNProcessTriggerController) TriggerProcess(ctx *gin.Context) {
 	var req dto.ProcessTriggerRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		common.Fail(ctx, 1001, err.Error())
+		common.Fail(ctx, 1001, "流程触发请求格式无效")
 		return
 	}
-
-	// 从上下文获取租户ID
-	tenantID, _ := ctx.Get("tenant_id")
-	if tenantID != nil {
-		req.TenantID = tenantID.(int)
+	workflowCtx, tenantID, ok := getBPMNTenantContext(ctx)
+	if !ok {
+		return
 	}
+	req.TenantID = tenantID
 
-	result, err := c.triggerService.TriggerProcess(ctx.Request.Context(), &req)
+	result, err := c.triggerService.TriggerProcess(workflowCtx, &req)
 	if err != nil {
-		common.Fail(ctx, 5001, err.Error())
+		respondBPMNError(ctx, err, "触发流程失败")
 		return
 	}
 
@@ -120,7 +119,7 @@ func (c *BPMNProcessTriggerController) GetProcessStatus(ctx *gin.Context) {
 
 	result, err := c.triggerService.GetProcessStatus(ctx.Request.Context(), instanceID, tenantID.(int))
 	if err != nil {
-		common.Fail(ctx, 5001, err.Error())
+		respondBPMNError(ctx, err, "获取流程状态失败")
 		return
 	}
 

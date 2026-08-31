@@ -194,21 +194,21 @@ func TestReleaseService_UpdateReleaseStatus(t *testing.T) {
 
 	// 测试更新状态
 	t.Run("更新为已计划状态", func(t *testing.T) {
-		result, err := releaseService.UpdateReleaseStatus(ctx, release.ID, testTenant.ID, "scheduled")
+		result, err := releaseService.UpdateReleaseStatus(ctx, release.ID, testTenant.ID, testUser.ID, "scheduled")
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.Equal(t, "scheduled", result.Status)
 	})
 
 	t.Run("更新为进行中状态", func(t *testing.T) {
-		result, err := releaseService.UpdateReleaseStatus(ctx, release.ID, testTenant.ID, "in-progress")
+		result, err := releaseService.UpdateReleaseStatus(ctx, release.ID, testTenant.ID, testUser.ID, "in-progress")
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.Equal(t, "in-progress", result.Status)
 	})
 
 	t.Run("更新为已完成状态", func(t *testing.T) {
-		result, err := releaseService.UpdateReleaseStatus(ctx, release.ID, testTenant.ID, "completed")
+		result, err := releaseService.UpdateReleaseStatus(ctx, release.ID, testTenant.ID, testUser.ID, "completed")
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.Equal(t, "completed", result.Status)

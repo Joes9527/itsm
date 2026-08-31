@@ -166,6 +166,26 @@ func (_u *NotificationUpdate) AddTenantID(v int) *NotificationUpdate {
 	return _u
 }
 
+// SetDeliveryKey sets the "delivery_key" field.
+func (_u *NotificationUpdate) SetDeliveryKey(v string) *NotificationUpdate {
+	_u.mutation.SetDeliveryKey(v)
+	return _u
+}
+
+// SetNillableDeliveryKey sets the "delivery_key" field if the given value is not nil.
+func (_u *NotificationUpdate) SetNillableDeliveryKey(v *string) *NotificationUpdate {
+	if v != nil {
+		_u.SetDeliveryKey(*v)
+	}
+	return _u
+}
+
+// ClearDeliveryKey clears the value of the "delivery_key" field.
+func (_u *NotificationUpdate) ClearDeliveryKey() *NotificationUpdate {
+	_u.mutation.ClearDeliveryKey()
+	return _u
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_u *NotificationUpdate) SetCreatedAt(v time.Time) *NotificationUpdate {
 	_u.mutation.SetCreatedAt(v)
@@ -299,6 +319,12 @@ func (_u *NotificationUpdate) sqlSave(ctx context.Context) (_node int, err error
 	}
 	if value, ok := _u.mutation.AddedTenantID(); ok {
 		_spec.AddField(notification.FieldTenantID, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.DeliveryKey(); ok {
+		_spec.SetField(notification.FieldDeliveryKey, field.TypeString, value)
+	}
+	if _u.mutation.DeliveryKeyCleared() {
+		_spec.ClearField(notification.FieldDeliveryKey, field.TypeString)
 	}
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(notification.FieldCreatedAt, field.TypeTime, value)
@@ -461,6 +487,26 @@ func (_u *NotificationUpdateOne) SetNillableTenantID(v *int) *NotificationUpdate
 // AddTenantID adds value to the "tenant_id" field.
 func (_u *NotificationUpdateOne) AddTenantID(v int) *NotificationUpdateOne {
 	_u.mutation.AddTenantID(v)
+	return _u
+}
+
+// SetDeliveryKey sets the "delivery_key" field.
+func (_u *NotificationUpdateOne) SetDeliveryKey(v string) *NotificationUpdateOne {
+	_u.mutation.SetDeliveryKey(v)
+	return _u
+}
+
+// SetNillableDeliveryKey sets the "delivery_key" field if the given value is not nil.
+func (_u *NotificationUpdateOne) SetNillableDeliveryKey(v *string) *NotificationUpdateOne {
+	if v != nil {
+		_u.SetDeliveryKey(*v)
+	}
+	return _u
+}
+
+// ClearDeliveryKey clears the value of the "delivery_key" field.
+func (_u *NotificationUpdateOne) ClearDeliveryKey() *NotificationUpdateOne {
+	_u.mutation.ClearDeliveryKey()
 	return _u
 }
 
@@ -627,6 +673,12 @@ func (_u *NotificationUpdateOne) sqlSave(ctx context.Context) (_node *Notificati
 	}
 	if value, ok := _u.mutation.AddedTenantID(); ok {
 		_spec.AddField(notification.FieldTenantID, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.DeliveryKey(); ok {
+		_spec.SetField(notification.FieldDeliveryKey, field.TypeString, value)
+	}
+	if _u.mutation.DeliveryKeyCleared() {
+		_spec.ClearField(notification.FieldDeliveryKey, field.TypeString)
 	}
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(notification.FieldCreatedAt, field.TypeTime, value)

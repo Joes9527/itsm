@@ -70723,6 +70723,7 @@ type NotificationMutation struct {
 	adduser_id    *int
 	tenant_id     *int
 	addtenant_id  *int
+	delivery_key  *string
 	created_at    *time.Time
 	updated_at    *time.Time
 	clearedFields map[string]struct{}
@@ -71183,6 +71184,55 @@ func (m *NotificationMutation) ResetTenantID() {
 	m.addtenant_id = nil
 }
 
+// SetDeliveryKey sets the "delivery_key" field.
+func (m *NotificationMutation) SetDeliveryKey(s string) {
+	m.delivery_key = &s
+}
+
+// DeliveryKey returns the value of the "delivery_key" field in the mutation.
+func (m *NotificationMutation) DeliveryKey() (r string, exists bool) {
+	v := m.delivery_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDeliveryKey returns the old "delivery_key" field's value of the Notification entity.
+// If the Notification object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *NotificationMutation) OldDeliveryKey(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDeliveryKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDeliveryKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDeliveryKey: %w", err)
+	}
+	return oldValue.DeliveryKey, nil
+}
+
+// ClearDeliveryKey clears the value of the "delivery_key" field.
+func (m *NotificationMutation) ClearDeliveryKey() {
+	m.delivery_key = nil
+	m.clearedFields[notification.FieldDeliveryKey] = struct{}{}
+}
+
+// DeliveryKeyCleared returns if the "delivery_key" field was cleared in this mutation.
+func (m *NotificationMutation) DeliveryKeyCleared() bool {
+	_, ok := m.clearedFields[notification.FieldDeliveryKey]
+	return ok
+}
+
+// ResetDeliveryKey resets all changes to the "delivery_key" field.
+func (m *NotificationMutation) ResetDeliveryKey() {
+	m.delivery_key = nil
+	delete(m.clearedFields, notification.FieldDeliveryKey)
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *NotificationMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -71289,7 +71339,7 @@ func (m *NotificationMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *NotificationMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 11)
 	if m.title != nil {
 		fields = append(fields, notification.FieldTitle)
 	}
@@ -71313,6 +71363,9 @@ func (m *NotificationMutation) Fields() []string {
 	}
 	if m.tenant_id != nil {
 		fields = append(fields, notification.FieldTenantID)
+	}
+	if m.delivery_key != nil {
+		fields = append(fields, notification.FieldDeliveryKey)
 	}
 	if m.created_at != nil {
 		fields = append(fields, notification.FieldCreatedAt)
@@ -71344,6 +71397,8 @@ func (m *NotificationMutation) Field(name string) (ent.Value, bool) {
 		return m.UserID()
 	case notification.FieldTenantID:
 		return m.TenantID()
+	case notification.FieldDeliveryKey:
+		return m.DeliveryKey()
 	case notification.FieldCreatedAt:
 		return m.CreatedAt()
 	case notification.FieldUpdatedAt:
@@ -71373,6 +71428,8 @@ func (m *NotificationMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldUserID(ctx)
 	case notification.FieldTenantID:
 		return m.OldTenantID(ctx)
+	case notification.FieldDeliveryKey:
+		return m.OldDeliveryKey(ctx)
 	case notification.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case notification.FieldUpdatedAt:
@@ -71441,6 +71498,13 @@ func (m *NotificationMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetTenantID(v)
+		return nil
+	case notification.FieldDeliveryKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDeliveryKey(v)
 		return nil
 	case notification.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -71519,6 +71583,9 @@ func (m *NotificationMutation) ClearedFields() []string {
 	if m.FieldCleared(notification.FieldActionText) {
 		fields = append(fields, notification.FieldActionText)
 	}
+	if m.FieldCleared(notification.FieldDeliveryKey) {
+		fields = append(fields, notification.FieldDeliveryKey)
+	}
 	return fields
 }
 
@@ -71538,6 +71605,9 @@ func (m *NotificationMutation) ClearField(name string) error {
 		return nil
 	case notification.FieldActionText:
 		m.ClearActionText()
+		return nil
+	case notification.FieldDeliveryKey:
+		m.ClearDeliveryKey()
 		return nil
 	}
 	return fmt.Errorf("unknown Notification nullable field %s", name)
@@ -71570,6 +71640,9 @@ func (m *NotificationMutation) ResetField(name string) error {
 		return nil
 	case notification.FieldTenantID:
 		m.ResetTenantID()
+		return nil
+	case notification.FieldDeliveryKey:
+		m.ResetDeliveryKey()
 		return nil
 	case notification.FieldCreatedAt:
 		m.ResetCreatedAt()
@@ -82155,6 +82228,8 @@ type ProcessCallbackOutboxMutation struct {
 	handler_id             *string
 	task_type              *string
 	element_id             *string
+	action                 *string
+	config_ref             *string
 	variables              *map[string]interface{}
 	status                 *string
 	attempt_count          *int
@@ -82681,6 +82756,104 @@ func (m *ProcessCallbackOutboxMutation) ResetElementID() {
 	m.element_id = nil
 }
 
+// SetAction sets the "action" field.
+func (m *ProcessCallbackOutboxMutation) SetAction(s string) {
+	m.action = &s
+}
+
+// Action returns the value of the "action" field in the mutation.
+func (m *ProcessCallbackOutboxMutation) Action() (r string, exists bool) {
+	v := m.action
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAction returns the old "action" field's value of the ProcessCallbackOutbox entity.
+// If the ProcessCallbackOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessCallbackOutboxMutation) OldAction(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAction is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAction requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAction: %w", err)
+	}
+	return oldValue.Action, nil
+}
+
+// ClearAction clears the value of the "action" field.
+func (m *ProcessCallbackOutboxMutation) ClearAction() {
+	m.action = nil
+	m.clearedFields[processcallbackoutbox.FieldAction] = struct{}{}
+}
+
+// ActionCleared returns if the "action" field was cleared in this mutation.
+func (m *ProcessCallbackOutboxMutation) ActionCleared() bool {
+	_, ok := m.clearedFields[processcallbackoutbox.FieldAction]
+	return ok
+}
+
+// ResetAction resets all changes to the "action" field.
+func (m *ProcessCallbackOutboxMutation) ResetAction() {
+	m.action = nil
+	delete(m.clearedFields, processcallbackoutbox.FieldAction)
+}
+
+// SetConfigRef sets the "config_ref" field.
+func (m *ProcessCallbackOutboxMutation) SetConfigRef(s string) {
+	m.config_ref = &s
+}
+
+// ConfigRef returns the value of the "config_ref" field in the mutation.
+func (m *ProcessCallbackOutboxMutation) ConfigRef() (r string, exists bool) {
+	v := m.config_ref
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConfigRef returns the old "config_ref" field's value of the ProcessCallbackOutbox entity.
+// If the ProcessCallbackOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessCallbackOutboxMutation) OldConfigRef(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConfigRef is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConfigRef requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConfigRef: %w", err)
+	}
+	return oldValue.ConfigRef, nil
+}
+
+// ClearConfigRef clears the value of the "config_ref" field.
+func (m *ProcessCallbackOutboxMutation) ClearConfigRef() {
+	m.config_ref = nil
+	m.clearedFields[processcallbackoutbox.FieldConfigRef] = struct{}{}
+}
+
+// ConfigRefCleared returns if the "config_ref" field was cleared in this mutation.
+func (m *ProcessCallbackOutboxMutation) ConfigRefCleared() bool {
+	_, ok := m.clearedFields[processcallbackoutbox.FieldConfigRef]
+	return ok
+}
+
+// ResetConfigRef resets all changes to the "config_ref" field.
+func (m *ProcessCallbackOutboxMutation) ResetConfigRef() {
+	m.config_ref = nil
+	delete(m.clearedFields, processcallbackoutbox.FieldConfigRef)
+}
+
 // SetVariables sets the "variables" field.
 func (m *ProcessCallbackOutboxMutation) SetVariables(value map[string]interface{}) {
 	m.variables = &value
@@ -83160,7 +83333,7 @@ func (m *ProcessCallbackOutboxMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ProcessCallbackOutboxMutation) Fields() []string {
-	fields := make([]string, 0, 19)
+	fields := make([]string, 0, 21)
 	if m.execution_key != nil {
 		fields = append(fields, processcallbackoutbox.FieldExecutionKey)
 	}
@@ -83187,6 +83360,12 @@ func (m *ProcessCallbackOutboxMutation) Fields() []string {
 	}
 	if m.element_id != nil {
 		fields = append(fields, processcallbackoutbox.FieldElementID)
+	}
+	if m.action != nil {
+		fields = append(fields, processcallbackoutbox.FieldAction)
+	}
+	if m.config_ref != nil {
+		fields = append(fields, processcallbackoutbox.FieldConfigRef)
 	}
 	if m.variables != nil {
 		fields = append(fields, processcallbackoutbox.FieldVariables)
@@ -83244,6 +83423,10 @@ func (m *ProcessCallbackOutboxMutation) Field(name string) (ent.Value, bool) {
 		return m.TaskType()
 	case processcallbackoutbox.FieldElementID:
 		return m.ElementID()
+	case processcallbackoutbox.FieldAction:
+		return m.Action()
+	case processcallbackoutbox.FieldConfigRef:
+		return m.ConfigRef()
 	case processcallbackoutbox.FieldVariables:
 		return m.Variables()
 	case processcallbackoutbox.FieldStatus:
@@ -83291,6 +83474,10 @@ func (m *ProcessCallbackOutboxMutation) OldField(ctx context.Context, name strin
 		return m.OldTaskType(ctx)
 	case processcallbackoutbox.FieldElementID:
 		return m.OldElementID(ctx)
+	case processcallbackoutbox.FieldAction:
+		return m.OldAction(ctx)
+	case processcallbackoutbox.FieldConfigRef:
+		return m.OldConfigRef(ctx)
 	case processcallbackoutbox.FieldVariables:
 		return m.OldVariables(ctx)
 	case processcallbackoutbox.FieldStatus:
@@ -83382,6 +83569,20 @@ func (m *ProcessCallbackOutboxMutation) SetField(name string, value ent.Value) e
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetElementID(v)
+		return nil
+	case processcallbackoutbox.FieldAction:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAction(v)
+		return nil
+	case processcallbackoutbox.FieldConfigRef:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConfigRef(v)
 		return nil
 	case processcallbackoutbox.FieldVariables:
 		v, ok := value.(map[string]interface{})
@@ -83540,6 +83741,12 @@ func (m *ProcessCallbackOutboxMutation) ClearedFields() []string {
 	if m.FieldCleared(processcallbackoutbox.FieldTaskID) {
 		fields = append(fields, processcallbackoutbox.FieldTaskID)
 	}
+	if m.FieldCleared(processcallbackoutbox.FieldAction) {
+		fields = append(fields, processcallbackoutbox.FieldAction)
+	}
+	if m.FieldCleared(processcallbackoutbox.FieldConfigRef) {
+		fields = append(fields, processcallbackoutbox.FieldConfigRef)
+	}
 	if m.FieldCleared(processcallbackoutbox.FieldVariables) {
 		fields = append(fields, processcallbackoutbox.FieldVariables)
 	}
@@ -83574,6 +83781,12 @@ func (m *ProcessCallbackOutboxMutation) ClearField(name string) error {
 		return nil
 	case processcallbackoutbox.FieldTaskID:
 		m.ClearTaskID()
+		return nil
+	case processcallbackoutbox.FieldAction:
+		m.ClearAction()
+		return nil
+	case processcallbackoutbox.FieldConfigRef:
+		m.ClearConfigRef()
 		return nil
 	case processcallbackoutbox.FieldVariables:
 		m.ClearVariables()
@@ -83624,6 +83837,12 @@ func (m *ProcessCallbackOutboxMutation) ResetField(name string) error {
 		return nil
 	case processcallbackoutbox.FieldElementID:
 		m.ResetElementID()
+		return nil
+	case processcallbackoutbox.FieldAction:
+		m.ResetAction()
+		return nil
+	case processcallbackoutbox.FieldConfigRef:
+		m.ResetConfigRef()
 		return nil
 	case processcallbackoutbox.FieldVariables:
 		m.ResetVariables()
@@ -89959,6 +90178,12 @@ type ProcessTaskMutation struct {
 	completed_time          *time.Time
 	form_key                *string
 	task_variables          *map[string]interface{}
+	callback_handler_id     *string
+	callback_task_type      *string
+	callback_action         *string
+	callback_config_ref     *string
+	aggregation_version     *int
+	addaggregation_version  *int
 	description             *string
 	correlation_id          *string
 	parent_task_id          *string
@@ -90838,6 +91063,258 @@ func (m *ProcessTaskMutation) ResetTaskVariables() {
 	delete(m.clearedFields, processtask.FieldTaskVariables)
 }
 
+// SetCallbackHandlerID sets the "callback_handler_id" field.
+func (m *ProcessTaskMutation) SetCallbackHandlerID(s string) {
+	m.callback_handler_id = &s
+}
+
+// CallbackHandlerID returns the value of the "callback_handler_id" field in the mutation.
+func (m *ProcessTaskMutation) CallbackHandlerID() (r string, exists bool) {
+	v := m.callback_handler_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCallbackHandlerID returns the old "callback_handler_id" field's value of the ProcessTask entity.
+// If the ProcessTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessTaskMutation) OldCallbackHandlerID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCallbackHandlerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCallbackHandlerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCallbackHandlerID: %w", err)
+	}
+	return oldValue.CallbackHandlerID, nil
+}
+
+// ClearCallbackHandlerID clears the value of the "callback_handler_id" field.
+func (m *ProcessTaskMutation) ClearCallbackHandlerID() {
+	m.callback_handler_id = nil
+	m.clearedFields[processtask.FieldCallbackHandlerID] = struct{}{}
+}
+
+// CallbackHandlerIDCleared returns if the "callback_handler_id" field was cleared in this mutation.
+func (m *ProcessTaskMutation) CallbackHandlerIDCleared() bool {
+	_, ok := m.clearedFields[processtask.FieldCallbackHandlerID]
+	return ok
+}
+
+// ResetCallbackHandlerID resets all changes to the "callback_handler_id" field.
+func (m *ProcessTaskMutation) ResetCallbackHandlerID() {
+	m.callback_handler_id = nil
+	delete(m.clearedFields, processtask.FieldCallbackHandlerID)
+}
+
+// SetCallbackTaskType sets the "callback_task_type" field.
+func (m *ProcessTaskMutation) SetCallbackTaskType(s string) {
+	m.callback_task_type = &s
+}
+
+// CallbackTaskType returns the value of the "callback_task_type" field in the mutation.
+func (m *ProcessTaskMutation) CallbackTaskType() (r string, exists bool) {
+	v := m.callback_task_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCallbackTaskType returns the old "callback_task_type" field's value of the ProcessTask entity.
+// If the ProcessTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessTaskMutation) OldCallbackTaskType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCallbackTaskType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCallbackTaskType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCallbackTaskType: %w", err)
+	}
+	return oldValue.CallbackTaskType, nil
+}
+
+// ClearCallbackTaskType clears the value of the "callback_task_type" field.
+func (m *ProcessTaskMutation) ClearCallbackTaskType() {
+	m.callback_task_type = nil
+	m.clearedFields[processtask.FieldCallbackTaskType] = struct{}{}
+}
+
+// CallbackTaskTypeCleared returns if the "callback_task_type" field was cleared in this mutation.
+func (m *ProcessTaskMutation) CallbackTaskTypeCleared() bool {
+	_, ok := m.clearedFields[processtask.FieldCallbackTaskType]
+	return ok
+}
+
+// ResetCallbackTaskType resets all changes to the "callback_task_type" field.
+func (m *ProcessTaskMutation) ResetCallbackTaskType() {
+	m.callback_task_type = nil
+	delete(m.clearedFields, processtask.FieldCallbackTaskType)
+}
+
+// SetCallbackAction sets the "callback_action" field.
+func (m *ProcessTaskMutation) SetCallbackAction(s string) {
+	m.callback_action = &s
+}
+
+// CallbackAction returns the value of the "callback_action" field in the mutation.
+func (m *ProcessTaskMutation) CallbackAction() (r string, exists bool) {
+	v := m.callback_action
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCallbackAction returns the old "callback_action" field's value of the ProcessTask entity.
+// If the ProcessTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessTaskMutation) OldCallbackAction(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCallbackAction is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCallbackAction requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCallbackAction: %w", err)
+	}
+	return oldValue.CallbackAction, nil
+}
+
+// ClearCallbackAction clears the value of the "callback_action" field.
+func (m *ProcessTaskMutation) ClearCallbackAction() {
+	m.callback_action = nil
+	m.clearedFields[processtask.FieldCallbackAction] = struct{}{}
+}
+
+// CallbackActionCleared returns if the "callback_action" field was cleared in this mutation.
+func (m *ProcessTaskMutation) CallbackActionCleared() bool {
+	_, ok := m.clearedFields[processtask.FieldCallbackAction]
+	return ok
+}
+
+// ResetCallbackAction resets all changes to the "callback_action" field.
+func (m *ProcessTaskMutation) ResetCallbackAction() {
+	m.callback_action = nil
+	delete(m.clearedFields, processtask.FieldCallbackAction)
+}
+
+// SetCallbackConfigRef sets the "callback_config_ref" field.
+func (m *ProcessTaskMutation) SetCallbackConfigRef(s string) {
+	m.callback_config_ref = &s
+}
+
+// CallbackConfigRef returns the value of the "callback_config_ref" field in the mutation.
+func (m *ProcessTaskMutation) CallbackConfigRef() (r string, exists bool) {
+	v := m.callback_config_ref
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCallbackConfigRef returns the old "callback_config_ref" field's value of the ProcessTask entity.
+// If the ProcessTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessTaskMutation) OldCallbackConfigRef(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCallbackConfigRef is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCallbackConfigRef requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCallbackConfigRef: %w", err)
+	}
+	return oldValue.CallbackConfigRef, nil
+}
+
+// ClearCallbackConfigRef clears the value of the "callback_config_ref" field.
+func (m *ProcessTaskMutation) ClearCallbackConfigRef() {
+	m.callback_config_ref = nil
+	m.clearedFields[processtask.FieldCallbackConfigRef] = struct{}{}
+}
+
+// CallbackConfigRefCleared returns if the "callback_config_ref" field was cleared in this mutation.
+func (m *ProcessTaskMutation) CallbackConfigRefCleared() bool {
+	_, ok := m.clearedFields[processtask.FieldCallbackConfigRef]
+	return ok
+}
+
+// ResetCallbackConfigRef resets all changes to the "callback_config_ref" field.
+func (m *ProcessTaskMutation) ResetCallbackConfigRef() {
+	m.callback_config_ref = nil
+	delete(m.clearedFields, processtask.FieldCallbackConfigRef)
+}
+
+// SetAggregationVersion sets the "aggregation_version" field.
+func (m *ProcessTaskMutation) SetAggregationVersion(i int) {
+	m.aggregation_version = &i
+	m.addaggregation_version = nil
+}
+
+// AggregationVersion returns the value of the "aggregation_version" field in the mutation.
+func (m *ProcessTaskMutation) AggregationVersion() (r int, exists bool) {
+	v := m.aggregation_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAggregationVersion returns the old "aggregation_version" field's value of the ProcessTask entity.
+// If the ProcessTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessTaskMutation) OldAggregationVersion(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAggregationVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAggregationVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAggregationVersion: %w", err)
+	}
+	return oldValue.AggregationVersion, nil
+}
+
+// AddAggregationVersion adds i to the "aggregation_version" field.
+func (m *ProcessTaskMutation) AddAggregationVersion(i int) {
+	if m.addaggregation_version != nil {
+		*m.addaggregation_version += i
+	} else {
+		m.addaggregation_version = &i
+	}
+}
+
+// AddedAggregationVersion returns the value that was added to the "aggregation_version" field in this mutation.
+func (m *ProcessTaskMutation) AddedAggregationVersion() (r int, exists bool) {
+	v := m.addaggregation_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAggregationVersion resets all changes to the "aggregation_version" field.
+func (m *ProcessTaskMutation) ResetAggregationVersion() {
+	m.aggregation_version = nil
+	m.addaggregation_version = nil
+}
+
 // SetDescription sets the "description" field.
 func (m *ProcessTaskMutation) SetDescription(s string) {
 	m.description = &s
@@ -91223,7 +91700,7 @@ func (m *ProcessTaskMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ProcessTaskMutation) Fields() []string {
-	fields := make([]string, 0, 25)
+	fields := make([]string, 0, 30)
 	if m.task_id != nil {
 		fields = append(fields, processtask.FieldTaskID)
 	}
@@ -91277,6 +91754,21 @@ func (m *ProcessTaskMutation) Fields() []string {
 	}
 	if m.task_variables != nil {
 		fields = append(fields, processtask.FieldTaskVariables)
+	}
+	if m.callback_handler_id != nil {
+		fields = append(fields, processtask.FieldCallbackHandlerID)
+	}
+	if m.callback_task_type != nil {
+		fields = append(fields, processtask.FieldCallbackTaskType)
+	}
+	if m.callback_action != nil {
+		fields = append(fields, processtask.FieldCallbackAction)
+	}
+	if m.callback_config_ref != nil {
+		fields = append(fields, processtask.FieldCallbackConfigRef)
+	}
+	if m.aggregation_version != nil {
+		fields = append(fields, processtask.FieldAggregationVersion)
 	}
 	if m.description != nil {
 		fields = append(fields, processtask.FieldDescription)
@@ -91343,6 +91835,16 @@ func (m *ProcessTaskMutation) Field(name string) (ent.Value, bool) {
 		return m.FormKey()
 	case processtask.FieldTaskVariables:
 		return m.TaskVariables()
+	case processtask.FieldCallbackHandlerID:
+		return m.CallbackHandlerID()
+	case processtask.FieldCallbackTaskType:
+		return m.CallbackTaskType()
+	case processtask.FieldCallbackAction:
+		return m.CallbackAction()
+	case processtask.FieldCallbackConfigRef:
+		return m.CallbackConfigRef()
+	case processtask.FieldAggregationVersion:
+		return m.AggregationVersion()
 	case processtask.FieldDescription:
 		return m.Description()
 	case processtask.FieldCorrelationID:
@@ -91402,6 +91904,16 @@ func (m *ProcessTaskMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldFormKey(ctx)
 	case processtask.FieldTaskVariables:
 		return m.OldTaskVariables(ctx)
+	case processtask.FieldCallbackHandlerID:
+		return m.OldCallbackHandlerID(ctx)
+	case processtask.FieldCallbackTaskType:
+		return m.OldCallbackTaskType(ctx)
+	case processtask.FieldCallbackAction:
+		return m.OldCallbackAction(ctx)
+	case processtask.FieldCallbackConfigRef:
+		return m.OldCallbackConfigRef(ctx)
+	case processtask.FieldAggregationVersion:
+		return m.OldAggregationVersion(ctx)
 	case processtask.FieldDescription:
 		return m.OldDescription(ctx)
 	case processtask.FieldCorrelationID:
@@ -91551,6 +92063,41 @@ func (m *ProcessTaskMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetTaskVariables(v)
 		return nil
+	case processtask.FieldCallbackHandlerID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCallbackHandlerID(v)
+		return nil
+	case processtask.FieldCallbackTaskType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCallbackTaskType(v)
+		return nil
+	case processtask.FieldCallbackAction:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCallbackAction(v)
+		return nil
+	case processtask.FieldCallbackConfigRef:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCallbackConfigRef(v)
+		return nil
+	case processtask.FieldAggregationVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAggregationVersion(v)
+		return nil
 	case processtask.FieldDescription:
 		v, ok := value.(string)
 		if !ok {
@@ -91608,6 +92155,9 @@ func (m *ProcessTaskMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *ProcessTaskMutation) AddedFields() []string {
 	var fields []string
+	if m.addaggregation_version != nil {
+		fields = append(fields, processtask.FieldAggregationVersion)
+	}
 	if m.addtenant_id != nil {
 		fields = append(fields, processtask.FieldTenantID)
 	}
@@ -91619,6 +92169,8 @@ func (m *ProcessTaskMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *ProcessTaskMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case processtask.FieldAggregationVersion:
+		return m.AddedAggregationVersion()
 	case processtask.FieldTenantID:
 		return m.AddedTenantID()
 	}
@@ -91630,6 +92182,13 @@ func (m *ProcessTaskMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *ProcessTaskMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case processtask.FieldAggregationVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAggregationVersion(v)
+		return nil
 	case processtask.FieldTenantID:
 		v, ok := value.(int)
 		if !ok {
@@ -91671,6 +92230,18 @@ func (m *ProcessTaskMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(processtask.FieldTaskVariables) {
 		fields = append(fields, processtask.FieldTaskVariables)
+	}
+	if m.FieldCleared(processtask.FieldCallbackHandlerID) {
+		fields = append(fields, processtask.FieldCallbackHandlerID)
+	}
+	if m.FieldCleared(processtask.FieldCallbackTaskType) {
+		fields = append(fields, processtask.FieldCallbackTaskType)
+	}
+	if m.FieldCleared(processtask.FieldCallbackAction) {
+		fields = append(fields, processtask.FieldCallbackAction)
+	}
+	if m.FieldCleared(processtask.FieldCallbackConfigRef) {
+		fields = append(fields, processtask.FieldCallbackConfigRef)
 	}
 	if m.FieldCleared(processtask.FieldDescription) {
 		fields = append(fields, processtask.FieldDescription)
@@ -91724,6 +92295,18 @@ func (m *ProcessTaskMutation) ClearField(name string) error {
 		return nil
 	case processtask.FieldTaskVariables:
 		m.ClearTaskVariables()
+		return nil
+	case processtask.FieldCallbackHandlerID:
+		m.ClearCallbackHandlerID()
+		return nil
+	case processtask.FieldCallbackTaskType:
+		m.ClearCallbackTaskType()
+		return nil
+	case processtask.FieldCallbackAction:
+		m.ClearCallbackAction()
+		return nil
+	case processtask.FieldCallbackConfigRef:
+		m.ClearCallbackConfigRef()
 		return nil
 	case processtask.FieldDescription:
 		m.ClearDescription()
@@ -91798,6 +92381,21 @@ func (m *ProcessTaskMutation) ResetField(name string) error {
 		return nil
 	case processtask.FieldTaskVariables:
 		m.ResetTaskVariables()
+		return nil
+	case processtask.FieldCallbackHandlerID:
+		m.ResetCallbackHandlerID()
+		return nil
+	case processtask.FieldCallbackTaskType:
+		m.ResetCallbackTaskType()
+		return nil
+	case processtask.FieldCallbackAction:
+		m.ResetCallbackAction()
+		return nil
+	case processtask.FieldCallbackConfigRef:
+		m.ResetCallbackConfigRef()
+		return nil
+	case processtask.FieldAggregationVersion:
+		m.ResetAggregationVersion()
 		return nil
 	case processtask.FieldDescription:
 		m.ResetDescription()
@@ -135693,6 +136291,7 @@ type TicketNotificationMutation struct {
 	sent_at       *time.Time
 	read_at       *time.Time
 	status        *string
+	delivery_key  *string
 	tenant_id     *int
 	addtenant_id  *int
 	created_at    *time.Time
@@ -136118,6 +136717,55 @@ func (m *TicketNotificationMutation) ResetStatus() {
 	m.status = nil
 }
 
+// SetDeliveryKey sets the "delivery_key" field.
+func (m *TicketNotificationMutation) SetDeliveryKey(s string) {
+	m.delivery_key = &s
+}
+
+// DeliveryKey returns the value of the "delivery_key" field in the mutation.
+func (m *TicketNotificationMutation) DeliveryKey() (r string, exists bool) {
+	v := m.delivery_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDeliveryKey returns the old "delivery_key" field's value of the TicketNotification entity.
+// If the TicketNotification object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketNotificationMutation) OldDeliveryKey(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDeliveryKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDeliveryKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDeliveryKey: %w", err)
+	}
+	return oldValue.DeliveryKey, nil
+}
+
+// ClearDeliveryKey clears the value of the "delivery_key" field.
+func (m *TicketNotificationMutation) ClearDeliveryKey() {
+	m.delivery_key = nil
+	m.clearedFields[ticketnotification.FieldDeliveryKey] = struct{}{}
+}
+
+// DeliveryKeyCleared returns if the "delivery_key" field was cleared in this mutation.
+func (m *TicketNotificationMutation) DeliveryKeyCleared() bool {
+	_, ok := m.clearedFields[ticketnotification.FieldDeliveryKey]
+	return ok
+}
+
+// ResetDeliveryKey resets all changes to the "delivery_key" field.
+func (m *TicketNotificationMutation) ResetDeliveryKey() {
+	m.delivery_key = nil
+	delete(m.clearedFields, ticketnotification.FieldDeliveryKey)
+}
+
 // SetTenantID sets the "tenant_id" field.
 func (m *TicketNotificationMutation) SetTenantID(i int) {
 	m.tenant_id = &i
@@ -136298,7 +136946,7 @@ func (m *TicketNotificationMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TicketNotificationMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 11)
 	if m.ticket != nil {
 		fields = append(fields, ticketnotification.FieldTicketID)
 	}
@@ -136322,6 +136970,9 @@ func (m *TicketNotificationMutation) Fields() []string {
 	}
 	if m.status != nil {
 		fields = append(fields, ticketnotification.FieldStatus)
+	}
+	if m.delivery_key != nil {
+		fields = append(fields, ticketnotification.FieldDeliveryKey)
 	}
 	if m.tenant_id != nil {
 		fields = append(fields, ticketnotification.FieldTenantID)
@@ -136353,6 +137004,8 @@ func (m *TicketNotificationMutation) Field(name string) (ent.Value, bool) {
 		return m.ReadAt()
 	case ticketnotification.FieldStatus:
 		return m.Status()
+	case ticketnotification.FieldDeliveryKey:
+		return m.DeliveryKey()
 	case ticketnotification.FieldTenantID:
 		return m.TenantID()
 	case ticketnotification.FieldCreatedAt:
@@ -136382,6 +137035,8 @@ func (m *TicketNotificationMutation) OldField(ctx context.Context, name string) 
 		return m.OldReadAt(ctx)
 	case ticketnotification.FieldStatus:
 		return m.OldStatus(ctx)
+	case ticketnotification.FieldDeliveryKey:
+		return m.OldDeliveryKey(ctx)
 	case ticketnotification.FieldTenantID:
 		return m.OldTenantID(ctx)
 	case ticketnotification.FieldCreatedAt:
@@ -136451,6 +137106,13 @@ func (m *TicketNotificationMutation) SetField(name string, value ent.Value) erro
 		}
 		m.SetStatus(v)
 		return nil
+	case ticketnotification.FieldDeliveryKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDeliveryKey(v)
+		return nil
 	case ticketnotification.FieldTenantID:
 		v, ok := value.(int)
 		if !ok {
@@ -136516,6 +137178,9 @@ func (m *TicketNotificationMutation) ClearedFields() []string {
 	if m.FieldCleared(ticketnotification.FieldReadAt) {
 		fields = append(fields, ticketnotification.FieldReadAt)
 	}
+	if m.FieldCleared(ticketnotification.FieldDeliveryKey) {
+		fields = append(fields, ticketnotification.FieldDeliveryKey)
+	}
 	return fields
 }
 
@@ -136535,6 +137200,9 @@ func (m *TicketNotificationMutation) ClearField(name string) error {
 		return nil
 	case ticketnotification.FieldReadAt:
 		m.ClearReadAt()
+		return nil
+	case ticketnotification.FieldDeliveryKey:
+		m.ClearDeliveryKey()
 		return nil
 	}
 	return fmt.Errorf("unknown TicketNotification nullable field %s", name)
@@ -136567,6 +137235,9 @@ func (m *TicketNotificationMutation) ResetField(name string) error {
 		return nil
 	case ticketnotification.FieldStatus:
 		m.ResetStatus()
+		return nil
+	case ticketnotification.FieldDeliveryKey:
+		m.ResetDeliveryKey()
 		return nil
 	case ticketnotification.FieldTenantID:
 		m.ResetTenantID()

@@ -3,6 +3,9 @@ package bpmn
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -14,6 +17,7 @@ import (
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/connectorconfig"
 
 	"go.uber.org/zap"
 )
@@ -105,12 +109,10 @@ func (h *WebhookHandler) GetHandlerID() string {
 func (h *WebhookHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
 	action, _ := variables["action"].(string)
 	switch action {
-	case "call_webhook":
-		return h.callWebhook(ctx, variables)
-	case "send_notification":
-		return h.sendWebhookNotification(ctx, variables)
+	case "call_webhook", "send_notification":
+		return h.callTrustedWebhook(ctx, variables)
 	default:
-		return h.callWebhook(ctx, variables)
+		return nil, fmt.Errorf("不支持的 Webhook 回调动作")
 	}
 }
 
@@ -119,107 +121,112 @@ func (h *WebhookHandler) Validate(ctx context.Context, config map[string]interfa
 	return nil
 }
 
-// callWebhook 调用Webhook
-func (h *WebhookHandler) callWebhook(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
-	webhookURL := GetStringFromVars(variables, "webhook_url")
-	method := GetStringFromVars(variables, "method")
-	payload := GetStringFromVars(variables, "payload")
-	headers := GetStringFromVars(variables, "headers")
-	timeout := GetIntFromVars(variables, "timeout")
+type trustedWebhookSettings struct {
+	URL            string `json:"url"`
+	TimeoutSeconds int    `json:"timeoutSeconds"`
+}
 
-	if webhookURL == "" {
-		return nil, fmt.Errorf("webhook URL不能为空")
+type trustedWebhookCredentials struct {
+	Secret string `json:"secret"`
+}
+
+type bpmnWebhookEnvelope struct {
+	EventType    string `json:"eventType,omitempty"`
+	Title        string `json:"title,omitempty"`
+	Content      string `json:"content,omitempty"`
+	BusinessType string `json:"businessType"`
+	BusinessID   int    `json:"businessId"`
+}
+
+func (h *WebhookHandler) callTrustedWebhook(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+	if h.client == nil {
+		return nil, fmt.Errorf("Webhook 配置存储不可用")
 	}
-	if err := validateWebhookURL(webhookURL); err != nil {
+	tenantID, err := RequireTenantID(ctx, variables)
+	if err != nil {
 		return nil, err
 	}
-
-	// 设置默认方法
-	if method == "" {
-		method = "POST"
+	configRef := GetStringFromVars(variables, "callback_config_ref")
+	if configRef == "" {
+		return nil, fmt.Errorf("Webhook 回调缺少可信配置引用")
 	}
-
-	h.logger.Infow(
-		"Calling webhook via BPMN",
-		"method", method,
-	)
-
-	// 准备请求
-	var body *bytes.Reader
-	if payload != "" {
-		body = bytes.NewReader([]byte(payload))
-	} else {
-		body = bytes.NewReader([]byte("{}"))
-	}
-
-	req, err := http.NewRequestWithContext(ctx, method, webhookURL, body)
+	config, err := h.client.ConnectorConfig.Query().Where(
+		connectorconfig.TenantID(tenantID),
+		connectorconfig.Name(configRef),
+		connectorconfig.Enabled(true),
+	).Only(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("创建Webhook请求失败: %w", err)
+		return nil, fmt.Errorf("Webhook 可信配置不可用")
 	}
-
-	// 设置请求头
-	req.Header.Set("Content-Type", "application/json")
-	if headers != "" {
-		// 解析自定义Headers (JSON格式)
-		var headerMap map[string]string
-		if err := json.Unmarshal([]byte(headers), &headerMap); err == nil {
-			for k, v := range headerMap {
-				req.Header.Set(k, v)
-			}
+	var settings trustedWebhookSettings
+	if err := json.Unmarshal([]byte(config.Settings), &settings); err != nil || settings.URL == "" {
+		return nil, fmt.Errorf("Webhook 可信配置无效")
+	}
+	if err := validateWebhookURL(settings.URL); err != nil {
+		return nil, fmt.Errorf("Webhook 可信端点不允许")
+	}
+	var credentials trustedWebhookCredentials
+	if config.Credentials != "" {
+		if err := json.Unmarshal([]byte(config.Credentials), &credentials); err != nil {
+			return nil, fmt.Errorf("Webhook 凭据配置无效")
 		}
 	}
+
+	envelope := bpmnWebhookEnvelope{
+		EventType:    GetStringFromVars(variables, "event_type"),
+		Title:        GetStringFromVars(variables, "title"),
+		Content:      GetStringFromVars(variables, "content"),
+		BusinessType: GetStringFromVars(variables, "business_type"),
+		BusinessID:   GetIntFromVars(variables, "business_id"),
+	}
+	body, err := json.Marshal(envelope)
+	if err != nil {
+		return nil, fmt.Errorf("创建 Webhook 载荷失败")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, settings.URL, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("创建 Webhook 请求失败")
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "ITSM-BPMN-Webhook/1.0")
+	req.Header.Set("X-ITSM-Event", envelope.EventType)
 	if executionKey, ok := BPMNCallbackExecutionKey(ctx); ok {
 		req.Header.Set("Idempotency-Key", executionKey)
+	} else {
+		return nil, fmt.Errorf("Webhook 回调缺少幂等执行键")
 	}
-
-	// 设置超时
-	timeoutValue := 30 // 默认30秒
-	if timeout > 0 {
-		timeoutValue = timeout
+	if credentials.Secret != "" {
+		mac := hmac.New(sha256.New, []byte(credentials.Secret))
+		_, _ = mac.Write(body)
+		req.Header.Set("X-ITSM-Signature", "sha256="+hex.EncodeToString(mac.Sum(nil)))
 	}
-	if timeoutValue > 120 {
-		timeoutValue = 120
+	timeoutSeconds := settings.TimeoutSeconds
+	if timeoutSeconds <= 0 {
+		timeoutSeconds = 30
 	}
-	requestCtx, cancel := context.WithTimeout(req.Context(), time.Duration(timeoutValue)*time.Second)
+	if timeoutSeconds > 120 {
+		timeoutSeconds = 120
+	}
+	requestCtx, cancel := context.WithTimeout(req.Context(), time.Duration(timeoutSeconds)*time.Second)
 	defer cancel()
 	req = req.WithContext(requestCtx)
 
-	// 发送请求
 	resp, err := h.httpClient.Do(req)
 	if err != nil {
 		h.logger.Errorw("Webhook call failed", "error_class", "handler_error")
-		return nil, fmt.Errorf("调用Webhook失败")
+		return nil, fmt.Errorf("调用 Webhook 失败")
 	}
 	defer resp.Body.Close()
-
-	// 解析响应
-	var respBody map[string]interface{}
-	decoder := json.NewDecoder(resp.Body)
-	if err := decoder.Decode(&respBody); err != nil {
-		// 响应可能不是JSON格式，记录状态码即可
-		h.logger.Warnw("Webhook response is not JSON", "status_code", resp.StatusCode)
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		h.logger.Warnw("Webhook target rejected callback", "status_code", resp.StatusCode)
+		return nil, fmt.Errorf("Webhook 目标返回非成功状态")
 	}
-
-	h.logger.Infow(
-		"Webhook called successfully",
-		"status_code", resp.StatusCode,
-	)
-
+	h.logger.Infow("Webhook called successfully", "status_code", resp.StatusCode)
 	return &dto.ServiceTaskResult{
-		Success: true,
-		Message: fmt.Sprintf("Webhook调用成功，状态码: %d", resp.StatusCode),
-		OutputVars: map[string]interface{}{
-			"webhook_url":   webhookURL,
-			"status_code":   resp.StatusCode,
-			"response_body": respBody,
-		},
+		Success:    true,
+		Message:    fmt.Sprintf("Webhook调用成功，状态码: %d", resp.StatusCode),
+		OutputVars: map[string]interface{}{"status_code": resp.StatusCode},
 	}, nil
-}
-
-// sendWebhookNotification 发送Webhook通知
-func (h *WebhookHandler) sendWebhookNotification(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
-	// 这是一个便捷方法，实际上调用的是同一个callWebhook
-	return h.callWebhook(ctx, variables)
 }
 
 // 确保 WebhookHandler 实现了 ServiceTaskHandlerInterface

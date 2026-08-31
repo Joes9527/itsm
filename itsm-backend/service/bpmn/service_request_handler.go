@@ -3,6 +3,7 @@ package bpmn
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"time"
 
 	"itsm-backend/dto"
@@ -67,11 +68,7 @@ func (h *ServiceRequestServiceTaskHandler) Execute(ctx context.Context, task *en
 		reason, _ := variables["cancel_reason"].(string)
 		return h.cancelRequest(ctx, variables, reason)
 	default:
-		// 与 ticket/incident/change/release 各 handler 一致的既有分发表约定：未知
-		// action 透传为成功空操作。本白名单是自定义 service_request 模板的扩展点，
-		// 内置 service_request_flow 全部走 generic_task 不经过这里
-		// （bpmn_usertask_callback_test.go 的反面用例锁定了该接线）。
-		return &dto.ServiceTaskResult{Success: true, Message: "无操作执行"}, nil
+		return nil, fmt.Errorf("不支持的服务请求回调动作")
 	}
 }
 
@@ -109,17 +106,30 @@ func (h *ServiceRequestServiceTaskHandler) updateRequest(ctx context.Context, va
 	// 真实写入：只更新纯表单元数据字段（无状态语义），状态/审批/工作流语义
 	// 仍委托给关联工单（见类型注释）。此前是"加载+打日志假装成功"的空实现。
 	update := sr.Update()
+	changed := false
 	if formData, ok := variables["form_data"].(map[string]interface{}); ok && len(formData) > 0 {
-		update.SetFormData(formData)
+		if !reflect.DeepEqual(sr.FormData, formData) {
+			update.SetFormData(formData)
+			changed = true
+		}
 	}
 	if costCenter, ok := variables["cost_center"].(string); ok && costCenter != "" {
-		update.SetCostCenter(costCenter)
+		if sr.CostCenter != costCenter {
+			update.SetCostCenter(costCenter)
+			changed = true
+		}
 	}
 	if dataClass, ok := variables["data_classification"].(string); ok && dataClass != "" {
-		update.SetDataClassification(dataClass)
+		if sr.DataClassification != dataClass {
+			update.SetDataClassification(dataClass)
+			changed = true
+		}
 	}
 	if needsPublicIP, ok := variables["needs_public_ip"].(bool); ok {
-		update.SetNeedsPublicIP(needsPublicIP)
+		if sr.NeedsPublicIP != needsPublicIP {
+			update.SetNeedsPublicIP(needsPublicIP)
+			changed = true
+		}
 	}
 	if whitelist, ok := variables["source_ip_whitelist"].([]interface{}); ok {
 		ips := make([]string, 0, len(whitelist))
@@ -128,15 +138,30 @@ func (h *ServiceRequestServiceTaskHandler) updateRequest(ctx context.Context, va
 				ips = append(ips, s)
 			}
 		}
+		if !reflect.DeepEqual(sr.SourceIPWhitelist, ips) {
+			update.SetSourceIPWhitelist(ips)
+			changed = true
+		}
+	} else if ips, ok := variables["source_ip_whitelist"].([]string); ok && !reflect.DeepEqual(sr.SourceIPWhitelist, ips) {
 		update.SetSourceIPWhitelist(ips)
+		changed = true
 	}
 	if expireAtStr, ok := variables["expire_at"].(string); ok && expireAtStr != "" {
 		if expireAt, parseErr := time.Parse(time.RFC3339, expireAtStr); parseErr == nil {
-			update.SetExpireAt(expireAt)
+			if !sr.ExpireAt.Equal(expireAt) {
+				update.SetExpireAt(expireAt)
+				changed = true
+			}
 		}
 	}
 	if complianceAck, ok := variables["compliance_ack"].(bool); ok {
-		update.SetComplianceAck(complianceAck)
+		if sr.ComplianceAck != complianceAck {
+			update.SetComplianceAck(complianceAck)
+			changed = true
+		}
+	}
+	if !changed {
+		return &dto.ServiceTaskResult{Success: true, Message: fmt.Sprintf("服务请求 %d 已是目标表单状态", sr.ID)}, nil
 	}
 	if _, err := update.Save(ctx); err != nil {
 		return nil, fmt.Errorf("更新服务请求失败: %w", err)
@@ -164,6 +189,14 @@ func (h *ServiceRequestServiceTaskHandler) setLinkedTicketStatus(ctx context.Con
 	}
 	if !isValidLinkedTicketStatusTransition(current.Status, newStatus) {
 		return nil, fmt.Errorf("非法的关联工单状态转换: %s -> %s", current.Status, newStatus)
+	}
+	if current.Status == newStatus {
+		if note != "" && sr.CompletionNote != note {
+			if _, err := sr.Update().SetCompletionNote(note).Save(ctx); err != nil {
+				return nil, fmt.Errorf("记录服务请求备注失败: %w", err)
+			}
+		}
+		return &dto.ServiceTaskResult{Success: true, Message: fmt.Sprintf("服务请求 %d 对应工单已处于 %s", sr.ID, newStatus)}, nil
 	}
 
 	update := current.Update()
@@ -198,6 +231,9 @@ func (h *ServiceRequestServiceTaskHandler) assignRequest(ctx context.Context, va
 	if assigneeID <= 0 {
 		return nil, fmt.Errorf("无效的 assignee_id")
 	}
+	if sr.ProcessorID == assigneeID {
+		return &dto.ServiceTaskResult{Success: true, Message: fmt.Sprintf("服务请求 %d 已分配", sr.ID)}, nil
+	}
 	if _, err := sr.Update().SetProcessorID(assigneeID).Save(ctx); err != nil {
 		return nil, fmt.Errorf("分配服务请求失败: %w", err)
 	}
@@ -211,6 +247,9 @@ func (h *ServiceRequestServiceTaskHandler) provisionResource(ctx context.Context
 		return nil, err
 	}
 	resourceType, _ := variables["resource_type"].(string)
+	if !sr.StartedAt.IsZero() {
+		return &dto.ServiceTaskResult{Success: true, Message: fmt.Sprintf("资源 %s 已开始供应", resourceType)}, nil
+	}
 	if _, err := sr.Update().SetStartedAt(time.Now()).Save(ctx); err != nil {
 		return nil, fmt.Errorf("记录资源开通开始时间失败: %w", err)
 	}
@@ -238,11 +277,26 @@ func (h *ServiceRequestServiceTaskHandler) completeRequest(ctx context.Context, 
 	}
 
 	completionNote, _ := variables["completion_note"].(string)
-	if _, err := sr.Update().SetCompletedAt(time.Now()).SetCompletionNote(completionNote).Save(ctx); err != nil {
-		return nil, fmt.Errorf("记录服务请求完成信息失败: %w", err)
+	if sr.CompletedAt.IsZero() || (completionNote != "" && sr.CompletionNote != completionNote) {
+		update := sr.Update()
+		if sr.CompletedAt.IsZero() {
+			update.SetCompletedAt(time.Now())
+		}
+		if completionNote != "" && sr.CompletionNote != completionNote {
+			update.SetCompletionNote(completionNote)
+		}
+		if _, err := update.Save(ctx); err != nil {
+			return nil, fmt.Errorf("记录服务请求完成信息失败: %w", err)
+		}
 	}
-	if _, err := current.Update().SetStatus("resolved").SetResolvedAt(time.Now()).SetUpdatedAt(time.Now()).Save(ctx); err != nil {
-		return nil, fmt.Errorf("更新关联工单状态失败: %w", err)
+	if current.Status != "resolved" || current.ResolvedAt.IsZero() {
+		update := current.Update().SetStatus("resolved")
+		if current.ResolvedAt.IsZero() {
+			update.SetResolvedAt(time.Now())
+		}
+		if _, err := update.SetUpdatedAt(time.Now()).Save(ctx); err != nil {
+			return nil, fmt.Errorf("更新关联工单状态失败: %w", err)
+		}
 	}
 	h.logger.Infow("Service request completed via BPMN", "request_id", sr.ID)
 	return &dto.ServiceTaskResult{Success: true, Message: fmt.Sprintf("服务请求 %d 已完成", sr.ID)}, nil

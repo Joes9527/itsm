@@ -14,8 +14,9 @@ import (
 	"go.uber.org/zap"
 )
 
-// setupPlatformTenantEnv 部署内置模板，返回不带租户键的平台级 ctx——模拟 controller 的
-// getBPMNTenantContext 对 tenant_id=0 不注入 BPMNTenantIDContextKey 的行为。
+// setupPlatformTenantEnv deploys the built-in templates and returns an
+// untrusted base context. Tests must opt into a typed actor scope or the narrow
+// trusted-tenant start capability before invoking public mutations.
 func setupPlatformTenantEnv(t *testing.T) (*ent.Client, ProcessEngine, context.Context, int) {
 	t.Helper()
 	client := enttest.Open(t, "sqlite3", testDSN())
@@ -47,11 +48,7 @@ func setupPlatformTenantEnv(t *testing.T) (*ent.Client, ProcessEngine, context.C
 	return client, engine, ctx, tenant.ID
 }
 
-// TestStartProcess_PlatformNoTenant_ServiceTaskRunsWithInstanceTenant 锁定 P2.2 修复：
-// 平台级（ctx 无租户键、variables 无 tenant_id）启动流程时，StartProcess 把定义租户
-// 注入 ctx，带 RequireTenantID 的 ServiceTask（incident_emergency_flow 的
-// Activity_AutoAssign）以实例租户执行，不再硬失败。
-func TestStartProcess_PlatformNoTenant_ServiceTaskRunsWithInstanceTenant(t *testing.T) {
+func TestStartProcess_TrustedTenant_ServiceTaskUsesInstanceIdentity(t *testing.T) {
 	client, engine, platformCtx, tenantID := setupPlatformTenantEnv(t)
 
 	assignee, err := client.User.Create().
@@ -60,20 +57,31 @@ func TestStartProcess_PlatformNoTenant_ServiceTaskRunsWithInstanceTenant(t *test
 		Save(platformCtx)
 	require.NoError(t, err)
 
+	workItem := client.Ticket.Create().
+		SetTitle("平台级启动测试事件").
+		SetTicketNumber("T-PLATFORM-INCIDENT-1").
+		SetType("incident").
+		SetRecordClass("incident").
+		SetStatus("new").
+		SetRequesterID(assignee.ID).
+		SetTenantID(tenantID).
+		SaveX(platformCtx)
 	inc, err := client.Incident.Create().
 		SetTitle("平台级启动测试事件").
 		SetIncidentNumber("INC-PLATFORM-1").
 		SetStatus("new").
 		SetReporterID(assignee.ID).
+		SetWorkItemID(workItem.ID).
 		SetTenantID(tenantID).
 		Save(platformCtx)
 	require.NoError(t, err)
 
-	instance, err := engine.StartProcess(platformCtx, "incident_emergency_flow", "incident:platform-1", "", 0, map[string]interface{}{
-		"incident_id": inc.ID,
-		"assignee_id": assignee.ID,
+	trustedCtx := WithTrustedBPMNTenantContext(platformCtx, tenantID)
+	instance, err := engine.StartProcess(trustedCtx, "incident_emergency_flow", "incident:platform-1", "incident", workItem.ID, map[string]interface{}{
+		"assignee_id":  assignee.ID,
+		"requester_id": assignee.ID,
 	})
-	require.NoError(t, err, "平台级启动流程不应再在 ServiceTask 上硬失败")
+	require.NoError(t, err)
 
 	assigned, err := client.Incident.Get(platformCtx, inc.ID)
 	require.NoError(t, err)
@@ -85,29 +93,41 @@ func TestStartProcess_PlatformNoTenant_ServiceTaskRunsWithInstanceTenant(t *test
 	assert.Equal(t, "Activity_ManagerApproval", started.CurrentActivityID, "流程应推进到第一个用户任务")
 }
 
-// TestCompleteTask_PlatformNoTenant_CallbackSideEffectFires 锁定 CompleteTask 的注入：
-// 平台级完成用户任务时，此前 dispatchUserTaskCallback 里的 RequireTenantID 失败导致
-// 业务副作用被静默跳过（只 Warn）；注入实例租户后副作用应真实执行。
-func TestCompleteTask_PlatformNoTenant_CallbackSideEffectFires(t *testing.T) {
+func TestCompleteTask_TypedScope_CallbackUsesAuthoritativeBusinessIdentity(t *testing.T) {
 	client, engine, platformCtx, tenantID := setupPlatformTenantEnv(t)
 
-	tenantCtx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, tenantID)
+	actor := client.User.Create().
+		SetUsername("platform-change-actor").SetEmail("platform-change-actor@test.com").SetPasswordHash("x").
+		SetName("变更处理人").SetTenantID(tenantID).SetActive(true).
+		SaveX(platformCtx)
+	workItem := client.Ticket.Create().
+		SetTitle("平台回调测试变更").
+		SetTicketNumber("T-PLATFORM-CHANGE-1").
+		SetType("change").
+		SetRecordClass("change_request").
+		SetRequesterID(actor.ID).
+		SetTenantID(tenantID).
+		SaveX(platformCtx)
 	ch := client.Change.Create().
 		SetTitle("平台回调测试变更").
-		SetCreatedBy(1).
+		SetCreatedBy(actor.ID).
+		SetWorkItemID(workItem.ID).
 		SetTenantID(tenantID).
-		SaveX(tenantCtx)
+		SaveX(platformCtx)
 
-	instance, err := engine.StartProcess(tenantCtx, "change_normal_flow", "change:platform-1", "", 0, map[string]interface{}{
+	trustedCtx := WithTrustedBPMNTenantContext(platformCtx, tenantID)
+	instance, err := engine.StartProcess(trustedCtx, "change_normal_flow", "change:platform-1", "change", workItem.ID, map[string]interface{}{
 		"approval_required": true,
-		"change_id":         ch.ID,
+		"requester_id":      actor.ID,
 	})
 	require.NoError(t, err)
 
-	task := findTaskByDefinitionKey(t, client, tenantCtx, instance.ID, "Activity_Assessment")
-	require.NoError(t, engine.CompleteTask(platformCtx, task.TaskID, map[string]interface{}{
-		"change_id": ch.ID,
-		"title":     "平台改过的标题",
+	task := findTaskByDefinitionKey(t, client, platformCtx, instance.ID, "Activity_Assessment")
+	actorCtx := WithBPMNAccessScope(platformCtx, BPMNAccessScope{
+		UserID: actor.ID, TenantID: tenantID, CanUpdateAllTasks: true,
+	})
+	require.NoError(t, engine.CompleteTask(actorCtx, task.TaskID, map[string]interface{}{
+		"title": "平台改过的标题",
 	}))
 
 	updated, err := client.Change.Get(platformCtx, ch.ID)
@@ -119,10 +139,7 @@ func TestCompleteTask_PlatformNoTenant_CallbackSideEffectFires(t *testing.T) {
 	assert.Equal(t, "Activity_CABApproval", advanced.CurrentActivityID, "流程应正常推进到 CAB 审批")
 }
 
-// TestCompleteTask_PlatformNoTenant_TaskStillBoundToInstanceTenant 锁定注入不放松租户
-// 边界：平台 ctx 伪造 change_id 指向别家租户时，注入的实例租户 + 写侧 Where(TenantID)
-// 使写入落空，别家租户数据不受影响。
-func TestCompleteTask_PlatformNoTenant_TaskStillBoundToInstanceTenant(t *testing.T) {
+func TestCompleteTask_ParticipantBusinessIDCannotRetargetCallback(t *testing.T) {
 	client, engine, platformCtx, tenantID := setupPlatformTenantEnv(t)
 
 	otherTenant, err := client.Tenant.Create().
@@ -130,27 +147,48 @@ func TestCompleteTask_PlatformNoTenant_TaskStillBoundToInstanceTenant(t *testing
 		Save(platformCtx)
 	require.NoError(t, err)
 
+	otherActor := client.User.Create().
+		SetUsername("platform-other-actor").SetEmail("platform-other-actor@test.com").SetPasswordHash("x").
+		SetName("其他租户处理人").SetTenantID(otherTenant.ID).SetActive(true).
+		SaveX(platformCtx)
+	otherWorkItem := client.Ticket.Create().
+		SetTitle("别家租户的变更").SetTicketNumber("T-PLATFORM-OTHER-CHANGE-1").
+		SetType("change").SetRecordClass("change_request").SetRequesterID(otherActor.ID).
+		SetTenantID(otherTenant.ID).SaveX(platformCtx)
 	otherChange := client.Change.Create().
 		SetTitle("别家租户的变更").
-		SetCreatedBy(1).
+		SetCreatedBy(otherActor.ID).
+		SetWorkItemID(otherWorkItem.ID).
 		SetTenantID(otherTenant.ID).
 		SaveX(platformCtx)
 
-	tenantCtx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, tenantID)
+	actor := client.User.Create().
+		SetUsername("platform-own-actor").SetEmail("platform-own-actor@test.com").SetPasswordHash("x").
+		SetName("本租户处理人").SetTenantID(tenantID).SetActive(true).
+		SaveX(platformCtx)
+	workItem := client.Ticket.Create().
+		SetTitle("本租户变更").SetTicketNumber("T-PLATFORM-OWN-CHANGE-1").
+		SetType("change").SetRecordClass("change_request").SetRequesterID(actor.ID).
+		SetTenantID(tenantID).SaveX(platformCtx)
 	ch := client.Change.Create().
 		SetTitle("本租户变更").
-		SetCreatedBy(1).
+		SetCreatedBy(actor.ID).
+		SetWorkItemID(workItem.ID).
 		SetTenantID(tenantID).
-		SaveX(tenantCtx)
+		SaveX(platformCtx)
 
-	instance, err := engine.StartProcess(tenantCtx, "change_normal_flow", "change:platform-2", "", 0, map[string]interface{}{
+	trustedCtx := WithTrustedBPMNTenantContext(platformCtx, tenantID)
+	instance, err := engine.StartProcess(trustedCtx, "change_normal_flow", "change:platform-2", "change", workItem.ID, map[string]interface{}{
 		"approval_required": true,
-		"change_id":         ch.ID,
+		"requester_id":      actor.ID,
 	})
 	require.NoError(t, err)
 
-	task := findTaskByDefinitionKey(t, client, tenantCtx, instance.ID, "Activity_Assessment")
-	require.NoError(t, engine.CompleteTask(platformCtx, task.TaskID, map[string]interface{}{
+	task := findTaskByDefinitionKey(t, client, platformCtx, instance.ID, "Activity_Assessment")
+	actorCtx := WithBPMNAccessScope(platformCtx, BPMNAccessScope{
+		UserID: actor.ID, TenantID: tenantID, CanUpdateAllTasks: true,
+	})
+	require.NoError(t, engine.CompleteTask(actorCtx, task.TaskID, map[string]interface{}{
 		"change_id": otherChange.ID,
 		"title":     "越权尝试",
 	}))
@@ -158,4 +196,5 @@ func TestCompleteTask_PlatformNoTenant_TaskStillBoundToInstanceTenant(t *testing
 	after, err := client.Change.Get(platformCtx, otherChange.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "别家租户的变更", after.Title, "跨租户伪造 change_id 不得写入别家租户数据")
+	assert.Equal(t, "越权尝试", client.Change.GetX(platformCtx, ch.ID).Title, "回调只能写权威流程目标")
 }

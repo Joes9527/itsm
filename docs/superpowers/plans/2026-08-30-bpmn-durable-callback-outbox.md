@@ -235,7 +235,7 @@ git commit -m "feat(bpmn): process callback outbox with leases"
 - Produces: `(*CustomProcessEngine).RunCallbackOutboxWorker(ctx context.Context, workerID string, interval time.Duration)`.
 - Produces: `(*CustomProcessEngine).ProcessPendingCallbacks(ctx context.Context, workerID string, limit int) (int, error)` for deterministic tests and operational invocation.
 - Consumes: Task 2 outbox enqueue, lease, retry, and execution-key contracts.
-- Removes: `deferredProcessCallback`, `runDeferredProcessCallbacks`, `advanceAfterDeferredCallback`, and warning-only `dispatchUserTaskCallback` side effects.
+- Removes: `deferredProcessCallback`, `runDeferredProcessCallbacks`, `advanceAfterDeferredCallback`, and warning-only inline UserTask callback side effects.
 
 - [ ] **Step 1: Write failing crash and recovery tests**
 
@@ -272,7 +272,7 @@ Change transactional `handleElement` behavior for a registered synchronous Servi
 4. Return without calling the handler or advancing the outgoing sequence flow.
 ```
 
-When `CompleteTask` sees a completed UserTask with `service_task_type`, persist one `user_task_callback` row before the task transaction commits. Use the completed ProcessTask identity and the sanitized callback-variable snapshot. Do not call `dispatchUserTaskCallback` after commit.
+When `CompleteTask` sees a completed UserTask with `service_task_type`, persist one `user_task_callback` row before the task transaction commits. Use the completed ProcessTask identity and the sanitized callback-variable snapshot. Do not invoke a separate inline callback after commit.
 
 Collect newly created execution keys during the transaction. After commit, make one best-effort `processExecutionKeys` call for low latency. Log only execution key, tenant ID, callback kind, attempt count, and sanitized class. Whether that attempt succeeds or fails, return success for the already committed task completion; the worker owns recovery.
 
@@ -410,8 +410,9 @@ Run:
 
 ```bash
 cd itsm-backend
-ITSM_TEST_DB='host=127.0.0.1 port=5432 user=itsm dbname=itsm sslmode=disable password=itsm_password_2026' \
-  go test -tags integration ./service -run 'TestClaimTaskConcurrentCASPostgres|TestBPMNCallbackOutboxLeaseRecoveryPostgres' -count=1 -v
+PGSERVICE=itsm-test PGPASSFILE=/run/secrets/itsm-test.pgpass \
+  ITSM_TEST_DB='service=itsm-test' \
+  go test -tags integration ./service -run 'TestClaimTaskConcurrentCASPostgres|TestBPMNCallbackOutboxLeaseRecoveryPostgres|TestCounterSignDistinctChildVotesConvergePostgres' -count=1 -v
 ```
 
 Expected: PASS. If the shared development database is unavailable, start the repository PostgreSQL service and rerun; do not replace this gate with SQLite or mark the task complete without real PostgreSQL evidence.

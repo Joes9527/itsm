@@ -53,8 +53,18 @@ type ProcessTask struct {
 	CompletedTime time.Time `json:"completed_time,omitempty"`
 	// 表单Key
 	FormKey string `json:"form_key,omitempty"`
-	// 任务变量
+	// 参与者可编辑的任务表单变量；回调路由和系统元数据不得存放在此字段
 	TaskVariables map[string]interface{} `json:"task_variables,omitempty"`
+	// 创建任务时从流程定义解析的不可变回调处理器 ID；显式哨兵表示无回调或无法解析
+	CallbackHandlerID string `json:"callback_handler_id,omitempty"`
+	// 创建任务时从流程定义解析的不可变回调任务类型
+	CallbackTaskType string `json:"callback_task_type,omitempty"`
+	// 创建任务时从流程定义解析的不可变回调动作
+	CallbackAction string `json:"callback_action,omitempty"`
+	// 创建任务时从流程定义解析的可信连接器配置引用，不包含端点或密钥
+	CallbackConfigRef string `json:"callback_config_ref,omitempty"`
+	// 会签父任务聚合串行化版本；原子递增用于获取父行写锁
+	AggregationVersion int `json:"aggregation_version,omitempty"`
 	// 任务描述
 	Description string `json:"description,omitempty"`
 	// 跨系统关联 ID（如 KAF session/Langfuse trace），用于委派任务的端到端追踪
@@ -102,9 +112,9 @@ func (*ProcessTask) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case processtask.FieldTaskVariables:
 			values[i] = new([]byte)
-		case processtask.FieldID, processtask.FieldProcessInstanceID, processtask.FieldTenantID:
+		case processtask.FieldID, processtask.FieldProcessInstanceID, processtask.FieldAggregationVersion, processtask.FieldTenantID:
 			values[i] = new(sql.NullInt64)
-		case processtask.FieldTaskID, processtask.FieldProcessDefinitionKey, processtask.FieldTaskDefinitionKey, processtask.FieldTaskName, processtask.FieldTaskType, processtask.FieldAssignee, processtask.FieldCandidateUsers, processtask.FieldCandidateGroups, processtask.FieldStatus, processtask.FieldPriority, processtask.FieldFormKey, processtask.FieldDescription, processtask.FieldCorrelationID, processtask.FieldParentTaskID, processtask.FieldRootTaskID:
+		case processtask.FieldTaskID, processtask.FieldProcessDefinitionKey, processtask.FieldTaskDefinitionKey, processtask.FieldTaskName, processtask.FieldTaskType, processtask.FieldAssignee, processtask.FieldCandidateUsers, processtask.FieldCandidateGroups, processtask.FieldStatus, processtask.FieldPriority, processtask.FieldFormKey, processtask.FieldCallbackHandlerID, processtask.FieldCallbackTaskType, processtask.FieldCallbackAction, processtask.FieldCallbackConfigRef, processtask.FieldDescription, processtask.FieldCorrelationID, processtask.FieldParentTaskID, processtask.FieldRootTaskID:
 			values[i] = new(sql.NullString)
 		case processtask.FieldDueDate, processtask.FieldCreatedTime, processtask.FieldAssignedTime, processtask.FieldStartedTime, processtask.FieldCompletedTime, processtask.FieldCreatedAt, processtask.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -238,6 +248,36 @@ func (_m *ProcessTask) assignValues(columns []string, values []any) error {
 				if err := json.Unmarshal(*value, &_m.TaskVariables); err != nil {
 					return fmt.Errorf("unmarshal field task_variables: %w", err)
 				}
+			}
+		case processtask.FieldCallbackHandlerID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field callback_handler_id", values[i])
+			} else if value.Valid {
+				_m.CallbackHandlerID = value.String
+			}
+		case processtask.FieldCallbackTaskType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field callback_task_type", values[i])
+			} else if value.Valid {
+				_m.CallbackTaskType = value.String
+			}
+		case processtask.FieldCallbackAction:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field callback_action", values[i])
+			} else if value.Valid {
+				_m.CallbackAction = value.String
+			}
+		case processtask.FieldCallbackConfigRef:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field callback_config_ref", values[i])
+			} else if value.Valid {
+				_m.CallbackConfigRef = value.String
+			}
+		case processtask.FieldAggregationVersion:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field aggregation_version", values[i])
+			} else if value.Valid {
+				_m.AggregationVersion = int(value.Int64)
 			}
 		case processtask.FieldDescription:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -375,6 +415,21 @@ func (_m *ProcessTask) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("task_variables=")
 	builder.WriteString(fmt.Sprintf("%v", _m.TaskVariables))
+	builder.WriteString(", ")
+	builder.WriteString("callback_handler_id=")
+	builder.WriteString(_m.CallbackHandlerID)
+	builder.WriteString(", ")
+	builder.WriteString("callback_task_type=")
+	builder.WriteString(_m.CallbackTaskType)
+	builder.WriteString(", ")
+	builder.WriteString("callback_action=")
+	builder.WriteString(_m.CallbackAction)
+	builder.WriteString(", ")
+	builder.WriteString("callback_config_ref=")
+	builder.WriteString(_m.CallbackConfigRef)
+	builder.WriteString(", ")
+	builder.WriteString("aggregation_version=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AggregationVersion))
 	builder.WriteString(", ")
 	builder.WriteString("description=")
 	builder.WriteString(_m.Description)

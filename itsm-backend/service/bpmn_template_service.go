@@ -100,7 +100,8 @@ func (s *BPMNTemplateService) syncTemplate(ctx context.Context, tmpl *TemplateIn
 	// 建定义）。复用版本服务而不是就地改写旧定义——运行中的实例仍引用旧版本，
 	// 就地改写会破坏运行中实例与已部署图的不可变契约。
 	versionSvc := NewBPMNVersionService(s.client, zap.NewNop().Sugar())
-	if _, err := versionSvc.CreateVersion(ctx, &CreateVersionRequest{
+	versionCtx := WithTrustedBPMNTenantContext(ctx, tenantID)
+	if _, err := versionSvc.CreateVersion(versionCtx, &CreateVersionRequest{
 		ProcessDefinitionKey: tmpl.ID,
 		TenantID:             tenantID,
 		Name:                 tmpl.Name,

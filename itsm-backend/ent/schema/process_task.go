@@ -70,8 +70,24 @@ func (ProcessTask) Fields() []ent.Field {
 			Comment("表单Key").
 			Optional(),
 		field.JSON("task_variables", map[string]interface{}{}).
-			Comment("任务变量").
+			Comment("参与者可编辑的任务表单变量；回调路由和系统元数据不得存放在此字段").
 			Optional(),
+		field.String("callback_handler_id").
+			Comment("创建任务时从流程定义解析的不可变回调处理器 ID；显式哨兵表示无回调或无法解析").
+			Optional(),
+		field.String("callback_task_type").
+			Comment("创建任务时从流程定义解析的不可变回调任务类型").
+			Optional(),
+		field.String("callback_action").
+			Comment("创建任务时从流程定义解析的不可变回调动作").
+			Optional(),
+		field.String("callback_config_ref").
+			Comment("创建任务时从流程定义解析的可信连接器配置引用，不包含端点或密钥").
+			Optional(),
+		field.Int("aggregation_version").
+			Comment("会签父任务聚合串行化版本；原子递增用于获取父行写锁").
+			NonNegative().
+			Default(0),
 		field.Text("description").
 			Comment("任务描述").
 			Optional(),

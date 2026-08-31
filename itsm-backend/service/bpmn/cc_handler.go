@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/group"
 	"itsm-backend/ent/role"
+	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketcc"
 	"itsm-backend/ent/user"
 
@@ -54,31 +55,35 @@ func (h *CCTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, vari
 	ccNotify := GetBoolFromVars(variables, "ccNotify", true)
 	notifyChannels := parseNotifyChannels(GetStringFromVars(variables, "notifyChannels"))
 	addedBy := GetIntFromVars(variables, "addedBy")
-	tenantID := GetIntFromVars(variables, "tenant_id")
+	tenantID, err := RequireTenantID(ctx, variables)
+	if err != nil {
+		return nil, err
+	}
 
 	if ticketID == 0 {
 		return nil, fmt.Errorf("工单ID不能为空")
-	}
-	if tenantID == 0 {
-		return nil, fmt.Errorf("租户ID不能为空")
 	}
 
 	h.logger.Infow(
 		"Executing CC task via BPMN",
 		"ticket_id", ticketID,
 		"cc_type", ccType,
-		"cc_user_ids", ccUserIds,
-		"cc_group_ids", ccGroupIds,
-		"cc_role_ids", ccRoleIds,
-		"cc_variable", ccVariable,
-		"added_by", addedBy,
 		"tenant_id", tenantID,
 	)
 
-	// 解析获取最终的抄送人ID列表
-	ccUsers, err := h.resolveCCUsers(ctx, ccType, ccUserIds, ccGroupIds, ccRoleIds, ccVariable, variables, tenantID)
+	tx, err := h.client.Tx(ctx)
 	if err != nil {
-		h.logger.Errorw("Failed to resolve CC users", "error", err)
+		return nil, fmt.Errorf("开启抄送任务事务失败")
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.Client().Ticket.Query().Where(ticket.ID(ticketID), ticket.TenantID(tenantID)).Only(ctx); err != nil {
+		return nil, fmt.Errorf("权威工单目标不存在")
+	}
+
+	// 解析获取最终的抄送人ID列表
+	ccUsers, err := h.resolveCCUsers(ctx, tx.Client(), ccType, ccUserIds, ccGroupIds, ccRoleIds, ccVariable, variables, tenantID)
+	if err != nil {
+		h.logger.Errorw("Failed to resolve CC users", "error_class", "recipient_validation")
 		return nil, err
 	}
 
@@ -97,18 +102,17 @@ func (h *CCTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, vari
 	var addedUsers []int
 	for _, ccUserID := range ccUsers {
 		// 检查是否已存在抄送记录
-		exists, err := h.client.TicketCC.Query().
+		exists, err := tx.Client().TicketCC.Query().
 			Where(ticketcc.TicketID(ticketID),
 				ticketcc.UserID(ccUserID),
 				ticketcc.TenantID(tenantID),
 				ticketcc.IsActive(true)).
 			Exist(ctx)
 		if err != nil {
-			h.logger.Warnw("Failed to check CC existence", "error", err, "user_id", ccUserID)
-			continue
+			return nil, fmt.Errorf("检查抄送关系失败")
 		}
 		if !exists {
-			err = h.client.TicketCC.Create().
+			err = tx.Client().TicketCC.Create().
 				SetTicketID(ticketID).
 				SetUserID(ccUserID).
 				SetAddedBy(addedBy).
@@ -117,8 +121,7 @@ func (h *CCTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, vari
 				SetIsActive(true).
 				Exec(ctx)
 			if err != nil {
-				h.logger.Warnw("Failed to add CC user", "error", err, "user_id", ccUserID)
-				continue
+				return nil, fmt.Errorf("创建抄送关系失败")
 			}
 			addedUsers = append(addedUsers, ccUserID)
 		}
@@ -126,7 +129,12 @@ func (h *CCTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, vari
 
 	// 发送通知给抄送人
 	if ccNotify && len(addedUsers) > 0 {
-		h.createCCNotifications(ctx, ticketID, addedUsers, notifyChannels, tenantID)
+		if err := h.createCCNotifications(ctx, tx.Client(), ticketID, addedUsers, notifyChannels, tenantID); err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("提交抄送任务事务失败")
 	}
 
 	return &dto.ServiceTaskResult{
@@ -139,22 +147,26 @@ func (h *CCTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, vari
 }
 
 // resolveCCUsers 解析抄送人ID列表
-func (h *CCTaskHandler) resolveCCUsers(ctx context.Context, ccType, ccUserIds, ccGroupIds, ccRoleIds, ccVariable string, variables map[string]interface{}, tenantID int) ([]int, error) {
+func (h *CCTaskHandler) resolveCCUsers(ctx context.Context, client *ent.Client, ccType, ccUserIds, ccGroupIds, ccRoleIds, ccVariable string, variables map[string]interface{}, tenantID int) ([]int, error) {
 	switch ccType {
 	case "user":
-		return h.parseCommaSeparatedInts(ccUserIds)
+		ids, err := h.parseCommaSeparatedInts(ccUserIds)
+		if err != nil {
+			return nil, err
+		}
+		return h.validateCCUsers(ctx, client, ids, tenantID)
 	case "group":
 		groupIds, err := h.parseCommaSeparatedInts(ccGroupIds)
 		if err != nil {
 			return nil, err
 		}
-		return h.getUserIDsFromGroups(ctx, groupIds, tenantID)
+		return h.getUserIDsFromGroups(ctx, client, groupIds, tenantID)
 	case "role":
 		roleIds, err := h.parseCommaSeparatedInts(ccRoleIds)
 		if err != nil {
 			return nil, err
 		}
-		return h.getUserIDsFromRoles(ctx, roleIds, tenantID)
+		return h.getUserIDsFromRoles(ctx, client, roleIds, tenantID)
 	case "variable":
 		if ccVariable == "" {
 			return nil, fmt.Errorf("动态变量名不能为空")
@@ -178,27 +190,57 @@ func (h *CCTaskHandler) resolveCCUsers(ctx context.Context, ccType, ccUserIds, c
 				case string:
 					id, err := strconv.Atoi(i)
 					if err != nil {
-						h.logger.Warnw("Invalid user ID in variable", "value", i, "error", err)
-						continue
+						return nil, fmt.Errorf("抄送用户ID格式无效")
 					}
 					res = append(res, id)
 				}
 			}
-			return res, nil
+			return h.validateCCUsers(ctx, client, res, tenantID)
 		case string:
 			// 尝试用逗号分隔解析
-			return h.parseCommaSeparatedInts(v)
+			ids, err := h.parseCommaSeparatedInts(v)
+			if err != nil {
+				return nil, err
+			}
+			return h.validateCCUsers(ctx, client, ids, tenantID)
 		case int:
-			return []int{v}, nil
+			return h.validateCCUsers(ctx, client, []int{v}, tenantID)
 		case float64:
-			return []int{int(v)}, nil
+			return h.validateCCUsers(ctx, client, []int{int(v)}, tenantID)
 		default:
 			return nil, fmt.Errorf("不支持的变量类型 %T", v)
 		}
 	default:
 		// 默认按用户ID处理
-		return h.parseCommaSeparatedInts(ccUserIds)
+		ids, err := h.parseCommaSeparatedInts(ccUserIds)
+		if err != nil {
+			return nil, err
+		}
+		return h.validateCCUsers(ctx, client, ids, tenantID)
 	}
+}
+
+func (h *CCTaskHandler) validateCCUsers(ctx context.Context, client *ent.Client, ids []int, tenantID int) ([]int, error) {
+	unique := make(map[int]struct{}, len(ids))
+	for _, id := range ids {
+		if id > 0 {
+			unique[id] = struct{}{}
+		}
+	}
+	if len(unique) == 0 {
+		return []int{}, nil
+	}
+	requested := make([]int, 0, len(unique))
+	for id := range unique {
+		requested = append(requested, id)
+	}
+	resolved, err := client.User.Query().Where(
+		user.IDIn(requested...), user.TenantID(tenantID), user.Active(true),
+	).Select(user.FieldID).Ints(ctx)
+	if err != nil || len(resolved) != len(requested) {
+		return nil, fmt.Errorf("抄送用户不存在或不属于当前租户")
+	}
+	return resolved, nil
 }
 
 // parseCommaSeparatedInts 解析逗号分隔的整数列表
@@ -222,8 +264,7 @@ func (h *CCTaskHandler) parseCommaSeparatedInts(str string) ([]int, error) {
 		}
 		id, err := strconv.Atoi(part)
 		if err != nil {
-			h.logger.Warnw("Invalid user ID", "value", part, "error", err)
-			continue
+			return nil, fmt.Errorf("抄送用户ID格式无效")
 		}
 		res = append(res, id)
 	}
@@ -231,11 +272,11 @@ func (h *CCTaskHandler) parseCommaSeparatedInts(str string) ([]int, error) {
 }
 
 // getUserIDsFromGroups 根据用户组ID获取用户ID列表
-func (h *CCTaskHandler) getUserIDsFromGroups(ctx context.Context, groupIds []int, tenantID int) ([]int, error) {
+func (h *CCTaskHandler) getUserIDsFromGroups(ctx context.Context, client *ent.Client, groupIds []int, tenantID int) ([]int, error) {
 	if len(groupIds) == 0 {
 		return []int{}, nil
 	}
-	users, err := h.client.User.Query().
+	users, err := client.User.Query().
 		Where(user.TenantID(tenantID), user.HasGroupsWith(group.IDIn(groupIds...))).
 		Select(user.FieldID).
 		Ints(ctx)
@@ -246,11 +287,11 @@ func (h *CCTaskHandler) getUserIDsFromGroups(ctx context.Context, groupIds []int
 }
 
 // getUserIDsFromRoles 根据角色ID获取用户ID列表
-func (h *CCTaskHandler) getUserIDsFromRoles(ctx context.Context, roleIds []int, tenantID int) ([]int, error) {
+func (h *CCTaskHandler) getUserIDsFromRoles(ctx context.Context, client *ent.Client, roleIds []int, tenantID int) ([]int, error) {
 	if len(roleIds) == 0 {
 		return []int{}, nil
 	}
-	users, err := h.client.User.Query().
+	users, err := client.User.Query().
 		Where(user.TenantID(tenantID), user.HasRolesWith(role.IDIn(roleIds...))).
 		Select(user.FieldID).
 		Ints(ctx)
@@ -292,17 +333,17 @@ func parseNotifyChannels(value string) []string {
 	return channels
 }
 
-func (h *CCTaskHandler) createCCNotifications(ctx context.Context, ticketID int, userIDs []int, channels []string, tenantID int) {
-	ticketEntity, err := h.client.Ticket.Get(ctx, ticketID)
+func (h *CCTaskHandler) createCCNotifications(ctx context.Context, client *ent.Client, ticketID int, userIDs []int, channels []string, tenantID int) error {
+	ticketEntity, err := client.Ticket.Query().Where(ticket.ID(ticketID), ticket.TenantID(tenantID)).Only(ctx)
 	if err != nil {
-		h.logger.Warnw("Failed to get ticket for CC notification", "error", err, "ticket_id", ticketID)
-		return
+		return fmt.Errorf("获取抄送通知工单失败")
 	}
 	now := time.Now()
 	content := fmt.Sprintf("工单 %s「%s」已抄送给你", ticketEntity.TicketNumber, ticketEntity.Title)
+	executionKey, hasExecutionKey := BPMNCallbackExecutionKey(ctx)
 	for _, userID := range userIDs {
 		for _, channel := range channels {
-			create := h.client.TicketNotification.Create().
+			create := client.TicketNotification.Create().
 				SetTicketID(ticketID).
 				SetUserID(userID).
 				SetType("cc").
@@ -313,22 +354,29 @@ func (h *CCTaskHandler) createCCNotifications(ctx context.Context, ticketID int,
 			if channel == "in_app" {
 				create.SetStatus("sent").SetSentAt(now)
 			}
+			if hasExecutionKey {
+				create.SetDeliveryKey(executionKey)
+			}
 			if _, err := create.Save(ctx); err != nil {
-				h.logger.Warnw("Failed to create BPMN CC notification", "error", err, "ticket_id", ticketID, "user_id", userID, "channel", channel)
+				return fmt.Errorf("创建抄送通知失败")
 			}
 		}
-		if _, err := h.client.Notification.Create().
+		create := client.Notification.Create().
 			SetTitle("工单抄送").
 			SetMessage(content).
 			SetType("info").
 			SetUserID(userID).
 			SetTenantID(tenantID).
 			SetActionURL(fmt.Sprintf("/tickets/%d", ticketID)).
-			SetActionText("查看工单").
-			Save(ctx); err != nil {
-			h.logger.Warnw("Failed to create BPMN unified CC notification", "error", err, "ticket_id", ticketID, "user_id", userID)
+			SetActionText("查看工单")
+		if hasExecutionKey {
+			create.SetDeliveryKey(executionKey)
+		}
+		if _, err := create.Save(ctx); err != nil {
+			return fmt.Errorf("创建统一抄送通知失败")
 		}
 	}
+	return nil
 }
 
 // Validate 验证配置

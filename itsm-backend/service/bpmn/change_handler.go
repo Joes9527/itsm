@@ -87,10 +87,7 @@ func (h *ChangeServiceTaskHandler) Execute(ctx context.Context, task *ent.Proces
 	case "notify_stakeholders":
 		return h.notifyStakeholders(ctx, variables)
 	default:
-		return &dto.ServiceTaskResult{
-			Success: true,
-			Message: "无操作执行",
-		}, nil
+		return nil, fmt.Errorf("不支持的变更回调动作")
 	}
 }
 
@@ -103,6 +100,9 @@ func (h *ChangeServiceTaskHandler) Validate(ctx context.Context, config map[stri
 // ChangeDomainServiceInterface 窄接口），不再直接 h.client.Change.Create()——那样会绕开
 // WorkItem 的事务化创建，见 ChangeDomainServiceInterface 的注释。
 func (h *ChangeServiceTaskHandler) createChange(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+	if _, durable := BPMNCallbackExecutionKey(ctx); durable {
+		return nil, fmt.Errorf("持久化回调必须使用流程实例中的既有变更目标")
+	}
 	title, _ := variables["title"].(string)
 	description, _ := variables["description"].(string)
 	changeType, _ := variables["type"].(string)
@@ -257,11 +257,9 @@ func (h *ChangeServiceTaskHandler) scheduleChange(ctx context.Context, variables
 		return nil, fmt.Errorf("查询变更失败: %w", err)
 	}
 
-	// 第一跳：转移状态为 approved（CAB 批准后的状态，所有类型都要经过）。已经在
-	// approved（或更靠后的状态）时跳过——重试场景下 scheduleChange 可能不是第一次
-	// 被调用（比如上一次调用完成了这一跳但后续步骤失败），再跑一次 draft/submitted
-	// -> approved 这类前向转换会被 canonical 状态机拒绝，不能把这种重试误判为非法。
-	if current.Status != "approved" {
+	// A completed first delivery leaves normal/standard changes in scheduled. A retry
+	// must never walk that desired state backwards through approved.
+	if current.Status != "approved" && current.Status != "scheduled" {
 		if err := h.transitionChangeStatus(ctx, tenantID, changeID, "approved"); err != nil {
 			return nil, err
 		}
@@ -278,7 +276,7 @@ func (h *ChangeServiceTaskHandler) scheduleChange(ctx context.Context, variables
 	}
 
 	// 第二跳：仅当该变更类型的状态机允许 approved -> scheduled 时才推进
-	if isValidChangeStatusTransition("approved", "scheduled", c.Type) {
+	if c.Status == "approved" && isValidChangeStatusTransition("approved", "scheduled", c.Type) {
 		if err := h.transitionChangeStatus(ctx, tenantID, changeID, "scheduled"); err != nil {
 			return nil, err
 		}
@@ -326,6 +324,9 @@ func (h *ChangeServiceTaskHandler) transitionChangeStatus(ctx context.Context, t
 		}
 		return fmt.Errorf("查询变更失败: %w", err)
 	}
+	if c.Status == targetStatus {
+		return nil
+	}
 	if !isValidChangeStatusTransition(c.Status, targetStatus, c.Type) {
 		return fmt.Errorf("无效的状态转换: 从 %q 到 %q", c.Status, targetStatus)
 	}
@@ -362,9 +363,13 @@ func (h *ChangeServiceTaskHandler) implementChange(ctx context.Context, variable
 		return nil, fmt.Errorf("查询变更失败: %w", err)
 	}
 
-	// entity.Status == "in_progress" 放行：回调重试落在已经生效的目标状态上，不是新
-	// 转换，不应该报错（canonical 状态机对终态/同值转换本来就不建模为"允许的转换"）。
-	if entity.Status != "in_progress" && !isValidChangeStatusTransition(entity.Status, "in_progress", entity.Type) {
+	if entity.Status == "in_progress" {
+		return &dto.ServiceTaskResult{
+			Success: true,
+			Message: fmt.Sprintf("变更 %d 已在实施中", changeID),
+		}, nil
+	}
+	if !isValidChangeStatusTransition(entity.Status, "in_progress", entity.Type) {
 		return nil, fmt.Errorf("非法的变更状态转换: %s -> %s", entity.Status, "in_progress")
 	}
 
@@ -419,8 +424,10 @@ func (h *ChangeServiceTaskHandler) verifyChange(ctx context.Context, variables m
 		return nil, fmt.Errorf("非法的变更状态转换: %s -> %s", entity.Status, newStatus)
 	}
 
-	if _, err := entity.Update().SetStatus(newStatus).Save(ctx); err != nil {
-		return nil, fmt.Errorf("验证变更失败: %w", err)
+	if entity.Status != newStatus {
+		if _, err := entity.Update().SetStatus(newStatus).Save(ctx); err != nil {
+			return nil, fmt.Errorf("验证变更失败: %w", err)
+		}
 	}
 
 	h.logger.Infow("Change verification via BPMN", "change_id", changeID, "result", verificationResult)
@@ -459,12 +466,14 @@ func (h *ChangeServiceTaskHandler) closeChange(ctx context.Context, variables ma
 		return nil, fmt.Errorf("非法的变更状态转换: %s -> %s", entity.Status, "completed")
 	}
 
-	now := time.Now()
-	if _, err := entity.Update().
-		SetStatus("completed").
-		SetActualEndDate(now).
-		Save(ctx); err != nil {
-		return nil, fmt.Errorf("关闭变更失败: %w", err)
+	if entity.Status != "completed" {
+		now := time.Now()
+		if _, err := entity.Update().
+			SetStatus("completed").
+			SetActualEndDate(now).
+			Save(ctx); err != nil {
+			return nil, fmt.Errorf("关闭变更失败: %w", err)
+		}
 	}
 
 	h.logger.Infow("Change closed via BPMN", "change_id", changeID, "feedback", feedback)

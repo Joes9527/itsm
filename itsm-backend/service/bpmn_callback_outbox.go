@@ -19,8 +19,6 @@ const (
 	bpmnCallbackStatusProcessing = "processing"
 	bpmnCallbackStatusCompleted  = "completed"
 	bpmnCallbackLeaseDuration    = 60 * time.Second
-
-	bpmnUnresolvedUserTaskCallbackHandlerID = "__unresolved_user_task_callback__"
 )
 
 type bpmnCallbackEnqueueRequest struct {
@@ -33,6 +31,8 @@ type bpmnCallbackEnqueueRequest struct {
 	HandlerID         string
 	TaskType          string
 	ElementID         string
+	Action            string
+	ConfigRef         string
 	Variables         map[string]interface{}
 }
 
@@ -96,6 +96,8 @@ func (o *bpmnCallbackOutbox) enqueue(ctx context.Context, client *ent.Client, re
 		SetHandlerID(request.HandlerID).
 		SetTaskType(request.TaskType).
 		SetElementID(request.ElementID).
+		SetAction(request.Action).
+		SetConfigRef(request.ConfigRef).
 		SetStatus(bpmnCallbackStatusPending).
 		SetNextAttemptAt(o.clock())
 	if request.ProcessTaskID > 0 {
@@ -427,7 +429,10 @@ func bpmnCallbackTenantID(ctx context.Context) (int, error) {
 func copyBPMNCallbackVariables(variables map[string]interface{}) map[string]interface{} {
 	copy := make(map[string]interface{}, len(variables)+1)
 	for key, value := range variables {
-		copy[key] = value
+		cloned, err := cloneBPMNJSONValue(value, 0)
+		if err == nil {
+			copy[key] = cloned
+		}
 	}
 	return copy
 }

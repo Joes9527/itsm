@@ -94,7 +94,8 @@ func configureStartProcessDefinition(t *testing.T, f *bpmnAuthorizationFixture, 
 func startProcessContext(f *bpmnAuthorizationFixture) context.Context {
 	ctx := context.WithValue(f.userCtx, bpmn.BPMNTenantIDContextKey, f.tenant.ID)
 	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, f.actor.ID)
-	return context.WithValue(ctx, "user", f.actor)
+	ctx = context.WithValue(ctx, "user", f.actor)
+	return WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: f.actor.ID, TenantID: f.tenant.ID})
 }
 
 func assertNoStartedProcessState(t *testing.T, f *bpmnAuthorizationFixture) {
