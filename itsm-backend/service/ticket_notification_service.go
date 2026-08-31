@@ -3,8 +3,10 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
+	"itsm-backend/connector"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/ticket"
@@ -19,12 +21,14 @@ func ticketNotificationStringPtr(s string) *string {
 }
 
 type TicketNotificationService struct {
-	client       *ent.Client
-	logger       *zap.SugaredLogger
-	emailService *EmailService
-	smsService   *SMSService
-	prefService  *NotificationPreferenceService // 按 event_type 查偏好
-	wsService    *WebSocketService              // push 渠道（WebSocket）
+	client           *ent.Client
+	logger           *zap.SugaredLogger
+	connectorManager *connector.Manager
+	emailService     *EmailService
+	smsService       *SMSService
+	prefService      *NotificationPreferenceService // 按 event_type 查偏好
+	wsService        *WebSocketService              // push 渠道（WebSocket）
+	now              func() time.Time
 }
 
 // NewTicketNotificationService 创建通知服务
@@ -32,7 +36,293 @@ func NewTicketNotificationService(client *ent.Client, logger *zap.SugaredLogger)
 	return &TicketNotificationService{
 		client: client,
 		logger: logger,
+		now:    time.Now,
 	}
+}
+
+// SetConnectorManager injects the connector runtime used by durable external deliveries.
+func (s *TicketNotificationService) SetConnectorManager(manager *connector.Manager) {
+	s.connectorManager = manager
+}
+
+const (
+	ticketNotificationStatusPending    = "pending"
+	ticketNotificationStatusProcessing = "processing"
+	ticketNotificationStatusSent       = "sent"
+	ticketNotificationLeaseDuration    = 60 * time.Second
+)
+
+// ProcessPendingDeliveries performs one deterministic durable notification sweep.
+func (s *TicketNotificationService) ProcessPendingDeliveries(ctx context.Context, workerID string, limit int) (int, error) {
+	if err := validateTicketNotificationWorkerID(workerID); err != nil {
+		return 0, err
+	}
+	if s.client == nil {
+		return 0, fmt.Errorf("ticket notification client is required")
+	}
+	if limit <= 0 {
+		return 0, nil
+	}
+
+	now := s.clock()
+	candidates, err := s.client.TicketNotification.Query().
+		Where(
+			ticketnotification.DeliveryKeyNotNil(),
+			ticketnotification.ChannelNEQ("in_app"),
+			ticketnotification.Or(
+				ticketnotification.And(
+					ticketnotification.StatusEQ(ticketNotificationStatusPending),
+					ticketnotification.NextAttemptAtLTE(now),
+				),
+				ticketnotification.And(
+					ticketnotification.StatusEQ(ticketNotificationStatusProcessing),
+					ticketnotification.LeaseExpiresAtLT(now),
+				),
+			),
+		).
+		Order(ent.Asc(ticketnotification.FieldNextAttemptAt), ent.Asc(ticketnotification.FieldID)).
+		Limit(limit).
+		All(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("ticket notification candidate scan failed")
+	}
+
+	completed := 0
+	failed := false
+	for _, row := range candidates {
+		claimed, claimErr := s.claimDelivery(ctx, workerID, row)
+		if claimErr != nil {
+			failed = true
+			continue
+		}
+		if !claimed {
+			continue
+		}
+
+		claimedRow := *row
+		claimedRow.Status = ticketNotificationStatusProcessing
+		claimedRow.AttemptCount++
+		claimedRow.LeaseOwner = workerID
+		claimedRow.LeaseExpiresAt = s.clock().Add(ticketNotificationLeaseDuration)
+		errorClass := s.dispatchClaimedDelivery(ctx, &claimedRow)
+		if errorClass != "" {
+			failed = true
+			_ = s.retryDelivery(ctx, workerID, &claimedRow, errorClass)
+			continue
+		}
+		completedRow, completeErr := s.completeDelivery(ctx, workerID, &claimedRow)
+		if completeErr != nil || !completedRow {
+			failed = true
+			continue
+		}
+		completed++
+	}
+	if failed {
+		return completed, fmt.Errorf("one or more ticket notifications were not completed")
+	}
+	return completed, nil
+}
+
+// RunDeliveryWorker performs an immediate sweep and polls until cancellation.
+func (s *TicketNotificationService) RunDeliveryWorker(ctx context.Context, workerID string, interval time.Duration) {
+	if validateTicketNotificationWorkerID(workerID) != nil {
+		return
+	}
+	if interval <= 0 {
+		interval = 2 * time.Second
+	}
+	s.runDeliverySweep(ctx, workerID)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			s.runDeliverySweep(ctx, workerID)
+		}
+	}
+}
+
+func (s *TicketNotificationService) runDeliverySweep(ctx context.Context, workerID string) {
+	if _, err := s.ProcessPendingDeliveries(ctx, workerID, 50); err != nil && s.logger != nil {
+		s.logger.Warnw("ticket notification delivery sweep incomplete",
+			"worker_id", workerID,
+			"error_class", "notification_sweep_error",
+		)
+	}
+}
+
+func (s *TicketNotificationService) claimDelivery(ctx context.Context, workerID string, row *ent.TicketNotification) (bool, error) {
+	if row == nil || row.TenantID <= 0 {
+		return false, fmt.Errorf("ticket notification row is missing tenant")
+	}
+	now := s.clock()
+	affected, err := s.client.TicketNotification.Update().
+		Where(
+			ticketnotification.ID(row.ID),
+			ticketnotification.TenantID(row.TenantID),
+			ticketnotification.DeliveryKeyNotNil(),
+			ticketnotification.Or(
+				ticketnotification.And(
+					ticketnotification.StatusEQ(ticketNotificationStatusPending),
+					ticketnotification.NextAttemptAtLTE(now),
+				),
+				ticketnotification.And(
+					ticketnotification.StatusEQ(ticketNotificationStatusProcessing),
+					ticketnotification.LeaseExpiresAtLT(now),
+				),
+			),
+		).
+		SetStatus(ticketNotificationStatusProcessing).
+		SetLeaseOwner(workerID).
+		SetLeaseExpiresAt(now.Add(ticketNotificationLeaseDuration)).
+		AddAttemptCount(1).
+		Save(ctx)
+	if err != nil {
+		return false, fmt.Errorf("ticket notification claim failed")
+	}
+	return affected == 1, nil
+}
+
+func (s *TicketNotificationService) completeDelivery(ctx context.Context, workerID string, row *ent.TicketNotification) (bool, error) {
+	affected, err := s.client.TicketNotification.Update().
+		Where(
+			ticketnotification.ID(row.ID),
+			ticketnotification.TenantID(row.TenantID),
+			ticketnotification.StatusEQ(ticketNotificationStatusProcessing),
+			ticketnotification.LeaseOwner(workerID),
+		).
+		SetStatus(ticketNotificationStatusSent).
+		SetSentAt(s.clock()).
+		ClearLeaseOwner().
+		ClearLeaseExpiresAt().
+		ClearLastErrorClass().
+		Save(ctx)
+	if err != nil {
+		return false, fmt.Errorf("ticket notification completion failed")
+	}
+	return affected == 1, nil
+}
+
+func (s *TicketNotificationService) retryDelivery(ctx context.Context, workerID string, row *ent.TicketNotification, errorClass string) error {
+	if !isTicketNotificationErrorClass(errorClass) {
+		errorClass = "unknown_error"
+	}
+	affected, err := s.client.TicketNotification.Update().
+		Where(
+			ticketnotification.ID(row.ID),
+			ticketnotification.TenantID(row.TenantID),
+			ticketnotification.StatusEQ(ticketNotificationStatusProcessing),
+			ticketnotification.LeaseOwner(workerID),
+		).
+		SetStatus(ticketNotificationStatusPending).
+		SetNextAttemptAt(s.clock().Add(ticketNotificationRetryDelay(row.AttemptCount))).
+		SetLastErrorClass(errorClass).
+		ClearLeaseOwner().
+		ClearLeaseExpiresAt().
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("ticket notification retry scheduling failed")
+	}
+	if affected != 1 {
+		return fmt.Errorf("ticket notification lease lost")
+	}
+	return nil
+}
+
+func (s *TicketNotificationService) dispatchClaimedDelivery(ctx context.Context, row *ent.TicketNotification) string {
+	if s.connectorManager == nil {
+		return "connector_unavailable"
+	}
+	ticketEntity, err := s.client.Ticket.Query().Where(ticket.ID(row.TicketID), ticket.TenantID(row.TenantID)).Only(ctx)
+	if err != nil {
+		return "delivery_target_invalid"
+	}
+	userEntity, err := s.client.User.Query().Where(user.ID(row.UserID), user.TenantID(row.TenantID), user.Active(true)).Only(ctx)
+	if err != nil {
+		return "delivery_target_invalid"
+	}
+	deliveryKey := ""
+	if row.DeliveryKey != nil {
+		deliveryKey = strings.TrimSpace(*row.DeliveryKey)
+	}
+	if deliveryKey == "" {
+		return "delivery_target_invalid"
+	}
+	target := ticketNotificationTarget(row.Channel, userEntity)
+	if target == "" {
+		return "delivery_target_invalid"
+	}
+	if err := s.connectorManager.Send(ctx, row.TenantID, row.Channel, &connector.Message{
+		ID:      deliveryKey,
+		Channel: target,
+		Type:    "text",
+		Title:   "工单抄送",
+		Content: row.Content,
+		Actions: []connector.Action{{Type: "link", Text: "查看工单", URL: fmt.Sprintf("/tickets/%d", ticketEntity.ID)}},
+		Metadata: map[string]interface{}{
+			"delivery_key":  deliveryKey,
+			"ticket_id":     ticketEntity.ID,
+			"ticket_number": ticketEntity.TicketNumber,
+			"event":         "ticket_cc",
+		},
+	}); err != nil {
+		return "connector_send"
+	}
+	return ""
+}
+
+func ticketNotificationTarget(channel string, recipient *ent.User) string {
+	if recipient == nil {
+		return ""
+	}
+	switch channel {
+	case "feishu":
+		return recipient.FeishuOpenID
+	case "dingtalk", "wecom":
+		return recipient.Username
+	case "email", "webhook":
+		return recipient.Email
+	case "sms":
+		return recipient.Phone
+	default:
+		return ""
+	}
+}
+
+func (s *TicketNotificationService) clock() time.Time {
+	if s.now != nil {
+		return s.now()
+	}
+	return time.Now()
+}
+
+func validateTicketNotificationWorkerID(workerID string) error {
+	workerID = strings.TrimSpace(workerID)
+	if workerID == "" || len(workerID) > 255 {
+		return fmt.Errorf("ticket notification worker id is invalid")
+	}
+	return nil
+}
+
+func isTicketNotificationErrorClass(errorClass string) bool {
+	switch errorClass {
+	case "connector_unavailable", "connector_send", "delivery_target_invalid", "unknown_error":
+		return true
+	default:
+		return false
+	}
+}
+
+func ticketNotificationRetryDelay(attempt int) time.Duration {
+	if attempt < 1 {
+		attempt = 1
+	}
+	if attempt >= 10 {
+		return 5 * time.Minute
+	}
+	return time.Second << (attempt - 1)
 }
 
 // SetEmailService 设置邮件服务

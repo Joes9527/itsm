@@ -13,7 +13,6 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"itsm-backend/connector"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
@@ -25,34 +24,6 @@ import (
 )
 
 // ==================== TicketWorkflowService 测试设置 ====================
-
-type ticketWorkflowCCConnector struct {
-	sent int32
-}
-
-func (c *ticketWorkflowCCConnector) Manifest() connector.Manifest {
-	return connector.Manifest{
-		Name:                "email",
-		Version:             "1.0.0",
-		Title:               "Ticket workflow CC test connector",
-		Type:                connector.TypeEmail,
-		Capabilities:        []connector.Capability{connector.CapSendMessage},
-		RequiredPermissions: []string{"connector:write"},
-	}
-}
-
-func (c *ticketWorkflowCCConnector) Init(context.Context, connector.Config) error { return nil }
-
-func (c *ticketWorkflowCCConnector) Send(context.Context, *connector.Message) error {
-	atomic.AddInt32(&c.sent, 1)
-	return nil
-}
-
-func (c *ticketWorkflowCCConnector) HealthCheck(context.Context) connector.HealthStatus {
-	return connector.HealthStatus{OK: true}
-}
-
-func (c *ticketWorkflowCCConnector) Close() error { return nil }
 
 func setupTicketWorkflowTest(t *testing.T) (*TicketWorkflowService, *ent.Client, context.Context) {
 	client := enttest.Open(t, "sqlite3", "file:ticket_workflow_test?mode=memory&cache=shared&_fk=1")
@@ -97,24 +68,6 @@ func createTicketWorkflowTestTicket(ctx context.Context, client *ent.Client, ten
 		Save(ctx)
 }
 
-func setupTicketWorkflowCCConnector(t *testing.T, service *TicketWorkflowService, ctx context.Context, tenantID int) *ticketWorkflowCCConnector {
-	t.Helper()
-	fake := &ticketWorkflowCCConnector{}
-	registry := connector.NewRegistry()
-	registry.Register(func() connector.Connector { return fake })
-	manager := connector.NewManager(registry, zaptest.NewLogger(t).Sugar())
-	require.NoError(t, manager.Provision(ctx, connector.Config{
-		TenantID: tenantID,
-		Name:     "email",
-		Type:     connector.TypeEmail,
-		Provider: "task-3-test",
-		Enabled:  true,
-	}))
-	t.Cleanup(manager.CloseAll)
-	service.SetConnectorManager(manager)
-	return fake
-}
-
 // ==================== TicketWorkflowService 基础测试 ====================
 
 func TestTicketWorkflowService_NewTicketWorkflowService(t *testing.T) {
@@ -127,16 +80,6 @@ func TestTicketWorkflowService_NewTicketWorkflowService(t *testing.T) {
 	assert.NotNil(t, service)
 	assert.Equal(t, client, service.client)
 	assert.Equal(t, logger, service.logger)
-}
-
-func TestTicketWorkflowService_SetConnectorManager(t *testing.T) {
-	service, client, _ := setupTicketWorkflowTest(t)
-	defer client.Close()
-
-	// 测试 SetConnectorManager 方法
-	service.SetConnectorManager(nil)
-	// 不应 panic
-	assert.NotNil(t, service)
 }
 
 func TestCCTicketReactivatesHighestInactiveRow(t *testing.T) {
@@ -365,7 +308,9 @@ func TestCCTicketDoesNotDispatchConnectorBeforeTransactionCommit(t *testing.T) {
 	require.NoError(t, err)
 	tk, err := createTicketWorkflowTestTicket(ctx, client, tenant.ID, operator.ID, "open")
 	require.NoError(t, err)
-	fake := setupTicketWorkflowCCConnector(t, service, ctx, tenant.ID)
+	notificationService := NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar())
+	fake := &durableNotificationConnector{}
+	configureDurableNotificationConnector(t, notificationService, tenant.ID, fake)
 	client.Use(func(next ent.Mutator) ent.Mutator {
 		return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
 			if _, ok := mutation.(*ent.TicketWorkflowRecordMutation); ok {
@@ -382,14 +327,14 @@ func TestCCTicketDoesNotDispatchConnectorBeforeTransactionCommit(t *testing.T) {
 	}, operator.ID, tenant.ID)
 
 	require.ErrorContains(t, err, "injected history failure before connector dispatch")
-	assert.Zero(t, atomic.LoadInt32(&fake.sent))
+	assert.Empty(t, fake.sentMessages())
 	assert.Zero(t, client.TicketCC.Query().CountX(ctx))
 	assert.Zero(t, client.TicketNotification.Query().CountX(ctx))
 	assert.Zero(t, client.Notification.Query().CountX(ctx))
 	assert.Zero(t, client.TicketWorkflowRecord.Query().CountX(ctx))
 }
 
-func TestCCTicketDispatchesConnectorAfterCommittedEffects(t *testing.T) {
+func TestCCTicketPersistsExternalDeliveryWithoutDispatch(t *testing.T) {
 	service, client, ctx := setupTicketWorkflowTest(t)
 	t.Cleanup(func() { _ = client.Close() })
 	tenant, err := createTicketWorkflowTestTenant(ctx, client, "cc-connector-success")
@@ -400,7 +345,9 @@ func TestCCTicketDispatchesConnectorAfterCommittedEffects(t *testing.T) {
 	require.NoError(t, err)
 	tk, err := createTicketWorkflowTestTicket(ctx, client, tenant.ID, operator.ID, "open")
 	require.NoError(t, err)
-	fake := setupTicketWorkflowCCConnector(t, service, ctx, tenant.ID)
+	notificationService := NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar())
+	fake := &durableNotificationConnector{}
+	configureDurableNotificationConnector(t, notificationService, tenant.ID, fake)
 
 	err = service.CCTicket(ctx, &dto.CCTicketRequest{
 		TicketID:       tk.ID,
@@ -409,13 +356,39 @@ func TestCCTicketDispatchesConnectorAfterCommittedEffects(t *testing.T) {
 	}, operator.ID, tenant.ID)
 
 	require.NoError(t, err)
-	assert.Equal(t, int32(1), atomic.LoadInt32(&fake.sent))
+	assert.Empty(t, fake.sentMessages())
 	notification := client.TicketNotification.Query().OnlyX(ctx)
-	assert.Equal(t, "sent", notification.Status)
-	assert.False(t, notification.SentAt.IsZero())
+	assert.Equal(t, "pending", notification.Status)
+	assert.True(t, notification.SentAt.IsZero())
+	assert.NotEmpty(t, notification.DeliveryKey)
 	assert.Equal(t, 1, client.TicketCC.Query().CountX(ctx))
 	assert.Equal(t, 1, client.Notification.Query().CountX(ctx))
 	assert.Equal(t, 1, client.TicketWorkflowRecord.Query().CountX(ctx))
+}
+
+func TestCCTicketPersistsExternalDeliveryWhenConnectorManagerUnavailable(t *testing.T) {
+	service, client, ctx := setupTicketWorkflowTest(t)
+	t.Cleanup(func() { _ = client.Close() })
+	tenant, err := createTicketWorkflowTestTenant(ctx, client, "cc-connector-unavailable")
+	require.NoError(t, err)
+	operator, err := createTicketWorkflowTestUser(ctx, client, tenant.ID, "cc-connector-unavailable-operator")
+	require.NoError(t, err)
+	recipient, err := createTicketWorkflowTestUser(ctx, client, tenant.ID, "cc-connector-unavailable-recipient")
+	require.NoError(t, err)
+	tk, err := createTicketWorkflowTestTicket(ctx, client, tenant.ID, operator.ID, "open")
+	require.NoError(t, err)
+
+	err = service.CCTicket(ctx, &dto.CCTicketRequest{
+		TicketID:       tk.ID,
+		CCUsers:        []int{recipient.ID},
+		NotifyChannels: []string{"email"},
+	}, operator.ID, tenant.ID)
+
+	require.NoError(t, err)
+	notification := client.TicketNotification.Query().OnlyX(ctx)
+	assert.Equal(t, "pending", notification.Status)
+	assert.NotEmpty(t, notification.DeliveryKey)
+	assert.True(t, notification.SentAt.IsZero())
 }
 
 // ==================== TicketWorkflowService 状态转换测试 ====================

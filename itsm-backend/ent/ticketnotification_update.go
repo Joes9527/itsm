@@ -174,6 +174,101 @@ func (_u *TicketNotificationUpdate) ClearDeliveryKey() *TicketNotificationUpdate
 	return _u
 }
 
+// SetAttemptCount sets the "attempt_count" field.
+func (_u *TicketNotificationUpdate) SetAttemptCount(v int) *TicketNotificationUpdate {
+	_u.mutation.ResetAttemptCount()
+	_u.mutation.SetAttemptCount(v)
+	return _u
+}
+
+// SetNillableAttemptCount sets the "attempt_count" field if the given value is not nil.
+func (_u *TicketNotificationUpdate) SetNillableAttemptCount(v *int) *TicketNotificationUpdate {
+	if v != nil {
+		_u.SetAttemptCount(*v)
+	}
+	return _u
+}
+
+// AddAttemptCount adds value to the "attempt_count" field.
+func (_u *TicketNotificationUpdate) AddAttemptCount(v int) *TicketNotificationUpdate {
+	_u.mutation.AddAttemptCount(v)
+	return _u
+}
+
+// SetNextAttemptAt sets the "next_attempt_at" field.
+func (_u *TicketNotificationUpdate) SetNextAttemptAt(v time.Time) *TicketNotificationUpdate {
+	_u.mutation.SetNextAttemptAt(v)
+	return _u
+}
+
+// SetNillableNextAttemptAt sets the "next_attempt_at" field if the given value is not nil.
+func (_u *TicketNotificationUpdate) SetNillableNextAttemptAt(v *time.Time) *TicketNotificationUpdate {
+	if v != nil {
+		_u.SetNextAttemptAt(*v)
+	}
+	return _u
+}
+
+// SetLeaseOwner sets the "lease_owner" field.
+func (_u *TicketNotificationUpdate) SetLeaseOwner(v string) *TicketNotificationUpdate {
+	_u.mutation.SetLeaseOwner(v)
+	return _u
+}
+
+// SetNillableLeaseOwner sets the "lease_owner" field if the given value is not nil.
+func (_u *TicketNotificationUpdate) SetNillableLeaseOwner(v *string) *TicketNotificationUpdate {
+	if v != nil {
+		_u.SetLeaseOwner(*v)
+	}
+	return _u
+}
+
+// ClearLeaseOwner clears the value of the "lease_owner" field.
+func (_u *TicketNotificationUpdate) ClearLeaseOwner() *TicketNotificationUpdate {
+	_u.mutation.ClearLeaseOwner()
+	return _u
+}
+
+// SetLeaseExpiresAt sets the "lease_expires_at" field.
+func (_u *TicketNotificationUpdate) SetLeaseExpiresAt(v time.Time) *TicketNotificationUpdate {
+	_u.mutation.SetLeaseExpiresAt(v)
+	return _u
+}
+
+// SetNillableLeaseExpiresAt sets the "lease_expires_at" field if the given value is not nil.
+func (_u *TicketNotificationUpdate) SetNillableLeaseExpiresAt(v *time.Time) *TicketNotificationUpdate {
+	if v != nil {
+		_u.SetLeaseExpiresAt(*v)
+	}
+	return _u
+}
+
+// ClearLeaseExpiresAt clears the value of the "lease_expires_at" field.
+func (_u *TicketNotificationUpdate) ClearLeaseExpiresAt() *TicketNotificationUpdate {
+	_u.mutation.ClearLeaseExpiresAt()
+	return _u
+}
+
+// SetLastErrorClass sets the "last_error_class" field.
+func (_u *TicketNotificationUpdate) SetLastErrorClass(v string) *TicketNotificationUpdate {
+	_u.mutation.SetLastErrorClass(v)
+	return _u
+}
+
+// SetNillableLastErrorClass sets the "last_error_class" field if the given value is not nil.
+func (_u *TicketNotificationUpdate) SetNillableLastErrorClass(v *string) *TicketNotificationUpdate {
+	if v != nil {
+		_u.SetLastErrorClass(*v)
+	}
+	return _u
+}
+
+// ClearLastErrorClass clears the value of the "last_error_class" field.
+func (_u *TicketNotificationUpdate) ClearLastErrorClass() *TicketNotificationUpdate {
+	_u.mutation.ClearLastErrorClass()
+	return _u
+}
+
 // SetTenantID sets the "tenant_id" field.
 func (_u *TicketNotificationUpdate) SetTenantID(v int) *TicketNotificationUpdate {
 	_u.mutation.ResetTenantID()
@@ -285,6 +380,16 @@ func (_u *TicketNotificationUpdate) check() error {
 			return &ValidationError{Name: "content", err: fmt.Errorf(`ent: validator failed for field "TicketNotification.content": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.AttemptCount(); ok {
+		if err := ticketnotification.AttemptCountValidator(v); err != nil {
+			return &ValidationError{Name: "attempt_count", err: fmt.Errorf(`ent: validator failed for field "TicketNotification.attempt_count": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.LastErrorClass(); ok {
+		if err := ticketnotification.LastErrorClassValidator(v); err != nil {
+			return &ValidationError{Name: "last_error_class", err: fmt.Errorf(`ent: validator failed for field "TicketNotification.last_error_class": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.TenantID(); ok {
 		if err := ticketnotification.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "TicketNotification.tenant_id": %w`, err)}
@@ -340,6 +445,33 @@ func (_u *TicketNotificationUpdate) sqlSave(ctx context.Context) (_node int, err
 	}
 	if _u.mutation.DeliveryKeyCleared() {
 		_spec.ClearField(ticketnotification.FieldDeliveryKey, field.TypeString)
+	}
+	if value, ok := _u.mutation.AttemptCount(); ok {
+		_spec.SetField(ticketnotification.FieldAttemptCount, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedAttemptCount(); ok {
+		_spec.AddField(ticketnotification.FieldAttemptCount, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.NextAttemptAt(); ok {
+		_spec.SetField(ticketnotification.FieldNextAttemptAt, field.TypeTime, value)
+	}
+	if value, ok := _u.mutation.LeaseOwner(); ok {
+		_spec.SetField(ticketnotification.FieldLeaseOwner, field.TypeString, value)
+	}
+	if _u.mutation.LeaseOwnerCleared() {
+		_spec.ClearField(ticketnotification.FieldLeaseOwner, field.TypeString)
+	}
+	if value, ok := _u.mutation.LeaseExpiresAt(); ok {
+		_spec.SetField(ticketnotification.FieldLeaseExpiresAt, field.TypeTime, value)
+	}
+	if _u.mutation.LeaseExpiresAtCleared() {
+		_spec.ClearField(ticketnotification.FieldLeaseExpiresAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.LastErrorClass(); ok {
+		_spec.SetField(ticketnotification.FieldLastErrorClass, field.TypeString, value)
+	}
+	if _u.mutation.LastErrorClassCleared() {
+		_spec.ClearField(ticketnotification.FieldLastErrorClass, field.TypeString)
 	}
 	if value, ok := _u.mutation.TenantID(); ok {
 		_spec.SetField(ticketnotification.FieldTenantID, field.TypeInt, value)
@@ -572,6 +704,101 @@ func (_u *TicketNotificationUpdateOne) ClearDeliveryKey() *TicketNotificationUpd
 	return _u
 }
 
+// SetAttemptCount sets the "attempt_count" field.
+func (_u *TicketNotificationUpdateOne) SetAttemptCount(v int) *TicketNotificationUpdateOne {
+	_u.mutation.ResetAttemptCount()
+	_u.mutation.SetAttemptCount(v)
+	return _u
+}
+
+// SetNillableAttemptCount sets the "attempt_count" field if the given value is not nil.
+func (_u *TicketNotificationUpdateOne) SetNillableAttemptCount(v *int) *TicketNotificationUpdateOne {
+	if v != nil {
+		_u.SetAttemptCount(*v)
+	}
+	return _u
+}
+
+// AddAttemptCount adds value to the "attempt_count" field.
+func (_u *TicketNotificationUpdateOne) AddAttemptCount(v int) *TicketNotificationUpdateOne {
+	_u.mutation.AddAttemptCount(v)
+	return _u
+}
+
+// SetNextAttemptAt sets the "next_attempt_at" field.
+func (_u *TicketNotificationUpdateOne) SetNextAttemptAt(v time.Time) *TicketNotificationUpdateOne {
+	_u.mutation.SetNextAttemptAt(v)
+	return _u
+}
+
+// SetNillableNextAttemptAt sets the "next_attempt_at" field if the given value is not nil.
+func (_u *TicketNotificationUpdateOne) SetNillableNextAttemptAt(v *time.Time) *TicketNotificationUpdateOne {
+	if v != nil {
+		_u.SetNextAttemptAt(*v)
+	}
+	return _u
+}
+
+// SetLeaseOwner sets the "lease_owner" field.
+func (_u *TicketNotificationUpdateOne) SetLeaseOwner(v string) *TicketNotificationUpdateOne {
+	_u.mutation.SetLeaseOwner(v)
+	return _u
+}
+
+// SetNillableLeaseOwner sets the "lease_owner" field if the given value is not nil.
+func (_u *TicketNotificationUpdateOne) SetNillableLeaseOwner(v *string) *TicketNotificationUpdateOne {
+	if v != nil {
+		_u.SetLeaseOwner(*v)
+	}
+	return _u
+}
+
+// ClearLeaseOwner clears the value of the "lease_owner" field.
+func (_u *TicketNotificationUpdateOne) ClearLeaseOwner() *TicketNotificationUpdateOne {
+	_u.mutation.ClearLeaseOwner()
+	return _u
+}
+
+// SetLeaseExpiresAt sets the "lease_expires_at" field.
+func (_u *TicketNotificationUpdateOne) SetLeaseExpiresAt(v time.Time) *TicketNotificationUpdateOne {
+	_u.mutation.SetLeaseExpiresAt(v)
+	return _u
+}
+
+// SetNillableLeaseExpiresAt sets the "lease_expires_at" field if the given value is not nil.
+func (_u *TicketNotificationUpdateOne) SetNillableLeaseExpiresAt(v *time.Time) *TicketNotificationUpdateOne {
+	if v != nil {
+		_u.SetLeaseExpiresAt(*v)
+	}
+	return _u
+}
+
+// ClearLeaseExpiresAt clears the value of the "lease_expires_at" field.
+func (_u *TicketNotificationUpdateOne) ClearLeaseExpiresAt() *TicketNotificationUpdateOne {
+	_u.mutation.ClearLeaseExpiresAt()
+	return _u
+}
+
+// SetLastErrorClass sets the "last_error_class" field.
+func (_u *TicketNotificationUpdateOne) SetLastErrorClass(v string) *TicketNotificationUpdateOne {
+	_u.mutation.SetLastErrorClass(v)
+	return _u
+}
+
+// SetNillableLastErrorClass sets the "last_error_class" field if the given value is not nil.
+func (_u *TicketNotificationUpdateOne) SetNillableLastErrorClass(v *string) *TicketNotificationUpdateOne {
+	if v != nil {
+		_u.SetLastErrorClass(*v)
+	}
+	return _u
+}
+
+// ClearLastErrorClass clears the value of the "last_error_class" field.
+func (_u *TicketNotificationUpdateOne) ClearLastErrorClass() *TicketNotificationUpdateOne {
+	_u.mutation.ClearLastErrorClass()
+	return _u
+}
+
 // SetTenantID sets the "tenant_id" field.
 func (_u *TicketNotificationUpdateOne) SetTenantID(v int) *TicketNotificationUpdateOne {
 	_u.mutation.ResetTenantID()
@@ -696,6 +923,16 @@ func (_u *TicketNotificationUpdateOne) check() error {
 			return &ValidationError{Name: "content", err: fmt.Errorf(`ent: validator failed for field "TicketNotification.content": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.AttemptCount(); ok {
+		if err := ticketnotification.AttemptCountValidator(v); err != nil {
+			return &ValidationError{Name: "attempt_count", err: fmt.Errorf(`ent: validator failed for field "TicketNotification.attempt_count": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.LastErrorClass(); ok {
+		if err := ticketnotification.LastErrorClassValidator(v); err != nil {
+			return &ValidationError{Name: "last_error_class", err: fmt.Errorf(`ent: validator failed for field "TicketNotification.last_error_class": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.TenantID(); ok {
 		if err := ticketnotification.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "TicketNotification.tenant_id": %w`, err)}
@@ -768,6 +1005,33 @@ func (_u *TicketNotificationUpdateOne) sqlSave(ctx context.Context) (_node *Tick
 	}
 	if _u.mutation.DeliveryKeyCleared() {
 		_spec.ClearField(ticketnotification.FieldDeliveryKey, field.TypeString)
+	}
+	if value, ok := _u.mutation.AttemptCount(); ok {
+		_spec.SetField(ticketnotification.FieldAttemptCount, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedAttemptCount(); ok {
+		_spec.AddField(ticketnotification.FieldAttemptCount, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.NextAttemptAt(); ok {
+		_spec.SetField(ticketnotification.FieldNextAttemptAt, field.TypeTime, value)
+	}
+	if value, ok := _u.mutation.LeaseOwner(); ok {
+		_spec.SetField(ticketnotification.FieldLeaseOwner, field.TypeString, value)
+	}
+	if _u.mutation.LeaseOwnerCleared() {
+		_spec.ClearField(ticketnotification.FieldLeaseOwner, field.TypeString)
+	}
+	if value, ok := _u.mutation.LeaseExpiresAt(); ok {
+		_spec.SetField(ticketnotification.FieldLeaseExpiresAt, field.TypeTime, value)
+	}
+	if _u.mutation.LeaseExpiresAtCleared() {
+		_spec.ClearField(ticketnotification.FieldLeaseExpiresAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.LastErrorClass(); ok {
+		_spec.SetField(ticketnotification.FieldLastErrorClass, field.TypeString, value)
+	}
+	if _u.mutation.LastErrorClassCleared() {
+		_spec.ClearField(ticketnotification.FieldLastErrorClass, field.TypeString)
 	}
 	if value, ok := _u.mutation.TenantID(); ok {
 		_spec.SetField(ticketnotification.FieldTenantID, field.TypeInt, value)

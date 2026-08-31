@@ -13,6 +13,7 @@ import (
 	"itsm-backend/ent/migrate"
 	entschema "itsm-backend/ent/schema"
 
+	"entgo.io/ent/dialect/entsql"
 	sqlschema "entgo.io/ent/dialect/sql/schema"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/require"
@@ -144,18 +145,54 @@ func TestTicketCCSchemaUsesNullableCallbackDeliveryKey(t *testing.T) {
 	}
 	require.True(t, deliveryKeyFound, "TicketCC must define callback delivery_key")
 
-	var callbackIndexFound bool
+	var callbackIndexFound, activeRelationIndexFound bool
 	for _, schemaIndex := range (entschema.TicketCC{}).Indexes() {
 		descriptor := schemaIndex.Descriptor()
-		require.False(t,
-			reflect.DeepEqual(descriptor.Fields, []string{"tenant_id", "ticket_id", "user_id"}),
-			"ordinary TicketCC relations must not have an unconditional natural unique index",
-		)
 		if reflect.DeepEqual(descriptor.Fields, []string{"tenant_id", "delivery_key", "user_id"}) {
 			callbackIndexFound = descriptor.Unique
 		}
+		if reflect.DeepEqual(descriptor.Fields, []string{"tenant_id", "ticket_id", "user_id"}) {
+			require.True(t, descriptor.Unique)
+			for _, annotation := range descriptor.Annotations {
+				indexAnnotation, ok := annotation.(*entsql.IndexAnnotation)
+				if ok && indexAnnotation.Where == "is_active" {
+					activeRelationIndexFound = true
+				}
+			}
+		}
 	}
 	require.True(t, callbackIndexFound, "TicketCC must have callback-only tenant delivery uniqueness")
+	require.True(t, activeRelationIndexFound, "TicketCC must enforce one active ordinary relation with a partial unique index")
+}
+
+func TestTicketNotificationSchemaDefinesHiddenDurableDeliveryMetadata(t *testing.T) {
+	wantFields := map[string]bool{
+		"attempt_count":    false,
+		"next_attempt_at":  false,
+		"lease_owner":      false,
+		"lease_expires_at": false,
+		"last_error_class": false,
+	}
+	for _, schemaField := range (entschema.TicketNotification{}).Fields() {
+		descriptor := schemaField.Descriptor()
+		if _, ok := wantFields[descriptor.Name]; !ok {
+			continue
+		}
+		require.True(t, descriptor.Sensitive || descriptor.Tag == `json:"-"`, "%s must be hidden from entity JSON", descriptor.Name)
+		wantFields[descriptor.Name] = true
+	}
+	for name, found := range wantFields {
+		require.True(t, found, "missing durable notification field %s", name)
+	}
+
+	var scheduleIndex, leaseIndex bool
+	for _, schemaIndex := range (entschema.TicketNotification{}).Indexes() {
+		descriptor := schemaIndex.Descriptor()
+		scheduleIndex = scheduleIndex || reflect.DeepEqual(descriptor.Fields, []string{"tenant_id", "status", "next_attempt_at"})
+		leaseIndex = leaseIndex || reflect.DeepEqual(descriptor.Fields, []string{"tenant_id", "status", "lease_expires_at"})
+	}
+	require.True(t, scheduleIndex)
+	require.True(t, leaseIndex)
 }
 
 func TestTicketCCMigrationCompatibilitySQLite(t *testing.T) {
@@ -204,8 +241,8 @@ func TestTicketCCMigrationCompatibilitySQLite(t *testing.T) {
 	require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM ticket_ccs WHERE delivery_key IS NULL").Scan(&nullDeliveryKeys))
 	require.Equal(t, 3, rowCount)
 	require.Equal(t, rowCount, nullDeliveryKeys)
-	requireSQLiteUniqueIndex(t, db, []string{"tenant_id", "delivery_key", "user_id"})
-	requireSQLiteIndexAbsent(t, db, []string{"tenant_id", "ticket_id", "user_id"})
+	requireSQLiteUniqueIndex(t, db, []string{"tenant_id", "delivery_key", "user_id"}, false)
+	requireSQLiteUniqueIndex(t, db, []string{"tenant_id", "ticket_id", "user_id"}, true)
 }
 
 func ticketCCMigrationTableWithoutForeignKeys() *sqlschema.Table {
@@ -214,20 +251,15 @@ func ticketCCMigrationTableWithoutForeignKeys() *sqlschema.Table {
 	return &table
 }
 
-func requireSQLiteUniqueIndex(t *testing.T, db *sql.DB, wantColumns []string) {
+func requireSQLiteUniqueIndex(t *testing.T, db *sql.DB, wantColumns []string, wantPartial bool) {
 	t.Helper()
-	found, unique := findSQLiteIndex(t, db, wantColumns)
+	found, unique, partial := findSQLiteIndex(t, db, wantColumns)
 	require.True(t, found, "missing SQLite index on %v", wantColumns)
 	require.True(t, unique, "SQLite index on %v must be unique", wantColumns)
+	require.Equal(t, wantPartial, partial, "SQLite index partial predicate mismatch on %v", wantColumns)
 }
 
-func requireSQLiteIndexAbsent(t *testing.T, db *sql.DB, wantColumns []string) {
-	t.Helper()
-	found, _ := findSQLiteIndex(t, db, wantColumns)
-	require.False(t, found, "unexpected SQLite index on %v", wantColumns)
-}
-
-func findSQLiteIndex(t *testing.T, db *sql.DB, wantColumns []string) (bool, bool) {
+func findSQLiteIndex(t *testing.T, db *sql.DB, wantColumns []string) (bool, bool, bool) {
 	t.Helper()
 	indexes, err := db.Query("PRAGMA index_list('ticket_ccs')")
 	require.NoError(t, err)
@@ -240,9 +272,9 @@ func findSQLiteIndex(t *testing.T, db *sql.DB, wantColumns []string) (bool, bool
 		columns, err := sqliteIndexColumns(db, name)
 		require.NoError(t, err)
 		if reflect.DeepEqual(columns, wantColumns) {
-			return true, unique == 1
+			return true, unique == 1, partial == 1
 		}
 	}
 	require.NoError(t, indexes.Err())
-	return false, false
+	return false, false, false
 }

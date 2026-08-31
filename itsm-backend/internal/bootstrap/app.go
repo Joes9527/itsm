@@ -64,14 +64,35 @@ type bpmnCallbackWorker interface {
 	RunCallbackOutboxWorker(context.Context, string, time.Duration)
 }
 
+type ticketNotificationWorker interface {
+	RunDeliveryWorker(context.Context, string, time.Duration)
+}
+
 type Application struct {
-	Cfg            *config.Config
-	Logger         *zap.SugaredLogger
-	DBClient       *ent.Client
-	Router         *gin.Engine
-	Embedder       service.Embedder
-	VectorStore    *service.VectorStore
-	callbackWorker bpmnCallbackWorker
+	Cfg                *config.Config
+	Logger             *zap.SugaredLogger
+	DBClient           *ent.Client
+	Router             *gin.Engine
+	Embedder           service.Embedder
+	VectorStore        *service.VectorStore
+	callbackWorker     bpmnCallbackWorker
+	notificationWorker ticketNotificationWorker
+}
+
+// prepareTicketCCIndexMigration removes the pre-partial-index definition.
+// Ent reuses this index name and additive schema creation cannot replace an
+// existing unconditional index with its partial equivalent.
+func prepareTicketCCIndexMigration(ctx context.Context, db *sql.DB, logger *zap.SugaredLogger) error {
+	if db == nil {
+		return nil
+	}
+	if _, err := db.ExecContext(ctx, `DROP INDEX IF EXISTS ticketcc_tenant_id_ticket_id_user_id`); err != nil {
+		return fmt.Errorf("drop legacy TicketCC natural unique index: %w", err)
+	}
+	if logger != nil {
+		logger.Debugw("legacy TicketCC natural index removed when present")
+	}
+	return nil
 }
 
 // prepareRolePermissionTenantMigration upgrades installations created before
@@ -259,6 +280,7 @@ func NewApplication() *Application {
 
 	// 通知 / 审批 / SLA / 自动化 / 序列服务（V2 子服务）
 	ticketNotificationService := service.NewTicketNotificationService(client, sugar)
+	ticketNotificationService.SetConnectorManager(connectorManager)
 	// 邮件通知（Graph sendMail 为主，SMTP fallback）
 	emailService := service.NewEmailService(service.EmailConfig{
 		Host:     cfg.SMTP.Host,
@@ -453,7 +475,6 @@ func NewApplication() *Application {
 
 	// Ticket Workflow Service & Controller
 	ticketWorkflowService := service.NewTicketWorkflowService(client, sugar)
-	ticketWorkflowService.SetConnectorManager(connectorManager)
 	// 同 releaseService：审批桥接复用全局 processEngine，保证 CallbackRegistry 已装配。
 	ticketWorkflowService.SetProcessEngine(processEngine)
 	ticketWorkflowController := controller.NewTicketWorkflowController(ticketWorkflowService, database.GetRawDB(), sugar)
@@ -871,13 +892,14 @@ func NewApplication() *Application {
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	return &Application{
-		Cfg:            cfg,
-		Logger:         sugar,
-		DBClient:       client,
-		Router:         r,
-		Embedder:       embedder,
-		VectorStore:    vectorStore,
-		callbackWorker: concreteProcessEngine,
+		Cfg:                cfg,
+		Logger:             sugar,
+		DBClient:           client,
+		Router:             r,
+		Embedder:           embedder,
+		VectorStore:        vectorStore,
+		callbackWorker:     concreteProcessEngine,
+		notificationWorker: ticketNotificationService,
 	}
 }
 
@@ -909,6 +931,9 @@ func InitializeStorage(cfg *config.Config, client *ent.Client, sugar *zap.Sugare
 		"schema migration and default seed at process boot")
 
 	if cfg.Deployment.AutoMigrate {
+		if err := prepareTicketCCIndexMigration(ctx, database.GetRawDB(), sugar); err != nil {
+			return fmt.Errorf("prepare TicketCC index migration: %w", err)
+		}
 		if err := prepareRolePermissionTenantMigration(ctx, database.GetRawDB(), sugar); err != nil {
 			return fmt.Errorf("prepare role permission tenant migration: %w", err)
 		}
@@ -1071,6 +1096,7 @@ func (app *Application) Run() {
 
 func (app *Application) startBackgroundTasks(lifecycleCtx context.Context) {
 	app.startCallbackOutboxWorker(lifecycleCtx)
+	app.startNotificationDeliveryWorker(lifecycleCtx)
 
 	go func() {
 		pipeline := service.NewEmbeddingPipeline(app.DBClient, app.Embedder, app.Logger, app.VectorStore)
@@ -1152,6 +1178,14 @@ func (app *Application) startCallbackOutboxWorker(ctx context.Context) {
 	}
 	workerID := "bpmn-callback-" + uuid.NewString()
 	go app.callbackWorker.RunCallbackOutboxWorker(ctx, workerID, 2*time.Second)
+}
+
+func (app *Application) startNotificationDeliveryWorker(ctx context.Context) {
+	if app.notificationWorker == nil {
+		return
+	}
+	workerID := "ticket-notification-" + uuid.NewString()
+	go app.notificationWorker.RunDeliveryWorker(ctx, workerID, 2*time.Second)
 }
 
 // srIncidentBridge 将 service.IncidentService 适配为 service_request.IncidentCreator，

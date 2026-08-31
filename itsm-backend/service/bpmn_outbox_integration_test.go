@@ -14,9 +14,11 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/migrate"
 	"itsm-backend/ent/processcallbackoutbox"
+	"itsm-backend/ent/ticketcc"
 	"itsm-backend/service/bpmn"
 
 	entgo "entgo.io/ent"
@@ -25,6 +27,7 @@ import (
 	sqlschema "entgo.io/ent/dialect/sql/schema"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 type postgresIdempotentCallbackReceiver struct {
@@ -227,7 +230,7 @@ func TestTicketCCMigrationCompatibilityPostgres(t *testing.T) {
 	require.NoError(t, err)
 	_, err = db.ExecContext(context.Background(), `INSERT INTO tickets (id) VALUES ($1)`, 41)
 	require.NoError(t, err)
-	for _, active := range []bool{true, false, false} {
+	for _, active := range []bool{false, false, false} {
 		_, err = db.ExecContext(context.Background(), `
 			INSERT INTO ticket_ccs (user_id, added_by, tenant_id, added_at, is_active, ticket_id)
 			VALUES ($1, $2, $3, $4, $5, $6)
@@ -254,7 +257,12 @@ func TestTicketCCMigrationCompatibilityPostgres(t *testing.T) {
 		INSERT INTO ticket_ccs (user_id, added_by, tenant_id, added_at, is_active, ticket_id)
 		VALUES ($1, $2, $3, $4, $5, $6)
 	`, 73, 11, 29, time.Date(2026, 8, 31, 13, 0, 0, 0, time.UTC), true, 41)
-	require.NoError(t, err, "ordinary duplicate rows with NULL delivery_key must remain compatible")
+	require.NoError(t, err, "inactive history must allow one active ordinary re-add")
+	_, err = db.ExecContext(context.Background(), `
+		INSERT INTO ticket_ccs (user_id, added_by, tenant_id, added_at, is_active, ticket_id)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`, 73, 12, 29, time.Date(2026, 8, 31, 14, 0, 0, 0, time.UTC), true, 41)
+	require.Error(t, err, "a second active ordinary relation must be rejected")
 
 	var firstID, secondID int
 	require.NoError(t, db.QueryRowContext(context.Background(), "SELECT id FROM ticket_ccs ORDER BY id LIMIT 1").Scan(&firstID))
@@ -263,6 +271,194 @@ func TestTicketCCMigrationCompatibilityPostgres(t *testing.T) {
 	require.NoError(t, err)
 	_, err = db.ExecContext(context.Background(), "UPDATE ticket_ccs SET delivery_key = $1 WHERE id = $2", "stable-callback-delivery", secondID)
 	require.Error(t, err, "same tenant, delivery key, and user must be unique")
+}
+
+func TestCCTicketConcurrentOrdinaryPostgresCommitsExactlyOneEffectSet(t *testing.T) {
+	dsn := os.Getenv("ITSM_TEST_DB")
+	require.NotEmpty(t, dsn, "ITSM_TEST_DB is required for PostgreSQL integration tests")
+	ctx, cancel := context.WithTimeout(context.Background(), postgresIntegrationTimeout)
+	defer cancel()
+
+	schemaName := "ticket_cc_race_" + strings.ReplaceAll(uuid.NewString(), "-", "_")
+	setupDB, setupClient := openPostgresEntClientInSchema(t, dsn, schemaName, true)
+	require.NoError(t, setupClient.Schema.Create(ctx))
+	namespace := strings.ReplaceAll(uuid.NewString(), "-", "")
+	tenant, err := createTicketWorkflowTestTenant(ctx, setupClient, "cc-race-"+namespace)
+	require.NoError(t, err)
+	operator, err := createTicketWorkflowTestUser(ctx, setupClient, tenant.ID, "cc-race-operator-"+namespace)
+	require.NoError(t, err)
+	recipient, err := createTicketWorkflowTestUser(ctx, setupClient, tenant.ID, "cc-race-recipient-"+namespace)
+	require.NoError(t, err)
+	tk, err := createTicketWorkflowTestTicket(ctx, setupClient, tenant.ID, operator.ID, "open")
+	require.NoError(t, err)
+
+	_, clientOne := openPostgresEntClientInSchema(t, dsn, schemaName, false)
+	_, clientTwo := openPostgresEntClientInSchema(t, dsn, schemaName, false)
+	arrived := make(chan struct{}, 2)
+	release := make(chan struct{})
+	installTicketCCCreateBarrier(clientOne, arrived, release)
+	installTicketCCCreateBarrier(clientTwo, arrived, release)
+
+	services := []*TicketWorkflowService{
+		NewTicketWorkflowService(clientOne, zap.NewNop().Sugar()),
+		NewTicketWorkflowService(clientTwo, zap.NewNop().Sugar()),
+	}
+	results := make(chan error, len(services))
+	for _, workflowService := range services {
+		go func(svc *TicketWorkflowService) {
+			results <- svc.CCTicket(context.Background(), &dto.CCTicketRequest{
+				TicketID: tk.ID,
+				CCUsers:  []int{recipient.ID},
+			}, operator.ID, tenant.ID)
+		}(workflowService)
+	}
+	for range services {
+		select {
+		case <-arrived:
+		case <-time.After(5 * time.Second):
+			t.Fatal("both ordinary CC transactions did not reach the create barrier")
+		}
+	}
+	close(release)
+
+	var successes, conflicts int
+	for range services {
+		select {
+		case callErr := <-results:
+			if callErr == nil {
+				successes++
+			} else {
+				conflicts++
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("ordinary CC race did not complete")
+		}
+	}
+	require.Equal(t, 1, successes)
+	require.Equal(t, 1, conflicts)
+	require.Equal(t, 1, setupClient.TicketCC.Query().Where(ticketcc.IsActive(true)).CountX(ctx))
+	require.Equal(t, 1, setupClient.TicketNotification.Query().CountX(ctx))
+	require.Equal(t, 1, setupClient.Notification.Query().CountX(ctx))
+	require.Equal(t, 1, setupClient.TicketWorkflowRecord.Query().CountX(ctx))
+
+	_ = setupDB
+}
+
+func TestTicketNotificationWorkerPostgresCASAndExpiredLeaseRecovery(t *testing.T) {
+	dsn := os.Getenv("ITSM_TEST_DB")
+	require.NotEmpty(t, dsn, "ITSM_TEST_DB is required for PostgreSQL integration tests")
+	ctx, cancel := context.WithTimeout(context.Background(), postgresIntegrationTimeout)
+	defer cancel()
+
+	schemaName := "ticket_notification_worker_" + strings.ReplaceAll(uuid.NewString(), "-", "_")
+	_, setupClient := openPostgresEntClientInSchema(t, dsn, schemaName, true)
+	require.NoError(t, setupClient.Schema.Create(ctx))
+	namespace := strings.ReplaceAll(uuid.NewString(), "-", "")
+	tenant, err := createTicketWorkflowTestTenant(ctx, setupClient, "notification-worker-"+namespace)
+	require.NoError(t, err)
+	operator, err := createTicketWorkflowTestUser(ctx, setupClient, tenant.ID, "notification-worker-operator-"+namespace)
+	require.NoError(t, err)
+	recipient, err := createTicketWorkflowTestUser(ctx, setupClient, tenant.ID, "notification-worker-recipient-"+namespace)
+	require.NoError(t, err)
+	tk, err := createTicketWorkflowTestTicket(ctx, setupClient, tenant.ID, operator.ID, "open")
+	require.NoError(t, err)
+	workflow := NewTicketWorkflowService(setupClient, zap.NewNop().Sugar())
+	require.NoError(t, workflow.CCTicket(ctx, &dto.CCTicketRequest{
+		TicketID:       tk.ID,
+		CCUsers:        []int{recipient.ID},
+		NotifyChannels: []string{"email"},
+	}, operator.ID, tenant.ID))
+	row := setupClient.TicketNotification.Query().OnlyX(ctx)
+
+	_, workerClientOne := openPostgresEntClientInSchema(t, dsn, schemaName, false)
+	_, workerClientTwo := openPostgresEntClientInSchema(t, dsn, schemaName, false)
+	workerOne := NewTicketNotificationService(workerClientOne, zap.NewNop().Sugar())
+	workerTwo := NewTicketNotificationService(workerClientTwo, zap.NewNop().Sugar())
+	release := make(chan struct{})
+	fake := &durableNotificationConnector{entered: make(chan struct{}, 1), release: release}
+	configureDurableNotificationConnector(t, workerOne, tenant.ID, fake)
+	configureDurableNotificationConnector(t, workerTwo, tenant.ID, fake)
+	now := time.Now().Add(time.Hour)
+	workerOne.now = func() time.Time { return now }
+	workerTwo.now = func() time.Time { return now }
+
+	firstResult := make(chan error, 1)
+	go func() {
+		_, processErr := workerOne.ProcessPendingDeliveries(context.Background(), "postgres-notification-worker-one", 10)
+		firstResult <- processErr
+	}()
+	select {
+	case <-fake.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("first PostgreSQL notification worker did not dispatch after claiming")
+	}
+	completed, err := workerTwo.ProcessPendingDeliveries(ctx, "postgres-notification-worker-two", 10)
+	require.NoError(t, err)
+	require.Zero(t, completed)
+	close(release)
+	require.NoError(t, <-firstResult)
+	require.Len(t, fake.sentMessages(), 1)
+
+	row = setupClient.TicketNotification.GetX(ctx, row.ID)
+	require.Equal(t, "sent", row.Status)
+	setupClient.TicketNotification.UpdateOneID(row.ID).
+		SetStatus("processing").
+		ClearSentAt().
+		SetLeaseOwner("expired-postgres-worker").
+		SetLeaseExpiresAt(now.Add(-time.Second)).
+		ExecX(ctx)
+	now = now.Add(2 * time.Minute)
+	completed, err = workerTwo.ProcessPendingDeliveries(ctx, "postgres-notification-worker-recovery", 10)
+	require.NoError(t, err)
+	require.Equal(t, 1, completed)
+	row = setupClient.TicketNotification.GetX(ctx, row.ID)
+	require.Equal(t, "sent", row.Status)
+	require.Equal(t, 2, row.AttemptCount)
+	require.Len(t, fake.sentMessages(), 2)
+	require.Equal(t, fake.sentMessages()[0].Metadata["delivery_key"], fake.sentMessages()[1].Metadata["delivery_key"])
+}
+
+func openPostgresEntClientInSchema(t *testing.T, dsn, schemaName string, createSchema bool) (*sql.DB, *ent.Client) {
+	t.Helper()
+	db, err := sql.Open("postgres", dsn)
+	require.NoError(t, err)
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	ctx := context.Background()
+	require.NoError(t, db.PingContext(ctx))
+	if createSchema {
+		_, err = db.ExecContext(ctx, fmt.Sprintf(`CREATE SCHEMA "%s"`, schemaName))
+		require.NoError(t, err)
+	}
+	_, err = db.ExecContext(ctx, fmt.Sprintf(`SET search_path TO "%s"`, schemaName))
+	require.NoError(t, err)
+	client := ent.NewClient(ent.Driver(entsql.OpenDB(dialect.Postgres, db)))
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), postgresIntegrationTimeout)
+		defer cancel()
+		if createSchema {
+			_, _ = db.ExecContext(cleanupCtx, `SET search_path TO public`)
+			_, _ = db.ExecContext(cleanupCtx, fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, schemaName))
+		}
+		_ = client.Close()
+	})
+	return db, client
+}
+
+func installTicketCCCreateBarrier(client *ent.Client, arrived chan<- struct{}, release <-chan struct{}) {
+	client.Use(func(next entgo.Mutator) entgo.Mutator {
+		return entgo.MutateFunc(func(ctx context.Context, mutation entgo.Mutation) (entgo.Value, error) {
+			if _, ok := mutation.(*ent.TicketCCMutation); ok && mutation.Op().Is(entgo.OpCreate) {
+				arrived <- struct{}{}
+				select {
+				case <-release:
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				}
+			}
+			return next.Mutate(ctx, mutation)
+		})
+	})
 }
 
 func TestBPMNCallbackOutboxLeaseRecoveryPostgres(t *testing.T) {

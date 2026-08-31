@@ -39,12 +39,34 @@ func (TicketNotification) Fields() []ent.Field {
 			Comment("阅读时间").
 			Optional(),
 		field.String("status").
-			Comment("状态: pending, sent, read").
+			Comment("状态: pending, processing, sent, read").
 			Default("pending"),
 		field.String("delivery_key").
 			Comment("内部回调投递幂等键，不对 API 暴露").
 			Optional().
 			Nillable().
+			Sensitive(),
+		field.Int("attempt_count").
+			Comment("外部投递尝试次数").
+			NonNegative().
+			Default(0).
+			StructTag(`json:"-"`),
+		field.Time("next_attempt_at").
+			Comment("下次允许投递时间").
+			Default(time.Now).
+			StructTag(`json:"-"`),
+		field.String("lease_owner").
+			Comment("当前投递租约持有者").
+			Optional().
+			Sensitive(),
+		field.Time("lease_expires_at").
+			Comment("当前投递租约过期时间").
+			Optional().
+			StructTag(`json:"-"`),
+		field.String("last_error_class").
+			Comment("最近一次投递失败的安全分类").
+			Optional().
+			MaxLen(128).
 			Sensitive(),
 		field.Int("tenant_id").
 			Comment("租户ID").
@@ -77,5 +99,7 @@ func (TicketNotification) Edges() []ent.Edge {
 func (TicketNotification) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("tenant_id", "delivery_key", "ticket_id", "user_id", "channel").Unique(),
+		index.Fields("tenant_id", "status", "next_attempt_at"),
+		index.Fields("tenant_id", "status", "lease_expires_at"),
 	}
 }

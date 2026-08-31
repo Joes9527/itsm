@@ -136358,27 +136358,33 @@ func (m *TicketCommentMutation) ResetEdge(name string) error {
 // TicketNotificationMutation represents an operation that mutates the TicketNotification nodes in the graph.
 type TicketNotificationMutation struct {
 	config
-	op            Op
-	typ           string
-	id            *int
-	_type         *string
-	channel       *string
-	content       *string
-	sent_at       *time.Time
-	read_at       *time.Time
-	status        *string
-	delivery_key  *string
-	tenant_id     *int
-	addtenant_id  *int
-	created_at    *time.Time
-	clearedFields map[string]struct{}
-	ticket        *int
-	clearedticket bool
-	user          *int
-	cleareduser   bool
-	done          bool
-	oldValue      func(context.Context) (*TicketNotification, error)
-	predicates    []predicate.TicketNotification
+	op               Op
+	typ              string
+	id               *int
+	_type            *string
+	channel          *string
+	content          *string
+	sent_at          *time.Time
+	read_at          *time.Time
+	status           *string
+	delivery_key     *string
+	attempt_count    *int
+	addattempt_count *int
+	next_attempt_at  *time.Time
+	lease_owner      *string
+	lease_expires_at *time.Time
+	last_error_class *string
+	tenant_id        *int
+	addtenant_id     *int
+	created_at       *time.Time
+	clearedFields    map[string]struct{}
+	ticket           *int
+	clearedticket    bool
+	user             *int
+	cleareduser      bool
+	done             bool
+	oldValue         func(context.Context) (*TicketNotification, error)
+	predicates       []predicate.TicketNotification
 }
 
 var _ ent.Mutation = (*TicketNotificationMutation)(nil)
@@ -136842,6 +136848,245 @@ func (m *TicketNotificationMutation) ResetDeliveryKey() {
 	delete(m.clearedFields, ticketnotification.FieldDeliveryKey)
 }
 
+// SetAttemptCount sets the "attempt_count" field.
+func (m *TicketNotificationMutation) SetAttemptCount(i int) {
+	m.attempt_count = &i
+	m.addattempt_count = nil
+}
+
+// AttemptCount returns the value of the "attempt_count" field in the mutation.
+func (m *TicketNotificationMutation) AttemptCount() (r int, exists bool) {
+	v := m.attempt_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAttemptCount returns the old "attempt_count" field's value of the TicketNotification entity.
+// If the TicketNotification object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketNotificationMutation) OldAttemptCount(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAttemptCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAttemptCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAttemptCount: %w", err)
+	}
+	return oldValue.AttemptCount, nil
+}
+
+// AddAttemptCount adds i to the "attempt_count" field.
+func (m *TicketNotificationMutation) AddAttemptCount(i int) {
+	if m.addattempt_count != nil {
+		*m.addattempt_count += i
+	} else {
+		m.addattempt_count = &i
+	}
+}
+
+// AddedAttemptCount returns the value that was added to the "attempt_count" field in this mutation.
+func (m *TicketNotificationMutation) AddedAttemptCount() (r int, exists bool) {
+	v := m.addattempt_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAttemptCount resets all changes to the "attempt_count" field.
+func (m *TicketNotificationMutation) ResetAttemptCount() {
+	m.attempt_count = nil
+	m.addattempt_count = nil
+}
+
+// SetNextAttemptAt sets the "next_attempt_at" field.
+func (m *TicketNotificationMutation) SetNextAttemptAt(t time.Time) {
+	m.next_attempt_at = &t
+}
+
+// NextAttemptAt returns the value of the "next_attempt_at" field in the mutation.
+func (m *TicketNotificationMutation) NextAttemptAt() (r time.Time, exists bool) {
+	v := m.next_attempt_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNextAttemptAt returns the old "next_attempt_at" field's value of the TicketNotification entity.
+// If the TicketNotification object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketNotificationMutation) OldNextAttemptAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNextAttemptAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNextAttemptAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNextAttemptAt: %w", err)
+	}
+	return oldValue.NextAttemptAt, nil
+}
+
+// ResetNextAttemptAt resets all changes to the "next_attempt_at" field.
+func (m *TicketNotificationMutation) ResetNextAttemptAt() {
+	m.next_attempt_at = nil
+}
+
+// SetLeaseOwner sets the "lease_owner" field.
+func (m *TicketNotificationMutation) SetLeaseOwner(s string) {
+	m.lease_owner = &s
+}
+
+// LeaseOwner returns the value of the "lease_owner" field in the mutation.
+func (m *TicketNotificationMutation) LeaseOwner() (r string, exists bool) {
+	v := m.lease_owner
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLeaseOwner returns the old "lease_owner" field's value of the TicketNotification entity.
+// If the TicketNotification object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketNotificationMutation) OldLeaseOwner(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLeaseOwner is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLeaseOwner requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLeaseOwner: %w", err)
+	}
+	return oldValue.LeaseOwner, nil
+}
+
+// ClearLeaseOwner clears the value of the "lease_owner" field.
+func (m *TicketNotificationMutation) ClearLeaseOwner() {
+	m.lease_owner = nil
+	m.clearedFields[ticketnotification.FieldLeaseOwner] = struct{}{}
+}
+
+// LeaseOwnerCleared returns if the "lease_owner" field was cleared in this mutation.
+func (m *TicketNotificationMutation) LeaseOwnerCleared() bool {
+	_, ok := m.clearedFields[ticketnotification.FieldLeaseOwner]
+	return ok
+}
+
+// ResetLeaseOwner resets all changes to the "lease_owner" field.
+func (m *TicketNotificationMutation) ResetLeaseOwner() {
+	m.lease_owner = nil
+	delete(m.clearedFields, ticketnotification.FieldLeaseOwner)
+}
+
+// SetLeaseExpiresAt sets the "lease_expires_at" field.
+func (m *TicketNotificationMutation) SetLeaseExpiresAt(t time.Time) {
+	m.lease_expires_at = &t
+}
+
+// LeaseExpiresAt returns the value of the "lease_expires_at" field in the mutation.
+func (m *TicketNotificationMutation) LeaseExpiresAt() (r time.Time, exists bool) {
+	v := m.lease_expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLeaseExpiresAt returns the old "lease_expires_at" field's value of the TicketNotification entity.
+// If the TicketNotification object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketNotificationMutation) OldLeaseExpiresAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLeaseExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLeaseExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLeaseExpiresAt: %w", err)
+	}
+	return oldValue.LeaseExpiresAt, nil
+}
+
+// ClearLeaseExpiresAt clears the value of the "lease_expires_at" field.
+func (m *TicketNotificationMutation) ClearLeaseExpiresAt() {
+	m.lease_expires_at = nil
+	m.clearedFields[ticketnotification.FieldLeaseExpiresAt] = struct{}{}
+}
+
+// LeaseExpiresAtCleared returns if the "lease_expires_at" field was cleared in this mutation.
+func (m *TicketNotificationMutation) LeaseExpiresAtCleared() bool {
+	_, ok := m.clearedFields[ticketnotification.FieldLeaseExpiresAt]
+	return ok
+}
+
+// ResetLeaseExpiresAt resets all changes to the "lease_expires_at" field.
+func (m *TicketNotificationMutation) ResetLeaseExpiresAt() {
+	m.lease_expires_at = nil
+	delete(m.clearedFields, ticketnotification.FieldLeaseExpiresAt)
+}
+
+// SetLastErrorClass sets the "last_error_class" field.
+func (m *TicketNotificationMutation) SetLastErrorClass(s string) {
+	m.last_error_class = &s
+}
+
+// LastErrorClass returns the value of the "last_error_class" field in the mutation.
+func (m *TicketNotificationMutation) LastErrorClass() (r string, exists bool) {
+	v := m.last_error_class
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastErrorClass returns the old "last_error_class" field's value of the TicketNotification entity.
+// If the TicketNotification object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketNotificationMutation) OldLastErrorClass(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastErrorClass is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastErrorClass requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastErrorClass: %w", err)
+	}
+	return oldValue.LastErrorClass, nil
+}
+
+// ClearLastErrorClass clears the value of the "last_error_class" field.
+func (m *TicketNotificationMutation) ClearLastErrorClass() {
+	m.last_error_class = nil
+	m.clearedFields[ticketnotification.FieldLastErrorClass] = struct{}{}
+}
+
+// LastErrorClassCleared returns if the "last_error_class" field was cleared in this mutation.
+func (m *TicketNotificationMutation) LastErrorClassCleared() bool {
+	_, ok := m.clearedFields[ticketnotification.FieldLastErrorClass]
+	return ok
+}
+
+// ResetLastErrorClass resets all changes to the "last_error_class" field.
+func (m *TicketNotificationMutation) ResetLastErrorClass() {
+	m.last_error_class = nil
+	delete(m.clearedFields, ticketnotification.FieldLastErrorClass)
+}
+
 // SetTenantID sets the "tenant_id" field.
 func (m *TicketNotificationMutation) SetTenantID(i int) {
 	m.tenant_id = &i
@@ -137022,7 +137267,7 @@ func (m *TicketNotificationMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TicketNotificationMutation) Fields() []string {
-	fields := make([]string, 0, 11)
+	fields := make([]string, 0, 16)
 	if m.ticket != nil {
 		fields = append(fields, ticketnotification.FieldTicketID)
 	}
@@ -137049,6 +137294,21 @@ func (m *TicketNotificationMutation) Fields() []string {
 	}
 	if m.delivery_key != nil {
 		fields = append(fields, ticketnotification.FieldDeliveryKey)
+	}
+	if m.attempt_count != nil {
+		fields = append(fields, ticketnotification.FieldAttemptCount)
+	}
+	if m.next_attempt_at != nil {
+		fields = append(fields, ticketnotification.FieldNextAttemptAt)
+	}
+	if m.lease_owner != nil {
+		fields = append(fields, ticketnotification.FieldLeaseOwner)
+	}
+	if m.lease_expires_at != nil {
+		fields = append(fields, ticketnotification.FieldLeaseExpiresAt)
+	}
+	if m.last_error_class != nil {
+		fields = append(fields, ticketnotification.FieldLastErrorClass)
 	}
 	if m.tenant_id != nil {
 		fields = append(fields, ticketnotification.FieldTenantID)
@@ -137082,6 +137342,16 @@ func (m *TicketNotificationMutation) Field(name string) (ent.Value, bool) {
 		return m.Status()
 	case ticketnotification.FieldDeliveryKey:
 		return m.DeliveryKey()
+	case ticketnotification.FieldAttemptCount:
+		return m.AttemptCount()
+	case ticketnotification.FieldNextAttemptAt:
+		return m.NextAttemptAt()
+	case ticketnotification.FieldLeaseOwner:
+		return m.LeaseOwner()
+	case ticketnotification.FieldLeaseExpiresAt:
+		return m.LeaseExpiresAt()
+	case ticketnotification.FieldLastErrorClass:
+		return m.LastErrorClass()
 	case ticketnotification.FieldTenantID:
 		return m.TenantID()
 	case ticketnotification.FieldCreatedAt:
@@ -137113,6 +137383,16 @@ func (m *TicketNotificationMutation) OldField(ctx context.Context, name string) 
 		return m.OldStatus(ctx)
 	case ticketnotification.FieldDeliveryKey:
 		return m.OldDeliveryKey(ctx)
+	case ticketnotification.FieldAttemptCount:
+		return m.OldAttemptCount(ctx)
+	case ticketnotification.FieldNextAttemptAt:
+		return m.OldNextAttemptAt(ctx)
+	case ticketnotification.FieldLeaseOwner:
+		return m.OldLeaseOwner(ctx)
+	case ticketnotification.FieldLeaseExpiresAt:
+		return m.OldLeaseExpiresAt(ctx)
+	case ticketnotification.FieldLastErrorClass:
+		return m.OldLastErrorClass(ctx)
 	case ticketnotification.FieldTenantID:
 		return m.OldTenantID(ctx)
 	case ticketnotification.FieldCreatedAt:
@@ -137189,6 +137469,41 @@ func (m *TicketNotificationMutation) SetField(name string, value ent.Value) erro
 		}
 		m.SetDeliveryKey(v)
 		return nil
+	case ticketnotification.FieldAttemptCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAttemptCount(v)
+		return nil
+	case ticketnotification.FieldNextAttemptAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNextAttemptAt(v)
+		return nil
+	case ticketnotification.FieldLeaseOwner:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLeaseOwner(v)
+		return nil
+	case ticketnotification.FieldLeaseExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLeaseExpiresAt(v)
+		return nil
+	case ticketnotification.FieldLastErrorClass:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastErrorClass(v)
+		return nil
 	case ticketnotification.FieldTenantID:
 		v, ok := value.(int)
 		if !ok {
@@ -137211,6 +137526,9 @@ func (m *TicketNotificationMutation) SetField(name string, value ent.Value) erro
 // this mutation.
 func (m *TicketNotificationMutation) AddedFields() []string {
 	var fields []string
+	if m.addattempt_count != nil {
+		fields = append(fields, ticketnotification.FieldAttemptCount)
+	}
 	if m.addtenant_id != nil {
 		fields = append(fields, ticketnotification.FieldTenantID)
 	}
@@ -137222,6 +137540,8 @@ func (m *TicketNotificationMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *TicketNotificationMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case ticketnotification.FieldAttemptCount:
+		return m.AddedAttemptCount()
 	case ticketnotification.FieldTenantID:
 		return m.AddedTenantID()
 	}
@@ -137233,6 +137553,13 @@ func (m *TicketNotificationMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *TicketNotificationMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case ticketnotification.FieldAttemptCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAttemptCount(v)
+		return nil
 	case ticketnotification.FieldTenantID:
 		v, ok := value.(int)
 		if !ok {
@@ -137257,6 +137584,15 @@ func (m *TicketNotificationMutation) ClearedFields() []string {
 	if m.FieldCleared(ticketnotification.FieldDeliveryKey) {
 		fields = append(fields, ticketnotification.FieldDeliveryKey)
 	}
+	if m.FieldCleared(ticketnotification.FieldLeaseOwner) {
+		fields = append(fields, ticketnotification.FieldLeaseOwner)
+	}
+	if m.FieldCleared(ticketnotification.FieldLeaseExpiresAt) {
+		fields = append(fields, ticketnotification.FieldLeaseExpiresAt)
+	}
+	if m.FieldCleared(ticketnotification.FieldLastErrorClass) {
+		fields = append(fields, ticketnotification.FieldLastErrorClass)
+	}
 	return fields
 }
 
@@ -137279,6 +137615,15 @@ func (m *TicketNotificationMutation) ClearField(name string) error {
 		return nil
 	case ticketnotification.FieldDeliveryKey:
 		m.ClearDeliveryKey()
+		return nil
+	case ticketnotification.FieldLeaseOwner:
+		m.ClearLeaseOwner()
+		return nil
+	case ticketnotification.FieldLeaseExpiresAt:
+		m.ClearLeaseExpiresAt()
+		return nil
+	case ticketnotification.FieldLastErrorClass:
+		m.ClearLastErrorClass()
 		return nil
 	}
 	return fmt.Errorf("unknown TicketNotification nullable field %s", name)
@@ -137314,6 +137659,21 @@ func (m *TicketNotificationMutation) ResetField(name string) error {
 		return nil
 	case ticketnotification.FieldDeliveryKey:
 		m.ResetDeliveryKey()
+		return nil
+	case ticketnotification.FieldAttemptCount:
+		m.ResetAttemptCount()
+		return nil
+	case ticketnotification.FieldNextAttemptAt:
+		m.ResetNextAttemptAt()
+		return nil
+	case ticketnotification.FieldLeaseOwner:
+		m.ResetLeaseOwner()
+		return nil
+	case ticketnotification.FieldLeaseExpiresAt:
+		m.ResetLeaseExpiresAt()
+		return nil
+	case ticketnotification.FieldLastErrorClass:
+		m.ResetLastErrorClass()
 		return nil
 	case ticketnotification.FieldTenantID:
 		m.ResetTenantID()

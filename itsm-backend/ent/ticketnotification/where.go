@@ -100,6 +100,31 @@ func DeliveryKey(v string) predicate.TicketNotification {
 	return predicate.TicketNotification(sql.FieldEQ(FieldDeliveryKey, v))
 }
 
+// AttemptCount applies equality check predicate on the "attempt_count" field. It's identical to AttemptCountEQ.
+func AttemptCount(v int) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEQ(FieldAttemptCount, v))
+}
+
+// NextAttemptAt applies equality check predicate on the "next_attempt_at" field. It's identical to NextAttemptAtEQ.
+func NextAttemptAt(v time.Time) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEQ(FieldNextAttemptAt, v))
+}
+
+// LeaseOwner applies equality check predicate on the "lease_owner" field. It's identical to LeaseOwnerEQ.
+func LeaseOwner(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEQ(FieldLeaseOwner, v))
+}
+
+// LeaseExpiresAt applies equality check predicate on the "lease_expires_at" field. It's identical to LeaseExpiresAtEQ.
+func LeaseExpiresAt(v time.Time) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEQ(FieldLeaseExpiresAt, v))
+}
+
+// LastErrorClass applies equality check predicate on the "last_error_class" field. It's identical to LastErrorClassEQ.
+func LastErrorClass(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEQ(FieldLastErrorClass, v))
+}
+
 // TenantID applies equality check predicate on the "tenant_id" field. It's identical to TenantIDEQ.
 func TenantID(v int) predicate.TicketNotification {
 	return predicate.TicketNotification(sql.FieldEQ(FieldTenantID, v))
@@ -583,6 +608,286 @@ func DeliveryKeyEqualFold(v string) predicate.TicketNotification {
 // DeliveryKeyContainsFold applies the ContainsFold predicate on the "delivery_key" field.
 func DeliveryKeyContainsFold(v string) predicate.TicketNotification {
 	return predicate.TicketNotification(sql.FieldContainsFold(FieldDeliveryKey, v))
+}
+
+// AttemptCountEQ applies the EQ predicate on the "attempt_count" field.
+func AttemptCountEQ(v int) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEQ(FieldAttemptCount, v))
+}
+
+// AttemptCountNEQ applies the NEQ predicate on the "attempt_count" field.
+func AttemptCountNEQ(v int) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNEQ(FieldAttemptCount, v))
+}
+
+// AttemptCountIn applies the In predicate on the "attempt_count" field.
+func AttemptCountIn(vs ...int) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldIn(FieldAttemptCount, vs...))
+}
+
+// AttemptCountNotIn applies the NotIn predicate on the "attempt_count" field.
+func AttemptCountNotIn(vs ...int) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNotIn(FieldAttemptCount, vs...))
+}
+
+// AttemptCountGT applies the GT predicate on the "attempt_count" field.
+func AttemptCountGT(v int) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldGT(FieldAttemptCount, v))
+}
+
+// AttemptCountGTE applies the GTE predicate on the "attempt_count" field.
+func AttemptCountGTE(v int) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldGTE(FieldAttemptCount, v))
+}
+
+// AttemptCountLT applies the LT predicate on the "attempt_count" field.
+func AttemptCountLT(v int) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldLT(FieldAttemptCount, v))
+}
+
+// AttemptCountLTE applies the LTE predicate on the "attempt_count" field.
+func AttemptCountLTE(v int) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldLTE(FieldAttemptCount, v))
+}
+
+// NextAttemptAtEQ applies the EQ predicate on the "next_attempt_at" field.
+func NextAttemptAtEQ(v time.Time) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEQ(FieldNextAttemptAt, v))
+}
+
+// NextAttemptAtNEQ applies the NEQ predicate on the "next_attempt_at" field.
+func NextAttemptAtNEQ(v time.Time) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNEQ(FieldNextAttemptAt, v))
+}
+
+// NextAttemptAtIn applies the In predicate on the "next_attempt_at" field.
+func NextAttemptAtIn(vs ...time.Time) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldIn(FieldNextAttemptAt, vs...))
+}
+
+// NextAttemptAtNotIn applies the NotIn predicate on the "next_attempt_at" field.
+func NextAttemptAtNotIn(vs ...time.Time) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNotIn(FieldNextAttemptAt, vs...))
+}
+
+// NextAttemptAtGT applies the GT predicate on the "next_attempt_at" field.
+func NextAttemptAtGT(v time.Time) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldGT(FieldNextAttemptAt, v))
+}
+
+// NextAttemptAtGTE applies the GTE predicate on the "next_attempt_at" field.
+func NextAttemptAtGTE(v time.Time) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldGTE(FieldNextAttemptAt, v))
+}
+
+// NextAttemptAtLT applies the LT predicate on the "next_attempt_at" field.
+func NextAttemptAtLT(v time.Time) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldLT(FieldNextAttemptAt, v))
+}
+
+// NextAttemptAtLTE applies the LTE predicate on the "next_attempt_at" field.
+func NextAttemptAtLTE(v time.Time) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldLTE(FieldNextAttemptAt, v))
+}
+
+// LeaseOwnerEQ applies the EQ predicate on the "lease_owner" field.
+func LeaseOwnerEQ(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEQ(FieldLeaseOwner, v))
+}
+
+// LeaseOwnerNEQ applies the NEQ predicate on the "lease_owner" field.
+func LeaseOwnerNEQ(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNEQ(FieldLeaseOwner, v))
+}
+
+// LeaseOwnerIn applies the In predicate on the "lease_owner" field.
+func LeaseOwnerIn(vs ...string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldIn(FieldLeaseOwner, vs...))
+}
+
+// LeaseOwnerNotIn applies the NotIn predicate on the "lease_owner" field.
+func LeaseOwnerNotIn(vs ...string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNotIn(FieldLeaseOwner, vs...))
+}
+
+// LeaseOwnerGT applies the GT predicate on the "lease_owner" field.
+func LeaseOwnerGT(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldGT(FieldLeaseOwner, v))
+}
+
+// LeaseOwnerGTE applies the GTE predicate on the "lease_owner" field.
+func LeaseOwnerGTE(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldGTE(FieldLeaseOwner, v))
+}
+
+// LeaseOwnerLT applies the LT predicate on the "lease_owner" field.
+func LeaseOwnerLT(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldLT(FieldLeaseOwner, v))
+}
+
+// LeaseOwnerLTE applies the LTE predicate on the "lease_owner" field.
+func LeaseOwnerLTE(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldLTE(FieldLeaseOwner, v))
+}
+
+// LeaseOwnerContains applies the Contains predicate on the "lease_owner" field.
+func LeaseOwnerContains(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldContains(FieldLeaseOwner, v))
+}
+
+// LeaseOwnerHasPrefix applies the HasPrefix predicate on the "lease_owner" field.
+func LeaseOwnerHasPrefix(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldHasPrefix(FieldLeaseOwner, v))
+}
+
+// LeaseOwnerHasSuffix applies the HasSuffix predicate on the "lease_owner" field.
+func LeaseOwnerHasSuffix(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldHasSuffix(FieldLeaseOwner, v))
+}
+
+// LeaseOwnerIsNil applies the IsNil predicate on the "lease_owner" field.
+func LeaseOwnerIsNil() predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldIsNull(FieldLeaseOwner))
+}
+
+// LeaseOwnerNotNil applies the NotNil predicate on the "lease_owner" field.
+func LeaseOwnerNotNil() predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNotNull(FieldLeaseOwner))
+}
+
+// LeaseOwnerEqualFold applies the EqualFold predicate on the "lease_owner" field.
+func LeaseOwnerEqualFold(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEqualFold(FieldLeaseOwner, v))
+}
+
+// LeaseOwnerContainsFold applies the ContainsFold predicate on the "lease_owner" field.
+func LeaseOwnerContainsFold(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldContainsFold(FieldLeaseOwner, v))
+}
+
+// LeaseExpiresAtEQ applies the EQ predicate on the "lease_expires_at" field.
+func LeaseExpiresAtEQ(v time.Time) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEQ(FieldLeaseExpiresAt, v))
+}
+
+// LeaseExpiresAtNEQ applies the NEQ predicate on the "lease_expires_at" field.
+func LeaseExpiresAtNEQ(v time.Time) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNEQ(FieldLeaseExpiresAt, v))
+}
+
+// LeaseExpiresAtIn applies the In predicate on the "lease_expires_at" field.
+func LeaseExpiresAtIn(vs ...time.Time) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldIn(FieldLeaseExpiresAt, vs...))
+}
+
+// LeaseExpiresAtNotIn applies the NotIn predicate on the "lease_expires_at" field.
+func LeaseExpiresAtNotIn(vs ...time.Time) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNotIn(FieldLeaseExpiresAt, vs...))
+}
+
+// LeaseExpiresAtGT applies the GT predicate on the "lease_expires_at" field.
+func LeaseExpiresAtGT(v time.Time) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldGT(FieldLeaseExpiresAt, v))
+}
+
+// LeaseExpiresAtGTE applies the GTE predicate on the "lease_expires_at" field.
+func LeaseExpiresAtGTE(v time.Time) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldGTE(FieldLeaseExpiresAt, v))
+}
+
+// LeaseExpiresAtLT applies the LT predicate on the "lease_expires_at" field.
+func LeaseExpiresAtLT(v time.Time) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldLT(FieldLeaseExpiresAt, v))
+}
+
+// LeaseExpiresAtLTE applies the LTE predicate on the "lease_expires_at" field.
+func LeaseExpiresAtLTE(v time.Time) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldLTE(FieldLeaseExpiresAt, v))
+}
+
+// LeaseExpiresAtIsNil applies the IsNil predicate on the "lease_expires_at" field.
+func LeaseExpiresAtIsNil() predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldIsNull(FieldLeaseExpiresAt))
+}
+
+// LeaseExpiresAtNotNil applies the NotNil predicate on the "lease_expires_at" field.
+func LeaseExpiresAtNotNil() predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNotNull(FieldLeaseExpiresAt))
+}
+
+// LastErrorClassEQ applies the EQ predicate on the "last_error_class" field.
+func LastErrorClassEQ(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEQ(FieldLastErrorClass, v))
+}
+
+// LastErrorClassNEQ applies the NEQ predicate on the "last_error_class" field.
+func LastErrorClassNEQ(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNEQ(FieldLastErrorClass, v))
+}
+
+// LastErrorClassIn applies the In predicate on the "last_error_class" field.
+func LastErrorClassIn(vs ...string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldIn(FieldLastErrorClass, vs...))
+}
+
+// LastErrorClassNotIn applies the NotIn predicate on the "last_error_class" field.
+func LastErrorClassNotIn(vs ...string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNotIn(FieldLastErrorClass, vs...))
+}
+
+// LastErrorClassGT applies the GT predicate on the "last_error_class" field.
+func LastErrorClassGT(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldGT(FieldLastErrorClass, v))
+}
+
+// LastErrorClassGTE applies the GTE predicate on the "last_error_class" field.
+func LastErrorClassGTE(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldGTE(FieldLastErrorClass, v))
+}
+
+// LastErrorClassLT applies the LT predicate on the "last_error_class" field.
+func LastErrorClassLT(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldLT(FieldLastErrorClass, v))
+}
+
+// LastErrorClassLTE applies the LTE predicate on the "last_error_class" field.
+func LastErrorClassLTE(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldLTE(FieldLastErrorClass, v))
+}
+
+// LastErrorClassContains applies the Contains predicate on the "last_error_class" field.
+func LastErrorClassContains(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldContains(FieldLastErrorClass, v))
+}
+
+// LastErrorClassHasPrefix applies the HasPrefix predicate on the "last_error_class" field.
+func LastErrorClassHasPrefix(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldHasPrefix(FieldLastErrorClass, v))
+}
+
+// LastErrorClassHasSuffix applies the HasSuffix predicate on the "last_error_class" field.
+func LastErrorClassHasSuffix(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldHasSuffix(FieldLastErrorClass, v))
+}
+
+// LastErrorClassIsNil applies the IsNil predicate on the "last_error_class" field.
+func LastErrorClassIsNil() predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldIsNull(FieldLastErrorClass))
+}
+
+// LastErrorClassNotNil applies the NotNil predicate on the "last_error_class" field.
+func LastErrorClassNotNil() predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNotNull(FieldLastErrorClass))
+}
+
+// LastErrorClassEqualFold applies the EqualFold predicate on the "last_error_class" field.
+func LastErrorClassEqualFold(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEqualFold(FieldLastErrorClass, v))
+}
+
+// LastErrorClassContainsFold applies the ContainsFold predicate on the "last_error_class" field.
+func LastErrorClassContainsFold(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldContainsFold(FieldLastErrorClass, v))
 }
 
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.

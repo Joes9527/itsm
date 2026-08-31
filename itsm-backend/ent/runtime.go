@@ -3681,12 +3681,26 @@ func init() {
 	ticketnotificationDescStatus := ticketnotificationFields[7].Descriptor()
 	// ticketnotification.DefaultStatus holds the default value on creation for the status field.
 	ticketnotification.DefaultStatus = ticketnotificationDescStatus.Default.(string)
+	// ticketnotificationDescAttemptCount is the schema descriptor for attempt_count field.
+	ticketnotificationDescAttemptCount := ticketnotificationFields[9].Descriptor()
+	// ticketnotification.DefaultAttemptCount holds the default value on creation for the attempt_count field.
+	ticketnotification.DefaultAttemptCount = ticketnotificationDescAttemptCount.Default.(int)
+	// ticketnotification.AttemptCountValidator is a validator for the "attempt_count" field. It is called by the builders before save.
+	ticketnotification.AttemptCountValidator = ticketnotificationDescAttemptCount.Validators[0].(func(int) error)
+	// ticketnotificationDescNextAttemptAt is the schema descriptor for next_attempt_at field.
+	ticketnotificationDescNextAttemptAt := ticketnotificationFields[10].Descriptor()
+	// ticketnotification.DefaultNextAttemptAt holds the default value on creation for the next_attempt_at field.
+	ticketnotification.DefaultNextAttemptAt = ticketnotificationDescNextAttemptAt.Default.(func() time.Time)
+	// ticketnotificationDescLastErrorClass is the schema descriptor for last_error_class field.
+	ticketnotificationDescLastErrorClass := ticketnotificationFields[13].Descriptor()
+	// ticketnotification.LastErrorClassValidator is a validator for the "last_error_class" field. It is called by the builders before save.
+	ticketnotification.LastErrorClassValidator = ticketnotificationDescLastErrorClass.Validators[0].(func(string) error)
 	// ticketnotificationDescTenantID is the schema descriptor for tenant_id field.
-	ticketnotificationDescTenantID := ticketnotificationFields[9].Descriptor()
+	ticketnotificationDescTenantID := ticketnotificationFields[14].Descriptor()
 	// ticketnotification.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	ticketnotification.TenantIDValidator = ticketnotificationDescTenantID.Validators[0].(func(int) error)
 	// ticketnotificationDescCreatedAt is the schema descriptor for created_at field.
-	ticketnotificationDescCreatedAt := ticketnotificationFields[10].Descriptor()
+	ticketnotificationDescCreatedAt := ticketnotificationFields[15].Descriptor()
 	// ticketnotification.DefaultCreatedAt holds the default value on creation for the created_at field.
 	ticketnotification.DefaultCreatedAt = ticketnotificationDescCreatedAt.Default.(func() time.Time)
 	tickettagFields := schema.TicketTag{}.Fields()

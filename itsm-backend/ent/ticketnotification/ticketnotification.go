@@ -32,6 +32,16 @@ const (
 	FieldStatus = "status"
 	// FieldDeliveryKey holds the string denoting the delivery_key field in the database.
 	FieldDeliveryKey = "delivery_key"
+	// FieldAttemptCount holds the string denoting the attempt_count field in the database.
+	FieldAttemptCount = "attempt_count"
+	// FieldNextAttemptAt holds the string denoting the next_attempt_at field in the database.
+	FieldNextAttemptAt = "next_attempt_at"
+	// FieldLeaseOwner holds the string denoting the lease_owner field in the database.
+	FieldLeaseOwner = "lease_owner"
+	// FieldLeaseExpiresAt holds the string denoting the lease_expires_at field in the database.
+	FieldLeaseExpiresAt = "lease_expires_at"
+	// FieldLastErrorClass holds the string denoting the last_error_class field in the database.
+	FieldLastErrorClass = "last_error_class"
 	// FieldTenantID holds the string denoting the tenant_id field in the database.
 	FieldTenantID = "tenant_id"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
@@ -70,6 +80,11 @@ var Columns = []string{
 	FieldReadAt,
 	FieldStatus,
 	FieldDeliveryKey,
+	FieldAttemptCount,
+	FieldNextAttemptAt,
+	FieldLeaseOwner,
+	FieldLeaseExpiresAt,
+	FieldLastErrorClass,
 	FieldTenantID,
 	FieldCreatedAt,
 }
@@ -97,6 +112,14 @@ var (
 	ContentValidator func(string) error
 	// DefaultStatus holds the default value on creation for the "status" field.
 	DefaultStatus string
+	// DefaultAttemptCount holds the default value on creation for the "attempt_count" field.
+	DefaultAttemptCount int
+	// AttemptCountValidator is a validator for the "attempt_count" field. It is called by the builders before save.
+	AttemptCountValidator func(int) error
+	// DefaultNextAttemptAt holds the default value on creation for the "next_attempt_at" field.
+	DefaultNextAttemptAt func() time.Time
+	// LastErrorClassValidator is a validator for the "last_error_class" field. It is called by the builders before save.
+	LastErrorClassValidator func(string) error
 	// TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	TenantIDValidator func(int) error
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
@@ -154,6 +177,31 @@ func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 // ByDeliveryKey orders the results by the delivery_key field.
 func ByDeliveryKey(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDeliveryKey, opts...).ToFunc()
+}
+
+// ByAttemptCount orders the results by the attempt_count field.
+func ByAttemptCount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAttemptCount, opts...).ToFunc()
+}
+
+// ByNextAttemptAt orders the results by the next_attempt_at field.
+func ByNextAttemptAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldNextAttemptAt, opts...).ToFunc()
+}
+
+// ByLeaseOwner orders the results by the lease_owner field.
+func ByLeaseOwner(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLeaseOwner, opts...).ToFunc()
+}
+
+// ByLeaseExpiresAt orders the results by the lease_expires_at field.
+func ByLeaseExpiresAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLeaseExpiresAt, opts...).ToFunc()
+}
+
+// ByLastErrorClass orders the results by the last_error_class field.
+func ByLastErrorClass(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLastErrorClass, opts...).ToFunc()
 }
 
 // ByTenantID orders the results by the tenant_id field.

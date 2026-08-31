@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"time"
 
-	"itsm-backend/connector"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processapprovaldecision"
@@ -17,14 +16,14 @@ import (
 	"itsm-backend/ent/ticketworkflowrecord"
 	"itsm-backend/ent/user"
 
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
 type TicketWorkflowService struct {
-	client           *ent.Client
-	logger           *zap.SugaredLogger
-	connectorManager *connector.Manager
-	approvalBridge   *BPMNApprovalBridge
+	client         *ent.Client
+	logger         *zap.SugaredLogger
+	approvalBridge *BPMNApprovalBridge
 }
 
 func NewTicketWorkflowService(client *ent.Client, logger *zap.SugaredLogger) *TicketWorkflowService {
@@ -59,11 +58,6 @@ func (s *TicketWorkflowService) SetProcessEngine(engine ProcessEngine) {
 	if s.approvalBridge != nil {
 		s.approvalBridge.SetProcessEngine(engine)
 	}
-}
-
-// SetConnectorManager 设置连接器管理器，用于飞书、钉钉、企业微信等外部渠道通知。
-func (s *TicketWorkflowService) SetConnectorManager(manager *connector.Manager) {
-	s.connectorManager = manager
 }
 
 // AcceptTicket 接单（事务保护，保证工单状态更新与流转记录的原子性）
@@ -362,10 +356,8 @@ func (s *TicketWorkflowService) CCTicket(ctx context.Context, req *dto.CCTicketR
 		addedUserIDs = append(addedUserIDs, ccUserID)
 	}
 
-	var connectorDeliveries []ccConnectorDelivery
 	if len(addedUserIDs) > 0 {
-		connectorDeliveries, err = txService.createCCNotifications(ctx, tk, addedUserIDs, req.NotifyChannels, tenantID)
-		if err != nil {
+		if err := txService.createCCNotifications(ctx, tk, addedUserIDs, req.NotifyChannels, tenantID); err != nil {
 			return err
 		}
 	}
@@ -388,7 +380,6 @@ func (s *TicketWorkflowService) CCTicket(ctx context.Context, req *dto.CCTicketR
 		return fmt.Errorf("提交抄送事务失败: %w", err)
 	}
 
-	s.dispatchCCConnectorNotifications(ctx, tk, connectorDeliveries, tenantID)
 	return nil
 }
 
@@ -1127,30 +1118,22 @@ func normalizeNotifyChannels(channels []string) []string {
 	return result
 }
 
-type ccConnectorDelivery struct {
-	notificationID int
-	channel        string
-	recipient      *ent.User
-	content        string
-}
-
-func (s *TicketWorkflowService) createCCNotifications(ctx context.Context, tk *ent.Ticket, userIDs []int, channels []string, tenantID int) ([]ccConnectorDelivery, error) {
+func (s *TicketWorkflowService) createCCNotifications(ctx context.Context, tk *ent.Ticket, userIDs []int, channels []string, tenantID int) error {
 	now := time.Now()
 	content := fmt.Sprintf("工单 %s「%s」已抄送给你", tk.TicketNumber, tk.Title)
 	notifyChannels := normalizeNotifyChannels(channels)
 	users, err := s.client.User.Query().Where(user.IDIn(uniqueInts(userIDs)...), user.TenantID(tenantID)).All(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("查询抄送通知用户失败: %w", err)
+		return fmt.Errorf("查询抄送通知用户失败: %w", err)
 	}
 	userByID := make(map[int]*ent.User, len(users))
 	for _, u := range users {
 		userByID[u.ID] = u
 	}
-	deliveries := make([]ccConnectorDelivery, 0)
 	for _, userID := range userIDs {
 		recipient := userByID[userID]
 		if recipient == nil {
-			return nil, fmt.Errorf("抄送通知用户不存在")
+			return fmt.Errorf("抄送通知用户不存在")
 		}
 		for _, channel := range notifyChannels {
 			status := "pending"
@@ -1164,19 +1147,12 @@ func (s *TicketWorkflowService) createCCNotifications(ctx context.Context, tk *e
 				SetStatus(status)
 			if channel == "in_app" {
 				create.SetStatus("sent").SetSentAt(now)
+			} else {
+				create.SetDeliveryKey("ticket-notification-" + uuid.NewString()).SetNextAttemptAt(now)
 			}
-			notification, err := create.Save(ctx)
+			_, err := create.Save(ctx)
 			if err != nil {
-				return nil, fmt.Errorf("创建工单抄送通知失败: %w", err)
-			}
-
-			if channel != "in_app" && s.connectorManager != nil {
-				deliveries = append(deliveries, ccConnectorDelivery{
-					notificationID: notification.ID,
-					channel:        channel,
-					recipient:      recipient,
-					content:        content,
-				})
+				return fmt.Errorf("创建工单抄送通知失败: %w", err)
 			}
 		}
 
@@ -1189,71 +1165,10 @@ func (s *TicketWorkflowService) createCCNotifications(ctx context.Context, tk *e
 			SetActionURL(fmt.Sprintf("/tickets/%d", tk.ID)).
 			SetActionText("查看工单").
 			Save(ctx); err != nil {
-			return nil, fmt.Errorf("创建统一抄送通知失败: %w", err)
+			return fmt.Errorf("创建统一抄送通知失败: %w", err)
 		}
 	}
-	return deliveries, nil
-}
-
-func (s *TicketWorkflowService) dispatchCCConnectorNotifications(ctx context.Context, tk *ent.Ticket, deliveries []ccConnectorDelivery, tenantID int) {
-	for _, delivery := range deliveries {
-		sendErr := s.sendConnectorCCNotification(ctx, tenantID, delivery.channel, tk, delivery.recipient, delivery.content)
-		nextStatus := "sent"
-		if sendErr != nil {
-			nextStatus = "failed"
-			s.logger.Warnw("Failed to send CC notification through connector", "error_class", "connector_send", "ticket_id", tk.ID, "user_id", delivery.recipient.ID, "channel", delivery.channel)
-		}
-		update := s.client.TicketNotification.UpdateOneID(delivery.notificationID).SetStatus(nextStatus)
-		if sendErr == nil {
-			update.SetSentAt(time.Now())
-		}
-		if _, err := update.Save(ctx); err != nil {
-			s.logger.Warnw("Failed to update connector CC notification status", "error_class", "notification_status_update", "notification_id", delivery.notificationID)
-		}
-	}
-}
-
-func (s *TicketWorkflowService) sendConnectorCCNotification(ctx context.Context, tenantID int, channel string, tk *ent.Ticket, recipient *ent.User, content string) error {
-	if s.connectorManager == nil {
-		return fmt.Errorf("connector manager not configured")
-	}
-	if recipient == nil {
-		return fmt.Errorf("recipient not found")
-	}
-
-	target := ""
-	switch channel {
-	case "feishu":
-		target = recipient.FeishuOpenID
-	case "dingtalk", "wecom":
-		target = recipient.Username
-	case "email":
-		target = recipient.Email
-	case "sms":
-		target = recipient.Phone
-	case "webhook":
-		target = recipient.Email
-	default:
-		return fmt.Errorf("unsupported connector channel %s", channel)
-	}
-	if target == "" {
-		return fmt.Errorf("recipient %d has no target for channel %s", recipient.ID, channel)
-	}
-
-	return s.connectorManager.Send(ctx, tenantID, channel, &connector.Message{
-		Channel: target,
-		Type:    "text",
-		Title:   "工单抄送",
-		Content: content,
-		Actions: []connector.Action{
-			{Type: "link", Text: "查看工单", URL: fmt.Sprintf("/tickets/%d", tk.ID)},
-		},
-		Metadata: map[string]interface{}{
-			"ticket_id":     tk.ID,
-			"ticket_number": tk.TicketNumber,
-			"event":         "ticket_cc",
-		},
-	})
+	return nil
 }
 
 func (s *TicketWorkflowService) buildCCListResponse(ctx context.Context, records []*ent.TicketCC) (*dto.TicketCCListResponse, error) {

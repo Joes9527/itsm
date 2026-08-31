@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
@@ -55,5 +56,8 @@ func (TicketCC) Edges() []ent.Edge {
 func (TicketCC) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("tenant_id", "delivery_key", "user_id").Unique(),
+		index.Fields("tenant_id", "ticket_id", "user_id").
+			Unique().
+			Annotations(entsql.IndexWhere("is_active")),
 	}
 }

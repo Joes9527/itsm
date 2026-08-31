@@ -33,10 +33,20 @@ type TicketNotification struct {
 	SentAt time.Time `json:"sent_at,omitempty"`
 	// 阅读时间
 	ReadAt time.Time `json:"read_at,omitempty"`
-	// 状态: pending, sent, read
+	// 状态: pending, processing, sent, read
 	Status string `json:"status,omitempty"`
 	// 内部回调投递幂等键，不对 API 暴露
 	DeliveryKey *string `json:"-"`
+	// 外部投递尝试次数
+	AttemptCount int `json:"-"`
+	// 下次允许投递时间
+	NextAttemptAt time.Time `json:"-"`
+	// 当前投递租约持有者
+	LeaseOwner string `json:"-"`
+	// 当前投递租约过期时间
+	LeaseExpiresAt time.Time `json:"-"`
+	// 最近一次投递失败的安全分类
+	LastErrorClass string `json:"-"`
 	// 租户ID
 	TenantID int `json:"tenant_id,omitempty"`
 	// 创建时间
@@ -85,11 +95,11 @@ func (*TicketNotification) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case ticketnotification.FieldID, ticketnotification.FieldTicketID, ticketnotification.FieldUserID, ticketnotification.FieldTenantID:
+		case ticketnotification.FieldID, ticketnotification.FieldTicketID, ticketnotification.FieldUserID, ticketnotification.FieldAttemptCount, ticketnotification.FieldTenantID:
 			values[i] = new(sql.NullInt64)
-		case ticketnotification.FieldType, ticketnotification.FieldChannel, ticketnotification.FieldContent, ticketnotification.FieldStatus, ticketnotification.FieldDeliveryKey:
+		case ticketnotification.FieldType, ticketnotification.FieldChannel, ticketnotification.FieldContent, ticketnotification.FieldStatus, ticketnotification.FieldDeliveryKey, ticketnotification.FieldLeaseOwner, ticketnotification.FieldLastErrorClass:
 			values[i] = new(sql.NullString)
-		case ticketnotification.FieldSentAt, ticketnotification.FieldReadAt, ticketnotification.FieldCreatedAt:
+		case ticketnotification.FieldSentAt, ticketnotification.FieldReadAt, ticketnotification.FieldNextAttemptAt, ticketnotification.FieldLeaseExpiresAt, ticketnotification.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -166,6 +176,36 @@ func (_m *TicketNotification) assignValues(columns []string, values []any) error
 			} else if value.Valid {
 				_m.DeliveryKey = new(string)
 				*_m.DeliveryKey = value.String
+			}
+		case ticketnotification.FieldAttemptCount:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field attempt_count", values[i])
+			} else if value.Valid {
+				_m.AttemptCount = int(value.Int64)
+			}
+		case ticketnotification.FieldNextAttemptAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field next_attempt_at", values[i])
+			} else if value.Valid {
+				_m.NextAttemptAt = value.Time
+			}
+		case ticketnotification.FieldLeaseOwner:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field lease_owner", values[i])
+			} else if value.Valid {
+				_m.LeaseOwner = value.String
+			}
+		case ticketnotification.FieldLeaseExpiresAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field lease_expires_at", values[i])
+			} else if value.Valid {
+				_m.LeaseExpiresAt = value.Time
+			}
+		case ticketnotification.FieldLastErrorClass:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field last_error_class", values[i])
+			} else if value.Valid {
+				_m.LastErrorClass = value.String
 			}
 		case ticketnotification.FieldTenantID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -250,6 +290,19 @@ func (_m *TicketNotification) String() string {
 	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("delivery_key=<sensitive>")
+	builder.WriteString(", ")
+	builder.WriteString("attempt_count=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AttemptCount))
+	builder.WriteString(", ")
+	builder.WriteString("next_attempt_at=")
+	builder.WriteString(_m.NextAttemptAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("lease_owner=<sensitive>")
+	builder.WriteString(", ")
+	builder.WriteString("lease_expires_at=")
+	builder.WriteString(_m.LeaseExpiresAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("last_error_class=<sensitive>")
 	builder.WriteString(", ")
 	builder.WriteString("tenant_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.TenantID))

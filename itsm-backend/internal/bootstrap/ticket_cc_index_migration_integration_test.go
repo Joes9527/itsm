@@ -1,0 +1,159 @@
+//go:build integration
+
+package bootstrap
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"os"
+	"strings"
+	"testing"
+	"time"
+
+	"itsm-backend/ent"
+	"itsm-backend/ent/migrate"
+
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
+	sqlschema "entgo.io/ent/dialect/sql/schema"
+	"github.com/google/uuid"
+	_ "github.com/lib/pq"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+)
+
+func TestPrepareTicketCCIndexMigrationPostgresReplacesLegacyUniqueIndex(t *testing.T) {
+	withPostgresTicketCCMigrationSchema(t, func(ctx context.Context, db *sql.DB) {
+		require.NoError(t, prepareTicketCCIndexMigration(ctx, db, zap.NewNop().Sugar()), "missing table/index must be safe")
+		createLegacyTicketCCPostgresTable(t, ctx, db)
+		_, err := db.ExecContext(ctx, `CREATE UNIQUE INDEX `+legacyTicketCCIndex+` ON ticket_ccs (tenant_id, ticket_id, user_id)`)
+		require.NoError(t, err)
+		_, err = db.ExecContext(ctx, `
+			INSERT INTO ticket_ccs (user_id, added_by, tenant_id, added_at, is_active, ticket_id)
+			VALUES ($1, $2, $3, $4, true, $5)
+		`, 73, 11, 29, time.Date(2026, 8, 31, 12, 0, 0, 0, time.UTC), 41)
+		require.NoError(t, err)
+
+		migrateTicketCCPostgres(t, ctx, db)
+		assertPostgresActiveTicketCCIndex(t, ctx, db)
+
+		_, err = db.ExecContext(ctx, `UPDATE ticket_ccs SET is_active = false`)
+		require.NoError(t, err)
+		_, err = db.ExecContext(ctx, `
+			INSERT INTO ticket_ccs (user_id, added_by, tenant_id, added_at, is_active, ticket_id)
+			VALUES ($1, $2, $3, $4, true, $5)
+		`, 73, 12, 29, time.Date(2026, 8, 31, 13, 0, 0, 0, time.UTC), 41)
+		require.NoError(t, err, "inactive history must allow an ordinary re-add")
+		_, err = db.ExecContext(ctx, `
+			INSERT INTO ticket_ccs (user_id, added_by, tenant_id, added_at, is_active, ticket_id)
+			VALUES ($1, $2, $3, $4, true, $5)
+		`, 73, 13, 29, time.Date(2026, 8, 31, 14, 0, 0, 0, time.UTC), 41)
+		require.Error(t, err, "a second active ordinary relation must be rejected")
+
+		_, err = db.ExecContext(ctx, `
+			INSERT INTO ticket_ccs (user_id, added_by, tenant_id, delivery_key, added_at, is_active, ticket_id)
+			VALUES ($1, $2, $3, $4, $5, false, $6)
+		`, 74, 11, 29, "callback-key", time.Date(2026, 8, 31, 15, 0, 0, 0, time.UTC), 41)
+		require.NoError(t, err)
+		_, err = db.ExecContext(ctx, `
+			INSERT INTO ticket_ccs (user_id, added_by, tenant_id, delivery_key, added_at, is_active, ticket_id)
+			VALUES ($1, $2, $3, $4, $5, false, $6)
+		`, 74, 12, 29, "callback-key", time.Date(2026, 8, 31, 16, 0, 0, 0, time.UTC), 41)
+		require.Error(t, err, "callback delivery uniqueness must remain enforced")
+	})
+}
+
+func TestPrepareTicketCCIndexMigrationPostgresAllowsHistoricalInactiveDuplicates(t *testing.T) {
+	withPostgresTicketCCMigrationSchema(t, func(ctx context.Context, db *sql.DB) {
+		createLegacyTicketCCPostgresTable(t, ctx, db)
+		for _, addedBy := range []int{11, 12, 13} {
+			_, err := db.ExecContext(ctx, `
+				INSERT INTO ticket_ccs (user_id, added_by, tenant_id, added_at, is_active, ticket_id)
+				VALUES ($1, $2, $3, $4, false, $5)
+			`, 73, addedBy, 29, time.Date(2026, 8, 31, 12, 0, 0, 0, time.UTC), 41)
+			require.NoError(t, err)
+		}
+
+		migrateTicketCCPostgres(t, ctx, db)
+		assertPostgresActiveTicketCCIndex(t, ctx, db)
+		_, err := db.ExecContext(ctx, `
+			INSERT INTO ticket_ccs (user_id, added_by, tenant_id, added_at, is_active, ticket_id)
+			VALUES ($1, $2, $3, $4, true, $5)
+		`, 73, 14, 29, time.Date(2026, 8, 31, 13, 0, 0, 0, time.UTC), 41)
+		require.NoError(t, err)
+
+		var rows, activeRows, nullKeys int
+		require.NoError(t, db.QueryRowContext(ctx, `SELECT COUNT(*) FROM ticket_ccs`).Scan(&rows))
+		require.NoError(t, db.QueryRowContext(ctx, `SELECT COUNT(*) FROM ticket_ccs WHERE is_active`).Scan(&activeRows))
+		require.NoError(t, db.QueryRowContext(ctx, `SELECT COUNT(*) FROM ticket_ccs WHERE delivery_key IS NULL`).Scan(&nullKeys))
+		require.Equal(t, 4, rows)
+		require.Equal(t, 1, activeRows)
+		require.Equal(t, rows, nullKeys)
+	})
+}
+
+func withPostgresTicketCCMigrationSchema(t *testing.T, fn func(context.Context, *sql.DB)) {
+	t.Helper()
+	dsn := os.Getenv("ITSM_TEST_DB")
+	require.NotEmpty(t, dsn, "ITSM_TEST_DB is required for PostgreSQL integration tests")
+	db, err := sql.Open("postgres", dsn)
+	require.NoError(t, err)
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	ctx := context.Background()
+	require.NoError(t, db.PingContext(ctx))
+
+	schemaName := "ticket_cc_bootstrap_" + strings.ReplaceAll(uuid.NewString(), "-", "_")
+	_, err = db.ExecContext(ctx, fmt.Sprintf(`CREATE SCHEMA "%s"`, schemaName))
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, fmt.Sprintf(`SET search_path TO "%s"`, schemaName))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_, _ = db.ExecContext(cleanupCtx, `SET search_path TO public`)
+		_, _ = db.ExecContext(cleanupCtx, fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, schemaName))
+		require.NoError(t, db.Close())
+	})
+
+	fn(ctx, db)
+}
+
+func createLegacyTicketCCPostgresTable(t *testing.T, ctx context.Context, db *sql.DB) {
+	t.Helper()
+	_, err := db.ExecContext(ctx, `
+		CREATE TABLE ticket_ccs (
+			id bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+			user_id bigint NOT NULL,
+			added_by bigint NOT NULL,
+			tenant_id bigint NOT NULL,
+			added_at timestamptz NOT NULL,
+			is_active boolean NOT NULL DEFAULT true,
+			ticket_id bigint NOT NULL
+		)
+	`)
+	require.NoError(t, err)
+}
+
+func migrateTicketCCPostgres(t *testing.T, ctx context.Context, db *sql.DB) {
+	t.Helper()
+	require.NoError(t, prepareTicketCCIndexMigration(ctx, db, zap.NewNop().Sugar()))
+	client := ent.NewClient(ent.Driver(entsql.OpenDB(dialect.Postgres, db)))
+	table := *migrate.TicketCcsTable
+	table.ForeignKeys = nil
+	require.NoError(t, migrate.Create(ctx, client.Schema, []*sqlschema.Table{&table}))
+}
+
+func assertPostgresActiveTicketCCIndex(t *testing.T, ctx context.Context, db *sql.DB) {
+	t.Helper()
+	var definition string
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT indexdef
+		FROM pg_indexes
+		WHERE schemaname = current_schema() AND indexname = $1
+	`, legacyTicketCCIndex).Scan(&definition))
+	normalized := strings.ToLower(strings.Join(strings.Fields(definition), " "))
+	require.Contains(t, normalized, "unique index")
+	require.Contains(t, normalized, "where is_active")
+}
