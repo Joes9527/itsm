@@ -17,20 +17,21 @@ import (
 )
 
 type Config struct {
-	Database   DatabaseConfig   `mapstructure:"database"`
-	Server     ServerConfig     `mapstructure:"server"`
-	JWT        JWTConfig        `mapstructure:"jwt"`
-	Log        LogConfig        `mapstructure:"log"`
-	LLM        LLMConfig        `mapstructure:"llm"`
-	SMS        SMSConfig        `mapstructure:"sms"`
-	SMTP       SMTPConfig       `mapstructure:"smtp"`
-	MinIO      MinIOConfig      `mapstructure:"minio"`
-	Ticket     TicketConfig     `mapstructure:"ticket"`
-	Redis      RedisConfig      `mapstructure:"redis"`
-	Security   SecurityConfig   `mapstructure:"security"`
-	Deployment DeploymentConfig `mapstructure:"deployment"`
-	RLS        RLSConfig        `mapstructure:"rls"`
-	KAFOutbox  KAFOutboxConfig
+	Database       DatabaseConfig   `mapstructure:"database"`
+	Server         ServerConfig     `mapstructure:"server"`
+	JWT            JWTConfig        `mapstructure:"jwt"`
+	Log            LogConfig        `mapstructure:"log"`
+	LLM            LLMConfig        `mapstructure:"llm"`
+	SMS            SMSConfig        `mapstructure:"sms"`
+	SMTP           SMTPConfig       `mapstructure:"smtp"`
+	MinIO          MinIOConfig      `mapstructure:"minio"`
+	Ticket         TicketConfig     `mapstructure:"ticket"`
+	Redis          RedisConfig      `mapstructure:"redis"`
+	Security       SecurityConfig   `mapstructure:"security"`
+	Deployment     DeploymentConfig `mapstructure:"deployment"`
+	RLS            RLSConfig        `mapstructure:"rls"`
+	KAFOutbox      KAFOutboxConfig
+	WorkflowOutbox WorkflowOutboxConfig
 }
 
 // KAFOutboxConfig controls reliable delivery of BPMN delegation events to KAF.
@@ -40,6 +41,14 @@ type KAFOutboxConfig struct {
 	WebhookSecret string
 	BatchSize     int
 	PollInterval  time.Duration
+}
+
+// WorkflowOutboxConfig controls reliable, local delivery of frozen BPMN start
+// requests. Unlike KAF delivery it is always enabled.
+type WorkflowOutboxConfig struct {
+	BatchSize    int
+	PollInterval time.Duration
+	MaxAttempts  int
 }
 
 // RLSConfig 控制 PostgreSQL Row-Level Security 的启用档位。
@@ -303,6 +312,11 @@ func LoadConfig() (*Config, error) {
 		return nil, err
 	}
 	config.KAFOutbox = kafOutboxConfig
+	workflowOutboxConfig, err := loadWorkflowOutboxConfig(kafOutboxEnv)
+	if err != nil {
+		return nil, err
+	}
+	config.WorkflowOutbox = workflowOutboxConfig
 
 	// RLS 三档开关，默认 off（零风险）。
 	config.RLS.Mode = getEnvWithDefault("RLS_MODE", config.RLS.Mode)
@@ -421,6 +435,32 @@ func loadKAFOutboxConfig(getenv func(string) string) (KAFOutboxConfig, error) {
 		if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") || parsedURL.Host == "" || parsedURL.User != nil {
 			return KAFOutboxConfig{}, fmt.Errorf("KAF_WEBHOOK_URL must be an absolute HTTP(S) URL without userinfo")
 		}
+	}
+	return config, nil
+}
+
+func loadWorkflowOutboxConfig(getenv func(string) string) (WorkflowOutboxConfig, error) {
+	config := WorkflowOutboxConfig{BatchSize: 20, PollInterval: 5 * time.Second, MaxAttempts: 10}
+	if value := strings.TrimSpace(getenv("WORKFLOW_OUTBOX_BATCH_SIZE")); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 1 || parsed > 100 {
+			return WorkflowOutboxConfig{}, fmt.Errorf("WORKFLOW_OUTBOX_BATCH_SIZE must be an integer from 1 through 100")
+		}
+		config.BatchSize = parsed
+	}
+	if value := strings.TrimSpace(getenv("WORKFLOW_OUTBOX_POLL_INTERVAL")); value != "" {
+		parsed, err := time.ParseDuration(value)
+		if err != nil || parsed < time.Second || parsed > time.Hour {
+			return WorkflowOutboxConfig{}, fmt.Errorf("WORKFLOW_OUTBOX_POLL_INTERVAL must be between 1s and 1h")
+		}
+		config.PollInterval = parsed
+	}
+	if value := strings.TrimSpace(getenv("WORKFLOW_OUTBOX_MAX_ATTEMPTS")); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 1 || parsed > 100 {
+			return WorkflowOutboxConfig{}, fmt.Errorf("WORKFLOW_OUTBOX_MAX_ATTEMPTS must be an integer from 1 through 100")
+		}
+		config.MaxAttempts = parsed
 	}
 	return config, nil
 }

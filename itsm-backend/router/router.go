@@ -257,10 +257,11 @@ type RouterConfig struct {
 	CloudController        *controller.CloudController
 
 	// Domain Handlers
-	ServiceCatalogHandler *service_catalog.Handler
-	ServiceRequestHandler *service_request.Handler
-	IntakeHandler         *intake.Handler
-	CMDBHandler           *cmdb.Handler
+	ServiceCatalogHandler       *service_catalog.Handler
+	ServiceRequestHandler       *service_request.Handler
+	IntakeHandler               *intake.Handler
+	WorkflowInterventionHandler *intake.WorkflowInterventionHandler
+	CMDBHandler                 *cmdb.Handler
 
 	ProblemHandler        *problem.Handler
 	ChangeHandler         *change.Handler
@@ -499,6 +500,13 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				"/intake/work-items",
 				middleware.RequirePermission("intake", "create"),
 				config.IntakeHandler.CreateWorkItem,
+			)
+		}
+		if config.WorkflowInterventionHandler != nil {
+			tenant.(*gin.RouterGroup).POST(
+				"/intake/work-items/:id/workflow-start/retry",
+				middleware.RequirePermission("intake", "intervene"),
+				config.WorkflowInterventionHandler.RetryWorkflowStart,
 			)
 		}
 

@@ -67,13 +67,14 @@ import (
 )
 
 type Application struct {
-	Cfg                 *config.Config
-	Logger              *zap.SugaredLogger
-	DBClient            *ent.Client
-	Router              *gin.Engine
-	Embedder            service.Embedder
-	VectorStore         *service.VectorStore
-	KAFOutboxDispatcher kafOutboxRunner
+	Cfg                      *config.Config
+	Logger                   *zap.SugaredLogger
+	DBClient                 *ent.Client
+	Router                   *gin.Engine
+	Embedder                 service.Embedder
+	VectorStore              *service.VectorStore
+	KAFOutboxDispatcher      kafOutboxRunner
+	WorkflowOutboxDispatcher kafOutboxRunner
 }
 
 type kafOutboxRunner interface {
@@ -256,6 +257,19 @@ func NewApplication() *Application {
 	// BPMN 子服务（必须在 TicketService 之前创建）
 	processBindingService := service.NewProcessBindingService(client)
 	processEngine := service.NewCustomProcessEngine(client, sugar)
+	customProcessEngine, ok := processEngine.(*service.CustomProcessEngine)
+	if !ok {
+		log.Fatal("custom BPMN process engine is required for workflow outbox delivery")
+	}
+	workflowOutboxRepository := service.NewOutboxEventRepository(client)
+	workflowOutboxDispatcher := service.NewWorkflowStartOutboxDispatcher(
+		workflowOutboxRepository,
+		customProcessEngine,
+		service.WorkflowStartOutboxConfig{
+			BatchSize: cfg.WorkflowOutbox.BatchSize, PollInterval: cfg.WorkflowOutbox.PollInterval, MaxAttempts: cfg.WorkflowOutbox.MaxAttempts,
+		},
+	)
+	workflowInterventionHandler := intake.NewWorkflowInterventionHandler(workflowOutboxRepository)
 	processTriggerService := service.NewProcessTriggerService(client, processEngine)
 	processResolver := service.NewProcessResolver(client, processBindingService)
 	bpmnVersionService := service.NewBPMNVersionService(client, sugar)
@@ -866,18 +880,19 @@ func NewApplication() *Application {
 		CloudController:        cloudController,
 
 		// Domain Handlers
-		ServiceCatalogHandler: scHandler,
-		ServiceRequestHandler: srHandler,
-		IntakeHandler:         intakeHandler,
-		ProblemHandler:        problemHandler,
-		ChangeHandler:         changeHandler,
-		KnowledgeHandler:      knowledgeHandler,
-		SLAHandler:            slaHandler,
-		SLATemplateController: slaTemplateController,
-		AIHandler:             aiHandler, // Added AI domain handler
-		CommonHandler:         commonHandler,
-		AuthController:        authController,
-		RoleHandler:           roleHandler,
+		ServiceCatalogHandler:       scHandler,
+		ServiceRequestHandler:       srHandler,
+		IntakeHandler:               intakeHandler,
+		WorkflowInterventionHandler: workflowInterventionHandler,
+		ProblemHandler:              problemHandler,
+		ChangeHandler:               changeHandler,
+		KnowledgeHandler:            knowledgeHandler,
+		SLAHandler:                  slaHandler,
+		SLATemplateController:       slaTemplateController,
+		AIHandler:                   aiHandler, // Added AI domain handler
+		CommonHandler:               commonHandler,
+		AuthController:              authController,
+		RoleHandler:                 roleHandler,
 
 		// Global Search
 		GlobalSearchController: globalSearchController,
@@ -909,13 +924,14 @@ func NewApplication() *Application {
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	return &Application{
-		Cfg:                 cfg,
-		Logger:              sugar,
-		DBClient:            client,
-		Router:              r,
-		Embedder:            embedder,
-		VectorStore:         vectorStore,
-		KAFOutboxDispatcher: kafOutboxDispatcher,
+		Cfg:                      cfg,
+		Logger:                   sugar,
+		DBClient:                 client,
+		Router:                   r,
+		Embedder:                 embedder,
+		VectorStore:              vectorStore,
+		KAFOutboxDispatcher:      kafOutboxDispatcher,
+		WorkflowOutboxDispatcher: workflowOutboxDispatcher,
 	}
 }
 
@@ -1100,6 +1116,8 @@ func (app *Application) Run() {
 	defer stop()
 	waitForKAFOutbox := app.startKafOutboxDispatcher(ctx)
 	defer waitForKAFOutbox()
+	waitForWorkflowOutbox := app.startWorkflowOutboxDispatcher(ctx)
+	defer waitForWorkflowOutbox()
 
 	// Start background tasks
 	app.startBackgroundTasks()
@@ -1125,6 +1143,20 @@ func (app *Application) startKafOutboxDispatcher(ctx context.Context) func() {
 	go func() {
 		defer waitGroup.Done()
 		app.KAFOutboxDispatcher.Run(ctx)
+	}()
+	return waitGroup.Wait
+}
+
+func (app *Application) startWorkflowOutboxDispatcher(ctx context.Context) func() {
+	if app.WorkflowOutboxDispatcher == nil {
+		return func() {}
+	}
+
+	var waitGroup sync.WaitGroup
+	waitGroup.Add(1)
+	go func() {
+		defer waitGroup.Done()
+		app.WorkflowOutboxDispatcher.Run(ctx)
 	}()
 	return waitGroup.Wait
 }

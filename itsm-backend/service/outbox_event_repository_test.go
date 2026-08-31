@@ -259,6 +259,47 @@ func TestOutboxEventRepository_MarkPublishedFinalizesClaimedEvent(t *testing.T) 
 	assert.WithinDuration(t, publishedAt, event.PublishedAt, time.Millisecond)
 }
 
+func TestOutboxEventRepository_MarkDeadAndRetryWorkflowStartWithAudit(t *testing.T) {
+	repo, client := newOutboxRepository(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	_, err := repo.Enqueue(ctx, nil, NewOutboxEvent{
+		EventID: NewWorkflowStartEventID(501, 22), EventType: workflowStartRequestedEventType,
+		TenantID: 7, AggregateType: "work_item", AggregateID: "501", Payload: json.RawMessage(`{"workItemId":501}`),
+		NextAttemptAt: now.Add(-time.Second),
+	})
+	require.NoError(t, err)
+	claimed, err := repo.ClaimDueByEventType(ctx, now, 1, workflowStartRequestedEventType)
+	require.NoError(t, err)
+	require.Len(t, claimed, 1)
+	repo.clock = func() time.Time { return now }
+	require.NoError(t, repo.MarkDead(ctx, claimed[0].ID, claimed[0].ClaimToken, "password=workflow-secret", OutboxRetryAudit{
+		TenantID: 7, RequestID: claimed[0].EventID, Resource: "work_item:501",
+		Action: "intake.workflow_start.manual_intervention_required", Path: "workflow/start", Method: "DISPATCH", StatusCode: 500,
+	}))
+
+	dead, err := client.OutboxEvent.Get(ctx, claimed[0].ID)
+	require.NoError(t, err)
+	require.Equal(t, outboxEventStatusDead, dead.Status)
+	require.Equal(t, 1, dead.AttemptCount)
+	require.NotContains(t, dead.LastError, "workflow-secret")
+	require.ErrorIs(t, repo.RetryDeadWorkflowStart(ctx, 8, 501), ErrWorkflowStartNotDead)
+
+	retryCtx := context.WithValue(context.WithValue(ctx, "user_id", 31), "request_id", "manual-retry-1")
+	require.NoError(t, repo.RetryDeadWorkflowStart(retryCtx, 7, 501))
+	retried, err := client.OutboxEvent.Get(ctx, claimed[0].ID)
+	require.NoError(t, err)
+	require.Equal(t, outboxEventStatusPending, retried.Status)
+	require.Zero(t, retried.AttemptCount)
+	require.Empty(t, retried.LastError)
+	require.Equal(t, claimed[0].EventID, retried.EventID)
+	audits, err := client.AuditLog.Query().All(ctx)
+	require.NoError(t, err)
+	require.Len(t, audits, 2)
+	require.Equal(t, "intake.workflow_start.retry_requested", audits[1].Action)
+	require.Equal(t, 31, audits[1].UserID)
+}
+
 func TestOutboxEventRepository_RedactsSensitiveEntityFieldsAndSanitizesRetryError(t *testing.T) {
 	repo, client := newOutboxRepository(t)
 	ctx := context.Background()

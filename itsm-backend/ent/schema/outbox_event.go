@@ -40,7 +40,7 @@ func (OutboxEvent) Fields() []ent.Field {
 			Comment("Serialized event payload").
 			Sensitive(),
 		field.String("status").
-			Comment("Delivery status: pending, publishing, published").
+			Comment("Delivery status: pending, publishing, published, dead").
 			Default("pending"),
 		field.Int("attempt_count").
 			Comment("Number of failed delivery attempts").

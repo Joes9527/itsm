@@ -96,6 +96,13 @@ func TestServiceCreateNoProcessSkipsOutbox(t *testing.T) {
 	require.Zero(t, countRows(t, fixture.client.OutboxEvent.Query().Where(outboxevent.AggregateIDEQ(fmt.Sprint(created.WorkItemID)))))
 }
 
+func TestWorkflowStartStatusProjection(t *testing.T) {
+	require.Equal(t, "pending", projectWorkflowStartStatus("pending"))
+	require.Equal(t, "pending", projectWorkflowStartStatus("publishing"))
+	require.Equal(t, "active", projectWorkflowStartStatus("published"))
+	require.Equal(t, "manual_intervention_required", projectWorkflowStartStatus("dead"))
+}
+
 type failingReferenceResolver struct{ err error }
 
 func (r failingReferenceResolver) Resolve(context.Context, *ent.Tx, Identity, CreateWorkItemCommand) (*ResolvedIntake, error) {

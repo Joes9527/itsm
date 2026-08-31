@@ -19,6 +19,9 @@ const (
 	outboxEventStatusPending    = "pending"
 	outboxEventStatusPublishing = "publishing"
 	outboxEventStatusPublished  = "published"
+	outboxEventStatusDead       = "dead"
+
+	workflowStartRequestedEventType = "workflow.start.requested"
 
 	outboxEventClaimLeaseDuration = 5 * time.Minute
 	outboxEventLastErrorMaxLength = 512
@@ -34,6 +37,8 @@ var (
 	// ErrOutboxEventClaimLost reports a completion attempt for an expired or
 	// superseded publishing lease.
 	ErrOutboxEventClaimLost = errors.New("outbox event claim is no longer active")
+
+	ErrWorkflowStartNotDead = errors.New("workflow start event is not awaiting manual intervention")
 
 	outboxSensitiveErrorJSONValuePattern   = regexp.MustCompile(`(?i)("(?:authorization|access[_ -]?token|client[_ -]?secret|token|secret|password|api[_ -]?key)"\s*:\s*")(?:\\.|[^"\\])*(")`)
 	outboxSensitiveErrorValuePattern       = regexp.MustCompile(`(?i)(^|[^[:alnum:]_])(authorization|access[_ -]?token|client[_ -]?secret|token|secret|password|api[_ -]?key)\s*[:=]\s*(?:bearer\s+)?[^\s,;]+`)
@@ -318,6 +323,101 @@ func (r *OutboxEventRepository) MarkPublished(ctx context.Context, eventID int, 
 	}
 	if updated == 0 {
 		return ErrOutboxEventClaimLost
+	}
+	return nil
+}
+
+// MarkDead atomically terminates an active delivery lease and writes the audit
+// evidence required for operator intervention.
+func (r *OutboxEventRepository) MarkDead(ctx context.Context, eventID int, claimToken, lastError string, audit OutboxRetryAudit) error {
+	tx, err := r.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("start outbox dead-letter transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	updated, err := tx.OutboxEvent.Update().Where(
+		outboxevent.IDEQ(eventID),
+		outboxevent.StatusEQ(outboxEventStatusPublishing),
+		outboxevent.ClaimTokenEQ(claimToken),
+		outboxevent.ClaimExpiresAtGT(r.currentTime()),
+	).SetStatus(outboxEventStatusDead).
+		AddAttemptCount(1).
+		SetLastError(summarizeOutboxError(lastError)).
+		ClearClaimToken().
+		ClearClaimExpiresAt().
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("mark outbox event dead: %w", err)
+	}
+	if updated == 0 {
+		return ErrOutboxEventClaimLost
+	}
+	if err := tx.AuditLog.Create().
+		SetTenantID(audit.TenantID).
+		SetRequestID(audit.RequestID).
+		SetResource(audit.Resource).
+		SetAction(audit.Action).
+		SetPath(audit.Path).
+		SetMethod(audit.Method).
+		SetStatusCode(audit.StatusCode).
+		Exec(ctx); err != nil {
+		return fmt.Errorf("record dead-letter audit: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit outbox dead-letter transaction: %w", err)
+	}
+	return nil
+}
+
+// RetryDeadWorkflowStart returns only a tenant-owned dead workflow-start event
+// to pending while retaining its immutable event ID and payload.
+func (r *OutboxEventRepository) RetryDeadWorkflowStart(ctx context.Context, tenantID, workItemID int) error {
+	if tenantID <= 0 || workItemID <= 0 {
+		return ErrWorkflowStartNotDead
+	}
+	tx, err := r.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("start workflow retry transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	updated, err := tx.OutboxEvent.Update().Where(
+		outboxevent.TenantIDEQ(tenantID),
+		outboxevent.EventTypeEQ(workflowStartRequestedEventType),
+		outboxevent.AggregateTypeEQ("work_item"),
+		outboxevent.AggregateIDEQ(fmt.Sprint(workItemID)),
+		outboxevent.StatusEQ(outboxEventStatusDead),
+	).SetStatus(outboxEventStatusPending).
+		SetAttemptCount(0).
+		SetNextAttemptAt(r.currentTime()).
+		ClearLastError().
+		ClearClaimToken().
+		ClearClaimExpiresAt().
+		ClearPublishedAt().
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("retry dead workflow start: %w", err)
+	}
+	if updated != 1 {
+		return ErrWorkflowStartNotDead
+	}
+	userID, _ := ctx.Value("user_id").(int)
+	requestID, _ := ctx.Value("request_id").(string)
+	createAudit := tx.AuditLog.Create().
+		SetTenantID(tenantID).
+		SetRequestID(requestID).
+		SetResource(fmt.Sprintf("work_item:%d", workItemID)).
+		SetAction("intake.workflow_start.retry_requested").
+		SetPath(fmt.Sprintf("/api/v1/intake/work-items/%d/workflow-start/retry", workItemID)).
+		SetMethod("POST").
+		SetStatusCode(202)
+	if userID > 0 {
+		createAudit.SetUserID(userID)
+	}
+	if err := createAudit.Exec(ctx); err != nil {
+		return fmt.Errorf("record workflow retry audit: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit workflow retry transaction: %w", err)
 	}
 	return nil
 }

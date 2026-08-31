@@ -237,10 +237,7 @@ func (e *CustomProcessEngine) CallbackRegistry() *bpmn.CallbackRegistry {
 
 // StartProcess 启动流程实例
 func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitionKey string, businessKey string, businessType string, businessID int, variables map[string]interface{}) (*ent.ProcessInstance, error) {
-	// 1. 获取租户ID
 	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
-
-	// 2. 获取流程定义
 	query := e.client.ProcessDefinition.Query().
 		Where(processdefinition.Key(processDefinitionKey)).
 		Where(processdefinition.IsActive(true)).
@@ -252,8 +249,53 @@ func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitio
 	if err != nil {
 		return nil, fmt.Errorf("获取流程定义失败: %w", err)
 	}
+	return e.startProcessWithDefinition(ctx, definition, businessKey, businessType, businessID, variables, false)
+}
 
-	// 3. 解析BPMN
+// StartProcessByDefinitionID starts the exact active definition frozen by the
+// caller. Its business key is an idempotency key: a retry returns the existing
+// tenant/definition instance even when that instance has already completed.
+func (e *CustomProcessEngine) StartProcessByDefinitionID(
+	ctx context.Context,
+	definitionID int,
+	businessKey string,
+	businessType string,
+	businessID int,
+	variables map[string]any,
+) (*ent.ProcessInstance, error) {
+	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
+	if tenantID <= 0 {
+		return nil, fmt.Errorf("workflow start requires tenant context")
+	}
+	if definitionID <= 0 || strings.TrimSpace(businessKey) == "" {
+		return nil, fmt.Errorf("workflow definition ID and business key are required")
+	}
+	definition, err := e.client.ProcessDefinition.Query().Where(
+		processdefinition.IDEQ(definitionID),
+		processdefinition.TenantIDEQ(tenantID),
+		processdefinition.IsActiveEQ(true),
+	).Only(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("load frozen process definition: %w", err)
+	}
+	if existing, err := e.loadIdempotentProcessInstance(ctx, tenantID, definition.ID, businessKey); err == nil {
+		return existing, nil
+	} else if !ent.IsNotFound(err) {
+		return nil, fmt.Errorf("load existing workflow start: %w", err)
+	}
+	return e.startProcessWithDefinition(ctx, definition, businessKey, businessType, businessID, variables, true)
+}
+
+func (e *CustomProcessEngine) startProcessWithDefinition(
+	ctx context.Context,
+	definition *ent.ProcessDefinition,
+	businessKey string,
+	businessType string,
+	businessID int,
+	variables map[string]any,
+	idempotent bool,
+) (*ent.ProcessInstance, error) {
+	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
 	bpmnDefinitions, err := e.parser.ParseXML(definition.BpmnXML)
 	if err != nil {
 		return nil, fmt.Errorf("解析BPMN失败: %w", err)
@@ -264,17 +306,15 @@ func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitio
 	}
 	process := bpmnDefinitions.Processes[0]
 
-	// 3. 找到开始事件
 	if len(process.StartEvents) == 0 {
 		return nil, fmt.Errorf("流程缺少开始事件")
 	}
 	startEvent := process.StartEvents[0]
 
-	// 4. 创建流程实例
 	createInstance := e.client.ProcessInstance.Create().
-		SetProcessInstanceID(fmt.Sprintf("PI-%s-%d", processDefinitionKey, time.Now().UnixNano())).
+		SetProcessInstanceID(fmt.Sprintf("PI-%s-%d", definition.Key, time.Now().UnixNano())).
 		SetBusinessKey(businessKey).
-		SetProcessDefinitionKey(processDefinitionKey).
+		SetProcessDefinitionKey(definition.Key).
 		SetProcessDefinitionID(definition.ID).
 		SetStatus("running").
 		SetVariables(variables).
@@ -290,6 +330,12 @@ func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitio
 	}
 	instance, err := createInstance.Save(ctx)
 	if err != nil {
+		if idempotent && ent.IsConstraintError(err) {
+			existing, loadErr := e.loadIdempotentProcessInstance(ctx, definition.TenantID, definition.ID, businessKey)
+			if loadErr == nil {
+				return existing, nil
+			}
+		}
 		// idx_process_instances_running_unique（migration 015）是这条并发竞态的最终防线：
 		// 各业务域（如 handlers/change 的 SubmitChange）在调用这里之前都做了一次
 		// "同 businessKey 是否已有运行中实例"的应用层检查，但那是 check-then-act，
@@ -297,12 +343,17 @@ func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitio
 		// INSERT 失败，转成友好错误而不是让原始 SQL 报错裸露给调用方。
 		var pqErr *pq.Error
 		if errors.As(err, &pqErr) && pqErr.Code == "23505" && pqErr.Constraint == "idx_process_instances_running_unique" {
+			if idempotent {
+				existing, loadErr := e.loadIdempotentProcessInstance(ctx, definition.TenantID, definition.ID, businessKey)
+				if loadErr == nil {
+					return existing, nil
+				}
+			}
 			return nil, fmt.Errorf("该业务实体已存在一个运行中的流程实例，不能重复触发")
 		}
 		return nil, fmt.Errorf("创建流程实例失败: %w", err)
 	}
 
-	// 5. 执行流程推进（从StartEvent开始）
 	// 平台级操作（ctx 无租户键：controller 的 getBPMNTenantContext 对 tenant_id=0
 	// 不注入）此前会在带 RequireTenantID 的 ServiceTask 上硬失败。实例租户跟随流程
 	// 定义（definition.TenantID 是 Positive 校验过的权威值），把它注入 ctx 后 handler
@@ -315,7 +366,6 @@ func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitio
 		return nil, err
 	}
 
-	// 6. 记录审计日志 - 流程启动
 	// 从context中获取用户信息
 	userID := 0
 	userName := ""
@@ -328,6 +378,14 @@ func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitio
 	}
 
 	return instance, nil
+}
+
+func (e *CustomProcessEngine) loadIdempotentProcessInstance(ctx context.Context, tenantID, definitionID int, businessKey string) (*ent.ProcessInstance, error) {
+	return e.client.ProcessInstance.Query().Where(
+		processinstance.TenantIDEQ(tenantID),
+		processinstance.ProcessDefinitionIDEQ(definitionID),
+		processinstance.BusinessKeyEQ(businessKey),
+	).Order(ent.Asc(processinstance.FieldID)).First(ctx)
 }
 
 // CompleteTask 完成任务（使用乐观锁保护变量合并，防止并发覆写）

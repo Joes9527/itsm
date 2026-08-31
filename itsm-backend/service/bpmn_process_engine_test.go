@@ -7,12 +7,55 @@ import (
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/service/bpmn"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
+
+func TestStartProcessByDefinitionIDUsesFrozenDefinitionAndReplays(t *testing.T) {
+	ctx := context.Background()
+	client := enttest.Open(t, "sqlite3", "file:frozen_process_start?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	tenant, err := client.Tenant.Create().SetName("Frozen process tenant").SetCode("frozen-process").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	deployment, err := client.ProcessDeployment.Create().SetDeploymentID("frozen-deployment").SetDeploymentName("Frozen").SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	oldDefinition, err := client.ProcessDefinition.Create().SetKey("frozen-flow").SetName("Frozen v1").SetVersion("1").
+		SetBpmnXML([]byte(minimalStartEndBPMN("frozen-v1"))).SetIsActive(true).SetIsLatest(false).
+		SetDeploymentID(deployment.ID).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	_, err = client.ProcessDefinition.Create().SetKey("frozen-flow").SetName("Frozen v2").SetVersion("2").
+		SetBpmnXML([]byte(minimalStartEndBPMN("frozen-v2"))).SetIsActive(true).SetIsLatest(true).
+		SetDeploymentID(deployment.ID).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	engine := NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar()).(*CustomProcessEngine)
+	tenantCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+	first, err := engine.StartProcessByDefinitionID(tenantCtx, oldDefinition.ID, "workflow-start:501:1", "work_item", 501, map[string]any{"workItemId": 501})
+	require.NoError(t, err)
+	require.Equal(t, oldDefinition.ID, first.ProcessDefinitionID)
+
+	replayed, err := engine.StartProcessByDefinitionID(tenantCtx, oldDefinition.ID, "workflow-start:501:1", "work_item", 501, map[string]any{"workItemId": 501})
+	require.NoError(t, err)
+	require.Equal(t, first.ID, replayed.ID)
+	count, err := client.ProcessInstance.Query().Count(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, count)
+}
+
+func minimalStartEndBPMN(processID string) string {
+	return `<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+  <process id="` + processID + `" isExecutable="true">
+    <startEvent id="start"><outgoing>flow-1</outgoing></startEvent>
+    <endEvent id="end"><incoming>flow-1</incoming></endEvent>
+    <sequenceFlow id="flow-1" sourceRef="start" targetRef="end" />
+  </process>
+</definitions>`
+}
 
 // TestEvaluateCondition_FailureReturnsFalse 测试条件评估失败时返回 false
 func TestEvaluateCondition_FailureReturnsFalse(t *testing.T) {

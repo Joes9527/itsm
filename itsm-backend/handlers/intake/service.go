@@ -290,8 +290,10 @@ func (s *Service) loadResult(ctx context.Context, tx *ent.Tx, tenantID, workItem
 
 func projectWorkflowStartStatus(outboxStatus string) string {
 	switch outboxStatus {
-	case "pending", "publishing", "published":
+	case "pending", "publishing":
 		return "pending"
+	case "published":
+		return "active"
 	default:
 		return "manual_intervention_required"
 	}

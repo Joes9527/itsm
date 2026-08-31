@@ -105,13 +105,14 @@ func TestSetupRoutesRegistersAuthenticatedIntakeCreateRoute(t *testing.T) {
 	router := gin.New()
 	SetupRoutes(router, &RouterConfig{
 		JWTSecret: "test-secret", Logger: zaptest.NewLogger(t).Sugar(), Client: client,
-		IntakeHandler: intake.NewHandler(nil),
+		IntakeHandler: intake.NewHandler(nil), WorkflowInterventionHandler: intake.NewWorkflowInterventionHandler(nil),
 	})
 	routes := make(map[string]bool)
 	for _, route := range router.Routes() {
 		routes[route.Method+" "+route.Path] = true
 	}
 	require.True(t, routes["POST /api/v1/intake/work-items"])
+	require.True(t, routes["POST /api/v1/intake/work-items/:id/workflow-start/retry"])
 }
 
 // =====================================================================
