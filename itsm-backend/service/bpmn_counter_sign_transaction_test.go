@@ -66,6 +66,9 @@ func counterSignGeneratedTaskCount(t *testing.T, f *bpmnAuthorizationFixture, in
 func startAutomaticCounterSignProcess(t *testing.T, approvalMode string) (*bpmnAuthorizationFixture, context.Context, *ent.ProcessInstance, *ent.ProcessTask) {
 	t.Helper()
 	f := newBPMNAuthorizationFixture(t)
+	f.engine.CallbackRegistry().RegisterHandler(
+		newCountingIdempotentCallbackHandler("counter_sign_transaction_callback", "counter_sign_transaction_callback_handler", 0),
+	)
 	configureStartProcessDefinition(t, f, automaticCounterSignBPMNXML(
 		approvalMode,
 		strconv.Itoa(f.actor.ID),
