@@ -3,6 +3,7 @@ package service_catalog
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/citype"
@@ -60,6 +61,27 @@ func (r *EntRepository) Get(ctx context.Context, tenantID int, id int) (*Service
 		Where(
 			servicecatalog.ID(id),
 			servicecatalog.TenantID(tenantID),
+		).
+		Only(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return r.toDomain(res), nil
+}
+
+// GetActiveForIntake loads the authoritative catalog configuration through the
+// caller's transaction. TargetClass is read exactly as persisted; this path
+// never derives it from the legacy ITSMType field.
+func (r *EntRepository) GetActiveForIntake(ctx context.Context, tx *ent.Tx, tenantID int, id int) (*ServiceCatalog, error) {
+	if tx == nil {
+		return nil, fmt.Errorf("intake catalog transaction is required")
+	}
+	res, err := tx.ServiceCatalog.Query().
+		Where(
+			servicecatalog.IDEQ(id),
+			servicecatalog.TenantIDEQ(tenantID),
+			servicecatalog.IsActiveEQ(true),
+			servicecatalog.StatusIn("active", "enabled"),
 		).
 		Only(ctx)
 	if err != nil {
@@ -278,5 +300,6 @@ func (r *EntRepository) toDomain(e *ent.ServiceCatalog) *ServiceCatalog {
 		TenantID:             e.TenantID,
 		CreatedAt:            e.CreatedAt,
 		UpdatedAt:            e.UpdatedAt,
+		Version:              e.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
 }

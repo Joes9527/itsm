@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"strings"
 
@@ -13,6 +14,19 @@ import (
 	"github.com/pkg/errors"
 )
 
+var (
+	ErrIntakeWorkflowBindingRequired = stderrors.New("intake workflow binding required")
+	ErrIntakeRecordClassUnsupported  = stderrors.New("intake record class unsupported")
+)
+
+type IntakeProcessBinding struct {
+	DefinitionID      int
+	DefinitionKey     string
+	DefinitionVersion string
+	NoProcess         bool
+	SLAPolicyID       string
+}
+
 // ProcessBindingService 流程绑定配置服务
 type ProcessBindingService struct {
 	client *ent.Client
@@ -21,6 +35,114 @@ type ProcessBindingService struct {
 // NewProcessBindingService 创建流程绑定服务
 func NewProcessBindingService(client *ent.Client) *ProcessBindingService {
 	return &ProcessBindingService{client: client}
+}
+
+// ResolveIntakeBinding freezes the exact active ProcessDefinition selected for
+// a new WorkItem. A catalog-specific key wins over generic binding rules. The
+// only successful result without a definition is an explicitly configured
+// conditions.no_process=true binding.
+func (s *ProcessBindingService) ResolveIntakeBinding(
+	ctx context.Context,
+	tx *ent.Tx,
+	tenantID int,
+	recordClass string,
+	catalogDefinitionKey string,
+) (*IntakeProcessBinding, error) {
+	if tx == nil {
+		return nil, fmt.Errorf("%w: transaction is required", ErrIntakeWorkflowBindingRequired)
+	}
+	client := tx.Client()
+	definitionKey := strings.TrimSpace(catalogDefinitionKey)
+	if definitionKey != "" {
+		return resolveIntakeProcessDefinition(ctx, client, tenantID, definitionKey, 0)
+	}
+
+	subType := ""
+	switch recordClass {
+	case "incident":
+		subType = "incident"
+	case "service_request_item":
+		subType = "service_request"
+	default:
+		return nil, fmt.Errorf("%w: %s", ErrIntakeRecordClassUnsupported, recordClass)
+	}
+
+	binding, err := client.ProcessBinding.Query().
+		Where(
+			processbinding.TenantIDEQ(tenantID),
+			processbinding.BusinessTypeEQ(string(dto.BusinessTypeTicket)),
+			processbinding.BusinessSubTypeEQ(subType),
+			processbinding.IsActiveEQ(true),
+		).
+		Order(
+			ent.Desc(processbinding.FieldPriority),
+			ent.Desc(processbinding.FieldIsDefault),
+			ent.Asc(processbinding.FieldID),
+		).
+		First(ctx)
+	if ent.IsNotFound(err) {
+		return nil, fmt.Errorf("%w: no active binding for %s", ErrIntakeWorkflowBindingRequired, recordClass)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("resolve intake workflow binding: %w", err)
+	}
+	if noProcess, ok := binding.Conditions["no_process"].(bool); ok && noProcess {
+		return &IntakeProcessBinding{NoProcess: true, SLAPolicyID: binding.SLAPolicyID}, nil
+	}
+	resolved, err := resolveIntakeProcessDefinition(ctx, client, tenantID, binding.ProcessDefinitionKey, binding.ProcessVersion)
+	if err != nil {
+		return nil, err
+	}
+	resolved.SLAPolicyID = binding.SLAPolicyID
+	return resolved, nil
+}
+
+func resolveIntakeProcessDefinition(ctx context.Context, client *ent.Client, tenantID int, key string, majorVersion int) (*IntakeProcessBinding, error) {
+	query := client.ProcessDefinition.Query().Where(
+		processdefinition.TenantIDEQ(tenantID),
+		processdefinition.KeyEQ(strings.TrimSpace(key)),
+		processdefinition.IsActiveEQ(true),
+	)
+	if majorVersion <= 0 {
+		query = query.Where(processdefinition.IsLatestEQ(true))
+	}
+	definitions, err := query.Order(
+		ent.Desc(processdefinition.FieldIsLatest),
+		ent.Desc(processdefinition.FieldDeployedAt),
+		ent.Desc(processdefinition.FieldID),
+	).All(ctx)
+	var definition *ent.ProcessDefinition
+	if err == nil {
+		for _, candidate := range definitions {
+			if majorVersion <= 0 || processDefinitionMajorVersion(candidate.Version) == majorVersion {
+				definition = candidate
+				break
+			}
+		}
+	}
+	if ent.IsNotFound(err) {
+		return nil, fmt.Errorf("%w: active definition %s was not found", ErrIntakeWorkflowBindingRequired, key)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("resolve intake process definition: %w", err)
+	}
+	if definition == nil {
+		return nil, fmt.Errorf("%w: active definition %s version %d was not found", ErrIntakeWorkflowBindingRequired, key, majorVersion)
+	}
+	return &IntakeProcessBinding{
+		DefinitionID:      definition.ID,
+		DefinitionKey:     definition.Key,
+		DefinitionVersion: definition.Version,
+	}, nil
+}
+
+func processDefinitionMajorVersion(version string) int {
+	version = strings.TrimPrefix(strings.TrimSpace(version), "v")
+	var major int
+	if _, err := fmt.Sscanf(version, "%d", &major); err != nil {
+		return 0
+	}
+	return major
 }
 
 // CreateBinding 创建流程绑定

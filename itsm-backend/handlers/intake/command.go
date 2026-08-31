@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+
+	"itsm-backend/ent"
 )
 
 const (
@@ -71,10 +73,13 @@ type ResolvedCatalog struct {
 	ID                      int
 	Version                 string
 	TargetClass             string
+	ServiceType             string
+	DeliveryTime            int
 	FormSchemaVersion       string
 	ProcessDefinitionKey    string
 	SLADefinitionID         *int
 	ConfigurationItemTypeID *int
+	CloudServiceID          *int
 }
 
 type ResolvedCTI struct {
@@ -88,19 +93,21 @@ type ResolvedFieldDefinition struct {
 	Key      string
 	DataType string
 	Required bool
+	Options  []any
 }
 
 type ResolvedIntake struct {
-	Identity         Identity
-	Command          CreateWorkItemCommand
-	RecordClass      string
-	Catalog          *ResolvedCatalog
-	CTI              ResolvedCTI
-	CIIDs            []int
-	FieldDefinitions []ResolvedFieldDefinition
-	Workflow         ResolvedWorkflowBinding
-	SLADefinitionID  *int
-	ResolverVersion  string
+	Identity           Identity
+	Command            CreateWorkItemCommand
+	RecordClass        string
+	Catalog            *ResolvedCatalog
+	CTI                ResolvedCTI
+	CIIDs              []int
+	ConfigurationItems []*ent.ConfigurationItem
+	FieldDefinitions   []ResolvedFieldDefinition
+	Workflow           ResolvedWorkflowBinding
+	SLADefinitionID    *int
+	ResolverVersion    string
 }
 
 type WorkItemDraft struct {

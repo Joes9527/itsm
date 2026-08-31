@@ -35,6 +35,7 @@ type ServiceCatalog struct {
 	Fields               []service.FieldDefinitionInput
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
+	Version              string
 }
 
 // Repository defines the interface for data persistence

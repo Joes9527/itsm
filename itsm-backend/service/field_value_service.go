@@ -23,7 +23,7 @@ func NewFieldValueService(client *ent.Client) *FieldValueService {
 // validateFieldValue 按字段定义的 field_type 做最基本的格式/成员校验。只处理有明确
 // 判定标准的类型（number 是不是数字、select/multiselect 的值在不在 options 里）；
 // text/textarea/date/boolean/file 目前没有额外格式约束，跳过。
-func validateFieldValue(def *ent.FieldDefinition, raw interface{}) error {
+func ValidateFieldValue(def *ent.FieldDefinition, raw interface{}) error {
 	switch def.FieldType {
 	case "number":
 		switch raw.(type) {
@@ -71,6 +71,10 @@ func validateFieldValue(def *ent.FieldDefinition, raw interface{}) error {
 	default:
 		return nil
 	}
+}
+
+func validateFieldValue(def *ent.FieldDefinition, raw interface{}) error {
+	return ValidateFieldValue(def, raw)
 }
 
 // CreateValues 把提交的 values（fieldName -> 原始值）跟 (defEntityType, defEntityID) 下的
