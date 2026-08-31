@@ -1,5 +1,10 @@
 # ITSM 业务完整性与可扩展性评估
 
+> **[已归档]** 本文档已被 [architecture-and-roadmap-assessment-2026-08-26.md](../reviews/architecture-and-roadmap-assessment-2026-08-26.md)
+> 逐条重查，其事件总线、Incident→Problem UI 等结论又被
+> [architecture-product-assessment-2026-08-30.md](../../architecture-product-assessment-2026-08-30.md) 进一步核实更新，
+> 请以 08-30 文档为准。本文档保留作为历史记录。
+
 > 评估日期: 2026-08-13
 > 方法: 三路并行代码审计（ITIL 流程闭环 / 平台能力 / 可扩展性）+ 生产环境 API 实测
 > 视角: 真实用户能否走完流程？平台能否不改核心代码扩展？

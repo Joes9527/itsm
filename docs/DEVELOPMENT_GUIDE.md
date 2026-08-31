@@ -48,6 +48,19 @@ ADMIN_PASSWORD=admin123
 NEXT_PUBLIC_API_URL=http://localhost:8090
 ```
 
+### 开发环境拓扑（多机协作）
+
+当前 ITSM 项目在两台机器上并行开发，不是单机自包含环境：
+
+- **本机（Mac）**：日常编码环境，运行前端 `npm run dev`、后端 `go run main.go` 等本地进程。
+- **192.168.31.66**：承载共享的 Postgres / Redis 基础设施——本机 `itsm-backend/.env` 的 `DB_HOST`/`REDIS_HOST` 均指向这台机器，本地后端连的不是私有 Docker 实例，而是这台机器上的共享数据库。同一台机器上还运行着另一路代码检出/worktree（供并行 agent 任务使用）以及 GitHub Actions self-hosted CI runner。
+
+由此带来的实际约束：
+
+1. **DB/Redis 是共享基础设施，不是本机沙箱。** 本机执行的迁移、`-fresh` 重置、RLS 模式切换（`RLS_MODE=shadow/enforce`）、批量数据操作，影响的是所有连到 `192.168.31.66` 的开发者和 agent，不只是当前会话。执行破坏性操作前先确认没有其他人正在使用（参见 [CLAUDE.md](../CLAUDE.md) 中关于 `-fresh` migrate 的警告）。
+2. **派发并行/后台任务前，先确认远端是否已有同名 worktree 在跑。** 已有过因未核对而重复排期的教训（KAF 委派链路），核对方法与纪律见 [architecture-assessment-remediation-execution-plan-design.md](superpowers/specs/2026-08-30-architecture-assessment-remediation-execution-plan-design.md) 的"五、执行纪律"一节。
+3. 连接 `192.168.31.66` 所需的跳板、端口、鉴权等个人 SSH 配置不进入本文档；需要登录该机器做运维/调试时，向持有该配置的开发者确认。
+
 ---
 
 ## 2. Docker 部署与运维排查

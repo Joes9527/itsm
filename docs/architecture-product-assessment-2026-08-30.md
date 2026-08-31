@@ -6,8 +6,9 @@
 > （含 2026-08-26 新增的"统一 Work Item 领域模型契约"一节）。
 >
 > 与既有评估的关系：本次评估对照并核实了
-> [architecture-and-roadmap-assessment-2026-08-26.md](./architecture-and-roadmap-assessment-2026-08-26.md)
-> （4 天前，file:line 级证据）与更早的 [architecture-assessment-2026-08.md](./architecture-assessment-2026-08.md)
+> [architecture-and-roadmap-assessment-2026-08-26.md](./archive/reviews/architecture-and-roadmap-assessment-2026-08-26.md)
+> （4 天前，file:line 级证据，现已归档）与更早的
+> [architecture-assessment-2026-08.md](./archive/reviews/architecture-assessment-2026-08.md)（现已归档）
 > 的结论；凡本文与前两份结论不一致处，均以本次重新核实的代码现状为准，并在正文标注差异原因，
 > 不直接假定前份结论仍然成立（08-26 报告本身也记录了一次"分支落后 origin/main 24 个提交导致
 > 结论过期"的教训，见其"审批机制单轨化"一节的更新说明，值得作为核实方法参考）。
@@ -221,9 +222,9 @@ AGENTS.md 2026-08-26 新增的"统一 Work Item 领域模型契约"是当前对 
 
 ### 既有评估与设计稿（本次核实对照的前置文档）
 
-- [architecture-and-roadmap-assessment-2026-08-26.md](./architecture-and-roadmap-assessment-2026-08-26.md) — 4 天前的架构诊断，file:line 级证据，本次评估的主要对照基线
-- [architecture-assessment-2026-08.md](./architecture-assessment-2026-08.md) — 更早一轮评估
-- [superpowers/specs/2026-08-26-approval-single-track-convergence-design.md](./superpowers/specs/2026-08-26-approval-single-track-convergence-design.md) — 审批单轨化收尾核实，确认 Change 域已通过 PR#6 收口
+- [architecture-and-roadmap-assessment-2026-08-26.md](./archive/reviews/architecture-and-roadmap-assessment-2026-08-26.md) — 4 天前的架构诊断，file:line 级证据，本次评估的主要对照基线（现已归档）
+- [architecture-assessment-2026-08.md](./archive/reviews/architecture-assessment-2026-08.md) — 更早一轮评估（现已归档）
+- [superpowers/specs/2026-08-26-approval-single-track-convergence-design.md](./archive/reviews/2026-08-26-approval-single-track-convergence-design.md) — 审批单轨化收尾核实，确认 Change 域已通过 PR#6 收口（现已归档）
 - [superpowers/specs/2026-08-13-event-bus-wiring-design.md](./superpowers/specs/2026-08-13-event-bus-wiring-design.md) — 事件总线现状盘点（当时 `Publish()` 零调用）
 - [superpowers/specs/2026-08-29-bpmn-async-service-task-design.md](./superpowers/specs/2026-08-29-bpmn-async-service-task-design.md) — 暂停型 service task 执行语义设计，与本报告 BPMN NoOp 发现相邻
 - [superpowers/specs/2026-08-26-unified-work-item-model-design.md](./superpowers/specs/2026-08-26-unified-work-item-model-design.md) — 统一 WorkItem 模型详细设计，AGENTS.md 对应契约的完整版本

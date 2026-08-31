@@ -18,7 +18,7 @@
 
 **简体中文** · [English](./README.en.md) · [日本語](./README.ja.md)
 
-[架构解析](./docs/articles/07-ai-native-architecture-guidance-harness-skill.md) · [GA 能力矩阵](./docs/v1-ga/capability-matrix.md)
+[架构解析](./docs/articles/07-ai-native-architecture-guidance-harness-skill.md) · [GA 准入指南](./docs/v1-ga-readiness.md)
 
 </div>
 
@@ -126,11 +126,10 @@ VERSION=v1.2.0 make build-backend
 | 类别 | 文档 |
 |------|------|
 | **入门** | [快速开始](#快速开始) · [贡献指南](./CONTRIBUTING.md) |
-| **架构** | [商业就绪架构](./docs/architecture/commercial-ready-architecture.md) · [AI Native 架构](./docs/articles/07-ai-native-architecture-guidance-harness-skill.md) |
-| **v1.0 GA** | [GA 准入指南](./docs/v1-ga-readiness.md) · [能力矩阵](./docs/v1-ga/capability-matrix.md) · [回滚指南](./docs/migrations/rollback-guide.md) |
+| **架构** | [架构总览](./docs/architecture/overview.md) · [AI Native 架构](./docs/articles/07-ai-native-architecture-guidance-harness-skill.md) |
+| **v1.0 GA** | [GA 准入指南](./docs/v1-ga-readiness.md) · [回滚指南](./docs/migrations/rollback-guide.md) |
 | **对比** | [ServiceNow 差距分析](./docs/cmdb/servicenow-gap-analysis.md) · [CMDB-ITIL4 集成](./docs/cmdb/cmdb-workflow-itil4-integration.md) |
 | **审批** | [审批节点语义](./docs/architecture/approval-node-semantics.md) |
-| **质量** | [RBAC 跨租户回归](./docs/rbac/regression-report.md) · [Raw SQL 治理清单](./docs/sqlx/inventory.md) |
 | **运维** | [部署指南](./docs/deployment.md) · [运维手册](./docs/operations.md) · [配置说明](./docs/configuration.md) |
 
 ## 验证 GA 准入
