@@ -955,6 +955,47 @@ func (s *KafDelegationService) CreateDelegatedTask(ctx context.Context, instance
 	if err != nil {
 		return nil, fmt.Errorf("load KAF delegation process instance: %w", err)
 	}
+	instance, err = tx.ProcessInstance.UpdateOne(instance).
+		SetCurrentActivityID(serviceTask.ID).
+		SetCurrentActivityName(serviceTask.ID).
+		Save(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("update KAF delegation process activity: %w", err)
+	}
+
+	task, err := s.createDelegatedTaskInTx(ctx, tx, instance, serviceTask)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit KAF delegation transaction: %w", err)
+	}
+	return task, nil
+}
+
+// createDelegatedTaskInTx persists the KAF wait-state records in a transaction
+// owned by the caller. The caller owns process activity/version updates and the
+// final commit, allowing an upstream BPMN user-task transition to be atomic.
+func (s *KafDelegationService) createDelegatedTaskInTx(ctx context.Context, tx *ent.Tx, instance *ent.ProcessInstance, serviceTask *BPMNServiceTask) (*ent.ProcessTask, error) {
+	if tx == nil {
+		return nil, fmt.Errorf("KAF delegation transaction is required")
+	}
+	if instance == nil {
+		return nil, fmt.Errorf("KAF delegation process instance is required")
+	}
+	if serviceTask == nil {
+		return nil, fmt.Errorf("KAF delegation service task is required")
+	}
+	if s.outbox == nil {
+		return nil, fmt.Errorf("KAF delegation outbox repository is required")
+	}
+	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
+	if tenantID <= 0 {
+		return nil, fmt.Errorf("KAF delegation tenant context is required")
+	}
+	if instance.TenantID != tenantID {
+		return nil, fmt.Errorf("KAF delegation process instance does not belong to tenant")
+	}
 
 	actorID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
 	if actorID > 0 {
@@ -967,13 +1008,6 @@ func (s *KafDelegationService) CreateDelegatedTask(ctx context.Context, instance
 		if !actorExists {
 			return nil, fmt.Errorf("KAF delegation audit actor %d does not belong to tenant %d", actorID, instance.TenantID)
 		}
-	}
-
-	if _, err := tx.ProcessInstance.UpdateOne(instance).
-		SetCurrentActivityID(serviceTask.ID).
-		SetCurrentActivityName(serviceTask.ID).
-		Save(ctx); err != nil {
-		return nil, fmt.Errorf("update KAF delegation process activity: %w", err)
 	}
 
 	task, err := tx.ProcessTask.Create().
@@ -1023,9 +1057,6 @@ func (s *KafDelegationService) CreateDelegatedTask(ctx context.Context, instance
 		}
 	}
 
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("commit KAF delegation transaction: %w", err)
-	}
 	return task, nil
 }
 

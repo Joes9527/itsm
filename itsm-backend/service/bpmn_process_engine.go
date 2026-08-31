@@ -466,6 +466,16 @@ func (e *CustomProcessEngine) completeTask(ctx context.Context, taskID string, v
 	if err := e.validateTicketRecordClassInput(ctx, instance, variables); err != nil {
 		return err
 	}
+	mergedVariables := mergeProcessVariables(instance.Variables, variables)
+	if targetRef, resolveErr := e.resolveNextElement(instance, process, task.TaskDefinitionKey, mergedVariables); resolveErr == nil {
+		if serviceTask := e.findServiceTask(process, targetRef); serviceTask != nil && e.isKafDelegationServiceTask(serviceTask) {
+			instance, err = e.completeTaskIntoKafWaitState(ctx, task, instance, serviceTask, variables)
+			if err != nil {
+				return err
+			}
+			return callback(ctx, task, instance.Variables)
+		}
+	}
 
 	updated := 0
 	err = e.runKafFencedWrite(ctx, func(client *ent.Client) error {
@@ -537,6 +547,143 @@ func (e *CustomProcessEngine) completeTask(ctx context.Context, taskID string, v
 	}
 
 	return nil
+}
+
+func mergeProcessVariables(current, incoming map[string]interface{}) map[string]interface{} {
+	merged := make(map[string]interface{}, len(current)+len(incoming))
+	for key, value := range current {
+		merged[key] = value
+	}
+	for key, value := range incoming {
+		merged[key] = value
+	}
+	return merged
+}
+
+// completeTaskIntoKafWaitState owns the single persistent transaction for a
+// user-task transition into the registered KAF asynchronous wait state.
+func (e *CustomProcessEngine) completeTaskIntoKafWaitState(ctx context.Context, task *ent.ProcessTask, instance *ent.ProcessInstance, serviceTask *BPMNServiceTask, variables map[string]interface{}) (*ent.ProcessInstance, error) {
+	const maxAttempts = 5
+	var lastErr error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		updated, err := e.completeTaskIntoKafWaitStateOnce(ctx, task, instance, serviceTask, variables)
+		if err == nil || !isRetryableBPMNHandoffConflict(err) {
+			return updated, err
+		}
+		lastErr = err
+		if err := waitForBPMNHandoffRetry(ctx, time.Duration(attempt+1)*5*time.Millisecond); err != nil {
+			return nil, err
+		}
+	}
+	completed, err := e.client.ProcessTask.Query().Where(
+		processtask.IDEQ(task.ID),
+		processtask.TenantIDEQ(instance.TenantID),
+		processtask.StatusEQ(common.ProcessTaskStatusCompleted),
+	).Exist(ctx)
+	if err == nil && completed {
+		return nil, fmt.Errorf("任务已被处理，请刷新后重试")
+	}
+	return nil, lastErr
+}
+
+func isRetryableBPMNHandoffConflict(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "database is locked") ||
+		strings.Contains(message, "database table is locked") ||
+		strings.Contains(message, "could not serialize access") ||
+		strings.Contains(message, "deadlock detected")
+}
+
+func waitForBPMNHandoffRetry(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func (e *CustomProcessEngine) completeTaskIntoKafWaitStateOnce(ctx context.Context, task *ent.ProcessTask, instance *ent.ProcessInstance, serviceTask *BPMNServiceTask, variables map[string]interface{}) (*ent.ProcessInstance, error) {
+	tx, err := e.client.Tx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("开启 KAF 交接事务失败: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	completedAt := time.Now()
+	updated, err := tx.ProcessTask.Update().Where(
+		processtask.IDEQ(task.ID),
+		processtask.TenantIDEQ(instance.TenantID),
+		processtask.StatusNEQ(common.ProcessTaskStatusCompleted),
+		processtask.StatusNEQ(common.ProcessTaskStatusCancelled),
+	).
+		SetStatus(common.ProcessTaskStatusCompleted).
+		SetCompletedTime(completedAt).
+		SetTaskVariables(variables).
+		Save(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("更新 KAF 交接源任务失败: %w", err)
+	}
+	if updated != 1 {
+		return nil, fmt.Errorf("任务已被处理，请刷新后重试")
+	}
+
+	current, err := tx.ProcessInstance.Query().Where(
+		processinstance.IDEQ(instance.ID),
+		processinstance.TenantIDEQ(instance.TenantID),
+	).Only(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("查询 KAF 交接流程实例失败: %w", err)
+	}
+	merged := mergeProcessVariables(current.Variables, variables)
+	updated, err = tx.ProcessInstance.Update().Where(
+		processinstance.IDEQ(current.ID),
+		processinstance.TenantIDEQ(current.TenantID),
+		processinstance.VersionEQ(current.Version),
+	).
+		SetVariables(merged).
+		SetVersion(current.Version + 1).
+		SetCurrentActivityID(serviceTask.ID).
+		SetCurrentActivityName(serviceTask.ID).
+		Save(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("更新 KAF 交接流程实例失败: %w", err)
+	}
+	if updated != 1 {
+		return nil, fmt.Errorf("KAF 交接流程实例已被并发更新，请刷新后重试")
+	}
+	current.Variables = merged
+	current.Version++
+	current.CurrentActivityID = serviceTask.ID
+	current.CurrentActivityName = serviceTask.ID
+
+	if err := e.recordApprovalDecisionWithClient(ctx, tx.Client(), current, task, variables); err != nil {
+		return nil, err
+	}
+	if _, err := e.kafDelegationService.createDelegatedTaskInTx(ctx, tx, current, serviceTask); err != nil {
+		return nil, fmt.Errorf("创建 KAF 委派任务失败: %w", err)
+	}
+
+	userID := 0
+	userName := ""
+	if actor, ok := ctx.Value("user").(*ent.User); ok {
+		userID = actor.ID
+		userName = actor.Name
+	}
+	transactionalAudit := NewBPMNAuditService(tx.Client(), e.logger)
+	if err := transactionalAudit.RecordTaskCompleted(ctx, task, userID, userName, task.TaskVariables, variables); err != nil {
+		return nil, fmt.Errorf("记录 KAF 交接源任务审计失败: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("提交 KAF 交接事务失败: %w", err)
+	}
+	return current, nil
 }
 
 func (e *CustomProcessEngine) ensureKafCompletionReceipt(ctx context.Context, ledgerID, tenantID int, taskID string) (*ent.KafTaskCompletionReceipt, error) {
@@ -779,6 +926,10 @@ func isAsyncHandler(handler bpmn.ServiceTaskHandlerInterface) bool {
 }
 
 func (e *CustomProcessEngine) recordApprovalDecision(ctx context.Context, instance *ent.ProcessInstance, task *ent.ProcessTask, variables map[string]interface{}) error {
+	return e.recordApprovalDecisionWithClient(ctx, e.client, instance, task, variables)
+}
+
+func (e *CustomProcessEngine) recordApprovalDecisionWithClient(ctx context.Context, client *ent.Client, instance *ent.ProcessInstance, task *ent.ProcessTask, variables map[string]interface{}) error {
 	action, _ := variables["approvalAction"].(string)
 	if action == "" {
 		return nil
@@ -790,7 +941,7 @@ func (e *CustomProcessEngine) recordApprovalDecision(ctx context.Context, instan
 		return fmt.Errorf("审批决策缺少认证操作人")
 	}
 	actorName := ""
-	if actor, err := e.client.User.Get(ctx, actorID); err == nil {
+	if actor, err := client.User.Get(ctx, actorID); err == nil {
 		actorName = actor.Name
 	}
 	businessType := instance.BusinessType
@@ -798,7 +949,7 @@ func (e *CustomProcessEngine) recordApprovalDecision(ctx context.Context, instan
 	if instance.BusinessID > 0 {
 		businessID = strconv.Itoa(instance.BusinessID)
 	}
-	_, err := e.client.ProcessApprovalDecision.Create().
+	_, err := client.ProcessApprovalDecision.Create().
 		SetProcessInstanceID(instance.ID).SetProcessTaskID(task.ID).
 		SetProcessInstanceKey(instance.ProcessInstanceID).SetTaskID(task.TaskID).
 		SetProcessDefinitionKey(instance.ProcessDefinitionKey).SetNodeKey(task.TaskDefinitionKey).
@@ -923,13 +1074,24 @@ func (e *CustomProcessEngine) mergeVariablesWithOptimisticLock(ctx context.Conte
 
 // executeStep 执行流程步骤
 func (e *CustomProcessEngine) executeStep(ctx context.Context, instance *ent.ProcessInstance, process *BPMNProcess, currentElementID string, variables map[string]interface{}) error {
-	outgoingFlows := e.findOutgoingFlows(process, currentElementID)
-
-	if len(outgoingFlows) == 0 {
+	targetRef, err := e.resolveNextElement(instance, process, currentElementID, variables)
+	if err != nil {
+		return err
+	}
+	if targetRef == "" {
 		if e.isEndEvent(process, currentElementID) {
 			return e.completeProcess(ctx, instance)
 		}
 		return nil
+	}
+	return e.handleElement(ctx, instance, process, targetRef)
+}
+
+func (e *CustomProcessEngine) resolveNextElement(instance *ent.ProcessInstance, process *BPMNProcess, currentElementID string, variables map[string]interface{}) (string, error) {
+	outgoingFlows := e.findOutgoingFlows(process, currentElementID)
+
+	if len(outgoingFlows) == 0 {
+		return "", nil
 	}
 
 	var targetRef string
@@ -946,7 +1108,7 @@ func (e *CustomProcessEngine) executeStep(ctx context.Context, instance *ent.Pro
 	}
 
 	if targetRef == "" {
-		return fmt.Errorf("没有符合条件的路径")
+		return "", fmt.Errorf("没有符合条件的路径")
 	}
 
 	// 多个无条件分支同时命中 → BPMN 建模警告，取第一条
@@ -959,7 +1121,7 @@ func (e *CustomProcessEngine) executeStep(ctx context.Context, instance *ent.Pro
 		)
 	}
 
-	return e.handleElement(ctx, instance, process, targetRef)
+	return targetRef, nil
 }
 
 func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.ProcessInstance, process *BPMNProcess, elementID string) error {

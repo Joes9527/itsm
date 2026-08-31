@@ -3,11 +3,15 @@ package service_request
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -21,6 +25,7 @@ import (
 	"itsm-backend/ent/kaftaskcompletionreceipt"
 	"itsm-backend/ent/outboxevent"
 	"itsm-backend/ent/processapprovaldecision"
+	"itsm-backend/ent/processauditlog"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/ent/servicerequest"
@@ -206,6 +211,219 @@ func TestSSLVPNRequest_ConflictingRecordClassVariableCannotReachKAF(t *testing.T
 	require.NoError(t, completeSSLVPNApproval(t, fx, instance, "Approval_2"))
 	assertTwoSSLVPNApprovalDecisions(t, fx, instance)
 	assertOneSSLVPNDelegation(t, fx, instance)
+}
+
+func TestSSLVPNRequest_KafOutboxFailureRollsBackApprovalHandoff(t *testing.T) {
+	fx := newSSLVPNDelegationFixture(t)
+	deploySSLVPNDefinition(t, fx, "sslvpn_atomic_handoff_rollback", fmt.Sprintf(sslvpnApprovalNodes, fx.approver.ID, fx.approver.ID), sslvpnApprovalFlows)
+
+	sr := createSSLVPNServiceRequestForDefinition(t, fx, "sslvpn_atomic_handoff_rollback")
+	instance := awaitSSLVPNInstance(t, fx, "ticket", sr.TicketID)
+	require.NoError(t, completeSSLVPNApproval(t, fx, instance, "Approval_1"))
+
+	sourceBefore, err := fx.client.ProcessTask.Query().Where(
+		processtask.ProcessInstanceIDEQ(instance.ID),
+		processtask.TaskDefinitionKeyEQ("Approval_2"),
+	).Only(fx.ctx)
+	require.NoError(t, err)
+	instanceBefore, err := fx.client.ProcessInstance.Get(fx.ctx, instance.ID)
+	require.NoError(t, err)
+	decisionCountBefore, err := fx.client.ProcessApprovalDecision.Query().Where(
+		processapprovaldecision.ProcessInstanceIDEQ(instance.ID),
+	).Count(fx.ctx)
+	require.NoError(t, err)
+
+	var failOutbox atomic.Bool
+	failOutbox.Store(true)
+	fx.client.OutboxEvent.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			if failOutbox.Load() && mutation.Op().Is(ent.OpCreate) {
+				return nil, errors.New("injected KAF outbox persistence failure")
+			}
+			return next.Mutate(ctx, mutation)
+		})
+	})
+	decisionVariables := map[string]interface{}{
+		"approvalAction":  "approve",
+		"approvalResult":  "approved",
+		"approvalComment": "must roll back with the KAF handoff",
+	}
+	err = completeSSLVPNApprovalWithVariables(t, fx, instance, "Approval_2", decisionVariables)
+	require.ErrorContains(t, err, "injected KAF outbox persistence failure")
+
+	sourceAfter, err := fx.client.ProcessTask.Get(fx.ctx, sourceBefore.ID)
+	require.NoError(t, err)
+	assert.Equal(t, sourceBefore.Status, sourceAfter.Status)
+	assert.Equal(t, sourceBefore.TaskVariables, sourceAfter.TaskVariables)
+	assert.Equal(t, sourceBefore.CompletedTime, sourceAfter.CompletedTime)
+
+	instanceAfter, err := fx.client.ProcessInstance.Get(fx.ctx, instance.ID)
+	require.NoError(t, err)
+	assert.Equal(t, instanceBefore.Variables, instanceAfter.Variables)
+	assert.Equal(t, instanceBefore.Version, instanceAfter.Version)
+	assert.Equal(t, instanceBefore.CurrentActivityID, instanceAfter.CurrentActivityID)
+	assert.Equal(t, instanceBefore.CurrentActivityName, instanceAfter.CurrentActivityName)
+
+	decisionCountAfter, err := fx.client.ProcessApprovalDecision.Query().Where(
+		processapprovaldecision.ProcessInstanceIDEQ(instance.ID),
+	).Count(fx.ctx)
+	require.NoError(t, err)
+	assert.Equal(t, decisionCountBefore, decisionCountAfter)
+	delegatedCount, err := fx.client.ProcessTask.Query().Where(
+		processtask.ProcessInstanceIDEQ(instance.ID),
+		processtask.TaskTypeEQ(bpmn.KafDelegateTaskType),
+	).Count(fx.ctx)
+	require.NoError(t, err)
+	assert.Zero(t, delegatedCount)
+	delegationAuditCount, err := fx.client.AuditLog.Query().Where(
+		auditlog.TenantIDEQ(fx.tenant.ID),
+		auditlog.ActionEQ("kaf_delegate.created"),
+	).Count(fx.ctx)
+	require.NoError(t, err)
+	assert.Zero(t, delegationAuditCount)
+	sourceAuditCount, err := fx.client.ProcessAuditLog.Query().Where(
+		processauditlog.ProcessInstanceIDEQ(instance.ID),
+		processauditlog.ActivityIDEQ("Approval_2"),
+		processauditlog.ActionEQ(itsmservice.AuditActionTaskCompleted),
+	).Count(fx.ctx)
+	require.NoError(t, err)
+	assert.Zero(t, sourceAuditCount)
+	outboxCount, err := fx.client.OutboxEvent.Query().Where(
+		outboxevent.TenantIDEQ(fx.tenant.ID),
+		outboxevent.EventTypeEQ("kaf_delegate_requested"),
+	).Count(fx.ctx)
+	require.NoError(t, err)
+	assert.Zero(t, outboxCount)
+
+	failOutbox.Store(false)
+	require.NoError(t, completeSSLVPNApprovalWithVariables(t, fx, instance, "Approval_2", decisionVariables))
+
+	sourceAfterRetry, err := fx.client.ProcessTask.Get(fx.ctx, sourceBefore.ID)
+	require.NoError(t, err)
+	assert.Equal(t, common.ProcessTaskStatusCompleted, sourceAfterRetry.Status)
+	assert.Equal(t, decisionVariables, sourceAfterRetry.TaskVariables)
+	assert.False(t, sourceAfterRetry.CompletedTime.IsZero())
+	instanceAfterRetry, err := fx.client.ProcessInstance.Get(fx.ctx, instance.ID)
+	require.NoError(t, err)
+	assert.Equal(t, instanceBefore.Version+1, instanceAfterRetry.Version)
+	assert.Equal(t, "Activity_KafDelegate", instanceAfterRetry.CurrentActivityID)
+	assert.Equal(t, decisionVariables["approvalComment"], instanceAfterRetry.Variables["approvalComment"])
+	assertAtomicSSLVPNHandoffCardinality(t, fx, instance, sourceBefore.ID, decisionCountBefore+1)
+}
+
+func assertAtomicSSLVPNHandoffCardinality(t *testing.T, fx *sslvpnDelegationFixture, instance *ent.ProcessInstance, sourceTaskID, decisionCount int) {
+	t.Helper()
+	decisions, err := fx.client.ProcessApprovalDecision.Query().Where(
+		processapprovaldecision.ProcessInstanceIDEQ(instance.ID),
+	).Count(fx.ctx)
+	require.NoError(t, err)
+	assert.Equal(t, decisionCount, decisions)
+	delegated, err := fx.client.ProcessTask.Query().Where(
+		processtask.ProcessInstanceIDEQ(instance.ID),
+		processtask.TaskTypeEQ(bpmn.KafDelegateTaskType),
+	).Count(fx.ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, delegated)
+	delegationAudits, err := fx.client.AuditLog.Query().Where(
+		auditlog.TenantIDEQ(fx.tenant.ID),
+		auditlog.ActionEQ("kaf_delegate.created"),
+	).Count(fx.ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, delegationAudits)
+	sourceAudits, err := fx.client.ProcessAuditLog.Query().Where(
+		processauditlog.ProcessInstanceIDEQ(instance.ID),
+		processauditlog.ActivityIDEQ("Approval_2"),
+		processauditlog.ActionEQ(itsmservice.AuditActionTaskCompleted),
+	).Count(fx.ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, sourceAudits)
+	outboxEvents, err := fx.client.OutboxEvent.Query().Where(
+		outboxevent.TenantIDEQ(fx.tenant.ID),
+		outboxevent.EventTypeEQ("kaf_delegate_requested"),
+	).Count(fx.ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, outboxEvents)
+	sourceDecisions, err := fx.client.ProcessApprovalDecision.Query().Where(
+		processapprovaldecision.ProcessTaskIDEQ(sourceTaskID),
+	).Count(fx.ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, sourceDecisions)
+}
+
+func TestSSLVPNRequest_ConcurrentKafHandoffPersistsOneTransition(t *testing.T) {
+	fx := newSSLVPNDelegationFixture(t)
+	deploySSLVPNDefinition(t, fx, "sslvpn_atomic_handoff_concurrent", fmt.Sprintf(sslvpnApprovalNodes, fx.approver.ID, fx.approver.ID), sslvpnApprovalFlows)
+
+	sr := createSSLVPNServiceRequestForDefinition(t, fx, "sslvpn_atomic_handoff_concurrent")
+	instance := awaitSSLVPNInstance(t, fx, "ticket", sr.TicketID)
+	require.NoError(t, completeSSLVPNApproval(t, fx, instance, "Approval_1"))
+	source, err := fx.client.ProcessTask.Query().Where(
+		processtask.ProcessInstanceIDEQ(instance.ID),
+		processtask.TaskDefinitionKeyEQ("Approval_2"),
+	).Only(fx.ctx)
+	require.NoError(t, err)
+	instanceBefore, err := fx.client.ProcessInstance.Get(fx.ctx, instance.ID)
+	require.NoError(t, err)
+	updatesReleased := make(chan struct{})
+	var sourceUpdateAttempts atomic.Int32
+	fx.client.ProcessTask.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			if mutation.Op().Is(ent.OpUpdate) {
+				if sourceUpdateAttempts.Add(1) == 2 {
+					close(updatesReleased)
+				}
+				<-updatesReleased
+			}
+			return next.Mutate(ctx, mutation)
+		})
+	})
+
+	approvalCtx := context.WithValue(context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, fx.tenant.ID), bpmn.BPMNUserIDContextKey, fx.approver.ID)
+	variables := map[string]interface{}{"approvalAction": "approve", "approvalResult": "approved"}
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	var ready sync.WaitGroup
+	ready.Add(2)
+	for range 2 {
+		go func() {
+			ready.Done()
+			<-start
+			results <- fx.engine.CompleteTask(approvalCtx, source.TaskID, variables)
+		}()
+	}
+	ready.Wait()
+	close(start)
+
+	var successCount int
+	var conflictErr error
+	for range 2 {
+		if result := <-results; result == nil {
+			successCount++
+		} else {
+			conflictErr = result
+		}
+	}
+	require.Equal(t, 1, successCount)
+	require.Error(t, conflictErr)
+	assert.True(t,
+		containsAny(conflictErr.Error(), "任务已被处理", "任务已结束"),
+		"losing decision must receive the existing processed/conflict error, got %v", conflictErr,
+	)
+
+	instanceAfter, err := fx.client.ProcessInstance.Get(fx.ctx, instance.ID)
+	require.NoError(t, err)
+	assert.Equal(t, instanceBefore.Version+1, instanceAfter.Version)
+	assert.Equal(t, "Activity_KafDelegate", instanceAfter.CurrentActivityID)
+	assertAtomicSSLVPNHandoffCardinality(t, fx, instance, source.ID, 2)
+}
+
+func containsAny(value string, candidates ...string) bool {
+	for _, candidate := range candidates {
+		if strings.Contains(value, candidate) {
+			return true
+		}
+	}
+	return false
 }
 
 func TestSSLVPNIncident_UsesSameDelegationTransportWithoutServiceRequestConversion(t *testing.T) {
