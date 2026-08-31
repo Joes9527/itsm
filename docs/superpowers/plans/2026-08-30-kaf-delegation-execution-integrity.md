@@ -10,6 +10,8 @@
 
 **Spec:** [KAF Delegation Execution Integrity Design](../specs/2026-08-30-kaf-delegation-execution-integrity-design.md)
 
+> **Implementation status (2026-08-31):** Tasks 1-5 and the subsequent full-review remediation items have been implemented in the ITSM feature worktree through `c1b9bbcd` and the KAF feature worktree through `afbc1645`. The unchecked step boxes below are retained as the original TDD execution recipe, not as the current completion tracker. The remaining release-evidence gap is the explicitly unchecked live cross-process SSLVPN flow near the end of this document; see the execution-integrity report and §12 of the parent autonomous-delegation design for broader product-scope work that this plan intentionally did not implement.
+
 ## Global Constraints
 
 - ITSM is authoritative for tenant checks, KAF per-task authorization, BPMN state, WorkItem lifecycle and audit; KAF never writes ITSM storage directly.
