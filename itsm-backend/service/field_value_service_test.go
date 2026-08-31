@@ -170,3 +170,48 @@ func TestFieldValueService_CreateValues_AcceptsValidNumberAndSelectValues(t *tes
 	})
 	require.NoError(t, err)
 }
+
+func TestFieldValueService_CreateValuesTxRollsBackWithCallerTransaction(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:field_value_tx_rollback?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	defSvc := NewFieldDefinitionService(client)
+	valSvc := NewFieldValueService(client)
+
+	_, err := defSvc.ReplaceDefinitions(ctx, 1, "service_catalog", 55, []FieldDefinitionInput{
+		{Name: "office_location", Label: "办公地点", FieldType: "text", SortOrder: 0},
+	})
+	require.NoError(t, err)
+
+	tx, err := client.Tx(ctx)
+	require.NoError(t, err)
+	require.NoError(t, valSvc.CreateValuesTx(ctx, tx, 1, "service_catalog", 55, "ticket", 550, map[string]any{
+		"office_location": "上海",
+	}))
+	require.NoError(t, tx.Rollback())
+
+	count, err := client.FieldValue.Query().Where(fieldvalue.EntityID(550)).Count(ctx)
+	require.NoError(t, err)
+	require.Zero(t, count)
+}
+
+func TestFieldValueService_CreateValuesTxReturnsValidationErrorToCaller(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:field_value_tx_validation?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	defSvc := NewFieldDefinitionService(client)
+	valSvc := NewFieldValueService(client)
+
+	_, err := defSvc.ReplaceDefinitions(ctx, 1, "service_catalog", 56, []FieldDefinitionInput{
+		{Name: "device_count", Label: "设备数量", FieldType: "number", SortOrder: 0},
+	})
+	require.NoError(t, err)
+
+	tx, err := client.Tx(ctx)
+	require.NoError(t, err)
+	err = valSvc.CreateValuesTx(ctx, tx, 1, "service_catalog", 56, "ticket", 560, map[string]any{
+		"device_count": "not-a-number",
+	})
+	require.ErrorContains(t, err, "需要数字类型")
+	require.NoError(t, tx.Rollback())
+}

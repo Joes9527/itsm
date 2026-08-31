@@ -779,6 +779,18 @@ CREATE POLICY tenant_isolation_kaf_task_completion_receipts ON kaf_task_completi
 `
 	case "020_unified_intake_rls":
 		return `
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'intake_requests_completed_work_item_check'
+    ) THEN
+        ALTER TABLE intake_requests
+            ADD CONSTRAINT intake_requests_completed_work_item_check
+            CHECK (status <> 'completed' OR (work_item_id IS NOT NULL AND completed_at IS NOT NULL));
+    END IF;
+END $$;
+
 ALTER TABLE intake_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE intake_requests FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS intake_requests_tenant_isolation ON intake_requests;

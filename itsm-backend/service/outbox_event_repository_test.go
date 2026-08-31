@@ -25,6 +25,12 @@ import (
 
 var outboxSQLiteDriverID atomic.Uint64
 
+func TestNewWorkflowStartEventIDIsDeterministic(t *testing.T) {
+	assert.Equal(t, "workflow-start:501:22", NewWorkflowStartEventID(501, 22))
+	assert.Equal(t, NewWorkflowStartEventID(501, 22), NewWorkflowStartEventID(501, 22))
+	assert.NotEqual(t, NewWorkflowStartEventID(501, 22), NewWorkflowStartEventID(502, 22))
+}
+
 func TestOutboxEventRepository_EnqueueDeduplicatesEventID(t *testing.T) {
 	repo, client := newOutboxRepository(t)
 	ctx := context.Background()

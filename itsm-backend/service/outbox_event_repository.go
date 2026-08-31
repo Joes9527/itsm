@@ -74,6 +74,12 @@ func NewOutboxEventRepository(client *ent.Client) *OutboxEventRepository {
 	return &OutboxEventRepository{client: client, clock: time.Now}
 }
 
+// NewWorkflowStartEventID returns the stable identity for one frozen workflow
+// definition start request. Retries therefore enqueue the same Outbox event.
+func NewWorkflowStartEventID(workItemID int, definitionID int) string {
+	return fmt.Sprintf("workflow-start:%d:%d", workItemID, definitionID)
+}
+
 // Enqueue writes an event through the caller's transaction when supplied, so
 // a domain change cannot commit without its matching delivery record.
 func (r *OutboxEventRepository) Enqueue(ctx context.Context, tx *ent.Tx, event NewOutboxEvent) (*ent.OutboxEvent, error) {

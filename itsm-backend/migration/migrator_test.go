@@ -181,4 +181,6 @@ func TestUnifiedIntakeMigrationEnablesRLS(t *testing.T) {
 		assert.Contains(t, sql, "USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint)")
 		assert.Contains(t, sql, "WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint)")
 	}
+	assert.Contains(t, sql, "CONSTRAINT intake_requests_completed_work_item_check")
+	assert.Contains(t, sql, "status <> 'completed' OR (work_item_id IS NOT NULL AND completed_at IS NOT NULL)")
 }
