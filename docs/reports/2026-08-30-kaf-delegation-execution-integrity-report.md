@@ -4,11 +4,31 @@ Date: 2026-08-31
 
 ## Status
 
-The breaker-residual remediation passed automated production-path tests in both
-linked worktrees. ITSM commit `47c836ca` and KAF commit `7fde7e50`, on top of
-the earlier final-fix commits, close the remaining execution-integrity
-findings. No live SSLVPN deployment, external network change, or production
-credential operation was performed.
+The implementation is accepted for controlled Dev integration, not yet for
+production rollout. The execution-integrity regressions pass in both linked
+worktrees, the KAF PostgreSQL Dev database was upgraded through revision
+`036_kaf_completion_replay`, and the current KAF source started successfully
+against that database. A live cross-process SSLVPN run with production-like
+credentials and PostgreSQL RLS remains outstanding.
+
+No request was sent to KAF PROD `10.128.35.195`, no production credential was
+used, and no external network change was performed.
+
+## Full-Implementation Review Addendum
+
+The 2026-08-31 whole-branch review found and remediated the following gaps:
+
+| Finding | Resolution |
+| --- | --- |
+| KAF delegation reused legacy Gazellio `ITSM_URL` and `ITSM_WEBHOOK_SECRET`. One KAF deployment could not safely connect to both systems. | Delegation now uses dedicated `ITSM_KAF_URL`, `ITSM_KAF_AUTOMATION_TOKEN`, and `ITSM_KAF_WEBHOOK_SECRET`; the legacy lifecycle integration remains on its existing settings. A regression proves a legacy webhook secret cannot authorize a delegation event. |
+| `lease_seconds` controlled heartbeat cadence but claim and renewal persisted a hard-coded 300-second lease. | Claim, heartbeat renewal, pre-action renewal, and completion replay now use the same configured TTL. |
+| `kaf-context` declared attachment references but always returned an empty list. | ITSM now returns tenant-filtered opaque attachment IDs only. File names, paths, storage URLs, and signed URLs are not exposed. |
+| Base KAF test collection imported the optional `sentence-transformers` package through the embedding evaluation CLI. | The optional dependency is loaded only when an embedding evaluation actually runs; its seven CLI tests pass without the embedding extra. |
+
+The existing `acp-backend` Docker container is not acceptance evidence: it is
+built from an older image and restarts because its ORM seed does not match the
+current `operation_policies` schema. Dev verification must run the current
+worktree source against the `kaf-dev` data-plane containers.
 
 ## Corrected Acceptance Evidence
 
@@ -85,6 +105,24 @@ ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/
 Result: `111 passed, 1 skipped in 11.81s`. The skip is the optional configured
 PostgreSQL probe; all SQLite production SQLAlchemy tests ran.
 
+After the full-implementation review fixes, the delegation, webhook,
+migration, and migration-DAG selection completed as follows:
+
+```bash
+ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src python -m pytest \
+  tests/test_itsm_webhook_auth.py tests/test_itsm_webhooks.py \
+  tests/test_kaf_delegation_contract.py tests/test_kaf_delegation_pipeline.py \
+  tests/test_kaf_delegation_delivery_migration.py tests/test_migration_dag.py -q
+```
+
+Result: `137 passed, 1 skipped`. The optional PostgreSQL probe is the skip.
+
+The local Dev database initially reported revision `033_pending_interaction_uq`.
+Running `alembic upgrade head` against `kaf-dev-postgres` applied revisions
+034, 035, and 036. Current revision is `036_kaf_completion_replay`, and current
+source then started on `127.0.0.1:8001`; `GET /health` returned
+`{"status":"ok"}`.
+
 ```bash
 ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/_work/kaf/kaf/.venv/bin/python -m pytest tests/test_migration_dag.py -q
 ```
@@ -104,10 +142,12 @@ ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/
 
 Result: `036_kaf_completion_replay (head)`.
 
-The repository-wide KAF `pytest -q` command did not collect tests because the
-environment lacks optional dependency `sentence_transformers`, imported by
-`tests/test_eval_embedding_models_cli.py`. This is an external environment
-limitation, not a passing full-suite result.
+The repository-wide KAF `pytest -q` command now collects and executes after the
+optional-import fix. It produced `2457 passed, 13 skipped, 1 xfailed`, plus 90
+failures and 32 setup errors. The dominant setup error is test-process settings
+drift to `localhost:5432` instead of the explicitly supplied Dev DSN; many
+remaining failures are outside this branch's delegation files. This is not a
+passing full-suite result and must not be represented as one.
 
 Both repositories passed `git diff --check`. Protected untracked historical
 ITSM review files were not modified, staged, or removed.
@@ -116,7 +156,15 @@ ITSM review files were not modified, staged, or removed.
 
 - PostgreSQL RLS and concurrency probes need configured test credentials to run
   rather than skip; deterministic SQL and SQLite transaction paths passed.
-- No live SSLVPN infrastructure or external deployment was exercised.
+- No live cross-process SSLVPN path with a real ITSM service account was
+  exercised. The in-process authoritative SSLVPN scenario and both service
+  suites passed.
+- The KAF repository-wide suite is not green because test modules mutate or
+  reload global settings and escape the supplied Dev database configuration.
+  That repository-level isolation cleanup is separate from delegation behavior
+  but remains a release-evidence gap.
+- Production rollout requires provisioning the three dedicated `ITSM_KAF_*`
+  settings and must not reuse legacy Gazellio credentials.
 - The generic non-KAF `CompleteTask` API remains multi-step by design; the
   exact-scope advancement and owner-fenced recovery guarantees apply to the
   dedicated KAF completion path.

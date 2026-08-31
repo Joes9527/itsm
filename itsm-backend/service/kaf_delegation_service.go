@@ -19,6 +19,7 @@ import (
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/ent/ticket"
+	"itsm-backend/ent/ticketattachment"
 	"itsm-backend/ent/user"
 	"itsm-backend/service/bpmn"
 
@@ -232,6 +233,7 @@ func (s *KafDelegationService) GetTaskContext(ctx context.Context, taskID string
 		return nil, err
 	}
 	workItem := KafWorkItem{ID: instance.BusinessID, RecordClass: recordClass}
+	attachments := []KafAttachmentRef{}
 	if instance.BusinessID > 0 {
 		item, itemErr := s.client.Ticket.Query().
 			Where(ticket.IDEQ(instance.BusinessID), ticket.TenantIDEQ(task.TenantID), ticket.DeletedAtIsNil()).
@@ -240,6 +242,16 @@ func (s *KafDelegationService) GetTaskContext(ctx context.Context, taskID string
 			workItem.Title = item.Title
 			workItem.Priority = item.Priority
 			workItem.Status = item.Status
+			attachmentIDs, attachmentErr := s.client.TicketAttachment.Query().
+				Where(ticketattachment.TicketIDEQ(item.ID), ticketattachment.TenantIDEQ(task.TenantID)).
+				Order(ent.Asc(ticketattachment.FieldID)).
+				IDs(ctx)
+			if attachmentErr != nil {
+				return nil, fmt.Errorf("load KAF WorkItem attachment references: %w", attachmentErr)
+			}
+			for _, attachmentID := range attachmentIDs {
+				attachments = append(attachments, KafAttachmentRef{ID: attachmentID})
+			}
 		}
 	}
 	return &KafTaskContext{
@@ -248,7 +260,7 @@ func (s *KafDelegationService) GetTaskContext(ctx context.Context, taskID string
 		AllowedActions: kafAllowedActions(task), ExpectedVersion: instance.Version,
 		WaitingPoint:   KafWaitingPoint{ProcessInstanceID: instance.ProcessInstanceID, ProcessDefinition: instance.ProcessDefinitionKey, ActivityID: instance.CurrentActivityID, ActivityName: instance.CurrentActivityName},
 		IntakeSnapshot: frozenKafIntakeSnapshot(instance.Variables), WorkItem: workItem,
-		Attachments: []KafAttachmentRef{},
+		Attachments: attachments,
 	}, nil
 }
 

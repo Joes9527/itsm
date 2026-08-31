@@ -3,6 +3,10 @@
 > 对应工作分支的 4 个遗留项整改（租户隔离 fail-closed / Release·Change 域侧桥接 / service_request 白名单收敛 / 平台级操作恢复）+ 顺带修复的 4 个模板缺陷。
 > 测试通过前**不提交**；每轮测试发现的问题记录在文末"结果记录表"，修复后重新执行对应场景。
 
+> 2026-08-31 补充：S10-S15 覆盖 KAF 自主委派、Outbox、task-scoped API、
+> action ledger 与崩溃恢复。`10.128.35.195` 是 KAF PROD，不是本计划的
+> 测试目标；除非另行批准，不得使用 PROD 凭据或向 PROD 发送委派事件。
+
 ---
 
 ## 0. 前置条件
@@ -54,6 +58,46 @@ docker exec itsm-postgres-dev psql -U itsm_user -d itsm -c \
 ```bash
 curl http://localhost:8090/api/v1/health
 # 前端打开 http://localhost:3010 能正常登录
+```
+
+### 0.5 KAF 当前源码与 Dev 数据平面
+
+`kaf-dev` Compose 只提供 PostgreSQL、Redis 和 Qdrant。旧的
+`acp-backend` 容器镜像不是当前分支验收对象；必须从 KAF worktree 启动源码。
+
+```bash
+KAF=/mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-worktrees/kaf-delegation-transactional-delivery
+
+docker compose -f "$KAF/docker/docker-compose.dev.yml" -p kaf-dev up -d
+
+cd "$KAF"
+ENV_FILE=/dev/null DEBUG=true \
+DATABASE_URL='postgresql+asyncpg://ai01:changeme@127.0.0.1:5434/control_plane' \
+REDIS_URL='redis://:changeme@127.0.0.1:6380/1' \
+PYTHONPATH=src .venv/bin/python -m alembic upgrade head
+
+# 必须输出 036_kaf_completion_replay
+docker exec kaf-dev-postgres psql -U ai01 -d control_plane -Atc \
+  'select version_num from alembic_version'
+```
+
+启动 KAF 时使用新的 Go/BPMN ITSM 专用配置，不得复用旧 Gazellio
+`ITSM_URL`/`ITSM_WEBHOOK_SECRET`：
+
+```bash
+ITSM_KAF_URL=http://127.0.0.1:8090 \
+ITSM_KAF_AUTOMATION_TOKEN='<同租户 kaf_automation JWT>' \
+ITSM_KAF_WEBHOOK_SECRET='<dev shared secret>' \
+DATABASE_URL='postgresql+asyncpg://ai01:changeme@127.0.0.1:5434/control_plane' \
+REDIS_URL='redis://:changeme@127.0.0.1:6380/1' \
+PYTHONPATH=src .venv/bin/python -m uvicorn acp.main:app --host 127.0.0.1 --port 8001
+```
+
+ITSM 对应配置：
+
+```bash
+KAF_WEBHOOK_URL=http://127.0.0.1:8001/webhooks/itsm
+KAF_WEBHOOK_SECRET='<dev shared secret>'
 ```
 
 ---
@@ -213,6 +257,66 @@ curl -s -X POST http://localhost:8090/api/v1/tickets \
 **步骤**：平台账号启动一条 incident_emergency_flow 实例（API 或流程管理入口，变量带 incident_id/assignee_id）。
 - 预期（修复后）：流程正常推进、自动分配动作以**实例所属租户**执行成功（事件被分配），不再整条 StartProcess 硬失败。
 - 若环境无平台账号：跳过手动验证，此项已有自动化覆盖（`bpmn_platform_tenant_test.go` 三条用例）。
+
+---
+
+## 场景 S10：KAF 委派健康与迁移前置【P0】
+
+1. 执行 0.5 的 Alembic 升级并启动当前 KAF 源码。
+2. `GET http://127.0.0.1:8001/health` 必须返回 `{"status":"ok"}`。
+3. PostgreSQL 必须存在 `kaf_delegation_deliveries`，revision 必须为
+   `036_kaf_completion_replay`。
+4. KAF 日志不得出现旧 `acp-backend` 的 `operation_policies.approval_chain`
+   非空约束错误。
+
+## 场景 S11：SSLVPN 委派主路径【P0】
+
+1. 创建 SSLVPN Service Request，完成双级审批，使 BPMN 到达
+   `taskType=kaf_delegate` 节点。
+2. ITSM 必须在同一事务中产生一个 delegated `ProcessTask`、一条
+   `kaf_delegate.created` 审计和一条 `kaf_delegate_requested` Outbox。
+3. Outbox webhook 被 KAF 接收后，KAF 只能通过 `ITSM_KAF_URL` 获取
+   `kaf-context`；自主选择 Procedure 后提交 `complete_bpmn_task`。
+4. 最终只允许存在一条 action ledger、一个成功 completion receipt、一个
+   KAF delivery；BPMN 只推进一次，WorkItem/Service Request 专业扩展仍存在。
+5. 用同一 action payload 重放，ITSM 返回 `already_applied`，不得增加
+   timeline、audit 或专业领域副作用。
+
+## 场景 S12：投递重复与崩溃恢复【P0】
+
+1. 同时发送相同 `(tenantId, taskId, correlationId)` 的 webhook，并触发一次
+   delegated-list recovery；只能有一个 Procedure 获得有效 lease。
+2. 在 KAF 已持久化 `completion_payload`、ITSM 已返回 `applied`、但 KAF
+   尚未写 `completed` 时终止进程。
+3. 重启 KAF 后必须重放原 payload，不得重新选择 Procedure 或再次执行 Tool；
+   delivery 最终收敛为 `completed`。
+4. 将 running lease 置为过期后复测，新的 owner 可以恢复，旧 owner 不得
+   finalize、续租或覆盖结果。
+
+## 场景 S13：认证、租户与配置隔离【P0 安全】
+
+1. 只配置旧 `ITSM_WEBHOOK_SECRET`、不配置 `ITSM_KAF_WEBHOOK_SECRET`，发送
+   正确签名的委派事件，预期 `503 kaf_webhook_secret_not_configured`。
+2. 使用非 `kaf_automation`、错误租户或普通 user task 调用 context/actions，
+   预期 403/404 fail-closed，且无 ledger、timeline、audit 或流程变化。
+3. 使用同租户 `kaf_automation` 调用时，只能读取 delegated KAF task；列表
+   翻页不得出现其他租户任务。
+
+## 场景 S14：附件上下文最小披露【P1】
+
+1. 给 SSLVPN WorkItem 上传一个文件名、路径和 URL 均含敏感信息的附件。
+2. 调用 `GET .../kaf-context`，`attachments` 只允许包含同租户附件 ID。
+3. 响应不得包含文件名、对象存储路径、直接 URL、签名 URL 或其他租户附件。
+
+## 场景 S15：回调失败与部分推进【P0】
+
+1. 注入 callback commit 后报错，首次 action 必须保持 retryable，不能伪装
+   `applied`；重试通过 action scope 收敛且领域副作用只有一次。
+2. 分别构造“task 已完成但 current activity 未推进”“activity 已变化但无活跃
+   successor”“end activity 已写但 process 仍 running”，均不得 reconcile 为
+   `applied`。
+3. 只有精确 successor task 存在或 process 已 terminal completed 时，恢复才可
+   写成功 receipt 并 finalize ledger。
 
 ---
 

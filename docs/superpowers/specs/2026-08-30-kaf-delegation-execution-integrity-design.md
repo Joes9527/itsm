@@ -1,6 +1,6 @@
 # KAF Delegation Execution Integrity Design
 
-> Status: Implemented, final-review and breaker-residual remediated 2026-08-31
+> Status: Implemented and whole-branch reviewed; controlled Dev acceptance, production E2E pending
 > Date: 2026-08-30
 > Extends: `2026-08-28-kaf-itsm-autonomous-workitem-delegation-design.md`
 > Trigger: final review findings for the 2026-08-29 delegation delivery plan
@@ -26,6 +26,10 @@ returning successfully is enough to complete a KAF delivery.
 
 - KAF never writes ITSM storage directly. It reads task context and invokes the
   existing task-scoped typed action API.
+- The task-scoped Go/BPMN ITSM integration uses dedicated
+  `ITSM_KAF_URL`, `ITSM_KAF_AUTOMATION_TOKEN`, and
+  `ITSM_KAF_WEBHOOK_SECRET` settings. It must not reuse the legacy Gazellio
+  `ITSM_URL`, credentials, or webhook secret.
 - KAF marks a delivery `completed` only after ITSM returns action result
   `applied` or `already_applied` for the same execution scope.
 - ITSM action idempotency is an immutable, tenant-scoped persistence contract,
@@ -160,6 +164,11 @@ An atomic conditional update claims a receipt only when it is `received` or
 a generated lease owner, and a bounded expiry. A webhook duplicate locates the
 existing task identity record and does not enqueue another Procedure.
 
+Claim, periodic heartbeat renewal, pre-action renewal, and completion replay
+must derive expiry from the same configured lease TTL. A test-only short TTL
+cannot change only the heartbeat cadence while leaving a 300-second database
+lease behind.
+
 Recovery queries the ITSM delegated-task list, resolves each task identity to
 the existing delivery, and claims or resumes that delivery. It never creates a
 second synthetic event identity for a task that already has a receipt. A
@@ -200,6 +209,9 @@ Every scalar string in structured exceptions is recursively redacted and
 bounded before logging or persistence. `resultSummary` and every
 `evidenceRefs` element use the same policy before ITSM transport; summary,
 reference length, and reference count are bounded.
+
+Task context returns only tenant-filtered opaque attachment IDs. It never
+returns attachment file names, storage paths, direct URLs, or signed URLs.
 
 Both ITSM ledger tables are covered by a registered production migration that
 enables and forces tenant RLS with `USING` and `WITH CHECK` policies following
@@ -243,6 +255,12 @@ the repository's `app.current_tenant` convention.
 10. A transient completion replay followed by delegated-list recovery invokes
     the Procedure once total, and an already-stamped 035 schema executes legacy
     duplicate cleanup through forward revision 036.
+11. A delegation signed with only the legacy ITSM webhook secret is rejected;
+    the dedicated KAF secret is required.
+12. A configured short delivery TTL is persisted by claim and renewal, not
+    used only as a heartbeat interval.
+13. `kaf-context` returns opaque same-tenant attachment IDs and excludes names,
+    paths, and URLs.
 
 ## 7. Out Of Scope
 

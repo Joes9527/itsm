@@ -172,6 +172,38 @@ func TestKafContext_RejectsNonDelegatedTaskType(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, response.Code)
 }
 
+func TestKafContext_ReturnsOnlyOpaqueAttachmentReferences(t *testing.T) {
+	router, taskID, client := newKafDelegationHTTPFixture(t, kafHTTPFixture{actorTenantID: 1, taskTenantID: 1, taskType: "kaf_delegate", status: common.ProcessTaskStatusDelegated})
+	workItemID := attachKafWorkItem(t, client, taskID)
+	ctx := context.Background()
+	task, err := client.ProcessTask.Query().Where(processtask.TaskIDEQ(taskID)).Only(ctx)
+	require.NoError(t, err)
+	actor, err := client.User.Query().Where(user.TenantIDEQ(task.TenantID)).Only(ctx)
+	require.NoError(t, err)
+	attachment, err := client.TicketAttachment.Create().
+		SetTicketID(workItemID).
+		SetFileName("vpn-passwords.txt").
+		SetFilePath("tenant/private/vpn-passwords.txt").
+		SetFileURL("https://storage.example.test/signed-secret").
+		SetFileSize(42).
+		SetFileType("text/plain").
+		SetUploadedBy(actor.ID).
+		SetTenantID(task.TenantID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	response := doKafRequest(t, router, http.MethodGet, "/api/v1/bpmn/process-tasks/"+taskID+"/kaf-context", "")
+	require.Equal(t, http.StatusOK, response.Code)
+	var body struct {
+		Data service.KafTaskContext `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(response.Body.Bytes(), &body))
+	require.Equal(t, []service.KafAttachmentRef{{ID: attachment.ID}}, body.Data.Attachments)
+	assert.NotContains(t, response.Body.String(), "vpn-passwords.txt")
+	assert.NotContains(t, response.Body.String(), "tenant/private")
+	assert.NotContains(t, response.Body.String(), "signed-secret")
+}
+
 func TestKafDelegatedList_ReturnsOnlyCurrentTenantDelegatedKafTasks(t *testing.T) {
 	router, taskID, _ := newKafDelegationHTTPFixture(t, kafHTTPFixture{actorTenantID: 1, taskTenantID: 1, taskType: "kaf_delegate", status: common.ProcessTaskStatusDelegated})
 	response := doKafRequest(t, router, http.MethodGet, "/api/v1/bpmn/process-tasks/kaf-delegated?status=delegated", "")

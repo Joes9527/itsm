@@ -368,3 +368,20 @@ git commit -m "test: verify KAF delegation execution integrity"
 - [x] Heartbeat the KAF lease during long Procedure execution and cancel/fail closed on ownership loss.
 - [x] In forward revision `036_kaf_completion_replay`, deterministically adopt one pre-lease legacy delivery and mark additional rows `superseded` with an observable remediation code for databases already stamped at 035.
 - [x] Correct the spec, plan, and evidence to report only behavior proven by production-path tests.
+
+## Whole-Branch Review Amendment (2026-08-31)
+
+- [x] Separate the Go/BPMN delegation endpoint and webhook secret from the
+  legacy Gazellio ITSM configuration through `ITSM_KAF_URL`,
+  `ITSM_KAF_AUTOMATION_TOKEN`, and `ITSM_KAF_WEBHOOK_SECRET`.
+- [x] Use the configured delivery lease TTL consistently for claim, heartbeat
+  renewal, pre-action renewal, and completion replay.
+- [x] Return same-tenant opaque WorkItem attachment IDs from `kaf-context`
+  without exposing names, paths, or URLs.
+- [x] Make the embedding evaluator's optional dependency lazy so the base KAF
+  suite can collect without the `embedding` extra.
+- [x] Upgrade the local KAF Dev PostgreSQL database from revision 033 through
+  036 and start current source successfully against it.
+- [ ] Run a live cross-process SSLVPN flow with a real Dev `kaf_automation`
+  principal and execute PostgreSQL RLS probes with `RLS_TEST_DSN`; these remain
+  release gates rather than inferred passes.
