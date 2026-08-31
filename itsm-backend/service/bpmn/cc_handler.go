@@ -264,6 +264,9 @@ func normalizeCCRecipientIDs(value interface{}) ([]int, error) {
 		seen[id] = struct{}{}
 		ids = append(ids, id)
 	}
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("动态抄送人不能为空")
+	}
 	return ids, nil
 }
 

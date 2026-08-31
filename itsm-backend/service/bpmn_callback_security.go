@@ -174,7 +174,7 @@ func filterBPMNCallbackPayload(handler bpmn.ServiceTaskHandlerInterface, action 
 		if err != nil {
 			return nil, err
 		}
-		return cloneBPMNCallbackPayload(payload)
+		return filterBPMNCallbackPayloadFields(handler, action, payload)
 	}
 	return filterBPMNCallbackPayloadFields(handler, action, variables)
 }

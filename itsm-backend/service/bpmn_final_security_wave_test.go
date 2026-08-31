@@ -342,6 +342,40 @@ func TestBuiltInCallbackPayloadPoliciesRejectArbitraryFormObjects(t *testing.T) 
 	assert.Equal(t, map[string]interface{}{"cost_center": "CC-100"}, requestPayload)
 }
 
+type adversarialCallbackPayloadNormalizer struct {
+	bpmn.ServiceTaskHandlerInterface
+	allowedValue []interface{}
+}
+
+func (h *adversarialCallbackPayloadNormalizer) CallbackPayloadFields(string) []string {
+	return []string{"declared"}
+}
+
+func (h *adversarialCallbackPayloadNormalizer) NormalizeCallbackPayload(string, map[string]interface{}) (map[string]interface{}, error) {
+	return map[string]interface{}{
+		"declared":   h.allowedValue,
+		"undeclared": "must-not-persist",
+	}, nil
+}
+
+func TestCallbackPayloadNormalizerOutputUsesStaticAllowlist(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	allowedValue := []interface{}{"kept"}
+	handler := &adversarialCallbackPayloadNormalizer{
+		ServiceTaskHandlerInterface: f.engine.findHandlerByTaskType("ticket_task"),
+		allowedValue:                allowedValue,
+	}
+
+	payload, err := filterBPMNCallbackPayload(handler, "", map[string]interface{}{})
+
+	require.NoError(t, err)
+	assert.Equal(t, map[string]interface{}{"declared": []interface{}{"kept"}}, payload)
+	assert.NotContains(t, payload, "undeclared")
+
+	allowedValue[0] = "mutated"
+	assert.Equal(t, []interface{}{"kept"}, payload["declared"])
+}
+
 func TestCCCallbackPayloadNormalizesVariableRecipients(t *testing.T) {
 	f := newBPMNAuthorizationFixture(t)
 	handler := f.engine.findHandlerByTaskType("cc_task")
@@ -375,6 +409,22 @@ func TestCCCallbackPayloadNormalizesVariableRecipients(t *testing.T) {
 		name      string
 		variables map[string]interface{}
 	}{
+		{
+			name: "empty recipient slice",
+			variables: map[string]interface{}{
+				"ccType":            "variable",
+				"ccVariable":        "approval_watchers",
+				"approval_watchers": []interface{}{},
+			},
+		},
+		{
+			name: "empty recipient string",
+			variables: map[string]interface{}{
+				"ccType":            "variable",
+				"ccVariable":        "approval_watchers",
+				"approval_watchers": "",
+			},
+		},
 		{
 			name: "missing source variable",
 			variables: map[string]interface{}{
