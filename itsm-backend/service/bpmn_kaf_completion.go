@@ -54,6 +54,9 @@ func (e *CustomProcessEngine) CompleteKafDelegatedTask(ctx context.Context, ledg
 	if err != nil {
 		return fmt.Errorf("load KAF delegated task: %w", err)
 	}
+	if task.TaskType != bpmn.KafDelegateTaskType {
+		return common.NewForbiddenError("task is not a KAF delegation")
+	}
 	userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
 	if userID <= 0 {
 		return common.NewForbiddenError("KAF completion requires an authenticated actor")

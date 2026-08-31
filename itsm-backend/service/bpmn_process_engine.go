@@ -789,9 +789,6 @@ func (e *CustomProcessEngine) authorizeKafAutomationActorForStatusWithClient(ctx
 	if actor.TenantID != task.TenantID {
 		return fmt.Errorf("KAF 自动化账号与委派任务所属租户不一致，拒绝跨租户完成任务")
 	}
-	if task.TaskType != bpmn.KafDelegateTaskType {
-		return fmt.Errorf("任务不是 KAF 委派任务")
-	}
 	if task.Status != allowedStatus {
 		return fmt.Errorf("委派任务当前状态不允许完成: %s", task.Status)
 	}
