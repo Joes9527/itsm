@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent/problem"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -20,6 +21,7 @@ type KnownErrorCreate struct {
 	config
 	mutation *KnownErrorMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetTitle sets the "title" field.
@@ -394,6 +396,7 @@ func (_c *KnownErrorCreate) createSpec() (*KnownError, *sqlgraph.CreateSpec) {
 		_node = &KnownError{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(knownerror.Table, sqlgraph.NewFieldSpec(knownerror.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Title(); ok {
 		_spec.SetField(knownerror.FieldTitle, field.TypeString, value)
 		_node.Title = value
@@ -505,11 +508,823 @@ func (_c *KnownErrorCreate) createSpec() (*KnownError, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.KnownError.Create().
+//		SetTitle(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.KnownErrorUpsert) {
+//			SetTitle(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *KnownErrorCreate) OnConflict(opts ...sql.ConflictOption) *KnownErrorUpsertOne {
+	_c.conflict = opts
+	return &KnownErrorUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.KnownError.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *KnownErrorCreate) OnConflictColumns(columns ...string) *KnownErrorUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &KnownErrorUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// KnownErrorUpsertOne is the builder for "upsert"-ing
+	//  one KnownError node.
+	KnownErrorUpsertOne struct {
+		create *KnownErrorCreate
+	}
+
+	// KnownErrorUpsert is the "OnConflict" setter.
+	KnownErrorUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetTitle sets the "title" field.
+func (u *KnownErrorUpsert) SetTitle(v string) *KnownErrorUpsert {
+	u.Set(knownerror.FieldTitle, v)
+	return u
+}
+
+// UpdateTitle sets the "title" field to the value that was provided on create.
+func (u *KnownErrorUpsert) UpdateTitle() *KnownErrorUpsert {
+	u.SetExcluded(knownerror.FieldTitle)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *KnownErrorUpsert) SetDescription(v string) *KnownErrorUpsert {
+	u.Set(knownerror.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *KnownErrorUpsert) UpdateDescription() *KnownErrorUpsert {
+	u.SetExcluded(knownerror.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *KnownErrorUpsert) ClearDescription() *KnownErrorUpsert {
+	u.SetNull(knownerror.FieldDescription)
+	return u
+}
+
+// SetSymptoms sets the "symptoms" field.
+func (u *KnownErrorUpsert) SetSymptoms(v string) *KnownErrorUpsert {
+	u.Set(knownerror.FieldSymptoms, v)
+	return u
+}
+
+// UpdateSymptoms sets the "symptoms" field to the value that was provided on create.
+func (u *KnownErrorUpsert) UpdateSymptoms() *KnownErrorUpsert {
+	u.SetExcluded(knownerror.FieldSymptoms)
+	return u
+}
+
+// ClearSymptoms clears the value of the "symptoms" field.
+func (u *KnownErrorUpsert) ClearSymptoms() *KnownErrorUpsert {
+	u.SetNull(knownerror.FieldSymptoms)
+	return u
+}
+
+// SetRootCause sets the "root_cause" field.
+func (u *KnownErrorUpsert) SetRootCause(v string) *KnownErrorUpsert {
+	u.Set(knownerror.FieldRootCause, v)
+	return u
+}
+
+// UpdateRootCause sets the "root_cause" field to the value that was provided on create.
+func (u *KnownErrorUpsert) UpdateRootCause() *KnownErrorUpsert {
+	u.SetExcluded(knownerror.FieldRootCause)
+	return u
+}
+
+// ClearRootCause clears the value of the "root_cause" field.
+func (u *KnownErrorUpsert) ClearRootCause() *KnownErrorUpsert {
+	u.SetNull(knownerror.FieldRootCause)
+	return u
+}
+
+// SetWorkaround sets the "workaround" field.
+func (u *KnownErrorUpsert) SetWorkaround(v string) *KnownErrorUpsert {
+	u.Set(knownerror.FieldWorkaround, v)
+	return u
+}
+
+// UpdateWorkaround sets the "workaround" field to the value that was provided on create.
+func (u *KnownErrorUpsert) UpdateWorkaround() *KnownErrorUpsert {
+	u.SetExcluded(knownerror.FieldWorkaround)
+	return u
+}
+
+// ClearWorkaround clears the value of the "workaround" field.
+func (u *KnownErrorUpsert) ClearWorkaround() *KnownErrorUpsert {
+	u.SetNull(knownerror.FieldWorkaround)
+	return u
+}
+
+// SetResolution sets the "resolution" field.
+func (u *KnownErrorUpsert) SetResolution(v string) *KnownErrorUpsert {
+	u.Set(knownerror.FieldResolution, v)
+	return u
+}
+
+// UpdateResolution sets the "resolution" field to the value that was provided on create.
+func (u *KnownErrorUpsert) UpdateResolution() *KnownErrorUpsert {
+	u.SetExcluded(knownerror.FieldResolution)
+	return u
+}
+
+// ClearResolution clears the value of the "resolution" field.
+func (u *KnownErrorUpsert) ClearResolution() *KnownErrorUpsert {
+	u.SetNull(knownerror.FieldResolution)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *KnownErrorUpsert) SetStatus(v string) *KnownErrorUpsert {
+	u.Set(knownerror.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *KnownErrorUpsert) UpdateStatus() *KnownErrorUpsert {
+	u.SetExcluded(knownerror.FieldStatus)
+	return u
+}
+
+// SetCategory sets the "category" field.
+func (u *KnownErrorUpsert) SetCategory(v string) *KnownErrorUpsert {
+	u.Set(knownerror.FieldCategory, v)
+	return u
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *KnownErrorUpsert) UpdateCategory() *KnownErrorUpsert {
+	u.SetExcluded(knownerror.FieldCategory)
+	return u
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *KnownErrorUpsert) ClearCategory() *KnownErrorUpsert {
+	u.SetNull(knownerror.FieldCategory)
+	return u
+}
+
+// SetSeverity sets the "severity" field.
+func (u *KnownErrorUpsert) SetSeverity(v string) *KnownErrorUpsert {
+	u.Set(knownerror.FieldSeverity, v)
+	return u
+}
+
+// UpdateSeverity sets the "severity" field to the value that was provided on create.
+func (u *KnownErrorUpsert) UpdateSeverity() *KnownErrorUpsert {
+	u.SetExcluded(knownerror.FieldSeverity)
+	return u
+}
+
+// SetAffectedProducts sets the "affected_products" field.
+func (u *KnownErrorUpsert) SetAffectedProducts(v []string) *KnownErrorUpsert {
+	u.Set(knownerror.FieldAffectedProducts, v)
+	return u
+}
+
+// UpdateAffectedProducts sets the "affected_products" field to the value that was provided on create.
+func (u *KnownErrorUpsert) UpdateAffectedProducts() *KnownErrorUpsert {
+	u.SetExcluded(knownerror.FieldAffectedProducts)
+	return u
+}
+
+// ClearAffectedProducts clears the value of the "affected_products" field.
+func (u *KnownErrorUpsert) ClearAffectedProducts() *KnownErrorUpsert {
+	u.SetNull(knownerror.FieldAffectedProducts)
+	return u
+}
+
+// SetAffectedCis sets the "affected_cis" field.
+func (u *KnownErrorUpsert) SetAffectedCis(v []string) *KnownErrorUpsert {
+	u.Set(knownerror.FieldAffectedCis, v)
+	return u
+}
+
+// UpdateAffectedCis sets the "affected_cis" field to the value that was provided on create.
+func (u *KnownErrorUpsert) UpdateAffectedCis() *KnownErrorUpsert {
+	u.SetExcluded(knownerror.FieldAffectedCis)
+	return u
+}
+
+// ClearAffectedCis clears the value of the "affected_cis" field.
+func (u *KnownErrorUpsert) ClearAffectedCis() *KnownErrorUpsert {
+	u.SetNull(knownerror.FieldAffectedCis)
+	return u
+}
+
+// SetKeywords sets the "keywords" field.
+func (u *KnownErrorUpsert) SetKeywords(v []string) *KnownErrorUpsert {
+	u.Set(knownerror.FieldKeywords, v)
+	return u
+}
+
+// UpdateKeywords sets the "keywords" field to the value that was provided on create.
+func (u *KnownErrorUpsert) UpdateKeywords() *KnownErrorUpsert {
+	u.SetExcluded(knownerror.FieldKeywords)
+	return u
+}
+
+// ClearKeywords clears the value of the "keywords" field.
+func (u *KnownErrorUpsert) ClearKeywords() *KnownErrorUpsert {
+	u.SetNull(knownerror.FieldKeywords)
+	return u
+}
+
+// SetOccurrenceCount sets the "occurrence_count" field.
+func (u *KnownErrorUpsert) SetOccurrenceCount(v int) *KnownErrorUpsert {
+	u.Set(knownerror.FieldOccurrenceCount, v)
+	return u
+}
+
+// UpdateOccurrenceCount sets the "occurrence_count" field to the value that was provided on create.
+func (u *KnownErrorUpsert) UpdateOccurrenceCount() *KnownErrorUpsert {
+	u.SetExcluded(knownerror.FieldOccurrenceCount)
+	return u
+}
+
+// AddOccurrenceCount adds v to the "occurrence_count" field.
+func (u *KnownErrorUpsert) AddOccurrenceCount(v int) *KnownErrorUpsert {
+	u.Add(knownerror.FieldOccurrenceCount, v)
+	return u
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *KnownErrorUpsert) SetCreatedBy(v int) *KnownErrorUpsert {
+	u.Set(knownerror.FieldCreatedBy, v)
+	return u
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *KnownErrorUpsert) UpdateCreatedBy() *KnownErrorUpsert {
+	u.SetExcluded(knownerror.FieldCreatedBy)
+	return u
+}
+
+// AddCreatedBy adds v to the "created_by" field.
+func (u *KnownErrorUpsert) AddCreatedBy(v int) *KnownErrorUpsert {
+	u.Add(knownerror.FieldCreatedBy, v)
+	return u
+}
+
+// SetApprovedBy sets the "approved_by" field.
+func (u *KnownErrorUpsert) SetApprovedBy(v int) *KnownErrorUpsert {
+	u.Set(knownerror.FieldApprovedBy, v)
+	return u
+}
+
+// UpdateApprovedBy sets the "approved_by" field to the value that was provided on create.
+func (u *KnownErrorUpsert) UpdateApprovedBy() *KnownErrorUpsert {
+	u.SetExcluded(knownerror.FieldApprovedBy)
+	return u
+}
+
+// AddApprovedBy adds v to the "approved_by" field.
+func (u *KnownErrorUpsert) AddApprovedBy(v int) *KnownErrorUpsert {
+	u.Add(knownerror.FieldApprovedBy, v)
+	return u
+}
+
+// ClearApprovedBy clears the value of the "approved_by" field.
+func (u *KnownErrorUpsert) ClearApprovedBy() *KnownErrorUpsert {
+	u.SetNull(knownerror.FieldApprovedBy)
+	return u
+}
+
+// SetApprovedAt sets the "approved_at" field.
+func (u *KnownErrorUpsert) SetApprovedAt(v time.Time) *KnownErrorUpsert {
+	u.Set(knownerror.FieldApprovedAt, v)
+	return u
+}
+
+// UpdateApprovedAt sets the "approved_at" field to the value that was provided on create.
+func (u *KnownErrorUpsert) UpdateApprovedAt() *KnownErrorUpsert {
+	u.SetExcluded(knownerror.FieldApprovedAt)
+	return u
+}
+
+// ClearApprovedAt clears the value of the "approved_at" field.
+func (u *KnownErrorUpsert) ClearApprovedAt() *KnownErrorUpsert {
+	u.SetNull(knownerror.FieldApprovedAt)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *KnownErrorUpsert) SetTenantID(v int) *KnownErrorUpsert {
+	u.Set(knownerror.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *KnownErrorUpsert) UpdateTenantID() *KnownErrorUpsert {
+	u.SetExcluded(knownerror.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *KnownErrorUpsert) AddTenantID(v int) *KnownErrorUpsert {
+	u.Add(knownerror.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *KnownErrorUpsert) SetCreatedAt(v time.Time) *KnownErrorUpsert {
+	u.Set(knownerror.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *KnownErrorUpsert) UpdateCreatedAt() *KnownErrorUpsert {
+	u.SetExcluded(knownerror.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *KnownErrorUpsert) SetUpdatedAt(v time.Time) *KnownErrorUpsert {
+	u.Set(knownerror.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *KnownErrorUpsert) UpdateUpdatedAt() *KnownErrorUpsert {
+	u.SetExcluded(knownerror.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.KnownError.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *KnownErrorUpsertOne) UpdateNewValues() *KnownErrorUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.KnownError.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *KnownErrorUpsertOne) Ignore() *KnownErrorUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *KnownErrorUpsertOne) DoNothing() *KnownErrorUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the KnownErrorCreate.OnConflict
+// documentation for more info.
+func (u *KnownErrorUpsertOne) Update(set func(*KnownErrorUpsert)) *KnownErrorUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&KnownErrorUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTitle sets the "title" field.
+func (u *KnownErrorUpsertOne) SetTitle(v string) *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetTitle(v)
+	})
+}
+
+// UpdateTitle sets the "title" field to the value that was provided on create.
+func (u *KnownErrorUpsertOne) UpdateTitle() *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateTitle()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *KnownErrorUpsertOne) SetDescription(v string) *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *KnownErrorUpsertOne) UpdateDescription() *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *KnownErrorUpsertOne) ClearDescription() *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetSymptoms sets the "symptoms" field.
+func (u *KnownErrorUpsertOne) SetSymptoms(v string) *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetSymptoms(v)
+	})
+}
+
+// UpdateSymptoms sets the "symptoms" field to the value that was provided on create.
+func (u *KnownErrorUpsertOne) UpdateSymptoms() *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateSymptoms()
+	})
+}
+
+// ClearSymptoms clears the value of the "symptoms" field.
+func (u *KnownErrorUpsertOne) ClearSymptoms() *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.ClearSymptoms()
+	})
+}
+
+// SetRootCause sets the "root_cause" field.
+func (u *KnownErrorUpsertOne) SetRootCause(v string) *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetRootCause(v)
+	})
+}
+
+// UpdateRootCause sets the "root_cause" field to the value that was provided on create.
+func (u *KnownErrorUpsertOne) UpdateRootCause() *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateRootCause()
+	})
+}
+
+// ClearRootCause clears the value of the "root_cause" field.
+func (u *KnownErrorUpsertOne) ClearRootCause() *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.ClearRootCause()
+	})
+}
+
+// SetWorkaround sets the "workaround" field.
+func (u *KnownErrorUpsertOne) SetWorkaround(v string) *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetWorkaround(v)
+	})
+}
+
+// UpdateWorkaround sets the "workaround" field to the value that was provided on create.
+func (u *KnownErrorUpsertOne) UpdateWorkaround() *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateWorkaround()
+	})
+}
+
+// ClearWorkaround clears the value of the "workaround" field.
+func (u *KnownErrorUpsertOne) ClearWorkaround() *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.ClearWorkaround()
+	})
+}
+
+// SetResolution sets the "resolution" field.
+func (u *KnownErrorUpsertOne) SetResolution(v string) *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetResolution(v)
+	})
+}
+
+// UpdateResolution sets the "resolution" field to the value that was provided on create.
+func (u *KnownErrorUpsertOne) UpdateResolution() *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateResolution()
+	})
+}
+
+// ClearResolution clears the value of the "resolution" field.
+func (u *KnownErrorUpsertOne) ClearResolution() *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.ClearResolution()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *KnownErrorUpsertOne) SetStatus(v string) *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *KnownErrorUpsertOne) UpdateStatus() *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetCategory sets the "category" field.
+func (u *KnownErrorUpsertOne) SetCategory(v string) *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetCategory(v)
+	})
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *KnownErrorUpsertOne) UpdateCategory() *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateCategory()
+	})
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *KnownErrorUpsertOne) ClearCategory() *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.ClearCategory()
+	})
+}
+
+// SetSeverity sets the "severity" field.
+func (u *KnownErrorUpsertOne) SetSeverity(v string) *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetSeverity(v)
+	})
+}
+
+// UpdateSeverity sets the "severity" field to the value that was provided on create.
+func (u *KnownErrorUpsertOne) UpdateSeverity() *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateSeverity()
+	})
+}
+
+// SetAffectedProducts sets the "affected_products" field.
+func (u *KnownErrorUpsertOne) SetAffectedProducts(v []string) *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetAffectedProducts(v)
+	})
+}
+
+// UpdateAffectedProducts sets the "affected_products" field to the value that was provided on create.
+func (u *KnownErrorUpsertOne) UpdateAffectedProducts() *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateAffectedProducts()
+	})
+}
+
+// ClearAffectedProducts clears the value of the "affected_products" field.
+func (u *KnownErrorUpsertOne) ClearAffectedProducts() *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.ClearAffectedProducts()
+	})
+}
+
+// SetAffectedCis sets the "affected_cis" field.
+func (u *KnownErrorUpsertOne) SetAffectedCis(v []string) *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetAffectedCis(v)
+	})
+}
+
+// UpdateAffectedCis sets the "affected_cis" field to the value that was provided on create.
+func (u *KnownErrorUpsertOne) UpdateAffectedCis() *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateAffectedCis()
+	})
+}
+
+// ClearAffectedCis clears the value of the "affected_cis" field.
+func (u *KnownErrorUpsertOne) ClearAffectedCis() *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.ClearAffectedCis()
+	})
+}
+
+// SetKeywords sets the "keywords" field.
+func (u *KnownErrorUpsertOne) SetKeywords(v []string) *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetKeywords(v)
+	})
+}
+
+// UpdateKeywords sets the "keywords" field to the value that was provided on create.
+func (u *KnownErrorUpsertOne) UpdateKeywords() *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateKeywords()
+	})
+}
+
+// ClearKeywords clears the value of the "keywords" field.
+func (u *KnownErrorUpsertOne) ClearKeywords() *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.ClearKeywords()
+	})
+}
+
+// SetOccurrenceCount sets the "occurrence_count" field.
+func (u *KnownErrorUpsertOne) SetOccurrenceCount(v int) *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetOccurrenceCount(v)
+	})
+}
+
+// AddOccurrenceCount adds v to the "occurrence_count" field.
+func (u *KnownErrorUpsertOne) AddOccurrenceCount(v int) *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.AddOccurrenceCount(v)
+	})
+}
+
+// UpdateOccurrenceCount sets the "occurrence_count" field to the value that was provided on create.
+func (u *KnownErrorUpsertOne) UpdateOccurrenceCount() *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateOccurrenceCount()
+	})
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *KnownErrorUpsertOne) SetCreatedBy(v int) *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetCreatedBy(v)
+	})
+}
+
+// AddCreatedBy adds v to the "created_by" field.
+func (u *KnownErrorUpsertOne) AddCreatedBy(v int) *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.AddCreatedBy(v)
+	})
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *KnownErrorUpsertOne) UpdateCreatedBy() *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateCreatedBy()
+	})
+}
+
+// SetApprovedBy sets the "approved_by" field.
+func (u *KnownErrorUpsertOne) SetApprovedBy(v int) *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetApprovedBy(v)
+	})
+}
+
+// AddApprovedBy adds v to the "approved_by" field.
+func (u *KnownErrorUpsertOne) AddApprovedBy(v int) *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.AddApprovedBy(v)
+	})
+}
+
+// UpdateApprovedBy sets the "approved_by" field to the value that was provided on create.
+func (u *KnownErrorUpsertOne) UpdateApprovedBy() *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateApprovedBy()
+	})
+}
+
+// ClearApprovedBy clears the value of the "approved_by" field.
+func (u *KnownErrorUpsertOne) ClearApprovedBy() *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.ClearApprovedBy()
+	})
+}
+
+// SetApprovedAt sets the "approved_at" field.
+func (u *KnownErrorUpsertOne) SetApprovedAt(v time.Time) *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetApprovedAt(v)
+	})
+}
+
+// UpdateApprovedAt sets the "approved_at" field to the value that was provided on create.
+func (u *KnownErrorUpsertOne) UpdateApprovedAt() *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateApprovedAt()
+	})
+}
+
+// ClearApprovedAt clears the value of the "approved_at" field.
+func (u *KnownErrorUpsertOne) ClearApprovedAt() *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.ClearApprovedAt()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *KnownErrorUpsertOne) SetTenantID(v int) *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *KnownErrorUpsertOne) AddTenantID(v int) *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *KnownErrorUpsertOne) UpdateTenantID() *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *KnownErrorUpsertOne) SetCreatedAt(v time.Time) *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *KnownErrorUpsertOne) UpdateCreatedAt() *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *KnownErrorUpsertOne) SetUpdatedAt(v time.Time) *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *KnownErrorUpsertOne) UpdateUpdatedAt() *KnownErrorUpsertOne {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *KnownErrorUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for KnownErrorCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *KnownErrorUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *KnownErrorUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *KnownErrorUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // KnownErrorCreateBulk is the builder for creating many KnownError entities in bulk.
 type KnownErrorCreateBulk struct {
 	config
 	err      error
 	builders []*KnownErrorCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the KnownError entities in the database.
@@ -539,6 +1354,7 @@ func (_c *KnownErrorCreateBulk) Save(ctx context.Context) ([]*KnownError, error)
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -589,6 +1405,481 @@ func (_c *KnownErrorCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *KnownErrorCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.KnownError.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.KnownErrorUpsert) {
+//			SetTitle(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *KnownErrorCreateBulk) OnConflict(opts ...sql.ConflictOption) *KnownErrorUpsertBulk {
+	_c.conflict = opts
+	return &KnownErrorUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.KnownError.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *KnownErrorCreateBulk) OnConflictColumns(columns ...string) *KnownErrorUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &KnownErrorUpsertBulk{
+		create: _c,
+	}
+}
+
+// KnownErrorUpsertBulk is the builder for "upsert"-ing
+// a bulk of KnownError nodes.
+type KnownErrorUpsertBulk struct {
+	create *KnownErrorCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.KnownError.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *KnownErrorUpsertBulk) UpdateNewValues() *KnownErrorUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.KnownError.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *KnownErrorUpsertBulk) Ignore() *KnownErrorUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *KnownErrorUpsertBulk) DoNothing() *KnownErrorUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the KnownErrorCreateBulk.OnConflict
+// documentation for more info.
+func (u *KnownErrorUpsertBulk) Update(set func(*KnownErrorUpsert)) *KnownErrorUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&KnownErrorUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTitle sets the "title" field.
+func (u *KnownErrorUpsertBulk) SetTitle(v string) *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetTitle(v)
+	})
+}
+
+// UpdateTitle sets the "title" field to the value that was provided on create.
+func (u *KnownErrorUpsertBulk) UpdateTitle() *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateTitle()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *KnownErrorUpsertBulk) SetDescription(v string) *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *KnownErrorUpsertBulk) UpdateDescription() *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *KnownErrorUpsertBulk) ClearDescription() *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetSymptoms sets the "symptoms" field.
+func (u *KnownErrorUpsertBulk) SetSymptoms(v string) *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetSymptoms(v)
+	})
+}
+
+// UpdateSymptoms sets the "symptoms" field to the value that was provided on create.
+func (u *KnownErrorUpsertBulk) UpdateSymptoms() *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateSymptoms()
+	})
+}
+
+// ClearSymptoms clears the value of the "symptoms" field.
+func (u *KnownErrorUpsertBulk) ClearSymptoms() *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.ClearSymptoms()
+	})
+}
+
+// SetRootCause sets the "root_cause" field.
+func (u *KnownErrorUpsertBulk) SetRootCause(v string) *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetRootCause(v)
+	})
+}
+
+// UpdateRootCause sets the "root_cause" field to the value that was provided on create.
+func (u *KnownErrorUpsertBulk) UpdateRootCause() *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateRootCause()
+	})
+}
+
+// ClearRootCause clears the value of the "root_cause" field.
+func (u *KnownErrorUpsertBulk) ClearRootCause() *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.ClearRootCause()
+	})
+}
+
+// SetWorkaround sets the "workaround" field.
+func (u *KnownErrorUpsertBulk) SetWorkaround(v string) *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetWorkaround(v)
+	})
+}
+
+// UpdateWorkaround sets the "workaround" field to the value that was provided on create.
+func (u *KnownErrorUpsertBulk) UpdateWorkaround() *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateWorkaround()
+	})
+}
+
+// ClearWorkaround clears the value of the "workaround" field.
+func (u *KnownErrorUpsertBulk) ClearWorkaround() *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.ClearWorkaround()
+	})
+}
+
+// SetResolution sets the "resolution" field.
+func (u *KnownErrorUpsertBulk) SetResolution(v string) *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetResolution(v)
+	})
+}
+
+// UpdateResolution sets the "resolution" field to the value that was provided on create.
+func (u *KnownErrorUpsertBulk) UpdateResolution() *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateResolution()
+	})
+}
+
+// ClearResolution clears the value of the "resolution" field.
+func (u *KnownErrorUpsertBulk) ClearResolution() *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.ClearResolution()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *KnownErrorUpsertBulk) SetStatus(v string) *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *KnownErrorUpsertBulk) UpdateStatus() *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetCategory sets the "category" field.
+func (u *KnownErrorUpsertBulk) SetCategory(v string) *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetCategory(v)
+	})
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *KnownErrorUpsertBulk) UpdateCategory() *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateCategory()
+	})
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *KnownErrorUpsertBulk) ClearCategory() *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.ClearCategory()
+	})
+}
+
+// SetSeverity sets the "severity" field.
+func (u *KnownErrorUpsertBulk) SetSeverity(v string) *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetSeverity(v)
+	})
+}
+
+// UpdateSeverity sets the "severity" field to the value that was provided on create.
+func (u *KnownErrorUpsertBulk) UpdateSeverity() *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateSeverity()
+	})
+}
+
+// SetAffectedProducts sets the "affected_products" field.
+func (u *KnownErrorUpsertBulk) SetAffectedProducts(v []string) *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetAffectedProducts(v)
+	})
+}
+
+// UpdateAffectedProducts sets the "affected_products" field to the value that was provided on create.
+func (u *KnownErrorUpsertBulk) UpdateAffectedProducts() *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateAffectedProducts()
+	})
+}
+
+// ClearAffectedProducts clears the value of the "affected_products" field.
+func (u *KnownErrorUpsertBulk) ClearAffectedProducts() *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.ClearAffectedProducts()
+	})
+}
+
+// SetAffectedCis sets the "affected_cis" field.
+func (u *KnownErrorUpsertBulk) SetAffectedCis(v []string) *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetAffectedCis(v)
+	})
+}
+
+// UpdateAffectedCis sets the "affected_cis" field to the value that was provided on create.
+func (u *KnownErrorUpsertBulk) UpdateAffectedCis() *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateAffectedCis()
+	})
+}
+
+// ClearAffectedCis clears the value of the "affected_cis" field.
+func (u *KnownErrorUpsertBulk) ClearAffectedCis() *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.ClearAffectedCis()
+	})
+}
+
+// SetKeywords sets the "keywords" field.
+func (u *KnownErrorUpsertBulk) SetKeywords(v []string) *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetKeywords(v)
+	})
+}
+
+// UpdateKeywords sets the "keywords" field to the value that was provided on create.
+func (u *KnownErrorUpsertBulk) UpdateKeywords() *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateKeywords()
+	})
+}
+
+// ClearKeywords clears the value of the "keywords" field.
+func (u *KnownErrorUpsertBulk) ClearKeywords() *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.ClearKeywords()
+	})
+}
+
+// SetOccurrenceCount sets the "occurrence_count" field.
+func (u *KnownErrorUpsertBulk) SetOccurrenceCount(v int) *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetOccurrenceCount(v)
+	})
+}
+
+// AddOccurrenceCount adds v to the "occurrence_count" field.
+func (u *KnownErrorUpsertBulk) AddOccurrenceCount(v int) *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.AddOccurrenceCount(v)
+	})
+}
+
+// UpdateOccurrenceCount sets the "occurrence_count" field to the value that was provided on create.
+func (u *KnownErrorUpsertBulk) UpdateOccurrenceCount() *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateOccurrenceCount()
+	})
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *KnownErrorUpsertBulk) SetCreatedBy(v int) *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetCreatedBy(v)
+	})
+}
+
+// AddCreatedBy adds v to the "created_by" field.
+func (u *KnownErrorUpsertBulk) AddCreatedBy(v int) *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.AddCreatedBy(v)
+	})
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *KnownErrorUpsertBulk) UpdateCreatedBy() *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateCreatedBy()
+	})
+}
+
+// SetApprovedBy sets the "approved_by" field.
+func (u *KnownErrorUpsertBulk) SetApprovedBy(v int) *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetApprovedBy(v)
+	})
+}
+
+// AddApprovedBy adds v to the "approved_by" field.
+func (u *KnownErrorUpsertBulk) AddApprovedBy(v int) *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.AddApprovedBy(v)
+	})
+}
+
+// UpdateApprovedBy sets the "approved_by" field to the value that was provided on create.
+func (u *KnownErrorUpsertBulk) UpdateApprovedBy() *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateApprovedBy()
+	})
+}
+
+// ClearApprovedBy clears the value of the "approved_by" field.
+func (u *KnownErrorUpsertBulk) ClearApprovedBy() *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.ClearApprovedBy()
+	})
+}
+
+// SetApprovedAt sets the "approved_at" field.
+func (u *KnownErrorUpsertBulk) SetApprovedAt(v time.Time) *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetApprovedAt(v)
+	})
+}
+
+// UpdateApprovedAt sets the "approved_at" field to the value that was provided on create.
+func (u *KnownErrorUpsertBulk) UpdateApprovedAt() *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateApprovedAt()
+	})
+}
+
+// ClearApprovedAt clears the value of the "approved_at" field.
+func (u *KnownErrorUpsertBulk) ClearApprovedAt() *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.ClearApprovedAt()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *KnownErrorUpsertBulk) SetTenantID(v int) *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *KnownErrorUpsertBulk) AddTenantID(v int) *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *KnownErrorUpsertBulk) UpdateTenantID() *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *KnownErrorUpsertBulk) SetCreatedAt(v time.Time) *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *KnownErrorUpsertBulk) UpdateCreatedAt() *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *KnownErrorUpsertBulk) SetUpdatedAt(v time.Time) *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *KnownErrorUpsertBulk) UpdateUpdatedAt() *KnownErrorUpsertBulk {
+	return u.Update(func(s *KnownErrorUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *KnownErrorUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the KnownErrorCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for KnownErrorCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *KnownErrorUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

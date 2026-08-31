@@ -15,6 +15,7 @@ import (
 	"itsm-backend/ent/workflow"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -24,6 +25,7 @@ type DepartmentCreate struct {
 	config
 	mutation *DepartmentMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetName sets the "name" field.
@@ -373,6 +375,7 @@ func (_c *DepartmentCreate) createSpec() (*Department, *sqlgraph.CreateSpec) {
 		_node = &Department{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(department.Table, sqlgraph.NewFieldSpec(department.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(department.FieldName, field.TypeString, value)
 		_node.Name = value
@@ -545,11 +548,524 @@ func (_c *DepartmentCreate) createSpec() (*Department, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.Department.Create().
+//		SetName(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.DepartmentUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *DepartmentCreate) OnConflict(opts ...sql.ConflictOption) *DepartmentUpsertOne {
+	_c.conflict = opts
+	return &DepartmentUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.Department.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *DepartmentCreate) OnConflictColumns(columns ...string) *DepartmentUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &DepartmentUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// DepartmentUpsertOne is the builder for "upsert"-ing
+	//  one Department node.
+	DepartmentUpsertOne struct {
+		create *DepartmentCreate
+	}
+
+	// DepartmentUpsert is the "OnConflict" setter.
+	DepartmentUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetName sets the "name" field.
+func (u *DepartmentUpsert) SetName(v string) *DepartmentUpsert {
+	u.Set(department.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *DepartmentUpsert) UpdateName() *DepartmentUpsert {
+	u.SetExcluded(department.FieldName)
+	return u
+}
+
+// SetCode sets the "code" field.
+func (u *DepartmentUpsert) SetCode(v string) *DepartmentUpsert {
+	u.Set(department.FieldCode, v)
+	return u
+}
+
+// UpdateCode sets the "code" field to the value that was provided on create.
+func (u *DepartmentUpsert) UpdateCode() *DepartmentUpsert {
+	u.SetExcluded(department.FieldCode)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *DepartmentUpsert) SetDescription(v string) *DepartmentUpsert {
+	u.Set(department.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *DepartmentUpsert) UpdateDescription() *DepartmentUpsert {
+	u.SetExcluded(department.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *DepartmentUpsert) ClearDescription() *DepartmentUpsert {
+	u.SetNull(department.FieldDescription)
+	return u
+}
+
+// SetManagerID sets the "manager_id" field.
+func (u *DepartmentUpsert) SetManagerID(v int) *DepartmentUpsert {
+	u.Set(department.FieldManagerID, v)
+	return u
+}
+
+// UpdateManagerID sets the "manager_id" field to the value that was provided on create.
+func (u *DepartmentUpsert) UpdateManagerID() *DepartmentUpsert {
+	u.SetExcluded(department.FieldManagerID)
+	return u
+}
+
+// AddManagerID adds v to the "manager_id" field.
+func (u *DepartmentUpsert) AddManagerID(v int) *DepartmentUpsert {
+	u.Add(department.FieldManagerID, v)
+	return u
+}
+
+// ClearManagerID clears the value of the "manager_id" field.
+func (u *DepartmentUpsert) ClearManagerID() *DepartmentUpsert {
+	u.SetNull(department.FieldManagerID)
+	return u
+}
+
+// SetParentID sets the "parent_id" field.
+func (u *DepartmentUpsert) SetParentID(v int) *DepartmentUpsert {
+	u.Set(department.FieldParentID, v)
+	return u
+}
+
+// UpdateParentID sets the "parent_id" field to the value that was provided on create.
+func (u *DepartmentUpsert) UpdateParentID() *DepartmentUpsert {
+	u.SetExcluded(department.FieldParentID)
+	return u
+}
+
+// ClearParentID clears the value of the "parent_id" field.
+func (u *DepartmentUpsert) ClearParentID() *DepartmentUpsert {
+	u.SetNull(department.FieldParentID)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *DepartmentUpsert) SetTenantID(v int) *DepartmentUpsert {
+	u.Set(department.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *DepartmentUpsert) UpdateTenantID() *DepartmentUpsert {
+	u.SetExcluded(department.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *DepartmentUpsert) AddTenantID(v int) *DepartmentUpsert {
+	u.Add(department.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *DepartmentUpsert) SetCreatedAt(v time.Time) *DepartmentUpsert {
+	u.Set(department.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *DepartmentUpsert) UpdateCreatedAt() *DepartmentUpsert {
+	u.SetExcluded(department.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *DepartmentUpsert) SetUpdatedAt(v time.Time) *DepartmentUpsert {
+	u.Set(department.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *DepartmentUpsert) UpdateUpdatedAt() *DepartmentUpsert {
+	u.SetExcluded(department.FieldUpdatedAt)
+	return u
+}
+
+// SetAreaName sets the "area_name" field.
+func (u *DepartmentUpsert) SetAreaName(v string) *DepartmentUpsert {
+	u.Set(department.FieldAreaName, v)
+	return u
+}
+
+// UpdateAreaName sets the "area_name" field to the value that was provided on create.
+func (u *DepartmentUpsert) UpdateAreaName() *DepartmentUpsert {
+	u.SetExcluded(department.FieldAreaName)
+	return u
+}
+
+// ClearAreaName clears the value of the "area_name" field.
+func (u *DepartmentUpsert) ClearAreaName() *DepartmentUpsert {
+	u.SetNull(department.FieldAreaName)
+	return u
+}
+
+// SetOrgType sets the "org_type" field.
+func (u *DepartmentUpsert) SetOrgType(v string) *DepartmentUpsert {
+	u.Set(department.FieldOrgType, v)
+	return u
+}
+
+// UpdateOrgType sets the "org_type" field to the value that was provided on create.
+func (u *DepartmentUpsert) UpdateOrgType() *DepartmentUpsert {
+	u.SetExcluded(department.FieldOrgType)
+	return u
+}
+
+// ClearOrgType clears the value of the "org_type" field.
+func (u *DepartmentUpsert) ClearOrgType() *DepartmentUpsert {
+	u.SetNull(department.FieldOrgType)
+	return u
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (u *DepartmentUpsert) SetDeletedAt(v time.Time) *DepartmentUpsert {
+	u.Set(department.FieldDeletedAt, v)
+	return u
+}
+
+// UpdateDeletedAt sets the "deleted_at" field to the value that was provided on create.
+func (u *DepartmentUpsert) UpdateDeletedAt() *DepartmentUpsert {
+	u.SetExcluded(department.FieldDeletedAt)
+	return u
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (u *DepartmentUpsert) ClearDeletedAt() *DepartmentUpsert {
+	u.SetNull(department.FieldDeletedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.Department.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *DepartmentUpsertOne) UpdateNewValues() *DepartmentUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.Department.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *DepartmentUpsertOne) Ignore() *DepartmentUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *DepartmentUpsertOne) DoNothing() *DepartmentUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the DepartmentCreate.OnConflict
+// documentation for more info.
+func (u *DepartmentUpsertOne) Update(set func(*DepartmentUpsert)) *DepartmentUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&DepartmentUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *DepartmentUpsertOne) SetName(v string) *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *DepartmentUpsertOne) UpdateName() *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetCode sets the "code" field.
+func (u *DepartmentUpsertOne) SetCode(v string) *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.SetCode(v)
+	})
+}
+
+// UpdateCode sets the "code" field to the value that was provided on create.
+func (u *DepartmentUpsertOne) UpdateCode() *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.UpdateCode()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *DepartmentUpsertOne) SetDescription(v string) *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *DepartmentUpsertOne) UpdateDescription() *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *DepartmentUpsertOne) ClearDescription() *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetManagerID sets the "manager_id" field.
+func (u *DepartmentUpsertOne) SetManagerID(v int) *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.SetManagerID(v)
+	})
+}
+
+// AddManagerID adds v to the "manager_id" field.
+func (u *DepartmentUpsertOne) AddManagerID(v int) *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.AddManagerID(v)
+	})
+}
+
+// UpdateManagerID sets the "manager_id" field to the value that was provided on create.
+func (u *DepartmentUpsertOne) UpdateManagerID() *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.UpdateManagerID()
+	})
+}
+
+// ClearManagerID clears the value of the "manager_id" field.
+func (u *DepartmentUpsertOne) ClearManagerID() *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.ClearManagerID()
+	})
+}
+
+// SetParentID sets the "parent_id" field.
+func (u *DepartmentUpsertOne) SetParentID(v int) *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.SetParentID(v)
+	})
+}
+
+// UpdateParentID sets the "parent_id" field to the value that was provided on create.
+func (u *DepartmentUpsertOne) UpdateParentID() *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.UpdateParentID()
+	})
+}
+
+// ClearParentID clears the value of the "parent_id" field.
+func (u *DepartmentUpsertOne) ClearParentID() *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.ClearParentID()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *DepartmentUpsertOne) SetTenantID(v int) *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *DepartmentUpsertOne) AddTenantID(v int) *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *DepartmentUpsertOne) UpdateTenantID() *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *DepartmentUpsertOne) SetCreatedAt(v time.Time) *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *DepartmentUpsertOne) UpdateCreatedAt() *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *DepartmentUpsertOne) SetUpdatedAt(v time.Time) *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *DepartmentUpsertOne) UpdateUpdatedAt() *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// SetAreaName sets the "area_name" field.
+func (u *DepartmentUpsertOne) SetAreaName(v string) *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.SetAreaName(v)
+	})
+}
+
+// UpdateAreaName sets the "area_name" field to the value that was provided on create.
+func (u *DepartmentUpsertOne) UpdateAreaName() *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.UpdateAreaName()
+	})
+}
+
+// ClearAreaName clears the value of the "area_name" field.
+func (u *DepartmentUpsertOne) ClearAreaName() *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.ClearAreaName()
+	})
+}
+
+// SetOrgType sets the "org_type" field.
+func (u *DepartmentUpsertOne) SetOrgType(v string) *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.SetOrgType(v)
+	})
+}
+
+// UpdateOrgType sets the "org_type" field to the value that was provided on create.
+func (u *DepartmentUpsertOne) UpdateOrgType() *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.UpdateOrgType()
+	})
+}
+
+// ClearOrgType clears the value of the "org_type" field.
+func (u *DepartmentUpsertOne) ClearOrgType() *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.ClearOrgType()
+	})
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (u *DepartmentUpsertOne) SetDeletedAt(v time.Time) *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.SetDeletedAt(v)
+	})
+}
+
+// UpdateDeletedAt sets the "deleted_at" field to the value that was provided on create.
+func (u *DepartmentUpsertOne) UpdateDeletedAt() *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.UpdateDeletedAt()
+	})
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (u *DepartmentUpsertOne) ClearDeletedAt() *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.ClearDeletedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *DepartmentUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for DepartmentCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *DepartmentUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *DepartmentUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *DepartmentUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // DepartmentCreateBulk is the builder for creating many Department entities in bulk.
 type DepartmentCreateBulk struct {
 	config
 	err      error
 	builders []*DepartmentCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the Department entities in the database.
@@ -579,6 +1095,7 @@ func (_c *DepartmentCreateBulk) Save(ctx context.Context) ([]*Department, error)
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -629,6 +1146,320 @@ func (_c *DepartmentCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *DepartmentCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.Department.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.DepartmentUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *DepartmentCreateBulk) OnConflict(opts ...sql.ConflictOption) *DepartmentUpsertBulk {
+	_c.conflict = opts
+	return &DepartmentUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.Department.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *DepartmentCreateBulk) OnConflictColumns(columns ...string) *DepartmentUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &DepartmentUpsertBulk{
+		create: _c,
+	}
+}
+
+// DepartmentUpsertBulk is the builder for "upsert"-ing
+// a bulk of Department nodes.
+type DepartmentUpsertBulk struct {
+	create *DepartmentCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.Department.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *DepartmentUpsertBulk) UpdateNewValues() *DepartmentUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.Department.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *DepartmentUpsertBulk) Ignore() *DepartmentUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *DepartmentUpsertBulk) DoNothing() *DepartmentUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the DepartmentCreateBulk.OnConflict
+// documentation for more info.
+func (u *DepartmentUpsertBulk) Update(set func(*DepartmentUpsert)) *DepartmentUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&DepartmentUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *DepartmentUpsertBulk) SetName(v string) *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *DepartmentUpsertBulk) UpdateName() *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetCode sets the "code" field.
+func (u *DepartmentUpsertBulk) SetCode(v string) *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.SetCode(v)
+	})
+}
+
+// UpdateCode sets the "code" field to the value that was provided on create.
+func (u *DepartmentUpsertBulk) UpdateCode() *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.UpdateCode()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *DepartmentUpsertBulk) SetDescription(v string) *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *DepartmentUpsertBulk) UpdateDescription() *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *DepartmentUpsertBulk) ClearDescription() *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetManagerID sets the "manager_id" field.
+func (u *DepartmentUpsertBulk) SetManagerID(v int) *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.SetManagerID(v)
+	})
+}
+
+// AddManagerID adds v to the "manager_id" field.
+func (u *DepartmentUpsertBulk) AddManagerID(v int) *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.AddManagerID(v)
+	})
+}
+
+// UpdateManagerID sets the "manager_id" field to the value that was provided on create.
+func (u *DepartmentUpsertBulk) UpdateManagerID() *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.UpdateManagerID()
+	})
+}
+
+// ClearManagerID clears the value of the "manager_id" field.
+func (u *DepartmentUpsertBulk) ClearManagerID() *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.ClearManagerID()
+	})
+}
+
+// SetParentID sets the "parent_id" field.
+func (u *DepartmentUpsertBulk) SetParentID(v int) *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.SetParentID(v)
+	})
+}
+
+// UpdateParentID sets the "parent_id" field to the value that was provided on create.
+func (u *DepartmentUpsertBulk) UpdateParentID() *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.UpdateParentID()
+	})
+}
+
+// ClearParentID clears the value of the "parent_id" field.
+func (u *DepartmentUpsertBulk) ClearParentID() *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.ClearParentID()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *DepartmentUpsertBulk) SetTenantID(v int) *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *DepartmentUpsertBulk) AddTenantID(v int) *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *DepartmentUpsertBulk) UpdateTenantID() *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *DepartmentUpsertBulk) SetCreatedAt(v time.Time) *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *DepartmentUpsertBulk) UpdateCreatedAt() *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *DepartmentUpsertBulk) SetUpdatedAt(v time.Time) *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *DepartmentUpsertBulk) UpdateUpdatedAt() *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// SetAreaName sets the "area_name" field.
+func (u *DepartmentUpsertBulk) SetAreaName(v string) *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.SetAreaName(v)
+	})
+}
+
+// UpdateAreaName sets the "area_name" field to the value that was provided on create.
+func (u *DepartmentUpsertBulk) UpdateAreaName() *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.UpdateAreaName()
+	})
+}
+
+// ClearAreaName clears the value of the "area_name" field.
+func (u *DepartmentUpsertBulk) ClearAreaName() *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.ClearAreaName()
+	})
+}
+
+// SetOrgType sets the "org_type" field.
+func (u *DepartmentUpsertBulk) SetOrgType(v string) *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.SetOrgType(v)
+	})
+}
+
+// UpdateOrgType sets the "org_type" field to the value that was provided on create.
+func (u *DepartmentUpsertBulk) UpdateOrgType() *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.UpdateOrgType()
+	})
+}
+
+// ClearOrgType clears the value of the "org_type" field.
+func (u *DepartmentUpsertBulk) ClearOrgType() *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.ClearOrgType()
+	})
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (u *DepartmentUpsertBulk) SetDeletedAt(v time.Time) *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.SetDeletedAt(v)
+	})
+}
+
+// UpdateDeletedAt sets the "deleted_at" field to the value that was provided on create.
+func (u *DepartmentUpsertBulk) UpdateDeletedAt() *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.UpdateDeletedAt()
+	})
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (u *DepartmentUpsertBulk) ClearDeletedAt() *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.ClearDeletedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *DepartmentUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the DepartmentCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for DepartmentCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *DepartmentUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent/ticket"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -20,6 +21,7 @@ type SLAViolationCreate struct {
 	config
 	mutation *SLAViolationMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetCreatedBy sets the "created_by" field.
@@ -460,6 +462,7 @@ func (_c *SLAViolationCreate) createSpec() (*SLAViolation, *sqlgraph.CreateSpec)
 		_node = &SLAViolation{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(slaviolation.Table, sqlgraph.NewFieldSpec(slaviolation.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(slaviolation.FieldCreatedBy, field.TypeInt, value)
 		_node.CreatedBy = value
@@ -569,11 +572,784 @@ func (_c *SLAViolationCreate) createSpec() (*SLAViolation, *sqlgraph.CreateSpec)
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.SLAViolation.Create().
+//		SetCreatedBy(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.SLAViolationUpsert) {
+//			SetCreatedBy(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *SLAViolationCreate) OnConflict(opts ...sql.ConflictOption) *SLAViolationUpsertOne {
+	_c.conflict = opts
+	return &SLAViolationUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.SLAViolation.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *SLAViolationCreate) OnConflictColumns(columns ...string) *SLAViolationUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &SLAViolationUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// SLAViolationUpsertOne is the builder for "upsert"-ing
+	//  one SLAViolation node.
+	SLAViolationUpsertOne struct {
+		create *SLAViolationCreate
+	}
+
+	// SLAViolationUpsert is the "OnConflict" setter.
+	SLAViolationUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetCreatedBy sets the "created_by" field.
+func (u *SLAViolationUpsert) SetCreatedBy(v int) *SLAViolationUpsert {
+	u.Set(slaviolation.FieldCreatedBy, v)
+	return u
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *SLAViolationUpsert) UpdateCreatedBy() *SLAViolationUpsert {
+	u.SetExcluded(slaviolation.FieldCreatedBy)
+	return u
+}
+
+// AddCreatedBy adds v to the "created_by" field.
+func (u *SLAViolationUpsert) AddCreatedBy(v int) *SLAViolationUpsert {
+	u.Add(slaviolation.FieldCreatedBy, v)
+	return u
+}
+
+// SetSLADefinitionID sets the "sla_definition_id" field.
+func (u *SLAViolationUpsert) SetSLADefinitionID(v int) *SLAViolationUpsert {
+	u.Set(slaviolation.FieldSLADefinitionID, v)
+	return u
+}
+
+// UpdateSLADefinitionID sets the "sla_definition_id" field to the value that was provided on create.
+func (u *SLAViolationUpsert) UpdateSLADefinitionID() *SLAViolationUpsert {
+	u.SetExcluded(slaviolation.FieldSLADefinitionID)
+	return u
+}
+
+// SetTicketType sets the "ticket_type" field.
+func (u *SLAViolationUpsert) SetTicketType(v string) *SLAViolationUpsert {
+	u.Set(slaviolation.FieldTicketType, v)
+	return u
+}
+
+// UpdateTicketType sets the "ticket_type" field to the value that was provided on create.
+func (u *SLAViolationUpsert) UpdateTicketType() *SLAViolationUpsert {
+	u.SetExcluded(slaviolation.FieldTicketType)
+	return u
+}
+
+// SetSLAName sets the "sla_name" field.
+func (u *SLAViolationUpsert) SetSLAName(v string) *SLAViolationUpsert {
+	u.Set(slaviolation.FieldSLAName, v)
+	return u
+}
+
+// UpdateSLAName sets the "sla_name" field to the value that was provided on create.
+func (u *SLAViolationUpsert) UpdateSLAName() *SLAViolationUpsert {
+	u.SetExcluded(slaviolation.FieldSLAName)
+	return u
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *SLAViolationUpsert) SetTicketID(v int) *SLAViolationUpsert {
+	u.Set(slaviolation.FieldTicketID, v)
+	return u
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *SLAViolationUpsert) UpdateTicketID() *SLAViolationUpsert {
+	u.SetExcluded(slaviolation.FieldTicketID)
+	return u
+}
+
+// SetViolationType sets the "violation_type" field.
+func (u *SLAViolationUpsert) SetViolationType(v string) *SLAViolationUpsert {
+	u.Set(slaviolation.FieldViolationType, v)
+	return u
+}
+
+// UpdateViolationType sets the "violation_type" field to the value that was provided on create.
+func (u *SLAViolationUpsert) UpdateViolationType() *SLAViolationUpsert {
+	u.SetExcluded(slaviolation.FieldViolationType)
+	return u
+}
+
+// SetViolationTime sets the "violation_time" field.
+func (u *SLAViolationUpsert) SetViolationTime(v time.Time) *SLAViolationUpsert {
+	u.Set(slaviolation.FieldViolationTime, v)
+	return u
+}
+
+// UpdateViolationTime sets the "violation_time" field to the value that was provided on create.
+func (u *SLAViolationUpsert) UpdateViolationTime() *SLAViolationUpsert {
+	u.SetExcluded(slaviolation.FieldViolationTime)
+	return u
+}
+
+// SetViolationOccurredAt sets the "violation_occurred_at" field.
+func (u *SLAViolationUpsert) SetViolationOccurredAt(v time.Time) *SLAViolationUpsert {
+	u.Set(slaviolation.FieldViolationOccurredAt, v)
+	return u
+}
+
+// UpdateViolationOccurredAt sets the "violation_occurred_at" field to the value that was provided on create.
+func (u *SLAViolationUpsert) UpdateViolationOccurredAt() *SLAViolationUpsert {
+	u.SetExcluded(slaviolation.FieldViolationOccurredAt)
+	return u
+}
+
+// SetExpectedTime sets the "expected_time" field.
+func (u *SLAViolationUpsert) SetExpectedTime(v int) *SLAViolationUpsert {
+	u.Set(slaviolation.FieldExpectedTime, v)
+	return u
+}
+
+// UpdateExpectedTime sets the "expected_time" field to the value that was provided on create.
+func (u *SLAViolationUpsert) UpdateExpectedTime() *SLAViolationUpsert {
+	u.SetExcluded(slaviolation.FieldExpectedTime)
+	return u
+}
+
+// AddExpectedTime adds v to the "expected_time" field.
+func (u *SLAViolationUpsert) AddExpectedTime(v int) *SLAViolationUpsert {
+	u.Add(slaviolation.FieldExpectedTime, v)
+	return u
+}
+
+// ClearExpectedTime clears the value of the "expected_time" field.
+func (u *SLAViolationUpsert) ClearExpectedTime() *SLAViolationUpsert {
+	u.SetNull(slaviolation.FieldExpectedTime)
+	return u
+}
+
+// SetActualTime sets the "actual_time" field.
+func (u *SLAViolationUpsert) SetActualTime(v int) *SLAViolationUpsert {
+	u.Set(slaviolation.FieldActualTime, v)
+	return u
+}
+
+// UpdateActualTime sets the "actual_time" field to the value that was provided on create.
+func (u *SLAViolationUpsert) UpdateActualTime() *SLAViolationUpsert {
+	u.SetExcluded(slaviolation.FieldActualTime)
+	return u
+}
+
+// AddActualTime adds v to the "actual_time" field.
+func (u *SLAViolationUpsert) AddActualTime(v int) *SLAViolationUpsert {
+	u.Add(slaviolation.FieldActualTime, v)
+	return u
+}
+
+// ClearActualTime clears the value of the "actual_time" field.
+func (u *SLAViolationUpsert) ClearActualTime() *SLAViolationUpsert {
+	u.SetNull(slaviolation.FieldActualTime)
+	return u
+}
+
+// SetOverdueMinutes sets the "overdue_minutes" field.
+func (u *SLAViolationUpsert) SetOverdueMinutes(v int) *SLAViolationUpsert {
+	u.Set(slaviolation.FieldOverdueMinutes, v)
+	return u
+}
+
+// UpdateOverdueMinutes sets the "overdue_minutes" field to the value that was provided on create.
+func (u *SLAViolationUpsert) UpdateOverdueMinutes() *SLAViolationUpsert {
+	u.SetExcluded(slaviolation.FieldOverdueMinutes)
+	return u
+}
+
+// AddOverdueMinutes adds v to the "overdue_minutes" field.
+func (u *SLAViolationUpsert) AddOverdueMinutes(v int) *SLAViolationUpsert {
+	u.Add(slaviolation.FieldOverdueMinutes, v)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *SLAViolationUpsert) SetStatus(v string) *SLAViolationUpsert {
+	u.Set(slaviolation.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *SLAViolationUpsert) UpdateStatus() *SLAViolationUpsert {
+	u.SetExcluded(slaviolation.FieldStatus)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *SLAViolationUpsert) SetDescription(v string) *SLAViolationUpsert {
+	u.Set(slaviolation.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *SLAViolationUpsert) UpdateDescription() *SLAViolationUpsert {
+	u.SetExcluded(slaviolation.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *SLAViolationUpsert) ClearDescription() *SLAViolationUpsert {
+	u.SetNull(slaviolation.FieldDescription)
+	return u
+}
+
+// SetSeverity sets the "severity" field.
+func (u *SLAViolationUpsert) SetSeverity(v string) *SLAViolationUpsert {
+	u.Set(slaviolation.FieldSeverity, v)
+	return u
+}
+
+// UpdateSeverity sets the "severity" field to the value that was provided on create.
+func (u *SLAViolationUpsert) UpdateSeverity() *SLAViolationUpsert {
+	u.SetExcluded(slaviolation.FieldSeverity)
+	return u
+}
+
+// SetIsResolved sets the "is_resolved" field.
+func (u *SLAViolationUpsert) SetIsResolved(v bool) *SLAViolationUpsert {
+	u.Set(slaviolation.FieldIsResolved, v)
+	return u
+}
+
+// UpdateIsResolved sets the "is_resolved" field to the value that was provided on create.
+func (u *SLAViolationUpsert) UpdateIsResolved() *SLAViolationUpsert {
+	u.SetExcluded(slaviolation.FieldIsResolved)
+	return u
+}
+
+// SetResolvedAt sets the "resolved_at" field.
+func (u *SLAViolationUpsert) SetResolvedAt(v time.Time) *SLAViolationUpsert {
+	u.Set(slaviolation.FieldResolvedAt, v)
+	return u
+}
+
+// UpdateResolvedAt sets the "resolved_at" field to the value that was provided on create.
+func (u *SLAViolationUpsert) UpdateResolvedAt() *SLAViolationUpsert {
+	u.SetExcluded(slaviolation.FieldResolvedAt)
+	return u
+}
+
+// ClearResolvedAt clears the value of the "resolved_at" field.
+func (u *SLAViolationUpsert) ClearResolvedAt() *SLAViolationUpsert {
+	u.SetNull(slaviolation.FieldResolvedAt)
+	return u
+}
+
+// SetResolutionNotes sets the "resolution_notes" field.
+func (u *SLAViolationUpsert) SetResolutionNotes(v string) *SLAViolationUpsert {
+	u.Set(slaviolation.FieldResolutionNotes, v)
+	return u
+}
+
+// UpdateResolutionNotes sets the "resolution_notes" field to the value that was provided on create.
+func (u *SLAViolationUpsert) UpdateResolutionNotes() *SLAViolationUpsert {
+	u.SetExcluded(slaviolation.FieldResolutionNotes)
+	return u
+}
+
+// ClearResolutionNotes clears the value of the "resolution_notes" field.
+func (u *SLAViolationUpsert) ClearResolutionNotes() *SLAViolationUpsert {
+	u.SetNull(slaviolation.FieldResolutionNotes)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *SLAViolationUpsert) SetTenantID(v int) *SLAViolationUpsert {
+	u.Set(slaviolation.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *SLAViolationUpsert) UpdateTenantID() *SLAViolationUpsert {
+	u.SetExcluded(slaviolation.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *SLAViolationUpsert) AddTenantID(v int) *SLAViolationUpsert {
+	u.Add(slaviolation.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *SLAViolationUpsert) SetCreatedAt(v time.Time) *SLAViolationUpsert {
+	u.Set(slaviolation.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *SLAViolationUpsert) UpdateCreatedAt() *SLAViolationUpsert {
+	u.SetExcluded(slaviolation.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *SLAViolationUpsert) SetUpdatedAt(v time.Time) *SLAViolationUpsert {
+	u.Set(slaviolation.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *SLAViolationUpsert) UpdateUpdatedAt() *SLAViolationUpsert {
+	u.SetExcluded(slaviolation.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.SLAViolation.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *SLAViolationUpsertOne) UpdateNewValues() *SLAViolationUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.SLAViolation.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *SLAViolationUpsertOne) Ignore() *SLAViolationUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *SLAViolationUpsertOne) DoNothing() *SLAViolationUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the SLAViolationCreate.OnConflict
+// documentation for more info.
+func (u *SLAViolationUpsertOne) Update(set func(*SLAViolationUpsert)) *SLAViolationUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&SLAViolationUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *SLAViolationUpsertOne) SetCreatedBy(v int) *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetCreatedBy(v)
+	})
+}
+
+// AddCreatedBy adds v to the "created_by" field.
+func (u *SLAViolationUpsertOne) AddCreatedBy(v int) *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.AddCreatedBy(v)
+	})
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *SLAViolationUpsertOne) UpdateCreatedBy() *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateCreatedBy()
+	})
+}
+
+// SetSLADefinitionID sets the "sla_definition_id" field.
+func (u *SLAViolationUpsertOne) SetSLADefinitionID(v int) *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetSLADefinitionID(v)
+	})
+}
+
+// UpdateSLADefinitionID sets the "sla_definition_id" field to the value that was provided on create.
+func (u *SLAViolationUpsertOne) UpdateSLADefinitionID() *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateSLADefinitionID()
+	})
+}
+
+// SetTicketType sets the "ticket_type" field.
+func (u *SLAViolationUpsertOne) SetTicketType(v string) *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetTicketType(v)
+	})
+}
+
+// UpdateTicketType sets the "ticket_type" field to the value that was provided on create.
+func (u *SLAViolationUpsertOne) UpdateTicketType() *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateTicketType()
+	})
+}
+
+// SetSLAName sets the "sla_name" field.
+func (u *SLAViolationUpsertOne) SetSLAName(v string) *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetSLAName(v)
+	})
+}
+
+// UpdateSLAName sets the "sla_name" field to the value that was provided on create.
+func (u *SLAViolationUpsertOne) UpdateSLAName() *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateSLAName()
+	})
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *SLAViolationUpsertOne) SetTicketID(v int) *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetTicketID(v)
+	})
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *SLAViolationUpsertOne) UpdateTicketID() *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateTicketID()
+	})
+}
+
+// SetViolationType sets the "violation_type" field.
+func (u *SLAViolationUpsertOne) SetViolationType(v string) *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetViolationType(v)
+	})
+}
+
+// UpdateViolationType sets the "violation_type" field to the value that was provided on create.
+func (u *SLAViolationUpsertOne) UpdateViolationType() *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateViolationType()
+	})
+}
+
+// SetViolationTime sets the "violation_time" field.
+func (u *SLAViolationUpsertOne) SetViolationTime(v time.Time) *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetViolationTime(v)
+	})
+}
+
+// UpdateViolationTime sets the "violation_time" field to the value that was provided on create.
+func (u *SLAViolationUpsertOne) UpdateViolationTime() *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateViolationTime()
+	})
+}
+
+// SetViolationOccurredAt sets the "violation_occurred_at" field.
+func (u *SLAViolationUpsertOne) SetViolationOccurredAt(v time.Time) *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetViolationOccurredAt(v)
+	})
+}
+
+// UpdateViolationOccurredAt sets the "violation_occurred_at" field to the value that was provided on create.
+func (u *SLAViolationUpsertOne) UpdateViolationOccurredAt() *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateViolationOccurredAt()
+	})
+}
+
+// SetExpectedTime sets the "expected_time" field.
+func (u *SLAViolationUpsertOne) SetExpectedTime(v int) *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetExpectedTime(v)
+	})
+}
+
+// AddExpectedTime adds v to the "expected_time" field.
+func (u *SLAViolationUpsertOne) AddExpectedTime(v int) *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.AddExpectedTime(v)
+	})
+}
+
+// UpdateExpectedTime sets the "expected_time" field to the value that was provided on create.
+func (u *SLAViolationUpsertOne) UpdateExpectedTime() *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateExpectedTime()
+	})
+}
+
+// ClearExpectedTime clears the value of the "expected_time" field.
+func (u *SLAViolationUpsertOne) ClearExpectedTime() *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.ClearExpectedTime()
+	})
+}
+
+// SetActualTime sets the "actual_time" field.
+func (u *SLAViolationUpsertOne) SetActualTime(v int) *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetActualTime(v)
+	})
+}
+
+// AddActualTime adds v to the "actual_time" field.
+func (u *SLAViolationUpsertOne) AddActualTime(v int) *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.AddActualTime(v)
+	})
+}
+
+// UpdateActualTime sets the "actual_time" field to the value that was provided on create.
+func (u *SLAViolationUpsertOne) UpdateActualTime() *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateActualTime()
+	})
+}
+
+// ClearActualTime clears the value of the "actual_time" field.
+func (u *SLAViolationUpsertOne) ClearActualTime() *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.ClearActualTime()
+	})
+}
+
+// SetOverdueMinutes sets the "overdue_minutes" field.
+func (u *SLAViolationUpsertOne) SetOverdueMinutes(v int) *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetOverdueMinutes(v)
+	})
+}
+
+// AddOverdueMinutes adds v to the "overdue_minutes" field.
+func (u *SLAViolationUpsertOne) AddOverdueMinutes(v int) *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.AddOverdueMinutes(v)
+	})
+}
+
+// UpdateOverdueMinutes sets the "overdue_minutes" field to the value that was provided on create.
+func (u *SLAViolationUpsertOne) UpdateOverdueMinutes() *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateOverdueMinutes()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *SLAViolationUpsertOne) SetStatus(v string) *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *SLAViolationUpsertOne) UpdateStatus() *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *SLAViolationUpsertOne) SetDescription(v string) *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *SLAViolationUpsertOne) UpdateDescription() *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *SLAViolationUpsertOne) ClearDescription() *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetSeverity sets the "severity" field.
+func (u *SLAViolationUpsertOne) SetSeverity(v string) *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetSeverity(v)
+	})
+}
+
+// UpdateSeverity sets the "severity" field to the value that was provided on create.
+func (u *SLAViolationUpsertOne) UpdateSeverity() *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateSeverity()
+	})
+}
+
+// SetIsResolved sets the "is_resolved" field.
+func (u *SLAViolationUpsertOne) SetIsResolved(v bool) *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetIsResolved(v)
+	})
+}
+
+// UpdateIsResolved sets the "is_resolved" field to the value that was provided on create.
+func (u *SLAViolationUpsertOne) UpdateIsResolved() *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateIsResolved()
+	})
+}
+
+// SetResolvedAt sets the "resolved_at" field.
+func (u *SLAViolationUpsertOne) SetResolvedAt(v time.Time) *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetResolvedAt(v)
+	})
+}
+
+// UpdateResolvedAt sets the "resolved_at" field to the value that was provided on create.
+func (u *SLAViolationUpsertOne) UpdateResolvedAt() *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateResolvedAt()
+	})
+}
+
+// ClearResolvedAt clears the value of the "resolved_at" field.
+func (u *SLAViolationUpsertOne) ClearResolvedAt() *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.ClearResolvedAt()
+	})
+}
+
+// SetResolutionNotes sets the "resolution_notes" field.
+func (u *SLAViolationUpsertOne) SetResolutionNotes(v string) *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetResolutionNotes(v)
+	})
+}
+
+// UpdateResolutionNotes sets the "resolution_notes" field to the value that was provided on create.
+func (u *SLAViolationUpsertOne) UpdateResolutionNotes() *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateResolutionNotes()
+	})
+}
+
+// ClearResolutionNotes clears the value of the "resolution_notes" field.
+func (u *SLAViolationUpsertOne) ClearResolutionNotes() *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.ClearResolutionNotes()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *SLAViolationUpsertOne) SetTenantID(v int) *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *SLAViolationUpsertOne) AddTenantID(v int) *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *SLAViolationUpsertOne) UpdateTenantID() *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *SLAViolationUpsertOne) SetCreatedAt(v time.Time) *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *SLAViolationUpsertOne) UpdateCreatedAt() *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *SLAViolationUpsertOne) SetUpdatedAt(v time.Time) *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *SLAViolationUpsertOne) UpdateUpdatedAt() *SLAViolationUpsertOne {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *SLAViolationUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for SLAViolationCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *SLAViolationUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *SLAViolationUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *SLAViolationUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // SLAViolationCreateBulk is the builder for creating many SLAViolation entities in bulk.
 type SLAViolationCreateBulk struct {
 	config
 	err      error
 	builders []*SLAViolationCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the SLAViolation entities in the database.
@@ -603,6 +1379,7 @@ func (_c *SLAViolationCreateBulk) Save(ctx context.Context) ([]*SLAViolation, er
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -653,6 +1430,460 @@ func (_c *SLAViolationCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *SLAViolationCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.SLAViolation.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.SLAViolationUpsert) {
+//			SetCreatedBy(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *SLAViolationCreateBulk) OnConflict(opts ...sql.ConflictOption) *SLAViolationUpsertBulk {
+	_c.conflict = opts
+	return &SLAViolationUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.SLAViolation.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *SLAViolationCreateBulk) OnConflictColumns(columns ...string) *SLAViolationUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &SLAViolationUpsertBulk{
+		create: _c,
+	}
+}
+
+// SLAViolationUpsertBulk is the builder for "upsert"-ing
+// a bulk of SLAViolation nodes.
+type SLAViolationUpsertBulk struct {
+	create *SLAViolationCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.SLAViolation.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *SLAViolationUpsertBulk) UpdateNewValues() *SLAViolationUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.SLAViolation.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *SLAViolationUpsertBulk) Ignore() *SLAViolationUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *SLAViolationUpsertBulk) DoNothing() *SLAViolationUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the SLAViolationCreateBulk.OnConflict
+// documentation for more info.
+func (u *SLAViolationUpsertBulk) Update(set func(*SLAViolationUpsert)) *SLAViolationUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&SLAViolationUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *SLAViolationUpsertBulk) SetCreatedBy(v int) *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetCreatedBy(v)
+	})
+}
+
+// AddCreatedBy adds v to the "created_by" field.
+func (u *SLAViolationUpsertBulk) AddCreatedBy(v int) *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.AddCreatedBy(v)
+	})
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *SLAViolationUpsertBulk) UpdateCreatedBy() *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateCreatedBy()
+	})
+}
+
+// SetSLADefinitionID sets the "sla_definition_id" field.
+func (u *SLAViolationUpsertBulk) SetSLADefinitionID(v int) *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetSLADefinitionID(v)
+	})
+}
+
+// UpdateSLADefinitionID sets the "sla_definition_id" field to the value that was provided on create.
+func (u *SLAViolationUpsertBulk) UpdateSLADefinitionID() *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateSLADefinitionID()
+	})
+}
+
+// SetTicketType sets the "ticket_type" field.
+func (u *SLAViolationUpsertBulk) SetTicketType(v string) *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetTicketType(v)
+	})
+}
+
+// UpdateTicketType sets the "ticket_type" field to the value that was provided on create.
+func (u *SLAViolationUpsertBulk) UpdateTicketType() *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateTicketType()
+	})
+}
+
+// SetSLAName sets the "sla_name" field.
+func (u *SLAViolationUpsertBulk) SetSLAName(v string) *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetSLAName(v)
+	})
+}
+
+// UpdateSLAName sets the "sla_name" field to the value that was provided on create.
+func (u *SLAViolationUpsertBulk) UpdateSLAName() *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateSLAName()
+	})
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *SLAViolationUpsertBulk) SetTicketID(v int) *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetTicketID(v)
+	})
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *SLAViolationUpsertBulk) UpdateTicketID() *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateTicketID()
+	})
+}
+
+// SetViolationType sets the "violation_type" field.
+func (u *SLAViolationUpsertBulk) SetViolationType(v string) *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetViolationType(v)
+	})
+}
+
+// UpdateViolationType sets the "violation_type" field to the value that was provided on create.
+func (u *SLAViolationUpsertBulk) UpdateViolationType() *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateViolationType()
+	})
+}
+
+// SetViolationTime sets the "violation_time" field.
+func (u *SLAViolationUpsertBulk) SetViolationTime(v time.Time) *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetViolationTime(v)
+	})
+}
+
+// UpdateViolationTime sets the "violation_time" field to the value that was provided on create.
+func (u *SLAViolationUpsertBulk) UpdateViolationTime() *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateViolationTime()
+	})
+}
+
+// SetViolationOccurredAt sets the "violation_occurred_at" field.
+func (u *SLAViolationUpsertBulk) SetViolationOccurredAt(v time.Time) *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetViolationOccurredAt(v)
+	})
+}
+
+// UpdateViolationOccurredAt sets the "violation_occurred_at" field to the value that was provided on create.
+func (u *SLAViolationUpsertBulk) UpdateViolationOccurredAt() *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateViolationOccurredAt()
+	})
+}
+
+// SetExpectedTime sets the "expected_time" field.
+func (u *SLAViolationUpsertBulk) SetExpectedTime(v int) *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetExpectedTime(v)
+	})
+}
+
+// AddExpectedTime adds v to the "expected_time" field.
+func (u *SLAViolationUpsertBulk) AddExpectedTime(v int) *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.AddExpectedTime(v)
+	})
+}
+
+// UpdateExpectedTime sets the "expected_time" field to the value that was provided on create.
+func (u *SLAViolationUpsertBulk) UpdateExpectedTime() *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateExpectedTime()
+	})
+}
+
+// ClearExpectedTime clears the value of the "expected_time" field.
+func (u *SLAViolationUpsertBulk) ClearExpectedTime() *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.ClearExpectedTime()
+	})
+}
+
+// SetActualTime sets the "actual_time" field.
+func (u *SLAViolationUpsertBulk) SetActualTime(v int) *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetActualTime(v)
+	})
+}
+
+// AddActualTime adds v to the "actual_time" field.
+func (u *SLAViolationUpsertBulk) AddActualTime(v int) *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.AddActualTime(v)
+	})
+}
+
+// UpdateActualTime sets the "actual_time" field to the value that was provided on create.
+func (u *SLAViolationUpsertBulk) UpdateActualTime() *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateActualTime()
+	})
+}
+
+// ClearActualTime clears the value of the "actual_time" field.
+func (u *SLAViolationUpsertBulk) ClearActualTime() *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.ClearActualTime()
+	})
+}
+
+// SetOverdueMinutes sets the "overdue_minutes" field.
+func (u *SLAViolationUpsertBulk) SetOverdueMinutes(v int) *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetOverdueMinutes(v)
+	})
+}
+
+// AddOverdueMinutes adds v to the "overdue_minutes" field.
+func (u *SLAViolationUpsertBulk) AddOverdueMinutes(v int) *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.AddOverdueMinutes(v)
+	})
+}
+
+// UpdateOverdueMinutes sets the "overdue_minutes" field to the value that was provided on create.
+func (u *SLAViolationUpsertBulk) UpdateOverdueMinutes() *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateOverdueMinutes()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *SLAViolationUpsertBulk) SetStatus(v string) *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *SLAViolationUpsertBulk) UpdateStatus() *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *SLAViolationUpsertBulk) SetDescription(v string) *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *SLAViolationUpsertBulk) UpdateDescription() *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *SLAViolationUpsertBulk) ClearDescription() *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetSeverity sets the "severity" field.
+func (u *SLAViolationUpsertBulk) SetSeverity(v string) *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetSeverity(v)
+	})
+}
+
+// UpdateSeverity sets the "severity" field to the value that was provided on create.
+func (u *SLAViolationUpsertBulk) UpdateSeverity() *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateSeverity()
+	})
+}
+
+// SetIsResolved sets the "is_resolved" field.
+func (u *SLAViolationUpsertBulk) SetIsResolved(v bool) *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetIsResolved(v)
+	})
+}
+
+// UpdateIsResolved sets the "is_resolved" field to the value that was provided on create.
+func (u *SLAViolationUpsertBulk) UpdateIsResolved() *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateIsResolved()
+	})
+}
+
+// SetResolvedAt sets the "resolved_at" field.
+func (u *SLAViolationUpsertBulk) SetResolvedAt(v time.Time) *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetResolvedAt(v)
+	})
+}
+
+// UpdateResolvedAt sets the "resolved_at" field to the value that was provided on create.
+func (u *SLAViolationUpsertBulk) UpdateResolvedAt() *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateResolvedAt()
+	})
+}
+
+// ClearResolvedAt clears the value of the "resolved_at" field.
+func (u *SLAViolationUpsertBulk) ClearResolvedAt() *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.ClearResolvedAt()
+	})
+}
+
+// SetResolutionNotes sets the "resolution_notes" field.
+func (u *SLAViolationUpsertBulk) SetResolutionNotes(v string) *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetResolutionNotes(v)
+	})
+}
+
+// UpdateResolutionNotes sets the "resolution_notes" field to the value that was provided on create.
+func (u *SLAViolationUpsertBulk) UpdateResolutionNotes() *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateResolutionNotes()
+	})
+}
+
+// ClearResolutionNotes clears the value of the "resolution_notes" field.
+func (u *SLAViolationUpsertBulk) ClearResolutionNotes() *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.ClearResolutionNotes()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *SLAViolationUpsertBulk) SetTenantID(v int) *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *SLAViolationUpsertBulk) AddTenantID(v int) *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *SLAViolationUpsertBulk) UpdateTenantID() *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *SLAViolationUpsertBulk) SetCreatedAt(v time.Time) *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *SLAViolationUpsertBulk) UpdateCreatedAt() *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *SLAViolationUpsertBulk) SetUpdatedAt(v time.Time) *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *SLAViolationUpsertBulk) UpdateUpdatedAt() *SLAViolationUpsertBulk {
+	return u.Update(func(s *SLAViolationUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *SLAViolationUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the SLAViolationCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for SLAViolationCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *SLAViolationUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

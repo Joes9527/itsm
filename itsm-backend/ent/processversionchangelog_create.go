@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent/user"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -20,6 +21,7 @@ type ProcessVersionChangelogCreate struct {
 	config
 	mutation *ProcessVersionChangelogMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetProcessDefinitionID sets the "process_definition_id" field.
@@ -251,6 +253,7 @@ func (_c *ProcessVersionChangelogCreate) createSpec() (*ProcessVersionChangelog,
 		_node = &ProcessVersionChangelog{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(processversionchangelog.Table, sqlgraph.NewFieldSpec(processversionchangelog.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Version(); ok {
 		_spec.SetField(processversionchangelog.FieldVersion, field.TypeString, value)
 		_node.Version = value
@@ -316,11 +319,420 @@ func (_c *ProcessVersionChangelogCreate) createSpec() (*ProcessVersionChangelog,
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ProcessVersionChangelog.Create().
+//		SetProcessDefinitionID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ProcessVersionChangelogUpsert) {
+//			SetProcessDefinitionID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ProcessVersionChangelogCreate) OnConflict(opts ...sql.ConflictOption) *ProcessVersionChangelogUpsertOne {
+	_c.conflict = opts
+	return &ProcessVersionChangelogUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ProcessVersionChangelog.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ProcessVersionChangelogCreate) OnConflictColumns(columns ...string) *ProcessVersionChangelogUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ProcessVersionChangelogUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ProcessVersionChangelogUpsertOne is the builder for "upsert"-ing
+	//  one ProcessVersionChangelog node.
+	ProcessVersionChangelogUpsertOne struct {
+		create *ProcessVersionChangelogCreate
+	}
+
+	// ProcessVersionChangelogUpsert is the "OnConflict" setter.
+	ProcessVersionChangelogUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetProcessDefinitionID sets the "process_definition_id" field.
+func (u *ProcessVersionChangelogUpsert) SetProcessDefinitionID(v int) *ProcessVersionChangelogUpsert {
+	u.Set(processversionchangelog.FieldProcessDefinitionID, v)
+	return u
+}
+
+// UpdateProcessDefinitionID sets the "process_definition_id" field to the value that was provided on create.
+func (u *ProcessVersionChangelogUpsert) UpdateProcessDefinitionID() *ProcessVersionChangelogUpsert {
+	u.SetExcluded(processversionchangelog.FieldProcessDefinitionID)
+	return u
+}
+
+// SetVersion sets the "version" field.
+func (u *ProcessVersionChangelogUpsert) SetVersion(v string) *ProcessVersionChangelogUpsert {
+	u.Set(processversionchangelog.FieldVersion, v)
+	return u
+}
+
+// UpdateVersion sets the "version" field to the value that was provided on create.
+func (u *ProcessVersionChangelogUpsert) UpdateVersion() *ProcessVersionChangelogUpsert {
+	u.SetExcluded(processversionchangelog.FieldVersion)
+	return u
+}
+
+// SetChangeLog sets the "change_log" field.
+func (u *ProcessVersionChangelogUpsert) SetChangeLog(v string) *ProcessVersionChangelogUpsert {
+	u.Set(processversionchangelog.FieldChangeLog, v)
+	return u
+}
+
+// UpdateChangeLog sets the "change_log" field to the value that was provided on create.
+func (u *ProcessVersionChangelogUpsert) UpdateChangeLog() *ProcessVersionChangelogUpsert {
+	u.SetExcluded(processversionchangelog.FieldChangeLog)
+	return u
+}
+
+// SetChangeDetails sets the "change_details" field.
+func (u *ProcessVersionChangelogUpsert) SetChangeDetails(v []map[string]interface{}) *ProcessVersionChangelogUpsert {
+	u.Set(processversionchangelog.FieldChangeDetails, v)
+	return u
+}
+
+// UpdateChangeDetails sets the "change_details" field to the value that was provided on create.
+func (u *ProcessVersionChangelogUpsert) UpdateChangeDetails() *ProcessVersionChangelogUpsert {
+	u.SetExcluded(processversionchangelog.FieldChangeDetails)
+	return u
+}
+
+// ClearChangeDetails clears the value of the "change_details" field.
+func (u *ProcessVersionChangelogUpsert) ClearChangeDetails() *ProcessVersionChangelogUpsert {
+	u.SetNull(processversionchangelog.FieldChangeDetails)
+	return u
+}
+
+// SetChangeType sets the "change_type" field.
+func (u *ProcessVersionChangelogUpsert) SetChangeType(v string) *ProcessVersionChangelogUpsert {
+	u.Set(processversionchangelog.FieldChangeType, v)
+	return u
+}
+
+// UpdateChangeType sets the "change_type" field to the value that was provided on create.
+func (u *ProcessVersionChangelogUpsert) UpdateChangeType() *ProcessVersionChangelogUpsert {
+	u.SetExcluded(processversionchangelog.FieldChangeType)
+	return u
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *ProcessVersionChangelogUpsert) SetCreatedBy(v int) *ProcessVersionChangelogUpsert {
+	u.Set(processversionchangelog.FieldCreatedBy, v)
+	return u
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *ProcessVersionChangelogUpsert) UpdateCreatedBy() *ProcessVersionChangelogUpsert {
+	u.SetExcluded(processversionchangelog.FieldCreatedBy)
+	return u
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (u *ProcessVersionChangelogUpsert) ClearCreatedBy() *ProcessVersionChangelogUpsert {
+	u.SetNull(processversionchangelog.FieldCreatedBy)
+	return u
+}
+
+// SetCreatedByName sets the "created_by_name" field.
+func (u *ProcessVersionChangelogUpsert) SetCreatedByName(v string) *ProcessVersionChangelogUpsert {
+	u.Set(processversionchangelog.FieldCreatedByName, v)
+	return u
+}
+
+// UpdateCreatedByName sets the "created_by_name" field to the value that was provided on create.
+func (u *ProcessVersionChangelogUpsert) UpdateCreatedByName() *ProcessVersionChangelogUpsert {
+	u.SetExcluded(processversionchangelog.FieldCreatedByName)
+	return u
+}
+
+// ClearCreatedByName clears the value of the "created_by_name" field.
+func (u *ProcessVersionChangelogUpsert) ClearCreatedByName() *ProcessVersionChangelogUpsert {
+	u.SetNull(processversionchangelog.FieldCreatedByName)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessVersionChangelogUpsert) SetTenantID(v int) *ProcessVersionChangelogUpsert {
+	u.Set(processversionchangelog.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessVersionChangelogUpsert) UpdateTenantID() *ProcessVersionChangelogUpsert {
+	u.SetExcluded(processversionchangelog.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessVersionChangelogUpsert) AddTenantID(v int) *ProcessVersionChangelogUpsert {
+	u.Add(processversionchangelog.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProcessVersionChangelogUpsert) SetCreatedAt(v time.Time) *ProcessVersionChangelogUpsert {
+	u.Set(processversionchangelog.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProcessVersionChangelogUpsert) UpdateCreatedAt() *ProcessVersionChangelogUpsert {
+	u.SetExcluded(processversionchangelog.FieldCreatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.ProcessVersionChangelog.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ProcessVersionChangelogUpsertOne) UpdateNewValues() *ProcessVersionChangelogUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ProcessVersionChangelog.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ProcessVersionChangelogUpsertOne) Ignore() *ProcessVersionChangelogUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ProcessVersionChangelogUpsertOne) DoNothing() *ProcessVersionChangelogUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ProcessVersionChangelogCreate.OnConflict
+// documentation for more info.
+func (u *ProcessVersionChangelogUpsertOne) Update(set func(*ProcessVersionChangelogUpsert)) *ProcessVersionChangelogUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ProcessVersionChangelogUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetProcessDefinitionID sets the "process_definition_id" field.
+func (u *ProcessVersionChangelogUpsertOne) SetProcessDefinitionID(v int) *ProcessVersionChangelogUpsertOne {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.SetProcessDefinitionID(v)
+	})
+}
+
+// UpdateProcessDefinitionID sets the "process_definition_id" field to the value that was provided on create.
+func (u *ProcessVersionChangelogUpsertOne) UpdateProcessDefinitionID() *ProcessVersionChangelogUpsertOne {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.UpdateProcessDefinitionID()
+	})
+}
+
+// SetVersion sets the "version" field.
+func (u *ProcessVersionChangelogUpsertOne) SetVersion(v string) *ProcessVersionChangelogUpsertOne {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.SetVersion(v)
+	})
+}
+
+// UpdateVersion sets the "version" field to the value that was provided on create.
+func (u *ProcessVersionChangelogUpsertOne) UpdateVersion() *ProcessVersionChangelogUpsertOne {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.UpdateVersion()
+	})
+}
+
+// SetChangeLog sets the "change_log" field.
+func (u *ProcessVersionChangelogUpsertOne) SetChangeLog(v string) *ProcessVersionChangelogUpsertOne {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.SetChangeLog(v)
+	})
+}
+
+// UpdateChangeLog sets the "change_log" field to the value that was provided on create.
+func (u *ProcessVersionChangelogUpsertOne) UpdateChangeLog() *ProcessVersionChangelogUpsertOne {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.UpdateChangeLog()
+	})
+}
+
+// SetChangeDetails sets the "change_details" field.
+func (u *ProcessVersionChangelogUpsertOne) SetChangeDetails(v []map[string]interface{}) *ProcessVersionChangelogUpsertOne {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.SetChangeDetails(v)
+	})
+}
+
+// UpdateChangeDetails sets the "change_details" field to the value that was provided on create.
+func (u *ProcessVersionChangelogUpsertOne) UpdateChangeDetails() *ProcessVersionChangelogUpsertOne {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.UpdateChangeDetails()
+	})
+}
+
+// ClearChangeDetails clears the value of the "change_details" field.
+func (u *ProcessVersionChangelogUpsertOne) ClearChangeDetails() *ProcessVersionChangelogUpsertOne {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.ClearChangeDetails()
+	})
+}
+
+// SetChangeType sets the "change_type" field.
+func (u *ProcessVersionChangelogUpsertOne) SetChangeType(v string) *ProcessVersionChangelogUpsertOne {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.SetChangeType(v)
+	})
+}
+
+// UpdateChangeType sets the "change_type" field to the value that was provided on create.
+func (u *ProcessVersionChangelogUpsertOne) UpdateChangeType() *ProcessVersionChangelogUpsertOne {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.UpdateChangeType()
+	})
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *ProcessVersionChangelogUpsertOne) SetCreatedBy(v int) *ProcessVersionChangelogUpsertOne {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.SetCreatedBy(v)
+	})
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *ProcessVersionChangelogUpsertOne) UpdateCreatedBy() *ProcessVersionChangelogUpsertOne {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.UpdateCreatedBy()
+	})
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (u *ProcessVersionChangelogUpsertOne) ClearCreatedBy() *ProcessVersionChangelogUpsertOne {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.ClearCreatedBy()
+	})
+}
+
+// SetCreatedByName sets the "created_by_name" field.
+func (u *ProcessVersionChangelogUpsertOne) SetCreatedByName(v string) *ProcessVersionChangelogUpsertOne {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.SetCreatedByName(v)
+	})
+}
+
+// UpdateCreatedByName sets the "created_by_name" field to the value that was provided on create.
+func (u *ProcessVersionChangelogUpsertOne) UpdateCreatedByName() *ProcessVersionChangelogUpsertOne {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.UpdateCreatedByName()
+	})
+}
+
+// ClearCreatedByName clears the value of the "created_by_name" field.
+func (u *ProcessVersionChangelogUpsertOne) ClearCreatedByName() *ProcessVersionChangelogUpsertOne {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.ClearCreatedByName()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessVersionChangelogUpsertOne) SetTenantID(v int) *ProcessVersionChangelogUpsertOne {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessVersionChangelogUpsertOne) AddTenantID(v int) *ProcessVersionChangelogUpsertOne {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessVersionChangelogUpsertOne) UpdateTenantID() *ProcessVersionChangelogUpsertOne {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProcessVersionChangelogUpsertOne) SetCreatedAt(v time.Time) *ProcessVersionChangelogUpsertOne {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProcessVersionChangelogUpsertOne) UpdateCreatedAt() *ProcessVersionChangelogUpsertOne {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ProcessVersionChangelogUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ProcessVersionChangelogCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ProcessVersionChangelogUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ProcessVersionChangelogUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ProcessVersionChangelogUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ProcessVersionChangelogCreateBulk is the builder for creating many ProcessVersionChangelog entities in bulk.
 type ProcessVersionChangelogCreateBulk struct {
 	config
 	err      error
 	builders []*ProcessVersionChangelogCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the ProcessVersionChangelog entities in the database.
@@ -350,6 +762,7 @@ func (_c *ProcessVersionChangelogCreateBulk) Save(ctx context.Context) ([]*Proce
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -400,6 +813,264 @@ func (_c *ProcessVersionChangelogCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ProcessVersionChangelogCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ProcessVersionChangelog.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ProcessVersionChangelogUpsert) {
+//			SetProcessDefinitionID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ProcessVersionChangelogCreateBulk) OnConflict(opts ...sql.ConflictOption) *ProcessVersionChangelogUpsertBulk {
+	_c.conflict = opts
+	return &ProcessVersionChangelogUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ProcessVersionChangelog.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ProcessVersionChangelogCreateBulk) OnConflictColumns(columns ...string) *ProcessVersionChangelogUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ProcessVersionChangelogUpsertBulk{
+		create: _c,
+	}
+}
+
+// ProcessVersionChangelogUpsertBulk is the builder for "upsert"-ing
+// a bulk of ProcessVersionChangelog nodes.
+type ProcessVersionChangelogUpsertBulk struct {
+	create *ProcessVersionChangelogCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.ProcessVersionChangelog.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ProcessVersionChangelogUpsertBulk) UpdateNewValues() *ProcessVersionChangelogUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ProcessVersionChangelog.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ProcessVersionChangelogUpsertBulk) Ignore() *ProcessVersionChangelogUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ProcessVersionChangelogUpsertBulk) DoNothing() *ProcessVersionChangelogUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ProcessVersionChangelogCreateBulk.OnConflict
+// documentation for more info.
+func (u *ProcessVersionChangelogUpsertBulk) Update(set func(*ProcessVersionChangelogUpsert)) *ProcessVersionChangelogUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ProcessVersionChangelogUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetProcessDefinitionID sets the "process_definition_id" field.
+func (u *ProcessVersionChangelogUpsertBulk) SetProcessDefinitionID(v int) *ProcessVersionChangelogUpsertBulk {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.SetProcessDefinitionID(v)
+	})
+}
+
+// UpdateProcessDefinitionID sets the "process_definition_id" field to the value that was provided on create.
+func (u *ProcessVersionChangelogUpsertBulk) UpdateProcessDefinitionID() *ProcessVersionChangelogUpsertBulk {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.UpdateProcessDefinitionID()
+	})
+}
+
+// SetVersion sets the "version" field.
+func (u *ProcessVersionChangelogUpsertBulk) SetVersion(v string) *ProcessVersionChangelogUpsertBulk {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.SetVersion(v)
+	})
+}
+
+// UpdateVersion sets the "version" field to the value that was provided on create.
+func (u *ProcessVersionChangelogUpsertBulk) UpdateVersion() *ProcessVersionChangelogUpsertBulk {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.UpdateVersion()
+	})
+}
+
+// SetChangeLog sets the "change_log" field.
+func (u *ProcessVersionChangelogUpsertBulk) SetChangeLog(v string) *ProcessVersionChangelogUpsertBulk {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.SetChangeLog(v)
+	})
+}
+
+// UpdateChangeLog sets the "change_log" field to the value that was provided on create.
+func (u *ProcessVersionChangelogUpsertBulk) UpdateChangeLog() *ProcessVersionChangelogUpsertBulk {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.UpdateChangeLog()
+	})
+}
+
+// SetChangeDetails sets the "change_details" field.
+func (u *ProcessVersionChangelogUpsertBulk) SetChangeDetails(v []map[string]interface{}) *ProcessVersionChangelogUpsertBulk {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.SetChangeDetails(v)
+	})
+}
+
+// UpdateChangeDetails sets the "change_details" field to the value that was provided on create.
+func (u *ProcessVersionChangelogUpsertBulk) UpdateChangeDetails() *ProcessVersionChangelogUpsertBulk {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.UpdateChangeDetails()
+	})
+}
+
+// ClearChangeDetails clears the value of the "change_details" field.
+func (u *ProcessVersionChangelogUpsertBulk) ClearChangeDetails() *ProcessVersionChangelogUpsertBulk {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.ClearChangeDetails()
+	})
+}
+
+// SetChangeType sets the "change_type" field.
+func (u *ProcessVersionChangelogUpsertBulk) SetChangeType(v string) *ProcessVersionChangelogUpsertBulk {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.SetChangeType(v)
+	})
+}
+
+// UpdateChangeType sets the "change_type" field to the value that was provided on create.
+func (u *ProcessVersionChangelogUpsertBulk) UpdateChangeType() *ProcessVersionChangelogUpsertBulk {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.UpdateChangeType()
+	})
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *ProcessVersionChangelogUpsertBulk) SetCreatedBy(v int) *ProcessVersionChangelogUpsertBulk {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.SetCreatedBy(v)
+	})
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *ProcessVersionChangelogUpsertBulk) UpdateCreatedBy() *ProcessVersionChangelogUpsertBulk {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.UpdateCreatedBy()
+	})
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (u *ProcessVersionChangelogUpsertBulk) ClearCreatedBy() *ProcessVersionChangelogUpsertBulk {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.ClearCreatedBy()
+	})
+}
+
+// SetCreatedByName sets the "created_by_name" field.
+func (u *ProcessVersionChangelogUpsertBulk) SetCreatedByName(v string) *ProcessVersionChangelogUpsertBulk {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.SetCreatedByName(v)
+	})
+}
+
+// UpdateCreatedByName sets the "created_by_name" field to the value that was provided on create.
+func (u *ProcessVersionChangelogUpsertBulk) UpdateCreatedByName() *ProcessVersionChangelogUpsertBulk {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.UpdateCreatedByName()
+	})
+}
+
+// ClearCreatedByName clears the value of the "created_by_name" field.
+func (u *ProcessVersionChangelogUpsertBulk) ClearCreatedByName() *ProcessVersionChangelogUpsertBulk {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.ClearCreatedByName()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessVersionChangelogUpsertBulk) SetTenantID(v int) *ProcessVersionChangelogUpsertBulk {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessVersionChangelogUpsertBulk) AddTenantID(v int) *ProcessVersionChangelogUpsertBulk {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessVersionChangelogUpsertBulk) UpdateTenantID() *ProcessVersionChangelogUpsertBulk {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProcessVersionChangelogUpsertBulk) SetCreatedAt(v time.Time) *ProcessVersionChangelogUpsertBulk {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProcessVersionChangelogUpsertBulk) UpdateCreatedAt() *ProcessVersionChangelogUpsertBulk {
+	return u.Update(func(s *ProcessVersionChangelogUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ProcessVersionChangelogUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ProcessVersionChangelogCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ProcessVersionChangelogCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ProcessVersionChangelogUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

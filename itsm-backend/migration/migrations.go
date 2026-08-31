@@ -118,6 +118,11 @@ var RegisteredMigrations = []Migration{
 		Description: "Enable and force tenant RLS on KAF action ledgers and completion receipts",
 		RollbackSQL: "",
 	},
+	{
+		Version:     "020_unified_intake_rls",
+		Description: "Enable and force tenant RLS on unified intake requests, resolution snapshots, and external identity mappings",
+		RollbackSQL: "",
+	},
 }
 
 // PostSchemaMigrations returns a defensive copy of the canonical active stream.
@@ -769,6 +774,29 @@ ALTER TABLE kaf_task_completion_receipts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE kaf_task_completion_receipts FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation_kaf_task_completion_receipts ON kaf_task_completion_receipts;
 CREATE POLICY tenant_isolation_kaf_task_completion_receipts ON kaf_task_completion_receipts
+    USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint)
+    WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint);
+`
+	case "020_unified_intake_rls":
+		return `
+ALTER TABLE intake_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE intake_requests FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS intake_requests_tenant_isolation ON intake_requests;
+CREATE POLICY intake_requests_tenant_isolation ON intake_requests
+    USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint)
+    WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint);
+
+ALTER TABLE intake_resolution_snapshots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE intake_resolution_snapshots FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS intake_resolution_snapshots_tenant_isolation ON intake_resolution_snapshots;
+CREATE POLICY intake_resolution_snapshots_tenant_isolation ON intake_resolution_snapshots
+    USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint)
+    WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint);
+
+ALTER TABLE external_identities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE external_identities FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS external_identities_tenant_isolation ON external_identities;
+CREATE POLICY external_identities_tenant_isolation ON external_identities
     USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint)
     WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint);
 `

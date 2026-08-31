@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/processtask"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,6 +20,7 @@ type ProcessTaskCreate struct {
 	config
 	mutation *ProcessTaskMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetTaskID sets the "task_id" field.
@@ -478,6 +480,7 @@ func (_c *ProcessTaskCreate) createSpec() (*ProcessTask, *sqlgraph.CreateSpec) {
 		_node = &ProcessTask{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(processtask.Table, sqlgraph.NewFieldSpec(processtask.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.TaskID(); ok {
 		_spec.SetField(processtask.FieldTaskID, field.TypeString, value)
 		_node.TaskID = value
@@ -594,11 +597,966 @@ func (_c *ProcessTaskCreate) createSpec() (*ProcessTask, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ProcessTask.Create().
+//		SetTaskID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ProcessTaskUpsert) {
+//			SetTaskID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ProcessTaskCreate) OnConflict(opts ...sql.ConflictOption) *ProcessTaskUpsertOne {
+	_c.conflict = opts
+	return &ProcessTaskUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ProcessTask.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ProcessTaskCreate) OnConflictColumns(columns ...string) *ProcessTaskUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ProcessTaskUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ProcessTaskUpsertOne is the builder for "upsert"-ing
+	//  one ProcessTask node.
+	ProcessTaskUpsertOne struct {
+		create *ProcessTaskCreate
+	}
+
+	// ProcessTaskUpsert is the "OnConflict" setter.
+	ProcessTaskUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetTaskID sets the "task_id" field.
+func (u *ProcessTaskUpsert) SetTaskID(v string) *ProcessTaskUpsert {
+	u.Set(processtask.FieldTaskID, v)
+	return u
+}
+
+// UpdateTaskID sets the "task_id" field to the value that was provided on create.
+func (u *ProcessTaskUpsert) UpdateTaskID() *ProcessTaskUpsert {
+	u.SetExcluded(processtask.FieldTaskID)
+	return u
+}
+
+// SetProcessInstanceID sets the "process_instance_id" field.
+func (u *ProcessTaskUpsert) SetProcessInstanceID(v int) *ProcessTaskUpsert {
+	u.Set(processtask.FieldProcessInstanceID, v)
+	return u
+}
+
+// UpdateProcessInstanceID sets the "process_instance_id" field to the value that was provided on create.
+func (u *ProcessTaskUpsert) UpdateProcessInstanceID() *ProcessTaskUpsert {
+	u.SetExcluded(processtask.FieldProcessInstanceID)
+	return u
+}
+
+// SetProcessDefinitionKey sets the "process_definition_key" field.
+func (u *ProcessTaskUpsert) SetProcessDefinitionKey(v string) *ProcessTaskUpsert {
+	u.Set(processtask.FieldProcessDefinitionKey, v)
+	return u
+}
+
+// UpdateProcessDefinitionKey sets the "process_definition_key" field to the value that was provided on create.
+func (u *ProcessTaskUpsert) UpdateProcessDefinitionKey() *ProcessTaskUpsert {
+	u.SetExcluded(processtask.FieldProcessDefinitionKey)
+	return u
+}
+
+// SetTaskDefinitionKey sets the "task_definition_key" field.
+func (u *ProcessTaskUpsert) SetTaskDefinitionKey(v string) *ProcessTaskUpsert {
+	u.Set(processtask.FieldTaskDefinitionKey, v)
+	return u
+}
+
+// UpdateTaskDefinitionKey sets the "task_definition_key" field to the value that was provided on create.
+func (u *ProcessTaskUpsert) UpdateTaskDefinitionKey() *ProcessTaskUpsert {
+	u.SetExcluded(processtask.FieldTaskDefinitionKey)
+	return u
+}
+
+// SetTaskName sets the "task_name" field.
+func (u *ProcessTaskUpsert) SetTaskName(v string) *ProcessTaskUpsert {
+	u.Set(processtask.FieldTaskName, v)
+	return u
+}
+
+// UpdateTaskName sets the "task_name" field to the value that was provided on create.
+func (u *ProcessTaskUpsert) UpdateTaskName() *ProcessTaskUpsert {
+	u.SetExcluded(processtask.FieldTaskName)
+	return u
+}
+
+// SetTaskType sets the "task_type" field.
+func (u *ProcessTaskUpsert) SetTaskType(v string) *ProcessTaskUpsert {
+	u.Set(processtask.FieldTaskType, v)
+	return u
+}
+
+// UpdateTaskType sets the "task_type" field to the value that was provided on create.
+func (u *ProcessTaskUpsert) UpdateTaskType() *ProcessTaskUpsert {
+	u.SetExcluded(processtask.FieldTaskType)
+	return u
+}
+
+// SetAssignee sets the "assignee" field.
+func (u *ProcessTaskUpsert) SetAssignee(v string) *ProcessTaskUpsert {
+	u.Set(processtask.FieldAssignee, v)
+	return u
+}
+
+// UpdateAssignee sets the "assignee" field to the value that was provided on create.
+func (u *ProcessTaskUpsert) UpdateAssignee() *ProcessTaskUpsert {
+	u.SetExcluded(processtask.FieldAssignee)
+	return u
+}
+
+// ClearAssignee clears the value of the "assignee" field.
+func (u *ProcessTaskUpsert) ClearAssignee() *ProcessTaskUpsert {
+	u.SetNull(processtask.FieldAssignee)
+	return u
+}
+
+// SetCandidateUsers sets the "candidate_users" field.
+func (u *ProcessTaskUpsert) SetCandidateUsers(v string) *ProcessTaskUpsert {
+	u.Set(processtask.FieldCandidateUsers, v)
+	return u
+}
+
+// UpdateCandidateUsers sets the "candidate_users" field to the value that was provided on create.
+func (u *ProcessTaskUpsert) UpdateCandidateUsers() *ProcessTaskUpsert {
+	u.SetExcluded(processtask.FieldCandidateUsers)
+	return u
+}
+
+// ClearCandidateUsers clears the value of the "candidate_users" field.
+func (u *ProcessTaskUpsert) ClearCandidateUsers() *ProcessTaskUpsert {
+	u.SetNull(processtask.FieldCandidateUsers)
+	return u
+}
+
+// SetCandidateGroups sets the "candidate_groups" field.
+func (u *ProcessTaskUpsert) SetCandidateGroups(v string) *ProcessTaskUpsert {
+	u.Set(processtask.FieldCandidateGroups, v)
+	return u
+}
+
+// UpdateCandidateGroups sets the "candidate_groups" field to the value that was provided on create.
+func (u *ProcessTaskUpsert) UpdateCandidateGroups() *ProcessTaskUpsert {
+	u.SetExcluded(processtask.FieldCandidateGroups)
+	return u
+}
+
+// ClearCandidateGroups clears the value of the "candidate_groups" field.
+func (u *ProcessTaskUpsert) ClearCandidateGroups() *ProcessTaskUpsert {
+	u.SetNull(processtask.FieldCandidateGroups)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *ProcessTaskUpsert) SetStatus(v string) *ProcessTaskUpsert {
+	u.Set(processtask.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ProcessTaskUpsert) UpdateStatus() *ProcessTaskUpsert {
+	u.SetExcluded(processtask.FieldStatus)
+	return u
+}
+
+// SetPriority sets the "priority" field.
+func (u *ProcessTaskUpsert) SetPriority(v string) *ProcessTaskUpsert {
+	u.Set(processtask.FieldPriority, v)
+	return u
+}
+
+// UpdatePriority sets the "priority" field to the value that was provided on create.
+func (u *ProcessTaskUpsert) UpdatePriority() *ProcessTaskUpsert {
+	u.SetExcluded(processtask.FieldPriority)
+	return u
+}
+
+// SetDueDate sets the "due_date" field.
+func (u *ProcessTaskUpsert) SetDueDate(v time.Time) *ProcessTaskUpsert {
+	u.Set(processtask.FieldDueDate, v)
+	return u
+}
+
+// UpdateDueDate sets the "due_date" field to the value that was provided on create.
+func (u *ProcessTaskUpsert) UpdateDueDate() *ProcessTaskUpsert {
+	u.SetExcluded(processtask.FieldDueDate)
+	return u
+}
+
+// ClearDueDate clears the value of the "due_date" field.
+func (u *ProcessTaskUpsert) ClearDueDate() *ProcessTaskUpsert {
+	u.SetNull(processtask.FieldDueDate)
+	return u
+}
+
+// SetCreatedTime sets the "created_time" field.
+func (u *ProcessTaskUpsert) SetCreatedTime(v time.Time) *ProcessTaskUpsert {
+	u.Set(processtask.FieldCreatedTime, v)
+	return u
+}
+
+// UpdateCreatedTime sets the "created_time" field to the value that was provided on create.
+func (u *ProcessTaskUpsert) UpdateCreatedTime() *ProcessTaskUpsert {
+	u.SetExcluded(processtask.FieldCreatedTime)
+	return u
+}
+
+// SetAssignedTime sets the "assigned_time" field.
+func (u *ProcessTaskUpsert) SetAssignedTime(v time.Time) *ProcessTaskUpsert {
+	u.Set(processtask.FieldAssignedTime, v)
+	return u
+}
+
+// UpdateAssignedTime sets the "assigned_time" field to the value that was provided on create.
+func (u *ProcessTaskUpsert) UpdateAssignedTime() *ProcessTaskUpsert {
+	u.SetExcluded(processtask.FieldAssignedTime)
+	return u
+}
+
+// ClearAssignedTime clears the value of the "assigned_time" field.
+func (u *ProcessTaskUpsert) ClearAssignedTime() *ProcessTaskUpsert {
+	u.SetNull(processtask.FieldAssignedTime)
+	return u
+}
+
+// SetStartedTime sets the "started_time" field.
+func (u *ProcessTaskUpsert) SetStartedTime(v time.Time) *ProcessTaskUpsert {
+	u.Set(processtask.FieldStartedTime, v)
+	return u
+}
+
+// UpdateStartedTime sets the "started_time" field to the value that was provided on create.
+func (u *ProcessTaskUpsert) UpdateStartedTime() *ProcessTaskUpsert {
+	u.SetExcluded(processtask.FieldStartedTime)
+	return u
+}
+
+// ClearStartedTime clears the value of the "started_time" field.
+func (u *ProcessTaskUpsert) ClearStartedTime() *ProcessTaskUpsert {
+	u.SetNull(processtask.FieldStartedTime)
+	return u
+}
+
+// SetCompletedTime sets the "completed_time" field.
+func (u *ProcessTaskUpsert) SetCompletedTime(v time.Time) *ProcessTaskUpsert {
+	u.Set(processtask.FieldCompletedTime, v)
+	return u
+}
+
+// UpdateCompletedTime sets the "completed_time" field to the value that was provided on create.
+func (u *ProcessTaskUpsert) UpdateCompletedTime() *ProcessTaskUpsert {
+	u.SetExcluded(processtask.FieldCompletedTime)
+	return u
+}
+
+// ClearCompletedTime clears the value of the "completed_time" field.
+func (u *ProcessTaskUpsert) ClearCompletedTime() *ProcessTaskUpsert {
+	u.SetNull(processtask.FieldCompletedTime)
+	return u
+}
+
+// SetFormKey sets the "form_key" field.
+func (u *ProcessTaskUpsert) SetFormKey(v string) *ProcessTaskUpsert {
+	u.Set(processtask.FieldFormKey, v)
+	return u
+}
+
+// UpdateFormKey sets the "form_key" field to the value that was provided on create.
+func (u *ProcessTaskUpsert) UpdateFormKey() *ProcessTaskUpsert {
+	u.SetExcluded(processtask.FieldFormKey)
+	return u
+}
+
+// ClearFormKey clears the value of the "form_key" field.
+func (u *ProcessTaskUpsert) ClearFormKey() *ProcessTaskUpsert {
+	u.SetNull(processtask.FieldFormKey)
+	return u
+}
+
+// SetTaskVariables sets the "task_variables" field.
+func (u *ProcessTaskUpsert) SetTaskVariables(v map[string]interface{}) *ProcessTaskUpsert {
+	u.Set(processtask.FieldTaskVariables, v)
+	return u
+}
+
+// UpdateTaskVariables sets the "task_variables" field to the value that was provided on create.
+func (u *ProcessTaskUpsert) UpdateTaskVariables() *ProcessTaskUpsert {
+	u.SetExcluded(processtask.FieldTaskVariables)
+	return u
+}
+
+// ClearTaskVariables clears the value of the "task_variables" field.
+func (u *ProcessTaskUpsert) ClearTaskVariables() *ProcessTaskUpsert {
+	u.SetNull(processtask.FieldTaskVariables)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *ProcessTaskUpsert) SetDescription(v string) *ProcessTaskUpsert {
+	u.Set(processtask.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *ProcessTaskUpsert) UpdateDescription() *ProcessTaskUpsert {
+	u.SetExcluded(processtask.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *ProcessTaskUpsert) ClearDescription() *ProcessTaskUpsert {
+	u.SetNull(processtask.FieldDescription)
+	return u
+}
+
+// SetCorrelationID sets the "correlation_id" field.
+func (u *ProcessTaskUpsert) SetCorrelationID(v string) *ProcessTaskUpsert {
+	u.Set(processtask.FieldCorrelationID, v)
+	return u
+}
+
+// UpdateCorrelationID sets the "correlation_id" field to the value that was provided on create.
+func (u *ProcessTaskUpsert) UpdateCorrelationID() *ProcessTaskUpsert {
+	u.SetExcluded(processtask.FieldCorrelationID)
+	return u
+}
+
+// ClearCorrelationID clears the value of the "correlation_id" field.
+func (u *ProcessTaskUpsert) ClearCorrelationID() *ProcessTaskUpsert {
+	u.SetNull(processtask.FieldCorrelationID)
+	return u
+}
+
+// SetParentTaskID sets the "parent_task_id" field.
+func (u *ProcessTaskUpsert) SetParentTaskID(v string) *ProcessTaskUpsert {
+	u.Set(processtask.FieldParentTaskID, v)
+	return u
+}
+
+// UpdateParentTaskID sets the "parent_task_id" field to the value that was provided on create.
+func (u *ProcessTaskUpsert) UpdateParentTaskID() *ProcessTaskUpsert {
+	u.SetExcluded(processtask.FieldParentTaskID)
+	return u
+}
+
+// ClearParentTaskID clears the value of the "parent_task_id" field.
+func (u *ProcessTaskUpsert) ClearParentTaskID() *ProcessTaskUpsert {
+	u.SetNull(processtask.FieldParentTaskID)
+	return u
+}
+
+// SetRootTaskID sets the "root_task_id" field.
+func (u *ProcessTaskUpsert) SetRootTaskID(v string) *ProcessTaskUpsert {
+	u.Set(processtask.FieldRootTaskID, v)
+	return u
+}
+
+// UpdateRootTaskID sets the "root_task_id" field to the value that was provided on create.
+func (u *ProcessTaskUpsert) UpdateRootTaskID() *ProcessTaskUpsert {
+	u.SetExcluded(processtask.FieldRootTaskID)
+	return u
+}
+
+// ClearRootTaskID clears the value of the "root_task_id" field.
+func (u *ProcessTaskUpsert) ClearRootTaskID() *ProcessTaskUpsert {
+	u.SetNull(processtask.FieldRootTaskID)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessTaskUpsert) SetTenantID(v int) *ProcessTaskUpsert {
+	u.Set(processtask.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessTaskUpsert) UpdateTenantID() *ProcessTaskUpsert {
+	u.SetExcluded(processtask.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessTaskUpsert) AddTenantID(v int) *ProcessTaskUpsert {
+	u.Add(processtask.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProcessTaskUpsert) SetCreatedAt(v time.Time) *ProcessTaskUpsert {
+	u.Set(processtask.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProcessTaskUpsert) UpdateCreatedAt() *ProcessTaskUpsert {
+	u.SetExcluded(processtask.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ProcessTaskUpsert) SetUpdatedAt(v time.Time) *ProcessTaskUpsert {
+	u.Set(processtask.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ProcessTaskUpsert) UpdateUpdatedAt() *ProcessTaskUpsert {
+	u.SetExcluded(processtask.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.ProcessTask.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ProcessTaskUpsertOne) UpdateNewValues() *ProcessTaskUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ProcessTask.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ProcessTaskUpsertOne) Ignore() *ProcessTaskUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ProcessTaskUpsertOne) DoNothing() *ProcessTaskUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ProcessTaskCreate.OnConflict
+// documentation for more info.
+func (u *ProcessTaskUpsertOne) Update(set func(*ProcessTaskUpsert)) *ProcessTaskUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ProcessTaskUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTaskID sets the "task_id" field.
+func (u *ProcessTaskUpsertOne) SetTaskID(v string) *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetTaskID(v)
+	})
+}
+
+// UpdateTaskID sets the "task_id" field to the value that was provided on create.
+func (u *ProcessTaskUpsertOne) UpdateTaskID() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateTaskID()
+	})
+}
+
+// SetProcessInstanceID sets the "process_instance_id" field.
+func (u *ProcessTaskUpsertOne) SetProcessInstanceID(v int) *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetProcessInstanceID(v)
+	})
+}
+
+// UpdateProcessInstanceID sets the "process_instance_id" field to the value that was provided on create.
+func (u *ProcessTaskUpsertOne) UpdateProcessInstanceID() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateProcessInstanceID()
+	})
+}
+
+// SetProcessDefinitionKey sets the "process_definition_key" field.
+func (u *ProcessTaskUpsertOne) SetProcessDefinitionKey(v string) *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetProcessDefinitionKey(v)
+	})
+}
+
+// UpdateProcessDefinitionKey sets the "process_definition_key" field to the value that was provided on create.
+func (u *ProcessTaskUpsertOne) UpdateProcessDefinitionKey() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateProcessDefinitionKey()
+	})
+}
+
+// SetTaskDefinitionKey sets the "task_definition_key" field.
+func (u *ProcessTaskUpsertOne) SetTaskDefinitionKey(v string) *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetTaskDefinitionKey(v)
+	})
+}
+
+// UpdateTaskDefinitionKey sets the "task_definition_key" field to the value that was provided on create.
+func (u *ProcessTaskUpsertOne) UpdateTaskDefinitionKey() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateTaskDefinitionKey()
+	})
+}
+
+// SetTaskName sets the "task_name" field.
+func (u *ProcessTaskUpsertOne) SetTaskName(v string) *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetTaskName(v)
+	})
+}
+
+// UpdateTaskName sets the "task_name" field to the value that was provided on create.
+func (u *ProcessTaskUpsertOne) UpdateTaskName() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateTaskName()
+	})
+}
+
+// SetTaskType sets the "task_type" field.
+func (u *ProcessTaskUpsertOne) SetTaskType(v string) *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetTaskType(v)
+	})
+}
+
+// UpdateTaskType sets the "task_type" field to the value that was provided on create.
+func (u *ProcessTaskUpsertOne) UpdateTaskType() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateTaskType()
+	})
+}
+
+// SetAssignee sets the "assignee" field.
+func (u *ProcessTaskUpsertOne) SetAssignee(v string) *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetAssignee(v)
+	})
+}
+
+// UpdateAssignee sets the "assignee" field to the value that was provided on create.
+func (u *ProcessTaskUpsertOne) UpdateAssignee() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateAssignee()
+	})
+}
+
+// ClearAssignee clears the value of the "assignee" field.
+func (u *ProcessTaskUpsertOne) ClearAssignee() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.ClearAssignee()
+	})
+}
+
+// SetCandidateUsers sets the "candidate_users" field.
+func (u *ProcessTaskUpsertOne) SetCandidateUsers(v string) *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetCandidateUsers(v)
+	})
+}
+
+// UpdateCandidateUsers sets the "candidate_users" field to the value that was provided on create.
+func (u *ProcessTaskUpsertOne) UpdateCandidateUsers() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateCandidateUsers()
+	})
+}
+
+// ClearCandidateUsers clears the value of the "candidate_users" field.
+func (u *ProcessTaskUpsertOne) ClearCandidateUsers() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.ClearCandidateUsers()
+	})
+}
+
+// SetCandidateGroups sets the "candidate_groups" field.
+func (u *ProcessTaskUpsertOne) SetCandidateGroups(v string) *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetCandidateGroups(v)
+	})
+}
+
+// UpdateCandidateGroups sets the "candidate_groups" field to the value that was provided on create.
+func (u *ProcessTaskUpsertOne) UpdateCandidateGroups() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateCandidateGroups()
+	})
+}
+
+// ClearCandidateGroups clears the value of the "candidate_groups" field.
+func (u *ProcessTaskUpsertOne) ClearCandidateGroups() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.ClearCandidateGroups()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *ProcessTaskUpsertOne) SetStatus(v string) *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ProcessTaskUpsertOne) UpdateStatus() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetPriority sets the "priority" field.
+func (u *ProcessTaskUpsertOne) SetPriority(v string) *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetPriority(v)
+	})
+}
+
+// UpdatePriority sets the "priority" field to the value that was provided on create.
+func (u *ProcessTaskUpsertOne) UpdatePriority() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdatePriority()
+	})
+}
+
+// SetDueDate sets the "due_date" field.
+func (u *ProcessTaskUpsertOne) SetDueDate(v time.Time) *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetDueDate(v)
+	})
+}
+
+// UpdateDueDate sets the "due_date" field to the value that was provided on create.
+func (u *ProcessTaskUpsertOne) UpdateDueDate() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateDueDate()
+	})
+}
+
+// ClearDueDate clears the value of the "due_date" field.
+func (u *ProcessTaskUpsertOne) ClearDueDate() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.ClearDueDate()
+	})
+}
+
+// SetCreatedTime sets the "created_time" field.
+func (u *ProcessTaskUpsertOne) SetCreatedTime(v time.Time) *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetCreatedTime(v)
+	})
+}
+
+// UpdateCreatedTime sets the "created_time" field to the value that was provided on create.
+func (u *ProcessTaskUpsertOne) UpdateCreatedTime() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateCreatedTime()
+	})
+}
+
+// SetAssignedTime sets the "assigned_time" field.
+func (u *ProcessTaskUpsertOne) SetAssignedTime(v time.Time) *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetAssignedTime(v)
+	})
+}
+
+// UpdateAssignedTime sets the "assigned_time" field to the value that was provided on create.
+func (u *ProcessTaskUpsertOne) UpdateAssignedTime() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateAssignedTime()
+	})
+}
+
+// ClearAssignedTime clears the value of the "assigned_time" field.
+func (u *ProcessTaskUpsertOne) ClearAssignedTime() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.ClearAssignedTime()
+	})
+}
+
+// SetStartedTime sets the "started_time" field.
+func (u *ProcessTaskUpsertOne) SetStartedTime(v time.Time) *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetStartedTime(v)
+	})
+}
+
+// UpdateStartedTime sets the "started_time" field to the value that was provided on create.
+func (u *ProcessTaskUpsertOne) UpdateStartedTime() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateStartedTime()
+	})
+}
+
+// ClearStartedTime clears the value of the "started_time" field.
+func (u *ProcessTaskUpsertOne) ClearStartedTime() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.ClearStartedTime()
+	})
+}
+
+// SetCompletedTime sets the "completed_time" field.
+func (u *ProcessTaskUpsertOne) SetCompletedTime(v time.Time) *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetCompletedTime(v)
+	})
+}
+
+// UpdateCompletedTime sets the "completed_time" field to the value that was provided on create.
+func (u *ProcessTaskUpsertOne) UpdateCompletedTime() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateCompletedTime()
+	})
+}
+
+// ClearCompletedTime clears the value of the "completed_time" field.
+func (u *ProcessTaskUpsertOne) ClearCompletedTime() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.ClearCompletedTime()
+	})
+}
+
+// SetFormKey sets the "form_key" field.
+func (u *ProcessTaskUpsertOne) SetFormKey(v string) *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetFormKey(v)
+	})
+}
+
+// UpdateFormKey sets the "form_key" field to the value that was provided on create.
+func (u *ProcessTaskUpsertOne) UpdateFormKey() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateFormKey()
+	})
+}
+
+// ClearFormKey clears the value of the "form_key" field.
+func (u *ProcessTaskUpsertOne) ClearFormKey() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.ClearFormKey()
+	})
+}
+
+// SetTaskVariables sets the "task_variables" field.
+func (u *ProcessTaskUpsertOne) SetTaskVariables(v map[string]interface{}) *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetTaskVariables(v)
+	})
+}
+
+// UpdateTaskVariables sets the "task_variables" field to the value that was provided on create.
+func (u *ProcessTaskUpsertOne) UpdateTaskVariables() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateTaskVariables()
+	})
+}
+
+// ClearTaskVariables clears the value of the "task_variables" field.
+func (u *ProcessTaskUpsertOne) ClearTaskVariables() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.ClearTaskVariables()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *ProcessTaskUpsertOne) SetDescription(v string) *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *ProcessTaskUpsertOne) UpdateDescription() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *ProcessTaskUpsertOne) ClearDescription() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetCorrelationID sets the "correlation_id" field.
+func (u *ProcessTaskUpsertOne) SetCorrelationID(v string) *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetCorrelationID(v)
+	})
+}
+
+// UpdateCorrelationID sets the "correlation_id" field to the value that was provided on create.
+func (u *ProcessTaskUpsertOne) UpdateCorrelationID() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateCorrelationID()
+	})
+}
+
+// ClearCorrelationID clears the value of the "correlation_id" field.
+func (u *ProcessTaskUpsertOne) ClearCorrelationID() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.ClearCorrelationID()
+	})
+}
+
+// SetParentTaskID sets the "parent_task_id" field.
+func (u *ProcessTaskUpsertOne) SetParentTaskID(v string) *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetParentTaskID(v)
+	})
+}
+
+// UpdateParentTaskID sets the "parent_task_id" field to the value that was provided on create.
+func (u *ProcessTaskUpsertOne) UpdateParentTaskID() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateParentTaskID()
+	})
+}
+
+// ClearParentTaskID clears the value of the "parent_task_id" field.
+func (u *ProcessTaskUpsertOne) ClearParentTaskID() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.ClearParentTaskID()
+	})
+}
+
+// SetRootTaskID sets the "root_task_id" field.
+func (u *ProcessTaskUpsertOne) SetRootTaskID(v string) *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetRootTaskID(v)
+	})
+}
+
+// UpdateRootTaskID sets the "root_task_id" field to the value that was provided on create.
+func (u *ProcessTaskUpsertOne) UpdateRootTaskID() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateRootTaskID()
+	})
+}
+
+// ClearRootTaskID clears the value of the "root_task_id" field.
+func (u *ProcessTaskUpsertOne) ClearRootTaskID() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.ClearRootTaskID()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessTaskUpsertOne) SetTenantID(v int) *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessTaskUpsertOne) AddTenantID(v int) *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessTaskUpsertOne) UpdateTenantID() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProcessTaskUpsertOne) SetCreatedAt(v time.Time) *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProcessTaskUpsertOne) UpdateCreatedAt() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ProcessTaskUpsertOne) SetUpdatedAt(v time.Time) *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ProcessTaskUpsertOne) UpdateUpdatedAt() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ProcessTaskUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ProcessTaskCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ProcessTaskUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ProcessTaskUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ProcessTaskUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ProcessTaskCreateBulk is the builder for creating many ProcessTask entities in bulk.
 type ProcessTaskCreateBulk struct {
 	config
 	err      error
 	builders []*ProcessTaskCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the ProcessTask entities in the database.
@@ -628,6 +1586,7 @@ func (_c *ProcessTaskCreateBulk) Save(ctx context.Context) ([]*ProcessTask, erro
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -678,6 +1637,558 @@ func (_c *ProcessTaskCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ProcessTaskCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ProcessTask.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ProcessTaskUpsert) {
+//			SetTaskID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ProcessTaskCreateBulk) OnConflict(opts ...sql.ConflictOption) *ProcessTaskUpsertBulk {
+	_c.conflict = opts
+	return &ProcessTaskUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ProcessTask.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ProcessTaskCreateBulk) OnConflictColumns(columns ...string) *ProcessTaskUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ProcessTaskUpsertBulk{
+		create: _c,
+	}
+}
+
+// ProcessTaskUpsertBulk is the builder for "upsert"-ing
+// a bulk of ProcessTask nodes.
+type ProcessTaskUpsertBulk struct {
+	create *ProcessTaskCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.ProcessTask.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ProcessTaskUpsertBulk) UpdateNewValues() *ProcessTaskUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ProcessTask.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ProcessTaskUpsertBulk) Ignore() *ProcessTaskUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ProcessTaskUpsertBulk) DoNothing() *ProcessTaskUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ProcessTaskCreateBulk.OnConflict
+// documentation for more info.
+func (u *ProcessTaskUpsertBulk) Update(set func(*ProcessTaskUpsert)) *ProcessTaskUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ProcessTaskUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTaskID sets the "task_id" field.
+func (u *ProcessTaskUpsertBulk) SetTaskID(v string) *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetTaskID(v)
+	})
+}
+
+// UpdateTaskID sets the "task_id" field to the value that was provided on create.
+func (u *ProcessTaskUpsertBulk) UpdateTaskID() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateTaskID()
+	})
+}
+
+// SetProcessInstanceID sets the "process_instance_id" field.
+func (u *ProcessTaskUpsertBulk) SetProcessInstanceID(v int) *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetProcessInstanceID(v)
+	})
+}
+
+// UpdateProcessInstanceID sets the "process_instance_id" field to the value that was provided on create.
+func (u *ProcessTaskUpsertBulk) UpdateProcessInstanceID() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateProcessInstanceID()
+	})
+}
+
+// SetProcessDefinitionKey sets the "process_definition_key" field.
+func (u *ProcessTaskUpsertBulk) SetProcessDefinitionKey(v string) *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetProcessDefinitionKey(v)
+	})
+}
+
+// UpdateProcessDefinitionKey sets the "process_definition_key" field to the value that was provided on create.
+func (u *ProcessTaskUpsertBulk) UpdateProcessDefinitionKey() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateProcessDefinitionKey()
+	})
+}
+
+// SetTaskDefinitionKey sets the "task_definition_key" field.
+func (u *ProcessTaskUpsertBulk) SetTaskDefinitionKey(v string) *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetTaskDefinitionKey(v)
+	})
+}
+
+// UpdateTaskDefinitionKey sets the "task_definition_key" field to the value that was provided on create.
+func (u *ProcessTaskUpsertBulk) UpdateTaskDefinitionKey() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateTaskDefinitionKey()
+	})
+}
+
+// SetTaskName sets the "task_name" field.
+func (u *ProcessTaskUpsertBulk) SetTaskName(v string) *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetTaskName(v)
+	})
+}
+
+// UpdateTaskName sets the "task_name" field to the value that was provided on create.
+func (u *ProcessTaskUpsertBulk) UpdateTaskName() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateTaskName()
+	})
+}
+
+// SetTaskType sets the "task_type" field.
+func (u *ProcessTaskUpsertBulk) SetTaskType(v string) *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetTaskType(v)
+	})
+}
+
+// UpdateTaskType sets the "task_type" field to the value that was provided on create.
+func (u *ProcessTaskUpsertBulk) UpdateTaskType() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateTaskType()
+	})
+}
+
+// SetAssignee sets the "assignee" field.
+func (u *ProcessTaskUpsertBulk) SetAssignee(v string) *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetAssignee(v)
+	})
+}
+
+// UpdateAssignee sets the "assignee" field to the value that was provided on create.
+func (u *ProcessTaskUpsertBulk) UpdateAssignee() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateAssignee()
+	})
+}
+
+// ClearAssignee clears the value of the "assignee" field.
+func (u *ProcessTaskUpsertBulk) ClearAssignee() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.ClearAssignee()
+	})
+}
+
+// SetCandidateUsers sets the "candidate_users" field.
+func (u *ProcessTaskUpsertBulk) SetCandidateUsers(v string) *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetCandidateUsers(v)
+	})
+}
+
+// UpdateCandidateUsers sets the "candidate_users" field to the value that was provided on create.
+func (u *ProcessTaskUpsertBulk) UpdateCandidateUsers() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateCandidateUsers()
+	})
+}
+
+// ClearCandidateUsers clears the value of the "candidate_users" field.
+func (u *ProcessTaskUpsertBulk) ClearCandidateUsers() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.ClearCandidateUsers()
+	})
+}
+
+// SetCandidateGroups sets the "candidate_groups" field.
+func (u *ProcessTaskUpsertBulk) SetCandidateGroups(v string) *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetCandidateGroups(v)
+	})
+}
+
+// UpdateCandidateGroups sets the "candidate_groups" field to the value that was provided on create.
+func (u *ProcessTaskUpsertBulk) UpdateCandidateGroups() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateCandidateGroups()
+	})
+}
+
+// ClearCandidateGroups clears the value of the "candidate_groups" field.
+func (u *ProcessTaskUpsertBulk) ClearCandidateGroups() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.ClearCandidateGroups()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *ProcessTaskUpsertBulk) SetStatus(v string) *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ProcessTaskUpsertBulk) UpdateStatus() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetPriority sets the "priority" field.
+func (u *ProcessTaskUpsertBulk) SetPriority(v string) *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetPriority(v)
+	})
+}
+
+// UpdatePriority sets the "priority" field to the value that was provided on create.
+func (u *ProcessTaskUpsertBulk) UpdatePriority() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdatePriority()
+	})
+}
+
+// SetDueDate sets the "due_date" field.
+func (u *ProcessTaskUpsertBulk) SetDueDate(v time.Time) *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetDueDate(v)
+	})
+}
+
+// UpdateDueDate sets the "due_date" field to the value that was provided on create.
+func (u *ProcessTaskUpsertBulk) UpdateDueDate() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateDueDate()
+	})
+}
+
+// ClearDueDate clears the value of the "due_date" field.
+func (u *ProcessTaskUpsertBulk) ClearDueDate() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.ClearDueDate()
+	})
+}
+
+// SetCreatedTime sets the "created_time" field.
+func (u *ProcessTaskUpsertBulk) SetCreatedTime(v time.Time) *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetCreatedTime(v)
+	})
+}
+
+// UpdateCreatedTime sets the "created_time" field to the value that was provided on create.
+func (u *ProcessTaskUpsertBulk) UpdateCreatedTime() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateCreatedTime()
+	})
+}
+
+// SetAssignedTime sets the "assigned_time" field.
+func (u *ProcessTaskUpsertBulk) SetAssignedTime(v time.Time) *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetAssignedTime(v)
+	})
+}
+
+// UpdateAssignedTime sets the "assigned_time" field to the value that was provided on create.
+func (u *ProcessTaskUpsertBulk) UpdateAssignedTime() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateAssignedTime()
+	})
+}
+
+// ClearAssignedTime clears the value of the "assigned_time" field.
+func (u *ProcessTaskUpsertBulk) ClearAssignedTime() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.ClearAssignedTime()
+	})
+}
+
+// SetStartedTime sets the "started_time" field.
+func (u *ProcessTaskUpsertBulk) SetStartedTime(v time.Time) *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetStartedTime(v)
+	})
+}
+
+// UpdateStartedTime sets the "started_time" field to the value that was provided on create.
+func (u *ProcessTaskUpsertBulk) UpdateStartedTime() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateStartedTime()
+	})
+}
+
+// ClearStartedTime clears the value of the "started_time" field.
+func (u *ProcessTaskUpsertBulk) ClearStartedTime() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.ClearStartedTime()
+	})
+}
+
+// SetCompletedTime sets the "completed_time" field.
+func (u *ProcessTaskUpsertBulk) SetCompletedTime(v time.Time) *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetCompletedTime(v)
+	})
+}
+
+// UpdateCompletedTime sets the "completed_time" field to the value that was provided on create.
+func (u *ProcessTaskUpsertBulk) UpdateCompletedTime() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateCompletedTime()
+	})
+}
+
+// ClearCompletedTime clears the value of the "completed_time" field.
+func (u *ProcessTaskUpsertBulk) ClearCompletedTime() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.ClearCompletedTime()
+	})
+}
+
+// SetFormKey sets the "form_key" field.
+func (u *ProcessTaskUpsertBulk) SetFormKey(v string) *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetFormKey(v)
+	})
+}
+
+// UpdateFormKey sets the "form_key" field to the value that was provided on create.
+func (u *ProcessTaskUpsertBulk) UpdateFormKey() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateFormKey()
+	})
+}
+
+// ClearFormKey clears the value of the "form_key" field.
+func (u *ProcessTaskUpsertBulk) ClearFormKey() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.ClearFormKey()
+	})
+}
+
+// SetTaskVariables sets the "task_variables" field.
+func (u *ProcessTaskUpsertBulk) SetTaskVariables(v map[string]interface{}) *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetTaskVariables(v)
+	})
+}
+
+// UpdateTaskVariables sets the "task_variables" field to the value that was provided on create.
+func (u *ProcessTaskUpsertBulk) UpdateTaskVariables() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateTaskVariables()
+	})
+}
+
+// ClearTaskVariables clears the value of the "task_variables" field.
+func (u *ProcessTaskUpsertBulk) ClearTaskVariables() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.ClearTaskVariables()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *ProcessTaskUpsertBulk) SetDescription(v string) *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *ProcessTaskUpsertBulk) UpdateDescription() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *ProcessTaskUpsertBulk) ClearDescription() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetCorrelationID sets the "correlation_id" field.
+func (u *ProcessTaskUpsertBulk) SetCorrelationID(v string) *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetCorrelationID(v)
+	})
+}
+
+// UpdateCorrelationID sets the "correlation_id" field to the value that was provided on create.
+func (u *ProcessTaskUpsertBulk) UpdateCorrelationID() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateCorrelationID()
+	})
+}
+
+// ClearCorrelationID clears the value of the "correlation_id" field.
+func (u *ProcessTaskUpsertBulk) ClearCorrelationID() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.ClearCorrelationID()
+	})
+}
+
+// SetParentTaskID sets the "parent_task_id" field.
+func (u *ProcessTaskUpsertBulk) SetParentTaskID(v string) *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetParentTaskID(v)
+	})
+}
+
+// UpdateParentTaskID sets the "parent_task_id" field to the value that was provided on create.
+func (u *ProcessTaskUpsertBulk) UpdateParentTaskID() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateParentTaskID()
+	})
+}
+
+// ClearParentTaskID clears the value of the "parent_task_id" field.
+func (u *ProcessTaskUpsertBulk) ClearParentTaskID() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.ClearParentTaskID()
+	})
+}
+
+// SetRootTaskID sets the "root_task_id" field.
+func (u *ProcessTaskUpsertBulk) SetRootTaskID(v string) *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetRootTaskID(v)
+	})
+}
+
+// UpdateRootTaskID sets the "root_task_id" field to the value that was provided on create.
+func (u *ProcessTaskUpsertBulk) UpdateRootTaskID() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateRootTaskID()
+	})
+}
+
+// ClearRootTaskID clears the value of the "root_task_id" field.
+func (u *ProcessTaskUpsertBulk) ClearRootTaskID() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.ClearRootTaskID()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessTaskUpsertBulk) SetTenantID(v int) *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessTaskUpsertBulk) AddTenantID(v int) *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessTaskUpsertBulk) UpdateTenantID() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProcessTaskUpsertBulk) SetCreatedAt(v time.Time) *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProcessTaskUpsertBulk) UpdateCreatedAt() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ProcessTaskUpsertBulk) SetUpdatedAt(v time.Time) *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ProcessTaskUpsertBulk) UpdateUpdatedAt() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ProcessTaskUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ProcessTaskCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ProcessTaskCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ProcessTaskUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

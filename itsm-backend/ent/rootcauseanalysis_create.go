@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/ticket"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,6 +20,7 @@ type RootCauseAnalysisCreate struct {
 	config
 	mutation *RootCauseAnalysisMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetTicketID sets the "ticket_id" field.
@@ -280,6 +282,7 @@ func (_c *RootCauseAnalysisCreate) createSpec() (*RootCauseAnalysis, *sqlgraph.C
 		_node = &RootCauseAnalysis{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(rootcauseanalysis.Table, sqlgraph.NewFieldSpec(rootcauseanalysis.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.TicketNumber(); ok {
 		_spec.SetField(rootcauseanalysis.FieldTicketNumber, field.TypeString, value)
 		_node.TicketNumber = value
@@ -340,11 +343,459 @@ func (_c *RootCauseAnalysisCreate) createSpec() (*RootCauseAnalysis, *sqlgraph.C
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.RootCauseAnalysis.Create().
+//		SetTicketID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.RootCauseAnalysisUpsert) {
+//			SetTicketID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *RootCauseAnalysisCreate) OnConflict(opts ...sql.ConflictOption) *RootCauseAnalysisUpsertOne {
+	_c.conflict = opts
+	return &RootCauseAnalysisUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.RootCauseAnalysis.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *RootCauseAnalysisCreate) OnConflictColumns(columns ...string) *RootCauseAnalysisUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &RootCauseAnalysisUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// RootCauseAnalysisUpsertOne is the builder for "upsert"-ing
+	//  one RootCauseAnalysis node.
+	RootCauseAnalysisUpsertOne struct {
+		create *RootCauseAnalysisCreate
+	}
+
+	// RootCauseAnalysisUpsert is the "OnConflict" setter.
+	RootCauseAnalysisUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetTicketID sets the "ticket_id" field.
+func (u *RootCauseAnalysisUpsert) SetTicketID(v int) *RootCauseAnalysisUpsert {
+	u.Set(rootcauseanalysis.FieldTicketID, v)
+	return u
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsert) UpdateTicketID() *RootCauseAnalysisUpsert {
+	u.SetExcluded(rootcauseanalysis.FieldTicketID)
+	return u
+}
+
+// SetTicketNumber sets the "ticket_number" field.
+func (u *RootCauseAnalysisUpsert) SetTicketNumber(v string) *RootCauseAnalysisUpsert {
+	u.Set(rootcauseanalysis.FieldTicketNumber, v)
+	return u
+}
+
+// UpdateTicketNumber sets the "ticket_number" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsert) UpdateTicketNumber() *RootCauseAnalysisUpsert {
+	u.SetExcluded(rootcauseanalysis.FieldTicketNumber)
+	return u
+}
+
+// SetTicketTitle sets the "ticket_title" field.
+func (u *RootCauseAnalysisUpsert) SetTicketTitle(v string) *RootCauseAnalysisUpsert {
+	u.Set(rootcauseanalysis.FieldTicketTitle, v)
+	return u
+}
+
+// UpdateTicketTitle sets the "ticket_title" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsert) UpdateTicketTitle() *RootCauseAnalysisUpsert {
+	u.SetExcluded(rootcauseanalysis.FieldTicketTitle)
+	return u
+}
+
+// SetAnalysisDate sets the "analysis_date" field.
+func (u *RootCauseAnalysisUpsert) SetAnalysisDate(v string) *RootCauseAnalysisUpsert {
+	u.Set(rootcauseanalysis.FieldAnalysisDate, v)
+	return u
+}
+
+// UpdateAnalysisDate sets the "analysis_date" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsert) UpdateAnalysisDate() *RootCauseAnalysisUpsert {
+	u.SetExcluded(rootcauseanalysis.FieldAnalysisDate)
+	return u
+}
+
+// SetRootCauses sets the "root_causes" field.
+func (u *RootCauseAnalysisUpsert) SetRootCauses(v []map[string]interface{}) *RootCauseAnalysisUpsert {
+	u.Set(rootcauseanalysis.FieldRootCauses, v)
+	return u
+}
+
+// UpdateRootCauses sets the "root_causes" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsert) UpdateRootCauses() *RootCauseAnalysisUpsert {
+	u.SetExcluded(rootcauseanalysis.FieldRootCauses)
+	return u
+}
+
+// SetAnalysisSummary sets the "analysis_summary" field.
+func (u *RootCauseAnalysisUpsert) SetAnalysisSummary(v string) *RootCauseAnalysisUpsert {
+	u.Set(rootcauseanalysis.FieldAnalysisSummary, v)
+	return u
+}
+
+// UpdateAnalysisSummary sets the "analysis_summary" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsert) UpdateAnalysisSummary() *RootCauseAnalysisUpsert {
+	u.SetExcluded(rootcauseanalysis.FieldAnalysisSummary)
+	return u
+}
+
+// ClearAnalysisSummary clears the value of the "analysis_summary" field.
+func (u *RootCauseAnalysisUpsert) ClearAnalysisSummary() *RootCauseAnalysisUpsert {
+	u.SetNull(rootcauseanalysis.FieldAnalysisSummary)
+	return u
+}
+
+// SetConfidenceScore sets the "confidence_score" field.
+func (u *RootCauseAnalysisUpsert) SetConfidenceScore(v float64) *RootCauseAnalysisUpsert {
+	u.Set(rootcauseanalysis.FieldConfidenceScore, v)
+	return u
+}
+
+// UpdateConfidenceScore sets the "confidence_score" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsert) UpdateConfidenceScore() *RootCauseAnalysisUpsert {
+	u.SetExcluded(rootcauseanalysis.FieldConfidenceScore)
+	return u
+}
+
+// AddConfidenceScore adds v to the "confidence_score" field.
+func (u *RootCauseAnalysisUpsert) AddConfidenceScore(v float64) *RootCauseAnalysisUpsert {
+	u.Add(rootcauseanalysis.FieldConfidenceScore, v)
+	return u
+}
+
+// SetAnalysisMethod sets the "analysis_method" field.
+func (u *RootCauseAnalysisUpsert) SetAnalysisMethod(v string) *RootCauseAnalysisUpsert {
+	u.Set(rootcauseanalysis.FieldAnalysisMethod, v)
+	return u
+}
+
+// UpdateAnalysisMethod sets the "analysis_method" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsert) UpdateAnalysisMethod() *RootCauseAnalysisUpsert {
+	u.SetExcluded(rootcauseanalysis.FieldAnalysisMethod)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *RootCauseAnalysisUpsert) SetTenantID(v int) *RootCauseAnalysisUpsert {
+	u.Set(rootcauseanalysis.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsert) UpdateTenantID() *RootCauseAnalysisUpsert {
+	u.SetExcluded(rootcauseanalysis.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *RootCauseAnalysisUpsert) AddTenantID(v int) *RootCauseAnalysisUpsert {
+	u.Add(rootcauseanalysis.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *RootCauseAnalysisUpsert) SetCreatedAt(v time.Time) *RootCauseAnalysisUpsert {
+	u.Set(rootcauseanalysis.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsert) UpdateCreatedAt() *RootCauseAnalysisUpsert {
+	u.SetExcluded(rootcauseanalysis.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *RootCauseAnalysisUpsert) SetUpdatedAt(v time.Time) *RootCauseAnalysisUpsert {
+	u.Set(rootcauseanalysis.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsert) UpdateUpdatedAt() *RootCauseAnalysisUpsert {
+	u.SetExcluded(rootcauseanalysis.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.RootCauseAnalysis.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *RootCauseAnalysisUpsertOne) UpdateNewValues() *RootCauseAnalysisUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.RootCauseAnalysis.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *RootCauseAnalysisUpsertOne) Ignore() *RootCauseAnalysisUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *RootCauseAnalysisUpsertOne) DoNothing() *RootCauseAnalysisUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the RootCauseAnalysisCreate.OnConflict
+// documentation for more info.
+func (u *RootCauseAnalysisUpsertOne) Update(set func(*RootCauseAnalysisUpsert)) *RootCauseAnalysisUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&RootCauseAnalysisUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *RootCauseAnalysisUpsertOne) SetTicketID(v int) *RootCauseAnalysisUpsertOne {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.SetTicketID(v)
+	})
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsertOne) UpdateTicketID() *RootCauseAnalysisUpsertOne {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.UpdateTicketID()
+	})
+}
+
+// SetTicketNumber sets the "ticket_number" field.
+func (u *RootCauseAnalysisUpsertOne) SetTicketNumber(v string) *RootCauseAnalysisUpsertOne {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.SetTicketNumber(v)
+	})
+}
+
+// UpdateTicketNumber sets the "ticket_number" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsertOne) UpdateTicketNumber() *RootCauseAnalysisUpsertOne {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.UpdateTicketNumber()
+	})
+}
+
+// SetTicketTitle sets the "ticket_title" field.
+func (u *RootCauseAnalysisUpsertOne) SetTicketTitle(v string) *RootCauseAnalysisUpsertOne {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.SetTicketTitle(v)
+	})
+}
+
+// UpdateTicketTitle sets the "ticket_title" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsertOne) UpdateTicketTitle() *RootCauseAnalysisUpsertOne {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.UpdateTicketTitle()
+	})
+}
+
+// SetAnalysisDate sets the "analysis_date" field.
+func (u *RootCauseAnalysisUpsertOne) SetAnalysisDate(v string) *RootCauseAnalysisUpsertOne {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.SetAnalysisDate(v)
+	})
+}
+
+// UpdateAnalysisDate sets the "analysis_date" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsertOne) UpdateAnalysisDate() *RootCauseAnalysisUpsertOne {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.UpdateAnalysisDate()
+	})
+}
+
+// SetRootCauses sets the "root_causes" field.
+func (u *RootCauseAnalysisUpsertOne) SetRootCauses(v []map[string]interface{}) *RootCauseAnalysisUpsertOne {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.SetRootCauses(v)
+	})
+}
+
+// UpdateRootCauses sets the "root_causes" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsertOne) UpdateRootCauses() *RootCauseAnalysisUpsertOne {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.UpdateRootCauses()
+	})
+}
+
+// SetAnalysisSummary sets the "analysis_summary" field.
+func (u *RootCauseAnalysisUpsertOne) SetAnalysisSummary(v string) *RootCauseAnalysisUpsertOne {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.SetAnalysisSummary(v)
+	})
+}
+
+// UpdateAnalysisSummary sets the "analysis_summary" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsertOne) UpdateAnalysisSummary() *RootCauseAnalysisUpsertOne {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.UpdateAnalysisSummary()
+	})
+}
+
+// ClearAnalysisSummary clears the value of the "analysis_summary" field.
+func (u *RootCauseAnalysisUpsertOne) ClearAnalysisSummary() *RootCauseAnalysisUpsertOne {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.ClearAnalysisSummary()
+	})
+}
+
+// SetConfidenceScore sets the "confidence_score" field.
+func (u *RootCauseAnalysisUpsertOne) SetConfidenceScore(v float64) *RootCauseAnalysisUpsertOne {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.SetConfidenceScore(v)
+	})
+}
+
+// AddConfidenceScore adds v to the "confidence_score" field.
+func (u *RootCauseAnalysisUpsertOne) AddConfidenceScore(v float64) *RootCauseAnalysisUpsertOne {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.AddConfidenceScore(v)
+	})
+}
+
+// UpdateConfidenceScore sets the "confidence_score" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsertOne) UpdateConfidenceScore() *RootCauseAnalysisUpsertOne {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.UpdateConfidenceScore()
+	})
+}
+
+// SetAnalysisMethod sets the "analysis_method" field.
+func (u *RootCauseAnalysisUpsertOne) SetAnalysisMethod(v string) *RootCauseAnalysisUpsertOne {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.SetAnalysisMethod(v)
+	})
+}
+
+// UpdateAnalysisMethod sets the "analysis_method" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsertOne) UpdateAnalysisMethod() *RootCauseAnalysisUpsertOne {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.UpdateAnalysisMethod()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *RootCauseAnalysisUpsertOne) SetTenantID(v int) *RootCauseAnalysisUpsertOne {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *RootCauseAnalysisUpsertOne) AddTenantID(v int) *RootCauseAnalysisUpsertOne {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsertOne) UpdateTenantID() *RootCauseAnalysisUpsertOne {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *RootCauseAnalysisUpsertOne) SetCreatedAt(v time.Time) *RootCauseAnalysisUpsertOne {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsertOne) UpdateCreatedAt() *RootCauseAnalysisUpsertOne {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *RootCauseAnalysisUpsertOne) SetUpdatedAt(v time.Time) *RootCauseAnalysisUpsertOne {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsertOne) UpdateUpdatedAt() *RootCauseAnalysisUpsertOne {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *RootCauseAnalysisUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for RootCauseAnalysisCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *RootCauseAnalysisUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *RootCauseAnalysisUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *RootCauseAnalysisUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // RootCauseAnalysisCreateBulk is the builder for creating many RootCauseAnalysis entities in bulk.
 type RootCauseAnalysisCreateBulk struct {
 	config
 	err      error
 	builders []*RootCauseAnalysisCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the RootCauseAnalysis entities in the database.
@@ -374,6 +825,7 @@ func (_c *RootCauseAnalysisCreateBulk) Save(ctx context.Context) ([]*RootCauseAn
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -424,6 +876,285 @@ func (_c *RootCauseAnalysisCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *RootCauseAnalysisCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.RootCauseAnalysis.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.RootCauseAnalysisUpsert) {
+//			SetTicketID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *RootCauseAnalysisCreateBulk) OnConflict(opts ...sql.ConflictOption) *RootCauseAnalysisUpsertBulk {
+	_c.conflict = opts
+	return &RootCauseAnalysisUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.RootCauseAnalysis.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *RootCauseAnalysisCreateBulk) OnConflictColumns(columns ...string) *RootCauseAnalysisUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &RootCauseAnalysisUpsertBulk{
+		create: _c,
+	}
+}
+
+// RootCauseAnalysisUpsertBulk is the builder for "upsert"-ing
+// a bulk of RootCauseAnalysis nodes.
+type RootCauseAnalysisUpsertBulk struct {
+	create *RootCauseAnalysisCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.RootCauseAnalysis.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *RootCauseAnalysisUpsertBulk) UpdateNewValues() *RootCauseAnalysisUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.RootCauseAnalysis.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *RootCauseAnalysisUpsertBulk) Ignore() *RootCauseAnalysisUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *RootCauseAnalysisUpsertBulk) DoNothing() *RootCauseAnalysisUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the RootCauseAnalysisCreateBulk.OnConflict
+// documentation for more info.
+func (u *RootCauseAnalysisUpsertBulk) Update(set func(*RootCauseAnalysisUpsert)) *RootCauseAnalysisUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&RootCauseAnalysisUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *RootCauseAnalysisUpsertBulk) SetTicketID(v int) *RootCauseAnalysisUpsertBulk {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.SetTicketID(v)
+	})
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsertBulk) UpdateTicketID() *RootCauseAnalysisUpsertBulk {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.UpdateTicketID()
+	})
+}
+
+// SetTicketNumber sets the "ticket_number" field.
+func (u *RootCauseAnalysisUpsertBulk) SetTicketNumber(v string) *RootCauseAnalysisUpsertBulk {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.SetTicketNumber(v)
+	})
+}
+
+// UpdateTicketNumber sets the "ticket_number" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsertBulk) UpdateTicketNumber() *RootCauseAnalysisUpsertBulk {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.UpdateTicketNumber()
+	})
+}
+
+// SetTicketTitle sets the "ticket_title" field.
+func (u *RootCauseAnalysisUpsertBulk) SetTicketTitle(v string) *RootCauseAnalysisUpsertBulk {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.SetTicketTitle(v)
+	})
+}
+
+// UpdateTicketTitle sets the "ticket_title" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsertBulk) UpdateTicketTitle() *RootCauseAnalysisUpsertBulk {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.UpdateTicketTitle()
+	})
+}
+
+// SetAnalysisDate sets the "analysis_date" field.
+func (u *RootCauseAnalysisUpsertBulk) SetAnalysisDate(v string) *RootCauseAnalysisUpsertBulk {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.SetAnalysisDate(v)
+	})
+}
+
+// UpdateAnalysisDate sets the "analysis_date" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsertBulk) UpdateAnalysisDate() *RootCauseAnalysisUpsertBulk {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.UpdateAnalysisDate()
+	})
+}
+
+// SetRootCauses sets the "root_causes" field.
+func (u *RootCauseAnalysisUpsertBulk) SetRootCauses(v []map[string]interface{}) *RootCauseAnalysisUpsertBulk {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.SetRootCauses(v)
+	})
+}
+
+// UpdateRootCauses sets the "root_causes" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsertBulk) UpdateRootCauses() *RootCauseAnalysisUpsertBulk {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.UpdateRootCauses()
+	})
+}
+
+// SetAnalysisSummary sets the "analysis_summary" field.
+func (u *RootCauseAnalysisUpsertBulk) SetAnalysisSummary(v string) *RootCauseAnalysisUpsertBulk {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.SetAnalysisSummary(v)
+	})
+}
+
+// UpdateAnalysisSummary sets the "analysis_summary" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsertBulk) UpdateAnalysisSummary() *RootCauseAnalysisUpsertBulk {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.UpdateAnalysisSummary()
+	})
+}
+
+// ClearAnalysisSummary clears the value of the "analysis_summary" field.
+func (u *RootCauseAnalysisUpsertBulk) ClearAnalysisSummary() *RootCauseAnalysisUpsertBulk {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.ClearAnalysisSummary()
+	})
+}
+
+// SetConfidenceScore sets the "confidence_score" field.
+func (u *RootCauseAnalysisUpsertBulk) SetConfidenceScore(v float64) *RootCauseAnalysisUpsertBulk {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.SetConfidenceScore(v)
+	})
+}
+
+// AddConfidenceScore adds v to the "confidence_score" field.
+func (u *RootCauseAnalysisUpsertBulk) AddConfidenceScore(v float64) *RootCauseAnalysisUpsertBulk {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.AddConfidenceScore(v)
+	})
+}
+
+// UpdateConfidenceScore sets the "confidence_score" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsertBulk) UpdateConfidenceScore() *RootCauseAnalysisUpsertBulk {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.UpdateConfidenceScore()
+	})
+}
+
+// SetAnalysisMethod sets the "analysis_method" field.
+func (u *RootCauseAnalysisUpsertBulk) SetAnalysisMethod(v string) *RootCauseAnalysisUpsertBulk {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.SetAnalysisMethod(v)
+	})
+}
+
+// UpdateAnalysisMethod sets the "analysis_method" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsertBulk) UpdateAnalysisMethod() *RootCauseAnalysisUpsertBulk {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.UpdateAnalysisMethod()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *RootCauseAnalysisUpsertBulk) SetTenantID(v int) *RootCauseAnalysisUpsertBulk {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *RootCauseAnalysisUpsertBulk) AddTenantID(v int) *RootCauseAnalysisUpsertBulk {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsertBulk) UpdateTenantID() *RootCauseAnalysisUpsertBulk {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *RootCauseAnalysisUpsertBulk) SetCreatedAt(v time.Time) *RootCauseAnalysisUpsertBulk {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsertBulk) UpdateCreatedAt() *RootCauseAnalysisUpsertBulk {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *RootCauseAnalysisUpsertBulk) SetUpdatedAt(v time.Time) *RootCauseAnalysisUpsertBulk {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *RootCauseAnalysisUpsertBulk) UpdateUpdatedAt() *RootCauseAnalysisUpsertBulk {
+	return u.Update(func(s *RootCauseAnalysisUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *RootCauseAnalysisUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the RootCauseAnalysisCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for RootCauseAnalysisCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *RootCauseAnalysisUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

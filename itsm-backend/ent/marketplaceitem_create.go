@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent/tenantinstallation"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -20,6 +21,7 @@ type MarketplaceItemCreate struct {
 	config
 	mutation *MarketplaceItemMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetName sets the "name" field.
@@ -510,6 +512,7 @@ func (_c *MarketplaceItemCreate) createSpec() (*MarketplaceItem, *sqlgraph.Creat
 		_node = &MarketplaceItem{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(marketplaceitem.Table, sqlgraph.NewFieldSpec(marketplaceitem.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(marketplaceitem.FieldName, field.TypeString, value)
 		_node.Name = value
@@ -657,11 +660,1096 @@ func (_c *MarketplaceItemCreate) createSpec() (*MarketplaceItem, *sqlgraph.Creat
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.MarketplaceItem.Create().
+//		SetName(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.MarketplaceItemUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *MarketplaceItemCreate) OnConflict(opts ...sql.ConflictOption) *MarketplaceItemUpsertOne {
+	_c.conflict = opts
+	return &MarketplaceItemUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.MarketplaceItem.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *MarketplaceItemCreate) OnConflictColumns(columns ...string) *MarketplaceItemUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &MarketplaceItemUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// MarketplaceItemUpsertOne is the builder for "upsert"-ing
+	//  one MarketplaceItem node.
+	MarketplaceItemUpsertOne struct {
+		create *MarketplaceItemCreate
+	}
+
+	// MarketplaceItemUpsert is the "OnConflict" setter.
+	MarketplaceItemUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetName sets the "name" field.
+func (u *MarketplaceItemUpsert) SetName(v string) *MarketplaceItemUpsert {
+	u.Set(marketplaceitem.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *MarketplaceItemUpsert) UpdateName() *MarketplaceItemUpsert {
+	u.SetExcluded(marketplaceitem.FieldName)
+	return u
+}
+
+// SetType sets the "type" field.
+func (u *MarketplaceItemUpsert) SetType(v marketplaceitem.Type) *MarketplaceItemUpsert {
+	u.Set(marketplaceitem.FieldType, v)
+	return u
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *MarketplaceItemUpsert) UpdateType() *MarketplaceItemUpsert {
+	u.SetExcluded(marketplaceitem.FieldType)
+	return u
+}
+
+// SetTitle sets the "title" field.
+func (u *MarketplaceItemUpsert) SetTitle(v string) *MarketplaceItemUpsert {
+	u.Set(marketplaceitem.FieldTitle, v)
+	return u
+}
+
+// UpdateTitle sets the "title" field to the value that was provided on create.
+func (u *MarketplaceItemUpsert) UpdateTitle() *MarketplaceItemUpsert {
+	u.SetExcluded(marketplaceitem.FieldTitle)
+	return u
+}
+
+// SetProvider sets the "provider" field.
+func (u *MarketplaceItemUpsert) SetProvider(v string) *MarketplaceItemUpsert {
+	u.Set(marketplaceitem.FieldProvider, v)
+	return u
+}
+
+// UpdateProvider sets the "provider" field to the value that was provided on create.
+func (u *MarketplaceItemUpsert) UpdateProvider() *MarketplaceItemUpsert {
+	u.SetExcluded(marketplaceitem.FieldProvider)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *MarketplaceItemUpsert) SetDescription(v string) *MarketplaceItemUpsert {
+	u.Set(marketplaceitem.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *MarketplaceItemUpsert) UpdateDescription() *MarketplaceItemUpsert {
+	u.SetExcluded(marketplaceitem.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *MarketplaceItemUpsert) ClearDescription() *MarketplaceItemUpsert {
+	u.SetNull(marketplaceitem.FieldDescription)
+	return u
+}
+
+// SetLongDescription sets the "long_description" field.
+func (u *MarketplaceItemUpsert) SetLongDescription(v string) *MarketplaceItemUpsert {
+	u.Set(marketplaceitem.FieldLongDescription, v)
+	return u
+}
+
+// UpdateLongDescription sets the "long_description" field to the value that was provided on create.
+func (u *MarketplaceItemUpsert) UpdateLongDescription() *MarketplaceItemUpsert {
+	u.SetExcluded(marketplaceitem.FieldLongDescription)
+	return u
+}
+
+// ClearLongDescription clears the value of the "long_description" field.
+func (u *MarketplaceItemUpsert) ClearLongDescription() *MarketplaceItemUpsert {
+	u.SetNull(marketplaceitem.FieldLongDescription)
+	return u
+}
+
+// SetIconURL sets the "icon_url" field.
+func (u *MarketplaceItemUpsert) SetIconURL(v string) *MarketplaceItemUpsert {
+	u.Set(marketplaceitem.FieldIconURL, v)
+	return u
+}
+
+// UpdateIconURL sets the "icon_url" field to the value that was provided on create.
+func (u *MarketplaceItemUpsert) UpdateIconURL() *MarketplaceItemUpsert {
+	u.SetExcluded(marketplaceitem.FieldIconURL)
+	return u
+}
+
+// ClearIconURL clears the value of the "icon_url" field.
+func (u *MarketplaceItemUpsert) ClearIconURL() *MarketplaceItemUpsert {
+	u.SetNull(marketplaceitem.FieldIconURL)
+	return u
+}
+
+// SetScreenshots sets the "screenshots" field.
+func (u *MarketplaceItemUpsert) SetScreenshots(v []string) *MarketplaceItemUpsert {
+	u.Set(marketplaceitem.FieldScreenshots, v)
+	return u
+}
+
+// UpdateScreenshots sets the "screenshots" field to the value that was provided on create.
+func (u *MarketplaceItemUpsert) UpdateScreenshots() *MarketplaceItemUpsert {
+	u.SetExcluded(marketplaceitem.FieldScreenshots)
+	return u
+}
+
+// ClearScreenshots clears the value of the "screenshots" field.
+func (u *MarketplaceItemUpsert) ClearScreenshots() *MarketplaceItemUpsert {
+	u.SetNull(marketplaceitem.FieldScreenshots)
+	return u
+}
+
+// SetTags sets the "tags" field.
+func (u *MarketplaceItemUpsert) SetTags(v []string) *MarketplaceItemUpsert {
+	u.Set(marketplaceitem.FieldTags, v)
+	return u
+}
+
+// UpdateTags sets the "tags" field to the value that was provided on create.
+func (u *MarketplaceItemUpsert) UpdateTags() *MarketplaceItemUpsert {
+	u.SetExcluded(marketplaceitem.FieldTags)
+	return u
+}
+
+// ClearTags clears the value of the "tags" field.
+func (u *MarketplaceItemUpsert) ClearTags() *MarketplaceItemUpsert {
+	u.SetNull(marketplaceitem.FieldTags)
+	return u
+}
+
+// SetRating sets the "rating" field.
+func (u *MarketplaceItemUpsert) SetRating(v float64) *MarketplaceItemUpsert {
+	u.Set(marketplaceitem.FieldRating, v)
+	return u
+}
+
+// UpdateRating sets the "rating" field to the value that was provided on create.
+func (u *MarketplaceItemUpsert) UpdateRating() *MarketplaceItemUpsert {
+	u.SetExcluded(marketplaceitem.FieldRating)
+	return u
+}
+
+// AddRating adds v to the "rating" field.
+func (u *MarketplaceItemUpsert) AddRating(v float64) *MarketplaceItemUpsert {
+	u.Add(marketplaceitem.FieldRating, v)
+	return u
+}
+
+// SetInstallCount sets the "install_count" field.
+func (u *MarketplaceItemUpsert) SetInstallCount(v int) *MarketplaceItemUpsert {
+	u.Set(marketplaceitem.FieldInstallCount, v)
+	return u
+}
+
+// UpdateInstallCount sets the "install_count" field to the value that was provided on create.
+func (u *MarketplaceItemUpsert) UpdateInstallCount() *MarketplaceItemUpsert {
+	u.SetExcluded(marketplaceitem.FieldInstallCount)
+	return u
+}
+
+// AddInstallCount adds v to the "install_count" field.
+func (u *MarketplaceItemUpsert) AddInstallCount(v int) *MarketplaceItemUpsert {
+	u.Add(marketplaceitem.FieldInstallCount, v)
+	return u
+}
+
+// SetLatestVersion sets the "latest_version" field.
+func (u *MarketplaceItemUpsert) SetLatestVersion(v string) *MarketplaceItemUpsert {
+	u.Set(marketplaceitem.FieldLatestVersion, v)
+	return u
+}
+
+// UpdateLatestVersion sets the "latest_version" field to the value that was provided on create.
+func (u *MarketplaceItemUpsert) UpdateLatestVersion() *MarketplaceItemUpsert {
+	u.SetExcluded(marketplaceitem.FieldLatestVersion)
+	return u
+}
+
+// SetMinSystemVersion sets the "min_system_version" field.
+func (u *MarketplaceItemUpsert) SetMinSystemVersion(v string) *MarketplaceItemUpsert {
+	u.Set(marketplaceitem.FieldMinSystemVersion, v)
+	return u
+}
+
+// UpdateMinSystemVersion sets the "min_system_version" field to the value that was provided on create.
+func (u *MarketplaceItemUpsert) UpdateMinSystemVersion() *MarketplaceItemUpsert {
+	u.SetExcluded(marketplaceitem.FieldMinSystemVersion)
+	return u
+}
+
+// ClearMinSystemVersion clears the value of the "min_system_version" field.
+func (u *MarketplaceItemUpsert) ClearMinSystemVersion() *MarketplaceItemUpsert {
+	u.SetNull(marketplaceitem.FieldMinSystemVersion)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *MarketplaceItemUpsert) SetStatus(v marketplaceitem.Status) *MarketplaceItemUpsert {
+	u.Set(marketplaceitem.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *MarketplaceItemUpsert) UpdateStatus() *MarketplaceItemUpsert {
+	u.SetExcluded(marketplaceitem.FieldStatus)
+	return u
+}
+
+// SetIsOfficial sets the "is_official" field.
+func (u *MarketplaceItemUpsert) SetIsOfficial(v bool) *MarketplaceItemUpsert {
+	u.Set(marketplaceitem.FieldIsOfficial, v)
+	return u
+}
+
+// UpdateIsOfficial sets the "is_official" field to the value that was provided on create.
+func (u *MarketplaceItemUpsert) UpdateIsOfficial() *MarketplaceItemUpsert {
+	u.SetExcluded(marketplaceitem.FieldIsOfficial)
+	return u
+}
+
+// SetIsFree sets the "is_free" field.
+func (u *MarketplaceItemUpsert) SetIsFree(v bool) *MarketplaceItemUpsert {
+	u.Set(marketplaceitem.FieldIsFree, v)
+	return u
+}
+
+// UpdateIsFree sets the "is_free" field to the value that was provided on create.
+func (u *MarketplaceItemUpsert) UpdateIsFree() *MarketplaceItemUpsert {
+	u.SetExcluded(marketplaceitem.FieldIsFree)
+	return u
+}
+
+// SetPrice sets the "price" field.
+func (u *MarketplaceItemUpsert) SetPrice(v float64) *MarketplaceItemUpsert {
+	u.Set(marketplaceitem.FieldPrice, v)
+	return u
+}
+
+// UpdatePrice sets the "price" field to the value that was provided on create.
+func (u *MarketplaceItemUpsert) UpdatePrice() *MarketplaceItemUpsert {
+	u.SetExcluded(marketplaceitem.FieldPrice)
+	return u
+}
+
+// AddPrice adds v to the "price" field.
+func (u *MarketplaceItemUpsert) AddPrice(v float64) *MarketplaceItemUpsert {
+	u.Add(marketplaceitem.FieldPrice, v)
+	return u
+}
+
+// SetCategory sets the "category" field.
+func (u *MarketplaceItemUpsert) SetCategory(v string) *MarketplaceItemUpsert {
+	u.Set(marketplaceitem.FieldCategory, v)
+	return u
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *MarketplaceItemUpsert) UpdateCategory() *MarketplaceItemUpsert {
+	u.SetExcluded(marketplaceitem.FieldCategory)
+	return u
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *MarketplaceItemUpsert) ClearCategory() *MarketplaceItemUpsert {
+	u.SetNull(marketplaceitem.FieldCategory)
+	return u
+}
+
+// SetCapabilities sets the "capabilities" field.
+func (u *MarketplaceItemUpsert) SetCapabilities(v []string) *MarketplaceItemUpsert {
+	u.Set(marketplaceitem.FieldCapabilities, v)
+	return u
+}
+
+// UpdateCapabilities sets the "capabilities" field to the value that was provided on create.
+func (u *MarketplaceItemUpsert) UpdateCapabilities() *MarketplaceItemUpsert {
+	u.SetExcluded(marketplaceitem.FieldCapabilities)
+	return u
+}
+
+// ClearCapabilities clears the value of the "capabilities" field.
+func (u *MarketplaceItemUpsert) ClearCapabilities() *MarketplaceItemUpsert {
+	u.SetNull(marketplaceitem.FieldCapabilities)
+	return u
+}
+
+// SetRequiredPermissions sets the "required_permissions" field.
+func (u *MarketplaceItemUpsert) SetRequiredPermissions(v []string) *MarketplaceItemUpsert {
+	u.Set(marketplaceitem.FieldRequiredPermissions, v)
+	return u
+}
+
+// UpdateRequiredPermissions sets the "required_permissions" field to the value that was provided on create.
+func (u *MarketplaceItemUpsert) UpdateRequiredPermissions() *MarketplaceItemUpsert {
+	u.SetExcluded(marketplaceitem.FieldRequiredPermissions)
+	return u
+}
+
+// ClearRequiredPermissions clears the value of the "required_permissions" field.
+func (u *MarketplaceItemUpsert) ClearRequiredPermissions() *MarketplaceItemUpsert {
+	u.SetNull(marketplaceitem.FieldRequiredPermissions)
+	return u
+}
+
+// SetConfigSchema sets the "config_schema" field.
+func (u *MarketplaceItemUpsert) SetConfigSchema(v map[string]interface{}) *MarketplaceItemUpsert {
+	u.Set(marketplaceitem.FieldConfigSchema, v)
+	return u
+}
+
+// UpdateConfigSchema sets the "config_schema" field to the value that was provided on create.
+func (u *MarketplaceItemUpsert) UpdateConfigSchema() *MarketplaceItemUpsert {
+	u.SetExcluded(marketplaceitem.FieldConfigSchema)
+	return u
+}
+
+// ClearConfigSchema clears the value of the "config_schema" field.
+func (u *MarketplaceItemUpsert) ClearConfigSchema() *MarketplaceItemUpsert {
+	u.SetNull(marketplaceitem.FieldConfigSchema)
+	return u
+}
+
+// SetAuthorID sets the "author_id" field.
+func (u *MarketplaceItemUpsert) SetAuthorID(v string) *MarketplaceItemUpsert {
+	u.Set(marketplaceitem.FieldAuthorID, v)
+	return u
+}
+
+// UpdateAuthorID sets the "author_id" field to the value that was provided on create.
+func (u *MarketplaceItemUpsert) UpdateAuthorID() *MarketplaceItemUpsert {
+	u.SetExcluded(marketplaceitem.FieldAuthorID)
+	return u
+}
+
+// ClearAuthorID clears the value of the "author_id" field.
+func (u *MarketplaceItemUpsert) ClearAuthorID() *MarketplaceItemUpsert {
+	u.SetNull(marketplaceitem.FieldAuthorID)
+	return u
+}
+
+// SetAuthorName sets the "author_name" field.
+func (u *MarketplaceItemUpsert) SetAuthorName(v string) *MarketplaceItemUpsert {
+	u.Set(marketplaceitem.FieldAuthorName, v)
+	return u
+}
+
+// UpdateAuthorName sets the "author_name" field to the value that was provided on create.
+func (u *MarketplaceItemUpsert) UpdateAuthorName() *MarketplaceItemUpsert {
+	u.SetExcluded(marketplaceitem.FieldAuthorName)
+	return u
+}
+
+// ClearAuthorName clears the value of the "author_name" field.
+func (u *MarketplaceItemUpsert) ClearAuthorName() *MarketplaceItemUpsert {
+	u.SetNull(marketplaceitem.FieldAuthorName)
+	return u
+}
+
+// SetHomepage sets the "homepage" field.
+func (u *MarketplaceItemUpsert) SetHomepage(v string) *MarketplaceItemUpsert {
+	u.Set(marketplaceitem.FieldHomepage, v)
+	return u
+}
+
+// UpdateHomepage sets the "homepage" field to the value that was provided on create.
+func (u *MarketplaceItemUpsert) UpdateHomepage() *MarketplaceItemUpsert {
+	u.SetExcluded(marketplaceitem.FieldHomepage)
+	return u
+}
+
+// ClearHomepage clears the value of the "homepage" field.
+func (u *MarketplaceItemUpsert) ClearHomepage() *MarketplaceItemUpsert {
+	u.SetNull(marketplaceitem.FieldHomepage)
+	return u
+}
+
+// SetRepository sets the "repository" field.
+func (u *MarketplaceItemUpsert) SetRepository(v string) *MarketplaceItemUpsert {
+	u.Set(marketplaceitem.FieldRepository, v)
+	return u
+}
+
+// UpdateRepository sets the "repository" field to the value that was provided on create.
+func (u *MarketplaceItemUpsert) UpdateRepository() *MarketplaceItemUpsert {
+	u.SetExcluded(marketplaceitem.FieldRepository)
+	return u
+}
+
+// ClearRepository clears the value of the "repository" field.
+func (u *MarketplaceItemUpsert) ClearRepository() *MarketplaceItemUpsert {
+	u.SetNull(marketplaceitem.FieldRepository)
+	return u
+}
+
+// SetLicense sets the "license" field.
+func (u *MarketplaceItemUpsert) SetLicense(v string) *MarketplaceItemUpsert {
+	u.Set(marketplaceitem.FieldLicense, v)
+	return u
+}
+
+// UpdateLicense sets the "license" field to the value that was provided on create.
+func (u *MarketplaceItemUpsert) UpdateLicense() *MarketplaceItemUpsert {
+	u.SetExcluded(marketplaceitem.FieldLicense)
+	return u
+}
+
+// ClearLicense clears the value of the "license" field.
+func (u *MarketplaceItemUpsert) ClearLicense() *MarketplaceItemUpsert {
+	u.SetNull(marketplaceitem.FieldLicense)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *MarketplaceItemUpsert) SetCreatedAt(v time.Time) *MarketplaceItemUpsert {
+	u.Set(marketplaceitem.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *MarketplaceItemUpsert) UpdateCreatedAt() *MarketplaceItemUpsert {
+	u.SetExcluded(marketplaceitem.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *MarketplaceItemUpsert) SetUpdatedAt(v time.Time) *MarketplaceItemUpsert {
+	u.Set(marketplaceitem.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *MarketplaceItemUpsert) UpdateUpdatedAt() *MarketplaceItemUpsert {
+	u.SetExcluded(marketplaceitem.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.MarketplaceItem.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *MarketplaceItemUpsertOne) UpdateNewValues() *MarketplaceItemUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.MarketplaceItem.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *MarketplaceItemUpsertOne) Ignore() *MarketplaceItemUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *MarketplaceItemUpsertOne) DoNothing() *MarketplaceItemUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the MarketplaceItemCreate.OnConflict
+// documentation for more info.
+func (u *MarketplaceItemUpsertOne) Update(set func(*MarketplaceItemUpsert)) *MarketplaceItemUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&MarketplaceItemUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *MarketplaceItemUpsertOne) SetName(v string) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertOne) UpdateName() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetType sets the "type" field.
+func (u *MarketplaceItemUpsertOne) SetType(v marketplaceitem.Type) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetType(v)
+	})
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertOne) UpdateType() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateType()
+	})
+}
+
+// SetTitle sets the "title" field.
+func (u *MarketplaceItemUpsertOne) SetTitle(v string) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetTitle(v)
+	})
+}
+
+// UpdateTitle sets the "title" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertOne) UpdateTitle() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateTitle()
+	})
+}
+
+// SetProvider sets the "provider" field.
+func (u *MarketplaceItemUpsertOne) SetProvider(v string) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetProvider(v)
+	})
+}
+
+// UpdateProvider sets the "provider" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertOne) UpdateProvider() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateProvider()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *MarketplaceItemUpsertOne) SetDescription(v string) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertOne) UpdateDescription() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *MarketplaceItemUpsertOne) ClearDescription() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetLongDescription sets the "long_description" field.
+func (u *MarketplaceItemUpsertOne) SetLongDescription(v string) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetLongDescription(v)
+	})
+}
+
+// UpdateLongDescription sets the "long_description" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertOne) UpdateLongDescription() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateLongDescription()
+	})
+}
+
+// ClearLongDescription clears the value of the "long_description" field.
+func (u *MarketplaceItemUpsertOne) ClearLongDescription() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.ClearLongDescription()
+	})
+}
+
+// SetIconURL sets the "icon_url" field.
+func (u *MarketplaceItemUpsertOne) SetIconURL(v string) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetIconURL(v)
+	})
+}
+
+// UpdateIconURL sets the "icon_url" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertOne) UpdateIconURL() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateIconURL()
+	})
+}
+
+// ClearIconURL clears the value of the "icon_url" field.
+func (u *MarketplaceItemUpsertOne) ClearIconURL() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.ClearIconURL()
+	})
+}
+
+// SetScreenshots sets the "screenshots" field.
+func (u *MarketplaceItemUpsertOne) SetScreenshots(v []string) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetScreenshots(v)
+	})
+}
+
+// UpdateScreenshots sets the "screenshots" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertOne) UpdateScreenshots() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateScreenshots()
+	})
+}
+
+// ClearScreenshots clears the value of the "screenshots" field.
+func (u *MarketplaceItemUpsertOne) ClearScreenshots() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.ClearScreenshots()
+	})
+}
+
+// SetTags sets the "tags" field.
+func (u *MarketplaceItemUpsertOne) SetTags(v []string) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetTags(v)
+	})
+}
+
+// UpdateTags sets the "tags" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertOne) UpdateTags() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateTags()
+	})
+}
+
+// ClearTags clears the value of the "tags" field.
+func (u *MarketplaceItemUpsertOne) ClearTags() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.ClearTags()
+	})
+}
+
+// SetRating sets the "rating" field.
+func (u *MarketplaceItemUpsertOne) SetRating(v float64) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetRating(v)
+	})
+}
+
+// AddRating adds v to the "rating" field.
+func (u *MarketplaceItemUpsertOne) AddRating(v float64) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.AddRating(v)
+	})
+}
+
+// UpdateRating sets the "rating" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertOne) UpdateRating() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateRating()
+	})
+}
+
+// SetInstallCount sets the "install_count" field.
+func (u *MarketplaceItemUpsertOne) SetInstallCount(v int) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetInstallCount(v)
+	})
+}
+
+// AddInstallCount adds v to the "install_count" field.
+func (u *MarketplaceItemUpsertOne) AddInstallCount(v int) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.AddInstallCount(v)
+	})
+}
+
+// UpdateInstallCount sets the "install_count" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertOne) UpdateInstallCount() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateInstallCount()
+	})
+}
+
+// SetLatestVersion sets the "latest_version" field.
+func (u *MarketplaceItemUpsertOne) SetLatestVersion(v string) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetLatestVersion(v)
+	})
+}
+
+// UpdateLatestVersion sets the "latest_version" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertOne) UpdateLatestVersion() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateLatestVersion()
+	})
+}
+
+// SetMinSystemVersion sets the "min_system_version" field.
+func (u *MarketplaceItemUpsertOne) SetMinSystemVersion(v string) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetMinSystemVersion(v)
+	})
+}
+
+// UpdateMinSystemVersion sets the "min_system_version" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertOne) UpdateMinSystemVersion() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateMinSystemVersion()
+	})
+}
+
+// ClearMinSystemVersion clears the value of the "min_system_version" field.
+func (u *MarketplaceItemUpsertOne) ClearMinSystemVersion() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.ClearMinSystemVersion()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *MarketplaceItemUpsertOne) SetStatus(v marketplaceitem.Status) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertOne) UpdateStatus() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetIsOfficial sets the "is_official" field.
+func (u *MarketplaceItemUpsertOne) SetIsOfficial(v bool) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetIsOfficial(v)
+	})
+}
+
+// UpdateIsOfficial sets the "is_official" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertOne) UpdateIsOfficial() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateIsOfficial()
+	})
+}
+
+// SetIsFree sets the "is_free" field.
+func (u *MarketplaceItemUpsertOne) SetIsFree(v bool) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetIsFree(v)
+	})
+}
+
+// UpdateIsFree sets the "is_free" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertOne) UpdateIsFree() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateIsFree()
+	})
+}
+
+// SetPrice sets the "price" field.
+func (u *MarketplaceItemUpsertOne) SetPrice(v float64) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetPrice(v)
+	})
+}
+
+// AddPrice adds v to the "price" field.
+func (u *MarketplaceItemUpsertOne) AddPrice(v float64) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.AddPrice(v)
+	})
+}
+
+// UpdatePrice sets the "price" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertOne) UpdatePrice() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdatePrice()
+	})
+}
+
+// SetCategory sets the "category" field.
+func (u *MarketplaceItemUpsertOne) SetCategory(v string) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetCategory(v)
+	})
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertOne) UpdateCategory() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateCategory()
+	})
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *MarketplaceItemUpsertOne) ClearCategory() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.ClearCategory()
+	})
+}
+
+// SetCapabilities sets the "capabilities" field.
+func (u *MarketplaceItemUpsertOne) SetCapabilities(v []string) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetCapabilities(v)
+	})
+}
+
+// UpdateCapabilities sets the "capabilities" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertOne) UpdateCapabilities() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateCapabilities()
+	})
+}
+
+// ClearCapabilities clears the value of the "capabilities" field.
+func (u *MarketplaceItemUpsertOne) ClearCapabilities() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.ClearCapabilities()
+	})
+}
+
+// SetRequiredPermissions sets the "required_permissions" field.
+func (u *MarketplaceItemUpsertOne) SetRequiredPermissions(v []string) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetRequiredPermissions(v)
+	})
+}
+
+// UpdateRequiredPermissions sets the "required_permissions" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertOne) UpdateRequiredPermissions() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateRequiredPermissions()
+	})
+}
+
+// ClearRequiredPermissions clears the value of the "required_permissions" field.
+func (u *MarketplaceItemUpsertOne) ClearRequiredPermissions() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.ClearRequiredPermissions()
+	})
+}
+
+// SetConfigSchema sets the "config_schema" field.
+func (u *MarketplaceItemUpsertOne) SetConfigSchema(v map[string]interface{}) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetConfigSchema(v)
+	})
+}
+
+// UpdateConfigSchema sets the "config_schema" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertOne) UpdateConfigSchema() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateConfigSchema()
+	})
+}
+
+// ClearConfigSchema clears the value of the "config_schema" field.
+func (u *MarketplaceItemUpsertOne) ClearConfigSchema() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.ClearConfigSchema()
+	})
+}
+
+// SetAuthorID sets the "author_id" field.
+func (u *MarketplaceItemUpsertOne) SetAuthorID(v string) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetAuthorID(v)
+	})
+}
+
+// UpdateAuthorID sets the "author_id" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertOne) UpdateAuthorID() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateAuthorID()
+	})
+}
+
+// ClearAuthorID clears the value of the "author_id" field.
+func (u *MarketplaceItemUpsertOne) ClearAuthorID() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.ClearAuthorID()
+	})
+}
+
+// SetAuthorName sets the "author_name" field.
+func (u *MarketplaceItemUpsertOne) SetAuthorName(v string) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetAuthorName(v)
+	})
+}
+
+// UpdateAuthorName sets the "author_name" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertOne) UpdateAuthorName() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateAuthorName()
+	})
+}
+
+// ClearAuthorName clears the value of the "author_name" field.
+func (u *MarketplaceItemUpsertOne) ClearAuthorName() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.ClearAuthorName()
+	})
+}
+
+// SetHomepage sets the "homepage" field.
+func (u *MarketplaceItemUpsertOne) SetHomepage(v string) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetHomepage(v)
+	})
+}
+
+// UpdateHomepage sets the "homepage" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertOne) UpdateHomepage() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateHomepage()
+	})
+}
+
+// ClearHomepage clears the value of the "homepage" field.
+func (u *MarketplaceItemUpsertOne) ClearHomepage() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.ClearHomepage()
+	})
+}
+
+// SetRepository sets the "repository" field.
+func (u *MarketplaceItemUpsertOne) SetRepository(v string) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetRepository(v)
+	})
+}
+
+// UpdateRepository sets the "repository" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertOne) UpdateRepository() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateRepository()
+	})
+}
+
+// ClearRepository clears the value of the "repository" field.
+func (u *MarketplaceItemUpsertOne) ClearRepository() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.ClearRepository()
+	})
+}
+
+// SetLicense sets the "license" field.
+func (u *MarketplaceItemUpsertOne) SetLicense(v string) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetLicense(v)
+	})
+}
+
+// UpdateLicense sets the "license" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertOne) UpdateLicense() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateLicense()
+	})
+}
+
+// ClearLicense clears the value of the "license" field.
+func (u *MarketplaceItemUpsertOne) ClearLicense() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.ClearLicense()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *MarketplaceItemUpsertOne) SetCreatedAt(v time.Time) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertOne) UpdateCreatedAt() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *MarketplaceItemUpsertOne) SetUpdatedAt(v time.Time) *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertOne) UpdateUpdatedAt() *MarketplaceItemUpsertOne {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *MarketplaceItemUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for MarketplaceItemCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *MarketplaceItemUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *MarketplaceItemUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *MarketplaceItemUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // MarketplaceItemCreateBulk is the builder for creating many MarketplaceItem entities in bulk.
 type MarketplaceItemCreateBulk struct {
 	config
 	err      error
 	builders []*MarketplaceItemCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the MarketplaceItem entities in the database.
@@ -691,6 +1779,7 @@ func (_c *MarketplaceItemCreateBulk) Save(ctx context.Context) ([]*MarketplaceIt
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -741,6 +1830,628 @@ func (_c *MarketplaceItemCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *MarketplaceItemCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.MarketplaceItem.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.MarketplaceItemUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *MarketplaceItemCreateBulk) OnConflict(opts ...sql.ConflictOption) *MarketplaceItemUpsertBulk {
+	_c.conflict = opts
+	return &MarketplaceItemUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.MarketplaceItem.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *MarketplaceItemCreateBulk) OnConflictColumns(columns ...string) *MarketplaceItemUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &MarketplaceItemUpsertBulk{
+		create: _c,
+	}
+}
+
+// MarketplaceItemUpsertBulk is the builder for "upsert"-ing
+// a bulk of MarketplaceItem nodes.
+type MarketplaceItemUpsertBulk struct {
+	create *MarketplaceItemCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.MarketplaceItem.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *MarketplaceItemUpsertBulk) UpdateNewValues() *MarketplaceItemUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.MarketplaceItem.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *MarketplaceItemUpsertBulk) Ignore() *MarketplaceItemUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *MarketplaceItemUpsertBulk) DoNothing() *MarketplaceItemUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the MarketplaceItemCreateBulk.OnConflict
+// documentation for more info.
+func (u *MarketplaceItemUpsertBulk) Update(set func(*MarketplaceItemUpsert)) *MarketplaceItemUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&MarketplaceItemUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *MarketplaceItemUpsertBulk) SetName(v string) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertBulk) UpdateName() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetType sets the "type" field.
+func (u *MarketplaceItemUpsertBulk) SetType(v marketplaceitem.Type) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetType(v)
+	})
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertBulk) UpdateType() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateType()
+	})
+}
+
+// SetTitle sets the "title" field.
+func (u *MarketplaceItemUpsertBulk) SetTitle(v string) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetTitle(v)
+	})
+}
+
+// UpdateTitle sets the "title" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertBulk) UpdateTitle() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateTitle()
+	})
+}
+
+// SetProvider sets the "provider" field.
+func (u *MarketplaceItemUpsertBulk) SetProvider(v string) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetProvider(v)
+	})
+}
+
+// UpdateProvider sets the "provider" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertBulk) UpdateProvider() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateProvider()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *MarketplaceItemUpsertBulk) SetDescription(v string) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertBulk) UpdateDescription() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *MarketplaceItemUpsertBulk) ClearDescription() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetLongDescription sets the "long_description" field.
+func (u *MarketplaceItemUpsertBulk) SetLongDescription(v string) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetLongDescription(v)
+	})
+}
+
+// UpdateLongDescription sets the "long_description" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertBulk) UpdateLongDescription() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateLongDescription()
+	})
+}
+
+// ClearLongDescription clears the value of the "long_description" field.
+func (u *MarketplaceItemUpsertBulk) ClearLongDescription() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.ClearLongDescription()
+	})
+}
+
+// SetIconURL sets the "icon_url" field.
+func (u *MarketplaceItemUpsertBulk) SetIconURL(v string) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetIconURL(v)
+	})
+}
+
+// UpdateIconURL sets the "icon_url" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertBulk) UpdateIconURL() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateIconURL()
+	})
+}
+
+// ClearIconURL clears the value of the "icon_url" field.
+func (u *MarketplaceItemUpsertBulk) ClearIconURL() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.ClearIconURL()
+	})
+}
+
+// SetScreenshots sets the "screenshots" field.
+func (u *MarketplaceItemUpsertBulk) SetScreenshots(v []string) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetScreenshots(v)
+	})
+}
+
+// UpdateScreenshots sets the "screenshots" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertBulk) UpdateScreenshots() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateScreenshots()
+	})
+}
+
+// ClearScreenshots clears the value of the "screenshots" field.
+func (u *MarketplaceItemUpsertBulk) ClearScreenshots() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.ClearScreenshots()
+	})
+}
+
+// SetTags sets the "tags" field.
+func (u *MarketplaceItemUpsertBulk) SetTags(v []string) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetTags(v)
+	})
+}
+
+// UpdateTags sets the "tags" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertBulk) UpdateTags() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateTags()
+	})
+}
+
+// ClearTags clears the value of the "tags" field.
+func (u *MarketplaceItemUpsertBulk) ClearTags() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.ClearTags()
+	})
+}
+
+// SetRating sets the "rating" field.
+func (u *MarketplaceItemUpsertBulk) SetRating(v float64) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetRating(v)
+	})
+}
+
+// AddRating adds v to the "rating" field.
+func (u *MarketplaceItemUpsertBulk) AddRating(v float64) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.AddRating(v)
+	})
+}
+
+// UpdateRating sets the "rating" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertBulk) UpdateRating() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateRating()
+	})
+}
+
+// SetInstallCount sets the "install_count" field.
+func (u *MarketplaceItemUpsertBulk) SetInstallCount(v int) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetInstallCount(v)
+	})
+}
+
+// AddInstallCount adds v to the "install_count" field.
+func (u *MarketplaceItemUpsertBulk) AddInstallCount(v int) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.AddInstallCount(v)
+	})
+}
+
+// UpdateInstallCount sets the "install_count" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertBulk) UpdateInstallCount() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateInstallCount()
+	})
+}
+
+// SetLatestVersion sets the "latest_version" field.
+func (u *MarketplaceItemUpsertBulk) SetLatestVersion(v string) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetLatestVersion(v)
+	})
+}
+
+// UpdateLatestVersion sets the "latest_version" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertBulk) UpdateLatestVersion() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateLatestVersion()
+	})
+}
+
+// SetMinSystemVersion sets the "min_system_version" field.
+func (u *MarketplaceItemUpsertBulk) SetMinSystemVersion(v string) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetMinSystemVersion(v)
+	})
+}
+
+// UpdateMinSystemVersion sets the "min_system_version" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertBulk) UpdateMinSystemVersion() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateMinSystemVersion()
+	})
+}
+
+// ClearMinSystemVersion clears the value of the "min_system_version" field.
+func (u *MarketplaceItemUpsertBulk) ClearMinSystemVersion() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.ClearMinSystemVersion()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *MarketplaceItemUpsertBulk) SetStatus(v marketplaceitem.Status) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertBulk) UpdateStatus() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetIsOfficial sets the "is_official" field.
+func (u *MarketplaceItemUpsertBulk) SetIsOfficial(v bool) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetIsOfficial(v)
+	})
+}
+
+// UpdateIsOfficial sets the "is_official" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertBulk) UpdateIsOfficial() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateIsOfficial()
+	})
+}
+
+// SetIsFree sets the "is_free" field.
+func (u *MarketplaceItemUpsertBulk) SetIsFree(v bool) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetIsFree(v)
+	})
+}
+
+// UpdateIsFree sets the "is_free" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertBulk) UpdateIsFree() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateIsFree()
+	})
+}
+
+// SetPrice sets the "price" field.
+func (u *MarketplaceItemUpsertBulk) SetPrice(v float64) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetPrice(v)
+	})
+}
+
+// AddPrice adds v to the "price" field.
+func (u *MarketplaceItemUpsertBulk) AddPrice(v float64) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.AddPrice(v)
+	})
+}
+
+// UpdatePrice sets the "price" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertBulk) UpdatePrice() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdatePrice()
+	})
+}
+
+// SetCategory sets the "category" field.
+func (u *MarketplaceItemUpsertBulk) SetCategory(v string) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetCategory(v)
+	})
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertBulk) UpdateCategory() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateCategory()
+	})
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *MarketplaceItemUpsertBulk) ClearCategory() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.ClearCategory()
+	})
+}
+
+// SetCapabilities sets the "capabilities" field.
+func (u *MarketplaceItemUpsertBulk) SetCapabilities(v []string) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetCapabilities(v)
+	})
+}
+
+// UpdateCapabilities sets the "capabilities" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertBulk) UpdateCapabilities() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateCapabilities()
+	})
+}
+
+// ClearCapabilities clears the value of the "capabilities" field.
+func (u *MarketplaceItemUpsertBulk) ClearCapabilities() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.ClearCapabilities()
+	})
+}
+
+// SetRequiredPermissions sets the "required_permissions" field.
+func (u *MarketplaceItemUpsertBulk) SetRequiredPermissions(v []string) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetRequiredPermissions(v)
+	})
+}
+
+// UpdateRequiredPermissions sets the "required_permissions" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertBulk) UpdateRequiredPermissions() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateRequiredPermissions()
+	})
+}
+
+// ClearRequiredPermissions clears the value of the "required_permissions" field.
+func (u *MarketplaceItemUpsertBulk) ClearRequiredPermissions() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.ClearRequiredPermissions()
+	})
+}
+
+// SetConfigSchema sets the "config_schema" field.
+func (u *MarketplaceItemUpsertBulk) SetConfigSchema(v map[string]interface{}) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetConfigSchema(v)
+	})
+}
+
+// UpdateConfigSchema sets the "config_schema" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertBulk) UpdateConfigSchema() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateConfigSchema()
+	})
+}
+
+// ClearConfigSchema clears the value of the "config_schema" field.
+func (u *MarketplaceItemUpsertBulk) ClearConfigSchema() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.ClearConfigSchema()
+	})
+}
+
+// SetAuthorID sets the "author_id" field.
+func (u *MarketplaceItemUpsertBulk) SetAuthorID(v string) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetAuthorID(v)
+	})
+}
+
+// UpdateAuthorID sets the "author_id" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertBulk) UpdateAuthorID() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateAuthorID()
+	})
+}
+
+// ClearAuthorID clears the value of the "author_id" field.
+func (u *MarketplaceItemUpsertBulk) ClearAuthorID() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.ClearAuthorID()
+	})
+}
+
+// SetAuthorName sets the "author_name" field.
+func (u *MarketplaceItemUpsertBulk) SetAuthorName(v string) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetAuthorName(v)
+	})
+}
+
+// UpdateAuthorName sets the "author_name" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertBulk) UpdateAuthorName() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateAuthorName()
+	})
+}
+
+// ClearAuthorName clears the value of the "author_name" field.
+func (u *MarketplaceItemUpsertBulk) ClearAuthorName() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.ClearAuthorName()
+	})
+}
+
+// SetHomepage sets the "homepage" field.
+func (u *MarketplaceItemUpsertBulk) SetHomepage(v string) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetHomepage(v)
+	})
+}
+
+// UpdateHomepage sets the "homepage" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertBulk) UpdateHomepage() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateHomepage()
+	})
+}
+
+// ClearHomepage clears the value of the "homepage" field.
+func (u *MarketplaceItemUpsertBulk) ClearHomepage() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.ClearHomepage()
+	})
+}
+
+// SetRepository sets the "repository" field.
+func (u *MarketplaceItemUpsertBulk) SetRepository(v string) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetRepository(v)
+	})
+}
+
+// UpdateRepository sets the "repository" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertBulk) UpdateRepository() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateRepository()
+	})
+}
+
+// ClearRepository clears the value of the "repository" field.
+func (u *MarketplaceItemUpsertBulk) ClearRepository() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.ClearRepository()
+	})
+}
+
+// SetLicense sets the "license" field.
+func (u *MarketplaceItemUpsertBulk) SetLicense(v string) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetLicense(v)
+	})
+}
+
+// UpdateLicense sets the "license" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertBulk) UpdateLicense() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateLicense()
+	})
+}
+
+// ClearLicense clears the value of the "license" field.
+func (u *MarketplaceItemUpsertBulk) ClearLicense() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.ClearLicense()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *MarketplaceItemUpsertBulk) SetCreatedAt(v time.Time) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertBulk) UpdateCreatedAt() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *MarketplaceItemUpsertBulk) SetUpdatedAt(v time.Time) *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *MarketplaceItemUpsertBulk) UpdateUpdatedAt() *MarketplaceItemUpsertBulk {
+	return u.Update(func(s *MarketplaceItemUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *MarketplaceItemUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the MarketplaceItemCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for MarketplaceItemCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *MarketplaceItemUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

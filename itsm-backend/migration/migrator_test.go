@@ -167,3 +167,18 @@ func TestKafExecutionIntegrityTablesHaveRegisteredTenantRLS(t *testing.T) {
 	}
 	assert.Equal(t, checksumSQL(sql), checksumSQL(GetMigrationSQL("019_kaf_execution_integrity_rls")))
 }
+
+func TestUnifiedIntakeMigrationEnablesRLS(t *testing.T) {
+	require.NotEmpty(t, RegisteredMigrations)
+	assert.Equal(t, "020_unified_intake_rls", RegisteredMigrations[len(RegisteredMigrations)-1].Version)
+
+	sql := GetMigrationSQL("020_unified_intake_rls")
+	require.NotEmpty(t, sql)
+	for _, table := range []string{"intake_requests", "intake_resolution_snapshots", "external_identities"} {
+		assert.Contains(t, sql, "ALTER TABLE "+table+" ENABLE ROW LEVEL SECURITY")
+		assert.Contains(t, sql, "ALTER TABLE "+table+" FORCE ROW LEVEL SECURITY")
+		assert.Contains(t, sql, "CREATE POLICY "+table+"_tenant_isolation ON "+table)
+		assert.Contains(t, sql, "USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint)")
+		assert.Contains(t, sql, "WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint)")
+	}
+}

@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent/sladefinition"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -20,6 +21,7 @@ type SLAAlertRuleCreate struct {
 	config
 	mutation *SLAAlertRuleMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetName sets the "name" field.
@@ -302,6 +304,7 @@ func (_c *SLAAlertRuleCreate) createSpec() (*SLAAlertRule, *sqlgraph.CreateSpec)
 		_node = &SLAAlertRule{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(slaalertrule.Table, sqlgraph.NewFieldSpec(slaalertrule.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(slaalertrule.FieldName, field.TypeString, value)
 		_node.Name = value
@@ -378,11 +381,459 @@ func (_c *SLAAlertRuleCreate) createSpec() (*SLAAlertRule, *sqlgraph.CreateSpec)
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.SLAAlertRule.Create().
+//		SetName(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.SLAAlertRuleUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *SLAAlertRuleCreate) OnConflict(opts ...sql.ConflictOption) *SLAAlertRuleUpsertOne {
+	_c.conflict = opts
+	return &SLAAlertRuleUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.SLAAlertRule.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *SLAAlertRuleCreate) OnConflictColumns(columns ...string) *SLAAlertRuleUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &SLAAlertRuleUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// SLAAlertRuleUpsertOne is the builder for "upsert"-ing
+	//  one SLAAlertRule node.
+	SLAAlertRuleUpsertOne struct {
+		create *SLAAlertRuleCreate
+	}
+
+	// SLAAlertRuleUpsert is the "OnConflict" setter.
+	SLAAlertRuleUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetName sets the "name" field.
+func (u *SLAAlertRuleUpsert) SetName(v string) *SLAAlertRuleUpsert {
+	u.Set(slaalertrule.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsert) UpdateName() *SLAAlertRuleUpsert {
+	u.SetExcluded(slaalertrule.FieldName)
+	return u
+}
+
+// SetSLADefinitionID sets the "sla_definition_id" field.
+func (u *SLAAlertRuleUpsert) SetSLADefinitionID(v int) *SLAAlertRuleUpsert {
+	u.Set(slaalertrule.FieldSLADefinitionID, v)
+	return u
+}
+
+// UpdateSLADefinitionID sets the "sla_definition_id" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsert) UpdateSLADefinitionID() *SLAAlertRuleUpsert {
+	u.SetExcluded(slaalertrule.FieldSLADefinitionID)
+	return u
+}
+
+// SetAlertLevel sets the "alert_level" field.
+func (u *SLAAlertRuleUpsert) SetAlertLevel(v string) *SLAAlertRuleUpsert {
+	u.Set(slaalertrule.FieldAlertLevel, v)
+	return u
+}
+
+// UpdateAlertLevel sets the "alert_level" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsert) UpdateAlertLevel() *SLAAlertRuleUpsert {
+	u.SetExcluded(slaalertrule.FieldAlertLevel)
+	return u
+}
+
+// SetThresholdPercentage sets the "threshold_percentage" field.
+func (u *SLAAlertRuleUpsert) SetThresholdPercentage(v int) *SLAAlertRuleUpsert {
+	u.Set(slaalertrule.FieldThresholdPercentage, v)
+	return u
+}
+
+// UpdateThresholdPercentage sets the "threshold_percentage" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsert) UpdateThresholdPercentage() *SLAAlertRuleUpsert {
+	u.SetExcluded(slaalertrule.FieldThresholdPercentage)
+	return u
+}
+
+// AddThresholdPercentage adds v to the "threshold_percentage" field.
+func (u *SLAAlertRuleUpsert) AddThresholdPercentage(v int) *SLAAlertRuleUpsert {
+	u.Add(slaalertrule.FieldThresholdPercentage, v)
+	return u
+}
+
+// SetNotificationChannels sets the "notification_channels" field.
+func (u *SLAAlertRuleUpsert) SetNotificationChannels(v []string) *SLAAlertRuleUpsert {
+	u.Set(slaalertrule.FieldNotificationChannels, v)
+	return u
+}
+
+// UpdateNotificationChannels sets the "notification_channels" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsert) UpdateNotificationChannels() *SLAAlertRuleUpsert {
+	u.SetExcluded(slaalertrule.FieldNotificationChannels)
+	return u
+}
+
+// SetEscalationEnabled sets the "escalation_enabled" field.
+func (u *SLAAlertRuleUpsert) SetEscalationEnabled(v bool) *SLAAlertRuleUpsert {
+	u.Set(slaalertrule.FieldEscalationEnabled, v)
+	return u
+}
+
+// UpdateEscalationEnabled sets the "escalation_enabled" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsert) UpdateEscalationEnabled() *SLAAlertRuleUpsert {
+	u.SetExcluded(slaalertrule.FieldEscalationEnabled)
+	return u
+}
+
+// SetEscalationLevels sets the "escalation_levels" field.
+func (u *SLAAlertRuleUpsert) SetEscalationLevels(v []map[string]interface{}) *SLAAlertRuleUpsert {
+	u.Set(slaalertrule.FieldEscalationLevels, v)
+	return u
+}
+
+// UpdateEscalationLevels sets the "escalation_levels" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsert) UpdateEscalationLevels() *SLAAlertRuleUpsert {
+	u.SetExcluded(slaalertrule.FieldEscalationLevels)
+	return u
+}
+
+// ClearEscalationLevels clears the value of the "escalation_levels" field.
+func (u *SLAAlertRuleUpsert) ClearEscalationLevels() *SLAAlertRuleUpsert {
+	u.SetNull(slaalertrule.FieldEscalationLevels)
+	return u
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *SLAAlertRuleUpsert) SetIsActive(v bool) *SLAAlertRuleUpsert {
+	u.Set(slaalertrule.FieldIsActive, v)
+	return u
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsert) UpdateIsActive() *SLAAlertRuleUpsert {
+	u.SetExcluded(slaalertrule.FieldIsActive)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *SLAAlertRuleUpsert) SetTenantID(v int) *SLAAlertRuleUpsert {
+	u.Set(slaalertrule.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsert) UpdateTenantID() *SLAAlertRuleUpsert {
+	u.SetExcluded(slaalertrule.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *SLAAlertRuleUpsert) AddTenantID(v int) *SLAAlertRuleUpsert {
+	u.Add(slaalertrule.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *SLAAlertRuleUpsert) SetCreatedAt(v time.Time) *SLAAlertRuleUpsert {
+	u.Set(slaalertrule.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsert) UpdateCreatedAt() *SLAAlertRuleUpsert {
+	u.SetExcluded(slaalertrule.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *SLAAlertRuleUpsert) SetUpdatedAt(v time.Time) *SLAAlertRuleUpsert {
+	u.Set(slaalertrule.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsert) UpdateUpdatedAt() *SLAAlertRuleUpsert {
+	u.SetExcluded(slaalertrule.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.SLAAlertRule.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *SLAAlertRuleUpsertOne) UpdateNewValues() *SLAAlertRuleUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.SLAAlertRule.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *SLAAlertRuleUpsertOne) Ignore() *SLAAlertRuleUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *SLAAlertRuleUpsertOne) DoNothing() *SLAAlertRuleUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the SLAAlertRuleCreate.OnConflict
+// documentation for more info.
+func (u *SLAAlertRuleUpsertOne) Update(set func(*SLAAlertRuleUpsert)) *SLAAlertRuleUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&SLAAlertRuleUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *SLAAlertRuleUpsertOne) SetName(v string) *SLAAlertRuleUpsertOne {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsertOne) UpdateName() *SLAAlertRuleUpsertOne {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetSLADefinitionID sets the "sla_definition_id" field.
+func (u *SLAAlertRuleUpsertOne) SetSLADefinitionID(v int) *SLAAlertRuleUpsertOne {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.SetSLADefinitionID(v)
+	})
+}
+
+// UpdateSLADefinitionID sets the "sla_definition_id" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsertOne) UpdateSLADefinitionID() *SLAAlertRuleUpsertOne {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.UpdateSLADefinitionID()
+	})
+}
+
+// SetAlertLevel sets the "alert_level" field.
+func (u *SLAAlertRuleUpsertOne) SetAlertLevel(v string) *SLAAlertRuleUpsertOne {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.SetAlertLevel(v)
+	})
+}
+
+// UpdateAlertLevel sets the "alert_level" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsertOne) UpdateAlertLevel() *SLAAlertRuleUpsertOne {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.UpdateAlertLevel()
+	})
+}
+
+// SetThresholdPercentage sets the "threshold_percentage" field.
+func (u *SLAAlertRuleUpsertOne) SetThresholdPercentage(v int) *SLAAlertRuleUpsertOne {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.SetThresholdPercentage(v)
+	})
+}
+
+// AddThresholdPercentage adds v to the "threshold_percentage" field.
+func (u *SLAAlertRuleUpsertOne) AddThresholdPercentage(v int) *SLAAlertRuleUpsertOne {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.AddThresholdPercentage(v)
+	})
+}
+
+// UpdateThresholdPercentage sets the "threshold_percentage" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsertOne) UpdateThresholdPercentage() *SLAAlertRuleUpsertOne {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.UpdateThresholdPercentage()
+	})
+}
+
+// SetNotificationChannels sets the "notification_channels" field.
+func (u *SLAAlertRuleUpsertOne) SetNotificationChannels(v []string) *SLAAlertRuleUpsertOne {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.SetNotificationChannels(v)
+	})
+}
+
+// UpdateNotificationChannels sets the "notification_channels" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsertOne) UpdateNotificationChannels() *SLAAlertRuleUpsertOne {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.UpdateNotificationChannels()
+	})
+}
+
+// SetEscalationEnabled sets the "escalation_enabled" field.
+func (u *SLAAlertRuleUpsertOne) SetEscalationEnabled(v bool) *SLAAlertRuleUpsertOne {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.SetEscalationEnabled(v)
+	})
+}
+
+// UpdateEscalationEnabled sets the "escalation_enabled" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsertOne) UpdateEscalationEnabled() *SLAAlertRuleUpsertOne {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.UpdateEscalationEnabled()
+	})
+}
+
+// SetEscalationLevels sets the "escalation_levels" field.
+func (u *SLAAlertRuleUpsertOne) SetEscalationLevels(v []map[string]interface{}) *SLAAlertRuleUpsertOne {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.SetEscalationLevels(v)
+	})
+}
+
+// UpdateEscalationLevels sets the "escalation_levels" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsertOne) UpdateEscalationLevels() *SLAAlertRuleUpsertOne {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.UpdateEscalationLevels()
+	})
+}
+
+// ClearEscalationLevels clears the value of the "escalation_levels" field.
+func (u *SLAAlertRuleUpsertOne) ClearEscalationLevels() *SLAAlertRuleUpsertOne {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.ClearEscalationLevels()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *SLAAlertRuleUpsertOne) SetIsActive(v bool) *SLAAlertRuleUpsertOne {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsertOne) UpdateIsActive() *SLAAlertRuleUpsertOne {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *SLAAlertRuleUpsertOne) SetTenantID(v int) *SLAAlertRuleUpsertOne {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *SLAAlertRuleUpsertOne) AddTenantID(v int) *SLAAlertRuleUpsertOne {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsertOne) UpdateTenantID() *SLAAlertRuleUpsertOne {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *SLAAlertRuleUpsertOne) SetCreatedAt(v time.Time) *SLAAlertRuleUpsertOne {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsertOne) UpdateCreatedAt() *SLAAlertRuleUpsertOne {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *SLAAlertRuleUpsertOne) SetUpdatedAt(v time.Time) *SLAAlertRuleUpsertOne {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsertOne) UpdateUpdatedAt() *SLAAlertRuleUpsertOne {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *SLAAlertRuleUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for SLAAlertRuleCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *SLAAlertRuleUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *SLAAlertRuleUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *SLAAlertRuleUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // SLAAlertRuleCreateBulk is the builder for creating many SLAAlertRule entities in bulk.
 type SLAAlertRuleCreateBulk struct {
 	config
 	err      error
 	builders []*SLAAlertRuleCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the SLAAlertRule entities in the database.
@@ -412,6 +863,7 @@ func (_c *SLAAlertRuleCreateBulk) Save(ctx context.Context) ([]*SLAAlertRule, er
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -462,6 +914,285 @@ func (_c *SLAAlertRuleCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *SLAAlertRuleCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.SLAAlertRule.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.SLAAlertRuleUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *SLAAlertRuleCreateBulk) OnConflict(opts ...sql.ConflictOption) *SLAAlertRuleUpsertBulk {
+	_c.conflict = opts
+	return &SLAAlertRuleUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.SLAAlertRule.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *SLAAlertRuleCreateBulk) OnConflictColumns(columns ...string) *SLAAlertRuleUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &SLAAlertRuleUpsertBulk{
+		create: _c,
+	}
+}
+
+// SLAAlertRuleUpsertBulk is the builder for "upsert"-ing
+// a bulk of SLAAlertRule nodes.
+type SLAAlertRuleUpsertBulk struct {
+	create *SLAAlertRuleCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.SLAAlertRule.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *SLAAlertRuleUpsertBulk) UpdateNewValues() *SLAAlertRuleUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.SLAAlertRule.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *SLAAlertRuleUpsertBulk) Ignore() *SLAAlertRuleUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *SLAAlertRuleUpsertBulk) DoNothing() *SLAAlertRuleUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the SLAAlertRuleCreateBulk.OnConflict
+// documentation for more info.
+func (u *SLAAlertRuleUpsertBulk) Update(set func(*SLAAlertRuleUpsert)) *SLAAlertRuleUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&SLAAlertRuleUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *SLAAlertRuleUpsertBulk) SetName(v string) *SLAAlertRuleUpsertBulk {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsertBulk) UpdateName() *SLAAlertRuleUpsertBulk {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetSLADefinitionID sets the "sla_definition_id" field.
+func (u *SLAAlertRuleUpsertBulk) SetSLADefinitionID(v int) *SLAAlertRuleUpsertBulk {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.SetSLADefinitionID(v)
+	})
+}
+
+// UpdateSLADefinitionID sets the "sla_definition_id" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsertBulk) UpdateSLADefinitionID() *SLAAlertRuleUpsertBulk {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.UpdateSLADefinitionID()
+	})
+}
+
+// SetAlertLevel sets the "alert_level" field.
+func (u *SLAAlertRuleUpsertBulk) SetAlertLevel(v string) *SLAAlertRuleUpsertBulk {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.SetAlertLevel(v)
+	})
+}
+
+// UpdateAlertLevel sets the "alert_level" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsertBulk) UpdateAlertLevel() *SLAAlertRuleUpsertBulk {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.UpdateAlertLevel()
+	})
+}
+
+// SetThresholdPercentage sets the "threshold_percentage" field.
+func (u *SLAAlertRuleUpsertBulk) SetThresholdPercentage(v int) *SLAAlertRuleUpsertBulk {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.SetThresholdPercentage(v)
+	})
+}
+
+// AddThresholdPercentage adds v to the "threshold_percentage" field.
+func (u *SLAAlertRuleUpsertBulk) AddThresholdPercentage(v int) *SLAAlertRuleUpsertBulk {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.AddThresholdPercentage(v)
+	})
+}
+
+// UpdateThresholdPercentage sets the "threshold_percentage" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsertBulk) UpdateThresholdPercentage() *SLAAlertRuleUpsertBulk {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.UpdateThresholdPercentage()
+	})
+}
+
+// SetNotificationChannels sets the "notification_channels" field.
+func (u *SLAAlertRuleUpsertBulk) SetNotificationChannels(v []string) *SLAAlertRuleUpsertBulk {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.SetNotificationChannels(v)
+	})
+}
+
+// UpdateNotificationChannels sets the "notification_channels" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsertBulk) UpdateNotificationChannels() *SLAAlertRuleUpsertBulk {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.UpdateNotificationChannels()
+	})
+}
+
+// SetEscalationEnabled sets the "escalation_enabled" field.
+func (u *SLAAlertRuleUpsertBulk) SetEscalationEnabled(v bool) *SLAAlertRuleUpsertBulk {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.SetEscalationEnabled(v)
+	})
+}
+
+// UpdateEscalationEnabled sets the "escalation_enabled" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsertBulk) UpdateEscalationEnabled() *SLAAlertRuleUpsertBulk {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.UpdateEscalationEnabled()
+	})
+}
+
+// SetEscalationLevels sets the "escalation_levels" field.
+func (u *SLAAlertRuleUpsertBulk) SetEscalationLevels(v []map[string]interface{}) *SLAAlertRuleUpsertBulk {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.SetEscalationLevels(v)
+	})
+}
+
+// UpdateEscalationLevels sets the "escalation_levels" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsertBulk) UpdateEscalationLevels() *SLAAlertRuleUpsertBulk {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.UpdateEscalationLevels()
+	})
+}
+
+// ClearEscalationLevels clears the value of the "escalation_levels" field.
+func (u *SLAAlertRuleUpsertBulk) ClearEscalationLevels() *SLAAlertRuleUpsertBulk {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.ClearEscalationLevels()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *SLAAlertRuleUpsertBulk) SetIsActive(v bool) *SLAAlertRuleUpsertBulk {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsertBulk) UpdateIsActive() *SLAAlertRuleUpsertBulk {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *SLAAlertRuleUpsertBulk) SetTenantID(v int) *SLAAlertRuleUpsertBulk {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *SLAAlertRuleUpsertBulk) AddTenantID(v int) *SLAAlertRuleUpsertBulk {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsertBulk) UpdateTenantID() *SLAAlertRuleUpsertBulk {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *SLAAlertRuleUpsertBulk) SetCreatedAt(v time.Time) *SLAAlertRuleUpsertBulk {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsertBulk) UpdateCreatedAt() *SLAAlertRuleUpsertBulk {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *SLAAlertRuleUpsertBulk) SetUpdatedAt(v time.Time) *SLAAlertRuleUpsertBulk {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *SLAAlertRuleUpsertBulk) UpdateUpdatedAt() *SLAAlertRuleUpsertBulk {
+	return u.Update(func(s *SLAAlertRuleUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *SLAAlertRuleUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the SLAAlertRuleCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for SLAAlertRuleCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *SLAAlertRuleUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

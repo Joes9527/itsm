@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/ticketworkflowrecord"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,6 +20,7 @@ type TicketWorkflowRecordCreate struct {
 	config
 	mutation *TicketWorkflowRecordMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetCreatedAt sets the "created_at" field.
@@ -241,6 +243,7 @@ func (_c *TicketWorkflowRecordCreate) createSpec() (*TicketWorkflowRecord, *sqlg
 		_node = &TicketWorkflowRecord{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(ticketworkflowrecord.Table, sqlgraph.NewFieldSpec(ticketworkflowrecord.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(ticketworkflowrecord.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
@@ -305,11 +308,568 @@ func (_c *TicketWorkflowRecordCreate) createSpec() (*TicketWorkflowRecord, *sqlg
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.TicketWorkflowRecord.Create().
+//		SetCreatedAt(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.TicketWorkflowRecordUpsert) {
+//			SetCreatedAt(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *TicketWorkflowRecordCreate) OnConflict(opts ...sql.ConflictOption) *TicketWorkflowRecordUpsertOne {
+	_c.conflict = opts
+	return &TicketWorkflowRecordUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.TicketWorkflowRecord.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *TicketWorkflowRecordCreate) OnConflictColumns(columns ...string) *TicketWorkflowRecordUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &TicketWorkflowRecordUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// TicketWorkflowRecordUpsertOne is the builder for "upsert"-ing
+	//  one TicketWorkflowRecord node.
+	TicketWorkflowRecordUpsertOne struct {
+		create *TicketWorkflowRecordCreate
+	}
+
+	// TicketWorkflowRecordUpsert is the "OnConflict" setter.
+	TicketWorkflowRecordUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetTicketID sets the "ticket_id" field.
+func (u *TicketWorkflowRecordUpsert) SetTicketID(v int) *TicketWorkflowRecordUpsert {
+	u.Set(ticketworkflowrecord.FieldTicketID, v)
+	return u
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsert) UpdateTicketID() *TicketWorkflowRecordUpsert {
+	u.SetExcluded(ticketworkflowrecord.FieldTicketID)
+	return u
+}
+
+// SetAction sets the "action" field.
+func (u *TicketWorkflowRecordUpsert) SetAction(v string) *TicketWorkflowRecordUpsert {
+	u.Set(ticketworkflowrecord.FieldAction, v)
+	return u
+}
+
+// UpdateAction sets the "action" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsert) UpdateAction() *TicketWorkflowRecordUpsert {
+	u.SetExcluded(ticketworkflowrecord.FieldAction)
+	return u
+}
+
+// SetFromStatus sets the "from_status" field.
+func (u *TicketWorkflowRecordUpsert) SetFromStatus(v string) *TicketWorkflowRecordUpsert {
+	u.Set(ticketworkflowrecord.FieldFromStatus, v)
+	return u
+}
+
+// UpdateFromStatus sets the "from_status" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsert) UpdateFromStatus() *TicketWorkflowRecordUpsert {
+	u.SetExcluded(ticketworkflowrecord.FieldFromStatus)
+	return u
+}
+
+// ClearFromStatus clears the value of the "from_status" field.
+func (u *TicketWorkflowRecordUpsert) ClearFromStatus() *TicketWorkflowRecordUpsert {
+	u.SetNull(ticketworkflowrecord.FieldFromStatus)
+	return u
+}
+
+// SetToStatus sets the "to_status" field.
+func (u *TicketWorkflowRecordUpsert) SetToStatus(v string) *TicketWorkflowRecordUpsert {
+	u.Set(ticketworkflowrecord.FieldToStatus, v)
+	return u
+}
+
+// UpdateToStatus sets the "to_status" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsert) UpdateToStatus() *TicketWorkflowRecordUpsert {
+	u.SetExcluded(ticketworkflowrecord.FieldToStatus)
+	return u
+}
+
+// ClearToStatus clears the value of the "to_status" field.
+func (u *TicketWorkflowRecordUpsert) ClearToStatus() *TicketWorkflowRecordUpsert {
+	u.SetNull(ticketworkflowrecord.FieldToStatus)
+	return u
+}
+
+// SetOperatorID sets the "operator_id" field.
+func (u *TicketWorkflowRecordUpsert) SetOperatorID(v int) *TicketWorkflowRecordUpsert {
+	u.Set(ticketworkflowrecord.FieldOperatorID, v)
+	return u
+}
+
+// UpdateOperatorID sets the "operator_id" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsert) UpdateOperatorID() *TicketWorkflowRecordUpsert {
+	u.SetExcluded(ticketworkflowrecord.FieldOperatorID)
+	return u
+}
+
+// AddOperatorID adds v to the "operator_id" field.
+func (u *TicketWorkflowRecordUpsert) AddOperatorID(v int) *TicketWorkflowRecordUpsert {
+	u.Add(ticketworkflowrecord.FieldOperatorID, v)
+	return u
+}
+
+// SetFromUserID sets the "from_user_id" field.
+func (u *TicketWorkflowRecordUpsert) SetFromUserID(v int) *TicketWorkflowRecordUpsert {
+	u.Set(ticketworkflowrecord.FieldFromUserID, v)
+	return u
+}
+
+// UpdateFromUserID sets the "from_user_id" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsert) UpdateFromUserID() *TicketWorkflowRecordUpsert {
+	u.SetExcluded(ticketworkflowrecord.FieldFromUserID)
+	return u
+}
+
+// AddFromUserID adds v to the "from_user_id" field.
+func (u *TicketWorkflowRecordUpsert) AddFromUserID(v int) *TicketWorkflowRecordUpsert {
+	u.Add(ticketworkflowrecord.FieldFromUserID, v)
+	return u
+}
+
+// ClearFromUserID clears the value of the "from_user_id" field.
+func (u *TicketWorkflowRecordUpsert) ClearFromUserID() *TicketWorkflowRecordUpsert {
+	u.SetNull(ticketworkflowrecord.FieldFromUserID)
+	return u
+}
+
+// SetToUserID sets the "to_user_id" field.
+func (u *TicketWorkflowRecordUpsert) SetToUserID(v int) *TicketWorkflowRecordUpsert {
+	u.Set(ticketworkflowrecord.FieldToUserID, v)
+	return u
+}
+
+// UpdateToUserID sets the "to_user_id" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsert) UpdateToUserID() *TicketWorkflowRecordUpsert {
+	u.SetExcluded(ticketworkflowrecord.FieldToUserID)
+	return u
+}
+
+// AddToUserID adds v to the "to_user_id" field.
+func (u *TicketWorkflowRecordUpsert) AddToUserID(v int) *TicketWorkflowRecordUpsert {
+	u.Add(ticketworkflowrecord.FieldToUserID, v)
+	return u
+}
+
+// ClearToUserID clears the value of the "to_user_id" field.
+func (u *TicketWorkflowRecordUpsert) ClearToUserID() *TicketWorkflowRecordUpsert {
+	u.SetNull(ticketworkflowrecord.FieldToUserID)
+	return u
+}
+
+// SetComment sets the "comment" field.
+func (u *TicketWorkflowRecordUpsert) SetComment(v string) *TicketWorkflowRecordUpsert {
+	u.Set(ticketworkflowrecord.FieldComment, v)
+	return u
+}
+
+// UpdateComment sets the "comment" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsert) UpdateComment() *TicketWorkflowRecordUpsert {
+	u.SetExcluded(ticketworkflowrecord.FieldComment)
+	return u
+}
+
+// ClearComment clears the value of the "comment" field.
+func (u *TicketWorkflowRecordUpsert) ClearComment() *TicketWorkflowRecordUpsert {
+	u.SetNull(ticketworkflowrecord.FieldComment)
+	return u
+}
+
+// SetReason sets the "reason" field.
+func (u *TicketWorkflowRecordUpsert) SetReason(v string) *TicketWorkflowRecordUpsert {
+	u.Set(ticketworkflowrecord.FieldReason, v)
+	return u
+}
+
+// UpdateReason sets the "reason" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsert) UpdateReason() *TicketWorkflowRecordUpsert {
+	u.SetExcluded(ticketworkflowrecord.FieldReason)
+	return u
+}
+
+// ClearReason clears the value of the "reason" field.
+func (u *TicketWorkflowRecordUpsert) ClearReason() *TicketWorkflowRecordUpsert {
+	u.SetNull(ticketworkflowrecord.FieldReason)
+	return u
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *TicketWorkflowRecordUpsert) SetMetadata(v map[string]interface{}) *TicketWorkflowRecordUpsert {
+	u.Set(ticketworkflowrecord.FieldMetadata, v)
+	return u
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsert) UpdateMetadata() *TicketWorkflowRecordUpsert {
+	u.SetExcluded(ticketworkflowrecord.FieldMetadata)
+	return u
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *TicketWorkflowRecordUpsert) ClearMetadata() *TicketWorkflowRecordUpsert {
+	u.SetNull(ticketworkflowrecord.FieldMetadata)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *TicketWorkflowRecordUpsert) SetTenantID(v int) *TicketWorkflowRecordUpsert {
+	u.Set(ticketworkflowrecord.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsert) UpdateTenantID() *TicketWorkflowRecordUpsert {
+	u.SetExcluded(ticketworkflowrecord.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *TicketWorkflowRecordUpsert) AddTenantID(v int) *TicketWorkflowRecordUpsert {
+	u.Add(ticketworkflowrecord.FieldTenantID, v)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.TicketWorkflowRecord.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *TicketWorkflowRecordUpsertOne) UpdateNewValues() *TicketWorkflowRecordUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		if _, exists := u.create.mutation.CreatedAt(); exists {
+			s.SetIgnore(ticketworkflowrecord.FieldCreatedAt)
+		}
+	}))
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.TicketWorkflowRecord.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *TicketWorkflowRecordUpsertOne) Ignore() *TicketWorkflowRecordUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *TicketWorkflowRecordUpsertOne) DoNothing() *TicketWorkflowRecordUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the TicketWorkflowRecordCreate.OnConflict
+// documentation for more info.
+func (u *TicketWorkflowRecordUpsertOne) Update(set func(*TicketWorkflowRecordUpsert)) *TicketWorkflowRecordUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&TicketWorkflowRecordUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *TicketWorkflowRecordUpsertOne) SetTicketID(v int) *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.SetTicketID(v)
+	})
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsertOne) UpdateTicketID() *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.UpdateTicketID()
+	})
+}
+
+// SetAction sets the "action" field.
+func (u *TicketWorkflowRecordUpsertOne) SetAction(v string) *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.SetAction(v)
+	})
+}
+
+// UpdateAction sets the "action" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsertOne) UpdateAction() *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.UpdateAction()
+	})
+}
+
+// SetFromStatus sets the "from_status" field.
+func (u *TicketWorkflowRecordUpsertOne) SetFromStatus(v string) *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.SetFromStatus(v)
+	})
+}
+
+// UpdateFromStatus sets the "from_status" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsertOne) UpdateFromStatus() *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.UpdateFromStatus()
+	})
+}
+
+// ClearFromStatus clears the value of the "from_status" field.
+func (u *TicketWorkflowRecordUpsertOne) ClearFromStatus() *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.ClearFromStatus()
+	})
+}
+
+// SetToStatus sets the "to_status" field.
+func (u *TicketWorkflowRecordUpsertOne) SetToStatus(v string) *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.SetToStatus(v)
+	})
+}
+
+// UpdateToStatus sets the "to_status" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsertOne) UpdateToStatus() *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.UpdateToStatus()
+	})
+}
+
+// ClearToStatus clears the value of the "to_status" field.
+func (u *TicketWorkflowRecordUpsertOne) ClearToStatus() *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.ClearToStatus()
+	})
+}
+
+// SetOperatorID sets the "operator_id" field.
+func (u *TicketWorkflowRecordUpsertOne) SetOperatorID(v int) *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.SetOperatorID(v)
+	})
+}
+
+// AddOperatorID adds v to the "operator_id" field.
+func (u *TicketWorkflowRecordUpsertOne) AddOperatorID(v int) *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.AddOperatorID(v)
+	})
+}
+
+// UpdateOperatorID sets the "operator_id" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsertOne) UpdateOperatorID() *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.UpdateOperatorID()
+	})
+}
+
+// SetFromUserID sets the "from_user_id" field.
+func (u *TicketWorkflowRecordUpsertOne) SetFromUserID(v int) *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.SetFromUserID(v)
+	})
+}
+
+// AddFromUserID adds v to the "from_user_id" field.
+func (u *TicketWorkflowRecordUpsertOne) AddFromUserID(v int) *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.AddFromUserID(v)
+	})
+}
+
+// UpdateFromUserID sets the "from_user_id" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsertOne) UpdateFromUserID() *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.UpdateFromUserID()
+	})
+}
+
+// ClearFromUserID clears the value of the "from_user_id" field.
+func (u *TicketWorkflowRecordUpsertOne) ClearFromUserID() *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.ClearFromUserID()
+	})
+}
+
+// SetToUserID sets the "to_user_id" field.
+func (u *TicketWorkflowRecordUpsertOne) SetToUserID(v int) *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.SetToUserID(v)
+	})
+}
+
+// AddToUserID adds v to the "to_user_id" field.
+func (u *TicketWorkflowRecordUpsertOne) AddToUserID(v int) *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.AddToUserID(v)
+	})
+}
+
+// UpdateToUserID sets the "to_user_id" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsertOne) UpdateToUserID() *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.UpdateToUserID()
+	})
+}
+
+// ClearToUserID clears the value of the "to_user_id" field.
+func (u *TicketWorkflowRecordUpsertOne) ClearToUserID() *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.ClearToUserID()
+	})
+}
+
+// SetComment sets the "comment" field.
+func (u *TicketWorkflowRecordUpsertOne) SetComment(v string) *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.SetComment(v)
+	})
+}
+
+// UpdateComment sets the "comment" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsertOne) UpdateComment() *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.UpdateComment()
+	})
+}
+
+// ClearComment clears the value of the "comment" field.
+func (u *TicketWorkflowRecordUpsertOne) ClearComment() *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.ClearComment()
+	})
+}
+
+// SetReason sets the "reason" field.
+func (u *TicketWorkflowRecordUpsertOne) SetReason(v string) *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.SetReason(v)
+	})
+}
+
+// UpdateReason sets the "reason" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsertOne) UpdateReason() *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.UpdateReason()
+	})
+}
+
+// ClearReason clears the value of the "reason" field.
+func (u *TicketWorkflowRecordUpsertOne) ClearReason() *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.ClearReason()
+	})
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *TicketWorkflowRecordUpsertOne) SetMetadata(v map[string]interface{}) *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.SetMetadata(v)
+	})
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsertOne) UpdateMetadata() *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.UpdateMetadata()
+	})
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *TicketWorkflowRecordUpsertOne) ClearMetadata() *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.ClearMetadata()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *TicketWorkflowRecordUpsertOne) SetTenantID(v int) *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *TicketWorkflowRecordUpsertOne) AddTenantID(v int) *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsertOne) UpdateTenantID() *TicketWorkflowRecordUpsertOne {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// Exec executes the query.
+func (u *TicketWorkflowRecordUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for TicketWorkflowRecordCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *TicketWorkflowRecordUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *TicketWorkflowRecordUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *TicketWorkflowRecordUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // TicketWorkflowRecordCreateBulk is the builder for creating many TicketWorkflowRecord entities in bulk.
 type TicketWorkflowRecordCreateBulk struct {
 	config
 	err      error
 	builders []*TicketWorkflowRecordCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the TicketWorkflowRecord entities in the database.
@@ -339,6 +899,7 @@ func (_c *TicketWorkflowRecordCreateBulk) Save(ctx context.Context) ([]*TicketWo
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -389,6 +950,348 @@ func (_c *TicketWorkflowRecordCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *TicketWorkflowRecordCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.TicketWorkflowRecord.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.TicketWorkflowRecordUpsert) {
+//			SetCreatedAt(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *TicketWorkflowRecordCreateBulk) OnConflict(opts ...sql.ConflictOption) *TicketWorkflowRecordUpsertBulk {
+	_c.conflict = opts
+	return &TicketWorkflowRecordUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.TicketWorkflowRecord.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *TicketWorkflowRecordCreateBulk) OnConflictColumns(columns ...string) *TicketWorkflowRecordUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &TicketWorkflowRecordUpsertBulk{
+		create: _c,
+	}
+}
+
+// TicketWorkflowRecordUpsertBulk is the builder for "upsert"-ing
+// a bulk of TicketWorkflowRecord nodes.
+type TicketWorkflowRecordUpsertBulk struct {
+	create *TicketWorkflowRecordCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.TicketWorkflowRecord.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *TicketWorkflowRecordUpsertBulk) UpdateNewValues() *TicketWorkflowRecordUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		for _, b := range u.create.builders {
+			if _, exists := b.mutation.CreatedAt(); exists {
+				s.SetIgnore(ticketworkflowrecord.FieldCreatedAt)
+			}
+		}
+	}))
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.TicketWorkflowRecord.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *TicketWorkflowRecordUpsertBulk) Ignore() *TicketWorkflowRecordUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *TicketWorkflowRecordUpsertBulk) DoNothing() *TicketWorkflowRecordUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the TicketWorkflowRecordCreateBulk.OnConflict
+// documentation for more info.
+func (u *TicketWorkflowRecordUpsertBulk) Update(set func(*TicketWorkflowRecordUpsert)) *TicketWorkflowRecordUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&TicketWorkflowRecordUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *TicketWorkflowRecordUpsertBulk) SetTicketID(v int) *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.SetTicketID(v)
+	})
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsertBulk) UpdateTicketID() *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.UpdateTicketID()
+	})
+}
+
+// SetAction sets the "action" field.
+func (u *TicketWorkflowRecordUpsertBulk) SetAction(v string) *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.SetAction(v)
+	})
+}
+
+// UpdateAction sets the "action" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsertBulk) UpdateAction() *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.UpdateAction()
+	})
+}
+
+// SetFromStatus sets the "from_status" field.
+func (u *TicketWorkflowRecordUpsertBulk) SetFromStatus(v string) *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.SetFromStatus(v)
+	})
+}
+
+// UpdateFromStatus sets the "from_status" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsertBulk) UpdateFromStatus() *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.UpdateFromStatus()
+	})
+}
+
+// ClearFromStatus clears the value of the "from_status" field.
+func (u *TicketWorkflowRecordUpsertBulk) ClearFromStatus() *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.ClearFromStatus()
+	})
+}
+
+// SetToStatus sets the "to_status" field.
+func (u *TicketWorkflowRecordUpsertBulk) SetToStatus(v string) *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.SetToStatus(v)
+	})
+}
+
+// UpdateToStatus sets the "to_status" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsertBulk) UpdateToStatus() *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.UpdateToStatus()
+	})
+}
+
+// ClearToStatus clears the value of the "to_status" field.
+func (u *TicketWorkflowRecordUpsertBulk) ClearToStatus() *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.ClearToStatus()
+	})
+}
+
+// SetOperatorID sets the "operator_id" field.
+func (u *TicketWorkflowRecordUpsertBulk) SetOperatorID(v int) *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.SetOperatorID(v)
+	})
+}
+
+// AddOperatorID adds v to the "operator_id" field.
+func (u *TicketWorkflowRecordUpsertBulk) AddOperatorID(v int) *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.AddOperatorID(v)
+	})
+}
+
+// UpdateOperatorID sets the "operator_id" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsertBulk) UpdateOperatorID() *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.UpdateOperatorID()
+	})
+}
+
+// SetFromUserID sets the "from_user_id" field.
+func (u *TicketWorkflowRecordUpsertBulk) SetFromUserID(v int) *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.SetFromUserID(v)
+	})
+}
+
+// AddFromUserID adds v to the "from_user_id" field.
+func (u *TicketWorkflowRecordUpsertBulk) AddFromUserID(v int) *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.AddFromUserID(v)
+	})
+}
+
+// UpdateFromUserID sets the "from_user_id" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsertBulk) UpdateFromUserID() *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.UpdateFromUserID()
+	})
+}
+
+// ClearFromUserID clears the value of the "from_user_id" field.
+func (u *TicketWorkflowRecordUpsertBulk) ClearFromUserID() *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.ClearFromUserID()
+	})
+}
+
+// SetToUserID sets the "to_user_id" field.
+func (u *TicketWorkflowRecordUpsertBulk) SetToUserID(v int) *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.SetToUserID(v)
+	})
+}
+
+// AddToUserID adds v to the "to_user_id" field.
+func (u *TicketWorkflowRecordUpsertBulk) AddToUserID(v int) *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.AddToUserID(v)
+	})
+}
+
+// UpdateToUserID sets the "to_user_id" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsertBulk) UpdateToUserID() *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.UpdateToUserID()
+	})
+}
+
+// ClearToUserID clears the value of the "to_user_id" field.
+func (u *TicketWorkflowRecordUpsertBulk) ClearToUserID() *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.ClearToUserID()
+	})
+}
+
+// SetComment sets the "comment" field.
+func (u *TicketWorkflowRecordUpsertBulk) SetComment(v string) *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.SetComment(v)
+	})
+}
+
+// UpdateComment sets the "comment" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsertBulk) UpdateComment() *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.UpdateComment()
+	})
+}
+
+// ClearComment clears the value of the "comment" field.
+func (u *TicketWorkflowRecordUpsertBulk) ClearComment() *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.ClearComment()
+	})
+}
+
+// SetReason sets the "reason" field.
+func (u *TicketWorkflowRecordUpsertBulk) SetReason(v string) *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.SetReason(v)
+	})
+}
+
+// UpdateReason sets the "reason" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsertBulk) UpdateReason() *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.UpdateReason()
+	})
+}
+
+// ClearReason clears the value of the "reason" field.
+func (u *TicketWorkflowRecordUpsertBulk) ClearReason() *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.ClearReason()
+	})
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *TicketWorkflowRecordUpsertBulk) SetMetadata(v map[string]interface{}) *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.SetMetadata(v)
+	})
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsertBulk) UpdateMetadata() *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.UpdateMetadata()
+	})
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *TicketWorkflowRecordUpsertBulk) ClearMetadata() *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.ClearMetadata()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *TicketWorkflowRecordUpsertBulk) SetTenantID(v int) *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *TicketWorkflowRecordUpsertBulk) AddTenantID(v int) *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *TicketWorkflowRecordUpsertBulk) UpdateTenantID() *TicketWorkflowRecordUpsertBulk {
+	return u.Update(func(s *TicketWorkflowRecordUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// Exec executes the query.
+func (u *TicketWorkflowRecordUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the TicketWorkflowRecordCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for TicketWorkflowRecordCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *TicketWorkflowRecordUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

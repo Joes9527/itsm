@@ -9,6 +9,7 @@ import (
 	"itsm-backend/ent/bpmnpermission"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -18,6 +19,7 @@ type BPMNPermissionCreate struct {
 	config
 	mutation *BPMNPermissionMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetResourceType sets the "resource_type" field.
@@ -302,6 +304,7 @@ func (_c *BPMNPermissionCreate) createSpec() (*BPMNPermission, *sqlgraph.CreateS
 		_node = &BPMNPermission{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(bpmnpermission.Table, sqlgraph.NewFieldSpec(bpmnpermission.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.ResourceType(); ok {
 		_spec.SetField(bpmnpermission.FieldResourceType, field.TypeString, value)
 		_node.ResourceType = value
@@ -361,11 +364,602 @@ func (_c *BPMNPermissionCreate) createSpec() (*BPMNPermission, *sqlgraph.CreateS
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.BPMNPermission.Create().
+//		SetResourceType(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.BPMNPermissionUpsert) {
+//			SetResourceType(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *BPMNPermissionCreate) OnConflict(opts ...sql.ConflictOption) *BPMNPermissionUpsertOne {
+	_c.conflict = opts
+	return &BPMNPermissionUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.BPMNPermission.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *BPMNPermissionCreate) OnConflictColumns(columns ...string) *BPMNPermissionUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &BPMNPermissionUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// BPMNPermissionUpsertOne is the builder for "upsert"-ing
+	//  one BPMNPermission node.
+	BPMNPermissionUpsertOne struct {
+		create *BPMNPermissionCreate
+	}
+
+	// BPMNPermissionUpsert is the "OnConflict" setter.
+	BPMNPermissionUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetResourceType sets the "resource_type" field.
+func (u *BPMNPermissionUpsert) SetResourceType(v string) *BPMNPermissionUpsert {
+	u.Set(bpmnpermission.FieldResourceType, v)
+	return u
+}
+
+// UpdateResourceType sets the "resource_type" field to the value that was provided on create.
+func (u *BPMNPermissionUpsert) UpdateResourceType() *BPMNPermissionUpsert {
+	u.SetExcluded(bpmnpermission.FieldResourceType)
+	return u
+}
+
+// SetResourceID sets the "resource_id" field.
+func (u *BPMNPermissionUpsert) SetResourceID(v int) *BPMNPermissionUpsert {
+	u.Set(bpmnpermission.FieldResourceID, v)
+	return u
+}
+
+// UpdateResourceID sets the "resource_id" field to the value that was provided on create.
+func (u *BPMNPermissionUpsert) UpdateResourceID() *BPMNPermissionUpsert {
+	u.SetExcluded(bpmnpermission.FieldResourceID)
+	return u
+}
+
+// AddResourceID adds v to the "resource_id" field.
+func (u *BPMNPermissionUpsert) AddResourceID(v int) *BPMNPermissionUpsert {
+	u.Add(bpmnpermission.FieldResourceID, v)
+	return u
+}
+
+// SetResourceKey sets the "resource_key" field.
+func (u *BPMNPermissionUpsert) SetResourceKey(v string) *BPMNPermissionUpsert {
+	u.Set(bpmnpermission.FieldResourceKey, v)
+	return u
+}
+
+// UpdateResourceKey sets the "resource_key" field to the value that was provided on create.
+func (u *BPMNPermissionUpsert) UpdateResourceKey() *BPMNPermissionUpsert {
+	u.SetExcluded(bpmnpermission.FieldResourceKey)
+	return u
+}
+
+// ClearResourceKey clears the value of the "resource_key" field.
+func (u *BPMNPermissionUpsert) ClearResourceKey() *BPMNPermissionUpsert {
+	u.SetNull(bpmnpermission.FieldResourceKey)
+	return u
+}
+
+// SetPermissionType sets the "permission_type" field.
+func (u *BPMNPermissionUpsert) SetPermissionType(v string) *BPMNPermissionUpsert {
+	u.Set(bpmnpermission.FieldPermissionType, v)
+	return u
+}
+
+// UpdatePermissionType sets the "permission_type" field to the value that was provided on create.
+func (u *BPMNPermissionUpsert) UpdatePermissionType() *BPMNPermissionUpsert {
+	u.SetExcluded(bpmnpermission.FieldPermissionType)
+	return u
+}
+
+// SetPrincipalType sets the "principal_type" field.
+func (u *BPMNPermissionUpsert) SetPrincipalType(v string) *BPMNPermissionUpsert {
+	u.Set(bpmnpermission.FieldPrincipalType, v)
+	return u
+}
+
+// UpdatePrincipalType sets the "principal_type" field to the value that was provided on create.
+func (u *BPMNPermissionUpsert) UpdatePrincipalType() *BPMNPermissionUpsert {
+	u.SetExcluded(bpmnpermission.FieldPrincipalType)
+	return u
+}
+
+// SetPrincipalID sets the "principal_id" field.
+func (u *BPMNPermissionUpsert) SetPrincipalID(v int) *BPMNPermissionUpsert {
+	u.Set(bpmnpermission.FieldPrincipalID, v)
+	return u
+}
+
+// UpdatePrincipalID sets the "principal_id" field to the value that was provided on create.
+func (u *BPMNPermissionUpsert) UpdatePrincipalID() *BPMNPermissionUpsert {
+	u.SetExcluded(bpmnpermission.FieldPrincipalID)
+	return u
+}
+
+// AddPrincipalID adds v to the "principal_id" field.
+func (u *BPMNPermissionUpsert) AddPrincipalID(v int) *BPMNPermissionUpsert {
+	u.Add(bpmnpermission.FieldPrincipalID, v)
+	return u
+}
+
+// SetIsGranted sets the "is_granted" field.
+func (u *BPMNPermissionUpsert) SetIsGranted(v bool) *BPMNPermissionUpsert {
+	u.Set(bpmnpermission.FieldIsGranted, v)
+	return u
+}
+
+// UpdateIsGranted sets the "is_granted" field to the value that was provided on create.
+func (u *BPMNPermissionUpsert) UpdateIsGranted() *BPMNPermissionUpsert {
+	u.SetExcluded(bpmnpermission.FieldIsGranted)
+	return u
+}
+
+// SetConditions sets the "conditions" field.
+func (u *BPMNPermissionUpsert) SetConditions(v string) *BPMNPermissionUpsert {
+	u.Set(bpmnpermission.FieldConditions, v)
+	return u
+}
+
+// UpdateConditions sets the "conditions" field to the value that was provided on create.
+func (u *BPMNPermissionUpsert) UpdateConditions() *BPMNPermissionUpsert {
+	u.SetExcluded(bpmnpermission.FieldConditions)
+	return u
+}
+
+// ClearConditions clears the value of the "conditions" field.
+func (u *BPMNPermissionUpsert) ClearConditions() *BPMNPermissionUpsert {
+	u.SetNull(bpmnpermission.FieldConditions)
+	return u
+}
+
+// SetFieldPermissions sets the "field_permissions" field.
+func (u *BPMNPermissionUpsert) SetFieldPermissions(v string) *BPMNPermissionUpsert {
+	u.Set(bpmnpermission.FieldFieldPermissions, v)
+	return u
+}
+
+// UpdateFieldPermissions sets the "field_permissions" field to the value that was provided on create.
+func (u *BPMNPermissionUpsert) UpdateFieldPermissions() *BPMNPermissionUpsert {
+	u.SetExcluded(bpmnpermission.FieldFieldPermissions)
+	return u
+}
+
+// ClearFieldPermissions clears the value of the "field_permissions" field.
+func (u *BPMNPermissionUpsert) ClearFieldPermissions() *BPMNPermissionUpsert {
+	u.SetNull(bpmnpermission.FieldFieldPermissions)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *BPMNPermissionUpsert) SetDescription(v string) *BPMNPermissionUpsert {
+	u.Set(bpmnpermission.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *BPMNPermissionUpsert) UpdateDescription() *BPMNPermissionUpsert {
+	u.SetExcluded(bpmnpermission.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *BPMNPermissionUpsert) ClearDescription() *BPMNPermissionUpsert {
+	u.SetNull(bpmnpermission.FieldDescription)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *BPMNPermissionUpsert) SetTenantID(v int) *BPMNPermissionUpsert {
+	u.Set(bpmnpermission.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *BPMNPermissionUpsert) UpdateTenantID() *BPMNPermissionUpsert {
+	u.SetExcluded(bpmnpermission.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *BPMNPermissionUpsert) AddTenantID(v int) *BPMNPermissionUpsert {
+	u.Add(bpmnpermission.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *BPMNPermissionUpsert) SetCreatedAt(v time.Time) *BPMNPermissionUpsert {
+	u.Set(bpmnpermission.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *BPMNPermissionUpsert) UpdateCreatedAt() *BPMNPermissionUpsert {
+	u.SetExcluded(bpmnpermission.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *BPMNPermissionUpsert) SetUpdatedAt(v time.Time) *BPMNPermissionUpsert {
+	u.Set(bpmnpermission.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *BPMNPermissionUpsert) UpdateUpdatedAt() *BPMNPermissionUpsert {
+	u.SetExcluded(bpmnpermission.FieldUpdatedAt)
+	return u
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (u *BPMNPermissionUpsert) SetExpiresAt(v time.Time) *BPMNPermissionUpsert {
+	u.Set(bpmnpermission.FieldExpiresAt, v)
+	return u
+}
+
+// UpdateExpiresAt sets the "expires_at" field to the value that was provided on create.
+func (u *BPMNPermissionUpsert) UpdateExpiresAt() *BPMNPermissionUpsert {
+	u.SetExcluded(bpmnpermission.FieldExpiresAt)
+	return u
+}
+
+// ClearExpiresAt clears the value of the "expires_at" field.
+func (u *BPMNPermissionUpsert) ClearExpiresAt() *BPMNPermissionUpsert {
+	u.SetNull(bpmnpermission.FieldExpiresAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.BPMNPermission.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *BPMNPermissionUpsertOne) UpdateNewValues() *BPMNPermissionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.BPMNPermission.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *BPMNPermissionUpsertOne) Ignore() *BPMNPermissionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *BPMNPermissionUpsertOne) DoNothing() *BPMNPermissionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the BPMNPermissionCreate.OnConflict
+// documentation for more info.
+func (u *BPMNPermissionUpsertOne) Update(set func(*BPMNPermissionUpsert)) *BPMNPermissionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&BPMNPermissionUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetResourceType sets the "resource_type" field.
+func (u *BPMNPermissionUpsertOne) SetResourceType(v string) *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.SetResourceType(v)
+	})
+}
+
+// UpdateResourceType sets the "resource_type" field to the value that was provided on create.
+func (u *BPMNPermissionUpsertOne) UpdateResourceType() *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.UpdateResourceType()
+	})
+}
+
+// SetResourceID sets the "resource_id" field.
+func (u *BPMNPermissionUpsertOne) SetResourceID(v int) *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.SetResourceID(v)
+	})
+}
+
+// AddResourceID adds v to the "resource_id" field.
+func (u *BPMNPermissionUpsertOne) AddResourceID(v int) *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.AddResourceID(v)
+	})
+}
+
+// UpdateResourceID sets the "resource_id" field to the value that was provided on create.
+func (u *BPMNPermissionUpsertOne) UpdateResourceID() *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.UpdateResourceID()
+	})
+}
+
+// SetResourceKey sets the "resource_key" field.
+func (u *BPMNPermissionUpsertOne) SetResourceKey(v string) *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.SetResourceKey(v)
+	})
+}
+
+// UpdateResourceKey sets the "resource_key" field to the value that was provided on create.
+func (u *BPMNPermissionUpsertOne) UpdateResourceKey() *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.UpdateResourceKey()
+	})
+}
+
+// ClearResourceKey clears the value of the "resource_key" field.
+func (u *BPMNPermissionUpsertOne) ClearResourceKey() *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.ClearResourceKey()
+	})
+}
+
+// SetPermissionType sets the "permission_type" field.
+func (u *BPMNPermissionUpsertOne) SetPermissionType(v string) *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.SetPermissionType(v)
+	})
+}
+
+// UpdatePermissionType sets the "permission_type" field to the value that was provided on create.
+func (u *BPMNPermissionUpsertOne) UpdatePermissionType() *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.UpdatePermissionType()
+	})
+}
+
+// SetPrincipalType sets the "principal_type" field.
+func (u *BPMNPermissionUpsertOne) SetPrincipalType(v string) *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.SetPrincipalType(v)
+	})
+}
+
+// UpdatePrincipalType sets the "principal_type" field to the value that was provided on create.
+func (u *BPMNPermissionUpsertOne) UpdatePrincipalType() *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.UpdatePrincipalType()
+	})
+}
+
+// SetPrincipalID sets the "principal_id" field.
+func (u *BPMNPermissionUpsertOne) SetPrincipalID(v int) *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.SetPrincipalID(v)
+	})
+}
+
+// AddPrincipalID adds v to the "principal_id" field.
+func (u *BPMNPermissionUpsertOne) AddPrincipalID(v int) *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.AddPrincipalID(v)
+	})
+}
+
+// UpdatePrincipalID sets the "principal_id" field to the value that was provided on create.
+func (u *BPMNPermissionUpsertOne) UpdatePrincipalID() *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.UpdatePrincipalID()
+	})
+}
+
+// SetIsGranted sets the "is_granted" field.
+func (u *BPMNPermissionUpsertOne) SetIsGranted(v bool) *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.SetIsGranted(v)
+	})
+}
+
+// UpdateIsGranted sets the "is_granted" field to the value that was provided on create.
+func (u *BPMNPermissionUpsertOne) UpdateIsGranted() *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.UpdateIsGranted()
+	})
+}
+
+// SetConditions sets the "conditions" field.
+func (u *BPMNPermissionUpsertOne) SetConditions(v string) *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.SetConditions(v)
+	})
+}
+
+// UpdateConditions sets the "conditions" field to the value that was provided on create.
+func (u *BPMNPermissionUpsertOne) UpdateConditions() *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.UpdateConditions()
+	})
+}
+
+// ClearConditions clears the value of the "conditions" field.
+func (u *BPMNPermissionUpsertOne) ClearConditions() *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.ClearConditions()
+	})
+}
+
+// SetFieldPermissions sets the "field_permissions" field.
+func (u *BPMNPermissionUpsertOne) SetFieldPermissions(v string) *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.SetFieldPermissions(v)
+	})
+}
+
+// UpdateFieldPermissions sets the "field_permissions" field to the value that was provided on create.
+func (u *BPMNPermissionUpsertOne) UpdateFieldPermissions() *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.UpdateFieldPermissions()
+	})
+}
+
+// ClearFieldPermissions clears the value of the "field_permissions" field.
+func (u *BPMNPermissionUpsertOne) ClearFieldPermissions() *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.ClearFieldPermissions()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *BPMNPermissionUpsertOne) SetDescription(v string) *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *BPMNPermissionUpsertOne) UpdateDescription() *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *BPMNPermissionUpsertOne) ClearDescription() *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *BPMNPermissionUpsertOne) SetTenantID(v int) *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *BPMNPermissionUpsertOne) AddTenantID(v int) *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *BPMNPermissionUpsertOne) UpdateTenantID() *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *BPMNPermissionUpsertOne) SetCreatedAt(v time.Time) *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *BPMNPermissionUpsertOne) UpdateCreatedAt() *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *BPMNPermissionUpsertOne) SetUpdatedAt(v time.Time) *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *BPMNPermissionUpsertOne) UpdateUpdatedAt() *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (u *BPMNPermissionUpsertOne) SetExpiresAt(v time.Time) *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.SetExpiresAt(v)
+	})
+}
+
+// UpdateExpiresAt sets the "expires_at" field to the value that was provided on create.
+func (u *BPMNPermissionUpsertOne) UpdateExpiresAt() *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.UpdateExpiresAt()
+	})
+}
+
+// ClearExpiresAt clears the value of the "expires_at" field.
+func (u *BPMNPermissionUpsertOne) ClearExpiresAt() *BPMNPermissionUpsertOne {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.ClearExpiresAt()
+	})
+}
+
+// Exec executes the query.
+func (u *BPMNPermissionUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for BPMNPermissionCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *BPMNPermissionUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *BPMNPermissionUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *BPMNPermissionUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // BPMNPermissionCreateBulk is the builder for creating many BPMNPermission entities in bulk.
 type BPMNPermissionCreateBulk struct {
 	config
 	err      error
 	builders []*BPMNPermissionCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the BPMNPermission entities in the database.
@@ -395,6 +989,7 @@ func (_c *BPMNPermissionCreateBulk) Save(ctx context.Context) ([]*BPMNPermission
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -445,6 +1040,362 @@ func (_c *BPMNPermissionCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *BPMNPermissionCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.BPMNPermission.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.BPMNPermissionUpsert) {
+//			SetResourceType(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *BPMNPermissionCreateBulk) OnConflict(opts ...sql.ConflictOption) *BPMNPermissionUpsertBulk {
+	_c.conflict = opts
+	return &BPMNPermissionUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.BPMNPermission.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *BPMNPermissionCreateBulk) OnConflictColumns(columns ...string) *BPMNPermissionUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &BPMNPermissionUpsertBulk{
+		create: _c,
+	}
+}
+
+// BPMNPermissionUpsertBulk is the builder for "upsert"-ing
+// a bulk of BPMNPermission nodes.
+type BPMNPermissionUpsertBulk struct {
+	create *BPMNPermissionCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.BPMNPermission.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *BPMNPermissionUpsertBulk) UpdateNewValues() *BPMNPermissionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.BPMNPermission.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *BPMNPermissionUpsertBulk) Ignore() *BPMNPermissionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *BPMNPermissionUpsertBulk) DoNothing() *BPMNPermissionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the BPMNPermissionCreateBulk.OnConflict
+// documentation for more info.
+func (u *BPMNPermissionUpsertBulk) Update(set func(*BPMNPermissionUpsert)) *BPMNPermissionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&BPMNPermissionUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetResourceType sets the "resource_type" field.
+func (u *BPMNPermissionUpsertBulk) SetResourceType(v string) *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.SetResourceType(v)
+	})
+}
+
+// UpdateResourceType sets the "resource_type" field to the value that was provided on create.
+func (u *BPMNPermissionUpsertBulk) UpdateResourceType() *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.UpdateResourceType()
+	})
+}
+
+// SetResourceID sets the "resource_id" field.
+func (u *BPMNPermissionUpsertBulk) SetResourceID(v int) *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.SetResourceID(v)
+	})
+}
+
+// AddResourceID adds v to the "resource_id" field.
+func (u *BPMNPermissionUpsertBulk) AddResourceID(v int) *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.AddResourceID(v)
+	})
+}
+
+// UpdateResourceID sets the "resource_id" field to the value that was provided on create.
+func (u *BPMNPermissionUpsertBulk) UpdateResourceID() *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.UpdateResourceID()
+	})
+}
+
+// SetResourceKey sets the "resource_key" field.
+func (u *BPMNPermissionUpsertBulk) SetResourceKey(v string) *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.SetResourceKey(v)
+	})
+}
+
+// UpdateResourceKey sets the "resource_key" field to the value that was provided on create.
+func (u *BPMNPermissionUpsertBulk) UpdateResourceKey() *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.UpdateResourceKey()
+	})
+}
+
+// ClearResourceKey clears the value of the "resource_key" field.
+func (u *BPMNPermissionUpsertBulk) ClearResourceKey() *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.ClearResourceKey()
+	})
+}
+
+// SetPermissionType sets the "permission_type" field.
+func (u *BPMNPermissionUpsertBulk) SetPermissionType(v string) *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.SetPermissionType(v)
+	})
+}
+
+// UpdatePermissionType sets the "permission_type" field to the value that was provided on create.
+func (u *BPMNPermissionUpsertBulk) UpdatePermissionType() *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.UpdatePermissionType()
+	})
+}
+
+// SetPrincipalType sets the "principal_type" field.
+func (u *BPMNPermissionUpsertBulk) SetPrincipalType(v string) *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.SetPrincipalType(v)
+	})
+}
+
+// UpdatePrincipalType sets the "principal_type" field to the value that was provided on create.
+func (u *BPMNPermissionUpsertBulk) UpdatePrincipalType() *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.UpdatePrincipalType()
+	})
+}
+
+// SetPrincipalID sets the "principal_id" field.
+func (u *BPMNPermissionUpsertBulk) SetPrincipalID(v int) *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.SetPrincipalID(v)
+	})
+}
+
+// AddPrincipalID adds v to the "principal_id" field.
+func (u *BPMNPermissionUpsertBulk) AddPrincipalID(v int) *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.AddPrincipalID(v)
+	})
+}
+
+// UpdatePrincipalID sets the "principal_id" field to the value that was provided on create.
+func (u *BPMNPermissionUpsertBulk) UpdatePrincipalID() *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.UpdatePrincipalID()
+	})
+}
+
+// SetIsGranted sets the "is_granted" field.
+func (u *BPMNPermissionUpsertBulk) SetIsGranted(v bool) *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.SetIsGranted(v)
+	})
+}
+
+// UpdateIsGranted sets the "is_granted" field to the value that was provided on create.
+func (u *BPMNPermissionUpsertBulk) UpdateIsGranted() *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.UpdateIsGranted()
+	})
+}
+
+// SetConditions sets the "conditions" field.
+func (u *BPMNPermissionUpsertBulk) SetConditions(v string) *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.SetConditions(v)
+	})
+}
+
+// UpdateConditions sets the "conditions" field to the value that was provided on create.
+func (u *BPMNPermissionUpsertBulk) UpdateConditions() *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.UpdateConditions()
+	})
+}
+
+// ClearConditions clears the value of the "conditions" field.
+func (u *BPMNPermissionUpsertBulk) ClearConditions() *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.ClearConditions()
+	})
+}
+
+// SetFieldPermissions sets the "field_permissions" field.
+func (u *BPMNPermissionUpsertBulk) SetFieldPermissions(v string) *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.SetFieldPermissions(v)
+	})
+}
+
+// UpdateFieldPermissions sets the "field_permissions" field to the value that was provided on create.
+func (u *BPMNPermissionUpsertBulk) UpdateFieldPermissions() *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.UpdateFieldPermissions()
+	})
+}
+
+// ClearFieldPermissions clears the value of the "field_permissions" field.
+func (u *BPMNPermissionUpsertBulk) ClearFieldPermissions() *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.ClearFieldPermissions()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *BPMNPermissionUpsertBulk) SetDescription(v string) *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *BPMNPermissionUpsertBulk) UpdateDescription() *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *BPMNPermissionUpsertBulk) ClearDescription() *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *BPMNPermissionUpsertBulk) SetTenantID(v int) *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *BPMNPermissionUpsertBulk) AddTenantID(v int) *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *BPMNPermissionUpsertBulk) UpdateTenantID() *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *BPMNPermissionUpsertBulk) SetCreatedAt(v time.Time) *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *BPMNPermissionUpsertBulk) UpdateCreatedAt() *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *BPMNPermissionUpsertBulk) SetUpdatedAt(v time.Time) *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *BPMNPermissionUpsertBulk) UpdateUpdatedAt() *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (u *BPMNPermissionUpsertBulk) SetExpiresAt(v time.Time) *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.SetExpiresAt(v)
+	})
+}
+
+// UpdateExpiresAt sets the "expires_at" field to the value that was provided on create.
+func (u *BPMNPermissionUpsertBulk) UpdateExpiresAt() *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.UpdateExpiresAt()
+	})
+}
+
+// ClearExpiresAt clears the value of the "expires_at" field.
+func (u *BPMNPermissionUpsertBulk) ClearExpiresAt() *BPMNPermissionUpsertBulk {
+	return u.Update(func(s *BPMNPermissionUpsert) {
+		s.ClearExpiresAt()
+	})
+}
+
+// Exec executes the query.
+func (u *BPMNPermissionUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the BPMNPermissionCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for BPMNPermissionCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *BPMNPermissionUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

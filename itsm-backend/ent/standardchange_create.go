@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/standardchange"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,6 +20,7 @@ type StandardChangeCreate struct {
 	config
 	mutation *StandardChangeMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetTitle sets the "title" field.
@@ -393,6 +395,7 @@ func (_c *StandardChangeCreate) createSpec() (*StandardChange, *sqlgraph.CreateS
 		_node = &StandardChange{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(standardchange.Table, sqlgraph.NewFieldSpec(standardchange.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Title(); ok {
 		_spec.SetField(standardchange.FieldTitle, field.TypeString, value)
 		_node.Title = value
@@ -484,11 +487,706 @@ func (_c *StandardChangeCreate) createSpec() (*StandardChange, *sqlgraph.CreateS
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.StandardChange.Create().
+//		SetTitle(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.StandardChangeUpsert) {
+//			SetTitle(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *StandardChangeCreate) OnConflict(opts ...sql.ConflictOption) *StandardChangeUpsertOne {
+	_c.conflict = opts
+	return &StandardChangeUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.StandardChange.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *StandardChangeCreate) OnConflictColumns(columns ...string) *StandardChangeUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &StandardChangeUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// StandardChangeUpsertOne is the builder for "upsert"-ing
+	//  one StandardChange node.
+	StandardChangeUpsertOne struct {
+		create *StandardChangeCreate
+	}
+
+	// StandardChangeUpsert is the "OnConflict" setter.
+	StandardChangeUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetTitle sets the "title" field.
+func (u *StandardChangeUpsert) SetTitle(v string) *StandardChangeUpsert {
+	u.Set(standardchange.FieldTitle, v)
+	return u
+}
+
+// UpdateTitle sets the "title" field to the value that was provided on create.
+func (u *StandardChangeUpsert) UpdateTitle() *StandardChangeUpsert {
+	u.SetExcluded(standardchange.FieldTitle)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *StandardChangeUpsert) SetDescription(v string) *StandardChangeUpsert {
+	u.Set(standardchange.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *StandardChangeUpsert) UpdateDescription() *StandardChangeUpsert {
+	u.SetExcluded(standardchange.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *StandardChangeUpsert) ClearDescription() *StandardChangeUpsert {
+	u.SetNull(standardchange.FieldDescription)
+	return u
+}
+
+// SetImplementationPlan sets the "implementation_plan" field.
+func (u *StandardChangeUpsert) SetImplementationPlan(v string) *StandardChangeUpsert {
+	u.Set(standardchange.FieldImplementationPlan, v)
+	return u
+}
+
+// UpdateImplementationPlan sets the "implementation_plan" field to the value that was provided on create.
+func (u *StandardChangeUpsert) UpdateImplementationPlan() *StandardChangeUpsert {
+	u.SetExcluded(standardchange.FieldImplementationPlan)
+	return u
+}
+
+// SetRollbackPlan sets the "rollback_plan" field.
+func (u *StandardChangeUpsert) SetRollbackPlan(v string) *StandardChangeUpsert {
+	u.Set(standardchange.FieldRollbackPlan, v)
+	return u
+}
+
+// UpdateRollbackPlan sets the "rollback_plan" field to the value that was provided on create.
+func (u *StandardChangeUpsert) UpdateRollbackPlan() *StandardChangeUpsert {
+	u.SetExcluded(standardchange.FieldRollbackPlan)
+	return u
+}
+
+// SetJustification sets the "justification" field.
+func (u *StandardChangeUpsert) SetJustification(v string) *StandardChangeUpsert {
+	u.Set(standardchange.FieldJustification, v)
+	return u
+}
+
+// UpdateJustification sets the "justification" field to the value that was provided on create.
+func (u *StandardChangeUpsert) UpdateJustification() *StandardChangeUpsert {
+	u.SetExcluded(standardchange.FieldJustification)
+	return u
+}
+
+// ClearJustification clears the value of the "justification" field.
+func (u *StandardChangeUpsert) ClearJustification() *StandardChangeUpsert {
+	u.SetNull(standardchange.FieldJustification)
+	return u
+}
+
+// SetCategory sets the "category" field.
+func (u *StandardChangeUpsert) SetCategory(v string) *StandardChangeUpsert {
+	u.Set(standardchange.FieldCategory, v)
+	return u
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *StandardChangeUpsert) UpdateCategory() *StandardChangeUpsert {
+	u.SetExcluded(standardchange.FieldCategory)
+	return u
+}
+
+// SetRiskLevel sets the "risk_level" field.
+func (u *StandardChangeUpsert) SetRiskLevel(v string) *StandardChangeUpsert {
+	u.Set(standardchange.FieldRiskLevel, v)
+	return u
+}
+
+// UpdateRiskLevel sets the "risk_level" field to the value that was provided on create.
+func (u *StandardChangeUpsert) UpdateRiskLevel() *StandardChangeUpsert {
+	u.SetExcluded(standardchange.FieldRiskLevel)
+	return u
+}
+
+// SetImpactScope sets the "impact_scope" field.
+func (u *StandardChangeUpsert) SetImpactScope(v string) *StandardChangeUpsert {
+	u.Set(standardchange.FieldImpactScope, v)
+	return u
+}
+
+// UpdateImpactScope sets the "impact_scope" field to the value that was provided on create.
+func (u *StandardChangeUpsert) UpdateImpactScope() *StandardChangeUpsert {
+	u.SetExcluded(standardchange.FieldImpactScope)
+	return u
+}
+
+// SetExpectedDuration sets the "expected_duration" field.
+func (u *StandardChangeUpsert) SetExpectedDuration(v int) *StandardChangeUpsert {
+	u.Set(standardchange.FieldExpectedDuration, v)
+	return u
+}
+
+// UpdateExpectedDuration sets the "expected_duration" field to the value that was provided on create.
+func (u *StandardChangeUpsert) UpdateExpectedDuration() *StandardChangeUpsert {
+	u.SetExcluded(standardchange.FieldExpectedDuration)
+	return u
+}
+
+// AddExpectedDuration adds v to the "expected_duration" field.
+func (u *StandardChangeUpsert) AddExpectedDuration(v int) *StandardChangeUpsert {
+	u.Add(standardchange.FieldExpectedDuration, v)
+	return u
+}
+
+// SetApprovalRequired sets the "approval_required" field.
+func (u *StandardChangeUpsert) SetApprovalRequired(v bool) *StandardChangeUpsert {
+	u.Set(standardchange.FieldApprovalRequired, v)
+	return u
+}
+
+// UpdateApprovalRequired sets the "approval_required" field to the value that was provided on create.
+func (u *StandardChangeUpsert) UpdateApprovalRequired() *StandardChangeUpsert {
+	u.SetExcluded(standardchange.FieldApprovalRequired)
+	return u
+}
+
+// SetAffectedCis sets the "affected_cis" field.
+func (u *StandardChangeUpsert) SetAffectedCis(v []string) *StandardChangeUpsert {
+	u.Set(standardchange.FieldAffectedCis, v)
+	return u
+}
+
+// UpdateAffectedCis sets the "affected_cis" field to the value that was provided on create.
+func (u *StandardChangeUpsert) UpdateAffectedCis() *StandardChangeUpsert {
+	u.SetExcluded(standardchange.FieldAffectedCis)
+	return u
+}
+
+// ClearAffectedCis clears the value of the "affected_cis" field.
+func (u *StandardChangeUpsert) ClearAffectedCis() *StandardChangeUpsert {
+	u.SetNull(standardchange.FieldAffectedCis)
+	return u
+}
+
+// SetPrerequisites sets the "prerequisites" field.
+func (u *StandardChangeUpsert) SetPrerequisites(v []string) *StandardChangeUpsert {
+	u.Set(standardchange.FieldPrerequisites, v)
+	return u
+}
+
+// UpdatePrerequisites sets the "prerequisites" field to the value that was provided on create.
+func (u *StandardChangeUpsert) UpdatePrerequisites() *StandardChangeUpsert {
+	u.SetExcluded(standardchange.FieldPrerequisites)
+	return u
+}
+
+// ClearPrerequisites clears the value of the "prerequisites" field.
+func (u *StandardChangeUpsert) ClearPrerequisites() *StandardChangeUpsert {
+	u.SetNull(standardchange.FieldPrerequisites)
+	return u
+}
+
+// SetRemarks sets the "remarks" field.
+func (u *StandardChangeUpsert) SetRemarks(v string) *StandardChangeUpsert {
+	u.Set(standardchange.FieldRemarks, v)
+	return u
+}
+
+// UpdateRemarks sets the "remarks" field to the value that was provided on create.
+func (u *StandardChangeUpsert) UpdateRemarks() *StandardChangeUpsert {
+	u.SetExcluded(standardchange.FieldRemarks)
+	return u
+}
+
+// ClearRemarks clears the value of the "remarks" field.
+func (u *StandardChangeUpsert) ClearRemarks() *StandardChangeUpsert {
+	u.SetNull(standardchange.FieldRemarks)
+	return u
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *StandardChangeUpsert) SetCreatedBy(v int) *StandardChangeUpsert {
+	u.Set(standardchange.FieldCreatedBy, v)
+	return u
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *StandardChangeUpsert) UpdateCreatedBy() *StandardChangeUpsert {
+	u.SetExcluded(standardchange.FieldCreatedBy)
+	return u
+}
+
+// AddCreatedBy adds v to the "created_by" field.
+func (u *StandardChangeUpsert) AddCreatedBy(v int) *StandardChangeUpsert {
+	u.Add(standardchange.FieldCreatedBy, v)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *StandardChangeUpsert) SetTenantID(v int) *StandardChangeUpsert {
+	u.Set(standardchange.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *StandardChangeUpsert) UpdateTenantID() *StandardChangeUpsert {
+	u.SetExcluded(standardchange.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *StandardChangeUpsert) AddTenantID(v int) *StandardChangeUpsert {
+	u.Add(standardchange.FieldTenantID, v)
+	return u
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *StandardChangeUpsert) SetIsActive(v bool) *StandardChangeUpsert {
+	u.Set(standardchange.FieldIsActive, v)
+	return u
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *StandardChangeUpsert) UpdateIsActive() *StandardChangeUpsert {
+	u.SetExcluded(standardchange.FieldIsActive)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *StandardChangeUpsert) SetCreatedAt(v time.Time) *StandardChangeUpsert {
+	u.Set(standardchange.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *StandardChangeUpsert) UpdateCreatedAt() *StandardChangeUpsert {
+	u.SetExcluded(standardchange.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *StandardChangeUpsert) SetUpdatedAt(v time.Time) *StandardChangeUpsert {
+	u.Set(standardchange.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *StandardChangeUpsert) UpdateUpdatedAt() *StandardChangeUpsert {
+	u.SetExcluded(standardchange.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.StandardChange.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *StandardChangeUpsertOne) UpdateNewValues() *StandardChangeUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.StandardChange.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *StandardChangeUpsertOne) Ignore() *StandardChangeUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *StandardChangeUpsertOne) DoNothing() *StandardChangeUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the StandardChangeCreate.OnConflict
+// documentation for more info.
+func (u *StandardChangeUpsertOne) Update(set func(*StandardChangeUpsert)) *StandardChangeUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&StandardChangeUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTitle sets the "title" field.
+func (u *StandardChangeUpsertOne) SetTitle(v string) *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetTitle(v)
+	})
+}
+
+// UpdateTitle sets the "title" field to the value that was provided on create.
+func (u *StandardChangeUpsertOne) UpdateTitle() *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateTitle()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *StandardChangeUpsertOne) SetDescription(v string) *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *StandardChangeUpsertOne) UpdateDescription() *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *StandardChangeUpsertOne) ClearDescription() *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetImplementationPlan sets the "implementation_plan" field.
+func (u *StandardChangeUpsertOne) SetImplementationPlan(v string) *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetImplementationPlan(v)
+	})
+}
+
+// UpdateImplementationPlan sets the "implementation_plan" field to the value that was provided on create.
+func (u *StandardChangeUpsertOne) UpdateImplementationPlan() *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateImplementationPlan()
+	})
+}
+
+// SetRollbackPlan sets the "rollback_plan" field.
+func (u *StandardChangeUpsertOne) SetRollbackPlan(v string) *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetRollbackPlan(v)
+	})
+}
+
+// UpdateRollbackPlan sets the "rollback_plan" field to the value that was provided on create.
+func (u *StandardChangeUpsertOne) UpdateRollbackPlan() *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateRollbackPlan()
+	})
+}
+
+// SetJustification sets the "justification" field.
+func (u *StandardChangeUpsertOne) SetJustification(v string) *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetJustification(v)
+	})
+}
+
+// UpdateJustification sets the "justification" field to the value that was provided on create.
+func (u *StandardChangeUpsertOne) UpdateJustification() *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateJustification()
+	})
+}
+
+// ClearJustification clears the value of the "justification" field.
+func (u *StandardChangeUpsertOne) ClearJustification() *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.ClearJustification()
+	})
+}
+
+// SetCategory sets the "category" field.
+func (u *StandardChangeUpsertOne) SetCategory(v string) *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetCategory(v)
+	})
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *StandardChangeUpsertOne) UpdateCategory() *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateCategory()
+	})
+}
+
+// SetRiskLevel sets the "risk_level" field.
+func (u *StandardChangeUpsertOne) SetRiskLevel(v string) *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetRiskLevel(v)
+	})
+}
+
+// UpdateRiskLevel sets the "risk_level" field to the value that was provided on create.
+func (u *StandardChangeUpsertOne) UpdateRiskLevel() *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateRiskLevel()
+	})
+}
+
+// SetImpactScope sets the "impact_scope" field.
+func (u *StandardChangeUpsertOne) SetImpactScope(v string) *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetImpactScope(v)
+	})
+}
+
+// UpdateImpactScope sets the "impact_scope" field to the value that was provided on create.
+func (u *StandardChangeUpsertOne) UpdateImpactScope() *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateImpactScope()
+	})
+}
+
+// SetExpectedDuration sets the "expected_duration" field.
+func (u *StandardChangeUpsertOne) SetExpectedDuration(v int) *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetExpectedDuration(v)
+	})
+}
+
+// AddExpectedDuration adds v to the "expected_duration" field.
+func (u *StandardChangeUpsertOne) AddExpectedDuration(v int) *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.AddExpectedDuration(v)
+	})
+}
+
+// UpdateExpectedDuration sets the "expected_duration" field to the value that was provided on create.
+func (u *StandardChangeUpsertOne) UpdateExpectedDuration() *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateExpectedDuration()
+	})
+}
+
+// SetApprovalRequired sets the "approval_required" field.
+func (u *StandardChangeUpsertOne) SetApprovalRequired(v bool) *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetApprovalRequired(v)
+	})
+}
+
+// UpdateApprovalRequired sets the "approval_required" field to the value that was provided on create.
+func (u *StandardChangeUpsertOne) UpdateApprovalRequired() *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateApprovalRequired()
+	})
+}
+
+// SetAffectedCis sets the "affected_cis" field.
+func (u *StandardChangeUpsertOne) SetAffectedCis(v []string) *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetAffectedCis(v)
+	})
+}
+
+// UpdateAffectedCis sets the "affected_cis" field to the value that was provided on create.
+func (u *StandardChangeUpsertOne) UpdateAffectedCis() *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateAffectedCis()
+	})
+}
+
+// ClearAffectedCis clears the value of the "affected_cis" field.
+func (u *StandardChangeUpsertOne) ClearAffectedCis() *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.ClearAffectedCis()
+	})
+}
+
+// SetPrerequisites sets the "prerequisites" field.
+func (u *StandardChangeUpsertOne) SetPrerequisites(v []string) *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetPrerequisites(v)
+	})
+}
+
+// UpdatePrerequisites sets the "prerequisites" field to the value that was provided on create.
+func (u *StandardChangeUpsertOne) UpdatePrerequisites() *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdatePrerequisites()
+	})
+}
+
+// ClearPrerequisites clears the value of the "prerequisites" field.
+func (u *StandardChangeUpsertOne) ClearPrerequisites() *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.ClearPrerequisites()
+	})
+}
+
+// SetRemarks sets the "remarks" field.
+func (u *StandardChangeUpsertOne) SetRemarks(v string) *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetRemarks(v)
+	})
+}
+
+// UpdateRemarks sets the "remarks" field to the value that was provided on create.
+func (u *StandardChangeUpsertOne) UpdateRemarks() *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateRemarks()
+	})
+}
+
+// ClearRemarks clears the value of the "remarks" field.
+func (u *StandardChangeUpsertOne) ClearRemarks() *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.ClearRemarks()
+	})
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *StandardChangeUpsertOne) SetCreatedBy(v int) *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetCreatedBy(v)
+	})
+}
+
+// AddCreatedBy adds v to the "created_by" field.
+func (u *StandardChangeUpsertOne) AddCreatedBy(v int) *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.AddCreatedBy(v)
+	})
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *StandardChangeUpsertOne) UpdateCreatedBy() *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateCreatedBy()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *StandardChangeUpsertOne) SetTenantID(v int) *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *StandardChangeUpsertOne) AddTenantID(v int) *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *StandardChangeUpsertOne) UpdateTenantID() *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *StandardChangeUpsertOne) SetIsActive(v bool) *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *StandardChangeUpsertOne) UpdateIsActive() *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *StandardChangeUpsertOne) SetCreatedAt(v time.Time) *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *StandardChangeUpsertOne) UpdateCreatedAt() *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *StandardChangeUpsertOne) SetUpdatedAt(v time.Time) *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *StandardChangeUpsertOne) UpdateUpdatedAt() *StandardChangeUpsertOne {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *StandardChangeUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for StandardChangeCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *StandardChangeUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *StandardChangeUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *StandardChangeUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // StandardChangeCreateBulk is the builder for creating many StandardChange entities in bulk.
 type StandardChangeCreateBulk struct {
 	config
 	err      error
 	builders []*StandardChangeCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the StandardChange entities in the database.
@@ -518,6 +1216,7 @@ func (_c *StandardChangeCreateBulk) Save(ctx context.Context) ([]*StandardChange
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -568,6 +1267,418 @@ func (_c *StandardChangeCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *StandardChangeCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.StandardChange.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.StandardChangeUpsert) {
+//			SetTitle(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *StandardChangeCreateBulk) OnConflict(opts ...sql.ConflictOption) *StandardChangeUpsertBulk {
+	_c.conflict = opts
+	return &StandardChangeUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.StandardChange.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *StandardChangeCreateBulk) OnConflictColumns(columns ...string) *StandardChangeUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &StandardChangeUpsertBulk{
+		create: _c,
+	}
+}
+
+// StandardChangeUpsertBulk is the builder for "upsert"-ing
+// a bulk of StandardChange nodes.
+type StandardChangeUpsertBulk struct {
+	create *StandardChangeCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.StandardChange.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *StandardChangeUpsertBulk) UpdateNewValues() *StandardChangeUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.StandardChange.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *StandardChangeUpsertBulk) Ignore() *StandardChangeUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *StandardChangeUpsertBulk) DoNothing() *StandardChangeUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the StandardChangeCreateBulk.OnConflict
+// documentation for more info.
+func (u *StandardChangeUpsertBulk) Update(set func(*StandardChangeUpsert)) *StandardChangeUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&StandardChangeUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTitle sets the "title" field.
+func (u *StandardChangeUpsertBulk) SetTitle(v string) *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetTitle(v)
+	})
+}
+
+// UpdateTitle sets the "title" field to the value that was provided on create.
+func (u *StandardChangeUpsertBulk) UpdateTitle() *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateTitle()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *StandardChangeUpsertBulk) SetDescription(v string) *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *StandardChangeUpsertBulk) UpdateDescription() *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *StandardChangeUpsertBulk) ClearDescription() *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetImplementationPlan sets the "implementation_plan" field.
+func (u *StandardChangeUpsertBulk) SetImplementationPlan(v string) *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetImplementationPlan(v)
+	})
+}
+
+// UpdateImplementationPlan sets the "implementation_plan" field to the value that was provided on create.
+func (u *StandardChangeUpsertBulk) UpdateImplementationPlan() *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateImplementationPlan()
+	})
+}
+
+// SetRollbackPlan sets the "rollback_plan" field.
+func (u *StandardChangeUpsertBulk) SetRollbackPlan(v string) *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetRollbackPlan(v)
+	})
+}
+
+// UpdateRollbackPlan sets the "rollback_plan" field to the value that was provided on create.
+func (u *StandardChangeUpsertBulk) UpdateRollbackPlan() *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateRollbackPlan()
+	})
+}
+
+// SetJustification sets the "justification" field.
+func (u *StandardChangeUpsertBulk) SetJustification(v string) *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetJustification(v)
+	})
+}
+
+// UpdateJustification sets the "justification" field to the value that was provided on create.
+func (u *StandardChangeUpsertBulk) UpdateJustification() *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateJustification()
+	})
+}
+
+// ClearJustification clears the value of the "justification" field.
+func (u *StandardChangeUpsertBulk) ClearJustification() *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.ClearJustification()
+	})
+}
+
+// SetCategory sets the "category" field.
+func (u *StandardChangeUpsertBulk) SetCategory(v string) *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetCategory(v)
+	})
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *StandardChangeUpsertBulk) UpdateCategory() *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateCategory()
+	})
+}
+
+// SetRiskLevel sets the "risk_level" field.
+func (u *StandardChangeUpsertBulk) SetRiskLevel(v string) *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetRiskLevel(v)
+	})
+}
+
+// UpdateRiskLevel sets the "risk_level" field to the value that was provided on create.
+func (u *StandardChangeUpsertBulk) UpdateRiskLevel() *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateRiskLevel()
+	})
+}
+
+// SetImpactScope sets the "impact_scope" field.
+func (u *StandardChangeUpsertBulk) SetImpactScope(v string) *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetImpactScope(v)
+	})
+}
+
+// UpdateImpactScope sets the "impact_scope" field to the value that was provided on create.
+func (u *StandardChangeUpsertBulk) UpdateImpactScope() *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateImpactScope()
+	})
+}
+
+// SetExpectedDuration sets the "expected_duration" field.
+func (u *StandardChangeUpsertBulk) SetExpectedDuration(v int) *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetExpectedDuration(v)
+	})
+}
+
+// AddExpectedDuration adds v to the "expected_duration" field.
+func (u *StandardChangeUpsertBulk) AddExpectedDuration(v int) *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.AddExpectedDuration(v)
+	})
+}
+
+// UpdateExpectedDuration sets the "expected_duration" field to the value that was provided on create.
+func (u *StandardChangeUpsertBulk) UpdateExpectedDuration() *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateExpectedDuration()
+	})
+}
+
+// SetApprovalRequired sets the "approval_required" field.
+func (u *StandardChangeUpsertBulk) SetApprovalRequired(v bool) *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetApprovalRequired(v)
+	})
+}
+
+// UpdateApprovalRequired sets the "approval_required" field to the value that was provided on create.
+func (u *StandardChangeUpsertBulk) UpdateApprovalRequired() *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateApprovalRequired()
+	})
+}
+
+// SetAffectedCis sets the "affected_cis" field.
+func (u *StandardChangeUpsertBulk) SetAffectedCis(v []string) *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetAffectedCis(v)
+	})
+}
+
+// UpdateAffectedCis sets the "affected_cis" field to the value that was provided on create.
+func (u *StandardChangeUpsertBulk) UpdateAffectedCis() *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateAffectedCis()
+	})
+}
+
+// ClearAffectedCis clears the value of the "affected_cis" field.
+func (u *StandardChangeUpsertBulk) ClearAffectedCis() *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.ClearAffectedCis()
+	})
+}
+
+// SetPrerequisites sets the "prerequisites" field.
+func (u *StandardChangeUpsertBulk) SetPrerequisites(v []string) *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetPrerequisites(v)
+	})
+}
+
+// UpdatePrerequisites sets the "prerequisites" field to the value that was provided on create.
+func (u *StandardChangeUpsertBulk) UpdatePrerequisites() *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdatePrerequisites()
+	})
+}
+
+// ClearPrerequisites clears the value of the "prerequisites" field.
+func (u *StandardChangeUpsertBulk) ClearPrerequisites() *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.ClearPrerequisites()
+	})
+}
+
+// SetRemarks sets the "remarks" field.
+func (u *StandardChangeUpsertBulk) SetRemarks(v string) *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetRemarks(v)
+	})
+}
+
+// UpdateRemarks sets the "remarks" field to the value that was provided on create.
+func (u *StandardChangeUpsertBulk) UpdateRemarks() *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateRemarks()
+	})
+}
+
+// ClearRemarks clears the value of the "remarks" field.
+func (u *StandardChangeUpsertBulk) ClearRemarks() *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.ClearRemarks()
+	})
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *StandardChangeUpsertBulk) SetCreatedBy(v int) *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetCreatedBy(v)
+	})
+}
+
+// AddCreatedBy adds v to the "created_by" field.
+func (u *StandardChangeUpsertBulk) AddCreatedBy(v int) *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.AddCreatedBy(v)
+	})
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *StandardChangeUpsertBulk) UpdateCreatedBy() *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateCreatedBy()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *StandardChangeUpsertBulk) SetTenantID(v int) *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *StandardChangeUpsertBulk) AddTenantID(v int) *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *StandardChangeUpsertBulk) UpdateTenantID() *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *StandardChangeUpsertBulk) SetIsActive(v bool) *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *StandardChangeUpsertBulk) UpdateIsActive() *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *StandardChangeUpsertBulk) SetCreatedAt(v time.Time) *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *StandardChangeUpsertBulk) UpdateCreatedAt() *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *StandardChangeUpsertBulk) SetUpdatedAt(v time.Time) *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *StandardChangeUpsertBulk) UpdateUpdatedAt() *StandardChangeUpsertBulk {
+	return u.Update(func(s *StandardChangeUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *StandardChangeUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the StandardChangeCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for StandardChangeCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *StandardChangeUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

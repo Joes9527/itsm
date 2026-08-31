@@ -12,6 +12,7 @@ import (
 	"itsm-backend/ent/workflow"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -21,6 +22,7 @@ type TicketCategoryCreate struct {
 	config
 	mutation *TicketCategoryMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetName sets the "name" field.
@@ -413,6 +415,7 @@ func (_c *TicketCategoryCreate) createSpec() (*TicketCategory, *sqlgraph.CreateS
 		_node = &TicketCategory{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(ticketcategory.Table, sqlgraph.NewFieldSpec(ticketcategory.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(ticketcategory.FieldName, field.TypeString, value)
 		_node.Name = value
@@ -555,11 +558,719 @@ func (_c *TicketCategoryCreate) createSpec() (*TicketCategory, *sqlgraph.CreateS
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.TicketCategory.Create().
+//		SetName(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.TicketCategoryUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *TicketCategoryCreate) OnConflict(opts ...sql.ConflictOption) *TicketCategoryUpsertOne {
+	_c.conflict = opts
+	return &TicketCategoryUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.TicketCategory.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *TicketCategoryCreate) OnConflictColumns(columns ...string) *TicketCategoryUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &TicketCategoryUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// TicketCategoryUpsertOne is the builder for "upsert"-ing
+	//  one TicketCategory node.
+	TicketCategoryUpsertOne struct {
+		create *TicketCategoryCreate
+	}
+
+	// TicketCategoryUpsert is the "OnConflict" setter.
+	TicketCategoryUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetName sets the "name" field.
+func (u *TicketCategoryUpsert) SetName(v string) *TicketCategoryUpsert {
+	u.Set(ticketcategory.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *TicketCategoryUpsert) UpdateName() *TicketCategoryUpsert {
+	u.SetExcluded(ticketcategory.FieldName)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *TicketCategoryUpsert) SetDescription(v string) *TicketCategoryUpsert {
+	u.Set(ticketcategory.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *TicketCategoryUpsert) UpdateDescription() *TicketCategoryUpsert {
+	u.SetExcluded(ticketcategory.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *TicketCategoryUpsert) ClearDescription() *TicketCategoryUpsert {
+	u.SetNull(ticketcategory.FieldDescription)
+	return u
+}
+
+// SetCode sets the "code" field.
+func (u *TicketCategoryUpsert) SetCode(v string) *TicketCategoryUpsert {
+	u.Set(ticketcategory.FieldCode, v)
+	return u
+}
+
+// UpdateCode sets the "code" field to the value that was provided on create.
+func (u *TicketCategoryUpsert) UpdateCode() *TicketCategoryUpsert {
+	u.SetExcluded(ticketcategory.FieldCode)
+	return u
+}
+
+// SetParentID sets the "parent_id" field.
+func (u *TicketCategoryUpsert) SetParentID(v int) *TicketCategoryUpsert {
+	u.Set(ticketcategory.FieldParentID, v)
+	return u
+}
+
+// UpdateParentID sets the "parent_id" field to the value that was provided on create.
+func (u *TicketCategoryUpsert) UpdateParentID() *TicketCategoryUpsert {
+	u.SetExcluded(ticketcategory.FieldParentID)
+	return u
+}
+
+// ClearParentID clears the value of the "parent_id" field.
+func (u *TicketCategoryUpsert) ClearParentID() *TicketCategoryUpsert {
+	u.SetNull(ticketcategory.FieldParentID)
+	return u
+}
+
+// SetLevel sets the "level" field.
+func (u *TicketCategoryUpsert) SetLevel(v int) *TicketCategoryUpsert {
+	u.Set(ticketcategory.FieldLevel, v)
+	return u
+}
+
+// UpdateLevel sets the "level" field to the value that was provided on create.
+func (u *TicketCategoryUpsert) UpdateLevel() *TicketCategoryUpsert {
+	u.SetExcluded(ticketcategory.FieldLevel)
+	return u
+}
+
+// AddLevel adds v to the "level" field.
+func (u *TicketCategoryUpsert) AddLevel(v int) *TicketCategoryUpsert {
+	u.Add(ticketcategory.FieldLevel, v)
+	return u
+}
+
+// SetSortOrder sets the "sort_order" field.
+func (u *TicketCategoryUpsert) SetSortOrder(v int) *TicketCategoryUpsert {
+	u.Set(ticketcategory.FieldSortOrder, v)
+	return u
+}
+
+// UpdateSortOrder sets the "sort_order" field to the value that was provided on create.
+func (u *TicketCategoryUpsert) UpdateSortOrder() *TicketCategoryUpsert {
+	u.SetExcluded(ticketcategory.FieldSortOrder)
+	return u
+}
+
+// AddSortOrder adds v to the "sort_order" field.
+func (u *TicketCategoryUpsert) AddSortOrder(v int) *TicketCategoryUpsert {
+	u.Add(ticketcategory.FieldSortOrder, v)
+	return u
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *TicketCategoryUpsert) SetIsActive(v bool) *TicketCategoryUpsert {
+	u.Set(ticketcategory.FieldIsActive, v)
+	return u
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *TicketCategoryUpsert) UpdateIsActive() *TicketCategoryUpsert {
+	u.SetExcluded(ticketcategory.FieldIsActive)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *TicketCategoryUpsert) SetTenantID(v int) *TicketCategoryUpsert {
+	u.Set(ticketcategory.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *TicketCategoryUpsert) UpdateTenantID() *TicketCategoryUpsert {
+	u.SetExcluded(ticketcategory.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *TicketCategoryUpsert) AddTenantID(v int) *TicketCategoryUpsert {
+	u.Add(ticketcategory.FieldTenantID, v)
+	return u
+}
+
+// SetDepartmentID sets the "department_id" field.
+func (u *TicketCategoryUpsert) SetDepartmentID(v int) *TicketCategoryUpsert {
+	u.Set(ticketcategory.FieldDepartmentID, v)
+	return u
+}
+
+// UpdateDepartmentID sets the "department_id" field to the value that was provided on create.
+func (u *TicketCategoryUpsert) UpdateDepartmentID() *TicketCategoryUpsert {
+	u.SetExcluded(ticketcategory.FieldDepartmentID)
+	return u
+}
+
+// ClearDepartmentID clears the value of the "department_id" field.
+func (u *TicketCategoryUpsert) ClearDepartmentID() *TicketCategoryUpsert {
+	u.SetNull(ticketcategory.FieldDepartmentID)
+	return u
+}
+
+// SetWorkflowID sets the "workflow_id" field.
+func (u *TicketCategoryUpsert) SetWorkflowID(v int) *TicketCategoryUpsert {
+	u.Set(ticketcategory.FieldWorkflowID, v)
+	return u
+}
+
+// UpdateWorkflowID sets the "workflow_id" field to the value that was provided on create.
+func (u *TicketCategoryUpsert) UpdateWorkflowID() *TicketCategoryUpsert {
+	u.SetExcluded(ticketcategory.FieldWorkflowID)
+	return u
+}
+
+// ClearWorkflowID clears the value of the "workflow_id" field.
+func (u *TicketCategoryUpsert) ClearWorkflowID() *TicketCategoryUpsert {
+	u.SetNull(ticketcategory.FieldWorkflowID)
+	return u
+}
+
+// SetItsmType sets the "itsm_type" field.
+func (u *TicketCategoryUpsert) SetItsmType(v string) *TicketCategoryUpsert {
+	u.Set(ticketcategory.FieldItsmType, v)
+	return u
+}
+
+// UpdateItsmType sets the "itsm_type" field to the value that was provided on create.
+func (u *TicketCategoryUpsert) UpdateItsmType() *TicketCategoryUpsert {
+	u.SetExcluded(ticketcategory.FieldItsmType)
+	return u
+}
+
+// ClearItsmType clears the value of the "itsm_type" field.
+func (u *TicketCategoryUpsert) ClearItsmType() *TicketCategoryUpsert {
+	u.SetNull(ticketcategory.FieldItsmType)
+	return u
+}
+
+// SetDefaultPriority sets the "default_priority" field.
+func (u *TicketCategoryUpsert) SetDefaultPriority(v string) *TicketCategoryUpsert {
+	u.Set(ticketcategory.FieldDefaultPriority, v)
+	return u
+}
+
+// UpdateDefaultPriority sets the "default_priority" field to the value that was provided on create.
+func (u *TicketCategoryUpsert) UpdateDefaultPriority() *TicketCategoryUpsert {
+	u.SetExcluded(ticketcategory.FieldDefaultPriority)
+	return u
+}
+
+// ClearDefaultPriority clears the value of the "default_priority" field.
+func (u *TicketCategoryUpsert) ClearDefaultPriority() *TicketCategoryUpsert {
+	u.SetNull(ticketcategory.FieldDefaultPriority)
+	return u
+}
+
+// SetSLATier sets the "sla_tier" field.
+func (u *TicketCategoryUpsert) SetSLATier(v string) *TicketCategoryUpsert {
+	u.Set(ticketcategory.FieldSLATier, v)
+	return u
+}
+
+// UpdateSLATier sets the "sla_tier" field to the value that was provided on create.
+func (u *TicketCategoryUpsert) UpdateSLATier() *TicketCategoryUpsert {
+	u.SetExcluded(ticketcategory.FieldSLATier)
+	return u
+}
+
+// ClearSLATier clears the value of the "sla_tier" field.
+func (u *TicketCategoryUpsert) ClearSLATier() *TicketCategoryUpsert {
+	u.SetNull(ticketcategory.FieldSLATier)
+	return u
+}
+
+// SetDefaultResolver sets the "default_resolver" field.
+func (u *TicketCategoryUpsert) SetDefaultResolver(v string) *TicketCategoryUpsert {
+	u.Set(ticketcategory.FieldDefaultResolver, v)
+	return u
+}
+
+// UpdateDefaultResolver sets the "default_resolver" field to the value that was provided on create.
+func (u *TicketCategoryUpsert) UpdateDefaultResolver() *TicketCategoryUpsert {
+	u.SetExcluded(ticketcategory.FieldDefaultResolver)
+	return u
+}
+
+// ClearDefaultResolver clears the value of the "default_resolver" field.
+func (u *TicketCategoryUpsert) ClearDefaultResolver() *TicketCategoryUpsert {
+	u.SetNull(ticketcategory.FieldDefaultResolver)
+	return u
+}
+
+// SetIsUserFacing sets the "is_user_facing" field.
+func (u *TicketCategoryUpsert) SetIsUserFacing(v bool) *TicketCategoryUpsert {
+	u.Set(ticketcategory.FieldIsUserFacing, v)
+	return u
+}
+
+// UpdateIsUserFacing sets the "is_user_facing" field to the value that was provided on create.
+func (u *TicketCategoryUpsert) UpdateIsUserFacing() *TicketCategoryUpsert {
+	u.SetExcluded(ticketcategory.FieldIsUserFacing)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *TicketCategoryUpsert) SetCreatedAt(v time.Time) *TicketCategoryUpsert {
+	u.Set(ticketcategory.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *TicketCategoryUpsert) UpdateCreatedAt() *TicketCategoryUpsert {
+	u.SetExcluded(ticketcategory.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *TicketCategoryUpsert) SetUpdatedAt(v time.Time) *TicketCategoryUpsert {
+	u.Set(ticketcategory.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *TicketCategoryUpsert) UpdateUpdatedAt() *TicketCategoryUpsert {
+	u.SetExcluded(ticketcategory.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.TicketCategory.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *TicketCategoryUpsertOne) UpdateNewValues() *TicketCategoryUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.TicketCategory.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *TicketCategoryUpsertOne) Ignore() *TicketCategoryUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *TicketCategoryUpsertOne) DoNothing() *TicketCategoryUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the TicketCategoryCreate.OnConflict
+// documentation for more info.
+func (u *TicketCategoryUpsertOne) Update(set func(*TicketCategoryUpsert)) *TicketCategoryUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&TicketCategoryUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *TicketCategoryUpsertOne) SetName(v string) *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *TicketCategoryUpsertOne) UpdateName() *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *TicketCategoryUpsertOne) SetDescription(v string) *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *TicketCategoryUpsertOne) UpdateDescription() *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *TicketCategoryUpsertOne) ClearDescription() *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetCode sets the "code" field.
+func (u *TicketCategoryUpsertOne) SetCode(v string) *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetCode(v)
+	})
+}
+
+// UpdateCode sets the "code" field to the value that was provided on create.
+func (u *TicketCategoryUpsertOne) UpdateCode() *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateCode()
+	})
+}
+
+// SetParentID sets the "parent_id" field.
+func (u *TicketCategoryUpsertOne) SetParentID(v int) *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetParentID(v)
+	})
+}
+
+// UpdateParentID sets the "parent_id" field to the value that was provided on create.
+func (u *TicketCategoryUpsertOne) UpdateParentID() *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateParentID()
+	})
+}
+
+// ClearParentID clears the value of the "parent_id" field.
+func (u *TicketCategoryUpsertOne) ClearParentID() *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.ClearParentID()
+	})
+}
+
+// SetLevel sets the "level" field.
+func (u *TicketCategoryUpsertOne) SetLevel(v int) *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetLevel(v)
+	})
+}
+
+// AddLevel adds v to the "level" field.
+func (u *TicketCategoryUpsertOne) AddLevel(v int) *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.AddLevel(v)
+	})
+}
+
+// UpdateLevel sets the "level" field to the value that was provided on create.
+func (u *TicketCategoryUpsertOne) UpdateLevel() *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateLevel()
+	})
+}
+
+// SetSortOrder sets the "sort_order" field.
+func (u *TicketCategoryUpsertOne) SetSortOrder(v int) *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetSortOrder(v)
+	})
+}
+
+// AddSortOrder adds v to the "sort_order" field.
+func (u *TicketCategoryUpsertOne) AddSortOrder(v int) *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.AddSortOrder(v)
+	})
+}
+
+// UpdateSortOrder sets the "sort_order" field to the value that was provided on create.
+func (u *TicketCategoryUpsertOne) UpdateSortOrder() *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateSortOrder()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *TicketCategoryUpsertOne) SetIsActive(v bool) *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *TicketCategoryUpsertOne) UpdateIsActive() *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *TicketCategoryUpsertOne) SetTenantID(v int) *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *TicketCategoryUpsertOne) AddTenantID(v int) *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *TicketCategoryUpsertOne) UpdateTenantID() *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetDepartmentID sets the "department_id" field.
+func (u *TicketCategoryUpsertOne) SetDepartmentID(v int) *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetDepartmentID(v)
+	})
+}
+
+// UpdateDepartmentID sets the "department_id" field to the value that was provided on create.
+func (u *TicketCategoryUpsertOne) UpdateDepartmentID() *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateDepartmentID()
+	})
+}
+
+// ClearDepartmentID clears the value of the "department_id" field.
+func (u *TicketCategoryUpsertOne) ClearDepartmentID() *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.ClearDepartmentID()
+	})
+}
+
+// SetWorkflowID sets the "workflow_id" field.
+func (u *TicketCategoryUpsertOne) SetWorkflowID(v int) *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetWorkflowID(v)
+	})
+}
+
+// UpdateWorkflowID sets the "workflow_id" field to the value that was provided on create.
+func (u *TicketCategoryUpsertOne) UpdateWorkflowID() *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateWorkflowID()
+	})
+}
+
+// ClearWorkflowID clears the value of the "workflow_id" field.
+func (u *TicketCategoryUpsertOne) ClearWorkflowID() *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.ClearWorkflowID()
+	})
+}
+
+// SetItsmType sets the "itsm_type" field.
+func (u *TicketCategoryUpsertOne) SetItsmType(v string) *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetItsmType(v)
+	})
+}
+
+// UpdateItsmType sets the "itsm_type" field to the value that was provided on create.
+func (u *TicketCategoryUpsertOne) UpdateItsmType() *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateItsmType()
+	})
+}
+
+// ClearItsmType clears the value of the "itsm_type" field.
+func (u *TicketCategoryUpsertOne) ClearItsmType() *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.ClearItsmType()
+	})
+}
+
+// SetDefaultPriority sets the "default_priority" field.
+func (u *TicketCategoryUpsertOne) SetDefaultPriority(v string) *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetDefaultPriority(v)
+	})
+}
+
+// UpdateDefaultPriority sets the "default_priority" field to the value that was provided on create.
+func (u *TicketCategoryUpsertOne) UpdateDefaultPriority() *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateDefaultPriority()
+	})
+}
+
+// ClearDefaultPriority clears the value of the "default_priority" field.
+func (u *TicketCategoryUpsertOne) ClearDefaultPriority() *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.ClearDefaultPriority()
+	})
+}
+
+// SetSLATier sets the "sla_tier" field.
+func (u *TicketCategoryUpsertOne) SetSLATier(v string) *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetSLATier(v)
+	})
+}
+
+// UpdateSLATier sets the "sla_tier" field to the value that was provided on create.
+func (u *TicketCategoryUpsertOne) UpdateSLATier() *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateSLATier()
+	})
+}
+
+// ClearSLATier clears the value of the "sla_tier" field.
+func (u *TicketCategoryUpsertOne) ClearSLATier() *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.ClearSLATier()
+	})
+}
+
+// SetDefaultResolver sets the "default_resolver" field.
+func (u *TicketCategoryUpsertOne) SetDefaultResolver(v string) *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetDefaultResolver(v)
+	})
+}
+
+// UpdateDefaultResolver sets the "default_resolver" field to the value that was provided on create.
+func (u *TicketCategoryUpsertOne) UpdateDefaultResolver() *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateDefaultResolver()
+	})
+}
+
+// ClearDefaultResolver clears the value of the "default_resolver" field.
+func (u *TicketCategoryUpsertOne) ClearDefaultResolver() *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.ClearDefaultResolver()
+	})
+}
+
+// SetIsUserFacing sets the "is_user_facing" field.
+func (u *TicketCategoryUpsertOne) SetIsUserFacing(v bool) *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetIsUserFacing(v)
+	})
+}
+
+// UpdateIsUserFacing sets the "is_user_facing" field to the value that was provided on create.
+func (u *TicketCategoryUpsertOne) UpdateIsUserFacing() *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateIsUserFacing()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *TicketCategoryUpsertOne) SetCreatedAt(v time.Time) *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *TicketCategoryUpsertOne) UpdateCreatedAt() *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *TicketCategoryUpsertOne) SetUpdatedAt(v time.Time) *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *TicketCategoryUpsertOne) UpdateUpdatedAt() *TicketCategoryUpsertOne {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *TicketCategoryUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for TicketCategoryCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *TicketCategoryUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *TicketCategoryUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *TicketCategoryUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // TicketCategoryCreateBulk is the builder for creating many TicketCategory entities in bulk.
 type TicketCategoryCreateBulk struct {
 	config
 	err      error
 	builders []*TicketCategoryCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the TicketCategory entities in the database.
@@ -589,6 +1300,7 @@ func (_c *TicketCategoryCreateBulk) Save(ctx context.Context) ([]*TicketCategory
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -639,6 +1351,425 @@ func (_c *TicketCategoryCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *TicketCategoryCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.TicketCategory.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.TicketCategoryUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *TicketCategoryCreateBulk) OnConflict(opts ...sql.ConflictOption) *TicketCategoryUpsertBulk {
+	_c.conflict = opts
+	return &TicketCategoryUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.TicketCategory.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *TicketCategoryCreateBulk) OnConflictColumns(columns ...string) *TicketCategoryUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &TicketCategoryUpsertBulk{
+		create: _c,
+	}
+}
+
+// TicketCategoryUpsertBulk is the builder for "upsert"-ing
+// a bulk of TicketCategory nodes.
+type TicketCategoryUpsertBulk struct {
+	create *TicketCategoryCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.TicketCategory.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *TicketCategoryUpsertBulk) UpdateNewValues() *TicketCategoryUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.TicketCategory.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *TicketCategoryUpsertBulk) Ignore() *TicketCategoryUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *TicketCategoryUpsertBulk) DoNothing() *TicketCategoryUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the TicketCategoryCreateBulk.OnConflict
+// documentation for more info.
+func (u *TicketCategoryUpsertBulk) Update(set func(*TicketCategoryUpsert)) *TicketCategoryUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&TicketCategoryUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *TicketCategoryUpsertBulk) SetName(v string) *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *TicketCategoryUpsertBulk) UpdateName() *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *TicketCategoryUpsertBulk) SetDescription(v string) *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *TicketCategoryUpsertBulk) UpdateDescription() *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *TicketCategoryUpsertBulk) ClearDescription() *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetCode sets the "code" field.
+func (u *TicketCategoryUpsertBulk) SetCode(v string) *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetCode(v)
+	})
+}
+
+// UpdateCode sets the "code" field to the value that was provided on create.
+func (u *TicketCategoryUpsertBulk) UpdateCode() *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateCode()
+	})
+}
+
+// SetParentID sets the "parent_id" field.
+func (u *TicketCategoryUpsertBulk) SetParentID(v int) *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetParentID(v)
+	})
+}
+
+// UpdateParentID sets the "parent_id" field to the value that was provided on create.
+func (u *TicketCategoryUpsertBulk) UpdateParentID() *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateParentID()
+	})
+}
+
+// ClearParentID clears the value of the "parent_id" field.
+func (u *TicketCategoryUpsertBulk) ClearParentID() *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.ClearParentID()
+	})
+}
+
+// SetLevel sets the "level" field.
+func (u *TicketCategoryUpsertBulk) SetLevel(v int) *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetLevel(v)
+	})
+}
+
+// AddLevel adds v to the "level" field.
+func (u *TicketCategoryUpsertBulk) AddLevel(v int) *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.AddLevel(v)
+	})
+}
+
+// UpdateLevel sets the "level" field to the value that was provided on create.
+func (u *TicketCategoryUpsertBulk) UpdateLevel() *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateLevel()
+	})
+}
+
+// SetSortOrder sets the "sort_order" field.
+func (u *TicketCategoryUpsertBulk) SetSortOrder(v int) *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetSortOrder(v)
+	})
+}
+
+// AddSortOrder adds v to the "sort_order" field.
+func (u *TicketCategoryUpsertBulk) AddSortOrder(v int) *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.AddSortOrder(v)
+	})
+}
+
+// UpdateSortOrder sets the "sort_order" field to the value that was provided on create.
+func (u *TicketCategoryUpsertBulk) UpdateSortOrder() *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateSortOrder()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *TicketCategoryUpsertBulk) SetIsActive(v bool) *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *TicketCategoryUpsertBulk) UpdateIsActive() *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *TicketCategoryUpsertBulk) SetTenantID(v int) *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *TicketCategoryUpsertBulk) AddTenantID(v int) *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *TicketCategoryUpsertBulk) UpdateTenantID() *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetDepartmentID sets the "department_id" field.
+func (u *TicketCategoryUpsertBulk) SetDepartmentID(v int) *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetDepartmentID(v)
+	})
+}
+
+// UpdateDepartmentID sets the "department_id" field to the value that was provided on create.
+func (u *TicketCategoryUpsertBulk) UpdateDepartmentID() *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateDepartmentID()
+	})
+}
+
+// ClearDepartmentID clears the value of the "department_id" field.
+func (u *TicketCategoryUpsertBulk) ClearDepartmentID() *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.ClearDepartmentID()
+	})
+}
+
+// SetWorkflowID sets the "workflow_id" field.
+func (u *TicketCategoryUpsertBulk) SetWorkflowID(v int) *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetWorkflowID(v)
+	})
+}
+
+// UpdateWorkflowID sets the "workflow_id" field to the value that was provided on create.
+func (u *TicketCategoryUpsertBulk) UpdateWorkflowID() *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateWorkflowID()
+	})
+}
+
+// ClearWorkflowID clears the value of the "workflow_id" field.
+func (u *TicketCategoryUpsertBulk) ClearWorkflowID() *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.ClearWorkflowID()
+	})
+}
+
+// SetItsmType sets the "itsm_type" field.
+func (u *TicketCategoryUpsertBulk) SetItsmType(v string) *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetItsmType(v)
+	})
+}
+
+// UpdateItsmType sets the "itsm_type" field to the value that was provided on create.
+func (u *TicketCategoryUpsertBulk) UpdateItsmType() *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateItsmType()
+	})
+}
+
+// ClearItsmType clears the value of the "itsm_type" field.
+func (u *TicketCategoryUpsertBulk) ClearItsmType() *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.ClearItsmType()
+	})
+}
+
+// SetDefaultPriority sets the "default_priority" field.
+func (u *TicketCategoryUpsertBulk) SetDefaultPriority(v string) *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetDefaultPriority(v)
+	})
+}
+
+// UpdateDefaultPriority sets the "default_priority" field to the value that was provided on create.
+func (u *TicketCategoryUpsertBulk) UpdateDefaultPriority() *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateDefaultPriority()
+	})
+}
+
+// ClearDefaultPriority clears the value of the "default_priority" field.
+func (u *TicketCategoryUpsertBulk) ClearDefaultPriority() *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.ClearDefaultPriority()
+	})
+}
+
+// SetSLATier sets the "sla_tier" field.
+func (u *TicketCategoryUpsertBulk) SetSLATier(v string) *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetSLATier(v)
+	})
+}
+
+// UpdateSLATier sets the "sla_tier" field to the value that was provided on create.
+func (u *TicketCategoryUpsertBulk) UpdateSLATier() *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateSLATier()
+	})
+}
+
+// ClearSLATier clears the value of the "sla_tier" field.
+func (u *TicketCategoryUpsertBulk) ClearSLATier() *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.ClearSLATier()
+	})
+}
+
+// SetDefaultResolver sets the "default_resolver" field.
+func (u *TicketCategoryUpsertBulk) SetDefaultResolver(v string) *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetDefaultResolver(v)
+	})
+}
+
+// UpdateDefaultResolver sets the "default_resolver" field to the value that was provided on create.
+func (u *TicketCategoryUpsertBulk) UpdateDefaultResolver() *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateDefaultResolver()
+	})
+}
+
+// ClearDefaultResolver clears the value of the "default_resolver" field.
+func (u *TicketCategoryUpsertBulk) ClearDefaultResolver() *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.ClearDefaultResolver()
+	})
+}
+
+// SetIsUserFacing sets the "is_user_facing" field.
+func (u *TicketCategoryUpsertBulk) SetIsUserFacing(v bool) *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetIsUserFacing(v)
+	})
+}
+
+// UpdateIsUserFacing sets the "is_user_facing" field to the value that was provided on create.
+func (u *TicketCategoryUpsertBulk) UpdateIsUserFacing() *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateIsUserFacing()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *TicketCategoryUpsertBulk) SetCreatedAt(v time.Time) *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *TicketCategoryUpsertBulk) UpdateCreatedAt() *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *TicketCategoryUpsertBulk) SetUpdatedAt(v time.Time) *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *TicketCategoryUpsertBulk) UpdateUpdatedAt() *TicketCategoryUpsertBulk {
+	return u.Update(func(s *TicketCategoryUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *TicketCategoryUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the TicketCategoryCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for TicketCategoryCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *TicketCategoryUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

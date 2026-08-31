@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/workflowtask"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,6 +20,7 @@ type WorkflowTaskCreate struct {
 	config
 	mutation *WorkflowTaskMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetTaskID sets the "task_id" field.
@@ -379,6 +381,7 @@ func (_c *WorkflowTaskCreate) createSpec() (*WorkflowTask, *sqlgraph.CreateSpec)
 		_node = &WorkflowTask{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(workflowtask.Table, sqlgraph.NewFieldSpec(workflowtask.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.TaskID(); ok {
 		_spec.SetField(workflowtask.FieldTaskID, field.TypeString, value)
 		_node.TaskID = value
@@ -471,11 +474,758 @@ func (_c *WorkflowTaskCreate) createSpec() (*WorkflowTask, *sqlgraph.CreateSpec)
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.WorkflowTask.Create().
+//		SetTaskID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.WorkflowTaskUpsert) {
+//			SetTaskID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *WorkflowTaskCreate) OnConflict(opts ...sql.ConflictOption) *WorkflowTaskUpsertOne {
+	_c.conflict = opts
+	return &WorkflowTaskUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.WorkflowTask.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *WorkflowTaskCreate) OnConflictColumns(columns ...string) *WorkflowTaskUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &WorkflowTaskUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// WorkflowTaskUpsertOne is the builder for "upsert"-ing
+	//  one WorkflowTask node.
+	WorkflowTaskUpsertOne struct {
+		create *WorkflowTaskCreate
+	}
+
+	// WorkflowTaskUpsert is the "OnConflict" setter.
+	WorkflowTaskUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetTaskID sets the "task_id" field.
+func (u *WorkflowTaskUpsert) SetTaskID(v string) *WorkflowTaskUpsert {
+	u.Set(workflowtask.FieldTaskID, v)
+	return u
+}
+
+// UpdateTaskID sets the "task_id" field to the value that was provided on create.
+func (u *WorkflowTaskUpsert) UpdateTaskID() *WorkflowTaskUpsert {
+	u.SetExcluded(workflowtask.FieldTaskID)
+	return u
+}
+
+// SetInstanceID sets the "instance_id" field.
+func (u *WorkflowTaskUpsert) SetInstanceID(v int) *WorkflowTaskUpsert {
+	u.Set(workflowtask.FieldInstanceID, v)
+	return u
+}
+
+// UpdateInstanceID sets the "instance_id" field to the value that was provided on create.
+func (u *WorkflowTaskUpsert) UpdateInstanceID() *WorkflowTaskUpsert {
+	u.SetExcluded(workflowtask.FieldInstanceID)
+	return u
+}
+
+// SetActivityID sets the "activity_id" field.
+func (u *WorkflowTaskUpsert) SetActivityID(v string) *WorkflowTaskUpsert {
+	u.Set(workflowtask.FieldActivityID, v)
+	return u
+}
+
+// UpdateActivityID sets the "activity_id" field to the value that was provided on create.
+func (u *WorkflowTaskUpsert) UpdateActivityID() *WorkflowTaskUpsert {
+	u.SetExcluded(workflowtask.FieldActivityID)
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *WorkflowTaskUpsert) SetName(v string) *WorkflowTaskUpsert {
+	u.Set(workflowtask.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *WorkflowTaskUpsert) UpdateName() *WorkflowTaskUpsert {
+	u.SetExcluded(workflowtask.FieldName)
+	return u
+}
+
+// SetType sets the "type" field.
+func (u *WorkflowTaskUpsert) SetType(v string) *WorkflowTaskUpsert {
+	u.Set(workflowtask.FieldType, v)
+	return u
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *WorkflowTaskUpsert) UpdateType() *WorkflowTaskUpsert {
+	u.SetExcluded(workflowtask.FieldType)
+	return u
+}
+
+// SetAssignee sets the "assignee" field.
+func (u *WorkflowTaskUpsert) SetAssignee(v string) *WorkflowTaskUpsert {
+	u.Set(workflowtask.FieldAssignee, v)
+	return u
+}
+
+// UpdateAssignee sets the "assignee" field to the value that was provided on create.
+func (u *WorkflowTaskUpsert) UpdateAssignee() *WorkflowTaskUpsert {
+	u.SetExcluded(workflowtask.FieldAssignee)
+	return u
+}
+
+// ClearAssignee clears the value of the "assignee" field.
+func (u *WorkflowTaskUpsert) ClearAssignee() *WorkflowTaskUpsert {
+	u.SetNull(workflowtask.FieldAssignee)
+	return u
+}
+
+// SetCandidateUsers sets the "candidate_users" field.
+func (u *WorkflowTaskUpsert) SetCandidateUsers(v string) *WorkflowTaskUpsert {
+	u.Set(workflowtask.FieldCandidateUsers, v)
+	return u
+}
+
+// UpdateCandidateUsers sets the "candidate_users" field to the value that was provided on create.
+func (u *WorkflowTaskUpsert) UpdateCandidateUsers() *WorkflowTaskUpsert {
+	u.SetExcluded(workflowtask.FieldCandidateUsers)
+	return u
+}
+
+// ClearCandidateUsers clears the value of the "candidate_users" field.
+func (u *WorkflowTaskUpsert) ClearCandidateUsers() *WorkflowTaskUpsert {
+	u.SetNull(workflowtask.FieldCandidateUsers)
+	return u
+}
+
+// SetCandidateGroups sets the "candidate_groups" field.
+func (u *WorkflowTaskUpsert) SetCandidateGroups(v string) *WorkflowTaskUpsert {
+	u.Set(workflowtask.FieldCandidateGroups, v)
+	return u
+}
+
+// UpdateCandidateGroups sets the "candidate_groups" field to the value that was provided on create.
+func (u *WorkflowTaskUpsert) UpdateCandidateGroups() *WorkflowTaskUpsert {
+	u.SetExcluded(workflowtask.FieldCandidateGroups)
+	return u
+}
+
+// ClearCandidateGroups clears the value of the "candidate_groups" field.
+func (u *WorkflowTaskUpsert) ClearCandidateGroups() *WorkflowTaskUpsert {
+	u.SetNull(workflowtask.FieldCandidateGroups)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *WorkflowTaskUpsert) SetStatus(v string) *WorkflowTaskUpsert {
+	u.Set(workflowtask.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *WorkflowTaskUpsert) UpdateStatus() *WorkflowTaskUpsert {
+	u.SetExcluded(workflowtask.FieldStatus)
+	return u
+}
+
+// SetPriority sets the "priority" field.
+func (u *WorkflowTaskUpsert) SetPriority(v string) *WorkflowTaskUpsert {
+	u.Set(workflowtask.FieldPriority, v)
+	return u
+}
+
+// UpdatePriority sets the "priority" field to the value that was provided on create.
+func (u *WorkflowTaskUpsert) UpdatePriority() *WorkflowTaskUpsert {
+	u.SetExcluded(workflowtask.FieldPriority)
+	return u
+}
+
+// SetFormData sets the "form_data" field.
+func (u *WorkflowTaskUpsert) SetFormData(v []uint8) *WorkflowTaskUpsert {
+	u.Set(workflowtask.FieldFormData, v)
+	return u
+}
+
+// UpdateFormData sets the "form_data" field to the value that was provided on create.
+func (u *WorkflowTaskUpsert) UpdateFormData() *WorkflowTaskUpsert {
+	u.SetExcluded(workflowtask.FieldFormData)
+	return u
+}
+
+// ClearFormData clears the value of the "form_data" field.
+func (u *WorkflowTaskUpsert) ClearFormData() *WorkflowTaskUpsert {
+	u.SetNull(workflowtask.FieldFormData)
+	return u
+}
+
+// SetVariables sets the "variables" field.
+func (u *WorkflowTaskUpsert) SetVariables(v []uint8) *WorkflowTaskUpsert {
+	u.Set(workflowtask.FieldVariables, v)
+	return u
+}
+
+// UpdateVariables sets the "variables" field to the value that was provided on create.
+func (u *WorkflowTaskUpsert) UpdateVariables() *WorkflowTaskUpsert {
+	u.SetExcluded(workflowtask.FieldVariables)
+	return u
+}
+
+// ClearVariables clears the value of the "variables" field.
+func (u *WorkflowTaskUpsert) ClearVariables() *WorkflowTaskUpsert {
+	u.SetNull(workflowtask.FieldVariables)
+	return u
+}
+
+// SetComment sets the "comment" field.
+func (u *WorkflowTaskUpsert) SetComment(v string) *WorkflowTaskUpsert {
+	u.Set(workflowtask.FieldComment, v)
+	return u
+}
+
+// UpdateComment sets the "comment" field to the value that was provided on create.
+func (u *WorkflowTaskUpsert) UpdateComment() *WorkflowTaskUpsert {
+	u.SetExcluded(workflowtask.FieldComment)
+	return u
+}
+
+// ClearComment clears the value of the "comment" field.
+func (u *WorkflowTaskUpsert) ClearComment() *WorkflowTaskUpsert {
+	u.SetNull(workflowtask.FieldComment)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *WorkflowTaskUpsert) SetTenantID(v int) *WorkflowTaskUpsert {
+	u.Set(workflowtask.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *WorkflowTaskUpsert) UpdateTenantID() *WorkflowTaskUpsert {
+	u.SetExcluded(workflowtask.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *WorkflowTaskUpsert) AddTenantID(v int) *WorkflowTaskUpsert {
+	u.Add(workflowtask.FieldTenantID, v)
+	return u
+}
+
+// SetDueDate sets the "due_date" field.
+func (u *WorkflowTaskUpsert) SetDueDate(v time.Time) *WorkflowTaskUpsert {
+	u.Set(workflowtask.FieldDueDate, v)
+	return u
+}
+
+// UpdateDueDate sets the "due_date" field to the value that was provided on create.
+func (u *WorkflowTaskUpsert) UpdateDueDate() *WorkflowTaskUpsert {
+	u.SetExcluded(workflowtask.FieldDueDate)
+	return u
+}
+
+// ClearDueDate clears the value of the "due_date" field.
+func (u *WorkflowTaskUpsert) ClearDueDate() *WorkflowTaskUpsert {
+	u.SetNull(workflowtask.FieldDueDate)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *WorkflowTaskUpsert) SetCreatedAt(v time.Time) *WorkflowTaskUpsert {
+	u.Set(workflowtask.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *WorkflowTaskUpsert) UpdateCreatedAt() *WorkflowTaskUpsert {
+	u.SetExcluded(workflowtask.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *WorkflowTaskUpsert) SetUpdatedAt(v time.Time) *WorkflowTaskUpsert {
+	u.Set(workflowtask.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *WorkflowTaskUpsert) UpdateUpdatedAt() *WorkflowTaskUpsert {
+	u.SetExcluded(workflowtask.FieldUpdatedAt)
+	return u
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (u *WorkflowTaskUpsert) SetCompletedAt(v time.Time) *WorkflowTaskUpsert {
+	u.Set(workflowtask.FieldCompletedAt, v)
+	return u
+}
+
+// UpdateCompletedAt sets the "completed_at" field to the value that was provided on create.
+func (u *WorkflowTaskUpsert) UpdateCompletedAt() *WorkflowTaskUpsert {
+	u.SetExcluded(workflowtask.FieldCompletedAt)
+	return u
+}
+
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (u *WorkflowTaskUpsert) ClearCompletedAt() *WorkflowTaskUpsert {
+	u.SetNull(workflowtask.FieldCompletedAt)
+	return u
+}
+
+// SetCompletedBy sets the "completed_by" field.
+func (u *WorkflowTaskUpsert) SetCompletedBy(v string) *WorkflowTaskUpsert {
+	u.Set(workflowtask.FieldCompletedBy, v)
+	return u
+}
+
+// UpdateCompletedBy sets the "completed_by" field to the value that was provided on create.
+func (u *WorkflowTaskUpsert) UpdateCompletedBy() *WorkflowTaskUpsert {
+	u.SetExcluded(workflowtask.FieldCompletedBy)
+	return u
+}
+
+// ClearCompletedBy clears the value of the "completed_by" field.
+func (u *WorkflowTaskUpsert) ClearCompletedBy() *WorkflowTaskUpsert {
+	u.SetNull(workflowtask.FieldCompletedBy)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.WorkflowTask.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *WorkflowTaskUpsertOne) UpdateNewValues() *WorkflowTaskUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.WorkflowTask.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *WorkflowTaskUpsertOne) Ignore() *WorkflowTaskUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *WorkflowTaskUpsertOne) DoNothing() *WorkflowTaskUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the WorkflowTaskCreate.OnConflict
+// documentation for more info.
+func (u *WorkflowTaskUpsertOne) Update(set func(*WorkflowTaskUpsert)) *WorkflowTaskUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&WorkflowTaskUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTaskID sets the "task_id" field.
+func (u *WorkflowTaskUpsertOne) SetTaskID(v string) *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetTaskID(v)
+	})
+}
+
+// UpdateTaskID sets the "task_id" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertOne) UpdateTaskID() *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateTaskID()
+	})
+}
+
+// SetInstanceID sets the "instance_id" field.
+func (u *WorkflowTaskUpsertOne) SetInstanceID(v int) *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetInstanceID(v)
+	})
+}
+
+// UpdateInstanceID sets the "instance_id" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertOne) UpdateInstanceID() *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateInstanceID()
+	})
+}
+
+// SetActivityID sets the "activity_id" field.
+func (u *WorkflowTaskUpsertOne) SetActivityID(v string) *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetActivityID(v)
+	})
+}
+
+// UpdateActivityID sets the "activity_id" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertOne) UpdateActivityID() *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateActivityID()
+	})
+}
+
+// SetName sets the "name" field.
+func (u *WorkflowTaskUpsertOne) SetName(v string) *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertOne) UpdateName() *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetType sets the "type" field.
+func (u *WorkflowTaskUpsertOne) SetType(v string) *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetType(v)
+	})
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertOne) UpdateType() *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateType()
+	})
+}
+
+// SetAssignee sets the "assignee" field.
+func (u *WorkflowTaskUpsertOne) SetAssignee(v string) *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetAssignee(v)
+	})
+}
+
+// UpdateAssignee sets the "assignee" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertOne) UpdateAssignee() *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateAssignee()
+	})
+}
+
+// ClearAssignee clears the value of the "assignee" field.
+func (u *WorkflowTaskUpsertOne) ClearAssignee() *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.ClearAssignee()
+	})
+}
+
+// SetCandidateUsers sets the "candidate_users" field.
+func (u *WorkflowTaskUpsertOne) SetCandidateUsers(v string) *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetCandidateUsers(v)
+	})
+}
+
+// UpdateCandidateUsers sets the "candidate_users" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertOne) UpdateCandidateUsers() *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateCandidateUsers()
+	})
+}
+
+// ClearCandidateUsers clears the value of the "candidate_users" field.
+func (u *WorkflowTaskUpsertOne) ClearCandidateUsers() *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.ClearCandidateUsers()
+	})
+}
+
+// SetCandidateGroups sets the "candidate_groups" field.
+func (u *WorkflowTaskUpsertOne) SetCandidateGroups(v string) *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetCandidateGroups(v)
+	})
+}
+
+// UpdateCandidateGroups sets the "candidate_groups" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertOne) UpdateCandidateGroups() *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateCandidateGroups()
+	})
+}
+
+// ClearCandidateGroups clears the value of the "candidate_groups" field.
+func (u *WorkflowTaskUpsertOne) ClearCandidateGroups() *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.ClearCandidateGroups()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *WorkflowTaskUpsertOne) SetStatus(v string) *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertOne) UpdateStatus() *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetPriority sets the "priority" field.
+func (u *WorkflowTaskUpsertOne) SetPriority(v string) *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetPriority(v)
+	})
+}
+
+// UpdatePriority sets the "priority" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertOne) UpdatePriority() *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdatePriority()
+	})
+}
+
+// SetFormData sets the "form_data" field.
+func (u *WorkflowTaskUpsertOne) SetFormData(v []uint8) *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetFormData(v)
+	})
+}
+
+// UpdateFormData sets the "form_data" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertOne) UpdateFormData() *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateFormData()
+	})
+}
+
+// ClearFormData clears the value of the "form_data" field.
+func (u *WorkflowTaskUpsertOne) ClearFormData() *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.ClearFormData()
+	})
+}
+
+// SetVariables sets the "variables" field.
+func (u *WorkflowTaskUpsertOne) SetVariables(v []uint8) *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetVariables(v)
+	})
+}
+
+// UpdateVariables sets the "variables" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertOne) UpdateVariables() *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateVariables()
+	})
+}
+
+// ClearVariables clears the value of the "variables" field.
+func (u *WorkflowTaskUpsertOne) ClearVariables() *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.ClearVariables()
+	})
+}
+
+// SetComment sets the "comment" field.
+func (u *WorkflowTaskUpsertOne) SetComment(v string) *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetComment(v)
+	})
+}
+
+// UpdateComment sets the "comment" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertOne) UpdateComment() *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateComment()
+	})
+}
+
+// ClearComment clears the value of the "comment" field.
+func (u *WorkflowTaskUpsertOne) ClearComment() *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.ClearComment()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *WorkflowTaskUpsertOne) SetTenantID(v int) *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *WorkflowTaskUpsertOne) AddTenantID(v int) *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertOne) UpdateTenantID() *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetDueDate sets the "due_date" field.
+func (u *WorkflowTaskUpsertOne) SetDueDate(v time.Time) *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetDueDate(v)
+	})
+}
+
+// UpdateDueDate sets the "due_date" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertOne) UpdateDueDate() *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateDueDate()
+	})
+}
+
+// ClearDueDate clears the value of the "due_date" field.
+func (u *WorkflowTaskUpsertOne) ClearDueDate() *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.ClearDueDate()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *WorkflowTaskUpsertOne) SetCreatedAt(v time.Time) *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertOne) UpdateCreatedAt() *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *WorkflowTaskUpsertOne) SetUpdatedAt(v time.Time) *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertOne) UpdateUpdatedAt() *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (u *WorkflowTaskUpsertOne) SetCompletedAt(v time.Time) *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetCompletedAt(v)
+	})
+}
+
+// UpdateCompletedAt sets the "completed_at" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertOne) UpdateCompletedAt() *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateCompletedAt()
+	})
+}
+
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (u *WorkflowTaskUpsertOne) ClearCompletedAt() *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.ClearCompletedAt()
+	})
+}
+
+// SetCompletedBy sets the "completed_by" field.
+func (u *WorkflowTaskUpsertOne) SetCompletedBy(v string) *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetCompletedBy(v)
+	})
+}
+
+// UpdateCompletedBy sets the "completed_by" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertOne) UpdateCompletedBy() *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateCompletedBy()
+	})
+}
+
+// ClearCompletedBy clears the value of the "completed_by" field.
+func (u *WorkflowTaskUpsertOne) ClearCompletedBy() *WorkflowTaskUpsertOne {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.ClearCompletedBy()
+	})
+}
+
+// Exec executes the query.
+func (u *WorkflowTaskUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for WorkflowTaskCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *WorkflowTaskUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *WorkflowTaskUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *WorkflowTaskUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // WorkflowTaskCreateBulk is the builder for creating many WorkflowTask entities in bulk.
 type WorkflowTaskCreateBulk struct {
 	config
 	err      error
 	builders []*WorkflowTaskCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the WorkflowTask entities in the database.
@@ -505,6 +1255,7 @@ func (_c *WorkflowTaskCreateBulk) Save(ctx context.Context) ([]*WorkflowTask, er
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -555,6 +1306,446 @@ func (_c *WorkflowTaskCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *WorkflowTaskCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.WorkflowTask.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.WorkflowTaskUpsert) {
+//			SetTaskID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *WorkflowTaskCreateBulk) OnConflict(opts ...sql.ConflictOption) *WorkflowTaskUpsertBulk {
+	_c.conflict = opts
+	return &WorkflowTaskUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.WorkflowTask.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *WorkflowTaskCreateBulk) OnConflictColumns(columns ...string) *WorkflowTaskUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &WorkflowTaskUpsertBulk{
+		create: _c,
+	}
+}
+
+// WorkflowTaskUpsertBulk is the builder for "upsert"-ing
+// a bulk of WorkflowTask nodes.
+type WorkflowTaskUpsertBulk struct {
+	create *WorkflowTaskCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.WorkflowTask.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *WorkflowTaskUpsertBulk) UpdateNewValues() *WorkflowTaskUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.WorkflowTask.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *WorkflowTaskUpsertBulk) Ignore() *WorkflowTaskUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *WorkflowTaskUpsertBulk) DoNothing() *WorkflowTaskUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the WorkflowTaskCreateBulk.OnConflict
+// documentation for more info.
+func (u *WorkflowTaskUpsertBulk) Update(set func(*WorkflowTaskUpsert)) *WorkflowTaskUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&WorkflowTaskUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTaskID sets the "task_id" field.
+func (u *WorkflowTaskUpsertBulk) SetTaskID(v string) *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetTaskID(v)
+	})
+}
+
+// UpdateTaskID sets the "task_id" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertBulk) UpdateTaskID() *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateTaskID()
+	})
+}
+
+// SetInstanceID sets the "instance_id" field.
+func (u *WorkflowTaskUpsertBulk) SetInstanceID(v int) *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetInstanceID(v)
+	})
+}
+
+// UpdateInstanceID sets the "instance_id" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertBulk) UpdateInstanceID() *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateInstanceID()
+	})
+}
+
+// SetActivityID sets the "activity_id" field.
+func (u *WorkflowTaskUpsertBulk) SetActivityID(v string) *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetActivityID(v)
+	})
+}
+
+// UpdateActivityID sets the "activity_id" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertBulk) UpdateActivityID() *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateActivityID()
+	})
+}
+
+// SetName sets the "name" field.
+func (u *WorkflowTaskUpsertBulk) SetName(v string) *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertBulk) UpdateName() *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetType sets the "type" field.
+func (u *WorkflowTaskUpsertBulk) SetType(v string) *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetType(v)
+	})
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertBulk) UpdateType() *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateType()
+	})
+}
+
+// SetAssignee sets the "assignee" field.
+func (u *WorkflowTaskUpsertBulk) SetAssignee(v string) *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetAssignee(v)
+	})
+}
+
+// UpdateAssignee sets the "assignee" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertBulk) UpdateAssignee() *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateAssignee()
+	})
+}
+
+// ClearAssignee clears the value of the "assignee" field.
+func (u *WorkflowTaskUpsertBulk) ClearAssignee() *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.ClearAssignee()
+	})
+}
+
+// SetCandidateUsers sets the "candidate_users" field.
+func (u *WorkflowTaskUpsertBulk) SetCandidateUsers(v string) *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetCandidateUsers(v)
+	})
+}
+
+// UpdateCandidateUsers sets the "candidate_users" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertBulk) UpdateCandidateUsers() *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateCandidateUsers()
+	})
+}
+
+// ClearCandidateUsers clears the value of the "candidate_users" field.
+func (u *WorkflowTaskUpsertBulk) ClearCandidateUsers() *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.ClearCandidateUsers()
+	})
+}
+
+// SetCandidateGroups sets the "candidate_groups" field.
+func (u *WorkflowTaskUpsertBulk) SetCandidateGroups(v string) *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetCandidateGroups(v)
+	})
+}
+
+// UpdateCandidateGroups sets the "candidate_groups" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertBulk) UpdateCandidateGroups() *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateCandidateGroups()
+	})
+}
+
+// ClearCandidateGroups clears the value of the "candidate_groups" field.
+func (u *WorkflowTaskUpsertBulk) ClearCandidateGroups() *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.ClearCandidateGroups()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *WorkflowTaskUpsertBulk) SetStatus(v string) *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertBulk) UpdateStatus() *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetPriority sets the "priority" field.
+func (u *WorkflowTaskUpsertBulk) SetPriority(v string) *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetPriority(v)
+	})
+}
+
+// UpdatePriority sets the "priority" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertBulk) UpdatePriority() *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdatePriority()
+	})
+}
+
+// SetFormData sets the "form_data" field.
+func (u *WorkflowTaskUpsertBulk) SetFormData(v []uint8) *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetFormData(v)
+	})
+}
+
+// UpdateFormData sets the "form_data" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertBulk) UpdateFormData() *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateFormData()
+	})
+}
+
+// ClearFormData clears the value of the "form_data" field.
+func (u *WorkflowTaskUpsertBulk) ClearFormData() *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.ClearFormData()
+	})
+}
+
+// SetVariables sets the "variables" field.
+func (u *WorkflowTaskUpsertBulk) SetVariables(v []uint8) *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetVariables(v)
+	})
+}
+
+// UpdateVariables sets the "variables" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertBulk) UpdateVariables() *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateVariables()
+	})
+}
+
+// ClearVariables clears the value of the "variables" field.
+func (u *WorkflowTaskUpsertBulk) ClearVariables() *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.ClearVariables()
+	})
+}
+
+// SetComment sets the "comment" field.
+func (u *WorkflowTaskUpsertBulk) SetComment(v string) *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetComment(v)
+	})
+}
+
+// UpdateComment sets the "comment" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertBulk) UpdateComment() *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateComment()
+	})
+}
+
+// ClearComment clears the value of the "comment" field.
+func (u *WorkflowTaskUpsertBulk) ClearComment() *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.ClearComment()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *WorkflowTaskUpsertBulk) SetTenantID(v int) *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *WorkflowTaskUpsertBulk) AddTenantID(v int) *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertBulk) UpdateTenantID() *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetDueDate sets the "due_date" field.
+func (u *WorkflowTaskUpsertBulk) SetDueDate(v time.Time) *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetDueDate(v)
+	})
+}
+
+// UpdateDueDate sets the "due_date" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertBulk) UpdateDueDate() *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateDueDate()
+	})
+}
+
+// ClearDueDate clears the value of the "due_date" field.
+func (u *WorkflowTaskUpsertBulk) ClearDueDate() *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.ClearDueDate()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *WorkflowTaskUpsertBulk) SetCreatedAt(v time.Time) *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertBulk) UpdateCreatedAt() *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *WorkflowTaskUpsertBulk) SetUpdatedAt(v time.Time) *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertBulk) UpdateUpdatedAt() *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (u *WorkflowTaskUpsertBulk) SetCompletedAt(v time.Time) *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetCompletedAt(v)
+	})
+}
+
+// UpdateCompletedAt sets the "completed_at" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertBulk) UpdateCompletedAt() *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateCompletedAt()
+	})
+}
+
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (u *WorkflowTaskUpsertBulk) ClearCompletedAt() *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.ClearCompletedAt()
+	})
+}
+
+// SetCompletedBy sets the "completed_by" field.
+func (u *WorkflowTaskUpsertBulk) SetCompletedBy(v string) *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.SetCompletedBy(v)
+	})
+}
+
+// UpdateCompletedBy sets the "completed_by" field to the value that was provided on create.
+func (u *WorkflowTaskUpsertBulk) UpdateCompletedBy() *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.UpdateCompletedBy()
+	})
+}
+
+// ClearCompletedBy clears the value of the "completed_by" field.
+func (u *WorkflowTaskUpsertBulk) ClearCompletedBy() *WorkflowTaskUpsertBulk {
+	return u.Update(func(s *WorkflowTaskUpsert) {
+		s.ClearCompletedBy()
+	})
+}
+
+// Exec executes the query.
+func (u *WorkflowTaskUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the WorkflowTaskCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for WorkflowTaskCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *WorkflowTaskUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

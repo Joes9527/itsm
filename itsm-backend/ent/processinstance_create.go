@@ -13,6 +13,7 @@ import (
 	"itsm-backend/ent/processvariable"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -22,6 +23,7 @@ type ProcessInstanceCreate struct {
 	config
 	mutation *ProcessInstanceMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetProcessInstanceID sets the "process_instance_id" field.
@@ -475,6 +477,7 @@ func (_c *ProcessInstanceCreate) createSpec() (*ProcessInstance, *sqlgraph.Creat
 		_node = &ProcessInstance{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(processinstance.Table, sqlgraph.NewFieldSpec(processinstance.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.ProcessInstanceID(); ok {
 		_spec.SetField(processinstance.FieldProcessInstanceID, field.TypeString, value)
 		_node.ProcessInstanceID = value
@@ -627,11 +630,914 @@ func (_c *ProcessInstanceCreate) createSpec() (*ProcessInstance, *sqlgraph.Creat
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ProcessInstance.Create().
+//		SetProcessInstanceID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ProcessInstanceUpsert) {
+//			SetProcessInstanceID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ProcessInstanceCreate) OnConflict(opts ...sql.ConflictOption) *ProcessInstanceUpsertOne {
+	_c.conflict = opts
+	return &ProcessInstanceUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ProcessInstance.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ProcessInstanceCreate) OnConflictColumns(columns ...string) *ProcessInstanceUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ProcessInstanceUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ProcessInstanceUpsertOne is the builder for "upsert"-ing
+	//  one ProcessInstance node.
+	ProcessInstanceUpsertOne struct {
+		create *ProcessInstanceCreate
+	}
+
+	// ProcessInstanceUpsert is the "OnConflict" setter.
+	ProcessInstanceUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetProcessInstanceID sets the "process_instance_id" field.
+func (u *ProcessInstanceUpsert) SetProcessInstanceID(v string) *ProcessInstanceUpsert {
+	u.Set(processinstance.FieldProcessInstanceID, v)
+	return u
+}
+
+// UpdateProcessInstanceID sets the "process_instance_id" field to the value that was provided on create.
+func (u *ProcessInstanceUpsert) UpdateProcessInstanceID() *ProcessInstanceUpsert {
+	u.SetExcluded(processinstance.FieldProcessInstanceID)
+	return u
+}
+
+// SetBusinessKey sets the "business_key" field.
+func (u *ProcessInstanceUpsert) SetBusinessKey(v string) *ProcessInstanceUpsert {
+	u.Set(processinstance.FieldBusinessKey, v)
+	return u
+}
+
+// UpdateBusinessKey sets the "business_key" field to the value that was provided on create.
+func (u *ProcessInstanceUpsert) UpdateBusinessKey() *ProcessInstanceUpsert {
+	u.SetExcluded(processinstance.FieldBusinessKey)
+	return u
+}
+
+// ClearBusinessKey clears the value of the "business_key" field.
+func (u *ProcessInstanceUpsert) ClearBusinessKey() *ProcessInstanceUpsert {
+	u.SetNull(processinstance.FieldBusinessKey)
+	return u
+}
+
+// SetBusinessType sets the "business_type" field.
+func (u *ProcessInstanceUpsert) SetBusinessType(v string) *ProcessInstanceUpsert {
+	u.Set(processinstance.FieldBusinessType, v)
+	return u
+}
+
+// UpdateBusinessType sets the "business_type" field to the value that was provided on create.
+func (u *ProcessInstanceUpsert) UpdateBusinessType() *ProcessInstanceUpsert {
+	u.SetExcluded(processinstance.FieldBusinessType)
+	return u
+}
+
+// ClearBusinessType clears the value of the "business_type" field.
+func (u *ProcessInstanceUpsert) ClearBusinessType() *ProcessInstanceUpsert {
+	u.SetNull(processinstance.FieldBusinessType)
+	return u
+}
+
+// SetBusinessID sets the "business_id" field.
+func (u *ProcessInstanceUpsert) SetBusinessID(v int) *ProcessInstanceUpsert {
+	u.Set(processinstance.FieldBusinessID, v)
+	return u
+}
+
+// UpdateBusinessID sets the "business_id" field to the value that was provided on create.
+func (u *ProcessInstanceUpsert) UpdateBusinessID() *ProcessInstanceUpsert {
+	u.SetExcluded(processinstance.FieldBusinessID)
+	return u
+}
+
+// AddBusinessID adds v to the "business_id" field.
+func (u *ProcessInstanceUpsert) AddBusinessID(v int) *ProcessInstanceUpsert {
+	u.Add(processinstance.FieldBusinessID, v)
+	return u
+}
+
+// ClearBusinessID clears the value of the "business_id" field.
+func (u *ProcessInstanceUpsert) ClearBusinessID() *ProcessInstanceUpsert {
+	u.SetNull(processinstance.FieldBusinessID)
+	return u
+}
+
+// SetProcessDefinitionKey sets the "process_definition_key" field.
+func (u *ProcessInstanceUpsert) SetProcessDefinitionKey(v string) *ProcessInstanceUpsert {
+	u.Set(processinstance.FieldProcessDefinitionKey, v)
+	return u
+}
+
+// UpdateProcessDefinitionKey sets the "process_definition_key" field to the value that was provided on create.
+func (u *ProcessInstanceUpsert) UpdateProcessDefinitionKey() *ProcessInstanceUpsert {
+	u.SetExcluded(processinstance.FieldProcessDefinitionKey)
+	return u
+}
+
+// SetProcessDefinitionID sets the "process_definition_id" field.
+func (u *ProcessInstanceUpsert) SetProcessDefinitionID(v int) *ProcessInstanceUpsert {
+	u.Set(processinstance.FieldProcessDefinitionID, v)
+	return u
+}
+
+// UpdateProcessDefinitionID sets the "process_definition_id" field to the value that was provided on create.
+func (u *ProcessInstanceUpsert) UpdateProcessDefinitionID() *ProcessInstanceUpsert {
+	u.SetExcluded(processinstance.FieldProcessDefinitionID)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *ProcessInstanceUpsert) SetStatus(v string) *ProcessInstanceUpsert {
+	u.Set(processinstance.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ProcessInstanceUpsert) UpdateStatus() *ProcessInstanceUpsert {
+	u.SetExcluded(processinstance.FieldStatus)
+	return u
+}
+
+// SetCurrentActivityID sets the "current_activity_id" field.
+func (u *ProcessInstanceUpsert) SetCurrentActivityID(v string) *ProcessInstanceUpsert {
+	u.Set(processinstance.FieldCurrentActivityID, v)
+	return u
+}
+
+// UpdateCurrentActivityID sets the "current_activity_id" field to the value that was provided on create.
+func (u *ProcessInstanceUpsert) UpdateCurrentActivityID() *ProcessInstanceUpsert {
+	u.SetExcluded(processinstance.FieldCurrentActivityID)
+	return u
+}
+
+// ClearCurrentActivityID clears the value of the "current_activity_id" field.
+func (u *ProcessInstanceUpsert) ClearCurrentActivityID() *ProcessInstanceUpsert {
+	u.SetNull(processinstance.FieldCurrentActivityID)
+	return u
+}
+
+// SetCurrentActivityName sets the "current_activity_name" field.
+func (u *ProcessInstanceUpsert) SetCurrentActivityName(v string) *ProcessInstanceUpsert {
+	u.Set(processinstance.FieldCurrentActivityName, v)
+	return u
+}
+
+// UpdateCurrentActivityName sets the "current_activity_name" field to the value that was provided on create.
+func (u *ProcessInstanceUpsert) UpdateCurrentActivityName() *ProcessInstanceUpsert {
+	u.SetExcluded(processinstance.FieldCurrentActivityName)
+	return u
+}
+
+// ClearCurrentActivityName clears the value of the "current_activity_name" field.
+func (u *ProcessInstanceUpsert) ClearCurrentActivityName() *ProcessInstanceUpsert {
+	u.SetNull(processinstance.FieldCurrentActivityName)
+	return u
+}
+
+// SetVariables sets the "variables" field.
+func (u *ProcessInstanceUpsert) SetVariables(v map[string]interface{}) *ProcessInstanceUpsert {
+	u.Set(processinstance.FieldVariables, v)
+	return u
+}
+
+// UpdateVariables sets the "variables" field to the value that was provided on create.
+func (u *ProcessInstanceUpsert) UpdateVariables() *ProcessInstanceUpsert {
+	u.SetExcluded(processinstance.FieldVariables)
+	return u
+}
+
+// ClearVariables clears the value of the "variables" field.
+func (u *ProcessInstanceUpsert) ClearVariables() *ProcessInstanceUpsert {
+	u.SetNull(processinstance.FieldVariables)
+	return u
+}
+
+// SetStartTime sets the "start_time" field.
+func (u *ProcessInstanceUpsert) SetStartTime(v time.Time) *ProcessInstanceUpsert {
+	u.Set(processinstance.FieldStartTime, v)
+	return u
+}
+
+// UpdateStartTime sets the "start_time" field to the value that was provided on create.
+func (u *ProcessInstanceUpsert) UpdateStartTime() *ProcessInstanceUpsert {
+	u.SetExcluded(processinstance.FieldStartTime)
+	return u
+}
+
+// SetEndTime sets the "end_time" field.
+func (u *ProcessInstanceUpsert) SetEndTime(v time.Time) *ProcessInstanceUpsert {
+	u.Set(processinstance.FieldEndTime, v)
+	return u
+}
+
+// UpdateEndTime sets the "end_time" field to the value that was provided on create.
+func (u *ProcessInstanceUpsert) UpdateEndTime() *ProcessInstanceUpsert {
+	u.SetExcluded(processinstance.FieldEndTime)
+	return u
+}
+
+// ClearEndTime clears the value of the "end_time" field.
+func (u *ProcessInstanceUpsert) ClearEndTime() *ProcessInstanceUpsert {
+	u.SetNull(processinstance.FieldEndTime)
+	return u
+}
+
+// SetSuspendedTime sets the "suspended_time" field.
+func (u *ProcessInstanceUpsert) SetSuspendedTime(v time.Time) *ProcessInstanceUpsert {
+	u.Set(processinstance.FieldSuspendedTime, v)
+	return u
+}
+
+// UpdateSuspendedTime sets the "suspended_time" field to the value that was provided on create.
+func (u *ProcessInstanceUpsert) UpdateSuspendedTime() *ProcessInstanceUpsert {
+	u.SetExcluded(processinstance.FieldSuspendedTime)
+	return u
+}
+
+// ClearSuspendedTime clears the value of the "suspended_time" field.
+func (u *ProcessInstanceUpsert) ClearSuspendedTime() *ProcessInstanceUpsert {
+	u.SetNull(processinstance.FieldSuspendedTime)
+	return u
+}
+
+// SetSuspendedReason sets the "suspended_reason" field.
+func (u *ProcessInstanceUpsert) SetSuspendedReason(v string) *ProcessInstanceUpsert {
+	u.Set(processinstance.FieldSuspendedReason, v)
+	return u
+}
+
+// UpdateSuspendedReason sets the "suspended_reason" field to the value that was provided on create.
+func (u *ProcessInstanceUpsert) UpdateSuspendedReason() *ProcessInstanceUpsert {
+	u.SetExcluded(processinstance.FieldSuspendedReason)
+	return u
+}
+
+// ClearSuspendedReason clears the value of the "suspended_reason" field.
+func (u *ProcessInstanceUpsert) ClearSuspendedReason() *ProcessInstanceUpsert {
+	u.SetNull(processinstance.FieldSuspendedReason)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessInstanceUpsert) SetTenantID(v int) *ProcessInstanceUpsert {
+	u.Set(processinstance.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessInstanceUpsert) UpdateTenantID() *ProcessInstanceUpsert {
+	u.SetExcluded(processinstance.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessInstanceUpsert) AddTenantID(v int) *ProcessInstanceUpsert {
+	u.Add(processinstance.FieldTenantID, v)
+	return u
+}
+
+// SetVersion sets the "version" field.
+func (u *ProcessInstanceUpsert) SetVersion(v int) *ProcessInstanceUpsert {
+	u.Set(processinstance.FieldVersion, v)
+	return u
+}
+
+// UpdateVersion sets the "version" field to the value that was provided on create.
+func (u *ProcessInstanceUpsert) UpdateVersion() *ProcessInstanceUpsert {
+	u.SetExcluded(processinstance.FieldVersion)
+	return u
+}
+
+// AddVersion adds v to the "version" field.
+func (u *ProcessInstanceUpsert) AddVersion(v int) *ProcessInstanceUpsert {
+	u.Add(processinstance.FieldVersion, v)
+	return u
+}
+
+// SetInitiator sets the "initiator" field.
+func (u *ProcessInstanceUpsert) SetInitiator(v string) *ProcessInstanceUpsert {
+	u.Set(processinstance.FieldInitiator, v)
+	return u
+}
+
+// UpdateInitiator sets the "initiator" field to the value that was provided on create.
+func (u *ProcessInstanceUpsert) UpdateInitiator() *ProcessInstanceUpsert {
+	u.SetExcluded(processinstance.FieldInitiator)
+	return u
+}
+
+// ClearInitiator clears the value of the "initiator" field.
+func (u *ProcessInstanceUpsert) ClearInitiator() *ProcessInstanceUpsert {
+	u.SetNull(processinstance.FieldInitiator)
+	return u
+}
+
+// SetParentProcessInstanceID sets the "parent_process_instance_id" field.
+func (u *ProcessInstanceUpsert) SetParentProcessInstanceID(v string) *ProcessInstanceUpsert {
+	u.Set(processinstance.FieldParentProcessInstanceID, v)
+	return u
+}
+
+// UpdateParentProcessInstanceID sets the "parent_process_instance_id" field to the value that was provided on create.
+func (u *ProcessInstanceUpsert) UpdateParentProcessInstanceID() *ProcessInstanceUpsert {
+	u.SetExcluded(processinstance.FieldParentProcessInstanceID)
+	return u
+}
+
+// ClearParentProcessInstanceID clears the value of the "parent_process_instance_id" field.
+func (u *ProcessInstanceUpsert) ClearParentProcessInstanceID() *ProcessInstanceUpsert {
+	u.SetNull(processinstance.FieldParentProcessInstanceID)
+	return u
+}
+
+// SetRootProcessInstanceID sets the "root_process_instance_id" field.
+func (u *ProcessInstanceUpsert) SetRootProcessInstanceID(v string) *ProcessInstanceUpsert {
+	u.Set(processinstance.FieldRootProcessInstanceID, v)
+	return u
+}
+
+// UpdateRootProcessInstanceID sets the "root_process_instance_id" field to the value that was provided on create.
+func (u *ProcessInstanceUpsert) UpdateRootProcessInstanceID() *ProcessInstanceUpsert {
+	u.SetExcluded(processinstance.FieldRootProcessInstanceID)
+	return u
+}
+
+// ClearRootProcessInstanceID clears the value of the "root_process_instance_id" field.
+func (u *ProcessInstanceUpsert) ClearRootProcessInstanceID() *ProcessInstanceUpsert {
+	u.SetNull(processinstance.FieldRootProcessInstanceID)
+	return u
+}
+
+// SetStateSnapshot sets the "state_snapshot" field.
+func (u *ProcessInstanceUpsert) SetStateSnapshot(v []uint8) *ProcessInstanceUpsert {
+	u.Set(processinstance.FieldStateSnapshot, v)
+	return u
+}
+
+// UpdateStateSnapshot sets the "state_snapshot" field to the value that was provided on create.
+func (u *ProcessInstanceUpsert) UpdateStateSnapshot() *ProcessInstanceUpsert {
+	u.SetExcluded(processinstance.FieldStateSnapshot)
+	return u
+}
+
+// ClearStateSnapshot clears the value of the "state_snapshot" field.
+func (u *ProcessInstanceUpsert) ClearStateSnapshot() *ProcessInstanceUpsert {
+	u.SetNull(processinstance.FieldStateSnapshot)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProcessInstanceUpsert) SetCreatedAt(v time.Time) *ProcessInstanceUpsert {
+	u.Set(processinstance.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProcessInstanceUpsert) UpdateCreatedAt() *ProcessInstanceUpsert {
+	u.SetExcluded(processinstance.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ProcessInstanceUpsert) SetUpdatedAt(v time.Time) *ProcessInstanceUpsert {
+	u.Set(processinstance.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ProcessInstanceUpsert) UpdateUpdatedAt() *ProcessInstanceUpsert {
+	u.SetExcluded(processinstance.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.ProcessInstance.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ProcessInstanceUpsertOne) UpdateNewValues() *ProcessInstanceUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ProcessInstance.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ProcessInstanceUpsertOne) Ignore() *ProcessInstanceUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ProcessInstanceUpsertOne) DoNothing() *ProcessInstanceUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ProcessInstanceCreate.OnConflict
+// documentation for more info.
+func (u *ProcessInstanceUpsertOne) Update(set func(*ProcessInstanceUpsert)) *ProcessInstanceUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ProcessInstanceUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetProcessInstanceID sets the "process_instance_id" field.
+func (u *ProcessInstanceUpsertOne) SetProcessInstanceID(v string) *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetProcessInstanceID(v)
+	})
+}
+
+// UpdateProcessInstanceID sets the "process_instance_id" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertOne) UpdateProcessInstanceID() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateProcessInstanceID()
+	})
+}
+
+// SetBusinessKey sets the "business_key" field.
+func (u *ProcessInstanceUpsertOne) SetBusinessKey(v string) *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetBusinessKey(v)
+	})
+}
+
+// UpdateBusinessKey sets the "business_key" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertOne) UpdateBusinessKey() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateBusinessKey()
+	})
+}
+
+// ClearBusinessKey clears the value of the "business_key" field.
+func (u *ProcessInstanceUpsertOne) ClearBusinessKey() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.ClearBusinessKey()
+	})
+}
+
+// SetBusinessType sets the "business_type" field.
+func (u *ProcessInstanceUpsertOne) SetBusinessType(v string) *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetBusinessType(v)
+	})
+}
+
+// UpdateBusinessType sets the "business_type" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertOne) UpdateBusinessType() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateBusinessType()
+	})
+}
+
+// ClearBusinessType clears the value of the "business_type" field.
+func (u *ProcessInstanceUpsertOne) ClearBusinessType() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.ClearBusinessType()
+	})
+}
+
+// SetBusinessID sets the "business_id" field.
+func (u *ProcessInstanceUpsertOne) SetBusinessID(v int) *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetBusinessID(v)
+	})
+}
+
+// AddBusinessID adds v to the "business_id" field.
+func (u *ProcessInstanceUpsertOne) AddBusinessID(v int) *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.AddBusinessID(v)
+	})
+}
+
+// UpdateBusinessID sets the "business_id" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertOne) UpdateBusinessID() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateBusinessID()
+	})
+}
+
+// ClearBusinessID clears the value of the "business_id" field.
+func (u *ProcessInstanceUpsertOne) ClearBusinessID() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.ClearBusinessID()
+	})
+}
+
+// SetProcessDefinitionKey sets the "process_definition_key" field.
+func (u *ProcessInstanceUpsertOne) SetProcessDefinitionKey(v string) *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetProcessDefinitionKey(v)
+	})
+}
+
+// UpdateProcessDefinitionKey sets the "process_definition_key" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertOne) UpdateProcessDefinitionKey() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateProcessDefinitionKey()
+	})
+}
+
+// SetProcessDefinitionID sets the "process_definition_id" field.
+func (u *ProcessInstanceUpsertOne) SetProcessDefinitionID(v int) *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetProcessDefinitionID(v)
+	})
+}
+
+// UpdateProcessDefinitionID sets the "process_definition_id" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertOne) UpdateProcessDefinitionID() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateProcessDefinitionID()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *ProcessInstanceUpsertOne) SetStatus(v string) *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertOne) UpdateStatus() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetCurrentActivityID sets the "current_activity_id" field.
+func (u *ProcessInstanceUpsertOne) SetCurrentActivityID(v string) *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetCurrentActivityID(v)
+	})
+}
+
+// UpdateCurrentActivityID sets the "current_activity_id" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertOne) UpdateCurrentActivityID() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateCurrentActivityID()
+	})
+}
+
+// ClearCurrentActivityID clears the value of the "current_activity_id" field.
+func (u *ProcessInstanceUpsertOne) ClearCurrentActivityID() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.ClearCurrentActivityID()
+	})
+}
+
+// SetCurrentActivityName sets the "current_activity_name" field.
+func (u *ProcessInstanceUpsertOne) SetCurrentActivityName(v string) *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetCurrentActivityName(v)
+	})
+}
+
+// UpdateCurrentActivityName sets the "current_activity_name" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertOne) UpdateCurrentActivityName() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateCurrentActivityName()
+	})
+}
+
+// ClearCurrentActivityName clears the value of the "current_activity_name" field.
+func (u *ProcessInstanceUpsertOne) ClearCurrentActivityName() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.ClearCurrentActivityName()
+	})
+}
+
+// SetVariables sets the "variables" field.
+func (u *ProcessInstanceUpsertOne) SetVariables(v map[string]interface{}) *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetVariables(v)
+	})
+}
+
+// UpdateVariables sets the "variables" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertOne) UpdateVariables() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateVariables()
+	})
+}
+
+// ClearVariables clears the value of the "variables" field.
+func (u *ProcessInstanceUpsertOne) ClearVariables() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.ClearVariables()
+	})
+}
+
+// SetStartTime sets the "start_time" field.
+func (u *ProcessInstanceUpsertOne) SetStartTime(v time.Time) *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetStartTime(v)
+	})
+}
+
+// UpdateStartTime sets the "start_time" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertOne) UpdateStartTime() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateStartTime()
+	})
+}
+
+// SetEndTime sets the "end_time" field.
+func (u *ProcessInstanceUpsertOne) SetEndTime(v time.Time) *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetEndTime(v)
+	})
+}
+
+// UpdateEndTime sets the "end_time" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertOne) UpdateEndTime() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateEndTime()
+	})
+}
+
+// ClearEndTime clears the value of the "end_time" field.
+func (u *ProcessInstanceUpsertOne) ClearEndTime() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.ClearEndTime()
+	})
+}
+
+// SetSuspendedTime sets the "suspended_time" field.
+func (u *ProcessInstanceUpsertOne) SetSuspendedTime(v time.Time) *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetSuspendedTime(v)
+	})
+}
+
+// UpdateSuspendedTime sets the "suspended_time" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertOne) UpdateSuspendedTime() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateSuspendedTime()
+	})
+}
+
+// ClearSuspendedTime clears the value of the "suspended_time" field.
+func (u *ProcessInstanceUpsertOne) ClearSuspendedTime() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.ClearSuspendedTime()
+	})
+}
+
+// SetSuspendedReason sets the "suspended_reason" field.
+func (u *ProcessInstanceUpsertOne) SetSuspendedReason(v string) *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetSuspendedReason(v)
+	})
+}
+
+// UpdateSuspendedReason sets the "suspended_reason" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertOne) UpdateSuspendedReason() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateSuspendedReason()
+	})
+}
+
+// ClearSuspendedReason clears the value of the "suspended_reason" field.
+func (u *ProcessInstanceUpsertOne) ClearSuspendedReason() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.ClearSuspendedReason()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessInstanceUpsertOne) SetTenantID(v int) *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessInstanceUpsertOne) AddTenantID(v int) *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertOne) UpdateTenantID() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetVersion sets the "version" field.
+func (u *ProcessInstanceUpsertOne) SetVersion(v int) *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetVersion(v)
+	})
+}
+
+// AddVersion adds v to the "version" field.
+func (u *ProcessInstanceUpsertOne) AddVersion(v int) *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.AddVersion(v)
+	})
+}
+
+// UpdateVersion sets the "version" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertOne) UpdateVersion() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateVersion()
+	})
+}
+
+// SetInitiator sets the "initiator" field.
+func (u *ProcessInstanceUpsertOne) SetInitiator(v string) *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetInitiator(v)
+	})
+}
+
+// UpdateInitiator sets the "initiator" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertOne) UpdateInitiator() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateInitiator()
+	})
+}
+
+// ClearInitiator clears the value of the "initiator" field.
+func (u *ProcessInstanceUpsertOne) ClearInitiator() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.ClearInitiator()
+	})
+}
+
+// SetParentProcessInstanceID sets the "parent_process_instance_id" field.
+func (u *ProcessInstanceUpsertOne) SetParentProcessInstanceID(v string) *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetParentProcessInstanceID(v)
+	})
+}
+
+// UpdateParentProcessInstanceID sets the "parent_process_instance_id" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertOne) UpdateParentProcessInstanceID() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateParentProcessInstanceID()
+	})
+}
+
+// ClearParentProcessInstanceID clears the value of the "parent_process_instance_id" field.
+func (u *ProcessInstanceUpsertOne) ClearParentProcessInstanceID() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.ClearParentProcessInstanceID()
+	})
+}
+
+// SetRootProcessInstanceID sets the "root_process_instance_id" field.
+func (u *ProcessInstanceUpsertOne) SetRootProcessInstanceID(v string) *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetRootProcessInstanceID(v)
+	})
+}
+
+// UpdateRootProcessInstanceID sets the "root_process_instance_id" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertOne) UpdateRootProcessInstanceID() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateRootProcessInstanceID()
+	})
+}
+
+// ClearRootProcessInstanceID clears the value of the "root_process_instance_id" field.
+func (u *ProcessInstanceUpsertOne) ClearRootProcessInstanceID() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.ClearRootProcessInstanceID()
+	})
+}
+
+// SetStateSnapshot sets the "state_snapshot" field.
+func (u *ProcessInstanceUpsertOne) SetStateSnapshot(v []uint8) *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetStateSnapshot(v)
+	})
+}
+
+// UpdateStateSnapshot sets the "state_snapshot" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertOne) UpdateStateSnapshot() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateStateSnapshot()
+	})
+}
+
+// ClearStateSnapshot clears the value of the "state_snapshot" field.
+func (u *ProcessInstanceUpsertOne) ClearStateSnapshot() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.ClearStateSnapshot()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProcessInstanceUpsertOne) SetCreatedAt(v time.Time) *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertOne) UpdateCreatedAt() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ProcessInstanceUpsertOne) SetUpdatedAt(v time.Time) *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertOne) UpdateUpdatedAt() *ProcessInstanceUpsertOne {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ProcessInstanceUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ProcessInstanceCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ProcessInstanceUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ProcessInstanceUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ProcessInstanceUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ProcessInstanceCreateBulk is the builder for creating many ProcessInstance entities in bulk.
 type ProcessInstanceCreateBulk struct {
 	config
 	err      error
 	builders []*ProcessInstanceCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the ProcessInstance entities in the database.
@@ -661,6 +1567,7 @@ func (_c *ProcessInstanceCreateBulk) Save(ctx context.Context) ([]*ProcessInstan
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -711,6 +1618,530 @@ func (_c *ProcessInstanceCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ProcessInstanceCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ProcessInstance.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ProcessInstanceUpsert) {
+//			SetProcessInstanceID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ProcessInstanceCreateBulk) OnConflict(opts ...sql.ConflictOption) *ProcessInstanceUpsertBulk {
+	_c.conflict = opts
+	return &ProcessInstanceUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ProcessInstance.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ProcessInstanceCreateBulk) OnConflictColumns(columns ...string) *ProcessInstanceUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ProcessInstanceUpsertBulk{
+		create: _c,
+	}
+}
+
+// ProcessInstanceUpsertBulk is the builder for "upsert"-ing
+// a bulk of ProcessInstance nodes.
+type ProcessInstanceUpsertBulk struct {
+	create *ProcessInstanceCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.ProcessInstance.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ProcessInstanceUpsertBulk) UpdateNewValues() *ProcessInstanceUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ProcessInstance.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ProcessInstanceUpsertBulk) Ignore() *ProcessInstanceUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ProcessInstanceUpsertBulk) DoNothing() *ProcessInstanceUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ProcessInstanceCreateBulk.OnConflict
+// documentation for more info.
+func (u *ProcessInstanceUpsertBulk) Update(set func(*ProcessInstanceUpsert)) *ProcessInstanceUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ProcessInstanceUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetProcessInstanceID sets the "process_instance_id" field.
+func (u *ProcessInstanceUpsertBulk) SetProcessInstanceID(v string) *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetProcessInstanceID(v)
+	})
+}
+
+// UpdateProcessInstanceID sets the "process_instance_id" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertBulk) UpdateProcessInstanceID() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateProcessInstanceID()
+	})
+}
+
+// SetBusinessKey sets the "business_key" field.
+func (u *ProcessInstanceUpsertBulk) SetBusinessKey(v string) *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetBusinessKey(v)
+	})
+}
+
+// UpdateBusinessKey sets the "business_key" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertBulk) UpdateBusinessKey() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateBusinessKey()
+	})
+}
+
+// ClearBusinessKey clears the value of the "business_key" field.
+func (u *ProcessInstanceUpsertBulk) ClearBusinessKey() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.ClearBusinessKey()
+	})
+}
+
+// SetBusinessType sets the "business_type" field.
+func (u *ProcessInstanceUpsertBulk) SetBusinessType(v string) *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetBusinessType(v)
+	})
+}
+
+// UpdateBusinessType sets the "business_type" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertBulk) UpdateBusinessType() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateBusinessType()
+	})
+}
+
+// ClearBusinessType clears the value of the "business_type" field.
+func (u *ProcessInstanceUpsertBulk) ClearBusinessType() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.ClearBusinessType()
+	})
+}
+
+// SetBusinessID sets the "business_id" field.
+func (u *ProcessInstanceUpsertBulk) SetBusinessID(v int) *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetBusinessID(v)
+	})
+}
+
+// AddBusinessID adds v to the "business_id" field.
+func (u *ProcessInstanceUpsertBulk) AddBusinessID(v int) *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.AddBusinessID(v)
+	})
+}
+
+// UpdateBusinessID sets the "business_id" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertBulk) UpdateBusinessID() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateBusinessID()
+	})
+}
+
+// ClearBusinessID clears the value of the "business_id" field.
+func (u *ProcessInstanceUpsertBulk) ClearBusinessID() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.ClearBusinessID()
+	})
+}
+
+// SetProcessDefinitionKey sets the "process_definition_key" field.
+func (u *ProcessInstanceUpsertBulk) SetProcessDefinitionKey(v string) *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetProcessDefinitionKey(v)
+	})
+}
+
+// UpdateProcessDefinitionKey sets the "process_definition_key" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertBulk) UpdateProcessDefinitionKey() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateProcessDefinitionKey()
+	})
+}
+
+// SetProcessDefinitionID sets the "process_definition_id" field.
+func (u *ProcessInstanceUpsertBulk) SetProcessDefinitionID(v int) *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetProcessDefinitionID(v)
+	})
+}
+
+// UpdateProcessDefinitionID sets the "process_definition_id" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertBulk) UpdateProcessDefinitionID() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateProcessDefinitionID()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *ProcessInstanceUpsertBulk) SetStatus(v string) *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertBulk) UpdateStatus() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetCurrentActivityID sets the "current_activity_id" field.
+func (u *ProcessInstanceUpsertBulk) SetCurrentActivityID(v string) *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetCurrentActivityID(v)
+	})
+}
+
+// UpdateCurrentActivityID sets the "current_activity_id" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertBulk) UpdateCurrentActivityID() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateCurrentActivityID()
+	})
+}
+
+// ClearCurrentActivityID clears the value of the "current_activity_id" field.
+func (u *ProcessInstanceUpsertBulk) ClearCurrentActivityID() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.ClearCurrentActivityID()
+	})
+}
+
+// SetCurrentActivityName sets the "current_activity_name" field.
+func (u *ProcessInstanceUpsertBulk) SetCurrentActivityName(v string) *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetCurrentActivityName(v)
+	})
+}
+
+// UpdateCurrentActivityName sets the "current_activity_name" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertBulk) UpdateCurrentActivityName() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateCurrentActivityName()
+	})
+}
+
+// ClearCurrentActivityName clears the value of the "current_activity_name" field.
+func (u *ProcessInstanceUpsertBulk) ClearCurrentActivityName() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.ClearCurrentActivityName()
+	})
+}
+
+// SetVariables sets the "variables" field.
+func (u *ProcessInstanceUpsertBulk) SetVariables(v map[string]interface{}) *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetVariables(v)
+	})
+}
+
+// UpdateVariables sets the "variables" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertBulk) UpdateVariables() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateVariables()
+	})
+}
+
+// ClearVariables clears the value of the "variables" field.
+func (u *ProcessInstanceUpsertBulk) ClearVariables() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.ClearVariables()
+	})
+}
+
+// SetStartTime sets the "start_time" field.
+func (u *ProcessInstanceUpsertBulk) SetStartTime(v time.Time) *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetStartTime(v)
+	})
+}
+
+// UpdateStartTime sets the "start_time" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertBulk) UpdateStartTime() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateStartTime()
+	})
+}
+
+// SetEndTime sets the "end_time" field.
+func (u *ProcessInstanceUpsertBulk) SetEndTime(v time.Time) *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetEndTime(v)
+	})
+}
+
+// UpdateEndTime sets the "end_time" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertBulk) UpdateEndTime() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateEndTime()
+	})
+}
+
+// ClearEndTime clears the value of the "end_time" field.
+func (u *ProcessInstanceUpsertBulk) ClearEndTime() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.ClearEndTime()
+	})
+}
+
+// SetSuspendedTime sets the "suspended_time" field.
+func (u *ProcessInstanceUpsertBulk) SetSuspendedTime(v time.Time) *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetSuspendedTime(v)
+	})
+}
+
+// UpdateSuspendedTime sets the "suspended_time" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertBulk) UpdateSuspendedTime() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateSuspendedTime()
+	})
+}
+
+// ClearSuspendedTime clears the value of the "suspended_time" field.
+func (u *ProcessInstanceUpsertBulk) ClearSuspendedTime() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.ClearSuspendedTime()
+	})
+}
+
+// SetSuspendedReason sets the "suspended_reason" field.
+func (u *ProcessInstanceUpsertBulk) SetSuspendedReason(v string) *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetSuspendedReason(v)
+	})
+}
+
+// UpdateSuspendedReason sets the "suspended_reason" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertBulk) UpdateSuspendedReason() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateSuspendedReason()
+	})
+}
+
+// ClearSuspendedReason clears the value of the "suspended_reason" field.
+func (u *ProcessInstanceUpsertBulk) ClearSuspendedReason() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.ClearSuspendedReason()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessInstanceUpsertBulk) SetTenantID(v int) *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessInstanceUpsertBulk) AddTenantID(v int) *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertBulk) UpdateTenantID() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetVersion sets the "version" field.
+func (u *ProcessInstanceUpsertBulk) SetVersion(v int) *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetVersion(v)
+	})
+}
+
+// AddVersion adds v to the "version" field.
+func (u *ProcessInstanceUpsertBulk) AddVersion(v int) *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.AddVersion(v)
+	})
+}
+
+// UpdateVersion sets the "version" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertBulk) UpdateVersion() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateVersion()
+	})
+}
+
+// SetInitiator sets the "initiator" field.
+func (u *ProcessInstanceUpsertBulk) SetInitiator(v string) *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetInitiator(v)
+	})
+}
+
+// UpdateInitiator sets the "initiator" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertBulk) UpdateInitiator() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateInitiator()
+	})
+}
+
+// ClearInitiator clears the value of the "initiator" field.
+func (u *ProcessInstanceUpsertBulk) ClearInitiator() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.ClearInitiator()
+	})
+}
+
+// SetParentProcessInstanceID sets the "parent_process_instance_id" field.
+func (u *ProcessInstanceUpsertBulk) SetParentProcessInstanceID(v string) *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetParentProcessInstanceID(v)
+	})
+}
+
+// UpdateParentProcessInstanceID sets the "parent_process_instance_id" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertBulk) UpdateParentProcessInstanceID() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateParentProcessInstanceID()
+	})
+}
+
+// ClearParentProcessInstanceID clears the value of the "parent_process_instance_id" field.
+func (u *ProcessInstanceUpsertBulk) ClearParentProcessInstanceID() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.ClearParentProcessInstanceID()
+	})
+}
+
+// SetRootProcessInstanceID sets the "root_process_instance_id" field.
+func (u *ProcessInstanceUpsertBulk) SetRootProcessInstanceID(v string) *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetRootProcessInstanceID(v)
+	})
+}
+
+// UpdateRootProcessInstanceID sets the "root_process_instance_id" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertBulk) UpdateRootProcessInstanceID() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateRootProcessInstanceID()
+	})
+}
+
+// ClearRootProcessInstanceID clears the value of the "root_process_instance_id" field.
+func (u *ProcessInstanceUpsertBulk) ClearRootProcessInstanceID() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.ClearRootProcessInstanceID()
+	})
+}
+
+// SetStateSnapshot sets the "state_snapshot" field.
+func (u *ProcessInstanceUpsertBulk) SetStateSnapshot(v []uint8) *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetStateSnapshot(v)
+	})
+}
+
+// UpdateStateSnapshot sets the "state_snapshot" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertBulk) UpdateStateSnapshot() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateStateSnapshot()
+	})
+}
+
+// ClearStateSnapshot clears the value of the "state_snapshot" field.
+func (u *ProcessInstanceUpsertBulk) ClearStateSnapshot() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.ClearStateSnapshot()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProcessInstanceUpsertBulk) SetCreatedAt(v time.Time) *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertBulk) UpdateCreatedAt() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ProcessInstanceUpsertBulk) SetUpdatedAt(v time.Time) *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ProcessInstanceUpsertBulk) UpdateUpdatedAt() *ProcessInstanceUpsertBulk {
+	return u.Update(func(s *ProcessInstanceUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ProcessInstanceUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ProcessInstanceCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ProcessInstanceCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ProcessInstanceUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

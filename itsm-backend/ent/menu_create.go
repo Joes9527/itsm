@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"itsm-backend/ent/menu"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -17,6 +18,7 @@ type MenuCreate struct {
 	config
 	mutation *MenuMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetName sets the "name" field.
@@ -265,6 +267,7 @@ func (_c *MenuCreate) createSpec() (*Menu, *sqlgraph.CreateSpec) {
 		_node = &Menu{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(menu.Table, sqlgraph.NewFieldSpec(menu.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(menu.FieldName, field.TypeString, value)
 		_node.Name = value
@@ -337,11 +340,472 @@ func (_c *MenuCreate) createSpec() (*Menu, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.Menu.Create().
+//		SetName(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.MenuUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *MenuCreate) OnConflict(opts ...sql.ConflictOption) *MenuUpsertOne {
+	_c.conflict = opts
+	return &MenuUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.Menu.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *MenuCreate) OnConflictColumns(columns ...string) *MenuUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &MenuUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// MenuUpsertOne is the builder for "upsert"-ing
+	//  one Menu node.
+	MenuUpsertOne struct {
+		create *MenuCreate
+	}
+
+	// MenuUpsert is the "OnConflict" setter.
+	MenuUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetName sets the "name" field.
+func (u *MenuUpsert) SetName(v string) *MenuUpsert {
+	u.Set(menu.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *MenuUpsert) UpdateName() *MenuUpsert {
+	u.SetExcluded(menu.FieldName)
+	return u
+}
+
+// SetPath sets the "path" field.
+func (u *MenuUpsert) SetPath(v string) *MenuUpsert {
+	u.Set(menu.FieldPath, v)
+	return u
+}
+
+// UpdatePath sets the "path" field to the value that was provided on create.
+func (u *MenuUpsert) UpdatePath() *MenuUpsert {
+	u.SetExcluded(menu.FieldPath)
+	return u
+}
+
+// SetIcon sets the "icon" field.
+func (u *MenuUpsert) SetIcon(v string) *MenuUpsert {
+	u.Set(menu.FieldIcon, v)
+	return u
+}
+
+// UpdateIcon sets the "icon" field to the value that was provided on create.
+func (u *MenuUpsert) UpdateIcon() *MenuUpsert {
+	u.SetExcluded(menu.FieldIcon)
+	return u
+}
+
+// ClearIcon clears the value of the "icon" field.
+func (u *MenuUpsert) ClearIcon() *MenuUpsert {
+	u.SetNull(menu.FieldIcon)
+	return u
+}
+
+// SetParentID sets the "parent_id" field.
+func (u *MenuUpsert) SetParentID(v int) *MenuUpsert {
+	u.Set(menu.FieldParentID, v)
+	return u
+}
+
+// UpdateParentID sets the "parent_id" field to the value that was provided on create.
+func (u *MenuUpsert) UpdateParentID() *MenuUpsert {
+	u.SetExcluded(menu.FieldParentID)
+	return u
+}
+
+// ClearParentID clears the value of the "parent_id" field.
+func (u *MenuUpsert) ClearParentID() *MenuUpsert {
+	u.SetNull(menu.FieldParentID)
+	return u
+}
+
+// SetPermissionCode sets the "permission_code" field.
+func (u *MenuUpsert) SetPermissionCode(v string) *MenuUpsert {
+	u.Set(menu.FieldPermissionCode, v)
+	return u
+}
+
+// UpdatePermissionCode sets the "permission_code" field to the value that was provided on create.
+func (u *MenuUpsert) UpdatePermissionCode() *MenuUpsert {
+	u.SetExcluded(menu.FieldPermissionCode)
+	return u
+}
+
+// ClearPermissionCode clears the value of the "permission_code" field.
+func (u *MenuUpsert) ClearPermissionCode() *MenuUpsert {
+	u.SetNull(menu.FieldPermissionCode)
+	return u
+}
+
+// SetSortOrder sets the "sort_order" field.
+func (u *MenuUpsert) SetSortOrder(v int) *MenuUpsert {
+	u.Set(menu.FieldSortOrder, v)
+	return u
+}
+
+// UpdateSortOrder sets the "sort_order" field to the value that was provided on create.
+func (u *MenuUpsert) UpdateSortOrder() *MenuUpsert {
+	u.SetExcluded(menu.FieldSortOrder)
+	return u
+}
+
+// AddSortOrder adds v to the "sort_order" field.
+func (u *MenuUpsert) AddSortOrder(v int) *MenuUpsert {
+	u.Add(menu.FieldSortOrder, v)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *MenuUpsert) SetTenantID(v int) *MenuUpsert {
+	u.Set(menu.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *MenuUpsert) UpdateTenantID() *MenuUpsert {
+	u.SetExcluded(menu.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *MenuUpsert) AddTenantID(v int) *MenuUpsert {
+	u.Add(menu.FieldTenantID, v)
+	return u
+}
+
+// SetIsVisible sets the "is_visible" field.
+func (u *MenuUpsert) SetIsVisible(v bool) *MenuUpsert {
+	u.Set(menu.FieldIsVisible, v)
+	return u
+}
+
+// UpdateIsVisible sets the "is_visible" field to the value that was provided on create.
+func (u *MenuUpsert) UpdateIsVisible() *MenuUpsert {
+	u.SetExcluded(menu.FieldIsVisible)
+	return u
+}
+
+// SetIsEnabled sets the "is_enabled" field.
+func (u *MenuUpsert) SetIsEnabled(v bool) *MenuUpsert {
+	u.Set(menu.FieldIsEnabled, v)
+	return u
+}
+
+// UpdateIsEnabled sets the "is_enabled" field to the value that was provided on create.
+func (u *MenuUpsert) UpdateIsEnabled() *MenuUpsert {
+	u.SetExcluded(menu.FieldIsEnabled)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *MenuUpsert) SetDescription(v string) *MenuUpsert {
+	u.Set(menu.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *MenuUpsert) UpdateDescription() *MenuUpsert {
+	u.SetExcluded(menu.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *MenuUpsert) ClearDescription() *MenuUpsert {
+	u.SetNull(menu.FieldDescription)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.Menu.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *MenuUpsertOne) UpdateNewValues() *MenuUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.Menu.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *MenuUpsertOne) Ignore() *MenuUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *MenuUpsertOne) DoNothing() *MenuUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the MenuCreate.OnConflict
+// documentation for more info.
+func (u *MenuUpsertOne) Update(set func(*MenuUpsert)) *MenuUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&MenuUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *MenuUpsertOne) SetName(v string) *MenuUpsertOne {
+	return u.Update(func(s *MenuUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *MenuUpsertOne) UpdateName() *MenuUpsertOne {
+	return u.Update(func(s *MenuUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetPath sets the "path" field.
+func (u *MenuUpsertOne) SetPath(v string) *MenuUpsertOne {
+	return u.Update(func(s *MenuUpsert) {
+		s.SetPath(v)
+	})
+}
+
+// UpdatePath sets the "path" field to the value that was provided on create.
+func (u *MenuUpsertOne) UpdatePath() *MenuUpsertOne {
+	return u.Update(func(s *MenuUpsert) {
+		s.UpdatePath()
+	})
+}
+
+// SetIcon sets the "icon" field.
+func (u *MenuUpsertOne) SetIcon(v string) *MenuUpsertOne {
+	return u.Update(func(s *MenuUpsert) {
+		s.SetIcon(v)
+	})
+}
+
+// UpdateIcon sets the "icon" field to the value that was provided on create.
+func (u *MenuUpsertOne) UpdateIcon() *MenuUpsertOne {
+	return u.Update(func(s *MenuUpsert) {
+		s.UpdateIcon()
+	})
+}
+
+// ClearIcon clears the value of the "icon" field.
+func (u *MenuUpsertOne) ClearIcon() *MenuUpsertOne {
+	return u.Update(func(s *MenuUpsert) {
+		s.ClearIcon()
+	})
+}
+
+// SetParentID sets the "parent_id" field.
+func (u *MenuUpsertOne) SetParentID(v int) *MenuUpsertOne {
+	return u.Update(func(s *MenuUpsert) {
+		s.SetParentID(v)
+	})
+}
+
+// UpdateParentID sets the "parent_id" field to the value that was provided on create.
+func (u *MenuUpsertOne) UpdateParentID() *MenuUpsertOne {
+	return u.Update(func(s *MenuUpsert) {
+		s.UpdateParentID()
+	})
+}
+
+// ClearParentID clears the value of the "parent_id" field.
+func (u *MenuUpsertOne) ClearParentID() *MenuUpsertOne {
+	return u.Update(func(s *MenuUpsert) {
+		s.ClearParentID()
+	})
+}
+
+// SetPermissionCode sets the "permission_code" field.
+func (u *MenuUpsertOne) SetPermissionCode(v string) *MenuUpsertOne {
+	return u.Update(func(s *MenuUpsert) {
+		s.SetPermissionCode(v)
+	})
+}
+
+// UpdatePermissionCode sets the "permission_code" field to the value that was provided on create.
+func (u *MenuUpsertOne) UpdatePermissionCode() *MenuUpsertOne {
+	return u.Update(func(s *MenuUpsert) {
+		s.UpdatePermissionCode()
+	})
+}
+
+// ClearPermissionCode clears the value of the "permission_code" field.
+func (u *MenuUpsertOne) ClearPermissionCode() *MenuUpsertOne {
+	return u.Update(func(s *MenuUpsert) {
+		s.ClearPermissionCode()
+	})
+}
+
+// SetSortOrder sets the "sort_order" field.
+func (u *MenuUpsertOne) SetSortOrder(v int) *MenuUpsertOne {
+	return u.Update(func(s *MenuUpsert) {
+		s.SetSortOrder(v)
+	})
+}
+
+// AddSortOrder adds v to the "sort_order" field.
+func (u *MenuUpsertOne) AddSortOrder(v int) *MenuUpsertOne {
+	return u.Update(func(s *MenuUpsert) {
+		s.AddSortOrder(v)
+	})
+}
+
+// UpdateSortOrder sets the "sort_order" field to the value that was provided on create.
+func (u *MenuUpsertOne) UpdateSortOrder() *MenuUpsertOne {
+	return u.Update(func(s *MenuUpsert) {
+		s.UpdateSortOrder()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *MenuUpsertOne) SetTenantID(v int) *MenuUpsertOne {
+	return u.Update(func(s *MenuUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *MenuUpsertOne) AddTenantID(v int) *MenuUpsertOne {
+	return u.Update(func(s *MenuUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *MenuUpsertOne) UpdateTenantID() *MenuUpsertOne {
+	return u.Update(func(s *MenuUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetIsVisible sets the "is_visible" field.
+func (u *MenuUpsertOne) SetIsVisible(v bool) *MenuUpsertOne {
+	return u.Update(func(s *MenuUpsert) {
+		s.SetIsVisible(v)
+	})
+}
+
+// UpdateIsVisible sets the "is_visible" field to the value that was provided on create.
+func (u *MenuUpsertOne) UpdateIsVisible() *MenuUpsertOne {
+	return u.Update(func(s *MenuUpsert) {
+		s.UpdateIsVisible()
+	})
+}
+
+// SetIsEnabled sets the "is_enabled" field.
+func (u *MenuUpsertOne) SetIsEnabled(v bool) *MenuUpsertOne {
+	return u.Update(func(s *MenuUpsert) {
+		s.SetIsEnabled(v)
+	})
+}
+
+// UpdateIsEnabled sets the "is_enabled" field to the value that was provided on create.
+func (u *MenuUpsertOne) UpdateIsEnabled() *MenuUpsertOne {
+	return u.Update(func(s *MenuUpsert) {
+		s.UpdateIsEnabled()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *MenuUpsertOne) SetDescription(v string) *MenuUpsertOne {
+	return u.Update(func(s *MenuUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *MenuUpsertOne) UpdateDescription() *MenuUpsertOne {
+	return u.Update(func(s *MenuUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *MenuUpsertOne) ClearDescription() *MenuUpsertOne {
+	return u.Update(func(s *MenuUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// Exec executes the query.
+func (u *MenuUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for MenuCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *MenuUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *MenuUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *MenuUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // MenuCreateBulk is the builder for creating many Menu entities in bulk.
 type MenuCreateBulk struct {
 	config
 	err      error
 	builders []*MenuCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the Menu entities in the database.
@@ -371,6 +835,7 @@ func (_c *MenuCreateBulk) Save(ctx context.Context) ([]*Menu, error) {
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -421,6 +886,292 @@ func (_c *MenuCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *MenuCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.Menu.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.MenuUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *MenuCreateBulk) OnConflict(opts ...sql.ConflictOption) *MenuUpsertBulk {
+	_c.conflict = opts
+	return &MenuUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.Menu.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *MenuCreateBulk) OnConflictColumns(columns ...string) *MenuUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &MenuUpsertBulk{
+		create: _c,
+	}
+}
+
+// MenuUpsertBulk is the builder for "upsert"-ing
+// a bulk of Menu nodes.
+type MenuUpsertBulk struct {
+	create *MenuCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.Menu.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *MenuUpsertBulk) UpdateNewValues() *MenuUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.Menu.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *MenuUpsertBulk) Ignore() *MenuUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *MenuUpsertBulk) DoNothing() *MenuUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the MenuCreateBulk.OnConflict
+// documentation for more info.
+func (u *MenuUpsertBulk) Update(set func(*MenuUpsert)) *MenuUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&MenuUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *MenuUpsertBulk) SetName(v string) *MenuUpsertBulk {
+	return u.Update(func(s *MenuUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *MenuUpsertBulk) UpdateName() *MenuUpsertBulk {
+	return u.Update(func(s *MenuUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetPath sets the "path" field.
+func (u *MenuUpsertBulk) SetPath(v string) *MenuUpsertBulk {
+	return u.Update(func(s *MenuUpsert) {
+		s.SetPath(v)
+	})
+}
+
+// UpdatePath sets the "path" field to the value that was provided on create.
+func (u *MenuUpsertBulk) UpdatePath() *MenuUpsertBulk {
+	return u.Update(func(s *MenuUpsert) {
+		s.UpdatePath()
+	})
+}
+
+// SetIcon sets the "icon" field.
+func (u *MenuUpsertBulk) SetIcon(v string) *MenuUpsertBulk {
+	return u.Update(func(s *MenuUpsert) {
+		s.SetIcon(v)
+	})
+}
+
+// UpdateIcon sets the "icon" field to the value that was provided on create.
+func (u *MenuUpsertBulk) UpdateIcon() *MenuUpsertBulk {
+	return u.Update(func(s *MenuUpsert) {
+		s.UpdateIcon()
+	})
+}
+
+// ClearIcon clears the value of the "icon" field.
+func (u *MenuUpsertBulk) ClearIcon() *MenuUpsertBulk {
+	return u.Update(func(s *MenuUpsert) {
+		s.ClearIcon()
+	})
+}
+
+// SetParentID sets the "parent_id" field.
+func (u *MenuUpsertBulk) SetParentID(v int) *MenuUpsertBulk {
+	return u.Update(func(s *MenuUpsert) {
+		s.SetParentID(v)
+	})
+}
+
+// UpdateParentID sets the "parent_id" field to the value that was provided on create.
+func (u *MenuUpsertBulk) UpdateParentID() *MenuUpsertBulk {
+	return u.Update(func(s *MenuUpsert) {
+		s.UpdateParentID()
+	})
+}
+
+// ClearParentID clears the value of the "parent_id" field.
+func (u *MenuUpsertBulk) ClearParentID() *MenuUpsertBulk {
+	return u.Update(func(s *MenuUpsert) {
+		s.ClearParentID()
+	})
+}
+
+// SetPermissionCode sets the "permission_code" field.
+func (u *MenuUpsertBulk) SetPermissionCode(v string) *MenuUpsertBulk {
+	return u.Update(func(s *MenuUpsert) {
+		s.SetPermissionCode(v)
+	})
+}
+
+// UpdatePermissionCode sets the "permission_code" field to the value that was provided on create.
+func (u *MenuUpsertBulk) UpdatePermissionCode() *MenuUpsertBulk {
+	return u.Update(func(s *MenuUpsert) {
+		s.UpdatePermissionCode()
+	})
+}
+
+// ClearPermissionCode clears the value of the "permission_code" field.
+func (u *MenuUpsertBulk) ClearPermissionCode() *MenuUpsertBulk {
+	return u.Update(func(s *MenuUpsert) {
+		s.ClearPermissionCode()
+	})
+}
+
+// SetSortOrder sets the "sort_order" field.
+func (u *MenuUpsertBulk) SetSortOrder(v int) *MenuUpsertBulk {
+	return u.Update(func(s *MenuUpsert) {
+		s.SetSortOrder(v)
+	})
+}
+
+// AddSortOrder adds v to the "sort_order" field.
+func (u *MenuUpsertBulk) AddSortOrder(v int) *MenuUpsertBulk {
+	return u.Update(func(s *MenuUpsert) {
+		s.AddSortOrder(v)
+	})
+}
+
+// UpdateSortOrder sets the "sort_order" field to the value that was provided on create.
+func (u *MenuUpsertBulk) UpdateSortOrder() *MenuUpsertBulk {
+	return u.Update(func(s *MenuUpsert) {
+		s.UpdateSortOrder()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *MenuUpsertBulk) SetTenantID(v int) *MenuUpsertBulk {
+	return u.Update(func(s *MenuUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *MenuUpsertBulk) AddTenantID(v int) *MenuUpsertBulk {
+	return u.Update(func(s *MenuUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *MenuUpsertBulk) UpdateTenantID() *MenuUpsertBulk {
+	return u.Update(func(s *MenuUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetIsVisible sets the "is_visible" field.
+func (u *MenuUpsertBulk) SetIsVisible(v bool) *MenuUpsertBulk {
+	return u.Update(func(s *MenuUpsert) {
+		s.SetIsVisible(v)
+	})
+}
+
+// UpdateIsVisible sets the "is_visible" field to the value that was provided on create.
+func (u *MenuUpsertBulk) UpdateIsVisible() *MenuUpsertBulk {
+	return u.Update(func(s *MenuUpsert) {
+		s.UpdateIsVisible()
+	})
+}
+
+// SetIsEnabled sets the "is_enabled" field.
+func (u *MenuUpsertBulk) SetIsEnabled(v bool) *MenuUpsertBulk {
+	return u.Update(func(s *MenuUpsert) {
+		s.SetIsEnabled(v)
+	})
+}
+
+// UpdateIsEnabled sets the "is_enabled" field to the value that was provided on create.
+func (u *MenuUpsertBulk) UpdateIsEnabled() *MenuUpsertBulk {
+	return u.Update(func(s *MenuUpsert) {
+		s.UpdateIsEnabled()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *MenuUpsertBulk) SetDescription(v string) *MenuUpsertBulk {
+	return u.Update(func(s *MenuUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *MenuUpsertBulk) UpdateDescription() *MenuUpsertBulk {
+	return u.Update(func(s *MenuUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *MenuUpsertBulk) ClearDescription() *MenuUpsertBulk {
+	return u.Update(func(s *MenuUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// Exec executes the query.
+func (u *MenuUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the MenuCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for MenuCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *MenuUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

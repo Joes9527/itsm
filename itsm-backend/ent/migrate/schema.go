@@ -1401,6 +1401,36 @@ var (
 		Columns:    EngineerSkillsColumns,
 		PrimaryKey: []*schema.Column{EngineerSkillsColumns[0]},
 	}
+	// ExternalIdentitiesColumns holds the columns for the "external_identities" table.
+	ExternalIdentitiesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "tenant_id", Type: field.TypeInt},
+		{Name: "provider", Type: field.TypeString},
+		{Name: "workspace", Type: field.TypeString},
+		{Name: "subject", Type: field.TypeString},
+		{Name: "user_id", Type: field.TypeInt},
+		{Name: "active", Type: field.TypeBool, Default: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// ExternalIdentitiesTable holds the schema information for the "external_identities" table.
+	ExternalIdentitiesTable = &schema.Table{
+		Name:       "external_identities",
+		Columns:    ExternalIdentitiesColumns,
+		PrimaryKey: []*schema.Column{ExternalIdentitiesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "externalidentity_provider_workspace_subject",
+				Unique:  true,
+				Columns: []*schema.Column{ExternalIdentitiesColumns[2], ExternalIdentitiesColumns[3], ExternalIdentitiesColumns[4]},
+			},
+			{
+				Name:    "externalidentity_tenant_id_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{ExternalIdentitiesColumns[1], ExternalIdentitiesColumns[5]},
+			},
+		},
+	}
 	// FeishuTicketSyncsColumns holds the columns for the "feishu_ticket_syncs" table.
 	FeishuTicketSyncsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -1749,6 +1779,87 @@ var (
 				Columns:    []*schema.Column{IncidentRuleExecutionsColumns[13]},
 				RefColumns: []*schema.Column{IncidentRulesColumns[0]},
 				OnDelete:   schema.NoAction,
+			},
+		},
+	}
+	// IntakeRequestsColumns holds the columns for the "intake_requests" table.
+	IntakeRequestsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "tenant_id", Type: field.TypeInt},
+		{Name: "actor_id", Type: field.TypeInt},
+		{Name: "channel", Type: field.TypeString},
+		{Name: "operation", Type: field.TypeString},
+		{Name: "idempotency_key", Type: field.TypeString},
+		{Name: "request_digest", Type: field.TypeString},
+		{Name: "digest_version", Type: field.TypeString},
+		{Name: "status", Type: field.TypeString, Default: "pending"},
+		{Name: "work_item_id", Type: field.TypeInt, Nullable: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
+	}
+	// IntakeRequestsTable holds the schema information for the "intake_requests" table.
+	IntakeRequestsTable = &schema.Table{
+		Name:       "intake_requests",
+		Columns:    IntakeRequestsColumns,
+		PrimaryKey: []*schema.Column{IntakeRequestsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "intakerequest_tenant_id_actor_id_channel_operation_idempotency_key",
+				Unique:  true,
+				Columns: []*schema.Column{IntakeRequestsColumns[1], IntakeRequestsColumns[2], IntakeRequestsColumns[3], IntakeRequestsColumns[4], IntakeRequestsColumns[5]},
+			},
+			{
+				Name:    "intakerequest_tenant_id_work_item_id",
+				Unique:  false,
+				Columns: []*schema.Column{IntakeRequestsColumns[1], IntakeRequestsColumns[9]},
+			},
+		},
+	}
+	// IntakeResolutionSnapshotsColumns holds the columns for the "intake_resolution_snapshots" table.
+	IntakeResolutionSnapshotsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "tenant_id", Type: field.TypeInt},
+		{Name: "intake_request_id", Type: field.TypeInt},
+		{Name: "work_item_id", Type: field.TypeInt},
+		{Name: "channel", Type: field.TypeString},
+		{Name: "source_provider", Type: field.TypeString},
+		{Name: "source_event_id", Type: field.TypeString, Nullable: true},
+		{Name: "source_conversation_id", Type: field.TypeString, Nullable: true},
+		{Name: "catalog_item_id", Type: field.TypeInt, Nullable: true},
+		{Name: "catalog_version", Type: field.TypeString, Nullable: true},
+		{Name: "record_class", Type: field.TypeString},
+		{Name: "cti_snapshot", Type: field.TypeJSON, Nullable: true},
+		{Name: "ci_ids", Type: field.TypeJSON},
+		{Name: "form_schema_version", Type: field.TypeString, Nullable: true},
+		{Name: "workflow_definition_id", Type: field.TypeInt, Nullable: true},
+		{Name: "workflow_definition_key", Type: field.TypeString, Nullable: true},
+		{Name: "workflow_definition_version", Type: field.TypeString, Nullable: true},
+		{Name: "no_process", Type: field.TypeBool, Default: false},
+		{Name: "sla_definition_id", Type: field.TypeInt, Nullable: true},
+		{Name: "resolver_version", Type: field.TypeString},
+		{Name: "request_digest", Type: field.TypeString},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// IntakeResolutionSnapshotsTable holds the schema information for the "intake_resolution_snapshots" table.
+	IntakeResolutionSnapshotsTable = &schema.Table{
+		Name:       "intake_resolution_snapshots",
+		Columns:    IntakeResolutionSnapshotsColumns,
+		PrimaryKey: []*schema.Column{IntakeResolutionSnapshotsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "intakeresolutionsnapshot_intake_request_id",
+				Unique:  true,
+				Columns: []*schema.Column{IntakeResolutionSnapshotsColumns[2]},
+			},
+			{
+				Name:    "intakeresolutionsnapshot_work_item_id",
+				Unique:  true,
+				Columns: []*schema.Column{IntakeResolutionSnapshotsColumns[3]},
+			},
+			{
+				Name:    "intakeresolutionsnapshot_tenant_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{IntakeResolutionSnapshotsColumns[1], IntakeResolutionSnapshotsColumns[21]},
 			},
 		},
 	}
@@ -5270,6 +5381,7 @@ var (
 		DomainConfigsTable,
 		EndpointAcLsTable,
 		EngineerSkillsTable,
+		ExternalIdentitiesTable,
 		FeishuTicketSyncsTable,
 		FieldDefinitionsTable,
 		FieldValuesTable,
@@ -5281,6 +5393,8 @@ var (
 		IncidentMetricsTable,
 		IncidentRulesTable,
 		IncidentRuleExecutionsTable,
+		IntakeRequestsTable,
+		IntakeResolutionSnapshotsTable,
 		ItemVersionsTable,
 		KafTaskActionLedgersTable,
 		KafTaskCompletionReceiptsTable,

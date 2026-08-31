@@ -9,6 +9,7 @@ import (
 	"itsm-backend/ent/cmdbsavedview"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -18,6 +19,7 @@ type CMDBSavedViewCreate struct {
 	config
 	mutation *CMDBSavedViewMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetName sets the "name" field.
@@ -259,6 +261,7 @@ func (_c *CMDBSavedViewCreate) createSpec() (*CMDBSavedView, *sqlgraph.CreateSpe
 		_node = &CMDBSavedView{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(cmdbsavedview.Table, sqlgraph.NewFieldSpec(cmdbsavedview.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(cmdbsavedview.FieldName, field.TypeString, value)
 		_node.Name = value
@@ -306,11 +309,498 @@ func (_c *CMDBSavedViewCreate) createSpec() (*CMDBSavedView, *sqlgraph.CreateSpe
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.CMDBSavedView.Create().
+//		SetName(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.CMDBSavedViewUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *CMDBSavedViewCreate) OnConflict(opts ...sql.ConflictOption) *CMDBSavedViewUpsertOne {
+	_c.conflict = opts
+	return &CMDBSavedViewUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.CMDBSavedView.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *CMDBSavedViewCreate) OnConflictColumns(columns ...string) *CMDBSavedViewUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &CMDBSavedViewUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// CMDBSavedViewUpsertOne is the builder for "upsert"-ing
+	//  one CMDBSavedView node.
+	CMDBSavedViewUpsertOne struct {
+		create *CMDBSavedViewCreate
+	}
+
+	// CMDBSavedViewUpsert is the "OnConflict" setter.
+	CMDBSavedViewUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetName sets the "name" field.
+func (u *CMDBSavedViewUpsert) SetName(v string) *CMDBSavedViewUpsert {
+	u.Set(cmdbsavedview.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsert) UpdateName() *CMDBSavedViewUpsert {
+	u.SetExcluded(cmdbsavedview.FieldName)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *CMDBSavedViewUpsert) SetDescription(v string) *CMDBSavedViewUpsert {
+	u.Set(cmdbsavedview.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsert) UpdateDescription() *CMDBSavedViewUpsert {
+	u.SetExcluded(cmdbsavedview.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *CMDBSavedViewUpsert) ClearDescription() *CMDBSavedViewUpsert {
+	u.SetNull(cmdbsavedview.FieldDescription)
+	return u
+}
+
+// SetFilters sets the "filters" field.
+func (u *CMDBSavedViewUpsert) SetFilters(v map[string]interface{}) *CMDBSavedViewUpsert {
+	u.Set(cmdbsavedview.FieldFilters, v)
+	return u
+}
+
+// UpdateFilters sets the "filters" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsert) UpdateFilters() *CMDBSavedViewUpsert {
+	u.SetExcluded(cmdbsavedview.FieldFilters)
+	return u
+}
+
+// ClearFilters clears the value of the "filters" field.
+func (u *CMDBSavedViewUpsert) ClearFilters() *CMDBSavedViewUpsert {
+	u.SetNull(cmdbsavedview.FieldFilters)
+	return u
+}
+
+// SetSortBy sets the "sort_by" field.
+func (u *CMDBSavedViewUpsert) SetSortBy(v string) *CMDBSavedViewUpsert {
+	u.Set(cmdbsavedview.FieldSortBy, v)
+	return u
+}
+
+// UpdateSortBy sets the "sort_by" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsert) UpdateSortBy() *CMDBSavedViewUpsert {
+	u.SetExcluded(cmdbsavedview.FieldSortBy)
+	return u
+}
+
+// ClearSortBy clears the value of the "sort_by" field.
+func (u *CMDBSavedViewUpsert) ClearSortBy() *CMDBSavedViewUpsert {
+	u.SetNull(cmdbsavedview.FieldSortBy)
+	return u
+}
+
+// SetSortOrder sets the "sort_order" field.
+func (u *CMDBSavedViewUpsert) SetSortOrder(v string) *CMDBSavedViewUpsert {
+	u.Set(cmdbsavedview.FieldSortOrder, v)
+	return u
+}
+
+// UpdateSortOrder sets the "sort_order" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsert) UpdateSortOrder() *CMDBSavedViewUpsert {
+	u.SetExcluded(cmdbsavedview.FieldSortOrder)
+	return u
+}
+
+// SetIsPublic sets the "is_public" field.
+func (u *CMDBSavedViewUpsert) SetIsPublic(v bool) *CMDBSavedViewUpsert {
+	u.Set(cmdbsavedview.FieldIsPublic, v)
+	return u
+}
+
+// UpdateIsPublic sets the "is_public" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsert) UpdateIsPublic() *CMDBSavedViewUpsert {
+	u.SetExcluded(cmdbsavedview.FieldIsPublic)
+	return u
+}
+
+// SetCreatorID sets the "creator_id" field.
+func (u *CMDBSavedViewUpsert) SetCreatorID(v int) *CMDBSavedViewUpsert {
+	u.Set(cmdbsavedview.FieldCreatorID, v)
+	return u
+}
+
+// UpdateCreatorID sets the "creator_id" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsert) UpdateCreatorID() *CMDBSavedViewUpsert {
+	u.SetExcluded(cmdbsavedview.FieldCreatorID)
+	return u
+}
+
+// AddCreatorID adds v to the "creator_id" field.
+func (u *CMDBSavedViewUpsert) AddCreatorID(v int) *CMDBSavedViewUpsert {
+	u.Add(cmdbsavedview.FieldCreatorID, v)
+	return u
+}
+
+// SetCreatorName sets the "creator_name" field.
+func (u *CMDBSavedViewUpsert) SetCreatorName(v string) *CMDBSavedViewUpsert {
+	u.Set(cmdbsavedview.FieldCreatorName, v)
+	return u
+}
+
+// UpdateCreatorName sets the "creator_name" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsert) UpdateCreatorName() *CMDBSavedViewUpsert {
+	u.SetExcluded(cmdbsavedview.FieldCreatorName)
+	return u
+}
+
+// ClearCreatorName clears the value of the "creator_name" field.
+func (u *CMDBSavedViewUpsert) ClearCreatorName() *CMDBSavedViewUpsert {
+	u.SetNull(cmdbsavedview.FieldCreatorName)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *CMDBSavedViewUpsert) SetTenantID(v int) *CMDBSavedViewUpsert {
+	u.Set(cmdbsavedview.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsert) UpdateTenantID() *CMDBSavedViewUpsert {
+	u.SetExcluded(cmdbsavedview.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *CMDBSavedViewUpsert) AddTenantID(v int) *CMDBSavedViewUpsert {
+	u.Add(cmdbsavedview.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *CMDBSavedViewUpsert) SetCreatedAt(v time.Time) *CMDBSavedViewUpsert {
+	u.Set(cmdbsavedview.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsert) UpdateCreatedAt() *CMDBSavedViewUpsert {
+	u.SetExcluded(cmdbsavedview.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *CMDBSavedViewUpsert) SetUpdatedAt(v time.Time) *CMDBSavedViewUpsert {
+	u.Set(cmdbsavedview.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsert) UpdateUpdatedAt() *CMDBSavedViewUpsert {
+	u.SetExcluded(cmdbsavedview.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.CMDBSavedView.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *CMDBSavedViewUpsertOne) UpdateNewValues() *CMDBSavedViewUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.CMDBSavedView.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *CMDBSavedViewUpsertOne) Ignore() *CMDBSavedViewUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *CMDBSavedViewUpsertOne) DoNothing() *CMDBSavedViewUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the CMDBSavedViewCreate.OnConflict
+// documentation for more info.
+func (u *CMDBSavedViewUpsertOne) Update(set func(*CMDBSavedViewUpsert)) *CMDBSavedViewUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&CMDBSavedViewUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *CMDBSavedViewUpsertOne) SetName(v string) *CMDBSavedViewUpsertOne {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsertOne) UpdateName() *CMDBSavedViewUpsertOne {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *CMDBSavedViewUpsertOne) SetDescription(v string) *CMDBSavedViewUpsertOne {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsertOne) UpdateDescription() *CMDBSavedViewUpsertOne {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *CMDBSavedViewUpsertOne) ClearDescription() *CMDBSavedViewUpsertOne {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetFilters sets the "filters" field.
+func (u *CMDBSavedViewUpsertOne) SetFilters(v map[string]interface{}) *CMDBSavedViewUpsertOne {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.SetFilters(v)
+	})
+}
+
+// UpdateFilters sets the "filters" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsertOne) UpdateFilters() *CMDBSavedViewUpsertOne {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.UpdateFilters()
+	})
+}
+
+// ClearFilters clears the value of the "filters" field.
+func (u *CMDBSavedViewUpsertOne) ClearFilters() *CMDBSavedViewUpsertOne {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.ClearFilters()
+	})
+}
+
+// SetSortBy sets the "sort_by" field.
+func (u *CMDBSavedViewUpsertOne) SetSortBy(v string) *CMDBSavedViewUpsertOne {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.SetSortBy(v)
+	})
+}
+
+// UpdateSortBy sets the "sort_by" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsertOne) UpdateSortBy() *CMDBSavedViewUpsertOne {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.UpdateSortBy()
+	})
+}
+
+// ClearSortBy clears the value of the "sort_by" field.
+func (u *CMDBSavedViewUpsertOne) ClearSortBy() *CMDBSavedViewUpsertOne {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.ClearSortBy()
+	})
+}
+
+// SetSortOrder sets the "sort_order" field.
+func (u *CMDBSavedViewUpsertOne) SetSortOrder(v string) *CMDBSavedViewUpsertOne {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.SetSortOrder(v)
+	})
+}
+
+// UpdateSortOrder sets the "sort_order" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsertOne) UpdateSortOrder() *CMDBSavedViewUpsertOne {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.UpdateSortOrder()
+	})
+}
+
+// SetIsPublic sets the "is_public" field.
+func (u *CMDBSavedViewUpsertOne) SetIsPublic(v bool) *CMDBSavedViewUpsertOne {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.SetIsPublic(v)
+	})
+}
+
+// UpdateIsPublic sets the "is_public" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsertOne) UpdateIsPublic() *CMDBSavedViewUpsertOne {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.UpdateIsPublic()
+	})
+}
+
+// SetCreatorID sets the "creator_id" field.
+func (u *CMDBSavedViewUpsertOne) SetCreatorID(v int) *CMDBSavedViewUpsertOne {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.SetCreatorID(v)
+	})
+}
+
+// AddCreatorID adds v to the "creator_id" field.
+func (u *CMDBSavedViewUpsertOne) AddCreatorID(v int) *CMDBSavedViewUpsertOne {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.AddCreatorID(v)
+	})
+}
+
+// UpdateCreatorID sets the "creator_id" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsertOne) UpdateCreatorID() *CMDBSavedViewUpsertOne {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.UpdateCreatorID()
+	})
+}
+
+// SetCreatorName sets the "creator_name" field.
+func (u *CMDBSavedViewUpsertOne) SetCreatorName(v string) *CMDBSavedViewUpsertOne {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.SetCreatorName(v)
+	})
+}
+
+// UpdateCreatorName sets the "creator_name" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsertOne) UpdateCreatorName() *CMDBSavedViewUpsertOne {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.UpdateCreatorName()
+	})
+}
+
+// ClearCreatorName clears the value of the "creator_name" field.
+func (u *CMDBSavedViewUpsertOne) ClearCreatorName() *CMDBSavedViewUpsertOne {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.ClearCreatorName()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *CMDBSavedViewUpsertOne) SetTenantID(v int) *CMDBSavedViewUpsertOne {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *CMDBSavedViewUpsertOne) AddTenantID(v int) *CMDBSavedViewUpsertOne {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsertOne) UpdateTenantID() *CMDBSavedViewUpsertOne {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *CMDBSavedViewUpsertOne) SetCreatedAt(v time.Time) *CMDBSavedViewUpsertOne {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsertOne) UpdateCreatedAt() *CMDBSavedViewUpsertOne {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *CMDBSavedViewUpsertOne) SetUpdatedAt(v time.Time) *CMDBSavedViewUpsertOne {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsertOne) UpdateUpdatedAt() *CMDBSavedViewUpsertOne {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *CMDBSavedViewUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for CMDBSavedViewCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *CMDBSavedViewUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *CMDBSavedViewUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *CMDBSavedViewUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // CMDBSavedViewCreateBulk is the builder for creating many CMDBSavedView entities in bulk.
 type CMDBSavedViewCreateBulk struct {
 	config
 	err      error
 	builders []*CMDBSavedViewCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the CMDBSavedView entities in the database.
@@ -340,6 +830,7 @@ func (_c *CMDBSavedViewCreateBulk) Save(ctx context.Context) ([]*CMDBSavedView, 
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -390,6 +881,306 @@ func (_c *CMDBSavedViewCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *CMDBSavedViewCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.CMDBSavedView.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.CMDBSavedViewUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *CMDBSavedViewCreateBulk) OnConflict(opts ...sql.ConflictOption) *CMDBSavedViewUpsertBulk {
+	_c.conflict = opts
+	return &CMDBSavedViewUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.CMDBSavedView.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *CMDBSavedViewCreateBulk) OnConflictColumns(columns ...string) *CMDBSavedViewUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &CMDBSavedViewUpsertBulk{
+		create: _c,
+	}
+}
+
+// CMDBSavedViewUpsertBulk is the builder for "upsert"-ing
+// a bulk of CMDBSavedView nodes.
+type CMDBSavedViewUpsertBulk struct {
+	create *CMDBSavedViewCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.CMDBSavedView.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *CMDBSavedViewUpsertBulk) UpdateNewValues() *CMDBSavedViewUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.CMDBSavedView.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *CMDBSavedViewUpsertBulk) Ignore() *CMDBSavedViewUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *CMDBSavedViewUpsertBulk) DoNothing() *CMDBSavedViewUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the CMDBSavedViewCreateBulk.OnConflict
+// documentation for more info.
+func (u *CMDBSavedViewUpsertBulk) Update(set func(*CMDBSavedViewUpsert)) *CMDBSavedViewUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&CMDBSavedViewUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *CMDBSavedViewUpsertBulk) SetName(v string) *CMDBSavedViewUpsertBulk {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsertBulk) UpdateName() *CMDBSavedViewUpsertBulk {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *CMDBSavedViewUpsertBulk) SetDescription(v string) *CMDBSavedViewUpsertBulk {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsertBulk) UpdateDescription() *CMDBSavedViewUpsertBulk {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *CMDBSavedViewUpsertBulk) ClearDescription() *CMDBSavedViewUpsertBulk {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetFilters sets the "filters" field.
+func (u *CMDBSavedViewUpsertBulk) SetFilters(v map[string]interface{}) *CMDBSavedViewUpsertBulk {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.SetFilters(v)
+	})
+}
+
+// UpdateFilters sets the "filters" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsertBulk) UpdateFilters() *CMDBSavedViewUpsertBulk {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.UpdateFilters()
+	})
+}
+
+// ClearFilters clears the value of the "filters" field.
+func (u *CMDBSavedViewUpsertBulk) ClearFilters() *CMDBSavedViewUpsertBulk {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.ClearFilters()
+	})
+}
+
+// SetSortBy sets the "sort_by" field.
+func (u *CMDBSavedViewUpsertBulk) SetSortBy(v string) *CMDBSavedViewUpsertBulk {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.SetSortBy(v)
+	})
+}
+
+// UpdateSortBy sets the "sort_by" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsertBulk) UpdateSortBy() *CMDBSavedViewUpsertBulk {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.UpdateSortBy()
+	})
+}
+
+// ClearSortBy clears the value of the "sort_by" field.
+func (u *CMDBSavedViewUpsertBulk) ClearSortBy() *CMDBSavedViewUpsertBulk {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.ClearSortBy()
+	})
+}
+
+// SetSortOrder sets the "sort_order" field.
+func (u *CMDBSavedViewUpsertBulk) SetSortOrder(v string) *CMDBSavedViewUpsertBulk {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.SetSortOrder(v)
+	})
+}
+
+// UpdateSortOrder sets the "sort_order" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsertBulk) UpdateSortOrder() *CMDBSavedViewUpsertBulk {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.UpdateSortOrder()
+	})
+}
+
+// SetIsPublic sets the "is_public" field.
+func (u *CMDBSavedViewUpsertBulk) SetIsPublic(v bool) *CMDBSavedViewUpsertBulk {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.SetIsPublic(v)
+	})
+}
+
+// UpdateIsPublic sets the "is_public" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsertBulk) UpdateIsPublic() *CMDBSavedViewUpsertBulk {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.UpdateIsPublic()
+	})
+}
+
+// SetCreatorID sets the "creator_id" field.
+func (u *CMDBSavedViewUpsertBulk) SetCreatorID(v int) *CMDBSavedViewUpsertBulk {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.SetCreatorID(v)
+	})
+}
+
+// AddCreatorID adds v to the "creator_id" field.
+func (u *CMDBSavedViewUpsertBulk) AddCreatorID(v int) *CMDBSavedViewUpsertBulk {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.AddCreatorID(v)
+	})
+}
+
+// UpdateCreatorID sets the "creator_id" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsertBulk) UpdateCreatorID() *CMDBSavedViewUpsertBulk {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.UpdateCreatorID()
+	})
+}
+
+// SetCreatorName sets the "creator_name" field.
+func (u *CMDBSavedViewUpsertBulk) SetCreatorName(v string) *CMDBSavedViewUpsertBulk {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.SetCreatorName(v)
+	})
+}
+
+// UpdateCreatorName sets the "creator_name" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsertBulk) UpdateCreatorName() *CMDBSavedViewUpsertBulk {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.UpdateCreatorName()
+	})
+}
+
+// ClearCreatorName clears the value of the "creator_name" field.
+func (u *CMDBSavedViewUpsertBulk) ClearCreatorName() *CMDBSavedViewUpsertBulk {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.ClearCreatorName()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *CMDBSavedViewUpsertBulk) SetTenantID(v int) *CMDBSavedViewUpsertBulk {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *CMDBSavedViewUpsertBulk) AddTenantID(v int) *CMDBSavedViewUpsertBulk {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsertBulk) UpdateTenantID() *CMDBSavedViewUpsertBulk {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *CMDBSavedViewUpsertBulk) SetCreatedAt(v time.Time) *CMDBSavedViewUpsertBulk {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsertBulk) UpdateCreatedAt() *CMDBSavedViewUpsertBulk {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *CMDBSavedViewUpsertBulk) SetUpdatedAt(v time.Time) *CMDBSavedViewUpsertBulk {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *CMDBSavedViewUpsertBulk) UpdateUpdatedAt() *CMDBSavedViewUpsertBulk {
+	return u.Update(func(s *CMDBSavedViewUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *CMDBSavedViewUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the CMDBSavedViewCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for CMDBSavedViewCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *CMDBSavedViewUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

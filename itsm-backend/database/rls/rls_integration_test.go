@@ -30,8 +30,10 @@ package rls
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	_ "github.com/lib/pq"
 )
@@ -158,6 +160,103 @@ func TestKafExecutionIntegrityTablesRejectCrossTenantRows(t *testing.T) {
 		if crossTenantRows != 0 {
 			t.Fatalf("%s exposed %d cross-tenant rows", table, crossTenantRows)
 		}
+	}
+}
+
+func execIntakeProbeAsTenant(t *testing.T, db *sql.DB, tenantID int64, query string, args ...any) {
+	t.Helper()
+	ctx := WithTenant(context.Background(), tenantID)
+	conn, err := AcquireConn(ctx, db)
+	if err != nil {
+		t.Fatalf("acquire tenant %d connection: %v", tenantID, err)
+	}
+	defer func() {
+		if err := ReleaseConn(ctx, conn); err != nil {
+			t.Fatalf("release tenant %d connection: %v", tenantID, err)
+		}
+	}()
+	if _, err := conn.ExecContext(ctx, "SET ROLE itsm_app"); err != nil {
+		t.Fatalf("set tenant %d role: %v", tenantID, err)
+	}
+	if _, err := conn.ExecContext(ctx, query, args...); err != nil {
+		t.Fatalf("execute tenant %d intake probe: %v", tenantID, err)
+	}
+}
+
+func countIntakeProbeAsTenant(t *testing.T, db *sql.DB, tenantID int64, query string, args ...any) int {
+	t.Helper()
+	ctx := WithTenant(context.Background(), tenantID)
+	conn, err := AcquireConn(ctx, db)
+	if err != nil {
+		t.Fatalf("acquire tenant %d connection: %v", tenantID, err)
+	}
+	defer func() {
+		if err := ReleaseConn(ctx, conn); err != nil {
+			t.Fatalf("release tenant %d connection: %v", tenantID, err)
+		}
+	}()
+	if _, err := conn.ExecContext(ctx, "SET ROLE itsm_app"); err != nil {
+		t.Fatalf("set tenant %d role: %v", tenantID, err)
+	}
+	var count int
+	if err := conn.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
+		t.Fatalf("count tenant %d intake probe: %v", tenantID, err)
+	}
+	return count
+}
+
+func TestUnifiedIntakeTablesIsolateTenantRows(t *testing.T) {
+	db := openTestDB(t)
+	defer db.Close()
+
+	var tenantA, tenantB int64 = 910001, 910002
+	nonce := time.Now().UnixNano()
+	marker := fmt.Sprintf("rls-intake-%d", nonce)
+	baseID := 1_500_000_000 + nonce%100_000_000
+
+	for offset, tenantID := range []int64{tenantA, tenantB} {
+		rowID := baseID + int64(offset*10)
+		execIntakeProbeAsTenant(t, db, tenantID, `
+			INSERT INTO intake_requests
+				(id, tenant_id, actor_id, channel, operation, idempotency_key, request_digest, digest_version, status)
+			VALUES ($1, $2, 1, 'rls_test', 'create', $3, $4, 'v1', 'pending')`,
+			rowID, tenantID, fmt.Sprintf("%s-%d", marker, tenantID), marker)
+		execIntakeProbeAsTenant(t, db, tenantID, `
+			INSERT INTO intake_resolution_snapshots
+				(id, tenant_id, intake_request_id, work_item_id, channel, source_provider, record_class, ci_ids, no_process, resolver_version, request_digest)
+			VALUES ($1, $2, $3, $4, 'rls_test', 'integration', 'incident', '[]'::jsonb, true, 'v1', $5)`,
+			rowID+1, tenantID, rowID, rowID, marker)
+		execIntakeProbeAsTenant(t, db, tenantID, `
+			INSERT INTO external_identities
+				(id, tenant_id, provider, workspace, subject, user_id, active)
+			VALUES ($1, $2, $3, 'rls-test', $4, 1, true)`,
+			rowID+2, tenantID, marker, fmt.Sprintf("subject-%d", tenantID))
+	}
+
+	defer func() {
+		for _, tenantID := range []int64{tenantA, tenantB} {
+			execIntakeProbeAsTenant(t, db, tenantID, "DELETE FROM external_identities WHERE provider = $1", marker)
+			execIntakeProbeAsTenant(t, db, tenantID, "DELETE FROM intake_resolution_snapshots WHERE request_digest = $1", marker)
+			execIntakeProbeAsTenant(t, db, tenantID, "DELETE FROM intake_requests WHERE request_digest = $1", marker)
+		}
+	}()
+
+	for _, probe := range []struct {
+		name  string
+		query string
+	}{
+		{name: "intake_requests", query: "SELECT COUNT(*) FROM intake_requests WHERE request_digest = $1"},
+		{name: "intake_resolution_snapshots", query: "SELECT COUNT(*) FROM intake_resolution_snapshots WHERE request_digest = $1"},
+		{name: "external_identities", query: "SELECT COUNT(*) FROM external_identities WHERE provider = $1"},
+	} {
+		t.Run(probe.name, func(t *testing.T) {
+			if got := countIntakeProbeAsTenant(t, db, tenantA, probe.query, marker); got != 1 {
+				t.Fatalf("tenant A saw %d %s rows, want exactly its own row", got, probe.name)
+			}
+			if got := countIntakeProbeAsTenant(t, db, tenantB, probe.query, marker); got != 1 {
+				t.Fatalf("tenant B saw %d %s rows, want exactly its own row", got, probe.name)
+			}
+		})
 	}
 }
 

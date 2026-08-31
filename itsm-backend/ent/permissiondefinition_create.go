@@ -9,6 +9,7 @@ import (
 	"itsm-backend/ent/permissiondefinition"
 	"itsm-backend/ent/rolepermission"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -18,6 +19,7 @@ type PermissionDefinitionCreate struct {
 	config
 	mutation *PermissionDefinitionMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetResource sets the "resource" field.
@@ -179,6 +181,7 @@ func (_c *PermissionDefinitionCreate) createSpec() (*PermissionDefinition, *sqlg
 		_node = &PermissionDefinition{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(permissiondefinition.Table, sqlgraph.NewFieldSpec(permissiondefinition.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Resource(); ok {
 		_spec.SetField(permissiondefinition.FieldResource, field.TypeString, value)
 		_node.Resource = value
@@ -222,11 +225,368 @@ func (_c *PermissionDefinitionCreate) createSpec() (*PermissionDefinition, *sqlg
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.PermissionDefinition.Create().
+//		SetResource(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.PermissionDefinitionUpsert) {
+//			SetResource(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *PermissionDefinitionCreate) OnConflict(opts ...sql.ConflictOption) *PermissionDefinitionUpsertOne {
+	_c.conflict = opts
+	return &PermissionDefinitionUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.PermissionDefinition.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *PermissionDefinitionCreate) OnConflictColumns(columns ...string) *PermissionDefinitionUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &PermissionDefinitionUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// PermissionDefinitionUpsertOne is the builder for "upsert"-ing
+	//  one PermissionDefinition node.
+	PermissionDefinitionUpsertOne struct {
+		create *PermissionDefinitionCreate
+	}
+
+	// PermissionDefinitionUpsert is the "OnConflict" setter.
+	PermissionDefinitionUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetResource sets the "resource" field.
+func (u *PermissionDefinitionUpsert) SetResource(v string) *PermissionDefinitionUpsert {
+	u.Set(permissiondefinition.FieldResource, v)
+	return u
+}
+
+// UpdateResource sets the "resource" field to the value that was provided on create.
+func (u *PermissionDefinitionUpsert) UpdateResource() *PermissionDefinitionUpsert {
+	u.SetExcluded(permissiondefinition.FieldResource)
+	return u
+}
+
+// SetAction sets the "action" field.
+func (u *PermissionDefinitionUpsert) SetAction(v string) *PermissionDefinitionUpsert {
+	u.Set(permissiondefinition.FieldAction, v)
+	return u
+}
+
+// UpdateAction sets the "action" field to the value that was provided on create.
+func (u *PermissionDefinitionUpsert) UpdateAction() *PermissionDefinitionUpsert {
+	u.SetExcluded(permissiondefinition.FieldAction)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *PermissionDefinitionUpsert) SetDescription(v string) *PermissionDefinitionUpsert {
+	u.Set(permissiondefinition.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *PermissionDefinitionUpsert) UpdateDescription() *PermissionDefinitionUpsert {
+	u.SetExcluded(permissiondefinition.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *PermissionDefinitionUpsert) ClearDescription() *PermissionDefinitionUpsert {
+	u.SetNull(permissiondefinition.FieldDescription)
+	return u
+}
+
+// SetDisplayName sets the "display_name" field.
+func (u *PermissionDefinitionUpsert) SetDisplayName(v string) *PermissionDefinitionUpsert {
+	u.Set(permissiondefinition.FieldDisplayName, v)
+	return u
+}
+
+// UpdateDisplayName sets the "display_name" field to the value that was provided on create.
+func (u *PermissionDefinitionUpsert) UpdateDisplayName() *PermissionDefinitionUpsert {
+	u.SetExcluded(permissiondefinition.FieldDisplayName)
+	return u
+}
+
+// ClearDisplayName clears the value of the "display_name" field.
+func (u *PermissionDefinitionUpsert) ClearDisplayName() *PermissionDefinitionUpsert {
+	u.SetNull(permissiondefinition.FieldDisplayName)
+	return u
+}
+
+// SetCategory sets the "category" field.
+func (u *PermissionDefinitionUpsert) SetCategory(v int) *PermissionDefinitionUpsert {
+	u.Set(permissiondefinition.FieldCategory, v)
+	return u
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *PermissionDefinitionUpsert) UpdateCategory() *PermissionDefinitionUpsert {
+	u.SetExcluded(permissiondefinition.FieldCategory)
+	return u
+}
+
+// AddCategory adds v to the "category" field.
+func (u *PermissionDefinitionUpsert) AddCategory(v int) *PermissionDefinitionUpsert {
+	u.Add(permissiondefinition.FieldCategory, v)
+	return u
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *PermissionDefinitionUpsert) ClearCategory() *PermissionDefinitionUpsert {
+	u.SetNull(permissiondefinition.FieldCategory)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *PermissionDefinitionUpsert) SetTenantID(v int) *PermissionDefinitionUpsert {
+	u.Set(permissiondefinition.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *PermissionDefinitionUpsert) UpdateTenantID() *PermissionDefinitionUpsert {
+	u.SetExcluded(permissiondefinition.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *PermissionDefinitionUpsert) AddTenantID(v int) *PermissionDefinitionUpsert {
+	u.Add(permissiondefinition.FieldTenantID, v)
+	return u
+}
+
+// ClearTenantID clears the value of the "tenant_id" field.
+func (u *PermissionDefinitionUpsert) ClearTenantID() *PermissionDefinitionUpsert {
+	u.SetNull(permissiondefinition.FieldTenantID)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.PermissionDefinition.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *PermissionDefinitionUpsertOne) UpdateNewValues() *PermissionDefinitionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.PermissionDefinition.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *PermissionDefinitionUpsertOne) Ignore() *PermissionDefinitionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *PermissionDefinitionUpsertOne) DoNothing() *PermissionDefinitionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the PermissionDefinitionCreate.OnConflict
+// documentation for more info.
+func (u *PermissionDefinitionUpsertOne) Update(set func(*PermissionDefinitionUpsert)) *PermissionDefinitionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&PermissionDefinitionUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetResource sets the "resource" field.
+func (u *PermissionDefinitionUpsertOne) SetResource(v string) *PermissionDefinitionUpsertOne {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.SetResource(v)
+	})
+}
+
+// UpdateResource sets the "resource" field to the value that was provided on create.
+func (u *PermissionDefinitionUpsertOne) UpdateResource() *PermissionDefinitionUpsertOne {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.UpdateResource()
+	})
+}
+
+// SetAction sets the "action" field.
+func (u *PermissionDefinitionUpsertOne) SetAction(v string) *PermissionDefinitionUpsertOne {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.SetAction(v)
+	})
+}
+
+// UpdateAction sets the "action" field to the value that was provided on create.
+func (u *PermissionDefinitionUpsertOne) UpdateAction() *PermissionDefinitionUpsertOne {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.UpdateAction()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *PermissionDefinitionUpsertOne) SetDescription(v string) *PermissionDefinitionUpsertOne {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *PermissionDefinitionUpsertOne) UpdateDescription() *PermissionDefinitionUpsertOne {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *PermissionDefinitionUpsertOne) ClearDescription() *PermissionDefinitionUpsertOne {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetDisplayName sets the "display_name" field.
+func (u *PermissionDefinitionUpsertOne) SetDisplayName(v string) *PermissionDefinitionUpsertOne {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.SetDisplayName(v)
+	})
+}
+
+// UpdateDisplayName sets the "display_name" field to the value that was provided on create.
+func (u *PermissionDefinitionUpsertOne) UpdateDisplayName() *PermissionDefinitionUpsertOne {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.UpdateDisplayName()
+	})
+}
+
+// ClearDisplayName clears the value of the "display_name" field.
+func (u *PermissionDefinitionUpsertOne) ClearDisplayName() *PermissionDefinitionUpsertOne {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.ClearDisplayName()
+	})
+}
+
+// SetCategory sets the "category" field.
+func (u *PermissionDefinitionUpsertOne) SetCategory(v int) *PermissionDefinitionUpsertOne {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.SetCategory(v)
+	})
+}
+
+// AddCategory adds v to the "category" field.
+func (u *PermissionDefinitionUpsertOne) AddCategory(v int) *PermissionDefinitionUpsertOne {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.AddCategory(v)
+	})
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *PermissionDefinitionUpsertOne) UpdateCategory() *PermissionDefinitionUpsertOne {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.UpdateCategory()
+	})
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *PermissionDefinitionUpsertOne) ClearCategory() *PermissionDefinitionUpsertOne {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.ClearCategory()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *PermissionDefinitionUpsertOne) SetTenantID(v int) *PermissionDefinitionUpsertOne {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *PermissionDefinitionUpsertOne) AddTenantID(v int) *PermissionDefinitionUpsertOne {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *PermissionDefinitionUpsertOne) UpdateTenantID() *PermissionDefinitionUpsertOne {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// ClearTenantID clears the value of the "tenant_id" field.
+func (u *PermissionDefinitionUpsertOne) ClearTenantID() *PermissionDefinitionUpsertOne {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.ClearTenantID()
+	})
+}
+
+// Exec executes the query.
+func (u *PermissionDefinitionUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for PermissionDefinitionCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *PermissionDefinitionUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *PermissionDefinitionUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *PermissionDefinitionUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // PermissionDefinitionCreateBulk is the builder for creating many PermissionDefinition entities in bulk.
 type PermissionDefinitionCreateBulk struct {
 	config
 	err      error
 	builders []*PermissionDefinitionCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the PermissionDefinition entities in the database.
@@ -255,6 +615,7 @@ func (_c *PermissionDefinitionCreateBulk) Save(ctx context.Context) ([]*Permissi
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -305,6 +666,236 @@ func (_c *PermissionDefinitionCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *PermissionDefinitionCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.PermissionDefinition.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.PermissionDefinitionUpsert) {
+//			SetResource(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *PermissionDefinitionCreateBulk) OnConflict(opts ...sql.ConflictOption) *PermissionDefinitionUpsertBulk {
+	_c.conflict = opts
+	return &PermissionDefinitionUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.PermissionDefinition.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *PermissionDefinitionCreateBulk) OnConflictColumns(columns ...string) *PermissionDefinitionUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &PermissionDefinitionUpsertBulk{
+		create: _c,
+	}
+}
+
+// PermissionDefinitionUpsertBulk is the builder for "upsert"-ing
+// a bulk of PermissionDefinition nodes.
+type PermissionDefinitionUpsertBulk struct {
+	create *PermissionDefinitionCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.PermissionDefinition.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *PermissionDefinitionUpsertBulk) UpdateNewValues() *PermissionDefinitionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.PermissionDefinition.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *PermissionDefinitionUpsertBulk) Ignore() *PermissionDefinitionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *PermissionDefinitionUpsertBulk) DoNothing() *PermissionDefinitionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the PermissionDefinitionCreateBulk.OnConflict
+// documentation for more info.
+func (u *PermissionDefinitionUpsertBulk) Update(set func(*PermissionDefinitionUpsert)) *PermissionDefinitionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&PermissionDefinitionUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetResource sets the "resource" field.
+func (u *PermissionDefinitionUpsertBulk) SetResource(v string) *PermissionDefinitionUpsertBulk {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.SetResource(v)
+	})
+}
+
+// UpdateResource sets the "resource" field to the value that was provided on create.
+func (u *PermissionDefinitionUpsertBulk) UpdateResource() *PermissionDefinitionUpsertBulk {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.UpdateResource()
+	})
+}
+
+// SetAction sets the "action" field.
+func (u *PermissionDefinitionUpsertBulk) SetAction(v string) *PermissionDefinitionUpsertBulk {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.SetAction(v)
+	})
+}
+
+// UpdateAction sets the "action" field to the value that was provided on create.
+func (u *PermissionDefinitionUpsertBulk) UpdateAction() *PermissionDefinitionUpsertBulk {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.UpdateAction()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *PermissionDefinitionUpsertBulk) SetDescription(v string) *PermissionDefinitionUpsertBulk {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *PermissionDefinitionUpsertBulk) UpdateDescription() *PermissionDefinitionUpsertBulk {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *PermissionDefinitionUpsertBulk) ClearDescription() *PermissionDefinitionUpsertBulk {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetDisplayName sets the "display_name" field.
+func (u *PermissionDefinitionUpsertBulk) SetDisplayName(v string) *PermissionDefinitionUpsertBulk {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.SetDisplayName(v)
+	})
+}
+
+// UpdateDisplayName sets the "display_name" field to the value that was provided on create.
+func (u *PermissionDefinitionUpsertBulk) UpdateDisplayName() *PermissionDefinitionUpsertBulk {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.UpdateDisplayName()
+	})
+}
+
+// ClearDisplayName clears the value of the "display_name" field.
+func (u *PermissionDefinitionUpsertBulk) ClearDisplayName() *PermissionDefinitionUpsertBulk {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.ClearDisplayName()
+	})
+}
+
+// SetCategory sets the "category" field.
+func (u *PermissionDefinitionUpsertBulk) SetCategory(v int) *PermissionDefinitionUpsertBulk {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.SetCategory(v)
+	})
+}
+
+// AddCategory adds v to the "category" field.
+func (u *PermissionDefinitionUpsertBulk) AddCategory(v int) *PermissionDefinitionUpsertBulk {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.AddCategory(v)
+	})
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *PermissionDefinitionUpsertBulk) UpdateCategory() *PermissionDefinitionUpsertBulk {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.UpdateCategory()
+	})
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *PermissionDefinitionUpsertBulk) ClearCategory() *PermissionDefinitionUpsertBulk {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.ClearCategory()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *PermissionDefinitionUpsertBulk) SetTenantID(v int) *PermissionDefinitionUpsertBulk {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *PermissionDefinitionUpsertBulk) AddTenantID(v int) *PermissionDefinitionUpsertBulk {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *PermissionDefinitionUpsertBulk) UpdateTenantID() *PermissionDefinitionUpsertBulk {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// ClearTenantID clears the value of the "tenant_id" field.
+func (u *PermissionDefinitionUpsertBulk) ClearTenantID() *PermissionDefinitionUpsertBulk {
+	return u.Update(func(s *PermissionDefinitionUpsert) {
+		s.ClearTenantID()
+	})
+}
+
+// Exec executes the query.
+func (u *PermissionDefinitionUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the PermissionDefinitionCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for PermissionDefinitionCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *PermissionDefinitionUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

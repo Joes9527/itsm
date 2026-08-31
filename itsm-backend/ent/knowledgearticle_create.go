@@ -12,6 +12,7 @@ import (
 	"itsm-backend/ent/knowledgearticleversion"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -21,6 +22,7 @@ type KnowledgeArticleCreate struct {
 	config
 	mutation *KnowledgeArticleMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetTitle sets the "title" field.
@@ -378,6 +380,7 @@ func (_c *KnowledgeArticleCreate) createSpec() (*KnowledgeArticle, *sqlgraph.Cre
 		_node = &KnowledgeArticle{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(knowledgearticle.Table, sqlgraph.NewFieldSpec(knowledgearticle.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Title(); ok {
 		_spec.SetField(knowledgearticle.FieldTitle, field.TypeString, value)
 		_node.Title = value
@@ -485,11 +488,602 @@ func (_c *KnowledgeArticleCreate) createSpec() (*KnowledgeArticle, *sqlgraph.Cre
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.KnowledgeArticle.Create().
+//		SetTitle(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.KnowledgeArticleUpsert) {
+//			SetTitle(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *KnowledgeArticleCreate) OnConflict(opts ...sql.ConflictOption) *KnowledgeArticleUpsertOne {
+	_c.conflict = opts
+	return &KnowledgeArticleUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.KnowledgeArticle.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *KnowledgeArticleCreate) OnConflictColumns(columns ...string) *KnowledgeArticleUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &KnowledgeArticleUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// KnowledgeArticleUpsertOne is the builder for "upsert"-ing
+	//  one KnowledgeArticle node.
+	KnowledgeArticleUpsertOne struct {
+		create *KnowledgeArticleCreate
+	}
+
+	// KnowledgeArticleUpsert is the "OnConflict" setter.
+	KnowledgeArticleUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetTitle sets the "title" field.
+func (u *KnowledgeArticleUpsert) SetTitle(v string) *KnowledgeArticleUpsert {
+	u.Set(knowledgearticle.FieldTitle, v)
+	return u
+}
+
+// UpdateTitle sets the "title" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsert) UpdateTitle() *KnowledgeArticleUpsert {
+	u.SetExcluded(knowledgearticle.FieldTitle)
+	return u
+}
+
+// SetContent sets the "content" field.
+func (u *KnowledgeArticleUpsert) SetContent(v string) *KnowledgeArticleUpsert {
+	u.Set(knowledgearticle.FieldContent, v)
+	return u
+}
+
+// UpdateContent sets the "content" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsert) UpdateContent() *KnowledgeArticleUpsert {
+	u.SetExcluded(knowledgearticle.FieldContent)
+	return u
+}
+
+// ClearContent clears the value of the "content" field.
+func (u *KnowledgeArticleUpsert) ClearContent() *KnowledgeArticleUpsert {
+	u.SetNull(knowledgearticle.FieldContent)
+	return u
+}
+
+// SetCategory sets the "category" field.
+func (u *KnowledgeArticleUpsert) SetCategory(v string) *KnowledgeArticleUpsert {
+	u.Set(knowledgearticle.FieldCategory, v)
+	return u
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsert) UpdateCategory() *KnowledgeArticleUpsert {
+	u.SetExcluded(knowledgearticle.FieldCategory)
+	return u
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *KnowledgeArticleUpsert) ClearCategory() *KnowledgeArticleUpsert {
+	u.SetNull(knowledgearticle.FieldCategory)
+	return u
+}
+
+// SetTags sets the "tags" field.
+func (u *KnowledgeArticleUpsert) SetTags(v string) *KnowledgeArticleUpsert {
+	u.Set(knowledgearticle.FieldTags, v)
+	return u
+}
+
+// UpdateTags sets the "tags" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsert) UpdateTags() *KnowledgeArticleUpsert {
+	u.SetExcluded(knowledgearticle.FieldTags)
+	return u
+}
+
+// ClearTags clears the value of the "tags" field.
+func (u *KnowledgeArticleUpsert) ClearTags() *KnowledgeArticleUpsert {
+	u.SetNull(knowledgearticle.FieldTags)
+	return u
+}
+
+// SetAuthorID sets the "author_id" field.
+func (u *KnowledgeArticleUpsert) SetAuthorID(v int) *KnowledgeArticleUpsert {
+	u.Set(knowledgearticle.FieldAuthorID, v)
+	return u
+}
+
+// UpdateAuthorID sets the "author_id" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsert) UpdateAuthorID() *KnowledgeArticleUpsert {
+	u.SetExcluded(knowledgearticle.FieldAuthorID)
+	return u
+}
+
+// AddAuthorID adds v to the "author_id" field.
+func (u *KnowledgeArticleUpsert) AddAuthorID(v int) *KnowledgeArticleUpsert {
+	u.Add(knowledgearticle.FieldAuthorID, v)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *KnowledgeArticleUpsert) SetTenantID(v int) *KnowledgeArticleUpsert {
+	u.Set(knowledgearticle.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsert) UpdateTenantID() *KnowledgeArticleUpsert {
+	u.SetExcluded(knowledgearticle.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *KnowledgeArticleUpsert) AddTenantID(v int) *KnowledgeArticleUpsert {
+	u.Add(knowledgearticle.FieldTenantID, v)
+	return u
+}
+
+// SetIsPublished sets the "is_published" field.
+func (u *KnowledgeArticleUpsert) SetIsPublished(v bool) *KnowledgeArticleUpsert {
+	u.Set(knowledgearticle.FieldIsPublished, v)
+	return u
+}
+
+// UpdateIsPublished sets the "is_published" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsert) UpdateIsPublished() *KnowledgeArticleUpsert {
+	u.SetExcluded(knowledgearticle.FieldIsPublished)
+	return u
+}
+
+// SetReviewStatus sets the "review_status" field.
+func (u *KnowledgeArticleUpsert) SetReviewStatus(v string) *KnowledgeArticleUpsert {
+	u.Set(knowledgearticle.FieldReviewStatus, v)
+	return u
+}
+
+// UpdateReviewStatus sets the "review_status" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsert) UpdateReviewStatus() *KnowledgeArticleUpsert {
+	u.SetExcluded(knowledgearticle.FieldReviewStatus)
+	return u
+}
+
+// SetReviewComment sets the "review_comment" field.
+func (u *KnowledgeArticleUpsert) SetReviewComment(v string) *KnowledgeArticleUpsert {
+	u.Set(knowledgearticle.FieldReviewComment, v)
+	return u
+}
+
+// UpdateReviewComment sets the "review_comment" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsert) UpdateReviewComment() *KnowledgeArticleUpsert {
+	u.SetExcluded(knowledgearticle.FieldReviewComment)
+	return u
+}
+
+// SetViewCount sets the "view_count" field.
+func (u *KnowledgeArticleUpsert) SetViewCount(v int) *KnowledgeArticleUpsert {
+	u.Set(knowledgearticle.FieldViewCount, v)
+	return u
+}
+
+// UpdateViewCount sets the "view_count" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsert) UpdateViewCount() *KnowledgeArticleUpsert {
+	u.SetExcluded(knowledgearticle.FieldViewCount)
+	return u
+}
+
+// AddViewCount adds v to the "view_count" field.
+func (u *KnowledgeArticleUpsert) AddViewCount(v int) *KnowledgeArticleUpsert {
+	u.Add(knowledgearticle.FieldViewCount, v)
+	return u
+}
+
+// SetLikeCount sets the "like_count" field.
+func (u *KnowledgeArticleUpsert) SetLikeCount(v int) *KnowledgeArticleUpsert {
+	u.Set(knowledgearticle.FieldLikeCount, v)
+	return u
+}
+
+// UpdateLikeCount sets the "like_count" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsert) UpdateLikeCount() *KnowledgeArticleUpsert {
+	u.SetExcluded(knowledgearticle.FieldLikeCount)
+	return u
+}
+
+// AddLikeCount adds v to the "like_count" field.
+func (u *KnowledgeArticleUpsert) AddLikeCount(v int) *KnowledgeArticleUpsert {
+	u.Add(knowledgearticle.FieldLikeCount, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *KnowledgeArticleUpsert) SetCreatedAt(v time.Time) *KnowledgeArticleUpsert {
+	u.Set(knowledgearticle.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsert) UpdateCreatedAt() *KnowledgeArticleUpsert {
+	u.SetExcluded(knowledgearticle.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *KnowledgeArticleUpsert) SetUpdatedAt(v time.Time) *KnowledgeArticleUpsert {
+	u.Set(knowledgearticle.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsert) UpdateUpdatedAt() *KnowledgeArticleUpsert {
+	u.SetExcluded(knowledgearticle.FieldUpdatedAt)
+	return u
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (u *KnowledgeArticleUpsert) SetDeletedAt(v time.Time) *KnowledgeArticleUpsert {
+	u.Set(knowledgearticle.FieldDeletedAt, v)
+	return u
+}
+
+// UpdateDeletedAt sets the "deleted_at" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsert) UpdateDeletedAt() *KnowledgeArticleUpsert {
+	u.SetExcluded(knowledgearticle.FieldDeletedAt)
+	return u
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (u *KnowledgeArticleUpsert) ClearDeletedAt() *KnowledgeArticleUpsert {
+	u.SetNull(knowledgearticle.FieldDeletedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.KnowledgeArticle.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *KnowledgeArticleUpsertOne) UpdateNewValues() *KnowledgeArticleUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.KnowledgeArticle.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *KnowledgeArticleUpsertOne) Ignore() *KnowledgeArticleUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *KnowledgeArticleUpsertOne) DoNothing() *KnowledgeArticleUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the KnowledgeArticleCreate.OnConflict
+// documentation for more info.
+func (u *KnowledgeArticleUpsertOne) Update(set func(*KnowledgeArticleUpsert)) *KnowledgeArticleUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&KnowledgeArticleUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTitle sets the "title" field.
+func (u *KnowledgeArticleUpsertOne) SetTitle(v string) *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.SetTitle(v)
+	})
+}
+
+// UpdateTitle sets the "title" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsertOne) UpdateTitle() *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.UpdateTitle()
+	})
+}
+
+// SetContent sets the "content" field.
+func (u *KnowledgeArticleUpsertOne) SetContent(v string) *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.SetContent(v)
+	})
+}
+
+// UpdateContent sets the "content" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsertOne) UpdateContent() *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.UpdateContent()
+	})
+}
+
+// ClearContent clears the value of the "content" field.
+func (u *KnowledgeArticleUpsertOne) ClearContent() *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.ClearContent()
+	})
+}
+
+// SetCategory sets the "category" field.
+func (u *KnowledgeArticleUpsertOne) SetCategory(v string) *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.SetCategory(v)
+	})
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsertOne) UpdateCategory() *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.UpdateCategory()
+	})
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *KnowledgeArticleUpsertOne) ClearCategory() *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.ClearCategory()
+	})
+}
+
+// SetTags sets the "tags" field.
+func (u *KnowledgeArticleUpsertOne) SetTags(v string) *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.SetTags(v)
+	})
+}
+
+// UpdateTags sets the "tags" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsertOne) UpdateTags() *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.UpdateTags()
+	})
+}
+
+// ClearTags clears the value of the "tags" field.
+func (u *KnowledgeArticleUpsertOne) ClearTags() *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.ClearTags()
+	})
+}
+
+// SetAuthorID sets the "author_id" field.
+func (u *KnowledgeArticleUpsertOne) SetAuthorID(v int) *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.SetAuthorID(v)
+	})
+}
+
+// AddAuthorID adds v to the "author_id" field.
+func (u *KnowledgeArticleUpsertOne) AddAuthorID(v int) *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.AddAuthorID(v)
+	})
+}
+
+// UpdateAuthorID sets the "author_id" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsertOne) UpdateAuthorID() *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.UpdateAuthorID()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *KnowledgeArticleUpsertOne) SetTenantID(v int) *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *KnowledgeArticleUpsertOne) AddTenantID(v int) *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsertOne) UpdateTenantID() *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetIsPublished sets the "is_published" field.
+func (u *KnowledgeArticleUpsertOne) SetIsPublished(v bool) *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.SetIsPublished(v)
+	})
+}
+
+// UpdateIsPublished sets the "is_published" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsertOne) UpdateIsPublished() *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.UpdateIsPublished()
+	})
+}
+
+// SetReviewStatus sets the "review_status" field.
+func (u *KnowledgeArticleUpsertOne) SetReviewStatus(v string) *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.SetReviewStatus(v)
+	})
+}
+
+// UpdateReviewStatus sets the "review_status" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsertOne) UpdateReviewStatus() *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.UpdateReviewStatus()
+	})
+}
+
+// SetReviewComment sets the "review_comment" field.
+func (u *KnowledgeArticleUpsertOne) SetReviewComment(v string) *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.SetReviewComment(v)
+	})
+}
+
+// UpdateReviewComment sets the "review_comment" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsertOne) UpdateReviewComment() *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.UpdateReviewComment()
+	})
+}
+
+// SetViewCount sets the "view_count" field.
+func (u *KnowledgeArticleUpsertOne) SetViewCount(v int) *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.SetViewCount(v)
+	})
+}
+
+// AddViewCount adds v to the "view_count" field.
+func (u *KnowledgeArticleUpsertOne) AddViewCount(v int) *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.AddViewCount(v)
+	})
+}
+
+// UpdateViewCount sets the "view_count" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsertOne) UpdateViewCount() *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.UpdateViewCount()
+	})
+}
+
+// SetLikeCount sets the "like_count" field.
+func (u *KnowledgeArticleUpsertOne) SetLikeCount(v int) *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.SetLikeCount(v)
+	})
+}
+
+// AddLikeCount adds v to the "like_count" field.
+func (u *KnowledgeArticleUpsertOne) AddLikeCount(v int) *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.AddLikeCount(v)
+	})
+}
+
+// UpdateLikeCount sets the "like_count" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsertOne) UpdateLikeCount() *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.UpdateLikeCount()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *KnowledgeArticleUpsertOne) SetCreatedAt(v time.Time) *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsertOne) UpdateCreatedAt() *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *KnowledgeArticleUpsertOne) SetUpdatedAt(v time.Time) *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsertOne) UpdateUpdatedAt() *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (u *KnowledgeArticleUpsertOne) SetDeletedAt(v time.Time) *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.SetDeletedAt(v)
+	})
+}
+
+// UpdateDeletedAt sets the "deleted_at" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsertOne) UpdateDeletedAt() *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.UpdateDeletedAt()
+	})
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (u *KnowledgeArticleUpsertOne) ClearDeletedAt() *KnowledgeArticleUpsertOne {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.ClearDeletedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *KnowledgeArticleUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for KnowledgeArticleCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *KnowledgeArticleUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *KnowledgeArticleUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *KnowledgeArticleUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // KnowledgeArticleCreateBulk is the builder for creating many KnowledgeArticle entities in bulk.
 type KnowledgeArticleCreateBulk struct {
 	config
 	err      error
 	builders []*KnowledgeArticleCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the KnowledgeArticle entities in the database.
@@ -519,6 +1113,7 @@ func (_c *KnowledgeArticleCreateBulk) Save(ctx context.Context) ([]*KnowledgeArt
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -569,6 +1164,362 @@ func (_c *KnowledgeArticleCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *KnowledgeArticleCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.KnowledgeArticle.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.KnowledgeArticleUpsert) {
+//			SetTitle(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *KnowledgeArticleCreateBulk) OnConflict(opts ...sql.ConflictOption) *KnowledgeArticleUpsertBulk {
+	_c.conflict = opts
+	return &KnowledgeArticleUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.KnowledgeArticle.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *KnowledgeArticleCreateBulk) OnConflictColumns(columns ...string) *KnowledgeArticleUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &KnowledgeArticleUpsertBulk{
+		create: _c,
+	}
+}
+
+// KnowledgeArticleUpsertBulk is the builder for "upsert"-ing
+// a bulk of KnowledgeArticle nodes.
+type KnowledgeArticleUpsertBulk struct {
+	create *KnowledgeArticleCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.KnowledgeArticle.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *KnowledgeArticleUpsertBulk) UpdateNewValues() *KnowledgeArticleUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.KnowledgeArticle.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *KnowledgeArticleUpsertBulk) Ignore() *KnowledgeArticleUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *KnowledgeArticleUpsertBulk) DoNothing() *KnowledgeArticleUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the KnowledgeArticleCreateBulk.OnConflict
+// documentation for more info.
+func (u *KnowledgeArticleUpsertBulk) Update(set func(*KnowledgeArticleUpsert)) *KnowledgeArticleUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&KnowledgeArticleUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTitle sets the "title" field.
+func (u *KnowledgeArticleUpsertBulk) SetTitle(v string) *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.SetTitle(v)
+	})
+}
+
+// UpdateTitle sets the "title" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsertBulk) UpdateTitle() *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.UpdateTitle()
+	})
+}
+
+// SetContent sets the "content" field.
+func (u *KnowledgeArticleUpsertBulk) SetContent(v string) *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.SetContent(v)
+	})
+}
+
+// UpdateContent sets the "content" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsertBulk) UpdateContent() *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.UpdateContent()
+	})
+}
+
+// ClearContent clears the value of the "content" field.
+func (u *KnowledgeArticleUpsertBulk) ClearContent() *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.ClearContent()
+	})
+}
+
+// SetCategory sets the "category" field.
+func (u *KnowledgeArticleUpsertBulk) SetCategory(v string) *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.SetCategory(v)
+	})
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsertBulk) UpdateCategory() *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.UpdateCategory()
+	})
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *KnowledgeArticleUpsertBulk) ClearCategory() *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.ClearCategory()
+	})
+}
+
+// SetTags sets the "tags" field.
+func (u *KnowledgeArticleUpsertBulk) SetTags(v string) *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.SetTags(v)
+	})
+}
+
+// UpdateTags sets the "tags" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsertBulk) UpdateTags() *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.UpdateTags()
+	})
+}
+
+// ClearTags clears the value of the "tags" field.
+func (u *KnowledgeArticleUpsertBulk) ClearTags() *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.ClearTags()
+	})
+}
+
+// SetAuthorID sets the "author_id" field.
+func (u *KnowledgeArticleUpsertBulk) SetAuthorID(v int) *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.SetAuthorID(v)
+	})
+}
+
+// AddAuthorID adds v to the "author_id" field.
+func (u *KnowledgeArticleUpsertBulk) AddAuthorID(v int) *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.AddAuthorID(v)
+	})
+}
+
+// UpdateAuthorID sets the "author_id" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsertBulk) UpdateAuthorID() *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.UpdateAuthorID()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *KnowledgeArticleUpsertBulk) SetTenantID(v int) *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *KnowledgeArticleUpsertBulk) AddTenantID(v int) *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsertBulk) UpdateTenantID() *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetIsPublished sets the "is_published" field.
+func (u *KnowledgeArticleUpsertBulk) SetIsPublished(v bool) *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.SetIsPublished(v)
+	})
+}
+
+// UpdateIsPublished sets the "is_published" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsertBulk) UpdateIsPublished() *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.UpdateIsPublished()
+	})
+}
+
+// SetReviewStatus sets the "review_status" field.
+func (u *KnowledgeArticleUpsertBulk) SetReviewStatus(v string) *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.SetReviewStatus(v)
+	})
+}
+
+// UpdateReviewStatus sets the "review_status" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsertBulk) UpdateReviewStatus() *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.UpdateReviewStatus()
+	})
+}
+
+// SetReviewComment sets the "review_comment" field.
+func (u *KnowledgeArticleUpsertBulk) SetReviewComment(v string) *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.SetReviewComment(v)
+	})
+}
+
+// UpdateReviewComment sets the "review_comment" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsertBulk) UpdateReviewComment() *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.UpdateReviewComment()
+	})
+}
+
+// SetViewCount sets the "view_count" field.
+func (u *KnowledgeArticleUpsertBulk) SetViewCount(v int) *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.SetViewCount(v)
+	})
+}
+
+// AddViewCount adds v to the "view_count" field.
+func (u *KnowledgeArticleUpsertBulk) AddViewCount(v int) *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.AddViewCount(v)
+	})
+}
+
+// UpdateViewCount sets the "view_count" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsertBulk) UpdateViewCount() *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.UpdateViewCount()
+	})
+}
+
+// SetLikeCount sets the "like_count" field.
+func (u *KnowledgeArticleUpsertBulk) SetLikeCount(v int) *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.SetLikeCount(v)
+	})
+}
+
+// AddLikeCount adds v to the "like_count" field.
+func (u *KnowledgeArticleUpsertBulk) AddLikeCount(v int) *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.AddLikeCount(v)
+	})
+}
+
+// UpdateLikeCount sets the "like_count" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsertBulk) UpdateLikeCount() *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.UpdateLikeCount()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *KnowledgeArticleUpsertBulk) SetCreatedAt(v time.Time) *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsertBulk) UpdateCreatedAt() *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *KnowledgeArticleUpsertBulk) SetUpdatedAt(v time.Time) *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsertBulk) UpdateUpdatedAt() *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (u *KnowledgeArticleUpsertBulk) SetDeletedAt(v time.Time) *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.SetDeletedAt(v)
+	})
+}
+
+// UpdateDeletedAt sets the "deleted_at" field to the value that was provided on create.
+func (u *KnowledgeArticleUpsertBulk) UpdateDeletedAt() *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.UpdateDeletedAt()
+	})
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (u *KnowledgeArticleUpsertBulk) ClearDeletedAt() *KnowledgeArticleUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleUpsert) {
+		s.ClearDeletedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *KnowledgeArticleUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the KnowledgeArticleCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for KnowledgeArticleCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *KnowledgeArticleUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

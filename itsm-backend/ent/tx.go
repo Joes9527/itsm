@@ -76,6 +76,8 @@ type Tx struct {
 	EndpointACL *EndpointACLClient
 	// EngineerSkill is the client for interacting with the EngineerSkill builders.
 	EngineerSkill *EngineerSkillClient
+	// ExternalIdentity is the client for interacting with the ExternalIdentity builders.
+	ExternalIdentity *ExternalIdentityClient
 	// FeishuTicketSync is the client for interacting with the FeishuTicketSync builders.
 	FeishuTicketSync *FeishuTicketSyncClient
 	// FieldDefinition is the client for interacting with the FieldDefinition builders.
@@ -98,6 +100,10 @@ type Tx struct {
 	IncidentRule *IncidentRuleClient
 	// IncidentRuleExecution is the client for interacting with the IncidentRuleExecution builders.
 	IncidentRuleExecution *IncidentRuleExecutionClient
+	// IntakeRequest is the client for interacting with the IntakeRequest builders.
+	IntakeRequest *IntakeRequestClient
+	// IntakeResolutionSnapshot is the client for interacting with the IntakeResolutionSnapshot builders.
+	IntakeResolutionSnapshot *IntakeResolutionSnapshotClient
 	// ItemVersion is the client for interacting with the ItemVersion builders.
 	ItemVersion *ItemVersionClient
 	// KafTaskActionLedger is the client for interacting with the KafTaskActionLedger builders.
@@ -413,6 +419,7 @@ func (tx *Tx) init() {
 	tx.DomainConfig = NewDomainConfigClient(tx.config)
 	tx.EndpointACL = NewEndpointACLClient(tx.config)
 	tx.EngineerSkill = NewEngineerSkillClient(tx.config)
+	tx.ExternalIdentity = NewExternalIdentityClient(tx.config)
 	tx.FeishuTicketSync = NewFeishuTicketSyncClient(tx.config)
 	tx.FieldDefinition = NewFieldDefinitionClient(tx.config)
 	tx.FieldValue = NewFieldValueClient(tx.config)
@@ -424,6 +431,8 @@ func (tx *Tx) init() {
 	tx.IncidentMetric = NewIncidentMetricClient(tx.config)
 	tx.IncidentRule = NewIncidentRuleClient(tx.config)
 	tx.IncidentRuleExecution = NewIncidentRuleExecutionClient(tx.config)
+	tx.IntakeRequest = NewIntakeRequestClient(tx.config)
+	tx.IntakeResolutionSnapshot = NewIntakeResolutionSnapshotClient(tx.config)
 	tx.ItemVersion = NewItemVersionClient(tx.config)
 	tx.KafTaskActionLedger = NewKafTaskActionLedgerClient(tx.config)
 	tx.KafTaskCompletionReceipt = NewKafTaskCompletionReceiptClient(tx.config)

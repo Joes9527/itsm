@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/changepir"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,6 +20,7 @@ type ChangePIRCreate struct {
 	config
 	mutation *ChangePIRMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetReviewerID sets the "reviewer_id" field.
@@ -373,6 +375,7 @@ func (_c *ChangePIRCreate) createSpec() (*ChangePIR, *sqlgraph.CreateSpec) {
 		_node = &ChangePIR{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(changepir.Table, sqlgraph.NewFieldSpec(changepir.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.ReviewerID(); ok {
 		_spec.SetField(changepir.FieldReviewerID, field.TypeInt, value)
 		_node.ReviewerID = value
@@ -457,11 +460,693 @@ func (_c *ChangePIRCreate) createSpec() (*ChangePIR, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ChangePIR.Create().
+//		SetReviewerID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ChangePIRUpsert) {
+//			SetReviewerID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ChangePIRCreate) OnConflict(opts ...sql.ConflictOption) *ChangePIRUpsertOne {
+	_c.conflict = opts
+	return &ChangePIRUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ChangePIR.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ChangePIRCreate) OnConflictColumns(columns ...string) *ChangePIRUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ChangePIRUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ChangePIRUpsertOne is the builder for "upsert"-ing
+	//  one ChangePIR node.
+	ChangePIRUpsertOne struct {
+		create *ChangePIRCreate
+	}
+
+	// ChangePIRUpsert is the "OnConflict" setter.
+	ChangePIRUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetReviewerID sets the "reviewer_id" field.
+func (u *ChangePIRUpsert) SetReviewerID(v int) *ChangePIRUpsert {
+	u.Set(changepir.FieldReviewerID, v)
+	return u
+}
+
+// UpdateReviewerID sets the "reviewer_id" field to the value that was provided on create.
+func (u *ChangePIRUpsert) UpdateReviewerID() *ChangePIRUpsert {
+	u.SetExcluded(changepir.FieldReviewerID)
+	return u
+}
+
+// AddReviewerID adds v to the "reviewer_id" field.
+func (u *ChangePIRUpsert) AddReviewerID(v int) *ChangePIRUpsert {
+	u.Add(changepir.FieldReviewerID, v)
+	return u
+}
+
+// ClearReviewerID clears the value of the "reviewer_id" field.
+func (u *ChangePIRUpsert) ClearReviewerID() *ChangePIRUpsert {
+	u.SetNull(changepir.FieldReviewerID)
+	return u
+}
+
+// SetOverallResult sets the "overall_result" field.
+func (u *ChangePIRUpsert) SetOverallResult(v string) *ChangePIRUpsert {
+	u.Set(changepir.FieldOverallResult, v)
+	return u
+}
+
+// UpdateOverallResult sets the "overall_result" field to the value that was provided on create.
+func (u *ChangePIRUpsert) UpdateOverallResult() *ChangePIRUpsert {
+	u.SetExcluded(changepir.FieldOverallResult)
+	return u
+}
+
+// SetObjectivesAchieved sets the "objectives_achieved" field.
+func (u *ChangePIRUpsert) SetObjectivesAchieved(v bool) *ChangePIRUpsert {
+	u.Set(changepir.FieldObjectivesAchieved, v)
+	return u
+}
+
+// UpdateObjectivesAchieved sets the "objectives_achieved" field to the value that was provided on create.
+func (u *ChangePIRUpsert) UpdateObjectivesAchieved() *ChangePIRUpsert {
+	u.SetExcluded(changepir.FieldObjectivesAchieved)
+	return u
+}
+
+// SetSuccessSummary sets the "success_summary" field.
+func (u *ChangePIRUpsert) SetSuccessSummary(v string) *ChangePIRUpsert {
+	u.Set(changepir.FieldSuccessSummary, v)
+	return u
+}
+
+// UpdateSuccessSummary sets the "success_summary" field to the value that was provided on create.
+func (u *ChangePIRUpsert) UpdateSuccessSummary() *ChangePIRUpsert {
+	u.SetExcluded(changepir.FieldSuccessSummary)
+	return u
+}
+
+// ClearSuccessSummary clears the value of the "success_summary" field.
+func (u *ChangePIRUpsert) ClearSuccessSummary() *ChangePIRUpsert {
+	u.SetNull(changepir.FieldSuccessSummary)
+	return u
+}
+
+// SetIssuesEncountered sets the "issues_encountered" field.
+func (u *ChangePIRUpsert) SetIssuesEncountered(v string) *ChangePIRUpsert {
+	u.Set(changepir.FieldIssuesEncountered, v)
+	return u
+}
+
+// UpdateIssuesEncountered sets the "issues_encountered" field to the value that was provided on create.
+func (u *ChangePIRUpsert) UpdateIssuesEncountered() *ChangePIRUpsert {
+	u.SetExcluded(changepir.FieldIssuesEncountered)
+	return u
+}
+
+// ClearIssuesEncountered clears the value of the "issues_encountered" field.
+func (u *ChangePIRUpsert) ClearIssuesEncountered() *ChangePIRUpsert {
+	u.SetNull(changepir.FieldIssuesEncountered)
+	return u
+}
+
+// SetLessonsLearned sets the "lessons_learned" field.
+func (u *ChangePIRUpsert) SetLessonsLearned(v string) *ChangePIRUpsert {
+	u.Set(changepir.FieldLessonsLearned, v)
+	return u
+}
+
+// UpdateLessonsLearned sets the "lessons_learned" field to the value that was provided on create.
+func (u *ChangePIRUpsert) UpdateLessonsLearned() *ChangePIRUpsert {
+	u.SetExcluded(changepir.FieldLessonsLearned)
+	return u
+}
+
+// ClearLessonsLearned clears the value of the "lessons_learned" field.
+func (u *ChangePIRUpsert) ClearLessonsLearned() *ChangePIRUpsert {
+	u.SetNull(changepir.FieldLessonsLearned)
+	return u
+}
+
+// SetImprovementRecommendations sets the "improvement_recommendations" field.
+func (u *ChangePIRUpsert) SetImprovementRecommendations(v string) *ChangePIRUpsert {
+	u.Set(changepir.FieldImprovementRecommendations, v)
+	return u
+}
+
+// UpdateImprovementRecommendations sets the "improvement_recommendations" field to the value that was provided on create.
+func (u *ChangePIRUpsert) UpdateImprovementRecommendations() *ChangePIRUpsert {
+	u.SetExcluded(changepir.FieldImprovementRecommendations)
+	return u
+}
+
+// ClearImprovementRecommendations clears the value of the "improvement_recommendations" field.
+func (u *ChangePIRUpsert) ClearImprovementRecommendations() *ChangePIRUpsert {
+	u.SetNull(changepir.FieldImprovementRecommendations)
+	return u
+}
+
+// SetActualStartTime sets the "actual_start_time" field.
+func (u *ChangePIRUpsert) SetActualStartTime(v time.Time) *ChangePIRUpsert {
+	u.Set(changepir.FieldActualStartTime, v)
+	return u
+}
+
+// UpdateActualStartTime sets the "actual_start_time" field to the value that was provided on create.
+func (u *ChangePIRUpsert) UpdateActualStartTime() *ChangePIRUpsert {
+	u.SetExcluded(changepir.FieldActualStartTime)
+	return u
+}
+
+// ClearActualStartTime clears the value of the "actual_start_time" field.
+func (u *ChangePIRUpsert) ClearActualStartTime() *ChangePIRUpsert {
+	u.SetNull(changepir.FieldActualStartTime)
+	return u
+}
+
+// SetActualEndTime sets the "actual_end_time" field.
+func (u *ChangePIRUpsert) SetActualEndTime(v time.Time) *ChangePIRUpsert {
+	u.Set(changepir.FieldActualEndTime, v)
+	return u
+}
+
+// UpdateActualEndTime sets the "actual_end_time" field to the value that was provided on create.
+func (u *ChangePIRUpsert) UpdateActualEndTime() *ChangePIRUpsert {
+	u.SetExcluded(changepir.FieldActualEndTime)
+	return u
+}
+
+// ClearActualEndTime clears the value of the "actual_end_time" field.
+func (u *ChangePIRUpsert) ClearActualEndTime() *ChangePIRUpsert {
+	u.SetNull(changepir.FieldActualEndTime)
+	return u
+}
+
+// SetActualDurationMinutes sets the "actual_duration_minutes" field.
+func (u *ChangePIRUpsert) SetActualDurationMinutes(v int) *ChangePIRUpsert {
+	u.Set(changepir.FieldActualDurationMinutes, v)
+	return u
+}
+
+// UpdateActualDurationMinutes sets the "actual_duration_minutes" field to the value that was provided on create.
+func (u *ChangePIRUpsert) UpdateActualDurationMinutes() *ChangePIRUpsert {
+	u.SetExcluded(changepir.FieldActualDurationMinutes)
+	return u
+}
+
+// AddActualDurationMinutes adds v to the "actual_duration_minutes" field.
+func (u *ChangePIRUpsert) AddActualDurationMinutes(v int) *ChangePIRUpsert {
+	u.Add(changepir.FieldActualDurationMinutes, v)
+	return u
+}
+
+// SetRollbackPerformed sets the "rollback_performed" field.
+func (u *ChangePIRUpsert) SetRollbackPerformed(v bool) *ChangePIRUpsert {
+	u.Set(changepir.FieldRollbackPerformed, v)
+	return u
+}
+
+// UpdateRollbackPerformed sets the "rollback_performed" field to the value that was provided on create.
+func (u *ChangePIRUpsert) UpdateRollbackPerformed() *ChangePIRUpsert {
+	u.SetExcluded(changepir.FieldRollbackPerformed)
+	return u
+}
+
+// SetRollbackReason sets the "rollback_reason" field.
+func (u *ChangePIRUpsert) SetRollbackReason(v string) *ChangePIRUpsert {
+	u.Set(changepir.FieldRollbackReason, v)
+	return u
+}
+
+// UpdateRollbackReason sets the "rollback_reason" field to the value that was provided on create.
+func (u *ChangePIRUpsert) UpdateRollbackReason() *ChangePIRUpsert {
+	u.SetExcluded(changepir.FieldRollbackReason)
+	return u
+}
+
+// ClearRollbackReason clears the value of the "rollback_reason" field.
+func (u *ChangePIRUpsert) ClearRollbackReason() *ChangePIRUpsert {
+	u.SetNull(changepir.FieldRollbackReason)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ChangePIRUpsert) SetTenantID(v int) *ChangePIRUpsert {
+	u.Set(changepir.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ChangePIRUpsert) UpdateTenantID() *ChangePIRUpsert {
+	u.SetExcluded(changepir.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ChangePIRUpsert) AddTenantID(v int) *ChangePIRUpsert {
+	u.Add(changepir.FieldTenantID, v)
+	return u
+}
+
+// SetReviewDate sets the "review_date" field.
+func (u *ChangePIRUpsert) SetReviewDate(v time.Time) *ChangePIRUpsert {
+	u.Set(changepir.FieldReviewDate, v)
+	return u
+}
+
+// UpdateReviewDate sets the "review_date" field to the value that was provided on create.
+func (u *ChangePIRUpsert) UpdateReviewDate() *ChangePIRUpsert {
+	u.SetExcluded(changepir.FieldReviewDate)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ChangePIRUpsert) SetCreatedAt(v time.Time) *ChangePIRUpsert {
+	u.Set(changepir.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ChangePIRUpsert) UpdateCreatedAt() *ChangePIRUpsert {
+	u.SetExcluded(changepir.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ChangePIRUpsert) SetUpdatedAt(v time.Time) *ChangePIRUpsert {
+	u.Set(changepir.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ChangePIRUpsert) UpdateUpdatedAt() *ChangePIRUpsert {
+	u.SetExcluded(changepir.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.ChangePIR.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ChangePIRUpsertOne) UpdateNewValues() *ChangePIRUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ChangePIR.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ChangePIRUpsertOne) Ignore() *ChangePIRUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ChangePIRUpsertOne) DoNothing() *ChangePIRUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ChangePIRCreate.OnConflict
+// documentation for more info.
+func (u *ChangePIRUpsertOne) Update(set func(*ChangePIRUpsert)) *ChangePIRUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ChangePIRUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetReviewerID sets the "reviewer_id" field.
+func (u *ChangePIRUpsertOne) SetReviewerID(v int) *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetReviewerID(v)
+	})
+}
+
+// AddReviewerID adds v to the "reviewer_id" field.
+func (u *ChangePIRUpsertOne) AddReviewerID(v int) *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.AddReviewerID(v)
+	})
+}
+
+// UpdateReviewerID sets the "reviewer_id" field to the value that was provided on create.
+func (u *ChangePIRUpsertOne) UpdateReviewerID() *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateReviewerID()
+	})
+}
+
+// ClearReviewerID clears the value of the "reviewer_id" field.
+func (u *ChangePIRUpsertOne) ClearReviewerID() *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.ClearReviewerID()
+	})
+}
+
+// SetOverallResult sets the "overall_result" field.
+func (u *ChangePIRUpsertOne) SetOverallResult(v string) *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetOverallResult(v)
+	})
+}
+
+// UpdateOverallResult sets the "overall_result" field to the value that was provided on create.
+func (u *ChangePIRUpsertOne) UpdateOverallResult() *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateOverallResult()
+	})
+}
+
+// SetObjectivesAchieved sets the "objectives_achieved" field.
+func (u *ChangePIRUpsertOne) SetObjectivesAchieved(v bool) *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetObjectivesAchieved(v)
+	})
+}
+
+// UpdateObjectivesAchieved sets the "objectives_achieved" field to the value that was provided on create.
+func (u *ChangePIRUpsertOne) UpdateObjectivesAchieved() *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateObjectivesAchieved()
+	})
+}
+
+// SetSuccessSummary sets the "success_summary" field.
+func (u *ChangePIRUpsertOne) SetSuccessSummary(v string) *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetSuccessSummary(v)
+	})
+}
+
+// UpdateSuccessSummary sets the "success_summary" field to the value that was provided on create.
+func (u *ChangePIRUpsertOne) UpdateSuccessSummary() *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateSuccessSummary()
+	})
+}
+
+// ClearSuccessSummary clears the value of the "success_summary" field.
+func (u *ChangePIRUpsertOne) ClearSuccessSummary() *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.ClearSuccessSummary()
+	})
+}
+
+// SetIssuesEncountered sets the "issues_encountered" field.
+func (u *ChangePIRUpsertOne) SetIssuesEncountered(v string) *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetIssuesEncountered(v)
+	})
+}
+
+// UpdateIssuesEncountered sets the "issues_encountered" field to the value that was provided on create.
+func (u *ChangePIRUpsertOne) UpdateIssuesEncountered() *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateIssuesEncountered()
+	})
+}
+
+// ClearIssuesEncountered clears the value of the "issues_encountered" field.
+func (u *ChangePIRUpsertOne) ClearIssuesEncountered() *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.ClearIssuesEncountered()
+	})
+}
+
+// SetLessonsLearned sets the "lessons_learned" field.
+func (u *ChangePIRUpsertOne) SetLessonsLearned(v string) *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetLessonsLearned(v)
+	})
+}
+
+// UpdateLessonsLearned sets the "lessons_learned" field to the value that was provided on create.
+func (u *ChangePIRUpsertOne) UpdateLessonsLearned() *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateLessonsLearned()
+	})
+}
+
+// ClearLessonsLearned clears the value of the "lessons_learned" field.
+func (u *ChangePIRUpsertOne) ClearLessonsLearned() *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.ClearLessonsLearned()
+	})
+}
+
+// SetImprovementRecommendations sets the "improvement_recommendations" field.
+func (u *ChangePIRUpsertOne) SetImprovementRecommendations(v string) *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetImprovementRecommendations(v)
+	})
+}
+
+// UpdateImprovementRecommendations sets the "improvement_recommendations" field to the value that was provided on create.
+func (u *ChangePIRUpsertOne) UpdateImprovementRecommendations() *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateImprovementRecommendations()
+	})
+}
+
+// ClearImprovementRecommendations clears the value of the "improvement_recommendations" field.
+func (u *ChangePIRUpsertOne) ClearImprovementRecommendations() *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.ClearImprovementRecommendations()
+	})
+}
+
+// SetActualStartTime sets the "actual_start_time" field.
+func (u *ChangePIRUpsertOne) SetActualStartTime(v time.Time) *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetActualStartTime(v)
+	})
+}
+
+// UpdateActualStartTime sets the "actual_start_time" field to the value that was provided on create.
+func (u *ChangePIRUpsertOne) UpdateActualStartTime() *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateActualStartTime()
+	})
+}
+
+// ClearActualStartTime clears the value of the "actual_start_time" field.
+func (u *ChangePIRUpsertOne) ClearActualStartTime() *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.ClearActualStartTime()
+	})
+}
+
+// SetActualEndTime sets the "actual_end_time" field.
+func (u *ChangePIRUpsertOne) SetActualEndTime(v time.Time) *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetActualEndTime(v)
+	})
+}
+
+// UpdateActualEndTime sets the "actual_end_time" field to the value that was provided on create.
+func (u *ChangePIRUpsertOne) UpdateActualEndTime() *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateActualEndTime()
+	})
+}
+
+// ClearActualEndTime clears the value of the "actual_end_time" field.
+func (u *ChangePIRUpsertOne) ClearActualEndTime() *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.ClearActualEndTime()
+	})
+}
+
+// SetActualDurationMinutes sets the "actual_duration_minutes" field.
+func (u *ChangePIRUpsertOne) SetActualDurationMinutes(v int) *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetActualDurationMinutes(v)
+	})
+}
+
+// AddActualDurationMinutes adds v to the "actual_duration_minutes" field.
+func (u *ChangePIRUpsertOne) AddActualDurationMinutes(v int) *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.AddActualDurationMinutes(v)
+	})
+}
+
+// UpdateActualDurationMinutes sets the "actual_duration_minutes" field to the value that was provided on create.
+func (u *ChangePIRUpsertOne) UpdateActualDurationMinutes() *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateActualDurationMinutes()
+	})
+}
+
+// SetRollbackPerformed sets the "rollback_performed" field.
+func (u *ChangePIRUpsertOne) SetRollbackPerformed(v bool) *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetRollbackPerformed(v)
+	})
+}
+
+// UpdateRollbackPerformed sets the "rollback_performed" field to the value that was provided on create.
+func (u *ChangePIRUpsertOne) UpdateRollbackPerformed() *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateRollbackPerformed()
+	})
+}
+
+// SetRollbackReason sets the "rollback_reason" field.
+func (u *ChangePIRUpsertOne) SetRollbackReason(v string) *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetRollbackReason(v)
+	})
+}
+
+// UpdateRollbackReason sets the "rollback_reason" field to the value that was provided on create.
+func (u *ChangePIRUpsertOne) UpdateRollbackReason() *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateRollbackReason()
+	})
+}
+
+// ClearRollbackReason clears the value of the "rollback_reason" field.
+func (u *ChangePIRUpsertOne) ClearRollbackReason() *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.ClearRollbackReason()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ChangePIRUpsertOne) SetTenantID(v int) *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ChangePIRUpsertOne) AddTenantID(v int) *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ChangePIRUpsertOne) UpdateTenantID() *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetReviewDate sets the "review_date" field.
+func (u *ChangePIRUpsertOne) SetReviewDate(v time.Time) *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetReviewDate(v)
+	})
+}
+
+// UpdateReviewDate sets the "review_date" field to the value that was provided on create.
+func (u *ChangePIRUpsertOne) UpdateReviewDate() *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateReviewDate()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ChangePIRUpsertOne) SetCreatedAt(v time.Time) *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ChangePIRUpsertOne) UpdateCreatedAt() *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ChangePIRUpsertOne) SetUpdatedAt(v time.Time) *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ChangePIRUpsertOne) UpdateUpdatedAt() *ChangePIRUpsertOne {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ChangePIRUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ChangePIRCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ChangePIRUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ChangePIRUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ChangePIRUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ChangePIRCreateBulk is the builder for creating many ChangePIR entities in bulk.
 type ChangePIRCreateBulk struct {
 	config
 	err      error
 	builders []*ChangePIRCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the ChangePIR entities in the database.
@@ -491,6 +1176,7 @@ func (_c *ChangePIRCreateBulk) Save(ctx context.Context) ([]*ChangePIR, error) {
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -541,6 +1227,411 @@ func (_c *ChangePIRCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ChangePIRCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ChangePIR.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ChangePIRUpsert) {
+//			SetReviewerID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ChangePIRCreateBulk) OnConflict(opts ...sql.ConflictOption) *ChangePIRUpsertBulk {
+	_c.conflict = opts
+	return &ChangePIRUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ChangePIR.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ChangePIRCreateBulk) OnConflictColumns(columns ...string) *ChangePIRUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ChangePIRUpsertBulk{
+		create: _c,
+	}
+}
+
+// ChangePIRUpsertBulk is the builder for "upsert"-ing
+// a bulk of ChangePIR nodes.
+type ChangePIRUpsertBulk struct {
+	create *ChangePIRCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.ChangePIR.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ChangePIRUpsertBulk) UpdateNewValues() *ChangePIRUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ChangePIR.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ChangePIRUpsertBulk) Ignore() *ChangePIRUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ChangePIRUpsertBulk) DoNothing() *ChangePIRUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ChangePIRCreateBulk.OnConflict
+// documentation for more info.
+func (u *ChangePIRUpsertBulk) Update(set func(*ChangePIRUpsert)) *ChangePIRUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ChangePIRUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetReviewerID sets the "reviewer_id" field.
+func (u *ChangePIRUpsertBulk) SetReviewerID(v int) *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetReviewerID(v)
+	})
+}
+
+// AddReviewerID adds v to the "reviewer_id" field.
+func (u *ChangePIRUpsertBulk) AddReviewerID(v int) *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.AddReviewerID(v)
+	})
+}
+
+// UpdateReviewerID sets the "reviewer_id" field to the value that was provided on create.
+func (u *ChangePIRUpsertBulk) UpdateReviewerID() *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateReviewerID()
+	})
+}
+
+// ClearReviewerID clears the value of the "reviewer_id" field.
+func (u *ChangePIRUpsertBulk) ClearReviewerID() *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.ClearReviewerID()
+	})
+}
+
+// SetOverallResult sets the "overall_result" field.
+func (u *ChangePIRUpsertBulk) SetOverallResult(v string) *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetOverallResult(v)
+	})
+}
+
+// UpdateOverallResult sets the "overall_result" field to the value that was provided on create.
+func (u *ChangePIRUpsertBulk) UpdateOverallResult() *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateOverallResult()
+	})
+}
+
+// SetObjectivesAchieved sets the "objectives_achieved" field.
+func (u *ChangePIRUpsertBulk) SetObjectivesAchieved(v bool) *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetObjectivesAchieved(v)
+	})
+}
+
+// UpdateObjectivesAchieved sets the "objectives_achieved" field to the value that was provided on create.
+func (u *ChangePIRUpsertBulk) UpdateObjectivesAchieved() *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateObjectivesAchieved()
+	})
+}
+
+// SetSuccessSummary sets the "success_summary" field.
+func (u *ChangePIRUpsertBulk) SetSuccessSummary(v string) *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetSuccessSummary(v)
+	})
+}
+
+// UpdateSuccessSummary sets the "success_summary" field to the value that was provided on create.
+func (u *ChangePIRUpsertBulk) UpdateSuccessSummary() *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateSuccessSummary()
+	})
+}
+
+// ClearSuccessSummary clears the value of the "success_summary" field.
+func (u *ChangePIRUpsertBulk) ClearSuccessSummary() *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.ClearSuccessSummary()
+	})
+}
+
+// SetIssuesEncountered sets the "issues_encountered" field.
+func (u *ChangePIRUpsertBulk) SetIssuesEncountered(v string) *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetIssuesEncountered(v)
+	})
+}
+
+// UpdateIssuesEncountered sets the "issues_encountered" field to the value that was provided on create.
+func (u *ChangePIRUpsertBulk) UpdateIssuesEncountered() *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateIssuesEncountered()
+	})
+}
+
+// ClearIssuesEncountered clears the value of the "issues_encountered" field.
+func (u *ChangePIRUpsertBulk) ClearIssuesEncountered() *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.ClearIssuesEncountered()
+	})
+}
+
+// SetLessonsLearned sets the "lessons_learned" field.
+func (u *ChangePIRUpsertBulk) SetLessonsLearned(v string) *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetLessonsLearned(v)
+	})
+}
+
+// UpdateLessonsLearned sets the "lessons_learned" field to the value that was provided on create.
+func (u *ChangePIRUpsertBulk) UpdateLessonsLearned() *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateLessonsLearned()
+	})
+}
+
+// ClearLessonsLearned clears the value of the "lessons_learned" field.
+func (u *ChangePIRUpsertBulk) ClearLessonsLearned() *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.ClearLessonsLearned()
+	})
+}
+
+// SetImprovementRecommendations sets the "improvement_recommendations" field.
+func (u *ChangePIRUpsertBulk) SetImprovementRecommendations(v string) *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetImprovementRecommendations(v)
+	})
+}
+
+// UpdateImprovementRecommendations sets the "improvement_recommendations" field to the value that was provided on create.
+func (u *ChangePIRUpsertBulk) UpdateImprovementRecommendations() *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateImprovementRecommendations()
+	})
+}
+
+// ClearImprovementRecommendations clears the value of the "improvement_recommendations" field.
+func (u *ChangePIRUpsertBulk) ClearImprovementRecommendations() *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.ClearImprovementRecommendations()
+	})
+}
+
+// SetActualStartTime sets the "actual_start_time" field.
+func (u *ChangePIRUpsertBulk) SetActualStartTime(v time.Time) *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetActualStartTime(v)
+	})
+}
+
+// UpdateActualStartTime sets the "actual_start_time" field to the value that was provided on create.
+func (u *ChangePIRUpsertBulk) UpdateActualStartTime() *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateActualStartTime()
+	})
+}
+
+// ClearActualStartTime clears the value of the "actual_start_time" field.
+func (u *ChangePIRUpsertBulk) ClearActualStartTime() *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.ClearActualStartTime()
+	})
+}
+
+// SetActualEndTime sets the "actual_end_time" field.
+func (u *ChangePIRUpsertBulk) SetActualEndTime(v time.Time) *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetActualEndTime(v)
+	})
+}
+
+// UpdateActualEndTime sets the "actual_end_time" field to the value that was provided on create.
+func (u *ChangePIRUpsertBulk) UpdateActualEndTime() *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateActualEndTime()
+	})
+}
+
+// ClearActualEndTime clears the value of the "actual_end_time" field.
+func (u *ChangePIRUpsertBulk) ClearActualEndTime() *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.ClearActualEndTime()
+	})
+}
+
+// SetActualDurationMinutes sets the "actual_duration_minutes" field.
+func (u *ChangePIRUpsertBulk) SetActualDurationMinutes(v int) *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetActualDurationMinutes(v)
+	})
+}
+
+// AddActualDurationMinutes adds v to the "actual_duration_minutes" field.
+func (u *ChangePIRUpsertBulk) AddActualDurationMinutes(v int) *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.AddActualDurationMinutes(v)
+	})
+}
+
+// UpdateActualDurationMinutes sets the "actual_duration_minutes" field to the value that was provided on create.
+func (u *ChangePIRUpsertBulk) UpdateActualDurationMinutes() *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateActualDurationMinutes()
+	})
+}
+
+// SetRollbackPerformed sets the "rollback_performed" field.
+func (u *ChangePIRUpsertBulk) SetRollbackPerformed(v bool) *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetRollbackPerformed(v)
+	})
+}
+
+// UpdateRollbackPerformed sets the "rollback_performed" field to the value that was provided on create.
+func (u *ChangePIRUpsertBulk) UpdateRollbackPerformed() *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateRollbackPerformed()
+	})
+}
+
+// SetRollbackReason sets the "rollback_reason" field.
+func (u *ChangePIRUpsertBulk) SetRollbackReason(v string) *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetRollbackReason(v)
+	})
+}
+
+// UpdateRollbackReason sets the "rollback_reason" field to the value that was provided on create.
+func (u *ChangePIRUpsertBulk) UpdateRollbackReason() *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateRollbackReason()
+	})
+}
+
+// ClearRollbackReason clears the value of the "rollback_reason" field.
+func (u *ChangePIRUpsertBulk) ClearRollbackReason() *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.ClearRollbackReason()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ChangePIRUpsertBulk) SetTenantID(v int) *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ChangePIRUpsertBulk) AddTenantID(v int) *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ChangePIRUpsertBulk) UpdateTenantID() *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetReviewDate sets the "review_date" field.
+func (u *ChangePIRUpsertBulk) SetReviewDate(v time.Time) *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetReviewDate(v)
+	})
+}
+
+// UpdateReviewDate sets the "review_date" field to the value that was provided on create.
+func (u *ChangePIRUpsertBulk) UpdateReviewDate() *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateReviewDate()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ChangePIRUpsertBulk) SetCreatedAt(v time.Time) *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ChangePIRUpsertBulk) UpdateCreatedAt() *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ChangePIRUpsertBulk) SetUpdatedAt(v time.Time) *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ChangePIRUpsertBulk) UpdateUpdatedAt() *ChangePIRUpsertBulk {
+	return u.Update(func(s *ChangePIRUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ChangePIRUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ChangePIRCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ChangePIRCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ChangePIRUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

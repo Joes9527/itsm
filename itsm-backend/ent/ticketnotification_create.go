@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent/user"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -20,6 +21,7 @@ type TicketNotificationCreate struct {
 	config
 	mutation *TicketNotificationMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetTicketID sets the "ticket_id" field.
@@ -264,6 +266,7 @@ func (_c *TicketNotificationCreate) createSpec() (*TicketNotification, *sqlgraph
 		_node = &TicketNotification{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(ticketnotification.Table, sqlgraph.NewFieldSpec(ticketnotification.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.GetType(); ok {
 		_spec.SetField(ticketnotification.FieldType, field.TypeString, value)
 		_node.Type = value
@@ -333,11 +336,433 @@ func (_c *TicketNotificationCreate) createSpec() (*TicketNotification, *sqlgraph
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.TicketNotification.Create().
+//		SetTicketID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.TicketNotificationUpsert) {
+//			SetTicketID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *TicketNotificationCreate) OnConflict(opts ...sql.ConflictOption) *TicketNotificationUpsertOne {
+	_c.conflict = opts
+	return &TicketNotificationUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.TicketNotification.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *TicketNotificationCreate) OnConflictColumns(columns ...string) *TicketNotificationUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &TicketNotificationUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// TicketNotificationUpsertOne is the builder for "upsert"-ing
+	//  one TicketNotification node.
+	TicketNotificationUpsertOne struct {
+		create *TicketNotificationCreate
+	}
+
+	// TicketNotificationUpsert is the "OnConflict" setter.
+	TicketNotificationUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetTicketID sets the "ticket_id" field.
+func (u *TicketNotificationUpsert) SetTicketID(v int) *TicketNotificationUpsert {
+	u.Set(ticketnotification.FieldTicketID, v)
+	return u
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *TicketNotificationUpsert) UpdateTicketID() *TicketNotificationUpsert {
+	u.SetExcluded(ticketnotification.FieldTicketID)
+	return u
+}
+
+// SetUserID sets the "user_id" field.
+func (u *TicketNotificationUpsert) SetUserID(v int) *TicketNotificationUpsert {
+	u.Set(ticketnotification.FieldUserID, v)
+	return u
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *TicketNotificationUpsert) UpdateUserID() *TicketNotificationUpsert {
+	u.SetExcluded(ticketnotification.FieldUserID)
+	return u
+}
+
+// SetType sets the "type" field.
+func (u *TicketNotificationUpsert) SetType(v string) *TicketNotificationUpsert {
+	u.Set(ticketnotification.FieldType, v)
+	return u
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *TicketNotificationUpsert) UpdateType() *TicketNotificationUpsert {
+	u.SetExcluded(ticketnotification.FieldType)
+	return u
+}
+
+// SetChannel sets the "channel" field.
+func (u *TicketNotificationUpsert) SetChannel(v string) *TicketNotificationUpsert {
+	u.Set(ticketnotification.FieldChannel, v)
+	return u
+}
+
+// UpdateChannel sets the "channel" field to the value that was provided on create.
+func (u *TicketNotificationUpsert) UpdateChannel() *TicketNotificationUpsert {
+	u.SetExcluded(ticketnotification.FieldChannel)
+	return u
+}
+
+// SetContent sets the "content" field.
+func (u *TicketNotificationUpsert) SetContent(v string) *TicketNotificationUpsert {
+	u.Set(ticketnotification.FieldContent, v)
+	return u
+}
+
+// UpdateContent sets the "content" field to the value that was provided on create.
+func (u *TicketNotificationUpsert) UpdateContent() *TicketNotificationUpsert {
+	u.SetExcluded(ticketnotification.FieldContent)
+	return u
+}
+
+// SetSentAt sets the "sent_at" field.
+func (u *TicketNotificationUpsert) SetSentAt(v time.Time) *TicketNotificationUpsert {
+	u.Set(ticketnotification.FieldSentAt, v)
+	return u
+}
+
+// UpdateSentAt sets the "sent_at" field to the value that was provided on create.
+func (u *TicketNotificationUpsert) UpdateSentAt() *TicketNotificationUpsert {
+	u.SetExcluded(ticketnotification.FieldSentAt)
+	return u
+}
+
+// ClearSentAt clears the value of the "sent_at" field.
+func (u *TicketNotificationUpsert) ClearSentAt() *TicketNotificationUpsert {
+	u.SetNull(ticketnotification.FieldSentAt)
+	return u
+}
+
+// SetReadAt sets the "read_at" field.
+func (u *TicketNotificationUpsert) SetReadAt(v time.Time) *TicketNotificationUpsert {
+	u.Set(ticketnotification.FieldReadAt, v)
+	return u
+}
+
+// UpdateReadAt sets the "read_at" field to the value that was provided on create.
+func (u *TicketNotificationUpsert) UpdateReadAt() *TicketNotificationUpsert {
+	u.SetExcluded(ticketnotification.FieldReadAt)
+	return u
+}
+
+// ClearReadAt clears the value of the "read_at" field.
+func (u *TicketNotificationUpsert) ClearReadAt() *TicketNotificationUpsert {
+	u.SetNull(ticketnotification.FieldReadAt)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *TicketNotificationUpsert) SetStatus(v string) *TicketNotificationUpsert {
+	u.Set(ticketnotification.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *TicketNotificationUpsert) UpdateStatus() *TicketNotificationUpsert {
+	u.SetExcluded(ticketnotification.FieldStatus)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *TicketNotificationUpsert) SetTenantID(v int) *TicketNotificationUpsert {
+	u.Set(ticketnotification.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *TicketNotificationUpsert) UpdateTenantID() *TicketNotificationUpsert {
+	u.SetExcluded(ticketnotification.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *TicketNotificationUpsert) AddTenantID(v int) *TicketNotificationUpsert {
+	u.Add(ticketnotification.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *TicketNotificationUpsert) SetCreatedAt(v time.Time) *TicketNotificationUpsert {
+	u.Set(ticketnotification.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *TicketNotificationUpsert) UpdateCreatedAt() *TicketNotificationUpsert {
+	u.SetExcluded(ticketnotification.FieldCreatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.TicketNotification.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *TicketNotificationUpsertOne) UpdateNewValues() *TicketNotificationUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.TicketNotification.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *TicketNotificationUpsertOne) Ignore() *TicketNotificationUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *TicketNotificationUpsertOne) DoNothing() *TicketNotificationUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the TicketNotificationCreate.OnConflict
+// documentation for more info.
+func (u *TicketNotificationUpsertOne) Update(set func(*TicketNotificationUpsert)) *TicketNotificationUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&TicketNotificationUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *TicketNotificationUpsertOne) SetTicketID(v int) *TicketNotificationUpsertOne {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.SetTicketID(v)
+	})
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *TicketNotificationUpsertOne) UpdateTicketID() *TicketNotificationUpsertOne {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.UpdateTicketID()
+	})
+}
+
+// SetUserID sets the "user_id" field.
+func (u *TicketNotificationUpsertOne) SetUserID(v int) *TicketNotificationUpsertOne {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.SetUserID(v)
+	})
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *TicketNotificationUpsertOne) UpdateUserID() *TicketNotificationUpsertOne {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.UpdateUserID()
+	})
+}
+
+// SetType sets the "type" field.
+func (u *TicketNotificationUpsertOne) SetType(v string) *TicketNotificationUpsertOne {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.SetType(v)
+	})
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *TicketNotificationUpsertOne) UpdateType() *TicketNotificationUpsertOne {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.UpdateType()
+	})
+}
+
+// SetChannel sets the "channel" field.
+func (u *TicketNotificationUpsertOne) SetChannel(v string) *TicketNotificationUpsertOne {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.SetChannel(v)
+	})
+}
+
+// UpdateChannel sets the "channel" field to the value that was provided on create.
+func (u *TicketNotificationUpsertOne) UpdateChannel() *TicketNotificationUpsertOne {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.UpdateChannel()
+	})
+}
+
+// SetContent sets the "content" field.
+func (u *TicketNotificationUpsertOne) SetContent(v string) *TicketNotificationUpsertOne {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.SetContent(v)
+	})
+}
+
+// UpdateContent sets the "content" field to the value that was provided on create.
+func (u *TicketNotificationUpsertOne) UpdateContent() *TicketNotificationUpsertOne {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.UpdateContent()
+	})
+}
+
+// SetSentAt sets the "sent_at" field.
+func (u *TicketNotificationUpsertOne) SetSentAt(v time.Time) *TicketNotificationUpsertOne {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.SetSentAt(v)
+	})
+}
+
+// UpdateSentAt sets the "sent_at" field to the value that was provided on create.
+func (u *TicketNotificationUpsertOne) UpdateSentAt() *TicketNotificationUpsertOne {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.UpdateSentAt()
+	})
+}
+
+// ClearSentAt clears the value of the "sent_at" field.
+func (u *TicketNotificationUpsertOne) ClearSentAt() *TicketNotificationUpsertOne {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.ClearSentAt()
+	})
+}
+
+// SetReadAt sets the "read_at" field.
+func (u *TicketNotificationUpsertOne) SetReadAt(v time.Time) *TicketNotificationUpsertOne {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.SetReadAt(v)
+	})
+}
+
+// UpdateReadAt sets the "read_at" field to the value that was provided on create.
+func (u *TicketNotificationUpsertOne) UpdateReadAt() *TicketNotificationUpsertOne {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.UpdateReadAt()
+	})
+}
+
+// ClearReadAt clears the value of the "read_at" field.
+func (u *TicketNotificationUpsertOne) ClearReadAt() *TicketNotificationUpsertOne {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.ClearReadAt()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *TicketNotificationUpsertOne) SetStatus(v string) *TicketNotificationUpsertOne {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *TicketNotificationUpsertOne) UpdateStatus() *TicketNotificationUpsertOne {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *TicketNotificationUpsertOne) SetTenantID(v int) *TicketNotificationUpsertOne {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *TicketNotificationUpsertOne) AddTenantID(v int) *TicketNotificationUpsertOne {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *TicketNotificationUpsertOne) UpdateTenantID() *TicketNotificationUpsertOne {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *TicketNotificationUpsertOne) SetCreatedAt(v time.Time) *TicketNotificationUpsertOne {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *TicketNotificationUpsertOne) UpdateCreatedAt() *TicketNotificationUpsertOne {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *TicketNotificationUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for TicketNotificationCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *TicketNotificationUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *TicketNotificationUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *TicketNotificationUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // TicketNotificationCreateBulk is the builder for creating many TicketNotification entities in bulk.
 type TicketNotificationCreateBulk struct {
 	config
 	err      error
 	builders []*TicketNotificationCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the TicketNotification entities in the database.
@@ -367,6 +792,7 @@ func (_c *TicketNotificationCreateBulk) Save(ctx context.Context) ([]*TicketNoti
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -417,6 +843,271 @@ func (_c *TicketNotificationCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *TicketNotificationCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.TicketNotification.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.TicketNotificationUpsert) {
+//			SetTicketID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *TicketNotificationCreateBulk) OnConflict(opts ...sql.ConflictOption) *TicketNotificationUpsertBulk {
+	_c.conflict = opts
+	return &TicketNotificationUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.TicketNotification.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *TicketNotificationCreateBulk) OnConflictColumns(columns ...string) *TicketNotificationUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &TicketNotificationUpsertBulk{
+		create: _c,
+	}
+}
+
+// TicketNotificationUpsertBulk is the builder for "upsert"-ing
+// a bulk of TicketNotification nodes.
+type TicketNotificationUpsertBulk struct {
+	create *TicketNotificationCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.TicketNotification.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *TicketNotificationUpsertBulk) UpdateNewValues() *TicketNotificationUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.TicketNotification.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *TicketNotificationUpsertBulk) Ignore() *TicketNotificationUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *TicketNotificationUpsertBulk) DoNothing() *TicketNotificationUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the TicketNotificationCreateBulk.OnConflict
+// documentation for more info.
+func (u *TicketNotificationUpsertBulk) Update(set func(*TicketNotificationUpsert)) *TicketNotificationUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&TicketNotificationUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *TicketNotificationUpsertBulk) SetTicketID(v int) *TicketNotificationUpsertBulk {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.SetTicketID(v)
+	})
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *TicketNotificationUpsertBulk) UpdateTicketID() *TicketNotificationUpsertBulk {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.UpdateTicketID()
+	})
+}
+
+// SetUserID sets the "user_id" field.
+func (u *TicketNotificationUpsertBulk) SetUserID(v int) *TicketNotificationUpsertBulk {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.SetUserID(v)
+	})
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *TicketNotificationUpsertBulk) UpdateUserID() *TicketNotificationUpsertBulk {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.UpdateUserID()
+	})
+}
+
+// SetType sets the "type" field.
+func (u *TicketNotificationUpsertBulk) SetType(v string) *TicketNotificationUpsertBulk {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.SetType(v)
+	})
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *TicketNotificationUpsertBulk) UpdateType() *TicketNotificationUpsertBulk {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.UpdateType()
+	})
+}
+
+// SetChannel sets the "channel" field.
+func (u *TicketNotificationUpsertBulk) SetChannel(v string) *TicketNotificationUpsertBulk {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.SetChannel(v)
+	})
+}
+
+// UpdateChannel sets the "channel" field to the value that was provided on create.
+func (u *TicketNotificationUpsertBulk) UpdateChannel() *TicketNotificationUpsertBulk {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.UpdateChannel()
+	})
+}
+
+// SetContent sets the "content" field.
+func (u *TicketNotificationUpsertBulk) SetContent(v string) *TicketNotificationUpsertBulk {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.SetContent(v)
+	})
+}
+
+// UpdateContent sets the "content" field to the value that was provided on create.
+func (u *TicketNotificationUpsertBulk) UpdateContent() *TicketNotificationUpsertBulk {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.UpdateContent()
+	})
+}
+
+// SetSentAt sets the "sent_at" field.
+func (u *TicketNotificationUpsertBulk) SetSentAt(v time.Time) *TicketNotificationUpsertBulk {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.SetSentAt(v)
+	})
+}
+
+// UpdateSentAt sets the "sent_at" field to the value that was provided on create.
+func (u *TicketNotificationUpsertBulk) UpdateSentAt() *TicketNotificationUpsertBulk {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.UpdateSentAt()
+	})
+}
+
+// ClearSentAt clears the value of the "sent_at" field.
+func (u *TicketNotificationUpsertBulk) ClearSentAt() *TicketNotificationUpsertBulk {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.ClearSentAt()
+	})
+}
+
+// SetReadAt sets the "read_at" field.
+func (u *TicketNotificationUpsertBulk) SetReadAt(v time.Time) *TicketNotificationUpsertBulk {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.SetReadAt(v)
+	})
+}
+
+// UpdateReadAt sets the "read_at" field to the value that was provided on create.
+func (u *TicketNotificationUpsertBulk) UpdateReadAt() *TicketNotificationUpsertBulk {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.UpdateReadAt()
+	})
+}
+
+// ClearReadAt clears the value of the "read_at" field.
+func (u *TicketNotificationUpsertBulk) ClearReadAt() *TicketNotificationUpsertBulk {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.ClearReadAt()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *TicketNotificationUpsertBulk) SetStatus(v string) *TicketNotificationUpsertBulk {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *TicketNotificationUpsertBulk) UpdateStatus() *TicketNotificationUpsertBulk {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *TicketNotificationUpsertBulk) SetTenantID(v int) *TicketNotificationUpsertBulk {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *TicketNotificationUpsertBulk) AddTenantID(v int) *TicketNotificationUpsertBulk {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *TicketNotificationUpsertBulk) UpdateTenantID() *TicketNotificationUpsertBulk {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *TicketNotificationUpsertBulk) SetCreatedAt(v time.Time) *TicketNotificationUpsertBulk {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *TicketNotificationUpsertBulk) UpdateCreatedAt() *TicketNotificationUpsertBulk {
+	return u.Update(func(s *TicketNotificationUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *TicketNotificationUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the TicketNotificationCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for TicketNotificationCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *TicketNotificationUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

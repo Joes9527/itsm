@@ -13,6 +13,7 @@ import (
 	"itsm-backend/ent/ticket"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -22,6 +23,7 @@ type SLADefinitionCreate struct {
 	config
 	mutation *SLADefinitionMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetName sets the "name" field.
@@ -400,6 +402,7 @@ func (_c *SLADefinitionCreate) createSpec() (*SLADefinition, *sqlgraph.CreateSpe
 		_node = &SLADefinition{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(sladefinition.Table, sqlgraph.NewFieldSpec(sladefinition.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(sladefinition.FieldName, field.TypeString, value)
 		_node.Name = value
@@ -531,11 +534,680 @@ func (_c *SLADefinitionCreate) createSpec() (*SLADefinition, *sqlgraph.CreateSpe
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.SLADefinition.Create().
+//		SetName(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.SLADefinitionUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *SLADefinitionCreate) OnConflict(opts ...sql.ConflictOption) *SLADefinitionUpsertOne {
+	_c.conflict = opts
+	return &SLADefinitionUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.SLADefinition.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *SLADefinitionCreate) OnConflictColumns(columns ...string) *SLADefinitionUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &SLADefinitionUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// SLADefinitionUpsertOne is the builder for "upsert"-ing
+	//  one SLADefinition node.
+	SLADefinitionUpsertOne struct {
+		create *SLADefinitionCreate
+	}
+
+	// SLADefinitionUpsert is the "OnConflict" setter.
+	SLADefinitionUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetName sets the "name" field.
+func (u *SLADefinitionUpsert) SetName(v string) *SLADefinitionUpsert {
+	u.Set(sladefinition.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *SLADefinitionUpsert) UpdateName() *SLADefinitionUpsert {
+	u.SetExcluded(sladefinition.FieldName)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *SLADefinitionUpsert) SetDescription(v string) *SLADefinitionUpsert {
+	u.Set(sladefinition.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *SLADefinitionUpsert) UpdateDescription() *SLADefinitionUpsert {
+	u.SetExcluded(sladefinition.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *SLADefinitionUpsert) ClearDescription() *SLADefinitionUpsert {
+	u.SetNull(sladefinition.FieldDescription)
+	return u
+}
+
+// SetServiceType sets the "service_type" field.
+func (u *SLADefinitionUpsert) SetServiceType(v string) *SLADefinitionUpsert {
+	u.Set(sladefinition.FieldServiceType, v)
+	return u
+}
+
+// UpdateServiceType sets the "service_type" field to the value that was provided on create.
+func (u *SLADefinitionUpsert) UpdateServiceType() *SLADefinitionUpsert {
+	u.SetExcluded(sladefinition.FieldServiceType)
+	return u
+}
+
+// ClearServiceType clears the value of the "service_type" field.
+func (u *SLADefinitionUpsert) ClearServiceType() *SLADefinitionUpsert {
+	u.SetNull(sladefinition.FieldServiceType)
+	return u
+}
+
+// SetPriority sets the "priority" field.
+func (u *SLADefinitionUpsert) SetPriority(v string) *SLADefinitionUpsert {
+	u.Set(sladefinition.FieldPriority, v)
+	return u
+}
+
+// UpdatePriority sets the "priority" field to the value that was provided on create.
+func (u *SLADefinitionUpsert) UpdatePriority() *SLADefinitionUpsert {
+	u.SetExcluded(sladefinition.FieldPriority)
+	return u
+}
+
+// ClearPriority clears the value of the "priority" field.
+func (u *SLADefinitionUpsert) ClearPriority() *SLADefinitionUpsert {
+	u.SetNull(sladefinition.FieldPriority)
+	return u
+}
+
+// SetCategoryIds sets the "category_ids" field.
+func (u *SLADefinitionUpsert) SetCategoryIds(v []int) *SLADefinitionUpsert {
+	u.Set(sladefinition.FieldCategoryIds, v)
+	return u
+}
+
+// UpdateCategoryIds sets the "category_ids" field to the value that was provided on create.
+func (u *SLADefinitionUpsert) UpdateCategoryIds() *SLADefinitionUpsert {
+	u.SetExcluded(sladefinition.FieldCategoryIds)
+	return u
+}
+
+// ClearCategoryIds clears the value of the "category_ids" field.
+func (u *SLADefinitionUpsert) ClearCategoryIds() *SLADefinitionUpsert {
+	u.SetNull(sladefinition.FieldCategoryIds)
+	return u
+}
+
+// SetResponseTime sets the "response_time" field.
+func (u *SLADefinitionUpsert) SetResponseTime(v int) *SLADefinitionUpsert {
+	u.Set(sladefinition.FieldResponseTime, v)
+	return u
+}
+
+// UpdateResponseTime sets the "response_time" field to the value that was provided on create.
+func (u *SLADefinitionUpsert) UpdateResponseTime() *SLADefinitionUpsert {
+	u.SetExcluded(sladefinition.FieldResponseTime)
+	return u
+}
+
+// AddResponseTime adds v to the "response_time" field.
+func (u *SLADefinitionUpsert) AddResponseTime(v int) *SLADefinitionUpsert {
+	u.Add(sladefinition.FieldResponseTime, v)
+	return u
+}
+
+// SetResolutionTime sets the "resolution_time" field.
+func (u *SLADefinitionUpsert) SetResolutionTime(v int) *SLADefinitionUpsert {
+	u.Set(sladefinition.FieldResolutionTime, v)
+	return u
+}
+
+// UpdateResolutionTime sets the "resolution_time" field to the value that was provided on create.
+func (u *SLADefinitionUpsert) UpdateResolutionTime() *SLADefinitionUpsert {
+	u.SetExcluded(sladefinition.FieldResolutionTime)
+	return u
+}
+
+// AddResolutionTime adds v to the "resolution_time" field.
+func (u *SLADefinitionUpsert) AddResolutionTime(v int) *SLADefinitionUpsert {
+	u.Add(sladefinition.FieldResolutionTime, v)
+	return u
+}
+
+// SetBusinessHours sets the "business_hours" field.
+func (u *SLADefinitionUpsert) SetBusinessHours(v map[string]interface{}) *SLADefinitionUpsert {
+	u.Set(sladefinition.FieldBusinessHours, v)
+	return u
+}
+
+// UpdateBusinessHours sets the "business_hours" field to the value that was provided on create.
+func (u *SLADefinitionUpsert) UpdateBusinessHours() *SLADefinitionUpsert {
+	u.SetExcluded(sladefinition.FieldBusinessHours)
+	return u
+}
+
+// ClearBusinessHours clears the value of the "business_hours" field.
+func (u *SLADefinitionUpsert) ClearBusinessHours() *SLADefinitionUpsert {
+	u.SetNull(sladefinition.FieldBusinessHours)
+	return u
+}
+
+// SetEscalationRules sets the "escalation_rules" field.
+func (u *SLADefinitionUpsert) SetEscalationRules(v map[string]interface{}) *SLADefinitionUpsert {
+	u.Set(sladefinition.FieldEscalationRules, v)
+	return u
+}
+
+// UpdateEscalationRules sets the "escalation_rules" field to the value that was provided on create.
+func (u *SLADefinitionUpsert) UpdateEscalationRules() *SLADefinitionUpsert {
+	u.SetExcluded(sladefinition.FieldEscalationRules)
+	return u
+}
+
+// ClearEscalationRules clears the value of the "escalation_rules" field.
+func (u *SLADefinitionUpsert) ClearEscalationRules() *SLADefinitionUpsert {
+	u.SetNull(sladefinition.FieldEscalationRules)
+	return u
+}
+
+// SetConditions sets the "conditions" field.
+func (u *SLADefinitionUpsert) SetConditions(v map[string]interface{}) *SLADefinitionUpsert {
+	u.Set(sladefinition.FieldConditions, v)
+	return u
+}
+
+// UpdateConditions sets the "conditions" field to the value that was provided on create.
+func (u *SLADefinitionUpsert) UpdateConditions() *SLADefinitionUpsert {
+	u.SetExcluded(sladefinition.FieldConditions)
+	return u
+}
+
+// ClearConditions clears the value of the "conditions" field.
+func (u *SLADefinitionUpsert) ClearConditions() *SLADefinitionUpsert {
+	u.SetNull(sladefinition.FieldConditions)
+	return u
+}
+
+// SetExcludeWeekends sets the "exclude_weekends" field.
+func (u *SLADefinitionUpsert) SetExcludeWeekends(v bool) *SLADefinitionUpsert {
+	u.Set(sladefinition.FieldExcludeWeekends, v)
+	return u
+}
+
+// UpdateExcludeWeekends sets the "exclude_weekends" field to the value that was provided on create.
+func (u *SLADefinitionUpsert) UpdateExcludeWeekends() *SLADefinitionUpsert {
+	u.SetExcluded(sladefinition.FieldExcludeWeekends)
+	return u
+}
+
+// SetExcludeHolidays sets the "exclude_holidays" field.
+func (u *SLADefinitionUpsert) SetExcludeHolidays(v bool) *SLADefinitionUpsert {
+	u.Set(sladefinition.FieldExcludeHolidays, v)
+	return u
+}
+
+// UpdateExcludeHolidays sets the "exclude_holidays" field to the value that was provided on create.
+func (u *SLADefinitionUpsert) UpdateExcludeHolidays() *SLADefinitionUpsert {
+	u.SetExcluded(sladefinition.FieldExcludeHolidays)
+	return u
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *SLADefinitionUpsert) SetIsActive(v bool) *SLADefinitionUpsert {
+	u.Set(sladefinition.FieldIsActive, v)
+	return u
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *SLADefinitionUpsert) UpdateIsActive() *SLADefinitionUpsert {
+	u.SetExcluded(sladefinition.FieldIsActive)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *SLADefinitionUpsert) SetTenantID(v int) *SLADefinitionUpsert {
+	u.Set(sladefinition.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *SLADefinitionUpsert) UpdateTenantID() *SLADefinitionUpsert {
+	u.SetExcluded(sladefinition.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *SLADefinitionUpsert) AddTenantID(v int) *SLADefinitionUpsert {
+	u.Add(sladefinition.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *SLADefinitionUpsert) SetCreatedAt(v time.Time) *SLADefinitionUpsert {
+	u.Set(sladefinition.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *SLADefinitionUpsert) UpdateCreatedAt() *SLADefinitionUpsert {
+	u.SetExcluded(sladefinition.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *SLADefinitionUpsert) SetUpdatedAt(v time.Time) *SLADefinitionUpsert {
+	u.Set(sladefinition.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *SLADefinitionUpsert) UpdateUpdatedAt() *SLADefinitionUpsert {
+	u.SetExcluded(sladefinition.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.SLADefinition.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *SLADefinitionUpsertOne) UpdateNewValues() *SLADefinitionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.SLADefinition.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *SLADefinitionUpsertOne) Ignore() *SLADefinitionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *SLADefinitionUpsertOne) DoNothing() *SLADefinitionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the SLADefinitionCreate.OnConflict
+// documentation for more info.
+func (u *SLADefinitionUpsertOne) Update(set func(*SLADefinitionUpsert)) *SLADefinitionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&SLADefinitionUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *SLADefinitionUpsertOne) SetName(v string) *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *SLADefinitionUpsertOne) UpdateName() *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *SLADefinitionUpsertOne) SetDescription(v string) *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *SLADefinitionUpsertOne) UpdateDescription() *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *SLADefinitionUpsertOne) ClearDescription() *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetServiceType sets the "service_type" field.
+func (u *SLADefinitionUpsertOne) SetServiceType(v string) *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetServiceType(v)
+	})
+}
+
+// UpdateServiceType sets the "service_type" field to the value that was provided on create.
+func (u *SLADefinitionUpsertOne) UpdateServiceType() *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdateServiceType()
+	})
+}
+
+// ClearServiceType clears the value of the "service_type" field.
+func (u *SLADefinitionUpsertOne) ClearServiceType() *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.ClearServiceType()
+	})
+}
+
+// SetPriority sets the "priority" field.
+func (u *SLADefinitionUpsertOne) SetPriority(v string) *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetPriority(v)
+	})
+}
+
+// UpdatePriority sets the "priority" field to the value that was provided on create.
+func (u *SLADefinitionUpsertOne) UpdatePriority() *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdatePriority()
+	})
+}
+
+// ClearPriority clears the value of the "priority" field.
+func (u *SLADefinitionUpsertOne) ClearPriority() *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.ClearPriority()
+	})
+}
+
+// SetCategoryIds sets the "category_ids" field.
+func (u *SLADefinitionUpsertOne) SetCategoryIds(v []int) *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetCategoryIds(v)
+	})
+}
+
+// UpdateCategoryIds sets the "category_ids" field to the value that was provided on create.
+func (u *SLADefinitionUpsertOne) UpdateCategoryIds() *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdateCategoryIds()
+	})
+}
+
+// ClearCategoryIds clears the value of the "category_ids" field.
+func (u *SLADefinitionUpsertOne) ClearCategoryIds() *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.ClearCategoryIds()
+	})
+}
+
+// SetResponseTime sets the "response_time" field.
+func (u *SLADefinitionUpsertOne) SetResponseTime(v int) *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetResponseTime(v)
+	})
+}
+
+// AddResponseTime adds v to the "response_time" field.
+func (u *SLADefinitionUpsertOne) AddResponseTime(v int) *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.AddResponseTime(v)
+	})
+}
+
+// UpdateResponseTime sets the "response_time" field to the value that was provided on create.
+func (u *SLADefinitionUpsertOne) UpdateResponseTime() *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdateResponseTime()
+	})
+}
+
+// SetResolutionTime sets the "resolution_time" field.
+func (u *SLADefinitionUpsertOne) SetResolutionTime(v int) *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetResolutionTime(v)
+	})
+}
+
+// AddResolutionTime adds v to the "resolution_time" field.
+func (u *SLADefinitionUpsertOne) AddResolutionTime(v int) *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.AddResolutionTime(v)
+	})
+}
+
+// UpdateResolutionTime sets the "resolution_time" field to the value that was provided on create.
+func (u *SLADefinitionUpsertOne) UpdateResolutionTime() *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdateResolutionTime()
+	})
+}
+
+// SetBusinessHours sets the "business_hours" field.
+func (u *SLADefinitionUpsertOne) SetBusinessHours(v map[string]interface{}) *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetBusinessHours(v)
+	})
+}
+
+// UpdateBusinessHours sets the "business_hours" field to the value that was provided on create.
+func (u *SLADefinitionUpsertOne) UpdateBusinessHours() *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdateBusinessHours()
+	})
+}
+
+// ClearBusinessHours clears the value of the "business_hours" field.
+func (u *SLADefinitionUpsertOne) ClearBusinessHours() *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.ClearBusinessHours()
+	})
+}
+
+// SetEscalationRules sets the "escalation_rules" field.
+func (u *SLADefinitionUpsertOne) SetEscalationRules(v map[string]interface{}) *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetEscalationRules(v)
+	})
+}
+
+// UpdateEscalationRules sets the "escalation_rules" field to the value that was provided on create.
+func (u *SLADefinitionUpsertOne) UpdateEscalationRules() *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdateEscalationRules()
+	})
+}
+
+// ClearEscalationRules clears the value of the "escalation_rules" field.
+func (u *SLADefinitionUpsertOne) ClearEscalationRules() *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.ClearEscalationRules()
+	})
+}
+
+// SetConditions sets the "conditions" field.
+func (u *SLADefinitionUpsertOne) SetConditions(v map[string]interface{}) *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetConditions(v)
+	})
+}
+
+// UpdateConditions sets the "conditions" field to the value that was provided on create.
+func (u *SLADefinitionUpsertOne) UpdateConditions() *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdateConditions()
+	})
+}
+
+// ClearConditions clears the value of the "conditions" field.
+func (u *SLADefinitionUpsertOne) ClearConditions() *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.ClearConditions()
+	})
+}
+
+// SetExcludeWeekends sets the "exclude_weekends" field.
+func (u *SLADefinitionUpsertOne) SetExcludeWeekends(v bool) *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetExcludeWeekends(v)
+	})
+}
+
+// UpdateExcludeWeekends sets the "exclude_weekends" field to the value that was provided on create.
+func (u *SLADefinitionUpsertOne) UpdateExcludeWeekends() *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdateExcludeWeekends()
+	})
+}
+
+// SetExcludeHolidays sets the "exclude_holidays" field.
+func (u *SLADefinitionUpsertOne) SetExcludeHolidays(v bool) *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetExcludeHolidays(v)
+	})
+}
+
+// UpdateExcludeHolidays sets the "exclude_holidays" field to the value that was provided on create.
+func (u *SLADefinitionUpsertOne) UpdateExcludeHolidays() *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdateExcludeHolidays()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *SLADefinitionUpsertOne) SetIsActive(v bool) *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *SLADefinitionUpsertOne) UpdateIsActive() *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *SLADefinitionUpsertOne) SetTenantID(v int) *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *SLADefinitionUpsertOne) AddTenantID(v int) *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *SLADefinitionUpsertOne) UpdateTenantID() *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *SLADefinitionUpsertOne) SetCreatedAt(v time.Time) *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *SLADefinitionUpsertOne) UpdateCreatedAt() *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *SLADefinitionUpsertOne) SetUpdatedAt(v time.Time) *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *SLADefinitionUpsertOne) UpdateUpdatedAt() *SLADefinitionUpsertOne {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *SLADefinitionUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for SLADefinitionCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *SLADefinitionUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *SLADefinitionUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *SLADefinitionUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // SLADefinitionCreateBulk is the builder for creating many SLADefinition entities in bulk.
 type SLADefinitionCreateBulk struct {
 	config
 	err      error
 	builders []*SLADefinitionCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the SLADefinition entities in the database.
@@ -565,6 +1237,7 @@ func (_c *SLADefinitionCreateBulk) Save(ctx context.Context) ([]*SLADefinition, 
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -615,6 +1288,404 @@ func (_c *SLADefinitionCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *SLADefinitionCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.SLADefinition.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.SLADefinitionUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *SLADefinitionCreateBulk) OnConflict(opts ...sql.ConflictOption) *SLADefinitionUpsertBulk {
+	_c.conflict = opts
+	return &SLADefinitionUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.SLADefinition.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *SLADefinitionCreateBulk) OnConflictColumns(columns ...string) *SLADefinitionUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &SLADefinitionUpsertBulk{
+		create: _c,
+	}
+}
+
+// SLADefinitionUpsertBulk is the builder for "upsert"-ing
+// a bulk of SLADefinition nodes.
+type SLADefinitionUpsertBulk struct {
+	create *SLADefinitionCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.SLADefinition.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *SLADefinitionUpsertBulk) UpdateNewValues() *SLADefinitionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.SLADefinition.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *SLADefinitionUpsertBulk) Ignore() *SLADefinitionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *SLADefinitionUpsertBulk) DoNothing() *SLADefinitionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the SLADefinitionCreateBulk.OnConflict
+// documentation for more info.
+func (u *SLADefinitionUpsertBulk) Update(set func(*SLADefinitionUpsert)) *SLADefinitionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&SLADefinitionUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *SLADefinitionUpsertBulk) SetName(v string) *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *SLADefinitionUpsertBulk) UpdateName() *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *SLADefinitionUpsertBulk) SetDescription(v string) *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *SLADefinitionUpsertBulk) UpdateDescription() *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *SLADefinitionUpsertBulk) ClearDescription() *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetServiceType sets the "service_type" field.
+func (u *SLADefinitionUpsertBulk) SetServiceType(v string) *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetServiceType(v)
+	})
+}
+
+// UpdateServiceType sets the "service_type" field to the value that was provided on create.
+func (u *SLADefinitionUpsertBulk) UpdateServiceType() *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdateServiceType()
+	})
+}
+
+// ClearServiceType clears the value of the "service_type" field.
+func (u *SLADefinitionUpsertBulk) ClearServiceType() *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.ClearServiceType()
+	})
+}
+
+// SetPriority sets the "priority" field.
+func (u *SLADefinitionUpsertBulk) SetPriority(v string) *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetPriority(v)
+	})
+}
+
+// UpdatePriority sets the "priority" field to the value that was provided on create.
+func (u *SLADefinitionUpsertBulk) UpdatePriority() *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdatePriority()
+	})
+}
+
+// ClearPriority clears the value of the "priority" field.
+func (u *SLADefinitionUpsertBulk) ClearPriority() *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.ClearPriority()
+	})
+}
+
+// SetCategoryIds sets the "category_ids" field.
+func (u *SLADefinitionUpsertBulk) SetCategoryIds(v []int) *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetCategoryIds(v)
+	})
+}
+
+// UpdateCategoryIds sets the "category_ids" field to the value that was provided on create.
+func (u *SLADefinitionUpsertBulk) UpdateCategoryIds() *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdateCategoryIds()
+	})
+}
+
+// ClearCategoryIds clears the value of the "category_ids" field.
+func (u *SLADefinitionUpsertBulk) ClearCategoryIds() *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.ClearCategoryIds()
+	})
+}
+
+// SetResponseTime sets the "response_time" field.
+func (u *SLADefinitionUpsertBulk) SetResponseTime(v int) *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetResponseTime(v)
+	})
+}
+
+// AddResponseTime adds v to the "response_time" field.
+func (u *SLADefinitionUpsertBulk) AddResponseTime(v int) *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.AddResponseTime(v)
+	})
+}
+
+// UpdateResponseTime sets the "response_time" field to the value that was provided on create.
+func (u *SLADefinitionUpsertBulk) UpdateResponseTime() *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdateResponseTime()
+	})
+}
+
+// SetResolutionTime sets the "resolution_time" field.
+func (u *SLADefinitionUpsertBulk) SetResolutionTime(v int) *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetResolutionTime(v)
+	})
+}
+
+// AddResolutionTime adds v to the "resolution_time" field.
+func (u *SLADefinitionUpsertBulk) AddResolutionTime(v int) *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.AddResolutionTime(v)
+	})
+}
+
+// UpdateResolutionTime sets the "resolution_time" field to the value that was provided on create.
+func (u *SLADefinitionUpsertBulk) UpdateResolutionTime() *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdateResolutionTime()
+	})
+}
+
+// SetBusinessHours sets the "business_hours" field.
+func (u *SLADefinitionUpsertBulk) SetBusinessHours(v map[string]interface{}) *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetBusinessHours(v)
+	})
+}
+
+// UpdateBusinessHours sets the "business_hours" field to the value that was provided on create.
+func (u *SLADefinitionUpsertBulk) UpdateBusinessHours() *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdateBusinessHours()
+	})
+}
+
+// ClearBusinessHours clears the value of the "business_hours" field.
+func (u *SLADefinitionUpsertBulk) ClearBusinessHours() *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.ClearBusinessHours()
+	})
+}
+
+// SetEscalationRules sets the "escalation_rules" field.
+func (u *SLADefinitionUpsertBulk) SetEscalationRules(v map[string]interface{}) *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetEscalationRules(v)
+	})
+}
+
+// UpdateEscalationRules sets the "escalation_rules" field to the value that was provided on create.
+func (u *SLADefinitionUpsertBulk) UpdateEscalationRules() *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdateEscalationRules()
+	})
+}
+
+// ClearEscalationRules clears the value of the "escalation_rules" field.
+func (u *SLADefinitionUpsertBulk) ClearEscalationRules() *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.ClearEscalationRules()
+	})
+}
+
+// SetConditions sets the "conditions" field.
+func (u *SLADefinitionUpsertBulk) SetConditions(v map[string]interface{}) *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetConditions(v)
+	})
+}
+
+// UpdateConditions sets the "conditions" field to the value that was provided on create.
+func (u *SLADefinitionUpsertBulk) UpdateConditions() *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdateConditions()
+	})
+}
+
+// ClearConditions clears the value of the "conditions" field.
+func (u *SLADefinitionUpsertBulk) ClearConditions() *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.ClearConditions()
+	})
+}
+
+// SetExcludeWeekends sets the "exclude_weekends" field.
+func (u *SLADefinitionUpsertBulk) SetExcludeWeekends(v bool) *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetExcludeWeekends(v)
+	})
+}
+
+// UpdateExcludeWeekends sets the "exclude_weekends" field to the value that was provided on create.
+func (u *SLADefinitionUpsertBulk) UpdateExcludeWeekends() *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdateExcludeWeekends()
+	})
+}
+
+// SetExcludeHolidays sets the "exclude_holidays" field.
+func (u *SLADefinitionUpsertBulk) SetExcludeHolidays(v bool) *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetExcludeHolidays(v)
+	})
+}
+
+// UpdateExcludeHolidays sets the "exclude_holidays" field to the value that was provided on create.
+func (u *SLADefinitionUpsertBulk) UpdateExcludeHolidays() *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdateExcludeHolidays()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *SLADefinitionUpsertBulk) SetIsActive(v bool) *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *SLADefinitionUpsertBulk) UpdateIsActive() *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *SLADefinitionUpsertBulk) SetTenantID(v int) *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *SLADefinitionUpsertBulk) AddTenantID(v int) *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *SLADefinitionUpsertBulk) UpdateTenantID() *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *SLADefinitionUpsertBulk) SetCreatedAt(v time.Time) *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *SLADefinitionUpsertBulk) UpdateCreatedAt() *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *SLADefinitionUpsertBulk) SetUpdatedAt(v time.Time) *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *SLADefinitionUpsertBulk) UpdateUpdatedAt() *SLADefinitionUpsertBulk {
+	return u.Update(func(s *SLADefinitionUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *SLADefinitionUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the SLADefinitionCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for SLADefinitionCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *SLADefinitionUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent/toolinvocation"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -20,6 +21,7 @@ type ConversationCreate struct {
 	config
 	mutation *ConversationMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetCreatedAt sets the "created_at" field.
@@ -187,6 +189,7 @@ func (_c *ConversationCreate) createSpec() (*Conversation, *sqlgraph.CreateSpec)
 		_node = &Conversation{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(conversation.Table, sqlgraph.NewFieldSpec(conversation.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(conversation.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
@@ -238,11 +241,290 @@ func (_c *ConversationCreate) createSpec() (*Conversation, *sqlgraph.CreateSpec)
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.Conversation.Create().
+//		SetCreatedAt(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ConversationUpsert) {
+//			SetCreatedAt(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ConversationCreate) OnConflict(opts ...sql.ConflictOption) *ConversationUpsertOne {
+	_c.conflict = opts
+	return &ConversationUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.Conversation.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ConversationCreate) OnConflictColumns(columns ...string) *ConversationUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ConversationUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ConversationUpsertOne is the builder for "upsert"-ing
+	//  one Conversation node.
+	ConversationUpsertOne struct {
+		create *ConversationCreate
+	}
+
+	// ConversationUpsert is the "OnConflict" setter.
+	ConversationUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ConversationUpsert) SetCreatedAt(v time.Time) *ConversationUpsert {
+	u.Set(conversation.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ConversationUpsert) UpdateCreatedAt() *ConversationUpsert {
+	u.SetExcluded(conversation.FieldCreatedAt)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ConversationUpsert) SetTenantID(v int) *ConversationUpsert {
+	u.Set(conversation.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ConversationUpsert) UpdateTenantID() *ConversationUpsert {
+	u.SetExcluded(conversation.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ConversationUpsert) AddTenantID(v int) *ConversationUpsert {
+	u.Add(conversation.FieldTenantID, v)
+	return u
+}
+
+// ClearTenantID clears the value of the "tenant_id" field.
+func (u *ConversationUpsert) ClearTenantID() *ConversationUpsert {
+	u.SetNull(conversation.FieldTenantID)
+	return u
+}
+
+// SetUserID sets the "user_id" field.
+func (u *ConversationUpsert) SetUserID(v int) *ConversationUpsert {
+	u.Set(conversation.FieldUserID, v)
+	return u
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *ConversationUpsert) UpdateUserID() *ConversationUpsert {
+	u.SetExcluded(conversation.FieldUserID)
+	return u
+}
+
+// AddUserID adds v to the "user_id" field.
+func (u *ConversationUpsert) AddUserID(v int) *ConversationUpsert {
+	u.Add(conversation.FieldUserID, v)
+	return u
+}
+
+// ClearUserID clears the value of the "user_id" field.
+func (u *ConversationUpsert) ClearUserID() *ConversationUpsert {
+	u.SetNull(conversation.FieldUserID)
+	return u
+}
+
+// SetTitle sets the "title" field.
+func (u *ConversationUpsert) SetTitle(v string) *ConversationUpsert {
+	u.Set(conversation.FieldTitle, v)
+	return u
+}
+
+// UpdateTitle sets the "title" field to the value that was provided on create.
+func (u *ConversationUpsert) UpdateTitle() *ConversationUpsert {
+	u.SetExcluded(conversation.FieldTitle)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.Conversation.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ConversationUpsertOne) UpdateNewValues() *ConversationUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.Conversation.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ConversationUpsertOne) Ignore() *ConversationUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ConversationUpsertOne) DoNothing() *ConversationUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ConversationCreate.OnConflict
+// documentation for more info.
+func (u *ConversationUpsertOne) Update(set func(*ConversationUpsert)) *ConversationUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ConversationUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ConversationUpsertOne) SetCreatedAt(v time.Time) *ConversationUpsertOne {
+	return u.Update(func(s *ConversationUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ConversationUpsertOne) UpdateCreatedAt() *ConversationUpsertOne {
+	return u.Update(func(s *ConversationUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ConversationUpsertOne) SetTenantID(v int) *ConversationUpsertOne {
+	return u.Update(func(s *ConversationUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ConversationUpsertOne) AddTenantID(v int) *ConversationUpsertOne {
+	return u.Update(func(s *ConversationUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ConversationUpsertOne) UpdateTenantID() *ConversationUpsertOne {
+	return u.Update(func(s *ConversationUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// ClearTenantID clears the value of the "tenant_id" field.
+func (u *ConversationUpsertOne) ClearTenantID() *ConversationUpsertOne {
+	return u.Update(func(s *ConversationUpsert) {
+		s.ClearTenantID()
+	})
+}
+
+// SetUserID sets the "user_id" field.
+func (u *ConversationUpsertOne) SetUserID(v int) *ConversationUpsertOne {
+	return u.Update(func(s *ConversationUpsert) {
+		s.SetUserID(v)
+	})
+}
+
+// AddUserID adds v to the "user_id" field.
+func (u *ConversationUpsertOne) AddUserID(v int) *ConversationUpsertOne {
+	return u.Update(func(s *ConversationUpsert) {
+		s.AddUserID(v)
+	})
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *ConversationUpsertOne) UpdateUserID() *ConversationUpsertOne {
+	return u.Update(func(s *ConversationUpsert) {
+		s.UpdateUserID()
+	})
+}
+
+// ClearUserID clears the value of the "user_id" field.
+func (u *ConversationUpsertOne) ClearUserID() *ConversationUpsertOne {
+	return u.Update(func(s *ConversationUpsert) {
+		s.ClearUserID()
+	})
+}
+
+// SetTitle sets the "title" field.
+func (u *ConversationUpsertOne) SetTitle(v string) *ConversationUpsertOne {
+	return u.Update(func(s *ConversationUpsert) {
+		s.SetTitle(v)
+	})
+}
+
+// UpdateTitle sets the "title" field to the value that was provided on create.
+func (u *ConversationUpsertOne) UpdateTitle() *ConversationUpsertOne {
+	return u.Update(func(s *ConversationUpsert) {
+		s.UpdateTitle()
+	})
+}
+
+// Exec executes the query.
+func (u *ConversationUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ConversationCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ConversationUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ConversationUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ConversationUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ConversationCreateBulk is the builder for creating many Conversation entities in bulk.
 type ConversationCreateBulk struct {
 	config
 	err      error
 	builders []*ConversationCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the Conversation entities in the database.
@@ -272,6 +554,7 @@ func (_c *ConversationCreateBulk) Save(ctx context.Context) ([]*Conversation, er
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -322,6 +605,194 @@ func (_c *ConversationCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ConversationCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.Conversation.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ConversationUpsert) {
+//			SetCreatedAt(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ConversationCreateBulk) OnConflict(opts ...sql.ConflictOption) *ConversationUpsertBulk {
+	_c.conflict = opts
+	return &ConversationUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.Conversation.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ConversationCreateBulk) OnConflictColumns(columns ...string) *ConversationUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ConversationUpsertBulk{
+		create: _c,
+	}
+}
+
+// ConversationUpsertBulk is the builder for "upsert"-ing
+// a bulk of Conversation nodes.
+type ConversationUpsertBulk struct {
+	create *ConversationCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.Conversation.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ConversationUpsertBulk) UpdateNewValues() *ConversationUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.Conversation.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ConversationUpsertBulk) Ignore() *ConversationUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ConversationUpsertBulk) DoNothing() *ConversationUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ConversationCreateBulk.OnConflict
+// documentation for more info.
+func (u *ConversationUpsertBulk) Update(set func(*ConversationUpsert)) *ConversationUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ConversationUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ConversationUpsertBulk) SetCreatedAt(v time.Time) *ConversationUpsertBulk {
+	return u.Update(func(s *ConversationUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ConversationUpsertBulk) UpdateCreatedAt() *ConversationUpsertBulk {
+	return u.Update(func(s *ConversationUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ConversationUpsertBulk) SetTenantID(v int) *ConversationUpsertBulk {
+	return u.Update(func(s *ConversationUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ConversationUpsertBulk) AddTenantID(v int) *ConversationUpsertBulk {
+	return u.Update(func(s *ConversationUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ConversationUpsertBulk) UpdateTenantID() *ConversationUpsertBulk {
+	return u.Update(func(s *ConversationUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// ClearTenantID clears the value of the "tenant_id" field.
+func (u *ConversationUpsertBulk) ClearTenantID() *ConversationUpsertBulk {
+	return u.Update(func(s *ConversationUpsert) {
+		s.ClearTenantID()
+	})
+}
+
+// SetUserID sets the "user_id" field.
+func (u *ConversationUpsertBulk) SetUserID(v int) *ConversationUpsertBulk {
+	return u.Update(func(s *ConversationUpsert) {
+		s.SetUserID(v)
+	})
+}
+
+// AddUserID adds v to the "user_id" field.
+func (u *ConversationUpsertBulk) AddUserID(v int) *ConversationUpsertBulk {
+	return u.Update(func(s *ConversationUpsert) {
+		s.AddUserID(v)
+	})
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *ConversationUpsertBulk) UpdateUserID() *ConversationUpsertBulk {
+	return u.Update(func(s *ConversationUpsert) {
+		s.UpdateUserID()
+	})
+}
+
+// ClearUserID clears the value of the "user_id" field.
+func (u *ConversationUpsertBulk) ClearUserID() *ConversationUpsertBulk {
+	return u.Update(func(s *ConversationUpsert) {
+		s.ClearUserID()
+	})
+}
+
+// SetTitle sets the "title" field.
+func (u *ConversationUpsertBulk) SetTitle(v string) *ConversationUpsertBulk {
+	return u.Update(func(s *ConversationUpsert) {
+		s.SetTitle(v)
+	})
+}
+
+// UpdateTitle sets the "title" field to the value that was provided on create.
+func (u *ConversationUpsertBulk) UpdateTitle() *ConversationUpsertBulk {
+	return u.Update(func(s *ConversationUpsert) {
+		s.UpdateTitle()
+	})
+}
+
+// Exec executes the query.
+func (u *ConversationUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ConversationCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ConversationCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ConversationUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

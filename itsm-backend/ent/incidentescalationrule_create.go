@@ -9,6 +9,7 @@ import (
 	"itsm-backend/ent/incidentescalationrule"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -18,6 +19,7 @@ type IncidentEscalationRuleCreate struct {
 	config
 	mutation *IncidentEscalationRuleMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetName sets the "name" field.
@@ -364,6 +366,7 @@ func (_c *IncidentEscalationRuleCreate) createSpec() (*IncidentEscalationRule, *
 		_node = &IncidentEscalationRule{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(incidentescalationrule.Table, sqlgraph.NewFieldSpec(incidentescalationrule.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(incidentescalationrule.FieldName, field.TypeString, value)
 		_node.Name = value
@@ -439,11 +442,758 @@ func (_c *IncidentEscalationRuleCreate) createSpec() (*IncidentEscalationRule, *
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.IncidentEscalationRule.Create().
+//		SetName(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.IncidentEscalationRuleUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *IncidentEscalationRuleCreate) OnConflict(opts ...sql.ConflictOption) *IncidentEscalationRuleUpsertOne {
+	_c.conflict = opts
+	return &IncidentEscalationRuleUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.IncidentEscalationRule.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *IncidentEscalationRuleCreate) OnConflictColumns(columns ...string) *IncidentEscalationRuleUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &IncidentEscalationRuleUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// IncidentEscalationRuleUpsertOne is the builder for "upsert"-ing
+	//  one IncidentEscalationRule node.
+	IncidentEscalationRuleUpsertOne struct {
+		create *IncidentEscalationRuleCreate
+	}
+
+	// IncidentEscalationRuleUpsert is the "OnConflict" setter.
+	IncidentEscalationRuleUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetName sets the "name" field.
+func (u *IncidentEscalationRuleUpsert) SetName(v string) *IncidentEscalationRuleUpsert {
+	u.Set(incidentescalationrule.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsert) UpdateName() *IncidentEscalationRuleUpsert {
+	u.SetExcluded(incidentescalationrule.FieldName)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *IncidentEscalationRuleUpsert) SetDescription(v string) *IncidentEscalationRuleUpsert {
+	u.Set(incidentescalationrule.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsert) UpdateDescription() *IncidentEscalationRuleUpsert {
+	u.SetExcluded(incidentescalationrule.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *IncidentEscalationRuleUpsert) ClearDescription() *IncidentEscalationRuleUpsert {
+	u.SetNull(incidentescalationrule.FieldDescription)
+	return u
+}
+
+// SetTriggerType sets the "trigger_type" field.
+func (u *IncidentEscalationRuleUpsert) SetTriggerType(v string) *IncidentEscalationRuleUpsert {
+	u.Set(incidentescalationrule.FieldTriggerType, v)
+	return u
+}
+
+// UpdateTriggerType sets the "trigger_type" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsert) UpdateTriggerType() *IncidentEscalationRuleUpsert {
+	u.SetExcluded(incidentescalationrule.FieldTriggerType)
+	return u
+}
+
+// SetEscalationLevel sets the "escalation_level" field.
+func (u *IncidentEscalationRuleUpsert) SetEscalationLevel(v int) *IncidentEscalationRuleUpsert {
+	u.Set(incidentescalationrule.FieldEscalationLevel, v)
+	return u
+}
+
+// UpdateEscalationLevel sets the "escalation_level" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsert) UpdateEscalationLevel() *IncidentEscalationRuleUpsert {
+	u.SetExcluded(incidentescalationrule.FieldEscalationLevel)
+	return u
+}
+
+// AddEscalationLevel adds v to the "escalation_level" field.
+func (u *IncidentEscalationRuleUpsert) AddEscalationLevel(v int) *IncidentEscalationRuleUpsert {
+	u.Add(incidentescalationrule.FieldEscalationLevel, v)
+	return u
+}
+
+// SetTriggerMinutes sets the "trigger_minutes" field.
+func (u *IncidentEscalationRuleUpsert) SetTriggerMinutes(v int) *IncidentEscalationRuleUpsert {
+	u.Set(incidentescalationrule.FieldTriggerMinutes, v)
+	return u
+}
+
+// UpdateTriggerMinutes sets the "trigger_minutes" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsert) UpdateTriggerMinutes() *IncidentEscalationRuleUpsert {
+	u.SetExcluded(incidentescalationrule.FieldTriggerMinutes)
+	return u
+}
+
+// AddTriggerMinutes adds v to the "trigger_minutes" field.
+func (u *IncidentEscalationRuleUpsert) AddTriggerMinutes(v int) *IncidentEscalationRuleUpsert {
+	u.Add(incidentescalationrule.FieldTriggerMinutes, v)
+	return u
+}
+
+// SetFromStatus sets the "from_status" field.
+func (u *IncidentEscalationRuleUpsert) SetFromStatus(v string) *IncidentEscalationRuleUpsert {
+	u.Set(incidentescalationrule.FieldFromStatus, v)
+	return u
+}
+
+// UpdateFromStatus sets the "from_status" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsert) UpdateFromStatus() *IncidentEscalationRuleUpsert {
+	u.SetExcluded(incidentescalationrule.FieldFromStatus)
+	return u
+}
+
+// ClearFromStatus clears the value of the "from_status" field.
+func (u *IncidentEscalationRuleUpsert) ClearFromStatus() *IncidentEscalationRuleUpsert {
+	u.SetNull(incidentescalationrule.FieldFromStatus)
+	return u
+}
+
+// SetToStatus sets the "to_status" field.
+func (u *IncidentEscalationRuleUpsert) SetToStatus(v string) *IncidentEscalationRuleUpsert {
+	u.Set(incidentescalationrule.FieldToStatus, v)
+	return u
+}
+
+// UpdateToStatus sets the "to_status" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsert) UpdateToStatus() *IncidentEscalationRuleUpsert {
+	u.SetExcluded(incidentescalationrule.FieldToStatus)
+	return u
+}
+
+// ClearToStatus clears the value of the "to_status" field.
+func (u *IncidentEscalationRuleUpsert) ClearToStatus() *IncidentEscalationRuleUpsert {
+	u.SetNull(incidentescalationrule.FieldToStatus)
+	return u
+}
+
+// SetTargetAssigneeType sets the "target_assignee_type" field.
+func (u *IncidentEscalationRuleUpsert) SetTargetAssigneeType(v string) *IncidentEscalationRuleUpsert {
+	u.Set(incidentescalationrule.FieldTargetAssigneeType, v)
+	return u
+}
+
+// UpdateTargetAssigneeType sets the "target_assignee_type" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsert) UpdateTargetAssigneeType() *IncidentEscalationRuleUpsert {
+	u.SetExcluded(incidentescalationrule.FieldTargetAssigneeType)
+	return u
+}
+
+// SetTargetAssigneeID sets the "target_assignee_id" field.
+func (u *IncidentEscalationRuleUpsert) SetTargetAssigneeID(v int) *IncidentEscalationRuleUpsert {
+	u.Set(incidentescalationrule.FieldTargetAssigneeID, v)
+	return u
+}
+
+// UpdateTargetAssigneeID sets the "target_assignee_id" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsert) UpdateTargetAssigneeID() *IncidentEscalationRuleUpsert {
+	u.SetExcluded(incidentescalationrule.FieldTargetAssigneeID)
+	return u
+}
+
+// AddTargetAssigneeID adds v to the "target_assignee_id" field.
+func (u *IncidentEscalationRuleUpsert) AddTargetAssigneeID(v int) *IncidentEscalationRuleUpsert {
+	u.Add(incidentescalationrule.FieldTargetAssigneeID, v)
+	return u
+}
+
+// ClearTargetAssigneeID clears the value of the "target_assignee_id" field.
+func (u *IncidentEscalationRuleUpsert) ClearTargetAssigneeID() *IncidentEscalationRuleUpsert {
+	u.SetNull(incidentescalationrule.FieldTargetAssigneeID)
+	return u
+}
+
+// SetTargetGroup sets the "target_group" field.
+func (u *IncidentEscalationRuleUpsert) SetTargetGroup(v string) *IncidentEscalationRuleUpsert {
+	u.Set(incidentescalationrule.FieldTargetGroup, v)
+	return u
+}
+
+// UpdateTargetGroup sets the "target_group" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsert) UpdateTargetGroup() *IncidentEscalationRuleUpsert {
+	u.SetExcluded(incidentescalationrule.FieldTargetGroup)
+	return u
+}
+
+// ClearTargetGroup clears the value of the "target_group" field.
+func (u *IncidentEscalationRuleUpsert) ClearTargetGroup() *IncidentEscalationRuleUpsert {
+	u.SetNull(incidentescalationrule.FieldTargetGroup)
+	return u
+}
+
+// SetAutoEscalate sets the "auto_escalate" field.
+func (u *IncidentEscalationRuleUpsert) SetAutoEscalate(v bool) *IncidentEscalationRuleUpsert {
+	u.Set(incidentescalationrule.FieldAutoEscalate, v)
+	return u
+}
+
+// UpdateAutoEscalate sets the "auto_escalate" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsert) UpdateAutoEscalate() *IncidentEscalationRuleUpsert {
+	u.SetExcluded(incidentescalationrule.FieldAutoEscalate)
+	return u
+}
+
+// SetNotificationConfig sets the "notification_config" field.
+func (u *IncidentEscalationRuleUpsert) SetNotificationConfig(v map[string]interface{}) *IncidentEscalationRuleUpsert {
+	u.Set(incidentescalationrule.FieldNotificationConfig, v)
+	return u
+}
+
+// UpdateNotificationConfig sets the "notification_config" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsert) UpdateNotificationConfig() *IncidentEscalationRuleUpsert {
+	u.SetExcluded(incidentescalationrule.FieldNotificationConfig)
+	return u
+}
+
+// ClearNotificationConfig clears the value of the "notification_config" field.
+func (u *IncidentEscalationRuleUpsert) ClearNotificationConfig() *IncidentEscalationRuleUpsert {
+	u.SetNull(incidentescalationrule.FieldNotificationConfig)
+	return u
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *IncidentEscalationRuleUpsert) SetIsActive(v bool) *IncidentEscalationRuleUpsert {
+	u.Set(incidentescalationrule.FieldIsActive, v)
+	return u
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsert) UpdateIsActive() *IncidentEscalationRuleUpsert {
+	u.SetExcluded(incidentescalationrule.FieldIsActive)
+	return u
+}
+
+// SetPriorityMatch sets the "priority_match" field.
+func (u *IncidentEscalationRuleUpsert) SetPriorityMatch(v string) *IncidentEscalationRuleUpsert {
+	u.Set(incidentescalationrule.FieldPriorityMatch, v)
+	return u
+}
+
+// UpdatePriorityMatch sets the "priority_match" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsert) UpdatePriorityMatch() *IncidentEscalationRuleUpsert {
+	u.SetExcluded(incidentescalationrule.FieldPriorityMatch)
+	return u
+}
+
+// ClearPriorityMatch clears the value of the "priority_match" field.
+func (u *IncidentEscalationRuleUpsert) ClearPriorityMatch() *IncidentEscalationRuleUpsert {
+	u.SetNull(incidentescalationrule.FieldPriorityMatch)
+	return u
+}
+
+// SetCategoryMatch sets the "category_match" field.
+func (u *IncidentEscalationRuleUpsert) SetCategoryMatch(v string) *IncidentEscalationRuleUpsert {
+	u.Set(incidentescalationrule.FieldCategoryMatch, v)
+	return u
+}
+
+// UpdateCategoryMatch sets the "category_match" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsert) UpdateCategoryMatch() *IncidentEscalationRuleUpsert {
+	u.SetExcluded(incidentescalationrule.FieldCategoryMatch)
+	return u
+}
+
+// ClearCategoryMatch clears the value of the "category_match" field.
+func (u *IncidentEscalationRuleUpsert) ClearCategoryMatch() *IncidentEscalationRuleUpsert {
+	u.SetNull(incidentescalationrule.FieldCategoryMatch)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *IncidentEscalationRuleUpsert) SetTenantID(v int) *IncidentEscalationRuleUpsert {
+	u.Set(incidentescalationrule.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsert) UpdateTenantID() *IncidentEscalationRuleUpsert {
+	u.SetExcluded(incidentescalationrule.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *IncidentEscalationRuleUpsert) AddTenantID(v int) *IncidentEscalationRuleUpsert {
+	u.Add(incidentescalationrule.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *IncidentEscalationRuleUpsert) SetCreatedAt(v time.Time) *IncidentEscalationRuleUpsert {
+	u.Set(incidentescalationrule.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsert) UpdateCreatedAt() *IncidentEscalationRuleUpsert {
+	u.SetExcluded(incidentescalationrule.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *IncidentEscalationRuleUpsert) SetUpdatedAt(v time.Time) *IncidentEscalationRuleUpsert {
+	u.Set(incidentescalationrule.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsert) UpdateUpdatedAt() *IncidentEscalationRuleUpsert {
+	u.SetExcluded(incidentescalationrule.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.IncidentEscalationRule.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *IncidentEscalationRuleUpsertOne) UpdateNewValues() *IncidentEscalationRuleUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.IncidentEscalationRule.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *IncidentEscalationRuleUpsertOne) Ignore() *IncidentEscalationRuleUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *IncidentEscalationRuleUpsertOne) DoNothing() *IncidentEscalationRuleUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the IncidentEscalationRuleCreate.OnConflict
+// documentation for more info.
+func (u *IncidentEscalationRuleUpsertOne) Update(set func(*IncidentEscalationRuleUpsert)) *IncidentEscalationRuleUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&IncidentEscalationRuleUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *IncidentEscalationRuleUpsertOne) SetName(v string) *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertOne) UpdateName() *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *IncidentEscalationRuleUpsertOne) SetDescription(v string) *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertOne) UpdateDescription() *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *IncidentEscalationRuleUpsertOne) ClearDescription() *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetTriggerType sets the "trigger_type" field.
+func (u *IncidentEscalationRuleUpsertOne) SetTriggerType(v string) *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetTriggerType(v)
+	})
+}
+
+// UpdateTriggerType sets the "trigger_type" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertOne) UpdateTriggerType() *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateTriggerType()
+	})
+}
+
+// SetEscalationLevel sets the "escalation_level" field.
+func (u *IncidentEscalationRuleUpsertOne) SetEscalationLevel(v int) *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetEscalationLevel(v)
+	})
+}
+
+// AddEscalationLevel adds v to the "escalation_level" field.
+func (u *IncidentEscalationRuleUpsertOne) AddEscalationLevel(v int) *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.AddEscalationLevel(v)
+	})
+}
+
+// UpdateEscalationLevel sets the "escalation_level" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertOne) UpdateEscalationLevel() *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateEscalationLevel()
+	})
+}
+
+// SetTriggerMinutes sets the "trigger_minutes" field.
+func (u *IncidentEscalationRuleUpsertOne) SetTriggerMinutes(v int) *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetTriggerMinutes(v)
+	})
+}
+
+// AddTriggerMinutes adds v to the "trigger_minutes" field.
+func (u *IncidentEscalationRuleUpsertOne) AddTriggerMinutes(v int) *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.AddTriggerMinutes(v)
+	})
+}
+
+// UpdateTriggerMinutes sets the "trigger_minutes" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertOne) UpdateTriggerMinutes() *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateTriggerMinutes()
+	})
+}
+
+// SetFromStatus sets the "from_status" field.
+func (u *IncidentEscalationRuleUpsertOne) SetFromStatus(v string) *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetFromStatus(v)
+	})
+}
+
+// UpdateFromStatus sets the "from_status" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertOne) UpdateFromStatus() *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateFromStatus()
+	})
+}
+
+// ClearFromStatus clears the value of the "from_status" field.
+func (u *IncidentEscalationRuleUpsertOne) ClearFromStatus() *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.ClearFromStatus()
+	})
+}
+
+// SetToStatus sets the "to_status" field.
+func (u *IncidentEscalationRuleUpsertOne) SetToStatus(v string) *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetToStatus(v)
+	})
+}
+
+// UpdateToStatus sets the "to_status" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertOne) UpdateToStatus() *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateToStatus()
+	})
+}
+
+// ClearToStatus clears the value of the "to_status" field.
+func (u *IncidentEscalationRuleUpsertOne) ClearToStatus() *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.ClearToStatus()
+	})
+}
+
+// SetTargetAssigneeType sets the "target_assignee_type" field.
+func (u *IncidentEscalationRuleUpsertOne) SetTargetAssigneeType(v string) *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetTargetAssigneeType(v)
+	})
+}
+
+// UpdateTargetAssigneeType sets the "target_assignee_type" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertOne) UpdateTargetAssigneeType() *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateTargetAssigneeType()
+	})
+}
+
+// SetTargetAssigneeID sets the "target_assignee_id" field.
+func (u *IncidentEscalationRuleUpsertOne) SetTargetAssigneeID(v int) *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetTargetAssigneeID(v)
+	})
+}
+
+// AddTargetAssigneeID adds v to the "target_assignee_id" field.
+func (u *IncidentEscalationRuleUpsertOne) AddTargetAssigneeID(v int) *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.AddTargetAssigneeID(v)
+	})
+}
+
+// UpdateTargetAssigneeID sets the "target_assignee_id" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertOne) UpdateTargetAssigneeID() *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateTargetAssigneeID()
+	})
+}
+
+// ClearTargetAssigneeID clears the value of the "target_assignee_id" field.
+func (u *IncidentEscalationRuleUpsertOne) ClearTargetAssigneeID() *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.ClearTargetAssigneeID()
+	})
+}
+
+// SetTargetGroup sets the "target_group" field.
+func (u *IncidentEscalationRuleUpsertOne) SetTargetGroup(v string) *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetTargetGroup(v)
+	})
+}
+
+// UpdateTargetGroup sets the "target_group" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertOne) UpdateTargetGroup() *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateTargetGroup()
+	})
+}
+
+// ClearTargetGroup clears the value of the "target_group" field.
+func (u *IncidentEscalationRuleUpsertOne) ClearTargetGroup() *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.ClearTargetGroup()
+	})
+}
+
+// SetAutoEscalate sets the "auto_escalate" field.
+func (u *IncidentEscalationRuleUpsertOne) SetAutoEscalate(v bool) *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetAutoEscalate(v)
+	})
+}
+
+// UpdateAutoEscalate sets the "auto_escalate" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertOne) UpdateAutoEscalate() *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateAutoEscalate()
+	})
+}
+
+// SetNotificationConfig sets the "notification_config" field.
+func (u *IncidentEscalationRuleUpsertOne) SetNotificationConfig(v map[string]interface{}) *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetNotificationConfig(v)
+	})
+}
+
+// UpdateNotificationConfig sets the "notification_config" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertOne) UpdateNotificationConfig() *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateNotificationConfig()
+	})
+}
+
+// ClearNotificationConfig clears the value of the "notification_config" field.
+func (u *IncidentEscalationRuleUpsertOne) ClearNotificationConfig() *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.ClearNotificationConfig()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *IncidentEscalationRuleUpsertOne) SetIsActive(v bool) *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertOne) UpdateIsActive() *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetPriorityMatch sets the "priority_match" field.
+func (u *IncidentEscalationRuleUpsertOne) SetPriorityMatch(v string) *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetPriorityMatch(v)
+	})
+}
+
+// UpdatePriorityMatch sets the "priority_match" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertOne) UpdatePriorityMatch() *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdatePriorityMatch()
+	})
+}
+
+// ClearPriorityMatch clears the value of the "priority_match" field.
+func (u *IncidentEscalationRuleUpsertOne) ClearPriorityMatch() *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.ClearPriorityMatch()
+	})
+}
+
+// SetCategoryMatch sets the "category_match" field.
+func (u *IncidentEscalationRuleUpsertOne) SetCategoryMatch(v string) *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetCategoryMatch(v)
+	})
+}
+
+// UpdateCategoryMatch sets the "category_match" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertOne) UpdateCategoryMatch() *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateCategoryMatch()
+	})
+}
+
+// ClearCategoryMatch clears the value of the "category_match" field.
+func (u *IncidentEscalationRuleUpsertOne) ClearCategoryMatch() *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.ClearCategoryMatch()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *IncidentEscalationRuleUpsertOne) SetTenantID(v int) *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *IncidentEscalationRuleUpsertOne) AddTenantID(v int) *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertOne) UpdateTenantID() *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *IncidentEscalationRuleUpsertOne) SetCreatedAt(v time.Time) *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertOne) UpdateCreatedAt() *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *IncidentEscalationRuleUpsertOne) SetUpdatedAt(v time.Time) *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertOne) UpdateUpdatedAt() *IncidentEscalationRuleUpsertOne {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *IncidentEscalationRuleUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for IncidentEscalationRuleCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *IncidentEscalationRuleUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *IncidentEscalationRuleUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *IncidentEscalationRuleUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // IncidentEscalationRuleCreateBulk is the builder for creating many IncidentEscalationRule entities in bulk.
 type IncidentEscalationRuleCreateBulk struct {
 	config
 	err      error
 	builders []*IncidentEscalationRuleCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the IncidentEscalationRule entities in the database.
@@ -473,6 +1223,7 @@ func (_c *IncidentEscalationRuleCreateBulk) Save(ctx context.Context) ([]*Incide
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -523,6 +1274,446 @@ func (_c *IncidentEscalationRuleCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *IncidentEscalationRuleCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.IncidentEscalationRule.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.IncidentEscalationRuleUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *IncidentEscalationRuleCreateBulk) OnConflict(opts ...sql.ConflictOption) *IncidentEscalationRuleUpsertBulk {
+	_c.conflict = opts
+	return &IncidentEscalationRuleUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.IncidentEscalationRule.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *IncidentEscalationRuleCreateBulk) OnConflictColumns(columns ...string) *IncidentEscalationRuleUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &IncidentEscalationRuleUpsertBulk{
+		create: _c,
+	}
+}
+
+// IncidentEscalationRuleUpsertBulk is the builder for "upsert"-ing
+// a bulk of IncidentEscalationRule nodes.
+type IncidentEscalationRuleUpsertBulk struct {
+	create *IncidentEscalationRuleCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.IncidentEscalationRule.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *IncidentEscalationRuleUpsertBulk) UpdateNewValues() *IncidentEscalationRuleUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.IncidentEscalationRule.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *IncidentEscalationRuleUpsertBulk) Ignore() *IncidentEscalationRuleUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *IncidentEscalationRuleUpsertBulk) DoNothing() *IncidentEscalationRuleUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the IncidentEscalationRuleCreateBulk.OnConflict
+// documentation for more info.
+func (u *IncidentEscalationRuleUpsertBulk) Update(set func(*IncidentEscalationRuleUpsert)) *IncidentEscalationRuleUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&IncidentEscalationRuleUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *IncidentEscalationRuleUpsertBulk) SetName(v string) *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertBulk) UpdateName() *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *IncidentEscalationRuleUpsertBulk) SetDescription(v string) *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertBulk) UpdateDescription() *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *IncidentEscalationRuleUpsertBulk) ClearDescription() *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetTriggerType sets the "trigger_type" field.
+func (u *IncidentEscalationRuleUpsertBulk) SetTriggerType(v string) *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetTriggerType(v)
+	})
+}
+
+// UpdateTriggerType sets the "trigger_type" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertBulk) UpdateTriggerType() *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateTriggerType()
+	})
+}
+
+// SetEscalationLevel sets the "escalation_level" field.
+func (u *IncidentEscalationRuleUpsertBulk) SetEscalationLevel(v int) *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetEscalationLevel(v)
+	})
+}
+
+// AddEscalationLevel adds v to the "escalation_level" field.
+func (u *IncidentEscalationRuleUpsertBulk) AddEscalationLevel(v int) *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.AddEscalationLevel(v)
+	})
+}
+
+// UpdateEscalationLevel sets the "escalation_level" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertBulk) UpdateEscalationLevel() *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateEscalationLevel()
+	})
+}
+
+// SetTriggerMinutes sets the "trigger_minutes" field.
+func (u *IncidentEscalationRuleUpsertBulk) SetTriggerMinutes(v int) *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetTriggerMinutes(v)
+	})
+}
+
+// AddTriggerMinutes adds v to the "trigger_minutes" field.
+func (u *IncidentEscalationRuleUpsertBulk) AddTriggerMinutes(v int) *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.AddTriggerMinutes(v)
+	})
+}
+
+// UpdateTriggerMinutes sets the "trigger_minutes" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertBulk) UpdateTriggerMinutes() *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateTriggerMinutes()
+	})
+}
+
+// SetFromStatus sets the "from_status" field.
+func (u *IncidentEscalationRuleUpsertBulk) SetFromStatus(v string) *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetFromStatus(v)
+	})
+}
+
+// UpdateFromStatus sets the "from_status" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertBulk) UpdateFromStatus() *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateFromStatus()
+	})
+}
+
+// ClearFromStatus clears the value of the "from_status" field.
+func (u *IncidentEscalationRuleUpsertBulk) ClearFromStatus() *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.ClearFromStatus()
+	})
+}
+
+// SetToStatus sets the "to_status" field.
+func (u *IncidentEscalationRuleUpsertBulk) SetToStatus(v string) *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetToStatus(v)
+	})
+}
+
+// UpdateToStatus sets the "to_status" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertBulk) UpdateToStatus() *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateToStatus()
+	})
+}
+
+// ClearToStatus clears the value of the "to_status" field.
+func (u *IncidentEscalationRuleUpsertBulk) ClearToStatus() *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.ClearToStatus()
+	})
+}
+
+// SetTargetAssigneeType sets the "target_assignee_type" field.
+func (u *IncidentEscalationRuleUpsertBulk) SetTargetAssigneeType(v string) *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetTargetAssigneeType(v)
+	})
+}
+
+// UpdateTargetAssigneeType sets the "target_assignee_type" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertBulk) UpdateTargetAssigneeType() *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateTargetAssigneeType()
+	})
+}
+
+// SetTargetAssigneeID sets the "target_assignee_id" field.
+func (u *IncidentEscalationRuleUpsertBulk) SetTargetAssigneeID(v int) *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetTargetAssigneeID(v)
+	})
+}
+
+// AddTargetAssigneeID adds v to the "target_assignee_id" field.
+func (u *IncidentEscalationRuleUpsertBulk) AddTargetAssigneeID(v int) *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.AddTargetAssigneeID(v)
+	})
+}
+
+// UpdateTargetAssigneeID sets the "target_assignee_id" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertBulk) UpdateTargetAssigneeID() *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateTargetAssigneeID()
+	})
+}
+
+// ClearTargetAssigneeID clears the value of the "target_assignee_id" field.
+func (u *IncidentEscalationRuleUpsertBulk) ClearTargetAssigneeID() *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.ClearTargetAssigneeID()
+	})
+}
+
+// SetTargetGroup sets the "target_group" field.
+func (u *IncidentEscalationRuleUpsertBulk) SetTargetGroup(v string) *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetTargetGroup(v)
+	})
+}
+
+// UpdateTargetGroup sets the "target_group" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertBulk) UpdateTargetGroup() *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateTargetGroup()
+	})
+}
+
+// ClearTargetGroup clears the value of the "target_group" field.
+func (u *IncidentEscalationRuleUpsertBulk) ClearTargetGroup() *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.ClearTargetGroup()
+	})
+}
+
+// SetAutoEscalate sets the "auto_escalate" field.
+func (u *IncidentEscalationRuleUpsertBulk) SetAutoEscalate(v bool) *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetAutoEscalate(v)
+	})
+}
+
+// UpdateAutoEscalate sets the "auto_escalate" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertBulk) UpdateAutoEscalate() *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateAutoEscalate()
+	})
+}
+
+// SetNotificationConfig sets the "notification_config" field.
+func (u *IncidentEscalationRuleUpsertBulk) SetNotificationConfig(v map[string]interface{}) *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetNotificationConfig(v)
+	})
+}
+
+// UpdateNotificationConfig sets the "notification_config" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertBulk) UpdateNotificationConfig() *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateNotificationConfig()
+	})
+}
+
+// ClearNotificationConfig clears the value of the "notification_config" field.
+func (u *IncidentEscalationRuleUpsertBulk) ClearNotificationConfig() *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.ClearNotificationConfig()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *IncidentEscalationRuleUpsertBulk) SetIsActive(v bool) *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertBulk) UpdateIsActive() *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetPriorityMatch sets the "priority_match" field.
+func (u *IncidentEscalationRuleUpsertBulk) SetPriorityMatch(v string) *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetPriorityMatch(v)
+	})
+}
+
+// UpdatePriorityMatch sets the "priority_match" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertBulk) UpdatePriorityMatch() *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdatePriorityMatch()
+	})
+}
+
+// ClearPriorityMatch clears the value of the "priority_match" field.
+func (u *IncidentEscalationRuleUpsertBulk) ClearPriorityMatch() *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.ClearPriorityMatch()
+	})
+}
+
+// SetCategoryMatch sets the "category_match" field.
+func (u *IncidentEscalationRuleUpsertBulk) SetCategoryMatch(v string) *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetCategoryMatch(v)
+	})
+}
+
+// UpdateCategoryMatch sets the "category_match" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertBulk) UpdateCategoryMatch() *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateCategoryMatch()
+	})
+}
+
+// ClearCategoryMatch clears the value of the "category_match" field.
+func (u *IncidentEscalationRuleUpsertBulk) ClearCategoryMatch() *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.ClearCategoryMatch()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *IncidentEscalationRuleUpsertBulk) SetTenantID(v int) *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *IncidentEscalationRuleUpsertBulk) AddTenantID(v int) *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertBulk) UpdateTenantID() *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *IncidentEscalationRuleUpsertBulk) SetCreatedAt(v time.Time) *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertBulk) UpdateCreatedAt() *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *IncidentEscalationRuleUpsertBulk) SetUpdatedAt(v time.Time) *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *IncidentEscalationRuleUpsertBulk) UpdateUpdatedAt() *IncidentEscalationRuleUpsertBulk {
+	return u.Update(func(s *IncidentEscalationRuleUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *IncidentEscalationRuleUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the IncidentEscalationRuleCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for IncidentEscalationRuleCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *IncidentEscalationRuleUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
