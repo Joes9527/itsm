@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **Canonical architecture & domain source**: [AGENTS.md](AGENTS.md) is the single authoritative source for product direction, system architecture, and the **Unified Work Item Domain Contract** — shared with Codex, which reads it automatically. Claude Code reads only this file automatically; AGENTS.md is not auto-loaded, so read it explicitly before any change touching domain models, cross-cutting architecture, or the WorkItem/professional-extension boundary. The sections in this file that overlap AGENTS.md are kept short by design — when architecture or domain rules change, update AGENTS.md first, then mirror the summary here in the same change.
+
 ## Project Overview
 
 ITSM (IT Service Management) system with a Go/Gin backend and Next.js/TypeScript frontend. Features include:
@@ -15,17 +17,7 @@ ITSM (IT Service Management) system with a Go/Gin backend and Next.js/TypeScript
 
 ## Product Direction
 
-This project is building an enterprise-grade, open-source, AI-Native ITSM platform for the China market. The long-term benchmark is ServiceNow-class process capability, but with lighter private deployment, stronger local enterprise integration, and open extensibility.
-
-Core product goals:
-
-- Cover complete ITIL v3/v4 service management workflows: ticket, incident, problem, change, release, service request, service catalog, SLA, knowledge, and CMDB.
-- Make workflow customization a first-class capability through BPMN, process binding, form/config templates, and auditable task execution.
-- Build AI into the service management lifecycle instead of adding a chatbot beside it: triage, summarization, knowledge retrieval, impact analysis, workflow recommendation, audit review, and controlled tool invocation.
-- Prepare for Feishu, WeCom, DingTalk, Webhook, connector marketplace, skill marketplace, plugin marketplace, and CLI-driven operations.
-- Support private deployment, SaaS, and SaaS + MSP modes without forking the core data model.
-
-When making architecture choices, prefer enterprise correctness, auditability, tenant isolation, and extensibility over quick feature-only shortcuts.
+Full statement: [AGENTS.md § Product Direction](AGENTS.md). Enterprise-grade, open-source, AI-Native ITSM platform for the China market — ServiceNow-class process capability, lighter private deployment, open extensibility; core coverage spans ITIL ticket/incident/problem/change/release/service-request/catalog/SLA/knowledge/CMDB, with BPMN-driven workflow customization, AI embedded in the lifecycle (not a bolt-on chatbot), and Feishu/WeCom/DingTalk/connector/skill/plugin/CLI surfaces. When making architecture choices, prefer enterprise correctness, auditability, tenant isolation, and extensibility over quick feature-only shortcuts.
 
 ## Current Product Stage
 
@@ -71,7 +63,9 @@ go run -tags create_user main.go
 ⚠️ `go run -tags migrate main.go` (or `go run -tags migrate .`) does **not** run incremental
 migrations — it runs `migrate_fresh.go`, which unconditionally does `DROP DATABASE IF EXISTS`
 and rebuilds from scratch. Running it against any database with real data (including a shared
-dev database) destroys it. It only exists for throwaway local resets.
+dev database) destroys it. It only exists for throwaway local resets. See
+[DEVELOPMENT_GUIDE.md § 开发环境拓扑](docs/DEVELOPMENT_GUIDE.md) for which physical host actually
+holds the shared dev database in the current multi-machine setup — it is not always your local machine.
 
 For actual incremental migrations, use `cmd/migrate` instead:
 
@@ -97,11 +91,7 @@ ADMIN_PASSWORD=admin123
 
 ### System Boundaries
 
-- **itsm-backend** is the source of truth for domain rules, permissions, workflow execution, tenant isolation, audit logs, and integration contracts.
-- **itsm-frontend** is the operator/admin/user experience layer. It should not duplicate business rules that belong in backend services.
-- **itsm-ai-service / guidance_sidecar / RAG services** provide AI assistance and retrieval. They must remain observable and fail safely.
-- **itsm-agent / itsm-skill / itsm-cli** are future-facing extension surfaces. Do not hard-code behavior into the core app if it clearly belongs in a connector, skill, or CLI operation.
-- **connector marketplace** integrations must go through lifecycle, health check, config, permission, and audit boundaries instead of ad hoc HTTP calls from controllers.
+Full statement: [AGENTS.md § System Architecture](AGENTS.md). Backend is the source of truth for domain rules, RBAC, tenant isolation, workflow execution, audit logs, and integration contracts — frontend must not duplicate business rules or infer authorization from UI state. AI service/RAG/connector/skill/CLI are extension surfaces that must go through established service, permission, tenant, audit, and event boundaries (lifecycle, health check, config, secret-masking) — never ad hoc calls from controllers.
 
 ### Backend Structure
 
@@ -143,11 +133,18 @@ All APIs return `{ code: number, message: string, data: any }`:
 
 ### Domain Ownership
 
-- Ticket, incident, problem, change, release, and service request are separate business domains. Reuse shared helpers, but do not collapse their lifecycle rules into one generic ticket abstraction unless the existing code already does so.
-- BPMN/process execution is the orchestration layer. Approval chains, service catalog fulfillment, SLA escalation, and AI suggestions should integrate through workflow/process records where possible.
-- CMDB is not an asset table. Preserve CI type, CI instance, relationship, topology, discovery source, impact analysis, and reconciliation concepts.
-- Knowledge/RAG features must keep source attribution, versioning, and permission filtering. Do not return knowledge content across tenant or permission boundaries.
-- MSP and multi-tenant behavior must be considered for every new table, query, API, menu item, and background job.
+Full statement: [AGENTS.md § Domain Ownership](AGENTS.md), plus the Unified Work Item Domain Contract below. Ticket/Incident/Problem/Change/Release/Service Request stay distinct professional domains — reuse shared helpers, don't collapse their lifecycle rules into one generic abstraction. BPMN is the orchestration layer for approvals/fulfillment/escalation. CMDB is not an asset table. Knowledge/RAG must keep source attribution, versioning, and tenant/permission filtering. MSP/tenant behavior applies to every new table, query, API, menu item, and background job. The Unified Work Item Domain Contract below governs how these domains relate at the data-model level — read it before adding fields, relations, or lifecycle logic to any of them.
+
+## Unified Work Item Domain Contract (Summary)
+
+Full contract: [AGENTS.md § Unified Work Item Domain Contract](AGENTS.md). Core invariants to hold for any Ticket/Incident/Problem/Change/Service Request work:
+
+- **WorkItem** (currently the `tickets` table) is the shared identity/cross-cutting record for Ticket, Incident, Problem, Change Request, Requested Item, and Catalog Task. Ticket is WorkItem's product-facing name, not a separate lifecycle.
+- Every Incident/Problem/Change Request/Requested Item/Catalog Task has exactly one WorkItem, created in the same transaction as its professional extension.
+- Professional extension tables own domain-specific fields only. **Do not** copy `title`, `description`, `status`, `priority`, `assignee`, `tenant`, `creator`, or public timestamps into an extension table. This has already drifted once (`ent/schema/incident.go` duplicates `title`/`description`/`status`/`priority`, tracked as known tech debt) — do not use that file as precedent for a new domain.
+- `recordClass` identifies the professional class and is immutable once an extension exists.
+- A relationship is not a lifecycle conversion — Incident does not become Problem by changing a type; create the target WorkItem and an explicit relation instead, preserving the source record and history.
+- Shared operations (assignment, comments, attachments, SLA projection, audit) live on WorkItem; `IncidentService`/`ProblemService`/`ChangeService`/`ServiceRequestService` own their own professional transitions — do not build a generic `switch recordClass` state machine.
 
 ## Important Patterns
 
@@ -191,6 +188,12 @@ All APIs return `{ code: number, message: string, data: any }`:
 - SLA timers and escalations must be computed from authoritative timestamps and policy bindings, not from UI-derived state.
 - Change management must preserve risk, CAB/approval, release window, implementation result, and PIR concepts.
 - Problem management must preserve root cause, workaround, known error, and linked incident relationships.
+
+## Fail-Closed Dispatch For Unknown Behavior
+
+- Any execution path that dispatches by type, capability, or name — BPMN service tasks, connector/skill capability invocation, AI tool invocation, event/webhook consumers, automation rule actions — must fail closed when the target is unknown, unregistered, or unsupported. Produce an explicit error, a visible pending/manual-intervention state, or a blocked transition. Do not silently no-op, skip, or proceed as if the step succeeded.
+- A step is legitimately optional only when it is declared optional ahead of time in its own definition (workflow diagram, capability manifest, rule config) — not inferred at runtime because no handler was found. A skipped optional step must still emit an audit record and an observable warning/metric so operators can see it was bypassed.
+- Apply this contract uniformly across dispatch surfaces (BPMN service tasks, connector/skill dispatch, AI tool invocation, event consumers) instead of solving it per surface. Extend the same fail-closed behavior when a new dispatch surface is added rather than inventing a new failure mode for it.
 
 ## CMDB Rules
 

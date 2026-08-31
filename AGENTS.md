@@ -2,6 +2,8 @@
 
 This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
+> **Shared with CLAUDE.md**: [CLAUDE.md](CLAUDE.md) is the file Claude Code reads automatically; it mirrors this file's architecture, domain, and product constraints (including a summary of the Unified Work Item Domain Contract below) plus Claude-Code-specific operational conventions (file naming, DTO/response format detail, Docker ops, TypeScript/Ant Design conventions) that don't apply to Codex. When architecture, domain, or cross-cutting principles change here, mirror the summary into CLAUDE.md in the same change — do not let the two drift, they are read by different agents working the same codebase.
+
 ## Project Overview
 
 ITSM (IT Service Management) system with a Go/Gin backend and Next.js/TypeScript frontend. Features include:
@@ -71,6 +73,12 @@ When making architecture choices, prefer enterprise correctness, auditability, t
 - AI is decision support by default. It may understand intent, extract entities, rank options, generate explanations, and propose actions; it must not silently bypass authorization, workflow, tenant isolation, or audit requirements.
 - Code enforces policy and performs side effects: permission checks, risk gates, policy lookup, state transitions, transaction boundaries, audit writes, and external calls. Do not re-derive domain meaning with a second classifier or keyword scan after an AI/domain service has produced structured output.
 - When structured AI output is insufficient, improve the typed schema, prompt, or configuration rather than adding a parallel classifier or hardcoded semantic branch. AI suggestions must retain confidence, model/provider, prompt version, actor/source, decision, and feedback where applicable.
+
+### Fail-Closed Dispatch For Unknown Behavior
+
+- Any execution path that dispatches by type, capability, or name — BPMN service tasks, connector/skill capability invocation, AI tool invocation, event/webhook consumers, automation rule actions — must fail closed when the target is unknown, unregistered, or unsupported. Produce an explicit error, a visible pending/manual-intervention state, or a blocked transition. Do not silently no-op, skip, or proceed as if the step succeeded.
+- A step is legitimately optional only when it is declared optional ahead of time in its own definition (workflow diagram, capability manifest, rule config) — not inferred at runtime because no handler was found. A skipped optional step must still emit an audit record and an observable warning/metric so operators can see it was bypassed.
+- Apply this contract uniformly across dispatch surfaces — BPMN service tasks (e.g. unregistered service task types), connector/skill capability dispatch, AI tool invocation, event consumers — instead of solving it per surface. Extend the same fail-closed behavior when a new dispatch surface is added rather than inventing a new failure mode for it.
 
 ### Development Documentation
 
