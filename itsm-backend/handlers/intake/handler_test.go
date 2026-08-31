@@ -93,11 +93,13 @@ func TestActorResolverPreservesVerifiedConnectorChannel(t *testing.T) {
 	c.Set("user_id", 11)
 	c.Set("role", "end_user")
 	c.Set("channel", "teams")
+	c.Set("provider", "entra")
 	c.Set("token_id", "jti-verified")
 
 	identity, err := NewActorResolver().Resolve(c)
 	require.NoError(t, err)
 	require.Equal(t, "teams", identity.Channel)
+	require.Equal(t, "entra", identity.Provider)
 	require.Equal(t, "jti-verified", identity.TokenID)
 	require.Equal(t, identity.ActorID, identity.RequesterID)
 }

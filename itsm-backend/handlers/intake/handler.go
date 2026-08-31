@@ -40,7 +40,8 @@ func (r *ActorResolver) Resolve(c *gin.Context) (Identity, error) {
 	}
 	return Identity{
 		TenantID: tenantID, ActorID: actorID, RequesterID: actorID, Role: role,
-		Channel: channel, TokenID: c.GetString("token_id"),
+		Channel: channel, Provider: strings.TrimSpace(c.GetString("provider")),
+		TokenID: c.GetString("token_id"),
 	}, nil
 }
 
