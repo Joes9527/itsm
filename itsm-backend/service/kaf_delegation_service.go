@@ -222,6 +222,21 @@ func (s *KafDelegationService) GetTaskContext(ctx context.Context, taskID string
 	if err := s.AuthorizeTask(ctx, task); err != nil {
 		return nil, err
 	}
+	result, err := s.buildKafTaskContext(ctx, task)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.recordKafReadAudit(ctx, task.TenantID, "kaf_delegate.context_read",
+		"bpmn/process-tasks/kaf-context", map[string]interface{}{
+			"taskId":        task.TaskID,
+			"correlationId": task.CorrelationID,
+		}); err != nil {
+		return nil, fmt.Errorf("record KAF context read audit: %w", err)
+	}
+	return result, nil
+}
+
+func (s *KafDelegationService) buildKafTaskContext(ctx context.Context, task *ent.ProcessTask) (*KafTaskContext, error) {
 	instance, err := s.client.ProcessInstance.Query().
 		Where(processinstance.IDEQ(task.ProcessInstanceID), processinstance.TenantIDEQ(task.TenantID)).
 		Only(ctx)
@@ -262,6 +277,28 @@ func (s *KafDelegationService) GetTaskContext(ctx context.Context, taskID string
 		IntakeSnapshot: frozenKafIntakeSnapshot(instance.Variables), WorkItem: workItem,
 		Attachments: attachments,
 	}, nil
+}
+
+func (s *KafDelegationService) recordKafReadAudit(
+	ctx context.Context, tenantID int, action, path string, body map[string]interface{},
+) error {
+	actorID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		return err
+	}
+	create := s.client.AuditLog.Create().
+		SetTenantID(tenantID).
+		SetResource("process_task").
+		SetAction(action).
+		SetPath(path).
+		SetMethod(http.MethodGet).
+		SetStatusCode(http.StatusOK).
+		SetRequestBody(string(encoded))
+	if actorID > 0 {
+		create.SetUserID(actorID)
+	}
+	return create.Exec(ctx)
 }
 
 func (s *KafDelegationService) ListDelegatedTasks(ctx context.Context, limit int) ([]KafTaskContext, error) {
@@ -312,13 +349,19 @@ func (s *KafDelegationService) ListDelegatedTaskPage(ctx context.Context, limit 
 		if err := s.AuthorizeTask(ctx, task); err != nil {
 			return nil, err
 		}
-		item, err := s.GetTaskContext(ctx, task.TaskID)
+		item, err := s.buildKafTaskContext(ctx, task)
 		if err != nil {
 			return nil, err
 		}
 		items = append(items, *item)
 	}
 	page.Items = items
+	if err := s.recordKafReadAudit(ctx, tenantID, "kaf_delegate.list",
+		"bpmn/process-tasks/kaf-delegated", map[string]interface{}{
+			"resultCount": len(page.Items),
+		}); err != nil {
+		return nil, fmt.Errorf("record KAF delegated list audit: %w", err)
+	}
 	return page, nil
 }
 

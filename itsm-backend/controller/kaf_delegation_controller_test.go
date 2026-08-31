@@ -204,11 +204,108 @@ func TestKafContext_ReturnsOnlyOpaqueAttachmentReferences(t *testing.T) {
 	assert.NotContains(t, response.Body.String(), "signed-secret")
 }
 
+func TestKafContext_RecordsOneSanitizedReadAudit(t *testing.T) {
+	router, taskID, client := newKafDelegationHTTPFixture(t, kafHTTPFixture{
+		actorTenantID: 1, taskTenantID: 1,
+		taskType: bpmn.KafDelegateTaskType, status: common.ProcessTaskStatusDelegated,
+	})
+	workItemID := attachKafWorkItem(t, client, taskID)
+	ctx := context.Background()
+	task, err := client.ProcessTask.Query().Where(processtask.TaskIDEQ(taskID)).Only(ctx)
+	require.NoError(t, err)
+	actor, err := client.User.Query().Where(user.TenantIDEQ(task.TenantID)).Only(ctx)
+	require.NoError(t, err)
+	_, err = client.TicketAttachment.Create().
+		SetTicketID(workItemID).
+		SetFileName("sensitive-vpn-passwords.txt").
+		SetFilePath("tenant/private/sensitive-vpn-passwords.txt").
+		SetFileURL("https://storage.example.test/signed-sensitive-secret").
+		SetFileSize(42).
+		SetFileType("text/plain").
+		SetUploadedBy(actor.ID).
+		SetTenantID(task.TenantID).
+		Save(ctx)
+	require.NoError(t, err)
+	_, err = client.ProcessInstance.UpdateOneID(task.ProcessInstanceID).
+		SetVariables(map[string]interface{}{
+			"intake_snapshot": map[string]interface{}{
+				"operationKind": "vpn_permission_grant",
+				"collected_fields": map[string]interface{}{
+					"user_identifier": "sensitive-user@example.test",
+				},
+			},
+		}).Save(ctx)
+	require.NoError(t, err)
+
+	response := doKafRequest(t, router, http.MethodGet,
+		"/api/v1/bpmn/process-tasks/"+taskID+"/kaf-context", "")
+	require.Equal(t, http.StatusOK, response.Code)
+
+	audits, err := client.AuditLog.Query().
+		Where(auditlog.ActionEQ("kaf_delegate.context_read")).All(ctx)
+	require.NoError(t, err)
+	require.Len(t, audits, 1)
+	assert.Equal(t, task.TenantID, audits[0].TenantID)
+	assert.Equal(t, actor.ID, audits[0].UserID)
+	assert.Equal(t, "process_task", audits[0].Resource)
+	assert.Equal(t, http.MethodGet, audits[0].Method)
+	assert.Equal(t, http.StatusOK, audits[0].StatusCode)
+	require.NotNil(t, audits[0].RequestBody)
+	requestBody := *audits[0].RequestBody
+	assert.Contains(t, requestBody, taskID)
+	assert.Contains(t, requestBody, "corr-kaf-http")
+	for _, forbidden := range []string{
+		"KAF delegated VPN access", "sensitive-user@example.test",
+		"intake_snapshot", "collected_fields", "token", "secret",
+		"sensitive-vpn-passwords.txt", "tenant/private", "signed-sensitive-secret",
+	} {
+		assert.NotContains(t, requestBody, forbidden)
+	}
+}
+
 func TestKafDelegatedList_ReturnsOnlyCurrentTenantDelegatedKafTasks(t *testing.T) {
 	router, taskID, _ := newKafDelegationHTTPFixture(t, kafHTTPFixture{actorTenantID: 1, taskTenantID: 1, taskType: "kaf_delegate", status: common.ProcessTaskStatusDelegated})
 	response := doKafRequest(t, router, http.MethodGet, "/api/v1/bpmn/process-tasks/kaf-delegated?status=delegated", "")
 	require.Equal(t, http.StatusOK, response.Code)
 	assert.Contains(t, response.Body.String(), taskID)
+}
+
+func TestKafDelegatedList_RecordsOneAggregateAudit(t *testing.T) {
+	router, _, client := newKafDelegationHTTPFixture(t, kafHTTPFixture{
+		actorTenantID: 1, taskTenantID: 1,
+		taskType: bpmn.KafDelegateTaskType, status: common.ProcessTaskStatusDelegated,
+	})
+	response := doKafRequest(t, router, http.MethodGet,
+		"/api/v1/bpmn/process-tasks/kaf-delegated?status=delegated", "")
+	require.Equal(t, http.StatusOK, response.Code)
+
+	ctx := context.Background()
+	listCount, err := client.AuditLog.Query().Where(auditlog.ActionEQ("kaf_delegate.list")).Count(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, listCount)
+	contextCount, err := client.AuditLog.Query().Where(auditlog.ActionEQ("kaf_delegate.context_read")).Count(ctx)
+	require.NoError(t, err)
+	assert.Zero(t, contextCount)
+	audit := client.AuditLog.Query().Where(auditlog.ActionEQ("kaf_delegate.list")).OnlyX(ctx)
+	require.NotNil(t, audit.RequestBody)
+	assert.JSONEq(t, `{"resultCount":1}`, *audit.RequestBody)
+}
+
+func TestKafContext_AuditPersistenceFailureDoesNotReturnContext(t *testing.T) {
+	router, taskID, client := newKafDelegationHTTPFixture(t, kafHTTPFixture{
+		actorTenantID: 1, taskTenantID: 1,
+		taskType: bpmn.KafDelegateTaskType, status: common.ProcessTaskStatusDelegated,
+	})
+	client.AuditLog.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			return nil, errors.New("forced audit persistence failure")
+		})
+	})
+
+	response := doKafRequest(t, router, http.MethodGet,
+		"/api/v1/bpmn/process-tasks/"+taskID+"/kaf-context", "")
+	assert.Equal(t, http.StatusInternalServerError, response.Code)
+	assert.NotContains(t, response.Body.String(), "corr-kaf-http")
 }
 
 func TestKafDelegatedList_PaginatesBeyondOneHundredTasks(t *testing.T) {
