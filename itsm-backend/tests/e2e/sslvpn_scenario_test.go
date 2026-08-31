@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/gin-gonic/gin"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -24,6 +24,7 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/fieldvalue"
+	"itsm-backend/ent/outboxevent"
 	"itsm-backend/ent/processapprovaldecision"
 	"itsm-backend/ent/processauditlog"
 	"itsm-backend/ent/processinstance"
@@ -35,6 +36,7 @@ import (
 	"itsm-backend/middleware"
 	repoTicket "itsm-backend/repository/ticket"
 	"itsm-backend/service"
+	"itsm-backend/service/bpmn"
 	"itsm-backend/tests/fixtures"
 )
 
@@ -421,13 +423,46 @@ func TestSSLVPNScenarioE2E(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "completed", updatedL2Task.Status, "L2 ops task must be marked completed")
 
-	// 2. Process Instance status -> COMPLETED
+	// 2. Process Instance remains running at the KAF delegation wait state
 	finalProcessInst, err := h.client.ProcessInstance.Get(ctx, processInst.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "completed", finalProcessInst.Status, "BPMN process instance must be completed")
-	assert.NotNil(t, finalProcessInst.EndTime, "Process end time must be set")
+	assert.Equal(t, "running", finalProcessInst.Status, "BPMN process instance must wait for KAF delegation")
+	endTimeUnset, err := h.client.ProcessInstance.Query().
+		Where(
+			processinstance.IDEQ(processInst.ID),
+			processinstance.EndTimeIsNil(),
+		).
+		Exist(ctx)
+	require.NoError(t, err)
+	assert.True(t, endTimeUnset, "Process end time must remain unset while KAF delegation is pending")
 
-	// 3. Process Approval Decision for L2 review
+	// 3. KAF delegated task and reliable delivery event must be persisted
+	delegatedTasks, err := h.client.ProcessTask.Query().
+		Where(
+			processtask.ProcessInstanceIDEQ(processInst.ID),
+			processtask.TenantIDEQ(h.tenant.ID),
+			processtask.TaskDefinitionKeyEQ("ServiceTask_KafDelegate"),
+			processtask.TaskTypeEQ(bpmn.KafDelegateTaskType),
+			processtask.StatusEQ("delegated"),
+		).
+		All(ctx)
+	require.NoError(t, err)
+	require.Len(t, delegatedTasks, 1, "one KAF delegated task must be waiting")
+	delegatedTask := delegatedTasks[0]
+
+	delegationEvents, err := h.client.OutboxEvent.Query().
+		Where(
+			outboxevent.TenantIDEQ(h.tenant.ID),
+			outboxevent.EventTypeEQ("kaf_delegate_requested"),
+			outboxevent.AggregateTypeEQ("process_task"),
+			outboxevent.AggregateIDEQ(delegatedTask.TaskID),
+		).
+		All(ctx)
+	require.NoError(t, err)
+	require.Len(t, delegationEvents, 1, "one KAF delegation outbox event must be queued")
+	assert.Equal(t, "pending", delegationEvents[0].Status)
+
+	// 4. Process Approval Decision for L2 review
 	decisionsStep3, err := h.client.ProcessApprovalDecision.Query().
 		Where(
 			processapprovaldecision.ProcessInstanceIDEQ(processInst.ID),
@@ -441,7 +476,7 @@ func TestSSLVPNScenarioE2E(t *testing.T) {
 	assert.Equal(t, "网络权限核准通过，允许访问", decisionsStep3[0].Comment)
 	assert.Equal(t, h.fixture.Users.Lixin.ID, decisionsStep3[0].ActorID)
 
-	// 4. Audit Log record for L2 review
+	// 5. Audit Log record for L2 review
 	auditLogsStep3, err := h.client.ProcessAuditLog.Query().
 		Where(
 			processauditlog.ProcessInstanceIDEQ(processInst.ID),
@@ -452,7 +487,7 @@ func TestSSLVPNScenarioE2E(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, auditLogsStep3, "audit log for L2 task completed must exist")
 
-	// 5. Verification of all approval decisions for the ticket
+	// 6. Verification of all approval decisions for the ticket
 	allDecisions, err := h.workflowSvc.GetApprovalDecisions(ctx, ticketID, h.tenant.ID)
 	require.NoError(t, err)
 	require.Len(t, allDecisions, 2, "ticket must have exactly 2 approval decisions in sequence")
