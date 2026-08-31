@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -15,21 +16,24 @@ import (
 	"github.com/gin-gonic/gin"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap/zaptest"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 )
 
-func setupTicketNotificationController(t *testing.T) (*gin.Engine, *ent.Client, int, int) {
+func setupTicketNotificationController(t *testing.T) (*gin.Engine, *ent.Client, int, int, *observer.ObservedLogs) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	client := enttest.Open(t, "sqlite3", "file:"+filepath.Join(t.TempDir(), "ticket_notification_controller.db")+"?_fk=1")
 	tenantID, userID := seedTenantUser(t, client)
-	controller := NewTicketNotificationController(service.NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar()), zaptest.NewLogger(t).Sugar())
+	core, logs := observer.New(zap.DebugLevel)
+	logger := zap.New(core).Sugar()
+	controller := NewTicketNotificationController(service.NewTicketNotificationService(client, logger), logger)
 
 	router := gin.New()
 	router.Use(gin.Recovery(), withTestAuth(tenantID, userID))
 	router.PUT("/api/v1/ticket-notifications/:id/read", controller.MarkNotificationRead)
 	router.PUT("/api/v1/ticket-notifications/read-all", controller.MarkAllNotificationsRead)
-	return router, client, tenantID, userID
+	return router, client, tenantID, userID, logs
 }
 
 func createTicketNotificationForController(t *testing.T, client *ent.Client, tenantID, userID int, status string) *ent.TicketNotification {
@@ -60,7 +64,7 @@ func createTicketNotificationForController(t *testing.T, client *ent.Client, ten
 }
 
 func TestTicketNotificationController_MarkReadUsesAuthenticatedTenantAndUser(t *testing.T) {
-	router, client, tenantID, userID := setupTicketNotificationController(t)
+	router, client, tenantID, userID, _ := setupTicketNotificationController(t)
 	notification := createTicketNotificationForController(t, client, tenantID, userID, "pending")
 
 	response := doReq(t, router, http.MethodPut, "/api/v1/ticket-notifications/"+strconv.Itoa(notification.ID)+"/read", nil, false)
@@ -72,7 +76,7 @@ func TestTicketNotificationController_MarkReadUsesAuthenticatedTenantAndUser(t *
 }
 
 func TestTicketNotificationController_MarkAllReadDoesNotCrossTenantOrDeliveryState(t *testing.T) {
-	router, client, tenantID, userID := setupTicketNotificationController(t)
+	router, client, tenantID, userID, _ := setupTicketNotificationController(t)
 	owned := createTicketNotificationForController(t, client, tenantID, userID, "sent")
 	otherTenantID, otherUserID := seedTenantUser(t, client)
 	other := createTicketNotificationForController(t, client, otherTenantID, otherUserID, "processing")
@@ -86,4 +90,34 @@ func TestTicketNotificationController_MarkAllReadDoesNotCrossTenantOrDeliverySta
 	require.Equal(t, "sent", owned.Status)
 	require.True(t, other.ReadAt.IsZero())
 	require.Equal(t, "processing", other.Status)
+}
+
+func TestTicketNotificationController_MarkReadHidesMissingAndForeignOwnership(t *testing.T) {
+	router, client, _, _, logs := setupTicketNotificationController(t)
+	otherTenantID, otherUserID := seedTenantUser(t, client)
+	foreign := createTicketNotificationForController(t, client, otherTenantID, otherUserID, "sent")
+
+	for _, notificationID := range []int{foreign.ID, foreign.ID + 100000} {
+		response := doReq(t, router, http.MethodPut, "/api/v1/ticket-notifications/"+strconv.Itoa(notificationID)+"/read", nil, false)
+		require.Equal(t, common.NotFoundCode, response.Code, "body=%s", mustString(response))
+		require.Equal(t, "通知不存在或无权限", response.Message)
+	}
+
+	require.Empty(t, logs.All(), "ownership misses must not emit storage-error logs")
+}
+
+func TestTicketNotificationController_MarkReadSanitizesStorageFailure(t *testing.T) {
+	router, client, _, _, logs := setupTicketNotificationController(t)
+	require.NoError(t, client.Close())
+
+	response := doReq(t, router, http.MethodPut, "/api/v1/ticket-notifications/1/read", nil, false)
+	require.Equal(t, common.InternalErrorCode, response.Code, "body=%s", mustString(response))
+	require.Equal(t, "通知读取状态更新失败", response.Message)
+
+	entries := logs.All()
+	require.Len(t, entries, 1)
+	fields := entries[0].ContextMap()
+	require.Equal(t, "ticket_notification_read_storage", fields["error_class"])
+	require.NotContains(t, fields, "error")
+	require.NotContains(t, fmt.Sprint(entries), "sql: database is closed")
 }

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/mail"
 	"strings"
@@ -16,6 +17,13 @@ import (
 
 	"go.uber.org/zap"
 )
+
+var (
+	ErrTicketNotificationNotFound = errors.New("ticket notification not found")
+	ErrTicketNotificationStorage  = errors.New("ticket notification storage failed")
+)
+
+const ticketNotificationReadStorageErrorClass = "ticket_notification_read_storage"
 
 func ticketNotificationStringPtr(s string) *string {
 	return &s
@@ -952,24 +960,19 @@ func (s *TicketNotificationService) MarkNotificationRead(
 	ctx context.Context,
 	notificationID, userID, tenantID int,
 ) error {
-	_, err := s.client.TicketNotification.Query().
+	updated, err := s.client.TicketNotification.Update().
 		Where(
 			ticketnotification.ID(notificationID),
 			ticketnotification.UserID(userID),
 			ticketnotification.TenantID(tenantID),
 		).
-		Only(ctx)
-	if err != nil {
-		return fmt.Errorf("notification not found: %w", err)
-	}
-
-	now := time.Now()
-	_, err = s.client.TicketNotification.UpdateOneID(notificationID).
-		SetNillableReadAt(&now).
+		SetReadAt(time.Now()).
 		Save(ctx)
 	if err != nil {
-		s.logger.Errorw("Failed to mark notification as read", "error", err)
-		return fmt.Errorf("failed to mark notification as read: %w", err)
+		return s.ticketNotificationReadStorageError()
+	}
+	if updated == 0 {
+		return ErrTicketNotificationNotFound
 	}
 
 	return nil
@@ -990,11 +993,20 @@ func (s *TicketNotificationService) MarkAllNotificationsRead(
 		SetNillableReadAt(&now).
 		Save(ctx)
 	if err != nil {
-		s.logger.Errorw("Failed to mark all notifications as read", "error", err)
-		return fmt.Errorf("failed to mark all notifications as read: %w", err)
+		return s.ticketNotificationReadStorageError()
 	}
 
 	return nil
+}
+
+func (s *TicketNotificationService) ticketNotificationReadStorageError() error {
+	if s.logger != nil {
+		s.logger.Errorw(
+			"ticket notification read storage failed",
+			"error_class", ticketNotificationReadStorageErrorClass,
+		)
+	}
+	return ErrTicketNotificationStorage
 }
 
 // GetUserNotificationPreferences 获取用户通知偏好

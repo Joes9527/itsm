@@ -47,17 +47,33 @@ describe('TicketNotificationApi', () => {
   });
 
   describe('markNotificationRead', () => {
-    it('should mark notification as read', async () => {
+    it('keeps generic Notification IDs on the generic endpoint', async () => {
       mockPut.mockResolvedValue(undefined);
       await TicketNotificationApi.markNotificationRead(5);
-      expect(mockPut).toHaveBeenCalledWith('/api/v1/ticket-notifications/5/read', {});
+      expect(mockPut).toHaveBeenCalledWith('/api/v1/notifications/5/read', {});
     });
   });
 
   describe('markAllNotificationsRead', () => {
-    it('should mark all as read', async () => {
+    it('keeps generic Notification records on the generic endpoint', async () => {
       mockPut.mockResolvedValue(undefined);
       await TicketNotificationApi.markAllNotificationsRead();
+      expect(mockPut).toHaveBeenCalledWith('/api/v1/notifications/read-all', {});
+    });
+  });
+
+  describe('markTicketNotificationRead', () => {
+    it('marks a TicketNotification through the dedicated endpoint', async () => {
+      mockPut.mockResolvedValue(undefined);
+      await TicketNotificationApi.markTicketNotificationRead(5);
+      expect(mockPut).toHaveBeenCalledWith('/api/v1/ticket-notifications/5/read', {});
+    });
+  });
+
+  describe('markAllTicketNotificationsRead', () => {
+    it('marks TicketNotification records through the dedicated endpoint', async () => {
+      mockPut.mockResolvedValue(undefined);
+      await TicketNotificationApi.markAllTicketNotificationsRead();
       expect(mockPut).toHaveBeenCalledWith('/api/v1/ticket-notifications/read-all', {});
     });
   });

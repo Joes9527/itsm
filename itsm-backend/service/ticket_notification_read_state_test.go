@@ -2,13 +2,18 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
+	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/ticketnotification"
 
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 func TestTicketNotificationReadStateDoesNotChangeDurableDeliveryState(t *testing.T) {
@@ -86,4 +91,56 @@ func TestTicketNotificationReadStateDoesNotChangeDurableDeliveryState(t *testing
 	require.Equal(t, 3, fixture.client.TicketNotification.Query().Where(
 		ticketnotification.ReadAtNotNil(),
 	).CountX(fixture.ctx))
+}
+
+func TestTicketNotificationMarkReadReturnsOwnershipNotFoundSentinel(t *testing.T) {
+	fixture := newDurableNotificationFixture(t, "notification-read-ownership")
+	notification := fixture.enqueueExternalCC(t)
+
+	for _, test := range []struct {
+		name           string
+		notificationID int
+		userID         int
+		tenantID       int
+	}{
+		{name: "missing", notificationID: notification.ID + 100000, userID: fixture.recipient.ID, tenantID: fixture.tenant.ID},
+		{name: "foreign user", notificationID: notification.ID, userID: fixture.recipient.ID + 100000, tenantID: fixture.tenant.ID},
+		{name: "foreign tenant", notificationID: notification.ID, userID: fixture.recipient.ID, tenantID: fixture.tenant.ID + 100000},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			err := fixture.notifications.MarkNotificationRead(fixture.ctx, test.notificationID, test.userID, test.tenantID)
+			require.ErrorIs(t, err, ErrTicketNotificationNotFound)
+			require.Equal(t, ErrTicketNotificationNotFound.Error(), err.Error())
+		})
+	}
+}
+
+func TestTicketNotificationReadStorageFailuresAreSanitized(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ticket_notification_read_storage?mode=memory&cache=shared&_fk=1")
+	core, logs := observer.New(zap.ErrorLevel)
+	notifications := NewTicketNotificationService(client, zap.New(core).Sugar())
+	require.NoError(t, client.Close())
+
+	for _, operation := range []struct {
+		name string
+		call func() error
+	}{
+		{name: "mark one", call: func() error { return notifications.MarkNotificationRead(context.Background(), 1, 2, 3) }},
+		{name: "mark all", call: func() error { return notifications.MarkAllNotificationsRead(context.Background(), 2, 3) }},
+	} {
+		t.Run(operation.name, func(t *testing.T) {
+			err := operation.call()
+			require.ErrorIs(t, err, ErrTicketNotificationStorage)
+			require.Equal(t, ErrTicketNotificationStorage.Error(), err.Error())
+		})
+	}
+
+	entries := logs.All()
+	require.Len(t, entries, 2)
+	for _, entry := range entries {
+		fields := entry.ContextMap()
+		require.Equal(t, "ticket_notification_read_storage", fields["error_class"])
+		require.NotContains(t, fields, "error")
+		require.NotContains(t, fmt.Sprint(entry), "sql: database is closed")
+	}
 }

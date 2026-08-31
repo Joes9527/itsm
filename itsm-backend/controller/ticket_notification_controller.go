@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"strconv"
 
 	"itsm-backend/common"
@@ -128,8 +129,7 @@ func (tnc *TicketNotificationController) MarkNotificationRead(c *gin.Context) {
 
 	err = tnc.notificationService.MarkNotificationRead(c.Request.Context(), notificationID, userID, tenantID)
 	if err != nil {
-		tnc.logger.Errorw("Failed to mark notification as read", "error", err, "notification_id", notificationID, "user_id", userID)
-		common.Fail(c, common.InternalErrorCode, err.Error())
+		tnc.respondTicketNotificationReadError(c, err)
 		return
 	}
 
@@ -144,12 +144,19 @@ func (tnc *TicketNotificationController) MarkAllNotificationsRead(c *gin.Context
 
 	err := tnc.notificationService.MarkAllNotificationsRead(c.Request.Context(), userID, tenantID)
 	if err != nil {
-		tnc.logger.Errorw("Failed to mark all notifications as read", "error", err, "user_id", userID)
-		common.Fail(c, common.InternalErrorCode, err.Error())
+		tnc.respondTicketNotificationReadError(c, err)
 		return
 	}
 
 	common.Success(c, nil)
+}
+
+func (tnc *TicketNotificationController) respondTicketNotificationReadError(c *gin.Context, err error) {
+	if errors.Is(err, service.ErrTicketNotificationNotFound) {
+		common.NotFound(c, "通知不存在或无权限")
+		return
+	}
+	common.InternalError(c, "通知读取状态更新失败")
 }
 
 // GetNotificationPreferences 获取用户通知偏好

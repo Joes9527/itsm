@@ -126,7 +126,7 @@ export const TicketNotificationSection: React.FC<TicketNotificationSectionProps>
   // 标记为已读
   const handleMarkRead = async (notificationId: number) => {
     try {
-      await TicketNotificationApi.markNotificationRead(notificationId);
+      await TicketNotificationApi.markTicketNotificationRead(notificationId);
       antMessage.success('已标记为已读');
       await loadNotifications();
     } catch (error: unknown) {
