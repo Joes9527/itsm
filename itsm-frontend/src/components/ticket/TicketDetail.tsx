@@ -3,7 +3,7 @@
 /**
  * 工单详情组件
  * 从 tickets/[ticketId]/page.tsx 抽取，与 IncidentDetail/ProblemDetail/ChangeDetail 域组件模式对齐
- * 包含：基本信息、SLA、审批/拒绝/分配/编辑/抄送/删除操作、详情 Tabs（评论/附件/审批链/历史/关联）
+ * 包含：基本信息、SLA、审批/拒绝/分配/编辑/抄送/删除操作、详情 Tabs（评论/附件/审批链/历史/关联/通知）
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -73,6 +73,7 @@ import { TicketAttachmentGrid } from './TicketAttachmentGrid';
 import { TicketHistoryList } from './TicketHistoryList';
 import { TicketApprovalCards } from './TicketApprovalCards';
 import { TicketRelationCards } from './TicketRelationCards';
+import { TicketNotificationSection } from '@/components/business/TicketNotificationSection';
 import {
   MessageSquare,
   Paperclip,
@@ -80,6 +81,7 @@ import {
   GitBranch,
   Link2,
   Info,
+  Bell,
 } from 'lucide-react';
 
 const { Title, Text } = Typography;
@@ -222,7 +224,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
     }
   }, [ticketId, fetchSLAInfo]);
 
-  // 底部五维 Tabs 的数量角标（失败静默，不阻塞详情页主流程）
+  // 详情 Tabs 的数量角标（失败静默，不阻塞详情页主流程）
   useEffect(() => {
     if (!ticketId) return;
 
@@ -631,7 +633,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
 
       {/* ================= 主体工作台栅格: 左侧 8 列 + 右侧 4 列 ================= */}
       <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* 左侧 8 列: 诉求描述 -> 服务目录交付规格 -> 底部五维 Tabs 协作流 */}
+        {/* 左侧 8 列: 诉求描述 -> 服务目录交付规格 -> 底部 Tabs 协作流 */}
         <div className="lg:col-span-8 space-y-5 min-w-0">
           {/* 1. 核心诉求描述卡片 */}
           <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4">
@@ -672,13 +674,15 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
             </div>
           )}
 
-          {/* 3. 底部五维完整 Tabs（评论/附件/审批链/历史/关联） */}
+          {/* 3. 底部协作 Tabs（评论/附件/审批链/历史/关联/通知） */}
           <TicketDetailTabs
             ticketId={ticketId}
             ticketSource={ticket.source}
             currentUserId={currentUser?.id}
             ticketAssigneeId={ticket.assigneeId}
             tabCounts={tabCounts}
+            canReadNotifications={hasPermission('notification:read')}
+            canSendNotifications={hasPermission('notification:create')}
           />
         </div>
 
@@ -1183,6 +1187,8 @@ interface TicketDetailTabsProps {
   ticketSource?: string;
   currentUserId?: number;
   ticketAssigneeId?: number;
+  canReadNotifications: boolean;
+  canSendNotifications: boolean;
   tabCounts?: {
     comments?: number;
     attachments?: number;
@@ -1198,6 +1204,8 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
   currentUserId,
   tabCounts,
   ticketAssigneeId,
+  canReadNotifications,
+  canSendNotifications,
 }) => {
   const countSuffix = (count?: number) => (count !== undefined ? ` (${count})` : '');
 
@@ -1267,6 +1275,21 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
       children: <TicketRelationCards ticketId={ticketId} />,
     },
   ];
+
+  if (canReadNotifications) {
+    items.push({
+      key: 'notifications',
+      label: (
+        <span className="flex items-center gap-1.5 text-xs font-medium">
+          <Bell size={13} />
+          工单通知
+        </span>
+      ),
+      children: (
+        <TicketNotificationSection ticketId={ticketId} canSend={canSendNotifications} />
+      ),
+    });
+  }
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-3">

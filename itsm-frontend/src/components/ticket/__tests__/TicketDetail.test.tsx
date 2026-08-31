@@ -7,7 +7,10 @@
 
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent, { PointerEventsCheckLevel } from '@testing-library/user-event';
 import TicketDetail from '../TicketDetail';
+
+const mockHasPermission: jest.Mock<boolean, [string]> = jest.fn((_permission: string) => false);
 
 jest.mock('antd', () => {
   const actual = jest.requireActual('antd');
@@ -49,11 +52,18 @@ jest.mock('@/lib/api/user-api', () => ({
   UserApi: { getUsers: jest.fn() },
 }));
 
+jest.mock('@/lib/api/ticket-notification-api', () => ({
+  TicketNotificationApi: {
+    getTicketNotifications: jest.fn(),
+    sendTicketNotification: jest.fn(),
+    markTicketNotificationRead: jest.fn(),
+  },
+}));
+
 jest.mock('@/lib/store/auth-store', () => {
-  const hasPermission = jest.fn(() => false);
   return {
     useAuthStore: jest.fn((selector: (s: unknown) => unknown) =>
-      selector({ user: undefined, hasPermission })
+      selector({ user: { id: 7 }, hasPermission: mockHasPermission })
     ),
   };
 });
@@ -85,11 +95,13 @@ jest.mock('../ServiceRequestPanel', () => () => null);
 jest.mock('../ServiceCatalogApprovalChain', () => () => null);
 jest.mock('../CIContextCard', () => ({ CIContextCard: () => null }));
 jest.mock('../KBRecommendCard', () => ({ KBRecommendCard: () => null }));
+jest.mock('@/components/common/UserSelect', () => ({ UserSelect: () => null }));
 
 import { TicketApi } from '@/lib/api/ticket-api';
 import { TicketApprovalApi } from '@/lib/api/ticket-approval-api';
 import { TicketRelationsApi } from '@/lib/api/ticket-relations-api';
 import { UserApi } from '@/lib/api/user-api';
+import { TicketNotificationApi } from '@/lib/api/ticket-notification-api';
 
 const mockGetTicket = TicketApi.getTicket as jest.Mock;
 const mockGetSLA = TicketApi.getTicketSLA as jest.Mock;
@@ -97,6 +109,7 @@ const mockGetUsers = UserApi.getUsers as jest.Mock;
 const mockGetDecisions = TicketApprovalApi.getApprovalDecisions as jest.Mock;
 const mockGetRelationStats = TicketRelationsApi.getRelationStats as jest.Mock;
 const mockGetHistory = TicketApi.getTicketHistory as jest.Mock;
+const mockGetTicketNotifications = TicketNotificationApi.getTicketNotifications as jest.Mock;
 
 const baseTicket = {
   id: 101,
@@ -121,11 +134,13 @@ const baseTicket = {
 describe('TicketDetail', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockHasPermission.mockImplementation(() => false);
     mockGetSLA.mockResolvedValue(null);
     mockGetUsers.mockResolvedValue({ users: [] });
     mockGetDecisions.mockResolvedValue([]);
     mockGetRelationStats.mockResolvedValue({ totalRelations: 0 });
     mockGetHistory.mockResolvedValue([]);
+    mockGetTicketNotifications.mockResolvedValue({ notifications: [], total: 0 });
   });
 
   it('renders Chinese label for open status instead of raw "open"', async () => {
@@ -148,5 +163,46 @@ describe('TicketDetail', () => {
       expect(screen.getAllByText('已分配').length).toBeGreaterThan(0);
     });
     expect(screen.queryByText('assigned')).not.toBeInTheDocument();
+  });
+
+  it('mounts the notification section lazily for users with notification:read', async () => {
+    mockHasPermission.mockImplementation(permission => permission === 'notification:read');
+    mockGetTicket.mockResolvedValueOnce({ ...baseTicket, status: 'open' });
+    const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+
+    render(<TicketDetail />);
+
+    const notificationTab = await screen.findByText('工单通知');
+    expect(mockGetTicketNotifications).not.toHaveBeenCalled();
+
+    await user.click(notificationTab);
+
+    expect(await screen.findByText('通知历史')).toBeInTheDocument();
+    expect(mockGetTicketNotifications).toHaveBeenCalledWith(101);
+    expect(screen.queryByText('发送通知')).not.toBeInTheDocument();
+  });
+
+  it('hides the notification tab without notification:read even when create is granted', async () => {
+    mockHasPermission.mockImplementation(permission => permission === 'notification:create');
+    mockGetTicket.mockResolvedValueOnce({ ...baseTicket, status: 'open' });
+
+    render(<TicketDetail />);
+
+    await screen.findByText('工单诉求与业务描述');
+    expect(screen.queryByText('工单通知')).not.toBeInTheDocument();
+    expect(mockGetTicketNotifications).not.toHaveBeenCalled();
+  });
+
+  it('shows notification send controls only with notification:create', async () => {
+    mockHasPermission.mockImplementation(permission =>
+      permission === 'notification:read' || permission === 'notification:create'
+    );
+    mockGetTicket.mockResolvedValueOnce({ ...baseTicket, status: 'open' });
+    const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+
+    render(<TicketDetail />);
+    await user.click(await screen.findByText('工单通知'));
+
+    expect(await screen.findByText('发送通知')).toBeInTheDocument();
   });
 });

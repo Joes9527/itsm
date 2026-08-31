@@ -522,8 +522,8 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 		tickets := tenant.(*gin.RouterGroup).Group("/tickets")
 		if config.TicketNotificationController != nil {
 			ticketNotifications := tenant.(*gin.RouterGroup).Group("/ticket-notifications")
-			ticketNotifications.PUT("/:id/read", middleware.RequirePermission("notification", "update"), config.TicketNotificationController.MarkNotificationRead)
-			ticketNotifications.PUT("/read-all", middleware.RequirePermission("notification", "update"), config.TicketNotificationController.MarkAllNotificationsRead)
+			ticketNotifications.PUT("/:id/read", middleware.RequirePermission("notification", "read"), config.TicketNotificationController.MarkNotificationRead)
+			ticketNotifications.PUT("/read-all", middleware.RequirePermission("notification", "read"), config.TicketNotificationController.MarkAllNotificationsRead)
 		}
 		{
 			tickets.GET("", middleware.RequirePermission("ticket", "read"), config.TicketController.ListTickets)

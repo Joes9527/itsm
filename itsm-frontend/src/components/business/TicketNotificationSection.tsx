@@ -36,7 +36,6 @@ import {
   TicketNotificationApi
 } from '@/lib/api/ticket-notification-api';
 import { UserSelect } from '@/components/common/UserSelect';
-import { useAuthStore } from '@/lib/store/auth-store';
 import { App } from 'antd';
 import { useI18n } from '@/lib/i18n';
 
@@ -59,7 +58,6 @@ export const TicketNotificationSection: React.FC<TicketNotificationSectionProps>
 }) => {
   const { message: antMessage } = App.useApp();
   const { t } = useI18n();
-  const { user } = useAuthStore();
   const [notifications, setNotifications] = useState<TicketNotification[]>([]);
   const [loading, setLoading] = useState(false);
   const [sendModalVisible, setSendModalVisible] = useState(false);
@@ -193,7 +191,7 @@ export const TicketNotificationSection: React.FC<TicketNotificationSectionProps>
   };
 
   // 未读通知数量
-  const unreadCount = notifications.filter(n => n.status !== 'read').length;
+  const unreadCount = notifications.filter(notification => !notification.readAt).length;
 
   return (
     <div className="space-y-4">
@@ -223,11 +221,13 @@ export const TicketNotificationSection: React.FC<TicketNotificationSectionProps>
         ) : (
           <List
             dataSource={notifications}
-            renderItem={notification => (
+            renderItem={notification => {
+              const isRead = Boolean(notification.readAt);
+              return (
               <List.Item
-                className={notification.status === 'read' ? 'opacity-70' : ''}
+                className={isRead ? 'opacity-70' : ''}
                 actions={[
-                  notification.status !== 'read' && (
+                  !isRead && (
                     <Tooltip title="标记为已读" key="read">
                       <Button
                         type="text"
@@ -244,7 +244,7 @@ export const TicketNotificationSection: React.FC<TicketNotificationSectionProps>
                 <List.Item.Meta
                   avatar={
                     <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-50">
-                      {notification.status === 'read' ? (
+                      {isRead ? (
                         <CheckCircle style={{ fontSize: 20, color: '#52c41a' }} />
                       ) : (
                         <Bell style={{ fontSize: 20, color: '#1890ff' }} />
@@ -266,7 +266,7 @@ export const TicketNotificationSection: React.FC<TicketNotificationSectionProps>
                             ? '短信'
                             : '站内消息'}
                       </Tag>
-                      {notification.status !== 'read' && <Badge status="processing" text="未读" />}
+                      {!isRead && <Badge status="processing" text="未读" />}
                     </Space>
                   }
                   description={
@@ -299,7 +299,8 @@ export const TicketNotificationSection: React.FC<TicketNotificationSectionProps>
                   }
                 />
               </List.Item>
-            )}
+              );
+            }}
           />
         )}
       </Card>
