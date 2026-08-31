@@ -1,6 +1,6 @@
-# KAF Delegation Execution Integrity Implementation Plan
+# KAF Delegation Execution Integrity Implementation Plan（历史执行记录）
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **状态警告（2026-08-31）：** 本计划对应的 Tasks 1–5 和两轮审查整改已经实施，并通过 `dc1233c8` 合并到 ITSM `main`。不得再把本文交给 `executing-plans` 或 `subagent-driven-development` 从头执行。下方未勾选的 Steps 是为追溯保留的原始 TDD 配方，不是当前完成度。当前唯一未闭合项是文末明确保留的真实 Dev 跨进程 SSLVPN/RLS 发布证据，其范围由父设计 §12.8 约束。
 
 **Goal:** Make KAF delegated-task completion durable and recoverable through an ITSM action ledger, completion receipts, propagated callback failures, and KAF delivery leases.
 
@@ -10,7 +10,7 @@
 
 **Spec:** [KAF Delegation Execution Integrity Design](../specs/2026-08-30-kaf-delegation-execution-integrity-design.md)
 
-> **Implementation status (2026-08-31):** Tasks 1-5 and the subsequent full-review remediation items have been implemented in the ITSM feature worktree through `c1b9bbcd` and the KAF feature worktree through `afbc1645`. The unchecked step boxes below are retained as the original TDD execution recipe, not as the current completion tracker. The remaining release-evidence gap is the explicitly unchecked live cross-process SSLVPN flow near the end of this document; see the execution-integrity report and §12 of the parent autonomous-delegation design for broader product-scope work that this plan intentionally did not implement.
+> **Implementation status (2026-08-31):** ITSM implementation and documentation are on `main@dc1233c8`; the historical ITSM feature worktree is at `41b24068`. KAF implementation is on its feature worktree at `b533daea` (`afbc1645` plus formatting). The remaining release-evidence gap is the explicitly unchecked live cross-process SSLVPN/RLS flow near the end of this document; see the execution-integrity report and §12.8 of the parent autonomous-delegation design. Unified Intake, Incident typed actions, KAF execution-model cleanup and UI remain separate product increments and were intentionally not implemented by this plan.
 
 ## Global Constraints
 
