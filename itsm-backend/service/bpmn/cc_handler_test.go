@@ -200,7 +200,7 @@ func TestCCTaskHandler_DifferentDeliveryReusesActiveOrdinaryRelation(t *testing.
 func TestCCTaskHandlerRejectsUnknownNotifyChannelsBeforeEffects(t *testing.T) {
 	for _, tt := range []struct {
 		name      string
-		channels  string
+		channels  interface{}
 		wantError bool
 		want      []string
 	}{
@@ -209,12 +209,13 @@ func TestCCTaskHandlerRejectsUnknownNotifyChannelsBeforeEffects(t *testing.T) {
 		{name: "known channels deduplicate", channels: "email, in_app, email", want: []string{"email", "in_app"}},
 		{name: "unknown channel", channels: "unknown", wantError: true},
 		{name: "mixed known and unknown channels", channels: "email,unknown", wantError: true},
+		{name: "non string channels", channels: []interface{}{"email"}, wantError: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			fixture := newCCHandlerRecipientFixture(t, "cc-notify-"+strconv.Itoa(len(tt.name)))
 			variables := fixture.variables("user")
 			variables["ccUserIds"] = strconv.Itoa(fixture.recipient.ID)
-			if tt.channels != "" {
+			if tt.channels != nil {
 				variables["notifyChannels"] = tt.channels
 			}
 
@@ -231,6 +232,74 @@ func TestCCTaskHandlerRejectsUnknownNotifyChannelsBeforeEffects(t *testing.T) {
 				channels = append(channels, row.Channel)
 			}
 			assert.ElementsMatch(t, tt.want, channels)
+		})
+	}
+}
+
+func TestCCTaskHandlerNormalizeCallbackPayloadValidatesChannelsForEveryCCType(t *testing.T) {
+	handler := NewCCTaskHandler(nil, zap.NewNop().Sugar())
+	for _, tt := range []struct {
+		name      string
+		variables map[string]interface{}
+	}{
+		{name: "omitted", variables: map[string]interface{}{"ccType": "user"}},
+		{name: "empty", variables: map[string]interface{}{"ccType": "user", "notifyChannels": "  "}},
+	} {
+		t.Run(tt.name+" channels default to in app", func(t *testing.T) {
+			payload, err := handler.NormalizeCallbackPayload("", tt.variables)
+
+			require.NoError(t, err)
+			assert.Equal(t, "in_app", payload["notifyChannels"])
+		})
+	}
+
+	for _, ccType := range []string{"user", "group", "role", "variable"} {
+		t.Run(ccType+" canonicalizes valid channels", func(t *testing.T) {
+			variables := map[string]interface{}{
+				"ccType":         ccType,
+				"notifyChannels": " email, in_app,email ",
+			}
+			if ccType == "variable" {
+				variables["ccVariable"] = "watchers"
+				variables["watchers"] = []interface{}{float64(7)}
+			}
+
+			payload, err := handler.NormalizeCallbackPayload("", variables)
+
+			require.NoError(t, err)
+			assert.Equal(t, "email,in_app", payload["notifyChannels"])
+		})
+
+		t.Run(ccType+" rejects mixed invalid channels", func(t *testing.T) {
+			variables := map[string]interface{}{
+				"ccType":         ccType,
+				"notifyChannels": "in_app,emial",
+			}
+			if ccType == "variable" {
+				variables["ccVariable"] = "watchers"
+				variables["watchers"] = []interface{}{float64(7)}
+			}
+
+			payload, err := handler.NormalizeCallbackPayload("", variables)
+
+			require.ErrorContains(t, err, "通知渠道")
+			assert.Nil(t, payload)
+		})
+
+		t.Run(ccType+" rejects non string channels", func(t *testing.T) {
+			variables := map[string]interface{}{
+				"ccType":         ccType,
+				"notifyChannels": []interface{}{"email"},
+			}
+			if ccType == "variable" {
+				variables["ccVariable"] = "watchers"
+				variables["watchers"] = []interface{}{float64(7)}
+			}
+
+			payload, err := handler.NormalizeCallbackPayload("", variables)
+
+			require.ErrorContains(t, err, "通知渠道")
+			assert.Nil(t, payload)
 		})
 	}
 }

@@ -58,6 +58,11 @@ func (h *CCTaskHandler) NormalizeCallbackPayload(action string, variables map[st
 			payload[key] = value
 		}
 	}
+	channels, err := parseNotifyChannelsFromVars(variables)
+	if err != nil {
+		return nil, err
+	}
+	payload["notifyChannels"] = strings.Join(channels, ",")
 
 	if strings.TrimSpace(GetStringFromVars(variables, "ccType")) != "variable" {
 		return payload, nil
@@ -92,7 +97,7 @@ func (h *CCTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, vari
 	ccGroupIds := GetStringFromVars(variables, "ccGroupIds")
 	ccRoleIds := GetStringFromVars(variables, "ccRoleIds")
 	ccNotify := GetBoolFromVars(variables, "ccNotify", true)
-	notifyChannels, err := parseNotifyChannels(GetStringFromVars(variables, "notifyChannels"))
+	notifyChannels, err := parseNotifyChannelsFromVars(variables)
 	if err != nil {
 		return nil, err
 	}
@@ -481,6 +486,18 @@ func parseNotifyChannels(value string) ([]string, error) {
 		return []string{"in_app"}, nil
 	}
 	return channels, nil
+}
+
+func parseNotifyChannelsFromVars(variables map[string]interface{}) ([]string, error) {
+	value, exists := variables["notifyChannels"]
+	if !exists {
+		return parseNotifyChannels("")
+	}
+	channels, ok := value.(string)
+	if !ok {
+		return nil, fmt.Errorf("通知渠道必须是字符串")
+	}
+	return parseNotifyChannels(channels)
 }
 
 func (h *CCTaskHandler) createCCNotifications(ctx context.Context, client *ent.Client, ticketID int, userIDs []int, channels []string, tenantID int) error {

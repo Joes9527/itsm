@@ -279,6 +279,35 @@ func configureLegacyUserCallbackDefinition(t *testing.T, f *bpmnAuthorizationFix
 	require.NoError(t, err)
 }
 
+func seedDurableCCUserCallbackTask(
+	t *testing.T,
+	f *bpmnAuthorizationFixture,
+	suffix string,
+) (*ent.ProcessTask, *ent.ProcessInstance, *ent.Ticket) {
+	t.Helper()
+	task := f.seedNonParticipantApprovalTask(t, suffix)
+	task, err := f.client.ProcessTask.UpdateOne(task).
+		SetCandidateUsers(f.actor.Email).
+		Save(f.userCtx)
+	require.NoError(t, err)
+	configureLegacyUserCallbackDefinition(t, f, task, "cc_task", "notify_cc")
+	ticket := f.client.Ticket.Create().
+		SetTitle("Durable CC callback").
+		SetTicketNumber("BPMN-CC-" + suffix).
+		SetStatus("open").
+		SetRequesterID(f.actor.ID).
+		SetTenantID(f.tenant.ID).
+		SaveX(f.userCtx)
+	instance := f.client.ProcessInstance.GetX(f.userCtx, task.ProcessInstanceID)
+	instance, err = f.client.ProcessInstance.UpdateOne(instance).
+		SetBusinessType("ticket").
+		SetBusinessID(ticket.ID).
+		SetInitiator(strconv.Itoa(f.actor.ID)).
+		Save(f.userCtx)
+	require.NoError(t, err)
+	return task, instance, ticket
+}
+
 func setCallbackTestClock(engine *CustomProcessEngine, now *time.Time) {
 	engine.callbackOutbox.now = func() time.Time { return *now }
 }
@@ -340,6 +369,22 @@ func TestCallbackWorkerRetriesAfterHandlerFailureWithSameExecutionKey(t *testing
 	assert.Equal(t, bpmnCallbackStatusCompleted, row.Status)
 	assert.Equal(t, []string{row.ExecutionKey, row.ExecutionKey}, handler.ExecutionKeys())
 	assert.Equal(t, 1, handler.EffectCount())
+}
+
+func TestCompleteTaskCanonicalizesValidCCChannelsBeforeEnqueue(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	task, instance, _ := seedDurableCCUserCallbackTask(t, f, "canonical-channels")
+
+	err := f.engine.CompleteTask(f.typedTaskScopeOnlyCtx(f.actor, false), task.TaskID, map[string]interface{}{
+		"ccType":         "user",
+		"ccUserIds":      strconv.Itoa(f.outsider.ID),
+		"ccNotify":       true,
+		"notifyChannels": " email, in_app,email ",
+	})
+	require.NoError(t, err)
+
+	row := callbackRowForInstance(t, f, instance.ID)
+	assert.Equal(t, "email,in_app", row.Variables["notifyChannels"])
 }
 
 func TestCallbackWorkerRecoversExpiredLeaseAfterSimulatedCrash(t *testing.T) {
