@@ -152,6 +152,8 @@ Live Dev 首次 L2 验收确认了一个 P1 完整性缺口：ITSM Dev 尚未执
 
 事务不得包含 HTTP、Graph、Procedure 或 Tool 调用。KAF 交付仍从已提交 Outbox 开始，保持现有跨进程恢复与 replay-only 合同。实现复用现有 `CustomProcessEngine`、`KafDelegationService` 和 Outbox repository，不增加 VPN 分支、第二套流程服务、测试端点或运行时迁移逻辑。
 
+最终并发复审补充了同一权威路由合同：完成事务解析出的非 KAF 目标也必须作为 `currentActivity + version` 路由标记提交；UserTask 创建、EndEvent 完成和 ServiceTask 执行前分别以 tenant、running、activity、version 做一次性 claim。若 reroute、suspend 或 terminate 先提交，旧目标必须显式失败且不得覆盖 activity、创建任务或执行 handler。可重试的事务提交冲突必须复用冻结的路由快照，不得重新计算 `random`、`currentTime` 等非确定性条件。外部 handler/callback 仍只在 claim 提交后执行。
+
 首次验收产生的 SR 34 / WorkItem 17 / process 143 作为失败证据保留。修复和 bootstrap 完成后，通过现有受权 API 终止该 process 并记录原因；不为它增加自动 orphan 兼容分支，也不直接改数据库。正式主路径由新的官方 Service Request 自动触发唯一新流程，不手工启动流程。
 
 ## 6. 失败、恢复与停止条件

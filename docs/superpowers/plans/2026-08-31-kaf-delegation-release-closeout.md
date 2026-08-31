@@ -1054,7 +1054,7 @@ Expected: both health calls succeed; `/proc/$KAF_PID/cwd` is the feature worktre
 - Produces: one database transaction covering the source task, process variable/version/activity transition, approval decision, KAF delegated task, source/delegation audits, and Outbox event.
 - Excludes: runtime auto-migration/readiness gates, synchronous Graph/Procedure/Tool work, a second workflow engine, process-143-specific behavior, and direct database repair.
 
-- [ ] **Step 1: Add a failing end-to-end service test for Outbox failure at the L2 handoff**
+- [x] **Step 1: Add a failing end-to-end service test for Outbox failure at the L2 handoff**
 
 Extend the existing SSLVPN/service fixture so the KAF Outbox repository fails while the real L2 approval is submitted. Before implementation, prove the test fails because the current engine leaves the source task completed or advances process state.
 
@@ -1074,7 +1074,7 @@ Graph/KAF runtime is not involved
 
 Run the narrow RED test and preserve its expected assertion failure in the private evidence directory.
 
-- [ ] **Step 2: Implement one transaction for the persistent KAF handoff**
+- [x] **Step 2: Implement one transaction for the persistent KAF handoff**
 
 Refactor the existing KAF delegated-task creation so it can participate in a caller-owned Ent transaction while retaining its current public all-or-nothing entry point. In the BPMN engine, only the transition whose resolved successor is the registered KAF async wait state uses the combined transaction.
 
@@ -1090,7 +1090,7 @@ Inside that transaction:
 
 Do not call Graph, KAF HTTP, Procedure, Tool, or user-task business callbacks inside the transaction. Preserve the existing post-commit callback behavior. Do not add logic for a particular BPMN key, catalog, record ID, UPN, group, or operation kind.
 
-- [ ] **Step 3: Prove rollback, retry, concurrency, and cardinality**
+- [x] **Step 3: Prove rollback, retry, concurrency, and cardinality**
 
 After the RED test turns GREEN, restore the Outbox repository and retry the same L2 task. Assert exactly one approval decision, delegated task, creation audit, source completion audit, and Outbox event, with the process waiting at the KAF activity and the source task completed.
 
@@ -1111,7 +1111,7 @@ git diff --check
 
 Expected: all commands exit zero; no tracked file outside the approved remediation scope changes.
 
-- [ ] **Step 4: Run the explicit ITSM bootstrap migration with no seed**
+- [x] **Step 4: Run the explicit ITSM bootstrap migration with no seed**
 
 Stop only the feature ITSM listener on `127.0.0.1:8090`. Source the private ITSM Dev env without printing values, then execute the repository-supported one-shot bootstrap:
 
@@ -1136,7 +1136,7 @@ no seed run was requested
 
 Restart the feature ITSM listener with migration flags unset and verify `/proc/<pid>/cwd` plus health. No migration-head check is added to the Web application.
 
-- [ ] **Step 5: Close the failed Dev process through the official API**
+- [x] **Step 5: Close the failed Dev process through the official API**
 
 Renew the short-lived administrative token through the established private helper. Call the existing authorized endpoint:
 
@@ -1147,9 +1147,11 @@ PUT /api/v1/bpmn/process-instances/<process-instance-key>/terminate
 
 Read back process 143 and prove `status=terminated`, Graph membership remains false, and no KAF task/outbox/action exists for the failed process. Preserve SR 34 / WorkItem 17 / process 143 as failure evidence. Do not reset task 197, directly edit any table, or manually start another process.
 
-- [ ] **Step 6: Independent review checkpoint**
+- [x] **Step 6: Independent review checkpoint**
 
 A fresh reviewer must verify the implementation against this Task 6A contract and `AGENTS.md`: one authoritative transaction boundary, no compatibility layer, no hardcoded VPN/process behavior, tenant-safe writes, explicit errors, and tests demonstrating rollback plus retry. Address every finding before Task 7 resumes.
+
+Completion evidence: ITSM commits `48159722`, `bff2bc13`, `eeaee520`, and `0e7a8701` establish the atomic KAF handoff, fail-closed canonical/gateway dispatch, authoritative route commit, and fenced non-KAF route claim. Final independent review found no findings; focused/race/full tests, `go build ./...`, and `git diff --check` passed. Bootstrap-only applied `019_kaf_execution_integrity_rls` with `ITSM_AUTO_SEED=false`; all three execution-integrity tables exist and both ledger/receipt tables have enabled+forced tenant RLS. Process 143 was terminated through the official API, has no L2 decision/KAF task/KAF audit/Outbox/action/receipt, and Graph readback remains `member=false`.
 
 ### Task 7: Execute One Real SSLVPN Main Path, Persist Evidence, Replay, and Restore
 
