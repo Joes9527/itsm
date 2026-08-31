@@ -11,6 +11,7 @@ import (
 	"itsm-backend/connector"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/service/bpmn"
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -75,6 +76,12 @@ func (c *durableNotificationConnector) sentMessages() []*connector.Message {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return append([]*connector.Message(nil), c.messages...)
+}
+
+func (c *durableNotificationConnector) setSendError(err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.sendErr = err
 }
 
 type durableNotificationFixture struct {
@@ -188,6 +195,61 @@ func TestTicketNotificationWorkerRetriesSendFailureWithStableDeliveryKey(t *test
 	require.Len(t, messages, 1)
 	require.Equal(t, *row.DeliveryKey, messages[0].ID)
 	require.Equal(t, *row.DeliveryKey, messages[0].Metadata["delivery_key"])
+}
+
+func TestBPMNCCFanoutUsesDistinctStableConnectorDeliveryKeys(t *testing.T) {
+	fixture := newDurableNotificationFixture(t, "notification-bpmn-fanout")
+	secondRecipient, err := createTicketWorkflowTestUser(
+		fixture.ctx,
+		fixture.client,
+		fixture.tenant.ID,
+		"notification-bpmn-fanout-second",
+	)
+	require.NoError(t, err)
+	handler := bpmn.NewCCTaskHandler(fixture.client, zaptest.NewLogger(t).Sugar())
+	callbackCtx := context.WithValue(fixture.ctx, bpmn.BPMNTenantIDContextKey, fixture.tenant.ID)
+	callbackCtx = bpmn.WithBPMNCallbackExecutionKey(callbackCtx, "callback-fanout-key")
+	_, err = handler.Execute(callbackCtx, nil, map[string]interface{}{
+		"ticket_id":         fixture.ticket.ID,
+		"ccType":            "variable",
+		"ccResolvedUserIds": []int{fixture.recipient.ID, secondRecipient.ID},
+		"ccNotify":          true,
+		"notifyChannels":    "email",
+		"addedBy":           fixture.operator.ID,
+	})
+	require.NoError(t, err)
+
+	rows := fixture.client.TicketNotification.Query().AllX(fixture.ctx)
+	require.Len(t, rows, 2)
+	require.NotNil(t, rows[0].DeliveryKey)
+	require.NotNil(t, rows[1].DeliveryKey)
+	require.NotEqual(t, *rows[0].DeliveryKey, *rows[1].DeliveryKey)
+
+	fake := &durableNotificationConnector{sendErr: errors.New("retry fanout")}
+	configureDurableNotificationConnector(t, fixture.notifications, fixture.tenant.ID, fake)
+	now := time.Now().Add(time.Hour)
+	fixture.notifications.now = func() time.Time { return now }
+	_, err = fixture.notifications.ProcessPendingDeliveries(fixture.ctx, "notification-worker-fanout-one", 10)
+	require.Error(t, err)
+	fake.setSendError(nil)
+	rows = fixture.client.TicketNotification.Query().AllX(fixture.ctx)
+	for _, row := range rows {
+		if row.NextAttemptAt.After(now) {
+			now = row.NextAttemptAt
+		}
+	}
+	completed, err := fixture.notifications.ProcessPendingDeliveries(fixture.ctx, "notification-worker-fanout-two", 10)
+	require.NoError(t, err)
+	require.Equal(t, 2, completed)
+
+	messageCounts := make(map[string]int)
+	for _, message := range fake.sentMessages() {
+		messageCounts[message.ID]++
+	}
+	require.Len(t, messageCounts, 2, "each recipient effect must have a distinct connector Message.ID")
+	for _, count := range messageCounts {
+		require.Equal(t, 2, count, "retry must retain the same effect-level Message.ID")
+	}
 }
 
 func TestTicketNotificationWorkerRecoversExpiredLeaseAfterSentStatusWriteFailure(t *testing.T) {
@@ -304,13 +366,13 @@ func TestTicketNotificationWorkerRunsImmediateSweepAndStopsOnCancellation(t *tes
 	case <-time.After(5 * time.Second):
 		t.Fatal("notification worker did not perform its immediate sweep")
 	}
+	require.Eventually(t, func() bool {
+		return fixture.client.TicketNotification.Query().OnlyX(context.Background()).Status == "sent"
+	}, 5*time.Second, 10*time.Millisecond)
 	cancel()
 	select {
 	case <-stopped:
 	case <-time.After(5 * time.Second):
 		t.Fatal("notification worker did not stop after cancellation")
 	}
-	require.Eventually(t, func() bool {
-		return fixture.client.TicketNotification.Query().OnlyX(context.Background()).Status == "sent"
-	}, 5*time.Second, 10*time.Millisecond)
 }

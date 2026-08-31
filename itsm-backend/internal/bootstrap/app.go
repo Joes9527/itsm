@@ -934,6 +934,9 @@ func InitializeStorage(cfg *config.Config, client *ent.Client, sugar *zap.Sugare
 		if err := prepareTicketCCIndexMigration(ctx, database.GetRawDB(), sugar); err != nil {
 			return fmt.Errorf("prepare TicketCC index migration: %w", err)
 		}
+		if err := prepareTicketNotificationMigration(ctx, database.GetRawDB(), sugar); err != nil {
+			return fmt.Errorf("prepare ticket notification migration: %w", err)
+		}
 		if err := prepareRolePermissionTenantMigration(ctx, database.GetRawDB(), sugar); err != nil {
 			return fmt.Errorf("prepare role permission tenant migration: %w", err)
 		}

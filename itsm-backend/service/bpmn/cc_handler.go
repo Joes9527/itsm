@@ -2,6 +2,7 @@ package bpmn
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"math"
 	"strconv"
@@ -457,7 +458,7 @@ func (h *CCTaskHandler) createCCNotifications(ctx context.Context, client *ent.C
 				create.SetStatus("sent").SetSentAt(now)
 			}
 			if hasExecutionKey {
-				create.SetDeliveryKey(executionKey)
+				create.SetDeliveryKey(ccNotificationDeliveryKey(executionKey, ticketID, userID, channel))
 			}
 			if _, err := create.Save(ctx); err != nil {
 				return fmt.Errorf("创建抄送通知失败")
@@ -479,6 +480,11 @@ func (h *CCTaskHandler) createCCNotifications(ctx context.Context, client *ent.C
 		}
 	}
 	return nil
+}
+
+func ccNotificationDeliveryKey(executionKey string, ticketID, userID int, channel string) string {
+	effectIdentity := fmt.Sprintf("%s\x00%d\x00%d\x00%s", executionKey, ticketID, userID, channel)
+	return fmt.Sprintf("ticket-notification-bpmn-%x", sha256.Sum256([]byte(effectIdentity)))
 }
 
 // Validate 验证配置
