@@ -127,12 +127,14 @@ func (c *IncidentCreator) CreateExtension(ctx context.Context, tx *ent.Tx, workI
 	if input.Subcategory != "" {
 		create.SetSubcategory(input.Subcategory)
 	}
-	if len(plan.Resolved.CIIDs) > 0 {
-		create.AddConfigurationItemIDs(plan.Resolved.CIIDs...)
-	}
 	created, err := create.Save(ctx)
 	if err != nil {
 		return nil, NewInfrastructureUnavailable("could not create incident extension", err)
+	}
+	if len(plan.Resolved.CIIDs) > 0 {
+		if _, err := created.Update().AddConfigurationItemIDs(plan.Resolved.CIIDs...).Save(ctx); err != nil {
+			return nil, NewInfrastructureUnavailable("could not link incident configuration items", err)
+		}
 	}
 	_, err = tx.IncidentEvent.Create().
 		SetIncidentID(created.ID).

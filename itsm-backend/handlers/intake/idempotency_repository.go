@@ -15,6 +15,8 @@ import (
 
 const intakeCreateOperation = "create_work_item"
 
+var errIdempotencyOwnerInProgress = errors.New("idempotency owner is still processing")
+
 type ClaimOutcome string
 
 const (
@@ -96,7 +98,7 @@ func (r *IdempotencyRepository) Claim(
 		return nil, "", NewInternalFailure(fmt.Sprintf("unsupported intake receipt status %q", receipt.Status), nil)
 	}
 	if !inserted {
-		return nil, "", NewInfrastructureUnavailable("idempotency claim is still processing", nil)
+		return nil, "", NewInfrastructureUnavailable("idempotency claim is still processing", errIdempotencyOwnerInProgress)
 	}
 	return receipt, ClaimInserted, nil
 }
