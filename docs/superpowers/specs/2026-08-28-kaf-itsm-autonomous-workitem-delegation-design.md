@@ -437,7 +437,7 @@ UI 验收至少覆盖：入口收敛与旧路由重定向、知识建议后继�
 
 ### 12.6 下一阶段建议工作包
 
-新 Agent 应从 ITSM `main` 读取本设计、`docs/BPMN 整改遗留项 E2E 测试计划.md`、执行完整性 design、历史 plan 和验收 report。不得把历史 plan 的未勾选 TDD 步骤当成待实施清单，也不得从 feature worktree 重做已经合并的 action ledger、completion receipt 或 Outbox。
+新 Agent 应从 ITSM `main` 读取本设计、`docs/testing/kaf-delegation-release-closeout-fixture.md`、执行完整性 design、历史 plan 和验收 report。不得把历史 plan 的未勾选 TDD 步骤当成待实施清单，也不得从 feature worktree 重做已经合并的 action ledger、completion receipt 或 Outbox。原 `BPMN 整改遗留项 E2E 测试计划.md` 已归档，只保留历史参考价值，不再作为发布收口权威入口。
 
 后续工作按依赖关系拆成独立 spec → plan → implementation 周期，禁止合并为一份横跨 ITSM、KAF、前端和真实环境的大计划：
 
