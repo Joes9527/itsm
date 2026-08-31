@@ -1167,7 +1167,7 @@ Completion evidence: ITSM commits `48159722`, `bff2bc13`, `eeaee520`, and `0e7a8
 - Produces: one newly created successful WorkItem/BPMN path after the preserved, officially terminated preflight failure; one published outbox event, one completed KAF delivery, one applied ledger/receipt, one Graph grant external action with sanitized audit rows, one exact-payload replay returning `already_applied`, and final Graph `member=false`.
 - Stop rule: after cleanup is armed, every failure path runs the Graph membership check and `remove_vpn_access(user_identifier)` when necessary; cleanup failure stops all further real-change work and marks closeout failed.
 
-- [ ] **Step 1: Define read-only membership and controlled cleanup helpers**
+- [x] **Step 1: Define read-only membership and controlled cleanup helpers**
 
 Keep the target fixture in shell variables, but let the Tool obtain the group from configuration:
 
@@ -1230,7 +1230,7 @@ trap 'cleanup_membership' EXIT INT TERM
 
 Expected: helpers print only object IDs, membership booleans, and success state; no token or credential.
 
-- [ ] **Step 2: Establish and prove the non-member baseline**
+- [x] **Step 2: Establish and prove the non-member baseline**
 
 ```bash
 cd /mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-worktrees/kaf-delegation-transactional-delivery
@@ -1247,7 +1247,7 @@ fi
 
 Expected: the final baseline file says `member=false`. Failure to remove/confirm is a hard stop.
 
-- [ ] **Step 3: Resolve the SSLVPN catalog and create the Service Request through the official API**
+- [x] **Step 3: Resolve the SSLVPN catalog and create the Service Request through the official API**
 
 ```bash
 export ITSM_BASE_URL=http://127.0.0.1:8090
@@ -1275,7 +1275,7 @@ printf 'service_request_id=%s work_item_id=%s\n' "$SERVICE_REQUEST_ID" "$WORK_IT
 
 Expected: one catalog, positive Service Request ID, and positive WorkItem ID. Do not start a second process manually.
 
-- [ ] **Step 4: Resolve the unique process and freeze the intake before approval**
+- [x] **Step 4: Resolve the unique process and freeze the intake before approval**
 
 ```bash
 for attempt in $(seq 1 30); do
@@ -1308,7 +1308,7 @@ printf 'process_instance_id=%s process_instance_key=%s\n' \
 
 Expected: the numeric ID and string key are both nonempty and the update returns code zero.
 
-- [ ] **Step 5: Upload one harmless attachment and complete L1 approval**
+- [x] **Step 5: Upload one harmless attachment and complete L1 approval**
 
 ```bash
 ATTACHMENT_FILE="$(mktemp)"
@@ -1332,7 +1332,7 @@ curl -fsS -X POST -H "Authorization: Bearer $ITSM_L1_TOKEN" -H 'Content-Type: ap
 
 Expected: attachment upload succeeds and the L1 decision advances to `UserTask_L2NetworkOpsApproval`.
 
-- [ ] **Step 6: Stop KAF before L2, approve L2, and identify the delegated task without a Graph race**
+- [x] **Step 6: Stop KAF before L2, approve L2, and identify the delegated task without a Graph race**
 
 Stop only the current-source Uvicorn `:8001` process from Task 6; leave KAF PostgreSQL/Redis/Qdrant and ITSM running. Then:
 
@@ -1369,7 +1369,7 @@ test -n "$KAF_TASK_ID"
 
 Expected: KAF is down, Graph still says `member=false`, and exactly one delegated task is found for this process.
 
-- [ ] **Step 7: Run live task-scope, tenant, list-audit, and attachment-disclosure breakers**
+- [x] **Step 7: Run live task-scope, tenant, list-audit, and attachment-disclosure breakers**
 
 ```bash
 curl -sS -o "$CLOSEOUT_EVIDENCE_DIR/wrong-subject.json" -w '%{http_code}\n' \
@@ -1405,7 +1405,7 @@ graph_membership | grep -q 'member=false'
 
 Expected: ordinary/cross-tenant actors cannot read context; the valid response exposes only attachment ID; no Graph mutation has occurred. The valid list and context calls each create their designed aggregate/single audit.
 
-- [ ] **Step 8: Restart current-source KAF and wait at most five minutes for end-to-end convergence**
+- [x] **Step 8: Restart current-source KAF and wait at most five minutes for end-to-end convergence**
 
 Restart the exact current-source Uvicorn command on `127.0.0.1:8001`, verify its working directory, then poll read-only state:
 
@@ -1433,7 +1433,7 @@ grep -q 'member=true' "$CLOSEOUT_EVIDENCE_DIR/graph-after-grant.txt"
 
 Expected: outbox retry delivers after KAF restart, KAF completes, and the real group membership becomes true. Timeout or delivery failure jumps to cleanup.
 
-- [ ] **Step 9: Read and assert authoritative side-effect cardinalities**
+- [x] **Step 9: Read and assert authoritative side-effect cardinalities**
 
 Use the already-loaded `ITSM_DATABASE_URL` without printing it:
 
@@ -1477,7 +1477,7 @@ grep -Eq '^graph_grant_audit_rows\|[1-9][0-9]*\|0$' "$CLOSEOUT_EVIDENCE_DIR/kaf-
 
 Expected: one outbox, ledger, receipt, completion audit, delivery, and Graph external action. Governance may persist separate pre/post/decorator audit rows, so those audit rows must be present and sanitized rather than incorrectly used as the invocation cardinality. Context audit count may be greater than one because the explicit disclosure probe and KAF runtime are two separate successful reads; each row must remain sanitized.
 
-- [ ] **Step 10: Replay the exact persisted completion payload and prove no duplicate effects**
+- [x] **Step 10: Replay the exact persisted completion payload and prove no duplicate effects**
 
 Read the payload without displaying it, submit it with the KAF automation token, then repeat cardinality queries:
 
@@ -1511,7 +1511,7 @@ test "$(docker exec kaf-dev-postgres psql -U ai01 -d control_plane -Atc "select 
 
 Expected: `already_applied`; one Graph grant external action and one ITSM business-effect set remain. The replay itself must not call the Procedure or Tool.
 
-- [ ] **Step 11: Restore Julian and clear the trap only after read-only confirmation**
+- [x] **Step 11: Restore Julian and clear the trap only after read-only confirmation**
 
 ```bash
 cleanup_membership
@@ -1538,7 +1538,7 @@ Expected: final Graph state is non-member. If the Tool or read-only confirmation
 - Consumes: Task 6 test logs and commits; Task 7 sanitized IDs, booleans, counts, replay response, and final cleanup state.
 - Produces: deterministic callback/lease/auth recovery evidence, a zero-skip real PostgreSQL RLS result, and one `Live Dev Closeout Addendum` consistent with command output and persistent records.
 
-- [ ] **Step 1: Run the deterministic ITSM callback, idempotency, auth, tenant, and attachment breakers**
+- [x] **Step 1: Run the deterministic ITSM callback, idempotency, auth, tenant, and attachment breakers**
 
 ```bash
 set -euo pipefail
@@ -1582,7 +1582,7 @@ go test ./handlers/service_request -run TestServiceRequestKafDelegationSSLVPN -c
 
 Expected: PASS; callback recovery does not perform a second BPMN completion, exact action replay is idempotent, and tenant/attachment boundaries fail closed.
 
-- [ ] **Step 2: Run deterministic KAF lease/recovery/replay breakers**
+- [x] **Step 2: Run deterministic KAF lease/recovery/replay breakers**
 
 ```bash
 cd /mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-worktrees/kaf-delegation-transactional-delivery
@@ -1598,7 +1598,7 @@ ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/
 
 Expected: PASS; the last test proves `procedure_calls == 1`, and all post-payload recovery is replay-only.
 
-- [ ] **Step 3: Run the real PostgreSQL RLS probe and reject skips**
+- [x] **Step 3: Run the real PostgreSQL RLS probe and reject skips**
 
 ```bash
 cd /home/administrator/project/itsm/itsm-backend
@@ -1613,7 +1613,7 @@ fi
 
 Expected: exit zero, at least one PASS, and zero skip markers. SQLite or deterministic SQL is not acceptable evidence.
 
-- [ ] **Step 4: Reconfirm final external state and repository cleanliness before writing the report**
+- [x] **Step 4: Reconfirm final external state and repository cleanliness before writing the report**
 
 ```bash
 cd /mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-worktrees/kaf-delegation-transactional-delivery
@@ -1628,7 +1628,7 @@ git diff --check
 
 Expected: `member=false`; KAF contains only intended committed changes; ITSM may still show the protected untracked `docs/implementation/` and the report edit that follows, with no unrelated files.
 
-- [ ] **Step 5: Append the Live Dev Closeout Addendum from sanitized evidence**
+- [x] **Step 5: Append the Live Dev Closeout Addendum from sanitized evidence**
 
 Use `apply_patch` to append these four headings to the existing report: `## Live Dev Closeout Addendum — 2026-08-31`, `### Environment and revisions`, `### Automated verification`, `### Live Service Request and replay evidence`, and `### Breakers and residual status`.
 
@@ -1651,7 +1651,7 @@ Populate every value with a literal observed fact from the named source below; d
 
 If the repository-wide KAF suite remains nonzero, list its exact counts and classify each modified-scope failure against the passing focused suite; do not call the suite green. Do not include token values, environment-file paths, raw Tool payloads, raw intake, attachment storage data, or unredacted exceptions. IDs and membership booleans are allowed.
 
-- [ ] **Step 6: Validate the report against evidence and the design completion criteria**
+- [x] **Step 6: Validate the report against evidence and the design completion criteria**
 
 ```bash
 cd /home/administrator/project/itsm
@@ -1669,20 +1669,36 @@ git diff --check
 
 Manually cross-check each reported count against `$CLOSEOUT_EVIDENCE_DIR`, confirm the final Graph file says `member=false`, and confirm no completion criterion is marked PASS from a skipped or nonzero command.
 
-- [ ] **Step 7: Run final verification and commit only the report**
+- [x] **Step 7: Run final verification and commit the closeout documentation**
 
 ```bash
 cd /home/administrator/project/itsm/itsm-backend
 go test ./controller ./service ./handlers/service_request ./tests/fixtures -count=1
 cd /home/administrator/project/itsm
 git diff --check
-git add docs/reports/2026-08-30-kaf-delegation-execution-integrity-report.md
+git add \
+  docs/reports/2026-08-30-kaf-delegation-execution-integrity-report.md \
+  docs/superpowers/plans/2026-08-31-kaf-delegation-release-closeout.md \
+  docs/superpowers/specs/2026-08-31-kaf-delegation-release-closeout-design.md
 git diff --cached --check
 git status --short
 git commit -m "docs(kaf): record live delegation closeout"
 ```
 
-Expected: focused verification exits zero; the staged set contains only the report; `docs/implementation/` remains untracked and unstaged.
+Expected: focused verification exits zero; the staged set contains only the
+closeout report and its design/plan status updates; protected historical review
+files remain untracked and unstaged.
+
+Completion evidence: the real path used SR 35 / WorkItem 18 / process 144 and
+completed with one Outbox, KAF delivery, ledger, receipt, completion audit, and
+Graph external action. Exact-payload replay returned `already_applied`; final
+Graph membership is false. Task 8 breakers passed (ITSM 19, KAF 7), real
+PostgreSQL RLS passed 15 tests with zero skips after TDD fixes `821388ef` and
+`fa577192`, independent review approved the final fix, ITSM full tests/build and
+the 139-test KAF delegation scope passed, and the Live Dev Addendum records a
+Dev `PASS`. The design, plan, and report are committed together so their status
+does not contradict the evidence; protected historical review files remain
+untracked and unstaged.
 
 ## Execution Gate
 

@@ -4,15 +4,15 @@ Date: 2026-08-31
 
 ## Status
 
-The implementation is accepted for controlled Dev integration, not yet for
-production rollout. The execution-integrity regressions pass in both linked
-worktrees, the KAF PostgreSQL Dev database was upgraded through revision
-`036_kaf_completion_replay`, and the current KAF source started successfully
-against that database. A live cross-process SSLVPN run with production-like
-credentials and PostgreSQL RLS remains outstanding.
+**PASS — stable Dev baseline.** The Live Dev closeout completed on 2026-08-31:
+one official SSLVPN Service Request crossed ITSM BPMN, transactional Outbox,
+KAF delivery, the governed Microsoft Graph Tool, exact-payload completion
+replay, and final permission cleanup. The real PostgreSQL RLS suite completed
+with zero skips after two fail-closed connection defects were repaired and
+independently reviewed.
 
-No request was sent to KAF PROD `10.128.35.195`, no production credential was
-used, and no external network change was performed.
+This is not production rollout approval. No request was sent to KAF PROD
+`10.128.35.195`, and the separate unified Intake design has not begun.
 
 ## Full-Implementation Review Addendum
 
@@ -143,7 +143,7 @@ ENV_FILE=/dev/null DEBUG=true PYTHONPATH=src /home/administrator/actions-runner/
 Result: `036_kaf_completion_replay (head)`.
 
 The repository-wide KAF `pytest -q` command now collects and executes after the
-optional-import fix. It produced `2457 passed, 13 skipped, 1 xfailed`, plus 90
+optional-import fix. It produced `2450 passed, 13 skipped, 1 xfailed`, plus 96
 failures and 32 setup errors. The dominant setup error is test-process settings
 drift to `localhost:5432` instead of the explicitly supplied Dev DSN; many
 remaining failures are outside this branch's delegation files. This is not a
@@ -154,11 +154,6 @@ ITSM review files were not modified, staged, or removed.
 
 ## Residual Limits
 
-- PostgreSQL RLS and concurrency probes need configured test credentials to run
-  rather than skip; deterministic SQL and SQLite transaction paths passed.
-- No live cross-process SSLVPN path with a real ITSM service account was
-  exercised. The in-process authoritative SSLVPN scenario and both service
-  suites passed.
 - The KAF repository-wide suite is not green because test modules mutate or
   reload global settings and escape the supplied Dev database configuration.
   That repository-level isolation cleanup is separate from delegation behavior
@@ -168,3 +163,104 @@ ITSM review files were not modified, staged, or removed.
 - The generic non-KAF `CompleteTask` API remains multi-step by design; the
   exact-scope advancement and owner-fenced recovery guarantees apply to the
   dedicated KAF completion path.
+
+The historical RLS and live-path gaps are superseded by the live Graph path and
+zero-skip PostgreSQL results below.
+
+## Live Dev Closeout Addendum — 2026-08-31
+
+### Environment and revisions
+
+- Execution window: `2026-08-31T20:25:21+08:00` through
+  `2026-08-31T20:54:31+08:00` (Asia/Shanghai).
+- ITSM revision: `fa57719288bdf308e300196b9497daae9e219d4d`.
+- KAF revision: `40dca9afa44fabb74d0609f7629ecc6de8a2049c`.
+- ITSM Dev reached post-schema migration `019_kaf_execution_integrity_rls`;
+  KAF Dev reached Alembic `036_kaf_completion_replay`.
+- Current-source listeners were verified at `127.0.0.1:8090` for ITSM and
+  `127.0.0.1:8001` for KAF. The pre-existing KAF listener on port 8000 was not
+  replaced or used as acceptance evidence.
+- The `it-support` workspace has exactly one retained mapping to ITSM tenant
+  `1`. The Dev RLS probe role `itsm_app` is `NOLOGIN`, non-superuser, and does
+  not bypass RLS.
+
+### Automated verification
+
+- ITSM deterministic Task 8 breakers: 19 tests passed across service,
+  controller, and Service Request handler scopes. They cover callback recovery,
+  idempotency, task scope, tenant rejection, list audit, and attachment
+  minimization.
+- KAF deterministic lease/recovery/replay breakers: 7 passed in 16.97 seconds.
+- Current KAF delegation/webhook/migration scope: 139 passed and 1 skipped in
+  34.18 seconds. The one skip is a separate optional concurrency probe that
+  requires a test-process database; the real KAF Dev PostgreSQL delivery was
+  exercised by the live path below.
+- Real ITSM PostgreSQL RLS: 15 passed, 0 skipped in 0.244 seconds. Tenant `1`
+  saw 7 `changes` rows, tenant `999` saw 0, both execution-integrity tables
+  rejected cross-tenant rows, missing tenant failed closed, and `DISCARD ALL`
+  cleared pooled session state.
+- The RLS run first exposed invalid parameter binding in `SET SESSION`; commit
+  `821388ef` replaced it with session-scoped, parameterized `set_config`.
+  Independent review then exposed dirty-connection reuse on cleanup errors;
+  commit `fa577192` invalidates the physical connection through
+  `driver.ErrBadConn`. Tests prove the old connection is closed and the next
+  borrow uses a new physical connection. Final independent review approved the
+  remediation with no findings.
+- Final ITSM `go test ./... -count=1` passed 53 test-bearing packages, with 157
+  packages reporting no test files, in 85 seconds. `go build ./...` passed in
+  10 seconds.
+- The recorded repository-wide KAF run remains nonzero: 2450 passed, 96 failed,
+  13 skipped, 1 xfailed, and 32 setup errors. Those failures are outside the
+  delegation closeout scope and are dominated by global test-settings/database
+  isolation; this report does not call that suite green.
+
+### Live Service Request and replay evidence
+
+- Official Service Request `35` created WorkItem `18` and process `144`
+  (`PI-sslvpn_approval_flow-1788179201869909767`). The process completed at
+  `EndEvent_1`, version `6`.
+- L1 task `199` and L2 task `200` completed before KAF task
+  `TASK-3a9e3b28-e4c1-4677-bf10-e6472649c252` (database task `201`) entered the
+  delegated wait state. Correlation ID:
+  `cafe4a9a-54fb-4d5c-95d0-2b58422cfe91`.
+- Task context exposed one opaque attachment reference, ID `2`, and no file
+  name, storage path, or URL. An ordinary subject received HTTP 403 and a
+  cross-tenant subject received HTTP 404.
+- Authoritative records remained cardinality one: Outbox `1` is `published`,
+  action ledger `1` is `applied`, completion receipt `1` is
+  `callback_succeeded`, KAF delivery
+  `35b9c18b-837e-456f-ad91-a92a7c57e39d` is `completed`, and governed external
+  action `30c89247-6bf5-4154-a9d2-28d6518b7992` is `succeeded`.
+- ITSM recorded one successful completion audit, three successful context-read
+  audits, and one creation audit. KAF recorded one Graph grant action and one
+  corresponding sanitized audit row; stored audit evidence contained zero
+  secret markers.
+- Membership lifecycle for user object
+  `8e60c8c8-9687-416a-968d-81d978eba0eb` and group object
+  `b7c7f066-3042-4a11-9e36-2ea80b979ae3` was
+  `member=false → member=true → member=true → member=false → member=false`
+  (baseline, grant, replay, cleanup, final readback).
+- Replaying the exact persisted completion payload returned `already_applied`.
+  Ledger, receipt, completion-audit, and Graph external-action counts remained
+  one, and replay did not cause a second membership transition.
+
+### Breakers and residual status
+
+- L2 approval while KAF was stopped committed the decision, delegated task,
+  creation audit, and pending Outbox atomically. Restart recovery published the
+  same event and converged without manual process creation or direct business
+  table repair.
+- Callback failure, duplicate webhook, concurrent claim, lease theft,
+  stale-owner finalization, remote-applied crash recovery, task scope, tenant
+  isolation, and replay-only behavior all passed their deterministic breakers.
+- Live diagnostics found two pre-existing API inconsistencies: lower-camel
+  process query keys are not bound while exported Go field names are, and the
+  process-variable endpoint accepts the numeric row ID rather than the engine
+  process key. They did not weaken the accepted delegation guarantees and
+  remain separate contract-hardening work.
+- Final Azure AD state is `member=false`. No cleanup action remains pending.
+
+**Closeout verdict: PASS.** This establishes a reproducible, audited Dev
+baseline for KAF delegation execution integrity. It does not authorize KAF PROD
+deployment. Unified Intake remains intentionally deferred to a separate
+brainstorm and design phase.

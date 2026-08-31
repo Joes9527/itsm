@@ -1,6 +1,6 @@
 # KAF 委派执行完整性发布收口设计
 
-> 状态：设计已批准并执行中；Live Dev 暴露的 BPMN → KAF 交接完整性修订已于 2026-08-31 批准
+> 状态：已完成；Live Dev 稳定基线于 2026-08-31 验收 PASS，统一 Intake 继续作为独立后续设计
 > 日期：2026-08-31
 > 上位设计：`2026-08-28-kaf-itsm-autonomous-workitem-delegation-design.md`
 > 已实现基线：`2026-08-30-kaf-delegation-execution-integrity-design.md`
