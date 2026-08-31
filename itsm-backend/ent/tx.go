@@ -100,6 +100,10 @@ type Tx struct {
 	IncidentRuleExecution *IncidentRuleExecutionClient
 	// ItemVersion is the client for interacting with the ItemVersion builders.
 	ItemVersion *ItemVersionClient
+	// KafTaskActionLedger is the client for interacting with the KafTaskActionLedger builders.
+	KafTaskActionLedger *KafTaskActionLedgerClient
+	// KafTaskCompletionReceipt is the client for interacting with the KafTaskCompletionReceipt builders.
+	KafTaskCompletionReceipt *KafTaskCompletionReceiptClient
 	// KnowledgeArticle is the client for interacting with the KnowledgeArticle builders.
 	KnowledgeArticle *KnowledgeArticleClient
 	// KnowledgeArticleLike is the client for interacting with the KnowledgeArticleLike builders.
@@ -126,6 +130,8 @@ type Tx struct {
 	Notification *NotificationClient
 	// NotificationPreference is the client for interacting with the NotificationPreference builders.
 	NotificationPreference *NotificationPreferenceClient
+	// OutboxEvent is the client for interacting with the OutboxEvent builders.
+	OutboxEvent *OutboxEventClient
 	// PasswordResetToken is the client for interacting with the PasswordResetToken builders.
 	PasswordResetToken *PasswordResetTokenClient
 	// Permission is the client for interacting with the Permission builders.
@@ -419,6 +425,8 @@ func (tx *Tx) init() {
 	tx.IncidentRule = NewIncidentRuleClient(tx.config)
 	tx.IncidentRuleExecution = NewIncidentRuleExecutionClient(tx.config)
 	tx.ItemVersion = NewItemVersionClient(tx.config)
+	tx.KafTaskActionLedger = NewKafTaskActionLedgerClient(tx.config)
+	tx.KafTaskCompletionReceipt = NewKafTaskCompletionReceiptClient(tx.config)
 	tx.KnowledgeArticle = NewKnowledgeArticleClient(tx.config)
 	tx.KnowledgeArticleLike = NewKnowledgeArticleLikeClient(tx.config)
 	tx.KnowledgeArticleParticipant = NewKnowledgeArticleParticipantClient(tx.config)
@@ -432,6 +440,7 @@ func (tx *Tx) init() {
 	tx.Microservice = NewMicroserviceClient(tx.config)
 	tx.Notification = NewNotificationClient(tx.config)
 	tx.NotificationPreference = NewNotificationPreferenceClient(tx.config)
+	tx.OutboxEvent = NewOutboxEventClient(tx.config)
 	tx.PasswordResetToken = NewPasswordResetTokenClient(tx.config)
 	tx.Permission = NewPermissionClient(tx.config)
 	tx.PermissionDefinition = NewPermissionDefinitionClient(tx.config)

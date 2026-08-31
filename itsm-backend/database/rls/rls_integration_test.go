@@ -133,6 +133,34 @@ func TestAcquireConn_TenantScopeIsolation(t *testing.T) {
 	t.Logf("tenant=1 visible=%d, tenant=999 visible=%d ✓", n1, n999)
 }
 
+func TestKafExecutionIntegrityTablesRejectCrossTenantRows(t *testing.T) {
+	db := openTestDB(t)
+	defer db.Close()
+	for _, table := range []string{"kaf_task_action_ledgers", "kaf_task_completion_receipts"} {
+		ctx := WithTenant(context.Background(), 999999)
+		conn, err := AcquireConn(ctx, db)
+		if err != nil {
+			t.Fatalf("acquire %s connection: %v", table, err)
+		}
+		if _, err := conn.ExecContext(ctx, "SET ROLE itsm_app"); err != nil {
+			_ = ReleaseConn(ctx, conn)
+			t.Fatalf("set role for %s: %v", table, err)
+		}
+		var crossTenantRows int
+		query := "SELECT COUNT(*) FROM " + table + " WHERE tenant_id <> 999999"
+		if err := conn.QueryRowContext(ctx, query).Scan(&crossTenantRows); err != nil {
+			_ = ReleaseConn(ctx, conn)
+			t.Fatalf("query %s through RLS: %v", table, err)
+		}
+		if err := ReleaseConn(ctx, conn); err != nil {
+			t.Fatalf("release %s connection: %v", table, err)
+		}
+		if crossTenantRows != 0 {
+			t.Fatalf("%s exposed %d cross-tenant rows", table, crossTenantRows)
+		}
+	}
+}
+
 // TestAcquireConn_NoTenantRejected ensures ErrNoTenant surfaces when
 // caller forgets to set tenant scope AND bypass is not asserted.
 func TestAcquireConn_NoTenantRejected(t *testing.T) {

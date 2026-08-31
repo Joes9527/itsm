@@ -11,6 +11,8 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/kaftaskactionledger"
+	"itsm-backend/ent/kaftaskcompletionreceipt"
 	"itsm-backend/ent/permission"
 	"itsm-backend/ent/predicate"
 	"itsm-backend/ent/processapprovaldecision"
@@ -21,12 +23,14 @@ import (
 	"itsm-backend/ent/processtask"
 	"itsm-backend/ent/role"
 	"itsm-backend/ent/rolepermission"
+	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketassignmentrule"
 	"itsm-backend/ent/user"
 	"itsm-backend/ent/workflowtask"
 	"itsm-backend/service/approver"
 	"itsm-backend/service/bpmn"
 
+	entsql "entgo.io/ent/dialect/sql"
 	"github.com/lib/pq"
 	"go.uber.org/zap"
 )
@@ -112,6 +116,15 @@ type CustomProcessEngine struct {
 	taskService              *bpmnTaskService
 	// 审计服务
 	auditService *BPMNAuditService
+	// KAF 委派服务负责委派任务、审计和 Outbox 的原子写入。
+	kafDelegationService *KafDelegationService
+}
+
+type kafCompletionFenceContextKey struct{}
+
+type kafCompletionFence struct {
+	ledgerID   int
+	leaseOwner string
 }
 
 // NewCustomProcessEngine 创建自定义流程引擎实例
@@ -134,6 +147,7 @@ func NewCustomProcessEngine(client *ent.Client, logger *zap.SugaredLogger) Proce
 	// 静默失败（见 dispatchUserTaskCallback 的"失败只告警不阻断"注释）。
 	engine.taskService = &bpmnTaskService{client: client, logger: logger, groupResolver: engine.groupResolver, engine: engine}
 	engine.auditService = NewBPMNAuditService(client, logger)
+	engine.kafDelegationService = NewKafDelegationService(client)
 
 	// 注册流程相关的内置函数
 	engine.registerProcessFunctions()
@@ -316,6 +330,85 @@ func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitio
 
 // CompleteTask 完成任务（使用乐观锁保护变量合并，防止并发覆写）
 func (e *CustomProcessEngine) CompleteTask(ctx context.Context, taskID string, variables map[string]interface{}) error {
+	return e.completeTask(ctx, taskID, variables, func(callbackCtx context.Context, task *ent.ProcessTask, callbackVariables map[string]interface{}) error {
+		if err := e.dispatchUserTaskCallback(callbackCtx, task, callbackVariables); err != nil {
+			e.logger.Warnw("UserTask completion callback failed", "taskID", task.TaskID, "error", err)
+		}
+		return nil
+	})
+}
+
+// CompleteKafDelegatedTask completes one KAF-ledger-scoped task and durably
+// records the callback outcome. It intentionally does not widen ProcessEngine:
+// generic callers retain CompleteTask's established best-effort callback behavior.
+func (e *CustomProcessEngine) CompleteKafDelegatedTask(ctx context.Context, ledgerID int, leaseOwner, taskID string, variables map[string]interface{}) error {
+	ledger, err := e.loadExecutingKafLedger(ctx, ledgerID, leaseOwner)
+	if err != nil {
+		return fmt.Errorf("load KAF completion ledger: %w", err)
+	}
+	if tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int); tenantID > 0 && ledger.TenantID != tenantID {
+		return fmt.Errorf("KAF completion ledger does not belong to tenant")
+	}
+	if ledger.TaskID != taskID {
+		return fmt.Errorf("KAF completion ledger does not match task")
+	}
+	ctx = bpmn.WithKafActionScope(ctx, bpmn.NewKafActionScope(
+		ledger.ID, ledger.TenantID, ledger.TaskID, ledger.RunID, ledger.StepID,
+		ledger.Action, ledger.IdempotencyKey, ledger.CorrelationID,
+		ledger.ProcedureRef, ledger.ProcedureVersion,
+	))
+	ctx = context.WithValue(ctx, kafCompletionFenceContextKey{}, kafCompletionFence{
+		ledgerID: ledger.ID, leaseOwner: leaseOwner,
+	})
+	receipt, err := e.ensureKafCompletionReceipt(ctx, ledgerID, ledger.TenantID, taskID)
+	if err != nil {
+		return err
+	}
+	task, err := e.client.ProcessTask.Query().Where(
+		processtask.TaskIDEQ(taskID), processtask.TenantIDEQ(ledger.TenantID),
+	).Only(ctx)
+	if err != nil {
+		return fmt.Errorf("load KAF delegated task: %w", err)
+	}
+	if task.Status == common.ProcessTaskStatusCompleted {
+		return e.recoverKafCompletionCallback(ctx, ledgerID, leaseOwner, receipt, task)
+	}
+
+	completionVariables := cloneKafVariables(task.TaskVariables)
+	for key, value := range variables {
+		completionVariables[key] = value
+	}
+	return e.completeTask(ctx, taskID, completionVariables, func(callbackCtx context.Context, callbackTask *ent.ProcessTask, callbackVariables map[string]interface{}) error {
+		if _, err := e.loadExecutingKafLedger(callbackCtx, ledgerID, leaseOwner); err != nil {
+			return err
+		}
+		if err := e.dispatchUserTaskCallback(callbackCtx, callbackTask, callbackVariables); err != nil {
+			return e.updateKafCompletionReceipt(callbackCtx, ledgerID, leaseOwner, receipt.ID, "callback_failed", "callback_failed", err)
+		}
+		return e.updateKafCompletionReceipt(callbackCtx, ledgerID, leaseOwner, receipt.ID, "callback_succeeded", "", nil)
+	})
+}
+
+func (e *CustomProcessEngine) loadExecutingKafLedger(ctx context.Context, ledgerID int, leaseOwner string) (*ent.KafTaskActionLedger, error) {
+	if strings.TrimSpace(leaseOwner) == "" {
+		return nil, fmt.Errorf("KAF completion lease owner is required")
+	}
+	ledger, err := e.client.KafTaskActionLedger.Query().Where(
+		kaftaskactionledger.IDEQ(ledgerID),
+		kaftaskactionledger.ResultStatusEQ("executing"),
+		kaftaskactionledger.LeaseOwnerEQ(leaseOwner),
+		kaftaskactionledger.LeaseExpiresAtGT(time.Now()),
+	).Only(ctx)
+	if ent.IsNotFound(err) {
+		return nil, fmt.Errorf("KAF completion lease owner is stale or expired")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("load executing KAF completion ledger: %w", err)
+	}
+	return ledger, nil
+}
+
+func (e *CustomProcessEngine) completeTask(ctx context.Context, taskID string, variables map[string]interface{}, callback func(context.Context, *ent.ProcessTask, map[string]interface{}) error) error {
 	// 1. 获取任务
 	taskQuery := e.client.ProcessTask.Query().
 		Where(processtask.TaskID(taskID))
@@ -370,18 +463,26 @@ func (e *CustomProcessEngine) CompleteTask(ctx context.Context, taskID string, v
 	if task.Status == "completed" || task.Status == "cancelled" {
 		return fmt.Errorf("任务已结束，不能重复完成")
 	}
+	if err := e.validateTicketRecordClassInput(ctx, instance, variables); err != nil {
+		return err
+	}
 
-	updated, err := e.client.ProcessTask.Update().
-		Where(
-			processtask.ID(task.ID),
-			processtask.TenantID(instance.TenantID),
-			processtask.StatusNEQ("completed"),
-			processtask.StatusNEQ("cancelled"),
-		).
-		SetStatus("completed").
-		SetCompletedTime(time.Now()).
-		SetTaskVariables(variables).
-		Save(ctx)
+	updated := 0
+	err = e.runKafFencedWrite(ctx, func(client *ent.Client) error {
+		var updateErr error
+		updated, updateErr = client.ProcessTask.Update().
+			Where(
+				processtask.ID(task.ID),
+				processtask.TenantID(instance.TenantID),
+				processtask.StatusNEQ("completed"),
+				processtask.StatusNEQ("cancelled"),
+			).
+			SetStatus("completed").
+			SetCompletedTime(time.Now()).
+			SetTaskVariables(variables).
+			Save(ctx)
+		return updateErr
+	})
 	if err != nil {
 		return fmt.Errorf("更新任务状态失败: %w", err)
 	}
@@ -419,7 +520,9 @@ func (e *CustomProcessEngine) CompleteTask(ctx context.Context, taskID string, v
 	// 也不该关心具体业务字段名）完成这类 UserTask 时，handler 拿到的 change_id 就是 0，
 	// 报"无效的变更ID"——业务副作用被吞掉但流程 token 已经往前走了，状态跟着悬空。
 	// action 仍然优先取 task 自身 metaData（dispatchUserTaskCallback 内部处理），不受此影响。
-	e.dispatchUserTaskCallback(ctx, task, instance.Variables)
+	if err := callback(ctx, task, instance.Variables); err != nil {
+		return err
+	}
 
 	// 7. 记录审计日志 - 任务完成
 	userID := 0
@@ -433,6 +536,155 @@ func (e *CustomProcessEngine) CompleteTask(ctx context.Context, taskID string, v
 		e.logger.Warnw("audit record failed", "error", err)
 	}
 
+	return nil
+}
+
+func (e *CustomProcessEngine) ensureKafCompletionReceipt(ctx context.Context, ledgerID, tenantID int, taskID string) (*ent.KafTaskCompletionReceipt, error) {
+	receipt, err := e.client.KafTaskCompletionReceipt.Query().Where(
+		kaftaskcompletionreceipt.LedgerIDEQ(ledgerID),
+	).Only(ctx)
+	if err == nil {
+		if receipt.TenantID != tenantID || receipt.TaskID != taskID {
+			return nil, fmt.Errorf("KAF completion receipt scope mismatch")
+		}
+		return receipt, nil
+	}
+	if !ent.IsNotFound(err) {
+		return nil, fmt.Errorf("load KAF completion receipt: %w", err)
+	}
+	err = e.runKafFencedWrite(ctx, func(client *ent.Client) error {
+		var createErr error
+		receipt, createErr = client.KafTaskCompletionReceipt.Create().
+			SetLedgerID(ledgerID).SetTenantID(tenantID).SetTaskID(taskID).
+			SetStatus("callback_pending").Save(ctx)
+		return createErr
+	})
+	if err == nil {
+		return receipt, nil
+	}
+	if !ent.IsConstraintError(err) {
+		return nil, fmt.Errorf("create KAF completion receipt: %w", err)
+	}
+	return e.ensureKafCompletionReceipt(ctx, ledgerID, tenantID, taskID)
+}
+
+func (e *CustomProcessEngine) recoverKafCompletionCallback(ctx context.Context, ledgerID int, leaseOwner string, receipt *ent.KafTaskCompletionReceipt, task *ent.ProcessTask) error {
+	if receipt.Status == "callback_succeeded" {
+		return nil
+	}
+	if _, err := e.loadExecutingKafLedger(ctx, ledgerID, leaseOwner); err != nil {
+		return err
+	}
+	if err := e.dispatchUserTaskCallback(ctx, task, task.TaskVariables); err != nil {
+		return e.updateKafCompletionReceipt(ctx, ledgerID, leaseOwner, receipt.ID, "callback_failed", "callback_failed", err)
+	}
+	return e.updateKafCompletionReceipt(ctx, ledgerID, leaseOwner, receipt.ID, "callback_succeeded", "", nil)
+}
+
+func (e *CustomProcessEngine) updateKafCompletionReceipt(ctx context.Context, ledgerID int, leaseOwner string, receiptID int, status, errorCode string, callbackErr error) error {
+	allowedFrom := []string{"callback_pending", "callback_failed"}
+	update := e.client.KafTaskCompletionReceipt.Update().Where(
+		kaftaskcompletionreceipt.IDEQ(receiptID),
+		kaftaskcompletionreceipt.LedgerIDEQ(ledgerID),
+		kaftaskcompletionreceipt.StatusIn(allowedFrom...),
+		kafReceiptOwnedByExecutingLease(ledgerID, leaseOwner, time.Now()),
+	).SetStatus(status)
+	if errorCode == "" {
+		update.ClearErrorCode()
+	} else {
+		// Do not persist callback text: it can include credentials or external payloads.
+		update.SetErrorCode(errorCode)
+	}
+	updated, err := update.Save(ctx)
+	if err != nil {
+		return fmt.Errorf("update KAF completion receipt: %w", err)
+	}
+	if updated != 1 {
+		receipt, loadErr := e.client.KafTaskCompletionReceipt.Get(ctx, receiptID)
+		if loadErr == nil && receipt.Status == "callback_succeeded" && status == "callback_succeeded" {
+			return nil
+		}
+		return fmt.Errorf("KAF completion receipt transition is stale or non-monotonic")
+	}
+	return callbackErr
+}
+
+func kafReceiptOwnedByExecutingLease(ledgerID int, leaseOwner string, now time.Time) predicate.KafTaskCompletionReceipt {
+	return func(selector *entsql.Selector) {
+		ledger := entsql.Table(kaftaskactionledger.Table)
+		ownedLedger := entsql.Select(ledger.C(kaftaskactionledger.FieldID)).From(ledger).Where(entsql.And(
+			entsql.EQ(ledger.C(kaftaskactionledger.FieldID), ledgerID),
+			entsql.EQ(ledger.C(kaftaskactionledger.FieldResultStatus), "executing"),
+			entsql.EQ(ledger.C(kaftaskactionledger.FieldLeaseOwner), leaseOwner),
+			entsql.GT(ledger.C(kaftaskactionledger.FieldLeaseExpiresAt), now),
+		))
+		selector.Where(entsql.In(selector.C(kaftaskcompletionreceipt.FieldLedgerID), ownedLedger))
+	}
+}
+
+func (e *CustomProcessEngine) runKafFencedWrite(ctx context.Context, write func(*ent.Client) error) error {
+	fence, fenced := ctx.Value(kafCompletionFenceContextKey{}).(kafCompletionFence)
+	if !fenced {
+		return write(e.client)
+	}
+	tx, err := e.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("start KAF owner-fenced write: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := write(tx.Client()); err != nil {
+		return err
+	}
+	if err := assertKafCompletionFence(ctx, tx.Client(), fence); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit KAF owner-fenced write: %w", err)
+	}
+	return nil
+}
+
+func assertKafCompletionFence(ctx context.Context, client *ent.Client, fence kafCompletionFence) error {
+	now := time.Now()
+	updated, err := client.KafTaskActionLedger.Update().Where(
+		kaftaskactionledger.IDEQ(fence.ledgerID),
+		kaftaskactionledger.ResultStatusEQ("executing"),
+		kaftaskactionledger.LeaseOwnerEQ(fence.leaseOwner),
+		kaftaskactionledger.LeaseExpiresAtGT(now),
+	).SetUpdatedAt(now).Save(ctx)
+	if err != nil {
+		return fmt.Errorf("fence KAF completion write: %w", err)
+	}
+	if updated != 1 {
+		return fmt.Errorf("KAF completion lease owner is stale or expired")
+	}
+	return nil
+}
+
+// validateTicketRecordClassInput rejects caller-controlled class changes before
+// completion writes any task or process state. Non-ticket workflows retain
+// their established variable behavior.
+func (e *CustomProcessEngine) validateTicketRecordClassInput(ctx context.Context, instance *ent.ProcessInstance, variables map[string]interface{}) error {
+	if instance.BusinessType != "ticket" {
+		return nil
+	}
+	provided, present := variables["record_class"]
+	if !present {
+		return nil
+	}
+	if instance.BusinessID <= 0 {
+		return fmt.Errorf("ticket process instance %d has no work item ID", instance.ID)
+	}
+	workItem, err := e.client.Ticket.Query().
+		Where(ticket.IDEQ(instance.BusinessID), ticket.TenantIDEQ(instance.TenantID), ticket.DeletedAtIsNil()).
+		Only(ctx)
+	if err != nil {
+		return fmt.Errorf("load ticket-backed work item record class: %w", err)
+	}
+	recordClass, ok := provided.(string)
+	if !ok || recordClass != workItem.RecordClass {
+		return fmt.Errorf("record class variable conflicts with persisted work item record class")
+	}
 	return nil
 }
 
@@ -452,13 +704,13 @@ func (e *CustomProcessEngine) CompleteTask(ctx context.Context, taskID string, v
 //
 // 失败只告警不阻断：走到这一步时任务已置为 completed、流程也已推进，返回错误既回滚不了
 // 也会诱导调用方重试（重试会撞上"任务已结束，不能重复完成"）。副作用失败留待告警与审计追踪。
-func (e *CustomProcessEngine) dispatchUserTaskCallback(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) {
+func (e *CustomProcessEngine) dispatchUserTaskCallback(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) error {
 	if e.callbackRegistry == nil || task == nil {
-		return
+		return nil
 	}
 	serviceTaskType, _ := task.TaskVariables[bpmnMetaDataServiceTaskType].(string)
 	if serviceTaskType == "" {
-		return
+		return nil
 	}
 
 	handler := e.findHandlerByTaskType(serviceTaskType)
@@ -467,7 +719,7 @@ func (e *CustomProcessEngine) dispatchUserTaskCallback(ctx context.Context, task
 		// 分支的既有约定视为 NoOp，仅告警不阻断流程。
 		e.logger.Warnw("UserTask 声明的 service_task_type 没有注册处理器，跳过回调",
 			"taskID", task.TaskID, "serviceTaskType", serviceTaskType)
-		return
+		return nil
 	}
 
 	callbackVars := make(map[string]interface{}, len(variables)+1)
@@ -483,12 +735,13 @@ func (e *CustomProcessEngine) dispatchUserTaskCallback(ctx context.Context, task
 	if _, err := handler.Execute(ctx, task, callbackVars); err != nil {
 		e.logger.Warnw("UserTask 完成后回调执行失败",
 			"taskID", task.TaskID, "taskDefinitionKey", task.TaskDefinitionKey,
-			"serviceTaskType", serviceTaskType, "error", err)
-		return
+			"serviceTaskType", serviceTaskType, "errorCode", "user_task_callback_failed")
+		return errors.New("user task callback failed")
 	}
 	e.logger.Infow("UserTask 完成后回调执行成功",
 		"taskID", task.TaskID, "taskDefinitionKey", task.TaskDefinitionKey,
 		"serviceTaskType", serviceTaskType)
+	return nil
 }
 
 // findHandlerByTaskType 按 handler 的 GetTaskType() 查找处理器。
@@ -575,7 +828,7 @@ const kafAutomationRole = "kaf_automation"
 // and the authorization decision can never diverge.
 func (e *CustomProcessEngine) authorizeTaskActor(ctx context.Context, task *ent.ProcessTask) error {
 	if handler := e.findHandlerByTaskType(task.TaskType); handler != nil && isAsyncHandler(handler) {
-		return e.authorizeKafAutomationActor(ctx, task)
+		return e.kafDelegationService.AuthorizeTask(ctx, task)
 	}
 
 	userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
@@ -599,38 +852,6 @@ func (e *CustomProcessEngine) authorizeTaskActor(ctx context.Context, task *ent.
 		return nil
 	}
 	return fmt.Errorf("当前用户不是该任务的审批人或候选人")
-}
-
-// authorizeKafAutomationActor 校验异步委派任务（如 kaf_delegate）只能被 kaf_automation
-// 角色的账号完成，任务必须处于 delegated 状态，且账号所属租户必须与任务所属租户一致。
-// assignee/candidateUsers 对机器完成的任务没有意义——同一租户下所有委派任务都由
-// 同一个账号处理，不存在"候选人"概念。无用户上下文时直接拒绝，不复用人工任务分支
-// "无上下文即放行"的口子：委派任务必须始终有明确的认证主体。
-//
-// 租户校验是必须的：CompleteTask 在 ctx 不带租户信息时会跳过它自己的租户过滤（这是
-// 平台级调用的既有行为，不在这次改动范围内），如果这里不再校验一次，任何租户的
-// kaf_automation 账号都能完成任意其他租户的委派任务——一个跨租户越权口子。
-func (e *CustomProcessEngine) authorizeKafAutomationActor(ctx context.Context, task *ent.ProcessTask) error {
-	userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int)
-	if userID <= 0 {
-		return fmt.Errorf("委派任务必须由已认证的 KAF 自动化账号完成")
-	}
-	actor, err := e.client.User.Query().Where(user.ID(userID)).Only(ctx)
-	if err != nil {
-		return fmt.Errorf("KAF 自动化账号不存在: %w", err)
-	}
-	// 角色比较做大小写/首尾空白归一化，跟 middleware.RequireRole（HTTP 层的角色门禁）
-	// 保持一致，避免同一份数据在两层用不同的比较口径。
-	if strings.ToLower(strings.TrimSpace(actor.Role)) != kafAutomationRole {
-		return fmt.Errorf("当前账号不是 KAF 自动化账号，无权完成委派任务")
-	}
-	if actor.TenantID != task.TenantID {
-		return fmt.Errorf("KAF 自动化账号与委派任务所属租户不一致，拒绝跨租户完成任务")
-	}
-	if task.Status != common.ProcessTaskStatusDelegated {
-		return fmt.Errorf("委派任务当前状态不允许完成: %s", task.Status)
-	}
-	return nil
 }
 
 // mergeVariablesWithOptimisticLock 使用乐观锁合并流程实例变量，防止并发覆写
@@ -676,6 +897,12 @@ func (e *CustomProcessEngine) mergeVariablesWithOptimisticLock(ctx context.Conte
 		}
 
 		if count > 0 {
+			if fence, ok := ctx.Value(kafCompletionFenceContextKey{}).(kafCompletionFence); ok {
+				if err := assertKafCompletionFence(ctx, tx.Client(), fence); err != nil {
+					_ = tx.Rollback()
+					return nil, err
+				}
+			}
 			// 更新成功，提交事务
 			if err := tx.Commit(); err != nil {
 				return nil, fmt.Errorf("提交事务失败: %w", err)
@@ -736,6 +963,10 @@ func (e *CustomProcessEngine) executeStep(ctx context.Context, instance *ent.Pro
 }
 
 func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.ProcessInstance, process *BPMNProcess, elementID string) error {
+	if serviceTask := e.findServiceTask(process, elementID); serviceTask != nil && e.isKafDelegationServiceTask(serviceTask) {
+		return e.createDelegatedTask(ctx, instance, serviceTask, bpmn.KafDelegateTaskType)
+	}
+
 	// Find the element name for logging
 	elementName := elementID
 	if task := e.findUserTask(process, elementID); task != nil {
@@ -744,10 +975,13 @@ func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.P
 		elementName = endEvent.Name
 	}
 
-	_, err := e.client.ProcessInstance.UpdateOne(instance).
-		SetCurrentActivityID(elementID).
-		SetCurrentActivityName(elementName).
-		Save(ctx)
+	err := e.runKafFencedWrite(ctx, func(client *ent.Client) error {
+		_, updateErr := client.ProcessInstance.UpdateOneID(instance.ID).
+			SetCurrentActivityID(elementID).
+			SetCurrentActivityName(elementName).
+			Save(ctx)
+		return updateErr
+	})
 	if err != nil {
 		return err
 	}
@@ -836,6 +1070,14 @@ func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.P
 	}
 
 	return e.executeStep(ctx, instance, process, elementID, instance.Variables)
+}
+
+func (e *CustomProcessEngine) isKafDelegationServiceTask(serviceTask *BPMNServiceTask) bool {
+	if serviceTask == nil || serviceTask.ServiceTaskType() != bpmn.KafDelegateTaskType {
+		return false
+	}
+	handler := e.findHandlerByTaskType(bpmn.KafDelegateTaskType)
+	return handler != nil && isAsyncHandler(handler)
 }
 
 func mergeServiceTaskVariables(instanceVariables map[string]interface{}, task *BPMNServiceTask) map[string]interface{} {
@@ -1066,22 +1308,27 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 			taskConfig[bpmnMetaDataAction] = action
 		}
 	}
-	createdTask, err := e.client.ProcessTask.Create().
-		SetTaskID(fmt.Sprintf("TASK-%s-%d", task.ID, time.Now().UnixNano())).
-		SetProcessInstanceID(instance.ID).
-		SetProcessDefinitionKey(instance.ProcessDefinitionKey).
-		SetTaskDefinitionKey(task.ID).
-		SetTaskName(task.Name).
-		SetTaskType("user_task").
-		SetStatus("created").
-		SetAssignee(assignee).
-		SetCandidateUsers(expandedCandidateUsers).
-		SetCandidateGroups(candidateGroupsToExpand).
-		SetFormKey(task.FormKey).
-		SetTaskVariables(taskConfig).
-		SetTenantID(instance.TenantID).
-		SetCreatedTime(time.Now()).
-		Save(ctx)
+	var createdTask *ent.ProcessTask
+	err := e.runKafFencedWrite(ctx, func(client *ent.Client) error {
+		var createErr error
+		createdTask, createErr = client.ProcessTask.Create().
+			SetTaskID(fmt.Sprintf("TASK-%s-%d", task.ID, time.Now().UnixNano())).
+			SetProcessInstanceID(instance.ID).
+			SetProcessDefinitionKey(instance.ProcessDefinitionKey).
+			SetTaskDefinitionKey(task.ID).
+			SetTaskName(task.Name).
+			SetTaskType("user_task").
+			SetStatus("created").
+			SetAssignee(assignee).
+			SetCandidateUsers(expandedCandidateUsers).
+			SetCandidateGroups(candidateGroupsToExpand).
+			SetFormKey(task.FormKey).
+			SetTaskVariables(taskConfig).
+			SetTenantID(instance.TenantID).
+			SetCreatedTime(time.Now()).
+			Save(ctx)
+		return createErr
+	})
 	if err != nil {
 		return fmt.Errorf("创建用户任务失败: %w", err)
 	}
@@ -1120,6 +1367,17 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 // authorizeTaskActor 和 dispatchUserTaskCallback 重新做 findHandlerByTaskType 查找——
 // 三处用的必须是同一个能查到同一个 handler 的字符串。
 func (e *CustomProcessEngine) createDelegatedTask(ctx context.Context, instance *ent.ProcessInstance, serviceTask *BPMNServiceTask, taskType string) error {
+	if taskType == bpmn.KafDelegateTaskType {
+		if e.kafDelegationService == nil {
+			return fmt.Errorf("KAF delegation service is not configured")
+		}
+		if _, err := e.kafDelegationService.CreateDelegatedTask(ctx, instance.ID, serviceTask); err != nil {
+			return fmt.Errorf("创建 KAF 委派任务失败: %w", err)
+		}
+		e.logger.Infow("KAF ServiceTask 已暂停，等待外部完成", "elementID", serviceTask.ID, "instanceID", instance.ProcessInstanceID)
+		return nil
+	}
+
 	taskVariables := map[string]interface{}{
 		bpmnMetaDataServiceTaskType: taskType,
 	}
@@ -1130,18 +1388,21 @@ func (e *CustomProcessEngine) createDelegatedTask(ctx context.Context, instance 
 		taskVariables[bpmnMetaDataAllowedActions] = allowedActions
 	}
 
-	_, err := e.client.ProcessTask.Create().
-		SetTaskID(fmt.Sprintf("TASK-%s-%d", serviceTask.ID, time.Now().UnixNano())).
-		SetProcessInstanceID(instance.ID).
-		SetProcessDefinitionKey(instance.ProcessDefinitionKey).
-		SetTaskDefinitionKey(serviceTask.ID).
-		SetTaskName(serviceTask.Name).
-		SetTaskType(taskType).
-		SetStatus(common.ProcessTaskStatusDelegated).
-		SetTaskVariables(taskVariables).
-		SetTenantID(instance.TenantID).
-		SetCreatedTime(time.Now()).
-		Save(ctx)
+	err := e.runKafFencedWrite(ctx, func(client *ent.Client) error {
+		_, createErr := client.ProcessTask.Create().
+			SetTaskID(fmt.Sprintf("TASK-%s-%d", serviceTask.ID, time.Now().UnixNano())).
+			SetProcessInstanceID(instance.ID).
+			SetProcessDefinitionKey(instance.ProcessDefinitionKey).
+			SetTaskDefinitionKey(serviceTask.ID).
+			SetTaskName(serviceTask.Name).
+			SetTaskType(taskType).
+			SetStatus(common.ProcessTaskStatusDelegated).
+			SetTaskVariables(taskVariables).
+			SetTenantID(instance.TenantID).
+			SetCreatedTime(time.Now()).
+			Save(ctx)
+		return createErr
+	})
 	if err != nil {
 		return fmt.Errorf("创建委派任务失败: %w", err)
 	}
@@ -1544,11 +1805,13 @@ func matchRuleConditions(conditions []map[string]interface{}, taskName string) b
 }
 
 func (e *CustomProcessEngine) completeProcess(ctx context.Context, instance *ent.ProcessInstance) error {
-	_, err := e.client.ProcessInstance.UpdateOne(instance).
-		SetStatus("completed").
-		SetEndTime(time.Now()).
-		Save(ctx)
-	return err
+	return e.runKafFencedWrite(ctx, func(client *ent.Client) error {
+		_, err := client.ProcessInstance.UpdateOneID(instance.ID).
+			SetStatus("completed").
+			SetEndTime(time.Now()).
+			Save(ctx)
+		return err
+	})
 }
 
 func (e *CustomProcessEngine) findOutgoingFlows(process *BPMNProcess, sourceRef string) []*BPMNSequenceFlow {

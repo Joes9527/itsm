@@ -60,11 +60,9 @@ func NewService(repo Repository, scRepo service_catalog.Repository, cmdbRepo cmd
 // duplicating that dependency on Handler.
 func (s *Service) Client() *ent.Client { return s.client }
 
-// Create submits a new service request. 先创建关联 Ticket（承担状态/审批/工作流），
-// 再创建瘦身后的 ServiceRequest 行——两步顺序执行，不在同一数据库事务里（TicketService.CreateTicket
-// 是自包含的高层编排方法，不暴露外部事务句柄）。若第二步失败，Ticket 已经存在但缺少关联的
-// SR 扩展数据——这与 CreateTicket 自己写 field_values 的失败处理是同一种"创建后写卫星数据，
-// 失败只警告不回滚主记录"模式，不是新发明的容错策略。
+// Create submits a new service request. Its WorkItem base record and the
+// ServiceRequest extension are one aggregate and must commit together. BPMN is
+// triggered only after that transaction commits.
 func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalogID int, reqData *ServiceRequest) (*ServiceRequest, error) {
 	if _, _, err := s.repo.GetUserContext(ctx, requesterID, tenantID); err != nil {
 		return nil, common.NewBadRequestError("Requester not found or inactive", err)
@@ -159,8 +157,8 @@ func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalog
 		}
 	}
 
-	// 3. 先创建关联 Ticket——source="service_catalog" 标记来源，
-	// description 用申请原因（reqData.reason() 从 FormData 兜底取，逻辑同下方 title()）。
+	// 3. Build the WorkItem base record. The transaction below owns persistence of
+	// both this Ticket and its ServiceRequest extension.
 	ticketReq := &dto.CreateTicketRequest{
 		Title:       title,
 		Description: reqData.reason(),
@@ -177,14 +175,8 @@ func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalog
 	if strings.TrimSpace(cat.ProcessDefinitionKey) != "" {
 		ticketReq.WorkflowDefinitionKey = strings.TrimSpace(cat.ProcessDefinitionKey)
 	}
-	createdTicket, err := s.ticketSvc.CreateTicket(ctx, ticketReq, tenantID)
-	if err != nil {
-		return nil, common.NewInternalError("Failed to create linked ticket", err)
-	}
-
 	newReq := &ServiceRequest{
 		TenantID:           tenantID,
-		TicketID:           createdTicket.ID,
 		CatalogID:          catalogID,
 		RequesterID:        requesterID,
 		ComplianceAck:      reqData.ComplianceAck,
@@ -211,12 +203,13 @@ func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalog
 		newReq.CiID = ciID
 	}
 
-	// 4. Save
-	created, err := s.repo.Create(ctx, newReq)
+	// 4. Persist both records atomically. A Service Request may never leave a
+	// classified WorkItem without its one required extension.
+	createdTicket, created, err := s.createWorkItemAndExtension(ctx, tenantID, ticketReq, newReq)
 	if err != nil {
-		s.logger.Errorw("Failed to create service request (linked ticket already created)", "error", err, "ticket_id", createdTicket.ID)
 		return nil, common.NewInternalError("Failed to create service request", err)
 	}
+	s.triggerWorkflowAfterServiceRequestCommit(createdTicket, tenantID, ticketReq.WorkflowDefinitionKey, ticketReq.ApprovalChain)
 
 	// 5. Persist dynamic custom field values against the TICKET now, not the SR
 	// (entity_type/entity_id 归属改成 ticket，这样工单详情页能像其他自定义字段一样直接展示)。
@@ -228,6 +221,64 @@ func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalog
 	}
 
 	return created, nil
+}
+
+func (s *Service) createWorkItemAndExtension(ctx context.Context, tenantID int, ticketReq *dto.CreateTicketRequest, req *ServiceRequest) (*ticket.Ticket, *ServiceRequest, error) {
+	if s.client == nil {
+		return nil, nil, fmt.Errorf("service request Ent client is required")
+	}
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("start service request transaction: %w", err)
+	}
+	rollback := func(cause error) (*ticket.Ticket, *ServiceRequest, error) {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			return nil, nil, fmt.Errorf("%w (rollback also failed: %v)", cause, rollbackErr)
+		}
+		return nil, nil, cause
+	}
+
+	workItemRepo := ticket.NewEntRepository(tx.Client(), s.logger)
+	workItem, err := workItemRepo.Create(ctx, &ticket.CreateParams{
+		Title:       ticketReq.Title,
+		Description: ticketReq.Description,
+		Type:        ticket.TypeServiceRequest,
+		Priority:    ticket.Priority(ticketReq.Priority),
+		RequesterID: ticketReq.RequesterID,
+		Source:      ticketReq.Source,
+	}, tenantID)
+	if err != nil {
+		return rollback(fmt.Errorf("create service request work item: %w", err))
+	}
+
+	req.TicketID = workItem.ID
+	created, err := NewEntRepository(tx.Client()).Create(ctx, req)
+	if err != nil {
+		return rollback(fmt.Errorf("create service request extension: %w", err))
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, nil, fmt.Errorf("commit service request transaction: %w", err)
+	}
+	return workItem, created, nil
+}
+
+type ticketWorkflowStarter interface {
+	TriggerWorkflowForExistingTicket(ctx context.Context, tkt *ticket.Ticket, tenantID int, workflowDefinitionKey string, approvalChain interface{}) error
+}
+
+func (s *Service) triggerWorkflowAfterServiceRequestCommit(tkt *ticket.Ticket, tenantID int, workflowDefinitionKey string, approvalChain interface{}) {
+	starter, ok := s.ticketSvc.(ticketWorkflowStarter)
+	if !ok {
+		s.logger.Warnw("Ticket service does not support post-commit workflow triggering", "ticket_id", tkt.ID)
+		return
+	}
+	go func() {
+		workflowCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := starter.TriggerWorkflowForExistingTicket(workflowCtx, tkt, tenantID, workflowDefinitionKey, approvalChain); err != nil {
+			s.logger.Warnw("Workflow trigger failed", "error", err, "ticket_id", tkt.ID)
+		}
+	}()
 }
 
 // title/reason 这两个展示字段现在只是"创建 ticket 时的初始值"，不再持久化在 SR 表上——

@@ -1,10 +1,11 @@
 # KAF 自主 WorkItem 受理与 BPMN 委派设计
 
-> 状态：Draft for review
+> 状态：Implementation in progress
 > 日期：2026-08-28
 > 范围：KAF 与 ITSM 的统一受理、终端用户/坐席/管理员 UI、WorkItem 创建、BPMN 委派和自动化处理主路径
 > 驱动验收：SSLVPN 权限申请与 SSLVPN 连接故障
 > 修订：2026-08-29 — 对照 ITSM/KAF 代码库现状核查后补充第 11 节「前置工程条件」，并在 §2.1、§2.3、§3.1、§4.3、§5 就地标注当前代码尚不具备、需先行落地的基础设施缺口。架构决策本身未变，本次修订标注的是「本设计可以实现之前必须先完成什么」。
+> 实施更新：2026-08-31 — 核心 BPMN → KAF 委派、事务性 Outbox、任务范围 API、action ledger、完成回执和 KAF 恢复链路已在 feature worktree 实现；统一 Intake、Incident typed actions、UI 和完整产品验收仍未完成。详见第 12 节。
 
 ## 1. 目标
 
@@ -151,6 +152,12 @@ ITSM 返回 `WorkItemResult`，至少包括 `id`、`number`、`recordClass`、`s
 事件不携带完整工单正文，但必须包含统一事件元数据：
 
 ```ts
+type ActorRef = {
+  id: string
+  kind: "system"
+  displayName: string
+}
+
 type KafDelegateRequested = {
   eventId: string
   tenantId: string
@@ -164,6 +171,8 @@ type KafDelegateRequested = {
   correlationId: string
 }
 ```
+
+`actor` 是创建该委派的 ITSM BPMN 系统主体，不是请求人，也不是 KAF。
 
 事件推送是主路径；KAF 重启或事件遗漏时，通过 `GET /bpmn/process-tasks/kaf-delegated?status=delegated` 补拉其有权处理的未完成任务。MVP 不提供 claim 或 lease API，KAF 自身负责执行协调。
 
@@ -360,3 +369,85 @@ UI 验收至少覆盖：入口收敛与旧路由重定向、知识建议后继�
 | P1-6 | KAF 新入口在 Layer Map 中的归属未定义 | 全文 | KAF 现有调度是 `TurnPipeline` 对话轮次驱动，`kaf_delegate` 委派由 ITSM 事件/轮询触发，不是对话轮次。需要明确新入口（新 Worker？独立后台服务？）挂在哪一层，以符合 KAF AGENTS.md「downward only」的依赖方向。 |
 
 以上条目中 P0-1 应作为一份「KAF 委派事务性投递（Outbox）」技术设计统一处理；P0-2、P0-3、P0-4 可作为该链路实现计划中的明确工作包，并在设计评审中确认复用边界。P1 类条目可以在对应领域的实现计划中作为前置 task 处理，不需要单独拦截本文档的评审通过。
+
+## 12. 实施状态与 Agent 交接（2026-08-31）
+
+### 12.1 状态口径与代码基线
+
+本节是当前实施状态的权威说明。第 11 节保留的是 2026-08-29 设计评审时识别的前置条件，不能继续被理解为当前代码状态。
+
+- ITSM 主工作区：`/home/administrator/project/itsm`，`main` 当前基线为 `a5f4fb5c`；主分支只包含新增的 E2E 场景文档，尚未包含完整委派实现。
+- ITSM 实现 worktree：`/home/administrator/project/itsm/.worktrees/kaf-delegation-transactional-delivery`，分支 `feat/kaf-delegation-transactional-delivery`，当前实现提交为 `c1b9bbcd`。
+- KAF 实现 worktree：`/mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-worktrees/kaf-delegation-transactional-delivery`，当前实现提交为 `afbc1645`。
+- ITSM feature worktree 中存在未跟踪的历史 review/approval Markdown 文件；它们不属于产品实现，不得在未确认来源时删除、覆盖或加入提交。
+- 下表中的“已完成”表示 feature worktree 已实现并有针对性测试证据，不表示已经合并到 `main`、部署到 PROD 或完成真实 SSLVPN Tool 验收。
+
+### 12.2 第 11 节工程条件状态
+
+| 编号 | 状态 | 已落地能力 | 剩余工作 |
+|---|---|---|---|
+| P0-1 | 已完成（feature 分支） | `ProcessTask`、显式创建审计和 Outbox 在同一事务落地；具备可靠投递、重试、KAF 持久化 delivery、lease、去重与完成恢复。 | 合并前复核迁移顺序和目标环境配置；真实跨进程链路仍需验收。 |
+| P0-2 | 已完成（feature 分支） | `kaf-context`、委派任务补拉和 `actions` 复用任务级 actor/tenant/`taskType`/状态校验；未引入 scoped token 或第二套权限模型。 | 在真实 ITSM service account 下验证 token、租户和 RBAC 配置。 |
+| P0-3 | 部分完成 | typed action、任务创建及完成路径已有显式审计，action 审计关联 immutable ledger、Procedure、run/step 和结果。 | `GET kaf-context` 当前仅执行授权与读取，尚未按 §5 写入显式上下文读取审计；需要补测试并确认高频补拉是否单独审计或聚合审计。 |
+| P0-4 | 部分完成 | KAF 动作已使用 `tenantId:taskId:runId:stepId`、`KafTaskActionLedger` 和 `applied/already_applied`；delivery 消费具备持久化去重。 | §4.1 的统一 `CreateWorkItemCommand.idempotencyKey` 及 Intake 创建去重尚未实现。不得用 action ledger 代替 Intake 幂等。 |
+| P1-1 | 部分完成 | 委派任务已写入并暴露 `correlationId`；上下文返回当前 `expectedVersion`；运行时能够约束允许动作。 | `allowedActions` 仍来自 `TaskVariables` 字符串，尚非结构化字段；任务级 version/直接 WorkItem 关联仍未按目标模型完全落地。 |
+| P1-2 | 未完成 | Incident 既有领域服务仍是计划中的唯一动作入口。 | KAF API 当前不支持 `assign`、`resolve`、`close`；必须先为 Incident 动作补调用方 `expectedVersion`、状态机、目标对象可见性和并发守卫，再接入 typed action。当前测试明确要求 `resolve` 返回不支持。 |
+| P1-3 | 未完成 | KAF 执行时暂以 Procedure 检索结果的 `content_hash` 作为 `procedureVersion`。 | `ProcedureManifest` 仍没有权威 `version` 列。需新增 schema/migration/摄取更新规则，并让执行记录引用持久化版本；不能长期把临时 hash 约定当成领域字段。 |
+| P1-4 | 部分完成 | 新链路采用独立的 `ITSM_KAF_URL`、`ITSM_KAF_AUTOMATION_TOKEN`、`ITSM_KAF_WEBHOOK_SECRET`，未复用遗留 Gazellio 凭据；委派运行在独立 headless pipeline。 | 实现位于 `orchestration/headless_tasks/kaf_delegation_pipeline.py`，未采用原建议的 `acp/itsm_delegate/` 命名空间。后续应基于职责拆分客户端与 pipeline，避免形成新的超大模块。 |
+| P1-5 | 部分完成 | ITSM action ledger 已以 run/step 作为跨系统动作幂等边界；KAF pipeline 会传递 run/step。 | KAF 既有 `WorkflowStepLedger` 与 ITSM action ledger 的职责映射尚未形成明确实现契约。应定义“Tool/步骤尝试归 KAF ledger，ITSM 副作用归 action ledger”，并补关联字段/测试，禁止双写同一事实。 |
+| P1-6 | 已完成（feature 分支） | `KafDelegationPipeline` 作为非对话 headless 入口，由 webhook 与恢复循环驱动，不依赖 `TurnPipeline`。 | 保持该依赖方向；后续拆文件不能回退到对话轮次入口。 |
+
+### 12.3 当前 action contract
+
+feature 分支当前只接受以下动作：
+
+- `complete_bpmn_task`
+- `update_progress`
+- `record_execution_failure`
+
+`assign`、`resolve`、`close` 尚未实现，不能因为 §4.3 已定义目标 DTO 就视为可调用能力。新增动作必须调用对应专业领域服务并维持 WorkItem 的单一生命周期权威；不得在 KAF delegation service 内复制 Incident/Service Request 状态机。
+
+### 12.4 验收状态
+
+| §9 验收项 | 状态 | 说明 |
+|---|---|---|
+| 1. KAF 与 ITSM 入口创建一致的 SSLVPN Service Request | 未完成 | 尚无统一 `CreateWorkItemCommand`/Intake 应用服务和创建幂等；ITSM 新建页与 KAF 确认提交也未收敛到同一契约。 |
+| 2. 双级审批后原子委派并由 KAF 按 taskId 获取上下文 | 核心链路已完成 | 已有事务性 Outbox、补拉、任务上下文 API 和 in-process SSLVPN Service Request 验收测试；尚未完成真实跨进程环境验收。 |
+| 3. Procedure/版本/Tool 引用/进度/最终动作可追溯 | 部分完成 | run/step、Procedure 引用、action/timeline/audit 主链路已具备；Procedure 权威版本、完整 Tool 审计关联和产品 UI 展示仍缺。 |
+| 4. 事件与动作重放不产生重复副作用 | 已完成（核心链路） | KAF delivery 去重、ITSM action ledger、completion receipt 和 `applied/already_applied` 已覆盖并发及恢复路径。 |
+| 5. SSLVPN Incident 创建、委派并经 IncidentService resolve | 未完成 | Incident Intake、流程绑定和 `resolve` typed action 尚未形成 E2E。 |
+| 6. 同一 correlationId 串联全部系统证据 | 部分完成 | ITSM/KAF 委派与 action 已传播 correlationId；尚未证明 KAF session、Langfuse trace、真实 Tool 和 UI 时间线的完整跨进程关联。 |
+| 7. tenant/RBAC/状态/版本/重放及真实沙箱测试 | 部分完成 | 核心 API 的确定性测试已覆盖主要拒绝与重放场景；PostgreSQL RLS/并发探针因凭据未配置而跳过，真实 SSLVPN 沙箱未执行。 |
+| 8. KAF 只通过 ITSM API、前端不推导领域语义 | 部分完成 | 新委派链路没有直连 ITSM 数据库；目标 Intake/UI 尚未完成，因此前端约束未形成完整验收证据。 |
+
+### 12.5 UI 与用户体验状态
+
+第 8 节不是“不需要调整 UI”，而是尚未实现：
+
+- 已有 `/my-requests` 列表与详情，但没有目标 `/my-requests/new` 统一自然语言受理页。
+- `/tickets/ai-create` 页面和侧边栏入口仍然存在，尚未迁移或重定向到统一受理入口。
+- 请求详情尚未完整展示服务阶段投影、KAF 自动化执行摘要、Procedure 版本、进度、失败原因和可审计证据引用。
+- 坐席页尚未形成面向 `kaf_delegate` 的等待点、允许动作、执行状态和恢复信息面板。
+- BPMN 设计器尚未完成 `kaf_delegate` 节点配置与校验体验。
+- 通知策略及 Web/Teams/WeCom 的状态反馈尚未形成端到端实现。
+
+公开评论与附件能力应复用现有 ticket 页面能力，不新建第二套评论系统。UI 只展示后端返回的状态、允许动作和结构化原因，不自行推导 `recordClass`、权限或领域状态机。
+
+### 12.6 下一阶段建议工作包
+
+新 Agent 应先读取本设计和 `docs/BPMN 整改遗留项 E2E 测试计划.md`，再从 ITSM feature worktree 读取 `docs/superpowers/specs/2026-08-30-kaf-delegation-execution-integrity-design.md`、`docs/superpowers/plans/2026-08-30-kaf-delegation-execution-integrity.md` 与 `docs/reports/2026-08-30-kaf-delegation-execution-integrity-report.md`。后三份文件尚未进入 `main`，不能在主工作区按相对路径查找。后续应基于现有 feature worktree 继续，避免从 `main` 重做已完成能力。
+
+1. **收口当前 feature 分支**：补 `kaf-context` 显式审计及测试，复核 ITSM/KAF 迁移、配置与合同；不要删除未跟踪历史 review 文件。
+2. **实现统一 Intake**：设计并落地唯一 `CreateWorkItemCommand` 应用服务、认证主体派生、Catalog/CTI/CI 校验、`idempotencyKey`、Service Request/Incident 原子创建与直接 ITSM/KAF 入口复用。
+3. **实现 Incident typed actions**：先扩展 IncidentService 的 `expectedVersion` 和 `AssignIncident` 状态/版本守卫，再接入 `assign`、`resolve`、`close`，补 tenant/RBAC/domain rejection/并发测试。
+4. **收敛 KAF 执行模型**：为 `ProcedureManifest` 增加权威 version；明确 `WorkflowStepLedger` 与 ITSM action ledger 的职责和关联；在不改变 headless 边界的前提下拆分委派客户端与 pipeline。
+5. **实现 UI**：新增统一受理页并迁移 `/tickets/ai-create`，在 requester/agent 页面加入自动化状态投影，补 BPMN 设计器节点体验；样式和评论/附件能力复用现有 ticket 页面。
+6. **完成驱动验收**：分别跑通 SSLVPN 权限申请和 SSLVPN 无法连接，覆盖 KAF 与 ITSM 入口、真实 PostgreSQL、跨进程 KAF、Langfuse/correlation、通知和隔离 Tool 沙箱。
+
+### 12.7 已有验证与限制
+
+- ITSM feature 分支已通过 `go test ./... -count=1`、`go build ./...` 和 `git diff --check`。
+- KAF 委派相关 focused suite 已通过；本地 Dev PostgreSQL 已升级到 `036_kaf_completion_replay`，当前源码启动后 `/health` 正常。
+- KAF repository-wide suite **未全绿**：最近一次结果为 `2457 passed, 13 skipped, 1 xfailed, 90 failed, 32 errors`。主要失败涉及测试全局 settings/数据库隔离和委派范围外模块，但在清理前不能宣称 KAF 全量回归通过。
+- 未对 `10.128.35.195` KAF PROD 发起写请求或验收；PROD 只可在明确发布窗口、凭据与回滚方案就绪后使用。
+- 当前通过的是 in-process SSLVPN Service Request 权威场景，不等同于真实跨进程、真实 Tool 或 PROD E2E。
