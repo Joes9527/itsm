@@ -123,6 +123,11 @@ var RegisteredMigrations = []Migration{
 		Description: "Enable and force tenant RLS on unified intake requests, resolution snapshots, and external identity mappings",
 		RollbackSQL: "",
 	},
+	{
+		Version:     "021_work_item_authority",
+		Description: "Make WorkItem authoritative for Incident and Service Request shared fields, replace extension RLS with ticket joins, and retire service_catalogs.itsm_type (irreversible; forward-fix only)",
+		RollbackSQL: "",
+	},
 }
 
 // PostSchemaMigrations returns a defensive copy of the canonical active stream.
@@ -811,6 +816,80 @@ DROP POLICY IF EXISTS external_identities_tenant_isolation ON external_identitie
 CREATE POLICY external_identities_tenant_isolation ON external_identities
     USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint)
     WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint);
+`
+	case "021_work_item_authority":
+		return `
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM incidents i
+        LEFT JOIN tickets t ON t.id = i.work_item_id
+        WHERE i.work_item_id IS NULL OR t.id IS NULL OR t.record_class <> 'incident'
+    ) THEN
+        RAISE EXCEPTION 'incident without an authoritative incident WorkItem';
+    END IF;
+    IF EXISTS (
+        SELECT 1 FROM service_requests sr
+        LEFT JOIN tickets t ON t.id = sr.ticket_id
+        WHERE t.id IS NULL OR t.record_class <> 'service_request_item'
+    ) THEN
+        RAISE EXCEPTION 'service request without an authoritative service_request_item WorkItem';
+    END IF;
+END $$;
+
+UPDATE service_catalogs
+SET target_class = CASE lower(trim(itsm_type))
+    WHEN 'request' THEN 'service_request_item'
+    WHEN 'service_request' THEN 'service_request_item'
+    WHEN 'incident' THEN 'incident'
+    WHEN 'change' THEN 'change_request'
+    WHEN 'change_request' THEN 'change_request'
+    ELSE target_class
+END
+WHERE target_class IS NULL OR trim(target_class) = '';
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM service_catalogs
+        WHERE target_class IS NULL
+           OR target_class NOT IN ('service_request_item', 'incident', 'change_request')
+    ) THEN
+        RAISE EXCEPTION 'service catalog target_class backfill is incomplete or unsupported';
+    END IF;
+END $$;
+
+DROP POLICY IF EXISTS tenant_isolation_incidents ON incidents;
+DROP POLICY IF EXISTS incidents_tenant_isolation ON incidents;
+ALTER TABLE incidents ALTER COLUMN work_item_id SET NOT NULL;
+ALTER TABLE incidents DROP COLUMN IF EXISTS title;
+ALTER TABLE incidents DROP COLUMN IF EXISTS description;
+ALTER TABLE incidents DROP COLUMN IF EXISTS status;
+ALTER TABLE incidents DROP COLUMN IF EXISTS priority;
+ALTER TABLE incidents DROP COLUMN IF EXISTS reporter_id;
+ALTER TABLE incidents DROP COLUMN IF EXISTS tenant_id;
+ALTER TABLE incidents DROP COLUMN IF EXISTS created_at;
+ALTER TABLE incidents DROP COLUMN IF EXISTS updated_at;
+CREATE POLICY tenant_isolation_incidents ON incidents
+    USING (EXISTS (SELECT 1 FROM tickets WHERE tickets.id = incidents.work_item_id AND tickets.tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint))
+    WITH CHECK (EXISTS (SELECT 1 FROM tickets WHERE tickets.id = incidents.work_item_id AND tickets.tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint));
+
+DROP POLICY IF EXISTS tenant_isolation_service_requests ON service_requests;
+DROP POLICY IF EXISTS service_requests_tenant_isolation ON service_requests;
+ALTER TABLE service_requests ALTER COLUMN ticket_id SET NOT NULL;
+ALTER TABLE service_requests DROP COLUMN IF EXISTS requester_id;
+ALTER TABLE service_requests DROP COLUMN IF EXISTS tenant_id;
+ALTER TABLE service_requests DROP COLUMN IF EXISTS created_at;
+ALTER TABLE service_requests DROP COLUMN IF EXISTS updated_at;
+CREATE POLICY tenant_isolation_service_requests ON service_requests
+    USING (EXISTS (SELECT 1 FROM tickets WHERE tickets.id = service_requests.ticket_id AND tickets.tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint))
+    WITH CHECK (EXISTS (SELECT 1 FROM tickets WHERE tickets.id = service_requests.ticket_id AND tickets.tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint));
+
+ALTER TABLE service_catalogs ALTER COLUMN target_class SET NOT NULL;
+ALTER TABLE service_catalogs DROP CONSTRAINT IF EXISTS service_catalogs_target_class_check;
+ALTER TABLE service_catalogs ADD CONSTRAINT service_catalogs_target_class_check
+    CHECK (target_class IN ('service_request_item', 'incident', 'change_request'));
+ALTER TABLE service_catalogs DROP COLUMN IF EXISTS itsm_type;
 `
 	default:
 		return ""

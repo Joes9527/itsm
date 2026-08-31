@@ -30,7 +30,6 @@ import (
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/ent/ticket"
-	"itsm-backend/handlers/cmdb"
 	"itsm-backend/handlers/service_catalog"
 	"itsm-backend/handlers/service_request"
 	"itsm-backend/middleware"
@@ -133,9 +132,8 @@ func setupSSLVPNTestHarness(t *testing.T) *sslvpnTestHarness {
 	scService := service_catalog.NewService(scRepo, client, logger)
 	scHandler := service_catalog.NewHandler(scService)
 
-	cmdbRepo := cmdb.NewEntRepository(client)
 	srRepo := service_request.NewEntRepository(client)
-	srService := service_request.NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc, nil, nil)
+	srService := service_request.NewService(srRepo, client, logger)
 	srHandler := service_request.NewHandler(srService)
 
 	// Generate JWT tokens for test roles

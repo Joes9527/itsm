@@ -3,9 +3,8 @@
 package servicerequest
 
 import (
-	"time"
-
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 const (
@@ -13,16 +12,12 @@ const (
 	Label = "service_request"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
-	// FieldTenantID holds the string denoting the tenant_id field in the database.
-	FieldTenantID = "tenant_id"
 	// FieldTicketID holds the string denoting the ticket_id field in the database.
 	FieldTicketID = "ticket_id"
 	// FieldCatalogID holds the string denoting the catalog_id field in the database.
 	FieldCatalogID = "catalog_id"
 	// FieldCiID holds the string denoting the ci_id field in the database.
 	FieldCiID = "ci_id"
-	// FieldRequesterID holds the string denoting the requester_id field in the database.
-	FieldRequesterID = "requester_id"
 	// FieldFormData holds the string denoting the form_data field in the database.
 	FieldFormData = "form_data"
 	// FieldCostCenter holds the string denoting the cost_center field in the database.
@@ -57,24 +52,27 @@ const (
 	FieldLastError = "last_error"
 	// FieldVersion holds the string denoting the version field in the database.
 	FieldVersion = "version"
-	// FieldCreatedAt holds the string denoting the created_at field in the database.
-	FieldCreatedAt = "created_at"
-	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
-	FieldUpdatedAt = "updated_at"
 	// FieldDeletedAt holds the string denoting the deleted_at field in the database.
 	FieldDeletedAt = "deleted_at"
+	// EdgeWorkItem holds the string denoting the work_item edge name in mutations.
+	EdgeWorkItem = "work_item"
 	// Table holds the table name of the servicerequest in the database.
 	Table = "service_requests"
+	// WorkItemTable is the table that holds the work_item relation/edge.
+	WorkItemTable = "service_requests"
+	// WorkItemInverseTable is the table name for the Ticket entity.
+	// It exists in this package in order to avoid circular dependency with the "ticket" package.
+	WorkItemInverseTable = "tickets"
+	// WorkItemColumn is the table column denoting the work_item relation/edge.
+	WorkItemColumn = "ticket_id"
 )
 
 // Columns holds all SQL columns for servicerequest fields.
 var Columns = []string{
 	FieldID,
-	FieldTenantID,
 	FieldTicketID,
 	FieldCatalogID,
 	FieldCiID,
-	FieldRequesterID,
 	FieldFormData,
 	FieldCostCenter,
 	FieldDataClassification,
@@ -92,8 +90,6 @@ var Columns = []string{
 	FieldCompletionNote,
 	FieldLastError,
 	FieldVersion,
-	FieldCreatedAt,
-	FieldUpdatedAt,
 	FieldDeletedAt,
 }
 
@@ -108,14 +104,10 @@ func ValidColumn(column string) bool {
 }
 
 var (
-	// TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
-	TenantIDValidator func(int) error
 	// TicketIDValidator is a validator for the "ticket_id" field. It is called by the builders before save.
 	TicketIDValidator func(int) error
 	// CatalogIDValidator is a validator for the "catalog_id" field. It is called by the builders before save.
 	CatalogIDValidator func(int) error
-	// RequesterIDValidator is a validator for the "requester_id" field. It is called by the builders before save.
-	RequesterIDValidator func(int) error
 	// DefaultDataClassification holds the default value on creation for the "data_classification" field.
 	DefaultDataClassification string
 	// DefaultNeedsPublicIP holds the default value on creation for the "needs_public_ip" field.
@@ -130,12 +122,6 @@ var (
 	DefaultVersion int
 	// VersionValidator is a validator for the "version" field. It is called by the builders before save.
 	VersionValidator func(int) error
-	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
-	DefaultCreatedAt func() time.Time
-	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
-	DefaultUpdatedAt func() time.Time
-	// UpdateDefaultUpdatedAt holds the default value on update for the "updated_at" field.
-	UpdateDefaultUpdatedAt func() time.Time
 )
 
 // OrderOption defines the ordering options for the ServiceRequest queries.
@@ -144,11 +130,6 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
-}
-
-// ByTenantID orders the results by the tenant_id field.
-func ByTenantID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldTenantID, opts...).ToFunc()
 }
 
 // ByTicketID orders the results by the ticket_id field.
@@ -164,11 +145,6 @@ func ByCatalogID(opts ...sql.OrderTermOption) OrderOption {
 // ByCiID orders the results by the ci_id field.
 func ByCiID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCiID, opts...).ToFunc()
-}
-
-// ByRequesterID orders the results by the requester_id field.
-func ByRequesterID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldRequesterID, opts...).ToFunc()
 }
 
 // ByCostCenter orders the results by the cost_center field.
@@ -246,17 +222,21 @@ func ByVersion(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldVersion, opts...).ToFunc()
 }
 
-// ByCreatedAt orders the results by the created_at field.
-func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
-}
-
-// ByUpdatedAt orders the results by the updated_at field.
-func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldUpdatedAt, opts...).ToFunc()
-}
-
 // ByDeletedAt orders the results by the deleted_at field.
 func ByDeletedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDeletedAt, opts...).ToFunc()
+}
+
+// ByWorkItemField orders the results by work_item field.
+func ByWorkItemField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newWorkItemStep(), sql.OrderByField(field, opts...))
+	}
+}
+func newWorkItemStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(WorkItemInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2O, true, WorkItemTable, WorkItemColumn),
+	)
 }

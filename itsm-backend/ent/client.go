@@ -7173,6 +7173,22 @@ func (c *IncidentClient) QueryProblems(_m *Incident) *ProblemQuery {
 	return query
 }
 
+// QueryWorkItem queries the work_item edge of a Incident.
+func (c *IncidentClient) QueryWorkItem(_m *Incident) *TicketQuery {
+	query := (&TicketClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(incident.Table, incident.FieldID, id),
+			sqlgraph.To(ticket.Table, ticket.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, true, incident.WorkItemTable, incident.WorkItemColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *IncidentClient) Hooks() []Hook {
 	return c.hooks.Incident
@@ -15395,6 +15411,22 @@ func (c *ServiceRequestClient) GetX(ctx context.Context, id int) *ServiceRequest
 	return obj
 }
 
+// QueryWorkItem queries the work_item edge of a ServiceRequest.
+func (c *ServiceRequestClient) QueryWorkItem(_m *ServiceRequest) *TicketQuery {
+	query := (&TicketClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(servicerequest.Table, servicerequest.FieldID, id),
+			sqlgraph.To(ticket.Table, ticket.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, true, servicerequest.WorkItemTable, servicerequest.WorkItemColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *ServiceRequestClient) Hooks() []Hook {
 	return c.hooks.ServiceRequest
@@ -16985,6 +17017,38 @@ func (c *TicketClient) QueryRootCauseAnalyses(_m *Ticket) *RootCauseAnalysisQuer
 			sqlgraph.From(ticket.Table, ticket.FieldID, id),
 			sqlgraph.To(rootcauseanalysis.Table, rootcauseanalysis.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, ticket.RootCauseAnalysesTable, ticket.RootCauseAnalysesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryIncident queries the incident edge of a Ticket.
+func (c *TicketClient) QueryIncident(_m *Ticket) *IncidentQuery {
+	query := (&IncidentClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(ticket.Table, ticket.FieldID, id),
+			sqlgraph.To(incident.Table, incident.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, ticket.IncidentTable, ticket.IncidentColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryServiceRequest queries the service_request edge of a Ticket.
+func (c *TicketClient) QueryServiceRequest(_m *Ticket) *ServiceRequestQuery {
+	query := (&ServiceRequestClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(ticket.Table, ticket.FieldID, id),
+			sqlgraph.To(servicerequest.Table, servicerequest.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, ticket.ServiceRequestTable, ticket.ServiceRequestColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil

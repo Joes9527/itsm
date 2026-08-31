@@ -2703,6 +2703,52 @@ func HasRootCauseAnalysesWith(preds ...predicate.RootCauseAnalysis) predicate.Ti
 	})
 }
 
+// HasIncident applies the HasEdge predicate on the "incident" edge.
+func HasIncident() predicate.Ticket {
+	return predicate.Ticket(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, IncidentTable, IncidentColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasIncidentWith applies the HasEdge predicate on the "incident" edge with a given conditions (other predicates).
+func HasIncidentWith(preds ...predicate.Incident) predicate.Ticket {
+	return predicate.Ticket(func(s *sql.Selector) {
+		step := newIncidentStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasServiceRequest applies the HasEdge predicate on the "service_request" edge.
+func HasServiceRequest() predicate.Ticket {
+	return predicate.Ticket(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, ServiceRequestTable, ServiceRequestColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasServiceRequestWith applies the HasEdge predicate on the "service_request" edge with a given conditions (other predicates).
+func HasServiceRequestWith(preds ...predicate.ServiceRequest) predicate.Ticket {
+	return predicate.Ticket(func(s *sql.Selector) {
+		step := newServiceRequestStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // HasFeishuSyncs applies the HasEdge predicate on the "feishu_syncs" edge.
 func HasFeishuSyncs() predicate.Ticket {
 	return predicate.Ticket(func(s *sql.Selector) {

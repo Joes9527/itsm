@@ -97,15 +97,10 @@ func ToIncidentResponse(incident *ent.Incident) *IncidentResponse {
 
 	response := &IncidentResponse{
 		ID:              incident.ID,
-		Title:           incident.Title,
-		Description:     incident.Description,
-		Status:          incident.Status,
-		Priority:        incident.Priority,
 		Severity:        incident.Severity,
 		Impact:          incident.Impact,
 		Urgency:         incident.Urgency,
 		IncidentNumber:  incident.IncidentNumber,
-		ReporterID:      incident.ReporterID,
 		Category:        incident.Category,
 		Subcategory:     incident.Subcategory,
 		ImpactAnalysis:  impactAnalysis,
@@ -116,10 +111,17 @@ func ToIncidentResponse(incident *ent.Incident) *IncidentResponse {
 		IsMajorIncident: incident.IsMajorIncident,
 		Source:          incident.Source,
 		Metadata:        incident.Metadata,
-		TenantID:        incident.TenantID,
 		Version:         incident.Version, // 乐观锁版本号
-		CreatedAt:       incident.CreatedAt,
-		UpdatedAt:       incident.UpdatedAt,
+	}
+	if workItem, err := incident.Edges.WorkItemOrErr(); err == nil && workItem != nil {
+		response.Title = workItem.Title
+		response.Description = workItem.Description
+		response.Status = workItem.Status
+		response.Priority = workItem.Priority
+		response.ReporterID = workItem.RequesterID
+		response.TenantID = workItem.TenantID
+		response.CreatedAt = workItem.CreatedAt
+		response.UpdatedAt = workItem.UpdatedAt
 	}
 
 	if configurationItems := incident.Edges.ConfigurationItems; configurationItems != nil {

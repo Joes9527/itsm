@@ -16,8 +16,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-// testDSN 为每个测试返回唯一的 SQLite 内存数据库 DSN，避免测试间数据库残留
-// （与 cmd/backfill_incident_work_item/main_test.go 同一做法）。
+// testDSN 为每个测试返回唯一的 SQLite 内存数据库 DSN，避免测试间数据库残留。
 var testDBCounter int64
 
 func testDSN() string {

@@ -30,12 +30,13 @@ func setupServiceRequestHandlerFixture(t *testing.T) (*ent.Client, *ServiceReque
 
 	tkt, err := client.Ticket.Create().
 		SetTitle("服务请求关联工单").SetTicketNumber("T-SRH-1").SetStatus("open").
+		SetRecordClass("service_request_item").
 		SetRequesterID(requester.ID).SetTenantID(tenant.ID).
 		Save(ctx)
 	require.NoError(t, err)
 
 	sr, err := client.ServiceRequest.Create().
-		SetTenantID(tenant.ID).SetTicketID(tkt.ID).SetCatalogID(1).SetRequesterID(requester.ID).
+		SetTicketID(tkt.ID).SetCatalogID(1).
 		Save(ctx)
 	require.NoError(t, err)
 
@@ -146,12 +147,12 @@ func TestServiceRequestHandler_UpdateRequest_WritesFormFields(t *testing.T) {
 	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
 
 	result, err := handler.Execute(ctx, nil, map[string]interface{}{
-		"action":             "update_request",
-		"request_id":         float64(sr.ID),
-		"cost_center":        "CC-001",
+		"action":              "update_request",
+		"request_id":          float64(sr.ID),
+		"cost_center":         "CC-001",
 		"data_classification": "confidential",
-		"needs_public_ip":    true,
-		"compliance_ack":     true,
+		"needs_public_ip":     true,
+		"compliance_ack":      true,
 	})
 	require.NoError(t, err)
 	assert.True(t, result.Success)

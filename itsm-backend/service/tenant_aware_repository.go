@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"itsm-backend/ent"
+	"itsm-backend/ent/incident"
 	"itsm-backend/ent/ticket"
 )
 
@@ -37,7 +38,7 @@ func (r *TenantAwareRepository) ValidateTenantAccess(_ context.Context, entityTe
 }
 
 // QueryWithTenantFilter returns a Ticket query pre-filtered by current tenant.
-// Other entities follow the same shape (e.g. client.Incident.Query().Where(incident.TenantIDEQ(r.tenantID))).
+// Other entities follow the same shape (e.g. client.Incident.Query().Where(incident.OwnedByTenant(r.tenantID))).
 func (r *TenantAwareRepository) QueryWithTenantFilter() *ent.TicketQuery {
 	return r.client.Ticket.Query().Where(ticket.TenantIDEQ(r.tenantID))
 }
@@ -67,14 +68,17 @@ func (r *TenantAwareRepository) LoadTicketTenant(ctx context.Context, id int) (i
 }
 
 func (r *TenantAwareRepository) LoadIncidentTenant(ctx context.Context, id int) (int, error) {
-	t, err := r.client.Incident.Get(ctx, id)
+	t, err := r.client.Incident.Query().Where(incident.IDEQ(id)).WithWorkItem().Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return 0, ErrNotFound
 		}
 		return 0, err
 	}
-	return t.TenantID, nil
+	if t.Edges.WorkItem == nil {
+		return 0, ErrNotFound
+	}
+	return t.Edges.WorkItem.TenantID, nil
 }
 
 func (r *TenantAwareRepository) LoadChangeTenant(ctx context.Context, id int) (int, error) {

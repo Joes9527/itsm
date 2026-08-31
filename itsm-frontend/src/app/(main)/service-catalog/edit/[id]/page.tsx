@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Card, Form, Input, InputNumber, Switch, Button, App, Spin } from 'antd';
+import { Card, Form, Input, InputNumber, Switch, Button, App, Spin, Select } from 'antd';
 import { useParams, useRouter } from 'next/navigation';
 import { ServiceCatalogApi } from '@/lib/api/service-catalog-api';
 import { useI18n } from '@/lib/i18n';
@@ -30,6 +30,7 @@ export default function EditServicePage() {
           description: data.shortDescription || data.fullDescription,
           deliveryTime: data.availability?.responseTime,
           status: data.status === 'published' ? 'enabled' : 'disabled',
+		  targetClass: data.targetClass,
         });
       } catch (error) {
         appMessage.error(t('common.getFailed'));
@@ -50,6 +51,7 @@ export default function EditServicePage() {
         shortDescription: values.description,
         availability: { responseTime: values.deliveryTime },
         status: values.status ? ServiceStatusType.PUBLISHED : ServiceStatusType.DRAFT,
+		targetClass: values.targetClass,
       });
       appMessage.success(t('common.saveSuccess'));
       router.push('/service-catalog');
@@ -83,6 +85,13 @@ export default function EditServicePage() {
           <Form.Item label={t('service.status')} name="status" valuePropName="checked">
             <Switch checkedChildren="enabled" unCheckedChildren="disabled" />
           </Form.Item>
+		  <Form.Item label="工作项类型" name="targetClass" rules={[{ required: true }]}>
+			<Select options={[
+			  { value: 'service_request_item', label: '服务请求' },
+			  { value: 'incident', label: '事件' },
+			  { value: 'change_request', label: '变更请求' },
+			]} />
+		  </Form.Item>
           <Form.Item>
             <div className="flex gap-4">
               <Button type="primary" htmlType="submit" loading={loading}>

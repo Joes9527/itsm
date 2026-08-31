@@ -13,6 +13,7 @@ import (
 	"itsm-backend/ent/processapprovaldecision"
 	"itsm-backend/ent/provisioningtask"
 	"itsm-backend/ent/servicerequest"
+	"itsm-backend/ent/ticket"
 	"itsm-backend/infrastructure/cloud"
 	cloudAlicloud "itsm-backend/infrastructure/cloud/alicloud"
 	"itsm-backend/middleware"
@@ -59,13 +60,17 @@ func (s *ProvisioningService) CreateTaskFromServiceRequest(ctx context.Context, 
 	defer tx.Rollback()
 
 	sr, err := tx.ServiceRequest.Query().
-		Where(servicerequest.ID(serviceRequestID), servicerequest.TenantID(tenantID)).
+		Where(servicerequest.ID(serviceRequestID), servicerequest.HasWorkItemWith(ticket.TenantIDEQ(tenantID))).
+		WithWorkItem().
 		First(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("服务请求不存在")
 	}
 
-	if perm := CanProvision(s.client, tenantID, actorUserID, actorRole, sr.RequesterID); !perm.Allowed {
+	if sr.Edges.WorkItem == nil {
+		return nil, fmt.Errorf("服务请求缺少权威 WorkItem")
+	}
+	if perm := CanProvision(s.client, tenantID, actorUserID, actorRole, sr.Edges.WorkItem.RequesterID); !perm.Allowed {
 		return nil, fmt.Errorf("%s", perm.Reason)
 	}
 
@@ -125,12 +130,16 @@ func (s *ProvisioningService) ExecuteTask(ctx context.Context, taskID, tenantID,
 	}
 
 	sr, err := s.client.ServiceRequest.Query().
-		Where(servicerequest.ID(task.ServiceRequestID), servicerequest.TenantID(tenantID)).
+		Where(servicerequest.ID(task.ServiceRequestID), servicerequest.HasWorkItemWith(ticket.TenantIDEQ(tenantID))).
+		WithWorkItem().
 		First(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("关联服务请求不存在")
 	}
-	if perm := CanProvision(s.client, tenantID, actorUserID, actorRole, sr.RequesterID); !perm.Allowed {
+	if sr.Edges.WorkItem == nil {
+		return nil, fmt.Errorf("关联服务请求缺少权威 WorkItem")
+	}
+	if perm := CanProvision(s.client, tenantID, actorUserID, actorRole, sr.Edges.WorkItem.RequesterID); !perm.Allowed {
 		return nil, fmt.Errorf("%s", perm.Reason)
 	}
 
@@ -162,7 +171,7 @@ func (s *ProvisioningService) ExecuteTask(ctx context.Context, taskID, tenantID,
 		}
 		// SR 没有 status 字段了（交付状态从 ProvisioningTask.Status 派生），仅保留错误信息留痕。
 		if err := s.client.ServiceRequest.Update().
-			Where(servicerequest.ID(task.ServiceRequestID), servicerequest.TenantID(tenantID)).
+			Where(servicerequest.ID(task.ServiceRequestID), servicerequest.HasWorkItemWith(ticket.TenantIDEQ(tenantID))).
 			SetLastError(execErr.Error()).
 			Exec(ctx); err != nil {
 			s.logger.Warnw("failed to update service request last_error", "serviceRequestID", task.ServiceRequestID, "error", err)

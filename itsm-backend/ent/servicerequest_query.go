@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"itsm-backend/ent/predicate"
 	"itsm-backend/ent/servicerequest"
+	"itsm-backend/ent/ticket"
 	"math"
 
 	"entgo.io/ent"
@@ -18,10 +19,11 @@ import (
 // ServiceRequestQuery is the builder for querying ServiceRequest entities.
 type ServiceRequestQuery struct {
 	config
-	ctx        *QueryContext
-	order      []servicerequest.OrderOption
-	inters     []Interceptor
-	predicates []predicate.ServiceRequest
+	ctx          *QueryContext
+	order        []servicerequest.OrderOption
+	inters       []Interceptor
+	predicates   []predicate.ServiceRequest
+	withWorkItem *TicketQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -56,6 +58,28 @@ func (_q *ServiceRequestQuery) Unique(unique bool) *ServiceRequestQuery {
 func (_q *ServiceRequestQuery) Order(o ...servicerequest.OrderOption) *ServiceRequestQuery {
 	_q.order = append(_q.order, o...)
 	return _q
+}
+
+// QueryWorkItem chains the current query on the "work_item" edge.
+func (_q *ServiceRequestQuery) QueryWorkItem() *TicketQuery {
+	query := (&TicketClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(servicerequest.Table, servicerequest.FieldID, selector),
+			sqlgraph.To(ticket.Table, ticket.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, true, servicerequest.WorkItemTable, servicerequest.WorkItemColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
 }
 
 // First returns the first ServiceRequest entity from the query.
@@ -245,15 +269,27 @@ func (_q *ServiceRequestQuery) Clone() *ServiceRequestQuery {
 		return nil
 	}
 	return &ServiceRequestQuery{
-		config:     _q.config,
-		ctx:        _q.ctx.Clone(),
-		order:      append([]servicerequest.OrderOption{}, _q.order...),
-		inters:     append([]Interceptor{}, _q.inters...),
-		predicates: append([]predicate.ServiceRequest{}, _q.predicates...),
+		config:       _q.config,
+		ctx:          _q.ctx.Clone(),
+		order:        append([]servicerequest.OrderOption{}, _q.order...),
+		inters:       append([]Interceptor{}, _q.inters...),
+		predicates:   append([]predicate.ServiceRequest{}, _q.predicates...),
+		withWorkItem: _q.withWorkItem.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
 	}
+}
+
+// WithWorkItem tells the query-builder to eager-load the nodes that are connected to
+// the "work_item" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *ServiceRequestQuery) WithWorkItem(opts ...func(*TicketQuery)) *ServiceRequestQuery {
+	query := (&TicketClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withWorkItem = query
+	return _q
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -262,12 +298,12 @@ func (_q *ServiceRequestQuery) Clone() *ServiceRequestQuery {
 // Example:
 //
 //	var v []struct {
-//		TenantID int `json:"tenant_id,omitempty"`
+//		TicketID int `json:"ticket_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.ServiceRequest.Query().
-//		GroupBy(servicerequest.FieldTenantID).
+//		GroupBy(servicerequest.FieldTicketID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *ServiceRequestQuery) GroupBy(field string, fields ...string) *ServiceRequestGroupBy {
@@ -285,11 +321,11 @@ func (_q *ServiceRequestQuery) GroupBy(field string, fields ...string) *ServiceR
 // Example:
 //
 //	var v []struct {
-//		TenantID int `json:"tenant_id,omitempty"`
+//		TicketID int `json:"ticket_id,omitempty"`
 //	}
 //
 //	client.ServiceRequest.Query().
-//		Select(servicerequest.FieldTenantID).
+//		Select(servicerequest.FieldTicketID).
 //		Scan(ctx, &v)
 func (_q *ServiceRequestQuery) Select(fields ...string) *ServiceRequestSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
@@ -332,8 +368,11 @@ func (_q *ServiceRequestQuery) prepareQuery(ctx context.Context) error {
 
 func (_q *ServiceRequestQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*ServiceRequest, error) {
 	var (
-		nodes = []*ServiceRequest{}
-		_spec = _q.querySpec()
+		nodes       = []*ServiceRequest{}
+		_spec       = _q.querySpec()
+		loadedTypes = [1]bool{
+			_q.withWorkItem != nil,
+		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*ServiceRequest).scanValues(nil, columns)
@@ -341,6 +380,7 @@ func (_q *ServiceRequestQuery) sqlAll(ctx context.Context, hooks ...queryHook) (
 	_spec.Assign = func(columns []string, values []any) error {
 		node := &ServiceRequest{config: _q.config}
 		nodes = append(nodes, node)
+		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
@@ -352,7 +392,43 @@ func (_q *ServiceRequestQuery) sqlAll(ctx context.Context, hooks ...queryHook) (
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
+	if query := _q.withWorkItem; query != nil {
+		if err := _q.loadWorkItem(ctx, query, nodes, nil,
+			func(n *ServiceRequest, e *Ticket) { n.Edges.WorkItem = e }); err != nil {
+			return nil, err
+		}
+	}
 	return nodes, nil
+}
+
+func (_q *ServiceRequestQuery) loadWorkItem(ctx context.Context, query *TicketQuery, nodes []*ServiceRequest, init func(*ServiceRequest), assign func(*ServiceRequest, *Ticket)) error {
+	ids := make([]int, 0, len(nodes))
+	nodeids := make(map[int][]*ServiceRequest)
+	for i := range nodes {
+		fk := nodes[i].TicketID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(ticket.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "ticket_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
 }
 
 func (_q *ServiceRequestQuery) sqlCount(ctx context.Context) (int, error) {
@@ -379,6 +455,9 @@ func (_q *ServiceRequestQuery) querySpec() *sqlgraph.QuerySpec {
 			if fields[i] != servicerequest.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
+		}
+		if _q.withWorkItem != nil {
+			_spec.Node.AddColumnOnce(servicerequest.FieldTicketID)
 		}
 	}
 	if ps := _q.predicates; len(ps) > 0 {

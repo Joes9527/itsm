@@ -994,7 +994,7 @@ func (s *DashboardService) getIncidentDistribution(ctx context.Context, tenantID
 	for i, category := range categories {
 		count, err := s.client.Incident.Query().
 			Where(
-				incident.TenantIDEQ(tenantID),
+				incident.HasWorkItemWith(ticket.TenantIDEQ(tenantID)),
 				incident.CategoryEQ(category),
 			).
 			Count(ctx)

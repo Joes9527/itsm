@@ -139,12 +139,16 @@ func findMismatches(ctx context.Context, client *ent.Client, tenantID int) ([]mi
 	}
 
 	// 2) 专业扩展记录的 work_item_id 指向的 ticket 的 record_class 对不上。
-	incidents, err := queryScoped(ctx, client.Incident.Query().Where(incident.WorkItemIDNotNil()), tenantID)
+	incidents, err := queryScoped(ctx, client.Incident.Query(), tenantID)
 	if err != nil {
 		return nil, err
 	}
 	for _, i := range incidents {
-		if err := checkBackref(ctx, client, i.WorkItemID, i.TenantID, "incident", &out); err != nil {
+		if i.Edges.WorkItem == nil {
+			out = append(out, mismatch{kind: "dangling_work_item_id", ticketID: i.WorkItemID, recordClass: "incident", detail: "incident is missing its authoritative work item"})
+			continue
+		}
+		if err := checkBackref(ctx, client, i.WorkItemID, i.Edges.WorkItem.TenantID, "incident", &out); err != nil {
 			return nil, err
 		}
 	}
@@ -207,9 +211,9 @@ func checkBackref(ctx context.Context, client *ent.Client, workItemID, tenantID 
 
 func queryScoped(ctx context.Context, q *ent.IncidentQuery, tenantID int) ([]*ent.Incident, error) {
 	if tenantID > 0 {
-		q = q.Where(incident.TenantID(tenantID))
+		q = q.Where(incident.OwnedByTenant(tenantID))
 	}
-	return q.All(ctx)
+	return q.WithWorkItem().All(ctx)
 }
 
 func queryScopedProblem(ctx context.Context, client *ent.Client, tenantID int) ([]*ent.Problem, error) {

@@ -185,6 +185,7 @@ const ServiceCatalogManagement = () => {
         fields,
         processDefinitionKey: values.processDefinitionKey || undefined,
         serviceType: values.serviceType || undefined,
+		targetClass: values.targetClass,
         ...(values.status ? { status: values.status } : {}),
       } as CreateServiceItemRequest;
       if (editingCatalog) {
@@ -232,6 +233,7 @@ const ServiceCatalogManagement = () => {
       fields: fieldsForForm,
       processDefinitionKey: catalog.processDefinitionKey,
       serviceType: catalog.serviceType,
+	  targetClass: catalog.targetClass,
     });
     setShowModal(true);
   };
@@ -268,6 +270,7 @@ const ServiceCatalogManagement = () => {
           if (catalog) {
             return ServiceCatalogApi.updateService(id.toString(), {
               status,
+			  targetClass: catalog.targetClass,
             } as UpdateServiceItemRequest);
           }
           return Promise.resolve();
@@ -285,7 +288,7 @@ const ServiceCatalogManagement = () => {
 
   const handleStatusChange = async (catalog: ServiceItem, status: 'published' | 'retired') => {
     try {
-      await ServiceCatalogApi.updateService(catalog.id, { status } as UpdateServiceItemRequest);
+	  await ServiceCatalogApi.updateService(catalog.id, { status, targetClass: catalog.targetClass } as UpdateServiceItemRequest);
       message.success(status === 'published' ? '服务目录已启用' : '服务目录已停用');
       fetchCatalogs();
     } catch (error) {
@@ -304,6 +307,7 @@ const ServiceCatalogManagement = () => {
         ciTypeId: catalog.ciTypeId,
         cloudServiceId: catalog.cloudServiceId,
         status: 'draft',
+		targetClass: catalog.targetClass,
       } as CreateServiceItemRequest);
       message.success('服务目录已复制为草稿');
       fetchCatalogs();
@@ -746,7 +750,7 @@ const ServiceCatalogManagement = () => {
           form={form}
           layout="vertical"
           onFinish={handleSubmit}
-          initialValues={{ status: 'enabled' }}
+		  initialValues={{ status: 'enabled', targetClass: 'service_request_item' }}
         >
           <Form.Item
             name="name"
@@ -768,6 +772,18 @@ const ServiceCatalogManagement = () => {
               { value: '数据服务', label: '数据服务' },
             ]} />
           </Form.Item>
+
+		  <Form.Item
+			name="targetClass"
+			label="工作项类型"
+			rules={[{ required: true, message: '请选择工作项类型' }]}
+		  >
+			<Select options={[
+			  { value: 'service_request_item', label: '服务请求' },
+			  { value: 'incident', label: '事件' },
+			  { value: 'change_request', label: '变更请求' },
+			]} />
+		  </Form.Item>
 
           <Form.Item
             name="description"

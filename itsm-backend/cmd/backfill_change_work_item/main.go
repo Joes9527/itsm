@@ -1,6 +1,5 @@
 // backfill_change_work_item 是 Wave 2（统一 Work Item 领域模型重构 · Change 迁移）用的
-// 一次性迁移工具，不是常规业务命令。镜像 cmd/backfill_incident_work_item /
-// cmd/backfill_problem_work_item 的形状，但比它们多做两件事——这是 Change 域特有的风险点：
+// 一次性迁移工具，不是常规业务命令。它还处理两件 Change 域特有的风险点：
 //
 //  1. Change 有一套已经在生产运行的 CAB 审批 BPMN 桥接机制（Track4），businessKey 采用
 //     "change:{id}" 约定，之前用 Change 自己的主键（changes.id）构造。这次迁移把
@@ -353,8 +352,8 @@ func migrateRelatedTickets(ctx context.Context, client *ent.Client, c *ent.Chang
 	return migrated, skipped, nil
 }
 
-// generateBackfillTicketNumber 复用与 handlers/change.EntRepository.generateWorkItemTicketNumber /
-// cmd/backfill_incident_work_item / cmd/backfill_problem_work_item 相同的编号格式
+// generateBackfillTicketNumber 复用与 handlers/change.EntRepository.generateWorkItemTicketNumber
+// 相同的编号格式
 // （TKT-YYYYMM-NNNNNN）与按租户维度计数的已知限制（tickets.ticket_number 是全局唯一索引，
 // 详见 handlers/change/repository_impl.go 同名函数的注释——这是一个跨 Ticket/Incident/
 // Problem/Change 共享的既有缺陷，不在本次任务范围内修）。取 Change 自己的创建时间算年月，

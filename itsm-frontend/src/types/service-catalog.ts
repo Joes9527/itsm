@@ -36,6 +36,8 @@ export enum ServiceType {
   CUSTOM = 'custom', // 自定义服务
 }
 
+export type WorkItemTargetClass = 'service_request_item' | 'incident' | 'change_request';
+
 /**
  * 服务项
  */
@@ -51,6 +53,8 @@ export interface ServiceItem {
 
   // 服务类型 - 用于动态表单
   serviceType?: ServiceType;
+	/** Authoritative professional WorkItem class selected by catalog administrators. */
+	targetClass: WorkItemTargetClass;
 
   // 由后端根据 serviceType 计算：仅 vm/rds/network/database/storage/oss 为 true
   // （见 itsm-backend handlers/service_catalog/entity.go RequiresInfraFields）。
@@ -429,12 +433,14 @@ export interface CreateServiceItemRequest {
   fields?: ServiceItem['fields'];
   // 决定是否需要基础设施字段，见 ServiceItem.serviceType/requiresInfraFields 注释。
   serviceType?: ServiceType | string;
+	targetClass: WorkItemTargetClass;
 }
 
 /**
  * 更新服务请求
  */
-export type UpdateServiceItemRequest = Partial<CreateServiceItemRequest>;
+export type UpdateServiceItemRequest = Partial<Omit<CreateServiceItemRequest, 'targetClass'>> &
+  Pick<CreateServiceItemRequest, 'targetClass'>;
 
 /**
  * 创建服务请求

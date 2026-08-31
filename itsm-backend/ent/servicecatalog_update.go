@@ -117,20 +117,6 @@ func (_u *ServiceCatalogUpdate) SetNillableServiceType(v *string) *ServiceCatalo
 	return _u
 }
 
-// SetItsmType sets the "itsm_type" field.
-func (_u *ServiceCatalogUpdate) SetItsmType(v string) *ServiceCatalogUpdate {
-	_u.mutation.SetItsmType(v)
-	return _u
-}
-
-// SetNillableItsmType sets the "itsm_type" field if the given value is not nil.
-func (_u *ServiceCatalogUpdate) SetNillableItsmType(v *string) *ServiceCatalogUpdate {
-	if v != nil {
-		_u.SetItsmType(*v)
-	}
-	return _u
-}
-
 // SetTargetClass sets the "target_class" field.
 func (_u *ServiceCatalogUpdate) SetTargetClass(v string) *ServiceCatalogUpdate {
 	_u.mutation.SetTargetClass(v)
@@ -142,12 +128,6 @@ func (_u *ServiceCatalogUpdate) SetNillableTargetClass(v *string) *ServiceCatalo
 	if v != nil {
 		_u.SetTargetClass(*v)
 	}
-	return _u
-}
-
-// ClearTargetClass clears the value of the "target_class" field.
-func (_u *ServiceCatalogUpdate) ClearTargetClass() *ServiceCatalogUpdate {
-	_u.mutation.ClearTargetClass()
 	return _u
 }
 
@@ -580,6 +560,11 @@ func (_u *ServiceCatalogUpdate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "ServiceCatalog.name": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.TargetClass(); ok {
+		if err := servicecatalog.TargetClassValidator(v); err != nil {
+			return &ValidationError{Name: "target_class", err: fmt.Errorf(`ent: validator failed for field "ServiceCatalog.target_class": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.TenantID(); ok {
 		if err := servicecatalog.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "ServiceCatalog.tenant_id": %w`, err)}
@@ -624,14 +609,8 @@ func (_u *ServiceCatalogUpdate) sqlSave(ctx context.Context) (_node int, err err
 	if value, ok := _u.mutation.ServiceType(); ok {
 		_spec.SetField(servicecatalog.FieldServiceType, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.ItsmType(); ok {
-		_spec.SetField(servicecatalog.FieldItsmType, field.TypeString, value)
-	}
 	if value, ok := _u.mutation.TargetClass(); ok {
 		_spec.SetField(servicecatalog.FieldTargetClass, field.TypeString, value)
-	}
-	if _u.mutation.TargetClassCleared() {
-		_spec.ClearField(servicecatalog.FieldTargetClass, field.TypeString)
 	}
 	if value, ok := _u.mutation.Price(); ok {
 		_spec.SetField(servicecatalog.FieldPrice, field.TypeFloat64, value)
@@ -873,20 +852,6 @@ func (_u *ServiceCatalogUpdateOne) SetNillableServiceType(v *string) *ServiceCat
 	return _u
 }
 
-// SetItsmType sets the "itsm_type" field.
-func (_u *ServiceCatalogUpdateOne) SetItsmType(v string) *ServiceCatalogUpdateOne {
-	_u.mutation.SetItsmType(v)
-	return _u
-}
-
-// SetNillableItsmType sets the "itsm_type" field if the given value is not nil.
-func (_u *ServiceCatalogUpdateOne) SetNillableItsmType(v *string) *ServiceCatalogUpdateOne {
-	if v != nil {
-		_u.SetItsmType(*v)
-	}
-	return _u
-}
-
 // SetTargetClass sets the "target_class" field.
 func (_u *ServiceCatalogUpdateOne) SetTargetClass(v string) *ServiceCatalogUpdateOne {
 	_u.mutation.SetTargetClass(v)
@@ -898,12 +863,6 @@ func (_u *ServiceCatalogUpdateOne) SetNillableTargetClass(v *string) *ServiceCat
 	if v != nil {
 		_u.SetTargetClass(*v)
 	}
-	return _u
-}
-
-// ClearTargetClass clears the value of the "target_class" field.
-func (_u *ServiceCatalogUpdateOne) ClearTargetClass() *ServiceCatalogUpdateOne {
-	_u.mutation.ClearTargetClass()
 	return _u
 }
 
@@ -1349,6 +1308,11 @@ func (_u *ServiceCatalogUpdateOne) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "ServiceCatalog.name": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.TargetClass(); ok {
+		if err := servicecatalog.TargetClassValidator(v); err != nil {
+			return &ValidationError{Name: "target_class", err: fmt.Errorf(`ent: validator failed for field "ServiceCatalog.target_class": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.TenantID(); ok {
 		if err := servicecatalog.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "ServiceCatalog.tenant_id": %w`, err)}
@@ -1410,14 +1374,8 @@ func (_u *ServiceCatalogUpdateOne) sqlSave(ctx context.Context) (_node *ServiceC
 	if value, ok := _u.mutation.ServiceType(); ok {
 		_spec.SetField(servicecatalog.FieldServiceType, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.ItsmType(); ok {
-		_spec.SetField(servicecatalog.FieldItsmType, field.TypeString, value)
-	}
 	if value, ok := _u.mutation.TargetClass(); ok {
 		_spec.SetField(servicecatalog.FieldTargetClass, field.TypeString, value)
-	}
-	if _u.mutation.TargetClassCleared() {
-		_spec.ClearField(servicecatalog.FieldTargetClass, field.TypeString)
 	}
 	if value, ok := _u.mutation.Price(); ok {
 		_spec.SetField(servicecatalog.FieldPrice, field.TypeFloat64, value)

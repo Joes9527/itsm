@@ -22,11 +22,6 @@ func NewEntRepository(client *ent.Client) *EntRepository {
 }
 
 func (r *EntRepository) Create(ctx context.Context, catalog *ServiceCatalog) (*ServiceCatalog, error) {
-	// target_class 在写入时从 itsm_type 同步计算——Create() 的领域实体字面量目前不接受
-	// itsm_type 入参（Service.Create 签名没有这个参数，ent schema 会应用 Default("Request")），
-	// 所以这里用 catalog.ITSMType（此刻是零值 ""）算出的 target_class 与 ent 的默认行为保持
-	// 一致：都等价于 "Request" → service_request_item。一旦 itsm_type 未来对 Create 开放，
-	// 这里不需要改，ComputeTargetClass 会随 catalog.ITSMType 的真实取值联动。
 	entFunc := r.client.ServiceCatalog.Create().
 		SetName(catalog.Name).
 		SetCategory(catalog.Category).
@@ -34,7 +29,7 @@ func (r *EntRepository) Create(ctx context.Context, catalog *ServiceCatalog) (*S
 		SetDeliveryTime(catalog.DeliveryTime).
 		SetStatus(catalog.Status).
 		SetIsActive(catalog.Status == "enabled").
-		SetTargetClass(ComputeTargetClass(catalog.ITSMType)).
+		SetTargetClass(catalog.TargetClass).
 		SetTenantID(catalog.TenantID)
 	if catalog.CITypeID > 0 {
 		entFunc = entFunc.SetCiTypeID(catalog.CITypeID)
@@ -71,7 +66,7 @@ func (r *EntRepository) Get(ctx context.Context, tenantID int, id int) (*Service
 
 // GetActiveForIntake loads the authoritative catalog configuration through the
 // caller's transaction. TargetClass is read exactly as persisted; this path
-// never derives it from the legacy ITSMType field.
+// never derives it from display labels or category metadata.
 func (r *EntRepository) GetActiveForIntake(ctx context.Context, tx *ent.Tx, tenantID int, id int) (*ServiceCatalog, error) {
 	if tx == nil {
 		return nil, fmt.Errorf("intake catalog transaction is required")
@@ -130,10 +125,6 @@ func (r *EntRepository) List(ctx context.Context, tenantID int, filters ListFilt
 }
 
 func (r *EntRepository) Update(ctx context.Context, tenantID int, catalog *ServiceCatalog) (*ServiceCatalog, error) {
-	// 自愈同步：catalog.ITSMType 来自 Service.Update 里先 Get() 再原地修改的 current，
-	// 忠实反映当前持久化的 itsm_type（Update 本身不改这个字段）。每次 Update 都重新按它
-	// 计算一次 target_class，这样即便某条存量记录还没跑过 cmd/backfill_servicecatalog_target_class，
-	// 只要被编辑保存一次也会被同步纠正，不会一直停留在空值。
 	update := r.client.ServiceCatalog.UpdateOneID(catalog.ID).
 		Where(servicecatalog.TenantID(tenantID)).
 		SetName(catalog.Name).
@@ -142,7 +133,7 @@ func (r *EntRepository) Update(ctx context.Context, tenantID int, catalog *Servi
 		SetDeliveryTime(catalog.DeliveryTime).
 		SetStatus(catalog.Status).
 		SetIsActive(catalog.Status == "enabled").
-		SetTargetClass(ComputeTargetClass(catalog.ITSMType))
+		SetTargetClass(catalog.TargetClass)
 	if catalog.CITypeID > 0 {
 		update = update.SetCiTypeID(catalog.CITypeID)
 	}
@@ -289,7 +280,6 @@ func (r *EntRepository) toDomain(e *ent.ServiceCatalog) *ServiceCatalog {
 		Name:                 e.Name,
 		Category:             e.Category,
 		Description:          e.Description,
-		ITSMType:             e.ItsmType,
 		TargetClass:          e.TargetClass,
 		ServiceType:          e.ServiceType,
 		DeliveryTime:         e.DeliveryTime,

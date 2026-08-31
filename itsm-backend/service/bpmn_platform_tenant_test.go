@@ -60,7 +60,7 @@ func TestStartProcess_PlatformNoTenant_ServiceTaskRunsWithInstanceTenant(t *test
 		Save(platformCtx)
 	require.NoError(t, err)
 
-	inc, err := client.Incident.Create().
+	inc, err := newIncidentTestBuilder(client).
 		SetTitle("平台级启动测试事件").
 		SetIncidentNumber("INC-PLATFORM-1").
 		SetStatus("new").
@@ -78,7 +78,9 @@ func TestStartProcess_PlatformNoTenant_ServiceTaskRunsWithInstanceTenant(t *test
 	assigned, err := client.Incident.Get(platformCtx, inc.ID)
 	require.NoError(t, err)
 	assert.Equal(t, assignee.ID, assigned.AssigneeID, "assign_incident 应以实例（定义）租户执行")
-	assert.Equal(t, "assigned", assigned.Status)
+	assignedWorkItem, err := incidentTestWorkItem(platformCtx, client, assigned.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "assigned", assignedWorkItem.Status)
 
 	started, err := client.ProcessInstance.Get(platformCtx, instance.ID)
 	require.NoError(t, err)

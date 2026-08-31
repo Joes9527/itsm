@@ -118,6 +118,10 @@ const (
 	EdgeSLAAlertHistory = "sla_alert_history"
 	// EdgeRootCauseAnalyses holds the string denoting the root_cause_analyses edge name in mutations.
 	EdgeRootCauseAnalyses = "root_cause_analyses"
+	// EdgeIncident holds the string denoting the incident edge name in mutations.
+	EdgeIncident = "incident"
+	// EdgeServiceRequest holds the string denoting the service_request edge name in mutations.
+	EdgeServiceRequest = "service_request"
 	// EdgeFeishuSyncs holds the string denoting the feishu_syncs edge name in mutations.
 	EdgeFeishuSyncs = "feishu_syncs"
 	// EdgeRequester holds the string denoting the requester edge name in mutations.
@@ -200,6 +204,20 @@ const (
 	RootCauseAnalysesInverseTable = "root_cause_analyses"
 	// RootCauseAnalysesColumn is the table column denoting the root_cause_analyses relation/edge.
 	RootCauseAnalysesColumn = "ticket_id"
+	// IncidentTable is the table that holds the incident relation/edge.
+	IncidentTable = "incidents"
+	// IncidentInverseTable is the table name for the Incident entity.
+	// It exists in this package in order to avoid circular dependency with the "incident" package.
+	IncidentInverseTable = "incidents"
+	// IncidentColumn is the table column denoting the incident relation/edge.
+	IncidentColumn = "work_item_id"
+	// ServiceRequestTable is the table that holds the service_request relation/edge.
+	ServiceRequestTable = "service_requests"
+	// ServiceRequestInverseTable is the table name for the ServiceRequest entity.
+	// It exists in this package in order to avoid circular dependency with the "servicerequest" package.
+	ServiceRequestInverseTable = "service_requests"
+	// ServiceRequestColumn is the table column denoting the service_request relation/edge.
+	ServiceRequestColumn = "ticket_id"
 	// FeishuSyncsTable is the table that holds the feishu_syncs relation/edge.
 	FeishuSyncsTable = "feishu_ticket_syncs"
 	// FeishuSyncsInverseTable is the table name for the FeishuTicketSync entity.
@@ -706,6 +724,20 @@ func ByRootCauseAnalyses(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption
 	}
 }
 
+// ByIncidentField orders the results by incident field.
+func ByIncidentField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newIncidentStep(), sql.OrderByField(field, opts...))
+	}
+}
+
+// ByServiceRequestField orders the results by service_request field.
+func ByServiceRequestField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newServiceRequestStep(), sql.OrderByField(field, opts...))
+	}
+}
+
 // ByFeishuSyncsCount orders the results by feishu_syncs count.
 func ByFeishuSyncsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -822,6 +854,20 @@ func newRootCauseAnalysesStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(RootCauseAnalysesInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, RootCauseAnalysesTable, RootCauseAnalysesColumn),
+	)
+}
+func newIncidentStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(IncidentInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2O, false, IncidentTable, IncidentColumn),
+	)
+}
+func newServiceRequestStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ServiceRequestInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2O, false, ServiceRequestTable, ServiceRequestColumn),
 	)
 }
 func newFeishuSyncsStep() *sqlgraph.Step {

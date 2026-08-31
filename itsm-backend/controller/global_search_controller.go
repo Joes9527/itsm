@@ -86,23 +86,27 @@ func (c *GlobalSearchController) Search(ctx *gin.Context) {
 	// 搜索事件
 	incidents, err := c.client.Incident.Query().
 		Where(
-			incident.TenantID(tenantID),
+			incident.OwnedByTenant(tenantID),
 			incident.Or(
-				incident.TitleContainsFold(keyword),
-				incident.DescriptionContainsFold(keyword),
+				incident.WorkItemTitleContainsFold(keyword),
+				incident.WorkItemDescriptionContainsFold(keyword),
 				incident.IncidentNumberContainsFold(keyword),
 			),
 		).
+		WithWorkItem().
 		Limit(10).
 		All(ctx)
 	if err == nil {
 		for _, i := range incidents {
+			if i.Edges.WorkItem == nil {
+				continue
+			}
 			results = append(results, &SearchResult{
 				ID:          i.ID,
 				Type:        "incident",
-				Title:       i.Title,
-				Description: i.Description,
-				Status:      i.Status,
+				Title:       i.Edges.WorkItem.Title,
+				Description: i.Edges.WorkItem.Description,
+				Status:      i.Edges.WorkItem.Status,
 				Number:      i.IncidentNumber,
 			})
 		}

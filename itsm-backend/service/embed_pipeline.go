@@ -8,6 +8,7 @@ import (
 	"itsm-backend/ent"
 	ia "itsm-backend/ent/incident"
 	ka "itsm-backend/ent/knowledgearticle"
+	"itsm-backend/ent/ticket"
 
 	"go.uber.org/zap"
 )
@@ -52,10 +53,15 @@ func (p *EmbeddingPipeline) RunOnce(ctx context.Context, tenantID int, limit int
 		}
 	}
 	// also embed latest incidents (title + description) for similarity search
-	incs, err := p.client.Incident.Query().Where(ia.TenantIDEQ(tenantID)).Order(ent.Desc(ia.FieldCreatedAt)).Limit(limit).All(ctx)
+	incs, err := p.client.Incident.Query().Where(ia.HasWorkItemWith(ticket.TenantIDEQ(tenantID))).
+		WithWorkItem().Order(ent.Desc(ia.FieldID)).Limit(limit).All(ctx)
 	if err == nil {
 		for _, it := range incs {
-			text := strings.TrimSpace(it.Title + "\n" + it.Description)
+			workItem, edgeErr := it.Edges.WorkItemOrErr()
+			if edgeErr != nil {
+				continue
+			}
+			text := strings.TrimSpace(workItem.Title + "\n" + workItem.Description)
 			if text == "" {
 				continue
 			}
@@ -64,7 +70,7 @@ func (p *EmbeddingPipeline) RunOnce(ctx context.Context, tenantID int, limit int
 				continue
 			}
 			if p.vectors != nil {
-				_ = p.vectors.Upsert(ctx, tenantID, "incident", it.ID, vec, it.Description, "incident:"+it.IncidentNumber)
+				_ = p.vectors.Upsert(ctx, tenantID, "incident", it.ID, vec, workItem.Description, "incident:"+it.IncidentNumber)
 			}
 			if p.logger != nil {
 				p.logger.Infow("Embedded Incident", "id", it.ID, "tenant_id", tenantID, "ts", time.Now().Unix())

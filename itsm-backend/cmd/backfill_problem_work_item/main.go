@@ -1,5 +1,5 @@
 // backfill_problem_work_item 是 Wave 2（统一 Work Item 领域模型重构 · Problem 迁移）
-// 用的一次性迁移工具，不是常规业务命令。镜像 cmd/backfill_incident_work_item 的形状。
+// 用的一次性迁移工具，不是常规业务命令。
 //
 // 背景：Wave 2 之后 handlers/problem.EntRepository.Create 在同一个数据库事务内同时创建
 // tickets 行（record_class="problem"）和 problems 行，并把 problems.work_item_id 回填指向
@@ -241,9 +241,7 @@ func backfillOne(ctx context.Context, client *ent.Client, prob *ent.Problem) (in
 // generateBackfillTicketNumber 复用与 handlers/problem.EntRepository.
 // generateWorkItemTicketNumber 相同的编号格式（TKT-YYYYMM-NNNNNN）与全局（不区分租户）
 // 计数维度——tickets.ticket_number 是全局唯一索引，按租户维度计数会在不同租户同月第一次
-// 建单时互相撞号（这是 cmd/backfill_incident_work_item 里
-// generateBackfillTicketNumber 和 IncidentService.generateWorkItemTicketNumber 都存在、
-// 但不在本次任务允许修改范围内的同类缺陷，已在交付说明里列出）。取 Problem 自己的创建
+// 建单时互相撞号（其他专业域的历史建单路径也存在同类限制）。取 Problem 自己的创建
 // 时间算年月，而不是运行工具时的当前时间——回填的 WorkItem 编号应该落在 Problem 实际
 // 创建的月份。同一事务内串行处理，不需要 Redis 原子计数器；不同事务之间仍受
 // ticket_number 的唯一索引兜底保护，撞号会在 Save 时报错，交由上层 backfillOne 整体回滚。

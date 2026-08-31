@@ -88,9 +88,7 @@ type ServiceCatalogResponse struct {
 	// （见 handlers/service_catalog/entity.go 的 RequiresInfraFields 函数注释）。
 	RequiresInfraFields bool `json:"requiresInfraFields"`
 	// TargetClass 是该目录项对应的 WorkItem 目标类：service_request_item|incident|change_request，
-	// 由后端根据 itsm_type 计算并在创建/更新时同步落库（见 handlers/service_catalog 的
-	// computeTargetClass），是 service_request 域路由判断（是否走 Incident 创建路径）的唯一
-	// 权威依据，itsm_type 不再承担这个职责（design doc §7.2）。
+	// 由管理端显式提供并持久化，是 Intake 专业扩展分派的唯一权威依据。
 	TargetClass string                   `json:"targetClass,omitempty"`
 	Fields      []map[string]interface{} `json:"fields,omitempty"`
 	CreatedAt   time.Time                `json:"createdAt"`
@@ -172,6 +170,7 @@ type CreateServiceCatalogRequest struct {
 	// ServiceType 决定是否需要基础设施字段，见 handlers/service_catalog.RequiresInfraFields。
 	// 取值：vm|rds|oss|network|storage|security|custom（ent schema servicecatalog.go 字段注释）。
 	ServiceType string `json:"serviceType" binding:"omitempty,max=50"`
+	TargetClass string `json:"targetClass" binding:"required,oneof=service_request_item incident change_request"`
 }
 
 // UpdateServiceCatalogRequest 更新服务目录请求
@@ -186,4 +185,5 @@ type UpdateServiceCatalogRequest struct {
 	Status               string                   `json:"status" binding:"omitempty,oneof=enabled disabled"`
 	Fields               []map[string]interface{} `json:"fields,omitempty"`
 	ServiceType          string                   `json:"serviceType" binding:"omitempty,max=50"`
+	TargetClass          string                   `json:"targetClass" binding:"required,oneof=service_request_item incident change_request"`
 }

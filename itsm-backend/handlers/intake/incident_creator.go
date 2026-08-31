@@ -107,20 +107,14 @@ func (c *IncidentCreator) CreateExtension(ctx context.Context, tx *ent.Tx, workI
 	}
 	create := tx.Incident.Create().
 		SetWorkItemID(workItem.ID).
-		SetTitle(plan.WorkItem.Title).
-		SetDescription(plan.WorkItem.Description).
-		SetStatus("new").
 		SetType("incident").
-		SetPriority(input.Priority).
 		SetSeverity(input.Severity).
 		SetImpact(input.Impact).
 		SetUrgency(input.Urgency).
 		SetIncidentNumber(input.IncidentNumber).
-		SetReporterID(plan.WorkItem.RequesterID).
 		SetSource(input.Source).
 		SetDetectedAt(input.DetectedAt).
-		SetIsAutomated(false).
-		SetTenantID(plan.WorkItem.TenantID)
+		SetIsAutomated(false)
 	if input.Category != "" {
 		create.SetCategory(input.Category)
 	}

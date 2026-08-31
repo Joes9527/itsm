@@ -14,6 +14,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func incidentAuthorizationSubject(workItemID int, status string) *ent.Incident {
+	return &ent.Incident{
+		WorkItemID: workItemID,
+		Edges:      ent.IncidentEdges{WorkItem: &ent.Ticket{ID: workItemID, Status: status}},
+	}
+}
+
 func TestBuildIncidentActionsMirrorsIncidentCommandRules(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	defer client.Close()
@@ -26,10 +33,10 @@ func TestBuildIncidentActionsMirrorsIncidentCommandRules(t *testing.T) {
 	workItem := createIncidentAuthorizationWorkItem(t, ctx, client, tenant.ID, actorUser.ID, "action-rules", "incident")
 
 	actor := ActionActor{Client: client, TenantID: tenant.ID, UserID: actorUser.ID, Role: "super_admin"}
-	inProgress := &ent.Incident{Status: common.IncidentStatusInProgress, WorkItemID: workItem.ID}
-	resolved := &ent.Incident{Status: common.IncidentStatusResolved, WorkItemID: workItem.ID}
-	closed := &ent.Incident{Status: common.IncidentStatusClosed, WorkItemID: workItem.ID}
-	cancelled := &ent.Incident{Status: common.IncidentStatusCancelled, WorkItemID: workItem.ID}
+	inProgress := incidentAuthorizationSubject(workItem.ID, common.IncidentStatusInProgress)
+	resolved := incidentAuthorizationSubject(workItem.ID, common.IncidentStatusResolved)
+	closed := incidentAuthorizationSubject(workItem.ID, common.IncidentStatusClosed)
+	cancelled := incidentAuthorizationSubject(workItem.ID, common.IncidentStatusCancelled)
 
 	require.True(t, BuildIncidentActions(ctx, actor, inProgress)["resolve"].Allowed)
 	require.False(t, BuildIncidentActions(ctx, actor, resolved)["resolve"].Allowed)
@@ -54,24 +61,18 @@ func TestCanConvertToProblemFailsClosed(t *testing.T) {
 	validWorkItem := createIncidentAuthorizationWorkItem(t, ctx, client, tenant.ID, actorUser.ID, "valid", "incident")
 
 	t.Run("valid Incident WorkItem", func(t *testing.T) {
-		permission := CanConvertToProblem(ctx, actor, &ent.Incident{
-			Status:     common.IncidentStatusInProgress,
-			WorkItemID: validWorkItem.ID,
-		})
+		permission := CanConvertToProblem(ctx, actor, incidentAuthorizationSubject(validWorkItem.ID, common.IncidentStatusInProgress))
 		require.True(t, permission.Allowed, permission.Reason)
 	})
 
 	t.Run("missing WorkItem", func(t *testing.T) {
-		permission := CanConvertToProblem(ctx, actor, &ent.Incident{Status: common.IncidentStatusInProgress})
+		permission := CanConvertToProblem(ctx, actor, incidentAuthorizationSubject(0, common.IncidentStatusInProgress))
 		require.False(t, permission.Allowed)
 		require.NotEmpty(t, permission.Reason)
 	})
 
 	t.Run("orphan WorkItem ID", func(t *testing.T) {
-		permission := CanConvertToProblem(ctx, actor, &ent.Incident{
-			Status:     common.IncidentStatusInProgress,
-			WorkItemID: validWorkItem.ID + 100000,
-		})
+		permission := CanConvertToProblem(ctx, actor, incidentAuthorizationSubject(validWorkItem.ID+100000, common.IncidentStatusInProgress))
 		require.False(t, permission.Allowed)
 	})
 
@@ -79,10 +80,7 @@ func TestCanConvertToProblemFailsClosed(t *testing.T) {
 		workItem := createIncidentAuthorizationWorkItem(t, ctx, client, tenant.ID, actorUser.ID, "deleted", "incident")
 		_, err := client.Ticket.UpdateOneID(workItem.ID).SetDeletedAt(time.Now()).Save(ctx)
 		require.NoError(t, err)
-		permission := CanConvertToProblem(ctx, actor, &ent.Incident{
-			Status:     common.IncidentStatusInProgress,
-			WorkItemID: workItem.ID,
-		})
+		permission := CanConvertToProblem(ctx, actor, incidentAuthorizationSubject(workItem.ID, common.IncidentStatusInProgress))
 		require.False(t, permission.Allowed)
 	})
 
@@ -92,19 +90,13 @@ func TestCanConvertToProblemFailsClosed(t *testing.T) {
 		foreignUser, err := createIncidentTestUser(ctx, client, foreignTenant.ID, "convert-foreign")
 		require.NoError(t, err)
 		workItem := createIncidentAuthorizationWorkItem(t, ctx, client, foreignTenant.ID, foreignUser.ID, "foreign", "incident")
-		permission := CanConvertToProblem(ctx, actor, &ent.Incident{
-			Status:     common.IncidentStatusInProgress,
-			WorkItemID: workItem.ID,
-		})
+		permission := CanConvertToProblem(ctx, actor, incidentAuthorizationSubject(workItem.ID, common.IncidentStatusInProgress))
 		require.False(t, permission.Allowed)
 	})
 
 	t.Run("wrong class WorkItem", func(t *testing.T) {
 		workItem := createIncidentAuthorizationWorkItem(t, ctx, client, tenant.ID, actorUser.ID, "wrong-class", "problem")
-		permission := CanConvertToProblem(ctx, actor, &ent.Incident{
-			Status:     common.IncidentStatusInProgress,
-			WorkItemID: workItem.ID,
-		})
+		permission := CanConvertToProblem(ctx, actor, incidentAuthorizationSubject(workItem.ID, common.IncidentStatusInProgress))
 		require.False(t, permission.Allowed)
 	})
 
@@ -120,10 +112,7 @@ func TestCanConvertToProblemFailsClosed(t *testing.T) {
 			Save(context.Background())
 		require.NoError(t, err)
 
-		permission := CanConvertToProblem(ctx, actor, &ent.Incident{
-			Status:     common.IncidentStatusInProgress,
-			WorkItemID: source.ID,
-		})
+		permission := CanConvertToProblem(ctx, actor, incidentAuthorizationSubject(source.ID, common.IncidentStatusInProgress))
 		require.False(t, permission.Allowed)
 		require.Equal(t, "已经转为问题", permission.Reason)
 	})
@@ -149,19 +138,13 @@ func TestCanConvertToProblemFailsClosed(t *testing.T) {
 			Save(context.Background())
 		require.NoError(t, err)
 
-		permission := CanConvertToProblem(ctx, actor, &ent.Incident{
-			Status:     common.IncidentStatusInProgress,
-			WorkItemID: source.ID,
-		})
+		permission := CanConvertToProblem(ctx, actor, incidentAuthorizationSubject(source.ID, common.IncidentStatusInProgress))
 		require.True(t, permission.Allowed, permission.Reason)
 	})
 
 	require.NoError(t, client.Close())
 	t.Run("relation lookup error", func(t *testing.T) {
-		permission := CanConvertToProblem(ctx, actor, &ent.Incident{
-			Status:     common.IncidentStatusInProgress,
-			WorkItemID: validWorkItem.ID,
-		})
+		permission := CanConvertToProblem(ctx, actor, incidentAuthorizationSubject(validWorkItem.ID, common.IncidentStatusInProgress))
 		require.False(t, permission.Allowed)
 		require.Equal(t, "无法确认事件是否已转为问题", permission.Reason)
 	})

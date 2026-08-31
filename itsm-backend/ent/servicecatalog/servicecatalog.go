@@ -23,8 +23,6 @@ const (
 	FieldIcon = "icon"
 	// FieldServiceType holds the string denoting the service_type field in the database.
 	FieldServiceType = "service_type"
-	// FieldItsmType holds the string denoting the itsm_type field in the database.
-	FieldItsmType = "itsm_type"
 	// FieldTargetClass holds the string denoting the target_class field in the database.
 	FieldTargetClass = "target_class"
 	// FieldPrice holds the string denoting the price field in the database.
@@ -77,7 +75,6 @@ var Columns = []string{
 	FieldCategory,
 	FieldIcon,
 	FieldServiceType,
-	FieldItsmType,
 	FieldTargetClass,
 	FieldPrice,
 	FieldDeliveryTime,
@@ -115,8 +112,10 @@ var (
 	NameValidator func(string) error
 	// DefaultServiceType holds the default value on creation for the "service_type" field.
 	DefaultServiceType string
-	// DefaultItsmType holds the default value on creation for the "itsm_type" field.
-	DefaultItsmType string
+	// DefaultTargetClass holds the default value on creation for the "target_class" field.
+	DefaultTargetClass string
+	// TargetClassValidator is a validator for the "target_class" field. It is called by the builders before save.
+	TargetClassValidator func(string) error
 	// DefaultRequiresApproval holds the default value on creation for the "requires_approval" field.
 	DefaultRequiresApproval bool
 	// DefaultApprovalLevel holds the default value on creation for the "approval_level" field.
@@ -168,11 +167,6 @@ func ByIcon(opts ...sql.OrderTermOption) OrderOption {
 // ByServiceType orders the results by the service_type field.
 func ByServiceType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldServiceType, opts...).ToFunc()
-}
-
-// ByItsmType orders the results by the itsm_type field.
-func ByItsmType(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldItsmType, opts...).ToFunc()
 }
 
 // ByTargetClass orders the results by the target_class field.

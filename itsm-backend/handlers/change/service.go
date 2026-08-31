@@ -393,9 +393,9 @@ func (s *Service) GetCMDBImpactSummary(ctx context.Context, changeID, tenantID i
 
 	openIncidentCount, err := s.entClient.Incident.Query().
 		Where(
-			incident.TenantID(tenantID),
+			incident.OwnedByTenant(tenantID),
 			incident.ConfigurationItemIDIn(ciIDs...),
-			incident.StatusNotIn("resolved", "closed"),
+			incident.WorkItemStatusNotIn("resolved", "closed"),
 		).
 		Count(ctx)
 	if err == nil {

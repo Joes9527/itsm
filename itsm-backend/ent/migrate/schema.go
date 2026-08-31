@@ -1559,17 +1559,11 @@ var (
 	// IncidentsColumns holds the columns for the "incidents" table.
 	IncidentsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "title", Type: field.TypeString},
-		{Name: "description", Type: field.TypeString, Nullable: true, Size: 2147483647},
-		{Name: "status", Type: field.TypeString, Default: "new"},
 		{Name: "type", Type: field.TypeString, Default: "incident"},
-		{Name: "priority", Type: field.TypeString, Default: "medium"},
 		{Name: "severity", Type: field.TypeString, Default: "medium"},
 		{Name: "impact", Type: field.TypeString, Default: "medium"},
 		{Name: "urgency", Type: field.TypeString, Default: "medium"},
 		{Name: "incident_number", Type: field.TypeString, Unique: true},
-		{Name: "reporter_id", Type: field.TypeInt},
-		{Name: "work_item_id", Type: field.TypeInt, Unique: true, Nullable: true},
 		{Name: "assignee_id", Type: field.TypeInt, Nullable: true},
 		{Name: "configuration_item_id", Type: field.TypeInt, Nullable: true},
 		{Name: "category", Type: field.TypeString, Nullable: true},
@@ -1586,22 +1580,28 @@ var (
 		{Name: "is_major_incident", Type: field.TypeBool, Default: false},
 		{Name: "source", Type: field.TypeString, Default: "manual"},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
-		{Name: "tenant_id", Type: field.TypeInt},
 		{Name: "version", Type: field.TypeInt, Default: 1},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
+		{Name: "work_item_id", Type: field.TypeInt, Unique: true},
 	}
 	// IncidentsTable holds the schema information for the "incidents" table.
 	IncidentsTable = &schema.Table{
 		Name:       "incidents",
 		Columns:    IncidentsColumns,
 		PrimaryKey: []*schema.Column{IncidentsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "incidents_tickets_incident",
+				Columns:    []*schema.Column{IncidentsColumns[24]},
+				RefColumns: []*schema.Column{TicketsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
 		Indexes: []*schema.Index{
 			{
 				Name:    "incident_work_item_id",
 				Unique:  false,
-				Columns: []*schema.Column{IncidentsColumns[11]},
+				Columns: []*schema.Column{IncidentsColumns[24]},
 			},
 		},
 	}
@@ -3686,8 +3686,7 @@ var (
 		{Name: "category", Type: field.TypeString, Nullable: true},
 		{Name: "icon", Type: field.TypeString, Nullable: true},
 		{Name: "service_type", Type: field.TypeString, Default: "custom"},
-		{Name: "itsm_type", Type: field.TypeString, Default: "Request"},
-		{Name: "target_class", Type: field.TypeString, Nullable: true},
+		{Name: "target_class", Type: field.TypeString, Default: "service_request_item"},
 		{Name: "price", Type: field.TypeFloat64, Nullable: true},
 		{Name: "delivery_time", Type: field.TypeInt, Nullable: true},
 		{Name: "unit", Type: field.TypeString, Nullable: true},
@@ -3717,12 +3716,12 @@ var (
 			{
 				Name:    "servicecatalog_ci_type_id",
 				Unique:  false,
-				Columns: []*schema.Column{ServiceCatalogsColumns[17]},
+				Columns: []*schema.Column{ServiceCatalogsColumns[16]},
 			},
 			{
 				Name:    "servicecatalog_cloud_service_id",
 				Unique:  false,
-				Columns: []*schema.Column{ServiceCatalogsColumns[18]},
+				Columns: []*schema.Column{ServiceCatalogsColumns[17]},
 			},
 			{
 				Name:    "servicecatalog_service_type",
@@ -3737,18 +3736,15 @@ var (
 			{
 				Name:    "servicecatalog_tenant_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{ServiceCatalogsColumns[22], ServiceCatalogsColumns[21]},
+				Columns: []*schema.Column{ServiceCatalogsColumns[21], ServiceCatalogsColumns[20]},
 			},
 		},
 	}
 	// ServiceRequestsColumns holds the columns for the "service_requests" table.
 	ServiceRequestsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "tenant_id", Type: field.TypeInt},
-		{Name: "ticket_id", Type: field.TypeInt},
 		{Name: "catalog_id", Type: field.TypeInt},
 		{Name: "ci_id", Type: field.TypeInt, Nullable: true},
-		{Name: "requester_id", Type: field.TypeInt},
 		{Name: "form_data", Type: field.TypeJSON, Nullable: true},
 		{Name: "cost_center", Type: field.TypeString, Nullable: true},
 		{Name: "data_classification", Type: field.TypeString, Default: "internal"},
@@ -3766,35 +3762,32 @@ var (
 		{Name: "completion_note", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "last_error", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "version", Type: field.TypeInt, Default: 1},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
+		{Name: "ticket_id", Type: field.TypeInt, Unique: true},
 	}
 	// ServiceRequestsTable holds the schema information for the "service_requests" table.
 	ServiceRequestsTable = &schema.Table{
 		Name:       "service_requests",
 		Columns:    ServiceRequestsColumns,
 		PrimaryKey: []*schema.Column{ServiceRequestsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "service_requests_tickets_service_request",
+				Columns:    []*schema.Column{ServiceRequestsColumns[21]},
+				RefColumns: []*schema.Column{TicketsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
 		Indexes: []*schema.Index{
 			{
 				Name:    "servicerequest_ticket_id",
 				Unique:  true,
+				Columns: []*schema.Column{ServiceRequestsColumns[21]},
+			},
+			{
+				Name:    "servicerequest_ci_id",
+				Unique:  false,
 				Columns: []*schema.Column{ServiceRequestsColumns[2]},
-			},
-			{
-				Name:    "servicerequest_tenant_id_created_at",
-				Unique:  false,
-				Columns: []*schema.Column{ServiceRequestsColumns[1], ServiceRequestsColumns[23]},
-			},
-			{
-				Name:    "servicerequest_tenant_id_requester_id_created_at",
-				Unique:  false,
-				Columns: []*schema.Column{ServiceRequestsColumns[1], ServiceRequestsColumns[5], ServiceRequestsColumns[23]},
-			},
-			{
-				Name:    "servicerequest_tenant_id_ci_id",
-				Unique:  false,
-				Columns: []*schema.Column{ServiceRequestsColumns[1], ServiceRequestsColumns[4]},
 			},
 		},
 	}
@@ -5514,6 +5507,7 @@ func init() {
 	DiscoveryResultsTable.ForeignKeys[0].RefTable = DiscoveryJobsTable
 	FeishuTicketSyncsTable.ForeignKeys[0].RefTable = TicketsTable
 	GroupsTable.ForeignKeys[0].RefTable = UsersTable
+	IncidentsTable.ForeignKeys[0].RefTable = TicketsTable
 	IncidentAlertsTable.ForeignKeys[0].RefTable = IncidentsTable
 	IncidentEventsTable.ForeignKeys[0].RefTable = IncidentsTable
 	IncidentMetricsTable.ForeignKeys[0].RefTable = IncidentsTable
@@ -5549,6 +5543,7 @@ func init() {
 	SLAMetricsTable.ForeignKeys[0].RefTable = SLADefinitionsTable
 	SLAViolationsTable.ForeignKeys[0].RefTable = SLADefinitionsTable
 	SLAViolationsTable.ForeignKeys[1].RefTable = TicketsTable
+	ServiceRequestsTable.ForeignKeys[0].RefTable = TicketsTable
 	SurveyResponsesTable.ForeignKeys[0].RefTable = SurveysTable
 	TenantsTable.ForeignKeys[0].RefTable = BootstrapTokensTable
 	TenantInstallationsTable.ForeignKeys[0].RefTable = MarketplaceItemsTable

@@ -8,6 +8,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/tests/testutil"
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -133,21 +134,17 @@ func TestIncidentIntegration(t *testing.T) {
 
 	// 创建事件
 	incidentNumber := fmt.Sprintf("INC-%d", time.Now().UnixNano())
-	incident, err := client.Incident.Create().
-		SetTitle("Email Service Down").
-		SetDescription("Users cannot access email").
-		SetPriority("critical").
-		SetStatus("open").
-		SetIncidentNumber(incidentNumber).
-		SetReporterID(user.ID).
-		SetTenantID(tenant.ID).
-		Save(ctx)
-	require.NoError(t, err)
+	incident := testutil.CreateIncident(t, ctx, client, tenant.ID, user.ID, testutil.IncidentFixture{
+		Number: incidentNumber, Title: "Email Service Down", Description: "Users cannot access email",
+		Priority: "critical", Status: "open",
+	})
 	logger.Info("Created incident", "incident_id", incident.ID)
 
 	// 验证事件
-	require.Equal(t, "critical", incident.Priority)
-	require.Equal(t, "open", incident.Status)
+	workItem, err := incident.QueryWorkItem().Only(ctx)
+	require.NoError(t, err)
+	require.Equal(t, "critical", workItem.Priority)
+	require.Equal(t, "open", workItem.Status)
 
 	t.Log("Incident integration test completed successfully")
 }

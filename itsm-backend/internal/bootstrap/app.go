@@ -668,8 +668,7 @@ func NewApplication() *Application {
 
 	// Domain: Service Request (DDD)
 	srRepo := service_request.NewEntRepository(client)
-	chainResolver := service.NewApprovalChainResolver(client, sugar)
-	srService := service_request.NewService(srRepo, scRepo, cmdbRepo, client, sugar, ticketService, chainResolver, nil)
+	srService := service_request.NewService(srRepo, client, sugar)
 	srHandler := service_request.NewHandler(srService, intakeService)
 
 	// Domain: Change (DDD)

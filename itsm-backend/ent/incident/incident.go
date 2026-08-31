@@ -14,16 +14,8 @@ const (
 	Label = "incident"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
-	// FieldTitle holds the string denoting the title field in the database.
-	FieldTitle = "title"
-	// FieldDescription holds the string denoting the description field in the database.
-	FieldDescription = "description"
-	// FieldStatus holds the string denoting the status field in the database.
-	FieldStatus = "status"
 	// FieldType holds the string denoting the type field in the database.
 	FieldType = "type"
-	// FieldPriority holds the string denoting the priority field in the database.
-	FieldPriority = "priority"
 	// FieldSeverity holds the string denoting the severity field in the database.
 	FieldSeverity = "severity"
 	// FieldImpact holds the string denoting the impact field in the database.
@@ -32,8 +24,6 @@ const (
 	FieldUrgency = "urgency"
 	// FieldIncidentNumber holds the string denoting the incident_number field in the database.
 	FieldIncidentNumber = "incident_number"
-	// FieldReporterID holds the string denoting the reporter_id field in the database.
-	FieldReporterID = "reporter_id"
 	// FieldWorkItemID holds the string denoting the work_item_id field in the database.
 	FieldWorkItemID = "work_item_id"
 	// FieldAssigneeID holds the string denoting the assignee_id field in the database.
@@ -68,14 +58,8 @@ const (
 	FieldSource = "source"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
-	// FieldTenantID holds the string denoting the tenant_id field in the database.
-	FieldTenantID = "tenant_id"
 	// FieldVersion holds the string denoting the version field in the database.
 	FieldVersion = "version"
-	// FieldCreatedAt holds the string denoting the created_at field in the database.
-	FieldCreatedAt = "created_at"
-	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
-	FieldUpdatedAt = "updated_at"
 	// FieldDeletedAt holds the string denoting the deleted_at field in the database.
 	FieldDeletedAt = "deleted_at"
 	// EdgeRelatedIncidents holds the string denoting the related_incidents edge name in mutations.
@@ -92,6 +76,8 @@ const (
 	EdgeConfigurationItems = "configuration_items"
 	// EdgeProblems holds the string denoting the problems edge name in mutations.
 	EdgeProblems = "problems"
+	// EdgeWorkItem holds the string denoting the work_item edge name in mutations.
+	EdgeWorkItem = "work_item"
 	// Table holds the table name of the incident in the database.
 	Table = "incidents"
 	// RelatedIncidentsTable is the table that holds the related_incidents relation/edge. The primary key declared below.
@@ -129,21 +115,23 @@ const (
 	// ProblemsInverseTable is the table name for the Problem entity.
 	// It exists in this package in order to avoid circular dependency with the "problem" package.
 	ProblemsInverseTable = "problems"
+	// WorkItemTable is the table that holds the work_item relation/edge.
+	WorkItemTable = "incidents"
+	// WorkItemInverseTable is the table name for the Ticket entity.
+	// It exists in this package in order to avoid circular dependency with the "ticket" package.
+	WorkItemInverseTable = "tickets"
+	// WorkItemColumn is the table column denoting the work_item relation/edge.
+	WorkItemColumn = "work_item_id"
 )
 
 // Columns holds all SQL columns for incident fields.
 var Columns = []string{
 	FieldID,
-	FieldTitle,
-	FieldDescription,
-	FieldStatus,
 	FieldType,
-	FieldPriority,
 	FieldSeverity,
 	FieldImpact,
 	FieldUrgency,
 	FieldIncidentNumber,
-	FieldReporterID,
 	FieldWorkItemID,
 	FieldAssigneeID,
 	FieldConfigurationItemID,
@@ -161,10 +149,7 @@ var Columns = []string{
 	FieldIsMajorIncident,
 	FieldSource,
 	FieldMetadata,
-	FieldTenantID,
 	FieldVersion,
-	FieldCreatedAt,
-	FieldUpdatedAt,
 	FieldDeletedAt,
 }
 
@@ -194,16 +179,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
-	// TitleValidator is a validator for the "title" field. It is called by the builders before save.
-	TitleValidator func(string) error
-	// DefaultStatus holds the default value on creation for the "status" field.
-	DefaultStatus string
 	// DefaultType holds the default value on creation for the "type" field.
 	DefaultType string
-	// DefaultPriority holds the default value on creation for the "priority" field.
-	DefaultPriority string
-	// PriorityValidator is a validator for the "priority" field. It is called by the builders before save.
-	PriorityValidator func(string) error
 	// DefaultSeverity holds the default value on creation for the "severity" field.
 	DefaultSeverity string
 	// DefaultImpact holds the default value on creation for the "impact" field.
@@ -216,8 +193,8 @@ var (
 	UrgencyValidator func(string) error
 	// IncidentNumberValidator is a validator for the "incident_number" field. It is called by the builders before save.
 	IncidentNumberValidator func(string) error
-	// ReporterIDValidator is a validator for the "reporter_id" field. It is called by the builders before save.
-	ReporterIDValidator func(int) error
+	// WorkItemIDValidator is a validator for the "work_item_id" field. It is called by the builders before save.
+	WorkItemIDValidator func(int) error
 	// DefaultDetectedAt holds the default value on creation for the "detected_at" field.
 	DefaultDetectedAt func() time.Time
 	// DefaultEscalationLevel holds the default value on creation for the "escalation_level" field.
@@ -228,18 +205,10 @@ var (
 	DefaultIsMajorIncident bool
 	// DefaultSource holds the default value on creation for the "source" field.
 	DefaultSource string
-	// TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
-	TenantIDValidator func(int) error
 	// DefaultVersion holds the default value on creation for the "version" field.
 	DefaultVersion int
 	// VersionValidator is a validator for the "version" field. It is called by the builders before save.
 	VersionValidator func(int) error
-	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
-	DefaultCreatedAt func() time.Time
-	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
-	DefaultUpdatedAt func() time.Time
-	// UpdateDefaultUpdatedAt holds the default value on update for the "updated_at" field.
-	UpdateDefaultUpdatedAt func() time.Time
 )
 
 // OrderOption defines the ordering options for the Incident queries.
@@ -250,29 +219,9 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
 }
 
-// ByTitle orders the results by the title field.
-func ByTitle(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldTitle, opts...).ToFunc()
-}
-
-// ByDescription orders the results by the description field.
-func ByDescription(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldDescription, opts...).ToFunc()
-}
-
-// ByStatus orders the results by the status field.
-func ByStatus(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldStatus, opts...).ToFunc()
-}
-
 // ByType orders the results by the type field.
 func ByType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldType, opts...).ToFunc()
-}
-
-// ByPriority orders the results by the priority field.
-func ByPriority(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldPriority, opts...).ToFunc()
 }
 
 // BySeverity orders the results by the severity field.
@@ -293,11 +242,6 @@ func ByUrgency(opts ...sql.OrderTermOption) OrderOption {
 // ByIncidentNumber orders the results by the incident_number field.
 func ByIncidentNumber(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldIncidentNumber, opts...).ToFunc()
-}
-
-// ByReporterID orders the results by the reporter_id field.
-func ByReporterID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldReporterID, opts...).ToFunc()
 }
 
 // ByWorkItemID orders the results by the work_item_id field.
@@ -365,24 +309,9 @@ func BySource(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSource, opts...).ToFunc()
 }
 
-// ByTenantID orders the results by the tenant_id field.
-func ByTenantID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldTenantID, opts...).ToFunc()
-}
-
 // ByVersion orders the results by the version field.
 func ByVersion(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldVersion, opts...).ToFunc()
-}
-
-// ByCreatedAt orders the results by the created_at field.
-func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
-}
-
-// ByUpdatedAt orders the results by the updated_at field.
-func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldUpdatedAt, opts...).ToFunc()
 }
 
 // ByDeletedAt orders the results by the deleted_at field.
@@ -487,6 +416,13 @@ func ByProblems(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newProblemsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// ByWorkItemField orders the results by work_item field.
+func ByWorkItemField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newWorkItemStep(), sql.OrderByField(field, opts...))
+	}
+}
 func newRelatedIncidentsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -534,5 +470,12 @@ func newProblemsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(ProblemsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2M, true, ProblemsTable, ProblemsPrimaryKey...),
+	)
+}
+func newWorkItemStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(WorkItemInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2O, true, WorkItemTable, WorkItemColumn),
 	)
 }

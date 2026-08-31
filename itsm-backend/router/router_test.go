@@ -16,6 +16,7 @@ import (
 	"itsm-backend/middleware"
 	"itsm-backend/migration"
 	"itsm-backend/service"
+	"itsm-backend/tests/testutil"
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/mattn/go-sqlite3"
@@ -287,10 +288,9 @@ func TestAssignRouteUsesIncidentWritePermission(t *testing.T) {
 		SetUsername("route-assignee").SetEmail("route-assignee@example.com").SetName("Route Assignee").
 		SetPasswordHash("x").SetRole(role.Code).SetActive(true).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
-	incidentEntity, err := client.Incident.Create().
-		SetTitle("Route assignment").SetStatus("new").SetIncidentNumber("INC-ROUTE-ASSIGN").
-		SetReporterID(reporter.ID).SetTenantID(tenant.ID).Save(ctx)
-	require.NoError(t, err)
+	incidentEntity := testutil.CreateIncident(t, ctx, client, tenant.ID, reporter.ID, testutil.IncidentFixture{
+		Number: "INC-ROUTE-ASSIGN", Title: "Route assignment", Status: "new",
+	})
 
 	const jwtSecret = "assign-route-secret"
 	logger := zaptest.NewLogger(t).Sugar()

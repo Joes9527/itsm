@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"itsm-backend/ent/servicerequest"
+	"itsm-backend/ent/ticket"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -20,12 +21,6 @@ type ServiceRequestCreate struct {
 	mutation *ServiceRequestMutation
 	hooks    []Hook
 	conflict []sql.ConflictOption
-}
-
-// SetTenantID sets the "tenant_id" field.
-func (_c *ServiceRequestCreate) SetTenantID(v int) *ServiceRequestCreate {
-	_c.mutation.SetTenantID(v)
-	return _c
 }
 
 // SetTicketID sets the "ticket_id" field.
@@ -51,12 +46,6 @@ func (_c *ServiceRequestCreate) SetNillableCiID(v *int) *ServiceRequestCreate {
 	if v != nil {
 		_c.SetCiID(*v)
 	}
-	return _c
-}
-
-// SetRequesterID sets the "requester_id" field.
-func (_c *ServiceRequestCreate) SetRequesterID(v int) *ServiceRequestCreate {
-	_c.mutation.SetRequesterID(v)
 	return _c
 }
 
@@ -282,34 +271,6 @@ func (_c *ServiceRequestCreate) SetNillableVersion(v *int) *ServiceRequestCreate
 	return _c
 }
 
-// SetCreatedAt sets the "created_at" field.
-func (_c *ServiceRequestCreate) SetCreatedAt(v time.Time) *ServiceRequestCreate {
-	_c.mutation.SetCreatedAt(v)
-	return _c
-}
-
-// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_c *ServiceRequestCreate) SetNillableCreatedAt(v *time.Time) *ServiceRequestCreate {
-	if v != nil {
-		_c.SetCreatedAt(*v)
-	}
-	return _c
-}
-
-// SetUpdatedAt sets the "updated_at" field.
-func (_c *ServiceRequestCreate) SetUpdatedAt(v time.Time) *ServiceRequestCreate {
-	_c.mutation.SetUpdatedAt(v)
-	return _c
-}
-
-// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (_c *ServiceRequestCreate) SetNillableUpdatedAt(v *time.Time) *ServiceRequestCreate {
-	if v != nil {
-		_c.SetUpdatedAt(*v)
-	}
-	return _c
-}
-
 // SetDeletedAt sets the "deleted_at" field.
 func (_c *ServiceRequestCreate) SetDeletedAt(v time.Time) *ServiceRequestCreate {
 	_c.mutation.SetDeletedAt(v)
@@ -322,6 +283,17 @@ func (_c *ServiceRequestCreate) SetNillableDeletedAt(v *time.Time) *ServiceReque
 		_c.SetDeletedAt(*v)
 	}
 	return _c
+}
+
+// SetWorkItemID sets the "work_item" edge to the Ticket entity by ID.
+func (_c *ServiceRequestCreate) SetWorkItemID(id int) *ServiceRequestCreate {
+	_c.mutation.SetWorkItemID(id)
+	return _c
+}
+
+// SetWorkItem sets the "work_item" edge to the Ticket entity.
+func (_c *ServiceRequestCreate) SetWorkItem(v *Ticket) *ServiceRequestCreate {
+	return _c.SetWorkItemID(v.ID)
 }
 
 // Mutation returns the ServiceRequestMutation object of the builder.
@@ -379,26 +351,10 @@ func (_c *ServiceRequestCreate) defaults() {
 		v := servicerequest.DefaultVersion
 		_c.mutation.SetVersion(v)
 	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
-		v := servicerequest.DefaultCreatedAt()
-		_c.mutation.SetCreatedAt(v)
-	}
-	if _, ok := _c.mutation.UpdatedAt(); !ok {
-		v := servicerequest.DefaultUpdatedAt()
-		_c.mutation.SetUpdatedAt(v)
-	}
 }
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *ServiceRequestCreate) check() error {
-	if _, ok := _c.mutation.TenantID(); !ok {
-		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "ServiceRequest.tenant_id"`)}
-	}
-	if v, ok := _c.mutation.TenantID(); ok {
-		if err := servicerequest.TenantIDValidator(v); err != nil {
-			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.tenant_id": %w`, err)}
-		}
-	}
 	if _, ok := _c.mutation.TicketID(); !ok {
 		return &ValidationError{Name: "ticket_id", err: errors.New(`ent: missing required field "ServiceRequest.ticket_id"`)}
 	}
@@ -413,14 +369,6 @@ func (_c *ServiceRequestCreate) check() error {
 	if v, ok := _c.mutation.CatalogID(); ok {
 		if err := servicerequest.CatalogIDValidator(v); err != nil {
 			return &ValidationError{Name: "catalog_id", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.catalog_id": %w`, err)}
-		}
-	}
-	if _, ok := _c.mutation.RequesterID(); !ok {
-		return &ValidationError{Name: "requester_id", err: errors.New(`ent: missing required field "ServiceRequest.requester_id"`)}
-	}
-	if v, ok := _c.mutation.RequesterID(); ok {
-		if err := servicerequest.RequesterIDValidator(v); err != nil {
-			return &ValidationError{Name: "requester_id", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.requester_id": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.DataClassification(); !ok {
@@ -448,11 +396,8 @@ func (_c *ServiceRequestCreate) check() error {
 			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.version": %w`, err)}
 		}
 	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
-		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "ServiceRequest.created_at"`)}
-	}
-	if _, ok := _c.mutation.UpdatedAt(); !ok {
-		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "ServiceRequest.updated_at"`)}
+	if len(_c.mutation.WorkItemIDs()) == 0 {
+		return &ValidationError{Name: "work_item", err: errors.New(`ent: missing required edge "ServiceRequest.work_item"`)}
 	}
 	return nil
 }
@@ -481,14 +426,6 @@ func (_c *ServiceRequestCreate) createSpec() (*ServiceRequest, *sqlgraph.CreateS
 		_spec = sqlgraph.NewCreateSpec(servicerequest.Table, sqlgraph.NewFieldSpec(servicerequest.FieldID, field.TypeInt))
 	)
 	_spec.OnConflict = _c.conflict
-	if value, ok := _c.mutation.TenantID(); ok {
-		_spec.SetField(servicerequest.FieldTenantID, field.TypeInt, value)
-		_node.TenantID = value
-	}
-	if value, ok := _c.mutation.TicketID(); ok {
-		_spec.SetField(servicerequest.FieldTicketID, field.TypeInt, value)
-		_node.TicketID = value
-	}
 	if value, ok := _c.mutation.CatalogID(); ok {
 		_spec.SetField(servicerequest.FieldCatalogID, field.TypeInt, value)
 		_node.CatalogID = value
@@ -496,10 +433,6 @@ func (_c *ServiceRequestCreate) createSpec() (*ServiceRequest, *sqlgraph.CreateS
 	if value, ok := _c.mutation.CiID(); ok {
 		_spec.SetField(servicerequest.FieldCiID, field.TypeInt, value)
 		_node.CiID = value
-	}
-	if value, ok := _c.mutation.RequesterID(); ok {
-		_spec.SetField(servicerequest.FieldRequesterID, field.TypeInt, value)
-		_node.RequesterID = value
 	}
 	if value, ok := _c.mutation.FormData(); ok {
 		_spec.SetField(servicerequest.FieldFormData, field.TypeJSON, value)
@@ -569,17 +502,26 @@ func (_c *ServiceRequestCreate) createSpec() (*ServiceRequest, *sqlgraph.CreateS
 		_spec.SetField(servicerequest.FieldVersion, field.TypeInt, value)
 		_node.Version = value
 	}
-	if value, ok := _c.mutation.CreatedAt(); ok {
-		_spec.SetField(servicerequest.FieldCreatedAt, field.TypeTime, value)
-		_node.CreatedAt = value
-	}
-	if value, ok := _c.mutation.UpdatedAt(); ok {
-		_spec.SetField(servicerequest.FieldUpdatedAt, field.TypeTime, value)
-		_node.UpdatedAt = value
-	}
 	if value, ok := _c.mutation.DeletedAt(); ok {
 		_spec.SetField(servicerequest.FieldDeletedAt, field.TypeTime, value)
 		_node.DeletedAt = &value
+	}
+	if nodes := _c.mutation.WorkItemIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: true,
+			Table:   servicerequest.WorkItemTable,
+			Columns: []string{servicerequest.WorkItemColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(ticket.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.TicketID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
 }
@@ -588,7 +530,7 @@ func (_c *ServiceRequestCreate) createSpec() (*ServiceRequest, *sqlgraph.CreateS
 // of the `INSERT` statement. For example:
 //
 //	client.ServiceRequest.Create().
-//		SetTenantID(v).
+//		SetTicketID(v).
 //		OnConflict(
 //			// Update the row with the new values
 //			// the was proposed for insertion.
@@ -597,7 +539,7 @@ func (_c *ServiceRequestCreate) createSpec() (*ServiceRequest, *sqlgraph.CreateS
 //		// Override some of the fields with custom
 //		// update values.
 //		Update(func(u *ent.ServiceRequestUpsert) {
-//			SetTenantID(v+v).
+//			SetTicketID(v+v).
 //		}).
 //		Exec(ctx)
 func (_c *ServiceRequestCreate) OnConflict(opts ...sql.ConflictOption) *ServiceRequestUpsertOne {
@@ -633,24 +575,6 @@ type (
 	}
 )
 
-// SetTenantID sets the "tenant_id" field.
-func (u *ServiceRequestUpsert) SetTenantID(v int) *ServiceRequestUpsert {
-	u.Set(servicerequest.FieldTenantID, v)
-	return u
-}
-
-// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
-func (u *ServiceRequestUpsert) UpdateTenantID() *ServiceRequestUpsert {
-	u.SetExcluded(servicerequest.FieldTenantID)
-	return u
-}
-
-// AddTenantID adds v to the "tenant_id" field.
-func (u *ServiceRequestUpsert) AddTenantID(v int) *ServiceRequestUpsert {
-	u.Add(servicerequest.FieldTenantID, v)
-	return u
-}
-
 // SetTicketID sets the "ticket_id" field.
 func (u *ServiceRequestUpsert) SetTicketID(v int) *ServiceRequestUpsert {
 	u.Set(servicerequest.FieldTicketID, v)
@@ -660,12 +584,6 @@ func (u *ServiceRequestUpsert) SetTicketID(v int) *ServiceRequestUpsert {
 // UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
 func (u *ServiceRequestUpsert) UpdateTicketID() *ServiceRequestUpsert {
 	u.SetExcluded(servicerequest.FieldTicketID)
-	return u
-}
-
-// AddTicketID adds v to the "ticket_id" field.
-func (u *ServiceRequestUpsert) AddTicketID(v int) *ServiceRequestUpsert {
-	u.Add(servicerequest.FieldTicketID, v)
 	return u
 }
 
@@ -708,24 +626,6 @@ func (u *ServiceRequestUpsert) AddCiID(v int) *ServiceRequestUpsert {
 // ClearCiID clears the value of the "ci_id" field.
 func (u *ServiceRequestUpsert) ClearCiID() *ServiceRequestUpsert {
 	u.SetNull(servicerequest.FieldCiID)
-	return u
-}
-
-// SetRequesterID sets the "requester_id" field.
-func (u *ServiceRequestUpsert) SetRequesterID(v int) *ServiceRequestUpsert {
-	u.Set(servicerequest.FieldRequesterID, v)
-	return u
-}
-
-// UpdateRequesterID sets the "requester_id" field to the value that was provided on create.
-func (u *ServiceRequestUpsert) UpdateRequesterID() *ServiceRequestUpsert {
-	u.SetExcluded(servicerequest.FieldRequesterID)
-	return u
-}
-
-// AddRequesterID adds v to the "requester_id" field.
-func (u *ServiceRequestUpsert) AddRequesterID(v int) *ServiceRequestUpsert {
-	u.Add(servicerequest.FieldRequesterID, v)
 	return u
 }
 
@@ -1023,30 +923,6 @@ func (u *ServiceRequestUpsert) AddVersion(v int) *ServiceRequestUpsert {
 	return u
 }
 
-// SetCreatedAt sets the "created_at" field.
-func (u *ServiceRequestUpsert) SetCreatedAt(v time.Time) *ServiceRequestUpsert {
-	u.Set(servicerequest.FieldCreatedAt, v)
-	return u
-}
-
-// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
-func (u *ServiceRequestUpsert) UpdateCreatedAt() *ServiceRequestUpsert {
-	u.SetExcluded(servicerequest.FieldCreatedAt)
-	return u
-}
-
-// SetUpdatedAt sets the "updated_at" field.
-func (u *ServiceRequestUpsert) SetUpdatedAt(v time.Time) *ServiceRequestUpsert {
-	u.Set(servicerequest.FieldUpdatedAt, v)
-	return u
-}
-
-// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
-func (u *ServiceRequestUpsert) UpdateUpdatedAt() *ServiceRequestUpsert {
-	u.SetExcluded(servicerequest.FieldUpdatedAt)
-	return u
-}
-
 // SetDeletedAt sets the "deleted_at" field.
 func (u *ServiceRequestUpsert) SetDeletedAt(v time.Time) *ServiceRequestUpsert {
 	u.Set(servicerequest.FieldDeletedAt, v)
@@ -1105,38 +981,10 @@ func (u *ServiceRequestUpsertOne) Update(set func(*ServiceRequestUpsert)) *Servi
 	return u
 }
 
-// SetTenantID sets the "tenant_id" field.
-func (u *ServiceRequestUpsertOne) SetTenantID(v int) *ServiceRequestUpsertOne {
-	return u.Update(func(s *ServiceRequestUpsert) {
-		s.SetTenantID(v)
-	})
-}
-
-// AddTenantID adds v to the "tenant_id" field.
-func (u *ServiceRequestUpsertOne) AddTenantID(v int) *ServiceRequestUpsertOne {
-	return u.Update(func(s *ServiceRequestUpsert) {
-		s.AddTenantID(v)
-	})
-}
-
-// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
-func (u *ServiceRequestUpsertOne) UpdateTenantID() *ServiceRequestUpsertOne {
-	return u.Update(func(s *ServiceRequestUpsert) {
-		s.UpdateTenantID()
-	})
-}
-
 // SetTicketID sets the "ticket_id" field.
 func (u *ServiceRequestUpsertOne) SetTicketID(v int) *ServiceRequestUpsertOne {
 	return u.Update(func(s *ServiceRequestUpsert) {
 		s.SetTicketID(v)
-	})
-}
-
-// AddTicketID adds v to the "ticket_id" field.
-func (u *ServiceRequestUpsertOne) AddTicketID(v int) *ServiceRequestUpsertOne {
-	return u.Update(func(s *ServiceRequestUpsert) {
-		s.AddTicketID(v)
 	})
 }
 
@@ -1193,27 +1041,6 @@ func (u *ServiceRequestUpsertOne) UpdateCiID() *ServiceRequestUpsertOne {
 func (u *ServiceRequestUpsertOne) ClearCiID() *ServiceRequestUpsertOne {
 	return u.Update(func(s *ServiceRequestUpsert) {
 		s.ClearCiID()
-	})
-}
-
-// SetRequesterID sets the "requester_id" field.
-func (u *ServiceRequestUpsertOne) SetRequesterID(v int) *ServiceRequestUpsertOne {
-	return u.Update(func(s *ServiceRequestUpsert) {
-		s.SetRequesterID(v)
-	})
-}
-
-// AddRequesterID adds v to the "requester_id" field.
-func (u *ServiceRequestUpsertOne) AddRequesterID(v int) *ServiceRequestUpsertOne {
-	return u.Update(func(s *ServiceRequestUpsert) {
-		s.AddRequesterID(v)
-	})
-}
-
-// UpdateRequesterID sets the "requester_id" field to the value that was provided on create.
-func (u *ServiceRequestUpsertOne) UpdateRequesterID() *ServiceRequestUpsertOne {
-	return u.Update(func(s *ServiceRequestUpsert) {
-		s.UpdateRequesterID()
 	})
 }
 
@@ -1560,34 +1387,6 @@ func (u *ServiceRequestUpsertOne) UpdateVersion() *ServiceRequestUpsertOne {
 	})
 }
 
-// SetCreatedAt sets the "created_at" field.
-func (u *ServiceRequestUpsertOne) SetCreatedAt(v time.Time) *ServiceRequestUpsertOne {
-	return u.Update(func(s *ServiceRequestUpsert) {
-		s.SetCreatedAt(v)
-	})
-}
-
-// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
-func (u *ServiceRequestUpsertOne) UpdateCreatedAt() *ServiceRequestUpsertOne {
-	return u.Update(func(s *ServiceRequestUpsert) {
-		s.UpdateCreatedAt()
-	})
-}
-
-// SetUpdatedAt sets the "updated_at" field.
-func (u *ServiceRequestUpsertOne) SetUpdatedAt(v time.Time) *ServiceRequestUpsertOne {
-	return u.Update(func(s *ServiceRequestUpsert) {
-		s.SetUpdatedAt(v)
-	})
-}
-
-// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
-func (u *ServiceRequestUpsertOne) UpdateUpdatedAt() *ServiceRequestUpsertOne {
-	return u.Update(func(s *ServiceRequestUpsert) {
-		s.UpdateUpdatedAt()
-	})
-}
-
 // SetDeletedAt sets the "deleted_at" field.
 func (u *ServiceRequestUpsertOne) SetDeletedAt(v time.Time) *ServiceRequestUpsertOne {
 	return u.Update(func(s *ServiceRequestUpsert) {
@@ -1744,7 +1543,7 @@ func (_c *ServiceRequestCreateBulk) ExecX(ctx context.Context) {
 //		// Override some of the fields with custom
 //		// update values.
 //		Update(func(u *ent.ServiceRequestUpsert) {
-//			SetTenantID(v+v).
+//			SetTicketID(v+v).
 //		}).
 //		Exec(ctx)
 func (_c *ServiceRequestCreateBulk) OnConflict(opts ...sql.ConflictOption) *ServiceRequestUpsertBulk {
@@ -1813,38 +1612,10 @@ func (u *ServiceRequestUpsertBulk) Update(set func(*ServiceRequestUpsert)) *Serv
 	return u
 }
 
-// SetTenantID sets the "tenant_id" field.
-func (u *ServiceRequestUpsertBulk) SetTenantID(v int) *ServiceRequestUpsertBulk {
-	return u.Update(func(s *ServiceRequestUpsert) {
-		s.SetTenantID(v)
-	})
-}
-
-// AddTenantID adds v to the "tenant_id" field.
-func (u *ServiceRequestUpsertBulk) AddTenantID(v int) *ServiceRequestUpsertBulk {
-	return u.Update(func(s *ServiceRequestUpsert) {
-		s.AddTenantID(v)
-	})
-}
-
-// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
-func (u *ServiceRequestUpsertBulk) UpdateTenantID() *ServiceRequestUpsertBulk {
-	return u.Update(func(s *ServiceRequestUpsert) {
-		s.UpdateTenantID()
-	})
-}
-
 // SetTicketID sets the "ticket_id" field.
 func (u *ServiceRequestUpsertBulk) SetTicketID(v int) *ServiceRequestUpsertBulk {
 	return u.Update(func(s *ServiceRequestUpsert) {
 		s.SetTicketID(v)
-	})
-}
-
-// AddTicketID adds v to the "ticket_id" field.
-func (u *ServiceRequestUpsertBulk) AddTicketID(v int) *ServiceRequestUpsertBulk {
-	return u.Update(func(s *ServiceRequestUpsert) {
-		s.AddTicketID(v)
 	})
 }
 
@@ -1901,27 +1672,6 @@ func (u *ServiceRequestUpsertBulk) UpdateCiID() *ServiceRequestUpsertBulk {
 func (u *ServiceRequestUpsertBulk) ClearCiID() *ServiceRequestUpsertBulk {
 	return u.Update(func(s *ServiceRequestUpsert) {
 		s.ClearCiID()
-	})
-}
-
-// SetRequesterID sets the "requester_id" field.
-func (u *ServiceRequestUpsertBulk) SetRequesterID(v int) *ServiceRequestUpsertBulk {
-	return u.Update(func(s *ServiceRequestUpsert) {
-		s.SetRequesterID(v)
-	})
-}
-
-// AddRequesterID adds v to the "requester_id" field.
-func (u *ServiceRequestUpsertBulk) AddRequesterID(v int) *ServiceRequestUpsertBulk {
-	return u.Update(func(s *ServiceRequestUpsert) {
-		s.AddRequesterID(v)
-	})
-}
-
-// UpdateRequesterID sets the "requester_id" field to the value that was provided on create.
-func (u *ServiceRequestUpsertBulk) UpdateRequesterID() *ServiceRequestUpsertBulk {
-	return u.Update(func(s *ServiceRequestUpsert) {
-		s.UpdateRequesterID()
 	})
 }
 
@@ -2265,34 +2015,6 @@ func (u *ServiceRequestUpsertBulk) AddVersion(v int) *ServiceRequestUpsertBulk {
 func (u *ServiceRequestUpsertBulk) UpdateVersion() *ServiceRequestUpsertBulk {
 	return u.Update(func(s *ServiceRequestUpsert) {
 		s.UpdateVersion()
-	})
-}
-
-// SetCreatedAt sets the "created_at" field.
-func (u *ServiceRequestUpsertBulk) SetCreatedAt(v time.Time) *ServiceRequestUpsertBulk {
-	return u.Update(func(s *ServiceRequestUpsert) {
-		s.SetCreatedAt(v)
-	})
-}
-
-// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
-func (u *ServiceRequestUpsertBulk) UpdateCreatedAt() *ServiceRequestUpsertBulk {
-	return u.Update(func(s *ServiceRequestUpsert) {
-		s.UpdateCreatedAt()
-	})
-}
-
-// SetUpdatedAt sets the "updated_at" field.
-func (u *ServiceRequestUpsertBulk) SetUpdatedAt(v time.Time) *ServiceRequestUpsertBulk {
-	return u.Update(func(s *ServiceRequestUpsert) {
-		s.SetUpdatedAt(v)
-	})
-}
-
-// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
-func (u *ServiceRequestUpsertBulk) UpdateUpdatedAt() *ServiceRequestUpsertBulk {
-	return u.Update(func(s *ServiceRequestUpsert) {
-		s.UpdateUpdatedAt()
 	})
 }
 

@@ -13,6 +13,7 @@ import (
 	"itsm-backend/ent/incidentmetric"
 	"itsm-backend/ent/predicate"
 	"itsm-backend/ent/problem"
+	"itsm-backend/ent/ticket"
 	"math"
 
 	"entgo.io/ent"
@@ -35,6 +36,7 @@ type IncidentQuery struct {
 	withParentIncident     *IncidentQuery
 	withConfigurationItems *ConfigurationItemQuery
 	withProblems           *ProblemQuery
+	withWorkItem           *TicketQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -218,6 +220,28 @@ func (_q *IncidentQuery) QueryProblems() *ProblemQuery {
 			sqlgraph.From(incident.Table, incident.FieldID, selector),
 			sqlgraph.To(problem.Table, problem.FieldID),
 			sqlgraph.Edge(sqlgraph.M2M, true, incident.ProblemsTable, incident.ProblemsPrimaryKey...),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryWorkItem chains the current query on the "work_item" edge.
+func (_q *IncidentQuery) QueryWorkItem() *TicketQuery {
+	query := (&TicketClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(incident.Table, incident.FieldID, selector),
+			sqlgraph.To(ticket.Table, ticket.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, true, incident.WorkItemTable, incident.WorkItemColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -424,6 +448,7 @@ func (_q *IncidentQuery) Clone() *IncidentQuery {
 		withParentIncident:     _q.withParentIncident.Clone(),
 		withConfigurationItems: _q.withConfigurationItems.Clone(),
 		withProblems:           _q.withProblems.Clone(),
+		withWorkItem:           _q.withWorkItem.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -507,18 +532,29 @@ func (_q *IncidentQuery) WithProblems(opts ...func(*ProblemQuery)) *IncidentQuer
 	return _q
 }
 
+// WithWorkItem tells the query-builder to eager-load the nodes that are connected to
+// the "work_item" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *IncidentQuery) WithWorkItem(opts ...func(*TicketQuery)) *IncidentQuery {
+	query := (&TicketClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withWorkItem = query
+	return _q
+}
+
 // GroupBy is used to group vertices by one or more fields/columns.
 // It is often used with aggregate functions, like: count, max, mean, min, sum.
 //
 // Example:
 //
 //	var v []struct {
-//		Title string `json:"title,omitempty"`
+//		Type string `json:"type,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.Incident.Query().
-//		GroupBy(incident.FieldTitle).
+//		GroupBy(incident.FieldType).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *IncidentQuery) GroupBy(field string, fields ...string) *IncidentGroupBy {
@@ -536,11 +572,11 @@ func (_q *IncidentQuery) GroupBy(field string, fields ...string) *IncidentGroupB
 // Example:
 //
 //	var v []struct {
-//		Title string `json:"title,omitempty"`
+//		Type string `json:"type,omitempty"`
 //	}
 //
 //	client.Incident.Query().
-//		Select(incident.FieldTitle).
+//		Select(incident.FieldType).
 //		Scan(ctx, &v)
 func (_q *IncidentQuery) Select(fields ...string) *IncidentSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
@@ -585,7 +621,7 @@ func (_q *IncidentQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Inc
 	var (
 		nodes       = []*Incident{}
 		_spec       = _q.querySpec()
-		loadedTypes = [7]bool{
+		loadedTypes = [8]bool{
 			_q.withRelatedIncidents != nil,
 			_q.withIncidentEvents != nil,
 			_q.withIncidentAlerts != nil,
@@ -593,6 +629,7 @@ func (_q *IncidentQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Inc
 			_q.withParentIncident != nil,
 			_q.withConfigurationItems != nil,
 			_q.withProblems != nil,
+			_q.withWorkItem != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -661,6 +698,12 @@ func (_q *IncidentQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Inc
 		if err := _q.loadProblems(ctx, query, nodes,
 			func(n *Incident) { n.Edges.Problems = []*Problem{} },
 			func(n *Incident, e *Problem) { n.Edges.Problems = append(n.Edges.Problems, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withWorkItem; query != nil {
+		if err := _q.loadWorkItem(ctx, query, nodes, nil,
+			func(n *Incident, e *Ticket) { n.Edges.WorkItem = e }); err != nil {
 			return nil, err
 		}
 	}
@@ -1001,6 +1044,35 @@ func (_q *IncidentQuery) loadProblems(ctx context.Context, query *ProblemQuery, 
 	}
 	return nil
 }
+func (_q *IncidentQuery) loadWorkItem(ctx context.Context, query *TicketQuery, nodes []*Incident, init func(*Incident), assign func(*Incident, *Ticket)) error {
+	ids := make([]int, 0, len(nodes))
+	nodeids := make(map[int][]*Incident)
+	for i := range nodes {
+		fk := nodes[i].WorkItemID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(ticket.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "work_item_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
+}
 
 func (_q *IncidentQuery) sqlCount(ctx context.Context) (int, error) {
 	_spec := _q.querySpec()
@@ -1026,6 +1098,9 @@ func (_q *IncidentQuery) querySpec() *sqlgraph.QuerySpec {
 			if fields[i] != incident.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
+		}
+		if _q.withWorkItem != nil {
+			_spec.Node.AddColumnOnce(incident.FieldWorkItemID)
 		}
 	}
 	if ps := _q.predicates; len(ps) > 0 {

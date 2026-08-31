@@ -71,7 +71,7 @@ func (s *RootCauseAnalysisService) AnalyzeProblemFromIncidents(ctx context.Conte
 
 	// 获取相关事件（数据库层按租户过滤，避免跨租户数据加载）
 	tenantIncidents, err := s.client.Incident.Query().
-		Where(incident.TenantIDEQ(problem.TenantID)).
+		Where(incident.OwnedByTenant(problem.TenantID)).
 		All(ctx)
 	if err != nil {
 		return nil, err
@@ -171,6 +171,7 @@ func (s *RootCauseAnalysisService) GetProblemAnalysis(ctx context.Context, probl
 
 	// 获取关联的事件
 	incidents, err := s.client.Incident.Query().
+		Where(incident.OwnedByTenant(problem.TenantID)).
 		Limit(100).
 		All(ctx)
 	if err != nil {
@@ -179,9 +180,7 @@ func (s *RootCauseAnalysisService) GetProblemAnalysis(ctx context.Context, probl
 
 	rca.IncidentIDs = make([]int, 0)
 	for _, inc := range incidents {
-		if inc.TenantID == problem.TenantID {
-			rca.IncidentIDs = append(rca.IncidentIDs, inc.ID)
-		}
+		rca.IncidentIDs = append(rca.IncidentIDs, inc.ID)
 	}
 
 	return rca, nil

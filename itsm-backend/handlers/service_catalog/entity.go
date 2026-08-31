@@ -13,14 +13,7 @@ type ServiceCatalog struct {
 	Name        string
 	Category    string
 	Description string
-	// ITSMType 历史字段：Request|Incident|Change。Wave 2（ServiceRequest 层级规范化）之后
-	// 不再是路由权威——TargetClass 才是。保留只是因为 ent schema 列还在、且是 TargetClass
-	// 的计算输入（见 repository_impl.go 调用的 ComputeTargetClass），不代表两个字段并存做路由
-	// 决策：所有实际路由判断（handlers/service_request 的 isIncidentCatalog/
-	// mapTargetClassToTicketType）已经改读 TargetClass。
-	ITSMType string
-	// TargetClass 是 WorkItem 目标类：service_request_item|incident|change_request，
-	// 在 repository_impl.go 的 Create/Update 里从 ITSMType 同步计算落库（design doc §7.2）。
+	// TargetClass is the sole runtime authority for the WorkItem class.
 	TargetClass    string
 	ServiceType    string // vm|rds|network|database|storage|oss|security|access|custom 等，决定是否需要基础设施字段（见 RequiresInfraFields）
 	DeliveryTime   int
@@ -93,18 +86,11 @@ const (
 	TargetClassChangeRequest      = "change_request"
 )
 
-// ComputeTargetClass 把历史 itsm_type（Request|Incident|Change）映射为受约束的
-// target_class。这是 target_class 的唯一计算入口——repository_impl.go 的 Create/Update
-// 在写入前调用它同步落库，cmd/backfill_servicecatalog_target_class 对存量行做一次性回填时
-// 复用同一份映射，避免两处各写一份导致漂移。空值/未知值一律 fail-safe 落到
-// service_request_item（对齐 ent schema itsm_type 字段的 Default("Request")）。
-func ComputeTargetClass(itsmType string) string {
-	switch itsmType {
-	case "Incident":
-		return TargetClassIncident
-	case "Change":
-		return TargetClassChangeRequest
+func IsValidTargetClass(targetClass string) bool {
+	switch targetClass {
+	case TargetClassServiceRequestItem, TargetClassIncident, TargetClassChangeRequest:
+		return true
 	default:
-		return TargetClassServiceRequestItem
+		return false
 	}
 }

@@ -20,6 +20,7 @@ import (
 	problemDomain "itsm-backend/handlers/problem"
 	"itsm-backend/middleware"
 	"itsm-backend/service"
+	"itsm-backend/tests/testutil"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap/zaptest"
@@ -246,14 +247,9 @@ func TestIncidentDetailHasActionsButListDoesNot(t *testing.T) {
 		SetUsername("detail-user").SetEmail("detail@example.com").SetName("Detail User").
 		SetPasswordHash("x").SetRole("super_admin").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
-	workItem, err := client.Ticket.Create().
-		SetTitle("Detail WorkItem").SetTicketNumber("TKT-DETAIL").SetStatus("open").SetPriority("high").
-		SetRequesterID(user.ID).SetTenantID(tenant.ID).SetRecordClass("incident").Save(ctx)
-	require.NoError(t, err)
-	incidentEntity, err := client.Incident.Create().
-		SetTitle("Detail Incident").SetStatus(common.IncidentStatusInProgress).SetIncidentNumber("INC-DETAIL").
-		SetReporterID(user.ID).SetWorkItemID(workItem.ID).SetTenantID(tenant.ID).Save(ctx)
-	require.NoError(t, err)
+	incidentEntity := testutil.CreateIncident(t, ctx, client, tenant.ID, user.ID, testutil.IncidentFixture{
+		Number: "INC-DETAIL", Title: "Detail WorkItem", Status: common.IncidentStatusInProgress, Priority: "high",
+	})
 
 	controller := NewIncidentController(service.NewIncidentService(client, zaptest.NewLogger(t).Sugar()), nil, nil, nil, nil, nil, zaptest.NewLogger(t).Sugar())
 	router := gin.New()

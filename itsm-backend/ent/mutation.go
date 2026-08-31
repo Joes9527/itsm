@@ -46668,19 +46668,11 @@ type IncidentMutation struct {
 	op                         Op
 	typ                        string
 	id                         *int
-	title                      *string
-	description                *string
-	status                     *string
 	_type                      *string
-	priority                   *string
 	severity                   *string
 	impact                     *string
 	urgency                    *string
 	incident_number            *string
-	reporter_id                *int
-	addreporter_id             *int
-	work_item_id               *int
-	addwork_item_id            *int
 	assignee_id                *int
 	addassignee_id             *int
 	configuration_item_id      *int
@@ -46701,12 +46693,8 @@ type IncidentMutation struct {
 	is_major_incident          *bool
 	source                     *string
 	metadata                   *map[string]interface{}
-	tenant_id                  *int
-	addtenant_id               *int
 	version                    *int
 	addversion                 *int
-	created_at                 *time.Time
-	updated_at                 *time.Time
 	deleted_at                 *time.Time
 	clearedFields              map[string]struct{}
 	related_incidents          map[int]struct{}
@@ -46730,6 +46718,8 @@ type IncidentMutation struct {
 	problems                   map[int]struct{}
 	removedproblems            map[int]struct{}
 	clearedproblems            bool
+	work_item                  *int
+	clearedwork_item           bool
 	done                       bool
 	oldValue                   func(context.Context) (*Incident, error)
 	predicates                 []predicate.Incident
@@ -46833,127 +46823,6 @@ func (m *IncidentMutation) IDs(ctx context.Context) ([]int, error) {
 	}
 }
 
-// SetTitle sets the "title" field.
-func (m *IncidentMutation) SetTitle(s string) {
-	m.title = &s
-}
-
-// Title returns the value of the "title" field in the mutation.
-func (m *IncidentMutation) Title() (r string, exists bool) {
-	v := m.title
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldTitle returns the old "title" field's value of the Incident entity.
-// If the Incident object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *IncidentMutation) OldTitle(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldTitle is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldTitle requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldTitle: %w", err)
-	}
-	return oldValue.Title, nil
-}
-
-// ResetTitle resets all changes to the "title" field.
-func (m *IncidentMutation) ResetTitle() {
-	m.title = nil
-}
-
-// SetDescription sets the "description" field.
-func (m *IncidentMutation) SetDescription(s string) {
-	m.description = &s
-}
-
-// Description returns the value of the "description" field in the mutation.
-func (m *IncidentMutation) Description() (r string, exists bool) {
-	v := m.description
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldDescription returns the old "description" field's value of the Incident entity.
-// If the Incident object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *IncidentMutation) OldDescription(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldDescription is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldDescription requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldDescription: %w", err)
-	}
-	return oldValue.Description, nil
-}
-
-// ClearDescription clears the value of the "description" field.
-func (m *IncidentMutation) ClearDescription() {
-	m.description = nil
-	m.clearedFields[incident.FieldDescription] = struct{}{}
-}
-
-// DescriptionCleared returns if the "description" field was cleared in this mutation.
-func (m *IncidentMutation) DescriptionCleared() bool {
-	_, ok := m.clearedFields[incident.FieldDescription]
-	return ok
-}
-
-// ResetDescription resets all changes to the "description" field.
-func (m *IncidentMutation) ResetDescription() {
-	m.description = nil
-	delete(m.clearedFields, incident.FieldDescription)
-}
-
-// SetStatus sets the "status" field.
-func (m *IncidentMutation) SetStatus(s string) {
-	m.status = &s
-}
-
-// Status returns the value of the "status" field in the mutation.
-func (m *IncidentMutation) Status() (r string, exists bool) {
-	v := m.status
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldStatus returns the old "status" field's value of the Incident entity.
-// If the Incident object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *IncidentMutation) OldStatus(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldStatus requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
-	}
-	return oldValue.Status, nil
-}
-
-// ResetStatus resets all changes to the "status" field.
-func (m *IncidentMutation) ResetStatus() {
-	m.status = nil
-}
-
 // SetType sets the "type" field.
 func (m *IncidentMutation) SetType(s string) {
 	m._type = &s
@@ -46988,42 +46857,6 @@ func (m *IncidentMutation) OldType(ctx context.Context) (v string, err error) {
 // ResetType resets all changes to the "type" field.
 func (m *IncidentMutation) ResetType() {
 	m._type = nil
-}
-
-// SetPriority sets the "priority" field.
-func (m *IncidentMutation) SetPriority(s string) {
-	m.priority = &s
-}
-
-// Priority returns the value of the "priority" field in the mutation.
-func (m *IncidentMutation) Priority() (r string, exists bool) {
-	v := m.priority
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldPriority returns the old "priority" field's value of the Incident entity.
-// If the Incident object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *IncidentMutation) OldPriority(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldPriority is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldPriority requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldPriority: %w", err)
-	}
-	return oldValue.Priority, nil
-}
-
-// ResetPriority resets all changes to the "priority" field.
-func (m *IncidentMutation) ResetPriority() {
-	m.priority = nil
 }
 
 // SetSeverity sets the "severity" field.
@@ -47170,71 +47003,14 @@ func (m *IncidentMutation) ResetIncidentNumber() {
 	m.incident_number = nil
 }
 
-// SetReporterID sets the "reporter_id" field.
-func (m *IncidentMutation) SetReporterID(i int) {
-	m.reporter_id = &i
-	m.addreporter_id = nil
-}
-
-// ReporterID returns the value of the "reporter_id" field in the mutation.
-func (m *IncidentMutation) ReporterID() (r int, exists bool) {
-	v := m.reporter_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldReporterID returns the old "reporter_id" field's value of the Incident entity.
-// If the Incident object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *IncidentMutation) OldReporterID(ctx context.Context) (v int, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldReporterID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldReporterID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldReporterID: %w", err)
-	}
-	return oldValue.ReporterID, nil
-}
-
-// AddReporterID adds i to the "reporter_id" field.
-func (m *IncidentMutation) AddReporterID(i int) {
-	if m.addreporter_id != nil {
-		*m.addreporter_id += i
-	} else {
-		m.addreporter_id = &i
-	}
-}
-
-// AddedReporterID returns the value that was added to the "reporter_id" field in this mutation.
-func (m *IncidentMutation) AddedReporterID() (r int, exists bool) {
-	v := m.addreporter_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ResetReporterID resets all changes to the "reporter_id" field.
-func (m *IncidentMutation) ResetReporterID() {
-	m.reporter_id = nil
-	m.addreporter_id = nil
-}
-
 // SetWorkItemID sets the "work_item_id" field.
 func (m *IncidentMutation) SetWorkItemID(i int) {
-	m.work_item_id = &i
-	m.addwork_item_id = nil
+	m.work_item = &i
 }
 
 // WorkItemID returns the value of the "work_item_id" field in the mutation.
 func (m *IncidentMutation) WorkItemID() (r int, exists bool) {
-	v := m.work_item_id
+	v := m.work_item
 	if v == nil {
 		return
 	}
@@ -47258,42 +47034,9 @@ func (m *IncidentMutation) OldWorkItemID(ctx context.Context) (v int, err error)
 	return oldValue.WorkItemID, nil
 }
 
-// AddWorkItemID adds i to the "work_item_id" field.
-func (m *IncidentMutation) AddWorkItemID(i int) {
-	if m.addwork_item_id != nil {
-		*m.addwork_item_id += i
-	} else {
-		m.addwork_item_id = &i
-	}
-}
-
-// AddedWorkItemID returns the value that was added to the "work_item_id" field in this mutation.
-func (m *IncidentMutation) AddedWorkItemID() (r int, exists bool) {
-	v := m.addwork_item_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ClearWorkItemID clears the value of the "work_item_id" field.
-func (m *IncidentMutation) ClearWorkItemID() {
-	m.work_item_id = nil
-	m.addwork_item_id = nil
-	m.clearedFields[incident.FieldWorkItemID] = struct{}{}
-}
-
-// WorkItemIDCleared returns if the "work_item_id" field was cleared in this mutation.
-func (m *IncidentMutation) WorkItemIDCleared() bool {
-	_, ok := m.clearedFields[incident.FieldWorkItemID]
-	return ok
-}
-
 // ResetWorkItemID resets all changes to the "work_item_id" field.
 func (m *IncidentMutation) ResetWorkItemID() {
-	m.work_item_id = nil
-	m.addwork_item_id = nil
-	delete(m.clearedFields, incident.FieldWorkItemID)
+	m.work_item = nil
 }
 
 // SetAssigneeID sets the "assignee_id" field.
@@ -48093,62 +47836,6 @@ func (m *IncidentMutation) ResetMetadata() {
 	delete(m.clearedFields, incident.FieldMetadata)
 }
 
-// SetTenantID sets the "tenant_id" field.
-func (m *IncidentMutation) SetTenantID(i int) {
-	m.tenant_id = &i
-	m.addtenant_id = nil
-}
-
-// TenantID returns the value of the "tenant_id" field in the mutation.
-func (m *IncidentMutation) TenantID() (r int, exists bool) {
-	v := m.tenant_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldTenantID returns the old "tenant_id" field's value of the Incident entity.
-// If the Incident object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *IncidentMutation) OldTenantID(ctx context.Context) (v int, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldTenantID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
-	}
-	return oldValue.TenantID, nil
-}
-
-// AddTenantID adds i to the "tenant_id" field.
-func (m *IncidentMutation) AddTenantID(i int) {
-	if m.addtenant_id != nil {
-		*m.addtenant_id += i
-	} else {
-		m.addtenant_id = &i
-	}
-}
-
-// AddedTenantID returns the value that was added to the "tenant_id" field in this mutation.
-func (m *IncidentMutation) AddedTenantID() (r int, exists bool) {
-	v := m.addtenant_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ResetTenantID resets all changes to the "tenant_id" field.
-func (m *IncidentMutation) ResetTenantID() {
-	m.tenant_id = nil
-	m.addtenant_id = nil
-}
-
 // SetVersion sets the "version" field.
 func (m *IncidentMutation) SetVersion(i int) {
 	m.version = &i
@@ -48203,78 +47890,6 @@ func (m *IncidentMutation) AddedVersion() (r int, exists bool) {
 func (m *IncidentMutation) ResetVersion() {
 	m.version = nil
 	m.addversion = nil
-}
-
-// SetCreatedAt sets the "created_at" field.
-func (m *IncidentMutation) SetCreatedAt(t time.Time) {
-	m.created_at = &t
-}
-
-// CreatedAt returns the value of the "created_at" field in the mutation.
-func (m *IncidentMutation) CreatedAt() (r time.Time, exists bool) {
-	v := m.created_at
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldCreatedAt returns the old "created_at" field's value of the Incident entity.
-// If the Incident object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *IncidentMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
-	}
-	return oldValue.CreatedAt, nil
-}
-
-// ResetCreatedAt resets all changes to the "created_at" field.
-func (m *IncidentMutation) ResetCreatedAt() {
-	m.created_at = nil
-}
-
-// SetUpdatedAt sets the "updated_at" field.
-func (m *IncidentMutation) SetUpdatedAt(t time.Time) {
-	m.updated_at = &t
-}
-
-// UpdatedAt returns the value of the "updated_at" field in the mutation.
-func (m *IncidentMutation) UpdatedAt() (r time.Time, exists bool) {
-	v := m.updated_at
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldUpdatedAt returns the old "updated_at" field's value of the Incident entity.
-// If the Incident object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *IncidentMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
-	}
-	return oldValue.UpdatedAt, nil
-}
-
-// ResetUpdatedAt resets all changes to the "updated_at" field.
-func (m *IncidentMutation) ResetUpdatedAt() {
-	m.updated_at = nil
 }
 
 // SetDeletedAt sets the "deleted_at" field.
@@ -48704,6 +48319,33 @@ func (m *IncidentMutation) ResetProblems() {
 	m.removedproblems = nil
 }
 
+// ClearWorkItem clears the "work_item" edge to the Ticket entity.
+func (m *IncidentMutation) ClearWorkItem() {
+	m.clearedwork_item = true
+	m.clearedFields[incident.FieldWorkItemID] = struct{}{}
+}
+
+// WorkItemCleared reports if the "work_item" edge to the Ticket entity was cleared.
+func (m *IncidentMutation) WorkItemCleared() bool {
+	return m.clearedwork_item
+}
+
+// WorkItemIDs returns the "work_item" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// WorkItemID instead. It exists only for internal usage by the builders.
+func (m *IncidentMutation) WorkItemIDs() (ids []int) {
+	if id := m.work_item; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetWorkItem resets all changes to the "work_item" edge.
+func (m *IncidentMutation) ResetWorkItem() {
+	m.work_item = nil
+	m.clearedwork_item = false
+}
+
 // Where appends a list predicates to the IncidentMutation builder.
 func (m *IncidentMutation) Where(ps ...predicate.Incident) {
 	m.predicates = append(m.predicates, ps...)
@@ -48738,21 +48380,9 @@ func (m *IncidentMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *IncidentMutation) Fields() []string {
-	fields := make([]string, 0, 32)
-	if m.title != nil {
-		fields = append(fields, incident.FieldTitle)
-	}
-	if m.description != nil {
-		fields = append(fields, incident.FieldDescription)
-	}
-	if m.status != nil {
-		fields = append(fields, incident.FieldStatus)
-	}
+	fields := make([]string, 0, 24)
 	if m._type != nil {
 		fields = append(fields, incident.FieldType)
-	}
-	if m.priority != nil {
-		fields = append(fields, incident.FieldPriority)
 	}
 	if m.severity != nil {
 		fields = append(fields, incident.FieldSeverity)
@@ -48766,10 +48396,7 @@ func (m *IncidentMutation) Fields() []string {
 	if m.incident_number != nil {
 		fields = append(fields, incident.FieldIncidentNumber)
 	}
-	if m.reporter_id != nil {
-		fields = append(fields, incident.FieldReporterID)
-	}
-	if m.work_item_id != nil {
+	if m.work_item != nil {
 		fields = append(fields, incident.FieldWorkItemID)
 	}
 	if m.assignee_id != nil {
@@ -48820,17 +48447,8 @@ func (m *IncidentMutation) Fields() []string {
 	if m.metadata != nil {
 		fields = append(fields, incident.FieldMetadata)
 	}
-	if m.tenant_id != nil {
-		fields = append(fields, incident.FieldTenantID)
-	}
 	if m.version != nil {
 		fields = append(fields, incident.FieldVersion)
-	}
-	if m.created_at != nil {
-		fields = append(fields, incident.FieldCreatedAt)
-	}
-	if m.updated_at != nil {
-		fields = append(fields, incident.FieldUpdatedAt)
 	}
 	if m.deleted_at != nil {
 		fields = append(fields, incident.FieldDeletedAt)
@@ -48843,16 +48461,8 @@ func (m *IncidentMutation) Fields() []string {
 // schema.
 func (m *IncidentMutation) Field(name string) (ent.Value, bool) {
 	switch name {
-	case incident.FieldTitle:
-		return m.Title()
-	case incident.FieldDescription:
-		return m.Description()
-	case incident.FieldStatus:
-		return m.Status()
 	case incident.FieldType:
 		return m.GetType()
-	case incident.FieldPriority:
-		return m.Priority()
 	case incident.FieldSeverity:
 		return m.Severity()
 	case incident.FieldImpact:
@@ -48861,8 +48471,6 @@ func (m *IncidentMutation) Field(name string) (ent.Value, bool) {
 		return m.Urgency()
 	case incident.FieldIncidentNumber:
 		return m.IncidentNumber()
-	case incident.FieldReporterID:
-		return m.ReporterID()
 	case incident.FieldWorkItemID:
 		return m.WorkItemID()
 	case incident.FieldAssigneeID:
@@ -48897,14 +48505,8 @@ func (m *IncidentMutation) Field(name string) (ent.Value, bool) {
 		return m.Source()
 	case incident.FieldMetadata:
 		return m.Metadata()
-	case incident.FieldTenantID:
-		return m.TenantID()
 	case incident.FieldVersion:
 		return m.Version()
-	case incident.FieldCreatedAt:
-		return m.CreatedAt()
-	case incident.FieldUpdatedAt:
-		return m.UpdatedAt()
 	case incident.FieldDeletedAt:
 		return m.DeletedAt()
 	}
@@ -48916,16 +48518,8 @@ func (m *IncidentMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *IncidentMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
-	case incident.FieldTitle:
-		return m.OldTitle(ctx)
-	case incident.FieldDescription:
-		return m.OldDescription(ctx)
-	case incident.FieldStatus:
-		return m.OldStatus(ctx)
 	case incident.FieldType:
 		return m.OldType(ctx)
-	case incident.FieldPriority:
-		return m.OldPriority(ctx)
 	case incident.FieldSeverity:
 		return m.OldSeverity(ctx)
 	case incident.FieldImpact:
@@ -48934,8 +48528,6 @@ func (m *IncidentMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldUrgency(ctx)
 	case incident.FieldIncidentNumber:
 		return m.OldIncidentNumber(ctx)
-	case incident.FieldReporterID:
-		return m.OldReporterID(ctx)
 	case incident.FieldWorkItemID:
 		return m.OldWorkItemID(ctx)
 	case incident.FieldAssigneeID:
@@ -48970,14 +48562,8 @@ func (m *IncidentMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldSource(ctx)
 	case incident.FieldMetadata:
 		return m.OldMetadata(ctx)
-	case incident.FieldTenantID:
-		return m.OldTenantID(ctx)
 	case incident.FieldVersion:
 		return m.OldVersion(ctx)
-	case incident.FieldCreatedAt:
-		return m.OldCreatedAt(ctx)
-	case incident.FieldUpdatedAt:
-		return m.OldUpdatedAt(ctx)
 	case incident.FieldDeletedAt:
 		return m.OldDeletedAt(ctx)
 	}
@@ -48989,40 +48575,12 @@ func (m *IncidentMutation) OldField(ctx context.Context, name string) (ent.Value
 // type.
 func (m *IncidentMutation) SetField(name string, value ent.Value) error {
 	switch name {
-	case incident.FieldTitle:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetTitle(v)
-		return nil
-	case incident.FieldDescription:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetDescription(v)
-		return nil
-	case incident.FieldStatus:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetStatus(v)
-		return nil
 	case incident.FieldType:
 		v, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetType(v)
-		return nil
-	case incident.FieldPriority:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetPriority(v)
 		return nil
 	case incident.FieldSeverity:
 		v, ok := value.(string)
@@ -49051,13 +48609,6 @@ func (m *IncidentMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetIncidentNumber(v)
-		return nil
-	case incident.FieldReporterID:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetReporterID(v)
 		return nil
 	case incident.FieldWorkItemID:
 		v, ok := value.(int)
@@ -49178,33 +48729,12 @@ func (m *IncidentMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetMetadata(v)
 		return nil
-	case incident.FieldTenantID:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetTenantID(v)
-		return nil
 	case incident.FieldVersion:
 		v, ok := value.(int)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetVersion(v)
-		return nil
-	case incident.FieldCreatedAt:
-		v, ok := value.(time.Time)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetCreatedAt(v)
-		return nil
-	case incident.FieldUpdatedAt:
-		v, ok := value.(time.Time)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetUpdatedAt(v)
 		return nil
 	case incident.FieldDeletedAt:
 		v, ok := value.(time.Time)
@@ -49221,12 +48751,6 @@ func (m *IncidentMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *IncidentMutation) AddedFields() []string {
 	var fields []string
-	if m.addreporter_id != nil {
-		fields = append(fields, incident.FieldReporterID)
-	}
-	if m.addwork_item_id != nil {
-		fields = append(fields, incident.FieldWorkItemID)
-	}
 	if m.addassignee_id != nil {
 		fields = append(fields, incident.FieldAssigneeID)
 	}
@@ -49235,9 +48759,6 @@ func (m *IncidentMutation) AddedFields() []string {
 	}
 	if m.addescalation_level != nil {
 		fields = append(fields, incident.FieldEscalationLevel)
-	}
-	if m.addtenant_id != nil {
-		fields = append(fields, incident.FieldTenantID)
 	}
 	if m.addversion != nil {
 		fields = append(fields, incident.FieldVersion)
@@ -49250,18 +48771,12 @@ func (m *IncidentMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *IncidentMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
-	case incident.FieldReporterID:
-		return m.AddedReporterID()
-	case incident.FieldWorkItemID:
-		return m.AddedWorkItemID()
 	case incident.FieldAssigneeID:
 		return m.AddedAssigneeID()
 	case incident.FieldConfigurationItemID:
 		return m.AddedConfigurationItemID()
 	case incident.FieldEscalationLevel:
 		return m.AddedEscalationLevel()
-	case incident.FieldTenantID:
-		return m.AddedTenantID()
 	case incident.FieldVersion:
 		return m.AddedVersion()
 	}
@@ -49273,20 +48788,6 @@ func (m *IncidentMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *IncidentMutation) AddField(name string, value ent.Value) error {
 	switch name {
-	case incident.FieldReporterID:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddReporterID(v)
-		return nil
-	case incident.FieldWorkItemID:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddWorkItemID(v)
-		return nil
 	case incident.FieldAssigneeID:
 		v, ok := value.(int)
 		if !ok {
@@ -49308,13 +48809,6 @@ func (m *IncidentMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddEscalationLevel(v)
 		return nil
-	case incident.FieldTenantID:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddTenantID(v)
-		return nil
 	case incident.FieldVersion:
 		v, ok := value.(int)
 		if !ok {
@@ -49330,12 +48824,6 @@ func (m *IncidentMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *IncidentMutation) ClearedFields() []string {
 	var fields []string
-	if m.FieldCleared(incident.FieldDescription) {
-		fields = append(fields, incident.FieldDescription)
-	}
-	if m.FieldCleared(incident.FieldWorkItemID) {
-		fields = append(fields, incident.FieldWorkItemID)
-	}
 	if m.FieldCleared(incident.FieldAssigneeID) {
 		fields = append(fields, incident.FieldAssigneeID)
 	}
@@ -49386,12 +48874,6 @@ func (m *IncidentMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *IncidentMutation) ClearField(name string) error {
 	switch name {
-	case incident.FieldDescription:
-		m.ClearDescription()
-		return nil
-	case incident.FieldWorkItemID:
-		m.ClearWorkItemID()
-		return nil
 	case incident.FieldAssigneeID:
 		m.ClearAssigneeID()
 		return nil
@@ -49436,20 +48918,8 @@ func (m *IncidentMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *IncidentMutation) ResetField(name string) error {
 	switch name {
-	case incident.FieldTitle:
-		m.ResetTitle()
-		return nil
-	case incident.FieldDescription:
-		m.ResetDescription()
-		return nil
-	case incident.FieldStatus:
-		m.ResetStatus()
-		return nil
 	case incident.FieldType:
 		m.ResetType()
-		return nil
-	case incident.FieldPriority:
-		m.ResetPriority()
 		return nil
 	case incident.FieldSeverity:
 		m.ResetSeverity()
@@ -49462,9 +48932,6 @@ func (m *IncidentMutation) ResetField(name string) error {
 		return nil
 	case incident.FieldIncidentNumber:
 		m.ResetIncidentNumber()
-		return nil
-	case incident.FieldReporterID:
-		m.ResetReporterID()
 		return nil
 	case incident.FieldWorkItemID:
 		m.ResetWorkItemID()
@@ -49517,17 +48984,8 @@ func (m *IncidentMutation) ResetField(name string) error {
 	case incident.FieldMetadata:
 		m.ResetMetadata()
 		return nil
-	case incident.FieldTenantID:
-		m.ResetTenantID()
-		return nil
 	case incident.FieldVersion:
 		m.ResetVersion()
-		return nil
-	case incident.FieldCreatedAt:
-		m.ResetCreatedAt()
-		return nil
-	case incident.FieldUpdatedAt:
-		m.ResetUpdatedAt()
 		return nil
 	case incident.FieldDeletedAt:
 		m.ResetDeletedAt()
@@ -49538,7 +48996,7 @@ func (m *IncidentMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *IncidentMutation) AddedEdges() []string {
-	edges := make([]string, 0, 7)
+	edges := make([]string, 0, 8)
 	if m.related_incidents != nil {
 		edges = append(edges, incident.EdgeRelatedIncidents)
 	}
@@ -49559,6 +49017,9 @@ func (m *IncidentMutation) AddedEdges() []string {
 	}
 	if m.problems != nil {
 		edges = append(edges, incident.EdgeProblems)
+	}
+	if m.work_item != nil {
+		edges = append(edges, incident.EdgeWorkItem)
 	}
 	return edges
 }
@@ -49609,13 +49070,17 @@ func (m *IncidentMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case incident.EdgeWorkItem:
+		if id := m.work_item; id != nil {
+			return []ent.Value{*id}
+		}
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *IncidentMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 7)
+	edges := make([]string, 0, 8)
 	if m.removedrelated_incidents != nil {
 		edges = append(edges, incident.EdgeRelatedIncidents)
 	}
@@ -49692,7 +49157,7 @@ func (m *IncidentMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *IncidentMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 7)
+	edges := make([]string, 0, 8)
 	if m.clearedrelated_incidents {
 		edges = append(edges, incident.EdgeRelatedIncidents)
 	}
@@ -49713,6 +49178,9 @@ func (m *IncidentMutation) ClearedEdges() []string {
 	}
 	if m.clearedproblems {
 		edges = append(edges, incident.EdgeProblems)
+	}
+	if m.clearedwork_item {
+		edges = append(edges, incident.EdgeWorkItem)
 	}
 	return edges
 }
@@ -49735,6 +49203,8 @@ func (m *IncidentMutation) EdgeCleared(name string) bool {
 		return m.clearedconfiguration_items
 	case incident.EdgeProblems:
 		return m.clearedproblems
+	case incident.EdgeWorkItem:
+		return m.clearedwork_item
 	}
 	return false
 }
@@ -49743,6 +49213,9 @@ func (m *IncidentMutation) EdgeCleared(name string) bool {
 // if that edge is not defined in the schema.
 func (m *IncidentMutation) ClearEdge(name string) error {
 	switch name {
+	case incident.EdgeWorkItem:
+		m.ClearWorkItem()
+		return nil
 	}
 	return fmt.Errorf("unknown Incident unique edge %s", name)
 }
@@ -49771,6 +49244,9 @@ func (m *IncidentMutation) ResetEdge(name string) error {
 		return nil
 	case incident.EdgeProblems:
 		m.ResetProblems()
+		return nil
+	case incident.EdgeWorkItem:
+		m.ResetWorkItem()
 		return nil
 	}
 	return fmt.Errorf("unknown Incident edge %s", name)
@@ -114294,7 +113770,6 @@ type ServiceCatalogMutation struct {
 	category                *string
 	icon                    *string
 	service_type            *string
-	itsm_type               *string
 	target_class            *string
 	price                   *float64
 	addprice                *float64
@@ -114650,42 +114125,6 @@ func (m *ServiceCatalogMutation) ResetServiceType() {
 	m.service_type = nil
 }
 
-// SetItsmType sets the "itsm_type" field.
-func (m *ServiceCatalogMutation) SetItsmType(s string) {
-	m.itsm_type = &s
-}
-
-// ItsmType returns the value of the "itsm_type" field in the mutation.
-func (m *ServiceCatalogMutation) ItsmType() (r string, exists bool) {
-	v := m.itsm_type
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldItsmType returns the old "itsm_type" field's value of the ServiceCatalog entity.
-// If the ServiceCatalog object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ServiceCatalogMutation) OldItsmType(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldItsmType is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldItsmType requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldItsmType: %w", err)
-	}
-	return oldValue.ItsmType, nil
-}
-
-// ResetItsmType resets all changes to the "itsm_type" field.
-func (m *ServiceCatalogMutation) ResetItsmType() {
-	m.itsm_type = nil
-}
-
 // SetTargetClass sets the "target_class" field.
 func (m *ServiceCatalogMutation) SetTargetClass(s string) {
 	m.target_class = &s
@@ -114717,22 +114156,9 @@ func (m *ServiceCatalogMutation) OldTargetClass(ctx context.Context) (v string, 
 	return oldValue.TargetClass, nil
 }
 
-// ClearTargetClass clears the value of the "target_class" field.
-func (m *ServiceCatalogMutation) ClearTargetClass() {
-	m.target_class = nil
-	m.clearedFields[servicecatalog.FieldTargetClass] = struct{}{}
-}
-
-// TargetClassCleared returns if the "target_class" field was cleared in this mutation.
-func (m *ServiceCatalogMutation) TargetClassCleared() bool {
-	_, ok := m.clearedFields[servicecatalog.FieldTargetClass]
-	return ok
-}
-
 // ResetTargetClass resets all changes to the "target_class" field.
 func (m *ServiceCatalogMutation) ResetTargetClass() {
 	m.target_class = nil
-	delete(m.clearedFields, servicecatalog.FieldTargetClass)
 }
 
 // SetPrice sets the "price" field.
@@ -115830,7 +115256,7 @@ func (m *ServiceCatalogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ServiceCatalogMutation) Fields() []string {
-	fields := make([]string, 0, 26)
+	fields := make([]string, 0, 25)
 	if m.name != nil {
 		fields = append(fields, servicecatalog.FieldName)
 	}
@@ -115845,9 +115271,6 @@ func (m *ServiceCatalogMutation) Fields() []string {
 	}
 	if m.service_type != nil {
 		fields = append(fields, servicecatalog.FieldServiceType)
-	}
-	if m.itsm_type != nil {
-		fields = append(fields, servicecatalog.FieldItsmType)
 	}
 	if m.target_class != nil {
 		fields = append(fields, servicecatalog.FieldTargetClass)
@@ -115927,8 +115350,6 @@ func (m *ServiceCatalogMutation) Field(name string) (ent.Value, bool) {
 		return m.Icon()
 	case servicecatalog.FieldServiceType:
 		return m.ServiceType()
-	case servicecatalog.FieldItsmType:
-		return m.ItsmType()
 	case servicecatalog.FieldTargetClass:
 		return m.TargetClass()
 	case servicecatalog.FieldPrice:
@@ -115988,8 +115409,6 @@ func (m *ServiceCatalogMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldIcon(ctx)
 	case servicecatalog.FieldServiceType:
 		return m.OldServiceType(ctx)
-	case servicecatalog.FieldItsmType:
-		return m.OldItsmType(ctx)
 	case servicecatalog.FieldTargetClass:
 		return m.OldTargetClass(ctx)
 	case servicecatalog.FieldPrice:
@@ -116073,13 +115492,6 @@ func (m *ServiceCatalogMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetServiceType(v)
-		return nil
-	case servicecatalog.FieldItsmType:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetItsmType(v)
 		return nil
 	case servicecatalog.FieldTargetClass:
 		v, ok := value.(string)
@@ -116371,9 +115783,6 @@ func (m *ServiceCatalogMutation) ClearedFields() []string {
 	if m.FieldCleared(servicecatalog.FieldIcon) {
 		fields = append(fields, servicecatalog.FieldIcon)
 	}
-	if m.FieldCleared(servicecatalog.FieldTargetClass) {
-		fields = append(fields, servicecatalog.FieldTargetClass)
-	}
 	if m.FieldCleared(servicecatalog.FieldPrice) {
 		fields = append(fields, servicecatalog.FieldPrice)
 	}
@@ -116430,9 +115839,6 @@ func (m *ServiceCatalogMutation) ClearField(name string) error {
 	case servicecatalog.FieldIcon:
 		m.ClearIcon()
 		return nil
-	case servicecatalog.FieldTargetClass:
-		m.ClearTargetClass()
-		return nil
 	case servicecatalog.FieldPrice:
 		m.ClearPrice()
 		return nil
@@ -116488,9 +115894,6 @@ func (m *ServiceCatalogMutation) ResetField(name string) error {
 		return nil
 	case servicecatalog.FieldServiceType:
 		m.ResetServiceType()
-		return nil
-	case servicecatalog.FieldItsmType:
-		m.ResetItsmType()
 		return nil
 	case servicecatalog.FieldTargetClass:
 		m.ResetTargetClass()
@@ -116610,16 +116013,10 @@ type ServiceRequestMutation struct {
 	op                        Op
 	typ                       string
 	id                        *int
-	tenant_id                 *int
-	addtenant_id              *int
-	ticket_id                 *int
-	addticket_id              *int
 	catalog_id                *int
 	addcatalog_id             *int
 	ci_id                     *int
 	addci_id                  *int
-	requester_id              *int
-	addrequester_id           *int
 	form_data                 *map[string]interface{}
 	cost_center               *string
 	data_classification       *string
@@ -116641,10 +116038,10 @@ type ServiceRequestMutation struct {
 	last_error                *string
 	version                   *int
 	addversion                *int
-	created_at                *time.Time
-	updated_at                *time.Time
 	deleted_at                *time.Time
 	clearedFields             map[string]struct{}
+	work_item                 *int
+	clearedwork_item          bool
 	done                      bool
 	oldValue                  func(context.Context) (*ServiceRequest, error)
 	predicates                []predicate.ServiceRequest
@@ -116748,71 +116145,14 @@ func (m *ServiceRequestMutation) IDs(ctx context.Context) ([]int, error) {
 	}
 }
 
-// SetTenantID sets the "tenant_id" field.
-func (m *ServiceRequestMutation) SetTenantID(i int) {
-	m.tenant_id = &i
-	m.addtenant_id = nil
-}
-
-// TenantID returns the value of the "tenant_id" field in the mutation.
-func (m *ServiceRequestMutation) TenantID() (r int, exists bool) {
-	v := m.tenant_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldTenantID returns the old "tenant_id" field's value of the ServiceRequest entity.
-// If the ServiceRequest object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ServiceRequestMutation) OldTenantID(ctx context.Context) (v int, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldTenantID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
-	}
-	return oldValue.TenantID, nil
-}
-
-// AddTenantID adds i to the "tenant_id" field.
-func (m *ServiceRequestMutation) AddTenantID(i int) {
-	if m.addtenant_id != nil {
-		*m.addtenant_id += i
-	} else {
-		m.addtenant_id = &i
-	}
-}
-
-// AddedTenantID returns the value that was added to the "tenant_id" field in this mutation.
-func (m *ServiceRequestMutation) AddedTenantID() (r int, exists bool) {
-	v := m.addtenant_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ResetTenantID resets all changes to the "tenant_id" field.
-func (m *ServiceRequestMutation) ResetTenantID() {
-	m.tenant_id = nil
-	m.addtenant_id = nil
-}
-
 // SetTicketID sets the "ticket_id" field.
 func (m *ServiceRequestMutation) SetTicketID(i int) {
-	m.ticket_id = &i
-	m.addticket_id = nil
+	m.work_item = &i
 }
 
 // TicketID returns the value of the "ticket_id" field in the mutation.
 func (m *ServiceRequestMutation) TicketID() (r int, exists bool) {
-	v := m.ticket_id
+	v := m.work_item
 	if v == nil {
 		return
 	}
@@ -116836,28 +116176,9 @@ func (m *ServiceRequestMutation) OldTicketID(ctx context.Context) (v int, err er
 	return oldValue.TicketID, nil
 }
 
-// AddTicketID adds i to the "ticket_id" field.
-func (m *ServiceRequestMutation) AddTicketID(i int) {
-	if m.addticket_id != nil {
-		*m.addticket_id += i
-	} else {
-		m.addticket_id = &i
-	}
-}
-
-// AddedTicketID returns the value that was added to the "ticket_id" field in this mutation.
-func (m *ServiceRequestMutation) AddedTicketID() (r int, exists bool) {
-	v := m.addticket_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
 // ResetTicketID resets all changes to the "ticket_id" field.
 func (m *ServiceRequestMutation) ResetTicketID() {
-	m.ticket_id = nil
-	m.addticket_id = nil
+	m.work_item = nil
 }
 
 // SetCatalogID sets the "catalog_id" field.
@@ -116984,62 +116305,6 @@ func (m *ServiceRequestMutation) ResetCiID() {
 	m.ci_id = nil
 	m.addci_id = nil
 	delete(m.clearedFields, servicerequest.FieldCiID)
-}
-
-// SetRequesterID sets the "requester_id" field.
-func (m *ServiceRequestMutation) SetRequesterID(i int) {
-	m.requester_id = &i
-	m.addrequester_id = nil
-}
-
-// RequesterID returns the value of the "requester_id" field in the mutation.
-func (m *ServiceRequestMutation) RequesterID() (r int, exists bool) {
-	v := m.requester_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldRequesterID returns the old "requester_id" field's value of the ServiceRequest entity.
-// If the ServiceRequest object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ServiceRequestMutation) OldRequesterID(ctx context.Context) (v int, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldRequesterID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldRequesterID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldRequesterID: %w", err)
-	}
-	return oldValue.RequesterID, nil
-}
-
-// AddRequesterID adds i to the "requester_id" field.
-func (m *ServiceRequestMutation) AddRequesterID(i int) {
-	if m.addrequester_id != nil {
-		*m.addrequester_id += i
-	} else {
-		m.addrequester_id = &i
-	}
-}
-
-// AddedRequesterID returns the value that was added to the "requester_id" field in this mutation.
-func (m *ServiceRequestMutation) AddedRequesterID() (r int, exists bool) {
-	v := m.addrequester_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ResetRequesterID resets all changes to the "requester_id" field.
-func (m *ServiceRequestMutation) ResetRequesterID() {
-	m.requester_id = nil
-	m.addrequester_id = nil
 }
 
 // SetFormData sets the "form_data" field.
@@ -117887,78 +117152,6 @@ func (m *ServiceRequestMutation) ResetVersion() {
 	m.addversion = nil
 }
 
-// SetCreatedAt sets the "created_at" field.
-func (m *ServiceRequestMutation) SetCreatedAt(t time.Time) {
-	m.created_at = &t
-}
-
-// CreatedAt returns the value of the "created_at" field in the mutation.
-func (m *ServiceRequestMutation) CreatedAt() (r time.Time, exists bool) {
-	v := m.created_at
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldCreatedAt returns the old "created_at" field's value of the ServiceRequest entity.
-// If the ServiceRequest object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ServiceRequestMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
-	}
-	return oldValue.CreatedAt, nil
-}
-
-// ResetCreatedAt resets all changes to the "created_at" field.
-func (m *ServiceRequestMutation) ResetCreatedAt() {
-	m.created_at = nil
-}
-
-// SetUpdatedAt sets the "updated_at" field.
-func (m *ServiceRequestMutation) SetUpdatedAt(t time.Time) {
-	m.updated_at = &t
-}
-
-// UpdatedAt returns the value of the "updated_at" field in the mutation.
-func (m *ServiceRequestMutation) UpdatedAt() (r time.Time, exists bool) {
-	v := m.updated_at
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldUpdatedAt returns the old "updated_at" field's value of the ServiceRequest entity.
-// If the ServiceRequest object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ServiceRequestMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
-	}
-	return oldValue.UpdatedAt, nil
-}
-
-// ResetUpdatedAt resets all changes to the "updated_at" field.
-func (m *ServiceRequestMutation) ResetUpdatedAt() {
-	m.updated_at = nil
-}
-
 // SetDeletedAt sets the "deleted_at" field.
 func (m *ServiceRequestMutation) SetDeletedAt(t time.Time) {
 	m.deleted_at = &t
@@ -118008,6 +117201,46 @@ func (m *ServiceRequestMutation) ResetDeletedAt() {
 	delete(m.clearedFields, servicerequest.FieldDeletedAt)
 }
 
+// SetWorkItemID sets the "work_item" edge to the Ticket entity by id.
+func (m *ServiceRequestMutation) SetWorkItemID(id int) {
+	m.work_item = &id
+}
+
+// ClearWorkItem clears the "work_item" edge to the Ticket entity.
+func (m *ServiceRequestMutation) ClearWorkItem() {
+	m.clearedwork_item = true
+	m.clearedFields[servicerequest.FieldTicketID] = struct{}{}
+}
+
+// WorkItemCleared reports if the "work_item" edge to the Ticket entity was cleared.
+func (m *ServiceRequestMutation) WorkItemCleared() bool {
+	return m.clearedwork_item
+}
+
+// WorkItemID returns the "work_item" edge ID in the mutation.
+func (m *ServiceRequestMutation) WorkItemID() (id int, exists bool) {
+	if m.work_item != nil {
+		return *m.work_item, true
+	}
+	return
+}
+
+// WorkItemIDs returns the "work_item" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// WorkItemID instead. It exists only for internal usage by the builders.
+func (m *ServiceRequestMutation) WorkItemIDs() (ids []int) {
+	if id := m.work_item; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetWorkItem resets all changes to the "work_item" edge.
+func (m *ServiceRequestMutation) ResetWorkItem() {
+	m.work_item = nil
+	m.clearedwork_item = false
+}
+
 // Where appends a list predicates to the ServiceRequestMutation builder.
 func (m *ServiceRequestMutation) Where(ps ...predicate.ServiceRequest) {
 	m.predicates = append(m.predicates, ps...)
@@ -118042,11 +117275,8 @@ func (m *ServiceRequestMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ServiceRequestMutation) Fields() []string {
-	fields := make([]string, 0, 25)
-	if m.tenant_id != nil {
-		fields = append(fields, servicerequest.FieldTenantID)
-	}
-	if m.ticket_id != nil {
+	fields := make([]string, 0, 21)
+	if m.work_item != nil {
 		fields = append(fields, servicerequest.FieldTicketID)
 	}
 	if m.catalog_id != nil {
@@ -118054,9 +117284,6 @@ func (m *ServiceRequestMutation) Fields() []string {
 	}
 	if m.ci_id != nil {
 		fields = append(fields, servicerequest.FieldCiID)
-	}
-	if m.requester_id != nil {
-		fields = append(fields, servicerequest.FieldRequesterID)
 	}
 	if m.form_data != nil {
 		fields = append(fields, servicerequest.FieldFormData)
@@ -118109,12 +117336,6 @@ func (m *ServiceRequestMutation) Fields() []string {
 	if m.version != nil {
 		fields = append(fields, servicerequest.FieldVersion)
 	}
-	if m.created_at != nil {
-		fields = append(fields, servicerequest.FieldCreatedAt)
-	}
-	if m.updated_at != nil {
-		fields = append(fields, servicerequest.FieldUpdatedAt)
-	}
 	if m.deleted_at != nil {
 		fields = append(fields, servicerequest.FieldDeletedAt)
 	}
@@ -118126,16 +117347,12 @@ func (m *ServiceRequestMutation) Fields() []string {
 // schema.
 func (m *ServiceRequestMutation) Field(name string) (ent.Value, bool) {
 	switch name {
-	case servicerequest.FieldTenantID:
-		return m.TenantID()
 	case servicerequest.FieldTicketID:
 		return m.TicketID()
 	case servicerequest.FieldCatalogID:
 		return m.CatalogID()
 	case servicerequest.FieldCiID:
 		return m.CiID()
-	case servicerequest.FieldRequesterID:
-		return m.RequesterID()
 	case servicerequest.FieldFormData:
 		return m.FormData()
 	case servicerequest.FieldCostCenter:
@@ -118170,10 +117387,6 @@ func (m *ServiceRequestMutation) Field(name string) (ent.Value, bool) {
 		return m.LastError()
 	case servicerequest.FieldVersion:
 		return m.Version()
-	case servicerequest.FieldCreatedAt:
-		return m.CreatedAt()
-	case servicerequest.FieldUpdatedAt:
-		return m.UpdatedAt()
 	case servicerequest.FieldDeletedAt:
 		return m.DeletedAt()
 	}
@@ -118185,16 +117398,12 @@ func (m *ServiceRequestMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *ServiceRequestMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
-	case servicerequest.FieldTenantID:
-		return m.OldTenantID(ctx)
 	case servicerequest.FieldTicketID:
 		return m.OldTicketID(ctx)
 	case servicerequest.FieldCatalogID:
 		return m.OldCatalogID(ctx)
 	case servicerequest.FieldCiID:
 		return m.OldCiID(ctx)
-	case servicerequest.FieldRequesterID:
-		return m.OldRequesterID(ctx)
 	case servicerequest.FieldFormData:
 		return m.OldFormData(ctx)
 	case servicerequest.FieldCostCenter:
@@ -118229,10 +117438,6 @@ func (m *ServiceRequestMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldLastError(ctx)
 	case servicerequest.FieldVersion:
 		return m.OldVersion(ctx)
-	case servicerequest.FieldCreatedAt:
-		return m.OldCreatedAt(ctx)
-	case servicerequest.FieldUpdatedAt:
-		return m.OldUpdatedAt(ctx)
 	case servicerequest.FieldDeletedAt:
 		return m.OldDeletedAt(ctx)
 	}
@@ -118244,13 +117449,6 @@ func (m *ServiceRequestMutation) OldField(ctx context.Context, name string) (ent
 // type.
 func (m *ServiceRequestMutation) SetField(name string, value ent.Value) error {
 	switch name {
-	case servicerequest.FieldTenantID:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetTenantID(v)
-		return nil
 	case servicerequest.FieldTicketID:
 		v, ok := value.(int)
 		if !ok {
@@ -118271,13 +117469,6 @@ func (m *ServiceRequestMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetCiID(v)
-		return nil
-	case servicerequest.FieldRequesterID:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetRequesterID(v)
 		return nil
 	case servicerequest.FieldFormData:
 		v, ok := value.(map[string]interface{})
@@ -118398,20 +117589,6 @@ func (m *ServiceRequestMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetVersion(v)
 		return nil
-	case servicerequest.FieldCreatedAt:
-		v, ok := value.(time.Time)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetCreatedAt(v)
-		return nil
-	case servicerequest.FieldUpdatedAt:
-		v, ok := value.(time.Time)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetUpdatedAt(v)
-		return nil
 	case servicerequest.FieldDeletedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -118427,20 +117604,11 @@ func (m *ServiceRequestMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *ServiceRequestMutation) AddedFields() []string {
 	var fields []string
-	if m.addtenant_id != nil {
-		fields = append(fields, servicerequest.FieldTenantID)
-	}
-	if m.addticket_id != nil {
-		fields = append(fields, servicerequest.FieldTicketID)
-	}
 	if m.addcatalog_id != nil {
 		fields = append(fields, servicerequest.FieldCatalogID)
 	}
 	if m.addci_id != nil {
 		fields = append(fields, servicerequest.FieldCiID)
-	}
-	if m.addrequester_id != nil {
-		fields = append(fields, servicerequest.FieldRequesterID)
 	}
 	if m.addquantity != nil {
 		fields = append(fields, servicerequest.FieldQuantity)
@@ -118459,16 +117627,10 @@ func (m *ServiceRequestMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *ServiceRequestMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
-	case servicerequest.FieldTenantID:
-		return m.AddedTenantID()
-	case servicerequest.FieldTicketID:
-		return m.AddedTicketID()
 	case servicerequest.FieldCatalogID:
 		return m.AddedCatalogID()
 	case servicerequest.FieldCiID:
 		return m.AddedCiID()
-	case servicerequest.FieldRequesterID:
-		return m.AddedRequesterID()
 	case servicerequest.FieldQuantity:
 		return m.AddedQuantity()
 	case servicerequest.FieldProcessorID:
@@ -118484,20 +117646,6 @@ func (m *ServiceRequestMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *ServiceRequestMutation) AddField(name string, value ent.Value) error {
 	switch name {
-	case servicerequest.FieldTenantID:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddTenantID(v)
-		return nil
-	case servicerequest.FieldTicketID:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddTicketID(v)
-		return nil
 	case servicerequest.FieldCatalogID:
 		v, ok := value.(int)
 		if !ok {
@@ -118511,13 +117659,6 @@ func (m *ServiceRequestMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddCiID(v)
-		return nil
-	case servicerequest.FieldRequesterID:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddRequesterID(v)
 		return nil
 	case servicerequest.FieldQuantity:
 		v, ok := value.(int)
@@ -118654,9 +117795,6 @@ func (m *ServiceRequestMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *ServiceRequestMutation) ResetField(name string) error {
 	switch name {
-	case servicerequest.FieldTenantID:
-		m.ResetTenantID()
-		return nil
 	case servicerequest.FieldTicketID:
 		m.ResetTicketID()
 		return nil
@@ -118665,9 +117803,6 @@ func (m *ServiceRequestMutation) ResetField(name string) error {
 		return nil
 	case servicerequest.FieldCiID:
 		m.ResetCiID()
-		return nil
-	case servicerequest.FieldRequesterID:
-		m.ResetRequesterID()
 		return nil
 	case servicerequest.FieldFormData:
 		m.ResetFormData()
@@ -118720,12 +117855,6 @@ func (m *ServiceRequestMutation) ResetField(name string) error {
 	case servicerequest.FieldVersion:
 		m.ResetVersion()
 		return nil
-	case servicerequest.FieldCreatedAt:
-		m.ResetCreatedAt()
-		return nil
-	case servicerequest.FieldUpdatedAt:
-		m.ResetUpdatedAt()
-		return nil
 	case servicerequest.FieldDeletedAt:
 		m.ResetDeletedAt()
 		return nil
@@ -118735,19 +117864,28 @@ func (m *ServiceRequestMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *ServiceRequestMutation) AddedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.work_item != nil {
+		edges = append(edges, servicerequest.EdgeWorkItem)
+	}
 	return edges
 }
 
 // AddedIDs returns all IDs (to other nodes) that were added for the given edge
 // name in this mutation.
 func (m *ServiceRequestMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case servicerequest.EdgeWorkItem:
+		if id := m.work_item; id != nil {
+			return []ent.Value{*id}
+		}
+	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *ServiceRequestMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
 	return edges
 }
 
@@ -118759,25 +117897,42 @@ func (m *ServiceRequestMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *ServiceRequestMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.clearedwork_item {
+		edges = append(edges, servicerequest.EdgeWorkItem)
+	}
 	return edges
 }
 
 // EdgeCleared returns a boolean which indicates if the edge with the given name
 // was cleared in this mutation.
 func (m *ServiceRequestMutation) EdgeCleared(name string) bool {
+	switch name {
+	case servicerequest.EdgeWorkItem:
+		return m.clearedwork_item
+	}
 	return false
 }
 
 // ClearEdge clears the value of the edge with the given name. It returns an error
 // if that edge is not defined in the schema.
 func (m *ServiceRequestMutation) ClearEdge(name string) error {
+	switch name {
+	case servicerequest.EdgeWorkItem:
+		m.ClearWorkItem()
+		return nil
+	}
 	return fmt.Errorf("unknown ServiceRequest unique edge %s", name)
 }
 
 // ResetEdge resets all changes to the edge with the given name in this mutation.
 // It returns an error if the edge is not defined in the schema.
 func (m *ServiceRequestMutation) ResetEdge(name string) error {
+	switch name {
+	case servicerequest.EdgeWorkItem:
+		m.ResetWorkItem()
+		return nil
+	}
 	return fmt.Errorf("unknown ServiceRequest edge %s", name)
 }
 
@@ -128451,6 +127606,10 @@ type TicketMutation struct {
 	root_cause_analyses        map[int]struct{}
 	removedroot_cause_analyses map[int]struct{}
 	clearedroot_cause_analyses bool
+	incident                   *int
+	clearedincident            bool
+	service_request            *int
+	clearedservice_request     bool
 	feishu_syncs               map[int]struct{}
 	removedfeishu_syncs        map[int]struct{}
 	clearedfeishu_syncs        bool
@@ -131282,6 +130441,84 @@ func (m *TicketMutation) ResetRootCauseAnalyses() {
 	m.removedroot_cause_analyses = nil
 }
 
+// SetIncidentID sets the "incident" edge to the Incident entity by id.
+func (m *TicketMutation) SetIncidentID(id int) {
+	m.incident = &id
+}
+
+// ClearIncident clears the "incident" edge to the Incident entity.
+func (m *TicketMutation) ClearIncident() {
+	m.clearedincident = true
+}
+
+// IncidentCleared reports if the "incident" edge to the Incident entity was cleared.
+func (m *TicketMutation) IncidentCleared() bool {
+	return m.clearedincident
+}
+
+// IncidentID returns the "incident" edge ID in the mutation.
+func (m *TicketMutation) IncidentID() (id int, exists bool) {
+	if m.incident != nil {
+		return *m.incident, true
+	}
+	return
+}
+
+// IncidentIDs returns the "incident" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// IncidentID instead. It exists only for internal usage by the builders.
+func (m *TicketMutation) IncidentIDs() (ids []int) {
+	if id := m.incident; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetIncident resets all changes to the "incident" edge.
+func (m *TicketMutation) ResetIncident() {
+	m.incident = nil
+	m.clearedincident = false
+}
+
+// SetServiceRequestID sets the "service_request" edge to the ServiceRequest entity by id.
+func (m *TicketMutation) SetServiceRequestID(id int) {
+	m.service_request = &id
+}
+
+// ClearServiceRequest clears the "service_request" edge to the ServiceRequest entity.
+func (m *TicketMutation) ClearServiceRequest() {
+	m.clearedservice_request = true
+}
+
+// ServiceRequestCleared reports if the "service_request" edge to the ServiceRequest entity was cleared.
+func (m *TicketMutation) ServiceRequestCleared() bool {
+	return m.clearedservice_request
+}
+
+// ServiceRequestID returns the "service_request" edge ID in the mutation.
+func (m *TicketMutation) ServiceRequestID() (id int, exists bool) {
+	if m.service_request != nil {
+		return *m.service_request, true
+	}
+	return
+}
+
+// ServiceRequestIDs returns the "service_request" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// ServiceRequestID instead. It exists only for internal usage by the builders.
+func (m *TicketMutation) ServiceRequestIDs() (ids []int) {
+	if id := m.service_request; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetServiceRequest resets all changes to the "service_request" edge.
+func (m *TicketMutation) ResetServiceRequest() {
+	m.service_request = nil
+	m.clearedservice_request = false
+}
+
 // AddFeishuSyncIDs adds the "feishu_syncs" edge to the FeishuTicketSync entity by ids.
 func (m *TicketMutation) AddFeishuSyncIDs(ids ...int) {
 	if m.feishu_syncs == nil {
@@ -132593,7 +131830,7 @@ func (m *TicketMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *TicketMutation) AddedEdges() []string {
-	edges := make([]string, 0, 15)
+	edges := make([]string, 0, 17)
 	if m.comments != nil {
 		edges = append(edges, ticket.EdgeComments)
 	}
@@ -132626,6 +131863,12 @@ func (m *TicketMutation) AddedEdges() []string {
 	}
 	if m.root_cause_analyses != nil {
 		edges = append(edges, ticket.EdgeRootCauseAnalyses)
+	}
+	if m.incident != nil {
+		edges = append(edges, ticket.EdgeIncident)
+	}
+	if m.service_request != nil {
+		edges = append(edges, ticket.EdgeServiceRequest)
 	}
 	if m.feishu_syncs != nil {
 		edges = append(edges, ticket.EdgeFeishuSyncs)
@@ -132712,6 +131955,14 @@ func (m *TicketMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case ticket.EdgeIncident:
+		if id := m.incident; id != nil {
+			return []ent.Value{*id}
+		}
+	case ticket.EdgeServiceRequest:
+		if id := m.service_request; id != nil {
+			return []ent.Value{*id}
+		}
 	case ticket.EdgeFeishuSyncs:
 		ids := make([]ent.Value, 0, len(m.feishu_syncs))
 		for id := range m.feishu_syncs {
@@ -132738,7 +131989,7 @@ func (m *TicketMutation) AddedIDs(name string) []ent.Value {
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *TicketMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 15)
+	edges := make([]string, 0, 17)
 	if m.removedcomments != nil {
 		edges = append(edges, ticket.EdgeComments)
 	}
@@ -132869,7 +132120,7 @@ func (m *TicketMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *TicketMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 15)
+	edges := make([]string, 0, 17)
 	if m.clearedcomments {
 		edges = append(edges, ticket.EdgeComments)
 	}
@@ -132902,6 +132153,12 @@ func (m *TicketMutation) ClearedEdges() []string {
 	}
 	if m.clearedroot_cause_analyses {
 		edges = append(edges, ticket.EdgeRootCauseAnalyses)
+	}
+	if m.clearedincident {
+		edges = append(edges, ticket.EdgeIncident)
+	}
+	if m.clearedservice_request {
+		edges = append(edges, ticket.EdgeServiceRequest)
 	}
 	if m.clearedfeishu_syncs {
 		edges = append(edges, ticket.EdgeFeishuSyncs)
@@ -132944,6 +132201,10 @@ func (m *TicketMutation) EdgeCleared(name string) bool {
 		return m.clearedsla_alert_history
 	case ticket.EdgeRootCauseAnalyses:
 		return m.clearedroot_cause_analyses
+	case ticket.EdgeIncident:
+		return m.clearedincident
+	case ticket.EdgeServiceRequest:
+		return m.clearedservice_request
 	case ticket.EdgeFeishuSyncs:
 		return m.clearedfeishu_syncs
 	case ticket.EdgeRequester:
@@ -132960,6 +132221,12 @@ func (m *TicketMutation) EdgeCleared(name string) bool {
 // if that edge is not defined in the schema.
 func (m *TicketMutation) ClearEdge(name string) error {
 	switch name {
+	case ticket.EdgeIncident:
+		m.ClearIncident()
+		return nil
+	case ticket.EdgeServiceRequest:
+		m.ClearServiceRequest()
+		return nil
 	case ticket.EdgeRequester:
 		m.ClearRequester()
 		return nil
@@ -133006,6 +132273,12 @@ func (m *TicketMutation) ResetEdge(name string) error {
 		return nil
 	case ticket.EdgeRootCauseAnalyses:
 		m.ResetRootCauseAnalyses()
+		return nil
+	case ticket.EdgeIncident:
+		m.ResetIncident()
+		return nil
+	case ticket.EdgeServiceRequest:
+		m.ResetServiceRequest()
 		return nil
 	case ticket.EdgeFeishuSyncs:
 		m.ResetFeishuSyncs()

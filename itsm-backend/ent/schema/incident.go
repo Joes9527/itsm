@@ -18,28 +18,9 @@ type Incident struct {
 // Fields of the Incident.
 func (Incident) Fields() []ent.Field {
 	return []ent.Field{
-		field.String("title").
-			Comment("事件标题").
-			NotEmpty(),
-		field.Text("description").
-			Comment("事件描述").
-			Optional(),
-		field.String("status").
-			Comment("状态").
-			Default("new"),
 		field.String("type").
 			Comment("事件类型").
 			Default("incident"),
-		field.String("priority").
-			Comment("优先级").
-			Validate(func(s string) error {
-				valid := map[string]bool{"low": true, "medium": true, "high": true, "critical": true}
-				if !valid[s] {
-					return fmt.Errorf("invalid priority value: %s", s)
-				}
-				return nil
-			}).
-			Default("medium"),
 		field.String("severity").
 			Comment("严重程度").
 			Default("medium"),
@@ -67,12 +48,9 @@ func (Incident) Fields() []ent.Field {
 			Comment("事件编号").
 			Unique().
 			NotEmpty(),
-		field.Int("reporter_id").
-			Comment("报告人ID").
-			Positive(),
 		field.Int("work_item_id").
-			Comment("关联的 WorkItem（tickets.id），唯一，必填——Incident 迁移到 WorkItem 后每条记录必须有且仅有一条对应的 tickets 行").
-			Optional().
+			Comment("关联的权威 WorkItem（tickets.id），唯一且必填").
+			Positive().
 			Unique(),
 		field.Int("assignee_id").
 			Comment("处理人ID").
@@ -122,20 +100,10 @@ func (Incident) Fields() []ent.Field {
 		field.JSON("metadata", map[string]interface{}{}).
 			Comment("元数据").
 			Optional(),
-		field.Int("tenant_id").
-			Comment("租户ID").
-			Positive(),
 		field.Int("version").
 			Comment("版本号（乐观锁）").
 			Default(1).
 			Positive(),
-		field.Time("created_at").
-			Comment("创建时间").
-			Default(time.Now),
-		field.Time("updated_at").
-			Comment("更新时间").
-			Default(time.Now).
-			UpdateDefault(time.Now),
 		field.Time("deleted_at").
 			Comment("软删除时间").
 			Optional().
@@ -163,6 +131,12 @@ func (Incident) Edges() []ent.Edge {
 		edge.From("problems", Problem.Type).
 			Ref("incidents").
 			Comment("关联的问题"),
+		edge.From("work_item", Ticket.Type).
+			Ref("incident").
+			Field("work_item_id").
+			Unique().
+			Required().
+			Comment("公共字段与租户边界的权威 WorkItem"),
 	}
 }
 

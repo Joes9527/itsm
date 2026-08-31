@@ -184,3 +184,22 @@ func TestUnifiedIntakeMigrationEnablesRLS(t *testing.T) {
 	assert.Contains(t, sql, "CONSTRAINT intake_requests_completed_work_item_check")
 	assert.Contains(t, sql, "status <> 'completed' OR (work_item_id IS NOT NULL AND completed_at IS NOT NULL)")
 }
+
+func TestWorkItemAuthorityMigrationDropsDuplicateColumnsAndUsesJoinRLS(t *testing.T) {
+	require.NotEmpty(t, RegisteredMigrations)
+	assert.Equal(t, "021_work_item_authority", RegisteredMigrations[len(RegisteredMigrations)-1].Version)
+
+	sql := GetMigrationSQL("021_work_item_authority")
+	require.NotEmpty(t, sql)
+	for _, column := range []string{"title", "description", "status", "priority", "reporter_id", "tenant_id", "created_at", "updated_at"} {
+		assert.Contains(t, sql, "ALTER TABLE incidents DROP COLUMN IF EXISTS "+column)
+	}
+	for _, column := range []string{"requester_id", "tenant_id", "created_at", "updated_at"} {
+		assert.Contains(t, sql, "ALTER TABLE service_requests DROP COLUMN IF EXISTS "+column)
+	}
+	assert.Contains(t, sql, "EXISTS (SELECT 1 FROM tickets")
+	assert.Contains(t, sql, "tickets.id = incidents.work_item_id")
+	assert.Contains(t, sql, "tickets.id = service_requests.ticket_id")
+	assert.Contains(t, sql, "ALTER TABLE service_catalogs DROP COLUMN IF EXISTS itsm_type")
+	assert.Contains(t, sql, "target_class IN ('service_request_item', 'incident', 'change_request')")
+}

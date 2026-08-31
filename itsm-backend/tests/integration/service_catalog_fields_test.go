@@ -12,10 +12,8 @@ import (
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
-	"itsm-backend/handlers/cmdb"
 	"itsm-backend/handlers/service_catalog"
 	"itsm-backend/handlers/service_request"
-	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -43,9 +41,7 @@ func setupServiceCatalogFieldsRouter(t *testing.T) (*gin.Engine, *ent.Tenant, *e
 	scHandler := service_catalog.NewHandler(scService)
 
 	srRepo := service_request.NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
-	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	srService := service_request.NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc, nil, nil)
+	srService := service_request.NewService(srRepo, client, logger)
 	srHandler := service_request.NewHandler(srService)
 
 	r := gin.New()

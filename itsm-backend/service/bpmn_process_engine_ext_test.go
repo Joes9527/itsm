@@ -1797,7 +1797,7 @@ func TestHandleElement_ServiceTask_IncidentAutoAssign_NoAssignee_ContinuesFlow(t
 	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
 	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, actorID)
 
-	inc, err := engine.client.Incident.Create().
+	inc, err := newIncidentTestBuilder(engine.client).
 		SetTitle("自动分配空态回归").
 		SetIncidentNumber("INC-AUTOASSIGN-1").
 		SetStatus("new").
@@ -1875,7 +1875,9 @@ func TestHandleElement_ServiceTask_IncidentAutoAssign_NoAssignee_ContinuesFlow(t
 	updatedIncident, err := engine.client.Incident.Get(ctx, inc.ID)
 	require.NoError(t, err)
 	assert.Zero(t, updatedIncident.AssigneeID, "空态跳过时不得写入处理人")
-	assert.Equal(t, "new", updatedIncident.Status, "空态跳过时不得改状态")
+	updatedWorkItem, err := incidentTestWorkItem(ctx, engine.client, updatedIncident.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "new", updatedWorkItem.Status, "空态跳过时不得改状态")
 }
 
 func TestProcessTask_CorrelationIDRoundTrip(t *testing.T) {

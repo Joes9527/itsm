@@ -93,10 +93,13 @@ func (r *EntRepository) toDomainWithAssociations(e *ent.Problem) *Problem {
 	if e.Edges.Incidents != nil {
 		p.Incidents = make([]*AssociatedItem, 0, len(e.Edges.Incidents))
 		for _, inc := range e.Edges.Incidents {
+			if inc.Edges.WorkItem == nil {
+				continue
+			}
 			p.Incidents = append(p.Incidents, &AssociatedItem{
 				ID:     inc.ID,
-				Title:  inc.Title,
-				Status: inc.Status,
+				Title:  inc.Edges.WorkItem.Title,
+				Status: inc.Edges.WorkItem.Status,
 				Number: inc.IncidentNumber,
 				Type:   "incident",
 			})
@@ -145,7 +148,7 @@ func (r *EntRepository) AddAssociations(ctx context.Context, tenantID, problemID
 		return r.linkTicketsAsWorkItemRelations(ctx, tenantID, prob.WorkItemID, actorUserID, relatedIDs)
 	case "incident":
 		count, err := r.client.Incident.Query().
-			Where(incident.IDIn(relatedIDs...), incident.TenantIDEQ(tenantID)).
+			Where(incident.IDIn(relatedIDs...), incident.OwnedByTenant(tenantID)).
 			Count(ctx)
 		if err != nil {
 			return err
@@ -432,8 +435,9 @@ func (r *EntRepository) GetWithAssociations(ctx context.Context, id int, tenantI
 	e, err := r.client.Problem.Query().
 		Where(problem.ID(id), problem.TenantID(tenantID), problem.DeletedAtIsNil()).
 		WithIncidents(func(q *ent.IncidentQuery) {
-			q.Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
-				Select("id", "title", "status", "incident_number")
+			q.Where(incident.OwnedByTenant(tenantID), incident.DeletedAtIsNil()).
+				Select(incident.FieldID, incident.FieldIncidentNumber).
+				WithWorkItem()
 		}).
 		WithChanges(func(q *ent.ChangeQuery) {
 			q.Where(change.TenantIDEQ(tenantID)).
@@ -485,11 +489,12 @@ func (r *EntRepository) loadIncidentAssociations(ctx context.Context, tenantID, 
 	}
 	incidents, err := r.client.Incident.Query().
 		Where(
-			incident.TenantIDEQ(tenantID),
+			incident.OwnedByTenant(tenantID),
 			incident.WorkItemIDIn(sourceWorkItemIDs...),
 			incident.DeletedAtIsNil(),
 		).
-		Select("id", "title", "status", "incident_number").
+		Select(incident.FieldID, incident.FieldIncidentNumber).
+		WithWorkItem().
 		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load linked incidents: %w", err)
@@ -497,8 +502,11 @@ func (r *EntRepository) loadIncidentAssociations(ctx context.Context, tenantID, 
 
 	items := make([]*AssociatedItem, 0, len(incidents))
 	for _, inc := range incidents {
+		if inc.Edges.WorkItem == nil {
+			return nil, fmt.Errorf("linked incident %d is missing its work item", inc.ID)
+		}
 		items = append(items, &AssociatedItem{
-			ID: inc.ID, Title: inc.Title, Status: inc.Status,
+			ID: inc.ID, Title: inc.Edges.WorkItem.Title, Status: inc.Edges.WorkItem.Status,
 			Number: inc.IncidentNumber, Type: "incident",
 		})
 	}

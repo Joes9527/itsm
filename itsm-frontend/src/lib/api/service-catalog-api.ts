@@ -88,6 +88,7 @@ export class ServiceCatalogApi {
       fields: Array.isArray(raw?.fields) ? raw.fields : [],
       processDefinitionKey: raw?.processDefinitionKey || undefined,
       serviceType: raw?.serviceType || undefined,
+		targetClass: raw?.targetClass,
       requiresInfraFields: Boolean(raw?.requiresInfraFields),
     };
   }
@@ -208,6 +209,7 @@ export class ServiceCatalogApi {
       fields: request.fields,
       processDefinitionKey: request.processDefinitionKey,
       serviceType: request.serviceType ? String(request.serviceType) : undefined,
+		targetClass: request.targetClass,
     };
     const resp = await httpClient.post<any>('/api/v1/service-catalogs', payload);
     return ServiceCatalogApi.toServiceItem(resp);
@@ -235,6 +237,7 @@ export class ServiceCatalogApi {
     if (request.serviceType !== undefined) {
       payload.serviceType = String(request.serviceType);
     }
+	payload.targetClass = request.targetClass;
     const st = ServiceCatalogApi.toBackendStatus(request.status);
     if (st) payload.status = st;
 
@@ -253,8 +256,10 @@ export class ServiceCatalogApi {
    * 发布服务
    */
   static async publishService(id: string): Promise<ServiceItem> {
+	const current = await ServiceCatalogApi.getService(id);
     const resp = await httpClient.put<any>(`/api/v1/service-catalogs/${id}`, {
       status: 'enabled',
+	  targetClass: current.targetClass,
     });
     return ServiceCatalogApi.toServiceItem(resp);
   }
@@ -263,8 +268,10 @@ export class ServiceCatalogApi {
    * 停用服务
    */
   static async retireService(id: string): Promise<ServiceItem> {
+	const current = await ServiceCatalogApi.getService(id);
     const resp = await httpClient.put<any>(`/api/v1/service-catalogs/${id}`, {
       status: 'disabled',
+	  targetClass: current.targetClass,
     });
     return ServiceCatalogApi.toServiceItem(resp);
   }

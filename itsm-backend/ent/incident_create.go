@@ -12,6 +12,7 @@ import (
 	"itsm-backend/ent/incidentevent"
 	"itsm-backend/ent/incidentmetric"
 	"itsm-backend/ent/problem"
+	"itsm-backend/ent/ticket"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -27,40 +28,6 @@ type IncidentCreate struct {
 	conflict []sql.ConflictOption
 }
 
-// SetTitle sets the "title" field.
-func (_c *IncidentCreate) SetTitle(v string) *IncidentCreate {
-	_c.mutation.SetTitle(v)
-	return _c
-}
-
-// SetDescription sets the "description" field.
-func (_c *IncidentCreate) SetDescription(v string) *IncidentCreate {
-	_c.mutation.SetDescription(v)
-	return _c
-}
-
-// SetNillableDescription sets the "description" field if the given value is not nil.
-func (_c *IncidentCreate) SetNillableDescription(v *string) *IncidentCreate {
-	if v != nil {
-		_c.SetDescription(*v)
-	}
-	return _c
-}
-
-// SetStatus sets the "status" field.
-func (_c *IncidentCreate) SetStatus(v string) *IncidentCreate {
-	_c.mutation.SetStatus(v)
-	return _c
-}
-
-// SetNillableStatus sets the "status" field if the given value is not nil.
-func (_c *IncidentCreate) SetNillableStatus(v *string) *IncidentCreate {
-	if v != nil {
-		_c.SetStatus(*v)
-	}
-	return _c
-}
-
 // SetType sets the "type" field.
 func (_c *IncidentCreate) SetType(v string) *IncidentCreate {
 	_c.mutation.SetType(v)
@@ -71,20 +38,6 @@ func (_c *IncidentCreate) SetType(v string) *IncidentCreate {
 func (_c *IncidentCreate) SetNillableType(v *string) *IncidentCreate {
 	if v != nil {
 		_c.SetType(*v)
-	}
-	return _c
-}
-
-// SetPriority sets the "priority" field.
-func (_c *IncidentCreate) SetPriority(v string) *IncidentCreate {
-	_c.mutation.SetPriority(v)
-	return _c
-}
-
-// SetNillablePriority sets the "priority" field if the given value is not nil.
-func (_c *IncidentCreate) SetNillablePriority(v *string) *IncidentCreate {
-	if v != nil {
-		_c.SetPriority(*v)
 	}
 	return _c
 }
@@ -137,23 +90,9 @@ func (_c *IncidentCreate) SetIncidentNumber(v string) *IncidentCreate {
 	return _c
 }
 
-// SetReporterID sets the "reporter_id" field.
-func (_c *IncidentCreate) SetReporterID(v int) *IncidentCreate {
-	_c.mutation.SetReporterID(v)
-	return _c
-}
-
 // SetWorkItemID sets the "work_item_id" field.
 func (_c *IncidentCreate) SetWorkItemID(v int) *IncidentCreate {
 	_c.mutation.SetWorkItemID(v)
-	return _c
-}
-
-// SetNillableWorkItemID sets the "work_item_id" field if the given value is not nil.
-func (_c *IncidentCreate) SetNillableWorkItemID(v *int) *IncidentCreate {
-	if v != nil {
-		_c.SetWorkItemID(*v)
-	}
 	return _c
 }
 
@@ -349,12 +288,6 @@ func (_c *IncidentCreate) SetMetadata(v map[string]interface{}) *IncidentCreate 
 	return _c
 }
 
-// SetTenantID sets the "tenant_id" field.
-func (_c *IncidentCreate) SetTenantID(v int) *IncidentCreate {
-	_c.mutation.SetTenantID(v)
-	return _c
-}
-
 // SetVersion sets the "version" field.
 func (_c *IncidentCreate) SetVersion(v int) *IncidentCreate {
 	_c.mutation.SetVersion(v)
@@ -365,34 +298,6 @@ func (_c *IncidentCreate) SetVersion(v int) *IncidentCreate {
 func (_c *IncidentCreate) SetNillableVersion(v *int) *IncidentCreate {
 	if v != nil {
 		_c.SetVersion(*v)
-	}
-	return _c
-}
-
-// SetCreatedAt sets the "created_at" field.
-func (_c *IncidentCreate) SetCreatedAt(v time.Time) *IncidentCreate {
-	_c.mutation.SetCreatedAt(v)
-	return _c
-}
-
-// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_c *IncidentCreate) SetNillableCreatedAt(v *time.Time) *IncidentCreate {
-	if v != nil {
-		_c.SetCreatedAt(*v)
-	}
-	return _c
-}
-
-// SetUpdatedAt sets the "updated_at" field.
-func (_c *IncidentCreate) SetUpdatedAt(v time.Time) *IncidentCreate {
-	_c.mutation.SetUpdatedAt(v)
-	return _c
-}
-
-// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (_c *IncidentCreate) SetNillableUpdatedAt(v *time.Time) *IncidentCreate {
-	if v != nil {
-		_c.SetUpdatedAt(*v)
 	}
 	return _c
 }
@@ -516,6 +421,11 @@ func (_c *IncidentCreate) AddProblems(v ...*Problem) *IncidentCreate {
 	return _c.AddProblemIDs(ids...)
 }
 
+// SetWorkItem sets the "work_item" edge to the Ticket entity.
+func (_c *IncidentCreate) SetWorkItem(v *Ticket) *IncidentCreate {
+	return _c.SetWorkItemID(v.ID)
+}
+
 // Mutation returns the IncidentMutation object of the builder.
 func (_c *IncidentCreate) Mutation() *IncidentMutation {
 	return _c.mutation
@@ -551,17 +461,9 @@ func (_c *IncidentCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *IncidentCreate) defaults() {
-	if _, ok := _c.mutation.Status(); !ok {
-		v := incident.DefaultStatus
-		_c.mutation.SetStatus(v)
-	}
 	if _, ok := _c.mutation.GetType(); !ok {
 		v := incident.DefaultType
 		_c.mutation.SetType(v)
-	}
-	if _, ok := _c.mutation.Priority(); !ok {
-		v := incident.DefaultPriority
-		_c.mutation.SetPriority(v)
 	}
 	if _, ok := _c.mutation.Severity(); !ok {
 		v := incident.DefaultSeverity
@@ -599,39 +501,12 @@ func (_c *IncidentCreate) defaults() {
 		v := incident.DefaultVersion
 		_c.mutation.SetVersion(v)
 	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
-		v := incident.DefaultCreatedAt()
-		_c.mutation.SetCreatedAt(v)
-	}
-	if _, ok := _c.mutation.UpdatedAt(); !ok {
-		v := incident.DefaultUpdatedAt()
-		_c.mutation.SetUpdatedAt(v)
-	}
 }
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *IncidentCreate) check() error {
-	if _, ok := _c.mutation.Title(); !ok {
-		return &ValidationError{Name: "title", err: errors.New(`ent: missing required field "Incident.title"`)}
-	}
-	if v, ok := _c.mutation.Title(); ok {
-		if err := incident.TitleValidator(v); err != nil {
-			return &ValidationError{Name: "title", err: fmt.Errorf(`ent: validator failed for field "Incident.title": %w`, err)}
-		}
-	}
-	if _, ok := _c.mutation.Status(); !ok {
-		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Incident.status"`)}
-	}
 	if _, ok := _c.mutation.GetType(); !ok {
 		return &ValidationError{Name: "type", err: errors.New(`ent: missing required field "Incident.type"`)}
-	}
-	if _, ok := _c.mutation.Priority(); !ok {
-		return &ValidationError{Name: "priority", err: errors.New(`ent: missing required field "Incident.priority"`)}
-	}
-	if v, ok := _c.mutation.Priority(); ok {
-		if err := incident.PriorityValidator(v); err != nil {
-			return &ValidationError{Name: "priority", err: fmt.Errorf(`ent: validator failed for field "Incident.priority": %w`, err)}
-		}
 	}
 	if _, ok := _c.mutation.Severity(); !ok {
 		return &ValidationError{Name: "severity", err: errors.New(`ent: missing required field "Incident.severity"`)}
@@ -660,12 +535,12 @@ func (_c *IncidentCreate) check() error {
 			return &ValidationError{Name: "incident_number", err: fmt.Errorf(`ent: validator failed for field "Incident.incident_number": %w`, err)}
 		}
 	}
-	if _, ok := _c.mutation.ReporterID(); !ok {
-		return &ValidationError{Name: "reporter_id", err: errors.New(`ent: missing required field "Incident.reporter_id"`)}
+	if _, ok := _c.mutation.WorkItemID(); !ok {
+		return &ValidationError{Name: "work_item_id", err: errors.New(`ent: missing required field "Incident.work_item_id"`)}
 	}
-	if v, ok := _c.mutation.ReporterID(); ok {
-		if err := incident.ReporterIDValidator(v); err != nil {
-			return &ValidationError{Name: "reporter_id", err: fmt.Errorf(`ent: validator failed for field "Incident.reporter_id": %w`, err)}
+	if v, ok := _c.mutation.WorkItemID(); ok {
+		if err := incident.WorkItemIDValidator(v); err != nil {
+			return &ValidationError{Name: "work_item_id", err: fmt.Errorf(`ent: validator failed for field "Incident.work_item_id": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.DetectedAt(); !ok {
@@ -683,14 +558,6 @@ func (_c *IncidentCreate) check() error {
 	if _, ok := _c.mutation.Source(); !ok {
 		return &ValidationError{Name: "source", err: errors.New(`ent: missing required field "Incident.source"`)}
 	}
-	if _, ok := _c.mutation.TenantID(); !ok {
-		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "Incident.tenant_id"`)}
-	}
-	if v, ok := _c.mutation.TenantID(); ok {
-		if err := incident.TenantIDValidator(v); err != nil {
-			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "Incident.tenant_id": %w`, err)}
-		}
-	}
 	if _, ok := _c.mutation.Version(); !ok {
 		return &ValidationError{Name: "version", err: errors.New(`ent: missing required field "Incident.version"`)}
 	}
@@ -699,11 +566,8 @@ func (_c *IncidentCreate) check() error {
 			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "Incident.version": %w`, err)}
 		}
 	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
-		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "Incident.created_at"`)}
-	}
-	if _, ok := _c.mutation.UpdatedAt(); !ok {
-		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Incident.updated_at"`)}
+	if len(_c.mutation.WorkItemIDs()) == 0 {
+		return &ValidationError{Name: "work_item", err: errors.New(`ent: missing required edge "Incident.work_item"`)}
 	}
 	return nil
 }
@@ -732,25 +596,9 @@ func (_c *IncidentCreate) createSpec() (*Incident, *sqlgraph.CreateSpec) {
 		_spec = sqlgraph.NewCreateSpec(incident.Table, sqlgraph.NewFieldSpec(incident.FieldID, field.TypeInt))
 	)
 	_spec.OnConflict = _c.conflict
-	if value, ok := _c.mutation.Title(); ok {
-		_spec.SetField(incident.FieldTitle, field.TypeString, value)
-		_node.Title = value
-	}
-	if value, ok := _c.mutation.Description(); ok {
-		_spec.SetField(incident.FieldDescription, field.TypeString, value)
-		_node.Description = value
-	}
-	if value, ok := _c.mutation.Status(); ok {
-		_spec.SetField(incident.FieldStatus, field.TypeString, value)
-		_node.Status = value
-	}
 	if value, ok := _c.mutation.GetType(); ok {
 		_spec.SetField(incident.FieldType, field.TypeString, value)
 		_node.Type = value
-	}
-	if value, ok := _c.mutation.Priority(); ok {
-		_spec.SetField(incident.FieldPriority, field.TypeString, value)
-		_node.Priority = value
 	}
 	if value, ok := _c.mutation.Severity(); ok {
 		_spec.SetField(incident.FieldSeverity, field.TypeString, value)
@@ -767,14 +615,6 @@ func (_c *IncidentCreate) createSpec() (*Incident, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.IncidentNumber(); ok {
 		_spec.SetField(incident.FieldIncidentNumber, field.TypeString, value)
 		_node.IncidentNumber = value
-	}
-	if value, ok := _c.mutation.ReporterID(); ok {
-		_spec.SetField(incident.FieldReporterID, field.TypeInt, value)
-		_node.ReporterID = value
-	}
-	if value, ok := _c.mutation.WorkItemID(); ok {
-		_spec.SetField(incident.FieldWorkItemID, field.TypeInt, value)
-		_node.WorkItemID = value
 	}
 	if value, ok := _c.mutation.AssigneeID(); ok {
 		_spec.SetField(incident.FieldAssigneeID, field.TypeInt, value)
@@ -840,21 +680,9 @@ func (_c *IncidentCreate) createSpec() (*Incident, *sqlgraph.CreateSpec) {
 		_spec.SetField(incident.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
 	}
-	if value, ok := _c.mutation.TenantID(); ok {
-		_spec.SetField(incident.FieldTenantID, field.TypeInt, value)
-		_node.TenantID = value
-	}
 	if value, ok := _c.mutation.Version(); ok {
 		_spec.SetField(incident.FieldVersion, field.TypeInt, value)
 		_node.Version = value
-	}
-	if value, ok := _c.mutation.CreatedAt(); ok {
-		_spec.SetField(incident.FieldCreatedAt, field.TypeTime, value)
-		_node.CreatedAt = value
-	}
-	if value, ok := _c.mutation.UpdatedAt(); ok {
-		_spec.SetField(incident.FieldUpdatedAt, field.TypeTime, value)
-		_node.UpdatedAt = value
 	}
 	if value, ok := _c.mutation.DeletedAt(); ok {
 		_spec.SetField(incident.FieldDeletedAt, field.TypeTime, value)
@@ -972,6 +800,23 @@ func (_c *IncidentCreate) createSpec() (*Incident, *sqlgraph.CreateSpec) {
 		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
+	if nodes := _c.mutation.WorkItemIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: true,
+			Table:   incident.WorkItemTable,
+			Columns: []string{incident.WorkItemColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(ticket.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.WorkItemID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
 	return _node, _spec
 }
 
@@ -979,7 +824,7 @@ func (_c *IncidentCreate) createSpec() (*Incident, *sqlgraph.CreateSpec) {
 // of the `INSERT` statement. For example:
 //
 //	client.Incident.Create().
-//		SetTitle(v).
+//		SetType(v).
 //		OnConflict(
 //			// Update the row with the new values
 //			// the was proposed for insertion.
@@ -988,7 +833,7 @@ func (_c *IncidentCreate) createSpec() (*Incident, *sqlgraph.CreateSpec) {
 //		// Override some of the fields with custom
 //		// update values.
 //		Update(func(u *ent.IncidentUpsert) {
-//			SetTitle(v+v).
+//			SetType(v+v).
 //		}).
 //		Exec(ctx)
 func (_c *IncidentCreate) OnConflict(opts ...sql.ConflictOption) *IncidentUpsertOne {
@@ -1024,48 +869,6 @@ type (
 	}
 )
 
-// SetTitle sets the "title" field.
-func (u *IncidentUpsert) SetTitle(v string) *IncidentUpsert {
-	u.Set(incident.FieldTitle, v)
-	return u
-}
-
-// UpdateTitle sets the "title" field to the value that was provided on create.
-func (u *IncidentUpsert) UpdateTitle() *IncidentUpsert {
-	u.SetExcluded(incident.FieldTitle)
-	return u
-}
-
-// SetDescription sets the "description" field.
-func (u *IncidentUpsert) SetDescription(v string) *IncidentUpsert {
-	u.Set(incident.FieldDescription, v)
-	return u
-}
-
-// UpdateDescription sets the "description" field to the value that was provided on create.
-func (u *IncidentUpsert) UpdateDescription() *IncidentUpsert {
-	u.SetExcluded(incident.FieldDescription)
-	return u
-}
-
-// ClearDescription clears the value of the "description" field.
-func (u *IncidentUpsert) ClearDescription() *IncidentUpsert {
-	u.SetNull(incident.FieldDescription)
-	return u
-}
-
-// SetStatus sets the "status" field.
-func (u *IncidentUpsert) SetStatus(v string) *IncidentUpsert {
-	u.Set(incident.FieldStatus, v)
-	return u
-}
-
-// UpdateStatus sets the "status" field to the value that was provided on create.
-func (u *IncidentUpsert) UpdateStatus() *IncidentUpsert {
-	u.SetExcluded(incident.FieldStatus)
-	return u
-}
-
 // SetType sets the "type" field.
 func (u *IncidentUpsert) SetType(v string) *IncidentUpsert {
 	u.Set(incident.FieldType, v)
@@ -1075,18 +878,6 @@ func (u *IncidentUpsert) SetType(v string) *IncidentUpsert {
 // UpdateType sets the "type" field to the value that was provided on create.
 func (u *IncidentUpsert) UpdateType() *IncidentUpsert {
 	u.SetExcluded(incident.FieldType)
-	return u
-}
-
-// SetPriority sets the "priority" field.
-func (u *IncidentUpsert) SetPriority(v string) *IncidentUpsert {
-	u.Set(incident.FieldPriority, v)
-	return u
-}
-
-// UpdatePriority sets the "priority" field to the value that was provided on create.
-func (u *IncidentUpsert) UpdatePriority() *IncidentUpsert {
-	u.SetExcluded(incident.FieldPriority)
 	return u
 }
 
@@ -1138,24 +929,6 @@ func (u *IncidentUpsert) UpdateIncidentNumber() *IncidentUpsert {
 	return u
 }
 
-// SetReporterID sets the "reporter_id" field.
-func (u *IncidentUpsert) SetReporterID(v int) *IncidentUpsert {
-	u.Set(incident.FieldReporterID, v)
-	return u
-}
-
-// UpdateReporterID sets the "reporter_id" field to the value that was provided on create.
-func (u *IncidentUpsert) UpdateReporterID() *IncidentUpsert {
-	u.SetExcluded(incident.FieldReporterID)
-	return u
-}
-
-// AddReporterID adds v to the "reporter_id" field.
-func (u *IncidentUpsert) AddReporterID(v int) *IncidentUpsert {
-	u.Add(incident.FieldReporterID, v)
-	return u
-}
-
 // SetWorkItemID sets the "work_item_id" field.
 func (u *IncidentUpsert) SetWorkItemID(v int) *IncidentUpsert {
 	u.Set(incident.FieldWorkItemID, v)
@@ -1165,18 +938,6 @@ func (u *IncidentUpsert) SetWorkItemID(v int) *IncidentUpsert {
 // UpdateWorkItemID sets the "work_item_id" field to the value that was provided on create.
 func (u *IncidentUpsert) UpdateWorkItemID() *IncidentUpsert {
 	u.SetExcluded(incident.FieldWorkItemID)
-	return u
-}
-
-// AddWorkItemID adds v to the "work_item_id" field.
-func (u *IncidentUpsert) AddWorkItemID(v int) *IncidentUpsert {
-	u.Add(incident.FieldWorkItemID, v)
-	return u
-}
-
-// ClearWorkItemID clears the value of the "work_item_id" field.
-func (u *IncidentUpsert) ClearWorkItemID() *IncidentUpsert {
-	u.SetNull(incident.FieldWorkItemID)
 	return u
 }
 
@@ -1456,24 +1217,6 @@ func (u *IncidentUpsert) ClearMetadata() *IncidentUpsert {
 	return u
 }
 
-// SetTenantID sets the "tenant_id" field.
-func (u *IncidentUpsert) SetTenantID(v int) *IncidentUpsert {
-	u.Set(incident.FieldTenantID, v)
-	return u
-}
-
-// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
-func (u *IncidentUpsert) UpdateTenantID() *IncidentUpsert {
-	u.SetExcluded(incident.FieldTenantID)
-	return u
-}
-
-// AddTenantID adds v to the "tenant_id" field.
-func (u *IncidentUpsert) AddTenantID(v int) *IncidentUpsert {
-	u.Add(incident.FieldTenantID, v)
-	return u
-}
-
 // SetVersion sets the "version" field.
 func (u *IncidentUpsert) SetVersion(v int) *IncidentUpsert {
 	u.Set(incident.FieldVersion, v)
@@ -1489,30 +1232,6 @@ func (u *IncidentUpsert) UpdateVersion() *IncidentUpsert {
 // AddVersion adds v to the "version" field.
 func (u *IncidentUpsert) AddVersion(v int) *IncidentUpsert {
 	u.Add(incident.FieldVersion, v)
-	return u
-}
-
-// SetCreatedAt sets the "created_at" field.
-func (u *IncidentUpsert) SetCreatedAt(v time.Time) *IncidentUpsert {
-	u.Set(incident.FieldCreatedAt, v)
-	return u
-}
-
-// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
-func (u *IncidentUpsert) UpdateCreatedAt() *IncidentUpsert {
-	u.SetExcluded(incident.FieldCreatedAt)
-	return u
-}
-
-// SetUpdatedAt sets the "updated_at" field.
-func (u *IncidentUpsert) SetUpdatedAt(v time.Time) *IncidentUpsert {
-	u.Set(incident.FieldUpdatedAt, v)
-	return u
-}
-
-// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
-func (u *IncidentUpsert) UpdateUpdatedAt() *IncidentUpsert {
-	u.SetExcluded(incident.FieldUpdatedAt)
 	return u
 }
 
@@ -1574,55 +1293,6 @@ func (u *IncidentUpsertOne) Update(set func(*IncidentUpsert)) *IncidentUpsertOne
 	return u
 }
 
-// SetTitle sets the "title" field.
-func (u *IncidentUpsertOne) SetTitle(v string) *IncidentUpsertOne {
-	return u.Update(func(s *IncidentUpsert) {
-		s.SetTitle(v)
-	})
-}
-
-// UpdateTitle sets the "title" field to the value that was provided on create.
-func (u *IncidentUpsertOne) UpdateTitle() *IncidentUpsertOne {
-	return u.Update(func(s *IncidentUpsert) {
-		s.UpdateTitle()
-	})
-}
-
-// SetDescription sets the "description" field.
-func (u *IncidentUpsertOne) SetDescription(v string) *IncidentUpsertOne {
-	return u.Update(func(s *IncidentUpsert) {
-		s.SetDescription(v)
-	})
-}
-
-// UpdateDescription sets the "description" field to the value that was provided on create.
-func (u *IncidentUpsertOne) UpdateDescription() *IncidentUpsertOne {
-	return u.Update(func(s *IncidentUpsert) {
-		s.UpdateDescription()
-	})
-}
-
-// ClearDescription clears the value of the "description" field.
-func (u *IncidentUpsertOne) ClearDescription() *IncidentUpsertOne {
-	return u.Update(func(s *IncidentUpsert) {
-		s.ClearDescription()
-	})
-}
-
-// SetStatus sets the "status" field.
-func (u *IncidentUpsertOne) SetStatus(v string) *IncidentUpsertOne {
-	return u.Update(func(s *IncidentUpsert) {
-		s.SetStatus(v)
-	})
-}
-
-// UpdateStatus sets the "status" field to the value that was provided on create.
-func (u *IncidentUpsertOne) UpdateStatus() *IncidentUpsertOne {
-	return u.Update(func(s *IncidentUpsert) {
-		s.UpdateStatus()
-	})
-}
-
 // SetType sets the "type" field.
 func (u *IncidentUpsertOne) SetType(v string) *IncidentUpsertOne {
 	return u.Update(func(s *IncidentUpsert) {
@@ -1634,20 +1304,6 @@ func (u *IncidentUpsertOne) SetType(v string) *IncidentUpsertOne {
 func (u *IncidentUpsertOne) UpdateType() *IncidentUpsertOne {
 	return u.Update(func(s *IncidentUpsert) {
 		s.UpdateType()
-	})
-}
-
-// SetPriority sets the "priority" field.
-func (u *IncidentUpsertOne) SetPriority(v string) *IncidentUpsertOne {
-	return u.Update(func(s *IncidentUpsert) {
-		s.SetPriority(v)
-	})
-}
-
-// UpdatePriority sets the "priority" field to the value that was provided on create.
-func (u *IncidentUpsertOne) UpdatePriority() *IncidentUpsertOne {
-	return u.Update(func(s *IncidentUpsert) {
-		s.UpdatePriority()
 	})
 }
 
@@ -1707,27 +1363,6 @@ func (u *IncidentUpsertOne) UpdateIncidentNumber() *IncidentUpsertOne {
 	})
 }
 
-// SetReporterID sets the "reporter_id" field.
-func (u *IncidentUpsertOne) SetReporterID(v int) *IncidentUpsertOne {
-	return u.Update(func(s *IncidentUpsert) {
-		s.SetReporterID(v)
-	})
-}
-
-// AddReporterID adds v to the "reporter_id" field.
-func (u *IncidentUpsertOne) AddReporterID(v int) *IncidentUpsertOne {
-	return u.Update(func(s *IncidentUpsert) {
-		s.AddReporterID(v)
-	})
-}
-
-// UpdateReporterID sets the "reporter_id" field to the value that was provided on create.
-func (u *IncidentUpsertOne) UpdateReporterID() *IncidentUpsertOne {
-	return u.Update(func(s *IncidentUpsert) {
-		s.UpdateReporterID()
-	})
-}
-
 // SetWorkItemID sets the "work_item_id" field.
 func (u *IncidentUpsertOne) SetWorkItemID(v int) *IncidentUpsertOne {
 	return u.Update(func(s *IncidentUpsert) {
@@ -1735,24 +1370,10 @@ func (u *IncidentUpsertOne) SetWorkItemID(v int) *IncidentUpsertOne {
 	})
 }
 
-// AddWorkItemID adds v to the "work_item_id" field.
-func (u *IncidentUpsertOne) AddWorkItemID(v int) *IncidentUpsertOne {
-	return u.Update(func(s *IncidentUpsert) {
-		s.AddWorkItemID(v)
-	})
-}
-
 // UpdateWorkItemID sets the "work_item_id" field to the value that was provided on create.
 func (u *IncidentUpsertOne) UpdateWorkItemID() *IncidentUpsertOne {
 	return u.Update(func(s *IncidentUpsert) {
 		s.UpdateWorkItemID()
-	})
-}
-
-// ClearWorkItemID clears the value of the "work_item_id" field.
-func (u *IncidentUpsertOne) ClearWorkItemID() *IncidentUpsertOne {
-	return u.Update(func(s *IncidentUpsert) {
-		s.ClearWorkItemID()
 	})
 }
 
@@ -2078,27 +1699,6 @@ func (u *IncidentUpsertOne) ClearMetadata() *IncidentUpsertOne {
 	})
 }
 
-// SetTenantID sets the "tenant_id" field.
-func (u *IncidentUpsertOne) SetTenantID(v int) *IncidentUpsertOne {
-	return u.Update(func(s *IncidentUpsert) {
-		s.SetTenantID(v)
-	})
-}
-
-// AddTenantID adds v to the "tenant_id" field.
-func (u *IncidentUpsertOne) AddTenantID(v int) *IncidentUpsertOne {
-	return u.Update(func(s *IncidentUpsert) {
-		s.AddTenantID(v)
-	})
-}
-
-// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
-func (u *IncidentUpsertOne) UpdateTenantID() *IncidentUpsertOne {
-	return u.Update(func(s *IncidentUpsert) {
-		s.UpdateTenantID()
-	})
-}
-
 // SetVersion sets the "version" field.
 func (u *IncidentUpsertOne) SetVersion(v int) *IncidentUpsertOne {
 	return u.Update(func(s *IncidentUpsert) {
@@ -2117,34 +1717,6 @@ func (u *IncidentUpsertOne) AddVersion(v int) *IncidentUpsertOne {
 func (u *IncidentUpsertOne) UpdateVersion() *IncidentUpsertOne {
 	return u.Update(func(s *IncidentUpsert) {
 		s.UpdateVersion()
-	})
-}
-
-// SetCreatedAt sets the "created_at" field.
-func (u *IncidentUpsertOne) SetCreatedAt(v time.Time) *IncidentUpsertOne {
-	return u.Update(func(s *IncidentUpsert) {
-		s.SetCreatedAt(v)
-	})
-}
-
-// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
-func (u *IncidentUpsertOne) UpdateCreatedAt() *IncidentUpsertOne {
-	return u.Update(func(s *IncidentUpsert) {
-		s.UpdateCreatedAt()
-	})
-}
-
-// SetUpdatedAt sets the "updated_at" field.
-func (u *IncidentUpsertOne) SetUpdatedAt(v time.Time) *IncidentUpsertOne {
-	return u.Update(func(s *IncidentUpsert) {
-		s.SetUpdatedAt(v)
-	})
-}
-
-// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
-func (u *IncidentUpsertOne) UpdateUpdatedAt() *IncidentUpsertOne {
-	return u.Update(func(s *IncidentUpsert) {
-		s.UpdateUpdatedAt()
 	})
 }
 
@@ -2304,7 +1876,7 @@ func (_c *IncidentCreateBulk) ExecX(ctx context.Context) {
 //		// Override some of the fields with custom
 //		// update values.
 //		Update(func(u *ent.IncidentUpsert) {
-//			SetTitle(v+v).
+//			SetType(v+v).
 //		}).
 //		Exec(ctx)
 func (_c *IncidentCreateBulk) OnConflict(opts ...sql.ConflictOption) *IncidentUpsertBulk {
@@ -2373,55 +1945,6 @@ func (u *IncidentUpsertBulk) Update(set func(*IncidentUpsert)) *IncidentUpsertBu
 	return u
 }
 
-// SetTitle sets the "title" field.
-func (u *IncidentUpsertBulk) SetTitle(v string) *IncidentUpsertBulk {
-	return u.Update(func(s *IncidentUpsert) {
-		s.SetTitle(v)
-	})
-}
-
-// UpdateTitle sets the "title" field to the value that was provided on create.
-func (u *IncidentUpsertBulk) UpdateTitle() *IncidentUpsertBulk {
-	return u.Update(func(s *IncidentUpsert) {
-		s.UpdateTitle()
-	})
-}
-
-// SetDescription sets the "description" field.
-func (u *IncidentUpsertBulk) SetDescription(v string) *IncidentUpsertBulk {
-	return u.Update(func(s *IncidentUpsert) {
-		s.SetDescription(v)
-	})
-}
-
-// UpdateDescription sets the "description" field to the value that was provided on create.
-func (u *IncidentUpsertBulk) UpdateDescription() *IncidentUpsertBulk {
-	return u.Update(func(s *IncidentUpsert) {
-		s.UpdateDescription()
-	})
-}
-
-// ClearDescription clears the value of the "description" field.
-func (u *IncidentUpsertBulk) ClearDescription() *IncidentUpsertBulk {
-	return u.Update(func(s *IncidentUpsert) {
-		s.ClearDescription()
-	})
-}
-
-// SetStatus sets the "status" field.
-func (u *IncidentUpsertBulk) SetStatus(v string) *IncidentUpsertBulk {
-	return u.Update(func(s *IncidentUpsert) {
-		s.SetStatus(v)
-	})
-}
-
-// UpdateStatus sets the "status" field to the value that was provided on create.
-func (u *IncidentUpsertBulk) UpdateStatus() *IncidentUpsertBulk {
-	return u.Update(func(s *IncidentUpsert) {
-		s.UpdateStatus()
-	})
-}
-
 // SetType sets the "type" field.
 func (u *IncidentUpsertBulk) SetType(v string) *IncidentUpsertBulk {
 	return u.Update(func(s *IncidentUpsert) {
@@ -2433,20 +1956,6 @@ func (u *IncidentUpsertBulk) SetType(v string) *IncidentUpsertBulk {
 func (u *IncidentUpsertBulk) UpdateType() *IncidentUpsertBulk {
 	return u.Update(func(s *IncidentUpsert) {
 		s.UpdateType()
-	})
-}
-
-// SetPriority sets the "priority" field.
-func (u *IncidentUpsertBulk) SetPriority(v string) *IncidentUpsertBulk {
-	return u.Update(func(s *IncidentUpsert) {
-		s.SetPriority(v)
-	})
-}
-
-// UpdatePriority sets the "priority" field to the value that was provided on create.
-func (u *IncidentUpsertBulk) UpdatePriority() *IncidentUpsertBulk {
-	return u.Update(func(s *IncidentUpsert) {
-		s.UpdatePriority()
 	})
 }
 
@@ -2506,27 +2015,6 @@ func (u *IncidentUpsertBulk) UpdateIncidentNumber() *IncidentUpsertBulk {
 	})
 }
 
-// SetReporterID sets the "reporter_id" field.
-func (u *IncidentUpsertBulk) SetReporterID(v int) *IncidentUpsertBulk {
-	return u.Update(func(s *IncidentUpsert) {
-		s.SetReporterID(v)
-	})
-}
-
-// AddReporterID adds v to the "reporter_id" field.
-func (u *IncidentUpsertBulk) AddReporterID(v int) *IncidentUpsertBulk {
-	return u.Update(func(s *IncidentUpsert) {
-		s.AddReporterID(v)
-	})
-}
-
-// UpdateReporterID sets the "reporter_id" field to the value that was provided on create.
-func (u *IncidentUpsertBulk) UpdateReporterID() *IncidentUpsertBulk {
-	return u.Update(func(s *IncidentUpsert) {
-		s.UpdateReporterID()
-	})
-}
-
 // SetWorkItemID sets the "work_item_id" field.
 func (u *IncidentUpsertBulk) SetWorkItemID(v int) *IncidentUpsertBulk {
 	return u.Update(func(s *IncidentUpsert) {
@@ -2534,24 +2022,10 @@ func (u *IncidentUpsertBulk) SetWorkItemID(v int) *IncidentUpsertBulk {
 	})
 }
 
-// AddWorkItemID adds v to the "work_item_id" field.
-func (u *IncidentUpsertBulk) AddWorkItemID(v int) *IncidentUpsertBulk {
-	return u.Update(func(s *IncidentUpsert) {
-		s.AddWorkItemID(v)
-	})
-}
-
 // UpdateWorkItemID sets the "work_item_id" field to the value that was provided on create.
 func (u *IncidentUpsertBulk) UpdateWorkItemID() *IncidentUpsertBulk {
 	return u.Update(func(s *IncidentUpsert) {
 		s.UpdateWorkItemID()
-	})
-}
-
-// ClearWorkItemID clears the value of the "work_item_id" field.
-func (u *IncidentUpsertBulk) ClearWorkItemID() *IncidentUpsertBulk {
-	return u.Update(func(s *IncidentUpsert) {
-		s.ClearWorkItemID()
 	})
 }
 
@@ -2877,27 +2351,6 @@ func (u *IncidentUpsertBulk) ClearMetadata() *IncidentUpsertBulk {
 	})
 }
 
-// SetTenantID sets the "tenant_id" field.
-func (u *IncidentUpsertBulk) SetTenantID(v int) *IncidentUpsertBulk {
-	return u.Update(func(s *IncidentUpsert) {
-		s.SetTenantID(v)
-	})
-}
-
-// AddTenantID adds v to the "tenant_id" field.
-func (u *IncidentUpsertBulk) AddTenantID(v int) *IncidentUpsertBulk {
-	return u.Update(func(s *IncidentUpsert) {
-		s.AddTenantID(v)
-	})
-}
-
-// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
-func (u *IncidentUpsertBulk) UpdateTenantID() *IncidentUpsertBulk {
-	return u.Update(func(s *IncidentUpsert) {
-		s.UpdateTenantID()
-	})
-}
-
 // SetVersion sets the "version" field.
 func (u *IncidentUpsertBulk) SetVersion(v int) *IncidentUpsertBulk {
 	return u.Update(func(s *IncidentUpsert) {
@@ -2916,34 +2369,6 @@ func (u *IncidentUpsertBulk) AddVersion(v int) *IncidentUpsertBulk {
 func (u *IncidentUpsertBulk) UpdateVersion() *IncidentUpsertBulk {
 	return u.Update(func(s *IncidentUpsert) {
 		s.UpdateVersion()
-	})
-}
-
-// SetCreatedAt sets the "created_at" field.
-func (u *IncidentUpsertBulk) SetCreatedAt(v time.Time) *IncidentUpsertBulk {
-	return u.Update(func(s *IncidentUpsert) {
-		s.SetCreatedAt(v)
-	})
-}
-
-// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
-func (u *IncidentUpsertBulk) UpdateCreatedAt() *IncidentUpsertBulk {
-	return u.Update(func(s *IncidentUpsert) {
-		s.UpdateCreatedAt()
-	})
-}
-
-// SetUpdatedAt sets the "updated_at" field.
-func (u *IncidentUpsertBulk) SetUpdatedAt(v time.Time) *IncidentUpsertBulk {
-	return u.Update(func(s *IncidentUpsert) {
-		s.SetUpdatedAt(v)
-	})
-}
-
-// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
-func (u *IncidentUpsertBulk) UpdateUpdatedAt() *IncidentUpsertBulk {
-	return u.Update(func(s *IncidentUpsert) {
-		s.UpdateUpdatedAt()
 	})
 }
 

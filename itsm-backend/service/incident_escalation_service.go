@@ -9,6 +9,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/slaviolation"
+	"itsm-backend/ent/ticket"
 
 	"go.uber.org/zap"
 )
@@ -143,7 +144,7 @@ func (s *IncidentEscalationService) DeleteEscalationRule(ctx context.Context, id
 
 // CheckAndEscalate 检查事件是否需要升级
 func (s *IncidentEscalationService) CheckAndEscalate(ctx context.Context, incidentID int) (*ent.Incident, error) {
-	incidentEnt, err := s.client.Incident.Get(ctx, incidentID)
+	incidentEnt, err := s.client.Incident.Query().Where(incident.IDEQ(incidentID)).WithWorkItem().Only(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -171,6 +172,10 @@ func (s *IncidentEscalationService) CheckAndEscalate(ctx context.Context, incide
 
 // getMatchingRules 获取匹配的升级规则
 func (s *IncidentEscalationService) getMatchingRules(ctx context.Context, incidentEnt *ent.Incident) ([]*ent.IncidentEscalationRule, error) {
+	workItem, err := incidentEnt.Edges.WorkItemOrErr()
+	if err != nil {
+		return nil, fmt.Errorf("incident WorkItem is required: %w", err)
+	}
 	all, err := s.client.IncidentEscalationRule.Query().All(ctx)
 	if err != nil {
 		return nil, err
@@ -178,12 +183,12 @@ func (s *IncidentEscalationService) getMatchingRules(ctx context.Context, incide
 
 	var matchedRules []*ent.IncidentEscalationRule
 	for _, rule := range all {
-		if rule.TenantID != incidentEnt.TenantID || !rule.IsActive {
+		if rule.TenantID != workItem.TenantID || !rule.IsActive {
 			continue
 		}
 
 		// 匹配优先级
-		if rule.PriorityMatch != "" && rule.PriorityMatch != incidentEnt.Priority {
+		if rule.PriorityMatch != "" && rule.PriorityMatch != workItem.Priority {
 			continue
 		}
 		// 匹配分类
@@ -198,6 +203,10 @@ func (s *IncidentEscalationService) getMatchingRules(ctx context.Context, incide
 
 // shouldEscalate 检查是否应该升级
 func (s *IncidentEscalationService) shouldEscalate(ctx context.Context, incidentEnt *ent.Incident, rule *ent.IncidentEscalationRule) (bool, error) {
+	workItem, err := incidentEnt.Edges.WorkItemOrErr()
+	if err != nil {
+		return false, fmt.Errorf("incident WorkItem is required: %w", err)
+	}
 	switch rule.TriggerType {
 	case "time_based":
 		// 基于时间升级
@@ -207,7 +216,7 @@ func (s *IncidentEscalationService) shouldEscalate(ctx context.Context, incident
 		// 基于SLA违规升级 - 检查是否存在未解决的SLA违规
 		violations, err := s.client.SLAViolation.Query().
 			Where(
-				slaviolation.TenantIDEQ(incidentEnt.TenantID),
+				slaviolation.TenantIDEQ(workItem.TenantID),
 				slaviolation.IsResolved(false),
 			).
 			All(ctx)
@@ -237,7 +246,13 @@ func (s *IncidentEscalationService) escalateIncident(ctx context.Context, incide
 		SetEscalationLevel(rule.EscalationLevel)
 
 	if rule.ToStatus != "" {
-		update.SetStatus(rule.ToStatus)
+		workItem, edgeErr := incidentEnt.Edges.WorkItemOrErr()
+		if edgeErr != nil {
+			return nil, fmt.Errorf("incident WorkItem is required: %w", edgeErr)
+		}
+		if _, edgeErr = workItem.Update().SetStatus(rule.ToStatus).Save(ctx); edgeErr != nil {
+			return nil, edgeErr
+		}
 	}
 
 	if rule.TargetAssigneeID > 0 {
@@ -301,9 +316,9 @@ func (s *IncidentEscalationService) ProcessEscalations(ctx context.Context, tena
 	// 查询所有待处理的事件
 	incidents, err := s.client.Incident.Query().
 		Where(
-			incident.TenantIDEQ(tenantID),
-			incident.StatusIn("new", "investigating"),
+			incident.HasWorkItemWith(ticket.TenantIDEQ(tenantID), ticket.StatusIn("new", "investigating")),
 		).
+		WithWorkItem().
 		All(ctx)
 	if err != nil {
 		return err

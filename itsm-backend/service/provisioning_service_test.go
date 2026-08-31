@@ -56,10 +56,8 @@ func provisioningTestFixture(t *testing.T, client *ent.Client, label string) (sr
 	require.NoError(t, err)
 
 	req, err := client.ServiceRequest.Create().
-		SetTenantID(tenant.ID).
 		SetTicketID(tkt.ID).
 		SetCatalogID(1).
-		SetRequesterID(requester.ID).
 		SetComplianceAck(true).
 		SetDataClassification("internal").
 		Save(ctx)
@@ -88,10 +86,10 @@ func TestCreateTaskFromServiceRequest_RejectsWithoutApprovalDecision(t *testing.
 	middleware.InvalidateAllPermissionCaches() // 避免不同测试的租户ID复用造成缓存串号
 	ctx := context.Background()
 
-	sr, _ := provisioningTestFixture(t, client, "no-decision")
+	sr, ticket := provisioningTestFixture(t, client, "no-decision")
 
 	svc := NewProvisioningService(client, zaptest.NewLogger(t).Sugar())
-	task, err := svc.CreateTaskFromServiceRequest(ctx, sr.ID, sr.TenantID, provisioningTestActorID, provisioningTestRole)
+	task, err := svc.CreateTaskFromServiceRequest(ctx, sr.ID, ticket.TenantID, provisioningTestActorID, provisioningTestRole)
 	require.Error(t, err)
 	assert.Nil(t, task)
 
@@ -124,16 +122,16 @@ func TestCreateTaskFromServiceRequest_SucceedsWithApprovalDecision(t *testing.T)
 		SetActorID(1).
 		SetAction("approve").
 		SetDecision("approved").
-		SetTenantID(sr.TenantID).
+		SetTenantID(ticket.TenantID).
 		Save(ctx)
 	require.NoError(t, err)
 
 	svc := NewProvisioningService(client, zaptest.NewLogger(t).Sugar())
-	task, err := svc.CreateTaskFromServiceRequest(ctx, sr.ID, sr.TenantID, provisioningTestActorID, provisioningTestRole)
+	task, err := svc.CreateTaskFromServiceRequest(ctx, sr.ID, ticket.TenantID, provisioningTestActorID, provisioningTestRole)
 	require.NoError(t, err)
 	require.NotNil(t, task)
 	assert.Equal(t, sr.ID, task.ServiceRequestID)
-	assert.Equal(t, sr.TenantID, task.TenantID)
+	assert.Equal(t, ticket.TenantID, task.TenantID)
 
 	count, err := client.ProvisioningTask.Query().Count(ctx)
 	require.NoError(t, err)
@@ -152,7 +150,7 @@ func TestCreateTaskFromServiceRequest_CrossTenantApprovalDoesNotUnlock(t *testin
 	ctx := context.Background()
 
 	srA, ticketA := provisioningTestFixture(t, client, "tenant-a")
-	srB, _ := provisioningTestFixture(t, client, "tenant-b")
+	_, ticketB := provisioningTestFixture(t, client, "tenant-b")
 
 	// The strongest form of the isolation check: a decision with tenant A's own ticket ID as
 	// business_id, but filed under tenant B. If the Exist query ever dropped its tenant_id
@@ -169,12 +167,12 @@ func TestCreateTaskFromServiceRequest_CrossTenantApprovalDoesNotUnlock(t *testin
 		SetActorID(1).
 		SetAction("approve").
 		SetDecision("approved").
-		SetTenantID(srB.TenantID).
+		SetTenantID(ticketB.TenantID).
 		Save(ctx)
 	require.NoError(t, err)
 
 	svc := NewProvisioningService(client, zaptest.NewLogger(t).Sugar())
-	task, err := svc.CreateTaskFromServiceRequest(ctx, srA.ID, srA.TenantID, provisioningTestActorID, provisioningTestRole)
+	task, err := svc.CreateTaskFromServiceRequest(ctx, srA.ID, ticketA.TenantID, provisioningTestActorID, provisioningTestRole)
 	require.Error(t, err, "a same-business_id approval decision filed under a different tenant must not unlock provisioning")
 	assert.Nil(t, task)
 

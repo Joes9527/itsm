@@ -165,6 +165,8 @@ func (Ticket) Edges() []ent.Edge {
 		edge.To("sla_violations", SLAViolation.Type),
 		edge.To("sla_alert_history", SLAAlertHistory.Type),
 		edge.To("root_cause_analyses", RootCauseAnalysis.Type),
+		edge.To("incident", Incident.Type).Unique(),
+		edge.To("service_request", ServiceRequest.Type).Unique(),
 		edge.To("feishu_syncs", FeishuTicketSync.Type),
 		edge.From("requester", User.Type).
 			Ref("tickets").

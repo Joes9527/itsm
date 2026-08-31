@@ -11,6 +11,7 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/ent"
 	"itsm-backend/middleware"
+	"itsm-backend/tests/testutil"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -69,18 +70,10 @@ func TestGlobalSearch_SearchCaseInsensitiveAndNumber(t *testing.T) {
 		Save(t.Context())
 	require.NoError(t, err)
 
-	_, err = client.Incident.Create().
-		SetTitle("Database latency alert").
-		SetDescription("Primary database is slow").
-		SetStatus("new").
-		SetType("incident").
-		SetPriority("high").
-		SetSeverity("high").
-		SetIncidentNumber("INC-GLOBAL-002").
-		SetReporterID(user.ID).
-		SetTenantID(tenant.ID).
-		Save(t.Context())
-	require.NoError(t, err)
+	testutil.CreateIncident(t, t.Context(), client, tenant.ID, user.ID, testutil.IncidentFixture{
+		Number: "INC-GLOBAL-002", Title: "Database latency alert",
+		Description: "Primary database is slow", Status: "new", Priority: "high", Severity: "high",
+	})
 
 	tests := []struct {
 		name         string

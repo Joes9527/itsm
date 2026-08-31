@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/incidentalert"
 	"itsm-backend/ent/incidentmetric"
+	"itsm-backend/ent/ticket"
 
 	"go.uber.org/zap"
 )
@@ -143,7 +144,7 @@ func (s *IncidentMonitoringService) createIncidentMetricFromPrometheus(ctx conte
 		return fmt.Errorf("invalid metric value %q: %w", value, err)
 	}
 	query := s.client.Incident.Query().
-		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil())
+		Where(incident.HasWorkItemWith(ticket.TenantIDEQ(tenantID)), incident.DeletedAtIsNil())
 	if rawID := metric["incident_id"]; rawID != "" {
 		incidentID, err := strconv.Atoi(rawID)
 		if err != nil || incidentID <= 0 {
@@ -251,9 +252,10 @@ func (s *IncidentMonitoringService) AnalyzeIncidentImpact(ctx context.Context, i
 	incidentEntity, err := s.client.Incident.Query().
 		Where(
 			incident.IDEQ(incidentID),
-			incident.TenantIDEQ(tenantID),
+			incident.HasWorkItemWith(ticket.TenantIDEQ(tenantID)),
 			incident.DeletedAtIsNil(),
 		).
+		WithWorkItem().
 		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -275,14 +277,18 @@ func (s *IncidentMonitoringService) AnalyzeIncidentImpact(ctx context.Context, i
 	}
 
 	// 分析影响
+	workItem, err := incidentEntity.Edges.WorkItemOrErr()
+	if err != nil {
+		return nil, fmt.Errorf("incident WorkItem is required: %w", err)
+	}
 	impactAnalysis := map[string]interface{}{
 		"incident_id":     incidentID,
 		"incident_number": incidentEntity.IncidentNumber,
-		"title":           incidentEntity.Title,
+		"title":           workItem.Title,
 		"severity":        incidentEntity.Severity,
-		"priority":        incidentEntity.Priority,
-		"status":          incidentEntity.Status,
-		"created_at":      incidentEntity.CreatedAt,
+		"priority":        workItem.Priority,
+		"status":          workItem.Status,
+		"created_at":      workItem.CreatedAt,
 		"analysis_time":   time.Now(),
 	}
 
@@ -328,12 +334,11 @@ func (s *IncidentMonitoringService) AnalyzeIncidentImpact(ctx context.Context, i
 	// 更新事件的影响分析
 	_, err = s.client.Incident.UpdateOneID(incidentID).
 		Where(
-			incident.TenantIDEQ(tenantID),
+			incident.HasWorkItemWith(ticket.TenantIDEQ(tenantID)),
 			incident.DeletedAtIsNil(),
 			incident.VersionEQ(incidentEntity.Version),
 		).
 		SetImpactAnalysis(impactAnalysis).
-		SetUpdatedAt(time.Now()).
 		AddVersion(1).
 		Save(ctx)
 	if err != nil {
@@ -347,7 +352,11 @@ func (s *IncidentMonitoringService) AnalyzeIncidentImpact(ctx context.Context, i
 // calculateTimeImpact 计算时间影响
 func (s *IncidentMonitoringService) calculateTimeImpact(incident *ent.Incident) map[string]interface{} {
 	now := time.Now()
-	createdAt := incident.CreatedAt
+	workItem, err := incident.Edges.WorkItemOrErr()
+	if err != nil {
+		return map[string]interface{}{"error": "incident WorkItem is missing"}
+	}
+	createdAt := workItem.CreatedAt
 
 	timeImpact := map[string]interface{}{
 		"hours_since_creation": now.Sub(createdAt).Hours(),
@@ -432,11 +441,12 @@ func (s *IncidentMonitoringService) GenerateIncidentReport(ctx context.Context, 
 	// 构建查询
 	query := s.client.Incident.Query().
 		Where(
-			incident.TenantIDEQ(tenantID),
+			incident.HasWorkItemWith(
+				ticket.TenantIDEQ(tenantID), ticket.CreatedAtGTE(startTime), ticket.CreatedAtLTE(endTime),
+			),
 			incident.DeletedAtIsNil(),
-			incident.CreatedAtGTE(startTime),
-			incident.CreatedAtLTE(endTime),
-		)
+		).
+		WithWorkItem()
 
 	// 应用过滤器
 	if req.IncidentID != nil {
@@ -446,10 +456,10 @@ func (s *IncidentMonitoringService) GenerateIncidentReport(ctx context.Context, 
 		query = query.Where(incident.CategoryEQ(*req.Category))
 	}
 	if req.Priority != nil {
-		query = query.Where(incident.PriorityEQ(*req.Priority))
+		query = query.Where(incident.HasWorkItemWith(ticket.PriorityEQ(*req.Priority)))
 	}
 	if req.Status != nil {
-		query = query.Where(incident.StatusEQ(*req.Status))
+		query = query.Where(incident.HasWorkItemWith(ticket.StatusEQ(*req.Status)))
 	}
 
 	// 获取事件列表
@@ -517,13 +527,17 @@ func (s *IncidentMonitoringService) calculateIncidentStats(incidents []*ent.Inci
 	var escalatedCount int
 
 	for _, incident := range incidents {
-		switch incident.Status {
+		workItem, err := incident.Edges.WorkItemOrErr()
+		if err != nil {
+			continue
+		}
+		switch workItem.Status {
 		case "new", "acknowledged", "assigned", "triaged", "in_progress", "on_hold", "escalated":
 			stats.OpenIncidents++
 		case "resolved":
 			stats.ResolvedIncidents++
 			if !incident.ResolvedAt.IsZero() {
-				resolutionTime := incident.ResolvedAt.Sub(incident.CreatedAt).Hours()
+				resolutionTime := incident.ResolvedAt.Sub(workItem.CreatedAt).Hours()
 				totalResolutionTime += resolutionTime
 				resolvedCount++
 			}
@@ -534,7 +548,7 @@ func (s *IncidentMonitoringService) calculateIncidentStats(incidents []*ent.Inci
 		if incident.Severity == "critical" {
 			stats.CriticalIncidents++
 		}
-		if incident.Priority == "high" || incident.Priority == "critical" {
+		if workItem.Priority == "high" || workItem.Priority == "critical" {
 			stats.HighPriorityIncidents++
 		}
 		if incident.EscalationLevel > 0 {
@@ -655,57 +669,8 @@ func (s *IncidentMonitoringService) getIncidentAlerts(ctx context.Context, incid
 func (s *IncidentMonitoringService) convertIncidentsToResponse(incidents []*ent.Incident) []dto.IncidentResponse {
 	responses := make([]dto.IncidentResponse, len(incidents))
 	for i, incident := range incidents {
-		var impactAnalysis *dto.ImpactAnalysis
-		if incident.ImpactAnalysis != nil {
-			impactAnalysis = &dto.ImpactAnalysis{}
-			dto.MapToStruct(incident.ImpactAnalysis, impactAnalysis)
-		}
-
-		var rootCause *dto.RootCause
-		if incident.RootCause != nil {
-			rootCause = &dto.RootCause{}
-			dto.MapToStruct(incident.RootCause, rootCause)
-		}
-
-		var resolutionSteps []dto.ResolutionStep
-		if incident.ResolutionSteps != nil {
-			dto.MapSliceToStructSlice(incident.ResolutionSteps, &resolutionSteps)
-		}
-
-		responses[i] = dto.IncidentResponse{
-			ID:              incident.ID,
-			Title:           incident.Title,
-			Description:     incident.Description,
-			Status:          incident.Status,
-			Priority:        incident.Priority,
-			Severity:        incident.Severity,
-			IncidentNumber:  incident.IncidentNumber,
-			ReporterID:      incident.ReporterID,
-			Category:        incident.Category,
-			Subcategory:     incident.Subcategory,
-			ImpactAnalysis:  impactAnalysis,
-			RootCause:       rootCause,
-			ResolutionSteps: resolutionSteps,
-			DetectedAt:      incident.DetectedAt,
-			EscalationLevel: incident.EscalationLevel,
-			IsAutomated:     incident.IsAutomated,
-			Source:          incident.Source,
-			Metadata:        incident.Metadata,
-			TenantID:        incident.TenantID,
-			CreatedAt:       incident.CreatedAt,
-			UpdatedAt:       incident.UpdatedAt,
-		}
-		if incident.AssigneeID > 0 {
-			responses[i].AssigneeID = &incident.AssigneeID
-		}
-		if !incident.ResolvedAt.IsZero() {
-			responses[i].ResolvedAt = &incident.ResolvedAt
-		}
-		if !incident.ClosedAt.IsZero() {
-			responses[i].ClosedAt = &incident.ClosedAt
-		}
-		if !incident.EscalatedAt.IsZero() {
-			responses[i].EscalatedAt = &incident.EscalatedAt
+		if response := dto.ToIncidentResponse(incident); response != nil {
+			responses[i] = *response
 		}
 	}
 	return responses

@@ -53,6 +53,9 @@ export const CreateServiceModal: React.FC<CreateServiceModalProps> = ({
       width={600}
     >
       <Form form={form} layout="vertical" style={{ marginTop: 20 }}>
+		<Form.Item name="targetClass" initialValue="service_request_item" hidden>
+		  <Input />
+		</Form.Item>
         <Form.Item
           label={t('serviceCatalog.name')}
           name="name"

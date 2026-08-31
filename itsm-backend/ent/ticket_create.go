@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"itsm-backend/ent/feishuticketsync"
+	"itsm-backend/ent/incident"
 	"itsm-backend/ent/rootcauseanalysis"
+	"itsm-backend/ent/servicerequest"
 	"itsm-backend/ent/slaalerthistory"
 	"itsm-backend/ent/slaviolation"
 	"itsm-backend/ent/ticket"
@@ -734,6 +736,44 @@ func (_c *TicketCreate) AddRootCauseAnalyses(v ...*RootCauseAnalysis) *TicketCre
 	return _c.AddRootCauseAnalysisIDs(ids...)
 }
 
+// SetIncidentID sets the "incident" edge to the Incident entity by ID.
+func (_c *TicketCreate) SetIncidentID(id int) *TicketCreate {
+	_c.mutation.SetIncidentID(id)
+	return _c
+}
+
+// SetNillableIncidentID sets the "incident" edge to the Incident entity by ID if the given value is not nil.
+func (_c *TicketCreate) SetNillableIncidentID(id *int) *TicketCreate {
+	if id != nil {
+		_c = _c.SetIncidentID(*id)
+	}
+	return _c
+}
+
+// SetIncident sets the "incident" edge to the Incident entity.
+func (_c *TicketCreate) SetIncident(v *Incident) *TicketCreate {
+	return _c.SetIncidentID(v.ID)
+}
+
+// SetServiceRequestID sets the "service_request" edge to the ServiceRequest entity by ID.
+func (_c *TicketCreate) SetServiceRequestID(id int) *TicketCreate {
+	_c.mutation.SetServiceRequestID(id)
+	return _c
+}
+
+// SetNillableServiceRequestID sets the "service_request" edge to the ServiceRequest entity by ID if the given value is not nil.
+func (_c *TicketCreate) SetNillableServiceRequestID(id *int) *TicketCreate {
+	if id != nil {
+		_c = _c.SetServiceRequestID(*id)
+	}
+	return _c
+}
+
+// SetServiceRequest sets the "service_request" edge to the ServiceRequest entity.
+func (_c *TicketCreate) SetServiceRequest(v *ServiceRequest) *TicketCreate {
+	return _c.SetServiceRequestID(v.ID)
+}
+
 // AddFeishuSyncIDs adds the "feishu_syncs" edge to the FeishuTicketSync entity by IDs.
 func (_c *TicketCreate) AddFeishuSyncIDs(ids ...int) *TicketCreate {
 	_c.mutation.AddFeishuSyncIDs(ids...)
@@ -1270,6 +1310,38 @@ func (_c *TicketCreate) createSpec() (*Ticket, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(rootcauseanalysis.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.IncidentIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   ticket.IncidentTable,
+			Columns: []string{ticket.IncidentColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(incident.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.ServiceRequestIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   ticket.ServiceRequestTable,
+			Columns: []string{ticket.ServiceRequestColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(servicerequest.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

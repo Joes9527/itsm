@@ -99,8 +99,9 @@ func TestHandler_Create_Success(t *testing.T) {
 	r, _, _ := scSetup(t)
 	uid := scUID()
 	req := dto.CreateServiceCatalogRequest{
-		Name:     "Catalog-" + uid,
-		Category: "hardware",
+		TargetClass: TargetClassServiceRequestItem,
+		Name:        "Catalog-" + uid,
+		Category:    "hardware",
 	}
 	resp := scDoReq(t, r, "POST", "/api/v1/service-catalogs", req)
 	require.Equal(t, common.SuccessCode, resp.Code, "body=%s", mustSC(resp))
@@ -127,6 +128,7 @@ func TestHandler_Create_MissingCategory(t *testing.T) {
 func TestHandler_Create_CloudServiceRequiresCIType(t *testing.T) {
 	r, _, _ := scSetup(t)
 	req := dto.CreateServiceCatalogRequest{
+		TargetClass:    TargetClassServiceRequestItem,
 		Name:           "Catalog-Cld",
 		Category:       "cloud",
 		CloudServiceID: 5, // CITypeID 缺省为 0
@@ -140,7 +142,8 @@ func TestHandler_List(t *testing.T) {
 	// 先创建一条
 	uid := scUID()
 	create := scDoReq(t, r, "POST", "/api/v1/service-catalogs", dto.CreateServiceCatalogRequest{
-		Name: "ListCat-" + uid, Category: "hw",
+		TargetClass: TargetClassServiceRequestItem,
+		Name:        "ListCat-" + uid, Category: "hw",
 	})
 	require.Equal(t, common.SuccessCode, create.Code)
 
@@ -155,7 +158,8 @@ func TestHandler_Get_Success(t *testing.T) {
 	r, _, _ := scSetup(t)
 	uid := scUID()
 	create := scDoReq(t, r, "POST", "/api/v1/service-catalogs", dto.CreateServiceCatalogRequest{
-		Name: "GetCat-" + uid, Category: "hw",
+		TargetClass: TargetClassServiceRequestItem,
+		Name:        "GetCat-" + uid, Category: "hw",
 	})
 	require.Equal(t, common.SuccessCode, create.Code)
 	id := int(create.Data.(map[string]interface{})["id"].(float64))
@@ -181,14 +185,15 @@ func TestHandler_Update_Success(t *testing.T) {
 	r, _, _ := scSetup(t)
 	uid := scUID()
 	create := scDoReq(t, r, "POST", "/api/v1/service-catalogs", dto.CreateServiceCatalogRequest{
-		Name: "UpdCat-" + uid, Category: "hw",
+		TargetClass: TargetClassServiceRequestItem,
+		Name:        "UpdCat-" + uid, Category: "hw",
 	})
 	require.Equal(t, common.SuccessCode, create.Code)
 	id := int(create.Data.(map[string]interface{})["id"].(float64))
 
 	updated := "Renamed-" + uid
 	resp := scDoReq(t, r, "PUT", "/api/v1/service-catalogs/"+strconv.Itoa(id),
-		dto.UpdateServiceCatalogRequest{Name: updated, Status: "disabled"})
+		dto.UpdateServiceCatalogRequest{Name: updated, Status: "disabled", TargetClass: TargetClassServiceRequestItem})
 	require.Equal(t, common.SuccessCode, resp.Code, "body=%s", mustSC(resp))
 	assert.Equal(t, updated, resp.Data.(map[string]interface{})["name"])
 	assert.Equal(t, "disabled", resp.Data.(map[string]interface{})["status"])
@@ -198,7 +203,8 @@ func TestHandler_Delete_Success(t *testing.T) {
 	r, _, _ := scSetup(t)
 	uid := scUID()
 	create := scDoReq(t, r, "POST", "/api/v1/service-catalogs", dto.CreateServiceCatalogRequest{
-		Name: "DelCat-" + uid, Category: "hw",
+		TargetClass: TargetClassServiceRequestItem,
+		Name:        "DelCat-" + uid, Category: "hw",
 	})
 	require.Equal(t, common.SuccessCode, create.Code)
 	id := int(create.Data.(map[string]interface{})["id"].(float64))
@@ -219,15 +225,18 @@ func TestHandler_CreateRejectsDuplicateNameAndInvalidDeliveryTime(t *testing.T) 
 	r, _, _ := scSetup(t)
 	name := "Duplicate-" + scUID()
 	first := scDoReq(t, r, "POST", "/api/v1/service-catalogs", dto.CreateServiceCatalogRequest{
-		Name: name, Category: "hardware",
+		TargetClass: TargetClassServiceRequestItem,
+		Name:        name, Category: "hardware",
 	})
 	require.Equal(t, common.SuccessCode, first.Code)
 	duplicate := scDoReq(t, r, "POST", "/api/v1/service-catalogs", dto.CreateServiceCatalogRequest{
-		Name: strings.ToUpper(name), Category: "hardware",
+		TargetClass: TargetClassServiceRequestItem,
+		Name:        strings.ToUpper(name), Category: "hardware",
 	})
 	assert.Equal(t, common.ConflictCode, duplicate.Code)
 	invalid := scDoReq(t, r, "POST", "/api/v1/service-catalogs", dto.CreateServiceCatalogRequest{
-		Name: "Invalid Delivery " + scUID(), Category: "hardware", DeliveryTime: "tomorrow",
+		TargetClass: TargetClassServiceRequestItem,
+		Name:        "Invalid Delivery " + scUID(), Category: "hardware", DeliveryTime: "tomorrow",
 	})
 	assert.Equal(t, common.ParamErrorCode, invalid.Code)
 }
@@ -248,11 +257,13 @@ func TestHandler_CreateValidatesReferencedTenantResources(t *testing.T) {
 	require.NoError(t, err)
 
 	foreignCI := scDoReq(t, r, "POST", "/api/v1/service-catalogs", dto.CreateServiceCatalogRequest{
-		Name: "Foreign CI " + scUID(), Category: "cloud", CITypeID: foreignType.ID,
+		TargetClass: TargetClassServiceRequestItem,
+		Name:        "Foreign CI " + scUID(), Category: "cloud", CITypeID: foreignType.ID,
 	})
 	assert.Equal(t, common.ParamErrorCode, foreignCI.Code)
 	foreignCloudResp := scDoReq(t, r, "POST", "/api/v1/service-catalogs", dto.CreateServiceCatalogRequest{
-		Name: "Foreign Cloud " + scUID(), Category: "cloud",
+		TargetClass: TargetClassServiceRequestItem,
+		Name:        "Foreign Cloud " + scUID(), Category: "cloud",
 		CITypeID: localType.ID, CloudServiceID: foreignCloud.ID,
 	})
 	assert.Equal(t, common.ParamErrorCode, foreignCloudResp.Code)
@@ -262,7 +273,8 @@ func TestHandler_Search(t *testing.T) {
 	r, _, _ := scSetup(t)
 	uid := scUID()
 	scDoReq(t, r, "POST", "/api/v1/service-catalogs", dto.CreateServiceCatalogRequest{
-		Name: "SearchCat-" + uid, Category: "hw",
+		TargetClass: TargetClassServiceRequestItem,
+		Name:        "SearchCat-" + uid, Category: "hw",
 	})
 	resp := scDoReq(t, r, "GET", "/api/v1/service-catalogs/search?q=SearchCat", nil)
 	require.Equal(t, common.SuccessCode, resp.Code, "body=%s", mustSC(resp))
@@ -273,7 +285,8 @@ func TestHandler_Stats(t *testing.T) {
 	r, _, _ := scSetup(t)
 	uid := scUID()
 	scDoReq(t, r, "POST", "/api/v1/service-catalogs", dto.CreateServiceCatalogRequest{
-		Name: "StatsCat-" + uid, Category: "hw",
+		TargetClass: TargetClassServiceRequestItem,
+		Name:        "StatsCat-" + uid, Category: "hw",
 	})
 	resp := scDoReq(t, r, "GET", "/api/v1/service-catalogs/stats", nil)
 	require.Equal(t, common.SuccessCode, resp.Code, "body=%s", mustSC(resp))

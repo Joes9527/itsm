@@ -9,6 +9,7 @@ import (
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/tests/testutil"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -416,9 +417,9 @@ func TestProblemServiceAssociationsLifecycle(t *testing.T) {
 		SetTitle("T1").SetTicketNumber("T-001").SetRequesterID(user.ID).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 
-	incident1, err := client.Incident.Create().
-		SetTitle("I1").SetIncidentNumber("INC-001").SetReporterID(user.ID).SetTenantID(tenant.ID).Save(ctx)
-	require.NoError(t, err)
+	incident1 := testutil.CreateIncident(t, ctx, client, tenant.ID, user.ID, testutil.IncidentFixture{
+		Number: "INC-001", Title: "I1",
+	})
 
 	change1, err := client.Change.Create().
 		SetTitle("C1").SetCreatedBy(user.ID).SetTenantID(tenant.ID).Save(ctx)

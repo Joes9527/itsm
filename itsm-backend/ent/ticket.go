@@ -5,6 +5,8 @@ package ent
 import (
 	"encoding/json"
 	"fmt"
+	"itsm-backend/ent/incident"
+	"itsm-backend/ent/servicerequest"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/user"
 	"strings"
@@ -137,6 +139,10 @@ type TicketEdges struct {
 	SLAAlertHistory []*SLAAlertHistory `json:"sla_alert_history,omitempty"`
 	// RootCauseAnalyses holds the value of the root_cause_analyses edge.
 	RootCauseAnalyses []*RootCauseAnalysis `json:"root_cause_analyses,omitempty"`
+	// Incident holds the value of the incident edge.
+	Incident *Incident `json:"incident,omitempty"`
+	// ServiceRequest holds the value of the service_request edge.
+	ServiceRequest *ServiceRequest `json:"service_request,omitempty"`
 	// FeishuSyncs holds the value of the feishu_syncs edge.
 	FeishuSyncs []*FeishuTicketSync `json:"feishu_syncs,omitempty"`
 	// Requester holds the value of the requester edge.
@@ -147,7 +153,7 @@ type TicketEdges struct {
 	Category []*TicketCategory `json:"category,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [15]bool
+	loadedTypes [17]bool
 }
 
 // CommentsOrErr returns the Comments value or an error if the edge
@@ -249,10 +255,32 @@ func (e TicketEdges) RootCauseAnalysesOrErr() ([]*RootCauseAnalysis, error) {
 	return nil, &NotLoadedError{edge: "root_cause_analyses"}
 }
 
+// IncidentOrErr returns the Incident value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e TicketEdges) IncidentOrErr() (*Incident, error) {
+	if e.Incident != nil {
+		return e.Incident, nil
+	} else if e.loadedTypes[11] {
+		return nil, &NotFoundError{label: incident.Label}
+	}
+	return nil, &NotLoadedError{edge: "incident"}
+}
+
+// ServiceRequestOrErr returns the ServiceRequest value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e TicketEdges) ServiceRequestOrErr() (*ServiceRequest, error) {
+	if e.ServiceRequest != nil {
+		return e.ServiceRequest, nil
+	} else if e.loadedTypes[12] {
+		return nil, &NotFoundError{label: servicerequest.Label}
+	}
+	return nil, &NotLoadedError{edge: "service_request"}
+}
+
 // FeishuSyncsOrErr returns the FeishuSyncs value or an error if the edge
 // was not loaded in eager-loading.
 func (e TicketEdges) FeishuSyncsOrErr() ([]*FeishuTicketSync, error) {
-	if e.loadedTypes[11] {
+	if e.loadedTypes[13] {
 		return e.FeishuSyncs, nil
 	}
 	return nil, &NotLoadedError{edge: "feishu_syncs"}
@@ -263,7 +291,7 @@ func (e TicketEdges) FeishuSyncsOrErr() ([]*FeishuTicketSync, error) {
 func (e TicketEdges) RequesterOrErr() (*User, error) {
 	if e.Requester != nil {
 		return e.Requester, nil
-	} else if e.loadedTypes[12] {
+	} else if e.loadedTypes[14] {
 		return nil, &NotFoundError{label: user.Label}
 	}
 	return nil, &NotLoadedError{edge: "requester"}
@@ -274,7 +302,7 @@ func (e TicketEdges) RequesterOrErr() (*User, error) {
 func (e TicketEdges) AssigneeOrErr() (*User, error) {
 	if e.Assignee != nil {
 		return e.Assignee, nil
-	} else if e.loadedTypes[13] {
+	} else if e.loadedTypes[15] {
 		return nil, &NotFoundError{label: user.Label}
 	}
 	return nil, &NotLoadedError{edge: "assignee"}
@@ -283,7 +311,7 @@ func (e TicketEdges) AssigneeOrErr() (*User, error) {
 // CategoryOrErr returns the Category value or an error if the edge
 // was not loaded in eager-loading.
 func (e TicketEdges) CategoryOrErr() ([]*TicketCategory, error) {
-	if e.loadedTypes[14] {
+	if e.loadedTypes[16] {
 		return e.Category, nil
 	}
 	return nil, &NotLoadedError{edge: "category"}
@@ -695,6 +723,16 @@ func (_m *Ticket) QuerySLAAlertHistory() *SLAAlertHistoryQuery {
 // QueryRootCauseAnalyses queries the "root_cause_analyses" edge of the Ticket entity.
 func (_m *Ticket) QueryRootCauseAnalyses() *RootCauseAnalysisQuery {
 	return NewTicketClient(_m.config).QueryRootCauseAnalyses(_m)
+}
+
+// QueryIncident queries the "incident" edge of the Ticket entity.
+func (_m *Ticket) QueryIncident() *IncidentQuery {
+	return NewTicketClient(_m.config).QueryIncident(_m)
+}
+
+// QueryServiceRequest queries the "service_request" edge of the Ticket entity.
+func (_m *Ticket) QueryServiceRequest() *ServiceRequestQuery {
+	return NewTicketClient(_m.config).QueryServiceRequest(_m)
 }
 
 // QueryFeishuSyncs queries the "feishu_syncs" edge of the Ticket entity.

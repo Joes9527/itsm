@@ -7,8 +7,10 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"itsm-backend/ent/feishuticketsync"
+	"itsm-backend/ent/incident"
 	"itsm-backend/ent/predicate"
 	"itsm-backend/ent/rootcauseanalysis"
+	"itsm-backend/ent/servicerequest"
 	"itsm-backend/ent/slaalerthistory"
 	"itsm-backend/ent/slaviolation"
 	"itsm-backend/ent/ticket"
@@ -47,6 +49,8 @@ type TicketQuery struct {
 	withSLAViolations     *SLAViolationQuery
 	withSLAAlertHistory   *SLAAlertHistoryQuery
 	withRootCauseAnalyses *RootCauseAnalysisQuery
+	withIncident          *IncidentQuery
+	withServiceRequest    *ServiceRequestQuery
 	withFeishuSyncs       *FeishuTicketSyncQuery
 	withRequester         *UserQuery
 	withAssignee          *UserQuery
@@ -323,6 +327,50 @@ func (_q *TicketQuery) QueryRootCauseAnalyses() *RootCauseAnalysisQuery {
 			sqlgraph.From(ticket.Table, ticket.FieldID, selector),
 			sqlgraph.To(rootcauseanalysis.Table, rootcauseanalysis.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, ticket.RootCauseAnalysesTable, ticket.RootCauseAnalysesColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryIncident chains the current query on the "incident" edge.
+func (_q *TicketQuery) QueryIncident() *IncidentQuery {
+	query := (&IncidentClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(ticket.Table, ticket.FieldID, selector),
+			sqlgraph.To(incident.Table, incident.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, ticket.IncidentTable, ticket.IncidentColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryServiceRequest chains the current query on the "service_request" edge.
+func (_q *TicketQuery) QueryServiceRequest() *ServiceRequestQuery {
+	query := (&ServiceRequestClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(ticket.Table, ticket.FieldID, selector),
+			sqlgraph.To(servicerequest.Table, servicerequest.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, ticket.ServiceRequestTable, ticket.ServiceRequestColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -621,6 +669,8 @@ func (_q *TicketQuery) Clone() *TicketQuery {
 		withSLAViolations:     _q.withSLAViolations.Clone(),
 		withSLAAlertHistory:   _q.withSLAAlertHistory.Clone(),
 		withRootCauseAnalyses: _q.withRootCauseAnalyses.Clone(),
+		withIncident:          _q.withIncident.Clone(),
+		withServiceRequest:    _q.withServiceRequest.Clone(),
 		withFeishuSyncs:       _q.withFeishuSyncs.Clone(),
 		withRequester:         _q.withRequester.Clone(),
 		withAssignee:          _q.withAssignee.Clone(),
@@ -752,6 +802,28 @@ func (_q *TicketQuery) WithRootCauseAnalyses(opts ...func(*RootCauseAnalysisQuer
 	return _q
 }
 
+// WithIncident tells the query-builder to eager-load the nodes that are connected to
+// the "incident" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *TicketQuery) WithIncident(opts ...func(*IncidentQuery)) *TicketQuery {
+	query := (&IncidentClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withIncident = query
+	return _q
+}
+
+// WithServiceRequest tells the query-builder to eager-load the nodes that are connected to
+// the "service_request" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *TicketQuery) WithServiceRequest(opts ...func(*ServiceRequestQuery)) *TicketQuery {
+	query := (&ServiceRequestClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withServiceRequest = query
+	return _q
+}
+
 // WithFeishuSyncs tells the query-builder to eager-load the nodes that are connected to
 // the "feishu_syncs" edge. The optional arguments are used to configure the query builder of the edge.
 func (_q *TicketQuery) WithFeishuSyncs(opts ...func(*FeishuTicketSyncQuery)) *TicketQuery {
@@ -875,7 +947,7 @@ func (_q *TicketQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Ticke
 		nodes       = []*Ticket{}
 		withFKs     = _q.withFKs
 		_spec       = _q.querySpec()
-		loadedTypes = [15]bool{
+		loadedTypes = [17]bool{
 			_q.withComments != nil,
 			_q.withAttachments != nil,
 			_q.withTags != nil,
@@ -887,6 +959,8 @@ func (_q *TicketQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Ticke
 			_q.withSLAViolations != nil,
 			_q.withSLAAlertHistory != nil,
 			_q.withRootCauseAnalyses != nil,
+			_q.withIncident != nil,
+			_q.withServiceRequest != nil,
 			_q.withFeishuSyncs != nil,
 			_q.withRequester != nil,
 			_q.withAssignee != nil,
@@ -990,6 +1064,18 @@ func (_q *TicketQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Ticke
 			func(n *Ticket, e *RootCauseAnalysis) {
 				n.Edges.RootCauseAnalyses = append(n.Edges.RootCauseAnalyses, e)
 			}); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withIncident; query != nil {
+		if err := _q.loadIncident(ctx, query, nodes, nil,
+			func(n *Ticket, e *Incident) { n.Edges.Incident = e }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withServiceRequest; query != nil {
+		if err := _q.loadServiceRequest(ctx, query, nodes, nil,
+			func(n *Ticket, e *ServiceRequest) { n.Edges.ServiceRequest = e }); err != nil {
 			return nil, err
 		}
 	}
@@ -1369,6 +1455,60 @@ func (_q *TicketQuery) loadRootCauseAnalyses(ctx context.Context, query *RootCau
 	}
 	query.Where(predicate.RootCauseAnalysis(func(s *sql.Selector) {
 		s.Where(sql.InValues(s.C(ticket.RootCauseAnalysesColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.TicketID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "ticket_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *TicketQuery) loadIncident(ctx context.Context, query *IncidentQuery, nodes []*Ticket, init func(*Ticket), assign func(*Ticket, *Incident)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int]*Ticket)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(incident.FieldWorkItemID)
+	}
+	query.Where(predicate.Incident(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(ticket.IncidentColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.WorkItemID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "work_item_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *TicketQuery) loadServiceRequest(ctx context.Context, query *ServiceRequestQuery, nodes []*Ticket, init func(*Ticket), assign func(*Ticket, *ServiceRequest)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int]*Ticket)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(servicerequest.FieldTicketID)
+	}
+	query.Where(predicate.ServiceRequest(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(ticket.ServiceRequestColumn), fks...))
 	}))
 	neighbors, err := query.All(ctx)
 	if err != nil {

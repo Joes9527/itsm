@@ -440,14 +440,18 @@ func (s *CIRelationshipService) GetCIImpactAnalysis(ctx context.Context, ciID, t
 		})
 	}
 	affectedIncidents := make([]dto.AffectedIncident, 0)
-	incidents, err := root.QueryIncidents().All(ctx)
+	incidents, err := root.QueryIncidents().WithWorkItem().All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query affected incidents: %w", err)
 	}
 	for _, in := range incidents {
+		workItem, edgeErr := in.Edges.WorkItemOrErr()
+		if edgeErr != nil {
+			return nil, fmt.Errorf("affected incident %d is missing its WorkItem: %w", in.ID, edgeErr)
+		}
 		affectedIncidents = append(affectedIncidents, dto.AffectedIncident{
-			ID: in.ID, Title: in.Title, Status: in.Status, Severity: in.Severity,
-			CreatedAt: in.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			ID: in.ID, Title: workItem.Title, Status: workItem.Status, Severity: in.Severity,
+			CreatedAt: workItem.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		})
 	}
 

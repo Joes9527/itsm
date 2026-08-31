@@ -2,11 +2,11 @@ package service_request
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/servicerequest"
+	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/user"
 )
 
@@ -20,15 +20,16 @@ func NewEntRepository(client *ent.Client) *EntRepository {
 
 // toDomain converts Ent model to Domain entity
 func (r *EntRepository) toDomain(req *ent.ServiceRequest) *ServiceRequest {
-	if req == nil {
+	if req == nil || req.Edges.WorkItem == nil {
 		return nil
 	}
+	workItem := req.Edges.WorkItem
 	return &ServiceRequest{
 		ID:                 req.ID,
-		TenantID:           req.TenantID,
+		TenantID:           workItem.TenantID,
 		TicketID:           req.TicketID,
 		CatalogID:          req.CatalogID,
-		RequesterID:        req.RequesterID,
+		RequesterID:        workItem.RequesterID,
 		CiID:               req.CiID,
 		FormData:           req.FormData,
 		CostCenter:         req.CostCenter,
@@ -47,8 +48,10 @@ func (r *EntRepository) toDomain(req *ent.ServiceRequest) *ServiceRequest {
 		CompletedAt:        itemOrNil(req.CompletedAt),
 		CompletionNote:     req.CompletionNote,
 		LastError:          req.LastError,
-		CreatedAt:          req.CreatedAt,
-		UpdatedAt:          req.UpdatedAt,
+		CreatedAt:          workItem.CreatedAt,
+		UpdatedAt:          workItem.UpdatedAt,
+		TicketTitle:        workItem.Title,
+		TicketStatus:       workItem.Status,
 	}
 }
 
@@ -66,55 +69,10 @@ func optionalInt(value int) *int {
 	return &value
 }
 
-func (r *EntRepository) Create(ctx context.Context, req *ServiceRequest) (*ServiceRequest, error) {
-	create := r.client.ServiceRequest.Create().
-		SetTenantID(req.TenantID).
-		SetTicketID(req.TicketID).
-		SetCatalogID(req.CatalogID).
-		SetRequesterID(req.RequesterID).
-		SetComplianceAck(req.ComplianceAck).
-		SetNeedsPublicIP(req.NeedsPublicIP).
-		SetDataClassification(req.DataClassification)
-
-	if req.FormData != nil {
-		create.SetFormData(req.FormData)
-	}
-	if req.CostCenter != "" {
-		create.SetCostCenter(req.CostCenter)
-	}
-	if req.SourceIPWhitelist != nil {
-		create.SetSourceIPWhitelist(req.SourceIPWhitelist)
-	}
-	if req.ExpireAt != nil {
-		create.SetExpireAt(*req.ExpireAt)
-	}
-	if req.ContactName != "" {
-		create.SetContactName(req.ContactName)
-	}
-	if req.ContactEmail != "" {
-		create.SetContactEmail(req.ContactEmail)
-	}
-	if req.Quantity > 0 {
-		create.SetQuantity(req.Quantity)
-	}
-	if req.ExpectedAt != nil {
-		create.SetExpectedAt(*req.ExpectedAt)
-	}
-	if req.CiID > 0 {
-		create.SetCiID(req.CiID)
-	}
-
-	savedReq, err := create.Save(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("creating service request: %w", err)
-	}
-
-	return r.toDomain(savedReq), nil
-}
-
 func (r *EntRepository) Get(ctx context.Context, id, tenantID int) (*ServiceRequest, error) {
 	req, err := r.client.ServiceRequest.Query().
-		Where(servicerequest.IDEQ(id), servicerequest.TenantIDEQ(tenantID), servicerequest.DeletedAtIsNil()).
+		Where(servicerequest.IDEQ(id), servicerequest.HasWorkItemWith(ticket.TenantIDEQ(tenantID)), servicerequest.DeletedAtIsNil()).
+		WithWorkItem().
 		Only(ctx)
 	if err != nil {
 		return nil, err
@@ -124,7 +82,8 @@ func (r *EntRepository) Get(ctx context.Context, id, tenantID int) (*ServiceRequ
 
 func (r *EntRepository) GetByTicketID(ctx context.Context, ticketID, tenantID int) (*ServiceRequest, error) {
 	sr, err := r.client.ServiceRequest.Query().
-		Where(servicerequest.TicketID(ticketID), servicerequest.TenantID(tenantID), servicerequest.DeletedAtIsNil()).
+		Where(servicerequest.TicketID(ticketID), servicerequest.HasWorkItemWith(ticket.TenantIDEQ(tenantID)), servicerequest.DeletedAtIsNil()).
+		WithWorkItem().
 		Only(ctx)
 	if err != nil {
 		return nil, err
@@ -134,10 +93,10 @@ func (r *EntRepository) GetByTicketID(ctx context.Context, ticketID, tenantID in
 
 func (r *EntRepository) List(ctx context.Context, tenantID int, filters ListFilters) ([]*ServiceRequest, int, error) {
 	query := r.client.ServiceRequest.Query().
-		Where(servicerequest.TenantID(tenantID), servicerequest.DeletedAtIsNil())
+		Where(servicerequest.HasWorkItemWith(ticket.TenantIDEQ(tenantID)), servicerequest.DeletedAtIsNil())
 
 	if filters.UserID > 0 {
-		query.Where(servicerequest.RequesterID(filters.UserID))
+		query.Where(servicerequest.HasWorkItemWith(ticket.TenantIDEQ(tenantID), ticket.RequesterIDEQ(filters.UserID)))
 	}
 
 	total, err := query.Count(ctx)
@@ -157,7 +116,7 @@ func (r *EntRepository) List(ctx context.Context, tenantID int, filters ListFilt
 	query.Limit(filters.Size).Offset((filters.Page - 1) * filters.Size)
 
 	// Default sort by CreatedAt DESC
-	rows, err := query.Order(ent.Desc(servicerequest.FieldCreatedAt)).All(ctx)
+	rows, err := query.WithWorkItem().Order(ent.Desc(servicerequest.FieldID)).All(ctx)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -173,7 +132,7 @@ func (r *EntRepository) List(ctx context.Context, tenantID int, filters ListFilt
 func (r *EntRepository) Update(ctx context.Context, req *ServiceRequest) error {
 	update := r.client.ServiceRequest.UpdateOneID(req.ID).
 		Where(
-			servicerequest.TenantIDEQ(req.TenantID),
+			servicerequest.HasWorkItemWith(ticket.TenantIDEQ(req.TenantID)),
 			servicerequest.DeletedAtIsNil(),
 			servicerequest.VersionEQ(req.Version),
 		).
@@ -196,7 +155,7 @@ func (r *EntRepository) Update(ctx context.Context, req *ServiceRequest) error {
 func (r *EntRepository) Delete(ctx context.Context, req *ServiceRequest) error {
 	return r.client.ServiceRequest.UpdateOneID(req.ID).
 		Where(
-			servicerequest.TenantIDEQ(req.TenantID),
+			servicerequest.HasWorkItemWith(ticket.TenantIDEQ(req.TenantID)),
 			servicerequest.DeletedAtIsNil(),
 			servicerequest.VersionEQ(req.Version),
 		).

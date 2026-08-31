@@ -24,35 +24,36 @@ func CanEditIncident(actor ActionActor) dto.ActionPermission {
 }
 
 func CanResolveIncident(actor ActionActor, incident *ent.Incident) dto.ActionPermission {
-	if incident.Status != common.IncidentStatusInProgress {
+	if incidentWorkItemStatus(incident) != common.IncidentStatusInProgress {
 		return dto.ActionPermission{Allowed: false, Reason: "只有处理中的事件可以解决"}
 	}
 	return CanEditIncident(actor)
 }
 
 func CanCloseIncident(actor ActionActor, incident *ent.Incident) dto.ActionPermission {
-	if incident.Status != common.IncidentStatusResolved {
+	if incidentWorkItemStatus(incident) != common.IncidentStatusResolved {
 		return dto.ActionPermission{Allowed: false, Reason: "只有已解决的事件可以关闭"}
 	}
 	return CanEditIncident(actor)
 }
 
 func CanReopenIncident(actor ActionActor, incident *ent.Incident) dto.ActionPermission {
-	if incident.Status != common.IncidentStatusResolved && incident.Status != common.IncidentStatusClosed {
+	status := incidentWorkItemStatus(incident)
+	if status != common.IncidentStatusResolved && status != common.IncidentStatusClosed {
 		return dto.ActionPermission{Allowed: false, Reason: "只有已解决或已关闭的事件可以重新打开"}
 	}
 	return CanEditIncident(actor)
 }
 
 func CanEscalateIncident(actor ActionActor, incident *ent.Incident) dto.ActionPermission {
-	if common.IsIncidentFinalStatus(incident.Status) {
+	if common.IsIncidentFinalStatus(incidentWorkItemStatus(incident)) {
 		return dto.ActionPermission{Allowed: false, Reason: "终态事件不能升级"}
 	}
 	return CanEditIncident(actor)
 }
 
 func CanAssignIncident(actor ActionActor, incident *ent.Incident) dto.ActionPermission {
-	if !canAssignIncidentStatus(incident.Status) {
+	if !canAssignIncidentStatus(incidentWorkItemStatus(incident)) {
 		return dto.ActionPermission{Allowed: false, Reason: "已解决或已关闭的事件不能重新指派"}
 	}
 	return CanEditIncident(actor)
@@ -62,7 +63,8 @@ func CanMarkMajorIncident(actor ActionActor, incident *ent.Incident) dto.ActionP
 	if incident.IsMajorIncident {
 		return dto.ActionPermission{Allowed: false, Reason: "已经是重大事件"}
 	}
-	if incident.Status == common.IncidentStatusResolved || common.IsIncidentFinalStatus(incident.Status) {
+	status := incidentWorkItemStatus(incident)
+	if status == common.IncidentStatusResolved || common.IsIncidentFinalStatus(status) {
 		return dto.ActionPermission{Allowed: false, Reason: "已解决、已关闭或已取消的事件不能标记为重大事件"}
 	}
 	return CanEditIncident(actor)
@@ -97,7 +99,7 @@ func hasIncidentProblemRelation(ctx context.Context, actor ActionActor, incident
 }
 
 func CanConvertToProblem(ctx context.Context, actor ActionActor, incident *ent.Incident) dto.ActionPermission {
-	if common.IsIncidentFinalStatus(incident.Status) {
+	if common.IsIncidentFinalStatus(incidentWorkItemStatus(incident)) {
 		return dto.ActionPermission{Allowed: false, Reason: "已关闭或已取消的事件不能转为问题"}
 	}
 	converted, err := hasIncidentProblemRelation(ctx, actor, incident)
@@ -108,6 +110,17 @@ func CanConvertToProblem(ctx context.Context, actor ActionActor, incident *ent.I
 		return dto.ActionPermission{Allowed: false, Reason: "已经转为问题"}
 	}
 	return CanEditIncident(actor)
+}
+
+func incidentWorkItemStatus(incident *ent.Incident) string {
+	if incident == nil {
+		return ""
+	}
+	workItem, err := incident.Edges.WorkItemOrErr()
+	if err != nil || workItem == nil {
+		return ""
+	}
+	return workItem.Status
 }
 
 func BuildIncidentActions(ctx context.Context, actor ActionActor, incident *ent.Incident) map[string]dto.ActionPermission {

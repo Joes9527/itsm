@@ -11,8 +11,8 @@
 //   - user_id 缺失（<=0）或 content 为空的历史评论事件会被跳过并计入 skipped，不会报错——
 //     ticket_comments.user_id 是 Positive() 必填、content 是 NotEmpty() 必填，旧数据里这两种
 //     不合规的行本来就无法映射成一条合法的 ticket_comments。
-//   - incident.work_item_id 仍为空（还没跑过 cmd/backfill_incident_work_item）的 Incident 下的
-//     评论事件会被跳过并计入 skipped——本工具不负责创建 WorkItem，只负责搬评论。
+//   - incident.work_item_id 异常为空的评论事件会被跳过并计入 skipped。migration 021 会在
+//     收敛权威模型前拒绝这类数据，因此该分支只是防御性检查。
 //   - 所属 Incident 已软删除的评论事件会被跳过。
 //   - is_internal/mentions 一律用默认值（false / 空），不从 incident_events.data 里解析——
 //     旧数据这两个字段不可靠，见设计文档 §4.2 第 1 步。
@@ -64,7 +64,7 @@ func resolvePlan(ctx context.Context, client *ent.Client, event *ent.IncidentEve
 		return commentPlan{}, false, "所属 incident 已被软删除", nil
 	}
 	if inc.WorkItemID == 0 {
-		return commentPlan{}, false, "incident 尚未回填 work_item_id（先跑 cmd/backfill_incident_work_item）", nil
+		return commentPlan{}, false, "incident 缺少权威 work_item_id", nil
 	}
 	if event.UserID <= 0 {
 		return commentPlan{}, false, "评论事件缺少可归属的 user_id", nil
@@ -150,9 +150,7 @@ func backfillOne(ctx context.Context, client *ent.Client, event *ent.IncidentEve
 // previewBackfill 是 -dry-run 用的只读版本：跑跟 backfillOne 完全相同的判断链路
 // （resolvePlan + alreadyMigrated），但不调用 Create，只统计数量。skipReasons 按
 // resolvePlan/alreadyMigrated 给出的原因字符串分组计数，而不是只给一个笼统的总数——
-// 不同跳过原因的运维含义差别很大（比如"incident 尚未回填 work_item_id"意味着这些评论
-// 一旦前端切换就永久不可见，需要操作员在正式回填前先跑 cmd/backfill_incident_work_item），
-// 折叠成一个数字会让操作员看不出该不该先处理别的问题。
+// 不同跳过原因的运维含义差别很大，折叠成一个数字会让操作员看不出该先处理哪类数据问题。
 //
 // failed 统计 resolvePlan/alreadyMigrated 查询本身出错（不是主动判定该跳过）的行数，
 // 处理方式跟下面 main() 里真实回填循环的 failed 计数完全对应：单独一行查询出错不应该

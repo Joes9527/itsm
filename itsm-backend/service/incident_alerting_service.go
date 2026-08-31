@@ -13,6 +13,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/incidentalert"
+	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/user"
 
 	"github.com/spf13/viper"
@@ -217,7 +218,7 @@ func (s *IncidentAlertingService) validateAlertRequest(ctx context.Context, req 
 		return fmt.Errorf("incident id is required")
 	}
 	exists, err := s.client.Incident.Query().
-		Where(incident.IDEQ(req.IncidentID), incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
+		Where(incident.IDEQ(req.IncidentID), incident.HasWorkItemWith(ticket.TenantIDEQ(tenantID)), incident.DeletedAtIsNil()).
 		Exist(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to validate incident: %w", err)
@@ -667,9 +668,10 @@ func (s *IncidentAlertingService) ProcessEscalationAlerts(ctx context.Context, i
 	incidentEntity, err := s.client.Incident.Query().
 		Where(
 			incident.IDEQ(incidentID),
-			incident.TenantIDEQ(tenantID),
+			incident.HasWorkItemWith(ticket.TenantIDEQ(tenantID)),
 			incident.DeletedAtIsNil(),
 		).
+		WithWorkItem().
 		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -718,7 +720,7 @@ func (s *IncidentAlertingService) ProcessEscalationAlerts(ctx context.Context, i
 		Recipients: recipients,
 		Metadata: map[string]interface{}{
 			"escalation_level":  escalationLevel,
-			"incident_title":    incidentEntity.Title,
+			"incident_title":    incidentEntity.Edges.WorkItem.Title,
 			"incident_severity": incidentEntity.Severity,
 		},
 	}, tenantID)
@@ -775,9 +777,10 @@ func (s *IncidentAlertingService) ProcessSLAViolationAlerts(ctx context.Context,
 	incidentEntity, err := s.client.Incident.Query().
 		Where(
 			incident.IDEQ(incidentID),
-			incident.TenantIDEQ(tenantID),
+			incident.HasWorkItemWith(ticket.TenantIDEQ(tenantID)),
 			incident.DeletedAtIsNil(),
 		).
+		WithWorkItem().
 		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -821,8 +824,8 @@ func (s *IncidentAlertingService) ProcessSLAViolationAlerts(ctx context.Context,
 		Recipients: recipients,
 		Metadata: map[string]interface{}{
 			"violation_type":    violationType,
-			"incident_title":    incidentEntity.Title,
-			"incident_priority": incidentEntity.Priority,
+			"incident_title":    incidentEntity.Edges.WorkItem.Title,
+			"incident_priority": incidentEntity.Edges.WorkItem.Priority,
 		},
 	}, tenantID)
 	if err != nil {
