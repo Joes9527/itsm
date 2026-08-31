@@ -107,8 +107,6 @@ nav:
       - 贡献指南: contributing.md
       - 标签体系: label-schema.md
       - Roadmap: roadmap.md
-      - 架构清理记录: ARCHITECTURE_CLEANUP.md
-      - 覆盖审计: testing/coverage-audit.md
       - 文档规范: documentation-style-guide.md
 
 extra_css:

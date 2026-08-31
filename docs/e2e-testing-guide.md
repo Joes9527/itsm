@@ -38,21 +38,11 @@
 
 ### CI 集成
 
-已更新 `.github/workflows/ci.yml`，新增 `e2e` job：
-
-```yaml
-e2e:
-  runs-on: ubuntu-latest
-  steps:
-    - Checkout code
-    - Setup Node.js
-    - Install dependencies
-    - Install Playwright browsers
-    - Start backend (go run main.go &)
-    - Start frontend (npm run dev &)
-    - Run smoke tests (npm run test:smoke)
-    - Run business flow E2E tests (npm run test:e2e:business)
-```
+截至当前，`.github/workflows/` 下没有任何 workflow 运行本文档描述的 E2E/Playwright 测试
+（`ci.yml` 不存在；现有 workflow 是 `backend-ci.yml`、`frontend-ci.yml`、`api-contract-check.yml`、
+`test-coverage-guard.yml`、`ga-gate.yml`、`acl-gate.yml`、`security.yml`、`release.yml` 等，
+其中 `ga-gate.yml` 只做组装后核心栈的健康检查和 API 烟测，不等同于本文档的业务流程 E2E）。
+以下命令需要在本地或专门的 E2E 环境手动运行，尚未接入 CI 门禁。
 
 ### 运行命令
 

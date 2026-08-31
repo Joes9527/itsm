@@ -35,7 +35,9 @@
 | 接收消息 | `im.message.receive_v1` | 接收用户发送给机器人的消息 |
 | 卡片回调 | `card.action.trigger` | 处理用户点击卡片按钮的事件 |
 
-事件回调地址配置为：`https://your-itsm-domain.com/api/v1/feishu/webhook`
+事件回调地址配置为：`https://your-itsm-domain.com/api/v1/feishu/webhook/:instance_id`
+（`:instance_id` 是该飞书连接器实例的 ID，用于多租户/多实例场景下区分回调来源，
+不能省略——路由定义见 `itsm-backend/router/feishu_routes.go`）。
 
 ## ITSM 系统配置
 ### 1. 环境变量配置

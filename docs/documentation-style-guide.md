@@ -9,11 +9,9 @@
 | `docs/` | 长期有效的核心指南和总入口 |
 | `docs/product/` | 产品能力、产品设计、发布能力说明 |
 | `docs/architecture/` | 架构设计和长期技术方案 |
-| `docs/prd/` | PRD 和需求规格 |
 | `docs/articles/` | 对外传播文章、专题说明 |
 | `docs/review/` | 当前仍有参考价值的评审、验收、测试结论 |
 | `docs/testing/` | 测试方案、测试用例入口、当前测试报告 |
-| `docs/delivery/` | 发布工程、生产就绪、CI/CD 方案 |
 | `docs/tools/` | 工具配置和辅助指南 |
 | `docs/scripts/` | 文档配套脚本 |
 | `docs/images/` | README 和文档引用的图片资产 |
@@ -25,15 +23,15 @@
 
 ```text
 deployment.md
-commercial-ready-architecture.md
-browser-e2e-test-report-2026-06-18.md
+role-based-product-test-plan.md
+servicenow-benchmark-2026-06-18.md
 ```
 
 规则：
 
 - 文件名使用英文小写、数字和连字符。
 - 长期指南不带日期，例如 `deployment.md`。
-- 阶段性报告带日期，例如 `frontend-ux-review-2026-06-19.md`。
+- 阶段性报告带日期，例如 `servicenow-benchmark-2026-06-18.md`（这类文档完成使命后移入 `docs/archive/`，见下）。
 - 文章可以带序号保持阅读顺序，例如 `07-ai-native-architecture-guidance-harness-skill.md`。
 - 测试用例文件允许保留用例编号前缀，例如 `TC-TICKET.md`，因为编号本身是测试资产的一部分。
 - 不提交 `.DS_Store`、临时截图、未引用的图片和本地导出文件。

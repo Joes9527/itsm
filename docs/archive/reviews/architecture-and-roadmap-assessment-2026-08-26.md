@@ -1,5 +1,8 @@
 # ITSM 架构现状诊断与功能 Roadmap（2026-08-26）
 
+> **[已归档]** 本文档的结论已被 [architecture-product-assessment-2026-08-30.md](../../architecture-product-assessment-2026-08-30.md)
+> 核实并订正，请以该文档为准。本文档保留作为历史记录。（本文档即将从 docs/ 移动到 docs/archive/reviews/）
+
 > 评估日期：2026-08-26
 > 基线 commit：`e9d5f52c`（HEAD，2026-08-26 18:05 +0800）
 > 方法：对 [architecture-assessment-2026-08.md](./architecture-assessment-2026-08.md)、
