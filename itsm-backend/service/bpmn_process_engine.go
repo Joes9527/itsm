@@ -1084,7 +1084,7 @@ func (e *CustomProcessEngine) executeClaimedCallback(ctx context.Context, worker
 	}
 	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, claimedRow.TenantID)
 	ctx = bpmn.WithBPMNCallbackExecutionKey(ctx, claimedRow.ExecutionKey)
-	claimedRow.Variables, err = filterBPMNCallbackPayload(handler, claimedRow.Action, claimedRow.Variables)
+	claimedRow.Variables, err = filterPersistedBPMNCallbackPayload(handler, claimedRow.Action, claimedRow.Variables)
 	if err != nil {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackHandlerError(err)
 	}

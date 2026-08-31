@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strconv"
 	"testing"
 
 	"itsm-backend/common"
@@ -339,6 +340,119 @@ func TestBuiltInCallbackPayloadPoliciesRejectArbitraryFormObjects(t *testing.T) 
 	)
 	require.NoError(t, err)
 	assert.Equal(t, map[string]interface{}{"cost_center": "CC-100"}, requestPayload)
+}
+
+func TestCCCallbackPayloadNormalizesVariableRecipients(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	handler := f.engine.findHandlerByTaskType("cc_task")
+	require.NotNil(t, handler)
+
+	t.Run("stores only the resolved recipient IDs", func(t *testing.T) {
+		watchers := []interface{}{float64(12), "13", float64(12)}
+		payload, err := filterBPMNCallbackPayload(handler, "", map[string]interface{}{
+			"ccType":            "variable",
+			"ccVariable":        "approval_watchers",
+			"approval_watchers": watchers,
+			"notifyChannels":    "in_app,email",
+			"addedBy":           999999,
+			"authorization":     "must-not-persist",
+		})
+
+		require.NoError(t, err)
+		assert.Equal(t, "variable", payload["ccType"])
+		assert.Equal(t, "approval_watchers", payload["ccVariable"])
+		assert.Equal(t, []int{12, 13}, payload["ccResolvedUserIds"])
+		assert.Equal(t, "in_app,email", payload["notifyChannels"])
+		assert.NotContains(t, payload, "approval_watchers")
+		assert.NotContains(t, payload, "addedBy")
+		assert.NotContains(t, payload, "authorization")
+
+		watchers[0] = float64(99)
+		assert.Equal(t, []int{12, 13}, payload["ccResolvedUserIds"])
+	})
+
+	for _, tt := range []struct {
+		name      string
+		variables map[string]interface{}
+	}{
+		{
+			name: "missing source variable",
+			variables: map[string]interface{}{
+				"ccType":     "variable",
+				"ccVariable": "approval_watchers",
+			},
+		},
+		{
+			name: "object source variable",
+			variables: map[string]interface{}{
+				"ccType":            "variable",
+				"ccVariable":        "approval_watchers",
+				"approval_watchers": map[string]interface{}{"id": 12},
+			},
+		},
+		{
+			name: "non-positive recipient",
+			variables: map[string]interface{}{
+				"ccType":            "variable",
+				"ccVariable":        "approval_watchers",
+				"approval_watchers": []interface{}{float64(0)},
+			},
+		},
+		{
+			name: "non-numeric recipient",
+			variables: map[string]interface{}{
+				"ccType":            "variable",
+				"ccVariable":        "approval_watchers",
+				"approval_watchers": []interface{}{"not-a-user-id"},
+			},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := filterBPMNCallbackPayload(handler, "", tt.variables)
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestCCCallbackAuthoritativeVariablesRequireValidInitiator(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	ticket := f.client.Ticket.Create().
+		SetTitle("CC callback attribution").
+		SetTicketNumber("CC-CALLBACK-ATTRIBUTION").
+		SetStatus("open").
+		SetRequesterID(f.actor.ID).
+		SetTenantID(f.tenant.ID).
+		SaveX(f.userCtx)
+	inactiveUser := f.client.User.Create().
+		SetUsername("inactive-cc-initiator").
+		SetEmail("inactive-cc-initiator@example.test").
+		SetName("Inactive CC Initiator").
+		SetPasswordHash("test").
+		SetActive(false).
+		SetTenantID(f.tenant.ID).
+		SaveX(f.userCtx)
+	instance := f.createProcessInstance(t, f.tenant, "cc-callback-attribution")
+	instance = f.client.ProcessInstance.UpdateOne(instance).
+		SetBusinessType("ticket").
+		SetBusinessID(ticket.ID).
+		SetInitiator(strconv.Itoa(f.actor.ID)).
+		SaveX(f.userCtx)
+	handler := f.engine.findHandlerByTaskType("cc_task")
+	require.NotNil(t, handler)
+
+	payload := map[string]interface{}{"addedBy": f.otherActor.ID}
+	variables, err := f.engine.authoritativeCallbackVariables(f.userCtx, instance, handler, payload)
+	require.NoError(t, err)
+	assert.Equal(t, f.actor.ID, variables["addedBy"])
+	assert.Equal(t, f.otherActor.ID, payload["addedBy"])
+
+	for _, initiator := range []string{"", "not-a-user-id", "0", strconv.Itoa(f.otherActor.ID), strconv.Itoa(inactiveUser.ID)} {
+		t.Run("rejects "+initiator, func(t *testing.T) {
+			instance.Initiator = initiator
+			_, err := f.engine.authoritativeCallbackVariables(f.userCtx, instance, handler, map[string]interface{}{})
+			require.EqualError(t, err, "CC回调流程发起人无效")
+		})
+	}
 }
 
 func TestCounterSignStatusDoesNotCountCancelledChildrenAsPending(t *testing.T) {

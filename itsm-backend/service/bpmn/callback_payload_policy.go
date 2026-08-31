@@ -97,8 +97,12 @@ func (h *NotificationHandler) CallbackPayloadFields(action string) []string {
 	}
 }
 
+var ccCallbackPayloadFields = []string{
+	"ccType", "ccUserIds", "ccGroupIds", "ccRoleIds", "ccVariable", "ccNotify", "notifyChannels", "ccResolvedUserIds",
+}
+
 func (h *CCTaskHandler) CallbackPayloadFields(action string) []string {
-	return []string{"ccType", "ccUserIds", "ccGroupIds", "ccRoleIds", "ccNotify"}
+	return append([]string(nil), ccCallbackPayloadFields...)
 }
 
 func (h *WebhookHandler) CallbackPayloadFields(action string) []string {
@@ -117,14 +121,15 @@ func (h *KafDelegateServiceTaskHandler) CallbackPayloadFields(action string) []s
 }
 
 var (
-	_ CallbackPayloadPolicy = (*ChangeServiceTaskHandler)(nil)
-	_ CallbackPayloadPolicy = (*IncidentServiceTaskHandler)(nil)
-	_ CallbackPayloadPolicy = (*TicketServiceTaskHandler)(nil)
-	_ CallbackPayloadPolicy = (*GenericServiceTaskHandler)(nil)
-	_ CallbackPayloadPolicy = (*ServiceRequestServiceTaskHandler)(nil)
-	_ CallbackPayloadPolicy = (*NotificationHandler)(nil)
-	_ CallbackPayloadPolicy = (*CCTaskHandler)(nil)
-	_ CallbackPayloadPolicy = (*WebhookHandler)(nil)
-	_ CallbackPayloadPolicy = (*ReleaseServiceTaskHandler)(nil)
-	_ CallbackPayloadPolicy = (*KafDelegateServiceTaskHandler)(nil)
+	_ CallbackPayloadPolicy     = (*ChangeServiceTaskHandler)(nil)
+	_ CallbackPayloadPolicy     = (*IncidentServiceTaskHandler)(nil)
+	_ CallbackPayloadPolicy     = (*TicketServiceTaskHandler)(nil)
+	_ CallbackPayloadPolicy     = (*GenericServiceTaskHandler)(nil)
+	_ CallbackPayloadPolicy     = (*ServiceRequestServiceTaskHandler)(nil)
+	_ CallbackPayloadPolicy     = (*NotificationHandler)(nil)
+	_ CallbackPayloadPolicy     = (*CCTaskHandler)(nil)
+	_ CallbackPayloadPolicy     = (*WebhookHandler)(nil)
+	_ CallbackPayloadPolicy     = (*ReleaseServiceTaskHandler)(nil)
+	_ CallbackPayloadPolicy     = (*KafDelegateServiceTaskHandler)(nil)
+	_ CallbackPayloadNormalizer = (*CCTaskHandler)(nil)
 )

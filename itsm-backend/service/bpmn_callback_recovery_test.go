@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -45,6 +46,104 @@ func TestCallbackWorkerSweepFailureEmitsSanitizedTelemetry(t *testing.T) {
 		"worker_id":   "callback-worker-test",
 		"error_class": "callback_sweep_error",
 	}, entries[0].ContextMap())
+}
+
+func TestCCCallbackOutboxVariableRecipientsUseAuthoritativeInitiator(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	watcher := f.client.User.Create().
+		SetUsername("cc-variable-watcher").
+		SetEmail("cc-variable-watcher@example.test").
+		SetName("CC Variable Watcher").
+		SetPasswordHash("test").
+		SetActive(true).
+		SetTenantID(f.tenant.ID).
+		SaveX(f.userCtx)
+	ticket := f.client.Ticket.Create().
+		SetTitle("Variable recipient CC").
+		SetTicketNumber("CC-VARIABLE-RECIPIENTS").
+		SetStatus("open").
+		SetRequesterID(f.actor.ID).
+		SetTenantID(f.tenant.ID).
+		SaveX(f.userCtx)
+
+	definitionXML := []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="cc-variable-recipients" isExecutable="true">
+    <bpmn:startEvent id="start" />
+    <bpmn:serviceTask id="cc-callback" name="CC callback" ccType="variable" ccVariable="approval_watchers" ccNotify="true" notifyChannels="in_app,email">
+      <bpmn:extensionElements><bpmn:metaData name="service_task_type">cc_task</bpmn:metaData></bpmn:extensionElements>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="end" />
+    <bpmn:sequenceFlow id="to-callback" sourceRef="start" targetRef="cc-callback" />
+    <bpmn:sequenceFlow id="to-end" sourceRef="cc-callback" targetRef="end" />
+  </bpmn:process>
+</bpmn:definitions>`)
+	instance := f.createProcessInstance(t, f.tenant, "cc-variable-recipients")
+	definition := f.client.ProcessDefinition.GetX(f.userCtx, instance.ProcessDefinitionID)
+	definition = f.client.ProcessDefinition.UpdateOne(definition).SetBpmnXML(definitionXML).SaveX(f.userCtx)
+	instance = f.client.ProcessInstance.UpdateOne(instance).
+		SetStatus("running").
+		SetCurrentActivityID("cc-callback").
+		SetCurrentActivityName("CC callback").
+		SetBusinessType("ticket").
+		SetBusinessID(ticket.ID).
+		SetInitiator(strconv.Itoa(f.actor.ID)).
+		SetVariables(map[string]interface{}{
+			"approval_watchers": []interface{}{float64(f.outsider.ID), strconv.Itoa(watcher.ID), float64(f.outsider.ID)},
+			"addedBy":           f.otherActor.ID,
+			"authorization":     "must-not-persist",
+		}).
+		SaveX(f.userCtx)
+
+	definitions, err := f.engine.parser.ParseXML(definition.BpmnXML)
+	require.NoError(t, err)
+	require.Len(t, definitions.Processes, 1)
+	require.Len(t, definitions.Processes[0].ServiceTasks, 1)
+	serviceTask := definitions.Processes[0].ServiceTasks[0]
+	handler := f.engine.findHandlerByTaskType(serviceTask.ServiceTaskType())
+	require.NotNil(t, handler)
+
+	executionKeys := make([]string, 0, 1)
+	scheduler := f.engine.forClient(f.client, &executionKeys)
+	err = scheduler.enqueueServiceTaskCallback(
+		f.userCtx,
+		instance,
+		handler,
+		handler.GetTaskType(),
+		serviceTask.ID,
+		serviceTask.ServiceTaskAction(),
+		serviceTask.CallbackConfigRef(),
+		mergeServiceTaskVariables(instance.Variables, serviceTask),
+	)
+	require.NoError(t, err)
+	require.Len(t, executionKeys, 1)
+
+	row := callbackRowForInstance(t, f, instance.ID)
+	require.NotContains(t, row.Variables, "approval_watchers")
+	require.NotContains(t, row.Variables, "addedBy")
+	require.NotContains(t, row.Variables, "authorization")
+	require.Contains(t, row.Variables, "ccResolvedUserIds")
+	require.ElementsMatch(t, []interface{}{float64(f.outsider.ID), float64(watcher.ID)}, row.Variables["ccResolvedUserIds"])
+	require.Equal(t, "in_app,email", row.Variables["notifyChannels"])
+
+	completed, err := f.engine.ProcessPendingCallbacks(context.Background(), "cc-variable-recipients-worker", 1)
+	require.NoError(t, err)
+	require.Equal(t, 1, completed)
+
+	relations := f.client.TicketCC.Query().AllX(f.userCtx)
+	require.Len(t, relations, 2)
+	for _, relation := range relations {
+		assert.Equal(t, ticket.ID, relation.TicketID)
+		assert.Equal(t, f.tenant.ID, relation.TenantID)
+		assert.Equal(t, f.actor.ID, relation.AddedBy)
+	}
+	notifications := f.client.TicketNotification.Query().AllX(f.userCtx)
+	require.Len(t, notifications, 4)
+	channels := make([]string, 0, len(notifications))
+	for _, notification := range notifications {
+		channels = append(channels, notification.Channel)
+	}
+	assert.ElementsMatch(t, []string{"in_app", "email", "in_app", "email"}, channels)
 }
 
 func newCountingIdempotentCallbackHandler(taskType, handlerID string, failures int) *countingIdempotentCallbackHandler {

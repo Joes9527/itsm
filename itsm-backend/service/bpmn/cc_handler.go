@@ -3,6 +3,7 @@ package bpmn
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -43,6 +44,39 @@ func (h *CCTaskHandler) GetHandlerID() string {
 	return "cc_handler"
 }
 
+// NormalizeCallbackPayload resolves variable recipients once while callback
+// scheduling still has the source process values available. The durable row
+// retains only the fixed recipient IDs, never the arbitrary source field.
+func (h *CCTaskHandler) NormalizeCallbackPayload(action string, variables map[string]interface{}) (map[string]interface{}, error) {
+	payload := make(map[string]interface{}, len(ccCallbackPayloadFields))
+	for _, key := range h.CallbackPayloadFields(action) {
+		if key == "ccResolvedUserIds" {
+			continue
+		}
+		if value, exists := variables[key]; exists {
+			payload[key] = value
+		}
+	}
+
+	if strings.TrimSpace(GetStringFromVars(variables, "ccType")) != "variable" {
+		return payload, nil
+	}
+	ccVariable := strings.TrimSpace(GetStringFromVars(variables, "ccVariable"))
+	if ccVariable == "" {
+		return nil, fmt.Errorf("动态抄送变量名不能为空")
+	}
+	source, exists := variables[ccVariable]
+	if !exists {
+		return nil, fmt.Errorf("动态抄送变量不存在")
+	}
+	ids, err := normalizeCCRecipientIDs(source)
+	if err != nil {
+		return nil, err
+	}
+	payload["ccResolvedUserIds"] = ids
+	return payload, nil
+}
+
 // Execute 执行抄送服务任务
 func (h *CCTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
 	// 获取参数
@@ -51,7 +85,6 @@ func (h *CCTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, vari
 	ccUserIds := GetStringFromVars(variables, "ccUserIds")
 	ccGroupIds := GetStringFromVars(variables, "ccGroupIds")
 	ccRoleIds := GetStringFromVars(variables, "ccRoleIds")
-	ccVariable := GetStringFromVars(variables, "ccVariable")
 	ccNotify := GetBoolFromVars(variables, "ccNotify", true)
 	notifyChannels := parseNotifyChannels(GetStringFromVars(variables, "notifyChannels"))
 	addedBy := GetIntFromVars(variables, "addedBy")
@@ -81,7 +114,7 @@ func (h *CCTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, vari
 	}
 
 	// 解析获取最终的抄送人ID列表
-	ccUsers, err := h.resolveCCUsers(ctx, tx.Client(), ccType, ccUserIds, ccGroupIds, ccRoleIds, ccVariable, variables, tenantID)
+	ccUsers, err := h.resolveCCUsers(ctx, tx.Client(), ccType, ccUserIds, ccGroupIds, ccRoleIds, variables, tenantID)
 	if err != nil {
 		h.logger.Errorw("Failed to resolve CC users", "error_class", "recipient_validation")
 		return nil, err
@@ -147,7 +180,7 @@ func (h *CCTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, vari
 }
 
 // resolveCCUsers 解析抄送人ID列表
-func (h *CCTaskHandler) resolveCCUsers(ctx context.Context, client *ent.Client, ccType, ccUserIds, ccGroupIds, ccRoleIds, ccVariable string, variables map[string]interface{}, tenantID int) ([]int, error) {
+func (h *CCTaskHandler) resolveCCUsers(ctx context.Context, client *ent.Client, ccType, ccUserIds, ccGroupIds, ccRoleIds string, variables map[string]interface{}, tenantID int) ([]int, error) {
 	switch ccType {
 	case "user":
 		ids, err := h.parseCommaSeparatedInts(ccUserIds)
@@ -168,48 +201,15 @@ func (h *CCTaskHandler) resolveCCUsers(ctx context.Context, client *ent.Client, 
 		}
 		return h.getUserIDsFromRoles(ctx, client, roleIds, tenantID)
 	case "variable":
-		if ccVariable == "" {
-			return nil, fmt.Errorf("动态变量名不能为空")
-		}
-		value, ok := variables[ccVariable]
+		resolved, ok := variables["ccResolvedUserIds"]
 		if !ok {
-			return nil, fmt.Errorf("变量 %s 不存在", ccVariable)
+			return nil, fmt.Errorf("动态抄送人未在入队时解析")
 		}
-		// 处理不同类型的变量值
-		switch v := value.(type) {
-		case []interface{}:
-			res := make([]int, 0, len(v))
-			for _, item := range v {
-				switch i := item.(type) {
-				case float64:
-					res = append(res, int(i))
-				case int:
-					res = append(res, i)
-				case int64:
-					res = append(res, int(i))
-				case string:
-					id, err := strconv.Atoi(i)
-					if err != nil {
-						return nil, fmt.Errorf("抄送用户ID格式无效")
-					}
-					res = append(res, id)
-				}
-			}
-			return h.validateCCUsers(ctx, client, res, tenantID)
-		case string:
-			// 尝试用逗号分隔解析
-			ids, err := h.parseCommaSeparatedInts(v)
-			if err != nil {
-				return nil, err
-			}
-			return h.validateCCUsers(ctx, client, ids, tenantID)
-		case int:
-			return h.validateCCUsers(ctx, client, []int{v}, tenantID)
-		case float64:
-			return h.validateCCUsers(ctx, client, []int{int(v)}, tenantID)
-		default:
-			return nil, fmt.Errorf("不支持的变量类型 %T", v)
+		ids, err := normalizeCCRecipientIDs(resolved)
+		if err != nil {
+			return nil, err
 		}
+		return h.validateCCUsers(ctx, client, ids, tenantID)
 	default:
 		// 默认按用户ID处理
 		ids, err := h.parseCommaSeparatedInts(ccUserIds)
@@ -217,6 +217,85 @@ func (h *CCTaskHandler) resolveCCUsers(ctx context.Context, client *ent.Client, 
 			return nil, err
 		}
 		return h.validateCCUsers(ctx, client, ids, tenantID)
+	}
+}
+
+func normalizeCCRecipientIDs(value interface{}) ([]int, error) {
+	values := make([]interface{}, 0)
+	switch typed := value.(type) {
+	case []interface{}:
+		values = append(values, typed...)
+	case []int:
+		for _, id := range typed {
+			values = append(values, id)
+		}
+	case []int64:
+		for _, id := range typed {
+			values = append(values, id)
+		}
+	case []float64:
+		for _, id := range typed {
+			values = append(values, id)
+		}
+	case []string:
+		for _, id := range typed {
+			values = append(values, id)
+		}
+	case string:
+		for _, id := range strings.Split(typed, ",") {
+			values = append(values, id)
+		}
+	case int, int64, float64:
+		values = append(values, typed)
+	default:
+		return nil, fmt.Errorf("动态抄送人必须是正整数列表")
+	}
+
+	seen := make(map[int]struct{}, len(values))
+	ids := make([]int, 0, len(values))
+	for _, value := range values {
+		id, err := normalizeCCRecipientID(value)
+		if err != nil {
+			return nil, err
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
+func normalizeCCRecipientID(value interface{}) (int, error) {
+	maxInt := int(^uint(0) >> 1)
+	valid := func(id int) (int, error) {
+		if id <= 0 {
+			return 0, fmt.Errorf("动态抄送人必须是正整数")
+		}
+		return id, nil
+	}
+	switch typed := value.(type) {
+	case int:
+		return valid(typed)
+	case int64:
+		if typed > int64(maxInt) {
+			return 0, fmt.Errorf("动态抄送人必须是正整数")
+		}
+		return valid(int(typed))
+	case float64:
+		if math.IsNaN(typed) || math.IsInf(typed, 0) || math.Trunc(typed) != typed || typed > float64(maxInt) || typed < 1 {
+			return 0, fmt.Errorf("动态抄送人必须是正整数")
+		}
+		return valid(int(typed))
+	case string:
+		id, err := strconv.Atoi(strings.TrimSpace(typed))
+		if err != nil {
+			return 0, fmt.Errorf("动态抄送人必须是正整数")
+		}
+		return valid(id)
+	default:
+		return 0, fmt.Errorf("动态抄送人必须是正整数")
 	}
 }
 

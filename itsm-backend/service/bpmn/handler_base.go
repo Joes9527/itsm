@@ -69,6 +69,12 @@ type CallbackPayloadPolicy interface {
 	CallbackPayloadFields(action string) []string
 }
 
+// CallbackPayloadNormalizer lets a handler derive its durable callback payload
+// from dynamic process values without persisting those dynamic source fields.
+type CallbackPayloadNormalizer interface {
+	NormalizeCallbackPayload(action string, variables map[string]interface{}) (map[string]interface{}, error)
+}
+
 // HandlerBase 处理器基类
 // 提供通用的辅助方法
 type HandlerBase struct {

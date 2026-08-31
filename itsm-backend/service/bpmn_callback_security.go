@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 
 	"itsm-backend/ent"
@@ -14,6 +15,7 @@ import (
 	"itsm-backend/ent/release"
 	"itsm-backend/ent/servicerequest"
 	"itsm-backend/ent/ticket"
+	"itsm-backend/ent/user"
 	"itsm-backend/service/bpmn"
 )
 
@@ -167,6 +169,23 @@ func mergeBPMNTaskCompletionVariables(existing, incoming map[string]interface{})
 }
 
 func filterBPMNCallbackPayload(handler bpmn.ServiceTaskHandlerInterface, action string, variables map[string]interface{}) (map[string]interface{}, error) {
+	if normalizer, ok := handler.(bpmn.CallbackPayloadNormalizer); ok {
+		payload, err := normalizer.NormalizeCallbackPayload(action, variables)
+		if err != nil {
+			return nil, err
+		}
+		return cloneBPMNCallbackPayload(payload)
+	}
+	return filterBPMNCallbackPayloadFields(handler, action, variables)
+}
+
+// filterPersistedBPMNCallbackPayload validates a durable payload without
+// re-reading the dynamic source values that were resolved during enqueue.
+func filterPersistedBPMNCallbackPayload(handler bpmn.ServiceTaskHandlerInterface, action string, variables map[string]interface{}) (map[string]interface{}, error) {
+	return filterBPMNCallbackPayloadFields(handler, action, variables)
+}
+
+func filterBPMNCallbackPayloadFields(handler bpmn.ServiceTaskHandlerInterface, action string, variables map[string]interface{}) (map[string]interface{}, error) {
 	policy, ok := handler.(bpmn.CallbackPayloadPolicy)
 	if !ok {
 		return map[string]interface{}{}, nil
@@ -178,13 +197,21 @@ func filterBPMNCallbackPayload(handler bpmn.ServiceTaskHandlerInterface, action 
 		if !exists {
 			continue
 		}
+		payload[key] = value
+	}
+	return cloneBPMNCallbackPayload(payload)
+}
+
+func cloneBPMNCallbackPayload(payload map[string]interface{}) (map[string]interface{}, error) {
+	clonedPayload := make(map[string]interface{}, len(payload))
+	for key, value := range payload {
 		cloned, err := cloneBPMNJSONValue(value, 0)
 		if err != nil {
 			return nil, fmt.Errorf("回调字段 %q 类型无效", key)
 		}
-		payload[key] = cloned
+		clonedPayload[key] = cloned
 	}
-	return payload, nil
+	return clonedPayload, nil
 }
 
 func (e *CustomProcessEngine) callbackDescriptor(taskType, action, configRef string) bpmnCallbackDescriptor {
@@ -280,6 +307,18 @@ func (e *CustomProcessEngine) authoritativeCallbackVariables(
 	}
 	if instance.BusinessID > 0 {
 		variables["business_id"] = instance.BusinessID
+	}
+	if handler.GetTaskType() == "cc_task" {
+		initiatorID, err := strconv.Atoi(strings.TrimSpace(instance.Initiator))
+		if err != nil || initiatorID <= 0 {
+			return nil, fmt.Errorf("CC回调流程发起人无效")
+		}
+		if _, err := e.client.User.Query().Where(
+			user.ID(initiatorID), user.TenantID(instance.TenantID), user.Active(true),
+		).Only(ctx); err != nil {
+			return nil, fmt.Errorf("CC回调流程发起人无效")
+		}
+		variables["addedBy"] = initiatorID
 	}
 
 	if !isBuiltInBusinessCallbackHandler(handler.GetTaskType()) {
