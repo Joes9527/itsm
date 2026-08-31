@@ -152,6 +152,12 @@ ITSM 返回 `WorkItemResult`，至少包括 `id`、`number`、`recordClass`、`s
 事件不携带完整工单正文，但必须包含统一事件元数据：
 
 ```ts
+type ActorRef = {
+  id: string
+  kind: "system"
+  displayName: string
+}
+
 type KafDelegateRequested = {
   eventId: string
   tenantId: string
@@ -165,6 +171,8 @@ type KafDelegateRequested = {
   correlationId: string
 }
 ```
+
+`actor` 是创建该委派的 ITSM BPMN 系统主体，不是请求人，也不是 KAF。
 
 事件推送是主路径；KAF 重启或事件遗漏时，通过 `GET /bpmn/process-tasks/kaf-delegated?status=delegated` 补拉其有权处理的未完成任务。MVP 不提供 claim 或 lease API，KAF 自身负责执行协调。
 

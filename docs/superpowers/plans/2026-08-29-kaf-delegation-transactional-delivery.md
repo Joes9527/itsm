@@ -47,12 +47,9 @@
 **Files:**
 - Create: `docs/contracts/kaf-delegate-requested.openapi.yaml`
 - Create: `itsm-backend/service/kaf_webhook_contract_test.go`
-- Modify: `/mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-main/src/acp/routers/itsm_webhooks.py`
-- Test: `/mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-main/tests/test_itsm_webhook_auth.py`
 
 **Interfaces:**
 - Produces: `KafDelegateRequested` HTTP body and headers `X-Webhook-Signature: sha256=<hex>` and `X-Event-ID: <uuid>`.
-- Produces: KAF `POST /webhooks/itsm` branch `event_type == "kaf_delegate_requested"`, authenticated by a valid shared-secret signature without `require_admin`.
 - Consumes: configured `KAF_WEBHOOK_SECRET`; all event fields listed in the spec §4.2.
 
 - [ ] **Step 1: 写 ITSM 侧序列化与签名失败测试**
@@ -62,13 +59,15 @@
 ```go
 func TestSignKafDelegateRequest_ProducesStableHMACAndMinimalPayload(t *testing.T) {
     event := KafDelegateRequested{
-        EventID: "evt-001", TenantID: 7, WorkItemID: "42", TicketID: "42",
-        TaskID: "TASK-42", RecordClass: "service_request_item",
+        EventType: "kaf_delegate_requested", EventID: "8c4d0fb8-7895-4b2a-969a-1f38829a3c83",
+        TenantID: "7", WorkItemID: "42", TicketID: "42", TaskID: "TASK-42",
+        RecordClass: "service_request_item",
+        Actor: KafDelegateActor{ID: "bpmn:instance-42", Kind: "system", DisplayName: "ITSM BPMN"},
         Timestamp: "2026-08-29T12:00:00Z", Version: 3, CorrelationID: "corr-42",
     }
     body, signature, err := SignKafDelegateRequest(event, "test-secret")
     require.NoError(t, err)
-    assert.JSONEq(t, `{"eventId":"evt-001","tenantId":7,"workItemId":"42","ticketId":"42","taskId":"TASK-42","recordClass":"service_request_item","timestamp":"2026-08-29T12:00:00Z","version":3,"correlationId":"corr-42"}`, string(body))
+    assert.JSONEq(t, `{"event_type":"kaf_delegate_requested","eventId":"8c4d0fb8-7895-4b2a-969a-1f38829a3c83","tenantId":"7","workItemId":"42","ticketId":"42","taskId":"TASK-42","recordClass":"service_request_item","actor":{"id":"bpmn:instance-42","kind":"system","displayName":"ITSM BPMN"},"timestamp":"2026-08-29T12:00:00Z","version":3,"correlationId":"corr-42"}`, string(body))
     assert.Equal(t, "sha256="+expectedHMAC(body, "test-secret"), signature)
     assert.NotContains(t, string(body), "description")
 }
@@ -82,42 +81,58 @@ Expected: FAIL，因为 `KafDelegateRequested` 与 `SignKafDelegateRequest` 尚�
 
 - [ ] **Step 3: 写 OpenAPI 合同并实现签名值对象**
 
-在 `docs/contracts/kaf-delegate-requested.openapi.yaml` 定义 `POST /webhooks/itsm`，请求体使用下列字段和 `event_type` 常量；`eventId` 是 UUID，`tenantId` 为正整数，`recordClass` 仅允许 `service_request_item` 或 `incident`：
+在 `docs/contracts/kaf-delegate-requested.openapi.yaml` 定义 `POST /webhooks/itsm`，请求体使用下列字段和 `event_type` 常量；`eventId` 是 UUID，`tenantId` 为非空字符串，`recordClass` 仅允许 `service_request_item` 或 `incident`，并要求 ITSM BPMN 系统主体 `actor`：
 
 ```yaml
 KafDelegateRequested:
   type: object
-  required: [event_type, eventId, tenantId, workItemId, ticketId, taskId, recordClass, timestamp, version, correlationId]
+  required: [event_type, eventId, tenantId, workItemId, ticketId, taskId, recordClass, actor, timestamp, version, correlationId]
   properties:
     event_type: { type: string, enum: [kaf_delegate_requested] }
     eventId: { type: string, format: uuid }
-    tenantId: { type: integer, minimum: 1 }
+    tenantId: { type: string, minLength: 1 }
     workItemId: { type: string }
     ticketId: { type: string }
     taskId: { type: string }
     recordClass: { type: string, enum: [service_request_item, incident] }
+    actor: { $ref: '#/components/schemas/ActorRef' }
     timestamp: { type: string, format: date-time }
     version: { type: integer, minimum: 1 }
     correlationId: { type: string, minLength: 1 }
+ActorRef:
+  type: object
+  required: [id, kind, displayName]
+  properties:
+    id: { type: string, minLength: 1 }
+    kind: { type: string, enum: [system] }
+    displayName: { type: string, minLength: 1 }
 ```
 
 在 `itsm-backend/service/kaf_outbox_dispatcher.go` 定义 exported DTO 和纯函数；使用 `json.Marshal` 的结构体字段顺序，而非 map，确保签名主体稳定：
 
 ```go
+type KafDelegateActor struct {
+    ID          string `json:"id"`
+    Kind        string `json:"kind"`
+    DisplayName string `json:"displayName"`
+}
+
 type KafDelegateRequested struct {
     EventType     string `json:"event_type"`
     EventID       string `json:"eventId"`
-    TenantID      int    `json:"tenantId"`
+    TenantID      string `json:"tenantId"`
     WorkItemID    string `json:"workItemId"`
     TicketID      string `json:"ticketId"`
     TaskID        string `json:"taskId"`
     RecordClass   string `json:"recordClass"`
+    Actor         KafDelegateActor `json:"actor"`
     Timestamp     string `json:"timestamp"`
     Version       int    `json:"version"`
     CorrelationID string `json:"correlationId"`
 }
 
 func SignKafDelegateRequest(event KafDelegateRequested, secret string) ([]byte, string, error) {
+    if err := validateKafDelegateRequested(event); err != nil { return nil, "", err }
     body, err := json.Marshal(event)
     if err != nil { return nil, "", err }
     mac := hmac.New(sha256.New, []byte(secret))
@@ -126,37 +141,14 @@ func SignKafDelegateRequest(event KafDelegateRequested, secret string) ([]byte, 
 }
 ```
 
-- [ ] **Step 4: 写 KAF webhook 分发失败测试**
-
-在 `kaf-main/tests/test_itsm_webhook_auth.py` 添加：
-
-```python
-async def test_kaf_delegate_event_requires_valid_hmac_and_does_not_require_admin(client, monkeypatch):
-    monkeypatch.setattr(settings, "itsm_webhook_secret", "test-secret")
-    body = delegate_event_body(event_id="evt-001")
-    response = await client.post("/webhooks/itsm", content=json.dumps(body), headers={
-        "X-Webhook-Signature": sign(body, "test-secret"),
-        "X-Event-ID": "evt-001",
-    })
-    assert response.status_code == 202
-    assert response.json() == {"status": "accepted", "ticket_id": "42"}
-```
-
-- [ ] **Step 5: 实现 KAF webhook 的鉴权和分发边界**
-
-在 `itsm_webhooks.py` 将路由拆成两条明确依赖：旧 lifecycle event 保持 `_verify_webhook_signature + require_admin`，新 `kaf_delegate_requested` 仅使用 `_verify_webhook_signature`。先解析并验证 `event_type`，再选择依赖，禁止“缺失 event_type 默认 approved”应用到新事件。新分支调用 `KafDelegationPipeline.accept(event)`，并仅在它持久化接收账本后返回 HTTP 202。
-
-- [ ] **Step 6: 运行合同测试并提交**
+- [ ] **Step 4: 运行 ITSM 合同测试并提交**
 
 Run:
 
 ```bash
 cd itsm-backend && go test ./service -run 'TestSignKafDelegateRequest' -v
-cd /mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-main && pytest tests/test_itsm_webhook_auth.py -q
 git -C /home/administrator/project/itsm add docs/contracts/kaf-delegate-requested.openapi.yaml itsm-backend/service/kaf_outbox_dispatcher.go itsm-backend/service/kaf_webhook_contract_test.go
 git -C /home/administrator/project/itsm commit -m "docs: define KAF delegation webhook contract"
-git -C /mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-main add src/acp/routers/itsm_webhooks.py tests/test_itsm_webhook_auth.py
-git -C /mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-main commit -m "feat: accept signed KAF delegation events"
 ```
 
 ### Task 2: 增加 tenant-scoped OutboxEvent 持久化与事务仓储
@@ -423,14 +415,26 @@ git commit -m "feat(outbox): dispatch KAF delegation webhooks"
 - Create: `/mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-main/alembic/versions/021_kaf_delegation_deliveries.py`
 - Create: `/mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-main/src/acp/orchestration/headless_tasks/kaf_delegation_pipeline.py`
 - Modify: `/mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-main/src/acp/routers/itsm_webhooks.py`
+- Test: `/mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-main/tests/test_itsm_webhook_auth.py`
 - Test: `/mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-main/tests/test_kaf_delegation_pipeline.py`
 
 **Interfaces:**
 - Produces: `KafDelegationDelivery(event_id, task_id, tenant_id, status, received_at, started_at, last_error)` with unique `event_id`.
 - Produces: `KafDelegationPipeline.accept(event: KafDelegateRequested) -> None`; duplicate events do not enqueue a second execution.
+- Produces: KAF `POST /webhooks/itsm` branch for `event_type == "kaf_delegate_requested"`, authenticated by a valid shared-secret signature without `require_admin` and acknowledged only after durable receipt.
 - Consumes: ITSM `GET /bpmn/process-tasks/{taskId}/kaf-context` from Task 6 and the KAF `kaf_automation` principal configuration.
 
-- [ ] **Step 1: 写 KAF 去重失败测试**
+- [ ] **Step 1: 写 KAF webhook 鉴权与分发失败测试**
+
+在 `tests/test_itsm_webhook_auth.py` 添加签名的 `kaf_delegate_requested` 请求测试；它不提供管理员 JWT，使用所有 Task 1 合同字段（包括 `actor`），并断言 `202 {"status":"accepted","ticket_id":"42"}`。
+
+- [ ] **Step 2: 运行 KAF webhook 测试确认失败**
+
+Run: `cd /mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-main && pytest tests/test_itsm_webhook_auth.py -q`
+
+Expected: FAIL，因为当前路由要求 `require_admin` 且尚未调用 durable delegation pipeline。
+
+- [ ] **Step 3: 写 KAF 去重失败测试**
 
 ```python
 async def test_accept_persists_once_and_enqueues_one_headless_run(session, monkeypatch):
@@ -442,17 +446,17 @@ async def test_accept_persists_once_and_enqueues_one_headless_run(session, monke
     assert pipeline.enqueued_task_ids == ["TASK-100"]
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [ ] **Step 4: 运行 pipeline 测试确认失败**
 
 Run: `cd /mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-main && pytest tests/test_kaf_delegation_pipeline.py -q`
 
 Expected: FAIL，因为 delivery model 和 pipeline 尚不存在。
 
-- [ ] **Step 3: 创建账本和 pipeline**
+- [ ] **Step 5: 创建账本、pipeline 和 webhook 分发边界**
 
-账本成功插入前不得确认 webhook。`accept` 对唯一约束冲突直接返回，不重跑。新 pipeline 只做以下确定性工作：使用 `taskId` 调用 ITSM context API、验证返回 `taskType == "kaf_delegate"` 与 `status == "delegated"`、建立 KAF execution context（`taskId`、`correlationId`、tenant、允许动作）并调度 KAF 的自主 Procedure 选择。不得从事件或旧 ticket 文本推导 CTI/Procedure；不得接入对话 `TurnPipeline`。
+账本成功插入前不得确认 webhook。`accept` 对唯一约束冲突直接返回，不重跑。`itsm_webhooks.py` 必须先解析并验证 `event_type`：旧 lifecycle event 保持 `_verify_webhook_signature + require_admin`，新 `kaf_delegate_requested` 仅使用 `_verify_webhook_signature`，不得把缺失类型的 lifecycle 默认 `approved` 应用于新事件。新分支调用 `KafDelegationPipeline.accept(event)`，仅在持久化接收账本后返回 `202`。新 pipeline 只做以下确定性工作：使用 `taskId` 调用 ITSM context API、验证返回 `taskType == "kaf_delegate"` 与 `status == "delegated"`、建立 KAF execution context（`taskId`、`correlationId`、tenant、允许动作）并调度 KAF 的自主 Procedure 选择。不得从事件或旧 ticket 文本推导 CTI/Procedure；不得接入对话 `TurnPipeline`。
 
-- [ ] **Step 4: 写 context 拒绝和故障恢复测试**
+- [ ] **Step 6: 写 context 拒绝和故障恢复测试**
 
 ```python
 async def test_pipeline_marks_delivery_retryable_when_context_is_not_active(session):
@@ -464,14 +468,14 @@ async def test_pipeline_marks_delivery_retryable_when_context_is_not_active(sess
     assert "task_not_active" in delivery.last_error
 ```
 
-- [ ] **Step 5: 运行测试和迁移校验并提交**
+- [ ] **Step 7: 运行测试和迁移校验并提交**
 
 Run:
 
 ```bash
 cd /mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-main && alembic upgrade head
 cd /mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-main && pytest tests/test_itsm_webhook_auth.py tests/test_kaf_delegation_pipeline.py -q
-git add src/acp/models/kaf_delegation_delivery.py alembic/versions/021_kaf_delegation_deliveries.py src/acp/orchestration/headless_tasks/kaf_delegation_pipeline.py src/acp/routers/itsm_webhooks.py tests/test_kaf_delegation_pipeline.py
+git add src/acp/models/kaf_delegation_delivery.py alembic/versions/021_kaf_delegation_deliveries.py src/acp/orchestration/headless_tasks/kaf_delegation_pipeline.py src/acp/routers/itsm_webhooks.py tests/test_itsm_webhook_auth.py tests/test_kaf_delegation_pipeline.py
 git commit -m "feat: persist and start KAF delegation runs"
 ```
 

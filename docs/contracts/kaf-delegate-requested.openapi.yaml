@@ -1,0 +1,100 @@
+openapi: 3.0.3
+info:
+  title: KAF delegation webhook
+  version: 1.0.0
+paths:
+  /webhooks/itsm:
+    post:
+      summary: Accept a signed ITSM delegation event
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+        - $ref: '#/components/parameters/EventID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KafDelegateRequested'
+      responses:
+        '202':
+          description: The event was durably accepted for processing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KafWebhookAccepted'
+        '400':
+          description: The payload is invalid.
+        '401':
+          description: The webhook signature is missing or invalid.
+components:
+  parameters:
+    WebhookSignature:
+      name: X-Webhook-Signature
+      in: header
+      required: true
+      schema:
+        type: string
+        pattern: '^sha256=[a-f0-9]{64}$'
+    EventID:
+      name: X-Event-ID
+      in: header
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    KafDelegateRequested:
+      type: object
+      required: [event_type, eventId, tenantId, workItemId, ticketId, taskId, recordClass, actor, timestamp, version, correlationId]
+      properties:
+        event_type:
+          type: string
+          enum: [kaf_delegate_requested]
+        eventId:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          minLength: 1
+        workItemId:
+          type: string
+        ticketId:
+          type: string
+        taskId:
+          type: string
+        recordClass:
+          type: string
+          enum: [service_request_item, incident]
+        actor:
+          $ref: '#/components/schemas/ActorRef'
+        timestamp:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          minimum: 1
+        correlationId:
+          type: string
+          minLength: 1
+    ActorRef:
+      type: object
+      required: [id, kind, displayName]
+      properties:
+        id:
+          type: string
+          minLength: 1
+        kind:
+          type: string
+          enum: [system]
+        displayName:
+          type: string
+          minLength: 1
+    KafWebhookAccepted:
+      type: object
+      required: [status, ticket_id]
+      properties:
+        status:
+          type: string
+          enum: [accepted]
+        ticket_id:
+          type: string

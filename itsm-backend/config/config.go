@@ -3,10 +3,14 @@ package config
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
@@ -26,6 +30,16 @@ type Config struct {
 	Security   SecurityConfig   `mapstructure:"security"`
 	Deployment DeploymentConfig `mapstructure:"deployment"`
 	RLS        RLSConfig        `mapstructure:"rls"`
+	KAFOutbox  KAFOutboxConfig
+}
+
+// KAFOutboxConfig controls reliable delivery of BPMN delegation events to KAF.
+// An empty WebhookURL intentionally disables the dispatcher.
+type KAFOutboxConfig struct {
+	WebhookURL    string
+	WebhookSecret string
+	BatchSize     int
+	PollInterval  time.Duration
 }
 
 // RLSConfig 控制 PostgreSQL Row-Level Security 的启用档位。
@@ -284,6 +298,11 @@ func LoadConfig() (*Config, error) {
 	config.Deployment.Mode = getEnvWithDefault("DEPLOYMENT_MODE", config.Deployment.Mode)
 	config.Deployment.AutoMigrate = getEnvBoolWithDefault("ITSM_AUTO_MIGRATE", config.Deployment.AutoMigrate)
 	config.Deployment.AutoSeed = getEnvBoolWithDefault("ITSM_AUTO_SEED", config.Deployment.AutoSeed)
+	kafOutboxConfig, err := loadKAFOutboxConfig(kafOutboxEnv)
+	if err != nil {
+		return nil, err
+	}
+	config.KAFOutbox = kafOutboxConfig
 
 	// RLS 三档开关，默认 off（零风险）。
 	config.RLS.Mode = getEnvWithDefault("RLS_MODE", config.RLS.Mode)
@@ -361,4 +380,47 @@ func getEnvBoolWithDefault(key string, defaultValue bool) bool {
 	}
 
 	return defaultValue
+}
+
+func kafOutboxEnv(key string) string {
+	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+		return value
+	}
+	return strings.TrimSpace(os.Getenv("ITSM_" + key))
+}
+
+func loadKAFOutboxConfig(getenv func(string) string) (KAFOutboxConfig, error) {
+	config := KAFOutboxConfig{
+		WebhookURL:    strings.TrimSpace(getenv("KAF_WEBHOOK_URL")),
+		WebhookSecret: strings.TrimSpace(getenv("KAF_WEBHOOK_SECRET")),
+		BatchSize:     20,
+		PollInterval:  5 * time.Second,
+	}
+
+	if value := strings.TrimSpace(getenv("KAF_OUTBOX_BATCH_SIZE")); value != "" {
+		batchSize, err := strconv.Atoi(value)
+		if err != nil || batchSize < 1 || batchSize > 100 {
+			return KAFOutboxConfig{}, fmt.Errorf("KAF_OUTBOX_BATCH_SIZE must be an integer from 1 through 100")
+		}
+		config.BatchSize = batchSize
+	}
+
+	if value := strings.TrimSpace(getenv("KAF_OUTBOX_POLL_INTERVAL")); value != "" {
+		pollInterval, err := time.ParseDuration(value)
+		if err != nil || pollInterval < time.Second {
+			return KAFOutboxConfig{}, fmt.Errorf("KAF_OUTBOX_POLL_INTERVAL must be a duration of at least 1s")
+		}
+		config.PollInterval = pollInterval
+	}
+
+	if config.WebhookURL != "" && config.WebhookSecret == "" {
+		return KAFOutboxConfig{}, fmt.Errorf("KAF_WEBHOOK_SECRET is required when KAF_WEBHOOK_URL is configured")
+	}
+	if config.WebhookURL != "" {
+		parsedURL, err := url.ParseRequestURI(config.WebhookURL)
+		if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") || parsedURL.Host == "" || parsedURL.User != nil {
+			return KAFOutboxConfig{}, fmt.Errorf("KAF_WEBHOOK_URL must be an absolute HTTP(S) URL without userinfo")
+		}
+	}
+	return config, nil
 }

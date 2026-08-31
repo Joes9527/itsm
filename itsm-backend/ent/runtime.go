@@ -47,6 +47,8 @@ import (
 	"itsm-backend/ent/incidentrule"
 	"itsm-backend/ent/incidentruleexecution"
 	"itsm-backend/ent/itemversion"
+	"itsm-backend/ent/kaftaskactionledger"
+	"itsm-backend/ent/kaftaskcompletionreceipt"
 	"itsm-backend/ent/knowledgearticle"
 	"itsm-backend/ent/knowledgearticlelike"
 	"itsm-backend/ent/knowledgearticleparticipant"
@@ -60,6 +62,7 @@ import (
 	"itsm-backend/ent/mspallocation"
 	"itsm-backend/ent/notification"
 	"itsm-backend/ent/notificationpreference"
+	"itsm-backend/ent/outboxevent"
 	"itsm-backend/ent/passwordresettoken"
 	"itsm-backend/ent/permission"
 	"itsm-backend/ent/permissiondefinition"
@@ -1626,6 +1629,86 @@ func init() {
 	itemversion.DefaultUpdatedAt = itemversionDescUpdatedAt.Default.(func() time.Time)
 	// itemversion.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	itemversion.UpdateDefaultUpdatedAt = itemversionDescUpdatedAt.UpdateDefault.(func() time.Time)
+	kaftaskactionledgerFields := schema.KafTaskActionLedger{}.Fields()
+	_ = kaftaskactionledgerFields
+	// kaftaskactionledgerDescTenantID is the schema descriptor for tenant_id field.
+	kaftaskactionledgerDescTenantID := kaftaskactionledgerFields[0].Descriptor()
+	// kaftaskactionledger.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	kaftaskactionledger.TenantIDValidator = kaftaskactionledgerDescTenantID.Validators[0].(func(int) error)
+	// kaftaskactionledgerDescTaskID is the schema descriptor for task_id field.
+	kaftaskactionledgerDescTaskID := kaftaskactionledgerFields[1].Descriptor()
+	// kaftaskactionledger.TaskIDValidator is a validator for the "task_id" field. It is called by the builders before save.
+	kaftaskactionledger.TaskIDValidator = kaftaskactionledgerDescTaskID.Validators[0].(func(string) error)
+	// kaftaskactionledgerDescRunID is the schema descriptor for run_id field.
+	kaftaskactionledgerDescRunID := kaftaskactionledgerFields[2].Descriptor()
+	// kaftaskactionledger.RunIDValidator is a validator for the "run_id" field. It is called by the builders before save.
+	kaftaskactionledger.RunIDValidator = kaftaskactionledgerDescRunID.Validators[0].(func(string) error)
+	// kaftaskactionledgerDescStepID is the schema descriptor for step_id field.
+	kaftaskactionledgerDescStepID := kaftaskactionledgerFields[3].Descriptor()
+	// kaftaskactionledger.StepIDValidator is a validator for the "step_id" field. It is called by the builders before save.
+	kaftaskactionledger.StepIDValidator = kaftaskactionledgerDescStepID.Validators[0].(func(string) error)
+	// kaftaskactionledgerDescAction is the schema descriptor for action field.
+	kaftaskactionledgerDescAction := kaftaskactionledgerFields[4].Descriptor()
+	// kaftaskactionledger.ActionValidator is a validator for the "action" field. It is called by the builders before save.
+	kaftaskactionledger.ActionValidator = kaftaskactionledgerDescAction.Validators[0].(func(string) error)
+	// kaftaskactionledgerDescIdempotencyKey is the schema descriptor for idempotency_key field.
+	kaftaskactionledgerDescIdempotencyKey := kaftaskactionledgerFields[5].Descriptor()
+	// kaftaskactionledger.IdempotencyKeyValidator is a validator for the "idempotency_key" field. It is called by the builders before save.
+	kaftaskactionledger.IdempotencyKeyValidator = kaftaskactionledgerDescIdempotencyKey.Validators[0].(func(string) error)
+	// kaftaskactionledgerDescCorrelationID is the schema descriptor for correlation_id field.
+	kaftaskactionledgerDescCorrelationID := kaftaskactionledgerFields[6].Descriptor()
+	// kaftaskactionledger.CorrelationIDValidator is a validator for the "correlation_id" field. It is called by the builders before save.
+	kaftaskactionledger.CorrelationIDValidator = kaftaskactionledgerDescCorrelationID.Validators[0].(func(string) error)
+	// kaftaskactionledgerDescProcedureRef is the schema descriptor for procedure_ref field.
+	kaftaskactionledgerDescProcedureRef := kaftaskactionledgerFields[7].Descriptor()
+	// kaftaskactionledger.ProcedureRefValidator is a validator for the "procedure_ref" field. It is called by the builders before save.
+	kaftaskactionledger.ProcedureRefValidator = kaftaskactionledgerDescProcedureRef.Validators[0].(func(string) error)
+	// kaftaskactionledgerDescProcedureVersion is the schema descriptor for procedure_version field.
+	kaftaskactionledgerDescProcedureVersion := kaftaskactionledgerFields[8].Descriptor()
+	// kaftaskactionledger.ProcedureVersionValidator is a validator for the "procedure_version" field. It is called by the builders before save.
+	kaftaskactionledger.ProcedureVersionValidator = kaftaskactionledgerDescProcedureVersion.Validators[0].(func(string) error)
+	// kaftaskactionledgerDescResultStatus is the schema descriptor for result_status field.
+	kaftaskactionledgerDescResultStatus := kaftaskactionledgerFields[9].Descriptor()
+	// kaftaskactionledger.DefaultResultStatus holds the default value on creation for the result_status field.
+	kaftaskactionledger.DefaultResultStatus = kaftaskactionledgerDescResultStatus.Default.(string)
+	// kaftaskactionledgerDescCreatedAt is the schema descriptor for created_at field.
+	kaftaskactionledgerDescCreatedAt := kaftaskactionledgerFields[14].Descriptor()
+	// kaftaskactionledger.DefaultCreatedAt holds the default value on creation for the created_at field.
+	kaftaskactionledger.DefaultCreatedAt = kaftaskactionledgerDescCreatedAt.Default.(func() time.Time)
+	// kaftaskactionledgerDescUpdatedAt is the schema descriptor for updated_at field.
+	kaftaskactionledgerDescUpdatedAt := kaftaskactionledgerFields[15].Descriptor()
+	// kaftaskactionledger.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	kaftaskactionledger.DefaultUpdatedAt = kaftaskactionledgerDescUpdatedAt.Default.(func() time.Time)
+	// kaftaskactionledger.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	kaftaskactionledger.UpdateDefaultUpdatedAt = kaftaskactionledgerDescUpdatedAt.UpdateDefault.(func() time.Time)
+	kaftaskcompletionreceiptFields := schema.KafTaskCompletionReceipt{}.Fields()
+	_ = kaftaskcompletionreceiptFields
+	// kaftaskcompletionreceiptDescLedgerID is the schema descriptor for ledger_id field.
+	kaftaskcompletionreceiptDescLedgerID := kaftaskcompletionreceiptFields[0].Descriptor()
+	// kaftaskcompletionreceipt.LedgerIDValidator is a validator for the "ledger_id" field. It is called by the builders before save.
+	kaftaskcompletionreceipt.LedgerIDValidator = kaftaskcompletionreceiptDescLedgerID.Validators[0].(func(int) error)
+	// kaftaskcompletionreceiptDescTenantID is the schema descriptor for tenant_id field.
+	kaftaskcompletionreceiptDescTenantID := kaftaskcompletionreceiptFields[1].Descriptor()
+	// kaftaskcompletionreceipt.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	kaftaskcompletionreceipt.TenantIDValidator = kaftaskcompletionreceiptDescTenantID.Validators[0].(func(int) error)
+	// kaftaskcompletionreceiptDescTaskID is the schema descriptor for task_id field.
+	kaftaskcompletionreceiptDescTaskID := kaftaskcompletionreceiptFields[2].Descriptor()
+	// kaftaskcompletionreceipt.TaskIDValidator is a validator for the "task_id" field. It is called by the builders before save.
+	kaftaskcompletionreceipt.TaskIDValidator = kaftaskcompletionreceiptDescTaskID.Validators[0].(func(string) error)
+	// kaftaskcompletionreceiptDescStatus is the schema descriptor for status field.
+	kaftaskcompletionreceiptDescStatus := kaftaskcompletionreceiptFields[3].Descriptor()
+	// kaftaskcompletionreceipt.DefaultStatus holds the default value on creation for the status field.
+	kaftaskcompletionreceipt.DefaultStatus = kaftaskcompletionreceiptDescStatus.Default.(string)
+	// kaftaskcompletionreceiptDescCreatedAt is the schema descriptor for created_at field.
+	kaftaskcompletionreceiptDescCreatedAt := kaftaskcompletionreceiptFields[5].Descriptor()
+	// kaftaskcompletionreceipt.DefaultCreatedAt holds the default value on creation for the created_at field.
+	kaftaskcompletionreceipt.DefaultCreatedAt = kaftaskcompletionreceiptDescCreatedAt.Default.(func() time.Time)
+	// kaftaskcompletionreceiptDescUpdatedAt is the schema descriptor for updated_at field.
+	kaftaskcompletionreceiptDescUpdatedAt := kaftaskcompletionreceiptFields[6].Descriptor()
+	// kaftaskcompletionreceipt.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	kaftaskcompletionreceipt.DefaultUpdatedAt = kaftaskcompletionreceiptDescUpdatedAt.Default.(func() time.Time)
+	// kaftaskcompletionreceipt.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	kaftaskcompletionreceipt.UpdateDefaultUpdatedAt = kaftaskcompletionreceiptDescUpdatedAt.UpdateDefault.(func() time.Time)
 	knowledgearticleFields := schema.KnowledgeArticle{}.Fields()
 	_ = knowledgearticleFields
 	// knowledgearticleDescTitle is the schema descriptor for title field.
@@ -1980,6 +2063,50 @@ func init() {
 	notificationpreference.DefaultUpdatedAt = notificationpreferenceDescUpdatedAt.Default.(func() time.Time)
 	// notificationpreference.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	notificationpreference.UpdateDefaultUpdatedAt = notificationpreferenceDescUpdatedAt.UpdateDefault.(func() time.Time)
+	outboxeventFields := schema.OutboxEvent{}.Fields()
+	_ = outboxeventFields
+	// outboxeventDescEventID is the schema descriptor for event_id field.
+	outboxeventDescEventID := outboxeventFields[0].Descriptor()
+	// outboxevent.EventIDValidator is a validator for the "event_id" field. It is called by the builders before save.
+	outboxevent.EventIDValidator = outboxeventDescEventID.Validators[0].(func(string) error)
+	// outboxeventDescEventType is the schema descriptor for event_type field.
+	outboxeventDescEventType := outboxeventFields[1].Descriptor()
+	// outboxevent.EventTypeValidator is a validator for the "event_type" field. It is called by the builders before save.
+	outboxevent.EventTypeValidator = outboxeventDescEventType.Validators[0].(func(string) error)
+	// outboxeventDescTenantID is the schema descriptor for tenant_id field.
+	outboxeventDescTenantID := outboxeventFields[2].Descriptor()
+	// outboxevent.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	outboxevent.TenantIDValidator = outboxeventDescTenantID.Validators[0].(func(int) error)
+	// outboxeventDescAggregateType is the schema descriptor for aggregate_type field.
+	outboxeventDescAggregateType := outboxeventFields[3].Descriptor()
+	// outboxevent.AggregateTypeValidator is a validator for the "aggregate_type" field. It is called by the builders before save.
+	outboxevent.AggregateTypeValidator = outboxeventDescAggregateType.Validators[0].(func(string) error)
+	// outboxeventDescAggregateID is the schema descriptor for aggregate_id field.
+	outboxeventDescAggregateID := outboxeventFields[4].Descriptor()
+	// outboxevent.AggregateIDValidator is a validator for the "aggregate_id" field. It is called by the builders before save.
+	outboxevent.AggregateIDValidator = outboxeventDescAggregateID.Validators[0].(func(string) error)
+	// outboxeventDescStatus is the schema descriptor for status field.
+	outboxeventDescStatus := outboxeventFields[6].Descriptor()
+	// outboxevent.DefaultStatus holds the default value on creation for the status field.
+	outboxevent.DefaultStatus = outboxeventDescStatus.Default.(string)
+	// outboxeventDescAttemptCount is the schema descriptor for attempt_count field.
+	outboxeventDescAttemptCount := outboxeventFields[7].Descriptor()
+	// outboxevent.DefaultAttemptCount holds the default value on creation for the attempt_count field.
+	outboxevent.DefaultAttemptCount = outboxeventDescAttemptCount.Default.(int)
+	// outboxeventDescNextAttemptAt is the schema descriptor for next_attempt_at field.
+	outboxeventDescNextAttemptAt := outboxeventFields[8].Descriptor()
+	// outboxevent.DefaultNextAttemptAt holds the default value on creation for the next_attempt_at field.
+	outboxevent.DefaultNextAttemptAt = outboxeventDescNextAttemptAt.Default.(func() time.Time)
+	// outboxeventDescCreatedAt is the schema descriptor for created_at field.
+	outboxeventDescCreatedAt := outboxeventFields[13].Descriptor()
+	// outboxevent.DefaultCreatedAt holds the default value on creation for the created_at field.
+	outboxevent.DefaultCreatedAt = outboxeventDescCreatedAt.Default.(func() time.Time)
+	// outboxeventDescUpdatedAt is the schema descriptor for updated_at field.
+	outboxeventDescUpdatedAt := outboxeventFields[14].Descriptor()
+	// outboxevent.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	outboxevent.DefaultUpdatedAt = outboxeventDescUpdatedAt.Default.(func() time.Time)
+	// outboxevent.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	outboxevent.UpdateDefaultUpdatedAt = outboxeventDescUpdatedAt.UpdateDefault.(func() time.Time)
 	passwordresettokenFields := schema.PasswordResetToken{}.Fields()
 	_ = passwordresettokenFields
 	// passwordresettokenDescToken is the schema descriptor for token field.

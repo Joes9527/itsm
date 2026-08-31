@@ -19,16 +19,21 @@ import (
 
 // BPMNWorkflowController BPMN工作流控制器
 type BPMNWorkflowController struct {
-	processEngine  service.ProcessEngine
-	versionService *service.BPMNVersionService
+	processEngine           service.ProcessEngine
+	versionService          *service.BPMNVersionService
+	kafDelegationController *KafDelegationController
 }
 
 // NewBPMNWorkflowController 创建BPMN工作流控制器
-func NewBPMNWorkflowController(processEngine service.ProcessEngine, versionService *service.BPMNVersionService) *BPMNWorkflowController {
-	return &BPMNWorkflowController{
+func NewBPMNWorkflowController(processEngine service.ProcessEngine, versionService *service.BPMNVersionService, clients ...*ent.Client) *BPMNWorkflowController {
+	controller := &BPMNWorkflowController{
 		processEngine:  processEngine,
 		versionService: versionService,
 	}
+	if len(clients) > 0 && clients[0] != nil {
+		controller.kafDelegationController = NewKafDelegationController(clients[0], processEngine)
+	}
+	return controller
 }
 
 func getBPMNTenantContext(ctx *gin.Context) (context.Context, int, bool) {
@@ -114,6 +119,10 @@ func (c *BPMNWorkflowController) RegisterRoutes(r *gin.RouterGroup) {
 		bpmn.POST("/tasks/:id/decisions", c.SubmitTaskDecision)
 		bpmn.PUT("/tasks/:id/cancel", c.CancelTask)
 		bpmn.PUT("/tasks/:id/variables", c.SetTaskVariables)
+
+		if c.kafDelegationController != nil {
+			c.kafDelegationController.RegisterRoutes(r)
+		}
 
 		// 会签管理
 		bpmn.POST("/tasks/:id/counter-sign", c.CreateCounterSignTasks)

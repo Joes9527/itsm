@@ -51,6 +51,8 @@ import (
 	"itsm-backend/ent/incidentrule"
 	"itsm-backend/ent/incidentruleexecution"
 	"itsm-backend/ent/itemversion"
+	"itsm-backend/ent/kaftaskactionledger"
+	"itsm-backend/ent/kaftaskcompletionreceipt"
 	"itsm-backend/ent/knowledgearticle"
 	"itsm-backend/ent/knowledgearticlelike"
 	"itsm-backend/ent/knowledgearticleparticipant"
@@ -64,6 +66,7 @@ import (
 	"itsm-backend/ent/mspallocation"
 	"itsm-backend/ent/notification"
 	"itsm-backend/ent/notificationpreference"
+	"itsm-backend/ent/outboxevent"
 	"itsm-backend/ent/passwordresettoken"
 	"itsm-backend/ent/permission"
 	"itsm-backend/ent/permissiondefinition"
@@ -185,6 +188,8 @@ const (
 	TypeIncidentRule                = "IncidentRule"
 	TypeIncidentRuleExecution       = "IncidentRuleExecution"
 	TypeItemVersion                 = "ItemVersion"
+	TypeKafTaskActionLedger         = "KafTaskActionLedger"
+	TypeKafTaskCompletionReceipt    = "KafTaskCompletionReceipt"
 	TypeKnowledgeArticle            = "KnowledgeArticle"
 	TypeKnowledgeArticleLike        = "KnowledgeArticleLike"
 	TypeKnowledgeArticleParticipant = "KnowledgeArticleParticipant"
@@ -198,6 +203,7 @@ const (
 	TypeMicroservice                = "Microservice"
 	TypeNotification                = "Notification"
 	TypeNotificationPreference      = "NotificationPreference"
+	TypeOutboxEvent                 = "OutboxEvent"
 	TypePasswordResetToken          = "PasswordResetToken"
 	TypePermission                  = "Permission"
 	TypePermissionDefinition        = "PermissionDefinition"
@@ -57917,6 +57923,2015 @@ func (m *ItemVersionMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown ItemVersion edge %s", name)
 }
 
+// KafTaskActionLedgerMutation represents an operation that mutates the KafTaskActionLedger nodes in the graph.
+type KafTaskActionLedgerMutation struct {
+	config
+	op                   Op
+	typ                  string
+	id                   *int
+	tenant_id            *int
+	addtenant_id         *int
+	task_id              *string
+	run_id               *string
+	step_id              *string
+	action               *string
+	idempotency_key      *string
+	correlation_id       *string
+	procedure_ref        *string
+	procedure_version    *string
+	result_status        *string
+	result_payload       *json.RawMessage
+	appendresult_payload json.RawMessage
+	lease_owner          *string
+	lease_expires_at     *time.Time
+	last_error_code      *string
+	created_at           *time.Time
+	updated_at           *time.Time
+	clearedFields        map[string]struct{}
+	done                 bool
+	oldValue             func(context.Context) (*KafTaskActionLedger, error)
+	predicates           []predicate.KafTaskActionLedger
+}
+
+var _ ent.Mutation = (*KafTaskActionLedgerMutation)(nil)
+
+// kaftaskactionledgerOption allows management of the mutation configuration using functional options.
+type kaftaskactionledgerOption func(*KafTaskActionLedgerMutation)
+
+// newKafTaskActionLedgerMutation creates new mutation for the KafTaskActionLedger entity.
+func newKafTaskActionLedgerMutation(c config, op Op, opts ...kaftaskactionledgerOption) *KafTaskActionLedgerMutation {
+	m := &KafTaskActionLedgerMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeKafTaskActionLedger,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withKafTaskActionLedgerID sets the ID field of the mutation.
+func withKafTaskActionLedgerID(id int) kaftaskactionledgerOption {
+	return func(m *KafTaskActionLedgerMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *KafTaskActionLedger
+		)
+		m.oldValue = func(ctx context.Context) (*KafTaskActionLedger, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().KafTaskActionLedger.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withKafTaskActionLedger sets the old KafTaskActionLedger of the mutation.
+func withKafTaskActionLedger(node *KafTaskActionLedger) kaftaskactionledgerOption {
+	return func(m *KafTaskActionLedgerMutation) {
+		m.oldValue = func(context.Context) (*KafTaskActionLedger, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m KafTaskActionLedgerMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m KafTaskActionLedgerMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *KafTaskActionLedgerMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *KafTaskActionLedgerMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().KafTaskActionLedger.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *KafTaskActionLedgerMutation) SetTenantID(i int) {
+	m.tenant_id = &i
+	m.addtenant_id = nil
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *KafTaskActionLedgerMutation) TenantID() (r int, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the KafTaskActionLedger entity.
+// If the KafTaskActionLedger object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskActionLedgerMutation) OldTenantID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// AddTenantID adds i to the "tenant_id" field.
+func (m *KafTaskActionLedgerMutation) AddTenantID(i int) {
+	if m.addtenant_id != nil {
+		*m.addtenant_id += i
+	} else {
+		m.addtenant_id = &i
+	}
+}
+
+// AddedTenantID returns the value that was added to the "tenant_id" field in this mutation.
+func (m *KafTaskActionLedgerMutation) AddedTenantID() (r int, exists bool) {
+	v := m.addtenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *KafTaskActionLedgerMutation) ResetTenantID() {
+	m.tenant_id = nil
+	m.addtenant_id = nil
+}
+
+// SetTaskID sets the "task_id" field.
+func (m *KafTaskActionLedgerMutation) SetTaskID(s string) {
+	m.task_id = &s
+}
+
+// TaskID returns the value of the "task_id" field in the mutation.
+func (m *KafTaskActionLedgerMutation) TaskID() (r string, exists bool) {
+	v := m.task_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTaskID returns the old "task_id" field's value of the KafTaskActionLedger entity.
+// If the KafTaskActionLedger object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskActionLedgerMutation) OldTaskID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTaskID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTaskID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTaskID: %w", err)
+	}
+	return oldValue.TaskID, nil
+}
+
+// ResetTaskID resets all changes to the "task_id" field.
+func (m *KafTaskActionLedgerMutation) ResetTaskID() {
+	m.task_id = nil
+}
+
+// SetRunID sets the "run_id" field.
+func (m *KafTaskActionLedgerMutation) SetRunID(s string) {
+	m.run_id = &s
+}
+
+// RunID returns the value of the "run_id" field in the mutation.
+func (m *KafTaskActionLedgerMutation) RunID() (r string, exists bool) {
+	v := m.run_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRunID returns the old "run_id" field's value of the KafTaskActionLedger entity.
+// If the KafTaskActionLedger object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskActionLedgerMutation) OldRunID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRunID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRunID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRunID: %w", err)
+	}
+	return oldValue.RunID, nil
+}
+
+// ResetRunID resets all changes to the "run_id" field.
+func (m *KafTaskActionLedgerMutation) ResetRunID() {
+	m.run_id = nil
+}
+
+// SetStepID sets the "step_id" field.
+func (m *KafTaskActionLedgerMutation) SetStepID(s string) {
+	m.step_id = &s
+}
+
+// StepID returns the value of the "step_id" field in the mutation.
+func (m *KafTaskActionLedgerMutation) StepID() (r string, exists bool) {
+	v := m.step_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStepID returns the old "step_id" field's value of the KafTaskActionLedger entity.
+// If the KafTaskActionLedger object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskActionLedgerMutation) OldStepID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStepID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStepID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStepID: %w", err)
+	}
+	return oldValue.StepID, nil
+}
+
+// ResetStepID resets all changes to the "step_id" field.
+func (m *KafTaskActionLedgerMutation) ResetStepID() {
+	m.step_id = nil
+}
+
+// SetAction sets the "action" field.
+func (m *KafTaskActionLedgerMutation) SetAction(s string) {
+	m.action = &s
+}
+
+// Action returns the value of the "action" field in the mutation.
+func (m *KafTaskActionLedgerMutation) Action() (r string, exists bool) {
+	v := m.action
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAction returns the old "action" field's value of the KafTaskActionLedger entity.
+// If the KafTaskActionLedger object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskActionLedgerMutation) OldAction(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAction is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAction requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAction: %w", err)
+	}
+	return oldValue.Action, nil
+}
+
+// ResetAction resets all changes to the "action" field.
+func (m *KafTaskActionLedgerMutation) ResetAction() {
+	m.action = nil
+}
+
+// SetIdempotencyKey sets the "idempotency_key" field.
+func (m *KafTaskActionLedgerMutation) SetIdempotencyKey(s string) {
+	m.idempotency_key = &s
+}
+
+// IdempotencyKey returns the value of the "idempotency_key" field in the mutation.
+func (m *KafTaskActionLedgerMutation) IdempotencyKey() (r string, exists bool) {
+	v := m.idempotency_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIdempotencyKey returns the old "idempotency_key" field's value of the KafTaskActionLedger entity.
+// If the KafTaskActionLedger object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskActionLedgerMutation) OldIdempotencyKey(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIdempotencyKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIdempotencyKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIdempotencyKey: %w", err)
+	}
+	return oldValue.IdempotencyKey, nil
+}
+
+// ResetIdempotencyKey resets all changes to the "idempotency_key" field.
+func (m *KafTaskActionLedgerMutation) ResetIdempotencyKey() {
+	m.idempotency_key = nil
+}
+
+// SetCorrelationID sets the "correlation_id" field.
+func (m *KafTaskActionLedgerMutation) SetCorrelationID(s string) {
+	m.correlation_id = &s
+}
+
+// CorrelationID returns the value of the "correlation_id" field in the mutation.
+func (m *KafTaskActionLedgerMutation) CorrelationID() (r string, exists bool) {
+	v := m.correlation_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCorrelationID returns the old "correlation_id" field's value of the KafTaskActionLedger entity.
+// If the KafTaskActionLedger object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskActionLedgerMutation) OldCorrelationID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCorrelationID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCorrelationID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCorrelationID: %w", err)
+	}
+	return oldValue.CorrelationID, nil
+}
+
+// ResetCorrelationID resets all changes to the "correlation_id" field.
+func (m *KafTaskActionLedgerMutation) ResetCorrelationID() {
+	m.correlation_id = nil
+}
+
+// SetProcedureRef sets the "procedure_ref" field.
+func (m *KafTaskActionLedgerMutation) SetProcedureRef(s string) {
+	m.procedure_ref = &s
+}
+
+// ProcedureRef returns the value of the "procedure_ref" field in the mutation.
+func (m *KafTaskActionLedgerMutation) ProcedureRef() (r string, exists bool) {
+	v := m.procedure_ref
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProcedureRef returns the old "procedure_ref" field's value of the KafTaskActionLedger entity.
+// If the KafTaskActionLedger object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskActionLedgerMutation) OldProcedureRef(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProcedureRef is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProcedureRef requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProcedureRef: %w", err)
+	}
+	return oldValue.ProcedureRef, nil
+}
+
+// ResetProcedureRef resets all changes to the "procedure_ref" field.
+func (m *KafTaskActionLedgerMutation) ResetProcedureRef() {
+	m.procedure_ref = nil
+}
+
+// SetProcedureVersion sets the "procedure_version" field.
+func (m *KafTaskActionLedgerMutation) SetProcedureVersion(s string) {
+	m.procedure_version = &s
+}
+
+// ProcedureVersion returns the value of the "procedure_version" field in the mutation.
+func (m *KafTaskActionLedgerMutation) ProcedureVersion() (r string, exists bool) {
+	v := m.procedure_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProcedureVersion returns the old "procedure_version" field's value of the KafTaskActionLedger entity.
+// If the KafTaskActionLedger object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskActionLedgerMutation) OldProcedureVersion(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProcedureVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProcedureVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProcedureVersion: %w", err)
+	}
+	return oldValue.ProcedureVersion, nil
+}
+
+// ResetProcedureVersion resets all changes to the "procedure_version" field.
+func (m *KafTaskActionLedgerMutation) ResetProcedureVersion() {
+	m.procedure_version = nil
+}
+
+// SetResultStatus sets the "result_status" field.
+func (m *KafTaskActionLedgerMutation) SetResultStatus(s string) {
+	m.result_status = &s
+}
+
+// ResultStatus returns the value of the "result_status" field in the mutation.
+func (m *KafTaskActionLedgerMutation) ResultStatus() (r string, exists bool) {
+	v := m.result_status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldResultStatus returns the old "result_status" field's value of the KafTaskActionLedger entity.
+// If the KafTaskActionLedger object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskActionLedgerMutation) OldResultStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldResultStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldResultStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldResultStatus: %w", err)
+	}
+	return oldValue.ResultStatus, nil
+}
+
+// ResetResultStatus resets all changes to the "result_status" field.
+func (m *KafTaskActionLedgerMutation) ResetResultStatus() {
+	m.result_status = nil
+}
+
+// SetResultPayload sets the "result_payload" field.
+func (m *KafTaskActionLedgerMutation) SetResultPayload(jm json.RawMessage) {
+	m.result_payload = &jm
+	m.appendresult_payload = nil
+}
+
+// ResultPayload returns the value of the "result_payload" field in the mutation.
+func (m *KafTaskActionLedgerMutation) ResultPayload() (r json.RawMessage, exists bool) {
+	v := m.result_payload
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldResultPayload returns the old "result_payload" field's value of the KafTaskActionLedger entity.
+// If the KafTaskActionLedger object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskActionLedgerMutation) OldResultPayload(ctx context.Context) (v json.RawMessage, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldResultPayload is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldResultPayload requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldResultPayload: %w", err)
+	}
+	return oldValue.ResultPayload, nil
+}
+
+// AppendResultPayload adds jm to the "result_payload" field.
+func (m *KafTaskActionLedgerMutation) AppendResultPayload(jm json.RawMessage) {
+	m.appendresult_payload = append(m.appendresult_payload, jm...)
+}
+
+// AppendedResultPayload returns the list of values that were appended to the "result_payload" field in this mutation.
+func (m *KafTaskActionLedgerMutation) AppendedResultPayload() (json.RawMessage, bool) {
+	if len(m.appendresult_payload) == 0 {
+		return nil, false
+	}
+	return m.appendresult_payload, true
+}
+
+// ClearResultPayload clears the value of the "result_payload" field.
+func (m *KafTaskActionLedgerMutation) ClearResultPayload() {
+	m.result_payload = nil
+	m.appendresult_payload = nil
+	m.clearedFields[kaftaskactionledger.FieldResultPayload] = struct{}{}
+}
+
+// ResultPayloadCleared returns if the "result_payload" field was cleared in this mutation.
+func (m *KafTaskActionLedgerMutation) ResultPayloadCleared() bool {
+	_, ok := m.clearedFields[kaftaskactionledger.FieldResultPayload]
+	return ok
+}
+
+// ResetResultPayload resets all changes to the "result_payload" field.
+func (m *KafTaskActionLedgerMutation) ResetResultPayload() {
+	m.result_payload = nil
+	m.appendresult_payload = nil
+	delete(m.clearedFields, kaftaskactionledger.FieldResultPayload)
+}
+
+// SetLeaseOwner sets the "lease_owner" field.
+func (m *KafTaskActionLedgerMutation) SetLeaseOwner(s string) {
+	m.lease_owner = &s
+}
+
+// LeaseOwner returns the value of the "lease_owner" field in the mutation.
+func (m *KafTaskActionLedgerMutation) LeaseOwner() (r string, exists bool) {
+	v := m.lease_owner
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLeaseOwner returns the old "lease_owner" field's value of the KafTaskActionLedger entity.
+// If the KafTaskActionLedger object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskActionLedgerMutation) OldLeaseOwner(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLeaseOwner is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLeaseOwner requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLeaseOwner: %w", err)
+	}
+	return oldValue.LeaseOwner, nil
+}
+
+// ClearLeaseOwner clears the value of the "lease_owner" field.
+func (m *KafTaskActionLedgerMutation) ClearLeaseOwner() {
+	m.lease_owner = nil
+	m.clearedFields[kaftaskactionledger.FieldLeaseOwner] = struct{}{}
+}
+
+// LeaseOwnerCleared returns if the "lease_owner" field was cleared in this mutation.
+func (m *KafTaskActionLedgerMutation) LeaseOwnerCleared() bool {
+	_, ok := m.clearedFields[kaftaskactionledger.FieldLeaseOwner]
+	return ok
+}
+
+// ResetLeaseOwner resets all changes to the "lease_owner" field.
+func (m *KafTaskActionLedgerMutation) ResetLeaseOwner() {
+	m.lease_owner = nil
+	delete(m.clearedFields, kaftaskactionledger.FieldLeaseOwner)
+}
+
+// SetLeaseExpiresAt sets the "lease_expires_at" field.
+func (m *KafTaskActionLedgerMutation) SetLeaseExpiresAt(t time.Time) {
+	m.lease_expires_at = &t
+}
+
+// LeaseExpiresAt returns the value of the "lease_expires_at" field in the mutation.
+func (m *KafTaskActionLedgerMutation) LeaseExpiresAt() (r time.Time, exists bool) {
+	v := m.lease_expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLeaseExpiresAt returns the old "lease_expires_at" field's value of the KafTaskActionLedger entity.
+// If the KafTaskActionLedger object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskActionLedgerMutation) OldLeaseExpiresAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLeaseExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLeaseExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLeaseExpiresAt: %w", err)
+	}
+	return oldValue.LeaseExpiresAt, nil
+}
+
+// ClearLeaseExpiresAt clears the value of the "lease_expires_at" field.
+func (m *KafTaskActionLedgerMutation) ClearLeaseExpiresAt() {
+	m.lease_expires_at = nil
+	m.clearedFields[kaftaskactionledger.FieldLeaseExpiresAt] = struct{}{}
+}
+
+// LeaseExpiresAtCleared returns if the "lease_expires_at" field was cleared in this mutation.
+func (m *KafTaskActionLedgerMutation) LeaseExpiresAtCleared() bool {
+	_, ok := m.clearedFields[kaftaskactionledger.FieldLeaseExpiresAt]
+	return ok
+}
+
+// ResetLeaseExpiresAt resets all changes to the "lease_expires_at" field.
+func (m *KafTaskActionLedgerMutation) ResetLeaseExpiresAt() {
+	m.lease_expires_at = nil
+	delete(m.clearedFields, kaftaskactionledger.FieldLeaseExpiresAt)
+}
+
+// SetLastErrorCode sets the "last_error_code" field.
+func (m *KafTaskActionLedgerMutation) SetLastErrorCode(s string) {
+	m.last_error_code = &s
+}
+
+// LastErrorCode returns the value of the "last_error_code" field in the mutation.
+func (m *KafTaskActionLedgerMutation) LastErrorCode() (r string, exists bool) {
+	v := m.last_error_code
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastErrorCode returns the old "last_error_code" field's value of the KafTaskActionLedger entity.
+// If the KafTaskActionLedger object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskActionLedgerMutation) OldLastErrorCode(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastErrorCode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastErrorCode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastErrorCode: %w", err)
+	}
+	return oldValue.LastErrorCode, nil
+}
+
+// ClearLastErrorCode clears the value of the "last_error_code" field.
+func (m *KafTaskActionLedgerMutation) ClearLastErrorCode() {
+	m.last_error_code = nil
+	m.clearedFields[kaftaskactionledger.FieldLastErrorCode] = struct{}{}
+}
+
+// LastErrorCodeCleared returns if the "last_error_code" field was cleared in this mutation.
+func (m *KafTaskActionLedgerMutation) LastErrorCodeCleared() bool {
+	_, ok := m.clearedFields[kaftaskactionledger.FieldLastErrorCode]
+	return ok
+}
+
+// ResetLastErrorCode resets all changes to the "last_error_code" field.
+func (m *KafTaskActionLedgerMutation) ResetLastErrorCode() {
+	m.last_error_code = nil
+	delete(m.clearedFields, kaftaskactionledger.FieldLastErrorCode)
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *KafTaskActionLedgerMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *KafTaskActionLedgerMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the KafTaskActionLedger entity.
+// If the KafTaskActionLedger object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskActionLedgerMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *KafTaskActionLedgerMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *KafTaskActionLedgerMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *KafTaskActionLedgerMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the KafTaskActionLedger entity.
+// If the KafTaskActionLedger object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskActionLedgerMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *KafTaskActionLedgerMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the KafTaskActionLedgerMutation builder.
+func (m *KafTaskActionLedgerMutation) Where(ps ...predicate.KafTaskActionLedger) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the KafTaskActionLedgerMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *KafTaskActionLedgerMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.KafTaskActionLedger, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *KafTaskActionLedgerMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *KafTaskActionLedgerMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (KafTaskActionLedger).
+func (m *KafTaskActionLedgerMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *KafTaskActionLedgerMutation) Fields() []string {
+	fields := make([]string, 0, 16)
+	if m.tenant_id != nil {
+		fields = append(fields, kaftaskactionledger.FieldTenantID)
+	}
+	if m.task_id != nil {
+		fields = append(fields, kaftaskactionledger.FieldTaskID)
+	}
+	if m.run_id != nil {
+		fields = append(fields, kaftaskactionledger.FieldRunID)
+	}
+	if m.step_id != nil {
+		fields = append(fields, kaftaskactionledger.FieldStepID)
+	}
+	if m.action != nil {
+		fields = append(fields, kaftaskactionledger.FieldAction)
+	}
+	if m.idempotency_key != nil {
+		fields = append(fields, kaftaskactionledger.FieldIdempotencyKey)
+	}
+	if m.correlation_id != nil {
+		fields = append(fields, kaftaskactionledger.FieldCorrelationID)
+	}
+	if m.procedure_ref != nil {
+		fields = append(fields, kaftaskactionledger.FieldProcedureRef)
+	}
+	if m.procedure_version != nil {
+		fields = append(fields, kaftaskactionledger.FieldProcedureVersion)
+	}
+	if m.result_status != nil {
+		fields = append(fields, kaftaskactionledger.FieldResultStatus)
+	}
+	if m.result_payload != nil {
+		fields = append(fields, kaftaskactionledger.FieldResultPayload)
+	}
+	if m.lease_owner != nil {
+		fields = append(fields, kaftaskactionledger.FieldLeaseOwner)
+	}
+	if m.lease_expires_at != nil {
+		fields = append(fields, kaftaskactionledger.FieldLeaseExpiresAt)
+	}
+	if m.last_error_code != nil {
+		fields = append(fields, kaftaskactionledger.FieldLastErrorCode)
+	}
+	if m.created_at != nil {
+		fields = append(fields, kaftaskactionledger.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, kaftaskactionledger.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *KafTaskActionLedgerMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case kaftaskactionledger.FieldTenantID:
+		return m.TenantID()
+	case kaftaskactionledger.FieldTaskID:
+		return m.TaskID()
+	case kaftaskactionledger.FieldRunID:
+		return m.RunID()
+	case kaftaskactionledger.FieldStepID:
+		return m.StepID()
+	case kaftaskactionledger.FieldAction:
+		return m.Action()
+	case kaftaskactionledger.FieldIdempotencyKey:
+		return m.IdempotencyKey()
+	case kaftaskactionledger.FieldCorrelationID:
+		return m.CorrelationID()
+	case kaftaskactionledger.FieldProcedureRef:
+		return m.ProcedureRef()
+	case kaftaskactionledger.FieldProcedureVersion:
+		return m.ProcedureVersion()
+	case kaftaskactionledger.FieldResultStatus:
+		return m.ResultStatus()
+	case kaftaskactionledger.FieldResultPayload:
+		return m.ResultPayload()
+	case kaftaskactionledger.FieldLeaseOwner:
+		return m.LeaseOwner()
+	case kaftaskactionledger.FieldLeaseExpiresAt:
+		return m.LeaseExpiresAt()
+	case kaftaskactionledger.FieldLastErrorCode:
+		return m.LastErrorCode()
+	case kaftaskactionledger.FieldCreatedAt:
+		return m.CreatedAt()
+	case kaftaskactionledger.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *KafTaskActionLedgerMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case kaftaskactionledger.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case kaftaskactionledger.FieldTaskID:
+		return m.OldTaskID(ctx)
+	case kaftaskactionledger.FieldRunID:
+		return m.OldRunID(ctx)
+	case kaftaskactionledger.FieldStepID:
+		return m.OldStepID(ctx)
+	case kaftaskactionledger.FieldAction:
+		return m.OldAction(ctx)
+	case kaftaskactionledger.FieldIdempotencyKey:
+		return m.OldIdempotencyKey(ctx)
+	case kaftaskactionledger.FieldCorrelationID:
+		return m.OldCorrelationID(ctx)
+	case kaftaskactionledger.FieldProcedureRef:
+		return m.OldProcedureRef(ctx)
+	case kaftaskactionledger.FieldProcedureVersion:
+		return m.OldProcedureVersion(ctx)
+	case kaftaskactionledger.FieldResultStatus:
+		return m.OldResultStatus(ctx)
+	case kaftaskactionledger.FieldResultPayload:
+		return m.OldResultPayload(ctx)
+	case kaftaskactionledger.FieldLeaseOwner:
+		return m.OldLeaseOwner(ctx)
+	case kaftaskactionledger.FieldLeaseExpiresAt:
+		return m.OldLeaseExpiresAt(ctx)
+	case kaftaskactionledger.FieldLastErrorCode:
+		return m.OldLastErrorCode(ctx)
+	case kaftaskactionledger.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case kaftaskactionledger.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown KafTaskActionLedger field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *KafTaskActionLedgerMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case kaftaskactionledger.FieldTenantID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case kaftaskactionledger.FieldTaskID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTaskID(v)
+		return nil
+	case kaftaskactionledger.FieldRunID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRunID(v)
+		return nil
+	case kaftaskactionledger.FieldStepID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStepID(v)
+		return nil
+	case kaftaskactionledger.FieldAction:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAction(v)
+		return nil
+	case kaftaskactionledger.FieldIdempotencyKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIdempotencyKey(v)
+		return nil
+	case kaftaskactionledger.FieldCorrelationID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCorrelationID(v)
+		return nil
+	case kaftaskactionledger.FieldProcedureRef:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProcedureRef(v)
+		return nil
+	case kaftaskactionledger.FieldProcedureVersion:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProcedureVersion(v)
+		return nil
+	case kaftaskactionledger.FieldResultStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetResultStatus(v)
+		return nil
+	case kaftaskactionledger.FieldResultPayload:
+		v, ok := value.(json.RawMessage)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetResultPayload(v)
+		return nil
+	case kaftaskactionledger.FieldLeaseOwner:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLeaseOwner(v)
+		return nil
+	case kaftaskactionledger.FieldLeaseExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLeaseExpiresAt(v)
+		return nil
+	case kaftaskactionledger.FieldLastErrorCode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastErrorCode(v)
+		return nil
+	case kaftaskactionledger.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case kaftaskactionledger.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown KafTaskActionLedger field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *KafTaskActionLedgerMutation) AddedFields() []string {
+	var fields []string
+	if m.addtenant_id != nil {
+		fields = append(fields, kaftaskactionledger.FieldTenantID)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *KafTaskActionLedgerMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case kaftaskactionledger.FieldTenantID:
+		return m.AddedTenantID()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *KafTaskActionLedgerMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case kaftaskactionledger.FieldTenantID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTenantID(v)
+		return nil
+	}
+	return fmt.Errorf("unknown KafTaskActionLedger numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *KafTaskActionLedgerMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(kaftaskactionledger.FieldResultPayload) {
+		fields = append(fields, kaftaskactionledger.FieldResultPayload)
+	}
+	if m.FieldCleared(kaftaskactionledger.FieldLeaseOwner) {
+		fields = append(fields, kaftaskactionledger.FieldLeaseOwner)
+	}
+	if m.FieldCleared(kaftaskactionledger.FieldLeaseExpiresAt) {
+		fields = append(fields, kaftaskactionledger.FieldLeaseExpiresAt)
+	}
+	if m.FieldCleared(kaftaskactionledger.FieldLastErrorCode) {
+		fields = append(fields, kaftaskactionledger.FieldLastErrorCode)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *KafTaskActionLedgerMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *KafTaskActionLedgerMutation) ClearField(name string) error {
+	switch name {
+	case kaftaskactionledger.FieldResultPayload:
+		m.ClearResultPayload()
+		return nil
+	case kaftaskactionledger.FieldLeaseOwner:
+		m.ClearLeaseOwner()
+		return nil
+	case kaftaskactionledger.FieldLeaseExpiresAt:
+		m.ClearLeaseExpiresAt()
+		return nil
+	case kaftaskactionledger.FieldLastErrorCode:
+		m.ClearLastErrorCode()
+		return nil
+	}
+	return fmt.Errorf("unknown KafTaskActionLedger nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *KafTaskActionLedgerMutation) ResetField(name string) error {
+	switch name {
+	case kaftaskactionledger.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case kaftaskactionledger.FieldTaskID:
+		m.ResetTaskID()
+		return nil
+	case kaftaskactionledger.FieldRunID:
+		m.ResetRunID()
+		return nil
+	case kaftaskactionledger.FieldStepID:
+		m.ResetStepID()
+		return nil
+	case kaftaskactionledger.FieldAction:
+		m.ResetAction()
+		return nil
+	case kaftaskactionledger.FieldIdempotencyKey:
+		m.ResetIdempotencyKey()
+		return nil
+	case kaftaskactionledger.FieldCorrelationID:
+		m.ResetCorrelationID()
+		return nil
+	case kaftaskactionledger.FieldProcedureRef:
+		m.ResetProcedureRef()
+		return nil
+	case kaftaskactionledger.FieldProcedureVersion:
+		m.ResetProcedureVersion()
+		return nil
+	case kaftaskactionledger.FieldResultStatus:
+		m.ResetResultStatus()
+		return nil
+	case kaftaskactionledger.FieldResultPayload:
+		m.ResetResultPayload()
+		return nil
+	case kaftaskactionledger.FieldLeaseOwner:
+		m.ResetLeaseOwner()
+		return nil
+	case kaftaskactionledger.FieldLeaseExpiresAt:
+		m.ResetLeaseExpiresAt()
+		return nil
+	case kaftaskactionledger.FieldLastErrorCode:
+		m.ResetLastErrorCode()
+		return nil
+	case kaftaskactionledger.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case kaftaskactionledger.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown KafTaskActionLedger field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *KafTaskActionLedgerMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *KafTaskActionLedgerMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *KafTaskActionLedgerMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *KafTaskActionLedgerMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *KafTaskActionLedgerMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *KafTaskActionLedgerMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *KafTaskActionLedgerMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown KafTaskActionLedger unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *KafTaskActionLedgerMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown KafTaskActionLedger edge %s", name)
+}
+
+// KafTaskCompletionReceiptMutation represents an operation that mutates the KafTaskCompletionReceipt nodes in the graph.
+type KafTaskCompletionReceiptMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int
+	ledger_id     *int
+	addledger_id  *int
+	tenant_id     *int
+	addtenant_id  *int
+	task_id       *string
+	status        *string
+	error_code    *string
+	created_at    *time.Time
+	updated_at    *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*KafTaskCompletionReceipt, error)
+	predicates    []predicate.KafTaskCompletionReceipt
+}
+
+var _ ent.Mutation = (*KafTaskCompletionReceiptMutation)(nil)
+
+// kaftaskcompletionreceiptOption allows management of the mutation configuration using functional options.
+type kaftaskcompletionreceiptOption func(*KafTaskCompletionReceiptMutation)
+
+// newKafTaskCompletionReceiptMutation creates new mutation for the KafTaskCompletionReceipt entity.
+func newKafTaskCompletionReceiptMutation(c config, op Op, opts ...kaftaskcompletionreceiptOption) *KafTaskCompletionReceiptMutation {
+	m := &KafTaskCompletionReceiptMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeKafTaskCompletionReceipt,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withKafTaskCompletionReceiptID sets the ID field of the mutation.
+func withKafTaskCompletionReceiptID(id int) kaftaskcompletionreceiptOption {
+	return func(m *KafTaskCompletionReceiptMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *KafTaskCompletionReceipt
+		)
+		m.oldValue = func(ctx context.Context) (*KafTaskCompletionReceipt, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().KafTaskCompletionReceipt.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withKafTaskCompletionReceipt sets the old KafTaskCompletionReceipt of the mutation.
+func withKafTaskCompletionReceipt(node *KafTaskCompletionReceipt) kaftaskcompletionreceiptOption {
+	return func(m *KafTaskCompletionReceiptMutation) {
+		m.oldValue = func(context.Context) (*KafTaskCompletionReceipt, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m KafTaskCompletionReceiptMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m KafTaskCompletionReceiptMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *KafTaskCompletionReceiptMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *KafTaskCompletionReceiptMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().KafTaskCompletionReceipt.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetLedgerID sets the "ledger_id" field.
+func (m *KafTaskCompletionReceiptMutation) SetLedgerID(i int) {
+	m.ledger_id = &i
+	m.addledger_id = nil
+}
+
+// LedgerID returns the value of the "ledger_id" field in the mutation.
+func (m *KafTaskCompletionReceiptMutation) LedgerID() (r int, exists bool) {
+	v := m.ledger_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLedgerID returns the old "ledger_id" field's value of the KafTaskCompletionReceipt entity.
+// If the KafTaskCompletionReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskCompletionReceiptMutation) OldLedgerID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLedgerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLedgerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLedgerID: %w", err)
+	}
+	return oldValue.LedgerID, nil
+}
+
+// AddLedgerID adds i to the "ledger_id" field.
+func (m *KafTaskCompletionReceiptMutation) AddLedgerID(i int) {
+	if m.addledger_id != nil {
+		*m.addledger_id += i
+	} else {
+		m.addledger_id = &i
+	}
+}
+
+// AddedLedgerID returns the value that was added to the "ledger_id" field in this mutation.
+func (m *KafTaskCompletionReceiptMutation) AddedLedgerID() (r int, exists bool) {
+	v := m.addledger_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetLedgerID resets all changes to the "ledger_id" field.
+func (m *KafTaskCompletionReceiptMutation) ResetLedgerID() {
+	m.ledger_id = nil
+	m.addledger_id = nil
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *KafTaskCompletionReceiptMutation) SetTenantID(i int) {
+	m.tenant_id = &i
+	m.addtenant_id = nil
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *KafTaskCompletionReceiptMutation) TenantID() (r int, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the KafTaskCompletionReceipt entity.
+// If the KafTaskCompletionReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskCompletionReceiptMutation) OldTenantID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// AddTenantID adds i to the "tenant_id" field.
+func (m *KafTaskCompletionReceiptMutation) AddTenantID(i int) {
+	if m.addtenant_id != nil {
+		*m.addtenant_id += i
+	} else {
+		m.addtenant_id = &i
+	}
+}
+
+// AddedTenantID returns the value that was added to the "tenant_id" field in this mutation.
+func (m *KafTaskCompletionReceiptMutation) AddedTenantID() (r int, exists bool) {
+	v := m.addtenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *KafTaskCompletionReceiptMutation) ResetTenantID() {
+	m.tenant_id = nil
+	m.addtenant_id = nil
+}
+
+// SetTaskID sets the "task_id" field.
+func (m *KafTaskCompletionReceiptMutation) SetTaskID(s string) {
+	m.task_id = &s
+}
+
+// TaskID returns the value of the "task_id" field in the mutation.
+func (m *KafTaskCompletionReceiptMutation) TaskID() (r string, exists bool) {
+	v := m.task_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTaskID returns the old "task_id" field's value of the KafTaskCompletionReceipt entity.
+// If the KafTaskCompletionReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskCompletionReceiptMutation) OldTaskID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTaskID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTaskID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTaskID: %w", err)
+	}
+	return oldValue.TaskID, nil
+}
+
+// ResetTaskID resets all changes to the "task_id" field.
+func (m *KafTaskCompletionReceiptMutation) ResetTaskID() {
+	m.task_id = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *KafTaskCompletionReceiptMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *KafTaskCompletionReceiptMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the KafTaskCompletionReceipt entity.
+// If the KafTaskCompletionReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskCompletionReceiptMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *KafTaskCompletionReceiptMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetErrorCode sets the "error_code" field.
+func (m *KafTaskCompletionReceiptMutation) SetErrorCode(s string) {
+	m.error_code = &s
+}
+
+// ErrorCode returns the value of the "error_code" field in the mutation.
+func (m *KafTaskCompletionReceiptMutation) ErrorCode() (r string, exists bool) {
+	v := m.error_code
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldErrorCode returns the old "error_code" field's value of the KafTaskCompletionReceipt entity.
+// If the KafTaskCompletionReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskCompletionReceiptMutation) OldErrorCode(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldErrorCode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldErrorCode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldErrorCode: %w", err)
+	}
+	return oldValue.ErrorCode, nil
+}
+
+// ClearErrorCode clears the value of the "error_code" field.
+func (m *KafTaskCompletionReceiptMutation) ClearErrorCode() {
+	m.error_code = nil
+	m.clearedFields[kaftaskcompletionreceipt.FieldErrorCode] = struct{}{}
+}
+
+// ErrorCodeCleared returns if the "error_code" field was cleared in this mutation.
+func (m *KafTaskCompletionReceiptMutation) ErrorCodeCleared() bool {
+	_, ok := m.clearedFields[kaftaskcompletionreceipt.FieldErrorCode]
+	return ok
+}
+
+// ResetErrorCode resets all changes to the "error_code" field.
+func (m *KafTaskCompletionReceiptMutation) ResetErrorCode() {
+	m.error_code = nil
+	delete(m.clearedFields, kaftaskcompletionreceipt.FieldErrorCode)
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *KafTaskCompletionReceiptMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *KafTaskCompletionReceiptMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the KafTaskCompletionReceipt entity.
+// If the KafTaskCompletionReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskCompletionReceiptMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *KafTaskCompletionReceiptMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *KafTaskCompletionReceiptMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *KafTaskCompletionReceiptMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the KafTaskCompletionReceipt entity.
+// If the KafTaskCompletionReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskCompletionReceiptMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *KafTaskCompletionReceiptMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the KafTaskCompletionReceiptMutation builder.
+func (m *KafTaskCompletionReceiptMutation) Where(ps ...predicate.KafTaskCompletionReceipt) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the KafTaskCompletionReceiptMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *KafTaskCompletionReceiptMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.KafTaskCompletionReceipt, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *KafTaskCompletionReceiptMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *KafTaskCompletionReceiptMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (KafTaskCompletionReceipt).
+func (m *KafTaskCompletionReceiptMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *KafTaskCompletionReceiptMutation) Fields() []string {
+	fields := make([]string, 0, 7)
+	if m.ledger_id != nil {
+		fields = append(fields, kaftaskcompletionreceipt.FieldLedgerID)
+	}
+	if m.tenant_id != nil {
+		fields = append(fields, kaftaskcompletionreceipt.FieldTenantID)
+	}
+	if m.task_id != nil {
+		fields = append(fields, kaftaskcompletionreceipt.FieldTaskID)
+	}
+	if m.status != nil {
+		fields = append(fields, kaftaskcompletionreceipt.FieldStatus)
+	}
+	if m.error_code != nil {
+		fields = append(fields, kaftaskcompletionreceipt.FieldErrorCode)
+	}
+	if m.created_at != nil {
+		fields = append(fields, kaftaskcompletionreceipt.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, kaftaskcompletionreceipt.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *KafTaskCompletionReceiptMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case kaftaskcompletionreceipt.FieldLedgerID:
+		return m.LedgerID()
+	case kaftaskcompletionreceipt.FieldTenantID:
+		return m.TenantID()
+	case kaftaskcompletionreceipt.FieldTaskID:
+		return m.TaskID()
+	case kaftaskcompletionreceipt.FieldStatus:
+		return m.Status()
+	case kaftaskcompletionreceipt.FieldErrorCode:
+		return m.ErrorCode()
+	case kaftaskcompletionreceipt.FieldCreatedAt:
+		return m.CreatedAt()
+	case kaftaskcompletionreceipt.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *KafTaskCompletionReceiptMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case kaftaskcompletionreceipt.FieldLedgerID:
+		return m.OldLedgerID(ctx)
+	case kaftaskcompletionreceipt.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case kaftaskcompletionreceipt.FieldTaskID:
+		return m.OldTaskID(ctx)
+	case kaftaskcompletionreceipt.FieldStatus:
+		return m.OldStatus(ctx)
+	case kaftaskcompletionreceipt.FieldErrorCode:
+		return m.OldErrorCode(ctx)
+	case kaftaskcompletionreceipt.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case kaftaskcompletionreceipt.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown KafTaskCompletionReceipt field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *KafTaskCompletionReceiptMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case kaftaskcompletionreceipt.FieldLedgerID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLedgerID(v)
+		return nil
+	case kaftaskcompletionreceipt.FieldTenantID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case kaftaskcompletionreceipt.FieldTaskID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTaskID(v)
+		return nil
+	case kaftaskcompletionreceipt.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case kaftaskcompletionreceipt.FieldErrorCode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetErrorCode(v)
+		return nil
+	case kaftaskcompletionreceipt.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case kaftaskcompletionreceipt.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown KafTaskCompletionReceipt field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *KafTaskCompletionReceiptMutation) AddedFields() []string {
+	var fields []string
+	if m.addledger_id != nil {
+		fields = append(fields, kaftaskcompletionreceipt.FieldLedgerID)
+	}
+	if m.addtenant_id != nil {
+		fields = append(fields, kaftaskcompletionreceipt.FieldTenantID)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *KafTaskCompletionReceiptMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case kaftaskcompletionreceipt.FieldLedgerID:
+		return m.AddedLedgerID()
+	case kaftaskcompletionreceipt.FieldTenantID:
+		return m.AddedTenantID()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *KafTaskCompletionReceiptMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case kaftaskcompletionreceipt.FieldLedgerID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddLedgerID(v)
+		return nil
+	case kaftaskcompletionreceipt.FieldTenantID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTenantID(v)
+		return nil
+	}
+	return fmt.Errorf("unknown KafTaskCompletionReceipt numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *KafTaskCompletionReceiptMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(kaftaskcompletionreceipt.FieldErrorCode) {
+		fields = append(fields, kaftaskcompletionreceipt.FieldErrorCode)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *KafTaskCompletionReceiptMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *KafTaskCompletionReceiptMutation) ClearField(name string) error {
+	switch name {
+	case kaftaskcompletionreceipt.FieldErrorCode:
+		m.ClearErrorCode()
+		return nil
+	}
+	return fmt.Errorf("unknown KafTaskCompletionReceipt nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *KafTaskCompletionReceiptMutation) ResetField(name string) error {
+	switch name {
+	case kaftaskcompletionreceipt.FieldLedgerID:
+		m.ResetLedgerID()
+		return nil
+	case kaftaskcompletionreceipt.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case kaftaskcompletionreceipt.FieldTaskID:
+		m.ResetTaskID()
+		return nil
+	case kaftaskcompletionreceipt.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case kaftaskcompletionreceipt.FieldErrorCode:
+		m.ResetErrorCode()
+		return nil
+	case kaftaskcompletionreceipt.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case kaftaskcompletionreceipt.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown KafTaskCompletionReceipt field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *KafTaskCompletionReceiptMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *KafTaskCompletionReceiptMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *KafTaskCompletionReceiptMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *KafTaskCompletionReceiptMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *KafTaskCompletionReceiptMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *KafTaskCompletionReceiptMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *KafTaskCompletionReceiptMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown KafTaskCompletionReceipt unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *KafTaskCompletionReceiptMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown KafTaskCompletionReceipt edge %s", name)
+}
+
 // KnowledgeArticleMutation represents an operation that mutates the KnowledgeArticle nodes in the graph.
 type KnowledgeArticleMutation struct {
 	config
@@ -72730,6 +74745,1252 @@ func (m *NotificationPreferenceMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown NotificationPreference edge %s", name)
+}
+
+// OutboxEventMutation represents an operation that mutates the OutboxEvent nodes in the graph.
+type OutboxEventMutation struct {
+	config
+	op               Op
+	typ              string
+	id               *int
+	event_id         *string
+	event_type       *string
+	tenant_id        *int
+	addtenant_id     *int
+	aggregate_type   *string
+	aggregate_id     *string
+	payload          *json.RawMessage
+	appendpayload    json.RawMessage
+	status           *string
+	attempt_count    *int
+	addattempt_count *int
+	next_attempt_at  *time.Time
+	claim_token      *string
+	claim_expires_at *time.Time
+	published_at     *time.Time
+	last_error       *string
+	created_at       *time.Time
+	updated_at       *time.Time
+	clearedFields    map[string]struct{}
+	done             bool
+	oldValue         func(context.Context) (*OutboxEvent, error)
+	predicates       []predicate.OutboxEvent
+}
+
+var _ ent.Mutation = (*OutboxEventMutation)(nil)
+
+// outboxeventOption allows management of the mutation configuration using functional options.
+type outboxeventOption func(*OutboxEventMutation)
+
+// newOutboxEventMutation creates new mutation for the OutboxEvent entity.
+func newOutboxEventMutation(c config, op Op, opts ...outboxeventOption) *OutboxEventMutation {
+	m := &OutboxEventMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeOutboxEvent,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withOutboxEventID sets the ID field of the mutation.
+func withOutboxEventID(id int) outboxeventOption {
+	return func(m *OutboxEventMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *OutboxEvent
+		)
+		m.oldValue = func(ctx context.Context) (*OutboxEvent, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().OutboxEvent.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withOutboxEvent sets the old OutboxEvent of the mutation.
+func withOutboxEvent(node *OutboxEvent) outboxeventOption {
+	return func(m *OutboxEventMutation) {
+		m.oldValue = func(context.Context) (*OutboxEvent, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m OutboxEventMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m OutboxEventMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *OutboxEventMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *OutboxEventMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().OutboxEvent.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetEventID sets the "event_id" field.
+func (m *OutboxEventMutation) SetEventID(s string) {
+	m.event_id = &s
+}
+
+// EventID returns the value of the "event_id" field in the mutation.
+func (m *OutboxEventMutation) EventID() (r string, exists bool) {
+	v := m.event_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEventID returns the old "event_id" field's value of the OutboxEvent entity.
+// If the OutboxEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OutboxEventMutation) OldEventID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEventID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEventID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEventID: %w", err)
+	}
+	return oldValue.EventID, nil
+}
+
+// ResetEventID resets all changes to the "event_id" field.
+func (m *OutboxEventMutation) ResetEventID() {
+	m.event_id = nil
+}
+
+// SetEventType sets the "event_type" field.
+func (m *OutboxEventMutation) SetEventType(s string) {
+	m.event_type = &s
+}
+
+// EventType returns the value of the "event_type" field in the mutation.
+func (m *OutboxEventMutation) EventType() (r string, exists bool) {
+	v := m.event_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEventType returns the old "event_type" field's value of the OutboxEvent entity.
+// If the OutboxEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OutboxEventMutation) OldEventType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEventType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEventType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEventType: %w", err)
+	}
+	return oldValue.EventType, nil
+}
+
+// ResetEventType resets all changes to the "event_type" field.
+func (m *OutboxEventMutation) ResetEventType() {
+	m.event_type = nil
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *OutboxEventMutation) SetTenantID(i int) {
+	m.tenant_id = &i
+	m.addtenant_id = nil
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *OutboxEventMutation) TenantID() (r int, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the OutboxEvent entity.
+// If the OutboxEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OutboxEventMutation) OldTenantID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// AddTenantID adds i to the "tenant_id" field.
+func (m *OutboxEventMutation) AddTenantID(i int) {
+	if m.addtenant_id != nil {
+		*m.addtenant_id += i
+	} else {
+		m.addtenant_id = &i
+	}
+}
+
+// AddedTenantID returns the value that was added to the "tenant_id" field in this mutation.
+func (m *OutboxEventMutation) AddedTenantID() (r int, exists bool) {
+	v := m.addtenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *OutboxEventMutation) ResetTenantID() {
+	m.tenant_id = nil
+	m.addtenant_id = nil
+}
+
+// SetAggregateType sets the "aggregate_type" field.
+func (m *OutboxEventMutation) SetAggregateType(s string) {
+	m.aggregate_type = &s
+}
+
+// AggregateType returns the value of the "aggregate_type" field in the mutation.
+func (m *OutboxEventMutation) AggregateType() (r string, exists bool) {
+	v := m.aggregate_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAggregateType returns the old "aggregate_type" field's value of the OutboxEvent entity.
+// If the OutboxEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OutboxEventMutation) OldAggregateType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAggregateType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAggregateType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAggregateType: %w", err)
+	}
+	return oldValue.AggregateType, nil
+}
+
+// ResetAggregateType resets all changes to the "aggregate_type" field.
+func (m *OutboxEventMutation) ResetAggregateType() {
+	m.aggregate_type = nil
+}
+
+// SetAggregateID sets the "aggregate_id" field.
+func (m *OutboxEventMutation) SetAggregateID(s string) {
+	m.aggregate_id = &s
+}
+
+// AggregateID returns the value of the "aggregate_id" field in the mutation.
+func (m *OutboxEventMutation) AggregateID() (r string, exists bool) {
+	v := m.aggregate_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAggregateID returns the old "aggregate_id" field's value of the OutboxEvent entity.
+// If the OutboxEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OutboxEventMutation) OldAggregateID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAggregateID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAggregateID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAggregateID: %w", err)
+	}
+	return oldValue.AggregateID, nil
+}
+
+// ResetAggregateID resets all changes to the "aggregate_id" field.
+func (m *OutboxEventMutation) ResetAggregateID() {
+	m.aggregate_id = nil
+}
+
+// SetPayload sets the "payload" field.
+func (m *OutboxEventMutation) SetPayload(jm json.RawMessage) {
+	m.payload = &jm
+	m.appendpayload = nil
+}
+
+// Payload returns the value of the "payload" field in the mutation.
+func (m *OutboxEventMutation) Payload() (r json.RawMessage, exists bool) {
+	v := m.payload
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPayload returns the old "payload" field's value of the OutboxEvent entity.
+// If the OutboxEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OutboxEventMutation) OldPayload(ctx context.Context) (v json.RawMessage, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPayload is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPayload requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPayload: %w", err)
+	}
+	return oldValue.Payload, nil
+}
+
+// AppendPayload adds jm to the "payload" field.
+func (m *OutboxEventMutation) AppendPayload(jm json.RawMessage) {
+	m.appendpayload = append(m.appendpayload, jm...)
+}
+
+// AppendedPayload returns the list of values that were appended to the "payload" field in this mutation.
+func (m *OutboxEventMutation) AppendedPayload() (json.RawMessage, bool) {
+	if len(m.appendpayload) == 0 {
+		return nil, false
+	}
+	return m.appendpayload, true
+}
+
+// ResetPayload resets all changes to the "payload" field.
+func (m *OutboxEventMutation) ResetPayload() {
+	m.payload = nil
+	m.appendpayload = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *OutboxEventMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *OutboxEventMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the OutboxEvent entity.
+// If the OutboxEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OutboxEventMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *OutboxEventMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetAttemptCount sets the "attempt_count" field.
+func (m *OutboxEventMutation) SetAttemptCount(i int) {
+	m.attempt_count = &i
+	m.addattempt_count = nil
+}
+
+// AttemptCount returns the value of the "attempt_count" field in the mutation.
+func (m *OutboxEventMutation) AttemptCount() (r int, exists bool) {
+	v := m.attempt_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAttemptCount returns the old "attempt_count" field's value of the OutboxEvent entity.
+// If the OutboxEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OutboxEventMutation) OldAttemptCount(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAttemptCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAttemptCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAttemptCount: %w", err)
+	}
+	return oldValue.AttemptCount, nil
+}
+
+// AddAttemptCount adds i to the "attempt_count" field.
+func (m *OutboxEventMutation) AddAttemptCount(i int) {
+	if m.addattempt_count != nil {
+		*m.addattempt_count += i
+	} else {
+		m.addattempt_count = &i
+	}
+}
+
+// AddedAttemptCount returns the value that was added to the "attempt_count" field in this mutation.
+func (m *OutboxEventMutation) AddedAttemptCount() (r int, exists bool) {
+	v := m.addattempt_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAttemptCount resets all changes to the "attempt_count" field.
+func (m *OutboxEventMutation) ResetAttemptCount() {
+	m.attempt_count = nil
+	m.addattempt_count = nil
+}
+
+// SetNextAttemptAt sets the "next_attempt_at" field.
+func (m *OutboxEventMutation) SetNextAttemptAt(t time.Time) {
+	m.next_attempt_at = &t
+}
+
+// NextAttemptAt returns the value of the "next_attempt_at" field in the mutation.
+func (m *OutboxEventMutation) NextAttemptAt() (r time.Time, exists bool) {
+	v := m.next_attempt_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNextAttemptAt returns the old "next_attempt_at" field's value of the OutboxEvent entity.
+// If the OutboxEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OutboxEventMutation) OldNextAttemptAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNextAttemptAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNextAttemptAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNextAttemptAt: %w", err)
+	}
+	return oldValue.NextAttemptAt, nil
+}
+
+// ResetNextAttemptAt resets all changes to the "next_attempt_at" field.
+func (m *OutboxEventMutation) ResetNextAttemptAt() {
+	m.next_attempt_at = nil
+}
+
+// SetClaimToken sets the "claim_token" field.
+func (m *OutboxEventMutation) SetClaimToken(s string) {
+	m.claim_token = &s
+}
+
+// ClaimToken returns the value of the "claim_token" field in the mutation.
+func (m *OutboxEventMutation) ClaimToken() (r string, exists bool) {
+	v := m.claim_token
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldClaimToken returns the old "claim_token" field's value of the OutboxEvent entity.
+// If the OutboxEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OutboxEventMutation) OldClaimToken(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldClaimToken is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldClaimToken requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldClaimToken: %w", err)
+	}
+	return oldValue.ClaimToken, nil
+}
+
+// ClearClaimToken clears the value of the "claim_token" field.
+func (m *OutboxEventMutation) ClearClaimToken() {
+	m.claim_token = nil
+	m.clearedFields[outboxevent.FieldClaimToken] = struct{}{}
+}
+
+// ClaimTokenCleared returns if the "claim_token" field was cleared in this mutation.
+func (m *OutboxEventMutation) ClaimTokenCleared() bool {
+	_, ok := m.clearedFields[outboxevent.FieldClaimToken]
+	return ok
+}
+
+// ResetClaimToken resets all changes to the "claim_token" field.
+func (m *OutboxEventMutation) ResetClaimToken() {
+	m.claim_token = nil
+	delete(m.clearedFields, outboxevent.FieldClaimToken)
+}
+
+// SetClaimExpiresAt sets the "claim_expires_at" field.
+func (m *OutboxEventMutation) SetClaimExpiresAt(t time.Time) {
+	m.claim_expires_at = &t
+}
+
+// ClaimExpiresAt returns the value of the "claim_expires_at" field in the mutation.
+func (m *OutboxEventMutation) ClaimExpiresAt() (r time.Time, exists bool) {
+	v := m.claim_expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldClaimExpiresAt returns the old "claim_expires_at" field's value of the OutboxEvent entity.
+// If the OutboxEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OutboxEventMutation) OldClaimExpiresAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldClaimExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldClaimExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldClaimExpiresAt: %w", err)
+	}
+	return oldValue.ClaimExpiresAt, nil
+}
+
+// ClearClaimExpiresAt clears the value of the "claim_expires_at" field.
+func (m *OutboxEventMutation) ClearClaimExpiresAt() {
+	m.claim_expires_at = nil
+	m.clearedFields[outboxevent.FieldClaimExpiresAt] = struct{}{}
+}
+
+// ClaimExpiresAtCleared returns if the "claim_expires_at" field was cleared in this mutation.
+func (m *OutboxEventMutation) ClaimExpiresAtCleared() bool {
+	_, ok := m.clearedFields[outboxevent.FieldClaimExpiresAt]
+	return ok
+}
+
+// ResetClaimExpiresAt resets all changes to the "claim_expires_at" field.
+func (m *OutboxEventMutation) ResetClaimExpiresAt() {
+	m.claim_expires_at = nil
+	delete(m.clearedFields, outboxevent.FieldClaimExpiresAt)
+}
+
+// SetPublishedAt sets the "published_at" field.
+func (m *OutboxEventMutation) SetPublishedAt(t time.Time) {
+	m.published_at = &t
+}
+
+// PublishedAt returns the value of the "published_at" field in the mutation.
+func (m *OutboxEventMutation) PublishedAt() (r time.Time, exists bool) {
+	v := m.published_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPublishedAt returns the old "published_at" field's value of the OutboxEvent entity.
+// If the OutboxEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OutboxEventMutation) OldPublishedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPublishedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPublishedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPublishedAt: %w", err)
+	}
+	return oldValue.PublishedAt, nil
+}
+
+// ClearPublishedAt clears the value of the "published_at" field.
+func (m *OutboxEventMutation) ClearPublishedAt() {
+	m.published_at = nil
+	m.clearedFields[outboxevent.FieldPublishedAt] = struct{}{}
+}
+
+// PublishedAtCleared returns if the "published_at" field was cleared in this mutation.
+func (m *OutboxEventMutation) PublishedAtCleared() bool {
+	_, ok := m.clearedFields[outboxevent.FieldPublishedAt]
+	return ok
+}
+
+// ResetPublishedAt resets all changes to the "published_at" field.
+func (m *OutboxEventMutation) ResetPublishedAt() {
+	m.published_at = nil
+	delete(m.clearedFields, outboxevent.FieldPublishedAt)
+}
+
+// SetLastError sets the "last_error" field.
+func (m *OutboxEventMutation) SetLastError(s string) {
+	m.last_error = &s
+}
+
+// LastError returns the value of the "last_error" field in the mutation.
+func (m *OutboxEventMutation) LastError() (r string, exists bool) {
+	v := m.last_error
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastError returns the old "last_error" field's value of the OutboxEvent entity.
+// If the OutboxEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OutboxEventMutation) OldLastError(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastError is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastError requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastError: %w", err)
+	}
+	return oldValue.LastError, nil
+}
+
+// ClearLastError clears the value of the "last_error" field.
+func (m *OutboxEventMutation) ClearLastError() {
+	m.last_error = nil
+	m.clearedFields[outboxevent.FieldLastError] = struct{}{}
+}
+
+// LastErrorCleared returns if the "last_error" field was cleared in this mutation.
+func (m *OutboxEventMutation) LastErrorCleared() bool {
+	_, ok := m.clearedFields[outboxevent.FieldLastError]
+	return ok
+}
+
+// ResetLastError resets all changes to the "last_error" field.
+func (m *OutboxEventMutation) ResetLastError() {
+	m.last_error = nil
+	delete(m.clearedFields, outboxevent.FieldLastError)
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *OutboxEventMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *OutboxEventMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the OutboxEvent entity.
+// If the OutboxEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OutboxEventMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *OutboxEventMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *OutboxEventMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *OutboxEventMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the OutboxEvent entity.
+// If the OutboxEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OutboxEventMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *OutboxEventMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the OutboxEventMutation builder.
+func (m *OutboxEventMutation) Where(ps ...predicate.OutboxEvent) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the OutboxEventMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *OutboxEventMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.OutboxEvent, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *OutboxEventMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *OutboxEventMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (OutboxEvent).
+func (m *OutboxEventMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *OutboxEventMutation) Fields() []string {
+	fields := make([]string, 0, 15)
+	if m.event_id != nil {
+		fields = append(fields, outboxevent.FieldEventID)
+	}
+	if m.event_type != nil {
+		fields = append(fields, outboxevent.FieldEventType)
+	}
+	if m.tenant_id != nil {
+		fields = append(fields, outboxevent.FieldTenantID)
+	}
+	if m.aggregate_type != nil {
+		fields = append(fields, outboxevent.FieldAggregateType)
+	}
+	if m.aggregate_id != nil {
+		fields = append(fields, outboxevent.FieldAggregateID)
+	}
+	if m.payload != nil {
+		fields = append(fields, outboxevent.FieldPayload)
+	}
+	if m.status != nil {
+		fields = append(fields, outboxevent.FieldStatus)
+	}
+	if m.attempt_count != nil {
+		fields = append(fields, outboxevent.FieldAttemptCount)
+	}
+	if m.next_attempt_at != nil {
+		fields = append(fields, outboxevent.FieldNextAttemptAt)
+	}
+	if m.claim_token != nil {
+		fields = append(fields, outboxevent.FieldClaimToken)
+	}
+	if m.claim_expires_at != nil {
+		fields = append(fields, outboxevent.FieldClaimExpiresAt)
+	}
+	if m.published_at != nil {
+		fields = append(fields, outboxevent.FieldPublishedAt)
+	}
+	if m.last_error != nil {
+		fields = append(fields, outboxevent.FieldLastError)
+	}
+	if m.created_at != nil {
+		fields = append(fields, outboxevent.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, outboxevent.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *OutboxEventMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case outboxevent.FieldEventID:
+		return m.EventID()
+	case outboxevent.FieldEventType:
+		return m.EventType()
+	case outboxevent.FieldTenantID:
+		return m.TenantID()
+	case outboxevent.FieldAggregateType:
+		return m.AggregateType()
+	case outboxevent.FieldAggregateID:
+		return m.AggregateID()
+	case outboxevent.FieldPayload:
+		return m.Payload()
+	case outboxevent.FieldStatus:
+		return m.Status()
+	case outboxevent.FieldAttemptCount:
+		return m.AttemptCount()
+	case outboxevent.FieldNextAttemptAt:
+		return m.NextAttemptAt()
+	case outboxevent.FieldClaimToken:
+		return m.ClaimToken()
+	case outboxevent.FieldClaimExpiresAt:
+		return m.ClaimExpiresAt()
+	case outboxevent.FieldPublishedAt:
+		return m.PublishedAt()
+	case outboxevent.FieldLastError:
+		return m.LastError()
+	case outboxevent.FieldCreatedAt:
+		return m.CreatedAt()
+	case outboxevent.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *OutboxEventMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case outboxevent.FieldEventID:
+		return m.OldEventID(ctx)
+	case outboxevent.FieldEventType:
+		return m.OldEventType(ctx)
+	case outboxevent.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case outboxevent.FieldAggregateType:
+		return m.OldAggregateType(ctx)
+	case outboxevent.FieldAggregateID:
+		return m.OldAggregateID(ctx)
+	case outboxevent.FieldPayload:
+		return m.OldPayload(ctx)
+	case outboxevent.FieldStatus:
+		return m.OldStatus(ctx)
+	case outboxevent.FieldAttemptCount:
+		return m.OldAttemptCount(ctx)
+	case outboxevent.FieldNextAttemptAt:
+		return m.OldNextAttemptAt(ctx)
+	case outboxevent.FieldClaimToken:
+		return m.OldClaimToken(ctx)
+	case outboxevent.FieldClaimExpiresAt:
+		return m.OldClaimExpiresAt(ctx)
+	case outboxevent.FieldPublishedAt:
+		return m.OldPublishedAt(ctx)
+	case outboxevent.FieldLastError:
+		return m.OldLastError(ctx)
+	case outboxevent.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case outboxevent.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown OutboxEvent field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *OutboxEventMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case outboxevent.FieldEventID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEventID(v)
+		return nil
+	case outboxevent.FieldEventType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEventType(v)
+		return nil
+	case outboxevent.FieldTenantID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case outboxevent.FieldAggregateType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAggregateType(v)
+		return nil
+	case outboxevent.FieldAggregateID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAggregateID(v)
+		return nil
+	case outboxevent.FieldPayload:
+		v, ok := value.(json.RawMessage)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPayload(v)
+		return nil
+	case outboxevent.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case outboxevent.FieldAttemptCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAttemptCount(v)
+		return nil
+	case outboxevent.FieldNextAttemptAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNextAttemptAt(v)
+		return nil
+	case outboxevent.FieldClaimToken:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetClaimToken(v)
+		return nil
+	case outboxevent.FieldClaimExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetClaimExpiresAt(v)
+		return nil
+	case outboxevent.FieldPublishedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPublishedAt(v)
+		return nil
+	case outboxevent.FieldLastError:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastError(v)
+		return nil
+	case outboxevent.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case outboxevent.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown OutboxEvent field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *OutboxEventMutation) AddedFields() []string {
+	var fields []string
+	if m.addtenant_id != nil {
+		fields = append(fields, outboxevent.FieldTenantID)
+	}
+	if m.addattempt_count != nil {
+		fields = append(fields, outboxevent.FieldAttemptCount)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *OutboxEventMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case outboxevent.FieldTenantID:
+		return m.AddedTenantID()
+	case outboxevent.FieldAttemptCount:
+		return m.AddedAttemptCount()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *OutboxEventMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case outboxevent.FieldTenantID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTenantID(v)
+		return nil
+	case outboxevent.FieldAttemptCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAttemptCount(v)
+		return nil
+	}
+	return fmt.Errorf("unknown OutboxEvent numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *OutboxEventMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(outboxevent.FieldClaimToken) {
+		fields = append(fields, outboxevent.FieldClaimToken)
+	}
+	if m.FieldCleared(outboxevent.FieldClaimExpiresAt) {
+		fields = append(fields, outboxevent.FieldClaimExpiresAt)
+	}
+	if m.FieldCleared(outboxevent.FieldPublishedAt) {
+		fields = append(fields, outboxevent.FieldPublishedAt)
+	}
+	if m.FieldCleared(outboxevent.FieldLastError) {
+		fields = append(fields, outboxevent.FieldLastError)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *OutboxEventMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *OutboxEventMutation) ClearField(name string) error {
+	switch name {
+	case outboxevent.FieldClaimToken:
+		m.ClearClaimToken()
+		return nil
+	case outboxevent.FieldClaimExpiresAt:
+		m.ClearClaimExpiresAt()
+		return nil
+	case outboxevent.FieldPublishedAt:
+		m.ClearPublishedAt()
+		return nil
+	case outboxevent.FieldLastError:
+		m.ClearLastError()
+		return nil
+	}
+	return fmt.Errorf("unknown OutboxEvent nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *OutboxEventMutation) ResetField(name string) error {
+	switch name {
+	case outboxevent.FieldEventID:
+		m.ResetEventID()
+		return nil
+	case outboxevent.FieldEventType:
+		m.ResetEventType()
+		return nil
+	case outboxevent.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case outboxevent.FieldAggregateType:
+		m.ResetAggregateType()
+		return nil
+	case outboxevent.FieldAggregateID:
+		m.ResetAggregateID()
+		return nil
+	case outboxevent.FieldPayload:
+		m.ResetPayload()
+		return nil
+	case outboxevent.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case outboxevent.FieldAttemptCount:
+		m.ResetAttemptCount()
+		return nil
+	case outboxevent.FieldNextAttemptAt:
+		m.ResetNextAttemptAt()
+		return nil
+	case outboxevent.FieldClaimToken:
+		m.ResetClaimToken()
+		return nil
+	case outboxevent.FieldClaimExpiresAt:
+		m.ResetClaimExpiresAt()
+		return nil
+	case outboxevent.FieldPublishedAt:
+		m.ResetPublishedAt()
+		return nil
+	case outboxevent.FieldLastError:
+		m.ResetLastError()
+		return nil
+	case outboxevent.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case outboxevent.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown OutboxEvent field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *OutboxEventMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *OutboxEventMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *OutboxEventMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *OutboxEventMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *OutboxEventMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *OutboxEventMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *OutboxEventMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown OutboxEvent unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *OutboxEventMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown OutboxEvent edge %s", name)
 }
 
 // PasswordResetTokenMutation represents an operation that mutates the PasswordResetToken nodes in the graph.
