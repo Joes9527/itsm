@@ -21,6 +21,7 @@ package rls
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
 )
@@ -84,10 +85,22 @@ func AcquireConn(ctx context.Context, db *sql.DB) (*sql.Conn, error) {
 	// parameter, so subsequent Ent queries on the same *sql.Conn inherit the
 	// tenant without interpolating caller-controlled data into SQL syntax.
 	if _, err := conn.ExecContext(ctx, "SELECT set_config('app.current_tenant', $1, false)", tid); err != nil {
-		_ = conn.Close()
+		invalidateConn(conn)
 		return nil, fmt.Errorf("rls: set tenant: %w", err)
 	}
 	return conn, nil
+}
+
+// invalidateConn marks the checked-out physical connection bad before closing
+// the sql.Conn handle. Returning driver.ErrBadConn from Raw makes database/sql
+// destroy the driver connection instead of returning potentially dirty session
+// state to the pool. The caller retains and returns the original business error.
+func invalidateConn(conn *sql.Conn) {
+	if conn == nil {
+		return
+	}
+	_ = conn.Raw(func(any) error { return driver.ErrBadConn })
+	_ = conn.Close()
 }
 
 // ReleaseConn resets tenant scope and returns the connection to the pool.
@@ -98,9 +111,10 @@ func ReleaseConn(ctx context.Context, conn *sql.Conn) error {
 	}
 	// DISCARD ALL clears session state including our variable. Prefer it over
 	// RESET because it also purges plan caches, temp tables, listens, etc.
-	// If this fails, close() ensures a dirty connection never returns to pool.
+	// If this fails, invalidate the physical connection so dirty session state
+	// cannot return to the pool.
 	if _, err := conn.ExecContext(ctx, "DISCARD ALL"); err != nil {
-		_ = conn.Close()
+		invalidateConn(conn)
 		return fmt.Errorf("rls: discard on release: %w", err)
 	}
 	return conn.Close() // Close on *sql.Conn returns it to the pool
