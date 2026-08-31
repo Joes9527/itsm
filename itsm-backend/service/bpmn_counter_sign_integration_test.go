@@ -60,8 +60,6 @@ func (b *postgresVoteLoadBarrier) interceptor() ent.Interceptor {
 func TestCounterSignDistinctChildVotesConvergePostgres(t *testing.T) {
 	setupClient, setupDB := openBPMNPostgresIntegrationClient(t)
 	migrateBPMNPostgresIntegrationTables(t, setupClient,
-		migrate.TenantsTable,
-		migrate.UsersTable,
 		migrate.ProcessDeploymentsTable,
 		migrate.ProcessDefinitionsTable,
 		migrate.ProcessInstancesTable,

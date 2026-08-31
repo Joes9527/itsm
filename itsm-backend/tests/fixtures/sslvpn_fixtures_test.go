@@ -8,7 +8,6 @@ import (
 	"itsm-backend/ent/fielddefinition"
 	"itsm-backend/ent/processdefinition"
 	"itsm-backend/service"
-	"itsm-backend/service/bpmn"
 	"itsm-backend/tests/fixtures"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -111,7 +110,7 @@ func TestEnsureSSLVPNMetadata(t *testing.T) {
 	engine, ok := engineIface.(*service.CustomProcessEngine)
 	require.True(t, ok)
 
-	runCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+	runCtx := service.WithTrustedBPMNTenantContext(ctx, tenant.ID)
 	instance, err := engine.StartProcess(runCtx, "sslvpn_approval_flow", "TICKET-VPN-TEST-1", "", 0, map[string]interface{}{
 		"requester_id": float64(res.Users.EndUser.ID),
 	})

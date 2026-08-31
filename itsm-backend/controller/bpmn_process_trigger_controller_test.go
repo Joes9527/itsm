@@ -3,6 +3,7 @@ package controller
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -11,6 +12,21 @@ import (
 
 func newTestTriggerController() *BPMNProcessTriggerController {
 	return &BPMNProcessTriggerController{}
+}
+
+func TestBPMNProcessTriggerController_InvalidBindingBodyDoesNotEchoInput(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/v1/process-bindings", strings.NewReader(
+		`{"processDefinitionKey":"binding-body-secret","broken":`,
+	))
+	ctx.Request.Header.Set("Content-Type", "application/json")
+
+	newTestTriggerController().CreateBinding(ctx)
+
+	assert.Contains(t, recorder.Body.String(), "流程绑定请求格式无效")
+	assert.NotContains(t, recorder.Body.String(), "binding-body-secret")
 }
 
 func TestBPMNProcessTriggerController_Trigger_UsesBPMNRoleGate(t *testing.T) {

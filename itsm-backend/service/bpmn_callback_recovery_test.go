@@ -17,6 +17,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 type countingIdempotentCallbackHandler struct {
@@ -27,6 +30,21 @@ type countingIdempotentCallbackHandler struct {
 	attemptKeys       []string
 	effectKeys        map[string]struct{}
 	sawCompletedTask  bool
+}
+
+func TestCallbackWorkerSweepFailureEmitsSanitizedTelemetry(t *testing.T) {
+	core, observed := observer.New(zapcore.WarnLevel)
+	engine := &CustomProcessEngine{logger: zap.New(core).Sugar()}
+
+	engine.runCallbackOutboxSweep(context.Background(), "callback-worker-test")
+
+	entries := observed.All()
+	require.Len(t, entries, 1)
+	assert.Equal(t, "BPMN callback sweep incomplete", entries[0].Message)
+	assert.Equal(t, map[string]interface{}{
+		"worker_id":   "callback-worker-test",
+		"error_class": "callback_sweep_error",
+	}, entries[0].ContextMap())
 }
 
 func newCountingIdempotentCallbackHandler(taskType, handlerID string, failures int) *countingIdempotentCallbackHandler {

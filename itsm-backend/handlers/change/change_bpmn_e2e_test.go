@@ -12,7 +12,6 @@ import (
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/handlers/change"
 	"itsm-backend/service"
-	"itsm-backend/service/bpmn"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -58,7 +57,7 @@ func TestChangeApprovalE2E_FullApproveFlow(t *testing.T) {
 	cmUser, err := client.User.Create().SetUsername("cm").SetEmail("cm@example.com").SetName("CM").SetPasswordHash("h").SetRole("change_manager").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 
-	tenantCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+	tenantCtx := service.WithBPMNAccessScope(ctx, service.BPMNAccessScope{UserID: requester.ID, TenantID: tenant.ID})
 	deploySvc := service.NewBPMNTemplateService(client)
 	_, err = deploySvc.LoadAndDeployTemplates(tenantCtx, tenant.ID)
 	require.NoError(t, err)
@@ -134,7 +133,7 @@ func TestChangeApprovalE2E_FullRejectFlow(t *testing.T) {
 	cmUser, err := client.User.Create().SetUsername("cm-reject").SetEmail("cm-reject@example.com").SetName("CM Reject").SetPasswordHash("h").SetRole("change_manager").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 
-	tenantCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+	tenantCtx := service.WithBPMNAccessScope(ctx, service.BPMNAccessScope{UserID: requester.ID, TenantID: tenant.ID})
 	deploySvc := service.NewBPMNTemplateService(client)
 	_, err = deploySvc.LoadAndDeployTemplates(tenantCtx, tenant.ID)
 	require.NoError(t, err)
@@ -200,7 +199,7 @@ func TestChangeApprovalE2E_NonCMUserCannotApprove(t *testing.T) {
 	outsider, err := client.User.Create().SetUsername("outsider-e2e").SetEmail("outsider-e2e@example.com").SetName("Outsider").SetPasswordHash("h").SetRole("agent").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 
-	tenantCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+	tenantCtx := service.WithBPMNAccessScope(ctx, service.BPMNAccessScope{UserID: requester.ID, TenantID: tenant.ID})
 	deploySvc := service.NewBPMNTemplateService(client)
 	_, err = deploySvc.LoadAndDeployTemplates(tenantCtx, tenant.ID)
 	require.NoError(t, err)

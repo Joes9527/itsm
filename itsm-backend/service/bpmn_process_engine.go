@@ -385,6 +385,13 @@ func (e *CustomProcessEngine) completeTaskWithClient(ctx context.Context, client
 	if err := e.authorizeTaskActorWithClient(ctx, client, task); err != nil {
 		return nil, err
 	}
+	return e.completeAuthorizedTaskWithClient(ctx, client, task, variables, executionKeys)
+}
+
+// completeAuthorizedTaskWithClient mutates a task only after the caller has
+// authorized that exact task. Vote uses it for the synthetic parent after it
+// authorizes the child and locks/validates the parent in the same transaction.
+func (e *CustomProcessEngine) completeAuthorizedTaskWithClient(ctx context.Context, client *ent.Client, task *ent.ProcessTask, variables map[string]interface{}, executionKeys *[]string) (*completedTaskEffect, error) {
 	if task.Status == common.ProcessTaskStatusCompleted || task.Status == common.ProcessTaskStatusCancelled {
 		return nil, common.NewConflictError("process task completion", "task is no longer active")
 	}
@@ -3893,8 +3900,9 @@ func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequ
 			Exec(ctx); err != nil {
 			return fmt.Errorf("更新会签父任务失败: %w", err)
 		}
-		parentEffect, err = s.engine.completeTaskWithClient(
-			ctx, tx.Client(), parentTask.TaskID,
+		parentTask.TaskVariables = summaryVariables
+		parentEffect, err = s.engine.completeAuthorizedTaskWithClient(
+			ctx, tx.Client(), parentTask,
 			map[string]interface{}{"approvalResult": status.Status, "approved": status.Status == "approved"},
 			&executionKeys,
 		)
@@ -3906,11 +3914,10 @@ func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequ
 		return fmt.Errorf("提交会签投票事务失败: %w", err)
 	}
 	if parentEffect != nil {
+		parentEffect.task.Unwrap()
 		if tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int); tenantID <= 0 {
 			ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, parentEffect.task.TenantID)
 		}
-	}
-	if parentEffect != nil {
 		s.engine.processCommittedCallbackKeys(ctx, parentEffect.task.TenantID, executionKeys)
 		s.engine.executeAsyncUserTaskCompletion(ctx, parentEffect)
 	}

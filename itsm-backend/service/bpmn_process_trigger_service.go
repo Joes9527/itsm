@@ -218,8 +218,23 @@ func (s *ProcessTriggerService) resolveProcessInstanceBusinessID(ctx context.Con
 	return instance.ProcessInstanceID, nil
 }
 
+func processTriggerTenant(ctx context.Context, requestedTenantID int) (int, error) {
+	tenantID, err := bpmnAuthorizedTenantFromContext(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if requestedTenantID > 0 && requestedTenantID != tenantID {
+		return 0, fmt.Errorf("流程触发租户授权上下文不一致")
+	}
+	return tenantID, nil
+}
+
 // CancelProcess 取消流程
 func (s *ProcessTriggerService) CancelProcess(ctx context.Context, processInstanceID int, reason string, tenantID int) error {
+	tenantID, err := processTriggerTenant(ctx, tenantID)
+	if err != nil {
+		return err
+	}
 	businessID, err := s.resolveProcessInstanceBusinessID(ctx, processInstanceID, tenantID)
 	if err != nil {
 		return err
@@ -229,6 +244,10 @@ func (s *ProcessTriggerService) CancelProcess(ctx context.Context, processInstan
 
 // SuspendProcess 暂停流程
 func (s *ProcessTriggerService) SuspendProcess(ctx context.Context, processInstanceID int, reason string, tenantID int) error {
+	tenantID, err := processTriggerTenant(ctx, tenantID)
+	if err != nil {
+		return err
+	}
 	businessID, err := s.resolveProcessInstanceBusinessID(ctx, processInstanceID, tenantID)
 	if err != nil {
 		return err
@@ -238,6 +257,10 @@ func (s *ProcessTriggerService) SuspendProcess(ctx context.Context, processInsta
 
 // ResumeProcess 恢复流程
 func (s *ProcessTriggerService) ResumeProcess(ctx context.Context, processInstanceID int, tenantID int) error {
+	tenantID, err := processTriggerTenant(ctx, tenantID)
+	if err != nil {
+		return err
+	}
 	businessID, err := s.resolveProcessInstanceBusinessID(ctx, processInstanceID, tenantID)
 	if err != nil {
 		return err
@@ -247,6 +270,10 @@ func (s *ProcessTriggerService) ResumeProcess(ctx context.Context, processInstan
 
 // GetProcessStatus 获取流程状态
 func (s *ProcessTriggerService) GetProcessStatus(ctx context.Context, processInstanceID int, tenantID int) (*dto.ProcessTriggerResponse, error) {
+	tenantID, err := processTriggerTenant(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
 	instance, err := s.client.ProcessInstance.Query().
 		Where(
 			processinstance.ID(processInstanceID),

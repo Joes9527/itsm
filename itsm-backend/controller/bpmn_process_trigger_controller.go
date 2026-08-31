@@ -115,9 +115,12 @@ func (c *BPMNProcessTriggerController) GetProcessStatus(ctx *gin.Context) {
 		return
 	}
 
-	tenantID, _ := ctx.Get("tenant_id")
+	workflowCtx, tenantID, ok := getBPMNTenantContext(ctx)
+	if !ok {
+		return
+	}
 
-	result, err := c.triggerService.GetProcessStatus(ctx.Request.Context(), instanceID, tenantID.(int))
+	result, err := c.triggerService.GetProcessStatus(workflowCtx, instanceID, tenantID)
 	if err != nil {
 		respondBPMNError(ctx, err, "获取流程状态失败")
 		return
@@ -206,7 +209,7 @@ func (c *BPMNProcessTriggerController) ResumeProcess(ctx *gin.Context) {
 func (c *BPMNProcessTriggerController) CreateBinding(ctx *gin.Context) {
 	var binding dto.ProcessBinding
 	if err := ctx.ShouldBindJSON(&binding); err != nil {
-		common.Fail(ctx, 1001, err.Error())
+		common.Fail(ctx, 1001, "流程绑定请求格式无效")
 		return
 	}
 
@@ -215,7 +218,7 @@ func (c *BPMNProcessTriggerController) CreateBinding(ctx *gin.Context) {
 
 	result, err := c.bindingService.CreateBinding(ctx.Request.Context(), &binding)
 	if err != nil {
-		common.Fail(ctx, 5001, err.Error())
+		respondBPMNError(ctx, err, "创建流程绑定失败")
 		return
 	}
 
@@ -234,7 +237,7 @@ func (c *BPMNProcessTriggerController) GetBinding(ctx *gin.Context) {
 
 	result, err := c.bindingService.GetBinding(ctx.Request.Context(), id, tenantID.(int))
 	if err != nil {
-		common.Fail(ctx, 5001, err.Error())
+		respondBPMNError(ctx, err, "获取流程绑定失败")
 		return
 	}
 
@@ -245,7 +248,7 @@ func (c *BPMNProcessTriggerController) GetBinding(ctx *gin.Context) {
 func (c *BPMNProcessTriggerController) QueryBindings(ctx *gin.Context) {
 	var req dto.ProcessBindingQueryRequest
 	if err := ctx.ShouldBindQuery(&req); err != nil {
-		common.Fail(ctx, 1001, err.Error())
+		common.Fail(ctx, 1001, "流程绑定查询参数无效")
 		return
 	}
 
@@ -254,7 +257,7 @@ func (c *BPMNProcessTriggerController) QueryBindings(ctx *gin.Context) {
 
 	result, err := c.bindingService.QueryBindings(ctx.Request.Context(), &req)
 	if err != nil {
-		common.Fail(ctx, 5001, err.Error())
+		respondBPMNError(ctx, err, "查询流程绑定失败")
 		return
 	}
 
@@ -271,7 +274,7 @@ func (c *BPMNProcessTriggerController) UpdateBinding(ctx *gin.Context) {
 
 	var binding dto.ProcessBinding
 	if err := ctx.ShouldBindJSON(&binding); err != nil {
-		common.Fail(ctx, 1001, err.Error())
+		common.Fail(ctx, 1001, "流程绑定请求格式无效")
 		return
 	}
 
@@ -280,7 +283,7 @@ func (c *BPMNProcessTriggerController) UpdateBinding(ctx *gin.Context) {
 
 	result, err := c.bindingService.UpdateBinding(ctx.Request.Context(), id, &binding)
 	if err != nil {
-		common.Fail(ctx, 5001, err.Error())
+		respondBPMNError(ctx, err, "更新流程绑定失败")
 		return
 	}
 
@@ -299,7 +302,7 @@ func (c *BPMNProcessTriggerController) DeleteBinding(ctx *gin.Context) {
 
 	err = c.bindingService.DeleteBinding(ctx.Request.Context(), id, tenantID.(int))
 	if err != nil {
-		common.Fail(ctx, 5001, err.Error())
+		respondBPMNError(ctx, err, "删除流程绑定失败")
 		return
 	}
 
@@ -314,7 +317,7 @@ func (c *BPMNProcessTriggerController) GetBindingsByBusinessType(ctx *gin.Contex
 
 	result, err := c.bindingService.GetBindingsByBusinessType(ctx.Request.Context(), businessType, tenantID.(int))
 	if err != nil {
-		common.Fail(ctx, 5001, err.Error())
+		respondBPMNError(ctx, err, "查询业务流程绑定失败")
 		return
 	}
 
@@ -333,7 +336,7 @@ func (c *BPMNProcessTriggerController) GetDepartmentProcesses(ctx *gin.Context) 
 
 	result, err := c.bindingService.GetDepartmentBindings(ctx.Request.Context(), tenantID.(int), departmentID)
 	if err != nil {
-		common.Fail(ctx, 5001, err.Error())
+		respondBPMNError(ctx, err, "查询部门流程绑定失败")
 		return
 	}
 
@@ -352,14 +355,14 @@ func (c *BPMNProcessTriggerController) InitDepartmentProcesses(ctx *gin.Context)
 		DepartmentType string `json:"departmentType" binding:"required"`
 	}
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		common.Fail(ctx, 1001, err.Error())
+		common.Fail(ctx, 1001, "部门流程初始化请求格式无效")
 		return
 	}
 
 	tenantID, _ := ctx.Get("tenant_id")
 
 	if err := c.bindingService.InitDepartmentDefaultBindings(ctx.Request.Context(), tenantID.(int), departmentID, req.DepartmentType); err != nil {
-		common.Fail(ctx, 5001, err.Error())
+		respondBPMNError(ctx, err, "初始化部门流程绑定失败")
 		return
 	}
 
@@ -373,7 +376,7 @@ func (c *BPMNProcessTriggerController) ListDomainConfigs(ctx *gin.Context) {
 
 	result, err := c.configService.ListConfigs(ctx.Request.Context(), tenantID.(int), configType)
 	if err != nil {
-		common.Fail(ctx, 5001, err.Error())
+		respondBPMNError(ctx, err, "查询流程域配置失败")
 		return
 	}
 
@@ -392,7 +395,7 @@ func (c *BPMNProcessTriggerController) SetDomainConfig(ctx *gin.Context) {
 		Description  string                 `json:"description"`
 	}
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		common.Fail(ctx, 1001, err.Error())
+		common.Fail(ctx, 1001, "流程域配置请求格式无效")
 		return
 	}
 	if req.InheritMode == "" {
@@ -412,7 +415,7 @@ func (c *BPMNProcessTriggerController) SetDomainConfig(ctx *gin.Context) {
 		req.Description,
 	)
 	if err != nil {
-		common.Fail(ctx, 5001, err.Error())
+		respondBPMNError(ctx, err, "保存流程域配置失败")
 		return
 	}
 
@@ -441,7 +444,7 @@ func (c *BPMNProcessTriggerController) GetEffectiveDomainConfig(ctx *gin.Context
 
 	result, err := c.configService.GetEffectiveConfig(ctx.Request.Context(), tenantID.(int), departmentID, teamID, configType, configKey)
 	if err != nil {
-		common.Fail(ctx, 5001, err.Error())
+		respondBPMNError(ctx, err, "查询有效流程域配置失败")
 		return
 	}
 

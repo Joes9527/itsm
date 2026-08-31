@@ -9,7 +9,6 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/service"
-	"itsm-backend/service/bpmn"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -70,7 +69,7 @@ func deployRealBPMNFixture(t *testing.T, entClient *ent.Client, tenantID int) (e
 	t.Helper()
 	engine = newTestBPMNEngine(t, entClient, zaptest.NewLogger(t).Sugar())
 	deploySvc := service.NewBPMNTemplateService(entClient)
-	tenantCtx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, tenantID)
+	tenantCtx := service.WithTrustedBPMNTenantContext(context.Background(), tenantID)
 	_, err := deploySvc.LoadAndDeployTemplates(tenantCtx, tenantID)
 	require.NoError(t, err)
 	return engine, service.NewProcessTriggerService(entClient, engine)
@@ -463,7 +462,7 @@ func TestGetApprovalHistory_IncludesPendingCABTask(t *testing.T) {
 
 	// change_manager 角色候选人——CAB 任务需要能解析出至少一个候选人，
 	// CandidateUsers 才会是这个用户名而不是空字符串/候选组兜底。
-	tenantCtx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, tenantID)
+	tenantCtx := service.WithBPMNAccessScope(context.Background(), service.BPMNAccessScope{UserID: actorID, TenantID: tenantID})
 	_, err := entClient.User.Create().SetUsername("pending-cm").SetEmail("pending-cm@example.com").SetName("Pending CM").SetPasswordHash("h").SetRole("change_manager").SetActive(true).SetTenantID(tenantID).Save(context.Background())
 	require.NoError(t, err)
 
@@ -495,7 +494,7 @@ func TestGetApprovalHistory_NoPendingEntryAfterDecisionMade(t *testing.T) {
 	tenantID, actorID := setupChangeBPMNActor(t, entClient, "pending-history-decided")
 	engine, trigger := deployRealBPMNFixture(t, entClient, tenantID)
 
-	tenantCtx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, tenantID)
+	tenantCtx := service.WithBPMNAccessScope(context.Background(), service.BPMNAccessScope{UserID: actorID, TenantID: tenantID})
 	cmUser, err := entClient.User.Create().SetUsername("decided-cm").SetEmail("decided-cm@example.com").SetName("Decided CM").SetPasswordHash("h").SetRole("change_manager").SetActive(true).SetTenantID(tenantID).Save(context.Background())
 	require.NoError(t, err)
 
@@ -528,7 +527,7 @@ func TestTransitionStatus_Cancel_TerminatesRunningProcessInstance(t *testing.T) 
 	tenantID, actorID := setupChangeBPMNActor(t, entClient, "cancel-terminate")
 	engine, trigger := deployRealBPMNFixture(t, entClient, tenantID)
 
-	tenantCtx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, tenantID)
+	tenantCtx := service.WithBPMNAccessScope(context.Background(), service.BPMNAccessScope{UserID: actorID, TenantID: tenantID})
 	workItem := createChangeWorkItemFixture(t, entClient, tenantID, actorID, "测试变更")
 	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
 	require.NoError(t, err)

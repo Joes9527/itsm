@@ -245,8 +245,8 @@ func TestChangeServiceTaskHandler_TenantScopedActions(t *testing.T) {
 			},
 		},
 		{
-			name:   "assess_risk",
-			action: "assess_risk",
+			name:      "assess_risk",
+			action:    "assess_risk",
 			extraVars: map[string]interface{}{
 				// type 缺省为 normal → medium；用 emergency 验证分支
 			},
@@ -370,6 +370,29 @@ func TestChangeServiceTaskHandler_ScheduleChange_DateParsing(t *testing.T) {
 	want := time.Date(2026, 9, 1, 8, 0, 0, 0, time.UTC)
 	assert.Equal(t, want, after.PlannedStartDate)
 	assert.True(t, after.PlannedEndDate.IsZero(), "未提交结束日期时不应写入")
+}
+
+func TestChangeServiceTaskHandler_CloseCompletedBackfillsEndDateOnce(t *testing.T) {
+	client, handler, tenantID, changeEntity := setupChangeHandlerFixture(t)
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+
+	_, err := client.Change.UpdateOne(changeEntity).SetStatus("completed").ClearActualEndDate().Save(ctx)
+	require.NoError(t, err)
+
+	variables := map[string]interface{}{"action": "close_change", "change_id": changeEntity.ID}
+	_, err = handler.Execute(ctx, nil, variables)
+	require.NoError(t, err)
+	closed, err := client.Change.Get(ctx, changeEntity.ID)
+	require.NoError(t, err)
+	require.False(t, closed.ActualEndDate.IsZero())
+	closedAt := closed.ActualEndDate
+
+	time.Sleep(time.Millisecond)
+	_, err = handler.Execute(ctx, nil, variables)
+	require.NoError(t, err)
+	retried, err := client.Change.Get(ctx, changeEntity.ID)
+	require.NoError(t, err)
+	assert.Equal(t, closedAt, retried.ActualEndDate, "retry must preserve the original closure timestamp")
 }
 
 // TestChangeServiceTaskHandler_ScheduleChangeAction_EmergencyStopsAtApproved covers Finding 4 of

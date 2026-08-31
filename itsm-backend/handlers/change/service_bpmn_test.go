@@ -222,7 +222,9 @@ func TestCompleteChangeApprovalTask_ApproveCompletesScheduleNode(t *testing.T) {
 
 	engine := newTestBPMNEngine(t, client, logger)
 	deploySvc := service.NewBPMNTemplateService(client)
-	tenantCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+	tenantCtx := service.WithBPMNAccessScope(ctx, service.BPMNAccessScope{
+		UserID: requester.ID, TenantID: tenant.ID, CanReadAllTasks: true, CanUpdateAllTasks: true,
+	})
 	_, err = deploySvc.LoadAndDeployTemplates(tenantCtx, tenant.ID)
 	require.NoError(t, err)
 
@@ -281,7 +283,9 @@ func TestCompleteChangeApprovalTask_RejectEndsProcess(t *testing.T) {
 
 	engine := newTestBPMNEngine(t, client, logger)
 	deploySvc := service.NewBPMNTemplateService(client)
-	tenantCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+	tenantCtx := service.WithBPMNAccessScope(ctx, service.BPMNAccessScope{
+		UserID: requester.ID, TenantID: tenant.ID, CanReadAllTasks: true, CanUpdateAllTasks: true,
+	})
 	_, err = deploySvc.LoadAndDeployTemplates(tenantCtx, tenant.ID)
 	require.NoError(t, err)
 
@@ -342,7 +346,9 @@ func TestCompleteChangeApprovalTask_WrongActorRejected(t *testing.T) {
 
 	engine := newTestBPMNEngine(t, client, logger)
 	deploySvc := service.NewBPMNTemplateService(client)
-	tenantCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+	tenantCtx := service.WithBPMNAccessScope(ctx, service.BPMNAccessScope{
+		UserID: requester.ID, TenantID: tenant.ID, CanReadAllTasks: true, CanUpdateAllTasks: true,
+	})
 	_, err = deploySvc.LoadAndDeployTemplates(tenantCtx, tenant.ID)
 	require.NoError(t, err)
 
@@ -397,7 +403,9 @@ func TestCompleteChangeApprovalTask_FiltersDecoyTaskByDefinitionKey(t *testing.T
 
 	engine := newTestBPMNEngine(t, client, logger)
 	deploySvc := service.NewBPMNTemplateService(client)
-	tenantCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+	tenantCtx := service.WithBPMNAccessScope(ctx, service.BPMNAccessScope{
+		UserID: requester.ID, TenantID: tenant.ID, CanReadAllTasks: true, CanUpdateAllTasks: true,
+	})
 	_, err = deploySvc.LoadAndDeployTemplates(tenantCtx, tenant.ID)
 	require.NoError(t, err)
 
@@ -479,7 +487,9 @@ func TestCompleteChangeApprovalTask_ResumesCascadeAfterInterruptedCall(t *testin
 
 	engine := newTestBPMNEngine(t, client, logger)
 	deploySvc := service.NewBPMNTemplateService(client)
-	tenantCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+	tenantCtx := service.WithBPMNAccessScope(ctx, service.BPMNAccessScope{
+		UserID: requester.ID, TenantID: tenant.ID, CanReadAllTasks: true, CanUpdateAllTasks: true,
+	})
 	_, err = deploySvc.LoadAndDeployTemplates(tenantCtx, tenant.ID)
 	require.NoError(t, err)
 
@@ -552,7 +562,9 @@ func TestCompleteChangeApprovalTask_RetryAfterFullSuccessIsNoop(t *testing.T) {
 
 	engine := newTestBPMNEngine(t, client, logger)
 	deploySvc := service.NewBPMNTemplateService(client)
-	tenantCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+	tenantCtx := service.WithBPMNAccessScope(ctx, service.BPMNAccessScope{
+		UserID: requester.ID, TenantID: tenant.ID, CanReadAllTasks: true, CanUpdateAllTasks: true,
+	})
 	_, err = deploySvc.LoadAndDeployTemplates(tenantCtx, tenant.ID)
 	require.NoError(t, err)
 
@@ -603,7 +615,9 @@ func TestCompleteChangeApprovalTask_RetryWithMismatchedActionRejected(t *testing
 
 	engine := newTestBPMNEngine(t, client, logger)
 	deploySvc := service.NewBPMNTemplateService(client)
-	tenantCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+	tenantCtx := service.WithBPMNAccessScope(ctx, service.BPMNAccessScope{
+		UserID: requester.ID, TenantID: tenant.ID, CanReadAllTasks: true, CanUpdateAllTasks: true,
+	})
 	_, err = deploySvc.LoadAndDeployTemplates(tenantCtx, tenant.ID)
 	require.NoError(t, err)
 
@@ -682,7 +696,9 @@ func setupChangeForTransitionStatusTest(t *testing.T, dbName string) (*ent.Clien
 
 	engine := newTestBPMNEngine(t, client, logger)
 	deploySvc := service.NewBPMNTemplateService(client)
-	tenantCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+	tenantCtx := service.WithBPMNAccessScope(ctx, service.BPMNAccessScope{
+		UserID: requester.ID, TenantID: tenant.ID, CanReadAllTasks: true, CanUpdateAllTasks: true,
+	})
 	_, err = deploySvc.LoadAndDeployTemplates(tenantCtx, tenant.ID)
 	require.NoError(t, err)
 
@@ -823,7 +839,9 @@ func TestSubmitChange_AutoCompletesAssessmentTask(t *testing.T) {
 
 	engine := newTestBPMNEngine(t, client, logger)
 	deploySvc := service.NewBPMNTemplateService(client)
-	tenantCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+	tenantCtx := service.WithBPMNAccessScope(ctx, service.BPMNAccessScope{
+		UserID: requester.ID, TenantID: tenant.ID, CanReadAllTasks: true, CanUpdateAllTasks: true,
+	})
 	_, err = deploySvc.LoadAndDeployTemplates(tenantCtx, tenant.ID)
 	require.NoError(t, err)
 
@@ -904,7 +922,9 @@ func TestBackfillLegacyPendingChange_SkipsChangeWithExistingInstance(t *testing.
 	c, err := client.Change.Create().SetTitle("已经有流程实例的变更").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
 	require.NoError(t, err)
 
-	tenantCtx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, tenantID)
+	tenantCtx := service.WithBPMNAccessScope(context.Background(), service.BPMNAccessScope{
+		UserID: actorID, TenantID: tenantID, CanUpdateAllTasks: true,
+	})
 	_, err = trigger.TriggerProcess(tenantCtx, &dto.ProcessTriggerRequest{
 		BusinessType:         dto.BusinessTypeChange,
 		BusinessID:           workItem.ID,
@@ -942,7 +962,9 @@ func TestBackfillLegacyPendingChange_RetriesAfterTerminatedInstance(t *testing.T
 	// 模拟第一次回填尝试：触发流程后失败，补偿性地 CancelProcess——跟
 	// BackfillLegacyPendingChange 自己在 completeAssessmentTask 失败时做的事一样，
 	// 留下一条 terminated 的流程实例，change.status 仍然是 pending。
-	tenantCtx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, tenantID)
+	tenantCtx := service.WithBPMNAccessScope(context.Background(), service.BPMNAccessScope{
+		UserID: actorID, TenantID: tenantID, CanUpdateAllTasks: true,
+	})
 	firstAttempt, err := trigger.TriggerProcess(tenantCtx, &dto.ProcessTriggerRequest{
 		BusinessType:         dto.BusinessTypeChange,
 		BusinessID:           workItem.ID,

@@ -507,7 +507,13 @@ func TestTaskMutationsUseAuthoritativeParticipantTokens(t *testing.T) {
 func TestVoteRollsBackFinalVoteWhenParentAdvancementFailsAndCanRetry(t *testing.T) {
 	f := newBPMNAuthorizationFixture(t)
 	parent := f.seedNonParticipantApprovalTask(t, "vote-parent-retry")
-	parent, err := f.client.ProcessTask.UpdateOne(parent).SetCandidateUsers(f.actor.Email).Save(f.userCtx)
+	probe := &postCommitProbeHandler{client: f.client, taskID: parent.TaskID, expectedAuditCount: 2}
+	f.engine.callbackRegistry.RegisterHandler(probe)
+	parent, err := f.client.ProcessTask.UpdateOne(parent).
+		SetCandidateUsers(f.actor.Email).
+		SetCallbackHandlerID(probe.GetHandlerID()).
+		SetCallbackTaskType(probe.GetTaskType()).
+		Save(f.userCtx)
 	require.NoError(t, err)
 	children, err := f.engine.TaskService().CreateCounterSignTasks(
 		f.typedTaskScopeOnlyCtx(f.actor, false), parent.TaskID,
@@ -536,6 +542,7 @@ func TestVoteRollsBackFinalVoteWhenParentAdvancementFailsAndCanRetry(t *testing.
 	assert.Zero(t, f.client.ProcessApprovalDecision.Query().Where(processapprovaldecision.ProcessTaskID(children[0].ID)).CountX(f.userCtx))
 
 	require.NoError(t, f.engine.TaskService().Vote(voteCtx, children[0].TaskID, &VoteRequest{Approved: true}))
+	assert.True(t, probe.observedCommittedState)
 	assert.Equal(t, common.ProcessTaskStatusCompleted, f.client.ProcessTask.GetX(f.userCtx, children[0].ID).Status)
 	assert.Equal(t, common.ProcessTaskStatusCompleted, f.client.ProcessTask.GetX(f.userCtx, parent.ID).Status)
 	assert.Equal(t, common.ProcessTaskStatusCompleted, f.client.ProcessInstance.GetX(f.userCtx, parent.ProcessInstanceID).Status)
@@ -578,14 +585,12 @@ func TestCompleteTaskRunsServiceHandlerOnlyAfterTaskAndAuditCommit(t *testing.T)
 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="http://bpmn.io/schema/bpmn">
   <bpmn:process id="post-commit" isExecutable="true">
     <bpmn:startEvent id="start" />
-    <bpmn:userTask id="approval" name="Approval" />
-    <bpmn:serviceTask id="probe" name="Probe">
+    <bpmn:userTask id="approval" name="Approval">
       <bpmn:extensionElements><bpmn:metaData name="service_task_type">post_commit_probe</bpmn:metaData></bpmn:extensionElements>
-    </bpmn:serviceTask>
+    </bpmn:userTask>
     <bpmn:endEvent id="end" />
     <bpmn:sequenceFlow id="to-approval" sourceRef="start" targetRef="approval" />
-    <bpmn:sequenceFlow id="to-probe" sourceRef="approval" targetRef="probe" />
-    <bpmn:sequenceFlow id="to-end" sourceRef="probe" targetRef="end" />
+    <bpmn:sequenceFlow id="to-end" sourceRef="approval" targetRef="end" />
   </bpmn:process>
 </bpmn:definitions>`
 	_, err = f.client.ProcessDefinition.UpdateOne(definition).SetBpmnXML([]byte(xml)).Save(f.userCtx)
@@ -601,15 +606,23 @@ func TestCompleteTaskRunsServiceHandlerOnlyAfterTaskAndAuditCommit(t *testing.T)
 type postCommitProbeHandler struct {
 	client                 *ent.Client
 	taskID                 string
+	expectedAuditCount     int
 	observedCommittedState bool
 }
 
 func (h *postCommitProbeHandler) GetTaskType() string  { return "post_commit_probe" }
 func (h *postCommitProbeHandler) GetHandlerID() string { return "post_commit_probe" }
+func (h *postCommitProbeHandler) IsAsync() bool        { return true }
 func (h *postCommitProbeHandler) Validate(context.Context, map[string]interface{}) error {
 	return nil
 }
-func (h *postCommitProbeHandler) Execute(ctx context.Context, _ *ent.ProcessTask, _ map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *postCommitProbeHandler) Execute(ctx context.Context, callbackTask *ent.ProcessTask, _ map[string]interface{}) (*dto.ServiceTaskResult, error) {
+	if callbackTask == nil {
+		return nil, fmt.Errorf("callback task is required")
+	}
+	if _, err := callbackTask.QueryProcessInstance().Only(ctx); err != nil {
+		return nil, fmt.Errorf("callback task remained bound to its committed transaction: %w", err)
+	}
 	task, err := h.client.ProcessTask.Query().Where(processtask.TaskID(h.taskID)).Only(ctx)
 	if err != nil {
 		return nil, err
@@ -621,7 +634,11 @@ func (h *postCommitProbeHandler) Execute(ctx context.Context, _ *ent.ProcessTask
 	if err != nil {
 		return nil, err
 	}
-	h.observedCommittedState = task.Status == common.ProcessTaskStatusCompleted && audits == 1
+	expectedAudits := h.expectedAuditCount
+	if expectedAudits == 0 {
+		expectedAudits = 1
+	}
+	h.observedCommittedState = task.Status == common.ProcessTaskStatusCompleted && audits == expectedAudits
 	if !h.observedCommittedState {
 		return nil, fmt.Errorf("service handler observed uncommitted task state")
 	}

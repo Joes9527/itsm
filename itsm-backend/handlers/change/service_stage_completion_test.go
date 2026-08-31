@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"itsm-backend/service"
-	"itsm-backend/service/bpmn"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
@@ -28,7 +27,8 @@ func TestTransitionStatus_StageCompletion_AdvanceProcessEndToEnd(t *testing.T) {
 	tenantID, actorID := setupChangeBPMNActor(t, entClient, "stage")
 
 	// 模板部署（change_normal_flow 的网关路由需要）
-	_, err := service.NewBPMNTemplateService(entClient).LoadAndDeployTemplates(context.Background(), tenantID)
+	deployCtx := service.WithTrustedBPMNTenantContext(context.Background(), tenantID)
+	_, err := service.NewBPMNTemplateService(entClient).LoadAndDeployTemplates(deployCtx, tenantID)
 	require.NoError(t, err)
 
 	// 域侧 mock：approved 状态（已过审批），ID 与 DB 行对齐。
@@ -82,8 +82,10 @@ func TestTransitionStatus_StageCompletion_AdvanceProcessEndToEnd(t *testing.T) {
 
 	// 模拟 ProcessTriggerService 启动：businessKey 按 "change:{id}" 约定
 	engine := service.NewCustomProcessEngine(entClient, zap.NewNop().Sugar())
-	workflowCtx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, tenantID)
-	instance, err := engine.StartProcess(workflowCtx, "change_normal_flow", fmt.Sprintf("change:%d", workItem.ID), "", 0, map[string]interface{}{
+	workflowCtx := service.WithBPMNAccessScope(context.Background(), service.BPMNAccessScope{
+		UserID: actorID, TenantID: tenantID, CanUpdateAllTasks: true,
+	})
+	instance, err := engine.StartProcess(workflowCtx, "change_normal_flow", fmt.Sprintf("change:%d", workItem.ID), "change", workItem.ID, map[string]interface{}{
 		"approval_required": false,
 		"business_type":     "change",
 		"business_id":       workItem.ID,

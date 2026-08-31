@@ -466,12 +466,15 @@ func (h *ChangeServiceTaskHandler) closeChange(ctx context.Context, variables ma
 		return nil, fmt.Errorf("非法的变更状态转换: %s -> %s", entity.Status, "completed")
 	}
 
-	if entity.Status != "completed" {
-		now := time.Now()
-		if _, err := entity.Update().
-			SetStatus("completed").
-			SetActualEndDate(now).
-			Save(ctx); err != nil {
+	if entity.Status != "completed" || entity.ActualEndDate.IsZero() {
+		update := entity.Update()
+		if entity.Status != "completed" {
+			update.SetStatus("completed")
+		}
+		if entity.ActualEndDate.IsZero() {
+			update.SetActualEndDate(time.Now())
+		}
+		if _, err := update.Save(ctx); err != nil {
 			return nil, fmt.Errorf("关闭变更失败: %w", err)
 		}
 	}
