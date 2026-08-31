@@ -170,7 +170,6 @@ func TestKafExecutionIntegrityTablesHaveRegisteredTenantRLS(t *testing.T) {
 
 func TestUnifiedIntakeMigrationEnablesRLS(t *testing.T) {
 	require.NotEmpty(t, RegisteredMigrations)
-	assert.Equal(t, "020_unified_intake_rls", RegisteredMigrations[len(RegisteredMigrations)-1].Version)
 
 	sql := GetMigrationSQL("020_unified_intake_rls")
 	require.NotEmpty(t, sql)
@@ -187,7 +186,6 @@ func TestUnifiedIntakeMigrationEnablesRLS(t *testing.T) {
 
 func TestWorkItemAuthorityMigrationDropsDuplicateColumnsAndUsesJoinRLS(t *testing.T) {
 	require.NotEmpty(t, RegisteredMigrations)
-	assert.Equal(t, "021_work_item_authority", RegisteredMigrations[len(RegisteredMigrations)-1].Version)
 
 	sql := GetMigrationSQL("021_work_item_authority")
 	require.NotEmpty(t, sql)
@@ -202,4 +200,11 @@ func TestWorkItemAuthorityMigrationDropsDuplicateColumnsAndUsesJoinRLS(t *testin
 	assert.Contains(t, sql, "tickets.id = service_requests.ticket_id")
 	assert.Contains(t, sql, "ALTER TABLE service_catalogs DROP COLUMN IF EXISTS itsm_type")
 	assert.Contains(t, sql, "target_class IN ('service_request_item', 'incident', 'change_request')")
+}
+
+func TestExternalIdentityVersionMigrationAddsPositiveOptimisticLock(t *testing.T) {
+	require.Equal(t, "022_external_identity_version", RegisteredMigrations[len(RegisteredMigrations)-1].Version)
+	sql := GetMigrationSQL("022_external_identity_version")
+	assert.Contains(t, sql, "ADD COLUMN IF NOT EXISTS version bigint NOT NULL DEFAULT 1")
+	assert.Contains(t, sql, "CHECK (version > 0)")
 }

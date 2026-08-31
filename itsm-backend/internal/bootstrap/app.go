@@ -718,7 +718,8 @@ func NewApplication() *Application {
 	// Common Domain
 	commonRepo := domainCommon.NewEntRepository(client)
 	commonServiceDomain := domainCommon.NewService(commonRepo, cfg.JWT.Secret, sugar, client)
-	// 注入 Redis 客户端（如果可用），启用 refresh token 黑名单
+	// 注入 Redis 客户端（如果可用），启用 refresh token 黑名单与 Intake assertion 防重放。
+	var sharedRedisClient *redis.Client
 	if cfg.Redis.Host != "" {
 		commonRedis := redis.NewClient(&redis.Options{
 			Addr:     fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
@@ -729,6 +730,7 @@ func NewApplication() *Application {
 		if err := commonRedis.Ping(pingCtx).Err(); err != nil {
 			sugar.Warnw("common domain redis ping failed; refresh token blacklist disabled", "error", err)
 		} else {
+			sharedRedisClient = commonRedis
 			commonServiceDomain.SetRedis(commonRedis)
 			middleware.ConfigureAccessTokenRevocationRedis(commonRedis)
 			sugar.Info("refresh token blacklist enabled via redis")
@@ -736,6 +738,18 @@ func NewApplication() *Application {
 		pingCancel()
 	}
 	commonHandler := domainCommon.NewHandler(commonServiceDomain)
+	identityMappingHandler := intake.NewIdentityMappingHandler(client)
+	var identityExchangeHandler *intake.IdentityExchangeHandler
+	if cfg.KAFIntake.Enabled {
+		var nonceStore intake.NonceStore
+		if sharedRedisClient != nil {
+			nonceStore = intake.NewRedisNonceStore(sharedRedisClient)
+		}
+		identityExchangeHandler = intake.NewIdentityExchangeHandler(
+			client, nonceStore, cfg.KAFIntake.ExchangeSecret, cfg.JWT.Secret,
+			cfg.KAFIntake.AssertionMaxAge, cfg.KAFIntake.TokenTTL,
+		)
+	}
 
 	// Auth Controller（装配缺失的 register / forgot-password / reset-password / validate-reset-token / switch-tenant 路由）
 	authService := service.NewAuthService(client, cfg.JWT.Secret, sugar, nil)
@@ -825,7 +839,10 @@ func NewApplication() *Application {
 
 	// 初始化 Redis 限流器（分布式环境使用）
 	var redisRateLimiter router.RateLimiterInterface
-	if cfg.Redis.Host != "" {
+	if sharedRedisClient != nil {
+		redisRateLimiter = middleware.NewRedisRateLimiter(sharedRedisClient, 500, time.Minute)
+		sugar.Info("Using shared Redis connection for distributed rate limiting")
+	} else if cfg.Redis.Host != "" {
 		redisClient := redis.NewClient(&redis.Options{
 			Addr:     fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
 			Password: cfg.Redis.Password,
@@ -914,6 +931,8 @@ func NewApplication() *Application {
 		ServiceCatalogHandler:       scHandler,
 		ServiceRequestHandler:       srHandler,
 		IntakeHandler:               intakeHandler,
+		IdentityExchangeHandler:     identityExchangeHandler,
+		IdentityMappingHandler:      identityMappingHandler,
 		WorkflowInterventionHandler: workflowInterventionHandler,
 		ProblemHandler:              problemHandler,
 		ChangeHandler:               changeHandler,

@@ -128,6 +128,11 @@ var RegisteredMigrations = []Migration{
 		Description: "Make WorkItem authoritative for Incident and Service Request shared fields, replace extension RLS with ticket joins, and retire service_catalogs.itsm_type (irreversible; forward-fix only)",
 		RollbackSQL: "",
 	},
+	{
+		Version:     "022_external_identity_version",
+		Description: "Add optimistic-lock version to tenant-scoped external identity mappings",
+		RollbackSQL: "",
+	},
 }
 
 // PostSchemaMigrations returns a defensive copy of the canonical active stream.
@@ -890,6 +895,15 @@ ALTER TABLE service_catalogs DROP CONSTRAINT IF EXISTS service_catalogs_target_c
 ALTER TABLE service_catalogs ADD CONSTRAINT service_catalogs_target_class_check
     CHECK (target_class IN ('service_request_item', 'incident', 'change_request'));
 ALTER TABLE service_catalogs DROP COLUMN IF EXISTS itsm_type;
+`
+	case "022_external_identity_version":
+		return `
+ALTER TABLE external_identities
+    ADD COLUMN IF NOT EXISTS version bigint NOT NULL DEFAULT 1;
+ALTER TABLE external_identities
+    DROP CONSTRAINT IF EXISTS external_identities_version_positive;
+ALTER TABLE external_identities
+    ADD CONSTRAINT external_identities_version_positive CHECK (version > 0);
 `
 	default:
 		return ""

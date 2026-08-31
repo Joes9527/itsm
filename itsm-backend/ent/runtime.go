@@ -1200,12 +1200,18 @@ func init() {
 	externalidentityDescActive := externalidentityFields[5].Descriptor()
 	// externalidentity.DefaultActive holds the default value on creation for the active field.
 	externalidentity.DefaultActive = externalidentityDescActive.Default.(bool)
+	// externalidentityDescVersion is the schema descriptor for version field.
+	externalidentityDescVersion := externalidentityFields[6].Descriptor()
+	// externalidentity.DefaultVersion holds the default value on creation for the version field.
+	externalidentity.DefaultVersion = externalidentityDescVersion.Default.(int)
+	// externalidentity.VersionValidator is a validator for the "version" field. It is called by the builders before save.
+	externalidentity.VersionValidator = externalidentityDescVersion.Validators[0].(func(int) error)
 	// externalidentityDescCreatedAt is the schema descriptor for created_at field.
-	externalidentityDescCreatedAt := externalidentityFields[6].Descriptor()
+	externalidentityDescCreatedAt := externalidentityFields[7].Descriptor()
 	// externalidentity.DefaultCreatedAt holds the default value on creation for the created_at field.
 	externalidentity.DefaultCreatedAt = externalidentityDescCreatedAt.Default.(func() time.Time)
 	// externalidentityDescUpdatedAt is the schema descriptor for updated_at field.
-	externalidentityDescUpdatedAt := externalidentityFields[7].Descriptor()
+	externalidentityDescUpdatedAt := externalidentityFields[8].Descriptor()
 	// externalidentity.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	externalidentity.DefaultUpdatedAt = externalidentityDescUpdatedAt.Default.(func() time.Time)
 	// externalidentity.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

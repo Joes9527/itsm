@@ -23,6 +23,7 @@ func (ExternalIdentity) Fields() []ent.Field {
 		field.String("subject").Immutable().NotEmpty().Sensitive(),
 		field.Int("user_id").Immutable().Positive(),
 		field.Bool("active").Default(true),
+		field.Int("version").Default(1).Positive(),
 		field.Time("created_at").Default(time.Now).Immutable(),
 		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),
 	}

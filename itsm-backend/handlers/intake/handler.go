@@ -31,9 +31,12 @@ func (r *ActorResolver) Resolve(c *gin.Context) (Identity, error) {
 	if tenantID <= 0 || actorID <= 0 || role == "" {
 		return Identity{}, NewAuthenticationRequired("authenticated intake identity is required", nil)
 	}
-	channel := "itsm_web"
-	if strings.HasPrefix(c.GetHeader("Authorization"), "Bearer ") {
-		channel = "itsm_api"
+	channel := strings.TrimSpace(c.GetString("channel"))
+	if channel == "" {
+		channel = "itsm_web"
+		if strings.HasPrefix(c.GetHeader("Authorization"), "Bearer ") {
+			channel = "itsm_api"
+		}
 	}
 	return Identity{
 		TenantID: tenantID, ActorID: actorID, RequesterID: actorID, Role: role,

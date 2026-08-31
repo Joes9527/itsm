@@ -42143,6 +42143,8 @@ type ExternalIdentityMutation struct {
 	user_id       *int
 	adduser_id    *int
 	active        *bool
+	version       *int
+	addversion    *int
 	created_at    *time.Time
 	updated_at    *time.Time
 	clearedFields map[string]struct{}
@@ -42505,6 +42507,62 @@ func (m *ExternalIdentityMutation) ResetActive() {
 	m.active = nil
 }
 
+// SetVersion sets the "version" field.
+func (m *ExternalIdentityMutation) SetVersion(i int) {
+	m.version = &i
+	m.addversion = nil
+}
+
+// Version returns the value of the "version" field in the mutation.
+func (m *ExternalIdentityMutation) Version() (r int, exists bool) {
+	v := m.version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldVersion returns the old "version" field's value of the ExternalIdentity entity.
+// If the ExternalIdentity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExternalIdentityMutation) OldVersion(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldVersion: %w", err)
+	}
+	return oldValue.Version, nil
+}
+
+// AddVersion adds i to the "version" field.
+func (m *ExternalIdentityMutation) AddVersion(i int) {
+	if m.addversion != nil {
+		*m.addversion += i
+	} else {
+		m.addversion = &i
+	}
+}
+
+// AddedVersion returns the value that was added to the "version" field in this mutation.
+func (m *ExternalIdentityMutation) AddedVersion() (r int, exists bool) {
+	v := m.addversion
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetVersion resets all changes to the "version" field.
+func (m *ExternalIdentityMutation) ResetVersion() {
+	m.version = nil
+	m.addversion = nil
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *ExternalIdentityMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -42611,7 +42669,7 @@ func (m *ExternalIdentityMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ExternalIdentityMutation) Fields() []string {
-	fields := make([]string, 0, 8)
+	fields := make([]string, 0, 9)
 	if m.tenant_id != nil {
 		fields = append(fields, externalidentity.FieldTenantID)
 	}
@@ -42629,6 +42687,9 @@ func (m *ExternalIdentityMutation) Fields() []string {
 	}
 	if m.active != nil {
 		fields = append(fields, externalidentity.FieldActive)
+	}
+	if m.version != nil {
+		fields = append(fields, externalidentity.FieldVersion)
 	}
 	if m.created_at != nil {
 		fields = append(fields, externalidentity.FieldCreatedAt)
@@ -42656,6 +42717,8 @@ func (m *ExternalIdentityMutation) Field(name string) (ent.Value, bool) {
 		return m.UserID()
 	case externalidentity.FieldActive:
 		return m.Active()
+	case externalidentity.FieldVersion:
+		return m.Version()
 	case externalidentity.FieldCreatedAt:
 		return m.CreatedAt()
 	case externalidentity.FieldUpdatedAt:
@@ -42681,6 +42744,8 @@ func (m *ExternalIdentityMutation) OldField(ctx context.Context, name string) (e
 		return m.OldUserID(ctx)
 	case externalidentity.FieldActive:
 		return m.OldActive(ctx)
+	case externalidentity.FieldVersion:
+		return m.OldVersion(ctx)
 	case externalidentity.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case externalidentity.FieldUpdatedAt:
@@ -42736,6 +42801,13 @@ func (m *ExternalIdentityMutation) SetField(name string, value ent.Value) error 
 		}
 		m.SetActive(v)
 		return nil
+	case externalidentity.FieldVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetVersion(v)
+		return nil
 	case externalidentity.FieldCreatedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -42764,6 +42836,9 @@ func (m *ExternalIdentityMutation) AddedFields() []string {
 	if m.adduser_id != nil {
 		fields = append(fields, externalidentity.FieldUserID)
 	}
+	if m.addversion != nil {
+		fields = append(fields, externalidentity.FieldVersion)
+	}
 	return fields
 }
 
@@ -42776,6 +42851,8 @@ func (m *ExternalIdentityMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedTenantID()
 	case externalidentity.FieldUserID:
 		return m.AddedUserID()
+	case externalidentity.FieldVersion:
+		return m.AddedVersion()
 	}
 	return nil, false
 }
@@ -42798,6 +42875,13 @@ func (m *ExternalIdentityMutation) AddField(name string, value ent.Value) error 
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddUserID(v)
+		return nil
+	case externalidentity.FieldVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddVersion(v)
 		return nil
 	}
 	return fmt.Errorf("unknown ExternalIdentity numeric field %s", name)
@@ -42843,6 +42927,9 @@ func (m *ExternalIdentityMutation) ResetField(name string) error {
 		return nil
 	case externalidentity.FieldActive:
 		m.ResetActive()
+		return nil
+	case externalidentity.FieldVersion:
+		m.ResetVersion()
 		return nil
 	case externalidentity.FieldCreatedAt:
 		m.ResetCreatedAt()

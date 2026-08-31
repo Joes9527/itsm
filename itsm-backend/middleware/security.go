@@ -136,7 +136,7 @@ func RateLimitMiddleware(limiter *RateLimiter) gin.HandlerFunc {
 		clientIP := c.ClientIP()
 
 		if !limiter.Allow(clientIP) {
-			common.Fail(c, http.StatusTooManyRequests, "请求过于频繁，请稍后再试")
+			common.TypedFail(c, http.StatusTooManyRequests, "RATE_LIMITED", "请求过于频繁，请稍后再试", true, nil)
 			c.Abort()
 			return
 		}

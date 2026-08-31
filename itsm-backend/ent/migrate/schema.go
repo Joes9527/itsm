@@ -1410,6 +1410,7 @@ var (
 		{Name: "subject", Type: field.TypeString},
 		{Name: "user_id", Type: field.TypeInt},
 		{Name: "active", Type: field.TypeBool, Default: true},
+		{Name: "version", Type: field.TypeInt, Default: 1},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 	}

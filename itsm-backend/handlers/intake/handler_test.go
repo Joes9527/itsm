@@ -84,6 +84,24 @@ func TestIntakeHandlerReturns201Then200AndDerivesIdentity(t *testing.T) {
 	}
 }
 
+func TestActorResolverPreservesVerifiedConnectorChannel(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/v1/intake/work-items", nil)
+	c.Request.Header.Set("Authorization", "Bearer intake-token")
+	c.Set("tenant_id", 7)
+	c.Set("user_id", 11)
+	c.Set("role", "end_user")
+	c.Set("channel", "teams")
+	c.Set("token_id", "jti-verified")
+
+	identity, err := NewActorResolver().Resolve(c)
+	require.NoError(t, err)
+	require.Equal(t, "teams", identity.Channel)
+	require.Equal(t, "jti-verified", identity.TokenID)
+	require.Equal(t, identity.ActorID, identity.RequesterID)
+}
+
 func TestIntakeHandlerRejectsMissingIdentityAndStrictBody(t *testing.T) {
 	t.Run("unauthenticated", func(t *testing.T) {
 		service := &stubCreateService{}

@@ -31,6 +31,7 @@ type Config struct {
 	Deployment     DeploymentConfig `mapstructure:"deployment"`
 	RLS            RLSConfig        `mapstructure:"rls"`
 	KAFOutbox      KAFOutboxConfig
+	KAFIntake      KAFIntakeConfig
 	WorkflowOutbox WorkflowOutboxConfig
 }
 
@@ -41,6 +42,15 @@ type KAFOutboxConfig struct {
 	WebhookSecret string
 	BatchSize     int
 	PollInterval  time.Duration
+}
+
+// KAFIntakeConfig controls the connector identity exchange. It deliberately
+// does not reuse the KAF webhook secret or any automation token.
+type KAFIntakeConfig struct {
+	Enabled         bool
+	ExchangeSecret  string
+	AssertionMaxAge time.Duration
+	TokenTTL        time.Duration
 }
 
 // WorkflowOutboxConfig controls reliable, local delivery of frozen BPMN start
@@ -312,6 +322,11 @@ func LoadConfig() (*Config, error) {
 		return nil, err
 	}
 	config.KAFOutbox = kafOutboxConfig
+	kafIntakeConfig, err := loadKAFIntakeConfig(kafOutboxEnv)
+	if err != nil {
+		return nil, err
+	}
+	config.KAFIntake = kafIntakeConfig
 	workflowOutboxConfig, err := loadWorkflowOutboxConfig(kafOutboxEnv)
 	if err != nil {
 		return nil, err
@@ -435,6 +450,25 @@ func loadKAFOutboxConfig(getenv func(string) string) (KAFOutboxConfig, error) {
 		if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") || parsedURL.Host == "" || parsedURL.User != nil {
 			return KAFOutboxConfig{}, fmt.Errorf("KAF_WEBHOOK_URL must be an absolute HTTP(S) URL without userinfo")
 		}
+	}
+	return config, nil
+}
+
+func loadKAFIntakeConfig(getenv func(string) string) (KAFIntakeConfig, error) {
+	config := KAFIntakeConfig{
+		ExchangeSecret:  strings.TrimSpace(getenv("KAF_INTAKE_EXCHANGE_SECRET")),
+		AssertionMaxAge: time.Minute,
+		TokenTTL:        5 * time.Minute,
+	}
+	if raw := strings.TrimSpace(getenv("KAF_INTAKE_EXCHANGE_ENABLED")); raw != "" {
+		enabled, err := strconv.ParseBool(raw)
+		if err != nil {
+			return KAFIntakeConfig{}, fmt.Errorf("KAF_INTAKE_EXCHANGE_ENABLED must be a boolean")
+		}
+		config.Enabled = enabled
+	}
+	if config.Enabled && config.ExchangeSecret == "" {
+		return KAFIntakeConfig{}, fmt.Errorf("KAF_INTAKE_EXCHANGE_SECRET is required when KAF intake identity exchange is enabled")
 	}
 	return config, nil
 }

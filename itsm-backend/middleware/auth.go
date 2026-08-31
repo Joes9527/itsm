@@ -12,27 +12,44 @@ import (
 )
 
 type Claims struct {
-	UserID    int    `json:"userId"`
-	Username  string `json:"username"`
-	Role      string `json:"role"`
-	TenantID  int    `json:"tenantId"`
-	TokenType string `json:"tokenType"` // "access" 或 "refresh"
+	UserID    int      `json:"userId"`
+	Username  string   `json:"username"`
+	Role      string   `json:"role"`
+	TenantID  int      `json:"tenantId"`
+	TokenType string   `json:"tokenType"` // "access" 或 "refresh"
+	Channel   string   `json:"channel,omitempty"`
+	Provider  string   `json:"provider,omitempty"`
+	Scope     []string `json:"scope,omitempty"`
 	jwt.RegisteredClaims
 }
 
-// ValidateAccessToken 验证 access token 并返回声明。
-func ValidateAccessToken(tokenString, jwtSecret string) (*Claims, error) {
+func parseJWTClaims(tokenString, jwtSecret string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+		if token.Method.Alg() != jwt.SigningMethodHS256.Alg() {
 			return nil, jwt.ErrSignatureInvalid
 		}
 		return []byte(jwtSecret), nil
 	})
-	if err != nil || !token.Valid {
+	if err != nil {
 		return nil, err
 	}
+	if !token.Valid {
+		return nil, jwt.ErrTokenInvalidClaims
+	}
 	claims, ok := token.Claims.(*Claims)
-	if !ok || claims.TokenType != "access" {
+	if !ok {
+		return nil, jwt.ErrTokenInvalidClaims
+	}
+	return claims, nil
+}
+
+// ValidateAccessToken 验证 access token 并返回声明。
+func ValidateAccessToken(tokenString, jwtSecret string) (*Claims, error) {
+	claims, err := parseJWTClaims(tokenString, jwtSecret)
+	if err != nil {
+		return nil, err
+	}
+	if claims.TokenType != "access" {
 		return nil, jwt.ErrInvalidKey
 	}
 	return claims, nil
@@ -40,16 +57,12 @@ func ValidateAccessToken(tokenString, jwtSecret string) (*Claims, error) {
 
 // ValidateRefreshToken 验证refresh token
 func ValidateRefreshToken(tokenString, jwtSecret string) (*Claims, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
-		return []byte(jwtSecret), nil
-	})
-
-	if err != nil || !token.Valid {
+	claims, err := parseJWTClaims(tokenString, jwtSecret)
+	if err != nil {
 		return nil, err
 	}
 
-	claims, ok := token.Claims.(*Claims)
-	if !ok || claims.TokenType != "refresh" {
+	if claims.TokenType != "refresh" {
 		return nil, jwt.ErrInvalidKey
 	}
 
@@ -164,13 +177,7 @@ func AuthMiddleware(jwtSecret string) gin.HandlerFunc {
 		)
 
 		// 解析JWT token
-		token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
-			// 验证签名算法，防止算法混淆攻击
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, jwt.ErrSignatureInvalid
-			}
-			return []byte(jwtSecret), nil
-		})
+		claims, err := parseJWTClaims(tokenString, jwtSecret)
 		if err != nil {
 			zap.S().Warnw(
 				"AuthMiddleware: token parse failed",
@@ -183,18 +190,8 @@ func AuthMiddleware(jwtSecret string) gin.HandlerFunc {
 			return
 		}
 
-		if !token.Valid {
-			zap.S().Warnw(
-				"AuthMiddleware: token invalid",
-				"path", c.Request.URL.Path,
-			)
-			common.Fail(c, common.AuthFailedCode, "token无效")
-			c.Abort()
-			return
-		}
-
 		// 提取用户信息
-		if claims, ok := token.Claims.(*Claims); ok {
+		if claims != nil {
 			// H4 修复：检查TokenType，必须是access类型
 			if claims.TokenType != "access" {
 				zap.S().Warnw(

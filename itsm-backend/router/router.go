@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"io"
+	"net/http"
 	"os"
 	"runtime"
 	"strconv"
@@ -260,6 +261,8 @@ type RouterConfig struct {
 	ServiceCatalogHandler       *service_catalog.Handler
 	ServiceRequestHandler       *service_request.Handler
 	IntakeHandler               *intake.Handler
+	IdentityExchangeHandler     *intake.IdentityExchangeHandler
+	IdentityMappingHandler      *intake.IdentityMappingHandler
 	WorkflowInterventionHandler *intake.WorkflowInterventionHandler
 	CMDBHandler                 *cmdb.Handler
 
@@ -315,7 +318,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 					return
 				}
 				if !allowed {
-					common.Fail(c, 429, "请求过于频繁，请稍后再试")
+					common.TypedFail(c, http.StatusTooManyRequests, "RATE_LIMITED", "请求过于频繁，请稍后再试", true, nil)
 					c.Abort()
 					return
 				}
@@ -343,6 +346,9 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 	// 公共路由（无需认证）
 	public := r.Group("/api/v1")
 	{
+		if config.IdentityExchangeHandler != nil {
+			public.POST("/intake/identity-exchange", config.IdentityExchangeHandler.Exchange)
+		}
 		if config.CommonHandler != nil {
 			public.POST("/auth/login", config.CommonHandler.Login)
 			public.POST("/refresh-token", config.CommonHandler.RefreshToken)
@@ -409,6 +415,24 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 		// CSRF 不验证登录相关的路径
 		csrfConfig.SkipPaths = append(csrfConfig.SkipPaths, "/api/v1/auth/login", "/api/v1/refresh-token")
 		auth.Use(middleware.CSRFProtectionMiddleware(csrfConfig))
+	}
+
+	// Unified Intake accepts ordinary access tokens plus the exact short-lived
+	// connector token. This separate group is the only place that accepts an
+	// intake token; the general auth group above remains access-only.
+	if config.IntakeHandler != nil {
+		intakeAuth := r.Group("/api/v1")
+		intakeAuth.Use(middleware.IntakeAuthMiddleware(config.JWTSecret))
+		intakeAuth.Use(middleware.RBACMiddleware(config.Client))
+		if config.CSRFEnabled {
+			intakeAuth.Use(middleware.CSRFProtectionMiddleware(middleware.DefaultCSRFConfig()))
+		}
+		intakeTenant := intakeAuth.Use(middleware.TenantMiddleware(config.Client))
+		intakeTenant.POST(
+			"/intake/work-items",
+			middleware.RequirePermission("intake", "create"),
+			config.IntakeHandler.CreateWorkItem,
+		)
 	}
 
 	// WebSocket 路由（使用短期票据替代JWT query参数，避免token泄露）
@@ -495,11 +519,21 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 		// 租户中间件
 		tenant := auth.Use(middleware.TenantMiddleware(config.Client))
 
-		if config.IntakeHandler != nil {
+		if config.IdentityMappingHandler != nil {
+			tenant.(*gin.RouterGroup).GET(
+				"/intake/external-identities",
+				middleware.RequirePermission("intake", "identity_admin"),
+				config.IdentityMappingHandler.List,
+			)
 			tenant.(*gin.RouterGroup).POST(
-				"/intake/work-items",
-				middleware.RequirePermission("intake", "create"),
-				config.IntakeHandler.CreateWorkItem,
+				"/intake/external-identities",
+				middleware.RequirePermission("intake", "identity_admin"),
+				config.IdentityMappingHandler.Create,
+			)
+			tenant.(*gin.RouterGroup).POST(
+				"/intake/external-identities/:id/disable",
+				middleware.RequirePermission("intake", "identity_admin"),
+				config.IdentityMappingHandler.Disable,
 			)
 		}
 		if config.WorkflowInterventionHandler != nil {

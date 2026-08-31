@@ -66,6 +66,20 @@ func (_c *ExternalIdentityCreate) SetNillableActive(v *bool) *ExternalIdentityCr
 	return _c
 }
 
+// SetVersion sets the "version" field.
+func (_c *ExternalIdentityCreate) SetVersion(v int) *ExternalIdentityCreate {
+	_c.mutation.SetVersion(v)
+	return _c
+}
+
+// SetNillableVersion sets the "version" field if the given value is not nil.
+func (_c *ExternalIdentityCreate) SetNillableVersion(v *int) *ExternalIdentityCreate {
+	if v != nil {
+		_c.SetVersion(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *ExternalIdentityCreate) SetCreatedAt(v time.Time) *ExternalIdentityCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -133,6 +147,10 @@ func (_c *ExternalIdentityCreate) defaults() {
 		v := externalidentity.DefaultActive
 		_c.mutation.SetActive(v)
 	}
+	if _, ok := _c.mutation.Version(); !ok {
+		v := externalidentity.DefaultVersion
+		_c.mutation.SetVersion(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := externalidentity.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -187,6 +205,14 @@ func (_c *ExternalIdentityCreate) check() error {
 	}
 	if _, ok := _c.mutation.Active(); !ok {
 		return &ValidationError{Name: "active", err: errors.New(`ent: missing required field "ExternalIdentity.active"`)}
+	}
+	if _, ok := _c.mutation.Version(); !ok {
+		return &ValidationError{Name: "version", err: errors.New(`ent: missing required field "ExternalIdentity.version"`)}
+	}
+	if v, ok := _c.mutation.Version(); ok {
+		if err := externalidentity.VersionValidator(v); err != nil {
+			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "ExternalIdentity.version": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "ExternalIdentity.created_at"`)}
@@ -244,6 +270,10 @@ func (_c *ExternalIdentityCreate) createSpec() (*ExternalIdentity, *sqlgraph.Cre
 	if value, ok := _c.mutation.Active(); ok {
 		_spec.SetField(externalidentity.FieldActive, field.TypeBool, value)
 		_node.Active = value
+	}
+	if value, ok := _c.mutation.Version(); ok {
+		_spec.SetField(externalidentity.FieldVersion, field.TypeInt, value)
+		_node.Version = value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(externalidentity.FieldCreatedAt, field.TypeTime, value)
@@ -314,6 +344,24 @@ func (u *ExternalIdentityUpsert) SetActive(v bool) *ExternalIdentityUpsert {
 // UpdateActive sets the "active" field to the value that was provided on create.
 func (u *ExternalIdentityUpsert) UpdateActive() *ExternalIdentityUpsert {
 	u.SetExcluded(externalidentity.FieldActive)
+	return u
+}
+
+// SetVersion sets the "version" field.
+func (u *ExternalIdentityUpsert) SetVersion(v int) *ExternalIdentityUpsert {
+	u.Set(externalidentity.FieldVersion, v)
+	return u
+}
+
+// UpdateVersion sets the "version" field to the value that was provided on create.
+func (u *ExternalIdentityUpsert) UpdateVersion() *ExternalIdentityUpsert {
+	u.SetExcluded(externalidentity.FieldVersion)
+	return u
+}
+
+// AddVersion adds v to the "version" field.
+func (u *ExternalIdentityUpsert) AddVersion(v int) *ExternalIdentityUpsert {
+	u.Add(externalidentity.FieldVersion, v)
 	return u
 }
 
@@ -400,6 +448,27 @@ func (u *ExternalIdentityUpsertOne) SetActive(v bool) *ExternalIdentityUpsertOne
 func (u *ExternalIdentityUpsertOne) UpdateActive() *ExternalIdentityUpsertOne {
 	return u.Update(func(s *ExternalIdentityUpsert) {
 		s.UpdateActive()
+	})
+}
+
+// SetVersion sets the "version" field.
+func (u *ExternalIdentityUpsertOne) SetVersion(v int) *ExternalIdentityUpsertOne {
+	return u.Update(func(s *ExternalIdentityUpsert) {
+		s.SetVersion(v)
+	})
+}
+
+// AddVersion adds v to the "version" field.
+func (u *ExternalIdentityUpsertOne) AddVersion(v int) *ExternalIdentityUpsertOne {
+	return u.Update(func(s *ExternalIdentityUpsert) {
+		s.AddVersion(v)
+	})
+}
+
+// UpdateVersion sets the "version" field to the value that was provided on create.
+func (u *ExternalIdentityUpsertOne) UpdateVersion() *ExternalIdentityUpsertOne {
+	return u.Update(func(s *ExternalIdentityUpsert) {
+		s.UpdateVersion()
 	})
 }
 
@@ -654,6 +723,27 @@ func (u *ExternalIdentityUpsertBulk) SetActive(v bool) *ExternalIdentityUpsertBu
 func (u *ExternalIdentityUpsertBulk) UpdateActive() *ExternalIdentityUpsertBulk {
 	return u.Update(func(s *ExternalIdentityUpsert) {
 		s.UpdateActive()
+	})
+}
+
+// SetVersion sets the "version" field.
+func (u *ExternalIdentityUpsertBulk) SetVersion(v int) *ExternalIdentityUpsertBulk {
+	return u.Update(func(s *ExternalIdentityUpsert) {
+		s.SetVersion(v)
+	})
+}
+
+// AddVersion adds v to the "version" field.
+func (u *ExternalIdentityUpsertBulk) AddVersion(v int) *ExternalIdentityUpsertBulk {
+	return u.Update(func(s *ExternalIdentityUpsert) {
+		s.AddVersion(v)
+	})
+}
+
+// UpdateVersion sets the "version" field to the value that was provided on create.
+func (u *ExternalIdentityUpsertBulk) UpdateVersion() *ExternalIdentityUpsertBulk {
+	return u.Update(func(s *ExternalIdentityUpsert) {
+		s.UpdateVersion()
 	})
 }
 

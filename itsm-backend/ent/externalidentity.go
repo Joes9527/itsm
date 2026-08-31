@@ -29,6 +29,8 @@ type ExternalIdentity struct {
 	UserID int `json:"user_id,omitempty"`
 	// Active holds the value of the "active" field.
 	Active bool `json:"active,omitempty"`
+	// Version holds the value of the "version" field.
+	Version int `json:"version,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -43,7 +45,7 @@ func (*ExternalIdentity) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case externalidentity.FieldActive:
 			values[i] = new(sql.NullBool)
-		case externalidentity.FieldID, externalidentity.FieldTenantID, externalidentity.FieldUserID:
+		case externalidentity.FieldID, externalidentity.FieldTenantID, externalidentity.FieldUserID, externalidentity.FieldVersion:
 			values[i] = new(sql.NullInt64)
 		case externalidentity.FieldProvider, externalidentity.FieldWorkspace, externalidentity.FieldSubject:
 			values[i] = new(sql.NullString)
@@ -105,6 +107,12 @@ func (_m *ExternalIdentity) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field active", values[i])
 			} else if value.Valid {
 				_m.Active = value.Bool
+			}
+		case externalidentity.FieldVersion:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field version", values[i])
+			} else if value.Valid {
+				_m.Version = int(value.Int64)
 			}
 		case externalidentity.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -169,6 +177,9 @@ func (_m *ExternalIdentity) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("active=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Active))
+	builder.WriteString(", ")
+	builder.WriteString("version=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Version))
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

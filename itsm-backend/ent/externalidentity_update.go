@@ -42,6 +42,27 @@ func (_u *ExternalIdentityUpdate) SetNillableActive(v *bool) *ExternalIdentityUp
 	return _u
 }
 
+// SetVersion sets the "version" field.
+func (_u *ExternalIdentityUpdate) SetVersion(v int) *ExternalIdentityUpdate {
+	_u.mutation.ResetVersion()
+	_u.mutation.SetVersion(v)
+	return _u
+}
+
+// SetNillableVersion sets the "version" field if the given value is not nil.
+func (_u *ExternalIdentityUpdate) SetNillableVersion(v *int) *ExternalIdentityUpdate {
+	if v != nil {
+		_u.SetVersion(*v)
+	}
+	return _u
+}
+
+// AddVersion adds value to the "version" field.
+func (_u *ExternalIdentityUpdate) AddVersion(v int) *ExternalIdentityUpdate {
+	_u.mutation.AddVersion(v)
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *ExternalIdentityUpdate) SetUpdatedAt(v time.Time) *ExternalIdentityUpdate {
 	_u.mutation.SetUpdatedAt(v)
@@ -89,7 +110,20 @@ func (_u *ExternalIdentityUpdate) defaults() {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (_u *ExternalIdentityUpdate) check() error {
+	if v, ok := _u.mutation.Version(); ok {
+		if err := externalidentity.VersionValidator(v); err != nil {
+			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "ExternalIdentity.version": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (_u *ExternalIdentityUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(externalidentity.Table, externalidentity.Columns, sqlgraph.NewFieldSpec(externalidentity.FieldID, field.TypeInt))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
@@ -100,6 +134,12 @@ func (_u *ExternalIdentityUpdate) sqlSave(ctx context.Context) (_node int, err e
 	}
 	if value, ok := _u.mutation.Active(); ok {
 		_spec.SetField(externalidentity.FieldActive, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Version(); ok {
+		_spec.SetField(externalidentity.FieldVersion, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedVersion(); ok {
+		_spec.AddField(externalidentity.FieldVersion, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(externalidentity.FieldUpdatedAt, field.TypeTime, value)
@@ -135,6 +175,27 @@ func (_u *ExternalIdentityUpdateOne) SetNillableActive(v *bool) *ExternalIdentit
 	if v != nil {
 		_u.SetActive(*v)
 	}
+	return _u
+}
+
+// SetVersion sets the "version" field.
+func (_u *ExternalIdentityUpdateOne) SetVersion(v int) *ExternalIdentityUpdateOne {
+	_u.mutation.ResetVersion()
+	_u.mutation.SetVersion(v)
+	return _u
+}
+
+// SetNillableVersion sets the "version" field if the given value is not nil.
+func (_u *ExternalIdentityUpdateOne) SetNillableVersion(v *int) *ExternalIdentityUpdateOne {
+	if v != nil {
+		_u.SetVersion(*v)
+	}
+	return _u
+}
+
+// AddVersion adds value to the "version" field.
+func (_u *ExternalIdentityUpdateOne) AddVersion(v int) *ExternalIdentityUpdateOne {
+	_u.mutation.AddVersion(v)
 	return _u
 }
 
@@ -198,7 +259,20 @@ func (_u *ExternalIdentityUpdateOne) defaults() {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (_u *ExternalIdentityUpdateOne) check() error {
+	if v, ok := _u.mutation.Version(); ok {
+		if err := externalidentity.VersionValidator(v); err != nil {
+			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "ExternalIdentity.version": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (_u *ExternalIdentityUpdateOne) sqlSave(ctx context.Context) (_node *ExternalIdentity, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(externalidentity.Table, externalidentity.Columns, sqlgraph.NewFieldSpec(externalidentity.FieldID, field.TypeInt))
 	id, ok := _u.mutation.ID()
 	if !ok {
@@ -226,6 +300,12 @@ func (_u *ExternalIdentityUpdateOne) sqlSave(ctx context.Context) (_node *Extern
 	}
 	if value, ok := _u.mutation.Active(); ok {
 		_spec.SetField(externalidentity.FieldActive, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Version(); ok {
+		_spec.SetField(externalidentity.FieldVersion, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedVersion(); ok {
+		_spec.AddField(externalidentity.FieldVersion, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(externalidentity.FieldUpdatedAt, field.TypeTime, value)
