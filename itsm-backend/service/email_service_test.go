@@ -2,9 +2,12 @@ package service
 
 import (
 	"context"
+	"errors"
+	"net/smtp"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
 
@@ -456,18 +459,19 @@ func TestEmailService_HelperFunctions(t *testing.T) {
 
 type mockGraphMailSender struct {
 	calls []struct{ mailbox, to, subject, body string }
+	err   error
 }
 
 func (m *mockGraphMailSender) SendMail(_ context.Context, mailbox, to, subject, body string) error {
 	m.calls = append(m.calls, struct{ mailbox, to, subject, body string }{mailbox, to, subject, body})
-	return nil
+	return m.err
 }
 
 func TestEmailService_SendViaGraph(t *testing.T) {
 	logger := zaptest.NewLogger(t).Sugar()
 	svc := NewEmailService(EmailConfig{}, logger)
 	mock := &mockGraphMailSender{}
-	svc.SetGraphProvider(func() (GraphMailSender, string, bool) {
+	svc.SetGraphProvider(func(_ int) (GraphMailSender, string, bool) {
 		return mock, "ai-support@example.com", true
 	})
 
@@ -477,7 +481,7 @@ func TestEmailService_SendViaGraph(t *testing.T) {
 		BodyText: "这是纯文本正文",
 		Body:     "<p>HTML 正文</p>",
 	}
-	err := svc.Send(context.Background(), msg)
+	err := svc.SendForTenant(context.Background(), 7, msg)
 	assert.NoError(t, err)
 	assert.Len(t, mock.calls, 2, "Graph 后端应对每个收件人发一次")
 	assert.Equal(t, "ai-support@example.com", mock.calls[0].mailbox)
@@ -490,7 +494,7 @@ func TestEmailService_SendViaGraph_FallsBackToBodyWhenNoText(t *testing.T) {
 	logger := zaptest.NewLogger(t).Sugar()
 	svc := NewEmailService(EmailConfig{}, logger)
 	mock := &mockGraphMailSender{}
-	svc.SetGraphProvider(func() (GraphMailSender, string, bool) {
+	svc.SetGraphProvider(func(_ int) (GraphMailSender, string, bool) {
 		return mock, "ai-support@example.com", true
 	})
 
@@ -499,8 +503,109 @@ func TestEmailService_SendViaGraph_FallsBackToBodyWhenNoText(t *testing.T) {
 		Subject: "无纯文本",
 		Body:    "<p>只有 HTML</p>",
 	}
-	err := svc.Send(context.Background(), msg)
+	err := svc.SendForTenant(context.Background(), 7, msg)
 	assert.NoError(t, err)
 	assert.Len(t, mock.calls, 1)
 	assert.Equal(t, "<p>只有 HTML</p>", mock.calls[0].body, "BodyText 为空时应回退到 Body")
+}
+
+func TestEmailServiceUsesOnlyRequestedTenantGraphProvider(t *testing.T) {
+	tenantOne := &mockGraphMailSender{}
+	tenantTwo := &mockGraphMailSender{}
+	requestedTenantIDs := make([]int, 0, 1)
+	svc := NewEmailService(EmailConfig{}, zaptest.NewLogger(t).Sugar())
+	svc.SetGraphProvider(func(tenantID int) (GraphMailSender, string, bool) {
+		requestedTenantIDs = append(requestedTenantIDs, tenantID)
+		switch tenantID {
+		case 1:
+			return tenantOne, "tenant-one@example.test", true
+		case 2:
+			return tenantTwo, "tenant-two@example.test", true
+		default:
+			return nil, "", false
+		}
+	})
+
+	err := svc.SendForTenant(context.Background(), 2, &EmailMessage{
+		To:       []string{"recipient@example.test"},
+		Subject:  "tenant scoped",
+		BodyText: "body",
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, []int{2}, requestedTenantIDs)
+	require.Empty(t, tenantOne.calls)
+	require.Len(t, tenantTwo.calls, 1)
+	require.Equal(t, "tenant-two@example.test", tenantTwo.calls[0].mailbox)
+}
+
+func TestEmailServiceFallsBackToSMTPAfterGraphRuntimeFailure(t *testing.T) {
+	graph := &mockGraphMailSender{err: errors.New("sensitive graph transport failure")}
+	svc := NewEmailService(EmailConfig{
+		Host: "smtp.example.test", Port: 587, Username: "mailer", From: "mailer@example.test",
+	}, zaptest.NewLogger(t).Sugar())
+	svc.SetGraphProvider(func(tenantID int) (GraphMailSender, string, bool) {
+		require.Equal(t, 42, tenantID)
+		return graph, "graph@example.test", true
+	})
+	smtpCalls := 0
+	svc.smtpSend = func(string, smtp.Auth, string, []string, []byte) error {
+		smtpCalls++
+		return nil
+	}
+
+	err := svc.SendForTenant(context.Background(), 42, &EmailMessage{
+		To:       []string{"recipient@example.test"},
+		Subject:  "fallback",
+		BodyText: "body",
+	})
+
+	require.NoError(t, err)
+	require.Len(t, graph.calls, 1)
+	require.Equal(t, 1, smtpCalls)
+}
+
+func TestEmailServiceLegacySendDoesNotConsultTenantGraphProvider(t *testing.T) {
+	svc := NewEmailService(EmailConfig{
+		Host: "smtp.example.test", Port: 587, Username: "mailer", From: "mailer@example.test",
+	}, zaptest.NewLogger(t).Sugar())
+	providerCalls := 0
+	svc.SetGraphProvider(func(int) (GraphMailSender, string, bool) {
+		providerCalls++
+		return &mockGraphMailSender{}, "graph@example.test", true
+	})
+	smtpCalls := 0
+	svc.smtpSend = func(string, smtp.Auth, string, []string, []byte) error {
+		smtpCalls++
+		return nil
+	}
+
+	err := svc.Send(context.Background(), &EmailMessage{
+		To:       []string{"legacy@example.test"},
+		Subject:  "legacy smtp",
+		BodyText: "body",
+	})
+
+	require.NoError(t, err)
+	require.Zero(t, providerCalls)
+	require.Equal(t, 1, smtpCalls)
+}
+
+func TestEmailServiceSMTPContextCancellationUsesFixedErrorClass(t *testing.T) {
+	svc := NewEmailService(EmailConfig{
+		Host: "smtp.example.test", Port: 587, Username: "mailer", From: "mailer@example.test",
+	}, zaptest.NewLogger(t).Sugar())
+	svc.smtpSend = func(string, smtp.Auth, string, []string, []byte) error {
+		return errors.New("sensitive canceled SMTP error")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := svc.SendForTenant(ctx, 42, &EmailMessage{
+		To:       []string{"recipient@example.test"},
+		Subject:  "canceled fallback",
+		BodyText: "body",
+	})
+
+	require.EqualError(t, err, "email_delivery_failed: smtp_send_failed")
 }

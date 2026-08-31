@@ -71,7 +71,7 @@ func TestTicketNotificationReadStateDoesNotChangeDurableDeliveryState(t *testing
 	configureDurableNotificationConnector(t, fixture.notifications, fixture.tenant.ID, connectorSink)
 	graphSink := &graphSenderSpy{}
 	emailService := NewEmailService(EmailConfig{}, zaptest.NewLogger(t).Sugar())
-	emailService.SetGraphProvider(func() (GraphMailSender, string, bool) {
+	emailService.SetGraphProvider(func(_ int) (GraphMailSender, string, bool) {
 		return graphSink, "sender@example.test", true
 	})
 	fixture.notifications.SetEmailService(emailService)

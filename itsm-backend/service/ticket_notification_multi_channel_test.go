@@ -72,7 +72,7 @@ func TestSendNotification_MultiChannelRouting(t *testing.T) {
 	svc.SetNotificationPreferenceService(NewNotificationPreferenceService(client, zaptest.NewLogger(t).Sugar()))
 	spy := &graphSenderSpy{}
 	emailSvc := NewEmailService(EmailConfig{}, zaptest.NewLogger(t).Sugar())
-	emailSvc.SetGraphProvider(func() (GraphMailSender, string, bool) {
+	emailSvc.SetGraphProvider(func(_ int) (GraphMailSender, string, bool) {
 		return spy, "ai-support@example.com", true
 	})
 	svc.SetEmailService(emailSvc)

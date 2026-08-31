@@ -267,7 +267,7 @@ func (s *TicketWorkflowService) ForwardTicket(ctx context.Context, req *dto.Forw
 
 // CCTicket 抄送工单
 func (s *TicketWorkflowService) CCTicket(ctx context.Context, req *dto.CCTicketRequest, userID, tenantID int) error {
-	s.logger.Infow("CC ticket", "ticket_id", req.TicketID, "cc_users", req.CCUsers, "user_id", userID)
+	s.logger.Infow("CC ticket", "ticket_id", req.TicketID)
 
 	notifyChannels, err := normalizeNotifyChannels(req.NotifyChannels)
 	if err != nil {

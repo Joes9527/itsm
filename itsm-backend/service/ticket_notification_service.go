@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"net/mail"
 	"strings"
 	"time"
 
@@ -281,10 +282,14 @@ func (s *TicketNotificationService) dispatchClaimedDelivery(ctx context.Context,
 		if s.emailService == nil || strings.TrimSpace(userEntity.Email) == "" {
 			return "delivery_target_invalid"
 		}
+		if _, err := mail.ParseAddress(userEntity.Email); err != nil {
+			return "delivery_target_invalid"
+		}
 		// EmailService owns Graph-to-SMTP fallback. The stable internal key keeps
 		// retries deterministic, while the external email effect remains at-least-once.
-		if err := s.emailService.SendTicketNotification(
+		if err := s.emailService.SendTicketNotificationForTenant(
 			ctx,
+			row.TenantID,
 			[]string{userEntity.Email},
 			ticketEntity.TicketNumber,
 			ticketEntity.Title,
@@ -453,15 +458,16 @@ func (s *TicketNotificationService) SendNotification(
 
 		// 2. 邮件
 		if prefs.EmailEnabled && s.emailService != nil && userEntity.Email != "" {
-			if err := s.emailService.SendTicketNotification(
+			if err := s.emailService.SendTicketNotificationForTenant(
 				ctx,
+				tenantID,
 				[]string{userEntity.Email},
 				ticketEntity.TicketNumber,
 				ticketEntity.Title,
 				req.EventType,
 				req.Content,
 			); err != nil {
-				s.logger.Errorw("Failed to send email notification", "error", err, "user_id", userID)
+				s.logger.Errorw("ticket email notification failed", "error_class", emailErrorClassDelivery)
 			}
 		}
 
@@ -787,8 +793,8 @@ func (s *TicketNotificationService) NotifySLABreached(
 			}
 		}
 		if len(emails) > 0 {
-			if err := s.emailService.SendTicketNotification(ctx, emails, ticket.TicketNumber, ticket.Title, "sla_breached", content); err != nil {
-				s.logger.Warnw("failed to send SLA breach email notification", "error", err, "ticket_id", ticketID)
+			if err := s.emailService.SendTicketNotificationForTenant(ctx, tenantID, emails, ticket.TicketNumber, ticket.Title, "sla_breached", content); err != nil {
+				s.logger.Warnw("SLA breach email notification failed", "error_class", emailErrorClassDelivery, "ticket_id", ticketID)
 			}
 		}
 	}

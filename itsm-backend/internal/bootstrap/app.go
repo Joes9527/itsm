@@ -181,6 +181,20 @@ func prepareRolePermissionTenantMigration(
 	return nil
 }
 
+func newTenantGraphProvider(manager *connector.Manager) service.GraphProvider {
+	return func(tenantID int) (service.GraphMailSender, string, bool) {
+		c, ok := manager.Get(tenantID, "msgraph-email")
+		if !ok {
+			return nil, "", false
+		}
+		gc, ok := c.(*msgraph.GraphConnector)
+		if !ok {
+			return nil, "", false
+		}
+		return gc.GraphClient(), gc.Mailbox(), true
+	}
+}
+
 func NewApplication() *Application {
 	// 1. 初始化配置
 	cfg, err := config.LoadConfig()
@@ -290,18 +304,8 @@ func NewApplication() *Application {
 		From:     cfg.SMTP.FromEmail,
 		FromName: cfg.SMTP.FromName,
 	}, sugar)
-	// 延迟绑定 Graph 发信：发信时动态查 msgraph 连接器（单租户 tenantID=1）
-	emailService.SetGraphProvider(func() (service.GraphMailSender, string, bool) {
-		c, ok := connectorManager.Get(1, "msgraph-email")
-		if !ok {
-			return nil, "", false
-		}
-		gc, ok := c.(*msgraph.GraphConnector)
-		if !ok {
-			return nil, "", false
-		}
-		return gc.GraphClient(), gc.Mailbox(), true
-	})
+	// 延迟绑定 Graph 发信：发信时只查询当前租户的 msgraph 连接器。
+	emailService.SetGraphProvider(newTenantGraphProvider(connectorManager))
 	ticketNotificationService.SetEmailService(emailService)
 	ticketSLAService := service.NewTicketSLAService(client, sugar)
 	ticketAutomationRuleService := service.NewTicketAutomationRuleService(client, sugar)

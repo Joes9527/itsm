@@ -7,7 +7,11 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/connector"
+	msgraph "itsm-backend/connector/builtin/msgraph"
+
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 )
 
 type recordingBPMNCallbackWorker struct {
@@ -93,4 +97,42 @@ func TestApplicationStartsOneNotificationDeliveryWorkerAndStopsOnCancellation(t 
 	case <-time.After(time.Second):
 		t.Fatal("application notification delivery worker did not stop after cancellation")
 	}
+}
+
+func TestBootstrapEmailGraphProviderLookupUsesRequestedTenant(t *testing.T) {
+	registry := connector.NewRegistry()
+	registry.Register(func() connector.Connector { return msgraph.New() })
+	manager := connector.NewManager(registry, zaptest.NewLogger(t).Sugar())
+	t.Cleanup(manager.CloseAll)
+	for _, fixture := range []struct {
+		tenantID int
+		mailbox  string
+	}{
+		{tenantID: 1, mailbox: "tenant-one@example.test"},
+		{tenantID: 2, mailbox: "tenant-two@example.test"},
+	} {
+		require.NoError(t, manager.Provision(context.Background(), connector.Config{
+			TenantID: fixture.tenantID,
+			Name:     "msgraph-email",
+			Type:     connector.TypeEmail,
+			Provider: fixture.mailbox,
+			Enabled:  true,
+			Credentials: map[string]string{
+				"azure_client_id":     "client-id",
+				"azure_client_secret": "client-secret",
+			},
+			Settings: map[string]interface{}{
+				"azure_tenant_id": "azure-tenant",
+				"mailbox":         fixture.mailbox,
+			},
+		}))
+	}
+
+	provider := newTenantGraphProvider(manager)
+	sender, mailbox, ok := provider(2)
+	require.True(t, ok)
+	require.NotNil(t, sender)
+	require.Equal(t, "tenant-two@example.test", mailbox)
+	_, _, ok = provider(3)
+	require.False(t, ok)
 }

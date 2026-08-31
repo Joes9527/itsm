@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/smtp"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -20,7 +22,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 // ==================== TicketWorkflowService 测试设置 ====================
@@ -389,6 +394,108 @@ func TestCCTicketPersistsExternalDeliveryWhenConnectorManagerUnavailable(t *test
 	assert.Equal(t, "pending", notification.Status)
 	assert.NotEmpty(t, notification.DeliveryKey)
 	assert.True(t, notification.SentAt.IsZero())
+}
+
+func TestEmailAndCCLogsContainOnlyFixedErrorClasses(t *testing.T) {
+	const (
+		recipientSentinel = "sensitive-recipient@example.test"
+		subjectSentinel   = "sensitive-subject-value"
+		contentSentinel   = "sensitive-ticket-content"
+		graphErrSentinel  = "sensitive-graph-provider-error"
+		smtpErrSentinel   = "sensitive-smtp-provider-error"
+	)
+	core, observed := observer.New(zapcore.DebugLevel)
+	logger := zap.New(core).Sugar()
+	emailService := NewEmailService(EmailConfig{
+		Host: "smtp.example.test", Port: 587, Username: "mailer", From: "mailer@example.test",
+	}, logger)
+	emailService.SetGraphProvider(func(int) (GraphMailSender, string, bool) {
+		return &mockGraphMailSender{err: errors.New(graphErrSentinel)}, "graph@example.test", true
+	})
+	smtpErr := errors.New(smtpErrSentinel)
+	emailService.smtpSend = func(string, smtp.Auth, string, []string, []byte) error {
+		return smtpErr
+	}
+
+	err := emailService.SendForTenant(context.Background(), 7, &EmailMessage{
+		To:       []string{recipientSentinel},
+		CC:       []string{"sensitive-cc@example.test"},
+		Subject:  subjectSentinel,
+		Body:     contentSentinel,
+		BodyText: contentSentinel,
+	})
+	require.Error(t, err)
+	require.NotContains(t, err.Error(), graphErrSentinel)
+	require.NotContains(t, err.Error(), smtpErrSentinel)
+
+	smtpErr = nil
+	require.NoError(t, emailService.SendTemplate(context.Background(), &EmailMessage{
+		To:       []string{recipientSentinel},
+		Subject:  subjectSentinel,
+		Body:     contentSentinel,
+		BodyText: contentSentinel,
+	}, "ticket-email", nil))
+
+	workflow, client, ctx := setupTicketWorkflowTest(t)
+	t.Cleanup(func() { _ = client.Close() })
+	workflow.logger = logger
+	tenant, err := createTicketWorkflowTestTenant(ctx, client, "sanitized-cc-logs")
+	require.NoError(t, err)
+	operator, err := createTicketWorkflowTestUser(ctx, client, tenant.ID, "sanitized-cc-operator")
+	require.NoError(t, err)
+	recipient, err := createTicketWorkflowTestUser(ctx, client, tenant.ID, "sanitized-cc-recipient")
+	require.NoError(t, err)
+	ticketEntity, err := createTicketWorkflowTestTicket(ctx, client, tenant.ID, operator.ID, "open")
+	require.NoError(t, err)
+	notificationService := NewTicketNotificationService(client, logger)
+	notificationService.SetEmailService(emailService)
+	smtpErr = errors.New(smtpErrSentinel)
+	require.NoError(t, notificationService.SendNotification(ctx, ticketEntity.ID, &dto.SendTicketNotificationRequest{
+		UserIDs:   []int{recipient.ID},
+		EventType: "ticket_cc",
+		Content:   contentSentinel,
+	}, tenant.ID))
+	require.NoError(t, workflow.CCTicket(ctx, &dto.CCTicketRequest{
+		TicketID: ticketEntity.ID,
+		CCUsers:  []int{recipient.ID},
+		Comment:  contentSentinel,
+	}, operator.ID, tenant.ID))
+
+	allowedErrorClasses := map[string]struct{}{
+		"graph_send_failed":     {},
+		"smtp_send_failed":      {},
+		"email_delivery_failed": {},
+	}
+	seenErrorClasses := make(map[string]struct{})
+	for _, entry := range observed.All() {
+		fields := entry.ContextMap()
+		combined := entry.Message + fmt.Sprint(fields)
+		for _, sentinel := range []string{
+			recipientSentinel,
+			"sensitive-cc@example.test",
+			subjectSentinel,
+			contentSentinel,
+			graphErrSentinel,
+			smtpErrSentinel,
+		} {
+			require.NotContains(t, combined, sentinel)
+		}
+		for _, forbiddenKey := range []string{"to", "subject", "error", "cc_users", "user_id"} {
+			_, exists := fields[forbiddenKey]
+			require.False(t, exists, "log field %q must not be emitted: %s", forbiddenKey, combined)
+		}
+		if value, exists := fields["error_class"]; exists {
+			errorClass, ok := value.(string)
+			require.True(t, ok)
+			_, ok = allowedErrorClasses[errorClass]
+			require.True(t, ok, "unexpected error class %q", errorClass)
+			seenErrorClasses[errorClass] = struct{}{}
+		}
+	}
+	require.Contains(t, seenErrorClasses, "graph_send_failed")
+	require.Contains(t, seenErrorClasses, "smtp_send_failed")
+	require.Contains(t, seenErrorClasses, "email_delivery_failed")
+	require.False(t, strings.Contains(fmt.Sprint(observed.AllUntimed()), recipientSentinel))
 }
 
 func TestCCTicketRejectsUnknownNotifyChannelsBeforeEffects(t *testing.T) {

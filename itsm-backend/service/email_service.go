@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/mail"
@@ -31,16 +32,35 @@ type GraphMailSender interface {
 	SendMail(ctx context.Context, mailbox, to, subject, body string) error
 }
 
+// GraphProvider resolves the configured Graph sender for one tenant only.
+type GraphProvider func(tenantID int) (GraphMailSender, string, bool)
+
+type smtpSendFunc func(addr string, auth smtp.Auth, from string, to []string, msg []byte) error
+
+const (
+	emailErrorClassGraphSend    = "graph_send_failed"
+	emailErrorClassSMTPSend     = "smtp_send_failed"
+	emailErrorClassDelivery     = "email_delivery_failed"
+	emailErrorClassRouteMissing = "email_route_unavailable"
+)
+
+var (
+	errEmailGraphSend    = errors.New(emailErrorClassGraphSend)
+	errEmailSMTPSend     = errors.New(emailErrorClassSMTPSend)
+	errEmailRouteMissing = errors.New(emailErrorClassRouteMissing)
+)
+
 // EmailService 邮件服务
 type EmailService struct {
-	config EmailConfig
-	logger *zap.SugaredLogger
-	mu     sync.Mutex
-	recent map[string][]time.Time
+	config   EmailConfig
+	logger   *zap.SugaredLogger
+	mu       sync.Mutex
+	recent   map[string][]time.Time
+	smtpSend smtpSendFunc
 
 	// graphProvider 延迟绑定 Graph 发信后端：返回 sender + 发件邮箱 + 是否可用。
 	// connector 运行时 provision，不能启动时注入，故发信时动态查询。
-	graphProvider func() (GraphMailSender, string, bool)
+	graphProvider GraphProvider
 }
 
 // EmailMessage 邮件消息
@@ -63,33 +83,74 @@ type EmailAttachment struct {
 // NewEmailService 创建邮件服务
 func NewEmailService(config EmailConfig, logger *zap.SugaredLogger) *EmailService {
 	return &EmailService{
-		config: config,
-		logger: logger,
-		recent: make(map[string][]time.Time),
+		config:   config,
+		logger:   logger,
+		recent:   make(map[string][]time.Time),
+		smtpSend: smtp.SendMail,
 	}
 }
 
 // SetGraphProvider 注入 Graph 发信后端（延迟绑定：发信时动态查 connector）。
-func (s *EmailService) SetGraphProvider(provider func() (GraphMailSender, string, bool)) {
+func (s *EmailService) SetGraphProvider(provider GraphProvider) {
 	s.graphProvider = provider
 }
 
-// Send 发送邮件
+// Send sends through explicitly configured SMTP for legacy callers that do not
+// carry tenant identity. Tenant-owned delivery must use SendForTenant.
 func (s *EmailService) Send(ctx context.Context, msg *EmailMessage) error {
+	if err := s.prepareMessage(msg); err != nil {
+		return err
+	}
+	if !s.smtpConfigured() {
+		return emailDeliveryError(errEmailRouteMissing)
+	}
+	if err := s.sendViaSMTP(ctx, msg); err != nil {
+		return emailDeliveryError(err)
+	}
+	return nil
+}
+
+// SendForTenant sends through only the requested tenant's Graph connector and
+// falls back to configured SMTP when Graph is unavailable at runtime.
+func (s *EmailService) SendForTenant(ctx context.Context, tenantID int, msg *EmailMessage) error {
+	if tenantID <= 0 {
+		return fmt.Errorf("email tenant is required")
+	}
+	if err := s.prepareMessage(msg); err != nil {
+		return err
+	}
+
+	var routeErrors []error
+	if s.graphProvider != nil {
+		if sender, mailbox, ok := s.graphProvider(tenantID); ok && sender != nil {
+			if err := s.sendViaGraph(ctx, sender, mailbox, msg); err == nil {
+				return nil
+			} else {
+				routeErrors = append(routeErrors, err)
+			}
+		}
+	}
+	if s.smtpConfigured() {
+		if err := s.sendViaSMTP(ctx, msg); err == nil {
+			return nil
+		} else {
+			routeErrors = append(routeErrors, err)
+		}
+	}
+	if len(routeErrors) == 0 {
+		routeErrors = append(routeErrors, errEmailRouteMissing)
+	}
+	return emailDeliveryError(routeErrors...)
+}
+
+func (s *EmailService) prepareMessage(msg *EmailMessage) error {
 	if err := s.validateMessage(msg); err != nil {
 		return err
 	}
 	if err := s.checkRateLimit(msg.To, 20, time.Minute); err != nil {
 		return err
 	}
-
-	// Graph 优先：provider 可用则走 Graph sendMail（Exchange Online）
-	if s.graphProvider != nil {
-		if sender, mailbox, ok := s.graphProvider(); ok && sender != nil {
-			return s.sendViaGraph(ctx, sender, mailbox, msg)
-		}
-	}
-	return s.sendViaSMTP(ctx, msg)
+	return nil
 }
 
 // sendViaGraph 通过 Graph sendMail 发送（纯文本 body）。
@@ -100,21 +161,17 @@ func (s *EmailService) sendViaGraph(ctx context.Context, sender GraphMailSender,
 	}
 	for _, to := range msg.To {
 		if err := sender.SendMail(ctx, mailbox, to, msg.Subject, body); err != nil {
-			s.logger.Errorw("Failed to send email via Graph", "error", err, "to", to)
-			return fmt.Errorf("graph send email: %w", err)
+			s.logger.Errorw("email Graph delivery failed", "error_class", emailErrorClassGraphSend)
+			return errEmailGraphSend
 		}
 	}
-	s.logger.Infow("Email sent via Graph", "to", msg.To, "subject", msg.Subject)
+	s.logger.Infow("email delivered via Graph")
 	return nil
 }
 
 // sendViaSMTP 通过 SMTP 发送（现有逻辑）。
 func (s *EmailService) sendViaSMTP(ctx context.Context, msg *EmailMessage) error {
-	s.logger.Infow(
-		"Sending email via SMTP",
-		"to", msg.To,
-		"subject", msg.Subject,
-	)
+	s.logger.Infow("sending email via SMTP")
 
 	// 构建邮件内容
 	var emailBody strings.Builder
@@ -172,25 +229,34 @@ func (s *EmailService) sendViaSMTP(ctx context.Context, msg *EmailMessage) error
 
 	var err error
 	for attempt := 0; attempt < 3; attempt++ {
-		err = smtp.SendMail(addr, auth, s.config.From, append(append([]string{}, msg.To...), msg.CC...), []byte(emailBody.String()))
+		err = s.smtpSend(addr, auth, s.config.From, append(append([]string{}, msg.To...), msg.CC...), []byte(emailBody.String()))
 		if err == nil {
 			break
 		}
 		if attempt < 2 {
 			select {
 			case <-ctx.Done():
-				return ctx.Err()
+				s.logger.Errorw("email SMTP delivery failed", "error_class", emailErrorClassSMTPSend)
+				return errEmailSMTPSend
 			case <-time.After(time.Duration(attempt+1) * 200 * time.Millisecond):
 			}
 		}
 	}
 	if err != nil {
-		s.logger.Errorw("Failed to send email", "error", err, "to", msg.To)
-		return fmt.Errorf("failed to send email: %w", err)
+		s.logger.Errorw("email SMTP delivery failed", "error_class", emailErrorClassSMTPSend)
+		return errEmailSMTPSend
 	}
 
-	s.logger.Infow("Email sent successfully", "to", msg.To, "subject", msg.Subject)
+	s.logger.Infow("email delivered via SMTP")
 	return nil
+}
+
+func (s *EmailService) smtpConfigured() bool {
+	return s.ValidateConfig() == nil && s.smtpSend != nil
+}
+
+func emailDeliveryError(routeErrors ...error) error {
+	return fmt.Errorf("%s: %w", emailErrorClassDelivery, errors.Join(routeErrors...))
 }
 
 func (s *EmailService) validateMessage(msg *EmailMessage) error {
@@ -230,7 +296,7 @@ func (s *EmailService) checkRateLimit(keys []string, limit int, window time.Dura
 
 // SendTemplate 发送模板邮件
 func (s *EmailService) SendTemplate(ctx context.Context, msg *EmailMessage, templateName string, data interface{}) error {
-	s.logger.Infow("Sending template email", "template", templateName, "to", msg.To)
+	s.logger.Infow("sending template email", "template", templateName)
 
 	// 解析模板
 	tmpl, err := template.New(templateName).Option("missingkey=error").Parse(msg.Body)
@@ -263,6 +329,20 @@ func (s *EmailService) SendTemplate(ctx context.Context, msg *EmailMessage, temp
 
 // SendTicketNotification 发送工单通知邮件
 func (s *EmailService) SendTicketNotification(ctx context.Context, to []string, ticketNumber, ticketTitle, action, content string) error {
+	return s.Send(ctx, buildTicketNotificationEmail(to, ticketNumber, ticketTitle, action, content))
+}
+
+// SendTicketNotificationForTenant sends a ticket email through tenant-scoped routing.
+func (s *EmailService) SendTicketNotificationForTenant(
+	ctx context.Context,
+	tenantID int,
+	to []string,
+	ticketNumber, ticketTitle, action, content string,
+) error {
+	return s.SendForTenant(ctx, tenantID, buildTicketNotificationEmail(to, ticketNumber, ticketTitle, action, content))
+}
+
+func buildTicketNotificationEmail(to []string, ticketNumber, ticketTitle, action, content string) *EmailMessage {
 	subject := fmt.Sprintf("[ITSM] 工单 %s - %s", ticketNumber, action)
 
 	bodyText := fmt.Sprintf(`
@@ -313,14 +393,12 @@ func (s *EmailService) SendTicketNotification(ctx context.Context, to []string, 
 </html>
 `, ticketNumber, ticketTitle, action, content)
 
-	msg := &EmailMessage{
+	return &EmailMessage{
 		To:       to,
 		Subject:  subject,
 		Body:     bodyHTML,
 		BodyText: bodyText,
 	}
-
-	return s.Send(ctx, msg)
 }
 
 // SendSLANotification 发送SLA告警邮件

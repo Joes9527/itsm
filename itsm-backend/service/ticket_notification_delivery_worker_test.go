@@ -247,7 +247,9 @@ func TestTicketNotificationWorkerRoutesLogicalEmailThroughBootstrapEmailWiring(t
 	fixture.notifications.SetConnectorManager(connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar()))
 	graph := &durableNotificationGraphSender{}
 	emailService := NewEmailService(EmailConfig{}, zaptest.NewLogger(t).Sugar())
-	emailService.SetGraphProvider(func() (GraphMailSender, string, bool) {
+	requestedTenantIDs := make([]int, 0, 1)
+	emailService.SetGraphProvider(func(tenantID int) (GraphMailSender, string, bool) {
+		requestedTenantIDs = append(requestedTenantIDs, tenantID)
 		return graph, "sender@example.test", true
 	})
 	fixture.notifications.SetEmailService(emailService)
@@ -257,6 +259,7 @@ func TestTicketNotificationWorkerRoutesLogicalEmailThroughBootstrapEmailWiring(t
 	completed, err := fixture.notifications.ProcessPendingDeliveries(fixture.ctx, "notification-bootstrap-email-worker", 10)
 	require.NoError(t, err)
 	require.Equal(t, 1, completed)
+	require.Equal(t, []int{fixture.tenant.ID}, requestedTenantIDs)
 	require.Equal(t, []string{fixture.recipient.Email}, graph.sentCalls())
 	require.Equal(t, ticketNotificationStatusSent, fixture.client.TicketNotification.GetX(fixture.ctx, row.ID).Status)
 }
@@ -267,7 +270,7 @@ func TestTicketNotificationWorkerRetriesEmailServiceFailure(t *testing.T) {
 	fixture.notifications.SetConnectorManager(connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar()))
 	graph := &durableNotificationGraphSender{sendErr: errors.New("graph temporarily unavailable")}
 	emailService := NewEmailService(EmailConfig{}, zaptest.NewLogger(t).Sugar())
-	emailService.SetGraphProvider(func() (GraphMailSender, string, bool) {
+	emailService.SetGraphProvider(func(_ int) (GraphMailSender, string, bool) {
 		return graph, "sender@example.test", true
 	})
 	fixture.notifications.SetEmailService(emailService)
@@ -290,6 +293,48 @@ func TestTicketNotificationWorkerRetriesEmailServiceFailure(t *testing.T) {
 	require.Equal(t, 1, completed)
 	require.Equal(t, []string{fixture.recipient.Email, fixture.recipient.Email}, graph.sentCalls())
 	require.Equal(t, ticketNotificationStatusSent, fixture.client.TicketNotification.GetX(fixture.ctx, row.ID).Status)
+}
+
+func TestTicketNotificationWorkerTreatsMalformedEmailAsPermanent(t *testing.T) {
+	fixture := newDurableNotificationFixture(t, "notification-malformed-email")
+	fixture.recipient = fixture.client.User.UpdateOneID(fixture.recipient.ID).
+		SetEmail("malformed-address").
+		SaveX(fixture.ctx)
+	row := fixture.enqueueExternalCCWithChannel(t, "email")
+	graph := &durableNotificationGraphSender{}
+	emailService := NewEmailService(EmailConfig{}, zaptest.NewLogger(t).Sugar())
+	emailService.SetGraphProvider(func(_ int) (GraphMailSender, string, bool) {
+		return graph, "sender@example.test", true
+	})
+	fixture.notifications.SetEmailService(emailService)
+
+	now := time.Now().Add(time.Hour)
+	fixture.notifications.now = func() time.Time { return now }
+	completed, err := fixture.notifications.ProcessPendingDeliveries(
+		fixture.ctx,
+		"notification-malformed-email-worker",
+		10,
+	)
+	require.Error(t, err)
+	require.Zero(t, completed)
+
+	row = fixture.client.TicketNotification.GetX(fixture.ctx, row.ID)
+	require.Equal(t, ticketNotificationStatusFailed, row.Status)
+	require.Equal(t, 1, row.AttemptCount)
+	require.Equal(t, "delivery_target_invalid", row.LastErrorClass)
+	require.Empty(t, row.LeaseOwner)
+	require.True(t, row.LeaseExpiresAt.IsZero())
+	require.Empty(t, graph.sentCalls())
+
+	now = now.Add(24 * time.Hour)
+	completed, err = fixture.notifications.ProcessPendingDeliveries(
+		fixture.ctx,
+		"notification-malformed-email-worker",
+		10,
+	)
+	require.NoError(t, err)
+	require.Zero(t, completed)
+	require.Equal(t, 1, fixture.client.TicketNotification.GetX(fixture.ctx, row.ID).AttemptCount)
 }
 
 func TestTicketNotificationWorkerMarksPermanentTargetFailureTerminal(t *testing.T) {
