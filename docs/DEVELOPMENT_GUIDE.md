@@ -43,6 +43,43 @@ Trusted BPMN scope is built only from authenticated `tenant_id`, `user_id`, role
 go test ./service/bpmn ./service ./controller -run 'BPMN|ProcessTask|ProcessInstance|KafDelegate' -count=1
 ```
 
+### BPMN callback outbox
+
+The callback outbox provides **at-least-once delivery**, not exactly-once delivery. Every delivery carries the stable outbox `execution_key` as `Idempotency-Key`; callback receivers must deduplicate that key and make the deduplication record and business effect atomic. A retry or lease recovery reuses the same key.
+
+Rows move through `pending` (eligible at `next_attempt_at`), `processing` (owned by a worker lease), and `completed` (durably delivered). A processing lease lasts 60 seconds; after it expires, another worker can reclaim the row. The application starts an immediate sweep, then sweeps every 2 seconds in batches of 50. Failures return to pending with exponential backoff capped at 5 minutes.
+
+Diagnostics must always include both the trusted tenant and exact execution key. Do not run unscoped outbox dumps on shared or production databases. This `psql` example returns only operational metadata and deliberately excludes callback variables:
+
+```bash
+psql "$ITSM_TEST_DB" -v tenant_id=42 -v execution_key='callback-key' -c "
+SELECT execution_key, status, attempt_count, next_attempt_at,
+       lease_owner, lease_expires_at, last_error_class, updated_at
+FROM process_callback_outboxes
+WHERE tenant_id = :'tenant_id'::bigint
+  AND execution_key = :'execution_key';"
+```
+
+Logs may include `tenant_id`, `execution_key`, callback kind, attempt count, status, and an allowlisted error class. Never log callback variables or bodies, raw handler errors, credentials, tokens, DSNs, or other secrets.
+
+Run the callback and authorization release gate from `itsm-backend`:
+
+```bash
+ITSM_TEST_DB="$ITSM_TEST_DB" go test -tags integration ./service \
+  -run 'TestClaimTaskConcurrentCASPostgres|TestBPMNCallbackOutboxLeaseRecoveryPostgres' -count=1 -v
+
+go test ./service/bpmn ./service ./controller -run 'BPMN|ProcessTask|ProcessInstance|KafDelegate|Callback|CounterSign' -count=1
+go test -race ./service ./internal/bootstrap -run 'TestBPMNAuthorization|TestTaskMutation|TestProcessInstanceMutation|TestCounterSign|TestCallback|TestClaimTask' -count=1
+go test ./middleware ./router ./internal/bootstrap -count=1
+go test ./... -count=1
+go build ./...
+git diff c15af6eda1febd47a75fb1e621907b16bbaac336..HEAD --check
+```
+
+Provision `ITSM_TEST_DB` through the local secret environment before running the integration gate. Do not paste its password into documentation, shell history, CI output, or test logs, and do not substitute SQLite or skip the integration tests when PostgreSQL is unavailable.
+
+The KAF work remains on a separate branch. After rebasing that branch onto callback-outbox or authorization changes, rerun the authorization/KAF-focused tests and the complete gate above before merge; a previously green KAF result is not evidence for the rebased result.
+
 ### 环境配置
 
 ```bash

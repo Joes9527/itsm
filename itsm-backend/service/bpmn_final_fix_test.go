@@ -423,7 +423,7 @@ func TestClaimTaskAuditFailureRollsBackBothClaimVariants(t *testing.T) {
 	}
 }
 
-func TestClaimTaskConcurrentClaimersUseCAS(t *testing.T) {
+func TestClaimTaskSecondClaimReturnsConflict(t *testing.T) {
 	rawDB, err := sql.Open("sqlite3", testDSN())
 	require.NoError(t, err)
 	rawDB.SetMaxOpenConns(1)
