@@ -87,7 +87,7 @@ func TestKafOutboxDispatcher_SchedulesRetryAfterTransportFailure(t *testing.T) {
 	assert.Equal(t, outboxEventStatusPending, persisted.Status)
 	assert.Equal(t, 1, persisted.AttemptCount)
 	assert.WithinDuration(t, now.Add(2*time.Second), persisted.NextAttemptAt, time.Millisecond)
-	assert.Contains(t, persisted.LastError, "connection refused")
+	assert.Contains(t, persisted.LastError, "deliver KAF webhook")
 }
 
 func TestKafOutboxDispatcher_RejectsURLWithoutSecret(t *testing.T) {
