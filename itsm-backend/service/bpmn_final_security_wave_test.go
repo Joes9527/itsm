@@ -144,6 +144,143 @@ func TestCompleteTaskMergesParticipantValuesWithoutErasingTaskSummary(t *testing
 	assert.Equal(t, "looks good", updated.TaskVariables["approvalComment"])
 }
 
+func TestLegacyCallbackDescriptorCompletionRejectsInvalidDefinitionsAtomically(t *testing.T) {
+	tests := []struct {
+		name       string
+		taskKey    string
+		bpmnXML    []byte
+		wantErr    string
+		wantStored string
+	}{
+		{
+			name:    "task node missing from deployed definition",
+			taskKey: "removed_legacy_task",
+			bpmnXML: []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="missing-legacy-task" isExecutable="true">
+    <bpmn:startEvent id="start" />
+    <bpmn:userTask id="unrelated_approval" name="Unrelated approval" />
+    <bpmn:endEvent id="end" />
+    <bpmn:sequenceFlow id="to-unrelated" sourceRef="start" targetRef="unrelated_approval" />
+    <bpmn:sequenceFlow id="to-end" sourceRef="unrelated_approval" targetRef="end" />
+  </bpmn:process>
+</bpmn:definitions>`),
+			wantErr: "任务节点不存在于已部署流程定义",
+		},
+		{
+			name:    "declared legacy service reference is unregistered",
+			taskKey: "legacy_service",
+			bpmnXML: []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="unresolved-legacy-service" isExecutable="true">
+    <bpmn:startEvent id="start" />
+    <bpmn:serviceTask id="legacy_service" name="Legacy service" implementation="retired_change_handler" />
+    <bpmn:endEvent id="end" />
+    <bpmn:sequenceFlow id="to-legacy-service" sourceRef="start" targetRef="legacy_service" />
+    <bpmn:sequenceFlow id="to-end" sourceRef="legacy_service" targetRef="end" />
+  </bpmn:process>
+</bpmn:definitions>`),
+			wantErr:    "回调描述符无法解析",
+			wantStored: bpmnUnresolvedUserTaskCallbackHandlerID,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newBPMNAuthorizationFixture(t)
+			task := f.seedNonParticipantApprovalTask(t, tt.taskKey)
+			task, err := f.client.ProcessTask.UpdateOne(task).
+				SetCandidateUsers(f.actor.Email).
+				SetTaskDefinitionKey(tt.taskKey).
+				SetTaskVariables(map[string]interface{}{"before": "kept"}).
+				Save(f.userCtx)
+			require.NoError(t, err)
+
+			instance := f.client.ProcessInstance.GetX(f.userCtx, task.ProcessInstanceID)
+			definition := f.client.ProcessDefinition.GetX(f.userCtx, instance.ProcessDefinitionID)
+			_, err = f.client.ProcessDefinition.UpdateOne(definition).SetBpmnXML(tt.bpmnXML).Save(f.userCtx)
+			require.NoError(t, err)
+
+			beforeTask := f.client.ProcessTask.GetX(f.userCtx, task.ID)
+			beforeInstance := f.client.ProcessInstance.GetX(f.userCtx, instance.ID)
+			beforeAuditCount := f.client.ProcessAuditLog.Query().CountX(f.userCtx)
+			beforeOutboxCount := f.client.ProcessCallbackOutbox.Query().CountX(f.userCtx)
+
+			err = f.engine.CompleteTask(
+				f.typedTaskScopeOnlyCtx(f.actor, false),
+				task.TaskID,
+				map[string]interface{}{"approvalComment": "must roll back"},
+			)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
+
+			afterTask := f.client.ProcessTask.GetX(f.userCtx, task.ID)
+			afterInstance := f.client.ProcessInstance.GetX(f.userCtx, instance.ID)
+			assert.Equal(t, beforeTask.Status, afterTask.Status)
+			assert.Equal(t, beforeTask.TaskVariables, afterTask.TaskVariables)
+			assert.Equal(t, beforeTask.CallbackHandlerID, afterTask.CallbackHandlerID)
+			assert.Equal(t, beforeTask.CallbackTaskType, afterTask.CallbackTaskType)
+			assert.Equal(t, beforeInstance.Version, afterInstance.Version)
+			assert.Equal(t, beforeInstance.Status, afterInstance.Status)
+			assert.Equal(t, beforeInstance.CurrentActivityID, afterInstance.CurrentActivityID)
+			assert.Equal(t, beforeInstance.Variables, afterInstance.Variables)
+			assert.Equal(t, beforeAuditCount, f.client.ProcessAuditLog.Query().CountX(f.userCtx))
+			assert.Equal(t, beforeOutboxCount, f.client.ProcessCallbackOutbox.Query().CountX(f.userCtx))
+
+			if tt.wantStored == "" {
+				return
+			}
+			definitions, err := f.engine.parser.ParseXML(tt.bpmnXML)
+			require.NoError(t, err)
+			require.Len(t, definitions.Processes, 1)
+			descriptor, err := f.engine.descriptorForProcessTask(f.userCtx, f.client, afterTask, definitions.Processes[0])
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantStored, descriptor.HandlerID)
+			assert.Equal(t, "retired_change_handler", descriptor.TaskType)
+		})
+	}
+}
+
+func TestExecuteStepRejectsOrphanElement(t *testing.T) {
+	tests := []struct {
+		name    string
+		element string
+		process *BPMNProcess
+	}{
+		{
+			name:    "user task without outgoing flow",
+			element: "orphan_user_task",
+			process: &BPMNProcess{UserTasks: []*BPMNUserTask{{ID: "orphan_user_task", Name: "Orphan user task"}}},
+		},
+		{
+			name:    "service task without outgoing flow",
+			element: "orphan_service_task",
+			process: &BPMNProcess{ServiceTasks: []*BPMNServiceTask{{ID: "orphan_service_task", Name: "Orphan service task"}}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newBPMNAuthorizationFixture(t)
+			instance := f.createProcessInstance(t, f.tenant, tt.element)
+			instance, err := f.client.ProcessInstance.UpdateOne(instance).
+				SetStatus("running").
+				SetCurrentActivityID(tt.element).
+				SetCurrentActivityName(tt.element).
+				Save(f.userCtx)
+			require.NoError(t, err)
+
+			err = f.engine.executeStep(f.userCtx, instance, tt.process, tt.element, map[string]interface{}{})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.element)
+
+			after := f.client.ProcessInstance.GetX(f.userCtx, instance.ID)
+			assert.Equal(t, "running", after.Status)
+			assert.Equal(t, tt.element, after.CurrentActivityID)
+		})
+	}
+}
+
 func TestCallbackOutboxDoesNotPersistArbitraryOrSensitiveProcessVariables(t *testing.T) {
 	f := newBPMNAuthorizationFixture(t)
 	handler := newCountingIdempotentCallbackHandler("allowlist_probe", "allowlist_probe_handler", 1)

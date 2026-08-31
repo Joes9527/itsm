@@ -410,7 +410,7 @@ func TestUserTaskCallbackFailureRemainsDurablyRetryable(t *testing.T) {
 	assert.Equal(t, 1, handler.EffectCount())
 }
 
-func TestUserTaskCallbackWithoutRegisteredHandlerIsDurablyRetryable(t *testing.T) {
+func TestUserTaskCallbackWithoutRegisteredHandlerFailsClosedUntilHandlerIsRegistered(t *testing.T) {
 	f := newBPMNAuthorizationFixture(t)
 	now := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
 	setCallbackTestClock(f.engine, &now)
@@ -420,6 +420,35 @@ func TestUserTaskCallbackWithoutRegisteredHandlerIsDurablyRetryable(t *testing.T
 		Save(f.userCtx)
 	require.NoError(t, err)
 	configureLegacyUserCallbackDefinition(t, f, task, "future_user_callback", "record_completion")
+
+	beforeTask := f.client.ProcessTask.GetX(f.userCtx, task.ID)
+	beforeInstance := f.client.ProcessInstance.GetX(f.userCtx, task.ProcessInstanceID)
+	beforeAuditCount := f.client.ProcessAuditLog.Query().CountX(f.userCtx)
+
+	err = f.engine.CompleteTask(
+		f.typedTaskScopeOnlyCtx(f.actor, false), task.TaskID, map[string]interface{}{"business_id": 42},
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "回调描述符无法解析")
+
+	afterFailedTask := f.client.ProcessTask.GetX(f.userCtx, task.ID)
+	afterFailedInstance := f.client.ProcessInstance.GetX(f.userCtx, task.ProcessInstanceID)
+	assert.Equal(t, beforeTask.Status, afterFailedTask.Status)
+	assert.Equal(t, beforeTask.TaskVariables, afterFailedTask.TaskVariables)
+	assert.Empty(t, afterFailedTask.CallbackHandlerID)
+	assert.Empty(t, afterFailedTask.CallbackTaskType)
+	assert.Equal(t, beforeInstance.Version, afterFailedInstance.Version)
+	assert.Equal(t, beforeInstance.Status, afterFailedInstance.Status)
+	assert.Equal(t, beforeInstance.CurrentActivityID, afterFailedInstance.CurrentActivityID)
+	assert.Equal(t, beforeInstance.Variables, afterFailedInstance.Variables)
+	assert.Equal(t, beforeAuditCount, f.client.ProcessAuditLog.Query().CountX(f.userCtx))
+	assert.Zero(t, f.client.ProcessCallbackOutbox.Query().Where(
+		processcallbackoutbox.TenantID(f.tenant.ID),
+		processcallbackoutbox.ProcessTaskID(task.ID),
+	).CountX(f.userCtx))
+
+	handler := newCountingIdempotentCallbackHandler("future_user_callback", "future_user_handler", 0)
+	f.engine.CallbackRegistry().RegisterHandler(handler)
 
 	require.NoError(t, f.engine.CompleteTask(
 		f.typedTaskScopeOnlyCtx(f.actor, false), task.TaskID, map[string]interface{}{"business_id": 42},
@@ -431,20 +460,13 @@ func TestUserTaskCallbackWithoutRegisteredHandlerIsDurablyRetryable(t *testing.T
 	).Only(f.userCtx)
 	require.NoError(t, err)
 	assert.Equal(t, "user_task_callback", row.CallbackKind)
-	assert.Equal(t, "__unresolved_user_task_callback__", row.HandlerID)
+	assert.Equal(t, "future_user_handler", row.HandlerID)
 	assert.Equal(t, "future_user_callback", row.TaskType)
-	assert.Equal(t, bpmnCallbackStatusPending, row.Status)
-	assert.Equal(t, "handler_error", row.LastErrorClass)
-
-	handler := newCountingIdempotentCallbackHandler("future_user_callback", "future_user_handler", 0)
-	f.engine.CallbackRegistry().RegisterHandler(handler)
-	now = now.Add(time.Second)
-	completed, err := f.engine.ProcessPendingCallbacks(context.Background(), "future-handler-worker", 50)
-	require.Error(t, err)
-	require.Zero(t, completed)
-	row = callbackRowForInstance(t, f, task.ProcessInstanceID)
-	assert.Equal(t, bpmnCallbackStatusPending, row.Status)
-	assert.Zero(t, handler.EffectCount())
+	assert.Equal(t, bpmnCallbackStatusCompleted, row.Status)
+	assert.NotEmpty(t, row.ExecutionKey)
+	assert.Equal(t, "future_user_handler", f.client.ProcessTask.GetX(f.userCtx, task.ID).CallbackHandlerID)
+	assert.Equal(t, "future_user_callback", f.client.ProcessTask.GetX(f.userCtx, task.ID).CallbackTaskType)
+	assert.Equal(t, 1, handler.EffectCount())
 }
 
 func TestUserTaskCallbackNormalizesPersistedTaskTypeWhenMetadataUsesHandlerID(t *testing.T) {

@@ -423,6 +423,9 @@ func (e *CustomProcessEngine) completeAuthorizedTaskWithClient(ctx context.Conte
 	if err != nil {
 		return nil, err
 	}
+	if descriptor.HandlerID == bpmnUnresolvedUserTaskCallbackHandlerID {
+		return nil, fmt.Errorf("回调描述符无法解析: %s", task.TaskDefinitionKey)
+	}
 
 	merged := make(map[string]interface{}, len(instance.Variables)+len(variables))
 	for key, value := range instance.Variables {
@@ -831,7 +834,7 @@ func (e *CustomProcessEngine) executeStep(ctx context.Context, instance *ent.Pro
 		if e.isEndEvent(process, currentElementID) {
 			return e.completeProcess(ctx, instance)
 		}
-		return nil
+		return fmt.Errorf("流程节点 %s 没有出向顺序流且不是结束事件", currentElementID)
 	}
 
 	var targetRef string

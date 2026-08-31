@@ -219,15 +219,21 @@ func (e *CustomProcessEngine) descriptorForProcessTask(ctx context.Context, clie
 		}, nil
 	}
 
-	descriptor := bpmnCallbackDescriptor{HandlerID: bpmnNoUserTaskCallbackHandlerID}
+	var descriptor bpmnCallbackDescriptor
 	if userTask := e.findUserTask(process, task.TaskDefinitionKey); userTask != nil {
+		// A legacy user task without a declaration is the only valid no-callback case.
 		descriptor = e.callbackDescriptor(userTask.ServiceTaskType(), userTask.ServiceTaskAction(), userTask.CallbackConfigRef())
 	} else if serviceTask := e.findServiceTask(process, task.TaskDefinitionKey); serviceTask != nil {
 		taskType := serviceTask.ServiceTaskType()
 		if taskType == "" {
 			taskType = e.definitionDeclaredServiceTaskType(serviceTask)
 		}
+		if taskType == "" {
+			return bpmnCallbackDescriptor{}, fmt.Errorf("服务任务 %s 未声明回调类型", task.TaskDefinitionKey)
+		}
 		descriptor = e.callbackDescriptor(taskType, serviceTask.ServiceTaskAction(), serviceTask.CallbackConfigRef())
+	} else {
+		return bpmnCallbackDescriptor{}, fmt.Errorf("任务节点不存在于已部署流程定义: %s", task.TaskDefinitionKey)
 	}
 
 	update := client.ProcessTask.UpdateOneID(task.ID).
@@ -251,7 +257,7 @@ func (e *CustomProcessEngine) definitionDeclaredServiceTaskType(task *BPMNServic
 		return ""
 	}
 	for _, candidate := range []string{task.Implementation, task.Class, task.DelegateExpression, task.OperationRef} {
-		if strings.TrimSpace(candidate) != "" && e.findHandlerByTaskType(candidate) != nil {
+		if candidate = strings.TrimSpace(candidate); candidate != "" {
 			return candidate
 		}
 	}
