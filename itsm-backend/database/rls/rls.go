@@ -2,10 +2,10 @@
 //
 // Design (from rls-migration-proposal-2026-07-18.md):
 //  1. Middleware extracts tenant_id from JWT and stores it in gin.Context.
-//  2. When a DB connection is acquired from the pool, we execute
-//     SET SESSION app.current_tenant = <tid> on that connection.
-//  3. Before the connection is returned to the pool, we RESET the variable
-//     to prevent cross-request tenant leakage.
+//  2. When a DB connection is acquired from the pool, we call
+//     set_config('app.current_tenant', <tid>, false) on that connection.
+//  3. Before the connection is returned to the pool, we DISCARD ALL session
+//     state to prevent cross-request tenant leakage.
 //
 // Threading model: database/sql pool guarantees exclusive ownership of a
 // *sql.Conn per checkout, so SESSION-level variables are safe as long as
@@ -80,10 +80,10 @@ func AcquireConn(ctx context.Context, db *sql.DB) (*sql.Conn, error) {
 		return nil, ErrNoTenant
 	}
 
-	// SET SESSION is transactional-safe: SETting inside a tx is scoped by
-	// autocommit; we intentionally SET at connection acquire so subsequent
-	// Ent queries on the same *sql.Conn inherit it.
-	if _, err := conn.ExecContext(ctx, "SET SESSION app.current_tenant = $1", tid); err != nil {
+	// set_config(..., false) applies at session scope and accepts a bind
+	// parameter, so subsequent Ent queries on the same *sql.Conn inherit the
+	// tenant without interpolating caller-controlled data into SQL syntax.
+	if _, err := conn.ExecContext(ctx, "SELECT set_config('app.current_tenant', $1, false)", tid); err != nil {
 		_ = conn.Close()
 		return nil, fmt.Errorf("rls: set tenant: %w", err)
 	}
