@@ -115,7 +115,7 @@ func (tnc *TicketNotificationController) ListUserNotifications(c *gin.Context) {
 }
 
 // MarkNotificationRead 标记通知为已读
-// PUT /api/v1/notifications/:id/read
+// PUT /api/v1/ticket-notifications/:id/read
 func (tnc *TicketNotificationController) MarkNotificationRead(c *gin.Context) {
 	notificationID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -137,7 +137,7 @@ func (tnc *TicketNotificationController) MarkNotificationRead(c *gin.Context) {
 }
 
 // MarkAllNotificationsRead 标记所有通知为已读
-// PUT /api/v1/notifications/read-all
+// PUT /api/v1/ticket-notifications/read-all
 func (tnc *TicketNotificationController) MarkAllNotificationsRead(c *gin.Context) {
 	userID := c.GetInt("user_id")
 	tenantID := c.GetInt("tenant_id")

@@ -50,7 +50,7 @@ describe('TicketNotificationApi', () => {
     it('should mark notification as read', async () => {
       mockPut.mockResolvedValue(undefined);
       await TicketNotificationApi.markNotificationRead(5);
-      expect(mockPut).toHaveBeenCalledWith('/api/v1/notifications/5/read', {});
+      expect(mockPut).toHaveBeenCalledWith('/api/v1/ticket-notifications/5/read', {});
     });
   });
 
@@ -58,7 +58,7 @@ describe('TicketNotificationApi', () => {
     it('should mark all as read', async () => {
       mockPut.mockResolvedValue(undefined);
       await TicketNotificationApi.markAllNotificationsRead();
-      expect(mockPut).toHaveBeenCalledWith('/api/v1/notifications/read-all', {});
+      expect(mockPut).toHaveBeenCalledWith('/api/v1/ticket-notifications/read-all', {});
     });
   });
 

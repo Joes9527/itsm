@@ -520,6 +520,11 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 
 		// ==================== Tickets ====================
 		tickets := tenant.(*gin.RouterGroup).Group("/tickets")
+		if config.TicketNotificationController != nil {
+			ticketNotifications := tenant.(*gin.RouterGroup).Group("/ticket-notifications")
+			ticketNotifications.PUT("/:id/read", middleware.RequirePermission("notification", "update"), config.TicketNotificationController.MarkNotificationRead)
+			ticketNotifications.PUT("/read-all", middleware.RequirePermission("notification", "update"), config.TicketNotificationController.MarkAllNotificationsRead)
+		}
 		{
 			tickets.GET("", middleware.RequirePermission("ticket", "read"), config.TicketController.ListTickets)
 			tickets.POST("", middleware.RequirePermission("ticket", "create"), config.TicketController.CreateTicket)

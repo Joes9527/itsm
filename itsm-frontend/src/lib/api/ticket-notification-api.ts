@@ -93,12 +93,12 @@ export class TicketNotificationApi {
 
   // 标记通知为已读
   static async markNotificationRead(notificationId: number): Promise<void> {
-    return httpClient.put(`/api/v1/notifications/${notificationId}/read`, {});
+    return httpClient.put(`/api/v1/ticket-notifications/${notificationId}/read`, {});
   }
 
   // 标记所有通知为已读
   static async markAllNotificationsRead(): Promise<void> {
-    return httpClient.put('/api/v1/notifications/read-all', {});
+    return httpClient.put('/api/v1/ticket-notifications/read-all', {});
   }
 
   // 删除单条通知
