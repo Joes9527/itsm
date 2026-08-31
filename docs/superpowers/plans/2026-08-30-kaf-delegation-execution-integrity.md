@@ -359,12 +359,12 @@ git commit -m "test: verify KAF delegation execution integrity"
 
 ## Final Review Remediation Amendment (2026-08-31)
 
-- [x] Require exact-scope task identity plus authoritative process advancement before reconciliation can return `applied`; add task-only crash and legitimately advanced tests.
-- [x] Carry the concrete ITSM ledger owner through completion, fence every callback/receipt/finalization predicate on an unexpired executing lease, and make receipt states monotonic.
+- [x] Require exact-scope task identity plus a durable task at the process instance's exact current activity or a successful terminal process outcome before reconciliation can return `applied`; cover task-only, successor-activity-without-task, and end-activity-without-completion crashes.
+- [x] Carry the concrete ITSM ledger owner through completion, transactionally post-validate receipt creation and every authoritative task/process completion write, fence callback/receipt/finalization predicates, and make receipt states monotonic.
 - [x] Put non-completing action effect, process version, timeline, ledger, and audit in one Ent transaction; prove rollback and retry convergence after forced finalization failure.
 - [x] Recursively redact and bound structured exception strings and outbound summaries/evidence references, including nested credentials and oversized values.
-- [x] Persist the outbound KAF completion payload and replay it from local recovery even when ITSM no longer lists the task.
+- [x] Persist the outbound KAF completion payload and make that delivery payload-replay-only forever, including transient/`in_progress` replay followed by delegated-list recovery.
 - [x] Register forced-RLS policies for both new ITSM tenant tables and add deterministic SQL plus PostgreSQL tenant-isolation coverage.
 - [x] Heartbeat the KAF lease during long Procedure execution and cancel/fail closed on ownership loss.
-- [x] Deterministically adopt one pre-lease legacy delivery and mark additional rows `superseded` with an observable remediation code.
+- [x] In forward revision `036_kaf_completion_replay`, deterministically adopt one pre-lease legacy delivery and mark additional rows `superseded` with an observable remediation code for databases already stamped at 035.
 - [x] Correct the spec, plan, and evidence to report only behavior proven by production-path tests.

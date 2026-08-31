@@ -1,6 +1,6 @@
 # KAF Delegation Execution Integrity Design
 
-> Status: Implemented and final-review remediated 2026-08-31
+> Status: Implemented, final-review and breaker-residual remediated 2026-08-31
 > Date: 2026-08-30
 > Extends: `2026-08-28-kaf-itsm-autonomous-workitem-delegation-design.md`
 > Trigger: final review findings for the 2026-08-29 delegation delivery plan
@@ -81,7 +81,10 @@ client, and contract tests change together.
    fencing token carried through the completion coordinator. Before engine
    completion, callback dispatch, every receipt transition, and ledger
    finalization, an atomic predicate must prove that this exact owner still
-   owns an unexpired `executing` ledger.
+   owns an unexpired `executing` ledger. Receipt creation and every
+   authoritative task/process completion write run in a short transaction that
+   post-validates and locks that exact ledger owner before commit; reclaim or
+   expiry rolls the write back.
 4. The coordinator invokes the dedicated KAF delegated-completion entry point.
    `complete_bpmn_task` remains the only action that advances BPMN. It must
    return synchronous UserTask callback failures; logging and returning `nil`
@@ -121,8 +124,11 @@ boundary rather than attempting to pass one caller transaction through every
   their effect once and report success, or report an error without claiming
   success. The coordinator may only finalize `applied` after the receipt is
   `callback_succeeded` and the task plus authoritative process instance reflect
-  advancement beyond the exact task definition. Task status alone is never
-  sufficient evidence of completion.
+  advancement beyond the exact task definition. A running process proves
+  advancement only when a non-terminal successor task exists for the instance's
+  exact `current_activity_id`; a terminal outcome requires the process status
+  itself to be `completed`. A changed activity pointer or task status alone is
+  never sufficient evidence of completion.
 - If reconciliation finds a completed task with no successful receipt, it
   leaves the ledger retryable and routes the callback through its same scoped
   idempotency boundary. It does not invoke generic `CompleteTask` again.
@@ -163,9 +169,13 @@ recoverable and carries its prior error context into the new attempt.
 Before invoking ITSM, KAF persists the exact bounded action payload. A local
 recovery scan claims replayable incomplete deliveries before consulting the
 delegated-task list, replays that payload, and converges the row after remote
-`applied` even when ITSM no longer advertises the task. Multiple pre-lease
-legacy rows are ranked deterministically; one canonical row remains adoptable
-and the others become observable `superseded` rows.
+`applied` even when ITSM no longer advertises the task. Once a delivery has a
+persisted completion payload it is replay-only forever: delegated-list recovery
+must never run its Procedure or Tools again, including after transient or
+`in_progress` replay responses. Multiple pre-lease legacy rows are ranked
+deterministically by forward revision `036_kaf_completion_replay`; one canonical
+row remains adoptable and the others become observable `superseded` rows. This
+cleanup does not rely on rerunning shipped revision 035.
 
 ### 4.3 Procedure and action reporting
 
@@ -226,6 +236,13 @@ the repository's `app.current_tenant` convention.
    `task_variables` idempotency writes are absent after migration.
 8. All new persistence paths are tenant-scoped, redacted, and covered by
    schema/transaction tests.
+9. Failure after writing a successor/end activity cannot reconcile as applied
+   without a durable successor task or completed process, and deterministic
+   mid-call reclaim tests prove stale owners cannot commit receipt, task,
+   activity, or terminal writes.
+10. A transient completion replay followed by delegated-list recovery invokes
+    the Procedure once total, and an already-stamped 035 schema executes legacy
+    duplicate cleanup through forward revision 036.
 
 ## 7. Out Of Scope
 
