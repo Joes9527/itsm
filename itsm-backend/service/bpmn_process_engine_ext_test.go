@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -24,6 +25,8 @@ import (
 	"itsm-backend/ent/processtask"
 	"itsm-backend/service/bpmn"
 
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
 	_ "github.com/mattn/go-sqlite3"
 
 	"go.uber.org/zap"
@@ -33,6 +36,32 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type failOnceCommitDriver struct {
+	dialect.Driver
+	failNext atomic.Bool
+}
+
+func (d *failOnceCommitDriver) Tx(ctx context.Context) (dialect.Tx, error) {
+	tx, err := d.Driver.Tx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &failOnceCommitTx{Tx: tx, failNext: &d.failNext}, nil
+}
+
+type failOnceCommitTx struct {
+	dialect.Tx
+	failNext *atomic.Bool
+}
+
+func (tx *failOnceCommitTx) Commit() error {
+	if tx.failNext.CompareAndSwap(true, false) {
+		_ = tx.Tx.Rollback()
+		return errors.New("database table is locked: injected commit conflict")
+	}
+	return tx.Tx.Commit()
+}
 
 // ==================== BPMNProcessEngine 辅助方法测试 ====================
 
@@ -914,6 +943,23 @@ const nonKafRerouteReviewBPMN = `<?xml version="1.0" encoding="UTF-8"?>
   </bpmn:process>
 </bpmn:definitions>`
 
+const nonKafSyncServiceReviewBPMN = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="https://itsm.example.test/bpmn">
+  <bpmn:process id="non_kaf_sync_service_review" name="Non-KAF sync service review" isExecutable="true">
+    <bpmn:startEvent id="Start" />
+    <bpmn:userTask id="Approval" name="Approval" />
+    <bpmn:serviceTask id="Sync_Service" name="Sync service">
+      <bpmn:extensionElements>
+        <bpmn:metaData name="service_task_type">counting_sync</bpmn:metaData>
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="End" name="End" />
+    <bpmn:sequenceFlow id="Flow_Start_Approval" sourceRef="Start" targetRef="Approval" />
+    <bpmn:sequenceFlow id="Flow_Approval_Service" sourceRef="Approval" targetRef="Sync_Service" />
+    <bpmn:sequenceFlow id="Flow_Service_End" sourceRef="Sync_Service" targetRef="End" />
+  </bpmn:process>
+</bpmn:definitions>`
+
 const gatewayCycleReviewBPMN = `<?xml version="1.0" encoding="UTF-8"?>
 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="https://itsm.example.test/bpmn">
   <bpmn:process id="gateway_cycle_review" name="Gateway cycle review" isExecutable="true">
@@ -943,6 +989,22 @@ func newWALAtomicKafReviewFixture(t *testing.T, suffix string, variables map[str
 	engine, ok := engineIface.(*CustomProcessEngine)
 	require.True(t, ok)
 	return populateAtomicKafReviewFixture(t, engine, context.Background(), suffix, atomicKafReviewBPMN, variables)
+}
+
+func newCommitConflictAtomicKafReviewFixture(t *testing.T, suffix, bpmnXML string, variables map[string]interface{}) (*CustomProcessEngine, context.Context, *ent.ProcessInstance, *ent.ProcessTask, *failOnceCommitDriver) {
+	t.Helper()
+	databasePath := filepath.Join(t.TempDir(), "commit-conflict-review.db")
+	baseDriver, err := entsql.Open("sqlite3", fmt.Sprintf("file:%s?_fk=1&_journal_mode=WAL&_busy_timeout=5000", databasePath))
+	require.NoError(t, err)
+	driver := &failOnceCommitDriver{Driver: baseDriver}
+	client := ent.NewClient(ent.Driver(driver))
+	require.NoError(t, client.Schema.Create(context.Background()))
+	t.Cleanup(func() { _ = client.Close() })
+	engineIface := NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar())
+	engine, ok := engineIface.(*CustomProcessEngine)
+	require.True(t, ok)
+	engine, ctx, instance, task := populateAtomicKafReviewFixture(t, engine, context.Background(), suffix, bpmnXML, variables)
+	return engine, ctx, instance, task, driver
 }
 
 func populateAtomicKafReviewFixture(t *testing.T, engine *CustomProcessEngine, baseCtx context.Context, suffix, bpmnXML string, variables map[string]interface{}) (*CustomProcessEngine, context.Context, *ent.ProcessInstance, *ent.ProcessTask) {
@@ -1130,6 +1192,28 @@ func TestCompleteTask_KafHandoffRetryReusesSingleRouteResolution(t *testing.T) {
 	assert.Equal(t, 1, outboxCount)
 }
 
+func TestCompleteTask_CommitConflictReusesFrozenRouteResolution(t *testing.T) {
+	engine, ctx, instance, task, driver := newCommitConflictAtomicKafReviewFixture(t, "commit-conflict-single-route", singleEvaluationReviewBPMN, nil)
+	conditionCalls := 0
+	engine.exprEngine.RegisterFunction("random", func(min, max float64) float64 {
+		conditionCalls++
+		if conditionCalls == 1 {
+			return 0.75
+		}
+		return 0.25
+	})
+	driver.failNext.Store(true)
+
+	require.NoError(t, engine.CompleteTask(ctx, task.TaskID, nil))
+	assert.Equal(t, 1, conditionCalls, "commit retry must reuse the route frozen from the unchanged authoritative snapshot")
+	persistedTask, err := engine.client.ProcessTask.Get(ctx, task.ID)
+	require.NoError(t, err)
+	assert.Equal(t, common.ProcessTaskStatusCompleted, persistedTask.Status)
+	persistedInstance, err := engine.client.ProcessInstance.Get(ctx, instance.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "completed", persistedInstance.Status)
+}
+
 func TestCompleteTask_LegacyKafHandlerIDUsesCanonicalAtomicDelegation(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -1302,7 +1386,7 @@ func TestCompleteTask_NonKafRetryReusesSingleRouteResolution(t *testing.T) {
 	persistedInstance, err := engine.client.ProcessInstance.Get(ctx, instance.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "completed", persistedInstance.Status)
-	assert.Equal(t, instance.Version+1, persistedInstance.Version)
+	assert.Equal(t, instance.Version+2, persistedInstance.Version)
 }
 
 func TestCompleteTask_ConcurrentNonKafRerouteRejectsStaleTarget(t *testing.T) {
@@ -1340,6 +1424,80 @@ func TestCompleteTask_ConcurrentNonKafRerouteRejectsStaleTarget(t *testing.T) {
 	).Count(ctx)
 	require.NoError(t, err)
 	assert.Zero(t, routedTasks)
+}
+
+func TestCommittedNonKafRoute_ExternalWinnerPreventsStaleTargetProcessing(t *testing.T) {
+	t.Run("reroute prevents user-task creation", func(t *testing.T) {
+		engine, ctx, instance, task := newAtomicKafReviewFixture(t, "post-commit-reroute", nonKafRerouteReviewBPMN, map[string]interface{}{"route_to_a": true})
+		definitions, err := engine.parser.ParseXML([]byte(nonKafRerouteReviewBPMN))
+		require.NoError(t, err)
+		process := definitions.Processes[0]
+		resolved, committed, kafCommitted, err := engine.commitCompletionRoute(ctx, task, instance, process, nil)
+		require.NoError(t, err)
+		assert.False(t, kafCommitted)
+		require.NotNil(t, resolved)
+		assert.Equal(t, "Route_A", resolved.elementID)
+		assert.Equal(t, "Route_A", committed.CurrentActivityID)
+
+		updated, err := engine.client.ProcessInstance.Update().Where(processinstance.IDEQ(instance.ID), processinstance.VersionEQ(committed.Version)).
+			SetVariables(map[string]interface{}{"route_to_a": false}).
+			SetCurrentActivityID("Route_B").
+			SetCurrentActivityName("Route B").
+			SetVersion(committed.Version + 1).
+			Save(ctx)
+		require.NoError(t, err)
+		require.Equal(t, 1, updated)
+
+		err = engine.handleCommittedResolvedElement(ctx, committed, process, resolved)
+		require.ErrorContains(t, err, "committed route")
+		routeATasks, err := engine.client.ProcessTask.Query().Where(processtask.ProcessInstanceIDEQ(instance.ID), processtask.TaskDefinitionKeyEQ("Route_A")).Count(ctx)
+		require.NoError(t, err)
+		assert.Zero(t, routeATasks)
+		persisted, err := engine.client.ProcessInstance.Get(ctx, instance.ID)
+		require.NoError(t, err)
+		assert.Equal(t, "Route_B", persisted.CurrentActivityID)
+	})
+
+	t.Run("suspend prevents user-task creation", func(t *testing.T) {
+		engine, ctx, instance, task := newAtomicKafReviewFixture(t, "post-commit-suspend", nonKafRerouteReviewBPMN, map[string]interface{}{"route_to_a": true})
+		definitions, err := engine.parser.ParseXML([]byte(nonKafRerouteReviewBPMN))
+		require.NoError(t, err)
+		process := definitions.Processes[0]
+		resolved, committed, _, err := engine.commitCompletionRoute(ctx, task, instance, process, nil)
+		require.NoError(t, err)
+		require.NoError(t, engine.client.ProcessInstance.UpdateOneID(instance.ID).SetStatus("suspended").Exec(ctx))
+
+		err = engine.handleCommittedResolvedElement(ctx, committed, process, resolved)
+		require.ErrorContains(t, err, "committed route")
+		routeATasks, err := engine.client.ProcessTask.Query().Where(processtask.ProcessInstanceIDEQ(instance.ID), processtask.TaskDefinitionKeyEQ("Route_A")).Count(ctx)
+		require.NoError(t, err)
+		assert.Zero(t, routeATasks)
+		persisted, err := engine.client.ProcessInstance.Get(ctx, instance.ID)
+		require.NoError(t, err)
+		assert.Equal(t, "suspended", persisted.Status)
+		assert.Equal(t, "Route_A", persisted.CurrentActivityID)
+	})
+
+	t.Run("terminate prevents service-handler execution", func(t *testing.T) {
+		engine, ctx, instance, task := newAtomicKafReviewFixture(t, "post-commit-terminate", nonKafSyncServiceReviewBPMN, nil)
+		handler := &countingSyncServiceTaskHandler{taskType: "counting_sync", handlerID: "counting_sync_handler"}
+		engine.callbackRegistry.RegisterHandler(handler)
+		definitions, err := engine.parser.ParseXML([]byte(nonKafSyncServiceReviewBPMN))
+		require.NoError(t, err)
+		process := definitions.Processes[0]
+		resolved, committed, _, err := engine.commitCompletionRoute(ctx, task, instance, process, nil)
+		require.NoError(t, err)
+		assert.Equal(t, "Sync_Service", committed.CurrentActivityID)
+		require.NoError(t, engine.client.ProcessInstance.UpdateOneID(instance.ID).SetStatus("terminated").Exec(ctx))
+
+		err = engine.handleCommittedResolvedElement(ctx, committed, process, resolved)
+		require.ErrorContains(t, err, "committed route")
+		assert.Zero(t, handler.executed)
+		persisted, err := engine.client.ProcessInstance.Get(ctx, instance.ID)
+		require.NoError(t, err)
+		assert.Equal(t, "terminated", persisted.Status)
+		assert.Equal(t, "Sync_Service", persisted.CurrentActivityID)
+	})
 }
 
 func TestCompleteTask_ConcurrentVariableRerouteRejectsStaleKafHandoff(t *testing.T) {
@@ -1761,6 +1919,24 @@ func (h *fakeAsyncServiceTaskHandler) Execute(ctx context.Context, task *ent.Pro
 var _ bpmn.ServiceTaskHandlerInterface = (*fakeAsyncServiceTaskHandler)(nil)
 var _ bpmn.AsyncServiceTaskHandler = (*fakeAsyncServiceTaskHandler)(nil)
 
+type countingSyncServiceTaskHandler struct {
+	taskType  string
+	handlerID string
+	executed  int
+}
+
+func (h *countingSyncServiceTaskHandler) GetTaskType() string  { return h.taskType }
+func (h *countingSyncServiceTaskHandler) GetHandlerID() string { return h.handlerID }
+func (h *countingSyncServiceTaskHandler) Validate(context.Context, map[string]interface{}) error {
+	return nil
+}
+func (h *countingSyncServiceTaskHandler) Execute(context.Context, *ent.ProcessTask, map[string]interface{}) (*dto.ServiceTaskResult, error) {
+	h.executed++
+	return &dto.ServiceTaskResult{Success: true}, nil
+}
+
+var _ bpmn.ServiceTaskHandlerInterface = (*countingSyncServiceTaskHandler)(nil)
+
 type failingUserTaskCallbackHandler struct {
 	taskType  string
 	handlerID string
@@ -1996,14 +2172,15 @@ func TestMergeKafCompletionVariables_StaleOwnerRollsBackProcessWrite(t *testing.
 	assert.NotContains(t, instance.Variables, "result")
 }
 
-func TestCompleteKafDelegatedTask_ReclaimDuringActivityWriteRollsBackProcessWrite(t *testing.T) {
+func TestCompleteKafDelegatedTask_ReclaimDuringRouteClaimPreventsSuccessorCreation(t *testing.T) {
 	engine, ctx, task, ledger := newKafOwnerFenceFixture(t, kafOwnerFenceSuccessorBPMN)
 	createPendingKafReceipt(t, engine, ctx, task, ledger)
 	reclaimed := false
 	engine.client.ProcessInstance.Use(func(next ent.Mutator) ent.Mutator {
 		return ent.MutateFunc(func(hookCtx context.Context, mutation ent.Mutation) (ent.Value, error) {
 			if instanceMutation, ok := mutation.(*ent.ProcessInstanceMutation); ok && !reclaimed {
-				if activityID, exists := instanceMutation.CurrentActivityID(); exists && activityID == "Activity_Successor" {
+				_, activitySet := instanceMutation.CurrentActivityID()
+				if _, versionSet := instanceMutation.Version(); versionSet && !activitySet {
 					reclaimed = true
 					reclaimKafLedger(t, engine, hookCtx, ledger.ID)
 				}
@@ -2017,7 +2194,7 @@ func TestCompleteKafDelegatedTask_ReclaimDuringActivityWriteRollsBackProcessWrit
 	require.True(t, reclaimed)
 	instance, err := engine.client.ProcessInstance.Get(ctx, task.ProcessInstanceID)
 	require.NoError(t, err)
-	assert.Equal(t, task.TaskDefinitionKey, instance.CurrentActivityID)
+	assert.Equal(t, "Activity_Successor", instance.CurrentActivityID)
 	successorCount, err := engine.client.ProcessTask.Query().Where(
 		processtask.ProcessInstanceIDEQ(task.ProcessInstanceID),
 		processtask.TaskDefinitionKeyEQ("Activity_Successor"),

@@ -474,7 +474,7 @@ func (e *CustomProcessEngine) completeTask(ctx context.Context, taskID string, v
 	}
 
 	// 5. 执行事务内已唯一解析的流程目标。
-	if err := e.handleResolvedElement(ctx, instance, process, resolved); err != nil {
+	if err := e.handleCommittedResolvedElement(ctx, instance, process, resolved); err != nil {
 		return err
 	}
 	if err := e.recordApprovalDecision(ctx, instance, task, variables); err != nil {
@@ -691,10 +691,11 @@ func (e *CustomProcessEngine) commitCompletionRouteOnce(ctx context.Context, tas
 	).
 		SetVariables(merged).
 		SetVersion(current.Version + 1)
-	if isKafWaitState {
+	if resolved != nil {
+		elementName := e.resolvedElementName(process, resolved)
 		instanceUpdate = instanceUpdate.
-			SetCurrentActivityID(resolved.serviceTask.ID).
-			SetCurrentActivityName(resolved.serviceTask.ID)
+			SetCurrentActivityID(resolved.elementID).
+			SetCurrentActivityName(elementName)
 	}
 	updated, err = instanceUpdate.Save(ctx)
 	if err != nil {
@@ -705,9 +706,11 @@ func (e *CustomProcessEngine) commitCompletionRouteOnce(ctx context.Context, tas
 	}
 	current.Variables = merged
 	current.Version++
+	if resolved != nil {
+		current.CurrentActivityID = resolved.elementID
+		current.CurrentActivityName = e.resolvedElementName(process, resolved)
+	}
 	if isKafWaitState {
-		current.CurrentActivityID = resolved.serviceTask.ID
-		current.CurrentActivityName = resolved.serviceTask.ID
 		if err := e.recordApprovalDecisionWithClient(ctx, tx.Client(), current, task, variables); err != nil {
 			return nil, nil, false, snapshot, err
 		}
@@ -733,7 +736,7 @@ func (e *CustomProcessEngine) commitCompletionRouteOnce(ctx context.Context, tas
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil, nil, false, nil, e.normalizeCompletionConflict(ctx, task, instance, fmt.Errorf("提交任务完成事务失败: %w", err))
+		return nil, nil, false, snapshot, fmt.Errorf("提交任务完成事务失败: %w", err)
 	}
 	return resolved, current, isKafWaitState, nil, nil
 }
@@ -1335,6 +1338,84 @@ func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.P
 	return e.handleResolvedElement(ctx, instance, process, resolved)
 }
 
+func (e *CustomProcessEngine) resolvedElementName(process *BPMNProcess, resolved *resolvedProcessElement) string {
+	if resolved == nil {
+		return ""
+	}
+	if task := e.findUserTask(process, resolved.elementID); task != nil && task.Name != "" {
+		return task.Name
+	}
+	if endEvent := e.findEndEvent(process, resolved.elementID); endEvent != nil && endEvent.Name != "" {
+		return endEvent.Name
+	}
+	if resolved.serviceTask != nil && resolved.serviceTask.Name != "" {
+		return resolved.serviceTask.Name
+	}
+	return resolved.elementID
+}
+
+// handleCommittedResolvedElement conditionally claims the route marker written
+// by commitCompletionRoute before creating or executing its target. A status,
+// activity, or version transition that wins first makes this CAS fail closed.
+func (e *CustomProcessEngine) handleCommittedResolvedElement(ctx context.Context, instance *ent.ProcessInstance, process *BPMNProcess, resolved *resolvedProcessElement) error {
+	if resolved == nil {
+		return nil
+	}
+	if task := e.findUserTask(process, resolved.elementID); task != nil {
+		return e.createUserTaskWithRouteClaim(ctx, instance, task, resolved)
+	}
+	if e.findEndEvent(process, resolved.elementID) != nil {
+		return e.completeCommittedProcess(ctx, instance, resolved)
+	}
+	if err := e.runCommittedRouteWrite(ctx, func(client *ent.Client) error {
+		return e.claimCommittedRoute(ctx, client, instance, resolved)
+	}); err != nil {
+		return err
+	}
+	claimedInstance := *instance
+	claimedInstance.Version++
+	return e.executeResolvedElement(ctx, &claimedInstance, process, resolved)
+}
+
+func (e *CustomProcessEngine) runCommittedRouteWrite(ctx context.Context, write func(*ent.Client) error) error {
+	tx, err := e.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("start committed route write: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := write(tx.Client()); err != nil {
+		return err
+	}
+	if fence, fenced := ctx.Value(kafCompletionFenceContextKey{}).(kafCompletionFence); fenced {
+		if err := assertKafCompletionFence(ctx, tx.Client(), fence); err != nil {
+			return err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit committed route write: %w", err)
+	}
+	return nil
+}
+
+func (e *CustomProcessEngine) claimCommittedRoute(ctx context.Context, client *ent.Client, instance *ent.ProcessInstance, resolved *resolvedProcessElement) error {
+	claimed, err := client.ProcessInstance.Update().Where(
+		processinstance.IDEQ(instance.ID),
+		processinstance.TenantIDEQ(instance.TenantID),
+		processinstance.StatusEQ("running"),
+		processinstance.CurrentActivityIDEQ(resolved.elementID),
+		processinstance.VersionEQ(instance.Version),
+	).
+		SetVersion(instance.Version + 1).
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("claim committed route %s: %w", resolved.elementID, err)
+	}
+	if claimed != 1 {
+		return fmt.Errorf("committed route %s is no longer authoritative", resolved.elementID)
+	}
+	return nil
+}
+
 func (e *CustomProcessEngine) handleResolvedElement(ctx context.Context, instance *ent.ProcessInstance, process *BPMNProcess, resolved *resolvedProcessElement) error {
 	if resolved == nil {
 		return nil
@@ -1344,13 +1425,7 @@ func (e *CustomProcessEngine) handleResolvedElement(ctx context.Context, instanc
 		return e.createDelegatedTask(ctx, instance, resolved.serviceTask, resolved.serviceTaskType)
 	}
 
-	// Find the element name for logging
-	elementName := elementID
-	if task := e.findUserTask(process, elementID); task != nil {
-		elementName = task.Name
-	} else if endEvent := e.findEndEvent(process, elementID); endEvent != nil {
-		elementName = endEvent.Name
-	}
+	elementName := e.resolvedElementName(process, resolved)
 
 	err := e.runKafFencedWrite(ctx, func(client *ent.Client) error {
 		_, updateErr := client.ProcessInstance.UpdateOneID(instance.ID).
@@ -1362,7 +1437,12 @@ func (e *CustomProcessEngine) handleResolvedElement(ctx context.Context, instanc
 	if err != nil {
 		return err
 	}
+	return e.executeResolvedElement(ctx, instance, process, resolved)
+}
 
+func (e *CustomProcessEngine) executeResolvedElement(ctx context.Context, instance *ent.ProcessInstance, process *BPMNProcess, resolved *resolvedProcessElement) error {
+	elementID := resolved.elementID
+	elementName := e.resolvedElementName(process, resolved)
 	// Debug: log element info
 	e.logger.Debugw("handleElement called", "elementID", elementID, "elementName", elementName, "userTasksCount", len(process.UserTasks))
 
@@ -1435,6 +1515,10 @@ func mergeServiceTaskVariables(instanceVariables map[string]interface{}, task *B
 const approvalFallbackCandidateGroup = "ticket-approvers"
 
 func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.ProcessInstance, task *BPMNUserTask) error {
+	return e.createUserTaskWithRouteClaim(ctx, instance, task, nil)
+}
+
+func (e *CustomProcessEngine) createUserTaskWithRouteClaim(ctx context.Context, instance *ent.ProcessInstance, task *BPMNUserTask, route *resolvedProcessElement) error {
 	// 自动分配逻辑：优先级 BPMN定义 > 流程变量(request/assignee) > 默认分配
 	assignee := task.Assignee
 
@@ -1620,7 +1704,12 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 		}
 	}
 	var createdTask *ent.ProcessTask
-	err := e.runKafFencedWrite(ctx, func(client *ent.Client) error {
+	persist := func(client *ent.Client) error {
+		if route != nil {
+			if err := e.claimCommittedRoute(ctx, client, instance, route); err != nil {
+				return err
+			}
+		}
 		var createErr error
 		createdTask, createErr = client.ProcessTask.Create().
 			SetTaskID(fmt.Sprintf("TASK-%s-%d", task.ID, time.Now().UnixNano())).
@@ -1639,7 +1728,13 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 			SetCreatedTime(time.Now()).
 			Save(ctx)
 		return createErr
-	})
+	}
+	var err error
+	if route == nil {
+		err = e.runKafFencedWrite(ctx, persist)
+	} else {
+		err = e.runCommittedRouteWrite(ctx, persist)
+	}
 	if err != nil {
 		return fmt.Errorf("创建用户任务失败: %w", err)
 	}
@@ -2122,6 +2217,29 @@ func (e *CustomProcessEngine) completeProcess(ctx context.Context, instance *ent
 			SetEndTime(time.Now()).
 			Save(ctx)
 		return err
+	})
+}
+
+func (e *CustomProcessEngine) completeCommittedProcess(ctx context.Context, instance *ent.ProcessInstance, resolved *resolvedProcessElement) error {
+	return e.runCommittedRouteWrite(ctx, func(client *ent.Client) error {
+		completed, err := client.ProcessInstance.Update().Where(
+			processinstance.IDEQ(instance.ID),
+			processinstance.TenantIDEQ(instance.TenantID),
+			processinstance.StatusEQ("running"),
+			processinstance.CurrentActivityIDEQ(resolved.elementID),
+			processinstance.VersionEQ(instance.Version),
+		).
+			SetStatus("completed").
+			SetEndTime(time.Now()).
+			SetVersion(instance.Version + 1).
+			Save(ctx)
+		if err != nil {
+			return fmt.Errorf("complete committed route %s: %w", resolved.elementID, err)
+		}
+		if completed != 1 {
+			return fmt.Errorf("committed route %s is no longer authoritative", resolved.elementID)
+		}
+		return nil
 	})
 }
 
