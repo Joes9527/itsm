@@ -2,6 +2,7 @@ package fixtures_test
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"itsm-backend/ent/enttest"
@@ -16,6 +17,36 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
+
+func TestSSLVPNApprovalFlow_DelegatesToKafAfterL2Approval(t *testing.T) {
+	xmlBytes, err := os.ReadFile("../../service/bpmn/sslvpn_approval_flow.bpmn")
+	require.NoError(t, err)
+	definitions, err := service.NewBPMNParser().ParseXML(xmlBytes)
+	require.NoError(t, err)
+	require.Len(t, definitions.Processes, 1)
+
+	var delegated *service.BPMNServiceTask
+	for index := range definitions.Processes[0].ServiceTasks {
+		task := definitions.Processes[0].ServiceTasks[index]
+		if task.ID == "ServiceTask_KafDelegate" {
+			delegated = task
+			break
+		}
+	}
+	require.NotNil(t, delegated)
+	assert.Equal(t, bpmn.KafDelegateTaskType, delegated.ServiceTaskType())
+	assert.Equal(t, "complete_bpmn_task", delegated.AllowedActions())
+	var outgoing *service.BPMNSequenceFlow
+	for _, flow := range definitions.Processes[0].SequenceFlows {
+		if flow.SourceRef == delegated.ID {
+			outgoing = flow
+			break
+		}
+	}
+	require.NotNil(t, outgoing)
+	assert.Equal(t, "Flow_Kaf_To_End", outgoing.ID)
+	assert.Equal(t, "EndEvent_1", outgoing.TargetRef)
+}
 
 func TestEnsureSSLVPNMetadata(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:sslvpn_fixtures_test?mode=memory&cache=shared&_fk=1")
