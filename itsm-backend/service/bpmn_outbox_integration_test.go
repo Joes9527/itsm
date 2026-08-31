@@ -70,6 +70,46 @@ type postgresOutboxClaimResult struct {
 	err       error
 }
 
+type postgresOutboxSnapshot struct {
+	ID                int
+	ExecutionKey      string
+	TenantID          int
+	ProcessInstanceID int
+	ProcessTaskID     int
+	TaskID            string
+	CallbackKind      string
+	HandlerID         string
+	TaskType          string
+	ElementID         string
+	Variables         map[string]interface{}
+	Status            string
+	AttemptCount      int
+	NextAttemptAt     time.Time
+	LeaseOwner        string
+	LeaseExpiresAt    time.Time
+	LastErrorClass    string
+	CompletedAt       time.Time
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
+func snapshotPostgresOutbox(row *ent.ProcessCallbackOutbox) postgresOutboxSnapshot {
+	variables := make(map[string]interface{}, len(row.Variables))
+	for key, value := range row.Variables {
+		variables[key] = value
+	}
+	return postgresOutboxSnapshot{
+		ID: row.ID, ExecutionKey: row.ExecutionKey, TenantID: row.TenantID,
+		ProcessInstanceID: row.ProcessInstanceID, ProcessTaskID: row.ProcessTaskID,
+		TaskID: row.TaskID, CallbackKind: row.CallbackKind, HandlerID: row.HandlerID,
+		TaskType: row.TaskType, ElementID: row.ElementID, Variables: variables,
+		Status: row.Status, AttemptCount: row.AttemptCount, NextAttemptAt: row.NextAttemptAt,
+		LeaseOwner: row.LeaseOwner, LeaseExpiresAt: row.LeaseExpiresAt,
+		LastErrorClass: row.LastErrorClass, CompletedAt: row.CompletedAt,
+		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+	}
+}
+
 type postgresOutboxLoad struct {
 	worker       string
 	rowID        int
@@ -157,11 +197,13 @@ func TestBPMNCallbackOutboxLeaseRecoveryPostgres(t *testing.T) {
 		SetHandlerID("postgres-idempotent-receiver").
 		SetTaskType("postgres_integration_callback").
 		SetElementID("callback-" + namespace).
+		SetVariables(map[string]interface{}{"fixture": stableKey}).
 		SetStatus(bpmnCallbackStatusPending).
 		SetNextAttemptAt(now).
+		SetLastErrorClass("handler_error").
 		Save(context.Background())
 	require.NoError(t, err)
-	_, err = setupClient.ProcessCallbackOutbox.Create().
+	otherRowBefore, err := setupClient.ProcessCallbackOutbox.Create().
 		SetExecutionKey(otherKey).
 		SetTenantID(otherTenant.ID).
 		SetProcessInstanceID(otherTenant.ID).
@@ -170,10 +212,23 @@ func TestBPMNCallbackOutboxLeaseRecoveryPostgres(t *testing.T) {
 		SetHandlerID("postgres-idempotent-receiver").
 		SetTaskType("postgres_integration_callback").
 		SetElementID("callback-" + namespace + "-other").
+		SetVariables(map[string]interface{}{"fixture": otherKey}).
 		SetStatus(bpmnCallbackStatusPending).
+		SetAttemptCount(4).
 		SetNextAttemptAt(now).
+		SetLastErrorClass("unknown_error").
 		Save(context.Background())
 	require.NoError(t, err)
+	targetBefore, err := setupClient.ProcessCallbackOutbox.Query().Where(
+		processcallbackoutbox.ID(row.ID), processcallbackoutbox.TenantID(tenant.ID),
+	).Only(context.Background())
+	require.NoError(t, err)
+	controlBefore, err := setupClient.ProcessCallbackOutbox.Query().Where(
+		processcallbackoutbox.ID(otherRowBefore.ID), processcallbackoutbox.TenantID(otherTenant.ID),
+	).Only(context.Background())
+	require.NoError(t, err)
+	targetBeforeSnapshot := snapshotPostgresOutbox(targetBefore)
+	controlBeforeSnapshot := snapshotPostgresOutbox(controlBefore)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), postgresIntegrationTimeout)
 		defer cancel()
@@ -266,6 +321,19 @@ func TestBPMNCallbackOutboxLeaseRecoveryPostgres(t *testing.T) {
 		loser = workerIDs[1]
 	}
 	require.Equal(t, 1, claimedRow.AttemptCount)
+	require.Equal(t, stableKey, claimedRow.ExecutionKey)
+	require.Equal(t, now.Add(bpmnCallbackLeaseDuration), claimedRow.LeaseExpiresAt)
+	require.Equal(t, targetBeforeSnapshot.NextAttemptAt, claimedRow.NextAttemptAt)
+	require.Equal(t, targetBeforeSnapshot.LastErrorClass, claimedRow.LastErrorClass)
+	require.True(t, claimedRow.CompletedAt.IsZero())
+	require.True(t, claimedRow.UpdatedAt.After(targetBeforeSnapshot.UpdatedAt))
+	expectedClaimed := targetBeforeSnapshot
+	expectedClaimed.Status = bpmnCallbackStatusProcessing
+	expectedClaimed.AttemptCount = 1
+	expectedClaimed.LeaseOwner = winner
+	expectedClaimed.LeaseExpiresAt = now.Add(bpmnCallbackLeaseDuration)
+	expectedClaimed.UpdatedAt = claimedRow.UpdatedAt
+	require.Equal(t, expectedClaimed, snapshotPostgresOutbox(claimedRow))
 	require.False(t, failCompletion.Load(), "the lease holder did not reach the completion boundary")
 	for _, result := range results {
 		require.Zero(t, result.completed)
@@ -296,9 +364,23 @@ func TestBPMNCallbackOutboxLeaseRecoveryPostgres(t *testing.T) {
 		processcallbackoutbox.ID(row.ID), processcallbackoutbox.TenantID(tenant.ID),
 	).Only(context.Background())
 	require.NoError(t, err)
+	require.Equal(t, stableKey, completedRow.ExecutionKey)
 	require.Equal(t, bpmnCallbackStatusCompleted, completedRow.Status)
 	require.Equal(t, 2, completedRow.AttemptCount)
+	require.False(t, completedRow.CompletedAt.IsZero())
+	require.Equal(t, now, completedRow.CompletedAt)
 	require.Empty(t, completedRow.LeaseOwner)
+	require.True(t, completedRow.LeaseExpiresAt.IsZero())
+	require.Empty(t, completedRow.LastErrorClass)
+	require.Equal(t, targetBeforeSnapshot.NextAttemptAt, completedRow.NextAttemptAt)
+	require.True(t, completedRow.UpdatedAt.After(claimedRow.UpdatedAt))
+	expectedCompleted := targetBeforeSnapshot
+	expectedCompleted.Status = bpmnCallbackStatusCompleted
+	expectedCompleted.AttemptCount = 2
+	expectedCompleted.LastErrorClass = ""
+	expectedCompleted.CompletedAt = now
+	expectedCompleted.UpdatedAt = completedRow.UpdatedAt
+	require.Equal(t, expectedCompleted, snapshotPostgresOutbox(completedRow))
 	deliveries, deliveryWorkers, leaseOwners, attempts, effectCount = receiver.snapshot()
 	require.Equal(t, []string{stableKey, stableKey}, deliveries)
 	require.Equal(t, []string{winner, loser}, deliveryWorkers)
@@ -310,7 +392,5 @@ func TestBPMNCallbackOutboxLeaseRecoveryPostgres(t *testing.T) {
 		processcallbackoutbox.TenantID(otherTenant.ID), processcallbackoutbox.ExecutionKey(otherKey),
 	).Only(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, bpmnCallbackStatusPending, otherRow.Status)
-	require.Zero(t, otherRow.AttemptCount)
-	require.Empty(t, otherRow.LeaseOwner)
+	require.Equal(t, controlBeforeSnapshot, snapshotPostgresOutbox(otherRow))
 }

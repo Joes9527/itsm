@@ -54,6 +54,55 @@ type postgresClaimResult struct {
 	err     error
 }
 
+type postgresProcessTaskSnapshot struct {
+	ID                   int
+	TaskID               string
+	ProcessInstanceID    int
+	ProcessDefinitionKey string
+	TaskDefinitionKey    string
+	TaskName             string
+	TaskType             string
+	Assignee             string
+	CandidateUsers       string
+	CandidateGroups      string
+	Status               string
+	Priority             string
+	DueDate              time.Time
+	CreatedTime          time.Time
+	AssignedTime         time.Time
+	StartedTime          time.Time
+	CompletedTime        time.Time
+	FormKey              string
+	TaskVariables        map[string]interface{}
+	Description          string
+	CorrelationID        string
+	ParentTaskID         string
+	RootTaskID           string
+	TenantID             int
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+}
+
+func snapshotPostgresProcessTask(row *ent.ProcessTask) postgresProcessTaskSnapshot {
+	variables := make(map[string]interface{}, len(row.TaskVariables))
+	for key, value := range row.TaskVariables {
+		variables[key] = value
+	}
+	return postgresProcessTaskSnapshot{
+		ID: row.ID, TaskID: row.TaskID, ProcessInstanceID: row.ProcessInstanceID,
+		ProcessDefinitionKey: row.ProcessDefinitionKey, TaskDefinitionKey: row.TaskDefinitionKey,
+		TaskName: row.TaskName, TaskType: row.TaskType, Assignee: row.Assignee,
+		CandidateUsers: row.CandidateUsers, CandidateGroups: row.CandidateGroups,
+		Status: row.Status, Priority: row.Priority, DueDate: row.DueDate,
+		CreatedTime: row.CreatedTime, AssignedTime: row.AssignedTime,
+		StartedTime: row.StartedTime, CompletedTime: row.CompletedTime,
+		FormKey: row.FormKey, TaskVariables: variables, Description: row.Description,
+		CorrelationID: row.CorrelationID, ParentTaskID: row.ParentTaskID,
+		RootTaskID: row.RootTaskID, TenantID: row.TenantID,
+		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+	}
+}
+
 type postgresClaimLoadBarrier struct {
 	taskID  int
 	arrived chan postgresClaimLoad
@@ -169,6 +218,7 @@ func seedPostgresClaimFixture(t *testing.T, client *ent.Client, db *sql.DB) post
 			SetProcessDefinitionKey(definition.Key).
 			SetTaskDefinitionKey("approval-" + taskNamespace).
 			SetTaskName("PostgreSQL claim task").
+			SetTaskVariables(map[string]interface{}{"fixture": taskNamespace}).
 			SetTenantID(fixtureTenant.ID).
 			Save(ctx)
 		require.NoError(t, err)
@@ -235,6 +285,16 @@ func TestClaimTaskConcurrentCASPostgres(t *testing.T) {
 		migrate.ProcessTasksTable,
 	)
 	fixture := seedPostgresClaimFixture(t, setupClient, setupDB)
+	targetBefore, err := setupClient.ProcessTask.Query().Where(
+		processtask.ID(fixture.taskID), processtask.TenantID(fixture.tenantID),
+	).Only(context.Background())
+	require.NoError(t, err)
+	controlBefore, err := setupClient.ProcessTask.Query().Where(
+		processtask.ID(fixture.otherTaskID), processtask.TenantID(fixture.otherTenantID),
+	).Only(context.Background())
+	require.NoError(t, err)
+	targetBeforeSnapshot := snapshotPostgresProcessTask(targetBefore)
+	controlBeforeSnapshot := snapshotPostgresProcessTask(controlBefore)
 	clientA, _ := openBPMNPostgresIntegrationClient(t)
 	clientB, _ := openBPMNPostgresIntegrationClient(t)
 	barrier := &postgresClaimLoadBarrier{
@@ -321,6 +381,16 @@ func TestClaimTaskConcurrentCASPostgres(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, strconv.Itoa(winnerID), persistedTask.Assignee)
 	require.Equal(t, common.ProcessTaskStatusAssigned, persistedTask.Status)
+	require.False(t, persistedTask.AssignedTime.IsZero())
+	require.True(t, persistedTask.StartedTime.IsZero())
+	require.True(t, persistedTask.CompletedTime.IsZero())
+	require.True(t, persistedTask.UpdatedAt.After(targetBeforeSnapshot.UpdatedAt))
+	expectedTarget := targetBeforeSnapshot
+	expectedTarget.Assignee = strconv.Itoa(winnerID)
+	expectedTarget.Status = common.ProcessTaskStatusAssigned
+	expectedTarget.AssignedTime = persistedTask.AssignedTime
+	expectedTarget.UpdatedAt = persistedTask.UpdatedAt
+	require.Equal(t, expectedTarget, snapshotPostgresProcessTask(persistedTask))
 	audits, err := setupClient.ProcessAuditLog.Query().Where(
 		processauditlog.TenantID(fixture.tenantID),
 		processauditlog.ProcessInstanceID(fixture.instanceID),
@@ -328,14 +398,16 @@ func TestClaimTaskConcurrentCASPostgres(t *testing.T) {
 	).All(context.Background())
 	require.NoError(t, err)
 	require.Len(t, audits, 1)
+	require.Equal(t, fixture.tenantID, audits[0].TenantID)
+	require.Equal(t, fixture.instanceID, audits[0].ProcessInstanceID)
+	require.Equal(t, AuditActionTaskClaimed, audits[0].Action)
 	require.Equal(t, winnerID, audits[0].AssigneeID)
 
 	otherTask, err := setupClient.ProcessTask.Query().Where(
 		processtask.ID(fixture.otherTaskID), processtask.TenantID(fixture.otherTenantID),
 	).Only(context.Background())
 	require.NoError(t, err)
-	require.Empty(t, otherTask.Assignee)
-	require.Equal(t, common.ProcessTaskStatusCreated, otherTask.Status)
+	require.Equal(t, controlBeforeSnapshot, snapshotPostgresProcessTask(otherTask))
 	otherAudits, err := setupClient.ProcessAuditLog.Query().Where(
 		processauditlog.TenantID(fixture.otherTenantID),
 		processauditlog.ProcessInstanceID(fixture.otherInstance),
