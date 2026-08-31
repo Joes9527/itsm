@@ -3,6 +3,7 @@ package bpmn
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
@@ -67,7 +68,7 @@ func (h *IncidentServiceTaskHandler) Execute(ctx context.Context, task *ent.Proc
 	action, _ := variables["action"].(string)
 	switch action {
 	case "create_incident":
-		return h.createIncident(ctx, variables)
+		return h.createIncident(ctx, task, variables)
 	case "assign_incident":
 		return h.assignIncident(ctx, variables)
 	case "escalate_incident":
@@ -93,7 +94,7 @@ func (h *IncidentServiceTaskHandler) Validate(ctx context.Context, config map[st
 }
 
 // createIncident 创建事件
-func (h *IncidentServiceTaskHandler) createIncident(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *IncidentServiceTaskHandler) createIncident(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
 	title, _ := variables["title"].(string)
 	description, _ := variables["description"].(string)
 	incidentType, _ := variables["type"].(string)
@@ -109,6 +110,14 @@ func (h *IncidentServiceTaskHandler) createIncident(ctx context.Context, variabl
 	if h.incidentService == nil {
 		return nil, fmt.Errorf("incident service 未注入，无法创建事件")
 	}
+	idempotencyKey, _ := variables["idempotency_key"].(string)
+	idempotencyKey = strings.TrimSpace(idempotencyKey)
+	if idempotencyKey == "" && task != nil {
+		idempotencyKey = fmt.Sprintf("bpmn-service-task-%d", task.ID)
+	}
+	if idempotencyKey == "" {
+		return nil, fmt.Errorf("创建事件需要稳定的 idempotency_key 或持久化流程任务 ID")
+	}
 	reporterID := GetIntFromVars(variables, "reporter_id")
 	resp, err := h.incidentService.CreateIncident(ctx, &dto.CreateIncidentRequest{
 		Title:       title,
@@ -116,6 +125,7 @@ func (h *IncidentServiceTaskHandler) createIncident(ctx context.Context, variabl
 		Type:        incidentType,
 		Priority:    priority,
 		Severity:    severity,
+		Metadata:    map[string]interface{}{"idempotency_key": idempotencyKey},
 	}, tenantID, reporterID)
 	if err != nil {
 		return nil, fmt.Errorf("创建事件失败: %w", err)

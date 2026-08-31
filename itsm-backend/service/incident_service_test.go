@@ -17,6 +17,7 @@ import (
 	"itsm-backend/ent/incidentevent"
 	"itsm-backend/ent/incidentmetric"
 	entticket "itsm-backend/ent/ticket"
+	"itsm-backend/ent/user"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -29,6 +30,75 @@ func setupIncidentTest(t *testing.T) (*ent.Client, *IncidentService, context.Con
 	client := enttest.Open(t, "sqlite3", testDSN())
 	logger := zaptest.NewLogger(t).Sugar()
 	service := NewIncidentService(client, logger)
+	service.SetCreateIncidentDelegate(func(ctx context.Context, req *dto.CreateIncidentRequest, tenantID, userID int) (*dto.IncidentResponse, error) {
+		if req == nil || strings.TrimSpace(req.Title) == "" {
+			return nil, fmt.Errorf("incident title is required")
+		}
+		reporterOK, err := client.User.Query().Where(user.IDEQ(userID), user.TenantIDEQ(tenantID), user.ActiveEQ(true)).Exist(ctx)
+		if err != nil || !reporterOK {
+			return nil, fmt.Errorf("reporter not found or inactive")
+		}
+		if req.AssigneeID != nil {
+			assigneeOK, queryErr := client.User.Query().Where(user.IDEQ(*req.AssigneeID), user.TenantIDEQ(tenantID), user.ActiveEQ(true)).Exist(ctx)
+			if queryErr != nil || !assigneeOK {
+				return nil, fmt.Errorf("assignee not found or inactive")
+			}
+		}
+		priority := req.Priority
+		if priority == "" {
+			priority = "medium"
+		}
+		severity := req.Severity
+		if severity == "" {
+			severity = "medium"
+		}
+		impact := req.Impact
+		if impact == "" {
+			impact = "medium"
+		}
+		urgency := req.Urgency
+		if urgency == "" {
+			urgency = "medium"
+		}
+		detectedAt := time.Now()
+		if req.DetectedAt != nil {
+			detectedAt = *req.DetectedAt
+		}
+		tx, err := client.Tx(ctx)
+		if err != nil {
+			return nil, err
+		}
+		workItem, err := tx.Ticket.Create().SetTitle(req.Title).SetDescription(req.Description).
+			SetType("incident").SetRecordClass("incident").SetStatus("open").SetPriority(priority).
+			SetSource("itsm_test").SetTicketNumber(fmt.Sprintf("TKT-TEST-%d", time.Now().UnixNano())).
+			SetRequesterID(userID).SetOpenedByID(userID).SetTenantID(tenantID).Save(ctx)
+		if err != nil {
+			_ = tx.Rollback()
+			return nil, err
+		}
+		create := tx.Incident.Create().SetWorkItemID(workItem.ID).SetTitle(req.Title).SetDescription(req.Description).
+			SetStatus("new").SetType("incident").SetPriority(priority).SetSeverity(severity).SetImpact(impact).
+			SetUrgency(urgency).SetIncidentNumber(fmt.Sprintf("INC-TEST-%d", time.Now().UnixNano())).
+			SetReporterID(userID).SetCategory(req.Category).SetSubcategory(req.Subcategory).
+			SetSource("manual").SetDetectedAt(detectedAt).SetMetadata(req.Metadata).SetTenantID(tenantID).
+			SetNillableAssigneeID(req.AssigneeID)
+		if len(req.ConfigurationItemIDs) > 0 {
+			create.AddConfigurationItemIDs(req.ConfigurationItemIDs...)
+		}
+		created, err := create.Save(ctx)
+		if err != nil {
+			_ = tx.Rollback()
+			return nil, err
+		}
+		if _, err = tx.IncidentEvent.Create().SetIncidentID(created.ID).SetEventType("creation").SetEventName("created").SetStatus("active").SetSeverity("info").SetSource("test").SetUserID(userID).SetOccurredAt(time.Now()).SetTenantID(tenantID).Save(ctx); err != nil {
+			_ = tx.Rollback()
+			return nil, err
+		}
+		if err = tx.Commit(); err != nil {
+			return nil, err
+		}
+		return service.GetIncident(ctx, created.ID, tenantID)
+	})
 	ctx := context.Background()
 	return client, service, ctx
 }

@@ -29,7 +29,10 @@ type IncidentService struct {
 	sequenceService       *SequenceService
 	processTriggerService ProcessTriggerServiceInterface
 	ruleEngine            *IncidentRuleEngine
+	createDelegate        IncidentCreateDelegate
 }
+
+type IncidentCreateDelegate func(context.Context, *dto.CreateIncidentRequest, int, int) (*dto.IncidentResponse, error)
 
 func NewIncidentService(client *ent.Client, logger *zap.SugaredLogger) *IncidentService {
 	return &IncidentService{
@@ -56,6 +59,13 @@ func (s *IncidentService) SetRuleEngine(engine *IncidentRuleEngine) {
 	s.ruleEngine = engine
 }
 
+// SetCreateIncidentDelegate routes every remaining internal create caller
+// (notably BPMN service tasks) through the unified Intake boundary. HTTP
+// controllers call Intake directly and do not use this compatibility method.
+func (s *IncidentService) SetCreateIncidentDelegate(delegate IncidentCreateDelegate) {
+	s.createDelegate = delegate
+}
+
 // GenerateIncidentNumberForIntake exposes the existing tenant-scoped number
 // allocator to the unified Intake creator without exposing lifecycle writes.
 func (s *IncidentService) GenerateIncidentNumberForIntake(ctx context.Context, tenantID int) (string, error) {
@@ -64,6 +74,15 @@ func (s *IncidentService) GenerateIncidentNumberForIntake(ctx context.Context, t
 
 // CreateIncident 创建事件
 func (s *IncidentService) CreateIncident(ctx context.Context, req *dto.CreateIncidentRequest, tenantID, userID int) (*dto.IncidentResponse, error) {
+	if s.createDelegate == nil {
+		return nil, fmt.Errorf("unified incident intake delegate is not configured")
+	}
+	return s.createDelegate(ctx, req, tenantID, userID)
+
+	// TODO(unified-intake-task-10): the unreachable legacy body below is removed
+	// together with its duplicated Incident columns after migration 021. Keeping
+	// it temporarily lets the authority migration land as one compile-safe step;
+	// it is never executable after this fail-closed delegate cutover.
 	s.logger.Infow("Creating incident", "title", req.Title, "tenant_id", tenantID, "user_id", userID)
 	if strings.TrimSpace(req.Title) == "" {
 		return nil, fmt.Errorf("incident title is required")

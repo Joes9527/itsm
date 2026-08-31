@@ -52,9 +52,24 @@ describe('IncidentAPI', () => {
     it('should create an incident', async () => {
       const data = { title: 'New Incident', priority: 'high', source: 'monitoring', type: 'alert' };
       mockPost.mockResolvedValue({ id: 2, ...data });
-      const result = await IncidentAPI.createIncident(data);
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents', data);
+      const result = await IncidentAPI.createIncident(data, 'incident-key-1');
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents', data, {
+        headers: { 'Idempotency-Key': 'incident-key-1' },
+      });
       expect(result.title).toBe('New Incident');
+    });
+
+    it('reuses the generated key when the same submission object retries', async () => {
+      const data = { title: 'Retry Incident', priority: 'high', source: 'manual', type: 'incident' };
+      mockPost.mockResolvedValue({ id: 3, ...data });
+
+      await IncidentAPI.createIncident(data);
+      await IncidentAPI.createIncident(data);
+
+      const firstConfig = mockPost.mock.calls[0][2];
+      const secondConfig = mockPost.mock.calls[1][2];
+      expect(firstConfig.headers['Idempotency-Key']).toEqual(expect.any(String));
+      expect(secondConfig.headers['Idempotency-Key']).toBe(firstConfig.headers['Idempotency-Key']);
     });
   });
 

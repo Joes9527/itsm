@@ -57,23 +57,23 @@ func (h *Handler) RegisterRoutes(group *gin.RouterGroup) {
 func (h *Handler) CreateWorkItem(c *gin.Context) {
 	identity, err := h.actors.Resolve(c)
 	if err != nil {
-		writeError(c, err)
+		WriteError(c, err)
 		return
 	}
 	if h.service == nil {
-		writeError(c, NewInternalFailure("intake service is unavailable", nil))
+		WriteError(c, NewInternalFailure("intake service is unavailable", nil))
 		return
 	}
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxCreateWorkItemBodyBytes)
 	command, err := DecodeCreateWorkItemCommand(c.Request.Body)
 	if err != nil {
-		writeError(c, err)
+		WriteError(c, err)
 		return
 	}
 	ctx := WithRequestID(c.Request.Context(), c.GetString("request_id"))
 	result, err := h.service.Create(ctx, identity, command)
 	if err != nil {
-		writeError(c, err)
+		WriteError(c, err)
 		return
 	}
 	status := http.StatusCreated
@@ -83,7 +83,10 @@ func (h *Handler) CreateWorkItem(c *gin.Context) {
 	common.SuccessWithStatus(c, status, result)
 }
 
-func writeError(c *gin.Context, err error) {
+// WriteError renders an Intake error through the stable public error contract.
+// Legacy professional create endpoints use the same renderer after adapting
+// their request DTOs to the unified command.
+func WriteError(c *gin.Context, err error) {
 	var typed *IntakeError
 	if !errors.As(err, &typed) {
 		typed = NewInternalFailure("intake request failed", nil)

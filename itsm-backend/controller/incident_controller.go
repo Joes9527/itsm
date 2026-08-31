@@ -1,12 +1,14 @@
 package controller
 
 import (
+	"context"
 	"strconv"
 	"strings"
 	"time"
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
+	"itsm-backend/handlers/intake"
 	problemDomain "itsm-backend/handlers/problem"
 	"itsm-backend/middleware"
 	"itsm-backend/service"
@@ -15,6 +17,14 @@ import (
 	"go.uber.org/zap"
 )
 
+type incidentIntakeService interface {
+	Create(context.Context, intake.Identity, intake.CreateWorkItemCommand) (*intake.CreateWorkItemResult, error)
+}
+
+type incidentCreateReader interface {
+	GetIncident(context.Context, int, int) (*dto.IncidentResponse, error)
+}
+
 type IncidentController struct {
 	incidentService          *service.IncidentService
 	ruleEngine               *service.IncidentRuleEngine
@@ -22,6 +32,8 @@ type IncidentController struct {
 	alertingService          *service.IncidentAlertingService
 	rootCauseAnalysisService *service.RootCauseAnalysisService
 	problemConversionService problemDomain.ConversionService
+	intakeService            incidentIntakeService
+	incidentCreateReader     incidentCreateReader
 	logger                   *zap.SugaredLogger
 }
 
@@ -41,8 +53,13 @@ func NewIncidentController(
 		alertingService:          alertingService,
 		rootCauseAnalysisService: rootCauseAnalysisService,
 		problemConversionService: problemConversionService,
+		incidentCreateReader:     incidentService,
 		logger:                   logger,
 	}
+}
+
+func (c *IncidentController) SetIntakeService(intakeService incidentIntakeService) {
+	c.intakeService = intakeService
 }
 
 // CreateIncident 创建事件
@@ -89,11 +106,58 @@ func (c *IncidentController) CreateIncident(ctx *gin.Context) {
 		common.Fail(ctx, common.AuthFailedCode, "获取用户ID失败")
 		return
 	}
-
-	response, err := c.incidentService.CreateIncident(ctx.Request.Context(), &req, tenantID, userID)
+	role := strings.TrimSpace(ctx.GetString("role"))
+	if role == "" {
+		intake.WriteError(ctx, intake.NewAuthenticationRequired("authenticated intake identity is required", nil))
+		return
+	}
+	key := strings.TrimSpace(ctx.GetHeader("Idempotency-Key"))
+	if key == "" {
+		intake.WriteError(ctx, intake.NewInvalidCommand("Idempotency-Key header is required", intake.FieldError{Field: "Idempotency-Key", Message: "is required"}, nil))
+		return
+	}
+	if c.intakeService == nil || c.incidentCreateReader == nil {
+		intake.WriteError(ctx, intake.NewInternalFailure("incident intake adapter is unavailable", nil))
+		return
+	}
+	severity := req.Severity
+	if severity == "" {
+		severity = req.Priority
+	}
+	incidentInput := &intake.IncidentInput{Severity: severity, Impact: req.Impact, Urgency: req.Urgency}
+	if req.DetectedAt != nil {
+		incidentInput.DetectedAt = req.DetectedAt.UTC().Format(time.RFC3339Nano)
+	}
+	identity := intake.Identity{
+		TenantID: tenantID, ActorID: userID, RequesterID: userID, Role: role,
+		Channel: "itsm_web", TokenID: ctx.GetString("token_id"),
+	}
+	if strings.HasPrefix(ctx.GetHeader("Authorization"), "Bearer ") {
+		identity.Channel = "itsm_api"
+	}
+	result, err := c.intakeService.Create(ctx.Request.Context(), identity, intake.CreateWorkItemCommand{
+		IdempotencyKey: key,
+		IntakeKind:     intake.IntakeKindIncident,
+		Title:          req.Title,
+		Description:    req.Description,
+		CIIDs:          append([]int(nil), req.ConfigurationItemIDs...),
+		Incident:       incidentInput,
+	})
 	if err != nil {
-		c.logger.Errorw("Failed to create incident", "error", err)
-		common.Fail(ctx, common.InternalErrorCode, "创建事件失败")
+		intake.WriteError(ctx, err)
+		return
+	}
+	if result == nil || result.RecordClass != intake.RecordClassIncident || result.ProfessionalReference.Type != "incident" || result.ProfessionalReference.ID <= 0 {
+		intake.WriteError(ctx, intake.NewInternalFailure("incident intake result is invalid", nil))
+		return
+	}
+
+	response, err := c.incidentCreateReader.GetIncident(ctx.Request.Context(), result.ProfessionalReference.ID, tenantID)
+	if err != nil {
+		if c.logger != nil {
+			c.logger.Errorw("Failed to load created incident", "error", err, "incident_id", result.ProfessionalReference.ID)
+		}
+		intake.WriteError(ctx, intake.NewInternalFailure("created incident could not be loaded", err))
 		return
 	}
 

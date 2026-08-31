@@ -173,7 +173,7 @@ func TestIncidentRuleActionFailureMarksExecutionFailed(t *testing.T) {
 	assert.Equal(t, 1, updatedRule.ExecutionCount)
 }
 
-func TestIncidentCreationUsesFormalRuleEngine(t *testing.T) {
+func TestIncidentCreationDoesNotRunPostCommitRuleGoroutine(t *testing.T) {
 	client, incidentService, ctx := setupIncidentTest(t)
 	defer client.Close()
 	tenant, err := createIncidentTestTenant(ctx, client, "formal-rule-engine")
@@ -199,15 +199,11 @@ func TestIncidentCreationUsesFormalRuleEngine(t *testing.T) {
 	}, tenant.ID, reporter.ID)
 	require.NoError(t, err)
 
-	require.Eventually(t, func() bool {
-		count, countErr := client.IncidentMetric.Query().
-			Where(incidentmetric.IncidentIDEQ(created.ID)).
-			Count(ctx)
-		return countErr == nil && count == 1
-	}, 2*time.Second, 20*time.Millisecond)
-	execution, err := client.IncidentRuleExecution.Query().
-		Where(incidentruleexecution.IncidentIDEQ(created.ID)).
-		Only(ctx)
+	time.Sleep(50 * time.Millisecond)
+	metricCount, err := client.IncidentMetric.Query().Where(incidentmetric.IncidentIDEQ(created.ID)).Count(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, "completed", execution.Status)
+	assert.Zero(t, metricCount)
+	executionCount, err := client.IncidentRuleExecution.Query().Where(incidentruleexecution.IncidentIDEQ(created.ID)).Count(ctx)
+	require.NoError(t, err)
+	assert.Zero(t, executionCount, "unified creation must not launch an untracked post-commit rule goroutine")
 }

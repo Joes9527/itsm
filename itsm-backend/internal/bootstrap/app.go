@@ -294,6 +294,41 @@ func NewApplication() *Application {
 		intakeCreators,
 		intake.NewWorkItemCreator(intake.WorkItemNumberFunc(ticketRepoImpl.GenerateTicketNumber)),
 	)
+	incidentService.SetCreateIncidentDelegate(func(ctx context.Context, req *dto.CreateIncidentRequest, tenantID, actorID int) (*dto.IncidentResponse, error) {
+		if req == nil {
+			return nil, fmt.Errorf("incident create request is required")
+		}
+		key, _ := req.Metadata["idempotency_key"].(string)
+		key = strings.TrimSpace(key)
+		if key == "" {
+			return nil, fmt.Errorf("stable incident idempotency key is required")
+		}
+		actor, err := client.User.Query().Where(user.IDEQ(actorID), user.TenantIDEQ(tenantID), user.ActiveEQ(true)).Only(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("resolve incident intake actor: %w", err)
+		}
+		severity := req.Severity
+		if severity == "" {
+			severity = req.Priority
+		}
+		incidentInput := &intake.IncidentInput{Severity: severity, Impact: req.Impact, Urgency: req.Urgency}
+		if req.DetectedAt != nil {
+			incidentInput.DetectedAt = req.DetectedAt.UTC().Format(time.RFC3339Nano)
+		}
+		result, err := intakeService.Create(ctx, intake.Identity{
+			TenantID: tenantID, ActorID: actorID, RequesterID: actorID, Role: actor.Role, Channel: "workflow",
+		}, intake.CreateWorkItemCommand{
+			IdempotencyKey: key, IntakeKind: intake.IntakeKindIncident, Title: req.Title,
+			Description: req.Description, CIIDs: append([]int(nil), req.ConfigurationItemIDs...), Incident: incidentInput,
+		})
+		if err != nil {
+			return nil, err
+		}
+		if result == nil || result.RecordClass != intake.RecordClassIncident || result.ProfessionalReference.Type != "incident" || result.ProfessionalReference.ID <= 0 {
+			return nil, fmt.Errorf("unified incident intake returned an invalid professional reference")
+		}
+		return incidentService.GetIncident(ctx, result.ProfessionalReference.ID, tenantID)
+	})
 	intakeHandler := intake.NewHandler(intakeService)
 
 	// Connector Manager / Registry / Market —— 连接器/插件/技能市场基础设施
@@ -540,6 +575,7 @@ func NewApplication() *Application {
 	problemServiceDomain := problem.NewService(problemRepo, sugar)
 	problemHandler := problem.NewHandler(problemServiceDomain, client)
 	incidentController := controller.NewIncidentController(incidentService, incidentRuleEngine, incidentMonitoringService, incidentAlertingService, rootCauseAnalysisService, problemServiceDomain, sugar)
+	incidentController.SetIntakeService(intakeService)
 
 	provisioningService := service.NewProvisioningService(client, sugar)
 	provisioningController := controller.NewProvisioningController(provisioningService)
@@ -633,12 +669,8 @@ func NewApplication() *Application {
 	// Domain: Service Request (DDD)
 	srRepo := service_request.NewEntRepository(client)
 	chainResolver := service.NewApprovalChainResolver(client, sugar)
-	// incidentBridge 把 service.IncidentService（legacy 横切分层，实际接路由的 Incident 实现，
-	// 见 router.go 的 /incidents 分组）适配为 service_request.IncidentCreator 这个最小接口，
-	// 让 Service.Create 在 isIncidentCatalog 分流时不用直接依赖 IncidentService 的完整签名。
-	incidentBridge := &srIncidentBridge{svc: incidentService}
-	srService := service_request.NewService(srRepo, scRepo, cmdbRepo, client, sugar, ticketService, chainResolver, incidentBridge)
-	srHandler := service_request.NewHandler(srService)
+	srService := service_request.NewService(srRepo, scRepo, cmdbRepo, client, sugar, ticketService, chainResolver, nil)
+	srHandler := service_request.NewHandler(srService, intakeService)
 
 	// Domain: Change (DDD)
 	changeRepo := change.NewEntRepository(client, database.GetRawDB())
@@ -1260,23 +1292,4 @@ func (app *Application) startBackgroundTasks() {
 			}
 		}
 	}()
-}
-
-// srIncidentBridge 将 service.IncidentService 适配为 service_request.IncidentCreator，
-// 使 ServiceRequest.Create 在遇到 ITSM 类型为 Incident 的 catalog 时能直接创建事件。
-type srIncidentBridge struct {
-	svc *service.IncidentService
-}
-
-func (b *srIncidentBridge) CreateIncident(ctx context.Context, tenantID, requesterID int, title, description string, catalogID int) (int, error) {
-	resp, err := b.svc.CreateIncident(ctx, &dto.CreateIncidentRequest{
-		Title:       title,
-		Description: description,
-		Type:        "incident",
-		Priority:    "medium",
-	}, tenantID, requesterID)
-	if err != nil {
-		return 0, err
-	}
-	return resp.ID, nil
 }

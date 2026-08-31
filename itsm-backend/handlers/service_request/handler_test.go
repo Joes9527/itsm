@@ -20,6 +20,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/handlers/cmdb"
+	"itsm-backend/handlers/intake"
 	"itsm-backend/handlers/service_catalog"
 	"itsm-backend/service"
 
@@ -61,12 +62,35 @@ func srDoReq(t *testing.T, r *gin.Engine, method, path string, body interface{})
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	if method == http.MethodPost && path == "/api/v1/service-requests" {
+		req.Header.Set("Idempotency-Key", "sr-test-"+srUID())
+	}
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
 	var resp common.Response
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	return &resp
+}
+
+type noProcessIntakeWorkflow struct{}
+
+func (noProcessIntakeWorkflow) ResolveIntakeBinding(context.Context, *ent.Tx, int, string, string) (*service.IntakeProcessBinding, error) {
+	return &service.IntakeProcessBinding{NoProcess: true}, nil
+}
+
+func newServiceRequestIntakeForTest(t *testing.T, client *ent.Client) *intake.Service {
+	t.Helper()
+	creators := intake.NewCreatorRegistry()
+	require.NoError(t, creators.Register(intake.NewServiceRequestItemCreator()))
+	return intake.NewService(
+		client,
+		intake.NewResolver(noProcessIntakeWorkflow{}, intake.PermissionCheckFunc(func(*ent.Client, intake.Identity, string, string) bool { return true })),
+		creators,
+		intake.NewWorkItemCreator(intake.WorkItemNumberFunc(func(context.Context, int) (string, error) {
+			return "TKT-" + srUID(), nil
+		})),
+	)
 }
 
 func srStr(resp *common.Response) string {
@@ -100,7 +124,7 @@ func srSetup(t *testing.T) (*gin.Engine, *ent.Client, int, int, int) {
 	cmdbRepo := cmdb.NewEntRepository(client)
 	ticketSvc := service.NewTicketServiceForTest(client, logger)
 	svc := NewService(repo, scRepo, cmdbRepo, client, logger, ticketSvc, nil, nil)
-	h := NewHandler(svc)
+	h := NewHandler(svc, newServiceRequestIntakeForTest(t, client))
 
 	user, err := client.User.Create().
 		SetUsername("sr-user-" + srUID()).
@@ -194,10 +218,17 @@ func TestServiceRequestHandler_Create_MissingCatalogID(t *testing.T) {
 
 func TestServiceRequestHandler_Create_CatalogNotFound(t *testing.T) {
 	r, _, _, _, _ := srSetup(t)
-	// 不存在的 catalog → service 返回 NotFound → handler 映射 5001
+	// 不存在的 catalog → Intake 返回稳定的 ReferenceNotFound 错误。
 	req := dto.CreateServiceRequestRequest{CatalogID: 999999, Title: "X", ComplianceAck: true}
-	resp := srDoReq(t, r, "POST", "/api/v1/service-requests", req)
-	assert.EqualValues(t, common.NotFoundErrorCode, resp.Code, "body=%s", srStr(resp))
+	body, err := json.Marshal(req)
+	require.NoError(t, err)
+	httpReq := httptest.NewRequest(http.MethodPost, "/api/v1/service-requests", bytes.NewReader(body))
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Idempotency-Key", "missing-catalog-"+srUID())
+	response := httptest.NewRecorder()
+	r.ServeHTTP(response, httpReq)
+	assert.Equal(t, http.StatusNotFound, response.Code, response.Body.String())
+	assert.Contains(t, response.Body.String(), `"code":"ReferenceNotFound"`)
 }
 
 func TestServiceRequestHandler_Create_MissingComplianceAck(t *testing.T) {
@@ -209,10 +240,17 @@ func TestServiceRequestHandler_Create_MissingComplianceAck(t *testing.T) {
 	infraCat, err := scService.Create(ctx, "VM-"+srUID(), "infrastructure", "for test", 0, tenantID, "enabled", 0, 0, nil, "", "vm")
 	require.NoError(t, err)
 
-	// ComplianceAck=false → service 返回 BadRequest → handler 映射 5001
+	// ComplianceAck=false → Intake 返回领域校验错误。
 	req := dto.CreateServiceRequestRequest{CatalogID: infraCat.ID, Title: "X"}
-	resp := srDoReq(t, r, "POST", "/api/v1/service-requests", req)
-	assert.EqualValues(t, common.ParamErrorCode, resp.Code, "body=%s", srStr(resp))
+	body, err := json.Marshal(req)
+	require.NoError(t, err)
+	httpReq := httptest.NewRequest(http.MethodPost, "/api/v1/service-requests", bytes.NewReader(body))
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Idempotency-Key", "missing-ack-"+srUID())
+	response := httptest.NewRecorder()
+	r.ServeHTTP(response, httpReq)
+	assert.Equal(t, http.StatusUnprocessableEntity, response.Code, response.Body.String())
+	assert.Contains(t, response.Body.String(), `"code":"DomainValidationFailed"`)
 }
 
 func TestServiceRequestCreateDefersNewCIUntilProvisioning(t *testing.T) {

@@ -473,9 +473,10 @@ func TestIncidentServiceTaskHandler_CreateIncident_DelegatesToInjectedService(t 
 	handler.SetIncidentService(fake)
 
 	result, err := handler.Execute(context.Background(), nil, map[string]interface{}{
-		"action":      "create_incident",
-		"title":       "测试事件",
-		"reporter_id": 3,
+		"action":          "create_incident",
+		"title":           "测试事件",
+		"reporter_id":     3,
+		"idempotency_key": "bpmn-test-incident-7",
 	})
 	require.NoError(t, err)
 	require.Equal(t, "测试事件", fake.lastCreateReq.Title)

@@ -9,13 +9,24 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/handlers/intake"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
 type Handler struct {
-	service *Service
+	service                    *Service
+	intakeService              serviceRequestIntakeService
+	serviceRequestCreateReader serviceRequestCreateReader
+}
+
+type serviceRequestIntakeService interface {
+	Create(context.Context, intake.Identity, intake.CreateWorkItemCommand) (*intake.CreateWorkItemResult, error)
+}
+
+type serviceRequestCreateReader interface {
+	Get(context.Context, int, int) (*ServiceRequest, error)
 }
 
 func failServiceRequest(c *gin.Context, err error) {
@@ -43,8 +54,12 @@ func failServiceRequest(c *gin.Context, err error) {
 	common.Fail(c, common.InternalErrorCode, err.Error())
 }
 
-func NewHandler(service *Service) *Handler {
-	return &Handler{service: service}
+func NewHandler(service *Service, intakeServices ...serviceRequestIntakeService) *Handler {
+	handler := &Handler{service: service, serviceRequestCreateReader: service}
+	if len(intakeServices) > 0 {
+		handler.intakeService = intakeServices[0]
+	}
+	return handler
 }
 
 // Map Domain to DTO
@@ -103,7 +118,7 @@ func (h *Handler) toDTOWithCustomFields(req *ServiceRequest, client *ent.Client,
 	resp.Actions = map[string]dto.ActionPermission{
 		"provision": service.CanProvision(client, req.TenantID, actorUserID, actorRole, req.RequesterID),
 	}
-	values, err := service.NewFieldValueService(client).ListValues(context.Background(), req.TenantID, "ticket", req.TicketID)
+	values, err := service.NewFieldValueService(client).ListValues(context.Background(), req.TenantID, "service_request", req.ID)
 	if err != nil {
 		return resp
 	}
@@ -128,6 +143,11 @@ func (h *Handler) Create(c *gin.Context) {
 		common.Fail(c, 1001, "catalogId is required")
 		return
 	}
+	key := strings.TrimSpace(c.GetHeader("Idempotency-Key"))
+	if key == "" {
+		intake.WriteError(c, intake.NewInvalidCommand("Idempotency-Key header is required", intake.FieldError{Field: "Idempotency-Key", Message: "is required"}, nil))
+		return
+	}
 
 	tenantID := c.GetInt("tenant_id")
 	if tenantID == 0 {
@@ -139,42 +159,71 @@ func (h *Handler) Create(c *gin.Context) {
 		common.Fail(c, 2001, "User ID missing")
 		return
 	}
-
-	expireAt := req.ExpireAt
-
-	domainReq := &ServiceRequest{
-		ComplianceAck:      req.ComplianceAck,
-		NeedsPublicIP:      req.NeedsPublicIP,
-		DataClassification: req.DataClassification,
-		FormData:           req.FormData,
-		CostCenter:         req.CostCenter,
-		SourceIPWhitelist:  req.SourceIPWhitelist,
-		ExpireAt:           expireAt,
-		ContactName:        req.ContactName,
-		ContactEmail:       req.ContactEmail,
-		Quantity:           req.Quantity,
-		ExpectedAt:         req.ExpectedAt,
+	role := strings.TrimSpace(c.GetString("role"))
+	if role == "" {
+		intake.WriteError(c, intake.NewAuthenticationRequired("authenticated intake identity is required", nil))
+		return
 	}
-	if domainReq.FormData == nil {
-		domainReq.FormData = map[string]interface{}{}
+	if h.intakeService == nil || h.serviceRequestCreateReader == nil {
+		intake.WriteError(c, intake.NewInternalFailure("service request intake adapter is unavailable", nil))
+		return
 	}
-	domainReq.FormData["title"] = req.Title
-	domainReq.FormData["reason"] = req.Reason
-
-	created, err := h.service.Create(c.Request.Context(), tenantID, userID, req.CatalogID, domainReq)
+	formValues := extractServiceRequestFieldValues(req.FormData)
+	if formValues == nil {
+		formValues = make(map[string]any)
+	}
+	formValues["cost_center"] = req.CostCenter
+	formValues["data_classification"] = req.DataClassification
+	formValues["needs_public_ip"] = req.NeedsPublicIP
+	formValues["source_ip_whitelist"] = append([]string(nil), req.SourceIPWhitelist...)
+	formValues["compliance_ack"] = req.ComplianceAck
+	formValues["contact_name"] = req.ContactName
+	formValues["contact_email"] = req.ContactEmail
+	formValues["quantity"] = req.Quantity
+	if req.ExpireAt != nil {
+		formValues["expire_at"] = req.ExpireAt.UTC().Format(time.RFC3339Nano)
+	}
+	if req.ExpectedAt != nil {
+		formValues["expected_at"] = req.ExpectedAt.UTC().Format(time.RFC3339Nano)
+	}
+	catalogID := req.CatalogID
+	identity := intake.Identity{
+		TenantID: tenantID, ActorID: userID, RequesterID: userID, Role: role,
+		Channel: "itsm_web", TokenID: c.GetString("token_id"),
+	}
+	if strings.HasPrefix(c.GetHeader("Authorization"), "Bearer ") {
+		identity.Channel = "itsm_api"
+	}
+	result, err := h.intakeService.Create(c.Request.Context(), identity, intake.CreateWorkItemCommand{
+		IdempotencyKey: key,
+		IntakeKind:     intake.IntakeKindCatalogItem,
+		Title:          req.Title,
+		Description:    req.Reason,
+		CatalogItemID:  &catalogID,
+		FormValues:     formValues,
+	})
 	if err != nil {
-		failServiceRequest(c, err)
+		intake.WriteError(c, err)
+		return
+	}
+	if result == nil || result.RecordClass != intake.RecordClassServiceRequestItem || result.ProfessionalReference.Type != "service_request" || result.ProfessionalReference.ID <= 0 {
+		intake.WriteError(c, intake.NewInternalFailure("service request intake result is invalid", nil))
 		return
 	}
 
-	fullReq, err := h.service.Get(c.Request.Context(), created.ID, tenantID)
+	fullReq, err := h.serviceRequestCreateReader.Get(c.Request.Context(), result.ProfessionalReference.ID, tenantID)
 	if err != nil {
-		h.service.logger.Errorw("Create: failed to get created service request", "error", err, "id", created.ID)
-		// Return the created object even if Get fails - created.ID is valid
-		common.Success(c, h.toDTO(created))
+		if h.service != nil && h.service.logger != nil {
+			h.service.logger.Errorw("Create: failed to get created service request", "error", err, "id", result.ProfessionalReference.ID)
+		}
+		intake.WriteError(c, intake.NewInternalFailure("created service request could not be loaded", err))
 		return
 	}
-	common.Success(c, h.toDTOWithCustomFields(fullReq, h.service.Client(), c.GetInt("user_id"), c.GetString("role")))
+	var client *ent.Client
+	if h.service != nil {
+		client = h.service.Client()
+	}
+	common.Success(c, h.toDTOWithCustomFields(fullReq, client, c.GetInt("user_id"), c.GetString("role")))
 }
 
 func (h *Handler) Get(c *gin.Context) {

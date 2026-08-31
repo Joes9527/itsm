@@ -32,26 +32,26 @@ func (h *WorkflowInterventionHandler) RegisterRoutes(group *gin.RouterGroup) {
 func (h *WorkflowInterventionHandler) RetryWorkflowStart(c *gin.Context) {
 	identity, err := h.actors.Resolve(c)
 	if err != nil {
-		writeError(c, err)
+		WriteError(c, err)
 		return
 	}
 	workItemID, err := strconv.Atoi(c.Param("id"))
 	if err != nil || workItemID <= 0 {
-		writeError(c, NewInvalidCommand("invalid work item ID", FieldError{Field: "id", Message: "must be a positive integer"}, err))
+		WriteError(c, NewInvalidCommand("invalid work item ID", FieldError{Field: "id", Message: "must be a positive integer"}, err))
 		return
 	}
 	if h.repository == nil {
-		writeError(c, NewInternalFailure("workflow intervention repository is unavailable", nil))
+		WriteError(c, NewInternalFailure("workflow intervention repository is unavailable", nil))
 		return
 	}
 	ctx := context.WithValue(c.Request.Context(), "user_id", identity.ActorID)
 	ctx = context.WithValue(ctx, "request_id", c.GetString("request_id"))
 	if err := h.repository.RetryDeadWorkflowStart(ctx, identity.TenantID, workItemID); err != nil {
 		if errors.Is(err, itsmservice.ErrWorkflowStartNotDead) {
-			writeError(c, NewReferenceNotFound("workflow start intervention was not found", nil))
+			WriteError(c, NewReferenceNotFound("workflow start intervention was not found", nil))
 			return
 		}
-		writeError(c, NewInfrastructureUnavailable("workflow start retry could not be requested", err))
+		WriteError(c, NewInfrastructureUnavailable("workflow start retry could not be requested", err))
 		return
 	}
 	common.SuccessWithStatus(c, http.StatusAccepted, gin.H{

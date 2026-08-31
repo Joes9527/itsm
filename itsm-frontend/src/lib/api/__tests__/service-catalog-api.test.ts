@@ -139,8 +139,28 @@ describe('ServiceCatalogApi', () => {
   describe('createServiceRequest', () => {
     it('should create service request', async () => {
       mockPost.mockResolvedValue({ id: 1 });
-      await ServiceCatalogApi.createServiceRequest({ serviceId: '5', formData: { reason: 'Need access' } } as any);
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/service-requests', expect.objectContaining({ catalogId: 5 }));
+      await ServiceCatalogApi.createServiceRequest(
+        { serviceId: '5', formData: { reason: 'Need access' } } as any,
+        'request-key-1'
+      );
+      expect(mockPost).toHaveBeenCalledWith(
+        '/api/v1/service-requests',
+        expect.objectContaining({ catalogId: 5 }),
+        { headers: { 'Idempotency-Key': 'request-key-1' } }
+      );
+    });
+
+    it('reuses the generated key when the same submission object retries', async () => {
+      const request = { serviceId: '5', formData: { reason: 'Need access' } } as any;
+      mockPost.mockResolvedValue({ id: 1 });
+
+      await ServiceCatalogApi.createServiceRequest(request);
+      await ServiceCatalogApi.createServiceRequest(request);
+
+      const firstConfig = mockPost.mock.calls[0][2];
+      const secondConfig = mockPost.mock.calls[1][2];
+      expect(firstConfig.headers['Idempotency-Key']).toEqual(expect.any(String));
+      expect(secondConfig.headers['Idempotency-Key']).toBe(firstConfig.headers['Idempotency-Key']);
     });
 
     // 回归测试：contactName/contactEmail/quantity/expectedAt 必须原样透传到后端 payload
@@ -164,7 +184,8 @@ describe('ServiceCatalogApi', () => {
           contactEmail: 'alice@example.com',
           quantity: 3,
           expectedAt: '2026-09-01T00:00:00.000Z',
-        })
+        }),
+        expect.objectContaining({ headers: expect.any(Object) })
       );
     });
 
@@ -178,7 +199,8 @@ describe('ServiceCatalogApi', () => {
       } as any);
       expect(mockPost).toHaveBeenCalledWith(
         '/api/v1/service-requests',
-        expect.objectContaining({ complianceAck: false })
+        expect.objectContaining({ complianceAck: false }),
+        expect.objectContaining({ headers: expect.any(Object) })
       );
     });
   });

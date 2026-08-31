@@ -2,6 +2,7 @@ import { httpClient } from './http-client';
 import type { ListQueryParams, PaginationResponse } from './types';
 import { API_URLS } from './types';
 import type { WorkItemActionState } from '@/components/work-item/WorkItemTypes';
+import { idempotencyKeyFor } from './idempotency-key';
 
 // 事件管理API接口
 export interface Incident {
@@ -392,8 +393,11 @@ export class IncidentAPI {
   }
 
   // 创建事件
-  static async createIncident(data: CreateIncidentRequest): Promise<Incident> {
-    const response = await httpClient.post<Incident>(API_URLS.INCIDENTS(), data);
+  static async createIncident(data: CreateIncidentRequest, idempotencyKey?: string): Promise<Incident> {
+    const key = idempotencyKeyFor(data, idempotencyKey);
+    const response = await httpClient.post<Incident>(API_URLS.INCIDENTS(), data, {
+      headers: { 'Idempotency-Key': key },
+    });
     return response;
   }
 
