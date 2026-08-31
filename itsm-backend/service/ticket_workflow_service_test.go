@@ -391,6 +391,55 @@ func TestCCTicketPersistsExternalDeliveryWhenConnectorManagerUnavailable(t *test
 	assert.True(t, notification.SentAt.IsZero())
 }
 
+func TestCCTicketRejectsUnknownNotifyChannelsBeforeEffects(t *testing.T) {
+	for index, tt := range []struct {
+		name      string
+		channels  []string
+		wantError bool
+		want      []string
+	}{
+		{name: "omitted defaults to in app", want: []string{"in_app"}},
+		{name: "empty defaults to in app", channels: []string{"  "}, want: []string{"in_app"}},
+		{name: "known channels deduplicate", channels: []string{"email", "in_app", "email"}, want: []string{"email", "in_app"}},
+		{name: "unknown channel", channels: []string{"unknown"}, wantError: true},
+		{name: "mixed known and unknown channels", channels: []string{"email", "unknown"}, wantError: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			service, client, ctx := setupTicketWorkflowTest(t)
+			t.Cleanup(func() { _ = client.Close() })
+			tenant, err := createTicketWorkflowTestTenant(ctx, client, "cc-channel-"+strconv.Itoa(index))
+			require.NoError(t, err)
+			operator, err := createTicketWorkflowTestUser(ctx, client, tenant.ID, "cc-channel-operator-"+strconv.Itoa(index))
+			require.NoError(t, err)
+			recipient, err := createTicketWorkflowTestUser(ctx, client, tenant.ID, "cc-channel-recipient-"+strconv.Itoa(index))
+			require.NoError(t, err)
+			ticket, err := createTicketWorkflowTestTicket(ctx, client, tenant.ID, operator.ID, "open")
+			require.NoError(t, err)
+
+			err = service.CCTicket(ctx, &dto.CCTicketRequest{
+				TicketID:       ticket.ID,
+				CCUsers:        []int{recipient.ID},
+				NotifyChannels: tt.channels,
+			}, operator.ID, tenant.ID)
+			if tt.wantError {
+				require.ErrorContains(t, err, "通知渠道")
+				assert.Zero(t, client.TicketCC.Query().CountX(ctx))
+				assert.Zero(t, client.TicketNotification.Query().CountX(ctx))
+				assert.Zero(t, client.Notification.Query().CountX(ctx))
+				assert.Zero(t, client.TicketWorkflowRecord.Query().CountX(ctx))
+				return
+			}
+			require.NoError(t, err)
+			rows := client.TicketNotification.Query().AllX(ctx)
+			channels := make([]string, 0, len(rows))
+			for _, row := range rows {
+				channels = append(channels, row.Channel)
+			}
+			assert.ElementsMatch(t, tt.want, channels)
+		})
+	}
+}
+
 // ==================== TicketWorkflowService 状态转换测试 ====================
 
 func TestTicketWorkflowService_GetAvailableActions(t *testing.T) {

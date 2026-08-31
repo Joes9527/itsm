@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"itsm-backend/dto"
@@ -268,6 +269,11 @@ func (s *TicketWorkflowService) ForwardTicket(ctx context.Context, req *dto.Forw
 func (s *TicketWorkflowService) CCTicket(ctx context.Context, req *dto.CCTicketRequest, userID, tenantID int) error {
 	s.logger.Infow("CC ticket", "ticket_id", req.TicketID, "cc_users", req.CCUsers, "user_id", userID)
 
+	notifyChannels, err := normalizeNotifyChannels(req.NotifyChannels)
+	if err != nil {
+		return err
+	}
+
 	tx, err := s.client.Tx(ctx)
 	if err != nil {
 		return fmt.Errorf("开启抄送事务失败: %w", err)
@@ -357,7 +363,7 @@ func (s *TicketWorkflowService) CCTicket(ctx context.Context, req *dto.CCTicketR
 	}
 
 	if len(addedUserIDs) > 0 {
-		if err := txService.createCCNotifications(ctx, tk, addedUserIDs, req.NotifyChannels, tenantID); err != nil {
+		if err := txService.createCCNotifications(ctx, tk, addedUserIDs, notifyChannels, tenantID); err != nil {
 			return err
 		}
 	}
@@ -370,7 +376,7 @@ func (s *TicketWorkflowService) CCTicket(ctx context.Context, req *dto.CCTicketR
 		CreatedAt: time.Now(),
 		Metadata: map[string]interface{}{
 			"cc_users":        append([]int(nil), addedUserIDs...),
-			"notify_channels": normalizeNotifyChannels(req.NotifyChannels),
+			"notify_channels": append([]string(nil), notifyChannels...),
 		},
 	}, tenantID)
 	if err != nil {
@@ -1087,9 +1093,9 @@ func (s *TicketWorkflowService) ensureCanViewTicketCC(ctx context.Context, tk *e
 	return fmt.Errorf("无权访问该工单抄送信息")
 }
 
-func normalizeNotifyChannels(channels []string) []string {
+func normalizeNotifyChannels(channels []string) ([]string, error) {
 	if len(channels) == 0 {
-		return []string{"in_app"}
+		return []string{"in_app"}, nil
 	}
 	allowed := map[string]struct{}{
 		"in_app":   {},
@@ -1102,9 +1108,13 @@ func normalizeNotifyChannels(channels []string) []string {
 	}
 	seen := make(map[string]struct{}, len(channels))
 	result := make([]string, 0, len(channels))
-	for _, channel := range channels {
-		if _, ok := allowed[channel]; !ok {
+	for _, rawChannel := range channels {
+		channel := strings.TrimSpace(rawChannel)
+		if channel == "" {
 			continue
+		}
+		if _, ok := allowed[channel]; !ok {
+			return nil, fmt.Errorf("通知渠道无效: %s", channel)
 		}
 		if _, exists := seen[channel]; exists {
 			continue
@@ -1113,15 +1123,14 @@ func normalizeNotifyChannels(channels []string) []string {
 		result = append(result, channel)
 	}
 	if len(result) == 0 {
-		return []string{"in_app"}
+		return []string{"in_app"}, nil
 	}
-	return result
+	return result, nil
 }
 
 func (s *TicketWorkflowService) createCCNotifications(ctx context.Context, tk *ent.Ticket, userIDs []int, channels []string, tenantID int) error {
 	now := time.Now()
 	content := fmt.Sprintf("工单 %s「%s」已抄送给你", tk.TicketNumber, tk.Title)
-	notifyChannels := normalizeNotifyChannels(channels)
 	users, err := s.client.User.Query().Where(user.IDIn(uniqueInts(userIDs)...), user.TenantID(tenantID)).All(ctx)
 	if err != nil {
 		return fmt.Errorf("查询抄送通知用户失败: %w", err)
@@ -1135,7 +1144,7 @@ func (s *TicketWorkflowService) createCCNotifications(ctx context.Context, tk *e
 		if recipient == nil {
 			return fmt.Errorf("抄送通知用户不存在")
 		}
-		for _, channel := range notifyChannels {
+		for _, channel := range channels {
 			status := "pending"
 			create := s.client.TicketNotification.Create().
 				SetTicketID(tk.ID).

@@ -8,12 +8,56 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
+
+type ccHandlerRecipientFixture struct {
+	client      *ent.Client
+	ctx         context.Context
+	tenant      *ent.Tenant
+	requester   *ent.User
+	recipient   *ent.User
+	ticket      *ent.Ticket
+	handler     *CCTaskHandler
+	callbackCtx context.Context
+}
+
+func newCCHandlerRecipientFixture(t *testing.T, suffix string) *ccHandlerRecipientFixture {
+	t.Helper()
+	client := enttest.Open(t, "sqlite3", "file:"+suffix+"?mode=memory&cache=shared&_fk=1")
+	t.Cleanup(func() { _ = client.Close() })
+	ctx := context.Background()
+	tenant := client.Tenant.Create().SetName("T").SetCode(suffix).SetDomain(suffix + ".test").SetStatus("active").SaveX(ctx)
+	requester := client.User.Create().SetUsername(suffix + "-requester").SetEmail(suffix + "-requester@test.invalid").SetPasswordHash("x").SetName("Requester").SetTenantID(tenant.ID).SetActive(true).SaveX(ctx)
+	recipient := client.User.Create().SetUsername(suffix + "-recipient").SetEmail(suffix + "-recipient@test.invalid").SetPasswordHash("x").SetName("Recipient").SetTenantID(tenant.ID).SetActive(true).SaveX(ctx)
+	ticket := client.Ticket.Create().SetTitle("CC recipient test").SetTicketNumber("CC-" + suffix).SetStatus("open").SetRequesterID(requester.ID).SetTenantID(tenant.ID).SaveX(ctx)
+	callbackCtx := context.WithValue(ctx, BPMNTenantIDContextKey, tenant.ID)
+	callbackCtx = WithBPMNCallbackExecutionKey(callbackCtx, suffix+"-delivery-key")
+	return &ccHandlerRecipientFixture{
+		client: client, ctx: ctx, tenant: tenant, requester: requester, recipient: recipient,
+		ticket: ticket, handler: NewCCTaskHandler(client, zap.NewNop().Sugar()), callbackCtx: callbackCtx,
+	}
+}
+
+func (f *ccHandlerRecipientFixture) variables(ccType string) map[string]interface{} {
+	return map[string]interface{}{
+		"ticket_id": f.ticket.ID,
+		"ccType":    ccType,
+		"ccNotify":  true,
+	}
+}
+
+func (f *ccHandlerRecipientFixture) assertNoEffects(t *testing.T) {
+	t.Helper()
+	assert.Zero(t, f.client.TicketCC.Query().CountX(f.ctx))
+	assert.Zero(t, f.client.TicketNotification.Query().CountX(f.ctx))
+	assert.Zero(t, f.client.Notification.Query().CountX(f.ctx))
+}
 
 func TestCCTaskHandler_UsesContextTenantAndRejectsCrossTenantRecipients(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:cc_handler_tenant?mode=memory&cache=shared&_fk=1")
@@ -151,4 +195,126 @@ func TestCCTaskHandler_DifferentDeliveryReusesActiveOrdinaryRelation(t *testing.
 	var storedKey sql.NullString
 	require.NoError(t, db.QueryRowContext(ctx, "SELECT delivery_key FROM ticket_ccs WHERE id = ?", ordinary.ID).Scan(&storedKey))
 	assert.False(t, storedKey.Valid)
+}
+
+func TestCCTaskHandlerRejectsUnknownNotifyChannelsBeforeEffects(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		channels  string
+		wantError bool
+		want      []string
+	}{
+		{name: "omitted defaults to in app", want: []string{"in_app"}},
+		{name: "empty defaults to in app", channels: "  ", want: []string{"in_app"}},
+		{name: "known channels deduplicate", channels: "email, in_app, email", want: []string{"email", "in_app"}},
+		{name: "unknown channel", channels: "unknown", wantError: true},
+		{name: "mixed known and unknown channels", channels: "email,unknown", wantError: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			fixture := newCCHandlerRecipientFixture(t, "cc-notify-"+strconv.Itoa(len(tt.name)))
+			variables := fixture.variables("user")
+			variables["ccUserIds"] = strconv.Itoa(fixture.recipient.ID)
+			if tt.channels != "" {
+				variables["notifyChannels"] = tt.channels
+			}
+
+			_, err := fixture.handler.Execute(fixture.callbackCtx, nil, variables)
+			if tt.wantError {
+				require.ErrorContains(t, err, "通知渠道")
+				fixture.assertNoEffects(t)
+				return
+			}
+			require.NoError(t, err)
+			rows := fixture.client.TicketNotification.Query().AllX(fixture.ctx)
+			channels := make([]string, 0, len(rows))
+			for _, row := range rows {
+				channels = append(channels, row.Channel)
+			}
+			assert.ElementsMatch(t, tt.want, channels)
+		})
+	}
+}
+
+func TestCCTaskHandlerValidatesTenantOwnedGroupAndRoleSelectors(t *testing.T) {
+	for _, selectorType := range []string{"group", "role"} {
+		for _, tt := range []struct {
+			name      string
+			selector  func(t *testing.T, f *ccHandlerRecipientFixture) int
+			wantError bool
+		}{
+			{
+				name: "foreign tenant selector",
+				selector: func(t *testing.T, f *ccHandlerRecipientFixture) int {
+					t.Helper()
+					otherTenant := f.client.Tenant.Create().SetName("Other").SetCode("other-" + selectorType).SetDomain("other-" + selectorType + ".test").SetStatus("active").SaveX(f.ctx)
+					otherUser := f.client.User.Create().SetUsername("other-" + selectorType).SetEmail("other-" + selectorType + "@test.invalid").SetPasswordHash("x").SetName("Other").SetTenantID(otherTenant.ID).SetActive(true).SaveX(f.ctx)
+					if selectorType == "group" {
+						group := f.client.Group.Create().SetName("foreign-group").SetTenantID(otherTenant.ID).SaveX(f.ctx)
+						f.client.User.UpdateOneID(otherUser.ID).AddGroupIDs(group.ID).ExecX(f.ctx)
+						return group.ID
+					}
+					role := f.client.Role.Create().SetName("foreign role").SetCode("foreign-" + selectorType).SetTenantID(otherTenant.ID).SaveX(f.ctx)
+					f.client.User.UpdateOneID(otherUser.ID).AddRoleIDs(role.ID).ExecX(f.ctx)
+					return role.ID
+				},
+				wantError: true,
+			},
+			{
+				name: "missing selector",
+				selector: func(t *testing.T, _ *ccHandlerRecipientFixture) int {
+					t.Helper()
+					return 999999
+				},
+				wantError: true,
+			},
+			{
+				name: "empty same tenant selector",
+				selector: func(t *testing.T, f *ccHandlerRecipientFixture) int {
+					t.Helper()
+					if selectorType == "group" {
+						return f.client.Group.Create().SetName("empty-group").SetTenantID(f.tenant.ID).SaveX(f.ctx).ID
+					}
+					return f.client.Role.Create().SetName("empty role").SetCode("empty-" + selectorType).SetTenantID(f.tenant.ID).SaveX(f.ctx).ID
+				},
+				wantError: true,
+			},
+			{
+				name: "active same tenant selector",
+				selector: func(t *testing.T, f *ccHandlerRecipientFixture) int {
+					t.Helper()
+					if selectorType == "group" {
+						group := f.client.Group.Create().SetName("active-group").SetTenantID(f.tenant.ID).SaveX(f.ctx)
+						f.client.User.UpdateOneID(f.recipient.ID).AddGroupIDs(group.ID).ExecX(f.ctx)
+						return group.ID
+					}
+					role := f.client.Role.Create().SetName("active role").SetCode("active-" + selectorType).SetTenantID(f.tenant.ID).SaveX(f.ctx)
+					f.client.User.UpdateOneID(f.recipient.ID).AddRoleIDs(role.ID).ExecX(f.ctx)
+					return role.ID
+				},
+			},
+		} {
+			t.Run(selectorType+"/"+tt.name, func(t *testing.T) {
+				fixture := newCCHandlerRecipientFixture(t, "cc-selector-"+selectorType+"-"+strconv.Itoa(len(tt.name)))
+				selectorID := tt.selector(t, fixture)
+				variables := fixture.variables(selectorType)
+				if selectorType == "group" {
+					variables["ccGroupIds"] = strconv.Itoa(selectorID)
+				} else {
+					variables["ccRoleIds"] = strconv.Itoa(selectorID)
+				}
+
+				result, err := fixture.handler.Execute(fixture.callbackCtx, nil, variables)
+				if tt.wantError {
+					require.Error(t, err)
+					fixture.assertNoEffects(t)
+					return
+				}
+				require.NoError(t, err)
+				assert.Equal(t, []int{fixture.recipient.ID}, result.OutputVars["added_cc_users"])
+				assert.Equal(t, 1, fixture.client.TicketCC.Query().CountX(fixture.ctx))
+				assert.Equal(t, 1, fixture.client.TicketNotification.Query().CountX(fixture.ctx))
+				assert.Equal(t, 1, fixture.client.Notification.Query().CountX(fixture.ctx))
+			})
+		}
+	}
 }

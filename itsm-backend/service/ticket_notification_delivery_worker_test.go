@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"itsm-backend/connector"
+	_ "itsm-backend/connector/builtin/msgraph"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/service/bpmn"
@@ -18,6 +19,7 @@ import (
 )
 
 type durableNotificationConnector struct {
+	name     string
 	mu       sync.Mutex
 	sendErr  error
 	messages []*connector.Message
@@ -25,9 +27,38 @@ type durableNotificationConnector struct {
 	release  <-chan struct{}
 }
 
+type durableNotificationGraphSender struct {
+	mu      sync.Mutex
+	sendErr error
+	calls   []string
+}
+
+func (s *durableNotificationGraphSender) SendMail(_ context.Context, _ string, to, _, _ string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.calls = append(s.calls, to)
+	return s.sendErr
+}
+
+func (s *durableNotificationGraphSender) setSendError(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.sendErr = err
+}
+
+func (s *durableNotificationGraphSender) sentCalls() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.calls...)
+}
+
 func (c *durableNotificationConnector) Manifest() connector.Manifest {
+	name := c.name
+	if name == "" {
+		name = "webhook"
+	}
 	return connector.Manifest{
-		Name:                "email",
+		Name:                name,
 		Version:             "1.0.0",
 		Title:               "Durable notification test connector",
 		Type:                connector.TypeEmail,
@@ -120,11 +151,15 @@ func newDurableNotificationFixture(t *testing.T, suffix string) *durableNotifica
 }
 
 func (f *durableNotificationFixture) enqueueExternalCC(t *testing.T) *ent.TicketNotification {
+	return f.enqueueExternalCCWithChannel(t, "webhook")
+}
+
+func (f *durableNotificationFixture) enqueueExternalCCWithChannel(t *testing.T, channel string) *ent.TicketNotification {
 	t.Helper()
 	require.NoError(t, f.workflow.CCTicket(f.ctx, &dto.CCTicketRequest{
 		TicketID:       f.ticket.ID,
 		CCUsers:        []int{f.recipient.ID},
-		NotifyChannels: []string{"email"},
+		NotifyChannels: []string{channel},
 	}, f.operator.ID, f.tenant.ID))
 	return f.client.TicketNotification.Query().OnlyX(f.ctx)
 }
@@ -134,9 +169,13 @@ func configureDurableNotificationConnector(t *testing.T, service *TicketNotifica
 	registry := connector.NewRegistry()
 	registry.Register(func() connector.Connector { return fake })
 	manager := connector.NewManager(registry, zaptest.NewLogger(t).Sugar())
+	connectorName := fake.name
+	if connectorName == "" {
+		connectorName = "webhook"
+	}
 	require.NoError(t, manager.Provision(context.Background(), connector.Config{
 		TenantID: tenantID,
-		Name:     "email",
+		Name:     connectorName,
 		Type:     connector.TypeEmail,
 		Provider: "durable-notification-test",
 		Enabled:  true,
@@ -197,6 +236,90 @@ func TestTicketNotificationWorkerRetriesSendFailureWithStableDeliveryKey(t *test
 	require.Equal(t, *row.DeliveryKey, messages[0].Metadata["delivery_key"])
 }
 
+func TestTicketNotificationWorkerRoutesLogicalEmailThroughBootstrapEmailWiring(t *testing.T) {
+	fixture := newDurableNotificationFixture(t, "notification-bootstrap-email")
+	row := fixture.enqueueExternalCCWithChannel(t, "email")
+
+	// Bootstrap registers the Graph connector as msgraph-email, not as the
+	// logical email delivery channel. The durable worker must use EmailService.
+	_, registered := connector.Default().Get("msgraph-email")
+	require.True(t, registered)
+	fixture.notifications.SetConnectorManager(connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar()))
+	graph := &durableNotificationGraphSender{}
+	emailService := NewEmailService(EmailConfig{}, zaptest.NewLogger(t).Sugar())
+	emailService.SetGraphProvider(func() (GraphMailSender, string, bool) {
+		return graph, "sender@example.test", true
+	})
+	fixture.notifications.SetEmailService(emailService)
+
+	now := time.Now().Add(time.Hour)
+	fixture.notifications.now = func() time.Time { return now }
+	completed, err := fixture.notifications.ProcessPendingDeliveries(fixture.ctx, "notification-bootstrap-email-worker", 10)
+	require.NoError(t, err)
+	require.Equal(t, 1, completed)
+	require.Equal(t, []string{fixture.recipient.Email}, graph.sentCalls())
+	require.Equal(t, ticketNotificationStatusSent, fixture.client.TicketNotification.GetX(fixture.ctx, row.ID).Status)
+}
+
+func TestTicketNotificationWorkerRetriesEmailServiceFailure(t *testing.T) {
+	fixture := newDurableNotificationFixture(t, "notification-email-retry")
+	row := fixture.enqueueExternalCCWithChannel(t, "email")
+	fixture.notifications.SetConnectorManager(connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar()))
+	graph := &durableNotificationGraphSender{sendErr: errors.New("graph temporarily unavailable")}
+	emailService := NewEmailService(EmailConfig{}, zaptest.NewLogger(t).Sugar())
+	emailService.SetGraphProvider(func() (GraphMailSender, string, bool) {
+		return graph, "sender@example.test", true
+	})
+	fixture.notifications.SetEmailService(emailService)
+
+	now := time.Now().Add(time.Hour)
+	fixture.notifications.now = func() time.Time { return now }
+	completed, err := fixture.notifications.ProcessPendingDeliveries(fixture.ctx, "notification-email-retry-worker", 10)
+	require.Error(t, err)
+	require.Zero(t, completed)
+
+	row = fixture.client.TicketNotification.GetX(fixture.ctx, row.ID)
+	require.Equal(t, ticketNotificationStatusPending, row.Status)
+	require.Equal(t, "connector_send", row.LastErrorClass)
+	require.Empty(t, row.LeaseOwner)
+
+	graph.setSendError(nil)
+	now = row.NextAttemptAt
+	completed, err = fixture.notifications.ProcessPendingDeliveries(fixture.ctx, "notification-email-retry-worker", 10)
+	require.NoError(t, err)
+	require.Equal(t, 1, completed)
+	require.Equal(t, []string{fixture.recipient.Email, fixture.recipient.Email}, graph.sentCalls())
+	require.Equal(t, ticketNotificationStatusSent, fixture.client.TicketNotification.GetX(fixture.ctx, row.ID).Status)
+}
+
+func TestTicketNotificationWorkerMarksPermanentTargetFailureTerminal(t *testing.T) {
+	fixture := newDurableNotificationFixture(t, "notification-terminal-target")
+	row := fixture.enqueueExternalCC(t)
+	row = fixture.client.TicketNotification.UpdateOneID(row.ID).SetChannel("sms").SaveX(fixture.ctx)
+	fixture.notifications.SetConnectorManager(connector.NewManager(connector.NewRegistry(), zaptest.NewLogger(t).Sugar()))
+
+	now := time.Now().Add(time.Hour)
+	fixture.notifications.now = func() time.Time { return now }
+	completed, err := fixture.notifications.ProcessPendingDeliveries(fixture.ctx, "notification-terminal-target-worker", 10)
+	require.Error(t, err)
+	require.Zero(t, completed)
+
+	row = fixture.client.TicketNotification.GetX(fixture.ctx, row.ID)
+	require.Equal(t, "failed", row.Status)
+	require.Equal(t, 1, row.AttemptCount)
+	require.Equal(t, "delivery_target_invalid", row.LastErrorClass)
+	require.Empty(t, row.LeaseOwner)
+	require.True(t, row.LeaseExpiresAt.IsZero())
+
+	now = now.Add(24 * time.Hour)
+	completed, err = fixture.notifications.ProcessPendingDeliveries(fixture.ctx, "notification-terminal-target-worker", 10)
+	require.NoError(t, err)
+	require.Zero(t, completed)
+	row = fixture.client.TicketNotification.GetX(fixture.ctx, row.ID)
+	require.Equal(t, "failed", row.Status)
+	require.Equal(t, 1, row.AttemptCount)
+}
+
 func TestBPMNCCFanoutUsesDistinctStableConnectorDeliveryKeys(t *testing.T) {
 	fixture := newDurableNotificationFixture(t, "notification-bpmn-fanout")
 	secondRecipient, err := createTicketWorkflowTestUser(
@@ -214,7 +337,7 @@ func TestBPMNCCFanoutUsesDistinctStableConnectorDeliveryKeys(t *testing.T) {
 		"ccType":            "variable",
 		"ccResolvedUserIds": []int{fixture.recipient.ID, secondRecipient.ID},
 		"ccNotify":          true,
-		"notifyChannels":    "email",
+		"notifyChannels":    "webhook",
 		"addedBy":           fixture.operator.ID,
 	})
 	require.NoError(t, err)

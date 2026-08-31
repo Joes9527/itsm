@@ -366,7 +366,7 @@ func TestTicketNotificationWorkerPostgresCASAndExpiredLeaseRecovery(t *testing.T
 	require.NoError(t, workflow.CCTicket(ctx, &dto.CCTicketRequest{
 		TicketID:       tk.ID,
 		CCUsers:        []int{recipient.ID},
-		NotifyChannels: []string{"email"},
+		NotifyChannels: []string{"webhook"},
 	}, operator.ID, tenant.ID))
 	row := setupClient.TicketNotification.Query().OnlyX(ctx)
 

@@ -174,6 +174,9 @@ func filterBPMNCallbackPayload(handler bpmn.ServiceTaskHandlerInterface, action 
 		if err != nil {
 			return nil, err
 		}
+		if err := validateBPMNCallbackNormalizerOutput(handler, action, payload); err != nil {
+			return nil, err
+		}
 		return filterBPMNCallbackPayloadFields(handler, action, payload)
 	}
 	return filterBPMNCallbackPayloadFields(handler, action, variables)
@@ -183,6 +186,29 @@ func filterBPMNCallbackPayload(handler bpmn.ServiceTaskHandlerInterface, action 
 // re-reading the dynamic source values that were resolved during enqueue.
 func filterPersistedBPMNCallbackPayload(handler bpmn.ServiceTaskHandlerInterface, action string, variables map[string]interface{}) (map[string]interface{}, error) {
 	return filterBPMNCallbackPayloadFields(handler, action, variables)
+}
+
+// validateBPMNCallbackNormalizerOutput rejects schema drift instead of silently
+// dropping a field. A normalizer may derive values, but its durable output must
+// still be fully declared by the handler-owned static payload policy.
+func validateBPMNCallbackNormalizerOutput(handler bpmn.ServiceTaskHandlerInterface, action string, payload map[string]interface{}) error {
+	policy, ok := handler.(bpmn.CallbackPayloadPolicy)
+	if !ok {
+		if len(payload) == 0 {
+			return nil
+		}
+		return fmt.Errorf("回调规范化输出包含未声明字段")
+	}
+	allowed := make(map[string]struct{}, len(policy.CallbackPayloadFields(action)))
+	for _, key := range policy.CallbackPayloadFields(action) {
+		allowed[key] = struct{}{}
+	}
+	for key := range payload {
+		if _, ok := allowed[key]; !ok {
+			return fmt.Errorf("回调规范化输出包含未声明字段: %s", key)
+		}
+	}
+	return nil
 }
 
 func filterBPMNCallbackPayloadFields(handler bpmn.ServiceTaskHandlerInterface, action string, variables map[string]interface{}) (map[string]interface{}, error) {

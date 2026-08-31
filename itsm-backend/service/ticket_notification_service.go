@@ -49,6 +49,7 @@ const (
 	ticketNotificationStatusPending    = "pending"
 	ticketNotificationStatusProcessing = "processing"
 	ticketNotificationStatusSent       = "sent"
+	ticketNotificationStatusFailed     = "failed"
 	ticketNotificationLeaseDuration    = 60 * time.Second
 )
 
@@ -107,7 +108,11 @@ func (s *TicketNotificationService) ProcessPendingDeliveries(ctx context.Context
 		errorClass := s.dispatchClaimedDelivery(ctx, &claimedRow)
 		if errorClass != "" {
 			failed = true
-			_ = s.retryDelivery(ctx, workerID, &claimedRow, errorClass)
+			if isTicketNotificationPermanentErrorClass(errorClass) {
+				_ = s.failDelivery(ctx, workerID, &claimedRow, errorClass)
+			} else {
+				_ = s.retryDelivery(ctx, workerID, &claimedRow, errorClass)
+			}
 			continue
 		}
 		completedRow, completeErr := s.completeDelivery(ctx, workerID, &claimedRow)
@@ -231,10 +236,32 @@ func (s *TicketNotificationService) retryDelivery(ctx context.Context, workerID 
 	return nil
 }
 
-func (s *TicketNotificationService) dispatchClaimedDelivery(ctx context.Context, row *ent.TicketNotification) string {
-	if s.connectorManager == nil {
-		return "connector_unavailable"
+func (s *TicketNotificationService) failDelivery(ctx context.Context, workerID string, row *ent.TicketNotification, errorClass string) error {
+	if !isTicketNotificationPermanentErrorClass(errorClass) {
+		errorClass = "unknown_error"
 	}
+	affected, err := s.client.TicketNotification.Update().
+		Where(
+			ticketnotification.ID(row.ID),
+			ticketnotification.TenantID(row.TenantID),
+			ticketnotification.StatusEQ(ticketNotificationStatusProcessing),
+			ticketnotification.LeaseOwner(workerID),
+		).
+		SetStatus(ticketNotificationStatusFailed).
+		SetLastErrorClass(errorClass).
+		ClearLeaseOwner().
+		ClearLeaseExpiresAt().
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("ticket notification terminal failure update failed")
+	}
+	if affected != 1 {
+		return fmt.Errorf("ticket notification lease lost")
+	}
+	return nil
+}
+
+func (s *TicketNotificationService) dispatchClaimedDelivery(ctx context.Context, row *ent.TicketNotification) string {
 	ticketEntity, err := s.client.Ticket.Query().Where(ticket.ID(row.TicketID), ticket.TenantID(row.TenantID)).Only(ctx)
 	if err != nil {
 		return "delivery_target_invalid"
@@ -249,6 +276,27 @@ func (s *TicketNotificationService) dispatchClaimedDelivery(ctx context.Context,
 	}
 	if deliveryKey == "" {
 		return "delivery_target_invalid"
+	}
+	if row.Channel == "email" {
+		if s.emailService == nil || strings.TrimSpace(userEntity.Email) == "" {
+			return "delivery_target_invalid"
+		}
+		// EmailService owns Graph-to-SMTP fallback. The stable internal key keeps
+		// retries deterministic, while the external email effect remains at-least-once.
+		if err := s.emailService.SendTicketNotification(
+			ctx,
+			[]string{userEntity.Email},
+			ticketEntity.TicketNumber,
+			ticketEntity.Title,
+			row.Type,
+			row.Content,
+		); err != nil {
+			return "connector_send"
+		}
+		return ""
+	}
+	if s.connectorManager == nil {
+		return "connector_unavailable"
 	}
 	target := ticketNotificationTarget(row.Channel, userEntity)
 	if target == "" {
@@ -282,7 +330,7 @@ func ticketNotificationTarget(channel string, recipient *ent.User) string {
 		return recipient.FeishuOpenID
 	case "dingtalk", "wecom":
 		return recipient.Username
-	case "email", "webhook":
+	case "webhook":
 		return recipient.Email
 	case "sms":
 		return recipient.Phone
@@ -313,6 +361,10 @@ func isTicketNotificationErrorClass(errorClass string) bool {
 	default:
 		return false
 	}
+}
+
+func isTicketNotificationPermanentErrorClass(errorClass string) bool {
+	return errorClass == "delivery_target_invalid"
 }
 
 func ticketNotificationRetryDelay(attempt int) time.Duration {
@@ -907,7 +959,6 @@ func (s *TicketNotificationService) MarkNotificationRead(
 
 	now := time.Now()
 	_, err = s.client.TicketNotification.UpdateOneID(notificationID).
-		SetStatus("read").
 		SetNillableReadAt(&now).
 		Save(ctx)
 	if err != nil {
@@ -930,7 +981,6 @@ func (s *TicketNotificationService) MarkAllNotificationsRead(
 			ticketnotification.TenantID(tenantID),
 			ticketnotification.ReadAtIsNil(),
 		).
-		SetStatus("read").
 		SetNillableReadAt(&now).
 		Save(ctx)
 	if err != nil {

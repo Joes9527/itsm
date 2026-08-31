@@ -117,7 +117,7 @@ func TestPrepareTicketNotificationMigrationPostgresUpgradesPopulatedLegacyRows(t
 			channel string
 			status  string
 		}{
-			{id: 1, channel: "email", status: "pending"},
+			{id: 1, channel: "webhook", status: "pending"},
 			{id: 2, channel: "sms", status: "failed"},
 			{id: 3, channel: "email", status: "sent"},
 			{id: 4, channel: "in_app", status: "pending"},

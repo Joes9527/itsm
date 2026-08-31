@@ -27,6 +27,7 @@ type countingIdempotentCallbackHandler struct {
 	mu                sync.Mutex
 	taskType          string
 	handlerID         string
+	callbackFields    []string
 	failuresRemaining int
 	attemptKeys       []string
 	effectKeys        map[string]struct{}
@@ -155,6 +156,9 @@ func newCountingIdempotentCallbackHandler(taskType, handlerID string, failures i
 
 func (h *countingIdempotentCallbackHandler) GetTaskType() string  { return h.taskType }
 func (h *countingIdempotentCallbackHandler) GetHandlerID() string { return h.handlerID }
+func (h *countingIdempotentCallbackHandler) CallbackPayloadFields(string) []string {
+	return append([]string(nil), h.callbackFields...)
+}
 func (h *countingIdempotentCallbackHandler) Validate(context.Context, map[string]interface{}) error {
 	return nil
 }
@@ -566,6 +570,75 @@ func TestUserTaskCallbackWithoutRegisteredHandlerFailsClosedUntilHandlerIsRegist
 	assert.Equal(t, "future_user_handler", f.client.ProcessTask.GetX(f.userCtx, task.ID).CallbackHandlerID)
 	assert.Equal(t, "future_user_callback", f.client.ProcessTask.GetX(f.userCtx, task.ID).CallbackTaskType)
 	assert.Equal(t, 1, handler.EffectCount())
+}
+
+func TestStoredUserTaskCallbackRequiresCurrentHandlerBeforeMutation(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	handler := newCountingIdempotentCallbackHandler("stored_user_callback", "stored_user_handler", 0)
+	handler.callbackFields = []string{"decision", "note"}
+	task := f.seedNonParticipantApprovalTask(t, "stored-user-callback-missing-handler")
+	task = f.client.ProcessTask.UpdateOne(task).
+		SetCandidateUsers(f.actor.Email).
+		SetCallbackHandlerID(handler.GetHandlerID()).
+		SetCallbackTaskType(handler.GetTaskType()).
+		SetCallbackAction("record_completion").
+		SaveX(f.userCtx)
+	instance := f.client.ProcessInstance.GetX(f.userCtx, task.ProcessInstanceID)
+	beforeAuditCount := f.client.ProcessAuditLog.Query().CountX(f.userCtx)
+	payload := map[string]interface{}{
+		"decision":      "approve",
+		"note":          "preserve this allowlisted payload",
+		"authorization": "must-not-persist",
+	}
+
+	err := f.engine.CompleteTask(f.typedTaskScopeOnlyCtx(f.actor, false), task.TaskID, payload)
+	require.ErrorContains(t, err, "回调处理器不可用")
+
+	afterFailedTask := f.client.ProcessTask.GetX(f.userCtx, task.ID)
+	afterFailedInstance := f.client.ProcessInstance.GetX(f.userCtx, instance.ID)
+	assert.Equal(t, task.Status, afterFailedTask.Status)
+	assert.Equal(t, task.TaskVariables, afterFailedTask.TaskVariables)
+	assert.Equal(t, instance.Version, afterFailedInstance.Version)
+	assert.Equal(t, instance.Variables, afterFailedInstance.Variables)
+	assert.Equal(t, beforeAuditCount, f.client.ProcessAuditLog.Query().CountX(f.userCtx))
+	assert.Zero(t, f.client.ProcessCallbackOutbox.Query().Where(
+		processcallbackoutbox.TenantID(f.tenant.ID),
+		processcallbackoutbox.ProcessTaskID(task.ID),
+	).CountX(f.userCtx))
+
+	f.engine.CallbackRegistry().RegisterHandler(handler)
+	require.NoError(t, f.engine.CompleteTask(f.typedTaskScopeOnlyCtx(f.actor, false), task.TaskID, payload))
+	row := f.client.ProcessCallbackOutbox.Query().Where(
+		processcallbackoutbox.TenantID(f.tenant.ID),
+		processcallbackoutbox.ProcessTaskID(task.ID),
+	).OnlyX(f.userCtx)
+	assert.Equal(t, map[string]interface{}{
+		"decision": "approve",
+		"note":     "preserve this allowlisted payload",
+	}, row.Variables)
+}
+
+func TestAlreadyEnqueuedCallbackRemainsRetryableWhenHandlerDisappears(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	now := time.Date(2026, 8, 31, 9, 0, 0, 0, time.UTC)
+	setCallbackTestClock(f.engine, &now)
+	handler := newCountingIdempotentCallbackHandler("disappearing_callback", "disappearing_handler", 1)
+	task, instance := seedDurableServiceCallbackTask(t, f, "handler-disappears", handler)
+
+	require.NoError(t, f.engine.CompleteTask(f.typedTaskScopeOnlyCtx(f.actor, false), task.TaskID, map[string]interface{}{}))
+	row := callbackRowForInstance(t, f, instance.ID)
+	require.Equal(t, bpmnCallbackStatusPending, row.Status)
+	require.Equal(t, 1, row.AttemptCount)
+
+	f.engine.CallbackRegistry().UnregisterHandler(handler.GetHandlerID())
+	now = row.NextAttemptAt
+	completed, err := f.engine.ProcessPendingCallbacks(context.Background(), "missing-handler-retry-worker", 10)
+	require.Error(t, err)
+	require.Zero(t, completed)
+	row = callbackRowForInstance(t, f, instance.ID)
+	assert.Equal(t, bpmnCallbackStatusPending, row.Status)
+	assert.Equal(t, "handler_error", row.LastErrorClass)
+	assert.Equal(t, 2, row.AttemptCount)
 }
 
 func TestUserTaskCallbackNormalizesPersistedTaskTypeWhenMetadataUsesHandlerID(t *testing.T) {

@@ -368,12 +368,42 @@ func TestCallbackPayloadNormalizerOutputUsesStaticAllowlist(t *testing.T) {
 
 	payload, err := filterBPMNCallbackPayload(handler, "", map[string]interface{}{})
 
-	require.NoError(t, err)
-	assert.Equal(t, map[string]interface{}{"declared": []interface{}{"kept"}}, payload)
-	assert.NotContains(t, payload, "undeclared")
+	require.ErrorContains(t, err, "undeclared")
+	assert.Nil(t, payload)
 
 	allowedValue[0] = "mutated"
-	assert.Equal(t, []interface{}{"kept"}, payload["declared"])
+}
+
+func TestCallbackPayloadNormalizerUndeclaredFieldRollsBackTaskCompletion(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	task := f.seedNonParticipantApprovalTask(t, "normalizer-schema-drift")
+	task = f.client.ProcessTask.UpdateOne(task).
+		SetCandidateUsers(f.actor.Email).
+		SaveX(f.userCtx)
+	handler := &adversarialCallbackPayloadNormalizer{
+		ServiceTaskHandlerInterface: f.engine.findHandlerByTaskType("ticket_task"),
+		allowedValue:                []interface{}{"kept"},
+	}
+	f.engine.CallbackRegistry().RegisterHandler(handler)
+	configureLegacyUserCallbackDefinition(t, f, task, handler.GetTaskType(), "update_status")
+
+	beforeTask := f.client.ProcessTask.GetX(f.userCtx, task.ID)
+	beforeInstance := f.client.ProcessInstance.GetX(f.userCtx, task.ProcessInstanceID)
+	beforeAuditCount := f.client.ProcessAuditLog.Query().CountX(f.userCtx)
+	err := f.engine.CompleteTask(f.typedTaskScopeOnlyCtx(f.actor, false), task.TaskID, map[string]interface{}{})
+	require.ErrorContains(t, err, "undeclared")
+
+	afterTask := f.client.ProcessTask.GetX(f.userCtx, task.ID)
+	afterInstance := f.client.ProcessInstance.GetX(f.userCtx, task.ProcessInstanceID)
+	assert.Equal(t, beforeTask.Status, afterTask.Status)
+	assert.Equal(t, beforeTask.TaskVariables, afterTask.TaskVariables)
+	assert.Equal(t, beforeInstance.Version, afterInstance.Version)
+	assert.Equal(t, beforeInstance.Variables, afterInstance.Variables)
+	assert.Equal(t, beforeAuditCount, f.client.ProcessAuditLog.Query().CountX(f.userCtx))
+	assert.Zero(t, f.client.ProcessCallbackOutbox.Query().Where(
+		processcallbackoutbox.TenantID(f.tenant.ID),
+		processcallbackoutbox.ProcessTaskID(task.ID),
+	).CountX(f.userCtx))
 }
 
 func TestCCCallbackPayloadNormalizesVariableRecipients(t *testing.T) {

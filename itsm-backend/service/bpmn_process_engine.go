@@ -427,6 +427,19 @@ func (e *CustomProcessEngine) completeAuthorizedTaskWithClient(ctx context.Conte
 		return nil, fmt.Errorf("回调描述符无法解析: %s", task.TaskDefinitionKey)
 	}
 
+	var handler bpmn.ServiceTaskHandlerInterface
+	callbackVariables := map[string]interface{}{}
+	if descriptor.HandlerID != bpmnNoUserTaskCallbackHandlerID {
+		handler = e.resolveCallbackDescriptorHandler(descriptor)
+		if handler == nil {
+			return nil, fmt.Errorf("回调处理器不可用: %s", task.TaskDefinitionKey)
+		}
+		callbackVariables, err = filterBPMNCallbackPayload(handler, descriptor.Action, variables)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	merged := make(map[string]interface{}, len(instance.Variables)+len(variables))
 	for key, value := range instance.Variables {
 		merged[key] = value
@@ -484,12 +497,7 @@ func (e *CustomProcessEngine) completeAuthorizedTaskWithClient(ctx context.Conte
 	if descriptor.HandlerID == bpmnNoUserTaskCallbackHandlerID {
 		return effect, nil
 	}
-	handler := e.resolveCallbackDescriptorHandler(descriptor)
-	callbackVariables, err := filterBPMNCallbackPayload(handler, descriptor.Action, variables)
-	if err != nil {
-		return nil, err
-	}
-	if handler != nil && isAsyncHandler(handler) {
+	if isAsyncHandler(handler) {
 		callbackVariables[bpmnMetaDataAction] = descriptor.Action
 		effect.variables = callbackVariables
 		effect.asyncHandler = handler

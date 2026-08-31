@@ -92,7 +92,10 @@ func (h *CCTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, vari
 	ccGroupIds := GetStringFromVars(variables, "ccGroupIds")
 	ccRoleIds := GetStringFromVars(variables, "ccRoleIds")
 	ccNotify := GetBoolFromVars(variables, "ccNotify", true)
-	notifyChannels := parseNotifyChannels(GetStringFromVars(variables, "notifyChannels"))
+	notifyChannels, err := parseNotifyChannels(GetStringFromVars(variables, "notifyChannels"))
+	if err != nil {
+		return nil, err
+	}
 	addedBy := GetIntFromVars(variables, "addedBy")
 	tenantID, err := RequireTenantID(ctx, variables)
 	if err != nil {
@@ -376,37 +379,78 @@ func (h *CCTaskHandler) parseCommaSeparatedInts(str string) ([]int, error) {
 
 // getUserIDsFromGroups 根据用户组ID获取用户ID列表
 func (h *CCTaskHandler) getUserIDsFromGroups(ctx context.Context, client *ent.Client, groupIds []int, tenantID int) ([]int, error) {
+	groupIds = uniqueCCSelectorIDs(groupIds)
 	if len(groupIds) == 0 {
-		return []int{}, nil
+		return nil, fmt.Errorf("抄送用户组不能为空")
+	}
+	validatedGroupIDs, err := client.Group.Query().
+		Where(group.IDIn(groupIds...), group.TenantID(tenantID)).
+		Select(group.FieldID).
+		Ints(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("校验抄送用户组失败: %w", err)
+	}
+	if len(validatedGroupIDs) != len(groupIds) {
+		return nil, fmt.Errorf("抄送用户组不存在或不属于当前租户")
 	}
 	users, err := client.User.Query().
-		Where(user.TenantID(tenantID), user.HasGroupsWith(group.IDIn(groupIds...))).
+		Where(user.TenantID(tenantID), user.Active(true), user.HasGroupsWith(group.IDIn(validatedGroupIDs...))).
 		Select(user.FieldID).
 		Ints(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("查询用户组成员失败: %w", err)
+	}
+	if len(users) == 0 {
+		return nil, fmt.Errorf("抄送用户组未解析到当前租户活跃用户")
 	}
 	return users, nil
 }
 
 // getUserIDsFromRoles 根据角色ID获取用户ID列表
 func (h *CCTaskHandler) getUserIDsFromRoles(ctx context.Context, client *ent.Client, roleIds []int, tenantID int) ([]int, error) {
+	roleIds = uniqueCCSelectorIDs(roleIds)
 	if len(roleIds) == 0 {
-		return []int{}, nil
+		return nil, fmt.Errorf("抄送角色不能为空")
+	}
+	validatedRoleIDs, err := client.Role.Query().
+		Where(role.IDIn(roleIds...), role.TenantID(tenantID)).
+		Select(role.FieldID).
+		Ints(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("校验抄送角色失败: %w", err)
+	}
+	if len(validatedRoleIDs) != len(roleIds) {
+		return nil, fmt.Errorf("抄送角色不存在或不属于当前租户")
 	}
 	users, err := client.User.Query().
-		Where(user.TenantID(tenantID), user.HasRolesWith(role.IDIn(roleIds...))).
+		Where(user.TenantID(tenantID), user.Active(true), user.HasRolesWith(role.IDIn(validatedRoleIDs...))).
 		Select(user.FieldID).
 		Ints(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("查询角色成员失败: %w", err)
 	}
+	if len(users) == 0 {
+		return nil, fmt.Errorf("抄送角色未解析到当前租户活跃用户")
+	}
 	return users, nil
 }
 
-func parseNotifyChannels(value string) []string {
-	if value == "" {
-		return []string{"in_app"}
+func uniqueCCSelectorIDs(ids []int) []int {
+	seen := make(map[int]struct{}, len(ids))
+	result := make([]int, 0, len(ids))
+	for _, id := range ids {
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		result = append(result, id)
+	}
+	return result
+}
+
+func parseNotifyChannels(value string) ([]string, error) {
+	if strings.TrimSpace(value) == "" {
+		return []string{"in_app"}, nil
 	}
 	allowed := map[string]struct{}{
 		"in_app":   {},
@@ -421,8 +465,11 @@ func parseNotifyChannels(value string) []string {
 	channels := []string{}
 	for _, part := range strings.Split(value, ",") {
 		channel := strings.TrimSpace(part)
-		if _, ok := allowed[channel]; !ok {
+		if channel == "" {
 			continue
+		}
+		if _, ok := allowed[channel]; !ok {
+			return nil, fmt.Errorf("通知渠道无效: %s", channel)
 		}
 		if _, exists := seen[channel]; exists {
 			continue
@@ -431,9 +478,9 @@ func parseNotifyChannels(value string) []string {
 		channels = append(channels, channel)
 	}
 	if len(channels) == 0 {
-		return []string{"in_app"}
+		return []string{"in_app"}, nil
 	}
-	return channels
+	return channels, nil
 }
 
 func (h *CCTaskHandler) createCCNotifications(ctx context.Context, client *ent.Client, ticketID int, userIDs []int, channels []string, tenantID int) error {

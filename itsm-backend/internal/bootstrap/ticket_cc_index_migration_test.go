@@ -109,7 +109,7 @@ func TestPrepareTicketNotificationMigrationSQLiteUpgradesPopulatedLegacyRows(t *
 		channel string
 		status  string
 	}{
-		{id: 1, channel: "email", status: "pending"},
+		{id: 1, channel: "webhook", status: "pending"},
 		{id: 2, channel: "sms", status: "failed"},
 		{id: 3, channel: "email", status: "sent"},
 		{id: 4, channel: "in_app", status: "pending"},
@@ -199,7 +199,7 @@ func assertLegacyTicketNotificationUpgrade(t *testing.T, ctx context.Context, db
 		channel   string
 		oldStatus string
 	}{
-		{id: 1, channel: "email", oldStatus: "pending"},
+		{id: 1, channel: "webhook", oldStatus: "pending"},
 		{id: 2, channel: "sms", oldStatus: "failed"},
 	} {
 		ticketID, userID, tenantID, status, key, attempts, nextAttempt, owner, leaseExpires, errorClass, preserved := query(expected.id)
@@ -313,7 +313,7 @@ func assertMigratedTicketNotificationsArePickedUp(
 		name     string
 		typeName connector.ConnectorType
 	}{
-		{name: "email", typeName: connector.TypeEmail},
+		{name: "webhook", typeName: connector.TypeWebhook},
 		{name: "sms", typeName: connector.TypeSMS},
 	} {
 		connectorConfig := config
@@ -325,7 +325,7 @@ func assertMigratedTicketNotificationsArePickedUp(
 	}
 	manager := connector.NewManager(registry, zap.NewNop().Sugar())
 	t.Cleanup(manager.CloseAll)
-	for _, channel := range []string{"email", "sms"} {
+	for _, channel := range []string{"webhook", "sms"} {
 		require.NoError(t, manager.Provision(ctx, connector.Config{
 			TenantID: tenant.ID,
 			Name:     channel,
