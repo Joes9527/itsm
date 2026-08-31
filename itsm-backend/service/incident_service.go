@@ -56,6 +56,12 @@ func (s *IncidentService) SetRuleEngine(engine *IncidentRuleEngine) {
 	s.ruleEngine = engine
 }
 
+// GenerateIncidentNumberForIntake exposes the existing tenant-scoped number
+// allocator to the unified Intake creator without exposing lifecycle writes.
+func (s *IncidentService) GenerateIncidentNumberForIntake(ctx context.Context, tenantID int) (string, error) {
+	return s.generateIncidentNumber(ctx, tenantID)
+}
+
 // CreateIncident 创建事件
 func (s *IncidentService) CreateIncident(ctx context.Context, req *dto.CreateIncidentRequest, tenantID, userID int) (*dto.IncidentResponse, error) {
 	s.logger.Infow("Creating incident", "title", req.Title, "tenant_id", tenantID, "user_id", userID)

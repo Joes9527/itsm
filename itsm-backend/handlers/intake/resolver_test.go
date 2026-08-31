@@ -225,6 +225,26 @@ func TestResolverRejectsHiddenCatalogInvalidFormAndPermissionDenial(t *testing.T
 		require.NoError(t, tx.Rollback())
 	})
 
+	t.Run("professional service request fields", func(t *testing.T) {
+		tx := beginIntakeTestTx(t, fixture.client)
+		cmd := fixture.catalogCommand(fixture.serviceCatalog.ID)
+		cmd.FormValues["contact_name"] = "Requester"
+		cmd.FormValues["quantity"] = 2
+		resolved, err := fixture.resolver(nil).Resolve(ctx, tx, fixture.identity(), cmd)
+		require.NoError(t, err)
+		require.Equal(t, "Requester", resolved.Command.FormValues["contact_name"])
+		require.NoError(t, tx.Rollback())
+	})
+
+	t.Run("unknown form field", func(t *testing.T) {
+		tx := beginIntakeTestTx(t, fixture.client)
+		cmd := fixture.catalogCommand(fixture.serviceCatalog.ID)
+		cmd.FormValues["unexpected"] = true
+		_, err := fixture.resolver(nil).Resolve(ctx, tx, fixture.identity(), cmd)
+		require.ErrorIs(t, err, ErrDomainValidationFailed)
+		require.NoError(t, tx.Rollback())
+	})
+
 	t.Run("target permission", func(t *testing.T) {
 		tx := beginIntakeTestTx(t, fixture.client)
 		checker := PermissionCheckFunc(func(_ *ent.Client, _ Identity, resource, action string) bool {

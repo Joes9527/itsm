@@ -117,7 +117,10 @@ type WorkItemDraft struct {
 	RecordClass     string
 	Title           string
 	Description     string
+	Status          string
 	Priority        string
+	Source          string
+	TicketNumber    string
 	CategoryID      *int
 	SLADefinitionID *int
 }

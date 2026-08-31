@@ -270,7 +270,9 @@ func (r *Resolver) resolveForm(ctx context.Context, client *ent.Client, resolved
 		}
 	}
 	for key := range resolved.Command.FormValues {
-		if _, known := byName[key]; !known {
+		_, customField := byName[key]
+		professionalField := resolved.RecordClass == RecordClassServiceRequestItem && isServiceRequestProfessionalField(key)
+		if !customField && !professionalField {
 			return NewDomainValidationFailed("service catalog form validation failed", nil, FieldError{Field: "formValues." + key, Message: "is not defined by this catalog item"})
 		}
 	}
@@ -278,6 +280,15 @@ func (r *Resolver) resolveForm(ctx context.Context, client *ent.Client, resolved
 		resolved.Catalog.FormSchemaVersion = fmt.Sprintf("%d:%s", len(defs), latest.UTC().Format(time.RFC3339Nano))
 	}
 	return nil
+}
+
+func isServiceRequestProfessionalField(key string) bool {
+	switch key {
+	case "cost_center", "data_classification", "needs_public_ip", "source_ip_whitelist", "expire_at", "compliance_ack", "contact_name", "contact_email", "quantity", "expected_at":
+		return true
+	default:
+		return false
+	}
 }
 
 func optionalPositiveInt(value int) *int {
