@@ -459,6 +459,8 @@ UI 验收至少覆盖：入口收敛与旧路由重定向、知识建议后继�
 
 2026-08-31 已确认先执行“执行完整性发布收口”，把已合并能力验证为稳定 Dev 基线；该门通过后，再单独 brainstorm 和设计统一 Intake。这样可以避免在跨进程认证、迁移、RLS 和恢复证据尚未闭合时，同时叠加 Intake、Incident actions 和 UI。
 
+发布收口的已批准独立设计见 `2026-08-31-kaf-delegation-release-closeout-design.md`；真实 Azure AD 对象与恢复约束见 `docs/testing/kaf-delegation-release-closeout-fixture.md`。
+
 发布收口的完成条件是：
 
 1. `GET .../kaf-context` 的成功读取形成显式、租户范围、无敏感内容的审计证据；高频 delegated-list 补拉不按每一条上下文读取制造不可控审计量。
