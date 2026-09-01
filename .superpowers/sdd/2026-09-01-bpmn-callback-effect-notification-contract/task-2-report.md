@@ -18,3 +18,46 @@ RED/GREEN evidence:
 Self-review: deleted legacy result/payload-policy identifiers; no compatibility callback bridge or second approval engine remains. P1-C async/KAF fencing and authorized-actor fixes on HEAD `4c082b85` are preserved. `itsm-frontend/test-results/junit.xml` is pre-existing and intentionally excluded from staging.
 
 Concern: full frontend Jest was not run; the focused standalone Jest command cannot satisfy the repository global coverage threshold by design. Migration 021 registration remains deferred.
+
+## Fix round 1
+
+Implemented the reviewed effect-gate corrections without adding an approval or
+notification compatibility path. CAB approval remains owned by the professional
+state machine and now reports `idempotent` after only its tenant-scoped
+existence check. Stakeholder notification has no durable delivery implementation,
+so it returns typed `blocked` (`handler_contract`). Incident auto-assignment with
+no assignee returns typed `blocked` (`target_missing`); the engine alone decides
+whether a persisted definition-declared optional snapshot can turn that into an
+optional skip. The non-optional engine regression proves the token remains at a
+running instance.
+
+Release approval now verifies the existing `ProcessApprovalDecision` by trusted
+tenant context and persisted ProcessTask identity: tenant, process instance,
+task, definition node, and completed-task `approvalAction`. Missing task/action,
+missing decision, and action mismatch block; a matching immutable decision is
+`idempotent`. No release state is derived or written by the BPMN handler.
+
+The Change handler reports `idempotent` for redeliveries that observe already
+rejected, in-progress, verified, closed, or scheduled state and makes no write;
+actual transition/date writes remain `applied`.
+
+Notification strict-contract regressions cover rejection of legacy `type` and
+`channel`, missing/unknown `eventType`, the public real-delivery summary, UI
+definition-provided event type options, no legacy request fields, failure without
+a fake notification, and successful refresh from persisted server state.
+
+RED/GREEN evidence:
+
+- RED: `go test ./service/bpmn -run 'Test(IncidentServiceTaskHandler_AssignIncident_NoAssignee_BlocksEffectGate|ReleaseHandler_ApprovalWithoutAuthoritativeDecisionBlocks|ChangeServiceTaskHandler_NotifyStakeholdersWithoutDurableDeliveryBlocks)' -count=1` failed exactly because all three effects were `applied`/`idempotent` rather than typed `blocked`.
+- RED: `go test ./service/bpmn -run TestChangeServiceTaskHandler_RetryWithoutWriteIsIdempotent -count=1` failed for reject, implement, verify, close, and schedule because each returned `applied`.
+- GREEN focused: `go test ./service/bpmn -run 'Test(ChangeServiceTaskHandler_(TenantScopedActions|ScheduleChangeAction_EmergencyStopsAtApproved|RetryWithoutWriteIsIdempotent)|ReleaseHandler_|IncidentServiceTaskHandler_AssignIncident_NoAssignee_BlocksEffectGate)' -count=1` — PASS.
+- GREEN engine gate: `go test ./service -run TestHandleElement_ServiceTask_IncidentAutoAssign_NoAssignee_BlocksNonOptionalFlow -count=1` — PASS.
+- GREEN controller strict contract: `go test ./controller -run 'TestTicketNotificationController_Send(RejectsLegacyFields|UsesStrictEventTypeContract)' -count=1` — PASS.
+- GREEN frontend: `npm test -- --runInBand --coverage=false src/components/business/__tests__/TicketNotificationSection.test.tsx` — PASS, 6 tests. The run emits the pre-existing Ant Design `List` deprecation warning.
+- `go test ./...` — PASS.
+- `npm run type-check` — PASS.
+
+Self-review: `git diff --check` is clean; Release decision predicates use only
+persisted task data and trusted tenant context, no request-derived identity.
+The retained P1-C CAS/KAF engine code was not modified. `junit.xml` remains
+unstaged.

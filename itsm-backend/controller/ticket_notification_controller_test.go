@@ -27,7 +27,9 @@ func setupTicketNotificationController(t *testing.T) (*gin.Engine, *ent.Client, 
 	tenantID, userID := seedTenantUser(t, client)
 	core, logs := observer.New(zap.DebugLevel)
 	logger := zap.New(core).Sugar()
-	controller := NewTicketNotificationController(service.NewTicketNotificationService(client, logger), logger)
+	notificationService := service.NewTicketNotificationService(client, logger)
+	notificationService.SetNotificationPreferenceService(service.NewNotificationPreferenceService(client, logger))
+	controller := NewTicketNotificationController(notificationService, logger)
 
 	router := gin.New()
 	router.Use(gin.Recovery(), withTestAuth(tenantID, userID))
@@ -49,6 +51,45 @@ func TestTicketNotificationController_SendRejectsLegacyFields(t *testing.T) {
 		"userIds": []int{userID}, "eventType": "ticket_updated", "content": "x", "channel": "in_app",
 	}, false)
 	require.Equal(t, common.ParamErrorCode, response.Code, "body=%s", mustString(response))
+}
+
+func TestTicketNotificationController_SendUsesStrictEventTypeContract(t *testing.T) {
+	router, client, tenantID, userID, _ := setupTicketNotificationController(t)
+	ticketEntity, err := client.Ticket.Create().
+		SetTicketNumber("TKT-NOTIFICATION-STRICT-" + uniqueTestID()).
+		SetTitle("Notification send contract").SetDescription("d").SetStatus("open").SetPriority("medium").
+		SetRequesterID(userID).SetTenantID(tenantID).Save(context.Background())
+	require.NoError(t, err)
+	path := "/api/v1/tickets/" + strconv.Itoa(ticketEntity.ID) + "/notifications"
+	_, err = client.NotificationPreference.Create().
+		SetUserID(userID).SetTenantID(tenantID).SetEventType("ticket_updated").
+		SetEmailEnabled(false).SetInAppEnabled(true).SetSmsEnabled(false).SetPushEnabled(false).
+		Save(context.Background())
+	require.NoError(t, err)
+
+	for _, payload := range []map[string]interface{}{
+		{"userIds": []int{userID}, "content": "x"},
+		{"userIds": []int{userID}, "eventType": "unknown", "content": "x"},
+		{"userIds": []int{userID}, "eventType": "ticket_updated", "content": "x", "type": "assigned"},
+		{"userIds": []int{userID}, "eventType": "ticket_updated", "content": "x", "channel": "in_app"},
+	} {
+		response := doReq(t, router, http.MethodPost, path, payload, false)
+		require.Equal(t, common.ParamErrorCode, response.Code, "body=%s", mustString(response))
+	}
+
+	response := doReq(t, router, http.MethodPost, path, map[string]interface{}{
+		"userIds": []int{userID}, "eventType": "ticket_updated", "content": "x",
+	}, false)
+	require.Equal(t, common.SuccessCode, response.Code, "body=%s", mustString(response))
+	summary, ok := response.Data.(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, "applied", summary["effect"])
+	require.EqualValues(t, 1, summary["recipientCount"])
+	require.EqualValues(t, 1, summary["appliedCount"])
+	require.EqualValues(t, 0, summary["idempotentCount"])
+	require.EqualValues(t, 1, summary["deliveryCount"])
+	_, leaksBlockCode := summary["blockCode"]
+	require.False(t, leaksBlockCode)
 }
 
 func createTicketNotificationForController(t *testing.T, client *ent.Client, tenantID, userID int, status string) *ent.TicketNotification {

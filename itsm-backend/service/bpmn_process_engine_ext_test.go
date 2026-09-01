@@ -996,14 +996,11 @@ func TestHandleElement_ServiceTask_DispatchesByMetaDataOverAttributeGuessing(t *
 	assert.Equal(t, "in_progress", updated.Status, "ticket_task 的 update_status（默认目标状态）应该真实生效")
 }
 
-// TestHandleElement_ServiceTask_IncidentAutoAssign_NoAssignee_ContinuesFlow 是 Finding 1
-// 在"bug 真正显形的那一层"的回归：incident_emergency_flow 的 Activity_AutoAssign 是起始
-// 事件后的第一个 serviceTask（service_task_type=incident_task, action=assign_incident），
-// 而新建事件的 assignee_id 天生是 0（Optional 字段）。handler 一旦对空处理人返回 error，
-// handleElement 会把错误往上抛、StartProcess 整体失败，而调用方
-// （incident_service.go 的 fire-and-forget goroutine）只 Warnw 一句——流程实例就永久卡在
-// 起始事件上，对任何用户都不可见。这里断言的是：handleElement 成功返回，且流程能推进到下一步。
-func TestHandleElement_ServiceTask_IncidentAutoAssign_NoAssignee_ContinuesFlow(t *testing.T) {
+// TestHandleElement_ServiceTask_IncidentAutoAssign_NoAssignee_BlocksNonOptionalFlow
+// locks the callback effect gate: no assignee is a typed blocked effect, and this
+// diagram does not declare callback_optional. The engine must therefore retain the
+// running instance instead of claiming the service task completed.
+func TestHandleElement_ServiceTask_IncidentAutoAssign_NoAssignee_BlocksNonOptionalFlow(t *testing.T) {
 	engine, baseCtx := newApprovalDecisionTestEngine(t)
 	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
 	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
@@ -1100,12 +1097,12 @@ func TestHandleElement_ServiceTask_IncidentAutoAssign_NoAssignee_ContinuesFlow(t
 	}
 
 	err = engine.handleElement(ctx, instance, process, "Activity_AutoAssign")
-	require.NoError(t, err, "无处理人是正常空态，不应该让 handleElement 失败、把流程卡死在起始节点")
+	require.NoError(t, err, "typed blocked effect is persisted by the engine, not returned as an execution error")
 
-	// 流程确实推进到了下一步（End_1 -> completeProcess）
+	// Non-optional blocked callbacks never advance to End_1.
 	updatedInstance, err := engine.client.ProcessInstance.Get(ctx, instance.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "completed", updatedInstance.Status, "空态跳过后流程应该继续走到结束事件")
+	assert.Equal(t, "running", updatedInstance.Status, "non-optional blocked callback must not advance the token")
 
 	updatedIncident, err := engine.client.Incident.Get(ctx, inc.ID)
 	require.NoError(t, err)

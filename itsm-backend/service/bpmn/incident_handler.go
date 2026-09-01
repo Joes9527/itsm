@@ -133,12 +133,8 @@ func (h *IncidentServiceTaskHandler) createIncident(ctx context.Context, variabl
 //
 // incident_emergency_flow.bpmn 的 Activity_AutoAssign 是起始事件之后的第一个 serviceTask
 // （service_task_type=incident_task, action=assign_incident），而 Incident.assignee_id 在
-// ent schema 里是 Optional——新建事件的 assignee_id 天生是 0。所以"自动分配时没有可用处理人"
-// 是这个节点的正常空态，不是失败：这里必须返回成功的空操作。
-//
-// 反例（不要改回去）：对空处理人返回 error → handleElement 把错误往上抛 → StartProcess 整体
-// 失败，而触发方（incident_service.go 的 fire-and-forget goroutine）只 Warnw 一句，
-// 流程实例就永久卡在起始事件上，对任何用户都不可见。
+// ent schema 里是 Optional。没有可用处理人时 handler 不得虚报成功：它返回 typed blocked，
+// 由 engine 根据持久化的 definition-declared optional 快照决定是否记录 optional skip。
 //
 // incident_id 无效则继续硬失败：那说明没人告诉这个节点该操作哪条事件，是真实的接线错误，
 // 跟"暂时没有处理人"是两回事，必须报出来。
@@ -153,9 +149,8 @@ func (h *IncidentServiceTaskHandler) assignIncident(ctx context.Context, variabl
 	if assigneeID <= 0 {
 		h.logger.Warnw("BPMN 自动分配未取到可用处理人，按空态跳过（不改事件状态）",
 			"incident_id", incidentID)
-		return &CallbackEffect{Status: CallbackEffectApplied,
-			Message: fmt.Sprintf("事件 %d 当前无可用处理人，跳过自动分配", incidentID),
-		}, nil
+		return BlockedEffect(CallbackBlockTargetMissing,
+			fmt.Sprintf("事件 %d 当前无可用处理人", incidentID)), nil
 	}
 
 	// 分配是一次真实写入，且 incident_id 在 UserTask 回调路径上来自客户端提交的变量，

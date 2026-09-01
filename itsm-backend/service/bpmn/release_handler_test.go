@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
@@ -57,7 +58,7 @@ func TestReleaseHandler_TechReview_AppendsReleaseNotes(t *testing.T) {
 	assert.Equal(t, "draft", updated.Status, "技术评审不改变发布状态")
 }
 
-func TestReleaseHandler_ApprovalIsIdempotentAfterAuthoritativeServiceDecision(t *testing.T) {
+func TestReleaseHandler_ApprovalWithoutAuthoritativeDecisionBlocks(t *testing.T) {
 	_, handler, tenantID, release := setupReleaseHandlerFixture(t)
 	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
 
@@ -65,7 +66,47 @@ func TestReleaseHandler_ApprovalIsIdempotentAfterAuthoritativeServiceDecision(t 
 		"action": "approval", "business_id": float64(release.ID),
 	})
 	require.NoError(t, err)
-	assert.Equal(t, CallbackEffectIdempotent, result.Status)
+	assert.Equal(t, CallbackEffectBlocked, result.Status)
+	assert.Equal(t, CallbackBlockTargetMissing, result.BlockCode)
+}
+
+func TestReleaseHandler_ApprovalRequiresMatchingPersistedDecision(t *testing.T) {
+	client, handler, tenantID, release := setupReleaseHandlerFixture(t)
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+	creator := client.User.Query().OnlyX(ctx)
+	deployment := client.ProcessDeployment.Create().
+		SetDeploymentID("release-approval-deployment").SetDeploymentName("release approval").
+		SetDeploymentTime(time.Now()).SetDeployedBy("test").SetIsActive(true).SetTenantID(tenantID).SaveX(ctx)
+	definition := client.ProcessDefinition.Create().
+		SetKey("release-approval").SetName("release approval").SetVersion("1").SetIsLatest(true).
+		SetBpmnXML([]byte("<definitions/> ")).SetDeploymentID(deployment.ID).SetDeployedAt(time.Now()).SetTenantID(tenantID).SaveX(ctx)
+	instance := client.ProcessInstance.Create().
+		SetProcessInstanceID("release-approval-instance").SetProcessDefinitionKey(definition.Key).
+		SetProcessDefinitionID(definition.ID).SetStatus("running").SetVariables(map[string]interface{}{}).SetTenantID(tenantID).SaveX(ctx)
+	task := client.ProcessTask.Create().
+		SetTaskID("release-approval-task").SetProcessInstanceID(instance.ID).SetProcessDefinitionKey(definition.Key).
+		SetTaskDefinitionKey("Activity_ReleaseApproval").SetTaskName("发布审批").SetTaskType("user_task").
+		SetStatus("completed").SetTaskVariables(map[string]interface{}{"approvalAction": "approve"}).SetTenantID(tenantID).SaveX(ctx)
+
+	missing, err := handler.Execute(ctx, task, map[string]interface{}{"action": "approval", "business_id": release.ID})
+	require.NoError(t, err)
+	require.Equal(t, CallbackEffectBlocked, missing.Status)
+
+	client.ProcessApprovalDecision.Create().
+		SetProcessInstanceID(instance.ID).SetProcessTaskID(task.ID).
+		SetProcessInstanceKey(instance.ProcessInstanceID).SetTaskID(task.TaskID).
+		SetProcessDefinitionKey(definition.Key).SetNodeKey(task.TaskDefinitionKey).
+		SetActorID(creator.ID).SetAction("approve").SetDecision("approved").SetTenantID(tenantID).SaveX(ctx)
+
+	task.TaskVariables["approvalAction"] = "reject"
+	mismatched, err := handler.Execute(ctx, task, map[string]interface{}{"action": "approval", "business_id": release.ID})
+	require.NoError(t, err)
+	require.Equal(t, CallbackEffectBlocked, mismatched.Status)
+
+	task.TaskVariables["approvalAction"] = "approve"
+	matched, err := handler.Execute(ctx, task, map[string]interface{}{"action": "approval", "business_id": release.ID})
+	require.NoError(t, err)
+	require.Equal(t, CallbackEffectIdempotent, matched.Status)
 }
 
 func TestReleaseHandler_Execute_AdvancesThroughStatuses(t *testing.T) {

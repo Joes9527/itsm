@@ -93,7 +93,7 @@ func TestChangeServiceTaskHandler_CreateChange_DelegatesToInjectedService(t *tes
 		"created_by":  float64(99),
 	})
 	require.NoError(t, err)
-	assert.True(t, result.Status == CallbackEffectApplied)
+	assert.Equal(t, CallbackEffectApplied, result.Status)
 	assert.Equal(t, 4242, result.OutputVars["change_id"], "OutputVars 应该使用领域服务返回的 ID")
 
 	require.Len(t, fake.calls, 1)
@@ -157,6 +157,7 @@ func TestChangeServiceTaskHandler_TenantScopedActions(t *testing.T) {
 		// 前置状态出发（fixture 默认为 draft）
 		setupStatus string
 		extraVars   map[string]interface{}
+		expected    CallbackEffectStatus
 		assertValid func(t *testing.T, client *ent.Client, changeID int)
 	}{
 		{
@@ -173,8 +174,9 @@ func TestChangeServiceTaskHandler_TenantScopedActions(t *testing.T) {
 			},
 		},
 		{
-			name:   "approve",
-			action: "approve_change",
+			name:     "approve",
+			action:   "approve_change",
+			expected: CallbackEffectIdempotent,
 			assertValid: func(t *testing.T, client *ent.Client, changeID int) {
 				after, err := client.Change.Get(context.Background(), changeID)
 				require.NoError(t, err)
@@ -257,8 +259,9 @@ func TestChangeServiceTaskHandler_TenantScopedActions(t *testing.T) {
 			},
 		},
 		{
-			name:   "notify_stakeholders",
-			action: "notify_stakeholders",
+			name:     "notify_stakeholders",
+			action:   "notify_stakeholders",
+			expected: CallbackEffectBlocked,
 			assertValid: func(t *testing.T, client *ent.Client, changeID int) {
 				after, err := client.Change.Get(context.Background(), changeID)
 				require.NoError(t, err)
@@ -284,7 +287,11 @@ func TestChangeServiceTaskHandler_TenantScopedActions(t *testing.T) {
 				}
 				result, err := handler.Execute(ctx, nil, vars)
 				require.NoError(t, err)
-				assert.True(t, result.Status == CallbackEffectApplied)
+				expected := tc.expected
+				if expected == "" {
+					expected = CallbackEffectApplied
+				}
+				assert.Equal(t, expected, result.Status)
 				tc.assertValid(t, client, changeEntity.ID)
 			})
 
@@ -338,12 +345,24 @@ func TestChangeServiceTaskHandler_AssessRisk_EmergencyType(t *testing.T) {
 		"change_id": changeEntity.ID,
 	})
 	require.NoError(t, err)
-	assert.True(t, result.Status == CallbackEffectApplied)
+	assert.Equal(t, CallbackEffectApplied, result.Status)
 	assert.Equal(t, "high", result.OutputVars["risk_level"], "emergency 变更应评估为 high")
 
 	after, err := client.Change.Get(ctx, changeEntity.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "high", after.RiskLevel)
+}
+
+func TestChangeServiceTaskHandler_NotifyStakeholdersWithoutDurableDeliveryBlocks(t *testing.T) {
+	_, handler, tenantID, changeEntity := setupChangeHandlerFixture(t)
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+
+	result, err := handler.Execute(ctx, nil, map[string]interface{}{
+		"action": "notify_stakeholders", "change_id": changeEntity.ID,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, CallbackEffectBlocked, result.Status)
+	assert.Equal(t, CallbackBlockHandlerContract, result.BlockCode)
 }
 
 // TestChangeServiceTaskHandler_ScheduleChange_DateParsing 锁定 scheduleChange 的
@@ -395,6 +414,68 @@ func TestChangeServiceTaskHandler_CloseCompletedBackfillsEndDateOnce(t *testing.
 	assert.Equal(t, closedAt, retried.ActualEndDate, "retry must preserve the original closure timestamp")
 }
 
+// A redelivered callback that observes its complete intended domain state must
+// report idempotent.  Returning applied here would let the outbox record a
+// durable effect that this delivery did not actually perform.
+func TestChangeServiceTaskHandler_RetryWithoutWriteIsIdempotent(t *testing.T) {
+
+	tests := []struct {
+		name   string
+		action string
+		status string
+		setup  func(*ent.Change)
+	}{
+		{
+			name:   "reject",
+			action: "reject_change",
+			status: "rejected",
+		},
+		{
+			name:   "implement",
+			action: "implement_change",
+			status: "in_progress",
+		},
+		{
+			name:   "verify",
+			action: "verify_change",
+			status: "completed",
+		},
+		{
+			name:   "close",
+			action: "close_change",
+			status: "completed",
+			setup: func(entity *ent.Change) {
+				entity.ActualEndDate = time.Now()
+			},
+		},
+		{
+			name:   "schedule",
+			action: "schedule_change",
+			status: "scheduled",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, handler, tenantID, changeEntity := setupChangeHandlerFixture(t)
+			ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+			update := client.Change.UpdateOne(changeEntity).SetStatus(tt.status)
+			if tt.setup != nil {
+				entity := *changeEntity
+				tt.setup(&entity)
+				update.SetActualEndDate(entity.ActualEndDate)
+			}
+			require.NoError(t, update.Exec(ctx))
+
+			result, err := handler.Execute(ctx, nil, map[string]interface{}{
+				"action": tt.action, "change_id": changeEntity.ID,
+			})
+			require.NoError(t, err)
+			assert.Equal(t, CallbackEffectIdempotent, result.Status)
+		})
+	}
+}
+
 // TestChangeServiceTaskHandler_ScheduleChangeAction_EmergencyStopsAtApproved covers Finding 4 of
 // the Track4 final review: emergency-type changes have no "scheduled" state in their state
 // machine (approved -> in_progress is the only legal next hop, a fast-track). scheduleChange must
@@ -413,7 +494,7 @@ func TestChangeServiceTaskHandler_ScheduleChangeAction_EmergencyStopsAtApproved(
 		"change_id": changeEntity.ID,
 	})
 	require.NoError(t, err)
-	assert.True(t, result.Status == CallbackEffectApplied)
+	assert.Equal(t, CallbackEffectIdempotent, result.Status)
 
 	updated, err := client.Change.Get(ctx, changeEntity.ID)
 	require.NoError(t, err)

@@ -235,7 +235,7 @@ func setupIncidentHandlerFixture(t *testing.T) (*ent.Client, *IncidentServiceTas
 // TestIncidentServiceTaskHandler_AssignIncident_NoAssignee_IsNoOp 是 Finding 1 的核心回归：
 // "自动分配但当前没有任何可用处理人"是正常空态，不是失败。返回 error 会让 handleElement
 // 把整条 StartProcess 打断，流程实例永久卡在起始事件上。
-func TestIncidentServiceTaskHandler_AssignIncident_NoAssignee_IsNoOp(t *testing.T) {
+func TestIncidentServiceTaskHandler_AssignIncident_NoAssignee_BlocksEffectGate(t *testing.T) {
 	client, handler, tenantID, inc, _ := setupIncidentHandlerFixture(t)
 	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
 
@@ -256,9 +256,10 @@ func TestIncidentServiceTaskHandler_AssignIncident_NoAssignee_IsNoOp(t *testing.
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := handler.Execute(ctx, nil, tc.variables)
-			require.NoError(t, err, "无处理人是正常空态，不应该返回错误")
+			require.NoError(t, err)
 			require.NotNil(t, result)
-			assert.True(t, result.Status == CallbackEffectApplied)
+			assert.Equal(t, CallbackEffectBlocked, result.Status)
+			assert.Equal(t, CallbackBlockTargetMissing, result.BlockCode)
 
 			after, err := client.Incident.Get(ctx, inc.ID)
 			require.NoError(t, err)

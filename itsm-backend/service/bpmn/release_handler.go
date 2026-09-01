@@ -8,6 +8,7 @@ import (
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/processapprovaldecision"
 	"itsm-backend/ent/release"
 
 	"go.uber.org/zap"
@@ -54,11 +55,7 @@ func (h *ReleaseServiceTaskHandler) Execute(ctx context.Context, task *ent.Proce
 	case "tech_review":
 		return h.techReview(ctx, variables)
 	case "approval":
-		// ReleaseService.ApplyReleaseApproval owns the professional approval
-		// transition. The BPMN callback is only the durable effect gate for
-		// that already-authorized decision; it must not invent a second
-		// approval lookup or lifecycle authority.
-		return IdempotentEffect("release approval is owned by ReleaseService", nil), nil
+		return h.approvalDecisionEffect(ctx, task, variables)
 	case "schedule":
 		return h.updateStatus(ctx, variables, string(dto.ReleaseStatusScheduled))
 	case "execute":
@@ -68,6 +65,38 @@ func (h *ReleaseServiceTaskHandler) Execute(ctx context.Context, task *ent.Proce
 	default:
 		return nil, fmt.Errorf("不支持的发布回调动作")
 	}
+}
+
+// approvalDecisionEffect verifies the decision already recorded by the
+// authoritative ReleaseService path. It neither derives nor writes a release
+// lifecycle state, so the BPMN effect gate cannot become a second approval
+// engine.
+func (h *ReleaseServiceTaskHandler) approvalDecisionEffect(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*CallbackEffect, error) {
+	if task == nil {
+		return BlockedEffect(CallbackBlockTargetMissing, "release approval task is missing"), nil
+	}
+	tenantID, err := RequireTenantID(ctx, variables)
+	if err != nil {
+		return nil, err
+	}
+	decisionAction, _ := task.TaskVariables["approvalAction"].(string)
+	if strings.TrimSpace(decisionAction) == "" {
+		return BlockedEffect(CallbackBlockTargetMissing, "authoritative release approval action is missing"), nil
+	}
+	exists, err := h.client.ProcessApprovalDecision.Query().Where(
+		processapprovaldecision.TenantID(tenantID),
+		processapprovaldecision.ProcessInstanceID(task.ProcessInstanceID),
+		processapprovaldecision.ProcessTaskID(task.ID),
+		processapprovaldecision.NodeKey(task.TaskDefinitionKey),
+		processapprovaldecision.Action(decisionAction),
+	).Exist(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("release approval decision lookup failed: %w", err)
+	}
+	if !exists {
+		return BlockedEffect(CallbackBlockTargetMissing, "authoritative release approval decision is missing"), nil
+	}
+	return IdempotentEffect("release approval decision is already recorded", nil), nil
 }
 
 func (h *ReleaseServiceTaskHandler) releaseID(variables map[string]interface{}) (int, error) {

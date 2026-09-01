@@ -193,9 +193,7 @@ func (h *ChangeServiceTaskHandler) approveChange(ctx context.Context, variables 
 		}
 		return nil, fmt.Errorf("查询变更失败: %w", err)
 	}
-	return &CallbackEffect{Status: CallbackEffectApplied,
-		Message: fmt.Sprintf("变更 %d 审批节点已处理", changeID),
-	}, nil
+	return IdempotentEffect(fmt.Sprintf("变更 %d 审批由专业状态机处理", changeID), nil), nil
 }
 
 // rejectChange 驳回变更
@@ -208,6 +206,18 @@ func (h *ChangeServiceTaskHandler) rejectChange(ctx context.Context, variables m
 	tenantID, err := RequireTenantID(ctx, variables)
 	if err != nil {
 		return nil, err
+	}
+	current, err := h.client.Change.Query().
+		Where(change.ID(changeID), change.TenantID(tenantID)).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("变更 %d 不存在或不属于当前租户", changeID)
+		}
+		return nil, fmt.Errorf("查询变更失败: %w", err)
+	}
+	if current.Status == "rejected" {
+		return IdempotentEffect(fmt.Sprintf("变更 %d 已驳回", changeID), nil), nil
 	}
 	if err := h.transitionChangeStatus(ctx, tenantID, changeID, "rejected"); err != nil {
 		return nil, err
@@ -248,12 +258,15 @@ func (h *ChangeServiceTaskHandler) scheduleChange(ctx context.Context, variables
 		return nil, fmt.Errorf("查询变更失败: %w", err)
 	}
 
+	wrote := false
+	dateWrote := false
 	// A completed first delivery leaves normal/standard changes in scheduled. A retry
 	// must never walk that desired state backwards through approved.
 	if current.Status != "approved" && current.Status != "scheduled" {
 		if err := h.transitionChangeStatus(ctx, tenantID, changeID, "approved"); err != nil {
 			return nil, err
 		}
+		wrote = true
 	}
 
 	c, err := h.client.Change.Query().
@@ -271,6 +284,7 @@ func (h *ChangeServiceTaskHandler) scheduleChange(ctx context.Context, variables
 		if err := h.transitionChangeStatus(ctx, tenantID, changeID, "scheduled"); err != nil {
 			return nil, err
 		}
+		wrote = true
 	}
 
 	// 解析日期时间
@@ -283,15 +297,24 @@ func (h *ChangeServiceTaskHandler) scheduleChange(ctx context.Context, variables
 	}
 
 	updateQuery := h.client.Change.UpdateOneID(changeID).Where(change.TenantID(tenantID))
-	if !plannedStart.IsZero() {
+	if !plannedStart.IsZero() && !plannedStart.Equal(c.PlannedStartDate) {
 		updateQuery.SetPlannedStartDate(plannedStart)
+		wrote = true
+		dateWrote = true
 	}
-	if !plannedEnd.IsZero() {
+	if !plannedEnd.IsZero() && !plannedEnd.Equal(c.PlannedEndDate) {
 		updateQuery.SetPlannedEndDate(plannedEnd)
+		wrote = true
+		dateWrote = true
 	}
 
-	if _, err := updateQuery.Save(ctx); err != nil {
-		return nil, fmt.Errorf("排期变更失败: %w", err)
+	if !wrote {
+		return IdempotentEffect(fmt.Sprintf("变更 %d 已完成排期", changeID), nil), nil
+	}
+	if dateWrote {
+		if _, err := updateQuery.Save(ctx); err != nil {
+			return nil, fmt.Errorf("排期变更失败: %w", err)
+		}
 	}
 
 	h.logger.Infow("Change scheduled via BPMN", "change_id", changeID)
@@ -354,9 +377,7 @@ func (h *ChangeServiceTaskHandler) implementChange(ctx context.Context, variable
 	}
 
 	if entity.Status == "in_progress" {
-		return &CallbackEffect{Status: CallbackEffectApplied,
-			Message: fmt.Sprintf("变更 %d 已在实施中", changeID),
-		}, nil
+		return IdempotentEffect(fmt.Sprintf("变更 %d 已在实施中", changeID), nil), nil
 	}
 	if !isValidChangeStatusTransition(entity.Status, "in_progress", entity.Type) {
 		return nil, fmt.Errorf("非法的变更状态转换: %s -> %s", entity.Status, "in_progress")
@@ -412,10 +433,11 @@ func (h *ChangeServiceTaskHandler) verifyChange(ctx context.Context, variables m
 		return nil, fmt.Errorf("非法的变更状态转换: %s -> %s", entity.Status, newStatus)
 	}
 
-	if entity.Status != newStatus {
-		if _, err := entity.Update().SetStatus(newStatus).Save(ctx); err != nil {
-			return nil, fmt.Errorf("验证变更失败: %w", err)
-		}
+	if entity.Status == newStatus {
+		return IdempotentEffect(fmt.Sprintf("变更 %d 验证结果已记录", changeID), nil), nil
+	}
+	if _, err := entity.Update().SetStatus(newStatus).Save(ctx); err != nil {
+		return nil, fmt.Errorf("验证变更失败: %w", err)
 	}
 
 	h.logger.Infow("Change verification via BPMN", "change_id", changeID, "result", verificationResult)
@@ -453,6 +475,9 @@ func (h *ChangeServiceTaskHandler) closeChange(ctx context.Context, variables ma
 		return nil, fmt.Errorf("非法的变更状态转换: %s -> %s", entity.Status, "completed")
 	}
 
+	if entity.Status == "completed" && !entity.ActualEndDate.IsZero() {
+		return IdempotentEffect(fmt.Sprintf("变更 %d 已关闭", changeID), nil), nil
+	}
 	if entity.Status != "completed" || entity.ActualEndDate.IsZero() {
 		update := entity.Update()
 		if entity.Status != "completed" {
@@ -558,9 +583,8 @@ func (h *ChangeServiceTaskHandler) notifyStakeholders(ctx context.Context, varia
 		"notification_type", notificationType,
 	)
 
-	return &CallbackEffect{Status: CallbackEffectApplied,
-		Message: fmt.Sprintf("变更 %d 利益相关者已通知", changeID),
-	}, nil
+	return BlockedEffect(CallbackBlockHandlerContract,
+		fmt.Sprintf("变更 %d 利益相关者通知未配置持久化投递", changeID)), nil
 }
 
 // isValidChangeStatusTransition 检查变更状态转换是否有效。
