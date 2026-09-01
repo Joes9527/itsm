@@ -10,8 +10,10 @@ import (
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/processauditlog"
 	"itsm-backend/ent/processcallbackoutbox"
+	"itsm-backend/metrics"
 	"itsm-backend/service/bpmn"
 
+	io_prometheus_client "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/require"
 )
 
@@ -114,6 +116,45 @@ func TestBPMNCallbackOutboxRequiredBlockedEffectIsTerminalAndAudited(t *testing.
 		processauditlog.ProcessInstanceID(saved.ProcessInstanceID),
 		processauditlog.Action(bpmn.CallbackAuditActionBlocked),
 	).CountX(context.Background()))
+}
+
+func TestBPMNCallbackOutboxTerminalMetricIsNotRepeatedAfterRestart(t *testing.T) {
+	client := openBPMNCallbackOutboxClient(t)
+	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	executor := &fakeBPMNCallbackExecutor{effect: bpmn.BlockedEffect(bpmn.CallbackBlockTargetMissing, "target-secret"), effectSet: true}
+	firstWorker := newBPMNCallbackOutboxForTest(client, executor, now)
+	row := enqueueBPMNCallbackOutboxForTest(t, firstWorker, "callback-terminal-metric")
+	const handlerID = "callback_test_terminal_metric_handler"
+	const action = "callback_test_terminal_metric_action"
+	require.NoError(t, client.ProcessCallbackOutbox.UpdateOne(row).
+		SetHandlerID(handlerID).
+		SetAction(action).
+		Exec(context.Background()))
+	metric, err := metrics.BPMNCallbackEffectsTotal.GetMetricWithLabelValues(handlerID, action, string(bpmn.CallbackEffectBlocked))
+	require.NoError(t, err)
+	before := bpmnCallbackMetricValue(t, metric)
+
+	completed, err := firstWorker.processPending(context.Background(), "worker-before-restart", 1)
+	require.NoError(t, err)
+	require.Zero(t, completed)
+	require.Equal(t, bpmnCallbackStatusBlocked, client.ProcessCallbackOutbox.GetX(context.Background(), row.ID).Status)
+	require.Equal(t, before+1, bpmnCallbackMetricValue(t, metric))
+
+	restartedWorker := newBPMNCallbackOutboxForTest(client, executor, now.Add(time.Hour))
+	completed, err = restartedWorker.processPending(context.Background(), "worker-after-restart", 1)
+	require.NoError(t, err)
+	require.Zero(t, completed)
+	require.Equal(t, before+1, bpmnCallbackMetricValue(t, metric))
+	require.Len(t, executor.keys, 1, "terminal callbacks must not be redelivered after worker restart")
+}
+
+func bpmnCallbackMetricValue(t *testing.T, metric interface {
+	Write(*io_prometheus_client.Metric) error
+}) float64 {
+	t.Helper()
+	payload := &io_prometheus_client.Metric{}
+	require.NoError(t, metric.Write(payload))
+	return payload.GetCounter().GetValue()
 }
 
 func TestBPMNCallbackOutboxOptionalBlockedEffectCompletesOnce(t *testing.T) {

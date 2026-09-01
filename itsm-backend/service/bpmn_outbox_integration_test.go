@@ -56,8 +56,13 @@ func (r *postgresIdempotentCallbackReceiver) executeClaimedCallback(
 	r.attempts = append(r.attempts, row.AttemptCount)
 	if _, exists := r.effects[key]; !exists {
 		r.effects[key] = 1
+		return bpmnCallbackExecutionResult{
+			Effect: bpmn.AppliedEffect("postgres integration callback applied", nil),
+		}, nil
 	}
-	return bpmnCallbackExecutionResult{}, nil
+	return bpmnCallbackExecutionResult{
+		Effect: bpmn.IdempotentEffect("postgres integration callback already applied", nil),
+	}, nil
 }
 
 func (r *postgresIdempotentCallbackReceiver) snapshot() ([]string, []string, []string, []int, int) {
@@ -599,8 +604,14 @@ func TestBPMNCallbackOutboxLeaseRecoveryPostgres(t *testing.T) {
 		processcallbackoutbox.ID(row.ID), processcallbackoutbox.TenantID(tenant.ID),
 	).Only(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, bpmnCallbackStatusProcessing, claimedRow.Status)
-	winner := claimedRow.LeaseOwner
+	require.Equal(t, bpmnCallbackStatusPending, claimedRow.Status)
+	winner := ""
+	for _, result := range results {
+		if result.err != nil {
+			winner = result.worker
+			break
+		}
+	}
 	require.Contains(t, workerIDs, winner)
 	loser := workerIDs[0]
 	if winner == loser {
@@ -608,16 +619,16 @@ func TestBPMNCallbackOutboxLeaseRecoveryPostgres(t *testing.T) {
 	}
 	require.Equal(t, 1, claimedRow.AttemptCount)
 	require.Equal(t, stableKey, claimedRow.ExecutionKey)
-	require.Equal(t, now.Add(bpmnCallbackLeaseDuration), claimedRow.LeaseExpiresAt)
-	require.Equal(t, targetBeforeSnapshot.NextAttemptAt, claimedRow.NextAttemptAt)
-	require.Equal(t, targetBeforeSnapshot.LastErrorClass, claimedRow.LastErrorClass)
+	require.True(t, claimedRow.LeaseExpiresAt.IsZero())
+	require.Equal(t, now.Add(bpmnCallbackRetryDelay(1)), claimedRow.NextAttemptAt)
+	require.Equal(t, "unknown_error", claimedRow.LastErrorClass)
 	require.True(t, claimedRow.CompletedAt.IsZero())
 	require.True(t, claimedRow.UpdatedAt.After(targetBeforeSnapshot.UpdatedAt))
 	expectedClaimed := targetBeforeSnapshot
-	expectedClaimed.Status = bpmnCallbackStatusProcessing
+	expectedClaimed.Status = bpmnCallbackStatusPending
 	expectedClaimed.AttemptCount = 1
-	expectedClaimed.LeaseOwner = winner
-	expectedClaimed.LeaseExpiresAt = now.Add(bpmnCallbackLeaseDuration)
+	expectedClaimed.NextAttemptAt = now.Add(bpmnCallbackRetryDelay(1))
+	expectedClaimed.LastErrorClass = "unknown_error"
 	expectedClaimed.UpdatedAt = claimedRow.UpdatedAt
 	require.Equal(t, expectedClaimed, snapshotPostgresOutbox(claimedRow))
 	require.False(t, failCompletion.Load(), "the lease holder did not reach the completion boundary")
@@ -658,11 +669,12 @@ func TestBPMNCallbackOutboxLeaseRecoveryPostgres(t *testing.T) {
 	require.Empty(t, completedRow.LeaseOwner)
 	require.True(t, completedRow.LeaseExpiresAt.IsZero())
 	require.Empty(t, completedRow.LastErrorClass)
-	require.Equal(t, targetBeforeSnapshot.NextAttemptAt, completedRow.NextAttemptAt)
+	require.Equal(t, claimedRow.NextAttemptAt, completedRow.NextAttemptAt)
 	require.True(t, completedRow.UpdatedAt.After(claimedRow.UpdatedAt))
 	expectedCompleted := targetBeforeSnapshot
 	expectedCompleted.Status = bpmnCallbackStatusCompleted
 	expectedCompleted.AttemptCount = 2
+	expectedCompleted.NextAttemptAt = claimedRow.NextAttemptAt
 	expectedCompleted.LastErrorClass = ""
 	expectedCompleted.CompletedAt = now
 	expectedCompleted.UpdatedAt = completedRow.UpdatedAt
