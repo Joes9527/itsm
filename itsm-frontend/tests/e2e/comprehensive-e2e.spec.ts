@@ -27,9 +27,9 @@ test.describe('ITSM 全面 E2E 业务流测试', () => {
   test('1.1 admin 登录 + 所有主页面可访问', async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto(`${BASE}/dashboard`);
-    await page.waitForSelector('body', { timeout: 10000 });
-    const html = await page.content();
-    expect(html.length).toBeGreaterThan(1000);
+    await expect(page.getByRole('heading', { name: 'AI-Native ITSM 运营仪表盘' })).toBeVisible({
+      timeout: 10000,
+    });
   });
 
   test('1.2 admin 访问全部 27 个主页面无 404', async ({ page }) => {
@@ -138,10 +138,11 @@ test.describe('ITSM 全面 E2E 业务流测试', () => {
   // ===== 4. 知识库 CRUD =====
   test('4.1 知识库：创建→列表→详情→搜索', async ({ page }) => {
     await loginAsAdmin(page);
+    const articleTitle = `E2E 知识 ${Date.now()}`;
 
     const createResp = await page.request.post(`${API}/api/v1/knowledge-articles`, {
       data: {
-        title: `E2E 知识 ${Date.now()}`,
+        title: articleTitle,
         content: '这是 E2E 测试创建的知识库文章内容',
         category: 'operations',
         tags: ['e2e', 'test'],
@@ -162,23 +163,24 @@ test.describe('ITSM 全面 E2E 业务流测试', () => {
 
     // UI: 新建页面渲染
     await page.goto(`${BASE}/knowledge/articles/new`);
-    await page.waitForSelector('form', { timeout: 10000 });
-    const html = await page.content();
-    expect(html).toContain('新建知识库文章');
+    await expect(page.getByRole('heading', { name: '新建知识库文章' })).toBeVisible({
+      timeout: 10000,
+    });
 
     // UI: 详情页面渲染
     await page.goto(`${BASE}/knowledge/articles/${artId}`);
-    await page.waitForSelector('body', { timeout: 10000 });
+    await expect(page.getByRole('heading', { name: articleTitle })).toBeVisible({ timeout: 10000 });
   });
 
   // ===== 5. 服务目录申请 =====
   test('5.1 服务目录：创建→详情→申请（含 compliance_ack + expire_at）', async ({ page }) => {
     await loginAsAdmin(page);
+    const catalogName = `E2E 服务目录 ${Date.now()}`;
 
     // 创建服务目录
     const catResp = await page.request.post(`${API}/api/v1/service-catalogs`, {
       data: {
-        name: `E2E 服务目录 ${Date.now()}`,
+        name: catalogName,
         description: 'E2E 测试用服务目录',
         category: '硬件',
         delivery_time: '5',
@@ -209,9 +211,8 @@ test.describe('ITSM 全面 E2E 业务流测试', () => {
 
     // UI 申请详情页面渲染（含 compliance_ack 字段）
     await page.goto(`${BASE}/service-catalog/request/${catId}`);
-    await page.waitForSelector('body', { timeout: 10000 });
-    const html = await page.content();
-    expect(html.length).toBeGreaterThan(500);
+    await expect(page.getByRole('heading', { name: '申请服务' })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(catalogName, { exact: true })).toBeVisible();
   });
 
   // ===== 6. 连接器市场 =====
@@ -252,9 +253,9 @@ test.describe('ITSM 全面 E2E 业务流测试', () => {
 
     // UI 连接器管理页面渲染
     await page.goto(`${BASE}/admin/connectors`);
-    await page.waitForSelector('body', { timeout: 10000 });
-    const html = await page.content();
-    expect(html.length).toBeGreaterThan(500);
+    await expect(
+      page.getByRole('heading', { name: '🧩 连接器 / 插件 / 技能 / IM 市场' })
+    ).toBeVisible({ timeout: 10000 });
   });
 
   // ===== 7. SLA 监控 =====

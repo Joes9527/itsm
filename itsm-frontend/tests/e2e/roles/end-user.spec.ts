@@ -81,8 +81,8 @@ test.describe('US1: end_user 提单到关闭闭环', () => {
     await page.goto(`${baseURL}/dashboard`);
 
     // 验证左侧菜单包含必要项
-    const menuText = await page.textContent('body');
-    expect(menuText).toMatch(/工单管理|我的工单/);
+    const navigation = page.getByRole('navigation').first();
+    await expect(navigation.getByText(/工单管理|我的工单/).first()).toBeVisible();
   });
 
   test('T020 - 验证登出功能', async ({ page }) => {

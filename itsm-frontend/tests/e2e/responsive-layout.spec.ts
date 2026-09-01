@@ -31,7 +31,9 @@ test.describe('Compatibility - 响应式布局', () => {
         await page.setViewportSize({ width: vp.width, height: vp.height });
         await page.goto('/dashboard');
         await page.waitForLoadState('networkidle');
-        await expect(page.locator('body')).toBeVisible();
+        await expect(
+          page.getByRole('heading', { name: 'AI-Native ITSM 运营仪表盘' })
+        ).toBeVisible();
         await assertNoHorizontalScroll(page);
       });
     }
@@ -45,7 +47,7 @@ test.describe('Compatibility - 响应式布局', () => {
         await page.setViewportSize({ width: vp.width, height: vp.height });
         await page.goto('/tickets');
         await page.waitForLoadState('networkidle');
-        await expect(page.locator('body')).toBeVisible();
+        await expect(page.getByRole('heading', { name: '工单管理' })).toBeVisible();
         await assertNoHorizontalScroll(page);
       });
     }

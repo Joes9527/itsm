@@ -38,7 +38,9 @@ test.describe('Stability - Soak', () => {
 
       await page.goto('/tickets');
       await page.waitForLoadState('networkidle');
-      await page.locator('body').waitFor({ state: 'visible', timeout: 10000 });
+      await expect(page.getByRole('heading', { name: '工单管理' })).toBeVisible({
+        timeout: 10000,
+      });
 
       const firstRow = page.locator('.ant-table-row, table tbody tr').first();
       await expect(firstRow).toBeVisible();
@@ -47,11 +49,15 @@ test.describe('Stability - Soak', () => {
 
       await page.goto('/incidents');
       await page.waitForLoadState('networkidle');
-      await page.locator('body').waitFor({ state: 'visible', timeout: 10000 });
+      await expect(page.getByRole('heading', { name: '事件管理' })).toBeVisible({
+        timeout: 10000,
+      });
 
       await page.goto('/dashboard');
       await page.waitForLoadState('networkidle');
-      await page.locator('body').waitFor({ state: 'visible', timeout: 10000 });
+      await expect(page.getByRole('heading', { name: 'AI-Native ITSM 运营仪表盘' })).toBeVisible({
+        timeout: 10000,
+      });
     }
 
     const endHeap = await getHeapUsedBytes(page);

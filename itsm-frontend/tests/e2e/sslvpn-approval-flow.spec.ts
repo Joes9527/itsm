@@ -94,7 +94,7 @@ test.describe('SSL-VPN 服务申请与多级审批端到端场景验证 (3-Perso
     await page.waitForLoadState('domcontentloaded');
 
     // 1.2 浏览服务目录并定位到 SSL-VPN 目录项
-    await expect(page.locator('body')).toBeVisible();
+    await expect(page.getByRole('heading', { name: '服务目录' })).toBeVisible();
 
     // 如果未从 API 获取到 catalogId，尝试从页面卡片获取
     const sslvpnCard = page
@@ -228,7 +228,9 @@ test.describe('SSL-VPN 服务申请与多级审批端到端场景验证 (3-Perso
     expect(createdTicketId).toBeGreaterThan(0);
 
     // 1.6 验证工单详情页展示
-    await expect(page.locator('body')).toContainText('申请研发出差 SSL-VPN 访问权限');
+    await expect(
+      page.getByRole('main').getByText('申请研发出差 SSL-VPN 访问权限', { exact: true })
+    ).toBeVisible();
   });
 
   // =========================================================================
@@ -335,6 +337,8 @@ test.describe('SSL-VPN 服务申请与多级审批端到端场景验证 (3-Perso
     // 3.5 访问该工单详情页，验证全流程审批通过
     await page.goto(`/tickets/${createdTicketId}`);
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('body')).toBeVisible();
+    await expect(
+      page.getByRole('main').getByText('申请研发出差 SSL-VPN 访问权限', { exact: true })
+    ).toBeVisible();
   });
 });
