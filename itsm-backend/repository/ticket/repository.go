@@ -31,9 +31,6 @@ type Repository interface {
 	CountByStatus(ctx context.Context, tenantID int) (map[Status]int, error)
 	CountByPriority(ctx context.Context, tenantID int) (map[Priority]int, error)
 
-	// 编号生成
-	GenerateTicketNumber(ctx context.Context, tenantID int) (string, error)
-
 	// 状态变更
 	UpdateStatus(ctx context.Context, id int, status Status, tenantID int) (*Ticket, error)
 	AssignTicket(ctx context.Context, id int, assigneeID int, tenantID int) (*Ticket, error)

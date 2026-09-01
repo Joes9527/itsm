@@ -8,6 +8,7 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	ticketrepo "itsm-backend/repository/ticket"
+	"itsm-backend/repository/workitemnumber"
 
 	"go.uber.org/zap"
 )
@@ -19,21 +20,25 @@ type ToolJob struct {
 }
 
 type ToolQueue struct {
-	jobs    chan ToolJob
-	client  *ent.Client
-	tools   *ToolRegistry
-	tickets *TicketService
-	logger  *zap.SugaredLogger
+	jobs            chan ToolJob
+	client          *ent.Client
+	tools           *ToolRegistry
+	tickets         *TicketService
+	numberAllocator workitemnumber.Allocator
+	logger          *zap.SugaredLogger
 }
 
-func NewToolQueue(client *ent.Client, tools *ToolRegistry, capacity int, logger *zap.SugaredLogger) *ToolQueue {
+func NewToolQueue(client *ent.Client, tools *ToolRegistry, allocator workitemnumber.Allocator, capacity int, logger *zap.SugaredLogger) *ToolQueue {
+	if allocator == nil {
+		panic("work item number allocator is required")
+	}
 	if capacity <= 0 {
 		capacity = 100
 	}
 	if logger == nil {
 		logger = zap.NewNop().Sugar()
 	}
-	q := &ToolQueue{jobs: make(chan ToolJob, capacity), client: client, tools: tools, logger: logger}
+	q := &ToolQueue{jobs: make(chan ToolJob, capacity), client: client, tools: tools, numberAllocator: allocator, logger: logger}
 	go q.worker()
 	return q
 }
@@ -61,7 +66,7 @@ func (q *ToolQueue) worker() {
 		case "create_ticket":
 			if q.tickets == nil {
 				q.tickets = NewTicketService(&TicketServiceConfig{
-					Repository: ticketrepo.NewEntRepository(q.client, zap.NewNop().Sugar()),
+					Repository: ticketrepo.NewEntRepository(q.client, zap.NewNop().Sugar(), q.numberAllocator),
 					Client:     q.client,
 					Logger:     zap.NewNop().Sugar(),
 				})
@@ -78,7 +83,7 @@ func (q *ToolQueue) worker() {
 		case "update_ticket":
 			if q.tickets == nil {
 				q.tickets = NewTicketService(&TicketServiceConfig{
-					Repository: ticketrepo.NewEntRepository(q.client, zap.NewNop().Sugar()),
+					Repository: ticketrepo.NewEntRepository(q.client, zap.NewNop().Sugar(), q.numberAllocator),
 					Client:     q.client,
 					Logger:     zap.NewNop().Sugar(),
 				})

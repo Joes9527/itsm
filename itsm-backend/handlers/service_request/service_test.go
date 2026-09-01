@@ -9,8 +9,10 @@ import (
 
 	"itsm-backend/ent/enttest"
 	entticket "itsm-backend/ent/ticket"
+	"itsm-backend/ent/workitemnumbersequence"
 	"itsm-backend/handlers/cmdb"
 	"itsm-backend/handlers/service_catalog"
+	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -18,6 +20,43 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
+
+func TestService_Create_CommitsWorkItemExtensionAndNumberTogether(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:sr_allocator_transaction?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	logger := zaptest.NewLogger(t).Sugar()
+	tenant, err := client.Tenant.Create().SetName("allocator").SetCode("sr-allocator").SetDomain("allocator.test").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	requester, err := client.User.Create().
+		SetUsername("allocator-requester").SetEmail("allocator-requester@test.com").SetName("Requester").
+		SetPasswordHash("hash").SetRole("end_user").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	scRepo := service_catalog.NewEntRepository(client)
+	catalog, err := service_catalog.NewService(scRepo, client, logger).Create(ctx, "allocator catalog", "software", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
+	require.NoError(t, err)
+
+	allocator := workitemnumber.NewPostgreSQLAllocator()
+	svc := NewService(NewEntRepository(client), scRepo, cmdb.NewEntRepository(client), client, allocator, logger, service.NewTicketServiceForTest(client, logger), nil, nil)
+	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+		ComplianceAck: true,
+		FormData:      map[string]interface{}{"title": "allocator request", "reason": "verify one aggregate"},
+	})
+	require.NoError(t, err)
+
+	workItem, err := client.Ticket.Get(ctx, created.TicketID)
+	require.NoError(t, err)
+	require.Equal(t, "service_request_item", workItem.RecordClass)
+	require.Regexp(t, `^TKT-[0-9]{6}-000001$`, workItem.TicketNumber)
+	extension, err := client.ServiceRequest.Get(ctx, created.ID)
+	require.NoError(t, err)
+	require.Equal(t, workItem.ID, extension.TicketID)
+	sequence, err := client.WorkItemNumberSequence.Query().
+		Where(workitemnumbersequence.TenantID(tenant.ID)).
+		Only(ctx)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), sequence.LastValue)
+}
 
 func TestService_Create_PersistsFieldValues(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:sr_field_values?mode=memory&cache=shared&_fk=1")
@@ -39,7 +78,7 @@ func TestService_Create_PersistsFieldValues(t *testing.T) {
 	srRepo := NewEntRepository(client)
 	cmdbRepo := cmdb.NewEntRepository(client)
 	ticketSvc := service.NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
 
 	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
@@ -81,7 +120,7 @@ func TestService_Create_SystemFormDataFieldsNotCollectedAsCustomFields(t *testin
 	srRepo := NewEntRepository(client)
 	cmdbRepo := cmdb.NewEntRepository(client)
 	ticketSvc := service.NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
 
 	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
@@ -119,7 +158,7 @@ func TestService_Create_PersistsFieldValues_ArrayShapeSnakeCaseName(t *testing.T
 	srRepo := NewEntRepository(client)
 	cmdbRepo := cmdb.NewEntRepository(client)
 	ticketSvc := service.NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
 
 	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
@@ -167,7 +206,7 @@ func TestService_Create_RequiredFieldMissing_Rejected(t *testing.T) {
 	srRepo := NewEntRepository(client)
 	cmdbRepo := cmdb.NewEntRepository(client)
 	ticketSvc := service.NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
 
 	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
@@ -209,7 +248,7 @@ func TestService_Create_LinksTicketAndDelegatesFields(t *testing.T) {
 	cmdbRepo := cmdb.NewEntRepository(client)
 	logger := zaptest.NewLogger(t).Sugar()
 	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc, nil, nil)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, nil)
 
 	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
@@ -255,7 +294,7 @@ func TestService_GetByTicketID_ReturnsLinkedServiceRequest(t *testing.T) {
 	cmdbRepo := cmdb.NewEntRepository(client)
 	logger := zaptest.NewLogger(t).Sugar()
 	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc, nil, nil)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, nil)
 
 	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
@@ -302,7 +341,7 @@ func TestService_List_BatchLoadsLinkedTicketSummary(t *testing.T) {
 	cmdbRepo := cmdb.NewEntRepository(client)
 	logger := zaptest.NewLogger(t).Sugar()
 	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc, nil, nil)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, nil)
 
 	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
@@ -368,7 +407,7 @@ func TestService_AttachTicketSummaries_DoesNotLeakCrossTenant(t *testing.T) {
 	cmdbRepo := cmdb.NewEntRepository(client)
 	logger := zaptest.NewLogger(t).Sugar()
 	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc, nil, nil)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, nil)
 
 	// A tenant-A ServiceRequest whose ticket_id happens to equal tenant B's ticket ID —
 	// simulating the collision scenario without depending on ent's ID allocation order.
@@ -422,7 +461,7 @@ func TestServiceRequest_ApprovalDegradedToSingleNodeBPMN(t *testing.T) {
 	cmdbRepo := cmdb.NewEntRepository(client)
 	logger := zaptest.NewLogger(t).Sugar()
 	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc, nil, nil)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, nil)
 
 	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
@@ -467,7 +506,7 @@ func TestService_Create_NonInfraCatalog_SkipsInfraValidation(t *testing.T) {
 	srRepo := NewEntRepository(client)
 	cmdbRepo := cmdb.NewEntRepository(client)
 	ticketSvc := service.NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
 
 	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		// 故意不设置 ComplianceAck/ExpireAt/DataClassification/NeedsPublicIP——
@@ -499,7 +538,7 @@ func TestService_Create_InfraCatalog_StillRequiresComplianceAck(t *testing.T) {
 	srRepo := NewEntRepository(client)
 	cmdbRepo := cmdb.NewEntRepository(client)
 	ticketSvc := service.NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
 
 	_, err = svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		DataClassification: "internal",
@@ -534,7 +573,7 @@ func TestService_Create_PersistsContactAndQuantityFieldsThroughFullPath(t *testi
 	srRepo := NewEntRepository(client)
 	cmdbRepo := cmdb.NewEntRepository(client)
 	ticketSvc := service.NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
 
 	expected := time.Now().Add(72 * time.Hour)
 	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{

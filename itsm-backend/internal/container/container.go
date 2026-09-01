@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/repository/base"
 	ticketRepo "itsm-backend/repository/ticket"
+	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
 
 	"go.uber.org/zap"
@@ -26,6 +27,7 @@ type Container struct {
 
 	// Repositories
 	ticketRepository ticketRepo.Repository
+	numberAllocator  workitemnumber.Allocator
 
 	// Core Services
 	ticketService         *service.TicketService
@@ -72,8 +74,9 @@ func (c *Container) Initialize() error {
 
 // initRepositories 初始化仓储层
 func (c *Container) initRepositories() {
+	c.numberAllocator = workitemnumber.NewPostgreSQLAllocator()
 	// Ticket Repository
-	c.ticketRepository = ticketRepo.NewEntRepository(c.client, c.logger)
+	c.ticketRepository = ticketRepo.NewEntRepository(c.client, c.logger, c.numberAllocator)
 }
 
 // initCoreServices 初始化核心服务

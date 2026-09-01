@@ -54,6 +54,7 @@ import (
 	"itsm-backend/migration"
 	"itsm-backend/pkg/seeder"
 	repository_ticket "itsm-backend/repository/ticket"
+	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/router"
 	"itsm-backend/service"
 	"itsm-backend/service/bpmn"
@@ -301,12 +302,11 @@ func NewApplication() *Application {
 	processResolver := service.NewProcessResolver(client, processBindingService)
 	bpmnVersionService := service.NewBPMNVersionService(client, sugar)
 
+	// WorkItem numbering has one process-wide allocator; PostgreSQL remains the
+	// authority for every Ticket/Requested Item creation path wired below.
+	numberAllocator := workitemnumber.NewPostgreSQLAllocator()
 	// 工单仓储层（V2 Repository 模式）
-	ticketRepoImpl := repository_ticket.NewEntRepository(client, sugar)
-	// 注入序列服务（用于 Redis 工单号生成）
-	ticketRepoImpl.SetSequenceService(sequenceService)
-	// 注入原生数据库连接（用于事务性编号生成）
-	ticketRepoImpl.SetRawDB(database.GetRawDB())
+	ticketRepoImpl := repository_ticket.NewEntRepository(client, sugar, numberAllocator)
 
 	// Connector Manager / Registry / Market —— 连接器/插件/技能市场基础设施
 	connectorManager := connector.NewManager(connector.Default(), sugar)
@@ -476,7 +476,7 @@ func NewApplication() *Application {
 
 	// AI Tools
 	toolRegistry := service.NewToolRegistry(ragService, incidentService, configurationItemService, client)
-	toolQueue := service.NewToolQueue(client, toolRegistry, 100, sugar)
+	toolQueue := service.NewToolQueue(client, toolRegistry, numberAllocator, 100, sugar)
 
 	ticketController := controller.NewTicketController(ticketService, ticketDependencyService, database.GetRawDB(), client, sugar)
 	ticketDependencyController := controller.NewTicketDependencyController(ticketDependencyService)
@@ -640,7 +640,7 @@ func NewApplication() *Application {
 	// 见 router.go 的 /incidents 分组）适配为 service_request.IncidentCreator 这个最小接口，
 	// 让 Service.Create 在 isIncidentCatalog 分流时不用直接依赖 IncidentService 的完整签名。
 	incidentBridge := &srIncidentBridge{svc: incidentService}
-	srService := service_request.NewService(srRepo, scRepo, cmdbRepo, client, sugar, ticketService, chainResolver, incidentBridge)
+	srService := service_request.NewService(srRepo, scRepo, cmdbRepo, client, numberAllocator, sugar, ticketService, chainResolver, incidentBridge)
 	srHandler := service_request.NewHandler(srService)
 
 	// Domain: Change (DDD)

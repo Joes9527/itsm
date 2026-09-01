@@ -28,6 +28,7 @@ import (
 	"itsm-backend/ent/user"
 	"itsm-backend/repository/base"
 	"itsm-backend/repository/ticket"
+	"itsm-backend/repository/workitemnumber"
 
 	"go.uber.org/zap"
 )
@@ -96,7 +97,7 @@ func NewTicketService(cfg *TicketServiceConfig) *TicketService {
 // 自动构造一个 EntRepository，避免每个测试都要写完整配置
 func NewTicketServiceForTest(client *ent.Client, logger *zap.SugaredLogger) *TicketService {
 	return NewTicketService(&TicketServiceConfig{
-		Repository: ticket.NewEntRepository(client, logger),
+		Repository: ticket.NewEntRepository(client, logger, workitemnumber.NewPostgreSQLAllocator()),
 		Client:     client,
 		Logger:     logger,
 	})

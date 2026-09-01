@@ -12,6 +12,7 @@ import (
 	"itsm-backend/ent/schema"
 	"itsm-backend/handlers/cmdb"
 	"itsm-backend/handlers/service_catalog"
+	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -61,7 +62,7 @@ func TestService_Create_FullChain_TicketStatusReflectedAfterChange(t *testing.T)
 	cmdbRepo := cmdb.NewEntRepository(client)
 	logger := zaptest.NewLogger(t).Sugar()
 	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc, nil, nil)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, nil)
 
 	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
@@ -138,7 +139,7 @@ func TestService_Create_FormDataFieldValuesConsistency_FieldLevel(t *testing.T) 
 	cmdbRepo := cmdb.NewEntRepository(client)
 	logger := zaptest.NewLogger(t).Sugar()
 	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc, nil, nil)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, nil)
 
 	submittedCustomFields := map[string]interface{}{
 		"environment":  "production",
@@ -239,7 +240,7 @@ func TestService_Create_ResolvesApprovalChainIntoFormData(t *testing.T) {
 	logger := zaptest.NewLogger(t).Sugar()
 	ticketSvc := service.NewTicketServiceForTest(client, logger)
 	chainResolver := service.NewApprovalChainResolver(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc, chainResolver, nil)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, chainResolver, nil)
 
 	// 金额低于 IT 审批阈值（50000）：应该只保留 level 1（普通步骤）和 level 3
 	// （group_controlled，始终保留），level 2 被过滤掉。
@@ -305,7 +306,7 @@ func TestService_Create_NoApprovalChainConfigured_FormDataHasNoApprovalChainKey(
 	logger := zaptest.NewLogger(t).Sugar()
 	ticketSvc := service.NewTicketServiceForTest(client, logger)
 	chainResolver := service.NewApprovalChainResolver(client, logger) // 有效但租户下无配置
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc, chainResolver, nil)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, chainResolver, nil)
 
 	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
@@ -391,7 +392,7 @@ func TestService_Create_IncidentCatalog_NoServiceRequestRowCreated(t *testing.T)
 	logger := zaptest.NewLogger(t).Sugar()
 	ticketSvc := service.NewTicketServiceForTest(client, logger)
 	fakeIncident := &fakeIncidentCreator{incidentID: 4242}
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc, nil, fakeIncident)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, fakeIncident)
 
 	result, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		FormData: map[string]interface{}{"title": "生产环境服务器宕机", "reason": "紧急"},
@@ -442,7 +443,7 @@ func TestService_Update_ForbiddenForNonOwnerWithoutPermission(t *testing.T) {
 	cmdbRepo := cmdb.NewEntRepository(client)
 	logger := zaptest.NewLogger(t).Sugar()
 	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc, nil, nil)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, nil)
 
 	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
@@ -492,7 +493,7 @@ func TestService_Update_AllowedForNonOwnerWithSuperAdminRole(t *testing.T) {
 	cmdbRepo := cmdb.NewEntRepository(client)
 	logger := zaptest.NewLogger(t).Sugar()
 	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc, nil, nil)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, nil)
 
 	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
@@ -539,7 +540,7 @@ func TestService_CrossTenantIsolation_GetUpdateDelete(t *testing.T) {
 	cmdbRepo := cmdb.NewEntRepository(client)
 	logger := zaptest.NewLogger(t).Sugar()
 	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc, nil, nil)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, nil)
 
 	created, err := svc.Create(ctx, tenantA.ID, requesterA.ID, catalogA.ID, &ServiceRequest{
 		ComplianceAck:      true,

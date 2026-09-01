@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/gin-gonic/gin"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -34,6 +34,7 @@ import (
 	"itsm-backend/handlers/service_request"
 	"itsm-backend/middleware"
 	repoTicket "itsm-backend/repository/ticket"
+	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
 	"itsm-backend/tests/fixtures"
 )
@@ -112,7 +113,8 @@ func setupSSLVPNTestHarness(t *testing.T) *sslvpnTestHarness {
 	triggerSvc := service.NewProcessTriggerService(client, engine)
 	slaSvc := service.NewTicketSLAService(client, logger)
 
-	ticketRepo := repoTicket.NewEntRepository(client, logger)
+	numberAllocator := workitemnumber.NewPostgreSQLAllocator()
+	ticketRepo := repoTicket.NewEntRepository(client, logger, numberAllocator)
 	ticketSvc := service.NewTicketService(&service.TicketServiceConfig{
 		Repository:            ticketRepo,
 		Client:                client,
@@ -133,7 +135,7 @@ func setupSSLVPNTestHarness(t *testing.T) *sslvpnTestHarness {
 
 	cmdbRepo := cmdb.NewEntRepository(client)
 	srRepo := service_request.NewEntRepository(client)
-	srService := service_request.NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc, nil, nil)
+	srService := service_request.NewService(srRepo, scRepo, cmdbRepo, client, numberAllocator, logger, ticketSvc, nil, nil)
 	srHandler := service_request.NewHandler(srService)
 
 	// Generate JWT tokens for test roles
