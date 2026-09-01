@@ -49,8 +49,7 @@ test.describe('冒烟测试 - 快速验证所有主要页面', () => {
     await page.getByTestId('ticket-submit-button').click();
 
     const createResp = await createResponsePromise;
-    expect(createResp.status()).toBeGreaterThanOrEqual(200);
-    expect(createResp.status()).toBeLessThan(300);
+    expect(createResp.status()).toBe(200);
 
     await page.waitForURL(/\/tickets\/\d+$/, { timeout: 20000 });
   });
@@ -63,8 +62,7 @@ test.describe('冒烟测试 - 快速验证所有主要页面', () => {
     const statusResp = await page.waitForResponse((resp) => {
       return resp.url().includes('/api/v1/configuration-items/discovery/status') && resp.request().method() === 'GET';
     }, { timeout: 20000 });
-    expect(statusResp.status()).toBeGreaterThanOrEqual(200);
-    expect(statusResp.status()).toBeLessThan(300);
+    expect(statusResp.status()).toBe(200);
 
     const runPromise = page.waitForResponse((resp) => {
       return resp.url().includes('/api/v1/configuration-items/discovery/run') && resp.request().method() === 'POST';
@@ -72,8 +70,7 @@ test.describe('冒烟测试 - 快速验证所有主要页面', () => {
     await page.getByRole('button', { name: '立即同步' }).click();
 
     const runResp = await runPromise;
-    expect(runResp.status()).toBeGreaterThanOrEqual(200);
-    expect(runResp.status()).toBeLessThan(300);
+    expect(runResp.status()).toBe(200);
   });
 
   test('SLA 监控数据加载与刷新正常（真实后端）', async ({ page }) => {
@@ -84,16 +81,14 @@ test.describe('冒烟测试 - 快速验证所有主要页面', () => {
     const initialMonitoringResp = await page.waitForResponse((resp) => {
       return resp.url().includes('/api/v1/sla/monitoring') && resp.request().method() === 'POST';
     }, { timeout: 20000 });
-    expect(initialMonitoringResp.status()).toBeGreaterThanOrEqual(200);
-    expect(initialMonitoringResp.status()).toBeLessThan(300);
+    expect(initialMonitoringResp.status()).toBe(200);
 
     const refreshPromise = page.waitForResponse((resp) => {
       return resp.url().includes('/api/v1/sla/monitoring') && resp.request().method() === 'POST';
     });
     await page.getByRole('button', { name: '刷新', exact: true }).click();
     const refreshResp = await refreshPromise;
-    expect(refreshResp.status()).toBeGreaterThanOrEqual(200);
-    expect(refreshResp.status()).toBeLessThan(300);
+    expect(refreshResp.status()).toBe(200);
   });
 
   test('所有主要页面可访问', async ({ page }) => {
@@ -152,15 +147,8 @@ test.describe('冒烟测试 - 快速验证所有主要页面', () => {
     const baseUrl = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
 
     // 通过前端访问API验证代理
-    const apiResponse = await page.request.get(`${baseUrl}/api/v1/auth/menus`).catch(() => null);
-
-    if (apiResponse) {
-      // 验证响应正常（200或401都可以，说明代理工作正常）
-      expect([200, 401, 403]).toContain(apiResponse.status());
-      console.log(`✓ API代理响应: ${apiResponse.status()}`);
-    } else {
-      console.log('✓ API代理测试跳过（无响应）');
-    }
+    const apiResponse = await page.request.get(`${baseUrl}/api/v1/auth/menus`);
+    expect(apiResponse.status()).toBe(200);
   });
 
   test('页面导航菜单正常', async ({ page }) => {

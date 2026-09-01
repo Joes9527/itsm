@@ -72,8 +72,7 @@ test.describe('Problem Create - 创建问题', () => {
     await submitBtn.click();
 
     const createResp = await createResponsePromise;
-    expect(createResp.status()).toBeGreaterThanOrEqual(200);
-    expect(createResp.status()).toBeLessThan(300);
+    expect(createResp.status()).toBe(200);
   });
 });
 

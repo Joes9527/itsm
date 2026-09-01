@@ -45,7 +45,24 @@ func (s *ReleaseService) SetProcessTriggerService(p ProcessTriggerServiceInterfa
 
 // CreateRelease 创建发布
 func (s *ReleaseService) CreateRelease(ctx context.Context, req *dto.CreateReleaseRequest, createdBy, tenantID int) (*dto.ReleaseResponse, error) {
-	releaseEntity, err := s.client.Release.Create().
+	if s.processEngine == nil {
+		return nil, fmt.Errorf("release workflow engine is unavailable")
+	}
+	if s.processTriggerSvc == nil {
+		return nil, fmt.Errorf("release workflow trigger is unavailable")
+	}
+	transactionalTrigger, ok := s.processTriggerSvc.(TransactionalProcessTrigger)
+	if !ok {
+		return nil, fmt.Errorf("release workflow trigger does not support atomic start")
+	}
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("start release creation transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	txClient := tx.Client()
+
+	releaseEntity, err := txClient.Release.Create().
 		SetReleaseNumber(req.ReleaseNumber).
 		SetTitle(req.Title).
 		SetDescription(req.Description).
@@ -100,22 +117,29 @@ func (s *ReleaseService) CreateRelease(ctx context.Context, req *dto.CreateRelea
 	}
 
 	// 获取创建人信息
-	creator, _ := s.client.User.Get(ctx, createdBy)
+	creator, _ := txClient.User.Get(ctx, createdBy)
 	creatorName := ""
 	if creator != nil {
 		creatorName = creator.Name
 	}
 
-	// 触发发布流程（按 ProcessBinding 默认绑定解析 release_approval_flow）。
-	if s.processTriggerSvc != nil {
-		triggerCtx := WithTrustedBPMNTenantContext(ctx, tenantID)
-		if _, triggerErr := s.processTriggerSvc.TriggerByBusinessType(
-			triggerCtx, dto.BusinessTypeRelease, releaseEntity.ID, nil, strconv.Itoa(createdBy), tenantID,
-		); triggerErr != nil {
-			s.logger.Warnw("Failed to trigger release workflow",
-				"release_id", releaseEntity.ID, "tenant_id", tenantID, "error", triggerErr)
-		}
+	triggerCtx := WithTrustedBPMNTenantContext(ctx, tenantID)
+	processStart, err := transactionalTrigger.TriggerByBusinessTypeWithClient(
+		triggerCtx, txClient, dto.BusinessTypeRelease, releaseEntity.ID,
+		map[string]interface{}{"requires_approval": req.RequiresApproval},
+		strconv.Itoa(createdBy), tenantID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("start release workflow atomically: %w", err)
 	}
+	if processStart == nil {
+		return nil, fmt.Errorf("start release workflow atomically: missing transactional start result")
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit release and workflow: %w", err)
+	}
+	releaseEntity.Unwrap()
+	processStart.DeliverCommittedCallbacks(ctx)
 
 	response := dto.ToReleaseResponse(releaseEntity)
 	response.CreatedByName = creatorName

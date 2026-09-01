@@ -7,25 +7,25 @@
 import { test, expect } from '../fixtures/auth';
 
 test.describe('FLOW-9: 多租户隔离验证', () => {
-  let adminToken: string;
-  let tenant1adminToken: string;
+  let adminRole: string;
+  let tenantAdminRole: string;
 
   test.beforeEach(async ({ loginAs }) => {
-    adminToken = await loginAs('admin');
-    tenant1adminToken = await loginAs('tenant1admin');
+    adminRole = await loginAs('admin');
+    tenantAdminRole = await loginAs('tenant1admin');
   });
 
   test('T074-FLOW9 - 租户隔离验证', async ({ apiGet, apiPost }) => {
     // Step 1: admin 确认能看所有租户
-    const allTenantsResp = await apiGet(adminToken, '/api/v1/tenants');
+    const allTenantsResp = await apiGet(adminRole, '/api/v1/tenants');
     expect(allTenantsResp.status).toBe(200);
 
     // Step 2: tenant1admin 只能看自己租户
-    const myTenantsResp = await apiGet(tenant1adminToken, '/api/v1/tenants');
-    expect([200, 403]).toContain(myTenantsResp.status);
+    const myTenantsResp = await apiGet(tenantAdminRole, '/api/v1/tenants');
+    expect(myTenantsResp.status).toBe(403);
 
     // Step 3: tenant1admin 创建的工单只能自己看到
-    const createResp = await apiPost(tenant1adminToken, '/api/v1/tickets', {
+    const createResp = await apiPost(tenantAdminRole, '/api/v1/tickets', {
       title: 'FLOW-9 租户隔离测试',
       description: '此工单属于 tenant_test',
       priority: 'low',
@@ -34,12 +34,12 @@ test.describe('FLOW-9: 多租户隔离验证', () => {
 
     expect(createResp.status).toBe(200);
     const ticketId = createResp.data.data?.id;
+    expect(ticketId).toBeDefined();
 
-    // Step 4: 尝试用 admin 访问其他租户工单（如果 tenant1admin 属于 tenant_test）
-    if (ticketId) {
-      const crossTenantResp = await apiGet(tenant1adminToken, `/api/v1/tickets?tenant_id=99999`);
-      // 应该返回空或 403
-      expect([200, 403]).toContain(crossTenantResp.status);
-    }
+    // Step 4: 客户端 tenant_id 不能覆盖认证租户。
+    const crossTenantResp = await apiGet(tenantAdminRole, `/api/v1/tickets?tenant_id=99999`);
+    expect(crossTenantResp.status).toBe(200);
+    expect(crossTenantResp.data).toHaveProperty('code', 0);
+    expect(JSON.stringify(crossTenantResp.data)).not.toContain('"tenantId":99999');
   });
 });

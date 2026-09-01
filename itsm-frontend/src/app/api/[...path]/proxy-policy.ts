@@ -17,9 +17,21 @@ export function isPublicProxyPath(path: string): boolean {
   return EXACT_PUBLIC_PATHS.has(path);
 }
 
-export function expiredSessionCookies(secure: boolean): string[] {
+function expiredSessionCookies(names: readonly string[], secure: boolean): string[] {
   const secureAttribute = secure ? '; Secure' : '';
-  return ['access_token', 'refresh_token'].map(
+  return names.map(
     name => `${name}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${secureAttribute}`
   );
+}
+
+// A protected-resource 401 means only the access token is stale. Keeping the
+// refresh cookie lets the one canonical browser client rotate the session.
+// Only an explicit refresh-session rejection invalidates both credentials;
+// infrastructure failures (including 503) preserve the session for retry.
+export function sessionCookieExpirations(path: string, status: number, secure: boolean): string[] {
+  if (status !== 401) return [];
+  if (path === '/api/v1/auth/refresh') {
+    return expiredSessionCookies(['access_token', 'refresh_token'], secure);
+  }
+  return expiredSessionCookies(['access_token'], secure);
 }

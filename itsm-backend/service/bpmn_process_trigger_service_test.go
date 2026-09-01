@@ -81,6 +81,47 @@ func TestTriggerProcess_PopulatesStructuredBusinessIdentity(t *testing.T) {
 	require.Equal(t, workItem.ID, instance.BusinessID)
 }
 
+func TestTransactionalTriggerDefersInitialCallbackUntilCallerCommit(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	workItem := f.client.Ticket.Create().
+		SetTitle("Atomic callback WorkItem").
+		SetTicketNumber("TKT-ATOMIC-CALLBACK").
+		SetType("generic").
+		SetRecordClass("generic").
+		SetRequesterID(f.actor.ID).
+		SetTenantID(f.tenant.ID).
+		SaveX(f.userCtx)
+	handler := &startProcessCommitProbeHandler{
+		client: f.client, tenantID: f.tenant.ID, businessKey: fmt.Sprintf("ticket:%d", workItem.ID),
+	}
+	f.engine.CallbackRegistry().RegisterHandler(handler)
+	configureStartProcessDefinition(t, f, startProcessServiceTaskXML(handler.GetTaskType()))
+	f.client.ProcessBinding.Create().
+		SetBusinessType(string(dto.BusinessTypeTicket)).
+		SetProcessDefinitionKey(f.definition.Key).
+		SetIsDefault(true).
+		SetTenantID(f.tenant.ID).
+		SaveX(f.userCtx)
+
+	tx, err := f.client.Tx(f.userCtx)
+	require.NoError(t, err)
+	defer func() { _ = tx.Rollback() }()
+	trigger := NewProcessTriggerService(f.client, f.engine)
+	start, err := trigger.TriggerByBusinessTypeWithClient(
+		WithTrustedBPMNTenantContext(f.userCtx, f.tenant.ID), tx.Client(),
+		dto.BusinessTypeTicket, workItem.ID, nil, strconv.Itoa(f.actor.ID), f.tenant.ID,
+	)
+	require.NoError(t, err)
+	require.NotNil(t, start)
+	require.False(t, handler.observedCommittedState, "inline callback must not run before the caller commits")
+	require.NoError(t, tx.Commit())
+
+	start.DeliverCommittedCallbacks(f.userCtx)
+	require.True(t, handler.observedCommittedState, "deferred callback must observe committed process state")
+	start.DeliverCommittedCallbacks(f.userCtx)
+	require.Equal(t, 1, handler.EffectCount(), "post-commit delivery handle must be single-use")
+}
+
 func TestTriggerProcessRejectsBusinessTypeThatDisagreesWithWorkItemRecordClass(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:trigger_business_identity_mismatch?mode=memory&cache=shared&_fk=1")
 	t.Cleanup(func() { require.NoError(t, client.Close()) })

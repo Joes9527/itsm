@@ -8,55 +8,59 @@
 import { test, expect } from '../fixtures/auth';
 
 test.describe('FLOW-2: 标准变更流程', () => {
-  let engineerToken: string;
+  let engineerRole: string;
 
   test.beforeEach(async ({ loginAs }) => {
-    engineerToken = await loginAs('engineer1');
+    engineerRole = await loginAs('engineer1');
   });
 
   test('T076-FLOW2 - 标准变更', async ({ apiPost }) => {
     // 创建标准变更
-    const changeResp = await apiPost(engineerToken, '/api/v1/changes', {
+    const changeResp = await apiPost(engineerRole, '/api/v1/changes', {
       title: 'FLOW-2 标准变更测试',
       description: '例行系统维护',
       change_type: 'standard',
       priority: 'low',
     });
 
-    expect([200, 404]).toContain(changeResp.status);
+    expect(changeResp.status).toBe(200);
+    expect(changeResp.data).toHaveProperty('code', 0);
+    expect(changeResp.data.data?.id).toBeDefined();
   });
 });
 
 test.describe('FLOW-5: 紧急变更流程', () => {
-  let engineerToken: string;
+  let engineerRole: string;
 
   test.beforeEach(async ({ loginAs }) => {
-    engineerToken = await loginAs('engineer1');
+    engineerRole = await loginAs('engineer1');
   });
 
   test('T076-FLOW5 - 紧急变更', async ({ apiPost }) => {
     // 创建紧急变更
-    const changeResp = await apiPost(engineerToken, '/api/v1/changes', {
+    const changeResp = await apiPost(engineerRole, '/api/v1/changes', {
       title: 'FLOW-5 紧急变更测试',
       description: '紧急修复安全漏洞',
       change_type: 'emergency',
       priority: 'critical',
     });
 
-    expect([200, 404]).toContain(changeResp.status);
+    expect(changeResp.status).toBe(200);
+    expect(changeResp.data).toHaveProperty('code', 0);
+    expect(changeResp.data.data?.id).toBeDefined();
   });
 });
 
 test.describe('FLOW-6: AI 工单建议接受', () => {
-  let engineerToken: string;
+  let engineerRole: string;
 
   test.beforeEach(async ({ loginAs }) => {
-    engineerToken = await loginAs('engineer1');
+    engineerRole = await loginAs('engineer1');
   });
 
   test('T076-FLOW6 - AI 工单建议', async ({ apiPost }) => {
     // 创建工单
-    const ticketResp = await apiPost(engineerToken, '/api/v1/tickets', {
+    const ticketResp = await apiPost(engineerRole, '/api/v1/tickets', {
       title: 'FLOW-6 AI 测试工单',
       description: '系统运行缓慢',
       priority: 'medium',
@@ -68,31 +72,37 @@ test.describe('FLOW-6: AI 工单建议接受', () => {
 
     // 记录 AI 审计
     if (ticketId) {
-      const auditResp = await apiPost(engineerToken, '/api/v1/ai/audit', {
-        ticket_id: ticketId,
-        suggestion: '建议检查数据库连接池',
+      const auditResp = await apiPost(engineerRole, '/api/v1/ai/audit', {
+        scenario: 'ticket_triage',
+        inputRef: `ticket:${ticketId}`,
+        promptVersion: 'e2e-v1',
+        model: 'e2e-fixture',
+        confidence: 0.9,
+        suggestion: { summary: '建议检查数据库连接池' },
         accepted: true,
       });
 
-      expect([200, 404]).toContain(auditResp.status);
+      expect(auditResp.status).toBe(200);
+      expect(auditResp.data).toHaveProperty('code', 0);
     }
   });
 });
 
 test.describe('FLOW-8: CMDB 影响分析', () => {
-  let engineerToken: string;
+  let engineerRole: string;
 
   test.beforeEach(async ({ loginAs }) => {
-    engineerToken = await loginAs('engineer1');
+    engineerRole = await loginAs('engineer1');
   });
 
   test('T076-FLOW8 - CMDB 影响分析', async ({ apiGet }) => {
     // 查看 CI 类型
-    const typesResp = await apiGet(engineerToken, '/api/v1/configuration-items/types');
-    expect([200, 404]).toContain(typesResp.status);
+    const typesResp = await apiGet(engineerRole, '/api/v1/cmdb/ci-types');
+    expect(typesResp.status).toBe(200);
+    expect(typesResp.data).toHaveProperty('code', 0);
 
     // 查看配置项列表
-    const ciListResp = await apiGet(engineerToken, '/api/v1/configuration-items');
+    const ciListResp = await apiGet(engineerRole, '/api/v1/cmdb/cis');
     expect(ciListResp.status).toBe(200);
   });
 });

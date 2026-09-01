@@ -2,8 +2,7 @@ import { render, screen, waitFor } from '@/lib/test-utils';
 import ServiceRequestsPage from '../page';
 import { serviceRequestAPI } from '@/lib/api/service-request-api';
 
-// Task 1 删除了 SR 自己的 status 字段和 /api/v1/service-requests/approvals/pending 承载的
-// SR 审批阶段概念（审批现在走关联 ticket 的 BPMN 流程）。这个页面之前：
+// SR 自己不再维护审批阶段，审批只走关联 ticket 的 BPMN 流程。这个页面之前：
 //   1) 用已经不存在的 status 字符串（submitted/manager_approved/.../delivered）分桶统计，
 //      永远算出 0；
 //   2) 渲染一个"待审批" Tab，数据源 getPendingApprovals 打在已经删除的路由上，

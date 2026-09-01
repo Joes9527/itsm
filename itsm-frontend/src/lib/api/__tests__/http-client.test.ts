@@ -16,10 +16,9 @@
  *   - `getPaginated` flattens nested filters into `filters[key]`
  *   - `batchOperation` wraps data in `{ operation, data }`
  *   - CSRF token is added to mutating requests but not GET
- *   - Auth (Bearer) header is included when a cookie token is present
+ *   - Browser credentials are included and no Authorization header is synthesized
  *   - Tenant headers (X-Tenant-ID, X-Tenant-Code) are added when the
  *     TenantContext is populated
- *   - `setTenantId/setTenantCode` are no-ops (deprecated)
  *   - Missing code field is tolerated (BPMN controller quirk)
  */
 

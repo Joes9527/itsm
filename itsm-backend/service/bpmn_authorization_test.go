@@ -651,6 +651,26 @@ func TestListUserTasksForcesCallerScopeWithoutTaskRead(t *testing.T) {
 	assert.Equal(t, mine.TaskID, rows[0].TaskID)
 }
 
+func TestListUserTasksFiltersByAuthoritativeBusinessIdentity(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	matching := f.createProcessInstance(t, f.tenant, "release-business-match")
+	matching = f.client.ProcessInstance.UpdateOne(matching).
+		SetBusinessType("release").SetBusinessID(42).SaveX(f.userCtx)
+	other := f.createProcessInstance(t, f.tenant, "release-business-other")
+	other = f.client.ProcessInstance.UpdateOne(other).
+		SetBusinessType("release").SetBusinessID(43).SaveX(f.userCtx)
+	wanted := f.createProcessTask(t, matching, f.tenant.ID, "release-business-match", strconv.Itoa(f.actor.ID), "", "")
+	f.createProcessTask(t, other, f.tenant.ID, "release-business-other", strconv.Itoa(f.actor.ID), "", "")
+
+	rows, total, err := f.engine.TaskService().ListUserTasks(f.scopedCtx(false, false, false, false), &ListUserTasksRequest{
+		BusinessType: "release", BusinessID: 42, Page: 1, PageSize: 20,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, total)
+	require.Len(t, rows, 1)
+	assert.Equal(t, wanted.ID, rows[0].ID)
+}
+
 func TestGetTaskRejectsSameTenantNonParticipant(t *testing.T) {
 	f := newBPMNAuthorizationFixture(t)
 	_, other := f.seedMineAndOtherTasks(t)

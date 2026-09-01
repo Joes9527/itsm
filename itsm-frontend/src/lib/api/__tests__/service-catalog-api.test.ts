@@ -117,8 +117,8 @@ describe('ServiceCatalogApi', () => {
       expect(result.total).toBe(1);
     });
 
-    // The retired SR-approval route (/service-requests/approvals/pending) and its
-    // isPendingApproval branch have been removed — approval now flows through the linked
+    // The retired SR-specific approval data source and its isPendingApproval branch have
+    // been removed — approval now flows through the linked
     // ticket's own BPMN mechanism. getServiceRequests always hits /me regardless of the
     // status value passed (including legacy 'pending_approval'/'pending' filter values).
     it('always uses the /me endpoint, never the retired pending-approvals endpoint', async () => {

@@ -47,12 +47,10 @@ test.describe('Performance - 浏览器端关键指标', () => {
       .fill('performance test');
 
     const start = Date.now();
-    const respPromise = page
-      .waitForResponse(
-        r => r.url().includes('/api/v1/tickets') && r.request().method() === 'POST',
-        { timeout: 15000 }
-      )
-      .catch(() => null);
+    const respPromise = page.waitForResponse(
+      r => r.url().includes('/api/v1/tickets') && r.request().method() === 'POST',
+      { timeout: 15000 }
+    );
 
     await page
       .locator(
@@ -64,10 +62,7 @@ test.describe('Performance - 浏览器端关键指标', () => {
     const response = await respPromise;
     const elapsed = Date.now() - start;
 
-    if (response) {
-      expect(response.status()).toBeGreaterThanOrEqual(200);
-      expect(response.status()).toBeLessThan(500);
-    }
+    expect(response.status()).toBe(200);
 
     expect(elapsed).toBeLessThanOrEqual(budgetMs);
   });
@@ -85,8 +80,7 @@ test.describe('Performance - 浏览器端关键指标', () => {
     const response = await page.request.post('/api/v1/tickets/batch/export', { data: payload });
     const elapsed = Date.now() - start;
 
-    expect(response.status()).toBeGreaterThanOrEqual(200);
-    expect(response.status()).toBeLessThan(500);
+    expect(response.status()).toBe(200);
     expect(elapsed).toBeLessThanOrEqual(budgetMs);
   });
 });

@@ -366,6 +366,8 @@ export class BPMNWorkflowApi {
     pageSize?: number;
     processInstanceId?: number;
     processDefinitionKey?: string;
+    businessType?: string;
+    businessId?: number;
     status?: string;
   }): Promise<UserTaskListResponse> {
     const query: Record<string, string> = {};
@@ -373,6 +375,8 @@ export class BPMNWorkflowApi {
     if (params?.pageSize) query.pageSize = String(params.pageSize);
     if (params?.processInstanceId) query.processInstanceId = String(params.processInstanceId);
     if (params?.processDefinitionKey) query.processDefinitionKey = params.processDefinitionKey;
+    if (params?.businessType) query.businessType = params.businessType;
+    if (params?.businessId) query.businessId = String(params.businessId);
     if (params?.status) query.status = params.status;
     const response = await httpClient.get<BackendListResponse<UserTask>>(
       `${this.baseUrl}/tasks`,

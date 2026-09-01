@@ -2,12 +2,14 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 
 	"itsm-backend/dto"
+	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/service/bpmn"
 
@@ -15,6 +17,88 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
+
+type failingReleaseProcessTrigger struct {
+	ProcessTriggerServiceInterface
+	err error
+}
+
+func (f *failingReleaseProcessTrigger) TriggerByBusinessType(context.Context, dto.BusinessType, int, map[string]interface{}, string, int) (*dto.ProcessTriggerResponse, error) {
+	return nil, f.err
+}
+
+func (f *failingReleaseProcessTrigger) TriggerByBusinessTypeWithClient(context.Context, *ent.Client, dto.BusinessType, int, map[string]interface{}, string, int) (*TransactionalProcessStart, error) {
+	return nil, f.err
+}
+
+type commitObservingReleaseProcessTrigger struct {
+	ProcessTriggerServiceInterface
+	client     *ent.Client
+	observed   bool
+	businessID int
+}
+
+func (f *commitObservingReleaseProcessTrigger) TriggerByBusinessTypeWithClient(_ context.Context, _ *ent.Client, _ dto.BusinessType, businessID int, _ map[string]interface{}, _ string, _ int) (*TransactionalProcessStart, error) {
+	f.businessID = businessID
+	return &TransactionalProcessStart{afterCommit: func(ctx context.Context) {
+		f.observed = f.client.Release.GetX(ctx, businessID) != nil
+	}}, nil
+}
+
+func TestReleaseService_CreateReleaseFailsClosedWithoutWorkflowDependencies(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", testDSN())
+	t.Cleanup(func() { _ = client.Close() })
+	ctx := context.Background()
+	tenant := client.Tenant.Create().SetName("No workflow").SetCode("no-workflow").SetDomain("no-workflow.test").SetStatus("active").SaveX(ctx)
+	actor := client.User.Create().SetUsername("no-workflow").SetEmail("no-workflow@test").SetName("No workflow").SetPasswordHash("x").SetActive(true).SetTenantID(tenant.ID).SaveX(ctx)
+
+	request := &dto.CreateReleaseRequest{ReleaseNumber: "REL-NO-WORKFLOW", Title: "must not orphan", Type: "minor"}
+	result, err := NewReleaseService(client, zaptest.NewLogger(t).Sugar()).CreateRelease(ctx, request, actor.ID, tenant.ID)
+	require.Nil(t, result)
+	require.ErrorContains(t, err, "workflow")
+	require.Zero(t, client.Release.Query().CountX(ctx), "failed creation must not leave an orphan release")
+	require.Zero(t, client.ProcessInstance.Query().CountX(ctx), "failed creation must not leave a partial workflow")
+}
+
+func TestReleaseService_CreateReleaseRollsBackWhenWorkflowStartFails(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", testDSN())
+	t.Cleanup(func() { _ = client.Close() })
+	ctx := context.Background()
+	tenant := client.Tenant.Create().SetName("Failing workflow").SetCode("failing-workflow").SetDomain("failing-workflow.test").SetStatus("active").SaveX(ctx)
+	actor := client.User.Create().SetUsername("failing-workflow").SetEmail("failing-workflow@test").SetName("Failing workflow").SetPasswordHash("x").SetActive(true).SetTenantID(tenant.ID).SaveX(ctx)
+
+	svc := NewReleaseService(client, zaptest.NewLogger(t).Sugar())
+	svc.SetProcessEngine(NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar()))
+	svc.SetProcessTriggerService(&failingReleaseProcessTrigger{err: errors.New("binding unavailable")})
+	result, err := svc.CreateRelease(ctx, &dto.CreateReleaseRequest{
+		ReleaseNumber: "REL-START-FAIL", Title: "rollback release", Type: "minor",
+	}, actor.ID, tenant.ID)
+
+	require.Nil(t, result)
+	require.ErrorContains(t, err, "binding unavailable")
+	require.Zero(t, client.Release.Query().CountX(ctx), "trigger failure must roll back the release")
+	require.Zero(t, client.ProcessInstance.Query().CountX(ctx), "trigger failure must not leave a process instance")
+}
+
+func TestReleaseService_DeliversTransactionalWorkflowCallbacksOnlyAfterCommit(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", testDSN())
+	t.Cleanup(func() { _ = client.Close() })
+	ctx := context.Background()
+	tenant := client.Tenant.Create().SetName("Post commit").SetCode("release-post-commit").SetDomain("release-post-commit.test").SetStatus("active").SaveX(ctx)
+	actor := client.User.Create().SetUsername("release-post-commit").SetEmail("release-post-commit@test").SetName("Post commit").SetPasswordHash("x").SetActive(true).SetTenantID(tenant.ID).SaveX(ctx)
+	trigger := &commitObservingReleaseProcessTrigger{client: client}
+	svc := NewReleaseService(client, zaptest.NewLogger(t).Sugar())
+	svc.SetProcessEngine(NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar()))
+	svc.SetProcessTriggerService(trigger)
+
+	created, err := svc.CreateRelease(ctx, &dto.CreateReleaseRequest{
+		ReleaseNumber: "REL-POST-COMMIT", Title: "deliver after commit", Type: "minor",
+	}, actor.ID, tenant.ID)
+
+	require.NoError(t, err)
+	require.Equal(t, created.ID, trigger.businessID)
+	require.True(t, trigger.observed, "post-commit callback must observe the committed release")
+}
 
 func TestReleaseService_CreateRelease(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
@@ -45,6 +129,7 @@ func TestReleaseService_CreateRelease(t *testing.T) {
 		SetTenantID(testTenant.ID).
 		Save(ctx)
 	require.NoError(t, err)
+	requireReleaseCreationWorkflow(t, client, releaseService, testTenant.ID)
 
 	tests := []struct {
 		name          string
@@ -135,13 +220,11 @@ func TestReleaseService_GetReleaseByID(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	// 创建测试发布
-	release, err := releaseService.CreateRelease(ctx, &dto.CreateReleaseRequest{
-		ReleaseNumber: "REL-001",
-		Title:         "测试发布",
-		Type:          "minor",
-	}, testUser.ID, testTenant.ID)
-	require.NoError(t, err)
+	// 此测试只验证读取，不经由创建命令制造无关的流程实例。
+	release := client.Release.Create().
+		SetReleaseNumber("REL-001").SetTitle("测试发布").SetType("minor").
+		SetStatus(string(dto.ReleaseStatusDraft)).SetCreatedBy(testUser.ID).SetTenantID(testTenant.ID).
+		SaveX(ctx)
 
 	// 测试获取发布
 	t.Run("获取存在的发布", func(t *testing.T) {
@@ -188,13 +271,11 @@ func TestReleaseService_UpdateReleaseStatusFailsClosedWithoutAuthoritativeWorkfl
 		Save(ctx)
 	require.NoError(t, err)
 
-	// 创建测试发布
-	release, err := releaseService.CreateRelease(ctx, &dto.CreateReleaseRequest{
-		ReleaseNumber: "REL-001",
-		Title:         "测试发布",
-		Type:          "minor",
-	}, testUser.ID, testTenant.ID)
-	require.NoError(t, err)
+	// 直接建立聚合，保留本测试对“无权威流程时状态变更失败”的精确前置条件。
+	release := client.Release.Create().
+		SetReleaseNumber("REL-001").SetTitle("测试发布").SetType("minor").
+		SetStatus(string(dto.ReleaseStatusDraft)).SetCreatedBy(testUser.ID).SetTenantID(testTenant.ID).
+		SaveX(ctx)
 
 	_, err = releaseService.UpdateReleaseStatus(ctx, release.ID, testTenant.ID, testUser.ID, "scheduled")
 	require.ErrorContains(t, err, "workflow engine is unavailable")
@@ -333,18 +414,11 @@ func TestReleaseService_GetReleaseStats(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	// 创建多个测试发布
-	_, _ = releaseService.CreateRelease(ctx, &dto.CreateReleaseRequest{
-		ReleaseNumber: "REL-001",
-		Title:         "发布1",
-		Type:          "minor",
-	}, testUser.ID, testTenant.ID)
-
-	_, _ = releaseService.CreateRelease(ctx, &dto.CreateReleaseRequest{
-		ReleaseNumber: "REL-002",
-		Title:         "发布2",
-		Type:          "patch",
-	}, testUser.ID, testTenant.ID)
+	// 统计查询测试直接准备持久化 fixture，不旁路生产创建命令的工作流不变量。
+	client.Release.Create().SetReleaseNumber("REL-001").SetTitle("发布1").SetType("minor").
+		SetStatus(string(dto.ReleaseStatusDraft)).SetCreatedBy(testUser.ID).SetTenantID(testTenant.ID).SaveX(ctx)
+	client.Release.Create().SetReleaseNumber("REL-002").SetTitle("发布2").SetType("patch").
+		SetStatus(string(dto.ReleaseStatusDraft)).SetCreatedBy(testUser.ID).SetTenantID(testTenant.ID).SaveX(ctx)
 
 	// 测试获取统计
 	stats, err := releaseService.GetReleaseStats(ctx, testTenant.ID)
@@ -352,4 +426,15 @@ func TestReleaseService_GetReleaseStats(t *testing.T) {
 	assert.NotNil(t, stats)
 	assert.Equal(t, 2, stats.Total)
 	assert.Equal(t, 2, stats.Draft)
+}
+
+func requireReleaseCreationWorkflow(t *testing.T, client *ent.Client, releaseService *ReleaseService, tenantID int) {
+	t.Helper()
+	ctx := context.Background()
+	_, err := NewBPMNTemplateService(client).LoadAndDeployTemplates(ctx, tenantID)
+	require.NoError(t, err)
+	require.NoError(t, NewProcessBindingService(client).InitDefaultBindings(ctx, tenantID))
+	engine := NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar())
+	releaseService.SetProcessEngine(engine)
+	releaseService.SetProcessTriggerService(NewProcessTriggerService(client, engine))
 }

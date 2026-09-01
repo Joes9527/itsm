@@ -26,7 +26,7 @@ test.describe('US4: approver 审批人多级审批', () => {
 
     const tasks = tasksResp.data?.data?.data || [];
     expect(tasks.length).toBeGreaterThan(0);
-    const taskId = tasks[0].taskId;
+    const taskId = tasks[0].id;
     const approveResp = await apiPost(role, `/api/v1/bpmn/tasks/${taskId}/decisions`, {
       action: 'approve',
       comment: 'E2E 测试通过',
@@ -39,7 +39,7 @@ test.describe('US4: approver 审批人多级审批', () => {
     expect(tasksResp.status).toBe(200);
     const tasks = tasksResp.data?.data?.data || [];
     expect(tasks.length).toBeGreaterThan(0);
-    const taskId = tasks[0].taskId;
+    const taskId = tasks[0].id;
     const rejectResp = await apiPost(role, `/api/v1/bpmn/tasks/${taskId}/decisions`, {
       action: 'reject',
       comment: 'E2E 测试拒绝',

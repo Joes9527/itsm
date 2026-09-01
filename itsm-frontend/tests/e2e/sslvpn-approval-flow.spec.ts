@@ -8,7 +8,7 @@
  *    - 验证 8 个动态自定义字段的 UI 渲染并填充提交；
  *    - 提交后跳转工单详情页 (/tickets/:ticketId)，验证状态与审批链。
  * 2. Persona 2 (supervisor_test / Password123!):
- *    - 登录系统，访问审批中心 (/approvals 或 /approvals/pending)；
+ *    - 登录系统，访问唯一 BPMN 审批中心 (/approvals)；
  *    - 查找到当前待初审的 BPMN 任务 (UserTask_DeptManagerApproval)；
  *    - 填写初审意见 "同意申请，出差值班需要" 并完成批准。
  * 3. Persona 3 (lixin_test / Password123!):

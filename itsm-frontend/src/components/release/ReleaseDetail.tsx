@@ -27,6 +27,8 @@ import dayjs from 'dayjs';
 
 import type { Release } from '@/lib/api/release-api';
 import { ReleaseApi } from '@/lib/api/release-api';
+import { BPMNWorkflowApi, type UserTask } from '@/lib/api/bpmn-workflow-api';
+import { releaseWorkflowCommands } from './release-workflow-commands';
 
 const { Title, Text } = Typography;
 
@@ -64,6 +66,7 @@ const ReleaseDetail: React.FC = () => {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [release, setRelease] = useState<Release | null>(null);
+  const [workflowTasks, setWorkflowTasks] = useState<UserTask[]>([]);
 
   useEffect(() => {
     if (id) {
@@ -75,8 +78,17 @@ const ReleaseDetail: React.FC = () => {
     setLoading(true);
     try {
       const data = await ReleaseApi.getRelease(Number(id));
+      const taskList = await BPMNWorkflowApi.listUserTasks({
+        businessType: 'release',
+        businessId: Number(id),
+        processDefinitionKey: 'release_approval_flow',
+        page: 1,
+        pageSize: 100,
+      });
       setRelease(data);
+      setWorkflowTasks(taskList.items);
     } catch (error) {
+      setWorkflowTasks([]);
       message.error('加载发布详情失败');
     } finally {
       setLoading(false);
@@ -162,6 +174,7 @@ const ReleaseDetail: React.FC = () => {
   }
 
   const currentStep = ['draft', 'scheduled', 'in-progress', 'completed'].indexOf(release.status);
+  const workflowCommands = releaseWorkflowCommands(workflowTasks);
 
   return (
     <Space orientation="vertical" style={{ width: '100%' }} size="large">
@@ -329,12 +342,12 @@ const ReleaseDetail: React.FC = () => {
           <Button type="primary" onClick={() => router.push(`/releases/${release.id}`)}>
             编辑
           </Button>
-          {release.status === 'draft' && (
+          {workflowCommands.techReview && (
             <Button onClick={requestTechReview}>
               技术评审
             </Button>
           )}
-          {release.status === 'draft' && !release.requiresApproval && (
+          {workflowCommands.schedule && (
             <Button
               onClick={async () => {
                 try {
@@ -348,7 +361,7 @@ const ReleaseDetail: React.FC = () => {
               提交计划
             </Button>
           )}
-          {release.status === 'scheduled' && (
+          {workflowCommands.execute && (
             <Button
               onClick={async () => {
                 try {
@@ -362,7 +375,7 @@ const ReleaseDetail: React.FC = () => {
               开始发布
             </Button>
           )}
-          {release.status === 'in-progress' && (
+          {workflowCommands.verify && (
             <Button
               type="primary"
               onClick={async () => {

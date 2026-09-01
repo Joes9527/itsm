@@ -2,9 +2,35 @@ package service
 
 import (
 	"context"
+	"sync"
 
 	"itsm-backend/dto"
+	"itsm-backend/ent"
 )
+
+// TransactionalProcessStart carries the durable process result plus the
+// latency-only callback delivery that must run after the caller commits its
+// transaction. The callback is guarded so a caller cannot execute it twice;
+// durable outbox recovery remains authoritative if the inline attempt fails.
+type TransactionalProcessStart struct {
+	Response    *dto.ProcessTriggerResponse
+	afterCommit func(context.Context)
+	once        sync.Once
+}
+
+func (s *TransactionalProcessStart) DeliverCommittedCallbacks(ctx context.Context) {
+	if s == nil || s.afterCommit == nil {
+		return
+	}
+	s.once.Do(func() { s.afterCommit(ctx) })
+}
+
+// TransactionalProcessTrigger starts the bound process on a caller-owned Ent
+// transaction. Domains that require record+workflow atomicity must depend on
+// this contract instead of starting a second transaction after persistence.
+type TransactionalProcessTrigger interface {
+	TriggerByBusinessTypeWithClient(ctx context.Context, client *ent.Client, businessType dto.BusinessType, businessID int, variables map[string]interface{}, triggeredBy string, tenantID int) (*TransactionalProcessStart, error)
+}
 
 // ProcessTriggerServiceInterface 流程触发服务接口
 type ProcessTriggerServiceInterface interface {

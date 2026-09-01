@@ -7,31 +7,31 @@
 import { test, expect } from '../fixtures/auth';
 
 test.describe('US7: tenant_admin 租户隔离', () => {
-  let token: string;
+  let role: string;
 
   test.beforeEach(async ({ loginAs }) => {
     // 登录为租户管理员
-    token = await loginAs('tenant1admin');
+    role = await loginAs('tenant1admin');
   });
 
   test('T051 - 只能看到本租户用户', async ({ apiGet }) => {
-    const response = await apiGet(token, '/api/v1/users');
+    const response = await apiGet(role, '/api/v1/users');
     expect(response.status).toBe(200);
     expect(response.data).toHaveProperty('code', 0);
   });
 
   test('T052 - 无法访问其他租户数据', async ({ apiGet }) => {
     // 尝试通过 tenant_id 参数访问其他租户
-    const response = await apiGet(token, '/api/v1/tickets?tenant_id=99999');
-
-    // 应该返回空或 403
-    expect([200, 403].includes(response.status)).toBe(true);
+    const response = await apiGet(role, '/api/v1/tickets?tenant_id=99999');
+    expect(response.status).toBe(200);
+    expect(response.data).toHaveProperty('code', 0);
+    expect(JSON.stringify(response.data)).not.toContain('"tenantId":99999');
   });
 
   test('T053 - 租户管理员能管理本租户用户', async ({ apiPost }) => {
     const unique = Date.now();
     // 尝试创建用户（租户管理员权限）
-    const response = await apiPost(token, '/api/v1/users', {
+    const response = await apiPost(role, '/api/v1/users', {
       username: `tenant-user-${unique}`,
       email: `tenant-user-${unique}@example.test`,
       password: 'test-password-123',
@@ -44,7 +44,7 @@ test.describe('US7: tenant_admin 租户隔离', () => {
 
   test('T054 - 无法创建租户', async ({ apiPostExpectStatus }) => {
     // 尝试创建新租户
-    const response = await apiPostExpectStatus(token, '/api/v1/tenants', 403, {
+    const response = await apiPostExpectStatus(role, '/api/v1/tenants', 403, {
       name: 'Test Tenant',
       code: 'test_tenant',
     });
@@ -54,7 +54,7 @@ test.describe('US7: tenant_admin 租户隔离', () => {
   });
 
   test('T055 - 能访问本租户仪表盘', async ({ apiGet }) => {
-    const response = await apiGet(token, '/api/v1/dashboard/stats');
+    const response = await apiGet(role, '/api/v1/dashboard/stats');
     expect(response.status).toBe(200);
   });
 });

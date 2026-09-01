@@ -55,18 +55,18 @@ type apiEnvelope struct {
 }
 
 type sslvpnTestHarness struct {
-	router      *gin.Engine
-	client      *ent.Client
-	rawDB       *sql.DB
-	tenant      *ent.Tenant
-	fixture     *fixtures.SSLVPNFixtureResult
-	userToken   string
-	superToken  string
-	lixinToken  string
-	engine      service.ProcessEngine
-	ticketSvc   *service.TicketService
-	workflowSvc *service.TicketWorkflowService
-	slaSvc      *service.TicketSLAService
+	router       *gin.Engine
+	client       *ent.Client
+	rawDB        *sql.DB
+	tenant       *ent.Tenant
+	fixture      *fixtures.SSLVPNFixtureResult
+	userSession  string
+	superSession string
+	lixinSession string
+	engine       service.ProcessEngine
+	ticketSvc    *service.TicketService
+	workflowSvc  *service.TicketWorkflowService
+	slaSvc       *service.TicketSLAService
 }
 
 func setupSSLVPNTestHarness(t *testing.T) *sslvpnTestHarness {
@@ -139,12 +139,12 @@ func setupSSLVPNTestHarness(t *testing.T) *sslvpnTestHarness {
 	srService := service_request.NewService(srRepo, scRepo, cmdbRepo, client, numberAllocator, logger, ticketSvc, nil, nil)
 	srHandler := service_request.NewHandler(srService)
 
-	// Generate JWT tokens for test roles
-	userToken, err := authentication.GenerateAccessToken(fixResult.Users.EndUser.ID, fixResult.Users.EndUser.Username, fixResult.Users.EndUser.Role, tenant.ID, testJWTSecret, 24*time.Hour)
+	// Build signed session values for the same HttpOnly-cookie path used in production.
+	userSession, err := authentication.GenerateAccessToken(fixResult.Users.EndUser.ID, fixResult.Users.EndUser.Username, fixResult.Users.EndUser.Role, tenant.ID, testJWTSecret, 24*time.Hour)
 	require.NoError(t, err)
-	superToken, err := authentication.GenerateAccessToken(fixResult.Users.Supervisor.ID, fixResult.Users.Supervisor.Username, fixResult.Users.Supervisor.Role, tenant.ID, testJWTSecret, 24*time.Hour)
+	superSession, err := authentication.GenerateAccessToken(fixResult.Users.Supervisor.ID, fixResult.Users.Supervisor.Username, fixResult.Users.Supervisor.Role, tenant.ID, testJWTSecret, 24*time.Hour)
 	require.NoError(t, err)
-	lixinToken, err := authentication.GenerateAccessToken(fixResult.Users.Lixin.ID, fixResult.Users.Lixin.Username, fixResult.Users.Lixin.Role, tenant.ID, testJWTSecret, 24*time.Hour)
+	lixinSession, err := authentication.GenerateAccessToken(fixResult.Users.Lixin.ID, fixResult.Users.Lixin.Username, fixResult.Users.Lixin.Role, tenant.ID, testJWTSecret, 24*time.Hour)
 	require.NoError(t, err)
 
 	// Set up Gin Router
@@ -152,7 +152,7 @@ func setupSSLVPNTestHarness(t *testing.T) *sslvpnTestHarness {
 	r.Use(gin.Recovery())
 
 	apiV1 := r.Group("/api/v1")
-	apiV1.Use(middleware.AuthMiddleware(testJWTSecret))
+	apiV1.Use(middleware.AuthMiddleware(testJWTSecret), middleware.CSRFProtectionMiddleware(middleware.DefaultCSRFConfig()))
 	{
 		// Tickets
 		apiV1.POST("/tickets", ticketController.CreateTicket)
@@ -169,22 +169,22 @@ func setupSSLVPNTestHarness(t *testing.T) *sslvpnTestHarness {
 	}
 
 	return &sslvpnTestHarness{
-		router:      r,
-		client:      client,
-		rawDB:       db,
-		tenant:      tenant,
-		fixture:     fixResult,
-		userToken:   userToken,
-		superToken:  superToken,
-		lixinToken:  lixinToken,
-		engine:      engine,
-		ticketSvc:   ticketSvc,
-		workflowSvc: ticketWorkflowSvc,
-		slaSvc:      slaSvc,
+		router:       r,
+		client:       client,
+		rawDB:        db,
+		tenant:       tenant,
+		fixture:      fixResult,
+		userSession:  userSession,
+		superSession: superSession,
+		lixinSession: lixinSession,
+		engine:       engine,
+		ticketSvc:    ticketSvc,
+		workflowSvc:  ticketWorkflowSvc,
+		slaSvc:       slaSvc,
 	}
 }
 
-func doRequest(t *testing.T, r http.Handler, token, method, path string, body interface{}) (apiEnvelope, int) {
+func doRequest(t *testing.T, r http.Handler, session, method, path string, body interface{}) (apiEnvelope, int) {
 	t.Helper()
 	var buf bytes.Buffer
 	if body != nil {
@@ -192,8 +192,13 @@ func doRequest(t *testing.T, r http.Handler, token, method, path string, body in
 	}
 	req := httptest.NewRequest(method, path, &buf)
 	req.Header.Set("Content-Type", "application/json")
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
+	if session != "" {
+		req.AddCookie(&http.Cookie{Name: "access_token", Value: session, Path: "/", HttpOnly: true})
+	}
+	if method != http.MethodGet && method != http.MethodHead && method != http.MethodOptions {
+		const csrf = "sslvpn-e2e-csrf"
+		req.AddCookie(&http.Cookie{Name: middleware.CSRFTokenCookieName, Value: csrf, Path: "/", HttpOnly: true})
+		req.Header.Set(middleware.CSRFTokenHeaderName, csrf)
 	}
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -234,7 +239,7 @@ func TestSSLVPNScenarioE2E(t *testing.T) {
 		},
 	}
 
-	env, status := doRequest(t, h.router, h.userToken, http.MethodPost, "/api/v1/service-requests", srCreationBody)
+	env, status := doRequest(t, h.router, h.userSession, http.MethodPost, "/api/v1/service-requests", srCreationBody)
 	require.Equal(t, http.StatusOK, status, "service request creation should return 200 OK: %s", env.Message)
 	require.Equal(t, 0, env.Code, "service request creation code must be 0: %s", env.Message)
 
@@ -353,7 +358,7 @@ func TestSSLVPNScenarioE2E(t *testing.T) {
 	}
 
 	// Complete supervisor approval using supervisor token via REST API
-	env, status = doRequest(t, h.router, h.superToken, http.MethodPost, fmt.Sprintf("/api/v1/bpmn/tasks/%s/decisions", deptTask.TaskID), supervisorApprovalBody)
+	env, status = doRequest(t, h.router, h.superSession, http.MethodPost, fmt.Sprintf("/api/v1/bpmn/tasks/%s/decisions", deptTask.TaskID), supervisorApprovalBody)
 	require.Equal(t, http.StatusOK, status, "supervisor approval should succeed: %s", env.Message)
 	require.Equal(t, 0, env.Code, "supervisor approval code must be 0: %s", env.Message)
 
@@ -414,7 +419,7 @@ func TestSSLVPNScenarioE2E(t *testing.T) {
 	}
 
 	// Complete L2 approval using Li Xin's token via REST API
-	env, status = doRequest(t, h.router, h.lixinToken, http.MethodPost, fmt.Sprintf("/api/v1/bpmn/tasks/%s/decisions", l2Task.TaskID), lixinApprovalBody)
+	env, status = doRequest(t, h.router, h.lixinSession, http.MethodPost, fmt.Sprintf("/api/v1/bpmn/tasks/%s/decisions", l2Task.TaskID), lixinApprovalBody)
 	require.Equal(t, http.StatusOK, status, "L2 ops approval should succeed: %s", env.Message)
 	require.Equal(t, 0, env.Code, "L2 ops approval code must be 0: %s", env.Message)
 

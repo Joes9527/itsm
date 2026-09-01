@@ -230,7 +230,10 @@ type startProcessCommitProbeHandler struct {
 	tenantID               int
 	businessKey            string
 	observedCommittedState bool
+	effectCount            int
 }
+
+func (h *startProcessCommitProbeHandler) EffectCount() int { return h.effectCount }
 
 func (h *startProcessCommitProbeHandler) GetTaskType() string  { return "start_commit_probe" }
 func (h *startProcessCommitProbeHandler) GetHandlerID() string { return "start_commit_probe_handler" }
@@ -238,6 +241,7 @@ func (h *startProcessCommitProbeHandler) CallbackContract(string) (bpmn.Callback
 	return bpmn.CallbackActionContract{}, true
 }
 func (h *startProcessCommitProbeHandler) Execute(ctx context.Context, _ *ent.ProcessTask, _ map[string]interface{}) (*bpmn.CallbackEffect, error) {
+	h.effectCount++
 	instance, err := h.client.ProcessInstance.Query().Where(
 		processinstance.TenantID(h.tenantID),
 		processinstance.BusinessKey(h.businessKey),

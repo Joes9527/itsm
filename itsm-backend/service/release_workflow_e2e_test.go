@@ -2,12 +2,12 @@ package service
 
 import (
 	"context"
-	"strconv"
 	"testing"
 
 	"itsm-backend/dto"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/processapprovaldecision"
+	"itsm-backend/ent/processauditlog"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/service/bpmn"
@@ -58,28 +58,27 @@ func TestReleaseFlow_ProcessTaskDecisionDrivesLifecycleEndToEnd(t *testing.T) {
 
 	_, err = NewBPMNTemplateService(client).LoadAndDeployTemplates(ctx, tenant.ID)
 	require.NoError(t, err)
+	require.NoError(t, NewProcessBindingService(client).InitDefaultBindings(ctx, tenant.ID))
 
 	releaseService := NewReleaseService(client, zap.NewNop().Sugar())
+	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar())
+	releaseService.SetProcessEngine(engine)
+	releaseService.SetProcessTriggerService(NewProcessTriggerService(client, engine))
+	engine.(*CustomProcessEngine).CallbackRegistry().
+		GetHandler("release_service_handler").(*bpmn.ReleaseServiceTaskHandler).
+		SetReleaseService(releaseService)
 	releaseEntity, err := releaseService.CreateRelease(ctx, &dto.CreateReleaseRequest{
-		ReleaseNumber: "REL-BRIDGE-1",
-		Title:         "流程端到端发布",
-		Type:          "minor",
+		ReleaseNumber:    "REL-BRIDGE-1",
+		Title:            "流程端到端发布",
+		Type:             "minor",
+		RequiresApproval: true,
 	}, creator.ID, tenant.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "draft", releaseEntity.Status)
 
-	// 模拟 ProcessTriggerService 启动：businessKey 与实例变量按 trigger 约定写入
-	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar())
-	releaseService.SetProcessEngine(engine)
-	engine.(*CustomProcessEngine).CallbackRegistry().
-		GetHandler("release_service_handler").(*bpmn.ReleaseServiceTaskHandler).
-		SetReleaseService(releaseService)
-	workflowCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
-	workflowCtx = WithTrustedBPMNTenantContext(workflowCtx, tenant.ID)
-	instance, err := engine.StartProcess(workflowCtx, "release_approval_flow", "release:"+strconv.Itoa(releaseEntity.ID), "release", releaseEntity.ID, map[string]interface{}{
-		"triggered_by": strconv.Itoa(creator.ID),
-	})
-	require.NoError(t, err)
+	instance := client.ProcessInstance.Query().Where(
+		processinstance.BusinessType("release"), processinstance.BusinessID(releaseEntity.ID),
+	).OnlyX(ctx)
 	started, err := client.ProcessInstance.Get(ctx, instance.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "Activity_TechReview", started.CurrentActivityID, "流程应停在技术评审节点")
@@ -179,26 +178,26 @@ func TestReleaseFlow_RejectApproval_EndsFlowAndCancelsRelease(t *testing.T) {
 
 	_, err = NewBPMNTemplateService(client).LoadAndDeployTemplates(ctx, tenant.ID)
 	require.NoError(t, err)
+	require.NoError(t, NewProcessBindingService(client).InitDefaultBindings(ctx, tenant.ID))
 
 	releaseService := NewReleaseService(client, zap.NewNop().Sugar())
-	releaseEntity, err := releaseService.CreateRelease(ctx, &dto.CreateReleaseRequest{
-		ReleaseNumber: "REL-REJECT-1",
-		Title:         "拒绝路径发布",
-		Type:          "minor",
-	}, creator.ID, tenant.ID)
-	require.NoError(t, err)
-
 	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar())
 	releaseService.SetProcessEngine(engine)
+	releaseService.SetProcessTriggerService(NewProcessTriggerService(client, engine))
 	engine.(*CustomProcessEngine).CallbackRegistry().
 		GetHandler("release_service_handler").(*bpmn.ReleaseServiceTaskHandler).
 		SetReleaseService(releaseService)
-	workflowCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
-	workflowCtx = WithTrustedBPMNTenantContext(workflowCtx, tenant.ID)
-	instance, err := engine.StartProcess(workflowCtx, "release_approval_flow", "release:"+strconv.Itoa(releaseEntity.ID), "release", releaseEntity.ID, map[string]interface{}{
-		"triggered_by": strconv.Itoa(creator.ID),
-	})
+	releaseEntity, err := releaseService.CreateRelease(ctx, &dto.CreateReleaseRequest{
+		ReleaseNumber:    "REL-REJECT-1",
+		Title:            "拒绝路径发布",
+		Type:             "minor",
+		RequiresApproval: true,
+	}, creator.ID, tenant.ID)
 	require.NoError(t, err)
+
+	instance := client.ProcessInstance.Query().Where(
+		processinstance.BusinessType("release"), processinstance.BusinessID(releaseEntity.ID),
+	).OnlyX(ctx)
 
 	// 技术评审通过 → 审批节点
 	_, err = releaseService.ApplyReleaseTechReview(ctx, releaseEntity.ID, tenant.ID, creator.ID, "评审通过")
@@ -252,21 +251,74 @@ func TestReleaseService_CreateRelease_TriggersWorkflow(t *testing.T) {
 	triggerSvc := NewProcessTriggerService(client, engine)
 
 	releaseService := NewReleaseService(client, zap.NewNop().Sugar())
+	releaseService.SetProcessEngine(engine)
 	releaseService.SetProcessTriggerService(triggerSvc)
 
 	releaseEntity, err := releaseService.CreateRelease(ctx, &dto.CreateReleaseRequest{
-		ReleaseNumber: "REL-TRIGGER-1",
-		Title:         "自动触发发布",
-		Type:          "minor",
+		ReleaseNumber:    "REL-TRIGGER-1",
+		Title:            "自动触发发布",
+		Type:             "minor",
+		RequiresApproval: true,
 	}, creator.ID, tenant.ID)
 	require.NoError(t, err)
 
 	instance, err := client.ProcessInstance.Query().
-		Where(processinstance.BusinessKey("release:"+strconv.Itoa(releaseEntity.ID)),
+		Where(processinstance.BusinessType("release"), processinstance.BusinessID(releaseEntity.ID),
 			processinstance.TenantID(tenant.ID)).
 		Only(ctx)
 	require.NoError(t, err, "创建发布应自动启动 release_approval_flow 实例")
 	assert.Equal(t, "release_approval_flow", instance.ProcessDefinitionKey)
 	assert.Equal(t, "Activity_TechReview", instance.CurrentActivityID,
 		"流程应停在第一个节点（技术评审）")
+	assert.Equal(t, true, instance.Variables["requires_approval"],
+		"requiresApproval must be a typed BPMN routing variable")
+}
+
+func TestReleaseFlow_NoApprovalUsesExplicitBPMNGatewayToSchedule(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", testDSN())
+	t.Cleanup(func() { _ = client.Close() })
+	ctx := context.Background()
+	tenant := client.Tenant.Create().
+		SetName("Release Optional Approval Tenant").SetCode("release-no-approval").
+		SetDomain("release-no-approval.example.com").SetStatus("active").SaveX(ctx)
+	creator := client.User.Create().
+		SetUsername("release-no-approval").SetEmail("release-no-approval@test.com").
+		SetPasswordHash("x").SetName("创建人").SetTenantID(tenant.ID).SetActive(true).SaveX(ctx)
+	_, err := NewBPMNTemplateService(client).LoadAndDeployTemplates(ctx, tenant.ID)
+	require.NoError(t, err)
+	require.NoError(t, NewProcessBindingService(client).InitDefaultBindings(ctx, tenant.ID))
+
+	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar())
+	trigger := NewProcessTriggerService(client, engine)
+	svc := NewReleaseService(client, zap.NewNop().Sugar())
+	svc.SetProcessEngine(engine)
+	svc.SetProcessTriggerService(trigger)
+	engine.(*CustomProcessEngine).CallbackRegistry().
+		GetHandler("release_service_handler").(*bpmn.ReleaseServiceTaskHandler).SetReleaseService(svc)
+
+	created, err := svc.CreateRelease(ctx, &dto.CreateReleaseRequest{
+		ReleaseNumber: "REL-NO-APPROVAL", Title: "BPMN optional approval", Type: "minor",
+		RequiresApproval: false,
+	}, creator.ID, tenant.ID)
+	require.NoError(t, err)
+	instance := client.ProcessInstance.Query().Where(
+		processinstance.BusinessType("release"), processinstance.BusinessID(created.ID),
+	).OnlyX(ctx)
+	require.Equal(t, false, instance.Variables["requires_approval"])
+
+	_, err = svc.ApplyReleaseTechReview(ctx, created.ID, tenant.ID, creator.ID, "无需人工审批")
+	require.NoError(t, err)
+	instance = client.ProcessInstance.GetX(ctx, instance.ID)
+	require.Equal(t, "Activity_Schedule", instance.CurrentActivityID)
+	require.False(t, client.ProcessTask.Query().Where(
+		processtask.ProcessInstanceID(instance.ID), processtask.TaskDefinitionKey("Activity_Approval"),
+	).ExistX(ctx), "BPMN false branch must not create an approval task")
+	require.True(t, client.ProcessTask.Query().Where(
+		processtask.ProcessInstanceID(instance.ID), processtask.TaskDefinitionKey("Activity_Schedule"),
+	).ExistX(ctx), "BPMN false branch must expose the canonical schedule command")
+	require.True(t, client.ProcessAuditLog.Query().Where(
+		processauditlog.ProcessInstanceID(instance.ID),
+		processauditlog.Action(AuditActionOptionalStepSkipped),
+		processauditlog.ActivityID("Flow_ApprovalSkipped"),
+	).ExistX(ctx), "definition-declared optional approval skip must be observable")
 }

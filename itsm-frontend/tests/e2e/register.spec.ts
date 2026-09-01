@@ -32,20 +32,15 @@ test.describe('Register + Login Flow - 注册登录流程', () => {
     await roleSelect.click();
     await page.getByRole('option', { name: /普通用户/i }).click();
 
-    const registerResponsePromise = page
-      .waitForResponse(
-        resp => resp.url().includes('/api/v1/auth/register') && resp.request().method() === 'POST',
-        { timeout: 30000 }
-      )
-      .catch(() => null);
+    const registerResponsePromise = page.waitForResponse(
+      resp => resp.url().includes('/api/v1/auth/register') && resp.request().method() === 'POST',
+      { timeout: 30000 }
+    );
 
     await page.getByRole('button', { name: /注册|Register/i }).click();
 
     const registerResponse = await registerResponsePromise;
-    if (registerResponse) {
-      expect(registerResponse.status()).toBeGreaterThanOrEqual(200);
-      expect(registerResponse.status()).toBeLessThan(500);
-    }
+    expect(registerResponse.status()).toBe(200);
 
     await page.waitForLoadState('networkidle');
 
@@ -62,20 +57,15 @@ test.describe('Register + Login Flow - 注册登录流程', () => {
     await loginInputs.nth(0).fill(username);
     await loginInputs.nth(1).fill(password);
 
-    const loginResponsePromise = page
-      .waitForResponse(
-        resp => resp.url().includes('/api/v1/auth/login') && resp.request().method() === 'POST',
-        { timeout: 30000 }
-      )
-      .catch(() => null);
+    const loginResponsePromise = page.waitForResponse(
+      resp => resp.url().includes('/api/v1/auth/login') && resp.request().method() === 'POST',
+      { timeout: 30000 }
+    );
 
     await page.click('button[type="submit"]');
 
     const loginResponse = await loginResponsePromise;
-    if (loginResponse) {
-      expect(loginResponse.status()).toBeGreaterThanOrEqual(200);
-      expect(loginResponse.status()).toBeLessThan(500);
-    }
+    expect(loginResponse.status()).toBe(200);
 
     await page.waitForURL(/\/(dashboard|tickets|incidents|problems|changes|service-catalog)/, {
       timeout: 30000,

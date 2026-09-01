@@ -22,6 +22,7 @@ import { AuthService } from '@/lib/services/auth-service';
 import { logger } from '@/lib/env';
 import { useAuthStoreHydration, useAuthStore } from '@/lib/store/auth-store';
 import { getDefaultRoute } from '@/lib/utils/role-routes';
+import { buildAzureLoginURL } from './azure-login-url';
 
 const { Text, Title } = Typography;
 
@@ -60,13 +61,13 @@ function LoginForm() {
   const redirectPath = searchParams.get('redirect') || null;
 
   // 处理登录提交
-  const handleLogin = async (values: { username: string; password: string }) => {
+  const handleLogin = async (values: { username: string; password: string; tenantCode: string }) => {
     logger.info('开始登录:', values);
     setLoading(true);
     setError('');
 
     try {
-      const success = await AuthService.login(values.username, values.password);
+      const success = await AuthService.login(values.username, values.password, values.tenantCode);
 
       if (success) {
         logger.info('认证信息已存储，准备跳转');
@@ -145,6 +146,13 @@ function LoginForm() {
         size='middle'
       >
         <Form.Item
+          name='tenantCode'
+          label='租户代码'
+          rules={[{ required: true, whitespace: true, message: '请输入租户代码' }]}
+        >
+          <Input placeholder='请输入租户代码' disabled={loading} />
+        </Form.Item>
+        <Form.Item
           name='username'
           label={t('auth.login.usernameLabel')}
           rules={[
@@ -212,8 +220,12 @@ function LoginForm() {
         className='w-full h-10 rounded-xl text-sm font-semibold'
         icon={<MicrosoftIcon />}
         onClick={() => {
-          const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
-          window.location.href = `${apiUrl}/api/v1/auth/azure/login`;
+          try {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+            window.location.href = buildAzureLoginURL(apiUrl, form.getFieldValue('tenantCode'));
+          } catch {
+            setError('请先输入租户代码');
+          }
         }}
       >
         使用 Microsoft 账户登录

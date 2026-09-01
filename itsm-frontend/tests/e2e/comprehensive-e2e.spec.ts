@@ -13,24 +13,11 @@
  * 9. 报表 / Dashboard
  */
 
-import type { Page } from '@playwright/test';
 import { test, expect } from '@playwright/test';
 import { loginAsAdmin } from './test-utils';
 
 const BASE = 'http://localhost:3000';
 const API = 'http://localhost:8090';
-
-async function waitApiOk(page: Page, urlPattern: RegExp): Promise<boolean> {
-  try {
-    const resp = await page.waitForResponse(
-      r => urlPattern.test(r.url()) && r.status() >= 200 && r.status() < 300,
-      { timeout: 15000 }
-    );
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 test.describe('ITSM 全面 E2E 业务流测试', () => {
 
@@ -57,9 +44,8 @@ test.describe('ITSM 全面 E2E 业务流测试', () => {
     ];
     for (const p of pages) {
       const resp = await page.goto(`${BASE}${p}`, { waitUntil: 'domcontentloaded' });
-      // 由于 Next.js 重定向，状态码可能是 200 或 307
       const status = resp?.status() ?? 0;
-      expect([200, 307, 308]).toContain(status);
+      expect(status).toBe(200);
     }
   });
 
@@ -250,7 +236,7 @@ test.describe('ITSM 全面 E2E 业务流测试', () => {
     const provResp = await page.request.post(`${API}/api/v1/connectors/configs`, {
       data: { name: 'console', enabled: true, settings: { debug_channel: 'stdout' } },
     });
-    expect([200, 400, 500]).toContain(provResp.status()); // 已存在可能 400
+    expect(provResp.status()).toBe(200);
 
     // 健康检查
     const healthResp = await page.request.get(`${API}/api/v1/connectors/health`);

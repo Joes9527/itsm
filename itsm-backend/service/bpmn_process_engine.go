@@ -321,12 +321,8 @@ func resolveBPMNProcessStartActor(ctx context.Context, client *ent.Client, tenan
 
 // StartProcess 启动流程实例
 func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitionKey string, businessKey string, businessType string, businessID int, variables map[string]interface{}) (*ent.ProcessInstance, error) {
-	tenantID, err := bpmnAuthorizedTenantFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if legacyTenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int); legacyTenantID > 0 && legacyTenantID != tenantID {
-		return nil, common.NewForbiddenError("BPMN 启动租户上下文不一致")
+	if e.transactionBound {
+		return e.startProcessWithClient(ctx, processDefinitionKey, businessKey, businessType, businessID, variables)
 	}
 	tx, err := e.client.Tx(ctx)
 	if err != nil {
@@ -335,8 +331,27 @@ func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitio
 	defer func() { _ = tx.Rollback() }()
 	executionKeys := make([]string, 0)
 	txEngine := e.forClient(tx.Client(), &executionKeys)
+	instance, err := txEngine.startProcessWithClient(ctx, processDefinitionKey, businessKey, businessType, businessID, variables)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("提交流程启动事务失败: %w", err)
+	}
+	instance.Unwrap()
+	e.processCommittedCallbackKeys(ctx, instance.TenantID, executionKeys)
+	return instance, nil
+}
 
-	query := tx.Client().ProcessDefinition.Query().
+func (e *CustomProcessEngine) startProcessWithClient(ctx context.Context, processDefinitionKey string, businessKey string, businessType string, businessID int, variables map[string]interface{}) (*ent.ProcessInstance, error) {
+	tenantID, err := bpmnAuthorizedTenantFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if legacyTenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int); legacyTenantID > 0 && legacyTenantID != tenantID {
+		return nil, common.NewForbiddenError("BPMN 启动租户上下文不一致")
+	}
+	query := e.client.ProcessDefinition.Query().
 		Where(processdefinition.Key(processDefinitionKey)).
 		Where(processdefinition.IsActive(true)).
 		Where(processdefinition.IsLatest(true))
@@ -361,7 +376,7 @@ func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitio
 	}
 	startEvent := process.StartEvents[0]
 
-	createInstance := tx.Client().ProcessInstance.Create().
+	createInstance := e.client.ProcessInstance.Create().
 		SetProcessInstanceID(fmt.Sprintf("PI-%s-%d", processDefinitionKey, time.Now().UnixNano())).
 		SetBusinessKey(businessKey).
 		SetProcessDefinitionKey(processDefinitionKey).
@@ -394,11 +409,11 @@ func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitio
 	}
 
 	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, definition.TenantID)
-	if err := txEngine.executeStep(ctx, instance, process, startEvent.ID, variables); err != nil {
+	if err := e.executeStep(ctx, instance, process, startEvent.ID, variables); err != nil {
 		return nil, err
 	}
 
-	actor, userName, err := resolveBPMNProcessStartActor(ctx, tx.Client(), definition.TenantID, variables)
+	actor, userName, err := resolveBPMNProcessStartActor(ctx, e.client, definition.TenantID, variables)
 	if err != nil {
 		return nil, err
 	}
@@ -406,15 +421,9 @@ func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitio
 	if actor != nil {
 		userID = actor.ID
 	}
-	if err := txEngine.auditService.RecordProcessStarted(ctx, instance, userID, userName, variables); err != nil {
+	if err := e.auditService.RecordProcessStarted(ctx, instance, userID, userName, variables); err != nil {
 		return nil, err
 	}
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("提交流程启动事务失败: %w", err)
-	}
-
-	instance.Unwrap()
-	e.processCommittedCallbackKeys(ctx, definition.TenantID, executionKeys)
 	return instance, nil
 }
 
@@ -1027,12 +1036,12 @@ func (e *CustomProcessEngine) executeStep(ctx context.Context, instance *ent.Pro
 		return fmt.Errorf("流程节点 %s 没有出向顺序流且不是结束事件", currentElementID)
 	}
 
-	var targetRef string
+	var selectedFlow *BPMNSequenceFlow
 	unconditionalCount := 0
 	for _, flow := range outgoingFlows {
 		if e.evaluateCondition(flow, variables) {
-			if targetRef == "" {
-				targetRef = flow.TargetRef
+			if selectedFlow == nil {
+				selectedFlow = flow
 			}
 			if flow.ConditionExpression == nil || flow.ConditionExpression.Expression == "" {
 				unconditionalCount++
@@ -1040,7 +1049,7 @@ func (e *CustomProcessEngine) executeStep(ctx context.Context, instance *ent.Pro
 		}
 	}
 
-	if targetRef == "" {
+	if selectedFlow == nil {
 		return fmt.Errorf("没有符合条件的路径")
 	}
 
@@ -1049,12 +1058,42 @@ func (e *CustomProcessEngine) executeStep(ctx context.Context, instance *ent.Pro
 		e.logger.Warnw("多个无条件分支同时匹配，已取第一条（请检查BPMN流程：应为排他网关添加条件表达式）",
 			"element_id", currentElementID,
 			"unconditional_count", unconditionalCount,
-			"selected_target", targetRef,
+			"selected_target", selectedFlow.TargetRef,
 			"instance_id", instance.ProcessInstanceID,
 		)
 	}
 
-	return e.handleElement(ctx, instance, process, targetRef)
+	if skippedStep := selectedFlow.OptionalSkip(); skippedStep != "" {
+		actorID, _ := numericInt(instance.Variables["triggered_by"])
+		if err := e.auditService.RecordAudit(ctx, &AuditContext{
+			ProcessInstanceID:    instance.ID,
+			ProcessInstanceKey:   instance.ProcessInstanceID,
+			ProcessDefinitionKey: instance.ProcessDefinitionKey,
+			ProcessDefinitionID:  instance.ProcessDefinitionID,
+			ActivityID:           selectedFlow.ID,
+			ActivityName:         skippedStep,
+			ActivityType:         ActivityTypeGateway,
+			Action:               AuditActionOptionalStepSkipped,
+			UserID:               actorID,
+			VariablesAfter:       variables,
+			Comment:              "BPMN definition declared this step optional",
+			TenantID:             instance.TenantID,
+			Metadata: map[string]interface{}{
+				"skipped_step": skippedStep,
+				"source_ref":   selectedFlow.SourceRef,
+				"target_ref":   selectedFlow.TargetRef,
+			},
+		}); err != nil {
+			return fmt.Errorf("record optional BPMN step skip: %w", err)
+		}
+		e.logger.Warnw("BPMN optional step skipped by declared sequence flow",
+			"process_instance_id", instance.ProcessInstanceID,
+			"flow_id", selectedFlow.ID,
+			"skipped_step", skippedStep,
+		)
+	}
+
+	return e.handleElement(ctx, instance, process, selectedFlow.TargetRef)
 }
 
 func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.ProcessInstance, process *BPMNProcess, elementID string) error {
@@ -2628,6 +2667,8 @@ type ListUserTasksRequest struct {
 	Status               string `json:"status" form:"status"`
 	ProcessDefinitionKey string `json:"processDefinitionKey" form:"processDefinitionKey"`
 	ProcessInstanceID    int    `json:"processInstanceId" form:"processInstanceId"`
+	BusinessType         string `json:"businessType" form:"businessType"`
+	BusinessID           int    `json:"businessId" form:"businessId"`
 	TenantID             int    `json:"tenantId" form:"tenantId"`
 	Page                 int    `json:"page" form:"page"`
 	PageSize             int    `json:"pageSize" form:"pageSize"`
@@ -3540,6 +3581,16 @@ func (s *bpmnTaskService) ListUserTasks(ctx context.Context, req *ListUserTasksR
 	}
 	if req.ProcessInstanceID > 0 {
 		query = query.Where(processtask.ProcessInstanceID(req.ProcessInstanceID))
+	}
+	if (req.BusinessType == "") != (req.BusinessID == 0) {
+		return nil, 0, common.NewBadRequestError("businessType and businessId must be provided together", nil)
+	}
+	if req.BusinessType != "" {
+		query = query.Where(processtask.HasProcessInstanceWith(
+			processinstance.BusinessType(req.BusinessType),
+			processinstance.BusinessID(req.BusinessID),
+			processinstance.TenantID(scope.TenantID),
+		))
 	}
 	if actor == nil {
 		total, err := query.Count(ctx)

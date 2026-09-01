@@ -57,6 +57,15 @@ describe('BPMNWorkflowApi canonical contracts', () => {
     expect(put).toHaveBeenCalledWith('/api/v1/bpmn/tasks/7/claim', {});
   });
 
+  it('filters active tasks by authoritative process business identity', async () => {
+    get.mockResolvedValue({ data: [], pagination: { total: 0, page: 1, pageSize: 20 } });
+    await BPMNWorkflowApi.listUserTasks({ businessType: 'release', businessId: 42 });
+    expect(get).toHaveBeenCalledWith('/api/v1/bpmn/tasks', {
+      businessType: 'release',
+      businessId: '42',
+    });
+  });
+
   it('submits approval only through the ProcessTask decision command', async () => {
     const decision = { action: 'reject' as const, comment: 'insufficient evidence' };
     await BPMNWorkflowApi.submitApprovalDecision(7, decision);

@@ -44,7 +44,7 @@ func LoadAzureConfig() AzureConfig {
 }
 
 func (c AzureConfig) IsConfigured() bool {
-	return c.TenantID != "" && c.ClientID != "" && c.ClientSecret != ""
+	return c.TenantID != "" && c.ClientID != "" && c.ClientSecret != "" && c.RedirectURI != ""
 }
 
 func (c AzureConfig) AuthorizeURL(state string) string {

@@ -3,11 +3,8 @@
 /**
  * 服务请求列表组件——"我的请求"
  *
- * 原来还有一个内部"待办审批" Tab，数据源 ServiceRequestApi.getPendingApprovals 打在
- * Task 1 已经删除的 /api/v1/service-requests/approvals/pending 上（SR 自己的审批阶段
- * 概念整体退休，审批现在走关联 Ticket 自己的 BPMN 流程，对应视图见
- * /approvals/pending 页面的"我作为候选组员（BPMN）"Tab）。与其保留一个数据源已经不存在、
- * 靠 catch 掩盖成永远空的 Tab，不如去掉——只保留"我的请求"这一个真实存在的视图。
+ * 服务请求域只展示请求记录；审批由关联 WorkItem 的 BPMN ProcessTask
+ * 唯一承载，并在 /approvals 中展示。这里不再定义第二套待审数据源或阶段。
  */
 
 import React, { useState, useEffect } from 'react';

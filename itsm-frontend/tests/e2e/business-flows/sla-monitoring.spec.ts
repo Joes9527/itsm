@@ -2,9 +2,20 @@
  * SLA 监控完整 E2E 测试
  * 覆盖 SLA 定义、监控、告警、报表等核心功能
  */
-import { test, expect } from '@playwright/test';
+import { test, expect, type APIRequestContext } from '@playwright/test';
 import { loginAs, logout, TEST_USERS } from '../utils/test-utils';
 import { TicketPage } from '../utils/page-objects/TicketPage';
+
+async function csrfHeaders(request: APIRequestContext, apiUrl: string) {
+  const response = await request.get(`${apiUrl}/api/v1/csrf-token`);
+  expect(response.status()).toBe(200);
+  const body = await response.json() as { data?: { csrf_token?: string } };
+  expect(body.data?.csrf_token).toBeTruthy();
+  return {
+    'Content-Type': 'application/json',
+    'X-CSRF-Token': body.data!.csrf_token!,
+  };
+}
 
 test.describe('SLA 监控完整测试', () => {
   test.beforeEach(async ({ page }) => {
@@ -139,15 +150,15 @@ test.describe('SLA 监控完整测试', () => {
         },
       });
 
-      expect(loginResponse.ok()).toBe(true);
+      expect(loginResponse.status()).toBe(200);
 
       // 获取 SLA 列表
       const response = await request.get(`${apiUrl}/api/v1/sla`);
 
-      expect([200, 401, 403].includes(response.status())).toBe(true);
+      expect(response.status()).toBe(200);
     });
 
-    test('GET /api/v1/sla/monitor 监控数据接口', async ({ request }) => {
+    test('POST /api/v1/sla/monitoring 监控数据接口', async ({ request }) => {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8090';
 
       // 登录
@@ -157,14 +168,18 @@ test.describe('SLA 监控完整测试', () => {
           password: TEST_USERS.admin.password,
         },
       });
+      expect(loginResponse.status()).toBe(200);
 
       // 获取 SLA 监控数据
-      const response = await request.get(`${apiUrl}/api/v1/sla/monitor`);
+      const response = await request.post(`${apiUrl}/api/v1/sla/monitoring`, {
+        data: {},
+        headers: await csrfHeaders(request, apiUrl),
+      });
 
-      expect([200, 401, 403].includes(response.status())).toBe(true);
+      expect(response.status()).toBe(200);
     });
 
-    test('GET /api/v1/sla/breaches 告警接口', async ({ request }) => {
+    test('GET /api/v1/sla/violations 告警接口', async ({ request }) => {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8090';
 
       // 登录
@@ -174,11 +189,12 @@ test.describe('SLA 监控完整测试', () => {
           password: TEST_USERS.admin.password,
         },
       });
+      expect(loginResponse.status()).toBe(200);
 
       // 获取 SLA 告警列表
-      const response = await request.get(`${apiUrl}/api/v1/sla/breaches`);
+      const response = await request.get(`${apiUrl}/api/v1/sla/violations`);
 
-      expect([200, 401, 403].includes(response.status())).toBe(true);
+      expect(response.status()).toBe(200);
     });
   });
 
@@ -269,30 +285,30 @@ test.describe('SLA 监控 API 集成测试', () => {
       },
     });
 
-    if (!loginResponse.ok()) {
-      test.skip();
-      return;
-    }
+    expect(loginResponse.status()).toBe(200);
 
     // 2. 获取 SLA 列表
     const slaResponse = await request.get(`${apiUrl}/api/v1/sla`);
-    const slaData = slaResponse.ok() ? await slaResponse.json() : null;
+    expect(slaResponse.status()).toBe(200);
+    const slaData = await slaResponse.json();
     console.log('SLA count:', slaData?.data?.total ?? 0);
 
     // 3. 获取 SLA 监控数据
-    const monitorResponse = await request.get(`${apiUrl}/api/v1/sla/monitor`);
-    const monitorData = monitorResponse.ok() ? await monitorResponse.json() : null;
+    const monitorResponse = await request.post(`${apiUrl}/api/v1/sla/monitoring`, {
+      data: {},
+      headers: await csrfHeaders(request, apiUrl),
+    });
+    expect(monitorResponse.status()).toBe(200);
+    const monitorData = await monitorResponse.json();
     console.log('SLA monitor data:', monitorData?.data ?? 'N/A');
 
     // 4. 获取 SLA 告警
-    const breachesResponse = await request.get(`${apiUrl}/api/v1/sla/breaches`);
-    const breachesData = breachesResponse.ok() ? await breachesResponse.json() : null;
+    const breachesResponse = await request.get(`${apiUrl}/api/v1/sla/violations`);
+    expect(breachesResponse.status()).toBe(200);
+    const breachesData = await breachesResponse.json();
     console.log('SLA breaches count:', breachesData?.data?.total ?? 0);
 
-    // 验证 API 响应
-    expect([200, 401, 403].includes(slaResponse.status())).toBe(true);
-    expect([200, 401, 403].includes(monitorResponse.status())).toBe(true);
-    expect([200, 401, 403].includes(breachesResponse.status())).toBe(true);
+    // 每个端点都必须满足唯一的成功契约。
   });
 
   test('SLA 权限验证', async ({ request }) => {
@@ -306,16 +322,11 @@ test.describe('SLA 监控 API 集成测试', () => {
       },
     });
 
-    if (!loginResponse.ok()) {
-      test.skip();
-      return;
-    }
+    expect(loginResponse.status()).toBe(200);
 
     // 尝试访问 SLA 管理接口
     const response = await request.get(`${apiUrl}/api/v1/sla`);
 
-    // 普通用户可能只能查看，不能管理
-    console.log('End user SLA access status:', response.status());
-    expect([200, 403].includes(response.status())).toBe(true);
+    expect(response.status()).toBe(403);
   });
 });

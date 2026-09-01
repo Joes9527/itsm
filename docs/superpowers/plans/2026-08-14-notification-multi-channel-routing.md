@@ -413,7 +413,7 @@ Run: `cd itsm-backend && go build -o /tmp/itsm-backend . && nohup /tmp/itsm-back
 
 - [ ] **Step 2: 初始化用户默认偏好**
 
-Run: `curl -X POST http://localhost:8090/api/v1/notification-preferences/init -H "Authorization: Bearer $TOKEN"`
+Run: `curl -X POST http://localhost:8090/api/v1/notification-preferences/init -b "$ITSM_COOKIE_JAR" -H "X-CSRF-Token: $ITSM_CSRF_TOKEN"`
 Expected: 为当前用户创建默认偏好（comment_added 等事件 email+in_app 启用）。
 
 - [ ] **Step 3: 触发评论并验证多渠道**

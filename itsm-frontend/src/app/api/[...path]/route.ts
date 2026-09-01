@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { hasBrowserSession } from '@/lib/auth/browser-session';
-import { expiredSessionCookies, isPublicProxyPath } from './proxy-policy';
+import { isPublicProxyPath, sessionCookieExpirations } from './proxy-policy';
 
 const BACKEND_BASE_URL = process.env.ITSM_BACKEND_URL || 'http://localhost:8090';
 
@@ -89,7 +89,7 @@ async function proxyRequest(request: NextRequest, params: Promise<{ path: string
       responseHeaders.delete('set-cookie');
       const secure = request.nextUrl.protocol === 'https:'
         || request.headers.get('x-forwarded-proto')?.toLowerCase() === 'https';
-      for (const cookie of expiredSessionCookies(secure)) {
+      for (const cookie of sessionCookieExpirations(fullPath, response.status, secure)) {
         responseHeaders.append('set-cookie', cookie);
       }
     }

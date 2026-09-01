@@ -13,6 +13,7 @@ const (
 	bpmnMetaDataAllowedActions   = "allowed_actions"
 	bpmnMetaDataCallbackConfig   = "callback_config_ref"
 	bpmnMetaDataCallbackOptional = "callback_optional"
+	bpmnMetaDataOptionalSkip     = "optional_skip"
 )
 
 // BPMNElement BPMN元素的基础接口
@@ -338,7 +339,15 @@ type BPMNSequenceFlow struct {
 	Name                string                   `xml:"name,attr"`
 	SourceRef           string                   `xml:"sourceRef,attr"`
 	TargetRef           string                   `xml:"targetRef,attr"`
+	ExtensionElements   *BPMNExtensionElements   `xml:"extensionElements"`
 	ConditionExpression *BPMNConditionExpression `xml:"conditionExpression"`
+}
+
+// OptionalSkip returns the definition-declared business step intentionally
+// bypassed by this sequence flow. Absence means the flow is not an optional
+// skip and therefore produces no skip audit.
+func (e *BPMNSequenceFlow) OptionalSkip() string {
+	return e.ExtensionElements.GetMetaData(bpmnMetaDataOptionalSkip)
 }
 
 // GetID 获取ID

@@ -207,6 +207,45 @@ func (s *ProcessTriggerService) TriggerByBusinessType(
 	return s.TriggerProcess(ctx, req)
 }
 
+// TriggerByBusinessTypeWithClient binds routing, identity validation and the
+// process engine to the caller's Ent transaction. It is the single atomic
+// start path used when a professional record and its process must commit or
+// roll back together.
+func (s *ProcessTriggerService) TriggerByBusinessTypeWithClient(
+	ctx context.Context,
+	client *ent.Client,
+	businessType dto.BusinessType,
+	businessID int,
+	variables map[string]interface{},
+	triggeredBy string,
+	tenantID int,
+) (*TransactionalProcessStart, error) {
+	if client == nil {
+		return nil, fmt.Errorf("transactional process client is required")
+	}
+	engine, ok := s.processEngine.(*CustomProcessEngine)
+	if !ok || engine == nil {
+		return nil, fmt.Errorf("transactional process engine is unavailable")
+	}
+	bound := *s
+	bound.client = client
+	executionKeys := make([]string, 0)
+	bound.processEngine = engine.forClient(client, &executionKeys)
+	bound.processBindingSvc = NewProcessBindingService(client)
+	bound.processRoutingSvc = NewProcessRoutingService(client, zap.NewNop().Sugar())
+	response, err := bound.TriggerByBusinessType(ctx, businessType, businessID, variables, triggeredBy, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	keys := append([]string(nil), executionKeys...)
+	return &TransactionalProcessStart{
+		Response: response,
+		afterCommit: func(callbackCtx context.Context) {
+			engine.processCommittedCallbackKeys(callbackCtx, tenantID, keys)
+		},
+	}, nil
+}
+
 // CancelProcess 取消流程
 func (s *ProcessTriggerService) CancelProcess(ctx context.Context, processInstanceID int, reason string) error {
 	return s.processEngine.TerminateProcess(ctx, strconv.Itoa(processInstanceID), reason)

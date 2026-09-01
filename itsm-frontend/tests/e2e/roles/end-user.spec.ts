@@ -6,34 +6,22 @@
  */
 import { test, expect } from '../fixtures/auth';
 
-const TEST_ACCOUNTS = {
-  admin: { username: 'admin', password: 'admin123', role: 'admin' },
-  user1: { username: 'user1', password: 'user123', role: 'end_user' },
-  security1: { username: 'security1', password: 'security123', role: 'security' },
-  engineer1: { username: 'engineer1', password: 'eng123', role: 'technician' },
-  manager1: { username: 'manager1', password: 'mgr123', role: 'manager' },
-  tenant1admin: { username: 'tenant1admin', password: 'ta123', role: 'admin' },
-} as const;
-
-type TestRole = keyof typeof TEST_ACCOUNTS;
-
 test.describe('US1: end_user 提单到关闭闭环', () => {
-  let token: string;
+  let role: string;
 
   test.beforeEach(async ({ loginAs }) => {
     // 登录为普通用户
-    token = await loginAs('user1');
+    role = await loginAs('user1');
   });
 
   test('T013 - 登录后能访问工单列表页面', async ({ page }) => {
     const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
     await page.goto(`${baseURL}/tickets`);
-    // 验证页面加载（可能有重定向到登录）
-    await expect(page).toHaveURL(/.*(\/login|\/tickets)/);
+    await expect(page).toHaveURL(/\/tickets(?:\?.*)?$/);
   });
 
   test('T014 - 创建工单成功', async ({ apiPost }) => {
-    const response = await apiPost(token, '/api/v1/tickets', {
+    const response = await apiPost(role, '/api/v1/tickets', {
       title: 'E2E 测试工单 - US1',
       description: '这是自动化端到端测试创建的工单',
       priority: 'medium',
@@ -46,7 +34,7 @@ test.describe('US1: end_user 提单到关闭闭环', () => {
   });
 
   test('T015 - 能查看我的工单列表', async ({ apiGet }) => {
-    const response = await apiGet(token, '/api/v1/tickets');
+    const response = await apiGet(role, '/api/v1/tickets');
 
     expect(response.status).toBe(200);
     expect(response.data).toHaveProperty('code', 0);
@@ -56,7 +44,7 @@ test.describe('US1: end_user 提单到关闭闭环', () => {
 
   test('T016 - 能查看工单详情', async ({ apiGet, apiPost }) => {
     // 先创建工单获取 ID
-    const createResp = await apiPost(token, '/api/v1/tickets', {
+    const createResp = await apiPost(role, '/api/v1/tickets', {
       title: 'US1 详情测试工单',
       description: '用于测试查看详情',
       priority: 'low',
@@ -67,7 +55,7 @@ test.describe('US1: end_user 提单到关闭闭环', () => {
     expect(ticketId).toBeDefined();
 
     // 获取详情
-    const detailResp = await apiGet(token, `/api/v1/tickets/${ticketId}`);
+    const detailResp = await apiGet(role, `/api/v1/tickets/${ticketId}`);
 
     expect(detailResp.status).toBe(200);
     expect(detailResp.data).toHaveProperty('code', 0);
@@ -76,18 +64,16 @@ test.describe('US1: end_user 提单到关闭闭环', () => {
 
   test('T017 - 非管理员无法访问其他租户工单', async ({ apiGet }) => {
     // 尝试访问不存在的租户工单（应该返回空或403）
-    const response = await apiGet(token, '/api/v1/tickets?tenant_id=99999');
-
-    // 应该返回 200 但数据为空或返回 403
-    expect([200, 403]).toContain(response.status);
+    const response = await apiGet(role, '/api/v1/tickets?tenant_id=99999');
+    expect(response.status).toBe(200);
+    expect(response.data).toHaveProperty('code', 0);
+    expect(JSON.stringify(response.data)).not.toContain('"tenantId":99999');
   });
 
   test('T018 - 验证角色权限 - end_user 无管理员权限', async ({ apiGet }) => {
     // end_user 不应能访问租户管理
-    const response = await apiGet(token, '/api/v1/tenants');
-
-    // 应该返回空列表或 403
-    expect([200, 403]).toContain(response.status);
+    const response = await apiGet(role, '/api/v1/tenants');
+    expect(response.status).toBe(403);
   });
 
   test('T019 - 验证菜单可见性 - 终端用户可见工单/知识库/服务目录', async ({ page }) => {
@@ -103,11 +89,9 @@ test.describe('US1: end_user 提单到关闭闭环', () => {
     const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
     await page.goto(`${baseURL}/dashboard`);
 
-    // 点击登出按钮（如果有）
     const logoutBtn = page.locator('button:has-text("退出")').first();
-    if (await logoutBtn.isVisible()) {
-      await logoutBtn.click();
-      await expect(page).toHaveURL(/.*\/login/);
-    }
+    await expect(logoutBtn).toBeVisible();
+    await logoutBtn.click();
+    await expect(page).toHaveURL(/.*\/login/);
   });
 });

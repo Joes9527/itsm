@@ -43,6 +43,12 @@ func azureTestConfig(tenantCode string) AzureConfig {
 	return AzureConfig{TenantID: "azure-tenant", ClientID: "client", ClientSecret: "secret", RedirectURI: "https://itsm.example/api/v1/auth/azure/callback", ITSMTenantCode: tenantCode}
 }
 
+func TestAzureConfigRequiresCallbackURI(t *testing.T) {
+	cfg := azureTestConfig("customer")
+	cfg.RedirectURI = ""
+	require.False(t, cfg.IsConfigured())
+}
+
 func TestAzureLoginStateCookieUsesCanonicalSecurePolicy(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()

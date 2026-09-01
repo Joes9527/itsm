@@ -2183,7 +2183,7 @@ Expected: all packages PASS. If any pre-existing unrelated test fails, verify vi
 Start the backend (`go run main.go`), then as an authenticated admin:
 
 ```bash
-curl -s http://localhost:8090/api/v1/connectors -H "Authorization: Bearer <token>" | jq '.data.items[] | select(.name=="msgraph-email")'
+curl -s http://localhost:8090/api/v1/connectors -b "$ITSM_COOKIE_JAR" | jq '.data.items[] | select(.name=="msgraph-email")'
 ```
 
 Expected: one item with `name: "msgraph-email"`, `type: "email"`, `installed: false`, `lifecycle: "available"`.
