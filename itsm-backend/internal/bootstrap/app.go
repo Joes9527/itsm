@@ -656,6 +656,9 @@ func NewApplication() *Application {
 	// 的注入方式（processEngine 的静态类型是 service.ProcessEngine 接口，未声明
 	// CallbackRegistry()，需要先做一次类型断言）。
 	if cpe, ok := processEngine.(*service.CustomProcessEngine); ok {
+		if h, ok := cpe.CallbackRegistry().GetHandler("service_request_handler").(*bpmn.ServiceRequestServiceTaskHandler); ok {
+			h.SetServiceRequestService(srService)
+		}
 		if h, ok := cpe.CallbackRegistry().GetHandler("change_service_handler").(*bpmn.ChangeServiceTaskHandler); ok {
 			h.SetChangeService(changeServiceDomain)
 		}

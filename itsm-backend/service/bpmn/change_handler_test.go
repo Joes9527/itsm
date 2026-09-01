@@ -1,12 +1,17 @@
-package bpmn
+package bpmn_test
 
 import (
 	"context"
+	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	changehandler "itsm-backend/handlers/change"
+	"itsm-backend/handlers/shared/workflowcallback"
+	. "itsm-backend/service/bpmn"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -42,7 +47,9 @@ func setupChangeHandlerFixture(t *testing.T) (*ent.Client, *ChangeServiceTaskHan
 		Save(ctx)
 	require.NoError(t, err)
 
-	handler := NewChangeServiceTaskHandler(client, zaptest.NewLogger(t).Sugar())
+	logger := zaptest.NewLogger(t).Sugar()
+	handler := NewChangeServiceTaskHandler(client, logger)
+	handler.SetChangeService(changehandler.NewService(nil, client, logger))
 	return client, handler, tenant.ID, changeEntity
 }
 
@@ -67,6 +74,10 @@ type fakeChangeDomainService struct {
 	}
 	returnID  int
 	returnErr error
+}
+
+func (f *fakeChangeDomainService) ApplyChangeWorkflowCallback(context.Context, workflowcallback.ChangeCommand) (workflowcallback.Result, error) {
+	return workflowcallback.Result{Status: workflowcallback.StatusBlocked, BlockCode: "handler_contract"}, nil
 }
 
 func (f *fakeChangeDomainService) CreateChangeForWorkflow(ctx context.Context, tenantID, createdBy int, title, description, changeType, priority string) (int, error) {
@@ -133,7 +144,7 @@ func TestChangeServiceTaskHandler_CreateChange_FailsClosedWithoutService(t *test
 		"title":  "未注入领域服务的变更",
 	})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "change service 未注入")
+	assert.Contains(t, err.Error(), "change service is not injected")
 }
 
 // TestChangeServiceTaskHandler_CreateChange_PropagatesServiceError 锁定领域服务返回的
@@ -151,7 +162,7 @@ func TestChangeServiceTaskHandler_CreateChange_PropagatesServiceError(t *testing
 		"title":  "会失败的变更",
 	})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "创建变更失败")
+	assert.Contains(t, err.Error(), "create change")
 }
 
 // TestChangeServiceTaskHandler_TenantScopedActions 覆盖九个带读写动作的租户隔离三件套：
@@ -382,6 +393,118 @@ func TestChangeServiceTaskHandler_UnchangedUpdateIsIdempotent(t *testing.T) {
 	require.Equal(t, CallbackEffectIdempotent, effect.Status)
 }
 
+func TestChangeServiceTaskHandler_UpdateChangeBlocksStatusBypass(t *testing.T) {
+	client, handler, tenantID, changeEntity := setupChangeHandlerFixture(t)
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+
+	effect, err := handler.Execute(ctx, nil, map[string]interface{}{
+		"action":    "update_change",
+		"change_id": changeEntity.ID,
+		"status":    "completed",
+	})
+	require.NoError(t, err)
+	require.Equal(t, CallbackEffectBlocked, effect.Status)
+	require.Equal(t, CallbackBlockHandlerContract, effect.BlockCode)
+
+	after := requireHandlerChangeWorkItem(t, client, changeEntity)
+	require.Equal(t, "draft", after.Status)
+}
+
+func TestChangeServiceTaskHandler_UpdateChangeCASLoserClassifiesExactEffect(t *testing.T) {
+	tests := []struct {
+		name        string
+		winnerTitle string
+		wantStatus  CallbackEffectStatus
+	}{
+		{name: "same payload is idempotent", winnerTitle: "CAS title", wantStatus: CallbackEffectIdempotent},
+		{name: "different payload is blocked", winnerTitle: "conflicting title", wantStatus: CallbackEffectBlocked},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			client, handler, tenantID, changeEntity := setupChangeHandlerFixture(t)
+			ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+			var injected atomic.Bool
+			client.Use(func(next ent.Mutator) ent.Mutator {
+				return ent.MutateFunc(func(mutationCtx context.Context, mutation ent.Mutation) (ent.Value, error) {
+					if ticketMutation, ok := mutation.(*ent.TicketMutation); ok {
+						if _, exists := ticketMutation.Title(); exists && injected.CompareAndSwap(false, true) {
+							_, injectErr := client.Ticket.UpdateOneID(changeEntity.WorkItemID).SetTitle(tc.winnerTitle).AddVersion(1).Save(mutationCtx)
+							require.NoError(t, injectErr)
+						}
+					}
+					return next.Mutate(mutationCtx, mutation)
+				})
+			})
+
+			effect, err := handler.Execute(ctx, nil, map[string]interface{}{
+				"action": "update_change", "change_id": changeEntity.ID, "title": "CAS title",
+			})
+			require.NoError(t, err)
+			require.Equal(t, tc.wantStatus, effect.Status)
+		})
+	}
+}
+
+func TestChangeServiceTaskHandler_RejectCASLoserClassifiesState(t *testing.T) {
+	tests := []struct {
+		name         string
+		winnerStatus string
+		wantStatus   CallbackEffectStatus
+	}{
+		{name: "same transition is idempotent", winnerStatus: "rejected", wantStatus: CallbackEffectIdempotent},
+		{name: "different transition is blocked", winnerStatus: "cancelled", wantStatus: CallbackEffectBlocked},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			client, handler, tenantID, changeEntity := setupChangeHandlerFixture(t)
+			ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+			client.Ticket.UpdateOneID(changeEntity.WorkItemID).SetStatus("submitted").ExecX(ctx)
+			var injected atomic.Bool
+			client.Use(func(next ent.Mutator) ent.Mutator {
+				return ent.MutateFunc(func(mutationCtx context.Context, mutation ent.Mutation) (ent.Value, error) {
+					if ticketMutation, ok := mutation.(*ent.TicketMutation); ok {
+						if status, exists := ticketMutation.Status(); exists && status == "rejected" && injected.CompareAndSwap(false, true) {
+							_, injectErr := client.Ticket.UpdateOneID(changeEntity.WorkItemID).SetStatus(tc.winnerStatus).AddVersion(1).Save(mutationCtx)
+							require.NoError(t, injectErr)
+						}
+					}
+					return next.Mutate(mutationCtx, mutation)
+				})
+			})
+
+			effect, err := handler.Execute(ctx, nil, map[string]interface{}{
+				"action": "reject_change", "change_id": changeEntity.ID,
+			})
+			require.NoError(t, err)
+			require.Equal(t, tc.wantStatus, effect.Status)
+		})
+	}
+}
+
+func TestChangeServiceTaskHandler_ScheduleRollsBackStatusWhenDateWriteFails(t *testing.T) {
+	client, handler, tenantID, changeEntity := setupChangeHandlerFixture(t)
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+	client.Ticket.UpdateOneID(changeEntity.WorkItemID).SetStatus("approved").ExecX(ctx)
+	client.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(mutationCtx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			if changeMutation, ok := mutation.(*ent.ChangeMutation); ok {
+				if _, exists := changeMutation.PlannedStartDate(); exists {
+					return nil, errors.New("injected schedule extension failure")
+				}
+			}
+			return next.Mutate(mutationCtx, mutation)
+		})
+	})
+
+	_, err := handler.Execute(ctx, nil, map[string]interface{}{
+		"action": "schedule_change", "change_id": changeEntity.ID,
+		"planned_start_date": "2026-09-01T08:00:00Z",
+	})
+	require.ErrorContains(t, err, "injected schedule extension failure")
+	require.Equal(t, "approved", requireHandlerChangeWorkItem(t, client, changeEntity).Status)
+	require.True(t, client.Change.GetX(ctx, changeEntity.ID).PlannedStartDate.IsZero())
+}
+
 func TestChangeServiceTaskHandler_UnknownActionBlocks(t *testing.T) {
 	_, handler, tenantID, _ := setupChangeHandlerFixture(t)
 	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
@@ -520,6 +643,9 @@ func TestChangeServiceTaskHandler_RetryWithoutWriteIsIdempotent(t *testing.T) {
 			name:   "implement",
 			action: "implement_change",
 			status: "in_progress",
+			setup: func(entity *ent.Change) {
+				entity.ActualStartDate = time.Now()
+			},
 		},
 		{
 			name:   "verify",
@@ -549,7 +675,14 @@ func TestChangeServiceTaskHandler_RetryWithoutWriteIsIdempotent(t *testing.T) {
 			if tt.setup != nil {
 				entity := *changeEntity
 				tt.setup(&entity)
-				require.NoError(t, client.Change.UpdateOne(changeEntity).SetActualEndDate(entity.ActualEndDate).Exec(ctx))
+				update := client.Change.UpdateOne(changeEntity)
+				if !entity.ActualStartDate.IsZero() {
+					update.SetActualStartDate(entity.ActualStartDate)
+				}
+				if !entity.ActualEndDate.IsZero() {
+					update.SetActualEndDate(entity.ActualEndDate)
+				}
+				require.NoError(t, update.Exec(ctx))
 			}
 
 			result, err := handler.Execute(ctx, nil, map[string]interface{}{
@@ -598,11 +731,12 @@ func TestChangeServiceTaskHandler_ScheduleChangeAction_InvalidTransitionRejected
 	_, err := client.Ticket.UpdateOneID(changeEntity.WorkItemID).SetStatus("rejected").Save(ctx)
 	require.NoError(t, err)
 
-	_, err = handler.Execute(ctx, nil, map[string]interface{}{
+	effect, err := handler.Execute(ctx, nil, map[string]interface{}{
 		"action":    "schedule_change",
 		"change_id": changeEntity.ID,
 	})
-	require.Error(t, err)
+	require.NoError(t, err)
+	require.Equal(t, CallbackEffectBlocked, effect.Status)
 
 	updated, err := client.Change.Get(ctx, changeEntity.ID)
 	require.NoError(t, err)

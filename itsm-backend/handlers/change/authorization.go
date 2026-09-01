@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"itsm-backend/authorization"
+	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/service"
 )
@@ -71,7 +72,7 @@ func CanRejectChange(actor service.ActionActor, c *Change) dto.ActionPermission 
 }
 
 func CanStartImplementation(actor service.ActionActor, c *Change) dto.ActionPermission {
-	if !service.IsValidChangeStatusTransition(c.Status, string(dto.ChangeStatusInProgress), c.Type) {
+	if !common.IsValidChangeStatusTransition(c.Status, string(dto.ChangeStatusInProgress), c.Type) {
 		return dto.ActionPermission{Allowed: false, Reason: "当前状态和变更类型不允许开始实施"}
 	}
 	if !canWriteChange(actor) {

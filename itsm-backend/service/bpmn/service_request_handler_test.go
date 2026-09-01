@@ -1,17 +1,35 @@
-package bpmn
+package bpmn_test
 
 import (
 	"context"
+	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	servicerequesthandler "itsm-backend/handlers/service_request"
+	"itsm-backend/repository/workitemnumber"
+	. "itsm-backend/service/bpmn"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
+
+func failResolvedTicketMutation(client *ent.Client) {
+	client.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			if ticketMutation, ok := mutation.(*ent.TicketMutation); ok {
+				if status, exists := ticketMutation.Status(); exists && status == "resolved" {
+					return nil, errors.New("injected linked work item failure")
+				}
+			}
+			return next.Mutate(ctx, mutation)
+		})
+	})
+}
 
 func setupServiceRequestHandlerFixture(t *testing.T) (*ent.Client, *ServiceRequestServiceTaskHandler, int, *ent.Ticket, *ent.ServiceRequest) {
 	client := enttest.Open(t, "sqlite3", "file:service_request_handler_test?mode=memory&cache=shared&_fk=1")
@@ -40,25 +58,90 @@ func setupServiceRequestHandlerFixture(t *testing.T) (*ent.Client, *ServiceReque
 		Save(ctx)
 	require.NoError(t, err)
 
-	handler := NewServiceRequestServiceTaskHandler(client, zaptest.NewLogger(t).Sugar())
+	logger := zaptest.NewLogger(t).Sugar()
+	handler := NewServiceRequestServiceTaskHandler(client, logger)
+	handler.SetServiceRequestService(servicerequesthandler.NewService(nil, nil, nil, client, workitemnumber.NewPostgreSQLAllocator(), logger, nil, nil, nil))
 	return client, handler, tenant.ID, tkt, sr
 }
 
-func TestServiceRequestHandler_AssignRequest_SetsProcessor(t *testing.T) {
-	client, handler, tenantID, _, sr := setupServiceRequestHandlerFixture(t)
+func TestServiceRequestHandler_AssignRequest_SetsAuthoritativeWorkItemAssignee(t *testing.T) {
+	client, handler, tenantID, tkt, sr := setupServiceRequestHandlerFixture(t)
 	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+	assignee := client.User.Create().SetUsername("assignee-srh").SetEmail("assignee-srh@test.com").SetPasswordHash("x").SetName("处理人").SetTenantID(tenantID).SetActive(true).SaveX(ctx)
 
 	result, err := handler.Execute(ctx, nil, map[string]interface{}{
 		"action":      "assign_request",
 		"request_id":  float64(sr.ID),
-		"assignee_id": float64(42),
+		"assignee_id": float64(assignee.ID),
 	})
 	require.NoError(t, err)
 	assert.True(t, result.Status == CallbackEffectApplied)
 
 	updated, err := client.ServiceRequest.Get(ctx, sr.ID)
 	require.NoError(t, err)
-	assert.Equal(t, 42, updated.ProcessorID)
+	assert.Zero(t, updated.ProcessorID, "professional extension must not shadow WorkItem assignment")
+	updatedWorkItem := client.Ticket.GetX(ctx, tkt.ID)
+	require.Equal(t, assignee.ID, updatedWorkItem.AssigneeID)
+}
+
+func TestServiceRequestHandler_ProvisionCASLoserReturnsIdempotent(t *testing.T) {
+	client, handler, tenantID, _, sr := setupServiceRequestHandlerFixture(t)
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+	startedAt := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	var injected atomic.Bool
+	client.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(mutationCtx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			if srMutation, ok := mutation.(*ent.ServiceRequestMutation); ok {
+				if _, exists := srMutation.StartedAt(); exists && injected.CompareAndSwap(false, true) {
+					_, injectErr := client.ServiceRequest.UpdateOneID(sr.ID).SetStartedAt(startedAt).AddVersion(1).Save(mutationCtx)
+					require.NoError(t, injectErr)
+				}
+			}
+			return next.Mutate(mutationCtx, mutation)
+		})
+	})
+
+	effect, err := handler.Execute(ctx, nil, map[string]interface{}{
+		"action": "provision_resource", "request_id": sr.ID, "resource_type": "vm",
+	})
+	require.NoError(t, err)
+	require.Equal(t, CallbackEffectIdempotent, effect.Status)
+	require.Equal(t, startedAt, client.ServiceRequest.GetX(ctx, sr.ID).StartedAt)
+}
+
+func TestServiceRequestHandler_UpdateRequestCASLoserClassifiesPayload(t *testing.T) {
+	tests := []struct {
+		name       string
+		winnerCost string
+		wantStatus CallbackEffectStatus
+	}{
+		{name: "same payload is idempotent", winnerCost: "CC-CAS", wantStatus: CallbackEffectIdempotent},
+		{name: "different payload is blocked", winnerCost: "CC-OTHER", wantStatus: CallbackEffectBlocked},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			client, handler, tenantID, _, sr := setupServiceRequestHandlerFixture(t)
+			ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+			var injected atomic.Bool
+			client.Use(func(next ent.Mutator) ent.Mutator {
+				return ent.MutateFunc(func(mutationCtx context.Context, mutation ent.Mutation) (ent.Value, error) {
+					if srMutation, ok := mutation.(*ent.ServiceRequestMutation); ok {
+						if _, exists := srMutation.CostCenter(); exists && injected.CompareAndSwap(false, true) {
+							_, injectErr := client.ServiceRequest.UpdateOneID(sr.ID).SetCostCenter(tc.winnerCost).AddVersion(1).Save(mutationCtx)
+							require.NoError(t, injectErr)
+						}
+					}
+					return next.Mutate(mutationCtx, mutation)
+				})
+			})
+
+			effect, err := handler.Execute(ctx, nil, map[string]interface{}{
+				"action": "update_request", "request_id": sr.ID, "cost_center": "CC-CAS",
+			})
+			require.NoError(t, err)
+			require.Equal(t, tc.wantStatus, effect.Status)
+		})
+	}
 }
 
 func TestServiceRequestHandler_CompleteRequest_UpdatesRequestAndLinkedTicket(t *testing.T) {
@@ -81,6 +164,49 @@ func TestServiceRequestHandler_CompleteRequest_UpdatesRequestAndLinkedTicket(t *
 	updatedTicket, err := client.Ticket.Get(ctx, tkt.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "resolved", updatedTicket.Status)
+}
+
+func TestServiceRequestHandler_CompleteRequestRollsBackExtensionWhenWorkItemWriteFails(t *testing.T) {
+	client, handler, tenantID, tkt, sr := setupServiceRequestHandlerFixture(t)
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+	failResolvedTicketMutation(client)
+
+	_, err := handler.Execute(ctx, nil, map[string]interface{}{
+		"action":          "complete_request",
+		"request_id":      sr.ID,
+		"completion_note": "must rollback",
+	})
+	require.ErrorContains(t, err, "injected linked work item failure")
+
+	afterRequest := client.ServiceRequest.GetX(context.Background(), sr.ID)
+	require.True(t, afterRequest.CompletedAt.IsZero())
+	require.Empty(t, afterRequest.CompletionNote)
+	afterWorkItem := client.Ticket.GetX(context.Background(), tkt.ID)
+	require.Equal(t, "open", afterWorkItem.Status)
+}
+
+func TestServiceRequestHandler_CompleteRequestCASConflictBlocksWithoutPartialWrite(t *testing.T) {
+	client, handler, tenantID, tkt, sr := setupServiceRequestHandlerFixture(t)
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+	var injected atomic.Bool
+	client.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(mutationCtx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			if srMutation, ok := mutation.(*ent.ServiceRequestMutation); ok {
+				if _, exists := srMutation.CompletedAt(); exists && injected.CompareAndSwap(false, true) {
+					return 0, nil
+				}
+			}
+			return next.Mutate(mutationCtx, mutation)
+		})
+	})
+
+	effect, err := handler.Execute(ctx, nil, map[string]interface{}{
+		"action": "complete_request", "request_id": sr.ID, "completion_note": "ready",
+	})
+	require.NoError(t, err)
+	require.Equal(t, CallbackEffectBlocked, effect.Status)
+	require.True(t, client.ServiceRequest.GetX(ctx, sr.ID).CompletedAt.IsZero())
+	require.Equal(t, "open", client.Ticket.GetX(ctx, tkt.ID).Status)
 }
 
 func TestServiceRequestHandler_RejectRequest_UpdatesLinkedTicketStatus(t *testing.T) {
@@ -225,12 +351,13 @@ func TestServiceRequestHandler_RejectRequest_IllegalTransition_Rejected(t *testi
 	_, err := client.Ticket.UpdateOne(tkt).SetStatus("resolved").Save(ctx)
 	require.NoError(t, err)
 
-	_, err = handler.Execute(ctx, nil, map[string]interface{}{
+	effect, err := handler.Execute(ctx, nil, map[string]interface{}{
 		"action":     "reject_request",
 		"request_id": float64(sr.ID),
 	})
-	require.Error(t, err, "resolved 工单不允许再被驳回")
-	assert.Contains(t, err.Error(), "非法的关联工单状态转换")
+	require.NoError(t, err)
+	require.Equal(t, CallbackEffectBlocked, effect.Status, "resolved 工单不允许再被驳回")
+	require.Equal(t, CallbackBlockHandlerContract, effect.BlockCode)
 
 	after, err := client.Ticket.Get(ctx, tkt.ID)
 	require.NoError(t, err)
@@ -270,20 +397,21 @@ func TestServiceRequestHandler_NoWriteActionsReturnIdempotent(t *testing.T) {
 	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
 
 	_, err := client.ServiceRequest.UpdateOne(sr).
-		SetProcessorID(42).
 		SetCostCenter("CC-001").
 		SetStartedAt(time.Now()).
 		Save(ctx)
 	require.NoError(t, err)
 	_, err = client.Ticket.UpdateOne(tkt).SetStatus("in_progress").Save(ctx)
 	require.NoError(t, err)
+	assignee := client.User.Create().SetUsername("same-assignee-srh").SetEmail("same-assignee-srh@test.com").SetPasswordHash("x").SetName("处理人").SetTenantID(tenantID).SetActive(true).SaveX(ctx)
+	client.Ticket.UpdateOneID(tkt.ID).SetAssigneeID(assignee.ID).ExecX(ctx)
 
 	for _, tc := range []struct {
 		name string
 		vars map[string]interface{}
 	}{
 		{name: "unchanged update", vars: map[string]interface{}{"action": "update_request", "request_id": sr.ID, "cost_center": "CC-001"}},
-		{name: "same assignee", vars: map[string]interface{}{"action": "assign_request", "request_id": sr.ID, "assignee_id": 42}},
+		{name: "same assignee", vars: map[string]interface{}{"action": "assign_request", "request_id": sr.ID, "assignee_id": assignee.ID}},
 		{name: "already provisioning", vars: map[string]interface{}{"action": "provision_resource", "request_id": sr.ID, "resource_type": "vm"}},
 		{name: "same linked status", vars: map[string]interface{}{"action": "approve_request", "request_id": sr.ID}},
 	} {

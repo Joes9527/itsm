@@ -35,6 +35,7 @@ func newApprovalAssignmentFixture(t *testing.T) *approvalAssignmentFixture {
 	engineIface := NewCustomProcessEngine(client, logger)
 	engine, ok := engineIface.(*CustomProcessEngine)
 	require.True(t, ok, "expected ProcessEngine to be *CustomProcessEngine")
+	injectEngineChangeCallbackTestService(t, engine, client)
 
 	ctx := context.Background()
 	tenant, err := client.Tenant.Create().

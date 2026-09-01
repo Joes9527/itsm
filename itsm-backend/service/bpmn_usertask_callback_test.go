@@ -42,6 +42,7 @@ func setupUserTaskCallbackEnv(t *testing.T) (*ent.Client, ProcessEngine, context
 
 	logger := zap.NewNop().Sugar()
 	engine := NewCustomProcessEngine(client, logger)
+	injectEngineChangeCallbackTestService(t, engine, client)
 
 	_, err = NewBPMNTemplateService(client).LoadAndDeployTemplates(ctx, tenant.ID)
 	require.NoError(t, err)

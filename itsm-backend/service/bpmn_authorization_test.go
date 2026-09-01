@@ -136,6 +136,7 @@ func newBPMNAuthorizationFixtureWithClient(t *testing.T, client *ent.Client) *bp
 		Save(ctx)
 	require.NoError(t, err)
 	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar()).(*CustomProcessEngine)
+	injectEngineChangeCallbackTestService(t, engine, client)
 
 	return &bpmnAuthorizationFixture{
 		client:      client,
