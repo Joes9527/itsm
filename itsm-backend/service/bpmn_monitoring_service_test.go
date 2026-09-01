@@ -9,7 +9,87 @@ import (
 
 	"itsm-backend/common"
 	"itsm-backend/ent"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
+
+func TestBPMNMonitoringListAssigneeFilterAppliesBeforeCountAndPagination(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	monitoring := NewBPMNMonitoringService(f.client, NewBPMNAuditService(f.client, zap.NewNop().Sugar()), zap.NewNop().Sugar())
+	now := time.Now()
+	targetAssignee := "target-agent"
+
+	seed := func(suffix, assignee string, startedAt time.Time, tenant *ent.Tenant) *ent.ProcessInstance {
+		t.Helper()
+		instance := f.createProcessInstance(t, tenant, suffix)
+		instance, err := f.client.ProcessInstance.UpdateOne(instance).SetStartTime(startedAt).Save(f.userCtx)
+		require.NoError(t, err)
+		task := f.createProcessTask(t, instance, tenant.ID, suffix, assignee, "", "")
+		_, err = f.client.ProcessTask.UpdateOne(task).SetStatus("assigned").Save(f.userCtx)
+		require.NoError(t, err)
+		return instance
+	}
+
+	seed("assignee-newest-nonmatch", "other-agent", now, f.tenant)
+	seed("assignee-newer-match", targetAssignee, now.Add(-time.Minute), f.tenant)
+	seed("assignee-middle-nonmatch", "other-agent", now.Add(-2*time.Minute), f.tenant)
+	wantSecondPage := seed("assignee-older-match", targetAssignee, now.Add(-3*time.Minute), f.tenant)
+	seed("assignee-cross-tenant", targetAssignee, now.Add(time.Minute), f.otherTenant)
+
+	rows, total, err := monitoring.ListProcessInstancesStatus(
+		f.actorScopeCtx(f.actor, f.tenant, true),
+		&ListProcessInstanceStatusQuery{Page: 2, PageSize: 1, Assignee: targetAssignee},
+	)
+	require.NoError(t, err)
+	assert.Equal(t, 2, total)
+	require.Len(t, rows, 1)
+	assert.Equal(t, wantSecondPage.ProcessInstanceID, rows[0].ProcessInstanceID)
+	assert.Equal(t, targetAssignee, rows[0].Assignee)
+}
+
+func TestBPMNAuditActivityStatisticsRequiresReadAllAndDerivesTenant(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	audit := NewBPMNAuditService(f.client, zap.NewNop().Sugar())
+	const processDefinitionKey = "activity-statistics"
+	seed := func(instance *ent.ProcessInstance, tenantID int, action string) {
+		t.Helper()
+		require.NoError(t, audit.RecordAudit(context.Background(), &AuditContext{
+			ProcessInstanceID:    instance.ID,
+			ProcessInstanceKey:   instance.ProcessInstanceID,
+			ProcessDefinitionKey: processDefinitionKey,
+			ProcessDefinitionID:  instance.ProcessDefinitionID,
+			ActivityID:           "activity",
+			ActivityName:         "Activity",
+			ActivityType:         ActivityTypeUserTask,
+			Action:               action,
+			TenantID:             tenantID,
+		}))
+	}
+	ownInstance := f.createProcessInstance(t, f.tenant, "activity-stats-own")
+	otherInstance := f.createProcessInstance(t, f.otherTenant, "activity-stats-other")
+	seed(ownInstance, f.tenant.ID, "own_action")
+	seed(otherInstance, f.otherTenant.ID, "other_action")
+	start, end := time.Now().Add(-time.Hour), time.Now().Add(time.Hour)
+
+	_, err := audit.GetActivityStatistics(
+		f.actorScopeCtx(f.actor, f.tenant, false),
+		processDefinitionKey,
+		start,
+		end,
+	)
+	requireBPMNForbidden(t, err)
+
+	stats, err := audit.GetActivityStatistics(
+		f.actorScopeCtx(f.actor, f.tenant, true),
+		processDefinitionKey,
+		start,
+		end,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]int{"own_action": 1}, stats)
+}
 
 func TestBPMNMonitoringMissingAuditServiceFailsClosed(t *testing.T) {
 	service := &BPMNMonitoringService{}

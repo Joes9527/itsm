@@ -1266,6 +1266,13 @@ func (s *BPMNMonitoringService) ListProcessInstancesStatus(ctx context.Context, 
 	if query.EndTime != nil {
 		dbQuery = dbQuery.Where(processinstance.StartTimeLTE(*query.EndTime))
 	}
+	if query.Assignee != "" {
+		dbQuery = dbQuery.Where(processinstance.HasProcessTasksWith(
+			processtask.TenantID(scope.TenantID),
+			processtask.Assignee(query.Assignee),
+			processtask.StatusIn("assigned", "in_progress"),
+		))
+	}
 
 	total, err := dbQuery.Clone().Count(ctx)
 	if err != nil {
@@ -1315,11 +1322,14 @@ func (s *BPMNMonitoringService) ListProcessInstancesStatus(ctx context.Context, 
 		}
 
 		// 查询当前任务（状态 assigned/in_progress）
-		currentTask, err := s.client.ProcessTask.Query().
+		currentTaskQuery := s.client.ProcessTask.Query().
 			Where(processtask.ProcessInstanceID(inst.ID)).
 			Where(processtask.TenantID(scope.TenantID)).
-			Where(processtask.StatusIn("assigned", "in_progress")).
-			First(ctx)
+			Where(processtask.StatusIn("assigned", "in_progress"))
+		if query.Assignee != "" {
+			currentTaskQuery = currentTaskQuery.Where(processtask.Assignee(query.Assignee))
+		}
+		currentTask, err := currentTaskQuery.First(ctx)
 		if err == nil && currentTask != nil {
 			status.CurrentTask = currentTask.TaskType
 			status.Assignee = currentTask.Assignee
@@ -1328,11 +1338,6 @@ func (s *BPMNMonitoringService) ListProcessInstancesStatus(ctx context.Context, 
 		// 计算进度
 		if progress, err := s.calculateProcessProgress(ctx, inst.ID, scope.TenantID); err == nil {
 			status.Progress = progress
-		}
-
-		// assignee 过滤（在拿到 currentTask 后过滤）
-		if query.Assignee != "" && status.Assignee != query.Assignee {
-			continue
 		}
 
 		statuses = append(statuses, status)
