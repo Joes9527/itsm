@@ -9,6 +9,7 @@ import (
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/changepir"
 	"itsm-backend/ent/problem"
+	"itsm-backend/ent/ticket"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -22,26 +23,6 @@ type ChangeCreate struct {
 	mutation *ChangeMutation
 	hooks    []Hook
 	conflict []sql.ConflictOption
-}
-
-// SetTitle sets the "title" field.
-func (_c *ChangeCreate) SetTitle(v string) *ChangeCreate {
-	_c.mutation.SetTitle(v)
-	return _c
-}
-
-// SetDescription sets the "description" field.
-func (_c *ChangeCreate) SetDescription(v string) *ChangeCreate {
-	_c.mutation.SetDescription(v)
-	return _c
-}
-
-// SetNillableDescription sets the "description" field if the given value is not nil.
-func (_c *ChangeCreate) SetNillableDescription(v *string) *ChangeCreate {
-	if v != nil {
-		_c.SetDescription(*v)
-	}
-	return _c
 }
 
 // SetJustification sets the "justification" field.
@@ -68,34 +49,6 @@ func (_c *ChangeCreate) SetType(v string) *ChangeCreate {
 func (_c *ChangeCreate) SetNillableType(v *string) *ChangeCreate {
 	if v != nil {
 		_c.SetType(*v)
-	}
-	return _c
-}
-
-// SetStatus sets the "status" field.
-func (_c *ChangeCreate) SetStatus(v string) *ChangeCreate {
-	_c.mutation.SetStatus(v)
-	return _c
-}
-
-// SetNillableStatus sets the "status" field if the given value is not nil.
-func (_c *ChangeCreate) SetNillableStatus(v *string) *ChangeCreate {
-	if v != nil {
-		_c.SetStatus(*v)
-	}
-	return _c
-}
-
-// SetPriority sets the "priority" field.
-func (_c *ChangeCreate) SetPriority(v string) *ChangeCreate {
-	_c.mutation.SetPriority(v)
-	return _c
-}
-
-// SetNillablePriority sets the "priority" field if the given value is not nil.
-func (_c *ChangeCreate) SetNillablePriority(v *string) *ChangeCreate {
-	if v != nil {
-		_c.SetPriority(*v)
 	}
 	return _c
 }
@@ -151,14 +104,6 @@ func (_c *ChangeCreate) SetCreatedBy(v int) *ChangeCreate {
 // SetWorkItemID sets the "work_item_id" field.
 func (_c *ChangeCreate) SetWorkItemID(v int) *ChangeCreate {
 	_c.mutation.SetWorkItemID(v)
-	return _c
-}
-
-// SetNillableWorkItemID sets the "work_item_id" field if the given value is not nil.
-func (_c *ChangeCreate) SetNillableWorkItemID(v *int) *ChangeCreate {
-	if v != nil {
-		_c.SetWorkItemID(*v)
-	}
 	return _c
 }
 
@@ -292,6 +237,11 @@ func (_c *ChangeCreate) SetNillableUpdatedAt(v *time.Time) *ChangeCreate {
 	return _c
 }
 
+// SetWorkItem sets the "work_item" edge to the Ticket entity.
+func (_c *ChangeCreate) SetWorkItem(v *Ticket) *ChangeCreate {
+	return _c.SetWorkItemID(v.ID)
+}
+
 // AddProblemIDs adds the "problems" edge to the Problem entity by IDs.
 func (_c *ChangeCreate) AddProblemIDs(ids ...int) *ChangeCreate {
 	_c.mutation.AddProblemIDs(ids...)
@@ -361,14 +311,6 @@ func (_c *ChangeCreate) defaults() {
 		v := change.DefaultType
 		_c.mutation.SetType(v)
 	}
-	if _, ok := _c.mutation.Status(); !ok {
-		v := change.DefaultStatus
-		_c.mutation.SetStatus(v)
-	}
-	if _, ok := _c.mutation.Priority(); !ok {
-		v := change.DefaultPriority
-		_c.mutation.SetPriority(v)
-	}
 	if _, ok := _c.mutation.ImpactScope(); !ok {
 		v := change.DefaultImpactScope
 		_c.mutation.SetImpactScope(v)
@@ -389,22 +331,8 @@ func (_c *ChangeCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *ChangeCreate) check() error {
-	if _, ok := _c.mutation.Title(); !ok {
-		return &ValidationError{Name: "title", err: errors.New(`ent: missing required field "Change.title"`)}
-	}
-	if v, ok := _c.mutation.Title(); ok {
-		if err := change.TitleValidator(v); err != nil {
-			return &ValidationError{Name: "title", err: fmt.Errorf(`ent: validator failed for field "Change.title": %w`, err)}
-		}
-	}
 	if _, ok := _c.mutation.GetType(); !ok {
 		return &ValidationError{Name: "type", err: errors.New(`ent: missing required field "Change.type"`)}
-	}
-	if _, ok := _c.mutation.Status(); !ok {
-		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Change.status"`)}
-	}
-	if _, ok := _c.mutation.Priority(); !ok {
-		return &ValidationError{Name: "priority", err: errors.New(`ent: missing required field "Change.priority"`)}
 	}
 	if _, ok := _c.mutation.ImpactScope(); !ok {
 		return &ValidationError{Name: "impact_scope", err: errors.New(`ent: missing required field "Change.impact_scope"`)}
@@ -420,6 +348,9 @@ func (_c *ChangeCreate) check() error {
 			return &ValidationError{Name: "created_by", err: fmt.Errorf(`ent: validator failed for field "Change.created_by": %w`, err)}
 		}
 	}
+	if _, ok := _c.mutation.WorkItemID(); !ok {
+		return &ValidationError{Name: "work_item_id", err: errors.New(`ent: missing required field "Change.work_item_id"`)}
+	}
 	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "Change.tenant_id"`)}
 	}
@@ -433,6 +364,9 @@ func (_c *ChangeCreate) check() error {
 	}
 	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Change.updated_at"`)}
+	}
+	if len(_c.mutation.WorkItemIDs()) == 0 {
+		return &ValidationError{Name: "work_item", err: errors.New(`ent: missing required edge "Change.work_item"`)}
 	}
 	return nil
 }
@@ -461,14 +395,6 @@ func (_c *ChangeCreate) createSpec() (*Change, *sqlgraph.CreateSpec) {
 		_spec = sqlgraph.NewCreateSpec(change.Table, sqlgraph.NewFieldSpec(change.FieldID, field.TypeInt))
 	)
 	_spec.OnConflict = _c.conflict
-	if value, ok := _c.mutation.Title(); ok {
-		_spec.SetField(change.FieldTitle, field.TypeString, value)
-		_node.Title = value
-	}
-	if value, ok := _c.mutation.Description(); ok {
-		_spec.SetField(change.FieldDescription, field.TypeString, value)
-		_node.Description = value
-	}
 	if value, ok := _c.mutation.Justification(); ok {
 		_spec.SetField(change.FieldJustification, field.TypeString, value)
 		_node.Justification = value
@@ -476,14 +402,6 @@ func (_c *ChangeCreate) createSpec() (*Change, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.GetType(); ok {
 		_spec.SetField(change.FieldType, field.TypeString, value)
 		_node.Type = value
-	}
-	if value, ok := _c.mutation.Status(); ok {
-		_spec.SetField(change.FieldStatus, field.TypeString, value)
-		_node.Status = value
-	}
-	if value, ok := _c.mutation.Priority(); ok {
-		_spec.SetField(change.FieldPriority, field.TypeString, value)
-		_node.Priority = value
 	}
 	if value, ok := _c.mutation.ImpactScope(); ok {
 		_spec.SetField(change.FieldImpactScope, field.TypeString, value)
@@ -500,10 +418,6 @@ func (_c *ChangeCreate) createSpec() (*Change, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(change.FieldCreatedBy, field.TypeInt, value)
 		_node.CreatedBy = value
-	}
-	if value, ok := _c.mutation.WorkItemID(); ok {
-		_spec.SetField(change.FieldWorkItemID, field.TypeInt, value)
-		_node.WorkItemID = value
 	}
 	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(change.FieldTenantID, field.TypeInt, value)
@@ -549,6 +463,23 @@ func (_c *ChangeCreate) createSpec() (*Change, *sqlgraph.CreateSpec) {
 		_spec.SetField(change.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
+	if nodes := _c.mutation.WorkItemIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   change.WorkItemTable,
+			Columns: []string{change.WorkItemColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(ticket.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.WorkItemID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
 	if nodes := _c.mutation.ProblemsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2M,
@@ -588,7 +519,7 @@ func (_c *ChangeCreate) createSpec() (*Change, *sqlgraph.CreateSpec) {
 // of the `INSERT` statement. For example:
 //
 //	client.Change.Create().
-//		SetTitle(v).
+//		SetJustification(v).
 //		OnConflict(
 //			// Update the row with the new values
 //			// the was proposed for insertion.
@@ -597,7 +528,7 @@ func (_c *ChangeCreate) createSpec() (*Change, *sqlgraph.CreateSpec) {
 //		// Override some of the fields with custom
 //		// update values.
 //		Update(func(u *ent.ChangeUpsert) {
-//			SetTitle(v+v).
+//			SetJustification(v+v).
 //		}).
 //		Exec(ctx)
 func (_c *ChangeCreate) OnConflict(opts ...sql.ConflictOption) *ChangeUpsertOne {
@@ -633,36 +564,6 @@ type (
 	}
 )
 
-// SetTitle sets the "title" field.
-func (u *ChangeUpsert) SetTitle(v string) *ChangeUpsert {
-	u.Set(change.FieldTitle, v)
-	return u
-}
-
-// UpdateTitle sets the "title" field to the value that was provided on create.
-func (u *ChangeUpsert) UpdateTitle() *ChangeUpsert {
-	u.SetExcluded(change.FieldTitle)
-	return u
-}
-
-// SetDescription sets the "description" field.
-func (u *ChangeUpsert) SetDescription(v string) *ChangeUpsert {
-	u.Set(change.FieldDescription, v)
-	return u
-}
-
-// UpdateDescription sets the "description" field to the value that was provided on create.
-func (u *ChangeUpsert) UpdateDescription() *ChangeUpsert {
-	u.SetExcluded(change.FieldDescription)
-	return u
-}
-
-// ClearDescription clears the value of the "description" field.
-func (u *ChangeUpsert) ClearDescription() *ChangeUpsert {
-	u.SetNull(change.FieldDescription)
-	return u
-}
-
 // SetJustification sets the "justification" field.
 func (u *ChangeUpsert) SetJustification(v string) *ChangeUpsert {
 	u.Set(change.FieldJustification, v)
@@ -690,30 +591,6 @@ func (u *ChangeUpsert) SetType(v string) *ChangeUpsert {
 // UpdateType sets the "type" field to the value that was provided on create.
 func (u *ChangeUpsert) UpdateType() *ChangeUpsert {
 	u.SetExcluded(change.FieldType)
-	return u
-}
-
-// SetStatus sets the "status" field.
-func (u *ChangeUpsert) SetStatus(v string) *ChangeUpsert {
-	u.Set(change.FieldStatus, v)
-	return u
-}
-
-// UpdateStatus sets the "status" field to the value that was provided on create.
-func (u *ChangeUpsert) UpdateStatus() *ChangeUpsert {
-	u.SetExcluded(change.FieldStatus)
-	return u
-}
-
-// SetPriority sets the "priority" field.
-func (u *ChangeUpsert) SetPriority(v string) *ChangeUpsert {
-	u.Set(change.FieldPriority, v)
-	return u
-}
-
-// UpdatePriority sets the "priority" field to the value that was provided on create.
-func (u *ChangeUpsert) UpdatePriority() *ChangeUpsert {
-	u.SetExcluded(change.FieldPriority)
 	return u
 }
 
@@ -792,18 +669,6 @@ func (u *ChangeUpsert) SetWorkItemID(v int) *ChangeUpsert {
 // UpdateWorkItemID sets the "work_item_id" field to the value that was provided on create.
 func (u *ChangeUpsert) UpdateWorkItemID() *ChangeUpsert {
 	u.SetExcluded(change.FieldWorkItemID)
-	return u
-}
-
-// AddWorkItemID adds v to the "work_item_id" field.
-func (u *ChangeUpsert) AddWorkItemID(v int) *ChangeUpsert {
-	u.Add(change.FieldWorkItemID, v)
-	return u
-}
-
-// ClearWorkItemID clears the value of the "work_item_id" field.
-func (u *ChangeUpsert) ClearWorkItemID() *ChangeUpsert {
-	u.SetNull(change.FieldWorkItemID)
 	return u
 }
 
@@ -1033,41 +898,6 @@ func (u *ChangeUpsertOne) Update(set func(*ChangeUpsert)) *ChangeUpsertOne {
 	return u
 }
 
-// SetTitle sets the "title" field.
-func (u *ChangeUpsertOne) SetTitle(v string) *ChangeUpsertOne {
-	return u.Update(func(s *ChangeUpsert) {
-		s.SetTitle(v)
-	})
-}
-
-// UpdateTitle sets the "title" field to the value that was provided on create.
-func (u *ChangeUpsertOne) UpdateTitle() *ChangeUpsertOne {
-	return u.Update(func(s *ChangeUpsert) {
-		s.UpdateTitle()
-	})
-}
-
-// SetDescription sets the "description" field.
-func (u *ChangeUpsertOne) SetDescription(v string) *ChangeUpsertOne {
-	return u.Update(func(s *ChangeUpsert) {
-		s.SetDescription(v)
-	})
-}
-
-// UpdateDescription sets the "description" field to the value that was provided on create.
-func (u *ChangeUpsertOne) UpdateDescription() *ChangeUpsertOne {
-	return u.Update(func(s *ChangeUpsert) {
-		s.UpdateDescription()
-	})
-}
-
-// ClearDescription clears the value of the "description" field.
-func (u *ChangeUpsertOne) ClearDescription() *ChangeUpsertOne {
-	return u.Update(func(s *ChangeUpsert) {
-		s.ClearDescription()
-	})
-}
-
 // SetJustification sets the "justification" field.
 func (u *ChangeUpsertOne) SetJustification(v string) *ChangeUpsertOne {
 	return u.Update(func(s *ChangeUpsert) {
@@ -1100,34 +930,6 @@ func (u *ChangeUpsertOne) SetType(v string) *ChangeUpsertOne {
 func (u *ChangeUpsertOne) UpdateType() *ChangeUpsertOne {
 	return u.Update(func(s *ChangeUpsert) {
 		s.UpdateType()
-	})
-}
-
-// SetStatus sets the "status" field.
-func (u *ChangeUpsertOne) SetStatus(v string) *ChangeUpsertOne {
-	return u.Update(func(s *ChangeUpsert) {
-		s.SetStatus(v)
-	})
-}
-
-// UpdateStatus sets the "status" field to the value that was provided on create.
-func (u *ChangeUpsertOne) UpdateStatus() *ChangeUpsertOne {
-	return u.Update(func(s *ChangeUpsert) {
-		s.UpdateStatus()
-	})
-}
-
-// SetPriority sets the "priority" field.
-func (u *ChangeUpsertOne) SetPriority(v string) *ChangeUpsertOne {
-	return u.Update(func(s *ChangeUpsert) {
-		s.SetPriority(v)
-	})
-}
-
-// UpdatePriority sets the "priority" field to the value that was provided on create.
-func (u *ChangeUpsertOne) UpdatePriority() *ChangeUpsertOne {
-	return u.Update(func(s *ChangeUpsert) {
-		s.UpdatePriority()
 	})
 }
 
@@ -1215,24 +1017,10 @@ func (u *ChangeUpsertOne) SetWorkItemID(v int) *ChangeUpsertOne {
 	})
 }
 
-// AddWorkItemID adds v to the "work_item_id" field.
-func (u *ChangeUpsertOne) AddWorkItemID(v int) *ChangeUpsertOne {
-	return u.Update(func(s *ChangeUpsert) {
-		s.AddWorkItemID(v)
-	})
-}
-
 // UpdateWorkItemID sets the "work_item_id" field to the value that was provided on create.
 func (u *ChangeUpsertOne) UpdateWorkItemID() *ChangeUpsertOne {
 	return u.Update(func(s *ChangeUpsert) {
 		s.UpdateWorkItemID()
-	})
-}
-
-// ClearWorkItemID clears the value of the "work_item_id" field.
-func (u *ChangeUpsertOne) ClearWorkItemID() *ChangeUpsertOne {
-	return u.Update(func(s *ChangeUpsert) {
-		s.ClearWorkItemID()
 	})
 }
 
@@ -1588,7 +1376,7 @@ func (_c *ChangeCreateBulk) ExecX(ctx context.Context) {
 //		// Override some of the fields with custom
 //		// update values.
 //		Update(func(u *ent.ChangeUpsert) {
-//			SetTitle(v+v).
+//			SetJustification(v+v).
 //		}).
 //		Exec(ctx)
 func (_c *ChangeCreateBulk) OnConflict(opts ...sql.ConflictOption) *ChangeUpsertBulk {
@@ -1657,41 +1445,6 @@ func (u *ChangeUpsertBulk) Update(set func(*ChangeUpsert)) *ChangeUpsertBulk {
 	return u
 }
 
-// SetTitle sets the "title" field.
-func (u *ChangeUpsertBulk) SetTitle(v string) *ChangeUpsertBulk {
-	return u.Update(func(s *ChangeUpsert) {
-		s.SetTitle(v)
-	})
-}
-
-// UpdateTitle sets the "title" field to the value that was provided on create.
-func (u *ChangeUpsertBulk) UpdateTitle() *ChangeUpsertBulk {
-	return u.Update(func(s *ChangeUpsert) {
-		s.UpdateTitle()
-	})
-}
-
-// SetDescription sets the "description" field.
-func (u *ChangeUpsertBulk) SetDescription(v string) *ChangeUpsertBulk {
-	return u.Update(func(s *ChangeUpsert) {
-		s.SetDescription(v)
-	})
-}
-
-// UpdateDescription sets the "description" field to the value that was provided on create.
-func (u *ChangeUpsertBulk) UpdateDescription() *ChangeUpsertBulk {
-	return u.Update(func(s *ChangeUpsert) {
-		s.UpdateDescription()
-	})
-}
-
-// ClearDescription clears the value of the "description" field.
-func (u *ChangeUpsertBulk) ClearDescription() *ChangeUpsertBulk {
-	return u.Update(func(s *ChangeUpsert) {
-		s.ClearDescription()
-	})
-}
-
 // SetJustification sets the "justification" field.
 func (u *ChangeUpsertBulk) SetJustification(v string) *ChangeUpsertBulk {
 	return u.Update(func(s *ChangeUpsert) {
@@ -1724,34 +1477,6 @@ func (u *ChangeUpsertBulk) SetType(v string) *ChangeUpsertBulk {
 func (u *ChangeUpsertBulk) UpdateType() *ChangeUpsertBulk {
 	return u.Update(func(s *ChangeUpsert) {
 		s.UpdateType()
-	})
-}
-
-// SetStatus sets the "status" field.
-func (u *ChangeUpsertBulk) SetStatus(v string) *ChangeUpsertBulk {
-	return u.Update(func(s *ChangeUpsert) {
-		s.SetStatus(v)
-	})
-}
-
-// UpdateStatus sets the "status" field to the value that was provided on create.
-func (u *ChangeUpsertBulk) UpdateStatus() *ChangeUpsertBulk {
-	return u.Update(func(s *ChangeUpsert) {
-		s.UpdateStatus()
-	})
-}
-
-// SetPriority sets the "priority" field.
-func (u *ChangeUpsertBulk) SetPriority(v string) *ChangeUpsertBulk {
-	return u.Update(func(s *ChangeUpsert) {
-		s.SetPriority(v)
-	})
-}
-
-// UpdatePriority sets the "priority" field to the value that was provided on create.
-func (u *ChangeUpsertBulk) UpdatePriority() *ChangeUpsertBulk {
-	return u.Update(func(s *ChangeUpsert) {
-		s.UpdatePriority()
 	})
 }
 
@@ -1839,24 +1564,10 @@ func (u *ChangeUpsertBulk) SetWorkItemID(v int) *ChangeUpsertBulk {
 	})
 }
 
-// AddWorkItemID adds v to the "work_item_id" field.
-func (u *ChangeUpsertBulk) AddWorkItemID(v int) *ChangeUpsertBulk {
-	return u.Update(func(s *ChangeUpsert) {
-		s.AddWorkItemID(v)
-	})
-}
-
 // UpdateWorkItemID sets the "work_item_id" field to the value that was provided on create.
 func (u *ChangeUpsertBulk) UpdateWorkItemID() *ChangeUpsertBulk {
 	return u.Update(func(s *ChangeUpsert) {
 		s.UpdateWorkItemID()
-	})
-}
-
-// ClearWorkItemID clears the value of the "work_item_id" field.
-func (u *ChangeUpsertBulk) ClearWorkItemID() *ChangeUpsertBulk {
-	return u.Update(func(s *ChangeUpsert) {
-		s.ClearWorkItemID()
 	})
 }
 

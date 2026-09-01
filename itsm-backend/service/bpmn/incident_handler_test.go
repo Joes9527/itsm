@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/incident"
+	"itsm-backend/ent/ticket"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,12 +31,8 @@ type dbBackedIncidentService struct {
 
 func (s *dbBackedIncidentService) CreateIncident(ctx context.Context, req *dto.CreateIncidentRequest, tenantID, userID int) (*dto.IncidentResponse, error) {
 	inc, err := s.client.Incident.Create().
-		SetTitle(req.Title).
-		SetDescription(req.Description).
 		SetType(req.Type).
-		SetPriority(req.Priority).
 		SetSeverity(req.Severity).
-		SetStatus(common.IncidentStatusNew).
 		SetReporterID(userID).
 		SetTenantID(tenantID).
 		Save(ctx)
@@ -60,15 +57,12 @@ func (s *dbBackedIncidentService) AssignIncident(ctx context.Context, id int, as
 }
 
 func (s *dbBackedIncidentService) UpdateStatus(ctx context.Context, id int, status string, tenantID int) (*dto.IncidentResponse, error) {
-	updated, err := s.client.Incident.Update().
-		Where(incident.ID(id), incident.TenantID(tenantID)).
-		SetStatus(status).
-		Save(ctx)
+	entity, err := s.client.Incident.Query().Where(incident.ID(id), incident.TenantID(tenantID)).Only(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if updated == 0 {
-		return nil, fmt.Errorf("incident not found")
+	if _, err := s.client.Ticket.UpdateOneID(entity.WorkItemID).Where(ticket.TenantID(tenantID)).SetStatus(status).Save(ctx); err != nil {
+		return nil, err
 	}
 	return &dto.IncidentResponse{ID: id}, nil
 }
@@ -93,18 +87,23 @@ func (s *dbBackedIncidentService) EscalateIncidentLevel(ctx context.Context, id,
 		Where(incident.TenantID(tenantID)).
 		SetEscalationLevel(level).
 		SetEscalatedAt(time.Now()).
-		SetStatus(common.IncidentStatusEscalated).
 		Save(ctx)
 	if err != nil {
+		return nil, err
+	}
+	if _, err := s.client.Ticket.UpdateOneID(current.WorkItemID).Where(ticket.TenantID(tenantID)).SetStatus(common.IncidentStatusEscalated).Save(ctx); err != nil {
 		return nil, err
 	}
 	return &dto.IncidentResponse{ID: id, EscalationLevel: updated.EscalationLevel}, nil
 }
 
 func (s *dbBackedIncidentService) ResolveIncidentForWorkflow(ctx context.Context, id, tenantID int, resolution string) (*dto.IncidentResponse, error) {
+	entity, err := s.client.Incident.Query().Where(incident.ID(id), incident.TenantID(tenantID)).Only(ctx)
+	if err != nil {
+		return nil, err
+	}
 	updated, err := s.client.Incident.Update().
 		Where(incident.ID(id), incident.TenantID(tenantID)).
-		SetStatus(common.IncidentStatusResolved).
 		SetResolvedAt(time.Now()).
 		Save(ctx)
 	if err != nil {
@@ -113,13 +112,19 @@ func (s *dbBackedIncidentService) ResolveIncidentForWorkflow(ctx context.Context
 	if updated == 0 {
 		return nil, fmt.Errorf("incident not found")
 	}
+	if _, err := s.client.Ticket.UpdateOneID(entity.WorkItemID).Where(ticket.TenantID(tenantID)).SetStatus(common.IncidentStatusResolved).Save(ctx); err != nil {
+		return nil, err
+	}
 	return &dto.IncidentResponse{ID: id}, nil
 }
 
 func (s *dbBackedIncidentService) CloseIncidentForWorkflow(ctx context.Context, id, tenantID int, feedback string) (*dto.IncidentResponse, error) {
+	entity, err := s.client.Incident.Query().Where(incident.ID(id), incident.TenantID(tenantID)).Only(ctx)
+	if err != nil {
+		return nil, err
+	}
 	updated, err := s.client.Incident.Update().
 		Where(incident.ID(id), incident.TenantID(tenantID)).
-		SetStatus(common.IncidentStatusClosed).
 		SetClosedAt(time.Now()).
 		Save(ctx)
 	if err != nil {
@@ -128,39 +133,31 @@ func (s *dbBackedIncidentService) CloseIncidentForWorkflow(ctx context.Context, 
 	if updated == 0 {
 		return nil, fmt.Errorf("incident not found")
 	}
+	if _, err := s.client.Ticket.UpdateOneID(entity.WorkItemID).Where(ticket.TenantID(tenantID)).SetStatus(common.IncidentStatusClosed).Save(ctx); err != nil {
+		return nil, err
+	}
 	return &dto.IncidentResponse{ID: id}, nil
 }
 
 func (s *dbBackedIncidentService) AcknowledgeIncidentForWorkflow(ctx context.Context, id, tenantID int) (*dto.IncidentResponse, error) {
-	updated, err := s.client.Incident.Update().
-		Where(incident.ID(id), incident.TenantID(tenantID)).
-		SetStatus(common.IncidentStatusAcknowledged).
-		Save(ctx)
+	entity, err := s.client.Incident.Query().Where(incident.ID(id), incident.TenantID(tenantID)).Only(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if updated == 0 {
-		return nil, fmt.Errorf("incident not found")
+	if _, err := s.client.Ticket.UpdateOneID(entity.WorkItemID).Where(ticket.TenantID(tenantID)).SetStatus(common.IncidentStatusAcknowledged).Save(ctx); err != nil {
+		return nil, err
 	}
 	return &dto.IncidentResponse{ID: id}, nil
 }
 
 func (s *dbBackedIncidentService) UpdateIncidentForWorkflow(ctx context.Context, id, tenantID int, title, description, priority, severity, status string) (*dto.IncidentResponse, error) {
+	entity, err := s.client.Incident.Query().Where(incident.ID(id), incident.TenantID(tenantID)).Only(ctx)
+	if err != nil {
+		return nil, err
+	}
 	q := s.client.Incident.Update().Where(incident.ID(id), incident.TenantID(tenantID))
-	if title != "" {
-		q.SetTitle(title)
-	}
-	if description != "" {
-		q.SetDescription(description)
-	}
-	if priority != "" {
-		q.SetPriority(priority)
-	}
 	if severity != "" {
 		q.SetSeverity(severity)
-	}
-	if status != "" {
-		q.SetStatus(status)
 	}
 	updated, err := q.Save(ctx)
 	if err != nil {
@@ -169,13 +166,32 @@ func (s *dbBackedIncidentService) UpdateIncidentForWorkflow(ctx context.Context,
 	if updated == 0 {
 		return nil, fmt.Errorf("incident not found")
 	}
+	workItemUpdate := s.client.Ticket.UpdateOneID(entity.WorkItemID).Where(ticket.TenantID(tenantID))
+	if title != "" {
+		workItemUpdate.SetTitle(title)
+	}
+	if description != "" {
+		workItemUpdate.SetDescription(description)
+	}
+	if priority != "" {
+		workItemUpdate.SetPriority(priority)
+	}
+	if status != "" {
+		workItemUpdate.SetStatus(status)
+	}
+	if _, err := workItemUpdate.Save(ctx); err != nil {
+		return nil, err
+	}
 	return &dto.IncidentResponse{ID: id}, nil
 }
 
 func (s *dbBackedIncidentService) CategorizeIncidentForWorkflow(ctx context.Context, id, tenantID int, category, subcategory string) (*dto.IncidentResponse, error) {
+	entity, err := s.client.Incident.Query().Where(incident.ID(id), incident.TenantID(tenantID)).Only(ctx)
+	if err != nil {
+		return nil, err
+	}
 	q := s.client.Incident.Update().
-		Where(incident.ID(id), incident.TenantID(tenantID)).
-		SetStatus(common.IncidentStatusTriaged)
+		Where(incident.ID(id), incident.TenantID(tenantID))
 	if category != "" {
 		q.SetCategory(category)
 	}
@@ -188,6 +204,9 @@ func (s *dbBackedIncidentService) CategorizeIncidentForWorkflow(ctx context.Cont
 	}
 	if updated == 0 {
 		return nil, fmt.Errorf("incident not found")
+	}
+	if _, err := s.client.Ticket.UpdateOneID(entity.WorkItemID).Where(ticket.TenantID(tenantID)).SetStatus(common.IncidentStatusTriaged).Save(ctx); err != nil {
+		return nil, err
 	}
 	return &dto.IncidentResponse{ID: id}, nil
 }
@@ -217,12 +236,13 @@ func setupIncidentHandlerFixture(t *testing.T) (*ent.Client, *IncidentServiceTas
 		SetName("处理人").SetTenantID(tenant.ID).SetActive(true).
 		Save(ctx)
 	require.NoError(t, err)
+	workItem, err := client.Ticket.Create().SetTitle("测试事件").SetStatus(common.IncidentStatusNew).SetPriority("medium").SetType("incident").SetRecordClass("incident").SetTicketNumber("TKT-INCIDENT-HANDLER").SetRequesterID(reporter.ID).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
 
 	inc, err := client.Incident.Create().
-		SetTitle("自动分配测试事件").
 		SetIncidentNumber("INC-IH-1").
-		SetStatus(common.IncidentStatusNew).
 		SetReporterID(reporter.ID).
+		SetWorkItemID(workItem.ID).
 		SetTenantID(tenant.ID).
 		Save(ctx)
 	require.NoError(t, err)
@@ -230,6 +250,13 @@ func setupIncidentHandlerFixture(t *testing.T) (*ent.Client, *IncidentServiceTas
 	handler := NewIncidentServiceTaskHandler(client, zaptest.NewLogger(t).Sugar())
 	handler.SetIncidentService(&dbBackedIncidentService{client: client})
 	return client, handler, tenant.ID, inc, assignee.ID
+}
+
+func requireHandlerIncidentWorkItem(t *testing.T, client *ent.Client, entity *ent.Incident) *ent.Ticket {
+	t.Helper()
+	workItem, err := client.Ticket.Get(context.Background(), entity.WorkItemID)
+	require.NoError(t, err)
+	return workItem
 }
 
 // TestIncidentServiceTaskHandler_AssignIncident_NoAssignee_IsNoOp 是 Finding 1 的核心回归：
@@ -263,7 +290,7 @@ func TestIncidentServiceTaskHandler_AssignIncident_NoAssignee_BlocksEffectGate(t
 
 			after, err := client.Incident.Get(ctx, inc.ID)
 			require.NoError(t, err)
-			assert.Equal(t, common.IncidentStatusNew, after.Status, "空态跳过时不应该改状态")
+			assert.Equal(t, common.IncidentStatusNew, requireHandlerIncidentWorkItem(t, client, after).Status, "空态跳过时不应该改状态")
 			assert.Zero(t, after.AssigneeID, "空态跳过时不应该写处理人")
 		})
 	}
@@ -286,7 +313,7 @@ func TestIncidentServiceTaskHandler_AssignIncident_ValidAssignee(t *testing.T) {
 	after, err := client.Incident.Get(ctx, inc.ID)
 	require.NoError(t, err)
 	assert.Equal(t, assigneeID, after.AssigneeID)
-	assert.Equal(t, common.IncidentStatusAssigned, after.Status)
+	assert.Equal(t, common.IncidentStatusAssigned, requireHandlerIncidentWorkItem(t, client, after).Status)
 }
 
 // TestIncidentServiceTaskHandler_AssignIncident_InvalidIncidentID_StillErrors：
@@ -339,7 +366,7 @@ func TestIncidentServiceTaskHandler_TenantScopedActions(t *testing.T) {
 				after, err := client.Incident.Get(context.Background(), incID)
 				require.NoError(t, err)
 				assert.Equal(t, 1, after.EscalationLevel, "未显式指定级别时应递增为 1")
-				assert.Equal(t, common.IncidentStatusEscalated, after.Status)
+				assert.Equal(t, common.IncidentStatusEscalated, requireHandlerIncidentWorkItem(t, client, after).Status)
 				assert.False(t, after.EscalatedAt.IsZero())
 			},
 		},
@@ -349,7 +376,7 @@ func TestIncidentServiceTaskHandler_TenantScopedActions(t *testing.T) {
 			assertValid: func(t *testing.T, client *ent.Client, incID int) {
 				after, err := client.Incident.Get(context.Background(), incID)
 				require.NoError(t, err)
-				assert.Equal(t, common.IncidentStatusResolved, after.Status)
+				assert.Equal(t, common.IncidentStatusResolved, requireHandlerIncidentWorkItem(t, client, after).Status)
 				assert.False(t, after.ResolvedAt.IsZero())
 			},
 		},
@@ -359,7 +386,7 @@ func TestIncidentServiceTaskHandler_TenantScopedActions(t *testing.T) {
 			assertValid: func(t *testing.T, client *ent.Client, incID int) {
 				after, err := client.Incident.Get(context.Background(), incID)
 				require.NoError(t, err)
-				assert.Equal(t, common.IncidentStatusClosed, after.Status)
+				assert.Equal(t, common.IncidentStatusClosed, requireHandlerIncidentWorkItem(t, client, after).Status)
 				assert.False(t, after.ClosedAt.IsZero())
 			},
 		},
@@ -369,7 +396,7 @@ func TestIncidentServiceTaskHandler_TenantScopedActions(t *testing.T) {
 			assertValid: func(t *testing.T, client *ent.Client, incID int) {
 				after, err := client.Incident.Get(context.Background(), incID)
 				require.NoError(t, err)
-				assert.Equal(t, common.IncidentStatusAcknowledged, after.Status)
+				assert.Equal(t, common.IncidentStatusAcknowledged, requireHandlerIncidentWorkItem(t, client, after).Status)
 			},
 		},
 		{
@@ -381,7 +408,7 @@ func TestIncidentServiceTaskHandler_TenantScopedActions(t *testing.T) {
 			assertValid: func(t *testing.T, client *ent.Client, incID int) {
 				after, err := client.Incident.Get(context.Background(), incID)
 				require.NoError(t, err)
-				assert.Equal(t, common.IncidentStatusTriaged, after.Status)
+				assert.Equal(t, common.IncidentStatusTriaged, requireHandlerIncidentWorkItem(t, client, after).Status)
 				assert.Equal(t, "network", after.Category)
 			},
 		},
@@ -394,8 +421,9 @@ func TestIncidentServiceTaskHandler_TenantScopedActions(t *testing.T) {
 			assertValid: func(t *testing.T, client *ent.Client, incID int) {
 				after, err := client.Incident.Get(context.Background(), incID)
 				require.NoError(t, err)
-				assert.Equal(t, "改过的标题", after.Title)
-				assert.Equal(t, common.IncidentStatusNew, after.Status, "update 只提交 title 时不得改状态")
+				workItem := requireHandlerIncidentWorkItem(t, client, after)
+				assert.Equal(t, "改过的标题", workItem.Title)
+				assert.Equal(t, common.IncidentStatusNew, workItem.Status, "update 只提交 title 时不得改状态")
 			},
 		},
 	}
@@ -422,6 +450,7 @@ func TestIncidentServiceTaskHandler_TenantScopedActions(t *testing.T) {
 
 				before, err := client.Incident.Get(context.Background(), inc.ID)
 				require.NoError(t, err)
+				beforeWorkItem := requireHandlerIncidentWorkItem(t, client, before)
 
 				vars := map[string]interface{}{"action": tc.action, "incident_id": inc.ID}
 				for k, v := range tc.extraVars {
@@ -432,8 +461,9 @@ func TestIncidentServiceTaskHandler_TenantScopedActions(t *testing.T) {
 
 				after, err := client.Incident.Get(context.Background(), inc.ID)
 				require.NoError(t, err)
-				assert.Equal(t, before.Status, after.Status, "跨租户请求不得改状态")
-				assert.Equal(t, before.Title, after.Title, "跨租户请求不得改标题")
+				afterWorkItem := requireHandlerIncidentWorkItem(t, client, after)
+				assert.Equal(t, beforeWorkItem.Status, afterWorkItem.Status, "跨租户请求不得改状态")
+				assert.Equal(t, beforeWorkItem.Title, afterWorkItem.Title, "跨租户请求不得改标题")
 				assert.Equal(t, before.EscalationLevel, after.EscalationLevel)
 			})
 

@@ -133,21 +133,20 @@ func TestIncidentIntegration(t *testing.T) {
 
 	// 创建事件
 	incidentNumber := fmt.Sprintf("INC-%d", time.Now().UnixNano())
+	incidentWorkItem, err := client.Ticket.Create().SetTitle("Critical incident").SetStatus("open").SetPriority("critical").SetType("incident").SetRecordClass("incident").SetTicketNumber("TKT-INC-1").SetRequesterID(user.ID).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
 	incident, err := client.Incident.Create().
-		SetTitle("Email Service Down").
-		SetDescription("Users cannot access email").
-		SetPriority("critical").
-		SetStatus("open").
 		SetIncidentNumber(incidentNumber).
 		SetReporterID(user.ID).
+		SetWorkItemID(incidentWorkItem.ID).
 		SetTenantID(tenant.ID).
 		Save(ctx)
 	require.NoError(t, err)
 	logger.Info("Created incident", "incident_id", incident.ID)
 
 	// 验证事件
-	require.Equal(t, "critical", incident.Priority)
-	require.Equal(t, "open", incident.Status)
+	require.Equal(t, "critical", incidentWorkItem.Priority)
+	require.Equal(t, "open", incidentWorkItem.Status)
 
 	t.Log("Incident integration test completed successfully")
 }
@@ -182,20 +181,19 @@ func TestChangeManagementIntegration(t *testing.T) {
 	require.NoError(t, err)
 
 	// 创建变更请求
+	changeWorkItem, err := client.Ticket.Create().SetTitle("Standard change").SetStatus("draft").SetPriority("medium").SetType("change").SetRecordClass("change_request").SetTicketNumber("TKT-CHG-1").SetRequesterID(user.ID).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
 	change, err := client.Change.Create().
-		SetTitle("Database Migration").
-		SetDescription("Migrate to new database server").
 		SetType("standard").
-		SetPriority("high").
-		SetStatus("draft").
 		SetCreatedBy(user.ID).
+		SetWorkItemID(changeWorkItem.ID).
 		SetTenantID(tenant.ID).
 		Save(ctx)
 	require.NoError(t, err)
 	logger.Info("Created change request", "change_id", change.ID)
 
 	// 验证变更
-	require.Equal(t, "draft", change.Status)
+	require.Equal(t, "draft", changeWorkItem.Status)
 	require.Equal(t, "standard", change.Type)
 
 	t.Log("Change management integration test completed successfully")

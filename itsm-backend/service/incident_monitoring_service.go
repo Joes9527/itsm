@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/incidentalert"
 	"itsm-backend/ent/incidentmetric"
+	"itsm-backend/ent/ticket"
 
 	"go.uber.org/zap"
 )
@@ -254,7 +255,7 @@ func (s *IncidentMonitoringService) AnalyzeIncidentImpact(ctx context.Context, i
 			incident.TenantIDEQ(tenantID),
 			incident.DeletedAtIsNil(),
 		).
-		Only(ctx)
+		WithWorkItem().Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, fmt.Errorf("incident not found")
@@ -278,10 +279,10 @@ func (s *IncidentMonitoringService) AnalyzeIncidentImpact(ctx context.Context, i
 	impactAnalysis := map[string]interface{}{
 		"incident_id":     incidentID,
 		"incident_number": incidentEntity.IncidentNumber,
-		"title":           incidentEntity.Title,
+		"title":           incidentEntity.Edges.WorkItem.Title,
 		"severity":        incidentEntity.Severity,
-		"priority":        incidentEntity.Priority,
-		"status":          incidentEntity.Status,
+		"priority":        incidentEntity.Edges.WorkItem.Priority,
+		"status":          incidentEntity.Edges.WorkItem.Status,
 		"created_at":      incidentEntity.CreatedAt,
 		"analysis_time":   time.Now(),
 	}
@@ -446,14 +447,14 @@ func (s *IncidentMonitoringService) GenerateIncidentReport(ctx context.Context, 
 		query = query.Where(incident.CategoryEQ(*req.Category))
 	}
 	if req.Priority != nil {
-		query = query.Where(incident.PriorityEQ(*req.Priority))
+		query = query.Where(incident.HasWorkItemWith(ticket.PriorityEQ(*req.Priority)))
 	}
 	if req.Status != nil {
-		query = query.Where(incident.StatusEQ(*req.Status))
+		query = query.Where(incident.HasWorkItemWith(ticket.StatusEQ(*req.Status)))
 	}
 
 	// 获取事件列表
-	incidents, err := query.All(ctx)
+	incidents, err := query.WithWorkItem().All(ctx)
 	if err != nil {
 		s.logger.Errorw("Failed to get incidents", "error", err)
 		return nil, fmt.Errorf("failed to get incidents: %w", err)
@@ -517,7 +518,10 @@ func (s *IncidentMonitoringService) calculateIncidentStats(incidents []*ent.Inci
 	var escalatedCount int
 
 	for _, incident := range incidents {
-		switch incident.Status {
+		if incident.Edges.WorkItem == nil {
+			continue
+		}
+		switch incident.Edges.WorkItem.Status {
 		case "new", "acknowledged", "assigned", "triaged", "in_progress", "on_hold", "escalated":
 			stats.OpenIncidents++
 		case "resolved":
@@ -534,7 +538,7 @@ func (s *IncidentMonitoringService) calculateIncidentStats(incidents []*ent.Inci
 		if incident.Severity == "critical" {
 			stats.CriticalIncidents++
 		}
-		if incident.Priority == "high" || incident.Priority == "critical" {
+		if incident.Edges.WorkItem.Priority == "high" || incident.Edges.WorkItem.Priority == "critical" {
 			stats.HighPriorityIncidents++
 		}
 		if incident.EscalationLevel > 0 {
@@ -655,6 +659,10 @@ func (s *IncidentMonitoringService) getIncidentAlerts(ctx context.Context, incid
 func (s *IncidentMonitoringService) convertIncidentsToResponse(incidents []*ent.Incident) []dto.IncidentResponse {
 	responses := make([]dto.IncidentResponse, len(incidents))
 	for i, incident := range incidents {
+		workItem := incident.Edges.WorkItem
+		if workItem == nil {
+			continue
+		}
 		var impactAnalysis *dto.ImpactAnalysis
 		if incident.ImpactAnalysis != nil {
 			impactAnalysis = &dto.ImpactAnalysis{}
@@ -674,10 +682,10 @@ func (s *IncidentMonitoringService) convertIncidentsToResponse(incidents []*ent.
 
 		responses[i] = dto.IncidentResponse{
 			ID:              incident.ID,
-			Title:           incident.Title,
-			Description:     incident.Description,
-			Status:          incident.Status,
-			Priority:        incident.Priority,
+			Title:           workItem.Title,
+			Description:     workItem.Description,
+			Status:          workItem.Status,
+			Priority:        workItem.Priority,
 			Severity:        incident.Severity,
 			IncidentNumber:  incident.IncidentNumber,
 			ReporterID:      incident.ReporterID,

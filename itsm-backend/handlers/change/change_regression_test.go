@@ -83,15 +83,11 @@ func createRegressionChange(t *testing.T, client *ent.Client, tenantID, actorID 
 	ctx := context.Background()
 
 	title := fmt.Sprintf("回归测试变更-%s-%s", changeType, status)
-	workItem := createChangeWorkItemFixture(t, client, tenantID, actorID, title)
+	workItem := createChangeWorkItemFixture(t, client, tenantID, actorID, title, status)
 
 	changeEntity, err := client.Change.Create().
-		SetTitle(title).
-		SetDescription("用于 Change 域回归测试的固定夹具。").
 		SetJustification("验证回归测试覆盖的变更理由。").
 		SetType(changeType).
-		SetStatus(status).
-		SetPriority("medium").
 		SetImpactScope("low").
 		SetRiskLevel("medium").
 		SetImplementationPlan("1. 备份 2. 实施 3. 验证").
@@ -591,35 +587,31 @@ func TestChangeTenantIsolation_ReadAndModify(t *testing.T) {
 	seedAggregateFixtures := func(t *testing.T) {
 		t.Helper()
 		for _, status := range []string{"pending_review", "approved", "scheduled", "in_progress", "completed", "failed", "rolled_back", "rejected", "cancelled"} {
+			workItemA := createChangeWorkItemFixture(t, entClient, tenantA, actorA, "aggregate A", status)
 			_, createErr := entClient.Change.Create().
-				SetTitle("tenant-a-stats-" + status).
-				SetDescription("租户隔离统计覆盖").
 				SetJustification("统计分支覆盖").
 				SetType("normal").
-				SetStatus(status).
-				SetPriority("medium").
 				SetImpactScope("low").
 				SetRiskLevel("medium").
 				SetImplementationPlan("实施计划").
 				SetRollbackPlan("回滚计划").
 				SetCreatedBy(actorA).
 				SetTenantID(tenantA).
+				SetWorkItemID(workItemA.ID).
 				Save(ctx)
 			require.NoError(t, createErr)
 
+			workItemB := createChangeWorkItemFixture(t, entClient, tenantB, actorB, "aggregate B", status)
 			_, createErr = entClient.Change.Create().
-				SetTitle("tenant-b-stats-" + status).
-				SetDescription("租户隔离统计覆盖").
 				SetJustification("统计分支覆盖").
 				SetType("normal").
-				SetStatus(status).
-				SetPriority("medium").
 				SetImpactScope("low").
 				SetRiskLevel("medium").
 				SetImplementationPlan("实施计划").
 				SetRollbackPlan("回滚计划").
 				SetCreatedBy(actorB).
 				SetTenantID(tenantB).
+				SetWorkItemID(workItemB.ID).
 				Save(ctx)
 			require.NoError(t, createErr)
 		}

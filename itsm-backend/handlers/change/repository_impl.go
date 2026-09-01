@@ -46,14 +46,18 @@ func toDomain(ec *ent.Change) *Change {
 	if ec == nil {
 		return nil
 	}
+	workItem := ec.Edges.WorkItem
+	if workItem == nil {
+		return nil
+	}
 	c := &Change{
 		ID:                 ec.ID,
-		Title:              ec.Title,
-		Description:        ec.Description,
+		Title:              workItem.Title,
+		Description:        workItem.Description,
 		Justification:      ec.Justification,
 		Type:               ec.Type,
-		Status:             ec.Status,
-		Priority:           ec.Priority,
+		Status:             workItem.Status,
+		Priority:           workItem.Priority,
 		ImpactScope:        ec.ImpactScope,
 		RiskLevel:          ec.RiskLevel,
 		AssigneeID:         &ec.AssigneeID,
@@ -351,6 +355,7 @@ func (r *EntRepository) Create(ctx context.Context, c *Change) (*Change, error) 
 		SetType("change").
 		SetRecordClass("change_request").
 		SetPriority(c.Priority).
+		SetStatus(c.Status).
 		SetTicketNumber(ticketNumber).
 		SetRequesterID(c.CreatedBy).
 		SetTenantID(c.TenantID).
@@ -362,12 +367,8 @@ func (r *EntRepository) Create(ctx context.Context, c *Change) (*Change, error) 
 	}
 
 	create := tx.Change.Create().
-		SetTitle(c.Title).
-		SetDescription(c.Description).
 		SetJustification(c.Justification).
 		SetType(c.Type).
-		SetStatus(c.Status).
-		SetPriority(c.Priority).
 		SetImpactScope(c.ImpactScope).
 		SetRiskLevel(c.RiskLevel).
 		SetCreatedBy(c.CreatedBy).
@@ -394,6 +395,7 @@ func (r *EntRepository) Create(ctx context.Context, c *Change) (*Change, error) 
 		return rollback(fmt.Errorf("failed to commit change transaction: %w", err))
 	}
 
+	saved.Edges.WorkItem = workItem
 	result := toDomain(saved)
 	if err := r.hydrateUsers(ctx, []*Change{result}, c.TenantID); err != nil {
 		return nil, err
@@ -407,6 +409,7 @@ func (r *EntRepository) Create(ctx context.Context, c *Change) (*Change, error) 
 func (r *EntRepository) Get(ctx context.Context, id int, tenantID int) (*Change, error) {
 	ec, err := r.client.Change.Query().
 		Where(change.ID(id), change.TenantID(tenantID)).
+		WithWorkItem().
 		First(ctx)
 	if err != nil {
 		return nil, err
@@ -425,16 +428,13 @@ func (r *EntRepository) List(ctx context.Context, tenantID int, page, size int, 
 	q := r.client.Change.Query().Where(change.TenantID(tenantID))
 
 	if status != "" && status != "全部" {
-		q = q.Where(change.Status(status))
+		q = q.Where(change.HasWorkItemWith(entticket.StatusEQ(status)))
 	}
 	if riskLevel != "" && riskLevel != "全部" {
 		q = q.Where(change.RiskLevel(riskLevel))
 	}
 	if search != "" {
-		q = q.Where(change.Or(
-			change.TitleContains(search),
-			change.DescriptionContains(search),
-		))
+		q = q.Where(change.HasWorkItemWith(entticket.Or(entticket.TitleContains(search), entticket.DescriptionContains(search))))
 	}
 
 	total, err := q.Count(ctx)
@@ -442,7 +442,7 @@ func (r *EntRepository) List(ctx context.Context, tenantID int, page, size int, 
 		return nil, 0, err
 	}
 
-	ecs, err := q.Order(ent.Desc(change.FieldCreatedAt)).
+	ecs, err := q.WithWorkItem().Order(ent.Desc(change.FieldCreatedAt)).
 		Offset((page - 1) * size).
 		Limit(size).
 		All(ctx)
@@ -480,12 +480,8 @@ func (r *EntRepository) Update(ctx context.Context, c *Change) (*Change, error) 
 	}
 
 	update := tx.Change.UpdateOneID(c.ID).
-		SetTitle(c.Title).
-		SetDescription(c.Description).
 		SetJustification(c.Justification).
 		SetType(c.Type).
-		SetStatus(c.Status).
-		SetPriority(c.Priority).
 		SetImpactScope(c.ImpactScope).
 		SetRiskLevel(c.RiskLevel).
 		SetImplementationPlan(c.ImplementationPlan).
@@ -512,6 +508,12 @@ func (r *EntRepository) Update(ctx context.Context, c *Change) (*Change, error) 
 	if err != nil {
 		return rollback(err)
 	}
+	if _, err := tx.Ticket.UpdateOneID(ec.WorkItemID).
+		Where(entticket.TenantIDEQ(c.TenantID)).
+		SetTitle(c.Title).SetDescription(c.Description).SetStatus(c.Status).SetPriority(c.Priority).SetUpdatedAt(time.Now()).
+		Save(ctx); err != nil {
+		return rollback(fmt.Errorf("failed to update change work item: %w", err))
+	}
 
 	if ec.WorkItemID > 0 {
 		// 用 Change 自己的创建人作为关系写入的 actor 近似值——UpdateChange 目前没有
@@ -525,6 +527,10 @@ func (r *EntRepository) Update(ctx context.Context, c *Change) (*Change, error) 
 		return rollback(fmt.Errorf("failed to commit change update transaction: %w", err))
 	}
 
+	ec.Edges.WorkItem, err = r.client.Ticket.Query().Where(entticket.IDEQ(ec.WorkItemID), entticket.TenantIDEQ(c.TenantID)).Only(ctx)
+	if err != nil {
+		return nil, err
+	}
 	result := toDomain(ec)
 	if err := r.hydrateUsers(ctx, []*Change{result}, c.TenantID); err != nil {
 		return nil, err
@@ -554,9 +560,11 @@ func (r *EntRepository) GetStats(ctx context.Context, tenantID int) (*Stats, err
 
 	// Single GROUP BY query instead of 11 sequential COUNT queries
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT status, COUNT(*) FROM changes
-		WHERE tenant_id = $1
-		GROUP BY status
+		SELECT t.status, COUNT(*)
+		FROM changes c
+		JOIN tickets t ON t.id = c.work_item_id AND t.tenant_id = c.tenant_id
+		WHERE c.tenant_id = $1
+		GROUP BY t.status
 	`, tenantID)
 	if err != nil {
 		return nil, err
@@ -614,10 +622,14 @@ func (r *EntRepository) GetStats(ctx context.Context, tenantID int) (*Stats, err
 // 用跟 SubmitForApproval 相同的乐观守卫：要求恰好 1 行受影响，否则说明
 // change 已经不是 draft 状态了。
 func (r *EntRepository) MarkSubmittedForApproval(ctx context.Context, changeID, tenantID int) error {
+	workItemID, err := r.resolveWorkItemID(ctx, changeID, tenantID)
+	if err != nil {
+		return err
+	}
 	result, err := r.db.ExecContext(ctx,
-		`UPDATE changes SET status = 'pending', updated_at = $1
+		`UPDATE tickets SET status = 'pending', updated_at = $1
 		 WHERE id = $2 AND tenant_id = $3 AND status = 'draft'`,
-		time.Now(), changeID, tenantID)
+		time.Now(), workItemID, tenantID)
 	if err != nil {
 		return err
 	}
@@ -855,11 +867,11 @@ func (r *EntRepository) ListByDateRange(ctx context.Context, tenantID int, start
 		Where(change.TenantID(tenantID))
 
 	if status != "" {
-		query = query.Where(change.Status(status))
+		query = query.Where(change.HasWorkItemWith(entticket.StatusEQ(status)))
 	}
 
 	// Filter by planned date range in memory
-	changes, err := query.All(ctx)
+	changes, err := query.WithWorkItem().All(ctx)
 	if err != nil {
 		return nil, err
 	}

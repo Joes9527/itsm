@@ -271,9 +271,12 @@ func TestAssignRouteUsesIncidentWritePermission(t *testing.T) {
 		SetUsername("route-assignee").SetEmail("route-assignee@example.com").SetName("Route Assignee").
 		SetPasswordHash("x").SetRole(role.Code).SetActive(true).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
-	incidentEntity, err := client.Incident.Create().
-		SetTitle("Route assignment").SetStatus("new").SetIncidentNumber("INC-ROUTE-ASSIGN").
-		SetReporterID(reporter.ID).SetTenantID(tenant.ID).Save(ctx)
+	workItem, err := client.Ticket.Create().SetTitle("Route assignment incident").SetStatus("new").SetPriority("medium").
+		SetType("incident").SetRecordClass("incident").SetTicketNumber("TKT-ROUTE-ASSIGN").
+		SetRequesterID(reporter.ID).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	incidentEntity, err := client.Incident.Create().SetIncidentNumber("INC-ROUTE-ASSIGN").
+		SetReporterID(reporter.ID).SetTenantID(tenant.ID).SetWorkItemID(workItem.ID).Save(ctx)
 	require.NoError(t, err)
 
 	const jwtSecret = "assign-route-secret"

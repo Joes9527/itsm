@@ -16,6 +16,7 @@ import (
 	"itsm-backend/ent/incidentmetric"
 	"itsm-backend/ent/incidentrule"
 	"itsm-backend/ent/processinstance"
+	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/user"
 	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service/bpmn"
@@ -171,6 +172,7 @@ func (s *IncidentService) CreateIncident(ctx context.Context, req *dto.CreateInc
 		SetType("incident").
 		SetRecordClass("incident").
 		SetPriority(priority).
+		SetStatus(common.IncidentStatusNew).
 		SetTicketNumber(workItemTicketNumber).
 		SetRequesterID(userID).
 		SetTenantID(tenantID).
@@ -183,11 +185,7 @@ func (s *IncidentService) CreateIncident(ctx context.Context, req *dto.CreateInc
 
 	create := tx.Incident.Create().
 		SetWorkItemID(workItem.ID).
-		SetTitle(req.Title).
-		SetDescription(req.Description).
-		SetStatus("new").
 		SetType(incidentType).
-		SetPriority(priority).
 		SetSeverity(severity).
 		SetImpact(impact).
 		SetUrgency(urgency).
@@ -231,6 +229,7 @@ func (s *IncidentService) CreateIncident(ctx context.Context, req *dto.CreateInc
 	if err := tx.Commit(); err != nil {
 		return rollback(fmt.Errorf("failed to commit incident transaction: %w", err))
 	}
+	incidentEntity.Edges.WorkItem = workItem
 	incidentEntity.Edges.ConfigurationItems = configurationItems
 
 	// 执行事件规则
@@ -296,6 +295,7 @@ func (s *IncidentService) getIncidentEntity(ctx context.Context, id int, tenantI
 			incident.TenantIDEQ(tenantID),
 			incident.DeletedAtIsNil(),
 		).
+		WithWorkItem().
 		WithConfigurationItems().
 		Only(ctx)
 	if err != nil {
@@ -325,10 +325,10 @@ func (s *IncidentService) ListIncidents(ctx context.Context, tenantID int, page,
 
 	// 应用过滤器
 	if status, ok := filters["status"].(string); ok && status != "" {
-		query = query.Where(incident.StatusEQ(status))
+		query = query.Where(incident.HasWorkItemWith(ticket.StatusEQ(status)))
 	}
 	if priority, ok := filters["priority"].(string); ok && priority != "" {
-		query = query.Where(incident.PriorityEQ(priority))
+		query = query.Where(incident.HasWorkItemWith(ticket.PriorityEQ(priority)))
 	}
 	if severity, ok := filters["severity"].(string); ok && severity != "" {
 		query = query.Where(incident.SeverityEQ(severity))
@@ -343,8 +343,7 @@ func (s *IncidentService) ListIncidents(ctx context.Context, tenantID int, page,
 		// 关键词搜索：标题、描述、事件编号
 		query = query.Where(
 			incident.Or(
-				incident.TitleContains(keyword),
-				incident.DescriptionContains(keyword),
+				incident.HasWorkItemWith(ticket.Or(ticket.TitleContains(keyword), ticket.DescriptionContains(keyword))),
 				incident.IncidentNumberContains(keyword),
 			),
 		)
@@ -362,6 +361,7 @@ func (s *IncidentService) ListIncidents(ctx context.Context, tenantID int, page,
 
 	// 分页查询
 	incidents, err := query.
+		WithWorkItem().
 		WithConfigurationItems().
 		Offset((page - 1) * size).
 		Limit(size).
@@ -441,6 +441,7 @@ func (s *IncidentService) UpdateIncident(ctx context.Context, id int, req *dto.U
 	// 获取当前事件实体
 	currentIncident, err := s.client.Incident.Query().
 		Where(incident.IDEQ(id), incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
+		WithWorkItem().
 		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -462,8 +463,8 @@ func (s *IncidentService) UpdateIncident(ctx context.Context, id int, req *dto.U
 	// 如果要更新状态，验证状态转换是否合法
 	if req.Status != nil {
 		// 验证状态转换
-		if !isValidIncidentStatusTransition(currentIncident.Status, *req.Status) {
-			return nil, fmt.Errorf("invalid status transition from '%s' to '%s'", currentIncident.Status, *req.Status)
+		if !isValidIncidentStatusTransition(currentIncident.Edges.WorkItem.Status, *req.Status) {
+			return nil, fmt.Errorf("invalid status transition from '%s' to '%s'", currentIncident.Edges.WorkItem.Status, *req.Status)
 		}
 		// 解决与关闭必须走专用动作，确保解决说明、关闭备注和审计事件不可被通用更新绕过。
 		if *req.Status == common.IncidentStatusResolved || *req.Status == common.IncidentStatusClosed {
@@ -499,21 +500,22 @@ func (s *IncidentService) UpdateIncident(ctx context.Context, id int, req *dto.U
 		}
 	}
 
-	updateQuery := s.client.Incident.UpdateOneID(id).
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("start incident update transaction: %w", err)
+	}
+	rollback := func(cause error) (*dto.IncidentResponse, error) {
+		_ = tx.Rollback()
+		return nil, cause
+	}
+	updateQuery := tx.Incident.UpdateOneID(id).
 		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
 		SetUpdatedAt(time.Now())
 	if !req.Force && req.Version > 0 {
 		updateQuery.Where(incident.VersionEQ(req.Version))
 	}
 
-	if req.Title != nil {
-		updateQuery.SetTitle(*req.Title)
-	}
-	if req.Description != nil {
-		updateQuery.SetDescription(*req.Description)
-	}
 	if req.Status != nil {
-		updateQuery.SetStatus(*req.Status)
 		// 如果状态变更为resolved，设置解决时间
 		if *req.Status == common.IncidentStatusResolved {
 			now := time.Now()
@@ -525,12 +527,9 @@ func (s *IncidentService) UpdateIncident(ctx context.Context, id int, req *dto.U
 			now := time.Now()
 			updateQuery.SetClosedAt(now)
 		}
-		if *req.Status == common.IncidentStatusInProgress && currentIncident.Status == common.IncidentStatusResolved {
+		if *req.Status == common.IncidentStatusInProgress && currentIncident.Edges.WorkItem.Status == common.IncidentStatusResolved {
 			updateQuery.ClearResolvedAt().ClearClosedAt()
 		}
-	}
-	if priority != nil {
-		updateQuery.SetPriority(*priority)
 	}
 	if req.Severity != nil {
 		updateQuery.SetSeverity(*req.Severity)
@@ -564,18 +563,39 @@ func (s *IncidentService) UpdateIncident(ctx context.Context, id int, req *dto.U
 	if err != nil {
 		if ent.IsNotFound(err) {
 			if !req.Force && req.Version > 0 {
-				latest, lookupErr := s.client.Incident.Query().
+				latest, lookupErr := tx.Incident.Query().
 					Where(incident.IDEQ(id), incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
-					Only(ctx)
+					WithWorkItem().Only(ctx)
 				if lookupErr == nil {
-					return nil, common.NewVersionConflictError("事件", id, req.Version, latest.Version)
+					return rollback(common.NewVersionConflictError("事件", id, req.Version, latest.Version))
 				}
 			}
-			return nil, fmt.Errorf("incident not found")
+			return rollback(fmt.Errorf("incident not found"))
 		}
 		s.logger.Errorw("Failed to update incident", "error", err)
-		return nil, fmt.Errorf("failed to update incident: %w", err)
+		return rollback(fmt.Errorf("failed to update incident: %w", err))
 	}
+	workItemUpdate := tx.Ticket.UpdateOneID(currentIncident.WorkItemID).Where(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil()).SetUpdatedAt(time.Now())
+	if req.Title != nil {
+		workItemUpdate.SetTitle(*req.Title)
+	}
+	if req.Description != nil {
+		workItemUpdate.SetDescription(*req.Description)
+	}
+	if req.Status != nil {
+		workItemUpdate.SetStatus(*req.Status)
+	}
+	if priority != nil {
+		workItemUpdate.SetPriority(*priority)
+	}
+	workItem, err := workItemUpdate.Save(ctx)
+	if err != nil {
+		return rollback(fmt.Errorf("failed to update incident work item: %w", err))
+	}
+	if err := tx.Commit(); err != nil {
+		return rollback(err)
+	}
+	incidentEntity.Edges.WorkItem = workItem
 
 	// 记录事件更新活动
 	_, err = s.CreateIncidentEvent(ctx, &dto.CreateIncidentEventRequest{
@@ -606,6 +626,7 @@ func (s *IncidentService) AssignIncident(ctx context.Context, id int, assigneeID
 	// 获取当前事件
 	current, err := s.client.Incident.Query().
 		Where(incident.IDEQ(id), incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
+		WithWorkItem().
 		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -613,7 +634,7 @@ func (s *IncidentService) AssignIncident(ctx context.Context, id int, assigneeID
 		}
 		return nil, fmt.Errorf("failed to get incident: %w", err)
 	}
-	if !canAssignIncidentStatus(current.Status) {
+	if !canAssignIncidentStatus(current.Edges.WorkItem.Status) {
 		return nil, fmt.Errorf("resolved, closed, or cancelled incidents cannot be reassigned")
 	}
 	if current.AssigneeID == assigneeID {
@@ -624,25 +645,37 @@ func (s *IncidentService) AssignIncident(ctx context.Context, id int, assigneeID
 		return nil, err
 	}
 
-	// 更新分配人
-	updatedIncident, err := s.client.Incident.UpdateOneID(id).
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to start incident assignment transaction: %w", err)
+	}
+	rollback := func(cause error) error {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			return fmt.Errorf("%w (rollback failed: %v)", cause, rollbackErr)
+		}
+		return cause
+	}
+
+	// 更新分配人，并在同一事务提交前重新验证权威 WorkItem 状态，防止状态与
+	// extension 版本在并发下分别变化而绕过终态守卫。
+	updatedIncident, err := tx.Incident.UpdateOneID(id).
 		Where(
 			incident.TenantIDEQ(tenantID),
 			incident.DeletedAtIsNil(),
 			incident.VersionEQ(current.Version),
-			incident.StatusEQ(current.Status),
 		).
 		SetAssigneeID(assigneeID).
 		SetUpdatedAt(time.Now()).
 		AddVersion(1).
 		Save(ctx)
 	if err != nil {
+		_ = tx.Rollback()
 		if ent.IsNotFound(err) {
 			latest, lookupErr := s.client.Incident.Query().
 				Where(incident.IDEQ(id), incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
-				Only(ctx)
+				WithWorkItem().Only(ctx)
 			if lookupErr == nil {
-				if !canAssignIncidentStatus(latest.Status) {
+				if !canAssignIncidentStatus(latest.Edges.WorkItem.Status) {
 					return nil, fmt.Errorf("resolved or closed incidents cannot be reassigned")
 				}
 				return nil, common.NewVersionConflictError("事件", id, current.Version, latest.Version)
@@ -655,6 +688,17 @@ func (s *IncidentService) AssignIncident(ctx context.Context, id int, assigneeID
 		s.logger.Errorw("Failed to assign incident", "error", err, "id", id)
 		return nil, fmt.Errorf("failed to assign incident: %w", err)
 	}
+	workItem, err := tx.Ticket.Query().Where(ticket.ID(current.WorkItemID), ticket.TenantID(tenantID)).Only(ctx)
+	if err != nil {
+		return nil, rollback(fmt.Errorf("failed to revalidate incident work item: %w", err))
+	}
+	if !canAssignIncidentStatus(workItem.Status) {
+		return nil, rollback(fmt.Errorf("resolved or closed incidents cannot be reassigned"))
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit incident assignment: %w", err)
+	}
+	updatedIncident.Edges.WorkItem = workItem
 
 	// 记录分配活动
 	s.CreateIncidentEvent(ctx, &dto.CreateIncidentEventRequest{
@@ -677,6 +721,7 @@ func (s *IncidentService) AssignIncident(ctx context.Context, id int, assigneeID
 func (s *IncidentService) UpdateStatus(ctx context.Context, id int, status string, tenantID int) (*dto.IncidentResponse, error) {
 	current, err := s.client.Incident.Query().
 		Where(incident.IDEQ(id), incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
+		WithWorkItem().
 		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -684,15 +729,10 @@ func (s *IncidentService) UpdateStatus(ctx context.Context, id int, status strin
 		}
 		return nil, fmt.Errorf("failed to get incident: %w", err)
 	}
-	if current.Status == status {
+	if current.Edges.WorkItem.Status == status {
 		return s.toIncidentResponse(current), nil
 	}
-	updated, err := s.client.Incident.UpdateOneID(id).
-		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
-		SetStatus(status).
-		SetUpdatedAt(time.Now()).
-		AddVersion(1).
-		Save(ctx)
+	updated, err := s.transitionIncident(ctx, current, tenantID, status, nil)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, fmt.Errorf("incident not found")
@@ -903,14 +943,14 @@ func (s *IncidentService) GetIncidentMonitoring(ctx context.Context, req *dto.In
 		query = query.Where(incident.CategoryEQ(*req.Category))
 	}
 	if req.Priority != nil {
-		query = query.Where(incident.PriorityEQ(*req.Priority))
+		query = query.Where(incident.HasWorkItemWith(ticket.PriorityEQ(*req.Priority)))
 	}
 	if req.Status != nil {
-		query = query.Where(incident.StatusEQ(*req.Status))
+		query = query.Where(incident.HasWorkItemWith(ticket.StatusEQ(*req.Status)))
 	}
 
 	// 获取事件列表
-	incidents, err := query.All(ctx)
+	incidents, err := query.WithWorkItem().All(ctx)
 	if err != nil {
 		s.logger.Errorw("Failed to get incidents", "error", err)
 		return nil, fmt.Errorf("failed to get incidents: %w", err)
@@ -923,7 +963,7 @@ func (s *IncidentService) GetIncidentMonitoring(ctx context.Context, req *dto.In
 	var resolvedCount int
 
 	for _, incidentEntity := range incidents {
-		switch incidentEntity.Status {
+		switch incidentEntity.Edges.WorkItem.Status {
 		case "new", "in_progress":
 			openIncidents++
 		case "resolved":
@@ -940,7 +980,7 @@ func (s *IncidentService) GetIncidentMonitoring(ctx context.Context, req *dto.In
 		if incidentEntity.Severity == "critical" {
 			criticalIncidents++
 		}
-		if incidentEntity.Priority == "high" || incidentEntity.Priority == "urgent" {
+		if incidentEntity.Edges.WorkItem.Priority == "high" || incidentEntity.Edges.WorkItem.Priority == "urgent" {
 			highPriorityIncidents++
 		}
 	}
@@ -1008,14 +1048,14 @@ func (s *IncidentService) EscalateIncident(ctx context.Context, req *dto.Inciden
 			incident.TenantIDEQ(tenantID),
 			incident.DeletedAtIsNil(),
 		).
-		Only(ctx)
+		WithWorkItem().Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, fmt.Errorf("incident not found")
 		}
 		return nil, fmt.Errorf("failed to get incident: %w", err)
 	}
-	if current.Status == common.IncidentStatusClosed || current.Status == common.IncidentStatusCancelled {
+	if current.Edges.WorkItem.Status == common.IncidentStatusClosed || current.Edges.WorkItem.Status == common.IncidentStatusCancelled {
 		return nil, fmt.Errorf("terminal incident cannot be escalated")
 	}
 	if req.EscalationLevel <= current.EscalationLevel {
@@ -1171,7 +1211,7 @@ func (s *IncidentService) executeIncidentRules(ctx context.Context, incidentID i
 			incident.TenantIDEQ(tenantID),
 			incident.DeletedAtIsNil(),
 		).
-		Only(ctx)
+		WithWorkItem().Only(ctx)
 	if err != nil {
 		s.logger.Errorw("Failed to get incident", "error", err)
 		return
@@ -1189,7 +1229,7 @@ func (s *IncidentService) evaluateRuleConditions(conditions map[string]interface
 	// 简化的条件评估逻辑
 	if priority, ok := conditions["priority"].([]string); ok {
 		for _, p := range priority {
-			if incident.Priority == p {
+			if incident.Edges.WorkItem != nil && incident.Edges.WorkItem.Priority == p {
 				return true
 			}
 		}
@@ -1202,7 +1242,7 @@ func (s *IncidentService) evaluateRuleConditions(conditions map[string]interface
 		}
 	}
 	if status, ok := conditions["status"].(string); ok {
-		return incident.Status == status
+		return incident.Edges.WorkItem != nil && incident.Edges.WorkItem.Status == status
 	}
 	return false
 }
@@ -1324,7 +1364,10 @@ func isValidIncidentStatusTransition(currentStatus, newStatus string) bool {
 
 // 转换为响应DTO
 func (s *IncidentService) toIncidentResponse(incident *ent.Incident) *dto.IncidentResponse {
-	return dto.ToIncidentResponse(incident)
+	if incident == nil {
+		return nil
+	}
+	return dto.ToIncidentResponse(incident, incident.Edges.WorkItem)
 }
 
 func (s *IncidentService) toIncidentEventResponse(event *ent.IncidentEvent) *dto.IncidentEventResponse {
@@ -1393,23 +1436,22 @@ func (s *IncidentService) AcknowledgeIncident(ctx context.Context, id, userID, t
 	// 获取当前事件状态进行验证
 	incidentEntity, err := s.client.Incident.Query().
 		Where(incident.IDEQ(id), incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
-		Only(ctx)
+		WithWorkItem().Only(ctx)
 	if err != nil {
 		return err
 	}
 
 	// 验证状态转换是否合法
-	if !isValidIncidentStatusTransition(incidentEntity.Status, common.IncidentStatusAcknowledged) {
-		return fmt.Errorf("invalid status transition from '%s' to '%s'", incidentEntity.Status, common.IncidentStatusAcknowledged)
+	status := incidentEntity.Edges.WorkItem.Status
+	if !isValidIncidentStatusTransition(status, common.IncidentStatusAcknowledged) {
+		return fmt.Errorf("invalid status transition from '%s' to '%s'", status, common.IncidentStatusAcknowledged)
 	}
 
 	now := time.Now()
-	err = s.client.Incident.UpdateOneID(id).
-		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil(), incident.VersionEQ(incidentEntity.Version)).
-		SetStatus(common.IncidentStatusAcknowledged).
-		SetUpdatedAt(now).
-		AddVersion(1).
-		Exec(ctx)
+	_, err = s.transitionIncident(ctx, incidentEntity, tenantID, common.IncidentStatusAcknowledged, func(update *ent.IncidentUpdateOne) {
+		update.SetUpdatedAt(now).
+			AddVersion(1)
+	})
 	if err != nil {
 		return err
 	}
@@ -1429,14 +1471,15 @@ func (s *IncidentService) ResolveIncident(ctx context.Context, id, userID, tenan
 	// 获取当前事件状态进行验证
 	incidentEntity, err := s.client.Incident.Query().
 		Where(incident.IDEQ(id), incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
-		Only(ctx)
+		WithWorkItem().Only(ctx)
 	if err != nil {
 		return err
 	}
 
 	// 验证状态转换是否合法
-	if !isValidIncidentStatusTransition(incidentEntity.Status, common.IncidentStatusResolved) {
-		return fmt.Errorf("invalid status transition from '%s' to '%s'", incidentEntity.Status, common.IncidentStatusResolved)
+	status := incidentEntity.Edges.WorkItem.Status
+	if !isValidIncidentStatusTransition(status, common.IncidentStatusResolved) {
+		return fmt.Errorf("invalid status transition from '%s' to '%s'", status, common.IncidentStatusResolved)
 	}
 
 	now := time.Now()
@@ -1453,16 +1496,15 @@ func (s *IncidentService) ResolveIncident(ctx context.Context, id, userID, tenan
 		"step": len(resolutionSteps) + 1, "description": strings.TrimSpace(resolution),
 		"executedBy": fmt.Sprintf("%d", userID), "executedAt": now, "status": "completed",
 	})
-	err = s.client.Incident.UpdateOneID(id).
-		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil(), incident.VersionEQ(incidentEntity.Version)).
-		SetStatus(common.IncidentStatusResolved).
-		SetResolvedAt(now).
-		ClearClosedAt().
-		SetRootCause(rootCauseData).
-		SetResolutionSteps(resolutionSteps).
-		SetUpdatedAt(now).
-		AddVersion(1).
-		Exec(ctx)
+	_, err = s.transitionIncident(ctx, incidentEntity, tenantID, common.IncidentStatusResolved, func(update *ent.IncidentUpdateOne) {
+		update.
+			SetResolvedAt(now).
+			ClearClosedAt().
+			SetRootCause(rootCauseData).
+			SetResolutionSteps(resolutionSteps).
+			SetUpdatedAt(now).
+			AddVersion(1)
+	})
 	if err != nil {
 		return err
 	}
@@ -1483,24 +1525,24 @@ func (s *IncidentService) CloseIncident(ctx context.Context, id, userID, tenantI
 	// 获取当前事件状态进行验证
 	incidentEntity, err := s.client.Incident.Query().
 		Where(incident.IDEQ(id), incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
-		Only(ctx)
+		WithWorkItem().Only(ctx)
 	if err != nil {
 		return err
 	}
 
 	// 验证状态转换是否合法
-	if !isValidIncidentStatusTransition(incidentEntity.Status, common.IncidentStatusClosed) {
-		return fmt.Errorf("invalid status transition from '%s' to '%s'", incidentEntity.Status, common.IncidentStatusClosed)
+	status := incidentEntity.Edges.WorkItem.Status
+	if !isValidIncidentStatusTransition(status, common.IncidentStatusClosed) {
+		return fmt.Errorf("invalid status transition from '%s' to '%s'", status, common.IncidentStatusClosed)
 	}
 
 	now := time.Now()
-	err = s.client.Incident.UpdateOneID(id).
-		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil(), incident.VersionEQ(incidentEntity.Version)).
-		SetStatus(common.IncidentStatusClosed).
-		SetClosedAt(now).
-		SetUpdatedAt(now).
-		AddVersion(1).
-		Exec(ctx)
+	_, err = s.transitionIncident(ctx, incidentEntity, tenantID, common.IncidentStatusClosed, func(update *ent.IncidentUpdateOne) {
+		update.
+			SetClosedAt(now).
+			SetUpdatedAt(now).
+			AddVersion(1)
+	})
 	if err != nil {
 		return err
 	}
@@ -1536,7 +1578,7 @@ func (s *IncidentService) CloseIncident(ctx context.Context, id, userID, tenantI
 func (s *IncidentService) EscalateIncidentLevel(ctx context.Context, id, tenantID, level int) (*dto.IncidentResponse, error) {
 	current, err := s.client.Incident.Query().
 		Where(incident.IDEQ(id), incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
-		Only(ctx)
+		WithWorkItem().Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, fmt.Errorf("incident not found")
@@ -1546,19 +1588,17 @@ func (s *IncidentService) EscalateIncidentLevel(ctx context.Context, id, tenantI
 	if level <= 0 {
 		level = 1
 	}
-	if current.Status == common.IncidentStatusEscalated && current.EscalationLevel >= level {
+	if current.Edges.WorkItem.Status == common.IncidentStatusEscalated && current.EscalationLevel >= level {
 		return s.toIncidentResponse(current), nil
 	}
 
 	now := time.Now()
-	updated, err := s.client.Incident.UpdateOneID(id).
-		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil(), incident.VersionEQ(current.Version)).
-		SetEscalationLevel(level).
-		SetEscalatedAt(now).
-		SetStatus(common.IncidentStatusEscalated).
-		SetUpdatedAt(now).
-		AddVersion(1).
-		Save(ctx)
+	updated, err := s.transitionIncident(ctx, current, tenantID, common.IncidentStatusEscalated, func(update *ent.IncidentUpdateOne) {
+		update.SetEscalationLevel(level).
+			SetEscalatedAt(now).
+			SetUpdatedAt(now).
+			AddVersion(1)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to escalate incident: %w", err)
 	}
@@ -1577,17 +1617,16 @@ func (s *IncidentService) ResolveIncidentForWorkflow(ctx context.Context, id, te
 	if err != nil {
 		return nil, err
 	}
-	if current.Status == common.IncidentStatusResolved && !current.ResolvedAt.IsZero() {
+	if current.Edges.WorkItem.Status == common.IncidentStatusResolved && !current.ResolvedAt.IsZero() {
 		return s.toIncidentResponse(current), nil
 	}
 	now := time.Now()
-	updated, err := s.client.Incident.UpdateOneID(id).
-		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil(), incident.VersionEQ(current.Version)).
-		SetStatus(common.IncidentStatusResolved).
-		SetResolvedAt(now).
-		SetUpdatedAt(now).
-		AddVersion(1).
-		Save(ctx)
+	updated, err := s.transitionIncident(ctx, current, tenantID, common.IncidentStatusResolved, func(update *ent.IncidentUpdateOne) {
+		update.
+			SetResolvedAt(now).
+			SetUpdatedAt(now).
+			AddVersion(1)
+	})
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, fmt.Errorf("事件 %d 不存在或不属于当前租户", id)
@@ -1608,17 +1647,16 @@ func (s *IncidentService) CloseIncidentForWorkflow(ctx context.Context, id, tena
 	if err != nil {
 		return nil, err
 	}
-	if current.Status == common.IncidentStatusClosed && !current.ClosedAt.IsZero() {
+	if current.Edges.WorkItem.Status == common.IncidentStatusClosed && !current.ClosedAt.IsZero() {
 		return s.toIncidentResponse(current), nil
 	}
 	now := time.Now()
-	updated, err := s.client.Incident.UpdateOneID(id).
-		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil(), incident.VersionEQ(current.Version)).
-		SetStatus(common.IncidentStatusClosed).
-		SetClosedAt(now).
-		SetUpdatedAt(now).
-		AddVersion(1).
-		Save(ctx)
+	updated, err := s.transitionIncident(ctx, current, tenantID, common.IncidentStatusClosed, func(update *ent.IncidentUpdateOne) {
+		update.
+			SetClosedAt(now).
+			SetUpdatedAt(now).
+			AddVersion(1)
+	})
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, fmt.Errorf("事件 %d 不存在或不属于当前租户", id)
@@ -1639,16 +1677,15 @@ func (s *IncidentService) AcknowledgeIncidentForWorkflow(ctx context.Context, id
 	if err != nil {
 		return nil, err
 	}
-	if current.Status == common.IncidentStatusAcknowledged {
+	if current.Edges.WorkItem.Status == common.IncidentStatusAcknowledged {
 		return s.toIncidentResponse(current), nil
 	}
 	now := time.Now()
-	updated, err := s.client.Incident.UpdateOneID(id).
-		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil(), incident.VersionEQ(current.Version)).
-		SetStatus(common.IncidentStatusAcknowledged).
-		SetUpdatedAt(now).
-		AddVersion(1).
-		Save(ctx)
+	updated, err := s.transitionIncident(ctx, current, tenantID, common.IncidentStatusAcknowledged, func(update *ent.IncidentUpdateOne) {
+		update.
+			SetUpdatedAt(now).
+			AddVersion(1)
+	})
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, fmt.Errorf("事件 %d 不存在或不属于当前租户", id)
@@ -1669,40 +1706,55 @@ func (s *IncidentService) UpdateIncidentForWorkflow(ctx context.Context, id, ten
 	if err != nil {
 		return nil, err
 	}
-	unchanged := (title == "" || title == current.Title) &&
-		(description == "" || description == current.Description) &&
-		(priority == "" || priority == current.Priority) &&
+	workItem := current.Edges.WorkItem
+	unchanged := (title == "" || title == workItem.Title) &&
+		(description == "" || description == workItem.Description) &&
+		(priority == "" || priority == workItem.Priority) &&
 		(severity == "" || severity == current.Severity) &&
-		(status == "" || status == current.Status)
+		(status == "" || status == workItem.Status)
 	if unchanged {
 		return s.toIncidentResponse(current), nil
 	}
-	updateQuery := s.client.Incident.UpdateOneID(id).
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	fail := func(cause error) (*dto.IncidentResponse, error) { _ = tx.Rollback(); return nil, cause }
+	updateQuery := tx.Incident.UpdateOneID(id).
 		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil(), incident.VersionEQ(current.Version)).
 		SetUpdatedAt(time.Now()).
 		AddVersion(1)
-	if title != "" {
-		updateQuery.SetTitle(title)
-	}
-	if description != "" {
-		updateQuery.SetDescription(description)
-	}
-	if priority != "" {
-		updateQuery.SetPriority(priority)
-	}
 	if severity != "" {
 		updateQuery.SetSeverity(severity)
-	}
-	if status != "" {
-		updateQuery.SetStatus(status)
 	}
 	updated, err := updateQuery.Save(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, fmt.Errorf("事件 %d 不存在或不属于当前租户", id)
+			return fail(fmt.Errorf("事件 %d 不存在或不属于当前租户", id))
 		}
-		return nil, fmt.Errorf("failed to update incident: %w", err)
+		return fail(fmt.Errorf("failed to update incident: %w", err))
 	}
+	workItemUpdate := tx.Ticket.UpdateOneID(current.WorkItemID).Where(ticket.TenantIDEQ(tenantID))
+	if title != "" {
+		workItemUpdate.SetTitle(title)
+	}
+	if description != "" {
+		workItemUpdate.SetDescription(description)
+	}
+	if priority != "" {
+		workItemUpdate.SetPriority(priority)
+	}
+	if status != "" {
+		workItemUpdate.SetStatus(status)
+	}
+	updatedWorkItem, err := workItemUpdate.Save(ctx)
+	if err != nil {
+		return fail(err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fail(err)
+	}
+	updated.Edges.WorkItem = updatedWorkItem
 	s.CreateIncidentEvent(ctx, &dto.CreateIncidentEventRequest{
 		IncidentID: id, EventType: "update", EventName: "事件更新",
 		Description: "事件信息已更新（工作流）", Status: "active", Severity: "info", Source: "system",
@@ -1717,23 +1769,22 @@ func (s *IncidentService) CategorizeIncidentForWorkflow(ctx context.Context, id,
 	if err != nil {
 		return nil, err
 	}
-	if current.Status == common.IncidentStatusTriaged &&
+	if current.Edges.WorkItem.Status == common.IncidentStatusTriaged &&
 		(category == "" || category == current.Category) &&
 		(subcategory == "" || subcategory == current.Subcategory) {
 		return s.toIncidentResponse(current), nil
 	}
-	updateQuery := s.client.Incident.UpdateOneID(id).
-		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil(), incident.VersionEQ(current.Version)).
-		SetStatus(common.IncidentStatusTriaged).
-		SetUpdatedAt(time.Now()).
-		AddVersion(1)
-	if category != "" {
-		updateQuery.SetCategory(category)
-	}
-	if subcategory != "" {
-		updateQuery.SetSubcategory(subcategory)
-	}
-	updated, err := updateQuery.Save(ctx)
+	updated, err := s.transitionIncident(ctx, current, tenantID, common.IncidentStatusTriaged, func(updateQuery *ent.IncidentUpdateOne) {
+		updateQuery.
+			SetUpdatedAt(time.Now()).
+			AddVersion(1)
+		if category != "" {
+			updateQuery.SetCategory(category)
+		}
+		if subcategory != "" {
+			updateQuery.SetSubcategory(subcategory)
+		}
+	})
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, fmt.Errorf("事件 %d 不存在或不属于当前租户", id)
@@ -1750,7 +1801,7 @@ func (s *IncidentService) CategorizeIncidentForWorkflow(ctx context.Context, id,
 func (s *IncidentService) workflowIncident(ctx context.Context, id, tenantID int) (*ent.Incident, error) {
 	entity, err := s.client.Incident.Query().
 		Where(incident.IDEQ(id), incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
-		Only(ctx)
+		WithWorkItem().Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, fmt.Errorf("事件 %d 不存在或不属于当前租户", id)
@@ -1760,28 +1811,52 @@ func (s *IncidentService) workflowIncident(ctx context.Context, id, tenantID int
 	return entity, nil
 }
 
+func (s *IncidentService) transitionIncident(ctx context.Context, current *ent.Incident, tenantID int, status string, mutate func(*ent.IncidentUpdateOne)) (*ent.Incident, error) {
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	fail := func(cause error) (*ent.Incident, error) { _ = tx.Rollback(); return nil, cause }
+	workItem, err := tx.Ticket.UpdateOneID(current.WorkItemID).Where(ticket.TenantIDEQ(tenantID)).SetStatus(status).Save(ctx)
+	if err != nil {
+		return fail(err)
+	}
+	update := tx.Incident.UpdateOneID(current.ID).Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil(), incident.VersionEQ(current.Version))
+	if mutate != nil {
+		mutate(update)
+	}
+	updated, err := update.Save(ctx)
+	if err != nil {
+		return fail(err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fail(err)
+	}
+	updated.Edges.WorkItem = workItem
+	return updated, nil
+}
+
 // ReopenIncident 将已解决或已关闭的事件重新流转到 in_progress
 func (s *IncidentService) ReopenIncident(ctx context.Context, id, userID, tenantID int) error {
 	incidentEntity, err := s.client.Incident.Query().
 		Where(incident.IDEQ(id), incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
-		Only(ctx)
+		WithWorkItem().Only(ctx)
 	if err != nil {
 		return err
 	}
 
-	if incidentEntity.Status != common.IncidentStatusResolved && incidentEntity.Status != common.IncidentStatusClosed {
+	if incidentEntity.Edges.WorkItem.Status != common.IncidentStatusResolved && incidentEntity.Edges.WorkItem.Status != common.IncidentStatusClosed {
 		return fmt.Errorf("only resolved or closed incidents can be reopened")
 	}
 
 	now := time.Now()
-	err = s.client.Incident.UpdateOneID(id).
-		Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil(), incident.VersionEQ(incidentEntity.Version)).
-		SetStatus(common.IncidentStatusInProgress).
-		ClearResolvedAt().
-		ClearClosedAt().
-		SetUpdatedAt(now).
-		AddVersion(1).
-		Exec(ctx)
+	_, err = s.transitionIncident(ctx, incidentEntity, tenantID, common.IncidentStatusInProgress, func(update *ent.IncidentUpdateOne) {
+		update.
+			ClearResolvedAt().
+			ClearClosedAt().
+			SetUpdatedAt(now).
+			AddVersion(1)
+	})
 	if err != nil {
 		return err
 	}
@@ -1798,7 +1873,7 @@ func (s *IncidentService) ReopenIncident(ctx context.Context, id, userID, tenant
 func (s *IncidentService) EscalateToMajorIncident(ctx context.Context, id, userID, tenantID int, req *dto.EscalateMajorIncidentRequest) error {
 	incidentEntity, err := s.client.Incident.Query().
 		Where(incident.IDEQ(id), incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
-		Only(ctx)
+		WithWorkItem().Only(ctx)
 	if err != nil {
 		return err
 	}
@@ -1806,7 +1881,7 @@ func (s *IncidentService) EscalateToMajorIncident(ctx context.Context, id, userI
 	if incidentEntity.IsMajorIncident {
 		return fmt.Errorf("incident is already a major incident")
 	}
-	if incidentEntity.Status == common.IncidentStatusResolved || incidentEntity.Status == common.IncidentStatusClosed {
+	if incidentEntity.Edges.WorkItem.Status == common.IncidentStatusResolved || incidentEntity.Edges.WorkItem.Status == common.IncidentStatusClosed {
 		return fmt.Errorf("resolved or closed incidents cannot be escalated to major incident")
 	}
 
@@ -1865,7 +1940,7 @@ func (s *IncidentService) GetIncidentStats(ctx context.Context, tenantID int) (*
 		Where(
 			incident.TenantIDEQ(tenantID),
 			incident.DeletedAtIsNil(),
-			incident.StatusIn("new", "acknowledged", "assigned", "triaged", "in_progress", "on_hold", "escalated"),
+			incident.HasWorkItemWith(ticket.StatusIn("new", "acknowledged", "assigned", "triaged", "in_progress", "on_hold", "escalated")),
 		).
 		Count(ctx)
 	if err != nil {
@@ -1889,7 +1964,7 @@ func (s *IncidentService) GetIncidentStats(ctx context.Context, tenantID int) (*
 			incident.DeletedAtIsNil(),
 			incident.Or(
 				incident.SeverityEQ("critical"),
-				incident.PriorityIn("high", "urgent"),
+				incident.HasWorkItemWith(ticket.PriorityIn("high", "urgent")),
 			),
 		).
 		Count(ctx)
@@ -1903,7 +1978,7 @@ func (s *IncidentService) GetIncidentStats(ctx context.Context, tenantID int) (*
 		Where(
 			incident.TenantIDEQ(tenantID),
 			incident.DeletedAtIsNil(),
-			incident.StatusEQ("resolved"),
+			incident.HasWorkItemWith(ticket.StatusEQ("resolved")),
 			incident.ResolvedAtNotNil(),
 		).
 		All(ctx)
@@ -2090,7 +2165,7 @@ func (s *IncidentService) triggerWorkflowForIncident(ctx context.Context, incide
 			incident.TenantIDEQ(tenantID),
 			incident.DeletedAtIsNil(),
 		).
-		Only(ctx)
+		WithWorkItem().Only(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get incident: %w", err)
 	}
@@ -2108,11 +2183,11 @@ func (s *IncidentService) triggerWorkflowForIncident(ctx context.Context, incide
 	variables := map[string]interface{}{
 		"incident_id":     inc.ID,
 		"incident_number": inc.IncidentNumber,
-		"title":           inc.Title,
-		"description":     inc.Description,
-		"priority":        inc.Priority,
+		"title":           inc.Edges.WorkItem.Title,
+		"description":     inc.Edges.WorkItem.Description,
+		"priority":        inc.Edges.WorkItem.Priority,
 		"severity":        inc.Severity,
-		"status":          inc.Status,
+		"status":          inc.Edges.WorkItem.Status,
 		"category":        inc.Category,
 		"reporter_id":     inc.ReporterID,
 		"assignee_id":     inc.AssigneeID,
@@ -2121,7 +2196,7 @@ func (s *IncidentService) triggerWorkflowForIncident(ctx context.Context, incide
 	// 根据严重程度选择不同的流程
 	// 注意: incident_general_flow 不存在，使用 incident_emergency_flow 作为默认
 	processKey := "incident_emergency_flow"
-	if inc.Severity == "critical" || inc.Priority == "urgent" {
+	if inc.Severity == "critical" || inc.Edges.WorkItem.Priority == "urgent" {
 		processKey = "incident_emergency_flow"
 	}
 

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"itsm-backend/ent/incident"
+	"itsm-backend/ent/ticket"
 	"strings"
 	"time"
 
@@ -18,16 +19,8 @@ type Incident struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
-	// 事件标题
-	Title string `json:"title,omitempty"`
-	// 事件描述
-	Description string `json:"description,omitempty"`
-	// 状态
-	Status string `json:"status,omitempty"`
 	// 事件类型
 	Type string `json:"type,omitempty"`
-	// 优先级
-	Priority string `json:"priority,omitempty"`
 	// 严重程度
 	Severity string `json:"severity,omitempty"`
 	// 影响范围：low/medium/high/critical
@@ -38,7 +31,7 @@ type Incident struct {
 	IncidentNumber string `json:"incident_number,omitempty"`
 	// 报告人ID
 	ReporterID int `json:"reporter_id,omitempty"`
-	// 关联的 WorkItem（tickets.id），唯一，必填——Incident 迁移到 WorkItem 后每条记录必须有且仅有一条对应的 tickets 行
+	// 关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入
 	WorkItemID int `json:"work_item_id,omitempty"`
 	// 处理人ID
 	AssigneeID int `json:"assignee_id,omitempty"`
@@ -90,6 +83,8 @@ type Incident struct {
 
 // IncidentEdges holds the relations/edges for other nodes in the graph.
 type IncidentEdges struct {
+	// 共享字段的唯一权威 WorkItem
+	WorkItem *Ticket `json:"work_item,omitempty"`
 	// 关联事件
 	RelatedIncidents []*Incident `json:"related_incidents,omitempty"`
 	// 事件活动记录
@@ -106,13 +101,24 @@ type IncidentEdges struct {
 	Problems []*Problem `json:"problems,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [7]bool
+	loadedTypes [8]bool
+}
+
+// WorkItemOrErr returns the WorkItem value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e IncidentEdges) WorkItemOrErr() (*Ticket, error) {
+	if e.WorkItem != nil {
+		return e.WorkItem, nil
+	} else if e.loadedTypes[0] {
+		return nil, &NotFoundError{label: ticket.Label}
+	}
+	return nil, &NotLoadedError{edge: "work_item"}
 }
 
 // RelatedIncidentsOrErr returns the RelatedIncidents value or an error if the edge
 // was not loaded in eager-loading.
 func (e IncidentEdges) RelatedIncidentsOrErr() ([]*Incident, error) {
-	if e.loadedTypes[0] {
+	if e.loadedTypes[1] {
 		return e.RelatedIncidents, nil
 	}
 	return nil, &NotLoadedError{edge: "related_incidents"}
@@ -121,7 +127,7 @@ func (e IncidentEdges) RelatedIncidentsOrErr() ([]*Incident, error) {
 // IncidentEventsOrErr returns the IncidentEvents value or an error if the edge
 // was not loaded in eager-loading.
 func (e IncidentEdges) IncidentEventsOrErr() ([]*IncidentEvent, error) {
-	if e.loadedTypes[1] {
+	if e.loadedTypes[2] {
 		return e.IncidentEvents, nil
 	}
 	return nil, &NotLoadedError{edge: "incident_events"}
@@ -130,7 +136,7 @@ func (e IncidentEdges) IncidentEventsOrErr() ([]*IncidentEvent, error) {
 // IncidentAlertsOrErr returns the IncidentAlerts value or an error if the edge
 // was not loaded in eager-loading.
 func (e IncidentEdges) IncidentAlertsOrErr() ([]*IncidentAlert, error) {
-	if e.loadedTypes[2] {
+	if e.loadedTypes[3] {
 		return e.IncidentAlerts, nil
 	}
 	return nil, &NotLoadedError{edge: "incident_alerts"}
@@ -139,7 +145,7 @@ func (e IncidentEdges) IncidentAlertsOrErr() ([]*IncidentAlert, error) {
 // IncidentMetricsOrErr returns the IncidentMetrics value or an error if the edge
 // was not loaded in eager-loading.
 func (e IncidentEdges) IncidentMetricsOrErr() ([]*IncidentMetric, error) {
-	if e.loadedTypes[3] {
+	if e.loadedTypes[4] {
 		return e.IncidentMetrics, nil
 	}
 	return nil, &NotLoadedError{edge: "incident_metrics"}
@@ -148,7 +154,7 @@ func (e IncidentEdges) IncidentMetricsOrErr() ([]*IncidentMetric, error) {
 // ParentIncidentOrErr returns the ParentIncident value or an error if the edge
 // was not loaded in eager-loading.
 func (e IncidentEdges) ParentIncidentOrErr() ([]*Incident, error) {
-	if e.loadedTypes[4] {
+	if e.loadedTypes[5] {
 		return e.ParentIncident, nil
 	}
 	return nil, &NotLoadedError{edge: "parent_incident"}
@@ -157,7 +163,7 @@ func (e IncidentEdges) ParentIncidentOrErr() ([]*Incident, error) {
 // ConfigurationItemsOrErr returns the ConfigurationItems value or an error if the edge
 // was not loaded in eager-loading.
 func (e IncidentEdges) ConfigurationItemsOrErr() ([]*ConfigurationItem, error) {
-	if e.loadedTypes[5] {
+	if e.loadedTypes[6] {
 		return e.ConfigurationItems, nil
 	}
 	return nil, &NotLoadedError{edge: "configuration_items"}
@@ -166,7 +172,7 @@ func (e IncidentEdges) ConfigurationItemsOrErr() ([]*ConfigurationItem, error) {
 // ProblemsOrErr returns the Problems value or an error if the edge
 // was not loaded in eager-loading.
 func (e IncidentEdges) ProblemsOrErr() ([]*Problem, error) {
-	if e.loadedTypes[6] {
+	if e.loadedTypes[7] {
 		return e.Problems, nil
 	}
 	return nil, &NotLoadedError{edge: "problems"}
@@ -183,7 +189,7 @@ func (*Incident) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case incident.FieldID, incident.FieldReporterID, incident.FieldWorkItemID, incident.FieldAssigneeID, incident.FieldConfigurationItemID, incident.FieldEscalationLevel, incident.FieldTenantID, incident.FieldVersion:
 			values[i] = new(sql.NullInt64)
-		case incident.FieldTitle, incident.FieldDescription, incident.FieldStatus, incident.FieldType, incident.FieldPriority, incident.FieldSeverity, incident.FieldImpact, incident.FieldUrgency, incident.FieldIncidentNumber, incident.FieldCategory, incident.FieldSubcategory, incident.FieldSource:
+		case incident.FieldType, incident.FieldSeverity, incident.FieldImpact, incident.FieldUrgency, incident.FieldIncidentNumber, incident.FieldCategory, incident.FieldSubcategory, incident.FieldSource:
 			values[i] = new(sql.NullString)
 		case incident.FieldDetectedAt, incident.FieldResolvedAt, incident.FieldClosedAt, incident.FieldEscalatedAt, incident.FieldCreatedAt, incident.FieldUpdatedAt, incident.FieldDeletedAt:
 			values[i] = new(sql.NullTime)
@@ -208,35 +214,11 @@ func (_m *Incident) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int(value.Int64)
-		case incident.FieldTitle:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field title", values[i])
-			} else if value.Valid {
-				_m.Title = value.String
-			}
-		case incident.FieldDescription:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field description", values[i])
-			} else if value.Valid {
-				_m.Description = value.String
-			}
-		case incident.FieldStatus:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field status", values[i])
-			} else if value.Valid {
-				_m.Status = value.String
-			}
 		case incident.FieldType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field type", values[i])
 			} else if value.Valid {
 				_m.Type = value.String
-			}
-		case incident.FieldPriority:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field priority", values[i])
-			} else if value.Valid {
-				_m.Priority = value.String
 			}
 		case incident.FieldSeverity:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -422,6 +404,11 @@ func (_m *Incident) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
 }
 
+// QueryWorkItem queries the "work_item" edge of the Incident entity.
+func (_m *Incident) QueryWorkItem() *TicketQuery {
+	return NewIncidentClient(_m.config).QueryWorkItem(_m)
+}
+
 // QueryRelatedIncidents queries the "related_incidents" edge of the Incident entity.
 func (_m *Incident) QueryRelatedIncidents() *IncidentQuery {
 	return NewIncidentClient(_m.config).QueryRelatedIncidents(_m)
@@ -480,20 +467,8 @@ func (_m *Incident) String() string {
 	var builder strings.Builder
 	builder.WriteString("Incident(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
-	builder.WriteString("title=")
-	builder.WriteString(_m.Title)
-	builder.WriteString(", ")
-	builder.WriteString("description=")
-	builder.WriteString(_m.Description)
-	builder.WriteString(", ")
-	builder.WriteString("status=")
-	builder.WriteString(_m.Status)
-	builder.WriteString(", ")
 	builder.WriteString("type=")
 	builder.WriteString(_m.Type)
-	builder.WriteString(", ")
-	builder.WriteString("priority=")
-	builder.WriteString(_m.Priority)
 	builder.WriteString(", ")
 	builder.WriteString("severity=")
 	builder.WriteString(_m.Severity)

@@ -26,6 +26,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/processinstance"
+	"itsm-backend/ent/ticket"
 	changedomain "itsm-backend/handlers/change"
 	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
@@ -118,11 +119,11 @@ func main() {
 }
 
 func findCandidates(ctx context.Context, client *ent.Client, tenantID int) ([]candidate, error) {
-	query := client.Change.Query().Where(change.Status("pending"))
+	query := client.Change.Query().Where(change.HasWorkItemWith(ticket.StatusEQ("pending")))
 	if tenantID > 0 {
 		query = query.Where(change.TenantID(tenantID))
 	}
-	changes, err := query.All(ctx)
+	changes, err := query.WithWorkItem().All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("查询 pending 变更失败: %w", err)
 	}
@@ -147,7 +148,7 @@ func findCandidates(ctx context.Context, client *ent.Client, tenantID int) ([]ca
 		if exists {
 			continue
 		}
-		candidates = append(candidates, candidate{id: c.ID, tenantID: c.TenantID, title: c.Title, typ: c.Type})
+		candidates = append(candidates, candidate{id: c.ID, tenantID: c.TenantID, title: c.Edges.WorkItem.Title, typ: c.Type})
 	}
 	return candidates, nil
 }

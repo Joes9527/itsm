@@ -34,7 +34,7 @@ func (s *ChangePIRService) CreatePIR(ctx context.Context, req *dto.CreateChangeP
 	// 验证变更存在且属于该租户
 	changeEntity, err := s.client.Change.Query().
 		Where(change.ID(req.ChangeID), change.TenantID(tenantID)).
-		First(ctx)
+		WithWorkItem().First(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, fmt.Errorf("变更不存在")
@@ -104,14 +104,14 @@ func (s *ChangePIRService) CreatePIR(ctx context.Context, req *dto.CreateChangeP
 	}
 
 	s.logger.Infow("PIR created successfully", "pir_id", pir.ID, "change_id", req.ChangeID)
-	return s.buildPIRResponse(ctx, pir, changeEntity.Title, tenantID, req.ChangeID)
+	return s.buildPIRResponse(ctx, pir, changeEntity.Edges.WorkItem.Title, tenantID, req.ChangeID)
 }
 
 // GetPIR 获取PIR详情
 func (s *ChangePIRService) GetPIR(ctx context.Context, id, tenantID int) (*dto.ChangePIRResponse, error) {
 	pir, err := s.client.ChangePIR.Query().
 		Where(changepir.ID(id), changepir.TenantID(tenantID)).
-		WithChange().
+		WithChange(func(q *ent.ChangeQuery) { q.WithWorkItem() }).
 		First(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -123,7 +123,7 @@ func (s *ChangePIRService) GetPIR(ctx context.Context, id, tenantID int) (*dto.C
 	changeTitle := ""
 	changeID := 0
 	if pir.Edges.Change != nil {
-		changeTitle = pir.Edges.Change.Title
+		changeTitle = pir.Edges.Change.Edges.WorkItem.Title
 		changeID = pir.Edges.Change.ID
 	}
 
@@ -134,7 +134,7 @@ func (s *ChangePIRService) GetPIR(ctx context.Context, id, tenantID int) (*dto.C
 func (s *ChangePIRService) GetPIRByChange(ctx context.Context, changeID, tenantID int) (*dto.ChangePIRResponse, error) {
 	pir, err := s.client.ChangePIR.Query().
 		Where(changepir.TenantID(tenantID), changepir.HasChangeWith(change.ID(changeID))).
-		WithChange().
+		WithChange(func(q *ent.ChangeQuery) { q.WithWorkItem() }).
 		First(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -145,7 +145,7 @@ func (s *ChangePIRService) GetPIRByChange(ctx context.Context, changeID, tenantI
 
 	changeTitle := ""
 	if pir.Edges.Change != nil {
-		changeTitle = pir.Edges.Change.Title
+		changeTitle = pir.Edges.Change.Edges.WorkItem.Title
 	}
 
 	return s.buildPIRResponseFull(ctx, pir, changeTitle, changeID)
@@ -169,7 +169,7 @@ func (s *ChangePIRService) ListPIRs(ctx context.Context, tenantID int, page, pag
 
 	// 分页查询
 	pirs, err := query.
-		WithChange().
+		WithChange(func(q *ent.ChangeQuery) { q.WithWorkItem() }).
 		Order(ent.Desc(changepir.FieldReviewDate)).
 		Offset((page - 1) * pageSize).
 		Limit(pageSize).
@@ -184,7 +184,7 @@ func (s *ChangePIRService) ListPIRs(ctx context.Context, tenantID int, page, pag
 		changeTitle := ""
 		changeID := 0
 		if pir.Edges.Change != nil {
-			changeTitle = pir.Edges.Change.Title
+			changeTitle = pir.Edges.Change.Edges.WorkItem.Title
 			changeID = pir.Edges.Change.ID
 		}
 		response, err := s.buildPIRResponseFull(ctx, pir, changeTitle, changeID)
@@ -206,6 +206,7 @@ func (s *ChangePIRService) UpdatePIR(ctx context.Context, id int, req *dto.Updat
 	// 获取PIR记录
 	pir, err := s.client.ChangePIR.Query().
 		Where(changepir.ID(id), changepir.TenantID(tenantID)).
+		WithChange(func(q *ent.ChangeQuery) { q.WithWorkItem() }).
 		First(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -247,7 +248,7 @@ func (s *ChangePIRService) UpdatePIR(ctx context.Context, id int, req *dto.Updat
 	changeTitle := ""
 	changeID := 0
 	if pir.Edges.Change != nil {
-		changeTitle = pir.Edges.Change.Title
+		changeTitle = pir.Edges.Change.Edges.WorkItem.Title
 		changeID = pir.Edges.Change.ID
 	}
 

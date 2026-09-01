@@ -69,16 +69,23 @@ func TestGlobalSearch_SearchCaseInsensitiveAndNumber(t *testing.T) {
 		Save(t.Context())
 	require.NoError(t, err)
 
-	_, err = client.Incident.Create().
-		SetTitle("Database latency alert").
-		SetDescription("Primary database is slow").
-		SetStatus("new").
+	incidentWorkItem, err := client.Ticket.Create().
+		SetTitle("Global search incident").
 		SetType("incident").
-		SetPriority("high").
+		SetRecordClass("incident").
+		SetTicketNumber("TKT-GLOBAL-002").
+		SetTenantID(tenant.ID).
+		SetRequesterID(user.ID).
+		Save(t.Context())
+	require.NoError(t, err)
+
+	_, err = client.Incident.Create().
+		SetType("incident").
 		SetSeverity("high").
 		SetIncidentNumber("INC-GLOBAL-002").
 		SetReporterID(user.ID).
 		SetTenantID(tenant.ID).
+		SetWorkItemID(incidentWorkItem.ID).
 		Save(t.Context())
 	require.NoError(t, err)
 

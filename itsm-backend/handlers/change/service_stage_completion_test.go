@@ -40,8 +40,8 @@ func TestTransitionStatus_StageCompletion_AdvanceProcessEndToEnd(t *testing.T) {
 	mockChange.Type = "standard"
 	repo.changes[mockChange.ID] = mockChange
 
-	// Review fix：先建两条无关的"垫场"Change（不建对应 WorkItem），把 changes.id 序列往前
-	// 顶两步。changes.id 和 tickets.id 是两张表各自独立的自增序列，如果这里只建一条 Change
+	// 先建两条无关的 WorkItem，把 tickets.id 序列往前顶两步。changes.id 和 tickets.id
+	// 是两张表各自独立的自增序列，如果这里只建一条 Change
 	// 和一条 WorkItem，在全新的内存库里两者都会恰好是各自表的第 1 行，数值碰巧相等——这样
 	// 即使 completeChangeStageTasks 里错误地直接用裸 changeID 拼 businessKey（而不是解析出
 	// 真正的 workItemID），也会因为两个数字碰巧一样而拼出同一个字符串，测试照样通过，
@@ -49,10 +49,10 @@ func TestTransitionStatus_StageCompletion_AdvanceProcessEndToEnd(t *testing.T) {
 	// dbChange.ID 和 workItem.ID 是两个不同的数字，只有真的按 workItemID 解析才能拼出
 	// engine.StartProcess 用的那个 businessKey。
 	for i := 0; i < 2; i++ {
-		_, err := entClient.Change.Create().
-			SetTitle(fmt.Sprintf("Decoy Change %d", i)).
-			SetStatus("draft").
-			SetCreatedBy(actorID).
+		_, err := entClient.Ticket.Create().
+			SetTitle(fmt.Sprintf("ID pad %d", i)).
+			SetTicketNumber(fmt.Sprintf("TKT-STAGE-PAD-%d", i)).
+			SetRequesterID(actorID).
 			SetTenantID(tenantID).
 			Save(context.Background())
 		require.NoError(t, err)
@@ -61,13 +61,11 @@ func TestTransitionStatus_StageCompletion_AdvanceProcessEndToEnd(t *testing.T) {
 	// Wave 2 起 completeChangeStageTasks 通过 resolveWorkItemID 查真实 entClient.Change 的
 	// work_item_id 来构造 businessKey——必须先建一条 WorkItem 并回填，否则会被当成"没有
 	// 关联的 WorkItem"静默跳过阶段完成（这个测试恰恰要验证阶段完成确实生效）。
-	workItem := createChangeWorkItemFixture(t, entClient, tenantID, actorID, "Stage Completion Change")
+	workItem := createChangeWorkItemFixture(t, entClient, tenantID, actorID, "Stage Completion Change", "approved")
 
 	// DB 侧真实 Change 行：handler 写侧（change_handler.go）直接操作 entClient，
 	// 状态必须与域侧一致（approved），否则 handler 状态机白名单会拒绝
 	dbChange, err := entClient.Change.Create().
-		SetTitle("Stage Completion Change").
-		SetStatus("approved").
 		SetCreatedBy(actorID).
 		SetTenantID(tenantID).
 		SetWorkItemID(workItem.ID).
@@ -78,6 +76,7 @@ func TestTransitionStatus_StageCompletion_AdvanceProcessEndToEnd(t *testing.T) {
 	// 让 mock 与 DB 使用同一个 ID（TransitionStatus 按 ID 操作 mock，handler 按 change_id 操作 DB）
 	delete(repo.changes, mockChange.ID)
 	mockChange.ID = dbChange.ID
+	mockChange.WorkItemID = &workItem.ID
 	repo.changes[dbChange.ID] = mockChange
 
 	// 模拟 ProcessTriggerService 启动：businessKey 按 "change:{id}" 约定
@@ -122,7 +121,9 @@ func TestTransitionStatus_StageCompletion_AdvanceProcessEndToEnd(t *testing.T) {
 	// handler 写侧：实施动作把 DB 状态推进到 in_progress
 	dbAfter, err := entClient.Change.Get(context.Background(), dbChange.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "in_progress", dbAfter.Status, "implement_change 应以注入的 change_id 生效")
+	dbAfterWorkItem, err := entClient.Ticket.Get(context.Background(), dbAfter.WorkItemID)
+	require.NoError(t, err)
+	assert.Equal(t, "in_progress", dbAfterWorkItem.Status, "implement_change 应以注入的 change_id 生效")
 
 	// 2. complete（completed）：原生完成 Activity_Verify（带 verify_passed）→ Activity_Close → End
 	updated, err = svc.TransitionStatus(context.Background(), dbChange.ID, tenantID, actorID, "completed", "")
@@ -135,7 +136,9 @@ func TestTransitionStatus_StageCompletion_AdvanceProcessEndToEnd(t *testing.T) {
 
 	dbFinal, err := entClient.Change.Get(context.Background(), dbChange.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "completed", dbFinal.Status, "verify/close 动作应把 DB 状态推进到 completed")
+	dbFinalWorkItem, err := entClient.Ticket.Get(context.Background(), dbFinal.WorkItemID)
+	require.NoError(t, err)
+	assert.Equal(t, "completed", dbFinalWorkItem.Status, "verify/close 动作应把 DB 状态推进到 completed")
 	assert.False(t, dbFinal.ActualEndDate.IsZero(), "关闭动作应写入实际结束时间")
 }
 

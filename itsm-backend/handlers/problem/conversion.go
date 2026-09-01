@@ -49,15 +49,15 @@ func (r *EntRepository) CreateFromIncident(
 		incident.IDEQ(incidentID),
 		incident.TenantIDEQ(tenantID),
 		incident.DeletedAtIsNil(),
-	).Only(ctx)
+	).WithWorkItem().Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return fail(fmt.Errorf("incident not found"))
 		}
 		return fail(fmt.Errorf("load incident for conversion: %w", err))
 	}
-	if common.IsIncidentFinalStatus(source.Status) {
-		return fail(fmt.Errorf("%s incident cannot be converted to a problem", source.Status))
+	if common.IsIncidentFinalStatus(source.Edges.WorkItem.Status) {
+		return fail(fmt.Errorf("%s incident cannot be converted to a problem", source.Edges.WorkItem.Status))
 	}
 	if source.WorkItemID <= 0 {
 		return fail(fmt.Errorf("incident source work item is missing"))
@@ -89,8 +89,8 @@ func (r *EntRepository) CreateFromIncident(
 		return fail(fmt.Errorf("incident is already investigated by a problem"))
 	}
 
-	title := "问题-" + source.Title
-	description := source.Description
+	title := "问题-" + source.Edges.WorkItem.Title
+	description := source.Edges.WorkItem.Description
 	if customTitle := strings.TrimSpace(req.Title); customTitle != "" {
 		title = customTitle
 	}
@@ -102,7 +102,7 @@ func (r *EntRepository) CreateFromIncident(
 		Title:       title,
 		Description: description,
 		Status:      "open",
-		Priority:    source.Priority,
+		Priority:    source.Edges.WorkItem.Priority,
 		Category:    source.Category,
 		RootCause:   strings.TrimSpace(req.RootCause),
 		Impact:      source.Impact,

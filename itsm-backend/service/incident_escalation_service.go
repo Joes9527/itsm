@@ -9,6 +9,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/slaviolation"
+	"itsm-backend/ent/ticket"
 
 	"go.uber.org/zap"
 )
@@ -143,7 +144,7 @@ func (s *IncidentEscalationService) DeleteEscalationRule(ctx context.Context, id
 
 // CheckAndEscalate 检查事件是否需要升级
 func (s *IncidentEscalationService) CheckAndEscalate(ctx context.Context, incidentID int) (*ent.Incident, error) {
-	incidentEnt, err := s.client.Incident.Get(ctx, incidentID)
+	incidentEnt, err := s.client.Incident.Query().Where(incident.IDEQ(incidentID)).WithWorkItem().Only(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +184,7 @@ func (s *IncidentEscalationService) getMatchingRules(ctx context.Context, incide
 		}
 
 		// 匹配优先级
-		if rule.PriorityMatch != "" && rule.PriorityMatch != incidentEnt.Priority {
+		if rule.PriorityMatch != "" && (incidentEnt.Edges.WorkItem == nil || rule.PriorityMatch != incidentEnt.Edges.WorkItem.Priority) {
 			continue
 		}
 		// 匹配分类
@@ -231,13 +232,23 @@ func (s *IncidentEscalationService) shouldEscalate(ctx context.Context, incident
 
 // escalateIncident 执行事件升级
 func (s *IncidentEscalationService) escalateIncident(ctx context.Context, incidentEnt *ent.Incident, rule *ent.IncidentEscalationRule) (*ent.Incident, error) {
-	// 更新事件
-	update := incidentEnt.Update().
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	fail := func(cause error) (*ent.Incident, error) {
+		_ = tx.Rollback()
+		return nil, cause
+	}
+	update := tx.Incident.UpdateOneID(incidentEnt.ID).
+		Where(incident.TenantIDEQ(incidentEnt.TenantID)).
 		SetEscalatedAt(time.Now()).
 		SetEscalationLevel(rule.EscalationLevel)
 
 	if rule.ToStatus != "" {
-		update.SetStatus(rule.ToStatus)
+		if _, err := tx.Ticket.UpdateOneID(incidentEnt.WorkItemID).Where(ticket.TenantIDEQ(incidentEnt.TenantID)).SetStatus(rule.ToStatus).Save(ctx); err != nil {
+			return fail(err)
+		}
 	}
 
 	if rule.TargetAssigneeID > 0 {
@@ -246,7 +257,7 @@ func (s *IncidentEscalationService) escalateIncident(ctx context.Context, incide
 
 	updatedIncident, err := update.Save(ctx)
 	if err != nil {
-		return nil, err
+		return fail(err)
 	}
 
 	// 发送升级通知
@@ -255,12 +266,19 @@ func (s *IncidentEscalationService) escalateIncident(ctx context.Context, incide
 	}
 
 	// 记录升级日志
-	_, err = s.client.IncidentEvent.Create().
+	_, err = tx.IncidentEvent.Create().
 		SetIncidentID(incidentEnt.ID).
 		SetEventType("escalation").
 		SetDescription(fmt.Sprintf("事件升级到L%d: %s", rule.EscalationLevel, rule.Name)).
 		SetCreatedAt(time.Now()).
 		Save(ctx)
+	if err != nil {
+		return fail(err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fail(err)
+	}
+	updatedIncident.Edges.WorkItem, err = s.client.Ticket.Query().Where(ticket.IDEQ(updatedIncident.WorkItemID), ticket.TenantIDEQ(updatedIncident.TenantID)).Only(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -302,9 +320,9 @@ func (s *IncidentEscalationService) ProcessEscalations(ctx context.Context, tena
 	incidents, err := s.client.Incident.Query().
 		Where(
 			incident.TenantIDEQ(tenantID),
-			incident.StatusIn("new", "investigating"),
+			incident.HasWorkItemWith(ticket.StatusIn("new", "investigating")),
 		).
-		All(ctx)
+		WithWorkItem().All(ctx)
 	if err != nil {
 		return err
 	}

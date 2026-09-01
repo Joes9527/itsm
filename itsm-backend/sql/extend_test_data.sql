@@ -27,41 +27,77 @@ WHERE NOT EXISTS (SELECT 1 FROM tickets WHERE ticket_number = 'TKT-202602-000016
 -- =============================================
 -- 2. 添加更多事件（6条）
 -- =============================================
-INSERT INTO incidents (title, description, status, priority, incident_number, source, type, is_major_incident, reporter_id, tenant_id, detected_at, created_at, updated_at)
-SELECT * FROM (VALUES
-    ('数据库CPU持续高负载', '数据库服务器CPU使用率超过90%持续超过30分钟', 'investigating', 'critical', 'INC-202602-000007', 'monitoring', 'incident', true, 1, 1, NOW() - INTERVAL '1 hour', NOW() - INTERVAL '1 hour', NOW() - INTERVAL '1 hour'),
-    ('第三方API调用失败率上升', '调用外部支付API失败率从1%上升到15%', 'confirmed', 'high', 'INC-202602-000008', 'monitoring', 'incident', false, 1, 1, NOW() - INTERVAL '2 hours', NOW() - INTERVAL '2 hours', NOW() - INTERVAL '2 hours'),
-    ('CDN节点异常', '华南地区CDN节点响应缓慢', 'in_progress', 'medium', 'INC-202602-000009', 'monitoring', 'incident', false, 1, 1, NOW() - INTERVAL '3 hours', NOW() - INTERVAL '3 hours', NOW() - INTERVAL '3 hours'),
-    ('Kubernetes集群节点故障', 'K8s集群一个工作节点宕机', 'resolved', 'high', 'INC-202602-000010', 'monitoring', 'incident', false, 1, 1, NOW() - INTERVAL '5 hours', NOW() - INTERVAL '5 hours', NOW() - INTERVAL '2 hours'),
-    ('SSL证书即将过期', '多个域名SSL证书将在3天后过期', 'identified', 'medium', 'INC-202602-000011', 'monitoring', 'incident', false, 1, 1, NOW() - INTERVAL '1 day', NOW() - INTERVAL '1 day', NOW() - INTERVAL '1 day'),
-    ('日志采集延迟', '日志采集延迟超过10分钟', 'new', 'low', 'INC-202602-000012', 'monitoring', 'incident', false, 1, 1, NOW() - INTERVAL '30 minutes', NOW() - INTERVAL '30 minutes', NOW() - INTERVAL '30 minutes')
-) AS v(title, description, status, priority, incident_number, source, type, is_major_incident, reporter_id, tenant_id, detected_at, created_at, updated_at)
-WHERE NOT EXISTS (SELECT 1 FROM incidents WHERE incident_number = 'INC-202602-000007');
+INSERT INTO tickets (title, description, status, priority, type, record_class, ticket_number, tenant_id, requester_id, created_at, updated_at)
+SELECT title, description, status, priority, 'incident', 'incident', work_item_number, tenant_id, reporter_id, created_at, created_at
+FROM (VALUES
+    ('数据库CPU持续高负载', '数据库服务器CPU使用率超过90%持续超过30分钟', 'investigating', 'critical', 'TKT-EXT-INC-000007', 1, 1, NOW() - INTERVAL '1 hour'),
+    ('第三方API调用失败率上升', '调用外部支付API失败率从1%上升到15%', 'confirmed', 'high', 'TKT-EXT-INC-000008', 1, 1, NOW() - INTERVAL '2 hours'),
+    ('CDN节点异常', '华南地区CDN节点响应缓慢', 'in_progress', 'medium', 'TKT-EXT-INC-000009', 1, 1, NOW() - INTERVAL '3 hours'),
+    ('Kubernetes集群节点故障', 'K8s集群一个工作节点宕机', 'resolved', 'high', 'TKT-EXT-INC-000010', 1, 1, NOW() - INTERVAL '5 hours'),
+    ('SSL证书即将过期', '多个域名SSL证书将在3天后过期', 'identified', 'medium', 'TKT-EXT-INC-000011', 1, 1, NOW() - INTERVAL '1 day'),
+    ('日志采集延迟', '日志采集延迟超过10分钟', 'new', 'low', 'TKT-EXT-INC-000012', 1, 1, NOW() - INTERVAL '30 minutes')
+) AS v(title, description, status, priority, work_item_number, tenant_id, reporter_id, created_at)
+ON CONFLICT DO NOTHING;
+INSERT INTO incidents (work_item_id, incident_number, source, type, is_major_incident, reporter_id, tenant_id, detected_at, created_at, updated_at)
+SELECT t.id, v.incident_number, 'monitoring', 'incident', v.is_major, v.reporter_id, v.tenant_id, v.created_at, v.created_at, v.created_at
+FROM (VALUES
+    ('TKT-EXT-INC-000007', 'INC-202602-000007', true, 1, 1, NOW() - INTERVAL '1 hour'),
+    ('TKT-EXT-INC-000008', 'INC-202602-000008', false, 1, 1, NOW() - INTERVAL '2 hours'),
+    ('TKT-EXT-INC-000009', 'INC-202602-000009', false, 1, 1, NOW() - INTERVAL '3 hours'),
+    ('TKT-EXT-INC-000010', 'INC-202602-000010', false, 1, 1, NOW() - INTERVAL '5 hours'),
+    ('TKT-EXT-INC-000011', 'INC-202602-000011', false, 1, 1, NOW() - INTERVAL '1 day'),
+    ('TKT-EXT-INC-000012', 'INC-202602-000012', false, 1, 1, NOW() - INTERVAL '30 minutes')
+) AS v(work_item_number, incident_number, is_major, reporter_id, tenant_id, created_at)
+JOIN tickets t ON t.ticket_number = v.work_item_number AND t.tenant_id = v.tenant_id
+WHERE NOT EXISTS (SELECT 1 FROM incidents i WHERE i.incident_number = v.incident_number AND i.tenant_id = v.tenant_id);
 
 -- =============================================
 -- 3. 添加更多问题（4条）
 -- =============================================
-INSERT INTO problems (title, description, status, priority, category, created_by, tenant_id, created_at, updated_at)
-SELECT * FROM (VALUES
-    ('API接口超时问题', '多个API接口存在超时问题，影响核心业务流程', 'investigating', 'critical', 'performance', 1, 1, NOW() - INTERVAL '3 days', NOW() - INTERVAL '3 days'),
-    ('缓存一致性问题', '缓存与数据库数据不一致导致显示异常', 'identified', 'high', 'data', 1, 1, NOW() - INTERVAL '5 days', NOW() - INTERVAL '5 days'),
-    ('定时任务执行慢', '多个定时任务执行时间过长影响系统性能', 'analyzing', 'medium', 'performance', 1, 1, NOW() - INTERVAL '7 days', NOW() - INTERVAL '7 days'),
-    ('日志存储空间增长过快', '日志存储空间每周增长50%，需要优化', 'open', 'low', 'storage', 1, 1, NOW() - INTERVAL '2 days', NOW() - INTERVAL '2 days')
-) AS v(title, description, status, priority, category, created_by, tenant_id, created_at, updated_at)
-WHERE NOT EXISTS (SELECT 1 FROM problems WHERE title = 'API接口超时问题');
+INSERT INTO tickets (title, description, status, priority, type, record_class, ticket_number, tenant_id, requester_id, created_at, updated_at)
+SELECT title, description, status, priority, 'problem', 'problem', work_item_number, tenant_id, 1, created_at, created_at
+FROM (VALUES
+    ('API接口超时问题', '多个API接口存在超时问题，影响核心业务流程', 'investigating', 'critical', 'TKT-EXT-PRB-000001', 1, NOW() - INTERVAL '3 days'),
+    ('缓存一致性问题', '缓存与数据库数据不一致导致显示异常', 'identified', 'high', 'TKT-EXT-PRB-000002', 1, NOW() - INTERVAL '5 days'),
+    ('定时任务执行慢', '多个定时任务执行时间过长影响系统性能', 'analyzing', 'medium', 'TKT-EXT-PRB-000003', 1, NOW() - INTERVAL '7 days'),
+    ('日志存储空间增长过快', '日志存储空间每周增长50%，需要优化', 'open', 'low', 'TKT-EXT-PRB-000004', 1, NOW() - INTERVAL '2 days')
+) AS v(title, description, status, priority, work_item_number, tenant_id, created_at)
+ON CONFLICT DO NOTHING;
+INSERT INTO problems (work_item_id, category, created_by, tenant_id, created_at, updated_at)
+SELECT t.id, v.category, 1, v.tenant_id, v.created_at, v.created_at
+FROM (VALUES
+    ('TKT-EXT-PRB-000001', 'performance', 1, NOW() - INTERVAL '3 days'),
+    ('TKT-EXT-PRB-000002', 'data', 1, NOW() - INTERVAL '5 days'),
+    ('TKT-EXT-PRB-000003', 'performance', 1, NOW() - INTERVAL '7 days'),
+    ('TKT-EXT-PRB-000004', 'storage', 1, NOW() - INTERVAL '2 days')
+) AS v(work_item_number, category, tenant_id, created_at)
+JOIN tickets t ON t.ticket_number = v.work_item_number AND t.tenant_id = v.tenant_id
+WHERE NOT EXISTS (SELECT 1 FROM problems p WHERE p.work_item_id = t.id);
 
 -- =============================================
 -- 4. 添加更多变更（5条）
 -- =============================================
-INSERT INTO changes (title, description, justification, type, status, priority, risk_level, created_by, tenant_id, planned_start_date, planned_end_date, created_at, updated_at)
-SELECT * FROM (VALUES
-    ('应用服务版本升级', '将Spring Boot应用从2.5升级到3.0', '安全漏洞修复和性能提升', 'standard', 'draft', 'medium', 'medium', 1, 1, NOW() + INTERVAL '7 days', NOW() + INTERVAL '8 days', NOW() - INTERVAL '1 day', NOW() - INTERVAL '1 day'),
-    ('负载均衡策略调整', '修改负载均衡算法从轮询改为加权最小连接', '提升资源利用率', 'standard', 'approved', 'medium', 'low', 1, 1, NOW() + INTERVAL '2 days', NOW() + INTERVAL '3 days', NOW() - INTERVAL '3 days', NOW() - INTERVAL '2 days'),
-    ('Redis集群扩容', 'Redis集群从3节点扩容到5节点', '应对业务增长', 'standard', 'pending_review', 'high', 'medium', 1, 1, NOW() + INTERVAL '5 days', NOW() + INTERVAL '6 days', NOW() - INTERVAL '2 days', NOW() - INTERVAL '2 days'),
-    ('紧急安全补丁', '修复Apache Log4j高危漏洞', '安全漏洞修复', 'emergency', 'in_progress', 'critical', 'high', 1, 1, NOW(), NOW() + INTERVAL '2 hours', NOW() - INTERVAL '1 hour', NOW() - INTERVAL '1 hour'),
-    ('数据库参数优化', '调整MySQL缓冲池大小和连接数参数', '性能优化', 'standard', 'scheduled', 'medium', 'low', 1, 1, NOW() + INTERVAL '3 days', NOW() + INTERVAL '4 days', NOW() - INTERVAL '5 days', NOW() - INTERVAL '4 days')
-) AS v(title, description, justification, type, status, priority, risk_level, created_by, tenant_id, planned_start_date, planned_end_date, created_at, updated_at)
-WHERE NOT EXISTS (SELECT 1 FROM changes WHERE title = '应用服务版本升级');
+INSERT INTO tickets (title, description, status, priority, type, record_class, ticket_number, tenant_id, requester_id, created_at, updated_at)
+SELECT title, description, status, priority, 'change', 'change_request', work_item_number, tenant_id, 1, created_at, created_at
+FROM (VALUES
+    ('应用服务版本升级', '将Spring Boot应用从2.5升级到3.0', 'draft', 'medium', 'TKT-EXT-CHG-000001', 1, NOW() - INTERVAL '1 day'),
+    ('负载均衡策略调整', '修改负载均衡算法从轮询改为加权最小连接', 'approved', 'medium', 'TKT-EXT-CHG-000002', 1, NOW() - INTERVAL '3 days'),
+    ('Redis集群扩容', 'Redis集群从3节点扩容到5节点', 'pending_review', 'high', 'TKT-EXT-CHG-000003', 1, NOW() - INTERVAL '2 days'),
+    ('紧急安全补丁', '修复Apache Log4j高危漏洞', 'in_progress', 'critical', 'TKT-EXT-CHG-000004', 1, NOW() - INTERVAL '1 hour'),
+    ('数据库参数优化', '调整MySQL缓冲池大小和连接数参数', 'scheduled', 'medium', 'TKT-EXT-CHG-000005', 1, NOW() - INTERVAL '5 days')
+) AS v(title, description, status, priority, work_item_number, tenant_id, created_at)
+ON CONFLICT DO NOTHING;
+INSERT INTO changes (work_item_id, justification, type, risk_level, created_by, tenant_id, planned_start_date, planned_end_date, created_at, updated_at)
+SELECT t.id, v.justification, v.change_type, v.risk_level, 1, v.tenant_id, v.planned_start, v.planned_end, v.created_at, v.created_at
+FROM (VALUES
+    ('TKT-EXT-CHG-000001', '安全漏洞修复和性能提升', 'standard', 'medium', 1, NOW() + INTERVAL '7 days', NOW() + INTERVAL '8 days', NOW() - INTERVAL '1 day'),
+    ('TKT-EXT-CHG-000002', '提升资源利用率', 'standard', 'low', 1, NOW() + INTERVAL '2 days', NOW() + INTERVAL '3 days', NOW() - INTERVAL '3 days'),
+    ('TKT-EXT-CHG-000003', '应对业务增长', 'standard', 'medium', 1, NOW() + INTERVAL '5 days', NOW() + INTERVAL '6 days', NOW() - INTERVAL '2 days'),
+    ('TKT-EXT-CHG-000004', '安全漏洞修复', 'emergency', 'high', 1, NOW(), NOW() + INTERVAL '2 hours', NOW() - INTERVAL '1 hour'),
+    ('TKT-EXT-CHG-000005', '性能优化', 'standard', 'low', 1, NOW() + INTERVAL '3 days', NOW() + INTERVAL '4 days', NOW() - INTERVAL '5 days')
+) AS v(work_item_number, justification, change_type, risk_level, tenant_id, planned_start, planned_end, created_at)
+JOIN tickets t ON t.ticket_number = v.work_item_number AND t.tenant_id = v.tenant_id
+WHERE NOT EXISTS (SELECT 1 FROM changes c WHERE c.work_item_id = t.id);
 
 -- =============================================
 -- 5. 添加更多服务请求（6条）

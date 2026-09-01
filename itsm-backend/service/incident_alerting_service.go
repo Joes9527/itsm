@@ -670,7 +670,7 @@ func (s *IncidentAlertingService) ProcessEscalationAlerts(ctx context.Context, i
 			incident.TenantIDEQ(tenantID),
 			incident.DeletedAtIsNil(),
 		).
-		Only(ctx)
+		WithWorkItem().Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return fmt.Errorf("incident not found")
@@ -718,7 +718,7 @@ func (s *IncidentAlertingService) ProcessEscalationAlerts(ctx context.Context, i
 		Recipients: recipients,
 		Metadata: map[string]interface{}{
 			"escalation_level":  escalationLevel,
-			"incident_title":    incidentEntity.Title,
+			"incident_title":    incidentEntity.Edges.WorkItem.Title,
 			"incident_severity": incidentEntity.Severity,
 		},
 	}, tenantID)
@@ -778,7 +778,7 @@ func (s *IncidentAlertingService) ProcessSLAViolationAlerts(ctx context.Context,
 			incident.TenantIDEQ(tenantID),
 			incident.DeletedAtIsNil(),
 		).
-		Only(ctx)
+		WithWorkItem().Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return fmt.Errorf("incident not found")
@@ -821,8 +821,8 @@ func (s *IncidentAlertingService) ProcessSLAViolationAlerts(ctx context.Context,
 		Recipients: recipients,
 		Metadata: map[string]interface{}{
 			"violation_type":    violationType,
-			"incident_title":    incidentEntity.Title,
-			"incident_priority": incidentEntity.Priority,
+			"incident_title":    incidentEntity.Edges.WorkItem.Title,
+			"incident_priority": incidentEntity.Edges.WorkItem.Priority,
 		},
 	}, tenantID)
 	if err != nil {

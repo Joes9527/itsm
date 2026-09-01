@@ -116,7 +116,7 @@ func TestDriverEnforceCountsAppliedAndBypass(t *testing.T) {
 	fake := &fakeDriver{}
 	d := NewDriver(fake, ModeEnforce, zap.NewNop().Sugar())
 	ctx := tenantctx.WithTenantID(context.Background(), 7)
-	_ = d.Exec(ctx, "UPDATE changes SET title='x'", nil, nil)
+	_ = d.Exec(ctx, "UPDATE tickets SET title='x'", nil, nil)
 	sysCtx := tenantctx.WithSystemBypass(context.Background())
 	_ = d.Exec(sysCtx, "SELECT COUNT(*) FROM changes", nil, nil)
 

@@ -1,12 +1,14 @@
 package standard_change
 
 import (
+	"context"
 	"strconv"
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	entstandardchange "itsm-backend/ent/standardchange"
+	changedomain "itsm-backend/handlers/change"
 	"itsm-backend/middleware"
 
 	"github.com/gin-gonic/gin"
@@ -14,14 +16,18 @@ import (
 )
 
 type Handler struct {
-	client *ent.Client
-	logger *zap.SugaredLogger
+	client        *ent.Client
+	logger        *zap.SugaredLogger
+	changeService interface {
+		CreateChange(context.Context, *changedomain.Change) (*changedomain.Change, error)
+	}
 }
 
-func NewHandler(client *ent.Client, logger *zap.SugaredLogger) *Handler {
+func NewHandler(client *ent.Client, logger *zap.SugaredLogger, changeService interface {
+	CreateChange(context.Context, *changedomain.Change) (*changedomain.Change, error)
+}) *Handler {
 	return &Handler{
-		client: client,
-		logger: logger,
+		client: client, logger: logger, changeService: changeService,
 	}
 }
 
@@ -405,6 +411,11 @@ func (h *Handler) InstantiateStandardChange(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
+	if h.changeService == nil {
+		h.logger.Errorw("Authoritative change service is unavailable")
+		common.InternalError(c, "Change service is unavailable")
+		return
+	}
 
 	// Get the template
 	template, err := h.client.StandardChange.Query().
@@ -437,21 +448,12 @@ func (h *Handler) InstantiateStandardChange(c *gin.Context) {
 	}
 
 	// Create change from template
-	change, err := h.client.Change.Create().
-		SetTitle(title).
-		SetDescription(template.Description).
-		SetJustification(template.Justification).
-		SetType("standard").
-		SetStatus("draft").
-		SetPriority("medium").
-		SetImpactScope(template.ImpactScope).
-		SetRiskLevel(template.RiskLevel).
-		SetImplementationPlan(template.ImplementationPlan).
-		SetRollbackPlan(template.RollbackPlan).
-		SetAffectedCis(affectedCIs).
-		SetCreatedBy(userID).
-		SetTenantID(tenantID).
-		Save(ctx)
+	change, err := h.changeService.CreateChange(ctx, &changedomain.Change{
+		Title: title, Description: template.Description, Justification: template.Justification,
+		Type: "standard", Status: "draft", Priority: "medium", ImpactScope: template.ImpactScope,
+		RiskLevel: template.RiskLevel, ImplementationPlan: template.ImplementationPlan,
+		RollbackPlan: template.RollbackPlan, AffectedCIs: affectedCIs, CreatedBy: userID, TenantID: tenantID,
+	})
 	if err != nil {
 		h.logger.Warnw("Failed to create change from template", "error", err)
 		common.InternalError(c, "Failed to create change from template")

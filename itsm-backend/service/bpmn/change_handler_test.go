@@ -34,16 +34,25 @@ func setupChangeHandlerFixture(t *testing.T) (*ent.Client, *ChangeServiceTaskHan
 		SetName("发起人").SetTenantID(tenant.ID).SetActive(true).
 		Save(ctx)
 	require.NoError(t, err)
+	workItem, err := client.Ticket.Create().SetTitle("测试变更").SetStatus("draft").SetPriority("medium").SetType("change").SetRecordClass("change_request").SetTicketNumber("TKT-CHANGE-HANDLER").SetRequesterID(creator.ID).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
 
 	changeEntity, err := client.Change.Create().
-		SetTitle("租户过滤测试变更").
 		SetCreatedBy(creator.ID).
 		SetTenantID(tenant.ID).
+		SetWorkItemID(workItem.ID).
 		Save(ctx)
 	require.NoError(t, err)
 
 	handler := NewChangeServiceTaskHandler(client, zaptest.NewLogger(t).Sugar())
 	return client, handler, tenant.ID, changeEntity
+}
+
+func requireHandlerChangeWorkItem(t *testing.T, client *ent.Client, entity *ent.Change) *ent.Ticket {
+	t.Helper()
+	workItem, err := client.Ticket.Get(context.Background(), entity.WorkItemID)
+	require.NoError(t, err)
+	return workItem
 }
 
 // fakeChangeDomainService 是 ChangeDomainServiceInterface 的轻量测试替身，只用来验证
@@ -169,8 +178,8 @@ func TestChangeServiceTaskHandler_TenantScopedActions(t *testing.T) {
 			assertValid: func(t *testing.T, client *ent.Client, changeID int) {
 				after, err := client.Change.Get(context.Background(), changeID)
 				require.NoError(t, err)
-				assert.Equal(t, "改过的变更标题", after.Title)
-				assert.Equal(t, "draft", after.Status, "update 只提交 title 时不得改状态")
+				assert.Equal(t, "改过的变更标题", requireHandlerChangeWorkItem(t, client, after).Title)
+				assert.Equal(t, "draft", requireHandlerChangeWorkItem(t, client, after).Status, "update 只提交 title 时不得改状态")
 			},
 		},
 		{
@@ -185,7 +194,7 @@ func TestChangeServiceTaskHandler_TenantScopedActions(t *testing.T) {
 				// 审批结果）——真正的终态判定在 schedule_change/reject_change。这里只做
 				// 存在性确认，不写状态，避免引入一个 canonical 状态机不认识的
 				// "pending_approval" 中间态。
-				assert.Equal(t, "draft", after.Status, "approve_change 本身不应该改变 Change.Status")
+				assert.Equal(t, "draft", requireHandlerChangeWorkItem(t, client, after).Status, "approve_change 本身不应该改变 Change.Status")
 			},
 		},
 		{
@@ -195,7 +204,7 @@ func TestChangeServiceTaskHandler_TenantScopedActions(t *testing.T) {
 			assertValid: func(t *testing.T, client *ent.Client, changeID int) {
 				after, err := client.Change.Get(context.Background(), changeID)
 				require.NoError(t, err)
-				assert.Equal(t, "rejected", after.Status)
+				assert.Equal(t, "rejected", requireHandlerChangeWorkItem(t, client, after).Status)
 			},
 		},
 		{
@@ -209,7 +218,7 @@ func TestChangeServiceTaskHandler_TenantScopedActions(t *testing.T) {
 			assertValid: func(t *testing.T, client *ent.Client, changeID int) {
 				after, err := client.Change.Get(context.Background(), changeID)
 				require.NoError(t, err)
-				assert.Equal(t, "scheduled", after.Status)
+				assert.Equal(t, "scheduled", requireHandlerChangeWorkItem(t, client, after).Status)
 				assert.False(t, after.PlannedStartDate.IsZero(), "排期日期应写入")
 				assert.False(t, after.PlannedEndDate.IsZero())
 			},
@@ -221,7 +230,7 @@ func TestChangeServiceTaskHandler_TenantScopedActions(t *testing.T) {
 			assertValid: func(t *testing.T, client *ent.Client, changeID int) {
 				after, err := client.Change.Get(context.Background(), changeID)
 				require.NoError(t, err)
-				assert.Equal(t, "in_progress", after.Status)
+				assert.Equal(t, "in_progress", requireHandlerChangeWorkItem(t, client, after).Status)
 				assert.False(t, after.ActualStartDate.IsZero())
 			},
 		},
@@ -232,7 +241,7 @@ func TestChangeServiceTaskHandler_TenantScopedActions(t *testing.T) {
 			assertValid: func(t *testing.T, client *ent.Client, changeID int) {
 				after, err := client.Change.Get(context.Background(), changeID)
 				require.NoError(t, err)
-				assert.Equal(t, "completed", after.Status, "验证通过应对齐域状态机 completed")
+				assert.Equal(t, "completed", requireHandlerChangeWorkItem(t, client, after).Status, "验证通过应对齐域状态机 completed")
 			},
 		},
 		{
@@ -242,7 +251,7 @@ func TestChangeServiceTaskHandler_TenantScopedActions(t *testing.T) {
 			assertValid: func(t *testing.T, client *ent.Client, changeID int) {
 				after, err := client.Change.Get(context.Background(), changeID)
 				require.NoError(t, err)
-				assert.Equal(t, "completed", after.Status, "关闭应对齐域状态机 completed")
+				assert.Equal(t, "completed", requireHandlerChangeWorkItem(t, client, after).Status, "关闭应对齐域状态机 completed")
 				assert.False(t, after.ActualEndDate.IsZero())
 			},
 		},
@@ -265,7 +274,7 @@ func TestChangeServiceTaskHandler_TenantScopedActions(t *testing.T) {
 			assertValid: func(t *testing.T, client *ent.Client, changeID int) {
 				after, err := client.Change.Get(context.Background(), changeID)
 				require.NoError(t, err)
-				assert.Equal(t, "draft", after.Status, "通知动作不应改状态")
+				assert.Equal(t, "draft", requireHandlerChangeWorkItem(t, client, after).Status, "通知动作不应改状态")
 			},
 		},
 	}
@@ -277,7 +286,7 @@ func TestChangeServiceTaskHandler_TenantScopedActions(t *testing.T) {
 				ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
 
 				if tc.setupStatus != "" {
-					_, err := client.Change.UpdateOne(changeEntity).SetStatus(tc.setupStatus).Save(ctx)
+					_, err := client.Ticket.UpdateOneID(changeEntity.WorkItemID).SetStatus(tc.setupStatus).Save(ctx)
 					require.NoError(t, err)
 				}
 
@@ -301,6 +310,7 @@ func TestChangeServiceTaskHandler_TenantScopedActions(t *testing.T) {
 
 				before, err := client.Change.Get(context.Background(), changeEntity.ID)
 				require.NoError(t, err)
+				beforeWorkItem := requireHandlerChangeWorkItem(t, client, before)
 
 				vars := map[string]interface{}{"action": tc.action, "change_id": changeEntity.ID}
 				for k, v := range tc.extraVars {
@@ -311,8 +321,8 @@ func TestChangeServiceTaskHandler_TenantScopedActions(t *testing.T) {
 
 				after, err := client.Change.Get(context.Background(), changeEntity.ID)
 				require.NoError(t, err)
-				assert.Equal(t, before.Status, after.Status, "跨租户请求不得改状态")
-				assert.Equal(t, before.Title, after.Title, "跨租户请求不得改标题")
+				assert.Equal(t, beforeWorkItem.Status, requireHandlerChangeWorkItem(t, client, after).Status, "跨租户请求不得改状态")
+				assert.Equal(t, beforeWorkItem.Title, requireHandlerChangeWorkItem(t, client, after).Title, "跨租户请求不得改标题")
 				assert.Equal(t, before.RiskLevel, after.RiskLevel)
 			})
 
@@ -417,7 +427,7 @@ func TestChangeServiceTaskHandler_ScheduleChange_DateParsing(t *testing.T) {
 	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
 
 	// 排期动作要求前置状态 approved（白名单 approved → scheduled）
-	_, err := client.Change.UpdateOne(changeEntity).SetStatus("approved").Save(ctx)
+	_, err := client.Ticket.UpdateOneID(changeEntity.WorkItemID).SetStatus("approved").Save(ctx)
 	require.NoError(t, err)
 
 	result, err := handler.Execute(ctx, nil, map[string]interface{}{
@@ -430,7 +440,7 @@ func TestChangeServiceTaskHandler_ScheduleChange_DateParsing(t *testing.T) {
 
 	after, err := client.Change.Get(ctx, changeEntity.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "scheduled", after.Status)
+	assert.Equal(t, "scheduled", requireHandlerChangeWorkItem(t, client, after).Status)
 	want := time.Date(2026, 9, 1, 8, 0, 0, 0, time.UTC)
 	assert.Equal(t, want, after.PlannedStartDate)
 	assert.True(t, after.PlannedEndDate.IsZero(), "未提交结束日期时不应写入")
@@ -440,7 +450,9 @@ func TestChangeServiceTaskHandler_CloseCompletedBackfillsEndDateOnce(t *testing.
 	client, handler, tenantID, changeEntity := setupChangeHandlerFixture(t)
 	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
 
-	_, err := client.Change.UpdateOne(changeEntity).SetStatus("completed").ClearActualEndDate().Save(ctx)
+	_, err := client.Ticket.UpdateOneID(changeEntity.WorkItemID).SetStatus("completed").Save(ctx)
+	require.NoError(t, err)
+	_, err = client.Change.UpdateOne(changeEntity).ClearActualEndDate().Save(ctx)
 	require.NoError(t, err)
 
 	variables := map[string]interface{}{"action": "close_change", "change_id": changeEntity.ID}
@@ -531,7 +543,9 @@ func TestChangeServiceTaskHandler_ScheduleChangeAction_EmergencyStopsAtApproved(
 	client, handler, tenantID, changeEntity := setupChangeHandlerFixture(t)
 	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
 
-	_, err := client.Change.UpdateOne(changeEntity).SetType("emergency").SetStatus("approved").Save(ctx)
+	_, err := client.Change.UpdateOne(changeEntity).SetType("emergency").Save(ctx)
+	require.NoError(t, err)
+	_, err = client.Ticket.UpdateOneID(changeEntity.WorkItemID).SetStatus("approved").Save(ctx)
 	require.NoError(t, err)
 
 	result, err := handler.Execute(ctx, nil, map[string]interface{}{
@@ -543,7 +557,7 @@ func TestChangeServiceTaskHandler_ScheduleChangeAction_EmergencyStopsAtApproved(
 
 	updated, err := client.Change.Get(ctx, changeEntity.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "approved", updated.Status)
+	assert.Equal(t, "approved", requireHandlerChangeWorkItem(t, client, updated).Status)
 }
 
 // TestChangeServiceTaskHandler_ScheduleChangeAction_InvalidTransitionRejected 锁定
@@ -553,7 +567,7 @@ func TestChangeServiceTaskHandler_ScheduleChangeAction_InvalidTransitionRejected
 	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
 
 	// rejected 是终态，不允许再转成 approved —— IsValidChangeStatusTransition 必须真的被遵守。
-	_, err := client.Change.UpdateOne(changeEntity).SetStatus("rejected").Save(ctx)
+	_, err := client.Ticket.UpdateOneID(changeEntity.WorkItemID).SetStatus("rejected").Save(ctx)
 	require.NoError(t, err)
 
 	_, err = handler.Execute(ctx, nil, map[string]interface{}{
@@ -564,5 +578,5 @@ func TestChangeServiceTaskHandler_ScheduleChangeAction_InvalidTransitionRejected
 
 	updated, err := client.Change.Get(ctx, changeEntity.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "rejected", updated.Status, "非法转换必须被拒绝，不能静默写入")
+	assert.Equal(t, "rejected", requireHandlerChangeWorkItem(t, client, updated).Status, "非法转换必须被拒绝，不能静默写入")
 }

@@ -55,26 +55,6 @@ func IDLTE(id int) predicate.Problem {
 	return predicate.Problem(sql.FieldLTE(FieldID, id))
 }
 
-// Title applies equality check predicate on the "title" field. It's identical to TitleEQ.
-func Title(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldEQ(FieldTitle, v))
-}
-
-// Description applies equality check predicate on the "description" field. It's identical to DescriptionEQ.
-func Description(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldEQ(FieldDescription, v))
-}
-
-// Status applies equality check predicate on the "status" field. It's identical to StatusEQ.
-func Status(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldEQ(FieldStatus, v))
-}
-
-// Priority applies equality check predicate on the "priority" field. It's identical to PriorityEQ.
-func Priority(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldEQ(FieldPriority, v))
-}
-
 // Category applies equality check predicate on the "category" field. It's identical to CategoryEQ.
 func Category(v string) predicate.Problem {
 	return predicate.Problem(sql.FieldEQ(FieldCategory, v))
@@ -143,276 +123,6 @@ func ClosedAt(v time.Time) predicate.Problem {
 // DeletedAt applies equality check predicate on the "deleted_at" field. It's identical to DeletedAtEQ.
 func DeletedAt(v time.Time) predicate.Problem {
 	return predicate.Problem(sql.FieldEQ(FieldDeletedAt, v))
-}
-
-// TitleEQ applies the EQ predicate on the "title" field.
-func TitleEQ(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldEQ(FieldTitle, v))
-}
-
-// TitleNEQ applies the NEQ predicate on the "title" field.
-func TitleNEQ(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldNEQ(FieldTitle, v))
-}
-
-// TitleIn applies the In predicate on the "title" field.
-func TitleIn(vs ...string) predicate.Problem {
-	return predicate.Problem(sql.FieldIn(FieldTitle, vs...))
-}
-
-// TitleNotIn applies the NotIn predicate on the "title" field.
-func TitleNotIn(vs ...string) predicate.Problem {
-	return predicate.Problem(sql.FieldNotIn(FieldTitle, vs...))
-}
-
-// TitleGT applies the GT predicate on the "title" field.
-func TitleGT(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldGT(FieldTitle, v))
-}
-
-// TitleGTE applies the GTE predicate on the "title" field.
-func TitleGTE(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldGTE(FieldTitle, v))
-}
-
-// TitleLT applies the LT predicate on the "title" field.
-func TitleLT(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldLT(FieldTitle, v))
-}
-
-// TitleLTE applies the LTE predicate on the "title" field.
-func TitleLTE(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldLTE(FieldTitle, v))
-}
-
-// TitleContains applies the Contains predicate on the "title" field.
-func TitleContains(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldContains(FieldTitle, v))
-}
-
-// TitleHasPrefix applies the HasPrefix predicate on the "title" field.
-func TitleHasPrefix(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldHasPrefix(FieldTitle, v))
-}
-
-// TitleHasSuffix applies the HasSuffix predicate on the "title" field.
-func TitleHasSuffix(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldHasSuffix(FieldTitle, v))
-}
-
-// TitleEqualFold applies the EqualFold predicate on the "title" field.
-func TitleEqualFold(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldEqualFold(FieldTitle, v))
-}
-
-// TitleContainsFold applies the ContainsFold predicate on the "title" field.
-func TitleContainsFold(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldContainsFold(FieldTitle, v))
-}
-
-// DescriptionEQ applies the EQ predicate on the "description" field.
-func DescriptionEQ(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldEQ(FieldDescription, v))
-}
-
-// DescriptionNEQ applies the NEQ predicate on the "description" field.
-func DescriptionNEQ(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldNEQ(FieldDescription, v))
-}
-
-// DescriptionIn applies the In predicate on the "description" field.
-func DescriptionIn(vs ...string) predicate.Problem {
-	return predicate.Problem(sql.FieldIn(FieldDescription, vs...))
-}
-
-// DescriptionNotIn applies the NotIn predicate on the "description" field.
-func DescriptionNotIn(vs ...string) predicate.Problem {
-	return predicate.Problem(sql.FieldNotIn(FieldDescription, vs...))
-}
-
-// DescriptionGT applies the GT predicate on the "description" field.
-func DescriptionGT(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldGT(FieldDescription, v))
-}
-
-// DescriptionGTE applies the GTE predicate on the "description" field.
-func DescriptionGTE(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldGTE(FieldDescription, v))
-}
-
-// DescriptionLT applies the LT predicate on the "description" field.
-func DescriptionLT(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldLT(FieldDescription, v))
-}
-
-// DescriptionLTE applies the LTE predicate on the "description" field.
-func DescriptionLTE(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldLTE(FieldDescription, v))
-}
-
-// DescriptionContains applies the Contains predicate on the "description" field.
-func DescriptionContains(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldContains(FieldDescription, v))
-}
-
-// DescriptionHasPrefix applies the HasPrefix predicate on the "description" field.
-func DescriptionHasPrefix(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldHasPrefix(FieldDescription, v))
-}
-
-// DescriptionHasSuffix applies the HasSuffix predicate on the "description" field.
-func DescriptionHasSuffix(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldHasSuffix(FieldDescription, v))
-}
-
-// DescriptionIsNil applies the IsNil predicate on the "description" field.
-func DescriptionIsNil() predicate.Problem {
-	return predicate.Problem(sql.FieldIsNull(FieldDescription))
-}
-
-// DescriptionNotNil applies the NotNil predicate on the "description" field.
-func DescriptionNotNil() predicate.Problem {
-	return predicate.Problem(sql.FieldNotNull(FieldDescription))
-}
-
-// DescriptionEqualFold applies the EqualFold predicate on the "description" field.
-func DescriptionEqualFold(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldEqualFold(FieldDescription, v))
-}
-
-// DescriptionContainsFold applies the ContainsFold predicate on the "description" field.
-func DescriptionContainsFold(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldContainsFold(FieldDescription, v))
-}
-
-// StatusEQ applies the EQ predicate on the "status" field.
-func StatusEQ(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldEQ(FieldStatus, v))
-}
-
-// StatusNEQ applies the NEQ predicate on the "status" field.
-func StatusNEQ(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldNEQ(FieldStatus, v))
-}
-
-// StatusIn applies the In predicate on the "status" field.
-func StatusIn(vs ...string) predicate.Problem {
-	return predicate.Problem(sql.FieldIn(FieldStatus, vs...))
-}
-
-// StatusNotIn applies the NotIn predicate on the "status" field.
-func StatusNotIn(vs ...string) predicate.Problem {
-	return predicate.Problem(sql.FieldNotIn(FieldStatus, vs...))
-}
-
-// StatusGT applies the GT predicate on the "status" field.
-func StatusGT(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldGT(FieldStatus, v))
-}
-
-// StatusGTE applies the GTE predicate on the "status" field.
-func StatusGTE(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldGTE(FieldStatus, v))
-}
-
-// StatusLT applies the LT predicate on the "status" field.
-func StatusLT(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldLT(FieldStatus, v))
-}
-
-// StatusLTE applies the LTE predicate on the "status" field.
-func StatusLTE(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldLTE(FieldStatus, v))
-}
-
-// StatusContains applies the Contains predicate on the "status" field.
-func StatusContains(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldContains(FieldStatus, v))
-}
-
-// StatusHasPrefix applies the HasPrefix predicate on the "status" field.
-func StatusHasPrefix(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldHasPrefix(FieldStatus, v))
-}
-
-// StatusHasSuffix applies the HasSuffix predicate on the "status" field.
-func StatusHasSuffix(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldHasSuffix(FieldStatus, v))
-}
-
-// StatusEqualFold applies the EqualFold predicate on the "status" field.
-func StatusEqualFold(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldEqualFold(FieldStatus, v))
-}
-
-// StatusContainsFold applies the ContainsFold predicate on the "status" field.
-func StatusContainsFold(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldContainsFold(FieldStatus, v))
-}
-
-// PriorityEQ applies the EQ predicate on the "priority" field.
-func PriorityEQ(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldEQ(FieldPriority, v))
-}
-
-// PriorityNEQ applies the NEQ predicate on the "priority" field.
-func PriorityNEQ(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldNEQ(FieldPriority, v))
-}
-
-// PriorityIn applies the In predicate on the "priority" field.
-func PriorityIn(vs ...string) predicate.Problem {
-	return predicate.Problem(sql.FieldIn(FieldPriority, vs...))
-}
-
-// PriorityNotIn applies the NotIn predicate on the "priority" field.
-func PriorityNotIn(vs ...string) predicate.Problem {
-	return predicate.Problem(sql.FieldNotIn(FieldPriority, vs...))
-}
-
-// PriorityGT applies the GT predicate on the "priority" field.
-func PriorityGT(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldGT(FieldPriority, v))
-}
-
-// PriorityGTE applies the GTE predicate on the "priority" field.
-func PriorityGTE(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldGTE(FieldPriority, v))
-}
-
-// PriorityLT applies the LT predicate on the "priority" field.
-func PriorityLT(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldLT(FieldPriority, v))
-}
-
-// PriorityLTE applies the LTE predicate on the "priority" field.
-func PriorityLTE(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldLTE(FieldPriority, v))
-}
-
-// PriorityContains applies the Contains predicate on the "priority" field.
-func PriorityContains(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldContains(FieldPriority, v))
-}
-
-// PriorityHasPrefix applies the HasPrefix predicate on the "priority" field.
-func PriorityHasPrefix(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldHasPrefix(FieldPriority, v))
-}
-
-// PriorityHasSuffix applies the HasSuffix predicate on the "priority" field.
-func PriorityHasSuffix(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldHasSuffix(FieldPriority, v))
-}
-
-// PriorityEqualFold applies the EqualFold predicate on the "priority" field.
-func PriorityEqualFold(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldEqualFold(FieldPriority, v))
-}
-
-// PriorityContainsFold applies the ContainsFold predicate on the "priority" field.
-func PriorityContainsFold(v string) predicate.Problem {
-	return predicate.Problem(sql.FieldContainsFold(FieldPriority, v))
 }
 
 // CategoryEQ applies the EQ predicate on the "category" field.
@@ -900,36 +610,6 @@ func WorkItemIDNotIn(vs ...int) predicate.Problem {
 	return predicate.Problem(sql.FieldNotIn(FieldWorkItemID, vs...))
 }
 
-// WorkItemIDGT applies the GT predicate on the "work_item_id" field.
-func WorkItemIDGT(v int) predicate.Problem {
-	return predicate.Problem(sql.FieldGT(FieldWorkItemID, v))
-}
-
-// WorkItemIDGTE applies the GTE predicate on the "work_item_id" field.
-func WorkItemIDGTE(v int) predicate.Problem {
-	return predicate.Problem(sql.FieldGTE(FieldWorkItemID, v))
-}
-
-// WorkItemIDLT applies the LT predicate on the "work_item_id" field.
-func WorkItemIDLT(v int) predicate.Problem {
-	return predicate.Problem(sql.FieldLT(FieldWorkItemID, v))
-}
-
-// WorkItemIDLTE applies the LTE predicate on the "work_item_id" field.
-func WorkItemIDLTE(v int) predicate.Problem {
-	return predicate.Problem(sql.FieldLTE(FieldWorkItemID, v))
-}
-
-// WorkItemIDIsNil applies the IsNil predicate on the "work_item_id" field.
-func WorkItemIDIsNil() predicate.Problem {
-	return predicate.Problem(sql.FieldIsNull(FieldWorkItemID))
-}
-
-// WorkItemIDNotNil applies the NotNil predicate on the "work_item_id" field.
-func WorkItemIDNotNil() predicate.Problem {
-	return predicate.Problem(sql.FieldNotNull(FieldWorkItemID))
-}
-
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v int) predicate.Problem {
 	return predicate.Problem(sql.FieldEQ(FieldTenantID, v))
@@ -1198,6 +878,29 @@ func DeletedAtIsNil() predicate.Problem {
 // DeletedAtNotNil applies the NotNil predicate on the "deleted_at" field.
 func DeletedAtNotNil() predicate.Problem {
 	return predicate.Problem(sql.FieldNotNull(FieldDeletedAt))
+}
+
+// HasWorkItem applies the HasEdge predicate on the "work_item" edge.
+func HasWorkItem() predicate.Problem {
+	return predicate.Problem(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, WorkItemTable, WorkItemColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasWorkItemWith applies the HasEdge predicate on the "work_item" edge with a given conditions (other predicates).
+func HasWorkItemWith(preds ...predicate.Ticket) predicate.Problem {
+	return predicate.Problem(func(s *sql.Selector) {
+		step := newWorkItemStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
 }
 
 // HasTickets applies the HasEdge predicate on the "tickets" edge.

@@ -85,7 +85,7 @@ func TestSubmitChange_TriggersBPMNProcess_Normal(t *testing.T) {
 	engine, trigger := deployRealBPMNFixture(t, entClient, tenantID)
 
 	workItem := createChangeWorkItemFixture(t, entClient, tenantID, actorID, "测试变更")
-	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
+	c, err := entClient.Change.Create().SetType("normal").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
 	require.NoError(t, err)
 
 	repo := newTestChangeRepository(entClient, openChangeBPMNRawDB(t, "change_submit_normal"))
@@ -111,7 +111,7 @@ func TestSubmitChange_TriggersBPMNProcess_Emergency(t *testing.T) {
 	engine, trigger := deployRealBPMNFixture(t, entClient, tenantID)
 
 	workItem := createChangeWorkItemFixture(t, entClient, tenantID, actorID, "测试变更")
-	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("emergency").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
+	c, err := entClient.Change.Create().SetType("emergency").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
 	require.NoError(t, err)
 
 	repo := newTestChangeRepository(entClient, openChangeBPMNRawDB(t, "change_submit_emergency"))
@@ -186,7 +186,9 @@ func TestTransitionStatusRejectsSelfApprovalAndSelfRejection(t *testing.T) {
 
 	updated, err := client.Change.Get(ctx, c.ID)
 	require.NoError(t, err)
-	require.Equal(t, "pending", updated.Status)
+	updatedWorkItem, err := client.Ticket.Get(ctx, updated.WorkItemID)
+	require.NoError(t, err)
+	require.Equal(t, "pending", updatedWorkItem.Status)
 
 	_, err = svc.TransitionStatus(ctx, c.ID, tenant.ID, c.CreatedBy, "rejected", "我驳回我自己")
 	require.Error(t, err)
@@ -194,14 +196,16 @@ func TestTransitionStatusRejectsSelfApprovalAndSelfRejection(t *testing.T) {
 
 	updated, err = client.Change.Get(ctx, c.ID)
 	require.NoError(t, err)
-	require.Equal(t, "pending", updated.Status)
+	updatedWorkItem, err = client.Ticket.Get(ctx, updated.WorkItemID)
+	require.NoError(t, err)
+	require.Equal(t, "pending", updatedWorkItem.Status)
 }
 
 func TestTransitionStatusUsesRejectGuardBeforeGenericStateValidation(t *testing.T) {
 	client, svc, tenant, changeManager, c := setupChangeForTransitionStatusTest(t, "transition_reject_state_reason")
 	ctx := context.Background()
 
-	_, err := client.Change.UpdateOneID(c.ID).SetStatus("draft").Save(ctx)
+	_, err := client.Ticket.UpdateOneID(c.WorkItemID).SetStatus("draft").Save(ctx)
 	require.NoError(t, err)
 
 	_, err = svc.TransitionStatus(ctx, c.ID, tenant.ID, changeManager.ID, "rejected", "风险不可接受")
@@ -224,9 +228,7 @@ func seedChangeInMockAndEnt(t *testing.T, repo *mockRepository, entClient *ent.C
 	t.Helper()
 	workItem := createChangeWorkItemFixture(t, entClient, tenantID, actorID, "测试变更")
 	real, err := entClient.Change.Create().
-		SetTitle("测试变更").
 		SetType(changeType).
-		SetStatus("draft").
 		SetRiskLevel("medium").
 		SetImpactScope("low").
 		SetTenantID(tenantID).
@@ -238,7 +240,7 @@ func seedChangeInMockAndEnt(t *testing.T, repo *mockRepository, entClient *ent.C
 	workItemID := workItem.ID
 	c := &Change{
 		ID:          real.ID,
-		Title:       real.Title,
+		Title:       workItem.Title,
 		Type:        changeType,
 		Status:      "draft",
 		RiskLevel:   "medium",
@@ -467,7 +469,7 @@ func TestGetApprovalHistory_IncludesPendingCABTask(t *testing.T) {
 	require.NoError(t, err)
 
 	workItem := createChangeWorkItemFixture(t, entClient, tenantID, actorID, "测试变更")
-	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
+	c, err := entClient.Change.Create().SetType("normal").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
 	require.NoError(t, err)
 
 	repo := newTestChangeRepository(entClient, openChangeBPMNRawDB(t, "change_pending_history"))
@@ -499,7 +501,7 @@ func TestGetApprovalHistory_NoPendingEntryAfterDecisionMade(t *testing.T) {
 	require.NoError(t, err)
 
 	workItem := createChangeWorkItemFixture(t, entClient, tenantID, actorID, "测试变更")
-	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
+	c, err := entClient.Change.Create().SetType("normal").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
 	require.NoError(t, err)
 
 	repo := newTestChangeRepository(entClient, openChangeBPMNRawDB(t, "change_pending_history_decided"))
@@ -529,7 +531,7 @@ func TestTransitionStatus_Cancel_TerminatesRunningProcessInstance(t *testing.T) 
 
 	tenantCtx := service.WithBPMNAccessScope(context.Background(), service.BPMNAccessScope{UserID: actorID, TenantID: tenantID})
 	workItem := createChangeWorkItemFixture(t, entClient, tenantID, actorID, "测试变更")
-	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
+	c, err := entClient.Change.Create().SetType("normal").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
 	require.NoError(t, err)
 
 	repo := newTestChangeRepository(entClient, openChangeBPMNRawDB(t, "change_cancel_terminates_instance"))
@@ -567,7 +569,7 @@ func TestTransitionStatus_Cancel_NoRunningInstanceIsNoop(t *testing.T) {
 	logger := zaptest.NewLogger(t).Sugar()
 
 	workItem := createChangeWorkItemFixture(t, entClient, tenantID, actorID, "测试变更")
-	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
+	c, err := entClient.Change.Create().SetType("normal").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
 	require.NoError(t, err)
 
 	repo := newTestChangeRepository(entClient, nil)

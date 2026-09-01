@@ -234,7 +234,7 @@ func TestProblemServiceStateMachineTransitions(t *testing.T) {
 
 		if tc.from != "open" {
 			// Direct DB update to set starting state for test
-			_, err = client.Problem.UpdateOneID(p.ID).SetStatus(tc.from).Save(ctx)
+			_, err = client.Ticket.UpdateOneID(*p.WorkItemID).SetStatus(tc.from).Save(ctx)
 			require.NoError(t, err)
 		}
 
@@ -269,7 +269,7 @@ func TestProblemServiceStateMachineTransitions(t *testing.T) {
 		require.NoError(t, err)
 
 		if tc.from != "open" {
-			_, err = client.Problem.UpdateOneID(p.ID).SetStatus(tc.from).Save(ctx)
+			_, err = client.Ticket.UpdateOneID(*p.WorkItemID).SetStatus(tc.from).Save(ctx)
 			require.NoError(t, err)
 		}
 
@@ -289,7 +289,7 @@ func TestProblemServiceUpdateRejectsDirectCloseUntilResolved(t *testing.T) {
 		t.Run(status, func(t *testing.T) {
 			p := createProblemHandlerProblem(t, ctx, service, tenant.ID, user.ID)
 			if status != "open" {
-				_, err := client.Problem.UpdateOneID(p.ID).SetStatus(status).Save(ctx)
+				_, err := client.Ticket.UpdateOneID(*p.WorkItemID).SetStatus(status).Save(ctx)
 				require.NoError(t, err)
 			}
 
@@ -299,7 +299,7 @@ func TestProblemServiceUpdateRejectsDirectCloseUntilResolved(t *testing.T) {
 	}
 
 	p := createProblemHandlerProblem(t, ctx, service, tenant.ID, user.ID)
-	_, err := client.Problem.UpdateOneID(p.ID).SetStatus("resolved").Save(ctx)
+	_, err := client.Ticket.UpdateOneID(*p.WorkItemID).SetStatus("resolved").Save(ctx)
 	require.NoError(t, err)
 
 	updated, err := service.Update(ctx, tenant.ID, p.ID, &Problem{Status: "closed"})
@@ -319,7 +319,7 @@ func TestProblemServiceCloseProblemRejectsUntilResolved(t *testing.T) {
 		t.Run(status, func(t *testing.T) {
 			p := createProblemHandlerProblem(t, ctx, service, tenant.ID, user.ID)
 			if status != "open" {
-				_, err := client.Problem.UpdateOneID(p.ID).SetStatus(status).Save(ctx)
+				_, err := client.Ticket.UpdateOneID(*p.WorkItemID).SetStatus(status).Save(ctx)
 				require.NoError(t, err)
 			}
 
@@ -329,7 +329,7 @@ func TestProblemServiceCloseProblemRejectsUntilResolved(t *testing.T) {
 	}
 
 	p := createProblemHandlerProblem(t, ctx, service, tenant.ID, user.ID)
-	_, err := client.Problem.UpdateOneID(p.ID).SetStatus("resolved").Save(ctx)
+	_, err := client.Ticket.UpdateOneID(*p.WorkItemID).SetStatus("resolved").Save(ctx)
 	require.NoError(t, err)
 
 	updated, err := service.CloseProblem(ctx, tenant.ID, p.ID, "final resolution")
@@ -451,12 +451,18 @@ func TestProblemServiceAssociationsLifecycle(t *testing.T) {
 		SetTitle("T1").SetTicketNumber("T-001").SetRequesterID(user.ID).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 
-	incident1, err := client.Incident.Create().
-		SetTitle("I1").SetIncidentNumber("INC-001").SetReporterID(user.ID).SetTenantID(tenant.ID).Save(ctx)
+	incidentWorkItem, err := client.Ticket.Create().SetTitle("I1").SetType("incident").SetRecordClass("incident").
+		SetTicketNumber("T-INC-001").SetRequesterID(user.ID).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	incident1, err := client.Incident.Create().SetIncidentNumber("INC-001").SetReporterID(user.ID).
+		SetTenantID(tenant.ID).SetWorkItemID(incidentWorkItem.ID).Save(ctx)
 	require.NoError(t, err)
 
-	change1, err := client.Change.Create().
-		SetTitle("C1").SetCreatedBy(user.ID).SetTenantID(tenant.ID).Save(ctx)
+	changeWorkItem, err := client.Ticket.Create().SetTitle("C1").SetType("change").SetRecordClass("change_request").
+		SetTicketNumber("T-CHG-001").SetRequesterID(user.ID).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	change1, err := client.Change.Create().SetCreatedBy(user.ID).SetTenantID(tenant.ID).
+		SetWorkItemID(changeWorkItem.ID).Save(ctx)
 	require.NoError(t, err)
 
 	// Add associations

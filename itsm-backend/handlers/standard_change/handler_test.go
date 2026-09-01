@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -20,6 +22,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/enttest"
+	changedomain "itsm-backend/handlers/change"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -37,7 +40,8 @@ func newTestClient(t *testing.T) *ent.Client {
 func setupTestRouter(t *testing.T, client *ent.Client, userID, tenantID int) (*gin.Engine, *Handler) {
 	gin.SetMode(gin.TestMode)
 	logger := zaptest.NewLogger(t).Sugar()
-	h := NewHandler(client, logger)
+	changeRepo := changedomain.NewEntRepository(client, nil, &standardChangeTestAllocator{})
+	h := NewHandler(client, logger, changedomain.NewService(changeRepo, client, logger))
 
 	r := gin.New()
 	r.Use(gin.Recovery())
@@ -53,6 +57,13 @@ func setupTestRouter(t *testing.T, client *ent.Client, userID, tenantID int) (*g
 	})
 	h.RegisterRoutes(r.Group("/api/v1"))
 	return r, h
+}
+
+type standardChangeTestAllocator struct{ next int }
+
+func (a *standardChangeTestAllocator) Allocate(_ context.Context, _ *ent.Client, tenantID int, _ time.Time) (string, error) {
+	a.next++
+	return fmt.Sprintf("TKT-%d-%06d", tenantID, a.next), nil
 }
 
 // createTemplate inserts a StandardChange template directly via ent, so tests can
@@ -428,12 +439,16 @@ func TestGetCategories_Distinct(t *testing.T) {
 
 func TestInstantiateStandardChange_Defaults(t *testing.T) {
 	client := newTestClient(t)
+	client.Tenant.Create().SetName("Standard Change Tenant").SetCode("standard-change-defaults").
+		SetDomain("standard-change-defaults.example.com").SetStatus("active").SaveX(context.Background())
+	actor := client.User.Create().SetUsername("standard-change-user").SetEmail("standard-change-user@example.com").
+		SetName("Standard Change User").SetPasswordHash("hash").SetTenantID(1).SetActive(true).SaveX(context.Background())
 	tmpl := createTemplate(t, client, 1, 5, func(b *ent.StandardChangeCreate) {
 		b.SetTitle("发布模板").SetRiskLevel("medium").SetImpactScope("high").
 			SetAffectedCis([]string{"web"}).
 			SetImplementationPlan("实施计划步骤").SetRollbackPlan("回滚计划步骤")
 	})
-	r, _ := setupTestRouter(t, client, 9, 1)
+	r, _ := setupTestRouter(t, client, actor.ID, 1)
 
 	w := doRequest(r, "POST", "/api/v1/standard-changes/"+strconv.Itoa(tmpl.ID)+"/instantiate", dto.InstantiateStandardChangeRequest{})
 	resp, data := decodeResponse(t, w)
@@ -444,15 +459,16 @@ func TestInstantiateStandardChange_Defaults(t *testing.T) {
 	// Verify the Change was created from the template with the expected mapping.
 	created, err := client.Change.Query().
 		Where(change.ID(changeID), change.TenantID(1)).
+		WithWorkItem().
 		Only(context.Background())
 	require.NoError(t, err)
-	assert.Equal(t, "发布模板", created.Title)
+	assert.Equal(t, "发布模板", created.Edges.WorkItem.Title)
 	assert.Equal(t, "standard", created.Type)
-	assert.Equal(t, "draft", created.Status)
-	assert.Equal(t, "medium", created.Priority)
+	assert.Equal(t, "draft", created.Edges.WorkItem.Status)
+	assert.Equal(t, "medium", created.Edges.WorkItem.Priority)
 	assert.Equal(t, "high", created.ImpactScope)
 	assert.Equal(t, "medium", created.RiskLevel)
-	assert.Equal(t, 9, created.CreatedBy)
+	assert.Equal(t, actor.ID, created.CreatedBy)
 	assert.Equal(t, []string{"web"}, created.AffectedCis)
 	assert.Equal(t, "实施计划步骤", created.ImplementationPlan)
 	assert.Equal(t, "回滚计划步骤", created.RollbackPlan)
@@ -460,10 +476,14 @@ func TestInstantiateStandardChange_Defaults(t *testing.T) {
 
 func TestInstantiateStandardChange_Overrides(t *testing.T) {
 	client := newTestClient(t)
+	client.Tenant.Create().SetName("Standard Change Tenant").SetCode("standard-change-overrides").
+		SetDomain("standard-change-overrides.example.com").SetStatus("active").SaveX(context.Background())
+	actor := client.User.Create().SetUsername("standard-change-user").SetEmail("standard-change-user@example.com").
+		SetName("Standard Change User").SetPasswordHash("hash").SetTenantID(1).SetActive(true).SaveX(context.Background())
 	tmpl := createTemplate(t, client, 1, 5, func(b *ent.StandardChangeCreate) {
 		b.SetTitle("原模板").SetAffectedCis([]string{"old"})
 	})
-	r, _ := setupTestRouter(t, client, 9, 1)
+	r, _ := setupTestRouter(t, client, actor.ID, 1)
 
 	req := dto.InstantiateStandardChangeRequest{
 		Title:       "覆盖标题",
@@ -477,9 +497,10 @@ func TestInstantiateStandardChange_Overrides(t *testing.T) {
 
 	created, err := client.Change.Query().
 		Where(change.ID(changeID), change.TenantID(1)).
+		WithWorkItem().
 		Only(context.Background())
 	require.NoError(t, err)
-	assert.Equal(t, "覆盖标题", created.Title)
+	assert.Equal(t, "覆盖标题", created.Edges.WorkItem.Title)
 	assert.Equal(t, []string{"new1", "new2"}, created.AffectedCis)
 	// Untouched fields fall back to the template's values (implementation plan is unchanged).
 	assert.Equal(t, "实施计划步骤", created.ImplementationPlan)

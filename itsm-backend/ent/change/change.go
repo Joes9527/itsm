@@ -14,18 +14,10 @@ const (
 	Label = "change"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
-	// FieldTitle holds the string denoting the title field in the database.
-	FieldTitle = "title"
-	// FieldDescription holds the string denoting the description field in the database.
-	FieldDescription = "description"
 	// FieldJustification holds the string denoting the justification field in the database.
 	FieldJustification = "justification"
 	// FieldType holds the string denoting the type field in the database.
 	FieldType = "type"
-	// FieldStatus holds the string denoting the status field in the database.
-	FieldStatus = "status"
-	// FieldPriority holds the string denoting the priority field in the database.
-	FieldPriority = "priority"
 	// FieldImpactScope holds the string denoting the impact_scope field in the database.
 	FieldImpactScope = "impact_scope"
 	// FieldRiskLevel holds the string denoting the risk_level field in the database.
@@ -58,12 +50,21 @@ const (
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
 	FieldUpdatedAt = "updated_at"
+	// EdgeWorkItem holds the string denoting the work_item edge name in mutations.
+	EdgeWorkItem = "work_item"
 	// EdgeProblems holds the string denoting the problems edge name in mutations.
 	EdgeProblems = "problems"
 	// EdgePir holds the string denoting the pir edge name in mutations.
 	EdgePir = "pir"
 	// Table holds the table name of the change in the database.
 	Table = "changes"
+	// WorkItemTable is the table that holds the work_item relation/edge.
+	WorkItemTable = "changes"
+	// WorkItemInverseTable is the table name for the Ticket entity.
+	// It exists in this package in order to avoid circular dependency with the "ticket" package.
+	WorkItemInverseTable = "tickets"
+	// WorkItemColumn is the table column denoting the work_item relation/edge.
+	WorkItemColumn = "work_item_id"
 	// ProblemsTable is the table that holds the problems relation/edge. The primary key declared below.
 	ProblemsTable = "problem_changes"
 	// ProblemsInverseTable is the table name for the Problem entity.
@@ -81,12 +82,8 @@ const (
 // Columns holds all SQL columns for change fields.
 var Columns = []string{
 	FieldID,
-	FieldTitle,
-	FieldDescription,
 	FieldJustification,
 	FieldType,
-	FieldStatus,
-	FieldPriority,
 	FieldImpactScope,
 	FieldRiskLevel,
 	FieldAssigneeID,
@@ -133,14 +130,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
-	// TitleValidator is a validator for the "title" field. It is called by the builders before save.
-	TitleValidator func(string) error
 	// DefaultType holds the default value on creation for the "type" field.
 	DefaultType string
-	// DefaultStatus holds the default value on creation for the "status" field.
-	DefaultStatus string
-	// DefaultPriority holds the default value on creation for the "priority" field.
-	DefaultPriority string
 	// DefaultImpactScope holds the default value on creation for the "impact_scope" field.
 	DefaultImpactScope string
 	// DefaultRiskLevel holds the default value on creation for the "risk_level" field.
@@ -165,16 +156,6 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
 }
 
-// ByTitle orders the results by the title field.
-func ByTitle(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldTitle, opts...).ToFunc()
-}
-
-// ByDescription orders the results by the description field.
-func ByDescription(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldDescription, opts...).ToFunc()
-}
-
 // ByJustification orders the results by the justification field.
 func ByJustification(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldJustification, opts...).ToFunc()
@@ -183,16 +164,6 @@ func ByJustification(opts ...sql.OrderTermOption) OrderOption {
 // ByType orders the results by the type field.
 func ByType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldType, opts...).ToFunc()
-}
-
-// ByStatus orders the results by the status field.
-func ByStatus(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldStatus, opts...).ToFunc()
-}
-
-// ByPriority orders the results by the priority field.
-func ByPriority(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldPriority, opts...).ToFunc()
 }
 
 // ByImpactScope orders the results by the impact_scope field.
@@ -265,6 +236,13 @@ func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUpdatedAt, opts...).ToFunc()
 }
 
+// ByWorkItemField orders the results by work_item field.
+func ByWorkItemField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newWorkItemStep(), sql.OrderByField(field, opts...))
+	}
+}
+
 // ByProblemsCount orders the results by problems count.
 func ByProblemsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -291,6 +269,13 @@ func ByPir(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	return func(s *sql.Selector) {
 		sqlgraph.OrderByNeighborTerms(s, newPirStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
+}
+func newWorkItemStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(WorkItemInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, false, WorkItemTable, WorkItemColumn),
+	)
 }
 func newProblemsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(

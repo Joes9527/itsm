@@ -13,6 +13,7 @@ import (
 	"itsm-backend/ent/incidentmetric"
 	"itsm-backend/ent/predicate"
 	"itsm-backend/ent/problem"
+	"itsm-backend/ent/ticket"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -34,54 +35,6 @@ func (_u *IncidentUpdate) Where(ps ...predicate.Incident) *IncidentUpdate {
 	return _u
 }
 
-// SetTitle sets the "title" field.
-func (_u *IncidentUpdate) SetTitle(v string) *IncidentUpdate {
-	_u.mutation.SetTitle(v)
-	return _u
-}
-
-// SetNillableTitle sets the "title" field if the given value is not nil.
-func (_u *IncidentUpdate) SetNillableTitle(v *string) *IncidentUpdate {
-	if v != nil {
-		_u.SetTitle(*v)
-	}
-	return _u
-}
-
-// SetDescription sets the "description" field.
-func (_u *IncidentUpdate) SetDescription(v string) *IncidentUpdate {
-	_u.mutation.SetDescription(v)
-	return _u
-}
-
-// SetNillableDescription sets the "description" field if the given value is not nil.
-func (_u *IncidentUpdate) SetNillableDescription(v *string) *IncidentUpdate {
-	if v != nil {
-		_u.SetDescription(*v)
-	}
-	return _u
-}
-
-// ClearDescription clears the value of the "description" field.
-func (_u *IncidentUpdate) ClearDescription() *IncidentUpdate {
-	_u.mutation.ClearDescription()
-	return _u
-}
-
-// SetStatus sets the "status" field.
-func (_u *IncidentUpdate) SetStatus(v string) *IncidentUpdate {
-	_u.mutation.SetStatus(v)
-	return _u
-}
-
-// SetNillableStatus sets the "status" field if the given value is not nil.
-func (_u *IncidentUpdate) SetNillableStatus(v *string) *IncidentUpdate {
-	if v != nil {
-		_u.SetStatus(*v)
-	}
-	return _u
-}
-
 // SetType sets the "type" field.
 func (_u *IncidentUpdate) SetType(v string) *IncidentUpdate {
 	_u.mutation.SetType(v)
@@ -92,20 +45,6 @@ func (_u *IncidentUpdate) SetType(v string) *IncidentUpdate {
 func (_u *IncidentUpdate) SetNillableType(v *string) *IncidentUpdate {
 	if v != nil {
 		_u.SetType(*v)
-	}
-	return _u
-}
-
-// SetPriority sets the "priority" field.
-func (_u *IncidentUpdate) SetPriority(v string) *IncidentUpdate {
-	_u.mutation.SetPriority(v)
-	return _u
-}
-
-// SetNillablePriority sets the "priority" field if the given value is not nil.
-func (_u *IncidentUpdate) SetNillablePriority(v *string) *IncidentUpdate {
-	if v != nil {
-		_u.SetPriority(*v)
 	}
 	return _u
 }
@@ -189,7 +128,6 @@ func (_u *IncidentUpdate) AddReporterID(v int) *IncidentUpdate {
 
 // SetWorkItemID sets the "work_item_id" field.
 func (_u *IncidentUpdate) SetWorkItemID(v int) *IncidentUpdate {
-	_u.mutation.ResetWorkItemID()
 	_u.mutation.SetWorkItemID(v)
 	return _u
 }
@@ -199,18 +137,6 @@ func (_u *IncidentUpdate) SetNillableWorkItemID(v *int) *IncidentUpdate {
 	if v != nil {
 		_u.SetWorkItemID(*v)
 	}
-	return _u
-}
-
-// AddWorkItemID adds value to the "work_item_id" field.
-func (_u *IncidentUpdate) AddWorkItemID(v int) *IncidentUpdate {
-	_u.mutation.AddWorkItemID(v)
-	return _u
-}
-
-// ClearWorkItemID clears the value of the "work_item_id" field.
-func (_u *IncidentUpdate) ClearWorkItemID() *IncidentUpdate {
-	_u.mutation.ClearWorkItemID()
 	return _u
 }
 
@@ -581,6 +507,11 @@ func (_u *IncidentUpdate) ClearDeletedAt() *IncidentUpdate {
 	return _u
 }
 
+// SetWorkItem sets the "work_item" edge to the Ticket entity.
+func (_u *IncidentUpdate) SetWorkItem(v *Ticket) *IncidentUpdate {
+	return _u.SetWorkItemID(v.ID)
+}
+
 // AddRelatedIncidentIDs adds the "related_incidents" edge to the Incident entity by IDs.
 func (_u *IncidentUpdate) AddRelatedIncidentIDs(ids ...int) *IncidentUpdate {
 	_u.mutation.AddRelatedIncidentIDs(ids...)
@@ -689,6 +620,12 @@ func (_u *IncidentUpdate) AddProblems(v ...*Problem) *IncidentUpdate {
 // Mutation returns the IncidentMutation object of the builder.
 func (_u *IncidentUpdate) Mutation() *IncidentMutation {
 	return _u.mutation
+}
+
+// ClearWorkItem clears the "work_item" edge to the Ticket entity.
+func (_u *IncidentUpdate) ClearWorkItem() *IncidentUpdate {
+	_u.mutation.ClearWorkItem()
+	return _u
 }
 
 // ClearRelatedIncidents clears all "related_incidents" edges to the Incident entity.
@@ -876,16 +813,6 @@ func (_u *IncidentUpdate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *IncidentUpdate) check() error {
-	if v, ok := _u.mutation.Title(); ok {
-		if err := incident.TitleValidator(v); err != nil {
-			return &ValidationError{Name: "title", err: fmt.Errorf(`ent: validator failed for field "Incident.title": %w`, err)}
-		}
-	}
-	if v, ok := _u.mutation.Priority(); ok {
-		if err := incident.PriorityValidator(v); err != nil {
-			return &ValidationError{Name: "priority", err: fmt.Errorf(`ent: validator failed for field "Incident.priority": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.Impact(); ok {
 		if err := incident.ImpactValidator(v); err != nil {
 			return &ValidationError{Name: "impact", err: fmt.Errorf(`ent: validator failed for field "Incident.impact": %w`, err)}
@@ -916,6 +843,9 @@ func (_u *IncidentUpdate) check() error {
 			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "Incident.version": %w`, err)}
 		}
 	}
+	if _u.mutation.WorkItemCleared() && len(_u.mutation.WorkItemIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "Incident.work_item"`)
+	}
 	return nil
 }
 
@@ -931,23 +861,8 @@ func (_u *IncidentUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			}
 		}
 	}
-	if value, ok := _u.mutation.Title(); ok {
-		_spec.SetField(incident.FieldTitle, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.Description(); ok {
-		_spec.SetField(incident.FieldDescription, field.TypeString, value)
-	}
-	if _u.mutation.DescriptionCleared() {
-		_spec.ClearField(incident.FieldDescription, field.TypeString)
-	}
-	if value, ok := _u.mutation.Status(); ok {
-		_spec.SetField(incident.FieldStatus, field.TypeString, value)
-	}
 	if value, ok := _u.mutation.GetType(); ok {
 		_spec.SetField(incident.FieldType, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.Priority(); ok {
-		_spec.SetField(incident.FieldPriority, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Severity(); ok {
 		_spec.SetField(incident.FieldSeverity, field.TypeString, value)
@@ -966,15 +881,6 @@ func (_u *IncidentUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedReporterID(); ok {
 		_spec.AddField(incident.FieldReporterID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.WorkItemID(); ok {
-		_spec.SetField(incident.FieldWorkItemID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedWorkItemID(); ok {
-		_spec.AddField(incident.FieldWorkItemID, field.TypeInt, value)
-	}
-	if _u.mutation.WorkItemIDCleared() {
-		_spec.ClearField(incident.FieldWorkItemID, field.TypeInt)
 	}
 	if value, ok := _u.mutation.AssigneeID(); ok {
 		_spec.SetField(incident.FieldAssigneeID, field.TypeInt, value)
@@ -1094,6 +1000,35 @@ func (_u *IncidentUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.DeletedAtCleared() {
 		_spec.ClearField(incident.FieldDeletedAt, field.TypeTime)
+	}
+	if _u.mutation.WorkItemCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   incident.WorkItemTable,
+			Columns: []string{incident.WorkItemColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(ticket.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.WorkItemIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   incident.WorkItemTable,
+			Columns: []string{incident.WorkItemColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(ticket.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if _u.mutation.RelatedIncidentsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1430,54 +1365,6 @@ type IncidentUpdateOne struct {
 	mutation *IncidentMutation
 }
 
-// SetTitle sets the "title" field.
-func (_u *IncidentUpdateOne) SetTitle(v string) *IncidentUpdateOne {
-	_u.mutation.SetTitle(v)
-	return _u
-}
-
-// SetNillableTitle sets the "title" field if the given value is not nil.
-func (_u *IncidentUpdateOne) SetNillableTitle(v *string) *IncidentUpdateOne {
-	if v != nil {
-		_u.SetTitle(*v)
-	}
-	return _u
-}
-
-// SetDescription sets the "description" field.
-func (_u *IncidentUpdateOne) SetDescription(v string) *IncidentUpdateOne {
-	_u.mutation.SetDescription(v)
-	return _u
-}
-
-// SetNillableDescription sets the "description" field if the given value is not nil.
-func (_u *IncidentUpdateOne) SetNillableDescription(v *string) *IncidentUpdateOne {
-	if v != nil {
-		_u.SetDescription(*v)
-	}
-	return _u
-}
-
-// ClearDescription clears the value of the "description" field.
-func (_u *IncidentUpdateOne) ClearDescription() *IncidentUpdateOne {
-	_u.mutation.ClearDescription()
-	return _u
-}
-
-// SetStatus sets the "status" field.
-func (_u *IncidentUpdateOne) SetStatus(v string) *IncidentUpdateOne {
-	_u.mutation.SetStatus(v)
-	return _u
-}
-
-// SetNillableStatus sets the "status" field if the given value is not nil.
-func (_u *IncidentUpdateOne) SetNillableStatus(v *string) *IncidentUpdateOne {
-	if v != nil {
-		_u.SetStatus(*v)
-	}
-	return _u
-}
-
 // SetType sets the "type" field.
 func (_u *IncidentUpdateOne) SetType(v string) *IncidentUpdateOne {
 	_u.mutation.SetType(v)
@@ -1488,20 +1375,6 @@ func (_u *IncidentUpdateOne) SetType(v string) *IncidentUpdateOne {
 func (_u *IncidentUpdateOne) SetNillableType(v *string) *IncidentUpdateOne {
 	if v != nil {
 		_u.SetType(*v)
-	}
-	return _u
-}
-
-// SetPriority sets the "priority" field.
-func (_u *IncidentUpdateOne) SetPriority(v string) *IncidentUpdateOne {
-	_u.mutation.SetPriority(v)
-	return _u
-}
-
-// SetNillablePriority sets the "priority" field if the given value is not nil.
-func (_u *IncidentUpdateOne) SetNillablePriority(v *string) *IncidentUpdateOne {
-	if v != nil {
-		_u.SetPriority(*v)
 	}
 	return _u
 }
@@ -1585,7 +1458,6 @@ func (_u *IncidentUpdateOne) AddReporterID(v int) *IncidentUpdateOne {
 
 // SetWorkItemID sets the "work_item_id" field.
 func (_u *IncidentUpdateOne) SetWorkItemID(v int) *IncidentUpdateOne {
-	_u.mutation.ResetWorkItemID()
 	_u.mutation.SetWorkItemID(v)
 	return _u
 }
@@ -1595,18 +1467,6 @@ func (_u *IncidentUpdateOne) SetNillableWorkItemID(v *int) *IncidentUpdateOne {
 	if v != nil {
 		_u.SetWorkItemID(*v)
 	}
-	return _u
-}
-
-// AddWorkItemID adds value to the "work_item_id" field.
-func (_u *IncidentUpdateOne) AddWorkItemID(v int) *IncidentUpdateOne {
-	_u.mutation.AddWorkItemID(v)
-	return _u
-}
-
-// ClearWorkItemID clears the value of the "work_item_id" field.
-func (_u *IncidentUpdateOne) ClearWorkItemID() *IncidentUpdateOne {
-	_u.mutation.ClearWorkItemID()
 	return _u
 }
 
@@ -1977,6 +1837,11 @@ func (_u *IncidentUpdateOne) ClearDeletedAt() *IncidentUpdateOne {
 	return _u
 }
 
+// SetWorkItem sets the "work_item" edge to the Ticket entity.
+func (_u *IncidentUpdateOne) SetWorkItem(v *Ticket) *IncidentUpdateOne {
+	return _u.SetWorkItemID(v.ID)
+}
+
 // AddRelatedIncidentIDs adds the "related_incidents" edge to the Incident entity by IDs.
 func (_u *IncidentUpdateOne) AddRelatedIncidentIDs(ids ...int) *IncidentUpdateOne {
 	_u.mutation.AddRelatedIncidentIDs(ids...)
@@ -2085,6 +1950,12 @@ func (_u *IncidentUpdateOne) AddProblems(v ...*Problem) *IncidentUpdateOne {
 // Mutation returns the IncidentMutation object of the builder.
 func (_u *IncidentUpdateOne) Mutation() *IncidentMutation {
 	return _u.mutation
+}
+
+// ClearWorkItem clears the "work_item" edge to the Ticket entity.
+func (_u *IncidentUpdateOne) ClearWorkItem() *IncidentUpdateOne {
+	_u.mutation.ClearWorkItem()
+	return _u
 }
 
 // ClearRelatedIncidents clears all "related_incidents" edges to the Incident entity.
@@ -2285,16 +2156,6 @@ func (_u *IncidentUpdateOne) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *IncidentUpdateOne) check() error {
-	if v, ok := _u.mutation.Title(); ok {
-		if err := incident.TitleValidator(v); err != nil {
-			return &ValidationError{Name: "title", err: fmt.Errorf(`ent: validator failed for field "Incident.title": %w`, err)}
-		}
-	}
-	if v, ok := _u.mutation.Priority(); ok {
-		if err := incident.PriorityValidator(v); err != nil {
-			return &ValidationError{Name: "priority", err: fmt.Errorf(`ent: validator failed for field "Incident.priority": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.Impact(); ok {
 		if err := incident.ImpactValidator(v); err != nil {
 			return &ValidationError{Name: "impact", err: fmt.Errorf(`ent: validator failed for field "Incident.impact": %w`, err)}
@@ -2324,6 +2185,9 @@ func (_u *IncidentUpdateOne) check() error {
 		if err := incident.VersionValidator(v); err != nil {
 			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "Incident.version": %w`, err)}
 		}
+	}
+	if _u.mutation.WorkItemCleared() && len(_u.mutation.WorkItemIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "Incident.work_item"`)
 	}
 	return nil
 }
@@ -2357,23 +2221,8 @@ func (_u *IncidentUpdateOne) sqlSave(ctx context.Context) (_node *Incident, err 
 			}
 		}
 	}
-	if value, ok := _u.mutation.Title(); ok {
-		_spec.SetField(incident.FieldTitle, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.Description(); ok {
-		_spec.SetField(incident.FieldDescription, field.TypeString, value)
-	}
-	if _u.mutation.DescriptionCleared() {
-		_spec.ClearField(incident.FieldDescription, field.TypeString)
-	}
-	if value, ok := _u.mutation.Status(); ok {
-		_spec.SetField(incident.FieldStatus, field.TypeString, value)
-	}
 	if value, ok := _u.mutation.GetType(); ok {
 		_spec.SetField(incident.FieldType, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.Priority(); ok {
-		_spec.SetField(incident.FieldPriority, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Severity(); ok {
 		_spec.SetField(incident.FieldSeverity, field.TypeString, value)
@@ -2392,15 +2241,6 @@ func (_u *IncidentUpdateOne) sqlSave(ctx context.Context) (_node *Incident, err 
 	}
 	if value, ok := _u.mutation.AddedReporterID(); ok {
 		_spec.AddField(incident.FieldReporterID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.WorkItemID(); ok {
-		_spec.SetField(incident.FieldWorkItemID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedWorkItemID(); ok {
-		_spec.AddField(incident.FieldWorkItemID, field.TypeInt, value)
-	}
-	if _u.mutation.WorkItemIDCleared() {
-		_spec.ClearField(incident.FieldWorkItemID, field.TypeInt)
 	}
 	if value, ok := _u.mutation.AssigneeID(); ok {
 		_spec.SetField(incident.FieldAssigneeID, field.TypeInt, value)
@@ -2520,6 +2360,35 @@ func (_u *IncidentUpdateOne) sqlSave(ctx context.Context) (_node *Incident, err 
 	}
 	if _u.mutation.DeletedAtCleared() {
 		_spec.ClearField(incident.FieldDeletedAt, field.TypeTime)
+	}
+	if _u.mutation.WorkItemCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   incident.WorkItemTable,
+			Columns: []string{incident.WorkItemColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(ticket.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.WorkItemIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   incident.WorkItemTable,
+			Columns: []string{incident.WorkItemColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(ticket.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if _u.mutation.RelatedIncidentsCleared() {
 		edge := &sqlgraph.EdgeSpec{

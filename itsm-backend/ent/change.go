@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"itsm-backend/ent/change"
+	"itsm-backend/ent/ticket"
 	"strings"
 	"time"
 
@@ -18,18 +19,10 @@ type Change struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
-	// 变更标题
-	Title string `json:"title,omitempty"`
-	// 变更描述
-	Description string `json:"description,omitempty"`
 	// 变更理由
 	Justification string `json:"justification,omitempty"`
 	// 变更类型
 	Type string `json:"type,omitempty"`
-	// 状态
-	Status string `json:"status,omitempty"`
-	// 优先级
-	Priority string `json:"priority,omitempty"`
 	// 影响范围
 	ImpactScope string `json:"impact_scope,omitempty"`
 	// 风险等级
@@ -38,7 +31,7 @@ type Change struct {
 	AssigneeID int `json:"assignee_id,omitempty"`
 	// 创建人ID
 	CreatedBy int `json:"created_by,omitempty"`
-	// 关联的 WorkItem（tickets.id），唯一，必填——迁移完成前允许为空
+	// 关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入
 	WorkItemID int `json:"work_item_id,omitempty"`
 	// 租户ID
 	TenantID int `json:"tenant_id,omitempty"`
@@ -71,19 +64,32 @@ type Change struct {
 
 // ChangeEdges holds the relations/edges for other nodes in the graph.
 type ChangeEdges struct {
+	// 共享字段的唯一权威 WorkItem
+	WorkItem *Ticket `json:"work_item,omitempty"`
 	// 关联的问题
 	Problems []*Problem `json:"problems,omitempty"`
 	// 实施后审查
 	Pir []*ChangePIR `json:"pir,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [3]bool
+}
+
+// WorkItemOrErr returns the WorkItem value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e ChangeEdges) WorkItemOrErr() (*Ticket, error) {
+	if e.WorkItem != nil {
+		return e.WorkItem, nil
+	} else if e.loadedTypes[0] {
+		return nil, &NotFoundError{label: ticket.Label}
+	}
+	return nil, &NotLoadedError{edge: "work_item"}
 }
 
 // ProblemsOrErr returns the Problems value or an error if the edge
 // was not loaded in eager-loading.
 func (e ChangeEdges) ProblemsOrErr() ([]*Problem, error) {
-	if e.loadedTypes[0] {
+	if e.loadedTypes[1] {
 		return e.Problems, nil
 	}
 	return nil, &NotLoadedError{edge: "problems"}
@@ -92,7 +98,7 @@ func (e ChangeEdges) ProblemsOrErr() ([]*Problem, error) {
 // PirOrErr returns the Pir value or an error if the edge
 // was not loaded in eager-loading.
 func (e ChangeEdges) PirOrErr() ([]*ChangePIR, error) {
-	if e.loadedTypes[1] {
+	if e.loadedTypes[2] {
 		return e.Pir, nil
 	}
 	return nil, &NotLoadedError{edge: "pir"}
@@ -107,7 +113,7 @@ func (*Change) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case change.FieldID, change.FieldAssigneeID, change.FieldCreatedBy, change.FieldWorkItemID, change.FieldTenantID:
 			values[i] = new(sql.NullInt64)
-		case change.FieldTitle, change.FieldDescription, change.FieldJustification, change.FieldType, change.FieldStatus, change.FieldPriority, change.FieldImpactScope, change.FieldRiskLevel, change.FieldImplementationPlan, change.FieldRollbackPlan:
+		case change.FieldJustification, change.FieldType, change.FieldImpactScope, change.FieldRiskLevel, change.FieldImplementationPlan, change.FieldRollbackPlan:
 			values[i] = new(sql.NullString)
 		case change.FieldPlannedStartDate, change.FieldPlannedEndDate, change.FieldActualStartDate, change.FieldActualEndDate, change.FieldCreatedAt, change.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -134,18 +140,6 @@ func (_m *Change) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int(value.Int64)
-		case change.FieldTitle:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field title", values[i])
-			} else if value.Valid {
-				_m.Title = value.String
-			}
-		case change.FieldDescription:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field description", values[i])
-			} else if value.Valid {
-				_m.Description = value.String
-			}
 		case change.FieldJustification:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field justification", values[i])
@@ -157,18 +151,6 @@ func (_m *Change) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field type", values[i])
 			} else if value.Valid {
 				_m.Type = value.String
-			}
-		case change.FieldStatus:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field status", values[i])
-			} else if value.Valid {
-				_m.Status = value.String
-			}
-		case change.FieldPriority:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field priority", values[i])
-			} else if value.Valid {
-				_m.Priority = value.String
 			}
 		case change.FieldImpactScope:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -290,6 +272,11 @@ func (_m *Change) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
 }
 
+// QueryWorkItem queries the "work_item" edge of the Change entity.
+func (_m *Change) QueryWorkItem() *TicketQuery {
+	return NewChangeClient(_m.config).QueryWorkItem(_m)
+}
+
 // QueryProblems queries the "problems" edge of the Change entity.
 func (_m *Change) QueryProblems() *ProblemQuery {
 	return NewChangeClient(_m.config).QueryProblems(_m)
@@ -323,23 +310,11 @@ func (_m *Change) String() string {
 	var builder strings.Builder
 	builder.WriteString("Change(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
-	builder.WriteString("title=")
-	builder.WriteString(_m.Title)
-	builder.WriteString(", ")
-	builder.WriteString("description=")
-	builder.WriteString(_m.Description)
-	builder.WriteString(", ")
 	builder.WriteString("justification=")
 	builder.WriteString(_m.Justification)
 	builder.WriteString(", ")
 	builder.WriteString("type=")
 	builder.WriteString(_m.Type)
-	builder.WriteString(", ")
-	builder.WriteString("status=")
-	builder.WriteString(_m.Status)
-	builder.WriteString(", ")
-	builder.WriteString("priority=")
-	builder.WriteString(_m.Priority)
 	builder.WriteString(", ")
 	builder.WriteString("impact_scope=")
 	builder.WriteString(_m.ImpactScope)

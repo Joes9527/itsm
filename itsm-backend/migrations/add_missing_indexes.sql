@@ -9,6 +9,8 @@
 CREATE INDEX CONCURRENTLY IF NOT EXISTS ticket_tenant_type_idx ON tickets (tenant_id, type);
 -- 按优先级查询
 CREATE INDEX CONCURRENTLY IF NOT EXISTS ticket_tenant_priority_idx ON tickets (tenant_id, priority);
+-- 按权威生命周期状态查询（Incident/Problem/Change 共用）
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ticket_tenant_status_idx ON tickets (tenant_id, status);
 -- 按分类查询
 CREATE INDEX CONCURRENTLY IF NOT EXISTS ticket_tenant_category_idx ON tickets (tenant_id, category_id);
 -- 按 SLA 定义查询
@@ -23,8 +25,7 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS ticket_tenant_dept_idx ON tickets (tenan
 -- =====================================================
 -- 多租户隔离
 CREATE INDEX CONCURRENTLY IF NOT EXISTS incident_tenant_idx ON incidents (tenant_id);
--- 按状态查询
-CREATE INDEX CONCURRENTLY IF NOT EXISTS incident_tenant_status_idx ON incidents (tenant_id, status);
+-- 状态由 WorkItem(tickets) 权威持有；复用 ticket_tenant_status_idx。
 -- 按处理人查询
 CREATE INDEX CONCURRENTLY IF NOT EXISTS incident_assignee_idx ON incidents (assignee_id);
 -- 按报告人查询
@@ -40,14 +41,12 @@ WHERE is_major_incident = true;
 -- 3. 问题表 (Problems) 索引优化 - 中优先级
 -- =====================================================
 CREATE INDEX CONCURRENTLY IF NOT EXISTS problem_tenant_idx ON problems (tenant_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS problem_tenant_status_idx ON problems (tenant_id, status);
 CREATE INDEX CONCURRENTLY IF NOT EXISTS problem_assignee_idx ON problems (assignee_id);
 CREATE INDEX CONCURRENTLY IF NOT EXISTS problem_created_at_idx ON problems (created_at);
 -- =====================================================
 -- 4. 变更表 (Changes) 索引优化 - 中优先级
 -- =====================================================
 CREATE INDEX CONCURRENTLY IF NOT EXISTS change_tenant_idx ON changes (tenant_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS change_tenant_status_idx ON changes (tenant_id, status);
 CREATE INDEX CONCURRENTLY IF NOT EXISTS change_type_idx ON changes (type);
 CREATE INDEX CONCURRENTLY IF NOT EXISTS change_assignee_idx ON changes (assignee_id);
 -- =====================================================

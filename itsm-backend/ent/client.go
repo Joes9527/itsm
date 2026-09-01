@@ -3551,6 +3551,22 @@ func (c *ChangeClient) GetX(ctx context.Context, id int) *Change {
 	return obj
 }
 
+// QueryWorkItem queries the work_item edge of a Change.
+func (c *ChangeClient) QueryWorkItem(_m *Change) *TicketQuery {
+	query := (&TicketClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(change.Table, change.FieldID, id),
+			sqlgraph.To(ticket.Table, ticket.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, change.WorkItemTable, change.WorkItemColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QueryProblems queries the problems edge of a Change.
 func (c *ChangeClient) QueryProblems(_m *Change) *ProblemQuery {
 	query := (&ProblemClient{config: c.config}).Query()
@@ -6918,6 +6934,22 @@ func (c *IncidentClient) GetX(ctx context.Context, id int) *Incident {
 		panic(err)
 	}
 	return obj
+}
+
+// QueryWorkItem queries the work_item edge of a Incident.
+func (c *IncidentClient) QueryWorkItem(_m *Incident) *TicketQuery {
+	query := (&TicketClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(incident.Table, incident.FieldID, id),
+			sqlgraph.To(ticket.Table, ticket.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, incident.WorkItemTable, incident.WorkItemColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
 }
 
 // QueryRelatedIncidents queries the related_incidents edge of a Incident.
@@ -11101,6 +11133,22 @@ func (c *ProblemClient) GetX(ctx context.Context, id int) *Problem {
 		panic(err)
 	}
 	return obj
+}
+
+// QueryWorkItem queries the work_item edge of a Problem.
+func (c *ProblemClient) QueryWorkItem(_m *Problem) *TicketQuery {
+	query := (&TicketClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(problem.Table, problem.FieldID, id),
+			sqlgraph.To(ticket.Table, ticket.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, problem.WorkItemTable, problem.WorkItemColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
 }
 
 // QueryTickets queries the tickets edge of a Problem.

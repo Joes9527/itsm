@@ -443,6 +443,7 @@ func TestChangeCallbackBusinessEffectSurvivesAdvanceFailureWithoutReplay(t *test
 
 	workItem := f.client.Ticket.Create().
 		SetTitle("Durable callback change").
+		SetStatus("pending").
 		SetType("change").
 		SetRecordClass("change_request").
 		SetPriority("medium").
@@ -451,9 +452,7 @@ func TestChangeCallbackBusinessEffectSurvivesAdvanceFailureWithoutReplay(t *test
 		SetTenantID(f.tenant.ID).
 		SaveX(f.userCtx)
 	changeEntity := f.client.Change.Create().
-		SetTitle(workItem.Title).
 		SetType("normal").
-		SetStatus("submitted").
 		SetRiskLevel("medium").
 		SetImpactScope("low").
 		SetCreatedBy(f.actor.ID).
@@ -494,7 +493,7 @@ func TestChangeCallbackBusinessEffectSurvivesAdvanceFailureWithoutReplay(t *test
 
 	require.NoError(t, f.engine.CompleteTask(f.typedTaskScopeOnlyCtx(f.actor, false), task.TaskID, nil))
 	firstEffect := f.client.Change.GetX(f.userCtx, changeEntity.ID)
-	require.Equal(t, "scheduled", firstEffect.Status)
+	require.Equal(t, "scheduled", requireChangeWorkItem(t, f.client, firstEffect).Status)
 	row := callbackRowForInstance(t, f, instance.ID)
 	require.Equal(t, bpmnCallbackStatusPending, row.Status)
 	require.Equal(t, "advance_error", row.LastErrorClass)
@@ -504,7 +503,7 @@ func TestChangeCallbackBusinessEffectSurvivesAdvanceFailureWithoutReplay(t *test
 	require.NoError(t, err)
 	require.Equal(t, 1, completed)
 	afterRetry := f.client.Change.GetX(f.userCtx, changeEntity.ID)
-	assert.Equal(t, "scheduled", afterRetry.Status)
+	assert.Equal(t, "scheduled", requireChangeWorkItem(t, f.client, afterRetry).Status)
 	assert.Equal(t, firstEffect.PlannedStartDate, afterRetry.PlannedStartDate)
 	assert.Equal(t, firstEffect.PlannedEndDate, afterRetry.PlannedEndDate)
 	assert.Equal(t, bpmnCallbackStatusCompleted, callbackRowForInstance(t, f, instance.ID).Status)
