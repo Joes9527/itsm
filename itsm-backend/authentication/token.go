@@ -1,10 +1,17 @@
 package authentication
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+)
+
+var (
+	ErrAccessTokenRevoked         = errors.New("access token is revoked")
+	ErrAccessTokenRevocationCheck = errors.New("access token revocation check failed")
 )
 
 type Claims struct {
@@ -16,7 +23,7 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-func ValidateAccessToken(tokenString, jwtSecret string) (*Claims, error) {
+func validateToken(tokenString, jwtSecret, expectedType string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, jwt.ErrSignatureInvalid
@@ -27,27 +34,29 @@ func ValidateAccessToken(tokenString, jwtSecret string) (*Claims, error) {
 		return nil, err
 	}
 	claims, ok := token.Claims.(*Claims)
-	if !ok || claims.TokenType != "access" {
+	if !ok || claims.TokenType != expectedType {
 		return nil, jwt.ErrInvalidKey
 	}
 	return claims, nil
 }
 
-func ValidateRefreshToken(tokenString, jwtSecret string) (*Claims, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, jwt.ErrSignatureInvalid
-		}
-		return []byte(jwtSecret), nil
-	})
-	if err != nil || !token.Valid {
+func ValidateAccessToken(ctx context.Context, tokenString, jwtSecret string) (*Claims, error) {
+	claims, err := validateToken(tokenString, jwtSecret, "access")
+	if err != nil {
 		return nil, err
 	}
-	claims, ok := token.Claims.(*Claims)
-	if !ok || claims.TokenType != "refresh" {
-		return nil, jwt.ErrInvalidKey
+	revoked, err := IsAccessTokenRevoked(ctx, tokenString)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrAccessTokenRevocationCheck, err)
+	}
+	if revoked {
+		return nil, ErrAccessTokenRevoked
 	}
 	return claims, nil
+}
+
+func ValidateRefreshToken(tokenString, jwtSecret string) (*Claims, error) {
+	return validateToken(tokenString, jwtSecret, "refresh")
 }
 
 func GenerateAccessToken(userID int, username, role string, tenantID int, jwtSecret string, expireTime time.Duration) (string, error) {

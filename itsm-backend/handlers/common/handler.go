@@ -101,7 +101,7 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 // Logout clears httpOnly auth cookies and returns success.
 func (h *Handler) Logout(c *gin.Context) {
 	token := c.GetString("token")
-	claims, err := authentication.ValidateAccessToken(token, h.svc.jwtSecret)
+	claims, err := authentication.ValidateAccessToken(c.Request.Context(), token, h.svc.jwtSecret)
 	if err != nil || claims.ExpiresAt == nil {
 		common.AuthFailed(c, "token无效")
 		return

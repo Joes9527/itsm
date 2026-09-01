@@ -22,21 +22,19 @@ import (
 )
 
 type AuthService struct {
-	client         *ent.Client
-	jwtSecret      string
-	logger         *zap.SugaredLogger
-	tokenBlacklist *TokenBlacklistService
-	emailService   *EmailService
-	baseURL        string // 前端基础URL，用于生成重置链接
+	client       *ent.Client
+	jwtSecret    string
+	logger       *zap.SugaredLogger
+	emailService *EmailService
+	baseURL      string // 前端基础URL，用于生成重置链接
 }
 
-func NewAuthService(client *ent.Client, jwtSecret string, logger *zap.SugaredLogger, blacklistService *TokenBlacklistService) *AuthService {
+func NewAuthService(client *ent.Client, jwtSecret string, logger *zap.SugaredLogger) *AuthService {
 	return &AuthService{
-		client:         client,
-		jwtSecret:      jwtSecret,
-		logger:         logger,
-		tokenBlacklist: blacklistService,
-		baseURL:        "http://localhost:3000", // 默认值，可在生产环境通过配置覆盖
+		client:    client,
+		jwtSecret: jwtSecret,
+		logger:    logger,
+		baseURL:   "http://localhost:3000", // 默认值，可在生产环境通过配置覆盖
 	}
 }
 
@@ -219,26 +217,13 @@ func (s *AuthService) getUserPermissions(userEntity *ent.User) []string {
 	return permissions
 }
 
-// RefreshToken 刷新token (实现token rotation安全机制)
+// RefreshToken 刷新 token。
 func (s *AuthService) RefreshToken(ctx context.Context, req *dto.RefreshTokenRequest) (*dto.RefreshTokenResponse, error) {
 	// 验证refresh token
 	claims, err := authentication.ValidateRefreshToken(req.RefreshToken, s.jwtSecret)
 	if err != nil {
 		s.logger.Warnw("Invalid refresh token", "error", err)
 		return nil, fmt.Errorf("刷新令牌无效")
-	}
-
-	// 检查 refresh token 是否已被拉黑（token rotation 后旧 token 立即失效）
-	if s.tokenBlacklist != nil {
-		blacklisted, chkErr := s.tokenBlacklist.IsRefreshBlacklisted(req.RefreshToken)
-		if chkErr != nil {
-			s.logger.Warnw("Failed to check refresh blacklist, denying by default", "error", chkErr)
-			return nil, fmt.Errorf("刷新令牌校验失败")
-		}
-		if blacklisted {
-			s.logger.Warnw("Refresh token replay detected", "user_id", claims.UserID)
-			return nil, fmt.Errorf("刷新令牌已失效，请重新登录")
-		}
 	}
 
 	// 获取用户信息
@@ -268,7 +253,7 @@ func (s *AuthService) RefreshToken(ctx context.Context, req *dto.RefreshTokenReq
 		return nil, fmt.Errorf("生成新令牌失败")
 	}
 
-	// 生成新的refresh token（实现rotation，防止replay攻击）
+	// 生成新的 refresh token。
 	newRefreshToken, err := authentication.GenerateRefreshToken(
 		userEntity.ID,
 		s.jwtSecret,
@@ -279,15 +264,7 @@ func (s *AuthService) RefreshToken(ctx context.Context, req *dto.RefreshTokenReq
 		return nil, fmt.Errorf("生成刷新令牌失败")
 	}
 
-	// 旧 refresh token 加入黑名单（TTL = 剩余有效期），彻底阻断 replay
-	if s.tokenBlacklist != nil && claims.ExpiresAt != nil {
-		if bErr := s.tokenBlacklist.AddRefreshToBlacklist(req.RefreshToken, claims.ExpiresAt.Time); bErr != nil {
-			// 拉黑失败不阻断本次刷新，但记录告警：可能存在短暂 replay 窗口
-			s.logger.Warnw("Failed to blacklist old refresh token", "user_id", userEntity.ID, "error", bErr)
-		}
-	}
-
-	s.logger.Infow("Token refreshed successfully with rotation", "user_id", userEntity.ID)
+	s.logger.Infow("Token refreshed successfully", "user_id", userEntity.ID)
 
 	return &dto.RefreshTokenResponse{
 		AccessToken:  newAccessToken,
@@ -495,54 +472,16 @@ func (s *AuthService) GetUserInfo(ctx context.Context, userID int) (*dto.UserInf
 	}, nil
 }
 
-// Logout 用户登出
-// panic-safe：即使底层 Redis 不可用导致 tokenBlacklist.RevokeUserTokens
-// panic，登出流程也应正常完成。避免一个子系统异常拖垮 HTTP 请求。
+// Logout 用户登出。当前 access token 的权威吊销由 RevokeAccessToken 执行。
 func (s *AuthService) Logout(ctx context.Context, userID int) error {
 	s.logger.Infow("User logged out", "user_id", userID)
-
-	// 如果启用了黑名单服务，撤销用户的所有token
-	if s.tokenBlacklist != nil {
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					s.logger.Errorw("Panic during token revocation, swallowed",
-						"user_id", userID, "panic", r)
-				}
-			}()
-			if err := s.tokenBlacklist.RevokeUserTokens(ctx, userID); err != nil {
-				s.logger.Warnw("Failed to revoke user tokens",
-					"user_id", userID, "error", err)
-				// 不影响登出流程
-			}
-		}()
-	}
-
 	return nil
-}
-
-// RevokeUserTokens 撤销用户的所有Token（登出所有设备）
-func (s *AuthService) RevokeUserTokens(ctx context.Context, userID int) error {
-	if s.tokenBlacklist == nil {
-		return fmt.Errorf("token blacklist service not configured")
-	}
-
-	return s.tokenBlacklist.RevokeUserTokens(ctx, userID)
-}
-
-// AddTokenToBlacklist 将特定Token加入黑名单
-func (s *AuthService) AddTokenToBlacklist(tokenString string, expiresAt time.Time) error {
-	if s.tokenBlacklist == nil {
-		return fmt.Errorf("token blacklist service not configured")
-	}
-
-	return s.tokenBlacklist.AddToBlacklist(tokenString, expiresAt)
 }
 
 // RevokeAccessToken 撤销当前 access token。该路径同时支持进程内存储与 Redis，
 // 确保未配置 Redis 的单实例环境也不会在登出后继续接受旧 token。
 func (s *AuthService) RevokeAccessToken(ctx context.Context, tokenString string) error {
-	claims, err := authentication.ValidateAccessToken(tokenString, s.jwtSecret)
+	claims, err := authentication.ValidateAccessToken(ctx, tokenString, s.jwtSecret)
 	if err != nil {
 		return fmt.Errorf("invalid access token: %w", err)
 	}
@@ -749,13 +688,6 @@ func (s *AuthService) ResetPassword(ctx context.Context, req *dto.PasswordResetR
 	}
 	if err = tx.Commit(); err != nil {
 		return nil, fmt.Errorf("提交密码重置失败")
-	}
-
-	// 撤销用户的所有token
-	if s.tokenBlacklist != nil {
-		if err := s.tokenBlacklist.RevokeUserTokens(ctx, tokenEntity.UserID); err != nil {
-			s.logger.Warnw("Failed to revoke user tokens", "user_id", tokenEntity.UserID, "error", err)
-		}
 	}
 
 	s.logger.Infow("Password reset successfully", "user_id", tokenEntity.UserID)

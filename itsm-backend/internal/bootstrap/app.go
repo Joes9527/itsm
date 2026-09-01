@@ -707,7 +707,7 @@ func NewApplication() *Application {
 	commonHandler := domainCommon.NewHandler(commonServiceDomain)
 
 	// Auth Controller（装配缺失的 register / forgot-password / reset-password / validate-reset-token / switch-tenant 路由）
-	authService := service.NewAuthService(client, cfg.JWT.Secret, sugar, nil)
+	authService := service.NewAuthService(client, cfg.JWT.Secret, sugar)
 	authService.SetEmailService(emailService)
 	if cfg.Server.FrontendURL != "" {
 		authService.SetBaseURL(cfg.Server.FrontendURL)

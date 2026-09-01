@@ -30,7 +30,7 @@ func TestAuthMiddlewareRejectsRevokedAccessToken(t *testing.T) {
 	router.ServeHTTP(first, firstRequest)
 	require.Equal(t, http.StatusNoContent, first.Code)
 
-	claims, err := authentication.ValidateAccessToken(token, secret)
+	claims, err := authentication.ValidateAccessToken(context.Background(), token, secret)
 	require.NoError(t, err)
 	require.NotNil(t, claims.ExpiresAt)
 	require.NoError(t, authentication.RevokeAccessToken(context.Background(), token, claims.ExpiresAt.Time))

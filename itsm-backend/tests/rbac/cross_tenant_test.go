@@ -228,7 +228,7 @@ func TestCrossTenantUserList(t *testing.T) {
 	})
 }
 
-// localBlacklist 简单的本地 token 黑名单 mock（替代 middleware 中的 NewTokenBlacklistService）
+// localBlacklist 是跨租户认证测试使用的本地 token 黑名单。
 type localBlacklist struct {
 	tokens map[string]struct{}
 }
