@@ -102,6 +102,116 @@ func TestProfessionalExtensionMigrationEnforcesOneToOneAndAssetLifecycle(t *test
 		)
 		requirePostgreSQLUniqueViolation(t, err)
 	}
+
+	for _, tableName := range []string{"incidents", "problems", "changes"} {
+		_, err = db.ExecContext(ctx, fmt.Sprintf(`INSERT INTO %s (work_item_id) VALUES (999999)`, tableName))
+		requirePostgreSQLForeignKeyViolation(t, err)
+	}
+}
+
+func TestProfessionalExtensionMigrationUpgradesLegacyDirectChangePolicy(t *testing.T) {
+	db := openProfessionalExtensionMigrationDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), professionalExtensionMigrationIntegrationTimeout)
+	defer cancel()
+
+	_, err := db.ExecContext(ctx, `
+		INSERT INTO tickets (id, tenant_id, record_class, deleted_at) VALUES
+			(1, 101, 'change_request', NULL),
+			(2, 202, 'change_request', NULL),
+			(3, 101, 'change_request', NOW());
+		INSERT INTO changes (work_item_id, tenant_id) VALUES (1, 101), (3, 101);
+		ALTER TABLE changes ENABLE ROW LEVEL SECURITY;
+		ALTER TABLE changes FORCE ROW LEVEL SECURITY;
+		CREATE POLICY tenant_isolation ON changes
+			USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint)
+			WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint);
+	`)
+	require.NoError(t, err)
+
+	_, err = db.ExecContext(ctx, GetMigrationSQL("022_drop_professional_extension_shared_fields"))
+	require.NoError(t, err)
+	verifySQL := readProfessionalExtensionMigrationAsset(t, "20260901_drop_professional_extension_shared_fields_verify.sql")
+	_, err = db.ExecContext(ctx, verifySQL)
+	require.NoError(t, err)
+
+	var usingExpression, checkExpression string
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT pg_get_expr(policy.polqual, policy.polrelid), pg_get_expr(policy.polwithcheck, policy.polrelid)
+		FROM pg_policy policy
+		JOIN pg_class relation ON relation.oid = policy.polrelid
+		JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+		WHERE namespace.nspname = current_schema()
+		  AND relation.relname = 'changes'
+		  AND policy.polname = 'tenant_isolation_changes'
+	`).Scan(&usingExpression, &checkExpression))
+	for _, expression := range []string{usingExpression, checkExpression} {
+		require.Contains(t, expression, "work_item.tenant_id")
+		require.Contains(t, expression, "work_item.deleted_at IS NULL")
+		require.Contains(t, expression, "app.current_tenant")
+		require.NotContains(t, expression, "app.current_tenant_id")
+		require.NotContains(t, expression, "changes.tenant_id")
+	}
+	var policyCount int
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM pg_policy policy
+		JOIN pg_class relation ON relation.oid = policy.polrelid
+		JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+		WHERE namespace.nspname = current_schema() AND relation.relname = 'changes'
+	`).Scan(&policyCount))
+	require.Equal(t, 1, policyCount)
+
+	var schemaName string
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT current_schema()`).Scan(&schemaName))
+	roleName := "professional_extension_rls_" + strings.ReplaceAll(uuid.NewString(), "-", "_")
+	_, err = db.ExecContext(ctx, fmt.Sprintf(`
+		CREATE ROLE %q NOLOGIN;
+		GRANT USAGE ON SCHEMA %q TO %q;
+		GRANT SELECT ON %q.tickets, %q.changes TO %q;
+		GRANT INSERT ON %q.changes TO %q;
+	`, roleName, schemaName, roleName, schemaName, schemaName, roleName, schemaName, roleName))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, dropErr := db.ExecContext(context.Background(), fmt.Sprintf(`DROP OWNED BY %q; DROP ROLE IF EXISTS %q`, roleName, roleName))
+		require.NoError(t, dropErr)
+	})
+
+	tx, err := db.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	_, err = tx.ExecContext(ctx, fmt.Sprintf(`SET LOCAL ROLE %q`, roleName))
+	require.NoError(t, err)
+	_, err = tx.ExecContext(ctx, `SET LOCAL app.current_tenant = '101'`)
+	require.NoError(t, err)
+	var visibleWorkItems []byte
+	require.NoError(t, tx.QueryRowContext(ctx, `SELECT COALESCE(json_agg(work_item_id ORDER BY work_item_id), '[]') FROM changes`).Scan(&visibleWorkItems))
+	require.JSONEq(t, `[1]`, string(visibleWorkItems), "same-tenant soft-deleted WorkItem must be hidden")
+	require.NoError(t, tx.Commit())
+
+	tx, err = db.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	_, err = tx.ExecContext(ctx, fmt.Sprintf(`SET LOCAL ROLE %q`, roleName))
+	require.NoError(t, err)
+	_, err = tx.ExecContext(ctx, `SET LOCAL app.current_tenant = '101'`)
+	require.NoError(t, err)
+	_, err = tx.ExecContext(ctx, `INSERT INTO changes (work_item_id) VALUES (2)`)
+	require.Error(t, err, "cross-tenant WorkItem association must be rejected by WITH CHECK")
+	require.NoError(t, tx.Rollback())
+}
+
+func TestProfessionalExtensionMigrationRejectsConflictingNamedForeignKey(t *testing.T) {
+	db := openProfessionalExtensionMigrationDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), professionalExtensionMigrationIntegrationTimeout)
+	defer cancel()
+
+	_, err := db.ExecContext(ctx, `
+		CREATE TABLE wrong_work_items (id BIGINT PRIMARY KEY);
+		ALTER TABLE incidents ADD CONSTRAINT incidents_tickets_work_item
+			FOREIGN KEY (work_item_id) REFERENCES wrong_work_items(id);
+	`)
+	require.NoError(t, err)
+
+	_, err = db.ExecContext(ctx, GetMigrationSQL("022_drop_professional_extension_shared_fields"))
+	require.ErrorContains(t, err, "conflicts with required incidents.work_item_id foreign key")
 }
 
 func TestProfessionalExtensionMigrationRejectsConflictingNamedIndex(t *testing.T) {
@@ -137,6 +247,43 @@ func TestProfessionalExtensionVerificationRejectsWrongNonUniqueIndex(t *testing.
 	require.ErrorContains(t, err, "must be a ready, valid, one-column unique index")
 }
 
+func TestProfessionalExtensionVerificationRejectsUnvalidatedForeignKey(t *testing.T) {
+	db := openProfessionalExtensionMigrationDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), professionalExtensionMigrationIntegrationTimeout)
+	defer cancel()
+
+	_, err := db.ExecContext(ctx, GetMigrationSQL("022_drop_professional_extension_shared_fields"))
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, `
+		ALTER TABLE incidents DROP CONSTRAINT incidents_tickets_work_item;
+		ALTER TABLE incidents ADD CONSTRAINT incidents_tickets_work_item
+			FOREIGN KEY (work_item_id) REFERENCES tickets(id) NOT VALID;
+	`)
+	require.NoError(t, err)
+
+	verifySQL := readProfessionalExtensionMigrationAsset(t, "20260901_drop_professional_extension_shared_fields_verify.sql")
+	_, err = db.ExecContext(ctx, verifySQL)
+	require.ErrorContains(t, err, "must be an exact validated foreign key")
+}
+
+func TestProfessionalExtensionVerificationRejectsPermissivePolicyShape(t *testing.T) {
+	db := openProfessionalExtensionMigrationDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), professionalExtensionMigrationIntegrationTimeout)
+	defer cancel()
+
+	_, err := db.ExecContext(ctx, GetMigrationSQL("022_drop_professional_extension_shared_fields"))
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, `
+		DROP POLICY tenant_isolation_changes ON changes;
+		CREATE POLICY tenant_isolation_changes ON changes USING (true) WITH CHECK (true);
+	`)
+	require.NoError(t, err)
+
+	verifySQL := readProfessionalExtensionMigrationAsset(t, "20260901_drop_professional_extension_shared_fields_verify.sql")
+	_, err = db.ExecContext(ctx, verifySQL)
+	require.ErrorContains(t, err, "must use authoritative WorkItem tenant and soft-delete scope")
+}
+
 func openProfessionalExtensionMigrationDB(t *testing.T) *sql.DB {
 	t.Helper()
 	dsn := os.Getenv("ITSM_TEST_DB")
@@ -159,7 +306,8 @@ func openProfessionalExtensionMigrationDB(t *testing.T) *sql.DB {
 		CREATE TABLE tickets (
 			id BIGINT PRIMARY KEY,
 			tenant_id BIGINT NOT NULL,
-			record_class TEXT NOT NULL
+			record_class TEXT NOT NULL,
+			deleted_at TIMESTAMPTZ
 		);
 		CREATE TABLE incidents (
 			id BIGSERIAL PRIMARY KEY,
@@ -167,7 +315,7 @@ func openProfessionalExtensionMigrationDB(t *testing.T) *sql.DB {
 			reporter_id BIGINT, assignee_id BIGINT, category TEXT, subcategory TEXT,
 			source TEXT, version BIGINT, created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ,
 			resolved_at TIMESTAMPTZ, closed_at TIMESTAMPTZ, deleted_at TIMESTAMPTZ,
-			work_item_id BIGINT NOT NULL REFERENCES tickets(id),
+			work_item_id BIGINT NOT NULL,
 			tenant_id BIGINT NOT NULL
 		);
 		CREATE TABLE problems (
@@ -178,7 +326,6 @@ func openProfessionalExtensionMigrationDB(t *testing.T) *sql.DB {
 			closed_at TIMESTAMPTZ, deleted_at TIMESTAMPTZ,
 			work_item_id BIGINT NOT NULL
 		);
-		ALTER TABLE problems ADD CONSTRAINT problems_work_item_fk FOREIGN KEY (work_item_id) REFERENCES tickets(id);
 		CREATE TABLE changes (
 			id BIGSERIAL PRIMARY KEY,
 			title TEXT, description TEXT, status TEXT, priority TEXT, assignee_id BIGINT,
@@ -186,7 +333,6 @@ func openProfessionalExtensionMigrationDB(t *testing.T) *sql.DB {
 			created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ,
 			work_item_id BIGINT NOT NULL
 		);
-		ALTER TABLE changes ADD CONSTRAINT changes_work_item_fk FOREIGN KEY (work_item_id) REFERENCES tickets(id);
 		CREATE INDEX incident_work_item_id ON incidents (work_item_id);
 		CREATE INDEX problem_work_item_id ON problems (work_item_id);
 		CREATE INDEX change_work_item_id ON changes (work_item_id);
@@ -230,4 +376,12 @@ func requirePostgreSQLUniqueViolation(t *testing.T, err error) {
 	var pqErr *pq.Error
 	require.ErrorAs(t, err, &pqErr)
 	require.Equal(t, pq.ErrorCode("23505"), pqErr.Code)
+}
+
+func requirePostgreSQLForeignKeyViolation(t *testing.T, err error) {
+	t.Helper()
+	require.Error(t, err)
+	var pqErr *pq.Error
+	require.ErrorAs(t, err, &pqErr)
+	require.Equal(t, pq.ErrorCode("23503"), pqErr.Code)
 }

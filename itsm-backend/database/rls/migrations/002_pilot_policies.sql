@@ -26,25 +26,26 @@
 -- ---------------------------------------------------------------------------
 
 ALTER TABLE changes ENABLE ROW LEVEL SECURITY;
-
--- FORCE 让表所有者也受约束（防止 owner 视角意外看到全部数据）
-ALTER TABLE changes FORCE ROW LEVEL SECURITY;
+ALTER TABLE changes NO FORCE ROW LEVEL SECURITY;
 
 -- 幂等：先 DROP 后 CREATE
 DROP POLICY IF EXISTS tenant_isolation ON changes;
+DROP POLICY IF EXISTS tenant_isolation_changes ON changes;
 
-CREATE POLICY tenant_isolation ON changes
+CREATE POLICY tenant_isolation_changes ON changes
     USING       (EXISTS (
         SELECT 1
         FROM tickets work_item
         WHERE work_item.id = changes.work_item_id
           AND work_item.tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint
+          AND work_item.deleted_at IS NULL
     ))
     WITH CHECK  (EXISTS (
         SELECT 1
         FROM tickets work_item
         WHERE work_item.id = changes.work_item_id
           AND work_item.tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint
+          AND work_item.deleted_at IS NULL
     ));
 
 -- ---------------------------------------------------------------------------
@@ -57,10 +58,11 @@ BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.tables
                WHERE table_schema = 'public' AND table_name = 'vectors') THEN
         EXECUTE 'ALTER TABLE vectors ENABLE ROW LEVEL SECURITY';
-        EXECUTE 'ALTER TABLE vectors FORCE ROW LEVEL SECURITY';
+        EXECUTE 'ALTER TABLE vectors NO FORCE ROW LEVEL SECURITY';
         EXECUTE 'DROP POLICY IF EXISTS tenant_isolation ON vectors';
+        EXECUTE 'DROP POLICY IF EXISTS tenant_isolation_vectors ON vectors';
         EXECUTE $POLICY$
-            CREATE POLICY tenant_isolation ON vectors
+            CREATE POLICY tenant_isolation_vectors ON vectors
                 USING       (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint)
                 WITH CHECK  (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint)
         $POLICY$;

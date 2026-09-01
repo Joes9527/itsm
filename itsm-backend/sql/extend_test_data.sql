@@ -22,7 +22,7 @@ SELECT * FROM (VALUES
     ('域名解析异常', '部分域名无法解析', 'investigating', 'high', 'TKT-202602-000029', 1, 4, 5, NOW() - INTERVAL '30 minutes', NOW() - INTERVAL '30 minutes'),
     ('备份任务失败', '昨晚数据库备份任务执行失败', 'in_progress', 'critical', 'TKT-202602-000030', 1, 2, 4, NOW() - INTERVAL '4 hours', NOW() - INTERVAL '4 hours')
 ) AS v(title, description, status, priority, ticket_number, tenant_id, requester_id, assignee_id, created_at, updated_at)
-WHERE NOT EXISTS (SELECT 1 FROM tickets WHERE ticket_number = 'TKT-202602-000016');
+WHERE NOT EXISTS (SELECT 1 FROM tickets WHERE tenant_id = 1 AND ticket_number = 'TKT-202602-000016');
 
 -- =============================================
 -- 2. 添加更多事件（6条）

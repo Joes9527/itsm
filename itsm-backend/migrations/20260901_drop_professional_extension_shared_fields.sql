@@ -2,20 +2,107 @@ DO $migration$
 DECLARE
     extension_table TEXT;
     extension_index TEXT;
+    extension_constraint TEXT;
     duplicate_work_item_id BIGINT;
     existing_index_oid OID;
     existing_index_unique BOOLEAN;
+    existing_constraint_oid OID;
+    orphan_work_item_id BIGINT;
 BEGIN
-    FOR extension_table, extension_index IN
+    IF to_regclass(format('%I.tickets', current_schema())) IS NULL THEN
+        RAISE EXCEPTION 'required WorkItem table tickets is missing from schema %', current_schema();
+    END IF;
+
+    -- A legacy direct changes.tenant_id policy depends on the column removed below.
+    -- Replace it in this same cutover; leaving the old policy makes DROP COLUMN fail.
+    IF to_regclass(format('%I.changes', current_schema())) IS NOT NULL THEN
+        EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I.changes', current_schema());
+        EXECUTE format('DROP POLICY IF EXISTS tenant_isolation_changes ON %I.changes', current_schema());
+    END IF;
+
+    FOR extension_table, extension_index, extension_constraint IN
         SELECT * FROM (VALUES
-            ('incidents', 'incident_work_item_id'),
-            ('problems', 'problem_work_item_id'),
-            ('changes', 'change_work_item_id')
-        ) AS extensions(table_name, index_name)
+            ('incidents', 'incident_work_item_id', 'incidents_tickets_work_item'),
+            ('problems', 'problem_work_item_id', 'problems_tickets_work_item'),
+            ('changes', 'change_work_item_id', 'changes_tickets_work_item')
+        ) AS extensions(table_name, index_name, constraint_name)
     LOOP
         IF to_regclass(format('%I.%I', current_schema(), extension_table)) IS NULL THEN
             RAISE EXCEPTION 'required professional extension table % is missing from schema %',
                 extension_table, current_schema();
+        END IF;
+
+        EXECUTE format(
+            'SELECT extension.work_item_id FROM %I.%I extension '
+            'LEFT JOIN %I.tickets work_item ON work_item.id = extension.work_item_id '
+            'WHERE work_item.id IS NULL LIMIT 1',
+            current_schema(), extension_table, current_schema()
+        ) INTO orphan_work_item_id;
+        IF orphan_work_item_id IS NOT NULL THEN
+            RAISE EXCEPTION '%.work_item_id has orphan WorkItem reference %', extension_table, orphan_work_item_id;
+        END IF;
+
+        SELECT constraint_relation.oid
+        INTO existing_constraint_oid
+        FROM pg_constraint constraint_relation
+        JOIN pg_class extension_relation ON extension_relation.oid = constraint_relation.conrelid
+        JOIN pg_namespace extension_schema ON extension_schema.oid = extension_relation.relnamespace
+        WHERE extension_schema.nspname = current_schema()
+          AND extension_relation.relname = extension_table
+          AND constraint_relation.conname = extension_constraint;
+
+        IF existing_constraint_oid IS NOT NULL AND NOT EXISTS (
+            SELECT 1
+            FROM pg_constraint constraint_relation
+            JOIN pg_class extension_relation ON extension_relation.oid = constraint_relation.conrelid
+            JOIN pg_namespace extension_schema ON extension_schema.oid = extension_relation.relnamespace
+            JOIN pg_class work_item_relation ON work_item_relation.oid = constraint_relation.confrelid
+            JOIN pg_namespace work_item_schema ON work_item_schema.oid = work_item_relation.relnamespace
+            JOIN pg_attribute extension_column
+              ON extension_column.attrelid = extension_relation.oid
+             AND extension_column.attnum = constraint_relation.conkey[1]
+            JOIN pg_attribute work_item_column
+              ON work_item_column.attrelid = work_item_relation.oid
+             AND work_item_column.attnum = constraint_relation.confkey[1]
+            WHERE constraint_relation.oid = existing_constraint_oid
+              AND constraint_relation.contype = 'f'
+              AND constraint_relation.convalidated
+              AND NOT constraint_relation.condeferrable
+              AND constraint_relation.confdeltype = 'a'
+              AND constraint_relation.confupdtype = 'a'
+              AND cardinality(constraint_relation.conkey) = 1
+              AND cardinality(constraint_relation.confkey) = 1
+              AND extension_schema.nspname = current_schema()
+              AND extension_relation.relname = extension_table
+              AND extension_column.attname = 'work_item_id'
+              AND work_item_schema.nspname = current_schema()
+              AND work_item_relation.relname = 'tickets'
+              AND work_item_column.attname = 'id'
+        ) THEN
+            RAISE EXCEPTION 'constraint %.% conflicts with required %.work_item_id foreign key',
+                current_schema(), extension_constraint, extension_table;
+        END IF;
+
+        IF existing_constraint_oid IS NULL THEN
+            IF EXISTS (
+                SELECT 1
+                FROM pg_constraint constraint_relation
+                JOIN pg_class extension_relation ON extension_relation.oid = constraint_relation.conrelid
+                JOIN pg_namespace extension_schema ON extension_schema.oid = extension_relation.relnamespace
+                JOIN pg_attribute extension_column
+                  ON extension_column.attrelid = extension_relation.oid
+                 AND extension_column.attnum = ANY (constraint_relation.conkey)
+                WHERE extension_schema.nspname = current_schema()
+                  AND extension_relation.relname = extension_table
+                  AND constraint_relation.contype = 'f'
+                  AND extension_column.attname = 'work_item_id'
+            ) THEN
+                RAISE EXCEPTION '%.work_item_id has a non-authoritative foreign key constraint', extension_table;
+            END IF;
+            EXECUTE format(
+                'ALTER TABLE %I.%I ADD CONSTRAINT %I FOREIGN KEY (work_item_id) REFERENCES %I.tickets(id)',
+                current_schema(), extension_table, extension_constraint, current_schema()
+            );
         END IF;
 
         EXECUTE format(
@@ -146,5 +233,22 @@ BEGIN
         duplicate_work_item_id := NULL;
         existing_index_oid := NULL;
         existing_index_unique := NULL;
+        existing_constraint_oid := NULL;
+        orphan_work_item_id := NULL;
     END LOOP;
+
+    EXECUTE format(
+        'CREATE POLICY tenant_isolation_changes ON %I.changes '
+        'USING (EXISTS (SELECT 1 FROM %I.tickets work_item '
+        'WHERE work_item.id = changes.work_item_id '
+        'AND work_item.tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint '
+        'AND work_item.deleted_at IS NULL)) '
+        'WITH CHECK (EXISTS (SELECT 1 FROM %I.tickets work_item '
+        'WHERE work_item.id = changes.work_item_id '
+        'AND work_item.tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint '
+        'AND work_item.deleted_at IS NULL))',
+        current_schema(), current_schema(), current_schema()
+    );
+    EXECUTE format('ALTER TABLE %I.changes ENABLE ROW LEVEL SECURITY', current_schema());
+    EXECUTE format('ALTER TABLE %I.changes NO FORCE ROW LEVEL SECURITY', current_schema());
 END $migration$;

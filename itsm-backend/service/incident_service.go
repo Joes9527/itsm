@@ -14,7 +14,6 @@ import (
 	"itsm-backend/ent/incidentalert"
 	"itsm-backend/ent/incidentevent"
 	"itsm-backend/ent/incidentmetric"
-	"itsm-backend/ent/incidentrule"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketcategory"
@@ -36,11 +35,18 @@ type IncidentService struct {
 }
 
 func NewIncidentService(client *ent.Client, logger *zap.SugaredLogger, numberAllocator workitemnumber.Allocator) *IncidentService {
-	return &IncidentService{
+	incidentService := &IncidentService{
 		client:          client,
 		logger:          logger,
 		numberAllocator: numberAllocator,
 	}
+	incidentService.ruleEngine = NewIncidentRuleEngine(client, logger, numberAllocator)
+	return incidentService
+}
+
+// RuleEngine returns the single authoritative rule engine owned by this service.
+func (s *IncidentService) RuleEngine() *IncidentRuleEngine {
+	return s.ruleEngine
 }
 
 // SetProcessTriggerService 设置流程触发服务
@@ -55,10 +61,6 @@ func (s *IncidentService) SetPriorityMatrixService(pms *PriorityMatrixService) {
 
 func (s *IncidentService) SetSequenceService(seq *SequenceService) {
 	s.sequenceService = seq
-}
-
-func (s *IncidentService) SetRuleEngine(engine *IncidentRuleEngine) {
-	s.ruleEngine = engine
 }
 
 // CreateIncident 创建事件
@@ -242,12 +244,8 @@ func (s *IncidentService) CreateIncident(ctx context.Context, req *dto.CreateInc
 	// Post-commit side effects run within a bounded, deterministic boundary.
 	// CreateIncident never returns while repository work still owns this service/client.
 	ruleCtx, cancelRules := context.WithTimeout(ctx, 30*time.Second)
-	if s.ruleEngine != nil {
-		if err := s.ruleEngine.ExecuteRulesForIncident(ruleCtx, incidentEntity.ID, tenantID); err != nil {
-			s.logger.Errorw("Incident rule execution completed with failures", "error", err, "incident_id", incidentEntity.ID)
-		}
-	} else {
-		s.executeIncidentRules(ruleCtx, incidentEntity.ID, tenantID)
+	if err := s.ruleEngine.ExecuteRulesForIncident(ruleCtx, incidentEntity.ID, tenantID); err != nil {
+		s.logger.Errorw("Incident rule execution completed with failures", "error", err, "incident_id", incidentEntity.ID)
 	}
 	cancelRules()
 
@@ -1183,171 +1181,6 @@ func (s *IncidentService) generateIncidentNumberWithDB(ctx context.Context, tena
 	}
 
 	return fmt.Sprintf("INC-%04d%02d-%06d", year, month, maxSeq+1), nil
-}
-
-func (s *IncidentService) executeIncidentRules(ctx context.Context, incidentID int, tenantID int) {
-	s.logger.Infow("Executing incident rules", "incident_id", incidentID)
-
-	// 获取激活的事件规则
-	rules, err := s.client.IncidentRule.Query().
-		Where(
-			incidentrule.TenantIDEQ(tenantID),
-			incidentrule.IsActiveEQ(true),
-		).
-		All(ctx)
-	if err != nil {
-		s.logger.Errorw("Failed to get incident rules", "error", err)
-		return
-	}
-
-	// 获取事件信息
-	incidentEntity, err := s.client.Incident.Query().
-		Where(
-			incident.IDEQ(incidentID),
-			incidentTenantScope(tenantID),
-		).
-		WithWorkItem(withIncidentWorkItemProjection).Only(ctx)
-	if err != nil {
-		s.logger.Errorw("Failed to get incident", "error", err)
-		return
-	}
-
-	// 执行每个规则
-	for _, rule := range rules {
-		if s.evaluateRuleConditions(rule.Conditions, incidentEntity) {
-			s.executeRuleActions(ctx, rule, incidentEntity, tenantID)
-		}
-	}
-}
-
-func (s *IncidentService) evaluateRuleConditions(conditions map[string]interface{}, incident *ent.Incident) bool {
-	// 简化的条件评估逻辑
-	if priority, ok := conditions["priority"].([]string); ok {
-		for _, p := range priority {
-			if incident.Edges.WorkItem != nil && incident.Edges.WorkItem.Priority == p {
-				return true
-			}
-		}
-	}
-	if severity, ok := conditions["severity"].([]string); ok {
-		for _, s := range severity {
-			if incident.Severity == s {
-				return true
-			}
-		}
-	}
-	if status, ok := conditions["status"].(string); ok {
-		return incident.Edges.WorkItem != nil && incident.Edges.WorkItem.Status == status
-	}
-	return false
-}
-
-func (s *IncidentService) executeRuleActions(ctx context.Context, rule *ent.IncidentRule, incident *ent.Incident, tenantID int) {
-	s.logger.Infow("Executing rule actions", "rule_id", rule.ID, "incident_id", incident.ID)
-
-	// 记录规则执行
-	execution, err := s.client.IncidentRuleExecution.Create().
-		SetRuleID(rule.ID).
-		SetIncidentID(incident.ID).
-		SetStatus("running").
-		SetStartedAt(time.Now()).
-		SetTenantID(tenantID).
-		SetCreatedAt(time.Now()).
-		SetUpdatedAt(time.Now()).
-		Save(ctx)
-	if err != nil {
-		s.logger.Errorw("Failed to create rule execution", "error", err)
-		return
-	}
-
-	// 执行动作
-	for _, action := range rule.Actions {
-		if actionType, ok := action["type"].(string); ok {
-			switch actionType {
-			case "escalate":
-				s.executeEscalationAction(ctx, action, incident, tenantID)
-			case "notify":
-				s.executeNotificationAction(ctx, action, incident, tenantID)
-			case "assign":
-				s.executeAssignmentAction(ctx, action, incident, tenantID)
-			}
-		}
-	}
-
-	// 更新规则执行状态
-	_, err = s.client.IncidentRuleExecution.UpdateOneID(execution.ID).
-		SetStatus("completed").
-		SetCompletedAt(time.Now()).
-		SetResult("Rule executed successfully").
-		Save(ctx)
-	if err != nil {
-		s.logger.Errorw("Failed to update rule execution", "error", err)
-	}
-
-	// 更新规则执行次数
-	_, err = s.client.IncidentRule.UpdateOneID(rule.ID).
-		SetExecutionCount(rule.ExecutionCount + 1).
-		SetLastExecutedAt(time.Now()).
-		Save(ctx)
-	if err != nil {
-		s.logger.Errorw("Failed to update rule execution count", "error", err)
-	}
-}
-
-func (s *IncidentService) executeEscalationAction(ctx context.Context, action map[string]interface{}, incident *ent.Incident, tenantID int) {
-	if level, ok := action["level"].(int); ok {
-		_, err := s.EscalateIncident(ctx, &dto.IncidentEscalationRequest{
-			IncidentID:      incident.ID,
-			EscalationLevel: level,
-			Reason:          "自动升级",
-			NotifyUsers:     []int{},
-			AutoAssign:      false,
-		}, tenantID)
-		if err != nil {
-			s.logger.Errorw("Failed to execute escalation action", "error", err)
-		}
-	}
-}
-
-func (s *IncidentService) executeNotificationAction(ctx context.Context, action map[string]interface{}, incident *ent.Incident, tenantID int) {
-	channels := []string{"email"}
-	if ch, ok := action["channels"].([]string); ok {
-		channels = ch
-	}
-
-	recipients := []string{"admin@company.com"}
-	if rec, ok := action["recipients"].([]string); ok {
-		recipients = rec
-	}
-
-	message := "事件需要关注"
-	if msg, ok := action["message"].(string); ok {
-		message = msg
-	}
-
-	_, err := s.CreateIncidentAlert(ctx, &dto.CreateIncidentAlertRequest{
-		IncidentID: incident.ID,
-		AlertType:  "notification",
-		AlertName:  "规则触发通知",
-		Message:    message,
-		Severity:   "medium",
-		Channels:   channels,
-		Recipients: recipients,
-	}, tenantID)
-	if err != nil {
-		s.logger.Errorw("Failed to execute notification action", "error", err)
-	}
-}
-
-func (s *IncidentService) executeAssignmentAction(ctx context.Context, action map[string]interface{}, incident *ent.Incident, tenantID int) {
-	if assigneeID, ok := action["assignee_id"].(int); ok {
-		_, err := s.UpdateIncident(ctx, incident.ID, &dto.UpdateIncidentRequest{
-			AssigneeID: &assigneeID,
-		}, tenantID)
-		if err != nil {
-			s.logger.Errorw("Failed to execute assignment action", "error", err)
-		}
-	}
 }
 
 // isValidIncidentStatusTransition 检查事件状态转换是否合法。
