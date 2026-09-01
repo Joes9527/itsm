@@ -4,14 +4,15 @@ import (
 	"context"
 
 	"itsm-backend/ent"
+	"itsm-backend/ent/change"
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/problem"
 	"itsm-backend/ent/servicerequest"
 	"itsm-backend/ent/ticket"
 )
 
-// RegisterSoftDeleteInterceptors 为带 deleted_at 字段的业务实体（ticket / incident /
-// problem / servicerequest）注册全局查询拦截器，确保：
+// RegisterSoftDeleteInterceptors 为软删除业务实体注册全局查询拦截器。专业扩展
+// Incident / Problem / Change 通过其权威 WorkItem 的 deleted_at 派生可见性，确保：
 //
 //   - 所有 Query（List / Get / First / Only）默认附加 DeletedAtIsNil() 条件，
 //     避免软删除记录出现在列表、详情、带边（WithXxx）的关联查询结果中。
@@ -33,9 +34,11 @@ func RegisterSoftDeleteInterceptors(client *ent.Client) {
 			case *ent.TicketQuery:
 				q.Where(ticket.DeletedAtIsNil())
 			case *ent.IncidentQuery:
-				q.Where(incident.DeletedAtIsNil())
+				q.Where(incident.HasWorkItemWith(ticket.DeletedAtIsNil()))
 			case *ent.ProblemQuery:
-				q.Where(problem.DeletedAtIsNil())
+				q.Where(problem.HasWorkItemWith(ticket.DeletedAtIsNil()))
+			case *ent.ChangeQuery:
+				q.Where(change.HasWorkItemWith(ticket.DeletedAtIsNil()))
 			case *ent.ServiceRequestQuery:
 				q.Where(servicerequest.DeletedAtIsNil())
 			}

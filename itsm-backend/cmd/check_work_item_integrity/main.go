@@ -144,7 +144,7 @@ func findMismatches(ctx context.Context, client *ent.Client, tenantID int) ([]mi
 		return nil, err
 	}
 	for _, i := range incidents {
-		if err := checkBackref(ctx, client, i.WorkItemID, i.TenantID, "incident", &out); err != nil {
+		if err := checkBackref(ctx, client, i.WorkItemID, i.Edges.WorkItem.TenantID, "incident", &out); err != nil {
 			return nil, err
 		}
 	}
@@ -153,7 +153,7 @@ func findMismatches(ctx context.Context, client *ent.Client, tenantID int) ([]mi
 		return nil, err
 	}
 	for _, p := range problems {
-		if err := checkBackref(ctx, client, p.WorkItemID, p.TenantID, "problem", &out); err != nil {
+		if err := checkBackref(ctx, client, p.WorkItemID, p.Edges.WorkItem.TenantID, "problem", &out); err != nil {
 			return nil, err
 		}
 	}
@@ -162,7 +162,7 @@ func findMismatches(ctx context.Context, client *ent.Client, tenantID int) ([]mi
 		return nil, err
 	}
 	for _, c := range changes {
-		if err := checkBackref(ctx, client, c.WorkItemID, c.TenantID, "change_request", &out); err != nil {
+		if err := checkBackref(ctx, client, c.WorkItemID, c.Edges.WorkItem.TenantID, "change_request", &out); err != nil {
 			return nil, err
 		}
 	}
@@ -183,18 +183,6 @@ func checkBackref(ctx context.Context, client *ent.Client, workItemID, tenantID 
 		}
 		return fmt.Errorf("查询 ticket %d 失败: %w", workItemID, err)
 	}
-	// work_item_id 没有 DB 层外键约束（纯 int 列 + 唯一索引，见 ent/schema/incident.go 等），
-	// 理论上不能排除专业扩展记录因数据错误而指向别的租户的 ticket——即便应用层始终在同一事务内
-	// 以相同 tenant_id 创建两边的记录。跨租户指向本身就是一种需要报告的不一致，且比
-	// record_class 不匹配更严重，所以单独作为一种 mismatch 上报，而不是被 record_class 检查掩盖。
-	if t.TenantID != tenantID {
-		*out = append(*out, mismatch{
-			kind: "tenant_mismatch", ticketID: workItemID, tenantID: tenantID,
-			recordClass: expectedClass,
-			detail: fmt.Sprintf("专业扩展记录属于租户 %d，但 work_item_id=%d 指向的 ticket 属于租户 %d",
-				tenantID, workItemID, t.TenantID),
-		})
-	}
 	if t.RecordClass != expectedClass {
 		*out = append(*out, mismatch{
 			kind: "record_class_mismatch", ticketID: workItemID, tenantID: tenantID,
@@ -207,23 +195,23 @@ func checkBackref(ctx context.Context, client *ent.Client, workItemID, tenantID 
 
 func queryScoped(ctx context.Context, q *ent.IncidentQuery, tenantID int) ([]*ent.Incident, error) {
 	if tenantID > 0 {
-		q = q.Where(incident.TenantID(tenantID))
+		q = q.Where(incident.HasWorkItemWith(ticket.TenantID(tenantID)))
 	}
-	return q.All(ctx)
+	return q.WithWorkItem().All(ctx)
 }
 
 func queryScopedProblem(ctx context.Context, client *ent.Client, tenantID int) ([]*ent.Problem, error) {
 	q := client.Problem.Query()
 	if tenantID > 0 {
-		q = q.Where(problem.TenantID(tenantID))
+		q = q.Where(problem.HasWorkItemWith(ticket.TenantID(tenantID)))
 	}
-	return q.All(ctx)
+	return q.WithWorkItem().All(ctx)
 }
 
 func queryScopedChange(ctx context.Context, client *ent.Client, tenantID int) ([]*ent.Change, error) {
 	q := client.Change.Query()
 	if tenantID > 0 {
-		q = q.Where(change.TenantID(tenantID))
+		q = q.Where(change.HasWorkItemWith(ticket.TenantID(tenantID)))
 	}
-	return q.All(ctx)
+	return q.WithWorkItem().All(ctx)
 }

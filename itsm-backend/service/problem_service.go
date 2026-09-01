@@ -7,6 +7,7 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/problem"
+	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/user"
 
 	"go.uber.org/zap"
@@ -74,8 +75,8 @@ func (s *ProblemService) CreateKnownErrorFromProblem(ctx context.Context, proble
 
 	// 获取问题
 	problemEntity, err := s.client.Problem.Query().
-		Where(problem.IDEQ(problemID), problem.TenantIDEQ(creator.TenantID), problem.DeletedAtIsNil()).
-		WithWorkItem().Only(ctx)
+		Where(problem.IDEQ(problemID), problem.HasWorkItemWith(ticket.TenantIDEQ(creator.TenantID), ticket.DeletedAtIsNil())).
+		WithWorkItem(func(q *ent.TicketQuery) { q.WithCategory() }).Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, fmt.Errorf("problem not found")
@@ -84,11 +85,15 @@ func (s *ProblemService) CreateKnownErrorFromProblem(ctx context.Context, proble
 	}
 
 	// 构建创建已知错误的请求
+	categoryName := ""
+	if problemEntity.Edges.WorkItem.Edges.Category != nil {
+		categoryName = problemEntity.Edges.WorkItem.Edges.Category.Name
+	}
 	createReq := dto.KEDBCreateRequest{
 		Title:            problemEntity.Edges.WorkItem.Title,
 		Description:      problemEntity.Edges.WorkItem.Description,
 		RootCause:        problemEntity.RootCause,
-		Category:         problemEntity.Category,
+		Category:         categoryName,
 		Severity:         mapPriorityToSeverity(problemEntity.Edges.WorkItem.Priority),
 		AffectedProducts: []string{},
 		AffectedCIs:      []string{},
@@ -154,7 +159,7 @@ func (s *ProblemService) CreateKnownErrorFromProblem(ctx context.Context, proble
 		AffectedCIs:      createReq.AffectedCIs,
 		Keywords:         createReq.Keywords,
 		CreatedBy:        createdBy,
-		TenantID:         problemEntity.TenantID,
+		TenantID:         problemEntity.Edges.WorkItem.TenantID,
 	})
 	if err != nil {
 		s.logger.Errorw("Failed to create known error from problem", "error", err)
@@ -162,7 +167,7 @@ func (s *ProblemService) CreateKnownErrorFromProblem(ctx context.Context, proble
 	}
 
 	// 关联已知错误到问题
-	err = s.knownErrorService.LinkKnownErrorToProblem(ctx, knownError.ID, problemID, problemEntity.TenantID)
+	err = s.knownErrorService.LinkKnownErrorToProblem(ctx, knownError.ID, problemID, problemEntity.Edges.WorkItem.TenantID)
 	if err != nil {
 		if deleteErr := s.client.KnownError.DeleteOneID(knownError.ID).Exec(ctx); deleteErr != nil {
 			s.logger.Errorw("Failed to compensate orphan known error", "knownErrorID", knownError.ID, "error", deleteErr)

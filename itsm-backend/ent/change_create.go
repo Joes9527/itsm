@@ -81,35 +81,9 @@ func (_c *ChangeCreate) SetNillableRiskLevel(v *string) *ChangeCreate {
 	return _c
 }
 
-// SetAssigneeID sets the "assignee_id" field.
-func (_c *ChangeCreate) SetAssigneeID(v int) *ChangeCreate {
-	_c.mutation.SetAssigneeID(v)
-	return _c
-}
-
-// SetNillableAssigneeID sets the "assignee_id" field if the given value is not nil.
-func (_c *ChangeCreate) SetNillableAssigneeID(v *int) *ChangeCreate {
-	if v != nil {
-		_c.SetAssigneeID(*v)
-	}
-	return _c
-}
-
-// SetCreatedBy sets the "created_by" field.
-func (_c *ChangeCreate) SetCreatedBy(v int) *ChangeCreate {
-	_c.mutation.SetCreatedBy(v)
-	return _c
-}
-
 // SetWorkItemID sets the "work_item_id" field.
 func (_c *ChangeCreate) SetWorkItemID(v int) *ChangeCreate {
 	_c.mutation.SetWorkItemID(v)
-	return _c
-}
-
-// SetTenantID sets the "tenant_id" field.
-func (_c *ChangeCreate) SetTenantID(v int) *ChangeCreate {
-	_c.mutation.SetTenantID(v)
 	return _c
 }
 
@@ -203,40 +177,6 @@ func (_c *ChangeCreate) SetAffectedCis(v []string) *ChangeCreate {
 	return _c
 }
 
-// SetRelatedTickets sets the "related_tickets" field.
-func (_c *ChangeCreate) SetRelatedTickets(v []string) *ChangeCreate {
-	_c.mutation.SetRelatedTickets(v)
-	return _c
-}
-
-// SetCreatedAt sets the "created_at" field.
-func (_c *ChangeCreate) SetCreatedAt(v time.Time) *ChangeCreate {
-	_c.mutation.SetCreatedAt(v)
-	return _c
-}
-
-// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_c *ChangeCreate) SetNillableCreatedAt(v *time.Time) *ChangeCreate {
-	if v != nil {
-		_c.SetCreatedAt(*v)
-	}
-	return _c
-}
-
-// SetUpdatedAt sets the "updated_at" field.
-func (_c *ChangeCreate) SetUpdatedAt(v time.Time) *ChangeCreate {
-	_c.mutation.SetUpdatedAt(v)
-	return _c
-}
-
-// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (_c *ChangeCreate) SetNillableUpdatedAt(v *time.Time) *ChangeCreate {
-	if v != nil {
-		_c.SetUpdatedAt(*v)
-	}
-	return _c
-}
-
 // SetWorkItem sets the "work_item" edge to the Ticket entity.
 func (_c *ChangeCreate) SetWorkItem(v *Ticket) *ChangeCreate {
 	return _c.SetWorkItemID(v.ID)
@@ -319,14 +259,6 @@ func (_c *ChangeCreate) defaults() {
 		v := change.DefaultRiskLevel
 		_c.mutation.SetRiskLevel(v)
 	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
-		v := change.DefaultCreatedAt()
-		_c.mutation.SetCreatedAt(v)
-	}
-	if _, ok := _c.mutation.UpdatedAt(); !ok {
-		v := change.DefaultUpdatedAt()
-		_c.mutation.SetUpdatedAt(v)
-	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -340,30 +272,8 @@ func (_c *ChangeCreate) check() error {
 	if _, ok := _c.mutation.RiskLevel(); !ok {
 		return &ValidationError{Name: "risk_level", err: errors.New(`ent: missing required field "Change.risk_level"`)}
 	}
-	if _, ok := _c.mutation.CreatedBy(); !ok {
-		return &ValidationError{Name: "created_by", err: errors.New(`ent: missing required field "Change.created_by"`)}
-	}
-	if v, ok := _c.mutation.CreatedBy(); ok {
-		if err := change.CreatedByValidator(v); err != nil {
-			return &ValidationError{Name: "created_by", err: fmt.Errorf(`ent: validator failed for field "Change.created_by": %w`, err)}
-		}
-	}
 	if _, ok := _c.mutation.WorkItemID(); !ok {
 		return &ValidationError{Name: "work_item_id", err: errors.New(`ent: missing required field "Change.work_item_id"`)}
-	}
-	if _, ok := _c.mutation.TenantID(); !ok {
-		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "Change.tenant_id"`)}
-	}
-	if v, ok := _c.mutation.TenantID(); ok {
-		if err := change.TenantIDValidator(v); err != nil {
-			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "Change.tenant_id": %w`, err)}
-		}
-	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
-		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "Change.created_at"`)}
-	}
-	if _, ok := _c.mutation.UpdatedAt(); !ok {
-		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Change.updated_at"`)}
 	}
 	if len(_c.mutation.WorkItemIDs()) == 0 {
 		return &ValidationError{Name: "work_item", err: errors.New(`ent: missing required edge "Change.work_item"`)}
@@ -411,18 +321,6 @@ func (_c *ChangeCreate) createSpec() (*Change, *sqlgraph.CreateSpec) {
 		_spec.SetField(change.FieldRiskLevel, field.TypeString, value)
 		_node.RiskLevel = value
 	}
-	if value, ok := _c.mutation.AssigneeID(); ok {
-		_spec.SetField(change.FieldAssigneeID, field.TypeInt, value)
-		_node.AssigneeID = value
-	}
-	if value, ok := _c.mutation.CreatedBy(); ok {
-		_spec.SetField(change.FieldCreatedBy, field.TypeInt, value)
-		_node.CreatedBy = value
-	}
-	if value, ok := _c.mutation.TenantID(); ok {
-		_spec.SetField(change.FieldTenantID, field.TypeInt, value)
-		_node.TenantID = value
-	}
 	if value, ok := _c.mutation.PlannedStartDate(); ok {
 		_spec.SetField(change.FieldPlannedStartDate, field.TypeTime, value)
 		_node.PlannedStartDate = value
@@ -450,18 +348,6 @@ func (_c *ChangeCreate) createSpec() (*Change, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.AffectedCis(); ok {
 		_spec.SetField(change.FieldAffectedCis, field.TypeJSON, value)
 		_node.AffectedCis = value
-	}
-	if value, ok := _c.mutation.RelatedTickets(); ok {
-		_spec.SetField(change.FieldRelatedTickets, field.TypeJSON, value)
-		_node.RelatedTickets = value
-	}
-	if value, ok := _c.mutation.CreatedAt(); ok {
-		_spec.SetField(change.FieldCreatedAt, field.TypeTime, value)
-		_node.CreatedAt = value
-	}
-	if value, ok := _c.mutation.UpdatedAt(); ok {
-		_spec.SetField(change.FieldUpdatedAt, field.TypeTime, value)
-		_node.UpdatedAt = value
 	}
 	if nodes := _c.mutation.WorkItemIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -618,48 +504,6 @@ func (u *ChangeUpsert) UpdateRiskLevel() *ChangeUpsert {
 	return u
 }
 
-// SetAssigneeID sets the "assignee_id" field.
-func (u *ChangeUpsert) SetAssigneeID(v int) *ChangeUpsert {
-	u.Set(change.FieldAssigneeID, v)
-	return u
-}
-
-// UpdateAssigneeID sets the "assignee_id" field to the value that was provided on create.
-func (u *ChangeUpsert) UpdateAssigneeID() *ChangeUpsert {
-	u.SetExcluded(change.FieldAssigneeID)
-	return u
-}
-
-// AddAssigneeID adds v to the "assignee_id" field.
-func (u *ChangeUpsert) AddAssigneeID(v int) *ChangeUpsert {
-	u.Add(change.FieldAssigneeID, v)
-	return u
-}
-
-// ClearAssigneeID clears the value of the "assignee_id" field.
-func (u *ChangeUpsert) ClearAssigneeID() *ChangeUpsert {
-	u.SetNull(change.FieldAssigneeID)
-	return u
-}
-
-// SetCreatedBy sets the "created_by" field.
-func (u *ChangeUpsert) SetCreatedBy(v int) *ChangeUpsert {
-	u.Set(change.FieldCreatedBy, v)
-	return u
-}
-
-// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
-func (u *ChangeUpsert) UpdateCreatedBy() *ChangeUpsert {
-	u.SetExcluded(change.FieldCreatedBy)
-	return u
-}
-
-// AddCreatedBy adds v to the "created_by" field.
-func (u *ChangeUpsert) AddCreatedBy(v int) *ChangeUpsert {
-	u.Add(change.FieldCreatedBy, v)
-	return u
-}
-
 // SetWorkItemID sets the "work_item_id" field.
 func (u *ChangeUpsert) SetWorkItemID(v int) *ChangeUpsert {
 	u.Set(change.FieldWorkItemID, v)
@@ -669,24 +513,6 @@ func (u *ChangeUpsert) SetWorkItemID(v int) *ChangeUpsert {
 // UpdateWorkItemID sets the "work_item_id" field to the value that was provided on create.
 func (u *ChangeUpsert) UpdateWorkItemID() *ChangeUpsert {
 	u.SetExcluded(change.FieldWorkItemID)
-	return u
-}
-
-// SetTenantID sets the "tenant_id" field.
-func (u *ChangeUpsert) SetTenantID(v int) *ChangeUpsert {
-	u.Set(change.FieldTenantID, v)
-	return u
-}
-
-// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
-func (u *ChangeUpsert) UpdateTenantID() *ChangeUpsert {
-	u.SetExcluded(change.FieldTenantID)
-	return u
-}
-
-// AddTenantID adds v to the "tenant_id" field.
-func (u *ChangeUpsert) AddTenantID(v int) *ChangeUpsert {
-	u.Add(change.FieldTenantID, v)
 	return u
 }
 
@@ -816,48 +642,6 @@ func (u *ChangeUpsert) ClearAffectedCis() *ChangeUpsert {
 	return u
 }
 
-// SetRelatedTickets sets the "related_tickets" field.
-func (u *ChangeUpsert) SetRelatedTickets(v []string) *ChangeUpsert {
-	u.Set(change.FieldRelatedTickets, v)
-	return u
-}
-
-// UpdateRelatedTickets sets the "related_tickets" field to the value that was provided on create.
-func (u *ChangeUpsert) UpdateRelatedTickets() *ChangeUpsert {
-	u.SetExcluded(change.FieldRelatedTickets)
-	return u
-}
-
-// ClearRelatedTickets clears the value of the "related_tickets" field.
-func (u *ChangeUpsert) ClearRelatedTickets() *ChangeUpsert {
-	u.SetNull(change.FieldRelatedTickets)
-	return u
-}
-
-// SetCreatedAt sets the "created_at" field.
-func (u *ChangeUpsert) SetCreatedAt(v time.Time) *ChangeUpsert {
-	u.Set(change.FieldCreatedAt, v)
-	return u
-}
-
-// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
-func (u *ChangeUpsert) UpdateCreatedAt() *ChangeUpsert {
-	u.SetExcluded(change.FieldCreatedAt)
-	return u
-}
-
-// SetUpdatedAt sets the "updated_at" field.
-func (u *ChangeUpsert) SetUpdatedAt(v time.Time) *ChangeUpsert {
-	u.Set(change.FieldUpdatedAt, v)
-	return u
-}
-
-// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
-func (u *ChangeUpsert) UpdateUpdatedAt() *ChangeUpsert {
-	u.SetExcluded(change.FieldUpdatedAt)
-	return u
-}
-
 // UpdateNewValues updates the mutable fields using the new values that were set on create.
 // Using this option is equivalent to using:
 //
@@ -961,55 +745,6 @@ func (u *ChangeUpsertOne) UpdateRiskLevel() *ChangeUpsertOne {
 	})
 }
 
-// SetAssigneeID sets the "assignee_id" field.
-func (u *ChangeUpsertOne) SetAssigneeID(v int) *ChangeUpsertOne {
-	return u.Update(func(s *ChangeUpsert) {
-		s.SetAssigneeID(v)
-	})
-}
-
-// AddAssigneeID adds v to the "assignee_id" field.
-func (u *ChangeUpsertOne) AddAssigneeID(v int) *ChangeUpsertOne {
-	return u.Update(func(s *ChangeUpsert) {
-		s.AddAssigneeID(v)
-	})
-}
-
-// UpdateAssigneeID sets the "assignee_id" field to the value that was provided on create.
-func (u *ChangeUpsertOne) UpdateAssigneeID() *ChangeUpsertOne {
-	return u.Update(func(s *ChangeUpsert) {
-		s.UpdateAssigneeID()
-	})
-}
-
-// ClearAssigneeID clears the value of the "assignee_id" field.
-func (u *ChangeUpsertOne) ClearAssigneeID() *ChangeUpsertOne {
-	return u.Update(func(s *ChangeUpsert) {
-		s.ClearAssigneeID()
-	})
-}
-
-// SetCreatedBy sets the "created_by" field.
-func (u *ChangeUpsertOne) SetCreatedBy(v int) *ChangeUpsertOne {
-	return u.Update(func(s *ChangeUpsert) {
-		s.SetCreatedBy(v)
-	})
-}
-
-// AddCreatedBy adds v to the "created_by" field.
-func (u *ChangeUpsertOne) AddCreatedBy(v int) *ChangeUpsertOne {
-	return u.Update(func(s *ChangeUpsert) {
-		s.AddCreatedBy(v)
-	})
-}
-
-// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
-func (u *ChangeUpsertOne) UpdateCreatedBy() *ChangeUpsertOne {
-	return u.Update(func(s *ChangeUpsert) {
-		s.UpdateCreatedBy()
-	})
-}
-
 // SetWorkItemID sets the "work_item_id" field.
 func (u *ChangeUpsertOne) SetWorkItemID(v int) *ChangeUpsertOne {
 	return u.Update(func(s *ChangeUpsert) {
@@ -1021,27 +756,6 @@ func (u *ChangeUpsertOne) SetWorkItemID(v int) *ChangeUpsertOne {
 func (u *ChangeUpsertOne) UpdateWorkItemID() *ChangeUpsertOne {
 	return u.Update(func(s *ChangeUpsert) {
 		s.UpdateWorkItemID()
-	})
-}
-
-// SetTenantID sets the "tenant_id" field.
-func (u *ChangeUpsertOne) SetTenantID(v int) *ChangeUpsertOne {
-	return u.Update(func(s *ChangeUpsert) {
-		s.SetTenantID(v)
-	})
-}
-
-// AddTenantID adds v to the "tenant_id" field.
-func (u *ChangeUpsertOne) AddTenantID(v int) *ChangeUpsertOne {
-	return u.Update(func(s *ChangeUpsert) {
-		s.AddTenantID(v)
-	})
-}
-
-// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
-func (u *ChangeUpsertOne) UpdateTenantID() *ChangeUpsertOne {
-	return u.Update(func(s *ChangeUpsert) {
-		s.UpdateTenantID()
 	})
 }
 
@@ -1189,55 +903,6 @@ func (u *ChangeUpsertOne) UpdateAffectedCis() *ChangeUpsertOne {
 func (u *ChangeUpsertOne) ClearAffectedCis() *ChangeUpsertOne {
 	return u.Update(func(s *ChangeUpsert) {
 		s.ClearAffectedCis()
-	})
-}
-
-// SetRelatedTickets sets the "related_tickets" field.
-func (u *ChangeUpsertOne) SetRelatedTickets(v []string) *ChangeUpsertOne {
-	return u.Update(func(s *ChangeUpsert) {
-		s.SetRelatedTickets(v)
-	})
-}
-
-// UpdateRelatedTickets sets the "related_tickets" field to the value that was provided on create.
-func (u *ChangeUpsertOne) UpdateRelatedTickets() *ChangeUpsertOne {
-	return u.Update(func(s *ChangeUpsert) {
-		s.UpdateRelatedTickets()
-	})
-}
-
-// ClearRelatedTickets clears the value of the "related_tickets" field.
-func (u *ChangeUpsertOne) ClearRelatedTickets() *ChangeUpsertOne {
-	return u.Update(func(s *ChangeUpsert) {
-		s.ClearRelatedTickets()
-	})
-}
-
-// SetCreatedAt sets the "created_at" field.
-func (u *ChangeUpsertOne) SetCreatedAt(v time.Time) *ChangeUpsertOne {
-	return u.Update(func(s *ChangeUpsert) {
-		s.SetCreatedAt(v)
-	})
-}
-
-// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
-func (u *ChangeUpsertOne) UpdateCreatedAt() *ChangeUpsertOne {
-	return u.Update(func(s *ChangeUpsert) {
-		s.UpdateCreatedAt()
-	})
-}
-
-// SetUpdatedAt sets the "updated_at" field.
-func (u *ChangeUpsertOne) SetUpdatedAt(v time.Time) *ChangeUpsertOne {
-	return u.Update(func(s *ChangeUpsert) {
-		s.SetUpdatedAt(v)
-	})
-}
-
-// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
-func (u *ChangeUpsertOne) UpdateUpdatedAt() *ChangeUpsertOne {
-	return u.Update(func(s *ChangeUpsert) {
-		s.UpdateUpdatedAt()
 	})
 }
 
@@ -1508,55 +1173,6 @@ func (u *ChangeUpsertBulk) UpdateRiskLevel() *ChangeUpsertBulk {
 	})
 }
 
-// SetAssigneeID sets the "assignee_id" field.
-func (u *ChangeUpsertBulk) SetAssigneeID(v int) *ChangeUpsertBulk {
-	return u.Update(func(s *ChangeUpsert) {
-		s.SetAssigneeID(v)
-	})
-}
-
-// AddAssigneeID adds v to the "assignee_id" field.
-func (u *ChangeUpsertBulk) AddAssigneeID(v int) *ChangeUpsertBulk {
-	return u.Update(func(s *ChangeUpsert) {
-		s.AddAssigneeID(v)
-	})
-}
-
-// UpdateAssigneeID sets the "assignee_id" field to the value that was provided on create.
-func (u *ChangeUpsertBulk) UpdateAssigneeID() *ChangeUpsertBulk {
-	return u.Update(func(s *ChangeUpsert) {
-		s.UpdateAssigneeID()
-	})
-}
-
-// ClearAssigneeID clears the value of the "assignee_id" field.
-func (u *ChangeUpsertBulk) ClearAssigneeID() *ChangeUpsertBulk {
-	return u.Update(func(s *ChangeUpsert) {
-		s.ClearAssigneeID()
-	})
-}
-
-// SetCreatedBy sets the "created_by" field.
-func (u *ChangeUpsertBulk) SetCreatedBy(v int) *ChangeUpsertBulk {
-	return u.Update(func(s *ChangeUpsert) {
-		s.SetCreatedBy(v)
-	})
-}
-
-// AddCreatedBy adds v to the "created_by" field.
-func (u *ChangeUpsertBulk) AddCreatedBy(v int) *ChangeUpsertBulk {
-	return u.Update(func(s *ChangeUpsert) {
-		s.AddCreatedBy(v)
-	})
-}
-
-// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
-func (u *ChangeUpsertBulk) UpdateCreatedBy() *ChangeUpsertBulk {
-	return u.Update(func(s *ChangeUpsert) {
-		s.UpdateCreatedBy()
-	})
-}
-
 // SetWorkItemID sets the "work_item_id" field.
 func (u *ChangeUpsertBulk) SetWorkItemID(v int) *ChangeUpsertBulk {
 	return u.Update(func(s *ChangeUpsert) {
@@ -1568,27 +1184,6 @@ func (u *ChangeUpsertBulk) SetWorkItemID(v int) *ChangeUpsertBulk {
 func (u *ChangeUpsertBulk) UpdateWorkItemID() *ChangeUpsertBulk {
 	return u.Update(func(s *ChangeUpsert) {
 		s.UpdateWorkItemID()
-	})
-}
-
-// SetTenantID sets the "tenant_id" field.
-func (u *ChangeUpsertBulk) SetTenantID(v int) *ChangeUpsertBulk {
-	return u.Update(func(s *ChangeUpsert) {
-		s.SetTenantID(v)
-	})
-}
-
-// AddTenantID adds v to the "tenant_id" field.
-func (u *ChangeUpsertBulk) AddTenantID(v int) *ChangeUpsertBulk {
-	return u.Update(func(s *ChangeUpsert) {
-		s.AddTenantID(v)
-	})
-}
-
-// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
-func (u *ChangeUpsertBulk) UpdateTenantID() *ChangeUpsertBulk {
-	return u.Update(func(s *ChangeUpsert) {
-		s.UpdateTenantID()
 	})
 }
 
@@ -1736,55 +1331,6 @@ func (u *ChangeUpsertBulk) UpdateAffectedCis() *ChangeUpsertBulk {
 func (u *ChangeUpsertBulk) ClearAffectedCis() *ChangeUpsertBulk {
 	return u.Update(func(s *ChangeUpsert) {
 		s.ClearAffectedCis()
-	})
-}
-
-// SetRelatedTickets sets the "related_tickets" field.
-func (u *ChangeUpsertBulk) SetRelatedTickets(v []string) *ChangeUpsertBulk {
-	return u.Update(func(s *ChangeUpsert) {
-		s.SetRelatedTickets(v)
-	})
-}
-
-// UpdateRelatedTickets sets the "related_tickets" field to the value that was provided on create.
-func (u *ChangeUpsertBulk) UpdateRelatedTickets() *ChangeUpsertBulk {
-	return u.Update(func(s *ChangeUpsert) {
-		s.UpdateRelatedTickets()
-	})
-}
-
-// ClearRelatedTickets clears the value of the "related_tickets" field.
-func (u *ChangeUpsertBulk) ClearRelatedTickets() *ChangeUpsertBulk {
-	return u.Update(func(s *ChangeUpsert) {
-		s.ClearRelatedTickets()
-	})
-}
-
-// SetCreatedAt sets the "created_at" field.
-func (u *ChangeUpsertBulk) SetCreatedAt(v time.Time) *ChangeUpsertBulk {
-	return u.Update(func(s *ChangeUpsert) {
-		s.SetCreatedAt(v)
-	})
-}
-
-// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
-func (u *ChangeUpsertBulk) UpdateCreatedAt() *ChangeUpsertBulk {
-	return u.Update(func(s *ChangeUpsert) {
-		s.UpdateCreatedAt()
-	})
-}
-
-// SetUpdatedAt sets the "updated_at" field.
-func (u *ChangeUpsertBulk) SetUpdatedAt(v time.Time) *ChangeUpsertBulk {
-	return u.Update(func(s *ChangeUpsert) {
-		s.SetUpdatedAt(v)
-	})
-}
-
-// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
-func (u *ChangeUpsertBulk) UpdateUpdatedAt() *ChangeUpsertBulk {
-	return u.Update(func(s *ChangeUpsert) {
-		s.UpdateUpdatedAt()
 	})
 }
 

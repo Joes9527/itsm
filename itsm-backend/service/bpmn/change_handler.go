@@ -137,7 +137,7 @@ func (h *ChangeServiceTaskHandler) updateChange(ctx context.Context, variables m
 		return nil, err
 	}
 
-	entity, err := h.client.Change.Query().Where(change.ID(changeID), change.TenantID(tenantID)).WithWorkItem().Only(ctx)
+	entity, err := h.client.Change.Query().Where(change.ID(changeID), change.HasWorkItemWith(ticket.TenantID(tenantID), ticket.DeletedAtIsNil())).WithWorkItem().Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, fmt.Errorf("变更 %d 不存在或不属于当前租户", changeID)
@@ -195,7 +195,7 @@ func (h *ChangeServiceTaskHandler) approveChange(ctx context.Context, task *ent.
 	// scheduleChange（approved/scheduled）和 rejectChange（rejected）。随后必须证明
 	// 当前完成任务已持久化同 tenant/process/task/node/action 的审批事实。
 	if _, err := h.client.Change.Query().
-		Where(change.ID(changeID), change.TenantID(tenantID)).
+		Where(change.ID(changeID), change.HasWorkItemWith(ticket.TenantID(tenantID), ticket.DeletedAtIsNil())).
 		Only(ctx); err != nil {
 		if ent.IsNotFound(err) {
 			return nil, fmt.Errorf("变更 %d 不存在或不属于当前租户", changeID)
@@ -217,7 +217,8 @@ func (h *ChangeServiceTaskHandler) rejectChange(ctx context.Context, variables m
 		return nil, err
 	}
 	current, err := h.client.Change.Query().
-		Where(change.ID(changeID), change.TenantID(tenantID)).
+		Where(change.ID(changeID), change.HasWorkItemWith(ticket.TenantID(tenantID), ticket.DeletedAtIsNil())).
+		WithWorkItem().
 		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -225,7 +226,7 @@ func (h *ChangeServiceTaskHandler) rejectChange(ctx context.Context, variables m
 		}
 		return nil, fmt.Errorf("查询变更失败: %w", err)
 	}
-	if current.Status == "rejected" {
+	if current.Edges.WorkItem.Status == "rejected" {
 		return IdempotentEffect(fmt.Sprintf("变更 %d 已驳回", changeID), nil), nil
 	}
 	if err := h.transitionChangeStatus(ctx, tenantID, changeID, "rejected"); err != nil {
@@ -258,7 +259,7 @@ func (h *ChangeServiceTaskHandler) scheduleChange(ctx context.Context, variables
 	}
 
 	current, err := h.client.Change.Query().
-		Where(change.ID(changeID), change.TenantID(tenantID)).
+		Where(change.ID(changeID), change.HasWorkItemWith(ticket.TenantID(tenantID), ticket.DeletedAtIsNil())).
 		WithWorkItem().
 		Only(ctx)
 	if err != nil {
@@ -280,7 +281,7 @@ func (h *ChangeServiceTaskHandler) scheduleChange(ctx context.Context, variables
 	}
 
 	c, err := h.client.Change.Query().
-		Where(change.ID(changeID), change.TenantID(tenantID)).
+		Where(change.ID(changeID), change.HasWorkItemWith(ticket.TenantID(tenantID), ticket.DeletedAtIsNil())).
 		WithWorkItem().
 		Only(ctx)
 	if err != nil {
@@ -307,7 +308,7 @@ func (h *ChangeServiceTaskHandler) scheduleChange(ctx context.Context, variables
 		plannedEnd, _ = time.Parse(time.RFC3339, endStr)
 	}
 
-	updateQuery := h.client.Change.UpdateOneID(changeID).Where(change.TenantID(tenantID))
+	updateQuery := h.client.Change.UpdateOneID(changeID).Where(change.HasWorkItemWith(ticket.TenantID(tenantID), ticket.DeletedAtIsNil()))
 	if !plannedStart.IsZero() && !plannedStart.Equal(c.PlannedStartDate) {
 		updateQuery.SetPlannedStartDate(plannedStart)
 		wrote = true
@@ -340,7 +341,7 @@ func (h *ChangeServiceTaskHandler) scheduleChange(ctx context.Context, variables
 // TransitionStatus 必须遵守同一套状态机规则，不能各自为政。
 func (h *ChangeServiceTaskHandler) transitionChangeStatus(ctx context.Context, tenantID, changeID int, targetStatus string) error {
 	c, err := h.client.Change.Query().
-		Where(change.ID(changeID), change.TenantID(tenantID)).
+		Where(change.ID(changeID), change.HasWorkItemWith(ticket.TenantID(tenantID), ticket.DeletedAtIsNil())).
 		WithWorkItem().
 		Only(ctx)
 	if err != nil {
@@ -380,7 +381,7 @@ func (h *ChangeServiceTaskHandler) implementChange(ctx context.Context, variable
 
 	// 获取变更信息（带租户约束）
 	entity, err := h.client.Change.Query().
-		Where(change.ID(changeID), change.TenantID(tenantID)).
+		Where(change.ID(changeID), change.HasWorkItemWith(ticket.TenantID(tenantID), ticket.DeletedAtIsNil())).
 		WithWorkItem().
 		Only(ctx)
 	if err != nil {
@@ -434,7 +435,7 @@ func (h *ChangeServiceTaskHandler) verifyChange(ctx context.Context, variables m
 	}
 
 	entity, err := h.client.Change.Query().
-		Where(change.ID(changeID), change.TenantID(tenantID)).
+		Where(change.ID(changeID), change.HasWorkItemWith(ticket.TenantID(tenantID), ticket.DeletedAtIsNil())).
 		WithWorkItem().
 		Only(ctx)
 	if err != nil {
@@ -476,7 +477,7 @@ func (h *ChangeServiceTaskHandler) closeChange(ctx context.Context, variables ma
 	}
 
 	entity, err := h.client.Change.Query().
-		Where(change.ID(changeID), change.TenantID(tenantID)).
+		Where(change.ID(changeID), change.HasWorkItemWith(ticket.TenantID(tenantID), ticket.DeletedAtIsNil())).
 		WithWorkItem().
 		Only(ctx)
 	if err != nil {
@@ -524,7 +525,7 @@ func (h *ChangeServiceTaskHandler) updateChangeState(ctx context.Context, entity
 	if _, err := tx.Ticket.UpdateOneID(entity.WorkItemID).Where(ticket.TenantID(tenantID)).SetStatus(status).Save(ctx); err != nil {
 		return fail(err)
 	}
-	update := tx.Change.UpdateOneID(entity.ID).Where(change.TenantID(tenantID))
+	update := tx.Change.UpdateOneID(entity.ID).Where(change.HasWorkItemWith(ticket.TenantID(tenantID), ticket.DeletedAtIsNil()))
 	if updateExtension != nil {
 		updateExtension(update)
 	}
@@ -552,7 +553,7 @@ func (h *ChangeServiceTaskHandler) assessRisk(ctx context.Context, variables map
 
 	// 获取变更信息进行风险评估（带租户约束）
 	entity, err := h.client.Change.Query().
-		Where(change.ID(changeID), change.TenantID(tenantID)).
+		Where(change.ID(changeID), change.HasWorkItemWith(ticket.TenantID(tenantID), ticket.DeletedAtIsNil())).
 		WithWorkItem().Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -605,7 +606,7 @@ func (h *ChangeServiceTaskHandler) notifyStakeholders(ctx context.Context, varia
 
 	// 获取变更信息（带租户约束）
 	entity, err := h.client.Change.Query().
-		Where(change.ID(changeID), change.TenantID(tenantID)).
+		Where(change.ID(changeID), change.HasWorkItemWith(ticket.TenantID(tenantID), ticket.DeletedAtIsNil())).
 		WithWorkItem().
 		Only(ctx)
 	if err != nil {

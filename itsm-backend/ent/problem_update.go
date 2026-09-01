@@ -11,7 +11,6 @@ import (
 	"itsm-backend/ent/predicate"
 	"itsm-backend/ent/problem"
 	"itsm-backend/ent/ticket"
-	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -28,26 +27,6 @@ type ProblemUpdate struct {
 // Where appends a list predicates to the ProblemUpdate builder.
 func (_u *ProblemUpdate) Where(ps ...predicate.Problem) *ProblemUpdate {
 	_u.mutation.Where(ps...)
-	return _u
-}
-
-// SetCategory sets the "category" field.
-func (_u *ProblemUpdate) SetCategory(v string) *ProblemUpdate {
-	_u.mutation.SetCategory(v)
-	return _u
-}
-
-// SetNillableCategory sets the "category" field if the given value is not nil.
-func (_u *ProblemUpdate) SetNillableCategory(v *string) *ProblemUpdate {
-	if v != nil {
-		_u.SetCategory(*v)
-	}
-	return _u
-}
-
-// ClearCategory clears the value of the "category" field.
-func (_u *ProblemUpdate) ClearCategory() *ProblemUpdate {
-	_u.mutation.ClearCategory()
 	return _u
 }
 
@@ -131,54 +110,6 @@ func (_u *ProblemUpdate) ClearImpact() *ProblemUpdate {
 	return _u
 }
 
-// SetAssigneeID sets the "assignee_id" field.
-func (_u *ProblemUpdate) SetAssigneeID(v int) *ProblemUpdate {
-	_u.mutation.ResetAssigneeID()
-	_u.mutation.SetAssigneeID(v)
-	return _u
-}
-
-// SetNillableAssigneeID sets the "assignee_id" field if the given value is not nil.
-func (_u *ProblemUpdate) SetNillableAssigneeID(v *int) *ProblemUpdate {
-	if v != nil {
-		_u.SetAssigneeID(*v)
-	}
-	return _u
-}
-
-// AddAssigneeID adds value to the "assignee_id" field.
-func (_u *ProblemUpdate) AddAssigneeID(v int) *ProblemUpdate {
-	_u.mutation.AddAssigneeID(v)
-	return _u
-}
-
-// ClearAssigneeID clears the value of the "assignee_id" field.
-func (_u *ProblemUpdate) ClearAssigneeID() *ProblemUpdate {
-	_u.mutation.ClearAssigneeID()
-	return _u
-}
-
-// SetCreatedBy sets the "created_by" field.
-func (_u *ProblemUpdate) SetCreatedBy(v int) *ProblemUpdate {
-	_u.mutation.ResetCreatedBy()
-	_u.mutation.SetCreatedBy(v)
-	return _u
-}
-
-// SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (_u *ProblemUpdate) SetNillableCreatedBy(v *int) *ProblemUpdate {
-	if v != nil {
-		_u.SetCreatedBy(*v)
-	}
-	return _u
-}
-
-// AddCreatedBy adds value to the "created_by" field.
-func (_u *ProblemUpdate) AddCreatedBy(v int) *ProblemUpdate {
-	_u.mutation.AddCreatedBy(v)
-	return _u
-}
-
 // SetWorkItemID sets the "work_item_id" field.
 func (_u *ProblemUpdate) SetWorkItemID(v int) *ProblemUpdate {
 	_u.mutation.SetWorkItemID(v)
@@ -190,107 +121,6 @@ func (_u *ProblemUpdate) SetNillableWorkItemID(v *int) *ProblemUpdate {
 	if v != nil {
 		_u.SetWorkItemID(*v)
 	}
-	return _u
-}
-
-// SetTenantID sets the "tenant_id" field.
-func (_u *ProblemUpdate) SetTenantID(v int) *ProblemUpdate {
-	_u.mutation.ResetTenantID()
-	_u.mutation.SetTenantID(v)
-	return _u
-}
-
-// SetNillableTenantID sets the "tenant_id" field if the given value is not nil.
-func (_u *ProblemUpdate) SetNillableTenantID(v *int) *ProblemUpdate {
-	if v != nil {
-		_u.SetTenantID(*v)
-	}
-	return _u
-}
-
-// AddTenantID adds value to the "tenant_id" field.
-func (_u *ProblemUpdate) AddTenantID(v int) *ProblemUpdate {
-	_u.mutation.AddTenantID(v)
-	return _u
-}
-
-// SetCreatedAt sets the "created_at" field.
-func (_u *ProblemUpdate) SetCreatedAt(v time.Time) *ProblemUpdate {
-	_u.mutation.SetCreatedAt(v)
-	return _u
-}
-
-// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_u *ProblemUpdate) SetNillableCreatedAt(v *time.Time) *ProblemUpdate {
-	if v != nil {
-		_u.SetCreatedAt(*v)
-	}
-	return _u
-}
-
-// SetUpdatedAt sets the "updated_at" field.
-func (_u *ProblemUpdate) SetUpdatedAt(v time.Time) *ProblemUpdate {
-	_u.mutation.SetUpdatedAt(v)
-	return _u
-}
-
-// SetResolvedAt sets the "resolved_at" field.
-func (_u *ProblemUpdate) SetResolvedAt(v time.Time) *ProblemUpdate {
-	_u.mutation.SetResolvedAt(v)
-	return _u
-}
-
-// SetNillableResolvedAt sets the "resolved_at" field if the given value is not nil.
-func (_u *ProblemUpdate) SetNillableResolvedAt(v *time.Time) *ProblemUpdate {
-	if v != nil {
-		_u.SetResolvedAt(*v)
-	}
-	return _u
-}
-
-// ClearResolvedAt clears the value of the "resolved_at" field.
-func (_u *ProblemUpdate) ClearResolvedAt() *ProblemUpdate {
-	_u.mutation.ClearResolvedAt()
-	return _u
-}
-
-// SetClosedAt sets the "closed_at" field.
-func (_u *ProblemUpdate) SetClosedAt(v time.Time) *ProblemUpdate {
-	_u.mutation.SetClosedAt(v)
-	return _u
-}
-
-// SetNillableClosedAt sets the "closed_at" field if the given value is not nil.
-func (_u *ProblemUpdate) SetNillableClosedAt(v *time.Time) *ProblemUpdate {
-	if v != nil {
-		_u.SetClosedAt(*v)
-	}
-	return _u
-}
-
-// ClearClosedAt clears the value of the "closed_at" field.
-func (_u *ProblemUpdate) ClearClosedAt() *ProblemUpdate {
-	_u.mutation.ClearClosedAt()
-	return _u
-}
-
-// SetDeletedAt sets the "deleted_at" field.
-func (_u *ProblemUpdate) SetDeletedAt(v time.Time) *ProblemUpdate {
-	_u.mutation.SetDeletedAt(v)
-	return _u
-}
-
-// SetNillableDeletedAt sets the "deleted_at" field if the given value is not nil.
-func (_u *ProblemUpdate) SetNillableDeletedAt(v *time.Time) *ProblemUpdate {
-	if v != nil {
-		_u.SetDeletedAt(*v)
-	}
-	return _u
-}
-
-// ClearDeletedAt clears the value of the "deleted_at" field.
-func (_u *ProblemUpdate) ClearDeletedAt() *ProblemUpdate {
-	_u.mutation.ClearDeletedAt()
 	return _u
 }
 
@@ -420,7 +250,6 @@ func (_u *ProblemUpdate) RemoveChanges(v ...*Change) *ProblemUpdate {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *ProblemUpdate) Save(ctx context.Context) (int, error) {
-	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -446,26 +275,8 @@ func (_u *ProblemUpdate) ExecX(ctx context.Context) {
 	}
 }
 
-// defaults sets the default values of the builder before save.
-func (_u *ProblemUpdate) defaults() {
-	if _, ok := _u.mutation.UpdatedAt(); !ok {
-		v := problem.UpdateDefaultUpdatedAt()
-		_u.mutation.SetUpdatedAt(v)
-	}
-}
-
 // check runs all checks and user-defined validators on the builder.
 func (_u *ProblemUpdate) check() error {
-	if v, ok := _u.mutation.CreatedBy(); ok {
-		if err := problem.CreatedByValidator(v); err != nil {
-			return &ValidationError{Name: "created_by", err: fmt.Errorf(`ent: validator failed for field "Problem.created_by": %w`, err)}
-		}
-	}
-	if v, ok := _u.mutation.TenantID(); ok {
-		if err := problem.TenantIDValidator(v); err != nil {
-			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "Problem.tenant_id": %w`, err)}
-		}
-	}
 	if _u.mutation.WorkItemCleared() && len(_u.mutation.WorkItemIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "Problem.work_item"`)
 	}
@@ -483,12 +294,6 @@ func (_u *ProblemUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 				ps[i](selector)
 			}
 		}
-	}
-	if value, ok := _u.mutation.Category(); ok {
-		_spec.SetField(problem.FieldCategory, field.TypeString, value)
-	}
-	if _u.mutation.CategoryCleared() {
-		_spec.ClearField(problem.FieldCategory, field.TypeString)
 	}
 	if value, ok := _u.mutation.RootCause(); ok {
 		_spec.SetField(problem.FieldRootCause, field.TypeString, value)
@@ -513,51 +318,6 @@ func (_u *ProblemUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.ImpactCleared() {
 		_spec.ClearField(problem.FieldImpact, field.TypeString)
-	}
-	if value, ok := _u.mutation.AssigneeID(); ok {
-		_spec.SetField(problem.FieldAssigneeID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedAssigneeID(); ok {
-		_spec.AddField(problem.FieldAssigneeID, field.TypeInt, value)
-	}
-	if _u.mutation.AssigneeIDCleared() {
-		_spec.ClearField(problem.FieldAssigneeID, field.TypeInt)
-	}
-	if value, ok := _u.mutation.CreatedBy(); ok {
-		_spec.SetField(problem.FieldCreatedBy, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedCreatedBy(); ok {
-		_spec.AddField(problem.FieldCreatedBy, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.TenantID(); ok {
-		_spec.SetField(problem.FieldTenantID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedTenantID(); ok {
-		_spec.AddField(problem.FieldTenantID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.CreatedAt(); ok {
-		_spec.SetField(problem.FieldCreatedAt, field.TypeTime, value)
-	}
-	if value, ok := _u.mutation.UpdatedAt(); ok {
-		_spec.SetField(problem.FieldUpdatedAt, field.TypeTime, value)
-	}
-	if value, ok := _u.mutation.ResolvedAt(); ok {
-		_spec.SetField(problem.FieldResolvedAt, field.TypeTime, value)
-	}
-	if _u.mutation.ResolvedAtCleared() {
-		_spec.ClearField(problem.FieldResolvedAt, field.TypeTime)
-	}
-	if value, ok := _u.mutation.ClosedAt(); ok {
-		_spec.SetField(problem.FieldClosedAt, field.TypeTime, value)
-	}
-	if _u.mutation.ClosedAtCleared() {
-		_spec.ClearField(problem.FieldClosedAt, field.TypeTime)
-	}
-	if value, ok := _u.mutation.DeletedAt(); ok {
-		_spec.SetField(problem.FieldDeletedAt, field.TypeTime, value)
-	}
-	if _u.mutation.DeletedAtCleared() {
-		_spec.ClearField(problem.FieldDeletedAt, field.TypeTime)
 	}
 	if _u.mutation.WorkItemCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -743,26 +503,6 @@ type ProblemUpdateOne struct {
 	mutation *ProblemMutation
 }
 
-// SetCategory sets the "category" field.
-func (_u *ProblemUpdateOne) SetCategory(v string) *ProblemUpdateOne {
-	_u.mutation.SetCategory(v)
-	return _u
-}
-
-// SetNillableCategory sets the "category" field if the given value is not nil.
-func (_u *ProblemUpdateOne) SetNillableCategory(v *string) *ProblemUpdateOne {
-	if v != nil {
-		_u.SetCategory(*v)
-	}
-	return _u
-}
-
-// ClearCategory clears the value of the "category" field.
-func (_u *ProblemUpdateOne) ClearCategory() *ProblemUpdateOne {
-	_u.mutation.ClearCategory()
-	return _u
-}
-
 // SetRootCause sets the "root_cause" field.
 func (_u *ProblemUpdateOne) SetRootCause(v string) *ProblemUpdateOne {
 	_u.mutation.SetRootCause(v)
@@ -843,54 +583,6 @@ func (_u *ProblemUpdateOne) ClearImpact() *ProblemUpdateOne {
 	return _u
 }
 
-// SetAssigneeID sets the "assignee_id" field.
-func (_u *ProblemUpdateOne) SetAssigneeID(v int) *ProblemUpdateOne {
-	_u.mutation.ResetAssigneeID()
-	_u.mutation.SetAssigneeID(v)
-	return _u
-}
-
-// SetNillableAssigneeID sets the "assignee_id" field if the given value is not nil.
-func (_u *ProblemUpdateOne) SetNillableAssigneeID(v *int) *ProblemUpdateOne {
-	if v != nil {
-		_u.SetAssigneeID(*v)
-	}
-	return _u
-}
-
-// AddAssigneeID adds value to the "assignee_id" field.
-func (_u *ProblemUpdateOne) AddAssigneeID(v int) *ProblemUpdateOne {
-	_u.mutation.AddAssigneeID(v)
-	return _u
-}
-
-// ClearAssigneeID clears the value of the "assignee_id" field.
-func (_u *ProblemUpdateOne) ClearAssigneeID() *ProblemUpdateOne {
-	_u.mutation.ClearAssigneeID()
-	return _u
-}
-
-// SetCreatedBy sets the "created_by" field.
-func (_u *ProblemUpdateOne) SetCreatedBy(v int) *ProblemUpdateOne {
-	_u.mutation.ResetCreatedBy()
-	_u.mutation.SetCreatedBy(v)
-	return _u
-}
-
-// SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (_u *ProblemUpdateOne) SetNillableCreatedBy(v *int) *ProblemUpdateOne {
-	if v != nil {
-		_u.SetCreatedBy(*v)
-	}
-	return _u
-}
-
-// AddCreatedBy adds value to the "created_by" field.
-func (_u *ProblemUpdateOne) AddCreatedBy(v int) *ProblemUpdateOne {
-	_u.mutation.AddCreatedBy(v)
-	return _u
-}
-
 // SetWorkItemID sets the "work_item_id" field.
 func (_u *ProblemUpdateOne) SetWorkItemID(v int) *ProblemUpdateOne {
 	_u.mutation.SetWorkItemID(v)
@@ -902,107 +594,6 @@ func (_u *ProblemUpdateOne) SetNillableWorkItemID(v *int) *ProblemUpdateOne {
 	if v != nil {
 		_u.SetWorkItemID(*v)
 	}
-	return _u
-}
-
-// SetTenantID sets the "tenant_id" field.
-func (_u *ProblemUpdateOne) SetTenantID(v int) *ProblemUpdateOne {
-	_u.mutation.ResetTenantID()
-	_u.mutation.SetTenantID(v)
-	return _u
-}
-
-// SetNillableTenantID sets the "tenant_id" field if the given value is not nil.
-func (_u *ProblemUpdateOne) SetNillableTenantID(v *int) *ProblemUpdateOne {
-	if v != nil {
-		_u.SetTenantID(*v)
-	}
-	return _u
-}
-
-// AddTenantID adds value to the "tenant_id" field.
-func (_u *ProblemUpdateOne) AddTenantID(v int) *ProblemUpdateOne {
-	_u.mutation.AddTenantID(v)
-	return _u
-}
-
-// SetCreatedAt sets the "created_at" field.
-func (_u *ProblemUpdateOne) SetCreatedAt(v time.Time) *ProblemUpdateOne {
-	_u.mutation.SetCreatedAt(v)
-	return _u
-}
-
-// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_u *ProblemUpdateOne) SetNillableCreatedAt(v *time.Time) *ProblemUpdateOne {
-	if v != nil {
-		_u.SetCreatedAt(*v)
-	}
-	return _u
-}
-
-// SetUpdatedAt sets the "updated_at" field.
-func (_u *ProblemUpdateOne) SetUpdatedAt(v time.Time) *ProblemUpdateOne {
-	_u.mutation.SetUpdatedAt(v)
-	return _u
-}
-
-// SetResolvedAt sets the "resolved_at" field.
-func (_u *ProblemUpdateOne) SetResolvedAt(v time.Time) *ProblemUpdateOne {
-	_u.mutation.SetResolvedAt(v)
-	return _u
-}
-
-// SetNillableResolvedAt sets the "resolved_at" field if the given value is not nil.
-func (_u *ProblemUpdateOne) SetNillableResolvedAt(v *time.Time) *ProblemUpdateOne {
-	if v != nil {
-		_u.SetResolvedAt(*v)
-	}
-	return _u
-}
-
-// ClearResolvedAt clears the value of the "resolved_at" field.
-func (_u *ProblemUpdateOne) ClearResolvedAt() *ProblemUpdateOne {
-	_u.mutation.ClearResolvedAt()
-	return _u
-}
-
-// SetClosedAt sets the "closed_at" field.
-func (_u *ProblemUpdateOne) SetClosedAt(v time.Time) *ProblemUpdateOne {
-	_u.mutation.SetClosedAt(v)
-	return _u
-}
-
-// SetNillableClosedAt sets the "closed_at" field if the given value is not nil.
-func (_u *ProblemUpdateOne) SetNillableClosedAt(v *time.Time) *ProblemUpdateOne {
-	if v != nil {
-		_u.SetClosedAt(*v)
-	}
-	return _u
-}
-
-// ClearClosedAt clears the value of the "closed_at" field.
-func (_u *ProblemUpdateOne) ClearClosedAt() *ProblemUpdateOne {
-	_u.mutation.ClearClosedAt()
-	return _u
-}
-
-// SetDeletedAt sets the "deleted_at" field.
-func (_u *ProblemUpdateOne) SetDeletedAt(v time.Time) *ProblemUpdateOne {
-	_u.mutation.SetDeletedAt(v)
-	return _u
-}
-
-// SetNillableDeletedAt sets the "deleted_at" field if the given value is not nil.
-func (_u *ProblemUpdateOne) SetNillableDeletedAt(v *time.Time) *ProblemUpdateOne {
-	if v != nil {
-		_u.SetDeletedAt(*v)
-	}
-	return _u
-}
-
-// ClearDeletedAt clears the value of the "deleted_at" field.
-func (_u *ProblemUpdateOne) ClearDeletedAt() *ProblemUpdateOne {
-	_u.mutation.ClearDeletedAt()
 	return _u
 }
 
@@ -1145,7 +736,6 @@ func (_u *ProblemUpdateOne) Select(field string, fields ...string) *ProblemUpdat
 
 // Save executes the query and returns the updated Problem entity.
 func (_u *ProblemUpdateOne) Save(ctx context.Context) (*Problem, error) {
-	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -1171,26 +761,8 @@ func (_u *ProblemUpdateOne) ExecX(ctx context.Context) {
 	}
 }
 
-// defaults sets the default values of the builder before save.
-func (_u *ProblemUpdateOne) defaults() {
-	if _, ok := _u.mutation.UpdatedAt(); !ok {
-		v := problem.UpdateDefaultUpdatedAt()
-		_u.mutation.SetUpdatedAt(v)
-	}
-}
-
 // check runs all checks and user-defined validators on the builder.
 func (_u *ProblemUpdateOne) check() error {
-	if v, ok := _u.mutation.CreatedBy(); ok {
-		if err := problem.CreatedByValidator(v); err != nil {
-			return &ValidationError{Name: "created_by", err: fmt.Errorf(`ent: validator failed for field "Problem.created_by": %w`, err)}
-		}
-	}
-	if v, ok := _u.mutation.TenantID(); ok {
-		if err := problem.TenantIDValidator(v); err != nil {
-			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "Problem.tenant_id": %w`, err)}
-		}
-	}
 	if _u.mutation.WorkItemCleared() && len(_u.mutation.WorkItemIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "Problem.work_item"`)
 	}
@@ -1226,12 +798,6 @@ func (_u *ProblemUpdateOne) sqlSave(ctx context.Context) (_node *Problem, err er
 			}
 		}
 	}
-	if value, ok := _u.mutation.Category(); ok {
-		_spec.SetField(problem.FieldCategory, field.TypeString, value)
-	}
-	if _u.mutation.CategoryCleared() {
-		_spec.ClearField(problem.FieldCategory, field.TypeString)
-	}
 	if value, ok := _u.mutation.RootCause(); ok {
 		_spec.SetField(problem.FieldRootCause, field.TypeString, value)
 	}
@@ -1255,51 +821,6 @@ func (_u *ProblemUpdateOne) sqlSave(ctx context.Context) (_node *Problem, err er
 	}
 	if _u.mutation.ImpactCleared() {
 		_spec.ClearField(problem.FieldImpact, field.TypeString)
-	}
-	if value, ok := _u.mutation.AssigneeID(); ok {
-		_spec.SetField(problem.FieldAssigneeID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedAssigneeID(); ok {
-		_spec.AddField(problem.FieldAssigneeID, field.TypeInt, value)
-	}
-	if _u.mutation.AssigneeIDCleared() {
-		_spec.ClearField(problem.FieldAssigneeID, field.TypeInt)
-	}
-	if value, ok := _u.mutation.CreatedBy(); ok {
-		_spec.SetField(problem.FieldCreatedBy, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedCreatedBy(); ok {
-		_spec.AddField(problem.FieldCreatedBy, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.TenantID(); ok {
-		_spec.SetField(problem.FieldTenantID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedTenantID(); ok {
-		_spec.AddField(problem.FieldTenantID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.CreatedAt(); ok {
-		_spec.SetField(problem.FieldCreatedAt, field.TypeTime, value)
-	}
-	if value, ok := _u.mutation.UpdatedAt(); ok {
-		_spec.SetField(problem.FieldUpdatedAt, field.TypeTime, value)
-	}
-	if value, ok := _u.mutation.ResolvedAt(); ok {
-		_spec.SetField(problem.FieldResolvedAt, field.TypeTime, value)
-	}
-	if _u.mutation.ResolvedAtCleared() {
-		_spec.ClearField(problem.FieldResolvedAt, field.TypeTime)
-	}
-	if value, ok := _u.mutation.ClosedAt(); ok {
-		_spec.SetField(problem.FieldClosedAt, field.TypeTime, value)
-	}
-	if _u.mutation.ClosedAtCleared() {
-		_spec.ClearField(problem.FieldClosedAt, field.TypeTime)
-	}
-	if value, ok := _u.mutation.DeletedAt(); ok {
-		_spec.SetField(problem.FieldDeletedAt, field.TypeTime, value)
-	}
-	if _u.mutation.DeletedAtCleared() {
-		_spec.ClearField(problem.FieldDeletedAt, field.TypeTime)
 	}
 	if _u.mutation.WorkItemCleared() {
 		edge := &sqlgraph.EdgeSpec{

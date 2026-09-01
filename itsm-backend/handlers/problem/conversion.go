@@ -47,9 +47,8 @@ func (r *EntRepository) CreateFromIncident(
 
 	source, err := tx.Incident.Query().Where(
 		incident.IDEQ(incidentID),
-		incident.TenantIDEQ(tenantID),
-		incident.DeletedAtIsNil(),
-	).WithWorkItem().Only(ctx)
+		incident.HasWorkItemWith(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil()),
+	).WithWorkItem(withProblemWorkItemProjection).Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return fail(fmt.Errorf("incident not found"))
@@ -98,12 +97,16 @@ func (r *EntRepository) CreateFromIncident(
 		description = customDescription
 	}
 
+	categoryName := ""
+	if source.Edges.WorkItem.Edges.Category != nil {
+		categoryName = source.Edges.WorkItem.Edges.Category.Name
+	}
 	created, err := r.createInTx(ctx, tx, &Problem{
 		Title:       title,
 		Description: description,
 		Status:      "open",
 		Priority:    source.Edges.WorkItem.Priority,
-		Category:    source.Category,
+		Category:    categoryName,
 		RootCause:   strings.TrimSpace(req.RootCause),
 		Impact:      source.Impact,
 		CreatedBy:   actorUserID,

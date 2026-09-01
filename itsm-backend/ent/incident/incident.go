@@ -24,18 +24,10 @@ const (
 	FieldUrgency = "urgency"
 	// FieldIncidentNumber holds the string denoting the incident_number field in the database.
 	FieldIncidentNumber = "incident_number"
-	// FieldReporterID holds the string denoting the reporter_id field in the database.
-	FieldReporterID = "reporter_id"
 	// FieldWorkItemID holds the string denoting the work_item_id field in the database.
 	FieldWorkItemID = "work_item_id"
-	// FieldAssigneeID holds the string denoting the assignee_id field in the database.
-	FieldAssigneeID = "assignee_id"
 	// FieldConfigurationItemID holds the string denoting the configuration_item_id field in the database.
 	FieldConfigurationItemID = "configuration_item_id"
-	// FieldCategory holds the string denoting the category field in the database.
-	FieldCategory = "category"
-	// FieldSubcategory holds the string denoting the subcategory field in the database.
-	FieldSubcategory = "subcategory"
 	// FieldImpactAnalysis holds the string denoting the impact_analysis field in the database.
 	FieldImpactAnalysis = "impact_analysis"
 	// FieldRootCause holds the string denoting the root_cause field in the database.
@@ -44,10 +36,6 @@ const (
 	FieldResolutionSteps = "resolution_steps"
 	// FieldDetectedAt holds the string denoting the detected_at field in the database.
 	FieldDetectedAt = "detected_at"
-	// FieldResolvedAt holds the string denoting the resolved_at field in the database.
-	FieldResolvedAt = "resolved_at"
-	// FieldClosedAt holds the string denoting the closed_at field in the database.
-	FieldClosedAt = "closed_at"
 	// FieldEscalatedAt holds the string denoting the escalated_at field in the database.
 	FieldEscalatedAt = "escalated_at"
 	// FieldEscalationLevel holds the string denoting the escalation_level field in the database.
@@ -56,20 +44,8 @@ const (
 	FieldIsAutomated = "is_automated"
 	// FieldIsMajorIncident holds the string denoting the is_major_incident field in the database.
 	FieldIsMajorIncident = "is_major_incident"
-	// FieldSource holds the string denoting the source field in the database.
-	FieldSource = "source"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
-	// FieldTenantID holds the string denoting the tenant_id field in the database.
-	FieldTenantID = "tenant_id"
-	// FieldVersion holds the string denoting the version field in the database.
-	FieldVersion = "version"
-	// FieldCreatedAt holds the string denoting the created_at field in the database.
-	FieldCreatedAt = "created_at"
-	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
-	FieldUpdatedAt = "updated_at"
-	// FieldDeletedAt holds the string denoting the deleted_at field in the database.
-	FieldDeletedAt = "deleted_at"
 	// EdgeWorkItem holds the string denoting the work_item edge name in mutations.
 	EdgeWorkItem = "work_item"
 	// EdgeRelatedIncidents holds the string denoting the related_incidents edge name in mutations.
@@ -140,29 +116,17 @@ var Columns = []string{
 	FieldImpact,
 	FieldUrgency,
 	FieldIncidentNumber,
-	FieldReporterID,
 	FieldWorkItemID,
-	FieldAssigneeID,
 	FieldConfigurationItemID,
-	FieldCategory,
-	FieldSubcategory,
 	FieldImpactAnalysis,
 	FieldRootCause,
 	FieldResolutionSteps,
 	FieldDetectedAt,
-	FieldResolvedAt,
-	FieldClosedAt,
 	FieldEscalatedAt,
 	FieldEscalationLevel,
 	FieldIsAutomated,
 	FieldIsMajorIncident,
-	FieldSource,
 	FieldMetadata,
-	FieldTenantID,
-	FieldVersion,
-	FieldCreatedAt,
-	FieldUpdatedAt,
-	FieldDeletedAt,
 }
 
 var (
@@ -205,8 +169,6 @@ var (
 	UrgencyValidator func(string) error
 	// IncidentNumberValidator is a validator for the "incident_number" field. It is called by the builders before save.
 	IncidentNumberValidator func(string) error
-	// ReporterIDValidator is a validator for the "reporter_id" field. It is called by the builders before save.
-	ReporterIDValidator func(int) error
 	// DefaultDetectedAt holds the default value on creation for the "detected_at" field.
 	DefaultDetectedAt func() time.Time
 	// DefaultEscalationLevel holds the default value on creation for the "escalation_level" field.
@@ -215,20 +177,6 @@ var (
 	DefaultIsAutomated bool
 	// DefaultIsMajorIncident holds the default value on creation for the "is_major_incident" field.
 	DefaultIsMajorIncident bool
-	// DefaultSource holds the default value on creation for the "source" field.
-	DefaultSource string
-	// TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
-	TenantIDValidator func(int) error
-	// DefaultVersion holds the default value on creation for the "version" field.
-	DefaultVersion int
-	// VersionValidator is a validator for the "version" field. It is called by the builders before save.
-	VersionValidator func(int) error
-	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
-	DefaultCreatedAt func() time.Time
-	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
-	DefaultUpdatedAt func() time.Time
-	// UpdateDefaultUpdatedAt holds the default value on update for the "updated_at" field.
-	UpdateDefaultUpdatedAt func() time.Time
 )
 
 // OrderOption defines the ordering options for the Incident queries.
@@ -264,19 +212,9 @@ func ByIncidentNumber(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldIncidentNumber, opts...).ToFunc()
 }
 
-// ByReporterID orders the results by the reporter_id field.
-func ByReporterID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldReporterID, opts...).ToFunc()
-}
-
 // ByWorkItemID orders the results by the work_item_id field.
 func ByWorkItemID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldWorkItemID, opts...).ToFunc()
-}
-
-// ByAssigneeID orders the results by the assignee_id field.
-func ByAssigneeID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldAssigneeID, opts...).ToFunc()
 }
 
 // ByConfigurationItemID orders the results by the configuration_item_id field.
@@ -284,29 +222,9 @@ func ByConfigurationItemID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldConfigurationItemID, opts...).ToFunc()
 }
 
-// ByCategory orders the results by the category field.
-func ByCategory(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldCategory, opts...).ToFunc()
-}
-
-// BySubcategory orders the results by the subcategory field.
-func BySubcategory(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldSubcategory, opts...).ToFunc()
-}
-
 // ByDetectedAt orders the results by the detected_at field.
 func ByDetectedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDetectedAt, opts...).ToFunc()
-}
-
-// ByResolvedAt orders the results by the resolved_at field.
-func ByResolvedAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldResolvedAt, opts...).ToFunc()
-}
-
-// ByClosedAt orders the results by the closed_at field.
-func ByClosedAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldClosedAt, opts...).ToFunc()
 }
 
 // ByEscalatedAt orders the results by the escalated_at field.
@@ -327,36 +245,6 @@ func ByIsAutomated(opts ...sql.OrderTermOption) OrderOption {
 // ByIsMajorIncident orders the results by the is_major_incident field.
 func ByIsMajorIncident(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldIsMajorIncident, opts...).ToFunc()
-}
-
-// BySource orders the results by the source field.
-func BySource(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldSource, opts...).ToFunc()
-}
-
-// ByTenantID orders the results by the tenant_id field.
-func ByTenantID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldTenantID, opts...).ToFunc()
-}
-
-// ByVersion orders the results by the version field.
-func ByVersion(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldVersion, opts...).ToFunc()
-}
-
-// ByCreatedAt orders the results by the created_at field.
-func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
-}
-
-// ByUpdatedAt orders the results by the updated_at field.
-func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldUpdatedAt, opts...).ToFunc()
-}
-
-// ByDeletedAt orders the results by the deleted_at field.
-func ByDeletedAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldDeletedAt, opts...).ToFunc()
 }
 
 // ByWorkItemField orders the results by work_item field.

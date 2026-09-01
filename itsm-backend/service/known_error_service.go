@@ -9,6 +9,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/knownerror"
 	"itsm-backend/ent/problem"
+	"itsm-backend/ent/ticket"
 
 	"go.uber.org/zap"
 )
@@ -221,7 +222,7 @@ func (s *KnownErrorService) MatchKnownErrorBySymptoms(ctx context.Context, tenan
 // LinkKnownErrorToProblem 关联已知错误到问题
 func (s *KnownErrorService) LinkKnownErrorToProblem(ctx context.Context, knownErrorID, problemID, tenantID int) error {
 	problemExists, err := s.client.Problem.Query().
-		Where(problem.IDEQ(problemID), problem.TenantIDEQ(tenantID), problem.DeletedAtIsNil()).
+		Where(problem.IDEQ(problemID), problem.HasWorkItemWith(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil())).
 		Exist(ctx)
 	if err != nil {
 		return err

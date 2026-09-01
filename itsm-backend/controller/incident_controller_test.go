@@ -252,7 +252,7 @@ func TestIncidentDetailHasActionsButListDoesNot(t *testing.T) {
 		SetRequesterID(user.ID).SetTenantID(tenant.ID).SetRecordClass("incident").Save(ctx)
 	require.NoError(t, err)
 	incidentEntity, err := client.Incident.Create().SetIncidentNumber("INC-DETAIL").
-		SetReporterID(user.ID).SetWorkItemID(workItem.ID).SetTenantID(tenant.ID).Save(ctx)
+		SetWorkItemID(workItem.ID).Save(ctx)
 	require.NoError(t, err)
 
 	controller := NewIncidentController(service.NewIncidentService(client, zaptest.NewLogger(t).Sugar(), workitemnumber.NewPostgreSQLAllocator()), nil, nil, nil, nil, nil, zaptest.NewLogger(t).Sugar())

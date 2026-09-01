@@ -3,8 +3,6 @@
 package change
 
 import (
-	"time"
-
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 )
@@ -22,14 +20,8 @@ const (
 	FieldImpactScope = "impact_scope"
 	// FieldRiskLevel holds the string denoting the risk_level field in the database.
 	FieldRiskLevel = "risk_level"
-	// FieldAssigneeID holds the string denoting the assignee_id field in the database.
-	FieldAssigneeID = "assignee_id"
-	// FieldCreatedBy holds the string denoting the created_by field in the database.
-	FieldCreatedBy = "created_by"
 	// FieldWorkItemID holds the string denoting the work_item_id field in the database.
 	FieldWorkItemID = "work_item_id"
-	// FieldTenantID holds the string denoting the tenant_id field in the database.
-	FieldTenantID = "tenant_id"
 	// FieldPlannedStartDate holds the string denoting the planned_start_date field in the database.
 	FieldPlannedStartDate = "planned_start_date"
 	// FieldPlannedEndDate holds the string denoting the planned_end_date field in the database.
@@ -44,12 +36,6 @@ const (
 	FieldRollbackPlan = "rollback_plan"
 	// FieldAffectedCis holds the string denoting the affected_cis field in the database.
 	FieldAffectedCis = "affected_cis"
-	// FieldRelatedTickets holds the string denoting the related_tickets field in the database.
-	FieldRelatedTickets = "related_tickets"
-	// FieldCreatedAt holds the string denoting the created_at field in the database.
-	FieldCreatedAt = "created_at"
-	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
-	FieldUpdatedAt = "updated_at"
 	// EdgeWorkItem holds the string denoting the work_item edge name in mutations.
 	EdgeWorkItem = "work_item"
 	// EdgeProblems holds the string denoting the problems edge name in mutations.
@@ -86,10 +72,7 @@ var Columns = []string{
 	FieldType,
 	FieldImpactScope,
 	FieldRiskLevel,
-	FieldAssigneeID,
-	FieldCreatedBy,
 	FieldWorkItemID,
-	FieldTenantID,
 	FieldPlannedStartDate,
 	FieldPlannedEndDate,
 	FieldActualStartDate,
@@ -97,9 +80,6 @@ var Columns = []string{
 	FieldImplementationPlan,
 	FieldRollbackPlan,
 	FieldAffectedCis,
-	FieldRelatedTickets,
-	FieldCreatedAt,
-	FieldUpdatedAt,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "changes"
@@ -136,16 +116,6 @@ var (
 	DefaultImpactScope string
 	// DefaultRiskLevel holds the default value on creation for the "risk_level" field.
 	DefaultRiskLevel string
-	// CreatedByValidator is a validator for the "created_by" field. It is called by the builders before save.
-	CreatedByValidator func(int) error
-	// TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
-	TenantIDValidator func(int) error
-	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
-	DefaultCreatedAt func() time.Time
-	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
-	DefaultUpdatedAt func() time.Time
-	// UpdateDefaultUpdatedAt holds the default value on update for the "updated_at" field.
-	UpdateDefaultUpdatedAt func() time.Time
 )
 
 // OrderOption defines the ordering options for the Change queries.
@@ -176,24 +146,9 @@ func ByRiskLevel(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRiskLevel, opts...).ToFunc()
 }
 
-// ByAssigneeID orders the results by the assignee_id field.
-func ByAssigneeID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldAssigneeID, opts...).ToFunc()
-}
-
-// ByCreatedBy orders the results by the created_by field.
-func ByCreatedBy(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldCreatedBy, opts...).ToFunc()
-}
-
 // ByWorkItemID orders the results by the work_item_id field.
 func ByWorkItemID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldWorkItemID, opts...).ToFunc()
-}
-
-// ByTenantID orders the results by the tenant_id field.
-func ByTenantID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldTenantID, opts...).ToFunc()
 }
 
 // ByPlannedStartDate orders the results by the planned_start_date field.
@@ -224,16 +179,6 @@ func ByImplementationPlan(opts ...sql.OrderTermOption) OrderOption {
 // ByRollbackPlan orders the results by the rollback_plan field.
 func ByRollbackPlan(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRollbackPlan, opts...).ToFunc()
-}
-
-// ByCreatedAt orders the results by the created_at field.
-func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
-}
-
-// ByUpdatedAt orders the results by the updated_at field.
-func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldUpdatedAt, opts...).ToFunc()
 }
 
 // ByWorkItemField orders the results by work_item field.

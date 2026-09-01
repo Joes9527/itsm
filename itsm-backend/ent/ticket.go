@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"itsm-backend/ent/ticket"
+	"itsm-backend/ent/ticketcategory"
 	"itsm-backend/ent/user"
 	"strings"
 	"time"
@@ -144,7 +145,7 @@ type TicketEdges struct {
 	// Assignee holds the value of the assignee edge.
 	Assignee *User `json:"assignee,omitempty"`
 	// Category holds the value of the category edge.
-	Category []*TicketCategory `json:"category,omitempty"`
+	Category *TicketCategory `json:"category,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
 	loadedTypes [15]bool
@@ -281,10 +282,12 @@ func (e TicketEdges) AssigneeOrErr() (*User, error) {
 }
 
 // CategoryOrErr returns the Category value or an error if the edge
-// was not loaded in eager-loading.
-func (e TicketEdges) CategoryOrErr() ([]*TicketCategory, error) {
-	if e.loadedTypes[14] {
+// was not loaded in eager-loading, or loaded but was not found.
+func (e TicketEdges) CategoryOrErr() (*TicketCategory, error) {
+	if e.Category != nil {
 		return e.Category, nil
+	} else if e.loadedTypes[14] {
+		return nil, &NotFoundError{label: ticketcategory.Label}
 	}
 	return nil, &NotLoadedError{edge: "category"}
 }

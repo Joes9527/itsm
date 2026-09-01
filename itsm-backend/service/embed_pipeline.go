@@ -8,6 +8,9 @@ import (
 	"itsm-backend/ent"
 	ia "itsm-backend/ent/incident"
 	ka "itsm-backend/ent/knowledgearticle"
+	"itsm-backend/ent/ticket"
+
+	entsql "entgo.io/ent/dialect/sql"
 
 	"go.uber.org/zap"
 )
@@ -52,7 +55,12 @@ func (p *EmbeddingPipeline) RunOnce(ctx context.Context, tenantID int, limit int
 		}
 	}
 	// also embed latest incidents (title + description) for similarity search
-	incs, err := p.client.Incident.Query().Where(ia.TenantIDEQ(tenantID)).WithWorkItem().Order(ent.Desc(ia.FieldCreatedAt)).Limit(limit).All(ctx)
+	incs, err := p.client.Incident.Query().
+		Where(ia.HasWorkItemWith(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil())).
+		WithWorkItem().
+		Order(ia.ByWorkItemField(ticket.FieldCreatedAt, entsql.OrderDesc())).
+		Limit(limit).
+		All(ctx)
 	if err == nil {
 		for _, it := range incs {
 			text := strings.TrimSpace(it.Edges.WorkItem.Title + "\n" + it.Edges.WorkItem.Description)

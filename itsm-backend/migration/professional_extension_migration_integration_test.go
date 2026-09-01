@@ -67,6 +67,20 @@ func TestProfessionalExtensionMigrationEnforcesOneToOneAndAssetLifecycle(t *test
 		_, err = db.ExecContext(ctx, statement)
 		require.NoError(t, err)
 	}
+	for tableName, removedColumns := range map[string][]string{
+		"incidents": {"reporter_id", "assignee_id", "category", "subcategory", "source", "tenant_id", "version", "created_at", "updated_at", "resolved_at", "closed_at", "deleted_at"},
+		"problems":  {"category", "assignee_id", "created_by", "tenant_id", "created_at", "updated_at", "resolved_at", "closed_at", "deleted_at"},
+		"changes":   {"assignee_id", "created_by", "tenant_id", "related_tickets", "created_at", "updated_at"},
+	} {
+		for _, columnName := range removedColumns {
+			var count int
+			require.NoError(t, db.QueryRowContext(ctx, `
+				SELECT COUNT(*) FROM information_schema.columns
+				WHERE table_schema = current_schema() AND table_name = $1 AND column_name = $2
+			`, tableName, columnName).Scan(&count))
+			require.Zero(t, count, "%s.%s must be physically removed", tableName, columnName)
+		}
+	}
 	var decoyTitleColumns int
 	require.NoError(t, db.QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM information_schema.columns
@@ -83,7 +97,7 @@ func TestProfessionalExtensionMigrationEnforcesOneToOneAndAssetLifecycle(t *test
 		{table: "changes", workItemID: 3},
 	} {
 		_, err = db.ExecContext(ctx,
-			fmt.Sprintf(`INSERT INTO %s (work_item_id, tenant_id) VALUES ($1, 101)`, testCase.table),
+			fmt.Sprintf(`INSERT INTO %s (work_item_id) VALUES ($1)`, testCase.table),
 			testCase.workItemID,
 		)
 		requirePostgreSQLUniqueViolation(t, err)
@@ -114,7 +128,7 @@ func TestProfessionalExtensionVerificationRejectsWrongNonUniqueIndex(t *testing.
 	require.NoError(t, err)
 	_, err = db.ExecContext(ctx, `
 		DROP INDEX incident_work_item_id;
-		CREATE INDEX incident_work_item_id ON incidents (tenant_id);
+		CREATE INDEX incident_work_item_id ON incidents (id);
 	`)
 	require.NoError(t, err)
 
@@ -150,12 +164,28 @@ func openProfessionalExtensionMigrationDB(t *testing.T) *sql.DB {
 		CREATE TABLE incidents (
 			id BIGSERIAL PRIMARY KEY,
 			title TEXT, description TEXT, status TEXT, priority TEXT,
+			reporter_id BIGINT, assignee_id BIGINT, category TEXT, subcategory TEXT,
+			source TEXT, version BIGINT, created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ,
+			resolved_at TIMESTAMPTZ, closed_at TIMESTAMPTZ, deleted_at TIMESTAMPTZ,
 			work_item_id BIGINT NOT NULL REFERENCES tickets(id),
 			tenant_id BIGINT NOT NULL
 		);
-		CREATE TABLE problems (LIKE incidents INCLUDING ALL);
+		CREATE TABLE problems (
+			id BIGSERIAL PRIMARY KEY,
+			title TEXT, description TEXT, status TEXT, priority TEXT, category TEXT,
+			assignee_id BIGINT, created_by BIGINT, tenant_id BIGINT NOT NULL,
+			created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ, resolved_at TIMESTAMPTZ,
+			closed_at TIMESTAMPTZ, deleted_at TIMESTAMPTZ,
+			work_item_id BIGINT NOT NULL
+		);
 		ALTER TABLE problems ADD CONSTRAINT problems_work_item_fk FOREIGN KEY (work_item_id) REFERENCES tickets(id);
-		CREATE TABLE changes (LIKE incidents INCLUDING ALL);
+		CREATE TABLE changes (
+			id BIGSERIAL PRIMARY KEY,
+			title TEXT, description TEXT, status TEXT, priority TEXT, assignee_id BIGINT,
+			created_by BIGINT, tenant_id BIGINT NOT NULL, related_tickets JSONB,
+			created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ,
+			work_item_id BIGINT NOT NULL
+		);
 		ALTER TABLE changes ADD CONSTRAINT changes_work_item_fk FOREIGN KEY (work_item_id) REFERENCES tickets(id);
 		CREATE INDEX incident_work_item_id ON incidents (work_item_id);
 		CREATE INDEX problem_work_item_id ON problems (work_item_id);

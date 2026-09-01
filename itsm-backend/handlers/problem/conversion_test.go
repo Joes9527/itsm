@@ -33,7 +33,7 @@ type conversionFixture struct {
 	incidentWorkItem int
 }
 
-func newConversionFixture(t *testing.T, status string, withWorkItem bool) *conversionFixture {
+func newConversionFixture(t *testing.T, status string, _ bool) *conversionFixture {
 	t.Helper()
 	suffix := strings.NewReplacer("/", "-", " ", "-").Replace(t.Name())
 	client := enttest.Open(t, "sqlite3", fmt.Sprintf("file:problem-conversion-%s?mode=memory&cache=shared&_fk=1&_busy_timeout=5000&_txlock=immediate", suffix))
@@ -42,22 +42,20 @@ func newConversionFixture(t *testing.T, status string, withWorkItem bool) *conve
 	tenant := createProblemHandlerTenant(t, ctx, client, suffix)
 	actor := createProblemHandlerUser(t, ctx, client, tenant.ID, suffix)
 
-	var workItemID int
-	if withWorkItem {
-		workItem, err := client.Ticket.Create().
-			SetTitle("Intermittent API outage").
-			SetDescription("Requests intermittently return 503").
-			SetStatus(status).
-			SetType("incident").
-			SetRecordClass("incident").
-			SetPriority("high").
-			SetTicketNumber("CONV-SRC-" + suffix).
-			SetRequesterID(actor.ID).
-			SetTenantID(tenant.ID).
-			Save(ctx)
-		require.NoError(t, err)
-		workItemID = workItem.ID
-	}
+	category := createProblemHandlerCategory(t, ctx, client, tenant.ID, "platform")
+	workItem, err := client.Ticket.Create().
+		SetTitle("Intermittent API outage").
+		SetDescription("Requests intermittently return 503").
+		SetStatus(status).
+		SetType("incident").
+		SetRecordClass("incident").
+		SetPriority("high").
+		SetTicketNumber("CONV-SRC-" + suffix).
+		SetRequesterID(actor.ID).
+		SetTenantID(tenant.ID).
+		SetCategoryID(category.ID).
+		Save(ctx)
+	require.NoError(t, err)
 
 	create := client.Incident.Create().
 		SetType("incident").
@@ -65,12 +63,7 @@ func newConversionFixture(t *testing.T, status string, withWorkItem bool) *conve
 		SetImpact("high").
 		SetUrgency("high").
 		SetIncidentNumber("CONV-INC-" + suffix).
-		SetReporterID(actor.ID).
-		SetCategory("platform").
-		SetTenantID(tenant.ID)
-	if withWorkItem {
-		create.SetWorkItemID(workItemID)
-	}
+		SetWorkItemID(workItem.ID)
 	incident, err := create.Save(ctx)
 	require.NoError(t, err)
 
@@ -82,7 +75,7 @@ func newConversionFixture(t *testing.T, status string, withWorkItem bool) *conve
 		tenantID:         tenant.ID,
 		actorID:          actor.ID,
 		incidentID:       incident.ID,
-		incidentWorkItem: workItemID,
+		incidentWorkItem: workItem.ID,
 	}
 }
 
@@ -196,7 +189,7 @@ func TestGetWithAssociationsOmitsDeletedConvertedIncident(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	_, err = f.client.Incident.UpdateOneID(f.incidentID).SetDeletedAt(time.Now()).Save(f.ctx)
+	_, err = f.client.Ticket.UpdateOneID(f.incidentWorkItem).SetDeletedAt(time.Now()).Save(f.ctx)
 	require.NoError(t, err)
 
 	withAssociations, err := f.service.GetWithAssociations(f.ctx, created.ID, f.tenantID)
@@ -214,7 +207,7 @@ func TestGetWithAssociationsOmitsDeletedLegacyIncident(t *testing.T) {
 		f.ctx, f.tenantID, created.ID, f.actorID, "incident", []int{f.incidentID},
 	))
 
-	_, err = f.client.Incident.UpdateOneID(f.incidentID).SetDeletedAt(time.Now()).Save(f.ctx)
+	_, err = f.client.Ticket.UpdateOneID(f.incidentWorkItem).SetDeletedAt(time.Now()).Save(f.ctx)
 	require.NoError(t, err)
 
 	withAssociations, err := f.service.GetWithAssociations(f.ctx, created.ID, f.tenantID)
@@ -272,7 +265,7 @@ func TestCreateFromIncidentRejectsIneligibleSourceWithoutWrites(t *testing.T) {
 		before := readConversionCounts(t, f)
 
 		_, err = f.service.CreateFromIncident(f.ctx, f.tenantID, f.incidentID, f.actorID, dto.ConvertIncidentToProblemRequest{})
-		require.ErrorContains(t, err, "source work item not found")
+		require.ErrorContains(t, err, "incident not found")
 		requireConversionCounts(t, f, before)
 	})
 }

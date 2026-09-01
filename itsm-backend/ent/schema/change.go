@@ -1,8 +1,6 @@
 package schema
 
 import (
-	"time"
-
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
@@ -29,17 +27,8 @@ func (Change) Fields() []ent.Field {
 		field.String("risk_level").
 			Comment("风险等级").
 			Default("medium"),
-		field.Int("assignee_id").
-			Comment("处理人ID").
-			Optional(),
-		field.Int("created_by").
-			Comment("创建人ID").
-			Positive(),
 		field.Int("work_item_id").
 			Comment("关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入"),
-		field.Int("tenant_id").
-			Comment("租户ID").
-			Positive(),
 		field.Time("planned_start_date").
 			Comment("计划开始时间").
 			Optional(),
@@ -61,16 +50,6 @@ func (Change) Fields() []ent.Field {
 		field.JSON("affected_cis", []string{}).
 			Comment("受影响的配置项").
 			Optional(),
-		field.JSON("related_tickets", []string{}).
-			Comment("相关工单").
-			Optional(),
-		field.Time("created_at").
-			Comment("创建时间").
-			Default(time.Now),
-		field.Time("updated_at").
-			Comment("更新时间").
-			Default(time.Now).
-			UpdateDefault(time.Now),
 	}
 }
 

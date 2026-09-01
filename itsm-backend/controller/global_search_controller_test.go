@@ -83,8 +83,6 @@ func TestGlobalSearch_SearchCaseInsensitiveAndNumber(t *testing.T) {
 		SetType("incident").
 		SetSeverity("high").
 		SetIncidentNumber("INC-GLOBAL-002").
-		SetReporterID(user.ID).
-		SetTenantID(tenant.ID).
 		SetWorkItemID(incidentWorkItem.ID).
 		Save(t.Context())
 	require.NoError(t, err)

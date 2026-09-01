@@ -27,8 +27,8 @@ WHERE NOT EXISTS (SELECT 1 FROM tickets WHERE ticket_number = 'TKT-202602-000016
 -- =============================================
 -- 2. 添加更多事件（6条）
 -- =============================================
-INSERT INTO tickets (title, description, status, priority, type, record_class, ticket_number, tenant_id, requester_id, created_at, updated_at)
-SELECT title, description, status, priority, 'incident', 'incident', work_item_number, tenant_id, reporter_id, created_at, created_at
+INSERT INTO tickets (title, description, status, priority, type, record_class, ticket_number, tenant_id, requester_id, source, created_at, updated_at)
+SELECT title, description, status, priority, 'incident', 'incident', work_item_number, tenant_id, reporter_id, 'monitoring', created_at, created_at
 FROM (VALUES
     ('数据库CPU持续高负载', '数据库服务器CPU使用率超过90%持续超过30分钟', 'investigating', 'critical', 'TKT-EXT-INC-000007', 1, 1, NOW() - INTERVAL '1 hour'),
     ('第三方API调用失败率上升', '调用外部支付API失败率从1%上升到15%', 'confirmed', 'high', 'TKT-EXT-INC-000008', 1, 1, NOW() - INTERVAL '2 hours'),
@@ -38,8 +38,8 @@ FROM (VALUES
     ('日志采集延迟', '日志采集延迟超过10分钟', 'new', 'low', 'TKT-EXT-INC-000012', 1, 1, NOW() - INTERVAL '30 minutes')
 ) AS v(title, description, status, priority, work_item_number, tenant_id, reporter_id, created_at)
 ON CONFLICT DO NOTHING;
-INSERT INTO incidents (work_item_id, incident_number, source, type, is_major_incident, reporter_id, tenant_id, detected_at, created_at, updated_at)
-SELECT t.id, v.incident_number, 'monitoring', 'incident', v.is_major, v.reporter_id, v.tenant_id, v.created_at, v.created_at, v.created_at
+INSERT INTO incidents (work_item_id, incident_number, type, is_major_incident, detected_at)
+SELECT t.id, v.incident_number, 'incident', v.is_major, v.created_at
 FROM (VALUES
     ('TKT-EXT-INC-000007', 'INC-202602-000007', true, 1, 1, NOW() - INTERVAL '1 hour'),
     ('TKT-EXT-INC-000008', 'INC-202602-000008', false, 1, 1, NOW() - INTERVAL '2 hours'),
@@ -49,7 +49,7 @@ FROM (VALUES
     ('TKT-EXT-INC-000012', 'INC-202602-000012', false, 1, 1, NOW() - INTERVAL '30 minutes')
 ) AS v(work_item_number, incident_number, is_major, reporter_id, tenant_id, created_at)
 JOIN tickets t ON t.ticket_number = v.work_item_number AND t.tenant_id = v.tenant_id
-WHERE NOT EXISTS (SELECT 1 FROM incidents i WHERE i.incident_number = v.incident_number AND i.tenant_id = v.tenant_id);
+WHERE NOT EXISTS (SELECT 1 FROM incidents i WHERE i.work_item_id = t.id);
 
 -- =============================================
 -- 3. 添加更多问题（4条）
@@ -63,8 +63,8 @@ FROM (VALUES
     ('日志存储空间增长过快', '日志存储空间每周增长50%，需要优化', 'open', 'low', 'TKT-EXT-PRB-000004', 1, NOW() - INTERVAL '2 days')
 ) AS v(title, description, status, priority, work_item_number, tenant_id, created_at)
 ON CONFLICT DO NOTHING;
-INSERT INTO problems (work_item_id, category, created_by, tenant_id, created_at, updated_at)
-SELECT t.id, v.category, 1, v.tenant_id, v.created_at, v.created_at
+INSERT INTO problems (work_item_id)
+SELECT t.id
 FROM (VALUES
     ('TKT-EXT-PRB-000001', 'performance', 1, NOW() - INTERVAL '3 days'),
     ('TKT-EXT-PRB-000002', 'data', 1, NOW() - INTERVAL '5 days'),
@@ -87,8 +87,8 @@ FROM (VALUES
     ('数据库参数优化', '调整MySQL缓冲池大小和连接数参数', 'scheduled', 'medium', 'TKT-EXT-CHG-000005', 1, NOW() - INTERVAL '5 days')
 ) AS v(title, description, status, priority, work_item_number, tenant_id, created_at)
 ON CONFLICT DO NOTHING;
-INSERT INTO changes (work_item_id, justification, type, risk_level, created_by, tenant_id, planned_start_date, planned_end_date, created_at, updated_at)
-SELECT t.id, v.justification, v.change_type, v.risk_level, 1, v.tenant_id, v.planned_start, v.planned_end, v.created_at, v.created_at
+INSERT INTO changes (work_item_id, justification, type, risk_level, planned_start_date, planned_end_date)
+SELECT t.id, v.justification, v.change_type, v.risk_level, v.planned_start, v.planned_end
 FROM (VALUES
     ('TKT-EXT-CHG-000001', '安全漏洞修复和性能提升', 'standard', 'medium', 1, NOW() + INTERVAL '7 days', NOW() + INTERVAL '8 days', NOW() - INTERVAL '1 day'),
     ('TKT-EXT-CHG-000002', '提升资源利用率', 'standard', 'low', 1, NOW() + INTERVAL '2 days', NOW() + INTERVAL '3 days', NOW() - INTERVAL '3 days'),

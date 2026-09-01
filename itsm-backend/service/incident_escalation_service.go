@@ -144,7 +144,7 @@ func (s *IncidentEscalationService) DeleteEscalationRule(ctx context.Context, id
 
 // CheckAndEscalate 检查事件是否需要升级
 func (s *IncidentEscalationService) CheckAndEscalate(ctx context.Context, incidentID int) (*ent.Incident, error) {
-	incidentEnt, err := s.client.Incident.Query().Where(incident.IDEQ(incidentID)).WithWorkItem().Only(ctx)
+	incidentEnt, err := s.client.Incident.Query().Where(incident.IDEQ(incidentID)).WithWorkItem(withIncidentWorkItemProjection).Only(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +179,7 @@ func (s *IncidentEscalationService) getMatchingRules(ctx context.Context, incide
 
 	var matchedRules []*ent.IncidentEscalationRule
 	for _, rule := range all {
-		if rule.TenantID != incidentEnt.TenantID || !rule.IsActive {
+		if incidentEnt.Edges.WorkItem == nil || rule.TenantID != incidentEnt.Edges.WorkItem.TenantID || !rule.IsActive {
 			continue
 		}
 
@@ -188,7 +188,14 @@ func (s *IncidentEscalationService) getMatchingRules(ctx context.Context, incide
 			continue
 		}
 		// 匹配分类
-		if rule.CategoryMatch != "" && rule.CategoryMatch != incidentEnt.Category {
+		categoryName := ""
+		if category := incidentEnt.Edges.WorkItem.Edges.Category; category != nil {
+			categoryName = category.Name
+			if parent := category.Edges.Parent; parent != nil {
+				categoryName = parent.Name
+			}
+		}
+		if rule.CategoryMatch != "" && rule.CategoryMatch != categoryName {
 			continue
 		}
 		matchedRules = append(matchedRules, rule)
@@ -208,7 +215,7 @@ func (s *IncidentEscalationService) shouldEscalate(ctx context.Context, incident
 		// 基于SLA违规升级 - 检查是否存在未解决的SLA违规
 		violations, err := s.client.SLAViolation.Query().
 			Where(
-				slaviolation.TenantIDEQ(incidentEnt.TenantID),
+				slaviolation.TenantIDEQ(incidentEnt.Edges.WorkItem.TenantID),
 				slaviolation.IsResolved(false),
 			).
 			All(ctx)
@@ -240,19 +247,26 @@ func (s *IncidentEscalationService) escalateIncident(ctx context.Context, incide
 		_ = tx.Rollback()
 		return nil, cause
 	}
+	tenantID := incidentEnt.Edges.WorkItem.TenantID
 	update := tx.Incident.UpdateOneID(incidentEnt.ID).
-		Where(incident.TenantIDEQ(incidentEnt.TenantID)).
+		Where(incidentTenantScope(tenantID)).
 		SetEscalatedAt(time.Now()).
 		SetEscalationLevel(rule.EscalationLevel)
 
+	workItemUpdate := tx.Ticket.UpdateOneID(incidentEnt.WorkItemID).
+		Where(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(incidentEnt.Edges.WorkItem.Version)).
+		SetUpdatedAt(time.Now()).
+		AddVersion(1)
 	if rule.ToStatus != "" {
-		if _, err := tx.Ticket.UpdateOneID(incidentEnt.WorkItemID).Where(ticket.TenantIDEQ(incidentEnt.TenantID)).SetStatus(rule.ToStatus).Save(ctx); err != nil {
-			return fail(err)
-		}
+		workItemUpdate.SetStatus(rule.ToStatus)
 	}
 
 	if rule.TargetAssigneeID > 0 {
-		update.SetAssigneeID(rule.TargetAssigneeID)
+		workItemUpdate.SetAssigneeID(rule.TargetAssigneeID)
+	}
+	workItem, err := workItemUpdate.Save(ctx)
+	if err != nil {
+		return fail(err)
 	}
 
 	updatedIncident, err := update.Save(ctx)
@@ -278,10 +292,7 @@ func (s *IncidentEscalationService) escalateIncident(ctx context.Context, incide
 	if err := tx.Commit(); err != nil {
 		return fail(err)
 	}
-	updatedIncident.Edges.WorkItem, err = s.client.Ticket.Query().Where(ticket.IDEQ(updatedIncident.WorkItemID), ticket.TenantIDEQ(updatedIncident.TenantID)).Only(ctx)
-	if err != nil {
-		return nil, err
-	}
+	updatedIncident.Edges.WorkItem = workItem
 
 	return updatedIncident, nil
 }
@@ -319,10 +330,9 @@ func (s *IncidentEscalationService) ProcessEscalations(ctx context.Context, tena
 	// 查询所有待处理的事件
 	incidents, err := s.client.Incident.Query().
 		Where(
-			incident.TenantIDEQ(tenantID),
-			incident.HasWorkItemWith(ticket.StatusIn("new", "investigating")),
+			incidentTenantScope(tenantID, ticket.StatusIn("new", "investigating")),
 		).
-		WithWorkItem().All(ctx)
+		WithWorkItem(withIncidentWorkItemProjection).All(ctx)
 	if err != nil {
 		return err
 	}

@@ -407,12 +407,12 @@ func (_q *ProblemQuery) WithChanges(opts ...func(*ChangeQuery)) *ProblemQuery {
 // Example:
 //
 //	var v []struct {
-//		Category string `json:"category,omitempty"`
+//		RootCause string `json:"root_cause,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.Problem.Query().
-//		GroupBy(problem.FieldCategory).
+//		GroupBy(problem.FieldRootCause).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *ProblemQuery) GroupBy(field string, fields ...string) *ProblemGroupBy {
@@ -430,11 +430,11 @@ func (_q *ProblemQuery) GroupBy(field string, fields ...string) *ProblemGroupBy 
 // Example:
 //
 //	var v []struct {
-//		Category string `json:"category,omitempty"`
+//		RootCause string `json:"root_cause,omitempty"`
 //	}
 //
 //	client.Problem.Query().
-//		Select(problem.FieldCategory).
+//		Select(problem.FieldRootCause).
 //		Scan(ctx, &v)
 func (_q *ProblemQuery) Select(fields ...string) *ProblemSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)

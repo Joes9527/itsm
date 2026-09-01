@@ -276,7 +276,7 @@ func TestAssignRouteUsesIncidentWritePermission(t *testing.T) {
 		SetRequesterID(reporter.ID).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 	incidentEntity, err := client.Incident.Create().SetIncidentNumber("INC-ROUTE-ASSIGN").
-		SetReporterID(reporter.ID).SetTenantID(tenant.ID).SetWorkItemID(workItem.ID).Save(ctx)
+		SetWorkItemID(workItem.ID).Save(ctx)
 	require.NoError(t, err)
 
 	const jwtSecret = "assign-route-secret"
@@ -296,7 +296,7 @@ func TestAssignRouteUsesIncidentWritePermission(t *testing.T) {
 	router.ServeHTTP(recorder, request)
 
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
-	updated, err := client.Incident.Get(ctx, incidentEntity.ID)
+	updated, err := client.Ticket.Get(ctx, workItem.ID)
 	require.NoError(t, err)
 	require.Equal(t, assignee.ID, updated.AssigneeID)
 }

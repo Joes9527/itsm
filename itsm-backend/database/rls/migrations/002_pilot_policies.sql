@@ -34,8 +34,18 @@ ALTER TABLE changes FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON changes;
 
 CREATE POLICY tenant_isolation ON changes
-    USING       (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint)
-    WITH CHECK  (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint);
+    USING       (EXISTS (
+        SELECT 1
+        FROM tickets work_item
+        WHERE work_item.id = changes.work_item_id
+          AND work_item.tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint
+    ))
+    WITH CHECK  (EXISTS (
+        SELECT 1
+        FROM tickets work_item
+        WHERE work_item.id = changes.work_item_id
+          AND work_item.tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint
+    ));
 
 -- ---------------------------------------------------------------------------
 -- 2. vectors 表（AI 检索索引）

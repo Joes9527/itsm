@@ -48,22 +48,10 @@ func (Incident) Fields() []ent.Field {
 			Comment("事件编号").
 			Unique().
 			NotEmpty(),
-		field.Int("reporter_id").
-			Comment("报告人ID").
-			Positive(),
 		field.Int("work_item_id").
 			Comment("关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入"),
-		field.Int("assignee_id").
-			Comment("处理人ID").
-			Optional(),
 		field.Int("configuration_item_id").
 			Comment("配置项ID").
-			Optional(),
-		field.String("category").
-			Comment("事件分类").
-			Optional(),
-		field.String("subcategory").
-			Comment("事件子分类").
 			Optional(),
 		field.JSON("impact_analysis", map[string]interface{}{}).
 			Comment("影响分析").
@@ -77,12 +65,6 @@ func (Incident) Fields() []ent.Field {
 		field.Time("detected_at").
 			Comment("检测时间").
 			Default(time.Now),
-		field.Time("resolved_at").
-			Comment("解决时间").
-			Optional(),
-		field.Time("closed_at").
-			Comment("关闭时间").
-			Optional(),
 		field.Time("escalated_at").
 			Comment("升级时间").
 			Optional(),
@@ -95,30 +77,9 @@ func (Incident) Fields() []ent.Field {
 		field.Bool("is_major_incident").
 			Comment("是否重大事件").
 			Default(false),
-		field.String("source").
-			Comment("事件来源").
-			Default("manual"),
 		field.JSON("metadata", map[string]interface{}{}).
 			Comment("元数据").
 			Optional(),
-		field.Int("tenant_id").
-			Comment("租户ID").
-			Positive(),
-		field.Int("version").
-			Comment("版本号（乐观锁）").
-			Default(1).
-			Positive(),
-		field.Time("created_at").
-			Comment("创建时间").
-			Default(time.Now),
-		field.Time("updated_at").
-			Comment("更新时间").
-			Default(time.Now).
-			UpdateDefault(time.Now),
-		field.Time("deleted_at").
-			Comment("软删除时间").
-			Optional().
-			Nillable(),
 	}
 }
 

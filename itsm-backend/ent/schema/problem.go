@@ -1,8 +1,6 @@
 package schema
 
 import (
-	"time"
-
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
@@ -17,9 +15,6 @@ type Problem struct {
 // Fields of the Problem.
 func (Problem) Fields() []ent.Field {
 	return []ent.Field{
-		field.String("category").
-			Comment("问题分类").
-			Optional(),
 		field.Text("root_cause").
 			Comment("根本原因").
 			Optional(),
@@ -32,36 +27,8 @@ func (Problem) Fields() []ent.Field {
 		field.Text("impact").
 			Comment("影响范围").
 			Optional(),
-		field.Int("assignee_id").
-			Comment("处理人ID").
-			Optional(),
-		field.Int("created_by").
-			Comment("创建人ID").
-			Positive(),
 		field.Int("work_item_id").
 			Comment("关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入"),
-		field.Int("tenant_id").
-			Comment("租户ID").
-			Positive(),
-		field.Time("created_at").
-			Comment("创建时间").
-			Default(time.Now),
-		field.Time("updated_at").
-			Comment("更新时间").
-			Default(time.Now).
-			UpdateDefault(time.Now),
-		field.Time("resolved_at").
-			Comment("解决时间").
-			Optional().
-			Nillable(),
-		field.Time("closed_at").
-			Comment("关闭时间").
-			Optional().
-			Nillable(),
-		field.Time("deleted_at").
-			Comment("删除时间").
-			Optional().
-			Nillable(),
 	}
 }
 

@@ -94,54 +94,6 @@ func (_u *ChangeUpdate) SetNillableRiskLevel(v *string) *ChangeUpdate {
 	return _u
 }
 
-// SetAssigneeID sets the "assignee_id" field.
-func (_u *ChangeUpdate) SetAssigneeID(v int) *ChangeUpdate {
-	_u.mutation.ResetAssigneeID()
-	_u.mutation.SetAssigneeID(v)
-	return _u
-}
-
-// SetNillableAssigneeID sets the "assignee_id" field if the given value is not nil.
-func (_u *ChangeUpdate) SetNillableAssigneeID(v *int) *ChangeUpdate {
-	if v != nil {
-		_u.SetAssigneeID(*v)
-	}
-	return _u
-}
-
-// AddAssigneeID adds value to the "assignee_id" field.
-func (_u *ChangeUpdate) AddAssigneeID(v int) *ChangeUpdate {
-	_u.mutation.AddAssigneeID(v)
-	return _u
-}
-
-// ClearAssigneeID clears the value of the "assignee_id" field.
-func (_u *ChangeUpdate) ClearAssigneeID() *ChangeUpdate {
-	_u.mutation.ClearAssigneeID()
-	return _u
-}
-
-// SetCreatedBy sets the "created_by" field.
-func (_u *ChangeUpdate) SetCreatedBy(v int) *ChangeUpdate {
-	_u.mutation.ResetCreatedBy()
-	_u.mutation.SetCreatedBy(v)
-	return _u
-}
-
-// SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (_u *ChangeUpdate) SetNillableCreatedBy(v *int) *ChangeUpdate {
-	if v != nil {
-		_u.SetCreatedBy(*v)
-	}
-	return _u
-}
-
-// AddCreatedBy adds value to the "created_by" field.
-func (_u *ChangeUpdate) AddCreatedBy(v int) *ChangeUpdate {
-	_u.mutation.AddCreatedBy(v)
-	return _u
-}
-
 // SetWorkItemID sets the "work_item_id" field.
 func (_u *ChangeUpdate) SetWorkItemID(v int) *ChangeUpdate {
 	_u.mutation.SetWorkItemID(v)
@@ -153,27 +105,6 @@ func (_u *ChangeUpdate) SetNillableWorkItemID(v *int) *ChangeUpdate {
 	if v != nil {
 		_u.SetWorkItemID(*v)
 	}
-	return _u
-}
-
-// SetTenantID sets the "tenant_id" field.
-func (_u *ChangeUpdate) SetTenantID(v int) *ChangeUpdate {
-	_u.mutation.ResetTenantID()
-	_u.mutation.SetTenantID(v)
-	return _u
-}
-
-// SetNillableTenantID sets the "tenant_id" field if the given value is not nil.
-func (_u *ChangeUpdate) SetNillableTenantID(v *int) *ChangeUpdate {
-	if v != nil {
-		_u.SetTenantID(*v)
-	}
-	return _u
-}
-
-// AddTenantID adds value to the "tenant_id" field.
-func (_u *ChangeUpdate) AddTenantID(v int) *ChangeUpdate {
-	_u.mutation.AddTenantID(v)
 	return _u
 }
 
@@ -315,44 +246,6 @@ func (_u *ChangeUpdate) ClearAffectedCis() *ChangeUpdate {
 	return _u
 }
 
-// SetRelatedTickets sets the "related_tickets" field.
-func (_u *ChangeUpdate) SetRelatedTickets(v []string) *ChangeUpdate {
-	_u.mutation.SetRelatedTickets(v)
-	return _u
-}
-
-// AppendRelatedTickets appends value to the "related_tickets" field.
-func (_u *ChangeUpdate) AppendRelatedTickets(v []string) *ChangeUpdate {
-	_u.mutation.AppendRelatedTickets(v)
-	return _u
-}
-
-// ClearRelatedTickets clears the value of the "related_tickets" field.
-func (_u *ChangeUpdate) ClearRelatedTickets() *ChangeUpdate {
-	_u.mutation.ClearRelatedTickets()
-	return _u
-}
-
-// SetCreatedAt sets the "created_at" field.
-func (_u *ChangeUpdate) SetCreatedAt(v time.Time) *ChangeUpdate {
-	_u.mutation.SetCreatedAt(v)
-	return _u
-}
-
-// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_u *ChangeUpdate) SetNillableCreatedAt(v *time.Time) *ChangeUpdate {
-	if v != nil {
-		_u.SetCreatedAt(*v)
-	}
-	return _u
-}
-
-// SetUpdatedAt sets the "updated_at" field.
-func (_u *ChangeUpdate) SetUpdatedAt(v time.Time) *ChangeUpdate {
-	_u.mutation.SetUpdatedAt(v)
-	return _u
-}
-
 // SetWorkItem sets the "work_item" edge to the Ticket entity.
 func (_u *ChangeUpdate) SetWorkItem(v *Ticket) *ChangeUpdate {
 	return _u.SetWorkItemID(v.ID)
@@ -443,7 +336,6 @@ func (_u *ChangeUpdate) RemovePir(v ...*ChangePIR) *ChangeUpdate {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *ChangeUpdate) Save(ctx context.Context) (int, error) {
-	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -469,26 +361,8 @@ func (_u *ChangeUpdate) ExecX(ctx context.Context) {
 	}
 }
 
-// defaults sets the default values of the builder before save.
-func (_u *ChangeUpdate) defaults() {
-	if _, ok := _u.mutation.UpdatedAt(); !ok {
-		v := change.UpdateDefaultUpdatedAt()
-		_u.mutation.SetUpdatedAt(v)
-	}
-}
-
 // check runs all checks and user-defined validators on the builder.
 func (_u *ChangeUpdate) check() error {
-	if v, ok := _u.mutation.CreatedBy(); ok {
-		if err := change.CreatedByValidator(v); err != nil {
-			return &ValidationError{Name: "created_by", err: fmt.Errorf(`ent: validator failed for field "Change.created_by": %w`, err)}
-		}
-	}
-	if v, ok := _u.mutation.TenantID(); ok {
-		if err := change.TenantIDValidator(v); err != nil {
-			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "Change.tenant_id": %w`, err)}
-		}
-	}
 	if _u.mutation.WorkItemCleared() && len(_u.mutation.WorkItemIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "Change.work_item"`)
 	}
@@ -521,27 +395,6 @@ func (_u *ChangeUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.RiskLevel(); ok {
 		_spec.SetField(change.FieldRiskLevel, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.AssigneeID(); ok {
-		_spec.SetField(change.FieldAssigneeID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedAssigneeID(); ok {
-		_spec.AddField(change.FieldAssigneeID, field.TypeInt, value)
-	}
-	if _u.mutation.AssigneeIDCleared() {
-		_spec.ClearField(change.FieldAssigneeID, field.TypeInt)
-	}
-	if value, ok := _u.mutation.CreatedBy(); ok {
-		_spec.SetField(change.FieldCreatedBy, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedCreatedBy(); ok {
-		_spec.AddField(change.FieldCreatedBy, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.TenantID(); ok {
-		_spec.SetField(change.FieldTenantID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedTenantID(); ok {
-		_spec.AddField(change.FieldTenantID, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.PlannedStartDate(); ok {
 		_spec.SetField(change.FieldPlannedStartDate, field.TypeTime, value)
@@ -589,23 +442,6 @@ func (_u *ChangeUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.AffectedCisCleared() {
 		_spec.ClearField(change.FieldAffectedCis, field.TypeJSON)
-	}
-	if value, ok := _u.mutation.RelatedTickets(); ok {
-		_spec.SetField(change.FieldRelatedTickets, field.TypeJSON, value)
-	}
-	if value, ok := _u.mutation.AppendedRelatedTickets(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, change.FieldRelatedTickets, value)
-		})
-	}
-	if _u.mutation.RelatedTicketsCleared() {
-		_spec.ClearField(change.FieldRelatedTickets, field.TypeJSON)
-	}
-	if value, ok := _u.mutation.CreatedAt(); ok {
-		_spec.SetField(change.FieldCreatedAt, field.TypeTime, value)
-	}
-	if value, ok := _u.mutation.UpdatedAt(); ok {
-		_spec.SetField(change.FieldUpdatedAt, field.TypeTime, value)
 	}
 	if _u.mutation.WorkItemCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -808,54 +644,6 @@ func (_u *ChangeUpdateOne) SetNillableRiskLevel(v *string) *ChangeUpdateOne {
 	return _u
 }
 
-// SetAssigneeID sets the "assignee_id" field.
-func (_u *ChangeUpdateOne) SetAssigneeID(v int) *ChangeUpdateOne {
-	_u.mutation.ResetAssigneeID()
-	_u.mutation.SetAssigneeID(v)
-	return _u
-}
-
-// SetNillableAssigneeID sets the "assignee_id" field if the given value is not nil.
-func (_u *ChangeUpdateOne) SetNillableAssigneeID(v *int) *ChangeUpdateOne {
-	if v != nil {
-		_u.SetAssigneeID(*v)
-	}
-	return _u
-}
-
-// AddAssigneeID adds value to the "assignee_id" field.
-func (_u *ChangeUpdateOne) AddAssigneeID(v int) *ChangeUpdateOne {
-	_u.mutation.AddAssigneeID(v)
-	return _u
-}
-
-// ClearAssigneeID clears the value of the "assignee_id" field.
-func (_u *ChangeUpdateOne) ClearAssigneeID() *ChangeUpdateOne {
-	_u.mutation.ClearAssigneeID()
-	return _u
-}
-
-// SetCreatedBy sets the "created_by" field.
-func (_u *ChangeUpdateOne) SetCreatedBy(v int) *ChangeUpdateOne {
-	_u.mutation.ResetCreatedBy()
-	_u.mutation.SetCreatedBy(v)
-	return _u
-}
-
-// SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (_u *ChangeUpdateOne) SetNillableCreatedBy(v *int) *ChangeUpdateOne {
-	if v != nil {
-		_u.SetCreatedBy(*v)
-	}
-	return _u
-}
-
-// AddCreatedBy adds value to the "created_by" field.
-func (_u *ChangeUpdateOne) AddCreatedBy(v int) *ChangeUpdateOne {
-	_u.mutation.AddCreatedBy(v)
-	return _u
-}
-
 // SetWorkItemID sets the "work_item_id" field.
 func (_u *ChangeUpdateOne) SetWorkItemID(v int) *ChangeUpdateOne {
 	_u.mutation.SetWorkItemID(v)
@@ -867,27 +655,6 @@ func (_u *ChangeUpdateOne) SetNillableWorkItemID(v *int) *ChangeUpdateOne {
 	if v != nil {
 		_u.SetWorkItemID(*v)
 	}
-	return _u
-}
-
-// SetTenantID sets the "tenant_id" field.
-func (_u *ChangeUpdateOne) SetTenantID(v int) *ChangeUpdateOne {
-	_u.mutation.ResetTenantID()
-	_u.mutation.SetTenantID(v)
-	return _u
-}
-
-// SetNillableTenantID sets the "tenant_id" field if the given value is not nil.
-func (_u *ChangeUpdateOne) SetNillableTenantID(v *int) *ChangeUpdateOne {
-	if v != nil {
-		_u.SetTenantID(*v)
-	}
-	return _u
-}
-
-// AddTenantID adds value to the "tenant_id" field.
-func (_u *ChangeUpdateOne) AddTenantID(v int) *ChangeUpdateOne {
-	_u.mutation.AddTenantID(v)
 	return _u
 }
 
@@ -1029,44 +796,6 @@ func (_u *ChangeUpdateOne) ClearAffectedCis() *ChangeUpdateOne {
 	return _u
 }
 
-// SetRelatedTickets sets the "related_tickets" field.
-func (_u *ChangeUpdateOne) SetRelatedTickets(v []string) *ChangeUpdateOne {
-	_u.mutation.SetRelatedTickets(v)
-	return _u
-}
-
-// AppendRelatedTickets appends value to the "related_tickets" field.
-func (_u *ChangeUpdateOne) AppendRelatedTickets(v []string) *ChangeUpdateOne {
-	_u.mutation.AppendRelatedTickets(v)
-	return _u
-}
-
-// ClearRelatedTickets clears the value of the "related_tickets" field.
-func (_u *ChangeUpdateOne) ClearRelatedTickets() *ChangeUpdateOne {
-	_u.mutation.ClearRelatedTickets()
-	return _u
-}
-
-// SetCreatedAt sets the "created_at" field.
-func (_u *ChangeUpdateOne) SetCreatedAt(v time.Time) *ChangeUpdateOne {
-	_u.mutation.SetCreatedAt(v)
-	return _u
-}
-
-// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_u *ChangeUpdateOne) SetNillableCreatedAt(v *time.Time) *ChangeUpdateOne {
-	if v != nil {
-		_u.SetCreatedAt(*v)
-	}
-	return _u
-}
-
-// SetUpdatedAt sets the "updated_at" field.
-func (_u *ChangeUpdateOne) SetUpdatedAt(v time.Time) *ChangeUpdateOne {
-	_u.mutation.SetUpdatedAt(v)
-	return _u
-}
-
 // SetWorkItem sets the "work_item" edge to the Ticket entity.
 func (_u *ChangeUpdateOne) SetWorkItem(v *Ticket) *ChangeUpdateOne {
 	return _u.SetWorkItemID(v.ID)
@@ -1170,7 +899,6 @@ func (_u *ChangeUpdateOne) Select(field string, fields ...string) *ChangeUpdateO
 
 // Save executes the query and returns the updated Change entity.
 func (_u *ChangeUpdateOne) Save(ctx context.Context) (*Change, error) {
-	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -1196,26 +924,8 @@ func (_u *ChangeUpdateOne) ExecX(ctx context.Context) {
 	}
 }
 
-// defaults sets the default values of the builder before save.
-func (_u *ChangeUpdateOne) defaults() {
-	if _, ok := _u.mutation.UpdatedAt(); !ok {
-		v := change.UpdateDefaultUpdatedAt()
-		_u.mutation.SetUpdatedAt(v)
-	}
-}
-
 // check runs all checks and user-defined validators on the builder.
 func (_u *ChangeUpdateOne) check() error {
-	if v, ok := _u.mutation.CreatedBy(); ok {
-		if err := change.CreatedByValidator(v); err != nil {
-			return &ValidationError{Name: "created_by", err: fmt.Errorf(`ent: validator failed for field "Change.created_by": %w`, err)}
-		}
-	}
-	if v, ok := _u.mutation.TenantID(); ok {
-		if err := change.TenantIDValidator(v); err != nil {
-			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "Change.tenant_id": %w`, err)}
-		}
-	}
 	if _u.mutation.WorkItemCleared() && len(_u.mutation.WorkItemIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "Change.work_item"`)
 	}
@@ -1266,27 +976,6 @@ func (_u *ChangeUpdateOne) sqlSave(ctx context.Context) (_node *Change, err erro
 	if value, ok := _u.mutation.RiskLevel(); ok {
 		_spec.SetField(change.FieldRiskLevel, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.AssigneeID(); ok {
-		_spec.SetField(change.FieldAssigneeID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedAssigneeID(); ok {
-		_spec.AddField(change.FieldAssigneeID, field.TypeInt, value)
-	}
-	if _u.mutation.AssigneeIDCleared() {
-		_spec.ClearField(change.FieldAssigneeID, field.TypeInt)
-	}
-	if value, ok := _u.mutation.CreatedBy(); ok {
-		_spec.SetField(change.FieldCreatedBy, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedCreatedBy(); ok {
-		_spec.AddField(change.FieldCreatedBy, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.TenantID(); ok {
-		_spec.SetField(change.FieldTenantID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedTenantID(); ok {
-		_spec.AddField(change.FieldTenantID, field.TypeInt, value)
-	}
 	if value, ok := _u.mutation.PlannedStartDate(); ok {
 		_spec.SetField(change.FieldPlannedStartDate, field.TypeTime, value)
 	}
@@ -1333,23 +1022,6 @@ func (_u *ChangeUpdateOne) sqlSave(ctx context.Context) (_node *Change, err erro
 	}
 	if _u.mutation.AffectedCisCleared() {
 		_spec.ClearField(change.FieldAffectedCis, field.TypeJSON)
-	}
-	if value, ok := _u.mutation.RelatedTickets(); ok {
-		_spec.SetField(change.FieldRelatedTickets, field.TypeJSON, value)
-	}
-	if value, ok := _u.mutation.AppendedRelatedTickets(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, change.FieldRelatedTickets, value)
-		})
-	}
-	if _u.mutation.RelatedTicketsCleared() {
-		_spec.ClearField(change.FieldRelatedTickets, field.TypeJSON)
-	}
-	if value, ok := _u.mutation.CreatedAt(); ok {
-		_spec.SetField(change.FieldCreatedAt, field.TypeTime, value)
-	}
-	if value, ok := _u.mutation.UpdatedAt(); ok {
-		_spec.SetField(change.FieldUpdatedAt, field.TypeTime, value)
 	}
 	if _u.mutation.WorkItemCleared() {
 		edge := &sqlgraph.EdgeSpec{

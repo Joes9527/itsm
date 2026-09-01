@@ -1017,12 +1017,10 @@ func TestHandleElement_ServiceTask_IncidentAutoAssign_NoAssignee_BlocksNonOption
 		SaveX(ctx)
 	inc, err := engine.client.Incident.Create().
 		SetIncidentNumber("INC-AUTOASSIGN-1").
-		SetReporterID(actorID).
 		SetWorkItemID(workItem.ID).
-		SetTenantID(tenantID).
 		Save(ctx)
 	require.NoError(t, err)
-	require.Zero(t, inc.AssigneeID, "新建事件默认没有处理人，这正是生产里的常态")
+	require.Zero(t, workItem.AssigneeID, "新建事件默认没有处理人，这正是生产里的常态")
 	processXML := `<?xml version="1.0" encoding="UTF-8"?>
 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="http://bpmn.io/schema/bpmn">
   <bpmn:process id="incident_autoassign_test_flow" isExecutable="true">
@@ -1069,7 +1067,7 @@ func TestHandleElement_ServiceTask_IncidentAutoAssign_NoAssignee_BlocksNonOption
 		SetBusinessID(workItem.ID).
 		SetStatus("running").SetTenantID(tenantID).
 		SetVariables(map[string]interface{}{
-			"assignee_id": inc.AssigneeID, // 0：没有可用处理人
+			"assignee_id": workItem.AssigneeID, // 0：没有可用处理人
 		}).
 		Save(ctx)
 	require.NoError(t, err)
@@ -1104,7 +1102,7 @@ func TestHandleElement_ServiceTask_IncidentAutoAssign_NoAssignee_BlocksNonOption
 
 	updatedIncident, err := engine.client.Incident.Get(ctx, inc.ID)
 	require.NoError(t, err)
-	assert.Zero(t, updatedIncident.AssigneeID, "空态跳过时不得写入处理人")
+	assert.Zero(t, requireIncidentWorkItem(t, engine.client, updatedIncident).AssigneeID, "空态跳过时不得写入处理人")
 	assert.Equal(t, "new", requireIncidentWorkItem(t, engine.client, updatedIncident).Status, "空态跳过时不得改状态")
 }
 

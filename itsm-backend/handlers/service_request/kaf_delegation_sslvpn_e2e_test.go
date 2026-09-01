@@ -421,14 +421,14 @@ func assertExclusiveSSLVPNServiceRequestClass(t *testing.T, fx *sslvpnDelegation
 	srCount, err := fx.client.ServiceRequest.Query().Where(servicerequest.TicketIDEQ(workItemID), servicerequest.TenantIDEQ(fx.tenant.ID)).Count(fx.ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 1, srCount)
-	incidentCount, err := fx.client.Incident.Query().Where(incident.WorkItemIDEQ(workItemID), incident.TenantIDEQ(fx.tenant.ID)).Count(fx.ctx)
+	incidentCount, err := fx.client.Incident.Query().Where(incident.WorkItemIDEQ(workItemID), incident.HasWorkItemWith(ticket.TenantIDEQ(fx.tenant.ID))).Count(fx.ctx)
 	require.NoError(t, err)
 	assert.Zero(t, incidentCount)
 }
 
 func assertExclusiveSSLVPNIncidentClass(t *testing.T, fx *sslvpnDelegationFixture, workItemID int) {
 	t.Helper()
-	incidentCount, err := fx.client.Incident.Query().Where(incident.WorkItemIDEQ(workItemID), incident.TenantIDEQ(fx.tenant.ID)).Count(fx.ctx)
+	incidentCount, err := fx.client.Incident.Query().Where(incident.WorkItemIDEQ(workItemID), incident.HasWorkItemWith(ticket.TenantIDEQ(fx.tenant.ID))).Count(fx.ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 1, incidentCount)
 	srCount, err := fx.client.ServiceRequest.Query().Where(servicerequest.TicketIDEQ(workItemID), servicerequest.TenantIDEQ(fx.tenant.ID)).Count(fx.ctx)

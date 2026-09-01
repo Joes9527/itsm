@@ -70,9 +70,7 @@ func TestStartProcess_TrustedTenant_ServiceTaskUsesInstanceIdentity(t *testing.T
 		SaveX(platformCtx)
 	inc, err := client.Incident.Create().
 		SetIncidentNumber("INC-PLATFORM-1").
-		SetReporterID(assignee.ID).
 		SetWorkItemID(workItem.ID).
-		SetTenantID(tenantID).
 		Save(platformCtx)
 	require.NoError(t, err)
 
@@ -86,7 +84,7 @@ func TestStartProcess_TrustedTenant_ServiceTaskUsesInstanceIdentity(t *testing.T
 
 	assigned, err := client.Incident.Get(platformCtx, inc.ID)
 	require.NoError(t, err)
-	assert.Equal(t, assignee.ID, assigned.AssigneeID, "assign_incident 应以实例（定义）租户执行")
+	assert.Equal(t, assignee.ID, requireIncidentWorkItem(t, client, assigned).AssigneeID, "assign_incident 应以实例（定义）租户执行")
 	assert.Equal(t, "assigned", requireIncidentWorkItem(t, client, assigned).Status)
 
 	started, err := client.ProcessInstance.Get(platformCtx, instance.ID)
@@ -110,9 +108,7 @@ func TestCompleteTask_TypedScope_CallbackUsesAuthoritativeBusinessIdentity(t *te
 		SetTenantID(tenantID).
 		SaveX(platformCtx)
 	ch := client.Change.Create().
-		SetCreatedBy(actor.ID).
 		SetWorkItemID(workItem.ID).
-		SetTenantID(tenantID).
 		SaveX(platformCtx)
 
 	trustedCtx := WithTrustedBPMNTenantContext(platformCtx, tenantID)
@@ -157,9 +153,7 @@ func TestCompleteTask_ParticipantBusinessIDCannotRetargetCallback(t *testing.T) 
 		SetType("change").SetRecordClass("change_request").SetRequesterID(otherActor.ID).
 		SetTenantID(otherTenant.ID).SaveX(platformCtx)
 	otherChange := client.Change.Create().
-		SetCreatedBy(otherActor.ID).
 		SetWorkItemID(otherWorkItem.ID).
-		SetTenantID(otherTenant.ID).
 		SaveX(platformCtx)
 
 	actor := client.User.Create().
@@ -171,9 +165,7 @@ func TestCompleteTask_ParticipantBusinessIDCannotRetargetCallback(t *testing.T) 
 		SetType("change").SetRecordClass("change_request").SetRequesterID(actor.ID).
 		SetTenantID(tenantID).SaveX(platformCtx)
 	ch := client.Change.Create().
-		SetCreatedBy(actor.ID).
 		SetWorkItemID(workItem.ID).
-		SetTenantID(tenantID).
 		SaveX(platformCtx)
 
 	trustedCtx := WithTrustedBPMNTenantContext(platformCtx, tenantID)

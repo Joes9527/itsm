@@ -76,8 +76,7 @@ func TestChangeRepositoryAllocatesSequentialWorkItemNumbers(t *testing.T) {
 // 真实 repo.Create 的测试（走 handler HTTP 路径、直接查 DB 断言）复用。relatedTickets
 // 里的每个编号都会同步建一条真实的目标 Ticket 行 + WorkItemRelation
 // （relation_type="related_to"），这样 repo.Get/List 读回的 RelatedTickets 才能命中——
-// 该字段的权威来源自这次改动起是 WorkItemRelation，不再是 changes.related_tickets JSON 列
-// （该列保留在 schema 里但已是待清理死字段，见 repository_impl.go 顶部说明）。
+// 该字段的唯一权威来源是 WorkItemRelation；changes 表不保存关系 JSON 副本。
 func createRegressionChange(t *testing.T, client *ent.Client, tenantID, actorID int, changeType, status string, relatedTickets []string) *ent.Change {
 	t.Helper()
 	ctx := context.Background()
@@ -92,8 +91,6 @@ func createRegressionChange(t *testing.T, client *ent.Client, tenantID, actorID 
 		SetRiskLevel("medium").
 		SetImplementationPlan("1. 备份 2. 实施 3. 验证").
 		SetRollbackPlan("实施失败时恢复备份并确认业务恢复。").
-		SetCreatedBy(actorID).
-		SetTenantID(tenantID).
 		SetWorkItemID(workItem.ID).
 		Save(ctx)
 	require.NoError(t, err)
@@ -324,14 +321,14 @@ func TestChangeController_TransitionStatus_StartGuardByType(t *testing.T) {
 	}
 }
 
-// TestEntRepository_RelatedTickets_JSONFieldBehavior 覆盖 Wave 2 的 related_tickets 迁移：
-// 权威来源从 changes.related_tickets 这一列自由文本 JSON 数组，收敛到 WorkItemRelation
+// TestEntRepository_RelatedTickets_WorkItemRelationBehavior 覆盖结构化关系行为：
+// 权威来源为 WorkItemRelation
 // （relation_type="related_to"，source=Change 自己的 WorkItem，target=被关联工单的
 // WorkItem/tickets.id）。这意味着行为跟迁移前有一个刻意的、有意义的差异：只有真实存在于
 // 当前租户下的工单编号才能被解析、写入并在读回时出现；不存在的编号会被跳过（见
 // EntRepository.resolveTicketNumbers 的交付说明——这是业务判断，不是 fail closed 的安全/
 // 租户边界，不应该让整个 Change 创建/更新失败）。
-func TestEntRepository_RelatedTickets_JSONFieldBehavior(t *testing.T) {
+func TestEntRepository_RelatedTickets_WorkItemRelationBehavior(t *testing.T) {
 	ctx := context.Background()
 	entClient := newChangeBPMNEntClient(t, "change_related_tickets_regression")
 	repo := newTestChangeRepository(entClient, openChangeBPMNRawDB(t, "change_related_tickets_regression"))
@@ -595,8 +592,6 @@ func TestChangeTenantIsolation_ReadAndModify(t *testing.T) {
 				SetRiskLevel("medium").
 				SetImplementationPlan("实施计划").
 				SetRollbackPlan("回滚计划").
-				SetCreatedBy(actorA).
-				SetTenantID(tenantA).
 				SetWorkItemID(workItemA.ID).
 				Save(ctx)
 			require.NoError(t, createErr)
@@ -609,8 +604,6 @@ func TestChangeTenantIsolation_ReadAndModify(t *testing.T) {
 				SetRiskLevel("medium").
 				SetImplementationPlan("实施计划").
 				SetRollbackPlan("回滚计划").
-				SetCreatedBy(actorB).
-				SetTenantID(tenantB).
 				SetWorkItemID(workItemB.ID).
 				Save(ctx)
 			require.NoError(t, createErr)

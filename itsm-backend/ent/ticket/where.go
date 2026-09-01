@@ -1280,26 +1280,6 @@ func CategoryIDNotIn(vs ...int) predicate.Ticket {
 	return predicate.Ticket(sql.FieldNotIn(FieldCategoryID, vs...))
 }
 
-// CategoryIDGT applies the GT predicate on the "category_id" field.
-func CategoryIDGT(v int) predicate.Ticket {
-	return predicate.Ticket(sql.FieldGT(FieldCategoryID, v))
-}
-
-// CategoryIDGTE applies the GTE predicate on the "category_id" field.
-func CategoryIDGTE(v int) predicate.Ticket {
-	return predicate.Ticket(sql.FieldGTE(FieldCategoryID, v))
-}
-
-// CategoryIDLT applies the LT predicate on the "category_id" field.
-func CategoryIDLT(v int) predicate.Ticket {
-	return predicate.Ticket(sql.FieldLT(FieldCategoryID, v))
-}
-
-// CategoryIDLTE applies the LTE predicate on the "category_id" field.
-func CategoryIDLTE(v int) predicate.Ticket {
-	return predicate.Ticket(sql.FieldLTE(FieldCategoryID, v))
-}
-
 // CategoryIDIsNil applies the IsNil predicate on the "category_id" field.
 func CategoryIDIsNil() predicate.Ticket {
 	return predicate.Ticket(sql.FieldIsNull(FieldCategoryID))
@@ -2777,7 +2757,7 @@ func HasCategory() predicate.Ticket {
 	return predicate.Ticket(func(s *sql.Selector) {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.M2M, true, CategoryTable, CategoryPrimaryKey...),
+			sqlgraph.Edge(sqlgraph.M2O, true, CategoryTable, CategoryColumn),
 		)
 		sqlgraph.HasNeighbors(s, step)
 	})

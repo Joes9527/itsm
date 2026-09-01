@@ -218,7 +218,7 @@ func TestGetCIImpactAnalysis_UpstreamCriticalAndAffectedItems(t *testing.T) {
 	incidentWorkItem := client.Ticket.Create().SetTitle("impact incident").SetTicketNumber("TCK-IMPACT-INC-1").
 		SetType("incident").SetRecordClass("incident").SetRequesterID(user.ID).SetTenantID(tenant.ID).SaveX(ctx)
 	in := client.Incident.Create().SetIncidentNumber("INC-IMPACT-1").
-		SetReporterID(user.ID).SetTenantID(tenant.ID).SetWorkItemID(incidentWorkItem.ID).SaveX(ctx)
+		SetWorkItemID(incidentWorkItem.ID).SaveX(ctx)
 	client.ConfigurationItem.UpdateOneID(root.ID).AddTickets(tk).AddIncidents(in).ExecX(ctx)
 
 	svc := NewCIRelationshipService(client, zaptest.NewLogger(t).Sugar())

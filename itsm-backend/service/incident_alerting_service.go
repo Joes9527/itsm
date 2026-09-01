@@ -217,7 +217,7 @@ func (s *IncidentAlertingService) validateAlertRequest(ctx context.Context, req 
 		return fmt.Errorf("incident id is required")
 	}
 	exists, err := s.client.Incident.Query().
-		Where(incident.IDEQ(req.IncidentID), incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).
+		Where(incident.IDEQ(req.IncidentID), incidentTenantScope(tenantID)).
 		Exist(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to validate incident: %w", err)
@@ -667,10 +667,9 @@ func (s *IncidentAlertingService) ProcessEscalationAlerts(ctx context.Context, i
 	incidentEntity, err := s.client.Incident.Query().
 		Where(
 			incident.IDEQ(incidentID),
-			incident.TenantIDEQ(tenantID),
-			incident.DeletedAtIsNil(),
+			incidentTenantScope(tenantID),
 		).
-		WithWorkItem().Only(ctx)
+		WithWorkItem(withIncidentWorkItemProjection).Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return fmt.Errorf("incident not found")
@@ -775,10 +774,9 @@ func (s *IncidentAlertingService) ProcessSLAViolationAlerts(ctx context.Context,
 	incidentEntity, err := s.client.Incident.Query().
 		Where(
 			incident.IDEQ(incidentID),
-			incident.TenantIDEQ(tenantID),
-			incident.DeletedAtIsNil(),
+			incidentTenantScope(tenantID),
 		).
-		WithWorkItem().Only(ctx)
+		WithWorkItem(withIncidentWorkItemProjection).Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return fmt.Errorf("incident not found")

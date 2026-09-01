@@ -3,6 +3,7 @@ package problem
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"itsm-backend/common"
@@ -12,9 +13,12 @@ import (
 	entpredicate "itsm-backend/ent/predicate"
 	"itsm-backend/ent/problem"
 	"itsm-backend/ent/ticket"
+	"itsm-backend/ent/ticketcategory"
 	"itsm-backend/ent/user"
 	"itsm-backend/ent/workitemrelation"
 	"itsm-backend/repository/workitemnumber"
+
+	entsql "entgo.io/ent/dialect/sql"
 )
 
 // problemTicketRelationType 是 Problem 关联普通工单（record_class 未收敛的一般关联，
@@ -31,6 +35,33 @@ func NewEntRepository(client *ent.Client, numberAllocator workitemnumber.Allocat
 	return &EntRepository{client: client, numberAllocator: numberAllocator}
 }
 
+func problemTenantScope(tenantID int, extra ...entpredicate.Ticket) entpredicate.Problem {
+	predicates := []entpredicate.Ticket{ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil()}
+	predicates = append(predicates, extra...)
+	return problem.HasWorkItemWith(predicates...)
+}
+
+func withProblemWorkItemProjection(query *ent.TicketQuery) {
+	query.WithCategory()
+}
+
+func (r *EntRepository) resolveCategory(ctx context.Context, tenantID int, name string) (*int, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, nil
+	}
+	category, err := r.client.TicketCategory.Query().Where(
+		ticketcategory.TenantIDEQ(tenantID), ticketcategory.IsActiveEQ(true), ticketcategory.NameEQ(name),
+	).Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("ticket category not found in tenant")
+		}
+		return nil, fmt.Errorf("resolve ticket category: %w", err)
+	}
+	return &category.ID, nil
+}
+
 func (r *EntRepository) toDomain(e *ent.Problem) *Problem {
 	if e == nil {
 		return nil
@@ -45,27 +76,33 @@ func (r *EntRepository) toDomain(e *ent.Problem) *Problem {
 		Description: workItem.Description,
 		Status:      workItem.Status,
 		Priority:    workItem.Priority,
-		Category:    e.Category,
 		RootCause:   e.RootCause,
 		Workaround:  e.Workaround,
 		Resolution:  e.Resolution,
 		Impact:      e.Impact,
-		CreatedBy:   e.CreatedBy,
-		TenantID:    e.TenantID,
-		CreatedAt:   e.CreatedAt,
-		UpdatedAt:   e.UpdatedAt,
+		CreatedBy:   workItem.OpenedByID,
+		TenantID:    workItem.TenantID,
+		CreatedAt:   workItem.CreatedAt,
+		UpdatedAt:   workItem.UpdatedAt,
 	}
-	if e.ResolvedAt != nil {
-		p.ResolvedAt = e.ResolvedAt
+	if p.CreatedBy == 0 {
+		p.CreatedBy = workItem.RequesterID
 	}
-	if e.ClosedAt != nil {
-		p.ClosedAt = e.ClosedAt
+	if workItem.Edges.Category != nil {
+		p.Category = workItem.Edges.Category.Name
+	}
+	if !workItem.ResolvedAt.IsZero() {
+		resolvedAt := workItem.ResolvedAt
+		p.ResolvedAt = &resolvedAt
+	}
+	if workItem.ClosedAt != nil {
+		p.ClosedAt = workItem.ClosedAt
 	}
 	// Handle optional fields
 	// Ent fields might be zero value if not set, or pointer depending on schema.
 	// Schema says: AssigneeID optional.
-	if e.AssigneeID != 0 {
-		id := e.AssigneeID
+	if workItem.AssigneeID != 0 {
+		id := workItem.AssigneeID
 		p.AssigneeID = &id
 	}
 	if e.WorkItemID != 0 {
@@ -117,7 +154,7 @@ func (r *EntRepository) toDomainWithAssociations(e *ent.Problem) *Problem {
 
 func (r *EntRepository) AddAssociations(ctx context.Context, tenantID, problemID, actorUserID int, relatedType string, relatedIDs []int) error {
 	prob, err := r.client.Problem.Query().
-		Where(problem.IDEQ(problemID), problem.TenantIDEQ(tenantID), problem.DeletedAtIsNil()).
+		Where(problem.IDEQ(problemID), problemTenantScope(tenantID)).
 		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -143,7 +180,7 @@ func (r *EntRepository) AddAssociations(ctx context.Context, tenantID, problemID
 		return r.linkTicketsAsWorkItemRelations(ctx, tenantID, prob.WorkItemID, actorUserID, relatedIDs)
 	case "incident":
 		count, err := r.client.Incident.Query().
-			Where(incident.IDIn(relatedIDs...), incident.TenantIDEQ(tenantID)).
+			Where(incident.IDIn(relatedIDs...), incident.HasWorkItemWith(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil())).
 			Count(ctx)
 		if err != nil {
 			return err
@@ -153,7 +190,7 @@ func (r *EntRepository) AddAssociations(ctx context.Context, tenantID, problemID
 		}
 	case "change":
 		count, err := r.client.Change.Query().
-			Where(change.IDIn(relatedIDs...), change.TenantIDEQ(tenantID)).
+			Where(change.IDIn(relatedIDs...), change.HasWorkItemWith(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil())).
 			Count(ctx)
 		if err != nil {
 			return err
@@ -171,7 +208,7 @@ func (r *EntRepository) AddAssociations(ctx context.Context, tenantID, problemID
 	// investigated_by/caused_by 关系，跟这里"Problem 关联任意工单"的无方向性 related_to
 	// 语义不同，混用会产生错误的关系类型）。
 	update := r.client.Problem.Update().
-		Where(problem.IDEQ(problemID), problem.TenantIDEQ(tenantID), problem.DeletedAtIsNil())
+		Where(problem.IDEQ(problemID), problemTenantScope(tenantID))
 	switch relatedType {
 	case "incident":
 		update.AddIncidentIDs(relatedIDs...)
@@ -224,7 +261,7 @@ func (r *EntRepository) linkTicketsAsWorkItemRelations(ctx context.Context, tena
 func (r *EntRepository) RemoveAssociation(ctx context.Context, tenantID, problemID int, relatedType string, relatedID int) error {
 	if relatedType == "ticket" {
 		prob, err := r.client.Problem.Query().
-			Where(problem.IDEQ(problemID), problem.TenantIDEQ(tenantID), problem.DeletedAtIsNil()).
+			Where(problem.IDEQ(problemID), problemTenantScope(tenantID)).
 			Only(ctx)
 		if err != nil {
 			if ent.IsNotFound(err) {
@@ -251,7 +288,7 @@ func (r *EntRepository) RemoveAssociation(ctx context.Context, tenantID, problem
 	}
 
 	update := r.client.Problem.Update().
-		Where(problem.IDEQ(problemID), problem.TenantIDEQ(tenantID), problem.DeletedAtIsNil())
+		Where(problem.IDEQ(problemID), problemTenantScope(tenantID))
 
 	switch relatedType {
 	case "incident":
@@ -313,6 +350,10 @@ func (r *EntRepository) createInTx(ctx context.Context, tx *ent.Tx, p *Problem) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to allocate work item ticket number: %w", err)
 	}
+	categoryID, err := r.resolveCategory(ctx, p.TenantID, p.Category)
+	if err != nil {
+		return nil, err
+	}
 
 	workItem, err := tx.Ticket.Create().
 		SetTitle(p.Title).
@@ -322,29 +363,30 @@ func (r *EntRepository) createInTx(ctx context.Context, tx *ent.Tx, p *Problem) 
 		SetPriority(p.Priority).
 		SetTicketNumber(ticketNumber).
 		SetRequesterID(p.CreatedBy).
+		SetOpenedByID(p.CreatedBy).
 		SetTenantID(p.TenantID).
+		SetNillableAssigneeID(p.AssigneeID).
+		SetNillableCategoryID(categoryID).
 		SetCreatedAt(issuedAt).
 		SetUpdatedAt(issuedAt).
 		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create work item: %w", err)
 	}
+	if categoryID != nil {
+		category, categoryErr := tx.TicketCategory.Query().Where(ticketcategory.IDEQ(*categoryID)).Only(ctx)
+		if categoryErr != nil {
+			return nil, fmt.Errorf("failed to load problem category projection: %w", categoryErr)
+		}
+		workItem.Edges.Category = category
+	}
 
 	create := tx.Problem.Create().
-		SetCategory(p.Category).
 		SetRootCause(p.RootCause).
 		SetWorkaround(p.Workaround).
 		SetResolution(p.Resolution).
 		SetImpact(p.Impact).
-		SetCreatedBy(p.CreatedBy).
-		SetTenantID(p.TenantID).
-		SetWorkItemID(workItem.ID).
-		SetCreatedAt(issuedAt).
-		SetUpdatedAt(issuedAt)
-
-	if p.AssigneeID != nil {
-		create.SetAssigneeID(*p.AssigneeID)
-	}
+		SetWorkItemID(workItem.ID)
 
 	saved, err := create.Save(ctx)
 	if err != nil {
@@ -364,8 +406,8 @@ func rollbackProblemTx(tx *ent.Tx, cause error) error {
 
 func (r *EntRepository) Get(ctx context.Context, id int, tenantID int) (*Problem, error) {
 	e, err := r.client.Problem.Query().
-		Where(problem.ID(id), problem.TenantID(tenantID), problem.DeletedAtIsNil()).
-		WithWorkItem().
+		Where(problem.ID(id), problemTenantScope(tenantID)).
+		WithWorkItem(withProblemWorkItemProjection).
 		Only(ctx)
 	if err != nil {
 		return nil, err
@@ -375,15 +417,15 @@ func (r *EntRepository) Get(ctx context.Context, id int, tenantID int) (*Problem
 
 func (r *EntRepository) GetWithAssociations(ctx context.Context, id int, tenantID int) (*Problem, error) {
 	e, err := r.client.Problem.Query().
-		Where(problem.ID(id), problem.TenantID(tenantID), problem.DeletedAtIsNil()).
+		Where(problem.ID(id), problemTenantScope(tenantID)).
 		WithIncidents(func(q *ent.IncidentQuery) {
-			q.Where(incident.TenantIDEQ(tenantID), incident.DeletedAtIsNil()).WithWorkItem()
+			q.Where(incident.HasWorkItemWith(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil())).WithWorkItem()
 		}).
 		WithChanges(func(q *ent.ChangeQuery) {
-			q.Where(change.TenantIDEQ(tenantID)).
+			q.Where(change.HasWorkItemWith(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil())).
 				WithWorkItem()
 		}).
-		WithWorkItem().
+		WithWorkItem(withProblemWorkItemProjection).
 		Only(ctx)
 	if err != nil {
 		return nil, err
@@ -430,9 +472,8 @@ func (r *EntRepository) loadIncidentAssociations(ctx context.Context, tenantID, 
 	}
 	incidents, err := r.client.Incident.Query().
 		Where(
-			incident.TenantIDEQ(tenantID),
+			incident.HasWorkItemWith(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil()),
 			incident.WorkItemIDIn(sourceWorkItemIDs...),
-			incident.DeletedAtIsNil(),
 		).
 		WithWorkItem().
 		All(ctx)
@@ -526,7 +567,7 @@ func (r *EntRepository) List(ctx context.Context, tenantID int, page, size int, 
 	if size > 200 {
 		size = 200
 	}
-	query := r.client.Problem.Query().Where(problem.TenantID(tenantID), problem.DeletedAtIsNil())
+	query := r.client.Problem.Query().Where(problemTenantScope(tenantID))
 
 	if v, ok := filters["status"].(string); ok && v != "" {
 		query = query.Where(problem.HasWorkItemWith(ticket.StatusEQ(v)))
@@ -535,7 +576,7 @@ func (r *EntRepository) List(ctx context.Context, tenantID int, page, size int, 
 		query = query.Where(problem.HasWorkItemWith(ticket.PriorityEQ(v)))
 	}
 	if v, ok := filters["category"].(string); ok && v != "" {
-		query = query.Where(problem.CategoryEQ(v))
+		query = query.Where(problem.HasWorkItemWith(ticket.HasCategoryWith(ticketcategory.NameEQ(v))))
 	}
 	if v, ok := filters["keyword"].(string); ok && v != "" {
 		query = query.Where(problem.HasWorkItemWith(ticket.Or(ticket.TitleContains(v), ticket.DescriptionContains(v))))
@@ -547,10 +588,10 @@ func (r *EntRepository) List(ctx context.Context, tenantID int, page, size int, 
 	}
 
 	list, err := query.
-		WithWorkItem().
+		WithWorkItem(withProblemWorkItemProjection).
 		Offset((page - 1) * size).
 		Limit(size).
-		Order(ent.Desc(problem.FieldCreatedAt)).
+		Order(problem.ByWorkItemField(ticket.FieldCreatedAt, entsql.OrderDesc())).
 		All(ctx)
 	if err != nil {
 		return nil, 0, err
@@ -568,41 +609,49 @@ func (r *EntRepository) Update(ctx context.Context, p *Problem) (*Problem, error
 	if err != nil {
 		return nil, fmt.Errorf("start problem update transaction: %w", err)
 	}
-	current, err := tx.Problem.Query().Where(problem.IDEQ(p.ID), problem.TenantIDEQ(p.TenantID), problem.DeletedAtIsNil()).Only(ctx)
+	current, err := tx.Problem.Query().Where(problem.IDEQ(p.ID), problemTenantScope(p.TenantID)).WithWorkItem(withProblemWorkItemProjection).Only(ctx)
 	if err != nil {
 		return nil, rollbackProblemTx(tx, err)
 	}
 	now := time.Now()
-	if _, err = tx.Ticket.UpdateOneID(current.WorkItemID).
-		Where(ticket.TenantIDEQ(p.TenantID), ticket.DeletedAtIsNil()).
-		SetTitle(p.Title).SetDescription(p.Description).SetStatus(p.Status).SetPriority(p.Priority).SetUpdatedAt(now).
-		Save(ctx); err != nil {
+	categoryID, err := r.resolveCategory(ctx, p.TenantID, p.Category)
+	if err != nil {
+		return nil, rollbackProblemTx(tx, err)
+	}
+	workItemUpdate := tx.Ticket.UpdateOneID(current.WorkItemID).
+		Where(ticket.TenantIDEQ(p.TenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(current.Edges.WorkItem.Version)).
+		SetTitle(p.Title).SetDescription(p.Description).SetStatus(p.Status).SetPriority(p.Priority).
+		SetUpdatedAt(now).AddVersion(1)
+	if p.AssigneeID == nil {
+		workItemUpdate.ClearAssigneeID()
+	} else {
+		workItemUpdate.SetAssigneeID(*p.AssigneeID)
+	}
+	if categoryID == nil {
+		workItemUpdate.ClearCategoryID()
+	} else {
+		workItemUpdate.SetCategoryID(*categoryID)
+	}
+	if p.ResolvedAt == nil {
+		workItemUpdate.ClearResolvedAt()
+	} else {
+		workItemUpdate.SetResolvedAt(*p.ResolvedAt)
+	}
+	if p.ClosedAt == nil {
+		workItemUpdate.ClearClosedAt()
+	} else {
+		workItemUpdate.SetClosedAt(*p.ClosedAt)
+	}
+	workItem, err := workItemUpdate.Save(ctx)
+	if err != nil {
 		return nil, rollbackProblemTx(tx, fmt.Errorf("update problem work item: %w", err))
 	}
 	update := tx.Problem.UpdateOneID(p.ID).
-		Where(problem.TenantIDEQ(p.TenantID), problem.DeletedAtIsNil()).
-		SetCategory(p.Category).
+		Where(problemTenantScope(p.TenantID)).
 		SetRootCause(p.RootCause).
 		SetWorkaround(p.Workaround).
 		SetResolution(p.Resolution).
-		SetImpact(p.Impact).
-		SetUpdatedAt(now)
-
-	if p.AssigneeID != nil {
-		update.SetAssigneeID(*p.AssigneeID)
-	} else {
-		update.ClearAssigneeID()
-	}
-	if p.ResolvedAt != nil {
-		update.SetResolvedAt(*p.ResolvedAt)
-	} else {
-		update.ClearResolvedAt()
-	}
-	if p.ClosedAt != nil {
-		update.SetClosedAt(*p.ClosedAt)
-	} else {
-		update.ClearClosedAt()
-	}
+		SetImpact(p.Impact)
 
 	saved, err := update.Save(ctx)
 	if err != nil {
@@ -611,9 +660,12 @@ func (r *EntRepository) Update(ctx context.Context, p *Problem) (*Problem, error
 	if err := tx.Commit(); err != nil {
 		return nil, rollbackProblemTx(tx, err)
 	}
-	saved.Edges.WorkItem, err = r.client.Ticket.Query().Where(ticket.IDEQ(current.WorkItemID), ticket.TenantIDEQ(p.TenantID)).Only(ctx)
-	if err != nil {
-		return nil, err
+	saved.Edges.WorkItem = workItem
+	if categoryID != nil {
+		saved.Edges.WorkItem.Edges.Category, err = r.client.TicketCategory.Get(ctx, *categoryID)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return r.toDomain(saved), nil
 }
@@ -629,8 +681,7 @@ func (r *EntRepository) Delete(ctx context.Context, id int, tenantID int) error 
 
 	existing, err := tx.Problem.Query().Where(
 		problem.IDEQ(id),
-		problem.TenantIDEQ(tenantID),
-		problem.DeletedAtIsNil(),
+		problemTenantScope(tenantID),
 	).Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -652,7 +703,7 @@ func (r *EntRepository) Delete(ctx context.Context, id int, tenantID int) error 
 		}
 	}
 
-	if _, err = tx.Problem.UpdateOne(existing).SetDeletedAt(deletedAt).Save(ctx); err != nil {
+	if _, err = tx.Ticket.UpdateOneID(existing.WorkItemID).Where(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil()).SetDeletedAt(deletedAt).SetUpdatedAt(deletedAt).AddVersion(1).Save(ctx); err != nil {
 		return fail(fmt.Errorf("soft-delete problem: %w", err))
 	}
 	if err = tx.Commit(); err != nil {
@@ -662,7 +713,7 @@ func (r *EntRepository) Delete(ctx context.Context, id int, tenantID int) error 
 }
 
 func (r *EntRepository) GetStats(ctx context.Context, tenantID int) (*ProblemStats, error) {
-	query := r.client.Problem.Query().Where(problem.TenantIDEQ(tenantID), problem.DeletedAtIsNil())
+	query := r.client.Problem.Query().Where(problemTenantScope(tenantID))
 
 	total, err := query.Count(ctx)
 	if err != nil {
@@ -672,7 +723,7 @@ func (r *EntRepository) GetStats(ctx context.Context, tenantID int) (*ProblemSta
 	// Simple count queries. Optimization: group by status/priority?
 	// For now keeping it simple as per original service.
 	count := func(preds ...entpredicate.Ticket) (int, error) {
-		q := r.client.Problem.Query().Where(problem.TenantIDEQ(tenantID), problem.DeletedAtIsNil())
+		q := r.client.Problem.Query().Where(problemTenantScope(tenantID))
 		q = q.Where(problem.HasWorkItemWith(preds...))
 		return q.Count(ctx)
 	}

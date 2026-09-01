@@ -9,6 +9,7 @@ import (
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/change"
+	entpredicate "itsm-backend/ent/predicate"
 	"itsm-backend/ent/processapprovaldecision"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
@@ -17,6 +18,7 @@ import (
 	"itsm-backend/ent/workitemrelation"
 	"itsm-backend/repository/workitemnumber"
 
+	entsql "entgo.io/ent/dialect/sql"
 	"go.uber.org/zap"
 )
 
@@ -30,6 +32,12 @@ type EntRepository struct {
 	client          *ent.Client
 	db              *sql.DB
 	numberAllocator workitemnumber.Allocator
+}
+
+func changeTenantScope(tenantID int, extra ...entpredicate.Ticket) entpredicate.Change {
+	predicates := []entpredicate.Ticket{entticket.TenantIDEQ(tenantID), entticket.DeletedAtIsNil()}
+	predicates = append(predicates, extra...)
+	return change.HasWorkItemWith(predicates...)
 }
 
 func NewEntRepository(client *ent.Client, db *sql.DB, numberAllocator workitemnumber.Allocator) *EntRepository {
@@ -60,9 +68,8 @@ func toDomain(ec *ent.Change) *Change {
 		Priority:           workItem.Priority,
 		ImpactScope:        ec.ImpactScope,
 		RiskLevel:          ec.RiskLevel,
-		AssigneeID:         &ec.AssigneeID,
-		CreatedBy:          ec.CreatedBy,
-		TenantID:           ec.TenantID,
+		CreatedBy:          workItem.OpenedByID,
+		TenantID:           workItem.TenantID,
 		PlannedStartDate:   &ec.PlannedStartDate,
 		PlannedEndDate:     &ec.PlannedEndDate,
 		ActualStartDate:    &ec.ActualStartDate,
@@ -70,8 +77,15 @@ func toDomain(ec *ent.Change) *Change {
 		ImplementationPlan: ec.ImplementationPlan,
 		RollbackPlan:       ec.RollbackPlan,
 		AffectedCIs:        ec.AffectedCis,
-		CreatedAt:          ec.CreatedAt,
-		UpdatedAt:          ec.UpdatedAt,
+		CreatedAt:          workItem.CreatedAt,
+		UpdatedAt:          workItem.UpdatedAt,
+	}
+	if c.CreatedBy == 0 {
+		c.CreatedBy = workItem.RequesterID
+	}
+	if workItem.AssigneeID > 0 {
+		assigneeID := workItem.AssigneeID
+		c.AssigneeID = &assigneeID
 	}
 	if ec.WorkItemID != 0 {
 		id := ec.WorkItemID
@@ -128,8 +142,7 @@ func (r *EntRepository) hydrateUsers(ctx context.Context, changes []*Change, ten
 }
 
 // hydrateRelatedTickets 用 WorkItemRelation（relation_type="related_to"）填充
-// Change.RelatedTickets，替换旧的 changes.related_tickets JSON 列作为权威来源（该列自 Wave 2
-// 起是待清理死字段，不再被业务逻辑读写，见 repository_impl.go 顶部的迁移说明和交付说明）。
+// Change.RelatedTickets 使用 WorkItemRelation（relation_type="related_to"）作为唯一权威来源。
 // 返回值按目标工单的 ticket_number 字符串组装，保持 dto.ChangeResponse.RelatedTickets
 // "相关工单编号" 的既有契约不变。没有 WorkItemID 的 Change（无效开发数据）不可能有任何
 // WorkItemRelation 指向它，直接跳过。
@@ -241,8 +254,8 @@ func (r *EntRepository) resolveTicketNumbers(ctx context.Context, client *ent.Cl
 // reconcileRelatedTicketRelations 把 sourceWorkItemID 名下的 related_to WorkItemRelation
 // 收敛到 desiredTicketNumbers 描述的目标集合：软删除当前存在但不再被期望的关系，为期望但
 // 尚不存在的目标新建关系。用"全量替换"而不是增量 diff——desiredTicketNumbers 语义上是
-// PUT 语义的完整期望列表（跟旧的 changes.related_tickets 字段替换语义一致，见
-// handlers/change/handler.go 的 UpdateChange：只有 req.RelatedTickets != nil 时才会覆盖
+// PUT 语义的完整期望列表（见 handlers/change/handler.go 的 UpdateChange：只有
+// req.RelatedTickets != nil 时才会覆盖
 // existing.RelatedTickets，否则调用方传入的就是 GetChange 已经从 WorkItemRelation
 // 水合出来的当前值，等价于"不变"）。actorUserID 用于新建关系的 created_by_id；Update
 // 路径目前没有独立的"当前操作人"概念（handler.go 的 UpdateChange 没有从请求上下文提取
@@ -314,8 +327,7 @@ func (r *EntRepository) reconcileRelatedTicketRelations(ctx context.Context, cli
 // handlers/problem.EntRepository.Create / IncidentService.CreateIncident 一致。
 //
 // relatedTickets（自由文本工单编号数组）在同一事务内解析并写入 WorkItemRelation
-// （relation_type="related_to"），不再写 changes.related_tickets 列——该列保留在 schema 里
-// 但从这次改动起是待清理死字段，见交付说明。
+// （relation_type="related_to"）；changes 表不保存关系 JSON 副本。
 func (r *EntRepository) Create(ctx context.Context, c *Change) (*Change, error) {
 	tx, err := r.client.Tx(ctx)
 	if err != nil {
@@ -358,7 +370,9 @@ func (r *EntRepository) Create(ctx context.Context, c *Change) (*Change, error) 
 		SetStatus(c.Status).
 		SetTicketNumber(ticketNumber).
 		SetRequesterID(c.CreatedBy).
+		SetOpenedByID(c.CreatedBy).
 		SetTenantID(c.TenantID).
+		SetNillableAssigneeID(c.AssigneeID).
 		SetCreatedAt(issuedAt).
 		SetUpdatedAt(issuedAt).
 		Save(ctx)
@@ -371,16 +385,12 @@ func (r *EntRepository) Create(ctx context.Context, c *Change) (*Change, error) 
 		SetType(c.Type).
 		SetImpactScope(c.ImpactScope).
 		SetRiskLevel(c.RiskLevel).
-		SetCreatedBy(c.CreatedBy).
-		SetTenantID(c.TenantID).
 		SetWorkItemID(workItem.ID).
 		SetImplementationPlan(c.ImplementationPlan).
 		SetRollbackPlan(c.RollbackPlan).
 		SetNillablePlannedStartDate(c.PlannedStartDate).
 		SetNillablePlannedEndDate(c.PlannedEndDate).
-		SetAffectedCis(c.AffectedCIs).
-		SetCreatedAt(issuedAt).
-		SetUpdatedAt(issuedAt)
+		SetAffectedCis(c.AffectedCIs)
 
 	saved, err := create.Save(ctx)
 	if err != nil {
@@ -408,7 +418,7 @@ func (r *EntRepository) Create(ctx context.Context, c *Change) (*Change, error) 
 
 func (r *EntRepository) Get(ctx context.Context, id int, tenantID int) (*Change, error) {
 	ec, err := r.client.Change.Query().
-		Where(change.ID(id), change.TenantID(tenantID)).
+		Where(change.ID(id), changeTenantScope(tenantID)).
 		WithWorkItem().
 		First(ctx)
 	if err != nil {
@@ -425,7 +435,7 @@ func (r *EntRepository) Get(ctx context.Context, id int, tenantID int) (*Change,
 }
 
 func (r *EntRepository) List(ctx context.Context, tenantID int, page, size int, status, search, riskLevel string) ([]*Change, int, error) {
-	q := r.client.Change.Query().Where(change.TenantID(tenantID))
+	q := r.client.Change.Query().Where(changeTenantScope(tenantID))
 
 	if status != "" && status != "全部" {
 		q = q.Where(change.HasWorkItemWith(entticket.StatusEQ(status)))
@@ -442,7 +452,7 @@ func (r *EntRepository) List(ctx context.Context, tenantID int, page, size int, 
 		return nil, 0, err
 	}
 
-	ecs, err := q.WithWorkItem().Order(ent.Desc(change.FieldCreatedAt)).
+	ecs, err := q.WithWorkItem().Order(change.ByWorkItemField(entticket.FieldCreatedAt, entsql.OrderDesc())).
 		Offset((page - 1) * size).
 		Limit(size).
 		All(ctx)
@@ -463,10 +473,8 @@ func (r *EntRepository) List(ctx context.Context, tenantID int, page, size int, 
 	return results, total, nil
 }
 
-// Update 在同一事务内更新 changes 行公共字段并把 c.RelatedTickets 描述的期望集合收敛到
-// WorkItemRelation（见 reconcileRelatedTicketRelations）——不再写 changes.related_tickets 列。
-// c.WorkItemID<=0（无效开发数据）时跳过关系收敛：没有 WorkItem 就没有可以挂载关系的
-// source，这不是错误，静默跳过，回填工具跑完之后自然可以正常收敛。
+// Update 在同一事务内更新专业字段、WorkItem 共享字段，并把 c.RelatedTickets 描述的期望
+// 集合收敛到 WorkItemRelation（见 reconcileRelatedTicketRelations）。
 func (r *EntRepository) Update(ctx context.Context, c *Change) (*Change, error) {
 	tx, err := r.client.Tx(ctx)
 	if err != nil {
@@ -479,7 +487,12 @@ func (r *EntRepository) Update(ctx context.Context, c *Change) (*Change, error) 
 		return nil, cause
 	}
 
+	current, err := tx.Change.Query().Where(change.IDEQ(c.ID), changeTenantScope(c.TenantID)).WithWorkItem().Only(ctx)
+	if err != nil {
+		return rollback(err)
+	}
 	update := tx.Change.UpdateOneID(c.ID).
+		Where(changeTenantScope(c.TenantID)).
 		SetJustification(c.Justification).
 		SetType(c.Type).
 		SetImpactScope(c.ImpactScope).
@@ -488,9 +501,6 @@ func (r *EntRepository) Update(ctx context.Context, c *Change) (*Change, error) 
 		SetRollbackPlan(c.RollbackPlan).
 		SetAffectedCis(c.AffectedCIs)
 
-	if c.AssigneeID != nil {
-		update.SetAssigneeID(*c.AssigneeID)
-	}
 	if c.PlannedStartDate != nil {
 		update.SetPlannedStartDate(*c.PlannedStartDate)
 	}
@@ -508,29 +518,31 @@ func (r *EntRepository) Update(ctx context.Context, c *Change) (*Change, error) 
 	if err != nil {
 		return rollback(err)
 	}
-	if _, err := tx.Ticket.UpdateOneID(ec.WorkItemID).
-		Where(entticket.TenantIDEQ(c.TenantID)).
-		SetTitle(c.Title).SetDescription(c.Description).SetStatus(c.Status).SetPriority(c.Priority).SetUpdatedAt(time.Now()).
-		Save(ctx); err != nil {
+	workItemUpdate := tx.Ticket.UpdateOneID(ec.WorkItemID).
+		Where(entticket.TenantIDEQ(c.TenantID), entticket.DeletedAtIsNil(), entticket.VersionEQ(current.Edges.WorkItem.Version)).
+		SetTitle(c.Title).SetDescription(c.Description).SetStatus(c.Status).SetPriority(c.Priority).
+		SetUpdatedAt(time.Now()).AddVersion(1)
+	if c.AssigneeID == nil {
+		workItemUpdate.ClearAssigneeID()
+	} else {
+		workItemUpdate.SetAssigneeID(*c.AssigneeID)
+	}
+	workItem, err := workItemUpdate.Save(ctx)
+	if err != nil {
 		return rollback(fmt.Errorf("failed to update change work item: %w", err))
 	}
 
-	if ec.WorkItemID > 0 {
-		// 用 Change 自己的创建人作为关系写入的 actor 近似值——UpdateChange 目前没有
-		// 独立的"当前操作人"概念可用，见 reconcileRelatedTicketRelations 顶部注释。
-		if err := r.reconcileRelatedTicketRelations(ctx, tx.Client(), c.TenantID, ec.WorkItemID, c.CreatedBy, c.RelatedTickets); err != nil {
-			return rollback(fmt.Errorf("failed to reconcile related tickets: %w", err))
-		}
+	// 用 Change 自己的创建人作为关系写入的 actor 近似值——UpdateChange 目前没有
+	// 独立的"当前操作人"概念可用，见 reconcileRelatedTicketRelations 顶部注释。
+	if err := r.reconcileRelatedTicketRelations(ctx, tx.Client(), c.TenantID, ec.WorkItemID, c.CreatedBy, c.RelatedTickets); err != nil {
+		return rollback(fmt.Errorf("failed to reconcile related tickets: %w", err))
 	}
 
 	if err := tx.Commit(); err != nil {
 		return rollback(fmt.Errorf("failed to commit change update transaction: %w", err))
 	}
 
-	ec.Edges.WorkItem, err = r.client.Ticket.Query().Where(entticket.IDEQ(ec.WorkItemID), entticket.TenantIDEQ(c.TenantID)).Only(ctx)
-	if err != nil {
-		return nil, err
-	}
+	ec.Edges.WorkItem = workItem
 	result := toDomain(ec)
 	if err := r.hydrateUsers(ctx, []*Change{result}, c.TenantID); err != nil {
 		return nil, err
@@ -542,9 +554,13 @@ func (r *EntRepository) Update(ctx context.Context, c *Change) (*Change, error) 
 }
 
 func (r *EntRepository) Delete(ctx context.Context, id int, tenantID int) error {
-	_, err := r.client.Change.Delete().
-		Where(change.ID(id), change.TenantID(tenantID)).
-		Exec(ctx)
+	entity, err := r.client.Change.Query().Where(change.ID(id), changeTenantScope(tenantID)).Only(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = r.client.Ticket.UpdateOneID(entity.WorkItemID).
+		Where(entticket.TenantIDEQ(tenantID), entticket.DeletedAtIsNil()).
+		SetDeletedAt(time.Now()).SetUpdatedAt(time.Now()).AddVersion(1).Save(ctx)
 	return err
 }
 
@@ -552,7 +568,7 @@ func (r *EntRepository) GetStats(ctx context.Context, tenantID int) (*Stats, err
 	stats := &Stats{}
 
 	// Total
-	total, err := r.client.Change.Query().Where(change.TenantID(tenantID)).Count(ctx)
+	total, err := r.client.Change.Query().Where(changeTenantScope(tenantID)).Count(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -562,8 +578,8 @@ func (r *EntRepository) GetStats(ctx context.Context, tenantID int) (*Stats, err
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT t.status, COUNT(*)
 		FROM changes c
-		JOIN tickets t ON t.id = c.work_item_id AND t.tenant_id = c.tenant_id
-		WHERE c.tenant_id = $1
+		JOIN tickets t ON t.id = c.work_item_id
+		WHERE t.tenant_id = $1 AND t.deleted_at IS NULL
 		GROUP BY t.status
 	`, tenantID)
 	if err != nil {
@@ -650,7 +666,7 @@ func (r *EntRepository) MarkSubmittedForApproval(ctx context.Context, changeID, 
 // 是否有可用的 WorkItem 身份；写路径必须 fail closed。
 func (r *EntRepository) resolveWorkItemID(ctx context.Context, changeID, tenantID int) (int, error) {
 	c, err := r.client.Change.Query().
-		Where(change.ID(changeID), change.TenantID(tenantID)).
+		Where(change.ID(changeID), changeTenantScope(tenantID)).
 		Only(ctx)
 	if err != nil {
 		return 0, err
@@ -864,7 +880,7 @@ func (r *EntRepository) ListByDateRange(ctx context.Context, tenantID int, start
 	end = end.Add(24*time.Hour - time.Second) // End of day
 
 	query := r.client.Change.Query().
-		Where(change.TenantID(tenantID))
+		Where(changeTenantScope(tenantID))
 
 	if status != "" {
 		query = query.Where(change.HasWorkItemWith(entticket.StatusEQ(status)))

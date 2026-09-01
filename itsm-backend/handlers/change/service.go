@@ -155,13 +155,13 @@ func (s *Service) GetCalendarView(ctx context.Context, tenantID int, startDate, 
 // businessKey 解析就是一致的——这也是 completeChangeApprovalTask 等方法在纯 mock repo 测试
 // 里依然能正确工作的原因。返回 0 且非 nil error 表示这条变更不存在、不属于当前租户，或者
 // 开发数据违反 WorkItem 创建不变量——调用方
-// 必须按各自的容错策略处理：SubmitChange/completeAssessmentTask/completeChangeApprovalTask/
-// BackfillLegacyPendingChange 是显式的用户发起动作，必须 fail closed；
+// 必须按各自的容错策略处理：SubmitChange/completeAssessmentTask/completeChangeApprovalTask
+// 是显式的用户发起动作，必须 fail closed；
 // cancelRunningProcessInstance/completeChangeStageTasks 是收尾/尽力而为动作，按"没有可操作的
 // 运行中实例"同等对待，静默跳过。
 func (s *Service) resolveWorkItemID(ctx context.Context, tenantID, changeID int) (int, error) {
 	c, err := s.entClient.Change.Query().
-		Where(change.ID(changeID), change.TenantID(tenantID)).
+		Where(change.ID(changeID), change.HasWorkItemWith(ticket.TenantID(tenantID), ticket.DeletedAtIsNil())).
 		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -405,7 +405,7 @@ func (s *Service) GetCMDBImpactSummary(ctx context.Context, changeID, tenantID i
 
 	openIncidentCount, err := s.entClient.Incident.Query().
 		Where(
-			incident.TenantID(tenantID),
+			incident.HasWorkItemWith(ticket.TenantID(tenantID), ticket.DeletedAtIsNil()),
 			incident.ConfigurationItemIDIn(ciIDs...),
 			incident.HasWorkItemWith(ticket.StatusNotIn("resolved", "closed")),
 		).
@@ -531,91 +531,6 @@ func (s *Service) cancelRunningProcessInstance(ctx context.Context, tenantID, us
 	if err := s.processTriggerService.CancelProcess(mutationCtx, instance.ID, reason); err != nil {
 		s.logger.Warnw("cancelRunningProcessInstance: 取消流程实例失败，可能残留在工作流控制台", "error", err, "change_id", changeID, "process_instance_id", instance.ID)
 	}
-}
-
-// BackfillLegacyPendingChange 面向 Track4 上线切换时刻的存量数据：一个变更在旧版审批链
-// 流程下已经提交到了 pending 状态，但因为迁移前后审批机制整体切换，没有对应的 BPMN
-// 流程实例——正常的审批/驳回操作都要求存在运行中的流程实例，这批变更会永久卡住。
-// 这不是常规业务入口，是给一次性迁移 CLI（cmd/backfill_legacy_pending_changes）用的：
-// 效果等价于重放一次 SubmitChange，但跳过"必须是 draft 状态"这道门槛——这些变更已经不在
-// draft 了，且旧的 change_approvals/change_approval_chains 表数据不会被读取（Track4 之后
-// 这两张表已经不是权威数据源）。审批人沿用 assigneeRole=change_manager 的候选人解析，
-// 不尝试还原旧审批链里指定的具体审批人。
-//
-// 本方法要求变更满足 WorkItem 创建不变量，否则 resolveWorkItemID fail closed。旧流程
-// 候选预过滤仍使用 "change:{changeID}" 格式，但最终以 WorkItem business key 查询；缺少
-// WorkItem 的无效开发记录不会得到兼容或修补路径。
-func (s *Service) BackfillLegacyPendingChange(ctx context.Context, changeID, tenantID int) error {
-	c, err := s.repo.Get(ctx, changeID, tenantID)
-	if err != nil {
-		return fmt.Errorf("变更不存在: %w", err)
-	}
-	if c.Status != "pending" {
-		return fmt.Errorf("变更当前状态是 %q，不是 pending，跳过（可能已经被处理过，或者本来就不需要回填）", c.Status)
-	}
-	if s.processTriggerService == nil || s.processEngine == nil {
-		return fmt.Errorf("流程触发/引擎服务未初始化")
-	}
-
-	workItemID, err := s.resolveWorkItemID(ctx, tenantID, changeID)
-	if err != nil {
-		return fmt.Errorf("旧流程记录违反 WorkItem 创建不变量: %w", err)
-	}
-
-	businessKey := fmt.Sprintf("change:%d", workItemID)
-	// 只有非 terminated 的实例才算"已经在走 Track4 新流程"。之前失败的回填尝试
-	// 会用 CancelProcess 补偿，留下一条 terminated 记录——如果这里不排除它，
-	// 失败一次就会把这个变更永久挡在回填之外，重试也没用。
-	exists, err := s.entClient.ProcessInstance.Query().
-		Where(
-			processinstance.BusinessKey(businessKey),
-			processinstance.TenantID(tenantID),
-			processinstance.StatusNEQ("terminated"),
-		).
-		Exist(ctx)
-	if err != nil {
-		return fmt.Errorf("检查是否已有流程实例失败: %w", err)
-	}
-	if exists {
-		return fmt.Errorf("该变更已经有关联的流程实例，不需要回填（可能已经走过 Track4 的新流程）")
-	}
-
-	processDefKey := "change_normal_flow"
-	if c.Type == "emergency" {
-		processDefKey = "change_emergency_flow"
-	}
-	triggerCtx := service.WithTrustedBPMNTenantContext(ctx, tenantID)
-	triggerResp, err := s.processTriggerService.TriggerProcess(triggerCtx, &dto.ProcessTriggerRequest{
-		BusinessType:         dto.BusinessTypeChange,
-		BusinessID:           workItemID,
-		ProcessDefinitionKey: processDefKey,
-		Variables: map[string]interface{}{
-			"approval_required": true,
-			// 旧审批链数据不记录"提交人"这个概念对应的现代字段，用创建人兜底——
-			// 只影响流程变量里的 requester_id（用于候选人解析时排除申请人自己），
-			// 不影响状态机、不影响谁能审批。
-			"requester_id": float64(c.CreatedBy),
-		},
-		TriggeredBy: fmt.Sprintf("%d", c.CreatedBy),
-		TenantID:    tenantID,
-	})
-	if err != nil {
-		return fmt.Errorf("触发审批流程失败: %w", err)
-	}
-
-	if err := s.completeAssessmentTask(ctx, tenantID, c.CreatedBy, changeID); err != nil {
-		// 流程实例已经创建，评估节点没推进成功——补偿取消掉，避免留下一个孤儿实例，
-		// 保持"回填要么完整成功、要么完全没发生"这个不变式，方便这个一次性工具重跑。
-		if triggerResp != nil && s.processTriggerService != nil {
-			mutationCtx := withProcessInstanceUpdateScope(ctx, c.CreatedBy, tenantID)
-			if cancelErr := s.processTriggerService.CancelProcess(mutationCtx, triggerResp.ProcessInstanceID,
-				"BackfillLegacyPendingChange: compensating rollback after assessment failure"); cancelErr != nil {
-				s.logger.Warnw("BackfillLegacyPendingChange: 补偿取消流程实例失败", "error", cancelErr, "change_id", changeID)
-			}
-		}
-		return fmt.Errorf("推进变更评估节点失败: %w", err)
-	}
-	return nil
 }
 
 // completeAssessmentTask uses the authenticated domain actor with a typed task

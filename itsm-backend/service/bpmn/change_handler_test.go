@@ -38,8 +38,6 @@ func setupChangeHandlerFixture(t *testing.T) (*ent.Client, *ChangeServiceTaskHan
 	require.NoError(t, err)
 
 	changeEntity, err := client.Change.Create().
-		SetCreatedBy(creator.ID).
-		SetTenantID(tenant.ID).
 		SetWorkItemID(workItem.ID).
 		Save(ctx)
 	require.NoError(t, err)
