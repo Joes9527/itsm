@@ -17,15 +17,26 @@ curl http://localhost:8090/api/v1/readiness/ga
 连接器生命周期：
 
 ```bash
-curl -H "Authorization: Bearer <token>" \
+COOKIE_JAR=$(mktemp)
+trap 'rm -f "$COOKIE_JAR"' EXIT
+curl -fsS -c "$COOKIE_JAR" -b "$COOKIE_JAR" \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}' \
+  http://localhost:8090/api/v1/auth/login | jq -e \
+  '.code == 0 and .data.user.id and (.data.access_token | not) and (.data.refresh_token | not)'
+
+curl -b "$COOKIE_JAR" \
   http://localhost:8090/api/v1/connectors/lifecycle
 ```
 
 AI 审计记录：
 
 ```bash
+CSRF_TOKEN=$(curl -fsS -c "$COOKIE_JAR" -b "$COOKIE_JAR" \
+  http://localhost:8090/api/v1/csrf-token | jq -r '.data.csrf_token')
 curl -X POST http://localhost:8090/api/v1/ai/audit \
-  -H "Authorization: Bearer <token>" \
+  -b "$COOKIE_JAR" \
+  -H "X-CSRF-Token: $CSRF_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "scenario": "ticket_triage",

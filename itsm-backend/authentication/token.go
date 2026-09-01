@@ -9,6 +9,23 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+const (
+	AccessTokenTTL  = 15 * time.Minute
+	RefreshTokenTTL = 7 * 24 * time.Hour
+)
+
+type SessionIdentity struct {
+	UserID   int
+	Username string
+	Role     string
+	TenantID int
+}
+
+type SessionTokens struct {
+	AccessToken  string
+	RefreshToken string
+}
+
 var (
 	ErrAccessTokenRevoked         = errors.New("access token is revoked")
 	ErrAccessTokenRevocationCheck = errors.New("access token revocation check failed")
@@ -76,4 +93,16 @@ func GenerateRefreshToken(userID int, username, role string, tenantID int, jwtSe
 		},
 	}
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(jwtSecret))
+}
+
+func IssueSessionTokens(identity SessionIdentity, jwtSecret string) (*SessionTokens, error) {
+	accessToken, err := GenerateAccessToken(identity.UserID, identity.Username, identity.Role, identity.TenantID, jwtSecret, AccessTokenTTL)
+	if err != nil {
+		return nil, err
+	}
+	refreshToken, err := GenerateRefreshToken(identity.UserID, identity.Username, identity.Role, identity.TenantID, jwtSecret, RefreshTokenTTL)
+	if err != nil {
+		return nil, err
+	}
+	return &SessionTokens{AccessToken: accessToken, RefreshToken: refreshToken}, nil
 }

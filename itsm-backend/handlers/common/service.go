@@ -120,12 +120,9 @@ func (s *Service) Login(ctx context.Context, username, password string, tenantID
 	}
 
 	// Generate tokens
-	accessToken, err := authentication.GenerateAccessToken(u.ID, u.Username, u.Role, u.TenantID, s.jwtSecret, 15*time.Minute)
-	if err != nil {
-		return nil, err
-	}
-
-	refreshToken, err := authentication.GenerateRefreshToken(u.ID, u.Username, u.Role, u.TenantID, s.jwtSecret, 7*24*time.Hour)
+	tokens, err := authentication.IssueSessionTokens(authentication.SessionIdentity{
+		UserID: u.ID, Username: u.Username, Role: u.Role, TenantID: u.TenantID,
+	}, s.jwtSecret)
 	if err != nil {
 		return nil, err
 	}
@@ -135,8 +132,8 @@ func (s *Service) Login(ctx context.Context, username, password string, tenantID
 	authentication.RecordLoginAudit(ctx, s.client, entUser.ID, entUser.TenantID, username, "LOGIN_SUCCESS", "")
 
 	return &AuthResult{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
+		AccessToken:  tokens.AccessToken,
+		RefreshToken: tokens.RefreshToken,
 		User:         u,
 	}, nil
 }
@@ -179,19 +176,16 @@ func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*AuthR
 	user.Permissions = s.getUserPermissions(role)
 
 	// regenerate tokens
-	accessToken, err := authentication.GenerateAccessToken(user.ID, user.Username, role, tenantEntity.ID, s.jwtSecret, 15*time.Minute)
-	if err != nil {
-		return nil, err
-	}
-
-	newRefresh, err := authentication.GenerateRefreshToken(user.ID, user.Username, role, tenantEntity.ID, s.jwtSecret, 7*24*time.Hour)
+	tokens, err := authentication.IssueSessionTokens(authentication.SessionIdentity{
+		UserID: user.ID, Username: user.Username, Role: role, TenantID: tenantEntity.ID,
+	}, s.jwtSecret)
 	if err != nil {
 		return nil, err
 	}
 
 	return &AuthResult{
-		AccessToken:  accessToken,
-		RefreshToken: newRefresh,
+		AccessToken:  tokens.AccessToken,
+		RefreshToken: tokens.RefreshToken,
 		User:         user,
 	}, nil
 }

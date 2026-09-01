@@ -241,9 +241,6 @@ INSERT INTO menus (name, path, icon, parent_id, permission_code, sort_order, ten
 SELECT '自动化规则', '/admin/tickets/automation-rules', 'Zap', id, 'ticket:write', 310, 1, true, true FROM menus WHERE path = '/admin';
 
 INSERT INTO menus (name, path, icon, parent_id, permission_code, sort_order, tenant_id, is_visible, is_enabled)
-SELECT '审批管理', '/admin/approvals', 'GitMerge', id, 'approval:read', 311, 1, true, true FROM menus WHERE path = '/admin';
-
-INSERT INTO menus (name, path, icon, parent_id, permission_code, sort_order, tenant_id, is_visible, is_enabled)
 SELECT '审批链管理', '/admin/approval-chains', 'Link', id, 'admin:write', 312, 1, true, true FROM menus WHERE path = '/admin';
 
 INSERT INTO menus (name, path, icon, parent_id, permission_code, sort_order, tenant_id, is_visible, is_enabled)
@@ -256,7 +253,7 @@ SELECT '系统配置', '/admin/system-config', 'Settings', id, 'system:write', 3
 -- 17. 特殊页面（无子菜单）
 -- ============================================
 INSERT INTO menus (name, path, icon, parent_id, permission_code, sort_order, tenant_id, is_visible, is_enabled) VALUES
-('待我审批', '/approvals/pending', 'CheckCircle', NULL, 'approval:read', 400, 1, true, true),
+('待我审批', '/approvals', 'CheckCircle', NULL, 'task:read', 400, 1, true, true),
 ('AI创建工单', '/tickets/ai-create', 'Sparkles', NULL, 'ticket:write', 401, 1, true, true);
 
 COMMIT;

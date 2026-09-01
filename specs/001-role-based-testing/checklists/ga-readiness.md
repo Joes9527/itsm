@@ -73,7 +73,7 @@
 - [ ] CHK080 前端 `menu-config.ts` 移除 `/reports/cmdb-quality`、`/reports/sla-trend`、`/reports/incident-trends`、`/reports/change-success`、`/reports/problem-efficiency`、`/tickets/templates` 等无后端 API 的孤立子项
 - [ ] CHK081 顶级菜单 `/reports`（DB id=10）同步下架或在前端隐藏，post-GA 路线图记录补建报表
 - [ ] CHK082 菜单加载以 DB `menus` 表为权威源；前端 `menu-config.ts` 与 DB diff 收敛为零
-- [ ] CHK083 §六冒烟矩阵中 `/api/v1/process-instances` 修正为 `/api/v1/bpmn/process-instances` 与 `/api/v1/workflow/instances`
+- [ ] CHK083 §六冒烟矩阵中旧流程路径收敛为 `/api/v1/bpmn/process-instances` 与 `/api/v1/bpmn/tasks`
 - [ ] CHK084 `/api/v1/templates/tickets`、`/api/v1/incident-rules` 从 GA 测试矩阵移除并写入 post-GA backlog
 
 ## 模板化与可复跑

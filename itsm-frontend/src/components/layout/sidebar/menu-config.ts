@@ -383,11 +383,11 @@ export function getMenuConfig(): MenuConfig {
       },
       // ===== 扩展模块 =====
       {
-        key: '/approvals/pending',
+        key: '/approvals',
         icon: getIconByName('CheckCircle')!,
         label: '待我审批',
-        path: '/approvals/pending',
-        permission: 'approval:read',
+        path: '/approvals',
+        permission: 'task:read',
         description: '待我审批',
       },
       // ===== MSP与发布 =====

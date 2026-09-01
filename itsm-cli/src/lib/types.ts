@@ -17,16 +17,19 @@ export interface PaginationParams {
 export interface LoginRequest { username: string; password: string }
 
 export interface LoginResponse {
-  token: string;
-  refresh_token: string;
   user: User;
-  tenant_id: number;
-  tenant_name: string;
+  tenant: TenantContext;
+}
+
+export interface TenantContext {
+  id: number;
+  name: string;
+  code: string;
 }
 
 export interface User {
   id: number; username: string; name: string; email: string;
-  role: string; tenant_id: number;
+  role: string; tenantId: number;
 }
 
 export interface Ticket {
@@ -89,19 +92,19 @@ export interface KnowledgeListResponse { items: KnowledgeArticle[]; total: numbe
 
 // ---------- Workflow / Approvals ----------
 export interface ProcessInstance {
-  id: string; process_key: string; business_key?: string;
-  state: string; start_time: string; end_time?: string;
+  id: number; processInstanceId: string; processDefinitionKey: string; businessKey?: string;
+  status: string; startTime?: string; endTime?: string;
   initiator?: string; variables?: Record<string, unknown>;
 }
-export interface ProcessInstanceListResponse { items: ProcessInstance[]; total: number }
+export interface ProcessInstanceListResponse { items: ProcessInstance[]; total: number; page: number; pageSize: number }
 
 export interface ApprovalTask {
-  id: string; name: string; process_instance_id?: string;
-  assignee?: string; candidate_groups?: string[];
-  created_at: string; due_date?: string; priority?: string;
+  id: number; taskId: string; taskName: string; processInstanceId: number;
+  assignee?: string; candidateGroups?: string;
+  createdTime: string; dueDate?: string; priority?: string;
   status?: string; variables?: Record<string, unknown>;
 }
-export interface ApprovalTaskListResponse { items: ApprovalTask[]; total: number }
+export interface ApprovalTaskListResponse { items: ApprovalTask[]; total: number; page: number; pageSize: number }
 
 // ---------- Notifications ----------
 export interface Notification {
@@ -119,10 +122,8 @@ export interface ConnectorManifest {
   homepage?: string; icon_url?: string;
 }
 export interface Credentials {
-  token: string;
-  refreshToken?: string;
+  cookieHeader: string;
   user?: User;
   tenantId?: number;
   tenantName?: string;
-  expiresAt?: string;
 }

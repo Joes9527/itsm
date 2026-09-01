@@ -1,10 +1,7 @@
 package controller
 
 import (
-	"net/http"
-	"os"
-	"strings"
-
+	"itsm-backend/authentication"
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/service"
@@ -14,22 +11,6 @@ import (
 
 type AuthController struct {
 	authService *service.AuthService
-}
-
-func authCookieSecure(c *gin.Context) bool {
-	if os.Getenv("ENV") == "development" || os.Getenv("GIN_MODE") != "release" {
-		return false
-	}
-	return c.Request.TLS != nil || strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https")
-}
-
-func setAuthCookies(c *gin.Context, accessToken, refreshToken string) {
-	c.SetSameSite(http.SameSiteLaxMode)
-	secure := authCookieSecure(c)
-	c.SetCookie("access_token", accessToken, 900, "/", "", secure, true)
-	if refreshToken != "" {
-		c.SetCookie("refresh_token", refreshToken, 604800, "/", "", secure, true)
-	}
 }
 
 func NewAuthController(authService *service.AuthService) *AuthController {
@@ -98,7 +79,9 @@ func (ac *AuthController) SwitchTenant(c *gin.Context) {
 		return
 	}
 
-	setAuthCookies(c, response.AccessToken, response.RefreshToken)
+	authentication.WriteSessionCookies(c.Writer, c.Request, &authentication.SessionTokens{
+		AccessToken: response.AccessToken, RefreshToken: response.RefreshToken,
+	})
 
 	common.Success(c, response)
 }

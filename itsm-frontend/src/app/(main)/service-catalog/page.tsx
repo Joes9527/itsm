@@ -136,7 +136,7 @@ export default function ServiceCatalogPage() {
               >
                 高级筛选
               </Button>
-              <Link href="/approvals/pending">
+              <Link href="/approvals">
                 <Button icon={<Bell size={16} />}>我的审批</Button>
               </Link>
               <Button type="primary" icon={<Zap size={16} />} onClick={jumpToCatalogList}>

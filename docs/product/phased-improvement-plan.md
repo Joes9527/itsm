@@ -71,7 +71,7 @@
 - 待完成：将 legacy 路由逐步替换为正式 controller/redirect/弃用策略，并补 API 兼容测试。
 - 待完成：如果仍需要旧 SLA dashboard 包，接入真实查询；否则从路由和构造链路中彻底下线。
 - 已开始：A2UI 与首页不再从 localStorage/sessionStorage 读取 token；A2UI 请求改为依赖 cookie 会话。
-- 待完成：统一认证 token 策略，收敛后端 `access_token` 与前端 `auth-token` 兼容分支。
+- 已完成：浏览器认证收敛为后端签发的 HttpOnly cookie，前端不存储或解析 JWT。
 - DTO 收敛：优先治理 Asset、Release、Role、Service、Attachment、Comment 等仍可能返回 Ent/内部模型的 controller。
 - 已开始：根目录 `.next/trace*` 构建痕迹移出版本控制，并补充根目录 `.next/` ignore。
 - 待完成：清理开源仓库构建产物；`node_modules`、`.next`、coverage、standalone deploy 等不得进入版本控制。
@@ -113,28 +113,27 @@
 - qoder 当前后端缺失功能计划可归入本阶段：知识库版本、协作 Session、变更日历。
 - Codex 负责跨模块状态机和端到端验收矩阵。
 
-### Phase 3: 工作流与审批体系统一
+### Phase 3: 工作流与审批体系统一（已完成）
 
-**目标**: 解决审批模板、工单流转、BPMN 工作流三套系统割裂的问题。
+**目标**: 审批与流程执行只保留 BPMN ProcessTask/ProcessInstance 权威模型。
 
 **阶段设计**:
 
-- 短期：文档和 UI 上明确三套系统的定位，避免用户误解。
-- 中期：通过 BPMN `ProcessBinding` 扩展可配置的业务流程绑定。
-- 中期：审批记录可关联 `process_instance_id`。
-- 长期：服务目录、变更、工单审批统一通过 BPMN 编排，轻量审批模板作为 BPMN 节点模板来源。
+- 已删除旧审批引擎、兼容 API 与重复 UI，所有审批命令写入 BPMN ProcessTask。
+- `ProcessBinding` 负责业务对象到 BPMN 流程定义的唯一绑定。
+- `ProcessApprovalDecision` 保留不可变审批历史，并关联 ProcessInstance/ProcessTask。
+- 服务目录、变更、工单审批统一通过 BPMN 编排。
 
 **验收**:
 
-- `/admin/approvals` 能显示是否绑定 BPMN。
-- `/workflow` 能查看哪些业务对象触发了流程实例。
-- 旧审批模板未绑定 BPMN 时保持兼容。
-- BPMN 节点配置可复用审批组、候选人、候选组。
+- `/approvals` 是唯一 BPMN 待办入口，旧待办子路径与旧管理入口均已移除。
+- `/workflow/instances` 通过 canonical `/api/v1/bpmn/process-instances` 查看业务实例。
+- 旧审批模板、旧 API、双读双写与兼容跳转均不存在。
+- BPMN 节点配置复用审批组、候选人、候选组。
 
 **qoder 协作边界**:
 
-- qoder 已完成关系调研，可继续做字段/API 设计草案。
-- Codex 负责兼容策略、迁移顺序、产品语义收敛。
+- 后续扩展必须直接复用 BPMN 与 WorkItem 权威边界，不得重新引入兼容审批层。
 
 ### Phase 4: 开源产品化与贡献者体验
 

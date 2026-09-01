@@ -63,8 +63,10 @@ class TestAuthModule:
         client = ITSMAPIClient()
         result = client.login('user1', 'user123')
         assert result is not None
-        assert 'access_token' in result or 'user' in result
-        assert client.token is not None
+        assert 'user' in result
+        assert 'access_token' not in result
+        assert 'refresh_token' not in result
+        assert client.session.cookies.get('access_token') is not None
 
     def test_login_invalid_credentials(self):
         """测试登录失败-无效凭据"""

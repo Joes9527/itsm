@@ -7,7 +7,7 @@
 ## 基础信息
 
 - **Base URL**: `http://localhost:8090/api/v1`
-- **认证方式**: JWT Bearer Token
+- **认证方式**: 后端签发的 Secure/HttpOnly cookie 会话；浏览器 JSON 响应不暴露 JWT
 - **数据格式**: JSON
 - **字符编码**: UTF-8
 

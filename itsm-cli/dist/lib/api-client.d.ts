@@ -2,6 +2,10 @@ import type { LoginRequest, LoginResponse, User, Ticket, TicketListResponse, Cre
 export declare class ApiClient {
     private baseURL;
     constructor(baseURL?: string);
+    private persistResponseCookies;
+    private refreshSession;
+    private csrfToken;
+    private request;
     login(loginData: LoginRequest): Promise<LoginResponse>;
     logout(): Promise<void>;
     getUserInfo(): Promise<User>;
@@ -39,10 +43,8 @@ export declare class ApiClient {
     listProcessInstances(params?: PaginationParams): Promise<ProcessInstanceListResponse>;
     getProcessInstance(id: string): Promise<ProcessInstance>;
     listUserTasks(): Promise<ApprovalTaskListResponse>;
-    completeTask(id: string, outcome: string, comment?: string): Promise<Record<string, unknown>>;
-    listApprovals(status?: string): Promise<ApprovalTaskListResponse>;
-    approveTask(id: string, comment?: string): Promise<Record<string, unknown>>;
-    rejectTask(id: string, comment?: string): Promise<Record<string, unknown>>;
+    completeTask(id: string, outcome: string, comment?: string): Promise<void>;
+    submitTaskDecision(id: string, action: 'approve' | 'reject', comment?: string): Promise<void>;
     listNotifications(params?: PaginationParams & {
         unread?: boolean;
     }): Promise<NotificationListResponse>;

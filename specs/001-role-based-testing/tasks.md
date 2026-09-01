@@ -30,7 +30,7 @@ description: "Task list for ITSM v1.0 GA 角色驱动的全产品测试方案"
 **Purpose**: 准备测试运行所需的目录、依赖、配置；不阻塞 Foundational 之后的并行。
 
 - [X] T001 创建目录骨架：`itsm-frontend/tests/e2e/roles/`、`itsm-frontend/tests/e2e/flows/`、`itsm-frontend/tests/e2e/fixtures/`、`docs/scripts/`
-- [X] T002 [P] 校验 Playwright 配置 `itsm-frontend/playwright.config.ts`，确认 `testDir` 覆盖 `tests/e2e/roles` 与 `tests/e2e/flows`，并设 `baseURL = http://localhost:3000`、`extraHTTPHeaders` 注入 token 占位
+- [X] T002 [P] 校验 Playwright 配置 `itsm-frontend/playwright.config.ts`，确认 `testDir` 覆盖 `tests/e2e/roles` 与 `tests/e2e/flows`，并设 `baseURL = http://localhost:3000`；认证由每个隔离 BrowserContext 的 cookie jar 承载
 - [X] T003 [P] 在 `itsm-frontend/package.json` `scripts` 增加 `"test:e2e:roles": "playwright test tests/e2e/roles"` 与 `"test:e2e:flows": "playwright test tests/e2e/flows"`（仅 scripts 字段，无新依赖）
 - [X] T004 [P] 校验 `docker-compose.dev.yml` 暴露 `5432`、`6379`，与 `quickstart.md` 步骤 1 一致
 
@@ -47,10 +47,10 @@ description: "Task list for ITSM v1.0 GA 角色驱动的全产品测试方案"
 - [X] T005 修改 `itsm-backend/pkg/seeder/seeder.go`：在默认 seed 中补 `engineer1 / eng123`（角色 engineer）、`manager1 / mgr123`（角色 approver/manager）、`tenant1admin / ta123`（角色 tenant_admin），均挂租户 `tenant_test`（FR-604, R-07）
 - [X] T006 在 `itsm-backend/router/ga_readiness.go` 中将每个模块 `Endpoint` 字段改为 GET 可达路径（例如 `/api/v1/sla/definitions` 替代 POST-only `/sla/monitoring`；`/api/v1/ai/audit` 改为 `/api/v1/ai/metrics` 等），保证 `GET /api/v1/readiness/ga` 中所列端点 GET 返回 200（R-01）
 - [X] T007 修改 `itsm-frontend/src/components/layout/sidebar/menu-config.ts`：删除 `/reports/cmdb-quality`、`/reports/sla-trend`、`/reports/incident-trends`、`/reports/change-success`、`/reports/problem-efficiency`、`/tickets/templates` 等无后端 API 的孤立子项；顶级 `/reports` 在 GA 前隐藏（FR-1001/1004）
-- [X] T008 [P] 新建 `itsm-frontend/tests/e2e/fixtures/auth.ts`：扩展 Playwright `test`，提供 `login(role)` 返回 access_token 的 fixture，账号映射 `admin / user1 / security1 / engineer1 / manager1 / tenant1admin`（research.md R6）
-- [X] T009 [P] 新建 `itsm-frontend/tests/e2e/fixtures/api.ts`：基于 `playwright.request` 封装 `apiGet(token, path)` / `apiPost(token, path, body)`，统一 `Authorization` 与 `X-Tenant-ID` 注入
+- [X] T008 [P] 新建 `itsm-frontend/tests/e2e/fixtures/auth.ts`：扩展 Playwright `test`，提供 `login(role)` 建立当前 BrowserContext 的 HttpOnly cookie 会话，账号映射 `admin / user1 / security1 / engineer1 / manager1 / tenant1admin`（research.md R6）
+- [X] T009 [P] 新建 `itsm-frontend/tests/e2e/fixtures/api.ts`：基于 `playwright.request` 的独立 cookie jar 封装 `apiGet(path)` / `apiPost(path, body)`；mutation 从 canonical CSRF endpoint 获取并发送 `X-CSRF-Token`
 - [X] T010 [P] 新建 `docs/scripts/smoke-api.sh` 骨架：`set -uo pipefail`、`fails=0`、`check()` 函数累加失败、最终 `exit $((fails>0))`，登录失败 `exit 2`（contracts/api-smoke-matrix.md "退出码约定"）
-- [X] T011 [P] 新建 `docs/scripts/lib/jwt.sh` 工具脚本：`get_token <user> <pass>` 调 `/api/v1/auth/login` 并 `jq -r '.data.access_token'`
+- [X] T011 [P] 使用 `docs/scripts/smoke-api.sh` 内唯一 cookie jar 登录助手；旧 `docs/scripts/lib/jwt.sh` 已随 JSON-token 契约退役删除
 - [X] T012 在 `itsm-backend/pkg/seeder/seeder_test.go`（如不存在则新建）增加用例：seeder 跑完后 6 个测试账号均能登录且角色正确（验证 T005）
 
 **Checkpoint**: 测试账号、GA 准入端点、菜单、fixture、smoke 骨架全部就绪 → Phase 3..9 可并行启动。
@@ -128,7 +128,7 @@ description: "Task list for ITSM v1.0 GA 角色驱动的全产品测试方案"
 ### Implementation for User Story 4
 
 - [ ] T036 [P] [US4] 新建 `itsm-frontend/tests/e2e/roles/approver.spec.ts`：用 fixture login `manager1`
-- [ ] T037 [US4] 在 `approver.spec.ts` 实现 `ALLOW-10`：`POST /api/v1/approval-workflows/instances/{id}/approve` 一级通过后流转下一节点（US4-AC1）
+- [ ] T037 [US4] 在 `approver.spec.ts` 实现 `ALLOW-10`：`POST /api/v1/bpmn/tasks/{id}/decisions` `{action:"approve"}` 一级通过后流转下一节点（US4-AC1）
 - [ ] T038 [US4] 在 `approver.spec.ts` 验证任一节点 reject → 整工作流 `rejected` + 审计（FR-803, US4-AC2）
 - [ ] T039 [US4] 在 `approver.spec.ts` 验证节点 timeout 触发升级：等待 > `manager_timeout` 后 `escalation_history` 新增记录（FR-404, US4-AC3）
 - [ ] T040 [US4] 在 `approver.spec.ts` 增加 `DENY-10`：`PUT /api/v1/tickets/{id}` 非审批字段 → 403（角色矩阵）
@@ -201,14 +201,14 @@ description: "Task list for ITSM v1.0 GA 角色驱动的全产品测试方案"
 - [X] T057 在 `docs/scripts/smoke-api.sh` 实现 #6..#9（tickets list/create + incidents list/create）
 - [X] T058 在 `docs/scripts/smoke-api.sh` 实现 #10..#14（problems/changes/CI/CI-create/ci-types）
 - [X] T059 在 `docs/scripts/smoke-api.sh` 实现 #15..#19（knowledge x2 / service-catalog / sla-defs / sla-monitoring POST）
-- [X] T060 在 `docs/scripts/smoke-api.sh` 实现 #20..#24（connectors/lifecycle / `/api/v1/bpmn/process-instances` / `/api/v1/workflow/instances` / approval-workflows / process-bindings）
+- [X] T060 在 `docs/scripts/smoke-api.sh` 实现 #20..#24（connectors/lifecycle / BPMN process definitions / process instances / tasks / process-bindings）
 - [X] T061 在 `docs/scripts/smoke-api.sh` 实现 #25..#28（ai/triage POST、ai/audit POST、dashboard/overview、analytics/tickets）
 - [X] T062 在 `docs/scripts/smoke-api.sh` 实现 #29..#32（audit-logs / users / tenants / roles）
 - [X] T063 在 `docs/scripts/smoke-api.sh` 末尾 `if [[ $fails -gt 0 ]]; then exit 1; fi` 并打印 `All endpoints OK`
 
 ### OWASP 冒烟层（owasp-test-matrix.md）
 
-- [ ] T064 [P] 在 `docs/scripts/smoke-api.sh` 增加 SEC-A02-02：登录后将 token `exp -1` → 401（FR-902）
+- [ ] T064 [P] 在 `docs/scripts/smoke-api.sh` 增加 SEC-A02-02：篡改 HttpOnly 会话 cookie 后访问受保护接口 → 401（FR-902）
 - [ ] T065 [P] 在 `docs/scripts/smoke-api.sh` 增加 SEC-A03-01：`POST /tickets` `title` 含 `' OR 1=1 --` → 持久化但 GET 渲染时 HTML 转义、DB 不破坏（FR-903）
 - [ ] T066 [P] 在 `docs/scripts/smoke-api.sh` 增加 SEC-A05-02：模拟 Redis NOAUTH（连接到无密码端口）→ 应用 fallback 内存限流，warning 日志（FR-904）
 - [ ] T067 [P] 在 `docs/scripts/smoke-api.sh` 增加 SEC-A07-01：5 次错误密码登录 → 第 6 次 429 + audit `login_failed`（FR-905）
@@ -234,7 +234,7 @@ description: "Task list for ITSM v1.0 GA 角色驱动的全产品测试方案"
 **Purpose**: 把所有自动化串入 GitHub Actions，做最终一致性扫描，更新源文档。
 
 - [X] T077 新建 `.github/workflows/ga-readiness.yml`：单 job 串行 — services(postgres/redis) → `go build ./...` → `go test ./... -count=1` → 启 backend 二进制 → `bash docs/scripts/smoke-api.sh` → `cd itsm-frontend && npm ci && npm run type-check && npm run lint:check && npm run test:unit && npm run build` → `npx next dev` 后台 → `npx playwright test tests/e2e/roles tests/e2e/flows`；失败上传 `playwright-report/` 与 `/tmp/itsm-*.log`（research.md R4）
-- [X] T078 [P] 在 `docs/ITSM-基于角色视角的产品测试方案.md` §六"已知不可达"小节同步 NC-002 决议：删除 `/templates/tickets`、`/incident-rules`，改写 `/process-instances` → `/api/v1/bpmn/process-instances` + `/api/v1/workflow/instances`
+- [X] T078 [P] 在 `docs/ITSM-基于角色视角的产品测试方案.md` §六"已知不可达"小节同步 NC-002 决议：删除 `/templates/tickets`、`/incident-rules`，旧流程路径统一改写为 `/api/v1/bpmn/*`
 - [X] T079 [P] 在 `docs/ITSM-基于角色视角的产品测试方案.md` 头部"自动化命令"小节追加 `bash docs/scripts/smoke-api.sh` 与 `npx playwright test tests/e2e/roles` / `tests/e2e/flows` 的标准命令
 - [X] T080 [P] 校验 `specs/001-role-based-testing/checklists/ga-readiness.md` 中 CHK080..CHK084（菜单一致性）能由 T007 / T077 / 冒烟脚本对应自动产出证据
 - [X] T081 [P] 在 `itsm-backend` 增加 `pkg/seeder/seeder_test.go`（如 T012 未覆盖）补租户 `tenant_test` + 6 测试账号 seed 幂等性测试

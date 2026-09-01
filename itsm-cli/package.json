@@ -10,7 +10,8 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc && node bin/itsm.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test tests/*.test.mjs"
   },
   "dependencies": {
     "react": "^19.0.0",

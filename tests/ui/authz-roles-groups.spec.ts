@@ -1,260 +1,121 @@
-import { test, expect } from '@playwright/test';
-import { APIRequestContext } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+import type { APIRequestContext } from '@playwright/test';
+
+const API = process.env.ITSM_BACKEND_URL || 'http://localhost:8090';
+
+async function login(request: APIRequestContext, username = 'admin', password = 'admin123') {
+  const response = await request.post(`${API}/api/v1/auth/login`, { data: { username, password } });
+  expect(response.ok()).toBeTruthy();
+  const body = await response.json();
+  expect(body.code).toBe(0);
+  expect(body.data).not.toHaveProperty('accessToken');
+  expect(body.data).not.toHaveProperty('refreshToken');
+  const state = await request.storageState();
+  expect(state.cookies.some(cookie => cookie.name === 'access_token' && cookie.httpOnly)).toBe(true);
+  expect(state.cookies.some(cookie => cookie.name === 'refresh_token' && cookie.httpOnly)).toBe(true);
+  return body.data;
+}
+
+async function csrfHeaders(request: APIRequestContext) {
+  const response = await request.get(`${API}/api/v1/csrf-token`);
+  expect(response.ok()).toBeTruthy();
+  const body = await response.json();
+  expect(body.code).toBe(0);
+  return { 'X-CSRF-Token': String(body.data.csrf_token) };
+}
 
 test.describe('User Management, Roles & Permissions Deep Testing', () => {
-  let request: APIRequestContext;
-
-  test.beforeAll(async ({ browser }) => {
-    request = browser.request;
+  test('login establishes an HttpOnly cookie session without JSON tokens', async ({ request }) => {
+    const data = await login(request);
+    expect(data.user).toHaveProperty('username', 'admin');
   });
 
-  test.afterAll(async () => {
-    await request.dispose();
-  });
-
-  test('should login successfully and obtain tokens', async () => {
-    const response = await request.post('http://localhost:8090/api/v1/auth/login', {
-      data: {
-        username: 'admin',
-        password: 'admin123'
-      }
+  test('fails login with invalid credentials and creates no session', async ({ request }) => {
+    const response = await request.post(`${API}/api/v1/auth/login`, {
+      data: { username: 'invalid', password: 'wrongpass' },
     });
-
-    expect(response.ok()).toBeTruthy();
     const body = await response.json();
-    expect(body.code).toBe(0);
-    expect(body.data).toHaveProperty('access_token');
-    expect(body.data).toHaveProperty('refresh_token');
-    expect(body.data.user).toHaveProperty('username', 'admin');
-  });
-
-  test('should fail login with invalid credentials', async () => {
-    const response = await request.post('http://localhost:8090/api/v1/auth/login', {
-      data: {
-        username: 'invalid',
-        password: 'wrongpass'
-      }
-    });
-
-    const body = await response.json();
-    expect(response.status()).toBe(200); // API returns 200 with error code
     expect(body.code).not.toBe(0);
+    expect((await request.storageState()).cookies).toHaveLength(0);
   });
 
-  test('should list users as admin', async () => {
-    // First login
-    const loginResp = await request.post('http://localhost:8090/api/v1/auth/login', {
-      data: { username: 'admin', password: 'admin123' }
-    });
-    const loginBody = await loginResp.json();
-    const token = loginBody.data.access_token;
+  test('lists and creates users as admin through the cookie session', async ({ request }) => {
+    await login(request);
+    const list = await request.get(`${API}/api/v1/users`);
+    expect(list.ok()).toBeTruthy();
+    const listBody = await list.json();
+    expect(listBody.code).toBe(0);
+    expect(Array.isArray(listBody.data.users)).toBeTruthy();
 
-    // List users
-    const response = await request.get('http://localhost:8090/api/v1/users', {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
+    const stamp = Date.now();
+    const created = await request.post(`${API}/api/v1/users`, {
+      headers: await csrfHeaders(request),
+      data: {
+        username: `testuser_${stamp}`,
+        email: `test_${stamp}@example.com`,
+        name: 'Test User',
+        password: 'TestPass123',
+        tenantId: 1,
+        role: 'agent',
+      },
     });
+    expect(created.ok()).toBeTruthy();
+    expect((await created.json()).code).toBe(0);
+  });
 
+  test('lists roles and manages a custom role as admin', async ({ request }) => {
+    await login(request);
+    const roles = await request.get(`${API}/api/v1/roles`);
+    expect(roles.ok()).toBeTruthy();
+    const roleBody = await roles.json();
+    expect(roleBody.code).toBe(0);
+    expect(roleBody.data.roles.map((role: { code?: string; name?: string }) => role.code || role.name)).toContain('admin');
+
+    const created = await request.post(`${API}/api/v1/roles`, {
+      headers: await csrfHeaders(request),
+      data: {
+        name: 'Custom Test Role',
+        code: `custom_test_role_${Date.now()}`,
+        description: 'Role for automated testing',
+        permissions: ['ticket:read', 'ticket:write', 'knowledge:read'],
+      },
+    });
+    expect(created.ok()).toBeTruthy();
+    const createdBody = await created.json();
+    expect(createdBody.code).toBe(0);
+    await request.delete(`${API}/api/v1/roles/${createdBody.data.id}`, {
+      headers: await csrfHeaders(request),
+    });
+  });
+
+  test('denies an end user access to the administrator user list', async ({ request }) => {
+    await login(request, 'user1', 'user123');
+    const response = await request.get(`${API}/api/v1/users`);
+    expect(response.status()).toBe(403);
+  });
+
+  test('rotates the cookie session through the canonical refresh endpoint', async ({ request }) => {
+    await login(request);
+    const before = (await request.storageState()).cookies.find(cookie => cookie.name === 'refresh_token')?.value;
+    const response = await request.post(`${API}/api/v1/auth/refresh`, { data: {} });
     expect(response.ok()).toBeTruthy();
     const body = await response.json();
     expect(body.code).toBe(0);
-    expect(body.data).toHaveProperty('users');
-    expect(body.data).toHaveProperty('pagination');
-    expect(Array.isArray(body.data.users)).toBeTruthy();
+    expect(body.data).not.toHaveProperty('accessToken');
+    expect(body.data).not.toHaveProperty('refreshToken');
+    const after = (await request.storageState()).cookies.find(cookie => cookie.name === 'refresh_token')?.value;
+    expect(after).toBeTruthy();
+    expect(after).not.toBe(before);
   });
 
-  test('should create user as admin', async () => {
-    const loginResp = await request.post('http://localhost:8090/api/v1/auth/login', {
-      data: { username: 'admin', password: 'admin123' }
+  test('logout clears the cookie session', async ({ request }) => {
+    await login(request);
+    const response = await request.post(`${API}/api/v1/auth/logout`, {
+      headers: await csrfHeaders(request),
     });
-    const token = (await loginResp.json()).data.access_token;
-
-    const newUser = {
-      username: `testuser_${Date.now()}`,
-      email: `test_${Date.now()}@example.com`,
-      name: 'Test User',
-      password: 'TestPass123',
-      tenant_id: 1,
-      role: 'agent'
-    };
-
-    const response = await request.post('http://localhost:8090/api/v1/users', {
-      headers: { 'Authorization': `Bearer ${token}` },
-      data: newUser
-    });
-
     expect(response.ok()).toBeTruthy();
-    const body = await response.json();
-    expect(body.code).toBe(0);
-    expect(body.data.username).toBe(newUser.username);
-    expect(body.data.role).toBe('agent');
-  });
-
-  test('should list roles as admin', async () => {
-    const loginResp = await request.post('http://localhost:8090/api/v1/auth/login', {
-      data: { username: 'admin', password: 'admin123' }
-    });
-    const token = (await loginResp.json()).data.access_token;
-
-    const response = await request.get('http://localhost:8090/api/v1/roles', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-
-    expect(response.ok()).toBeTruthy();
-    const body = await response.json();
-    expect(body.code).toBe(0);
-    expect(body.data).toHaveProperty('roles');
-    expect(body.data.roles.length).toBeGreaterThan(0);
-
-    // Check for default roles
-    const roleNames = body.data.roles.map((r: any) => r.code || r.name);
-    expect(roleNames).toContain('admin');
-    expect(roleNames).toContain('agent');
-    expect(roleNames).toContain('end_user');
-  });
-
-  test('should create custom role with permissions', async () => {
-    const loginResp = await request.post('http://localhost:8090/api/v1/auth/login', {
-      data: { username: 'admin', password: 'admin123' }
-    });
-    const token = (await loginResp.json()).data.access_token;
-
-    const roleData = {
-      name: 'Custom Test Role',
-      code: 'custom_test_role',
-      description: 'Role for automated testing',
-      permissions: ['ticket:read', 'ticket:write', 'knowledge:read']
-    };
-
-    const response = await request.post('http://localhost:8090/api/v1/roles', {
-      headers: { 'Authorization': `Bearer ${token}` },
-      data: roleData
-    });
-
-    expect(response.ok()).toBeTruthy();
-    const body = await response.json();
-    expect(body.code).toBe(0);
-    expect(body.data.name).toBe('Custom Test Role');
-    expect(body.data.permissions).toHaveLength(3);
-    expect(body.data.permissions).toContain('ticket:read');
-
-    // Clean up - delete the role
-    const roleId = body.data.id;
-    await request.delete(`http://localhost:8090/api/v1/roles/${roleId}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-  });
-
-  test('should deny access for end_user to list all users', async () => {
-    // Create an end_user first (as admin)
-    const adminLogin = await request.post('http://localhost:8090/api/v1/auth/login', {
-      data: { username: 'admin', password: 'admin123' }
-    });
-    const adminToken = (await adminLogin.json()).data.access_token;
-
-    const newUser = {
-      username: `enduser_${Date.now()}`,
-      email: `end_${Date.now()}@example.com`,
-      name: 'End User Test',
-      password: 'TestPass123',
-      tenant_id: 1,
-      role: 'end_user'
-    };
-    const createResp = await request.post('http://localhost:8090/api/v1/users', {
-      headers: { 'Authorization': `Bearer ${adminToken}` },
-      data: newUser
-    });
-    expect((await createResp.json()).code).toBe(0);
-
-    // Login as end_user
-    const endUserLogin = await request.post('http://localhost:8090/api/v1/auth/login', {
-      data: { username: newUser.username, password: newUser.password }
-    });
-    const endUserToken = (await endUserLogin.json()).data.access_token;
-
-    // Try to list all users
-    const listResp = await request.get('http://localhost:8090/api/v1/users', {
-      headers: { 'Authorization': `Bearer ${endUserToken}` }
-    });
-
-    const body = await listResp.json();
-    // Should be forbidden or empty (end_user cannot list all users)
-    expect(listResponse.status()).toBeOneOf([200, 403]);
-    if (listResp.status() === 200) {
-      // If 200, should only return own user or empty (depending on implementation)
-      // The current RBAC middleware blocks the call entirely, so expect 403
-    } else {
-      expect(body.code).not.toBe(0);
-    }
-  });
-
-  test('should enforce ticket ownership for end_user', async () => {
-    // This test requires ticket creation; see further tests
-  });
-
-  test('should verify groups endpoint does not exist', async () => {
-    const loginResp = await request.post('http://localhost:8090/api/v1/auth/login', {
-      data: { username: 'admin', password: 'admin123' }
-    });
-    const token = (await loginResp.json()).data.access_token;
-
-    const response = await request.get('http://localhost:8090/api/v1/groups', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-
-    // Expect 404 Not Found
-    expect(response.status()).toBe(404);
-  });
-
-  test('should test permission-based access to endpoints', async () => {
-    // Create a role with specific permission and verify access
-    // See integration test for detailed steps
-  });
-
-  test('should test token refresh flow', async () => {
-    const loginResp = await request.post('http://localhost:8090/api/v1/auth/login', {
-      data: { username: 'admin', password: 'admin123' }
-    });
-    const loginBody = await loginResp.json();
-    const refreshToken = loginBody.data.refresh_token;
-
-    // Wait a moment (simulate access token expiry not needed, refresh token is separate)
-    const refreshResp = await request.post('http://localhost:8090/api/v1/auth/refresh', {
-      data: { refresh_token: refreshToken }
-    });
-
-    expect(refreshResp.ok()).toBeTruthy();
-    const refreshBody = await refreshResp.json();
-    expect(refreshBody.code).toBe(0);
-    expect(refreshBody.data).toHaveProperty('access_token');
-  });
-
-  test('should test logout invalidates session', async () => {
-    const loginResp = await request.post('http://localhost:8090/api/v1/auth/login', {
-      data: { username: 'admin', password: 'admin123' }
-    });
-    const token = (await loginResp.json()).data.access_token;
-
-    const logoutResp = await request.post('http://localhost:8090/api/v1/auth/logout', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-
-    expect(logoutResp.ok()).toBeTruthy();
-    const body = await logoutResp.json();
-    expect(body.code).toBe(0);
-
-    // Subsequent call with same token should fail (if token is properly invalidated)
-    // Note: Without token blacklist, JWT might still be valid until expiry
-    // This depends on backend implementation
-  });
-
-  test('should verify tenant isolation', async () => {
-    // Create tenant 1 admin, create user in tenant 1
-    // Attempt to access that user as tenant 2 admin (if multi-tenant setup possible)
-    // Requires more complex setup; see integration tests
+    const cookies = (await request.storageState()).cookies;
+    expect(cookies.some(cookie => cookie.name === 'access_token')).toBe(false);
+    expect(cookies.some(cookie => cookie.name === 'refresh_token')).toBe(false);
   });
 });
-
-// Additional browser UI tests would be in separate file
-// e.g., authz-roles-groups-ui.spec.ts

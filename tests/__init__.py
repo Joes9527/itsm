@@ -116,7 +116,6 @@ class TestContext:
         self.config = Config()
         self.logger = Logger.get_logger('context')
         self._data = {}
-        self._token = None
         self._tenant_id = None
 
     def set(self, key: str, value: Any):
@@ -126,15 +125,6 @@ class TestContext:
     def get(self, key: str, default: Any = None) -> Any:
         """获取测试数据"""
         return self._data.get(key, default)
-
-    def set_token(self, token: str):
-        """设置认证token"""
-        self._token = token
-        self.logger.info("Authentication token set")
-
-    def get_token(self) -> Optional[str]:
-        """获取认证token"""
-        return self._token
 
     def set_tenant_id(self, tenant_id: int):
         """设置租户ID"""
@@ -147,7 +137,6 @@ class TestContext:
     def clear(self):
         """清理测试数据"""
         self._data.clear()
-        self._token = None
         self._tenant_id = None
 
 

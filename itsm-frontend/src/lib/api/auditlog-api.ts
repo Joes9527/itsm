@@ -39,7 +39,7 @@ export interface ListAuditLogsResponse {
   pageSize: number;
 }
 
-// 查询审计日志（自动携带 Authorization、X-Tenant-ID / X-Tenant-Code）
+// 查询审计日志（浏览器会话由 HttpOnly Cookie 承载，并携带租户上下文头）
 export async function listAuditLogs(params: ListAuditLogsParams): Promise<ListAuditLogsResponse> {
   const query = new URLSearchParams();
   if (params.page) query.set('page', String(params.page));

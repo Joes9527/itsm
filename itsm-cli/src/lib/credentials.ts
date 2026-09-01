@@ -3,23 +3,27 @@ import * as path from 'path';
 import * as os from 'os';
 import type { Credentials } from './types.js';
 
-const CREDENTIALS_DIR = path.join(os.homedir(), '.itsm');
+const CREDENTIALS_DIR = process.env.ITSM_CREDENTIALS_DIR || path.join(os.homedir(), '.itsm');
 const CREDENTIALS_FILE = path.join(CREDENTIALS_DIR, 'credentials');
 
 export { type Credentials };
 
 export function saveCredentials(cred: Credentials): void {
   if (!fs.existsSync(CREDENTIALS_DIR)) {
-    fs.mkdirSync(CREDENTIALS_DIR, { recursive: true });
+    fs.mkdirSync(CREDENTIALS_DIR, { recursive: true, mode: 0o700 });
   }
-  fs.writeFileSync(CREDENTIALS_FILE, JSON.stringify(cred, null, 2), 'utf-8');
+  fs.chmodSync(CREDENTIALS_DIR, 0o700);
+  fs.writeFileSync(CREDENTIALS_FILE, JSON.stringify(cred, null, 2), { encoding: 'utf-8', mode: 0o600 });
+  fs.chmodSync(CREDENTIALS_FILE, 0o600);
 }
 
 export function loadCredentials(): Credentials | null {
   try {
     if (!fs.existsSync(CREDENTIALS_FILE)) return null;
     const raw = fs.readFileSync(CREDENTIALS_FILE, 'utf-8');
-    return JSON.parse(raw) as Credentials;
+    const parsed = JSON.parse(raw) as Partial<Credentials>;
+    if (typeof parsed.cookieHeader !== 'string' || !parsed.cookieHeader) return null;
+    return parsed as Credentials;
   } catch {
     return null;
   }
@@ -37,10 +41,5 @@ export function clearCredentials(): void {
 
 export function isLoggedIn(): boolean {
   const cred = loadCredentials();
-  if (!cred) return false;
-  if (!cred.token) return false;
-  if (cred.expiresAt) {
-    return new Date(cred.expiresAt) > new Date();
-  }
-  return true;
+  return Boolean(cred?.cookieHeader);
 }

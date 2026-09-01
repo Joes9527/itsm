@@ -4,4 +4,5 @@ interface LoginProps {
     password: string;
 }
 export declare const LoginCommand: React.FC<LoginProps>;
+export declare const LogoutCommand: React.FC;
 export {};

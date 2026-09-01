@@ -36,9 +36,10 @@ login() {
     local username="$1"
     local password="$2"
     local body_file="${TMP_DIR}/login-${username}.json"
+    local cookie_jar="${TMP_DIR}/session-${username}.cookies"
     local http_code
 
-    http_code=$(curl -sS -o "${body_file}" -w '%{http_code}' \
+    http_code=$(curl -sS -o "${body_file}" -w '%{http_code}' -c "${cookie_jar}" -b "${cookie_jar}" \
         -X POST "${API_BASE}/auth/login" \
         -H 'Content-Type: application/json' \
         -d "$(jq -nc --arg username "${username}" --arg password "${password}" '{username:$username,password:$password}')" || true)
@@ -49,37 +50,41 @@ login() {
         exit 1
     fi
 
-    jq -r '.data.access_token' "${body_file}"
+    if ! grep -q 'access_token' "${cookie_jar}"; then
+        log_error "login did not establish cookie session for ${username}"
+        exit 1
+    fi
+    echo "${cookie_jar}"
 }
 
 api_call() {
     local method="$1"
     local path="$2"
-    local token="$3"
+    local cookie_jar="$3"
     local outfile="$4"
     local payload="${5:-}"
 
     if [[ -n "${payload}" ]]; then
         curl -sS -o "${outfile}" -w '%{http_code}' \
             -X "${method}" "${API_BASE}${path}" \
-            -H "Authorization: Bearer ${token}" \
+            -b "${cookie_jar}" \
             -H 'Content-Type: application/json' \
             -d "${payload}" || true
     else
         curl -sS -o "${outfile}" -w '%{http_code}' \
             -X "${method}" "${API_BASE}${path}" \
-            -H "Authorization: Bearer ${token}" || true
+            -b "${cookie_jar}" || true
     fi
 }
 
 assert_users_endpoint() {
     local username="$1"
-    local token="$2"
+    local cookie_jar="$2"
     local expected_http="$3"
     local outfile="${TMP_DIR}/${username}-users.json"
     local http_code
 
-    http_code=$(api_call GET "/users" "${token}" "${outfile}")
+    http_code=$(api_call GET "/users" "${cookie_jar}" "${outfile}")
     if [[ "${http_code}" != "${expected_http}" ]]; then
         log_result FAIL "${username} /users HTTP=${http_code}, expected ${expected_http}"
         return
@@ -100,13 +105,13 @@ assert_users_endpoint() {
 
 assert_menu_visibility() {
     local username="$1"
-    local token="$2"
+    local cookie_jar="$2"
     shift 2
     local restricted=("$@")
     local outfile="${TMP_DIR}/${username}-menus.json"
     local http_code
 
-    http_code=$(api_call GET "/auth/menus" "${token}" "${outfile}")
+    http_code=$(api_call GET "/auth/menus" "${cookie_jar}" "${outfile}")
     if [[ "${http_code}" != "200" ]]; then
         log_result FAIL "${username} /auth/menus HTTP=${http_code}"
         return
@@ -133,14 +138,14 @@ main() {
     require_tools
     log_phase "RBAC and Menu Regression"
 
-    local admin_token user_token security_token
-    admin_token="$(login admin admin123)"
-    user_token="$(login user1 user123)"
-    security_token="$(login security1 security123)"
+    local admin_session user_session security_session
+    admin_session="$(login admin admin123)"
+    user_session="$(login user1 user123)"
+    security_session="$(login security1 security123)"
 
-    assert_users_endpoint "admin" "${admin_token}" "200"
-    assert_users_endpoint "user1" "${user_token}" "403"
-    assert_users_endpoint "security1" "${security_token}" "403"
+    assert_users_endpoint "admin" "${admin_session}" "200"
+    assert_users_endpoint "user1" "${user_session}" "403"
+    assert_users_endpoint "security1" "${security_session}" "403"
 
     local restricted_labels=(
         "用户管理"
@@ -151,8 +156,8 @@ main() {
         "工作流"
     )
 
-    assert_menu_visibility "user1" "${user_token}" "${restricted_labels[@]}"
-    assert_menu_visibility "security1" "${security_token}" "${restricted_labels[@]}"
+    assert_menu_visibility "user1" "${user_session}" "${restricted_labels[@]}"
+    assert_menu_visibility "security1" "${security_session}" "${restricted_labels[@]}"
 
     log_phase "Summary"
     echo "PASSED=${PASSED}"

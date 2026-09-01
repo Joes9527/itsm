@@ -3,7 +3,6 @@ package common
 import (
 	"errors"
 	"strconv"
-	"strings"
 
 	"itsm-backend/authentication"
 	"itsm-backend/authorization"
@@ -25,20 +24,6 @@ type LoginRequest struct {
 
 func NewHandler(svc *Service) *Handler {
 	return &Handler{svc: svc}
-}
-
-func shouldUseSecureCookies(c *gin.Context) bool {
-	if c.Request.TLS != nil {
-		return true
-	}
-
-	return strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https")
-}
-
-func cookieDomain(_ *gin.Context) string {
-	// Frontend now calls the backend through same-origin /api proxy, so host-only
-	// cookies are the safest default for both localhost and production domains.
-	return ""
 }
 
 // Auth
@@ -67,18 +52,12 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 
-	secure := shouldUseSecureCookies(c)
-	domain := cookieDomain(c)
-	httpOnly := true
-
 	// Browsers reject Secure cookies over plain HTTP. We keep host-only cookies
 	// without Secure in local development so the same-origin frontend proxy can
 	// persist login state. Production HTTPS requests still get Secure cookies.
-
-	// Access token: 15分钟
-	c.SetCookie("access_token", res.AccessToken, 900, "/", domain, secure, httpOnly)
-	// Refresh token: 7天
-	c.SetCookie("refresh_token", res.RefreshToken, 604800, "/", domain, secure, httpOnly)
+	authentication.WriteSessionCookies(c.Writer, c.Request, &authentication.SessionTokens{
+		AccessToken: res.AccessToken, RefreshToken: res.RefreshToken,
+	})
 
 	common.Success(c, res)
 }
@@ -112,14 +91,9 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	secure := shouldUseSecureCookies(c)
-	domain := cookieDomain(c)
-
-	// 设置 httpOnly cookies (Secure only on HTTPS requests)
-	c.SetCookie("access_token", res.AccessToken, 900, "/", domain, secure, true)
-	if res.RefreshToken != "" {
-		c.SetCookie("refresh_token", res.RefreshToken, 604800, "/", domain, secure, true)
-	}
+	authentication.WriteSessionCookies(c.Writer, c.Request, &authentication.SessionTokens{
+		AccessToken: res.AccessToken, RefreshToken: res.RefreshToken,
+	})
 
 	common.Success(c, res)
 }
@@ -153,11 +127,7 @@ func (h *Handler) Logout(c *gin.Context) {
 		return
 	}
 
-	secure := shouldUseSecureCookies(c)
-	domain := cookieDomain(c)
-
-	c.SetCookie("access_token", "", -1, "/", domain, secure, true)
-	c.SetCookie("refresh_token", "", -1, "/", domain, secure, true)
+	authentication.ClearSessionCookies(c.Writer, c.Request)
 
 	common.Success(c, nil)
 }

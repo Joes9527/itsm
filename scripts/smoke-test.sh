@@ -24,6 +24,8 @@ ADMIN_USER=${ITSM_ADMIN_USER:-"admin"}
 ADMIN_PASS=${ITSM_ADMIN_PASS:-"admin123"}
 MAX_RETRIES=${MAX_RETRIES:-30}
 RETRY_INTERVAL=${RETRY_INTERVAL:-2}
+SESSION_COOKIE_JAR=$(mktemp)
+trap 'rm -f "$SESSION_COOKIE_JAR"' EXIT
 
 # 测试计数器
 PASSED=0
@@ -93,20 +95,14 @@ test_json_endpoint() {
     local url=$2
     local method=${3:-GET}
     local body=${4:-""}
-    local auth_token=${5:-""}
     
     echo -e "${BLUE}测试: $name${NC}"
     echo "  URL: $url"
     
-    headers="-H Content-Type: application/json"
-    if [ -n "$auth_token" ]; then
-        headers="$headers -H Authorization: Bearer $auth_token"
-    fi
-    
     if [ -n "$body" ]; then
-        response=$(curl -sf "$url" $headers -X "$method" -d "$body" 2>&1 || true)
+        response=$(curl -sf -b "$SESSION_COOKIE_JAR" "$url" -H "Content-Type: application/json" -X "$method" -d "$body" 2>&1 || true)
     else
-        response=$(curl -sf "$url" $headers -X "$method" 2>&1 || true)
+        response=$(curl -sf -b "$SESSION_COOKIE_JAR" "$url" -H "Content-Type: application/json" -X "$method" 2>&1 || true)
     fi
     
     if [ $? -eq 0 ]; then
@@ -148,31 +144,28 @@ echo ""
 echo -e "${YELLOW}[阶段 2/5] 登录功能测试${NC}"
 echo "----------------------------------------"
 
-# 获取token
+# 建立 HttpOnly cookie 会话
 echo -e "${BLUE}测试: 用户登录${NC}"
-login_response=$(curl -sf -X POST "$BACKEND_URL/api/v1/auth/login" \
+login_response=$(curl -sf -c "$SESSION_COOKIE_JAR" -b "$SESSION_COOKIE_JAR" -X POST "$BACKEND_URL/api/v1/auth/login" \
     -H "Content-Type: application/json" \
     -d "{\"username\":\"$ADMIN_USER\",\"password\":\"$ADMIN_PASS\"}" 2>&1 || true)
 
 if echo "$login_response" | jq . > /dev/null 2>&1; then
-    # Backend login response shape (see auth_controller.go Login):
-    #   { code: 0, message: "success", data: { accessToken, refreshToken, user } }
-    # Supports both camelCase (current) and snake_case (legacy) field names.
-    token=$(echo "$login_response" | jq -r '.data.accessToken // .data.access_token // .data.token // .token // .access_token // empty' 2>/dev/null || true)
-    if [ -n "$token" ] && [ "$token" != "null" ]; then
-        echo -e "${GREEN}  ✓ 登录成功，获取到Token${NC}"
+    user_id=$(echo "$login_response" | jq -r '.data.user.id // empty' 2>/dev/null || true)
+    if [ -n "$user_id" ] && grep -q 'access_token' "$SESSION_COOKIE_JAR" && grep -q 'refresh_token' "$SESSION_COOKIE_JAR"; then
+        echo -e "${GREEN}  ✓ 登录成功，HttpOnly cookie 会话已建立${NC}"
         PASSED=$((PASSED + 1))
     else
         echo -e "${RED}  ✗ 登录响应格式异常${NC}"
         echo "  响应: $login_response"
         FAILED=$((FAILED + 1))
-        token=""
+        user_id=""
     fi
 else
     echo -e "${RED}  ✗ 登录请求失败${NC}"
     echo "  响应: $login_response"
     FAILED=$((FAILED + 1))
-    token=""
+    user_id=""
 fi
 
 echo ""
@@ -181,13 +174,13 @@ echo ""
 echo -e "${YELLOW}[阶段 3/5] 核心API可用性${NC}"
 echo "----------------------------------------"
 
-if [ -n "$token" ]; then
-    test_json_endpoint "获取用户信息" "$BACKEND_URL/api/v1/auth/me" "GET" "" "$token"
-    test_json_endpoint "获取仪表盘数据" "$BACKEND_URL/api/v1/dashboard/stats" "GET" "" "$token"
-    test_json_endpoint "获取事件列表" "$BACKEND_URL/api/v1/incidents" "GET" "" "$token"
-    test_json_endpoint "获取工单列表" "$BACKEND_URL/api/v1/tickets" "GET" "" "$token"
+if [ -n "$user_id" ]; then
+    test_json_endpoint "获取用户信息" "$BACKEND_URL/api/v1/auth/me" "GET" ""
+    test_json_endpoint "获取仪表盘数据" "$BACKEND_URL/api/v1/dashboard/stats" "GET" ""
+    test_json_endpoint "获取事件列表" "$BACKEND_URL/api/v1/incidents" "GET" ""
+    test_json_endpoint "获取工单列表" "$BACKEND_URL/api/v1/tickets" "GET" ""
 else
-    echo -e "${YELLOW}  跳过API测试（无有效Token）${NC}"
+    echo -e "${YELLOW}  跳过API测试（无有效会话）${NC}"
 fi
 
 echo ""

@@ -234,18 +234,20 @@ sequenceDiagram
 
     U->>LP: 输入用户名/密码 + 勾选 Remember Me
     LP->>LP: 表单验证
-    LP->>AS: login(username, password, undefined, rememberMe)
+    LP->>AS: login(username, password, tenantCode)
     AS->>BE: POST /api/v1/auth/login
-    BE-->>AS: {access_token, refresh_token, user, tenant}
-    AS->>AS: useAuthStore.login(user, token, tenant)
+    BE-->>AS: Set-Cookie(HttpOnly access+refresh) + {user, tenant}
+    AS->>AS: useAuthStore.login(user, tenant)
     AS-->>LP: true (登录成功)
     LP->>LP: router.push('/dashboard')
     
-    Note over MW: 中间件验证 token
+    Note over MW: 中间件仅做会话 cookie 存在性粗门禁
     
-    MW->>MW: isValidToken(token)?
-    alt Token 有效
+    MW->>MW: access cookie present?
+    alt Cookie 存在
         MW-->>DB: NextResponse.next()
+        DB->>BE: GET /api/v1/auth/me
+        BE-->>DB: 已验证的用户/tenant上下文
         DB->>DB: 加载仪表盘数据
         alt 数据为空
             DB->>U: 显示空状态引导卡片

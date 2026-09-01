@@ -1499,13 +1499,9 @@ func (s *Seeder) seedMenus(ctx context.Context) {
 		{Name: "变更管理", Path: "/changes", Icon: "BarChart3", PermissionCode: "change:read", SortOrder: 50},
 		{Name: "CMDB", Path: "/cmdb", Icon: "Database", PermissionCode: "cmdb:read", SortOrder: 60},
 		{Name: "服务目录", Path: "/service-catalog", Icon: "Book", PermissionCode: "service:read", SortOrder: 70},
-		// "我的待办"(/approvals/pending) 页面本身一直存在且能正常工作(BPMN UserTask 审批收件箱)，
-		// 但从未被加入过菜单种子——旧的 "审批管理"(/admin/approvals) 菜单在 34e4b951 因为指向已删除
-		// 的管理页面而被移除(见上面 SortOrder 260 处的注释)，但同一次改动没有补上这个真正给普通
-		// 审批人用的收件箱页面的菜单项，导致任何角色都无法从侧边栏发现它，只能靠直接输入 URL。
-		// PermissionCode 用 task:read 而不是 workflow:read——部门经理/普通用户/IT总监这些实际
-		// 需要审批的角色都有 task:read，但不是所有角色都有 workflow:read。
-		{Name: "我的待办", Path: "/approvals/pending", Icon: "CheckSquare", PermissionCode: "task:read", SortOrder: 75},
+		// BPMN ProcessTask 审批收件箱的唯一页面。PermissionCode 用 task:read，
+		// 因为任务候选人不必拥有流程定义管理权限。
+		{Name: "我的待办", Path: "/approvals", Icon: "CheckSquare", PermissionCode: "task:read", SortOrder: 75},
 		{Name: "知识库", Path: "/knowledge", Icon: "HelpCircle", PermissionCode: "knowledge:read", SortOrder: 80},
 		{Name: "SLA监控", Path: "/sla-dashboard", Icon: "Calendar", PermissionCode: "sla:read", SortOrder: 90},
 		{Name: "报表", Path: "/reports", Icon: "TrendingUp", PermissionCode: "report:read", SortOrder: 100},
@@ -1520,8 +1516,7 @@ func (s *Seeder) seedMenus(ctx context.Context) {
 		{Name: "组管理", Path: "/admin/groups", Icon: "Users", PermissionCode: "groups:read", SortOrder: 230},
 		{Name: "部门管理", Path: "/admin/departments", Icon: "Activity", PermissionCode: "department:read", SortOrder: 240},
 		{Name: "团队管理", Path: "/admin/teams", Icon: "Users", PermissionCode: "team:read", SortOrder: 250},
-		// "审批管理"(/admin/approvals) 页面已在 34e4b951 删除(工单审批链 Tab 改用真实 BPMN
-		// 审批决策数据)，这里同步移除菜单种子，避免继续生成指向已删除页面的死链菜单项。
+		// 审批只通过 /approvals 的 BPMN ProcessTask 收件箱，不生成第二个管理入口。
 		{Name: "SLA配置", Path: "/admin/sla-definitions", Icon: "Calendar", PermissionCode: "sla:write", SortOrder: 270},
 		{Name: "系统配置", Path: "/admin/system-config", Icon: "Settings", PermissionCode: "system:write", SortOrder: 280},
 	}
@@ -1915,8 +1910,7 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 			// allowlist 把关（end_user 本身就在该 allowlist 里），所以这两条 bpmn:* 授权现在只
 			// 控制 BPMN 菜单可见性，不是接口能不能调的门槛，保留它们是为了让申请人在菜单里也能
 			// 看到相应入口（backlog：BPMN 真正的 DB 驱动权限模型，见设计文档）。
-			// task:read：/api/v1/workflow/tasks、/api/v1/tenant/my-approvals 等"我的待办"路由
-			// 是真正按 RequirePermission("task","read") 做 DB 驱动校验的，这条是必需的真实授权。
+			// task:read：canonical /api/v1/bpmn/tasks 与 /approvals 待办页的真实授权。
 			"bpmn:read", "bpmn:write", "task:read",
 		},
 		// 访客

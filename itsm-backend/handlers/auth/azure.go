@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"itsm-backend/authentication"
+	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/ent"
 	"itsm-backend/ent/user"
@@ -70,6 +71,21 @@ type azureUserInfo struct {
 	DisplayName   string `json:"displayName"`
 	UserPrincipal string `json:"userPrincipalName"`
 	Mail          string `json:"mail"`
+}
+
+type azureIdentityProvider interface {
+	Exchange(context.Context, AzureConfig, string) (*azureTokenResponse, error)
+	UserInfo(context.Context, string) (*azureUserInfo, error)
+}
+
+type microsoftAzureProvider struct{}
+
+func (microsoftAzureProvider) Exchange(ctx context.Context, cfg AzureConfig, code string) (*azureTokenResponse, error) {
+	return exchangeCode(ctx, cfg, code)
+}
+
+func (microsoftAzureProvider) UserInfo(ctx context.Context, accessToken string) (*azureUserInfo, error) {
+	return getUserInfo(ctx, accessToken)
 }
 
 // exchangeCode exchanges authorization code for tokens.
@@ -145,14 +161,19 @@ func AzureLoginHandler(cfg AzureConfig, logger *zap.SugaredLogger) gin.HandlerFu
 			common.Fail(c, common.InternalErrorCode, "failed to generate state")
 			return
 		}
-		// Store state in a short-lived cookie
-		c.SetCookie("azure_oauth_state", state, 600, "/", "", false, true)
+		// Store state in a short-lived cookie under the same transport policy as
+		// the resulting session cookies.
+		authentication.WriteOAuthStateCookie(c.Writer, c.Request, state, 600)
 		c.Redirect(http.StatusTemporaryRedirect, cfg.AuthorizeURL(state))
 	}
 }
 
 // AzureCallbackHandler handles the Azure AD OIDC callback.
 func AzureCallbackHandler(cfg AzureConfig, client *ent.Client, jwtSecret string, logger *zap.SugaredLogger) gin.HandlerFunc {
+	return azureCallbackHandler(cfg, client, jwtSecret, logger, microsoftAzureProvider{}, time.Now)
+}
+
+func azureCallbackHandler(cfg AzureConfig, client *ent.Client, jwtSecret string, logger *zap.SugaredLogger, provider azureIdentityProvider, now func() time.Time) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if !cfg.IsConfigured() {
 			common.Fail(c, common.InternalErrorCode, "Azure AD not configured")
@@ -166,7 +187,7 @@ func AzureCallbackHandler(cfg AzureConfig, client *ent.Client, jwtSecret string,
 			common.Fail(c, common.AuthFailedCode, "invalid state")
 			return
 		}
-		c.SetCookie("azure_oauth_state", "", -1, "/", "", false, true)
+		authentication.WriteOAuthStateCookie(c.Writer, c.Request, "", -1)
 
 		code := c.Query("code")
 		if code == "" {
@@ -175,7 +196,7 @@ func AzureCallbackHandler(cfg AzureConfig, client *ent.Client, jwtSecret string,
 		}
 
 		// Exchange code for tokens
-		token, err := exchangeCode(c.Request.Context(), cfg, code)
+		token, err := provider.Exchange(c.Request.Context(), cfg, code)
 		if err != nil {
 			logger.Errorw("azure token exchange failed", "error", err)
 			common.Fail(c, common.AuthFailedCode, "Azure authentication failed")
@@ -183,7 +204,7 @@ func AzureCallbackHandler(cfg AzureConfig, client *ent.Client, jwtSecret string,
 		}
 
 		// Get user info from Microsoft Graph
-		info, err := getUserInfo(c.Request.Context(), token.AccessToken)
+		info, err := provider.UserInfo(c.Request.Context(), token.AccessToken)
 		if err != nil {
 			logger.Errorw("azure user info fetch failed", "error", err)
 			common.Fail(c, common.AuthFailedCode, "failed to get user info")
@@ -220,24 +241,38 @@ func AzureCallbackHandler(cfg AzureConfig, client *ent.Client, jwtSecret string,
 			common.Fail(c, common.InternalErrorCode, "failed to lookup user")
 			return
 		}
-
-		// Issue JWT (access token valid 24h)
-		tokenStr, err := authentication.GenerateAccessToken(u.ID, u.Username, string(u.Role), tenantID, jwtSecret, 24*time.Hour)
-		if err != nil {
-			logger.Errorw("jwt generation failed", "error", err)
-			common.Fail(c, common.InternalErrorCode, "failed to generate token")
+		if !u.Active {
+			common.AuthFailed(c, "user account is inactive")
 			return
 		}
 
-		// Set token as httpOnly cookie (matching regular login flow)
-		c.SetCookie(
-			"access_token", tokenStr,
-			86400, "/", "", false, true, // 24h, httpOnly, Secure=false (dev)
-		)
+		tenantEntity, err := authorization.AuthorizeTenantSession(ctx, client, u, u.TenantID, now())
+		if err != nil {
+			logger.Warnw("azure tenant session denied", "user_id", u.ID, "tenant_id", u.TenantID, "error", err)
+			common.AuthFailed(c, "tenant session is unavailable")
+			return
+		}
+		role := string(u.Role)
+		if u.MspRole != "" {
+			if mappedRole := authorization.GetMSPRBACRole(string(u.MspRole)); mappedRole != "" {
+				role = mappedRole
+			}
+		}
+
+		session, err := authentication.IssueSessionTokens(authentication.SessionIdentity{
+			UserID: u.ID, Username: u.Username, Role: role, TenantID: tenantEntity.ID,
+		}, jwtSecret)
+		if err != nil {
+			logger.Errorw("session generation failed", "error", err)
+			common.Fail(c, common.InternalErrorCode, "failed to generate session")
+			return
+		}
+
+		authentication.WriteSessionCookies(c.Writer, c.Request, session)
 
 		// Role-based redirect
 		target := "/dashboard"
-		switch string(u.Role) {
+		switch role {
 		case "end_user":
 			target = "/tickets/create"
 		case "agent", "technician":

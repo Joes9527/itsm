@@ -199,7 +199,7 @@
 |---|---|---|---|---|
 | 健康 | `/api/v1/health` | GET | 200 | ✅ |
 | 就绪 | `/api/v1/readiness/ga` | GET | 200，12/12 ready | ✅ |
-| 认证 | `/api/v1/auth/login` | POST | 0 + token | ✅ |
+| 认证 | `/api/v1/auth/login` | POST | 0 + HttpOnly session cookies；JSON 无 JWT | ✅ |
 | 菜单 | `/api/v1/auth/menus` | GET | 0 | ✅ |
 | 工单 | `/api/v1/tickets` | GET/POST | 0 | ✅ |
 | 事件 | `/api/v1/incidents` | GET/POST | 0 | ✅ |
@@ -213,8 +213,9 @@
 | SLA 监控 | `/api/v1/sla/monitoring` | **POST** | 0 | ✅ |
 | 连接器 | `/api/v1/connectors/lifecycle` | GET | 0，5 内置 | ✅ |
 | 流程绑定 | `/api/v1/process-bindings` | GET | 0 | ✅ |
-| 审批流 | `/api/v1/approval-workflows` | GET | 0 | ✅ |
-| 工作流实例 | `/api/v1/workflow/instances` | GET | 0 | ✅ |
+| BPMN 定义 | `/api/v1/bpmn/process-definitions` | GET | 0 | ✅ |
+| BPMN 实例 | `/api/v1/bpmn/process-instances` | GET | 0 | ✅ |
+| BPMN 待办 | `/api/v1/bpmn/tasks` | GET | 0 | ✅ |
 | AI Triage | `/api/v1/ai/triage` | POST | 0 | ✅ |
 | AI 审计 | `/api/v1/ai/audit` | **POST** | 0 | ✅ |
 | 仪表盘 | `/api/v1/dashboard/overview` | GET | 0 | ✅ |
@@ -227,7 +228,7 @@
 - `/api/v1/reports/cmdb-quality` 等 reports/* — 菜单引用但路由未注册
 - `/api/v1/templates/tickets` — 推测真实路径不同
 - `/api/v1/incident-rules` — 路径错或未启用
-- `/api/v1/process-instances` — 路径错（实际 `/api/v1/workflow/instances`）
+- `/api/v1/process-instances` — 旧路径已删除；唯一接口为 `/api/v1/bpmn/process-instances`
 
 ---
 
@@ -237,7 +238,7 @@
 |---|---|---|
 | A01 失效访问控制 | end_user 直接访问 `/audit-logs`、`/tenants` | 403 |
 | A01 横向越权 | 用户 A 改用户 B 工单 | 403 |
-| A02 加密失效 | JWT 必须签名且不可伪造 | 改 token 任意位 → 401 |
+| A02 加密失效 | 服务端必须验证 cookie 会话签名 | 篡改会话 cookie 任意位 → 401 |
 | A03 注入 | 工单 title 含 `' OR 1=1 --`、CI 名 `<script>` | 持久化但渲染时转义；DB 不被破坏 |
 | A05 安全错配 | 生产 mode、CORS 白名单、Redis 鉴权 | `SERVER_MODE=release`，`ITSM_CORS_ALLOWED_ORIGINS` 显式，`REDIS_PASSWORD` 必填 |
 | A07 鉴权失效 | 暴力登录 5 次 | 限流并审计 |

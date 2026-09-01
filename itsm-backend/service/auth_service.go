@@ -159,31 +159,12 @@ func (s *AuthService) SwitchTenant(ctx context.Context, userID, tenantID int) (*
 		}
 	}
 
-	accessToken, err := authentication.GenerateAccessToken(
-		userEntity.ID,
-		userEntity.Username,
-		role,
-		tenantID,
-		s.jwtSecret,
-		time.Duration(15)*time.Minute,
-	)
+	tokens, err := authentication.IssueSessionTokens(authentication.SessionIdentity{
+		UserID: userEntity.ID, Username: userEntity.Username, Role: role, TenantID: tenantID,
+	}, s.jwtSecret)
 	if err != nil {
 		s.logger.Errorw("Failed to generate access token for tenant switch", "user_id", userEntity.ID, "tenant_id", tenantID, "error", err)
 		return nil, fmt.Errorf("生成token失败")
-	}
-
-	// 生成新的refresh token
-	refreshToken, err := authentication.GenerateRefreshToken(
-		userEntity.ID,
-		userEntity.Username,
-		role,
-		tenantID,
-		s.jwtSecret,
-		time.Duration(7*24)*time.Hour,
-	)
-	if err != nil {
-		s.logger.Errorw("Failed to generate refresh token for tenant switch", "user_id", userEntity.ID, "error", err)
-		return nil, fmt.Errorf("生成刷新令牌失败")
 	}
 
 	s.logger.Infow("Tenant switched successfully", "user_id", userEntity.ID, "tenant_id", tenantID)
@@ -192,8 +173,8 @@ func (s *AuthService) SwitchTenant(ctx context.Context, userID, tenantID int) (*
 	permissions := s.getUserPermissions(userEntity)
 
 	return &dto.LoginResponse{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
+		AccessToken:  tokens.AccessToken,
+		RefreshToken: tokens.RefreshToken,
 		User: &dto.LoginUserResponse{
 			ID:       userEntity.ID,
 			Username: userEntity.Username,

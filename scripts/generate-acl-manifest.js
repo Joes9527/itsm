@@ -226,10 +226,12 @@ const KNOWN_PUBLIC = new Set([
   "/api/v1/auth/forgot-password",
   "/api/v1/auth/reset-password",
   "/api/v1/auth/validate-reset-token",
+  "/api/v1/auth/azure/login",
+  "/api/v1/auth/azure/callback",
   // 外部系统回调：由独立签名/事件校验保护，无法要求登录态 RBAC
   "/api/v1/connectors/feishu/callback",
-  "/api/v1/feishu/oauth/callback",
-  "/api/v1/feishu/webhook",
+  "/api/v1/feishu/oauth/callback/:instance_id",
+  "/api/v1/feishu/webhook/:instance_id",
 ]);
 
 // 认证即可访问的身份/自服务类端点：登录后任意角色都需要，
@@ -245,6 +247,10 @@ const AUTH_ONLY = new Set([
   "/api/v1/auth/logout",
   "/api/v1/auth/menus",
   "/api/v1/auth/switch-tenant",  // 租户切换：JWT 认证即可，无需 RBAC 资源权限
+  // The application service dispatches the professional-domain read policy
+  // after loading the WorkItem; a second route-level lookup would duplicate
+  // authorization and could drift from the recordClass authority.
+  "/api/v1/tickets/:id/approval-decisions",
   "/api/v1/users/profile",
   "/api/v1/users/me",
 ]);

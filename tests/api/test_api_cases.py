@@ -43,7 +43,7 @@ class TestAuthentication:
         """创建API客户端"""
         client = ITSMAPIClient()
         yield client
-        if client.token:
+        if client.session.cookies.get('access_token'):
             try:
                 client.logout()
             except:
@@ -55,15 +55,16 @@ class TestAuthentication:
 
         # 验证返回结构
         assert result is not None
-        assert 'access_token' in result or 'user' in result
+        assert 'user' in result
 
         # 验证用户信息
         if 'user' in result:
             user = result['user']
             assert user.get('username') == 'user1'
 
-        # 验证token存在
-        assert api_client.token is not None
+        assert api_client.session.cookies.get('access_token') is not None
+        assert 'access_token' not in result
+        assert 'refresh_token' not in result
 
     def test_login_failure_invalid_credentials(self, api_client):
         """测试登录失败-无效凭据"""
@@ -90,13 +91,13 @@ class TestAuthentication:
         """测试登出"""
         # 先登录
         api_client.login('user1', 'user123')
-        assert api_client.token is not None
+        assert api_client.session.cookies.get('access_token') is not None
 
         # 登出
         result = api_client.logout()
         # 登出可能成功也可能失败(取决于后端实现)
         assert result is True or result is False
-        assert api_client.token is None
+        assert api_client.session.cookies.get('access_token') is None
 
 
 class TestTickets:

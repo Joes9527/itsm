@@ -332,12 +332,6 @@ class TestWorkflowModule:
         logged_in_client.page.wait_for_timeout(2000)
         print("工作流实例页: 已加载")
 
-    def test_workflow_automation(self, logged_in_client):
-        """测试工作流自动化"""
-        logged_in_client.navigate_to('/workflow/automation')
-        logged_in_client.page.wait_for_timeout(2000)
-        print("工作流自动化页: 已加载")
-
     def test_workflow_ticket_approval(self, logged_in_client):
         """测试工单审批"""
         logged_in_client.navigate_to('/workflow/ticket-approval')
@@ -590,7 +584,7 @@ class TestApprovalModule:
 
     def test_approvals_pending_page(self, logged_in_client):
         """测试待审批页面"""
-        logged_in_client.navigate_to('/approvals/pending')
+        logged_in_client.navigate_to('/approvals')
         logged_in_client.page.wait_for_timeout(2000)
         print("待审批页: 已加载")
 

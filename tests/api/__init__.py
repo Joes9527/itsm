@@ -18,7 +18,7 @@ from .. import get_config, get_logger, context
 class APIClient:
     """API测试客户端"""
 
-    def __init__(self, base_url: str = None, token: str = None):
+    def __init__(self, base_url: str = None):
         self.config = get_config()
         self.logger = get_logger('api_client')
 
@@ -27,7 +27,6 @@ class APIClient:
             base_url = self.config.get('api', 'base_url', fallback='http://localhost:8080')
 
         self.base_url = base_url.rstrip('/')
-        self.token = token
         self.session = self._create_session()
         self.last_response = None
         self.last_request = None
@@ -55,9 +54,6 @@ class APIClient:
             'Content-Type': 'application/json',
             'Accept': 'application/json'
         }
-
-        if self.token:
-            headers['Authorization'] = f'Bearer {self.token}'
 
         tenant_id = context.get_tenant_id()
         if tenant_id:
@@ -115,6 +111,14 @@ class APIClient:
         if headers:
             request_headers.update(headers)
 
+        if method.upper() in {'POST', 'PUT', 'PATCH', 'DELETE'} and endpoint not in {
+            '/api/v1/auth/login', '/api/v1/auth/register', '/api/v1/auth/refresh',
+            '/api/v1/auth/forgot-password', '/api/v1/auth/reset-password',
+        }:
+            csrf_response = self.session.get(self._build_url('/api/v1/csrf-token'), timeout=timeout)
+            csrf_response.raise_for_status()
+            request_headers['X-CSRF-Token'] = csrf_response.json()['data']['csrf_token']
+
         self._log_request(method, url, headers=request_headers, json=json, params=params)
 
         try:
@@ -168,6 +172,10 @@ class APIClient:
         """文件上传"""
         url = self._build_url(endpoint)
         headers = self._get_headers()
+        timeout = kwargs.get('timeout', self.config.get_int('api', 'timeout', 30))
+        csrf_response = self.session.get(self._build_url('/api/v1/csrf-token'), timeout=timeout)
+        csrf_response.raise_for_status()
+        headers['X-CSRF-Token'] = csrf_response.json()['data']['csrf_token']
         # 上传文件时不需要Content-Type，让requests自动处理
 
         self._log_request('POST', url, files=files, data=data)
@@ -193,8 +201,8 @@ class APIClient:
 class ITSMAPIClient(APIClient):
     """ITSM API客户端 - 封装常用业务接口"""
 
-    def __init__(self, base_url: str = None, token: str = None):
-        super().__init__(base_url, token)
+    def __init__(self, base_url: str = None):
+        super().__init__(base_url)
         self.logger = get_logger('itsm_api')
 
     # ==================== 认证接口 ====================
@@ -214,12 +222,12 @@ class ITSMAPIClient(APIClient):
         if response.status_code == 200:
             data = response.json()
             if data.get('code') == 0:
-                self.token = data.get('data', {}).get('access_token')
-                context.set_token(self.token)
-
                 # 设置租户ID
-                tenant_id = data.get('data', {}).get('tenant_id', 1)
+                tenant_id = data.get('data', {}).get('user', {}).get('tenantId', 1)
                 context.set_tenant_id(tenant_id)
+
+                if 'access_token' not in self.session.cookies or 'refresh_token' not in self.session.cookies:
+                    raise RuntimeError('login did not establish the canonical cookie session')
 
                 self.logger.info(f"Login successful: {username}")
                 return data.get('data', {})
@@ -231,7 +239,7 @@ class ITSMAPIClient(APIClient):
     def logout(self) -> bool:
         """用户登出"""
         response = self.post('/api/v1/auth/logout')
-        self.token = None
+        self.session.cookies.clear()
         context.clear()
         return response.status_code == 200
 
@@ -511,6 +519,6 @@ class APIResponse:
         return self.status_code >= 500
 
 
-def create_api_client(token: str = None) -> ITSMAPIClient:
+def create_api_client() -> ITSMAPIClient:
     """创建ITSM API客户端"""
-    return ITSMAPIClient(token=token)
+    return ITSMAPIClient()

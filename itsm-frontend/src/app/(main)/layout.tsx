@@ -42,34 +42,34 @@ export default function MainLayout({
   useEffect(() => {
     setMounted(true);
     const checkAuth = async () => {
-      let userInfo = null;
-      let tenantInfo = null;
-
+      const { login, logout, setCurrentTenant } = useAuthStore.getState();
+      let userInfo: any;
       try {
         userInfo = await httpClient.get<any>('/api/v1/auth/me');
+        const actorId = Number(userInfo?.id);
+        if (!Number.isInteger(actorId) || actorId <= 0 || !String(userInfo?.username || '').trim()) {
+          throw new Error('Invalid authenticated actor response');
+        }
       } catch (e) {
         console.error('Failed to fetch user info:', e);
-      }
-
-      try {
-        tenantInfo = await httpClient.get<any>('/api/v1/auth/tenants');
-      } catch (e) {
-        console.error('Failed to fetch tenant info:', e);
-      }
-
-      // 如果两个都失败，则认为未认证
-      if (!userInfo && !tenantInfo) {
+        logout();
         setIsAuthenticated(false);
         router.push(`/login?redirect=${encodeURIComponent(pathname || '/')}`);
         setCheckingAuth(false);
         return;
       }
 
+      let tenantInfo: any = null;
+      try {
+        tenantInfo = await httpClient.get<any>('/api/v1/auth/tenants');
+      } catch (e) {
+        console.error('Failed to fetch tenant info:', e);
+      }
+
       const tenants = Array.isArray(tenantInfo?.tenants) ? tenantInfo.tenants : [];
       const currentTenant = tenants[0];
       const roleCode = String(userInfo?.role || 'end_user');
 
-      const { login, setCurrentTenant } = useAuthStore.getState();
       login(
         {
           id: Number(userInfo?.id || 0),

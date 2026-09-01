@@ -143,7 +143,7 @@ jobs:
 | 类别 | 落点 |
 |------|------|
 | A01 越权 | 角色 E2E（end-user / security spec）|
-| A02 加密 | 角色 E2E（任意 spec 中加一组 token 篡改）|
+| A02 加密 | 角色 E2E（任意 spec 中加一组无效 HttpOnly 会话）|
 | A03 注入 | 冒烟脚本（提单 title 注入串）|
 | A05 配置 | 冒烟脚本（启动期 env 校验，单独 case）|
 | A06 已过期组件 | 暂不在 GA 范围（依赖 SBOM/扫描，post-GA）|
@@ -154,7 +154,7 @@ jobs:
 
 **Rationale**：
 
-- E2E 适合"用户视角越权 / 横向越权"这类需要 token + 行为流的场景。
+- E2E 适合"用户视角越权 / 横向越权"这类需要 cookie 会话 + 行为流的场景。
 - 冒烟脚本适合"一次 curl 即可"的注入 / 限流 / SSRF 等。
 - A06 需要外部扫描器，与本 feature 的"测试方案"边界冲突，列入 post-GA。
 
@@ -167,7 +167,7 @@ jobs:
 
 ## R6 — Playwright 角色 spec 最小结构
 
-**Decision**：每份 spec 共享 `tests/e2e/fixtures/auth.ts` 注入登录 token，按角色目录分文件。
+**Decision**：每份 spec 共享 `tests/e2e/fixtures/auth.ts` 建立隔离的 HttpOnly cookie 会话，按角色目录分文件。
 
 **Rationale**：
 
@@ -181,12 +181,15 @@ jobs:
 // tests/e2e/fixtures/auth.ts
 import { test as base } from '@playwright/test';
 type Roles = 'admin' | 'user1' | 'security1' | 'engineer1' | 'manager1' | 'tenant1admin';
-export const test = base.extend<{ login(role: Roles): Promise<string> }>({
+export const test = base.extend<{ login(role: Roles): Promise<void> }>({
   login: async ({ request }, use) => {
     await use(async (role) => {
       const passwords = { admin: 'admin123', user1: 'user123', security1: 'security123', engineer1: 'eng123', manager1: 'mgr123', tenant1admin: 'ta123' };
       const r = await request.post('/api/v1/auth/login', { data: { username: role, password: passwords[role] }});
-      return (await r.json()).data.access_token;
+      const body = await r.json();
+      if (!r.ok() || !body.data?.user?.id || body.data.access_token || body.data.refresh_token) {
+        throw new Error('cookie-only login failed');
+      }
     });
   },
 });
@@ -206,7 +209,7 @@ tests/e2e/roles/
 **Alternatives Considered**：
 
 - 单文件 7 个 describe：违反"独立可交付"原则。
-- 用 storage state：与多角色切换冲突。
+- 复用一个全局 storage state：多角色 cookie 相互覆盖，无法保证隔离。
 
 ---
 
@@ -227,7 +230,7 @@ set -uo pipefail
 fails=0
 check() {
   local name=$1 method=$2 path=$3 expect=${4:-200}
-  local code=$(curl -s -o /tmp/body -w "%{http_code}" -X "$method" "$BASE$path" -H "Authorization: Bearer $TOKEN")
+  local code=$(curl -s -b "$COOKIE_JAR" -o "$BODY_FILE" -w "%{http_code}" -X "$method" "$BASE$path")
   if [[ "$code" != "$expect" ]]; then
     echo "[FAIL] $name $method $path -> $code (expect $expect)"; fails=$((fails+1))
   else
