@@ -1,15 +1,14 @@
 package controller
 
 import (
+	"context"
 	"strconv"
 	"time"
 
 	"itsm-backend/common"
-	"itsm-backend/middleware"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 // BPMNDashboardController BPMN监控仪表盘控制器
@@ -35,24 +34,21 @@ func NewBPMNDashboardController(
 	}
 }
 
-// resolveTenantID resolves tenant_id from the authenticated context and enforces fail-closed.
-// Must NOT trust query parameters for tenant isolation (would allow cross-tenant enumeration).
-func resolveTenantID(ctx *gin.Context) (int, bool) {
-	tenantID := ctx.GetInt("tenant_id")
-	if tenantID <= 0 {
-		zap.S().Warnw("BPMN Dashboard: tenant_id missing in context, rejecting request",
-			"path", ctx.Request.URL.Path,
-			"remote_ip", ctx.ClientIP())
-		common.Fail(ctx, common.AuthFailedCode, "租户信息缺失")
-		return 0, false
+func getBPMNDashboardReadAllContext(ctx *gin.Context) (context.Context, int, bool) {
+	requestCtx, tenantID, ok := getBPMNTenantContext(ctx)
+	if !ok {
+		return nil, 0, false
 	}
-	return tenantID, true
+	if _, err := service.RequireBPMNInstanceReadAll(requestCtx); err != nil {
+		respondBPMNError(ctx, err, "BPMN 仪表盘访问被拒绝")
+		return nil, 0, false
+	}
+	return requestCtx, tenantID, true
 }
 
 // RegisterRoutes 注册路由
 func (c *BPMNDashboardController) RegisterRoutes(r *gin.RouterGroup) {
 	dashboard := r.Group("/bpmn/dashboard")
-	dashboard.Use(middleware.RequireLegacyBPMNRoles())
 	{
 		// 仪表盘
 		dashboard.GET("/metrics", c.GetDashboardMetrics)
@@ -60,7 +56,7 @@ func (c *BPMNDashboardController) RegisterRoutes(r *gin.RouterGroup) {
 
 		// 审计日志
 		dashboard.GET("/audit-logs", c.GetAuditLogs)
-		dashboard.GET("/audit-logs/timeline", c.GetProcessTimeline)
+		dashboard.GET("/audit-logs/timeline/:process_instance_key", c.GetProcessTimeline)
 		dashboard.GET("/audit-logs/user/:userId", c.GetUserActivity)
 
 		// SLA
@@ -79,12 +75,11 @@ func (c *BPMNDashboardController) RegisterRoutes(r *gin.RouterGroup) {
 // @Summary 获取仪表盘指标
 // @Tags BPMN仪表盘
 // @Produce json
-// @Param tenant_id query int true "租户ID"
 // @Param start_time query string false "开始时间"
 // @Param end_time query string false "结束时间"
 // @Success 200 {object} common.Response
 func (c *BPMNDashboardController) GetDashboardMetrics(ctx *gin.Context) {
-	tenantID, ok := resolveTenantID(ctx)
+	requestCtx, tenantID, ok := getBPMNDashboardReadAllContext(ctx)
 	if !ok {
 		return
 	}
@@ -105,9 +100,9 @@ func (c *BPMNDashboardController) GetDashboardMetrics(ctx *gin.Context) {
 		}
 	}
 
-	metrics, err := c.metricsService.GetDashboardMetrics(ctx.Request.Context(), tenantID, startTime, endTime)
+	metrics, err := c.metricsService.GetDashboardMetrics(requestCtx, tenantID, startTime, endTime)
 	if err != nil {
-		common.Fail(ctx, 5001, "获取仪表盘指标失败: "+err.Error())
+		respondBPMNError(ctx, err, "获取仪表盘指标失败")
 		return
 	}
 
@@ -119,7 +114,6 @@ func (c *BPMNDashboardController) GetDashboardMetrics(ctx *gin.Context) {
 // @Tags BPMN仪表盘
 // @Produce json
 // @Param key path string true "流程定义Key"
-// @Param tenant_id query int true "租户ID"
 // @Param start_time query string false "开始时间"
 // @Param end_time query string false "结束时间"
 // @Success 200 {object} common.Response
@@ -130,7 +124,7 @@ func (c *BPMNDashboardController) GetProcessMetrics(ctx *gin.Context) {
 		return
 	}
 
-	tenantID, ok := resolveTenantID(ctx)
+	requestCtx, tenantID, ok := getBPMNDashboardReadAllContext(ctx)
 	if !ok {
 		return
 	}
@@ -151,9 +145,9 @@ func (c *BPMNDashboardController) GetProcessMetrics(ctx *gin.Context) {
 		}
 	}
 
-	metrics, err := c.metricsService.GetProcessMetrics(ctx.Request.Context(), key, tenantID, startTime, endTime)
+	metrics, err := c.metricsService.GetProcessMetrics(requestCtx, key, tenantID, startTime, endTime)
 	if err != nil {
-		common.Fail(ctx, 5001, "获取流程指标失败: "+err.Error())
+		respondBPMNError(ctx, err, "获取流程指标失败")
 		return
 	}
 
@@ -164,7 +158,6 @@ func (c *BPMNDashboardController) GetProcessMetrics(ctx *gin.Context) {
 // @Summary 获取审计日志
 // @Tags BPMN仪表盘
 // @Produce json
-// @Param tenant_id query int true "租户ID"
 // @Param process_instance_id query int false "流程实例ID"
 // @Param process_definition_key query string false "流程定义Key"
 // @Param action query string false "操作类型"
@@ -175,14 +168,12 @@ func (c *BPMNDashboardController) GetProcessMetrics(ctx *gin.Context) {
 // @Param page_size query int false "每页数量"
 // @Success 200 {object} common.Response
 func (c *BPMNDashboardController) GetAuditLogs(ctx *gin.Context) {
-	tenantID, ok := resolveTenantID(ctx)
+	requestCtx, _, ok := getBPMNTenantContext(ctx)
 	if !ok {
 		return
 	}
 
-	req := &service.QueryAuditLogsRequest{
-		TenantID: tenantID,
-	}
+	req := &service.QueryAuditLogsRequest{}
 
 	if v := ctx.Query("process_instance_id"); v != "" {
 		if id, err := strconv.Atoi(v); err == nil {
@@ -236,9 +227,9 @@ func (c *BPMNDashboardController) GetAuditLogs(ctx *gin.Context) {
 		req.PageSize = 20
 	}
 
-	logs, total, err := c.auditService.QueryAuditLogs(ctx.Request.Context(), req)
+	logs, total, err := c.auditService.QueryAuditLogs(requestCtx, req)
 	if err != nil {
-		common.Fail(ctx, 5001, "查询审计日志失败: "+err.Error())
+		respondBPMNError(ctx, err, "查询审计日志失败")
 		return
 	}
 
@@ -262,12 +253,14 @@ func (c *BPMNDashboardController) GetProcessTimeline(ctx *gin.Context) {
 		return
 	}
 
-	tenantIDVal, _ := ctx.Get("tenant_id")
-	tenantID, _ := tenantIDVal.(int)
+	requestCtx, _, ok := getBPMNTenantContext(ctx)
+	if !ok {
+		return
+	}
 
-	timeline, err := c.auditService.GetProcessTimeline(ctx.Request.Context(), processInstanceKey, tenantID)
+	timeline, err := c.auditService.GetProcessTimeline(requestCtx, processInstanceKey)
 	if err != nil {
-		common.Fail(ctx, 5001, "获取流程时间线失败: "+err.Error())
+		respondBPMNError(ctx, err, "获取流程时间线失败")
 		return
 	}
 
@@ -279,7 +272,6 @@ func (c *BPMNDashboardController) GetProcessTimeline(ctx *gin.Context) {
 // @Tags BPMN仪表盘
 // @Produce json
 // @Param userId path int true "用户ID"
-// @Param tenant_id query int true "租户ID"
 // @Param start_time query string false "开始时间"
 // @Param end_time query string false "结束时间"
 // @Success 200 {object} common.Response
@@ -290,7 +282,7 @@ func (c *BPMNDashboardController) GetUserActivity(ctx *gin.Context) {
 		return
 	}
 
-	tenantID, ok := resolveTenantID(ctx)
+	requestCtx, _, ok := getBPMNDashboardReadAllContext(ctx)
 	if !ok {
 		return
 	}
@@ -311,9 +303,9 @@ func (c *BPMNDashboardController) GetUserActivity(ctx *gin.Context) {
 		}
 	}
 
-	activity, err := c.auditService.GetUserActivity(ctx.Request.Context(), userID, tenantID, startTime, endTime)
+	activity, err := c.auditService.GetUserActivity(requestCtx, userID, startTime, endTime)
 	if err != nil {
-		common.Fail(ctx, 5001, "获取用户活动失败: "+err.Error())
+		respondBPMNError(ctx, err, "获取用户活动失败")
 		return
 	}
 
@@ -324,17 +316,16 @@ func (c *BPMNDashboardController) GetUserActivity(ctx *gin.Context) {
 // @Summary 获取SLA违规
 // @Tags BPMN仪表盘
 // @Produce json
-// @Param tenant_id query int true "租户ID"
 // @Success 200 {object} common.Response
 func (c *BPMNDashboardController) GetSLAViolations(ctx *gin.Context) {
-	tenantID, ok := resolveTenantID(ctx)
+	requestCtx, tenantID, ok := getBPMNDashboardReadAllContext(ctx)
 	if !ok {
 		return
 	}
 
-	violations, err := c.slaService.CheckSLAViolations(ctx.Request.Context(), tenantID)
+	violations, err := c.slaService.CheckSLAViolations(requestCtx, tenantID)
 	if err != nil {
-		common.Fail(ctx, 5001, "获取SLA违规失败: "+err.Error())
+		respondBPMNError(ctx, err, "获取 SLA 违规失败")
 		return
 	}
 
@@ -346,7 +337,6 @@ func (c *BPMNDashboardController) GetSLAViolations(ctx *gin.Context) {
 // @Tags BPMN仪表盘
 // @Produce json
 // @Param key query string true "流程定义Key"
-// @Param tenant_id query int true "租户ID"
 // @Param start_time query string false "开始时间"
 // @Param end_time query string false "结束时间"
 // @Success 200 {object} common.Response
@@ -357,7 +347,7 @@ func (c *BPMNDashboardController) GetSLACompliance(ctx *gin.Context) {
 		return
 	}
 
-	tenantID, ok := resolveTenantID(ctx)
+	requestCtx, tenantID, ok := getBPMNDashboardReadAllContext(ctx)
 	if !ok {
 		return
 	}
@@ -378,9 +368,9 @@ func (c *BPMNDashboardController) GetSLACompliance(ctx *gin.Context) {
 		}
 	}
 
-	rate, compliant, total, err := c.slaService.GetSLAComplianceRate(ctx.Request.Context(), key, startTime, endTime, tenantID)
+	rate, compliant, total, err := c.slaService.GetSLAComplianceRate(requestCtx, key, startTime, endTime, tenantID)
 	if err != nil {
-		common.Fail(ctx, 5001, "获取SLA合规率失败: "+err.Error())
+		respondBPMNError(ctx, err, "获取 SLA 合规率失败")
 		return
 	}
 
@@ -395,17 +385,16 @@ func (c *BPMNDashboardController) GetSLACompliance(ctx *gin.Context) {
 // @Summary 获取租户统计
 // @Tags BPMN仪表盘
 // @Produce json
-// @Param tenant_id query int true "租户ID"
 // @Success 200 {object} common.Response
 func (c *BPMNDashboardController) GetTenantStats(ctx *gin.Context) {
-	tenantID, ok := resolveTenantID(ctx)
+	requestCtx, tenantID, ok := getBPMNDashboardReadAllContext(ctx)
 	if !ok {
 		return
 	}
 
-	stats, err := c.tenantService.GetTenantStatistics(ctx.Request.Context(), tenantID)
+	stats, err := c.tenantService.GetTenantStatistics(requestCtx, tenantID)
 	if err != nil {
-		common.Fail(ctx, 5001, "获取租户统计失败: "+err.Error())
+		respondBPMNError(ctx, err, "获取租户统计失败")
 		return
 	}
 
@@ -417,7 +406,6 @@ func (c *BPMNDashboardController) GetTenantStats(ctx *gin.Context) {
 // @Tags BPMN仪表盘
 // @Produce json
 // @Param key query string true "流程定义Key"
-// @Param tenant_id query int true "租户ID"
 // @Success 200 {object} common.Response
 func (c *BPMNDashboardController) GetBottleneckAnalysis(ctx *gin.Context) {
 	key := ctx.Query("key")
@@ -426,14 +414,14 @@ func (c *BPMNDashboardController) GetBottleneckAnalysis(ctx *gin.Context) {
 		return
 	}
 
-	tenantID, ok := resolveTenantID(ctx)
+	requestCtx, tenantID, ok := getBPMNDashboardReadAllContext(ctx)
 	if !ok {
 		return
 	}
 
-	bottlenecks, err := c.metricsService.GetBottleneckAnalysis(ctx.Request.Context(), key, tenantID)
+	bottlenecks, err := c.metricsService.GetBottleneckAnalysis(requestCtx, key, tenantID)
 	if err != nil {
-		common.Fail(ctx, 5001, "获取瓶颈分析失败: "+err.Error())
+		respondBPMNError(ctx, err, "获取瓶颈分析失败")
 		return
 	}
 

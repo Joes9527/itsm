@@ -3,8 +3,10 @@ package service
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
+	"itsm-backend/common"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processauditlog"
 	"itsm-backend/ent/processinstance"
@@ -331,7 +333,28 @@ func (s *BPMNAuditService) RecordVariableChanged(ctx context.Context, instance *
 
 // QueryAuditLogs 查询审计日志
 func (s *BPMNAuditService) QueryAuditLogs(ctx context.Context, req *QueryAuditLogsRequest) ([]*ent.ProcessAuditLog, int, error) {
-	query := s.client.ProcessAuditLog.Query()
+	if req == nil {
+		return nil, 0, common.NewBadRequestError("审计日志查询不能为空", nil)
+	}
+
+	scope, err := BPMNAccessScopeFromContext(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	if req.ProcessInstanceID > 0 {
+		if _, err = s.instanceAccessPolicy.loadForRead(ctx, strconv.Itoa(req.ProcessInstanceID)); err != nil {
+			return nil, 0, err
+		}
+	} else if req.ProcessInstanceKey != "" {
+		if _, err = s.instanceAccessPolicy.loadForRead(ctx, req.ProcessInstanceKey); err != nil {
+			return nil, 0, err
+		}
+	} else if _, err = RequireBPMNInstanceReadAll(ctx); err != nil {
+		return nil, 0, err
+	}
+
+	query := s.client.ProcessAuditLog.Query().
+		Where(processauditlog.TenantID(scope.TenantID))
 
 	// 构建查询条件
 	if req.ProcessInstanceID > 0 {
@@ -357,9 +380,6 @@ func (s *BPMNAuditService) QueryAuditLogs(ctx context.Context, req *QueryAuditLo
 	}
 	if req.AssigneeID > 0 {
 		query = query.Where(processauditlog.AssigneeID(req.AssigneeID))
-	}
-	if req.TenantID > 0 {
-		query = query.Where(processauditlog.TenantID(req.TenantID))
 	}
 	if !req.StartTime.IsZero() {
 		query = query.Where(processauditlog.TimestampGTE(req.StartTime))
@@ -404,15 +424,17 @@ func (s *BPMNAuditService) QueryAuditLogs(ctx context.Context, req *QueryAuditLo
 }
 
 // GetProcessTimeline 获取流程时间线
-func (s *BPMNAuditService) GetProcessTimeline(ctx context.Context, processInstanceKey string, tenantID int) ([]*ent.ProcessAuditLog, error) {
-	query := s.client.ProcessAuditLog.Query().
-		Where(processauditlog.ProcessInstanceKey(processInstanceKey))
-
-	if tenantID > 0 {
-		query = query.Where(processauditlog.TenantID(tenantID))
+func (s *BPMNAuditService) GetProcessTimeline(ctx context.Context, processInstanceKey string) ([]*ent.ProcessAuditLog, error) {
+	instance, err := s.instanceAccessPolicy.loadForRead(ctx, processInstanceKey)
+	if err != nil {
+		return nil, err
 	}
 
-	logs, err := query.
+	logs, err := s.client.ProcessAuditLog.Query().
+		Where(
+			processauditlog.TenantID(instance.TenantID),
+			processauditlog.ProcessInstanceID(instance.ID),
+		).
 		Order(ent.Asc(processauditlog.FieldTimestamp)).
 		All(ctx)
 	if err != nil {
@@ -422,15 +444,16 @@ func (s *BPMNAuditService) GetProcessTimeline(ctx context.Context, processInstan
 }
 
 // GetUserActivity 获取用户活动
-func (s *BPMNAuditService) GetUserActivity(ctx context.Context, userID int, tenantID int, startTime, endTime time.Time) ([]*ent.ProcessAuditLog, error) {
+func (s *BPMNAuditService) GetUserActivity(ctx context.Context, userID int, startTime, endTime time.Time) ([]*ent.ProcessAuditLog, error) {
+	scope, err := RequireBPMNInstanceReadAll(ctx)
+	if err != nil {
+		return nil, err
+	}
 	query := s.client.ProcessAuditLog.Query().
 		Where(processauditlog.UserID(userID)).
 		Where(processauditlog.TimestampGTE(startTime)).
-		Where(processauditlog.TimestampLTE(endTime))
-
-	if tenantID > 0 {
-		query = query.Where(processauditlog.TenantID(tenantID))
-	}
+		Where(processauditlog.TimestampLTE(endTime)).
+		Where(processauditlog.TenantID(scope.TenantID))
 
 	return query.Order(ent.Desc(processauditlog.FieldTimestamp)).All(ctx)
 }
@@ -471,7 +494,6 @@ type QueryAuditLogsRequest struct {
 	Action               string
 	UserID               int
 	AssigneeID           int
-	TenantID             int
 	StartTime            time.Time
 	EndTime              time.Time
 	Page                 int

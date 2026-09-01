@@ -2,12 +2,36 @@ package service
 
 import (
 	"context"
+	"errors"
 	"math"
 	"testing"
 	"time"
 
+	"itsm-backend/common"
 	"itsm-backend/ent"
 )
+
+func TestBPMNMonitoringMissingAuditServiceFailsClosed(t *testing.T) {
+	service := &BPMNMonitoringService{}
+
+	_, _, auditErr := service.GetAuditLogs(context.Background(), &AuditLogRequest{})
+	_, timelineErr := service.GetProcessTimeline(context.Background(), "PI-1")
+
+	for name, err := range map[string]error{"audit logs": auditErr, "timeline": timelineErr} {
+		t.Run(name, func(t *testing.T) {
+			if err == nil {
+				t.Fatal("expected missing audit service to fail closed")
+			}
+			var appErr *common.AppError
+			if !errors.As(err, &appErr) {
+				t.Fatalf("expected AppError, got %T: %v", err, err)
+			}
+			if appErr.Code != common.ErrCodeInternal {
+				t.Fatalf("error code = %s, want %s", appErr.Code, common.ErrCodeInternal)
+			}
+		})
+	}
+}
 
 // 单元测试：测试 percentile 函数（P95 分位数计算）
 func TestPercentile(t *testing.T) {
@@ -198,7 +222,6 @@ func TestPercentileEdges(t *testing.T) {
 func TestListProcessInstanceStatusQueryFields(t *testing.T) {
 	now := time.Now()
 	q := &ListProcessInstanceStatusQuery{
-		TenantID:   1,
 		Page:       1,
 		PageSize:   20,
 		ProcessKey: "incident_emergency_flow",
@@ -206,9 +229,6 @@ func TestListProcessInstanceStatusQueryFields(t *testing.T) {
 		Assignee:   "user1",
 		StartTime:  &now,
 		EndTime:    &now,
-	}
-	if q.TenantID != 1 {
-		t.Error("TenantID not set")
 	}
 	if q.ProcessKey != "incident_emergency_flow" {
 		t.Error("ProcessKey not set")
@@ -221,14 +241,10 @@ func TestAuditLogRequestFields(t *testing.T) {
 	req := &AuditLogRequest{
 		UserID:    "1",
 		Action:    "started",
-		TenantID:  1,
 		Page:      1,
 		PageSize:  20,
 		StartTime: &now,
 		EndTime:   &now,
-	}
-	if req.TenantID != 1 {
-		t.Error("TenantID not set")
 	}
 	if req.UserID != "1" {
 		t.Error("UserID not set")
