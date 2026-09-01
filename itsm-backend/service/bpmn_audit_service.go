@@ -459,17 +459,18 @@ func (s *BPMNAuditService) GetUserActivity(ctx context.Context, userID int, star
 }
 
 // GetActivityStatistics 获取活动统计
-func (s *BPMNAuditService) GetActivityStatistics(ctx context.Context, processDefinitionKey string, tenantID int, startTime, endTime time.Time) (map[string]int, error) {
+func (s *BPMNAuditService) GetActivityStatistics(ctx context.Context, processDefinitionKey string, startTime, endTime time.Time) (map[string]int, error) {
+	scope, err := RequireBPMNInstanceReadAll(ctx)
+	if err != nil {
+		return nil, err
+	}
 	stats := make(map[string]int)
 
 	query := s.client.ProcessAuditLog.Query().
 		Where(processauditlog.ProcessDefinitionKey(processDefinitionKey)).
 		Where(processauditlog.TimestampGTE(startTime)).
-		Where(processauditlog.TimestampLTE(endTime))
-
-	if tenantID > 0 {
-		query = query.Where(processauditlog.TenantID(tenantID))
-	}
+		Where(processauditlog.TimestampLTE(endTime)).
+		Where(processauditlog.TenantID(scope.TenantID))
 
 	logs, err := query.All(ctx)
 	if err != nil {
