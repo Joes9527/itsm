@@ -8,27 +8,41 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/processauditlog"
 	"itsm-backend/ent/processinstance"
+	"itsm-backend/service/bpmn"
 
 	"go.uber.org/zap"
 )
 
 // BPMNAuditService BPMN审计服务
 type BPMNAuditService struct {
-	client *ent.Client
-	logger *zap.SugaredLogger
+	client               *ent.Client
+	logger               *zap.SugaredLogger
+	instanceAccessPolicy *bpmnInstanceAccessPolicy
 }
 
 // NewBPMNAuditService 创建BPMN审计服务
 func NewBPMNAuditService(client *ent.Client, logger *zap.SugaredLogger) *BPMNAuditService {
+	groupResolver := bpmn.NewGroupResolver(client)
+	participationResolver := newBPMNParticipationResolver(client, groupResolver)
 	return &BPMNAuditService{
-		client: client,
-		logger: logger,
+		client:               client,
+		logger:               logger,
+		instanceAccessPolicy: newBPMNInstanceAccessPolicy(client, participationResolver),
 	}
 }
 
 // ForClient binds audit writes to the caller's Ent client, including transaction clients.
 func (s *BPMNAuditService) ForClient(client *ent.Client) *BPMNAuditService {
-	return &BPMNAuditService{client: client, logger: s.logger}
+	policy := s.instanceAccessPolicy
+	if policy == nil {
+		groupResolver := bpmn.NewGroupResolver(s.client)
+		policy = newBPMNInstanceAccessPolicy(s.client, newBPMNParticipationResolver(s.client, groupResolver))
+	}
+	return &BPMNAuditService{
+		client:               client,
+		logger:               s.logger,
+		instanceAccessPolicy: policy.forClient(client),
+	}
 }
 
 // AuditAction 审计操作类型
