@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strconv"
 	"testing"
 
 	"itsm-backend/ent"
@@ -80,6 +81,7 @@ func TestStartProcess_TrustedTenant_ServiceTaskUsesInstanceIdentity(t *testing.T
 	instance, err := engine.StartProcess(trustedCtx, "incident_emergency_flow", "incident:platform-1", "incident", workItem.ID, map[string]interface{}{
 		"assignee_id":  assignee.ID,
 		"requester_id": assignee.ID,
+		"triggered_by": strconv.Itoa(assignee.ID),
 	})
 	require.NoError(t, err)
 
@@ -119,6 +121,7 @@ func TestCompleteTask_TypedScope_CallbackUsesAuthoritativeBusinessIdentity(t *te
 	instance, err := engine.StartProcess(trustedCtx, "change_normal_flow", "change:platform-1", "change", workItem.ID, map[string]interface{}{
 		"approval_required": true,
 		"requester_id":      actor.ID,
+		"triggered_by":      strconv.Itoa(actor.ID),
 	})
 	require.NoError(t, err)
 
@@ -181,6 +184,7 @@ func TestCompleteTask_ParticipantBusinessIDCannotRetargetCallback(t *testing.T) 
 	instance, err := engine.StartProcess(trustedCtx, "change_normal_flow", "change:platform-2", "change", workItem.ID, map[string]interface{}{
 		"approval_required": true,
 		"requester_id":      actor.ID,
+		"triggered_by":      strconv.Itoa(actor.ID),
 	})
 	require.NoError(t, err)
 

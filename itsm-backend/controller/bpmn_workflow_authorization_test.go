@@ -17,6 +17,7 @@ import (
 	"itsm-backend/ent/enttest"
 	"itsm-backend/middleware"
 	"itsm-backend/service"
+	"itsm-backend/service/bpmn"
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/mattn/go-sqlite3"
@@ -28,6 +29,16 @@ import (
 type contextCapturingProcessInstanceService struct {
 	listCtx  context.Context
 	statsCtx context.Context
+}
+
+type startContextCapturingProcessEngine struct {
+	*fakeProcessEngine
+	startCtx context.Context
+}
+
+func (e *startContextCapturingProcessEngine) StartProcess(ctx context.Context, _ string, _ string, _ string, _ int, _ map[string]interface{}) (*ent.ProcessInstance, error) {
+	e.startCtx = ctx
+	return &ent.ProcessInstance{}, nil
 }
 
 func (s *contextCapturingProcessInstanceService) GetProcessInstance(context.Context, string) (*ent.ProcessInstance, error) {
@@ -78,6 +89,32 @@ func TestGetBPMNTenantContextBuildsTrustedScope(t *testing.T) {
 	assert.True(t, scope.CanUpdateAllInstances)
 	assert.True(t, scope.CanReadAllTasks)
 	assert.True(t, scope.CanUpdateAllTasks)
+}
+
+func TestStartProcessPassesAuthenticatedActorScope(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := &startContextCapturingProcessEngine{fakeProcessEngine: &fakeProcessEngine{taskSvc: &fakeTaskService{}}}
+	controller := NewBPMNWorkflowController(engine, nil)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/v1/bpmn/process-instances", strings.NewReader(`{
+		"processDefinitionKey":"flow","businessKey":"ticket:1",
+		"variables":{"triggered_by":"999"}
+	}`))
+	ctx.Request.Header.Set("Content-Type", "application/json")
+	ctx.Request = ctx.Request.WithContext(middleware.WithAuthenticatedTenantID(ctx.Request.Context(), 42))
+	ctx.Set("tenant_id", 42)
+	ctx.Set("user_id", 7)
+
+	controller.StartProcess(ctx)
+
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	require.NotNil(t, engine.startCtx)
+	scope, err := service.BPMNAccessScopeFromContext(engine.startCtx)
+	require.NoError(t, err)
+	assert.Equal(t, 7, scope.UserID)
+	assert.Equal(t, 42, scope.TenantID)
+	assert.Equal(t, 7, engine.startCtx.Value(bpmn.BPMNUserIDContextKey))
 }
 
 func seedBPMNRolePermissions(t *testing.T, client *ent.Client, tenantID int, roleCode string, permissions ...string) {

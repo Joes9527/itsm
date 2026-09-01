@@ -4,12 +4,14 @@ import (
 	"context"
 	stdErrors "errors"
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/ent/processauditlog"
 	"itsm-backend/service/bpmn"
 
 	"entgo.io/ent/dialect"
@@ -46,6 +48,7 @@ func TestTriggerProcess_PopulatesStructuredBusinessIdentity(t *testing.T) {
 		BusinessID:           42,
 		ProcessDefinitionKey: "change_normal_flow",
 		Variables:            map[string]interface{}{"approval_required": false},
+		TriggeredBy:          "system",
 		TenantID:             tenant.ID,
 	})
 	require.NoError(t, err)
@@ -59,6 +62,53 @@ func TestTriggerProcess_PopulatesStructuredBusinessIdentity(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "change", instance.BusinessType)
 	require.Equal(t, 42, instance.BusinessID)
+}
+
+func TestTriggerProcessScopeOverridesRequestTriggeredBy(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:trigger_authenticated_actor?mode=memory&cache=shared&_fk=1")
+	t.Cleanup(func() { require.NoError(t, client.Close()) })
+	ctx := context.Background()
+
+	tenant, err := client.Tenant.Create().
+		SetName("Authenticated trigger tenant").
+		SetCode("trigger-authenticated").
+		SetDomain("trigger-authenticated.example.com").
+		SetStatus("active").
+		Save(ctx)
+	require.NoError(t, err)
+	actor, err := client.User.Create().
+		SetUsername("authenticated.trigger.actor").
+		SetEmail("authenticated.trigger.actor@example.test").
+		SetName("Authenticated Trigger Actor").
+		SetPasswordHash("test").
+		SetRole("service_agent").
+		SetActive(true).
+		SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	workflowCtx := WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: actor.ID, TenantID: tenant.ID})
+	deploySvc := NewBPMNTemplateService(client)
+	_, err = deploySvc.LoadAndDeployTemplates(workflowCtx, tenant.ID)
+	require.NoError(t, err)
+
+	resp, err := NewProcessTriggerService(client, NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar())).TriggerProcess(workflowCtx, &dto.ProcessTriggerRequest{
+		BusinessType:         dto.BusinessTypeChange,
+		BusinessID:           43,
+		ProcessDefinitionKey: "change_normal_flow",
+		TriggeredBy:          "system",
+		TenantID:             tenant.ID,
+	})
+	require.NoError(t, err)
+
+	instance := client.ProcessInstance.GetX(ctx, resp.ProcessInstanceID)
+	require.Equal(t, strconv.Itoa(actor.ID), instance.Variables["triggered_by"])
+	audit := client.ProcessAuditLog.Query().Where(
+		processauditlog.ProcessInstanceID(instance.ID),
+		processauditlog.Action(AuditActionProcessStarted),
+	).OnlyX(ctx)
+	require.Equal(t, actor.ID, audit.UserID)
+	require.Equal(t, actor.Name, audit.UserName)
 }
 
 func TestProcessTriggerResponseLooksUpDefinitionWithinInstanceTenant(t *testing.T) {

@@ -82,7 +82,9 @@ func TestReleaseFlow_StageBridges_AdvanceProcessEndToEnd(t *testing.T) {
 	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar())
 	workflowCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
 	workflowCtx = WithTrustedBPMNTenantContext(workflowCtx, tenant.ID)
-	instance, err := engine.StartProcess(workflowCtx, "release_approval_flow", "release:"+strconv.Itoa(releaseEntity.ID), "release", releaseEntity.ID, map[string]interface{}{})
+	instance, err := engine.StartProcess(workflowCtx, "release_approval_flow", "release:"+strconv.Itoa(releaseEntity.ID), "release", releaseEntity.ID, map[string]interface{}{
+		"triggered_by": strconv.Itoa(creator.ID),
+	})
 	require.NoError(t, err)
 	started, err := client.ProcessInstance.Get(ctx, instance.ID)
 	require.NoError(t, err)
@@ -187,7 +189,9 @@ func TestReleaseFlow_RejectApproval_EndsFlowAndCancelsRelease(t *testing.T) {
 	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar())
 	workflowCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
 	workflowCtx = WithTrustedBPMNTenantContext(workflowCtx, tenant.ID)
-	instance, err := engine.StartProcess(workflowCtx, "release_approval_flow", "release:"+strconv.Itoa(releaseEntity.ID), "release", releaseEntity.ID, map[string]interface{}{})
+	instance, err := engine.StartProcess(workflowCtx, "release_approval_flow", "release:"+strconv.Itoa(releaseEntity.ID), "release", releaseEntity.ID, map[string]interface{}{
+		"triggered_by": strconv.Itoa(creator.ID),
+	})
 	require.NoError(t, err)
 
 	// 技术评审通过 → 审批节点
