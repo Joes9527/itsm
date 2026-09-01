@@ -123,20 +123,6 @@ func (_u *TicketUpdate) ClearSource() *TicketUpdate {
 	return _u
 }
 
-// SetRecordClass sets the "record_class" field.
-func (_u *TicketUpdate) SetRecordClass(v string) *TicketUpdate {
-	_u.mutation.SetRecordClass(v)
-	return _u
-}
-
-// SetNillableRecordClass sets the "record_class" field if the given value is not nil.
-func (_u *TicketUpdate) SetNillableRecordClass(v *string) *TicketUpdate {
-	if v != nil {
-		_u.SetRecordClass(*v)
-	}
-	return _u
-}
-
 // SetOpenedByID sets the "opened_by_id" field.
 func (_u *TicketUpdate) SetOpenedByID(v int) *TicketUpdate {
 	_u.mutation.ResetOpenedByID()
@@ -1447,9 +1433,6 @@ func (_u *TicketUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.SourceCleared() {
 		_spec.ClearField(ticket.FieldSource, field.TypeString)
 	}
-	if value, ok := _u.mutation.RecordClass(); ok {
-		_spec.SetField(ticket.FieldRecordClass, field.TypeString, value)
-	}
 	if value, ok := _u.mutation.OpenedByID(); ok {
 		_spec.SetField(ticket.FieldOpenedByID, field.TypeInt, value)
 	}
@@ -2405,20 +2388,6 @@ func (_u *TicketUpdateOne) SetNillableSource(v *string) *TicketUpdateOne {
 // ClearSource clears the value of the "source" field.
 func (_u *TicketUpdateOne) ClearSource() *TicketUpdateOne {
 	_u.mutation.ClearSource()
-	return _u
-}
-
-// SetRecordClass sets the "record_class" field.
-func (_u *TicketUpdateOne) SetRecordClass(v string) *TicketUpdateOne {
-	_u.mutation.SetRecordClass(v)
-	return _u
-}
-
-// SetNillableRecordClass sets the "record_class" field if the given value is not nil.
-func (_u *TicketUpdateOne) SetNillableRecordClass(v *string) *TicketUpdateOne {
-	if v != nil {
-		_u.SetRecordClass(*v)
-	}
 	return _u
 }
 
@@ -3761,9 +3730,6 @@ func (_u *TicketUpdateOne) sqlSave(ctx context.Context) (_node *Ticket, err erro
 	}
 	if _u.mutation.SourceCleared() {
 		_spec.ClearField(ticket.FieldSource, field.TypeString)
-	}
-	if value, ok := _u.mutation.RecordClass(); ok {
-		_spec.SetField(ticket.FieldRecordClass, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.OpenedByID(); ok {
 		_spec.SetField(ticket.FieldOpenedByID, field.TypeInt, value)

@@ -733,6 +733,38 @@ CREATE TABLE IF NOT EXISTS work_item_number_sequences (
     CONSTRAINT work_item_number_sequences_last_value_check
         CHECK (last_value BETWEEN 0 AND 999999)
 );
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint c
+        JOIN pg_class sequence_table ON sequence_table.oid = c.conrelid
+        JOIN pg_namespace table_schema ON table_schema.oid = sequence_table.relnamespace
+        WHERE table_schema.nspname = current_schema()
+          AND sequence_table.relname = 'work_item_number_sequences'
+          AND c.conname = 'work_item_number_sequences_period_check'
+          AND c.contype = 'c'
+    ) THEN
+        ALTER TABLE work_item_number_sequences
+            ADD CONSTRAINT work_item_number_sequences_period_check
+            CHECK (period ~ '^[0-9]{6}$');
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint c
+        JOIN pg_class sequence_table ON sequence_table.oid = c.conrelid
+        JOIN pg_namespace table_schema ON table_schema.oid = sequence_table.relnamespace
+        WHERE table_schema.nspname = current_schema()
+          AND sequence_table.relname = 'work_item_number_sequences'
+          AND c.conname = 'work_item_number_sequences_last_value_check'
+          AND c.contype = 'c'
+    ) THEN
+        ALTER TABLE work_item_number_sequences
+            ADD CONSTRAINT work_item_number_sequences_last_value_check
+            CHECK (last_value BETWEEN 0 AND 999999);
+    END IF;
+END $$;
 CREATE UNIQUE INDEX IF NOT EXISTS workitemnumbersequence_tenant_id_period
     ON work_item_number_sequences (tenant_id, period);
 DROP INDEX IF EXISTS ticket_ticket_number;
