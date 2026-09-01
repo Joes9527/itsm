@@ -476,11 +476,12 @@ func (s *TicketAutomationRuleService) executeActions(
 				if ticketEntity.AssigneeID > 0 {
 					userIDs = append(userIDs, ticketEntity.AssigneeID)
 				}
-				if err := s.notificationService.SendNotification(ctx, ticketEntity.ID, &dto.SendTicketNotificationRequest{
+				result, sendErr := s.notificationService.SendNotification(ctx, ticketEntity.ID, &dto.SendTicketNotificationRequest{
 					UserIDs:   userIDs,
 					EventType: "ticket_updated",
 					Content:   content,
-				}, ticketEntity.TenantID); err != nil {
+				}, ticketEntity.TenantID)
+				if err := ticketNotificationDeliveryError(result, sendErr); err != nil {
 					s.logger.Warnw("failed to send automation notification", "error", err, "ticket_id", ticketEntity.ID)
 				}
 			}

@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"itsm-backend/common"
-	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/enttest"
@@ -45,10 +44,10 @@ type failingKafCallbackHandler struct{ err error }
 
 func (h *failingKafCallbackHandler) GetTaskType() string  { return "failing_kaf_callback" }
 func (h *failingKafCallbackHandler) GetHandlerID() string { return "failing_kaf_callback_handler" }
-func (h *failingKafCallbackHandler) Validate(context.Context, map[string]interface{}) error {
-	return nil
+func (h *failingKafCallbackHandler) CallbackContract(string) (bpmn.CallbackActionContract, bool) {
+	return bpmn.CallbackActionContract{}, true
 }
-func (h *failingKafCallbackHandler) Execute(context.Context, *ent.ProcessTask, map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *failingKafCallbackHandler) Execute(context.Context, *ent.ProcessTask, map[string]interface{}) (*bpmn.CallbackEffect, error) {
 	return nil, h.err
 }
 

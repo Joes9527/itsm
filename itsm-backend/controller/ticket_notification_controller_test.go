@@ -31,9 +31,24 @@ func setupTicketNotificationController(t *testing.T) (*gin.Engine, *ent.Client, 
 
 	router := gin.New()
 	router.Use(gin.Recovery(), withTestAuth(tenantID, userID))
+	router.POST("/api/v1/tickets/:id/notifications", controller.SendTicketNotification)
 	router.PUT("/api/v1/ticket-notifications/:id/read", controller.MarkNotificationRead)
 	router.PUT("/api/v1/ticket-notifications/read-all", controller.MarkAllNotificationsRead)
 	return router, client, tenantID, userID, logs
+}
+
+func TestTicketNotificationController_SendRejectsLegacyFields(t *testing.T) {
+	router, client, tenantID, userID, _ := setupTicketNotificationController(t)
+	ticketEntity, err := client.Ticket.Create().
+		SetTicketNumber("TKT-NOTIFICATION-SEND-" + uniqueTestID()).
+		SetTitle("Notification send contract").SetDescription("d").SetStatus("open").SetPriority("medium").
+		SetRequesterID(userID).SetTenantID(tenantID).Save(context.Background())
+	require.NoError(t, err)
+
+	response := doReq(t, router, http.MethodPost, "/api/v1/tickets/"+strconv.Itoa(ticketEntity.ID)+"/notifications", map[string]interface{}{
+		"userIds": []int{userID}, "eventType": "ticket_updated", "content": "x", "channel": "in_app",
+	}, false)
+	require.Equal(t, common.ParamErrorCode, response.Code, "body=%s", mustString(response))
 }
 
 func createTicketNotificationForController(t *testing.T, client *ent.Client, tenantID, userID int, status string) *ent.TicketNotification {

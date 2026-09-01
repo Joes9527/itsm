@@ -261,11 +261,3 @@ func (sv *StandardVariables) ConvertToMap() map[string]interface{} {
 
 	return result
 }
-
-// ServiceTaskResult 服务任务执行结果
-type ServiceTaskResult struct {
-	Success     bool                   `json:"success"`
-	Message     string                 `json:"message,omitempty"`
-	OutputVars  map[string]interface{} `json:"outputVars,omitempty"`
-	UpdatedData map[string]interface{} `json:"updatedData,omitempty"`
-}

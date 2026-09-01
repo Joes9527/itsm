@@ -450,11 +450,13 @@ func TestEmailAndCCLogsContainOnlyFixedErrorClasses(t *testing.T) {
 	notificationService := NewTicketNotificationService(client, logger)
 	notificationService.SetEmailService(emailService)
 	smtpErr = errors.New(smtpErrSentinel)
-	require.NoError(t, notificationService.SendNotification(ctx, ticketEntity.ID, &dto.SendTicketNotificationRequest{
+	result, err := notificationService.SendNotification(ctx, ticketEntity.ID, &dto.SendTicketNotificationRequest{
 		UserIDs:   []int{recipient.ID},
 		EventType: "ticket_cc",
 		Content:   contentSentinel,
-	}, tenant.ID))
+	}, tenant.ID)
+	require.Error(t, err)
+	require.Nil(t, result)
 	require.NoError(t, workflow.CCTicket(ctx, &dto.CCTicketRequest{
 		TicketID: ticketEntity.ID,
 		CCUsers:  []int{recipient.ID},

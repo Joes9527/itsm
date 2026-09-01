@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"itsm-backend/common"
-	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processcallbackoutbox"
 	"itsm-backend/service/bpmn"
@@ -115,6 +114,7 @@ func TestCCCallbackOutboxVariableRecipientsUseAuthoritativeInitiator(t *testing.
 		serviceTask.ServiceTaskAction(),
 		serviceTask.CallbackConfigRef(),
 		mergeServiceTaskVariables(instance.Variables, serviceTask),
+		false,
 	)
 	require.NoError(t, err)
 	require.Len(t, executionKeys, 1)
@@ -156,13 +156,10 @@ func newCountingIdempotentCallbackHandler(taskType, handlerID string, failures i
 
 func (h *countingIdempotentCallbackHandler) GetTaskType() string  { return h.taskType }
 func (h *countingIdempotentCallbackHandler) GetHandlerID() string { return h.handlerID }
-func (h *countingIdempotentCallbackHandler) CallbackPayloadFields(string) []string {
-	return append([]string(nil), h.callbackFields...)
+func (h *countingIdempotentCallbackHandler) CallbackContract(string) (bpmn.CallbackActionContract, bool) {
+	return bpmn.CallbackActionContract{PayloadFields: append([]string(nil), h.callbackFields...)}, true
 }
-func (h *countingIdempotentCallbackHandler) Validate(context.Context, map[string]interface{}) error {
-	return nil
-}
-func (h *countingIdempotentCallbackHandler) Execute(ctx context.Context, task *ent.ProcessTask, _ map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *countingIdempotentCallbackHandler) Execute(ctx context.Context, task *ent.ProcessTask, _ map[string]interface{}) (*bpmn.CallbackEffect, error) {
 	key, ok := bpmn.BPMNCallbackExecutionKey(ctx)
 	if !ok || key == "" {
 		return nil, errors.New("callback execution key missing")
@@ -178,7 +175,7 @@ func (h *countingIdempotentCallbackHandler) Execute(ctx context.Context, task *e
 		return nil, errors.New("sensitive callback receiver failure")
 	}
 	h.effectKeys[key] = struct{}{}
-	return &dto.ServiceTaskResult{Success: true}, nil
+	return bpmn.AppliedEffect("", nil), nil
 }
 
 func (h *countingIdempotentCallbackHandler) AttemptCount() int {

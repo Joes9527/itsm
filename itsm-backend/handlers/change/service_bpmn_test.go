@@ -1057,7 +1057,7 @@ func TestChangeServiceTaskHandler_CreateChange_DelegatesToRealServiceAndCreatesW
 		"created_by":  float64(actorID),
 	})
 	require.NoError(t, err)
-	require.True(t, result.Success)
+	require.Equal(t, bpmn.CallbackEffectApplied, result.Status)
 
 	changeID, ok := result.OutputVars["change_id"].(int)
 	require.True(t, ok, "OutputVars.change_id 应该是真实领域服务创建的 Change ID")

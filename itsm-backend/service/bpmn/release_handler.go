@@ -48,17 +48,17 @@ func (h *ReleaseServiceTaskHandler) GetHandlerID() string {
 }
 
 // Execute 执行发布任务
-func (h *ReleaseServiceTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *ReleaseServiceTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*CallbackEffect, error) {
 	action, _ := variables["action"].(string)
 	switch action {
 	case "tech_review":
 		return h.techReview(ctx, variables)
 	case "approval":
-		// 有意的空操作：ReleaseService.ApplyReleaseApproval 是审批的真正业务入口，
-		// 它会先桥接完成这个 BPMN 任务（触发本方法执行），再在自己函数体里把
-		// Release.Status 转到 scheduled/cancelled——这一刻权威状态还没写，这里没有
-		// 足够信息（不知道是 approve 还是 reject）也不需要重复做这件事。
-		return &dto.ServiceTaskResult{Success: true, Message: "审批决策由 ReleaseService.ApplyReleaseApproval 统一处理"}, nil
+		// ReleaseService.ApplyReleaseApproval owns the professional approval
+		// transition. The BPMN callback is only the durable effect gate for
+		// that already-authorized decision; it must not invent a second
+		// approval lookup or lifecycle authority.
+		return IdempotentEffect("release approval is owned by ReleaseService", nil), nil
 	case "schedule":
 		return h.updateStatus(ctx, variables, string(dto.ReleaseStatusScheduled))
 	case "execute":
@@ -68,11 +68,6 @@ func (h *ReleaseServiceTaskHandler) Execute(ctx context.Context, task *ent.Proce
 	default:
 		return nil, fmt.Errorf("不支持的发布回调动作")
 	}
-}
-
-// Validate 验证配置
-func (h *ReleaseServiceTaskHandler) Validate(ctx context.Context, config map[string]interface{}) error {
-	return nil
 }
 
 func (h *ReleaseServiceTaskHandler) releaseID(variables map[string]interface{}) (int, error) {
@@ -86,7 +81,7 @@ func (h *ReleaseServiceTaskHandler) releaseID(variables map[string]interface{}) 
 // techReview 记录技术评审意见。评审通过/不通过在这个流程设计里不对应独立的发布状态
 // （Release.status 只有 draft/scheduled/in-progress/completed/cancelled/failed/
 // rolled_back），所以这里只追加评审记录到 release_notes，不改状态。
-func (h *ReleaseServiceTaskHandler) techReview(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *ReleaseServiceTaskHandler) techReview(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
 	releaseID, err := h.releaseID(variables)
 	if err != nil {
 		return nil, err
@@ -107,7 +102,7 @@ func (h *ReleaseServiceTaskHandler) techReview(ctx context.Context, variables ma
 	notes := entity.ReleaseNotes
 	entry := fmt.Sprintf("[技术评审] %s", comment)
 	if comment == "" || strings.Contains(notes, entry) {
-		return &dto.ServiceTaskResult{Success: true, Message: "技术评审意见已记录"}, nil
+		return IdempotentEffect("技术评审意见已记录", nil), nil
 	}
 	if notes != "" {
 		notes += "\n"
@@ -117,10 +112,10 @@ func (h *ReleaseServiceTaskHandler) techReview(ctx context.Context, variables ma
 		return nil, fmt.Errorf("记录技术评审失败: %w", err)
 	}
 	h.logger.Infow("Release tech review recorded via BPMN", "release_id", releaseID)
-	return &dto.ServiceTaskResult{Success: true, Message: "技术评审意见已记录"}, nil
+	return &CallbackEffect{Status: CallbackEffectApplied, Message: "技术评审意见已记录"}, nil
 }
 
-func (h *ReleaseServiceTaskHandler) updateStatus(ctx context.Context, variables map[string]interface{}, status string) (*dto.ServiceTaskResult, error) {
+func (h *ReleaseServiceTaskHandler) updateStatus(ctx context.Context, variables map[string]interface{}, status string) (*CallbackEffect, error) {
 	releaseID, err := h.releaseID(variables)
 	if err != nil {
 		return nil, err
@@ -141,7 +136,7 @@ func (h *ReleaseServiceTaskHandler) updateStatus(ctx context.Context, variables 
 		return nil, fmt.Errorf("非法的发布状态转换: %s -> %s", current.Status, status)
 	}
 	if current.Status == status {
-		return &dto.ServiceTaskResult{Success: true, Message: fmt.Sprintf("发布 %d 已处于 %s", releaseID, status)}, nil
+		return IdempotentEffect(fmt.Sprintf("发布 %d 已处于 %s", releaseID, status), nil), nil
 	}
 
 	update := current.Update().SetStatus(status)
@@ -153,7 +148,7 @@ func (h *ReleaseServiceTaskHandler) updateStatus(ctx context.Context, variables 
 	}
 
 	h.logger.Infow("Release status updated via BPMN", "release_id", releaseID, "status", status)
-	return &dto.ServiceTaskResult{Success: true, Message: fmt.Sprintf("发布 %d 状态已更新为 %s", releaseID, status)}, nil
+	return &CallbackEffect{Status: CallbackEffectApplied, Message: fmt.Sprintf("发布 %d 状态已更新为 %s", releaseID, status)}, nil
 }
 
 // isValidReleaseStatusTransitionForBPMN 复制自 service/release_service.go 的

@@ -29,9 +29,7 @@ import {
   Clock,
   AlertCircle,
 } from 'lucide-react';
-import type {
-  TicketNotification,
-  SendTicketNotificationRequest} from '@/lib/api/ticket-notification-api';
+import type { TicketNotification, SendTicketNotificationRequest } from '@/lib/api/ticket-notification-api';
 import {
   TicketNotificationApi
 } from '@/lib/api/ticket-notification-api';
@@ -45,7 +43,6 @@ const { TextArea } = Input;
 interface TicketNotificationSectionProps {
   ticketId: number;
   canSend?: boolean;
-  onNotificationSent?: (notification: TicketNotification) => void;
 }
 
 /**
@@ -54,13 +51,13 @@ interface TicketNotificationSectionProps {
 export const TicketNotificationSection: React.FC<TicketNotificationSectionProps> = ({
   ticketId,
   canSend = true,
-  onNotificationSent,
 }) => {
   const { message: antMessage } = App.useApp();
   const { t } = useI18n();
   const [notifications, setNotifications] = useState<TicketNotification[]>([]);
   const [loading, setLoading] = useState(false);
   const [sendModalVisible, setSendModalVisible] = useState(false);
+  const [eventTypes, setEventTypes] = useState<Array<{ code: string; name: string }>>([]);
   const [form] = Form.useForm();
 
   // 加载通知列表
@@ -82,40 +79,30 @@ export const TicketNotificationSection: React.FC<TicketNotificationSectionProps>
     }
   }, [ticketId]);
 
+  useEffect(() => {
+    if (!sendModalVisible) return;
+    TicketNotificationApi.getNotificationPreferences()
+      .then(response => setEventTypes(response.eventTypes || []))
+      .catch(() => antMessage.error('加载通知事件类型失败'));
+  }, [sendModalVisible]);
+
   // 发送通知
   const handleSendNotification = async (values: {
     userIds: number[];
-    type: string;
-    channel: 'email' | 'in_app' | 'sms';
+    eventType: string;
     content: string;
   }) => {
     try {
       const request: SendTicketNotificationRequest = {
         userIds: values.userIds,
-        type: values.type,
-        channel: values.channel,
+        eventType: values.eventType,
         content: values.content,
       };
-      await TicketNotificationApi.sendTicketNotification(ticketId, request);
-      antMessage.success('通知发送成功');
+      const result = await TicketNotificationApi.sendTicketNotification(ticketId, request);
+      antMessage.success(`通知已投递 ${result.deliveryCount} 次`);
       setSendModalVisible(false);
       form.resetFields();
       await loadNotifications();
-      // 触发回调
-      if (onNotificationSent) {
-        // 创建一个临时通知对象用于回调
-        const tempNotification: TicketNotification = {
-          id: Date.now(),
-          ticketId: ticketId,
-          userId: values.userIds[0],
-          type: values.type as any,
-          channel: values.channel,
-          content: values.content,
-          status: 'sent',
-          createdAt: new Date().toISOString(),
-        };
-        onNotificationSent(tempNotification);
-      }
     } catch (error: unknown) {
       antMessage.error(error instanceof Error ? error.message : '通知发送失败');
     }
@@ -322,10 +309,6 @@ export const TicketNotificationSection: React.FC<TicketNotificationSectionProps>
           form={form}
           layout="vertical"
           onFinish={handleSendNotification}
-          initialValues={{
-            channel: 'in_app',
-            type: 'commented',
-          }}
         >
           <Form.Item
             label="接收人"
@@ -337,30 +320,10 @@ export const TicketNotificationSection: React.FC<TicketNotificationSectionProps>
 
           <Form.Item
             label="通知类型"
-            name="type"
+            name="eventType"
             rules={[{ required: true, message: '请选择通知类型' }]}
           >
-            <Select placeholder="请选择通知类型" options={[
-              { value: "created", label: "工单创建" },
-              { value: "assigned", label: "工单分配" },
-              { value: "status_changed", label: "状态变更" },
-              { value: "commented", label: "新增评论" },
-              { value: "sla_warning", label: "SLA警告" },
-              { value: "resolved", label: "工单已解决" },
-              { value: "closed", label: "工单已关闭" },
-            ]} />
-          </Form.Item>
-
-          <Form.Item
-            label="通知渠道"
-            name="channel"
-            rules={[{ required: true, message: '请选择通知渠道' }]}
-          >
-            <Select placeholder="请选择通知渠道" options={[
-              { value: "in_app", label: "站内消息" },
-              { value: "email", label: "邮件" },
-              { value: "sms", label: "短信" },
-            ]} />
+            <Select placeholder="请选择通知类型" options={eventTypes.map(eventType => ({ value: eventType.code, label: eventType.name }))} />
           </Form.Item>
 
           <Form.Item

@@ -30,10 +30,11 @@ describe('TicketNotificationApi', () => {
 
   describe('sendTicketNotification', () => {
     it('should send notification', async () => {
-      const data = { userIds: [1, 2], type: 'assigned', channel: 'email' as const, content: 'Test' };
-      mockPost.mockResolvedValue(undefined);
-      await TicketNotificationApi.sendTicketNotification(10, data);
+      const data = { userIds: [1, 2], eventType: 'ticket_assigned', content: 'Test' };
+      mockPost.mockResolvedValue({ effect: 'applied', recipientCount: 2, appliedCount: 2, idempotentCount: 0, deliveryCount: 2 });
+      const result = await TicketNotificationApi.sendTicketNotification(10, data);
       expect(mockPost).toHaveBeenCalledWith('/api/v1/tickets/10/notifications', data);
+      expect(result.effect).toBe('applied');
     });
   });
 

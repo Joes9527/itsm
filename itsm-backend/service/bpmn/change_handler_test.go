@@ -93,7 +93,7 @@ func TestChangeServiceTaskHandler_CreateChange_DelegatesToInjectedService(t *tes
 		"created_by":  float64(99),
 	})
 	require.NoError(t, err)
-	assert.True(t, result.Success)
+	assert.True(t, result.Status == CallbackEffectApplied)
 	assert.Equal(t, 4242, result.OutputVars["change_id"], "OutputVars 应该使用领域服务返回的 ID")
 
 	require.Len(t, fake.calls, 1)
@@ -284,7 +284,7 @@ func TestChangeServiceTaskHandler_TenantScopedActions(t *testing.T) {
 				}
 				result, err := handler.Execute(ctx, nil, vars)
 				require.NoError(t, err)
-				assert.True(t, result.Success)
+				assert.True(t, result.Status == CallbackEffectApplied)
 				tc.assertValid(t, client, changeEntity.ID)
 			})
 
@@ -338,7 +338,7 @@ func TestChangeServiceTaskHandler_AssessRisk_EmergencyType(t *testing.T) {
 		"change_id": changeEntity.ID,
 	})
 	require.NoError(t, err)
-	assert.True(t, result.Success)
+	assert.True(t, result.Status == CallbackEffectApplied)
 	assert.Equal(t, "high", result.OutputVars["risk_level"], "emergency 变更应评估为 high")
 
 	after, err := client.Change.Get(ctx, changeEntity.ID)
@@ -362,7 +362,7 @@ func TestChangeServiceTaskHandler_ScheduleChange_DateParsing(t *testing.T) {
 		"planned_start_date": "2026-09-01T08:00:00Z",
 	})
 	require.NoError(t, err)
-	assert.True(t, result.Success)
+	assert.True(t, result.Status == CallbackEffectApplied)
 
 	after, err := client.Change.Get(ctx, changeEntity.ID)
 	require.NoError(t, err)
@@ -413,7 +413,7 @@ func TestChangeServiceTaskHandler_ScheduleChangeAction_EmergencyStopsAtApproved(
 		"change_id": changeEntity.ID,
 	})
 	require.NoError(t, err)
-	assert.True(t, result.Success)
+	assert.True(t, result.Status == CallbackEffectApplied)
 
 	updated, err := client.Change.Get(ctx, changeEntity.ID)
 	require.NoError(t, err)

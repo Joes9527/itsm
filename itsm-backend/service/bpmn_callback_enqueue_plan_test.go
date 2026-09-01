@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/service/bpmn"
 
@@ -114,12 +113,8 @@ func (h *callbackEnqueuePlanTestHandler) GetTaskType() string {
 	return h.taskType
 }
 
-func (h *callbackEnqueuePlanTestHandler) Execute(context.Context, *ent.ProcessTask, map[string]interface{}) (*dto.ServiceTaskResult, error) {
-	return &dto.ServiceTaskResult{}, nil
-}
-
-func (h *callbackEnqueuePlanTestHandler) Validate(context.Context, map[string]interface{}) error {
-	return nil
+func (h *callbackEnqueuePlanTestHandler) Execute(context.Context, *ent.ProcessTask, map[string]interface{}) (*bpmn.CallbackEffect, error) {
+	return bpmn.AppliedEffect("", nil), nil
 }
 
 func (h *callbackEnqueuePlanTestHandler) CallbackContract(action string) (bpmn.CallbackActionContract, bool) {

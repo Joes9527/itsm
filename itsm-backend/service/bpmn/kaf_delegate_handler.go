@@ -3,7 +3,6 @@ package bpmn
 import (
 	"context"
 
-	"itsm-backend/dto"
 	"itsm-backend/ent"
 
 	"go.uber.org/zap"
@@ -41,14 +40,9 @@ func (h *KafDelegateServiceTaskHandler) IsAsync() bool {
 	return true
 }
 
-// Validate 验证配置
-func (h *KafDelegateServiceTaskHandler) Validate(ctx context.Context, config map[string]interface{}) error {
-	return nil
-}
-
 // Execute 只在委派任务完成后的异步回调阶段被调用一次，用于记录完成事件，
 // 不产生业务副作用。
-func (h *KafDelegateServiceTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *KafDelegateServiceTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*CallbackEffect, error) {
 	taskID := ""
 	tenantID := 0
 	if task != nil {
@@ -60,7 +54,7 @@ func (h *KafDelegateServiceTaskHandler) Execute(ctx context.Context, task *ent.P
 	} else {
 		h.logger.Infow("KAF 委派任务已完成", "taskID", taskID, "tenantID", tenantID)
 	}
-	return &dto.ServiceTaskResult{Success: true, Message: "kaf_delegate 任务已完成"}, nil
+	return &CallbackEffect{Status: CallbackEffectApplied, Message: "kaf_delegate 任务已完成"}, nil
 }
 
 // 确保 KafDelegateServiceTaskHandler 实现了 ServiceTaskHandlerInterface 和 AsyncServiceTaskHandler

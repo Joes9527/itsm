@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/group"
 	"itsm-backend/ent/role"
@@ -49,8 +48,11 @@ func (h *CCTaskHandler) GetHandlerID() string {
 // scheduling still has the source process values available. The durable row
 // retains only the fixed recipient IDs, never the arbitrary source field.
 func (h *CCTaskHandler) NormalizeCallbackPayload(action string, variables map[string]interface{}) (map[string]interface{}, error) {
-	payload := make(map[string]interface{}, len(ccCallbackPayloadFields))
-	for _, key := range h.CallbackPayloadFields(action) {
+	// CC has one actionless contract; legacy BPMN node labels are not part of
+	// the durable action boundary and never alter recipient semantics.
+	contract, _ := h.CallbackContract("")
+	payload := make(map[string]interface{}, len(contract.PayloadFields))
+	for _, key := range contract.PayloadFields {
 		if key == "ccResolvedUserIds" {
 			continue
 		}
@@ -84,7 +86,7 @@ func (h *CCTaskHandler) NormalizeCallbackPayload(action string, variables map[st
 }
 
 // Execute 执行抄送服务任务
-func (h *CCTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *CCTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*CallbackEffect, error) {
 	deliveryKey, ok := BPMNCallbackExecutionKey(ctx)
 	if !ok {
 		return nil, fmt.Errorf("抄送回调执行键不能为空")
@@ -109,6 +111,14 @@ func (h *CCTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, vari
 
 	if ticketID == 0 {
 		return nil, fmt.Errorf("工单ID不能为空")
+	}
+	if ccType != "user" && ccType != "group" && ccType != "role" && ccType != "variable" {
+		return BlockedEffect(CallbackBlockUnsupportedCCType, "unsupported CC recipient type"), nil
+	}
+	for _, raw := range []string{ccUserIds, ccGroupIds, ccRoleIds} {
+		if strings.Contains(raw, "${") {
+			return BlockedEffect(CallbackBlockUnsupportedTemplate, "unresolved CC placeholder"), nil
+		}
 	}
 
 	h.logger.Infow(
@@ -135,18 +145,12 @@ func (h *CCTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, vari
 	}
 
 	if len(ccUsers) == 0 {
-		h.logger.Warnw("No CC users resolved, skip CC task")
-		return &dto.ServiceTaskResult{
-			Success: true,
-			Message: "没有解析到抄送人，跳过抄送任务",
-			OutputVars: map[string]interface{}{
-				"added_cc_users": []int{},
-			},
-		}, nil
+		return BlockedEffect(CallbackBlockRecipientEmpty, "CC recipient set is empty"), nil
 	}
 
 	// 添加抄送人
 	var addedUsers []int
+	hadExistingDelivery := false
 	for _, ccUserID := range ccUsers {
 		delivered, err := tx.Client().TicketCC.Query().
 			Where(
@@ -159,6 +163,7 @@ func (h *CCTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, vari
 			return nil, fmt.Errorf("检查抄送回调投递失败")
 		}
 		if delivered {
+			hadExistingDelivery = true
 			continue
 		}
 
@@ -198,9 +203,14 @@ func (h *CCTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, vari
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("提交抄送任务事务失败")
 	}
+	if len(addedUsers) == 0 && hadExistingDelivery {
+		return IdempotentEffect("CC delivery already exists", map[string]interface{}{"added_cc_users": []int{}}), nil
+	}
+	if len(addedUsers) == 0 {
+		return BlockedEffect(CallbackBlockRecipientEmpty, "CC recipient set produced no durable delivery"), nil
+	}
 
-	return &dto.ServiceTaskResult{
-		Success: true,
+	return &CallbackEffect{Status: CallbackEffectApplied,
 		Message: fmt.Sprintf("已成功添加 %d 位抄送人", len(addedUsers)),
 		OutputVars: map[string]interface{}{
 			"added_cc_users": addedUsers,
@@ -240,12 +250,7 @@ func (h *CCTaskHandler) resolveCCUsers(ctx context.Context, client *ent.Client, 
 		}
 		return h.validateCCUsers(ctx, client, ids, tenantID)
 	default:
-		// 默认按用户ID处理
-		ids, err := h.parseCommaSeparatedInts(ccUserIds)
-		if err != nil {
-			return nil, err
-		}
-		return h.validateCCUsers(ctx, client, ids, tenantID)
+		return nil, fmt.Errorf("unsupported CC recipient type")
 	}
 }
 
@@ -366,12 +371,8 @@ func (h *CCTaskHandler) parseCommaSeparatedInts(str string) ([]int, error) {
 		if part == "" {
 			continue
 		}
-		// 处理变量占位符，如 ${applyUserId}
 		if strings.HasPrefix(part, "${") && strings.HasSuffix(part, "}") {
-			// 这里会在流程变量替换阶段处理，暂时保留原样，由上层替换
-			// TODO: 支持变量解析
-			h.logger.Warnw("Variable placeholder in CC user ID not supported yet", "placeholder", part)
-			continue
+			return nil, fmt.Errorf("unresolved CC placeholder")
 		}
 		id, err := strconv.Atoi(part)
 		if err != nil {
@@ -549,11 +550,6 @@ func (h *CCTaskHandler) createCCNotifications(ctx context.Context, client *ent.C
 func ccNotificationDeliveryKey(executionKey string, ticketID, userID int, channel string) string {
 	effectIdentity := fmt.Sprintf("%s\x00%d\x00%d\x00%s", executionKey, ticketID, userID, channel)
 	return fmt.Sprintf("ticket-notification-bpmn-%x", sha256.Sum256([]byte(effectIdentity)))
-}
-
-// Validate 验证配置
-func (h *CCTaskHandler) Validate(ctx context.Context, config map[string]interface{}) error {
-	return nil
 }
 
 // 确保 CCTaskHandler 实现了 ServiceTaskHandlerInterface

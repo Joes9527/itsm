@@ -63,7 +63,7 @@ func (h *ChangeServiceTaskHandler) GetHandlerID() string {
 }
 
 // Execute 执行变更服务任务
-func (h *ChangeServiceTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *ChangeServiceTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*CallbackEffect, error) {
 	action, _ := variables["action"].(string)
 	switch action {
 	case "create_change":
@@ -91,15 +91,10 @@ func (h *ChangeServiceTaskHandler) Execute(ctx context.Context, task *ent.Proces
 	}
 }
 
-// Validate 验证配置
-func (h *ChangeServiceTaskHandler) Validate(ctx context.Context, config map[string]interface{}) error {
-	return nil
-}
-
 // createChange 创建变更。委托给 handlers/change.Service.CreateChange（通过
 // ChangeDomainServiceInterface 窄接口），不再直接 h.client.Change.Create()——那样会绕开
 // WorkItem 的事务化创建，见 ChangeDomainServiceInterface 的注释。
-func (h *ChangeServiceTaskHandler) createChange(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *ChangeServiceTaskHandler) createChange(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
 	if _, durable := BPMNCallbackExecutionKey(ctx); durable {
 		return nil, fmt.Errorf("持久化回调必须使用流程实例中的既有变更目标")
 	}
@@ -123,15 +118,14 @@ func (h *ChangeServiceTaskHandler) createChange(ctx context.Context, variables m
 
 	h.logger.Infow("Change created via BPMN", "change_id", changeID, "title", title)
 
-	return &dto.ServiceTaskResult{
-		Success:    true,
+	return &CallbackEffect{Status: CallbackEffectApplied,
 		Message:    fmt.Sprintf("变更 %d 已创建", changeID),
 		OutputVars: map[string]interface{}{"change_id": changeID},
 	}, nil
 }
 
 // updateChange 更新变更
-func (h *ChangeServiceTaskHandler) updateChange(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *ChangeServiceTaskHandler) updateChange(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
 	changeID := GetIntFromVars(variables, "change_id")
 	if changeID <= 0 {
 		return nil, fmt.Errorf("无效的变更ID")
@@ -165,8 +159,7 @@ func (h *ChangeServiceTaskHandler) updateChange(ctx context.Context, variables m
 
 	h.logger.Infow("Change updated via BPMN", "change_id", changeID)
 
-	return &dto.ServiceTaskResult{
-		Success: true,
+	return &CallbackEffect{Status: CallbackEffectApplied,
 		Message: fmt.Sprintf("变更 %d 已更新", changeID),
 	}, nil
 }
@@ -176,7 +169,7 @@ func (h *ChangeServiceTaskHandler) updateChange(ctx context.Context, variables m
 // 不管审批结果是 approve 还是 reject 都会走到这里（节点自己的 action 是固定的，
 // 不代表审批结果）——真正的终态判定在 schedule_change/reject_change。
 // 这里不改 Change.Status，只做一次存在性确认，避免 change_id 无效时静默成功。
-func (h *ChangeServiceTaskHandler) approveChange(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *ChangeServiceTaskHandler) approveChange(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
 	changeID := GetIntFromVars(variables, "change_id")
 	if changeID <= 0 {
 		return nil, fmt.Errorf("无效的变更ID")
@@ -200,14 +193,13 @@ func (h *ChangeServiceTaskHandler) approveChange(ctx context.Context, variables 
 		}
 		return nil, fmt.Errorf("查询变更失败: %w", err)
 	}
-	return &dto.ServiceTaskResult{
-		Success: true,
+	return &CallbackEffect{Status: CallbackEffectApplied,
 		Message: fmt.Sprintf("变更 %d 审批节点已处理", changeID),
 	}, nil
 }
 
 // rejectChange 驳回变更
-func (h *ChangeServiceTaskHandler) rejectChange(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *ChangeServiceTaskHandler) rejectChange(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
 	changeID := GetIntFromVars(variables, "change_id")
 	if changeID <= 0 {
 		return nil, fmt.Errorf("无效的变更ID")
@@ -220,8 +212,7 @@ func (h *ChangeServiceTaskHandler) rejectChange(ctx context.Context, variables m
 	if err := h.transitionChangeStatus(ctx, tenantID, changeID, "rejected"); err != nil {
 		return nil, err
 	}
-	return &dto.ServiceTaskResult{
-		Success: true,
+	return &CallbackEffect{Status: CallbackEffectApplied,
 		Message: fmt.Sprintf("变更 %d 已驳回", changeID),
 	}, nil
 }
@@ -236,7 +227,7 @@ func (h *ChangeServiceTaskHandler) rejectChange(ctx context.Context, variables m
 //     isValidChangeStatusTransition("approved", "scheduled", type) 为真时才做第二跳；
 //     否则停在 approved，交给后续 Activity_Implement 直接把 approved 推进到
 //     in_progress（这也是 emergency 状态机唯一合法的下一跳）。
-func (h *ChangeServiceTaskHandler) scheduleChange(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *ChangeServiceTaskHandler) scheduleChange(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
 	changeID := GetIntFromVars(variables, "change_id")
 	if changeID <= 0 {
 		return nil, fmt.Errorf("无效的变更ID")
@@ -305,8 +296,7 @@ func (h *ChangeServiceTaskHandler) scheduleChange(ctx context.Context, variables
 
 	h.logger.Infow("Change scheduled via BPMN", "change_id", changeID)
 
-	return &dto.ServiceTaskResult{
-		Success: true,
+	return &CallbackEffect{Status: CallbackEffectApplied,
 		Message: fmt.Sprintf("变更 %d 已排期", changeID),
 	}, nil
 }
@@ -340,7 +330,7 @@ func (h *ChangeServiceTaskHandler) transitionChangeStatus(ctx context.Context, t
 }
 
 // implementChange 实施变更
-func (h *ChangeServiceTaskHandler) implementChange(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *ChangeServiceTaskHandler) implementChange(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
 	changeID := GetIntFromVars(variables, "change_id")
 
 	if changeID <= 0 {
@@ -364,8 +354,7 @@ func (h *ChangeServiceTaskHandler) implementChange(ctx context.Context, variable
 	}
 
 	if entity.Status == "in_progress" {
-		return &dto.ServiceTaskResult{
-			Success: true,
+		return &CallbackEffect{Status: CallbackEffectApplied,
 			Message: fmt.Sprintf("变更 %d 已在实施中", changeID),
 		}, nil
 	}
@@ -383,14 +372,13 @@ func (h *ChangeServiceTaskHandler) implementChange(ctx context.Context, variable
 
 	h.logger.Infow("Change implementation started via BPMN", "change_id", changeID, "title", entity.Title)
 
-	return &dto.ServiceTaskResult{
-		Success: true,
+	return &CallbackEffect{Status: CallbackEffectApplied,
 		Message: fmt.Sprintf("变更 %d 开始实施", changeID),
 	}, nil
 }
 
 // verifyChange 验证变更
-func (h *ChangeServiceTaskHandler) verifyChange(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *ChangeServiceTaskHandler) verifyChange(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
 	changeID := GetIntFromVars(variables, "change_id")
 	verificationResult, _ := variables["verification_result"].(string)
 
@@ -432,14 +420,13 @@ func (h *ChangeServiceTaskHandler) verifyChange(ctx context.Context, variables m
 
 	h.logger.Infow("Change verification via BPMN", "change_id", changeID, "result", verificationResult)
 
-	return &dto.ServiceTaskResult{
-		Success: true,
+	return &CallbackEffect{Status: CallbackEffectApplied,
 		Message: fmt.Sprintf("变更 %d 验证结果: %s", changeID, verificationResult),
 	}, nil
 }
 
 // closeChange 关闭变更
-func (h *ChangeServiceTaskHandler) closeChange(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *ChangeServiceTaskHandler) closeChange(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
 	changeID := GetIntFromVars(variables, "change_id")
 	feedback, _ := variables["feedback"].(string)
 
@@ -481,14 +468,13 @@ func (h *ChangeServiceTaskHandler) closeChange(ctx context.Context, variables ma
 
 	h.logger.Infow("Change closed via BPMN", "change_id", changeID, "feedback", feedback)
 
-	return &dto.ServiceTaskResult{
-		Success: true,
+	return &CallbackEffect{Status: CallbackEffectApplied,
 		Message: fmt.Sprintf("变更 %d 已关闭", changeID),
 	}, nil
 }
 
 // assessRisk 评估变更风险
-func (h *ChangeServiceTaskHandler) assessRisk(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *ChangeServiceTaskHandler) assessRisk(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
 	changeID := GetIntFromVars(variables, "change_id")
 
 	if changeID <= 0 {
@@ -530,8 +516,7 @@ func (h *ChangeServiceTaskHandler) assessRisk(ctx context.Context, variables map
 
 	h.logger.Infow("Change risk assessed via BPMN", "change_id", changeID, "risk_level", riskLevel, "impact_scope", impactScope)
 
-	return &dto.ServiceTaskResult{
-		Success: true,
+	return &CallbackEffect{Status: CallbackEffectApplied,
 		Message: fmt.Sprintf("变更 %d 风险评估完成: %s", changeID, riskLevel),
 		OutputVars: map[string]interface{}{
 			"risk_level":   riskLevel,
@@ -541,7 +526,7 @@ func (h *ChangeServiceTaskHandler) assessRisk(ctx context.Context, variables map
 }
 
 // notifyStakeholders 通知利益相关者
-func (h *ChangeServiceTaskHandler) notifyStakeholders(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *ChangeServiceTaskHandler) notifyStakeholders(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
 	changeID := GetIntFromVars(variables, "change_id")
 	notificationType, _ := variables["notification_type"].(string)
 
@@ -573,8 +558,7 @@ func (h *ChangeServiceTaskHandler) notifyStakeholders(ctx context.Context, varia
 		"notification_type", notificationType,
 	)
 
-	return &dto.ServiceTaskResult{
-		Success: true,
+	return &CallbackEffect{Status: CallbackEffectApplied,
 		Message: fmt.Sprintf("变更 %d 利益相关者已通知", changeID),
 	}, nil
 }

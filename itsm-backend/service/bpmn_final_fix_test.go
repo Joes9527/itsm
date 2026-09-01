@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"itsm-backend/common"
-	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processapprovaldecision"
 	"itsm-backend/ent/processauditlog"
@@ -235,10 +234,10 @@ type startProcessCommitProbeHandler struct {
 
 func (h *startProcessCommitProbeHandler) GetTaskType() string  { return "start_commit_probe" }
 func (h *startProcessCommitProbeHandler) GetHandlerID() string { return "start_commit_probe_handler" }
-func (h *startProcessCommitProbeHandler) Validate(context.Context, map[string]interface{}) error {
-	return nil
+func (h *startProcessCommitProbeHandler) CallbackContract(string) (bpmn.CallbackActionContract, bool) {
+	return bpmn.CallbackActionContract{}, true
 }
-func (h *startProcessCommitProbeHandler) Execute(ctx context.Context, _ *ent.ProcessTask, _ map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *startProcessCommitProbeHandler) Execute(ctx context.Context, _ *ent.ProcessTask, _ map[string]interface{}) (*bpmn.CallbackEffect, error) {
 	instance, err := h.client.ProcessInstance.Query().Where(
 		processinstance.TenantID(h.tenantID),
 		processinstance.BusinessKey(h.businessKey),
@@ -258,7 +257,7 @@ func (h *startProcessCommitProbeHandler) Execute(ctx context.Context, _ *ent.Pro
 	if !h.observedCommittedState {
 		return nil, errors.New("initial callback observed uncommitted start state")
 	}
-	return &dto.ServiceTaskResult{Success: true}, nil
+	return bpmn.AppliedEffect("", nil), nil
 }
 
 var _ bpmn.ServiceTaskHandlerInterface = (*startProcessCommitProbeHandler)(nil)
@@ -613,10 +612,10 @@ type postCommitProbeHandler struct {
 func (h *postCommitProbeHandler) GetTaskType() string  { return "post_commit_probe" }
 func (h *postCommitProbeHandler) GetHandlerID() string { return "post_commit_probe" }
 func (h *postCommitProbeHandler) IsAsync() bool        { return false }
-func (h *postCommitProbeHandler) Validate(context.Context, map[string]interface{}) error {
-	return nil
+func (h *postCommitProbeHandler) CallbackContract(string) (bpmn.CallbackActionContract, bool) {
+	return bpmn.CallbackActionContract{}, true
 }
-func (h *postCommitProbeHandler) Execute(ctx context.Context, callbackTask *ent.ProcessTask, _ map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *postCommitProbeHandler) Execute(ctx context.Context, callbackTask *ent.ProcessTask, _ map[string]interface{}) (*bpmn.CallbackEffect, error) {
 	if callbackTask == nil {
 		return nil, fmt.Errorf("callback task is required")
 	}
@@ -642,7 +641,7 @@ func (h *postCommitProbeHandler) Execute(ctx context.Context, callbackTask *ent.
 	if !h.observedCommittedState {
 		return nil, fmt.Errorf("service handler observed uncommitted task state")
 	}
-	return &dto.ServiceTaskResult{Success: true}, nil
+	return bpmn.AppliedEffect("", nil), nil
 }
 
 var _ bpmn.ServiceTaskHandlerInterface = (*postCommitProbeHandler)(nil)

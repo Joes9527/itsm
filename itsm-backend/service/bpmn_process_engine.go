@@ -25,6 +25,7 @@ import (
 	"itsm-backend/ent/ticketassignmentrule"
 	"itsm-backend/ent/user"
 	"itsm-backend/ent/workflowtask"
+	"itsm-backend/metrics"
 	"itsm-backend/service/approver"
 	"itsm-backend/service/bpmn"
 
@@ -521,14 +522,44 @@ func (e *CustomProcessEngine) completeAuthorizedTaskWithClient(ctx context.Conte
 
 	var handler bpmn.ServiceTaskHandlerInterface
 	callbackVariables := map[string]interface{}{}
+	callbackPlan := CallbackEnqueuePlan{}
+	synchronousCallback := false
 	if descriptor.HandlerID != bpmnNoUserTaskCallbackHandlerID {
 		handler = e.resolveCallbackDescriptorHandler(descriptor)
 		if handler == nil {
 			return nil, fmt.Errorf("回调处理器不可用: %s", task.TaskDefinitionKey)
 		}
-		callbackVariables, err = filterBPMNCallbackPayload(handler, descriptor.Action, variables)
-		if err != nil {
-			return nil, err
+		if !isAsyncHandler(handler) {
+			optionalDeclared := false
+			// KAF creates a synthetic ProcessTask for a service-task node. It is
+			// fenced by its own ledger and has no UserTask definition to inspect.
+			_, kafScoped := bpmn.KafActionScopeFromContext(ctx)
+			if descriptor.TaskType != bpmn.KafDelegateTaskType && !kafScoped {
+				userTask := e.findUserTask(process, task.TaskDefinitionKey)
+				if userTask == nil {
+					return nil, fmt.Errorf("用户任务不存在于流程定义: %s", task.TaskDefinitionKey)
+				}
+				var optionalErr error
+				optionalDeclared, optionalErr = userTask.CallbackOptionalDeclared()
+				if optionalErr != nil {
+					return nil, optionalErr
+				}
+			}
+			action := descriptor.Action
+			if handler.GetTaskType() == "cc_task" {
+				action = ""
+			}
+			callbackPlan, err = BuildCallbackEnqueuePlan(CallbackDescriptor{
+				HandlerID: descriptor.HandlerID, TaskType: descriptor.TaskType, Action: action, ConfigRef: descriptor.ConfigRef,
+			}, variables, optionalDeclared, e.callbackRegistry)
+			if err != nil {
+				return nil, err
+			}
+			callbackVariables = callbackPlan.Payload
+			// KAF's completion ledger already owns its pause/resume boundary. Its
+			// callback remains durable, but it must not turn a delegated service
+			// task into the ordinary UserTask effect gate.
+			synchronousCallback = !kafScoped && task.TaskType != bpmn.KafDelegateTaskType
 		}
 	}
 
@@ -575,8 +606,13 @@ func (e *CustomProcessEngine) completeAuthorizedTaskWithClient(ctx context.Conte
 	task.TaskVariables = mergedTaskVariables
 	task.AggregationVersion++
 	txEngine := e.forClient(client, executionKeys)
-	if err := txEngine.executeStep(ctx, instance, process, task.TaskDefinitionKey, merged); err != nil {
-		return nil, err
+	// A synchronous callback is an effect gate: the task completion is durable,
+	// but the token remains on this user task until the outbox observes an
+	// applied/idempotent (or definition-declared optional) effect.
+	if !synchronousCallback {
+		if err := txEngine.executeStep(ctx, instance, process, task.TaskDefinitionKey, merged); err != nil {
+			return nil, err
+		}
 	}
 	if err := txEngine.recordApprovalDecisionWithClient(ctx, client, instance, task, variables); err != nil {
 		return nil, err
@@ -596,7 +632,7 @@ func (e *CustomProcessEngine) completeAuthorizedTaskWithClient(ctx context.Conte
 		effect.asyncHandler = handler
 		return effect, nil
 	}
-	if err := txEngine.enqueueUserTaskCallback(ctx, task, descriptor, callbackVariables); err != nil {
+	if err := txEngine.enqueueUserTaskCallback(ctx, task, descriptor, callbackPlan); err != nil {
 		return nil, err
 	}
 	return effect, nil
@@ -654,18 +690,27 @@ func (e *CustomProcessEngine) completionAuditActor(ctx context.Context, client *
 	return 0, "", nil, nil
 }
 
-func (e *CustomProcessEngine) enqueueUserTaskCallback(ctx context.Context, task *ent.ProcessTask, descriptor bpmnCallbackDescriptor, variables map[string]interface{}) error {
-	row, err := e.callbackOutbox.enqueue(ctx, e.client, bpmnCallbackEnqueueRequest{
+func (e *CustomProcessEngine) enqueueUserTaskCallback(ctx context.Context, task *ent.ProcessTask, descriptor bpmnCallbackDescriptor, plan CallbackEnqueuePlan) error {
+	request := bpmnCallbackEnqueueRequest{
 		TenantID: task.TenantID, ProcessInstanceID: task.ProcessInstanceID,
 		ProcessTaskID: task.ID, TaskID: task.TaskID,
 		CallbackKind: "user_task_callback", HandlerID: descriptor.HandlerID,
 		TaskType: descriptor.TaskType, ElementID: task.TaskDefinitionKey,
-		Action: descriptor.Action, ConfigRef: descriptor.ConfigRef, Variables: variables,
-	})
+		Action: plan.Action, ConfigRef: plan.ConfigRef, Variables: plan.Payload, OptionalDeclared: plan.OptionalDeclared,
+	}
+	var row *ent.ProcessCallbackOutbox
+	var err error
+	if plan.BlockCode != "" {
+		row, err = e.callbackOutbox.enqueueBlocked(ctx, e.client, request, plan.BlockCode)
+	} else {
+		row, err = e.callbackOutbox.enqueue(ctx, e.client, request)
+	}
 	if err != nil {
 		return fmt.Errorf("enqueue user task callback failed")
 	}
-	e.collectCallbackExecutionKey(row.ExecutionKey)
+	if plan.BlockCode == "" {
+		e.collectCallbackExecutionKey(row.ExecutionKey)
+	}
 	return nil
 }
 
@@ -1050,9 +1095,13 @@ func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.P
 					return e.createDelegatedTask(ctx, instance, serviceTask, serviceTaskType)
 				}
 				callbackVars := mergeServiceTaskVariables(instance.Variables, serviceTask)
+				optionalDeclared, optionalErr := serviceTask.CallbackOptionalDeclared()
+				if optionalErr != nil {
+					return optionalErr
+				}
 				return e.enqueueServiceTaskCallback(
 					ctx, instance, handler, handler.GetTaskType(), elementID,
-					serviceTask.ServiceTaskAction(), serviceTask.CallbackConfigRef(), callbackVars,
+					serviceTask.ServiceTaskAction(), serviceTask.CallbackConfigRef(), callbackVars, optionalDeclared,
 				)
 			}
 			return fmt.Errorf("ServiceTask %s 声明的处理器未注册", elementID)
@@ -1093,9 +1142,13 @@ func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.P
 					return e.createDelegatedTask(ctx, instance, serviceTask, resolvedTaskType)
 				}
 				taskVariables := mergeServiceTaskVariables(instance.Variables, serviceTask)
+				optionalDeclared, optionalErr := serviceTask.CallbackOptionalDeclared()
+				if optionalErr != nil {
+					return optionalErr
+				}
 				return e.enqueueServiceTaskCallback(
 					ctx, instance, handler, handler.GetTaskType(), elementID,
-					serviceTask.ServiceTaskAction(), serviceTask.CallbackConfigRef(), taskVariables,
+					serviceTask.ServiceTaskAction(), serviceTask.CallbackConfigRef(), taskVariables, optionalDeclared,
 				)
 			}
 		}
@@ -1114,19 +1167,34 @@ func (e *CustomProcessEngine) enqueueServiceTaskCallback(
 	action string,
 	configRef string,
 	variables map[string]interface{},
+	optionalDeclared bool,
 ) error {
-	payload, err := filterBPMNCallbackPayload(handler, action, variables)
+	if handler != nil && handler.GetTaskType() == "cc_task" {
+		action = ""
+	}
+	plan, err := BuildCallbackEnqueuePlan(CallbackDescriptor{
+		HandlerID: handler.GetHandlerID(), TaskType: taskType, Action: action, ConfigRef: configRef,
+	}, variables, optionalDeclared, e.callbackRegistry)
 	if err != nil {
 		return err
 	}
-	row, err := e.callbackOutbox.enqueue(ctx, e.client, bpmnCallbackEnqueueRequest{
+	request := bpmnCallbackEnqueueRequest{
 		TenantID: instance.TenantID, ProcessInstanceID: instance.ID,
 		CallbackKind: "service_task", HandlerID: handler.GetHandlerID(),
-		TaskType: taskType, ElementID: elementID, Action: action, ConfigRef: configRef,
-		Variables: payload,
-	})
+		TaskType: taskType, ElementID: elementID, Action: plan.Action, ConfigRef: plan.ConfigRef,
+		Variables: plan.Payload, OptionalDeclared: plan.OptionalDeclared,
+	}
+	var row *ent.ProcessCallbackOutbox
+	if plan.BlockCode != "" {
+		row, err = e.callbackOutbox.enqueueBlocked(ctx, e.client, request, plan.BlockCode)
+	} else {
+		row, err = e.callbackOutbox.enqueue(ctx, e.client, request)
+	}
 	if err != nil {
 		return fmt.Errorf("enqueue service task callback failed")
+	}
+	if plan.BlockCode != "" {
+		return nil
 	}
 	if e.callbackExecutionKeys != nil {
 		*e.callbackExecutionKeys = append(*e.callbackExecutionKeys, row.ExecutionKey)
@@ -1293,10 +1361,14 @@ func (e *CustomProcessEngine) executeClaimedServiceTaskCallback(
 	row *ent.ProcessCallbackOutbox,
 	handler bpmn.ServiceTaskHandlerInterface,
 ) (bpmnCallbackExecutionResult, error) {
-	if _, err := handler.Execute(ctx, nil, row.Variables); err != nil {
+	effect, err := handler.Execute(ctx, nil, row.Variables)
+	if err != nil {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackHandlerError(err)
 	}
-
+	outcome := bpmn.ResolveCallbackOutcome(effect, row.OptionalDeclared)
+	if !outcome.Advance {
+		return bpmnCallbackExecutionResult{Effect: effect}, nil
+	}
 	tx, err := e.client.Tx(ctx)
 	if err != nil {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
@@ -1315,8 +1387,11 @@ func (e *CustomProcessEngine) executeClaimedServiceTaskCallback(
 		processinstance.ID(txRow.ProcessInstanceID),
 		processinstance.TenantID(txRow.TenantID),
 	).Only(ctx)
-	if err != nil || instance.CurrentActivityID != txRow.ElementID {
+	if err != nil {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+	}
+	if instance.CurrentActivityID != txRow.ElementID {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(errors.New("callback no longer owns current activity"))
 	}
 	definition, err := tx.Client().ProcessDefinition.Query().Where(
 		processdefinition.ID(instance.ProcessDefinitionID),
@@ -1338,10 +1413,16 @@ func (e *CustomProcessEngine) executeClaimedServiceTaskCallback(
 	if err != nil || !completed {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
 	}
+	if outcome.AuditAction == bpmn.CallbackAuditActionSkippedOptional {
+		if err := NewBPMNAuditService(tx.Client(), zap.NewNop().Sugar()).RecordCallbackSkippedOptional(ctx, txRow, outcome.BlockCode); err != nil {
+			return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
 	}
-	return bpmnCallbackExecutionResult{CompletionCommitted: true}, nil
+	metrics.RecordBPMNCallbackEffect(row.HandlerID, row.Action, string(outcome.MetricEffect))
+	return bpmnCallbackExecutionResult{CompletionCommitted: true, Effect: effect}, nil
 }
 
 func (e *CustomProcessEngine) executeClaimedUserTaskCallback(
@@ -1361,8 +1442,29 @@ func (e *CustomProcessEngine) executeClaimedUserTaskCallback(
 	if err != nil {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
 	}
-	if _, err := handler.Execute(ctx, task, row.Variables); err != nil {
+	effect, err := handler.Execute(ctx, task, row.Variables)
+	if err != nil {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackHandlerError(err)
+	}
+	outcome := bpmn.ResolveCallbackOutcome(effect, row.OptionalDeclared)
+	if !outcome.Advance {
+		return bpmnCallbackExecutionResult{Effect: effect}, nil
+	}
+	if task.TaskType == bpmn.KafDelegateTaskType {
+		tx, err := e.client.Tx(ctx)
+		if err != nil {
+			return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+		}
+		defer func() { _ = tx.Rollback() }()
+		completed, err := e.callbackOutbox.completeWithClient(ctx, tx.Client(), workerID, row)
+		if err != nil || !completed {
+			return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+		}
+		if err := tx.Commit(); err != nil {
+			return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+		}
+		metrics.RecordBPMNCallbackEffect(row.HandlerID, row.Action, string(outcome.MetricEffect))
+		return bpmnCallbackExecutionResult{CompletionCommitted: true, Effect: effect}, nil
 	}
 
 	tx, err := e.client.Tx(ctx)
@@ -1370,14 +1472,53 @@ func (e *CustomProcessEngine) executeClaimedUserTaskCallback(
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	completed, err := e.callbackOutbox.completeWithClient(ctx, tx.Client(), workerID, row)
+	txRow, err := tx.Client().ProcessCallbackOutbox.Query().Where(
+		processcallbackoutbox.ID(row.ID),
+		processcallbackoutbox.TenantID(row.TenantID),
+		processcallbackoutbox.StatusEQ(bpmnCallbackStatusProcessing),
+		processcallbackoutbox.LeaseOwner(workerID),
+	).Only(ctx)
+	if err != nil {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+	}
+	instance, err := tx.Client().ProcessInstance.Query().Where(
+		processinstance.ID(txRow.ProcessInstanceID), processinstance.TenantID(txRow.TenantID),
+	).Only(ctx)
+	if err != nil {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+	}
+	if instance.CurrentActivityID != txRow.ElementID {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(errors.New("callback no longer owns current activity"))
+	}
+	definition, err := tx.Client().ProcessDefinition.Query().Where(
+		processdefinition.ID(instance.ProcessDefinitionID), processdefinition.TenantID(instance.TenantID),
+	).Only(ctx)
+	if err != nil {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+	}
+	definitions, err := e.parser.ParseXML(definition.BpmnXML)
+	if err != nil || len(definitions.Processes) == 0 {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+	}
+	downstreamExecutionKeys := make([]string, 0)
+	txEngine := e.forClient(tx.Client(), &downstreamExecutionKeys)
+	if err := txEngine.executeStep(ctx, instance, definitions.Processes[0], txRow.ElementID, instance.Variables); err != nil {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+	}
+	completed, err := e.callbackOutbox.completeWithClient(ctx, tx.Client(), workerID, txRow)
 	if err != nil || !completed {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+	}
+	if outcome.AuditAction == bpmn.CallbackAuditActionSkippedOptional {
+		if err := NewBPMNAuditService(tx.Client(), zap.NewNop().Sugar()).RecordCallbackSkippedOptional(ctx, txRow, outcome.BlockCode); err != nil {
+			return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
 	}
-	return bpmnCallbackExecutionResult{CompletionCommitted: true}, nil
+	metrics.RecordBPMNCallbackEffect(row.HandlerID, row.Action, string(outcome.MetricEffect))
+	return bpmnCallbackExecutionResult{CompletionCommitted: true, Effect: effect}, nil
 }
 
 func (e *CustomProcessEngine) isKafDelegationServiceTask(serviceTask *BPMNServiceTask) bool {

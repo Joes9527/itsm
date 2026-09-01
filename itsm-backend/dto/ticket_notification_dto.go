@@ -36,6 +36,25 @@ type SendTicketNotificationRequest struct {
 	InAppOnly   bool   `json:"-"`                                // durable callback 不直接调用无幂等协议的外部渠道
 }
 
+const (
+	TicketNotificationEffectApplied    = "applied"
+	TicketNotificationEffectIdempotent = "idempotent"
+	TicketNotificationEffectBlocked    = "blocked"
+)
+
+// SendTicketNotificationResult is the durable evidence produced by the
+// authoritative ticket-notification service. BlockCode is internal-only so a
+// deterministic delivery block cannot expose implementation detail through the
+// public API.
+type SendTicketNotificationResult struct {
+	Effect          string `json:"effect"`
+	RecipientCount  int    `json:"recipientCount"`
+	AppliedCount    int    `json:"appliedCount"`
+	IdempotentCount int    `json:"idempotentCount"`
+	DeliveryCount   int    `json:"deliveryCount"`
+	BlockCode       string `json:"-"`
+}
+
 // UpdateNotificationPreferencesRequest 更新通知偏好请求
 type UpdateNotificationPreferencesRequest struct {
 	EmailEnabled   bool `json:"emailEnabled"`   // 是否启用邮件通知

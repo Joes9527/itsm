@@ -49,7 +49,7 @@ func BuildCallbackEnqueuePlan(
 	if registry == nil {
 		return CallbackEnqueuePlan{}, fmt.Errorf("callback registry is required")
 	}
-	if plan.HandlerID == "" || plan.TaskType == "" || plan.Action == "" {
+	if plan.HandlerID == "" || plan.TaskType == "" {
 		return blockedCallbackEnqueuePlan(plan), nil
 	}
 

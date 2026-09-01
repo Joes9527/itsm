@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/notification"
 	"itsm-backend/ent/user"
@@ -38,7 +37,7 @@ func (h *NotificationHandler) GetHandlerID() string {
 }
 
 // Execute 执行通知服务任务
-func (h *NotificationHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *NotificationHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*CallbackEffect, error) {
 	action, _ := variables["action"].(string)
 	switch action {
 	case "send_email":
@@ -48,36 +47,31 @@ func (h *NotificationHandler) Execute(ctx context.Context, task *ent.ProcessTask
 	case "send_in_app":
 		return h.sendInAppNotification(ctx, variables)
 	case "send_webhook":
-		return nil, fmt.Errorf("Webhook 通知必须使用带可信连接器配置的 webhook_task")
+		return BlockedEffect(CallbackBlockChannelUnavailable, "webhook callback channel is unavailable"), nil
 	default:
-		return nil, fmt.Errorf("不支持的通知动作")
+		return BlockedEffect(CallbackBlockHandlerContract, "unsupported notification callback action"), nil
 	}
 }
 
-// Validate 验证配置
-func (h *NotificationHandler) Validate(ctx context.Context, config map[string]interface{}) error {
-	return nil
-}
-
 // sendEmail 发送邮件通知
-func (h *NotificationHandler) sendEmail(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
-	return nil, fmt.Errorf("BPMN 邮件通知适配器未配置，不能声明发送成功")
+func (h *NotificationHandler) sendEmail(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
+	return BlockedEffect(CallbackBlockChannelUnavailable, "email callback channel is unavailable"), nil
 }
 
 // sendSMS 发送短信通知
-func (h *NotificationHandler) sendSMS(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
-	return nil, fmt.Errorf("BPMN 短信通知适配器未配置，不能声明发送成功")
+func (h *NotificationHandler) sendSMS(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
+	return BlockedEffect(CallbackBlockChannelUnavailable, "sms callback channel is unavailable"), nil
 }
 
 // sendInAppNotification 发送应用内通知
-func (h *NotificationHandler) sendInAppNotification(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *NotificationHandler) sendInAppNotification(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
 	userIDs := GetIntFromVars(variables, "user_ids")
 	title := GetStringFromVars(variables, "title")
 	content := GetStringFromVars(variables, "content")
 	notificationType := GetStringFromVars(variables, "notification_type")
 
 	if userIDs == 0 {
-		return nil, fmt.Errorf("用户ID不能为空")
+		return BlockedEffect(CallbackBlockRecipientEmpty, "notification recipient is empty"), nil
 	}
 	if h.client == nil {
 		return nil, fmt.Errorf("通知存储未配置")
@@ -103,7 +97,7 @@ func (h *NotificationHandler) sendInAppNotification(ctx context.Context, variabl
 			return nil, fmt.Errorf("检查通知幂等状态失败")
 		}
 		if exists {
-			return &dto.ServiceTaskResult{Success: true, Message: fmt.Sprintf("应用内通知已发送给用户 %d", userIDs)}, nil
+			return IdempotentEffect(fmt.Sprintf("应用内通知已发送给用户 %d", userIDs), nil), nil
 		}
 	}
 
@@ -122,8 +116,7 @@ func (h *NotificationHandler) sendInAppNotification(ctx context.Context, variabl
 
 	h.logger.Infow("In-app notification persisted via BPMN", "user_id", userIDs, "tenant_id", tenantID)
 
-	return &dto.ServiceTaskResult{
-		Success: true,
+	return &CallbackEffect{Status: CallbackEffectApplied,
 		Message: fmt.Sprintf("应用内通知已发送给用户 %d", userIDs),
 	}, nil
 }

@@ -77,7 +77,7 @@ func TestSendNotification_MultiChannelRouting(t *testing.T) {
 	})
 	svc.SetEmailService(emailSvc)
 
-	err = svc.SendNotification(ctx, ticket.ID, &dto.SendTicketNotificationRequest{
+	_, err = svc.SendNotification(ctx, ticket.ID, &dto.SendTicketNotificationRequest{
 		UserIDs:   []int{user.ID},
 		EventType: "comment_added",
 		Content:   "new comment",
@@ -111,7 +111,7 @@ func TestSendNotification_InAppDisabledNoRecord(t *testing.T) {
 
 	svc.SetNotificationPreferenceService(NewNotificationPreferenceService(client, zaptest.NewLogger(t).Sugar()))
 
-	_ = svc.SendNotification(ctx, ticket.ID, &dto.SendTicketNotificationRequest{
+	_, _ = svc.SendNotification(ctx, ticket.ID, &dto.SendTicketNotificationRequest{
 		UserIDs:   []int{user.ID},
 		EventType: "comment_added",
 		Content:   "x",
@@ -119,6 +119,21 @@ func TestSendNotification_InAppDisabledNoRecord(t *testing.T) {
 
 	cnt, _ := client.TicketNotification.Query().Count(ctx)
 	assert.Equal(t, 0, cnt, "偏好全禁用时不应创建站内记录")
+}
+
+func TestSendNotification_ZeroRecipientsReturnsBlockedEvidence(t *testing.T) {
+	client, svc, ctx := setupTicketNotificationTest(t)
+	defer client.Close()
+	tenant, _, ticket := createNotifTestData(t, client, ctx)
+
+	result, err := svc.SendNotification(ctx, ticket.ID, &dto.SendTicketNotificationRequest{
+		EventType: "ticket_updated",
+		Content:   "no recipients",
+	}, tenant.ID)
+	require.NoError(t, err)
+	require.Equal(t, dto.TicketNotificationEffectBlocked, result.Effect)
+	require.Equal(t, "recipient_empty", result.BlockCode)
+	require.Zero(t, client.TicketNotification.Query().CountX(ctx))
 }
 
 func TestSendNotification_DefaultPreferenceWhenNoRecord(t *testing.T) {
@@ -129,12 +144,19 @@ func TestSendNotification_DefaultPreferenceWhenNoRecord(t *testing.T) {
 
 	// 不创建偏好记录 → 走默认偏好（email+in_app）
 	svc.SetNotificationPreferenceService(NewNotificationPreferenceService(client, zaptest.NewLogger(t).Sugar()))
+	emailService := NewEmailService(EmailConfig{}, zaptest.NewLogger(t).Sugar())
+	emailService.SetGraphProvider(func(_ int) (GraphMailSender, string, bool) {
+		return &graphSenderSpy{}, "ai-support@example.com", true
+	})
+	svc.SetEmailService(emailService)
 
-	_ = svc.SendNotification(ctx, ticket.ID, &dto.SendTicketNotificationRequest{
+	result, err := svc.SendNotification(ctx, ticket.ID, &dto.SendTicketNotificationRequest{
 		UserIDs:   []int{user.ID},
 		EventType: "comment_added",
 		Content:   "x",
 	}, tenant.ID)
+	require.NoError(t, err)
+	require.Equal(t, dto.TicketNotificationEffectApplied, result.Effect)
 
 	cnt, err := client.TicketNotification.Query().Count(ctx)
 	require.NoError(t, err)

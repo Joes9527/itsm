@@ -170,63 +170,46 @@ func mergeBPMNTaskCompletionVariables(existing, incoming map[string]interface{})
 }
 
 func filterBPMNCallbackPayload(handler bpmn.ServiceTaskHandlerInterface, action string, variables map[string]interface{}) (map[string]interface{}, error) {
+	contract, err := callbackActionContractForHandler(handler, action)
+	if err != nil {
+		return nil, err
+	}
 	if normalizer, ok := handler.(bpmn.CallbackPayloadNormalizer); ok {
 		payload, err := normalizer.NormalizeCallbackPayload(action, variables)
 		if err != nil {
 			return nil, err
 		}
-		if err := validateBPMNCallbackNormalizerOutput(handler, action, payload); err != nil {
+		if err := validateBPMNCallbackNormalizerContractOutput(contract, payload); err != nil {
 			return nil, err
 		}
-		return filterBPMNCallbackPayloadFields(handler, action, payload)
+		return normalizeBPMNCallbackContractPayload(contract, payload)
 	}
-	return filterBPMNCallbackPayloadFields(handler, action, variables)
+	return normalizeBPMNCallbackContractPayload(contract, variables)
 }
 
 // filterPersistedBPMNCallbackPayload validates a durable payload without
 // re-reading the dynamic source values that were resolved during enqueue.
 func filterPersistedBPMNCallbackPayload(handler bpmn.ServiceTaskHandlerInterface, action string, variables map[string]interface{}) (map[string]interface{}, error) {
-	return filterBPMNCallbackPayloadFields(handler, action, variables)
+	contract, err := callbackActionContractForHandler(handler, action)
+	if err != nil {
+		return nil, err
+	}
+	return normalizeBPMNCallbackContractPayload(contract, variables)
 }
 
-// validateBPMNCallbackNormalizerOutput rejects schema drift instead of silently
-// dropping a field. A normalizer may derive values, but its durable output must
-// still be fully declared by the handler-owned static payload policy.
-func validateBPMNCallbackNormalizerOutput(handler bpmn.ServiceTaskHandlerInterface, action string, payload map[string]interface{}) error {
-	policy, ok := handler.(bpmn.CallbackPayloadPolicy)
+func callbackActionContractForHandler(handler bpmn.ServiceTaskHandlerInterface, action string) (bpmn.CallbackActionContract, error) {
+	provider, ok := handler.(bpmn.CallbackContractProvider)
 	if !ok {
-		if len(payload) == 0 {
-			return nil
-		}
-		return fmt.Errorf("回调规范化输出包含未声明字段")
+		return bpmn.CallbackActionContract{}, fmt.Errorf("callback handler has no synchronous contract")
 	}
-	allowed := make(map[string]struct{}, len(policy.CallbackPayloadFields(action)))
-	for _, key := range policy.CallbackPayloadFields(action) {
-		allowed[key] = struct{}{}
-	}
-	for key := range payload {
-		if _, ok := allowed[key]; !ok {
-			return fmt.Errorf("回调规范化输出包含未声明字段: %s", key)
-		}
-	}
-	return nil
-}
-
-func filterBPMNCallbackPayloadFields(handler bpmn.ServiceTaskHandlerInterface, action string, variables map[string]interface{}) (map[string]interface{}, error) {
-	policy, ok := handler.(bpmn.CallbackPayloadPolicy)
+	contract, ok := provider.CallbackContract(action)
 	if !ok {
-		return map[string]interface{}{}, nil
+		return bpmn.CallbackActionContract{}, fmt.Errorf("callback action is not declared")
 	}
-	allowed := policy.CallbackPayloadFields(action)
-	payload := make(map[string]interface{}, len(allowed))
-	for _, key := range allowed {
-		value, exists := variables[key]
-		if !exists {
-			continue
-		}
-		payload[key] = value
+	if err := validateBPMNCallbackActionContract(contract); err != nil {
+		return bpmn.CallbackActionContract{}, err
 	}
-	return cloneBPMNCallbackPayload(payload)
+	return contract, nil
 }
 
 func cloneBPMNCallbackPayload(payload map[string]interface{}) (map[string]interface{}, error) {
@@ -347,7 +330,7 @@ func validateBPMNCallbackContractPayloadFields(payload map[string]interface{}, a
 	}
 	for field := range payload {
 		if _, ok := allowed[field]; !ok {
-			return fmt.Errorf("回调负载包含未声明字段")
+			return fmt.Errorf("回调负载包含未声明字段: %s", field)
 		}
 	}
 	return nil

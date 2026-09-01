@@ -235,11 +235,11 @@ func (e *CustomProcessEngine) enqueueRecoveredKafCallback(ctx context.Context, l
 	if handler == nil {
 		return errors.New("KAF completion callback handler is unavailable")
 	}
-	payload, err := filterBPMNCallbackPayload(handler, descriptor.Action, task.TaskVariables)
-	if err != nil {
-		return err
-	}
 	if isAsyncHandler(handler) {
+		payload, err := filterBPMNCallbackPayload(handler, descriptor.Action, task.TaskVariables)
+		if err != nil {
+			return err
+		}
 		if err := assertKafCompletionFence(ctx, tx.Client(), kafCompletionFence{ledgerID: ledgerID, leaseOwner: leaseOwner}); err != nil {
 			return err
 		}
@@ -249,9 +249,19 @@ func (e *CustomProcessEngine) enqueueRecoveredKafCallback(ctx context.Context, l
 		payload[bpmnMetaDataAction] = descriptor.Action
 		return e.finishKafCompletionCallback(ctx, ledgerID, leaseOwner, receipt, &completedTaskEffect{task: task, variables: payload, asyncHandler: handler}, nil)
 	}
+	action := descriptor.Action
+	if handler.GetTaskType() == "cc_task" {
+		action = ""
+	}
+	plan, err := BuildCallbackEnqueuePlan(CallbackDescriptor{
+		HandlerID: descriptor.HandlerID, TaskType: descriptor.TaskType, Action: action, ConfigRef: descriptor.ConfigRef,
+	}, task.TaskVariables, false, e.callbackRegistry)
+	if err != nil {
+		return err
+	}
 	keys := make([]string, 0, 1)
 	txEngine := e.forClient(tx.Client(), &keys)
-	if err := txEngine.enqueueUserTaskCallback(ctx, task, descriptor, payload); err != nil {
+	if err := txEngine.enqueueUserTaskCallback(ctx, task, descriptor, plan); err != nil {
 		return err
 	}
 	if err := assertKafCompletionFence(ctx, tx.Client(), kafCompletionFence{ledgerID: ledgerID, leaseOwner: leaseOwner}); err != nil {

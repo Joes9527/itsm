@@ -62,9 +62,15 @@ func TestApprovalGatewayReadsApplicationVariableName(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.processKey, func(t *testing.T) {
+			businessType := ""
+			businessID := 0
+			if tc.processKey == "change_normal_flow" {
+				workItem, _ := createUserTaskCallbackChange(t, client, ctx, tenant.ID, reader.ID, "CHG-GATE-"+tc.processKey)
+				businessType, businessID = "change", workItem.ID
+			}
 			// Test case 1: approval_required=true should route to approval node
 			t.Run("approval_required=true", func(t *testing.T) {
-				instance, err := engine.StartProcess(ctx, tc.processKey, "test-business-key-approval-true-"+tc.processKey, "", 0, map[string]interface{}{
+				instance, err := engine.StartProcess(ctx, tc.processKey, "test-business-key-approval-true-"+tc.processKey, businessType, businessID, map[string]interface{}{
 					"approval_required": true,
 				})
 				require.NoError(t, err)
@@ -91,7 +97,7 @@ func TestApprovalGatewayReadsApplicationVariableName(t *testing.T) {
 
 			// Test case 2: approval_required=false should skip approval node and go to skip node
 			t.Run("approval_required=false", func(t *testing.T) {
-				instance, err := engine.StartProcess(ctx, tc.processKey, "test-business-key-approval-false-"+tc.processKey, "", 0, map[string]interface{}{
+				instance, err := engine.StartProcess(ctx, tc.processKey, "test-business-key-approval-false-"+tc.processKey, businessType, businessID, map[string]interface{}{
 					"approval_required": false,
 				})
 				require.NoError(t, err)

@@ -25,8 +25,8 @@ type ticketStatusServiceEntStub struct {
 
 type ticketNotificationStub struct{}
 
-func (*ticketNotificationStub) SendNotification(context.Context, int, *dto.SendTicketNotificationRequest, int) error {
-	return nil
+func (*ticketNotificationStub) SendNotification(context.Context, int, *dto.SendTicketNotificationRequest, int) (*dto.SendTicketNotificationResult, error) {
+	return &dto.SendTicketNotificationResult{Effect: dto.TicketNotificationEffectApplied, AppliedCount: 1, DeliveryCount: 1}, nil
 }
 
 func (s *ticketStatusServiceEntStub) UpdateTicketStatusForWorkflow(ctx context.Context, ticketID int, status string, tenantID int, operatorID int) error {
@@ -127,7 +127,7 @@ func TestTicketServiceTaskHandler_UpdateTicketStatus(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, result)
-				assert.True(t, result.Success)
+				assert.Contains(t, []CallbackEffectStatus{CallbackEffectApplied, CallbackEffectIdempotent}, result.Status)
 
 				// 验证工单状态已更新
 				updatedTicket, err := client.Ticket.Get(ctx, tt.ticketID)
@@ -237,7 +237,7 @@ func TestTicketServiceTaskHandler_EscalateTicket(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, result)
-				assert.True(t, result.Success)
+				assert.True(t, result.Status == CallbackEffectApplied)
 
 				// 验证工单优先级已更新
 				updatedTicket, err := client.Ticket.Get(ctx, tt.ticketID)
@@ -358,7 +358,7 @@ func TestTicketServiceTaskHandler_AssignTicket(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, result)
-				assert.True(t, result.Success)
+				assert.Contains(t, []CallbackEffectStatus{CallbackEffectApplied, CallbackEffectIdempotent}, result.Status)
 
 				// 验证工单已被分配
 				updatedTicket, err := client.Ticket.Get(ctx, tt.ticketID)
@@ -416,7 +416,7 @@ func TestTicketServiceTaskHandler_Execute(t *testing.T) {
 		name          string
 		variables     map[string]interface{}
 		expectedError bool
-		checkResult   func(*testing.T, *dto.ServiceTaskResult)
+		checkResult   func(*testing.T, *CallbackEffect)
 	}{
 		{
 			name: "执行 update_status 动作",
@@ -426,8 +426,8 @@ func TestTicketServiceTaskHandler_Execute(t *testing.T) {
 				"new_status":  "in_progress",
 			},
 			expectedError: false,
-			checkResult: func(t *testing.T, result *dto.ServiceTaskResult) {
-				assert.True(t, result.Success)
+			checkResult: func(t *testing.T, result *CallbackEffect) {
+				assert.True(t, result.Status == CallbackEffectApplied)
 			},
 		},
 		{
@@ -439,8 +439,8 @@ func TestTicketServiceTaskHandler_Execute(t *testing.T) {
 				"escalation_reason": "测试升级",
 			},
 			expectedError: false,
-			checkResult: func(t *testing.T, result *dto.ServiceTaskResult) {
-				assert.True(t, result.Success)
+			checkResult: func(t *testing.T, result *CallbackEffect) {
+				assert.True(t, result.Status == CallbackEffectApplied)
 			},
 		},
 		{
@@ -451,8 +451,8 @@ func TestTicketServiceTaskHandler_Execute(t *testing.T) {
 				"assignee_id": float64(testUser.ID),
 			},
 			expectedError: false,
-			checkResult: func(t *testing.T, result *dto.ServiceTaskResult) {
-				assert.True(t, result.Success)
+			checkResult: func(t *testing.T, result *CallbackEffect) {
+				assert.True(t, result.Status == CallbackEffectApplied)
 			},
 		},
 		{
@@ -520,25 +520,6 @@ func TestTicketServiceTaskHandler_GetHandlerID(t *testing.T) {
 
 	handlerID := handler.GetHandlerID()
 	assert.Equal(t, "ticket_service_handler", handlerID)
-}
-
-func TestTicketServiceTaskHandler_Validate(t *testing.T) {
-	client := enttest.Open(t, "sqlite3", "file:ent?mode=memory&cache=shared&_fk=1")
-	defer client.Close()
-
-	logger := zaptest.NewLogger(t).Sugar()
-	handler := NewTicketServiceTaskHandler(client, logger)
-
-	ctx := context.Background()
-
-	// 测试配置验证
-	config := map[string]interface{}{
-		"action":     "update_status",
-		"new_status": "in_progress",
-	}
-
-	err := handler.Validate(ctx, config)
-	assert.NoError(t, err)
 }
 
 func TestTicketServiceTaskHandler_UpdateStatus_RequiresInjectedService(t *testing.T) {

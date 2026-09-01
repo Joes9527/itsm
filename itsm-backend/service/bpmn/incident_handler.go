@@ -63,7 +63,7 @@ func (h *IncidentServiceTaskHandler) GetHandlerID() string {
 }
 
 // Execute 执行事件服务任务
-func (h *IncidentServiceTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *IncidentServiceTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*CallbackEffect, error) {
 	action, _ := variables["action"].(string)
 	switch action {
 	case "create_incident":
@@ -87,13 +87,8 @@ func (h *IncidentServiceTaskHandler) Execute(ctx context.Context, task *ent.Proc
 	}
 }
 
-// Validate 验证配置
-func (h *IncidentServiceTaskHandler) Validate(ctx context.Context, config map[string]interface{}) error {
-	return nil
-}
-
 // createIncident 创建事件
-func (h *IncidentServiceTaskHandler) createIncident(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *IncidentServiceTaskHandler) createIncident(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
 	if _, durable := BPMNCallbackExecutionKey(ctx); durable {
 		return nil, fmt.Errorf("持久化回调必须使用流程实例中的既有事件目标")
 	}
@@ -128,8 +123,7 @@ func (h *IncidentServiceTaskHandler) createIncident(ctx context.Context, variabl
 
 	h.logger.Infow("Incident created via BPMN", "incident_id", resp.ID, "title", title)
 
-	return &dto.ServiceTaskResult{
-		Success:    true,
+	return &CallbackEffect{Status: CallbackEffectApplied,
 		Message:    fmt.Sprintf("事件 %d 已创建", resp.ID),
 		OutputVars: map[string]interface{}{"incident_id": resp.ID, "incident_number": resp.IncidentNumber},
 	}, nil
@@ -148,7 +142,7 @@ func (h *IncidentServiceTaskHandler) createIncident(ctx context.Context, variabl
 //
 // incident_id 无效则继续硬失败：那说明没人告诉这个节点该操作哪条事件，是真实的接线错误，
 // 跟"暂时没有处理人"是两回事，必须报出来。
-func (h *IncidentServiceTaskHandler) assignIncident(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *IncidentServiceTaskHandler) assignIncident(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
 	incidentID := GetIntFromVars(variables, "incident_id")
 	assigneeID := GetIntFromVars(variables, "assignee_id")
 
@@ -159,8 +153,7 @@ func (h *IncidentServiceTaskHandler) assignIncident(ctx context.Context, variabl
 	if assigneeID <= 0 {
 		h.logger.Warnw("BPMN 自动分配未取到可用处理人，按空态跳过（不改事件状态）",
 			"incident_id", incidentID)
-		return &dto.ServiceTaskResult{
-			Success: true,
+		return &CallbackEffect{Status: CallbackEffectApplied,
 			Message: fmt.Sprintf("事件 %d 当前无可用处理人，跳过自动分配", incidentID),
 		}, nil
 	}
@@ -184,14 +177,13 @@ func (h *IncidentServiceTaskHandler) assignIncident(ctx context.Context, variabl
 
 	h.logger.Infow("Incident assigned via BPMN", "incident_id", incidentID, "assignee_id", assigneeID)
 
-	return &dto.ServiceTaskResult{
-		Success: true,
+	return &CallbackEffect{Status: CallbackEffectApplied,
 		Message: fmt.Sprintf("事件 %d 已分配给用户 %d", incidentID, assigneeID),
 	}, nil
 }
 
 // escalateIncident 升级事件
-func (h *IncidentServiceTaskHandler) escalateIncident(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *IncidentServiceTaskHandler) escalateIncident(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
 	incidentID := GetIntFromVars(variables, "incident_id")
 	escalationLevel := GetIntFromVars(variables, "escalation_level")
 	reason, _ := variables["escalation_reason"].(string)
@@ -216,14 +208,13 @@ func (h *IncidentServiceTaskHandler) escalateIncident(ctx context.Context, varia
 
 	h.logger.Infow("Incident escalated via BPMN", "incident_id", incidentID, "escalation_level", resp.EscalationLevel, "reason", reason)
 
-	return &dto.ServiceTaskResult{
-		Success: true,
+	return &CallbackEffect{Status: CallbackEffectApplied,
 		Message: fmt.Sprintf("事件 %d 已升级到第 %d 级", incidentID, resp.EscalationLevel),
 	}, nil
 }
 
 // resolveIncident 解决事件
-func (h *IncidentServiceTaskHandler) resolveIncident(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *IncidentServiceTaskHandler) resolveIncident(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
 	incidentID := GetIntFromVars(variables, "incident_id")
 	resolution, _ := variables["resolution"].(string)
 
@@ -245,14 +236,13 @@ func (h *IncidentServiceTaskHandler) resolveIncident(ctx context.Context, variab
 
 	h.logger.Infow("Incident resolved via BPMN", "incident_id", incidentID, "resolution", resolution)
 
-	return &dto.ServiceTaskResult{
-		Success: true,
+	return &CallbackEffect{Status: CallbackEffectApplied,
 		Message: fmt.Sprintf("事件 %d 已解决: %s", incidentID, resolution),
 	}, nil
 }
 
 // closeIncident 关闭事件
-func (h *IncidentServiceTaskHandler) closeIncident(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *IncidentServiceTaskHandler) closeIncident(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
 	incidentID := GetIntFromVars(variables, "incident_id")
 	feedback, _ := variables["feedback"].(string)
 
@@ -274,14 +264,13 @@ func (h *IncidentServiceTaskHandler) closeIncident(ctx context.Context, variable
 
 	h.logger.Infow("Incident closed via BPMN", "incident_id", incidentID, "feedback", feedback)
 
-	return &dto.ServiceTaskResult{
-		Success: true,
+	return &CallbackEffect{Status: CallbackEffectApplied,
 		Message: fmt.Sprintf("事件 %d 已关闭", incidentID),
 	}, nil
 }
 
 // updateIncident 更新事件
-func (h *IncidentServiceTaskHandler) updateIncident(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *IncidentServiceTaskHandler) updateIncident(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
 	incidentID := GetIntFromVars(variables, "incident_id")
 
 	if incidentID <= 0 {
@@ -308,14 +297,13 @@ func (h *IncidentServiceTaskHandler) updateIncident(ctx context.Context, variabl
 
 	h.logger.Infow("Incident updated via BPMN", "incident_id", incidentID)
 
-	return &dto.ServiceTaskResult{
-		Success: true,
+	return &CallbackEffect{Status: CallbackEffectApplied,
 		Message: fmt.Sprintf("事件 %d 已更新", incidentID),
 	}, nil
 }
 
 // acknowledgeIncident 确认事件
-func (h *IncidentServiceTaskHandler) acknowledgeIncident(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *IncidentServiceTaskHandler) acknowledgeIncident(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
 	incidentID := GetIntFromVars(variables, "incident_id")
 
 	if incidentID <= 0 {
@@ -336,14 +324,13 @@ func (h *IncidentServiceTaskHandler) acknowledgeIncident(ctx context.Context, va
 
 	h.logger.Infow("Incident acknowledged via BPMN", "incident_id", incidentID)
 
-	return &dto.ServiceTaskResult{
-		Success: true,
+	return &CallbackEffect{Status: CallbackEffectApplied,
 		Message: fmt.Sprintf("事件 %d 已确认", incidentID),
 	}, nil
 }
 
 // categorizeIncident 分类事件
-func (h *IncidentServiceTaskHandler) categorizeIncident(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *IncidentServiceTaskHandler) categorizeIncident(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
 	incidentID := GetIntFromVars(variables, "incident_id")
 	category, _ := variables["category"].(string)
 	subcategory, _ := variables["subcategory"].(string)
@@ -366,8 +353,7 @@ func (h *IncidentServiceTaskHandler) categorizeIncident(ctx context.Context, var
 
 	h.logger.Infow("Incident categorized via BPMN", "incident_id", incidentID, "category", category, "subcategory", subcategory)
 
-	return &dto.ServiceTaskResult{
-		Success: true,
+	return &CallbackEffect{Status: CallbackEffectApplied,
 		Message: fmt.Sprintf("事件 %d 已分类: %s/%s", incidentID, category, subcategory),
 	}, nil
 }

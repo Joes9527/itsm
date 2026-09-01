@@ -258,7 +258,7 @@ func TestIncidentServiceTaskHandler_AssignIncident_NoAssignee_IsNoOp(t *testing.
 			result, err := handler.Execute(ctx, nil, tc.variables)
 			require.NoError(t, err, "无处理人是正常空态，不应该返回错误")
 			require.NotNil(t, result)
-			assert.True(t, result.Success)
+			assert.True(t, result.Status == CallbackEffectApplied)
 
 			after, err := client.Incident.Get(ctx, inc.ID)
 			require.NoError(t, err)
@@ -280,7 +280,7 @@ func TestIncidentServiceTaskHandler_AssignIncident_ValidAssignee(t *testing.T) {
 		"assignee_id": assigneeID,
 	})
 	require.NoError(t, err)
-	assert.True(t, result.Success)
+	assert.True(t, result.Status == CallbackEffectApplied)
 
 	after, err := client.Incident.Get(ctx, inc.ID)
 	require.NoError(t, err)
@@ -411,7 +411,7 @@ func TestIncidentServiceTaskHandler_TenantScopedActions(t *testing.T) {
 				}
 				result, err := handler.Execute(ctx, nil, vars)
 				require.NoError(t, err)
-				assert.True(t, result.Success)
+				assert.True(t, result.Status == CallbackEffectApplied)
 				tc.assertValid(t, client, inc.ID)
 			})
 

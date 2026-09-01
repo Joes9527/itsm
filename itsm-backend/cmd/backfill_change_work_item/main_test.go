@@ -217,18 +217,13 @@ func TestBackfillOne_MigratesRunningProcessInstanceBusinessKey_EndToEnd(t *testi
 	})
 	require.NoError(t, err)
 
-	// 推进到 CAB 审批节点（完成变更评估）。
-	assessmentTasks, _, err := engine.TaskService().ListUserTasks(tenantCtx, &service.ListUserTasksRequest{PageSize: 10})
-	require.NoError(t, err)
-	require.NoError(t, engine.CompleteTask(tenantCtx, assessmentTasks[0].TaskID, map[string]interface{}{}))
-
 	// 前置条件确认：运行中实例确实是旧格式 businessKey。
 	oldBusinessKey := fmt.Sprintf("change:%d", legacy.ID)
 	before, err := client.ProcessInstance.Query().
 		Where(processinstance.BusinessKey(oldBusinessKey), processinstance.TenantID(tenant.ID), processinstance.Status("running")).
 		Only(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, "Activity_CABApproval", before.CurrentActivityID)
+	assert.Equal(t, "Activity_Assessment", before.CurrentActivityID)
 
 	// 3. 跑本工具的核心回填逻辑。
 	result, err := backfillOne(ctx, client, legacy)
@@ -251,6 +246,16 @@ func TestBackfillOne_MigratesRunningProcessInstanceBusinessKey_EndToEnd(t *testi
 		Exist(ctx)
 	require.NoError(t, err)
 	assert.False(t, stillOld, "旧格式的 businessKey 不应该再查得到任何实例")
+
+	// The effect gate resolves the professional Change target from the
+	// authoritative WorkItem identity. Complete the pre-existing assessment
+	// only after the migration has made that identity canonical.
+	assessmentTasks, _, err := engine.TaskService().ListUserTasks(tenantCtx, &service.ListUserTasksRequest{PageSize: 10})
+	require.NoError(t, err)
+	require.NoError(t, engine.CompleteTask(tenantCtx, assessmentTasks[0].TaskID, map[string]interface{}{}))
+	migratedInstance, err = client.ProcessInstance.Get(ctx, migratedInstance.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "Activity_CABApproval", migratedInstance.CurrentActivityID)
 
 	// 5. 核心正确性证明：用真实的 handlers/change.Service.TransitionStatus 完成 CAB 审批，
 	//    必须能通过新 businessKey 找到并推进这条被迁移过的实例。

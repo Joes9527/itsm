@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"itsm-backend/common"
-	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/enttest"
@@ -1144,12 +1143,9 @@ type fakeAsyncServiceTaskHandler struct {
 func (h *fakeAsyncServiceTaskHandler) GetTaskType() string  { return h.taskType }
 func (h *fakeAsyncServiceTaskHandler) GetHandlerID() string { return h.handlerID }
 func (h *fakeAsyncServiceTaskHandler) IsAsync() bool        { return true }
-func (h *fakeAsyncServiceTaskHandler) Validate(ctx context.Context, config map[string]interface{}) error {
-	return nil
-}
-func (h *fakeAsyncServiceTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *fakeAsyncServiceTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*bpmn.CallbackEffect, error) {
 	h.executed++
-	return &dto.ServiceTaskResult{Success: true}, nil
+	return bpmn.AppliedEffect("", nil), nil
 }
 
 var _ bpmn.ServiceTaskHandlerInterface = (*fakeAsyncServiceTaskHandler)(nil)
@@ -1164,10 +1160,10 @@ type failingUserTaskCallbackHandler struct {
 
 func (h *failingUserTaskCallbackHandler) GetTaskType() string  { return h.taskType }
 func (h *failingUserTaskCallbackHandler) GetHandlerID() string { return h.handlerID }
-func (h *failingUserTaskCallbackHandler) Validate(context.Context, map[string]interface{}) error {
-	return nil
+func (h *failingUserTaskCallbackHandler) CallbackContract(string) (bpmn.CallbackActionContract, bool) {
+	return bpmn.CallbackActionContract{}, true
 }
-func (h *failingUserTaskCallbackHandler) Execute(ctx context.Context, _ *ent.ProcessTask, _ map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *failingUserTaskCallbackHandler) Execute(ctx context.Context, _ *ent.ProcessTask, _ map[string]interface{}) (*bpmn.CallbackEffect, error) {
 	h.scope, h.scopeOK = bpmn.KafActionScopeFromContext(ctx)
 	return nil, errors.New("callback rejected Bearer secret-token")
 }

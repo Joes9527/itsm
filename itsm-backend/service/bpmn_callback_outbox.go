@@ -37,6 +37,7 @@ type bpmnCallbackEnqueueRequest struct {
 	Action            string
 	ConfigRef         string
 	Variables         map[string]interface{}
+	OptionalDeclared  bool
 }
 
 type bpmnCallbackExecutor interface {
@@ -102,6 +103,7 @@ func (o *bpmnCallbackOutbox) enqueue(ctx context.Context, client *ent.Client, re
 		SetElementID(request.ElementID).
 		SetAction(request.Action).
 		SetConfigRef(request.ConfigRef).
+		SetOptionalDeclared(request.OptionalDeclared).
 		SetStatus(bpmnCallbackStatusPending).
 		SetNextAttemptAt(o.clock())
 	if request.ProcessTaskID > 0 {
@@ -111,6 +113,37 @@ func (o *bpmnCallbackOutbox) enqueue(ctx context.Context, client *ent.Client, re
 		create.SetVariables(copyBPMNCallbackVariables(request.Variables))
 	}
 	return create.Save(ctx)
+}
+
+// enqueueBlocked records a definition-time contract failure as a terminal
+// outbox row.  It deliberately uses the same durable/audited representation
+// as a worker-discovered blocked effect: a malformed definition must never be
+// retried as if it were transient infrastructure failure.
+func (o *bpmnCallbackOutbox) enqueueBlocked(ctx context.Context, client *ent.Client, request bpmnCallbackEnqueueRequest, code bpmn.CallbackBlockCode) (*ent.ProcessCallbackOutbox, error) {
+	if !bpmn.IsAllowedCallbackBlockCode(code) {
+		return nil, fmt.Errorf("bpmn callback block code is invalid")
+	}
+	row, err := o.enqueue(ctx, client, request)
+	if err != nil {
+		return nil, err
+	}
+	updated, err := client.ProcessCallbackOutbox.Update().
+		Where(processcallbackoutbox.ID(row.ID), processcallbackoutbox.TenantID(row.TenantID), processcallbackoutbox.StatusEQ(bpmnCallbackStatusPending)).
+		SetStatus(bpmnCallbackStatusBlocked).
+		SetCompletedAt(o.clock()).
+		SetLastErrorClass(string(code)).
+		Save(ctx)
+	if err != nil || updated != 1 {
+		return nil, fmt.Errorf("bpmn callback blocked enqueue failed")
+	}
+	row.Status = bpmnCallbackStatusBlocked
+	row.CompletedAt = o.clock()
+	row.LastErrorClass = string(code)
+	if err := NewBPMNAuditService(client, zap.NewNop().Sugar()).RecordCallbackBlocked(ctx, row, code); err != nil {
+		return nil, fmt.Errorf("bpmn callback blocked audit persistence failed")
+	}
+	metrics.RecordBPMNCallbackEffect(row.HandlerID, row.Action, string(bpmn.CallbackEffectBlocked))
+	return row, nil
 }
 
 func (o *bpmnCallbackOutbox) processPending(ctx context.Context, workerID string, limit int) (int, error) {

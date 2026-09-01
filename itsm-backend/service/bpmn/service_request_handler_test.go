@@ -53,7 +53,7 @@ func TestServiceRequestHandler_AssignRequest_SetsProcessor(t *testing.T) {
 		"assignee_id": float64(42),
 	})
 	require.NoError(t, err)
-	assert.True(t, result.Success)
+	assert.True(t, result.Status == CallbackEffectApplied)
 
 	updated, err := client.ServiceRequest.Get(ctx, sr.ID)
 	require.NoError(t, err)
@@ -70,7 +70,7 @@ func TestServiceRequestHandler_CompleteRequest_UpdatesRequestAndLinkedTicket(t *
 		"completion_note": "已开通",
 	})
 	require.NoError(t, err)
-	assert.True(t, result.Success)
+	assert.True(t, result.Status == CallbackEffectApplied)
 
 	updatedSR, err := client.ServiceRequest.Get(ctx, sr.ID)
 	require.NoError(t, err)
@@ -148,16 +148,17 @@ func TestServiceRequestHandler_RetryPreservesFirstEffectTimestamps(t *testing.T)
 	assert.Equal(t, firstTicket.ResolvedAt, afterTicket.ResolvedAt)
 }
 
-func TestServiceRequestHandler_CreateRequest_ReturnsExplicitUnsupportedError(t *testing.T) {
+func TestServiceRequestHandler_CreateRequestBlocksBeforeEffect(t *testing.T) {
 	_, handler, tenantID, _, _ := setupServiceRequestHandlerFixture(t)
 	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
 
-	_, err := handler.Execute(ctx, nil, map[string]interface{}{
+	effect, err := handler.Execute(ctx, nil, map[string]interface{}{
 		"action": "create_request",
 		"title":  "新请求",
 	})
-	require.Error(t, err, "服务请求在流程启动前就已经存在（先创建 ServiceRequest 才会触发 BPMN），"+
-		"从流程内部再\"创建\"一个于架构不符——这里应该是明确报错而不是假装成功")
+	require.NoError(t, err)
+	require.Equal(t, CallbackEffectBlocked, effect.Status)
+	require.Equal(t, CallbackBlockHandlerContract, effect.BlockCode)
 }
 
 func TestServiceRequestHandler_InvalidRequestID_ReturnsError(t *testing.T) {
@@ -183,7 +184,7 @@ func TestServiceRequestHandler_UpdateRequest_WritesFormFields(t *testing.T) {
 		"compliance_ack":      true,
 	})
 	require.NoError(t, err)
-	assert.True(t, result.Success)
+	assert.True(t, result.Status == CallbackEffectApplied)
 
 	updated, err := client.ServiceRequest.Get(ctx, sr.ID)
 	require.NoError(t, err)
@@ -245,7 +246,7 @@ func TestServiceRequestHandler_CompleteRequest_Idempotent(t *testing.T) {
 		"request_id": float64(sr.ID),
 	})
 	require.NoError(t, err)
-	assert.True(t, result.Success)
+	assert.True(t, result.Status == CallbackEffectApplied)
 
 	after, err := client.Ticket.Get(ctx, tkt.ID)
 	require.NoError(t, err)

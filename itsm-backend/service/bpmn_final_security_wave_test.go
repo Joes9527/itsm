@@ -349,8 +349,8 @@ type adversarialCallbackPayloadNormalizer struct {
 	allowedValue []interface{}
 }
 
-func (h *adversarialCallbackPayloadNormalizer) CallbackPayloadFields(string) []string {
-	return []string{"declared"}
+func (h *adversarialCallbackPayloadNormalizer) CallbackContract(string) (bpmn.CallbackActionContract, bool) {
+	return bpmn.CallbackActionContract{PayloadFields: []string{"declared"}}, true
 }
 
 func (h *adversarialCallbackPayloadNormalizer) NormalizeCallbackPayload(string, map[string]interface{}) (map[string]interface{}, error) {
@@ -376,7 +376,7 @@ func TestCallbackPayloadNormalizerOutputUsesStaticAllowlist(t *testing.T) {
 	allowedValue[0] = "mutated"
 }
 
-func TestCallbackPayloadNormalizerUndeclaredFieldRollsBackTaskCompletion(t *testing.T) {
+func TestCallbackPayloadNormalizerUndeclaredFieldCreatesDurableBlockedGate(t *testing.T) {
 	f := newBPMNAuthorizationFixture(t)
 	task := f.seedNonParticipantApprovalTask(t, "normalizer-schema-drift")
 	task = f.client.ProcessTask.UpdateOne(task).
@@ -389,23 +389,20 @@ func TestCallbackPayloadNormalizerUndeclaredFieldRollsBackTaskCompletion(t *test
 	f.engine.CallbackRegistry().RegisterHandler(handler)
 	configureLegacyUserCallbackDefinition(t, f, task, handler.GetTaskType(), "update_status")
 
-	beforeTask := f.client.ProcessTask.GetX(f.userCtx, task.ID)
-	beforeInstance := f.client.ProcessInstance.GetX(f.userCtx, task.ProcessInstanceID)
-	beforeAuditCount := f.client.ProcessAuditLog.Query().CountX(f.userCtx)
 	err := f.engine.CompleteTask(f.typedTaskScopeOnlyCtx(f.actor, false), task.TaskID, map[string]interface{}{})
-	require.ErrorContains(t, err, "undeclared")
+	require.NoError(t, err)
 
 	afterTask := f.client.ProcessTask.GetX(f.userCtx, task.ID)
 	afterInstance := f.client.ProcessInstance.GetX(f.userCtx, task.ProcessInstanceID)
-	assert.Equal(t, beforeTask.Status, afterTask.Status)
-	assert.Equal(t, beforeTask.TaskVariables, afterTask.TaskVariables)
-	assert.Equal(t, beforeInstance.Version, afterInstance.Version)
-	assert.Equal(t, beforeInstance.Variables, afterInstance.Variables)
-	assert.Equal(t, beforeAuditCount, f.client.ProcessAuditLog.Query().CountX(f.userCtx))
-	assert.Zero(t, f.client.ProcessCallbackOutbox.Query().Where(
+	assert.Equal(t, common.ProcessTaskStatusCompleted, afterTask.Status)
+	assert.Equal(t, task.TaskDefinitionKey, afterInstance.CurrentActivityID)
+	blocked := f.client.ProcessCallbackOutbox.Query().Where(
 		processcallbackoutbox.TenantID(f.tenant.ID),
 		processcallbackoutbox.ProcessTaskID(task.ID),
-	).CountX(f.userCtx))
+	).OnlyX(f.userCtx)
+	assert.Equal(t, bpmnCallbackStatusBlocked, blocked.Status)
+	assert.Equal(t, string(bpmn.CallbackBlockHandlerContract), blocked.LastErrorClass)
+	assert.Empty(t, blocked.Variables)
 }
 
 type ccCompletionMutationSnapshot struct {
@@ -458,7 +455,7 @@ func snapshotCCCompletionMutationState(
 	}
 }
 
-func TestCompleteTaskRejectsInvalidCCChannelBeforeMutation(t *testing.T) {
+func TestCompleteTaskBlocksInvalidCCChannelDurably(t *testing.T) {
 	for _, tt := range []struct {
 		name     string
 		channels interface{}
@@ -469,9 +466,7 @@ func TestCompleteTaskRejectsInvalidCCChannelBeforeMutation(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			f := newBPMNAuthorizationFixture(t)
-			task, instance, _ := seedDurableCCUserCallbackTask(t, f, "invalid-channels-"+strconv.Itoa(len(tt.name)))
-			before := snapshotCCCompletionMutationState(t, f, task.ID, instance.ID)
-
+			task, _, _ := seedDurableCCUserCallbackTask(t, f, "invalid-channels-"+strconv.Itoa(len(tt.name)))
 			err := f.engine.CompleteTask(f.typedTaskScopeOnlyCtx(f.actor, false), task.TaskID, map[string]interface{}{
 				"ccType":         "user",
 				"ccUserIds":      strconv.Itoa(f.outsider.ID),
@@ -479,9 +474,14 @@ func TestCompleteTaskRejectsInvalidCCChannelBeforeMutation(t *testing.T) {
 				"notifyChannels": tt.channels,
 			})
 
-			require.ErrorContains(t, err, "通知渠道")
-			after := snapshotCCCompletionMutationState(t, f, task.ID, instance.ID)
-			assert.Equal(t, before, after)
+			require.NoError(t, err)
+			blocked := f.client.ProcessCallbackOutbox.Query().Where(
+				processcallbackoutbox.TenantID(f.tenant.ID),
+				processcallbackoutbox.ProcessTaskID(task.ID),
+			).OnlyX(f.userCtx)
+			assert.Equal(t, bpmnCallbackStatusBlocked, blocked.Status)
+			assert.Equal(t, string(bpmn.CallbackBlockHandlerContract), blocked.LastErrorClass)
+			assert.Empty(t, blocked.Variables)
 		})
 	}
 }

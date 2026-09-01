@@ -16,7 +16,7 @@ import (
 // TicketNotificationServiceInterface 通知服务接口
 // 用于避免循环依赖
 type TicketNotificationServiceInterface interface {
-	SendNotification(ctx context.Context, ticketID int, req *dto.SendTicketNotificationRequest, tenantID int) error
+	SendNotification(ctx context.Context, ticketID int, req *dto.SendTicketNotificationRequest, tenantID int) (*dto.SendTicketNotificationResult, error)
 }
 
 // TicketStatusServiceInterface 工单状态更新服务接口（避免循环依赖，见
@@ -48,18 +48,38 @@ func (h *TicketServiceTaskHandler) SetNotificationService(svc TicketNotification
 	h.notificationService = svc
 }
 
-func (h *TicketServiceTaskHandler) sendNotification(ctx context.Context, ticketID int, req *dto.SendTicketNotificationRequest, tenantID int) error {
+func (h *TicketServiceTaskHandler) sendNotification(ctx context.Context, ticketID int, req *dto.SendTicketNotificationRequest, tenantID int) (*CallbackEffect, error) {
 	if h.notificationService == nil {
-		return fmt.Errorf("ticket notification service 未注入")
+		return nil, fmt.Errorf("ticket notification service 未注入")
 	}
 	if req == nil {
-		return fmt.Errorf("工单通知请求不能为空")
+		return nil, fmt.Errorf("工单通知请求不能为空")
 	}
 	if key, durable := BPMNCallbackExecutionKey(ctx); durable {
 		req.DeliveryKey = key
 		req.InAppOnly = true
 	}
-	return h.notificationService.SendNotification(ctx, ticketID, req, tenantID)
+	result, err := h.notificationService.SendNotification(ctx, ticketID, req, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return nil, fmt.Errorf("ticket notification result is missing")
+	}
+	switch result.Effect {
+	case dto.TicketNotificationEffectApplied:
+		return AppliedEffect("ticket notification delivered", nil), nil
+	case dto.TicketNotificationEffectIdempotent:
+		return IdempotentEffect("ticket notification already delivered", nil), nil
+	case dto.TicketNotificationEffectBlocked:
+		code := CallbackBlockCode(result.BlockCode)
+		if !IsAllowedCallbackBlockCode(code) {
+			return nil, fmt.Errorf("ticket notification result has invalid block code")
+		}
+		return BlockedEffect(code, "ticket notification delivery blocked"), nil
+	default:
+		return nil, fmt.Errorf("ticket notification result has invalid effect")
+	}
 }
 
 // SetTicketService 注入工单状态服务，由 bootstrap 在 TicketService 构造完成后调用
@@ -90,7 +110,7 @@ func (h *TicketServiceTaskHandler) getTicket(ctx context.Context, ticketID int, 
 }
 
 // Execute 执行工单服务任务
-func (h *TicketServiceTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *TicketServiceTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*CallbackEffect, error) {
 	// 提取业务ID
 	var businessID int
 	switch v := variables["business_id"].(type) {
@@ -125,13 +145,8 @@ func (h *TicketServiceTaskHandler) Execute(ctx context.Context, task *ent.Proces
 	}
 }
 
-// Validate 验证配置
-func (h *TicketServiceTaskHandler) Validate(ctx context.Context, config map[string]interface{}) error {
-	return nil
-}
-
 // updateTicketStatus 更新工单状态
-func (h *TicketServiceTaskHandler) updateTicketStatus(ctx context.Context, ticketID int, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *TicketServiceTaskHandler) updateTicketStatus(ctx context.Context, ticketID int, variables map[string]interface{}) (*CallbackEffect, error) {
 	// 获取新状态
 	newStatus, _ := variables["new_status"].(string)
 	if newStatus == "" {
@@ -158,9 +173,7 @@ func (h *TicketServiceTaskHandler) updateTicketStatus(ctx context.Context, ticke
 		return nil, fmt.Errorf("工单不存在: %w", err)
 	}
 	if current.Status == newStatus {
-		return &dto.ServiceTaskResult{
-			Success: true, Message: fmt.Sprintf("工单 %d 已处于 %s", ticketID, newStatus), UpdatedData: additionalData,
-		}, nil
+		return IdempotentEffect(fmt.Sprintf("工单 %d 已处于 %s", ticketID, newStatus), additionalData), nil
 	}
 	// operatorID=0 表示系统身份（BPMN 引擎驱动的状态变更，不是某个登录用户点的按钮）；
 	// TicketService.UpdateTicketStatus 本身不强制 operatorID>0。
@@ -171,15 +184,14 @@ func (h *TicketServiceTaskHandler) updateTicketStatus(ctx context.Context, ticke
 
 	h.logger.Infow("Ticket status updated via BPMN", "ticket_id", ticketID, "new_status", newStatus)
 
-	return &dto.ServiceTaskResult{
-		Success:     true,
+	return &CallbackEffect{Status: CallbackEffectApplied,
 		Message:     fmt.Sprintf("工单 %d 状态已更新为 %s", ticketID, newStatus),
 		UpdatedData: additionalData,
 	}, nil
 }
 
 // notifyRequester 通知请求人
-func (h *TicketServiceTaskHandler) notifyRequester(ctx context.Context, ticketID int, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *TicketServiceTaskHandler) notifyRequester(ctx context.Context, ticketID int, variables map[string]interface{}) (*CallbackEffect, error) {
 	// 获取通知内容
 	notificationType, _ := variables["notification_type"].(string)
 	if notificationType == "" {
@@ -197,8 +209,11 @@ func (h *TicketServiceTaskHandler) notifyRequester(ctx context.Context, ticketID
 		return nil, fmt.Errorf("工单不存在: %w", err)
 	}
 
+	if ticketEntity.RequesterID <= 0 {
+		return BlockedEffect(CallbackBlockRecipientMissing, "ticket requester is missing"), nil
+	}
 	// 发送通知给请求人
-	if ticketEntity.RequesterID > 0 {
+	{
 		req := &dto.SendTicketNotificationRequest{
 			UserIDs:   []int{ticketEntity.RequesterID},
 			EventType: mapBPMNNotificationType(notificationType),
@@ -208,22 +223,20 @@ func (h *TicketServiceTaskHandler) notifyRequester(ctx context.Context, ticketID
 			req.DeliveryKey = key
 			req.InAppOnly = true
 		}
-		err = h.sendNotification(ctx, ticketID, req, ticketEntity.TenantID)
+		effect, err := h.sendNotification(ctx, ticketID, req, ticketEntity.TenantID)
 		if err != nil {
 			return nil, fmt.Errorf("通知请求人失败")
 		}
+		return effect, nil
 	}
 
 	h.logger.Infow("Requester notified via BPMN", "ticket_id", ticketID, "requester_id", ticketEntity.RequesterID)
 
-	return &dto.ServiceTaskResult{
-		Success: true,
-		Message: fmt.Sprintf("已通知请求人 %d", ticketEntity.RequesterID),
-	}, nil
+	return nil, fmt.Errorf("unreachable requester notification path")
 }
 
 // notifyHandler 通知处理人
-func (h *TicketServiceTaskHandler) notifyHandler(ctx context.Context, ticketID int, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *TicketServiceTaskHandler) notifyHandler(ctx context.Context, ticketID int, variables map[string]interface{}) (*CallbackEffect, error) {
 	// 获取通知内容
 	notificationType, _ := variables["notification_type"].(string)
 	if notificationType == "" {
@@ -241,8 +254,11 @@ func (h *TicketServiceTaskHandler) notifyHandler(ctx context.Context, ticketID i
 		return nil, fmt.Errorf("工单不存在: %w", err)
 	}
 
+	if ticketEntity.AssigneeID <= 0 {
+		return BlockedEffect(CallbackBlockRecipientMissing, "ticket assignee is missing"), nil
+	}
 	// 发送通知给处理人
-	if ticketEntity.AssigneeID > 0 {
+	{
 		req := &dto.SendTicketNotificationRequest{
 			UserIDs:   []int{ticketEntity.AssigneeID},
 			EventType: mapBPMNNotificationType(notificationType),
@@ -252,22 +268,20 @@ func (h *TicketServiceTaskHandler) notifyHandler(ctx context.Context, ticketID i
 			req.DeliveryKey = key
 			req.InAppOnly = true
 		}
-		err = h.sendNotification(ctx, ticketID, req, ticketEntity.TenantID)
+		effect, err := h.sendNotification(ctx, ticketID, req, ticketEntity.TenantID)
 		if err != nil {
 			return nil, fmt.Errorf("通知处理人失败")
 		}
+		return effect, nil
 	}
 
 	h.logger.Infow("Handler notified via BPMN", "ticket_id", ticketID, "handler_id", ticketEntity.AssigneeID)
 
-	return &dto.ServiceTaskResult{
-		Success: true,
-		Message: fmt.Sprintf("已通知处理人 %d", ticketEntity.AssigneeID),
-	}, nil
+	return nil, fmt.Errorf("unreachable handler notification path")
 }
 
 // escalateTicket 升级工单
-func (h *TicketServiceTaskHandler) escalateTicket(ctx context.Context, ticketID int, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *TicketServiceTaskHandler) escalateTicket(ctx context.Context, ticketID int, variables map[string]interface{}) (*CallbackEffect, error) {
 	// 获取升级优先级
 	escalateTo, _ := variables["escalate_to"].(string)
 	if escalateTo == "" {
@@ -286,10 +300,7 @@ func (h *TicketServiceTaskHandler) escalateTicket(ctx context.Context, ticketID 
 	}
 
 	if ticketEntity.Priority == escalateTo && ticketEntity.Status == "escalated" {
-		return &dto.ServiceTaskResult{
-			Success: true,
-			Message: fmt.Sprintf("工单 %d 已升级为 %s", ticketID, escalateTo),
-		}, nil
+		return IdempotentEffect(fmt.Sprintf("工单 %d 已升级为 %s", ticketID, escalateTo), nil), nil
 	}
 
 	// 通知管理员或升级处理人
@@ -297,13 +308,17 @@ func (h *TicketServiceTaskHandler) escalateTicket(ctx context.Context, ticketID 
 	if len(adminIDs) > 0 {
 		content := fmt.Sprintf("工单 %s (#%s) 已升级，原因：%s", ticketEntity.Title, ticketEntity.TicketNumber, escalationReason)
 		for _, adminID := range adminIDs {
-			if err := h.sendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
+			effect, err := h.sendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
 				UserIDs:   []int{adminID},
 				EventType: "ticket_updated",
 				Content:   content,
-			}, ticketEntity.TenantID); err != nil {
+			}, ticketEntity.TenantID)
+			if err != nil {
 				h.logger.Warnw("failed to send escalation notification", "error_class", "notification_delivery", "ticket_id", ticketID, "admin_id", adminID)
 				return nil, fmt.Errorf("升级通知失败")
+			}
+			if effect.Status == CallbackEffectBlocked {
+				return effect, nil
 			}
 		}
 	}
@@ -321,14 +336,13 @@ func (h *TicketServiceTaskHandler) escalateTicket(ctx context.Context, ticketID 
 
 	h.logger.Infow("Ticket escalated via BPMN", "ticket_id", ticketID, "escalated_to", escalateTo, "reason", escalationReason)
 
-	return &dto.ServiceTaskResult{
-		Success: true,
+	return &CallbackEffect{Status: CallbackEffectApplied,
 		Message: fmt.Sprintf("工单 %d 已升级为 %s", ticketID, escalateTo),
 	}, nil
 }
 
 // assignTicket 分配工单
-func (h *TicketServiceTaskHandler) assignTicket(ctx context.Context, ticketID int, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *TicketServiceTaskHandler) assignTicket(ctx context.Context, ticketID int, variables map[string]interface{}) (*CallbackEffect, error) {
 	// 获取分配的处理人ID
 	assigneeIDFloat, ok := variables["assignee_id"].(float64)
 	assigneeID := int(assigneeIDFloat)
@@ -352,10 +366,7 @@ func (h *TicketServiceTaskHandler) assignTicket(ctx context.Context, ticketID in
 	}
 
 	if ticketEntity.AssigneeID == assigneeID && ticketEntity.Status == common.TicketStatusAssigned {
-		return &dto.ServiceTaskResult{
-			Success: true,
-			Message: fmt.Sprintf("工单 %d 已分配给用户 %d", ticketID, assigneeID),
-		}, nil
+		return IdempotentEffect(fmt.Sprintf("工单 %d 已分配给用户 %d", ticketID, assigneeID), nil), nil
 	}
 
 	// 发送通知给新的处理人
@@ -363,13 +374,17 @@ func (h *TicketServiceTaskHandler) assignTicket(ctx context.Context, ticketID in
 	if notifyContent == "" {
 		notifyContent = fmt.Sprintf("您被分配了一个新工单：%s (#%s)", ticketEntity.Title, ticketEntity.TicketNumber)
 	}
-	if err := h.sendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
+	effect, err := h.sendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
 		UserIDs:   []int{assigneeID},
 		EventType: "ticket_assigned",
 		Content:   notifyContent,
-	}, ticketEntity.TenantID); err != nil {
+	}, ticketEntity.TenantID)
+	if err != nil {
 		h.logger.Warnw("failed to send assignment notification", "error_class", "notification_delivery", "ticket_id", ticketID, "assignee_id", assigneeID)
 		return nil, fmt.Errorf("分配通知失败")
+	}
+	if effect.Status == CallbackEffectBlocked {
+		return effect, nil
 	}
 
 	_, err = h.client.Ticket.UpdateOneID(ticketID).Where(ticket.TenantID(tenantID)).
@@ -383,8 +398,7 @@ func (h *TicketServiceTaskHandler) assignTicket(ctx context.Context, ticketID in
 
 	h.logger.Infow("Ticket assigned via BPMN", "ticket_id", ticketID, "assignee_id", assigneeID)
 
-	return &dto.ServiceTaskResult{
-		Success: true,
+	return &CallbackEffect{Status: CallbackEffectApplied,
 		Message: fmt.Sprintf("工单 %d 已分配给用户 %d", ticketID, assigneeID),
 	}, nil
 }

@@ -6,7 +6,6 @@ import (
 	"reflect"
 	"time"
 
-	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/servicerequest"
 	"itsm-backend/ent/ticket"
@@ -44,13 +43,11 @@ func (h *ServiceRequestServiceTaskHandler) GetHandlerID() string {
 // "状态"语义的动作都改成更新关联 Ticket 的状态，跟 GenericServiceTaskHandler 的写法一致；
 // ServiceRequest 自己的字段（processor_id/started_at/completed_at/completion_note）
 // 只用来记录资源交付过程本身的信息。
-func (h *ServiceRequestServiceTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *ServiceRequestServiceTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*CallbackEffect, error) {
 	action, _ := variables["action"].(string)
 	switch action {
 	case "create_request":
-		// 域不变量声明而非死成员：ServiceRequest 必须先于流程存在（服务目录创建 →
-		// 触发流程），流程内创建与架构不符，永远显式报错。
-		return nil, fmt.Errorf("服务请求必须先通过服务目录申请创建，流程实例只能在请求已存在之后触发——不支持从流程内部创建新请求")
+		return BlockedEffect(CallbackBlockHandlerContract, "service requests are created before BPMN starts"), nil
 	case "update_request":
 		return h.updateRequest(ctx, variables)
 	case "approve_request":
@@ -70,11 +67,6 @@ func (h *ServiceRequestServiceTaskHandler) Execute(ctx context.Context, task *en
 	default:
 		return nil, fmt.Errorf("不支持的服务请求回调动作")
 	}
-}
-
-// Validate 验证配置
-func (h *ServiceRequestServiceTaskHandler) Validate(ctx context.Context, config map[string]interface{}) error {
-	return nil
 }
 
 // getServiceRequest 按 request_id + 租户取出服务请求，找不到时返回明确错误。
@@ -97,7 +89,7 @@ func (h *ServiceRequestServiceTaskHandler) getServiceRequest(ctx context.Context
 	return sr, tenantID, nil
 }
 
-func (h *ServiceRequestServiceTaskHandler) updateRequest(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *ServiceRequestServiceTaskHandler) updateRequest(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
 	sr, _, err := h.getServiceRequest(ctx, variables)
 	if err != nil {
 		return nil, err
@@ -161,18 +153,18 @@ func (h *ServiceRequestServiceTaskHandler) updateRequest(ctx context.Context, va
 		}
 	}
 	if !changed {
-		return &dto.ServiceTaskResult{Success: true, Message: fmt.Sprintf("服务请求 %d 已是目标表单状态", sr.ID)}, nil
+		return &CallbackEffect{Status: CallbackEffectApplied, Message: fmt.Sprintf("服务请求 %d 已是目标表单状态", sr.ID)}, nil
 	}
 	if _, err := update.Save(ctx); err != nil {
 		return nil, fmt.Errorf("更新服务请求失败: %w", err)
 	}
 	h.logger.Infow("Service request updated via BPMN", "request_id", sr.ID)
-	return &dto.ServiceTaskResult{Success: true, Message: fmt.Sprintf("服务请求 %d 已更新", sr.ID)}, nil
+	return &CallbackEffect{Status: CallbackEffectApplied, Message: fmt.Sprintf("服务请求 %d 已更新", sr.ID)}, nil
 }
 
 // setLinkedTicketStatus 把服务请求关联工单的状态改成 newStatus，可选附一条完成备注。
 // 先读当前状态做转换校验（带租户约束），非法转换明确报错，不再无条件覆盖关联工单。
-func (h *ServiceRequestServiceTaskHandler) setLinkedTicketStatus(ctx context.Context, variables map[string]interface{}, newStatus, note string) (*dto.ServiceTaskResult, error) {
+func (h *ServiceRequestServiceTaskHandler) setLinkedTicketStatus(ctx context.Context, variables map[string]interface{}, newStatus, note string) (*CallbackEffect, error) {
 	sr, tenantID, err := h.getServiceRequest(ctx, variables)
 	if err != nil {
 		return nil, err
@@ -196,7 +188,7 @@ func (h *ServiceRequestServiceTaskHandler) setLinkedTicketStatus(ctx context.Con
 				return nil, fmt.Errorf("记录服务请求备注失败: %w", err)
 			}
 		}
-		return &dto.ServiceTaskResult{Success: true, Message: fmt.Sprintf("服务请求 %d 对应工单已处于 %s", sr.ID, newStatus)}, nil
+		return &CallbackEffect{Status: CallbackEffectApplied, Message: fmt.Sprintf("服务请求 %d 对应工单已处于 %s", sr.ID, newStatus)}, nil
 	}
 
 	update := current.Update()
@@ -211,10 +203,10 @@ func (h *ServiceRequestServiceTaskHandler) setLinkedTicketStatus(ctx context.Con
 			return nil, fmt.Errorf("记录服务请求备注失败: %w", err)
 		}
 	}
-	return &dto.ServiceTaskResult{Success: true, Message: fmt.Sprintf("服务请求 %d 对应工单状态已更新为 %s", sr.ID, newStatus)}, nil
+	return &CallbackEffect{Status: CallbackEffectApplied, Message: fmt.Sprintf("服务请求 %d 对应工单状态已更新为 %s", sr.ID, newStatus)}, nil
 }
 
-func (h *ServiceRequestServiceTaskHandler) rejectRequest(ctx context.Context, variables map[string]interface{}, reason string) (*dto.ServiceTaskResult, error) {
+func (h *ServiceRequestServiceTaskHandler) rejectRequest(ctx context.Context, variables map[string]interface{}, reason string) (*CallbackEffect, error) {
 	note := reason
 	if note == "" {
 		note = "已驳回"
@@ -222,7 +214,7 @@ func (h *ServiceRequestServiceTaskHandler) rejectRequest(ctx context.Context, va
 	return h.setLinkedTicketStatus(ctx, variables, "closed", note)
 }
 
-func (h *ServiceRequestServiceTaskHandler) assignRequest(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *ServiceRequestServiceTaskHandler) assignRequest(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
 	sr, _, err := h.getServiceRequest(ctx, variables)
 	if err != nil {
 		return nil, err
@@ -232,32 +224,32 @@ func (h *ServiceRequestServiceTaskHandler) assignRequest(ctx context.Context, va
 		return nil, fmt.Errorf("无效的 assignee_id")
 	}
 	if sr.ProcessorID == assigneeID {
-		return &dto.ServiceTaskResult{Success: true, Message: fmt.Sprintf("服务请求 %d 已分配", sr.ID)}, nil
+		return &CallbackEffect{Status: CallbackEffectApplied, Message: fmt.Sprintf("服务请求 %d 已分配", sr.ID)}, nil
 	}
 	if _, err := sr.Update().SetProcessorID(assigneeID).Save(ctx); err != nil {
 		return nil, fmt.Errorf("分配服务请求失败: %w", err)
 	}
 	h.logger.Infow("Service request assigned via BPMN", "request_id", sr.ID, "assignee_id", assigneeID)
-	return &dto.ServiceTaskResult{Success: true, Message: fmt.Sprintf("服务请求 %d 已分配", sr.ID)}, nil
+	return &CallbackEffect{Status: CallbackEffectApplied, Message: fmt.Sprintf("服务请求 %d 已分配", sr.ID)}, nil
 }
 
-func (h *ServiceRequestServiceTaskHandler) provisionResource(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *ServiceRequestServiceTaskHandler) provisionResource(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
 	sr, _, err := h.getServiceRequest(ctx, variables)
 	if err != nil {
 		return nil, err
 	}
 	resourceType, _ := variables["resource_type"].(string)
 	if !sr.StartedAt.IsZero() {
-		return &dto.ServiceTaskResult{Success: true, Message: fmt.Sprintf("资源 %s 已开始供应", resourceType)}, nil
+		return &CallbackEffect{Status: CallbackEffectApplied, Message: fmt.Sprintf("资源 %s 已开始供应", resourceType)}, nil
 	}
 	if _, err := sr.Update().SetStartedAt(time.Now()).Save(ctx); err != nil {
 		return nil, fmt.Errorf("记录资源开通开始时间失败: %w", err)
 	}
 	h.logger.Infow("Resource provisioning via BPMN", "request_id", sr.ID, "resource_type", resourceType)
-	return &dto.ServiceTaskResult{Success: true, Message: fmt.Sprintf("资源 %s 开始供应", resourceType)}, nil
+	return &CallbackEffect{Status: CallbackEffectApplied, Message: fmt.Sprintf("资源 %s 开始供应", resourceType)}, nil
 }
 
-func (h *ServiceRequestServiceTaskHandler) completeRequest(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *ServiceRequestServiceTaskHandler) completeRequest(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
 	sr, tenantID, err := h.getServiceRequest(ctx, variables)
 	if err != nil {
 		return nil, err
@@ -299,10 +291,10 @@ func (h *ServiceRequestServiceTaskHandler) completeRequest(ctx context.Context, 
 		}
 	}
 	h.logger.Infow("Service request completed via BPMN", "request_id", sr.ID)
-	return &dto.ServiceTaskResult{Success: true, Message: fmt.Sprintf("服务请求 %d 已完成", sr.ID)}, nil
+	return &CallbackEffect{Status: CallbackEffectApplied, Message: fmt.Sprintf("服务请求 %d 已完成", sr.ID)}, nil
 }
 
-func (h *ServiceRequestServiceTaskHandler) cancelRequest(ctx context.Context, variables map[string]interface{}, reason string) (*dto.ServiceTaskResult, error) {
+func (h *ServiceRequestServiceTaskHandler) cancelRequest(ctx context.Context, variables map[string]interface{}, reason string) (*CallbackEffect, error) {
 	note := reason
 	if note == "" {
 		note = "已取消"

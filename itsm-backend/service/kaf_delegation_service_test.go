@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"itsm-backend/common"
-	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/enttest"
@@ -280,13 +279,13 @@ type failOncePersistingKafCallbackHandler struct {
 
 func (h *scopeCapturingKafCallbackHandler) GetTaskType() string  { return "kaf_scope_capture" }
 func (h *scopeCapturingKafCallbackHandler) GetHandlerID() string { return "kaf_scope_capture_handler" }
-func (h *scopeCapturingKafCallbackHandler) Validate(context.Context, map[string]interface{}) error {
-	return nil
+func (h *scopeCapturingKafCallbackHandler) CallbackContract(string) (bpmn.CallbackActionContract, bool) {
+	return bpmn.CallbackActionContract{}, true
 }
-func (h *scopeCapturingKafCallbackHandler) Execute(ctx context.Context, _ *ent.ProcessTask, _ map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *scopeCapturingKafCallbackHandler) Execute(ctx context.Context, _ *ent.ProcessTask, _ map[string]interface{}) (*bpmn.CallbackEffect, error) {
 	h.calls++
 	h.scope, h.scopeOK = bpmn.KafActionScopeFromContext(ctx)
-	return &dto.ServiceTaskResult{Success: true}, nil
+	return bpmn.AppliedEffect("", nil), nil
 }
 
 var _ bpmn.ServiceTaskHandlerInterface = (*scopeCapturingKafCallbackHandler)(nil)
@@ -297,10 +296,10 @@ func (h *failOncePersistingKafCallbackHandler) GetTaskType() string {
 func (h *failOncePersistingKafCallbackHandler) GetHandlerID() string {
 	return "kaf_fail_once_persisting_callback_handler"
 }
-func (h *failOncePersistingKafCallbackHandler) Validate(context.Context, map[string]interface{}) error {
-	return nil
+func (h *failOncePersistingKafCallbackHandler) CallbackContract(string) (bpmn.CallbackActionContract, bool) {
+	return bpmn.CallbackActionContract{}, true
 }
-func (h *failOncePersistingKafCallbackHandler) Execute(ctx context.Context, _ *ent.ProcessTask, _ map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *failOncePersistingKafCallbackHandler) Execute(ctx context.Context, _ *ent.ProcessTask, _ map[string]interface{}) (*bpmn.CallbackEffect, error) {
 	h.calls++
 	h.scope, h.scopeOK = bpmn.KafActionScopeFromContext(ctx)
 	if !h.scopeOK {
@@ -314,7 +313,7 @@ func (h *failOncePersistingKafCallbackHandler) Execute(ctx context.Context, _ *e
 		return nil, err
 	}
 	if applied {
-		return &dto.ServiceTaskResult{Success: true}, nil
+		return bpmn.AppliedEffect("", nil), nil
 	}
 	err = h.client.TicketComment.Create().
 		SetTicketID(h.workItemID).
@@ -329,7 +328,7 @@ func (h *failOncePersistingKafCallbackHandler) Execute(ctx context.Context, _ *e
 	if h.calls == 1 {
 		return nil, errors.New("forced callback error after committed effect")
 	}
-	return &dto.ServiceTaskResult{Success: true}, nil
+	return bpmn.AppliedEffect("", nil), nil
 }
 
 var _ bpmn.ServiceTaskHandlerInterface = (*failOncePersistingKafCallbackHandler)(nil)

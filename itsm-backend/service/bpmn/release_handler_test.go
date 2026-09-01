@@ -49,7 +49,7 @@ func TestReleaseHandler_TechReview_AppendsReleaseNotes(t *testing.T) {
 		"comment":     "技术评审通过，无阻塞项",
 	})
 	require.NoError(t, err)
-	assert.True(t, result.Success)
+	assert.True(t, result.Status == CallbackEffectApplied)
 
 	updated, err := client.Release.Get(ctx, release.ID)
 	require.NoError(t, err)
@@ -57,16 +57,15 @@ func TestReleaseHandler_TechReview_AppendsReleaseNotes(t *testing.T) {
 	assert.Equal(t, "draft", updated.Status, "技术评审不改变发布状态")
 }
 
-func TestReleaseHandler_Approval_IsDocumentedNoop(t *testing.T) {
+func TestReleaseHandler_ApprovalIsIdempotentAfterAuthoritativeServiceDecision(t *testing.T) {
 	_, handler, tenantID, release := setupReleaseHandlerFixture(t)
 	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
 
 	result, err := handler.Execute(ctx, nil, map[string]interface{}{
-		"action":      "approval",
-		"business_id": float64(release.ID),
+		"action": "approval", "business_id": float64(release.ID),
 	})
-	require.NoError(t, err, "approval 动作是有意的空操作，权威状态转换在 ReleaseService.ApplyReleaseApproval 里")
-	assert.True(t, result.Success)
+	require.NoError(t, err)
+	assert.Equal(t, CallbackEffectIdempotent, result.Status)
 }
 
 func TestReleaseHandler_Execute_AdvancesThroughStatuses(t *testing.T) {
@@ -110,7 +109,7 @@ func TestReleaseHandler_Schedule_IsIdempotentOnAlreadyScheduled(t *testing.T) {
 		"business_id": float64(release.ID),
 	})
 	require.NoError(t, err, "已经是 scheduled 时重复调用应该是幂等成功，不是状态机错误")
-	assert.True(t, result.Success)
+	assert.Equal(t, CallbackEffectIdempotent, result.Status)
 }
 
 func TestReleaseHandler_RetryDoesNotRewriteEffect(t *testing.T) {

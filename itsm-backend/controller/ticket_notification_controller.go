@@ -1,8 +1,11 @@
 package controller
 
 import (
+	"encoding/json"
 	"errors"
+	"io"
 	"strconv"
+	"strings"
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
@@ -58,21 +61,48 @@ func (tnc *TicketNotificationController) SendTicketNotification(c *gin.Context) 
 	}
 
 	var req dto.SendTicketNotificationRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	decoder := json.NewDecoder(c.Request.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
 		common.Fail(c, common.ParamErrorCode, "请求参数错误: "+err.Error())
+		return
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		common.Fail(c, common.ParamErrorCode, "请求参数错误")
+		return
+	}
+	if len(req.UserIDs) == 0 || strings.TrimSpace(req.Content) == "" || !isTicketNotificationEventType(req.EventType) {
+		common.Fail(c, common.ParamErrorCode, "请求参数错误")
 		return
 	}
 
 	tenantID := c.GetInt("tenant_id")
 
-	err = tnc.notificationService.SendNotification(c.Request.Context(), ticketID, &req, tenantID)
+	result, err := tnc.notificationService.SendNotification(c.Request.Context(), ticketID, &req, tenantID)
 	if err != nil {
 		tnc.logger.Errorw("Failed to send ticket notification", "error", err, "ticket_id", ticketID, "tenant_id", tenantID)
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return
 	}
+	if result == nil {
+		common.Fail(c, common.InternalErrorCode, "通知投递结果缺失")
+		return
+	}
+	if result.Effect == dto.TicketNotificationEffectBlocked {
+		common.Fail(c, common.BadRequestCode, "通知未产生投递")
+		return
+	}
 
-	common.Success(c, nil)
+	common.Success(c, result)
+}
+
+func isTicketNotificationEventType(eventType string) bool {
+	for _, candidate := range dto.ListNotificationEventTypes() {
+		if candidate.Code == eventType {
+			return true
+		}
+	}
+	return false
 }
 
 // ListUserNotifications 获取用户通知列表
