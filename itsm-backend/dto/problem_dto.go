@@ -73,9 +73,8 @@ type ProblemResponse struct {
 	CreatedAt   time.Time                   `json:"createdAt"`
 	UpdatedAt   time.Time                   `json:"updatedAt"`
 	Actions     map[string]ActionPermission `json:"actions,omitempty"`
-	// WorkItemID 关联的 WorkItem（tickets.id）。统一 WorkItem 领域模型迁移（Wave 2）后
-	// 新建的 Problem 一定有值；迁移前创建、尚未跑 cmd/backfill_problem_work_item 回填的
-	// 存量记录可能为 nil。与 dto.IncidentResponse.WorkItemID 同一模式。
+	// WorkItemID 关联的 WorkItem（tickets.id）。Problem 创建事务保证该值存在；nil 表示
+	// 开发数据违反 WorkItem 创建不变量。与 dto.IncidentResponse.WorkItemID 同一模式。
 	WorkItemID *int `json:"workItemId,omitempty"`
 	// 关联数据
 	AssociatedTickets   []*AssociatedItemResponse `json:"associatedTickets,omitempty"`

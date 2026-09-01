@@ -14,8 +14,8 @@ export interface Incident {
   source: string;
   type: string;
   incidentNumber?: string;
-  /** 关联的 WorkItem（tickets.id）。Wave 2 起由后端 CreateIncident 在同一事务内建立；
-   * 迁移前创建的存量事件在 cmd/backfill_incident_work_item 回填之前可能为空。 */
+  /** 关联的 WorkItem（tickets.id）。后端 CreateIncident 在同一事务内建立；
+   * 缺失表示开发数据违反 WorkItem 创建不变量。 */
   workItemId?: number;
   isMajorIncident?: boolean;
   reporter?: {

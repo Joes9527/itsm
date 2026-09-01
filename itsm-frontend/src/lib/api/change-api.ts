@@ -74,9 +74,8 @@ export interface Change {
   createdAt: string;
   updatedAt: string;
   /**
-   * 关联的 WorkItem（tickets.id）。统一 WorkItem 领域模型迁移（Wave 2）后新建变更总是非空；
-   * 迁移前创建、还没跑 cmd/backfill_change_work_item 回填的存量变更可能是 undefined。
-   * 供 changes/[id]/page.tsx 接入 WorkItemShell 使用。
+   * 关联的 WorkItem（tickets.id）。后端创建事务保证该值存在；缺失表示开发数据违反
+   * WorkItem 创建不变量。供 changes/[id]/page.tsx 接入 WorkItemShell 使用。
    */
   workItemId?: number;
   actions?: Record<string, WorkItemActionState>;

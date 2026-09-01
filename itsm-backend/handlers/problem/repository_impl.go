@@ -128,7 +128,7 @@ func (r *EntRepository) AddAssociations(ctx context.Context, tenantID, problemID
 			return fmt.Errorf("one or more tickets do not belong to the current tenant")
 		}
 		if prob.WorkItemID <= 0 {
-			return fmt.Errorf("problem %d has no linked work item yet; run cmd/backfill_problem_work_item first", problemID)
+			return fmt.Errorf("problem %d violates WorkItem creation invariant: missing work_item_id", problemID)
 		}
 		return r.linkTicketsAsWorkItemRelations(ctx, tenantID, prob.WorkItemID, actorUserID, relatedIDs)
 	case "incident":
@@ -461,9 +461,8 @@ func mergeAssociatedItems(existing, additional []*AssociatedItem) []*AssociatedI
 }
 
 // loadTicketAssociations 通过 WorkItemRelation 读取 Problem 关联的普通工单（Wave 2 起
-// 不再走 ent 的 Problem<->Ticket 多对多 edge）。sourceWorkItemID<=0 表示这条 Problem
-// 还没有关联的 WorkItem（迁移前创建、尚未跑 cmd/backfill_problem_work_item），此时没有
-// 任何 WorkItemRelation 行可能引用它，直接返回空列表。
+// 不再走 ent 的 Problem<->Ticket 多对多 edge）。sourceWorkItemID<=0 表示开发数据违反
+// WorkItem 创建不变量；读取端没有可查询的 WorkItemRelation，返回空列表。
 func (r *EntRepository) loadTicketAssociations(ctx context.Context, tenantID, sourceWorkItemID int) ([]*AssociatedItem, error) {
 	if sourceWorkItemID <= 0 {
 		return []*AssociatedItem{}, nil

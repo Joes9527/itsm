@@ -359,7 +359,7 @@ func (s *TicketLifecycleService) mapProcessStatus(status string) string {
 }
 
 // IsValidTicketStatusTransition 检查状态转换是否合法
-// 导出的函数供其他服务使用（如 TicketCoreService）
+// 导出的函数供 TicketService 等领域服务复用。
 func IsValidTicketStatusTransition(currentStatus, newStatus string) bool {
 	validTransitions := map[string][]string{
 		common.TicketStatusNew:        {common.TicketStatusOpen, common.TicketStatusAssigned, common.TicketStatusInProgress, common.TicketStatusCancelled},

@@ -16,9 +16,8 @@ import type { WorkItemCommon, WorkItemSLAState } from '@/components/work-item/Wo
 // 混用会导致 WorkItemComments/WorkItemAttachments 挂到错误的 WorkItem 上。
 function toWorkItemCommon(incident: Incident): WorkItemCommon | null {
   if (!incident.workItemId) {
-    // 迁移前创建、还没跑 cmd/backfill_incident_work_item 回填的存量事件没有 workItemId，
-    // 此时不渲染 WorkItemShell（下面 IncidentDetail 本身仍然完整可用），避免用一个假的
-    // ID 挂载评论/附件占位组件。
+    // 缺少 workItemId 表示开发数据违反 WorkItem 创建不变量。拒绝用专业记录 ID 猜测
+    // WorkItem 身份，避免把评论或附件挂到错误记录。
     return null;
   }
   return {
@@ -130,11 +129,9 @@ export default function IncidentDetailPage() {
           </Button>
         </div>
 
-        {/* workItem 只有在事件摘要加载成功且带有 workItemId（Wave 2 迁移后创建/已跑过
-            cmd/backfill_incident_work_item 回填）时才非空。加载中、加载失败（见
-            loadWorkItemSummary 的 catch）、或存量未回填事件这三种情况下 workItem 都是
-            null，直接退化为原有的纯 IncidentDetail 展示——不用 WorkItemShell 自己的
-            loading/error 态挡住已经完整可用的 IncidentDetail。 */}
+        {/* workItem 只有在事件摘要加载成功且满足 WorkItem 创建不变量时才非空。加载中、
+            加载失败（见 loadWorkItemSummary 的 catch）或无效开发记录下 workItem 为 null，
+            不用猜测的 ID 挂载 WorkItemShell。 */}
         {workItem && incident ? (
           <WorkItemShell
             workItem={workItem}
