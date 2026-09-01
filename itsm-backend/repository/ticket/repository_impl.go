@@ -20,6 +20,26 @@ type EntRepository struct {
 	numberAllocator workitemnumber.Allocator
 }
 
+// TransactionalCreator is the narrow creation port for an application layer
+// that already owns an Ent transaction. It has no non-transactional fallback.
+// Ordinary callers must use Repository.Create.
+type TransactionalCreator interface {
+	CreateInTransaction(ctx context.Context, client *ent.Client, params *CreateParams, tenantID int) (*Ticket, error)
+}
+
+type transactionalCreator struct {
+	numberAllocator workitemnumber.Allocator
+}
+
+// NewTransactionalCreator constructs the transaction-bound Ticket creation
+// primitive for an application transaction owner.
+func NewTransactionalCreator(allocator workitemnumber.Allocator) TransactionalCreator {
+	if allocator == nil {
+		panic("work item number allocator is required")
+	}
+	return &transactionalCreator{numberAllocator: allocator}
+}
+
 // NewEntRepository 创建 Ent 工单仓储
 func NewEntRepository(client *ent.Client, logger *zap.SugaredLogger, allocator workitemnumber.Allocator) *EntRepository {
 	if allocator == nil {
@@ -34,13 +54,32 @@ func NewEntRepository(client *ent.Client, logger *zap.SugaredLogger, allocator w
 
 // Create 创建工单
 func (r *EntRepository) Create(ctx context.Context, params *CreateParams, tenantID int) (*Ticket, error) {
+	tx, err := r.Client().Tx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("start ticket creation transaction: %w", err)
+	}
+
+	created, err := NewTransactionalCreator(r.numberAllocator).CreateInTransaction(ctx, tx.Client(), params, tenantID)
+	if err != nil {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			return nil, fmt.Errorf("%w (rollback ticket creation transaction: %v)", err, rollbackErr)
+		}
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit ticket creation transaction: %w", err)
+	}
+	return created, nil
+}
+
+func (c *transactionalCreator) CreateInTransaction(ctx context.Context, client *ent.Client, params *CreateParams, tenantID int) (*Ticket, error) {
 	issuedAt := time.Now().UTC()
-	ticketNumber, err := r.numberAllocator.Allocate(ctx, r.Client(), tenantID, issuedAt)
+	ticketNumber, err := c.numberAllocator.Allocate(ctx, client, tenantID, issuedAt)
 	if err != nil {
 		return nil, fmt.Errorf("allocate work item number: %w", err)
 	}
 
-	builder := r.Client().Ticket.Create().
+	builder := client.Ticket.Create().
 		SetTitle(params.Title).
 		SetDescription(params.Description).
 		SetType(string(params.Type)).

@@ -187,13 +187,13 @@ func TestRepository_Create_PersistsCreatorEmailAndExternalMessageID(t *testing.T
 	assert.Equal(t, "<msg-1@contoso.com>", stored.ExternalMessageID)
 }
 
-func TestRepository_Create_RejectsSameTenantDuplicateNumberWithoutRetry(t *testing.T) {
+func TestRepository_Create_RollsBackAllocationWhenTicketInsertFails(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()
 
 	now := time.Now().UTC()
 	existingNumber := fmt.Sprintf("TKT-%s-000001", now.Format("200601"))
-	_, err := fx.client.Ticket.Create().
+	existing, err := fx.client.Ticket.Create().
 		SetTitle("Existing Ticket").
 		SetDescription("Existing").
 		SetType(string(TypeIncident)).
@@ -207,18 +207,54 @@ func TestRepository_Create_RejectsSameTenantDuplicateNumberWithoutRetry(t *testi
 
 	_, err = fx.repo.Create(fx.ctx, &CreateParams{
 		Title:       "Duplicate Create",
-		Description: "Allocator does not retry a uniqueness failure",
+		Description: "The Ticket insert fails after the allocator advances",
 		Priority:    PriorityMedium,
 		Type:        TypeIncident,
 		RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 	require.Error(t, err)
 
-	sequence, err := fx.client.WorkItemNumberSequence.Query().
+	sequenceCount, err := fx.client.WorkItemNumberSequence.Query().
 		Where(workitemnumbersequence.TenantID(fx.tenant.ID), workitemnumbersequence.Period(now.Format("200601"))).
-		Only(fx.ctx)
+		Count(fx.ctx)
 	require.NoError(t, err)
-	assert.Equal(t, int64(1), sequence.LastValue)
+	assert.Zero(t, sequenceCount, "the failed Ticket insert must roll back the allocator increment")
+
+	require.NoError(t, fx.client.Ticket.DeleteOneID(existing.ID).Exec(fx.ctx))
+	created, err := fx.repo.Create(fx.ctx, &CreateParams{
+		Title:       "Successful retry after the conflicting row is removed",
+		Description: "The rolled-back number is reusable because no increment committed",
+		Priority:    PriorityMedium,
+		Type:        TypeIncident,
+		RequesterID: fx.user.ID,
+	}, fx.tenant.ID)
+	require.NoError(t, err)
+	assert.Equal(t, existingNumber, created.TicketNumber)
+}
+
+func TestTransactionalCreator_UsesCallerOwnedTransaction(t *testing.T) {
+	fx := newRepoFixture(t)
+	defer fx.client.Close()
+
+	tx, err := fx.client.Tx(fx.ctx)
+	require.NoError(t, err)
+	created, err := NewTransactionalCreator(workitemnumber.NewPostgreSQLAllocator()).CreateInTransaction(fx.ctx, tx.Client(), &CreateParams{
+		Title:       "outer transaction ticket",
+		Description: "the outer owner decides whether the WorkItem commits",
+		Priority:    PriorityMedium,
+		Type:        TypeServiceRequest,
+		RequesterID: fx.user.ID,
+	}, fx.tenant.ID)
+	require.NoError(t, err)
+	require.NotZero(t, created.ID)
+	require.NoError(t, tx.Rollback())
+
+	ticketCount, err := fx.client.Ticket.Query().Count(fx.ctx)
+	require.NoError(t, err)
+	assert.Zero(t, ticketCount)
+	sequenceCount, err := fx.client.WorkItemNumberSequence.Query().Count(fx.ctx)
+	require.NoError(t, err)
+	assert.Zero(t, sequenceCount)
 }
 
 func TestRepository_Create_DifferentTenants(t *testing.T) {

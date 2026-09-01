@@ -244,8 +244,8 @@ func (s *Service) createWorkItemAndExtension(ctx context.Context, tenantID int, 
 		return nil, nil, cause
 	}
 
-	workItemRepo := ticket.NewEntRepository(tx.Client(), s.logger, s.numberAllocator)
-	workItem, err := workItemRepo.Create(ctx, &ticket.CreateParams{
+	workItemCreator := ticket.NewTransactionalCreator(s.numberAllocator)
+	workItem, err := workItemCreator.CreateInTransaction(ctx, tx.Client(), &ticket.CreateParams{
 		Title:       ticketReq.Title,
 		Description: ticketReq.Description,
 		Type:        ticket.TypeServiceRequest,
