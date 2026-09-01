@@ -12,6 +12,8 @@ test.describe.configure({ timeout: 90000 });
 
 test.describe('Ticket Lifecycle - End User Creates Ticket', () => {
   test('end user should be able to create a ticket', async ({ page }) => {
+    const ticketTitle = `E2E Test Ticket - ${Date.now()}`;
+    let createdTicketId = 0;
     // Step 1: Login as end user
     await test.step('Login as end_user', async () => {
       await loginAndReturn(page, TEST_USERS.end_user);
@@ -22,57 +24,34 @@ test.describe('Ticket Lifecycle - End User Creates Ticket', () => {
       await page.goto('/tickets/create');
       await page.waitForLoadState('networkidle');
 
-      // Check for form
-      const form = page.locator('form');
-      await expect(form).toBeVisible({ timeout: 10000 });
+      await expect(page.getByRole('main', { name: '创建工单页面' })).toBeVisible({ timeout: 10000 });
     });
 
     // Step 3: Fill in ticket details
     await test.step('Fill in ticket details', async () => {
       // Fill title
-      const titleInput = page.locator(
-        'input[id*="title"], input[name*="title"], input[placeholder*="标题"]'
-      );
+      const titleInput = page.getByLabel('标题');
       await expect(titleInput).toBeVisible();
       {
-        await titleInput.fill('E2E Test Ticket - ' + Date.now());
+        await titleInput.fill(ticketTitle);
       }
 
       // Fill description
-      const descInput = page.locator(
-        'textarea[id*="description"], textarea[name*="description"], textarea[placeholder*="描述"]'
-      );
+      const descInput = page.getByLabel('详细描述');
       await expect(descInput).toBeVisible();
       {
         await descInput.fill('This is a test ticket created by E2E test');
       }
 
-      // Select priority if available
-      const prioritySelect = page.locator('[class*="priority"], select[name*="priority"]');
+      const prioritySelect = page.getByLabel('优先级');
       await expect(prioritySelect).toBeVisible();
-      {
-        await prioritySelect.click();
-        await page.waitForTimeout(300);
-        await page.keyboard.press('ArrowDown');
-        await page.keyboard.press('Enter');
-      }
-
-      // Select category if available
-      const categorySelect = page.locator('[class*="category"], select[name*="category"]');
-      await expect(categorySelect).toBeVisible();
-      {
-        await categorySelect.click();
-        await page.waitForTimeout(300);
-        await page.keyboard.press('ArrowDown');
-        await page.keyboard.press('Enter');
-      }
+      await prioritySelect.click();
+      await page.getByRole('option', { name: '高', exact: true }).click();
     });
 
     // Step 4: Submit ticket
     await test.step('Submit ticket', async () => {
-      const submitButton = page.locator(
-        'button[type="submit"], button:has-text("提交"), button:has-text("创建")'
-      );
+      const submitButton = page.getByRole('button', { name: '创建工单', exact: true });
       await expect(submitButton).toBeVisible();
       const createResponse = page.waitForResponse(
         response =>
@@ -80,12 +59,19 @@ test.describe('Ticket Lifecycle - End User Creates Ticket', () => {
           /\/api\/v1\/tickets$/.test(new URL(response.url()).pathname)
       );
       await submitButton.click();
-      expect((await createResponse).status()).toBe(200);
+      const response = await createResponse;
+      expect(response.status()).toBe(200);
+      const envelope = await response.json();
+      expect(envelope).toHaveProperty('code', 0);
+      expect(envelope.data).toMatchObject({ title: ticketTitle });
+      expect(envelope.data.id).toBeGreaterThan(0);
+      createdTicketId = envelope.data.id;
     });
 
     // Step 5: Verify ticket created (check URL or success message)
     await test.step('Verify ticket created', async () => {
-      await expect(page).toHaveURL(/\/tickets\/\d+$/);
+      await expect(page).toHaveURL(new RegExp(`/tickets/${createdTicketId}$`));
+      await expect(page.getByText(ticketTitle, { exact: true })).toBeVisible();
     });
   });
 });
@@ -106,15 +92,15 @@ test.describe('Ticket Lifecycle - Agent Processes Ticket', () => {
     // Step 3: View ticket details
     await test.step('View ticket details', async () => {
       // Look for a ticket to click on
-      const ticketRow = page.locator('.ant-table-row, [class*="row"]').first();
+      const ticketRow = page.locator('table tbody tr').first();
       await expect(ticketRow).toBeVisible({ timeout: 5000 });
       {
         await ticketRow.click();
         await page.waitForLoadState('networkidle');
 
-        // Should show ticket details
-        const details = page.locator('[class*="detail"], [class*="info"], .ant-card');
-        await expect(details.first()).toBeVisible({ timeout: 5000 });
+        await expect(page.getByRole('button', { name: '编辑', exact: true })).toBeVisible({
+          timeout: 5000,
+        });
       }
     });
 
@@ -151,27 +137,23 @@ test.describe('Ticket Lifecycle - Admin Manages Tickets', () => {
       await page.goto('/tickets');
       await page.waitForLoadState('networkidle');
 
-      // Should display ticket list
-      const content = page.locator('.ant-table, [class*="table"]');
-      await expect(content.first()).toBeVisible({ timeout: 10000 });
+      await expect(page.getByRole('table')).toBeVisible({ timeout: 10000 });
     });
 
     // Step 3: Filter tickets by status
     await test.step('Filter tickets by status', async () => {
-      const filterButton = page.locator(
-        '[class*="filter"], button:has-text("筛选"), button:has-text("过滤")'
-      );
+      const filterButton = page.getByRole('button', { name: '过滤器', exact: true });
       await expect(filterButton).toBeVisible();
       await filterButton.click();
 
-      const statusOption = page
-        .locator('.ant-select-dropdown:has-text("Open"), .ant-select-item:has-text("Open")')
-        .first();
+      await page.getByPlaceholder('状态').click();
+      const statusOption = page.getByRole('option', { name: '待处理', exact: true });
       await expect(statusOption).toBeVisible();
       const filterResponse = page.waitForResponse(
         response =>
           response.request().method() === 'GET' &&
-          new URL(response.url()).pathname === '/api/v1/tickets'
+          new URL(response.url()).pathname === '/api/v1/tickets' &&
+          new URL(response.url()).searchParams.get('status') === 'open'
       );
       await statusOption.click();
       expect((await filterResponse).status()).toBe(200);
@@ -181,7 +163,7 @@ test.describe('Ticket Lifecycle - Admin Manages Tickets', () => {
     // Step 4: Assign ticket (if controls available)
     await test.step('Assign ticket', async () => {
       // Click on a ticket row
-      const ticketRow = page.locator('.ant-table-row, [class*="row"]').first();
+      const ticketRow = page.locator('table tbody tr').first();
       await expect(ticketRow).toBeVisible({ timeout: 5000 });
       {
         await ticketRow.click();
@@ -224,9 +206,7 @@ test.describe('Ticket Search and Filter', () => {
     await page.waitForLoadState('networkidle');
 
     // Find search input - use .first() to avoid matching multiple elements
-    const searchInput = page
-      .locator('input[placeholder*="搜索"], input[placeholder*="Search"], input[type="search"]')
-      .first();
+    const searchInput = page.getByPlaceholder('搜索工单标题、描述或工单号');
     await expect(searchInput).toBeVisible();
     const searchResponse = page.waitForResponse(response => {
       const url = new URL(response.url());

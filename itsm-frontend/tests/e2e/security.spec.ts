@@ -18,31 +18,20 @@ test.describe('Security - 浏览器侧安全验证', () => {
 
     await loginAndReturn(page, { ...DEFAULT_LOGIN, username: 'end_user', password: 'admin123' });
     await page.goto('/tickets/create');
-    await page.waitForSelector('form, [data-testid="ticket-form"]', { timeout: 15000 });
+    await expect(page.getByRole('main', { name: '创建工单页面' })).toBeVisible({ timeout: 15000 });
 
     const title = `XSS Test ${Date.now()}`;
     const payload = `<img src=x onerror="window.__xss_mark && window.__xss_mark()">`;
 
-    await page
-      .locator('input[id*="title"], input[name*="title"], input[placeholder*="标题"]')
-      .first()
-      .fill(title);
-    await page
-      .locator('textarea[id*="description"], textarea[name*="description"], textarea[placeholder*="描述"]')
-      .first()
-      .fill(payload);
+    await page.getByLabel('标题').fill(title);
+    await page.getByLabel('详细描述').fill(payload);
 
     const createResp = page.waitForResponse(
       resp => resp.url().includes('/api/v1/tickets') && resp.request().method() === 'POST',
       { timeout: 15000 }
     );
 
-    await page
-      .locator(
-        'button[type="submit"], button:has-text("提交"), button:has-text("创建"), button:has-text("创建工单")'
-      )
-      .first()
-      .click();
+    await page.getByRole('button', { name: '创建工单', exact: true }).click();
     expect((await createResp).status()).toBe(200);
 
     await page.waitForLoadState('networkidle');

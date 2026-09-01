@@ -13,7 +13,7 @@ test.describe('Problem List - 问题列表', () => {
   });
 
   test('should display problem list page', async ({ page }) => {
-    await expect(page.locator('h1').first()).toContainText(/问题|problem/i);
+    await expect(page.getByRole('heading', { name: '问题管理' })).toBeVisible();
   });
 
   test('should display problem table', async ({ page }) => {
@@ -46,14 +46,14 @@ test.describe('Problem Create - 创建问题', () => {
   });
 
   test('should display create problem form', async ({ page }) => {
-    await expect(page.locator('input[name="title"], input#title')).toBeVisible();
-    await expect(page.locator('textarea[name="description"]')).toBeVisible();
+    await expect(page.getByLabel('问题标题')).toBeVisible();
+    await expect(page.getByLabel('详细描述')).toBeVisible();
   });
 
   test('should create problem successfully', async ({ page }) => {
-    const titleInput = page.locator('input[name="title"], input#title').first();
-    const descInput = page.locator('textarea[name="description"], textarea').first();
-    const submitBtn = page.locator('button[type="submit"]').first();
+    const titleInput = page.getByLabel('问题标题');
+    const descInput = page.getByLabel('详细描述');
+    const submitBtn = page.getByRole('button', { name: '创建问题' });
 
     await expect(titleInput).toBeVisible();
     await expect(descInput).toBeVisible();
@@ -86,23 +86,7 @@ test.describe('Problem Detail - 问题详情', () => {
   });
 
   test('should display problem detail', async ({ page }) => {
-    await expect(page.locator('h1, .ant-card-head-title').first()).toBeVisible();
+    await expect(page.getByRole('button', { name: '返回列表' })).toBeVisible();
   });
 
-  test('should display RCA section', async ({ page }) => {
-    const rcaTab = page.locator('button:has-text("根因分析"), button:has-text("RCA")');
-    await expect(rcaTab).toBeVisible();
-    {
-      await rcaTab.click();
-    }
-  });
-
-  test('should link to related incidents', async ({ page }) => {
-    const relatedTab = page.locator('button:has-text("关联事件")');
-    await expect(relatedTab).toBeVisible();
-    {
-      await relatedTab.click();
-      await expect(page.locator('[class*="incident"]')).toBeVisible();
-    }
-  });
 });

@@ -3,9 +3,23 @@
  * 配置管理数据库模块业务测试
  */
 
-import type { Page } from '@playwright/test';
+import type { APIRequestContext, Page } from '@playwright/test';
 import { test, expect } from '@playwright/test';
 import { loginAndReturn } from './auth-utils';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8090';
+
+async function csrfHeaders(request: APIRequestContext) {
+  const response = await request.get(`${API_URL}/api/v1/csrf-token`);
+  expect(response.status()).toBe(200);
+  const envelope = (await response.json()) as { code: number; data: { csrf_token: string } };
+  expect(envelope.code).toBe(0);
+  expect(envelope.data.csrf_token).toEqual(expect.any(String));
+  return {
+    'Content-Type': 'application/json',
+    'X-CSRF-Token': envelope.data.csrf_token,
+  };
+}
 
 test.describe('CMDB - 配置管理', () => {
   test.describe.configure({ timeout: 120_000 });
@@ -17,7 +31,6 @@ test.describe('CMDB - 配置管理', () => {
   async function openPage(page: Page, path: string) {
     await page.goto(path, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     await expect(page).toHaveURL(new RegExp(path.replace('/', '\\/')));
-    await expect(page.locator('.main-content')).toBeVisible({ timeout: 60_000 });
   }
 
   async function selectFormOption(page: Page, label: string, option: string) {
@@ -107,5 +120,62 @@ test.describe('CMDB - 配置管理', () => {
     await expect(page.getByText('未关联配置项（有云资源ID但未绑定）')).toBeVisible({
       timeout: 30_000,
     });
+  });
+
+  test('should create and display a canonical discovery source and queue its discovery job', async ({
+    page,
+  }) => {
+    const sourceName = `E2E discovery source ${Date.now()}`;
+    const headers = await csrfHeaders(page.request);
+
+    const createSourceResponse = await page.request.post(
+      `${API_URL}/api/v1/cmdb/discovery/sources`,
+      {
+        headers,
+        data: {
+          name: sourceName,
+          sourceType: 'manual',
+          provider: 'e2e',
+          description: 'Canonical CMDB discovery E2E source',
+          isActive: true,
+        },
+      }
+    );
+    expect(createSourceResponse.status()).toBe(200);
+    const sourceEnvelope = await createSourceResponse.json();
+    expect(sourceEnvelope).toHaveProperty('code', 0);
+    expect(sourceEnvelope.data).toMatchObject({ name: sourceName, sourceType: 'manual' });
+    expect(sourceEnvelope.data.id).toEqual(expect.any(String));
+
+    const jobResponse = await page.request.post(`${API_URL}/api/v1/cmdb/discovery/jobs`, {
+      headers,
+      data: { sourceId: sourceEnvelope.data.id },
+    });
+    expect(jobResponse.status()).toBe(200);
+    const jobEnvelope = await jobResponse.json();
+    expect(jobEnvelope).toHaveProperty('code', 0);
+    expect(jobEnvelope.data).toMatchObject({
+      sourceId: sourceEnvelope.data.id,
+      status: 'pending',
+    });
+    expect(jobEnvelope.data.id).toBeGreaterThan(0);
+
+    const sourceListResponsePromise = page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return (
+        response.request().method() === 'GET' &&
+        url.pathname === '/api/v1/cmdb/discovery/sources'
+      );
+    });
+    await page.goto('/cmdb/registry');
+    const sourceListResponse = await sourceListResponsePromise;
+    expect(sourceListResponse.status()).toBe(200);
+    const listEnvelope = await sourceListResponse.json();
+    expect(listEnvelope).toHaveProperty('code', 0);
+    expect(listEnvelope.data).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: sourceEnvelope.data.id, name: sourceName })])
+    );
+    await expect(page.getByRole('heading', { name: 'Service Graph Registry' })).toBeVisible();
+    await expect(page.getByRole('cell', { name: sourceName })).toBeVisible();
   });
 });

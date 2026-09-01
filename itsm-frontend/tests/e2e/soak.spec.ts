@@ -42,7 +42,7 @@ test.describe('Stability - Soak', () => {
         timeout: 10000,
       });
 
-      const firstRow = page.locator('.ant-table-row, table tbody tr').first();
+      const firstRow = page.locator('table tbody tr').first();
       await expect(firstRow).toBeVisible();
       await firstRow.click();
       await page.waitForLoadState('networkidle');

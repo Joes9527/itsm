@@ -98,16 +98,14 @@ test.describe('SSL-VPN 服务申请与多级审批端到端场景验证 (3-Perso
 
     // 如果未从 API 获取到 catalogId，尝试从页面卡片获取
     const sslvpnCard = page
-      .locator('.ant-card, [class*="ServiceItemCard"], div')
+      .locator('.ant-card')
       .filter({
         hasText: 'SSL-VPN 远程办公访问权限申请',
       })
       .first();
 
     await expect(sslvpnCard).toBeVisible();
-    const applyBtn = sslvpnCard
-      .locator('button:has-text("申请服务"), button:has-text("申请")')
-      .first();
+    const applyBtn = sslvpnCard.getByRole('button', { name: '申请服务', exact: true });
     await expect(applyBtn).toBeVisible();
     await applyBtn.click();
 
@@ -118,42 +116,30 @@ test.describe('SSL-VPN 服务申请与多级审批端到端场景验证 (3-Perso
     catalogId = parseInt(urlMatch![1], 10);
 
     // 1.3 验证申请页与 8 个自定义输入控件正确渲染
-    await page.waitForSelector('form.ant-form', { timeout: 10000 });
-
     // 基础表单项
-    const titleInput = page
-      .locator('#title, input[placeholder*="说明申请目的"], input[id*="title"]')
-      .first();
+    const titleInput = page.locator('#title');
     await titleInput.fill('申请研发出差 SSL-VPN 访问权限');
 
-    const reasonInput = page
-      .locator('#reason, textarea[placeholder*="详细说明申请原因"], textarea[id*="reason"]')
-      .first();
+    const reasonInput = page.locator('#reason');
     await reasonInput.fill('因出差需要远程访问研发内网与生产堡垒机');
 
     // 验证与填写 8 个动态自定义字段
     // 字段 1: 申请人姓名 (applicant_name)
-    const nameInput = page
-      .locator('input[id*="customFields_applicant_name"], input[name*="applicant_name"]')
-      .first();
+    const nameInput = page.locator('#customFields_applicant_name');
     await expect(nameInput).toBeVisible();
     {
       await nameInput.fill(SSLVPN_CUSTOM_FIELDS.applicant_name);
     }
 
     // 字段 2: 申请人域账号/UPN (applicant_upn)
-    const upnInput = page
-      .locator('input[id*="customFields_applicant_upn"], input[name*="applicant_upn"]')
-      .first();
+    const upnInput = page.locator('#customFields_applicant_upn');
     await expect(upnInput).toBeVisible();
     {
       await upnInput.fill(SSLVPN_CUSTOM_FIELDS.applicant_upn);
     }
 
     // 字段 3: 员工工号 (employee_id)
-    const empIdInput = page
-      .locator('input[id*="customFields_employee_id"], input[name*="employee_id"]')
-      .first();
+    const empIdInput = page.locator('#customFields_employee_id');
     await expect(empIdInput).toBeVisible();
     {
       await empIdInput.fill(SSLVPN_CUSTOM_FIELDS.employee_id);
@@ -184,9 +170,7 @@ test.describe('SSL-VPN 服务申请与多级审批端到端场景验证 (3-Perso
     }
 
     // 字段 6: 访问目标系统与网段 (target_systems)
-    const targetInput = page
-      .locator('input[id*="customFields_target_systems"], input[name*="target_systems"]')
-      .first();
+    const targetInput = page.locator('#customFields_target_systems');
     await expect(targetInput).toBeVisible();
     {
       await targetInput.fill(SSLVPN_CUSTOM_FIELDS.target_systems);
@@ -205,18 +189,14 @@ test.describe('SSL-VPN 服务申请与多级审批端到端场景验证 (3-Perso
     }
 
     // 字段 8: 业务申请理由 (access_reason - textarea)
-    const accessReasonInput = page
-      .locator('textarea[id*="customFields_access_reason"], textarea[name*="access_reason"]')
-      .first();
+    const accessReasonInput = page.locator('#customFields_access_reason');
     await expect(accessReasonInput).toBeVisible();
     {
       await accessReasonInput.fill(SSLVPN_CUSTOM_FIELDS.access_reason);
     }
 
     // 1.4 点击提交申请
-    const submitBtn = page
-      .locator('button[type="submit"]:has-text("提交申请"), button:has-text("提交")')
-      .first();
+    const submitBtn = page.getByRole('button', { name: '提交申请', exact: true });
     await submitBtn.click();
 
     // 1.5 验证提交成功并跳转到工单详情页
@@ -242,11 +222,11 @@ test.describe('SSL-VPN 服务申请与多级审批端到端场景验证 (3-Perso
     await page.waitForLoadState('domcontentloaded');
 
     // 2.2 验证在待办中心能看到对应的待办任务
-    await page.waitForSelector('table.ant-table, [class*="ant-table"]', { timeout: 15000 });
+    await expect(page.getByRole('table')).toBeVisible({ timeout: 15000 });
 
     // 查找包含 "上级领导初审" 或该工单标题的待办行
     const taskRow = page
-      .locator('tr.ant-table-row, tr')
+      .getByRole('row')
       .filter({
         hasText: /上级领导初审|UserTask_DeptManagerApproval|SSL-VPN/,
       })
@@ -255,29 +235,27 @@ test.describe('SSL-VPN 服务申请与多级审批端到端场景验证 (3-Perso
     await expect(taskRow).toBeVisible({ timeout: 10000 });
 
     // 2.3 如果有"领取"按钮，先点击领取，或直接点击"批准"
-    const claimBtn = taskRow.locator('button:has-text("领取")').first();
+    const claimBtn = taskRow.getByRole('button', { name: '领取', exact: true });
     await expect(claimBtn).toBeVisible();
     {
       await claimBtn.click();
-      await page.waitForTimeout(1000);
     }
 
-    const approveBtn = taskRow.locator('button:has-text("批准")').first();
+    const approveBtn = taskRow.getByRole('button', { name: '批准', exact: true });
+    await expect(approveBtn).toBeVisible();
     await approveBtn.click();
 
     // 2.4 在弹出的审批模态框中输入审批意见并确认批准
-    const modal = page.locator('.ant-modal-content');
+    const modal = page.getByRole('dialog', { name: '批准任务' });
     await expect(modal).toBeVisible({ timeout: 5000 });
 
-    const commentInput = modal.locator('textarea').first();
+    const commentInput = modal.getByPlaceholder('可填写审批意见');
     await expect(commentInput).toBeVisible();
     {
       await commentInput.fill('同意申请，出差值班需要');
     }
 
-    const confirmApproveBtn = modal
-      .locator('button.ant-btn-primary:has-text("确认批准"), button:has-text("确定")')
-      .first();
+    const confirmApproveBtn = modal.getByRole('button', { name: '确认批准', exact: true });
     await confirmApproveBtn.click();
 
     // 2.5 验证初审已完成
@@ -295,10 +273,10 @@ test.describe('SSL-VPN 服务申请与多级审批端到端场景验证 (3-Perso
     await page.waitForLoadState('domcontentloaded');
 
     // 3.2 验证在待办中心看到流转过来的第二级技术复审任务
-    await page.waitForSelector('table.ant-table, [class*="ant-table"]', { timeout: 15000 });
+    await expect(page.getByRole('table')).toBeVisible({ timeout: 15000 });
 
     const l2TaskRow = page
-      .locator('tr.ant-table-row, tr')
+      .getByRole('row')
       .filter({
         hasText: /李昕|L2网络运维|UserTask_L2NetworkOpsApproval|SSL-VPN/,
       })
@@ -307,29 +285,27 @@ test.describe('SSL-VPN 服务申请与多级审批端到端场景验证 (3-Perso
     await expect(l2TaskRow).toBeVisible({ timeout: 10000 });
 
     // 3.3 领取并批准
-    const claimBtn = l2TaskRow.locator('button:has-text("领取")').first();
+    const claimBtn = l2TaskRow.getByRole('button', { name: '领取', exact: true });
     await expect(claimBtn).toBeVisible();
     {
       await claimBtn.click();
-      await page.waitForTimeout(1000);
     }
 
-    const approveBtn = l2TaskRow.locator('button:has-text("批准")').first();
+    const approveBtn = l2TaskRow.getByRole('button', { name: '批准', exact: true });
+    await expect(approveBtn).toBeVisible();
     await approveBtn.click();
 
     // 3.4 填写复审意见并提交
-    const modal = page.locator('.ant-modal-content');
+    const modal = page.getByRole('dialog', { name: '批准任务' });
     await expect(modal).toBeVisible({ timeout: 5000 });
 
-    const commentInput = modal.locator('textarea').first();
+    const commentInput = modal.getByPlaceholder('可填写审批意见');
     await expect(commentInput).toBeVisible();
     {
       await commentInput.fill('网络权限核准通过');
     }
 
-    const confirmApproveBtn = modal
-      .locator('button.ant-btn-primary:has-text("确认批准"), button:has-text("确定")')
-      .first();
+    const confirmApproveBtn = modal.getByRole('button', { name: '确认批准', exact: true });
     await confirmApproveBtn.click();
 
     await expect(modal).not.toBeVisible({ timeout: 10000 });

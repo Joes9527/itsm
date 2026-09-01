@@ -20,6 +20,35 @@ async function csrfHeaders(request: APIRequestContext, apiUrl: string) {
 }
 
 test.describe('SLA 监控完整测试', () => {
+  test('SLA monitor loads and refreshes the canonical monitoring projection', async ({ page }) => {
+    await loginAs(page, 'admin');
+
+    const initialResponsePromise = page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return response.request().method() === 'POST' && url.pathname === '/api/v1/sla/monitoring';
+    });
+    await page.goto('/sla-monitor');
+    const initialResponse = await initialResponsePromise;
+    expect(initialResponse.status()).toBe(200);
+    const initialEnvelope = await initialResponse.json();
+    expect(initialEnvelope).toHaveProperty('code', 0);
+    expect(initialEnvelope).toHaveProperty('data');
+    await expect(page.getByRole('heading', { name: 'SLA实时监控' })).toBeVisible();
+    await expect(page.getByText('SLA总数', { exact: true })).toBeVisible();
+
+    const refreshResponsePromise = page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return response.request().method() === 'POST' && url.pathname === '/api/v1/sla/monitoring';
+    });
+    await page.getByRole('button', { name: '刷新', exact: true }).click();
+    const refreshResponse = await refreshResponsePromise;
+    expect(refreshResponse.status()).toBe(200);
+    const refreshEnvelope = await refreshResponse.json();
+    expect(refreshEnvelope).toHaveProperty('code', 0);
+    expect(refreshEnvelope).toHaveProperty('data');
+    await expect(page.getByText('总体合规率', { exact: true })).toBeVisible();
+  });
+
   test.describe('SLA API 接口测试', () => {
     test('GET /api/v1/sla SLA 列表接口', async ({ request }) => {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8090';
@@ -89,12 +118,7 @@ test.describe('SLA 监控完整测试', () => {
       await page.waitForLoadState('domcontentloaded');
 
       // 检查是否有 SLA 相关信息
-      await expect(
-        page
-          .getByRole('main')
-          .getByText(/SLA|服务级别/)
-          .first()
-      ).toBeVisible();
+      await expect(page.getByText(/SLA|服务级别/).first()).toBeVisible();
     });
   });
 });

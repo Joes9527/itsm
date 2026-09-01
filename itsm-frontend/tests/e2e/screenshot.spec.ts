@@ -53,7 +53,7 @@ test.describe('ITSM Screenshots', () => {
     // Capture dashboard
     await page.goto(`${CONFIG.baseURL}/dashboard`);
     await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(2000);
+    await page.evaluate(() => document.fonts.ready);
     await page.screenshot({
       path: path.join(CONFIG.outputDir, 'dashboard.png'),
       fullPage: true

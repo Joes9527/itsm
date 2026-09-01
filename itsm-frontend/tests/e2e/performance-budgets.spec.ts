@@ -27,16 +27,10 @@ test.describe('Performance - 浏览器端关键指标', () => {
 
     await loginAndReturn(page, { ...DEFAULT_LOGIN, username: 'end_user', password: 'admin123' });
     await page.goto('/tickets/create');
-    await page.waitForSelector('form, [data-testid="ticket-form"]', { timeout: 15000 });
+    await expect(page.getByRole('main', { name: '创建工单页面' })).toBeVisible({ timeout: 15000 });
 
-    await page
-      .locator('input[id*="title"], input[name*="title"], input[placeholder*="标题"]')
-      .first()
-      .fill(`Perf Ticket ${Date.now()}`);
-    await page
-      .locator('textarea[id*="description"], textarea[name*="description"], textarea[placeholder*="描述"]')
-      .first()
-      .fill('performance test');
+    await page.getByLabel('标题').fill(`Perf Ticket ${Date.now()}`);
+    await page.getByLabel('详细描述').fill('performance test');
 
     const start = Date.now();
     const respPromise = page.waitForResponse(
@@ -44,12 +38,7 @@ test.describe('Performance - 浏览器端关键指标', () => {
       { timeout: 15000 }
     );
 
-    await page
-      .locator(
-        'button[type="submit"], button:has-text("提交"), button:has-text("创建"), button:has-text("创建工单")'
-      )
-      .first()
-      .click();
+    await page.getByRole('button', { name: '创建工单', exact: true }).click();
 
     const response = await respPromise;
     const elapsed = Date.now() - start;

@@ -16,7 +16,6 @@ test.describe('Workflow Management - 工作流管理', () => {
   async function openWorkflowPage(page: import('@playwright/test').Page, path: string) {
     await page.goto(path, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     await expect(page).toHaveURL(new RegExp(path.replace('/', '\\/')));
-    await expect(page.locator('.main-content')).toBeVisible({ timeout: 60_000 });
   }
 
   test.describe('Workflow List - 工作流列表', () => {

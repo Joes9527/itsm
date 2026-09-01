@@ -14,7 +14,9 @@ test.describe('Login Page - 无需认证', () => {
   });
 
   test('should display login form', async ({ page }) => {
-    await expect(page.locator('form')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('textbox', { name: '租户代码' })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('textbox', { name: '用户名' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '登录' })).toBeVisible();
   });
 
   test('should display username field', async ({ page }) => {
@@ -37,8 +39,7 @@ test.describe('Login Page - 无需认证', () => {
   test('should show validation error when submitting empty form', async ({ page }) => {
     await page.waitForSelector('button[type="submit"]', { timeout: 15000 });
     await page.click('button[type="submit"]');
-    // 等待一下让验证运行
-    await page.waitForTimeout(500);
+    await expect(page.getByText('请输入租户代码', { exact: true })).toBeVisible();
     // 页面仍然在登录页
     await expect(page).toHaveURL(/\/login/);
   });
