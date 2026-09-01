@@ -9,7 +9,11 @@ DECLARE
     invalid_link_exists BOOLEAN;
     policy_using TEXT;
     policy_check TEXT;
-    canonical_policy_expression TEXT := '(EXISTS ( SELECT 1 FROM tickets work_item WHERE ((work_item.id = changes.work_item_id) AND (work_item.tenant_id = (NULLIF(current_setting(''app.current_tenant''::text, true), ''''::text))::bigint) AND (work_item.deleted_at IS NULL))))';
+    policy_roles OID[];
+    policy_command "char";
+    policy_permissive BOOLEAN;
+    canonical_policy_expression TEXT;
+    canonical_policy_name TEXT;
 BEGIN
     FOR extension_table, extension_index, extension_constraint, expected_record_class IN
         SELECT * FROM (VALUES
@@ -150,40 +154,64 @@ BEGIN
         END IF;
     END LOOP;
 
-	SELECT pg_get_expr(policy.polqual, policy.polrelid),
-	       pg_get_expr(policy.polwithcheck, policy.polrelid)
-	INTO policy_using, policy_check
-	FROM pg_policy policy
-	JOIN pg_class relation ON relation.oid = policy.polrelid
-	JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
-	WHERE namespace.nspname = current_schema()
-	  AND relation.relname = 'changes'
-	  AND policy.polname = 'tenant_isolation_changes';
+	FOR extension_table IN SELECT unnest(ARRAY['incidents', 'problems', 'changes']) LOOP
+		canonical_policy_name := 'tenant_isolation_' || extension_table;
+		canonical_policy_expression := format(
+			'(EXISTS ( SELECT 1 FROM tickets work_item WHERE ((work_item.id = %I.work_item_id) AND (work_item.tenant_id = (NULLIF(current_setting(''app.current_tenant''::text, true), ''''::text))::bigint) AND (work_item.deleted_at IS NULL))))',
+			extension_table
+		);
+		policy_using := NULL;
+		policy_check := NULL;
+		policy_roles := NULL;
+		policy_command := NULL;
+		policy_permissive := NULL;
 
-	IF policy_using IS NULL OR policy_check IS NULL
-	   OR regexp_replace(btrim(policy_using), '\s+', ' ', 'g') <> canonical_policy_expression
-	   OR regexp_replace(btrim(policy_check), '\s+', ' ', 'g') <> canonical_policy_expression THEN
-		RAISE EXCEPTION 'changes.tenant_isolation_changes must use authoritative WorkItem tenant and soft-delete scope exactly';
-	END IF;
-
-	IF (SELECT COUNT(*)
+		SELECT pg_get_expr(policy.polqual, policy.polrelid),
+		       pg_get_expr(policy.polwithcheck, policy.polrelid),
+		       policy.polroles,
+		       policy.polcmd,
+		       policy.polpermissive
+		INTO policy_using, policy_check, policy_roles, policy_command, policy_permissive
 		FROM pg_policy policy
 		JOIN pg_class relation ON relation.oid = policy.polrelid
 		JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
 		WHERE namespace.nspname = current_schema()
-		  AND relation.relname = 'changes') <> 1 THEN
-		RAISE EXCEPTION 'changes must have exactly one canonical RLS policy';
-	END IF;
+		  AND relation.relname = extension_table
+		  AND policy.polname = canonical_policy_name;
 
-	IF NOT EXISTS (
-		SELECT 1
-		FROM pg_class relation
-		JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
-		WHERE namespace.nspname = current_schema()
-		  AND relation.relname = 'changes'
-		  AND relation.relrowsecurity
-		  AND NOT relation.relforcerowsecurity
-	) THEN
-		RAISE EXCEPTION 'changes RLS must be enabled without FORCE';
-	END IF;
+		IF policy_using IS NULL OR policy_check IS NULL
+		   OR regexp_replace(btrim(policy_using), '\s+', ' ', 'g') <> canonical_policy_expression
+		   OR regexp_replace(btrim(policy_check), '\s+', ' ', 'g') <> canonical_policy_expression THEN
+			RAISE EXCEPTION '%.% must use authoritative WorkItem tenant and soft-delete scope exactly',
+				extension_table, canonical_policy_name;
+		END IF;
+
+		IF policy_roles <> ARRAY[0::OID]
+		   OR policy_command <> '*'
+		   OR NOT policy_permissive THEN
+			RAISE EXCEPTION '%.% must have canonical PUBLIC/ALL/PERMISSIVE policy attributes',
+				extension_table, canonical_policy_name;
+		END IF;
+
+		IF (SELECT COUNT(*)
+			FROM pg_policy policy
+			JOIN pg_class relation ON relation.oid = policy.polrelid
+			JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+			WHERE namespace.nspname = current_schema()
+			  AND relation.relname = extension_table) <> 1 THEN
+			RAISE EXCEPTION '% must have exactly one canonical RLS policy', extension_table;
+		END IF;
+
+		IF NOT EXISTS (
+			SELECT 1
+			FROM pg_class relation
+			JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+			WHERE namespace.nspname = current_schema()
+			  AND relation.relname = extension_table
+			  AND relation.relrowsecurity
+			  AND NOT relation.relforcerowsecurity
+		) THEN
+			RAISE EXCEPTION '% RLS must be enabled without FORCE', extension_table;
+		END IF;
+	END LOOP;
 END $verification$;

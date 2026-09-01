@@ -139,3 +139,33 @@ Observed RED before the corresponding fixes:
 
 - A broad `go test -tags=integration_rls -race ./database/rls -count=1 -v` run had one environment-data failure: the pre-existing `TestAcquireConn_TenantScopeIsolation` assumes tenant 1 already owns at least one Change, but the current local dev database returned zero. All other cases passed, including the new canceled-context live cleanup test. This is recorded separately and is not represented as a clean full RLS run; the focused zero-skip release boundary above is the authoritative round-2 live evidence.
 - The earlier fresh-replay 009 integration blocker and the required `020 -> 021 -> 022` combined ordering remain unchanged.
+
+## Authority review round 3 fix
+
+### Implementation
+
+- Migration 022 apply and development reset now replace direct-column policies for all three professional extension tables, not only Change. Their only final policies are `tenant_isolation_incidents`, `tenant_isolation_problems`, and `tenant_isolation_changes`; each resolves tenant and active-record scope through `extension.work_item_id -> tickets.id`, uses only `app.current_tenant`, is explicitly `AS PERMISSIVE FOR ALL TO PUBLIC`, and leaves RLS enabled without `FORCE`.
+- Verification is table-driven across Incident, Problem, and Change. For every table it requires the exact canonical policy name, exactly one policy, PUBLIC roles (`polroles = {0}`), ALL command (`polcmd = '*'`), permissive mode, exact whitespace-normalized `USING` and `WITH CHECK` expressions, and `ENABLE`/no-`FORCE`. Missing, extra, role-scoped, command-scoped, restrictive, or permissive-expression policies fail closed.
+- Apply, reset, and verify continue to require the exact single extension `work_item_id -> tickets(id)` FK. Live adverse coverage now exercises canonical-plus-wrong FK state against every gate and every professional extension.
+- No compatibility policy, alternate GUC, parallel name, new migration, or transaction-layer change was introduced.
+
+### RED evidence
+
+- The independent live reproduction rebuilt `tenant_isolation_changes` with identical expressions but `TO itsm_admin`; the previous verifier exited zero because it did not inspect `polroles`, `polcmd`, or `polpermissive`.
+- Before the tuple fix, `go test -tags=integration ./migration -run 'TestProfessionalExtensionVerificationRejects(RoleScoped|CommandScoped|Restrictive)CanonicalPolicy' -count=1 -v` failed all three cases because verification returned nil.
+- The fresh-009 integration precheck established that direct policies existed for all three extensions before shared-column removal while the previous 022 only rebuilt Change, leaving Incident and Problem without final policies. This external RED was encoded as a retained fresh-009-direct-policy upgrade test plus exact three-table catalog and behavior checks.
+
+### GREEN evidence
+
+- `go test -tags=integration -race ./migration -run 'TestProfessionalExtension(Migration|Verification|Reset|Apply)' -count=1 -v` against local `itsm-postgres-dev` — PASS, zero skips. It covers all three tables for missing/extra policy, `OR true`, wrong role, wrong command, restrictive mode, and apply/verify/reset additional-FK rejection while preserving the earlier lifecycle and FK/index gates.
+- `go test -tags=integration -race ./migration -run 'TestProfessionalExtensionMigrationUpgradesFresh009DirectPoliciesForEveryExtension|TestProfessionalExtensionPoliciesEnforceWorkItemScopeForEveryExtension' -count=1 -v` — PASS, zero skips. All three fresh-009 direct policies upgrade in place; a real non-owner role sees only its active tenant WorkItem and cross-tenant inserts fail `WITH CHECK` for Incident, Problem, and Change.
+- `go test ./migration -run 'TestProfessionalExtensionsDropSharedFieldsIsVersioned|TestProfessionalExtensionVerificationBindsExactReadyValidUniqueIndexes' -count=1` — PASS; the embedded apply SQL and retained asset remain equal, and Go source checks pin the tuple fields.
+- `go test ./... -count=1` — PASS.
+- `go build ./...` — PASS.
+- `go test -race ./controller ./service ./handlers/change -count=1` — PASS (`controller 78.436s`, `service 96.366s`, `handlers/change 7.876s`).
+- `npm run type-check` — PASS.
+- `git diff --check` and the frozen transaction-file diff gate — PASS.
+
+### Remaining integration contract
+
+- Integration must still order `020 -> 021 -> 022`. The incoming corrected 009 remains responsible for its own canonical direct-policy creation; 022 is now proven to replace those direct policies with the final indirect WorkItem policies for every professional extension.
