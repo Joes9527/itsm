@@ -279,7 +279,7 @@ func NewApplication() *Application {
 		sequenceService = ss
 		sugar.Infow("Redis sequence service initialized successfully")
 	} else {
-		sugar.Warnw("Redis sequence service not available, will use database fallback for ticket number")
+		sugar.Warnw("Redis sequence service not available; professional incident_number will use database fallback")
 	}
 
 	// 初始化 EventBus 事件总线

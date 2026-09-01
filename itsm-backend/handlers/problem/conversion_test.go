@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -88,14 +87,6 @@ func newConversionFixture(t *testing.T, status string, withWorkItem bool) *conve
 		incidentID:       incident.ID,
 		incidentWorkItem: workItemID,
 	}
-}
-
-type atomicSequenceProvider struct {
-	next atomic.Int64
-}
-
-func (p *atomicSequenceProvider) GetNextSequenceWithExpiry(context.Context, string, time.Time) (int64, error) {
-	return p.next.Add(1), nil
 }
 
 type conversionCounts struct {
