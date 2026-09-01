@@ -74,7 +74,7 @@ func TestIsValidChangeStatusTransition(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := IsValidChangeStatusTransition(tt.currentStatus, tt.newStatus, tt.changeType)
+			got := common.IsValidChangeStatusTransition(tt.currentStatus, tt.newStatus, tt.changeType)
 			assert.Equal(t, tt.want, got,
 				"IsValidChangeStatusTransition(%q, %q, %q)", tt.currentStatus, tt.newStatus, tt.changeType)
 		})

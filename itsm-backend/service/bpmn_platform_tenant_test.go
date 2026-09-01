@@ -34,6 +34,7 @@ func setupPlatformTenantEnv(t *testing.T) (*ent.Client, ProcessEngine, context.C
 	require.NoError(t, err)
 
 	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar())
+	injectEngineChangeCallbackTestService(t, engine, client)
 	_, err = NewBPMNTemplateService(client).LoadAndDeployTemplates(ctx, tenant.ID)
 	require.NoError(t, err)
 
