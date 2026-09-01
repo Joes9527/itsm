@@ -3,10 +3,9 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"net"
-	"net/smtp"
-	"os"
+	"net/mail"
 	"strings"
 	"time"
 
@@ -16,223 +15,56 @@ import (
 	"itsm-backend/ent/incidentalert"
 	"itsm-backend/ent/user"
 
-	"github.com/spf13/viper"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
 type IncidentAlertingService struct {
-	client *ent.Client
-	logger *zap.SugaredLogger
+	client           *ent.Client
+	outboxRepository *OutboxEventRepository
+	logger           *zap.SugaredLogger
 }
 
-const incidentAlertDeliveryTimeout = 5 * time.Second
+const incidentAlertDeliveryEventType = "incident_alert_delivery"
 
 func NewIncidentAlertingService(client *ent.Client, logger *zap.SugaredLogger) *IncidentAlertingService {
 	return &IncidentAlertingService{
-		client: client,
-		logger: logger,
+		client:           client,
+		outboxRepository: NewOutboxEventRepository(client),
+		logger:           logger,
 	}
 }
 
-// AlertChannel 告警渠道接口
-type AlertChannel interface {
-	Send(ctx context.Context, alert *dto.IncidentAlertResponse) error
-	GetName() string
-	IsEnabled() bool
+type incidentAlertDeliveryPayload struct {
+	Version       int      `json:"version"`
+	EventID       string   `json:"eventId"`
+	TenantID      int      `json:"tenantId"`
+	AlertID       int      `json:"alertId"`
+	Channel       string   `json:"channel"`
+	Recipients    []string `json:"recipients"`
+	Subject       string   `json:"subject"`
+	Message       string   `json:"message"`
+	ActorID       int      `json:"actorId,omitempty"`
+	Source        string   `json:"source"`
+	CorrelationID string   `json:"correlationId"`
 }
 
-// EmailChannel 邮件告警渠道
-type EmailChannel struct {
-	smtpHost     string
-	smtpPort     int
-	smtpUsername string
-	smtpPassword string
-	fromEmail    string
-	logger       *zap.SugaredLogger
+type incidentAlertActorContextKey struct{}
+
+type incidentAlertActor struct {
+	ID            int
+	Source        string
+	CorrelationID string
 }
 
-func (c *EmailChannel) Send(ctx context.Context, alert *dto.IncidentAlertResponse) error {
-	c.logger.Infow("Sending email alert", "alert_id", alert.ID, "recipients", alert.Recipients)
-
-	if len(alert.Recipients) == 0 {
-		return nil
-	}
-
-	// 真实邮件发送逻辑
-	auth := smtp.PlainAuth("", c.smtpUsername, c.smtpPassword, c.smtpHost)
-
-	msg := []byte(fmt.Sprintf("To: %s\r\n"+
-		"Subject: [ITSM Alert] %s\r\n"+
-		"\r\n"+
-		"%s\r\n", alert.Recipients[0], alert.AlertName, alert.Message))
-
-	addr := fmt.Sprintf("%s:%d", c.smtpHost, c.smtpPort)
-
-	// 在非测试/开发环境中尝试发送
-	if os.Getenv("GIN_MODE") == "release" || os.Getenv("ENABLE_EMAIL_SENDING") == "true" {
-		if err := sendSMTPWithContext(ctx, addr, c.smtpHost, auth, c.fromEmail, alert.Recipients, msg); err != nil {
-			c.logger.Errorw("Failed to send email via SMTP", "error", err)
-			return fmt.Errorf("failed to send email via SMTP: %w", err)
-		} else {
-			c.logger.Infow("Email sent via SMTP successfully")
-		}
-	} else {
-		// 模拟邮件发送
-		if err := waitForAlertSimulation(ctx, 100*time.Millisecond); err != nil {
-			return err
-		}
-		c.logger.Infow("Email sending simulated (dev mode)")
-	}
-
-	c.logger.Infow("Email alert processing completed", "alert_id", alert.ID)
-	return nil
-}
-
-func sendSMTPWithContext(ctx context.Context, addr, host string, auth smtp.Auth, from string, recipients []string, msg []byte) error {
-	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	if deadline, ok := ctx.Deadline(); ok {
-		if err := conn.SetDeadline(deadline); err != nil {
-			return err
-		}
-	}
-	client, err := smtp.NewClient(conn, host)
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-	if auth != nil {
-		if ok, _ := client.Extension("AUTH"); ok {
-			if err := client.Auth(auth); err != nil {
-				return err
-			}
-		}
-	}
-	if err := client.Mail(from); err != nil {
-		return err
-	}
-	for _, recipient := range recipients {
-		if err := client.Rcpt(recipient); err != nil {
-			return err
-		}
-	}
-	writer, err := client.Data()
-	if err != nil {
-		return err
-	}
-	if _, err := writer.Write(msg); err != nil {
-		_ = writer.Close()
-		return err
-	}
-	if err := writer.Close(); err != nil {
-		return err
-	}
-	return client.Quit()
-}
-
-func waitForAlertSimulation(ctx context.Context, duration time.Duration) error {
-	timer := time.NewTimer(duration)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-timer.C:
-		return nil
-	}
-}
-
-func (c *EmailChannel) GetName() string {
-	return "email"
-}
-
-func (c *EmailChannel) IsEnabled() bool {
-	return c.smtpHost != "" && c.smtpPort > 0
-}
-
-// SMSChannel 短信告警渠道
-type SMSChannel struct {
-	apiKey    string
-	apiSecret string
-	signName  string
-	logger    *zap.SugaredLogger
-}
-
-func (c *SMSChannel) Send(ctx context.Context, alert *dto.IncidentAlertResponse) error {
-	c.logger.Infow("Sending SMS alert", "alert_id", alert.ID, "recipients", alert.Recipients)
-	if os.Getenv("GIN_MODE") == "release" {
-		return fmt.Errorf("SMS alert provider is not implemented; use a managed connector")
-	}
-	if err := waitForAlertSimulation(ctx, 200*time.Millisecond); err != nil {
-		return err
-	}
-	c.logger.Infow("SMS alert simulated in non-production environment", "alert_id", alert.ID)
-	return nil
-}
-
-func (c *SMSChannel) GetName() string {
-	return "sms"
-}
-
-func (c *SMSChannel) IsEnabled() bool {
-	return c.apiKey != "" && c.apiSecret != ""
-}
-
-// SlackChannel Slack告警渠道
-type SlackChannel struct {
-	webhookURL string
-	channel    string
-	logger     *zap.SugaredLogger
-}
-
-func (c *SlackChannel) Send(ctx context.Context, alert *dto.IncidentAlertResponse) error {
-	c.logger.Infow("Sending Slack alert", "alert_id", alert.ID, "channel", c.channel)
-	if os.Getenv("GIN_MODE") == "release" {
-		return fmt.Errorf("slack alert delivery must use the connector lifecycle")
-	}
-	if err := waitForAlertSimulation(ctx, 150*time.Millisecond); err != nil {
-		return err
-	}
-	c.logger.Infow("Slack alert simulated in non-production environment", "alert_id", alert.ID)
-	return nil
-}
-
-func (c *SlackChannel) GetName() string {
-	return "slack"
-}
-
-func (c *SlackChannel) IsEnabled() bool {
-	return c.webhookURL != ""
-}
-
-// WebhookChannel Webhook告警渠道
-type WebhookChannel struct {
-	url     string
-	method  string
-	headers map[string]string
-	logger  *zap.SugaredLogger
-}
-
-func (c *WebhookChannel) Send(ctx context.Context, alert *dto.IncidentAlertResponse) error {
-	c.logger.Infow("Sending webhook alert", "alert_id", alert.ID, "url", c.url)
-	if os.Getenv("GIN_MODE") == "release" {
-		return fmt.Errorf("webhook alert delivery must use the connector lifecycle")
-	}
-	if err := waitForAlertSimulation(ctx, 100*time.Millisecond); err != nil {
-		return err
-	}
-	c.logger.Infow("Webhook alert simulated in non-production environment", "alert_id", alert.ID)
-	return nil
-}
-
-func (c *WebhookChannel) GetName() string {
-	return "webhook"
-}
-
-func (c *WebhookChannel) IsEnabled() bool {
-	return c.url != ""
+// WithIncidentAlertActor carries auditable actor/source metadata from an API
+// or automation boundary into the durable delivery envelope.
+func WithIncidentAlertActor(ctx context.Context, actorID int, source, correlationID string) context.Context {
+	return context.WithValue(ctx, incidentAlertActorContextKey{}, incidentAlertActor{
+		ID:            actorID,
+		Source:        strings.TrimSpace(source),
+		CorrelationID: strings.TrimSpace(correlationID),
+	})
 }
 
 // CreateIncidentAlert 创建事件告警
@@ -246,8 +78,17 @@ func (s *IncidentAlertingService) CreateIncidentAlert(ctx context.Context, req *
 		triggeredAt = *req.TriggeredAt
 	}
 
-	// 创建告警记录
-	alert, err := s.client.IncidentAlert.Create().
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("start incident alert transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	actor := resolveIncidentAlertActor(ctx)
+	if actor.CorrelationID == "" {
+		actor.CorrelationID = uuid.NewString()
+	}
+
+	alert, err := tx.IncidentAlert.Create().
 		SetIncidentID(req.IncidentID).
 		SetAlertType(req.AlertType).
 		SetAlertName(req.AlertName).
@@ -267,20 +108,90 @@ func (s *IncidentAlertingService) CreateIncidentAlert(ctx context.Context, req *
 		return nil, fmt.Errorf("failed to create incident alert: %w", err)
 	}
 
-	// Persist in-app notifications before returning. Keeping database writes out
-	// of the delivery goroutine prevents them from racing with subsequent alert
-	// lifecycle updates (and their mandatory audit events).
-	s.createSystemNotification(ctx, alert, tenantID)
-
-	// Keep delivery within the caller's lifecycle and impose one bounded budget.
-	// Durable fan-out can replace this path later; a detached goroutine is not a
-	// reliability mechanism and can outlive both the request and test/database.
-	deliveryCtx, cancel := context.WithTimeout(ctx, incidentAlertDeliveryTimeout)
-	defer cancel()
-	s.sendAlertNotifications(deliveryCtx, alert)
+	if err := s.createSystemNotification(ctx, tx, alert, tenantID); err != nil {
+		return nil, fmt.Errorf("create incident alert in-app notification: %w", err)
+	}
+	deliveryAccepted := false
+	for _, channel := range req.Channels {
+		if channel != "email" {
+			continue
+		}
+		for _, recipient := range req.Recipients {
+			if err := s.enqueueAlertDelivery(ctx, tx, alert, channel, recipient, actor); err != nil {
+				return nil, fmt.Errorf("enqueue incident alert delivery: %w", err)
+			}
+		}
+		deliveryAccepted = true
+	}
+	if deliveryAccepted {
+		if err := recordIncidentAlertDeliveryAudit(ctx, tx, alert, actor); err != nil {
+			return nil, fmt.Errorf("audit incident alert delivery acceptance: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit incident alert transaction: %w", err)
+	}
 
 	s.logger.Infow("Incident alert created successfully", "id", alert.ID)
 	return s.toIncidentAlertResponse(alert), nil
+}
+
+func (s *IncidentAlertingService) enqueueAlertDelivery(ctx context.Context, tx *ent.Tx, alert *ent.IncidentAlert, channel, recipient string, actor incidentAlertActor) error {
+	eventID := uuid.NewString()
+	if actor.CorrelationID == "" {
+		actor.CorrelationID = eventID
+	}
+	payload, err := json.Marshal(incidentAlertDeliveryPayload{
+		Version:       1,
+		EventID:       eventID,
+		TenantID:      alert.TenantID,
+		AlertID:       alert.ID,
+		Channel:       channel,
+		Recipients:    []string{recipient},
+		Subject:       alert.AlertName,
+		Message:       alert.Message,
+		ActorID:       actor.ID,
+		Source:        actor.Source,
+		CorrelationID: actor.CorrelationID,
+	})
+	if err != nil {
+		return fmt.Errorf("encode incident alert delivery: %w", err)
+	}
+	_, err = s.outboxRepository.Enqueue(ctx, tx, NewOutboxEvent{
+		EventID:       eventID,
+		EventType:     incidentAlertDeliveryEventType,
+		TenantID:      alert.TenantID,
+		AggregateType: "incident_alert",
+		AggregateID:   fmt.Sprint(alert.ID),
+		Payload:       payload,
+	})
+	return err
+}
+
+func resolveIncidentAlertActor(ctx context.Context) incidentAlertActor {
+	actor := incidentAlertActor{Source: "system"}
+	if carried, ok := ctx.Value(incidentAlertActorContextKey{}).(incidentAlertActor); ok {
+		actor = carried
+	}
+	if actor.Source == "" {
+		actor.Source = "system"
+	}
+	return actor
+}
+
+func recordIncidentAlertDeliveryAudit(ctx context.Context, tx *ent.Tx, alert *ent.IncidentAlert, actor incidentAlertActor) error {
+	create := tx.AuditLog.Create().
+		SetTenantID(alert.TenantID).
+		SetRequestID(actor.CorrelationID).
+		SetResource("incident_alert").
+		SetAction("incident_alert.delivery_accepted").
+		SetPath("incident_alerts/delivery").
+		SetMethod("OUTBOX").
+		SetStatusCode(202)
+	if actor.ID > 0 {
+		create.SetUserID(actor.ID)
+	}
+	return create.Exec(ctx)
 }
 
 func (s *IncidentAlertingService) validateAlertRequest(ctx context.Context, req *dto.CreateIncidentAlertRequest, tenantID int) error {
@@ -304,156 +215,33 @@ func (s *IncidentAlertingService) validateAlertRequest(ctx context.Context, req 
 	default:
 		return fmt.Errorf("invalid alert severity: %s", req.Severity)
 	}
-	allowedChannels := map[string]struct{}{"email": {}, "sms": {}, "slack": {}, "webhook": {}, "in_app": {}}
+	allowedChannels := map[string]struct{}{"email": {}, "in_app": {}}
+	seenChannels := make(map[string]struct{}, len(req.Channels))
 	for _, channel := range req.Channels {
 		if _, ok := allowedChannels[channel]; !ok {
 			return fmt.Errorf("unsupported alert channel: %s", channel)
+		}
+		if _, duplicate := seenChannels[channel]; duplicate {
+			return fmt.Errorf("duplicate alert channel: %s", channel)
+		}
+		seenChannels[channel] = struct{}{}
+	}
+	if _, sendsEmail := seenChannels["email"]; sendsEmail {
+		if len(req.Recipients) == 0 {
+			return fmt.Errorf("email alert recipient is required")
+		}
+		for _, recipient := range req.Recipients {
+			if _, err := mail.ParseAddress(recipient); err != nil {
+				return fmt.Errorf("invalid email alert recipient")
+			}
 		}
 	}
 	return nil
 }
 
-// sendAlertNotifications 发送告警通知
-func (s *IncidentAlertingService) sendAlertNotifications(ctx context.Context, alert *ent.IncidentAlert) {
-	s.logger.Infow("Sending alert notifications", "alert_id", alert.ID)
-
-	// 获取告警渠道
-	channels := s.getAlertChannels(alert.Channels)
-
-	// 转换为响应格式
-	alertResponse := s.toIncidentAlertResponse(alert)
-
-	// 发送到各个渠道
-	for _, channel := range channels {
-		if !channel.IsEnabled() {
-			s.logger.Warnw("Alert channel is disabled", "channel", channel.GetName())
-			continue
-		}
-
-		err := channel.Send(ctx, alertResponse)
-		if err != nil {
-			s.logger.Errorw("Failed to send alert notification",
-				"error", err,
-				"channel", channel.GetName(),
-				"alert_id", alert.ID)
-		}
-	}
-}
-
-// getAlertChannels 获取告警渠道
-func (s *IncidentAlertingService) getAlertChannels(channelNames []string) []AlertChannel {
-	var channels []AlertChannel
-
-	for _, channelName := range channelNames {
-		switch channelName {
-		case "email":
-			smtpHost := viper.GetString("alerting.smtp.host")
-			smtpPort := viper.GetInt("alerting.smtp.port")
-			smtpUsername := viper.GetString("alerting.smtp.username")
-			smtpPassword := viper.GetString("alerting.smtp.password")
-			fromEmail := viper.GetString("alerting.smtp.from_email")
-
-			// 从环境变量覆盖配置
-			if host := os.Getenv("SMTP_HOST"); host != "" {
-				smtpHost = host
-			}
-			if port := os.Getenv("SMTP_PORT"); port != "" {
-				fmt.Sscanf(port, "%d", &smtpPort)
-			}
-			if username := os.Getenv("SMTP_USERNAME"); username != "" {
-				smtpUsername = username
-			}
-			if password := os.Getenv("SMTP_PASSWORD"); password != "" {
-				smtpPassword = password
-			}
-			if from := os.Getenv("SMTP_FROM_EMAIL"); from != "" {
-				fromEmail = from
-			}
-
-			channels = append(channels, &EmailChannel{
-				smtpHost:     smtpHost,
-				smtpPort:     smtpPort,
-				smtpUsername: smtpUsername,
-				smtpPassword: smtpPassword,
-				fromEmail:    fromEmail,
-				logger:       s.logger,
-			})
-		case "sms":
-			apiKey := viper.GetString("alerting.sms.api_key")
-			apiSecret := viper.GetString("alerting.sms.api_secret")
-			signName := viper.GetString("alerting.sms.sign_name")
-
-			// 从环境变量覆盖配置
-			if key := os.Getenv("SMS_API_KEY"); key != "" {
-				apiKey = key
-			}
-			if secret := os.Getenv("SMS_API_SECRET"); secret != "" {
-				apiSecret = secret
-			}
-			if sign := os.Getenv("SMS_SIGN_NAME"); sign != "" {
-				signName = sign
-			}
-
-			channels = append(channels, &SMSChannel{
-				apiKey:    apiKey,
-				apiSecret: apiSecret,
-				signName:  signName,
-				logger:    s.logger,
-			})
-		case "slack":
-			webhookURL := viper.GetString("alerting.slack.webhook_url")
-			channel := viper.GetString("alerting.slack.channel")
-
-			// 从环境变量覆盖配置
-			if url := os.Getenv("SLACK_WEBHOOK_URL"); url != "" {
-				webhookURL = url
-			}
-			if ch := os.Getenv("SLACK_CHANNEL"); ch != "" {
-				channel = ch
-			}
-
-			channels = append(channels, &SlackChannel{
-				webhookURL: webhookURL,
-				channel:    channel,
-				logger:     s.logger,
-			})
-		case "webhook":
-			url := viper.GetString("alerting.webhook.url")
-			method := viper.GetString("alerting.webhook.method")
-
-			// 从环境变量覆盖配置
-			if u := os.Getenv("WEBHOOK_URL"); u != "" {
-				url = u
-			}
-			if m := os.Getenv("WEBHOOK_METHOD"); m != "" {
-				method = m
-			}
-
-			// Authorization header from env
-			authHeader := os.Getenv("WEBHOOK_AUTH_HEADER")
-
-			headers := map[string]string{
-				"Content-Type": "application/json",
-			}
-			if authHeader != "" {
-				headers["Authorization"] = authHeader
-			}
-
-			channels = append(channels, &WebhookChannel{
-				url:     url,
-				method:  method,
-				headers: headers,
-				logger:  s.logger,
-			})
-		}
-	}
-
-	return channels
-}
-
 // createSystemNotification 创建系统通知记录
-func (s *IncidentAlertingService) createSystemNotification(ctx context.Context, alert *ent.IncidentAlert, tenantID int) {
-	recipients, err := s.client.User.Query().
+func (s *IncidentAlertingService) createSystemNotification(ctx context.Context, tx *ent.Tx, alert *ent.IncidentAlert, tenantID int) error {
+	recipients, err := tx.User.Query().
 		Where(
 			user.TenantIDEQ(tenantID),
 			user.ActiveEQ(true),
@@ -461,11 +249,10 @@ func (s *IncidentAlertingService) createSystemNotification(ctx context.Context, 
 		).
 		All(ctx)
 	if err != nil {
-		s.logger.Errorw("Failed to resolve in-app alert recipients", "error", err)
-		return
+		return fmt.Errorf("resolve in-app alert recipients: %w", err)
 	}
 	for _, recipient := range recipients {
-		_, err := s.client.Notification.Create().
+		_, err := tx.Notification.Create().
 			SetTitle(alert.AlertName).
 			SetMessage(alert.Message).
 			SetType("incident_alert").
@@ -475,9 +262,10 @@ func (s *IncidentAlertingService) createSystemNotification(ctx context.Context, 
 			SetUpdatedAt(time.Now()).
 			Save(ctx)
 		if err != nil {
-			s.logger.Errorw("Failed to create system notification", "error", err, "user_id", recipient.ID)
+			return fmt.Errorf("create in-app alert notification: %w", err)
 		}
 	}
+	return nil
 }
 
 // AcknowledgeAlert 确认告警

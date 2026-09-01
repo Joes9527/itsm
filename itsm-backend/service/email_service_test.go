@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/smtp"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -549,7 +550,7 @@ func TestEmailServiceFallsBackToSMTPAfterGraphRuntimeFailure(t *testing.T) {
 		return graph, "graph@example.test", true
 	})
 	smtpCalls := 0
-	svc.smtpSend = func(string, smtp.Auth, string, []string, []byte) error {
+	svc.smtpSend = func(context.Context, string, smtp.Auth, string, []string, []byte) error {
 		smtpCalls++
 		return nil
 	}
@@ -575,7 +576,7 @@ func TestEmailServiceLegacySendDoesNotConsultTenantGraphProvider(t *testing.T) {
 		return &mockGraphMailSender{}, "graph@example.test", true
 	})
 	smtpCalls := 0
-	svc.smtpSend = func(string, smtp.Auth, string, []string, []byte) error {
+	svc.smtpSend = func(context.Context, string, smtp.Auth, string, []string, []byte) error {
 		smtpCalls++
 		return nil
 	}
@@ -595,7 +596,7 @@ func TestEmailServiceSMTPContextCancellationUsesFixedErrorClass(t *testing.T) {
 	svc := NewEmailService(EmailConfig{
 		Host: "smtp.example.test", Port: 587, Username: "mailer", From: "mailer@example.test",
 	}, zaptest.NewLogger(t).Sugar())
-	svc.smtpSend = func(string, smtp.Auth, string, []string, []byte) error {
+	svc.smtpSend = func(context.Context, string, smtp.Auth, string, []string, []byte) error {
 		return errors.New("sensitive canceled SMTP error")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -608,4 +609,24 @@ func TestEmailServiceSMTPContextCancellationUsesFixedErrorClass(t *testing.T) {
 	})
 
 	require.EqualError(t, err, "email_delivery_failed: smtp_send_failed")
+}
+
+func TestEmailServiceSMTPTransportHonorsContextDeadline(t *testing.T) {
+	svc := NewEmailService(EmailConfig{
+		Host: "smtp.example.test", Port: 587, Username: "mailer", From: "mailer@example.test",
+	}, zaptest.NewLogger(t).Sugar())
+	svc.smtpSend = func(ctx context.Context, _ string, _ smtp.Auth, _ string, _ []string, _ []byte) error {
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	started := time.Now()
+
+	err := svc.SendForTenant(ctx, 42, &EmailMessage{
+		To: []string{"recipient@example.test"}, Subject: "deadline", BodyText: "body",
+	})
+
+	require.EqualError(t, err, "email_delivery_failed: smtp_send_failed")
+	require.Less(t, time.Since(started), time.Second)
 }

@@ -39,6 +39,23 @@ func TestApplication_StartKafOutboxDispatcherRunsOnceAndWaitsForCancellation(t *
 	assert.Equal(t, int32(1), runner.runs.Load())
 }
 
+func TestApplication_StartOutboxDeliveryWorkerRunsOnceAndWaitsForCancellation(t *testing.T) {
+	runner := &blockingKafOutboxRunner{started: make(chan struct{})}
+	app := &Application{outboxDeliveryWorker: runner}
+	ctx, cancel := context.WithCancel(context.Background())
+	wait := app.startOutboxDeliveryWorker(ctx)
+
+	select {
+	case <-runner.started:
+	case <-time.After(time.Second):
+		t.Fatal("outbox delivery worker did not start")
+	}
+	cancel()
+	wait()
+
+	assert.Equal(t, int32(1), runner.runs.Load())
+}
+
 func TestServeUntilContextCancelledShutsDownServer(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

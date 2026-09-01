@@ -64,6 +64,15 @@ code `5003`; the backend never falls back to reusable refresh tokens.
 | `SMTP_FROM` | From email address（fallback） | No | noreply@itsm.local |
 | `FRONTEND_URL` | 前端地址（密码重置链接等） | No | http://localhost:3000 |
 
+Incident alert email delivery is accepted transactionally through `outbox_events`; API success means durable acceptance, not external delivery completion. The shared worker owns lease recovery, retry, blocked, and dead-letter states.
+
+| Variable | Description | Required | Default |
+|----------|-------------|----------|---------|
+| `OUTBOX_DELIVERY_BATCH_SIZE` | Maximum deliveries claimed per registered event type and poll | No | 20 |
+| `OUTBOX_DELIVERY_POLL_INTERVAL` | Shared delivery worker polling interval | No | 5s |
+| `OUTBOX_DELIVERY_HANDLER_TIMEOUT` | Timeout for one external delivery call | No | 5s |
+| `OUTBOX_DELIVERY_MAX_ATTEMPTS` | Retry attempts before dead-letter | No | 5 |
+
 ### Notifications
 
 | Variable | Description | Required | Default |

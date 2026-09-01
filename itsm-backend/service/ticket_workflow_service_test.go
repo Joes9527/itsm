@@ -413,7 +413,7 @@ func TestEmailAndCCLogsContainOnlyFixedErrorClasses(t *testing.T) {
 		return &mockGraphMailSender{err: errors.New(graphErrSentinel)}, "graph@example.test", true
 	})
 	smtpErr := errors.New(smtpErrSentinel)
-	emailService.smtpSend = func(string, smtp.Auth, string, []string, []byte) error {
+	emailService.smtpSend = func(context.Context, string, smtp.Auth, string, []string, []byte) error {
 		return smtpErr
 	}
 
