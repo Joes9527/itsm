@@ -267,7 +267,7 @@ func (s *Service) SubmitChange(ctx context.Context, changeID, tenantID, submitte
 			if triggerResp != nil {
 				mutationCtx := withProcessInstanceUpdateScope(ctx, submitterID, tenantID)
 				if cancelErr := s.processTriggerService.CancelProcess(mutationCtx, triggerResp.ProcessInstanceID,
-					"SubmitChange: compensating rollback after assessment auto-completion failure", tenantID); cancelErr != nil {
+					"SubmitChange: compensating rollback after assessment auto-completion failure"); cancelErr != nil {
 					s.logger.Warnw("SubmitChange: 补偿取消流程实例失败，可能残留运行中实例阻塞后续重新提交",
 						"error", cancelErr, "change_id", changeID, "process_instance_id", triggerResp.ProcessInstanceID)
 				}
@@ -285,7 +285,7 @@ func (s *Service) SubmitChange(ctx context.Context, changeID, tenantID, submitte
 			if triggerResp != nil {
 				mutationCtx := withProcessInstanceUpdateScope(ctx, submitterID, tenantID)
 				if cancelErr := s.processTriggerService.CancelProcess(mutationCtx, triggerResp.ProcessInstanceID,
-					"SubmitChange: compensating rollback after MarkSubmittedForApproval failure", tenantID); cancelErr != nil {
+					"SubmitChange: compensating rollback after MarkSubmittedForApproval failure"); cancelErr != nil {
 					s.logger.Warnw("SubmitChange: 补偿取消流程实例失败，可能残留运行中实例阻塞后续重新提交",
 						"error", cancelErr, "change_id", changeID, "process_instance_id", triggerResp.ProcessInstanceID)
 				}
@@ -527,7 +527,7 @@ func (s *Service) cancelRunningProcessInstance(ctx context.Context, tenantID, us
 		return
 	}
 	mutationCtx := withProcessInstanceUpdateScope(ctx, userID, tenantID)
-	if err := s.processTriggerService.CancelProcess(mutationCtx, instance.ID, reason, tenantID); err != nil {
+	if err := s.processTriggerService.CancelProcess(mutationCtx, instance.ID, reason); err != nil {
 		s.logger.Warnw("cancelRunningProcessInstance: 取消流程实例失败，可能残留在工作流控制台", "error", err, "change_id", changeID, "process_instance_id", instance.ID)
 	}
 }
@@ -613,7 +613,7 @@ func (s *Service) BackfillLegacyPendingChange(ctx context.Context, changeID, ten
 		if triggerResp != nil && s.processTriggerService != nil {
 			mutationCtx := withProcessInstanceUpdateScope(ctx, c.CreatedBy, tenantID)
 			if cancelErr := s.processTriggerService.CancelProcess(mutationCtx, triggerResp.ProcessInstanceID,
-				"BackfillLegacyPendingChange: compensating rollback after assessment failure", tenantID); cancelErr != nil {
+				"BackfillLegacyPendingChange: compensating rollback after assessment failure"); cancelErr != nil {
 				s.logger.Warnw("BackfillLegacyPendingChange: 补偿取消流程实例失败", "error", cancelErr, "change_id", changeID)
 			}
 		}

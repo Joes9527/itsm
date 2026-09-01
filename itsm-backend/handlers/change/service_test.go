@@ -42,20 +42,20 @@ func (m *mockProcessTriggerService) TriggerByBusinessType(ctx context.Context, b
 	return nil, nil
 }
 
-func (m *mockProcessTriggerService) CancelProcess(ctx context.Context, processInstanceID int, reason string, tenantID int) error {
+func (m *mockProcessTriggerService) CancelProcess(ctx context.Context, processInstanceID int, reason string) error {
 	m.cancelCalls = append(m.cancelCalls, processInstanceID)
 	return m.cancelErr
 }
 
-func (m *mockProcessTriggerService) SuspendProcess(ctx context.Context, processInstanceID int, reason string, tenantID int) error {
+func (m *mockProcessTriggerService) SuspendProcess(ctx context.Context, processInstanceID int, reason string) error {
 	return nil
 }
 
-func (m *mockProcessTriggerService) ResumeProcess(ctx context.Context, processInstanceID int, tenantID int) error {
+func (m *mockProcessTriggerService) ResumeProcess(ctx context.Context, processInstanceID int) error {
 	return nil
 }
 
-func (m *mockProcessTriggerService) GetProcessStatus(ctx context.Context, processInstanceID int, tenantID int) (*dto.ProcessTriggerResponse, error) {
+func (m *mockProcessTriggerService) GetProcessStatus(ctx context.Context, processInstanceID int) (*dto.ProcessTriggerResponse, error) {
 	return nil, nil
 }
 
@@ -303,7 +303,7 @@ type cancelAlwaysFailsTriggerService struct {
 	cancelErr   error
 }
 
-func (w *cancelAlwaysFailsTriggerService) CancelProcess(ctx context.Context, processInstanceID int, reason string, tenantID int) error {
+func (w *cancelAlwaysFailsTriggerService) CancelProcess(ctx context.Context, processInstanceID int, reason string) error {
 	w.cancelCalls = append(w.cancelCalls, processInstanceID)
 	return w.cancelErr
 }

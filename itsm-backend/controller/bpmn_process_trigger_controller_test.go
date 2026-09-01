@@ -29,7 +29,7 @@ func TestBPMNProcessTriggerController_InvalidBindingBodyDoesNotEchoInput(t *test
 	assert.NotContains(t, recorder.Body.String(), "binding-body-secret")
 }
 
-func TestBPMNProcessTriggerController_Trigger_UsesBPMNRoleGate(t *testing.T) {
+func TestBPMNProcessTriggerController_InstanceStatusDoesNotUseLegacyRoleGate(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	c := newTestTriggerController()
 	r := gin.New()
@@ -41,7 +41,10 @@ func TestBPMNProcessTriggerController_Trigger_UsesBPMNRoleGate(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/api/v1/process-trigger/status/123", nil)
 	r.ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusForbidden, w.Code)
+	// Status now reaches the authoritative instance-scope handler. This fixture
+	// deliberately omits authenticated tenant/actor context, so it fails there
+	// (401) rather than at the obsolete coarse role gate (403).
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestBPMNProcessTriggerController_BindingsRead_UsesBPMNRoleGate(t *testing.T) {

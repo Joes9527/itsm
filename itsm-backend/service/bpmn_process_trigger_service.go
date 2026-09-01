@@ -10,7 +10,6 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processdefinition"
-	"itsm-backend/ent/processinstance"
 	"itsm-backend/service/bpmn"
 
 	"github.com/pkg/errors"
@@ -200,102 +199,42 @@ func (s *ProcessTriggerService) TriggerByBusinessType(
 	return s.TriggerProcess(ctx, req)
 }
 
-// resolveProcessInstanceBusinessID 把 ProcessInstance 的 ent 内部整数主键翻译成
-// CustomProcessEngine.TerminateProcess/SuspendProcess/ResumeProcess 真正按查询的
-// ProcessInstanceID 字符串业务字段（形如 "PI-change_normal_flow-xxx"）。这三个引擎方法
-// 内部统一用 processinstance.ProcessInstanceID(...) 过滤，直接把整数主键
-// fmt.Sprintf("%d", ...) 传进去必然查不到任何行（业务字段的值从来不是纯数字），
-// 之前这里就是这么写的——一个从未真正生效过的静默失败：Bug 是被 SubmitChange 的
-// MarkSubmittedForApproval-失败补偿测试用真实引擎跑出来才发现的，之前的测试全部
-// 用 mock 触发服务，从没真正跑过这条路径。
-func (s *ProcessTriggerService) resolveProcessInstanceBusinessID(ctx context.Context, processInstanceID, tenantID int) (string, error) {
-	instance, err := s.client.ProcessInstance.Query().
-		Where(processinstance.ID(processInstanceID), processinstance.TenantID(tenantID)).
-		Only(ctx)
-	if err != nil {
-		return "", fmt.Errorf("查询流程实例失败: %w", err)
-	}
-	return instance.ProcessInstanceID, nil
-}
-
-func processTriggerTenant(ctx context.Context, requestedTenantID int) (int, error) {
-	tenantID, err := bpmnAuthorizedTenantFromContext(ctx)
-	if err != nil {
-		return 0, err
-	}
-	if requestedTenantID > 0 && requestedTenantID != tenantID {
-		return 0, fmt.Errorf("流程触发租户授权上下文不一致")
-	}
-	return tenantID, nil
-}
-
 // CancelProcess 取消流程
-func (s *ProcessTriggerService) CancelProcess(ctx context.Context, processInstanceID int, reason string, tenantID int) error {
-	tenantID, err := processTriggerTenant(ctx, tenantID)
-	if err != nil {
-		return err
-	}
-	businessID, err := s.resolveProcessInstanceBusinessID(ctx, processInstanceID, tenantID)
-	if err != nil {
-		return err
-	}
-	return s.processEngine.TerminateProcess(ctx, businessID, reason)
+func (s *ProcessTriggerService) CancelProcess(ctx context.Context, processInstanceID int, reason string) error {
+	return s.processEngine.TerminateProcess(ctx, strconv.Itoa(processInstanceID), reason)
 }
 
 // SuspendProcess 暂停流程
-func (s *ProcessTriggerService) SuspendProcess(ctx context.Context, processInstanceID int, reason string, tenantID int) error {
-	tenantID, err := processTriggerTenant(ctx, tenantID)
-	if err != nil {
-		return err
-	}
-	businessID, err := s.resolveProcessInstanceBusinessID(ctx, processInstanceID, tenantID)
-	if err != nil {
-		return err
-	}
-	return s.processEngine.SuspendProcess(ctx, businessID, reason)
+func (s *ProcessTriggerService) SuspendProcess(ctx context.Context, processInstanceID int, reason string) error {
+	return s.processEngine.SuspendProcess(ctx, strconv.Itoa(processInstanceID), reason)
 }
 
 // ResumeProcess 恢复流程
-func (s *ProcessTriggerService) ResumeProcess(ctx context.Context, processInstanceID int, tenantID int) error {
-	tenantID, err := processTriggerTenant(ctx, tenantID)
-	if err != nil {
-		return err
-	}
-	businessID, err := s.resolveProcessInstanceBusinessID(ctx, processInstanceID, tenantID)
-	if err != nil {
-		return err
-	}
-	return s.processEngine.ResumeProcess(ctx, businessID)
+func (s *ProcessTriggerService) ResumeProcess(ctx context.Context, processInstanceID int) error {
+	return s.processEngine.ResumeProcess(ctx, strconv.Itoa(processInstanceID))
 }
 
 // GetProcessStatus 获取流程状态
-func (s *ProcessTriggerService) GetProcessStatus(ctx context.Context, processInstanceID int, tenantID int) (*dto.ProcessTriggerResponse, error) {
-	tenantID, err := processTriggerTenant(ctx, tenantID)
+func (s *ProcessTriggerService) GetProcessStatus(ctx context.Context, processInstanceID int) (*dto.ProcessTriggerResponse, error) {
+	instance, err := s.processEngine.ProcessInstanceService().GetProcessInstance(ctx, strconv.Itoa(processInstanceID))
 	if err != nil {
 		return nil, err
 	}
-	instance, err := s.client.ProcessInstance.Query().
-		Where(
-			processinstance.ID(processInstanceID),
-			processinstance.TenantID(tenantID),
-		).
-		Only(ctx)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			return nil, fmt.Errorf("流程实例 %d 不存在", processInstanceID)
-		}
-		return nil, errors.Wrap(err, "查询流程实例失败")
-	}
+	return s.toProcessTriggerResponse(ctx, instance)
+}
 
-	definition, _ := s.client.ProcessDefinition.Query().
+func (s *ProcessTriggerService) toProcessTriggerResponse(ctx context.Context, instance *ent.ProcessInstance) (*dto.ProcessTriggerResponse, error) {
+	definition, err := s.client.ProcessDefinition.Query().
 		Where(
 			processdefinition.Key(instance.ProcessDefinitionKey),
-			processdefinition.TenantID(tenantID),
-			processdefinition.IsLatest(true),
+			processdefinition.TenantID(instance.TenantID),
 		).
 		First(ctx)
+	if err != nil && !ent.IsNotFound(err) {
+		return nil, errors.Wrap(err, "查询流程定义失败")
+	}
 	processName := instance.ProcessDefinitionKey
-	if definition != nil {
+	if err == nil {
 		processName = definition.Name
 	}
 

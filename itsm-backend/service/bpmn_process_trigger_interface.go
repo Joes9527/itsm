@@ -15,16 +15,16 @@ type ProcessTriggerServiceInterface interface {
 	TriggerByBusinessType(ctx context.Context, businessType dto.BusinessType, businessID int, variables map[string]interface{}, triggeredBy string, tenantID int) (*dto.ProcessTriggerResponse, error)
 
 	// CancelProcess 取消流程
-	CancelProcess(ctx context.Context, processInstanceID int, reason string, tenantID int) error
+	CancelProcess(ctx context.Context, processInstanceID int, reason string) error
 
 	// SuspendProcess 暂停流程
-	SuspendProcess(ctx context.Context, processInstanceID int, reason string, tenantID int) error
+	SuspendProcess(ctx context.Context, processInstanceID int, reason string) error
 
 	// ResumeProcess 恢复流程
-	ResumeProcess(ctx context.Context, processInstanceID int, tenantID int) error
+	ResumeProcess(ctx context.Context, processInstanceID int) error
 
 	// GetProcessStatus 获取流程状态
-	GetProcessStatus(ctx context.Context, processInstanceID int, tenantID int) (*dto.ProcessTriggerResponse, error)
+	GetProcessStatus(ctx context.Context, processInstanceID int) (*dto.ProcessTriggerResponse, error)
 }
 
 // ProcessBindingServiceInterface 流程绑定配置服务接口

@@ -811,7 +811,7 @@ func (s *TicketService) CancelWorkflow(ctx context.Context, ticketID int, tenant
 	}
 
 	if s.processTriggerSvc != nil {
-		return s.processTriggerSvc.CancelProcess(ctx, processInstance.ID, reason, tenantID)
+		return s.processTriggerSvc.CancelProcess(ctx, processInstance.ID, reason)
 	}
 	return fmt.Errorf("流程触发服务未配置")
 }
