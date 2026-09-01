@@ -1,8 +1,9 @@
 # ITSM 架构可信化、Agent 平台化与规模化演进总设计
 
-> 状态：已完成对话设计，待书面审阅
+> 状态：已处理首轮书面 review，待复审确认
 > 日期：2026-09-01
 > 代码基线：`f11290317499b958ba93d85689286fdccccfe697`
+> 基线身份：该 commit 是 2026-09-01 的远端 `origin/main`，不是待合并功能分支；本地 `main` 仍停在其祖先 `fda84251`，因为主 worktree 有其他 Agent 的未提交改动而未执行 fast-forward
 > 依据：`AGENTS.md`、`f1129031` 当前代码复核、既有 WorkItem/BPMN/KAF 设计与验收材料，以及 2026-09-01 架构评估草稿中的待核查结论
 
 ## 一、目的与文档定位
@@ -24,6 +25,7 @@
 |---|---|---|
 | WorkItem/SLA | Incident、Problem、Change 会创建 WorkItem，但没有统一 SLA 绑定，扩展表仍重复保存公共字段，后续状态可能与 WorkItem 不一致 | Phase 1 物理收口为 WorkItem 唯一权威 |
 | `ticket_number` | `tickets.ticket_number` 全局唯一，但 Ticket/Incident、Problem、Change 存在不同计数维度和不同生成器 | Phase 1 改为租户内唯一并只保留一个分配器 |
+| Ticket 审批 | `TicketWorkflowService.ApproveTicket` 先在 legacy transaction 外桥接并推进 BPMN，随后另开事务维护 `TicketApproval` 状态/委派记录，并按自己的 pending count 直接改写 `tickets.status`；前端提交仍携带 `approvalId` | Phase 1 删除 TicketApproval 运行态和 Ticket 专用 bridge，审批只操作 ProcessTask/ProcessApprovalDecision |
 | BPMN 授权 | 主 ProcessInstance/Task API 已接入 typed access scope 和 participation policy；process-trigger status、dashboard/audit 等入口仍缺同租户对象授权 | Phase 1 完成所有入口收口 |
 | BPMN ServiceTask dispatch | 未注册 handler 已返回显式错误，不再是 NoOp | 不重复修复；后续只治理“handler 返回成功但未产生声明效果” |
 | BPMN callback | 已有 durable callback outbox，但 Generic/CC/通知 handler 仍可能在目标缺失、接收人为空或配置不支持时返回成功 | Phase 1 建立效果语义；Phase 2 迁入统一 Outbox/Worker |
@@ -82,7 +84,7 @@ Services                   Access/Lifecycle/Effect Policy
 
 | Phase | 核心目标 | 退出结果 |
 |---|---|---|
-| Phase 1：可信核心 | 消除数据、授权、生命周期和 callback 语义风险 | WorkItem、编号、SLA、BPMN 授权和效果语义只有一条权威路径 |
+| Phase 1：可信核心 | 消除数据、授权、审批双轨、生命周期和 callback 语义风险 | WorkItem、编号、SLA、Ticket 审批、BPMN 授权和效果语义只有一条权威路径 |
 | Phase 2：可靠执行平台 | 建立强制租户隔离、业务审计和统一可靠执行底座 | RLS、Audit、Outbox/Worker 和 KAF 生产准入有真实运行证据 |
 | Phase 3：生态与规模化 | 统一 Agent/Connector/Tool 扩展，并支持 MSP、多区域和灾备 | 新能力通过 registry 扩展，不修改核心 switch，不分叉领域模型 |
 
@@ -114,6 +116,7 @@ Services                   Access/Lifecycle/Effect Policy
 - title、description、status、priority、requester、assignee、tenant、公共时间戳和 SLA 只保存在 WorkItem。
 - 专业状态机继续验证专业转换，但最终通过共享 WorkItem 状态写入口修改公共状态。
 - Incident、Problem、Change、Requested Item 接入后删除各自编号生成器、公共字段写入和重复字段定义。
+- P1-B 必须先生成并核对现有 `TicketService.CreateTicket` 调用方清单，至少覆盖普通/快速创建 Controller、MS Graph 邮件入口、Service Request、Tool Queue 和 Service 内部创建；调用方要么显式拥有 transaction，要么调用由 WorkItem application service 管理 transaction 的唯一顶层入口，不能保留两个 `CreateTicket` 语义。
 - Phase 1 负责领域数据与流程语义的单轨化；统一业务 Audit 和事务 Outbox 由并行推进的 P2-B/P2-C 接入。接入前不添加临时审计 helper、临时 event publisher 或空实现 port。
 
 ### 5.2 BPMN 授权、生命周期与效果语义
@@ -131,7 +134,7 @@ authenticated actor + tenant + endpoint permissions
 
 架构决策：
 
-- process-trigger status、dashboard、audit timeline 和所有 alias route 必须经过相同对象授权，不再用 legacy role gate 代替 participation policy。
+- process-trigger status/cancel/suspend/resume、dashboard、audit timeline 和所有 alias route 必须经过相同对象授权，不再用 legacy role gate 代替 participation policy。
 - `TaskLifecyclePolicy` 集中定义 assign、claim、complete、cancel、delegate 和 variable mutation 的允许源状态。
 - completed、cancelled 等终态禁止重新分派、取消或修改变量。
 - callback 结果使用 `applied`、`idempotent`、`skipped_optional`、`blocked` 四种明确语义，替代模糊的 `Success bool`。
@@ -140,7 +143,21 @@ authenticated actor + tenant + endpoint permissions
 - 通知 API 只保留 `eventType` 合同，删除前端 `type/channel` 请求模型及相关测试夹具。
 - Phase 1 保持当前 durable callback 事实不退化；Phase 2 完成统一平台迁移后删除其专用调度实现。
 
-### 5.3 Phase 1 门禁
+### 5.3 Ticket 审批运行态单轨化
+
+Ticket 批准、拒绝和委派必须直接操作当前用户有权处理的 BPMN `ProcessTask`。唯一运行态事实是 `ProcessTask` 和 `ProcessApprovalDecision`；`TicketApproval` 不再参与鉴权、待审批计数、状态推进或委派。
+
+架构决策：
+
+- 后端按 WorkItem 查询当前用户可操作的审批任务，并返回 task ID、instance ID、node、允许动作和版本；前端不再接收或提交 `approvalId`。
+- approve/reject/delegate 直接调用 BPMN task command；对象授权、CAS、终态保护、决策记录和 token 推进全部位于 BPMN 事务路径。
+- WorkItem 的 approved/rejected 等公共状态只能由 BPMN 节点完成后调用权威 WorkItem transition 写入，不能根据 `TicketApproval` pending count 推导。
+- 删除 `TicketWorkflowService.ApproveTicket` 中的 `TicketApproval` 查询/更新/创建、直接 `tickets.status` 更新以及 Ticket 专用 `approvalBridge` 调用。
+- 删除 `TicketApproval` schema/table、DTO、API 参数、生成代码、测试夹具和只服务该运行态的路由；开发数据库通过保留在仓库中的版本化 drop/reset/seed script 直接重建。
+- `ApprovalChain` 只允许作为 ProcessBinding 在流程启动前解析的声明式审批人配置，不保存运行态结果或推进状态。一个 binding 只能选择 ApprovalChain 引用或 BPMN 内联审批人配置之一；配置 preflight 对同时声明两者的情况 fail closed。
+- 审批历史 UI 只读取 `ProcessApprovalDecision`，批准、拒绝、委派、重复提交和并发提交都不再经过 legacy endpoint。
+
+### 5.4 Phase 1 门禁
 
 - 四个专业域并发、跨租户创建和依赖降级测试不产生编号冲突。
 - WorkItem 与专业扩展不存在重复公共字段或双写调用点。
@@ -149,6 +166,8 @@ authenticated actor + tenant + endpoint permissions
 - 所有任务终态操作被拒绝并留下审计。
 - callback 不存在“成功但无效果”。
 - 前后端通知合同测试和真实 API 测试通过。
+- Ticket 审批只产生一条 BPMN task command 和一条 `ProcessApprovalDecision`；重复/并发提交只推进一次。
+- `TicketApproval` 表、`approvalId` 请求字段、直接审批状态写入和 Ticket legacy approval 调用点全部为零。
 
 ## 六、Phase 2：可靠执行平台
 
@@ -188,7 +207,9 @@ authenticated actor + tenant + endpoint permissions
 
 - 一条 outbox row 只对应一个 destination 和一套 claim 生命周期；需要 fan-out 时，业务事务为每个 destination 写一条 delivery，禁止两个 dispatcher 竞争同一 status。
 - Ticket、Incident、Problem、Change、SLA、BPMN callback、KAF 和 Connector 复用同一 claim、retry、DLQ、replay 和可观测实现。
-- 领域 receipt、KAF completion ledger 等具有独立业务语义的数据可以保留，但不得自行实现第二套调度系统。
+- `OutboxEvent` 演进为统一投递事实；`ProcessCallbackOutbox` 属于重复调度状态，迁移后删除。
+- `KafTaskActionLedger` 作为已接受动作/副作用账本、`KafTaskCompletionReceipt` 作为 monotonic completion receipt 可以保留，因为它们记录领域执行事实而不是投递 claim；两者不得自行实现 poll、lease、retry 或 DLQ。
+- P2-C 的详细设计必须逐表列出 `keep`、`migrate`、`delete` 及理由；未列入保留清单的专用 delivery state 默认删除。
 - 未知 handler/event type 进入 blocked/DLQ 并告警，不得 no-op。
 - 迁移完成后删除 KAF 专用 dispatcher、BPMN callback 专用 worker/table、关键事件 fire-and-forget 发布以及重复 retry/lease 代码。
 - Web 进程只提交业务事务和 outbox；SLA、Embedding、Webhook、Connector 同步、导出和长耗时 AI 工作逐步迁入独立 Worker。
@@ -286,6 +307,7 @@ AI 输出必须保留 confidence、model/provider、prompt version、actor/sourc
 | 1A | NumberAllocator、复合唯一约束、schema script | BPMN 对象授权和终态策略 | callback 效果语义、通知合同和 handler |
 | 1B-Core | WorkItemCreator、SLAPolicyBinder、事务接口 | 跨域合同测试和开发数据 reset/seed script | 专业域回归矩阵和验证 script |
 | 1B-Domain | Ticket/Incident 接入 | Problem 接入并删除重复字段 | Change/Requested Item 接入并删除重复字段 |
+| 1C | TicketApproval 后端删除和 BPMN task command | 前端 task-based 审批接线和旧 API 删除 | 审批并发/权限/E2E 与 drop/reset/verification script |
 | 2A | RLS-aware driver、角色和 policy | AuditService 与审计合同 | 统一 Outbox schema、Worker 和 Registry |
 | 2B | 专业域审计与 Outbox producer | BPMN callback 迁移和旧实现删除 | KAF dispatcher 迁移和 closeout 工具 |
 | 2C | RLS 全表覆盖和 RawDB 清理 | 高风险审计验证 | Worker 故障注入、DLQ/replay 和恢复 |
@@ -293,7 +315,7 @@ AI 输出必须保留 confidence、model/provider、prompt version、actor/sourc
 | 3B | Problem/Change Agent 场景 | 企业连接器 | Agent/Connector 可观测和生产验收 |
 | 3C | Tenant placement、MSP scope | region-local Worker/Outbox 和灾备 | 多区域、撤权、恢复和驻留 E2E |
 
-`1B-Domain` 必须基于已经合入的 `1B-Core` 开始。Phase 3 场景实现必须基于已经完成生产准入的 Phase 2 平台。
+`1B-Domain` 必须基于已经合入的 `1B-Core` 开始。`1C` 必须基于 P1-C 的统一 BPMN 对象授权和终态策略开始。Phase 3 场景实现必须基于已经完成生产准入的 Phase 2 平台。
 
 ### 8.2 文件所有权与集成
 
@@ -361,13 +383,15 @@ WorkItem、专业扩展、SLA、业务审计和 Outbox 在同一数据库事务�
 
 ### 11.2 指标
 
-- RLS missing-tenant、system bypass 和 tenant table coverage。
-- WorkItem 无 SLA/状态不一致/编号冲突数量。
-- 高风险业务动作审计覆盖率和 audit failure。
-- Outbox lag、retry、DLQ、replay、duplicate suppression。
-- BPMN blocked、optional skip 和 terminal mutation rejection。
-- KAF/Agent completion rate、人工介入率和平均完成时间。
-- Capability 调用按 provider、risk、tenant、region 的成功率和延迟。
+| 指标 | 统一口径 | 阶段门禁 |
+|---|---|---|
+| 租户隔离验证覆盖率 | 实际在 PostgreSQL enforce 下执行且通过的关键 tenant table 数 / 关键 tenant table 总数；skip 不计入分子 | Phase 2 关键表 100%，skip=0 |
+| WorkItem 数据一致性事故数 | 编号冲突、SLA 静默缺失、公共状态/字段不一致的运行时记录数 | Phase 1 验收与后续季度均为 0 |
+| 高风险操作审计覆盖率 | 产生完整 actor/tenant/source/before/after/correlation 审计的成功高风险动作数 / 成功高风险动作总数 | 发布门禁 100%，持续运营不得低于 99% |
+| Agent 委派完成率与人工介入率 | 按场景统计免人工成功数、blocked/人工处理数、平均时长；不同风险场景分别设目标 | SSLVPN 先建立 Dev/生产基线，新场景没有基线前不得宣称统一目标 |
+| 事件可靠性/Outbox 覆盖度 | 事务性写入统一 Outbox 的范围内关键事件类型数 / 已定义关键事件类型总数，同时统计 lag、retry、DLQ、replay 和 duplicate suppression | Phase 2 范围内关键事件 100%，DLQ 可见且有 owner |
+| BPMN 执行完整性 | blocked、合法 optional skip、终态修改拒绝、重复 command suppression 的数量和比率 | 非声明 optional 的无效果成功为 0，终态非法修改成功为 0 |
+| Capability 运行质量 | 按 provider、risk、tenant、region 统计成功率、延迟、重试和人工介入 | 每个 capability 在 manifest 中定义独立 SLO 后才能启用 |
 
 ### 11.3 每个 wave 的完成证据
 
@@ -389,28 +413,29 @@ WorkItem、专业扩展、SLA、业务审计和 Outbox 在同一数据库事务�
 2. P1-B：WorkItemCreator、SLA policy 与专业域物理收口。
 3. P1-C：BPMN 残留对象授权与终态策略。
 4. P1-D：BPMN callback 效果语义与通知合同。
-5. P2-A：RLS-aware data path 与全表 policy。
-6. P2-B：统一 AuditService 与高风险动作接入。
-7. P2-C：统一 Outbox/Worker、旧 callback/KAF dispatcher 迁移。
-8. P2-D：KAF SSLVPN Live Dev Closeout 与生产准入。
-9. P3-A：Capability Registry、manifest、risk/approval policy。
-10. P3-B：Agent/Connector 场景扩展与人工介入。
-11. P3-C：Tenant placement、MSP delegated scope、多区域与灾备。
+5. P1-E：Ticket 审批运行态 BPMN 单轨化与 `TicketApproval` 删除。
+6. P2-A：RLS-aware data path 与全表 policy。
+7. P2-B：统一 AuditService 与高风险动作接入。
+8. P2-C：统一 Outbox/Worker、旧 callback/KAF dispatcher 迁移。
+9. P2-D：KAF SSLVPN Live Dev Closeout 与生产准入。
+10. P3-A：Capability Registry、manifest、risk/approval policy。
+11. P3-B：Agent/Connector 场景扩展与人工介入。
+12. P3-C：Tenant placement、MSP delegated scope、多区域与灾备。
 
 依赖关系：
 
 ```text
 P1-A -> P1-B
-P1-C -> P1-D
+P1-C -> P1-E
 
 P2-A --------------------------┐
 P2-B --------------------------┼-> P2-D -> P3-A -> P3-B
-P2-C <- P1-B + P1-D -----------┘
+P2-C <- P1-B + P1-D + P1-E ----┘
 
 P2-A + P2-B + P2-C -> P3-C
 ```
 
-P1-A/P1-C 可以并行；P2-A/P2-B/P2-C 的接口设计可以并行，但共享 schema/bootstrap 接线按 owner 串行集成。任何 P3 场景都不能绕过对应 P2 门禁。
+P1-A/P1-C/P1-D 可以在接口冻结后并行；P1-E 等待 P1-C。P2-A/P2-B/P2-C 的接口设计可以并行，但共享 schema/bootstrap 接线按 owner 串行集成。任何 P3 场景都不能绕过对应 P2 门禁。
 
 ## 十三、非目标
 
@@ -424,6 +449,6 @@ P1-A/P1-C 可以并行；P2-A/P2-B/P2-C 的接口设计可以并行，但共享 
 
 ## 十四、书面设计批准后的下一步
 
-本总体设计批准后，不直接生成覆盖全部 Phase 的单一 implementation plan。首先为 P1-A、P1-C、P1-D 编写独立详细设计或核实现有设计是否足够；接口冻结后分别使用 `writing-plans` 生成依赖有序的实施计划。P1-B 在 P1-A 的编号和 transaction contract 确定后进入设计与执行。
+本总体设计批准后，不直接生成覆盖全部 Phase 的单一 implementation plan。首先为 P1-A、P1-C、P1-D 编写独立详细设计或核实现有设计是否足够；接口冻结后分别使用 `writing-plans` 生成依赖有序的实施计划。P1-B 在 P1-A 的编号和 transaction contract 确定后进入设计与执行；P1-E 在 P1-C 的 task authorization/command contract 合入后立即进入设计与执行。
 
 每个子项目重复执行：设计批准、计划批准、独立 worktree、TDD 实施、交叉 review、集成门禁、旧路径删除和证据归档。
