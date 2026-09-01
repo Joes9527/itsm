@@ -1,6 +1,9 @@
 package bpmn
 
-import "fmt"
+import (
+	"fmt"
+	"reflect"
+)
 
 // CallbackEffectStatus describes the durable business effect produced by a
 // synchronous BPMN callback.
@@ -43,7 +46,7 @@ func AppliedEffect(message string, output map[string]interface{}) *CallbackEffec
 	return &CallbackEffect{
 		Status:     CallbackEffectApplied,
 		Message:    message,
-		OutputVars: output,
+		OutputVars: snapshotCallbackEvidence(output),
 	}
 }
 
@@ -51,7 +54,7 @@ func IdempotentEffect(message string, output map[string]interface{}) *CallbackEf
 	return &CallbackEffect{
 		Status:     CallbackEffectIdempotent,
 		Message:    message,
-		OutputVars: output,
+		OutputVars: snapshotCallbackEvidence(output),
 	}
 }
 
@@ -93,15 +96,75 @@ func ValidateHandlerEffect(effect *CallbackEffect) error {
 		if effect.BlockCode != "" {
 			return fmt.Errorf("callback effect %q cannot include block code %q", effect.Status, effect.BlockCode)
 		}
-		return nil
 	case CallbackEffectBlocked:
 		if !IsAllowedCallbackBlockCode(effect.BlockCode) {
 			return fmt.Errorf("callback effect has unsupported block code %q", effect.BlockCode)
 		}
-		return nil
 	case CallbackEffectSkippedOptional:
 		return fmt.Errorf("callback handlers cannot return %q", CallbackEffectSkippedOptional)
 	default:
 		return fmt.Errorf("callback handler returned unsupported effect status %q", effect.Status)
+	}
+
+	effect.OutputVars = snapshotCallbackEvidence(effect.OutputVars)
+	effect.UpdatedData = snapshotCallbackEvidence(effect.UpdatedData)
+	return nil
+}
+
+func snapshotCallbackEvidence(source map[string]interface{}) map[string]interface{} {
+	if source == nil {
+		return nil
+	}
+	snapshot := make(map[string]interface{}, len(source))
+	for key, value := range source {
+		snapshot[key] = snapshotCallbackEvidenceValue(value)
+	}
+	return snapshot
+}
+
+func snapshotCallbackEvidenceValue(value interface{}) interface{} {
+	if value == nil {
+		return nil
+	}
+	return snapshotCallbackEvidenceReflectValue(reflect.ValueOf(value)).Interface()
+}
+
+func snapshotCallbackEvidenceReflectValue(value reflect.Value) reflect.Value {
+	switch value.Kind() {
+	case reflect.Interface:
+		if value.IsNil() {
+			return reflect.Zero(value.Type())
+		}
+		item := snapshotCallbackEvidenceReflectValue(value.Elem())
+		snapshot := reflect.New(value.Type()).Elem()
+		snapshot.Set(item)
+		return snapshot
+	case reflect.Map:
+		if value.IsNil() {
+			return reflect.Zero(value.Type())
+		}
+		snapshot := reflect.MakeMapWithSize(value.Type(), value.Len())
+		iterator := value.MapRange()
+		for iterator.Next() {
+			snapshot.SetMapIndex(iterator.Key(), snapshotCallbackEvidenceReflectValue(iterator.Value()))
+		}
+		return snapshot
+	case reflect.Slice:
+		if value.IsNil() {
+			return reflect.Zero(value.Type())
+		}
+		snapshot := reflect.MakeSlice(value.Type(), value.Len(), value.Len())
+		for i := 0; i < value.Len(); i++ {
+			snapshot.Index(i).Set(snapshotCallbackEvidenceReflectValue(value.Index(i)))
+		}
+		return snapshot
+	case reflect.Array:
+		snapshot := reflect.New(value.Type()).Elem()
+		for i := 0; i < value.Len(); i++ {
+			snapshot.Index(i).Set(snapshotCallbackEvidenceReflectValue(value.Index(i)))
+		}
+		return snapshot
+	default:
+		return value
 	}
 }

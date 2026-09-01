@@ -27,6 +27,74 @@ func TestCallbackEffectConstructorsPreserveOutcomeData(t *testing.T) {
 	require.Equal(t, "no recipients", blocked.Message)
 }
 
+func TestAppliedEffectSnapshotsNestedOutputVars(t *testing.T) {
+	output := map[string]interface{}{
+		"delivery": map[string]interface{}{
+			"recipients": []string{"alice", "bob"},
+		},
+	}
+
+	effect := AppliedEffect("sent", output)
+	output["delivery"].(map[string]interface{})["recipients"].([]string)[0] = "mallory"
+	output["delivery"].(map[string]interface{})["attempt"] = 2
+	output["new"] = true
+
+	require.Equal(t, map[string]interface{}{
+		"delivery": map[string]interface{}{
+			"recipients": []string{"alice", "bob"},
+		},
+	}, effect.OutputVars)
+}
+
+func TestIdempotentEffectSnapshotsNestedOutputVars(t *testing.T) {
+	output := map[string]interface{}{
+		"deliveries": []interface{}{
+			map[string]interface{}{"id": 42, "channels": []string{"in_app"}},
+		},
+	}
+
+	effect := IdempotentEffect("already sent", output)
+	delivery := output["deliveries"].([]interface{})[0].(map[string]interface{})
+	delivery["id"] = 99
+	delivery["channels"].([]string)[0] = "email"
+
+	require.Equal(t, map[string]interface{}{
+		"deliveries": []interface{}{
+			map[string]interface{}{"id": 42, "channels": []string{"in_app"}},
+		},
+	}, effect.OutputVars)
+}
+
+func TestValidateHandlerEffectSnapshotsOutputAndUpdatedEvidence(t *testing.T) {
+	output := map[string]interface{}{
+		"result": map[string]string{"state": "sent"},
+	}
+	updated := map[string]interface{}{
+		"ticket": map[string]interface{}{
+			"followers": []int{7, 9},
+		},
+	}
+	effect := &CallbackEffect{
+		Status:      CallbackEffectApplied,
+		OutputVars:  output,
+		UpdatedData: updated,
+	}
+
+	require.NoError(t, ValidateHandlerEffect(effect))
+	output["result"].(map[string]string)["state"] = "changed"
+	updated["ticket"].(map[string]interface{})["followers"].([]int)[0] = 100
+	updated["ticket"].(map[string]interface{})["new"] = true
+
+	require.Equal(t, map[string]interface{}{
+		"result": map[string]string{"state": "sent"},
+	}, effect.OutputVars)
+	require.Equal(t, map[string]interface{}{
+		"ticket": map[string]interface{}{
+			"followers": []int{7, 9},
+		},
+	}, effect.UpdatedData)
+}
+
 func TestCallbackEffectStatusValues(t *testing.T) {
 	require.Equal(t, CallbackEffectStatus("applied"), CallbackEffectApplied)
 	require.Equal(t, CallbackEffectStatus("idempotent"), CallbackEffectIdempotent)
