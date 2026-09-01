@@ -737,7 +737,7 @@ var (
 		Indexes: []*schema.Index{
 			{
 				Name:    "change_work_item_id",
-				Unique:  false,
+				Unique:  true,
 				Columns: []*schema.Column{ChangesColumns[18]},
 			},
 		},
@@ -1576,7 +1576,7 @@ var (
 		Indexes: []*schema.Index{
 			{
 				Name:    "incident_work_item_id",
-				Unique:  false,
+				Unique:  true,
 				Columns: []*schema.Column{IncidentsColumns[28]},
 			},
 		},
@@ -2427,7 +2427,7 @@ var (
 		Indexes: []*schema.Index{
 			{
 				Name:    "problem_work_item_id",
-				Unique:  false,
+				Unique:  true,
 				Columns: []*schema.Column{ProblemsColumns[15]},
 			},
 		},
