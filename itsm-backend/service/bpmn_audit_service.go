@@ -60,6 +60,7 @@ const (
 	AuditActionTaskCompleted        = "completed"
 	AuditActionTaskCancelled        = "task_cancelled"
 	AuditActionTaskVariablesChanged = "task_variables_changed"
+	AuditActionTaskMutationRejected = "task_mutation_rejected"
 	AuditActionCounterSignCreated   = "counter_sign_created"
 	AuditActionTaskEscalated        = "escalated"
 	AuditActionTaskReassigned       = "reassigned"
@@ -241,6 +242,30 @@ func (s *BPMNAuditService) RecordTaskVariablesChanged(ctx context.Context, task 
 	auditCtx.Action = AuditActionTaskVariablesChanged
 	auditCtx.VariablesBefore = before
 	auditCtx.VariablesAfter = after
+	return s.RecordAudit(ctx, auditCtx)
+}
+
+// RecordTaskMutationRejected records a fail-closed lifecycle rejection without
+// emitting any mutation-success audit entry.
+func (s *BPMNAuditService) RecordTaskMutationRejected(
+	ctx context.Context,
+	task *ent.ProcessTask,
+	actorID int,
+	actorName string,
+	command BPMNTaskCommand,
+	currentStatus string,
+) error {
+	auditCtx, err := s.taskAuditContext(ctx, task, actorID, actorName)
+	if err != nil {
+		return err
+	}
+	auditCtx.Action = AuditActionTaskMutationRejected
+	auditCtx.Metadata = map[string]interface{}{
+		"command":          string(command),
+		"current_status":   currentStatus,
+		"observed_version": task.AggregationVersion,
+		"result":           "conflict",
+	}
 	return s.RecordAudit(ctx, auditCtx)
 }
 

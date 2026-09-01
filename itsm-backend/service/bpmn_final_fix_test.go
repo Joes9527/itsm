@@ -612,7 +612,7 @@ type postCommitProbeHandler struct {
 
 func (h *postCommitProbeHandler) GetTaskType() string  { return "post_commit_probe" }
 func (h *postCommitProbeHandler) GetHandlerID() string { return "post_commit_probe" }
-func (h *postCommitProbeHandler) IsAsync() bool        { return true }
+func (h *postCommitProbeHandler) IsAsync() bool        { return false }
 func (h *postCommitProbeHandler) Validate(context.Context, map[string]interface{}) error {
 	return nil
 }
