@@ -16,7 +16,7 @@ function MicrosoftIcon() {
   );
 }
 import { useI18n } from '@/lib/i18n/useI18n';
-import { Typography, Alert, ConfigProvider, Form, Input, Button, Checkbox, Flex, Tooltip } from 'antd';
+import { Typography, Alert, ConfigProvider, Form, Input, Button, Flex, Tooltip } from 'antd';
 import { antdTheme } from '@/lib/antd-theme';
 import { AuthService } from '@/lib/services/auth-service';
 import { logger } from '@/lib/env';
@@ -54,7 +54,6 @@ function LoginForm() {
   // 状态管理
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
 
   // 检查会话过期标记
   const isExpired = searchParams.get('expired') === 'true';
@@ -67,12 +66,7 @@ function LoginForm() {
     setError('');
 
     try {
-      const success = await AuthService.login(
-        values.username,
-        values.password,
-        undefined,
-        rememberMe
-      );
+      const success = await AuthService.login(values.username, values.password);
 
       if (success) {
         logger.info('认证信息已存储，准备跳转');
@@ -181,14 +175,7 @@ function LoginForm() {
         </Form.Item>
 
         <Form.Item className='mb-5'>
-          <Flex justify='space-between' align='center'>
-            <Checkbox
-              checked={rememberMe}
-              onChange={e => setRememberMe(e.target.checked)}
-              disabled={loading}
-            >
-              {t('auth.login.rememberMe')}
-            </Checkbox>
+          <Flex justify='flex-end' align='center'>
             <Tooltip title={loading ? '登录中...' : ''}>
               <Link href='/forgot-password'>
                 <Button type='link' className='p-0 h-auto text-xs' disabled={loading}>

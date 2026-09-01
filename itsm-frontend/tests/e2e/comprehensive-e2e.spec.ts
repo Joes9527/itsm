@@ -315,23 +315,22 @@ test.describe('ITSM 全面 E2E 业务流测试', () => {
 
   // ===== 9. 多角色权限 =====
   test('9.1 user1（end_user）权限边界', async ({ page }) => {
-    // 直接以 user1 身份获取 token（无需 UI 登录）
+    // 直接以 user1 身份建立 cookie 会话（无需 UI 登录）
     const loginResp = await page.request.post(`${API}/api/v1/auth/login`, {
       data: { username: 'user1', password: 'user123' },
     });
-    const user1Token = (await loginResp.json()).data.access_token;
-    const headers = { Authorization: `Bearer ${user1Token}` };
+    expect(loginResp.status()).toBe(200);
 
     // 可读 tickets
-    const ticketsResp = await page.request.get(`${API}/api/v1/tickets?page=1&page_size=3`, { headers });
+    const ticketsResp = await page.request.get(`${API}/api/v1/tickets?page=1&page_size=3`);
     expect(ticketsResp.status()).toBe(200);
 
     // 不可读 configuration-items
-    const cmdbResp = await page.request.get(`${API}/api/v1/configuration-items`, { headers });
+    const cmdbResp = await page.request.get(`${API}/api/v1/configuration-items`);
     expect(cmdbResp.status()).toBe(403);
 
     // 不可读 incidents
-    const incResp = await page.request.get(`${API}/api/v1/incidents?page=1&page_size=3`, { headers });
+    const incResp = await page.request.get(`${API}/api/v1/incidents?page=1&page_size=3`);
     expect(incResp.status()).toBe(403);
   });
 
@@ -339,19 +338,18 @@ test.describe('ITSM 全面 E2E 业务流测试', () => {
     const loginResp = await page.request.post(`${API}/api/v1/auth/login`, {
       data: { username: 'security1', password: 'security123' },
     });
-    const secToken = (await loginResp.json()).data.access_token;
-    const headers = { Authorization: `Bearer ${secToken}` };
+    expect(loginResp.status()).toBe(200);
 
     // 可读 incidents
-    const incResp = await page.request.get(`${API}/api/v1/incidents?page=1&page_size=3`, { headers });
+    const incResp = await page.request.get(`${API}/api/v1/incidents?page=1&page_size=3`);
     expect(incResp.status()).toBe(200);
 
     // 不能访问审计日志
-    const auditResp = await page.request.get(`${API}/api/v1/audit-logs`, { headers });
+    const auditResp = await page.request.get(`${API}/api/v1/audit-logs`);
     expect(auditResp.status()).toBe(403);
 
     // 不能访问连接器
-    const connResp = await page.request.get(`${API}/api/v1/connectors`, { headers });
+    const connResp = await page.request.get(`${API}/api/v1/connectors`);
     expect(connResp.status()).toBe(403);
   });
 

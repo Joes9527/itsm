@@ -610,8 +610,8 @@ POST   /api/v1/tags/bind                  # 绑定标签
 #### 3.2.3 API端点
 
 ```
-POST   /api/v1/login                      # 登录
-POST   /api/v1/refresh-token              # 刷新Token
+POST   /api/v1/auth/login                 # 登录（JWT 仅通过 HttpOnly Cookie 交付）
+POST   /api/v1/auth/refresh               # 刷新会话（HttpOnly Cookie 单次轮换）
 ```
 
 ### 3.3 通知模块 (Notification)

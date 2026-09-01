@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"itsm-backend/authentication"
+	"itsm-backend/authorization"
 	"itsm-backend/common"
 
 	"github.com/gin-gonic/gin"
@@ -20,10 +21,6 @@ type LoginRequest struct {
 	Password   string `json:"password" binding:"required"`
 	TenantID   int    `json:"tenantId"`
 	TenantCode string `json:"tenantCode"`
-}
-
-type RefreshTokenRequest struct {
-	RefreshToken string `json:"refreshToken"`
 }
 
 func NewHandler(svc *Service) *Handler {
@@ -91,32 +88,22 @@ func (h *Handler) Login(c *gin.Context) {
 // @Tags 认证
 // @Accept json
 // @Produce json
-// @Param request body RefreshTokenRequest false "非浏览器客户端的刷新令牌"
 // @Success 200 {object} common.Response{data=AuthResult}
 // @Failure 400 {object} common.Response
 // @Failure 401 {object} common.Response
 // @Failure 503 {object} common.Response
 // @Router /api/v1/auth/refresh [post]
 func (h *Handler) RefreshToken(c *gin.Context) {
-	var req RefreshTokenRequest
-	if c.Request.ContentLength != 0 {
-		if err := c.ShouldBindJSON(&req); err != nil {
-			common.ParamError(c, "参数错误: "+err.Error())
-			return
-		}
-	}
-	if req.RefreshToken == "" {
-		req.RefreshToken, _ = c.Cookie("refresh_token")
-	}
-	if req.RefreshToken == "" {
+	refreshToken, _ := c.Cookie("refresh_token")
+	if refreshToken == "" {
 		common.ParamError(c, "缺少刷新令牌")
 		return
 	}
 
-	res, err := h.svc.RefreshToken(c.Request.Context(), req.RefreshToken)
+	res, err := h.svc.RefreshToken(c.Request.Context(), refreshToken)
 	if err != nil {
 		var unavailable *authentication.RefreshTokenStoreUnavailableError
-		if errors.As(err, &unavailable) {
+		if errors.As(err, &unavailable) || errors.Is(err, authorization.ErrTenantAuthorizationUnavailable) {
 			h.svc.logger.Errorw("authoritative refresh token store unavailable", "error", err)
 			common.ServiceUnavailable(c, "刷新服务暂不可用")
 			return

@@ -5,8 +5,8 @@ import { Form, Input, Select, Button, Card, Space, Spin, message } from 'antd';
 import { Send, Bot, CheckCircle } from 'lucide-react';
 import type { A2UIComponent, A2UIDataModel, ValueDef, OptionItem, ActionDef, TextProps } from '@/types/a2ui';
 import { getValueByPath, setValueByPath } from '@/types/a2ui';
-import { isAuthenticated } from '@/lib/auth/token-storage';
 import { A2UIApi } from '@/lib/api/a2ui-api';
+import { useAuthStore } from '@/lib/store/auth-store';
 
 // 解析值定义（字面量或路径）
 function resolveValue(def: ValueDef | undefined, model: A2UIDataModel): unknown {
@@ -292,7 +292,7 @@ export function A2UIFormRenderer() {
 
   // 检查是否已登录
   const checkAuth = (): boolean => {
-    if (!isAuthenticated()) {
+    if (!useAuthStore.getState().isAuthenticated) {
       message.error('请先登录后再使用此功能');
       return false;
     }

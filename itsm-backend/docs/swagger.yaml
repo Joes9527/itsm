@@ -29,10 +29,6 @@ definitions:
     - StrengthLow
   common.AuthResult:
     properties:
-      accessToken:
-        type: string
-      refreshToken:
-        type: string
       user:
         $ref: '#/definitions/common.User'
     type: object
@@ -49,11 +45,6 @@ definitions:
     required:
     - password
     - username
-    type: object
-  common.RefreshTokenRequest:
-    properties:
-      refreshToken:
-        type: string
     type: object
   common.Response:
     properties:
@@ -9805,12 +9796,6 @@ paths:
     post:
       consumes:
       - application/json
-      parameters:
-      - description: 非浏览器客户端的刷新令牌
-        in: body
-        name: request
-        schema:
-          $ref: '#/definitions/common.RefreshTokenRequest'
       produces:
       - application/json
       responses:

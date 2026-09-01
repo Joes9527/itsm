@@ -125,7 +125,7 @@ func (s *Service) Login(ctx context.Context, username, password string, tenantID
 		return nil, err
 	}
 
-	refreshToken, err := authentication.GenerateRefreshToken(u.ID, s.jwtSecret, 7*24*time.Hour)
+	refreshToken, err := authentication.GenerateRefreshToken(u.ID, u.Username, u.Role, u.TenantID, s.jwtSecret, 7*24*time.Hour)
 	if err != nil {
 		return nil, err
 	}
@@ -142,23 +142,49 @@ func (s *Service) Login(ctx context.Context, username, password string, tenantID
 }
 
 func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*AuthResult, error) {
-	claims, err := s.refreshTokens.Consume(ctx, refreshToken)
+	validated, err := s.refreshTokens.Validate(refreshToken)
 	if err != nil {
 		return nil, fmt.Errorf("refresh token rejected: %w", err)
 	}
-
-	user, err := s.repo.GetUserByID(ctx, claims.UserID)
+	identity := validated.Identity()
+	if s.client == nil {
+		return nil, fmt.Errorf("refresh authentication context unavailable")
+	}
+	userEntity, err := s.client.User.Get(ctx, identity.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("user not found")
 	}
+	if !userEntity.Active {
+		return nil, fmt.Errorf("user account is inactive")
+	}
+	role := string(userEntity.Role)
+	if userEntity.MspRole != "" {
+		if mappedRole := authorization.GetMSPRBACRole(string(userEntity.MspRole)); mappedRole != "" {
+			role = mappedRole
+		}
+	}
+	if identity.Username != userEntity.Username || identity.Role != role {
+		return nil, fmt.Errorf("refresh token actor context is stale")
+	}
+	tenantEntity, err := authorization.AuthorizeTenantSession(ctx, s.client, userEntity, identity.TenantID, time.Now())
+	if err != nil {
+		return nil, fmt.Errorf("refresh tenant rejected: %w", err)
+	}
+	if err := s.refreshTokens.Consume(ctx, validated); err != nil {
+		return nil, fmt.Errorf("refresh token rejected: %w", err)
+	}
+	user := toUserDomain(userEntity)
+	user.Role = role
+	user.TenantID = tenantEntity.ID
+	user.Permissions = s.getUserPermissions(role)
 
 	// regenerate tokens
-	accessToken, err := authentication.GenerateAccessToken(user.ID, user.Username, user.Role, user.TenantID, s.jwtSecret, 15*time.Minute)
+	accessToken, err := authentication.GenerateAccessToken(user.ID, user.Username, role, tenantEntity.ID, s.jwtSecret, 15*time.Minute)
 	if err != nil {
 		return nil, err
 	}
 
-	newRefresh, err := authentication.GenerateRefreshToken(user.ID, s.jwtSecret, 7*24*time.Hour)
+	newRefresh, err := authentication.GenerateRefreshToken(user.ID, user.Username, role, tenantEntity.ID, s.jwtSecret, 7*24*time.Hour)
 	if err != nil {
 		return nil, err
 	}

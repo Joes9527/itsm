@@ -91,12 +91,7 @@ export class TicketAttachmentApi {
 
       const baseURL = API_BASE_URL || process.env.ITSM_BACKEND_URL || 'http://localhost:8090';
       xhr.open('POST', `${baseURL}/api/v1/tickets/${ticketId}/attachments`);
-
-      // 添加认证头
-      const token = httpClient.getAuthToken();
-      if (token) {
-        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-      }
+      xhr.withCredentials = true;
 
       xhr.send(formData);
     });

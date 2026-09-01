@@ -26,7 +26,7 @@ func TestValidateAccessTokenRejectsRevokedToken(t *testing.T) {
 
 func TestValidateAccessTokenRejectsRefreshToken(t *testing.T) {
 	const secret = "authoritative-token-type-secret"
-	refreshToken, err := GenerateRefreshToken(41, secret, time.Hour)
+	refreshToken, err := GenerateRefreshToken(41, "operator", "admin", 7, secret, time.Hour)
 	require.NoError(t, err)
 
 	_, err = ValidateAccessToken(context.Background(), refreshToken, secret)

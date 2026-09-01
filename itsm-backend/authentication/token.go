@@ -66,9 +66,9 @@ func GenerateAccessToken(userID int, username, role string, tenantID int, jwtSec
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(jwtSecret))
 }
 
-func GenerateRefreshToken(userID int, jwtSecret string, expireTime time.Duration) (string, error) {
+func GenerateRefreshToken(userID int, username, role string, tenantID int, jwtSecret string, expireTime time.Duration) (string, error) {
 	claims := Claims{
-		UserID: userID, TokenType: "refresh",
+		UserID: userID, Username: username, Role: role, TenantID: tenantID, TokenType: "refresh",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        fmt.Sprintf("rt-%d-%d-%d", userID, time.Now().UnixNano(), time.Now().UnixNano()%1000000),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expireTime)),

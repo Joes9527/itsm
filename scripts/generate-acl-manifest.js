@@ -219,8 +219,7 @@ function discoverRouterFiles(dir) {
 
 const KNOWN_PUBLIC = new Set([
   "/api/v1/health", "/api/v1/healthz", "/api/v1/readyz",
-  "/api/v1/version", "/api/v1/auth/login", "/api/v1/refresh-token",
-  "/api/v1/auth/refresh",
+  "/api/v1/version", "/api/v1/auth/login", "/api/v1/auth/refresh",
   "/api/v1/csrf-token", "/api/v1/readiness/ga",
   // 注册与密码重置：无需登录
   "/api/v1/auth/register",

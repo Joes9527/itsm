@@ -9,7 +9,6 @@ jest.mock('../http-client', () => ({
     delete: jest.fn(),
     patch: jest.fn(),
     getBaseURL: jest.fn(() => 'http://localhost:8090'),
-    getAuthToken: jest.fn(() => 'test-token'),
   },
 }));
 
@@ -23,23 +22,51 @@ const mockPatch = (httpClient as any).patch as jest.Mock;
 class TestApi extends BaseApi {
   protected static readonly basePath = '/api/v1/test';
 
-  static async testGetList(params?: any) { return this.getList('/items', params); }
-  static async testGetById(id: string | number) { return this.getById('/items', id); }
-  static async testCreate(data: any) { return this.create('/items', data); }
-  static async testUpdate(id: string | number, data: any) { return this.update('/items', id, data); }
-  static async testPatch(id: string | number, data: any) { return this.patch('/items', id, data); }
-  static async testDelete(id: string | number) { return this.delete('/items', id); }
-  static async testBatchDelete(ids: any[]) { return this.batchDelete('/items', ids); }
-  static async testBatchUpdate(ids: any[], data: any) { return this.batchUpdate('/items', ids, data); }
-  static async testSearch(params: any) { return this.search('/items', params); }
-  static async testGetStats(params?: any) { return this.getStats('/items', params); }
-  static async testUpload(file: File, data?: any) { return this.upload('/upload', file, data); }
-  static testBuildQueryString(p: any) { return this.buildQueryString(p); }
-  static testSafeParse(json: string, fallback: any) { return this.safeParse(json, fallback); }
+  static async testGetList(params?: any) {
+    return this.getList('/items', params);
+  }
+  static async testGetById(id: string | number) {
+    return this.getById('/items', id);
+  }
+  static async testCreate(data: any) {
+    return this.create('/items', data);
+  }
+  static async testUpdate(id: string | number, data: any) {
+    return this.update('/items', id, data);
+  }
+  static async testPatch(id: string | number, data: any) {
+    return this.patch('/items', id, data);
+  }
+  static async testDelete(id: string | number) {
+    return this.delete('/items', id);
+  }
+  static async testBatchDelete(ids: any[]) {
+    return this.batchDelete('/items', ids);
+  }
+  static async testBatchUpdate(ids: any[], data: any) {
+    return this.batchUpdate('/items', ids, data);
+  }
+  static async testSearch(params: any) {
+    return this.search('/items', params);
+  }
+  static async testGetStats(params?: any) {
+    return this.getStats('/items', params);
+  }
+  static async testUpload(file: File, data?: any) {
+    return this.upload('/upload', file, data);
+  }
+  static testBuildQueryString(p: any) {
+    return this.buildQueryString(p);
+  }
+  static testSafeParse(json: string, fallback: any) {
+    return this.safeParse(json, fallback);
+  }
 }
 
 describe('base-api', () => {
-  beforeEach(() => { jest.clearAllMocks(); });
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
   describe('ApiError', () => {
     it('should create with all params', () => {
@@ -58,7 +85,10 @@ describe('base-api', () => {
     });
 
     it('fromResponse should create from ApiResponse', () => {
-      const err = ApiError.fromResponse({ code: 1001, message: 'Bad param', data: null } as any, '/ep');
+      const err = ApiError.fromResponse(
+        { code: 1001, message: 'Bad param', data: null } as any,
+        '/ep'
+      );
       expect(err.message).toBe('Bad param');
       expect(err.code).toBe(1001);
       expect(err.endpoint).toBe('/ep');
@@ -153,16 +183,22 @@ describe('base-api', () => {
     });
 
     it('extractData should return data on success', () => {
-      expect(ApiResponseHandler.extractData({ code: 0, message: '', data: 'val' } as any)).toBe('val');
+      expect(ApiResponseHandler.extractData({ code: 0, message: '', data: 'val' } as any)).toBe(
+        'val'
+      );
     });
 
     it('extractData should throw on failure', () => {
-      expect(() => ApiResponseHandler.extractData({ code: 1, message: 'err', data: null } as any)).toThrow();
+      expect(() =>
+        ApiResponseHandler.extractData({ code: 1, message: 'err', data: null } as any)
+      ).toThrow();
     });
 
     it('handlePaginationResponse should extract paginated data', () => {
       const pagData = { items: [1, 2], total: 2, page: 1, pageSize: 10 };
-      expect(ApiResponseHandler.handlePaginationResponse({ code: 0, message: '', data: pagData } as any)).toEqual(pagData);
+      expect(
+        ApiResponseHandler.handlePaginationResponse({ code: 0, message: '', data: pagData } as any)
+      ).toEqual(pagData);
     });
   });
 
@@ -212,7 +248,10 @@ describe('base-api', () => {
     it('batchUpdate should call PUT', async () => {
       mockPut.mockResolvedValue({ updated: 2 });
       await TestApi.testBatchUpdate([1, 2], { status: 'active' });
-      expect(mockPut).toHaveBeenCalledWith('/api/v1/test/items/batch', { ids: [1, 2], data: { status: 'active' } });
+      expect(mockPut).toHaveBeenCalledWith('/api/v1/test/items/batch', {
+        ids: [1, 2],
+        data: { status: 'active' },
+      });
     });
 
     it('search should call GET /search', async () => {

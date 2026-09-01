@@ -138,7 +138,6 @@ export async function aiChatStream(
   callbacks: AIChatStreamCallbacks = {}
 ): Promise<number> {
   const baseUrl = httpClient.getBaseURL();
-  const token = httpClient.getAuthToken();
   const tenantId = httpClient.getTenantId();
 
   // 优先走前端同源代理，避开直连后端的 CORS/CSRF 问题。
@@ -174,7 +173,6 @@ export async function aiChatStream(
     'Content-Type': 'application/json',
     Accept: 'text/event-stream',
   };
-  if (token) headers.Authorization = `Bearer ${token}`;
   if (tenantId) headers['X-Tenant-ID'] = String(tenantId);
   if (csrfToken) headers['X-CSRF-Token'] = decodeURIComponent(csrfToken);
 

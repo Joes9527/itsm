@@ -26,7 +26,8 @@ const NOTIFICATION_REFRESH_INTERVAL_MS = 30000; // 30秒
 const NOTIFICATION_PAGE_SIZE = 10;
 
 const normalizeNotification = (notification: any): TicketNotification => {
-  const isRead = typeof notification.read === 'boolean' ? notification.read : notification.status === 'read';
+  const isRead =
+    typeof notification.read === 'boolean' ? notification.read : notification.status === 'read';
   // 通用 Notification 表无 ticketId，从 actionUrl（如 "/tickets/30"）提取
   let ticketId = notification.ticketId ?? 0;
   if (!ticketId && notification.actionUrl) {
@@ -66,7 +67,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, token, hasPermission, isAdmin } = useAuthStore();
+  const { user, hasPermission, isAdmin } = useAuthStore();
   const { isDark, toggleTheme } = useTheme();
   const { language, changeLanguage } = useI18n();
   useAuthStoreHydration();
@@ -107,9 +108,9 @@ export const Header: React.FC<HeaderProps> = ({
 
   // 初始化通知和WebSocket
   useEffect(() => {
-    if (user?.id && token) {
+    if (user?.id) {
       loadNotifications();
-      notificationWS.connect(user.id, token).catch(() => {
+      notificationWS.connect().catch(() => {
         // WebSocket server not available, ignore silently
       });
 
@@ -124,7 +125,7 @@ export const Header: React.FC<HeaderProps> = ({
         notificationWS.disconnect();
       };
     }
-  }, [user?.id, token, loadNotifications]);
+  }, [user?.id, loadNotifications]);
 
   // 定期刷新通知
   useEffect(() => {
@@ -226,14 +227,23 @@ export const Header: React.FC<HeaderProps> = ({
   ];
 
   return (
-    <AntHeader className={styles.header} style={{ background: '#2A2A2A', height: 56, lineHeight: '56px', padding: '0 20px' }}>
+    <AntHeader
+      className={styles.header}
+      style={{ background: '#2A2A2A', height: 56, lineHeight: '56px', padding: '0 20px' }}
+    >
       {/* 主行：Logo品牌 + 收缩按钮 / 面包屑 + 右侧工具 */}
       <div className={styles.mainRow}>
         {/* 左侧：收缩按钮 + Logo + 品牌文字 */}
         <div className={styles.left}>
           <Button
-            type="text"
-            icon={collapsed ? <PanelLeftOpen size={18} color="#fff" /> : <PanelLeftClose size={18} color="#fff" />}
+            type='text'
+            icon={
+              collapsed ? (
+                <PanelLeftOpen size={18} color='#fff' />
+              ) : (
+                <PanelLeftClose size={18} color='#fff' />
+              )
+            }
             onClick={() => onCollapse(!collapsed)}
             aria-label={collapsed ? '展开侧边栏' : '收起侧边栏'}
             title={collapsed ? '展开侧边栏' : '收起侧边栏'}
@@ -247,11 +257,13 @@ export const Header: React.FC<HeaderProps> = ({
             }}
           />
           {showBreadcrumb && (
-            <div className={styles.breadcrumb} role="navigation" aria-label="面包屑导航" style={{ marginLeft: 16 }}>
-              <Breadcrumb
-                items={breadcrumb || buildBreadcrumb(pathname)}
-                separator="/"
-              />
+            <div
+              className={styles.breadcrumb}
+              role='navigation'
+              aria-label='面包屑导航'
+              style={{ marginLeft: 16 }}
+            >
+              <Breadcrumb items={breadcrumb || buildBreadcrumb(pathname)} separator='/' />
             </div>
           )}
         </div>
@@ -271,13 +283,13 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* AI 助手入口：与侧边栏使用相同的 ai:use 权限，admin 默认放行 */}
           {hasPermission('ai:use') || isAdmin() ? (
-            <Tooltip title="AI助手">
+            <Tooltip title='AI助手'>
               <Button
-                type="text"
+                type='text'
                 className={styles.actionButton}
                 onClick={() => router.push('/ai/chat')}
-                aria-label="AI助手"
-                title="AI助手"
+                aria-label='AI助手'
+                title='AI助手'
               >
                 <Bot size={18} />
               </Button>
@@ -285,14 +297,14 @@ export const Header: React.FC<HeaderProps> = ({
           ) : null}
 
           {/* 通知 */}
-          <Tooltip title="通知中心">
-            <Badge count={unreadCount} size="small" offset={[-2, 2]}>
+          <Tooltip title='通知中心'>
+            <Badge count={unreadCount} size='small' offset={[-2, 2]}>
               <Button
-                type="text"
+                type='text'
                 className={`${styles.actionButton} ${styles.notificationButton}${notificationsOpen ? ` ${styles.active}` : ''}`}
                 onClick={() => setNotificationsOpen(true)}
-                aria-label="通知中心"
-                title="通知中心"
+                aria-label='通知中心'
+                title='通知中心'
               >
                 <Bell size={18} />
               </Button>
@@ -302,7 +314,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* 主题切换 */}
           <Tooltip title={isDark ? '切换到亮色' : '切换到暗色'}>
             <Button
-              type="text"
+              type='text'
               className={styles.actionButton}
               onClick={toggleTheme}
               aria-label={isDark ? '切换到亮色' : '切换到暗色'}
@@ -313,10 +325,10 @@ export const Header: React.FC<HeaderProps> = ({
           </Tooltip>
 
           {/* 语言切换 */}
-          <Dropdown menu={{ items: languageItems }} placement="bottomRight" trigger={['click']}>
+          <Dropdown menu={{ items: languageItems }} placement='bottomRight' trigger={['click']}>
             <Tooltip title={language === 'zh-CN' ? '切换语言' : 'Switch Language'}>
               <Button
-                type="text"
+                type='text'
                 className={styles.actionButton}
                 aria-label={language === 'zh-CN' ? '切换语言' : 'Switch Language'}
                 title={language === 'zh-CN' ? '切换语言' : 'Switch Language'}

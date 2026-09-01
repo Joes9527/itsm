@@ -44,10 +44,9 @@ import {
 import dayjs from 'dayjs';
 import type {
   TicketNotification,
-  NotificationPreferenceItem} from '@/lib/api/ticket-notification-api';
-import {
-  TicketNotificationApi
+  NotificationPreferenceItem,
 } from '@/lib/api/ticket-notification-api';
+import { TicketNotificationApi } from '@/lib/api/ticket-notification-api';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { notificationWS } from '@/lib/services/notification-ws';
 import { useI18n } from '@/lib/i18n';
@@ -57,7 +56,8 @@ const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
 
 const normalizeNotification = (notification: any): TicketNotification => {
-  const isRead = typeof notification.read === 'boolean' ? notification.read : notification.status === 'read';
+  const isRead =
+    typeof notification.read === 'boolean' ? notification.read : notification.status === 'read';
   // 通用 Notification 表无 ticketId，从 actionUrl（如 "/tickets/30"）提取
   let ticketId = notification.ticketId ?? 0;
   if (!ticketId && notification.actionUrl) {
@@ -149,13 +149,13 @@ interface ChannelConfig {
 
 const CHANNELS: ChannelConfig[] = [
   { key: 'email', nameKey: 'notifications.email', icon: Mail, color: 'blue' },
-  { key:'inApp', nameKey: 'notifications.inApp', icon: MessageSquare, color: 'default' },
+  { key: 'inApp', nameKey: 'notifications.inApp', icon: MessageSquare, color: 'default' },
   { key: 'sms', nameKey: 'notifications.sms', icon: Smartphone, color: 'green' },
 ];
 
 export default function NotificationsPage() {
   const { t } = useI18n();
-  const { user, token } = useAuthStore();
+  const { user } = useAuthStore();
   const { message } = App.useApp();
   const router = useRouter();
   const [notifications, setNotifications] = useState<TicketNotification[]>([]);
@@ -224,10 +224,10 @@ export default function NotificationsPage() {
 
   // 初始化 WebSocket 连接
   useEffect(() => {
-    if (user?.id && token) {
+    if (user?.id) {
       // 连接 WebSocket
       notificationWS
-        .connect(user.id, token)
+        .connect()
         .then(() => {
           setWsConnected(true);
         })
@@ -255,7 +255,7 @@ export default function NotificationsPage() {
         notificationWS.disconnect();
       };
     }
-  }, [user?.id, token]);
+  }, [user?.id]);
 
   // 初始加载
   useEffect(() => {
@@ -366,9 +366,7 @@ export default function NotificationsPage() {
         pageSize: 200,
       });
       const allItems = response.notifications || [];
-      await Promise.all(
-        allItems.map(item => TicketNotificationApi.deleteNotification(item.id))
-      );
+      await Promise.all(allItems.map(item => TicketNotificationApi.deleteNotification(item.id)));
       message.success(t('notifications.clearAll'));
       loadNotifications();
     } catch (error) {
@@ -448,7 +446,7 @@ export default function NotificationsPage() {
   const getChannelIcon = (channel: string) => {
     const config = CHANNELS.find(c => c.key === channel);
     const IconComponent = config?.icon || MessageSquare;
-    return <IconComponent className="w-4 h-4" />;
+    return <IconComponent className='w-4 h-4' />;
   };
 
   // 获取渠道颜色
@@ -483,17 +481,22 @@ export default function NotificationsPage() {
             className={notification.status === 'read' ? 'opacity-70' : ''}
             style={{ cursor: 'pointer' }}
             onClick={() => {
-              const url = notification.actionUrl || (notification.ticketId ? `/tickets/${notification.ticketId}` : null);
+              const url =
+                notification.actionUrl ||
+                (notification.ticketId ? `/tickets/${notification.ticketId}` : null);
               if (url) router.push(url);
             }}
             actions={[
               notification.status !== 'read' && (
                 <Button
-                  key="read"
-                  type="link"
-                  size="small"
-                  icon={<Eye className="w-4 h-4" />}
-                  onClick={e => { e.stopPropagation(); handleMarkRead(notification.id); }}
+                  key='read'
+                  type='link'
+                  size='small'
+                  icon={<Eye className='w-4 h-4' />}
+                  onClick={e => {
+                    e.stopPropagation();
+                    handleMarkRead(notification.id);
+                  }}
                   loading={actionKey === `read-${notification.id}`}
                   aria-label={`${t('notifications.markRead')}: ${getNotificationTypeLabel(notification.type)}`}
                 >
@@ -501,12 +504,18 @@ export default function NotificationsPage() {
                 </Button>
               ),
               <Popconfirm
-                key="delete"
+                key='delete'
                 title={t('notifications.delete')}
                 description={t('notifications.deleteRead')}
                 onConfirm={() => handleDeleteNotification(notification.id)}
               >
-                <Button type="link" size="small" danger icon={<Delete className="w-4 h-4" />} onClick={e => e.stopPropagation()}>
+                <Button
+                  type='link'
+                  size='small'
+                  danger
+                  icon={<Delete className='w-4 h-4' />}
+                  onClick={e => e.stopPropagation()}
+                >
                   {t('notifications.delete')}
                 </Button>
               </Popconfirm>,
@@ -514,17 +523,17 @@ export default function NotificationsPage() {
           >
             <List.Item.Meta
               avatar={
-                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100">
-                  <Bell className="w-5 h-5 text-blue-600" />
+                <div className='flex items-center justify-center w-10 h-10 rounded-full bg-blue-100'>
+                  <Bell className='w-5 h-5 text-blue-600' />
                 </div>
               }
               title={
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
+                <div className='flex items-center justify-between'>
+                  <div className='flex items-center space-x-2'>
                     <Text strong={notification.status !== 'read'}>
                       {getNotificationTypeLabel(notification.type)}
                     </Text>
-                    {notification.status !== 'read' && <Badge status="processing" />}
+                    {notification.status !== 'read' && <Badge status='processing' />}
                     <Tag
                       color={getChannelColor(notification.channel)}
                       icon={getChannelIcon(notification.channel)}
@@ -536,21 +545,21 @@ export default function NotificationsPage() {
                           : t('notifications.inApp')}
                     </Tag>
                   </div>
-                  <Text type="secondary" className="text-xs">
+                  <Text type='secondary' className='text-xs'>
                     {formatDateTime(notification.createdAt)}
                   </Text>
                 </div>
               }
               description={
-                <div className="space-y-1">
+                <div className='space-y-1'>
                   <Text>{notification.content}</Text>
                   {notification.sentAt && (
-                    <div className="text-xs text-gray-500">
+                    <div className='text-xs text-gray-500'>
                       {t('notifications.sentAt')}: {formatDateTime(notification.sentAt)}
                     </div>
                   )}
                   {notification.readAt && (
-                    <div className="text-xs text-gray-500">
+                    <div className='text-xs text-gray-500'>
                       {t('notifications.readAt')}: {formatDateTime(notification.readAt)}
                     </div>
                   )}
@@ -565,11 +574,11 @@ export default function NotificationsPage() {
 
   // 渲染筛选栏
   const renderFilterBar = () => (
-    <Row gutter={[16, 16]} className="mb-4">
+    <Row gutter={[16, 16]} className='mb-4'>
       <Col xs={24} md={6}>
         <Input
           placeholder={t('notifications.searchPlaceholder')}
-          prefix={<Search className="w-4 h-4" />}
+          prefix={<Search className='w-4 h-4' />}
           value={searchText}
           onChange={e => setSearchText(e.target.value)}
           allowClear
@@ -620,7 +629,7 @@ export default function NotificationsPage() {
         />
       </Col>
       <Col xs={24} md={2}>
-        <Button icon={<RefreshCw className="w-4 h-4" />} onClick={loadNotifications}>
+        <Button icon={<RefreshCw className='w-4 h-4' />} onClick={loadNotifications}>
           {t('workflow.refresh')}
         </Button>
       </Col>
@@ -632,17 +641,17 @@ export default function NotificationsPage() {
       key: 'all',
       label: (
         <span>
-          <Bell className="mr-1 inline h-4 w-4" />
+          <Bell className='mr-1 inline h-4 w-4' />
           {t('notifications.allNotifications')}
           {filteredUnreadNotifications.length > 0 && (
-            <Badge count={filteredUnreadNotifications.length} className="ml-2" />
+            <Badge count={filteredUnreadNotifications.length} className='ml-2' />
           )}
         </span>
       ),
       children: (
         <Card>
           {renderFilterBar()}
-          <div className="mb-4 flex items-center justify-between">
+          <div className='mb-4 flex items-center justify-between'>
             <Text>
               {t('notifications.totalNotifications', { total: filteredNotifications.length })},
               {t('notifications.unreadCount', { count: filteredUnreadNotifications.length })}
@@ -659,14 +668,16 @@ export default function NotificationsPage() {
                   description={t('notifications.deleteRead')}
                   onConfirm={handleClearAll}
                 >
-                  <Button danger icon={<Delete className="h-4 w-4" />}>
+                  <Button danger icon={<Delete className='h-4 w-4' />}>
                     {t('notifications.clearAll')}
                   </Button>
                 </Popconfirm>
               )}
             </Space>
           </div>
-          <Spin spinning={loading} tip={t('workflow.loading')}>{renderNotificationList(filteredNotifications)}</Spin>
+          <Spin spinning={loading} tip={t('workflow.loading')}>
+            {renderNotificationList(filteredNotifications)}
+          </Spin>
         </Card>
       ),
     },
@@ -674,10 +685,10 @@ export default function NotificationsPage() {
       key: 'unread',
       label: (
         <span>
-          <Clock className="mr-1 inline h-4 w-4" />
+          <Clock className='mr-1 inline h-4 w-4' />
           {t('notifications.unread')}
           {filteredUnreadNotifications.length > 0 && (
-            <Badge count={filteredUnreadNotifications.length} className="ml-2" />
+            <Badge count={filteredUnreadNotifications.length} className='ml-2' />
           )}
         </span>
       ),
@@ -692,7 +703,7 @@ export default function NotificationsPage() {
       key: 'read',
       label: (
         <span>
-          <CheckCircle className="mr-1 inline h-4 w-4" />
+          <CheckCircle className='mr-1 inline h-4 w-4' />
           {t('notifications.read')}
         </span>
       ),
@@ -707,54 +718,54 @@ export default function NotificationsPage() {
       key: 'preferences',
       label: (
         <span>
-          <Settings className="mr-1 inline h-4 w-4" />
+          <Settings className='mr-1 inline h-4 w-4' />
           {t('notifications.preferences')}
         </span>
       ),
       children: (
         <Card>
-          <div className="mb-4 flex items-center justify-between">
+          <div className='mb-4 flex items-center justify-between'>
             <Title level={4}>{t('notifications.preferences')}</Title>
-            <Button icon={<RotateCcw className="h-4 w-4" />} onClick={handleResetPreferences}>
+            <Button icon={<RotateCcw className='h-4 w-4' />} onClick={handleResetPreferences}>
               {t('notifications.resetDefault')}
             </Button>
           </div>
           <Spin spinning={preferencesLoading}>
-            <Form form={form} layout="vertical" onFinish={handleSavePreferences}>
+            <Form form={form} layout='vertical' onFinish={handleSavePreferences}>
               <Row gutter={[16, 16]}>
                 <Col xs={24} md={8}>
                   <Text strong>{t('notifications.eventTypes')}</Text>
                 </Col>
                 <Col xs={24} md={5}>
-                  <Text strong className="flex items-center">
-                    <Mail className="mr-1 h-4 w-4" /> {t('notifications.emailEnabled')}
+                  <Text strong className='flex items-center'>
+                    <Mail className='mr-1 h-4 w-4' /> {t('notifications.emailEnabled')}
                   </Text>
                 </Col>
                 <Col xs={24} md={5}>
-                  <Text strong className="flex items-center">
-                    <MessageSquare className="mr-1 h-4 w-4" /> {t('notifications.inAppEnabled')}
+                  <Text strong className='flex items-center'>
+                    <MessageSquare className='mr-1 h-4 w-4' /> {t('notifications.inAppEnabled')}
                   </Text>
                 </Col>
                 <Col xs={24} md={6}>
-                  <Text strong className="flex items-center">
-                    <Smartphone className="mr-1 h-4 w-4" /> {t('notifications.smsEnabled')}
+                  <Text strong className='flex items-center'>
+                    <Smartphone className='mr-1 h-4 w-4' /> {t('notifications.smsEnabled')}
                   </Text>
                 </Col>
               </Row>
               <Divider />
               {EVENT_TYPES.map(event => (
-                <Row key={event.type} gutter={[16, 16]} align="middle" className="mb-2">
+                <Row key={event.type} gutter={[16, 16]} align='middle' className='mb-2'>
                   <Col xs={24} md={8}>
                     <div>
                       <Text>{t(event.nameKey)}</Text>
                       <br />
-                      <Text type="secondary" className="text-xs">
+                      <Text type='secondary' className='text-xs'>
                         {t(event.descKey)}
                       </Text>
                     </div>
                   </Col>
                   <Col xs={24} md={5}>
-                    <Form.Item name={`${event.type}_email`} valuePropName="checked" noStyle>
+                    <Form.Item name={`${event.type}_email`} valuePropName='checked' noStyle>
                       <Switch
                         checkedChildren={t('workflow.statusEnabled')}
                         unCheckedChildren={t('workflow.statusDisabled')}
@@ -762,7 +773,7 @@ export default function NotificationsPage() {
                     </Form.Item>
                   </Col>
                   <Col xs={24} md={5}>
-                    <Form.Item name={`${event.type}_in_app`} valuePropName="checked" noStyle>
+                    <Form.Item name={`${event.type}_in_app`} valuePropName='checked' noStyle>
                       <Switch
                         checkedChildren={t('workflow.statusEnabled')}
                         unCheckedChildren={t('workflow.statusDisabled')}
@@ -770,7 +781,7 @@ export default function NotificationsPage() {
                     </Form.Item>
                   </Col>
                   <Col xs={24} md={6}>
-                    <Form.Item name={`${event.type}_sms`} valuePropName="checked" noStyle>
+                    <Form.Item name={`${event.type}_sms`} valuePropName='checked' noStyle>
                       <Switch
                         checkedChildren={t('workflow.statusEnabled')}
                         unCheckedChildren={t('workflow.statusDisabled')}
@@ -783,7 +794,7 @@ export default function NotificationsPage() {
               <Divider />
 
               <Form.Item>
-                <Button type="primary" htmlType="submit" loading={actionKey === 'save-preferences'}>
+                <Button type='primary' htmlType='submit' loading={actionKey === 'save-preferences'}>
                   {t('notifications.saveSettings')}
                 </Button>
               </Form.Item>
@@ -795,20 +806,20 @@ export default function NotificationsPage() {
   ];
 
   return (
-    <div className="p-6">
-      <div className="mb-6 flex items-center justify-between">
+    <div className='p-6'>
+      <div className='mb-6 flex items-center justify-between'>
         <Title level={2}>{t('notifications.title')}</Title>
         <Space>
           <Tooltip
             title={wsConnected ? t('notifications.wsConnected') : t('notifications.wsDisconnected')}
           >
             {wsConnected ? (
-              <Wifi className="h-5 w-5 text-green-500" />
+              <Wifi className='h-5 w-5 text-green-500' />
             ) : (
-              <WifiOff className="h-5 w-5 text-red-500" />
+              <WifiOff className='h-5 w-5 text-red-500' />
             )}
           </Tooltip>
-          <Button icon={<RefreshCw className="h-4 w-4" />} onClick={loadNotifications}>
+          <Button icon={<RefreshCw className='h-4 w-4' />} onClick={loadNotifications}>
             {t('workflow.refresh')}
           </Button>
         </Space>

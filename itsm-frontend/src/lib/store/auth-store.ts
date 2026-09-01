@@ -9,7 +9,6 @@ import { persist } from 'zustand/middleware';
 import { clearAuthStorage } from '@/lib/auth/token-storage';
 import { setTenant, clearTenant } from '@/lib/auth/tenant-context';
 import type { User, Tenant } from '@/lib/api/api-config';
-import { httpClient } from '@/lib/api/http-client';
 
 // ===================================
 // 类型定义
@@ -20,13 +19,12 @@ import { httpClient } from '@/lib/api/http-client';
 interface AuthState {
   // 状态
   user: User | null;
-  token: string | null;
   currentTenant: Tenant | null;
   isAuthenticated: boolean;
   isLoading: boolean;
 
   // 认证操作
-  login: (user: User, token: string, tenant?: Tenant) => void;
+  login: (user: User, tenant?: Tenant) => void;
   logout: () => void;
   updateUser: (user: Partial<User>) => void;
   setLoading: (loading: boolean) => void;
@@ -50,17 +48,15 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       // 初始状态
       user: null,
-      token: null,
       currentTenant: null,
       isAuthenticated: false,
       isLoading: false,
 
       // 登录操作
       // 注意：token 存储在 httpOnly cookie 中，前端不需要存储
-      login: (user: User, _token: string, tenant?: Tenant) => {
+      login: (user: User, tenant?: Tenant) => {
         set({
           user,
-          token: null, // token 在 httpOnly cookie 中，不存储在前端
           isAuthenticated: true,
           isLoading: false,
           currentTenant: tenant || null,
@@ -68,8 +64,7 @@ export const useAuthStore = create<AuthState>()(
 
         // 只设置租户信息（不存储 token）
         if (tenant) {
-          httpClient.setTenantId(tenant.id);
-          httpClient.setTenantCode(tenant.code);
+          setTenant(tenant.id, tenant.code);
         }
       },
 
@@ -77,7 +72,6 @@ export const useAuthStore = create<AuthState>()(
       logout: () => {
         set({
           user: null,
-          token: null,
           isAuthenticated: false,
           isLoading: false,
           currentTenant: null,
@@ -86,9 +80,7 @@ export const useAuthStore = create<AuthState>()(
         // 清除所有认证信息（使用统一的清理函数，包含历史键名）
         clearAuthStorage();
 
-        httpClient.clearToken();
-        httpClient.setTenantId(null);
-        httpClient.setTenantCode(null);
+        clearTenant();
       },
 
       // 更新用户信息
@@ -109,8 +101,7 @@ export const useAuthStore = create<AuthState>()(
       // 设置当前租户
       setCurrentTenant: (tenant: Tenant) => {
         set({ currentTenant: tenant });
-        httpClient.setTenantId(tenant.id);
-        httpClient.setTenantCode(tenant.code);
+        setTenant(tenant.id, tenant.code);
 
         if (typeof window !== 'undefined') {
           localStorage.setItem('current_tenant_id', tenant.id.toString());
@@ -121,8 +112,7 @@ export const useAuthStore = create<AuthState>()(
       // 清除租户
       clearTenant: () => {
         set({ currentTenant: null });
-        httpClient.setTenantId(null);
-        httpClient.setTenantCode(null);
+        clearTenant();
 
         if (typeof window !== 'undefined') {
           localStorage.removeItem('current_tenant_id');
@@ -152,13 +142,12 @@ export const useAuthStore = create<AuthState>()(
       name: 'auth-storage',
       partialize: state => ({
         // 安全：不持久化 user（含 PII/permissions），避免 XSS 读取与跨用户残留
-        token: null, // token 在 httpOnly cookie 中，不持久化
         currentTenant: state.currentTenant,
         // 不持久化 isAuthenticated/user，由启动时的 /api/v1/auth/me 探活接口决定
         // 避免 cookie 过期后前端仍显示已登录的伪登录态
       }),
       skipHydration: true, // 手动处理 SSR hydration
-      onRehydrateStorage: () => (state) => {
+      onRehydrateStorage: () => state => {
         // hydration 完成后，强制将 isAuthenticated 设为 false
         // 后续通过 /api/v1/auth/me 接口验证真实登录状态
         if (state) {

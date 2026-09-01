@@ -1,9 +1,9 @@
 package common
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func TestShouldUseSecureCookies(t *testing.T) {
@@ -42,15 +43,19 @@ func TestShouldUseSecureCookies(t *testing.T) {
 
 func TestRefreshTokenReturnsServiceUnavailableWhenAuthoritativeStoreIsUnavailable(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	const secret = "refresh-handler-unavailable-secret"
-	consumer := authentication.NewRefreshTokenConsumer(secret, nil)
-	svc := NewService(nil, secret, zap.NewNop().Sugar(), nil, consumer)
+	fx := newRefreshServiceFixture(t)
+	tenant := fx.tenant("unavailable-handler", "standard", "active")
+	user := fx.user(tenant.ID, "unavailable-handler-user", "end_user", "", true)
+	consumer := authentication.NewRefreshTokenConsumer(fx.secret, nil)
+	svc := NewService(NewEntRepository(fx.client), fx.secret, zap.NewNop().Sugar(), fx.client, consumer)
 	handler := NewHandler(svc)
 	router := gin.New()
 	router.POST("/api/v1/auth/refresh", handler.RefreshToken)
 
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", strings.NewReader(`{"refreshToken":"signed-but-store-unavailable"}`))
+	token := fx.token(user, "end_user", tenant.ID)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", strings.NewReader(`{}`))
 	request.Header.Set("Content-Type", "application/json")
+	request.AddCookie(&http.Cookie{Name: "refresh_token", Value: token})
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
 
@@ -60,16 +65,14 @@ func TestRefreshTokenReturnsServiceUnavailableWhenAuthoritativeStoreIsUnavailabl
 
 func TestRefreshTokenRotatesHttpOnlyCookieThroughCanonicalHandler(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	const secret = "refresh-handler-cookie-secret"
-	store := &atomicRefreshTokenStore{consumed: make(map[string]struct{})}
-	consumer := authentication.NewRefreshTokenConsumer(secret, store)
-	user := &User{ID: 61, Username: "browser-user", Role: "end_user", TenantID: 9, Active: true}
-	svc := NewService(&refreshTestRepository{user: user}, secret, zap.NewNop().Sugar(), nil, consumer)
-	handler := NewHandler(svc)
+	fx := newRefreshServiceFixture(t)
+	tenant := fx.tenant("browser-handler", "standard", "active")
+	user := fx.user(tenant.ID, "browser-user", "end_user", "", true)
+	handler := NewHandler(fx.service)
 	router := gin.New()
 	router.POST("/api/v1/auth/refresh", handler.RefreshToken)
 
-	original, err := authentication.GenerateRefreshToken(user.ID, secret, time.Hour)
+	original, err := authentication.GenerateRefreshToken(user.ID, user.Username, user.Role, user.TenantID, fx.secret, time.Hour)
 	require.NoError(t, err)
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", strings.NewReader(`{}`))
 	request.Header.Set("Content-Type", "application/json")
@@ -87,7 +90,46 @@ func TestRefreshTokenRotatesHttpOnlyCookieThroughCanonicalHandler(t *testing.T) 
 	}
 	require.NotEmpty(t, rotated)
 	require.NotEqual(t, original, rotated)
-	claims, err := authentication.NewRefreshTokenConsumer(secret, &atomicRefreshTokenStore{consumed: make(map[string]struct{})}).Consume(context.Background(), rotated)
+	require.NotContains(t, response.Body.String(), "accessToken")
+	require.NotContains(t, response.Body.String(), "refreshToken")
+	require.NotContains(t, response.Body.String(), rotated)
+	claims, err := authentication.NewRefreshTokenConsumer(fx.secret, &atomicRefreshTokenStore{consumed: make(map[string]struct{})}).Validate(rotated)
 	require.NoError(t, err)
-	require.Equal(t, user.ID, claims.UserID)
+	require.Equal(t, user.ID, claims.Identity().UserID)
+}
+
+func TestLoginDeliversJWTsOnlyThroughHttpOnlyCookies(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	fx := newRefreshServiceFixture(t)
+	tenant := fx.tenant("login-handler", "standard", "active")
+	hash, err := bcrypt.GenerateFromPassword([]byte("correct-password"), bcrypt.MinCost)
+	require.NoError(t, err)
+	user := fx.user(tenant.ID, "login-user", "end_user", "", true)
+	fx.client.User.UpdateOneID(user.ID).SetPasswordHash(string(hash)).ExecX(fx.ctx)
+
+	router := gin.New()
+	router.POST("/api/v1/auth/login", NewHandler(fx.service).Login)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"login-user","password":"correct-password","tenantId":`+strconv.Itoa(tenant.ID)+`}`))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	require.Equal(t, http.StatusOK, response.Code)
+	var accessToken, refreshToken string
+	for _, cookie := range response.Result().Cookies() {
+		switch cookie.Name {
+		case "access_token":
+			accessToken = cookie.Value
+			require.True(t, cookie.HttpOnly)
+		case "refresh_token":
+			refreshToken = cookie.Value
+			require.True(t, cookie.HttpOnly)
+		}
+	}
+	require.NotEmpty(t, accessToken)
+	require.NotEmpty(t, refreshToken)
+	require.NotContains(t, response.Body.String(), "accessToken")
+	require.NotContains(t, response.Body.String(), "refreshToken")
+	require.NotContains(t, response.Body.String(), accessToken)
+	require.NotContains(t, response.Body.String(), refreshToken)
 }

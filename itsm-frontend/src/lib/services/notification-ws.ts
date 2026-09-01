@@ -4,6 +4,7 @@
  */
 
 import { logger } from '@/lib/env';
+import { httpClient } from '@/lib/api/http-client';
 import type { TicketNotification } from '@/lib/api/ticket-notification-api';
 export type { TicketNotification } from '@/lib/api/ticket-notification-api';
 
@@ -46,8 +47,6 @@ class NotificationWSService {
   private connectionCallbacks: Set<ConnectionCallback> = new Set();
   private reconnectCallbacks: Set<ReconnectCallback> = new Set();
   private maxAttemptsCallbacks: Set<MaxAttemptsCallback> = new Set();
-  private userId: number | null = null;
-  private token: string | null = null;
   private shouldReconnect = true;
   private isManualDisconnect = false;
 
@@ -62,16 +61,15 @@ class NotificationWSService {
   /**
    * 连接 WebSocket
    */
-  connect(userId: number, token: string): Promise<void> {
+  async connect(): Promise<void> {
+    const { ticket } = await httpClient.post<{ ticket: string }>('/api/v1/ws/ticket', {});
     return new Promise((resolve, reject) => {
-      this.userId = userId;
-      this.token = token;
       this.shouldReconnect = true;
       this.isManualDisconnect = false;
 
       // 获取 WebSocket URL
       const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8090/api/v1/ws/notifications';
-      const url = `${wsUrl}?user_id=${userId}&token=${token}`;
+      const url = `${wsUrl}?ticket=${encodeURIComponent(ticket)}`;
 
       // 清理旧连接
       this.cleanup();
@@ -220,8 +218,8 @@ class NotificationWSService {
     this.reconnectCallbacks.forEach(cb => cb(this.reconnectAttempts, this.maxReconnectAttempts));
 
     this.reconnectTimeout = setTimeout(() => {
-      if (this.shouldReconnect && this.userId && this.token) {
-        this.connect(this.userId, this.token).catch(() => {
+      if (this.shouldReconnect) {
+        this.connect().catch(() => {
           // 连接失败由 onclose 处理，会触发重连
         });
       }
@@ -295,11 +293,7 @@ class NotificationWSService {
     this.reconnectAttempts = 0;
     this.reconnectDelay = 0;
 
-    if (this.userId && this.token) {
-      return this.connect(this.userId, this.token);
-    }
-
-    return Promise.reject(new Error('No userId or token available'));
+    return this.connect();
   }
 
   /**

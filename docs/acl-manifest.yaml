@@ -11,17 +11,11 @@ routes:
     description: 创建
     source: router.go:343
   - method: POST
-    path: /api/v1/refresh-token
-    permission: null  # PUBLIC
-    menu: v1
-    description: 创建
-    source: router.go:344
-  - method: POST
     path: /api/v1/auth/refresh
     permission: null  # PUBLIC
     menu: v1
     description: 创建
-    source: router.go:345
+    source: router.go:344
   - method: POST
     path: /api/v1/auth/register
     permission: null  # PUBLIC

@@ -8,7 +8,6 @@ jest.mock('@/lib/api/http-client', () => ({
     put: jest.fn(),
     delete: jest.fn(),
     patch: jest.fn(),
-    getAuthToken: jest.fn().mockReturnValue('mock-token'),
   },
 }));
 
@@ -20,7 +19,9 @@ const mockGet = httpClient.get as jest.Mock;
 const mockDelete = httpClient.delete as jest.Mock;
 
 describe('TicketAttachmentApi', () => {
-  beforeEach(() => { jest.clearAllMocks(); });
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
   describe('listAttachments', () => {
     it('should list attachments for a ticket', async () => {

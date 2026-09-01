@@ -52,13 +52,36 @@ type RefreshTokenConsumer struct {
 	store     RefreshTokenStore
 }
 
+type RefreshTokenIdentity struct {
+	UserID   int
+	Username string
+	Role     string
+	TenantID int
+}
+
+// ValidatedRefreshToken is an opaque, signed refresh token that may be
+// authorized by the application before its one-time consumption.
+type ValidatedRefreshToken struct {
+	consumer  *RefreshTokenConsumer
+	token     string
+	expiresAt time.Time
+	identity  RefreshTokenIdentity
+}
+
+func (t *ValidatedRefreshToken) Identity() RefreshTokenIdentity {
+	if t == nil {
+		return RefreshTokenIdentity{}
+	}
+	return t.identity
+}
+
 func NewRefreshTokenConsumer(jwtSecret string, store RefreshTokenStore) *RefreshTokenConsumer {
 	return &RefreshTokenConsumer{jwtSecret: jwtSecret, store: store}
 }
 
-func (c *RefreshTokenConsumer) Consume(ctx context.Context, token string) (*Claims, error) {
-	if c == nil || c.store == nil {
-		return nil, &RefreshTokenStoreUnavailableError{}
+func (c *RefreshTokenConsumer) Validate(token string) (*ValidatedRefreshToken, error) {
+	if c == nil {
+		return nil, errors.New("refresh token consumer is not configured")
 	}
 	claims, err := validateToken(token, c.jwtSecret, "refresh")
 	if err != nil {
@@ -67,10 +90,27 @@ func (c *RefreshTokenConsumer) Consume(ctx context.Context, token string) (*Clai
 	if claims.ExpiresAt == nil {
 		return nil, errors.New("refresh token has no expiry")
 	}
-	if err := c.store.Consume(ctx, token, claims.ExpiresAt.Time); err != nil {
-		return nil, err
+	if claims.UserID <= 0 || claims.TenantID <= 0 || claims.Username == "" || claims.Role == "" {
+		return nil, errors.New("refresh token session identity is incomplete")
 	}
-	return claims, nil
+	return &ValidatedRefreshToken{
+		consumer:  c,
+		token:     token,
+		expiresAt: claims.ExpiresAt.Time,
+		identity: RefreshTokenIdentity{
+			UserID: claims.UserID, Username: claims.Username, Role: claims.Role, TenantID: claims.TenantID,
+		},
+	}, nil
+}
+
+func (c *RefreshTokenConsumer) Consume(ctx context.Context, token *ValidatedRefreshToken) error {
+	if c == nil || c.store == nil {
+		return &RefreshTokenStoreUnavailableError{}
+	}
+	if token == nil || token.consumer != c || token.token == "" {
+		return errors.New("refresh token was not validated by this consumer")
+	}
+	return c.store.Consume(ctx, token.token, token.expiresAt)
 }
 
 type redisRefreshTokenStore struct {

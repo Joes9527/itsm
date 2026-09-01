@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 
@@ -11,11 +12,9 @@ import (
 	"itsm-backend/authorization"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
-	"itsm-backend/ent/mspallocation"
 	"itsm-backend/ent/passwordresettoken"
 	"itsm-backend/ent/tenant"
 	"itsm-backend/ent/user"
-	"itsm-backend/pkg/tenantmode"
 
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
@@ -130,11 +129,6 @@ func (s *AuthService) GetUserTenants(ctx context.Context, userID int) (*dto.User
 
 // SwitchTenant 切换租户
 func (s *AuthService) SwitchTenant(ctx context.Context, userID, tenantID int) (*dto.LoginResponse, error) {
-	// 授权检查覆盖三条路径:
-	//   1) native — 调用者原生租户就是目标租户(user.tenant_id == tenantID)
-	//   2) super_admin — 平台超管跨租户运维
-	//   3) msp_cross — MSP 服务商员工凭 msp_role + 有效 MSPAllocation 切换到客户租户
-	// 任何不属于上述三类的请求一律拒绝,避免租户水平越权。
 	userEntity, err := s.client.User.Get(ctx, userID)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -143,66 +137,32 @@ func (s *AuthService) SwitchTenant(ctx context.Context, userID, tenantID int) (*
 		s.logger.Errorw("Failed to load user for tenant switch", "user_id", userID, "error", err)
 		return nil, fmt.Errorf("无权限访问该租户")
 	}
-
-	nativeSwitch := userEntity.TenantID == tenantID
-	superAdmin := userEntity.Role == "super_admin"
-
-	mspAllowed := false
-	if !nativeSwitch && !superAdmin && string(userEntity.MspRole) != "" {
-		// 仅当用户原生租户是 msp_provider 时,MSP 跨租户授权才有意义。
-		origin, oerr := s.client.Tenant.Get(ctx, userEntity.TenantID)
-		if oerr == nil && tenantmode.IsMSPProviderTenantType(string(origin.Type)) {
-			target, terr := s.client.Tenant.Get(ctx, tenantID)
-			if terr == nil && tenantmode.IsCustomerTenantType(string(target.Type)) {
-				count, qerr := s.client.MSPAllocation.Query().
-					Where(
-						mspallocation.MspUserIDEQ(userID),
-						mspallocation.CustomerTenantIDEQ(tenantID),
-						mspallocation.DeassignedAtIsNil(),
-					).
-					Count(ctx)
-				if qerr == nil && count > 0 {
-					mspAllowed = true
-				}
-			}
+	if !userEntity.Active {
+		return nil, fmt.Errorf("用户账号已被禁用")
+	}
+	tenantEntity, err := authorization.AuthorizeTenantSession(ctx, s.client, userEntity, tenantID, time.Now())
+	if err != nil {
+		switch {
+		case errors.Is(err, authorization.ErrTenantInactive):
+			return nil, fmt.Errorf("租户已被暂停")
+		case errors.Is(err, authorization.ErrTenantExpired):
+			return nil, fmt.Errorf("租户已过期")
+		default:
+			s.logger.Warnw("Switch tenant denied", "user_id", userID, "tenant_id", tenantID, "error", err)
+			return nil, fmt.Errorf("无权限访问该租户")
 		}
 	}
-
-	if !nativeSwitch && !superAdmin && !mspAllowed {
-		s.logger.Warnw(
-			"Switch tenant denied",
-			"user_id", userID,
-			"tenant_id", tenantID,
-			"native_switch", nativeSwitch,
-			"super_admin", superAdmin,
-			"msp_role", string(userEntity.MspRole),
-		)
-		return nil, fmt.Errorf("无权限访问该租户")
-	}
-
-	// 查询目标租户,共享原有 token 生成路径。
-	tenantEntity, err := s.client.Tenant.Get(ctx, tenantID)
-	if err != nil {
-		s.logger.Errorw("Failed to get tenant", "tenant_id", tenantID, "error", err)
-		return nil, fmt.Errorf("租户不存在")
-	}
-
-	// 即便调用者具备权限,目标租户本身也必须在 active 且未过期。
-	if tenantEntity.Status != "active" {
-		s.logger.Warnw("Switch tenant rejected: tenant inactive",
-			"user_id", userID, "tenant_id", tenantID, "status", tenantEntity.Status)
-		return nil, fmt.Errorf("租户已被暂停")
-	}
-	if !tenantEntity.ExpiresAt.IsZero() && tenantEntity.ExpiresAt.Before(time.Now()) {
-		s.logger.Warnw("Switch tenant rejected: tenant expired",
-			"user_id", userID, "tenant_id", tenantID, "expires_at", tenantEntity.ExpiresAt)
-		return nil, fmt.Errorf("租户已过期")
+	role := string(userEntity.Role)
+	if userEntity.MspRole != "" {
+		if mappedRole := authorization.GetMSPRBACRole(string(userEntity.MspRole)); mappedRole != "" {
+			role = mappedRole
+		}
 	}
 
 	accessToken, err := authentication.GenerateAccessToken(
 		userEntity.ID,
 		userEntity.Username,
-		string(userEntity.Role),
+		role,
 		tenantID,
 		s.jwtSecret,
 		time.Duration(15)*time.Minute,
@@ -215,6 +175,9 @@ func (s *AuthService) SwitchTenant(ctx context.Context, userID, tenantID int) (*
 	// 生成新的refresh token
 	refreshToken, err := authentication.GenerateRefreshToken(
 		userEntity.ID,
+		userEntity.Username,
+		role,
+		tenantID,
 		s.jwtSecret,
 		time.Duration(7*24)*time.Hour,
 	)
@@ -236,7 +199,7 @@ func (s *AuthService) SwitchTenant(ctx context.Context, userID, tenantID int) (*
 			Username: userEntity.Username,
 			Email:    userEntity.Email,
 			Name:     userEntity.Name,
-			Role:     string(userEntity.Role),
+			Role:     role,
 			MSPRole: func() *string {
 				s := string(userEntity.MspRole)
 				if s == "" {
@@ -248,7 +211,7 @@ func (s *AuthService) SwitchTenant(ctx context.Context, userID, tenantID int) (*
 			DepartmentID: userEntity.DepartmentID,
 			Phone:        userEntity.Phone,
 			Active:       userEntity.Active,
-			TenantID:     userEntity.TenantID,
+			TenantID:     tenantEntity.ID,
 			CreatedAt:    userEntity.CreatedAt,
 			UpdatedAt:    userEntity.UpdatedAt,
 			Permissions:  permissions,

@@ -111,13 +111,9 @@ export async function createTicketViaApi(
 ): Promise<{ id: number }> {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
-  // Get current auth token
-  const token = await page.evaluate(() => localStorage.getItem('access_token'));
-
   const response = await page.request.post(`${apiUrl}/api/v1/tickets`, {
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
     },
     data: ticketData,
   });

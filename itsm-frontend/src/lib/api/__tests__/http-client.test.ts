@@ -77,27 +77,12 @@ describe('httpClient', () => {
   });
 
   afterAll(() => {
-    Object.values(consoleSpy).forEach((spy) => spy.mockRestore());
+    Object.values(consoleSpy).forEach(spy => spy.mockRestore());
   });
 
   describe('base configuration', () => {
     it('defaults to same-origin when no public API URL is configured', () => {
       expect(httpClient.getBaseURL()).toBe(process.env.NEXT_PUBLIC_API_URL || '');
-    });
-
-    it('returns null token when no cookie is set', () => {
-      expect(httpClient.getAuthToken()).toBeNull();
-      expect(httpClient.getToken()).toBeNull();
-    });
-
-    it('setToken populates the in-memory token; clearToken clears it', () => {
-      // Cookie is the source of truth for cross-request auth, but
-      // setToken is kept for backward compatibility and DOES set the
-      // in-memory field. clearToken resets it back to null.
-      httpClient.setToken('whatever');
-      expect(httpClient.getAuthToken()).toBe('whatever');
-      httpClient.clearToken();
-      expect(httpClient.getAuthToken()).toBeNull();
     });
   });
 
@@ -142,9 +127,11 @@ describe('httpClient', () => {
         })
       );
 
-      const result = await httpClient.get<{ ticketNumber: string; assigneeId: number; createdAt: string }>(
-        '/api/v1/tickets/1'
-      );
+      const result = await httpClient.get<{
+        ticketNumber: string;
+        assigneeId: number;
+        createdAt: string;
+      }>('/api/v1/tickets/1');
 
       expect(result).toEqual({
         ticketNumber: 'TKT-001',
@@ -174,7 +161,9 @@ describe('httpClient', () => {
         jsonResponse({ code: 1001, message: '标题不能为空', data: null })
       );
 
-      await expect(httpClient.post('/api/v1/tickets', { title: '' })).rejects.toThrow('标题不能为空');
+      await expect(httpClient.post('/api/v1/tickets', { title: '' })).rejects.toThrow(
+        '标题不能为空'
+      );
     });
 
     it('throws with HTTP status when response.ok is false', async () => {
@@ -296,9 +285,9 @@ describe('httpClient', () => {
         jsonResponse({ code: 2003, message: '流程定义不可修改' }, { status: 403, ok: false })
       );
 
-      await expect(httpClient.put('/api/v1/bpmn/process-definitions/locked?version=1.0.0', { name: 'x' })).rejects.toThrow(
-        '流程定义不可修改'
-      );
+      await expect(
+        httpClient.put('/api/v1/bpmn/process-definitions/locked?version=1.0.0', { name: 'x' })
+      ).rejects.toThrow('流程定义不可修改');
     });
 
     it('falls back to the generic status message when the error body has no message field', async () => {
@@ -344,7 +333,11 @@ describe('httpClient', () => {
   describe('getPaginated', () => {
     it('flattens nested filters into filters[key]=value', async () => {
       fetchMock.mockResolvedValueOnce(
-        jsonResponse({ code: 0, message: 'ok', data: { data: [], total: 0, page: 1, pageSize: 20, totalPages: 0 } })
+        jsonResponse({
+          code: 0,
+          message: 'ok',
+          data: { data: [], total: 0, page: 1, pageSize: 20, totalPages: 0 },
+        })
       );
 
       await httpClient.getPaginated('/api/v1/tickets', {

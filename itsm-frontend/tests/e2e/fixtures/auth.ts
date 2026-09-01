@@ -1,4 +1,5 @@
-import { test as base, Page } from '@playwright/test';
+import { test as base } from '@playwright/test';
+import type { APIRequestContext } from '@playwright/test';
 
 /**
  * 角色测试账号映射
@@ -18,57 +19,38 @@ export type TestRole = keyof typeof TEST_ACCOUNTS;
 // 扩展 Playwright test 类型
 interface TestFixtures {
   loginAs: (role: TestRole) => Promise<string>;
-  apiGet: (token: string, path: string) => Promise<any>;
-  apiPost: (token: string, path: string, body?: any) => Promise<any>;
+  apiGet: (role: string, path: string) => Promise<any>;
+  apiPost: (role: string, path: string, body?: any) => Promise<any>;
+}
+
+async function establishSession(request: APIRequestContext, role: TestRole) {
+  const account = TEST_ACCOUNTS[role];
+  const apiURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8090';
+  const response = await request.post(`${apiURL}/api/v1/auth/login`, {
+    data: { username: account.username, password: account.password },
+  });
+  if (!response.ok()) throw new Error(`Login failed for ${role}: ${response.status()}`);
+
+  const json = (await response.json()) as { data?: Record<string, unknown> };
+  const data = json.data ?? {};
+  if ('access_token' in data || 'accessToken' in data || 'refresh_token' in data || 'refreshToken' in data) {
+    throw new Error(`Login response for ${role} exposed a JWT`);
+  }
 }
 
 export const test = base.extend<TestFixtures>({
-  loginAs: async ({ page, request }, use) => {
+  loginAs: async ({ request }, use) => {
     await use(async (role: TestRole) => {
-      const account = TEST_ACCOUNTS[role];
-      const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
-      const apiURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8090';
-
-      // 调用登录 API
-      const response = await request.post(`${apiURL}/api/v1/auth/login`, {
-        data: {
-          username: account.username,
-          password: account.password,
-        },
-      });
-
-      if (!response.ok()) {
-        throw new Error(`Login failed for ${role}: ${response.status()}`);
-      }
-
-      const json = await response.json();
-      const token = json.data?.access_token;
-
-      if (!token) {
-        throw new Error(`No access token for ${role}`);
-      }
-
-      // 设置页面 cookie（用于 UI 测试）
-      await page.goto(`${baseURL}/login`);
-      await page.evaluate(
-        (t) => {
-          document.cookie = `token=${t}; path=/`;
-        },
-        token
-      );
-
-      return token;
+      await establishSession(request, role);
+      return role;
     });
   },
 
   apiGet: async ({ request }, use) => {
-    await use(async (token: string, path: string) => {
+    await use(async (role: string, path: string) => {
+      await establishSession(request, role as TestRole);
       const apiURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8090';
-      const response = await request.get(`${apiURL}${path}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await request.get(`${apiURL}${path}`);
       return {
         status: response.status(),
         data: response.ok() ? await response.json() : await response.text(),
@@ -77,11 +59,11 @@ export const test = base.extend<TestFixtures>({
   },
 
   apiPost: async ({ request }, use) => {
-    await use(async (token: string, path: string, body?: any) => {
+    await use(async (role: string, path: string, body?: any) => {
+      await establishSession(request, role as TestRole);
       const apiURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8090';
       const response = await request.post(`${apiURL}${path}`, {
         headers: {
-          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         data: body,

@@ -21,14 +21,21 @@ func TestRedisRefreshTokenConsumerConsumesTokenExactlyOnce(t *testing.T) {
 	client := redis.NewClient(&redis.Options{Addr: server.Addr()})
 	t.Cleanup(func() { _ = client.Close() })
 	consumer := NewRefreshTokenConsumer(refreshTestSecret, NewRedisRefreshTokenStore(client))
-	token, err := GenerateRefreshToken(73, refreshTestSecret, time.Hour)
+	token, err := GenerateRefreshToken(73, "operator", "admin", 8, refreshTestSecret, time.Hour)
 	require.NoError(t, err)
 
-	claims, err := consumer.Consume(context.Background(), token)
+	validated, err := consumer.Validate(token)
 	require.NoError(t, err)
-	require.Equal(t, 73, claims.UserID)
+	identity := validated.Identity()
+	require.Equal(t, 73, identity.UserID)
+	require.Equal(t, "operator", identity.Username)
+	require.Equal(t, "admin", identity.Role)
+	require.Equal(t, 8, identity.TenantID)
+	require.NoError(t, consumer.Consume(context.Background(), validated))
 
-	_, err = consumer.Consume(context.Background(), token)
+	validated, err = consumer.Validate(token)
+	require.NoError(t, err)
+	err = consumer.Consume(context.Background(), validated)
 	require.ErrorIs(t, err, ErrRefreshTokenConsumed)
 
 	keys := server.Keys()
@@ -44,7 +51,7 @@ func TestRedisRefreshTokenConsumerAllowsOneConcurrentUse(t *testing.T) {
 	client := redis.NewClient(&redis.Options{Addr: server.Addr()})
 	t.Cleanup(func() { _ = client.Close() })
 	consumer := NewRefreshTokenConsumer(refreshTestSecret, NewRedisRefreshTokenStore(client))
-	token, err := GenerateRefreshToken(91, refreshTestSecret, time.Hour)
+	token, err := GenerateRefreshToken(91, "concurrent", "end_user", 3, refreshTestSecret, time.Hour)
 	require.NoError(t, err)
 
 	const attempts = 24
@@ -57,7 +64,12 @@ func TestRedisRefreshTokenConsumerAllowsOneConcurrentUse(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			_, consumeErr := consumer.Consume(context.Background(), token)
+			validated, validateErr := consumer.Validate(token)
+			if validateErr != nil {
+				t.Errorf("unexpected validate error: %v", validateErr)
+				return
+			}
+			consumeErr := consumer.Consume(context.Background(), validated)
 			switch {
 			case consumeErr == nil:
 				successes.Add(1)
@@ -78,10 +90,12 @@ func TestRedisRefreshTokenConsumerAllowsOneConcurrentUse(t *testing.T) {
 func TestRefreshTokenConsumerFailsClosedWithoutStore(t *testing.T) {
 	t.Parallel()
 	consumer := NewRefreshTokenConsumer(refreshTestSecret, nil)
-	token, err := GenerateRefreshToken(12, refreshTestSecret, time.Hour)
+	token, err := GenerateRefreshToken(12, "missing-store", "end_user", 1, refreshTestSecret, time.Hour)
 	require.NoError(t, err)
 
-	_, err = consumer.Consume(context.Background(), token)
+	validated, err := consumer.Validate(token)
+	require.NoError(t, err)
+	err = consumer.Consume(context.Background(), validated)
 	var unavailable *RefreshTokenStoreUnavailableError
 	require.ErrorAs(t, err, &unavailable)
 }
@@ -98,7 +112,7 @@ func TestRedisRefreshTokenConsumerFailsClosedWhenRedisIsUnavailable(t *testing.T
 	})
 	t.Cleanup(func() { _ = client.Close() })
 	consumer := NewRefreshTokenConsumer(refreshTestSecret, NewRedisRefreshTokenStore(client))
-	token, err := GenerateRefreshToken(44, refreshTestSecret, time.Hour)
+	token, err := GenerateRefreshToken(44, "redis-down", "admin", 2, refreshTestSecret, time.Hour)
 	require.NoError(t, err)
 	server.Close()
 
@@ -110,7 +124,12 @@ func TestRedisRefreshTokenConsumerFailsClosedWhenRedisIsUnavailable(t *testing.T
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, consumeErr := consumer.Consume(context.Background(), token)
+			validated, validateErr := consumer.Validate(token)
+			if validateErr != nil {
+				t.Errorf("unexpected validate error: %v", validateErr)
+				return
+			}
+			consumeErr := consumer.Consume(context.Background(), validated)
 			if consumeErr == nil {
 				successes.Add(1)
 				return

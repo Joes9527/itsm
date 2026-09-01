@@ -56,8 +56,6 @@ Content-Type: application/json
   "code": 0,
   "message": "success",
   "data": {
-    "accessToken": "eyJhbGciOiJIUzI1NiIs...",
-    "refreshToken": "eyJhbGciOiJIUzI1NiIs...",
     "user": {
       "id": 1,
       "username": "admin",
@@ -82,24 +80,24 @@ Content-Type: application/json
 ```http
 POST /auth/refresh
 Content-Type: application/json
+Cookie: refresh_token=<HttpOnly cookie>
 
-{
-  "refreshToken": "eyJhbGciOiJIUzI1NiIs..."
-}
+{}
 ```
 
-Refresh token 每次只能成功使用一次；成功后返回一对新 token。Redis
-不可用时接口返回 HTTP `503`/业务码 `5003`，不会降级为可重放刷新。
+Access token 和 refresh token 只通过 `HttpOnly` Cookie 交付，登录、刷新与租户切换的
+JSON 响应不包含 JWT。Refresh token 每次只能成功使用一次；成功后轮换两个 Cookie。
+Redis 不可用时接口返回 HTTP `503`/业务码 `5003`，不会降级为可重放刷新。
 
 ### 登出
 
 ```http
 POST /auth/logout
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 登出端点撤销当前 access token 并清除浏览器认证 Cookie。它不接收、也不
-声称服务器端撤销调用方未提交的 refresh token；客户端应丢弃本地 token。
+声称服务器端撤销未提交的 refresh token；浏览器不能读取这些 Cookie 的值。
 
 ### 注册
 
@@ -150,7 +148,7 @@ Content-Type: application/json
 
 ```http
 GET /tickets
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 
 Query Parameters:
 - page: 页码 (默认: 1)
@@ -196,7 +194,7 @@ Query Parameters:
 
 ```http
 POST /tickets
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -212,14 +210,14 @@ Content-Type: application/json
 
 ```http
 GET /tickets/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 更新工单
 
 ```http
 PUT /tickets/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -235,7 +233,7 @@ Content-Type: application/json
 
 ```http
 PUT /tickets/{id}/status
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -248,14 +246,14 @@ Content-Type: application/json
 
 ```http
 DELETE /tickets/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 分配工单
 
 ```http
 POST /tickets/{id}/assign
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -281,14 +279,14 @@ POST /tickets/{id}/workflow/reopen
 
 ```http
 GET /tickets/{id}/comments
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 添加工单评论
 
 ```http
 POST /tickets/{id}/comments
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -301,14 +299,14 @@ Content-Type: application/json
 
 ```http
 GET /tickets/{id}/attachments
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 上传工单附件
 
 ```http
 POST /tickets/{id}/attachments
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: multipart/form-data
 
 file: [binary data]
@@ -320,7 +318,7 @@ file: [binary data]
 
 ```http
 GET /incidents
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 
 Query Parameters:
 - page: 页码
@@ -334,7 +332,7 @@ Query Parameters:
 
 ```http
 POST /incidents
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -350,14 +348,14 @@ Content-Type: application/json
 
 ```http
 GET /incidents/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 更新事件
 
 ```http
 PUT /incidents/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -372,7 +370,7 @@ Content-Type: application/json
 
 ```http
 DELETE /incidents/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ## 问题管理接口
@@ -381,7 +379,7 @@ Authorization: Bearer <accessToken>
 
 ```http
 GET /problems
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 
 Query Parameters:
 - page: 页码
@@ -394,7 +392,7 @@ Query Parameters:
 
 ```http
 POST /problems
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -409,14 +407,14 @@ Content-Type: application/json
 
 ```http
 GET /problems/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 更新问题
 
 ```http
 PUT /problems/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -430,7 +428,7 @@ Content-Type: application/json
 
 ```http
 DELETE /problems/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ## 变更管理接口
@@ -439,7 +437,7 @@ Authorization: Bearer <accessToken>
 
 ```http
 GET /changes
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 
 Query Parameters:
 - page: 页码
@@ -452,7 +450,7 @@ Query Parameters:
 
 ```http
 POST /changes
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -469,14 +467,14 @@ Content-Type: application/json
 
 ```http
 GET /changes/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 更新变更
 
 ```http
 PUT /changes/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -491,7 +489,7 @@ Content-Type: application/json
 
 ```http
 DELETE /changes/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 变更状态流转
@@ -513,7 +511,7 @@ POST /changes/{id}/cancel
 
 ```http
 GET /releases
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 
 Query Parameters:
 - page: 页码
@@ -525,7 +523,7 @@ Query Parameters:
 
 ```http
 POST /releases
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -540,14 +538,14 @@ Content-Type: application/json
 
 ```http
 GET /releases/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 更新发布
 
 ```http
 PUT /releases/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -561,7 +559,7 @@ Content-Type: application/json
 
 ```http
 PUT /releases/{id}/status
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -573,7 +571,7 @@ Content-Type: application/json
 
 ```http
 DELETE /releases/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ## 服务目录接口
@@ -582,7 +580,7 @@ Authorization: Bearer <accessToken>
 
 ```http
 GET /service-catalog
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 
 Query Parameters:
 - categoryId: 分类过滤
@@ -593,7 +591,7 @@ Query Parameters:
 
 ```http
 GET /service-catalog/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ## 知识库接口
@@ -602,7 +600,7 @@ Authorization: Bearer <accessToken>
 
 ```http
 GET /knowledge/articles
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 
 Query Parameters:
 - page: 页码
@@ -615,14 +613,14 @@ Query Parameters:
 
 ```http
 GET /knowledge/articles/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 创建知识文章
 
 ```http
 POST /knowledge/articles
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -638,7 +636,7 @@ Content-Type: application/json
 
 ```http
 PUT /knowledge/articles/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -652,14 +650,14 @@ Content-Type: application/json
 
 ```http
 DELETE /knowledge/articles/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 知识库搜索
 
 ```http
 POST /knowledge/search
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -672,7 +670,7 @@ Content-Type: application/json
 
 ```http
 POST /knowledge/ask
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -687,21 +685,21 @@ Content-Type: application/json
 
 ```http
 GET /sla/policies
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 获取 SLA 统计
 
 ```http
 GET /sla/statistics
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 获取 SLA 违规记录
 
 ```http
 GET /sla/violations
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ## 工作流接口
@@ -710,21 +708,21 @@ Authorization: Bearer <accessToken>
 
 ```http
 GET /workflows
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 获取工作流实例
 
 ```http
 GET /workflows/instances/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 启动工作流
 
 ```http
 POST /workflows/instances
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -741,7 +739,7 @@ Content-Type: application/json
 
 ```http
 GET /users
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 
 Query Parameters:
 - page: 页码
@@ -754,14 +752,14 @@ Query Parameters:
 
 ```http
 GET /users/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 创建用户
 
 ```http
 POST /users
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -778,7 +776,7 @@ Content-Type: application/json
 
 ```http
 PUT /users/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -793,7 +791,7 @@ Content-Type: application/json
 
 ```http
 DELETE /users/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ## 资产管理接口
@@ -802,7 +800,7 @@ Authorization: Bearer <accessToken>
 
 ```http
 GET /assets
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 
 Query Parameters:
 - page: 页码
@@ -816,14 +814,14 @@ Query Parameters:
 
 ```http
 GET /assets/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 创建资产
 
 ```http
 POST /assets
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -849,7 +847,7 @@ Content-Type: application/json
 
 ```http
 PUT /assets/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -863,7 +861,7 @@ Content-Type: application/json
 
 ```http
 PUT /assets/{id}/assign
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -875,21 +873,21 @@ Content-Type: application/json
 
 ```http
 PUT /assets/{id}/retire
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 删除资产
 
 ```http
 DELETE /assets/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 获取资产统计
 
 ```http
 GET /assets/statistics
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ## 许可证管理接口
@@ -898,7 +896,7 @@ Authorization: Bearer <accessToken>
 
 ```http
 GET /licenses
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 
 Query Parameters:
 - page: 页码
@@ -911,14 +909,14 @@ Query Parameters:
 
 ```http
 GET /licenses/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 创建许可证
 
 ```http
 POST /licenses
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -938,7 +936,7 @@ Content-Type: application/json
 
 ```http
 PUT /licenses/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -952,7 +950,7 @@ Content-Type: application/json
 
 ```http
 PUT /licenses/{id}/assign
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -964,14 +962,14 @@ Content-Type: application/json
 
 ```http
 DELETE /licenses/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 获取许可证统计
 
 ```http
 GET /licenses/statistics
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ## CMDB 接口
@@ -980,7 +978,7 @@ Authorization: Bearer <accessToken>
 
 ```http
 GET /cmdb/items
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 
 Query Parameters:
 - page: 页码
@@ -993,14 +991,14 @@ Query Parameters:
 
 ```http
 GET /cmdb/items/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 创建配置项
 
 ```http
 POST /cmdb/items
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -1021,7 +1019,7 @@ Content-Type: application/json
 
 ```http
 PUT /cmdb/items/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -1037,21 +1035,21 @@ Content-Type: application/json
 
 ```http
 DELETE /cmdb/items/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 获取配置项关系
 
 ```http
 GET /cmdb/items/{id}/relationships
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 获取配置项拓扑图
 
 ```http
 GET /cmdb/items/{id}/topology
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ## 通知接口
@@ -1060,7 +1058,7 @@ Authorization: Bearer <accessToken>
 
 ```http
 GET /notifications
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 
 Query Parameters:
 - page: 页码
@@ -1073,28 +1071,28 @@ Query Parameters:
 
 ```http
 PUT /notifications/{id}/read
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 标记所有通知已读
 
 ```http
 PUT /notifications/read-all
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 删除通知
 
 ```http
 DELETE /notifications/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 获取未读数量
 
 ```http
 GET /notifications/unread-count
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ## 仪表板接口
@@ -1103,21 +1101,21 @@ Authorization: Bearer <accessToken>
 
 ```http
 GET /dashboard
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 获取工单统计
 
 ```http
 GET /dashboard/ticket-stats
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 获取 SLA 统计
 
 ```http
 GET /dashboard/sla-stats
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ## 系统配置接口
@@ -1126,28 +1124,28 @@ Authorization: Bearer <accessToken>
 
 ```http
 GET /system-configs
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 获取系统配置
 
 ```http
 GET /system-configs/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 获取系统配置（按键）
 
 ```http
 GET /system-configs/key/{key}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 更新系统配置
 
 ```http
 PUT /system-configs/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -1159,7 +1157,7 @@ Content-Type: application/json
 
 ```http
 PUT /system-configs/batch
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -1180,7 +1178,7 @@ Content-Type: application/json
 
 ```http
 GET /system-configs/init
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ## 搜索接口
@@ -1189,7 +1187,7 @@ Authorization: Bearer <accessToken>
 
 ```http
 GET /search
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 
 Query Parameters:
 - q: 搜索关键词

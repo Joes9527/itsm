@@ -3,103 +3,16 @@ import { API_BASE_URL } from '@/lib/api/api-config';
 import { useAuthStore } from '@/lib/store/auth-store';
 
 export class AuthService {
-  /**
-   * 第三方登录
-   */
-  static async thirdPartyLogin(provider: string, code: string, state?: string | null): Promise<void> {
-    const response = await fetch(`/api/auth/${provider}/callback`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ code, state }),
-    });
-
-    if (!response.ok) {
-      throw new Error('登录失败');
-    }
-
-    const data = await response.json();
-    // 不将令牌/用户信息写入 localStorage（避免 XSS 窃取）。
-    // 令牌由后端 httpOnly cookie 管理；前端仅写入 auth-token 标记位供 middleware 路由守卫使用。
-    if (typeof window !== 'undefined' && data.user) {
-      const secure = location.protocol === 'https:' ? '; Secure' : '';
-      // 仅写入标记位（非真值 token），供 middleware 路由守卫判断登录态
-      // 真值 token 由后端 httpOnly cookie 管理，JS 不可读，防 XSS 窃取
-      document.cookie = `auth-token=1; path=/; SameSite=Lax${secure}`;
-    }
-    if (data.user) {
-      const { login } = useAuthStore.getState();
-      const u = data.user as any;
-      login(
-        {
-          id: Number(u?.id || 0),
-          username: String(u?.username || ''),
-          role: String(u?.role || 'end_user'),
-          email: String(u?.email || ''),
-          name: String(u?.name || u?.fullName || ''),
-          tenantId: u?.tenantId ? Number(u.tenantId) : undefined,
-          department: u?.department,
-          permissions: u?.permissions,
-        },
-        String(data.token || 'authenticated'),
-        {
-          id: Number(u?.tenantId || 1),
-          name: '默认租户',
-          code: 'default',
-          type: 'standard' as any,
-          status: 'active' as any,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        } as Tenant
-      );
-    }
-  }
-
-  // Only non-sensitive UI marker cookies may be inspected in the browser.
-  // Authentication tokens are intentionally not read through this helper.
-  private static getCookie(name: string): string | null {
-    if (typeof document === 'undefined') return null;
-    for (const cookie of document.cookie.split(';')) {
-      const [cookieName, cookieValue] = cookie.trim().split('=');
-      if (cookieName === name) return decodeURIComponent(cookieValue || '');
-    }
-    return null;
-  }
-
-  // 设置tokens（空实现，保留向后兼容）
-  // 安全：access_token 由后端 httpOnly cookie 管理，前端不存储 token 真值
-  // middleware 路由守卫依赖 auth-token 标记位 cookie（非真值）
-  static setTokens(accessToken: string, refreshToken: string) {
-    void accessToken;
-    void refreshToken;
-  }
-
-  // 获取access token
-  static getAccessToken(): string | null {
-	return null;
-  }
-
-  // Backward-compatible helpers used by some UI providers
-  static getToken(): string | null {
-    return this.getAccessToken();
-  }
-
   static getCurrentUser() {
     const { user } = useAuthStore.getState();
     return user;
-  }
-
-  // 获取refresh token
-  static getRefreshToken(): string | null {
-	return null;
   }
 
   // 检查是否已认证
   static isAuthenticated(): boolean {
     const { isAuthenticated } = useAuthStore.getState();
     if (isAuthenticated) return true;
-	return false;
+    return false;
   }
 
   // 直接使用fetch进行HTTP请求，避免循环依赖
@@ -129,28 +42,6 @@ export class AuthService {
     return responseData.data;
   }
 
-  // 刷新token
-  static async refreshToken(): Promise<boolean> {
-    try {
-      await this.makeRequest<Record<string, never>>('/api/v1/auth/refresh', {
-        method: 'POST',
-        credentials: 'include', // Include httpOnly cookies
-		body: '{}',
-      });
-      return true;
-    } catch (error) {
-      console.error('Token refresh failed:', error);
-      this.clearTokens();
-      return false;
-    }
-  }
-
-  // 清除所有tokens
-  static clearTokens() {
-    const { logout } = useAuthStore.getState();
-    logout();
-  }
-
   // 登出方法
   static logout() {
     const { logout } = useAuthStore.getState();
@@ -160,9 +51,6 @@ export class AuthService {
         credentials: 'include',
       }).catch(() => {});
     } finally {
-      // 清除 auth-token cookie（middleware 路由守卫使用）
-      const secure = location.protocol === 'https:' ? '; Secure' : '';
-      document.cookie = `auth-token=; path=/; max-age=0; SameSite=Lax${secure}`;
       logout();
     }
   }
@@ -171,13 +59,10 @@ export class AuthService {
   static async login(
     username: string,
     password: string,
-    tenantCode?: string,
-    rememberMe?: boolean
+    tenantCode?: string
   ): Promise<boolean> {
     try {
       const data = await this.makeRequest<{
-        accessToken: string;
-        refreshToken: string;
         user: unknown;
         tenant?: unknown;
       }>('/api/v1/auth/login', {
@@ -188,15 +73,6 @@ export class AuthService {
           tenantCode: tenantCode,
         }),
       });
-
-      // Token 仅通过 httpOnly cookie 管理（由后端设置）
-      // 前端仅设置 auth-token cookie 供 middleware 路由守卫使用
-      if (typeof window !== 'undefined' && data.user) {
-        const cookieMaxAge = rememberMe ? `; max-age=${7 * 24 * 60 * 60}` : '';
-        const secure = location.protocol === 'https:' ? '; Secure' : '';
-        // 仅写入 auth-token 标记位供 middleware 路由守卫使用，不写真值 token
-		document.cookie = `auth-token=1; path=/; SameSite=Lax${cookieMaxAge}${secure}`;
-      }
 
       // 使用store管理登录状态
       const { login } = useAuthStore.getState();
@@ -209,17 +85,12 @@ export class AuthService {
           role: String(u?.role || 'end_user'),
           email: String(u?.email || ''),
           name: String(u?.name || u?.fullName || ''),
-          tenantId: u?.tenantId
-            ? Number(u.tenantId)
-            : u?.tenantId
-              ? Number(u.tenantId)
-              : undefined,
+          tenantId: u?.tenantId ? Number(u.tenantId) : u?.tenantId ? Number(u.tenantId) : undefined,
           department: u?.department,
           permissions: u?.permissions,
           createdAt: u?.createdAt || u?.createdAt,
           updatedAt: u?.updatedAt || u?.updatedAt,
         },
-		'authenticated',
         {
           id: Number(t?.id || u?.tenantId || 1),
           name: String(t?.name || '默认租户'),

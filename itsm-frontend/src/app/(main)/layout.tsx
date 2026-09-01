@@ -83,7 +83,6 @@ export default function MainLayout({
           createdAt: userInfo?.createdAt,
           updatedAt: userInfo?.updatedAt,
         },
-        'authenticated',
         currentTenant
           ? {
               id: Number(currentTenant.id),
@@ -176,8 +175,8 @@ export default function MainLayout({
   // 正在检查认证状态时显示 loading
   if (checkingAuth) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <LoadingSpinner size="lg" />
+      <div className='flex items-center justify-center min-h-screen'>
+        <LoadingSpinner size='lg' />
       </div>
     );
   }
@@ -194,8 +193,8 @@ export default function MainLayout({
     <ConfigProvider locale={zhCN}>
       <App>
         <a
-          href="#main-content"
-          className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:bg-primary-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary-400"
+          href='#main-content'
+          className='sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:bg-primary-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary-400'
         >
           跳转到主要内容
         </a>
@@ -203,21 +202,21 @@ export default function MainLayout({
 
         {isPortalLayout ? (
           /* =================== 1. 自服务门户布局 (PortalLayout) =================== */
-          <Layout className="min-h-screen bg-[#f8fafc] dark:bg-slate-950 flex flex-col">
+          <Layout className='min-h-screen bg-[#f8fafc] dark:bg-slate-950 flex flex-col'>
             <Header collapsed={true} onCollapse={() => {}} showBreadcrumb={false} />
-            <Content id="main-content" tabIndex={-1} className="w-full flex-1 outline-none">
-              <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
+            <Content id='main-content' tabIndex={-1} className='w-full flex-1 outline-none'>
+              <div className='max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6'>
                 <PageTransition>{children}</PageTransition>
               </div>
             </Content>
-            <footer className="text-center py-6 bg-transparent text-slate-400 text-xs">
+            <footer className='text-center py-6 bg-transparent text-slate-400 text-xs'>
               AI-Native ITSM ©{new Date().getFullYear()} - 极简自服务与企业技术支持平台
             </footer>
           </Layout>
         ) : (
           /* =================== 2. 专业控制台布局 (ConsoleLayout) =================== */
           <Layout
-            className="min-h-screen bg-[#f5f7fb] dark:bg-slate-950"
+            className='min-h-screen bg-[#f5f7fb] dark:bg-slate-950'
             style={{
               paddingLeft: isMobile
                 ? 0
@@ -227,26 +226,22 @@ export default function MainLayout({
               transition: 'padding-left 0.2s ease',
             }}
           >
-            <Sidebar
-              collapsed={collapsed}
-              onCollapse={setCollapsed}
-              mobile={isMobile}
-            />
+            <Sidebar collapsed={collapsed} onCollapse={setCollapsed} mobile={isMobile} />
 
-            <Layout className="bg-[#f5f7fb] dark:bg-slate-950 min-h-screen">
+            <Layout className='bg-[#f5f7fb] dark:bg-slate-950 min-h-screen'>
               <Header collapsed={collapsed} onCollapse={setCollapsed} showBreadcrumb={true} />
 
               <Content
-                id="main-content"
+                id='main-content'
                 tabIndex={-1}
                 onClick={handleContentClick}
-                className="bg-[#f5f7fb] dark:bg-slate-950 w-auto min-w-0 max-w-full overflow-x-hidden shadow-none outline-none"
+                className='bg-[#f5f7fb] dark:bg-slate-950 w-auto min-w-0 max-w-full overflow-x-hidden shadow-none outline-none'
                 style={{
                   minHeight: LAYOUT_CONFIG.content.minHeight,
                 }}
               >
                 <div
-                  className="main-content"
+                  className='main-content'
                   style={{
                     padding: isMobile ? `${LAYOUT_CONFIG.content.paddingMobile}px` : '16px',
                   }}
@@ -255,7 +250,7 @@ export default function MainLayout({
                 </div>
               </Content>
 
-              <footer className="text-center p-4 bg-transparent text-gray-400 text-xs">
+              <footer className='text-center p-4 bg-transparent text-gray-400 text-xs'>
                 AI-Native ITSM ©{new Date().getFullYear()} - AI驱动的IT服务管理系统
               </footer>
             </Layout>
@@ -263,7 +258,7 @@ export default function MainLayout({
             {!collapsed && isMobile && (
               <div
                 onClick={() => setCollapsed(true)}
-                className="fixed inset-0 bg-black/45"
+                className='fixed inset-0 bg-black/45'
                 style={{
                   zIndex: LAYOUT_CONFIG.zIndex.sider - 1,
                 }}

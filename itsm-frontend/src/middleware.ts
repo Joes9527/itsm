@@ -50,38 +50,11 @@ const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-passwor
 const apiRoutes = ['/api'];
 
 /**
- * 从请求中获取认证 Token
- * 支持多种方式：Cookie、Authorization Header
+ * 从后端签发的 HttpOnly cookie 获取页面会话。
  */
 function getAuthToken(request: NextRequest): string | null {
-  // 1. 优先检查 httpOnly access_token cookie（由后端 Set-Cookie 设置）
-  const accessToken = request.cookies.get('access_token')?.value;
-  if (accessToken) return accessToken;
-
-  // 2. 从 Authorization Header 读取（API 调用）
-  const authHeader = request.headers.get('Authorization');
-  if (authHeader) {
-    // 支持 Bearer Token 格式
-    if (authHeader.startsWith('Bearer ')) {
-      return authHeader.substring(7);
-    }
-    // 支持直接传递 Token
-    return authHeader;
-  }
-
-  // 3. 从自定义 Header 读取
-  const customToken = request.headers.get('X-Auth-Token');
-  if (customToken) {
-    return customToken;
-  }
-
-  // 4. 检查 auth-token cookie 标记位
-  const cookieToken = request.cookies.get('auth-token')?.value;
-  if (cookieToken && cookieToken !== '1') {
-    return cookieToken;
-  }
-
-  return null;
+  // 页面路由守卫只读取后端签发的 HttpOnly cookie。
+  return request.cookies.get('access_token')?.value ?? null;
 }
 
 /**

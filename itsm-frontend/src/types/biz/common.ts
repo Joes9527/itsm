@@ -67,9 +67,3 @@ export interface AuditLog {
   statusCode: number;
   requestBody?: string;
 }
-
-export interface AuthResult {
-  accessToken: string;
-  refreshToken: string;
-  user: User;
-}

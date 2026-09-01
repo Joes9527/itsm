@@ -73,12 +73,7 @@ test.describe('SSL-VPN 服务申请与多级审批端到端场景验证 (3-Perso
     });
 
     if (loginResp.ok()) {
-      const loginData = await loginResp.json();
-      const token = loginData.data?.access_token || loginData.data?.accessToken;
-      if (token) {
-        const catResp = await request.get(`${API_BASE}/api/v1/service-catalogs?page=1&size=100`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const catResp = await request.get(`${API_BASE}/api/v1/service-catalogs?page=1&size=100`);
         if (catResp.ok()) {
           const catData = await catResp.json();
           const items = catData.data?.items || catData.items || [];
@@ -89,7 +84,6 @@ test.describe('SSL-VPN 服务申请与多级审批端到端场景验证 (3-Perso
             catalogId = sslvpnItem.id;
           }
         }
-      }
     }
   });
 

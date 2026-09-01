@@ -55,43 +55,6 @@ describe('AuthService', () => {
     Object.keys(mockCookieStore).forEach(key => delete mockCookieStore[key]);
   });
 
-  describe('Token Management', () => {
-    describe('setTokens', () => {
-      it('should set tokens without throwing', () => {
-        expect(() => AuthService.setTokens('access-token', 'refresh-token')).not.toThrow();
-      });
-    });
-
-    describe('getAccessToken', () => {
-      it('should return null when no token exists', () => {
-        expect(AuthService.getAccessToken()).toBeNull();
-      });
-
-      it('should not expose an access token even if a test cookie is present', () => {
-        mockCookieStore['access_token'] = 'test-access-token';
-        expect(AuthService.getAccessToken()).toBeNull();
-      });
-    });
-
-    describe('getRefreshToken', () => {
-      it('should return null when no token exists', () => {
-        expect(AuthService.getRefreshToken()).toBeNull();
-      });
-
-      it('should not expose a refresh token even if a test cookie is present', () => {
-        mockCookieStore['refresh_token'] = 'test-refresh-token';
-        expect(AuthService.getRefreshToken()).toBeNull();
-      });
-    });
-
-    describe('getToken', () => {
-      it('should not expose a token through the backward-compatible helper', () => {
-        mockCookieStore['access_token'] = 'test-token';
-        expect(AuthService.getToken()).toBeNull();
-      });
-    });
-  });
-
   describe('Authentication Status', () => {
     describe('getCurrentUser', () => {
       it('should return current user from store', () => {
@@ -108,17 +71,6 @@ describe('AuthService', () => {
         expect(result).toBe(true);
       });
 
-      it('should return true when access token exists in cookie', () => {
-        const userState = require('@/lib/store/auth-store').useAuthStore.getState();
-        userState.isAuthenticated = false;
-        mockCookieStore['access_token'] = 'valid-token';
-
-        const result = AuthService.isAuthenticated();
-        expect(result).toBe(true);
-
-        // Reset
-        userState.isAuthenticated = true;
-      });
     });
   });
 
@@ -132,8 +84,6 @@ describe('AuthService', () => {
               code: 0,
               message: 'success',
               data: {
-                accessToken: 'new-access-token',
-                refreshToken: 'new-refresh-token',
                 user: {
                   id: 1,
                   username: 'testuser',
@@ -153,7 +103,7 @@ describe('AuthService', () => {
             }),
         });
 
-        const result = await AuthService.login('testuser', 'password123', 'test', true);
+        const result = await AuthService.login('testuser', 'password123', 'test');
 
         expect(result).toBe(true);
         expect(mockLogin).toHaveBeenCalled();
@@ -184,25 +134,6 @@ describe('AuthService', () => {
 
         expect(result).toBe(false);
       });
-    });
-  });
-
-  describe('Third Party Login', () => {
-    it('should handle third party login successfully', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ token: 'test-token', user: { id: 1 } }),
-      });
-
-      await expect(AuthService.thirdPartyLogin('google', 'code123')).resolves.not.toThrow();
-    });
-
-    it('should throw error on failed third party login', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-      });
-
-      await expect(AuthService.thirdPartyLogin('google', 'invalid')).rejects.toThrow('登录失败');
     });
   });
 
@@ -325,44 +256,6 @@ describe('AuthService', () => {
     });
   });
 
-  describe('Token Refresh', () => {
-    it('should refresh token successfully', async () => {
-      mockCookieStore['refresh_token'] = 'valid-refresh-token';
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            code: 0,
-            message: 'success',
-            data: {
-              accessToken: 'new-access-token',
-              refreshToken: 'new-refresh-token',
-            },
-          }),
-      });
-
-      const result = await AuthService.refreshToken();
-
-      expect(result).toBe(true);
-    });
-
-    it('should return false when no refresh token exists', async () => {
-      const result = await AuthService.refreshToken();
-
-      expect(result).toBe(false);
-    });
-
-    it('should return false on refresh failure', async () => {
-      mockCookieStore['refresh_token'] = 'expired-token';
-      mockFetch.mockRejectedValueOnce(new Error('Token expired'));
-
-      const result = await AuthService.refreshToken();
-
-      expect(result).toBe(false);
-      expect(mockLogout).toHaveBeenCalled();
-    });
-  });
-
   describe('Logout', () => {
     it('should logout successfully', async () => {
       mockFetch.mockResolvedValueOnce({
@@ -379,27 +272,6 @@ describe('AuthService', () => {
 
       expect(() => AuthService.logout()).not.toThrow();
       expect(mockLogout).toHaveBeenCalled();
-    });
-  });
-
-  describe('Clear Tokens', () => {
-    it('should clear tokens and logout', () => {
-      expect(() => AuthService.clearTokens()).not.toThrow();
-      expect(mockLogout).toHaveBeenCalled();
-    });
-  });
-
-  describe('Cookie Helper', () => {
-    it('getCookie should return null in non-browser environment', () => {
-      // Since we're in test environment, document is mocked
-      const token = AuthService['getCookie']('nonexistent');
-      expect(token).toBeNull();
-    });
-
-    it('getCookie should return cookie value when exists', () => {
-      mockCookieStore['test_cookie'] = 'test-value';
-      const value = AuthService['getCookie']('test_cookie');
-      expect(value).toBe('test-value');
     });
   });
 });

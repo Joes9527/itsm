@@ -953,16 +953,6 @@ const docTemplate = `{
                     "认证"
                 ],
                 "summary": "刷新访问令牌",
-                "parameters": [
-                    {
-                        "description": "非浏览器客户端的刷新令牌",
-                        "name": "request",
-                        "in": "body",
-                        "schema": {
-                            "$ref": "#/definitions/common.RefreshTokenRequest"
-                        }
-                    }
-                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -11158,12 +11148,6 @@ const docTemplate = `{
         "common.AuthResult": {
             "type": "object",
             "properties": {
-                "accessToken": {
-                    "type": "string"
-                },
-                "refreshToken": {
-                    "type": "string"
-                },
                 "user": {
                     "$ref": "#/definitions/common.User"
                 }
@@ -11186,14 +11170,6 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "common.RefreshTokenRequest": {
-            "type": "object",
-            "properties": {
-                "refreshToken": {
                     "type": "string"
                 }
             }

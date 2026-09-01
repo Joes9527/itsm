@@ -141,18 +141,8 @@ test.describe('SLA 监控完整测试', () => {
 
       expect(loginResponse.ok()).toBe(true);
 
-      const loginData = await loginResponse.json();
-      const token = loginData.data?.access_token;
-
-      if (!token) {
-        test.skip();
-        return;
-      }
-
       // 获取 SLA 列表
-      const response = await request.get(`${apiUrl}/api/v1/sla`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await request.get(`${apiUrl}/api/v1/sla`);
 
       expect([200, 401, 403].includes(response.status())).toBe(true);
     });
@@ -168,18 +158,8 @@ test.describe('SLA 监控完整测试', () => {
         },
       });
 
-      const loginData = await loginResponse.json();
-      const token = loginData.data?.access_token;
-
-      if (!token) {
-        test.skip();
-        return;
-      }
-
       // 获取 SLA 监控数据
-      const response = await request.get(`${apiUrl}/api/v1/sla/monitor`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await request.get(`${apiUrl}/api/v1/sla/monitor`);
 
       expect([200, 401, 403].includes(response.status())).toBe(true);
     });
@@ -195,18 +175,8 @@ test.describe('SLA 监控完整测试', () => {
         },
       });
 
-      const loginData = await loginResponse.json();
-      const token = loginData.data?.access_token;
-
-      if (!token) {
-        test.skip();
-        return;
-      }
-
       // 获取 SLA 告警列表
-      const response = await request.get(`${apiUrl}/api/v1/sla/breaches`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await request.get(`${apiUrl}/api/v1/sla/breaches`);
 
       expect([200, 401, 403].includes(response.status())).toBe(true);
     });
@@ -304,29 +274,18 @@ test.describe('SLA 监控 API 集成测试', () => {
       return;
     }
 
-    const loginData = await loginResponse.json();
-    const token = loginData.data?.access_token;
-
-    expect(token).toBeDefined();
-
     // 2. 获取 SLA 列表
-    const slaResponse = await request.get(`${apiUrl}/api/v1/sla`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const slaResponse = await request.get(`${apiUrl}/api/v1/sla`);
     const slaData = slaResponse.ok() ? await slaResponse.json() : null;
     console.log('SLA count:', slaData?.data?.total ?? 0);
 
     // 3. 获取 SLA 监控数据
-    const monitorResponse = await request.get(`${apiUrl}/api/v1/sla/monitor`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const monitorResponse = await request.get(`${apiUrl}/api/v1/sla/monitor`);
     const monitorData = monitorResponse.ok() ? await monitorResponse.json() : null;
     console.log('SLA monitor data:', monitorData?.data ?? 'N/A');
 
     // 4. 获取 SLA 告警
-    const breachesResponse = await request.get(`${apiUrl}/api/v1/sla/breaches`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const breachesResponse = await request.get(`${apiUrl}/api/v1/sla/breaches`);
     const breachesData = breachesResponse.ok() ? await breachesResponse.json() : null;
     console.log('SLA breaches count:', breachesData?.data?.total ?? 0);
 
@@ -352,15 +311,8 @@ test.describe('SLA 监控 API 集成测试', () => {
       return;
     }
 
-    const loginData = await loginResponse.json();
-    const token = loginData.data?.access_token;
-
-    expect(token).toBeDefined();
-
     // 尝试访问 SLA 管理接口
-    const response = await request.get(`${apiUrl}/api/v1/sla`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const response = await request.get(`${apiUrl}/api/v1/sla`);
 
     // 普通用户可能只能查看，不能管理
     console.log('End user SLA access status:', response.status());

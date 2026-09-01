@@ -69,7 +69,6 @@ export { KnowledgeBaseApi } from './knowledge-base-api';
 // 用户和权限
 export { UserApi } from './user-api';
 export { RoleAPI } from './role-api';
-export { AuthAPI } from './auth-api';
 export { TenantAPI } from './tenant-api';
 
 // 通用API

@@ -1,4 +1,12 @@
-import { aiTriage, aiSearchKB, aiSimilarIncidents, aiSummarize, aiSaveFeedback, aiGetMetrics, AIApi } from '../ai-api';
+import {
+  aiTriage,
+  aiSearchKB,
+  aiSimilarIncidents,
+  aiSummarize,
+  aiSaveFeedback,
+  aiGetMetrics,
+  AIApi,
+} from '../ai-api';
 import { httpClient } from '../http-client';
 
 jest.mock('../http-client', () => ({
@@ -8,7 +16,6 @@ jest.mock('../http-client', () => ({
     put: jest.fn(),
     delete: jest.fn(),
     getBaseURL: jest.fn(() => 'http://localhost:3000'),
-    getAuthToken: jest.fn(() => 'token123'),
     getTenantId: jest.fn(() => 1),
   },
 }));
@@ -17,13 +24,26 @@ const mockGet = httpClient.get as jest.Mock;
 const mockPost = httpClient.post as jest.Mock;
 
 describe('AI API', () => {
-  beforeEach(() => { jest.clearAllMocks(); });
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
   describe('aiTriage', () => {
     it('should triage and transform response', async () => {
-      mockPost.mockResolvedValue({ suggestions: { category: 'network', priority: 'high', confidence: 0.9, reasoning: 'network issue', urgency: 'urgent' } });
+      mockPost.mockResolvedValue({
+        suggestions: {
+          category: 'network',
+          priority: 'high',
+          confidence: 0.9,
+          reasoning: 'network issue',
+          urgency: 'urgent',
+        },
+      });
       const result = await aiTriage('Network down', 'Cannot connect');
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/ai/triage', { title: 'Network down', description: 'Cannot connect' });
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/ai/triage', {
+        title: 'Network down',
+        description: 'Cannot connect',
+      });
       expect(result.category).toBe('network');
       expect(result.priority).toBe('high');
       expect(result.confidence).toBe(0.9);
@@ -43,7 +63,11 @@ describe('AI API', () => {
     it('should search knowledge base', async () => {
       mockPost.mockResolvedValue([{ id: 1, objectType: 'article', snippet: 'found' }]);
       const result = await aiSearchKB('password reset', 3);
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/ai/knowledge/search', { query: 'password reset', limit: 3, type: 'kb' });
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/ai/knowledge/search', {
+        query: 'password reset',
+        limit: 3,
+        type: 'kb',
+      });
       expect(result.answers).toHaveLength(1);
     });
 
@@ -58,7 +82,11 @@ describe('AI API', () => {
     it('should find similar incidents', async () => {
       mockPost.mockResolvedValue([{ id: 1, objectType: 'incident', snippet: 'similar' }]);
       const result = await aiSimilarIncidents('server crash', 5);
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/ai/knowledge/search', { query: 'server crash', limit: 5, type: 'incident' });
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/ai/knowledge/search', {
+        query: 'server crash',
+        limit: 5,
+        type: 'incident',
+      });
       expect(result.incidents).toHaveLength(1);
     });
   });
@@ -67,7 +95,10 @@ describe('AI API', () => {
     it('should summarize text', async () => {
       mockPost.mockResolvedValue({ answers: ['This is a summary'] });
       const result = await aiSummarize('Long text here', 100);
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/ai/chat', expect.objectContaining({ limit: 1 }));
+      expect(mockPost).toHaveBeenCalledWith(
+        '/api/v1/ai/chat',
+        expect.objectContaining({ limit: 1 })
+      );
       expect(result.summary).toBe('This is a summary');
     });
 
@@ -113,7 +144,11 @@ describe('AI API', () => {
     it('chat should call post', async () => {
       mockPost.mockResolvedValue({ answers: [] });
       await AIApi.chat({ query: 'hello', limit: 5 });
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/ai/chat', { query: 'hello', limit: 5, conversationId: undefined });
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/ai/chat', {
+        query: 'hello',
+        limit: 5,
+        conversationId: undefined,
+      });
     });
 
     it('searchKB should delegate', async () => {
@@ -162,7 +197,11 @@ describe('AI API', () => {
       originalFetch = global.fetch;
       // Polyfill TextDecoder for jsdom
       if (typeof TextDecoder === 'undefined') {
-        (global as any).TextDecoder = class { decode(buf: any) { return Buffer.from(buf).toString('utf-8'); } };
+        (global as any).TextDecoder = class {
+          decode(buf: any) {
+            return Buffer.from(buf).toString('utf-8');
+          }
+        };
       }
     });
     afterEach(() => {
@@ -191,7 +230,10 @@ describe('AI API', () => {
       const onSources = jest.fn();
       const onDelta = jest.fn();
       const onDone = jest.fn();
-      const result = await aiChatStream({ query: 'test', limit: 5 }, { onSources, onDelta, onDone });
+      const result = await aiChatStream(
+        { query: 'test', limit: 5 },
+        { onSources, onDelta, onDone }
+      );
 
       expect(onSources).toHaveBeenCalledWith([expect.objectContaining({ id: 1 })]);
       expect(onDelta).toHaveBeenCalledWith('Hello');
@@ -209,9 +251,7 @@ describe('AI API', () => {
 
     it('should handle error event in stream', async () => {
       const { aiChatStream } = require('../ai-api');
-      const chunks = [
-        encode('event:error\ndata:{"message":"rate limited"}\n\n'),
-      ];
+      const chunks = [encode('event:error\ndata:{"message":"rate limited"}\n\n')];
       let chunkIndex = 0;
       const mockReader = {
         read: jest.fn().mockImplementation(() => {
@@ -221,7 +261,9 @@ describe('AI API', () => {
           return Promise.resolve({ value: undefined, done: true });
         }),
       };
-      global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, body: { getReader: () => mockReader } });
+      global.fetch = jest
+        .fn()
+        .mockResolvedValue({ ok: true, status: 200, body: { getReader: () => mockReader } });
       const onError = jest.fn();
       await aiChatStream({ query: 'test' }, { onError });
       expect(onError).toHaveBeenCalledWith('rate limited');
@@ -242,7 +284,9 @@ describe('AI API', () => {
           return Promise.resolve({ value: undefined, done: true });
         }),
       };
-      global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, body: { getReader: () => mockReader } });
+      global.fetch = jest
+        .fn()
+        .mockResolvedValue({ ok: true, status: 200, body: { getReader: () => mockReader } });
       const onDelta = jest.fn();
       const result = await aiChatStream({ query: 'test' }, { onDelta });
       expect(onDelta).not.toHaveBeenCalled();
@@ -263,7 +307,9 @@ describe('AI API', () => {
           return Promise.resolve({ value: undefined, done: true });
         }),
       };
-      global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, body: { getReader: () => mockReader } });
+      global.fetch = jest
+        .fn()
+        .mockResolvedValue({ ok: true, status: 200, body: { getReader: () => mockReader } });
       const result = await AIApi.chatStream({ query: 'hello' });
       expect(result).toBe(99);
     });

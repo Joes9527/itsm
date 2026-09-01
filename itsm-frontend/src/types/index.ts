@@ -29,7 +29,6 @@ export type {
   UserStats,
   LoginRequest,
   LoginResponse,
-  RefreshTokenRequest,
   ChangePasswordRequest,
   ResetPasswordRequest,
   SetPasswordRequest,

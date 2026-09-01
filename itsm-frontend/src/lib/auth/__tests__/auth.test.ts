@@ -3,7 +3,13 @@
  */
 
 jest.mock('@/lib/api/http-client', () => ({
-  httpClient: { get: jest.fn(), post: jest.fn(), put: jest.fn(), delete: jest.fn(), patch: jest.fn() },
+  httpClient: {
+    get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+    delete: jest.fn(),
+    patch: jest.fn(),
+  },
 }));
 
 describe('token-storage', () => {
@@ -19,52 +25,6 @@ describe('token-storage', () => {
     });
   });
 
-  it('isAuthenticated returns false when no auth cookie', async () => {
-    tokenStorage = await import('../token-storage');
-    expect(tokenStorage.isAuthenticated()).toBe(false);
-  });
-
-  it('isAuthenticated returns true when auth-token cookie exists', async () => {
-    Object.defineProperty(document, 'cookie', {
-      writable: true,
-      value: 'auth-token=abc123; other=val',
-    });
-    tokenStorage = await import('../token-storage');
-    expect(tokenStorage.isAuthenticated()).toBe(true);
-  });
-
-  it('isAuthenticated returns true when access_token cookie exists', async () => {
-    Object.defineProperty(document, 'cookie', {
-      writable: true,
-      value: 'access_token=xyz',
-    });
-    tokenStorage = await import('../token-storage');
-    expect(tokenStorage.isAuthenticated()).toBe(true);
-  });
-
-  it('getAccessToken always returns null (httpOnly cookie)', async () => {
-    tokenStorage = await import('../token-storage');
-    expect(tokenStorage.getAccessToken()).toBeNull();
-  });
-
-  it('getRefreshToken always returns null', async () => {
-    tokenStorage = await import('../token-storage');
-    expect(tokenStorage.getRefreshToken()).toBeNull();
-  });
-
-  it('setAccessToken is a no-op', async () => {
-    tokenStorage = await import('../token-storage');
-    tokenStorage.setAccessToken('token123');
-    // no error, no storage
-    expect(localStorage.getItem('access_token')).toBeNull();
-  });
-
-  it('setRefreshToken is a no-op', async () => {
-    tokenStorage = await import('../token-storage');
-    tokenStorage.setRefreshToken('refresh123');
-    expect(localStorage.getItem('refresh_token')).toBeNull();
-  });
-
   it('getTenantCode returns stored value', async () => {
     localStorage.setItem('current_tenant_code', 'TENANT_A');
     tokenStorage = await import('../token-storage');
@@ -77,42 +37,17 @@ describe('token-storage', () => {
     expect(tokenStorage.getTenantId()).toBe('42');
   });
 
-  it('migrateLegacyAuthStorage migrates tenantCode', async () => {
-    localStorage.setItem('tenantCode', 'LEGACY_TENANT');
-    tokenStorage = await import('../token-storage');
-    tokenStorage.migrateLegacyAuthStorage();
-    expect(localStorage.getItem('current_tenant_code')).toBe('LEGACY_TENANT');
-    expect(localStorage.getItem('tenantCode')).toBeNull();
-  });
-
-  it('migrateLegacyAuthStorage does not overwrite existing', async () => {
-    localStorage.setItem('current_tenant_code', 'EXISTING');
-    localStorage.setItem('tenantCode', 'LEGACY');
-    tokenStorage = await import('../token-storage');
-    tokenStorage.migrateLegacyAuthStorage();
-    expect(localStorage.getItem('current_tenant_code')).toBe('EXISTING');
-  });
-
   it('clearAuthStorage removes all keys', async () => {
     localStorage.setItem('current_tenant_id', '1');
     localStorage.setItem('current_tenant_code', 'X');
-    localStorage.setItem('auth_token', 'old');
-    localStorage.setItem('itsm_token', 'old2');
-    localStorage.setItem('token', 'old3');
-    localStorage.setItem('tenantCode', 'old4');
     tokenStorage = await import('../token-storage');
     tokenStorage.clearAuthStorage();
     expect(localStorage.getItem('current_tenant_id')).toBeNull();
     expect(localStorage.getItem('current_tenant_code')).toBeNull();
-    expect(localStorage.getItem('auth_token')).toBeNull();
-    expect(localStorage.getItem('itsm_token')).toBeNull();
-    expect(localStorage.getItem('token')).toBeNull();
-    expect(localStorage.getItem('tenantCode')).toBeNull();
   });
 
   it('STORAGE_KEYS are exported correctly', async () => {
     tokenStorage = await import('../token-storage');
-    expect(tokenStorage.STORAGE_KEYS.ACCESS_TOKEN).toBe('access_token');
     expect(tokenStorage.STORAGE_KEYS.TENANT_CODE).toBe('current_tenant_code');
   });
 });
@@ -174,67 +109,5 @@ describe('tenant-context', () => {
     unsub();
     tenantContext.setTenantId(100);
     expect(fn).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('mock-auth-service', () => {
-  let mockAuth: typeof import('../mock-auth-service');
-
-  beforeEach(() => {
-    jest.resetModules();
-  });
-
-  it('login succeeds for admin', async () => {
-    mockAuth = await import('../mock-auth-service');
-    const service = mockAuth.createMockAuthService();
-    const result = await service.login('admin', 'pass');
-    expect(result.success).toBe(true);
-    expect(result.user?.username).toBe('admin');
-    expect(result.token).toBeDefined();
-  });
-
-  it('login succeeds for test user', async () => {
-    mockAuth = await import('../mock-auth-service');
-    const service = mockAuth.createMockAuthService();
-    const result = await service.login('test', 'pass');
-    expect(result.success).toBe(true);
-  });
-
-  it('login fails for unknown user', async () => {
-    mockAuth = await import('../mock-auth-service');
-    const service = mockAuth.createMockAuthService();
-    const result = await service.login('unknown', 'pass');
-    expect(result.success).toBe(false);
-    expect(result.error).toBe('Invalid credentials');
-  });
-
-  it('logout clears current user', async () => {
-    mockAuth = await import('../mock-auth-service');
-    const service = mockAuth.createMockAuthService();
-    await service.login('admin', 'pass');
-    await service.logout();
-    expect(service.getCurrentUser()).toBeNull();
-  });
-
-  it('validateToken returns auth status', async () => {
-    mockAuth = await import('../mock-auth-service');
-    const service = mockAuth.createMockAuthService();
-    expect(await service.validateToken('any')).toBe(true);
-    await service.logout();
-    expect(await service.validateToken('any')).toBe(false);
-  });
-
-  it('getCurrentUser returns default user initially', async () => {
-    mockAuth = await import('../mock-auth-service');
-    const service = mockAuth.createMockAuthService();
-    const user = service.getCurrentUser();
-    expect(user).not.toBeNull();
-    expect(user?.role).toBe('admin');
-  });
-
-  it('exports singleton MockAuthService', async () => {
-    mockAuth = await import('../mock-auth-service');
-    expect(mockAuth.MockAuthService).toBeDefined();
-    expect(mockAuth.MockAuthService.login).toBeDefined();
   });
 });

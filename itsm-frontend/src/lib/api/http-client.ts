@@ -57,35 +57,12 @@ interface ApiResponse<T> {
 
 class HttpClient {
   private baseURL: string;
-  private token: string | null = null;
   private readonly timeout: number;
 
   constructor(baseURL: string = API_BASE_URL) {
     this.baseURL =
       typeof window === 'undefined' ? process.env.ITSM_BACKEND_URL || baseURL : baseURL;
     this.timeout = parseInt(process.env.NEXT_PUBLIC_API_TIMEOUT || '30000');
-	// Browser authentication uses HttpOnly cookies. JavaScript deliberately never
-	// reads the token value; non-browser callers may still set this field.
-  }
-
-  setToken(token: string) {
-    this.token = token;
-    // Token is stored in httpOnly cookie by backend, no need to set here
-    // This method kept for backward compatibility
-  }
-
-  clearToken() {
-    this.token = null;
-  }
-
-  setTenantId(tenantId: number | null) {
-    // Tenant state is now managed by TenantContext — kept for backward compat
-    // New code should use tenant-context.ts directly
-    logger.debug('HttpClient.setTenantId called (deprecated — use tenant-context.ts)');
-  }
-
-  setTenantCode(code: string | null) {
-    logger.debug('HttpClient.setTenantCode called (deprecated — use tenant-context.ts)');
   }
 
   // Get tenant code — now reads from TenantContext (single source of truth)
@@ -95,15 +72,6 @@ class HttpClient {
 
   getTenantId(): number | null {
     return getTenantId();
-  }
-
-  getAuthToken(): string | null {
-    return this.token;
-  }
-
-  // Backward-compat helpers (some legacy code expects these)
-  getToken(): string | null {
-    return this.getAuthToken();
   }
 
   getBaseURL(): string {
@@ -116,16 +84,9 @@ class HttpClient {
       ...security.network.getSecureHeaders(),
     };
 
-    // Browser requests authenticate with HttpOnly cookies. Only non-browser
-    // callers that explicitly set a token use the Authorization header.
-    const currentToken = typeof window === 'undefined' ? this.token : null;
     // Tenant state — read from TenantContext (single source of truth)
     const currentTenantId = getTenantId();
     const currentTenantCode = getTenantCode();
-
-    if (currentToken) {
-      headers['Authorization'] = `Bearer ${currentToken}`;
-    }
 
     if (currentTenantId) {
       headers['X-Tenant-ID'] = currentTenantId.toString();
@@ -181,13 +142,13 @@ class HttpClient {
   // Independent token refresh method to avoid circular dependencies
   private async refreshTokenInternal(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.baseURL}/api/v1/refresh-token`, {
+      const response = await fetch(`${this.baseURL}/api/v1/auth/refresh`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         credentials: 'include', // Include httpOnly cookies
-		body: '{}',
+        body: '{}',
       });
 
       if (response?.ok) {
@@ -259,10 +220,7 @@ class HttpClient {
 
       // The backend rotates the token after every successful mutation. A cached token
       // can therefore race with the CSRF cookie; refresh it once and retry the request.
-      if (
-        this.isMutatingMethod(config.method) &&
-        (await this.isCSRFRejection(response))
-      ) {
+      if (this.isMutatingMethod(config.method) && (await this.isCSRFRejection(response))) {
         security.csrf.clearToken();
         const retryHeaders = await this.addCSRFHeader(this.getHeaders(), config.method || 'GET');
         response = await fetch(url, {
@@ -317,8 +275,7 @@ class HttpClient {
 
           return retryData.data;
         } else {
-          // Refresh failed, clear token and redirect to login
-          this.clearToken();
+          // Refresh failed; the backend session is authoritative.
           if (typeof window !== 'undefined') {
             // Only redirect if not already on login page to avoid loops
             if (!window.location.pathname.startsWith('/login')) {
@@ -419,7 +376,10 @@ class HttpClient {
           ? // blob passthrough
             await (async () => {
               const url = `${this.baseURL}${endpoint}`;
-              const headers: Record<string, string> = { ...this.getHeaders(), ...(cfg.headers || {}) };
+              const headers: Record<string, string> = {
+                ...this.getHeaders(),
+                ...(cfg.headers || {}),
+              };
               if (body instanceof FormData) delete headers['Content-Type'];
               else headers['Content-Type'] = headers['Content-Type'] || 'application/json';
               const res = await fetch(url, { method, headers, body: body ?? null });
@@ -678,11 +638,7 @@ class HttpClient {
       const uploadUrl = endpoint.startsWith('http') ? endpoint : `${this.baseURL}${endpoint}`;
       xhr.open('POST', uploadUrl);
 
-      // 添加认证头
-      const token = this.getAuthToken();
-      if (token) {
-        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-      }
+      xhr.withCredentials = true;
 
       xhr.send(formData);
     });

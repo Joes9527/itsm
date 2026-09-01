@@ -87,7 +87,6 @@ describe('Unified Config', () => {
     });
 
     it('should have storage keys', () => {
-      expect(APP_CONFIG.STORAGE.TOKEN_KEY).toBe('itsm_token');
     });
 
     it('should have theme config', () => {

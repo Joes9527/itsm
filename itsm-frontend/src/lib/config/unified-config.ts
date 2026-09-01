@@ -143,8 +143,6 @@ export const APP_CONFIG = {
 
   // 本地存储配置
   STORAGE: {
-    TOKEN_KEY: 'itsm_token',
-    REFRESH_TOKEN_KEY: 'itsm_refresh_token',
     USER_KEY: 'itsm_user',
     SETTINGS_KEY: 'itsm_settings',
     THEME_KEY: 'itsm_theme',

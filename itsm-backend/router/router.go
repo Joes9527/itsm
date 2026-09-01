@@ -341,7 +341,6 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 	{
 		if config.CommonHandler != nil {
 			public.POST("/auth/login", config.CommonHandler.Login)
-			public.POST("/refresh-token", config.CommonHandler.RefreshToken)
 			public.POST("/auth/refresh", config.CommonHandler.RefreshToken)
 		}
 
@@ -403,13 +402,13 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 	if config.CSRFEnabled {
 		csrfConfig := middleware.DefaultCSRFConfig()
 		// CSRF 不验证登录相关的路径
-		csrfConfig.SkipPaths = append(csrfConfig.SkipPaths, "/api/v1/auth/login", "/api/v1/refresh-token")
+		csrfConfig.SkipPaths = append(csrfConfig.SkipPaths, "/api/v1/auth/login")
 		auth.Use(middleware.CSRFProtectionMiddleware(csrfConfig))
 	}
 
 	// WebSocket 路由（使用短期票据替代JWT query参数，避免token泄露）
 	// 票据流程:
-	//   1. 客户端 POST /api/v1/ws/ticket (携带 Authorization header) 获取短期票据
+	//   1. 浏览器通过 HttpOnly access_token Cookie 调用 POST /api/v1/ws/ticket 获取短期票据
 	//   2. 客户端使用 ?ticket=<ticket> 建立 WebSocket 连接
 	//   3. 票据验证后立即销毁（一次性使用）
 	var wsTicketStore *WSTicketStore
@@ -417,7 +416,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 		wsTicketStore = NewWSTicketStore(DefaultWSTicketTTL)
 
 		// 票据颁发端点（需要JWT认证）
-		auth.POST("/ws/ticket", middleware.RequireRole("super_admin"), func(c *gin.Context) {
+		auth.POST("/ws/ticket", func(c *gin.Context) {
 			userID, _ := c.Get("user_id")
 			tenantID, _ := c.Get("tenant_id")
 

@@ -20,7 +20,6 @@ jest.mock('@/lib/api/http-client', () => ({
   httpClient: {
     setTenantId: jest.fn(),
     setTenantCode: jest.fn(),
-    clearToken: jest.fn(),
   },
 }));
 
@@ -38,9 +37,8 @@ describe('useAuthStore', () => {
     it('应为未认证状态', async () => {
       const { useAuthStore } = await import('../auth-store');
       const state = useAuthStore.getState();
-      
+
       expect(state.user).toBeNull();
-      expect(state.token).toBeNull();
       expect(state.currentTenant).toBeNull();
       expect(state.isAuthenticated).toBe(false);
       expect(state.isLoading).toBe(false);
@@ -53,7 +51,7 @@ describe('useAuthStore', () => {
   describe('login', () => {
     it('应正确设置用户信息', async () => {
       const { useAuthStore } = await import('../auth-store');
-      
+
       const mockUser = {
         id: 1,
         name: 'Test User',
@@ -74,7 +72,7 @@ describe('useAuthStore', () => {
       };
 
       act(() => {
-        useAuthStore.getState().login(mockUser, 'mock-token', mockTenant);
+        useAuthStore.getState().login(mockUser, mockTenant);
       });
 
       const state = useAuthStore.getState();
@@ -87,7 +85,7 @@ describe('useAuthStore', () => {
 
     it('登录时无租户应设置 currentTenant 为 null', async () => {
       const { useAuthStore } = await import('../auth-store');
-      
+
       const mockUser = {
         id: 1,
         name: 'Test User',
@@ -98,7 +96,7 @@ describe('useAuthStore', () => {
       };
 
       act(() => {
-        useAuthStore.getState().login(mockUser, 'mock-token');
+        useAuthStore.getState().login(mockUser);
       });
 
       const state = useAuthStore.getState();
@@ -109,7 +107,7 @@ describe('useAuthStore', () => {
   describe('logout', () => {
     it('应清除所有认证状态', async () => {
       const { useAuthStore } = await import('../auth-store');
-      
+
       // 先登录
       const mockUser = {
         id: 1,
@@ -119,9 +117,9 @@ describe('useAuthStore', () => {
         role: 'admin',
         tenantId: 1,
       };
-      
+
       act(() => {
-        useAuthStore.getState().login(mockUser, 'mock-token');
+        useAuthStore.getState().login(mockUser);
       });
 
       // 验证登录状态
@@ -134,7 +132,6 @@ describe('useAuthStore', () => {
 
       const state = useAuthStore.getState();
       expect(state.user).toBeNull();
-      expect(state.token).toBeNull();
       expect(state.currentTenant).toBeNull();
       expect(state.isAuthenticated).toBe(false);
     });
@@ -143,7 +140,7 @@ describe('useAuthStore', () => {
   describe('updateUser', () => {
     it('应更新用户信息', async () => {
       const { useAuthStore } = await import('../auth-store');
-      
+
       const mockUser = {
         id: 1,
         name: 'Test User',
@@ -152,9 +149,9 @@ describe('useAuthStore', () => {
         role: 'user',
         tenantId: 1,
       };
-      
+
       act(() => {
-        useAuthStore.getState().login(mockUser, 'mock-token');
+        useAuthStore.getState().login(mockUser);
       });
 
       act(() => {
@@ -168,7 +165,7 @@ describe('useAuthStore', () => {
 
     it('用户未登录时 updateUser 应不报错', async () => {
       const { useAuthStore } = await import('../auth-store');
-      
+
       // 未登录状态
       act(() => {
         useAuthStore.getState().updateUser({ name: 'Updated Name' });
@@ -182,7 +179,7 @@ describe('useAuthStore', () => {
   describe('setLoading', () => {
     it('应设置 loading 状态', async () => {
       const { useAuthStore } = await import('../auth-store');
-      
+
       act(() => {
         useAuthStore.getState().setLoading(true);
       });
@@ -203,7 +200,7 @@ describe('useAuthStore', () => {
   describe('setCurrentTenant', () => {
     it('应设置当前租户', async () => {
       const { useAuthStore } = await import('../auth-store');
-      
+
       const mockTenant = {
         id: 1,
         name: 'Test Tenant',
@@ -226,7 +223,7 @@ describe('useAuthStore', () => {
   describe('clearTenant', () => {
     it('应清除租户', async () => {
       const { useAuthStore } = await import('../auth-store');
-      
+
       const mockTenant = {
         id: 1,
         name: 'Test Tenant',
@@ -256,7 +253,7 @@ describe('useAuthStore', () => {
   describe('hasPermission', () => {
     it('用户有权限时应返回 true', async () => {
       const { useAuthStore } = await import('../auth-store');
-      
+
       const mockUser = {
         id: 1,
         name: 'Test User',
@@ -268,7 +265,7 @@ describe('useAuthStore', () => {
       };
 
       act(() => {
-        useAuthStore.getState().login(mockUser, 'mock-token');
+        useAuthStore.getState().login(mockUser);
       });
 
       expect(useAuthStore.getState().hasPermission('ticket:view')).toBe(true);
@@ -277,7 +274,7 @@ describe('useAuthStore', () => {
 
     it('用户无权限时应返回 false', async () => {
       const { useAuthStore } = await import('../auth-store');
-      
+
       const mockUser = {
         id: 1,
         name: 'Test User',
@@ -289,7 +286,7 @@ describe('useAuthStore', () => {
       };
 
       act(() => {
-        useAuthStore.getState().login(mockUser, 'mock-token');
+        useAuthStore.getState().login(mockUser);
       });
 
       expect(useAuthStore.getState().hasPermission('ticket:delete')).toBe(false);
@@ -297,7 +294,7 @@ describe('useAuthStore', () => {
 
     it('用户为 null 时应返回 false', async () => {
       const { useAuthStore } = await import('../auth-store');
-      
+
       expect(useAuthStore.getState().hasPermission('ticket:view')).toBe(false);
     });
   });
@@ -305,7 +302,7 @@ describe('useAuthStore', () => {
   describe('hasRole', () => {
     it('用户有角色时应返回 true', async () => {
       const { useAuthStore } = await import('../auth-store');
-      
+
       const mockUser = {
         id: 1,
         name: 'Test User',
@@ -316,7 +313,7 @@ describe('useAuthStore', () => {
       };
 
       act(() => {
-        useAuthStore.getState().login(mockUser, 'mock-token');
+        useAuthStore.getState().login(mockUser);
       });
 
       expect(useAuthStore.getState().hasRole('admin')).toBe(true);
@@ -324,7 +321,7 @@ describe('useAuthStore', () => {
 
     it('用户角色不匹配时应返回 false', async () => {
       const { useAuthStore } = await import('../auth-store');
-      
+
       const mockUser = {
         id: 1,
         name: 'Test User',
@@ -335,7 +332,7 @@ describe('useAuthStore', () => {
       };
 
       act(() => {
-        useAuthStore.getState().login(mockUser, 'mock-token');
+        useAuthStore.getState().login(mockUser);
       });
 
       expect(useAuthStore.getState().hasRole('admin')).toBe(false);
@@ -345,7 +342,7 @@ describe('useAuthStore', () => {
   describe('isAdmin', () => {
     it('admin 角色应返回 true', async () => {
       const { useAuthStore } = await import('../auth-store');
-      
+
       const mockUser = {
         id: 1,
         name: 'Test User',
@@ -356,7 +353,7 @@ describe('useAuthStore', () => {
       };
 
       act(() => {
-        useAuthStore.getState().login(mockUser, 'mock-token');
+        useAuthStore.getState().login(mockUser);
       });
 
       expect(useAuthStore.getState().isAdmin()).toBe(true);
@@ -364,7 +361,7 @@ describe('useAuthStore', () => {
 
     it('super_admin 角色应返回 true', async () => {
       const { useAuthStore } = await import('../auth-store');
-      
+
       const mockUser = {
         id: 1,
         name: 'Test User',
@@ -375,7 +372,7 @@ describe('useAuthStore', () => {
       };
 
       act(() => {
-        useAuthStore.getState().login(mockUser, 'mock-token');
+        useAuthStore.getState().login(mockUser);
       });
 
       expect(useAuthStore.getState().isAdmin()).toBe(true);
@@ -383,7 +380,7 @@ describe('useAuthStore', () => {
 
     it('普通用户应返回 false', async () => {
       const { useAuthStore } = await import('../auth-store');
-      
+
       const mockUser = {
         id: 1,
         name: 'Test User',
@@ -394,7 +391,7 @@ describe('useAuthStore', () => {
       };
 
       act(() => {
-        useAuthStore.getState().login(mockUser, 'mock-token');
+        useAuthStore.getState().login(mockUser);
       });
 
       expect(useAuthStore.getState().isAdmin()).toBe(false);
@@ -414,7 +411,7 @@ describe('useTenantStore', () => {
     it('应有初始空状态', async () => {
       const { useTenantStore } = await import('../auth-store');
       const state = useTenantStore.getState();
-      
+
       expect(state.tenants).toEqual([]);
       expect(state.loading).toBe(false);
       expect(state.error).toBeNull();
@@ -424,10 +421,26 @@ describe('useTenantStore', () => {
   describe('setTenants', () => {
     it('应设置租户列表', async () => {
       const { useTenantStore } = await import('../auth-store');
-      
+
       const mockTenants = [
-        { id: 1, name: 'Tenant 1', code: 't1', type: 'standard' as const, status: 'active' as const, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-        { id: 2, name: 'Tenant 2', code: 't2', type: 'standard' as const, status: 'active' as const, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        {
+          id: 1,
+          name: 'Tenant 1',
+          code: 't1',
+          type: 'standard' as const,
+          status: 'active' as const,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: 2,
+          name: 'Tenant 2',
+          code: 't2',
+          type: 'standard' as const,
+          status: 'active' as const,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
       ];
 
       act(() => {
@@ -441,8 +454,16 @@ describe('useTenantStore', () => {
   describe('addTenant', () => {
     it('应添加租户到列表', async () => {
       const { useTenantStore } = await import('../auth-store');
-      
-      const mockTenant = { id: 1, name: 'New Tenant', code: 'new', type: 'standard' as const, status: 'active' as const, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+
+      const mockTenant = {
+        id: 1,
+        name: 'New Tenant',
+        code: 'new',
+        type: 'standard' as const,
+        status: 'active' as const,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
 
       act(() => {
         useTenantStore.getState().addTenant(mockTenant);
@@ -455,10 +476,26 @@ describe('useTenantStore', () => {
   describe('updateTenant', () => {
     it('应更新指定租户', async () => {
       const { useTenantStore } = await import('../auth-store');
-      
+
       const mockTenants = [
-        { id: 1, name: 'Tenant 1', code: 't1', type: 'standard' as const, status: 'active' as const, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-        { id: 2, name: 'Tenant 2', code: 't2', type: 'standard' as const, status: 'active' as const, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        {
+          id: 1,
+          name: 'Tenant 1',
+          code: 't1',
+          type: 'standard' as const,
+          status: 'active' as const,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: 2,
+          name: 'Tenant 2',
+          code: 't2',
+          type: 'standard' as const,
+          status: 'active' as const,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
       ];
 
       act(() => {
@@ -478,10 +515,26 @@ describe('useTenantStore', () => {
   describe('removeTenant', () => {
     it('应从列表中移除租户', async () => {
       const { useTenantStore } = await import('../auth-store');
-      
+
       const mockTenants = [
-        { id: 1, name: 'Tenant 1', code: 't1', type: 'standard' as const, status: 'active' as const, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-        { id: 2, name: 'Tenant 2', code: 't2', type: 'standard' as const, status: 'active' as const, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        {
+          id: 1,
+          name: 'Tenant 1',
+          code: 't1',
+          type: 'standard' as const,
+          status: 'active' as const,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: 2,
+          name: 'Tenant 2',
+          code: 't2',
+          type: 'standard' as const,
+          status: 'active' as const,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
       ];
 
       act(() => {
@@ -501,7 +554,7 @@ describe('useTenantStore', () => {
   describe('setLoading / setError', () => {
     it('应正确设置 loading 状态', async () => {
       const { useTenantStore } = await import('../auth-store');
-      
+
       act(() => {
         useTenantStore.getState().setLoading(true);
       });
@@ -511,7 +564,7 @@ describe('useTenantStore', () => {
 
     it('应正确设置 error 状态', async () => {
       const { useTenantStore } = await import('../auth-store');
-      
+
       act(() => {
         useTenantStore.getState().setError('Some error');
       });
@@ -527,7 +580,7 @@ describe('useTenantStore', () => {
 describe('权限常量', () => {
   it('PERMISSIONS 应包含所有预期权限', async () => {
     const { PERMISSIONS } = await import('../auth-store');
-    
+
     expect(PERMISSIONS.TICKET_VIEW).toBe('ticket:view');
     expect(PERMISSIONS.TICKET_CREATE).toBe('ticket:create');
     expect(PERMISSIONS.TICKET_DELETE).toBe('ticket:delete');
@@ -537,7 +590,7 @@ describe('权限常量', () => {
 
   it('ROLES 应包含所有预期角色', async () => {
     const { ROLES } = await import('../auth-store');
-    
+
     expect(ROLES.SUPER_ADMIN).toBe('super_admin');
     expect(ROLES.ADMIN).toBe('admin');
     expect(ROLES.MANAGER).toBe('manager');
