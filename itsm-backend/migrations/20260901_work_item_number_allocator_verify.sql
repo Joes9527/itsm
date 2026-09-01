@@ -1,6 +1,6 @@
 DO $$
 BEGIN
-    IF to_regclass('work_item_number_sequences') IS NULL THEN
+    IF to_regclass(format('%I.%I', current_schema(), 'work_item_number_sequences')) IS NULL THEN
         RAISE EXCEPTION 'work_item_number_sequences table is missing';
     END IF;
 
@@ -8,11 +8,19 @@ BEGIN
         SELECT 1
         FROM pg_index i
         JOIN pg_class index_relation ON index_relation.oid = i.indexrelid
+        JOIN pg_namespace index_schema ON index_schema.oid = index_relation.relnamespace
+        JOIN pg_class table_relation ON table_relation.oid = i.indrelid
+        JOIN pg_namespace table_schema ON table_schema.oid = table_relation.relnamespace
         JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS key_column(attnum, ordinal) ON TRUE
         JOIN pg_attribute attribute
             ON attribute.attrelid = i.indrelid AND attribute.attnum = key_column.attnum
-        WHERE index_relation.relname = 'workitemnumbersequence_tenant_id_period'
+        WHERE index_schema.nspname = current_schema()
+          AND table_schema.nspname = current_schema()
+          AND table_relation.relname = 'work_item_number_sequences'
+          AND index_relation.relname = 'workitemnumbersequence_tenant_id_period'
           AND i.indisunique
+          AND i.indisvalid
+          AND i.indisready
         GROUP BY i.indexrelid
         HAVING array_agg(attribute.attname ORDER BY key_column.ordinal) = ARRAY['tenant_id', 'period']::name[]
     ) THEN
@@ -23,11 +31,19 @@ BEGIN
         SELECT 1
         FROM pg_index i
         JOIN pg_class index_relation ON index_relation.oid = i.indexrelid
+        JOIN pg_namespace index_schema ON index_schema.oid = index_relation.relnamespace
+        JOIN pg_class table_relation ON table_relation.oid = i.indrelid
+        JOIN pg_namespace table_schema ON table_schema.oid = table_relation.relnamespace
         JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS key_column(attnum, ordinal) ON TRUE
         JOIN pg_attribute attribute
             ON attribute.attrelid = i.indrelid AND attribute.attnum = key_column.attnum
-        WHERE index_relation.relname = 'ticket_tenant_id_ticket_number'
+        WHERE index_schema.nspname = current_schema()
+          AND table_schema.nspname = current_schema()
+          AND table_relation.relname = 'tickets'
+          AND index_relation.relname = 'ticket_tenant_id_ticket_number'
           AND i.indisunique
+          AND i.indisvalid
+          AND i.indisready
         GROUP BY i.indexrelid
         HAVING array_agg(attribute.attname ORDER BY key_column.ordinal) = ARRAY['tenant_id', 'ticket_number']::name[]
     ) THEN
@@ -37,7 +53,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1
         FROM pg_constraint
-        WHERE conrelid = 'work_item_number_sequences'::regclass
+        WHERE conrelid = to_regclass(format('%I.%I', current_schema(), 'work_item_number_sequences'))
           AND conname = 'work_item_number_sequences_period_check'
           AND contype = 'c'
     ) THEN
@@ -47,7 +63,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1
         FROM pg_constraint
-        WHERE conrelid = 'work_item_number_sequences'::regclass
+        WHERE conrelid = to_regclass(format('%I.%I', current_schema(), 'work_item_number_sequences'))
           AND conname = 'work_item_number_sequences_last_value_check'
           AND contype = 'c'
     ) THEN

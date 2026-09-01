@@ -34,8 +34,9 @@ func (Ticket) Fields() []ent.Field {
 			Default("manual").
 			Optional(),
 		field.String("record_class").
-			Comment("WorkItem 记录类型：generic/service_request_item/incident/problem/change_request/catalog_task；创建后不可变，由领域服务在事务内校验，不在 schema 层强制").
-			Default("generic"),
+			Comment("WorkItem 记录类型：generic/service_request_item/incident/problem/change_request/catalog_task；创建后不可变，由领域服务在事务内校验").
+			Default("generic").
+			Immutable(),
 		field.Int("opened_by_id").
 			Comment("实际录入/触发者ID（区别于 requester_id 服务接受者）").
 			Optional(),

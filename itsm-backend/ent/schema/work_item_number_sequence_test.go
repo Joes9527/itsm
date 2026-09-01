@@ -7,12 +7,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestTicketNumberIsImmutableAndTenantScopedUnique(t *testing.T) {
-	var immutable, fieldUnique, composite bool
+func TestTicketNumberAndRecordClassAreImmutableAndTenantScopedUnique(t *testing.T) {
+	var ticketNumberImmutable, recordClassImmutable, fieldUnique, composite bool
 	for _, f := range (Ticket{}).Fields() {
-		if f.Descriptor().Name == "ticket_number" {
-			immutable = f.Descriptor().Immutable
+		switch f.Descriptor().Name {
+		case "ticket_number":
+			ticketNumberImmutable = f.Descriptor().Immutable
 			fieldUnique = f.Descriptor().Unique
+		case "record_class":
+			recordClassImmutable = f.Descriptor().Immutable
 		}
 	}
 	for _, idx := range (Ticket{}).Indexes() {
@@ -22,7 +25,8 @@ func TestTicketNumberIsImmutableAndTenantScopedUnique(t *testing.T) {
 		}
 		require.False(t, d.Unique && reflect.DeepEqual(d.Fields, []string{"ticket_number"}))
 	}
-	require.True(t, immutable)
+	require.True(t, ticketNumberImmutable)
+	require.True(t, recordClassImmutable)
 	require.False(t, fieldUnique)
 	require.True(t, composite)
 }

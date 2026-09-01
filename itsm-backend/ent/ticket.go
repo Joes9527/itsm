@@ -29,7 +29,7 @@ type Ticket struct {
 	Type string `json:"type,omitempty"`
 	// 工单来源：manual=手动创建，service_catalog=服务目录申请
 	Source string `json:"source,omitempty"`
-	// WorkItem 记录类型：generic/service_request_item/incident/problem/change_request/catalog_task；创建后不可变，由领域服务在事务内校验，不在 schema 层强制
+	// WorkItem 记录类型：generic/service_request_item/incident/problem/change_request/catalog_task；创建后不可变，由领域服务在事务内校验
 	RecordClass string `json:"record_class,omitempty"`
 	// 实际录入/触发者ID（区别于 requester_id 服务接受者）
 	OpenedByID int `json:"opened_by_id,omitempty"`

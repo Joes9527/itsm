@@ -1467,18 +1467,6 @@ func (u *TicketUpsert) ClearSource() *TicketUpsert {
 	return u
 }
 
-// SetRecordClass sets the "record_class" field.
-func (u *TicketUpsert) SetRecordClass(v string) *TicketUpsert {
-	u.Set(ticket.FieldRecordClass, v)
-	return u
-}
-
-// UpdateRecordClass sets the "record_class" field to the value that was provided on create.
-func (u *TicketUpsert) UpdateRecordClass() *TicketUpsert {
-	u.SetExcluded(ticket.FieldRecordClass)
-	return u
-}
-
 // SetOpenedByID sets the "opened_by_id" field.
 func (u *TicketUpsert) SetOpenedByID(v int) *TicketUpsert {
 	u.Set(ticket.FieldOpenedByID, v)
@@ -2138,6 +2126,9 @@ func (u *TicketUpsert) ClearCustomFieldValues() *TicketUpsert {
 func (u *TicketUpsertOne) UpdateNewValues() *TicketUpsertOne {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
 	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		if _, exists := u.create.mutation.RecordClass(); exists {
+			s.SetIgnore(ticket.FieldRecordClass)
+		}
 		if _, exists := u.create.mutation.TicketNumber(); exists {
 			s.SetIgnore(ticket.FieldTicketNumber)
 		}
@@ -2253,20 +2244,6 @@ func (u *TicketUpsertOne) UpdateSource() *TicketUpsertOne {
 func (u *TicketUpsertOne) ClearSource() *TicketUpsertOne {
 	return u.Update(func(s *TicketUpsert) {
 		s.ClearSource()
-	})
-}
-
-// SetRecordClass sets the "record_class" field.
-func (u *TicketUpsertOne) SetRecordClass(v string) *TicketUpsertOne {
-	return u.Update(func(s *TicketUpsert) {
-		s.SetRecordClass(v)
-	})
-}
-
-// UpdateRecordClass sets the "record_class" field to the value that was provided on create.
-func (u *TicketUpsertOne) UpdateRecordClass() *TicketUpsertOne {
-	return u.Update(func(s *TicketUpsert) {
-		s.UpdateRecordClass()
 	})
 }
 
@@ -3202,6 +3179,9 @@ func (u *TicketUpsertBulk) UpdateNewValues() *TicketUpsertBulk {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
 	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
 		for _, b := range u.create.builders {
+			if _, exists := b.mutation.RecordClass(); exists {
+				s.SetIgnore(ticket.FieldRecordClass)
+			}
 			if _, exists := b.mutation.TicketNumber(); exists {
 				s.SetIgnore(ticket.FieldTicketNumber)
 			}
@@ -3318,20 +3298,6 @@ func (u *TicketUpsertBulk) UpdateSource() *TicketUpsertBulk {
 func (u *TicketUpsertBulk) ClearSource() *TicketUpsertBulk {
 	return u.Update(func(s *TicketUpsert) {
 		s.ClearSource()
-	})
-}
-
-// SetRecordClass sets the "record_class" field.
-func (u *TicketUpsertBulk) SetRecordClass(v string) *TicketUpsertBulk {
-	return u.Update(func(s *TicketUpsert) {
-		s.SetRecordClass(v)
-	})
-}
-
-// UpdateRecordClass sets the "record_class" field to the value that was provided on create.
-func (u *TicketUpsertBulk) UpdateRecordClass() *TicketUpsertBulk {
-	return u.Update(func(s *TicketUpsert) {
-		s.UpdateRecordClass()
 	})
 }
 

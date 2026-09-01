@@ -1,6 +1,8 @@
 package migration
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -193,6 +195,27 @@ func TestWorkItemNumberAllocatorIsVersioned(t *testing.T) {
 	assert.Contains(t, sql, "CREATE TABLE IF NOT EXISTS work_item_number_sequences")
 	assert.Contains(t, sql, "work_item_number_sequences_period_check")
 	assert.Contains(t, sql, "work_item_number_sequences_last_value_check")
+	assert.Contains(t, sql, "DO $$")
+	assert.Contains(t, sql, "ALTER TABLE work_item_number_sequences\n            ADD CONSTRAINT work_item_number_sequences_period_check")
+	assert.Contains(t, sql, "ALTER TABLE work_item_number_sequences\n            ADD CONSTRAINT work_item_number_sequences_last_value_check")
 	assert.Contains(t, sql, "CREATE UNIQUE INDEX IF NOT EXISTS workitemnumbersequence_tenant_id_period")
 	assert.Contains(t, sql, "CREATE UNIQUE INDEX IF NOT EXISTS ticket_tenant_id_ticket_number")
+}
+
+func TestWorkItemNumberAllocatorVerificationBindsReadyValidIndexes(t *testing.T) {
+	verificationSQL, err := os.ReadFile(filepath.Join("..", "migrations", "20260901_work_item_number_allocator_verify.sql"))
+	require.NoError(t, err)
+
+	sql := string(verificationSQL)
+	for _, expected := range []string{
+		"JOIN pg_namespace index_schema ON index_schema.oid = index_relation.relnamespace",
+		"JOIN pg_class table_relation ON table_relation.oid = i.indrelid",
+		"JOIN pg_namespace table_schema ON table_schema.oid = table_relation.relnamespace",
+		"index_schema.nspname = current_schema()",
+		"AND table_schema.nspname = current_schema()",
+		"AND table_relation.relname = 'work_item_number_sequences'\n          AND index_relation.relname = 'workitemnumbersequence_tenant_id_period'\n          AND i.indisunique\n          AND i.indisvalid\n          AND i.indisready",
+		"AND table_relation.relname = 'tickets'\n          AND index_relation.relname = 'ticket_tenant_id_ticket_number'\n          AND i.indisunique\n          AND i.indisvalid\n          AND i.indisready",
+	} {
+		assert.Contains(t, sql, expected)
+	}
 }
