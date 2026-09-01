@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/smtp"
 	"testing"
 	"time"
 
@@ -24,7 +25,7 @@ type blockingIncidentAlertEmailSender struct{}
 
 func (blockingIncidentAlertEmailSender) SendForTenant(ctx context.Context, _ int, _ *EmailMessage) error {
 	<-ctx.Done()
-	return ctx.Err()
+	return newEmailTransportError("smtp", "before_send", emailNotAccepted, ctx.Err())
 }
 
 type incidentAlertEmailDelivery struct {
@@ -42,7 +43,7 @@ func testOutboxRegistry(t *testing.T, sender incidentAlertEmailSender) *OutboxEv
 func (s *recordingIncidentAlertEmailSender) SendForTenant(_ context.Context, tenantID int, message *EmailMessage) error {
 	if s.failuresRemaining > 0 {
 		s.failuresRemaining--
-		return errors.New("temporary email route failure")
+		return newEmailTransportError("smtp", "dial", emailNotAccepted, errors.New("temporary email route failure"))
 	}
 	s.deliveries = append(s.deliveries, incidentAlertEmailDelivery{tenantID: tenantID, message: *message})
 	return nil
@@ -66,7 +67,7 @@ func TestOutboxDeliveryWorkerRetriesThenPublishesExactlyOnce(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "pending", event.Status)
 	assert.Equal(t, 1, event.AttemptCount)
-	assert.Contains(t, event.LastError, "temporary email route failure")
+	assert.Contains(t, event.LastError, emailErrorClassSMTPSend)
 	assert.Empty(t, sender.deliveries)
 
 	now = event.NextAttemptAt.Add(time.Millisecond)
@@ -165,6 +166,54 @@ func TestOutboxDeliveryWorkerDoesNotResendAmbiguousExpiredAttempt(t *testing.T) 
 	assert.True(t, audited)
 }
 
+func TestOutboxDeliveryWorkerRetriesRealEmailServicePreAcceptanceFailure(t *testing.T) {
+	repository, client := newOutboxRepository(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	eventID := enqueueIncidentAlertDeliveryForWorker(t, repository, now)
+	email := NewEmailService(EmailConfig{Host: "smtp.example.test", Port: 587, Username: "mailer", From: "mailer@example.test"}, zaptest.NewLogger(t).Sugar())
+	calls := 0
+	email.smtpSend = func(context.Context, string, smtp.Auth, string, []string, []byte) error {
+		calls++
+		return newEmailTransportError("smtp", "dial", emailNotAccepted, errors.New("dial unavailable"))
+	}
+	worker, err := NewOutboxDeliveryWorker(repository, OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: time.Second, MaxAttempts: 3}, zaptest.NewLogger(t).Sugar(), testOutboxRegistry(t, email))
+	require.NoError(t, err)
+	worker.now = func() time.Time { return now }
+	repository.clock = worker.now
+	require.NoError(t, worker.DispatchOnce(ctx))
+	event, err := client.OutboxEvent.Query().Where(outboxevent.EventIDEQ(eventID)).Only(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, outboxEventStatusPending, event.Status)
+	assert.Equal(t, 1, calls, "durable SMTP must not retry inside EmailService")
+}
+
+func TestOutboxDeliveryWorkerAuditsImmediateRealEmailServiceAmbiguity(t *testing.T) {
+	repository, client := newOutboxRepository(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	eventID := enqueueIncidentAlertDeliveryForWorker(t, repository, now)
+	email := NewEmailService(EmailConfig{Host: "smtp.example.test", Port: 587, Username: "mailer", From: "mailer@example.test"}, zaptest.NewLogger(t).Sugar())
+	calls := 0
+	email.smtpSend = func(context.Context, string, smtp.Auth, string, []string, []byte) error {
+		calls++
+		return newEmailTransportError("smtp", "data_close", emailAcceptanceUnknown, errors.New("acceptance response lost"))
+	}
+	worker, err := NewOutboxDeliveryWorker(repository, OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: time.Second, MaxAttempts: 3}, zaptest.NewLogger(t).Sugar(), testOutboxRegistry(t, email))
+	require.NoError(t, err)
+	worker.now = func() time.Time { return now }
+	repository.clock = worker.now
+	require.NoError(t, worker.DispatchOnce(ctx))
+	event, err := client.OutboxEvent.Query().Where(outboxevent.EventIDEQ(eventID)).Only(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, outboxEventStatusBlocked, event.Status)
+	assert.Contains(t, event.LastError, "delivery_unknown")
+	assert.Equal(t, 1, calls)
+	audited, err := client.AuditLog.Query().Where(auditlog.RequestIDEQ(eventID), auditlog.ActionEQ("outbox.delivery_unknown")).Exist(ctx)
+	require.NoError(t, err)
+	assert.True(t, audited)
+}
+
 func TestOutboxDeliveryWorkerBlocksUnsupportedIncidentAlertChannel(t *testing.T) {
 	repository, client := newOutboxRepository(t)
 	ctx := context.Background()
@@ -207,7 +256,7 @@ func TestOutboxDeliveryWorkerMovesExhaustedDeliveryToDeadLetter(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "dead_letter", event.Status)
 	assert.Equal(t, 1, event.AttemptCount)
-	assert.Contains(t, event.LastError, "temporary email route failure")
+	assert.Contains(t, event.LastError, emailErrorClassSMTPSend)
 }
 
 func TestOutboxDeliveryWorkerBoundsExternalCallWithHandlerTimeout(t *testing.T) {
@@ -228,7 +277,7 @@ func TestOutboxDeliveryWorkerBoundsExternalCallWithHandlerTimeout(t *testing.T) 
 	event, err := client.OutboxEvent.Query().Where(outboxevent.EventIDEQ(eventID)).Only(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, "dead_letter", event.Status)
-	assert.Contains(t, event.LastError, "context deadline exceeded")
+	assert.Contains(t, event.LastError, emailErrorClassSMTPSend)
 }
 
 func enqueueIncidentAlertDeliveryForWorker(t *testing.T, repository *OutboxEventRepository, now time.Time) string {

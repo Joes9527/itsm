@@ -102,3 +102,16 @@ Additional green evidence:
 - durable Graph ambiguity performs no SMTP fallback;
 - unsupported rule channels fail before persistence;
 - focused race suite for repository/worker/email/channel contracts passes.
+
+### Transport acceptance boundary follow-up
+
+The transport follow-up separates failures by stage and outcome instead of treating every Graph/SMTP error alike:
+
+- failures proven to occur before external acceptance (`not_accepted`) return to the shared worker retry policy;
+- a lost/opaque response after a request or SMTP DATA terminator is `acceptance_unknown` and immediately becomes `delivery_unknown`/`blocked` for manual reconciliation;
+- durable SMTP performs exactly one transport call per worker attempt; only legacy non-durable calls may internally retry a proven pre-acceptance failure;
+- SMTP's successful DATA close is the acceptance boundary. A subsequent QUIT failure is cleanup only and does not invalidate delivery. An explicit SMTP DATA rejection is retryable, while a lost DATA response is ambiguous;
+- Graph token/request construction, connection dial, explicit HTTP rejection, and opaque/lost response stages carry the same typed outcome contract;
+- immediate ambiguity now writes `outbox.delivery_unknown` audit evidence in the same transaction as the blocked transition, matching expired-lease recovery.
+
+This remains conservative at-least-once delivery with manual reconciliation for ambiguity. Delivery IDs are preserved for correlation/provider-side deduplication; no exactly-once SMTP guarantee is claimed.

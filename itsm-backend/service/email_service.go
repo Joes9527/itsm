@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/mail"
 	"net/smtp"
+	"net/textproto"
 	"strings"
 	"sync"
 	"time"
@@ -38,6 +39,56 @@ type GraphMailSender interface {
 type GraphProvider func(tenantID int) (GraphMailSender, string, bool)
 
 type smtpSendFunc func(context.Context, string, smtp.Auth, string, []string, []byte) error
+
+type emailTransportOutcome string
+
+const (
+	emailNotAccepted       emailTransportOutcome = "not_accepted"
+	emailAcceptanceUnknown emailTransportOutcome = "acceptance_unknown"
+)
+
+type emailTransportError struct {
+	route   string
+	stage   string
+	outcome emailTransportOutcome
+	cause   error
+}
+
+func newEmailTransportError(route, stage string, outcome emailTransportOutcome, cause error) error {
+	return &emailTransportError{route: route, stage: stage, outcome: outcome, cause: cause}
+}
+
+func (e *emailTransportError) Error() string {
+	if e.route == "graph" {
+		return emailErrorClassGraphSend
+	}
+	return emailErrorClassSMTPSend
+}
+func (e *emailTransportError) Unwrap() error           { return e.cause }
+func (e *emailTransportError) DeliveryOutcome() string { return string(e.outcome) }
+func (e *emailTransportError) DeliveryStage() string   { return e.stage }
+func (e *emailTransportError) Is(target error) bool {
+	return (e.route == "graph" && target == errEmailGraphSend) || (e.route == "smtp" && target == errEmailSMTPSend)
+}
+
+type emailDeliveryOutcomeCarrier interface{ DeliveryOutcome() string }
+type emailDeliveryStageCarrier interface{ DeliveryStage() string }
+
+func emailTransportOutcomeOf(err error) emailTransportOutcome {
+	var carrier emailDeliveryOutcomeCarrier
+	if errors.As(err, &carrier) && carrier.DeliveryOutcome() == string(emailNotAccepted) {
+		return emailNotAccepted
+	}
+	return emailAcceptanceUnknown
+}
+
+func emailTransportStageOf(err error, fallback string) string {
+	var carrier emailDeliveryStageCarrier
+	if errors.As(err, &carrier) && carrier.DeliveryStage() != "" {
+		return carrier.DeliveryStage()
+	}
+	return fallback
+}
 
 const (
 	emailErrorClassGraphSend    = "graph_send_failed"
@@ -131,7 +182,7 @@ func (s *EmailService) SendForTenant(ctx context.Context, tenantID int, msg *Ema
 				return nil
 			} else {
 				routeErrors = append(routeErrors, err)
-				if msg.DisableProviderFallback {
+				if msg.DisableProviderFallback || emailTransportOutcomeOf(err) == emailAcceptanceUnknown {
 					return emailDeliveryError(routeErrors...)
 				}
 			}
@@ -169,7 +220,7 @@ func (s *EmailService) sendViaGraph(ctx context.Context, sender GraphMailSender,
 	for _, to := range msg.To {
 		if err := sender.SendMail(ctx, mailbox, to, msg.Subject, body, msg.DeliveryID); err != nil {
 			s.logger.Errorw("email Graph delivery failed", "error_class", emailErrorClassGraphSend)
-			return errEmailGraphSend
+			return newEmailTransportError("graph", emailTransportStageOf(err, "send_mail"), emailTransportOutcomeOf(err), err)
 		}
 	}
 	s.logger.Infow("email delivered via Graph")
@@ -238,24 +289,34 @@ func (s *EmailService) sendViaSMTP(ctx context.Context, msg *EmailMessage) error
 	auth := smtp.PlainAuth("", s.config.Username, s.config.Password, s.config.Host)
 	addr := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
 
+	maxAttempts := 3
+	if msg.DisableProviderFallback {
+		maxAttempts = 1
+	}
 	var err error
-	for attempt := 0; attempt < 3; attempt++ {
+	for attempt := 0; attempt < maxAttempts; attempt++ {
 		err = s.smtpSend(ctx, addr, auth, s.config.From, append(append([]string{}, msg.To...), msg.CC...), []byte(emailBody.String()))
 		if err == nil {
 			break
 		}
-		if attempt < 2 {
+		if _, typed := err.(*emailTransportError); !typed {
+			err = newEmailTransportError("smtp", "transport", emailAcceptanceUnknown, err)
+		}
+		if emailTransportOutcomeOf(err) == emailAcceptanceUnknown || msg.DisableProviderFallback {
+			break
+		}
+		if attempt < maxAttempts-1 {
 			select {
 			case <-ctx.Done():
 				s.logger.Errorw("email SMTP delivery failed", "error_class", emailErrorClassSMTPSend)
-				return errEmailSMTPSend
+				return newEmailTransportError("smtp", "context", emailNotAccepted, ctx.Err())
 			case <-time.After(time.Duration(attempt+1) * 200 * time.Millisecond):
 			}
 		}
 	}
 	if err != nil {
 		s.logger.Errorw("email SMTP delivery failed", "error_class", emailErrorClassSMTPSend)
-		return errEmailSMTPSend
+		return err
 	}
 
 	s.logger.Infow("email delivered via SMTP")
@@ -265,53 +326,62 @@ func (s *EmailService) sendViaSMTP(ctx context.Context, msg *EmailMessage) error
 func sendSMTPWithContext(ctx context.Context, addr string, auth smtp.Auth, from string, recipients []string, msg []byte) error {
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
-		return err
+		return newEmailTransportError("smtp", "address", emailNotAccepted, err)
 	}
 	connection, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr)
 	if err != nil {
-		return err
+		return newEmailTransportError("smtp", "dial", emailNotAccepted, err)
 	}
 	defer connection.Close()
 	if deadline, ok := ctx.Deadline(); ok {
 		if err := connection.SetDeadline(deadline); err != nil {
-			return err
+			return newEmailTransportError("smtp", "deadline", emailNotAccepted, err)
 		}
 	}
 	client, err := smtp.NewClient(connection, host)
 	if err != nil {
-		return err
+		return newEmailTransportError("smtp", "greeting", emailNotAccepted, err)
 	}
 	defer client.Close()
 	if ok, _ := client.Extension("STARTTLS"); ok {
 		if err := client.StartTLS(&tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}); err != nil {
-			return err
+			return newEmailTransportError("smtp", "starttls", emailNotAccepted, err)
 		}
 	}
 	if auth != nil {
 		if err := client.Auth(auth); err != nil {
-			return err
+			return newEmailTransportError("smtp", "auth", emailNotAccepted, err)
 		}
 	}
 	if err := client.Mail(from); err != nil {
-		return err
+		return newEmailTransportError("smtp", "mail_from", emailNotAccepted, err)
 	}
 	for _, recipient := range recipients {
 		if err := client.Rcpt(recipient); err != nil {
-			return err
+			return newEmailTransportError("smtp", "recipient", emailNotAccepted, err)
 		}
 	}
 	writer, err := client.Data()
 	if err != nil {
-		return err
+		return newEmailTransportError("smtp", "data_start", emailNotAccepted, err)
 	}
 	if _, err := writer.Write(msg); err != nil {
-		_ = writer.Close()
-		return err
+		// Abort by closing the SMTP connection via the deferred client.Close.
+		// Calling writer.Close here would emit the DATA terminator and could turn
+		// a known incomplete write into an ambiguous accepted message.
+		return newEmailTransportError("smtp", "data_write", emailNotAccepted, err)
 	}
 	if err := writer.Close(); err != nil {
-		return err
+		var smtpRejection *textproto.Error
+		if errors.As(err, &smtpRejection) {
+			return newEmailTransportError("smtp", "data_rejected", emailNotAccepted, err)
+		}
+		return newEmailTransportError("smtp", "data_close", emailAcceptanceUnknown, err)
 	}
-	return client.Quit()
+	// A successful DATA close is the authoritative SMTP acceptance boundary;
+	// QUIT is session cleanup and cannot invalidate an already accepted mail.
+	_ = client.Quit()
+	return nil
 }
 
 func (s *EmailService) smtpConfigured() bool {
