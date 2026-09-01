@@ -214,6 +214,79 @@ func TestProfessionalExtensionMigrationRejectsConflictingNamedForeignKey(t *test
 	require.ErrorContains(t, err, "conflicts with required incidents.work_item_id foreign key")
 }
 
+func TestProfessionalExtensionMigrationRejectsAdditionalForeignKey(t *testing.T) {
+	db := openProfessionalExtensionMigrationDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), professionalExtensionMigrationIntegrationTimeout)
+	defer cancel()
+
+	_, err := db.ExecContext(ctx, `
+		CREATE TABLE wrong_work_items (id BIGINT PRIMARY KEY);
+		ALTER TABLE incidents ADD CONSTRAINT incidents_tickets_work_item
+			FOREIGN KEY (work_item_id) REFERENCES tickets(id);
+		ALTER TABLE incidents ADD CONSTRAINT incidents_wrong_work_item
+			FOREIGN KEY (work_item_id) REFERENCES wrong_work_items(id);
+	`)
+	require.NoError(t, err)
+
+	_, err = db.ExecContext(ctx, GetMigrationSQL("022_drop_professional_extension_shared_fields"))
+	require.ErrorContains(t, err, "additional foreign key")
+}
+
+func TestProfessionalExtensionVerificationRejectsAdditionalForeignKey(t *testing.T) {
+	db := openProfessionalExtensionMigrationDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), professionalExtensionMigrationIntegrationTimeout)
+	defer cancel()
+
+	_, err := db.ExecContext(ctx, GetMigrationSQL("022_drop_professional_extension_shared_fields"))
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, `
+		CREATE TABLE wrong_work_items (id BIGINT PRIMARY KEY);
+		ALTER TABLE incidents ADD CONSTRAINT incidents_wrong_work_item
+			FOREIGN KEY (work_item_id) REFERENCES wrong_work_items(id);
+	`)
+	require.NoError(t, err)
+
+	verifySQL := readProfessionalExtensionMigrationAsset(t, "20260901_drop_professional_extension_shared_fields_verify.sql")
+	_, err = db.ExecContext(ctx, verifySQL)
+	require.ErrorContains(t, err, "exactly one foreign key")
+}
+
+func TestProfessionalExtensionResetEstablishesExactForeignKeys(t *testing.T) {
+	db := openProfessionalExtensionMigrationDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), professionalExtensionMigrationIntegrationTimeout)
+	defer cancel()
+
+	resetSQL := readProfessionalExtensionMigrationAsset(t, "20260901_drop_professional_extension_shared_fields_dev_reset.sql")
+	verifySQL := readProfessionalExtensionMigrationAsset(t, "20260901_drop_professional_extension_shared_fields_verify.sql")
+	_, err := db.ExecContext(ctx, resetSQL)
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, verifySQL)
+	require.NoError(t, err)
+	for _, tableName := range []string{"incidents", "problems", "changes"} {
+		_, err = db.ExecContext(ctx, fmt.Sprintf(`INSERT INTO %s (work_item_id) VALUES (999999)`, tableName))
+		requirePostgreSQLForeignKeyViolation(t, err)
+	}
+}
+
+func TestProfessionalExtensionResetRejectsAdditionalForeignKey(t *testing.T) {
+	db := openProfessionalExtensionMigrationDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), professionalExtensionMigrationIntegrationTimeout)
+	defer cancel()
+
+	_, err := db.ExecContext(ctx, `
+		CREATE TABLE wrong_work_items (id BIGINT PRIMARY KEY);
+		ALTER TABLE incidents ADD CONSTRAINT incidents_tickets_work_item
+			FOREIGN KEY (work_item_id) REFERENCES tickets(id);
+		ALTER TABLE incidents ADD CONSTRAINT incidents_wrong_work_item
+			FOREIGN KEY (work_item_id) REFERENCES wrong_work_items(id);
+	`)
+	require.NoError(t, err)
+
+	resetSQL := readProfessionalExtensionMigrationAsset(t, "20260901_drop_professional_extension_shared_fields_dev_reset.sql")
+	_, err = db.ExecContext(ctx, resetSQL)
+	require.ErrorContains(t, err, "additional foreign key")
+}
+
 func TestProfessionalExtensionMigrationRejectsConflictingNamedIndex(t *testing.T) {
 	db := openProfessionalExtensionMigrationDB(t)
 	ctx, cancel := context.WithTimeout(context.Background(), professionalExtensionMigrationIntegrationTimeout)
@@ -282,6 +355,51 @@ func TestProfessionalExtensionVerificationRejectsPermissivePolicyShape(t *testin
 	verifySQL := readProfessionalExtensionMigrationAsset(t, "20260901_drop_professional_extension_shared_fields_verify.sql")
 	_, err = db.ExecContext(ctx, verifySQL)
 	require.ErrorContains(t, err, "must use authoritative WorkItem tenant and soft-delete scope")
+}
+
+func TestProfessionalExtensionVerificationRejectsCanonicalPolicyWithPermissiveBranch(t *testing.T) {
+	db := openProfessionalExtensionMigrationDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), professionalExtensionMigrationIntegrationTimeout)
+	defer cancel()
+
+	_, err := db.ExecContext(ctx, GetMigrationSQL("022_drop_professional_extension_shared_fields"))
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, `
+		DROP POLICY tenant_isolation_changes ON changes;
+		CREATE POLICY tenant_isolation_changes ON changes
+			USING ((EXISTS (
+				SELECT 1 FROM tickets work_item
+				WHERE work_item.id = changes.work_item_id
+				  AND work_item.tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint
+				  AND work_item.deleted_at IS NULL
+			)) OR true)
+			WITH CHECK ((EXISTS (
+				SELECT 1 FROM tickets work_item
+				WHERE work_item.id = changes.work_item_id
+				  AND work_item.tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint
+				  AND work_item.deleted_at IS NULL
+			)) OR true);
+	`)
+	require.NoError(t, err)
+
+	verifySQL := readProfessionalExtensionMigrationAsset(t, "20260901_drop_professional_extension_shared_fields_verify.sql")
+	_, err = db.ExecContext(ctx, verifySQL)
+	require.ErrorContains(t, err, "must use authoritative WorkItem tenant and soft-delete scope exactly")
+}
+
+func TestProfessionalExtensionVerificationRejectsAdditionalPolicy(t *testing.T) {
+	db := openProfessionalExtensionMigrationDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), professionalExtensionMigrationIntegrationTimeout)
+	defer cancel()
+
+	_, err := db.ExecContext(ctx, GetMigrationSQL("022_drop_professional_extension_shared_fields"))
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, `CREATE POLICY tenant_isolation_extra ON changes USING (true) WITH CHECK (true)`)
+	require.NoError(t, err)
+
+	verifySQL := readProfessionalExtensionMigrationAsset(t, "20260901_drop_professional_extension_shared_fields_verify.sql")
+	_, err = db.ExecContext(ctx, verifySQL)
+	require.ErrorContains(t, err, "exactly one canonical RLS policy")
 }
 
 func openProfessionalExtensionMigrationDB(t *testing.T) *sql.DB {

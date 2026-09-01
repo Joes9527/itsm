@@ -21,9 +21,11 @@ package rls
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
 )
 
 // tenantCtxKey is the private type used to store tenant_id in context.Context.
@@ -58,6 +60,8 @@ func IsSystemBypass(ctx context.Context) bool {
 // ErrNoTenant is returned when a query is attempted without a tenant scope
 // and without SystemBypass. Callers must handle this before hitting the DB.
 var ErrNoTenant = errors.New("rls: no tenant_id in context and system bypass not set")
+
+const releaseCleanupTimeout = 5 * time.Second
 
 // AcquireConn checks out a connection from db and sets the SESSION variable
 // app.current_tenant to the tenant_id carried by ctx. The returned *sql.Conn
@@ -101,12 +105,19 @@ func ReleaseConn(ctx context.Context, conn *sql.Conn) error {
 	if conn == nil {
 		return nil
 	}
-	// DISCARD ALL clears session state including our variable. Prefer it over
-	// RESET because it also purges plan caches, temp tables, listens, etc.
-	// If this fails, close() ensures a dirty connection never returns to pool.
-	if _, err := conn.ExecContext(ctx, "DISCARD ALL"); err != nil {
-		_ = conn.Close()
-		return fmt.Errorf("rls: discard on release: %w", err)
+	// Request cancellation must not bypass session cleanup. A short independent
+	// context bounds DISCARD while still allowing it to run after the request ends.
+	cleanupCtx, cancel := context.WithTimeout(context.Background(), releaseCleanupTimeout)
+	defer cancel()
+	if _, err := conn.ExecContext(cleanupCtx, "DISCARD ALL"); err != nil {
+		// Returning driver.ErrBadConn from Raw tells database/sql to destroy the
+		// physical connection. Close alone would put a dirty session back in pool.
+		evictionErr := conn.Raw(func(any) error { return driver.ErrBadConn })
+		closeErr := conn.Close()
+		if evictionErr != nil && !errors.Is(evictionErr, driver.ErrBadConn) {
+			return fmt.Errorf("rls: discard on release: %w", errors.Join(err, evictionErr, closeErr))
+		}
+		return fmt.Errorf("rls: discard on release: %w", errors.Join(err, closeErr))
 	}
 	return conn.Close() // Close on *sql.Conn returns it to the pool
 }

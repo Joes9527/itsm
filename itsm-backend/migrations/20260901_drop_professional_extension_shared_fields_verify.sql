@@ -9,6 +9,7 @@ DECLARE
     invalid_link_exists BOOLEAN;
     policy_using TEXT;
     policy_check TEXT;
+    canonical_policy_expression TEXT := '(EXISTS ( SELECT 1 FROM tickets work_item WHERE ((work_item.id = changes.work_item_id) AND (work_item.tenant_id = (NULLIF(current_setting(''app.current_tenant''::text, true), ''''::text))::bigint) AND (work_item.deleted_at IS NULL))))';
 BEGIN
     FOR extension_table, extension_index, extension_constraint, expected_record_class IN
         SELECT * FROM (VALUES
@@ -93,6 +94,20 @@ BEGIN
 				current_schema(), extension_constraint, extension_table;
 		END IF;
 
+		IF (SELECT COUNT(*)
+			FROM pg_constraint constraint_relation
+			JOIN pg_class extension_relation ON extension_relation.oid = constraint_relation.conrelid
+			JOIN pg_namespace extension_schema ON extension_schema.oid = extension_relation.relnamespace
+			JOIN pg_attribute extension_column
+			  ON extension_column.attrelid = extension_relation.oid
+			 AND extension_column.attnum = ANY (constraint_relation.conkey)
+			WHERE extension_schema.nspname = current_schema()
+			  AND extension_relation.relname = extension_table
+			  AND constraint_relation.contype = 'f'
+			  AND extension_column.attname = 'work_item_id') <> 1 THEN
+			RAISE EXCEPTION '%.work_item_id must have exactly one foreign key constraint', extension_table;
+		END IF;
+
         IF NOT EXISTS (
             SELECT 1
             FROM pg_index i
@@ -146,15 +161,9 @@ BEGIN
 	  AND policy.polname = 'tenant_isolation_changes';
 
 	IF policy_using IS NULL OR policy_check IS NULL
-	   OR position('work_item.tenant_id' IN policy_using) = 0
-	   OR position('work_item.deleted_at IS NULL' IN policy_using) = 0
-	   OR position('app.current_tenant' IN policy_using) = 0
-	   OR position('app.current_tenant_id' IN policy_using) > 0
-	   OR position('work_item.tenant_id' IN policy_check) = 0
-	   OR position('work_item.deleted_at IS NULL' IN policy_check) = 0
-	   OR position('app.current_tenant' IN policy_check) = 0
-	   OR position('app.current_tenant_id' IN policy_check) > 0 THEN
-		RAISE EXCEPTION 'changes.tenant_isolation_changes must use authoritative WorkItem tenant and soft-delete scope';
+	   OR regexp_replace(btrim(policy_using), '\s+', ' ', 'g') <> canonical_policy_expression
+	   OR regexp_replace(btrim(policy_check), '\s+', ' ', 'g') <> canonical_policy_expression THEN
+		RAISE EXCEPTION 'changes.tenant_isolation_changes must use authoritative WorkItem tenant and soft-delete scope exactly';
 	END IF;
 
 	IF (SELECT COUNT(*)
