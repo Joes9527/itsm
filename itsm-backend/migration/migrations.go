@@ -614,20 +614,31 @@ ALTER TABLE change_rollback_executions ADD COLUMN IF NOT EXISTS tenant_id BIGINT
 ALTER TABLE change_implementation_plans ADD COLUMN IF NOT EXISTS tenant_id BIGINT;
 
 UPDATE change_approvals ca
-SET tenant_id = c.tenant_id
+SET tenant_id = wi.tenant_id
 FROM changes c
+JOIN tickets wi ON wi.id = c.work_item_id
 WHERE ca.change_id = c.id AND (ca.tenant_id IS NULL OR ca.tenant_id = 0);
 
-UPDATE change_approval_chains t SET tenant_id = c.tenant_id
-FROM changes c WHERE t.change_id = c.id AND (t.tenant_id IS NULL OR t.tenant_id = 0);
-UPDATE change_risk_assessments t SET tenant_id = c.tenant_id
-FROM changes c WHERE t.change_id = c.id AND (t.tenant_id IS NULL OR t.tenant_id = 0);
-UPDATE change_rollback_plans t SET tenant_id = c.tenant_id
-FROM changes c WHERE t.change_id = c.id AND (t.tenant_id IS NULL OR t.tenant_id = 0);
-UPDATE change_rollback_executions t SET tenant_id = c.tenant_id
-FROM changes c WHERE t.change_id = c.id AND (t.tenant_id IS NULL OR t.tenant_id = 0);
-UPDATE change_implementation_plans t SET tenant_id = c.tenant_id
-FROM changes c WHERE t.change_id = c.id AND (t.tenant_id IS NULL OR t.tenant_id = 0);
+UPDATE change_approval_chains t SET tenant_id = wi.tenant_id
+FROM changes c
+JOIN tickets wi ON wi.id = c.work_item_id
+WHERE t.change_id = c.id AND (t.tenant_id IS NULL OR t.tenant_id = 0);
+UPDATE change_risk_assessments t SET tenant_id = wi.tenant_id
+FROM changes c
+JOIN tickets wi ON wi.id = c.work_item_id
+WHERE t.change_id = c.id AND (t.tenant_id IS NULL OR t.tenant_id = 0);
+UPDATE change_rollback_plans t SET tenant_id = wi.tenant_id
+FROM changes c
+JOIN tickets wi ON wi.id = c.work_item_id
+WHERE t.change_id = c.id AND (t.tenant_id IS NULL OR t.tenant_id = 0);
+UPDATE change_rollback_executions t SET tenant_id = wi.tenant_id
+FROM changes c
+JOIN tickets wi ON wi.id = c.work_item_id
+WHERE t.change_id = c.id AND (t.tenant_id IS NULL OR t.tenant_id = 0);
+UPDATE change_implementation_plans t SET tenant_id = wi.tenant_id
+FROM changes c
+JOIN tickets wi ON wi.id = c.work_item_id
+WHERE t.change_id = c.id AND (t.tenant_id IS NULL OR t.tenant_id = 0);
 
 DO $$
 BEGIN

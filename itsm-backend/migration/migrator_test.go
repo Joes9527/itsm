@@ -144,6 +144,18 @@ func TestChangeExecutionTablesAreVersioned(t *testing.T) {
 	}
 }
 
+func TestChangeExecutionTenantBackfillUsesWorkItemAuthority(t *testing.T) {
+	sql := GetMigrationSQL("007_add_change_execution_tables")
+	require.NotEmpty(t, sql)
+
+	// Change is a professional extension and no longer owns tenant_id. Every
+	// execution child keeps its direct tenant_id, sourced through Change's
+	// authoritative WorkItem relation during migration.
+	assert.NotContains(t, sql, "c.tenant_id")
+	assert.Equal(t, 6, strings.Count(sql, "SET tenant_id = wi.tenant_id"))
+	assert.Equal(t, 6, strings.Count(sql, "JOIN tickets wi ON wi.id = c.work_item_id"))
+}
+
 func TestPostSchemaMigrationsStartsAtUnifiedVersion(t *testing.T) {
 	migrations := PostSchemaMigrations()
 	assert.NotEmpty(t, migrations)
