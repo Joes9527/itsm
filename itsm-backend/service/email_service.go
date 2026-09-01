@@ -3,10 +3,12 @@ package service
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"html/template"
+	"net"
 	"net/mail"
 	"net/smtp"
 	"strings"
@@ -35,7 +37,7 @@ type GraphMailSender interface {
 // GraphProvider resolves the configured Graph sender for one tenant only.
 type GraphProvider func(tenantID int) (GraphMailSender, string, bool)
 
-type smtpSendFunc func(addr string, auth smtp.Auth, from string, to []string, msg []byte) error
+type smtpSendFunc func(context.Context, string, smtp.Auth, string, []string, []byte) error
 
 const (
 	emailErrorClassGraphSend    = "graph_send_failed"
@@ -86,7 +88,7 @@ func NewEmailService(config EmailConfig, logger *zap.SugaredLogger) *EmailServic
 		config:   config,
 		logger:   logger,
 		recent:   make(map[string][]time.Time),
-		smtpSend: smtp.SendMail,
+		smtpSend: sendSMTPWithContext,
 	}
 }
 
@@ -229,7 +231,7 @@ func (s *EmailService) sendViaSMTP(ctx context.Context, msg *EmailMessage) error
 
 	var err error
 	for attempt := 0; attempt < 3; attempt++ {
-		err = s.smtpSend(addr, auth, s.config.From, append(append([]string{}, msg.To...), msg.CC...), []byte(emailBody.String()))
+		err = s.smtpSend(ctx, addr, auth, s.config.From, append(append([]string{}, msg.To...), msg.CC...), []byte(emailBody.String()))
 		if err == nil {
 			break
 		}
@@ -249,6 +251,58 @@ func (s *EmailService) sendViaSMTP(ctx context.Context, msg *EmailMessage) error
 
 	s.logger.Infow("email delivered via SMTP")
 	return nil
+}
+
+func sendSMTPWithContext(ctx context.Context, addr string, auth smtp.Auth, from string, recipients []string, msg []byte) error {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return err
+	}
+	connection, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return err
+	}
+	defer connection.Close()
+	if deadline, ok := ctx.Deadline(); ok {
+		if err := connection.SetDeadline(deadline); err != nil {
+			return err
+		}
+	}
+	client, err := smtp.NewClient(connection, host)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	if ok, _ := client.Extension("STARTTLS"); ok {
+		if err := client.StartTLS(&tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}); err != nil {
+			return err
+		}
+	}
+	if auth != nil {
+		if err := client.Auth(auth); err != nil {
+			return err
+		}
+	}
+	if err := client.Mail(from); err != nil {
+		return err
+	}
+	for _, recipient := range recipients {
+		if err := client.Rcpt(recipient); err != nil {
+			return err
+		}
+	}
+	writer, err := client.Data()
+	if err != nil {
+		return err
+	}
+	if _, err := writer.Write(msg); err != nil {
+		_ = writer.Close()
+		return err
+	}
+	if err := writer.Close(); err != nil {
+		return err
+	}
+	return client.Quit()
 }
 
 func (s *EmailService) smtpConfigured() bool {

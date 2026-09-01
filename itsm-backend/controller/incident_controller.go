@@ -636,7 +636,14 @@ func (c *IncidentController) CreateIncidentAlert(ctx *gin.Context) {
 	if !ok {
 		return
 	}
-	response, err := c.alertingService.CreateIncidentAlert(ctx.Request.Context(), &req, tenantID)
+	userID, err := middleware.GetUserID(ctx)
+	if err != nil {
+		c.logger.Errorw("Failed to get incident alert actor", "error", err)
+		common.Fail(ctx, common.AuthFailedCode, "获取用户ID失败")
+		return
+	}
+	deliveryCtx := service.WithIncidentAlertActor(ctx.Request.Context(), userID, "user", ctx.GetString("request_id"))
+	response, err := c.alertingService.CreateIncidentAlert(deliveryCtx, &req, tenantID)
 	if err != nil {
 		c.logger.Errorw("Failed to create incident alert", "error", err)
 		common.Fail(ctx, common.InternalErrorCode, "创建事件告警失败")

@@ -328,8 +328,8 @@ func TestKafOutboxDispatcher_RetriesServerErrorsWithoutClientErrorAudit(t *testi
 }
 
 func TestKafOutboxRetryDelayCapsAtFiveMinutes(t *testing.T) {
-	assert.Equal(t, 2*time.Second, kafOutboxRetryDelay(1))
-	assert.Equal(t, 5*time.Minute, kafOutboxRetryDelay(9))
+	assert.Equal(t, 2*time.Second, outboxRetryDelay(1))
+	assert.Equal(t, 5*time.Minute, outboxRetryDelay(9))
 }
 
 func TestKafOutboxDispatcher_ClaimsOnlyKafDelegationEvents(t *testing.T) {

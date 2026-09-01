@@ -76,15 +76,16 @@ type ticketNotificationWorker interface {
 }
 
 type Application struct {
-	Cfg                 *config.Config
-	Logger              *zap.SugaredLogger
-	DBClient            *ent.Client
-	Router              *gin.Engine
-	Embedder            service.Embedder
-	VectorStore         *service.VectorStore
-	callbackWorker      bpmnCallbackWorker
-	notificationWorker  ticketNotificationWorker
-	KAFOutboxDispatcher kafOutboxRunner
+	Cfg                  *config.Config
+	Logger               *zap.SugaredLogger
+	DBClient             *ent.Client
+	Router               *gin.Engine
+	Embedder             service.Embedder
+	VectorStore          *service.VectorStore
+	callbackWorker       bpmnCallbackWorker
+	notificationWorker   ticketNotificationWorker
+	outboxDeliveryWorker kafOutboxRunner
+	KAFOutboxDispatcher  kafOutboxRunner
 }
 
 // prepareTicketCCIndexMigration removes the pre-partial-index definition.
@@ -337,6 +338,20 @@ func NewApplication() *Application {
 	// 延迟绑定 Graph 发信：发信时只查询当前租户的 msgraph 连接器。
 	emailService.SetGraphProvider(newTenantGraphProvider(connectorManager))
 	ticketNotificationService.SetEmailService(emailService)
+	outboxDeliveryWorker, err := service.NewOutboxDeliveryWorker(
+		service.NewOutboxEventRepository(client),
+		service.OutboxDeliveryWorkerConfig{
+			BatchSize:      cfg.OutboxDelivery.BatchSize,
+			PollInterval:   cfg.OutboxDelivery.PollInterval,
+			HandlerTimeout: cfg.OutboxDelivery.HandlerTimeout,
+			MaxAttempts:    cfg.OutboxDelivery.MaxAttempts,
+		},
+		sugar,
+		service.NewIncidentAlertDeliveryHandler(emailService),
+	)
+	if err != nil {
+		log.Fatalf("Invalid outbox delivery worker configuration: %v", err)
+	}
 	ticketSLAService := service.NewTicketSLAService(client, sugar)
 	ticketAutomationRuleService := service.NewTicketAutomationRuleService(client, sugar)
 
@@ -923,15 +938,16 @@ func NewApplication() *Application {
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	return &Application{
-		Cfg:                 cfg,
-		Logger:              sugar,
-		DBClient:            client,
-		Router:              r,
-		Embedder:            embedder,
-		VectorStore:         vectorStore,
-		callbackWorker:      concreteProcessEngine,
-		notificationWorker:  ticketNotificationService,
-		KAFOutboxDispatcher: kafOutboxDispatcher,
+		Cfg:                  cfg,
+		Logger:               sugar,
+		DBClient:             client,
+		Router:               r,
+		Embedder:             embedder,
+		VectorStore:          vectorStore,
+		callbackWorker:       concreteProcessEngine,
+		notificationWorker:   ticketNotificationService,
+		outboxDeliveryWorker: outboxDeliveryWorker,
+		KAFOutboxDispatcher:  kafOutboxDispatcher,
 	}
 }
 
@@ -1132,6 +1148,8 @@ func (app *Application) Run() {
 	defer stop()
 	waitForKAFOutbox := app.startKafOutboxDispatcher(ctx)
 	defer waitForKAFOutbox()
+	waitForOutboxDelivery := app.startOutboxDeliveryWorker(ctx)
+	defer waitForOutboxDelivery()
 
 	backgroundCtx, cancelBackground := context.WithCancel(context.Background())
 	defer cancelBackground()
@@ -1158,6 +1176,20 @@ func (app *Application) startKafOutboxDispatcher(ctx context.Context) func() {
 	go func() {
 		defer waitGroup.Done()
 		app.KAFOutboxDispatcher.Run(ctx)
+	}()
+	return waitGroup.Wait
+}
+
+func (app *Application) startOutboxDeliveryWorker(ctx context.Context) func() {
+	if app.outboxDeliveryWorker == nil {
+		return func() {}
+	}
+
+	var waitGroup sync.WaitGroup
+	waitGroup.Add(1)
+	go func() {
+		defer waitGroup.Done()
+		app.outboxDeliveryWorker.Run(ctx)
 	}()
 	return waitGroup.Wait
 }

@@ -125,7 +125,7 @@ func (d *KafOutboxDispatcher) dispatchEvent(ctx context.Context, event *ent.Outb
 }
 
 func (d *KafOutboxDispatcher) scheduleRetry(ctx context.Context, event *ent.OutboxEvent, deliveryError string) error {
-	nextAttemptAt := d.now().UTC().Add(kafOutboxRetryDelay(event.AttemptCount + 1))
+	nextAttemptAt := d.now().UTC().Add(outboxRetryDelay(event.AttemptCount + 1))
 	if err := d.repository.MarkRetry(ctx, event.ID, event.ClaimToken, deliveryError, nextAttemptAt); err != nil {
 		return fmt.Errorf("schedule KAF webhook retry: %w", err)
 	}
@@ -133,7 +133,7 @@ func (d *KafOutboxDispatcher) scheduleRetry(ctx context.Context, event *ent.Outb
 }
 
 func (d *KafOutboxDispatcher) scheduleClientErrorRetry(ctx context.Context, event *ent.OutboxEvent, deliveryError string, statusCode int) error {
-	nextAttemptAt := d.now().UTC().Add(kafOutboxRetryDelay(event.AttemptCount + 1))
+	nextAttemptAt := d.now().UTC().Add(outboxRetryDelay(event.AttemptCount + 1))
 	if err := d.repository.MarkRetryWithAudit(ctx, event.ID, event.ClaimToken, deliveryError, nextAttemptAt, OutboxRetryAudit{
 		TenantID:   event.TenantID,
 		RequestID:  event.EventID,
@@ -146,22 +146,6 @@ func (d *KafOutboxDispatcher) scheduleClientErrorRetry(ctx context.Context, even
 		return fmt.Errorf("schedule KAF webhook client-error retry: %w", err)
 	}
 	return nil
-}
-
-func kafOutboxRetryDelay(attemptCount int) time.Duration {
-	const maxDelay = 5 * time.Minute
-
-	delay := time.Second
-	for attempt := 0; attempt < attemptCount && delay < maxDelay; attempt++ {
-		if delay > maxDelay/2 {
-			return maxDelay
-		}
-		delay *= 2
-	}
-	if delay > maxDelay {
-		return maxDelay
-	}
-	return delay
 }
 
 func signKafOutboxPayload(payload []byte, secret string) string {

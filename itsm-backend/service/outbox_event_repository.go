@@ -19,6 +19,8 @@ const (
 	outboxEventStatusPending    = "pending"
 	outboxEventStatusPublishing = "publishing"
 	outboxEventStatusPublished  = "published"
+	outboxEventStatusBlocked    = "blocked"
+	outboxEventStatusDeadLetter = "dead_letter"
 
 	outboxEventClaimLeaseDuration = 5 * time.Minute
 	outboxEventLastErrorMaxLength = 512
@@ -309,6 +311,42 @@ func (r *OutboxEventRepository) MarkPublished(ctx context.Context, eventID int, 
 		Save(ctx)
 	if err != nil {
 		return fmt.Errorf("mark outbox event published: %w", err)
+	}
+	if updated == 0 {
+		return ErrOutboxEventClaimLost
+	}
+	return nil
+}
+
+// MarkBlocked records a non-retryable configuration or payload failure while
+// retaining the delivery for operator inspection.
+func (r *OutboxEventRepository) MarkBlocked(ctx context.Context, eventID int, claimToken, lastError string) error {
+	return r.markTerminal(ctx, eventID, claimToken, outboxEventStatusBlocked, lastError)
+}
+
+// MarkDeadLetter records a transient delivery that exhausted its configured
+// retry budget. It remains observable and can be replayed by an explicit
+// operator action in the unified outbox boundary.
+func (r *OutboxEventRepository) MarkDeadLetter(ctx context.Context, eventID int, claimToken, lastError string) error {
+	return r.markTerminal(ctx, eventID, claimToken, outboxEventStatusDeadLetter, lastError)
+}
+
+func (r *OutboxEventRepository) markTerminal(ctx context.Context, eventID int, claimToken, status, lastError string) error {
+	updated, err := r.client.OutboxEvent.Update().
+		Where(
+			outboxevent.IDEQ(eventID),
+			outboxevent.StatusEQ(outboxEventStatusPublishing),
+			outboxevent.ClaimTokenEQ(claimToken),
+			outboxevent.ClaimExpiresAtGT(r.currentTime()),
+		).
+		SetStatus(status).
+		AddAttemptCount(1).
+		SetLastError(summarizeOutboxError(lastError)).
+		ClearClaimToken().
+		ClearClaimExpiresAt().
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("mark outbox event %s: %w", status, err)
 	}
 	if updated == 0 {
 		return ErrOutboxEventClaimLost
