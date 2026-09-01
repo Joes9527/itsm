@@ -1,9 +1,14 @@
 package service
 
 import (
+	"bufio"
 	"context"
 	"errors"
+	"fmt"
+	"net"
 	"net/smtp"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -541,7 +546,7 @@ func TestEmailServiceUsesOnlyRequestedTenantGraphProvider(t *testing.T) {
 }
 
 func TestEmailServiceFallsBackToSMTPAfterGraphRuntimeFailure(t *testing.T) {
-	graph := &mockGraphMailSender{err: errors.New("sensitive graph transport failure")}
+	graph := &mockGraphMailSender{err: newEmailTransportError("graph", "token", emailNotAccepted, errors.New("sensitive graph transport failure"))}
 	svc := NewEmailService(EmailConfig{
 		Host: "smtp.example.test", Port: 587, Username: "mailer", From: "mailer@example.test",
 	}, zaptest.NewLogger(t).Sugar())
@@ -657,4 +662,112 @@ func TestEmailServiceSMTPTransportHonorsContextDeadline(t *testing.T) {
 
 	require.EqualError(t, err, "email_delivery_failed: smtp_send_failed")
 	require.Less(t, time.Since(started), time.Second)
+}
+
+func TestEmailServiceDurableSMTPPreAcceptanceFailureIsRetryableAndSingleAttempt(t *testing.T) {
+	svc := NewEmailService(EmailConfig{Host: "smtp.example.test", Port: 587, Username: "mailer", From: "mailer@example.test"}, zaptest.NewLogger(t).Sugar())
+	calls := 0
+	svc.smtpSend = func(context.Context, string, smtp.Auth, string, []string, []byte) error {
+		calls++
+		return newEmailTransportError("smtp", "dial", emailNotAccepted, errors.New("dial failed"))
+	}
+	err := svc.SendForTenant(context.Background(), 42, &EmailMessage{
+		To: []string{"recipient@example.test"}, Subject: "durable", BodyText: "body",
+		DeliveryID: "evt-pre", DisableProviderFallback: true,
+	})
+	require.Error(t, err)
+	assert.Equal(t, emailNotAccepted, emailTransportOutcomeOf(err))
+	assert.Equal(t, 1, calls, "durable retry belongs to the outbox worker")
+}
+
+func TestEmailServiceDurableSMTPDataAcceptanceUnknownIsAmbiguousAndSingleAttempt(t *testing.T) {
+	svc := NewEmailService(EmailConfig{Host: "smtp.example.test", Port: 587, Username: "mailer", From: "mailer@example.test"}, zaptest.NewLogger(t).Sugar())
+	calls := 0
+	svc.smtpSend = func(context.Context, string, smtp.Auth, string, []string, []byte) error {
+		calls++
+		return newEmailTransportError("smtp", "data_close", emailAcceptanceUnknown, errors.New("response lost"))
+	}
+	err := svc.SendForTenant(context.Background(), 42, &EmailMessage{
+		To: []string{"recipient@example.test"}, Subject: "durable", BodyText: "body",
+		DeliveryID: "evt-unknown", DisableProviderFallback: true,
+	})
+	require.Error(t, err)
+	assert.Equal(t, emailAcceptanceUnknown, emailTransportOutcomeOf(err))
+	assert.Equal(t, 1, calls)
+}
+
+func TestEmailServiceDurableGraphPreAcceptanceFailureRemainsRetryable(t *testing.T) {
+	graph := &mockGraphMailSender{err: newEmailTransportError("graph", "token", emailNotAccepted, errors.New("token unavailable"))}
+	svc := NewEmailService(EmailConfig{}, zaptest.NewLogger(t).Sugar())
+	svc.SetGraphProvider(func(int) (GraphMailSender, string, bool) { return graph, "graph@example.test", true })
+	err := svc.SendForTenant(context.Background(), 42, &EmailMessage{
+		To: []string{"recipient@example.test"}, Subject: "durable", BodyText: "body",
+		DeliveryID: "evt-graph-pre", DisableProviderFallback: true,
+	})
+	require.Error(t, err)
+	assert.Equal(t, emailNotAccepted, emailTransportOutcomeOf(err))
+}
+
+func TestEmailServiceRealSMTPExplicitDATARejectionIsNotAccepted(t *testing.T) {
+	config := startOutcomeSMTPServer(t, "451 temporary rejection", false)
+	svc := NewEmailService(config, zaptest.NewLogger(t).Sugar())
+	err := svc.SendForTenant(context.Background(), 42, &EmailMessage{
+		To: []string{"recipient@example.test"}, Subject: "durable", BodyText: "body",
+		DeliveryID: "evt-rejected", DisableProviderFallback: true,
+	})
+	require.Error(t, err)
+	assert.Equal(t, emailNotAccepted, emailTransportOutcomeOf(err))
+}
+
+func TestEmailServiceRealSMTPLostDATAResponseIsAcceptanceUnknown(t *testing.T) {
+	config := startOutcomeSMTPServer(t, "", true)
+	svc := NewEmailService(config, zaptest.NewLogger(t).Sugar())
+	err := svc.SendForTenant(context.Background(), 42, &EmailMessage{
+		To: []string{"recipient@example.test"}, Subject: "durable", BodyText: "body",
+		DeliveryID: "evt-unknown", DisableProviderFallback: true,
+	})
+	require.Error(t, err)
+	assert.Equal(t, emailAcceptanceUnknown, emailTransportOutcomeOf(err))
+}
+
+func startOutcomeSMTPServer(t *testing.T, dataResponse string, closeAfterData bool) EmailConfig {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = listener.Close() })
+	go func() {
+		conn, acceptErr := listener.Accept()
+		if acceptErr != nil {
+			return
+		}
+		defer conn.Close()
+		reader := bufio.NewReader(conn)
+		write := func(response string) { _, _ = fmt.Fprintf(conn, "%s\r\n", response) }
+		read := func() string { line, _ := reader.ReadString('\n'); return strings.TrimSpace(line) }
+		write("220 test smtp")
+		_ = read()
+		_, _ = fmt.Fprint(conn, "250-test smtp\r\n250 AUTH PLAIN\r\n")
+		_ = read()
+		write("235 authenticated")
+		_ = read()
+		write("250 sender ok")
+		_ = read()
+		write("250 recipient ok")
+		_ = read()
+		write("354 end with dot")
+		for {
+			if read() == "." {
+				break
+			}
+		}
+		if closeAfterData {
+			return
+		}
+		write(dataResponse)
+	}()
+	host, portText, err := net.SplitHostPort(listener.Addr().String())
+	require.NoError(t, err)
+	port, err := strconv.Atoi(portText)
+	require.NoError(t, err)
+	return EmailConfig{Host: host, Port: port, Username: "mailer", Password: "secret", From: "mailer@example.test"}
 }

@@ -115,7 +115,13 @@ func (w *OutboxDeliveryWorker) dispatch(ctx context.Context, handler OutboxDeliv
 
 	var blocked *outboxDeliveryBlockedError
 	if errors.As(err, &blocked) {
-		if markErr := w.repository.MarkBlocked(ctx, event.ID, event.ClaimToken, blocked.Error()); markErr != nil {
+		var markErr error
+		if strings.HasPrefix(blocked.Error(), "delivery_unknown:") {
+			markErr = w.repository.MarkDeliveryUnknown(ctx, event, event.ClaimToken, blocked.Error())
+		} else {
+			markErr = w.repository.MarkBlocked(ctx, event.ID, event.ClaimToken, blocked.Error())
+		}
+		if markErr != nil {
 			return fmt.Errorf("block outbox delivery %s: %w", event.EventID, markErr)
 		}
 		w.logger.Warnw("outbox delivery blocked", "event_id", event.EventID, "event_type", event.EventType)

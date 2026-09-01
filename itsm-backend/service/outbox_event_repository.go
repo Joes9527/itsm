@@ -24,8 +24,9 @@ const (
 
 	outboxEventClaimLeaseDuration = 5 * time.Minute
 	outboxEventLastErrorMaxLength = 512
-	outboxEventClaimRetryAttempts = 10
+	outboxEventClaimRetryAttempts = 50
 	outboxEventClaimRetryDelay    = 10 * time.Millisecond
+	outboxEventClaimRetryMaxDelay = 100 * time.Millisecond
 	outboxDeliveryAttemptPrefix   = "delivery_attempt_started:"
 	outboxDeliveryUnknownError    = "delivery_unknown: external side effect may have completed; manual reconciliation required"
 )
@@ -123,7 +124,11 @@ func (r *OutboxEventRepository) ClaimDueByEventType(ctx context.Context, now tim
 			return claimed, err
 		}
 
-		timer := time.NewTimer(time.Duration(attempt+1) * outboxEventClaimRetryDelay)
+		delay := time.Duration(attempt+1) * outboxEventClaimRetryDelay
+		if delay > outboxEventClaimRetryMaxDelay {
+			delay = outboxEventClaimRetryMaxDelay
+		}
+		timer := time.NewTimer(delay)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
@@ -415,6 +420,39 @@ func (r *OutboxEventRepository) MarkPublished(ctx context.Context, eventID int, 
 // retaining the delivery for operator inspection.
 func (r *OutboxEventRepository) MarkBlocked(ctx context.Context, eventID int, claimToken, lastError string) error {
 	return r.markTerminal(ctx, eventID, claimToken, outboxEventStatusBlocked, lastError)
+}
+
+// MarkDeliveryUnknown atomically records the ambiguous terminal state and the
+// audit evidence required for manual reconciliation.
+func (r *OutboxEventRepository) MarkDeliveryUnknown(ctx context.Context, event *ent.OutboxEvent, claimToken, lastError string) error {
+	if event == nil {
+		return fmt.Errorf("outbox event is required")
+	}
+	tx, err := r.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("start delivery unknown transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	updated, err := tx.OutboxEvent.Update().Where(
+		outboxevent.IDEQ(event.ID), outboxevent.StatusEQ(outboxEventStatusPublishing),
+		outboxevent.ClaimTokenEQ(claimToken), outboxevent.ClaimExpiresAtGT(r.currentTime()),
+	).SetStatus(outboxEventStatusBlocked).AddAttemptCount(1).SetLastError(summarizeOutboxError(lastError)).
+		ClearClaimToken().ClearClaimExpiresAt().Save(ctx)
+	if err != nil {
+		return fmt.Errorf("mark delivery unknown: %w", err)
+	}
+	if updated == 0 {
+		return ErrOutboxEventClaimLost
+	}
+	if err := tx.AuditLog.Create().SetTenantID(event.TenantID).SetRequestID(event.EventID).
+		SetResource("outbox_event").SetAction("outbox.delivery_unknown").SetPath("outbox/events").
+		SetMethod("WORKER").SetStatusCode(409).Exec(ctx); err != nil {
+		return fmt.Errorf("audit delivery unknown: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit delivery unknown transaction: %w", err)
+	}
+	return nil
 }
 
 // MarkDeadLetter records a transient delivery that exhausted its configured
