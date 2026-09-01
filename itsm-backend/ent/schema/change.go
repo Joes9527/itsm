@@ -36,8 +36,7 @@ func (Change) Fields() []ent.Field {
 			Comment("创建人ID").
 			Positive(),
 		field.Int("work_item_id").
-			Comment("关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入").
-			Unique(),
+			Comment("关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入"),
 		field.Int("tenant_id").
 			Comment("租户ID").
 			Positive(),
@@ -94,6 +93,6 @@ func (Change) Edges() []ent.Edge {
 // Indexes of the Change.
 func (Change) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("work_item_id"),
+		index.Fields("work_item_id").Unique(),
 	}
 }

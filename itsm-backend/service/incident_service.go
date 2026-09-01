@@ -162,10 +162,8 @@ func (s *IncidentService) CreateIncident(ctx context.Context, req *dto.CreateInc
 	// 统一 WorkItem 领域模型宪章 §3.2：WorkItem 创建与专业扩展记录创建必须在同一事务中完成。
 	// 这里先建 tickets 行（record_class="incident"，创建后不可变），公共字段（标题/描述/
 	// 优先级/请求人/租户）以这行为权威来源；Incident 行只保存事件专属数据 + 反向指向这行的
-	// work_item_id。WorkItem 的 status/priority 只在创建这一刻从请求参数写入一次，后续
-	// Incident 状态机的流转（assign/acknowledge/resolve/close/escalate……）不会反写
-	// tickets.status——持续双向同步要么是禁止的双写反模式，要么需要同时改遍所有状态转换
-	// 方法，超出本次事务边界修复的范围，留作独立后续项。
+	// work_item_id。WorkItem 的 status/priority 是共享字段的唯一存储位置，后续 Incident
+	// 状态机通过 transitionIncident 更新 WorkItem；Incident 扩展不再保存第二份状态。
 	workItem, err := tx.Ticket.Create().
 		SetTitle(req.Title).
 		SetDescription(req.Description).
