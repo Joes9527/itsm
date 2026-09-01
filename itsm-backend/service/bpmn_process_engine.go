@@ -245,40 +245,64 @@ func (e *CustomProcessEngine) CallbackRegistry() *bpmn.CallbackRegistry {
 }
 
 func resolveProcessInitiator(ctx context.Context, variables map[string]interface{}) string {
+	if _, present := bpmnAccessScopeValue(ctx); present {
+		if scope, err := BPMNAccessScopeFromContext(ctx); err == nil {
+			return strconv.Itoa(scope.UserID)
+		}
+		return "system"
+	}
 	if userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int); userID > 0 {
 		return strconv.Itoa(userID)
 	}
-	for _, key := range []string{"requester_id", "requesterId"} {
-		if requesterID := bpmn.GetIntFromVars(variables, key); requesterID > 0 {
-			return strconv.Itoa(requesterID)
-		}
+	triggeredBy := strings.TrimSpace(bpmn.GetStringFromVars(variables, "triggered_by"))
+	if triggeredBy == "system" {
+		return "system"
+	}
+	if actorID, err := strconv.Atoi(triggeredBy); err == nil && actorID > 0 {
+		return strconv.Itoa(actorID)
 	}
 	return "system"
+}
+
+// trustedBPMNProcessStartActorID extracts the authoritative actor from the
+// request context. Callers that cross an asynchronous boundary snapshot this
+// identity before detaching from the request context.
+func trustedBPMNProcessStartActorID(ctx context.Context, tenantID int) (int, bool, error) {
+	if _, present := bpmnAccessScopeValue(ctx); present {
+		scope, err := BPMNAccessScopeFromContext(ctx)
+		if err != nil || scope.TenantID != tenantID {
+			return 0, false, common.NewForbiddenError("流程启动用户租户不一致")
+		}
+		return scope.UserID, true, nil
+	}
+	if userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int); userID > 0 {
+		return userID, true, nil
+	}
+	return 0, false, nil
 }
 
 // resolveBPMNProcessStartActor resolves the durable audit actor from trusted
 // workflow context. Process-start request variables are not an HTTP identity
 // source: triggered_by is consumed only for trusted application-service starts.
 func resolveBPMNProcessStartActor(ctx context.Context, client *ent.Client, tenantID int, variables map[string]interface{}) (*ent.User, string, error) {
-	actorID := 0
-	if _, present := bpmnAccessScopeValue(ctx); present {
-		scope, err := BPMNAccessScopeFromContext(ctx)
-		if err != nil || scope.TenantID != tenantID {
-			return nil, "", common.NewForbiddenError("流程启动用户租户不一致")
+	actorID, hasTrustedActor, err := trustedBPMNProcessStartActorID(ctx, tenantID)
+	if err != nil {
+		return nil, "", err
+	}
+	if !hasTrustedActor {
+		triggeredBy := strings.TrimSpace(bpmn.GetStringFromVars(variables, "triggered_by"))
+		if triggeredBy == "system" {
+			return nil, "system", nil
 		}
-		actorID = scope.UserID
-	} else if userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int); userID > 0 {
-		actorID = userID
-	} else if triggeredBy := strings.TrimSpace(bpmn.GetStringFromVars(variables, "triggered_by")); triggeredBy == "system" {
-		return nil, "system", nil
-	} else if triggeredBy != "" {
-		parsed, err := strconv.Atoi(triggeredBy)
-		if err != nil || parsed <= 0 {
-			return nil, "", fmt.Errorf("流程启动用户无效")
+		if triggeredBy != "" {
+			parsed, err := strconv.Atoi(triggeredBy)
+			if err != nil || parsed <= 0 {
+				return nil, "", fmt.Errorf("流程启动用户无效")
+			}
+			actorID = parsed
+		} else {
+			return nil, "", fmt.Errorf("流程启动缺少权威操作用户")
 		}
-		actorID = parsed
-	} else {
-		return nil, "", fmt.Errorf("流程启动缺少权威操作用户")
 	}
 
 	actor, err := client.User.Query().Where(

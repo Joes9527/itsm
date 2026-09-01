@@ -14,6 +14,7 @@ import (
 	"itsm-backend/middleware"
 	"itsm-backend/repository/ticket"
 	"itsm-backend/service"
+	"itsm-backend/service/bpmn"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -111,7 +112,8 @@ func (tc *TicketController) CreateTicket(c *gin.Context) {
 	// 设置请求者ID为当前用户
 	req.RequesterID = userID
 
-	ticket, err := tc.ticketService.CreateTicket(c.Request.Context(), &req, tenantID)
+	workflowCtx := context.WithValue(c.Request.Context(), bpmn.BPMNUserIDContextKey, userID)
+	ticket, err := tc.ticketService.CreateTicket(workflowCtx, &req, tenantID)
 	if err != nil {
 		tc.logger.Errorw("Failed to create ticket", "error", err, "tenant_id", tenantID)
 		common.Fail(c, common.InternalErrorCode, err.Error())
@@ -1006,7 +1008,8 @@ func (tc *TicketController) CreateSubtask(c *gin.Context) {
 		FormFields:     req.FormFields,
 	}
 
-	ticket, err := tc.ticketService.CreateTicket(c.Request.Context(), &fullReq, tenantID)
+	workflowCtx := context.WithValue(c.Request.Context(), bpmn.BPMNUserIDContextKey, userID)
+	ticket, err := tc.ticketService.CreateTicket(workflowCtx, &fullReq, tenantID)
 	if err != nil {
 		tc.logger.Errorw("Failed to create subtask", "error", err, "parent_id", parentID, "tenant_id", tenantID)
 		common.Fail(c, common.InternalErrorCode, err.Error())

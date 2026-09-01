@@ -28,6 +28,7 @@ import (
 	"itsm-backend/ent/user"
 	"itsm-backend/repository/base"
 	"itsm-backend/repository/ticket"
+	"itsm-backend/service/bpmn"
 
 	"go.uber.org/zap"
 )
@@ -262,13 +263,21 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 	// 这是 V1 缺失的 Phase 1 #1 缺陷修复：V2 必须让工单进入 BPMN 引擎
 	// 使用独立 ctx，否则控制器响应后 workflow 触发立即被取消。
 	if s.processTriggerSvc != nil {
-		go func() {
-			ctx2, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			if err := s.triggerWorkflowForTicket(ctx2, tkt, tenantID, workflowDefinitionKey, req.ApprovalChain); err != nil {
-				s.logger.Warnw("Workflow trigger failed", "error", err, "ticket_id", tkt.ID)
-			}
-		}()
+		workflowActorID, hasWorkflowActor, err := trustedBPMNProcessStartActorID(ctx, tenantID)
+		if err != nil {
+			s.logger.Warnw("Workflow trigger skipped: invalid actor context", "error", err, "ticket_id", tkt.ID)
+		} else {
+			go func(actorID int, hasActor bool) {
+				ctx2, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				if hasActor {
+					ctx2 = context.WithValue(ctx2, bpmn.BPMNUserIDContextKey, actorID)
+				}
+				if err := s.triggerWorkflowForTicket(ctx2, tkt, tenantID, workflowDefinitionKey, req.ApprovalChain); err != nil {
+					s.logger.Warnw("Workflow trigger failed", "error", err, "ticket_id", tkt.ID)
+				}
+			}(workflowActorID, hasWorkflowActor)
+		}
 	}
 
 	s.logger.Infow("Ticket created", "ticket_id", tkt.ID, "ticket_number", tkt.TicketNumber)
@@ -673,6 +682,15 @@ func isTicketDataScopeAllRole(role string) bool {
 // triggerWorkflowForTicket 异步触发工单关联的 BPMN 流程
 // 逻辑参考 V1 (ticket_service.go:221-279)，适配 V2 的 DDD 领域模型
 func (s *TicketService) triggerWorkflowForTicket(ctx context.Context, tkt *ticket.Ticket, tenantID int, workflowDefinitionKey string, approvalChain interface{}) error {
+	triggeredBy, hasTriggeredBy, err := trustedBPMNProcessStartActorID(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+	triggeredByValue := "system"
+	if hasTriggeredBy {
+		triggeredByValue = strconv.Itoa(triggeredBy)
+	}
+
 	// 构造流程变量
 	variables := map[string]interface{}{
 		"ticket_id":     tkt.ID,
@@ -714,7 +732,7 @@ func (s *TicketService) triggerWorkflowForTicket(ctx context.Context, tkt *ticke
 		BusinessID:           tkt.ID,
 		ProcessDefinitionKey: processKey,
 		Variables:            variables,
-		TriggeredBy:          fmt.Sprintf("%d", tkt.RequesterID),
+		TriggeredBy:          triggeredByValue,
 		TriggeredAt:          time.Now(),
 		TenantID:             tenantID,
 	}
