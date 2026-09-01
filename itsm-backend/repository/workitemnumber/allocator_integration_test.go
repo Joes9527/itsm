@@ -175,10 +175,17 @@ func openPostgreSQLAllocatorIntegrationClient(t *testing.T) *ent.Client {
 	scopedDB.SetMaxIdleConns(16)
 	require.NoError(t, scopedDB.PingContext(ctx))
 	client := ent.NewClient(ent.Driver(entsql.OpenDB(dialect.Postgres, scopedDB)))
+	// TicketsTable carries references to the complete application schema even
+	// when foreign-key creation is disabled. This focused fixture needs the
+	// generated Ticket columns and indexes, but none of its unrelated edges.
+	// Clear foreign keys on a test-local copy so Ent can install the faithful
+	// table shape without requiring every referenced domain table.
+	ticketsTable := *entmigrate.TicketsTable
+	ticketsTable.ForeignKeys = nil
 	require.NoError(t, entmigrate.Create(
 		ctx,
 		client.Schema,
-		[]*schema.Table{entmigrate.WorkItemNumberSequencesTable, entmigrate.TicketsTable},
+		[]*schema.Table{entmigrate.WorkItemNumberSequencesTable, &ticketsTable},
 		entmigrate.WithForeignKeys(false),
 	))
 	_, err = scopedDB.ExecContext(ctx, appmigration.GetMigrationSQL("020_work_item_number_allocator"))
