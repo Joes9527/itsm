@@ -122,20 +122,28 @@ func callbackOptionalDeclared(extensionElements *BPMNExtensionElements) (bool, e
 	if extensionElements == nil {
 		return false, nil
 	}
+	var (
+		declared        bool
+		declarationSeen bool
+	)
 	for _, metadata := range extensionElements.MetaData {
 		if metadata.Name != bpmnMetaDataCallbackOptional {
 			continue
 		}
+		if declarationSeen {
+			return false, fmt.Errorf("%s must be declared at most once", bpmnMetaDataCallbackOptional)
+		}
+		declarationSeen = true
 		switch strings.TrimSpace(metadata.Value) {
 		case "true":
-			return true, nil
+			declared = true
 		case "false":
-			return false, nil
+			declared = false
 		default:
 			return false, fmt.Errorf("%s must be exactly true or false", bpmnMetaDataCallbackOptional)
 		}
 	}
-	return false, nil
+	return declared, nil
 }
 
 // BPMNUserTask 用户任务

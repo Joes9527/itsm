@@ -92,6 +92,22 @@ func testCallbackOptionalDeclared(
 			}},
 			wantError: true,
 		},
+		{
+			name: "duplicate same value rejected",
+			extensionElements: &BPMNExtensionElements{MetaData: []BPMNMetaData{
+				{Name: "callback_optional", Value: "true"},
+				{Name: "callback_optional", Value: "true"},
+			}},
+			wantError: true,
+		},
+		{
+			name: "duplicate conflicting values rejected",
+			extensionElements: &BPMNExtensionElements{MetaData: []BPMNMetaData{
+				{Name: "callback_optional", Value: "true"},
+				{Name: "callback_optional", Value: "false"},
+			}},
+			wantError: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -99,6 +115,7 @@ func testCallbackOptionalDeclared(
 			got, err := newTask(tt.extensionElements).CallbackOptionalDeclared()
 			if tt.wantError {
 				require.Error(t, err)
+				require.False(t, got, "invalid or duplicate optionality must fail closed")
 				return
 			}
 			require.NoError(t, err)
