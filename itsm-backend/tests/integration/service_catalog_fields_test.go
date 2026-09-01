@@ -15,6 +15,7 @@ import (
 	"itsm-backend/handlers/cmdb"
 	"itsm-backend/handlers/service_catalog"
 	"itsm-backend/handlers/service_request"
+	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -45,7 +46,7 @@ func setupServiceCatalogFieldsRouter(t *testing.T) (*gin.Engine, *ent.Tenant, *e
 	srRepo := service_request.NewEntRepository(client)
 	cmdbRepo := cmdb.NewEntRepository(client)
 	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	srService := service_request.NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc, nil, nil)
+	srService := service_request.NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, nil)
 	srHandler := service_request.NewHandler(srService)
 
 	r := gin.New()

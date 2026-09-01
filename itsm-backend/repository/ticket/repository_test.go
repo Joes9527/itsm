@@ -9,46 +9,14 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/ent/workitemnumbersequence"
 	"itsm-backend/repository/base"
+	"itsm-backend/repository/workitemnumber"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
-
-type stubSequenceProvider struct {
-	values []int64
-	index  int
-}
-
-func (s *stubSequenceProvider) GetNextSequenceWithExpiry(_ context.Context, _ string, _ time.Time) (int64, error) {
-	if s.index >= len(s.values) {
-		return 0, fmt.Errorf("no more sequence values")
-	}
-	value := s.values[s.index]
-	s.index++
-	return value, nil
-}
-
-func TestRepository_SetSequenceService_TypedNilUsesDatabaseFallback(t *testing.T) {
-	fx := newRepoFixture(t)
-	defer fx.client.Close()
-
-	repo := fx.repo.(*EntRepository)
-	var unavailableSequenceService *stubSequenceProvider
-	repo.SetSequenceService(unavailableSequenceService)
-	require.Nil(t, repo.sequenceService)
-
-	tkt, err := repo.Create(fx.ctx, &CreateParams{
-		Title:       "Database fallback ticket",
-		Description: "Redis is unavailable",
-		Priority:    PriorityMedium,
-		Type:        TypeIncident,
-		RequesterID: fx.user.ID,
-	}, fx.tenant.ID)
-	require.NoError(t, err)
-	assert.NotEmpty(t, tkt.TicketNumber)
-}
 
 // repoFixture sets up an in-memory SQLite repo for testing.
 type repoFixture struct {
@@ -64,7 +32,7 @@ func newRepoFixture(t *testing.T) *repoFixture {
 	ctx := context.Background()
 	client := enttest.Open(t, "sqlite3", "file:repo_test?mode=memory&cache=shared&_fk=1")
 	logger := zaptest.NewLogger(t).Sugar()
-	repo := NewEntRepository(client, logger)
+	repo := NewEntRepository(client, logger, workitemnumber.NewPostgreSQLAllocator())
 
 	tenant, err := client.Tenant.Create().
 		SetName("Test Tenant").
@@ -111,7 +79,7 @@ func TestRepository_Create(t *testing.T) {
 	assert.Equal(t, StatusNew, tkt.Status)
 }
 
-func TestRepository_Create_GeneratesTicketNumber(t *testing.T) {
+func TestRepository_Create_FirstNumbersAreTenantScoped(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()
 
@@ -125,8 +93,31 @@ func TestRepository_Create_GeneratesTicketNumber(t *testing.T) {
 
 	tkt, err := fx.repo.Create(fx.ctx, params, fx.tenant.ID)
 	require.NoError(t, err)
-	assert.NotEmpty(t, tkt.TicketNumber)
-	assert.Contains(t, tkt.TicketNumber, "TKT-")
+	assert.Regexp(t, `^TKT-[0-9]{6}-000001$`, tkt.TicketNumber)
+
+	otherTenant, err := fx.client.Tenant.Create().
+		SetName("Other Tenant").
+		SetCode("other").
+		SetDomain("other.test").
+		SetStatus("active").
+		Save(fx.ctx)
+	require.NoError(t, err)
+	otherRequester, err := fx.client.User.Create().
+		SetUsername("other-requester").
+		SetEmail("other-requester@test.com").
+		SetName("Other Requester").
+		SetPasswordHash("hash").
+		SetRole("end_user").
+		SetActive(true).
+		SetTenantID(otherTenant.ID).
+		Save(fx.ctx)
+	require.NoError(t, err)
+
+	otherParams := *params
+	otherParams.RequesterID = otherRequester.ID
+	other, err := fx.repo.Create(fx.ctx, &otherParams, otherTenant.ID)
+	require.NoError(t, err)
+	assert.Equal(t, tkt.TicketNumber, other.TicketNumber)
 }
 
 func TestRepository_Create_PersistsCustomFieldValues(t *testing.T) {
@@ -196,15 +187,12 @@ func TestRepository_Create_PersistsCreatorEmailAndExternalMessageID(t *testing.T
 	assert.Equal(t, "<msg-1@contoso.com>", stored.ExternalMessageID)
 }
 
-func TestRepository_Create_RetriesOnTicketNumberConflict(t *testing.T) {
+func TestRepository_Create_RejectsSameTenantDuplicateNumberWithoutRetry(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()
 
-	concreteRepo, ok := fx.repo.(*EntRepository)
-	require.True(t, ok)
-
-	now := time.Now()
-	existingNumber := fmt.Sprintf("TKT-%04d%02d-%06d", now.Year(), int(now.Month()), 1)
+	now := time.Now().UTC()
+	existingNumber := fmt.Sprintf("TKT-%s-000001", now.Format("200601"))
 	_, err := fx.client.Ticket.Create().
 		SetTitle("Existing Ticket").
 		SetDescription("Existing").
@@ -217,18 +205,20 @@ func TestRepository_Create_RetriesOnTicketNumberConflict(t *testing.T) {
 		Save(fx.ctx)
 	require.NoError(t, err)
 
-	concreteRepo.SetSequenceService(&stubSequenceProvider{values: []int64{1, 2}})
-
-	tkt, err := fx.repo.Create(fx.ctx, &CreateParams{
-		Title:       "Retry Create",
-		Description: "Conflict then retry",
+	_, err = fx.repo.Create(fx.ctx, &CreateParams{
+		Title:       "Duplicate Create",
+		Description: "Allocator does not retry a uniqueness failure",
 		Priority:    PriorityMedium,
 		Type:        TypeIncident,
 		RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
+	require.Error(t, err)
+
+	sequence, err := fx.client.WorkItemNumberSequence.Query().
+		Where(workitemnumbersequence.TenantID(fx.tenant.ID), workitemnumbersequence.Period(now.Format("200601"))).
+		Only(fx.ctx)
 	require.NoError(t, err)
-	assert.NotEqual(t, existingNumber, tkt.TicketNumber)
-	assert.Equal(t, fmt.Sprintf("TKT-%04d%02d-%06d", now.Year(), int(now.Month()), 2), tkt.TicketNumber)
+	assert.Equal(t, int64(1), sequence.LastValue)
 }
 
 func TestRepository_Create_DifferentTenants(t *testing.T) {
@@ -739,52 +729,6 @@ func TestRepository_CountByPriority(t *testing.T) {
 	counts, err := fx.repo.CountByPriority(fx.ctx, fx.tenant.ID)
 	require.NoError(t, err)
 	assert.Contains(t, counts, PriorityCritical)
-}
-
-// =====================================================================
-// GenerateTicketNumber
-// =====================================================================
-
-func TestRepository_GenerateTicketNumber(t *testing.T) {
-	fx := newRepoFixture(t)
-	defer fx.client.Close()
-
-	num, err := fx.repo.GenerateTicketNumber(fx.ctx, fx.tenant.ID)
-	require.NoError(t, err)
-	assert.Contains(t, num, "TKT-")
-	assert.NotEmpty(t, num)
-}
-
-func TestRepository_GenerateTicketNumber_Uniqueness(t *testing.T) {
-	fx := newRepoFixture(t)
-	defer fx.client.Close()
-
-	seen := make(map[string]struct{})
-	prev := ""
-	// GenerateTicketNumber is count-based: each call without creating a ticket
-	// returns the same counter value. To exercise uniqueness, create a ticket
-	// between calls so the count increments.
-	for i := 0; i < 20; i++ {
-		_, _ = fx.repo.Create(fx.ctx, &CreateParams{
-			Title:       "Num Uniq",
-			Description: "",
-			Priority:    PriorityLow,
-			Type:        TypeIncident,
-			RequesterID: fx.user.ID,
-		}, fx.tenant.ID)
-
-		num, err := fx.repo.GenerateTicketNumber(fx.ctx, fx.tenant.ID)
-		require.NoError(t, err)
-		assert.NotEmpty(t, num)
-		assert.Contains(t, num, "TKT-")
-		if prev != "" {
-			assert.NotEqual(t, prev, num, "numbers should differ after creating a ticket")
-		}
-		prev = num
-		_, exists := seen[num]
-		assert.False(t, exists, "generated ticket number should be unique: %s", num)
-		seen[num] = struct{}{}
-	}
 }
 
 // =====================================================================

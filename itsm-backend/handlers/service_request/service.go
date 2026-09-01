@@ -15,6 +15,7 @@ import (
 	"itsm-backend/handlers/service_catalog"
 	"itsm-backend/middleware"
 	"itsm-backend/repository/ticket"
+	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
 
 	"go.uber.org/zap"
@@ -32,26 +33,31 @@ type IncidentCreator interface {
 }
 
 type Service struct {
-	repo          Repository
-	scRepo        service_catalog.Repository
-	cmdbRepo      cmdb.Repository
-	client        *ent.Client
-	logger        *zap.SugaredLogger
-	ticketSvc     TicketServiceInterface
-	chainResolver *service.ApprovalChainResolver
-	incidentSvc   IncidentCreator
+	repo            Repository
+	scRepo          service_catalog.Repository
+	cmdbRepo        cmdb.Repository
+	client          *ent.Client
+	numberAllocator workitemnumber.Allocator
+	logger          *zap.SugaredLogger
+	ticketSvc       TicketServiceInterface
+	chainResolver   *service.ApprovalChainResolver
+	incidentSvc     IncidentCreator
 }
 
-func NewService(repo Repository, scRepo service_catalog.Repository, cmdbRepo cmdb.Repository, entClient *ent.Client, logger *zap.SugaredLogger, ticketSvc TicketServiceInterface, chainResolver *service.ApprovalChainResolver, incidentSvc IncidentCreator) *Service {
+func NewService(repo Repository, scRepo service_catalog.Repository, cmdbRepo cmdb.Repository, entClient *ent.Client, allocator workitemnumber.Allocator, logger *zap.SugaredLogger, ticketSvc TicketServiceInterface, chainResolver *service.ApprovalChainResolver, incidentSvc IncidentCreator) *Service {
+	if allocator == nil {
+		panic("work item number allocator is required")
+	}
 	return &Service{
-		repo:          repo,
-		scRepo:        scRepo,
-		cmdbRepo:      cmdbRepo,
-		client:        entClient,
-		logger:        logger,
-		ticketSvc:     ticketSvc,
-		chainResolver: chainResolver,
-		incidentSvc:   incidentSvc,
+		repo:            repo,
+		scRepo:          scRepo,
+		cmdbRepo:        cmdbRepo,
+		client:          entClient,
+		numberAllocator: allocator,
+		logger:          logger,
+		ticketSvc:       ticketSvc,
+		chainResolver:   chainResolver,
+		incidentSvc:     incidentSvc,
 	}
 }
 
@@ -238,7 +244,7 @@ func (s *Service) createWorkItemAndExtension(ctx context.Context, tenantID int, 
 		return nil, nil, cause
 	}
 
-	workItemRepo := ticket.NewEntRepository(tx.Client(), s.logger)
+	workItemRepo := ticket.NewEntRepository(tx.Client(), s.logger, s.numberAllocator)
 	workItem, err := workItemRepo.Create(ctx, &ticket.CreateParams{
 		Title:       ticketReq.Title,
 		Description: ticketReq.Description,

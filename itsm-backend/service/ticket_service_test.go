@@ -12,6 +12,7 @@ import (
 	entTicket "itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketcomment"
 	"itsm-backend/ent/user"
+	"itsm-backend/ent/workitemnumbersequence"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -144,6 +145,11 @@ func TestTicketService_CreateTicket(t *testing.T) {
 				assert.Equal(t, "new", string(response.Status)) // V2 默认状态为 new
 				assert.NotEmpty(t, response.TicketNumber)
 				assert.Equal(t, tt.tenantID, response.TenantID)
+				sequence, err := client.WorkItemNumberSequence.Query().
+					Where(workitemnumbersequence.TenantID(tt.tenantID)).
+					Only(ctx)
+				require.NoError(t, err)
+				assert.Positive(t, sequence.LastValue)
 			}
 		})
 	}
