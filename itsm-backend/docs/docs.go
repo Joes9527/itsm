@@ -6884,7 +6884,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/ent.Problem"
+                                            "$ref": "#/definitions/dto.ProblemResponse"
                                         }
                                     }
                                 }
@@ -10141,55 +10141,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/tickets/workflow/approve": {
-            "post": {
-                "description": "审批工单（通过/拒绝/委派）",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "工单流转"
-                ],
-                "summary": "审批工单",
-                "parameters": [
-                    {
-                        "description": "审批请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.ApproveTicketRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/common.Response"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "object",
-                                            "additionalProperties": {
-                                                "type": "string"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/tickets/workflow/cc": {
             "post": {
                 "description": "将工单抄送给其他人",
@@ -10309,55 +10260,6 @@ const docTemplate = `{
                         "required": true,
                         "schema": {
                             "$ref": "#/definitions/dto.ForwardTicketRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/common.Response"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "object",
-                                            "additionalProperties": {
-                                                "type": "string"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/tickets/workflow/reject": {
-            "post": {
-                "description": "驳回工单并说明原因",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "工单流转"
-                ],
-                "summary": "驳回工单",
-                "parameters": [
-                    {
-                        "description": "驳回请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.RejectTicketRequest"
                         }
                     }
                 ],
@@ -11422,6 +11324,17 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.ActionPermission": {
+            "type": "object",
+            "properties": {
+                "allowed": {
+                    "type": "boolean"
+                },
+                "reason": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.AddCITagsRequest": {
             "type": "object",
             "required": [
@@ -11486,97 +11399,6 @@ const docTemplate = `{
                 },
                 "title": {
                     "type": "string"
-                }
-            }
-        },
-        "dto.ApprovalRecord": {
-            "type": "object",
-            "properties": {
-                "action": {
-                    "description": "approve, reject, delegate",
-                    "type": "string"
-                },
-                "approver": {
-                    "$ref": "#/definitions/dto.WorkflowUserInfo"
-                },
-                "attachments": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.AttachmentInfo"
-                    }
-                },
-                "comment": {
-                    "type": "string"
-                },
-                "createdAt": {
-                    "type": "string"
-                },
-                "delegateTo": {
-                    "$ref": "#/definitions/dto.WorkflowUserInfo"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "level": {
-                    "type": "integer"
-                },
-                "levelName": {
-                    "type": "string"
-                },
-                "processedAt": {
-                    "type": "string"
-                },
-                "status": {
-                    "$ref": "#/definitions/dto.ApprovalStatus"
-                },
-                "ticketId": {
-                    "type": "integer"
-                }
-            }
-        },
-        "dto.ApprovalStatus": {
-            "type": "string",
-            "enum": [
-                "pending",
-                "in_progress",
-                "approved",
-                "rejected",
-                "cancelled"
-            ],
-            "x-enum-varnames": [
-                "ApprovalStatusPending",
-                "ApprovalStatusInProgress",
-                "ApprovalStatusApproved",
-                "ApprovalStatusRejected",
-                "ApprovalStatusCancelled"
-            ]
-        },
-        "dto.ApproveTicketRequest": {
-            "type": "object",
-            "required": [
-                "action",
-                "approvalId"
-            ],
-            "properties": {
-                "action": {
-                    "type": "string",
-                    "enum": [
-                        "approve",
-                        "reject",
-                        "delegate"
-                    ]
-                },
-                "approvalId": {
-                    "type": "integer"
-                },
-                "comment": {
-                    "type": "string"
-                },
-                "delegateToUserId": {
-                    "type": "integer"
-                },
-                "ticketId": {
-                    "type": "integer"
                 }
             }
         },
@@ -11660,16 +11482,22 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.AttachmentInfo": {
+        "dto.AssociatedItemResponse": {
             "type": "object",
             "properties": {
-                "filename": {
-                    "type": "string"
-                },
                 "id": {
                     "type": "integer"
                 },
-                "url": {
+                "number": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "type": {
                     "type": "string"
                 }
             }
@@ -15185,6 +15013,12 @@ const docTemplate = `{
         "dto.IncidentResponse": {
             "type": "object",
             "properties": {
+                "actions": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/dto.ActionPermission"
+                    }
+                },
                 "assigneeId": {
                     "type": "integer",
                     "example": 2
@@ -15824,6 +15658,85 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.ProblemResponse": {
+            "type": "object",
+            "properties": {
+                "actions": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/dto.ActionPermission"
+                    }
+                },
+                "assigneeId": {
+                    "type": "integer"
+                },
+                "associatedChanges": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AssociatedItemResponse"
+                    }
+                },
+                "associatedIncidents": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AssociatedItemResponse"
+                    }
+                },
+                "associatedTickets": {
+                    "description": "关联数据",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AssociatedItemResponse"
+                    }
+                },
+                "category": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "createdBy": {
+                    "type": "integer"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "impact": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "string"
+                },
+                "resolution": {
+                    "type": "string"
+                },
+                "rootCause": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "tenantId": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "workItemId": {
+                    "description": "WorkItemID 关联的 WorkItem（tickets.id）。Problem 创建事务保证该值存在；nil 表示\n开发数据违反 WorkItem 创建不变量。与 dto.IncidentResponse.WorkItemID 同一模式。",
+                    "type": "integer"
+                },
+                "workaround": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.ProcessApprovalDecisionResponse": {
             "type": "object",
             "properties": {
@@ -16040,27 +15953,6 @@ const docTemplate = `{
                 },
                 "username": {
                     "type": "string"
-                }
-            }
-        },
-        "dto.RejectTicketRequest": {
-            "type": "object",
-            "required": [
-                "comment",
-                "reason"
-            ],
-            "properties": {
-                "comment": {
-                    "type": "string"
-                },
-                "reason": {
-                    "type": "string"
-                },
-                "returnToStatus": {
-                    "type": "string"
-                },
-                "ticketId": {
-                    "type": "integer"
                 }
             }
         },
@@ -16597,28 +16489,20 @@ const docTemplate = `{
             "type": "string",
             "enum": [
                 "accept",
-                "reject",
                 "withdraw",
                 "forward",
                 "cc",
                 "escalate",
-                "approve",
-                "approve_reject",
-                "delegate",
                 "resolve",
                 "close",
                 "reopen"
             ],
             "x-enum-varnames": [
                 "WorkflowActionAccept",
-                "WorkflowActionReject",
                 "WorkflowActionWithdraw",
                 "WorkflowActionForward",
                 "WorkflowActionCC",
                 "WorkflowActionEscalate",
-                "WorkflowActionApprove",
-                "WorkflowActionApproveReject",
-                "WorkflowActionDelegate",
                 "WorkflowActionResolve",
                 "WorkflowActionClose",
                 "WorkflowActionReopen"
@@ -16627,9 +16511,6 @@ const docTemplate = `{
         "dto.TicketWorkflowState": {
             "type": "object",
             "properties": {
-                "approvalStatus": {
-                    "$ref": "#/definitions/dto.ApprovalStatus"
-                },
                 "availableActions": {
                     "type": "array",
                     "items": {
@@ -16637,9 +16518,6 @@ const docTemplate = `{
                     }
                 },
                 "canAccept": {
-                    "type": "boolean"
-                },
-                "canApprove": {
                     "type": "boolean"
                 },
                 "canCc": {
@@ -16651,23 +16529,11 @@ const docTemplate = `{
                 "canForward": {
                     "type": "boolean"
                 },
-                "canReject": {
-                    "type": "boolean"
-                },
                 "canResolve": {
                     "type": "boolean"
                 },
                 "canWithdraw": {
                     "type": "boolean"
-                },
-                "completedApprovals": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.ApprovalRecord"
-                    }
-                },
-                "currentApprovalLevel": {
-                    "type": "integer"
                 },
                 "currentAssignee": {
                     "$ref": "#/definitions/dto.WorkflowUserInfo"
@@ -16675,16 +16541,7 @@ const docTemplate = `{
                 "currentStatus": {
                     "type": "string"
                 },
-                "pendingApprovers": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.WorkflowUserInfo"
-                    }
-                },
                 "ticketId": {
-                    "type": "integer"
-                },
-                "totalApprovalLevels": {
                     "type": "integer"
                 }
             }
@@ -18243,22 +18100,6 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
-                "assignee_id": {
-                    "description": "处理人ID",
-                    "type": "integer"
-                },
-                "created_at": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "created_by": {
-                    "description": "创建人ID",
-                    "type": "integer"
-                },
-                "description": {
-                    "description": "变更描述",
-                    "type": "string"
-                },
                 "edges": {
                     "description": "Edges holds the relations/edges for other nodes in the graph.\nThe values are being populated by the ChangeQuery when eager-loading is set.",
                     "allOf": [
@@ -18291,17 +18132,6 @@ const docTemplate = `{
                     "description": "计划开始时间",
                     "type": "string"
                 },
-                "priority": {
-                    "description": "优先级",
-                    "type": "string"
-                },
-                "related_tickets": {
-                    "description": "相关工单",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
                 "risk_level": {
                     "description": "风险等级",
                     "type": "string"
@@ -18310,28 +18140,12 @@ const docTemplate = `{
                     "description": "回滚计划",
                     "type": "string"
                 },
-                "status": {
-                    "description": "状态",
-                    "type": "string"
-                },
-                "tenant_id": {
-                    "description": "租户ID",
-                    "type": "integer"
-                },
-                "title": {
-                    "description": "变更标题",
-                    "type": "string"
-                },
                 "type": {
                     "description": "变更类型",
                     "type": "string"
                 },
-                "updated_at": {
-                    "description": "更新时间",
-                    "type": "string"
-                },
                 "work_item_id": {
-                    "description": "关联的 WorkItem（tickets.id），唯一，必填——迁移完成前允许为空",
+                    "description": "关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入",
                     "type": "integer"
                 }
             }
@@ -18352,6 +18166,14 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/ent.Problem"
                     }
+                },
+                "work_item": {
+                    "description": "共享字段的唯一权威 WorkItem",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/ent.Ticket"
+                        }
+                    ]
                 }
             }
         },
@@ -19343,33 +19165,9 @@ const docTemplate = `{
         "ent.Incident": {
             "type": "object",
             "properties": {
-                "assignee_id": {
-                    "description": "处理人ID",
-                    "type": "integer"
-                },
-                "category": {
-                    "description": "事件分类",
-                    "type": "string"
-                },
-                "closed_at": {
-                    "description": "关闭时间",
-                    "type": "string"
-                },
                 "configuration_item_id": {
                     "description": "配置项ID",
                     "type": "integer"
-                },
-                "created_at": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "deleted_at": {
-                    "description": "软删除时间",
-                    "type": "string"
-                },
-                "description": {
-                    "description": "事件描述",
-                    "type": "string"
                 },
                 "detected_at": {
                     "description": "检测时间",
@@ -19421,14 +19219,6 @@ const docTemplate = `{
                     "type": "object",
                     "additionalProperties": true
                 },
-                "priority": {
-                    "description": "优先级",
-                    "type": "string"
-                },
-                "reporter_id": {
-                    "description": "报告人ID",
-                    "type": "integer"
-                },
                 "resolution_steps": {
                     "description": "解决步骤",
                     "type": "array",
@@ -19436,10 +19226,6 @@ const docTemplate = `{
                         "type": "object",
                         "additionalProperties": true
                     }
-                },
-                "resolved_at": {
-                    "description": "解决时间",
-                    "type": "string"
                 },
                 "root_cause": {
                     "description": "根本原因",
@@ -19450,44 +19236,16 @@ const docTemplate = `{
                     "description": "严重程度",
                     "type": "string"
                 },
-                "source": {
-                    "description": "事件来源",
-                    "type": "string"
-                },
-                "status": {
-                    "description": "状态",
-                    "type": "string"
-                },
-                "subcategory": {
-                    "description": "事件子分类",
-                    "type": "string"
-                },
-                "tenant_id": {
-                    "description": "租户ID",
-                    "type": "integer"
-                },
-                "title": {
-                    "description": "事件标题",
-                    "type": "string"
-                },
                 "type": {
                     "description": "事件类型",
-                    "type": "string"
-                },
-                "updated_at": {
-                    "description": "更新时间",
                     "type": "string"
                 },
                 "urgency": {
                     "description": "紧急程度：low/medium/high/critical",
                     "type": "string"
                 },
-                "version": {
-                    "description": "版本号（乐观锁）",
-                    "type": "integer"
-                },
                 "work_item_id": {
-                    "description": "关联的 WorkItem（tickets.id），唯一，必填——Incident 迁移到 WorkItem 后每条记录必须有且仅有一条对应的 tickets 行",
+                    "description": "关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入",
                     "type": "integer"
                 }
             }
@@ -19644,6 +19402,14 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/ent.Incident"
                     }
+                },
+                "work_item": {
+                    "description": "共享字段的唯一权威 WorkItem",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/ent.Ticket"
+                        }
+                    ]
                 }
             }
         },
@@ -20758,34 +20524,6 @@ const docTemplate = `{
         "ent.Problem": {
             "type": "object",
             "properties": {
-                "assignee_id": {
-                    "description": "处理人ID",
-                    "type": "integer"
-                },
-                "category": {
-                    "description": "问题分类",
-                    "type": "string"
-                },
-                "closed_at": {
-                    "description": "关闭时间",
-                    "type": "string"
-                },
-                "created_at": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "created_by": {
-                    "description": "创建人ID",
-                    "type": "integer"
-                },
-                "deleted_at": {
-                    "description": "删除时间",
-                    "type": "string"
-                },
-                "description": {
-                    "description": "问题描述",
-                    "type": "string"
-                },
                 "edges": {
                     "description": "Edges holds the relations/edges for other nodes in the graph.\nThe values are being populated by the ProblemQuery when eager-loading is set.",
                     "allOf": [
@@ -20802,40 +20540,16 @@ const docTemplate = `{
                     "description": "影响范围",
                     "type": "string"
                 },
-                "priority": {
-                    "description": "优先级",
-                    "type": "string"
-                },
                 "resolution": {
                     "description": "最终解决方案",
-                    "type": "string"
-                },
-                "resolved_at": {
-                    "description": "解决时间",
                     "type": "string"
                 },
                 "root_cause": {
                     "description": "根本原因",
                     "type": "string"
                 },
-                "status": {
-                    "description": "状态",
-                    "type": "string"
-                },
-                "tenant_id": {
-                    "description": "租户ID",
-                    "type": "integer"
-                },
-                "title": {
-                    "description": "问题标题",
-                    "type": "string"
-                },
-                "updated_at": {
-                    "description": "更新时间",
-                    "type": "string"
-                },
                 "work_item_id": {
-                    "description": "关联的 WorkItem（tickets.id），唯一，必填——迁移完成前允许为空",
+                    "description": "关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入",
                     "type": "integer"
                 },
                 "workaround": {
@@ -20867,6 +20581,14 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/ent.Ticket"
                     }
+                },
+                "work_item": {
+                    "description": "共享字段的唯一权威 WorkItem",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/ent.Ticket"
+                        }
+                    ]
                 }
             }
         },
@@ -21416,12 +21138,32 @@ const docTemplate = `{
         "ent.ProcessTask": {
             "type": "object",
             "properties": {
+                "aggregation_version": {
+                    "description": "会签父任务聚合串行化版本；原子递增用于获取父行写锁",
+                    "type": "integer"
+                },
                 "assigned_time": {
                     "description": "分配时间",
                     "type": "string"
                 },
                 "assignee": {
                     "description": "任务负责人",
+                    "type": "string"
+                },
+                "callback_action": {
+                    "description": "创建任务时从流程定义解析的不可变回调动作",
+                    "type": "string"
+                },
+                "callback_config_ref": {
+                    "description": "创建任务时从流程定义解析的可信连接器配置引用，不包含端点或密钥",
+                    "type": "string"
+                },
+                "callback_handler_id": {
+                    "description": "创建任务时从流程定义解析的不可变回调处理器 ID；显式哨兵表示无回调或无法解析",
+                    "type": "string"
+                },
+                "callback_task_type": {
+                    "description": "创建任务时从流程定义解析的不可变回调任务类型",
                     "type": "string"
                 },
                 "candidate_groups": {
@@ -21434,6 +21176,10 @@ const docTemplate = `{
                 },
                 "completed_time": {
                     "description": "完成时间",
+                    "type": "string"
+                },
+                "correlation_id": {
+                    "description": "跨系统关联 ID（如 KAF session/Langfuse trace），用于委派任务的端到端追踪",
                     "type": "string"
                 },
                 "created_at": {
@@ -21513,7 +21259,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "task_variables": {
-                    "description": "任务变量",
+                    "description": "参与者可编辑的任务表单变量；回调路由和系统元数据不得存放在此字段",
                     "type": "object",
                     "additionalProperties": true
                 },
@@ -22889,7 +22635,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "record_class": {
-                    "description": "WorkItem 记录类型：generic/service_request_item/incident/problem/change_request/catalog_task；创建后不可变，由领域服务在事务内校验，不在 schema 层强制",
+                    "description": "WorkItem 记录类型：generic/service_request_item/incident/problem/change_request/catalog_task；创建后不可变，由领域服务在事务内校验",
                     "type": "string"
                 },
                 "requester_id": {
@@ -22955,84 +22701,6 @@ const docTemplate = `{
                 "version": {
                     "description": "版本号（乐观锁）",
                     "type": "integer"
-                }
-            }
-        },
-        "ent.TicketApproval": {
-            "type": "object",
-            "properties": {
-                "action": {
-                    "description": "审批动作: approve/reject/delegate",
-                    "type": "string"
-                },
-                "approver_id": {
-                    "description": "审批人ID",
-                    "type": "integer"
-                },
-                "comment": {
-                    "description": "审批意见",
-                    "type": "string"
-                },
-                "created_at": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "delegate_to_user_id": {
-                    "description": "委派目标用户ID",
-                    "type": "integer"
-                },
-                "edges": {
-                    "description": "Edges holds the relations/edges for other nodes in the graph.\nThe values are being populated by the TicketApprovalQuery when eager-loading is set.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/ent.TicketApprovalEdges"
-                        }
-                    ]
-                },
-                "id": {
-                    "description": "ID of the ent.",
-                    "type": "integer"
-                },
-                "level": {
-                    "description": "审批级别（1=一级,2=二级...）",
-                    "type": "integer"
-                },
-                "level_name": {
-                    "description": "级别名称",
-                    "type": "string"
-                },
-                "processed_at": {
-                    "description": "处理时间",
-                    "type": "string"
-                },
-                "status": {
-                    "description": "审批状态: pending/approved/rejected/cancelled",
-                    "type": "string"
-                },
-                "tenant_id": {
-                    "description": "租户ID",
-                    "type": "integer"
-                },
-                "ticket_id": {
-                    "description": "工单ID",
-                    "type": "integer"
-                },
-                "updated_at": {
-                    "description": "更新时间",
-                    "type": "string"
-                }
-            }
-        },
-        "ent.TicketApprovalEdges": {
-            "type": "object",
-            "properties": {
-                "ticket": {
-                    "description": "所属工单",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/ent.Ticket"
-                        }
-                    ]
                 }
             }
         },
@@ -23379,13 +23047,6 @@ const docTemplate = `{
         "ent.TicketEdges": {
             "type": "object",
             "properties": {
-                "approvals": {
-                    "description": "Approvals holds the value of the approvals edge.",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/ent.TicketApproval"
-                    }
-                },
                 "assignee": {
                     "description": "Assignee holds the value of the assignee edge.",
                     "allOf": [
@@ -23403,10 +23064,11 @@ const docTemplate = `{
                 },
                 "category": {
                     "description": "Category holds the value of the category edge.",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/ent.TicketCategory"
-                    }
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/ent.TicketCategory"
+                        }
+                    ]
                 },
                 "cc_users": {
                     "description": "CcUsers holds the value of the cc_users edge.",
@@ -23524,7 +23186,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "status": {
-                    "description": "状态: pending, sent, read",
+                    "description": "状态: pending, processing, sent, read",
                     "type": "string"
                 },
                 "tenant_id": {

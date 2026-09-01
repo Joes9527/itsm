@@ -613,11 +613,9 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 			// 工单流转工作流
 			if config.TicketWorkflowController != nil {
 				tickets.POST("/workflow/accept", middleware.RequirePermission("workflow", "update"), config.TicketWorkflowController.AcceptTicket)
-				tickets.POST("/workflow/reject", middleware.RequirePermission("workflow", "update"), config.TicketWorkflowController.RejectTicket)
 				tickets.POST("/workflow/withdraw", middleware.RequirePermission("workflow", "update"), config.TicketWorkflowController.WithdrawTicket)
 				tickets.POST("/workflow/forward", middleware.RequirePermission("workflow", "update"), config.TicketWorkflowController.ForwardTicket)
 				tickets.POST("/workflow/cc", middleware.RequirePermission("workflow", "update"), config.TicketWorkflowController.CCTicket)
-				tickets.POST("/workflow/approve", middleware.RequirePermission("workflow", "update"), config.TicketWorkflowController.ApproveTicket)
 				tickets.POST("/workflow/resolve", middleware.RequirePermission("workflow", "update"), config.TicketWorkflowController.ResolveTicket)
 				tickets.POST("/workflow/close", middleware.RequirePermission("workflow", "update"), config.TicketWorkflowController.CloseTicket)
 				tickets.POST("/workflow/reopen", middleware.RequirePermission("workflow", "update"), config.TicketWorkflowController.ReopenTicket)

@@ -303,9 +303,6 @@ type TenantInstallation func(*sql.Selector)
 // Ticket is the predicate function for ticket builders.
 type Ticket func(*sql.Selector)
 
-// TicketApproval is the predicate function for ticketapproval builders.
-type TicketApproval func(*sql.Selector)
-
 // TicketAssignmentRule is the predicate function for ticketassignmentrule builders.
 type TicketAssignmentRule func(*sql.Selector)
 

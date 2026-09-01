@@ -70,6 +70,10 @@ DECLARE
     work_item_foreign_key_count INTEGER;
     orphan_work_item_id BIGINT;
 BEGIN
+    -- Development cutover: BPMN ProcessTask/ProcessApprovalDecision are the
+    -- only ticket approval runtime. No legacy row migration is supported.
+    EXECUTE format('DROP TABLE IF EXISTS %I.ticket_approvals CASCADE', current_schema());
+
     IF to_regclass(format('%I.tickets', current_schema())) IS NULL THEN
         RAISE EXCEPTION 'required WorkItem table tickets is missing from schema %', current_schema();
     END IF;
@@ -426,7 +430,7 @@ var RegisteredMigrations = []Migration{
 	},
 	{
 		Version:     "022_drop_professional_extension_shared_fields",
-		Description: "Remove all WorkItem-owned fields from Incident, Problem, and Change extensions",
+		Description: "Remove WorkItem-owned extension fields and retire the legacy TicketApproval runtime",
 		RollbackSQL: "",
 	},
 }

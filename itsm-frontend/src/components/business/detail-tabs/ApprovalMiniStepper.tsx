@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { GitBranch } from 'lucide-react';
-import { TicketApprovalApi } from '@/lib/api/ticket-approval-api';
+import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
 import { toApprovalSteps } from './approvalUtils';
 import type { ApprovalStep, ApprovalStepStatus } from './types';
 
@@ -60,7 +60,7 @@ function formatStepTime(iso?: string): string {
 /**
  * 工单详情右侧工具箱：流转节点进度（BPMN）。
  * 样式对齐 prototype 的 ✓/●/○ 时间轴；数据源与审批链 Tab 相同
- * （TicketApprovalApi.getApprovalDecisions），不引入第二套状态映射。
+ * （BPMNWorkflowApi.getTicketApprovalDecisions），不引入第二套状态映射。
  */
 export const ApprovalMiniStepper: React.FC<{ ticketId: number }> = ({ ticketId }) => {
   const [steps, setSteps] = useState<ApprovalStep[]>([]);
@@ -69,7 +69,7 @@ export const ApprovalMiniStepper: React.FC<{ ticketId: number }> = ({ ticketId }
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const decisions = await TicketApprovalApi.getApprovalDecisions(ticketId);
+      const decisions = await BPMNWorkflowApi.getTicketApprovalDecisions(ticketId);
       setSteps(toApprovalSteps(decisions ?? []));
     } catch {
       setSteps([]);

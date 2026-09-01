@@ -115,7 +115,7 @@ func TestReleaseHandler_NoTenantContext_FailsClosed(t *testing.T) {
 	assert.Equal(t, "draft", after.Status, "fail closed 时不得写入任何状态")
 }
 
-func TestStatefulBuiltInHandlersRejectUnknownActions(t *testing.T) {
+func TestStatefulBuiltInHandlersFailClosedForUnknownActions(t *testing.T) {
 	handlers := []ServiceTaskHandlerInterface{
 		NewTicketServiceTaskHandler(nil, nil),
 		NewChangeServiceTaskHandler(nil, nil),
@@ -127,10 +127,16 @@ func TestStatefulBuiltInHandlersRejectUnknownActions(t *testing.T) {
 
 	for _, handler := range handlers {
 		t.Run(handler.GetHandlerID(), func(t *testing.T) {
-			_, err := handler.Execute(context.Background(), nil, map[string]interface{}{
+			effect, err := handler.Execute(context.Background(), nil, map[string]interface{}{
 				"action":      "unsupported_action",
 				"business_id": 1,
 			})
+			if err == nil {
+				require.NotNil(t, effect)
+				require.Equal(t, CallbackEffectBlocked, effect.Status)
+				require.Equal(t, CallbackBlockHandlerContract, effect.BlockCode)
+				return
+			}
 			require.Error(t, err)
 		})
 	}

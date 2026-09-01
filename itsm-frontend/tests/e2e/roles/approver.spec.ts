@@ -15,21 +15,18 @@ test.describe('US4: approver 审批人多级审批', () => {
   });
 
   test('T036 - 能查看待审批列表', async ({ apiGet }) => {
-    // 实际端点: GET /api/v1/approval-workflows，manager 角色可能无权限返回 403
-    const response = await apiGet(token, '/api/v1/approval-workflows');
+    const response = await apiGet(token, '/api/v1/my-approvals');
     expect([200, 403, 404].includes(response.status)).toBe(true);
   });
 
   test('T037 - 能审批通过工单', async ({ apiGet, apiPost }) => {
-    // 先查看审批记录
-    const recordsResp = await apiGet(token, '/api/v1/tickets/approval/records');
-    expect([200, 403, 404].includes(recordsResp.status)).toBe(true);
+    const tasksResp = await apiGet(token, '/api/v1/my-approvals');
+    expect([200, 403, 404].includes(tasksResp.status)).toBe(true);
 
-    // 如果有记录，尝试提交审批
-    const approvalList = recordsResp.data?.data?.records || recordsResp.data?.data?.list || [];
-    if (approvalList.length > 0) {
-      const approvalId = approvalList[0].id;
-      const approveResp = await apiPost(token, `/api/v1/tickets/${approvalId}/approval/submit`, {
+    const tasks = tasksResp.data?.data?.items || tasksResp.data?.items || [];
+    if (tasks.length > 0) {
+      const taskId = tasks[0].taskId || tasks[0].id;
+      const approveResp = await apiPost(token, `/api/v1/bpmn/tasks/${taskId}/decisions`, {
         action: 'approve',
         comment: 'E2E 测试通过',
       });
@@ -38,12 +35,12 @@ test.describe('US4: approver 审批人多级审批', () => {
   });
 
   test('T038 - 能审批拒绝工单', async ({ apiGet, apiPost }) => {
-    const recordsResp = await apiGet(token, '/api/v1/tickets/approval/records');
-    const approvalList = recordsResp.data?.data?.records || recordsResp.data?.data?.list || [];
+    const tasksResp = await apiGet(token, '/api/v1/my-approvals');
+    const tasks = tasksResp.data?.data?.items || tasksResp.data?.items || [];
 
-    if (approvalList.length > 0) {
-      const approvalId = approvalList[0].id;
-      const rejectResp = await apiPost(token, `/api/v1/tickets/${approvalId}/approval/submit`, {
+    if (tasks.length > 0) {
+      const taskId = tasks[0].taskId || tasks[0].id;
+      const rejectResp = await apiPost(token, `/api/v1/bpmn/tasks/${taskId}/decisions`, {
         action: 'reject',
         comment: 'E2E 测试拒绝',
       });
@@ -52,8 +49,15 @@ test.describe('US4: approver 审批人多级审批', () => {
   });
 
   test('T039 - 能查看审批历史', async ({ apiGet }) => {
-    // 实际端点: GET /api/v1/tickets/approval/records
-    const historyResp = await apiGet(token, '/api/v1/tickets/approval/records');
+    const tasksResp = await apiGet(token, '/api/v1/my-approvals');
+    const tasks = tasksResp.data?.data?.items || tasksResp.data?.items || [];
+    const businessId = tasks[0]?.businessId;
+    if (!businessId) {
+      expect([200, 403, 404].includes(tasksResp.status)).toBe(true);
+      return;
+    }
+
+    const historyResp = await apiGet(token, `/api/v1/tickets/${businessId}/approval-decisions`);
     expect([200, 403, 404].includes(historyResp.status)).toBe(true);
   });
 

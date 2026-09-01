@@ -18,6 +18,7 @@ import (
 	"itsm-backend/ent/incidentmetric"
 	entticket "itsm-backend/ent/ticket"
 	"itsm-backend/repository/workitemnumber"
+	"itsm-backend/service/bpmn"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1090,7 +1091,7 @@ func TestIncidentService_EscalateIncidentLevel_AutoIncrementsAndAudits(t *testin
 
 	resp, err := service.EscalateIncidentLevel(ctx, entity.ID, tenant.ID, 0)
 	require.NoError(t, err)
-	assert.Equal(t, 1, resp.EscalationLevel)
+	assert.Equal(t, 1, resp.Incident.EscalationLevel)
 
 	after, err := client.Incident.Get(ctx, entity.ID)
 	require.NoError(t, err)
@@ -1106,7 +1107,7 @@ func TestIncidentService_EscalateIncidentLevel_AutoIncrementsAndAudits(t *testin
 	// 显式指定级别时不再自动递增。
 	resp2, err := service.EscalateIncidentLevel(ctx, entity.ID, tenant.ID, 3)
 	require.NoError(t, err)
-	assert.Equal(t, 3, resp2.EscalationLevel)
+	assert.Equal(t, 3, resp2.Incident.EscalationLevel)
 }
 
 func TestIncidentService_ResolveIncidentForWorkflow_SetsStatusAndAudits(t *testing.T) {
@@ -1267,6 +1268,60 @@ func TestIncidentService_WorkflowRetryPreservesFirstBusinessEffect(t *testing.T)
 		assert.Equal(t, firstWorkItem.ResolvedAt, afterWorkItem.ResolvedAt)
 		assert.Equal(t, 1, client.IncidentEvent.Query().Where(incidentevent.IncidentIDEQ(entity.ID)).CountX(ctx))
 	})
+}
+
+func TestIncidentServiceTaskHandler_RetryNoWriteIsIdempotent(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		vars func(incidentID, assigneeID int) map[string]interface{}
+	}{
+		{name: "assign", vars: func(id, assigneeID int) map[string]interface{} {
+			return map[string]interface{}{"action": "assign_incident", "incident_id": id, "assignee_id": assigneeID}
+		}},
+		{name: "escalate", vars: func(id, _ int) map[string]interface{} {
+			return map[string]interface{}{"action": "escalate_incident", "incident_id": id, "escalation_level": 1}
+		}},
+		{name: "resolve", vars: func(id, _ int) map[string]interface{} {
+			return map[string]interface{}{"action": "resolve_incident", "incident_id": id, "resolution": "restored"}
+		}},
+		{name: "close", vars: func(id, _ int) map[string]interface{} {
+			return map[string]interface{}{"action": "close_incident", "incident_id": id, "feedback": "done"}
+		}},
+		{name: "acknowledge", vars: func(id, _ int) map[string]interface{} {
+			return map[string]interface{}{"action": "acknowledge_incident", "incident_id": id}
+		}},
+		{name: "update", vars: func(id, _ int) map[string]interface{} {
+			return map[string]interface{}{"action": "update_incident", "incident_id": id, "title": "updated once"}
+		}},
+		{name: "categorize", vars: func(id, _ int) map[string]interface{} {
+			return map[string]interface{}{"action": "categorize_incident", "incident_id": id, "category": "network", "subcategory": "dns"}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client, incidentService, ctx := setupIncidentTest(t)
+			defer client.Close()
+			tenant, err := createIncidentTestTenant(ctx, client, "handler-retry-"+tc.name)
+			require.NoError(t, err)
+			user, err := createIncidentTestUser(ctx, client, tenant.ID, "handler-retry-"+tc.name)
+			require.NoError(t, err)
+			if tc.name == "categorize" {
+				parent := client.TicketCategory.Create().SetName("network").SetCode("network").SetTenantID(tenant.ID).SaveX(ctx)
+				client.TicketCategory.Create().SetName("dns").SetCode("dns").SetTenantID(tenant.ID).SetParentID(parent.ID).SaveX(ctx)
+			}
+			entity := newLifecycleIncidentFixture(t, client, ctx, tenant.ID, user.ID, "INC-HANDLER-RETRY-"+tc.name)
+			handler := bpmn.NewIncidentServiceTaskHandler(client, zaptest.NewLogger(t).Sugar())
+			handler.SetIncidentService(incidentService)
+			workflowCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+			variables := tc.vars(entity.ID, user.ID)
+
+			first, err := handler.Execute(workflowCtx, nil, variables)
+			require.NoError(t, err)
+			require.Equal(t, bpmn.CallbackEffectApplied, first.Status)
+			retried, err := handler.Execute(workflowCtx, nil, variables)
+			require.NoError(t, err)
+			require.Equal(t, bpmn.CallbackEffectIdempotent, retried.Status)
+		})
+	}
 }
 
 // TestIncidentService_WorkflowMethods_CrossTenantFailClosed 覆盖六个 BPMN 工作流方法

@@ -26,6 +26,10 @@ describe('isValidTransition', () => {
     expect(isValidTransition(TicketStatus.CLOSED, TicketStatus.OPEN)).toBe(false);
   });
 
+  it('does not expose a direct ticket rejection transition for BPMN approval work', () => {
+    expect(isValidTransition(TicketStatus.PENDING_APPROVAL, TicketStatus.REJECTED)).toBe(false);
+  });
+
   it('allows RESOLVED -> CLOSED', () => {
     expect(isValidTransition(TicketStatus.RESOLVED, TicketStatus.CLOSED)).toBe(true);
   });
@@ -46,6 +50,10 @@ describe('getTransitionAction', () => {
 
   it('returns null for unmapped transitions', () => {
     expect(getTransitionAction(TicketStatus.NEW, TicketStatus.OPEN)).toBeNull();
+  });
+
+  it('does not expose a legacy ticket rejection command', () => {
+    expect(getTransitionAction(TicketStatus.PENDING_APPROVAL, TicketStatus.REJECTED)).toBeNull();
   });
 });
 

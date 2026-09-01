@@ -210,8 +210,6 @@ type Tx struct {
 	TenantInstallation *TenantInstallationClient
 	// Ticket is the client for interacting with the Ticket builders.
 	Ticket *TicketClient
-	// TicketApproval is the client for interacting with the TicketApproval builders.
-	TicketApproval *TicketApprovalClient
 	// TicketAssignmentRule is the client for interacting with the TicketAssignmentRule builders.
 	TicketAssignmentRule *TicketAssignmentRuleClient
 	// TicketAttachment is the client for interacting with the TicketAttachment builders.
@@ -484,7 +482,6 @@ func (tx *Tx) init() {
 	tx.Tenant = NewTenantClient(tx.config)
 	tx.TenantInstallation = NewTenantInstallationClient(tx.config)
 	tx.Ticket = NewTicketClient(tx.config)
-	tx.TicketApproval = NewTicketApprovalClient(tx.config)
 	tx.TicketAssignmentRule = NewTicketAssignmentRuleClient(tx.config)
 	tx.TicketAttachment = NewTicketAttachmentClient(tx.config)
 	tx.TicketAutomationRule = NewTicketAutomationRuleClient(tx.config)

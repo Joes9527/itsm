@@ -135,6 +135,14 @@ type IncidentResponse struct {
 	Actions             map[string]ActionPermission `json:"actions,omitempty"`
 }
 
+// IncidentMutationOutcome reports whether an Incident domain operation
+// persisted its target state. Callback handlers use it to distinguish a true
+// first application from an idempotent retry without an external pre-read.
+type IncidentMutationOutcome struct {
+	Incident *IncidentResponse
+	Applied  bool
+}
+
 type IncidentListResponse struct {
 	Incidents  []*IncidentResponse `json:"incidents"`
 	Total      int                 `json:"total"`

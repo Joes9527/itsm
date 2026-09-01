@@ -15,6 +15,10 @@ DECLARE
     canonical_policy_expression TEXT;
     canonical_policy_name TEXT;
 BEGIN
+    IF to_regclass(format('%I.ticket_approvals', current_schema())) IS NOT NULL THEN
+        RAISE EXCEPTION 'legacy ticket_approvals table still exists in schema %', current_schema();
+    END IF;
+
     FOR extension_table, extension_index, extension_constraint, expected_record_class IN
         SELECT * FROM (VALUES
             ('incidents', 'incident_work_item_id', 'incidents_tickets_work_item', 'incident'),

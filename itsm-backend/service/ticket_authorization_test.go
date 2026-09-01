@@ -10,8 +10,8 @@ import (
 	"itsm-backend/middleware"
 	"itsm-backend/repository/ticket"
 
-	"github.com/stretchr/testify/require"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/stretchr/testify/require"
 )
 
 // seedRolePermission 给测试角色授予一条 resource:action 权限，供 hasPermission 相关断言使用。
@@ -40,59 +40,6 @@ func seedRolePermission(t *testing.T, client *ent.Client, tenantID int, roleCode
 		SetTenantID(tenantID).
 		Save(ctx)
 	require.NoError(t, err)
-}
-
-func TestCanApprove_RequesterExcludedEvenWithPermission(t *testing.T) {
-	client := enttest.Open(t, "sqlite3", testDSN())
-	defer client.Close()
-	middleware.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
-	ctx := context.Background()
-
-	tenant, err := client.Tenant.Create().SetName("t").SetCode("t").SetDomain("t.com").SetStatus("active").Save(ctx)
-	require.NoError(t, err)
-	seedRolePermission(t, client, tenant.ID, "l1_support", "ticket", "update")
-
-	tk := &ticket.Ticket{ID: 1, RequesterID: 42, Status: ticket.StatusOpen}
-	actor := ActionActor{Client: client, TenantID: tenant.ID, UserID: 42, Role: "l1_support"}
-
-	perm := CanApprove(actor, tk)
-	require.False(t, perm.Allowed)
-	require.Equal(t, "不能审批自己提交的工单", perm.Reason)
-}
-
-func TestCanApprove_AllowedForNonRequesterWithPermission(t *testing.T) {
-	client := enttest.Open(t, "sqlite3", testDSN())
-	defer client.Close()
-	middleware.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
-	ctx := context.Background()
-
-	tenant, err := client.Tenant.Create().SetName("t").SetCode("t").SetDomain("t.com").SetStatus("active").Save(ctx)
-	require.NoError(t, err)
-	seedRolePermission(t, client, tenant.ID, "l1_support", "ticket", "update")
-
-	tk := &ticket.Ticket{ID: 1, RequesterID: 42, Status: ticket.StatusOpen}
-	actor := ActionActor{Client: client, TenantID: tenant.ID, UserID: 99, Role: "l1_support"}
-
-	perm := CanApprove(actor, tk)
-	require.True(t, perm.Allowed)
-}
-
-func TestCanApprove_DeniedWithoutPermission(t *testing.T) {
-	client := enttest.Open(t, "sqlite3", testDSN())
-	defer client.Close()
-	middleware.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
-	ctx := context.Background()
-
-	tenant, err := client.Tenant.Create().SetName("t").SetCode("t").SetDomain("t.com").SetStatus("active").Save(ctx)
-	require.NoError(t, err)
-	// end_user 没有 ticket:update
-
-	tk := &ticket.Ticket{ID: 1, RequesterID: 42, Status: ticket.StatusOpen}
-	actor := ActionActor{Client: client, TenantID: tenant.ID, UserID: 99, Role: "end_user"}
-
-	perm := CanApprove(actor, tk)
-	require.False(t, perm.Allowed)
-	require.Equal(t, "无审批权限", perm.Reason)
 }
 
 func TestCanAssign_NotExcludedForRequester(t *testing.T) {

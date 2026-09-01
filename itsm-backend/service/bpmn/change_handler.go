@@ -88,7 +88,7 @@ func (h *ChangeServiceTaskHandler) Execute(ctx context.Context, task *ent.Proces
 	case "notify_stakeholders":
 		return h.notifyStakeholders(ctx, variables)
 	default:
-		return nil, fmt.Errorf("不支持的变更回调动作")
+		return BlockedEffect(CallbackBlockHandlerContract, "unsupported change callback action"), nil
 	}
 }
 
@@ -147,21 +147,28 @@ func (h *ChangeServiceTaskHandler) updateChange(ctx context.Context, variables m
 	updateQuery := h.client.Ticket.UpdateOneID(entity.WorkItemID).Where(ticket.TenantID(tenantID))
 	changed := false
 	if title, ok := variables["title"].(string); ok && title != "" {
-		updateQuery.SetTitle(title)
-		changed = true
+		if title != entity.Edges.WorkItem.Title {
+			updateQuery.SetTitle(title)
+			changed = true
+		}
 	}
 	if description, ok := variables["description"].(string); ok && description != "" {
-		updateQuery.SetDescription(description)
-		changed = true
+		if description != entity.Edges.WorkItem.Description {
+			updateQuery.SetDescription(description)
+			changed = true
+		}
 	}
 	if status, ok := variables["status"].(string); ok && status != "" {
-		updateQuery.SetStatus(status)
-		changed = true
-	}
-	if changed {
-		if _, err := updateQuery.Save(ctx); err != nil {
-			return nil, fmt.Errorf("更新变更 WorkItem 失败: %w", err)
+		if status != entity.Edges.WorkItem.Status {
+			updateQuery.SetStatus(status)
+			changed = true
 		}
+	}
+	if !changed {
+		return IdempotentEffect(fmt.Sprintf("变更 %d 已是目标状态", changeID), nil), nil
+	}
+	if _, err := updateQuery.Save(ctx); err != nil {
+		return nil, fmt.Errorf("更新变更 WorkItem 失败: %w", err)
 	}
 
 	h.logger.Infow("Change updated via BPMN", "change_id", changeID)
@@ -572,6 +579,13 @@ func (h *ChangeServiceTaskHandler) assessRisk(ctx context.Context, variables map
 	} else if entity.Type == "minor" {
 		riskLevel = "low"
 	}
+	output := map[string]interface{}{
+		"risk_level":   riskLevel,
+		"impact_scope": impactScope,
+	}
+	if entity.RiskLevel == riskLevel {
+		return IdempotentEffect(fmt.Sprintf("变更 %d 风险评估已是 %s", changeID, riskLevel), output), nil
+	}
 
 	if _, err := entity.Update().
 		SetRiskLevel(riskLevel).
@@ -582,11 +596,8 @@ func (h *ChangeServiceTaskHandler) assessRisk(ctx context.Context, variables map
 	h.logger.Infow("Change risk assessed via BPMN", "change_id", changeID, "risk_level", riskLevel, "impact_scope", impactScope)
 
 	return &CallbackEffect{Status: CallbackEffectApplied,
-		Message: fmt.Sprintf("变更 %d 风险评估完成: %s", changeID, riskLevel),
-		OutputVars: map[string]interface{}{
-			"risk_level":   riskLevel,
-			"impact_scope": impactScope,
-		},
+		Message:    fmt.Sprintf("变更 %d 风险评估完成: %s", changeID, riskLevel),
+		OutputVars: output,
 	}, nil
 }
 

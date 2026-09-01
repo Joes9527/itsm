@@ -124,8 +124,6 @@ type TicketEdges struct {
 	Tags []*TicketTag `json:"tags,omitempty"`
 	// 双向关联工单
 	RelatedTickets []*Ticket `json:"related_tickets,omitempty"`
-	// Approvals holds the value of the approvals edge.
-	Approvals []*TicketApproval `json:"approvals,omitempty"`
 	// WorkflowRecords holds the value of the workflow_records edge.
 	WorkflowRecords []*TicketWorkflowRecord `json:"workflow_records,omitempty"`
 	// Notifications holds the value of the notifications edge.
@@ -148,7 +146,7 @@ type TicketEdges struct {
 	Category *TicketCategory `json:"category,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [15]bool
+	loadedTypes [14]bool
 }
 
 // CommentsOrErr returns the Comments value or an error if the edge
@@ -187,19 +185,10 @@ func (e TicketEdges) RelatedTicketsOrErr() ([]*Ticket, error) {
 	return nil, &NotLoadedError{edge: "related_tickets"}
 }
 
-// ApprovalsOrErr returns the Approvals value or an error if the edge
-// was not loaded in eager-loading.
-func (e TicketEdges) ApprovalsOrErr() ([]*TicketApproval, error) {
-	if e.loadedTypes[4] {
-		return e.Approvals, nil
-	}
-	return nil, &NotLoadedError{edge: "approvals"}
-}
-
 // WorkflowRecordsOrErr returns the WorkflowRecords value or an error if the edge
 // was not loaded in eager-loading.
 func (e TicketEdges) WorkflowRecordsOrErr() ([]*TicketWorkflowRecord, error) {
-	if e.loadedTypes[5] {
+	if e.loadedTypes[4] {
 		return e.WorkflowRecords, nil
 	}
 	return nil, &NotLoadedError{edge: "workflow_records"}
@@ -208,7 +197,7 @@ func (e TicketEdges) WorkflowRecordsOrErr() ([]*TicketWorkflowRecord, error) {
 // NotificationsOrErr returns the Notifications value or an error if the edge
 // was not loaded in eager-loading.
 func (e TicketEdges) NotificationsOrErr() ([]*TicketNotification, error) {
-	if e.loadedTypes[6] {
+	if e.loadedTypes[5] {
 		return e.Notifications, nil
 	}
 	return nil, &NotLoadedError{edge: "notifications"}
@@ -217,7 +206,7 @@ func (e TicketEdges) NotificationsOrErr() ([]*TicketNotification, error) {
 // CcUsersOrErr returns the CcUsers value or an error if the edge
 // was not loaded in eager-loading.
 func (e TicketEdges) CcUsersOrErr() ([]*TicketCC, error) {
-	if e.loadedTypes[7] {
+	if e.loadedTypes[6] {
 		return e.CcUsers, nil
 	}
 	return nil, &NotLoadedError{edge: "cc_users"}
@@ -226,7 +215,7 @@ func (e TicketEdges) CcUsersOrErr() ([]*TicketCC, error) {
 // SLAViolationsOrErr returns the SLAViolations value or an error if the edge
 // was not loaded in eager-loading.
 func (e TicketEdges) SLAViolationsOrErr() ([]*SLAViolation, error) {
-	if e.loadedTypes[8] {
+	if e.loadedTypes[7] {
 		return e.SLAViolations, nil
 	}
 	return nil, &NotLoadedError{edge: "sla_violations"}
@@ -235,7 +224,7 @@ func (e TicketEdges) SLAViolationsOrErr() ([]*SLAViolation, error) {
 // SLAAlertHistoryOrErr returns the SLAAlertHistory value or an error if the edge
 // was not loaded in eager-loading.
 func (e TicketEdges) SLAAlertHistoryOrErr() ([]*SLAAlertHistory, error) {
-	if e.loadedTypes[9] {
+	if e.loadedTypes[8] {
 		return e.SLAAlertHistory, nil
 	}
 	return nil, &NotLoadedError{edge: "sla_alert_history"}
@@ -244,7 +233,7 @@ func (e TicketEdges) SLAAlertHistoryOrErr() ([]*SLAAlertHistory, error) {
 // RootCauseAnalysesOrErr returns the RootCauseAnalyses value or an error if the edge
 // was not loaded in eager-loading.
 func (e TicketEdges) RootCauseAnalysesOrErr() ([]*RootCauseAnalysis, error) {
-	if e.loadedTypes[10] {
+	if e.loadedTypes[9] {
 		return e.RootCauseAnalyses, nil
 	}
 	return nil, &NotLoadedError{edge: "root_cause_analyses"}
@@ -253,7 +242,7 @@ func (e TicketEdges) RootCauseAnalysesOrErr() ([]*RootCauseAnalysis, error) {
 // FeishuSyncsOrErr returns the FeishuSyncs value or an error if the edge
 // was not loaded in eager-loading.
 func (e TicketEdges) FeishuSyncsOrErr() ([]*FeishuTicketSync, error) {
-	if e.loadedTypes[11] {
+	if e.loadedTypes[10] {
 		return e.FeishuSyncs, nil
 	}
 	return nil, &NotLoadedError{edge: "feishu_syncs"}
@@ -264,7 +253,7 @@ func (e TicketEdges) FeishuSyncsOrErr() ([]*FeishuTicketSync, error) {
 func (e TicketEdges) RequesterOrErr() (*User, error) {
 	if e.Requester != nil {
 		return e.Requester, nil
-	} else if e.loadedTypes[12] {
+	} else if e.loadedTypes[11] {
 		return nil, &NotFoundError{label: user.Label}
 	}
 	return nil, &NotLoadedError{edge: "requester"}
@@ -275,7 +264,7 @@ func (e TicketEdges) RequesterOrErr() (*User, error) {
 func (e TicketEdges) AssigneeOrErr() (*User, error) {
 	if e.Assignee != nil {
 		return e.Assignee, nil
-	} else if e.loadedTypes[13] {
+	} else if e.loadedTypes[12] {
 		return nil, &NotFoundError{label: user.Label}
 	}
 	return nil, &NotLoadedError{edge: "assignee"}
@@ -286,7 +275,7 @@ func (e TicketEdges) AssigneeOrErr() (*User, error) {
 func (e TicketEdges) CategoryOrErr() (*TicketCategory, error) {
 	if e.Category != nil {
 		return e.Category, nil
-	} else if e.loadedTypes[14] {
+	} else if e.loadedTypes[13] {
 		return nil, &NotFoundError{label: ticketcategory.Label}
 	}
 	return nil, &NotLoadedError{edge: "category"}
@@ -663,11 +652,6 @@ func (_m *Ticket) QueryTags() *TicketTagQuery {
 // QueryRelatedTickets queries the "related_tickets" edge of the Ticket entity.
 func (_m *Ticket) QueryRelatedTickets() *TicketQuery {
 	return NewTicketClient(_m.config).QueryRelatedTickets(_m)
-}
-
-// QueryApprovals queries the "approvals" edge of the Ticket entity.
-func (_m *Ticket) QueryApprovals() *TicketApprovalQuery {
-	return NewTicketClient(_m.config).QueryApprovals(_m)
 }
 
 // QueryWorkflowRecords queries the "workflow_records" edge of the Ticket entity.

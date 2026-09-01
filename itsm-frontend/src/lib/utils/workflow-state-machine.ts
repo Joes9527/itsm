@@ -26,7 +26,6 @@ export const VALID_TICKET_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
   ],
   [TicketStatus.PENDING_APPROVAL]: [
     TicketStatus.OPEN, // 审批通过后返回待处理
-    TicketStatus.REJECTED,
     TicketStatus.CANCELLED,
   ],
   [TicketStatus.PENDING]: [
@@ -54,10 +53,6 @@ export const STATUS_TRANSITION_ACTIONS: Record<string, string> = {
 
   // 关闭
   'resolved:closed': 'closeTicket',
-
-  // 审批
-  'pending_approval:approved': 'approveTicket',
-  'pending_approval:rejected': 'rejectTicket',
 
   // 重开
   'resolved:open': 'reopenTicket',

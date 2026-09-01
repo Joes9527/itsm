@@ -104,8 +104,6 @@ const (
 	EdgeTags = "tags"
 	// EdgeRelatedTickets holds the string denoting the related_tickets edge name in mutations.
 	EdgeRelatedTickets = "related_tickets"
-	// EdgeApprovals holds the string denoting the approvals edge name in mutations.
-	EdgeApprovals = "approvals"
 	// EdgeWorkflowRecords holds the string denoting the workflow_records edge name in mutations.
 	EdgeWorkflowRecords = "workflow_records"
 	// EdgeNotifications holds the string denoting the notifications edge name in mutations.
@@ -151,13 +149,6 @@ const (
 	TagsColumn = "ticket_tags"
 	// RelatedTicketsTable is the table that holds the related_tickets relation/edge. The primary key declared below.
 	RelatedTicketsTable = "ticket_related_tickets"
-	// ApprovalsTable is the table that holds the approvals relation/edge.
-	ApprovalsTable = "ticket_approvals"
-	// ApprovalsInverseTable is the table name for the TicketApproval entity.
-	// It exists in this package in order to avoid circular dependency with the "ticketapproval" package.
-	ApprovalsInverseTable = "ticket_approvals"
-	// ApprovalsColumn is the table column denoting the approvals relation/edge.
-	ApprovalsColumn = "ticket_id"
 	// WorkflowRecordsTable is the table that holds the workflow_records relation/edge.
 	WorkflowRecordsTable = "ticket_workflow_records"
 	// WorkflowRecordsInverseTable is the table name for the TicketWorkflowRecord entity.
@@ -607,20 +598,6 @@ func ByRelatedTickets(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
-// ByApprovalsCount orders the results by approvals count.
-func ByApprovalsCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newApprovalsStep(), opts...)
-	}
-}
-
-// ByApprovals orders the results by approvals terms.
-func ByApprovals(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newApprovalsStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-
 // ByWorkflowRecordsCount orders the results by workflow_records count.
 func ByWorkflowRecordsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -765,13 +742,6 @@ func newRelatedTicketsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(Table, FieldID),
 		sqlgraph.Edge(sqlgraph.M2M, false, RelatedTicketsTable, RelatedTicketsPrimaryKey...),
-	)
-}
-func newApprovalsStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(ApprovalsInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, ApprovalsTable, ApprovalsColumn),
 	)
 }
 func newWorkflowRecordsStep() *sqlgraph.Step {

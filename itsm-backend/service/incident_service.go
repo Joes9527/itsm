@@ -624,6 +624,22 @@ func canAssignIncidentStatus(status string) bool {
 }
 
 func (s *IncidentService) AssignIncident(ctx context.Context, id int, assigneeID int, tenantID int) (*dto.IncidentResponse, error) {
+	outcome, err := s.assignIncident(ctx, id, assigneeID, tenantID, false)
+	if err != nil {
+		return nil, err
+	}
+	return outcome.Incident, nil
+}
+
+// AssignIncidentForWorkflow atomically applies the workflow assignment target:
+// assignee and the Incident-owned assigned state. Returning the persisted
+// mutation outcome lets the callback engine distinguish a retry from a first
+// application without a race-prone read in the handler.
+func (s *IncidentService) AssignIncidentForWorkflow(ctx context.Context, id int, assigneeID int, tenantID int) (*dto.IncidentMutationOutcome, error) {
+	return s.assignIncident(ctx, id, assigneeID, tenantID, true)
+}
+
+func (s *IncidentService) assignIncident(ctx context.Context, id int, assigneeID int, tenantID int, workflow bool) (*dto.IncidentMutationOutcome, error) {
 	s.logger.Infow("Assigning incident", "id", id, "assignee_id", assigneeID, "tenant_id", tenantID)
 
 	// 获取当前事件
@@ -640,15 +656,15 @@ func (s *IncidentService) AssignIncident(ctx context.Context, id int, assigneeID
 	if !canAssignIncidentStatus(current.Edges.WorkItem.Status) {
 		return nil, fmt.Errorf("resolved, closed, or cancelled incidents cannot be reassigned")
 	}
-	if current.Edges.WorkItem.AssigneeID == assigneeID {
-		return s.toIncidentResponse(current), nil
+	if current.Edges.WorkItem.AssigneeID == assigneeID && (!workflow || current.Edges.WorkItem.Status == common.IncidentStatusAssigned) {
+		return &dto.IncidentMutationOutcome{Incident: s.toIncidentResponse(current), Applied: false}, nil
 	}
 
 	if err := s.validateIncidentAssignee(ctx, assigneeID, tenantID); err != nil {
 		return nil, err
 	}
 
-	_, err = s.client.Ticket.UpdateOneID(current.WorkItemID).
+	update := s.client.Ticket.UpdateOneID(current.WorkItemID).
 		Where(
 			ticket.TenantIDEQ(tenantID),
 			ticket.DeletedAtIsNil(),
@@ -657,8 +673,11 @@ func (s *IncidentService) AssignIncident(ctx context.Context, id int, assigneeID
 		).
 		SetAssigneeID(assigneeID).
 		SetUpdatedAt(time.Now()).
-		AddVersion(1).
-		Save(ctx)
+		AddVersion(1)
+	if workflow {
+		update.SetStatus(common.IncidentStatusAssigned)
+	}
+	_, err = update.Save(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			latest, lookupErr := s.client.Incident.Query().
@@ -695,43 +714,7 @@ func (s *IncidentService) AssignIncident(ctx context.Context, id int, assigneeID
 	}, tenantID)
 
 	s.logger.Infow("Incident assigned successfully", "id", id, "assignee_id", assigneeID)
-	return s.toIncidentResponse(updatedIncident), nil
-}
-
-// UpdateStatus 更新事件状态（租户校验 + 乐观锁版本递增 + 审计事件），不做状态机合法性
-// 校验——Incident 完整状态机是 Wave 2 迁移的范围，这里只是把 BPMN handler 现有的一次
-// "assigned" 状态写入从裸 Ent 操作收回到领域服务里，不新增业务规则。
-func (s *IncidentService) UpdateStatus(ctx context.Context, id int, status string, tenantID int) (*dto.IncidentResponse, error) {
-	current, err := s.client.Incident.Query().
-		Where(incident.IDEQ(id), incidentTenantScope(tenantID)).
-		WithWorkItem(withIncidentWorkItemProjection).
-		Only(ctx)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			return nil, fmt.Errorf("incident not found")
-		}
-		return nil, fmt.Errorf("failed to get incident: %w", err)
-	}
-	if current.Edges.WorkItem.Status == status {
-		return s.toIncidentResponse(current), nil
-	}
-	updated, err := s.transitionIncident(ctx, current, tenantID, status, nil)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			return nil, fmt.Errorf("incident not found")
-		}
-		return nil, fmt.Errorf("failed to update incident status: %w", err)
-	}
-	s.CreateIncidentEvent(ctx, &dto.CreateIncidentEventRequest{
-		IncidentID:  id,
-		EventType:   "status_changed",
-		EventName:   "状态变更",
-		Description: fmt.Sprintf("事件状态变更为 %s", status),
-		Status:      "active",
-		Severity:    "info",
-		Source:      "system",
-	}, tenantID)
-	return s.toIncidentResponse(updated), nil
+	return &dto.IncidentMutationOutcome{Incident: s.toIncidentResponse(updatedIncident), Applied: true}, nil
 }
 
 func (s *IncidentService) validateIncidentAssignee(ctx context.Context, assigneeID, tenantID int) error {
@@ -1389,7 +1372,7 @@ func (s *IncidentService) CloseIncident(ctx context.Context, id, userID, tenantI
 
 // EscalateIncidentLevel 供 BPMN 自动升级节点使用。level<=0 的稳定目标是一级，
 // 而不是依赖当前值递增；这样同一 durable callback 的重试不会重复升级。
-func (s *IncidentService) EscalateIncidentLevel(ctx context.Context, id, tenantID, level int) (*dto.IncidentResponse, error) {
+func (s *IncidentService) EscalateIncidentLevel(ctx context.Context, id, tenantID, level int) (*dto.IncidentMutationOutcome, error) {
 	current, err := s.client.Incident.Query().
 		Where(incident.IDEQ(id), incidentTenantScope(tenantID)).
 		WithWorkItem(withIncidentWorkItemProjection).Only(ctx)
@@ -1403,7 +1386,7 @@ func (s *IncidentService) EscalateIncidentLevel(ctx context.Context, id, tenantI
 		level = 1
 	}
 	if current.Edges.WorkItem.Status == common.IncidentStatusEscalated && current.EscalationLevel >= level {
-		return s.toIncidentResponse(current), nil
+		return &dto.IncidentMutationOutcome{Incident: s.toIncidentResponse(current), Applied: false}, nil
 	}
 
 	now := time.Now()
@@ -1419,18 +1402,18 @@ func (s *IncidentService) EscalateIncidentLevel(ctx context.Context, id, tenantI
 		Description: fmt.Sprintf("事件升级到级别 %d（工作流自动触发）", level),
 		Status:      "active", Severity: "high", Source: "system",
 	}, tenantID)
-	return s.toIncidentResponse(updated), nil
+	return &dto.IncidentMutationOutcome{Incident: s.toIncidentResponse(updated), Applied: true}, nil
 }
 
 // ResolveIncidentForWorkflow 供 BPMN resolve_incident 节点使用，同旧的裸 Ent 实现语义
 // （只设置 status=resolved），补上 ResolvedAt（旧实现遗漏）和审计事件。
-func (s *IncidentService) ResolveIncidentForWorkflow(ctx context.Context, id, tenantID int, resolution string) (*dto.IncidentResponse, error) {
+func (s *IncidentService) ResolveIncidentForWorkflow(ctx context.Context, id, tenantID int, resolution string) (*dto.IncidentMutationOutcome, error) {
 	current, err := s.workflowIncident(ctx, id, tenantID)
 	if err != nil {
 		return nil, err
 	}
 	if current.Edges.WorkItem.Status == common.IncidentStatusResolved && !current.Edges.WorkItem.ResolvedAt.IsZero() {
-		return s.toIncidentResponse(current), nil
+		return &dto.IncidentMutationOutcome{Incident: s.toIncidentResponse(current), Applied: false}, nil
 	}
 	updated, err := s.transitionIncident(ctx, current, tenantID, common.IncidentStatusResolved, nil)
 	if err != nil {
@@ -1443,18 +1426,18 @@ func (s *IncidentService) ResolveIncidentForWorkflow(ctx context.Context, id, te
 		IncidentID: id, EventType: "resolution", EventName: "事件解决",
 		Description: strings.TrimSpace(resolution), Status: "active", Severity: "info", Source: "system",
 	}, tenantID)
-	return s.toIncidentResponse(updated), nil
+	return &dto.IncidentMutationOutcome{Incident: s.toIncidentResponse(updated), Applied: true}, nil
 }
 
 // CloseIncidentForWorkflow 供 BPMN close_incident 节点使用，同旧的裸 Ent 实现语义
 // （status=closed + closed_at），补上审计事件。
-func (s *IncidentService) CloseIncidentForWorkflow(ctx context.Context, id, tenantID int, feedback string) (*dto.IncidentResponse, error) {
+func (s *IncidentService) CloseIncidentForWorkflow(ctx context.Context, id, tenantID int, feedback string) (*dto.IncidentMutationOutcome, error) {
 	current, err := s.workflowIncident(ctx, id, tenantID)
 	if err != nil {
 		return nil, err
 	}
 	if current.Edges.WorkItem.Status == common.IncidentStatusClosed && current.Edges.WorkItem.ClosedAt != nil {
-		return s.toIncidentResponse(current), nil
+		return &dto.IncidentMutationOutcome{Incident: s.toIncidentResponse(current), Applied: false}, nil
 	}
 	updated, err := s.transitionIncident(ctx, current, tenantID, common.IncidentStatusClosed, nil)
 	if err != nil {
@@ -1467,18 +1450,18 @@ func (s *IncidentService) CloseIncidentForWorkflow(ctx context.Context, id, tena
 		IncidentID: id, EventType: "closure", EventName: "事件关闭",
 		Description: strings.TrimSpace(feedback), Status: "active", Severity: "info", Source: "system",
 	}, tenantID)
-	return s.toIncidentResponse(updated), nil
+	return &dto.IncidentMutationOutcome{Incident: s.toIncidentResponse(updated), Applied: true}, nil
 }
 
 // AcknowledgeIncidentForWorkflow 供 BPMN acknowledge_incident 节点使用，同旧的裸 Ent 实现
 // 语义（status=acknowledged），补上审计事件。
-func (s *IncidentService) AcknowledgeIncidentForWorkflow(ctx context.Context, id, tenantID int) (*dto.IncidentResponse, error) {
+func (s *IncidentService) AcknowledgeIncidentForWorkflow(ctx context.Context, id, tenantID int) (*dto.IncidentMutationOutcome, error) {
 	current, err := s.workflowIncident(ctx, id, tenantID)
 	if err != nil {
 		return nil, err
 	}
 	if current.Edges.WorkItem.Status == common.IncidentStatusAcknowledged {
-		return s.toIncidentResponse(current), nil
+		return &dto.IncidentMutationOutcome{Incident: s.toIncidentResponse(current), Applied: false}, nil
 	}
 	updated, err := s.transitionIncident(ctx, current, tenantID, common.IncidentStatusAcknowledged, nil)
 	if err != nil {
@@ -1491,12 +1474,12 @@ func (s *IncidentService) AcknowledgeIncidentForWorkflow(ctx context.Context, id
 		IncidentID: id, EventType: "acknowledgement", EventName: "事件确认",
 		Description: "事件由工作流自动确认", Status: "active", Severity: "info", Source: "system",
 	}, tenantID)
-	return s.toIncidentResponse(updated), nil
+	return &dto.IncidentMutationOutcome{Incident: s.toIncidentResponse(updated), Applied: true}, nil
 }
 
 // UpdateIncidentForWorkflow 供 BPMN update_incident 节点使用（如初步诊断步骤），按提供的
 // 字段做部分更新，空字符串表示"不修改该字段"——同旧的裸 Ent 实现语义，补上审计事件。
-func (s *IncidentService) UpdateIncidentForWorkflow(ctx context.Context, id, tenantID int, title, description, priority, severity, status string) (*dto.IncidentResponse, error) {
+func (s *IncidentService) UpdateIncidentForWorkflow(ctx context.Context, id, tenantID int, title, description, priority, severity, status string) (*dto.IncidentMutationOutcome, error) {
 	current, err := s.workflowIncident(ctx, id, tenantID)
 	if err != nil {
 		return nil, err
@@ -1508,13 +1491,13 @@ func (s *IncidentService) UpdateIncidentForWorkflow(ctx context.Context, id, ten
 		(severity == "" || severity == current.Severity) &&
 		(status == "" || status == workItem.Status)
 	if unchanged {
-		return s.toIncidentResponse(current), nil
+		return &dto.IncidentMutationOutcome{Incident: s.toIncidentResponse(current), Applied: false}, nil
 	}
 	tx, err := s.client.Tx(ctx)
 	if err != nil {
 		return nil, err
 	}
-	fail := func(cause error) (*dto.IncidentResponse, error) { _ = tx.Rollback(); return nil, cause }
+	fail := func(cause error) (*dto.IncidentMutationOutcome, error) { _ = tx.Rollback(); return nil, cause }
 	updateQuery := tx.Incident.UpdateOneID(id).
 		Where(incidentTenantScope(tenantID))
 	if severity != "" {
@@ -1554,12 +1537,12 @@ func (s *IncidentService) UpdateIncidentForWorkflow(ctx context.Context, id, ten
 		IncidentID: id, EventType: "update", EventName: "事件更新",
 		Description: "事件信息已更新（工作流）", Status: "active", Severity: "info", Source: "system",
 	}, tenantID)
-	return s.toIncidentResponse(updated), nil
+	return &dto.IncidentMutationOutcome{Incident: s.toIncidentResponse(updated), Applied: true}, nil
 }
 
 // CategorizeIncidentForWorkflow 供 BPMN categorize_incident 节点使用，同旧的裸 Ent 实现语义
 // （status=triaged + category/subcategory），补上审计事件。
-func (s *IncidentService) CategorizeIncidentForWorkflow(ctx context.Context, id, tenantID int, category, subcategory string) (*dto.IncidentResponse, error) {
+func (s *IncidentService) CategorizeIncidentForWorkflow(ctx context.Context, id, tenantID int, category, subcategory string) (*dto.IncidentMutationOutcome, error) {
 	current, err := s.workflowIncident(ctx, id, tenantID)
 	if err != nil {
 		return nil, err
@@ -1568,7 +1551,7 @@ func (s *IncidentService) CategorizeIncidentForWorkflow(ctx context.Context, id,
 	if current.Edges.WorkItem.Status == common.IncidentStatusTriaged &&
 		(category == "" || category == currentResponse.Category) &&
 		(subcategory == "" || subcategory == currentResponse.Subcategory) {
-		return s.toIncidentResponse(current), nil
+		return &dto.IncidentMutationOutcome{Incident: s.toIncidentResponse(current), Applied: false}, nil
 	}
 	if category == "" {
 		category = currentResponse.Category
@@ -1591,7 +1574,7 @@ func (s *IncidentService) CategorizeIncidentForWorkflow(ctx context.Context, id,
 		IncidentID: id, EventType: "categorization", EventName: "事件分类",
 		Description: fmt.Sprintf("事件已分类: %s/%s", category, subcategory), Status: "active", Severity: "info", Source: "system",
 	}, tenantID)
-	return s.toIncidentResponse(updated), nil
+	return &dto.IncidentMutationOutcome{Incident: s.toIncidentResponse(updated), Applied: true}, nil
 }
 
 func (s *IncidentService) workflowIncident(ctx context.Context, id, tenantID int) (*ent.Incident, error) {

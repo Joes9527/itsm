@@ -15,28 +15,6 @@ func isRequester(t *ticket.Ticket, actorUserID int) bool {
 	return t.RequesterID == actorUserID
 }
 
-// CanApprove/CanReject：ticket:update 权限 + 非本人提交 + 工单未结束。
-func CanApprove(actor ActionActor, t *ticket.Ticket) dto.ActionPermission {
-	if isRequester(t, actor.UserID) {
-		return dto.ActionPermission{Allowed: false, Reason: "不能审批自己提交的工单"}
-	}
-	if isFinalStatus(t.Status) {
-		return dto.ActionPermission{Allowed: false, Reason: "工单已结束，无法操作"}
-	}
-	if !middleware.HasResourcePermission(actor.Client, actor.Role, "ticket", "update", actor.TenantID) {
-		return dto.ActionPermission{Allowed: false, Reason: "无审批权限"}
-	}
-	return dto.ActionPermission{Allowed: true}
-}
-
-func CanReject(actor ActionActor, t *ticket.Ticket) dto.ActionPermission {
-	perm := CanApprove(actor, t)
-	if !perm.Allowed && perm.Reason == "不能审批自己提交的工单" {
-		perm.Reason = "不能拒绝自己提交的工单"
-	}
-	return perm
-}
-
 // CanAssign：ticket:assign 权限 + 工单未结束，不排除本人（分配是路由工作，非职责分离场景）。
 func CanAssign(actor ActionActor, t *ticket.Ticket) dto.ActionPermission {
 	if isFinalStatus(t.Status) {
@@ -98,14 +76,13 @@ func CanCC(ctx context.Context, actor ActionActor, ticketID int) dto.ActionPermi
 	return dto.ActionPermission{Allowed: true}
 }
 
-// BuildTicketActions 组装工单核心域的 6 个动作权限，供详情响应的 actions 字段使用。
+// BuildTicketActions 只组装 Ticket 领域命令。审批命令由 BPMN ProcessTask API
+// 单独投影，避免详情接口产生可绕过流程的 approve/reject 动作。
 func BuildTicketActions(ctx context.Context, actor ActionActor, t *ticket.Ticket) map[string]dto.ActionPermission {
 	return map[string]dto.ActionPermission{
-		"approve": CanApprove(actor, t),
-		"reject":  CanReject(actor, t),
-		"assign":  CanAssign(actor, t),
-		"edit":    CanEdit(actor, t),
-		"cc":      CanCC(ctx, actor, t.ID),
-		"delete":  CanDelete(ctx, actor, t),
+		"assign": CanAssign(actor, t),
+		"edit":   CanEdit(actor, t),
+		"cc":     CanCC(ctx, actor, t.ID),
+		"delete": CanDelete(ctx, actor, t),
 	}
 }

@@ -323,6 +323,7 @@ func TestProfessionalExtensionsDropSharedFieldsIsVersioned(t *testing.T) {
 	for _, expected := range []string{
 		"policy.polroles", "policy.polcmd", "policy.polpermissive",
 		"policy_roles <> ARRAY[0::OID]", "policy_command <> '*'", "OR NOT policy_permissive",
+		"legacy ticket_approvals table still exists",
 	} {
 		require.Contains(t, string(verificationSQL), expected)
 	}

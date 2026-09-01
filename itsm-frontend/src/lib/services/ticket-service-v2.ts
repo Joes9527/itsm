@@ -227,26 +227,6 @@ export class TicketService extends BaseService<Ticket, CreateTicketParams, Updat
   // ==================== 审批操作 ====================
 
   /**
-   * 批准工单
-   */
-  async approve(
-    id: number,
-    data: { action: 'approve' | 'reject' | 'delegate'; comment?: string; delegateToUserId?: number }
-  ): Promise<{ success: boolean; message: string }> {
-    return this.post('/workflow/approve', {
-      ticketId: id,
-      ...data,
-    });
-  }
-
-  /**
-   * 拒绝工单
-   */
-  async reject(ticketId: number, reason: string): Promise<{ message: string }> {
-    return this.post('/workflow/reject', { ticketId: ticketId, reason });
-  }
-
-  /**
    * 接单
    */
   async accept(ticketId: number): Promise<{ message: string }> {

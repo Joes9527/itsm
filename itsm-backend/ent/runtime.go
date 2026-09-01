@@ -101,7 +101,6 @@ import (
 	"itsm-backend/ent/tenant"
 	"itsm-backend/ent/tenantinstallation"
 	"itsm-backend/ent/ticket"
-	"itsm-backend/ent/ticketapproval"
 	"itsm-backend/ent/ticketassignmentrule"
 	"itsm-backend/ent/ticketattachment"
 	"itsm-backend/ent/ticketautomationrule"
@@ -3482,22 +3481,6 @@ func init() {
 	ticketDescIsManagedByMsp := ticketFields[35].Descriptor()
 	// ticket.DefaultIsManagedByMsp holds the default value on creation for the is_managed_by_msp field.
 	ticket.DefaultIsManagedByMsp = ticketDescIsManagedByMsp.Default.(bool)
-	ticketapprovalFields := schema.TicketApproval{}.Fields()
-	_ = ticketapprovalFields
-	// ticketapprovalDescStatus is the schema descriptor for status field.
-	ticketapprovalDescStatus := ticketapprovalFields[4].Descriptor()
-	// ticketapproval.DefaultStatus holds the default value on creation for the status field.
-	ticketapproval.DefaultStatus = ticketapprovalDescStatus.Default.(string)
-	// ticketapprovalDescCreatedAt is the schema descriptor for created_at field.
-	ticketapprovalDescCreatedAt := ticketapprovalFields[9].Descriptor()
-	// ticketapproval.DefaultCreatedAt holds the default value on creation for the created_at field.
-	ticketapproval.DefaultCreatedAt = ticketapprovalDescCreatedAt.Default.(func() time.Time)
-	// ticketapprovalDescUpdatedAt is the schema descriptor for updated_at field.
-	ticketapprovalDescUpdatedAt := ticketapprovalFields[10].Descriptor()
-	// ticketapproval.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	ticketapproval.DefaultUpdatedAt = ticketapprovalDescUpdatedAt.Default.(func() time.Time)
-	// ticketapproval.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	ticketapproval.UpdateDefaultUpdatedAt = ticketapprovalDescUpdatedAt.UpdateDefault.(func() time.Time)
 	ticketassignmentruleFields := schema.TicketAssignmentRule{}.Fields()
 	_ = ticketassignmentruleFields
 	// ticketassignmentruleDescName is the schema descriptor for name field.

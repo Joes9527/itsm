@@ -589,6 +589,13 @@ export class BPMNWorkflowApi {
     return (res as { data?: ProcessApprovalDecision[] }).data ?? (res as ProcessApprovalDecision[]);
   }
 
+  static async getTicketApprovalDecisions(ticketId: number): Promise<ProcessApprovalDecision[]> {
+    const res = await httpClient.get<
+      { data?: ProcessApprovalDecision[] } | ProcessApprovalDecision[]
+    >(`/api/v1/tickets/${ticketId}/approval-decisions`);
+    return (res as { data?: ProcessApprovalDecision[] }).data ?? (res as ProcessApprovalDecision[]);
+  }
+
   /**
    * 取消任务
    */

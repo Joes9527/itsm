@@ -4,6 +4,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/smtp"
 	"os"
 	"strings"
@@ -23,6 +24,8 @@ type IncidentAlertingService struct {
 	client *ent.Client
 	logger *zap.SugaredLogger
 }
+
+const incidentAlertDeliveryTimeout = 5 * time.Second
 
 func NewIncidentAlertingService(client *ent.Client, logger *zap.SugaredLogger) *IncidentAlertingService {
 	return &IncidentAlertingService{
@@ -67,7 +70,7 @@ func (c *EmailChannel) Send(ctx context.Context, alert *dto.IncidentAlertRespons
 
 	// 在非测试/开发环境中尝试发送
 	if os.Getenv("GIN_MODE") == "release" || os.Getenv("ENABLE_EMAIL_SENDING") == "true" {
-		if err := smtp.SendMail(addr, auth, c.fromEmail, alert.Recipients, msg); err != nil {
+		if err := sendSMTPWithContext(ctx, addr, c.smtpHost, auth, c.fromEmail, alert.Recipients, msg); err != nil {
 			c.logger.Errorw("Failed to send email via SMTP", "error", err)
 			return fmt.Errorf("failed to send email via SMTP: %w", err)
 		} else {
@@ -75,12 +78,70 @@ func (c *EmailChannel) Send(ctx context.Context, alert *dto.IncidentAlertRespons
 		}
 	} else {
 		// 模拟邮件发送
-		time.Sleep(100 * time.Millisecond)
+		if err := waitForAlertSimulation(ctx, 100*time.Millisecond); err != nil {
+			return err
+		}
 		c.logger.Infow("Email sending simulated (dev mode)")
 	}
 
 	c.logger.Infow("Email alert processing completed", "alert_id", alert.ID)
 	return nil
+}
+
+func sendSMTPWithContext(ctx context.Context, addr, host string, auth smtp.Auth, from string, recipients []string, msg []byte) error {
+	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if deadline, ok := ctx.Deadline(); ok {
+		if err := conn.SetDeadline(deadline); err != nil {
+			return err
+		}
+	}
+	client, err := smtp.NewClient(conn, host)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	if auth != nil {
+		if ok, _ := client.Extension("AUTH"); ok {
+			if err := client.Auth(auth); err != nil {
+				return err
+			}
+		}
+	}
+	if err := client.Mail(from); err != nil {
+		return err
+	}
+	for _, recipient := range recipients {
+		if err := client.Rcpt(recipient); err != nil {
+			return err
+		}
+	}
+	writer, err := client.Data()
+	if err != nil {
+		return err
+	}
+	if _, err := writer.Write(msg); err != nil {
+		_ = writer.Close()
+		return err
+	}
+	if err := writer.Close(); err != nil {
+		return err
+	}
+	return client.Quit()
+}
+
+func waitForAlertSimulation(ctx context.Context, duration time.Duration) error {
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func (c *EmailChannel) GetName() string {
@@ -104,7 +165,9 @@ func (c *SMSChannel) Send(ctx context.Context, alert *dto.IncidentAlertResponse)
 	if os.Getenv("GIN_MODE") == "release" {
 		return fmt.Errorf("SMS alert provider is not implemented; use a managed connector")
 	}
-	time.Sleep(200 * time.Millisecond)
+	if err := waitForAlertSimulation(ctx, 200*time.Millisecond); err != nil {
+		return err
+	}
 	c.logger.Infow("SMS alert simulated in non-production environment", "alert_id", alert.ID)
 	return nil
 }
@@ -129,7 +192,9 @@ func (c *SlackChannel) Send(ctx context.Context, alert *dto.IncidentAlertRespons
 	if os.Getenv("GIN_MODE") == "release" {
 		return fmt.Errorf("slack alert delivery must use the connector lifecycle")
 	}
-	time.Sleep(150 * time.Millisecond)
+	if err := waitForAlertSimulation(ctx, 150*time.Millisecond); err != nil {
+		return err
+	}
 	c.logger.Infow("Slack alert simulated in non-production environment", "alert_id", alert.ID)
 	return nil
 }
@@ -155,7 +220,9 @@ func (c *WebhookChannel) Send(ctx context.Context, alert *dto.IncidentAlertRespo
 	if os.Getenv("GIN_MODE") == "release" {
 		return fmt.Errorf("webhook alert delivery must use the connector lifecycle")
 	}
-	time.Sleep(100 * time.Millisecond)
+	if err := waitForAlertSimulation(ctx, 100*time.Millisecond); err != nil {
+		return err
+	}
 	c.logger.Infow("Webhook alert simulated in non-production environment", "alert_id", alert.ID)
 	return nil
 }
@@ -205,8 +272,12 @@ func (s *IncidentAlertingService) CreateIncidentAlert(ctx context.Context, req *
 	// lifecycle updates (and their mandatory audit events).
 	s.createSystemNotification(ctx, alert, tenantID)
 
-	// External channel delivery may block on remote services, so keep it async.
-	go s.sendAlertNotifications(context.Background(), alert)
+	// Keep delivery within the caller's lifecycle and impose one bounded budget.
+	// Durable fan-out can replace this path later; a detached goroutine is not a
+	// reliability mechanism and can outlive both the request and test/database.
+	deliveryCtx, cancel := context.WithTimeout(ctx, incidentAlertDeliveryTimeout)
+	defer cancel()
+	s.sendAlertNotifications(deliveryCtx, alert)
 
 	s.logger.Infow("Incident alert created successfully", "id", alert.ID)
 	return s.toIncidentAlertResponse(alert), nil

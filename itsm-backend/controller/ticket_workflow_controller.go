@@ -71,37 +71,6 @@ func (tc *TicketWorkflowController) AcceptTicket(c *gin.Context) {
 	common.Success(c, gin.H{"message": "接单成功"})
 }
 
-// RejectTicket 驳回工单
-// @Summary 驳回工单
-// @Description 驳回工单并说明原因
-// @Tags 工单流转
-// @Accept json
-// @Produce json
-// @Param request body dto.RejectTicketRequest true "驳回请求"
-// @Success 200 {object} common.Response{data=map[string]string}
-// @Router /api/v1/tickets/workflow/reject [post]
-func (tc *TicketWorkflowController) RejectTicket(c *gin.Context) {
-	var req dto.RejectTicketRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.Fail(c, common.ParamErrorCode, "请求参数错误: "+err.Error())
-		return
-	}
-
-	userID, tenantID, ok := getAuthContext(c)
-	if !ok {
-		return
-	}
-
-	err := tc.workflowService.RejectTicket(c.Request.Context(), &req, userID, tenantID)
-	if err != nil {
-		tc.logger.Errorw("Failed to reject ticket", "error", err, "ticket_id", req.TicketID)
-		common.Fail(c, common.InternalErrorCode, err.Error())
-		return
-	}
-
-	common.Success(c, gin.H{"message": "驳回成功"})
-}
-
 // WithdrawTicket 撤回工单
 // @Summary 撤回工单
 // @Description 撤回已提交的工单
@@ -246,49 +215,6 @@ func (tc *TicketWorkflowController) ListTicketCCRecords(c *gin.Context) {
 	}
 
 	common.Success(c, resp)
-}
-
-// ApproveTicket 审批工单
-// @Summary 审批工单
-// @Description 审批工单（通过/拒绝/委派）
-// @Tags 工单流转
-// @Accept json
-// @Produce json
-// @Param request body dto.ApproveTicketRequest true "审批请求"
-// @Success 200 {object} common.Response{data=map[string]string}
-// @Router /api/v1/tickets/workflow/approve [post]
-func (tc *TicketWorkflowController) ApproveTicket(c *gin.Context) {
-	var req dto.ApproveTicketRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.Fail(c, common.ParamErrorCode, "请求参数错误: "+err.Error())
-		return
-	}
-
-	userID, tenantID, ok := getAuthContext(c)
-	if !ok {
-		return
-	}
-
-	err := tc.workflowService.ApproveTicket(c.Request.Context(), &req, userID, tenantID)
-	if err != nil {
-		tc.logger.Errorw("Failed to approve ticket", "error", err, "ticket_id", req.TicketID)
-		common.Fail(c, common.InternalErrorCode, err.Error())
-		return
-	}
-
-	var message string
-	switch req.Action {
-	case "approve":
-		message = "审批通过"
-	case "reject":
-		message = "审批拒绝"
-	case "delegate":
-		message = "已委派"
-	default:
-		message = "操作成功"
-	}
-
-	common.Success(c, gin.H{"message": message})
 }
 
 // ResolveTicket 解决工单

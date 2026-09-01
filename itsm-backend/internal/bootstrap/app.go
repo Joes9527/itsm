@@ -506,8 +506,6 @@ func NewApplication() *Application {
 
 	// Ticket Workflow Service & Controller
 	ticketWorkflowService := service.NewTicketWorkflowService(client, sugar)
-	// 同 releaseService：审批桥接复用全局 processEngine，保证 CallbackRegistry 已装配。
-	ticketWorkflowService.SetProcessEngine(processEngine)
 	ticketWorkflowController := controller.NewTicketWorkflowController(ticketWorkflowService, database.GetRawDB(), sugar)
 
 	// Ticket Automation Rule Controller (service 已于 131 行预创建并注入 V2)

@@ -42,6 +42,13 @@ definitions:
       ticketId:
         type: integer
     type: object
+  dto.ActionPermission:
+    properties:
+      allowed:
+        type: boolean
+      reason:
+        type: string
+    type: object
   dto.AddCITagsRequest:
     properties:
       tagIds:
@@ -85,70 +92,6 @@ definitions:
         type: string
       title:
         type: string
-    type: object
-  dto.ApprovalRecord:
-    properties:
-      action:
-        description: approve, reject, delegate
-        type: string
-      approver:
-        $ref: '#/definitions/dto.WorkflowUserInfo'
-      attachments:
-        items:
-          $ref: '#/definitions/dto.AttachmentInfo'
-        type: array
-      comment:
-        type: string
-      createdAt:
-        type: string
-      delegateTo:
-        $ref: '#/definitions/dto.WorkflowUserInfo'
-      id:
-        type: integer
-      level:
-        type: integer
-      levelName:
-        type: string
-      processedAt:
-        type: string
-      status:
-        $ref: '#/definitions/dto.ApprovalStatus'
-      ticketId:
-        type: integer
-    type: object
-  dto.ApprovalStatus:
-    enum:
-    - pending
-    - in_progress
-    - approved
-    - rejected
-    - cancelled
-    type: string
-    x-enum-varnames:
-    - ApprovalStatusPending
-    - ApprovalStatusInProgress
-    - ApprovalStatusApproved
-    - ApprovalStatusRejected
-    - ApprovalStatusCancelled
-  dto.ApproveTicketRequest:
-    properties:
-      action:
-        enum:
-        - approve
-        - reject
-        - delegate
-        type: string
-      approvalId:
-        type: integer
-      comment:
-        type: string
-      delegateToUserId:
-        type: integer
-      ticketId:
-        type: integer
-    required:
-    - action
-    - approvalId
     type: object
   dto.ArticleParticipantResponse:
     properties:
@@ -202,13 +145,17 @@ definitions:
     required:
     - customerTenantId
     type: object
-  dto.AttachmentInfo:
+  dto.AssociatedItemResponse:
     properties:
-      filename:
-        type: string
       id:
         type: integer
-      url:
+      number:
+        type: string
+      status:
+        type: string
+      title:
+        type: string
+      type:
         type: string
     type: object
   dto.AutomationRuleResponse:
@@ -2691,6 +2638,10 @@ definitions:
     type: object
   dto.IncidentResponse:
     properties:
+      actions:
+        additionalProperties:
+          $ref: '#/definitions/dto.ActionPermission'
+        type: object
       assigneeId:
         example: 2
         type: integer
@@ -3129,6 +3080,61 @@ definitions:
         description: 适用场景说明
         type: string
     type: object
+  dto.ProblemResponse:
+    properties:
+      actions:
+        additionalProperties:
+          $ref: '#/definitions/dto.ActionPermission'
+        type: object
+      assigneeId:
+        type: integer
+      associatedChanges:
+        items:
+          $ref: '#/definitions/dto.AssociatedItemResponse'
+        type: array
+      associatedIncidents:
+        items:
+          $ref: '#/definitions/dto.AssociatedItemResponse'
+        type: array
+      associatedTickets:
+        description: 关联数据
+        items:
+          $ref: '#/definitions/dto.AssociatedItemResponse'
+        type: array
+      category:
+        type: string
+      createdAt:
+        type: string
+      createdBy:
+        type: integer
+      description:
+        type: string
+      id:
+        type: integer
+      impact:
+        type: string
+      priority:
+        type: string
+      resolution:
+        type: string
+      rootCause:
+        type: string
+      status:
+        type: string
+      tenantId:
+        type: integer
+      title:
+        type: string
+      updatedAt:
+        type: string
+      workItemId:
+        description: |-
+          WorkItemID 关联的 WorkItem（tickets.id）。Problem 创建事务保证该值存在；nil 表示
+          开发数据违反 WorkItem 创建不变量。与 dto.IncidentResponse.WorkItemID 同一模式。
+        type: integer
+      workaround:
+        type: string
+    type: object
   dto.ProcessApprovalDecisionResponse:
     properties:
       action:
@@ -3278,20 +3284,6 @@ definitions:
         type: string
       username:
         type: string
-    type: object
-  dto.RejectTicketRequest:
-    properties:
-      comment:
-        type: string
-      reason:
-        type: string
-      returnToStatus:
-        type: string
-      ticketId:
-        type: integer
-    required:
-    - comment
-    - reason
     type: object
   dto.RelationshipStrength:
     enum:
@@ -3647,42 +3639,30 @@ definitions:
   dto.TicketWorkflowAction:
     enum:
     - accept
-    - reject
     - withdraw
     - forward
     - cc
     - escalate
-    - approve
-    - approve_reject
-    - delegate
     - resolve
     - close
     - reopen
     type: string
     x-enum-varnames:
     - WorkflowActionAccept
-    - WorkflowActionReject
     - WorkflowActionWithdraw
     - WorkflowActionForward
     - WorkflowActionCC
     - WorkflowActionEscalate
-    - WorkflowActionApprove
-    - WorkflowActionApproveReject
-    - WorkflowActionDelegate
     - WorkflowActionResolve
     - WorkflowActionClose
     - WorkflowActionReopen
   dto.TicketWorkflowState:
     properties:
-      approvalStatus:
-        $ref: '#/definitions/dto.ApprovalStatus'
       availableActions:
         items:
           $ref: '#/definitions/dto.TicketWorkflowAction'
         type: array
       canAccept:
-        type: boolean
-      canApprove:
         type: boolean
       canCc:
         type: boolean
@@ -3690,29 +3670,15 @@ definitions:
         type: boolean
       canForward:
         type: boolean
-      canReject:
-        type: boolean
       canResolve:
         type: boolean
       canWithdraw:
         type: boolean
-      completedApprovals:
-        items:
-          $ref: '#/definitions/dto.ApprovalRecord'
-        type: array
-      currentApprovalLevel:
-        type: integer
       currentAssignee:
         $ref: '#/definitions/dto.WorkflowUserInfo'
       currentStatus:
         type: string
-      pendingApprovers:
-        items:
-          $ref: '#/definitions/dto.WorkflowUserInfo'
-        type: array
       ticketId:
-        type: integer
-      totalApprovalLevels:
         type: integer
     type: object
   dto.TimeImpact:
@@ -4810,18 +4776,6 @@ definitions:
         items:
           type: string
         type: array
-      assignee_id:
-        description: 处理人ID
-        type: integer
-      created_at:
-        description: 创建时间
-        type: string
-      created_by:
-        description: 创建人ID
-        type: integer
-      description:
-        description: 变更描述
-        type: string
       edges:
         allOf:
         - $ref: '#/definitions/ent.ChangeEdges'
@@ -4846,37 +4800,17 @@ definitions:
       planned_start_date:
         description: 计划开始时间
         type: string
-      priority:
-        description: 优先级
-        type: string
-      related_tickets:
-        description: 相关工单
-        items:
-          type: string
-        type: array
       risk_level:
         description: 风险等级
         type: string
       rollback_plan:
         description: 回滚计划
         type: string
-      status:
-        description: 状态
-        type: string
-      tenant_id:
-        description: 租户ID
-        type: integer
-      title:
-        description: 变更标题
-        type: string
       type:
         description: 变更类型
         type: string
-      updated_at:
-        description: 更新时间
-        type: string
       work_item_id:
-        description: 关联的 WorkItem（tickets.id），唯一，必填——迁移完成前允许为空
+        description: 关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入
         type: integer
     type: object
   ent.ChangeEdges:
@@ -4891,6 +4825,10 @@ definitions:
         items:
           $ref: '#/definitions/ent.Problem'
         type: array
+      work_item:
+        allOf:
+        - $ref: '#/definitions/ent.Ticket'
+        description: 共享字段的唯一权威 WorkItem
     type: object
   ent.ChangePIR:
     properties:
@@ -5596,27 +5534,9 @@ definitions:
     type: object
   ent.Incident:
     properties:
-      assignee_id:
-        description: 处理人ID
-        type: integer
-      category:
-        description: 事件分类
-        type: string
-      closed_at:
-        description: 关闭时间
-        type: string
       configuration_item_id:
         description: 配置项ID
         type: integer
-      created_at:
-        description: 创建时间
-        type: string
-      deleted_at:
-        description: 软删除时间
-        type: string
-      description:
-        description: 事件描述
-        type: string
       detected_at:
         description: 检测时间
         type: string
@@ -5655,21 +5575,12 @@ definitions:
         additionalProperties: true
         description: 元数据
         type: object
-      priority:
-        description: 优先级
-        type: string
-      reporter_id:
-        description: 报告人ID
-        type: integer
       resolution_steps:
         description: 解决步骤
         items:
           additionalProperties: true
           type: object
         type: array
-      resolved_at:
-        description: 解决时间
-        type: string
       root_cause:
         additionalProperties: true
         description: 根本原因
@@ -5677,36 +5588,14 @@ definitions:
       severity:
         description: 严重程度
         type: string
-      source:
-        description: 事件来源
-        type: string
-      status:
-        description: 状态
-        type: string
-      subcategory:
-        description: 事件子分类
-        type: string
-      tenant_id:
-        description: 租户ID
-        type: integer
-      title:
-        description: 事件标题
-        type: string
       type:
         description: 事件类型
-        type: string
-      updated_at:
-        description: 更新时间
         type: string
       urgency:
         description: 紧急程度：low/medium/high/critical
         type: string
-      version:
-        description: 版本号（乐观锁）
-        type: integer
       work_item_id:
-        description: 关联的 WorkItem（tickets.id），唯一，必填——Incident 迁移到 WorkItem 后每条记录必须有且仅有一条对应的
-          tickets 行
+        description: 关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入
         type: integer
     type: object
   ent.IncidentAlert:
@@ -5818,6 +5707,10 @@ definitions:
         items:
           $ref: '#/definitions/ent.Incident'
         type: array
+      work_item:
+        allOf:
+        - $ref: '#/definitions/ent.Ticket'
+        description: 共享字段的唯一权威 WorkItem
     type: object
   ent.IncidentEvent:
     properties:
@@ -6600,27 +6493,6 @@ definitions:
     type: object
   ent.Problem:
     properties:
-      assignee_id:
-        description: 处理人ID
-        type: integer
-      category:
-        description: 问题分类
-        type: string
-      closed_at:
-        description: 关闭时间
-        type: string
-      created_at:
-        description: 创建时间
-        type: string
-      created_by:
-        description: 创建人ID
-        type: integer
-      deleted_at:
-        description: 删除时间
-        type: string
-      description:
-        description: 问题描述
-        type: string
       edges:
         allOf:
         - $ref: '#/definitions/ent.ProblemEdges'
@@ -6633,32 +6505,14 @@ definitions:
       impact:
         description: 影响范围
         type: string
-      priority:
-        description: 优先级
-        type: string
       resolution:
         description: 最终解决方案
-        type: string
-      resolved_at:
-        description: 解决时间
         type: string
       root_cause:
         description: 根本原因
         type: string
-      status:
-        description: 状态
-        type: string
-      tenant_id:
-        description: 租户ID
-        type: integer
-      title:
-        description: 问题标题
-        type: string
-      updated_at:
-        description: 更新时间
-        type: string
       work_item_id:
-        description: 关联的 WorkItem（tickets.id），唯一，必填——迁移完成前允许为空
+        description: 关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入
         type: integer
       workaround:
         description: 临时解决方案
@@ -6681,6 +6535,10 @@ definitions:
         items:
           $ref: '#/definitions/ent.Ticket'
         type: array
+      work_item:
+        allOf:
+        - $ref: '#/definitions/ent.Ticket'
+        description: 共享字段的唯一权威 WorkItem
     type: object
   ent.ProcessBinding:
     properties:
@@ -7081,11 +6939,26 @@ definitions:
     type: object
   ent.ProcessTask:
     properties:
+      aggregation_version:
+        description: 会签父任务聚合串行化版本；原子递增用于获取父行写锁
+        type: integer
       assigned_time:
         description: 分配时间
         type: string
       assignee:
         description: 任务负责人
+        type: string
+      callback_action:
+        description: 创建任务时从流程定义解析的不可变回调动作
+        type: string
+      callback_config_ref:
+        description: 创建任务时从流程定义解析的可信连接器配置引用，不包含端点或密钥
+        type: string
+      callback_handler_id:
+        description: 创建任务时从流程定义解析的不可变回调处理器 ID；显式哨兵表示无回调或无法解析
+        type: string
+      callback_task_type:
+        description: 创建任务时从流程定义解析的不可变回调任务类型
         type: string
       candidate_groups:
         description: 候选组，逗号分隔
@@ -7095,6 +6968,9 @@ definitions:
         type: string
       completed_time:
         description: 完成时间
+        type: string
+      correlation_id:
+        description: 跨系统关联 ID（如 KAF session/Langfuse trace），用于委派任务的端到端追踪
         type: string
       created_at:
         description: 创建时间
@@ -7155,7 +7031,7 @@ definitions:
         type: string
       task_variables:
         additionalProperties: true
-        description: 任务变量
+        description: 参与者可编辑的任务表单变量；回调路由和系统元数据不得存放在此字段
         type: object
       tenant_id:
         description: 租户ID
@@ -8131,8 +8007,7 @@ definitions:
         description: 评分评论
         type: string
       record_class:
-        description: WorkItem 记录类型：generic/service_request_item/incident/problem/change_request/catalog_task；创建后不可变，由领域服务在事务内校验，不在
-          schema 层强制
+        description: WorkItem 记录类型：generic/service_request_item/incident/problem/change_request/catalog_task；创建后不可变，由领域服务在事务内校验
         type: string
       requester_id:
         description: 申请人ID
@@ -8182,61 +8057,6 @@ definitions:
       version:
         description: 版本号（乐观锁）
         type: integer
-    type: object
-  ent.TicketApproval:
-    properties:
-      action:
-        description: '审批动作: approve/reject/delegate'
-        type: string
-      approver_id:
-        description: 审批人ID
-        type: integer
-      comment:
-        description: 审批意见
-        type: string
-      created_at:
-        description: 创建时间
-        type: string
-      delegate_to_user_id:
-        description: 委派目标用户ID
-        type: integer
-      edges:
-        allOf:
-        - $ref: '#/definitions/ent.TicketApprovalEdges'
-        description: |-
-          Edges holds the relations/edges for other nodes in the graph.
-          The values are being populated by the TicketApprovalQuery when eager-loading is set.
-      id:
-        description: ID of the ent.
-        type: integer
-      level:
-        description: 审批级别（1=一级,2=二级...）
-        type: integer
-      level_name:
-        description: 级别名称
-        type: string
-      processed_at:
-        description: 处理时间
-        type: string
-      status:
-        description: '审批状态: pending/approved/rejected/cancelled'
-        type: string
-      tenant_id:
-        description: 租户ID
-        type: integer
-      ticket_id:
-        description: 工单ID
-        type: integer
-      updated_at:
-        description: 更新时间
-        type: string
-    type: object
-  ent.TicketApprovalEdges:
-    properties:
-      ticket:
-        allOf:
-        - $ref: '#/definitions/ent.Ticket'
-        description: 所属工单
     type: object
   ent.TicketAttachment:
     properties:
@@ -8472,11 +8292,6 @@ definitions:
     type: object
   ent.TicketEdges:
     properties:
-      approvals:
-        description: Approvals holds the value of the approvals edge.
-        items:
-          $ref: '#/definitions/ent.TicketApproval'
-        type: array
       assignee:
         allOf:
         - $ref: '#/definitions/ent.User'
@@ -8487,10 +8302,9 @@ definitions:
           $ref: '#/definitions/ent.TicketAttachment'
         type: array
       category:
+        allOf:
+        - $ref: '#/definitions/ent.TicketCategory'
         description: Category holds the value of the category edge.
-        items:
-          $ref: '#/definitions/ent.TicketCategory'
-        type: array
       cc_users:
         description: CcUsers holds the value of the cc_users edge.
         items:
@@ -8574,7 +8388,7 @@ definitions:
         description: 发送时间
         type: string
       status:
-        description: '状态: pending, sent, read'
+        description: '状态: pending, processing, sent, read'
         type: string
       tenant_id:
         description: 租户ID
@@ -13625,7 +13439,7 @@ paths:
             - $ref: '#/definitions/common.Response'
             - properties:
                 data:
-                  $ref: '#/definitions/ent.Problem'
+                  $ref: '#/definitions/dto.ProblemResponse'
               type: object
         "400":
           description: Bad Request
@@ -16035,35 +15849,6 @@ paths:
       summary: 接单
       tags:
       - 工单流转
-  /api/v1/tickets/workflow/approve:
-    post:
-      consumes:
-      - application/json
-      description: 审批工单（通过/拒绝/委派）
-      parameters:
-      - description: 审批请求
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.ApproveTicketRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/common.Response'
-            - properties:
-                data:
-                  additionalProperties:
-                    type: string
-                  type: object
-              type: object
-      summary: 审批工单
-      tags:
-      - 工单流转
   /api/v1/tickets/workflow/cc:
     post:
       consumes:
@@ -16149,35 +15934,6 @@ paths:
                   type: object
               type: object
       summary: 转发工单
-      tags:
-      - 工单流转
-  /api/v1/tickets/workflow/reject:
-    post:
-      consumes:
-      - application/json
-      description: 驳回工单并说明原因
-      parameters:
-      - description: 驳回请求
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.RejectTicketRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/common.Response'
-            - properties:
-                data:
-                  additionalProperties:
-                    type: string
-                  type: object
-              type: object
-      summary: 驳回工单
       tags:
       - 工单流转
   /api/v1/tickets/workflow/reopen:
