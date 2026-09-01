@@ -50,13 +50,15 @@ interface DashboardOverviewProps {
 export const normalizeDashboardTicket = (t: any): Ticket | null => {
   const tenantId = Number(t?.tenantId);
   if (!Number.isInteger(tenantId) || tenantId <= 0) return null;
+  if (t.requester && !String(t.requester.role || '').trim()) return null;
+  if (t.assignee && !String(t.assignee.role || '').trim()) return null;
   const requester = t.requester
     ? {
         id: t.requester.id,
         fullName: t.requester.name,
         username: t.requester.username,
         email: t.requester.email,
-        role: t.requester.role || 'user',
+        role: String(t.requester.role),
       }
     : undefined;
   const assignee = t.assignee
@@ -65,7 +67,7 @@ export const normalizeDashboardTicket = (t: any): Ticket | null => {
         fullName: t.assignee.name,
         username: t.assignee.username,
         email: t.assignee.email,
-        role: t.assignee.role || 'agent',
+        role: String(t.assignee.role),
       }
     : undefined;
   return {
@@ -87,10 +89,12 @@ export const normalizeDashboardTicket = (t: any): Ticket | null => {
 export const normalizeDashboardUser = (u: any): User | null => {
   const tenantId = Number(u?.tenantId);
   if (!Number.isInteger(tenantId) || tenantId <= 0) return null;
+  const role = String(u?.role || '').trim();
+  if (!role) return null;
   return {
     ...u,
     fullName: u.name || u.username,
-    role: u.role || 'end_user',
+    role,
     status: u.active ? 'active' : 'inactive',
     tenantId,
     createdAt: u.createdAt || new Date().toISOString(),

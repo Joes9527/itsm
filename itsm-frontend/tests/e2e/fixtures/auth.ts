@@ -1,6 +1,6 @@
 import { test as base } from '@playwright/test';
 import type { APIRequestContext } from '@playwright/test';
-import { establishSession } from '../auth-utils';
+import { establishSession, loginAndReturn } from '../auth-utils';
 
 /**
  * 角色测试账号映射
@@ -45,9 +45,11 @@ async function postWithCSRF(request: APIRequestContext, path: string, body?: unk
 }
 
 export const test = base.extend<TestFixtures>({
-  loginAs: async ({ request }, use) => {
+  // Page-oriented login uses the canonical same-origin browser flow. API-only
+  // fixtures below deliberately keep their independent backend request jar.
+  loginAs: async ({ page }, use) => {
     await use(async (role: TestRole) => {
-      await establishRoleSession(request, role);
+      await loginAndReturn(page, TEST_ACCOUNTS[role], '/');
       return role;
     });
   },

@@ -195,7 +195,7 @@ export default function ProfilePage() {
           name: user.name || '',
           department: user.department || '',
           phone: '',
-          role: user.role || 'user',
+          role: String(user.role),
           createdAt: user.createdAt || new Date().toISOString(),
           lastLogin: undefined,
         };

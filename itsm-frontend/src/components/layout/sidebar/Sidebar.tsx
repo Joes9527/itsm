@@ -200,7 +200,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCollapse, mobile 
             <div className={styles.userAvatar}>{user?.name?.[0] || user?.username?.[0] || 'U'}</div>
             <div className={styles.userDetails}>
               <div className={styles.userName}>{user?.name || user?.username}</div>
-              <div className={styles.userRole}>{user?.role || 'user'}</div>
+              {user?.role && <div className={styles.userRole}>{user.role}</div>}
             </div>
           </div>
         </div>

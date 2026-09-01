@@ -74,10 +74,13 @@ test.describe('Ticket Lifecycle - End User Creates Ticket', () => {
         'button[type="submit"], button:has-text("提交"), button:has-text("创建")'
       );
       await expect(submitButton).toBeVisible();
-      {
-        await submitButton.click();
-        await page.waitForTimeout(2000);
-      }
+      const createResponse = page.waitForResponse(
+        response =>
+          response.request().method() === 'POST' &&
+          /\/api\/v1\/tickets$/.test(new URL(response.url()).pathname)
+      );
+      await submitButton.click();
+      expect((await createResponse).status()).toBe(200);
     });
 
     // Step 5: Verify ticket created (check URL or success message)
@@ -115,28 +118,23 @@ test.describe('Ticket Lifecycle - Agent Processes Ticket', () => {
       }
     });
 
-    // Step 4: Update ticket status if controls available
+    // Step 4: Update ticket status through the canonical edit command.
     await test.step('Update ticket status', async () => {
-      const statusSelect = page.locator(
-        '[class*="status"], select[name*="status"], [class*="select"]'
+      await page.getByRole('button', { name: '编辑', exact: true }).click();
+      const modal = page.getByRole('dialog', { name: /编辑工单/ });
+      await expect(modal).toBeVisible();
+      await modal.getByLabel('状态').click();
+      await page.getByRole('option', { name: '处理中' }).click();
+
+      const updateResponse = page.waitForResponse(
+        response =>
+          response.request().method() === 'PUT' &&
+          /\/api\/v1\/tickets\/\d+$/.test(new URL(response.url()).pathname)
       );
-      await expect(statusSelect).toBeVisible({ timeout: 3000 });
-      {
-        await statusSelect.click();
-        await page.waitForTimeout(500);
-
-        // Select "In Progress" option
-        await page.keyboard.press('ArrowDown');
-        await page.keyboard.press('Enter');
-
-        // Save button
-        const saveButton = page.locator('button:has-text("保存"), button:has-text("更新")');
-        await expect(saveButton).toBeVisible();
-        {
-          await saveButton.click();
-          await page.waitForTimeout(1000);
-        }
-      }
+      await modal.getByRole('button', { name: '保存修改' }).click();
+      expect((await updateResponse).status()).toBe(200);
+      await expect(modal).not.toBeVisible();
+      await expect(page.getByText('处理中', { exact: true }).first()).toBeVisible();
     });
   });
 });
@@ -164,20 +162,20 @@ test.describe('Ticket Lifecycle - Admin Manages Tickets', () => {
         '[class*="filter"], button:has-text("筛选"), button:has-text("过滤")'
       );
       await expect(filterButton).toBeVisible();
-      {
-        await filterButton.click();
-        await page.waitForTimeout(500);
+      await filterButton.click();
 
-        // Select a status filter
-        const statusOption = page
-          .locator('.ant-select-dropdown:has-text("Open"), .ant-select-item:has-text("Open")')
-          .first();
-        await expect(statusOption).toBeVisible();
-        {
-          await statusOption.click();
-          await page.waitForTimeout(1000);
-        }
-      }
+      const statusOption = page
+        .locator('.ant-select-dropdown:has-text("Open"), .ant-select-item:has-text("Open")')
+        .first();
+      await expect(statusOption).toBeVisible();
+      const filterResponse = page.waitForResponse(
+        response =>
+          response.request().method() === 'GET' &&
+          new URL(response.url()).pathname === '/api/v1/tickets'
+      );
+      await statusOption.click();
+      expect((await filterResponse).status()).toBe(200);
+      await expect(statusOption).not.toBeVisible();
     });
 
     // Step 4: Assign ticket (if controls available)
@@ -189,21 +187,27 @@ test.describe('Ticket Lifecycle - Admin Manages Tickets', () => {
         await ticketRow.click();
         await page.waitForLoadState('networkidle');
 
-        // Look for assign button
-        const assignButton = page.locator('button:has-text("分配"), button:has-text("Assign")');
+        const assignButton = page.getByRole('button', { name: /转派分配/ });
         await expect(assignButton).toBeVisible();
-        {
-          await assignButton.click();
-          await page.waitForTimeout(500);
+        await assignButton.click();
+        const modal = page.getByRole('dialog', { name: /分配工单/ });
+        await expect(modal).toBeVisible();
+        await modal.getByLabel('分配给').click();
+        const assigneeOption = page.getByRole('option').first();
+        await expect(assigneeOption).toBeVisible();
+        const assigneeLabel = (await assigneeOption.textContent())?.trim();
+        expect(assigneeLabel?.length).toBeGreaterThan(0);
+        await assigneeOption.click();
 
-          // Select an assignee
-          const assigneeOption = page.locator('.ant-select-item, [class*="option"]').first();
-          await expect(assigneeOption).toBeVisible();
-          {
-            await assigneeOption.click();
-            await page.waitForTimeout(500);
-          }
-        }
+        const assignResponse = page.waitForResponse(
+          response =>
+            response.request().method() === 'POST' &&
+            /\/api\/v1\/tickets\/\d+\/assign$/.test(new URL(response.url()).pathname)
+        );
+        await modal.getByRole('button', { name: '确认分配' }).click();
+        expect((await assignResponse).status()).toBe(200);
+        await expect(modal).not.toBeVisible();
+        await expect(page.getByText('工单分配成功')).toBeVisible();
       }
     });
   });
@@ -224,13 +228,24 @@ test.describe('Ticket Search and Filter', () => {
       .locator('input[placeholder*="搜索"], input[placeholder*="Search"], input[type="search"]')
       .first();
     await expect(searchInput).toBeVisible();
-    {
-      await searchInput.fill('test');
-      await page.waitForTimeout(500);
+    const searchResponse = page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return (
+        response.request().method() === 'GET' &&
+        url.pathname === '/api/v1/tickets' &&
+        url.searchParams.get('keyword') === 'test'
+      );
+    });
+    await searchInput.fill('test');
+    expect((await searchResponse).status()).toBe(200);
 
-      // Press search
-      await page.keyboard.press('Enter');
-      await page.waitForTimeout(1000);
+    const rows = page.locator('table tbody tr');
+    if ((await rows.count()) === 0) {
+      await expect(page.locator('.ant-empty')).toBeVisible();
+    } else {
+      for (const row of await rows.all()) {
+        await expect(row).toContainText(/test/i);
+      }
     }
   });
 
@@ -238,17 +253,30 @@ test.describe('Ticket Search and Filter', () => {
     await page.goto('/tickets');
     await page.waitForLoadState('networkidle');
 
-    // Find priority filter
-    const priorityFilter = page.locator('[class*="priority"], select[name*="priority"]');
+    await page.getByRole('button', { name: '过滤器' }).click();
+    const priorityFilter = page.locator('.ant-select').filter({ hasText: '优先级' }).first();
     await expect(priorityFilter).toBeVisible();
-    {
-      await priorityFilter.click();
-      await page.waitForTimeout(300);
+    await priorityFilter.click();
+    const highOption = page.getByRole('option', { name: /高优先级/ });
+    await expect(highOption).toBeVisible();
+    const priorityResponse = page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return (
+        response.request().method() === 'GET' &&
+        url.pathname === '/api/v1/tickets' &&
+        url.searchParams.get('priority') === 'high'
+      );
+    });
+    await highOption.click();
+    expect((await priorityResponse).status()).toBe(200);
 
-      // Select a priority
-      await page.keyboard.press('ArrowDown');
-      await page.keyboard.press('Enter');
-      await page.waitForTimeout(1000);
+    const rows = page.locator('table tbody tr');
+    if ((await rows.count()) === 0) {
+      await expect(page.locator('.ant-empty')).toBeVisible();
+    } else {
+      for (const row of await rows.all()) {
+        await expect(row).toContainText(/高/);
+      }
     }
   });
 });
